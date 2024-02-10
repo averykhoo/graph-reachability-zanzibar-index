@@ -73,6 +73,42 @@ then re-add all other unaffected edges?
 
 ## Overcomplicating things
 
+Skippable section
+
 The obvious trick to try would be to track which paths contain which edges.
+This is clearly not a scalable approach, but it illustrates why the final approach works
 
 todo: continue story another day
+
+## Reference counting
+
+When we add an edge (e.g. `B -> F`), all nodes reachable from `F` are added `B` and to all nodes that can reach `B`
+
+```mermaid
+flowchart TB
+    A --> B
+    B --> C
+    B --> D
+    C --> E
+    D --> E
+    A --> E
+    F --> D
+    B --> F
+```
+
+|     | A   | B   | C   | D   | E   | F   |
+|-----|-----|-----|-----|-----|-----|-----|
+| A   |     | 1   | 1   | 2   | 4   | 1   |
+| B   |     |     | 1   | 2   | 3   |     |
+| C   |     |     |     |     | 1   |     |
+| D   |     |     |     |     | 1   |     |
+| E   |     |     |     |     |     |     |
+| F   |     |     |     | 1   | 1   |     |
+
+### Maintaining the invariant
+
+
+
+## Optimizations
+
+Building in reverse topo order / reverse DFS (on node exit not entry) with deduplication
