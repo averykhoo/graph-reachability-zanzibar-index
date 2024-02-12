@@ -131,14 +131,23 @@ flowchart TB
 * the graph must remain acyclic
 * we need to store edges too, since we can't trivially tell from the lookup table whether a given edge exists
     * it's possible but computationally kinda slow
-* node deletion requires zero incoming paths
-  * but also remember to remove outgoing paths from the edge store
-  * also remember to optimize node deletion in the index 
-
+* node deletion requires zero incoming and outgoing paths
+  * delete all edges that touch the node first
+  * remember to optimize node deletion in the index 
+* technically it should support multiple edges between the same two nodes
 ## Optimizations
 
 * Building in reverse topo order / reverse DFS (on node exit not entry) with deduplication
+  * if the graph edges have a different distribution then maybe there's no difference,
+    or maybe topo sort would be faster?
+  * or maybe it's better to fill in every other layer of the topo sort graph first, to minimize extra calls?
 * node deletion works like deleting an edge from itself 
+* use a sparse matrix for the edges - if it's indexed twice, then lookups and reverse lookups are both constant time
+  * something like a compressed adjacency matrix?
+  * the index only includes nodes if there are edges
+  * garbage collect whenever any node/edge is removed
+* it's possible to figure out the edges from the original index (albeit slowly with some kind of rref-like algo)
+  so maybe if this index is written to disk we can avoid writing the edges?
 
 ## Transactions
 
