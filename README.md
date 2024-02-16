@@ -146,8 +146,9 @@ flowchart TB
   * something like a compressed adjacency matrix?
   * the index only includes nodes if there are edges
   * garbage collect whenever any node/edge is removed
-* it's possible to figure out the edges from the original index (albeit slowly with some kind of rref-like algo)
+* it's possible to figure out the edges from the original index (albeit in O(n**2) time with some kind of rref-like algo)
   so maybe if this index is written to disk we can avoid writing the edges?
+  * basically sort the nodes by the number of outgoing edges, then starting from the most edges, start subtracting until it's zeroed
 
 ## Transactions
 
