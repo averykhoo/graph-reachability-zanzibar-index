@@ -12,7 +12,7 @@ class MultiSet(Counter):
         if not isinstance(value, int):
             raise TypeError(f'value {value} is not an integer')
         if value < 0:
-            raise ValueError(f'value {value} is negative')re
+            raise ValueError(f'value {value} is negative')
         if value == 0:
             super().__delitem__(key)
         else:
