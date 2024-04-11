@@ -36,18 +36,28 @@ class MultiSet(Counter):
 @dataclass(frozen=True)
 class AcyclicGraphReachabilityIndex:
     direct_edge_counts: MultiSet[tuple[str, str], int] = field(default_factory=MultiSet)  # {(source, dest): count}
-    
+
     # index for "indirect" edges, which include direct edges
     index_paths: dict[str, set[str]] = field(default_factory=dict)  # {source: {dest, ...}}
     inverted_index_paths: dict[str, set[str]] = field(default_factory=dict)  # {dest: {source, ...}}
     index_path_counts: MultiSet[tuple[str, str], int] = field(default_factory=MultiSet)  # {(source, dest): count}
 
-    def _check(self):
+    def _check_invariants(self):
+        def _check_node_name(_node):
+            assert isinstance(_node, str), _node
+            assert len(_node) > 0, _node
+
         for node_from in self.index_paths:
+            _check_node_name(node_from)
             for node_to in self.index_paths[node_from]:
                 assert node_to in self.inverted_index_paths
                 assert node_from in self.inverted_index_paths[node_to]
                 assert self.index_path_counts[(node_from, node_to)] > 0
+
+        for node_to in self.inverted_index_paths:
+            for node_from in self.inverted_index_paths[node_to]:
+                assert node_from in self.index_paths
+                assert node_to in self.index_paths[node_from]
 
     def _reachable_backwards(self, _node):
         reachable_backwards = MultiSet()
@@ -64,7 +74,7 @@ class AcyclicGraphReachabilityIndex:
         return reachable_forwards
 
     def _add_indirect_edge(self, _from, _to, _add_count):
-        self._check()
+        self._check_invariants()
         self.index_path_counts[(_from, _to)] += _add_count
         if self.index_path_counts[(_from, _to)]:
             self.index_paths.setdefault(_from, set()).add(_to)
@@ -78,11 +88,11 @@ class AcyclicGraphReachabilityIndex:
                 self.inverted_index_paths[_to].remove(_from)
                 if not self.inverted_index_paths[_to]:
                     del self.inverted_index_paths[_to]
-        self._check()
+        self._check_invariants()
 
     def add_edge(self, node_from, node_to):
         # sanity check
-        self._check()
+        self._check_invariants()
         assert node_from != node_to
 
         # ensure acyclic invariant holds
@@ -111,11 +121,11 @@ class AcyclicGraphReachabilityIndex:
         # add the direct edge
         self._add_indirect_edge(node_from, node_to, 1)
         self.direct_edge_counts[(node_from, node_to)] += 1
-        self._check()
+        self._check_invariants()
 
     def remove_edge(self, node_from, node_to):
         # sanity check
-        self._check()
+        self._check_invariants()
         assert node_from != node_to
 
         # ensure there's an edge to remove
@@ -144,7 +154,7 @@ class AcyclicGraphReachabilityIndex:
         # remove the direct edge
         self._add_indirect_edge(node_from, node_to, -1)
         self.direct_edge_counts[(node_from, node_to)] -= 1
-        self._check()
+        self._check_invariants()
 
 
 if __name__ == '__main__':
