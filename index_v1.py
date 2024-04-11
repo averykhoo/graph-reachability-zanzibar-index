@@ -62,6 +62,13 @@ class AcyclicGraphReachabilityIndex:
         assert reachable_from_node_to[node_from] == 0, reachable_from_node_to
         assert reachable_from_node_to[node_to] == 0, reachable_from_node_to
 
+        # add the indirect edges:
+        for from_node, from_count in reachable_from_node_from.items():
+            for to_node, to_count in reachable_from_node_to.items():
+                self.index_path_counts[(from_node, to_node)] += from_count * to_count
+                self.index_paths.setdefault(from_node, set()).add(to_node)
+                self.inverted_index_paths.setdefault(to_node, set()).add(from_node)
+
         # add the node_to's reachable nodes to node_from
         for to_node, count in reachable_from_node_to.items():
             self.index_path_counts[(node_from, to_node)] += count
@@ -102,6 +109,14 @@ class AcyclicGraphReachabilityIndex:
         assert reachable_from_node_to[node_from] == 0, reachable_from_node_to
         assert reachable_from_node_to[node_to] == 0, reachable_from_node_to
 
+        # remove the indirect edges:
+        for from_node, from_count in reachable_from_node_from.items():
+            for to_node, to_count in reachable_from_node_to.items():
+                self.index_path_counts[(from_node, to_node)] -= from_count * to_count
+                if self.index_path_counts[(from_node, to_node)] == 0:
+                    self.index_paths[from_node].remove(to_node)
+                    self.inverted_index_paths[to_node].remove(from_node)
+
         # remove the node_to's reachable nodes from node_from
         for to_node, count in reachable_from_node_to.items():
             self.index_path_counts[(node_from, to_node)] -= count
@@ -137,13 +152,12 @@ class AcyclicGraphReachabilityIndex:
 
 
 if __name__ == '__main__':
-    # TODO: error cases
-    # ab,bc,bc,cd remove bc leaves behind 2x ad indirect edges
-    # ab, cd, bc -> ad not reachable
     idx = AcyclicGraphReachabilityIndex()
     idx.add_edge('a', 'b')
-    idx.add_edge('c', 'd')
     idx.add_edge('b', 'c')
+    idx.add_edge('b', 'c')
+    idx.add_edge('c', 'd')
+    idx.remove_edge('b', 'c')
     print(idx.index_paths)
     print(idx.inverted_index_paths)
     print(idx.index_path_counts)
