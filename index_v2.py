@@ -19,49 +19,60 @@ class AcyclicGraphReachabilityIndexV2:
 
         for node_from in self.index_paths_counts:
             _check_node_name(node_from)
+            assert node_from not in self.index_paths_counts[node_from]  # no cycles
             for node_to, count in self.index_paths_counts[node_from].items():
                 assert node_to in self.inverted_index_paths
                 assert node_from in self.inverted_index_paths[node_to]
                 assert count > 0
 
+        # make sure the inverted index exactly matches the forward index
         for node_to in self.inverted_index_paths:
             for node_from in self.inverted_index_paths[node_to]:
-                assert node_from in self.index_paths_counts
-                assert node_to in self.index_paths_counts[node_from]
+                assert node_to in self.index_paths_counts[node_from]  # might also raise index error if missing
+
+        # the indirect edges must always contain the direct edges
+        for (node_from, node_to), count in self.direct_edge_counts.items():
+            assert self.index_paths_counts[node_from][node_to] >= count, (
+                node_from, node_to, self.direct_edge_counts, self.index_paths_counts)
 
     def _reachable_backwards(self, _node):
         reachable_backwards = MultiSet()
         for reachable_node in self.inverted_index_paths.get(_node, set()):
             reachable_backwards[reachable_node] = self.index_paths_counts[reachable_node][_node]
-        assert reachable_backwards[_node] == 0
         return reachable_backwards
 
     def _reachable_forwards(self, _node):
         reachable_forwards = self.index_paths_counts.get(_node, MultiSet()).copy()
-        assert reachable_forwards[_node] == 0
         return reachable_forwards
 
     def _add_indirect_edge(self, _from: str, _to: str, _add_count: int):
-        self._check_invariants()
         self.index_paths_counts.setdefault(_from, MultiSet())[_to] += _add_count
         if self.index_paths_counts[_from][_to]:
             self.inverted_index_paths.setdefault(_to, set()).add(_from)
         else:
-            assert _to not in self.index_paths_counts[_from]
             if not self.index_paths_counts[_from]:
                 del self.index_paths_counts[_from]
             if _from in self.inverted_index_paths[_to]:
                 self.inverted_index_paths[_to].remove(_from)
                 if not self.inverted_index_paths[_to]:
                     del self.inverted_index_paths[_to]
+
+        # final safety check
         self._check_invariants()
 
     def _add_edge_unsafe(self, node_from, node_to, multiplier):
-        self._check_invariants()
+        # if multiplier is zero, there's probably a bug somewhere
+        assert multiplier != 0
 
-        # get the reachable nodes and check invariants
+        # we need to remove direct edge first to preserve the invariant
+        if multiplier < 0:
+            self.direct_edge_counts[(node_from, node_to)] += multiplier
+
+        # get the reachable nodes
         reachable_from_node_from = self._reachable_backwards(node_from)
         reachable_from_node_to = self._reachable_forwards(node_to)
+
+        # ensure we're not creating a cycle
         assert reachable_from_node_from[node_to] == 0, reachable_from_node_from
         assert reachable_from_node_to[node_from] == 0, reachable_from_node_to
 
@@ -78,10 +89,12 @@ class AcyclicGraphReachabilityIndexV2:
         for from_node, count in reachable_from_node_from.items():
             self._add_indirect_edge(from_node, node_to, count * multiplier)
 
-        # add the direct edge
+        # add the direct edge last to preserve the invariant
         self._add_indirect_edge(node_from, node_to, multiplier)
-        self.direct_edge_counts[(node_from, node_to)] += multiplier
+        if multiplier > 0:
+            self.direct_edge_counts[(node_from, node_to)] += multiplier
 
+        # final safety check
         self._check_invariants()
 
     def add_edge(self, node_from, node_to):
@@ -109,8 +122,8 @@ if __name__ == '__main__':
     idx = AcyclicGraphReachabilityIndexV2()
     idx.add_edge('a', 'b')
     idx.add_edge('b', 'c')
-    idx.add_edge('b', 'c')
     idx.add_edge('c', 'd')
+    idx.add_edge('b', 'c')
     idx.remove_edge('b', 'c')
     print(idx.index_paths_counts)
     print(idx.inverted_index_paths)
