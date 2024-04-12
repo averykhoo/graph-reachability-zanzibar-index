@@ -45,13 +45,13 @@ flowchart TB
     A --> E
 ```
 
-|     | A   | B   | C   | D   | E   |
-|-----|-----|-----|-----|-----|-----|
-| A   |     | 1   | 1   | 1   | 1   |
-| B   |     |     | 1   | 1   | 1   |
-| C   |     |     |     |     | 1   |
-| D   |     |     |     |     | 1   |
-| E   |     |     |     |     |     |
+|   | A | B | C | D | E |
+|---|---|---|---|---|---|
+| A |   | 1 | 1 | 1 | 1 |
+| B |   |   | 1 | 1 | 1 |
+| C |   |   |   |   | 1 |
+| D |   |   |   |   | 1 |
+| E |   |   |   |   |   |
 
 Lookups are pretty trivial to accomplish with this sort of index.
 Also, adding a new node `F` and an arrow `F -> D` would simply require adding a new row and column:
@@ -67,14 +67,14 @@ flowchart TB
     F --> D
 ```
 
-|     | A   | B   | C   | D   | E   | F   |
-|-----|-----|-----|-----|-----|-----|-----|
-| A   |     | 1   | 1   | 1   | 1   |     |
-| B   |     |     | 1   | 1   | 1   |     |
-| C   |     |     |     |     | 1   |     |
-| D   |     |     |     |     | 1   |     |
-| E   |     |     |     |     |     |     |
-| F   |     |     |     | 1   | 1   |     |
+|   | A | B | C | D | E | F |
+|---|---|---|---|---|---|---|
+| A |   | 1 | 1 | 1 | 1 |   |
+| B |   |   | 1 | 1 | 1 |   |
+| C |   |   |   |   | 1 |   |
+| D |   |   |   |   | 1 |   |
+| E |   |   |   |   |   |   |
+| F |   |   |   | 1 | 1 |   |
 
 And this operation simply copies the reachability of `D` onto `F`, also adding one entry from `F` to `D`.
 But this index does not allow the deletion of edges[^footnote-edge-deletion-1],
@@ -116,14 +116,14 @@ flowchart TB
     B --> F
 ```
 
-|     | A   | B   | C   | D   | E   | F   |
-|-----|-----|-----|-----|-----|-----|-----|
-| A   |     | 1   | 1   | 2   | 4   | 1   |
-| B   |     |     | 1   | 2   | 3   | 1   |
-| C   |     |     |     |     | 1   |     |
-| D   |     |     |     |     | 1   |     |
-| E   |     |     |     |     |     |     |
-| F   |     |     |     | 1   | 1   |     |
+|   | A | B | C | D | E | F |
+|---|---|---|---|---|---|---|
+| A |   | 1 | 1 | 2 | 4 | 1 |
+| B |   |   | 1 | 2 | 3 | 1 |
+| C |   |   |   |   | 1 |   |
+| D |   |   |   |   | 1 |   |
+| E |   |   |   |   |   |   |
+| F |   |   |   | 1 | 1 |   |
 
 ### Maintaining the invariant
 
@@ -132,23 +132,24 @@ flowchart TB
 * we need to store edges too, since we can't trivially tell from the lookup table whether a given edge exists
     * it's possible but computationally kinda slow
 * node deletion requires zero incoming and outgoing paths
-  * delete all edges that touch the node first
-  * remember to optimize node deletion in the index 
+    * delete all edges that touch the node first
+    * remember to optimize node deletion in the index
 * technically it should support multiple edges between the same two nodes
+
 ## Optimizations
 
 * Building in reverse topo order / reverse DFS (on node exit not entry) with deduplication
-  * if the graph edges have a different distribution then maybe there's no difference,
-    or maybe topo sort would be faster?
-  * or maybe it's better to fill in every other layer of the topo sort graph first, to minimize extra calls?
-* node deletion works like deleting an edge from itself 
+    * if the graph edges have a different distribution then maybe there's no difference,
+      or maybe topo sort would be faster?
+    * or maybe it's better to fill in every other layer of the topo sort graph first, to minimize extra calls?
+* node deletion works like deleting an edge from itself
 * use a sparse matrix for the edges - if it's indexed twice, then lookups and reverse lookups are both constant time
-  * something like a compressed adjacency matrix?
-  * the index only includes nodes if there are edges
-  * garbage collect whenever any node/edge is removed
+    * something like a compressed adjacency matrix?
+    * the index only includes nodes if there are edges
+    * garbage collect whenever any node/edge is removed
 * it's possible to figure out the edges from the original index (albeit in O(n**2) time with some kind of rref-like algo)
   so maybe if this index is written to disk we can avoid writing the edges?
-  * basically sort the nodes by the number of outgoing edges, then starting from the most edges, start subtracting until it's zeroed
+    * basically sort the nodes by the number of outgoing edges, then starting from the most edges, start subtracting until it's zeroed
 
 ## Transactions
 
@@ -157,4 +158,6 @@ flowchart TB
 * add one edge at a time
 * make sure not to add any edges that were removed in the same transaction, or dedupe beforehand
 * rollback if a cycle is detected
-* both the edge store and the index should be in the same database 
+* both the edge store and the index should be in the same database
+* nested transactions to support adding multiple edges together?
+* optimization: single transaction, but will need multiple reads and a local cache before writing

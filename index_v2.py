@@ -48,6 +48,9 @@ class AcyclicGraphReachabilityIndexV2:
         return reachable_forwards
 
     def _add_indirect_edge(self, _from: str, _to: str, _add_count: int):
+        assert _add_count != 0
+        assert _from != _to
+
         self.index_paths_counts.setdefault(_from, MultiSet())[_to] += _add_count
         if self.index_paths_counts[_from][_to]:
             self.inverted_index_paths.setdefault(_to, set()).add(_from)
@@ -64,11 +67,19 @@ class AcyclicGraphReachabilityIndexV2:
 
     def _add_edge_unsafe(self, node_from, node_to, multiplier):
         # if multiplier is zero, there's probably a bug somewhere
-        assert multiplier != 0
+        assert multiplier in {-1, 1}
 
         # we need to remove direct edge first to preserve the invariant
-        if multiplier < 0:
+        if node_from != node_to and multiplier < 0:
             self.direct_edge_counts[(node_from, node_to)] += multiplier
+            self._add_indirect_edge(node_from, node_to, multiplier)
+
+        # alternatively, remove the entire node from direct edges
+        if node_from == node_to:
+            assert multiplier == -1
+            _to_remove = [edge for edge in self.direct_edge_counts if node_from in edge]
+            for edge in _to_remove:
+                del self.direct_edge_counts[edge]
 
         # get the reachable nodes
         reachable_from_node_from = self._reachable_backwards(node_from)
@@ -92,8 +103,8 @@ class AcyclicGraphReachabilityIndexV2:
             self._add_indirect_edge(from_node, node_to, count * multiplier)
 
         # add the direct edge last to preserve the invariant
-        self._add_indirect_edge(node_from, node_to, multiplier)
-        if multiplier > 0:
+        if node_from != node_to and multiplier > 0:
+            self._add_indirect_edge(node_from, node_to, multiplier)
             self.direct_edge_counts[(node_from, node_to)] += multiplier
 
         # final safety check
@@ -118,6 +129,9 @@ class AcyclicGraphReachabilityIndexV2:
             raise ValueError(f'{node_from=} has no direct edge to {node_to=}, cannot remove nonexistent edge')
 
         self._add_edge_unsafe(node_from, node_to, -1)
+
+    def remove_node(self, node):
+        self._add_edge_unsafe(node, node, -1)
 
 
 def random_test(edges):
@@ -155,10 +169,10 @@ def random_test(edges):
                     add_edges.append((new_node, node_to))
         random.shuffle(add_edges)  # randomizing the order means some intermediate nodes may never connect, but wtv
         for node_from, node_to in add_edges:
-            idx = random.randint(0, len(temp_edges))  # insert into a random location
-            temp_edges.insert(idx, (node_from, node_to, True))
-            idx = random.randint(idx + 1, len(temp_edges))  # remove sometime afterwards
-            temp_edges.insert(idx, (node_from, node_to, False))
+            _idx = random.randint(0, len(temp_edges))  # insert into a random location
+            temp_edges.insert(_idx, (node_from, node_to, True))
+            _idx = random.randint(_idx + 1, len(temp_edges))  # remove sometime afterwards
+            temp_edges.insert(_idx, (node_from, node_to, False))
         assert original_index == create_index(temp_edges)
 
     return original_index
@@ -166,6 +180,10 @@ def random_test(edges):
 
 if __name__ == '__main__':
     idx = random_test(['ab', 'bc', 'bd', 'ac', 'cd'])
+    print(idx.index_paths_counts)
+    print(idx.inverted_index_paths)
+    print(idx.direct_edge_counts)
+    idx.remove_node('d')
     print(idx.index_paths_counts)
     print(idx.inverted_index_paths)
     print(idx.direct_edge_counts)
