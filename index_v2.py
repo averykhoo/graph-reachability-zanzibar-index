@@ -1,5 +1,7 @@
+import random
 from dataclasses import dataclass
 from dataclasses import field
+from uuid import uuid4
 
 from index_v1 import MultiSet
 
@@ -118,13 +120,52 @@ class AcyclicGraphReachabilityIndexV2:
         self._add_edge_unsafe(node_from, node_to, -1)
 
 
+def random_test(edges):
+    def create_index(_edges: list[tuple[str, str, bool]]):
+        _index = AcyclicGraphReachabilityIndexV2()
+        for _from, _to, _add in _edges:
+            if _add:
+                _index.add_edge(_from, _to)
+            else:
+                _index.remove_edge(_from, _to)
+        return _index
+
+    original_edges = [(_from, _to, True) for _from, _to in edges]
+    original_index = create_index(original_edges)
+    assert original_index == create_index(sorted(original_edges))
+
+    # randomize
+    test_edges = []
+    for _ in range(1000):
+        temp_edges = original_edges.copy()
+        random.shuffle(temp_edges)
+        assert original_index == create_index(temp_edges)
+        test_edges.append(temp_edges)
+
+    # randomly insert a new edge and delete it later
+    for temp_edges in test_edges:
+        add_edges = []  # new edges to insert
+        for node_from, node_to, _ in temp_edges:
+            for _ in range(random.randint(0, 5)):  # add each edge up to 5 extra times
+                if random.random() < 0.5:
+                    add_edges.append((node_from, node_to))
+                else:
+                    new_node = str(uuid4())  # randomly add an intermediate node
+                    add_edges.append((node_from, new_node))
+                    add_edges.append((new_node, node_to))
+        random.shuffle(add_edges)  # randomizing the order means some intermediate nodes may never connect, but wtv
+        for node_from, node_to in add_edges:
+            idx = random.randint(0, len(temp_edges))  # insert into a random location
+            temp_edges.insert(idx, (node_from, node_to, True))
+            idx = random.randint(idx + 1, len(temp_edges))  # remove sometime afterwards
+            temp_edges.insert(idx, (node_from, node_to, False))
+        assert original_index == create_index(temp_edges)
+
+    return original_index
+
+
 if __name__ == '__main__':
-    idx = AcyclicGraphReachabilityIndexV2()
-    idx.add_edge('a', 'b')
-    idx.add_edge('b', 'c')
-    idx.add_edge('c', 'd')
-    idx.add_edge('b', 'c')
-    idx.remove_edge('b', 'c')
+    idx = random_test(['ab', 'bc', 'bd', 'ac', 'cd'])
     print(idx.index_paths_counts)
     print(idx.inverted_index_paths)
     print(idx.direct_edge_counts)
