@@ -133,7 +133,7 @@ class AcyclicGraphReachabilityIndexV2:
     def remove_node(self, node):
         self._add_edge_unsafe(node, node, -1)
 
-    def check_path(self, node_from, node_to):
+    def check_reachable(self, node_from, node_to):
         # probably slightly faster than using the forward index
         return node_from in self.inverted_index_paths.get(node_to, set())
 
