@@ -6,18 +6,23 @@ from uuid import uuid4
 from index_v1 import MultiSet
 
 
+@dataclass(frozen=True, unsafe_hash=True, order=True)
+class Node:
+    name: str
+
+
 @dataclass(frozen=True)
 class AcyclicGraphReachabilityIndexV2:
-    direct_edge_counts: MultiSet[tuple[str, str], int] = field(default_factory=MultiSet)  # {(source, dest): count}
+    direct_edge_counts: MultiSet[tuple[Node, Node], int] = field(default_factory=MultiSet)  # {(source, dest): count}
 
     # index for "indirect" edges, which include direct edges
-    index_paths_counts: dict[str, MultiSet] = field(default_factory=dict)  # {source: {dest: count}}
-    inverted_index_paths: dict[str, set[str]] = field(default_factory=dict)  # {dest: {source, ...}}
+    index_paths_counts: dict[Node, MultiSet] = field(default_factory=dict)  # {source: {dest: count}}
+    inverted_index_paths: dict[Node, set[Node]] = field(default_factory=dict)  # {dest: {source, ...}}
 
     def _check_invariants(self):
-        def _check_node_name(_node):
-            assert isinstance(_node, str), _node
-            assert len(_node) > 0, _node
+        def _check_node_name(_node: Node):
+            assert isinstance(_node, Node), _node
+            assert len(_node.name) > 0, _node
 
         for node_from in self.index_paths_counts:
             _check_node_name(node_from)
@@ -37,17 +42,17 @@ class AcyclicGraphReachabilityIndexV2:
             assert self.index_paths_counts[node_from][node_to] >= count, (
                 node_from, node_to, self.direct_edge_counts, self.index_paths_counts)
 
-    def _reachable_backwards(self, _node):
+    def _reachable_backwards(self, _node: Node):
         reachable_backwards = MultiSet()
         for reachable_node in self.inverted_index_paths.get(_node, set()):
             reachable_backwards[reachable_node] = self.index_paths_counts[reachable_node][_node]
         return reachable_backwards
 
-    def _reachable_forwards(self, _node):
+    def _reachable_forwards(self, _node: Node):
         reachable_forwards = self.index_paths_counts.get(_node, MultiSet()).copy()
         return reachable_forwards
 
-    def _add_indirect_edge(self, _from: str, _to: str, _add_count: int):
+    def _add_indirect_edge(self, _from: Node, _to: Node, _add_count: int):
         assert _add_count != 0
         assert _from != _to
 
@@ -120,7 +125,7 @@ class AcyclicGraphReachabilityIndexV2:
 
         self._add_edge_unsafe(node_from, node_to, 1)
 
-    def remove_edge(self, node_from, node_to):
+    def remove_edge(self, node_from: Node, node_to: Node):
         # sanity check
         assert node_from != node_to
 
@@ -130,22 +135,24 @@ class AcyclicGraphReachabilityIndexV2:
 
         self._add_edge_unsafe(node_from, node_to, -1)
 
-    def remove_node(self, node):
+    def remove_node(self, node: Node):
         self._add_edge_unsafe(node, node, -1)
 
-    def check_reachable(self, node_from, node_to):
+    def check_reachable(self, node_from: Node, node_to: Node):
         # probably slightly faster than using the forward index
         return node_from in self.inverted_index_paths.get(node_to, set())
 
-    def lookup_reachable(self, node_from):
+    def lookup_reachable(self, node_from: Node):
         return list(self.index_paths_counts.get(node_from, MultiSet()).keys())
 
-    def lookup_reverse(self, node_to):
+    def lookup_reverse(self, node_to: Node):
         return list(self.inverted_index_paths.get(node_to))
 
 
 def random_test(edges):
-    def create_index(_edges: list[tuple[str, str, bool]]):
+    edges = [(Node(x), Node(y)) for x, y in edges]
+
+    def create_index(_edges: list[tuple[Node, Node, bool]]):
         _index = AcyclicGraphReachabilityIndexV2()
         for _from, _to, _add in _edges:
             if _add:
@@ -174,7 +181,7 @@ def random_test(edges):
                 if random.random() < 0.5:
                     add_edges.append((node_from, node_to))
                 else:
-                    new_node = str(uuid4())  # randomly add an intermediate node
+                    new_node = Node(str(uuid4()))  # randomly add an intermediate node
                     add_edges.append((node_from, new_node))
                     add_edges.append((new_node, node_to))
         random.shuffle(add_edges)  # randomizing the order means some intermediate nodes may never connect, but wtv
@@ -193,7 +200,7 @@ if __name__ == '__main__':
     print(idx.index_paths_counts)
     print(idx.inverted_index_paths)
     print(idx.direct_edge_counts)
-    idx.remove_node('d')
+    idx.remove_node(Node('d'))
     print(idx.index_paths_counts)
     print(idx.inverted_index_paths)
     print(idx.direct_edge_counts)
