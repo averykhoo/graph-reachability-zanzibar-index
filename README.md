@@ -161,3 +161,9 @@ flowchart TB
 * both the edge store and the index should be in the same database
 * nested transactions to support adding multiple edges together?
 * optimization: single transaction, but will need multiple reads and a local cache before writing
+
+## reducing the search space when traversing edges
+
+* build a state machine
+* filter by node type and edge type
+* in the schema graph there should only be a few possible transitions
