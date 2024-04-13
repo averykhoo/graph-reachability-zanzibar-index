@@ -6,7 +6,7 @@ from uuid import uuid4
 from index_v1 import MultiSet
 
 
-@dataclass(frozen=True, unsafe_hash=True, order=True)
+@dataclass(frozen=True, unsafe_hash=True, order=True, slots=True)
 class Node:
     name: str
 
