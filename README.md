@@ -180,4 +180,6 @@ flowchart TB
 
 ### zookies
 
-### 
+### `*` wildcard entities
+
+### rewrite from entities to nodes
