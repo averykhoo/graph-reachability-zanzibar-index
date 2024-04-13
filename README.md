@@ -162,8 +162,22 @@ flowchart TB
 * nested transactions to support adding multiple edges together?
 * optimization: single transaction, but will need multiple reads and a local cache before writing
 
-## reducing the search space when traversing edges
+## Zanzibar
+
+### reducing the search space when manually traversing edges
 
 * build a state machine
 * filter by node type and edge type
 * in the schema graph there should only be a few possible transitions
+
+### userset rewrites
+
+* build rules based on schema
+
+### graph rewrite from edge-labeled to non-labeled
+
+### boolean operators
+
+### zookies
+
+### 
