@@ -13,6 +13,7 @@ class Node:
 
 @dataclass(frozen=True)
 class AcyclicGraphReachabilityIndexV2:
+    __skip_check_invariants: bool = False
     direct_edge_counts: MultiSet[tuple[Node, Node], int] = field(default_factory=MultiSet)  # {(source, dest): count}
 
     # index for "indirect" edges, which include direct edges
@@ -20,6 +21,9 @@ class AcyclicGraphReachabilityIndexV2:
     inverted_index_paths: dict[Node, set[Node]] = field(default_factory=dict)  # {dest: {source, ...}}
 
     def _check_invariants(self):
+        if self.__skip_check_invariants:
+            return
+
         def _check_node_name(_node: Node):
             assert isinstance(_node, Node), _node
             assert len(_node.name) > 0, _node
