@@ -187,9 +187,17 @@ flowchart TB
 
 ### graph rewrite from edge-labeled to non-labeled
 
+* tldr if user:a can access doc:b then draw from `user:a:null` -> `doc:b:access`
+* this deserves more words but maybe someday
+
 ### boolean operators
 
+* requires post-processing, too much effort for now
+
 ### zookies
+
+* some kind of transaction timestamp, maybe snowflake or ULID or uuid7 or lamport clock thingamajig
+* the cache just needs to store the last updated timestamp
 
 ### `*` wildcard entities
 
