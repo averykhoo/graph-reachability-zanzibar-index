@@ -147,9 +147,11 @@ flowchart TB
     * something like a compressed adjacency matrix?
     * the index only includes nodes if there are edges
     * garbage collect whenever any node/edge is removed
-* it's possible to figure out the edges from the original index (albeit in O(n**2) time with some kind of rref-like algo)
+* it's possible to figure out the edges from the original index (albeit in O(n**2) time with some kind of rref-like
+  algo)
   so maybe if this index is written to disk we can avoid writing the edges?
-    * basically sort the nodes by the number of outgoing edges, then starting from the most edges, start subtracting until it's zeroed
+    * basically sort the nodes by the number of outgoing edges, then starting from the most edges, start subtracting
+      until it's zeroed
 
 ## Transactions
 
@@ -173,6 +175,14 @@ flowchart TB
 ### userset rewrites
 
 * build rules based on schema
+* basically something like
+    * if tuple matches some rule (subject type, subject relation, object type, object relation)
+    * then clone, overwrite some params, and add another tuple
+* rule matching shouldn't be linear though, maybe put it in a trie structure or hash table?
+    * hash table would require hashing the same tuple up to 16 times though, so maybe not the best idea?
+    * then again it's still faster than backtracking through a trie
+* this will also be used to handle the `*` type, rewriting all `object name` to `object *`
+    * we should only set up this rule if `*` is in schema, and only for specific relations
 
 ### graph rewrite from edge-labeled to non-labeled
 
@@ -181,5 +191,17 @@ flowchart TB
 ### zookies
 
 ### `*` wildcard entities
+
+* although * can't be an object in openfga, i see no reason not to support it
+* tldr do checks up to 4 times:
+    * user:a access doc:x
+    * user:* access doc:x
+    * user:a access doc:*
+    * user:* access doc:*
+    * (depending on whether there exists a relation access:doc:* or user:*:access in the schema)
+* do lookups twice:
+    * user:a access doc:?
+    * user:* access doc:?
+    * and if ? contains * then return all docs
 
 ### rewrite from entities to nodes
