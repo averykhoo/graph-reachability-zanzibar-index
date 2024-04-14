@@ -176,8 +176,9 @@ flowchart TB
 
 * build rules based on schema
 * basically something like
-    * if tuple matches some rule (subject type, subject relation, object type, object relation)
+    * if tuple matches some rule (subject type, subject name, relation, object type, object name, object)
     * then clone, overwrite some params, and add another tuple
+    * alternatively do it at the node level, although that requires splitting up relation into subject and object rels
 * rule matching shouldn't be linear though, maybe put it in a trie structure or hash table?
     * hash table would require hashing the same tuple up to 16 times though, so maybe not the best idea?
     * then again it's still faster than backtracking through a trie
