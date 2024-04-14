@@ -1,20 +1,20 @@
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True, kw_only=True, slots=True, order=True)
+@dataclass(frozen=True, slots=True, order=True)
 class Entity:
     type: str
     name: str
 
 
-@dataclass(frozen=True, kw_only=True, slots=True, order=True)
+@dataclass(frozen=True, slots=True, order=True)
 class RelationalTriple:
     subject: Entity
     relation: str
     object: Entity
 
 
-@dataclass(frozen=True, kw_only=True, slots=True, order=True)
+@dataclass(frozen=True, slots=True, order=True)
 class EntityPattern:
     type: str | None = None
     name: str | None = None
@@ -35,7 +35,7 @@ class EntityPattern:
                       name=self.name or entity.name)
 
 
-@dataclass(frozen=True, kw_only=True, slots=True, order=True)
+@dataclass(frozen=True, slots=True, order=True)
 class RelationalTriplePattern:
     subject: EntityPattern | None = None
     relation: str | None = None
@@ -55,8 +55,42 @@ class RelationalTriplePattern:
     def replace(self, relational_triple: RelationalTriple) -> RelationalTriple:
         if not isinstance(relational_triple, RelationalTriple):
             raise TypeError(f'expected a `RelationalTriple`, got {relational_triple!r}')
-        _subject = None if self.subject is None else self.subject.replace(relational_triple.subject)
-        _object = None if self.object is None else self.object.replace(relational_triple.object)
+        _subject = self.subject.replace(relational_triple.subject) if self.subject else relational_triple.subject
+        _object = self.object.replace(relational_triple.object) if self.object else relational_triple.object
         return RelationalTriple(subject=_subject,
                                 relation=self.relation or relational_triple.relation,
                                 object=_object)
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class Rule:
+    if_pattern: RelationalTriplePattern
+    then_pattern: RelationalTriplePattern
+
+    def apply(self, relational_triple: RelationalTriple) -> RelationalTriple | None:
+        if self.if_pattern.match(relational_triple):
+            return self.then_pattern.replace(relational_triple)
+
+
+@dataclass
+class RuleSet:
+    rules: list[Rule]
+
+    def apply(self, relational_triple: RelationalTriple):
+        yield relational_triple
+        for rule in self.rules:
+            if (_result := rule.apply(relational_triple)) is not None:
+                yield _result
+
+
+if __name__ == '__main__':
+    rt1 = RelationalTriple(Entity('user', 'A'), 'admin', Entity('group', 'X'))
+    rt2 = RelationalTriple(Entity('user', '*'), 'member', Entity('group', 'X'))
+
+    rules = RuleSet([
+        Rule(RelationalTriplePattern(EntityPattern('user'), 'admin', EntityPattern('group')),
+             RelationalTriplePattern(relation='writer', object=EntityPattern('asdf')))
+    ])
+
+    print(list(rules.apply(rt1)))
+    print(list(rules.apply(rt2)))
