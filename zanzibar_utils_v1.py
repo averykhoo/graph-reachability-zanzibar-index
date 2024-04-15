@@ -13,6 +13,9 @@ class RelationalTriple:
     relation: str
     object: Entity
 
+    # needed for adding group:a#member is a writer of document:b
+    subject_predicate: str | None = None
+
 
 @dataclass(frozen=True, slots=True, order=True)
 class EntityPattern:
@@ -40,6 +43,7 @@ class RelationalTriplePattern:
     subject: EntityPattern | None = None
     relation: str | None = None
     object: EntityPattern | None = None
+    subject_predicate: str | None = None
 
     def match(self, relational_triple: RelationalTriple) -> bool:
         if not isinstance(relational_triple, RelationalTriple):
@@ -50,6 +54,10 @@ class RelationalTriplePattern:
             return False
         if self.object is not None and not self.object.match(relational_triple.object):
             return False
+        if self.subject_predicate is not None and self.subject_predicate != relational_triple.subject_predicate:
+            return False
+        if self.subject_predicate is None and relational_triple.subject_predicate is not None:
+            raise NotImplemented  # need another way to match any
         return True
 
     def replace(self, relational_triple: RelationalTriple) -> RelationalTriple:
