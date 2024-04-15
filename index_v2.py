@@ -12,7 +12,7 @@ class Node:
 
 
 @dataclass(frozen=True)
-class AcyclicGraphReachabilityIndexV2:
+class DirectedAcyclicMultiGraphReachabilityIndexV2:
     __skip_check_invariants: bool = False
     direct_edge_counts: MultiSet[tuple[Node, Node], int] = field(default_factory=MultiSet)  # {(source, dest): count}
 
@@ -157,7 +157,7 @@ def random_test(edges):
     edges = [(Node(x), Node(y)) for x, y in edges]
 
     def create_index(_edges: list[tuple[Node, Node, bool]]):
-        _index = AcyclicGraphReachabilityIndexV2()
+        _index = DirectedAcyclicMultiGraphReachabilityIndexV2()
         for _from, _to, _add in _edges:
             if _add:
                 _index.add_edge(_from, _to)

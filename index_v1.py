@@ -34,7 +34,7 @@ class MultiSet(Counter):
 
 
 @dataclass(frozen=True)
-class AcyclicGraphReachabilityIndex:
+class DirectedAcyclicMultiGraphReachabilityIndex:
     direct_edge_counts: MultiSet[tuple[str, str], int] = field(default_factory=MultiSet)  # {(source, dest): count}
 
     # index for "indirect" edges, which include direct edges
@@ -158,7 +158,7 @@ class AcyclicGraphReachabilityIndex:
 
 
 if __name__ == '__main__':
-    idx = AcyclicGraphReachabilityIndex()
+    idx = DirectedAcyclicMultiGraphReachabilityIndex()
     idx.add_edge('a', 'b')
     idx.add_edge('b', 'c')
     idx.add_edge('b', 'c')
