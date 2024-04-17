@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from types import EllipsisType
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -17,17 +18,17 @@ class RelationalTriple:
     subject_predicate: str | None = None
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@dataclass(frozen=True, slots=True, order=True, kw_only=True)
 class EntityPattern:
-    type: str | None = None
-    name: str | None = None
+    type: str | EllipsisType = ...
+    name: str | EllipsisType = ...
 
     def match(self, entity: Entity) -> bool:
         if not isinstance(entity, Entity):
             raise TypeError(f'expected an `Entity`, got {entity!r}')
-        if self.type is not None and self.type != entity.type:
+        if self.type is not Ellipsis and self.type != entity.type:
             return False
-        if self.name is not None and self.name != entity.name:
+        if self.name is not Ellipsis and self.name != entity.name:
             return False
         return True
 
@@ -38,26 +39,34 @@ class EntityPattern:
                       name=self.name or entity.name)
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@dataclass(frozen=True, slots=True, order=True, kw_only=True)
 class RelationalTriplePattern:
-    subject: EntityPattern | None = None
-    relation: str | None = None
-    object: EntityPattern | None = None
-    subject_predicate: str | None = None
+    subject_type: str | EllipsisType = ...
+    subject_name: str | EllipsisType = ...
+    relation: str | EllipsisType = ...
+    object_type: str | EllipsisType = ...
+    object_name: str | EllipsisType = ...
+    subject_predicate: str | None | EllipsisType = ...
+
+    @property
+    def subject(self):
+        return EntityPattern(type=self.subject_type, name=self.subject_name)
+
+    @property
+    def object(self):
+        return EntityPattern(type=self.object_type, name=self.object_name)
 
     def match(self, relational_triple: RelationalTriple) -> bool:
         if not isinstance(relational_triple, RelationalTriple):
             raise TypeError(f'expected a `RelationalTriple`, got {relational_triple!r}')
-        if self.subject is not None and not self.subject.match(relational_triple.subject):
+        if self.subject_predicate is not Ellipsis and self.subject_predicate != relational_triple.subject_predicate:
             return False
-        if self.relation is not None and self.relation != relational_triple.relation:
+        if self.subject is not Ellipsis and not self.subject.match(relational_triple.subject):
             return False
-        if self.object is not None and not self.object.match(relational_triple.object):
+        if self.relation is not Ellipsis and self.relation != relational_triple.relation:
             return False
-        if self.subject_predicate is not None and self.subject_predicate != relational_triple.subject_predicate:
+        if self.object is not Ellipsis and not self.object.match(relational_triple.object):
             return False
-        if self.subject_predicate is None and relational_triple.subject_predicate is not None:
-            raise NotImplemented  # need another way to match any
         return True
 
     def replace(self, relational_triple: RelationalTriple) -> RelationalTriple:
@@ -96,8 +105,8 @@ if __name__ == '__main__':
     rt2 = RelationalTriple(Entity('user', '*'), 'member', Entity('group', 'X'))
 
     rules = RuleSet([
-        Rule(RelationalTriplePattern(EntityPattern('user'), 'admin', EntityPattern('group')),
-             RelationalTriplePattern(relation='writer', object=EntityPattern('asdf')))
+        Rule(RelationalTriplePattern(subject_type='user', relation='admin', object_type='group'),
+             RelationalTriplePattern(relation='writer', object_type='asdf'))
     ])
 
     print(list(rules.apply(rt1)))
