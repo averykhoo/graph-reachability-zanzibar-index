@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from pprint import pprint
 from types import EllipsisType
 
+from index_v2 import Node
+
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
 class Entity:
@@ -14,6 +16,13 @@ class Entity:
 
     def __str__(self):
         return f'{self.type}:{self.name}'
+
+
+@dataclass(frozen=True, unsafe_hash=True, order=True, slots=True)
+class NodeV2(Node):
+    type: str
+    name: str
+    predicate: str | EllipsisType
 
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
@@ -29,6 +38,18 @@ class RelationalTriple:
         # follows zanzibar paper
         subject_predicate = '...' if self.subject_predicate is Ellipsis else self.subject_predicate
         return f'{self.object}#{self.relation}@{self.subject}#{subject_predicate}'
+
+    @property
+    def node_from(self):
+        return NodeV2(type=self.subject.type,
+                      name=self.subject.name,
+                      predicate=self.subject_predicate)
+
+    @property
+    def node_to(self):
+        return NodeV2(type=self.object.type,
+                      name=self.object.name,
+                      predicate=self.relation)
 
 
 @dataclass(frozen=True, slots=True, order=True, kw_only=True)
@@ -241,3 +262,14 @@ if __name__ == '__main__':
     pprint(list(rules_and_filters.apply(RelationalTriple(Entity('user', 'A'), 'owner', Entity('team', 'X')))))
     pprint(list(rules_and_filters.apply(RelationalTriple(Entity('organization', 'O'), 'owner', Entity('team', 'X')))))
     pprint(list(rules_and_filters.apply(RelationalTriple(Entity('organization', 'O'), 'owner', Entity('repo', 'X')))))
+
+    print(RelationalTriple(subject=Entity(type='organization', name='O'),
+                           relation='admin',
+                           object=Entity(type='repo', name='X'),
+                           subject_predicate='repo_admin',
+                           ).node_from)
+    print(RelationalTriple(subject=Entity(type='organization', name='O'),
+                           relation='admin',
+                           object=Entity(type='repo', name='X'),
+                           subject_predicate='repo_admin',
+                           ).node_to)
