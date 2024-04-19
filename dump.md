@@ -39,5 +39,31 @@ flowchart LR
 
 * `*` as special entity?
 * check twice, lookup twice, reverse lookup
+* entity-tuple counters
+  * when first added (implicitly), count number of tuple references
+    * separate subject/object counts? or together?
+  * when last removed (both counts hit zero), delete entity
+  * use this to create/delete entity -> entity:* tuples
+  * also maybe an implicit tuple flag, since explicitly created entities shouldn't be deleted
+
+tuple workflow
+1. add/remove tuple
+2. filter tuple by schema
+3. add/remove entity
+   * add/remove entity -> entity:*
+4. rewrite + expand tuple recursively by schema
+5. convert to from/to nodes
+6. cycle detection and addition to index
+
+features
+
+* `[user]` -> filter
+* `[group#member]` -> filter
+* `or admin` -> rule
+* `or member from owner-group` -> rule
+* `(... and ...)` -> post-add rewrite?
+* `(... but not ...)` -> post add rewrite?
+* schema type checking, so that all relations always resolve to a single type?
+  * or resolve by relations and do duck-typing checks instead? this is more correct maybe but also more effort
 * 
 
