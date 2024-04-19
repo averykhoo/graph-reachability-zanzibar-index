@@ -171,6 +171,7 @@ class RuleSet:
 
 if __name__ == '__main__':
     # https://github.com/openfga/sample-stores/blob/main/stores/github/model.fga
+    # (the openfga dsl is slightly nicer than the spicedb dsl)
     rules_and_filters = RuleSet([
         # model
         #   schema 1.1

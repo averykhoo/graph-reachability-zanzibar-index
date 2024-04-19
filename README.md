@@ -166,6 +166,8 @@ flowchart TB
 
 ## Zanzibar
 
+See the paper at https://zanzibar.tech
+
 ### reducing the search space when manually traversing edges
 
 * build a state machine
@@ -219,7 +221,6 @@ flowchart TB
 * rules for rewriting tuples to add more relations
 * rules about rules - no recursion, since that doesn't work (we don't have anything to recurse)
   * e.g. `group->subgroup: [group] or subgroup from subgroup`
-* 
 
 ### index guarantee
 
