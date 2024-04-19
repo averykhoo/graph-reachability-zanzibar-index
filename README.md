@@ -214,3 +214,16 @@ flowchart TB
     * and if ? contains * then return all docs
 
 ### rewrite from entities to nodes
+
+* rules for what tuples can be added
+* rules for rewriting tuples to add more relations
+* rules about rules - no recursion, since that doesn't work (we don't have anything to recurse)
+  * e.g. `group->subgroup: [group] or subgroup from subgroup`
+* 
+
+### index guarantee
+
+* if we want to ensure writes tothe index always succeed, then we need a store of ignored tuples that cause cycles
+* then we can add and remove them as no-ops
+* also the remove should always happen before the adds
+
