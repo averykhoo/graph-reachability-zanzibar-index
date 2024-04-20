@@ -96,6 +96,8 @@ def _add_edge_unsafe(subject_predicate: str | EllipsisType | None,
     # we need to remove direct edge first to preserve the invariant
     if (subject_predicate != relation or subject_id != object_id) and multiplier < 0:
         _add_db_edges_unsafe(subject_predicate, subject_id, relation, object_id, multiplier, multiplier)
+    else:
+        raise NotImplementedError  # disable this for now because i need to remove the whole entity, not just a node
 
     # alternatively, remove the entire node from direct edges
     if subject_predicate == relation and subject_id == object_id:
@@ -160,17 +162,25 @@ def add_edge(subject_predicate, subject_id, relation, object_id):
 
     _add_edge_unsafe(subject_predicate, subject_id, relation, object_id, 1)
 
-# def remove_edge(node_from: Node, node_to: Node):
-#     # sanity check
-#     assert node_from != node_to
-#
-#     # ensure there's an edge to remove
-#     if direct_edge_counts[(node_from, node_to)] == 0:
-#         raise ValueError(f'{node_from=} has no direct edge to {node_to=}, cannot remove nonexistent edge')
-#
-#     _add_edge_unsafe(node_from, node_to, -1)
-#
-#
+
+def remove_edge(subject_predicate, subject_id, relation, object_id):
+    # sanity check
+    assert subject_predicate != relation or subject_id != object_id
+
+    with Session(engine) as session:
+        triple = session.exec(select(RelationalTriple)
+                              .where(RelationalTriple.subject_predicate == subject_predicate)
+                              .where(RelationalTriple.subject_id == subject_id)
+                              .where(RelationalTriple.relation == relation)
+                              .where(RelationalTriple.object_id == object_id)
+                              ).first()
+        # ensure acyclic invariant holds
+        if triple is None or triple.direct_edge_count == 0:
+            raise ValueError(f'{subject_predicate=} {subject_id=} has no direct edge to {relation=} {object_id=}, '
+                             f'cannot remove nonexistent edge')
+
+    _add_edge_unsafe(subject_predicate, subject_id, relation, object_id, -1)
+
 # def remove_node(node: Node):
 #     _add_edge_unsafe(node, node, -1)
 #
