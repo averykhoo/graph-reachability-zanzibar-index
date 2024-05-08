@@ -5,22 +5,22 @@ from sqlmodel import SQLModel, Field, create_engine, Session, select
 from index_v1 import MultiSet
 
 
-class Entity(SQLModel, table=True):
+class Node(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    predicate: str = Field(index=True)
     type: str = Field(index=True)
     name: str = Field(index=True)
     implicit: bool = Field(default=True)  # if implicit, should be auto-deleted once all referencing tuples are deleted
-    count: int = Field(default=0)
+    reference_count: int = Field(default=0)
 
 
-class RelationalTriple(SQLModel, table=True):
+class Edge(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    subject_predicate: str | EllipsisType = Field(index=True)
-    subject_id: int = Field(foreign_key="team.id", index=True)
-    relation: str = Field(index=True)
-    object_id: int = Field(foreign_key="team.id", index=True)
+    subject_id: int = Field(foreign_key="node.id", index=True)
+    object_id: int = Field(foreign_key="node.id", index=True)
     direct_edge_count: int = Field(default=0)  # how many tuples were inserted
     indirect_edge_count: int = Field(default=0)
+    ignored_count: int = Field(default=0)
 
 
 engine = create_engine('sqlite:///database.db', echo=True)
