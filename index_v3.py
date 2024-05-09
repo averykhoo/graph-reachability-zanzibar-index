@@ -1,6 +1,10 @@
 from types import EllipsisType
 
-from sqlmodel import SQLModel, Field, create_engine, Session, select
+from sqlmodel import Field
+from sqlmodel import SQLModel
+from sqlmodel import Session
+from sqlmodel import create_engine
+from sqlmodel import select
 
 from index_v1 import MultiSet
 
@@ -10,8 +14,10 @@ class Node(SQLModel, table=True):
     predicate: str = Field(index=True)
     type: str = Field(index=True)
     name: str = Field(index=True)
-    implicit: bool = Field(default=True)  # if implicit, should be auto-deleted once all referencing tuples are deleted
-    reference_count: int = Field(default=0)
+
+    # TODO
+    # implicit: bool = Field(default=True)  # if implicit, should be auto-deleted once all referencing tuples are deleted
+    # reference_count: int = Field(default=0)
 
     @property
     def predicate_or_ellipsis(self) -> str | EllipsisType:
@@ -133,26 +139,29 @@ def _add_direct_edge_unsafe(subject_id: int,
         for triple in triples_to:
             reachable_after_object[triple.object_id] = triple.indirect_edge_count
 
-    # ensure we're not creating a cycle
-    assert reachable_before_subject[object_id] == 0, reachable_before_subject
-    assert reachable_after_object[subject_id] == 0, reachable_after_object
+        # ensure we're not creating a cycle
+        assert reachable_before_subject[object_id] == 0, reachable_before_subject
+        assert reachable_after_object[subject_id] == 0, reachable_after_object
 
-    # add the indirect edges:
-    for from_node_id, from_count in reachable_before_subject.items():
-        for to_node_id, to_count in reachable_after_object.items():
-            _add_db_edges_unsafe(session, from_node_id, to_node_id, 0, from_count * to_count * multiplier)
+        # add the indirect edges:
+        for from_node_id, from_count in reachable_before_subject.items():
+            for to_node_id, to_count in reachable_after_object.items():
+                _add_db_edges_unsafe(session, from_node_id, to_node_id, 0, from_count * to_count * multiplier)
 
-    # add the object's reachable nodes to subject
-    for to_node_id, count in reachable_after_object.items():
-        _add_db_edges_unsafe(session, subject_id, to_node_id, 0, count * multiplier)
+        # add the object's reachable nodes to subject
+        for to_node_id, count in reachable_after_object.items():
+            _add_db_edges_unsafe(session, subject_id, to_node_id, 0, count * multiplier)
 
-    # make object reachable from all the nodes that can reach subject
-    for from_node_id, count in reachable_before_subject.items():
-        _add_db_edges_unsafe(session, from_node_id, object_id, 0, count * multiplier)
+        # make object reachable from all the nodes that can reach subject
+        for from_node_id, count in reachable_before_subject.items():
+            _add_db_edges_unsafe(session, from_node_id, object_id, 0, count * multiplier)
 
-    # add the direct edge last to preserve the invariant
-    if subject_id != object_id and multiplier > 0:
-        _add_db_edges_unsafe(session, subject_id, object_id, multiplier, multiplier)
+        # add the direct edge last to preserve the invariant
+        if subject_id != object_id and multiplier > 0:
+            _add_db_edges_unsafe(session, subject_id, object_id, multiplier, multiplier)
+
+        # commit transaction
+        session.commit()
 
 
 def add_edge(subject_id, object_id):
@@ -194,25 +203,95 @@ def remove_node(node_id: int):
     # removing an entity may require removing multiple nodes
     _add_direct_edge_unsafe(node_id, node_id, -1)
 
-# def check_reachable(node_from: Node, node_to: Node):
-#     # probably slightly faster than using the forward index
-#     return node_from in inverted_index_paths.get(node_to, set())
-#
-#
-# def lookup_reachable(node_from: Node):
-#     return list(index_paths_counts.get(node_from, MultiSet()).keys())
-#
-#
-# def lookup_reverse(node_to: Node):
-#     return list(inverted_index_paths.get(node_to))
-#
-#
-# if __name__ == '__main__':
-#     idx = random_test(['ab', 'bc', 'bd', 'ac', 'cd'])
-#     print(idx.index_paths_counts)
-#     print(idx.inverted_index_paths)
-#     print(idx.direct_edge_counts)
-#     idx.remove_node(Node('d'))
-#     print(idx.index_paths_counts)
-#     print(idx.inverted_index_paths)
-#     print(idx.direct_edge_counts)
+
+def check_reachable(subject_id: int, object_id: int):
+    with Session(engine) as session:
+        triple = session.exec(select(Edge)
+                              .where(Edge.subject_id == subject_id)
+                              .where(Edge.object_id == object_id)
+                              ).first()
+        # ensure acyclic invariant holds
+        return triple is not None and triple.indirect_edge_count > 0
+
+
+def lookup_reachable(subject_id: int):
+    with Session(engine) as session:
+        triples = session.exec(select(Edge)
+                               .where(Edge.subject_id == subject_id)
+                               ).all()
+
+        object_ids = set()
+        for triple in triples:
+            if triple.indirect_edge_count > 0:
+                assert triple.object_id != subject_id  # invariant
+                object_ids.add(triple.object_id)
+
+        return object_ids
+
+
+def lookup_reverse(object_id: int):
+    with Session(engine) as session:
+        triples = session.exec(select(Edge)
+                               .where(Edge.object_id == object_id)
+                               ).all()
+
+        subject_ids = set()
+        for triple in triples:
+            if triple.indirect_edge_count > 0:
+                assert triple.subject_id != object_id  # invariant
+                subject_ids.add(triple.subject_id)
+
+        return subject_ids
+
+
+def node(predicate: str | EllipsisType,
+         entity_type: str,
+         entity_name: str,
+         ):
+    if predicate is Ellipsis:
+        predicate = '...'
+    with Session(engine) as session:
+        found = session.exec(select(Node)
+                             .where(Node.predicate == predicate)
+                             .where(Node.type == entity_type)
+                             .where(Node.name == entity_name)
+                             ).all()
+        if found:
+            assert len(found) == 1
+            return found[0]
+        node = Node(predicate=predicate, type=entity_type, name=entity_name)
+        session.add(node)
+        session.commit()
+        session.refresh()
+        return node
+
+
+if __name__ == '__main__':
+    alice = node(..., 'user', 'alice')
+    bob = node(..., 'user', 'bob')
+    group_1 = node('member', 'group', 'g1')
+    group_2 = node('member', 'group', 'g2')
+    document_a_ro = node('reader', 'document', 'abc.xyz')
+    document_a_rw = node('writer', 'document', 'abc.xyz')
+    document_b_rw = node('writer', 'document', 'qwerty.pdf')
+
+    add_edge(document_a_rw.id, document_a_ro.id)
+    add_edge(alice.id, document_a_ro.id)
+    add_edge(alice.id, group_1.id)
+    add_edge(bob.id, group_1.id)
+    add_edge(bob.id, group_2.id)
+    add_edge(group_1.id, document_a_rw.id)
+    add_edge(group_2.id, document_a_ro.id)
+    add_edge(group_2.id, document_b_rw.id)
+
+    print(f'{check_reachable(alice.id, document_a_ro.id)=}')
+    print(f'{check_reachable(alice.id, document_a_rw.id)=}')
+    print(f'{check_reachable(alice.id, document_b_rw.id)=}')
+    print(f'{lookup_reachable(alice.id)=}')
+
+    print(f'{check_reachable(bob.id, document_a_ro.id)=}')
+    print(f'{check_reachable(bob.id, document_a_rw.id)=}')
+    print(f'{check_reachable(bob.id, document_b_rw.id)=}')
+    print(f'{lookup_reachable(bob.id)=}')
+
+    print(f'{lookup_reverse(document_a_ro.id)=}')
