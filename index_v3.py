@@ -188,8 +188,8 @@ def node(predicate: str | EllipsisType,
          entity_type: str,
          entity_name: str,
          *,
+         create_if_missing: bool,  # TODO: decide whether to default to True or False
          implicit: bool | None = None,
-         create_if_missing: bool = True,
          ):
     if predicate is Ellipsis:
         predicate = '...'
@@ -222,8 +222,8 @@ def add_edge(subject_predicate: str | EllipsisType,
              object_type: str,
              object_name: str,
              ):
-    _subject = node(subject_predicate, subject_type, subject_name)
-    _object = node(relation, object_type, object_name)
+    _subject = node(subject_predicate, subject_type, subject_name, create_if_missing=True)
+    _object = node(relation, object_type, object_name, create_if_missing=True)
 
     # sanity check
     assert _subject.id != _object.id
