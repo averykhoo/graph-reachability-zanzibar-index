@@ -2,14 +2,14 @@
 * correctness / consistency
 * generality / expressiveness
 * perforamnce
-* (real) availability
+* (real) availability <-- why real? might have misread the handwriting on my notes
 * multi-tenancy
 * cross-namespace relations?
 * shared tuples / state?
+* acyclic check
 
-* conditional transition
+* conditional transitions?
 * default condition exists?
-* acyclic check?
 
 ```mermaid
 flowchart LR
@@ -55,16 +55,18 @@ tuple workflow
 
 schema rewrite to rules/filters
 
-* `[user]` -> filter
-* `[group#member]` -> filter
-* `[user:*]` -> filter + add tuple upon entity creation
-    * or add the (inefficient) rules `user:?->...` -> `user:?->user:*` and  `...->user:?` -> `user:?->user:*`
-        * note: the current rewrite logic is too simple to express the second of those rules right now
-    * but more efficient to count entity usage and only add once
-* `or admin` -> rule
-* `or member from owner-group` -> rule
-* `(... and ...)` -> post-add rewrite?
-* `(... but not ...)` -> post add rewrite?
+| schema syntax                    | action type                             | action description                                                                                       |
+|----------------------------------|-----------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `[user]`                         | filter                                  | allow edge of type `user -> object`, see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                     |
+| `[user:*]`                       | filter + add tuple upon entity creation | or, add the (inefficient) rules `user:?->...` -> `user:?->user:*` and  `...->user:?` -> `user:?->user:*` |
+| `[group#member]`                 | filter                                  | allow edge of type `group#member -> object`, see [zanzibar_utils_v1](./zanzibar_utils_v1.py)             |
+| `[group:*#member]`               | filter + ...                            | combination of the actions above                                                                         |
+| `... or admin`                   | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
+| `... or member from owner-group` | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
+| `(... and ...)`                  | post-add rewrite?                       | not yet supported                                                                                        |
+| `(... but not ...)`              | post add rewrite?                       | not yet supported                                                                                        |
+
+* note: the current rewrite logic is too simple to express the second of those rules right now
 * schema type checking, so that all relations always resolve to a single type?
     * or resolve by relations and do duck-typing checks instead? this is more correct maybe but also more effort
 * need some way to track explicitly added tuples vs auto-included tuples?
