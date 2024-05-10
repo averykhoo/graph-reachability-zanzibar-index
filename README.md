@@ -19,13 +19,15 @@ And it should allow addition and removal in about linear-ish time
 * adding a new node `u` with no incoming/outgoing edges
 * removing a node `u` and all edges to/from `u`
 
-And it should build an index from a given graph in no worse than quadratic time,
-and shouldn't take any more than quadratic space.
+And it should build an index from a given graph in no worse than polynomial time,
+and shouldn't take any more than polynomial space.
+
+All this is to help with indexing permissions in [Google Zanzibar](https://zanzibar.tech)
 
 ## How does it work
 
-Assuming it does actually work, the code should explain how it works.
-If it doesn't work then this repo will probably be archived.
+Please read the the code to understand how it works.
+~~If it doesn't work then this repo will probably be archived.~~
 
 ## Why does it work
 
@@ -309,3 +311,14 @@ schema rewrite to rules/filters
     * might be possible to pre-compile match and rewrite rules into a flat list with multiple rewrites for efficiency
     * and compile the match rules into something like a trie for efficiency
 
+# TODO
+
+* re-introduce invariant checks for the index v3, and think of more checks
+* re-introduce randomized testing for v3
+* support tracking user-triples and rule-triples in the index
+* parse the fga schema (json) into filters and rewrite rules
+* store the filters and rewrite rules in the database
+* support namespacing within the database
+    * or just use a new database each time? probably better for it to be in the database though
+* figure out how to implement boolean operations with post-processing
+* output the new edges and newly removed edges for external indexing
