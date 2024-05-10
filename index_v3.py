@@ -14,10 +14,8 @@ class Node(SQLModel, table=True):
     predicate: str = Field(index=True)
     type: str = Field(index=True)
     name: str = Field(index=True)
-
-    # TODO
-    # implicit: bool = Field(default=True)  # if implicit, should be auto-deleted once all referencing tuples are deleted
-    # reference_count: int = Field(default=0)
+    implicit: bool = Field(default=True)  # if implicit, should be auto-deleted once all referencing tuples are deleted
+    reference_count: int = Field(default=0)
 
     @property
     def predicate_or_ellipsis(self) -> str | EllipsisType:
@@ -32,7 +30,7 @@ class Edge(SQLModel, table=True):
     indirect_edge_count: int = Field(default=0)
 
 
-engine = create_engine('sqlite:///database.db', echo=True)
+engine = create_engine('sqlite:///database.db')  # , echo=True)
 
 SQLModel.metadata.create_all(engine)
 
@@ -160,61 +158,142 @@ def _add_direct_edge_unsafe(subject_id: int,
         if subject_id != object_id and multiplier > 0:
             _add_db_edges_unsafe(session, subject_id, object_id, multiplier, multiplier)
 
+        # add reference counts
+        for node_id in (subject_id, object_id):
+            node = session.exec(select(Node)
+                                .where(Node.id == node_id)
+                                ).first()
+            assert node is not None
+            node.reference_count += 1
+            session.add(node)
+
         # commit transaction
         session.commit()
 
 
-def add_edge(subject_id, object_id):
+def node(predicate: str | EllipsisType,
+         entity_type: str,
+         entity_name: str,
+         *,
+         implicit: bool | None = None,
+         create_if_missing: bool = True,
+         ):
+    if predicate is Ellipsis:
+        predicate = '...'
+    with Session(engine) as session:
+        found = session.exec(select(Node)
+                             .where(Node.predicate == predicate)
+                             .where(Node.type == entity_type)
+                             .where(Node.name == entity_name)
+                             ).first()
+        if found is not None:
+            if implicit is not None and found.implicit != implicit:
+                found.implicit = False
+                session.add(found)
+                session.commit()
+                session.refresh(found)
+            return found
+        if not create_if_missing:
+            raise KeyError(f'Node missing: {predicate=}, {entity_type=}, {entity_name=}')
+        node = Node(predicate=predicate, type=entity_type, name=entity_name, implicit=implicit)
+        session.add(node)
+        session.commit()
+        session.refresh(node)
+        return node
+
+
+def add_edge(subject_predicate: str | EllipsisType,
+             subject_type: str,
+             subject_name: str,
+             relation: str,
+             object_type: str,
+             object_name: str,
+             ):
+    _subject = node(subject_predicate, subject_type, subject_name)
+    _object = node(relation, object_type, object_name)
+
     # sanity check
-    assert subject_id != object_id
+    assert _subject.id != _object.id
 
     with Session(engine) as session:
         triple = session.exec(select(Edge)
-                              .where(Edge.subject_id == object_id)
-                              .where(Edge.object_id == subject_id)
+                              .where(Edge.subject_id == _object.id)
+                              .where(Edge.object_id == _subject.id)
                               ).first()
         # ensure acyclic invariant holds
         if triple is not None and triple.indirect_edge_count > 0:
-            raise ValueError(f'{subject_id=} is reachable from {object_id=}, '
+            raise ValueError(f'{_subject=} is reachable from {_object=}, '
                              f'adding this edge would create a cycle')
 
-    _add_direct_edge_unsafe(subject_id, object_id, 1)
+    _add_direct_edge_unsafe(_subject.id, _object.id, 1)
 
 
-def remove_edge(subject_id, object_id):
+def remove_edge(subject_predicate: str | EllipsisType,
+                subject_type: str,
+                subject_name: str,
+                relation: str,
+                object_type: str,
+                object_name: str,
+                ):
+    try:
+        _subject = node(subject_predicate, subject_type, subject_name, create_if_missing=False)
+        _object = node(relation, object_type, object_name, create_if_missing=False)
+    except KeyError as e:
+        raise ValueError('Non-existent edge cannot be removed') from e
+
     # sanity check
-    assert subject_id != object_id
+    assert _subject.id != _object.id
 
     with Session(engine) as session:
         triple = session.exec(select(Edge)
-                              .where(Edge.subject_id == subject_id)
-                              .where(Edge.object_id == object_id)
+                              .where(Edge.subject_id == _subject.id)
+                              .where(Edge.object_id == _object.id)
                               ).first()
         # ensure acyclic invariant holds
         if triple is None or triple.direct_edge_count == 0:
-            raise ValueError(f'{subject_id=} has no direct edge to {object_id=}, '
+            raise ValueError(f'{_subject=} has no direct edge to {_object=}, '
                              f'cannot remove nonexistent edge')
 
-    _add_direct_edge_unsafe(subject_id, object_id, -1)
+    _add_direct_edge_unsafe(_subject.id, _object.id, -1)
 
 
-def remove_node(node_id: int):
-    # NOTE: this removes a node, not an entity
-    # removing an entity may require removing multiple nodes
-    _add_direct_edge_unsafe(node_id, node_id, -1)
+def remove_node(predicate: str | EllipsisType,
+                entity_type: str,
+                entity_name: str,
+                ):
+    _node = node(predicate, entity_type, entity_name, create_if_missing=False)  # raises KeyError if missing
+    _add_direct_edge_unsafe(_node.id, _node.id, -1)
 
 
-def check_reachable(subject_id: int, object_id: int):
+def check_reachable(subject_predicate: str | EllipsisType,
+                    subject_type: str,
+                    subject_name: str,
+                    relation: str,
+                    object_type: str,
+                    object_name: str,
+                    ):
+    # TODO: does not yet handle subject:* relations
+    try:
+        _subject = node(subject_predicate, subject_type, subject_name, create_if_missing=False)
+        _object = node(relation, object_type, object_name, create_if_missing=False)
+    except KeyError:
+        return False
+
+    # sanity check
+    assert _subject.id != _object.id
+
     with Session(engine) as session:
         triple = session.exec(select(Edge)
-                              .where(Edge.subject_id == subject_id)
-                              .where(Edge.object_id == object_id)
+                              .where(Edge.subject_id == _subject.id)
+                              .where(Edge.object_id == _object.id)
                               ).first()
         # ensure acyclic invariant holds
         return triple is not None and triple.indirect_edge_count > 0
 
 
 def lookup_reachable(subject_id: int):
+    # TODO: need some sort of sql table join to select object type
+    # TODO: return nodes or something more useful instead of node ids
     with Session(engine) as session:
         triples = session.exec(select(Edge)
                                .where(Edge.subject_id == subject_id)
@@ -230,6 +309,8 @@ def lookup_reachable(subject_id: int):
 
 
 def lookup_reverse(object_id: int):
+    # TODO: need some sort of sql table join to select subject type
+    # TODO: return nodes or something more useful instead of node ids
     with Session(engine) as session:
         triples = session.exec(select(Edge)
                                .where(Edge.object_id == object_id)
@@ -244,54 +325,24 @@ def lookup_reverse(object_id: int):
         return subject_ids
 
 
-def node(predicate: str | EllipsisType,
-         entity_type: str,
-         entity_name: str,
-         ):
-    if predicate is Ellipsis:
-        predicate = '...'
-    with Session(engine) as session:
-        found = session.exec(select(Node)
-                             .where(Node.predicate == predicate)
-                             .where(Node.type == entity_type)
-                             .where(Node.name == entity_name)
-                             ).all()
-        if found:
-            assert len(found) == 1
-            return found[0]
-        node = Node(predicate=predicate, type=entity_type, name=entity_name)
-        session.add(node)
-        session.commit()
-        session.refresh()
-        return node
-
-
 if __name__ == '__main__':
-    alice = node(..., 'user', 'alice')
-    bob = node(..., 'user', 'bob')
-    group_1 = node('member', 'group', 'g1')
-    group_2 = node('member', 'group', 'g2')
-    document_a_ro = node('reader', 'document', 'abc.xyz')
-    document_a_rw = node('writer', 'document', 'abc.xyz')
-    document_b_rw = node('writer', 'document', 'qwerty.pdf')
+    add_edge('writer', 'document', 'abc.xyz', 'reader', 'document', 'abc.xyz')
+    add_edge(..., 'user', 'alice', 'reader', 'document', 'abc.xyz')
+    add_edge(..., 'user', 'alice', 'member', 'group', 'g1')
+    add_edge(..., 'user', 'bob', 'member', 'group', 'g1')
+    add_edge(..., 'user', 'bob', 'member', 'group', 'g2')
+    add_edge('member', 'group', 'g1', 'writer', 'document', 'abc.xyz')
+    add_edge('member', 'group', 'g2', 'reader', 'document', 'abc.xyz')
+    add_edge('member', 'group', 'g2', 'writer', 'document', 'qwerty.pdf')
 
-    add_edge(document_a_rw.id, document_a_ro.id)
-    add_edge(alice.id, document_a_ro.id)
-    add_edge(alice.id, group_1.id)
-    add_edge(bob.id, group_1.id)
-    add_edge(bob.id, group_2.id)
-    add_edge(group_1.id, document_a_rw.id)
-    add_edge(group_2.id, document_a_ro.id)
-    add_edge(group_2.id, document_b_rw.id)
+    print(f"{check_reachable(..., 'user', 'alice', 'reader', 'document', 'abc.xyz')=}")
+    print(f"{check_reachable(..., 'user', 'alice', 'writer', 'document', 'abc.xyz')=}")
+    print(f"{check_reachable(..., 'user', 'alice', 'writer', 'document', 'qwerty.pdf')=}")
+    print(f"{lookup_reachable(node(..., 'user', 'alice', create_if_missing=False).id)=}")
 
-    print(f'{check_reachable(alice.id, document_a_ro.id)=}')
-    print(f'{check_reachable(alice.id, document_a_rw.id)=}')
-    print(f'{check_reachable(alice.id, document_b_rw.id)=}')
-    print(f'{lookup_reachable(alice.id)=}')
+    print(f"{check_reachable(..., 'user', 'bob', 'reader', 'document', 'abc.xyz')=}")
+    print(f"{check_reachable(..., 'user', 'bob', 'writer', 'document', 'abc.xyz')=}")
+    print(f"{check_reachable(..., 'user', 'bob', 'writer', 'document', 'qwerty.pdf')=}")
+    print(f"{lookup_reachable(node(..., 'user', 'bob', create_if_missing=False).id)=}")
 
-    print(f'{check_reachable(bob.id, document_a_ro.id)=}')
-    print(f'{check_reachable(bob.id, document_a_rw.id)=}')
-    print(f'{check_reachable(bob.id, document_b_rw.id)=}')
-    print(f'{lookup_reachable(bob.id)=}')
-
-    print(f'{lookup_reverse(document_a_ro.id)=}')
+    print(f"{lookup_reverse(node('reader', 'document', 'abc.xyz', create_if_missing=False).id)=}")
