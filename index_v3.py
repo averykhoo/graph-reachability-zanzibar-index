@@ -158,14 +158,27 @@ def _add_direct_edge_unsafe(subject_id: int,
         if subject_id != object_id and multiplier > 0:
             _add_db_edges_unsafe(session, subject_id, object_id, multiplier, multiplier)
 
+        # delete the entire node, ignoring state of Node.implicit flag
+        if subject_id == object_id:
+            _node = session.exec(select(Node)
+                                 .where(Node.id == subject_id)
+                                 ).first()
+            assert _node is not None
+            session.delete(_node)
+
         # add reference counts
-        for node_id in (subject_id, object_id):
-            node = session.exec(select(Node)
-                                .where(Node.id == node_id)
-                                ).first()
-            assert node is not None
-            node.reference_count += 1
-            session.add(node)
+        else:
+            for node_id in (subject_id, object_id):
+                _node = session.exec(select(Node)
+                                     .where(Node.id == node_id)
+                                     ).first()
+                assert _node is not None
+                assert _node.reference_count + multiplier >= 0
+                if _node.reference_count + multiplier == 0 and _node.implicit:
+                    session.delete(_node)
+                else:
+                    _node.reference_count += multiplier
+                    session.add(_node)
 
         # commit transaction
         session.commit()
@@ -195,11 +208,11 @@ def node(predicate: str | EllipsisType,
             return found
         if not create_if_missing:
             raise KeyError(f'Node missing: {predicate=}, {entity_type=}, {entity_name=}')
-        node = Node(predicate=predicate, type=entity_type, name=entity_name, implicit=implicit)
-        session.add(node)
+        _node = Node(predicate=predicate, type=entity_type, name=entity_name, implicit=implicit)
+        session.add(_node)
         session.commit()
-        session.refresh(node)
-        return node
+        session.refresh(_node)
+        return _node
 
 
 def add_edge(subject_predicate: str | EllipsisType,
