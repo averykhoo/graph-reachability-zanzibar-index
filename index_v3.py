@@ -1,6 +1,8 @@
 from types import EllipsisType
 
+from sqlalchemy.orm import RelationshipProperty
 from sqlmodel import Field
+from sqlmodel import Relationship
 from sqlmodel import SQLModel
 from sqlmodel import Session
 from sqlmodel import create_engine
@@ -28,6 +30,13 @@ class Edge(SQLModel, table=True):
     object_id: int = Field(foreign_key="node.id", index=True)
     direct_edge_count: int = Field(default=0)  # how many tuples were inserted
     indirect_edge_count: int = Field(default=0)
+
+    # TODO: some kind of `user_edge_count` to differentiate user-added triples
+
+    # the `foreign_keys` bit looks sus but it works
+    # note: it must be called within a db session at least once to use it later
+    subject: Node = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[Edge.subject_id]'))
+    object: Node = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[Edge.object_id]'))
 
 
 engine = create_engine('sqlite:///database.db')  # , echo=True)
@@ -82,6 +91,8 @@ def _add_db_edges_unsafe(session: Session,
         return
 
     for triple in triples:
+        print(triple.subject)
+        print(triple.object)
         if direct_edge_count is None or triple.direct_edge_count + direct_edge_count == 0:
             if indirect_edge_count is None or triple.indirect_edge_count + indirect_edge_count == 0:
                 session.delete(triple)
@@ -103,22 +114,24 @@ def _add_db_edges_unsafe(session: Session,
 
 def _add_direct_edge_unsafe(subject_id: int,
                             object_id: int,
-                            multiplier: int,
+                            count: int,
                             ):
+    # TODO: support adding/removing multiple edges at once? and use the multiset to collate the changes
+
     # if multiplier is zero, there's probably a bug somewhere
     # at least for now, we only ever add or remove a single edge at a time
-    assert multiplier in {-1, 1}
+    assert count in {-1, 1}
 
     # do this all in a single transaction
     with Session(engine) as session:
 
         # we need to remove direct edge first to preserve the invariant
-        if subject_id != object_id and multiplier < 0:
-            _add_db_edges_unsafe(session, subject_id, object_id, multiplier, multiplier)
+        if subject_id != object_id and count < 0:
+            _add_db_edges_unsafe(session, subject_id, object_id, count, count)
 
         # alternatively, remove the entire node from direct edges
         if subject_id == object_id:
-            assert multiplier == -1
+            assert count == -1
             _add_db_edges_unsafe(session, subject_id, None, None, 0)
             _add_db_edges_unsafe(session, None, object_id, None, 0)
 
@@ -144,19 +157,19 @@ def _add_direct_edge_unsafe(subject_id: int,
         # add the indirect edges:
         for from_node_id, from_count in reachable_before_subject.items():
             for to_node_id, to_count in reachable_after_object.items():
-                _add_db_edges_unsafe(session, from_node_id, to_node_id, 0, from_count * to_count * multiplier)
+                _add_db_edges_unsafe(session, from_node_id, to_node_id, 0, from_count * to_count * count)
 
         # add the object's reachable nodes to subject
         for to_node_id, count in reachable_after_object.items():
-            _add_db_edges_unsafe(session, subject_id, to_node_id, 0, count * multiplier)
+            _add_db_edges_unsafe(session, subject_id, to_node_id, 0, count * count)
 
         # make object reachable from all the nodes that can reach subject
         for from_node_id, count in reachable_before_subject.items():
-            _add_db_edges_unsafe(session, from_node_id, object_id, 0, count * multiplier)
+            _add_db_edges_unsafe(session, from_node_id, object_id, 0, count * count)
 
         # add the direct edge last to preserve the invariant
-        if subject_id != object_id and multiplier > 0:
-            _add_db_edges_unsafe(session, subject_id, object_id, multiplier, multiplier)
+        if subject_id != object_id and count > 0:
+            _add_db_edges_unsafe(session, subject_id, object_id, count, count)
 
         # delete the entire node, ignoring state of Node.implicit flag
         if subject_id == object_id:
@@ -173,11 +186,11 @@ def _add_direct_edge_unsafe(subject_id: int,
                                      .where(Node.id == node_id)
                                      ).first()
                 assert _node is not None
-                assert _node.reference_count + multiplier >= 0
-                if _node.reference_count + multiplier == 0 and _node.implicit:
+                assert _node.reference_count + count >= 0
+                if _node.reference_count + count == 0 and _node.implicit:
                     session.delete(_node)
                 else:
-                    _node.reference_count += multiplier
+                    _node.reference_count += count
                     session.add(_node)
 
         # commit transaction
