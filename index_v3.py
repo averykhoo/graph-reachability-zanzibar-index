@@ -117,6 +117,11 @@ def _add_direct_edge_unsafe(subject_id: int,
                             count: int,
                             ):
     # TODO: support adding/removing multiple edges at once? and use the multiset to collate the changes
+    # this is not compatible with node removal though, since that operation is inherently ordered
+    # probably take in a dict like {(subject_id, object_id): count}
+    # read all we need, and cache in a local multiset so it's still correct
+    # then collate changes in multi-sets for direct and indirect edge counts (and user edge counts)
+    # and only at the end, make all the changes in one transaction
 
     # if multiplier is zero, there's probably a bug somewhere
     # at least for now, we only ever add or remove a single edge at a time
