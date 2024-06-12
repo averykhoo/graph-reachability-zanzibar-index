@@ -5,6 +5,7 @@ from sqlmodel import Field
 from sqlmodel import Relationship
 from sqlmodel import SQLModel
 from sqlmodel import Session
+from sqlmodel import UniqueConstraint
 from sqlmodel import create_engine
 from sqlmodel import select
 
@@ -12,6 +13,10 @@ from index_v1 import MultiSet
 
 
 class Node(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint('predicate', 'type', 'name', name='node_unique_constraint'),
+    )
+
     id: int | None = Field(default=None, primary_key=True)
     predicate: str = Field(index=True)
     type: str = Field(index=True)
@@ -25,6 +30,10 @@ class Node(SQLModel, table=True):
 
 
 class Edge(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint('subject_id', 'object_id', name='edge_unique_constraint'),
+    )
+
     id: int | None = Field(default=None, primary_key=True)
     subject_id: int = Field(foreign_key="node.id", index=True)
     object_id: int = Field(foreign_key="node.id", index=True)
