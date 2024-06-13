@@ -228,9 +228,11 @@ See the paper at https://zanzibar.tech
 
 ### index guarantee
 
-* if we want to ensure writes to the index always succeed, then we need a store of ignored tuples that cause cycles
-* then we can add and remove them as no-ops
-* also the remove should always happen before the adds
+* ~~if we want to ensure writes to the index always succeed, then we need a store of ignored tuples that cause cycles~~
+* ~~then we can add and remove them as no-ops~~
+* ~~also the remove should always happen before the adds~~
+
+*the above doesn't work since removing a tuple that breaks the cycle doesn't add the previously ignored tuple* 
 
 ### notes
 
