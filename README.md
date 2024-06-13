@@ -1,7 +1,9 @@
-# Directed Acyclic Graph Reachability Indexing
+# Directed Acyclic (Multi-)Graph Reachability Indexing for Zanzibar
 
 I can't find any literature on a graph reachability index that works exactly the way I want,
-so here we go again on another yak-shaving exercise
+so here we go again on another ~~yak-shaving exercise~~ exploratory side project
+
+This is all an effort to find a way to index zanzibar-like permissions for efficient lookup
 
 ## What is this
 
