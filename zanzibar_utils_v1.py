@@ -169,6 +169,201 @@ class RuleSet:
                     unprocessed.add(_result)
 
 
+def parse_relation_rule(rule: str) -> tuple[list[tuple[str, str | None]], list[tuple[str, str]]]:
+    """
+    NOTE: WINDSURF WROTE THIS CODE
+    Parse a single relation rule into direct assignments and from relations.
+    Returns (direct_assignments, from_relations) where:
+        - direct_assignments is list of (type, predicate) for direct type assignments
+        - from_relations is list of (relation, from_relation) for 'X from Y' rules
+    
+    Examples:
+        "[user]" -> ([(user, None)], [])
+        "[user, domain#member]" -> ([(user, None), (domain, member)], [])
+        "writer" -> ([(None, writer)], [])
+        "owner from parent_folder" -> ([], [(owner, parent_folder)])
+    """
+    direct_assignments = []
+    from_relations = []
+
+    # Handle 'X from Y' format
+    if ' from ' in rule:
+        relation, from_relation = rule.strip().split(' from ')
+        from_relations.append((relation.strip(), from_relation.strip()))
+        return direct_assignments, from_relations
+
+    # Handle direct type assignments [type1, type2#relation]
+    if rule.startswith('['):
+        subjects = rule[1:].split(']')[0].split(',')
+        for subject in subjects:
+            subject = subject.strip()
+            if '#' in subject:
+                # Handle type#relation format
+                subject_type, subject_predicate = subject.split('#')
+                direct_assignments.append((subject_type.strip(), subject_predicate.strip()))
+            else:
+                # Handle direct type assignment
+                direct_assignments.append((subject.strip(), None))
+    else:
+        # Handle single relation reference (e.g., "writer")
+        direct_assignments.append((None, rule.strip()))
+
+    return direct_assignments, from_relations
+
+
+def parse_openfga_schema(schema: str) -> RuleSet:
+    """
+    NOTE: WINDSURF WROTE THIS CODE
+    Parse an OpenFGA schema string and generate a RuleSet.
+    
+    Example schema:
+    model
+      schema 1.1
+    
+    type folder
+      relations
+        define owner: [user, domain#member] or owner from parent_folder
+        define viewer: [user] or writer or viewer from parent_folder
+    """
+    rules_and_filters = []
+    current_type = None
+
+    for line in schema.strip().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+
+        # Handle indentation by counting leading spaces
+        indent = len(line) - len(line.lstrip())
+        line = line.lstrip()
+
+        if line.startswith('model'):
+            continue
+        elif line.startswith('schema'):
+            continue
+        elif line.startswith('type '):
+            current_type = line.split(' ', 1)[1].strip()
+        elif line.startswith('relations'):
+            continue
+        elif line.startswith('define '):
+            if not current_type:
+                raise ValueError("Relation definition without type context")
+
+            # Parse relation definition
+            # Format: define relation_name: [...] or other_relation or relation from other_relation
+            relation_def = line[7:].strip()  # Remove 'define '
+            relation_name, relation_rules = relation_def.split(':', 1)
+            relation_name = relation_name.strip()
+
+            # Split on 'or' and process each rule
+            for rule in relation_rules.strip().split(' or '):
+                rule = rule.strip()
+                direct_assignments, from_relations = parse_relation_rule(rule)
+
+                # Add filters for direct type assignments
+                for subject_type, subject_predicate in direct_assignments:
+                    if subject_type is None:
+                        # This is a relation reference (e.g., "writer")
+                        rules_and_filters.append(
+                            Rule(
+                                RelationalTriplePattern(
+                                    relation=subject_predicate,
+                                    object_type=current_type
+                                ),
+                                RelationalTriplePattern(
+                                    relation=relation_name,
+                                    object_type=current_type
+                                )
+                            )
+                        )
+                    else:
+                        # This is a type assignment (e.g., "[user]" or "domain#member")
+                        rules_and_filters.append(
+                            Filter(RelationalTriplePattern(
+                                subject_predicate=subject_predicate or Ellipsis,
+                                subject_type=subject_type,
+                                relation=relation_name,
+                                object_type=current_type
+                            ))
+                        )
+
+                # Add rules for 'from' relations
+                for relation, from_relation in from_relations:
+                    # Create a rule that says: if X has relation R with Y's from_relation,
+                    # then X has relation with Y
+                    rules_and_filters.append(
+                        Rule(
+                            RelationalTriplePattern(
+                                relation=relation,
+                                object_type=current_type,
+                                object_predicate=from_relation
+                            ),
+                            RelationalTriplePattern(
+                                relation=relation_name,
+                                object_type=current_type
+                            )
+                        )
+                    )
+
+    return RuleSet(rules_and_filters)
+
+
+def generate_example_ruleset() -> RuleSet:
+    """
+    NOTE: WINDSURF WROTE THIS CODE
+    Generate a RuleSet from the Google Drive example OpenFGA schema.
+    """
+    schema = '''
+    model
+      schema 1.1
+
+    type user
+
+    type domain
+      relations
+        define member: [user]
+
+    type folder
+      relations
+        define can_share: writer
+        define owner: [user, domain#member] or owner from parent_folder
+        define parent_folder: [folder]
+        define viewer: [user, domain#member] or writer or viewer from parent_folder
+        define writer: [user, domain#member] or owner or writer from parent_folder
+
+    type document
+      relations
+        define can_share: writer
+        define owner: [user, domain#member] or owner from parent_folder
+        define parent_folder: [folder]
+        define viewer: [user, domain#member] or writer or viewer from parent_folder
+        define writer: [user, domain#member] or owner or writer from parent_folder
+    '''
+    return parse_openfga_schema(schema)
+
+
+# NOTE: WINDSURF WROTE THIS CODE
+if __name__ == '__main__':
+    # Test the parser with the Google Drive example
+    ruleset = generate_example_ruleset()
+
+    # Test some example triples
+    test_triples = [
+        # Direct user ownership
+        RelationalTriple(Entity('user', 'alice'), 'owner', Entity('folder', 'root')),
+        # Domain member ownership
+        RelationalTriple(Entity('domain', 'example.com'), 'member', Entity('user', 'bob')),
+        # Parent folder inheritance
+        RelationalTriple(Entity('folder', 'subfolder'), 'parent_folder', Entity('folder', 'root')),
+        # Writer implies viewer
+        RelationalTriple(Entity('user', 'charlie'), 'writer', Entity('document', 'doc1')),
+    ]
+
+    for triple in test_triples:
+        print(f"\nProcessing: {triple}")
+        for result in ruleset.apply(triple):
+            print(f"Generated: {result}")
+
 if __name__ == '__main__':
     # https://github.com/openfga/sample-stores/blob/main/stores/github/model.fga
     # (the openfga dsl is slightly nicer than the spicedb dsl)
