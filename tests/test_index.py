@@ -61,7 +61,37 @@ class IndexV3Polyfill(IndexPolyfill):
         return check_reachable(..., 'node', from_node, '...', 'node', to_node)
 
 
-@pytest.fixture(params=[IndexV1Polyfill, IndexV2Polyfill, IndexV3Polyfill])
+class IndexV4Polyfill(IndexPolyfill):
+    def __init__(self):
+        from index_v4 import ReachabilityIndex, Store
+        from sqlmodel import Session, create_engine
+        
+        self.engine = create_engine('sqlite:///:memory:')
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+        store = Store(id="test_store")
+        self.session.add(store)
+        self.session.commit()
+        
+        self.idx = ReachabilityIndex(self.session, store_id="test_store")
+
+    def add_edge(self, from_node: str, to_node: str):
+        self.idx.add_edge(..., 'node', from_node, '...', 'node', to_node)
+        self.session.commit()
+
+    def remove_edge(self, from_node: str, to_node: str):
+        self.idx.remove_edge(..., 'node', from_node, '...', 'node', to_node)
+        self.session.commit()
+
+    def check_reachable(self, from_node: str, to_node: str) -> bool:
+        return self.idx.check_reachable(..., 'node', from_node, '...', 'node', to_node)
+
+    def __del__(self):
+        if hasattr(self, 'session'):
+            self.session.close()
+
+
+@pytest.fixture(params=[IndexV1Polyfill, IndexV2Polyfill, IndexV3Polyfill, IndexV4Polyfill])
 def index(request):
     """Provides a fresh index instance for each test across all versions."""
     return request.param()
