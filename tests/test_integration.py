@@ -139,3 +139,47 @@ def test_integration_hierarchy():
 
     # Check that another user doesn't have access
     assert check_reachable(..., 'user', 'eve', 'viewer', 'document', 'main.py') is False
+
+
+def test_integration_confluence(load_fga_schema):
+    schema = load_fga_schema('confluence.fga')
+    ruleset = parse_openfga_schema(schema)
+    
+    t1 = RelationalTriple(Entity('user', 'u1'), 'member', Entity('group', 'g1'), Ellipsis)
+    ingest_triple(ruleset, t1)
+    
+    t2 = RelationalTriple(Entity('group', 'g1'), 'member', Entity('organization', 'org1'), 'member')
+    ingest_triple(ruleset, t2)
+    
+    t3 = RelationalTriple(Entity('organization', 'org1'), 'organization', Entity('space', 's1'), Ellipsis)
+    ingest_triple(ruleset, t3)
+    
+    t4 = RelationalTriple(Entity('space', 's1'), 'space', Entity('page', 'p1'), Ellipsis)
+    ingest_triple(ruleset, t4)
+    
+    assert check_reachable(..., 'user', 'u1', 'can_view_pages', 'space', 's1') is True
+    assert check_reachable(..., 'user', 'u1', 'can_view', 'page', 'p1') is True
+
+@pytest.mark.xfail(reason="'but not' might not be fully supported by parser yet")
+def test_integration_demorgans(load_fga_schema):
+    schema = load_fga_schema('demorgans_reverse.fga')
+    ruleset = parse_openfga_schema(schema)
+    
+    t1 = RelationalTriple(Entity('user', 'alice'), 'assigned', Entity('role', 'r1'), Ellipsis)
+    ingest_triple(ruleset, t1)
+
+def test_integration_github(load_fga_schema):
+    schema = load_fga_schema('github.fga')
+    ruleset = parse_openfga_schema(schema)
+    
+    t1 = RelationalTriple(Entity('user', 'u1'), 'repo_admin', Entity('organization', 'org1'), Ellipsis)
+    ingest_triple(ruleset, t1)
+    
+    t2 = RelationalTriple(Entity('organization', 'org1'), 'owner', Entity('repo', 'r1'), Ellipsis)
+    ingest_triple(ruleset, t2)
+    
+    assert check_reachable(..., 'user', 'u1', 'admin', 'repo', 'r1') is True
+    assert check_reachable(..., 'user', 'u1', 'maintainer', 'repo', 'r1') is True
+    assert check_reachable(..., 'user', 'u1', 'writer', 'repo', 'r1') is True
+    assert check_reachable(..., 'user', 'u1', 'triager', 'repo', 'r1') is True
+    assert check_reachable(..., 'user', 'u1', 'reader', 'repo', 'r1') is True

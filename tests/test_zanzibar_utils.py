@@ -161,3 +161,21 @@ def test_parse_openfga_schema():
     assert implied_owner.subject_predicate == 'owner'
     assert 'writer' in relations
     assert 'viewer' in relations
+
+
+
+def test_parse_confluence_fga(load_fga_schema):
+    schema = load_fga_schema('confluence.fga')
+    ruleset = parse_openfga_schema(schema)
+    assert len(ruleset.rules_and_filters) > 0
+
+def test_parse_demorgans_fga(load_fga_schema):
+    for fga_file in ['demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga']:
+        schema = load_fga_schema(fga_file)
+        ruleset = parse_openfga_schema(schema)
+        assert len(ruleset.rules_and_filters) > 0
+
+def test_parse_github_fga(load_fga_schema):
+    schema = load_fga_schema('github.fga')
+    ruleset = parse_openfga_schema(schema)
+    assert len(ruleset.rules_and_filters) > 0
