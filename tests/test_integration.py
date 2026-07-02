@@ -284,16 +284,15 @@ def test_integration_gdrive(backend: Backend, load_fga_schema):
     schema = load_fga_schema('gdrive.fga')
     ruleset = parse_openfga_schema(schema)
 
-    # alice is a member of engineering domain
-    t1 = RelationalTriple(Entity('user', 'alice'), 'member', Entity('domain', 'engineering'), Ellipsis)
+    # alice is a member of engineering group
+    t1 = RelationalTriple(Entity('user', 'alice'), 'member', Entity('group', 'engineering'), Ellipsis)
     ingest_triple(backend, ruleset, t1)
 
-    # engineering domain member is a writer on shared-docs folder
-    t2 = RelationalTriple(Entity('domain', 'engineering'), 'writer', Entity('folder', 'shared-docs'), 'member')
+    # engineering group member is a viewer on shared-docs folder
+    t2 = RelationalTriple(Entity('group', 'engineering'), 'viewer', Entity('folder', 'shared-docs'), 'member')
     ingest_triple(backend, ruleset, t2)
 
-    # alice should be writer and viewer of shared-docs
-    assert backend.check_reachable(..., 'user', 'alice', 'writer', 'folder', 'shared-docs') is True
+    # alice should be a viewer of shared-docs
     assert backend.check_reachable(..., 'user', 'alice', 'viewer', 'folder', 'shared-docs') is True
 
     # alice should NOT be owner

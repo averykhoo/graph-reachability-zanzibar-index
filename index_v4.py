@@ -17,11 +17,12 @@ class PermissionDelta(NamedTuple):
     action: str  # "ADDED" or "REMOVED"
 
 
-class Store(SQLModel, table=True):
+class StoreV4(SQLModel, table=True):
     """
     Represents a discrete graph index environment (e.g., a specific Tenant or App).
     Allows attaching arbitrary metadata to the graph boundary.
     """
+    __tablename__ = "store_v4"
     __table_args__ = {'extend_existing': True}
 
     id: str = Field(primary_key=True)
@@ -29,43 +30,49 @@ class Store(SQLModel, table=True):
     created_at: float = Field(default_factory=time.time)
 
 
-class Node(SQLModel, table=True):
+class NodeV4(SQLModel, table=True):
+    __tablename__ = "node_v4"
     __table_args__ = (
-        UniqueConstraint('store_id', 'predicate', 'type', 'name', name='node_unique_constraint'),
+        UniqueConstraint('store_id', 'predicate', 'type', 'name', name='node_v4_unique_constraint'),
         {'extend_existing': True},
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    store_id: str = Field(foreign_key="store.id", index=True)
+    store_id: str = Field(foreign_key="store_v4.id", index=True)
     predicate: str = Field(index=True)
     type: str = Field(index=True)
     name: str = Field(index=True)
     implicit: bool = Field(default=True)
     reference_count: int = Field(default=0)
 
-    store: Store = Relationship()
+    store: StoreV4 = Relationship()
 
     @property
     def predicate_or_ellipsis(self) -> str | EllipsisType:
         return Ellipsis if self.predicate == '...' else self.predicate
 
 
-class Edge(SQLModel, table=True):
+class EdgeV4(SQLModel, table=True):
+    __tablename__ = "edge_v4"
     __table_args__ = (
-        UniqueConstraint('store_id', 'subject_id', 'object_id', name='edge_unique_constraint'),
+        UniqueConstraint('store_id', 'subject_id', 'object_id', name='edge_v4_unique_constraint'),
         {'extend_existing': True},
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    store_id: str = Field(foreign_key="store.id", index=True)
-    subject_id: int = Field(foreign_key="node.id", index=True)
-    object_id: int = Field(foreign_key="node.id", index=True)
+    store_id: str = Field(foreign_key="store_v4.id", index=True)
+    subject_id: int = Field(foreign_key="node_v4.id", index=True)
+    object_id: int = Field(foreign_key="node_v4.id", index=True)
     direct_edge_count: int = Field(default=0)
     indirect_edge_count: int = Field(default=0)
 
-    store: Store = Relationship()
-    subject: Node = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[Edge.subject_id]'))
-    object: Node = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[Edge.object_id]'))
+    store: StoreV4 = Relationship()
+    subject: NodeV4 = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[EdgeV4.subject_id]'))
+    object: NodeV4 = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[EdgeV4.object_id]'))
+
+Node = NodeV4
+Edge = EdgeV4
+Store = StoreV4
 
 
 class ReachabilityIndex:
@@ -91,11 +98,11 @@ class ReachabilityIndex:
         assert direct_count != 0 or indirect_count != 0
 
         deltas = []
-        _select = select(Edge).where(Edge.store_id == self.store_id)
+        _select = select(EdgeV4).where(EdgeV4.store_id == self.store_id)
         if subject_id is not None:
-            _select = _select.where(Edge.subject_id == subject_id)
+            _select = _select.where(EdgeV4.subject_id == subject_id)
         if object_id is not None:
-            _select = _select.where(Edge.object_id == object_id)
+            _select = _select.where(EdgeV4.object_id == object_id)
 
         triples = self.session.exec(_select).all()
 
@@ -109,7 +116,7 @@ class ReachabilityIndex:
             assert (indirect_count or 0) >= (direct_count or 0)
             assert (indirect_count or 0) > 0
 
-            edge = Edge(
+            edge = EdgeV4(
                 store_id=self.store_id,
                 subject_id=subject_id,
                 object_id=object_id,
@@ -180,13 +187,13 @@ class ReachabilityIndex:
         reachable_after_object = MultiSet()
 
         triples_from = self.session.exec(
-            select(Edge).where(Edge.store_id == self.store_id).where(Edge.object_id == subject_id)
+            select(EdgeV4).where(EdgeV4.store_id == self.store_id).where(EdgeV4.object_id == subject_id)
         ).all()
         for triple in triples_from:
             reachable_before_subject[triple.subject_id] = triple.indirect_edge_count
 
         triples_to = self.session.exec(
-            select(Edge).where(Edge.store_id == self.store_id).where(Edge.subject_id == object_id)
+            select(EdgeV4).where(EdgeV4.store_id == self.store_id).where(EdgeV4.subject_id == object_id)
         ).all()
         for triple in triples_to:
             reachable_after_object[triple.object_id] = triple.indirect_edge_count
@@ -212,13 +219,13 @@ class ReachabilityIndex:
         # Handle logical Node deletion
         if subject_id == object_id:
             _node = self.session.exec(
-                select(Node).where(Node.store_id == self.store_id).where(Node.id == subject_id)).first()
+                select(NodeV4).where(NodeV4.store_id == self.store_id).where(NodeV4.id == subject_id)).first()
             if _node:
                 self.session.delete(_node)
         else:
             for node_id in (subject_id, object_id):
                 _node = self.session.exec(
-                    select(Node).where(Node.store_id == self.store_id).where(Node.id == node_id)).first()
+                    select(NodeV4).where(NodeV4.store_id == self.store_id).where(NodeV4.id == node_id)).first()
                 if _node:
                     assert _node.reference_count + count >= 0
                     if _node.reference_count + count == 0 and _node.implicit:
@@ -230,16 +237,16 @@ class ReachabilityIndex:
         return deltas
 
     def node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str, *, create_if_missing: bool,
-             implicit: bool | None = None) -> Node:
+             implicit: bool | None = None) -> NodeV4:
         if predicate is Ellipsis:
             predicate = '...'
 
         found = self.session.exec(
-            select(Node)
-            .where(Node.store_id == self.store_id)
-            .where(Node.predicate == predicate)
-            .where(Node.type == entity_type)
-            .where(Node.name == entity_name)
+            select(NodeV4)
+            .where(NodeV4.store_id == self.store_id)
+            .where(NodeV4.predicate == predicate)
+            .where(NodeV4.type == entity_type)
+            .where(NodeV4.name == entity_name)
         ).first()
 
         if found is not None:
@@ -251,7 +258,7 @@ class ReachabilityIndex:
         if not create_if_missing:
             raise KeyError(f'Node missing: {predicate=}, {entity_type=}, {entity_name=}')
 
-        _node = Node(store_id=self.store_id, predicate=predicate, type=entity_type, name=entity_name, implicit=implicit)
+        _node = NodeV4(store_id=self.store_id, predicate=predicate, type=entity_type, name=entity_name, implicit=implicit)
         self.session.add(_node)
         self.session.flush()  # flush to get auto-increment id immediately without committing transaction
         return _node
@@ -264,10 +271,10 @@ class ReachabilityIndex:
         assert _subject.id != _object.id
 
         triple = self.session.exec(
-            select(Edge)
-            .where(Edge.store_id == self.store_id)
-            .where(Edge.subject_id == _object.id)
-            .where(Edge.object_id == _subject.id)
+            select(EdgeV4)
+            .where(EdgeV4.store_id == self.store_id)
+            .where(EdgeV4.subject_id == _object.id)
+            .where(EdgeV4.object_id == _subject.id)
         ).first()
 
         if triple is not None and triple.indirect_edge_count > 0:
@@ -322,13 +329,13 @@ class ReachabilityIndex:
 
     def lookup_reachable(self, subject_id: int) -> set[int]:
         triples = self.session.exec(
-            select(Edge).where(Edge.store_id == self.store_id).where(Edge.subject_id == subject_id)
+            select(EdgeV4).where(EdgeV4.store_id == self.store_id).where(EdgeV4.subject_id == subject_id)
         ).all()
         return {t.object_id for t in triples if t.indirect_edge_count > 0}
 
     def lookup_reverse(self, object_id: int) -> set[int]:
         triples = self.session.exec(
-            select(Edge).where(Edge.store_id == self.store_id).where(Edge.object_id == object_id)
+            select(EdgeV4).where(EdgeV4.store_id == self.store_id).where(EdgeV4.object_id == object_id)
         ).all()
         return {t.subject_id for t in triples if t.indirect_edge_count > 0}
 
