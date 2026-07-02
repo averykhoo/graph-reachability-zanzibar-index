@@ -1,0 +1,29 @@
+model
+  schema 1.1
+
+type user
+
+type role
+  relations
+    define granted: [user]
+
+type cond
+  relations
+    define assigned: [role]
+
+type attr
+  relations
+    define required_by: [cond]
+
+type doc
+  relations
+    define _all_attrs: [attr:*]
+    define labels: [attr]
+    define non_labels: _all_attrs but not labels
+
+    define _all_conds: [cond:*]
+    define unmatchable_conds: required_by from non_labels
+    define matchable_conds: _all_conds but not unmatchable_conds
+
+    define matched_roles: assigned from matchable_conds
+    define matched_users: granted from matched_roles

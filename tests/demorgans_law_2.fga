@@ -1,0 +1,29 @@
+model
+  schema 1.1
+
+type user
+
+type attr
+  relations
+    define _all_users: [user:*]
+    define has_attr: [user]
+    define missing_user: _all_users but not has_attr
+
+type cond
+  relations
+    define _all_users: [user:*]
+    define requires: [attr]
+    define user_missing_requirement: missing_user from requires
+    define user_met_requirement: _all_users but not user_missing_requirement
+
+type role
+  relations
+    define assigned: [user]
+    define match_any: [cond]
+    define role_user_met: user_met_requirement from match_any
+    define authorized_user: assigned and role_user_met
+
+type doc
+  relations
+    define associated_role: [role]
+    define access: authorized_user from associated_role
