@@ -1,0 +1,37 @@
+model
+  schema 1.1
+
+type user
+
+type organization
+  relations
+    define member: [user, group#member]
+    define admin: [user]
+    define can_create_page: member
+    define can_create_project: member
+
+type group
+  relations
+    define member: [user]
+
+type space
+  relations
+    define organization: [organization]
+    define can_view_pages: member from organization
+
+type page
+  relations
+    define space: [space]
+    define owner: [user]
+    define can_view: owner or can_view_pages from space
+
+type project
+  relations
+    define organization: [organization]
+    define viewer: member from organization
+
+type ticket
+  relations
+    define project: [project]
+    define owner: [user]
+    define can_view: owner or viewer from project

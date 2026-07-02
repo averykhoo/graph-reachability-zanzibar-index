@@ -1,0 +1,27 @@
+model
+  schema 1.1
+
+type doc
+
+type attr
+  relations
+    define _all_docs: [doc:*]
+    define labels: [doc]
+    define does_not_label: _all_docs but not labels
+
+type cond
+  relations
+    define _all_docs: [doc:*]
+    define requires: [attr]
+    define requirement_not_met: does_not_label from requires
+    define requirement_met: _all_docs but not requirement_not_met
+
+type role
+  relations
+    define match_any: [cond]
+    define access: requirement_met from match_any
+
+type user
+  relations
+    define assigned: [role]
+    define access: access from assigned
