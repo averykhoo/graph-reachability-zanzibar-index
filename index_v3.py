@@ -174,12 +174,12 @@ def _add_direct_edge_unsafe(subject_id: int,
                 _add_db_edges_unsafe(session, from_node_id, to_node_id, 0, from_count * to_count * count)
 
         # add the object's reachable nodes to subject
-        for to_node_id, count in reachable_after_object.items():
-            _add_db_edges_unsafe(session, subject_id, to_node_id, 0, count * count)
+        for to_node_id, path_count in reachable_after_object.items():
+            _add_db_edges_unsafe(session, subject_id, to_node_id, 0, path_count * count)
 
         # make object reachable from all the nodes that can reach subject
-        for from_node_id, count in reachable_before_subject.items():
-            _add_db_edges_unsafe(session, from_node_id, object_id, 0, count * count)
+        for from_node_id, path_count in reachable_before_subject.items():
+            _add_db_edges_unsafe(session, from_node_id, object_id, 0, path_count * count)
 
         # add the direct edge last to preserve the invariant
         if subject_id != object_id and count > 0:
