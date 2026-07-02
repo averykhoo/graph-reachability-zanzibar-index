@@ -36,7 +36,12 @@ class RelationalTriple:
 
     def __str__(self):
         # follows zanzibar paper
-        subject_predicate = '...' if self.subject_predicate is Ellipsis else self.subject_predicate
+        subject_predicate: str
+        if isinstance(self.subject_predicate, str):
+            subject_predicate = self.subject_predicate
+        else:
+            assert self.subject_predicate is Ellipsis
+            subject_predicate = '...'
         return f'{self.object}#{self.relation}@{self.subject}#{subject_predicate}'
 
     @property
@@ -136,7 +141,9 @@ class Rule:
 
     def apply(self, relational_triple: RelationalTriple) -> RelationalTriple | None:
         if self.if_pattern.match(relational_triple):
-            return self.then_pattern.replace(relational_triple)
+            if self.then_pattern is not None:
+                return self.then_pattern.replace(relational_triple)
+        return None
 
 
 @dataclass
@@ -169,7 +176,7 @@ class RuleSet:
                     unprocessed.add(_result)
 
 
-def parse_relation_rule(rule: str) -> tuple[list[tuple[str, str | None]], list[tuple[str, str]]]:
+def parse_relation_rule(rule: str) -> tuple[list[tuple[str | None, str | None]], list[tuple[str, str]]]:
     """
     NOTE: WINDSURF WROTE THIS CODE
     Parse a single relation rule into direct assignments and from relations.
@@ -183,8 +190,8 @@ def parse_relation_rule(rule: str) -> tuple[list[tuple[str, str | None]], list[t
         "writer" -> ([(None, writer)], [])
         "owner from parent_folder" -> ([], [(owner, parent_folder)])
     """
-    direct_assignments = []
-    from_relations = []
+    direct_assignments: list[tuple[str | None, str | None]] = []
+    from_relations: list[tuple[str, str]] = []
 
     # Handle 'X from Y' format
     if ' from ' in rule:
@@ -225,7 +232,7 @@ def parse_openfga_schema(schema: str) -> RuleSet:
         define owner: [user, domain#member] or owner from parent_folder
         define viewer: [user] or writer or viewer from parent_folder
     """
-    rules_and_filters = []
+    _rules_and_filters: list[Rule | Filter] = []
     current_type = None
 
     for line in schema.strip().splitlines():
@@ -234,7 +241,6 @@ def parse_openfga_schema(schema: str) -> RuleSet:
             continue
 
         # Handle indentation by counting leading spaces
-        indent = len(line) - len(line.lstrip())
         line = line.lstrip()
 
         if line.startswith('model'):
@@ -264,7 +270,7 @@ def parse_openfga_schema(schema: str) -> RuleSet:
                 for subject_type, subject_predicate in direct_assignments:
                     if subject_type is None:
                         # This is a relation reference (e.g., "writer")
-                        rules_and_filters.append(
+                        _rules_and_filters.append(
                             Rule(
                                 RelationalTriplePattern(
                                     relation=subject_predicate,
@@ -278,7 +284,7 @@ def parse_openfga_schema(schema: str) -> RuleSet:
                         )
                     else:
                         # This is a type assignment (e.g., "[user]" or "domain#member")
-                        rules_and_filters.append(
+                        _rules_and_filters.append(
                             Filter(RelationalTriplePattern(
                                 subject_predicate=subject_predicate or Ellipsis,
                                 subject_type=subject_type,
@@ -291,21 +297,21 @@ def parse_openfga_schema(schema: str) -> RuleSet:
                 for relation, from_relation in from_relations:
                     # Create a rule that says: if X has relation R with Y's from_relation,
                     # then X has relation with Y
-                    rules_and_filters.append(
+                    _rules_and_filters.append(
                         Rule(
                             RelationalTriplePattern(
-                                relation=relation,
+                                relation=from_relation,
                                 object_type=current_type,
-                                object_predicate=from_relation
                             ),
                             RelationalTriplePattern(
+                                subject_predicate=relation,
                                 relation=relation_name,
                                 object_type=current_type
                             )
                         )
                     )
 
-    return RuleSet(rules_and_filters)
+    return RuleSet(_rules_and_filters)
 
 
 def generate_example_ruleset() -> RuleSet:
@@ -342,7 +348,6 @@ def generate_example_ruleset() -> RuleSet:
     return parse_openfga_schema(schema)
 
 
-# NOTE: WINDSURF WROTE THIS CODE
 if __name__ == '__main__':
     # Test the parser with the Google Drive example
     ruleset = generate_example_ruleset()
@@ -354,7 +359,7 @@ if __name__ == '__main__':
         # Domain member ownership
         RelationalTriple(Entity('domain', 'example.com'), 'member', Entity('user', 'bob')),
         # Parent folder inheritance
-        RelationalTriple(Entity('folder', 'subfolder'), 'parent_folder', Entity('folder', 'root')),
+        RelationalTriple(Entity('folder', 'root'), 'parent_folder', Entity('folder', 'subfolder')),
         # Writer implies viewer
         RelationalTriple(Entity('user', 'charlie'), 'writer', Entity('document', 'doc1')),
     ]
