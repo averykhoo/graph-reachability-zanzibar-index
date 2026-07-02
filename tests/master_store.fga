@@ -1,0 +1,18 @@
+model
+  schema 1.1
+
+type user
+
+type service-account
+
+type group
+  relations
+    define subgroup: [group]
+    define member: [user, user:*, service-account, service-account:*] or member from subgroup
+
+type store
+  relations
+    define checker: [user, user:*, service-account, service-account:*, group#member] or reader
+    define reader: [user, user:*, service-account, service-account:*, group#member] or writer
+    define writer: [user, service-account, group#member] or admin
+    define admin: [user, service-account, group#member]
