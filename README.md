@@ -205,19 +205,80 @@ See the paper at https://zanzibar.tech
 * some kind of transaction timestamp, maybe snowflake or ULID or uuid7 or lamport clock thingamajig
 * the cache just needs to store the last updated timestamp
 
-### `*` wildcard entities
+### `*` wildcard entities (materialized)
 
-* although * can't be an object in openfga, i see no reason not to support it
-* tldr do checks up to 4 times:
-    * user:a access doc:x
-    * user:* access doc:x
-    * user:a access doc:*
-    * user:* access doc:*
-    * (depending on whether there exists a relation access:doc:* or user:*:access in the schema)
-* do lookups twice:
-    * user:a access doc:?
-    * user:* access doc:?
-    * and if ? contains * then return all docs
+Wildcards are supported as a first-class, **materialized** feature in `index_v4`
+(`index_v4/wildcard.py`, the `WildcardIndex` façade). We support the OpenFGA subject
+wildcards `user:*` and `group:*#member`, and — as a deliberate extension beyond OpenFGA
+— wildcard **objects** like `folder:*`. `check()` stays constant time (≤4 point lookups
+on a unique index) regardless of data size, nesting depth, or fan-out: all wildcard hops
+that can occur in the *interior* of a path are materialized as real edges at write time;
+only the two hops touching the literal query endpoints stay virtual.
+
+**Split wildcard nodes.** Each wildcard-capable shape `S = (type, predicate)` gets up to
+two nodes (`NodeV4.wildcard ∈ {'', 'any', 'all'}`):
+
+* `w_any(S)` — "some instance of S." Concrete instances bridge **into** it
+  (`concrete → w_any`); grants depart **out of** it. A tuple whose *subject* is a wildcard
+  produces a grant from `w_any`.
+* `w_all(S)` — "all instances of S." Grants arrive **into** it; instance bridges depart
+  **out of** it (`w_all → concrete`). A tuple whose *object* is a wildcard produces a grant
+  into `w_all`.
+
+There is deliberately no `w_any → w_all` bridge — that is what prevents the instance leak
+`alice → user:* → bob` (being an instance must not grant what is distributed to instances).
+
+**Position rule (uniform).** Wildcard in subject position → `w_any(subject_type,
+subject_predicate)`; wildcard in object position → `w_all(object_type, relation)`. Applies
+to raw and rewrite-derived tuples alike.
+
+**Check = up to 4 probes** (ORed, short-circuiting; a missing node just makes a probe
+false, which is what makes *ghost entities* work):
+
+| # | probe | gated on |
+|---|---|---|
+| 1 | `(subject) → (object)` | always |
+| 2 | `w_any(s_type, subject_pred) → (object)` | `(s_type, subject_pred)` is a subject-wildcard shape and `s_name != '*'` |
+| 3 | `(subject) → w_all(o_type, relation)` | `(o_type, relation)` is an object-wildcard shape and `o_name != '*'` |
+| 4 | `w_any(...) → w_all(...)` | both gates above |
+
+A literal `'*'` query endpoint maps to its own variant node in probe 1 and skips its own
+wildcard probe. Reads never create nodes and never recurse.
+
+**Declaring wildcards.** Subject wildcards come from the schema: `[T:*]` marks the bare
+shape `(T, '...')`, `[T:*#P]` marks the userset shape `(T, P)`. Object wildcards have no
+OpenFGA syntax, so pass them to `parse_openfga_schema(schema,
+object_wildcard_shapes={(object_type, relation), ...})`. Filters stay strict on the subject
+(`[user]` still rejects a `user:*` subject) but permissive on the object so object-wildcard
+tuples flow through ingestion; the façade validates object-wildcard shapes.
+
+**Strict ∀⇒∃ (the only mode).** "Granted on **all** S" implies "reaches **some** S" only if
+at least one concrete instance of S exists — realized structurally by
+`alice → w_all(S) → concrete → w_any(S)`, which requires a real concrete in the middle.
+With zero instances the implication does not hold. A per-shape lenient/vacuous mode (a
+single `w_all(S) → w_any(S)` edge) is a documented future hook, not implemented.
+
+**Cost model** (don't "fix" these — they are the accepted trade for O(1) reads):
+
+* Plain `[user:*]`: zero bridges, zero backfill, +≤3 probes on gated checks; one edge per
+  wildcard tuple. Bare shapes `(T, '...')` never need in-bridges.
+* Declaring a bridged shape (`[group:*#member]`, or any object-wildcard shape) costs one
+  bridge edge per concrete of that shape **plus** the closure rows connecting each bridge's
+  ancestors/descendants to the `w` node — roughly one closure row per (member × group) even
+  before any wildcard grant exists. **Declaration itself has a cost; only declare shapes you
+  use.**
+* A wildcard grant on a bridged shape fans out through the closure to every instance's
+  subtree — the same row count as granting each instance explicitly. The wildcard automates
+  the fan-out; nothing eliminates it while reads are O(1).
+
+**Symbolic deltas.** `PermissionDelta`s that mention a wildcard node id are *symbolic*
+("everyone of shape S gained/lost X"). They are passed through untouched; expanding them
+into concrete deltas is a future post-processing layer.
+
+**Self-referential wildcard tuples are rejected by cycle detection, and that is correct:**
+`group:*#member member group:g` would make g's members include members-of-any-group
+(including g's) — a genuine cycle. The façade re-raises the core's cycle error with an
+explanatory message.
 
 ### rewrite from entities to nodes
 

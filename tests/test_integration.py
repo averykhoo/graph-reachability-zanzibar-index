@@ -93,6 +93,46 @@ class V4Backend(Backend):
         self._session.close()
 
 
+class V4WildcardBackend(Backend):
+    """Wildcard-aware backend over WildcardIndex (v4 only). add_edge/remove_edge map to
+    add_tuple/remove_tuple; check_reachable runs the O(1) probe set."""
+
+    def __init__(self, schema_info):
+        from index_v4 import ReachabilityIndex, Store, WildcardIndex
+        from sqlmodel import Session, create_engine
+
+        self._engine = create_engine('sqlite:///:memory:')
+        SQLModel.metadata.create_all(self._engine)
+        self._session = Session(self._engine)
+        store = Store(id="wildcard_test")
+        self._session.add(store)
+        self._session.commit()
+
+        idx = ReachabilityIndex(self._session, store_id="wildcard_test")
+        self.widx = WildcardIndex(idx, schema_info)
+        self.widx.backfill()          # harmless on an empty store; spec §7.2 calls it in every fixture
+
+    def add_edge(self, subject_predicate, subject_type, subject_name,
+                 relation, object_type, object_name):
+        self.widx.add_tuple(subject_predicate, subject_type, subject_name,
+                            relation, object_type, object_name)
+        self._session.commit()
+
+    def remove_edge(self, subject_predicate, subject_type, subject_name,
+                    relation, object_type, object_name):
+        self.widx.remove_tuple(subject_predicate, subject_type, subject_name,
+                               relation, object_type, object_name)
+        self._session.commit()
+
+    def check_reachable(self, subject_predicate, subject_type, subject_name,
+                        relation, object_type, object_name) -> bool:
+        return self.widx.check(subject_predicate, subject_type, subject_name,
+                               relation, object_type, object_name)
+
+    def teardown(self):
+        self._session.close()
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -380,3 +420,90 @@ def test_integration_revoke_group_membership(backend: Backend):
     # All access revoked
     assert backend.check_reachable(..., 'user', 'alice', 'writer', 'document', 'doc1') is False
     assert backend.check_reachable(..., 'user', 'alice', 'viewer', 'document', 'doc1') is False
+
+
+# ---------------------------------------------------------------------------
+# Wildcard integration tests (v4 WildcardIndex only; v3 has no wildcard support)
+# ---------------------------------------------------------------------------
+
+def test_integration_wildcard_public_doc():
+    schema = '''
+    model
+      schema 1.1
+
+    type user
+
+    type document
+      relations
+        define viewer: [user, user:*]
+    '''
+    ruleset = parse_openfga_schema(schema)
+    backend = V4WildcardBackend(ruleset.schema_info)
+
+    # public grant: any user can view doc1
+    ingest_triple(backend, ruleset, RelationalTriple(Entity('user', '*'), 'viewer', Entity('document', 'doc1'), Ellipsis))
+
+    # a never-seen user is a viewer; an unrelated doc is not covered
+    assert backend.check_reachable(..., 'user', 'ghost', 'viewer', 'document', 'doc1') is True
+    assert backend.check_reachable(..., 'user', 'ghost', 'viewer', 'document', 'doc2') is False
+    backend.teardown()
+
+
+def test_integration_wildcard_two_hop_hierarchy():
+    schema = '''
+    model
+      schema 1.1
+
+    type user
+
+    type folder
+      relations
+        define parent_folder: [folder, folder:*]
+        define viewer: [user:*, user, folder:*#viewer] or viewer from parent_folder
+
+    type document
+      relations
+        define parent_folder: [folder, folder:*]
+        define viewer: [user:*, user, folder:*#viewer] or viewer from parent_folder
+    '''
+    ruleset = parse_openfga_schema(schema, object_wildcard_shapes={('folder', 'viewer')})
+    backend = V4WildcardBackend(ruleset.schema_info)
+
+    # user:* views folder xyz; folder:* is the parent of doc1 -> everyone views doc1
+    ingest_triple(backend, ruleset, RelationalTriple(Entity('user', '*'), 'viewer', Entity('folder', 'xyz'), Ellipsis))
+    ingest_triple(backend, ruleset, RelationalTriple(Entity('folder', '*'), 'parent_folder', Entity('document', 'doc1'), Ellipsis))
+
+    assert backend.check_reachable(..., 'user', 'alice', 'viewer', 'document', 'doc1') is True
+    assert backend.check_reachable(..., 'user', 'ghost', 'viewer', 'document', 'doc1') is True
+    backend.teardown()
+
+
+def test_integration_wildcard_object_all_folders():
+    schema = '''
+    model
+      schema 1.1
+
+    type user
+
+    type folder
+      relations
+        define parent: [folder]
+        define viewer: [user] or viewer from parent
+
+    type document
+      relations
+        define parent: [folder]
+        define viewer: [user] or viewer from parent
+    '''
+    ruleset = parse_openfga_schema(schema,
+                                   object_wildcard_shapes={('folder', 'viewer'), ('document', 'viewer')})
+    backend = V4WildcardBackend(ruleset.schema_info)
+
+    # alice views ALL folders (object wildcard); f1 is parent of d -> alice views d
+    ingest_triple(backend, ruleset, RelationalTriple(Entity('user', 'alice'), 'viewer', Entity('folder', '*'), Ellipsis))
+    ingest_triple(backend, ruleset, RelationalTriple(Entity('folder', 'f1'), 'parent', Entity('document', 'd'), Ellipsis))
+
+    assert backend.check_reachable(..., 'user', 'alice', 'viewer', 'document', 'd') is True
+    assert backend.check_reachable(..., 'user', 'alice', 'viewer', 'folder', 'ghost_folder') is True   # probe 3
+    assert backend.check_reachable(..., 'user', 'bob', 'viewer', 'document', 'd') is False
+    backend.teardown()

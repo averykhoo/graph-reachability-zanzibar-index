@@ -174,6 +174,8 @@ class ReachabilityIndex:
         # A wildcard node stores name='*' with wildcard in {'any','all'}; a concrete
         # node stores wildcard=''. The two facts are equivalent -- reject any attempt
         # to smuggle in an ambiguous node (spec §1.3).
+        if wildcard not in {'', 'any', 'all'}:
+            raise ValueError(f"wildcard must be '', 'any', or 'all', got {wildcard!r}")
         if (entity_name == '*') != (wildcard != ''):
             raise ValueError(
                 f"name=='*' and a non-empty wildcard must go together, got "
@@ -197,6 +199,13 @@ class ReachabilityIndex:
 
         if not create_if_missing:
             raise KeyError(f'Node missing: {predicate=}, {entity_type=}, {entity_name=}')
+
+        # Default new nodes to implicit. Passing implicit=None straight through relies on
+        # SQLModel coercing it back to the column default (True); make that explicit so
+        # the implicit-GC predicate (`_node.implicit`) can never see a NULL/None and skip
+        # collection. Only affects creation -- the found-node branch above is untouched.
+        if implicit is None:
+            implicit = True
 
         _node = NodeV4(store_id=self.store_id, predicate=predicate, type=entity_type, name=entity_name,
                        wildcard=wildcard, implicit=implicit)
@@ -253,6 +262,17 @@ class ReachabilityIndex:
         ).first()
 
         return triple is not None and triple.indirect_edge_count > 0
+
+    def direct_edge_exists_by_id(self, subject_id: int, object_id: int) -> bool:
+        """Whether a *direct* edge row exists (used by the façade for idempotent bridges)."""
+        triple = self.session.exec(
+            select(Edge)
+            .where(Edge.store_id == self.store_id)
+            .where(Edge.subject_id == subject_id)
+            .where(Edge.object_id == object_id)
+        ).first()
+
+        return triple is not None and triple.direct_edge_count > 0
 
     def add_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                  object_type: str, object_name: str) -> list[PermissionDelta]:

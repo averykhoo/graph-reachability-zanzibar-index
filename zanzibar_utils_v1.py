@@ -99,9 +99,18 @@ class RelationalTriplePattern:
     relation: str | None = None
     object_type: str | None = None
     object_name: str | None = None
-    # Threaded onto both endpoint patterns (spec §2.2). Set True for RULES, left
-    # False (strict) for FILTERS.
+    # Subject-side permissiveness (spec §2.2): True for RULES, False (strict) for
+    # FILTERS so `[user]` keeps rejecting a `user:*` subject.
     match_wildcards: bool = False
+    # Object-side permissiveness. Object wildcards (`folder:*`) are the spec's extension
+    # beyond OpenFGA and have no subject-restriction meaning, so a FILTER must not reject
+    # a tuple merely for having a wildcard object -- that validity is the façade's job
+    # (declared object-wildcard shapes). Defaults to `match_wildcards` when unset.
+    object_match_wildcards: bool | None = None
+
+    @property
+    def _object_match_wildcards(self) -> bool:
+        return self.match_wildcards if self.object_match_wildcards is None else self.object_match_wildcards
 
     @property
     def subject(self):
@@ -111,7 +120,7 @@ class RelationalTriplePattern:
     @property
     def object(self):
         return EntityPattern(type=self.object_type, name=self.object_name,
-                             match_wildcards=self.match_wildcards)
+                             match_wildcards=self._object_match_wildcards)
 
     def match(self, relational_triple: RelationalTriple) -> bool:
         if not isinstance(relational_triple, RelationalTriple):
@@ -359,7 +368,10 @@ def parse_openfga_schema(
                                 subject_type=subject_type,
                                 subject_name=subject_name,
                                 relation=relation_name,
-                                object_type=current_type
+                                object_type=current_type,
+                                # strict on the subject, permissive on the object so
+                                # object-wildcard tuples flow through to the façade.
+                                object_match_wildcards=True,
                             ))
                         )
                         if subject_name == '*':
