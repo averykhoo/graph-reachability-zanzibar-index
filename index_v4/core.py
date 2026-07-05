@@ -167,9 +167,18 @@ class ReachabilityIndex:
         return deltas
 
     def node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str, *, create_if_missing: bool,
-             implicit: bool | None = None) -> NodeV4:
+             implicit: bool | None = None, wildcard: str = '') -> NodeV4:
         if predicate is Ellipsis:
             predicate = '...'
+
+        # A wildcard node stores name='*' with wildcard in {'any','all'}; a concrete
+        # node stores wildcard=''. The two facts are equivalent -- reject any attempt
+        # to smuggle in an ambiguous node (spec §1.3).
+        if (entity_name == '*') != (wildcard != ''):
+            raise ValueError(
+                f"name=='*' and a non-empty wildcard must go together, got "
+                f"{entity_name=!r}, {wildcard=!r}"
+            )
 
         found = self.session.exec(
             select(NodeV4)
@@ -177,6 +186,7 @@ class ReachabilityIndex:
             .where(NodeV4.predicate == predicate)
             .where(NodeV4.type == entity_type)
             .where(NodeV4.name == entity_name)
+            .where(NodeV4.wildcard == wildcard)
         ).first()
 
         if found is not None:
@@ -188,29 +198,67 @@ class ReachabilityIndex:
         if not create_if_missing:
             raise KeyError(f'Node missing: {predicate=}, {entity_type=}, {entity_name=}')
 
-        _node = NodeV4(store_id=self.store_id, predicate=predicate, type=entity_type, name=entity_name, implicit=implicit)
+        _node = NodeV4(store_id=self.store_id, predicate=predicate, type=entity_type, name=entity_name,
+                       wildcard=wildcard, implicit=implicit)
         self.session.add(_node)
         self.session.flush()  # flush to get auto-increment id immediately without committing transaction
         return _node
+
+    def add_edge_by_id(self, subject_id: int, object_id: int) -> list[PermissionDelta]:
+        """Add a direct edge between two already-resolved node ids.
+
+        Performs the same reverse-reachability cycle pre-check as add_edge, then
+        the ref-counted +1 direct-edge update. The façade uses this so it never
+        re-resolves names it already resolved.
+        """
+        assert subject_id != object_id
+
+        triple = self.session.exec(
+            select(EdgeV4)
+            .where(EdgeV4.store_id == self.store_id)
+            .where(EdgeV4.subject_id == object_id)
+            .where(EdgeV4.object_id == subject_id)
+        ).first()
+
+        if triple is not None and triple.indirect_edge_count > 0:
+            raise ValueError(
+                f'{subject_id=} is reachable from {object_id=}, adding this edge would create a cycle')
+
+        return self._add_direct_edge_unsafe(subject_id, object_id, 1)
+
+    def remove_edge_by_id(self, subject_id: int, object_id: int) -> list[PermissionDelta]:
+        """Remove a direct edge between two already-resolved node ids (ref-counted -1)."""
+        assert subject_id != object_id
+
+        triple = self.session.exec(
+            select(Edge)
+            .where(Edge.store_id == self.store_id)
+            .where(Edge.subject_id == subject_id)
+            .where(Edge.object_id == object_id)
+        ).first()
+
+        if triple is None or triple.direct_edge_count == 0:
+            raise ValueError(
+                f'{subject_id=} has no direct edge to {object_id=}, cannot remove nonexistent edge')
+
+        return self._add_direct_edge_unsafe(subject_id, object_id, -1)
+
+    def check_reachable_by_id(self, subject_id: int, object_id: int) -> bool:
+        """The edge point lookup only: is object reachable from subject?"""
+        triple = self.session.exec(
+            select(Edge)
+            .where(Edge.store_id == self.store_id)
+            .where(Edge.subject_id == subject_id)
+            .where(Edge.object_id == object_id)
+        ).first()
+
+        return triple is not None and triple.indirect_edge_count > 0
 
     def add_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                  object_type: str, object_name: str) -> list[PermissionDelta]:
         _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=True)
         _object = self.node(relation, object_type, object_name, create_if_missing=True)
-
-        assert _subject.id != _object.id
-
-        triple = self.session.exec(
-            select(EdgeV4)
-            .where(EdgeV4.store_id == self.store_id)
-            .where(EdgeV4.subject_id == _object.id)
-            .where(EdgeV4.object_id == _subject.id)
-        ).first()
-
-        if triple is not None and triple.indirect_edge_count > 0:
-            raise ValueError(f'{_subject=} is reachable from {_object=}, adding this edge would create a cycle')
-
-        return self._add_direct_edge_unsafe(_subject.id, _object.id, 1)
+        return self.add_edge_by_id(_subject.id, _object.id)
 
     def remove_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                     object_type: str, object_name: str) -> list[PermissionDelta]:
@@ -220,19 +268,7 @@ class ReachabilityIndex:
         except KeyError as e:
             raise ValueError('Non-existent edge cannot be removed') from e
 
-        assert _subject.id != _object.id
-
-        triple = self.session.exec(
-            select(Edge)
-            .where(Edge.store_id == self.store_id)
-            .where(Edge.subject_id == _subject.id)
-            .where(Edge.object_id == _object.id)
-        ).first()
-
-        if triple is None or triple.direct_edge_count == 0:
-            raise ValueError(f'{_subject=} has no direct edge to {_object=}, cannot remove nonexistent edge')
-
-        return self._add_direct_edge_unsafe(_subject.id, _object.id, -1)
+        return self.remove_edge_by_id(_subject.id, _object.id)
 
     def remove_node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str) -> list[PermissionDelta]:
         _node = self.node(predicate, entity_type, entity_name, create_if_missing=False)
@@ -246,16 +282,7 @@ class ReachabilityIndex:
         except KeyError:
             return False
 
-        assert _subject.id != _object.id
-
-        triple = self.session.exec(
-            select(Edge)
-            .where(Edge.store_id == self.store_id)
-            .where(Edge.subject_id == _subject.id)
-            .where(Edge.object_id == _object.id)
-        ).first()
-
-        return triple is not None and triple.indirect_edge_count > 0
+        return self.check_reachable_by_id(_subject.id, _object.id)
 
     def lookup_reachable(self, subject_id: int) -> set[int]:
         triples = self.session.exec(

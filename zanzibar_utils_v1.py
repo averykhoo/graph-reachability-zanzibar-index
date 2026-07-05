@@ -61,6 +61,12 @@ class RelationalTriple:
 class EntityPattern:
     type: str | None = None
     name: str | None = None
+    # Permissive matching for rewrite RULES (spec §2.2). When True and this pattern
+    # does not pin a name (name is None), the wildcard-vs-concrete guard is skipped so
+    # a name-agnostic rule matches wildcard entities too (e.g. writer=>viewer must
+    # carry a `user:*` subject through). FILTERS keep the default (strict) so `[user]`
+    # continues to reject `user:*`.
+    match_wildcards: bool = False
 
     @property
     def wildcard(self):
@@ -73,8 +79,9 @@ class EntityPattern:
             return False
         if self.name is not None and self.name != entity.name:
             return False
-        if self.wildcard != entity.wildcard:
-            return False
+        if not (self.match_wildcards and self.name is None):
+            if self.wildcard != entity.wildcard:
+                return False
         return True
 
     def replace(self, entity: Entity) -> Entity:
@@ -92,14 +99,19 @@ class RelationalTriplePattern:
     relation: str | None = None
     object_type: str | None = None
     object_name: str | None = None
+    # Threaded onto both endpoint patterns (spec §2.2). Set True for RULES, left
+    # False (strict) for FILTERS.
+    match_wildcards: bool = False
 
     @property
     def subject(self):
-        return EntityPattern(type=self.subject_type, name=self.subject_name)
+        return EntityPattern(type=self.subject_type, name=self.subject_name,
+                             match_wildcards=self.match_wildcards)
 
     @property
     def object(self):
-        return EntityPattern(type=self.object_type, name=self.object_name)
+        return EntityPattern(type=self.object_type, name=self.object_name,
+                             match_wildcards=self.match_wildcards)
 
     def match(self, relational_triple: RelationalTriple) -> bool:
         if not isinstance(relational_triple, RelationalTriple):
@@ -146,9 +158,41 @@ class Rule:
         return None
 
 
+@dataclass(frozen=True)
+class SchemaInfo:
+    """Wildcard-shape metadata derived from a schema (spec §2.3).
+
+    A *shape* is ``(entity_type, predicate)`` where predicate is ``'...'`` for a bare
+    entity or a relation name for a userset. This is intentionally dumb: we never do
+    static reachability analysis to elide bridges beyond the bare-shape rule below --
+    an unnecessary O(1)-degree bridge is harmless, a missing bridge is a correctness bug.
+    """
+    subject_wildcard_shapes: frozenset[tuple[str, str]] = frozenset()   # (type, predicate); '...' for bare
+    object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset()    # (type, relation)
+
+    @property
+    def bridged_in_shapes(self) -> frozenset[tuple[str, str]]:
+        # Shapes needing concrete->w_any bridges: subject-wildcard USERSET shapes only.
+        # Bare shapes (T, '...') never need in-bridges -- nothing in this graph ever
+        # points into a '...'-predicate node, so a bare-shape hop can only be the LEADING
+        # hop of a path, which probe #2 covers virtually. This is what makes plain
+        # OpenFGA [user:*] cost zero bridges.
+        return frozenset(s for s in self.subject_wildcard_shapes if s[1] != '...')
+
+    @property
+    def bridged_out_shapes(self) -> frozenset[tuple[str, str]]:
+        # Shapes needing w_all->concrete bridges: all declared object-wildcard shapes.
+        # (Sink-shape elision is a future optimization; be conservative now.)
+        return self.object_wildcard_shapes
+
+
 @dataclass
 class RuleSet:
     rules_and_filters: list[Rule | Filter]
+    # Populated by parse_openfga_schema; None for hand-built rulesets. The façade
+    # (§6) reads this; ingestion via .apply ignores it (spec §2.3: "returned
+    # alongside (or wrapping) the RuleSet").
+    schema_info: SchemaInfo | None = None
 
     def apply(self, relational_triple: RelationalTriple):
         unprocessed = set()
@@ -176,21 +220,26 @@ class RuleSet:
                     unprocessed.add(_result)
 
 
-def parse_relation_rule(rule: str) -> tuple[list[tuple[str | None, str | None]], list[tuple[str, str]]]:
+def parse_relation_rule(
+        rule: str,
+) -> tuple[list[tuple[str | None, str | None, str | None]], list[tuple[str, str]]]:
     """
-    NOTE: WINDSURF WROTE THIS CODE
+    NOTE: WINDSURF WROTE THIS CODE (extended for wildcard subjects, spec §2.1)
     Parse a single relation rule into direct assignments and from relations.
     Returns (direct_assignments, from_relations) where:
-        - direct_assignments is list of (type, predicate) for direct type assignments
+        - direct_assignments is list of (type, predicate, name) for direct type assignments;
+          name is '*' for a wildcard declaration (`T:*` / `T:*#P`), else None
         - from_relations is list of (relation, from_relation) for 'X from Y' rules
-    
+
     Examples:
-        "[user]" -> ([(user, None)], [])
-        "[user, domain#member]" -> ([(user, None), (domain, member)], [])
-        "writer" -> ([(None, writer)], [])
+        "[user]" -> ([(user, None, None)], [])
+        "[user, domain#member]" -> ([(user, None, None), (domain, member, None)], [])
+        "[user:*]" -> ([(user, None, '*')], [])
+        "[group:*#member]" -> ([(group, member, '*')], [])
+        "writer" -> ([(None, writer, None)], [])
         "owner from parent_folder" -> ([], [(owner, parent_folder)])
     """
-    direct_assignments: list[tuple[str | None, str | None]] = []
+    direct_assignments: list[tuple[str | None, str | None, str | None]] = []
     from_relations: list[tuple[str, str]] = []
 
     # Handle 'X from Y' format
@@ -199,40 +248,54 @@ def parse_relation_rule(rule: str) -> tuple[list[tuple[str | None, str | None]],
         from_relations.append((relation.strip(), from_relation.strip()))
         return direct_assignments, from_relations
 
-    # Handle direct type assignments [type1, type2#relation]
+    # Handle direct type assignments [type1, type2#relation, type3:*, type4:*#relation]
     if rule.startswith('['):
         subjects = rule[1:].split(']')[0].split(',')
         for subject in subjects:
             subject = subject.strip()
             if '#' in subject:
-                # Handle type#relation format
-                subject_type, subject_predicate = subject.split('#')
-                direct_assignments.append((subject_type.strip(), subject_predicate.strip()))
+                # type#relation or type:*#relation
+                left, subject_predicate = subject.split('#')
+                subject_predicate = subject_predicate.strip()
             else:
-                # Handle direct type assignment
-                direct_assignments.append((subject.strip(), None))
+                # bare type or type:*
+                left, subject_predicate = subject, None
+            left = left.strip()
+            if left.endswith(':*'):
+                subject_type, subject_name = left[:-len(':*')].strip(), '*'
+            else:
+                subject_type, subject_name = left, None
+            direct_assignments.append((subject_type, subject_predicate, subject_name))
     else:
         # Handle single relation reference (e.g., "writer")
-        direct_assignments.append((None, rule.strip()))
+        direct_assignments.append((None, rule.strip(), None))
 
     return direct_assignments, from_relations
 
 
-def parse_openfga_schema(schema: str) -> RuleSet:
+def parse_openfga_schema(
+        schema: str,
+        object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
+) -> RuleSet:
     """
-    NOTE: WINDSURF WROTE THIS CODE
-    Parse an OpenFGA schema string and generate a RuleSet.
-    
+    NOTE: WINDSURF WROTE THIS CODE (extended for wildcards, spec §2.1/§2.3)
+    Parse an OpenFGA schema string and generate a RuleSet (with attached SchemaInfo).
+
+    ``object_wildcard_shapes`` are ``(object_type, relation)`` pairs enabling wildcard
+    *objects* (e.g. `folder:*`), a deliberate extension beyond OpenFGA that has no DSL
+    syntax and so must be declared here.
+
     Example schema:
     model
       schema 1.1
-    
+
     type folder
       relations
         define owner: [user, domain#member] or owner from parent_folder
         define viewer: [user] or writer or viewer from parent_folder
     """
     _rules_and_filters: list[Rule | Filter] = []
+    subject_wildcard_shapes: set[tuple[str, str]] = set()
     current_type = None
 
     for line in schema.strip().splitlines():
@@ -267,33 +330,42 @@ def parse_openfga_schema(schema: str) -> RuleSet:
                 direct_assignments, from_relations = parse_relation_rule(rule)
 
                 # Add filters for direct type assignments
-                for subject_type, subject_predicate in direct_assignments:
+                for subject_type, subject_predicate, subject_name in direct_assignments:
                     if subject_type is None:
-                        # This is a relation reference (e.g., "writer")
+                        # This is a relation reference (e.g., "writer") -> a permissive
+                        # RULE so wildcard subjects propagate through computed usersets.
                         _rules_and_filters.append(
                             Rule(
                                 RelationalTriplePattern(
                                     relation=subject_predicate,
-                                    object_type=current_type
+                                    object_type=current_type,
+                                    match_wildcards=True,
                                 ),
                                 RelationalTriplePattern(
                                     relation=relation_name,
-                                    object_type=current_type
+                                    object_type=current_type,
+                                    match_wildcards=True,
                                 )
                             )
                         )
                     else:
-                        # This is a type assignment (e.g., "[user]" or "domain#member")
+                        # This is a type assignment (e.g., "[user]", "domain#member",
+                        # "[user:*]", "[group:*#member]") -> a strict FILTER. The wildcard
+                        # filter (subject_name='*') matches ONLY wildcard subjects; the
+                        # concrete filter (subject_name=None) keeps rejecting `T:*`.
                         _rules_and_filters.append(
                             Filter(RelationalTriplePattern(
                                 subject_predicate=subject_predicate or Ellipsis,
                                 subject_type=subject_type,
+                                subject_name=subject_name,
                                 relation=relation_name,
                                 object_type=current_type
                             ))
                         )
+                        if subject_name == '*':
+                            subject_wildcard_shapes.add((subject_type, subject_predicate or '...'))
 
-                # Add rules for 'from' relations
+                # Add rules for 'from' relations (permissive, spec §2.2)
                 for relation, from_relation in from_relations:
                     # Create a rule that says: if X has relation R with Y's from_relation,
                     # then X has relation with Y
@@ -302,16 +374,22 @@ def parse_openfga_schema(schema: str) -> RuleSet:
                             RelationalTriplePattern(
                                 relation=from_relation,
                                 object_type=current_type,
+                                match_wildcards=True,
                             ),
                             RelationalTriplePattern(
                                 subject_predicate=relation,
                                 relation=relation_name,
-                                object_type=current_type
+                                object_type=current_type,
+                                match_wildcards=True,
                             )
                         )
                     )
 
-    return RuleSet(_rules_and_filters)
+    schema_info = SchemaInfo(
+        subject_wildcard_shapes=frozenset(subject_wildcard_shapes),
+        object_wildcard_shapes=frozenset(object_wildcard_shapes),
+    )
+    return RuleSet(_rules_and_filters, schema_info=schema_info)
 
 
 def generate_example_ruleset() -> RuleSet:

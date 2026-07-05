@@ -30,7 +30,8 @@ class StoreV4(SQLModel, table=True):
 class NodeV4(SQLModel, table=True):
     __tablename__ = "node_v4"
     __table_args__ = (
-        UniqueConstraint('store_id', 'predicate', 'type', 'name', name='node_v4_unique_constraint'),
+        UniqueConstraint('store_id', 'predicate', 'type', 'name', 'wildcard',
+                         name='node_v4_unique_constraint'),
         {'extend_existing': True},
     )
 
@@ -39,6 +40,10 @@ class NodeV4(SQLModel, table=True):
     predicate: str = Field(index=True)
     type: str = Field(index=True)
     name: str = Field(index=True)
+    # '' for concrete nodes, 'any' or 'all' for split wildcard nodes (spec §1.2/§1.3).
+    # Empty string (NOT NULL) is deliberate: SQLite treats NULLs as distinct in a
+    # unique constraint, which would silently permit duplicate concrete nodes.
+    wildcard: str = Field(default='', index=True)
     implicit: bool = Field(default=True)
     reference_count: int = Field(default=0)
 
