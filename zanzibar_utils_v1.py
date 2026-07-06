@@ -765,17 +765,33 @@ def _emit_expr(expr: Expr, object_type: str, relation_name: str,
         raise TypeError(f"unknown Expr node {expr!r}")
 
 
-def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo) -> RuleSet:
-    """Compile a (pure-union) AST into the graph index's Filters/Rules (spec §2.3).
+def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
+                    enable_boolean: bool = True) -> RuleSet:
+    """Compile an AST into the graph index's Filters/Rules (spec §2.3).
 
-    Raises ``UnsupportedByGraphIndex`` (naming the relation) on the first ``and`` /
-    ``but not`` encountered, so the graph backend never silently mis-ingests a boolean
-    schema.
+    Boolean (`and` / `but not`) relations compile into derived predicates (boolean
+    spec §3): untainted relations byte-identically to the pure-union path, tainted
+    ones into leaf routing + executable plans on ``RuleSet.compiled``, with
+    ``RuleSet.schema_info`` enriched with the derived/leaf namespace facts.
+    ``UnsupportedByGraphIndex`` survives only for the decision-15 scope rejections;
+    derived-dependency cycles raise ``ValueError``.
+
+    ``enable_boolean=False`` restores the historical refusal (the pre-P7 behavior):
+    the first boolean operator raises ``UnsupportedByGraphIndex``.
     """
-    rules_and_filters: list[Rule | Filter] = []
+    if not enable_boolean:
+        rules_and_filters: list[Rule | Filter] = []
+        for (object_type, relation_name), expr in ast.items():
+            _emit_expr(expr, object_type, relation_name, rules_and_filters)
+        return RuleSet(rules_and_filters, schema_info=schema_info)
+
+    tainted = compute_taint(ast)
+    rules_and_filters = []
     for (object_type, relation_name), expr in ast.items():
-        _emit_expr(expr, object_type, relation_name, rules_and_filters)
-    return RuleSet(rules_and_filters, schema_info=schema_info)
+        if (object_type, relation_name) not in tainted:
+            _emit_expr(expr, object_type, relation_name, rules_and_filters)
+    compiled, schema_info = compile_boolean_schema(ast, schema_info, rules_and_filters)
+    return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled)
 
 
 # ===========================================================================
@@ -1448,6 +1464,8 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
             assert (then_t, then_rel) not in derived, \
                 f'Rule rewrites into a derived-public family: {rf}'
 
+    if not derived and not compiled.leaf_families:
+        return compiled, schema_info      # pure schema: nothing to enrich
     enriched = replace(schema_info,
                        derived_families=derived,
                        leaf_families=compiled.leaf_families)
@@ -1458,7 +1476,7 @@ def parse_openfga_schema(
         schema: str,
         object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
         *,
-        enable_boolean: bool = False,
+        enable_boolean: bool = True,
 ) -> RuleSet:
     """Parse + compile an OpenFGA schema into a graph-index RuleSet (spec §2.1/§2.3).
 
@@ -1467,25 +1485,13 @@ def parse_openfga_schema(
     *objects* (e.g. `folder:*`), a deliberate extension beyond OpenFGA that has no DSL
     syntax and so must be declared here.
 
-    ``enable_boolean=True`` compiles boolean (`and` / `but not`) relations into derived
-    predicates (boolean spec §3): untainted relations compile byte-identically, tainted
-    ones get leaf routing + plans in ``RuleSet.compiled``. With the default
-    ``enable_boolean=False`` boolean schemas raise ``UnsupportedByGraphIndex`` exactly
-    as before -- the default flips with the P7 matrix flip, once the delta processor
-    exists to maintain the derived state.
+    Boolean (`and` / `but not`) schemas compile into derived predicates maintained by
+    the delta processor (boolean spec §3/§5) -- the P7 matrix flip. Pass
+    ``enable_boolean=False`` for the historical refusal behavior.
     """
     ast = parse_schema_ast(schema)
     schema_info = derive_schema_info(ast, object_wildcard_shapes)
-    if not enable_boolean:
-        return compile_ruleset(ast, schema_info)
-
-    tainted = compute_taint(ast)
-    rules_and_filters: list[Rule | Filter] = []
-    for (object_type, relation_name), expr in ast.items():
-        if (object_type, relation_name) not in tainted:
-            _emit_expr(expr, object_type, relation_name, rules_and_filters)
-    compiled, schema_info = compile_boolean_schema(ast, schema_info, rules_and_filters)
-    return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled)
+    return compile_ruleset(ast, schema_info, enable_boolean=enable_boolean)
 
 
 # ---- unparser (round-trip property, boolean spec §9) ----

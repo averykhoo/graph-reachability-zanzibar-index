@@ -69,21 +69,23 @@ def test_parity_engine_walk_union_wildcards(load_fga_schema, seed):
     pe.close()
 
 
-def test_parity_engine_boolean_runs_without_graph_pre_flip(load_fga_schema):
-    """Pre-P7: the boolean fixture compiles for oracle+set engines only. The engine
-    must degrade to 3-way rather than fail -- this is the seam the flip widens."""
+def test_parity_engine_boolean_runs_four_way_post_flip(load_fga_schema):
+    """Post-P7: the boolean fixture compiles for the graph too -- the ParityEngine
+    seam widens to 4-way automatically (graph + oracle + both set engines), with the
+    processor cascade inside every graph write."""
     schema = load_fga_schema('boolean_wildcards.fga')
     pe = ParityEngine(schema)
-    assert pe.graph is None, 'graph backend unexpectedly accepted a boolean schema pre-flip'
+    assert pe.graph is not None, 'graph backend must join boolean schemas post-flip'
+    assert pe.graph.proc is not None, 'boolean graph backend needs the delta processor'
 
-    assert pe.add_tuple('...', 'user', 'u1', 'public', 'doc', 'd1') is False or True  # op runs
     pe.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
     pe.add_tuple('...', 'user', 'u1', 'blocked', 'doc', 'd1')
     pe.add_tuple('...', 'user', 'u2', 'editor', 'doc', 'd1')
-    # viewer = (public but not blocked) or editor
+    # viewer = (public but not blocked) or editor -- check() asserts 4-way unanimity
     assert pe.check('...', 'user', 'u2', 'viewer', 'doc', 'd1') is True    # editor arm
     assert pe.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is False   # blocked defeats star
     assert pe.check('...', 'user', 'ghost', 'viewer', 'doc', 'd1') is True # star-covered ghost
+    assert pe.check('...', 'user', '*', 'viewer', 'doc', 'd1') is True     # intensional
     pe.close()
 
 

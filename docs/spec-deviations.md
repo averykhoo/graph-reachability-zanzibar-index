@@ -323,4 +323,39 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 ---
 
+## 2026-07-07 — P7 (matrix flip — THE ACCEPTANCE EVENT)
+
+**Boolean fixture stores run 4-way** (`boolean_wildcards.fga` in the randomized
+matrix; the `demorgans_*` trio pointwise across every relation): graph (delta-
+processor-maintained, I9-audited per op) · oracle · set engine under both `SetOps`,
+unanimous accept/reject, identical checks over the same grids as before. Suite:
+411 passed, 0 skipped.
+
+1. **`enable_boolean` defaults flipped to True** in `compile_ruleset` and
+   `parse_openfga_schema`; `enable_boolean=False` keeps the historical refusal
+   reachable (one test pins it). Refusal tests replaced with compile-success +
+   plan-shape assertions (test_schema_ast, test_zanzibar_utils, test_integration).
+
+2. **Set-engine cycle parity now covers boolean schemas**: `compile_ruleset`
+   succeeding means `SetEngine._ruleset` exists, so its flow-graph reproduces the
+   graph's raw-write edge set (leaf-routed) and both backends reject the same data
+   cycles — required for 4-way unanimity. Schemas the graph still refuses
+   (decision-15 scope, cyclic derived deps → the new `except (UnsupportedByGraph
+   Index, ValueError)`) degrade to no-cycle-rejection as before.
+
+3. **Derived check with a `'*'` object answers False** without node resolution
+   (decision 15: no object-star state can exist on a derived relation) — the grid's
+   star-object queries surfaced that `_get_concrete` would otherwise reject the
+   reserved name.
+
+4. **Compile snapshots now cover boolean fixtures too** (they compile, so the P0
+   golden gate extends to them automatically).
+
+5. **Latent graph-vs-oracle divergence NOT introduced here (pre-existing)**: rule-
+   routed members of an *untainted* TTU tupleset count as parents in the graph's
+   rewrite semantics but not in the oracle's raw-tuple semantics (P5 entry #3). No
+   fixture exercises it; the 4-way matrix pins all shapes that are exercised.
+
+---
+
 *(subsequent phases append below)*

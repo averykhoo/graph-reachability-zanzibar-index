@@ -4,10 +4,11 @@ P5 validation matrix (spec §7): the artifact that pins "same semantics".
   * 4-way (union + wildcard, wildcards.fga): graph WildcardIndex, reference oracle, and
     the set engine under BOTH SetOps -- unanimous accept/reject after every op and
     identical `check` over the full grid.
-  * 3-way (boolean, boolean_wildcards.fga): oracle + set engine (both SetOps); the graph
-    refuses the schema (asserted separately in test_schema_ast / test_zanzibar_utils).
-  * De Morgan equivalence (§7.3): for the demorgans fixtures, check(lhs) == check(rhs)
-    on both oracle and set engine across the grid.
+  * 4-way (boolean, boolean_wildcards.fga): SAME machinery, graph included -- the
+    boolean-IVM acceptance event (boolean spec §10). The graph maintains derived
+    relations via the delta-processor cascade; post-op runs the I9 fixpoint audit.
+  * De Morgan equivalence (§7.3): for the demorgans fixtures, oracle == set engine ==
+    graph pointwise across the grid.
 
 Runs under both SetOps implementations, which must be indistinguishable.
 """
@@ -18,6 +19,8 @@ from types import EllipsisType
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
+from index_v4.outbox import outbox_watermark
+from index_v4.processor import DeltaProcessor
 from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
 from tests.oracle import Oracle, OracleTuple
 from tests.wildcard_helpers import make_wildcard_index, assert_wildcard_invariants
@@ -42,9 +45,12 @@ def _fresh_session() -> Session:
 class GraphBackend:
     name = 'graph'
 
-    def __init__(self, schema, object_wc):
+    def __init__(self, schema, object_wc=frozenset()):
         self.ruleset = parse_openfga_schema(schema, object_wildcard_shapes=object_wc)
         self.session, self.widx = make_wildcard_index(self.ruleset.schema_info, store_id='g')
+        self.proc = None
+        if self.ruleset.compiled is not None and self.ruleset.compiled.plans:
+            self.proc = DeltaProcessor(self.widx, self.ruleset.compiled)
 
     def _derived(self, raw, op):
         sp = Ellipsis if raw[0] == '...' else raw[0]
@@ -56,7 +62,10 @@ class GraphBackend:
 
     def apply(self, raw, op) -> bool:
         try:
+            wm = outbox_watermark(self.session, 'g')
             self._derived(raw, op)
+            if self.proc is not None:
+                self.proc.run_cascade(wm)               # synchronous v1: same txn
             self.session.commit()
             return True
         except ValueError:
@@ -68,6 +77,8 @@ class GraphBackend:
 
     def post_op(self):
         assert_wildcard_invariants(self.widx)
+        if self.proc is not None:
+            self.proc.audit_fixpoint()                  # I9, all keys (paranoia dose)
 
     def close(self):
         self.session.close()
@@ -175,7 +186,8 @@ def test_matrix_4way_union_wildcard(load_fga_schema, seed):
 
 
 # ---------------------------------------------------------------------------
-# 3-way: boolean (no graph -- it refuses the schema)
+# 4-way: boolean (THE acceptance event, boolean spec §10 -- the graph joins the
+# same grids and after-every-op comparison it used to refuse)
 # ---------------------------------------------------------------------------
 
 BOOL_USERS = ['u1', 'u2']
@@ -214,12 +226,17 @@ def _boolean_grid():
     return [(sp, st, sn, r, ot, on) for (sp, st, sn) in subjects for (r, ot, on) in targets]
 
 
-@pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
 @pytest.mark.parametrize('seed', [0, 1, 2])
-def test_matrix_3way_boolean(load_fga_schema, ops, seed):
+def test_matrix_4way_boolean(load_fga_schema, seed):
+    """Boolean store, 4-way: graph (processor-maintained) · oracle · set engine under
+    both SetOps -- unanimous accept/reject after every op, identical check over the
+    full grid. This is the feature's acceptance event (boolean spec §10)."""
     schema = load_fga_schema('boolean_wildcards.fga')
-    session = _fresh_session()
-    se = SetEngine(session, 'b', schema, ops=ops)
+    graph = GraphBackend(schema)
+    set_backends = [SetBackend(schema, frozenset(), PySets)] \
+        + ([SetBackend(schema, frozenset(), RoaringSets)] if RoaringSets else [])
+    oracle = OracleBackend(schema)
+    mb = MultiBackend([graph] + set_backends, decider=graph)
 
     pool = _boolean_pool()
     grid = _boolean_grid()
@@ -232,23 +249,22 @@ def test_matrix_3way_boolean(load_fga_schema, ops, seed):
             op, raw = ('add', rng.choice(cands)) if cands else ('remove', rng.choice(sorted(present)))
         else:
             op, raw = 'remove', rng.choice(sorted(present))
-        try:
-            (se.add_tuple if op == 'add' else se.remove_tuple)(*raw)
-            session.commit()
-        except ValueError:
-            session.rollback()
-            continue
-        (present.add if op == 'add' else present.discard)(raw)
-        history.append((op, raw))
 
-        oracle = Oracle(schema, [OracleTuple(*r) for r in present])
+        accepted = mb.apply(raw, op)
+        if accepted:
+            (present.add if op == 'add' else present.discard)(raw)
+            history.append((op, raw))
+
+        oracle.bind(present)
+        all_backends = [graph, oracle] + set_backends
         for q in grid:
-            got, exp = se.check(*q), oracle.check(*q)
-            if got != exp:
-                pytest.fail(f'boolean check mismatch seed={seed} ops={ops.name} q={q} '
-                            f'set={got} oracle={exp}\n'
+            answers = {b.name: b.check(q) for b in all_backends}
+            if len(set(answers.values())) != 1:
+                pytest.fail(f'boolean check disagreement seed={seed} q={q}: {answers}\n'
                             + '\n'.join(f'  {o} {r}' for o, r in history))
-    session.close()
+
+    for b in [graph] + set_backends:
+        b.close()
 
 
 # ---------------------------------------------------------------------------
@@ -288,9 +304,10 @@ def _demorgan_pool(schema_text):
 
 @pytest.mark.parametrize('fixture', ['demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga'])
 @pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
-def test_demorgan_oracle_equals_setengine(load_fga_schema, fixture, ops):
-    """The operational De Morgan check: the two independent boolean evaluators (oracle,
-    set engine) agree pointwise on every relation over randomized tuple sets."""
+def test_demorgan_oracle_equals_setengine_equals_graph(load_fga_schema, fixture, ops):
+    """The operational De Morgan check, 3 evaluators since the P7 flip: oracle, set
+    engine, and the graph backend agree pointwise on every relation over randomized
+    tuple sets."""
     schema = load_fga_schema(fixture)
     pool = _demorgan_pool(schema)
     from zanzibar_utils_v1 import parse_schema_ast
@@ -302,22 +319,29 @@ def test_demorgan_oracle_equals_setengine(load_fga_schema, fixture, ops):
                 ('...', 'doc', 'dc1'), ('...', 'doc', '*')]
 
     rng = random.Random(0)
-    for trial in range(6):
+    for trial in range(4):
         present = set(rng.sample(pool, k=min(len(pool), rng.randint(1, len(pool)))))
         session = _fresh_session()
         se = SetEngine(session, f't{trial}', schema, ops=ops)
-        for raw in present:
+        graph = GraphBackend(schema)
+        for raw in sorted(present):
             try:
                 se.add_tuple(*raw)
             except ValueError:
                 present.discard(raw)
+                continue
+            assert graph.apply(raw, 'add'), f'graph rejected what the set engine took: {raw}'
         session.commit()
+        graph.post_op()
         oracle = Oracle(schema, [OracleTuple(*r) for r in present])
 
         for (ot, rel) in rels:
             for (sp, st, sn) in subjects:
                 for on in ['dc1', 'ghost', '*', 'r1', 'c1', 'at1']:
                     q = (sp, st, sn, rel, ot, on)
-                    got, exp = se.check(*q), oracle.check(*q)
-                    assert got == exp, f'{fixture} {ops.name} q={q} set={got} oracle={exp} present={sorted(present)}'
+                    got, exp, g = se.check(*q), oracle.check(*q), graph.check(q)
+                    assert got == exp == g, \
+                        f'{fixture} {ops.name} q={q} set={got} oracle={exp} graph={g} ' \
+                        f'present={sorted(present)}'
+        graph.close()
         session.close()

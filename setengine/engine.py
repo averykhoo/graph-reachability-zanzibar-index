@@ -163,14 +163,15 @@ class SetEngine:
         self.ast = parse_schema_ast(schema)
         self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes)
         self.filters = schema_filters(self.ast)
-        # For pure-union schemas we can reproduce the graph backend's DERIVED edge graph
-        # (same RuleSet) and reject exactly the cycles it rejects -- including from-chain
-        # cycles. Boolean schemas have no graph partner, so data-cycle rejection is off
-        # (the oracle evaluates cyclic schemas rather than rejecting; §1.5 parity is
-        # only against the graph, which cannot ingest booleans).
+        # Reproduce the graph backend's raw-write edge graph (same RuleSet) and reject
+        # exactly the cycles it rejects -- including from-chain cycles. Since the P7
+        # matrix flip this covers boolean schemas too (their raw writes route onto
+        # leaf families). Schemas the graph still refuses (decision-15 scope, cyclic
+        # derived dependencies) have no graph partner: data-cycle rejection is off and
+        # the oracle remains the only cross-check.
         try:
             self._ruleset = compile_ruleset(self.ast, self.schema_info)
-        except UnsupportedByGraphIndex:
+        except (UnsupportedByGraphIndex, ValueError):
             self._ruleset = None
         self.rebuild()
 

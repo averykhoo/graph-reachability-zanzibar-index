@@ -294,12 +294,14 @@ def test_integration_confluence(backend: Backend, load_fga_schema):
     assert backend.check_reachable(..., 'user', 'u1', 'can_view', 'page', 'p1') is True
 
 
-def test_integration_demorgans_refused_by_graph(load_fga_schema):
-    # The demorgans schema uses `but not`; the graph backend refuses to ingest it
-    # (spec §2.3/§7.4 -- the old xfail retired). The set engine handles booleans.
+def test_integration_demorgans_compiles_for_graph(load_fga_schema):
+    # The P7 flip (boolean spec §10): `but not` schemas compile into derived
+    # predicates instead of being refused; the historical guard stays reachable.
     schema = load_fga_schema('demorgans_reverse.fga')
+    ruleset = parse_openfga_schema(schema)
+    assert ruleset.compiled is not None and ruleset.compiled.plans
     with pytest.raises(UnsupportedByGraphIndex):
-        parse_openfga_schema(schema)
+        parse_openfga_schema(schema, enable_boolean=False)
 
 
 def test_integration_github(backend: Backend, load_fga_schema):

@@ -346,6 +346,10 @@ class WildcardIndex:
 
     def _check_derived(self, s_pred: str, s_type: str, s_name: str,
                        relation: str, o_type: str, o_name: str) -> bool:
+        if o_name == '*':
+            # object wildcards on derived relations are rejected at compile (decision
+            # 15): no object-star state can exist, so the intensional query is False
+            return False
         if s_name == '*':
             # intensional: is the whole shape covered? (1 residue read)
             stars, _ = self._residue_state(relation, o_type, o_name)

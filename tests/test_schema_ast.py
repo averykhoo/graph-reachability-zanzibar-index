@@ -226,15 +226,26 @@ def test_compile_pure_union_succeeds(load_fga_schema):
     assert ruleset.schema_info is info
 
 
+# ---------------------------------------------------------------------------
+# The P7 flip: boolean schemas COMPILE into derived predicates (boolean spec §10 --
+# these replace the historical refusal tests; plan-shape depth lives in
+# tests/test_boolean_compile.py).
+# ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize('fixture', ['demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga'])
-def test_compile_refuses_booleans(load_fga_schema, fixture):
+def test_compile_accepts_booleans(load_fga_schema, fixture):
     ast = parse_schema_ast(load_fga_schema(fixture))
-    with pytest.raises(UnsupportedByGraphIndex):
-        compile_ruleset(ast, derive_schema_info(ast))
+    ruleset = compile_ruleset(ast, derive_schema_info(ast))
+    assert ruleset.compiled is not None and ruleset.compiled.plans
+    assert ruleset.compiled.strata, 'derived relations must stratify'
+    # every tainted relation has an executable plan in a stratum
+    for key in ruleset.compiled.tainted:
+        assert key in ruleset.compiled.plans
 
 
-def test_compile_refuses_intersection_naming_relation():
+def test_compile_boolean_intersection_gets_plan():
     schema = '''
+    type user
     type doc
       relations
         define a: [user]
@@ -242,11 +253,13 @@ def test_compile_refuses_intersection_naming_relation():
         define x: a and b
     '''
     ast = parse_schema_ast(schema)
-    with pytest.raises(UnsupportedByGraphIndex, match='x'):
-        compile_ruleset(ast, derive_schema_info(ast))
+    ruleset = compile_ruleset(ast, derive_schema_info(ast))
+    plan = ruleset.compiled.plans[('doc', 'x')]
+    assert [s.kind for s in plan.leaves] == ['closure', 'closure']
+    assert callable(plan.check_fn) and callable(plan.stars_fn)
 
 
-def test_parse_openfga_schema_still_refuses_booleans(load_fga_schema):
-    # The high-level entry point (parse + compile) surfaces the refusal.
+def test_enable_boolean_false_restores_refusal(load_fga_schema):
+    # the historical behavior stays reachable for callers that want the guard
     with pytest.raises(UnsupportedByGraphIndex):
-        parse_openfga_schema(load_fga_schema('demorgans_law_2.fga'))
+        parse_openfga_schema(load_fga_schema('demorgans_law_2.fga'), enable_boolean=False)

@@ -1,0 +1,13 @@
+# rules_and_filters (in compile order)
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='granted', object_type='role', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='role', subject_name=None, relation='assigned', object_type='cond', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='cond', subject_name=None, relation='required_by', object_type='attr', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='attr', subject_name='*', relation='_all_attrs', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='attr', subject_name=None, relation='labels', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='cond', subject_name='*', relation='_all_conds', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='_all_conds', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='matchable_conds.0', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None))
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='_all_attrs', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='non_labels.0', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None))
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='labels', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='non_labels.1', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None))
+# schema_info
+subject_wildcard_shapes=[('attr', '...'), ('cond', '...')]
+object_wildcard_shapes=[]

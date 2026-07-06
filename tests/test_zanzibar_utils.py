@@ -181,9 +181,13 @@ def test_parse_fga_schemas(load_fga_schema, fga_file):
 
 
 @pytest.mark.parametrize("fga_file", sorted(BOOLEAN_FGA_FILES))
-def test_parse_boolean_fga_schemas_refused_by_graph(load_fga_schema, fga_file):
-    # The graph index must never silently mis-ingest a boolean schema (spec §2.3): it
-    # parses fine but compilation refuses it, naming the offending relation.
+def test_parse_boolean_fga_schemas_compile_for_graph(load_fga_schema, fga_file):
+    # The P7 flip (boolean spec §10): boolean schemas compile into derived predicates
+    # (leaf routing + executable plans) instead of being refused. The refusal remains
+    # reachable via enable_boolean=False for callers that want the historical guard.
     schema = load_fga_schema(fga_file)
+    ruleset = parse_openfga_schema(schema)
+    assert ruleset.compiled is not None and ruleset.compiled.plans
+    assert ruleset.schema_info.derived_families
     with pytest.raises(UnsupportedByGraphIndex):
-        parse_openfga_schema(schema)
+        parse_openfga_schema(schema, enable_boolean=False)

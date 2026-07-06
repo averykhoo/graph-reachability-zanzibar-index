@@ -13,10 +13,10 @@ comparison; see docs/spec-deviations.md #3) -- so per-op parity is *check* parit
 lookup/lookup_reverse are served by the graph backend (or the first set engine while a
 boolean schema keeps the graph out, pre-P7) and pinned by their own dedicated tests.
 
-Boolean schemas: until the P7 matrix flip, `parse_openfga_schema` refuses them, so the
-engine runs 3-way (oracle + both set engines) exactly like today's matrix. After the
-flip the same class runs 4-way with zero changes here -- the graph joins automatically
-when compile succeeds. This is the acceptance seam.
+Boolean schemas run 4-way since the P7 matrix flip: the graph joins automatically when
+compile succeeds (its writes run the delta-processor cascade in-transaction, its post-op
+runs the I9 fixpoint audit). Schemas the graph still refuses -- decision-15 scope,
+cyclic derived dependencies -- degrade to 3-way, oracle + both set engines.
 
 Paranoia mode (spec §8.1) defaults ON: the graph store gets pre/post-commit invariant
 checking (index_v4.invariants.install_paranoia) plus the per-op I12 snapshots here.
@@ -54,22 +54,31 @@ def _fresh_session() -> Session:
 
 
 class _GraphSide:
-    """The graph backend: RuleSet rewrite fan-out into a WildcardIndex."""
+    """The graph backend: RuleSet rewrite fan-out into a WildcardIndex, plus the
+    delta-processor cascade for schemas with derived (boolean) relations."""
     name = 'graph'
 
     def __init__(self, ruleset, *, paranoia: bool):
         self.ruleset = ruleset
         self.session, self.widx = make_wildcard_index(
             ruleset.schema_info, store_id='pg', paranoia=paranoia)
+        self.proc = None
+        if ruleset.compiled is not None and ruleset.compiled.plans:
+            from index_v4.processor import DeltaProcessor
+            self.proc = DeltaProcessor(self.widx, ruleset.compiled)
 
     def apply(self, raw: RawTuple, op: str) -> bool:
+        from index_v4.outbox import outbox_watermark
         sp = Ellipsis if raw[0] == '...' else raw[0]
         triple = RelationalTriple(Entity(raw[1], raw[2]), raw[3], Entity(raw[4], raw[5]), sp)
         fn = self.widx.add_tuple if op == 'add' else self.widx.remove_tuple
         try:
+            wm = outbox_watermark(self.session, 'pg')
             for d in self.ruleset.apply(triple):
                 fn(_norm(d.subject_predicate), d.subject.type, d.subject.name,
                    d.relation, d.object.type, d.object.name)
+            if self.proc is not None:
+                self.proc.run_cascade(wm)                # synchronous v1: same txn
             self.session.commit()
             return True
         except ValueError:
@@ -84,6 +93,8 @@ class _GraphSide:
 
     def post_op(self) -> None:
         assert_wildcard_invariants(self.widx)
+        if self.proc is not None:
+            self.proc.audit_fixpoint()                   # I9, all keys (paranoia dose)
 
     def close(self) -> None:
         self.session.close()
