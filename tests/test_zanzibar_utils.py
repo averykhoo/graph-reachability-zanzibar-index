@@ -11,6 +11,7 @@ from zanzibar_utils_v1 import (
     Rule,
     RuleSet,
     parse_openfga_schema,
+    UnsupportedByGraphIndex,
 )
 
 
@@ -165,10 +166,24 @@ def test_parse_openfga_schema():
 
 
 
+# The demorgans fixtures use boolean operators (`and` / `but not`); the graph index
+# refuses them loudly (spec §2.3). Every other fixture is pure-union and must compile.
+BOOLEAN_FGA_FILES = {'demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga',
+                     'boolean_wildcards.fga'}
 FGA_FILES = [f.name for f in (Path(__file__).parent / "fga_schemas").glob("*.fga")]
+UNION_FGA_FILES = [f for f in FGA_FILES if f not in BOOLEAN_FGA_FILES]
 
-@pytest.mark.parametrize("fga_file", FGA_FILES)
+@pytest.mark.parametrize("fga_file", UNION_FGA_FILES)
 def test_parse_fga_schemas(load_fga_schema, fga_file):
     schema = load_fga_schema(fga_file)
     ruleset = parse_openfga_schema(schema)
     assert len(ruleset.rules_and_filters) > 0
+
+
+@pytest.mark.parametrize("fga_file", sorted(BOOLEAN_FGA_FILES))
+def test_parse_boolean_fga_schemas_refused_by_graph(load_fga_schema, fga_file):
+    # The graph index must never silently mis-ingest a boolean schema (spec §2.3): it
+    # parses fine but compilation refuses it, naming the offending relation.
+    schema = load_fga_schema(fga_file)
+    with pytest.raises(UnsupportedByGraphIndex):
+        parse_openfga_schema(schema)

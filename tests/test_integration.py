@@ -9,7 +9,8 @@ from zanzibar_utils_v1 import (
     Entity,
     RelationalTriple,
     parse_openfga_schema,
-    RuleSet
+    RuleSet,
+    UnsupportedByGraphIndex,
 )
 
 
@@ -293,13 +294,12 @@ def test_integration_confluence(backend: Backend, load_fga_schema):
     assert backend.check_reachable(..., 'user', 'u1', 'can_view', 'page', 'p1') is True
 
 
-@pytest.mark.xfail(reason="'but not' might not be fully supported by parser yet")
-def test_integration_demorgans(backend: Backend, load_fga_schema):
+def test_integration_demorgans_refused_by_graph(load_fga_schema):
+    # The demorgans schema uses `but not`; the graph backend refuses to ingest it
+    # (spec §2.3/§7.4 -- the old xfail retired). The set engine handles booleans.
     schema = load_fga_schema('demorgans_reverse.fga')
-    ruleset = parse_openfga_schema(schema)
-
-    t1 = RelationalTriple(Entity('user', 'alice'), 'assigned', Entity('role', 'r1'), Ellipsis)
-    ingest_triple(backend, ruleset, t1)
+    with pytest.raises(UnsupportedByGraphIndex):
+        parse_openfga_schema(schema)
 
 
 def test_integration_github(backend: Backend, load_fga_schema):

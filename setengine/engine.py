@@ -1,0 +1,640 @@
+"""
+Set engine storage model + writes (spec §5, §6.1-6.2).
+
+Stores ONLY raw set memberships; builds no closure. In-memory state is rebuilt from the
+``TupleV1`` table on open (replay). The evaluator (check/expand/lookups, §6.3-6.5) is
+added on top of this storage layer.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass
+from types import EllipsisType
+
+from sqlmodel import Session, select
+
+from zanzibar_utils_v1 import (
+    Entity,
+    RelationalTriple,
+    parse_schema_ast,
+    derive_schema_info,
+    schema_filters,
+    compile_ruleset,
+    UnsupportedByGraphIndex,
+    Direct,
+    Computed,
+    TTU,
+    Union,
+    Intersection,
+    Exclusion,
+)
+from .setops import SetOps, DEFAULT_SETOPS
+from .models import TupleV1
+from . import memberset as ms
+from .memberset import MemberSet
+
+NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
+
+
+class LookupResult:
+    """Concrete result ids + symbolic wildcard markers (mirrors index_v4 LookupResult)."""
+
+    def __init__(self):
+        self.node_ids: set[int] = set()               # concrete result ids
+        self.markers: set[tuple[str, str]] = set()    # (type, predicate) star shapes
+
+    def __repr__(self):
+        return f'LookupResult(node_ids={self.node_ids}, markers={self.markers})'
+
+
+def _norm_pred(pred: str | EllipsisType | None) -> str:
+    return '...' if (pred is Ellipsis or pred is None) else pred
+
+
+def _denorm_pred(pred: str) -> str | EllipsisType:
+    return Ellipsis if pred == '...' else pred
+
+
+class Interner:
+    """Per-store, append-only interning of ``(type, name, predicate)`` to int32 ids.
+
+    Star nodes intern like anything else -- ``(T, '*', pred)`` -- and need no any/all
+    split: a star id's role is unambiguous from which side of storage it sits on (a
+    star *subject* is a sentinel inside some node's entities/usersets; a star *object*
+    is a NodeSets key). ``ids_of_type`` / ``ids_of_shape`` are the population masks the
+    MemberSet algebra needs; they are append-only (spec §5), never pruned on remove.
+    """
+
+    def __init__(self, ops: SetOps):
+        self.ops = ops
+        self.id_of: dict[tuple[str, str, str], int] = {}
+        self.key_of: list[tuple[str, str, str]] = []
+        self.ids_of_type: dict[str, object] = defaultdict(ops.new)          # concrete entities (pred '...')
+        self.ids_of_shape: dict[tuple[str, str], object] = defaultdict(ops.new)  # concrete usersets
+
+    def intern(self, entity_type: str, name: str, pred: str) -> int:
+        key = (entity_type, name, pred)
+        i = self.id_of.get(key)
+        if i is not None:
+            return i
+        i = len(self.key_of)
+        self.id_of[key] = i
+        self.key_of.append(key)
+        if name != '*':                       # star ids are sentinels, not population members
+            if pred == '...':
+                self.ids_of_type[entity_type].add(i)
+            else:
+                self.ids_of_shape[(entity_type, pred)].add(i)
+        return i
+
+    def get(self, entity_type: str, name: str, pred: str) -> int | None:
+        return self.id_of.get((entity_type, name, pred))
+
+    def key(self, uid: int) -> tuple[str, str, str]:
+        return self.key_of[uid]
+
+
+@dataclass
+class NodeSets:
+    """Direct subjects granted a relation on one object node (the tuple's object side).
+
+    The split is a performance invariant, not cosmetics (spec §5): evaluator recursion
+    iterates only ``usersets`` (small, topology-shaped), while ``entities`` bitmaps
+    (potentially huge populations) are only ever combined by C-level bulk ops.
+    """
+    entities: object      # subject ids with predicate '...' (concrete entities + bare-star sentinels)
+    usersets: object      # subject ids with predicate != '...' (concrete usersets + userset-star sentinels)
+
+
+class SetEngine:
+    """Raw-tuple, bitmap-backed reachability engine (storage + writes; §5, §6.1-6.2)."""
+
+    def __init__(self, session: Session, store_id: str, schema: str, *,
+                 object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
+                 ops: SetOps = DEFAULT_SETOPS):
+        self.session = session
+        self.store_id = store_id
+        self.ops = ops
+        self.ast = parse_schema_ast(schema)
+        self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes)
+        self.filters = schema_filters(self.ast)
+        # For pure-union schemas we can reproduce the graph backend's DERIVED edge graph
+        # (same RuleSet) and reject exactly the cycles it rejects -- including from-chain
+        # cycles. Boolean schemas have no graph partner, so data-cycle rejection is off
+        # (the oracle evaluates cyclic schemas rather than rejecting; §1.5 parity is
+        # only against the graph, which cannot ingest booleans).
+        try:
+            self._ruleset = compile_ruleset(self.ast, self.schema_info)
+        except UnsupportedByGraphIndex:
+            self._ruleset = None
+        self.rebuild()
+
+    # ------------------------------------------------------------------ #
+    # State (rebuilt on open)
+    # ------------------------------------------------------------------ #
+
+    def _reset_state(self) -> None:
+        self.interner = Interner(self.ops)
+        self.node_sets: dict[int, NodeSets] = {}       # object id -> NodeSets
+        self.member_of: dict[int, object] = {}         # subject id -> object ids it appears in
+        # Write-time cycle-detection index over the graph backend's DERIVED edges
+        # (union schemas only). NOT read state -- reads never consult it.
+        self._flow_adj: dict[NodeKey, set[NodeKey]] = {}
+        self._edge_count: dict[tuple[NodeKey, NodeKey], int] = {}
+
+    def rebuild(self) -> None:
+        """Replay the TupleV1 table into fresh in-memory state (spec §3, §6.5)."""
+        self._reset_state()
+        rows = self.session.exec(
+            select(TupleV1).where(TupleV1.store_id == self.store_id).order_by(TupleV1.id)
+        ).all()
+        for row in rows:
+            self._apply_add(row.subject_predicate, row.subject_type, row.subject_name,
+                            row.relation, row.object_type, row.object_name)
+
+    # ------------------------------------------------------------------ #
+    # Population masks (for the MemberSet algebra)
+    # ------------------------------------------------------------------ #
+
+    def population(self, shape: tuple[str, str]):
+        """Concrete member ids of a shape: ids_of_type[T] for bare, ids_of_shape[(T,P)]."""
+        entity_type, pred = shape
+        if pred == '...':
+            return self.interner.ids_of_type.get(entity_type, self.ops.new())
+        return self.interner.ids_of_shape.get(shape, self.ops.new())
+
+    # ------------------------------------------------------------------ #
+    # Writes (§6.1) -- no rewrite expansion, no derived state
+    # ------------------------------------------------------------------ #
+
+    def add_tuple(self, subject_predicate, s_type: str, s_name: str,
+                  relation: str, o_type: str, o_name: str) -> list:
+        s_pred = _norm_pred(subject_predicate)
+        if self._row(s_pred, s_type, s_name, relation, o_type, o_name) is not None:
+            return []                                  # idempotent: septuple already present
+        self._validate(s_pred, s_type, s_name, relation, o_type, o_name)
+        self.session.add(TupleV1(
+            store_id=self.store_id, subject_predicate=s_pred, subject_type=s_type,
+            subject_name=s_name, relation=relation, object_type=o_type, object_name=o_name))
+        self._apply_add(s_pred, s_type, s_name, relation, o_type, o_name)
+        return []                                      # this backend computes no deltas (§6.1)
+
+    def remove_tuple(self, subject_predicate, s_type: str, s_name: str,
+                     relation: str, o_type: str, o_name: str) -> list:
+        s_pred = _norm_pred(subject_predicate)
+        row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
+        if row is None:
+            raise ValueError('non-existent tuple cannot be removed')
+        self.session.delete(row)
+        self._apply_remove(s_pred, s_type, s_name, relation, o_type, o_name)
+        return []
+
+    def _row(self, s_pred, s_type, s_name, relation, o_type, o_name) -> TupleV1 | None:
+        return self.session.exec(
+            select(TupleV1)
+            .where(TupleV1.store_id == self.store_id)
+            .where(TupleV1.subject_predicate == s_pred)
+            .where(TupleV1.subject_type == s_type)
+            .where(TupleV1.subject_name == s_name)
+            .where(TupleV1.relation == relation)
+            .where(TupleV1.object_type == o_type)
+            .where(TupleV1.object_name == o_name)
+        ).first()
+
+    def _apply_add(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
+        subject_id = self.interner.intern(s_type, s_name, s_pred)
+        object_id = self.interner.intern(o_type, o_name, relation)
+        ns = self.node_sets.get(object_id)
+        if ns is None:
+            ns = NodeSets(self.ops.new(), self.ops.new())
+            self.node_sets[object_id] = ns
+        # classification is purely by predicate: entities carry '...', usersets a relation
+        (ns.entities if s_pred == '...' else ns.usersets).add(subject_id)
+        mo = self.member_of.get(subject_id)
+        if mo is None:
+            mo = self.ops.new()
+            self.member_of[subject_id] = mo
+        mo.add(object_id)
+
+        for u, v in self._derived_edges(s_pred, s_type, s_name, relation, o_type, o_name):
+            self._flow_add_edge(u, v)
+
+    def _apply_remove(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
+        subject_id = self.interner.get(s_type, s_name, s_pred)
+        object_id = self.interner.get(o_type, o_name, relation)
+        if subject_id is None or object_id is None:
+            return
+        ns = self.node_sets.get(object_id)
+        if ns is not None:
+            (ns.entities if s_pred == '...' else ns.usersets).discard(subject_id)
+        mo = self.member_of.get(subject_id)
+        if mo is not None:
+            mo.discard(object_id)
+        for u, v in self._derived_edges(s_pred, s_type, s_name, relation, o_type, o_name):
+            self._flow_remove_edge(u, v)
+        # Empty sets are left in place (spec §6.1: no GC -- nothing derived exists to leak).
+        # Interner masks are append-only (spec §5) and intentionally NOT pruned here.
+
+    # ------------------------------------------------------------------ #
+    # Flow-graph index (write-time cycle detection; union schemas only)
+    # ------------------------------------------------------------------ #
+
+    def _derived_edges(self, s_pred, s_type, s_name, relation, o_type, o_name) -> list[tuple[NodeKey, NodeKey]]:
+        """The graph backend's derived (node_from -> node_to) edges for this raw tuple.
+
+        Reuses the compiled RuleSet so the flow graph is byte-for-byte the graph index's
+        edge set. Empty for boolean schemas (no RuleSet)."""
+        if self._ruleset is None:
+            return []
+        triple = RelationalTriple(
+            subject=Entity(s_type, s_name), relation=relation,
+            object=Entity(o_type, o_name), subject_predicate=_denorm_pred(s_pred))
+        edges = []
+        for d in self._ruleset.apply(triple):
+            u = (d.subject.type, d.subject.name, _norm_pred(d.subject_predicate))
+            v = (d.object.type, d.object.name, d.relation)
+            if u != v:
+                edges.append((u, v))
+        return edges
+
+    def _flow_add_edge(self, u: NodeKey, v: NodeKey) -> None:
+        c = self._edge_count.get((u, v), 0)
+        self._edge_count[(u, v)] = c + 1
+        if c == 0:
+            self._flow_adj.setdefault(u, set()).add(v)
+
+    def _flow_remove_edge(self, u: NodeKey, v: NodeKey) -> None:
+        c = self._edge_count.get((u, v), 0)
+        if c <= 1:
+            self._edge_count.pop((u, v), None)
+            succ = self._flow_adj.get(u)
+            if succ is not None:
+                succ.discard(v)
+        else:
+            self._edge_count[(u, v)] = c - 1
+
+    def _flow_reaches(self, src: NodeKey, dst: NodeKey, extra: list[tuple[NodeKey, NodeKey]]) -> bool:
+        """Is dst reachable from src in the flow graph plus `extra` (tentative) edges?"""
+        seen: set[NodeKey] = set()
+        stack = [src]
+        while stack:
+            node = stack.pop()
+            if node == dst:
+                return True
+            if node in seen:
+                continue
+            seen.add(node)
+            stack.extend(self._flow_adj.get(node, ()))
+            stack.extend(v for (a, v) in extra if a == node)
+        return False
+
+    # ------------------------------------------------------------------ #
+    # Validation (§6.2) -- parity with the graph backend, side-effect free
+    # ------------------------------------------------------------------ #
+
+    def _validate(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
+        # (1) object-wildcard gating: a T:* object is valid only for a declared shape.
+        if o_name == '*' and (o_type, relation) not in self.schema_info.object_wildcard_shapes:
+            raise ValueError(
+                f"object wildcard {o_type}:* (relation {relation!r}) is not a declared "
+                f"object-wildcard shape")
+
+        # (2) type-restriction validity via the schema's strict Filters (same code as the
+        #     graph backend). Subject-wildcard gating is encoded IN the Filters (a [T:*]
+        #     restriction yields a subject_name='*' filter; [T] keeps rejecting T:*).
+        triple = RelationalTriple(
+            subject=Entity(s_type, s_name), relation=relation,
+            object=Entity(o_type, o_name), subject_predicate=_denorm_pred(s_pred))
+        if not any(f.apply(triple) for f in self.filters):
+            raise ValueError(
+                f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} matches no "
+                f"declared type restriction for {o_type}#{relation}")
+
+        # (3) cycle rejection (§6.2): reject usersets whose membership would loop, matching
+        #     the graph backend's cycle detection. Side-effect free -- uses existing ids only.
+        if self._would_cycle(s_pred, s_type, s_name, relation, o_type, o_name):
+            raise ValueError(
+                f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} would create a "
+                f"cycle in the userset membership topology")
+
+    def _would_cycle(self, s_pred, s_type, s_name, relation, o_type, o_name) -> bool:
+        # Boolean schemas have no graph partner and the oracle evaluates cyclic schemas
+        # rather than rejecting -- so we do not reject data cycles for them.
+        if self._ruleset is None:
+            return False
+
+        # Same-shape wildcard self-reference (e.g. group:*#member member group:g): a cycle
+        # by construction that the graph backend also rejects (§1.5).
+        if s_name == '*' and s_pred != '...' and (s_type, s_pred) == (o_type, relation):
+            return True
+
+        # Would adding any DERIVED edge u->v close a loop? (v already reaches u.) This
+        # reproduces the graph backend's reachability cycle check exactly, so both accept
+        # and reject the same op sequences -- including from-chain cycles.
+        edges = self._derived_edges(s_pred, s_type, s_name, relation, o_type, o_name)
+        for u, v in edges:
+            if self._flow_reaches(v, u, edges):
+                return True
+        return False
+
+    # ------------------------------------------------------------------ #
+    # Object-node resolution shared by the evaluator
+    # ------------------------------------------------------------------ #
+
+    def _object_ids(self, o_type: str, o_name: str, rel: str) -> list[int]:
+        """Interned ids for (o_type,o_name,rel) plus the star object (o_type,'*',rel) when
+        declared and the query object is concrete (§6.3 object-side handling)."""
+        ids: list[int] = []
+        if o_name == '*':
+            i = self.interner.get(o_type, '*', rel)          # intensional: star object only
+            if i is not None:
+                ids.append(i)
+            return ids
+        i = self.interner.get(o_type, o_name, rel)
+        if i is not None:
+            ids.append(i)
+        if (o_type, rel) in self.schema_info.object_wildcard_shapes:
+            si = self.interner.get(o_type, '*', rel)
+            if si is not None:
+                ids.append(si)
+        return ids
+
+    def _instances_of_type(self, t: str, query_names: set[tuple[str, str]]) -> set[str]:
+        """Concrete instance names of a type (interner keys ∪ query endpoints), for the
+        strict ∀⇒∃ expansion of star tuplesets. Rare path (star parents)."""
+        names = {n for (kt, n, _p) in self.interner.key_of if kt == t and n != '*'}
+        names |= {qn for (qt, qn) in query_names if qt == t and qn != '*'}
+        return names
+
+    # ------------------------------------------------------------------ #
+    # check -- pointwise, short-circuiting (§6.3)
+    # ------------------------------------------------------------------ #
+
+    def check(self, subject_predicate, s_type: str, s_name: str,
+              relation: str, o_type: str, o_name: str) -> bool:
+        s_pred = _norm_pred(subject_predicate)
+        subject = (s_type, s_name, s_pred)
+        query_names = {(s_type, s_name), (o_type, o_name)}
+        memo: dict[tuple[str, str, str], bool] = {}
+        stack: set[tuple[str, str, str]] = set()
+
+        def sat(ot: str, on: str, rel: str) -> bool:
+            key = (ot, on, rel)
+            cached = memo.get(key)
+            if cached is not None:
+                return cached
+            if key in stack:
+                return False
+            expr = self.ast.get((ot, rel))
+            if expr is None:
+                memo[key] = False
+                return False
+            stack.add(key)
+            result = sat_expr(expr, ot, on, rel)
+            stack.discard(key)
+            memo[key] = result
+            return result
+
+        def sat_expr(expr, ot: str, on: str, rel: str) -> bool:
+            if isinstance(expr, Union):
+                return any(sat_expr(c, ot, on, rel) for c in expr.children)
+            if isinstance(expr, Intersection):
+                return all(sat_expr(c, ot, on, rel) for c in expr.children)
+            if isinstance(expr, Exclusion):
+                return sat_expr(expr.base, ot, on, rel) and not sat_expr(expr.subtract, ot, on, rel)
+            if isinstance(expr, Direct):
+                return direct_leaf(expr, ot, on, rel)
+            if isinstance(expr, Computed):
+                return sat(ot, on, expr.relation)
+            if isinstance(expr, TTU):
+                return ttu_leaf(expr.target_rel, expr.tupleset_rel, ot, on)
+            raise TypeError(f'unknown AST node {expr!r}')
+
+        def direct_leaf(direct, ot: str, on: str, rel: str) -> bool:
+            restr = {(r.type, r.predicate, r.wildcard) for r in direct.restrictions}
+            nodes = [self.node_sets[i] for i in self._object_ids(ot, on, rel) if i in self.node_sets]
+            if not nodes:
+                return False
+
+            def in_entities(uid):
+                return uid is not None and any(uid in ns.entities for ns in nodes)
+
+            def in_usersets(uid):
+                return uid is not None and any(uid in ns.usersets for ns in nodes)
+
+            if s_name == '*':
+                # intensional per-branch: the matching star sentinel must be granted here
+                if s_pred == '...':
+                    return (s_type, '...', True) in restr and in_entities(
+                        self.interner.get(s_type, '*', '...'))
+                return (s_type, s_pred, True) in restr and in_usersets(
+                    self.interner.get(s_type, '*', s_pred))
+
+            if s_pred == '...':
+                # concrete bare entity
+                if (s_type, '...', False) in restr and in_entities(
+                        self.interner.get(s_type, s_name, '...')):
+                    return True
+                if (s_type, '...', True) in restr and in_entities(
+                        self.interner.get(s_type, '*', '...')):
+                    return True
+                return member_via_usersets(nodes, restr)
+
+            # userset query subject
+            if (s_type, s_pred, False) in restr and in_usersets(
+                    self.interner.get(s_type, s_name, s_pred)):
+                return True
+            if (s_type, s_pred, True) in restr and in_usersets(
+                    self.interner.get(s_type, '*', s_pred)):
+                return True
+            return member_via_usersets(nodes, restr)
+
+        def member_via_usersets(nodes, restr) -> bool:
+            # iterate only usersets (small, topology-shaped -- the §5 performance invariant)
+            for ns in nodes:
+                for uid in ns.usersets:
+                    t, n, p = self.interner.key(uid)
+                    if n != '*':
+                        if (t, p, False) in restr and sat(t, n, p):
+                            return True
+                    elif (t, p, True) in restr:
+                        for inst_id in list(self.interner.ids_of_shape.get((t, p), ())):
+                            it, inn, ip = self.interner.key(inst_id)
+                            if sat(it, inn, ip):
+                                return True
+            return False
+
+        def ttu_leaf(target_rel: str, tupleset_rel: str, ot: str, on: str) -> bool:
+            nodes = [self.node_sets[i] for i in self._object_ids(ot, on, tupleset_rel)
+                     if i in self.node_sets]
+            for ns in nodes:
+                # tupleset subjects (parents) live in entities (bare) -- iterated per §6.3;
+                # userset tuplesets are unusual but handled for completeness.
+                for pid in list(ns.entities) + list(ns.usersets):
+                    pt, pn, _pp = self.interner.key(pid)
+                    if pn != '*':
+                        if (s_type, s_name, s_pred) == (pt, pn, target_rel):
+                            return True                       # the from-chain userset itself
+                        if sat(pt, pn, target_rel):
+                            return True
+                    else:
+                        if (s_type, s_pred) == (pt, target_rel):
+                            return True                       # star/userset subject of that shape
+                        for inst in self._instances_of_type(pt, query_names):
+                            if sat(pt, inst, target_rel):
+                                return True
+            return False
+
+        return sat(o_type, o_name, relation)
+
+    # ------------------------------------------------------------------ #
+    # expand -- bulk, memoized MemberSets (§6.3)
+    # ------------------------------------------------------------------ #
+
+    def expand(self, relation: str, o_type: str, o_name: str,
+               memo: dict | None = None) -> MemberSet:
+        """The full member set of (o_type, o_name, relation) as a MemberSet (§6.3).
+
+        Concrete entity/userset members land in ``pos``; subject wildcards become star
+        shapes in ``stars`` (never enumerated). Never interns on read."""
+        if memo is None:
+            memo = {}
+        stack: set[tuple[str, str, str]] = set()
+        ops, pop = self.ops, self.population
+
+        def do(ot: str, on: str, rel: str) -> MemberSet:
+            key = (ot, on, rel)
+            cached = memo.get(key)
+            if cached is not None:
+                return cached
+            if key in stack:
+                return ms.empty(ops)
+            expr = self.ast.get((ot, rel))
+            if expr is None:
+                memo[key] = ms.empty(ops)
+                return memo[key]
+            stack.add(key)
+            r = do_expr(expr, ot, on, rel)
+            stack.discard(key)
+            memo[key] = r
+            return r
+
+        def do_expr(expr, ot, on, rel) -> MemberSet:
+            if isinstance(expr, Union):
+                acc = ms.empty(ops)
+                for c in expr.children:
+                    acc = ms.union(acc, do_expr(c, ot, on, rel), ops, pop)
+                return acc
+            if isinstance(expr, Intersection):
+                acc = None
+                for c in expr.children:
+                    m = do_expr(c, ot, on, rel)
+                    acc = m if acc is None else ms.intersect(acc, m, ops, pop)
+                return acc if acc is not None else ms.empty(ops)
+            if isinstance(expr, Exclusion):
+                return ms.subtract(do_expr(expr.base, ot, on, rel),
+                                   do_expr(expr.subtract, ot, on, rel), ops, pop)
+            if isinstance(expr, Direct):
+                return direct_expand(expr, ot, on, rel)
+            if isinstance(expr, Computed):
+                return do(ot, on, expr.relation)
+            if isinstance(expr, TTU):
+                return ttu_expand(expr.target_rel, expr.tupleset_rel, ot, on)
+            raise TypeError(f'unknown AST node {expr!r}')
+
+        def direct_expand(direct, ot, on, rel) -> MemberSet:
+            restr = {(r.type, r.predicate, r.wildcard) for r in direct.restrictions}
+            nodes = [self.node_sets[i] for i in self._object_ids(ot, on, rel) if i in self.node_sets]
+            pos = ops.new()
+            stars: set[tuple[str, str]] = set()
+            acc = ms.empty(ops)
+            for ns in nodes:
+                for (rtype, rpred, rwild) in restr:
+                    if rpred != '...':
+                        continue
+                    if rwild:
+                        sid = self.interner.get(rtype, '*', '...')
+                        if sid is not None and sid in ns.entities:
+                            stars.add((rtype, '...'))
+                    else:
+                        pos |= (ops.new(ns.entities) & ops.new(pop((rtype, '...'))))
+                for uid in ns.usersets:
+                    t, n, p = self.interner.key(uid)
+                    if n != '*':
+                        if (t, p, False) in restr:
+                            pos.add(uid)                              # the userset node itself
+                            acc = ms.union(acc, do(t, n, p), ops, pop)
+                    elif (t, p, True) in restr:
+                        stars.add((t, p))                             # covers all usersets of shape
+                        for inst_id in list(self.interner.ids_of_shape.get((t, p), ())):
+                            it, inn, ip = self.interner.key(inst_id)
+                            acc = ms.union(acc, do(it, inn, ip), ops, pop)
+            local = MemberSet(ops.freeze(pos), frozenset(stars), ops.freeze())
+            return ms.union(local, acc, ops, pop)
+
+        def ttu_expand(target, tupleset, ot, on) -> MemberSet:
+            nodes = [self.node_sets[i] for i in self._object_ids(ot, on, tupleset)
+                     if i in self.node_sets]
+            acc = ms.empty(ops)
+            for ns in nodes:
+                for pid in list(ns.entities) + list(ns.usersets):
+                    pt, pn, _pp = self.interner.key(pid)
+                    if pn != '*':
+                        acc = ms.union(acc, do(pt, pn, target), ops, pop)
+                        fid = self.interner.get(pt, pn, target)       # from-chain userset itself
+                        if fid is not None:
+                            acc = ms.union(acc, ms.singleton_entity(fid, ops), ops, pop)
+                    else:
+                        acc = ms.union(acc, ms.star((pt, target), ops), ops, pop)
+                        for inst in self._instances_of_type(pt, {(ot, on)}):
+                            acc = ms.union(acc, do(pt, inst, target), ops, pop)
+            return acc
+
+        return do(o_type, o_name, relation)
+
+    # ------------------------------------------------------------------ #
+    # Lookups (§6.4)
+    # ------------------------------------------------------------------ #
+
+    def lookup_reverse(self, relation: str, o_type: str, o_name: str) -> LookupResult:
+        """Everything that can reach the object: expand rendered as a LookupResult (§6.4).
+
+        Concretes come from the MemberSet's ``pos``; star shapes become symbolic markers
+        (never enumerated to concretes)."""
+        m = self.expand(relation, o_type, o_name)
+        result = LookupResult()
+        result.node_ids = set(m.pos)
+        result.markers = set(m.stars)
+        return result
+
+    def lookup(self, subject_predicate, s_type: str, s_name: str) -> LookupResult:
+        """Everything the subject can reach (§6.4).
+
+        A verify-based semi-join: every interned object node is a candidate, confirmed by
+        check mode (which is sound under booleans). Object-wildcard shapes the subject can
+        reach are reported as markers. (The candidate set is intentionally simple; a
+        reverse-propagation generator is a documented optimization.)"""
+        s_pred = _norm_pred(subject_predicate)
+        result = LookupResult()
+        seen_rel_nodes: set[tuple[str, str, str]] = set()
+        for (t, n, p) in self.interner.key_of:
+            if p == '...':
+                continue                                   # entity nodes are not relations
+            key = (t, n, p)
+            if key in seen_rel_nodes:
+                continue
+            seen_rel_nodes.add(key)
+            if self.check(subject_predicate, s_type, s_name, p, t, n):
+                oid = self.interner.get(t, n, p)
+                if n == '*':
+                    result.markers.add((t, p))
+                elif oid is not None:
+                    result.node_ids.add(oid)
+        return result
+
+
+# The backend protocol (§6.5) is exactly SetEngine's surface: add_tuple / remove_tuple /
+# check / lookup / lookup_reverse, constructed from (session, store_id, schema), plus
+# rebuild() for open-replay.
+SetEngineBackend = SetEngine

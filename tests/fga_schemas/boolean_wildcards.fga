@@ -1,0 +1,18 @@
+model
+  schema 1.1
+
+type user
+
+type group
+  relations
+    define member: [user, group#member]
+
+type doc
+  relations
+    define parent: [doc]
+    define public: [user:*]
+    define blocked: [user]
+    define editor: [user, group#member]
+    define viewer: (public but not blocked) or editor
+    define restricted: editor and public
+    define inherited: viewer from parent

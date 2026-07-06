@@ -282,126 +282,367 @@ def parse_relation_rule(
     return direct_assignments, from_relations
 
 
-def parse_openfga_schema(
-        schema: str,
-        object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
-) -> RuleSet:
+# ===========================================================================
+# Expression AST (spec §2.1) + recursive-descent parser (spec §2.2)
+# ===========================================================================
+#
+# Parsing is split from compilation (spec §2.3): the DSL is parsed into a
+# ``SchemaAST`` -- a plain, backend-agnostic tree -- which BOTH the graph index
+# (via ``compile_ruleset``) and the set engine / oracle consume. The graph index
+# only supports pure-union definitions; ``compile_ruleset`` refuses ``and`` /
+# ``but not`` loudly (``UnsupportedByGraphIndex``) so a boolean schema can never be
+# silently mis-ingested.
+
+
+class UnsupportedByGraphIndex(Exception):
+    """A schema construct (``and`` / ``but not``) the graph index cannot represent.
+
+    Raised by ``compile_ruleset`` naming the offending relation. The set-engine
+    backend handles these; the closure-materialising graph index does not.
     """
-    NOTE: WINDSURF WROTE THIS CODE (extended for wildcards, spec §2.1/§2.3)
-    Parse an OpenFGA schema string and generate a RuleSet (with attached SchemaInfo).
 
-    ``object_wildcard_shapes`` are ``(object_type, relation)`` pairs enabling wildcard
-    *objects* (e.g. `folder:*`), a deliberate extension beyond OpenFGA that has no DSL
-    syntax and so must be declared here.
 
-    Example schema:
-    model
-      schema 1.1
+# ---- leaves ----
 
-    type folder
-      relations
-        define owner: [user, domain#member] or owner from parent_folder
-        define viewer: [user] or writer or viewer from parent_folder
+@dataclass(frozen=True, slots=True)
+class Restriction:
+    """One entry of a ``[...]`` type-restriction list.
+
+    ``predicate`` is ``'...'`` for a bare entity (``[user]``) or a relation name for a
+    userset (``[group#member]``). ``wildcard`` is True for ``T:*`` / ``T:*#P``.
     """
-    _rules_and_filters: list[Rule | Filter] = []
-    subject_wildcard_shapes: set[tuple[str, str]] = set()
-    current_type = None
+    type: str
+    predicate: str
+    wildcard: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Direct:
+    """A ``[...]`` direct type-restriction list, e.g. ``[user, group#member, user:*]``."""
+    restrictions: tuple[Restriction, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Computed:
+    """A computed userset: ``define viewer: editor`` -> ``Computed('editor')``."""
+    relation: str
+
+
+@dataclass(frozen=True, slots=True)
+class TTU:
+    """Tuple-to-userset: ``define viewer: viewer from parent`` -> ``TTU('viewer', 'parent')``."""
+    target_rel: str
+    tupleset_rel: str
+
+
+# ---- operators ----
+
+@dataclass(frozen=True, slots=True)
+class Union:
+    children: tuple['Expr', ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Intersection:
+    children: tuple['Expr', ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Exclusion:
+    base: 'Expr'
+    subtract: 'Expr'
+
+
+Expr = Union | Intersection | Exclusion | Direct | Computed | TTU
+SchemaAST = dict[tuple[str, str], Expr]     # (object_type, relation) -> Expr
+
+
+_RESERVED = ('or', 'and', 'but', 'not', 'from')
+
+
+def _tokenize_relation_body(body: str) -> list[tuple[str, str]]:
+    """Split a relation body into (kind, text) tokens.
+
+    Brackets are atomic (``[user, group#member]`` -> one ``bracket`` token, commas
+    and spaces preserved); parens are their own tokens; everything else is a
+    whitespace-delimited ``word`` (relation names + the reserved keywords).
+    """
+    tokens: list[tuple[str, str]] = []
+    i, n = 0, len(body)
+    while i < n:
+        c = body[i]
+        if c.isspace():
+            i += 1
+        elif c == '[':
+            j = body.find(']', i)
+            if j == -1:
+                raise ValueError(f"unterminated '[' in relation body {body!r}")
+            tokens.append(('bracket', body[i:j + 1]))
+            i = j + 1
+        elif c == '(':
+            tokens.append(('lparen', '('))
+            i += 1
+        elif c == ')':
+            tokens.append(('rparen', ')'))
+            i += 1
+        else:
+            j = i
+            while j < n and not body[j].isspace() and body[j] not in '()[]':
+                j += 1
+            tokens.append(('word', body[i:j]))
+            i = j
+    return tokens
+
+
+class _RelationParser:
+    """Recursive-descent parser for one relation body (grammar in spec §2.2):
+
+        expr    := chain ('but not' chain)?     # at most one exclusion, loosest binding
+        chain   := unit (OP unit)*              # OP homogeneous: all 'or' or all 'and'
+        unit    := '(' expr ')' | leaf
+        leaf    := type-restriction-list | REL | REL 'from' REL
+    """
+
+    def __init__(self, tokens: list[tuple[str, str]], relation: str):
+        self.tokens = tokens
+        self.relation = relation
+        self.pos = 0
+
+    def _peek(self) -> tuple[str | None, str | None]:
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else (None, None)
+
+    def parse(self) -> Expr:
+        if not self.tokens:
+            raise ValueError(f"relation {self.relation!r}: empty definition")
+        expr = self._parse_expr()
+        if self.pos != len(self.tokens):
+            _, text = self._peek()
+            raise ValueError(f"relation {self.relation!r}: unexpected token {text!r}")
+        return expr
+
+    def _parse_expr(self) -> Expr:
+        base = self._parse_chain()
+        if self._match_but_not():
+            return Exclusion(base, self._parse_chain())
+        return base
+
+    def _match_but_not(self) -> bool:
+        if (self.pos + 1 < len(self.tokens)
+                and self.tokens[self.pos] == ('word', 'but')
+                and self.tokens[self.pos + 1] == ('word', 'not')):
+            self.pos += 2
+            return True
+        return False
+
+    def _parse_chain(self) -> Expr:
+        children = [self._parse_unit()]
+        op: str | None = None
+        while True:
+            kind, text = self._peek()
+            if kind == 'word' and text in ('or', 'and'):
+                if op is None:
+                    op = text
+                elif op != text:
+                    raise ValueError(
+                        f"relation {self.relation!r}: mixing 'or' and 'and' without "
+                        f"parentheses is ambiguous")
+                self.pos += 1
+                children.append(self._parse_unit())
+            else:
+                break
+        if op is None:
+            return children[0]
+        return Union(tuple(children)) if op == 'or' else Intersection(tuple(children))
+
+    def _parse_unit(self) -> Expr:
+        kind, _ = self._peek()
+        if kind == 'lparen':
+            self.pos += 1
+            expr = self._parse_expr()
+            if self._peek()[0] != 'rparen':
+                raise ValueError(f"relation {self.relation!r}: expected ')'")
+            self.pos += 1
+            return expr
+        return self._parse_leaf()
+
+    def _parse_leaf(self) -> Expr:
+        kind, text = self._peek()
+        if kind == 'bracket':
+            self.pos += 1
+            direct_assignments, _ = parse_relation_rule(text)
+            return Direct(tuple(
+                Restriction(type=t, predicate=('...' if p is None else p), wildcard=(nm == '*'))
+                for (t, p, nm) in direct_assignments
+            ))
+        if kind == 'word':
+            if text in _RESERVED:
+                raise ValueError(f"relation {self.relation!r}: unexpected {text!r}")
+            self.pos += 1
+            if self._peek() == ('word', 'from'):
+                self.pos += 1
+                k3, t3 = self._peek()
+                if k3 != 'word' or t3 in _RESERVED:
+                    raise ValueError(f"relation {self.relation!r}: expected a relation after 'from'")
+                self.pos += 1
+                return TTU(target_rel=text, tupleset_rel=t3)
+            return Computed(text)
+        raise ValueError(f"relation {self.relation!r}: unexpected end of expression")
+
+
+def parse_schema_ast(schema: str) -> SchemaAST:
+    """Parse an OpenFGA DSL string into ``{(object_type, relation): Expr}`` (spec §2.2).
+
+    Always succeeds for well-formed syntax, including boolean (``and`` / ``but not``)
+    definitions -- refusing booleans is compilation's job, not parsing's.
+    """
+    ast: SchemaAST = {}
+    current_type: str | None = None
 
     for line in schema.strip().splitlines():
         line = line.strip()
         if not line or line.startswith('#'):
             continue
-
-        # Handle indentation by counting leading spaces
-        line = line.lstrip()
-
-        if line.startswith('model'):
+        if line.startswith('model') or line.startswith('schema') or line.startswith('relations'):
             continue
-        elif line.startswith('schema'):
-            continue
-        elif line.startswith('type '):
+        if line.startswith('type '):
             current_type = line.split(' ', 1)[1].strip()
-        elif line.startswith('relations'):
-            continue
         elif line.startswith('define '):
             if not current_type:
                 raise ValueError("Relation definition without type context")
-
-            # Parse relation definition
-            # Format: define relation_name: [...] or other_relation or relation from other_relation
-            relation_def = line[7:].strip()  # Remove 'define '
-            relation_name, relation_rules = relation_def.split(':', 1)
+            relation_name, _, body = line[len('define '):].partition(':')
             relation_name = relation_name.strip()
+            tokens = _tokenize_relation_body(body.strip())
+            ast[(current_type, relation_name)] = _RelationParser(tokens, relation_name).parse()
+    return ast
 
-            # Split on 'or' and process each rule
-            for rule in relation_rules.strip().split(' or '):
-                rule = rule.strip()
-                direct_assignments, from_relations = parse_relation_rule(rule)
 
-                # Add filters for direct type assignments
-                for subject_type, subject_predicate, subject_name in direct_assignments:
-                    if subject_type is None:
-                        # This is a relation reference (e.g., "writer") -> a permissive
-                        # RULE so wildcard subjects propagate through computed usersets.
-                        _rules_and_filters.append(
-                            Rule(
-                                RelationalTriplePattern(
-                                    relation=subject_predicate,
-                                    object_type=current_type,
-                                    match_wildcards=True,
-                                ),
-                                RelationalTriplePattern(
-                                    relation=relation_name,
-                                    object_type=current_type,
-                                    match_wildcards=True,
-                                )
-                            )
-                        )
-                    else:
-                        # This is a type assignment (e.g., "[user]", "domain#member",
-                        # "[user:*]", "[group:*#member]") -> a strict FILTER. The wildcard
-                        # filter (subject_name='*') matches ONLY wildcard subjects; the
-                        # concrete filter (subject_name=None) keeps rejecting `T:*`.
-                        _rules_and_filters.append(
-                            Filter(RelationalTriplePattern(
-                                subject_predicate=subject_predicate or Ellipsis,
-                                subject_type=subject_type,
-                                subject_name=subject_name,
-                                relation=relation_name,
-                                object_type=current_type,
-                                # strict on the subject, permissive on the object so
-                                # object-wildcard tuples flow through to the façade.
-                                object_match_wildcards=True,
-                            ))
-                        )
-                        if subject_name == '*':
-                            subject_wildcard_shapes.add((subject_type, subject_predicate or '...'))
+def _iter_directs(expr: Expr):
+    if isinstance(expr, Direct):
+        yield expr
+    elif isinstance(expr, (Union, Intersection)):
+        for c in expr.children:
+            yield from _iter_directs(c)
+    elif isinstance(expr, Exclusion):
+        yield from _iter_directs(expr.base)
+        yield from _iter_directs(expr.subtract)
+    # Computed / TTU carry no direct restrictions
 
-                # Add rules for 'from' relations (permissive, spec §2.2)
-                for relation, from_relation in from_relations:
-                    # Create a rule that says: if X has relation R with Y's from_relation,
-                    # then X has relation with Y
-                    _rules_and_filters.append(
-                        Rule(
-                            RelationalTriplePattern(
-                                relation=from_relation,
-                                object_type=current_type,
-                                match_wildcards=True,
-                            ),
-                            RelationalTriplePattern(
-                                subject_predicate=relation,
-                                relation=relation_name,
-                                object_type=current_type,
-                                match_wildcards=True,
-                            )
-                        )
-                    )
 
-    schema_info = SchemaInfo(
+def derive_schema_info(
+        ast: SchemaAST,
+        object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
+) -> SchemaInfo:
+    """Derive wildcard-shape metadata from the AST (spec §2.3).
+
+    Subject-wildcard shapes come from every ``T:*`` / ``T:*#P`` restriction anywhere in
+    the schema. Object-wildcard shapes have no DSL syntax and are declared by the caller.
+    """
+    subject_wildcard_shapes: set[tuple[str, str]] = set()
+    for expr in ast.values():
+        for direct in _iter_directs(expr):
+            for r in direct.restrictions:
+                if r.wildcard:
+                    subject_wildcard_shapes.add((r.type, r.predicate))
+    return SchemaInfo(
         subject_wildcard_shapes=frozenset(subject_wildcard_shapes),
         object_wildcard_shapes=frozenset(object_wildcard_shapes),
     )
-    return RuleSet(_rules_and_filters, schema_info=schema_info)
+
+
+def _restriction_filter(r: Restriction, object_type: str, relation_name: str) -> Filter:
+    """The strict FILTER for one `[...]` restriction (spec §2.1/§2.3).
+
+    The wildcard filter (subject_name='*') matches ONLY wildcard subjects; the concrete
+    filter (subject_name=None) keeps rejecting `T:*`. Object side stays permissive so
+    object-wildcard tuples reach the façade.
+    """
+    return Filter(RelationalTriplePattern(
+        subject_predicate=(Ellipsis if r.predicate == '...' else r.predicate),
+        subject_type=r.type,
+        subject_name=('*' if r.wildcard else None),
+        relation=relation_name,
+        object_type=object_type,
+        object_match_wildcards=True,
+    ))
+
+
+def schema_filters(ast: SchemaAST) -> list[Filter]:
+    """Every strict direct-restriction Filter in the schema, booleans included (spec §6.2).
+
+    Unlike ``compile_ruleset`` this never raises on ``and`` / ``but not`` -- it walks the
+    Direct leaves inside boolean branches too. The set engine reuses these Filters for
+    write-validity parity with the graph backend without materialising any RuleSet.
+    """
+    out: list[Filter] = []
+    for (object_type, relation_name), expr in ast.items():
+        for direct in _iter_directs(expr):
+            for r in direct.restrictions:
+                out.append(_restriction_filter(r, object_type, relation_name))
+    return out
+
+
+def _emit_expr(expr: Expr, object_type: str, relation_name: str,
+               out: list[Rule | Filter]) -> None:
+    if isinstance(expr, Union):
+        for c in expr.children:
+            _emit_expr(c, object_type, relation_name, out)
+    elif isinstance(expr, (Intersection, Exclusion)):
+        op = 'and' if isinstance(expr, Intersection) else 'but not'
+        raise UnsupportedByGraphIndex(
+            f"relation {object_type}#{relation_name} uses boolean operator {op!r}; "
+            f"the graph index materialises closures and cannot ingest boolean relations "
+            f"(use the set engine)")
+    elif isinstance(expr, Direct):
+        for r in expr.restrictions:
+            out.append(_restriction_filter(r, object_type, relation_name))
+    elif isinstance(expr, Computed):
+        # Permissive RULE so wildcard subjects propagate through computed usersets (§2.2).
+        out.append(Rule(
+            RelationalTriplePattern(relation=expr.relation, object_type=object_type,
+                                    match_wildcards=True),
+            RelationalTriplePattern(relation=relation_name, object_type=object_type,
+                                    match_wildcards=True),
+        ))
+    elif isinstance(expr, TTU):
+        # `target from tupleset`: a tuple carrying `tupleset` rewrites to `target`#relation.
+        out.append(Rule(
+            RelationalTriplePattern(relation=expr.tupleset_rel, object_type=object_type,
+                                    match_wildcards=True),
+            RelationalTriplePattern(subject_predicate=expr.target_rel, relation=relation_name,
+                                    object_type=object_type, match_wildcards=True),
+        ))
+    else:
+        raise TypeError(f"unknown Expr node {expr!r}")
+
+
+def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo) -> RuleSet:
+    """Compile a (pure-union) AST into the graph index's Filters/Rules (spec §2.3).
+
+    Raises ``UnsupportedByGraphIndex`` (naming the relation) on the first ``and`` /
+    ``but not`` encountered, so the graph backend never silently mis-ingests a boolean
+    schema.
+    """
+    rules_and_filters: list[Rule | Filter] = []
+    for (object_type, relation_name), expr in ast.items():
+        _emit_expr(expr, object_type, relation_name, rules_and_filters)
+    return RuleSet(rules_and_filters, schema_info=schema_info)
+
+
+def parse_openfga_schema(
+        schema: str,
+        object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
+) -> RuleSet:
+    """Parse + compile an OpenFGA schema into a graph-index RuleSet (spec §2.1/§2.3).
+
+    Pipeline: ``parse_schema_ast`` -> ``derive_schema_info`` -> ``compile_ruleset``.
+    ``object_wildcard_shapes`` are ``(object_type, relation)`` pairs enabling wildcard
+    *objects* (e.g. `folder:*`), a deliberate extension beyond OpenFGA that has no DSL
+    syntax and so must be declared here. Boolean (`and` / `but not`) schemas raise
+    ``UnsupportedByGraphIndex`` -- parse to an AST directly for those.
+    """
+    ast = parse_schema_ast(schema)
+    schema_info = derive_schema_info(ast, object_wildcard_shapes)
+    return compile_ruleset(ast, schema_info)
 
 
 def generate_example_ruleset() -> RuleSet:

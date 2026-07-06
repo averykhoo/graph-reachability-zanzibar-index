@@ -198,7 +198,13 @@ See the paper at https://zanzibar.tech
 
 ### boolean operators
 
-* requires post-processing, too much effort for now
+Boolean relations (`and`, `but not`) are supported by the **set engine** backend
+(`setengine/`), not the graph index — see [The two backends: a memoization
+spectrum](#the-two-backends-a-memoization-spectrum) below. The graph index materialises
+closures and cannot represent negation, so `compile_ruleset` refuses a boolean schema
+loudly (`UnsupportedByGraphIndex`, naming the relation); the shared expression AST from
+the parser (`Direct`/`Computed`/`TTU`/`Union`/`Intersection`/`Exclusion`) is the artifact
+both backends consume.
 
 ### zookies
 
@@ -375,6 +381,73 @@ schema rewrite to rules/filters
     * also maybe some way to ensure the rules don't end up being recursive
     * might be possible to pre-compile match and rewrite rules into a flat list with multiple rewrites for efficiency
     * and compile the match rules into something like a trie for efficiency
+
+## The two backends: a memoization spectrum
+
+The repo now ships **two evaluation backends with identical semantics and opposite cost
+models** — they are the two endpoints of a single memoization spectrum:
+
+* the **graph index** (`index_v4`, `WildcardIndex`) memoizes *everything at write time*.
+  It materialises the full transitive closure (plus wildcard bridges) as ref-counted
+  edges, so `check` is O(1) — at most a few point lookups on the unique edge index,
+  independent of data size or nesting depth. Writes pay for that: each write updates the
+  closure, and boolean relations can't be represented at all.
+* the **set engine** (`setengine/`) memoizes *nothing across queries*. It stores only the
+  raw tuples (`TupleV1`) and computes memberships on the fly with bitmap algebra. Writes
+  are O(1) in-memory updates; reads are O(schema depth × topology) with the bulk set work
+  vectorized. In exchange it supports boolean operators (`and`, `but not`) the closure
+  index cannot.
+
+Same questions, same answers, opposite place to spend the work. The **validation matrix**
+(`tests/test_matrix.py`) is what pins "same semantics": a 4-way comparison
+(handwritten expectations · reference oracle · set engine · graph `WildcardIndex`) over
+the union+wildcard fixtures, and a 3-way comparison (handwritten · oracle · set engine)
+over the boolean fixtures, with `check` compared across all backends over the full query
+grid after every operation — under **both** set representations.
+
+### Cost model
+
+| | graph index | set engine |
+|---|---|---|
+| write | O(closure delta) — materialises transitive edges + bridges | O(1) — append a raw tuple, update three in-memory maps |
+| `check` | O(1) point lookups on the closure | O(schema depth × topology), memoized per query |
+| booleans (`and` / `but not`) | ✗ refused (`UnsupportedByGraphIndex`) | ✓ |
+| deltas (`PermissionDelta`) | ✓ | ✗ (returns `[]`) |
+| storage | derived closure edges | raw tuples only (ground truth) |
+
+### Set representation (`SetOps`)
+
+All set state and algebra go through a thin pluggable seam (`setengine/setops.py`), a
+factory pair selected at construction: `RoaringSets` (`pyroaring`, default) or `PySets`
+(builtin `set`/`frozenset`). Builtin sets tend to win on small, membership-heavy work
+(`check`); roaring wins on large populations and bulk union/intersection/difference (the
+`expand` path). The benchmark (`benchmarks/set_engine_bench.py`) makes the trade concrete;
+the whole test matrix runs under both and asserts they are indistinguishable.
+
+### Star × boolean semantics
+
+A `'*'`-named query subject is evaluated **intensionally, per branch** — "does a grant
+flow through the wildcard", not "does every concrete instance happen to qualify":
+
+| query subject | `A and B` | `A but not B` |
+|---|---|---|
+| `'*'` (star) | star-covered in **both** | star-covered in A and **not** star-covered in B |
+| concrete `u` | `u ∈ A` and `u ∈ B` | `u ∈ A` and `u ∉ B` (genuine pointwise) |
+| ghost `g` | (same as concrete) | (same as concrete) |
+
+So a concrete-only exclusion (`A but not bob`) does **not** defeat a `'*'` query of `A`:
+the star is still covered in `A`, and bob's individual removal is not a star in `B`. The
+set engine's `MemberSet` (`pos` / `stars` / `neg`) reproduces this table by construction;
+a shared property suite asserts the oracle and the `MemberSet` algebra agree on it.
+
+### Non-goals (documented hooks only)
+
+Cross-query caching / version-counter invalidation; bitmap snapshot persistence
+(`BitMap.serialize()` blobs — state is in-memory, rebuilt from `TupleV1` on open); deltas
+from the set engine; wiring the graph backend through `TupleV1` (harness-level fan-out
+only — `WildcardIndex` is finished code); boolean support *in the graph backend* (a future
+check-time expression layer over `WildcardIndex.check` that would consume the same shared
+AST); 64-bit id space; any query-time node interning.
 
 # TODO
 
