@@ -181,4 +181,32 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 ---
 
+## 2026-07-07 — P3 (models + outbox)
+
+1. **Residue `stars`/`neg` are JSON text columns**, not a JSON list + roaring-bitmap
+   bytes (§4's sketch): graph node ids are plain autoincrement ints and residues are
+   per-object small, so JSON keeps the column debuggable and avoids coupling the graph
+   backend to pyroaring. Layout was explicitly *(adapt)*; uniqueness
+   (`store_id, object_node_id`), the relation index, and `version` are as specced.
+
+2. **Write-path return type is now `None`** (`add_edge`/`remove_edge`/`remove_node`/
+   `add_tuple`/`remove_tuple`): flips go to `DeltaOutboxV1` inside the transaction.
+   Back-compat drain: `index_v4.outbox.drain_deltas(session, store, after_id)` +
+   `outbox_watermark`. `PermissionDelta` survives as the drained value type.
+   Delta-consuming tests migrated to watermark+drain; stream equivalence pinned by
+   `tests/test_outbox.py::test_outbox_stream_matches_legacy_flips` (order included).
+
+3. **`EdgeV4.derived` is written by the façade's processor context** (`processor_writes`
+   flag → `ReachabilityIndex._writing_derived` around the direct-edge update), set on
+   direct-count increase, cleared when the direct count retires. Equivalent to I5's
+   "incoming direct edge on a derived-public family" because exclusivity (P2) already
+   guarantees only the processor writes those.
+
+4. **Delta-scoped verification cost**: wired into paranoia's `before_commit` (per-
+   transaction range from the last committed watermark; BFS over direct edges per
+   affected pair). Full suite 60s → 110s with it on everywhere — accepted while
+   prerelease per §8.1; `paranoia=False` opts out (benchmarks).
+
+---
+
 *(subsequent phases append below)*

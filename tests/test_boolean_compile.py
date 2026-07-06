@@ -306,11 +306,13 @@ def test_facade_derived_family_exclusivity():
     with pytest.raises(ValueError, match='processor'):
         widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
 
+    from index_v4.outbox import drain_deltas, outbox_watermark
+    wm = outbox_watermark(session, 'test')
     widx.processor_writes = True
-    deltas = widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
+    widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
     widx.processor_writes = False
-    assert deltas, 'processor-flagged derived write must land'
     session.commit()
+    assert drain_deltas(session, 'test', wm), 'processor-flagged derived write must land'
 
     # leaf-family writes stay open to the (rewritten) raw path
     widx.add_tuple('...', 'user', 'alice', 'viewer.0', 'doc', 'd1')

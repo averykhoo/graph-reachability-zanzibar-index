@@ -67,10 +67,56 @@ class EdgeV4(SQLModel, table=True):
     object_id: int = Field(foreign_key="node_v4.id", index=True)
     direct_edge_count: int = Field(default=0)
     indirect_edge_count: int = Field(default=0)
+    # True iff the direct edge was written by the delta processor into a derived-public
+    # family (boolean spec §4/I5). Exclusivity makes this equivalent to "direct edge on
+    # a derived-public family"; the flag makes the invariant checkable per row.
+    derived: bool = Field(default=False)
 
     store: StoreV4 = Relationship()
     subject: NodeV4 = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[EdgeV4.subject_id]'))
     object: NodeV4 = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[EdgeV4.object_id]'))
+
+
+class ResidueV1(SQLModel, table=True):
+    """Persisted symbolic wildcard state per (object node, derived relation): the
+    ``(stars, neg)`` record `check` consults alongside the edge probe (boolean spec §4).
+
+    ``object_node_id`` is the derived relation's public object node, whose identity
+    already encodes the relation; ``relation`` is denormalized for ``lookup()``'s
+    by-relation residue scan. ``stars``/``neg`` are JSON (list of [type, predicate]
+    shapes / list of concrete subject node ids) -- layout adaptable per spec §4;
+    cursor-free, one row per object. Empty residues are deleted, never stored.
+    """
+    __tablename__ = "residue_v1"
+    __table_args__ = (
+        UniqueConstraint('store_id', 'object_node_id', name='residue_v1_unique'),
+        {'extend_existing': True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    store_id: str = Field(index=True)
+    object_node_id: int = Field(foreign_key="node_v4.id", index=True)
+    relation: str = Field(index=True)
+    stars: str = Field(default='[]')     # JSON: [[type, predicate], ...]
+    neg: str = Field(default='[]')       # JSON: [subject_node_id, ...]
+    version: int = Field(default=0)      # bumped on every changing reconcile (I7)
+
+
+class DeltaOutboxV1(SQLModel, table=True):
+    """The delta stream (boolean spec §4/§5.1): every reachability flip inserts a row
+    inside the writing transaction. The autoincrement id is the cursor; the cascade
+    reads by keyset pagination from its starting watermark. Replayable, memory-flat,
+    and the seam for a future async worker (spec §13).
+    """
+    __tablename__ = "delta_outbox_v1"
+    __table_args__ = {'extend_existing': True}
+
+    id: int | None = Field(default=None, primary_key=True)
+    store_id: str = Field(index=True)
+    subject_node_id: int
+    object_node_id: int
+    action: str                          # 'ADDED' | 'REMOVED'
+
 
 Node = NodeV4
 Edge = EdgeV4

@@ -32,6 +32,7 @@ from sqlalchemy import event
 from sqlmodel import Session, select
 
 from .models import EdgeV4, NodeV4
+from .outbox import outbox_rows, outbox_watermark
 
 if TYPE_CHECKING:
     from zanzibar_utils_v1 import SchemaInfo
@@ -176,23 +177,79 @@ def snapshot_rows(session: Session, store_id: str) -> tuple[Counter, Counter]:
     return node_rows, edge_rows
 
 
+def verify_outbox_deltas(session: Session, store_id: str, after_id: int = 0) -> None:
+    """Delta-scoped verification (boolean spec §8.3): the outbox names exactly the
+    pairs whose reachability allegedly flipped. For each pair's *final* action in the
+    range, recompute reachability by BFS over direct edges and compare with both the
+    closure row and the claimed flip. O(affected × local neighbourhood) -- the full
+    closure recompute stays a test-suite job, never a per-write cost."""
+    rows = outbox_rows(session, store_id, after_id)
+    if not rows:
+        return
+
+    final: dict[tuple[int, int], str] = {}
+    for r in rows:
+        final[(r.subject_node_id, r.object_node_id)] = r.action
+
+    edges = session.exec(select(EdgeV4).where(EdgeV4.store_id == store_id)).all()
+    adj: dict[int, list[int]] = {}
+    closure: dict[tuple[int, int], int] = {}
+    for e in edges:
+        if e.direct_edge_count > 0:
+            adj.setdefault(e.subject_id, []).append(e.object_id)
+        closure[(e.subject_id, e.object_id)] = e.indirect_edge_count
+
+    def bfs_reaches(src: int, dst: int) -> bool:
+        seen = {src}
+        frontier = [src]
+        while frontier:
+            nxt = []
+            for n in frontier:
+                for m in adj.get(n, ()):
+                    if m == dst:
+                        return True
+                    if m not in seen:
+                        seen.add(m)
+                        nxt.append(m)
+            frontier = nxt
+        return False
+
+    for (s, o), action in final.items():
+        reachable = bfs_reaches(s, o)
+        row_positive = closure.get((s, o), 0) > 0
+        if reachable != row_positive:
+            _fail(f'delta-scoped: closure row disagrees with direct-edge BFS for '
+                  f'({s} -> {o}): bfs={reachable} row={row_positive}')
+        expected = (action == 'ADDED')
+        if reachable != expected:
+            _fail(f'delta-scoped: outbox claims {action} for ({s} -> {o}) but BFS '
+                  f'reachability is {reachable}')
+
+
 def install_paranoia(session: Session, store_id: str,
                      schema_info: 'SchemaInfo | None' = None) -> None:
     """Wire paranoia mode onto a session (boolean spec §8.1).
 
-    - pre-commit (inside the transaction): flush pending state, run the checker;
-      a violation raises, aborting the commit, so the caller's rollback restores
-      the last consistent state.
+    - pre-commit (inside the transaction): flush pending state, run the invariant
+      checker AND the delta-scoped verifier over this transaction's outbox range; a
+      violation raises, aborting the commit, so the caller's rollback restores the
+      last consistent state.
     - post-commit (fresh session, same bind): re-run the checker against what was
       actually committed, catching commit-boundary and session-state bugs.
     """
+    # Watermark of the last COMMITTED outbox id: rows above it in before_commit are
+    # exactly this transaction's flips. Only ever set from committed state, so a
+    # rollback (which discards its own rows) can never leave it stale.
+    state = {'wm': outbox_watermark(session, store_id)}
 
     @event.listens_for(session, 'before_commit')
     def _pre_commit_check(sess: Session) -> None:
         sess.flush()   # before_commit fires before the commit's flush; check real state
         check_invariants(sess, store_id, schema_info)
+        verify_outbox_deltas(sess, store_id, state['wm'])
 
     @event.listens_for(session, 'after_commit')
     def _post_commit_check(sess: Session) -> None:
         with Session(sess.get_bind()) as fresh:
             check_invariants(fresh, store_id, schema_info)
+            state['wm'] = outbox_watermark(fresh, store_id)

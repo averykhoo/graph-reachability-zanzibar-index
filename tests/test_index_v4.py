@@ -33,25 +33,34 @@ def v4_env():
 
 
 # ---------------------------------------------------------------------------
-# PermissionDelta tests
+# PermissionDelta tests -- deltas are outbox rows now (boolean spec §4); each op's
+# flips are drained from the cursor watermark taken just before it.
 # ---------------------------------------------------------------------------
 
+def _drained(session, store_id, op):
+    from index_v4.outbox import drain_deltas, outbox_watermark
+    wm = outbox_watermark(session, store_id)
+    op()
+    session.commit()
+    return drain_deltas(session, store_id, wm)
+
+
 class TestPermissionDeltas:
-    def test_add_edge_returns_added_delta(self, v4_env):
+    def test_add_edge_emits_added_delta(self, v4_env):
         engine, session, idx = v4_env
-        deltas = idx.add_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1')
-        session.commit()
+        deltas = _drained(session, "test_store",
+                          lambda: idx.add_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1'))
 
         assert len(deltas) >= 1
         assert any(d.action == "ADDED" for d in deltas)
 
-    def test_remove_edge_returns_removed_delta(self, v4_env):
+    def test_remove_edge_emits_removed_delta(self, v4_env):
         engine, session, idx = v4_env
         idx.add_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1')
         session.commit()
 
-        deltas = idx.remove_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1')
-        session.commit()
+        deltas = _drained(session, "test_store",
+                          lambda: idx.remove_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1'))
 
         assert len(deltas) >= 1
         assert any(d.action == "REMOVED" for d in deltas)
@@ -62,8 +71,8 @@ class TestPermissionDeltas:
         idx.add_edge(..., 'user', 'alice', 'member', 'group', 'g1')
         session.commit()
 
-        deltas = idx.add_edge('member', 'group', 'g1', 'viewer', 'document', 'doc1')
-        session.commit()
+        deltas = _drained(session, "test_store",
+                          lambda: idx.add_edge('member', 'group', 'g1', 'viewer', 'document', 'doc1'))
 
         # Should include the new transitive path: alice -> doc1
         added = [d for d in deltas if d.action == "ADDED"]
@@ -71,9 +80,10 @@ class TestPermissionDeltas:
 
     def test_delta_store_id_matches(self, v4_env):
         engine, session, idx = v4_env
-        deltas = idx.add_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1')
-        session.commit()
+        deltas = _drained(session, "test_store",
+                          lambda: idx.add_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1'))
 
+        assert deltas
         for delta in deltas:
             assert delta.store_id == "test_store"
 
@@ -85,8 +95,8 @@ class TestPermissionDeltas:
         idx.add_edge(..., 'node', 'A', '...', 'node', 'B')
         session.commit()
 
-        deltas = idx.remove_edge(..., 'node', 'A', '...', 'node', 'B')
-        session.commit()
+        deltas = _drained(session, "test_store",
+                          lambda: idx.remove_edge(..., 'node', 'A', '...', 'node', 'B'))
 
         # Edge still exists, so no REMOVED delta expected
         removed = [d for d in deltas if d.action == "REMOVED"]
@@ -256,8 +266,8 @@ class TestRemoveNode:
         idx.add_edge(..., 'user', 'alice', 'viewer', 'document', 'doc1')
         session.commit()
 
-        deltas = idx.remove_node(..., 'user', 'alice')
-        session.commit()
+        deltas = _drained(session, "test_store",
+                          lambda: idx.remove_node(..., 'user', 'alice'))
 
         removed = [d for d in deltas if d.action == "REMOVED"]
         assert len(removed) >= 1

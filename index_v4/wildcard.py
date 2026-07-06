@@ -19,7 +19,7 @@ from types import EllipsisType
 from sqlmodel import select
 
 from .core import ReachabilityIndex
-from .models import NodeV4, PermissionDelta
+from .models import NodeV4
 from zanzibar_utils_v1 import SchemaInfo, validate_write_identifiers
 
 
@@ -205,8 +205,13 @@ class WildcardIndex:
     # Writes (§6)
     # ------------------------------------------------------------------ #
 
+    def _derived_write_ctx(self, relation: str, o_type: str) -> bool:
+        """True iff this write is the processor writing into a derived-public family
+        (flags the direct edge row EdgeV4.derived; boolean spec §4/I5)."""
+        return self.processor_writes and (o_type, relation) in self.schema_info.derived_families
+
     def add_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
-                  relation: str, o_type: str, o_name: str) -> list[PermissionDelta]:
+                  relation: str, o_type: str, o_name: str) -> None:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._assert_derived_exclusivity(relation, o_type)
         self._invalidate_w_cache()
@@ -217,8 +222,9 @@ class WildcardIndex:
         self._ensure_bridges(subject)
         self._ensure_bridges(obj)
 
+        self.idx._writing_derived = self._derived_write_ctx(relation, o_type)
         try:
-            return self.idx.add_edge_by_id(subject.id, obj.id)
+            self.idx.add_edge_by_id(subject.id, obj.id)
         except ValueError as e:
             if 'cycle' in str(e) and (subject.wildcard != '' or obj.wildcard != ''):
                 raise ValueError(
@@ -227,9 +233,11 @@ class WildcardIndex:
                     f"({s_type}:{s_name}#{_norm_pred(subject_predicate)} {relation} {o_type}:{o_name})"
                 ) from e
             raise
+        finally:
+            self.idx._writing_derived = False
 
     def remove_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
-                     relation: str, o_type: str, o_name: str) -> list[PermissionDelta]:
+                     relation: str, o_type: str, o_name: str) -> None:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._assert_derived_exclusivity(relation, o_type)
         self._invalidate_w_cache()
@@ -241,12 +249,11 @@ class WildcardIndex:
             # parity): a remove of a never-seen endpoint is a ValueError rejection.
             raise ValueError('Non-existent edge cannot be removed') from e
 
-        deltas = self.idx.remove_edge_by_id(subject.id, obj.id)
+        self.idx.remove_edge_by_id(subject.id, obj.id)
 
         # GC bridges for concrete endpoints whose only remaining edges are their bridges.
         self._maybe_remove_bridges(subject)
         self._maybe_remove_bridges(obj)
-        return deltas
 
     # ------------------------------------------------------------------ #
     # Reads (§3.1)
