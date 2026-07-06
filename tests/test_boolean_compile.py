@@ -95,7 +95,7 @@ def test_plan_shapes_boolean_wildcards(load_fga_schema):
 
     # inherited: viewer from parent (derived target, untainted tupleset)
     inherited = plans[('doc', 'inherited')]
-    assert inherited.tree == PDerivedTTU('viewer', 'parent', True)
+    assert inherited.tree == PDerivedTTU('viewer', 'parent', True, ('doc',))
     assert inherited.deps == (('doc', 'viewer'),)
     assert inherited.stratum == 1
 
@@ -118,7 +118,7 @@ def test_plan_shapes_demorgans_law_1(load_fga_schema):
         PClosureLeaf('non_labels.0', True), PClosureLeaf('non_labels.1', False))
 
     unmatchable = plans[('doc', 'unmatchable_conds')]
-    assert unmatchable.tree == PDerivedTuplesetTTU('required_by', 'non_labels', True)
+    assert unmatchable.tree == PDerivedTuplesetTTU('required_by', 'non_labels', True, ('attr',))
     assert unmatchable.deps == (('doc', 'non_labels'),)
 
     matchable = plans[('doc', 'matchable_conds')]
@@ -127,9 +127,9 @@ def test_plan_shapes_demorgans_law_1(load_fga_schema):
         PDerivedComputed('unmatchable_conds', False))
 
     assert plans[('doc', 'matched_roles')].tree == \
-        PDerivedTuplesetTTU('assigned', 'matchable_conds', True)
+        PDerivedTuplesetTTU('assigned', 'matchable_conds', True, ('cond',))
     assert plans[('doc', 'matched_users')].tree == \
-        PDerivedTuplesetTTU('granted', 'matched_roles', True)
+        PDerivedTuplesetTTU('granted', 'matched_roles', True, ('role',))
 
     # five strata, in chain order
     assert rs.compiled.strata == [

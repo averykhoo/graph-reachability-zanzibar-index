@@ -30,9 +30,18 @@ class ReachabilityIndex:
 
     def _emit(self, subject_id: int, object_id: int, action: str) -> None:
         """Record a reachability flip in the outbox (boolean spec §4: deltas are rows
-        inserted inside the writing transaction, never in-memory lists)."""
-        self.session.add(DeltaOutboxV1(store_id=self.store_id, subject_node_id=subject_id,
-                                       object_node_id=object_id, action=action))
+        inserted inside the writing transaction, never in-memory lists). Endpoint
+        identities are denormalized at emission -- the nodes are alive here, but
+        implicit-node GC may delete them before the cascade reads the row."""
+        s = self.session.get(NodeV4, subject_id)
+        o = self.session.get(NodeV4, object_id)
+        self.session.add(DeltaOutboxV1(
+            store_id=self.store_id, subject_node_id=subject_id, object_node_id=object_id,
+            action=action,
+            subject_type=s.type if s else '', subject_name=s.name if s else '',
+            subject_predicate=s.predicate if s else '',
+            object_type=o.type if o else '', object_name=o.name if o else '',
+            object_predicate=o.predicate if o else ''))
 
     def _lock_store(self) -> None:
         """Serialize concurrent writers to this store for the rest of the transaction.

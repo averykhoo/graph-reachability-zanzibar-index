@@ -107,6 +107,11 @@ class DeltaOutboxV1(SQLModel, table=True):
     inside the writing transaction. The autoincrement id is the cursor; the cascade
     reads by keyset pagination from its starting watermark. Replayable, memory-flat,
     and the seam for a future async worker (spec §13).
+
+    Endpoints are denormalized (type/name/predicate captured at emission): implicit-
+    node GC can delete an endpoint's node row inside the same transaction, and the
+    processor must still be able to map the flip to its derived key (see
+    docs/spec-deviations.md P4).
     """
     __tablename__ = "delta_outbox_v1"
     __table_args__ = {'extend_existing': True}
@@ -116,6 +121,12 @@ class DeltaOutboxV1(SQLModel, table=True):
     subject_node_id: int
     object_node_id: int
     action: str                          # 'ADDED' | 'REMOVED'
+    subject_type: str = Field(default='')
+    subject_name: str = Field(default='')
+    subject_predicate: str = Field(default='')
+    object_type: str = Field(default='')
+    object_name: str = Field(default='')
+    object_predicate: str = Field(default='')
 
 
 Node = NodeV4

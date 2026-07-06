@@ -209,4 +209,49 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 ---
 
+## 2026-07-07 — P4 (delta processor)
+
+1. **Outbox rows denormalize their endpoints** (type/name/predicate captured at
+   emission): implicit-node GC can delete an endpoint's node row *inside the same
+   transaction* (e.g. removing a subject's last tuple), and the §5.2 delta→key mapping
+   must still resolve the flip. Ids alone would leave unmappable rows and stale
+   residue-neg ids (an id-reuse hazard under SQLite rowid recycling). A delta whose
+   subject node is already gone maps to a *full-object* reconcile so the neg recompute
+   prunes the dead id.
+
+2. **Derived-public nodes are pinned non-implicit**: they anchor `ResidueV1` rows
+   (star-only objects legitimately have residues with zero edges), and implicit GC on
+   the last derived edge's removal would orphan the residue.
+
+3. **§5.2 gap fixed — tupleset-tuple deltas**: a new/removed *tupleset* tuple of a
+   `PDerivedTTU` (e.g. `doc:d1 parent doc:d2` under `inherited: viewer from parent`)
+   changes the parent set but maps to no key under §5.2's enumeration. New compile
+   artifact `tupleset_feeders` routes those deltas to the dependent on the same
+   object; `target_feeders` also covers mixed-type untainted TTU targets.
+
+4. **Canonical edge representation (order-independence)**: a derived edge exists iff
+   eval-true AND NOT star-covered; star-covered subjects are answered exclusively by
+   the residue (`neg` iff expr-false). Without the covered-⇒-no-edge half, a subject
+   holding transient concrete support kept its edge across op orders that never
+   re-audited it, breaking permutation invariance and the "star-only members: zero
+   edges" space rule. Same read semantics, deterministic rows.
+
+5. **§5.3 step-2 neg candidates pull the neg sets of ALL derived-leaf kinds**
+   (computed, userset, ttu, tupleset-ttu) — exclusions propagate up strata through
+   residues; the ttu case is what makes `inherited`'s neg inherit `viewer`'s
+   exclusions on the tupleset parent.
+
+6. **No revisit guard needed in the evaluator**: the compiled plans evaluate against
+   persisted lower-stratum state only (edge probes + residues) — there is no recursive
+   eval path to guard. The §5.3 guard's intent (a corrupted store must fail loudly,
+   never spin) is carried by the cascade's quiescence check and the hard-fail cycle
+   guard on derived writes (`InvariantViolation`, not a rejection).
+
+7. **Cascade rounds process every mapped key per round** (spec §5.1's own structure),
+   ordered by stratum inside a round; residue-version bumps are carried in-memory to
+   the next round's key set (they emit no outbox rows). Quiescence is asserted after
+   `len(strata)` rounds.
+
+---
+
 *(subsequent phases append below)*

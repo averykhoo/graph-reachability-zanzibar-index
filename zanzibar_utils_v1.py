@@ -822,23 +822,28 @@ class PDerivedUserset:
 @dataclass(frozen=True, slots=True)
 class PDerivedTTU:
     """``target from tupleset`` where the *target* is derived (tupleset untainted):
-    ∃ tupleset-parent p: derived check (subject, target, p)."""
+    ∃ tupleset-parent p: derived check (subject, target, p). ``parent_types`` are the
+    tupleset's member entity types, resolved at compile so the processor never walks
+    the AST (boolean spec §1.11)."""
     target_rel: str
     tupleset_rel: str
     positive: bool
+    parent_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class PDerivedTuplesetTTU:
     """``target from tupleset`` where the *tupleset* itself is derived: the parent set
     is the derived relation's membership on this object (edge+residue), and candidate
-    parents are enumerated from the subject's own target edges + the tupleset relation's
-    residues -- data-bounded, never universe-bounded. (Deviation from spec decision 15,
-    which rejected this shape: the frozen acceptance event requires demorgans_law_1.fga
-    to flip 4-way, and that fixture is three of these. See docs/spec-deviations.md.)"""
+    parents are enumerated from the target relation's stored object nodes + the
+    tupleset relation's residues -- data-bounded, never universe-bounded. (Deviation
+    from spec decision 15, which rejected this shape: the frozen acceptance event
+    requires demorgans_law_1.fga to flip 4-way, and that fixture is three of these.
+    See docs/spec-deviations.md.)"""
     target_rel: str
     tupleset_rel: str
     positive: bool
+    parent_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -916,8 +921,12 @@ class CompiledBooleans:
     plans: dict[tuple[str, str], Plan]
     dependents: dict[tuple[str, str], list[DependentEdge]]
     # Deltas on these (possibly untainted) target relations must fan out to the
-    # derived-tupleset TTUs that read them (keyed by the target's (type, relation)).
+    # TTU plans that read them (keyed by the target's (type, relation)).
     target_feeders: dict[tuple[str, str], list[DependentEdge]]
+    # Deltas on an (untainted) tupleset relation of a PDerivedTTU invalidate the
+    # dependent on the SAME object (a new/removed parent tuple changes the parent set;
+    # §5.2 does not enumerate this case but correctness requires it -- deviations P4).
+    tupleset_feeders: dict[tuple[str, str], list[DependentEdge]]
     strata: list[list[tuple[str, str]]]
 
     @property
@@ -1136,9 +1145,10 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
         if isinstance(e, Computed):
             return PDerivedComputed(e.relation, positive)
         if isinstance(e, TTU):
+            parent_types = tuple(sorted(_member_types(object_type, e.tupleset_rel, ast, frozenset())))
             if (object_type, e.tupleset_rel) in tainted:
-                return PDerivedTuplesetTTU(e.target_rel, e.tupleset_rel, positive)
-            return PDerivedTTU(e.target_rel, e.tupleset_rel, positive)
+                return PDerivedTuplesetTTU(e.target_rel, e.tupleset_rel, positive, parent_types)
+            return PDerivedTTU(e.target_rel, e.tupleset_rel, positive, parent_types)
         raise TypeError(f"unknown Expr node {e!r}")
 
     return build(expr, True)
@@ -1182,11 +1192,11 @@ def _compile_check_fn(node) -> Callable:
         leaf, t, p = node.predicate, node.subject_type, node.subject_predicate
         return lambda ctx, s: ctx.userset_check(leaf, t, p, s)
     if isinstance(node, PDerivedTTU):
-        tr, ts = node.target_rel, node.tupleset_rel
-        return lambda ctx, s: ctx.ttu_check(tr, ts, s)
+        tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
+        return lambda ctx, s: ctx.ttu_check(tr, ts, pt, s)
     if isinstance(node, PDerivedTuplesetTTU):
-        tr, ts = node.target_rel, node.tupleset_rel
-        return lambda ctx, s: ctx.tupleset_ttu_check(tr, ts, s)
+        tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
+        return lambda ctx, s: ctx.tupleset_ttu_check(tr, ts, pt, s)
     if isinstance(node, PUnion):
         fns = tuple(_compile_check_fn(c) for c in node.children)
         return lambda ctx, s: any(f(ctx, s) for f in fns)
@@ -1213,11 +1223,11 @@ def _compile_stars_fn(node) -> Callable:
         leaf, t, p = node.predicate, node.subject_type, node.subject_predicate
         return lambda ctx: ctx.userset_stars(leaf, t, p)
     if isinstance(node, PDerivedTTU):
-        tr, ts = node.target_rel, node.tupleset_rel
-        return lambda ctx: ctx.ttu_stars(tr, ts)
+        tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
+        return lambda ctx: ctx.ttu_stars(tr, ts, pt)
     if isinstance(node, PDerivedTuplesetTTU):
-        tr, ts = node.target_rel, node.tupleset_rel
-        return lambda ctx: ctx.tupleset_ttu_stars(tr, ts)
+        tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
+        return lambda ctx: ctx.tupleset_ttu_stars(tr, ts, pt)
     if isinstance(node, PUnion):
         fns = tuple(_compile_stars_fn(c) for c in node.children)
         return lambda ctx: reduce(frozenset.__or__, (f(ctx) for f in fns))
@@ -1233,7 +1243,8 @@ def _compile_stars_fn(node) -> Callable:
 # ---- deps / dependents / strata (boolean spec §1.9, §3.4, §5.2) ----
 
 def _plan_deps_and_fanout(key: tuple[str, str], tree, tainted: frozenset, ast: SchemaAST,
-                          dependents: dict, target_feeders: dict) -> tuple:
+                          dependents: dict, target_feeders: dict,
+                          tupleset_feeders: dict) -> tuple:
     object_type, _ = key
     deps: list[tuple[str, str]] = []
 
@@ -1252,11 +1263,20 @@ def _plan_deps_and_fanout(key: tuple[str, str], tree, tainted: frozenset, ast: S
             dependents.setdefault(k, []).append(
                 DependentEdge(key, 'userset', leaf=n.predicate))
         elif isinstance(n, PDerivedTTU):
+            # a new/removed tupleset tuple changes the parent set: invalidate this
+            # relation on the tuple's object
+            tupleset_feeders.setdefault((object_type, n.tupleset_rel), []).append(
+                DependentEdge(key, 'ttu', tupleset_rel=n.tupleset_rel))
             for t in _member_types(object_type, n.tupleset_rel, ast, frozenset()):
                 k = (t, n.target_rel)
                 if k in tainted:
                     dep(k)
                     dependents.setdefault(k, []).append(
+                        DependentEdge(key, 'ttu', tupleset_rel=n.tupleset_rel))
+                elif k in ast:
+                    # untainted target on this parent type (mixed-type target):
+                    # its ordinary closure deltas must still invalidate this plan
+                    target_feeders.setdefault(k, []).append(
                         DependentEdge(key, 'ttu', tupleset_rel=n.tupleset_rel))
         elif isinstance(n, PDerivedTuplesetTTU):
             ts_key = (object_type, n.tupleset_rel)
@@ -1347,12 +1367,14 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
     plans: dict[tuple[str, str], Plan] = {}
     dependents: dict[tuple[str, str], list[DependentEdge]] = {}
     target_feeders: dict[tuple[str, str], list[DependentEdge]] = {}
+    tupleset_feeders: dict[tuple[str, str], list[DependentEdge]] = {}
 
     for key in sorted(tainted):
         object_type, relation = key
         tree = _build_plan_tree(key, ast[key], tainted, ast, rules_and_filters)
         leaves = _plan_leaves(tree)
-        deps = _plan_deps_and_fanout(key, tree, tainted, ast, dependents, target_feeders)
+        deps = _plan_deps_and_fanout(key, tree, tainted, ast, dependents, target_feeders,
+                                     tupleset_feeders)
         plans[key] = Plan(key=key, tree=tree, leaves=leaves, deps=deps, stratum=0,
                           check_fn=_compile_check_fn(tree), stars_fn=_compile_stars_fn(tree))
         namespace[(object_type, relation)] = DerivedFamily(relation, object_type)
@@ -1368,7 +1390,8 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
 
     compiled = CompiledBooleans(
         tainted=tainted, namespace=namespace, plans=plans,
-        dependents=dependents, target_feeders=target_feeders, strata=strata)
+        dependents=dependents, target_feeders=target_feeders,
+        tupleset_feeders=tupleset_feeders, strata=strata)
 
     # Exclusivity, compile-time third (boolean spec §3.3): no plain-Filter admission
     # and no Rule then-target lands on a derived-public family.
