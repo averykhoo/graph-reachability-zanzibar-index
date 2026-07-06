@@ -97,21 +97,22 @@ class _EvalContext:
             out |= self.proc.member_stars(pt, target, pn)
         return out
 
-    # -- derived-tupleset TTU: parents are the derived tupleset's members; candidates
-    #    enumerated from the target relation's stored object nodes (data-bounded) --
+    # -- derived-tupleset TTU: parents are the STORED tupleset tuples (the pinned
+    #    Zanzibar semantics -- the oracle's ttu_leaf reads raw tuples, never computed
+    #    membership), which for a derived tupleset live on its leaf families --
 
     def tupleset_ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
-        for (pt, pn) in self.proc.target_family_objects(target, parent_types):
-            if (self.proc.derived_check(self.object_type, ts, self.obj_name, ('...', pt, pn))
-                    and self.proc.member_check(pt, target, pn, s)):
+        for (pt, pn) in self.proc.derived_stored_parents(self.object_type, self.obj_name,
+                                                         ts, parent_types):
+            if self.proc.member_check(pt, target, pn, s):
                 return True
         return False
 
     def tupleset_ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
         out: frozenset = frozenset()
-        for (pt, pn) in self.proc.target_family_objects(target, parent_types):
-            if self.proc.derived_check(self.object_type, ts, self.obj_name, ('...', pt, pn)):
-                out |= self.proc.member_stars(pt, target, pn)
+        for (pt, pn) in self.proc.derived_stored_parents(self.object_type, self.obj_name,
+                                                         ts, parent_types):
+            out |= self.proc.member_stars(pt, target, pn)
         return out
 
 
@@ -232,52 +233,56 @@ class DeltaProcessor:
 
     def tupleset_parents(self, object_type: str, obj_name: str, ts: str,
                          parent_types: tuple) -> list[tuple[str, str]]:
-        """Entity parents p with a stored tupleset tuple (p, ts, obj) -- reverse
-        concretes on the (obj, ts) node, filtered to bare entities of parent types."""
+        """Entity parents p with a stored tupleset tuple (p, ts, obj): DIRECT incoming
+        entity subjects on the (obj, ts) node. Stored tuples only -- the pinned TTU
+        semantics (oracle ttu_leaf); computed members of the tupleset never count."""
         ts_node = self._node(ts, object_type, obj_name)
         if ts_node is None:
             return []
-        return [(n.type, n.name) for n in self._incoming_concretes(ts_node.id)
-                if n.predicate == '...' and n.type in parent_types]
-
-    def target_family_objects(self, target: str, parent_types: tuple) -> list[tuple[str, str]]:
-        """All stored object nodes of the target relation over the parent types --
-        the candidate parents of a derived-tupleset TTU (bounded by target tuples)."""
-        rows = self.session.exec(
-            select(NodeV4).where(NodeV4.store_id == self.store_id)
-            .where(NodeV4.predicate == target).where(NodeV4.wildcard == '')
-        ).all()
-        return [(n.type, n.name) for n in rows if n.type in parent_types]
-
-    def _residue_objects_of_relation(self, object_type: str, rel: str) -> list[str]:
-        """Object names of every residue row on (object_type, rel) -- the symbolic
-        side of derived-membership enumeration (INDEX(store_id, relation))."""
-        rows = self.session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == self.store_id)
-            .where(ResidueV1.relation == rel)
-        ).all()
         out = []
-        for r in rows:
-            n = self.session.get(NodeV4, r.object_node_id)
-            if n is not None and n.type == object_type:
-                out.append(n.name)
+        for e in self._direct_incoming(ts_node.id):
+            n = self.session.get(NodeV4, e.subject_id)
+            if (n is not None and n.wildcard == '' and n.predicate == '...'
+                    and n.type in parent_types):
+                out.append((n.type, n.name))
         return out
 
-    def _derived_memberships_of_entity(self, e_type: str, e_name: str,
-                                       object_type: str, rel: str) -> set[str]:
-        """Objects x where entity (e_type, e_name) ∈ derived rel(x): concrete derived
-        edges from the entity node ∪ residues whose stars cover the entity's shape."""
+    def _ts_leaf_predicates(self, object_type: str, ts: str) -> list[str]:
+        """The STORAGE-leaf predicates of a derived tupleset relation: only
+        RewriteFilter-fed leaves hold raw stored tuples (rule-routed leaves carry
+        computed state, which never counts as a TTU parent)."""
+        plan = self.compiled.plans[(object_type, ts)]
+        return [spec.predicate for spec in plan.leaves if spec.storage]
+
+    def derived_stored_parents(self, object_type: str, obj_name: str, ts: str,
+                               parent_types: tuple) -> list[tuple[str, str]]:
+        """Stored tupleset tuples of a DERIVED tupleset relation: raw admitted writes
+        live on its leaf families (rewrite routing), so parents are the direct
+        incoming entity subjects across those leaf nodes."""
+        seen: dict[tuple[str, str], None] = {}
+        for leaf in self._ts_leaf_predicates(object_type, ts):
+            for (pt, pn) in self.tupleset_parents(object_type, obj_name, leaf, parent_types):
+                seen[(pt, pn)] = None
+        return list(seen)
+
+    def _stored_parent_objects_of_entity(self, e_type: str, e_name: str,
+                                         object_type: str, ts: str) -> set[str]:
+        """Objects obj with a stored tuple (entity, ts, obj) where ts is a derived
+        tupleset: the entity's direct outgoing edges into ts's leaf families."""
+        ent = self._node('...', e_type, e_name)
+        if ent is None:
+            return set()
+        leaf_preds = set(self._ts_leaf_predicates(object_type, ts))
         out: set[str] = set()
-        node = self._node('...', e_type, e_name)
-        if node is not None:
-            for oid in self.idx.lookup_reachable(node.id):
-                o = self.session.get(NodeV4, oid)
-                if o is not None and (o.type, o.predicate) == (object_type, rel):
-                    out.add(o.name)
-        for obj_name in self._residue_objects_of_relation(object_type, rel):
-            stars, neg = self._residue_state(object_type, rel, obj_name)
-            if (e_type, '...') in stars and (node is None or node.id not in neg):
-                out.add(obj_name)
+        edges = self.session.exec(
+            select(EdgeV4).where(EdgeV4.store_id == self.store_id)
+            .where(EdgeV4.subject_id == ent.id)
+            .where(EdgeV4.direct_edge_count > 0)  # type: ignore[arg-type]
+        ).all()
+        for e in edges:
+            o = self.session.get(NodeV4, e.object_id)
+            if o is not None and o.type == object_type and o.predicate in leaf_preds:
+                out.add(o.name)
         return out
 
     # ------------------------------------------------------------------ #
@@ -444,7 +449,8 @@ class DeltaProcessor:
         if spec.kind == 'derived-tupleset-ttu':
             node = self._find_leaf_node(spec, object_type)
             out = set()
-            for (pt, pn) in self.target_family_objects(node.target_rel, node.parent_types):
+            for (pt, pn) in self.derived_stored_parents(object_type, obj_name,
+                                                        node.tupleset_rel, node.parent_types):
                 if (pt, node.target_rel) in self.compiled.tainted:
                     out |= self._residue_state(pt, node.target_rel, pn)[1]
             return out
@@ -474,10 +480,8 @@ class DeltaProcessor:
         if spec.kind == 'derived-tupleset-ttu':
             node = self._find_leaf_node(spec, object_type)
             out = {}
-            # deliberately UNfiltered by tupleset membership: a subject holding target
-            # edges only to out-of-tupleset parents may still need a neg entry (it can
-            # be star-covered via another parent while expr-false)
-            for (pt, pn) in self.target_family_objects(node.target_rel, node.parent_types):
+            for (pt, pn) in self.derived_stored_parents(object_type, obj_name,
+                                                        node.tupleset_rel, node.parent_types):
                 p_node = self._node(node.target_rel, pt, pn)
                 if p_node is not None:
                     for n in self._incoming_concretes(p_node.id):
@@ -569,6 +573,12 @@ class DeltaProcessor:
                     full(key)
                 else:
                     subject(key, (s_pred, s_type, s_name))
+                # a stored tuple of a derived TUPLESET changed: the parent set of its
+                # tupleset-ttu dependents changed on this object (stored-tuple TTU
+                # semantics -- membership changes alone don't move parents)
+                for edge in self.compiled.dependents.get((o_type, fam.owner_relation), []):
+                    if edge.via == 'tupleset-ttu':
+                        full((edge.dependent[0], edge.dependent[1], o_name))
             elif isinstance(fam, DerivedFamily):
                 self._fan_out((o_type, o_pred), o_name, keys, full)
             # a tupleset tuple appeared/vanished: the dependent on the SAME object
@@ -578,8 +588,9 @@ class DeltaProcessor:
                 # delta on an (untainted) TTU target relation
                 dep_t, dep_r = edge.dependent
                 if edge.via == 'tupleset-ttu':
-                    # dependents = objects whose derived tupleset holds this entity
-                    for obj_name in self._derived_memberships_of_entity(
+                    # dependents = objects holding a STORED tupleset tuple from this
+                    # entity (on the derived tupleset's leaf families)
+                    for obj_name in self._stored_parent_objects_of_entity(
                             o_type, o_name, dep_t, edge.tupleset_rel):
                         full((dep_t, dep_r, obj_name))
                 else:   # 'ttu' (mixed-type untainted target of a PDerivedTTU)

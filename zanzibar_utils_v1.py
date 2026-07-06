@@ -796,9 +796,15 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo) -> RuleSet:
 @dataclass(frozen=True, slots=True)
 class PClosureLeaf:
     """A maximal boolean-free, derived-free subtree, compiled to ordinary Filters/Rules
-    under the synthetic leaf predicate; evaluated via the wildcard-aware closure check."""
+    under the synthetic leaf predicate; evaluated via the wildcard-aware closure check.
+
+    ``storage=True`` marks a RewriteFilter-fed leaf (Direct restrictions): its edges
+    ARE the relation's raw stored tuples -- the parent set for TTUs over this derived
+    relation (stored-tuple semantics). Rule-fed (routed) leaves never count as stored
+    tuples, so Direct restrictions are always compiled into their own leaf."""
     predicate: str          # '<relation>.<index>'
     positive: bool
+    storage: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -833,13 +839,14 @@ class PDerivedTTU:
 
 @dataclass(frozen=True, slots=True)
 class PDerivedTuplesetTTU:
-    """``target from tupleset`` where the *tupleset* itself is derived: the parent set
-    is the derived relation's membership on this object (edge+residue), and candidate
-    parents are enumerated from the target relation's stored object nodes + the
-    tupleset relation's residues -- data-bounded, never universe-bounded. (Deviation
-    from spec decision 15, which rejected this shape: the frozen acceptance event
-    requires demorgans_law_1.fga to flip 4-way, and that fixture is three of these.
-    See docs/spec-deviations.md.)"""
+    """``target from tupleset`` where the *tupleset* itself is derived. Parents are
+    the STORED tupleset tuples only (the pinned Zanzibar TTU semantics -- the oracle's
+    ttu_leaf reads raw tuples, never computed membership), which for a derived
+    tupleset live on its leaf families. A derived tupleset with no Direct restrictions
+    can hold no stored tuples, making its dependent TTU constantly empty -- exactly
+    the oracle's answer. (Deviation from spec decision 15, which rejected this shape:
+    the frozen acceptance event requires demorgans_law_1.fga to flip 4-way, and that
+    fixture is three of these. See docs/spec-deviations.md.)"""
     target_rel: str
     tupleset_rel: str
     positive: bool
@@ -869,6 +876,7 @@ class LeafSpec:
     predicate: str          # leaf predicate for closure/userset kinds; public name otherwise
     kind: str               # 'closure' | 'derived-computed' | 'derived-userset' | 'derived-ttu' | 'derived-tupleset-ttu'
     positive: bool
+    storage: bool = False   # True iff this family holds the relation's raw stored tuples
 
 
 @dataclass(frozen=True, slots=True)
@@ -879,6 +887,7 @@ class LeafFamily:
     index: int
     positive: bool
     kind: str               # 'closure' | 'userset-storage'
+    storage: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1113,9 +1122,36 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
             _emit_leaf_expr(subtree_for_emission, object_type, relation, leaf, out_rules)
         return leaf
 
+    def _split_pure(e: Expr) -> tuple[tuple, list]:
+        """Flatten a pure subtree into (Direct restrictions, other exprs) -- pure
+        subtrees are unions of {Direct, Computed, TTU}, so the split is lossless."""
+        if isinstance(e, Direct):
+            return e.restrictions, []
+        if isinstance(e, Union):
+            restrictions: tuple = ()
+            others: list = []
+            for c in e.children:
+                r, o = _split_pure(c)
+                restrictions += r
+                others += o
+            return restrictions, others
+        return (), [e]
+
     def build(e: Expr, positive: bool):
         if _is_pure(e, object_type, tainted, ast):
-            return PClosureLeaf(alloc(e, positive=positive), positive)
+            # Direct restrictions get their OWN storage leaf: its edges are exactly
+            # the relation's raw stored tuples (never mixed with rule-routed state),
+            # which TTU-over-this-relation parent enumeration depends on.
+            restrictions, others = _split_pure(e)
+            nodes = []
+            if restrictions:
+                nodes.append(PClosureLeaf(
+                    alloc(Direct(tuple(restrictions)), positive=positive),
+                    positive, storage=True))
+            if others:
+                sub = others[0] if len(others) == 1 else Union(tuple(others))
+                nodes.append(PClosureLeaf(alloc(sub, positive=positive), positive))
+            return nodes[0] if len(nodes) == 1 else PUnion(tuple(nodes))
         if isinstance(e, Union):
             return PUnion(tuple(build(c, positive) for c in e.children))
         if isinstance(e, Intersection):
@@ -1129,7 +1165,8 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
                          if not (r.predicate != '...' and (r.type, r.predicate) in tainted))
             nodes = []
             if pure:
-                nodes.append(PClosureLeaf(alloc(Direct(pure), positive=positive), positive))
+                nodes.append(PClosureLeaf(alloc(Direct(pure), positive=positive),
+                                          positive, storage=True))
             for r in e.restrictions:
                 if r.predicate != '...' and (r.type, r.predicate) in tainted:
                     if r.wildcard:
@@ -1159,11 +1196,11 @@ def _plan_leaves(tree) -> tuple[LeafSpec, ...]:
 
     def walk(n) -> None:
         if isinstance(n, PClosureLeaf):
-            out.append(LeafSpec(n.predicate, 'closure', n.positive))
+            out.append(LeafSpec(n.predicate, 'closure', n.positive, storage=n.storage))
         elif isinstance(n, PDerivedComputed):
             out.append(LeafSpec(n.relation, 'derived-computed', n.positive))
         elif isinstance(n, PDerivedUserset):
-            out.append(LeafSpec(n.predicate, 'derived-userset', n.positive))
+            out.append(LeafSpec(n.predicate, 'derived-userset', n.positive, storage=True))
         elif isinstance(n, PDerivedTTU):
             out.append(LeafSpec(n.target_rel, 'derived-ttu', n.positive))
         elif isinstance(n, PDerivedTuplesetTTU):
@@ -1384,7 +1421,8 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
                 namespace[(object_type, spec.predicate)] = LeafFamily(
                     owner_relation=relation, object_type=object_type, index=idx,
                     positive=spec.positive,
-                    kind=('closure' if spec.kind == 'closure' else 'userset-storage'))
+                    kind=('closure' if spec.kind == 'closure' else 'userset-storage'),
+                    storage=spec.storage)
 
     strata = _stratify(plans)
 

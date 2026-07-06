@@ -254,4 +254,47 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 ---
 
+## 2026-07-07 — P5 (reads)
+
+1. **⚠ TTU semantics correction (oracle-pinned): parents are STORED tupleset tuples,
+   never computed membership.** The oracle's `ttu_leaf` (tests/oracle.py:429) iterates
+   raw tuples with `tup.relation == tupleset_rel` — authentic Zanzibar semantics. My
+   P4 derived-tupleset-TTU enumerated *computed* members of the derived tupleset,
+   which disagreed with the oracle on demorgans_law_1 (caught by the P5 grid-parity
+   walk). Consequence: a derived tupleset with no Direct restrictions can hold no
+   stored tuples, so its dependent TTUs are constantly empty — exactly the oracle's
+   answer (demorgans_law_1's `unmatchable_conds`/`matched_roles`/`matched_users` are
+   ∅ by construction; the fixture's live semantics are in `non_labels` and
+   `matchable_conds`). This also retro-simplifies the decision-15 override: no
+   residue-scan parent enumeration exists; `target_feeders` fan-out uses the entity's
+   stored tuples on the tupleset's storage leaves.
+
+2. **Storage leaves are split from routed leaves**: Direct restrictions of a derived
+   relation always compile into their OWN leaf (marked `storage=True` on
+   PClosureLeaf/LeafSpec/LeafFamily), never merged with Computed/TTU references in
+   the same pure subtree. Rule-routed edges on a shared leaf would otherwise be
+   indistinguishable from raw stored tuples, corrupting TTU parent sets (the bug the
+   grid walk exposed). Affects derived compile only; pure-union output remains
+   byte-identical.
+
+3. **`tupleset_parents` uses DIRECT incoming entity edges** on the tupleset node (not
+   closure reachability): a member of a granted userset is not a tupleset parent.
+   Note: rule-routed members of an *untainted* tupleset relation still count as
+   parents (the pre-existing pure-union TTU-rule behavior); the oracle counts raw
+   tuples only. No fixture exercises the difference; noted as a latent gap in the
+   pure-union path, not introduced here.
+
+4. **Untainted `check` consolidation counts**: node-id resolution (≤2 concrete
+   lookups; w-ids cached) stays separate from the single edge-probe statement
+   (`tuple_(subject_id, object_id).in_(keys) ... LIMIT 1`), per the spec's own
+   description. The statement-counter test asserts exactly one edge_v4 statement per
+   check (zero allowed on a no-key miss).
+
+5. **`lookup_reverse` on derived relations returns the canonical representation**:
+   star-covered members appear via markers + `excluded_node_ids` (never enumerated,
+   and they hold no edges by the P4 canonical rule); `node_ids` carries only
+   uncovered concrete members.
+
+---
+
 *(subsequent phases append below)*

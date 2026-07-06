@@ -288,42 +288,72 @@ def _neg_names(session, widx, row):
 # ---------------------------------------------------------------------------
 
 def test_derived_tupleset_ttu_chain(load_fga_schema):
+    """The pinned TTU semantics (oracle ttu_leaf): parents come from STORED tupleset
+    tuples only, never computed membership. demorgans_law_1's derived tuplesets
+    (non_labels, matchable_conds, matched_roles) have no Direct restrictions, so no
+    tuple can ever be stored on them -- their dependent TTUs are constantly empty,
+    exactly as the oracle answers. The residue algebra still drives non_labels /
+    matchable_conds."""
     session, widx, proc, write = build(load_fga_schema('demorgans_law_1.fga'))
 
-    # d has all attrs except a1; a1 and (ghost-ish) a2 are required by conds c1/c2
     write('add', ('...', 'attr', '*', '_all_attrs', 'doc', 'd'))
     write('add', ('...', 'attr', 'a1', 'labels', 'doc', 'd'))
     write('add', ('...', 'cond', 'c1', 'required_by', 'attr', 'a1'))
     write('add', ('...', 'cond', 'c2', 'required_by', 'attr', 'a2'))
     write('add', ('...', 'cond', '*', '_all_conds', 'doc', 'd'))
 
-    # non_labels(d): all attrs but a1
+    # non_labels(d): all attrs but a1 (star-minus-concrete residue)
     assert proc.derived_check('doc', 'non_labels', 'd', ('...', 'attr', 'a2')) is True
     assert proc.derived_check('doc', 'non_labels', 'd', ('...', 'attr', 'a1')) is False
 
-    # unmatchable_conds(d) = required_by from non_labels: c2 (via a2), not c1 (a1 is a label)
-    assert proc.derived_check('doc', 'unmatchable_conds', 'd', ('...', 'cond', 'c2')) is True
+    # unmatchable_conds(d) = required_by from non_labels: no STORED non_labels tuple
+    # can exist (no restrictions) => empty, even though a2 is a computed member
+    assert proc.derived_check('doc', 'unmatchable_conds', 'd', ('...', 'cond', 'c2')) is False
     assert proc.derived_check('doc', 'unmatchable_conds', 'd', ('...', 'cond', 'c1')) is False
 
-    # matchable_conds(d) = all conds but unmatchable: c1 and ghosts yes, c2 no
-    assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', 'c1')) is True
-    assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', 'c2')) is False
-    assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', 'ghost')) is True
+    # matchable_conds(d) = all conds but unmatchable = the star, for everyone
+    for name in ('c1', 'c2', 'ghost'):
+        assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', name)) is True
+    assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', '*')) is True
 
-    # the feeder path: labelling a2 AFTER the fact must flip c2 back to matchable
-    write('add', ('...', 'attr', 'a2', 'labels', 'doc', 'd'))
-    assert proc.derived_check('doc', 'unmatchable_conds', 'd', ('...', 'cond', 'c2')) is False
-    assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', 'c2')) is True
-
-    # role chain to the top stratum
+    # matched_roles / matched_users: TTUs over storable-tuple-less tuplesets => empty
     write('add', ('...', 'role', 'r1', 'assigned', 'cond', 'c1'))
     write('add', ('...', 'user', 'u1', 'granted', 'role', 'r1'))
-    assert proc.derived_check('doc', 'matched_roles', 'd', ('...', 'role', 'r1')) is True
-    assert proc.derived_check('doc', 'matched_users', 'd', ('...', 'user', 'u1')) is True
-
-    # revoking the grant retracts the top of the chain
-    write('remove', ('...', 'user', 'u1', 'granted', 'role', 'r1'))
+    assert proc.derived_check('doc', 'matched_roles', 'd', ('...', 'role', 'r1')) is False
     assert proc.derived_check('doc', 'matched_users', 'd', ('...', 'user', 'u1')) is False
+
+    proc.audit_fixpoint()
+    session.close()
+
+
+def test_derived_tupleset_ttu_with_stored_tuples():
+    """A derived tupleset WITH Direct restrictions: stored tuples (routed onto its
+    leaves) are the TTU parents; membership of the parent in the tupleset does not
+    gate them (stored-tuple semantics), and target membership is evaluated through
+    the derived target's edge+residue state."""
+    session, widx, proc, write = build('''
+        type user
+        type folder
+          relations
+            define banned: [folder]
+            define linked: [folder] but not banned
+            define owner: [user]
+            define reachable_owner: owner from linked
+        type doc
+    ''')
+    # f2 is linked from f1 (stored tuple), and alice owns f2
+    write('add', ('...', 'folder', 'f2', 'linked', 'folder', 'f1'))
+    write('add', ('...', 'user', 'alice', 'owner', 'folder', 'f2'))
+    assert proc.derived_check('folder', 'reachable_owner', 'f1', ('...', 'user', 'alice')) is True
+
+    # banning f2 flips linked's membership but NOT the stored tuple: parents are
+    # stored tuples, so alice remains a reachable_owner (oracle semantics)
+    write('add', ('...', 'folder', 'f2', 'banned', 'folder', 'f1'))
+    assert proc.derived_check('folder', 'reachable_owner', 'f1', ('...', 'user', 'alice')) is True
+
+    # removing the stored tuple retracts the parent
+    write('remove', ('...', 'folder', 'f2', 'linked', 'folder', 'f1'))
+    assert proc.derived_check('folder', 'reachable_owner', 'f1', ('...', 'user', 'alice')) is False
 
     proc.audit_fixpoint()
     session.close()

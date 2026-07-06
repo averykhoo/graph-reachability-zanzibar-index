@@ -13,13 +13,15 @@ restores consistency.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from types import EllipsisType
 
+from sqlalchemy import tuple_
 from sqlmodel import select
 
 from .core import ReachabilityIndex
-from .models import NodeV4
+from .models import EdgeV4, NodeV4, ResidueV1
 from zanzibar_utils_v1 import SchemaInfo, validate_write_identifiers
 
 
@@ -27,6 +29,10 @@ from zanzibar_utils_v1 import SchemaInfo, validate_write_identifiers
 class LookupResult:
     node_ids: set[int] = field(default_factory=set)               # concrete results
     markers: set[tuple[str, str, str]] = field(default_factory=set)  # (type, predicate, variant) symbolic "all/any"
+    # "everyone of a starred shape EXCEPT these" (boolean spec §6): concrete node ids
+    # excluded from a derived relation's star coverage, from the residue's neg.
+    # Additive and empty everywhere except derived lookup_reverse.
+    excluded_node_ids: set[int] = field(default_factory=set)
 
 
 def _norm_pred(predicate: str | EllipsisType) -> str:
@@ -262,14 +268,22 @@ class WildcardIndex:
     def check(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
               relation: str, o_type: str, o_name: str) -> bool:
         s_pred = _norm_pred(subject_predicate)
+
+        # Derived (boolean) relations: edge probe + residue, no wildcard probes --
+        # derived relations are never wildcard shapes; symbolic state lives in the
+        # residue (boolean spec §6).
+        if (o_type, relation) in self.schema_info.derived_families:
+            return self._check_derived(s_pred, s_type, s_name, relation, o_type, o_name)
+
         subj_is_star = (s_name == '*')
         obj_is_star = (o_name == '*')
 
         subject_shape_declared = (s_type, s_pred) in self.schema_info.subject_wildcard_shapes
         object_shape_declared = (o_type, relation) in self.schema_info.object_wildcard_shapes
 
-        # Resolve up to 4 node ids (w-ids cached), then up to 4 point-lookup edge reads.
-        # A literal '*' query endpoint maps to its own variant node in probe 1.
+        # Resolve up to 4 node ids (w-ids cached). A literal '*' query endpoint maps
+        # to its own variant node in probe 1; a missing node simply drops its keys
+        # (ghosts thus retain their star-probe coverage).
         if subj_is_star:
             subj_id = self._w_id(s_type, s_pred, 'any')
         else:
@@ -281,30 +295,75 @@ class WildcardIndex:
             obj = self._get_concrete(relation, o_type, o_name)
             obj_id = obj.id if obj is not None else None
 
-        def reach(a_id: int | None, b_id: int | None) -> bool:
-            return a_id is not None and b_id is not None and self.idx.check_reachable_by_id(a_id, b_id)
+        keys: list[tuple[int, int]] = []
 
-        # Probe 1: (subject) -> (object)
-        if reach(subj_id, obj_id):
+        def key(a_id: int | None, b_id: int | None) -> None:
+            if a_id is not None and b_id is not None:
+                keys.append((a_id, b_id))
+
+        key(subj_id, obj_id)                                             # probe 1
+        w_any_id = (self._w_id(s_type, s_pred, 'any')
+                    if not subj_is_star and subject_shape_declared else None)
+        w_all_id = (self._w_id(o_type, relation, 'all')
+                    if not obj_is_star and object_shape_declared else None)
+        key(w_any_id, obj_id)                                            # probe 2
+        key(subj_id, w_all_id)                                           # probe 3
+        key(w_any_id, w_all_id)                                          # probe 4
+
+        if not keys:
+            return False
+
+        # ONE SQL round trip for all probes (boolean spec §1.14 / §6): the candidate
+        # keys go into a single row-value IN with LIMIT 1.
+        row = self.idx.session.exec(
+            select(EdgeV4.id)
+            .where(EdgeV4.store_id == self.idx.store_id)
+            .where(tuple_(EdgeV4.subject_id, EdgeV4.object_id).in_(keys))
+            .where(EdgeV4.indirect_edge_count > 0)  # type: ignore[arg-type]
+            .limit(1)
+        ).first()
+        return row is not None
+
+    # ------------------------------------------------------------------ #
+    # Derived reads (boolean spec §6)
+    # ------------------------------------------------------------------ #
+
+    def _residue_state(self, relation: str, o_type: str, o_name: str
+                       ) -> tuple[frozenset, set[int]]:
+        """(stars, neg) of the derived relation's residue; empty if no row/node.
+        Read-only: never interns."""
+        node = self._get_concrete(relation, o_type, o_name)
+        if node is None:
+            return frozenset(), set()
+        row = self.idx.session.exec(
+            select(ResidueV1)
+            .where(ResidueV1.store_id == self.idx.store_id)
+            .where(ResidueV1.object_node_id == node.id)
+        ).first()
+        if row is None:
+            return frozenset(), set()
+        return frozenset(tuple(s) for s in json.loads(row.stars)), set(json.loads(row.neg))
+
+    def _check_derived(self, s_pred: str, s_type: str, s_name: str,
+                       relation: str, o_type: str, o_name: str) -> bool:
+        if s_name == '*':
+            # intensional: is the whole shape covered? (1 residue read)
+            stars, _ = self._residue_state(relation, o_type, o_name)
+            return (s_type, s_pred) in stars
+
+        # probe 1 only: the derived edge (public family)
+        subj = self._get_concrete(s_pred, s_type, s_name)
+        obj = self._get_concrete(relation, o_type, o_name)
+        if subj is not None and obj is not None \
+                and self.idx.check_reachable_by_id(subj.id, obj.id):
             return True
 
-        # Probe 2: w_any(s_type, s_pred) -> (object)
-        if not subj_is_star and subject_shape_declared:
-            if reach(self._w_id(s_type, s_pred, 'any'), obj_id):
-                return True
-
-        # Probe 3: (subject) -> w_all(o_type, relation)
-        if not obj_is_star and object_shape_declared:
-            if reach(subj_id, self._w_id(o_type, relation, 'all')):
-                return True
-
-        # Probe 4: w_any(...) -> w_all(...)
-        if (not subj_is_star and subject_shape_declared
-                and not obj_is_star and object_shape_declared):
-            if reach(self._w_id(s_type, s_pred, 'any'), self._w_id(o_type, relation, 'all')):
-                return True
-
-        return False
+        # residue: star coverage minus neg; a ghost subject has no node and thus
+        # cannot be in neg -- the stars answer alone.
+        stars, neg = self._residue_state(relation, o_type, o_name)
+        if (s_type, s_pred) not in stars:
+            return False
+        return subj is None or subj.id not in neg
 
     def _get_concrete(self, predicate: str, entity_type: str, name: str) -> NodeV4 | None:
         try:
@@ -314,7 +373,11 @@ class WildcardIndex:
 
     def lookup(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str) -> LookupResult:
         """Everything the subject can reach. Concrete targets go in node_ids; any wildcard
-        node reached becomes a symbolic marker (spec §6) -- never enumerated to concretes."""
+        node reached becomes a symbolic marker (spec §6) -- never enumerated to concretes.
+
+        Derived relations contribute twice (boolean spec §6): materialised derived
+        edges arrive through the ordinary reachable set, and star-covered memberships
+        come from a residue scan (shape ∈ stars ∧ subject ∉ neg)."""
         s_pred = _norm_pred(subject_predicate)
         result = LookupResult()
 
@@ -324,12 +387,43 @@ class WildcardIndex:
             self._collect_reachable(self._get_concrete(s_pred, s_type, s_name), result)
             if (s_type, s_pred) in self.schema_info.subject_wildcard_shapes:
                 self._collect_reachable(self._w_node(s_type, s_pred, 'any', create=False), result)
+
+        if self.schema_info.derived_families:
+            self._collect_residue_memberships(s_pred, s_type, s_name, result)
         return result
+
+    def _collect_residue_memberships(self, s_pred: str, s_type: str, s_name: str,
+                                     result: LookupResult) -> None:
+        shape = (s_type, s_pred)
+        s_node = None if s_name == '*' else self._get_concrete(s_pred, s_type, s_name)
+        rows = self.idx.session.exec(
+            select(ResidueV1).where(ResidueV1.store_id == self.idx.store_id)
+        ).all()
+        for row in rows:
+            stars = frozenset(tuple(s) for s in json.loads(row.stars))
+            if shape not in stars:
+                continue
+            if s_name != '*' and s_node is not None and s_node.id in set(json.loads(row.neg)):
+                continue
+            result.node_ids.add(row.object_node_id)
 
     def lookup_reverse(self, relation: str, o_type: str, o_name: str) -> LookupResult:
         """Everything that can reach the object. Symmetric with lookup: w_all/w_any nodes
-        in the reverse set become symbolic markers (e.g. 'every T#P')."""
+        in the reverse set become symbolic markers (e.g. 'every T#P').
+
+        On a derived relation (boolean spec §6): concretes are the derived edges'
+        subjects; the residue's stars render as the existing symbolic markers (variant
+        'any': subject-side coverage) and its neg fills ``excluded_node_ids`` so
+        "everyone of shape σ except these" is representable without enumeration."""
         result = LookupResult()
+
+        if (o_type, relation) in self.schema_info.derived_families:
+            self._collect_reverse(self._get_concrete(relation, o_type, o_name), result)
+            stars, neg = self._residue_state(relation, o_type, o_name)
+            for (t, p) in stars:
+                result.markers.add((t, p, 'any'))
+            result.excluded_node_ids |= neg
+            return result
 
         if o_name == '*':
             self._collect_reverse(self._w_node(o_type, relation, 'all', create=False), result)
