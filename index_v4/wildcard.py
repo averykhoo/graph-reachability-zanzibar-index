@@ -41,6 +41,19 @@ class WildcardIndex:
         # rarely). Read-only lookups (check/lookup) hit it; every write clears it, so it
         # can never go stale across an add/remove that creates or GCs a w node.
         self._w_id_cache: dict[tuple[str, str, str], int | None] = {}
+        # Derived-family write exclusivity (boolean spec §3.3/I5): only the delta
+        # processor may write incoming direct edges on a derived-public family. The
+        # processor sets this flag around its own writes.
+        self.processor_writes = False
+
+    def _assert_derived_exclusivity(self, relation: str, o_type: str) -> None:
+        if self.processor_writes:
+            return
+        if (o_type, relation) in self.schema_info.derived_families:
+            raise ValueError(
+                f"relation {relation!r} on {o_type} is a derived (boolean) relation; "
+                f"its edges are processor-maintained -- tuples must be routed through "
+                f"RuleSet.apply, which rewrites them onto the leaf families")
 
     # ------------------------------------------------------------------ #
     # Node resolution (position rule §1.2 + validity §3.5)
@@ -195,6 +208,7 @@ class WildcardIndex:
     def add_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
                   relation: str, o_type: str, o_name: str) -> list[PermissionDelta]:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
+        self._assert_derived_exclusivity(relation, o_type)
         self._invalidate_w_cache()
         subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=True)
         obj = self._resolve(relation, o_type, o_name, 'object', create=True)
@@ -217,6 +231,7 @@ class WildcardIndex:
     def remove_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
                      relation: str, o_type: str, o_name: str) -> list[PermissionDelta]:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
+        self._assert_derived_exclusivity(relation, o_type)
         self._invalidate_w_cache()
         try:
             subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=False)

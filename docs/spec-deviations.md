@@ -123,4 +123,62 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 ---
 
+## 2026-07-07 — P2 (compile)
+
+1. **⚠ Decision-15 override: derived-tupleset TTUs are SUPPORTED, not rejected.**
+   Decision 15 rejects "a `TTU` whose *tupleset* relation is derived", but the §0
+   **frozen** acceptance event requires `demorgans_law_1.fga` to flip 4-way — and that
+   fixture is built on three such TTUs (`required_by from non_labels`,
+   `assigned from matchable_conds`, `granted from matched_roles`). Frozen list beats
+   the decision list, so the shape is implemented as a fourth plan-leaf kind,
+   `PDerivedTuplesetTTU`: evaluation enumerates candidate parents from the *subject's
+   own target edges* plus a residue scan keyed by the tupleset relation — data-bounded,
+   never universe-bounded, so the cost-model row ("symbolic write: data-bounded") is
+   preserved. New compile artifact `target_feeders` routes deltas on the (possibly
+   untainted) target relations into the processor. The decision's underlying fear
+   (object-star-shaped parent sets) is real but answerable: ghosts/star-covered parents
+   contribute no members under strict ∀⇒∃ because they hold no target tuples.
+   **If the rejection was intentional and demorgans_law_1 was meant to stay 3-way,
+   say so — the plan-node + feeder wiring is cleanly removable.**
+
+2. **`Filter.rewrite_relation` is a subclass** (`RewriteFilter(Filter)`), not a new
+   field on `Filter`: keeps pure-union compile output (and its P0 snapshot reprs)
+   byte-identical. Mechanism-only change; behavior as specced (§3.3).
+
+3. **Namespace keys are `(object_type, predicate)`**, not bare predicate strings
+   (§3.4 says `dict[predicate_str → Family]`): the same relation name may be tainted
+   on one type and plain on another (`demorgans_law_2.fga` declares `_all_users` on
+   two types), and node identity in the store is `(type, name, predicate)`. One dict
+   hit either way.
+
+4. **Boolean compilation is opt-in until P7** (`parse_openfga_schema(...,
+   enable_boolean=False)` default): compile capability lands green in P2 while the
+   default path still raises `UnsupportedByGraphIndex`, because a graph backend that
+   compiles boolean schemas but has no delta processor yet would answer derived checks
+   wrongly (ParityEngine auto-joins the graph on compile success — the P7 seam).
+   P7 flips the default and replaces the refusal tests; until then they stay green.
+
+5. **Added scope restriction (beyond decision 15): wildcard userset restrictions over
+   derived relations (`[T:*#P]` with P tainted) are rejected** with a loud
+   `UnsupportedByGraphIndex`. Star coverage of `T:*#P` composes through *residue*
+   stars of every instance, which the leaf-probe star fold cannot see (needs
+   symbolic composition through residues — same hook family as object wildcards on
+   derived). No fixture or OpenFGA-standard schema uses this shape; the set engine
+   still handles such schemas 3-way.
+
+6. **Indexed dispatch preserves list order across buckets** (position-tagged merge),
+   so pure-union first-match admission is provably byte-identical; verified by the P0
+   snapshot suite plus the unchanged 330 green tests.
+
+7. **Leaf indexes count both closure-leaves and userset storage leaves** in one
+   pre-order sequence (§3.2 says "closure-leaf positions"; tainted userset
+   restrictions also need a persisted family for their raw tuples, so they draw from
+   the same counter — deterministic and collision-free either way).
+
+8. **Derived-dependency cycles raise `ValueError`** (naming the cyclic keys), not
+   `UnsupportedByGraphIndex` — §3.4 reserves the latter for decision-15 scope
+   rejections. Cyclic boolean schemas stay set-engine-only permanently.
+
+---
+
 *(subsequent phases append below)*
