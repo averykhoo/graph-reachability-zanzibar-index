@@ -370,8 +370,8 @@ schema rewrite to rules/filters
 | `[group:*#member]`               | filter + ...                            | combination of the actions above                                                                         |
 | `... or admin`                   | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
 | `... or member from owner-group` | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
-| `(... and ...)`                  | post-add rewrite?                       | not yet supported                                                                                        |
-| `(... but not ...)`              | post add rewrite?                       | not yet supported                                                                                        |
+| `(... and ...)`                  | parsed to `Intersection`                | refused by the graph index (`UnsupportedByGraphIndex`); evaluated by the set engine (`setengine/`)       |
+| `(... but not ...)`              | parsed to `Exclusion`                   | refused by the graph index (`UnsupportedByGraphIndex`); evaluated by the set engine (`setengine/`)       |
 
 * note: the current rewrite logic is too simple to express the second of those rules right now
 * schema type checking, so that all relations always resolve to a single type?
@@ -470,5 +470,4 @@ AST); 64-bit id space; any query-time node interning.
 * store the filters and rewrite rules in the database
 * support namespacing within the database
     * or just use a new database each time? probably better for it to be in the database though
-* figure out how to implement boolean operations with post-processing
 * output the new edges and newly removed edges for external indexing
