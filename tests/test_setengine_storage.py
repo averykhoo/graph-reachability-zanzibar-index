@@ -206,3 +206,87 @@ def test_rejects_undeclared_object_wildcard(validity_engine):
 def test_remove_nonexistent_raises(validity_engine):
     with pytest.raises(ValueError):
         validity_engine.remove_tuple('...', 'user', 'alice', 'viewer', 'document', 'd1')
+
+
+# ---------------------------------------------------------------------------
+# Reference-counted interner: bounded memory + safe id recycling under churn
+# ---------------------------------------------------------------------------
+
+CHURN_SCHEMA = '''
+type user
+type doc
+  relations
+    define viewer: [user]
+'''
+
+
+@pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
+def test_interner_bounded_under_churn(ops):
+    session = _fresh_session()
+    se = SetEngine(session, 'c', CHURN_SCHEMA, ops=ops)
+    se.add_tuple('...', 'user', 'permanent', 'viewer', 'doc', 'keep')
+
+    N = 2000
+    for i in range(N):
+        se.add_tuple('...', 'user', f'sess{i}', 'viewer', 'doc', f'd{i}')
+        se.remove_tuple('...', 'user', f'sess{i}', 'viewer', 'doc', f'd{i}')
+    session.commit()
+
+    # memory is bounded by LIVE entities (the one permanent tuple: user + doc), not by the
+    # 2N+2 entities ever interned, and internal ids are recycled rather than climbing.
+    assert len(se.interner.id_of) == 2
+    assert len(se.interner.key_of) == 2
+    assert len(se.node_sets) == 1
+    assert len(se.member_of) == 1
+    assert se.interner._next <= 4, f'id highwater grew under churn: {se.interner._next}'
+    assert se.check('...', 'user', 'permanent', 'viewer', 'doc', 'keep') is True
+    session.close()
+
+
+@pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
+def test_recycled_id_carries_no_stale_permission(ops):
+    session = _fresh_session()
+    se = SetEngine(session, 'r', CHURN_SCHEMA, ops=ops)
+    se.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'A')
+    session.commit()
+    se.remove_tuple('...', 'user', 'alice', 'viewer', 'doc', 'A')  # frees alice's id
+    session.commit()
+    se.add_tuple('...', 'user', 'bob', 'viewer', 'doc', 'B')       # may reuse a freed id
+    session.commit()
+
+    assert se.check('...', 'user', 'alice', 'viewer', 'doc', 'A') is False  # ghost now
+    assert se.check('...', 'user', 'alice', 'viewer', 'doc', 'B') is False  # no leak into B
+    assert se.check('...', 'user', 'bob', 'viewer', 'doc', 'B') is True
+    session.close()
+
+
+@pytest.mark.parametrize('seed', [0, 1])
+def test_churn_preserves_correctness_vs_oracle(seed):
+    """Interleave heavy add/remove churn with a stable core; check must still match the
+    oracle throughout, proving recycling never corrupts live state."""
+    from tests.oracle import Oracle, OracleTuple
+    schema = CHURN_SCHEMA
+    session = _fresh_session()
+    se = SetEngine(session, 'x', schema, ops=PySets)
+    rng = random.Random(seed)
+    present = set()
+    grid = [('...', 'user', u, 'viewer', 'doc', d)
+            for u in ['core', 'ghost'] for d in ['keep', 'tmp0', 'tmp5', 'gone']]
+
+    for step in range(60):
+        u, d = f'u{rng.randint(0, 9)}', f'tmp{rng.randint(0, 9)}'
+        raw = ('...', 'user', u, 'viewer', 'doc', d)
+        if raw in present:
+            se.remove_tuple(*raw); present.discard(raw)
+        else:
+            se.add_tuple(*raw); present.add(raw)
+        # keep a stable core tuple around
+        core = ('...', 'user', 'core', 'viewer', 'doc', 'keep')
+        if core not in present:
+            se.add_tuple(*core); present.add(core)
+        session.commit()
+
+        oracle = Oracle(schema, [OracleTuple(*r) for r in present])
+        for q in grid:
+            assert se.check(*q) == oracle.check(*q), (q, sorted(present))
+    session.close()

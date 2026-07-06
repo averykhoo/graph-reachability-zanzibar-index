@@ -29,7 +29,7 @@ def _memberset_contains(se, m, s_pred, s_type, s_name) -> bool:
         return m.contains_star((s_type, s_pred))
     sid = se.interner.get(s_type, s_name, s_pred)
     # ghost (never interned): use an unused non-negative id (roaring ids are uint32)
-    uid = sid if sid is not None else len(se.interner.key_of) + 1000
+    uid = sid if sid is not None else max(se.interner.key_of, default=0) + 1000
     if s_pred == '...':
         return m.contains_entity(uid, s_type)
     return m.contains_userset(uid, (s_type, s_pred))

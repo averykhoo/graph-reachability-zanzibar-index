@@ -57,35 +57,78 @@ def _denorm_pred(pred: str) -> str | EllipsisType:
 
 
 class Interner:
-    """Per-store, append-only interning of ``(type, name, predicate)`` to int32 ids.
+    """Per-store, reference-counted interning of ``(type, name, predicate)`` to int32 ids.
+
+    Two decoupled identities: the ``(type, name, predicate)`` key is the immutable
+    *surrogate* (the stable identity, and what ``TupleV1`` persists), while the int32 id is
+    a *reusable internal handle* for the bitmap algebra. Each id carries a reference count
+    (how many stored tuples mention it, in either position). When the last referencing
+    tuple is removed the count reaches zero, the surrogate->id mapping is dropped, the id
+    is scrubbed from the population masks, and the id is returned to a free list for reuse.
+    This bounds memory by the *live* entity count rather than the lifetime count -- so churn
+    of temporary entities cannot leak -- and keeps ids within the uint32 domain roaring
+    needs. (Supersedes the append-only design in spec §5/§10; ``rebuild`` remains the way
+    to reconstruct minimal state from the table.)
 
     Star nodes intern like anything else -- ``(T, '*', pred)`` -- and need no any/all
     split: a star id's role is unambiguous from which side of storage it sits on (a
     star *subject* is a sentinel inside some node's entities/usersets; a star *object*
     is a NodeSets key). ``ids_of_type`` / ``ids_of_shape`` are the population masks the
-    MemberSet algebra needs; they are append-only (spec §5), never pruned on remove.
+    MemberSet algebra needs; freeing an id scrubs it from them.
     """
 
     def __init__(self, ops: SetOps):
         self.ops = ops
-        self.id_of: dict[tuple[str, str, str], int] = {}
-        self.key_of: list[tuple[str, str, str]] = []
+        self.id_of: dict[tuple[str, str, str], int] = {}      # surrogate key -> in-use internal id
+        self.key_of: dict[int, tuple[str, str, str]] = {}     # internal id -> surrogate key
+        self.refcount: dict[int, int] = {}                    # internal id -> # referencing tuples
         self.ids_of_type: dict[str, object] = defaultdict(ops.new)          # concrete entities (pred '...')
         self.ids_of_shape: dict[tuple[str, str], object] = defaultdict(ops.new)  # concrete usersets
+        self._free: list[int] = []                            # recyclable internal ids
+        self._next: int = 0                                   # next fresh internal id
 
-    def intern(self, entity_type: str, name: str, pred: str) -> int:
+    def acquire(self, entity_type: str, name: str, pred: str) -> int:
+        """Intern (creating the mapping and allocating/reusing an internal id if needed)
+        and add one reference. Called once per subject/object occurrence in a tuple."""
         key = (entity_type, name, pred)
         i = self.id_of.get(key)
-        if i is not None:
-            return i
-        i = len(self.key_of)
-        self.id_of[key] = i
-        self.key_of.append(key)
-        if name != '*':                       # star ids are sentinels, not population members
-            if pred == '...':
-                self.ids_of_type[entity_type].add(i)
+        if i is None:
+            if self._free:
+                i = self._free.pop()
             else:
-                self.ids_of_shape[(entity_type, pred)].add(i)
+                i = self._next
+                self._next += 1
+            self.id_of[key] = i
+            self.key_of[i] = key
+            self.refcount[i] = 0
+            if name != '*':                   # star ids are sentinels, not population members
+                if pred == '...':
+                    self.ids_of_type[entity_type].add(i)
+                else:
+                    self.ids_of_shape[(entity_type, pred)].add(i)
+        self.refcount[i] += 1
+        return i
+
+    def release(self, entity_type: str, name: str, pred: str) -> int | None:
+        """Drop one reference; when it reaches zero, remove the mapping, scrub the masks,
+        and recycle the id. Returns the freed id (else None) so the caller can scrub any
+        residual per-id state before the id is reused."""
+        key = (entity_type, name, pred)
+        i = self.id_of.get(key)
+        if i is None:
+            return None                       # unknown surrogate: nothing to release
+        self.refcount[i] -= 1
+        if self.refcount[i] > 0:
+            return None
+        del self.id_of[key]
+        del self.key_of[i]
+        del self.refcount[i]
+        if name != '*':
+            mask = (self.ids_of_type.get(entity_type) if pred == '...'
+                    else self.ids_of_shape.get((entity_type, pred)))
+            if mask is not None:
+                mask.discard(i)
+        self._free.append(i)
         return i
 
     def get(self, entity_type: str, name: str, pred: str) -> int | None:
@@ -203,8 +246,8 @@ class SetEngine:
         ).first()
 
     def _apply_add(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
-        subject_id = self.interner.intern(s_type, s_name, s_pred)
-        object_id = self.interner.intern(o_type, o_name, relation)
+        subject_id = self.interner.acquire(s_type, s_name, s_pred)   # +1 ref (create mapping if new)
+        object_id = self.interner.acquire(o_type, o_name, relation)
         ns = self.node_sets.get(object_id)
         if ns is None:
             ns = NodeSets(self.ops.new(), self.ops.new())
@@ -225,16 +268,27 @@ class SetEngine:
         object_id = self.interner.get(o_type, o_name, relation)
         if subject_id is None or object_id is None:
             return
+        # Prune the membership entry, dropping now-empty node/member maps so nothing
+        # accumulates for removed entities.
         ns = self.node_sets.get(object_id)
         if ns is not None:
             (ns.entities if s_pred == '...' else ns.usersets).discard(subject_id)
+            if not ns.entities and not ns.usersets:
+                self.node_sets.pop(object_id, None)
         mo = self.member_of.get(subject_id)
         if mo is not None:
             mo.discard(object_id)
+            if len(mo) == 0:
+                self.member_of.pop(subject_id, None)
         for u, v in self._derived_edges(s_pred, s_type, s_name, relation, o_type, o_name):
             self._flow_remove_edge(u, v)
-        # Empty sets are left in place (spec §6.1: no GC -- nothing derived exists to leak).
-        # Interner masks are append-only (spec §5) and intentionally NOT pruned here.
+        # Release interner references; a freed (recycled) id must not carry residual state.
+        if self.interner.release(s_type, s_name, s_pred) is not None:
+            self.node_sets.pop(subject_id, None)
+            self.member_of.pop(subject_id, None)
+        if self.interner.release(o_type, o_name, relation) is not None:
+            self.node_sets.pop(object_id, None)
+            self.member_of.pop(object_id, None)
 
     # ------------------------------------------------------------------ #
     # Flow-graph index (write-time cycle detection; union schemas only)
@@ -363,7 +417,7 @@ class SetEngine:
     def _instances_of_type(self, t: str, query_names: set[tuple[str, str]]) -> set[str]:
         """Concrete instance names of a type (interner keys ∪ query endpoints), for the
         strict ∀⇒∃ expansion of star tuplesets. Rare path (star parents)."""
-        names = {n for (kt, n, _p) in self.interner.key_of if kt == t and n != '*'}
+        names = {n for (kt, n, _p) in self.interner.key_of.values() if kt == t and n != '*'}
         names |= {qn for (qt, qn) in query_names if qt == t and qn != '*'}
         return names
 
@@ -618,7 +672,7 @@ class SetEngine:
         s_pred = _norm_pred(subject_predicate)
         result = LookupResult()
         seen_rel_nodes: set[tuple[str, str, str]] = set()
-        for (t, n, p) in self.interner.key_of:
+        for (t, n, p) in list(self.interner.key_of.values()):
             if p == '...':
                 continue                                   # entity nodes are not relations
             key = (t, n, p)

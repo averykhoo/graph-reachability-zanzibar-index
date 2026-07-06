@@ -396,7 +396,11 @@ models** — they are the two endpoints of a single memoization spectrum:
   raw tuples (`TupleV1`) and computes memberships on the fly with bitmap algebra. Writes
   are O(1) in-memory updates; reads are O(schema depth × topology) with the bulk set work
   vectorized. In exchange it supports boolean operators (`and`, `but not`) the closure
-  index cannot.
+  index cannot. Interning is **reference-counted**: the `(type, name, predicate)` key is
+  the immutable surrogate identity, the int32 id is a reusable handle, and when the last
+  tuple mentioning an entity is removed its id (and mapping) is freed and recycled — so
+  in-memory size tracks the *live* entity count, not the lifetime count, and high churn of
+  temporary entities cannot leak (nor exhaust the uint32 id domain).
 
 Same questions, same answers, opposite place to spend the work. The **validation matrix**
 (`tests/test_matrix.py`) is what pins "same semantics": a 4-way comparison
