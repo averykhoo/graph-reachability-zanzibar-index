@@ -1,0 +1,18 @@
+# rules_and_filters (in compile order)
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='member', object_type='group', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate='member', subject_type='group', subject_name=None, relation='member', object_type='group', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='folder', subject_name=None, relation='parent', object_type='folder', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='viewer', object_type='folder', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name='*', relation='viewer', object_type='folder', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate='member', subject_type='group', subject_name=None, relation='viewer', object_type='folder', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate='member', subject_type='group', subject_name='*', relation='viewer', object_type='folder', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='parent', object_type='folder', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate='viewer', subject_type=None, subject_name=None, relation='viewer', object_type='folder', object_name=None, match_wildcards=True, object_match_wildcards=None))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='folder', subject_name=None, relation='parent', object_type='document', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='viewer', object_type='document', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name='*', relation='viewer', object_type='document', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate='member', subject_type='group', subject_name=None, relation='viewer', object_type='document', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate='member', subject_type='group', subject_name='*', relation='viewer', object_type='document', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='parent', object_type='document', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate='viewer', subject_type=None, subject_name=None, relation='viewer', object_type='document', object_name=None, match_wildcards=True, object_match_wildcards=None))
+# schema_info
+subject_wildcard_shapes=[('group', 'member'), ('user', '...')]
+object_wildcard_shapes=[]
