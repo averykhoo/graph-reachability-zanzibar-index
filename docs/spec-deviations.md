@@ -89,4 +89,38 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 ---
 
+## 2026-07-07 — P1 (verification foundation)
+
+1. **Paranoia wiring mechanism** (spec §8.1 *(adapt)*): SQLAlchemy session events.
+   `index_v4.invariants.install_paranoia(session, store_id, schema_info)` listens on
+   `before_commit` (flush + check inside the transaction; `InvariantViolation` aborts
+   the commit) and `after_commit` (re-check in a fresh `Session` on the same bind).
+   Wired on by default in `tests.wildcard_helpers.make_wildcard_index` — i.e. every
+   test that builds a graph store now runs under paranoia (`paranoia=False` opt-out
+   for benchmarks and for tests that corrupt state on purpose).
+
+2. **ParityEngine parity scope** (spec §8.4): per-op parity is *check*-parity
+   (unanimous accept/reject + full-grid check vs the oracle). `lookup` /
+   `lookup_reverse` are served by the richest live backend without per-op
+   cross-assertion, because the oracle is check-only (P0 finding #3) and the two live
+   engines use different id spaces; lookup correctness stays pinned by its dedicated
+   tests and P5 adds the derived-lookup ones. Grid: universe (names seen in applied
+   ops) ∪ ghosts ∪ `'*'`, subjects from Direct restrictions, deterministically
+   sampled above a cap.
+
+3. **ParityEngine is additive, not a retrofit**: existing matrix/property tests keep
+   their own harnesses (they are the pinned artifact P7 flips); ParityEngine drives
+   the handwritten scenarios + new random walks, and is the default engine for all
+   *new* phase tests going forward. Suite-wide paranoia comes via
+   `make_wildcard_index` (see #1).
+
+4. **Façade rejection-family fix** (validity parity, frozen): `WildcardIndex.
+   remove_tuple` leaked `KeyError` when an endpoint node never existed, while the set
+   engine and `ReachabilityIndex.remove_edge` reject the same op with `ValueError`.
+   Surfaced by ParityEngine's unanimity assert; fixed by translating `KeyError` →
+   `ValueError('Non-existent edge cannot be removed')` in the façade, matching
+   core.remove_edge.
+
+---
+
 *(subsequent phases append below)*

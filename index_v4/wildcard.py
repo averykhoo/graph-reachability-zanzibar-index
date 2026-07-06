@@ -218,8 +218,13 @@ class WildcardIndex:
                      relation: str, o_type: str, o_name: str) -> list[PermissionDelta]:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._invalidate_w_cache()
-        subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=False)
-        obj = self._resolve(relation, o_type, o_name, 'object', create=False)
+        try:
+            subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=False)
+            obj = self._resolve(relation, o_type, o_name, 'object', create=False)
+        except KeyError as e:
+            # Same rejection family as core.remove_edge and the set engine (validity
+            # parity): a remove of a never-seen endpoint is a ValueError rejection.
+            raise ValueError('Non-existent edge cannot be removed') from e
 
         deltas = self.idx.remove_edge_by_id(subject.id, obj.id)
 
