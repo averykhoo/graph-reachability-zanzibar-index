@@ -28,10 +28,12 @@ from __future__ import annotations
 from collections import Counter
 from typing import TYPE_CHECKING
 
+import json
+
 from sqlalchemy import event
 from sqlmodel import Session, select
 
-from .models import EdgeV4, NodeV4
+from .models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueV1
 from .outbox import outbox_rows, outbox_watermark
 
 if TYPE_CHECKING:
@@ -65,11 +67,14 @@ def _fail(msg: str) -> None:
 
 
 def check_invariants(session: Session, store_id: str,
-                     schema_info: 'SchemaInfo | None' = None) -> None:
-    """Assert I1-I3 (+ node encoding) over the store's committed-or-pending rows.
+                     schema_info: 'SchemaInfo | None' = None,
+                     residue_versions: dict[int, int] | None = None) -> None:
+    """Assert I1-I6 + I10 (+ node encoding) over the store's committed-or-pending rows.
 
-    ``schema_info`` gates I3 (bridge hygiene needs the declared shapes); without it
-    only the schema-independent invariants run.
+    ``schema_info`` gates the schema-dependent invariants (I3 bridge hygiene, I4
+    namespace classification, I5 derived-flag exclusivity, I6 residue placement);
+    without it only the schema-independent ones run. ``residue_versions`` (a mutable
+    dict the caller keeps across checks) enables I7 version monotonicity.
     """
     nodes, edges = _load(session, store_id)
     by_id = {n.id: n for n in nodes}
@@ -161,6 +166,104 @@ def check_invariants(session: Session, store_id: str,
             elif has_out:
                 _fail(f'I3: concrete {n} of non-bridged-out shape has a w_all->concrete bridge')
 
+    if schema_info is not None:
+        _check_derived_invariants(session, store_id, schema_info, nodes, edges, by_id,
+                                  residue_versions)
+
+    _check_outbox_sanity(session, store_id)
+
+
+def _check_derived_invariants(session: Session, store_id: str, schema_info,
+                              nodes, edges, by_id, residue_versions) -> None:
+    """I4 namespace classification, I5 derived-flag exclusivity, I6 residue placement,
+    I7 residue-version monotonicity (boolean spec §8.2)."""
+    leaf_families = schema_info.leaf_families
+    derived_families = schema_info.derived_families
+
+    # I4: every '.'-predicate node family must be a declared leaf family; leaf and
+    # derived families never appear as w_all shapes (decision 15 rejected those).
+    for n in nodes:
+        key = (n.type, n.predicate)
+        if '.' in n.predicate and n.predicate != '...' and key not in leaf_families:
+            _fail(f'I4: node {n} uses a leaf-style predicate outside the compiled namespace')
+        if n.wildcard == 'all' and (key in leaf_families or key in derived_families):
+            _fail(f'I4: w_all node on a leaf/derived family: {n}')
+
+    # I5: derived=True iff a direct edge into a derived-public family; nowhere else.
+    for e in edges:
+        o = by_id.get(e.object_id)
+        if o is None:
+            continue
+        on_derived = (o.type, o.predicate) in derived_families and o.wildcard == ''
+        if e.direct_edge_count > 0 and on_derived:
+            if not e.derived:
+                _fail(f'I5: direct edge into derived family lacks the derived flag: {e}')
+        elif e.derived:
+            _fail(f'I5: derived flag on a non-derived-direct edge row: {e}')
+
+    # I6 / I7: residue placement + version monotonicity.
+    subject_shapes = schema_info.subject_wildcard_shapes
+    rows = session.exec(
+        select(ResidueV1).where(ResidueV1.store_id == store_id)).all()
+    derived_edge_subjects: dict[int, set[int]] = {}
+    for e in edges:
+        if e.direct_edge_count > 0 and e.derived:
+            derived_edge_subjects.setdefault(e.object_id, set()).add(e.subject_id)
+
+    for r in rows:
+        node = by_id.get(r.object_node_id)
+        if node is None:
+            _fail(f'I6: residue row {r.id} references a missing node {r.object_node_id}')
+        if (node.type, node.predicate) not in derived_families:
+            _fail(f'I6: residue on a non-derived relation: {node}')
+        if r.relation != node.predicate:
+            _fail(f'I6: residue.relation {r.relation!r} disagrees with its node {node}')
+        stars = frozenset(tuple(s) for s in json.loads(r.stars))
+        neg = set(json.loads(r.neg))
+        if not stars and not neg:
+            _fail(f'I6: empty residue row persisted for {node}')
+        if not stars <= subject_shapes:
+            _fail(f'I6: residue stars {stars} outside declared subject shapes on {node}')
+        for nid in neg:
+            s = by_id.get(nid)
+            if s is None:
+                _fail(f'I6: residue neg holds a dead node id {nid} on {node}')
+            if s.wildcard != '':
+                _fail(f'I6: residue neg holds a wildcard node {s} on {node}')
+            if (s.type, s.predicate) not in stars:
+                _fail(f'I6: neg subject {s} not star-covered by {stars} on {node}')
+        if neg & derived_edge_subjects.get(r.object_node_id, set()):
+            _fail(f'I6: neg overlaps derived-edge holders on {node} '
+                  f'(an edge means expr-true; neg means expr-false)')
+
+    # I7: version monotonicity per residue ROW (empty rows are deleted, so a
+    # recreated residue legitimately restarts its lineage at version 1 -- lineage is
+    # keyed by (row id, object) and pruned when the row disappears).
+    if residue_versions is not None:
+        seen = set()
+        for r in rows:
+            k = (r.id, r.object_node_id)
+            seen.add(k)
+            last = residue_versions.get(k)
+            if last is not None and r.version < last:
+                _fail(f'I7: residue version regressed on row {r.id} '
+                      f'(object {r.object_node_id}): {last} -> {r.version}')
+            residue_versions[k] = r.version
+        for k in list(residue_versions):
+            if k not in seen:
+                del residue_versions[k]
+
+
+def _check_outbox_sanity(session: Session, store_id: str) -> None:
+    """I10: outbox rows well-formed (the watermark bookkeeping lives with paranoia)."""
+    rows = session.exec(
+        select(DeltaOutboxV1).where(DeltaOutboxV1.store_id == store_id)).all()
+    for r in rows:
+        if r.action not in ('ADDED', 'REMOVED'):
+            _fail(f'I10: malformed outbox action {r.action!r} (row {r.id})')
+        if not r.object_type or not r.object_predicate or not r.subject_type:
+            _fail(f'I10: outbox row {r.id} missing denormalized endpoints')
+
 
 def snapshot_rows(session: Session, store_id: str) -> tuple[Counter, Counter]:
     """Id-independent (node_rows, edge_rows) multisets, for I11/I12 comparisons: two
@@ -241,15 +344,20 @@ def install_paranoia(session: Session, store_id: str,
     # exactly this transaction's flips. Only ever set from committed state, so a
     # rollback (which discards its own rows) can never leave it stale.
     state = {'wm': outbox_watermark(session, store_id)}
+    # I7: last-seen residue versions, monotone across the run. Only advanced by the
+    # post-commit pass so rolled-back bumps don't poison the baseline.
+    committed_versions: dict[int, int] = {}
 
     @event.listens_for(session, 'before_commit')
     def _pre_commit_check(sess: Session) -> None:
         sess.flush()   # before_commit fires before the commit's flush; check real state
-        check_invariants(sess, store_id, schema_info)
+        check_invariants(sess, store_id, schema_info,
+                         residue_versions=dict(committed_versions))
         verify_outbox_deltas(sess, store_id, state['wm'])
 
     @event.listens_for(session, 'after_commit')
     def _post_commit_check(sess: Session) -> None:
         with Session(sess.get_bind()) as fresh:
-            check_invariants(fresh, store_id, schema_info)
+            check_invariants(fresh, store_id, schema_info,
+                             residue_versions=committed_versions)
             state['wm'] = outbox_watermark(fresh, store_id)

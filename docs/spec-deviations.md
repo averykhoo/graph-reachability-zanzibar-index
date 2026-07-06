@@ -297,4 +297,30 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 ---
 
+## 2026-07-07 — P6 (new-state invariants + backfill)
+
+1. **I7 lineage is per residue ROW**, keyed `(row id, object_node_id)` with absent
+   keys pruned each check: empty residues are deleted (spec §4), so a legitimate
+   delete-then-recreate restarts at version 1 — the §8.2 wording ("checker keeps
+   last-seen versions in memory") tripped on cascades whose intermediate rounds
+   emptied a residue that a later round refilled (caught by the demorgans_reverse
+   parity walk under paranoia). In-place regressions on a live row still fail.
+   Residual corner: SQLite rowid reuse of a just-deleted max-id row for the same
+   object could mask one regression — accepted for a prerelease checker.
+
+2. **I9 wiring**: `audit_fixpoint` (all live keys — the paranoia dose) runs per-op in
+   the P5/P7 parity walks and per scenario in the processor tests, not inside every
+   `session.commit()` — it needs a processor instance, which the commit hook doesn't
+   have; the per-commit paranoia layer covers I1–I7/I10–I12 plus §8.3.
+
+3. **I8**: stratification acyclicity is compile-time (`_stratify` raises); the
+   runtime re-assert is the cascade's quiescence check, which fails loudly if the
+   strata bound is ever wrong.
+
+4. **Backfill enumerates positive leaf families + the public family** per key
+   (subtrahends never generate candidates), chunked and idempotent; residue-only
+   objects are covered because derived-public nodes are pinned non-implicit (P4).
+
+---
+
 *(subsequent phases append below)*

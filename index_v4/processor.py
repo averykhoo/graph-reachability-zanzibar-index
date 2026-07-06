@@ -689,35 +689,52 @@ class DeltaProcessor:
                 f'leftover keys: {sorted(leftover)}')
 
     # ------------------------------------------------------------------ #
+    # Backfill / bootstrap (§5.5)
+    # ------------------------------------------------------------------ #
+
+    def _live_keys_of(self, object_type: str, rel: str) -> set[str]:
+        """Object names with any state under (object_type, rel): positive-leaf family
+        nodes (subtrahends never generate candidates, only filter), the public node
+        family, and residue rows."""
+        names: set[str] = set()
+        plan = self.compiled.plans[(object_type, rel)]
+        preds = [rel] + [spec.predicate for spec in plan.leaves
+                         if spec.positive and spec.kind in ('closure', 'derived-userset')]
+        for pred in preds:
+            rows = self.session.exec(
+                select(NodeV4).where(NodeV4.store_id == self.store_id)
+                .where(NodeV4.type == object_type).where(NodeV4.predicate == pred)
+                .where(NodeV4.wildcard == '')
+            ).all()
+            names.update(n.name for n in rows)
+        return names
+
+    def backfill(self, chunk_size: int = 200) -> None:
+        """Bootstrap/repair derived state from existing leaf data (§5.5): per stratum
+        in topo order, reconcile every object with any positive-leaf state. Chunked,
+        idempotent, mirroring the wildcard ``backfill()`` precedent; doubles as the
+        recovery path when I9 finds an inconsistent key."""
+        for stratum in self.compiled.strata:
+            for (object_type, rel) in stratum:
+                names = sorted(self._live_keys_of(object_type, rel))
+                for i in range(0, len(names), chunk_size):
+                    for obj_name in names[i:i + chunk_size]:
+                        self.reconcile(object_type, rel, obj_name)
+                    self.session.flush()
+        self._bumped = []
+
+    # ------------------------------------------------------------------ #
     # I9 fixpoint audit (§8.2)
     # ------------------------------------------------------------------ #
 
     def audit_fixpoint(self) -> None:
-        """I9: reconcile of every live derived key produces zero changes."""
-        live: set[Key] = set()
-        for (object_type, rel) in self.compiled.plans:
-            nodes = self.session.exec(
-                select(NodeV4).where(NodeV4.store_id == self.store_id)
-                .where(NodeV4.type == object_type).where(NodeV4.predicate == rel)
-                .where(NodeV4.wildcard == '')
-            ).all()
-            for n in nodes:
-                live.add((object_type, rel, n.name))
-            # objects that only have leaf state (no public node yet)
-            for spec in self.compiled.plans[(object_type, rel)].leaves:
-                if spec.kind in ('closure', 'derived-userset'):
-                    leafs = self.session.exec(
-                        select(NodeV4).where(NodeV4.store_id == self.store_id)
-                        .where(NodeV4.type == object_type)
-                        .where(NodeV4.predicate == spec.predicate)
-                        .where(NodeV4.wildcard == '')
-                    ).all()
-                    for n in leafs:
-                        live.add((object_type, rel, n.name))
-
-        for (object_type, rel, obj_name) in sorted(live):
-            if self.reconcile(object_type, rel, obj_name):
-                raise InvariantViolation(
-                    f'I9: reconcile of ({object_type}, {rel}, {obj_name}) was not a '
-                    f'fixpoint -- derived state was stale')
+        """I9: reconcile of every live derived key produces zero changes. On a hit,
+        ``backfill()`` is the recovery path (§5.5)."""
+        for stratum in self.compiled.strata:
+            for (object_type, rel) in stratum:
+                for obj_name in sorted(self._live_keys_of(object_type, rel)):
+                    if self.reconcile(object_type, rel, obj_name):
+                        raise InvariantViolation(
+                            f'I9: reconcile of ({object_type}, {rel}, {obj_name}) was '
+                            f'not a fixpoint -- derived state was stale')
         self._bumped = []
