@@ -2,18 +2,46 @@ from types import EllipsisType
 from sqlmodel import Session, select
 
 from index_v1 import MultiSet
-from .models import EdgeV4, NodeV4, PermissionDelta, Edge, Node
+from .models import EdgeV4, NodeV4, PermissionDelta, Edge, Node, StoreV4
 
 
 class ReachabilityIndex:
     """
     Stateful interface to interact with the transitive closure DAG.
     Operates inside a provided Session to allow multi-edge transactional batching.
+
+    Concurrency: every write funnels through ``_lock_store`` (a ``FOR UPDATE`` row lock on
+    the store row) so that a whole logical write -- the check-then-act cycle test *and* the
+    read-modify-write ref-count updates across the affected closure region -- is atomic
+    with respect to other writers to the same store. Without it, two concurrent writers on
+    an MVCC backend (PostgreSQL/MySQL, READ COMMITTED) would (a) lose ref-count increments
+    on any shared edge and (b) be able to each pass the cycle check yet jointly create a
+    cycle. See ``_lock_store`` for why the lock is at store rather than per-edge granularity.
     """
 
     def __init__(self, session: Session, store_id: str):
         self.session = session
         self.store_id = store_id
+
+    def _lock_store(self) -> None:
+        """Serialize concurrent writers to this store for the rest of the transaction.
+
+        A single ``add_edge`` / ``remove_edge`` mutates a data-dependent set of
+        transitive-closure rows *and* performs a check-then-act cycle test; both must be
+        atomic w.r.t. other writers. We take a row-level ``FOR UPDATE`` lock on the store
+        row rather than locking each affected edge: the affected set is discovered while
+        walking the graph, so locking it piecemeal in graph order invites deadlocks --
+        serializing at store granularity is deadlock-free and matches the reality that one
+        logical write already touches many rows.
+
+        On PostgreSQL/MySQL this blocks other writers to the store until this transaction
+        commits/rolls back. On SQLite ``with_for_update()`` renders to nothing (the engine
+        already takes a database-level write lock), so tests are unaffected. A missing
+        store row simply yields no lock (harmless).
+        """
+        self.session.exec(
+            select(StoreV4).where(StoreV4.id == self.store_id).with_for_update()
+        ).first()
 
     def _add_db_edges_unsafe(
             self,
@@ -222,6 +250,11 @@ class ReachabilityIndex:
         """
         assert subject_id != object_id
 
+        # Serialize the cycle check + ref-counted closure mutation against other writers
+        # (held until commit): otherwise the check and the update are separate steps, so
+        # concurrent adds can jointly create a cycle or lose count increments.
+        self._lock_store()
+
         triple = self.session.exec(
             select(EdgeV4)
             .where(EdgeV4.store_id == self.store_id)
@@ -238,6 +271,8 @@ class ReachabilityIndex:
     def remove_edge_by_id(self, subject_id: int, object_id: int) -> list[PermissionDelta]:
         """Remove a direct edge between two already-resolved node ids (ref-counted -1)."""
         assert subject_id != object_id
+
+        self._lock_store()   # serialize the ref-counted closure mutation (held until commit)
 
         triple = self.session.exec(
             select(Edge)
@@ -291,6 +326,7 @@ class ReachabilityIndex:
         return self.remove_edge_by_id(_subject.id, _object.id)
 
     def remove_node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str) -> list[PermissionDelta]:
+        self._lock_store()   # serialize node deletion + its closure fixups (held until commit)
         _node = self.node(predicate, entity_type, entity_name, create_if_missing=False)
         return self._add_direct_edge_unsafe(_node.id, _node.id, -1)
 

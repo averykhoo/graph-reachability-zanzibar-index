@@ -1,3 +1,13 @@
+# CONCURRENCY NOTE (superseded by index_v4): the write path here has the same race as
+# early v4 -- `_add_db_edges_unsafe` does an unlocked read-modify-write of the edge
+# ref-counts, and `add_edge` performs a check-then-act cycle test. On an MVCC backend
+# (PostgreSQL/MySQL, READ COMMITTED) two concurrent writers can lose count increments or
+# jointly form a cycle; SQLite masks it with a database-level write lock. v4 fixes this by
+# serializing writers with a `FOR UPDATE` lock on the store row (see
+# `index_v4/core.py::ReachabilityIndex._lock_store`). This module is kept for reference and
+# is intentionally NOT patched -- serialize writes externally (or migrate to v4) if you run
+# it concurrently on a non-SQLite backend.
+
 from types import EllipsisType
 
 from sqlalchemy.orm import RelationshipProperty
