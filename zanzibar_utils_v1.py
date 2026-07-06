@@ -1,8 +1,61 @@
+import re
 from dataclasses import dataclass
 from pprint import pprint
 from types import EllipsisType
 
 from index_v2 import Node
+
+
+# ---------------------------------------------------------------------------
+# Identifier validation (strict surrogate ids for both backends)
+# ---------------------------------------------------------------------------
+#
+# Entity types, entity names, and relations are the *surrogate* identities. They are
+# stored and interned verbatim, so we constrain them to a conservative, delimiter-free
+# charset -- keeping DSL/parsing delimiters (``: # @ , ( ) space`` and the ``or`` /
+# ``but not`` keywords already excluded by whitespace), control characters, quotes, and
+# injection payloads out of identity strings entirely. Names may additionally be the
+# wildcard sentinel ``'*'``; a subject predicate may be the bare sentinel ``'...'``.
+# Internal ids remain strictly numeric (allocated int32s), decoupled from these strings.
+
+IDENTIFIER_CHARSET = r'A-Za-z0-9_./@+=-'
+_IDENTIFIER_RE = re.compile(rf'^[{IDENTIFIER_CHARSET}]{{1,256}}$')
+
+
+def is_valid_identifier(value) -> bool:
+    return isinstance(value, str) and _IDENTIFIER_RE.match(value) is not None
+
+
+def _require(value, label: str, *, allow_star: bool = False, allow_ellipsis: bool = False) -> None:
+    if allow_ellipsis and (value is Ellipsis or value == '...'):
+        return
+    if allow_star and value == '*':
+        return
+    if not is_valid_identifier(value):
+        extra = ''.join([" or '*'" if allow_star else '', " or '...'" if allow_ellipsis else ''])
+        raise ValueError(
+            f"invalid {label} {value!r}: must match [{IDENTIFIER_CHARSET}] (1-256 chars){extra}")
+
+
+def validate_write_identifiers(subject_predicate, subject_type, subject_name,
+                               relation, object_type, object_name) -> None:
+    """Reject any out-of-charset identifier on a tuple write (shared by both backends).
+
+    Types and relations must be plain identifiers; names may be the wildcard ``'*'``; the
+    subject predicate may be the bare ``'...'`` (or ``Ellipsis``)."""
+    _require(subject_type, 'subject_type')
+    _require(relation, 'relation')
+    _require(object_type, 'object_type')
+    _require(subject_name, 'subject_name', allow_star=True)
+    _require(object_name, 'object_name', allow_star=True)
+    _require(subject_predicate, 'subject_predicate', allow_ellipsis=True)
+
+
+def validate_node_identifiers(predicate, entity_type, entity_name) -> None:
+    """Validate a single node identity (predicate/type/name) for node-level writes."""
+    _require(entity_type, 'entity_type')
+    _require(entity_name, 'entity_name', allow_star=True)
+    _require(predicate, 'predicate', allow_ellipsis=True)
 
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)

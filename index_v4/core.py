@@ -2,6 +2,7 @@ from types import EllipsisType
 from sqlmodel import Session, select
 
 from index_v1 import MultiSet
+from zanzibar_utils_v1 import validate_write_identifiers, validate_node_identifiers
 from .models import EdgeV4, NodeV4, PermissionDelta, Edge, Node, StoreV4
 
 
@@ -311,12 +312,16 @@ class ReachabilityIndex:
 
     def add_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                  object_type: str, object_name: str) -> list[PermissionDelta]:
+        validate_write_identifiers(subject_predicate, subject_type, subject_name,
+                                   relation, object_type, object_name)
         _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=True)
         _object = self.node(relation, object_type, object_name, create_if_missing=True)
         return self.add_edge_by_id(_subject.id, _object.id)
 
     def remove_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                     object_type: str, object_name: str) -> list[PermissionDelta]:
+        validate_write_identifiers(subject_predicate, subject_type, subject_name,
+                                   relation, object_type, object_name)
         try:
             _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=False)
             _object = self.node(relation, object_type, object_name, create_if_missing=False)
@@ -326,6 +331,7 @@ class ReachabilityIndex:
         return self.remove_edge_by_id(_subject.id, _object.id)
 
     def remove_node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str) -> list[PermissionDelta]:
+        validate_node_identifiers(predicate, entity_type, entity_name)
         self._lock_store()   # serialize node deletion + its closure fixups (held until commit)
         _node = self.node(predicate, entity_type, entity_name, create_if_missing=False)
         return self._add_direct_edge_unsafe(_node.id, _node.id, -1)

@@ -20,7 +20,7 @@ from sqlmodel import select
 
 from .core import ReachabilityIndex
 from .models import NodeV4, PermissionDelta
-from zanzibar_utils_v1 import SchemaInfo
+from zanzibar_utils_v1 import SchemaInfo, validate_write_identifiers
 
 
 @dataclass
@@ -194,6 +194,7 @@ class WildcardIndex:
 
     def add_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
                   relation: str, o_type: str, o_name: str) -> list[PermissionDelta]:
+        validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._invalidate_w_cache()
         subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=True)
         obj = self._resolve(relation, o_type, o_name, 'object', create=True)
@@ -215,6 +216,7 @@ class WildcardIndex:
 
     def remove_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
                      relation: str, o_type: str, o_name: str) -> list[PermissionDelta]:
+        validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._invalidate_w_cache()
         subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=False)
         obj = self._resolve(relation, o_type, o_name, 'object', create=False)

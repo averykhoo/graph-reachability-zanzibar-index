@@ -21,6 +21,7 @@ from zanzibar_utils_v1 import (
     derive_schema_info,
     schema_filters,
     compile_ruleset,
+    validate_write_identifiers,
     UnsupportedByGraphIndex,
     Direct,
     Computed,
@@ -214,6 +215,7 @@ class SetEngine:
     def add_tuple(self, subject_predicate, s_type: str, s_name: str,
                   relation: str, o_type: str, o_name: str) -> list:
         s_pred = _norm_pred(subject_predicate)
+        validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         if self._row(s_pred, s_type, s_name, relation, o_type, o_name) is not None:
             return []                                  # idempotent: septuple already present
         self._validate(s_pred, s_type, s_name, relation, o_type, o_name)
@@ -226,6 +228,7 @@ class SetEngine:
     def remove_tuple(self, subject_predicate, s_type: str, s_name: str,
                      relation: str, o_type: str, o_name: str) -> list:
         s_pred = _norm_pred(subject_predicate)
+        validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
         if row is None:
             raise ValueError('non-existent tuple cannot be removed')

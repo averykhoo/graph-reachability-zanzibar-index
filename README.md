@@ -402,6 +402,14 @@ models** — they are the two endpoints of a single memoization spectrum:
   in-memory size tracks the *live* entity count, not the lifetime count, and high churn of
   temporary entities cannot leak (nor exhaust the uint32 id domain).
 
+**Identifier validation.** Surrogate identities (entity types, entity names, relations)
+are constrained on every write — in *both* backends — to a strict, delimiter-free charset
+`[A-Za-z0-9_./@+=-]` (1–256 chars; a name may also be the wildcard `*`, a subject
+predicate the bare `...`). This keeps DSL/parsing delimiters, whitespace, quotes, control
+bytes, and injection payloads out of identity strings entirely (SQL is parameterized
+regardless, so this is defense-in-depth). Internal ids stay strictly numeric, decoupled
+from these strings.
+
 Same questions, same answers, opposite place to spend the work. The **validation matrix**
 (`tests/test_matrix.py`) is what pins "same semantics": a 4-way comparison
 (handwritten expectations · reference oracle · set engine · graph `WildcardIndex`) over
