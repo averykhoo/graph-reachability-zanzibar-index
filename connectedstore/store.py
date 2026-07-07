@@ -37,14 +37,21 @@ class ConnectedStore:
     def __init__(self, session: Session, store_id: str, *,
                  schema: str | None = None,
                  object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
-                 ops: SetOps = DEFAULT_SETOPS):
+                 ops: SetOps = DEFAULT_SETOPS,
+                 sync: bool = True):
         """Open (or bootstrap, when ``schema`` is given) a connected store.
 
         A passed schema is persisted write-once via ``ensure_schema``; passing one
         that disagrees with the store's persisted schema is a loud error.
+
+        ``sync=True`` (default) inlines the apply step into every write (cursor at
+        the log head). ``sync=False`` is the async schedule: writes land in the
+        source of truth only; the index advances when ``catch_up`` runs (the worker
+        loop), and token-carrying reads fall back to the set engine while it lags.
         """
         self.session = session
         self.store_id = store_id
+        self.sync = sync
         if schema is not None:
             ensure_schema(session, store_id, schema, object_wildcard_shapes)
             session.flush()
@@ -73,8 +80,9 @@ class ConnectedStore:
         try:
             fn = self.source.add if op == 'add' else self.source.remove
             token = fn(*raw)
-            # the async apply step, inlined (sync schedule): cursor rides the head
-            advance_index(self.session, self.cursor, self.widx, self.ruleset, self.proc)
+            if self.sync:
+                # the async apply step, inlined (sync schedule): cursor rides the head
+                advance_index(self.session, self.cursor, self.widx, self.ruleset, self.proc)
             self.session.commit()
             return token
         except Exception:
@@ -83,6 +91,36 @@ class ConnectedStore:
             # been mutated before the failure: rebuild it from the rolled-back truth
             self.source.engine.rebuild()
             raise
+
+    # ------------------------------------------------------------------ #
+    # The worker loop (async schedule): same apply step, batched
+    # ------------------------------------------------------------------ #
+
+    def catch_up(self, batch: int | None = None) -> int:
+        """Advance the index over the log until it reaches the head; one transaction
+        per batch (exactly-once: applied rows + cursor commit together, so a failed
+        batch moves nothing and a retry re-reads the same rows). Returns the number
+        of log rows applied. This IS the async worker's body -- a daemon would just
+        call it on a schedule."""
+        total = 0
+        while True:
+            try:
+                applied = advance_index(self.session, self.cursor, self.widx,
+                                        self.ruleset, self.proc, batch=batch)
+                if applied:
+                    self.session.commit()
+            except Exception:
+                self.session.rollback()
+                raise
+            if not applied:
+                return total
+            total += applied
+
+    def lag(self) -> int:
+        """Log rows the index has not yet applied (0 = fully caught up). Counted,
+        not id-subtracted: log ids are globally monotonic across stores."""
+        from .source import log_rows
+        return len(log_rows(self.session, self.store_id, self.cursor.applied_log_id))
 
     # ------------------------------------------------------------------ #
     # Reads: index-served, freshness-gated (spec §2.5)
