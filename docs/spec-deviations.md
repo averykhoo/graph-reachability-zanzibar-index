@@ -510,4 +510,34 @@ addressed:
 
 ---
 
+## 2026-07-08 — external review round 2 (triage + fixes)
+
+Two claims; one confirmed, one half-right:
+
+1. **`_find_leaf_node` crash on derived-userset leaves (CONFIRMED).** The helper
+   only knew TTU node kinds, so a FULL reconcile of any plan holding a tainted
+   userset restriction (`[T#P]` with P derived) died with "plan node not found".
+   The reviewer's diagnosis of the blind spot was exact: no fixture places a
+   tainted userset inside a plan, and the cheap per-subject path masked the naive
+   repro — the trigger is any full reconcile (symbolic delta, dependency
+   invalidation, `audit_fixpoint`, `backfill`). Fixed (userset leaves match on
+   their storage predicate); the previously-unexercised PDerivedUserset path is
+   now covered end-to-end against the oracle, including the three-relation
+   invalidation chain (`gblocked` → `member` → `banned` → `viewer`) both ways.
+
+2. **`WildcardIndex.remove_node` missing (half-right).** The quoted "docstring" is
+   actually `wildcard-materialization-spec.md` §remove_tuple — a spec-mandated
+   façade API that was never implemented; that part stands, and it now exists
+   (bridge-strip first, derived-exclusivity guard, KeyError→ValueError parity).
+   The claimed SYMPTOM was empirically refuted: core `remove_node` retires bridge
+   edge rows fine via the count math (no dangling rows, no post-condition trip).
+   The *actual* value of strip-bridges-first, which the review missed: the core's
+   node-removal shortcut doesn't decrement neighbour reference counts, so façade-
+   level bridge removal keeps w-node refcounts honest and lets an orphaned w node
+   be implicit-GC'd instead of lingering with a stale count. (The general
+   neighbour-refcount staleness of core `remove_node` is pre-existing and remains
+   — noted as a core wart; it affects only GC eagerness, never reachability.)
+
+---
+
 *(subsequent phases append below)*

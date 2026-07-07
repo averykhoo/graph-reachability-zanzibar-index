@@ -494,18 +494,24 @@ class DeltaProcessor:
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
     def _find_leaf_node(self, spec, object_type: str):
-        """Recover the plan-tree node for a TTU leaf spec (kind+predicate match)."""
-        from zanzibar_utils_v1 import PDerivedTTU, PDerivedTuplesetTTU
+        """Recover the plan-tree node for a derived leaf spec (kind + predicate
+        match). Userset leaves match on their storage predicate; TTU leaves on their
+        target relation."""
+        from zanzibar_utils_v1 import PDerivedTTU, PDerivedTuplesetTTU, PDerivedUserset
 
-        want = PDerivedTTU if spec.kind == 'derived-ttu' else PDerivedTuplesetTTU
+        if spec.kind == 'derived-userset':
+            want, match_attr = PDerivedUserset, 'predicate'
+        elif spec.kind == 'derived-ttu':
+            want, match_attr = PDerivedTTU, 'target_rel'
+        else:
+            want, match_attr = PDerivedTuplesetTTU, 'target_rel'
         found = []
 
         def walk(n):
-            if isinstance(n, want) and n.target_rel == spec.predicate:
+            if isinstance(n, want) and getattr(n, match_attr) == spec.predicate:
                 found.append(n)
-            for attr in ('children',):
-                for c in getattr(n, attr, ()):
-                    walk(c)
+            for c in getattr(n, 'children', ()):
+                walk(c)
             for attr in ('base', 'subtract'):
                 if hasattr(n, attr):
                     walk(getattr(n, attr))

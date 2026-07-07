@@ -22,7 +22,8 @@ from sqlmodel import select
 
 from .core import ReachabilityIndex
 from .models import EdgeV4, NodeV4, ResidueV1
-from zanzibar_utils_v1 import SchemaInfo, validate_write_identifiers
+from zanzibar_utils_v1 import (SchemaInfo, validate_node_identifiers,
+                               validate_write_identifiers)
 
 
 @dataclass
@@ -277,6 +278,46 @@ class WildcardIndex:
         # GC bridges for concrete endpoints whose only remaining edges are their bridges.
         self._maybe_remove_bridges(subject)
         self._maybe_remove_bridges(obj)
+
+    def remove_node(self, predicate: str | EllipsisType, entity_type: str,
+                    name: str) -> None:
+        """Remove a node and all its edges, stripping its materialized wildcard
+        bridges FIRST (spec §remove_tuple: explicit nodes keep bridges for as long
+        as they exist; ``remove_node`` must strip them before the core removal).
+
+        The ordering is not cosmetic: the core's node-removal shortcut retires edge
+        ROWS by count math but does not decrement the neighbours' reference counts
+        -- stripping bridges through ``remove_edge_by_id`` first keeps the w-node
+        refcounts honest, so an orphaned w node can be implicit-GC'd instead of
+        lingering with a stale count."""
+        validate_node_identifiers(predicate, entity_type, name)
+        pred = _norm_pred(predicate)
+        # derived-public nodes are processor-owned state (I5), same as their edges
+        self._assert_derived_exclusivity(pred, entity_type)
+        self._invalidate_w_cache()
+        try:
+            node = self.idx.node(pred, entity_type, name, create_if_missing=False)
+        except KeyError as e:
+            raise ValueError('Non-existent node cannot be removed') from e
+
+        if node.wildcard == '':
+            node_id = node.id
+            shape = (node.type, node.predicate)
+            if shape in self.schema_info.bridged_in_shapes:
+                w_any = self._w_node(node.type, node.predicate, 'any', create=False)
+                if w_any is not None and self.idx.direct_edge_exists_by_id(node_id, w_any.id):
+                    self.idx.remove_edge_by_id(node_id, w_any.id)
+            # stripping the in-bridge may already have implicit-GC'd the node
+            if self._node_by_id(node_id) is None:
+                return
+            if shape in self.schema_info.bridged_out_shapes:
+                w_all = self._w_node(node.type, node.predicate, 'all', create=False)
+                if w_all is not None and self.idx.direct_edge_exists_by_id(w_all.id, node_id):
+                    self.idx.remove_edge_by_id(w_all.id, node_id)
+            if self._node_by_id(node_id) is None:
+                return
+
+        self.idx.remove_node(pred, entity_type, name)
 
     # ------------------------------------------------------------------ #
     # Reads (§3.1)

@@ -392,6 +392,86 @@ def test_regression_public_node_gc_on_add_remove():
 
 
 # ---------------------------------------------------------------------------
+# Frozen external-review finding: tainted userset restrictions ([T#P] with P
+# derived) -- the whole PDerivedUserset path, previously unexercised.
+# ---------------------------------------------------------------------------
+
+_TAINTED_USERSET = '''
+    type user
+    type group
+      relations
+        define gblocked: [user]
+        define member: [user] but not gblocked
+    type doc
+      relations
+        define banned: [group#member]
+        define viewer: [user] but not banned
+'''
+
+
+def test_regression_tainted_userset_full_reconcile():
+    """_find_leaf_node only knew TTU leaves: a FULL reconcile of any plan holding a
+    derived-userset leaf (here banned = [group#member], member tainted) crashed with
+    'plan node not found'. The cheap per-subject path masked it -- audit_fixpoint
+    (or any symbolic/dependency invalidation) was the trigger."""
+    session, widx, proc, write = build(_TAINTED_USERSET)
+    write('add', ('...', 'user', 'alice', 'viewer', 'doc', 'd1'))
+    write('add', ('...', 'user', 'alice', 'member', 'group', 'g1'))
+    write('add', ('member', 'group', 'g1', 'banned', 'doc', 'd1'))
+
+    proc.audit_fixpoint()                       # used to crash right here
+    session.close()
+
+
+def test_tainted_userset_end_to_end_vs_oracle():
+    """The full chain: membership through a DERIVED userset feeds an exclusion two
+    relations up, invalidations flow both ways, and every answer matches the oracle."""
+    from tests.oracle import Oracle, OracleTuple
+
+    session, widx, proc, write = build(_TAINTED_USERSET)
+    present = []
+
+    def w(op, raw):
+        write(op, raw)
+        if op == 'add':
+            present.append(raw)
+        else:
+            present.remove(raw)
+
+    w('add', ('...', 'user', 'alice', 'viewer', 'doc', 'd1'))
+    w('add', ('...', 'user', 'bob', 'viewer', 'doc', 'd1'))
+    w('add', ('...', 'user', 'alice', 'member', 'group', 'g1'))
+    w('add', ('member', 'group', 'g1', 'banned', 'doc', 'd1'))
+
+    grid = [('...', 'user', sn, rel, ot, on)
+            for sn in ('alice', 'bob', 'ghost')
+            for (rel, ot, on) in [('viewer', 'doc', 'd1'), ('banned', 'doc', 'd1'),
+                                  ('member', 'group', 'g1')]]
+
+    def compare(tag):
+        oracle = Oracle(_TAINTED_USERSET, [OracleTuple(*r) for r in present])
+        for q in grid:
+            got = widx.check(*q)
+            exp = oracle.check(*q)
+            assert got == exp, f'{tag}: {q} graph={got} oracle={exp}'
+        proc.audit_fixpoint()
+
+    compare('after setup')                       # alice banned via g1; bob still viewer
+
+    # gblock alice inside the group: she leaves member(g1), hence leaves banned,
+    # hence RE-GAINS viewer -- a three-relation invalidation chain
+    w('add', ('...', 'user', 'alice', 'gblocked', 'group', 'g1'))
+    compare('after gblock')
+
+    w('remove', ('...', 'user', 'alice', 'gblocked', 'group', 'g1'))
+    compare('after ungblock')                    # banned again
+
+    w('remove', ('member', 'group', 'g1', 'banned', 'doc', 'd1'))
+    compare('after unban')                       # stored userset tuple retired
+    session.close()
+
+
+# ---------------------------------------------------------------------------
 # boolean_wildcards.fga driven end-to-end at the processor level
 # ---------------------------------------------------------------------------
 
