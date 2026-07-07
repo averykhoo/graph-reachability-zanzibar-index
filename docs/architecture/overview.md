@@ -6,6 +6,8 @@ reference oracle and a validation matrix. Start here; go deeper per file:
 
 | doc | covers |
 |---|---|
+| [`theory.md`](./theory.md) | the math: path-counting closure (why removal is exact), split wildcard nodes, stratified fixpoints, residues, the star-closed set algebra |
+| [`correctness.md`](./correctness.md) | the correctness argument: what's by-construction vs empirically pinned, the redundancy structure, known gaps |
 | [`system.md`](./system.md) | the composed system: source-of-truth tuple store + log, the apply step, sync/async schedules, freshness tokens, bootstrap |
 | [`graph-index.md`](./graph-index.md) | closure maintenance, path counts, wildcard split-node model, the ≤4-probe check |
 | [`derived-predicates.md`](./derived-predicates.md) | boolean operators in the graph index: taint, leaf routing, the delta processor, residues |
@@ -94,7 +96,7 @@ from the boolean spec are recorded in `docs/spec-deviations.md`.
 
 ## Running things
 
-Conda env named after the repo folder. Full suite is the gate (425 tests):
+Conda env named after the repo folder. Full suite is the gate (~470 tests):
 
 ```
 "C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe" -m pytest -q

@@ -33,9 +33,14 @@ Please read the the code to understand how it works.
 
 Okay fine, there are docs now. Start at
 [`docs/architecture/overview.md`](./docs/architecture/overview.md) for the module map
-and the short version of everything; the full design specs (with the rejected
-alternatives) are in [`docs/specs/`](./docs/specs/), and the decisions distilled from
-them in [`docs/architecture/decision-log.md`](./docs/architecture/decision-log.md).
+and the short version of everything. The actual *why* lives in
+[`docs/architecture/theory.md`](./docs/architecture/theory.md) (path-counting
+closure, split wildcard nodes, stratified fixpoints, the star-closed set algebra)
+and [`docs/architecture/correctness.md`](./docs/architecture/correctness.md) (what's
+proved by construction vs pinned by redundant implementations, and the known gaps).
+The full design specs (with the rejected alternatives) are in
+[`docs/specs/`](./docs/specs/), decisions distilled in
+[`docs/architecture/decision-log.md`](./docs/architecture/decision-log.md).
 The code cites the specs by section number (`spec §N` / `boolean spec §N`), so they're
 reference material, not just history.
 
@@ -443,8 +448,9 @@ regardless, so this is defense-in-depth). Internal ids stay strictly numeric, de
 from these strings.
 
 Same questions, same answers, opposite place to spend the work. The **validation matrix**
-(`tests/test_matrix.py`) is what pins "same semantics": a 4-way comparison
-(handwritten expectations · reference oracle · set engine · graph `WildcardIndex`) over
+(`tests/test_matrix.py`) is what pins "same semantics": a lockstep comparison
+(handwritten expectations · reference oracle · set engine · graph `WildcardIndex` ·
+the composed `ConnectedStore`) over
 **both** the union+wildcard fixtures **and** the boolean fixtures (the graph joined the
 boolean grids with the derived-predicate work — the boolean-IVM spec's acceptance
 event), with `check` compared across all backends over the full query grid after every

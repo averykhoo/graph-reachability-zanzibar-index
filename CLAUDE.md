@@ -9,7 +9,7 @@ IVM delta processor.
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
   Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`
-- The full suite is the gate (300+ tests): run
+- The full suite is the gate (450+ tests): run
   `"C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe" -m pytest -q`
   from the repo root before claiming a change is done.
 - Deps: `sqlmodel`, `pytest`, `pyroaring` (set-engine default bitmap backend),

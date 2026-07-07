@@ -20,9 +20,11 @@ straight from it: strict ∀⇒∃ (`universe()` witnesses), intensional `'*'`
 What "same semantics" *means* here: after every op of randomized walks, unanimous
 accept/reject across backends and identical `check` over a full query grid
 (universe ∪ ghosts ∪ `'*'`), under both `SetOps`. Since the boolean-IVM flip the
-boolean fixture stores run **4-way** (graph included, processor-maintained,
-I9-audited per op); the demorgans trio compares oracle · set engine · graph
-pointwise on every relation.
+boolean fixture stores run with the graph included (processor-maintained,
+I9-audited per op); since the connected-store round, **`ConnectedBackend`** (the
+composed system: tuple log + synchronously-maintained index) sits in the same
+matrices — graph · connected · oracle · set engine × both `SetOps`. The demorgans
+trio compares oracle · set engine · graph pointwise on every relation.
 
 ## ParityEngine (`tests/parity.py`)
 
@@ -69,6 +71,15 @@ a stateful machine driving a ParityEngine. Profiles: `ci` (default, small) /
 named regression** — the two found so far live in `test_processor.py::
 test_regression_public_node_gc_on_add_remove` and `test_parity_engine.py::
 test_regression_duplicate_raw_add_is_idempotent`.
+
+## Connected-store suites
+
+`tests/test_connectedstore*.py`: schema write-once + self-describing opens; log ≡
+applied writes + replay; cross-half write atomicity (injected index-half failure,
+evaluator self-heal); built-vs-live equivalence; async lag → catch-up →
+convergence with crash-retry exactly-once; concurrent-writer convergence and
+torn-read detection on file-backed SQLite (WAL + real BEGIN semantics).
+`tests/test_openfga_json.py`: JSON twins parse to identical ASTs + loud rejections.
 
 ## Handwritten anchors
 
