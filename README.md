@@ -198,13 +198,16 @@ See the paper at https://zanzibar.tech
 
 ### boolean operators
 
-Boolean relations (`and`, `but not`) are supported by the **set engine** backend
-(`setengine/`), not the graph index — see [The two backends: a memoization
-spectrum](#the-two-backends-a-memoization-spectrum) below. The graph index materialises
-closures and cannot represent negation, so `compile_ruleset` refuses a boolean schema
-loudly (`UnsupportedByGraphIndex`, naming the relation); the shared expression AST from
-the parser (`Direct`/`Computed`/`TTU`/`Union`/`Intersection`/`Exclusion`) is the artifact
-both backends consume.
+Boolean relations (`and`, `but not`) are supported by **both backends**. The set engine
+(`setengine/`) evaluates them on the fly with bitmap algebra; the graph index compiles
+them into **derived predicates** maintained by a delta processor — stratified
+incremental view maintenance over the closure's own delta stream (see
+[Booleans in the graph index](#booleans-in-the-graph-index-derived-predicates) below and
+the design doc [`graph-boolean-ivm-spec.md`](./graph-boolean-ivm-spec.md)). The shared
+expression AST from the parser (`Direct`/`Computed`/`TTU`/`Union`/`Intersection`/
+`Exclusion`) is the artifact both backends consume; `parse_openfga_schema(...,
+enable_boolean=False)` keeps the historical refusal (`UnsupportedByGraphIndex`)
+reachable for callers that want the guard.
 
 ### zookies
 
@@ -277,9 +280,10 @@ single `w_all(S) → w_any(S)` edge) is a documented future hook, not implemente
   subtree — the same row count as granting each instance explicitly. The wildcard automates
   the fan-out; nothing eliminates it while reads are O(1).
 
-**Symbolic deltas.** `PermissionDelta`s that mention a wildcard node id are *symbolic*
-("everyone of shape S gained/lost X"). They are passed through untouched; expanding them
-into concrete deltas is a future post-processing layer.
+**Symbolic deltas.** Outbox rows that mention a wildcard node are *symbolic* ("everyone
+of shape S gained/lost X"). They are never fanned out over the shape's population; the
+delta processor consumes them as full-object invalidations (the boolean spec's §5.4
+rule), and external consumers receive them untouched.
 
 **Self-referential wildcard tuples are rejected by cycle detection, and that is correct:**
 `group:*#member member group:g` would make g's members include members-of-any-group
@@ -370,8 +374,8 @@ schema rewrite to rules/filters
 | `[group:*#member]`               | filter + ...                            | combination of the actions above                                                                         |
 | `... or admin`                   | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
 | `... or member from owner-group` | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
-| `(... and ...)`                  | parsed to `Intersection`                | refused by the graph index (`UnsupportedByGraphIndex`); evaluated by the set engine (`setengine/`)       |
-| `(... but not ...)`              | parsed to `Exclusion`                   | refused by the graph index (`UnsupportedByGraphIndex`); evaluated by the set engine (`setengine/`)       |
+| `(... and ...)`                  | parsed to `Intersection`                | graph: compiled to a derived predicate (leaf routing + delta processor); set engine: bitmap `&`          |
+| `(... but not ...)`              | parsed to `Exclusion`                   | graph: compiled to a derived predicate (edge + residue state); set engine: bitmap `-`                    |
 
 * note: the current rewrite logic is too simple to express the second of those rules right now
 * schema type checking, so that all relations always resolve to a single type?
@@ -391,7 +395,9 @@ models** — they are the two endpoints of a single memoization spectrum:
   It materialises the full transitive closure (plus wildcard bridges) as ref-counted
   edges, so `check` is O(1) — at most a few point lookups on the unique edge index,
   independent of data size or nesting depth. Writes pay for that: each write updates the
-  closure, and boolean relations can't be represented at all.
+  closure, and boolean relations are maintained as **derived predicates** by an
+  in-transaction delta processor (`index_v4/processor.py`) — more write amplification,
+  same O(1) reads.
 * the **set engine** (`setengine/`) memoizes *nothing across queries*. It stores only the
   raw tuples (`TupleV1`) and computes memberships on the fly with bitmap algebra. Writes
   are O(1) in-memory updates; reads are O(schema depth × topology) with the bulk set work
@@ -413,19 +419,20 @@ from these strings.
 Same questions, same answers, opposite place to spend the work. The **validation matrix**
 (`tests/test_matrix.py`) is what pins "same semantics": a 4-way comparison
 (handwritten expectations · reference oracle · set engine · graph `WildcardIndex`) over
-the union+wildcard fixtures, and a 3-way comparison (handwritten · oracle · set engine)
-over the boolean fixtures, with `check` compared across all backends over the full query
-grid after every operation — under **both** set representations.
+**both** the union+wildcard fixtures **and** the boolean fixtures (the graph joined the
+boolean grids with the derived-predicate work — the boolean-IVM spec's acceptance
+event), with `check` compared across all backends over the full query grid after every
+operation — under **both** set representations.
 
 ### Cost model
 
 | | graph index | set engine |
 |---|---|---|
-| write | O(closure delta) — materialises transitive edges + bridges | O(1) — append a raw tuple, update three in-memory maps |
-| `check` | O(1) point lookups on the closure | O(schema depth × topology), memoized per query |
-| booleans (`and` / `but not`) | ✗ refused (`UnsupportedByGraphIndex`) | ✓ |
-| deltas (`PermissionDelta`) | ✓ | ✗ (returns `[]`) |
-| storage | derived closure edges | raw tuples only (ground truth) |
+| write | O(closure delta) — materialises transitive edges + bridges; derived relations add the reconcile cascade (see below) | O(1) — append a raw tuple, update three in-memory maps |
+| `check` | O(1): one edge-probe SQL statement (≤4 keys); derived relations: edge probe + residue (≤2 point reads) | O(schema depth × topology), memoized per query |
+| booleans (`and` / `but not`) | ✓ derived predicates (stratified IVM) | ✓ |
+| deltas (`PermissionDelta`) | ✓ (transactional outbox, `index_v4/outbox.py`) — including derived relations | ✗ (returns `[]`) |
+| storage | derived closure edges (+ derived edges & one residue row per (object, boolean relation)) | raw tuples only (ground truth) |
 
 ### Set representation (`SetOps`)
 
@@ -452,14 +459,66 @@ the star is still covered in `A`, and bob's individual removal is not a star in 
 set engine's `MemberSet` (`pos` / `stars` / `neg`) reproduces this table by construction;
 a shared property suite asserts the oracle and the `MemberSet` algebra agree on it.
 
+### Booleans in the graph index: derived predicates
+
+Design doc: [`graph-boolean-ivm-spec.md`](./graph-boolean-ivm-spec.md); implementation
+deviations: [`docs/spec-deviations.md`](./docs/spec-deviations.md).
+
+A relation is **tainted** iff its AST transitively reaches an `Intersection`/`Exclusion`
+(taint propagates through `Computed`, `TTU`, and userset restrictions — a plain union
+over a boolean relation is itself derived, or it would silently drop star-covered
+members). Untainted relations compile **byte-identically** to before (snapshot-gated).
+Tainted relations compile ahead-of-time into:
+
+* **leaf predicate families** `<relation>.<index>` — raw writes against the public name
+  are routed onto them by `RewriteFilter`s (every matching filter fires: fan-in), and
+  `Computed`/`TTU` references inside boolean-free subtrees become ordinary rules
+  targeting the leaves;
+* an **executable plan** per relation (closure-composed callables, short-circuiting; the
+  star fold is lifted rule-for-rule from the set engine's `MemberSet` algebra);
+* **strata** — a topo order over derived dependencies (recursion through a boolean
+  relation is a compile error).
+
+The **delta processor** (`index_v4/processor.py`) consumes the closure's own transactional
+outbox (`DeltaOutboxV1`) and maintains, per derived relation: materialised **derived
+edges** for concretely-supported members (flagged `EdgeV4.derived`) and a per-object
+**residue** row (`ResidueV1`: `stars` = intensionally covered subject shapes, `neg` =
+star-covered-but-excluded concrete ids). Star-covered members hold **no** edges — they
+are answered by the residue, which is what keeps `[user:*] but not banned` costing one
+row instead of a universe. `check` on a derived relation is an edge probe + a residue
+read; symbolic (`'*'`) queries read the residue intensionally; ghosts ride the stars.
+
+**Honesty notes** (accepted prices, not bugs):
+
+* **Write amplification is multiplicative in strata depth.** A leaf flip re-reconciles
+  every dependent derived relation up the strata, inside the writing transaction
+  (synchronous v1). The outbox fixes memory, not amplification — a root-folder grant
+  still writes O(fan-out) closure rows; that price was accepted when the closure was.
+* **Symbolic writes cost a full-object reconcile**: adding/removing a `T:*` grant that
+  feeds a derived relation re-derives every concrete member *with state on that object*
+  (data-bounded, never universe-bounded) — the §5.4 rule that prevents silent corruption
+  of concrete edge-holders when only symbolic state changed.
+* **TTU parents are stored tuples**, never computed membership (the oracle's — and
+  Zanzibar's — semantics). A TTU over a derived relation with no direct restrictions is
+  constantly empty, exactly as the oracle answers.
+* **Paranoia mode** (default ON while prerelease) runs the invariant checker (I1–I7,
+  I10–I12) pre- and post-commit plus delta-scoped verification per transaction — roughly
+  2× suite time; pass `paranoia=False` for benchmarks.
+
+Scope hooks (loud compile errors, `UnsupportedByGraphIndex`): object wildcards on
+derived relations, and wildcard userset restrictions over derived relations (both need
+symbolic composition through residues — a symmetric subject-keyed residue is the
+documented hook).
+
 ### Non-goals (documented hooks only)
 
 Cross-query caching / version-counter invalidation; bitmap snapshot persistence
 (`BitMap.serialize()` blobs — state is in-memory, rebuilt from `TupleV1` on open); deltas
 from the set engine; wiring the graph backend through `TupleV1` (harness-level fan-out
-only — `WildcardIndex` is finished code); boolean support *in the graph backend* (a future
-check-time expression layer over `WildcardIndex.check` that would consume the same shared
-AST); 64-bit id space; any query-time node interning.
+only — `WildcardIndex` is finished code); async outbox workers (the replay property keeps
+the seam viable; SAVEPOINT-per-delta noted in the spec); exposing derived-relation deltas
+to external consumers; automatic outbox pruning; residue GC beyond empty-row deletion;
+lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
 

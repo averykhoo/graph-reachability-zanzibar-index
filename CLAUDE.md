@@ -2,7 +2,9 @@
 
 Zanzibar-style relationship/permission indexing. Two evaluation backends with **identical
 semantics but opposite cost models** (a memoization spectrum), pinned together by a shared
-independent reference oracle.
+independent reference oracle. Both backends support boolean operators (`and` / `but not`):
+the set engine natively, the graph index via derived predicates maintained by a stratified
+IVM delta processor.
 
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
@@ -10,13 +12,19 @@ independent reference oracle.
 - The full suite is the gate (300+ tests): run
   `"C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe" -m pytest -q`
   from the repo root before claiming a change is done.
-- Deps: `sqlmodel`, `pytest`, `pyroaring` (set-engine default bitmap backend).
+- Deps: `sqlmodel`, `pytest`, `pyroaring` (set-engine default bitmap backend),
+  `hypothesis` (property/stateful fuzzing).
 
 ## Layout / mental model
 - **`index_v4/`** — the graph index. `ReachabilityIndex` (core.py) materializes the full
   transitive closure as ref-counted edges, so `check` is O(1); `WildcardIndex`
-  (wildcard.py) is the wildcard-aware façade adding materialized `*` bridges.
-  **No boolean operators** (it can't represent negation).
+  (wildcard.py) is the wildcard-aware façade adding materialized `*` bridges and the
+  derived-relation read path (edge probe + residue). **Boolean operators are supported
+  as derived predicates**: `processor.py` (the delta processor: reconcile + per-stratum
+  cascade over the outbox), `outbox.py` (transactional `DeltaOutboxV1` stream +
+  watermark/drain helpers — write paths return None, deltas are rows), `invariants.py`
+  (I1–I12 checker, paranoia mode wiring, §8.3 delta-scoped verifier), `models.py`
+  (adds `EdgeV4.derived`, `ResidueV1` symbolic `(stars, neg)` state).
 - **`setengine/`** — the set engine. Stores only raw tuples (`TupleV1`), builds no
   closure, computes memberships on the fly with bitmap algebra, and **supports `and` /
   `but not`**.
@@ -28,21 +36,39 @@ independent reference oracle.
     `TupleV1`).
 - **`zanzibar_utils_v1.py`** — shared schema layer. Recursive-descent parser →
   `SchemaAST` (`Direct` / `Computed` / `TTU` / `Union` / `Intersection` / `Exclusion`);
-  `compile_ruleset` produces the graph index's Filters/Rules and **raises
-  `UnsupportedByGraphIndex` on booleans**; `SchemaInfo`; `validate_write_identifiers`.
+  `compile_ruleset` produces the graph index's Filters/Rules **plus, for boolean
+  (tainted) relations, the AOT derived-predicate artifacts** (`RuleSet.compiled`:
+  plans, namespace, strata, fan-out tables; leaf routing via `RewriteFilter`s;
+  `unparse_schema_ast` round-trips the AST). `UnsupportedByGraphIndex` survives only
+  for scope rejections (object wildcards on derived relations, wildcard usersets over
+  derived relations) and via `enable_boolean=False`; derived-dependency cycles raise
+  `ValueError`. `SchemaInfo`; `validate_write_identifiers`; `.` is reserved in declared
+  relation names (leaf predicates are `<relation>.<index>`).
 - **`tests/oracle.py`** — independent reference oracle (pointwise, boolean-aware).
   **Independence contract:** it imports nothing from the backends and parses the DSL
   itself, so one parser bug can't corrupt both sides of the validation matrix.
 - **`index_v1/2/3.py`** — superseded predecessors (v1 in-memory; v3 the DB closure design,
   carrying a documented concurrency note that points at the v4 fix). Don't build on them.
-- Design source-of-truth: the spec markdown (`wildcard-materialization-spec.md` and
-  `set-engine-spec.md`; the code's `spec §N` citations point at the latter). Where a spec
-  and the code disagree on a name, the code wins.
+- Design source-of-truth: `graph-boolean-ivm-spec.md` (the boolean/derived-predicate
+  design — code comments cite it as "boolean spec §N") with its implementation record in
+  `docs/spec-deviations.md`. The earlier wildcard-materialization and set-engine specs
+  (cited as bare "spec §N" in older comments) live in git history. Where a spec and the
+  code disagree on a name, the code wins.
 
 ## Testing conventions
 - The **validation matrix** (`tests/test_matrix.py`) is what pins "same semantics":
   handwritten expectations · oracle · set engine · graph index, compared over a full query
-  grid, under **both** `SetOps`. Boolean schemas are 3-way (the graph refuses them).
+  grid, under **both** `SetOps`. Boolean schemas run **4-way** (graph included, processor-
+  maintained, I9-audited per op).
+- The **ParityEngine** (`tests/parity.py`) is the default engine for integration-style
+  tests: every op fans out to all backends with unanimity, I12, and full-grid oracle
+  parity asserted internally. **Paranoia mode** (default ON via `make_wildcard_index`)
+  runs the invariant checker + delta-scoped verifier inside every commit; pass
+  `paranoia=False` in benchmarks or when a test corrupts state on purpose.
+- The **hypothesis campaign** (`tests/test_hypothesis.py`): metamorphic schema pairs,
+  add/remove row-multiset restoration, permutation invariance, cascade replay-from-zero,
+  generated-schema round-trips, and a stateful ParityEngine machine. Profiles: `ci`
+  (default) / `HYPOTHESIS_PROFILE=deep` locally.
 - Property tests reuse a shared candidate pool + grid (`tests/test_wildcard_property.py`).
 - **Never edit a golden or oracle result just to make a refactor pass** — the oracle and
   goldens ARE the behavioral spec.
@@ -59,3 +85,14 @@ independent reference oracle.
   serializes writers per store on PostgreSQL/MySQL; it's a no-op on SQLite, which
   serializes writers itself (concurrent SQLite writers need retry on `SQLITE_BUSY` /
   node-creation `IntegrityError`). Use one `Session` per thread — never share one.
+- **Derived-relation exclusivity (I5)**: only the delta processor writes incoming direct
+  edges on derived-public families (`WildcardIndex.processor_writes` flag); users write
+  public names, `RuleSet.apply` routes them onto leaf families. A graph write on a
+  boolean schema must run `DeltaProcessor.run_cascade(watermark)` in the same
+  transaction (synchronous v1) — see `GraphBackend.apply` in `tests/test_matrix.py`.
+- **TTU parents are STORED tupleset tuples**, never computed membership (oracle-pinned
+  Zanzibar semantics): a TTU over a derived relation with no direct restrictions is
+  constantly empty. Storage leaves are split from rule-routed leaves for exactly this.
+- **Never edit a golden/oracle result to make a refactor pass** — and the compiled-
+  RuleSet snapshots (`tests/snapshots/`) are the byte-identity gate for untainted
+  compilation.
