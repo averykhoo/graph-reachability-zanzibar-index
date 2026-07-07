@@ -1494,6 +1494,105 @@ def parse_openfga_schema(
     return compile_ruleset(ast, schema_info, enable_boolean=enable_boolean)
 
 
+# ---- OpenFGA JSON front-end (connected-store spec §5-S5) ----
+#
+# The OpenFGA authorization-model JSON format is a second FRONT-END to the same
+# SchemaAST -- everything downstream (taint, plans, both backends, the oracle's
+# independent DSL parser via unparse) is untouched. Unsupported OpenFGA features
+# (conditions, non-1.1 schema versions, unknown rewrite operators) are rejected
+# loudly, never skipped.
+
+import json as _json
+
+
+def parse_openfga_json(model) -> SchemaAST:
+    """Parse an OpenFGA authorization model (JSON string or dict) into a SchemaAST.
+
+    Supports schema_version 1.1: ``this`` (with ``directly_related_user_types``
+    metadata), ``computedUserset``, ``tupleToUserset``, ``union``, ``intersection``,
+    ``difference``. Conditions are rejected.
+    """
+    if isinstance(model, str):
+        model = _json.loads(model)
+    version = model.get('schema_version')
+    if version != '1.1':
+        raise ValueError(f"unsupported OpenFGA schema_version {version!r} (need '1.1')")
+    if model.get('conditions'):
+        raise ValueError('OpenFGA conditions are not supported')
+
+    ast: SchemaAST = {}
+    for type_def in model.get('type_definitions', []):
+        object_type = type_def['type']
+        relations = type_def.get('relations', {})
+        metadata = (type_def.get('metadata') or {}).get('relations', {})
+        for relation_name, rewrite in relations.items():
+            if '.' in relation_name:
+                raise ValueError(
+                    f"relation {relation_name!r}: '.' is reserved for compiled leaf "
+                    f"predicates and cannot appear in a declared relation name")
+            restrictions = _json_restrictions(
+                object_type, relation_name,
+                (metadata.get(relation_name) or {}).get('directly_related_user_types', []))
+            ast[(object_type, relation_name)] = _json_rewrite(
+                rewrite, object_type, relation_name, restrictions)
+    return ast
+
+
+def _json_restrictions(object_type: str, relation_name: str,
+                       entries: list) -> tuple[Restriction, ...]:
+    out = []
+    for e in entries:
+        if e.get('condition'):
+            raise ValueError(
+                f'relation {object_type}#{relation_name}: conditional type '
+                f'restrictions are not supported')
+        predicate = e.get('relation') or '...'
+        wildcard = 'wildcard' in e and e['wildcard'] is not None
+        out.append(Restriction(type=e['type'], predicate=predicate, wildcard=wildcard))
+    return tuple(out)
+
+
+def _json_rewrite(node: dict, object_type: str, relation_name: str,
+                  restrictions: tuple[Restriction, ...]) -> Expr:
+    """One OpenFGA userset-rewrite node -> Expr. ``this`` means "the directly
+    related tuples" -- the same restriction set wherever it appears in the tree."""
+    if not isinstance(node, dict) or len(node) != 1:
+        raise ValueError(
+            f'relation {object_type}#{relation_name}: rewrite node must have exactly '
+            f'one operator, got {node!r}')
+    kind, body = next(iter(node.items()))
+
+    if kind == 'this':
+        if not restrictions:
+            raise ValueError(
+                f'relation {object_type}#{relation_name}: `this` requires '
+                f'directly_related_user_types metadata')
+        return Direct(restrictions)
+    if kind == 'computedUserset':
+        return Computed(body['relation'])
+    if kind == 'tupleToUserset':
+        return TTU(target_rel=body['computedUserset']['relation'],
+                   tupleset_rel=body['tupleset']['relation'])
+    if kind == 'union':
+        return Union(tuple(_json_rewrite(c, object_type, relation_name, restrictions)
+                           for c in body['child']))
+    if kind == 'intersection':
+        return Intersection(tuple(_json_rewrite(c, object_type, relation_name, restrictions)
+                                  for c in body['child']))
+    if kind == 'difference':
+        return Exclusion(
+            _json_rewrite(body['base'], object_type, relation_name, restrictions),
+            _json_rewrite(body['subtract'], object_type, relation_name, restrictions))
+    raise ValueError(
+        f'relation {object_type}#{relation_name}: unsupported rewrite operator {kind!r}')
+
+
+def openfga_json_to_dsl(model) -> str:
+    """OpenFGA JSON -> canonical DSL text (the persistable schema source): parse to
+    the shared AST, render through the round-trip-safe unparser."""
+    return unparse_schema_ast(parse_openfga_json(model))
+
+
 # ---- unparser (round-trip property, boolean spec §9) ----
 
 def unparse_schema_ast(ast: SchemaAST) -> str:

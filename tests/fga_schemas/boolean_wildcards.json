@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {"type": "user"},
+    {
+      "type": "group",
+      "relations": {"member": {"this": {}}},
+      "metadata": {"relations": {"member": {"directly_related_user_types": [
+        {"type": "user"},
+        {"type": "group", "relation": "member"}
+      ]}}}
+    },
+    {
+      "type": "doc",
+      "relations": {
+        "parent": {"this": {}},
+        "public": {"this": {}},
+        "blocked": {"this": {}},
+        "editor": {"this": {}},
+        "viewer": {"union": {"child": [
+          {"difference": {
+            "base": {"computedUserset": {"relation": "public"}},
+            "subtract": {"computedUserset": {"relation": "blocked"}}
+          }},
+          {"computedUserset": {"relation": "editor"}}
+        ]}},
+        "restricted": {"intersection": {"child": [
+          {"computedUserset": {"relation": "editor"}},
+          {"computedUserset": {"relation": "public"}}
+        ]}},
+        "inherited": {"tupleToUserset": {
+          "tupleset": {"relation": "parent"},
+          "computedUserset": {"relation": "viewer"}
+        }}
+      },
+      "metadata": {"relations": {
+        "parent": {"directly_related_user_types": [{"type": "doc"}]},
+        "public": {"directly_related_user_types": [{"type": "user", "wildcard": {}}]},
+        "blocked": {"directly_related_user_types": [{"type": "user"}]},
+        "editor": {"directly_related_user_types": [
+          {"type": "user"},
+          {"type": "group", "relation": "member"}
+        ]}
+      }}
+    }
+  ]
+}
