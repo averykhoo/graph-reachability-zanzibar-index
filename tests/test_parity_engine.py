@@ -89,6 +89,26 @@ def test_parity_engine_boolean_runs_four_way_post_flip(load_fga_schema):
     pe.close()
 
 
+def test_regression_duplicate_raw_add_is_idempotent():
+    """Frozen hypothesis counterexample (P8 stateful machine): add the SAME raw tuple
+    twice, remove once -- the tuple must be gone everywhere. Raw tuples are a set;
+    the graph core's ref-counting is for rewritten fan-in, not raw re-adds."""
+    schema = '''
+        type user
+        type doc
+          relations
+            define parent: [doc]
+            define viewer: [user]
+    '''
+    pe = ParityEngine(schema)
+    raw = ('...', 'doc', 'd1', 'parent', 'doc', 'd2')
+    assert pe.add_tuple(*raw) is True
+    assert pe.add_tuple(*raw) is True      # idempotent no-op, not a second count
+    assert pe.remove_tuple(*raw) is True
+    assert pe.check(*raw) is False          # unanimous: gone everywhere
+    pe.close()
+
+
 def test_parity_engine_rejection_cleanliness_i12():
     """An op rejected by every backend must leave every backend's rows untouched."""
     schema = '''

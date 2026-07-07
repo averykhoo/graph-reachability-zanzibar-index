@@ -199,6 +199,15 @@ class ParityEngine:
     # ------------------------------------------------------------------ #
 
     def _apply(self, raw: RawTuple, op: str) -> bool:
+        if op == 'add' and raw in self.present:
+            # Zanzibar raw tuples are a SET: a duplicate add is an idempotent no-op
+            # (TupleV1's unique constraint already makes the set engine no-op it; the
+            # graph core is deliberately ref-counted for REWRITTEN fan-in -- two
+            # different raw tuples may derive the same edge -- so raw-level
+            # idempotence lives here, at the tuple API boundary). Found by the P8
+            # stateful machine: add,add,remove diverged graph from oracle otherwise.
+            return True
+
         pre = {b.name: b.snapshot() for b in self.stateful} if self.paranoia else {}
 
         results = {b.name: b.apply(raw, op) for b in self.stateful}

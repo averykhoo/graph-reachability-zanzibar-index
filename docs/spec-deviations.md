@@ -358,4 +358,59 @@ unanimous accept/reject, identical checks over the same grids as before. Suite:
 
 ---
 
+## 2026-07-07 — P8 (hypothesis campaign)
+
+1. **The ParityEngine is the machine's oracle**: rather than re-implementing per-op
+   assertions, both the property layer and the `RuleBasedStateMachine` drive
+   ParityEngines, which already assert unanimity, I12, full-grid oracle parity,
+   paranoia (I1–I7/I10/§8.3), and the graph's I9 audit on every accepted op.
+
+2. **Schema strategy**: relations generated in topo order over a fixed `user`/`doc`
+   universe with a `parent` tupleset — stratifiable by construction, exactly as §9
+   prescribes; cyclic boolean schemas asserted separately as compile rejections.
+
+3. **CI profile**: `max_examples=12`, `stateful_step_count=8`, `deadline=None`
+   (each example spins up 3–4 full backends); `HYPOTHESIS_PROFILE=deep` gives
+   120/25 for local/nightly runs.
+
+4. **The deep profile found two real bugs** (CI profile was green; §11-P8's "fixes may
+   reopen earlier phases" happened exactly as predicted). Both shrunk, triaged, fixed,
+   frozen as named regressions:
+
+   * **Pinned public-node leak** (`test_add_then_remove_restores_row_multiset` +
+     `test_cascade_replay_from_zero`): derived-public nodes are pinned non-implicit
+     (P4, residue anchoring), so add-then-remove left an empty pinned node behind,
+     breaking exact row-multiset restoration. Fix: the processor GCs its own public
+     node once neither residue nor edges remain (`_gc_public_node`; refcount 0 ⇒ no
+     closure rows can reference it). Frozen:
+     `test_processor.py::test_regression_public_node_gc_on_add_remove`.
+   * **Duplicate-raw-add divergence** (stateful machine): adding the SAME raw tuple
+     twice then removing once left the graph's ref-counted edge at count 1 while the
+     set engine/oracle (raw tuples are a SET; TupleV1 unique) dropped it — a
+     pre-existing pure-union divergence no pool ever exercised (matrix pools filter
+     `raw not in present`). The graph core stays ref-counted (two *different* raw
+     tuples may rewrite to the same derived edge — counts are load-bearing there);
+     idempotence belongs at the raw-tuple API boundary, implemented in
+     `ParityEngine._apply`. Frozen:
+     `test_parity_engine.py::test_regression_duplicate_raw_add_is_idempotent`.
+
+   Deep-profile status after fixes: all property tests + the stateful machine green
+   at `max_examples=120` / `stateful_step_count=25`. Final suite: 425 passed.
+
+## 2026-07-07 — P9 (docs)
+
+README: boolean-operators section rewritten (both backends), rewrite-table rows
+updated, memoization-spectrum + cost-model tables reflect derived predicates and the
+outbox, new "Booleans in the graph index" section with the honesty notes (write
+amplification multiplicative in strata depth; symbolic-write full-object reconcile
+cost; TTU stored-tuple semantics; paranoia ~2× suite time), non-goals updated
+(boolean-in-graph delivered; async workers/pruning/residue-GC hooks listed).
+CLAUDE.md: layout notes for processor/outbox/invariants, compile-layer description,
+4-way matrix + ParityEngine + paranoia + hypothesis testing conventions, derived
+gotchas, spec pointer now names `graph-boolean-ivm-spec.md` (the earlier two spec
+files were removed from the working tree by the author; noted as living in git
+history).
+
+---
+
 *(subsequent phases append below)*

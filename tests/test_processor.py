@@ -360,6 +360,38 @@ def test_derived_tupleset_ttu_with_stored_tuples():
 
 
 # ---------------------------------------------------------------------------
+# Frozen hypothesis counterexample (P8 deep run): add-then-remove must restore
+# the exact row multiset -- the pinned derived-public node used to leak.
+# ---------------------------------------------------------------------------
+
+def test_regression_public_node_gc_on_add_remove():
+    """Shrunk by hypothesis: `r4 = (r0 from parent) or ([user] and [user])` with a
+    self-parent tuple. The pure TTU subtree is a rule-routed leaf, so the parent
+    write creates a userset-subject leaf edge, eval flips true, and the processor
+    writes a derived edge -- pinning the public node non-implicit. Removing the
+    tuple retired the edge but leaked the empty pinned node; the processor now GCs
+    its public node once neither residue nor edges remain."""
+    schema = '''
+        type user
+        type doc
+          relations
+            define parent: [doc]
+            define r0: [user]
+            define r4: (r0 from parent) or ([user] and [user])
+    '''
+    session, widx, proc, write = build(schema)
+    before = snapshot_rows(session, 'test')
+
+    write('add', ('...', 'doc', 'd1', 'parent', 'doc', 'd1'))
+    assert proc.derived_check('doc', 'r4', 'd1', ('r0', 'doc', 'd1')) is True
+    write('remove', ('...', 'doc', 'd1', 'parent', 'doc', 'd1'))
+
+    assert snapshot_rows(session, 'test') == before
+    proc.audit_fixpoint()
+    session.close()
+
+
+# ---------------------------------------------------------------------------
 # boolean_wildcards.fga driven end-to-end at the processor level
 # ---------------------------------------------------------------------------
 

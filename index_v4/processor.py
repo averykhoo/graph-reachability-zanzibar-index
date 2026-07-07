@@ -359,6 +359,8 @@ class DeltaProcessor:
                 (neg.add if want_neg else neg.discard)(s_node.id)
                 self._store_residue(object_type, rel, obj_name, stars, neg)
                 changed = True
+        if changed:
+            self._gc_public_node(object_type, rel, obj_name)
         return changed
 
     def reconcile(self, object_type: str, rel: str, obj_name: str) -> bool:
@@ -418,6 +420,8 @@ class DeltaProcessor:
             edges_changed |= self.reconcile_subject(
                 object_type, rel, obj_name, (n.predicate, n.type, n.name))
 
+        if residue_changed or edges_changed:
+            self._gc_public_node(object_type, rel, obj_name)
         return residue_changed or edges_changed
 
     def _derived_leaf_neg_ids(self, object_type: str, obj_name: str, spec) -> set[int]:
@@ -512,6 +516,20 @@ class DeltaProcessor:
                 break
         assert found, f'plan node not found for leaf {spec}'
         return found[0]
+
+    def _gc_public_node(self, object_type: str, rel: str, obj_name: str) -> None:
+        """Processor-managed lifecycle for the pinned derived-public node: it is
+        created non-implicit (it anchors the residue row and must survive its last
+        edge's removal), so the processor deletes it itself once NOTHING remains --
+        no residue row and no edges (reference_count counts direct edges, and a node
+        with zero direct edges can hold no closure rows either). Keeps add-then-remove
+        an exact row-multiset round trip."""
+        node = self._node(rel, object_type, obj_name)
+        if node is None or node.reference_count != 0:
+            return
+        if self._residue_row(node.id) is not None:
+            return
+        self.session.delete(node)
 
     def _store_residue(self, object_type: str, rel: str, obj_name: str,
                        stars: frozenset, neg: set[int]) -> None:
