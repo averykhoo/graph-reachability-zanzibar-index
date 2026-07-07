@@ -25,6 +25,11 @@ _IDENTIFIER_RE = re.compile(rf'^[{IDENTIFIER_CHARSET}]{{1,256}}$')
 
 
 def is_valid_identifier(value) -> bool:
+    """Strict charset membership ONLY: the reserved sentinels ``'*'`` (wildcard name)
+    and ``'...'`` (bare subject predicate) are NOT valid identifiers -- they are
+    admitted positionally by ``_require``'s ``allow_star``/``allow_ellipsis`` flags,
+    never by this predicate. External callers wanting "is this writable as a name"
+    should go through ``validate_write_identifiers``."""
     return isinstance(value, str) and _IDENTIFIER_RE.match(value) is not None
 
 
@@ -765,6 +770,45 @@ def _emit_expr(expr: Expr, object_type: str, relation_name: str,
         raise TypeError(f"unknown Expr node {expr!r}")
 
 
+def _directs_only(expr: Expr) -> bool:
+    if isinstance(expr, Direct):
+        return True
+    if isinstance(expr, Union):
+        return all(_directs_only(c) for c in expr.children)
+    return False
+
+
+def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
+    """Zanzibar/OpenFGA tupleset semantics: a TTU's parent set comes from STORED
+    tuples of the tupleset relation, never from computed membership. An *untainted*
+    tupleset relation with Computed/TTU arms would break that in the graph backend:
+    its rewrite rules land derived triples on the tupleset family, and the TTU rule
+    would illegally propagate them (the oracle and the set engine, reading raw
+    tuples, would not) -- a silent cross-backend divergence. Rejected loudly instead,
+    exactly as OpenFGA validates its models. Tainted (derived) tuplesets are exempt:
+    their stored tuples live on dedicated storage leaves, which the boolean path
+    already reads exclusively."""
+    for (object_type, relation), expr in ast.items():
+        def walk(e: Expr) -> None:
+            if isinstance(e, TTU):
+                ts_key = (object_type, e.tupleset_rel)
+                if ts_key in ast and ts_key not in tainted and not _directs_only(ast[ts_key]):
+                    raise UnsupportedByGraphIndex(
+                        f"relation {object_type}#{relation}: tupleset "
+                        f"{e.tupleset_rel!r} has computed/rewritten arms; Zanzibar "
+                        f"tupleset semantics read stored tuples only, and the graph "
+                        f"index cannot separate raw from rewritten members of an "
+                        f"untainted relation (declare it direct-only, or make the "
+                        f"whole chain boolean so storage leaves apply)")
+            elif isinstance(e, (Union, Intersection)):
+                for c in e.children:
+                    walk(c)
+            elif isinstance(e, Exclusion):
+                walk(e.base)
+                walk(e.subtract)
+        walk(expr)
+
+
 def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
                     enable_boolean: bool = True) -> RuleSet:
     """Compile an AST into the graph index's Filters/Rules (spec §2.3).
@@ -780,12 +824,14 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
     the first boolean operator raises ``UnsupportedByGraphIndex``.
     """
     if not enable_boolean:
+        _validate_ttu_tuplesets(ast, frozenset())
         rules_and_filters: list[Rule | Filter] = []
         for (object_type, relation_name), expr in ast.items():
             _emit_expr(expr, object_type, relation_name, rules_and_filters)
         return RuleSet(rules_and_filters, schema_info=schema_info)
 
     tainted = compute_taint(ast)
+    _validate_ttu_tuplesets(ast, tainted)
     rules_and_filters = []
     for (object_type, relation_name), expr in ast.items():
         if (object_type, relation_name) not in tainted:

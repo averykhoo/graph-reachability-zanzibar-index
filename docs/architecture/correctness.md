@@ -73,13 +73,21 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   expectations; metamorphic laws constrain it independently of any implementation.
   A semantics bug shared by the oracle *and* both engines *and* the hand
   computations remains logically possible.
-* **Latent pure-union TTU divergence**: rule-routed members of an *untainted*
-  tupleset relation count as TTU parents in the graph's rewrite semantics but not
-  in the oracle's raw-tuple semantics. No fixture or generator currently exercises
-  it (spec-deviations, P5 #3). Known, bounded, unguarded.
-* **SQLite rowid-reuse corners**: I7's same-max-rowid recreate blind spot and the
-  (mitigated) dead-id-in-neg hazard. Real databases with non-recycling sequences
-  don't have them; the residual risk is accepted for a prerelease checker.
+* ~~Latent pure-union TTU divergence~~ **closed** (review round): untainted TTU
+  tuplesets with computed/rewritten arms are now rejected at compile — the OpenFGA
+  model-validation approach — so the graph can no longer silently propagate
+  rewrite-derived parents the raw-tuple backends never see.
+* **SQLite rowid-reuse corners**: the dead-id-in-neg hazard is mitigated
+  (full-reconcile pruning); I7's corner turned out to be a *false positive* (a
+  same-transaction recreate reusing the max rowid), now handled by the version-1
+  lineage-restart rule — the residual blind spot is an in-place regression to
+  exactly version 1. Real databases with non-recycling sequences have neither.
+* **Tokened reads against a stale evaluator cost a rebuild.** The `at_least`
+  fallback is now watermark-aware (rebuild-on-demand, `StaleRead` when the session
+  snapshot itself predates the write), which makes it *correct* across sessions —
+  but each stale tokened read pays an O(live tuples) evaluator rebuild. Fine at
+  human scale; a hot multi-reader deployment would want a shared invalidation
+  signal instead.
 * **Concurrency coverage is SQLite-shaped.** `_lock_store`/`FOR UPDATE` semantics
   on PostgreSQL/MySQL are reasoned about, not tested here; the pysqlite
   transaction quirks are worked around in tests, which means production engines

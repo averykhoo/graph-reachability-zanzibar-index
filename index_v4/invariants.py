@@ -238,14 +238,18 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
 
     # I7: version monotonicity per residue ROW (empty rows are deleted, so a
     # recreated residue legitimately restarts its lineage at version 1 -- lineage is
-    # keyed by (row id, object) and pruned when the row disappears).
+    # keyed by (row id, object) and pruned when the row disappears). A row observed
+    # at version 1 is ALWAYS treated as a fresh lineage: SQLite may reuse a just-
+    # deleted max rowid for a same-object recreate within one transaction, and
+    # without this allowance that legitimate recreate would FALSELY trip I7 (the
+    # residual blind spot is an in-place regression to exactly 1, accepted).
     if residue_versions is not None:
         seen = set()
         for r in rows:
             k = (r.id, r.object_node_id)
             seen.add(k)
             last = residue_versions.get(k)
-            if last is not None and r.version < last:
+            if last is not None and r.version < last and r.version != 1:
                 _fail(f'I7: residue version regressed on row {r.id} '
                       f'(object {r.object_node_id}): {last} -> {r.version}')
             residue_versions[k] = r.version

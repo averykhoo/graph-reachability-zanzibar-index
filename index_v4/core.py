@@ -357,7 +357,21 @@ class ReachabilityIndex:
         validate_node_identifiers(predicate, entity_type, entity_name)
         self._lock_store()   # serialize node deletion + its closure fixups (held until commit)
         _node = self.node(predicate, entity_type, entity_name, create_if_missing=False)
-        self._add_direct_edge_unsafe(_node.id, _node.id, -1)
+        node_id = _node.id
+        self._add_direct_edge_unsafe(node_id, node_id, -1)
+        # Post-condition (defense in depth): the counting math must have retired every
+        # edge row touching the node before the node row itself was deleted -- a
+        # leftover here would be a dangling reference (SQLite does not enforce FKs by
+        # default). Cheap targeted check; a hit means corrupted counts, so fail loudly
+        # inside the transaction rather than persist ghosts.
+        leftover = self.session.exec(
+            select(EdgeV4).where(EdgeV4.store_id == self.store_id)
+            .where((EdgeV4.subject_id == node_id) | (EdgeV4.object_id == node_id))
+            .limit(1)
+        ).first()
+        assert leftover is None, (
+            f'remove_node left a dangling edge row {leftover} referencing deleted '
+            f'node {node_id} -- path-count corruption')
 
     def check_reachable(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
                         relation: str, object_type: str, object_name: str) -> bool:

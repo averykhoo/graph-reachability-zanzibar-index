@@ -59,6 +59,15 @@ A write returns its log id. `check(..., at_least=token)` is served by the index 
 `timestamp <= query_timestamp` merge simplified to a fallback. Sync mode satisfies
 every token trivially; async mode is where it earns its keep.
 
+The fallback is **watermark-aware**: the set engine's in-memory state is only as
+fresh as its last rebuild plus the instance's own writes
+(`TupleSource.evaluator_watermark` tracks exactly that), so a tokened read whose
+token exceeds the watermark triggers a rebuild-on-demand — the honest per-read cost
+of demanding freshness from a lagging index. If the token is *still* not visible,
+the session's read snapshot predates the write: the read raises `StaleRead` (call
+`refresh()` and retry) rather than silently serving stale under an explicit
+freshness demand.
+
 ## Bootstrap and schema changes
 
 `build_index(session, source, index_id=None)` — the offline builder: capture the log

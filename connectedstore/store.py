@@ -19,7 +19,7 @@ Transaction semantics: ``write`` commits on success and rolls back on rejection
 
 from __future__ import annotations
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from index_v4.processor import DeltaProcessor
 from setengine.setops import SetOps, DEFAULT_SETOPS
@@ -27,6 +27,12 @@ from setengine.setops import SetOps, DEFAULT_SETOPS
 from .apply import advance_index, ensure_cursor
 from .schema_io import ensure_schema, open_graph_index
 from .source import TupleSource
+
+
+class StaleRead(RuntimeError):
+    """A read carrying an ``at_least`` token could not be satisfied: the index lags
+    the token AND the write is not visible in this session's read snapshot. Start a
+    fresh snapshot (``refresh()``) and retry."""
 
 
 class ConnectedStore:
@@ -89,7 +95,8 @@ class ConnectedStore:
             self.session.rollback()
             # the set engine's in-memory state is a cache over TupleV1 and may have
             # been mutated before the failure: rebuild it from the rolled-back truth
-            self.source.engine.rebuild()
+            # (also resets the evaluator watermark past the discarded token)
+            self.source.refresh_evaluator()
             raise
 
     # ------------------------------------------------------------------ #
@@ -121,14 +128,21 @@ class ConnectedStore:
         cache, so the next queries see the latest committed state coherently
         (fresh transaction + rebuilt evaluator + cleared w-id cache)."""
         self.session.rollback()
-        self.source.engine.rebuild()
+        self.source.refresh_evaluator()
         self.widx._invalidate_w_cache()
 
     def lag(self) -> int:
-        """Log rows the index has not yet applied (0 = fully caught up). Counted,
-        not id-subtracted: log ids are globally monotonic across stores."""
-        from .source import log_rows
-        return len(log_rows(self.session, self.store_id, self.cursor.applied_log_id))
+        """Log rows the index has not yet applied (0 = fully caught up). A COUNT
+        query -- never materializes rows (ids are globally monotonic across stores,
+        so counting, not id-subtraction, is also what makes the number meaningful)."""
+        from sqlalchemy import func
+        from .models import TupleLogV1
+        return self.session.exec(
+            select(func.count())
+            .select_from(TupleLogV1)
+            .where(TupleLogV1.store_id == self.store_id)
+            .where(TupleLogV1.id > self.cursor.applied_log_id)
+        ).one()
 
     # ------------------------------------------------------------------ #
     # Reads: index-served, freshness-gated (spec §2.5)
@@ -143,7 +157,26 @@ class ConnectedStore:
         if self._fresh_enough(at_least):
             return self.widx.check(subject_predicate, s_type, s_name,
                                    relation, o_type, o_name)
-        # index lags the token (async schedule): the set engine is fresh by construction
+        # the in-memory cursor may simply be behind another session's catch-up:
+        # re-read it once before paying for a fallback
+        self.session.refresh(self.cursor)
+        if self._fresh_enough(at_least):
+            return self.widx.check(subject_predicate, s_type, s_name,
+                                   relation, o_type, o_name)
+
+        # Index lags the token: fall back to the set engine -- but its state is an
+        # in-memory cache, only as fresh as its own watermark. Rebuild on demand if
+        # it predates the token (the honest cost of a tokened read against a lagging
+        # index: one evaluator rebuild). If the token is STILL not visible, this
+        # session's read snapshot predates the write -- refuse loudly rather than
+        # serve a stale answer under an explicit freshness demand.
+        if self.source.evaluator_watermark < at_least:
+            self.source.refresh_evaluator()
+            if self.source.evaluator_watermark < at_least:
+                raise StaleRead(
+                    f'token {at_least} is not visible in this session snapshot '
+                    f'(evaluator at {self.source.evaluator_watermark}); call '
+                    f'refresh() to start a fresh read transaction and retry')
         return self.source.check(subject_predicate, s_type, s_name,
                                  relation, o_type, o_name)
 

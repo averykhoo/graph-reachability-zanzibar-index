@@ -119,10 +119,32 @@ def test_i6_empty_residue_row():
 def test_i7_version_regression():
     session, widx, proc, write = _populated()
     row = session.exec(select(ResidueV1)).first()
-    # checker saw a later version for this same row: an in-place regression
-    versions = {(row.id, row.object_node_id): row.version + 5}
+    # an in-place regression to a version > 1 (version 1 is the lineage-restart
+    # allowance -- see test_i7_reused_rowid_recreate_is_not_flagged)
+    row.version = 3
+    session.add(row)
+    session.flush()
+    versions = {(row.id, row.object_node_id): 5}
     with pytest.raises(InvariantViolation, match='I7'):
         check_invariants(session, 'test', widx.schema_info, residue_versions=versions)
+    session.rollback()
+    session.close()
+
+
+def test_i7_reused_rowid_recreate_is_not_flagged():
+    """SQLite may hand a same-transaction recreate the just-deleted max rowid: the
+    new row legitimately carries version=1 against a higher remembered lineage.
+    That must NOT trip I7 (it would be a false-positive commit abort, not a masked
+    regression)."""
+    session, widx, proc, write = _populated()
+    row = session.exec(select(ResidueV1)).first()
+    row.version = 1                                 # a recreate always starts at 1
+    session.add(row)
+    session.flush()
+    versions = {(row.id, row.object_node_id): 7}    # stale lineage from a dead row
+    check_invariants(session, 'test', widx.schema_info, residue_versions=versions)
+    assert versions[(row.id, row.object_node_id)] == 1   # lineage restarted
+    session.rollback()
     session.close()
 
 

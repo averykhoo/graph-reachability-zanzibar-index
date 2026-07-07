@@ -239,6 +239,51 @@ def test_wildcard_userset_over_derived_rejected():
         parse_openfga_schema(schema, enable_boolean=True)
 
 
+def test_rewritten_untainted_tupleset_rejected():
+    """Zanzibar tupleset semantics read STORED tuples only. An untainted tupleset
+    with computed arms would let the graph's TTU rule illegally propagate rewritten
+    members (which the oracle and set engine, reading raw tuples, would not) --
+    rejected at compile instead of diverging silently."""
+    schema = '''
+        type user
+        type folder
+          relations
+            define viewer: [user]
+        type doc
+          relations
+            define alias: [folder]
+            define parent: [folder] or alias
+            define viewer: [user] or viewer from parent
+    '''
+    with pytest.raises(UnsupportedByGraphIndex, match='stored tuples only'):
+        parse_openfga_schema(schema)
+    with pytest.raises(UnsupportedByGraphIndex, match='stored tuples only'):
+        parse_openfga_schema(schema, enable_boolean=False)
+
+    # the set engine degrades gracefully (evaluates raw-tuple semantics, no ruleset)
+    from sqlmodel import Session, SQLModel, create_engine
+    from setengine import SetEngine
+    engine = create_engine('sqlite:///:memory:')
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        se = SetEngine(session, 's', schema)
+        assert se._ruleset is None
+        se.add_tuple('...', 'folder', 'f1', 'alias', 'doc', 'd1')
+        se.add_tuple('...', 'user', 'alice', 'viewer', 'folder', 'f1')
+        session.commit()
+        # alice is a viewer of f1, and f1 is an alias of d1 -- but alias-derived
+        # parent membership does NOT feed the TTU (stored parent tuples only)
+        assert se.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is False
+
+
+def test_derived_tupleset_still_compiles(load_fga_schema):
+    """The rejection targets UNTAINTED rewritten tuplesets only: derived (tainted)
+    tuplesets keep compiling -- their stored tuples live on dedicated storage
+    leaves, which the boolean path reads exclusively (demorgans_law_1's chain)."""
+    rs = parse_openfga_schema(load_fga_schema('demorgans_law_1.fga'))
+    assert ('doc', 'unmatchable_conds') in rs.compiled.plans
+
+
 # ---------------------------------------------------------------------------
 # Write routing (§3.3): rewriting, fan-in, refusals, exclusivity
 # ---------------------------------------------------------------------------

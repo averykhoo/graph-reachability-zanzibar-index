@@ -12,10 +12,11 @@ from .schema_io import (SchemaMismatch, ensure_schema, load_schema,
 from .source import TupleSource, log_rows, log_watermark
 from .apply import advance_index, ensure_cursor
 from .build import build_index
-from .store import ConnectedStore
+from .store import ConnectedStore, StaleRead
 
 __all__ = [
     "ConnectedStore",
+    "StaleRead",
     "advance_index",
     "ensure_cursor",
     "build_index",

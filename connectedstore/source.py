@@ -57,7 +57,12 @@ class TupleSource:
         self.session = session
         self.store_id = store_id
         # the set engine is the online evaluator AND the admission validator
-        # (restrictions + wildcard gating + cycle parity with the graph backend)
+        # (restrictions + wildcard gating + cycle parity with the graph backend).
+        # Its state is IN-MEMORY, rebuilt from TupleV1: it is only as fresh as its
+        # last rebuild plus this instance's own writes. evaluator_watermark tracks
+        # exactly that ("the evaluator reflects the log through here"), so freshness-
+        # token fallbacks can rebuild on demand instead of trusting a stale cache.
+        self.evaluator_watermark = log_watermark(session, store_id)
         self.engine: SetEngine = open_set_engine(session, store_id, ops=ops)
 
     # ------------------------------------------------------------------ #
@@ -74,7 +79,9 @@ class TupleSource:
         if self.engine._row(s_pred, s_type, s_name, relation, o_type, o_name) is not None:
             return log_watermark(self.session, self.store_id)
         self.engine.add_tuple(s_pred, s_type, s_name, relation, o_type, o_name)
-        return self._append('ADD', s_pred, s_type, s_name, relation, o_type, o_name)
+        token = self._append('ADD', s_pred, s_type, s_name, relation, o_type, o_name)
+        self.evaluator_watermark = max(self.evaluator_watermark, token)
+        return token
 
     def remove(self, subject_predicate, s_type: str, s_name: str,
                relation: str, o_type: str, o_name: str) -> int:
@@ -82,7 +89,9 @@ class TupleSource:
         ``ValueError`` (and logs nothing) if the tuple is not present."""
         s_pred = '...' if subject_predicate is Ellipsis else subject_predicate
         self.engine.remove_tuple(s_pred, s_type, s_name, relation, o_type, o_name)
-        return self._append('REMOVE', s_pred, s_type, s_name, relation, o_type, o_name)
+        token = self._append('REMOVE', s_pred, s_type, s_name, relation, o_type, o_name)
+        self.evaluator_watermark = max(self.evaluator_watermark, token)
+        return token
 
     def _append(self, op: str, s_pred: str, s_type: str, s_name: str,
                 relation: str, o_type: str, o_name: str) -> int:
@@ -101,6 +110,16 @@ class TupleSource:
 
     def check(self, *q) -> bool:
         return self.engine.check(*q)
+
+    def refresh_evaluator(self) -> None:
+        """Rebuild the in-memory evaluator from the current TupleV1 snapshot and
+        RESET the evaluator watermark to it. The watermark is read BEFORE the rebuild
+        (conservative: rows committed in between are included in the rebuild but not
+        claimed). Assignment, not max: after a rollback the old watermark may claim
+        a token that never committed."""
+        wm = log_watermark(self.session, self.store_id)
+        self.engine.rebuild()
+        self.evaluator_watermark = wm
 
     def watermark(self) -> int:
         return log_watermark(self.session, self.store_id)

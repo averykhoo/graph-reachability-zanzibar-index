@@ -226,6 +226,15 @@ class WildcardIndex:
 
     def add_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
                   relation: str, o_type: str, o_name: str) -> None:
+        """Add one (possibly rewrite-derived) triple as a ref-counted direct edge.
+
+        ⚠ MULTIGRAPH SEMANTICS, deliberately: adding the same triple twice counts to
+        2 and takes two removes to retire. That is load-bearing for rewrite fan-in
+        (two different raw tuples may derive the same edge and must retire
+        independently) -- it is NOT the raw-tuple API. Zanzibar raw tuples are a SET;
+        set-semantics idempotence lives one layer up, at the tuple boundary
+        (connectedstore.TupleSource / the harness adapters). Do not feed raw user
+        writes here directly unless you deduplicate them yourself."""
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._assert_derived_exclusivity(relation, o_type)
         self._invalidate_w_cache()

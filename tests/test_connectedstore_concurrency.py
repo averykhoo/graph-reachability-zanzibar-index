@@ -203,3 +203,60 @@ def test_replica_reads_under_async_lag(tmp_path):
         r_session.rollback()                                   # fresh snapshot
         assert reader.check(*q) is True                        # converged
         assert reader.check(*q, at_least=token) is True
+
+
+def test_token_fallback_rebuilds_stale_evaluator(tmp_path):
+    """The cross-session token contract: a write committed AFTER the reader opened
+    must still be honored by a token-carrying read -- the reader's in-memory
+    evaluator rebuilds on demand instead of serving its stale cache."""
+    from connectedstore import StaleRead
+
+    engine = _file_engine(tmp_path / 'token.db')
+    with Session(engine) as boot:
+        ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
+        boot.commit()
+
+    with Session(engine) as w_session, Session(engine) as r_session:
+        writer = ConnectedStore(w_session, 's')
+        writer.sync = False
+        reader = ConnectedStore(r_session, 's')        # opens BEFORE the write
+
+        token = writer.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
+
+        # release the reader's snapshot only -- deliberately NOT refresh(): the
+        # in-memory evaluator stays stale, and the tokened read itself must detect
+        # that (evaluator watermark < token), rebuild, and answer fresh. This is
+        # the case a trusted-stale cache used to get wrong.
+        r_session.rollback()
+        q = ('...', 'user', 'ghost', 'viewer', 'doc', 'd1')
+        assert reader.source.evaluator_watermark < token
+        assert reader.check(*q, at_least=token) is True
+        # and the un-tokened read still serves the (lagging) index consistently
+        assert reader.check(*q) is False
+
+
+def test_token_not_visible_in_pinned_snapshot_raises(tmp_path):
+    """If the reader is pinned in a snapshot that predates the write, a tokened read
+    must refuse loudly (StaleRead), never silently serve stale under an explicit
+    freshness demand; refresh() + retry succeeds."""
+    from connectedstore import StaleRead
+
+    engine = _file_engine(tmp_path / 'pinned.db')
+    with Session(engine) as boot:
+        ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
+        boot.commit()
+
+    with Session(engine) as w_session, Session(engine) as r_session:
+        writer = ConnectedStore(w_session, 's')
+        writer.sync = False
+        reader = ConnectedStore(r_session, 's')
+        q = ('...', 'user', 'ghost', 'viewer', 'doc', 'd1')
+        reader.check(*q)                    # pin a WAL read snapshot NOW
+
+        token = writer.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
+
+        with pytest.raises(StaleRead, match='refresh'):
+            reader.check(*q, at_least=token)
+
+        reader.refresh()                    # fresh snapshot + caches
+        assert reader.check(*q, at_least=token) is True

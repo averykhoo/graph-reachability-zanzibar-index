@@ -307,6 +307,10 @@ Facts verified against the repo, with deviations from the spec text noted:
    parity walk under paranoia). In-place regressions on a live row still fail.
    Residual corner: SQLite rowid reuse of a just-deleted max-id row for the same
    object could mask one regression — accepted for a prerelease checker.
+   *(Correction, review round: this claim was wrong — the corner produced a FALSE
+   POSITIVE (a legitimate same-transaction recreate reusing the max rowid would trip
+   I7 and abort the commit), not a mask. Fixed: version-1 rows always restart their
+   lineage; the residual blind spot is now an in-place regression to exactly 1.)*
 
 2. **I9 wiring**: `audit_fixpoint` (all live keys — the paranoia dose) runs per-op in
    the P5/P7 parity walks and per scenario in the processor tests, not inside every
@@ -453,6 +457,56 @@ Three findings, all product-relevant:
    (`isolation_level=None` + BEGIN on the `begin` event) and `journal_mode=WAL` —
    snapshot-isolated readers that never block the writer, the honest local
    simulation of primary-write/replica-read.
+
+---
+
+## 2026-07-07 — external review round (triage + fixes)
+
+An external code review raised seven issues; verified against the code, five were
+real (two with wrong details), two were by-design/documentation items. All
+addressed:
+
+1. **Cross-session freshness-token gap (real, the important one).** The
+   `at_least` fallback consulted the set engine's in-memory state, which is only as
+   fresh as its last rebuild — a write committed after a reader opened was not
+   honored by that reader's tokened reads. (Our own S7 test masked it: the reader
+   opened *after* the write.) Fix: `TupleSource.evaluator_watermark` tracks exactly
+   what the in-memory evaluator reflects; a tokened read whose token exceeds it
+   rebuilds on demand (the honest cost: one rebuild per stale tokened read), and if
+   the token is *still* not visible — the session's read snapshot predates the
+   write — raises `StaleRead` rather than silently serving stale under an explicit
+   freshness demand. Rollback paths reset (not max) the watermark so a discarded
+   token can never overstate freshness.
+
+2. **`lag()` materialized every pending row (real).** Now a `SELECT COUNT(*)`.
+
+3. **Pure-union TTU divergence (real, previously logged as latent; now closed).**
+   An *untainted* TTU tupleset with computed/rewritten arms would let the graph's
+   TTU rule propagate rewrite-derived members that the oracle and set engine
+   (stored-tuple semantics) never see. Fix: compile-time rejection
+   (`UnsupportedByGraphIndex`, "stored tuples only") — exactly how OpenFGA
+   validates its models. Derived (tainted) tuplesets are exempt: their storage
+   leaves already isolate raw tuples. Fixture scan confirmed every untainted
+   tupleset in the repo is Direct-only, so nothing existing was rejected.
+
+4. **`remove_node` dangling-edge worry (speculative — the counting theorem +
+   `_lock_store` + I1's missing-node check cover it).** Hardened anyway with a
+   cheap in-transaction post-condition: any edge row still referencing the deleted
+   node fails loudly instead of persisting a ghost.
+
+5. **I7 rowid corner (reviewer right, our log wrong).** The corner was a false
+   positive, not a mask — corrected above and fixed in code (version-1 lineage
+   restart).
+
+6. **Façade multigraph semantics (by design).** `WildcardIndex.add_tuple` is
+   deliberately ref-counted (rewrite fan-in requires it: two different raw tuples
+   may derive the same edge and must retire independently); set-semantics
+   idempotence lives at the raw-tuple boundary (`TupleSource`, harness adapters).
+   Now documented loudly on the method itself.
+
+7. **`is_valid_identifier` naming (fair nit).** Docstring now states the sentinels
+   (`'*'`, `'...'`) are admitted positionally by `_require`, never by the charset
+   predicate.
 
 ---
 
