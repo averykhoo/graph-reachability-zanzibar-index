@@ -47,18 +47,21 @@ Do not re-walk these without new evidence — the alternatives were considered.
   transaction.
 * **Taint propagates** (a pure union over a boolean relation is derived): star-covered
   members have no edges, so compiling it normally would silently drop them.
-* **Symbolic state is a per-object residue row** (`stars`, `neg`) — not derived
-  w-edges (splits one relation's symbolic state across two writers + bridge-GC
-  interactions), not extensional star expansion (unbounded, ghost-wrong, and
-  cycle-creating for self-including universals).
+* **Symbolic state is a per-object residue row** (`stars`, `neg`, `upos`) — not
+  derived w-edges (splits one relation's symbolic state across two writers +
+  bridge-GC interactions), not extensional star expansion (unbounded, ghost-wrong,
+  and cycle-creating for self-including universals).
 * **Deltas are invalidation signals, never state transfers**; reconciliation is
   recompute-from-committed-state, idempotent. The §5.4 rule is load-bearing: a
   symbolic delta must reconcile the concrete edge-holders on that object, not just
   the residue (blocked:`[user:*]` arriving produces no concrete delta for bob, yet
   must revoke his edge).
 * **Canonical representation**: star-covered members hold no edges (residue answers);
-  uncovered members hold an edge iff true. Required for permutation invariance and
-  the "star-only members: zero edges" space rule.
+  uncovered bare-entity members hold an edge iff true; **userset members never hold
+  edges** — a derived edge from a userset node would leak through the closure past
+  each member's own pointwise exclusion, so true userset memberships live in the
+  residue's `upos` (pos-without-transitivity; blind-audit P4/D2). Required for
+  permutation invariance and the "star-only members: zero edges" space rule.
 * **Synchronous v1, in-transaction outbox cascade**; no SAVEPOINTs (a failed
   reconcile must abort the whole write; SAVEPOINT-per-delta is the future async
   worker's tool, noted with the pysqlite transaction-boundary caveat).

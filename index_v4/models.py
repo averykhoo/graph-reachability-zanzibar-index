@@ -99,6 +99,11 @@ class ResidueV1(SQLModel, table=True):
     relation: str = Field(index=True)
     stars: str = Field(default='[]')     # JSON: [[type, predicate], ...]
     neg: str = Field(default='[]')       # JSON: [subject_node_id, ...]
+    # userset-shaped subjects whose membership is TRUE (blind-audit P4): a derived
+    # EDGE from a userset node would leak through the closure to every member,
+    # defeating each member's own pointwise exclusion -- so userset memberships are
+    # recorded here, edge-free, and answered like pos-with-no-transitivity.
+    upos: str = Field(default='[]')      # JSON: [userset_node_id, ...]
     version: int = Field(default=0)      # bumped on every changing reconcile (I7)
 
 

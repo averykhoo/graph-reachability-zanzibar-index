@@ -50,10 +50,11 @@ Invariants: I1 count algebra (`indirect >= direct > 0`-family), I2 direct-edge
 acyclicity, I3 bridge hygiene, I4 namespace classification (leaf-style predicates
 must be declared leaf families), I5 derived-flag exclusivity, I6 residue placement
 (stars ⊆ declared shapes; neg concrete + star-covered + disjoint from edge holders;
-no empty rows), I7 residue-version monotonicity (per row lineage), I8 stratification
-(compile-time), I9 fixpoint audit (`DeltaProcessor.audit_fixpoint`, run per-op by the
-matrix/parity graph backends), I10 outbox well-formedness, I11 read purity, I12
-rejection cleanliness. Costs ~2x suite time.
+upos userset-shaped + uncovered + edge-free + disjoint from neg; no empty rows), I7
+residue-version monotonicity (per row lineage), I8 stratification (compile-time), I9
+fixpoint audit (`DeltaProcessor.audit_fixpoint`, run per-op by the matrix/parity
+graph backends), I10 outbox well-formedness, I11 read purity, I12 rejection
+cleanliness, I13 refcount = direct-edge degree. Costs ~2x suite time.
 
 ## Snapshots (`tests/test_compile_snapshot.py`)
 

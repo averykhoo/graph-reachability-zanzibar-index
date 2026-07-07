@@ -540,4 +540,95 @@ Two claims; one confirmed, one half-right:
 
 ---
 
+## 2026-07-08 — blind self-audit (7 fresh-context agents; consolidated fixes)
+
+Seven agents audited the code blind (oracle, set engine, graph core, wildcard
+façade, processor, schema layer, connected store). Findings triaged to 7 CRITICAL
++ 12 HIGH confirmed; everything below is fixed and pinned in
+`tests/test_blind_audit_regressions.py` (plus suite-local additions). Four were
+**semantic decisions**, flagged for veto:
+
+**D1 — `'*'`-subject queries are flow-through (SEMANTIC CHANGE).** Live 3-way
+divergence: for a star that reaches a relation only *through a granted userset*
+(`user:*` member of `group:g`, `g#member` granted viewer), the graph answered True
+while oracle + set engine answered False ("per-branch only"). Per-branch was
+structurally unimplementable in the graph (the closure cannot distinguish how the
+star arrived), and the flow-through reading matches OpenFGA's literal-subject
+treatment (`user:*` is a subject like any other; membership composes). Oracle and
+set engine now flow through; the graph was already correct. The wildcard spec's
+"intensional, per branch" wording (§7) now applies to **object**-side stars only.
+
+**D2/P4 — userset subjects on derived relations are edge-free (`ResidueV1.upos`).**
+CRITICAL: a derived EDGE from a userset node (`group:g#member` satisfying the
+expression) is transitive — the closure grants every member, silently defeating
+each member's own pointwise exclusion (`a but not b` leaked to excluded members).
+Boolean membership does not distribute over a userset's members, so it must not be
+an edge. New residue column `upos` records true userset memberships
+(pos-without-transitivity); check/lookup/lookup_reverse answer userset-shaped
+subjects from `upos` ∪ (stars ∖ neg) with no closure probe; reconcile settles
+usersets wholesale (step 2c) and audits edges over bare-entity subjects only. I6
+extended (upos: live + userset-shaped + uncovered + edge-free + disjoint from neg).
+
+**D3 — userset restrictions in tuplesets rejected (OpenFGA model rule).** A
+userset restriction on a tupleset relation bypassed taint analysis entirely and
+had drop-the-predicate parent semantics no spec defines. Wildcard restrictions in
+tuplesets stay ALLOWED — star tuplesets are this repo's deliberate object-wildcard
+extension (w_all machinery, pinned by `test_wildcard_through_from_chain`);
+`derive_schema_info` now derives their TTU through-shapes
+(`(parent_type, target_rel)`) so the rewritten write resolves on the graph (this
+was the oracle-agent's wildcard-tupleset divergence).
+
+**D4 — object-wildcard shapes on TTU targets of tainted plans rejected**
+(decision-15 family). Derived evaluation probes the closure directly and cannot
+see w_all state, so such a grant would be silently invisible to the plan.
+
+The rest, by area:
+
+* **Memo poisoning under the recursion guard (CRITICAL, oracle + set engine +
+  expand).** The revisit guard returns a provisional False, but frames computed
+  *while the guard was active* were memoized as final — `reader=True`,
+  `editor=True`, `reader and editor=False`, internally inconsistent; and since the
+  oracle shared the scheme, the validation matrix was structurally blind to it.
+  Fixed with a Tarjan-lowlink-style guard in all three evaluators (memoize a frame
+  only if its subtree consulted no in-stack key above it). Both auditor repros
+  pinned.
+* **Processor:** `_fan_out` called a method deleted in the P5 rework
+  (AttributeError on any tainted-target fan-out); `_find_leaf_node` resolved leaves
+  by first-match instead of the compile-time binding (wrong-node reconciles) — plans
+  now carry `leaf_nodes` zipped to `leaves`; userset-storage deltas with a userset
+  subject now force a full reconcile; `userset_check` answers the exact-granted
+  userset directly from stored tuples.
+* **Graph core:** the node-removal shortcut never decremented neighbour
+  reference_counts (the review-2 "wart", upgraded to CRITICAL: it defeats bridge GC
+  and `_gc_public_node` under churn) — debits are computed from incident direct
+  edges and applied at the tail with the same implicit-GC rule, *after* the
+  expansion loops so every REMOVED delta still denormalizes live endpoints (I10).
+  New **I13**: `reference_count` == direct-edge degree, checked after I3 (bridges
+  are the more specific diagnosis for bridge corruption). `add/remove_edge_by_id`
+  re-verify endpoint liveness inside the store lock (TOCTOU); self-edges rejected
+  as 1-cycles; `add_edge`/`remove_edge` lock before resolution.
+* **Wildcard façade:** the `_w_id` cache returned stale ids across
+  rollback/session boundaries — removed (resolve fresh; `_invalidate_w_cache` kept
+  as a documented no-op); `remove_node` rejects `name='*'` cleanly.
+* **Schema layer:** tokenizer hung on a stray `]` (zero-progress loop) — now a
+  ValueError; multi-`#` and empty-predicate restrictions rejected; unrecognized
+  schema lines and duplicate type/define blocks rejected; `'.'`-reservation
+  enforced on restriction/Computed/TTU references; exclusivity asserts promoted to
+  ValueError; single-child union/intersection collapsed (and empty children
+  rejected) in `_json_rewrite`.
+* **Oracle (O4):** its independent parser had the same stray-`]` hang and silent
+  multi-`#` misparse — mirrored fixes (independence contract kept: no production
+  imports).
+* **Connected store:** `build_index` re-reads the watermark after snapshotting and
+  raises on movement (lost-write race); idle `catch_up` rolls back instead of
+  pinning its read snapshot (and, on PostgreSQL, holding the store lock) forever;
+  the constructor commits its bootstrap so a second session can reopen
+  self-describing; ParityEngine catches ValueError too, so cyclic boolean schemas
+  degrade to 3-way instead of being unconstructible (X7 — exactly the schema class
+  where the memo bug lived); tokens documented as store-local (X6).
+
+Full suite after: 497 passed (18 of them the new regression pins).
+
+---
+
 *(subsequent phases append below)*

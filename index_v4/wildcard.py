@@ -44,10 +44,6 @@ class WildcardIndex:
     def __init__(self, idx: ReachabilityIndex, schema_info: SchemaInfo):
         self.idx = idx
         self.schema_info = schema_info
-        # Per-store cache of wildcard-node ids (spec §3.1: the set is tiny and changes
-        # rarely). Read-only lookups (check/lookup) hit it; every write clears it, so it
-        # can never go stale across an add/remove that creates or GCs a w node.
-        self._w_id_cache: dict[tuple[str, str, str], int | None] = {}
         # Derived-family write exclusivity (boolean spec §3.3/I5): only the delta
         # processor may write incoming direct edges on a derived-public family. The
         # processor sets this flag around its own writes.
@@ -104,23 +100,21 @@ class WildcardIndex:
             return None
 
     def _w_id(self, entity_type: str, predicate: str, variant: str) -> int | None:
-        """Cached id of a w_any/w_all node (read path), or None if it doesn't exist.
+        """Id of a w_any/w_all node (read path), or None if it doesn't exist.
 
-        Misses are NOT cached: another session may create the w node at any time (the
-        replica-reader pattern), and a cached None would pin its probes off forever.
-        A cached positive id stays safe -- a GC'd w node had no wildcard state left,
-        so probing its dead id is correctly False."""
-        key = (entity_type, predicate, variant)
-        cached = self._w_id_cache.get(key)
-        if cached is None:
-            node = self._w_node(entity_type, predicate, variant, create=False)
-            if node is None:
-                return None
-            self._w_id_cache[key] = cached = node.id
-        return cached
+        Deliberately UNcached (blind-audit W2): every caching scheme tried here went
+        stale across sessions -- cached misses pinned probes off after another
+        session created the w node, and cached positive ids turned into false
+        POSITIVES under SQLite rowid reuse (a GC'd w node's id claimed by an
+        unrelated node) and permanent false negatives after w-node re-creation.
+        Resolution is one point lookup on the unique node index -- the same cost
+        class as the probe it feeds."""
+        node = self._w_node(entity_type, predicate, variant, create=False)
+        return node.id if node is not None else None
 
     def _invalidate_w_cache(self) -> None:
-        self._w_id_cache.clear()
+        """No-op since the w-id cache was removed (blind-audit W2); kept so existing
+        call sites and consumers (ConnectedStore.refresh) stay source-compatible."""
 
     def _bridge_degree(self, shape: tuple[str, str]) -> int:
         return ((1 if shape in self.schema_info.bridged_in_shapes else 0)
@@ -291,6 +285,10 @@ class WildcardIndex:
         refcounts honest, so an orphaned w node can be implicit-GC'd instead of
         lingering with a stale count."""
         validate_node_identifiers(predicate, entity_type, name)
+        if name == '*':
+            raise ValueError(
+                'wildcard nodes are bridge/GC-managed and cannot be removed directly '
+                '(remove the grants and bridged concretes that keep them alive)')
         pred = _norm_pred(predicate)
         # derived-public nodes are processor-owned state (I5), same as their edges
         self._assert_derived_exclusivity(pred, entity_type)
@@ -387,20 +385,21 @@ class WildcardIndex:
     # ------------------------------------------------------------------ #
 
     def _residue_state(self, relation: str, o_type: str, o_name: str
-                       ) -> tuple[frozenset, set[int]]:
-        """(stars, neg) of the derived relation's residue; empty if no row/node.
-        Read-only: never interns."""
+                       ) -> tuple[frozenset, set[int], set[int]]:
+        """(stars, neg, upos) of the derived relation's residue; empty if no
+        row/node. Read-only: never interns."""
         node = self._get_concrete(relation, o_type, o_name)
         if node is None:
-            return frozenset(), set()
+            return frozenset(), set(), set()
         row = self.idx.session.exec(
             select(ResidueV1)
             .where(ResidueV1.store_id == self.idx.store_id)
             .where(ResidueV1.object_node_id == node.id)
         ).first()
         if row is None:
-            return frozenset(), set()
-        return frozenset(tuple(s) for s in json.loads(row.stars)), set(json.loads(row.neg))
+            return frozenset(), set(), set()
+        return (frozenset(tuple(s) for s in json.loads(row.stars)),
+                set(json.loads(row.neg)), set(json.loads(row.upos)))
 
     def _check_derived(self, s_pred: str, s_type: str, s_name: str,
                        relation: str, o_type: str, o_name: str) -> bool:
@@ -410,11 +409,22 @@ class WildcardIndex:
             return False
         if s_name == '*':
             # intensional: is the whole shape covered? (1 residue read)
-            stars, _ = self._residue_state(relation, o_type, o_name)
+            stars, _, _ = self._residue_state(relation, o_type, o_name)
             return (s_type, s_pred) in stars
 
-        # probe 1 only: the derived edge (public family)
         subj = self._get_concrete(s_pred, s_type, s_name)
+
+        if s_pred != '...':
+            # userset subject: edge-free membership (blind-audit P4 -- userset
+            # edges would leak through the closure past members' own exclusions)
+            stars, neg, upos = self._residue_state(relation, o_type, o_name)
+            if subj is not None and subj.id in upos:
+                return True
+            if (s_type, s_pred) not in stars:
+                return False
+            return subj is None or subj.id not in neg
+
+        # probe 1 only: the derived edge (public family)
         obj = self._get_concrete(relation, o_type, o_name)
         if subj is not None and obj is not None \
                 and self.idx.check_reachable_by_id(subj.id, obj.id):
@@ -422,7 +432,7 @@ class WildcardIndex:
 
         # residue: star coverage minus neg; a ghost subject has no node and thus
         # cannot be in neg -- the stars answer alone.
-        stars, neg = self._residue_state(relation, o_type, o_name)
+        stars, neg, _ = self._residue_state(relation, o_type, o_name)
         if (s_type, s_pred) not in stars:
             return False
         return subj is None or subj.id not in neg
@@ -462,6 +472,10 @@ class WildcardIndex:
             select(ResidueV1).where(ResidueV1.store_id == self.idx.store_id)
         ).all()
         for row in rows:
+            if s_name != '*' and s_node is not None \
+                    and s_node.id in set(json.loads(row.upos)):
+                result.node_ids.add(row.object_node_id)     # edge-free userset membership
+                continue
             stars = frozenset(tuple(s) for s in json.loads(row.stars))
             if shape not in stars:
                 continue
@@ -481,10 +495,11 @@ class WildcardIndex:
 
         if (o_type, relation) in self.schema_info.derived_families:
             self._collect_reverse(self._get_concrete(relation, o_type, o_name), result)
-            stars, neg = self._residue_state(relation, o_type, o_name)
+            stars, neg, upos = self._residue_state(relation, o_type, o_name)
             for (t, p) in stars:
                 result.markers.add((t, p, 'any'))
             result.excluded_node_ids |= neg
+            result.node_ids |= upos            # edge-free userset memberships (P4)
             return result
 
         if o_name == '*':

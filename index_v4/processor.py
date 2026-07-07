@@ -72,7 +72,14 @@ class _EvalContext:
     # -- derived-userset leaves: ∃ stored userset x on the storage leaf: s ∈ P(x) --
 
     def userset_check(self, leaf: str, t: str, p: str, s: SubjectKey) -> bool:
-        for x_name in self.proc.stored_userset_subjects(self.object_type, self.obj_name, leaf, t, p):
+        sp, st, sn = s
+        stored = self.proc.stored_userset_subjects(self.object_type, self.obj_name, leaf, t, p)
+        # "this exact userset is granted" (Zanzibar/oracle direct_leaf semantics --
+        # blind-audit): the stored userset row itself is a member, regardless of its
+        # own membership set
+        if (st, sp) == (t, p) and sn in stored:
+            return True
+        for x_name in stored:
             if self.proc.derived_check(t, p, x_name, s):
                 return True
         return False
@@ -149,33 +156,46 @@ class DeltaProcessor:
         ).first()
 
     def _residue_state(self, object_type: str, rel: str, obj_name: str
-                       ) -> tuple[frozenset, set[int]]:
+                       ) -> tuple[frozenset, set[int], set[int]]:
         node = self._node(rel, object_type, obj_name)
         if node is None:
-            return frozenset(), set()
+            return frozenset(), set(), set()
         row = self._residue_row(node.id)
         if row is None:
-            return frozenset(), set()
+            return frozenset(), set(), set()
         stars = frozenset(tuple(s) for s in json.loads(row.stars))
         neg = set(json.loads(row.neg))
-        return stars, neg
+        upos = set(json.loads(row.upos))
+        return stars, neg, upos
 
     def residue_stars(self, object_type: str, rel: str, obj_name: str) -> frozenset:
         return self._residue_state(object_type, rel, obj_name)[0]
 
     def derived_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey) -> bool:
-        """The §6 derived membership check: edge probe + residue (≤2 point reads)."""
+        """The §6 derived membership check: edge probe + residue (point reads).
+
+        Userset-shaped subjects are answered from the residue's ``upos`` (never from
+        edges -- blind-audit P4: a userset edge would leak through the closure to
+        every member, past their individual exclusions)."""
         sp, st, sn = s
         obj_node = self._node(rel, object_type, obj_name)
         if obj_node is None:
             return False
         if sn == '*':
-            stars, _ = self._residue_state(object_type, rel, obj_name)
+            stars, _, _ = self._residue_state(object_type, rel, obj_name)
             return _shape(sp, st) in stars
         s_node = self._node(sp, st, sn)
+        if sp != '...':
+            # userset subject: edge-free membership
+            stars, neg, upos = self._residue_state(object_type, rel, obj_name)
+            if s_node is not None and s_node.id in upos:
+                return True
+            if _shape(sp, st) not in stars:
+                return False
+            return s_node is None or s_node.id not in neg
         if s_node is not None and self.idx.check_reachable_by_id(s_node.id, obj_node.id):
             return True
-        stars, neg = self._residue_state(object_type, rel, obj_name)
+        stars, neg, _ = self._residue_state(object_type, rel, obj_name)
         if _shape(sp, st) not in stars:
             return False
         return s_node is None or s_node.id not in neg
@@ -321,13 +341,16 @@ class DeltaProcessor:
 
     def reconcile_subject(self, object_type: str, rel: str, obj_name: str,
                           s: SubjectKey) -> bool:
-        """Cheap path: reconcile one subject's derived edge + residue-neg membership.
+        """Cheap path: reconcile one subject's membership representation.
 
         Canonical representation (deterministic across op orders, and the space rule
         'star-only members: zero edges'):
           * star-covered subjects hold NO edge -- they are answered by the residue:
             in ``neg`` iff expr-false;
-          * uncovered subjects hold an edge iff expr-true, and are never in ``neg``.
+          * uncovered BARE-ENTITY subjects hold an edge iff expr-true;
+          * USERSET subjects never hold edges (a userset edge leaks through the
+            closure to every member, defeating pointwise exclusion -- blind-audit
+            P4): uncovered ones are in ``upos`` iff expr-true.
         Returns True iff anything changed."""
         plan = self.compiled.plans[(object_type, rel)]
         ctx = _EvalContext(self, object_type, obj_name)
@@ -336,11 +359,25 @@ class DeltaProcessor:
         sp, st, sn = s
         changed = False
 
-        stars, neg = self._residue_state(object_type, rel, obj_name)
+        stars, neg, upos = self._residue_state(object_type, rel, obj_name)
         covered = _shape(sp, st) in stars
-        want_edge = should and not covered
-
         s_node = self._node(sp, st, sn)
+
+        if sp != '...':
+            # userset subject: upos, never edges
+            if s_node is not None:
+                want_upos = should and not covered
+                want_neg = covered and not should
+                if want_upos != (s_node.id in upos) or want_neg != (s_node.id in neg):
+                    (upos.add if want_upos else upos.discard)(s_node.id)
+                    (neg.add if want_neg else neg.discard)(s_node.id)
+                    self._store_residue(object_type, rel, obj_name, stars, neg, upos)
+                    changed = True
+            if changed:
+                self._gc_public_node(object_type, rel, obj_name)
+            return changed
+
+        want_edge = should and not covered
         obj_node = self._node(rel, object_type, obj_name)
         has_edge = (s_node is not None and obj_node is not None
                     and self.idx.direct_edge_exists_by_id(s_node.id, obj_node.id))
@@ -357,7 +394,7 @@ class DeltaProcessor:
             want_neg = covered and not should
             if want_neg != (s_node.id in neg):
                 (neg.add if want_neg else neg.discard)(s_node.id)
-                self._store_residue(object_type, rel, obj_name, stars, neg)
+                self._store_residue(object_type, rel, obj_name, stars, neg, upos)
                 changed = True
         if changed:
             self._gc_public_node(object_type, rel, obj_name)
@@ -388,22 +425,14 @@ class DeltaProcessor:
                     candidates[n.id] = n
 
         neg: set[int] = set()
-        neg_nodes: dict[int, NodeV4] = {}
         for nid, n in candidates.items():
             if _shape(n.predicate, n.type) not in stars:
                 continue
             if not plan.check_fn(ctx, (n.predicate, n.type, n.name)):
                 neg.add(nid)
-                neg_nodes[nid] = n
 
-        # (3) upsert/delete the residue iff changed.
-        old_stars, old_neg = self._residue_state(object_type, rel, obj_name)
-        residue_changed = (stars != old_stars) or (neg != old_neg)
-        if residue_changed:
-            self._store_residue(object_type, rel, obj_name, stars, neg)
-
-        # (4) edge audit: current derived incoming concretes ∪ concretes of every
-        #     positive leaf ∪ step-2 candidates.
+        # (2b) audit set: current derived incoming concretes ∪ concretes of every
+        #      positive leaf ∪ step-2 candidates ∪ current upos members.
         audit: dict[int, NodeV4] = dict(candidates)
         obj_node = self._node(rel, object_type, obj_name)
         if obj_node is not None:
@@ -414,9 +443,35 @@ class DeltaProcessor:
                 continue
             for n in self._leaf_concretes(object_type, obj_name, spec):
                 audit[n.id] = n
+        old_stars, old_neg, old_upos = self._residue_state(object_type, rel, obj_name)
+        for nid in old_upos:
+            n = self.session.get(NodeV4, nid)
+            if n is not None:
+                audit[n.id] = n
 
+        # (2c) upos: userset-shaped audit members, recomputed wholesale (blind-audit
+        #      P4 -- userset memberships are edge-free; wholesale recompute prunes
+        #      stale ids the same way neg's does).
+        upos: set[int] = set()
+        for nid, n in audit.items():
+            if n.predicate == '...' or n.wildcard != '':
+                continue
+            if _shape(n.predicate, n.type) in stars:
+                continue                        # covered: answered by stars/neg
+            if plan.check_fn(ctx, (n.predicate, n.type, n.name)):
+                upos.add(nid)
+
+        # (3) upsert/delete the residue iff changed.
+        residue_changed = (stars != old_stars) or (neg != old_neg) or (upos != old_upos)
+        if residue_changed:
+            self._store_residue(object_type, rel, obj_name, stars, neg, upos)
+
+        # (4) edge audit over BARE-ENTITY subjects (userset subjects were settled in
+        #     2c and must never hold edges -- P4).
         edges_changed = False
         for n in audit.values():
+            if n.predicate != '...':
+                continue
             edges_changed |= self.reconcile_subject(
                 object_type, rel, obj_name, (n.predicate, n.type, n.name))
 
@@ -494,34 +549,18 @@ class DeltaProcessor:
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
     def _find_leaf_node(self, spec, object_type: str):
-        """Recover the plan-tree node for a derived leaf spec (kind + predicate
-        match). Userset leaves match on their storage predicate; TTU leaves on their
-        target relation."""
-        from zanzibar_utils_v1 import PDerivedTTU, PDerivedTuplesetTTU, PDerivedUserset
-
-        if spec.kind == 'derived-userset':
-            want, match_attr = PDerivedUserset, 'predicate'
-        elif spec.kind == 'derived-ttu':
-            want, match_attr = PDerivedTTU, 'target_rel'
-        else:
-            want, match_attr = PDerivedTuplesetTTU, 'target_rel'
-        found = []
-
-        def walk(n):
-            if isinstance(n, want) and getattr(n, match_attr) == spec.predicate:
-                found.append(n)
-            for c in getattr(n, 'children', ()):
-                walk(c)
-            for attr in ('base', 'subtract'):
-                if hasattr(n, attr):
-                    walk(getattr(n, attr))
-
+        """The plan-tree node for a leaf spec, via the compile-time index-aligned
+        pairing (blind-audit P2: reconstructing this by name resolved two
+        same-target TTU leaves to the same node, silently dropping one tupleset's
+        parents -- and audit_fixpoint shared the blindness). Identity match: specs
+        handed to us always come from a plan's own ``leaves`` tuple."""
         for plan in self.compiled.plans.values():
-            if plan.key[0] == object_type and any(s is spec for s in plan.leaves):
-                walk(plan.tree)
-                break
-        assert found, f'plan node not found for leaf {spec}'
-        return found[0]
+            if plan.key[0] != object_type:
+                continue
+            for s, node in zip(plan.leaves, plan.leaf_nodes):
+                if s is spec:
+                    return node
+        raise AssertionError(f'plan node not found for leaf {spec}')
 
     def _gc_public_node(self, object_type: str, rel: str, obj_name: str) -> None:
         """Processor-managed lifecycle for the pinned derived-public node: it is
@@ -538,26 +577,27 @@ class DeltaProcessor:
         self.session.delete(node)
 
     def _store_residue(self, object_type: str, rel: str, obj_name: str,
-                       stars: frozenset, neg: set[int]) -> None:
+                       stars: frozenset, neg: set[int], upos: set[int]) -> None:
         """Upsert/delete the residue row; bump version; record the bump for dependent
         invalidation. Empty residues are deleted, never stored (spec §4)."""
         # The processor may intern the public object node on the write path (spec §4);
         # non-implicit so residue-only objects (star coverage, zero edges) survive GC.
         node = self.idx.node(rel, object_type, obj_name, create_if_missing=True, implicit=False)
         row = self._residue_row(node.id)
-        empty = not stars and not neg
+        empty = not stars and not neg and not upos
         if row is None:
             if empty:
                 return
             self.session.add(ResidueV1(
                 store_id=self.store_id, object_node_id=node.id, relation=rel,
                 stars=json.dumps(sorted([list(s) for s in stars])),
-                neg=json.dumps(sorted(neg)), version=1))
+                neg=json.dumps(sorted(neg)), upos=json.dumps(sorted(upos)), version=1))
         elif empty:
             self.session.delete(row)
         else:
             row.stars = json.dumps(sorted([list(s) for s in stars]))
             row.neg = json.dumps(sorted(neg))
+            row.upos = json.dumps(sorted(upos))
             row.version += 1
             self.session.add(row)
         self._bumped.append((object_type, rel, obj_name))
@@ -590,6 +630,13 @@ class DeltaProcessor:
                 key = (o_type, fam.owner_relation, o_name)
                 if s_name == '*':
                     full(key)              # symbolic delta: §5.4 full-object rule
+                elif fam.kind == 'userset-storage' and s_pred != '...':
+                    # a stored userset tuple arrived/left: the dependent's stars
+                    # (userset_stars) and neg candidates change, and star-covered
+                    # members of the userset hold no edges to invalidate them --
+                    # the cheap path left order-dependent stale state (blind-audit
+                    # P3: symbolic in effect, so full-object like §5.4)
+                    full(key)
                 elif self._node(s_pred, s_type, s_name) is None:
                     # subject node GC'd within this transaction: its id may linger in
                     # the residue's neg; a full reconcile recomputes neg from live
@@ -658,8 +705,11 @@ class DeltaProcessor:
                     # the derived tupleset itself changed: same object reconciles
                     full((dep_t, dep_r, obj_name))
                 else:
-                    # a (tainted) target changed: every object whose tupleset holds it
-                    for on in self._derived_memberships_of_entity(
+                    # a (tainted) TTU target changed: dependents are the objects
+                    # holding a STORED tupleset tuple from this entity (blind-audit
+                    # P1: this called a method deleted in the stored-tuple-semantics
+                    # rework -- any derived tupleset with a tainted target crashed)
+                    for on in self._stored_parent_objects_of_entity(
                             source[0], obj_name, dep_t, edge.tupleset_rel):
                         full((dep_t, dep_r, on))
             else:

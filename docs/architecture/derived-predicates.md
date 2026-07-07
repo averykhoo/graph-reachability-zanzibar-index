@@ -64,10 +64,15 @@ outbox frontier to keys (§5.2), reconcile each, advance; assert quiescence afte
   path so bridges/counts/cycle-checks/delta-emission behave normally — emitted deltas
   drive the next stratum), plus one **residue** row (`ResidueV1`): `stars` =
   intensionally covered subject shapes, `neg` = star-covered-but-excluded concrete
-  node ids, `version` bumped on change.
+  node ids, `upos` = userset-shaped subjects whose membership is true (edge-free —
+  see below), `version` bumped on change.
 * **Canonical representation** (order-independence + the space rule): star-covered
   subjects hold NO edge — they are answered by the residue (`neg` iff expr-false);
-  uncovered subjects hold an edge iff expr-true and are never in `neg`.
+  uncovered **bare-entity** subjects hold an edge iff expr-true and are never in
+  `neg`; **userset subjects never hold edges** — a derived edge from a userset node
+  would leak through the closure to every member, defeating each member's own
+  pointwise exclusion, so true userset memberships live in `upos` instead
+  (pos-without-transitivity; blind-audit P4).
 * **Reconcile is idempotent by construction**: stars via the plan's fold over
   per-branch intensional probes; `neg` recomputed from negative-leaf concretes ∪ the
   neg sets of every referenced derived leaf (exclusions propagate up strata through
@@ -85,15 +90,18 @@ outbox frontier to keys (§5.2), reconcile each, advance; assert quiescence afte
 
 ```
 check(s, R, o) on derived R:
-    o == '*'      -> False (no object-star state can exist on derived relations)
-    s == '*'      -> shape(s) ∈ residue(o,R).stars          (intensional; 1 read)
-    else          -> derived edge probe (public family, probe 1 only)
-                     or (shape(s) ∈ stars and s_id ∉ neg)   (≤2 point reads)
+    o == '*'          -> False (no object-star state can exist on derived relations)
+    s == '*'          -> shape(s) ∈ residue(o,R).stars      (intensional; 1 read)
+    s is a userset    -> s_id ∈ upos
+                         or (shape(s) ∈ stars and s_id ∉ neg)   (residue only, no probe)
+    else (bare)       -> derived edge probe (public family, probe 1 only)
+                         or (shape(s) ∈ stars and s_id ∉ neg)   (≤2 point reads)
 ```
 
 Ghosts have no node, so they can't be in `neg` — stars answer alone.
 `lookup_reverse` renders stars as `(type, pred, 'any')` markers +
-`excluded_node_ids` (= neg); `lookup` adds a residue scan (shape ∈ stars ∧ id ∉ neg).
+`excluded_node_ids` (= neg), and unions `upos` into the concrete ids; `lookup` adds
+a residue scan (id ∈ upos, or shape ∈ stars ∧ id ∉ neg).
 
 ## Cost model (accepted prices)
 

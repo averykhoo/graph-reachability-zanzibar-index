@@ -38,6 +38,11 @@ def build_index(session: Session, source_store_id: str,
     """
     index_store_id = index_store_id or source_store_id
 
+    if session.new or session.dirty or session.deleted:
+        raise ValueError(
+            'build_index owns the transaction (commit on success, rollback on '
+            'failure): call it on a clean session, not one with pending changes')
+
     try:
         watermark = log_watermark(session, source_store_id)
         schema_text, shapes = load_schema(session, source_store_id)
@@ -80,6 +85,17 @@ def build_index(session: Session, source_store_id: str,
         if ruleset.compiled is not None and ruleset.compiled.plans:
             proc = DeltaProcessor(widx, ruleset.compiled)
             proc.backfill()
+
+        # Blind-audit X1: watermark and snapshot were two unserialized reads -- a
+        # write committed between them would be IN the snapshot AND above the
+        # watermark, so the tail stream would re-apply it (refcount 2 on a
+        # ref-counted index: a later revoke retires only one -- a permanent phantom
+        # grant). Re-read the watermark after the snapshot; if it moved, writes
+        # were concurrent and the snapshot/watermark pair is not a consistent cut.
+        if log_watermark(session, source_store_id) != watermark:
+            raise RuntimeError(
+                f'concurrent writes to source store {source_store_id!r} during '
+                f'build_index; retry when the store is quiescent (or stop writers)')
 
         cursor = ensure_cursor(session, index_store_id, source_store_id)
         cursor.applied_log_id = watermark

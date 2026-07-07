@@ -148,11 +148,15 @@ class ParityEngine:
         self._rng = random.Random(seed)
         self.ast = parse_schema_ast(schema)
 
-        # Graph joins iff the schema compiles for it (the P7 flip widens this set).
+        # Graph joins iff the schema compiles for it. Cyclic derived dependencies
+        # raise ValueError (not UnsupportedByGraphIndex) and must also degrade to
+        # 3-way -- blind-audit X7: catching only the latter made ParityEngine
+        # unconstructible on exactly the schema class (cyclic booleans) where the
+        # evaluator memo bug lived.
         try:
             ruleset = parse_openfga_schema(schema, object_wildcard_shapes=object_wildcard_shapes)
             self.graph: _GraphSide | None = _GraphSide(ruleset, paranoia=paranoia)
-        except UnsupportedByGraphIndex:
+        except (UnsupportedByGraphIndex, ValueError):
             self.graph = None
 
         self.set_sides = [_SetSide(schema, object_wildcard_shapes, ops) for ops in ALL_SETOPS]

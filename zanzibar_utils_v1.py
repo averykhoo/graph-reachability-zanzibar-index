@@ -399,17 +399,18 @@ def parse_relation_rule(
     direct_assignments: list[tuple[str | None, str | None, str | None]] = []
     from_relations: list[tuple[str, str]] = []
 
-    # Handle 'X from Y' format
-    if ' from ' in rule:
-        relation, from_relation = rule.strip().split(' from ')
-        from_relations.append((relation.strip(), from_relation.strip()))
-        return direct_assignments, from_relations
-
-    # Handle direct type assignments [type1, type2#relation, type3:*, type4:*#relation]
+    # Bracket lists FIRST (blind-audit S-4: '[user from x]' used to hit the
+    # ' from ' branch and silently parse to an empty, un-writable Direct).
     if rule.startswith('['):
         subjects = rule[1:].split(']')[0].split(',')
+        if not any(s.strip() for s in subjects):
+            raise ValueError(f'empty type-restriction list in {rule!r}')
         for subject in subjects:
             subject = subject.strip()
+            if not subject:
+                raise ValueError(f'empty entry in type-restriction list {rule!r}')
+            if subject.count('#') > 1:
+                raise ValueError(f'malformed restriction {subject!r} (multiple #)')
             if '#' in subject:
                 # type#relation or type:*#relation
                 left, subject_predicate = subject.split('#')
@@ -422,11 +423,23 @@ def parse_relation_rule(
                 subject_type, subject_name = left[:-len(':*')].strip(), '*'
             else:
                 subject_type, subject_name = left, None
+            # garbage like '[group#]' / '[user: *]' previously produced dead,
+            # never-matching Filters instead of a parse error (blind-audit S-4)
+            if not is_valid_identifier(subject_type):
+                raise ValueError(f'invalid subject type in restriction {subject!r}')
+            if subject_predicate is not None and not is_valid_identifier(subject_predicate):
+                raise ValueError(f'invalid userset relation in restriction {subject!r}')
             direct_assignments.append((subject_type, subject_predicate, subject_name))
-    else:
-        # Handle single relation reference (e.g., "writer")
-        direct_assignments.append((None, rule.strip(), None))
+        return direct_assignments, from_relations
 
+    # Handle 'X from Y' format
+    if ' from ' in rule:
+        relation, from_relation = rule.strip().split(' from ')
+        from_relations.append((relation.strip(), from_relation.strip()))
+        return direct_assignments, from_relations
+
+    # Handle single relation reference (e.g., "writer")
+    direct_assignments.append((None, rule.strip(), None))
     return direct_assignments, from_relations
 
 
@@ -527,6 +540,11 @@ def _tokenize_relation_body(body: str) -> list[tuple[str, str]]:
                 raise ValueError(f"unterminated '[' in relation body {body!r}")
             tokens.append(('bracket', body[i:j + 1]))
             i = j + 1
+        elif c == ']':
+            # a ']' outside a bracket previously made the word-scan below produce a
+            # zero-length token without advancing i -- an infinite loop on any
+            # schema typo like '[user]]' (blind-audit S-1: a DoS on schema text)
+            raise ValueError(f"unexpected ']' in relation body {body!r}")
         elif c == '(':
             tokens.append(('lparen', '('))
             i += 1
@@ -537,6 +555,7 @@ def _tokenize_relation_body(body: str) -> list[tuple[str, str]]:
             j = i
             while j < n and not body[j].isspace() and body[j] not in '()[]':
                 j += 1
+            assert j > i, f'tokenizer made no progress at {body[i:]!r}'
             tokens.append(('word', body[i:j]))
             i = j
     return tokens
@@ -645,20 +664,32 @@ def parse_schema_ast(schema: str) -> SchemaAST:
     """
     ast: SchemaAST = {}
     current_type: str | None = None
+    seen_types: set[str] = set()
 
     for line in schema.strip().splitlines():
         line = line.strip()
         if not line or line.startswith('#'):
             continue
-        if line.startswith('model') or line.startswith('schema') or line.startswith('relations'):
+        words = line.split()
+        head = words[0]
+        if head in ('model', 'schema', 'relations'):
             continue
-        if line.startswith('type '):
-            current_type = line.split(' ', 1)[1].strip()
-        elif line.startswith('define '):
+        if head == 'type':
+            if len(words) != 2:
+                raise ValueError(f'malformed type declaration: {line!r}')
+            current_type = words[1]
+            # duplicate type blocks silently merged before -- a pasted schema with a
+            # duplicate silently rewrote relations (blind-audit S-6)
+            if current_type in seen_types:
+                raise ValueError(f'duplicate type declaration: {current_type!r}')
+            seen_types.add(current_type)
+        elif head == 'define':
             if not current_type:
                 raise ValueError("Relation definition without type context")
-            relation_name, _, body = line[len('define '):].partition(':')
+            relation_name, colon, body = line[len('define'):].strip().partition(':')
             relation_name = relation_name.strip()
+            if not colon:
+                raise ValueError(f'malformed relation definition (missing colon): {line!r}')
             # Lexical collision lock (boolean spec §3.2): '.' is reserved for synthetic
             # leaf predicates ('<relation>.<index>'), so a *declared* relation name may
             # never contain it. Tuple-side entity names remain unrestricted.
@@ -666,9 +697,51 @@ def parse_schema_ast(schema: str) -> SchemaAST:
                 raise ValueError(
                     f"relation {relation_name!r}: '.' is reserved for compiled leaf "
                     f"predicates and cannot appear in a declared relation name")
+            if (current_type, relation_name) in ast:
+                raise ValueError(
+                    f'duplicate relation definition: {current_type}#{relation_name}')
             tokens = _tokenize_relation_body(body.strip())
             ast[(current_type, relation_name)] = _RelationParser(tokens, relation_name).parse()
+        else:
+            # silently dropping unrecognized lines lost or misattributed whole
+            # relation definitions (blind-audit S-3)
+            raise ValueError(f'unrecognized schema line: {line!r}')
+
+    _validate_ast_references(ast)
     return ast
+
+
+def _validate_ast_references(ast: SchemaAST) -> None:
+    """Referenced predicates may not use the reserved leaf namespace (the '.'-lock
+    was previously bypassable through restriction predicates, Computed refs, and TTU
+    refs -- blind-audit S-5: a `[doc#viewer.0]` restriction was a foreign write
+    handle into a compiled leaf family)."""
+    def check_name(name: str, where: str) -> None:
+        if '.' in name and name != '...':
+            raise ValueError(
+                f"{where}: {name!r} is inside the reserved leaf namespace "
+                f"('.' in referenced relation names)")
+
+    for (object_type, relation), expr in ast.items():
+        where = f'{object_type}#{relation}'
+
+        def walk(e: Expr) -> None:
+            if isinstance(e, Direct):
+                for r in e.restrictions:
+                    check_name(r.predicate, where)
+            elif isinstance(e, Computed):
+                check_name(e.relation, where)
+            elif isinstance(e, TTU):
+                check_name(e.target_rel, where)
+                check_name(e.tupleset_rel, where)
+            elif isinstance(e, (Union, Intersection)):
+                for c in e.children:
+                    walk(c)
+            elif isinstance(e, Exclusion):
+                walk(e.base)
+                walk(e.subtract)
+
+        walk(expr)
 
 
 def _iter_directs(expr: Expr):
@@ -698,6 +771,31 @@ def derive_schema_info(
             for r in direct.restrictions:
                 if r.wildcard:
                     subject_wildcard_shapes.add((r.type, r.predicate))
+
+    # Star tuplesets (blind-audit): a wildcard restriction [S:*] on a relation used
+    # as a TTU tupleset means the TTU rule will rewrite `S:* ts o` into a tuple
+    # whose subject shape is (S, target_rel) -- that through-shape must be declared
+    # or the graph rejects a schema-legal write the set engine accepts.
+    def walk_ttus(e):
+        if isinstance(e, TTU):
+            yield e
+        elif isinstance(e, (Union, Intersection)):
+            for c in e.children:
+                yield from walk_ttus(c)
+        elif isinstance(e, Exclusion):
+            yield from walk_ttus(e.base)
+            yield from walk_ttus(e.subtract)
+
+    for (object_type, _rel), expr in ast.items():
+        for ttu in walk_ttus(expr):
+            ts_expr = ast.get((object_type, ttu.tupleset_rel))
+            if ts_expr is None:
+                continue
+            for direct in _iter_directs(ts_expr):
+                for r in direct.restrictions:
+                    if r.wildcard and r.predicate == '...':
+                        subject_wildcard_shapes.add((r.type, ttu.target_rel))
+
     return SchemaInfo(
         subject_wildcard_shapes=frozenset(subject_wildcard_shapes),
         object_wildcard_shapes=frozenset(object_wildcard_shapes),
@@ -800,6 +898,23 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
                         f"index cannot separate raw from rewritten members of an "
                         f"untainted relation (declare it direct-only, or make the "
                         f"whole chain boolean so storage leaves apply)")
+                if ts_key in ast:
+                    # USERSET restrictions in tuplesets are rejected (OpenFGA model
+                    # rule): they bypassed taint analysis entirely (a relation
+                    # reading derived state compiled as pure union with no
+                    # invalidation wiring) and had drop-the-predicate parent
+                    # semantics no spec defines (blind-audit D3). Wildcard
+                    # restrictions stay ALLOWED -- star tuplesets are this repo's
+                    # deliberate object-wildcard extension (w_all machinery);
+                    # derive_schema_info derives their through-shapes.
+                    for d in _iter_directs(ast[ts_key]):
+                        for r in d.restrictions:
+                            if r.predicate != '...':
+                                raise UnsupportedByGraphIndex(
+                                    f"relation {object_type}#{relation}: tupleset "
+                                    f"{e.tupleset_rel!r} declares a userset "
+                                    f"restriction; tupleset relations must be "
+                                    f"directly assignable types (OpenFGA model rule)")
             elif isinstance(e, (Union, Intersection)):
                 for c in e.children:
                     walk(c)
@@ -828,6 +943,7 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
         rules_and_filters: list[Rule | Filter] = []
         for (object_type, relation_name), expr in ast.items():
             _emit_expr(expr, object_type, relation_name, rules_and_filters)
+        schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
         return RuleSet(rules_and_filters, schema_info=schema_info)
 
     tainted = compute_taint(ast)
@@ -837,7 +953,36 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
         if (object_type, relation_name) not in tainted:
             _emit_expr(expr, object_type, relation_name, rules_and_filters)
     compiled, schema_info = compile_boolean_schema(ast, schema_info, rules_and_filters)
+    schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
     return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled)
+
+
+def _expand_object_wildcard_shapes(rules_and_filters: list,
+                                   schema_info: SchemaInfo) -> SchemaInfo:
+    """Close declared object-wildcard shapes over the rewrite rules (blind-audit):
+    a star-object tuple on a declared shape is REWRITTEN by Rules onto other
+    relations (and boolean storage/routed leaves), and the façade validates the
+    rewritten tuple's shape -- undeclared, the write was rejected on one backend
+    and accepted on the other. Fixpoint over then-relations."""
+    shapes = set(schema_info.object_wildcard_shapes)
+    changed = True
+    while changed:
+        changed = False
+        for rf in rules_and_filters:
+            if not isinstance(rf, Rule) or rf.then_pattern is None:
+                continue
+            src = (rf.if_pattern.object_type, rf.if_pattern.relation)
+            if src in shapes or (rf.if_pattern.object_type is None and
+                                 any(s[1] == rf.if_pattern.relation for s in shapes)):
+                dst_type = rf.then_pattern.object_type or rf.if_pattern.object_type
+                dst = (dst_type, rf.then_pattern.relation)
+                if dst_type is not None and rf.then_pattern.relation is not None \
+                        and dst not in shapes:
+                    shapes.add(dst)
+                    changed = True
+    if shapes == set(schema_info.object_wildcard_shapes):
+        return schema_info
+    return replace(schema_info, object_wildcard_shapes=frozenset(shapes))
 
 
 # ===========================================================================
@@ -974,10 +1119,12 @@ class Plan:
     """One derived relation's executable plan. ``check_fn(ctx, subject) -> bool`` and
     ``stars_fn(ctx) -> frozenset[shape]`` are closure-composed (no AST walk, no
     per-node dispatch, short-circuit); ``ctx`` is the processor's evaluation context
-    bound to one (store, object)."""
+    bound to one (store, object). ``leaf_nodes`` is index-aligned with ``leaves`` --
+    the authoritative spec→tree-node pairing (never reconstruct it by name)."""
     key: tuple[str, str]                # (object_type, relation)
     tree: object
     leaves: tuple[LeafSpec, ...]
+    leaf_nodes: tuple                   # plan-tree node per leaf, index-aligned
     deps: tuple[tuple[str, str], ...]   # tainted keys this plan reads
     stratum: int
     check_fn: Callable
@@ -1253,20 +1400,30 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
     return build(expr, True)
 
 
-def _plan_leaves(tree) -> tuple[LeafSpec, ...]:
-    out: list[LeafSpec] = []
+def _plan_leaves(tree) -> tuple[tuple[LeafSpec, ...], tuple]:
+    """Pre-order leaf specs AND their plan-tree nodes, index-aligned. The pairing is
+    load-bearing (blind-audit P2): reconstructing the spec→node association by name
+    silently resolved BOTH of two same-target TTU leaves to the first node, dropping
+    the second tupleset's parents -- invisibly, because the audit enumeration shared
+    the bug."""
+    specs: list[LeafSpec] = []
+    nodes: list = []
+
+    def leaf(spec: LeafSpec, n) -> None:
+        specs.append(spec)
+        nodes.append(n)
 
     def walk(n) -> None:
         if isinstance(n, PClosureLeaf):
-            out.append(LeafSpec(n.predicate, 'closure', n.positive, storage=n.storage))
+            leaf(LeafSpec(n.predicate, 'closure', n.positive, storage=n.storage), n)
         elif isinstance(n, PDerivedComputed):
-            out.append(LeafSpec(n.relation, 'derived-computed', n.positive))
+            leaf(LeafSpec(n.relation, 'derived-computed', n.positive), n)
         elif isinstance(n, PDerivedUserset):
-            out.append(LeafSpec(n.predicate, 'derived-userset', n.positive, storage=True))
+            leaf(LeafSpec(n.predicate, 'derived-userset', n.positive, storage=True), n)
         elif isinstance(n, PDerivedTTU):
-            out.append(LeafSpec(n.target_rel, 'derived-ttu', n.positive))
+            leaf(LeafSpec(n.target_rel, 'derived-ttu', n.positive), n)
         elif isinstance(n, PDerivedTuplesetTTU):
-            out.append(LeafSpec(n.target_rel, 'derived-tupleset-ttu', n.positive))
+            leaf(LeafSpec(n.target_rel, 'derived-tupleset-ttu', n.positive), n)
         elif isinstance(n, (PUnion, PIntersection)):
             for c in n.children:
                 walk(c)
@@ -1275,7 +1432,7 @@ def _plan_leaves(tree) -> tuple[LeafSpec, ...]:
             walk(n.subtract)
 
     walk(tree)
-    return tuple(out)
+    return tuple(specs), tuple(nodes)
 
 
 # ---- executable plans (boolean spec §3.4: no AST walk, short-circuit) ----
@@ -1462,6 +1619,37 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
             raise UnsupportedByGraphIndex(
                 f"object-wildcard shape ({t}, {r}) names a compiled leaf predicate")
 
+    # Decision-15 family, extended (blind-audit D4): an object-wildcard shape on the
+    # TARGET relation of a TTU inside a tainted plan is also rejected. The plan's
+    # evaluator resolves TTU parents from stored tuples and probes each parent's
+    # target membership through the core closure -- a `parent_type:*` object-wildcard
+    # grant lives in w_all state that those probes never consult, so it would be
+    # silently invisible to derived evaluation.
+    def _walk_ttus(e):
+        if isinstance(e, TTU):
+            yield e
+        elif isinstance(e, (Union, Intersection)):
+            for c in e.children:
+                yield from _walk_ttus(c)
+        elif isinstance(e, Exclusion):
+            yield from _walk_ttus(e.base)
+            yield from _walk_ttus(e.subtract)
+
+    for key in sorted(tainted):
+        for ttu in _walk_ttus(ast[key]):
+            ts_expr = ast.get((key[0], ttu.tupleset_rel))
+            if ts_expr is None:
+                continue
+            for direct in _iter_directs(ts_expr):
+                for restr in direct.restrictions:
+                    if (restr.type, ttu.target_rel) in schema_info.object_wildcard_shapes:
+                        raise UnsupportedByGraphIndex(
+                            f"object-wildcard shape ({restr.type}, {ttu.target_rel}) "
+                            f"is the TTU target of derived relation {key[0]}#{key[1]}; "
+                            f"derived evaluation probes the closure directly and "
+                            f"cannot see object-wildcard (w_all) state (decision-15 "
+                            f"family, blind-audit D4)")
+
     namespace: dict[tuple[str, str], LeafFamily | DerivedFamily] = {}
     plans: dict[tuple[str, str], Plan] = {}
     dependents: dict[tuple[str, str], list[DependentEdge]] = {}
@@ -1471,10 +1659,11 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
     for key in sorted(tainted):
         object_type, relation = key
         tree = _build_plan_tree(key, ast[key], tainted, ast, rules_and_filters)
-        leaves = _plan_leaves(tree)
+        leaves, leaf_nodes = _plan_leaves(tree)
         deps = _plan_deps_and_fanout(key, tree, tainted, ast, dependents, target_feeders,
                                      tupleset_feeders)
-        plans[key] = Plan(key=key, tree=tree, leaves=leaves, deps=deps, stratum=0,
+        plans[key] = Plan(key=key, tree=tree, leaves=leaves, leaf_nodes=leaf_nodes,
+                          deps=deps, stratum=0,
                           check_fn=_compile_check_fn(tree), stars_fn=_compile_stars_fn(tree))
         namespace[(object_type, relation)] = DerivedFamily(relation, object_type)
         for spec in leaves:
@@ -1494,21 +1683,27 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
         tupleset_feeders=tupleset_feeders, strata=strata)
 
     # Exclusivity, compile-time third (boolean spec §3.3): no plain-Filter admission
-    # and no Rule then-target lands on a derived-public family.
+    # and no Rule then-target lands on a derived-public family. Real raises, not
+    # asserts (blind-audit: last line of defense for I5, must survive python -O).
     derived = compiled.derived_families
+    derived_predicates = {r for (_t, r) in derived}
     for rf in rules_and_filters:
         if isinstance(rf, RewriteFilter):
             o_t = rf.if_pattern.object_type
-            assert (o_t, rf.rewrite_relation) in compiled.leaf_families, \
-                f'RewriteFilter routes outside a leaf family: {rf}'
+            if (o_t, rf.rewrite_relation) not in compiled.leaf_families:
+                raise ValueError(f'RewriteFilter routes outside a leaf family: {rf}')
         elif isinstance(rf, Filter):
-            assert (rf.if_pattern.object_type, rf.if_pattern.relation) not in derived, \
-                f'plain Filter admits a derived-public relation: {rf}'
+            if (rf.if_pattern.object_type, rf.if_pattern.relation) in derived:
+                raise ValueError(f'plain Filter admits a derived-public relation: {rf}')
         elif isinstance(rf, Rule) and rf.then_pattern is not None:
             then_rel = rf.then_pattern.relation
             then_t = rf.then_pattern.object_type or rf.if_pattern.object_type
-            assert (then_t, then_rel) not in derived, \
-                f'Rule rewrites into a derived-public family: {rf}'
+            if (then_t, then_rel) in derived:
+                raise ValueError(f'Rule rewrites into a derived-public family: {rf}')
+            sp = rf.then_pattern.subject_predicate
+            if isinstance(sp, str) and sp in derived_predicates:
+                raise ValueError(
+                    f'Rule then-pattern carries a derived subject predicate: {rf}')
 
     if not derived and not compiled.leaf_families:
         return compiled, schema_info      # pure schema: nothing to enrich
@@ -1619,12 +1814,17 @@ def _json_rewrite(node: dict, object_type: str, relation_name: str,
     if kind == 'tupleToUserset':
         return TTU(target_rel=body['computedUserset']['relation'],
                    tupleset_rel=body['tupleset']['relation'])
-    if kind == 'union':
-        return Union(tuple(_json_rewrite(c, object_type, relation_name, restrictions)
-                           for c in body['child']))
-    if kind == 'intersection':
-        return Intersection(tuple(_json_rewrite(c, object_type, relation_name, restrictions)
-                                  for c in body['child']))
+    if kind in ('union', 'intersection'):
+        children = tuple(_json_rewrite(c, object_type, relation_name, restrictions)
+                         for c in body['child'])
+        if not children:
+            raise ValueError(
+                f'relation {object_type}#{relation_name}: empty {kind} child list')
+        if len(children) == 1:
+            # a single-child operator must collapse: Union((x,)) unparses to text
+            # that reparses as x, breaking the round-trip contract (blind-audit S-7)
+            return children[0]
+        return Union(children) if kind == 'union' else Intersection(children)
     if kind == 'difference':
         return Exclusion(
             _json_rewrite(body['base'], object_type, relation_name, restrictions),

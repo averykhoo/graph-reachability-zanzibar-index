@@ -161,9 +161,29 @@ class ReachabilityIndex:
 
         # Node removal shortcut: unsets direct edge counts globally
         if subject_id == object_id:
-            assert count == -1
+            if count != -1:
+                raise ValueError('node-removal shortcut only supports count == -1')
+            # Blind-audit C1: the shortcut retires every incident direct edge by
+            # count math, so the neighbours' reference_counts (incremented per direct
+            # edge on add) must be decremented FIRST -- and the same implicit-GC rule
+            # applied -- or every neighbour of a removed node keeps an inflated count
+            # forever, defeating bridge GC (wildcard §7.3) and _gc_public_node.
+            incident = self.session.exec(
+                select(EdgeV4).where(EdgeV4.store_id == self.store_id)
+                .where((EdgeV4.subject_id == subject_id) | (EdgeV4.object_id == subject_id))
+                .where(EdgeV4.direct_edge_count > 0)  # type: ignore[arg-type]
+            ).all()
+            neighbour_debits: dict[int, int] = {}
+            for e in incident:
+                other = e.object_id if e.subject_id == subject_id else e.subject_id
+                if other != subject_id:
+                    neighbour_debits[other] = neighbour_debits.get(other, 0) + e.direct_edge_count
             self._add_db_edges_unsafe(subject_id, None, None, 0)
             self._add_db_edges_unsafe(None, object_id, None, 0)
+            # Debits are APPLIED at the tail (with the logical node deletion): the
+            # expansion loops below retire the surviving indirect counts and emit
+            # REMOVED deltas, and _emit denormalizes endpoint identities from live
+            # node rows (I10) -- GC-ing a neighbour here would strip them.
 
         # Build local reachability map based on current DB state
         reachable_before_subject = MultiSet()
@@ -201,6 +221,24 @@ class ReachabilityIndex:
 
         # Handle logical Node deletion
         if subject_id == object_id:
+            # Blind-audit C1: apply the neighbour refcount debits computed in the
+            # shortcut (one per retired incident direct edge) with the same
+            # implicit-GC rule as remove_edge -- otherwise every neighbour of a
+            # removed node keeps an inflated count forever, defeating bridge GC
+            # (wildcard §7.3) and _gc_public_node. Done here, after the expansion
+            # loops, so every REMOVED delta was emitted while its endpoints lived.
+            for other_id, debit in neighbour_debits.items():
+                _n = self.session.exec(
+                    select(NodeV4).where(NodeV4.store_id == self.store_id)
+                    .where(NodeV4.id == other_id)).first()
+                if _n is None:
+                    continue
+                assert _n.reference_count - debit >= 0
+                if _n.reference_count - debit == 0 and _n.implicit:
+                    self.session.delete(_n)
+                else:
+                    _n.reference_count -= debit
+                    self.session.add(_n)
             _node = self.session.exec(
                 select(NodeV4).where(NodeV4.store_id == self.store_id).where(NodeV4.id == subject_id)).first()
             if _node:
@@ -243,7 +281,9 @@ class ReachabilityIndex:
         ).first()
 
         if found is not None:
-            if implicit is not None and found.implicit != implicit:
+            # explicit is sticky: an implicit node can be promoted to explicit, never
+            # demoted (the processor's residue anchoring depends on this)
+            if implicit is False and found.implicit:
                 found.implicit = False
                 self.session.add(found)
             return found
@@ -264,6 +304,18 @@ class ReachabilityIndex:
         self.session.flush()  # flush to get auto-increment id immediately without committing transaction
         return _node
 
+    def _require_live_nodes(self, *node_ids: int) -> None:
+        """Both endpoints must still exist (checked INSIDE the store lock): a stale
+        id from a pre-lock resolution racing a concurrent remove_node would otherwise
+        insert a dangling edge -- and SQLite rowid reuse could later turn it into a
+        phantom permission on an unrelated node (blind-audit C2)."""
+        for nid in node_ids:
+            row = self.session.exec(
+                select(NodeV4).where(NodeV4.store_id == self.store_id)
+                .where(NodeV4.id == nid)).first()
+            if row is None:
+                raise ValueError(f'node id {nid} no longer exists (concurrent removal?)')
+
     def add_edge_by_id(self, subject_id: int, object_id: int) -> None:
         """Add a direct edge between two already-resolved node ids.
 
@@ -272,12 +324,19 @@ class ReachabilityIndex:
         re-resolves names it already resolved. Reachability flips are recorded in
         the delta outbox (boolean spec §4); drain with index_v4.outbox helpers.
         """
-        assert subject_id != object_id
+        if subject_id == object_id:
+            # a tuple whose subject node IS its object node is the trivial cycle;
+            # a real rejection, not an assert (under -O the assert would fall into
+            # the node-DELETION shortcut and corrupt the store -- blind-audit C3)
+            raise ValueError(
+                f'{subject_id=} equals {object_id=}: self-referential edge would '
+                f'create a cycle')
 
         # Serialize the cycle check + ref-counted closure mutation against other writers
         # (held until commit): otherwise the check and the update are separate steps, so
         # concurrent adds can jointly create a cycle or lose count increments.
         self._lock_store()
+        self._require_live_nodes(subject_id, object_id)
 
         triple = self.session.exec(
             select(EdgeV4)
@@ -294,9 +353,12 @@ class ReachabilityIndex:
 
     def remove_edge_by_id(self, subject_id: int, object_id: int) -> None:
         """Remove a direct edge between two already-resolved node ids (ref-counted -1)."""
-        assert subject_id != object_id
+        if subject_id == object_id:
+            raise ValueError(
+                f'{subject_id=} equals {object_id=}: no self-referential edge can exist')
 
         self._lock_store()   # serialize the ref-counted closure mutation (held until commit)
+        self._require_live_nodes(subject_id, object_id)
 
         triple = self.session.exec(
             select(Edge)
@@ -337,6 +399,8 @@ class ReachabilityIndex:
                  object_type: str, object_name: str) -> None:
         validate_write_identifiers(subject_predicate, subject_type, subject_name,
                                    relation, object_type, object_name)
+        self._lock_store()   # lock BEFORE resolution: a concurrent remove_node in the
+        # resolve-then-mutate gap would hand us stale ids (blind-audit C2)
         _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=True)
         _object = self.node(relation, object_type, object_name, create_if_missing=True)
         self.add_edge_by_id(_subject.id, _object.id)
@@ -345,6 +409,7 @@ class ReachabilityIndex:
                     object_type: str, object_name: str) -> None:
         validate_write_identifiers(subject_predicate, subject_type, subject_name,
                                    relation, object_type, object_name)
+        self._lock_store()   # lock before resolution (blind-audit C2)
         try:
             _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=False)
             _object = self.node(relation, object_type, object_name, create_if_missing=False)

@@ -115,12 +115,16 @@ member set can be co-finite relative to a shape ("every user except bob"), and
 edges can only enumerate. The persisted form per (object, derived relation) is
 
 ```
-members = edges  ∪  ( ⋃_{σ ∈ stars} population(σ)  ∖  neg )
+members = edges  ∪  upos  ∪  ( ⋃_{σ ∈ stars} population(σ)  ∖  neg )
 ```
 
 with the **canonical representation rule**: a subject whose shape is star-covered
-holds *no* edge (it is in `neg` iff expression-false); an uncovered subject holds
-an edge iff expression-true and is never in `neg`. This makes the representation of
+holds *no* edge (it is in `neg` iff expression-false); an uncovered *bare-entity*
+subject holds an edge iff expression-true and is never in `neg`; an uncovered
+*userset* subject is in `upos` iff expression-true — never an edge, because a
+derived edge from a userset node is transitive through the closure and would grant
+every member past its own pointwise exclusion (membership in a boolean relation
+does not distribute over the userset's members). This makes the representation of
 any logical state **unique**, which is what buys row-level determinism: any two op
 orders reaching the same logical state produce identical rows (permutation
 invariance), and add-then-remove restores the exact row multiset. It also carries

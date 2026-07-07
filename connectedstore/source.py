@@ -14,6 +14,12 @@ Write ops return the log id -- the freshness token (spec §2.5): an index whose
 cursor is >= the token reflects this write. Duplicate adds are idempotent no-ops
 (raw tuples are a SET) and return the current watermark, which trivially satisfies
 the token contract.
+
+Tokens are STORE-LOCAL (blind-audit X6): the token domain is this store's own
+``TupleLogV1`` id sequence, so a token minted against one store means nothing to
+another (log ids are per-database autoincrements, not a global clock). Comparing or
+carrying tokens across stores is a category error; multi-store consistency needs an
+external ordering.
 """
 
 from __future__ import annotations

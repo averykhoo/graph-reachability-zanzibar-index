@@ -387,6 +387,20 @@ class SetEngine:
         if s_name == '*' and s_pred != '...' and (s_type, s_pred) == (o_type, relation):
             return True
 
+        # A derived edge whose endpoints coincide is the trivial cycle (e.g.
+        # doc:x#viewer viewer doc:x). _derived_edges filters u==v pairs for the flow
+        # graph, so detect it here directly (blind-audit E3: the graph backend
+        # rejects the same tuple).
+        triple = RelationalTriple(
+            subject=Entity(s_type, s_name), relation=relation,
+            object=Entity(o_type, o_name), subject_predicate=_denorm_pred(s_pred))
+        if self._ruleset is not None:
+            for d in self._ruleset.apply(triple):
+                u = (d.subject.type, d.subject.name, _norm_pred(d.subject_predicate))
+                v = (d.object.type, d.object.name, d.relation)
+                if u == v:
+                    return True
+
         # Would adding any DERIVED edge u->v close a loop? (v already reaches u.) This
         # reproduces the graph backend's reachability cycle check exactly, so both accept
         # and reject the same op sequences -- including from-chain cycles.
@@ -435,7 +449,13 @@ class SetEngine:
         subject = (s_type, s_name, s_pred)
         query_names = {(s_type, s_name), (o_type, o_name)}
         memo: dict[tuple[str, str, str], bool] = {}
-        stack: set[tuple[str, str, str]] = set()
+        stack: dict[tuple[str, str, str], int] = {}     # key -> stack depth
+        # Lowlink memo guard (see tests/oracle.py sat, kept in lockstep): a frame
+        # whose subtree consulted an in-progress key computed only a provisional
+        # answer -- memoizing it would poison non-short-circuiting boolean consumers
+        # and make answers depend on bitmap/interner iteration order.
+        _INF = float('inf')
+        low = [_INF]
 
         def sat(ot: str, on: str, rel: str) -> bool:
             key = (ot, on, rel)
@@ -443,15 +463,23 @@ class SetEngine:
             if cached is not None:
                 return cached
             if key in stack:
+                low[0] = min(low[0], stack[key])
                 return False
             expr = self.ast.get((ot, rel))
             if expr is None:
                 memo[key] = False
                 return False
-            stack.add(key)
+            depth = len(stack)
+            stack[key] = depth
+            outer_low, low[0] = low[0], _INF
             result = sat_expr(expr, ot, on, rel)
-            stack.discard(key)
-            memo[key] = result
+            my_low = low[0]
+            del stack[key]
+            if my_low >= depth:
+                memo[key] = result
+                low[0] = outer_low
+            else:
+                low[0] = min(outer_low, my_low)
             return result
 
         def sat_expr(expr, ot: str, on: str, rel: str) -> bool:
@@ -482,12 +510,20 @@ class SetEngine:
                 return uid is not None and any(uid in ns.usersets for ns in nodes)
 
             if s_name == '*':
-                # intensional per-branch: the matching star sentinel must be granted here
+                # intensional on this branch's own restrictions: the matching star
+                # sentinel granted here...
                 if s_pred == '...':
-                    return (s_type, '...', True) in restr and in_entities(
-                        self.interner.get(s_type, '*', '...'))
-                return (s_type, s_pred, True) in restr and in_usersets(
-                    self.interner.get(s_type, '*', s_pred))
+                    if (s_type, '...', True) in restr and in_entities(
+                            self.interner.get(s_type, '*', '...')):
+                        return True
+                elif (s_type, s_pred, True) in restr and in_usersets(
+                        self.interner.get(s_type, '*', s_pred)):
+                    return True
+                # ...or flow-through: '*' resolves through granted usersets like any
+                # subject (blind-audit D1 -- the OpenFGA literal-subject reading; the
+                # graph closure and this engine's own expand already behave this way,
+                # and per-branch-only is structurally unimplementable in the graph)
+                return member_via_usersets(nodes, restr)
 
             if s_pred == '...':
                 # concrete bare entity
@@ -517,9 +553,13 @@ class SetEngine:
                         if (t, p, False) in restr and sat(t, n, p):
                             return True
                     elif (t, p, True) in restr:
-                        for inst_id in list(self.interner.ids_of_shape.get((t, p), ())):
-                            it, inn, ip = self.interner.key(inst_id)
-                            if sat(it, inn, ip):
+                        # ∀-shaped grant (T:*#P): ∃ an INSTANCE of T whose P contains
+                        # the subject. Instances come from tuple-mentioned names only
+                        # (blind-audit: never from ids_of_shape, which misses members
+                        # via Computed/TTU; and never from query endpoints, which
+                        # would let a ghost witness its own existence -- strict ∀⇒∃)
+                        for inst in self._instances_of_type(t, frozenset()):
+                            if sat(t, inst, p):
                                 return True
             return False
 
@@ -539,7 +579,9 @@ class SetEngine:
                     else:
                         if (s_type, s_pred) == (pt, target_rel):
                             return True                       # star/userset subject of that shape
-                        for inst in self._instances_of_type(pt, query_names):
+                        # tuple-mentioned instances only: query endpoints must not
+                        # act as ∃-witnesses (strict ∀⇒∃; blind-audit O3)
+                        for inst in self._instances_of_type(pt, frozenset()):
                             if sat(pt, inst, target_rel):
                                 return True
             return False
@@ -558,8 +600,13 @@ class SetEngine:
         shapes in ``stars`` (never enumerated). Never interns on read."""
         if memo is None:
             memo = {}
-        stack: set[tuple[str, str, str]] = set()
+        stack: dict[tuple[str, str, str], int] = {}     # key -> stack depth
         ops, pop = self.ops, self.population
+        # Lowlink memo guard, same as check()/the oracle: a frame whose subtree
+        # consulted an in-progress key holds a provisional (under-approximated)
+        # MemberSet and must not be memoized.
+        _INF = float('inf')
+        low = [_INF]
 
         def do(ot: str, on: str, rel: str) -> MemberSet:
             key = (ot, on, rel)
@@ -567,15 +614,23 @@ class SetEngine:
             if cached is not None:
                 return cached
             if key in stack:
+                low[0] = min(low[0], stack[key])
                 return ms.empty(ops)
             expr = self.ast.get((ot, rel))
             if expr is None:
                 memo[key] = ms.empty(ops)
                 return memo[key]
-            stack.add(key)
+            depth = len(stack)
+            stack[key] = depth
+            outer_low, low[0] = low[0], _INF
             r = do_expr(expr, ot, on, rel)
-            stack.discard(key)
-            memo[key] = r
+            my_low = low[0]
+            del stack[key]
+            if my_low >= depth:
+                memo[key] = r
+                low[0] = outer_low
+            else:
+                low[0] = min(outer_low, my_low)
             return r
 
         def do_expr(expr, ot, on, rel) -> MemberSet:
@@ -625,9 +680,11 @@ class SetEngine:
                             acc = ms.union(acc, do(t, n, p), ops, pop)
                     elif (t, p, True) in restr:
                         stars.add((t, p))                             # covers all usersets of shape
-                        for inst_id in list(self.interner.ids_of_shape.get((t, p), ())):
-                            it, inn, ip = self.interner.key(inst_id)
-                            acc = ms.union(acc, do(it, inn, ip), ops, pop)
+                        # tuple-mentioned instances, not ids_of_shape: an instance
+                        # whose P-membership exists only via Computed/TTU never
+                        # interns (T, n, P) and would be missed (blind-audit E2)
+                        for inst in self._instances_of_type(t, frozenset()):
+                            acc = ms.union(acc, do(t, inst, p), ops, pop)
             local = MemberSet(ops.freeze(pos), frozenset(stars), ops.freeze())
             return ms.union(local, acc, ops, pop)
 
@@ -645,7 +702,8 @@ class SetEngine:
                             acc = ms.union(acc, ms.singleton_entity(fid, ops), ops, pop)
                     else:
                         acc = ms.union(acc, ms.star((pt, target), ops), ops, pop)
-                        for inst in self._instances_of_type(pt, {(ot, on)}):
+                        # tuple-mentioned instances only (no endpoint witnesses; O3)
+                        for inst in self._instances_of_type(pt, frozenset()):
                             acc = ms.union(acc, do(pt, inst, target), ops, pop)
             return acc
 

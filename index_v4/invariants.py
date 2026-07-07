@@ -166,6 +166,22 @@ def check_invariants(session: Session, store_id: str,
             elif has_out:
                 _fail(f'I3: concrete {n} of non-bridged-out shape has a w_all->concrete bridge')
 
+    # I13 (blind-audit C5): reference_count is exactly the node's direct-edge degree
+    # (each direct edge increments both endpoints on add and decrements on remove).
+    # This is what makes remove_node-style refcount corruption -- which silently
+    # defeats bridge GC and derived-node GC -- visible to paranoia instead of latent.
+    # Runs AFTER the bridge checks: a missing/extra bridge edge also skews degree,
+    # and I3 is the more specific diagnosis for that corruption.
+    degree: dict[int, int] = {}
+    for e in edges:
+        if e.direct_edge_count > 0:
+            degree[e.subject_id] = degree.get(e.subject_id, 0) + e.direct_edge_count
+            degree[e.object_id] = degree.get(e.object_id, 0) + e.direct_edge_count
+    for n in nodes:
+        if n.reference_count != degree.get(n.id, 0):
+            _fail(f'I13: reference_count {n.reference_count} != direct-edge degree '
+                  f'{degree.get(n.id, 0)} on {n}')
+
     if schema_info is not None:
         _check_derived_invariants(session, store_id, schema_info, nodes, edges, by_id,
                                   residue_versions)
@@ -220,7 +236,8 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
             _fail(f'I6: residue.relation {r.relation!r} disagrees with its node {node}')
         stars = frozenset(tuple(s) for s in json.loads(r.stars))
         neg = set(json.loads(r.neg))
-        if not stars and not neg:
+        upos = set(json.loads(r.upos))
+        if not stars and not neg and not upos:
             _fail(f'I6: empty residue row persisted for {node}')
         if not stars <= subject_shapes:
             _fail(f'I6: residue stars {stars} outside declared subject shapes on {node}')
@@ -235,6 +252,24 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
         if neg & derived_edge_subjects.get(r.object_node_id, set()):
             _fail(f'I6: neg overlaps derived-edge holders on {node} '
                   f'(an edge means expr-true; neg means expr-false)')
+        # upos (blind-audit P4): edge-free TRUE memberships of userset-shaped
+        # subjects. Must hold live, concrete, userset-predicate nodes; disjoint from
+        # neg (true vs false); never star-covered (covered ⇒ answered by stars/neg);
+        # and never edge-holders (upos exists precisely so usersets get no edges).
+        if upos & neg:
+            _fail(f'I6: upos overlaps neg on {node}')
+        if upos & derived_edge_subjects.get(r.object_node_id, set()):
+            _fail(f'I6: upos overlaps derived-edge holders on {node} '
+                  f'(userset memberships must be edge-free)')
+        for nid in upos:
+            s = by_id.get(nid)
+            if s is None:
+                _fail(f'I6: residue upos holds a dead node id {nid} on {node}')
+            if s.wildcard != '' or s.predicate == '...':
+                _fail(f'I6: residue upos holds a non-userset node {s} on {node}')
+            if (s.type, s.predicate) in stars:
+                _fail(f'I6: upos subject {s} is star-covered by {stars} on {node} '
+                      f'(covered subjects are answered by stars/neg, not upos)')
 
     # I7: version monotonicity per residue ROW (empty rows are deleted, so a
     # recreated residue legitimately restarts its lineage at version 1 -- lineage is

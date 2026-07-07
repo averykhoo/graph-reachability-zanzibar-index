@@ -124,6 +124,10 @@ def _tokenize(body: str) -> list[tuple[str, str]]:
                 raise ValueError(f'unterminated [ in {body!r}')
             tokens.append(('bracket', body[i:j + 1]))
             i = j + 1
+        elif c == ']':
+            # a stray ']' would make the word branch scan zero characters and loop
+            # forever (mirrors the production tokenizer's fix -- found blind-audit O4)
+            raise ValueError(f'unmatched ] in {body!r}')
         elif c in '()':
             tokens.append(('lparen' if c == '(' else 'rparen', c))
             i += 1
@@ -131,6 +135,7 @@ def _tokenize(body: str) -> list[tuple[str, str]]:
             j = i
             while j < n and not body[j].isspace() and body[j] not in '()[]':
                 j += 1
+            assert j > i, f'tokenizer made no progress at {i} in {body!r}'
             tokens.append(('word', body[i:j]))
             i = j
     return tokens
@@ -147,6 +152,10 @@ def _parse_restrictions(bracket: str) -> tuple[tuple[str, str, bool], ...]:
         if '#' in part:
             left, pred = part.split('#', 1)
             pred = pred.strip()
+            # mirrors the production parser (blind-audit O4): a second '#' or an
+            # empty predicate silently misparsed before
+            if not pred or '#' in pred or '.' in pred:
+                raise ValueError(f'malformed userset restriction {part!r}')
         else:
             left, pred = part, '...'
         left = left.strip()
@@ -322,25 +331,47 @@ class Oracle:
         query_names = {(subject_type, subject_name), (object_type, object_name)}
 
         memo: dict[tuple[str, str, str], bool] = {}
-        stack: set[tuple[str, str, str]] = set()
+        stack: dict[tuple[str, str, str], int] = {}     # key -> stack depth
+        # Tarjan-lowlink-style memo guard: a frame whose subtree consulted a key that
+        # was still IN PROGRESS computed only a provisional answer (the guard returns
+        # False on revisit), so memoizing it would poison later, non-short-circuiting
+        # consumers (a and b / a but not b). Only the frame at the top of its cycle
+        # (lowlink == own depth) may be memoized.
+        INF = float('inf')
+        low = [INF]                                      # min in-stack depth touched
 
         def universe(entity_type: str) -> set[str]:
             return self._universe(entity_type, query_names)
+
+        def instances(entity_type: str) -> set[str]:
+            """∃-witnesses for strict ∀⇒∃ star expansions: tuple-mentioned names
+            ONLY. Query endpoints must never witness existence -- a ghost would
+            "exist" because you asked about it (blind-audit O3). ``universe()``
+            (endpoints included) remains correct for shape/marker matching."""
+            return self._universe(entity_type, set())
 
         def sat(o_type: str, o_name: str, rel: str) -> bool:
             key = (o_type, o_name, rel)
             if key in memo:
                 return memo[key]
             if key in stack:
+                low[0] = min(low[0], stack[key])
                 return False            # recursive schema: this path adds nothing new
             expr = self.ast.get((o_type, rel))
             if expr is None:
                 memo[key] = False
                 return False
-            stack.add(key)
+            depth = len(stack)
+            stack[key] = depth
+            outer_low, low[0] = low[0], INF
             result = sat_expr(expr, o_type, o_name, rel)
-            stack.discard(key)
-            memo[key] = result
+            my_low = low[0]
+            del stack[key]
+            if my_low >= depth:         # cycle (if any) closed at or below this frame
+                memo[key] = result
+                low[0] = outer_low
+            else:                       # provisional: an ancestor was consulted
+                low[0] = min(outer_low, my_low)
             return result
 
         def sat_expr(expr, o_type: str, o_name: str, rel: str) -> bool:
@@ -380,11 +411,15 @@ class Oracle:
                       and tup.object_name in objs and restriction_matches(tup)]
 
             if s_name == '*':
-                # intensional per-branch: the matching star tuple of this shape must exist
+                # intensional on this branch's own restrictions: the matching star
+                # tuple of this shape exists...
                 for g in grants:
                     if g.subject_name == '*' and g.subject_type == s_type and g.subject_predicate == s_pred:
                         return True
-                return False
+                # ...or flow-through: '*' resolves through granted usersets like any
+                # other subject (blind-audit D1: OpenFGA literal-subject semantics;
+                # the graph closure cannot express per-branch-only for userset flow)
+                return _member_of_granted(grants)
 
             if s_pred == '...':
                 # concrete bare entity u
@@ -421,7 +456,7 @@ class Oracle:
                     if sat(g.subject_type, g.subject_name, g.subject_predicate):
                         return True                            # member of concrete userset
                 else:
-                    for inst in universe(g.subject_type):      # member of ANY instance (star)
+                    for inst in instances(g.subject_type):     # member of ANY instance (star)
                         if sat(g.subject_type, inst, g.subject_predicate):
                             return True
             return False
@@ -441,10 +476,10 @@ class Oracle:
                     if sat(p_type, p_name, target_rel):
                         return True
                 else:
-                    # star parent (S:*): marker of shape (S, target_rel) + universe expansion
+                    # star parent (S:*): marker of shape (S, target_rel) + instance expansion
                     if (s_type, s_pred) == (p_type, target_rel):
                         return True                            # star/userset subject of that shape
-                    for inst in universe(p_type):
+                    for inst in instances(p_type):
                         if sat(p_type, inst, target_rel):
                             return True
             return False

@@ -67,6 +67,12 @@ class ConnectedStore:
         self.proc = (DeltaProcessor(self.widx, compiled)
                      if compiled is not None and compiled.plans else None)
         self.cursor = ensure_cursor(session, store_id, store_id)
+        # Blind-audit X3: the bootstrap rows (schema/store/cursor) used to ride the
+        # session transaction un-committed -- so the FIRST rejected write (an
+        # ordinary ValueError!) or one documented refresh() poll rolled them back
+        # and bricked the instance; a read-only open also held the write lock for
+        # its lifetime. The class owns commits everywhere else; it owns this one too.
+        self.session.commit()
 
     # ------------------------------------------------------------------ #
     # Writes: one transaction across both halves (sync schedule)
@@ -116,6 +122,12 @@ class ConnectedStore:
                                         self.ruleset, self.proc, batch=batch)
                 if applied:
                     self.session.commit()
+                else:
+                    # Blind-audit X2: the zero-row path still opened a transaction
+                    # (store lock + cursor refresh + log read). Leaving it open
+                    # pins the worker's read snapshot forever (blind daemon) and,
+                    # on PostgreSQL, holds the FOR UPDATE store lock indefinitely.
+                    self.session.rollback()
             except Exception:
                 self.session.rollback()
                 raise

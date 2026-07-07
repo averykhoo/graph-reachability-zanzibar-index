@@ -68,7 +68,9 @@ tests/
 ## Key semantics (pinned -- see decision-log.md for why)
 
 * **Strict ∀⇒∃**: no vacuous grants; a star grant reaches concretes only if instances
-  exist. `'*'` queries are intensional, per branch.
+  exist. Object-side `'*'` queries are intensional, per branch; subject-side `'*'`
+  queries are **flow-through** (a `user:*` subject resolves through granted usersets,
+  the OpenFGA literal-subject reading — blind-audit D1).
 * **TTU parents are STORED tupleset tuples**, never computed membership (the oracle's
   `ttu_leaf` reads raw tuples -- authentic Zanzibar). A TTU over a derived relation
   with no direct restrictions is constantly empty.

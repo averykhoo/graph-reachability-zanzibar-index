@@ -59,6 +59,10 @@ A write returns its log id. `check(..., at_least=token)` is served by the index 
 `timestamp <= query_timestamp` merge simplified to a fallback. Sync mode satisfies
 every token trivially; async mode is where it earns its keep.
 
+Tokens are **store-local**: the domain is the store's own `TupleLogV1` id sequence
+(a per-database autoincrement, not a global clock). A token minted against one store
+means nothing to another; cross-store consistency needs an external ordering.
+
 The fallback is **watermark-aware**: the set engine's in-memory state is only as
 fresh as its last rebuild plus the instance's own writes
 (`TupleSource.evaluator_watermark` tracks exactly that), so a tokened read whose
