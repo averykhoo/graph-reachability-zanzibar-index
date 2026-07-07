@@ -429,4 +429,31 @@ passed.
 
 ---
 
+## 2026-07-07 — connected-store round, S7 (concurrency & stale reads)
+
+Three findings, all product-relevant:
+
+1. **Cursor lost-update**: two concurrent appliers could read the same cursor value
+   before either committed and double-apply log rows onto ref-counted state.
+   `advance_index` now takes the index store's write lock (`_lock_store`) **before**
+   reading the cursor and re-reads it fresh — FOR UPDATE on PostgreSQL/MySQL; on
+   SQLite the database write lock + caller retry-on-busy give the same serialization.
+
+2. **W-id cache cached misses**: the wildcard façade cached `None` for absent w
+   nodes, invalidated only by the session's own writes — sound single-session, wrong
+   for a replica reader (another session creates the w node; the reader's probes
+   stay off forever). Misses are no longer cached; positive ids remain safe (a GC'd
+   w node had no wildcard state left, so a dead-id probe is correctly False).
+   `ConnectedStore.refresh()` is the replica poll API: fresh snapshot + rebuilt
+   evaluator + cleared w-id cache.
+
+3. **pysqlite defaults tear snapshots** (the spec §1.8 caveat, met in practice):
+   SELECTs run in autocommit, so multi-statement reads straddle commits. The
+   concurrency tests install the SQLAlchemy-documented workaround
+   (`isolation_level=None` + BEGIN on the `begin` event) and `journal_mode=WAL` —
+   snapshot-isolated readers that never block the writer, the honest local
+   simulation of primary-write/replica-read.
+
+---
+
 *(subsequent phases append below)*

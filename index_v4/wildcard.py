@@ -103,12 +103,20 @@ class WildcardIndex:
             return None
 
     def _w_id(self, entity_type: str, predicate: str, variant: str) -> int | None:
-        """Cached id of a w_any/w_all node (read path), or None if it doesn't exist."""
+        """Cached id of a w_any/w_all node (read path), or None if it doesn't exist.
+
+        Misses are NOT cached: another session may create the w node at any time (the
+        replica-reader pattern), and a cached None would pin its probes off forever.
+        A cached positive id stays safe -- a GC'd w node had no wildcard state left,
+        so probing its dead id is correctly False."""
         key = (entity_type, predicate, variant)
-        if key not in self._w_id_cache:
+        cached = self._w_id_cache.get(key)
+        if cached is None:
             node = self._w_node(entity_type, predicate, variant, create=False)
-            self._w_id_cache[key] = node.id if node is not None else None
-        return self._w_id_cache[key]
+            if node is None:
+                return None
+            self._w_id_cache[key] = cached = node.id
+        return cached
 
     def _invalidate_w_cache(self) -> None:
         self._w_id_cache.clear()

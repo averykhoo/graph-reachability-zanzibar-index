@@ -74,6 +74,14 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
     """Apply log rows past the cursor to the index; advance the cursor; return the
     number of rows applied. The CALLER commits -- applied rows + cursor advance land
     in one transaction (exactly-once, spec §2.6)."""
+    # Serialize concurrent appliers on the index store BEFORE reading the cursor:
+    # two workers reading the same cursor value would double-apply log rows (a
+    # lost-update on ref-counted state). FOR UPDATE on PostgreSQL/MySQL; on SQLite
+    # the database write lock + the caller's retry-on-busy provide the same
+    # serialization (the cursor is re-read fresh on retry).
+    widx.idx._lock_store()
+    session.refresh(cursor)
+
     rows = log_rows(session, cursor.source_store_id, cursor.applied_log_id, limit=batch)
     if not rows:
         return 0
