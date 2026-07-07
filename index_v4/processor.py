@@ -713,7 +713,11 @@ class DeltaProcessor:
     def _live_keys_of(self, object_type: str, rel: str) -> set[str]:
         """Object names with any state under (object_type, rel): positive-leaf family
         nodes (subtrahends never generate candidates, only filter), the public node
-        family, and residue rows."""
+        family, plus -- for derived leaves with no storage family of their own --
+        the objects discoverable through what they read: tupleset-tuple families for
+        TTU leaves, the referenced relation's own live keys for computed references.
+        (Live maintenance reaches those objects via dependents-invalidation; backfill
+        must reach them by enumeration.)"""
         names: set[str] = set()
         plan = self.compiled.plans[(object_type, rel)]
         preds = [rel] + [spec.predicate for spec in plan.leaves
@@ -725,6 +729,28 @@ class DeltaProcessor:
                 .where(NodeV4.wildcard == '')
             ).all()
             names.update(n.name for n in rows)
+
+        for spec in plan.leaves:
+            if not spec.positive or spec.kind in ('closure', 'derived-userset'):
+                continue
+            if spec.kind == 'derived-computed':
+                # same-object reference: any object live under the referenced relation
+                names |= self._live_keys_of(object_type, spec.predicate)
+            elif spec.kind == 'derived-ttu':
+                # objects holding tupleset tuples: the (T, *, tupleset_rel) family
+                node = self._find_leaf_node(spec, object_type)
+                rows = self.session.exec(
+                    select(NodeV4).where(NodeV4.store_id == self.store_id)
+                    .where(NodeV4.type == object_type)
+                    .where(NodeV4.predicate == node.tupleset_rel)
+                    .where(NodeV4.wildcard == '')
+                ).all()
+                names.update(n.name for n in rows)
+            elif spec.kind == 'derived-tupleset-ttu':
+                # stored tuples of a derived tupleset live on ITS leaf families,
+                # which its own live keys enumerate (strictly lower stratum)
+                node = self._find_leaf_node(spec, object_type)
+                names |= self._live_keys_of(object_type, node.tupleset_rel)
         return names
 
     def backfill(self, chunk_size: int = 200) -> None:

@@ -11,12 +11,14 @@ from .schema_io import (SchemaMismatch, ensure_schema, load_schema,
                         open_graph_index, open_set_engine, save_schema)
 from .source import TupleSource, log_rows, log_watermark
 from .apply import advance_index, ensure_cursor
+from .build import build_index
 from .store import ConnectedStore
 
 __all__ = [
     "ConnectedStore",
     "advance_index",
     "ensure_cursor",
+    "build_index",
     "SchemaV4",
     "TupleLogV1",
     "IndexCursorV1",

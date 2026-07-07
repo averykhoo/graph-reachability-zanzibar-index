@@ -413,4 +413,20 @@ history).
 
 ---
 
+## 2026-07-07 — connected-store round, S4 (build_index)
+
+**P6 backfill enumeration gap found and fixed** by the built-vs-live equivalence
+test: `_live_keys_of` discovered objects via leaf *families* only, so derived
+relations with no storage family of their own — TTU-only (`inherited: viewer from
+parent`) and computed-only (`approver: viewer`) shapes — were never reconciled by
+`backfill()`/`audit_fixpoint` (live maintenance reaches those objects via
+dependents-invalidation, so the gap was invisible until an offline build). Fix:
+enumeration now follows what non-storage derived leaves *read* — the tupleset-tuple
+family for `derived-ttu`, the referenced relation's live keys for
+`derived-computed`/`derived-tupleset-ttu` (strictly lower stratum ⇒ recursion
+terminates). P6's own backfill test had only closure-leaf relations, which is why it
+passed.
+
+---
+
 *(subsequent phases append below)*
