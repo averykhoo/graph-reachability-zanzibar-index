@@ -10,8 +10,13 @@ from .models import IndexCursorV1, SchemaV4, TupleLogV1
 from .schema_io import (SchemaMismatch, ensure_schema, load_schema,
                         open_graph_index, open_set_engine, save_schema)
 from .source import TupleSource, log_rows, log_watermark
+from .apply import advance_index, ensure_cursor
+from .store import ConnectedStore
 
 __all__ = [
+    "ConnectedStore",
+    "advance_index",
+    "ensure_cursor",
     "SchemaV4",
     "TupleLogV1",
     "IndexCursorV1",
