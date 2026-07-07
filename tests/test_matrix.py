@@ -126,6 +126,39 @@ class OracleBackend:
         return oracle.check(*q)
 
 
+class ConnectedBackend:
+    """The composed system (connected-store spec): source-of-truth tuples + log +
+    synchronously-maintained index behind one façade. Its membership in the matrix
+    validates the composition, not just the parts."""
+    name = 'connected'
+
+    def __init__(self, schema, object_wc=frozenset()):
+        from connectedstore import ConnectedStore
+        self.session = _fresh_session()
+        self.cs = ConnectedStore(self.session, 'cx', schema=schema,
+                                 object_wildcard_shapes=object_wc)
+        self.session.commit()
+
+    def apply(self, raw, op) -> bool:
+        try:
+            (self.cs.add_tuple if op == 'add' else self.cs.remove_tuple)(*raw)
+            return True
+        except ValueError:
+            return False        # ConnectedStore rolled back + self-healed already
+
+    def check(self, q):
+        return self.cs.check(*q)
+
+    def post_op(self):
+        assert_wildcard_invariants(self.cs.widx)
+        if self.cs.proc is not None:
+            self.cs.proc.audit_fixpoint()
+        assert self.cs.lag() == 0          # sync schedule: cursor rides the head
+
+    def close(self):
+        self.session.close()
+
+
 class MultiBackend:
     """Fan each op out to every stateful backend; assert unanimous accept/reject (§7.1)."""
 
@@ -151,10 +184,11 @@ class MultiBackend:
 def test_matrix_4way_union_wildcard(load_fga_schema, seed):
     schema = load_fga_schema('wildcards.fga')
     graph = GraphBackend(schema, OBJECT_WC)
+    connected = ConnectedBackend(schema, OBJECT_WC)
     set_py = SetBackend(schema, OBJECT_WC, PySets)
     set_backends = [set_py] + ([SetBackend(schema, OBJECT_WC, RoaringSets)] if RoaringSets else [])
     oracle = OracleBackend(schema)
-    mb = MultiBackend([graph] + set_backends, decider=graph)
+    mb = MultiBackend([graph, connected] + set_backends, decider=graph)
 
     pool = _candidate_raw_tuples()
     grid = _query_grid()
@@ -174,14 +208,14 @@ def test_matrix_4way_union_wildcard(load_fga_schema, seed):
             history.append((op, raw))
 
         oracle.bind(present)
-        all_backends = [graph, oracle] + set_backends
+        all_backends = [graph, connected, oracle] + set_backends
         for q in grid:
             answers = {b.name: b.check(q) for b in all_backends}
             if len(set(answers.values())) != 1:
                 pytest.fail(f'check disagreement seed={seed} q={q}: {answers}\n'
                             + '\n'.join(f'  {o} {r}' for o, r in history))
 
-    for b in [graph] + set_backends:
+    for b in [graph, connected] + set_backends:
         b.close()
 
 
@@ -233,10 +267,11 @@ def test_matrix_4way_boolean(load_fga_schema, seed):
     full grid. This is the feature's acceptance event (boolean spec §10)."""
     schema = load_fga_schema('boolean_wildcards.fga')
     graph = GraphBackend(schema)
+    connected = ConnectedBackend(schema)
     set_backends = [SetBackend(schema, frozenset(), PySets)] \
         + ([SetBackend(schema, frozenset(), RoaringSets)] if RoaringSets else [])
     oracle = OracleBackend(schema)
-    mb = MultiBackend([graph] + set_backends, decider=graph)
+    mb = MultiBackend([graph, connected] + set_backends, decider=graph)
 
     pool = _boolean_pool()
     grid = _boolean_grid()
@@ -256,14 +291,14 @@ def test_matrix_4way_boolean(load_fga_schema, seed):
             history.append((op, raw))
 
         oracle.bind(present)
-        all_backends = [graph, oracle] + set_backends
+        all_backends = [graph, connected, oracle] + set_backends
         for q in grid:
             answers = {b.name: b.check(q) for b in all_backends}
             if len(set(answers.values())) != 1:
                 pytest.fail(f'boolean check disagreement seed={seed} q={q}: {answers}\n'
                             + '\n'.join(f'  {o} {r}' for o, r in history))
 
-    for b in [graph] + set_backends:
+    for b in [graph, connected] + set_backends:
         b.close()
 
 

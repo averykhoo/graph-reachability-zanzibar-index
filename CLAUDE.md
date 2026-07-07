@@ -47,6 +47,14 @@ IVM delta processor.
 - **`tests/oracle.py`** — independent reference oracle (pointwise, boolean-aware).
   **Independence contract:** it imports nothing from the backends and parses the DSL
   itself, so one parser bug can't corrupt both sides of the validation matrix.
+- **`connectedstore/`** — the composed system (Zanzibar/Leopard split): `TupleV1` +
+  permanent `TupleLogV1` = source of truth, graph index = materialized view.
+  `TupleSource` (admission-validated writes returning log-id freshness tokens),
+  `advance_index` (THE apply step — sync inlines it, async loops it via
+  `ConnectedStore.catch_up`), `build_index` (offline bootstrap), `SchemaV4`
+  (write-once schema source; compiled artifacts are cache). Composition layer only:
+  it imports both backends, they never import it. Schemas are static — a new schema
+  means a new store/index.
 - **`legacy/`** — superseded predecessors v1–v3 (v1 in-memory; v3 the DB closure design,
   carrying a documented concurrency note that points at the v4 fix). Runnable
   documentation only — don't build on them; live code still imports `legacy.index_v1.

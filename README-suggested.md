@@ -42,10 +42,14 @@ reference material, not just history.
 ## Repo layout
 
 ```
-zanzibar_utils_v1.py   shared schema layer (parser, compile, validation)
+zanzibar_utils_v1.py   shared schema layer (DSL + OpenFGA JSON parsers, compile,
+                       validation)
 index_v4/              the graph index (closure core, wildcard façade,
                        boolean delta processor, invariants, outbox)
 setengine/             the set engine (bitmap evaluation, MemberSet, interner)
+connectedstore/        the composed system: source-of-truth tuples + permanent
+                       log feeding the index (sync or async), freshness tokens,
+                       offline index builds - the Zanzibar/Leopard split
 legacy/                v1-v3, superseded but runnable documentation
 tests/                 incl. the independent oracle + the validation matrix
 docs/                  architecture notes, design specs, deviations log
@@ -551,11 +555,19 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 * support tracking user-triples and rule-triples in the index
     * partially there: derived-relation storage leaves vs routed leaves make the
       distinction for boolean relations; pure-union relations still mix them
-* parse the fga schema (json) into filters and rewrite rules
-* async outbox worker (the replay property + `drain_deltas` keep the seam viable)
+* ~~parse the fga schema (json) into filters and rewrite rules~~
+  `parse_openfga_json` (OpenFGA 1.1 authorization-model JSON → the same AST)
+* ~~store the filters and rewrite rules in the database~~ resolved by decision:
+  the schema *source* is stored (`SchemaV4`, write-once); compiled rules are a
+  deterministic cache, recompiled on open (persisting them would be a drift surface)
+* ~~support namespacing within the database~~ every table is `store_id`-scoped from
+  the start (`StoreV4`); see `TestMultiStoreIsolation`
+* ~~output the new edges and newly removed edges for external indexing~~
+  `DeltaOutboxV1` + `index_v4/outbox.py`'s `drain_deltas` (transactional, replayable)
+* ~~async outbox worker~~ `ConnectedStore(sync=False)` + `catch_up()` — the worker
+  body exists and is tested (lag, crash-retry exactly-once, convergence); a daemon
+  would just call it on a timer
 * symmetric subject-keyed residues, to lift the two remaining scope rejections
   (object wildcards on derived relations; wildcard usersets over derived relations)
-* store the filters and rewrite rules in the database
-* support namespacing within the database
-    * or just use a new database each time? probably better for it to be in the database though
-* output the new edges and newly removed edges for external indexing
+* a real service wrapper (deliberately skipped: the store is a plain callable API)
+* log compaction, if the tuple log ever outgrows "humans wrote this"

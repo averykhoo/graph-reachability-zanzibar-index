@@ -6,11 +6,12 @@ reference oracle and a validation matrix. Start here; go deeper per file:
 
 | doc | covers |
 |---|---|
+| [`system.md`](./system.md) | the composed system: source-of-truth tuple store + log, the apply step, sync/async schedules, freshness tokens, bootstrap |
 | [`graph-index.md`](./graph-index.md) | closure maintenance, path counts, wildcard split-node model, the ≤4-probe check |
 | [`derived-predicates.md`](./derived-predicates.md) | boolean operators in the graph index: taint, leaf routing, the delta processor, residues |
 | [`verification.md`](./verification.md) | oracle contract, validation matrix, ParityEngine, paranoia/invariants, hypothesis campaign |
 | [`decision-log.md`](./decision-log.md) | load-bearing decisions + rejected alternatives, compressed from the specs |
-| [`../spec-deviations.md`](../spec-deviations.md) | dated implementation record: where the build diverged from the boolean spec and why |
+| [`../spec-deviations.md`](../spec-deviations.md) | dated implementation record: where the builds diverged from the specs and why |
 | [`../specs/`](../specs/) | the full original design specs (see "Citations" below) |
 
 ## The memoization spectrum
@@ -45,6 +46,13 @@ setengine/
   memberset.py           star-closed MemberSet (pos/stars/neg) algebra -- the pinned
                          star×boolean table lives here
   setops.py              pluggable SetOps seam: RoaringSets (default) / PySets
+connectedstore/          the composed system (imports both backends, never imported
+                         by them): SchemaV4 (write-once schema source), TupleLogV1
+                         (permanent tuple log = tokens), IndexCursorV1, TupleSource
+                         (validated source-of-truth writes), advance_index (THE
+                         apply step), ConnectedStore (sync/async schedules,
+                         freshness-gated reads, refresh(), catch_up()),
+                         build_index (offline bootstrap)
 legacy/                  superseded v1-v3, runnable documentation only (v1.MultiSet and
                          v2.Node are still imported by live code)
 tests/
