@@ -1,7 +1,7 @@
 from types import EllipsisType
 from sqlmodel import Session, select
 
-from index_v1 import MultiSet
+from legacy.index_v1 import MultiSet
 from zanzibar_utils_v1 import validate_write_identifiers, validate_node_identifiers
 from .models import DeltaOutboxV1, EdgeV4, NodeV4, Edge, Node, StoreV4
 

@@ -1,9 +1,9 @@
 import pytest
 from sqlmodel import SQLModel
 
-from index_v1 import DirectedAcyclicMultiGraphReachabilityIndex
-from index_v2 import DirectedAcyclicMultiGraphReachabilityIndexV2, Node as NodeV2
-from index_v3 import engine, add_edge, remove_edge, check_reachable
+from legacy.index_v1 import DirectedAcyclicMultiGraphReachabilityIndex
+from legacy.index_v2 import DirectedAcyclicMultiGraphReachabilityIndexV2, Node as NodeV2
+from legacy.index_v3 import engine, add_edge, remove_edge, check_reachable
 
 
 class IndexPolyfill:

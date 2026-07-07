@@ -47,13 +47,17 @@ IVM delta processor.
 - **`tests/oracle.py`** — independent reference oracle (pointwise, boolean-aware).
   **Independence contract:** it imports nothing from the backends and parses the DSL
   itself, so one parser bug can't corrupt both sides of the validation matrix.
-- **`index_v1/2/3.py`** — superseded predecessors (v1 in-memory; v3 the DB closure design,
-  carrying a documented concurrency note that points at the v4 fix). Don't build on them.
-- Design source-of-truth: `graph-boolean-ivm-spec.md` (the boolean/derived-predicate
-  design — code comments cite it as "boolean spec §N") with its implementation record in
-  `docs/spec-deviations.md`. The earlier wildcard-materialization and set-engine specs
-  (cited as bare "spec §N" in older comments) live in git history. Where a spec and the
-  code disagree on a name, the code wins.
+- **`legacy/`** — superseded predecessors v1–v3 (v1 in-memory; v3 the DB closure design,
+  carrying a documented concurrency note that points at the v4 fix). Runnable
+  documentation only — don't build on them; live code still imports `legacy.index_v1.
+  MultiSet` and `legacy.index_v2.Node`.
+- **Docs**: start at `docs/architecture/overview.md` (module map + pointers; the other
+  architecture files cover the graph index, derived predicates, verification, and the
+  decision log). Full design specs live in `docs/specs/` — code comments cite them by
+  section: bare "spec §N" in `index_v4/*` → wildcard-materialization-spec.md, in
+  `setengine/*` → set-engine-spec.md; "boolean spec §N" → graph-boolean-ivm-spec.md.
+  Implementation divergences: `docs/spec-deviations.md`. Where a spec and the code
+  disagree on a name, the code wins.
 
 ## Testing conventions
 - The **validation matrix** (`tests/test_matrix.py`) is what pins "same semantics":

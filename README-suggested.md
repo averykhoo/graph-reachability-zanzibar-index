@@ -31,6 +31,27 @@ All this is to help with indexing permissions in [Google Zanzibar](https://zanzi
 Please read the the code to understand how it works.
 ~~If it doesn't work then this repo will probably be archived.~~
 
+Okay fine, there are docs now. Start at
+[`docs/architecture/overview.md`](./docs/architecture/overview.md) for the module map
+and the short version of everything; the full design specs (with the rejected
+alternatives) are in [`docs/specs/`](./docs/specs/), and the decisions distilled from
+them in [`docs/architecture/decision-log.md`](./docs/architecture/decision-log.md).
+The code cites the specs by section number (`spec §N` / `boolean spec §N`), so they're
+reference material, not just history.
+
+## Repo layout
+
+```
+zanzibar_utils_v1.py   shared schema layer (parser, compile, validation)
+index_v4/              the graph index (closure core, wildcard façade,
+                       boolean delta processor, invariants, outbox)
+setengine/             the set engine (bitmap evaluation, MemberSet, interner)
+legacy/                v1-v3, superseded but runnable documentation
+tests/                 incl. the independent oracle + the validation matrix
+docs/                  architecture notes, design specs, deviations log
+benchmarks/            set-engine benchmark
+```
+
 ## Why does it work
 
 ### Starting with a trivial lookup table
@@ -377,7 +398,8 @@ schema rewrite to rules/filters
 | `(... and ...)`                  | parsed to `Intersection`                | graph: compiled to a derived predicate (leaf routing + delta processor); set engine: bitmap `&`          |
 | `(... but not ...)`              | parsed to `Exclusion`                   | graph: compiled to a derived predicate (edge + residue state); set engine: bitmap `-`                    |
 
-* note: the current rewrite logic is too simple to express the second of those rules right now
+* ~~note: the current rewrite logic is too simple to express the second of those rules right now~~
+  (TTU rewrites landed in `_emit_expr` — `X from Y` compiles to a rule carrying the target relation in the subject predicate)
 * schema type checking, so that all relations always resolve to a single type?
     * or resolve by relations and do duck-typing checks instead? this is more correct maybe but also more effort
 * need some way to track explicitly added tuples vs auto-included tuples?
@@ -522,10 +544,17 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
 
-* re-introduce invariant checks for the index v3, and think of more checks
-* re-introduce randomized testing for v3
+* ~~re-introduce invariant checks for the index v3, and think of more checks~~
+  v4 has I1–I12 + paranoia mode now (`index_v4/invariants.py`); v3 is `legacy/`
+* ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
+  the ParityEngine walks, and the hypothesis campaign (`tests/test_hypothesis.py`)
 * support tracking user-triples and rule-triples in the index
+    * partially there: derived-relation storage leaves vs routed leaves make the
+      distinction for boolean relations; pure-union relations still mix them
 * parse the fga schema (json) into filters and rewrite rules
+* async outbox worker (the replay property + `drain_deltas` keep the seam viable)
+* symmetric subject-keyed residues, to lift the two remaining scope rejections
+  (object wildcards on derived relations; wildcard usersets over derived relations)
 * store the filters and rewrite rules in the database
 * support namespacing within the database
     * or just use a new database each time? probably better for it to be in the database though

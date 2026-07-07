@@ -19,7 +19,7 @@ from sqlmodel import UniqueConstraint
 from sqlmodel import create_engine
 from sqlmodel import select
 
-from index_v1 import MultiSet
+from legacy.index_v1 import MultiSet
 
 
 class Node(SQLModel, table=True):

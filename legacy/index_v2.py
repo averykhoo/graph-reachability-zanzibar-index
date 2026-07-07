@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from uuid import uuid4
 
-from index_v1 import MultiSet
+from legacy.index_v1 import MultiSet
 
 
 @dataclass(frozen=True, unsafe_hash=True, order=True, slots=True)

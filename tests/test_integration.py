@@ -1,10 +1,10 @@
 import pytest
 from sqlmodel import SQLModel
 
-from index_v3 import engine as v3_engine
-from index_v3 import add_edge as v3_add_edge
-from index_v3 import remove_edge as v3_remove_edge
-from index_v3 import check_reachable as v3_check_reachable
+from legacy.index_v3 import engine as v3_engine
+from legacy.index_v3 import add_edge as v3_add_edge
+from legacy.index_v3 import remove_edge as v3_remove_edge
+from legacy.index_v3 import check_reachable as v3_check_reachable
 from zanzibar_utils_v1 import (
     Entity,
     RelationalTriple,

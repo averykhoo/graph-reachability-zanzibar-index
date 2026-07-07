@@ -5,7 +5,7 @@ from pprint import pprint
 from types import EllipsisType
 from typing import Callable
 
-from index_v2 import Node
+from legacy.index_v2 import Node
 
 
 # ---------------------------------------------------------------------------
