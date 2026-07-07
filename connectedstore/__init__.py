@@ -9,6 +9,7 @@ inlined into the write transaction (spec §1/§4).
 from .models import IndexCursorV1, SchemaV4, TupleLogV1
 from .schema_io import (SchemaMismatch, ensure_schema, load_schema,
                         open_graph_index, open_set_engine, save_schema)
+from .source import TupleSource, log_rows, log_watermark
 
 __all__ = [
     "SchemaV4",
@@ -20,4 +21,7 @@ __all__ = [
     "load_schema",
     "open_set_engine",
     "open_graph_index",
+    "TupleSource",
+    "log_rows",
+    "log_watermark",
 ]
