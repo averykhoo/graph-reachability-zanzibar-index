@@ -59,7 +59,8 @@ def log_rows(session: Session, store_id: str, after_id: int = 0,
 class TupleSource:
     """Source-of-truth writes for one tuple store (the Zanzibar half)."""
 
-    def __init__(self, session: Session, store_id: str, *, ops: SetOps = DEFAULT_SETOPS):
+    def __init__(self, session: Session, store_id: str, *, ops: SetOps = DEFAULT_SETOPS,
+                 ruleset=None):
         self.session = session
         self.store_id = store_id
         # the set engine is the online evaluator AND the admission validator
@@ -68,8 +69,10 @@ class TupleSource:
         # last rebuild plus this instance's own writes. evaluator_watermark tracks
         # exactly that ("the evaluator reflects the log through here"), so freshness-
         # token fallbacks can rebuild on demand instead of trusting a stale cache.
+        # ``ruleset`` skips recompiling a schema the caller already compiled.
         self.evaluator_watermark = log_watermark(session, store_id)
-        self.engine: SetEngine = open_set_engine(session, store_id, ops=ops)
+        self.engine: SetEngine = open_set_engine(session, store_id, ops=ops,
+                                                 ruleset=ruleset)
 
     # ------------------------------------------------------------------ #
     # Writes (validate -> TupleV1 -> log append; one transaction)
@@ -82,9 +85,10 @@ class TupleSource:
         Idempotent on duplicates (raw tuples are a set): no state change, no log
         row, current watermark returned."""
         s_pred = '...' if subject_predicate is Ellipsis else subject_predicate
-        if self.engine._row(s_pred, s_type, s_name, relation, o_type, o_name) is not None:
+        if not self.engine.add_tuple(s_pred, s_type, s_name, relation, o_type, o_name):
+            # duplicate: idempotent no-op, no log row; the current watermark
+            # trivially satisfies the token contract
             return log_watermark(self.session, self.store_id)
-        self.engine.add_tuple(s_pred, s_type, s_name, relation, o_type, o_name)
         token = self._append('ADD', s_pred, s_type, s_name, relation, o_type, o_name)
         self.evaluator_watermark = max(self.evaluator_watermark, token)
         return token

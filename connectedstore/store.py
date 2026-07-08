@@ -61,8 +61,10 @@ class ConnectedStore:
         if schema is not None:
             ensure_schema(session, store_id, schema, object_wildcard_shapes)
             session.flush()
-        self.source = TupleSource(session, store_id, ops=ops)
+        # Graph side first: its compiled RuleSet is handed to the set engine so the
+        # shared schema is parsed + compiled once, not once per backend.
         self.widx, self.ruleset = open_graph_index(session, store_id)
+        self.source = TupleSource(session, store_id, ops=ops, ruleset=self.ruleset)
         compiled = self.ruleset.compiled
         self.proc = (DeltaProcessor(self.widx, compiled)
                      if compiled is not None and compiled.plans else None)
@@ -89,9 +91,21 @@ class ConnectedStore:
                            relation, o_type, o_name)
 
     def _write(self, op: str, *raw) -> int:
+        fn = self.source.add if op == 'add' else self.source.remove
         try:
-            fn = self.source.add if op == 'add' else self.source.remove
             token = fn(*raw)
+        except ValueError:
+            # ordinary admission rejection: the set engine validates before mutating
+            # its in-memory state (SetEngine.add_tuple/remove_tuple contract), so
+            # the rollback alone restores truth -- no O(N) evaluator rebuild on the
+            # hot rejection path
+            self.session.rollback()
+            raise
+        except Exception:
+            self.session.rollback()
+            self.source.refresh_evaluator()
+            raise
+        try:
             if self.sync:
                 # the async apply step, inlined (sync schedule): cursor rides the head
                 advance_index(self.session, self.cursor, self.widx, self.ruleset, self.proc)
@@ -99,9 +113,9 @@ class ConnectedStore:
             return token
         except Exception:
             self.session.rollback()
-            # the set engine's in-memory state is a cache over TupleV1 and may have
-            # been mutated before the failure: rebuild it from the rolled-back truth
-            # (also resets the evaluator watermark past the discarded token)
+            # past admission the evaluator HAS the write in memory: it is a cache
+            # over TupleV1, so rebuild it from the rolled-back truth (also resets
+            # the evaluator watermark past the discarded token)
             self.source.refresh_evaluator()
             raise
 

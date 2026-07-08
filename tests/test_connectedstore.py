@@ -133,6 +133,29 @@ def test_rejected_write_lands_nowhere(session, load_fga_schema):
     assert _full_state(session, 'cs', cs.widx) == before
 
 
+def test_rejected_write_skips_evaluator_rebuild(session, load_fga_schema):
+    """An ordinary admission rejection (ValueError) leaves the in-memory evaluator
+    untouched (the set engine validates before mutating), so the O(N) rebuild is
+    reserved for failures past admission -- a burst of invalid writes must not go
+    quadratic (review 3)."""
+    cs = _open(session, load_fga_schema)
+    cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
+
+    calls = []
+    original = cs.source.refresh_evaluator
+    cs.source.refresh_evaluator = lambda: calls.append(1) or original()
+    with pytest.raises(ValueError):
+        cs.add_tuple('...', 'martian', 'zork', 'viewer', 'doc', 'd1')
+    with pytest.raises(ValueError):
+        cs.remove_tuple('...', 'user', 'ghost', 'editor', 'doc', 'd1')
+    cs.source.refresh_evaluator = original
+    assert calls == []
+
+    # the evaluator is still coherent with the (unchanged) ground truth
+    assert cs.source.check('...', 'user', 'u1', 'editor', 'doc', 'd1') is True
+    assert cs.check('...', 'user', 'u1', 'editor', 'doc', 'd1') is True
+
+
 def test_duplicate_add_through_store_is_idempotent(session, load_fga_schema):
     cs = _open(session, load_fga_schema)
     t1 = cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')

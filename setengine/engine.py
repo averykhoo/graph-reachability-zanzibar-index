@@ -157,7 +157,8 @@ class SetEngine:
 
     def __init__(self, session: Session, store_id: str, schema: str, *,
                  object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
-                 ops: SetOps = DEFAULT_SETOPS):
+                 ops: SetOps = DEFAULT_SETOPS,
+                 ruleset=None):
         self.session = session
         self.store_id = store_id
         self.ops = ops
@@ -169,13 +170,18 @@ class SetEngine:
         # matrix flip this covers boolean schemas too (their raw writes route onto
         # leaf families). Schemas the graph still refuses (decision-15 scope, cyclic
         # derived dependencies) have no graph partner: data-cycle rejection is off and
-        # the oracle remains the only cross-check.
-        try:
-            self._ruleset = compile_ruleset(self.ast, self.schema_info)
-        except (UnsupportedByGraphIndex, CyclicDerivedDependency):
-            # Only the graph's documented refusals leave us ruleset-less; any other
-            # ValueError from compile is a regression that must surface (review 3).
-            self._ruleset = None
+        # the oracle remains the only cross-check. A caller that already compiled the
+        # same schema (ConnectedStore opens both backends) passes its RuleSet in.
+        if ruleset is not None:
+            self._ruleset = ruleset
+        else:
+            try:
+                self._ruleset = compile_ruleset(self.ast, self.schema_info)
+            except (UnsupportedByGraphIndex, CyclicDerivedDependency):
+                # Only the graph's documented refusals leave us ruleset-less; any
+                # other ValueError from compile is a regression that must surface
+                # (review 3).
+                self._ruleset = None
         if self._ruleset is not None and self._ruleset.schema_info is not None:
             # Adopt the compiled SchemaInfo: its object-wildcard shapes are CLOSED
             # over the rewrite rules (_expand_object_wildcard_shapes), which is what
@@ -225,20 +231,27 @@ class SetEngine:
     # ------------------------------------------------------------------ #
 
     def add_tuple(self, subject_predicate, s_type: str, s_name: str,
-                  relation: str, o_type: str, o_name: str) -> list:
+                  relation: str, o_type: str, o_name: str) -> bool:
+        """Add one raw tuple; True if added, False for the idempotent duplicate
+        no-op. Raises ``ValueError`` only from validation, BEFORE any in-memory
+        mutation (ConnectedStore's rejection path relies on this to skip the
+        evaluator rebuild). This backend computes no deltas (§6.1)."""
         s_pred = _norm_pred(subject_predicate)
         validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         if self._row(s_pred, s_type, s_name, relation, o_type, o_name) is not None:
-            return []                                  # idempotent: septuple already present
+            return False                               # idempotent: septuple already present
         self._validate(s_pred, s_type, s_name, relation, o_type, o_name)
         self.session.add(TupleV1(
             store_id=self.store_id, subject_predicate=s_pred, subject_type=s_type,
             subject_name=s_name, relation=relation, object_type=o_type, object_name=o_name))
         self._apply_add(s_pred, s_type, s_name, relation, o_type, o_name)
-        return []                                      # this backend computes no deltas (§6.1)
+        return True
 
     def remove_tuple(self, subject_predicate, s_type: str, s_name: str,
-                     relation: str, o_type: str, o_name: str) -> list:
+                     relation: str, o_type: str, o_name: str) -> None:
+        """Remove one raw tuple. Raises ``ValueError`` only from validation /
+        the missing-tuple rejection, BEFORE any in-memory mutation (same contract
+        as ``add_tuple``)."""
         s_pred = _norm_pred(subject_predicate)
         validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
@@ -246,7 +259,6 @@ class SetEngine:
             raise ValueError('non-existent tuple cannot be removed')
         self.session.delete(row)
         self._apply_remove(s_pred, s_type, s_name, relation, o_type, o_name)
-        return []
 
     def _row(self, s_pred, s_type, s_name, relation, o_type, o_name) -> TupleV1 | None:
         return self.session.exec(

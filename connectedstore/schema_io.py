@@ -78,11 +78,13 @@ def ensure_schema(session: Session, store_id: str, schema_text: str,
 
 
 def open_set_engine(session: Session, store_id: str, *,
-                    ops: SetOps = DEFAULT_SETOPS) -> SetEngine:
-    """Open the set engine on a self-describing store (schema loaded from the DB)."""
+                    ops: SetOps = DEFAULT_SETOPS,
+                    ruleset: RuleSet | None = None) -> SetEngine:
+    """Open the set engine on a self-describing store (schema loaded from the DB).
+    ``ruleset`` skips recompiling a schema the caller already compiled."""
     schema_text, shapes = load_schema(session, store_id)
     return SetEngine(session, store_id, schema_text,
-                     object_wildcard_shapes=shapes, ops=ops)
+                     object_wildcard_shapes=shapes, ops=ops, ruleset=ruleset)
 
 
 def open_graph_index(session: Session, store_id: str,
