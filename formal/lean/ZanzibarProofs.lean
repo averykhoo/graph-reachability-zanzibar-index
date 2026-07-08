@@ -14,6 +14,7 @@ import ZanzibarProofs.Spec.WellDef
 
 -- Set-engine model + T1
 import ZanzibarProofs.SetEngine.MemberSet
+import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Eval
 import ZanzibarProofs.SetEngine.Correct
 

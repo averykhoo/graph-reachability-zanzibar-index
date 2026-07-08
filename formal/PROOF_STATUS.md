@@ -53,7 +53,10 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T6a exclusion-effective | `exclusion_effective` | **proved-mod-deps** | via T1/T2b |
 | T6b no-ghost-grant | `no_ghost_grant` | **proved-mod-deps** | via T2b |
 | T6c wildcard scoping | `wildcard_scoping` | placeholder (`rfl`) | refine to real statement in Phase 5 |
-| (lemma) `ext_normalize` | `MemberSet.ext_normalize` | **proved** | first real proof; MemberSet renorm correctness |
+| (lemma) `ext_normalize` | `MemberSet.ext_normalize` | **proved** | MemberSet renorm correctness |
+| (lemmas) algebra ext laws | `ext_union/ext_intersect/ext_subtract` | **proved** | `ext (a⊕b) = ext a ⊕ ext b` (Algebra.lean); T1 workhorses |
+| (lemmas) star laws | `stars_union/intersect/subtract` | **proved** | `rfl` |
+| (lemmas) star×boolean | `containsStar_union/intersect/subtract` | **proved** | the pinned intensional `'*'` table (§5.6) |
 
 ## `sorry` ledger
 
