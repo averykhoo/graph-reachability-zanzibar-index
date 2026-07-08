@@ -156,10 +156,22 @@ def gdrive_queries(n: int, count: int):
     return qs
 
 
+_DM_USERS_PER_ROLE = 6
+_DM_ROLES_PER_DOC = 2
+
+
+def _demorgans_sizes(n: int) -> tuple[int, int, int, int]:
+    """(n_users, n_attrs, n_conds, n_roles) -- shared by generator and query builder
+    so queries hit the REAL universe. Users capped (has_attr is O(attrs x users));
+    attrs/conds/roles grow with n ('a lot of conditions and attributes')."""
+    return (min(n, 250), max(8, n // 2), max(8, n // 2), max(8, n // 2))
+
+
 def gen_demorgans(n: int, *, n_users: int = None, n_attrs: int = None,
                   n_conds: int = None, n_roles: int = None,
                   attrs_per_cond: int = 3, conds_per_role: int = 2,
-                  users_per_role: int = 6, roles_per_doc: int = 2):
+                  users_per_role: int = _DM_USERS_PER_ROLE,
+                  roles_per_doc: int = _DM_ROLES_PER_DOC):
     """demorgans_law_2 dataset: N docs over a shared user/attr/cond/role universe.
 
     access(u, doc) = ∃ role r associated with doc: u assigned to r AND for every
@@ -168,10 +180,11 @@ def gen_demorgans(n: int, *, n_users: int = None, n_attrs: int = None,
     missing_user / user_met_requirement have their star coverage. has_attr is given
     to ~half the users per attr, so the ∀-over-required-attrs makes the answer
     genuinely mixed rather than trivially true or false."""
-    n_users = n_users or min(n, 250)      # cap: has_attr is O(attrs x users)
-    n_attrs = n_attrs or max(8, n // 2)
-    n_conds = n_conds or max(8, n // 2)
-    n_roles = n_roles or max(8, n // 2)
+    du, da, dc, dr = _demorgans_sizes(n)
+    n_users = n_users or du
+    n_attrs = n_attrs or da
+    n_conds = n_conds or dc
+    n_roles = n_roles or dr
 
     for a in range(n_attrs):
         yield ('...', 'user', '*', '_all_users', 'attr', f'a{a}')        # star coverage
@@ -195,10 +208,20 @@ def gen_demorgans(n: int, *, n_users: int = None, n_attrs: int = None,
 
 
 def demorgans_queries(n: int, count: int):
+    """Doc-AWARE query mix so checks traverse the real cascade, not a fast-false
+    path. For doc d (associated with roles r_{d%R}, r_{(d+1)%R}), a user assigned to
+    one of those roles is u_{(role*6 + k) % U}; querying those exercises the full
+    assigned ∧ role_user_met path (true/false split by whether they meet the cond's
+    required attrs). 1/3 are ghosts (guaranteed misses)."""
+    n_users, _, _, n_roles = _demorgans_sizes(n)
     qs = []
     for i in range(count):
         d = i % n
-        u = f'u{(i * 5) % n}' if i % 3 else f'ghost{i}'
+        if i % 3 == 0:
+            qs.append(('...', 'user', f'ghost{i}', 'access', 'doc', f'd{d}'))
+            continue
+        role = (d + (i % _DM_ROLES_PER_DOC)) % n_roles         # a role associated with d
+        u = f'u{(role * _DM_USERS_PER_ROLE + (i % _DM_USERS_PER_ROLE)) % n_users}'  # assigned to it
         qs.append(('...', 'user', u, 'access', 'doc', f'd{d}'))
     return qs
 
