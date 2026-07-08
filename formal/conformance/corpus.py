@@ -151,6 +151,58 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "carol", "banned", "doc", "d1")],
         (),
     ),
+    "taint_union_over_boolean": (
+        # §3.1 taint: a plain union OVER a boolean relation must still serve
+        # star-covered members. viewer is boolean (star base minus blocked);
+        # approver unions viewer with admin.
+        """
+        type user
+        type doc
+          define base: [user:*]
+          define blocked: [user]
+          define viewer: base but not blocked
+          define admin: [user]
+          define approver: viewer or admin
+        """,
+        [mk_tuple("...", "user", "*", "base", "doc", "d1"),
+         mk_tuple("...", "user", "mallory", "blocked", "doc", "d1"),
+         mk_tuple("...", "user", "root", "admin", "doc", "d1")],
+        (),
+    ),
+    "nested_boolean": (
+        """
+        type user
+        type doc
+          define editor: [user]
+          define required: [user]
+          define banned: [user]
+          define viewer: (editor and required) but not banned
+        """,
+        [mk_tuple("...", "user", "alice", "editor", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "required", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "editor", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "required", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "banned", "doc", "d1")],
+        (),
+    ),
+    "double_exclusion": (
+        # a but not (b but not c): parenthesized nested exclusion as the subtrahend.
+        """
+        type user
+        type doc
+          define a: [user]
+          define b: [user]
+          define c: [user]
+          define viewer: a but not (b but not c)
+        """,
+        [mk_tuple("...", "user", "alice", "a", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "a", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "b", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "a", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "b", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "c", "doc", "d1")],
+        (),
+    ),
     "demorgans": (
         # (A but not B) vs (not (not A or B)) style — exercise nested exclusion.
         """
