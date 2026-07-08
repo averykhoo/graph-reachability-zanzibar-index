@@ -582,6 +582,22 @@ was the oracle-agent's wildcard-tupleset divergence).
 (decision-15 family). Derived evaluation probes the closure directly and cannot
 see w_all state, so such a grant would be silently invisible to the plan.
 
+**D4 widened (review 3) — the decision-15-family guards run on the EXPANDED
+shape set and cover every TTU position.** `_reject_object_wildcard_scope` runs
+twice in `compile_ruleset`: on the declared shapes before plan construction and
+again after `_expand_object_wildcard_shapes` closes them over the rewrite rules
+(a shape one Computed/TTU hop upstream of a rejected position is the same shape
+post-expansion — guarding declared shapes only re-admitted the rejected class,
+and the first legal star-object write crashed the delta processor). Newly
+rejected alongside the original two: shapes expanding onto compiled leaf
+predicates, shapes on the TUPLESET relation of a tainted plan's TTU
+(`tupleset_parents` reads direct stored tuples and never consults w_all —
+silent wrong denials with no invariant tripping), and star-tupleset
+through-shapes landing on a derived TTU target (an underived wildcard userset
+over a derived relation; it structurally violated I3). The set engine now
+adopts the compiled RuleSet's expanded `SchemaInfo`, so star-object write
+admission agrees across backends.
+
 The rest, by area:
 
 * **Memo poisoning under the recursion guard (CRITICAL, oracle + set engine +
