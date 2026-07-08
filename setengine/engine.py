@@ -15,6 +15,7 @@ from types import EllipsisType
 from sqlmodel import Session, select
 
 from zanzibar_utils_v1 import (
+    CyclicDerivedDependency,
     Entity,
     RelationalTriple,
     parse_schema_ast,
@@ -171,7 +172,9 @@ class SetEngine:
         # the oracle remains the only cross-check.
         try:
             self._ruleset = compile_ruleset(self.ast, self.schema_info)
-        except (UnsupportedByGraphIndex, ValueError):
+        except (UnsupportedByGraphIndex, CyclicDerivedDependency):
+            # Only the graph's documented refusals leave us ruleset-less; any other
+            # ValueError from compile is a regression that must surface (review 3).
             self._ruleset = None
         if self._ruleset is not None and self._ruleset.schema_info is not None:
             # Adopt the compiled SchemaInfo: its object-wildcard shapes are CLOSED

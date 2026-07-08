@@ -33,8 +33,9 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from index_v4.invariants import snapshot_rows
 from setengine import SetEngine, ALL_SETOPS
 from setengine.models import TupleV1
-from zanzibar_utils_v1 import (Entity, RelationalTriple, UnsupportedByGraphIndex,
-                               parse_openfga_schema, parse_schema_ast, _iter_directs)
+from zanzibar_utils_v1 import (CyclicDerivedDependency, Entity, RelationalTriple,
+                               UnsupportedByGraphIndex, parse_openfga_schema,
+                               parse_schema_ast, _iter_directs)
 from tests.oracle import Oracle, OracleTuple
 from tests.wildcard_helpers import make_wildcard_index, assert_wildcard_invariants
 
@@ -149,15 +150,19 @@ class ParityEngine:
         self.ast = parse_schema_ast(schema)
 
         # Graph joins iff the schema compiles for it. Cyclic derived dependencies
-        # raise ValueError (not UnsupportedByGraphIndex) and must also degrade to
-        # 3-way -- blind-audit X7: catching only the latter made ParityEngine
-        # unconstructible on exactly the schema class (cyclic booleans) where the
-        # evaluator memo bug lived.
+        # (CyclicDerivedDependency, a ValueError subclass) must also degrade to
+        # 3-way -- blind-audit X7: catching only UnsupportedByGraphIndex made
+        # ParityEngine unconstructible on exactly the schema class (cyclic
+        # booleans) where the evaluator memo bug lived. ONLY those two: a bare
+        # ValueError from compile is a regression that must surface, not silently
+        # shrink the matrix to 3-way (review 3).
         try:
             ruleset = parse_openfga_schema(schema, object_wildcard_shapes=object_wildcard_shapes)
             self.graph: _GraphSide | None = _GraphSide(ruleset, paranoia=paranoia)
-        except (UnsupportedByGraphIndex, ValueError):
+            self.graph_drop_reason: str | None = None
+        except (UnsupportedByGraphIndex, CyclicDerivedDependency) as e:
             self.graph = None
+            self.graph_drop_reason = f'{type(e).__name__}: {e}'
 
         self.set_sides = [_SetSide(schema, object_wildcard_shapes, ops) for ops in ALL_SETOPS]
         self.stateful = ([self.graph] if self.graph else []) + self.set_sides

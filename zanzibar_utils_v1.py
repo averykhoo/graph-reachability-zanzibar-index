@@ -463,6 +463,15 @@ class UnsupportedByGraphIndex(Exception):
     """
 
 
+class CyclicDerivedDependency(ValueError):
+    """Derived relations form a dependency cycle (boolean spec §1.9 forbids
+    recursion through boolean relations). A ``ValueError`` subclass for backwards
+    compatibility, but its OWN type so graph-optional consumers (ParityEngine,
+    the set engine's cycle-parity compile) can degrade on exactly this rejection
+    without swallowing every other ``ValueError`` a compile regression might
+    raise."""
+
+
 # ---- leaves ----
 
 @dataclass(frozen=True, slots=True)
@@ -1666,7 +1675,7 @@ def _stratify(plans: dict) -> list[list[tuple[str, str]]]:
 
     if placed != len(plans):
         cyclic = sorted(k for k, d in indeg.items() if d > 0)
-        raise ValueError(
+        raise CyclicDerivedDependency(
             f"derived relations form a dependency cycle (boolean spec §1.9 forbids "
             f"recursion through boolean relations): {cyclic}")
     return strata
