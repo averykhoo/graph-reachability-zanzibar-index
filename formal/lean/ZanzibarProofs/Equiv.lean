@@ -45,7 +45,7 @@ theorem exclusion_effective (S : Schema) (T : Store) (σ : GraphState) (q : Quer
     (`T'` is the post-removal store; `σ'` its reached state.) -/
 theorem no_ghost_grant (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
     (hWF : WF S) (hStrat : Stratifiable S) (hAcc : GraphAccepts S)
-    (hInv : Inv S σ') (hReach : ReachedBy σ' S T') (hValid : AllValid T')
+    (hInv : Inv S σ') (hReach : ReachedBy σ' S T') (_hValid : AllValid T')
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
   rw [graph_correct S T' σ' q hWF hStrat hAcc hInv hReach]; exact hDeny
