@@ -133,6 +133,14 @@ class DeltaProcessor:
         self.store_id = widx.idx.store_id
         self.compiled = compiled
         self.subject_shapes = sorted(widx.schema_info.subject_wildcard_shapes)
+        # spec -> plan-tree node, by identity (blind-audit P2: two same-target TTU
+        # leaves carry EQUAL specs, so the pairing must be positional/identity,
+        # never by name). Built once; specs stay alive on their Plan's tuples.
+        self._leaf_node_by_spec = {
+            id(spec): node
+            for plan in compiled.plans.values()
+            for spec, node in zip(plan.leaves, plan.leaf_nodes)
+        }
         # residue bumps of the current round, consumed by the cascade as extra
         # invalidations for the next round (spec §5.2: version bumps enqueue the same
         # dependent keys; they emit no outbox rows).
@@ -157,16 +165,7 @@ class DeltaProcessor:
 
     def _residue_state(self, object_type: str, rel: str, obj_name: str
                        ) -> tuple[frozenset, set[int], set[int]]:
-        node = self._node(rel, object_type, obj_name)
-        if node is None:
-            return frozenset(), set(), set()
-        row = self._residue_row(node.id)
-        if row is None:
-            return frozenset(), set(), set()
-        stars = frozenset(tuple(s) for s in json.loads(row.stars))
-        neg = set(json.loads(row.neg))
-        upos = set(json.loads(row.upos))
-        return stars, neg, upos
+        return self.widx._residue_state(rel, object_type, obj_name)
 
     def residue_stars(self, object_type: str, rel: str, obj_name: str) -> frozenset:
         return self._residue_state(object_type, rel, obj_name)[0]
@@ -174,31 +173,11 @@ class DeltaProcessor:
     def derived_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey) -> bool:
         """The §6 derived membership check: edge probe + residue (point reads).
 
-        Userset-shaped subjects are answered from the residue's ``upos`` (never from
-        edges -- blind-audit P4: a userset edge would leak through the closure to
-        every member, past their individual exclusions)."""
+        Delegates to the façade's ``_check_derived`` -- the read path and the
+        processor's reconcile MUST share one implementation, or a semantics fix in
+        one (e.g. the blind-audit P4 upos rule) silently diverges the other."""
         sp, st, sn = s
-        obj_node = self._node(rel, object_type, obj_name)
-        if obj_node is None:
-            return False
-        if sn == '*':
-            stars, _, _ = self._residue_state(object_type, rel, obj_name)
-            return _shape(sp, st) in stars
-        s_node = self._node(sp, st, sn)
-        if sp != '...':
-            # userset subject: edge-free membership
-            stars, neg, upos = self._residue_state(object_type, rel, obj_name)
-            if s_node is not None and s_node.id in upos:
-                return True
-            if _shape(sp, st) not in stars:
-                return False
-            return s_node is None or s_node.id not in neg
-        if s_node is not None and self.idx.check_reachable_by_id(s_node.id, obj_node.id):
-            return True
-        stars, neg, _ = self._residue_state(object_type, rel, obj_name)
-        if _shape(sp, st) not in stars:
-            return False
-        return s_node is None or s_node.id not in neg
+        return self.widx._check_derived(sp, st, sn, rel, object_type, obj_name)
 
     def member_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey) -> bool:
         """Membership in (object_type, rel) -- derived (edge+residue) when tainted,
@@ -490,7 +469,7 @@ class DeltaProcessor:
         if spec.kind == 'derived-userset':
             # stored usersets x of (t, p): pull residue(x, p).neg
             out: set[int] = set()
-            tree_node = self._find_leaf_node(spec, object_type)
+            tree_node = self._find_leaf_node(spec)
             for x in self.stored_userset_subjects(object_type, obj_name, spec.predicate,
                                                   tree_node.subject_type,
                                                   tree_node.subject_predicate):
@@ -498,7 +477,7 @@ class DeltaProcessor:
                                            tree_node.subject_predicate, x)[1]
             return out
         if spec.kind == 'derived-ttu':
-            node = self._find_leaf_node(spec, object_type)
+            node = self._find_leaf_node(spec)
             out = set()
             for (pt, pn) in self.tupleset_parents(object_type, obj_name,
                                                   node.tupleset_rel, node.parent_types):
@@ -506,7 +485,7 @@ class DeltaProcessor:
                     out |= self._residue_state(pt, node.target_rel, pn)[1]
             return out
         if spec.kind == 'derived-tupleset-ttu':
-            node = self._find_leaf_node(spec, object_type)
+            node = self._find_leaf_node(spec)
             out = set()
             for (pt, pn) in self.derived_stored_parents(object_type, obj_name,
                                                         node.tupleset_rel, node.parent_types):
@@ -527,7 +506,7 @@ class DeltaProcessor:
             d_node = self._node(spec.predicate, object_type, obj_name)
             return [] if d_node is None else self._incoming_concretes(d_node.id)
         if spec.kind == 'derived-ttu':
-            node = self._find_leaf_node(spec, object_type)
+            node = self._find_leaf_node(spec)
             out: dict[int, NodeV4] = {}
             for (pt, pn) in self.tupleset_parents(object_type, obj_name,
                                                   node.tupleset_rel, node.parent_types):
@@ -537,7 +516,7 @@ class DeltaProcessor:
                         out[n.id] = n
             return list(out.values())
         if spec.kind == 'derived-tupleset-ttu':
-            node = self._find_leaf_node(spec, object_type)
+            node = self._find_leaf_node(spec)
             out = {}
             for (pt, pn) in self.derived_stored_parents(object_type, obj_name,
                                                         node.tupleset_rel, node.parent_types):
@@ -548,19 +527,16 @@ class DeltaProcessor:
             return list(out.values())
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
-    def _find_leaf_node(self, spec, object_type: str):
+    def _find_leaf_node(self, spec):
         """The plan-tree node for a leaf spec, via the compile-time index-aligned
         pairing (blind-audit P2: reconstructing this by name resolved two
         same-target TTU leaves to the same node, silently dropping one tupleset's
         parents -- and audit_fixpoint shared the blindness). Identity match: specs
         handed to us always come from a plan's own ``leaves`` tuple."""
-        for plan in self.compiled.plans.values():
-            if plan.key[0] != object_type:
-                continue
-            for s, node in zip(plan.leaves, plan.leaf_nodes):
-                if s is spec:
-                    return node
-        raise AssertionError(f'plan node not found for leaf {spec}')
+        node = self._leaf_node_by_spec.get(id(spec))
+        if node is None:
+            raise AssertionError(f'plan node not found for leaf {spec}')
+        return node
 
     def _gc_public_node(self, object_type: str, rel: str, obj_name: str) -> None:
         """Processor-managed lifecycle for the pinned derived-public node: it is
@@ -794,7 +770,7 @@ class DeltaProcessor:
                 names |= self._live_keys_of(object_type, spec.predicate)
             elif spec.kind == 'derived-ttu':
                 # objects holding tupleset tuples: the (T, *, tupleset_rel) family
-                node = self._find_leaf_node(spec, object_type)
+                node = self._find_leaf_node(spec)
                 rows = self.session.exec(
                     select(NodeV4).where(NodeV4.store_id == self.store_id)
                     .where(NodeV4.type == object_type)
@@ -805,7 +781,7 @@ class DeltaProcessor:
             elif spec.kind == 'derived-tupleset-ttu':
                 # stored tuples of a derived tupleset live on ITS leaf families,
                 # which its own live keys enumerate (strictly lower stratum)
-                node = self._find_leaf_node(spec, object_type)
+                node = self._find_leaf_node(spec)
                 names |= self._live_keys_of(object_type, node.tupleset_rel)
         return names
 

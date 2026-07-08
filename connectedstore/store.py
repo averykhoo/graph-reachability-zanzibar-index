@@ -152,10 +152,10 @@ class ConnectedStore:
     def refresh(self) -> None:
         """Replica-reader poll: drop the current read snapshot and every read-path
         cache, so the next queries see the latest committed state coherently
-        (fresh transaction + rebuilt evaluator + cleared w-id cache)."""
+        (fresh transaction + rebuilt evaluator; the graph read path is uncached
+        by design -- blind-audit W2)."""
         self.session.rollback()
         self.source.refresh_evaluator()
-        self.widx._invalidate_w_cache()
 
     def lag(self) -> int:
         """Log rows the index has not yet applied (0 = fully caught up). A COUNT

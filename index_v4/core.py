@@ -316,14 +316,10 @@ class ReachabilityIndex:
             if row is None:
                 raise ValueError(f'node id {nid} no longer exists (concurrent removal?)')
 
-    def add_edge_by_id(self, subject_id: int, object_id: int) -> None:
-        """Add a direct edge between two already-resolved node ids.
-
-        Performs the same reverse-reachability cycle pre-check as add_edge, then
-        the ref-counted +1 direct-edge update. The façade uses this so it never
-        re-resolves names it already resolved. Reachability flips are recorded in
-        the delta outbox (boolean spec §4); drain with index_v4.outbox helpers.
-        """
+    def _add_edge_locked(self, subject_id: int, object_id: int) -> None:
+        """Cycle pre-check + ref-counted +1 direct-edge update. Caller holds the
+        store lock and has established both ids are live (resolution under the lock
+        counts: every writer serializes on it, so no concurrent removal can land)."""
         if subject_id == object_id:
             # a tuple whose subject node IS its object node is the trivial cycle;
             # a real rejection, not an assert (under -O the assert would fall into
@@ -331,12 +327,6 @@ class ReachabilityIndex:
             raise ValueError(
                 f'{subject_id=} equals {object_id=}: self-referential edge would '
                 f'create a cycle')
-
-        # Serialize the cycle check + ref-counted closure mutation against other writers
-        # (held until commit): otherwise the check and the update are separate steps, so
-        # concurrent adds can jointly create a cycle or lose count increments.
-        self._lock_store()
-        self._require_live_nodes(subject_id, object_id)
 
         triple = self.session.exec(
             select(EdgeV4)
@@ -351,14 +341,28 @@ class ReachabilityIndex:
 
         self._add_direct_edge_unsafe(subject_id, object_id, 1)
 
-    def remove_edge_by_id(self, subject_id: int, object_id: int) -> None:
-        """Remove a direct edge between two already-resolved node ids (ref-counted -1)."""
+    def add_edge_by_id(self, subject_id: int, object_id: int) -> None:
+        """Add a direct edge between two already-resolved node ids.
+
+        Performs the same reverse-reachability cycle pre-check as add_edge, then
+        the ref-counted +1 direct-edge update. The façade uses this so it never
+        re-resolves names it already resolved. Reachability flips are recorded in
+        the delta outbox (boolean spec §4); drain with index_v4.outbox helpers.
+        """
+        # Serialize the cycle check + ref-counted closure mutation against other writers
+        # (held until commit): otherwise the check and the update are separate steps, so
+        # concurrent adds can jointly create a cycle or lose count increments. The ids
+        # may come from a PRE-lock resolution, so re-verify liveness inside the lock.
+        self._lock_store()
+        self._require_live_nodes(subject_id, object_id)
+        self._add_edge_locked(subject_id, object_id)
+
+    def _remove_edge_locked(self, subject_id: int, object_id: int) -> None:
+        """Direct-edge existence check + ref-counted -1 update. Caller holds the
+        store lock (same contract as ``_add_edge_locked``)."""
         if subject_id == object_id:
             raise ValueError(
                 f'{subject_id=} equals {object_id=}: no self-referential edge can exist')
-
-        self._lock_store()   # serialize the ref-counted closure mutation (held until commit)
-        self._require_live_nodes(subject_id, object_id)
 
         triple = self.session.exec(
             select(Edge)
@@ -372,6 +376,12 @@ class ReachabilityIndex:
                 f'{subject_id=} has no direct edge to {object_id=}, cannot remove nonexistent edge')
 
         self._add_direct_edge_unsafe(subject_id, object_id, -1)
+
+    def remove_edge_by_id(self, subject_id: int, object_id: int) -> None:
+        """Remove a direct edge between two already-resolved node ids (ref-counted -1)."""
+        self._lock_store()   # serialize the ref-counted closure mutation (held until commit)
+        self._require_live_nodes(subject_id, object_id)
+        self._remove_edge_locked(subject_id, object_id)
 
     def check_reachable_by_id(self, subject_id: int, object_id: int) -> bool:
         """The edge point lookup only: is object reachable from subject?"""
@@ -403,7 +413,8 @@ class ReachabilityIndex:
         # resolve-then-mutate gap would hand us stale ids (blind-audit C2)
         _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=True)
         _object = self.node(relation, object_type, object_name, create_if_missing=True)
-        self.add_edge_by_id(_subject.id, _object.id)
+        # resolved under the lock: live by construction, no re-verification round trip
+        self._add_edge_locked(_subject.id, _object.id)
 
     def remove_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                     object_type: str, object_name: str) -> None:
@@ -416,7 +427,7 @@ class ReachabilityIndex:
         except KeyError as e:
             raise ValueError('Non-existent edge cannot be removed') from e
 
-        self.remove_edge_by_id(_subject.id, _object.id)
+        self._remove_edge_locked(_subject.id, _object.id)
 
     def remove_node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str) -> None:
         validate_node_identifiers(predicate, entity_type, entity_name)

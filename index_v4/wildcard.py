@@ -112,10 +112,6 @@ class WildcardIndex:
         node = self._w_node(entity_type, predicate, variant, create=False)
         return node.id if node is not None else None
 
-    def _invalidate_w_cache(self) -> None:
-        """No-op since the w-id cache was removed (blind-audit W2); kept so existing
-        call sites and consumers (ConnectedStore.refresh) stay source-compatible."""
-
     def _bridge_degree(self, shape: tuple[str, str]) -> int:
         return ((1 if shape in self.schema_info.bridged_in_shapes else 0)
                 + (1 if shape in self.schema_info.bridged_out_shapes else 0))
@@ -140,6 +136,22 @@ class WildcardIndex:
             if not self.idx.direct_edge_exists_by_id(w_all.id, node.id):
                 self.idx.add_edge_by_id(w_all.id, node.id)          # w_all -> concrete (bridge)
 
+    def _strip_bridges(self, node_id: int, shape: tuple[str, str]) -> None:
+        """Remove a concrete node's bridge edges (in, then out), tolerating the
+        implicit GC that the first strip may trigger."""
+        entity_type, predicate = shape
+        if shape in self.schema_info.bridged_in_shapes:
+            w_any = self._w_node(entity_type, predicate, 'any', create=False)
+            if w_any is not None and self.idx.direct_edge_exists_by_id(node_id, w_any.id):
+                self.idx.remove_edge_by_id(node_id, w_any.id)
+        # re-fetch: the first removal may already have collected the node
+        if self._node_by_id(node_id) is None:
+            return
+        if shape in self.schema_info.bridged_out_shapes:
+            w_all = self._w_node(entity_type, predicate, 'all', create=False)
+            if w_all is not None and self.idx.direct_edge_exists_by_id(w_all.id, node_id):
+                self.idx.remove_edge_by_id(w_all.id, node_id)
+
     def _maybe_remove_bridges(self, node: NodeV4) -> None:
         """If a concrete node's only remaining edges are its bridges, strip them so the
         core's implicit GC deletes it (§7.3)."""
@@ -154,18 +166,7 @@ class WildcardIndex:
             return                                                  # already collected
         if not (fresh.implicit and fresh.reference_count == degree):
             return
-        if shape in self.schema_info.bridged_in_shapes:
-            w_any = self._w_node(node.type, node.predicate, 'any', create=False)
-            if w_any is not None and self.idx.direct_edge_exists_by_id(fresh.id, w_any.id):
-                self.idx.remove_edge_by_id(fresh.id, w_any.id)
-        # re-fetch: the first removal may already have collected the node
-        fresh = self._node_by_id(node.id)
-        if fresh is None:
-            return
-        if shape in self.schema_info.bridged_out_shapes:
-            w_all = self._w_node(node.type, node.predicate, 'all', create=False)
-            if w_all is not None and self.idx.direct_edge_exists_by_id(w_all.id, fresh.id):
-                self.idx.remove_edge_by_id(w_all.id, fresh.id)
+        self._strip_bridges(fresh.id, shape)
 
     def _node_by_id(self, node_id: int) -> NodeV4 | None:
         return self.idx.session.exec(
@@ -188,7 +189,6 @@ class WildcardIndex:
 
         Idempotent; safe to call always. Does not create a w node for a shape that has
         no concrete instances (avoids orphan wildcard nodes)."""
-        self._invalidate_w_cache()
         # Serialize against live writers: the existence probes below are
         # check-then-act on ref-counted bridge edges (blind-audit C2).
         self.idx._lock_store()
@@ -235,7 +235,6 @@ class WildcardIndex:
         writes here directly unless you deduplicate them yourself."""
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._assert_derived_exclusivity(relation, o_type)
-        self._invalidate_w_cache()
         # Lock BEFORE resolution, exactly like core.add_edge (blind-audit C2): a
         # concurrent remove_node in the resolve-then-mutate gap would hand us stale
         # ids, and the bridge existence probes below are check-then-act -- two
@@ -266,7 +265,6 @@ class WildcardIndex:
                      relation: str, o_type: str, o_name: str) -> None:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._assert_derived_exclusivity(relation, o_type)
-        self._invalidate_w_cache()
         self.idx._lock_store()   # lock before resolution (blind-audit C2)
         try:
             subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=False)
@@ -301,7 +299,6 @@ class WildcardIndex:
         pred = _norm_pred(predicate)
         # derived-public nodes are processor-owned state (I5), same as their edges
         self._assert_derived_exclusivity(pred, entity_type)
-        self._invalidate_w_cache()
         self.idx._lock_store()   # lock before resolution (blind-audit C2)
         try:
             node = self.idx.node(pred, entity_type, name, create_if_missing=False)
@@ -310,18 +307,8 @@ class WildcardIndex:
 
         if node.wildcard == '':
             node_id = node.id
-            shape = (node.type, node.predicate)
-            if shape in self.schema_info.bridged_in_shapes:
-                w_any = self._w_node(node.type, node.predicate, 'any', create=False)
-                if w_any is not None and self.idx.direct_edge_exists_by_id(node_id, w_any.id):
-                    self.idx.remove_edge_by_id(node_id, w_any.id)
-            # stripping the in-bridge may already have implicit-GC'd the node
-            if self._node_by_id(node_id) is None:
-                return
-            if shape in self.schema_info.bridged_out_shapes:
-                w_all = self._w_node(node.type, node.predicate, 'all', create=False)
-                if w_all is not None and self.idx.direct_edge_exists_by_id(w_all.id, node_id):
-                    self.idx.remove_edge_by_id(w_all.id, node_id)
+            self._strip_bridges(node_id, (node.type, node.predicate))
+            # stripping a bridge may already have implicit-GC'd the node
             if self._node_by_id(node_id) is None:
                 return
 
@@ -478,20 +465,21 @@ class WildcardIndex:
                                      result: LookupResult) -> None:
         shape = (s_type, s_pred)
         s_node = None if s_name == '*' else self._get_concrete(s_pred, s_type, s_name)
+        concrete = s_node is not None
         rows = self.idx.session.exec(
             select(ResidueV1).where(ResidueV1.store_id == self.idx.store_id)
         ).all()
         for row in rows:
-            if s_name != '*' and s_node is not None \
-                    and s_node.id in set(json.loads(row.upos)):
+            # stars first (small, and the common filter) so the per-row upos/neg
+            # JSON decodes only run on the branch that needs them
+            covered = shape in frozenset(tuple(s) for s in json.loads(row.stars))
+            if covered:
+                if concrete and s_node.id in set(json.loads(row.neg)) \
+                        and s_node.id not in set(json.loads(row.upos)):
+                    continue
+                result.node_ids.add(row.object_node_id)
+            elif concrete and s_node.id in set(json.loads(row.upos)):
                 result.node_ids.add(row.object_node_id)     # edge-free userset membership
-                continue
-            stars = frozenset(tuple(s) for s in json.loads(row.stars))
-            if shape not in stars:
-                continue
-            if s_name != '*' and s_node is not None and s_node.id in set(json.loads(row.neg)):
-                continue
-            result.node_ids.add(row.object_node_id)
 
     def lookup_reverse(self, relation: str, o_type: str, o_name: str) -> LookupResult:
         """Everything that can reach the object. Symmetric with lookup: w_all/w_any nodes
