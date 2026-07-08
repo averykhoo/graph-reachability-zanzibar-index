@@ -105,6 +105,37 @@ def test_rejects_reserved_dot_in_relation_name():
         parse_openfga_json(model)
 
 
+def test_rejects_duplicate_type_definitions():
+    """S-6 parity with the DSL front-end: a duplicate type_definitions entry used
+    to silently REPLACE the earlier one's relations, so a store bootstrapped from
+    the JSON ran a different schema than the operator wrote (review 3)."""
+    model = _minimal()
+    model['type_definitions'].append({
+        'type': 'doc',
+        'relations': {'viewer': {'computedUserset': {'relation': 'editor'}}},
+    })
+    with pytest.raises(ValueError, match='duplicate type declaration'):
+        parse_openfga_json(model)
+
+
+def test_rejects_reserved_dot_in_referenced_names():
+    """S-5 parity with the DSL front-end: the '.'-namespace lock covers REFERENCED
+    names too. A directly_related_user_types entry (or computedUserset/TTU ref)
+    naming '<relation>.<index>' was a foreign write handle into a compiled leaf
+    family (review 3)."""
+    restriction = _minimal()
+    restriction['type_definitions'][1]['metadata']['relations']['viewer'][
+        'directly_related_user_types'].append({'type': 'doc', 'relation': 'viewer.0'})
+    with pytest.raises(ValueError, match='reserved leaf namespace'):
+        parse_openfga_json(restriction)
+
+    computed = _minimal()
+    computed['type_definitions'][1]['relations']['owner'] = {
+        'computedUserset': {'relation': 'viewer.0'}}
+    with pytest.raises(ValueError, match='reserved leaf namespace'):
+        parse_openfga_json(computed)
+
+
 def test_accepts_json_string_input(load_fga_schema):
     text = load_fga_schema('wildcards.json')
     assert parse_openfga_json(text) == parse_openfga_json(json.loads(text))

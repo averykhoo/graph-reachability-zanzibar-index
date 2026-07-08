@@ -1793,8 +1793,15 @@ def parse_openfga_json(model) -> SchemaAST:
         raise ValueError('OpenFGA conditions are not supported')
 
     ast: SchemaAST = {}
+    seen_types: set[str] = set()
     for type_def in model.get('type_definitions', []):
         object_type = type_def['type']
+        # Same S-6 rule as the DSL front-end: a duplicate type_definitions entry
+        # silently replaced the earlier one's relations -- the store then ran a
+        # different schema than the operator wrote, with no error anywhere.
+        if object_type in seen_types:
+            raise ValueError(f'duplicate type declaration: {object_type!r}')
+        seen_types.add(object_type)
         relations = type_def.get('relations', {})
         metadata = (type_def.get('metadata') or {}).get('relations', {})
         for relation_name, rewrite in relations.items():
@@ -1807,6 +1814,11 @@ def parse_openfga_json(model) -> SchemaAST:
                 (metadata.get(relation_name) or {}).get('directly_related_user_types', []))
             ast[(object_type, relation_name)] = _json_rewrite(
                 rewrite, object_type, relation_name, restrictions)
+    # The S-5 '.'-namespace lock applies to REFERENCED names too (restriction
+    # predicates, computedUserset / tupleToUserset refs) -- the DSL front-end runs
+    # this in parse_schema_ast; skipping it here left a foreign write handle into
+    # compiled leaf families open through JSON metadata.
+    _validate_ast_references(ast)
     return ast
 
 
