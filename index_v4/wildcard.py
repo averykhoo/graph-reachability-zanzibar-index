@@ -189,6 +189,9 @@ class WildcardIndex:
         Idempotent; safe to call always. Does not create a w node for a shape that has
         no concrete instances (avoids orphan wildcard nodes)."""
         self._invalidate_w_cache()
+        # Serialize against live writers: the existence probes below are
+        # check-then-act on ref-counted bridge edges (blind-audit C2).
+        self.idx._lock_store()
         for shape in self.schema_info.bridged_in_shapes:
             entity_type, predicate = shape
             concretes = self._concrete_nodes_of_shape(entity_type, predicate)
@@ -233,6 +236,11 @@ class WildcardIndex:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._assert_derived_exclusivity(relation, o_type)
         self._invalidate_w_cache()
+        # Lock BEFORE resolution, exactly like core.add_edge (blind-audit C2): a
+        # concurrent remove_node in the resolve-then-mutate gap would hand us stale
+        # ids, and the bridge existence probes below are check-then-act -- two
+        # unserialized writers would double-count a ref-counted bridge edge.
+        self.idx._lock_store()
         subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=True)
         obj = self._resolve(relation, o_type, o_name, 'object', create=True)
 
@@ -259,6 +267,7 @@ class WildcardIndex:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._assert_derived_exclusivity(relation, o_type)
         self._invalidate_w_cache()
+        self.idx._lock_store()   # lock before resolution (blind-audit C2)
         try:
             subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=False)
             obj = self._resolve(relation, o_type, o_name, 'object', create=False)
@@ -293,6 +302,7 @@ class WildcardIndex:
         # derived-public nodes are processor-owned state (I5), same as their edges
         self._assert_derived_exclusivity(pred, entity_type)
         self._invalidate_w_cache()
+        self.idx._lock_store()   # lock before resolution (blind-audit C2)
         try:
             node = self.idx.node(pred, entity_type, name, create_if_missing=False)
         except KeyError as e:
