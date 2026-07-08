@@ -15,7 +15,7 @@ Two workloads:
                     graph index materialises the full closure; the set engine walks
                     it on the fly. Local queries (a doc + its ancestor folders +
                     their groups) touch a bounded neighbourhood regardless of N.
-  * ``demorgans``-- demorgans_law_1.fga: a 5-level boolean+TTU derived cascade over
+  * ``demorgans``-- demorgans_law_2.fga: a 5-level boolean+TTU derived cascade over
                     attrs/conds/roles. Graph maintains derived state via the
                     processor; set engine evaluates the booleans pointwise.
 
@@ -158,6 +158,8 @@ def gdrive_queries(n: int, count: int):
 
 _DM_USERS_PER_ROLE = 6
 _DM_ROLES_PER_DOC = 2
+_DM_ATTRS_PER_COND = 3
+_DM_CONDS_PER_ROLE = 2
 
 
 def _demorgans_sizes(n: int) -> tuple[int, int, int, int]:
@@ -167,11 +169,7 @@ def _demorgans_sizes(n: int) -> tuple[int, int, int, int]:
     return (min(n, 250), max(8, n // 2), max(8, n // 2), max(8, n // 2))
 
 
-def gen_demorgans(n: int, *, n_users: int = None, n_attrs: int = None,
-                  n_conds: int = None, n_roles: int = None,
-                  attrs_per_cond: int = 3, conds_per_role: int = 2,
-                  users_per_role: int = _DM_USERS_PER_ROLE,
-                  roles_per_doc: int = _DM_ROLES_PER_DOC):
+def gen_demorgans(n: int):
     """demorgans_law_2 dataset: N docs over a shared user/attr/cond/role universe.
 
     access(u, doc) = ∃ role r associated with doc: u assigned to r AND for every
@@ -179,12 +177,12 @@ def gen_demorgans(n: int, *, n_users: int = None, n_attrs: int = None,
     has_attr a. Every attr/cond declares the [user:*] star (_all_users) so
     missing_user / user_met_requirement have their star coverage. has_attr is given
     to ~half the users per attr, so the ∀-over-required-attrs makes the answer
-    genuinely mixed rather than trivially true or false."""
-    du, da, dc, dr = _demorgans_sizes(n)
-    n_users = n_users or du
-    n_attrs = n_attrs or da
-    n_conds = n_conds or dc
-    n_roles = n_roles or dr
+    genuinely mixed rather than trivially true or false.
+
+    Sizes and fan-outs come ONLY from _demorgans_sizes and the _DM_* module
+    constants — demorgans_queries assumes exactly this shape, so the generator
+    deliberately takes no overrides."""
+    n_users, n_attrs, n_conds, n_roles = _demorgans_sizes(n)
 
     for a in range(n_attrs):
         yield ('...', 'user', '*', '_all_users', 'attr', f'a{a}')        # star coverage
@@ -195,15 +193,15 @@ def gen_demorgans(n: int, *, n_users: int = None, n_attrs: int = None,
                 yield ('...', 'user', f'u{u}', 'has_attr', 'attr', f'a{a}')
     for c in range(n_conds):
         yield ('...', 'user', '*', '_all_users', 'cond', f'c{c}')
-        for k in range(attrs_per_cond):                                  # disjoint attr pairs per cond
+        for k in range(_DM_ATTRS_PER_COND):                              # disjoint attr pairs per cond
             yield ('...', 'attr', f'a{(2 * c + k) % n_attrs}', 'requires', 'cond', f'c{c}')
     for r in range(n_roles):
-        for k in range(users_per_role):
-            yield ('...', 'user', f'u{(r * users_per_role + k) % n_users}', 'assigned', 'role', f'r{r}')
-        for k in range(conds_per_role):
+        for k in range(_DM_USERS_PER_ROLE):
+            yield ('...', 'user', f'u{(r * _DM_USERS_PER_ROLE + k) % n_users}', 'assigned', 'role', f'r{r}')
+        for k in range(_DM_CONDS_PER_ROLE):
             yield ('...', 'cond', f'c{(r + k) % n_conds}', 'match_any', 'role', f'r{r}')
     for d in range(n):
-        for k in range(roles_per_doc):
+        for k in range(_DM_ROLES_PER_DOC):
             yield ('...', 'role', f'r{(d + k) % n_roles}', 'associated_role', 'doc', f'd{d}')
 
 
@@ -212,7 +210,13 @@ def demorgans_queries(n: int, count: int):
     path. For doc d (associated with roles r_{d%R}, r_{(d+1)%R}), a user assigned to
     one of those roles is u_{(role*6 + k) % U}; querying those exercises the full
     assigned ∧ role_user_met path (true/false split by whether they meet the cond's
-    required attrs). 1/3 are ghosts (guaranteed misses)."""
+    required attrs). 1/3 are ghosts (guaranteed misses).
+
+    Role-slot and user-slot come from a multiplicative hash of i, NOT from linear
+    i-arithmetic: any linear stride (i % 2, i % 3, a non-ghost counter, ...)
+    aliases against d = i % n at some scale — e.g. i % 2 parity-locks every even
+    n to even role indices only — silently shrinking the queried role universe.
+    Hashing is still fully deterministic (no RNG)."""
     n_users, _, _, n_roles = _demorgans_sizes(n)
     qs = []
     for i in range(count):
@@ -220,8 +224,9 @@ def demorgans_queries(n: int, count: int):
         if i % 3 == 0:
             qs.append(('...', 'user', f'ghost{i}', 'access', 'doc', f'd{d}'))
             continue
-        role = (d + (i % _DM_ROLES_PER_DOC)) % n_roles         # a role associated with d
-        u = f'u{(role * _DM_USERS_PER_ROLE + (i % _DM_USERS_PER_ROLE)) % n_users}'  # assigned to it
+        h = (i * 0x9E3779B1) & 0xFFFFFFFF                      # Fibonacci hash of i
+        role = (d + ((h >> 7) % _DM_ROLES_PER_DOC)) % n_roles  # a role associated with d
+        u = f'u{(role * _DM_USERS_PER_ROLE + ((h >> 13) % _DM_USERS_PER_ROLE)) % n_users}'  # assigned to it
         qs.append(('...', 'user', u, 'access', 'doc', f'd{d}'))
     return qs
 
@@ -301,7 +306,14 @@ def run(workload: str, backend: str, scale: int, checks: int, ops_name: str,
 
     # correctness spot-check: at least one query must be True and one False, else
     # the query mix is degenerate and the throughput number is meaningless
-    trues = sum(1 for qq in q[:200] if check(*qq))
+    sample = [bool(check(*qq)) for qq in q[:200]]
+    trues = sum(sample)
+    assert 0 < trues < len(sample), (
+        f'degenerate query mix ({trues}/{len(sample)} true): throughput would be meaningless')
+    # Per-query answer signature over the sample: equal sigs for two backends at the
+    # same (workload, scale) prove per-query agreement on these 200 queries; equal
+    # trues_of_200 counts alone would not.
+    answers_sig = f'{int("".join("01"[b] for b in sample), 2):x}'
     rate, el = timed(lambda i: check(*q[i % len(q)]), checks)
 
     tuples_ram = (rss_after - rss_before) if (rss_after and rss_before) else None
@@ -312,6 +324,7 @@ def run(workload: str, backend: str, scale: int, checks: int, ops_name: str,
     print(f'  RSS delta (data)  : {tuples_ram:,.0f} MB' if tuples_ram is not None else '')
     print(f'  peak RSS          : {rss_peak:,.0f} MB' if rss_peak else '')
     print(f'  check throughput  : {rate:,.0f} checks/s  ({checks} checks, {trues}/200 true)')
+    print(f'  answers signature : {answers_sig}')
 
     if emit_json:
         out = Path(__file__).resolve().parent / 'results'
@@ -321,7 +334,8 @@ def run(workload: str, backend: str, scale: int, checks: int, ops_name: str,
                    rss_after_mb=round(rss_after, 1) if rss_after else None,
                    rss_delta_mb=round(tuples_ram, 1) if tuples_ram is not None else None,
                    peak_rss_mb=round(rss_peak, 1) if rss_peak else None,
-                   checks=checks, checks_per_s=round(rate, 1), trues_of_200=trues)
+                   checks=checks, checks_per_s=round(rate, 1), trues_of_200=trues,
+                   answers_sig=answers_sig)
         with (out / 'scale_bench.jsonl').open('a') as fh:
             fh.write(json.dumps(rec) + '\n')
 
