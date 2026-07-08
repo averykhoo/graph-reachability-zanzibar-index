@@ -6,6 +6,24 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Overnight autonomous run (2026-07-09 → 07-10)
+
+User granted full autonomy ("keep going til you're done, I'll review tomorrow in one
+go"). Plan, in priority order, committing each GREEN increment and documenting every
+decision here:
+1. Harden the spec: randomized conformance fuzzing (sem vs oracle vs set engine over
+   random tuple subsets + grids). Safe (pure Python); catches spec bugs like the
+   fuelBound one. Any unresolved divergence → adjudication log, don't block.
+2. Concrete set-engine `expand` model (remove `opaque SetEngineModel.check`) + prove
+   T1 with the algebra lemmas. Main proof effort.
+3. Attempt T0a pigeonhole (`semAux_fuel_stable_step`) and T0b Kahn lemmas.
+4. Attempt T4: define `pathCount` concretely, prove the first-edge recurrence + the
+   counting theorem.
+5. Shrink the opaque surface: concrete graph state types (even if T2/T5 stay sorry).
+6. Final documentation + review summary.
+Discipline: never commit a broken build; if a proof stalls past reasonable effort,
+leave a documented `sorry` and move on. Update this file continuously.
+
 ## Current phase & resume point
 
 - **Phase 1 DONE** (Lean skeleton + all T0–T6 stated; `lake build` green with 9
