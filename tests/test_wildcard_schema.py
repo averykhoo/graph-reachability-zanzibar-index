@@ -3,6 +3,8 @@ P2 schema-layer tests (spec §2): wildcard declaration parsing, strict-vs-permis
 pattern matching, SchemaInfo, and the §2.2 propagation regression.
 """
 
+import pytest
+
 from zanzibar_utils_v1 import (
     Entity,
     EntityPattern,
@@ -25,10 +27,12 @@ def test_parse_relation_rule_wildcard_subjects():
     assert parse_relation_rule('[group:*#member]') == ([('group', 'member', '*')], [])
     # mixed list keeps concrete and wildcard entries distinct
     assert parse_relation_rule('[user, user:*]') == ([('user', None, None), ('user', None, '*')], [])
-    # computed userset still parses as a relation reference (type None)
-    assert parse_relation_rule('writer') == ([(None, 'writer', None)], [])
-    # from-rules unaffected
-    assert parse_relation_rule('owner from parent') == ([], [('owner', 'parent')])
+    # non-bracket input is a parse error: the rewrite-reference fallbacks were
+    # dead in production (_RelationParser only hands bracket tokens here)
+    with pytest.raises(ValueError, match='bracketed'):
+        parse_relation_rule('writer')
+    with pytest.raises(ValueError, match='bracketed'):
+        parse_relation_rule('owner from parent')
 
 
 # ---------------------------------------------------------------------------

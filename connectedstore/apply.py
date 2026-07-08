@@ -15,15 +15,13 @@ processor's cycle guard.
 
 from __future__ import annotations
 
-from types import EllipsisType
-
 from sqlmodel import Session, select
 
 from index_v4 import WildcardIndex
 from index_v4.invariants import InvariantViolation
 from index_v4.outbox import outbox_watermark
 from index_v4.processor import DeltaProcessor
-from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet
+from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet, norm_pred as _norm
 
 from .models import IndexCursorV1, TupleLogV1
 from .source import log_rows
@@ -45,10 +43,6 @@ def ensure_cursor(session: Session, index_store_id: str,
             f"index {index_store_id!r} already materializes source "
             f"{row.source_store_id!r}, not {source_store_id!r}")
     return row
-
-
-def _norm(pred: str | EllipsisType) -> str:
-    return '...' if pred is Ellipsis else pred
 
 
 def _apply_row(row: TupleLogV1, widx: WildcardIndex, ruleset: RuleSet) -> None:

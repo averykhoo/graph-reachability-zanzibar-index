@@ -1,7 +1,6 @@
 import re
 from dataclasses import dataclass, field, replace
 from functools import reduce
-from pprint import pprint
 from types import EllipsisType
 from typing import Callable
 
@@ -377,70 +376,66 @@ def replace_relation(triple: RelationalTriple, relation: str) -> RelationalTripl
                             object=triple.object, subject_predicate=triple.subject_predicate)
 
 
+def norm_pred(pred: 'str | EllipsisType | None') -> str:
+    """The storage form of a subject predicate: '...' for the bare-entity sentinel
+    (Ellipsis or None), else the relation name unchanged. THE shared normalizer --
+    the backends and the composition layer import this instead of keeping copies
+    (the oracle keeps its own by the independence contract)."""
+    return '...' if (pred is Ellipsis or pred is None) else pred
+
+
 def parse_relation_rule(
         rule: str,
 ) -> tuple[list[tuple[str | None, str | None, str | None]], list[tuple[str, str]]]:
     """
-    NOTE: WINDSURF WROTE THIS CODE (extended for wildcard subjects, spec §2.1)
-    Parse a single relation rule into direct assignments and from relations.
-    Returns (direct_assignments, from_relations) where:
-        - direct_assignments is list of (type, predicate, name) for direct type assignments;
-          name is '*' for a wildcard declaration (`T:*` / `T:*#P`), else None
-        - from_relations is list of (relation, from_relation) for 'X from Y' rules
+    Parse one bracketed type-restriction list (spec §2.1) into direct assignments:
+    (type, predicate, name) tuples, where name is '*' for a wildcard declaration
+    (`T:*` / `T:*#P`), else None. The second tuple element is always empty -- it
+    held 'X from Y' pairs when this function also parsed rewrite references; the
+    recursive-descent _RelationParser owns those now and only hands bracket
+    tokens here (the fallback branches were dead in the production pipeline).
 
     Examples:
         "[user]" -> ([(user, None, None)], [])
         "[user, domain#member]" -> ([(user, None, None), (domain, member, None)], [])
         "[user:*]" -> ([(user, None, '*')], [])
         "[group:*#member]" -> ([(group, member, '*')], [])
-        "writer" -> ([(None, writer, None)], [])
-        "owner from parent_folder" -> ([], [(owner, parent_folder)])
     """
     direct_assignments: list[tuple[str | None, str | None, str | None]] = []
-    from_relations: list[tuple[str, str]] = []
 
-    # Bracket lists FIRST (blind-audit S-4: '[user from x]' used to hit the
-    # ' from ' branch and silently parse to an empty, un-writable Direct).
-    if rule.startswith('['):
-        subjects = rule[1:].split(']')[0].split(',')
-        if not any(s.strip() for s in subjects):
-            raise ValueError(f'empty type-restriction list in {rule!r}')
-        for subject in subjects:
-            subject = subject.strip()
-            if not subject:
-                raise ValueError(f'empty entry in type-restriction list {rule!r}')
-            if subject.count('#') > 1:
-                raise ValueError(f'malformed restriction {subject!r} (multiple #)')
-            if '#' in subject:
-                # type#relation or type:*#relation
-                left, subject_predicate = subject.split('#')
-                subject_predicate = subject_predicate.strip()
-            else:
-                # bare type or type:*
-                left, subject_predicate = subject, None
-            left = left.strip()
-            if left.endswith(':*'):
-                subject_type, subject_name = left[:-len(':*')].strip(), '*'
-            else:
-                subject_type, subject_name = left, None
-            # garbage like '[group#]' / '[user: *]' previously produced dead,
-            # never-matching Filters instead of a parse error (blind-audit S-4)
-            if not is_valid_identifier(subject_type):
-                raise ValueError(f'invalid subject type in restriction {subject!r}')
-            if subject_predicate is not None and not is_valid_identifier(subject_predicate):
-                raise ValueError(f'invalid userset relation in restriction {subject!r}')
-            direct_assignments.append((subject_type, subject_predicate, subject_name))
-        return direct_assignments, from_relations
-
-    # Handle 'X from Y' format
-    if ' from ' in rule:
-        relation, from_relation = rule.strip().split(' from ')
-        from_relations.append((relation.strip(), from_relation.strip()))
-        return direct_assignments, from_relations
-
-    # Handle single relation reference (e.g., "writer")
-    direct_assignments.append((None, rule.strip(), None))
-    return direct_assignments, from_relations
+    # Bracket lists only (blind-audit S-4: '[user from x]' used to hit a
+    # ' from ' fallback branch and silently parse to an empty, un-writable Direct).
+    if not rule.startswith('['):
+        raise ValueError(f'expected a bracketed type-restriction list, got {rule!r}')
+    subjects = rule[1:].split(']')[0].split(',')
+    if not any(s.strip() for s in subjects):
+        raise ValueError(f'empty type-restriction list in {rule!r}')
+    for subject in subjects:
+        subject = subject.strip()
+        if not subject:
+            raise ValueError(f'empty entry in type-restriction list {rule!r}')
+        if subject.count('#') > 1:
+            raise ValueError(f'malformed restriction {subject!r} (multiple #)')
+        if '#' in subject:
+            # type#relation or type:*#relation
+            left, subject_predicate = subject.split('#')
+            subject_predicate = subject_predicate.strip()
+        else:
+            # bare type or type:*
+            left, subject_predicate = subject, None
+        left = left.strip()
+        if left.endswith(':*'):
+            subject_type, subject_name = left[:-len(':*')].strip(), '*'
+        else:
+            subject_type, subject_name = left, None
+        # garbage like '[group#]' / '[user: *]' previously produced dead,
+        # never-matching Filters instead of a parse error (blind-audit S-4)
+        if not is_valid_identifier(subject_type):
+            raise ValueError(f'invalid subject type in restriction {subject!r}')
+        if subject_predicate is not None and not is_valid_identifier(subject_predicate):
+            raise ValueError(f'invalid userset relation in restriction {subject!r}')
+        direct_assignments.append((subject_type, subject_predicate, subject_name))
+    return direct_assignments, []
 
 
 # ===========================================================================
@@ -813,21 +808,48 @@ def derive_schema_info(
     )
 
 
-def _restriction_filter(r: Restriction, object_type: str, relation_name: str) -> Filter:
-    """The strict FILTER for one `[...]` restriction (spec §2.1/§2.3).
+def _restriction_pattern(r: Restriction, object_type: str,
+                         relation_name: str) -> RelationalTriplePattern:
+    """The admission pattern for one `[...]` restriction (spec §2.1/§2.3): shared by
+    plain Filters, leaf-routing RewriteFilters, and userset storage-leaf routing.
 
-    The wildcard filter (subject_name='*') matches ONLY wildcard subjects; the concrete
-    filter (subject_name=None) keeps rejecting `T:*`. Object side stays permissive so
-    object-wildcard tuples reach the façade.
+    The wildcard pattern (subject_name='*') matches ONLY wildcard subjects; the
+    concrete pattern (subject_name=None) keeps rejecting `T:*`. Object side stays
+    permissive so object-wildcard tuples reach the façade.
     """
-    return Filter(RelationalTriplePattern(
+    return RelationalTriplePattern(
         subject_predicate=(Ellipsis if r.predicate == '...' else r.predicate),
         subject_type=r.type,
         subject_name=('*' if r.wildcard else None),
         relation=relation_name,
         object_type=object_type,
         object_match_wildcards=True,
-    ))
+    )
+
+
+def _restriction_filter(r: Restriction, object_type: str, relation_name: str) -> Filter:
+    return Filter(_restriction_pattern(r, object_type, relation_name))
+
+
+def _rewrite_rule(expr: 'Computed | TTU', object_type: str, target_relation: str) -> Rule:
+    """The Computed/TTU rewrite Rule (permissive so wildcard subjects propagate,
+    §2.2). ``target_relation`` is the public relation in ``_emit_expr`` and the
+    synthetic leaf predicate in ``_emit_leaf_expr`` -- the pattern shapes are
+    shared by construction, not mirrored by hand."""
+    if isinstance(expr, Computed):
+        return Rule(
+            RelationalTriplePattern(relation=expr.relation, object_type=object_type,
+                                    match_wildcards=True),
+            RelationalTriplePattern(relation=target_relation, object_type=object_type,
+                                    match_wildcards=True),
+        )
+    # `target from tupleset`: a tuple carrying `tupleset` rewrites to `target`#relation.
+    return Rule(
+        RelationalTriplePattern(relation=expr.tupleset_rel, object_type=object_type,
+                                match_wildcards=True),
+        RelationalTriplePattern(subject_predicate=expr.target_rel, relation=target_relation,
+                                object_type=object_type, match_wildcards=True),
+    )
 
 
 def schema_filters(ast: SchemaAST) -> list[Filter]:
@@ -859,22 +881,8 @@ def _emit_expr(expr: Expr, object_type: str, relation_name: str,
     elif isinstance(expr, Direct):
         for r in expr.restrictions:
             out.append(_restriction_filter(r, object_type, relation_name))
-    elif isinstance(expr, Computed):
-        # Permissive RULE so wildcard subjects propagate through computed usersets (§2.2).
-        out.append(Rule(
-            RelationalTriplePattern(relation=expr.relation, object_type=object_type,
-                                    match_wildcards=True),
-            RelationalTriplePattern(relation=relation_name, object_type=object_type,
-                                    match_wildcards=True),
-        ))
-    elif isinstance(expr, TTU):
-        # `target from tupleset`: a tuple carrying `tupleset` rewrites to `target`#relation.
-        out.append(Rule(
-            RelationalTriplePattern(relation=expr.tupleset_rel, object_type=object_type,
-                                    match_wildcards=True),
-            RelationalTriplePattern(subject_predicate=expr.target_rel, relation=relation_name,
-                                    object_type=object_type, match_wildcards=True),
-        ))
+    elif isinstance(expr, (Computed, TTU)):
+        out.append(_rewrite_rule(expr, object_type, relation_name))
     else:
         raise TypeError(f"unknown Expr node {expr!r}")
 
@@ -1349,37 +1357,18 @@ def _emit_leaf_expr(expr: Expr, object_type: str, public_relation: str, leaf: st
                     out: list) -> None:
     """Compile one closure-leaf subtree. Directs become RewriteFilters (admission
     matches the PUBLIC relation name; routing lands on the leaf); Computed/TTU become
-    ordinary Rules targeting the leaf. Mirrors _emit_expr's pattern shapes exactly."""
+    ordinary Rules targeting the leaf. Shares _emit_expr's pattern builders."""
     if isinstance(expr, Union):
         for c in expr.children:
             _emit_leaf_expr(c, object_type, public_relation, leaf, out)
     elif isinstance(expr, Direct):
         for r in expr.restrictions:
             out.append(RewriteFilter(
-                if_pattern=RelationalTriplePattern(
-                    subject_predicate=(Ellipsis if r.predicate == '...' else r.predicate),
-                    subject_type=r.type,
-                    subject_name=('*' if r.wildcard else None),
-                    relation=public_relation,
-                    object_type=object_type,
-                    object_match_wildcards=True,
-                ),
+                if_pattern=_restriction_pattern(r, object_type, public_relation),
                 rewrite_relation=leaf,
             ))
-    elif isinstance(expr, Computed):
-        out.append(Rule(
-            RelationalTriplePattern(relation=expr.relation, object_type=object_type,
-                                    match_wildcards=True),
-            RelationalTriplePattern(relation=leaf, object_type=object_type,
-                                    match_wildcards=True),
-        ))
-    elif isinstance(expr, TTU):
-        out.append(Rule(
-            RelationalTriplePattern(relation=expr.tupleset_rel, object_type=object_type,
-                                    match_wildcards=True),
-            RelationalTriplePattern(subject_predicate=expr.target_rel, relation=leaf,
-                                    object_type=object_type, match_wildcards=True),
-        ))
+    elif isinstance(expr, (Computed, TTU)):
+        out.append(_rewrite_rule(expr, object_type, leaf))
     else:
         raise TypeError(f"boolean/derived node inside a closure-leaf: {expr!r}")
 
@@ -1398,15 +1387,9 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
         counter[0] += 1
         if userset is not None:
             # storage leaf for a tainted userset restriction: one RewriteFilter
+            # (userset.predicate is never '...', so the shared pattern is identical)
             out_rules.append(RewriteFilter(
-                if_pattern=RelationalTriplePattern(
-                    subject_predicate=userset.predicate,
-                    subject_type=userset.type,
-                    subject_name=('*' if userset.wildcard else None),
-                    relation=relation,
-                    object_type=object_type,
-                    object_match_wildcards=True,
-                ),
+                if_pattern=_restriction_pattern(userset, object_type, relation),
                 rewrite_relation=leaf,
             ))
         else:
@@ -1904,7 +1887,7 @@ def unparse_schema_ast(ast: SchemaAST) -> str:
             s += f'#{r.predicate}'
         return s
 
-    def render(e: Expr, *, top: bool = False) -> str:
+    def render(e: Expr) -> str:
         if isinstance(e, Direct):
             return '[' + ', '.join(render_restriction(r) for r in e.restrictions) + ']'
         if isinstance(e, Computed):
@@ -1945,168 +1928,8 @@ def unparse_schema_ast(ast: SchemaAST) -> str:
         if rels:
             lines.append('  relations')
             for rel, expr in rels:
-                lines.append(f'    define {rel}: {render(expr, top=True)}')
+                lines.append(f'    define {rel}: {render(expr)}')
         lines.append('')
     return '\n'.join(lines)
 
 
-def generate_example_ruleset() -> RuleSet:
-    """
-    NOTE: WINDSURF WROTE THIS CODE
-    Generate a RuleSet from the Google Drive example OpenFGA schema.
-    """
-    schema = '''
-    model
-      schema 1.1
-
-    type user
-
-    type domain
-      relations
-        define member: [user]
-
-    type folder
-      relations
-        define can_share: writer
-        define owner: [user, domain#member] or owner from parent_folder
-        define parent_folder: [folder]
-        define viewer: [user, domain#member] or writer or viewer from parent_folder
-        define writer: [user, domain#member] or owner or writer from parent_folder
-
-    type document
-      relations
-        define can_share: writer
-        define owner: [user, domain#member] or owner from parent_folder
-        define parent_folder: [folder]
-        define viewer: [user, domain#member] or writer or viewer from parent_folder
-        define writer: [user, domain#member] or owner or writer from parent_folder
-    '''
-    return parse_openfga_schema(schema)
-
-
-if __name__ == '__main__':
-    # Test the parser with the Google Drive example
-    ruleset = generate_example_ruleset()
-
-    # Test some example triples
-    test_triples = [
-        # Direct user ownership
-        RelationalTriple(Entity('user', 'alice'), 'owner', Entity('folder', 'root')),
-        # Domain member ownership
-        RelationalTriple(Entity('domain', 'example.com'), 'member', Entity('user', 'bob')),
-        # Parent folder inheritance
-        RelationalTriple(Entity('folder', 'root'), 'parent_folder', Entity('folder', 'subfolder')),
-        # Writer implies viewer
-        RelationalTriple(Entity('user', 'charlie'), 'writer', Entity('document', 'doc1')),
-    ]
-
-    for triple in test_triples:
-        print(f"\nProcessing: {triple}")
-        for result in ruleset.apply(triple):
-            print(f"Generated: {result}")
-
-if __name__ == '__main__':
-    # https://github.com/openfga/sample-stores/blob/main/stores/github/model.fga
-    # (the openfga dsl is slightly nicer than the spicedb dsl)
-    rules_and_filters = RuleSet([
-        # model
-        #   schema 1.1
-
-        # type user
-
-        # type team
-        #   relations
-        #     define member: [user, team#member]
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='member', object_type='team')),
-
-        # type organization
-        #   relations
-        #     define owner: [user]
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='owner', object_type='organization')),
-        #     define member: [user] or owner
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='member', object_type='organization')),
-        Rule(RelationalTriplePattern(relation='owner', object_type='organization'),
-             RelationalTriplePattern(relation='member', object_type='organization')),
-        #     define repo_admin: [user, organization#member]
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='repo_admin', object_type='organization')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='organization',
-                                       relation='repo_admin', object_type='organization')),
-        #     define repo_writer: [user, organization#member]
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='repo_writer', object_type='organization')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='organization',
-                                       relation='repo_writer', object_type='organization')),
-        #     define repo_reader: [user, organization#member]
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='repo_reader', object_type='organization')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='organization',
-                                       relation='repo_reader', object_type='organization')),
-
-        # type repo
-        #   relations
-        #     define owner: [organization]
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='organization',
-                                       relation='owner', object_type='repo')),
-        #     define admin: [user, team#member] or repo_admin from owner
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='admin', object_type='repo')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='team',
-                                       relation='admin', object_type='repo')),
-        Rule(RelationalTriplePattern(subject_predicate=..., subject_type='organization',
-                                     relation='owner', object_type='repo'),
-             RelationalTriplePattern(subject_predicate='repo_admin', relation='admin')),
-        #     define maintainer: [user, team#member] or admin
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='maintainer', object_type='repo')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='team',
-                                       relation='maintainer', object_type='repo')),
-        Rule(RelationalTriplePattern(relation='admin', object_type='repo'),
-             RelationalTriplePattern(relation='maintainer', object_type='repo')),
-        #     define writer: [user, team#member] or maintainer or repo_writer from owner
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='writer', object_type='repo')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='team',
-                                       relation='writer', object_type='repo')),
-        Rule(RelationalTriplePattern(relation='maintainer', object_type='repo'),
-             RelationalTriplePattern(relation='writer', object_type='repo')),
-        Rule(RelationalTriplePattern(subject_predicate=..., subject_type='organization',
-                                     relation='owner', object_type='repo'),
-             RelationalTriplePattern(subject_predicate='repo_writer', relation='writer')),
-        #     define triager: [user, team#member] or writer
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='triager', object_type='repo')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='team',
-                                       relation='triager', object_type='repo')),
-        Rule(RelationalTriplePattern(relation='writer', object_type='repo'),
-             RelationalTriplePattern(relation='triager', object_type='repo')),
-        #     define reader: [user, team#member] or triager or repo_reader from owner
-        Filter(RelationalTriplePattern(subject_predicate=..., subject_type='user',
-                                       relation='reader', object_type='repo')),
-        Filter(RelationalTriplePattern(subject_predicate='member', subject_type='team',
-                                       relation='reader', object_type='repo')),
-        Rule(RelationalTriplePattern(relation='triager', object_type='repo'),
-             RelationalTriplePattern(relation='reader', object_type='repo')),
-        Rule(RelationalTriplePattern(subject_predicate=..., subject_type='organization',
-                                     relation='owner', object_type='repo'),
-             RelationalTriplePattern(subject_predicate='repo_reader', relation='reader')),
-    ])
-
-    pprint(list(rules_and_filters.apply(RelationalTriple(Entity('user', 'A'), 'admin', Entity('repo', 'X')))))
-    pprint(list(rules_and_filters.apply(RelationalTriple(Entity('user', 'A'), 'owner', Entity('team', 'X')))))
-    pprint(list(rules_and_filters.apply(RelationalTriple(Entity('organization', 'O'), 'owner', Entity('team', 'X')))))
-    pprint(list(rules_and_filters.apply(RelationalTriple(Entity('organization', 'O'), 'owner', Entity('repo', 'X')))))
-
-    print(RelationalTriple(subject=Entity(type='organization', name='O'),
-                           relation='admin',
-                           object=Entity(type='repo', name='X'),
-                           subject_predicate='repo_admin',
-                           ).node_from)
-    print(RelationalTriple(subject=Entity(type='organization', name='O'),
-                           relation='admin',
-                           object=Entity(type='repo', name='X'),
-                           subject_predicate='repo_admin',
-                           ).node_to)

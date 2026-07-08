@@ -18,6 +18,7 @@ from zanzibar_utils_v1 import (
     CyclicDerivedDependency,
     Entity,
     RelationalTriple,
+    norm_pred as _norm_pred,
     parse_schema_ast,
     derive_schema_info,
     schema_filters,
@@ -48,10 +49,6 @@ class LookupResult:
 
     def __repr__(self):
         return f'LookupResult(node_ids={self.node_ids}, markers={self.markers})'
-
-
-def _norm_pred(pred: str | EllipsisType | None) -> str:
-    return '...' if (pred is Ellipsis or pred is None) else pred
 
 
 def _denorm_pred(pred: str) -> str | EllipsisType:
@@ -240,11 +237,13 @@ class SetEngine:
         validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         if self._row(s_pred, s_type, s_name, relation, o_type, o_name) is not None:
             return False                               # idempotent: septuple already present
-        self._validate(s_pred, s_type, s_name, relation, o_type, o_name)
+        # one rewrite fan-out per accepted add: validation and application share it
+        pairs = self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name)
+        self._validate(s_pred, s_type, s_name, relation, o_type, o_name, pairs)
         self.session.add(TupleV1(
             store_id=self.store_id, subject_predicate=s_pred, subject_type=s_type,
             subject_name=s_name, relation=relation, object_type=o_type, object_name=o_name))
-        self._apply_add(s_pred, s_type, s_name, relation, o_type, o_name)
+        self._apply_add(s_pred, s_type, s_name, relation, o_type, o_name, pairs=pairs)
         return True
 
     def remove_tuple(self, subject_predicate, s_type: str, s_name: str,
@@ -272,7 +271,8 @@ class SetEngine:
             .where(TupleV1.object_name == o_name)
         ).first()
 
-    def _apply_add(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
+    def _apply_add(self, s_pred, s_type, s_name, relation, o_type, o_name, *,
+                   pairs=None) -> None:
         subject_id = self.interner.acquire(s_type, s_name, s_pred)   # +1 ref (create mapping if new)
         object_id = self.interner.acquire(o_type, o_name, relation)
         ns = self.node_sets.get(object_id)
@@ -287,8 +287,11 @@ class SetEngine:
             self.member_of[subject_id] = mo
         mo.add(object_id)
 
-        for u, v in self._derived_edges(s_pred, s_type, s_name, relation, o_type, o_name):
-            self._flow_add_edge(u, v)
+        if pairs is None:
+            pairs = self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name)
+        for u, v in pairs:
+            if u != v:
+                self._flow_add_edge(u, v)
 
     def _apply_remove(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
         subject_id = self.interner.get(s_type, s_name, s_pred)
@@ -307,8 +310,9 @@ class SetEngine:
             mo.discard(object_id)
             if len(mo) == 0:
                 self.member_of.pop(subject_id, None)
-        for u, v in self._derived_edges(s_pred, s_type, s_name, relation, o_type, o_name):
-            self._flow_remove_edge(u, v)
+        for u, v in self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name):
+            if u != v:
+                self._flow_remove_edge(u, v)
         # Release interner references; a freed (recycled) id must not carry residual state.
         if self.interner.release(s_type, s_name, s_pred) is not None:
             self.node_sets.pop(subject_id, None)
@@ -321,23 +325,19 @@ class SetEngine:
     # Flow-graph index (write-time cycle detection; union schemas only)
     # ------------------------------------------------------------------ #
 
-    def _derived_edges(self, s_pred, s_type, s_name, relation, o_type, o_name) -> list[tuple[NodeKey, NodeKey]]:
-        """The graph backend's derived (node_from -> node_to) edges for this raw tuple.
-
-        Reuses the compiled RuleSet so the flow graph is byte-for-byte the graph index's
-        edge set. Empty for boolean schemas (no RuleSet)."""
+    def _derived_pairs(self, s_pred, s_type, s_name, relation, o_type, o_name) -> list[tuple[NodeKey, NodeKey]]:
+        """ALL of the graph backend's derived (node_from, node_to) pairs for this raw
+        tuple, u == v included (the trivial-cycle probe needs those; the flow graph
+        skips them). Reuses the compiled RuleSet so the flow graph is byte-for-byte
+        the graph index's edge set. Empty for schemas with no RuleSet."""
         if self._ruleset is None:
             return []
         triple = RelationalTriple(
             subject=Entity(s_type, s_name), relation=relation,
             object=Entity(o_type, o_name), subject_predicate=_denorm_pred(s_pred))
-        edges = []
-        for d in self._ruleset.apply(triple):
-            u = (d.subject.type, d.subject.name, _norm_pred(d.subject_predicate))
-            v = (d.object.type, d.object.name, d.relation)
-            if u != v:
-                edges.append((u, v))
-        return edges
+        return [((d.subject.type, d.subject.name, _norm_pred(d.subject_predicate)),
+                 (d.object.type, d.object.name, d.relation))
+                for d in self._ruleset.apply(triple)]
 
     def _flow_add_edge(self, u: NodeKey, v: NodeKey) -> None:
         c = self._edge_count.get((u, v), 0)
@@ -374,7 +374,8 @@ class SetEngine:
     # Validation (§6.2) -- parity with the graph backend, side-effect free
     # ------------------------------------------------------------------ #
 
-    def _validate(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
+    def _validate(self, s_pred, s_type, s_name, relation, o_type, o_name,
+                  pairs) -> None:
         # (1) object-wildcard gating: a T:* object is valid only for a declared shape.
         if o_name == '*' and (o_type, relation) not in self.schema_info.object_wildcard_shapes:
             raise ValueError(
@@ -394,12 +395,12 @@ class SetEngine:
 
         # (3) cycle rejection (§6.2): reject usersets whose membership would loop, matching
         #     the graph backend's cycle detection. Side-effect free -- uses existing ids only.
-        if self._would_cycle(s_pred, s_type, s_name, relation, o_type, o_name):
+        if self._would_cycle(s_pred, s_type, s_name, relation, o_type, pairs):
             raise ValueError(
                 f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} would create a "
                 f"cycle in the userset membership topology")
 
-    def _would_cycle(self, s_pred, s_type, s_name, relation, o_type, o_name) -> bool:
+    def _would_cycle(self, s_pred, s_type, s_name, relation, o_type, pairs) -> bool:
         # Boolean schemas have no graph partner and the oracle evaluates cyclic schemas
         # rather than rejecting -- so we do not reject data cycles for them.
         if self._ruleset is None:
@@ -410,24 +411,16 @@ class SetEngine:
         if s_name == '*' and s_pred != '...' and (s_type, s_pred) == (o_type, relation):
             return True
 
-        # A derived edge whose endpoints coincide is the trivial cycle (e.g.
-        # doc:x#viewer viewer doc:x). _derived_edges filters u==v pairs for the flow
-        # graph, so detect it here directly (blind-audit E3: the graph backend
-        # rejects the same tuple).
-        triple = RelationalTriple(
-            subject=Entity(s_type, s_name), relation=relation,
-            object=Entity(o_type, o_name), subject_predicate=_denorm_pred(s_pred))
-        if self._ruleset is not None:
-            for d in self._ruleset.apply(triple):
-                u = (d.subject.type, d.subject.name, _norm_pred(d.subject_predicate))
-                v = (d.object.type, d.object.name, d.relation)
-                if u == v:
-                    return True
+        # A derived pair whose endpoints coincide is the trivial cycle (e.g.
+        # doc:x#viewer viewer doc:x) -- blind-audit E3: the graph backend rejects
+        # the same tuple.
+        if any(u == v for u, v in pairs):
+            return True
 
         # Would adding any DERIVED edge u->v close a loop? (v already reaches u.) This
         # reproduces the graph backend's reachability cycle check exactly, so both accept
         # and reject the same op sequences -- including from-chain cycles.
-        edges = self._derived_edges(s_pred, s_type, s_name, relation, o_type, o_name)
+        edges = [(u, v) for u, v in pairs if u != v]
         for u, v in edges:
             if self._flow_reaches(v, u, edges):
                 return True

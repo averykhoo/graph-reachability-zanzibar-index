@@ -22,7 +22,8 @@ from sqlmodel import select
 
 from .core import ReachabilityIndex
 from .models import EdgeV4, NodeV4, ResidueV1
-from zanzibar_utils_v1 import (SchemaInfo, validate_node_identifiers,
+from zanzibar_utils_v1 import (SchemaInfo, norm_pred as _norm_pred,
+                               validate_node_identifiers,
                                validate_write_identifiers)
 
 
@@ -34,10 +35,6 @@ class LookupResult:
     # excluded from a derived relation's star coverage, from the residue's neg.
     # Additive and empty everywhere except derived lookup_reverse.
     excluded_node_ids: set[int] = field(default_factory=set)
-
-
-def _norm_pred(predicate: str | EllipsisType) -> str:
-    return '...' if predicate is Ellipsis else predicate
 
 
 class WildcardIndex:
