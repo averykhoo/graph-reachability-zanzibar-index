@@ -58,6 +58,15 @@ def intersect (pop : Shape → Finset Id) (a b : MemberSet Id) : MemberSet Id :=
 def subtract (pop : Shape → Finset Id) (a b : MemberSet Id) : MemberSet Id :=
   normalize pop (ext pop a \ ext pop b) (a.stars \ b.stars)
 
+/-- The empty member set (`memberset.py:68-69`). -/
+def empty : MemberSet Id := { pos := ∅, stars := ∅, neg := ∅ }
+
+/-- A single concrete member (`memberset.py:72-73`). -/
+def singletonEntity (uid : Id) : MemberSet Id := { pos := {uid}, stars := ∅, neg := ∅ }
+
+/-- A single covered star shape (`memberset.py:76-77`). -/
+def star (shape : Shape) : MemberSet Id := { pos := ∅, stars := {shape}, neg := ∅ }
+
 /-- `contains_star` — intensional shape membership (`memberset.py:54`). -/
 def containsStar (m : MemberSet Id) (shape : Shape) : Bool := shape ∈ m.stars
 

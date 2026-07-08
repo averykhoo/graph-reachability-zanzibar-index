@@ -50,14 +50,13 @@ theorem no_ghost_grant (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
     GraphModel.check σ' q = false := by
   rw [graph_correct S T' σ' q hWF hStrat hAcc hInv hReach]; exact hDeny
 
-/-- **T6c (wildcard scoping).** A `T:*` grant matches subject `u` only if
-    `u.type = T`. Stated as a spec-level lemma (both backends inherit it via T1/T2b):
-    a query whose subject type differs from every star grant's type is unaffected by
-    those grants. Proof is a `sem`/`directLeaf` lemma (Phase 5). -/
-theorem wildcard_scoping (S : Schema) (T : Store) (q : Query)
-    (_hStrat : Stratifiable S) :
-    -- placeholder shape: refined in Phase 5 to the precise scoping statement
-    sem S T q = sem S T q := by
-  rfl
+/-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)
+    matches a stored tuple only when the tuple's subject type is one of the
+    restriction types — so a `T:*` grant can never leak to a subject of another type.
+    Now a REAL proved theorem (was a placeholder), via `restrictionMatches_type`. Both
+    backends inherit the property through T1/T2b + the shared leaf structure. -/
+theorem wildcard_scoping (rs : List Restriction) (tup : Tuple)
+    (h : restrictionMatches rs tup = true) : ∃ r ∈ rs, tup.subject.type = r.1 :=
+  restrictionMatches_type rs tup h
 
 end Zanzibar

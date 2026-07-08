@@ -134,4 +134,15 @@ def semAux (S : Schema) (subject : SubjectRef) (T : Store) (q : Query) :
 def sem (S : Schema) (T : Store) (q : Query) : Bool :=
   semAux S q.subject T q (fuelBound S T) q.object.type q.object.name q.relation
 
+/-- **Wildcard type-scoping (core of T6c).** A `Direct` restriction matches a stored
+    tuple only when the tuple's subject type equals one of the restriction types — so
+    a `T:*` grant (or any restriction) can only ever match subjects of type `T`. This
+    is the structural fact underlying wildcard scoping (`SEMANTICS.md` §5.4, T6c). -/
+theorem restrictionMatches_type (rs : List Restriction) (tup : Tuple)
+    (h : restrictionMatches rs tup = true) : ∃ r ∈ rs, tup.subject.type = r.1 := by
+  unfold restrictionMatches at h
+  obtain ⟨r, hr, hp⟩ := List.any_eq_true.mp h
+  simp only [Bool.and_eq_true, beq_iff_eq] at hp
+  exact ⟨r, hr, hp.1.1⟩
+
 end Zanzibar

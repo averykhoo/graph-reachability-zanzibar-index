@@ -71,8 +71,10 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T5 cascade converges | `cascade_converges` | stated (sorry) | subsumed by T2a |
 | T6a exclusion-effective | `exclusion_effective` | **proved-mod-deps** | via T1/T2b |
 | T6b no-ghost-grant | `no_ghost_grant` | **proved-mod-deps** | via T2b |
-| T6c wildcard scoping | `wildcard_scoping` | placeholder (`rfl`) | refine to real statement in Phase 5 |
+| T6c wildcard scoping | `wildcard_scoping` | **proved** | real theorem now: `T:*` grants are type-scoped, via `restrictionMatches_type` |
+| (lemma) grant type-scoping | `restrictionMatches_type` | **proved** | axiom-clean `[propext, Quot.sound]` |
 | (lemma) `ext_normalize` | `MemberSet.ext_normalize` | **proved** | MemberSet renorm correctness |
+| (lemmas) membership/constructors | `mem_ext_union/intersect/subtract`, `ext_empty/singletonEntity/star`, `neg_subset_starpop` | **proved** | T1 leaf/composition building blocks (Algebra.lean) |
 | (lemmas) algebra ext laws | `ext_union/ext_intersect/ext_subtract` | **proved** | `ext (a⊕b) = ext a ⊕ ext b` (Algebra.lean); T1 workhorses |
 | (lemmas) star laws | `stars_union/intersect/subtract` | **proved** | `rfl` |
 | (lemmas) star×boolean | `containsStar_union/intersect/subtract` | **proved** | the pinned intensional `'*'` table (§5.6) |
@@ -86,6 +88,16 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 - `GraphIndex/Closure.lean`: `pathCount_addEdge`, `pathCount_removeEdge` (2)
 - `GraphIndex/Correct.lean`: `graph_reached_inv`, `graph_correct`,
   `cascade_converges` (3)
+
+## Axiom audit snapshot (C4) — `lake build ZanzibarProofs.Audit`
+
+Run 2026-07-09. `#print axioms` on representative results:
+- `ext_normalize`, `ext_union`, `containsStar_subtract`, `mem_ext_union` →
+  `[propext, Classical.choice, Quot.sound]` (the 3 standard axioms — clean).
+- `restrictionMatches_type`, `wildcard_scoping` → `[propext, Quot.sound]` (cleaner).
+- `sem_fuel_stable`, `backend_equivalence` → `[sorryAx]` (honestly flagged;
+  route through tracked sorries). **No custom axioms** — Gemini's suggested
+  `phat_def` axiom was rejected, keeping the surface clean for the final C4 gate.
 
 ## Pending axioms (opaque placeholders — to be replaced, flagged by the C4 axiom audit)
 
