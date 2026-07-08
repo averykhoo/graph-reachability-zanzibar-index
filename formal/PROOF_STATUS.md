@@ -29,7 +29,7 @@ this before ending ANY session. A fresh session should read, in order:
 | 0 | Semantics extraction | **done** | SEMANTICS.md; 7 ambiguities logged |
 | 0.5 | verify compiler undefined-reference behavior (A3) | todo | refine `WF` in Phase 3/4 |
 | 1 | Lean skeleton + spec + theorem statements | **done** | builds green; all T0–T6 stated |
-| 2 | Conformance bridge v1 | **core done** | `zcli` + spec-vs-oracle green (6/6); add backends in P3/4 |
+| 2 | Conformance bridge v1 | **done** | three-way `sem`/oracle/set-engine over 11 schemas, 33 tests green; graph backend TODO in P4 |
 | 3 | Set-engine model + T1 | **in progress** | replace opaque check; prove T1 |
 | 4 | Graph-index model + T2/T4/T5 | not started | ~half total effort |
 | 5 | Equivalence T3 + security T6 | statements done | T3/T6a/b `rw`-proved modulo T1/T2b |
