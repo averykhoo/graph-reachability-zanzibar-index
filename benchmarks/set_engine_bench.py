@@ -126,7 +126,11 @@ def build_deep_set(ops: SetOps, depth: int, chains: int) -> SetEngine:
 
 def build_deep_graph(depth: int, chains: int):
     ruleset = parse_openfga_schema(DEEP_SCHEMA)
-    session, widx = make_wildcard_index(ruleset.schema_info, store_id='deep')
+    # paranoia=False: benchmarks measure index maintenance, not the invariant
+    # checker (wildcard_helpers/CLAUDE.md require this here -- paranoia runs the
+    # full I1-I13 sweep plus the per-pair outbox BFS around every commit)
+    session, widx = make_wildcard_index(ruleset.schema_info, store_id='deep',
+                                        paranoia=False)
 
     def ingest(sp, st, sn, rel, ot, on):
         tr = RelationalTriple(Entity(st, sn), rel, Entity(ot, on), Ellipsis if sp == '...' else sp)
@@ -209,8 +213,10 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
           f'{(f"{peak_rss_mb():.0f}" if peak_rss_mb() else "n/a"):>14}')
     session.close()
 
-    # (b) wide/flat expand-heavy -- set engine only (graph can't ingest `but not`)
-    print('\n(b) wide/flat, expand-heavy  (graph refuses `but not` -- set engine only)')
+    # (b) wide/flat expand-heavy -- set engine only: bulk expand is its native op
+    # (post-P7 the graph ingests boolean schemas too, but its read surface here is
+    # point probes / lookup, not a bulk MemberSet expand)
+    print('\n(b) wide/flat, expand-heavy  (set engine only: bulk expand is its native op)')
     print(header)
     for ops in ops_list:
         se = build_wide(ops, pop, blocked)
