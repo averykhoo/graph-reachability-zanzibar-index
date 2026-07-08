@@ -9,7 +9,26 @@ from __future__ import annotations
 
 from tests.oracle import t as mk_tuple
 
+
+def _deep_grid(n_rel: int = 8, n_obj: int = 8):
+    """A schema/tuples pair that traverses the object x relation grid so the
+    evaluation depth is ~n_rel*n_obj — far exceeding an additive fuel bound.
+    Regression for the multiplicative-fuelBound fix (Store.lean). check(alice, r1,
+    node{n_obj}) is True (reaches the r1@node1 grant through the grid)."""
+    lines = ["type user", "type node", "  define parent: [node]",
+             "  define r1: [user] or r2"]
+    for i in range(2, n_rel):
+        lines.append(f"  define r{i}: r{i + 1}")
+    lines.append(f"  define r{n_rel}: r1 from parent")
+    schema = "\n".join(lines)
+    tuples = [mk_tuple("...", "node", f"node{i}", "parent", "node", f"node{i + 1}")
+              for i in range(1, n_obj)]
+    tuples.append(mk_tuple("...", "user", "alice", "r1", "node", "node1"))
+    return schema, tuples, ()
+
+
 SCHEMAS: dict[str, tuple[str, list, tuple]] = {
+    "deep_grid": _deep_grid(),
     "union_computed": (
         """
         type user

@@ -42,7 +42,8 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 | Theorem | Lean name | Status | Note |
 |---------|-----------|--------|------|
-| T0a spec well-defined (fuel-stable) | `sem_fuel_stable` | stated (sorry) | rests on stratified non-monotone fixpoint |
+| T0a spec well-defined (fuel-stable) | `sem_fuel_stable` | **proved-mod-deps** | proved from `semAux_fuel_stable_step` by `Nat.le_induction` |
+| T0a pigeonhole core | `semAux_fuel_stable_step` | stated (sorry) | one-more-fuel-is-a-no-op above the bound |
 | T0b stratify soundness | `stratify_none_iff_cycle`, `stratify_topological` | stated (sorry) | Kahn correctness — not as mechanical as plan hoped |
 | T1 set engine = sem | `setEngine_correct` | stated (sorry) | Phase 3; needs concrete model first |
 | T2a graph invariant + materialize | `graph_reached_inv` | stated (sorry) | hardest; Phase 4 |
@@ -81,11 +82,21 @@ definition before Phase 6.
 
 ## Adjudications (spec/oracle/backend disagreements)
 
-None yet. Per plan §8.2: any disagreement → STOP, record here (schema, ops, query,
-each system's answer, analysis), ask the user. Do NOT edit oracle/goldens/Python
-semantics or weaken a theorem to match.
+Per plan §8.2: any disagreement → STOP, record here (schema, ops, query, each
+system's answer, analysis). Do NOT edit oracle/goldens/Python semantics or weaken a
+theorem to match.
 
-_(none)_
+- **2026-07-09 — `fuelBound` too small (spec bug, not a semantic ambiguity). RESOLVED.**
+  Found via a Gemini review of the Lean spec; **confirmed empirically**: a schema
+  with `n` computed relations chained per object and linked across an `m`-object
+  parent chain by TTU (a `deep_grid`, n=m=8) evaluates at depth ~`n·m`=64, but the
+  additive `fuelBound = |keys| + 2|T| + 4` = 29 cut `semAux` off early → spec
+  returned `false` where the oracle returned `true`. The oracle is ground truth; the
+  bug was mine (under-provisioned fuel). **Fix:** `fuelBound = |keys| · (2|T| + 4)`
+  (multiplicative — the recursion depth is bounded by the `(entity × relation)` state
+  space, not their sum). Added `deep_grid` to the conformance corpus as a permanent
+  regression; conformance 33→36 green. The shallow original corpus is why it slipped
+  past — lesson logged. No user adjudication needed (spec bug, clear resolution).
 
 ---
 

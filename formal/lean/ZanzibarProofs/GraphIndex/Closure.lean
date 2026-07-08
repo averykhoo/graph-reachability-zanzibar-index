@@ -30,8 +30,18 @@ def DirectGraph.removeEdge (g : DirectGraph V) (u v : V) : DirectGraph V :=
   ⟨fun a b => g.dcount a b - (if a = u ∧ b = v then 1 else 0)⟩
 
 /-- `p(u,v)`: number of distinct directed paths of length ≥ 1 from `u` to `v`.
-    Opaque for Phase 1; Phase 4 defines it (DAG path enumeration) and proves the
-    counting theorems below. -/
+    Opaque for Phase 1; Phase 4 defines it (bounded DAG path enumeration over a
+    `Fintype V`, total without needing acyclicity, equal to the true count on DAGs)
+    and proves the counting theorems below.
+
+    **Phase-4 proof strategy** (a corrected Gemini suggestion — as a *lemma* to be
+    proved from the definition, NOT an axiom, so the C4 axiom audit stays clean):
+    once defined, `pathCount` satisfies the first-edge recurrence
+    `phat g u v = (if u = v then 1 else 0) + ∑ w, g.dcount u w * phat g w v`
+    (paths grouped by their first hop). `pathCount_addEdge` then follows by
+    algebraic expansion of this recurrence. Introducing the recurrence as an
+    `axiom` about the *opaque* constant was rejected: it pollutes the axiom set and
+    the plan's C4 gate forbids custom axioms. -/
 opaque pathCount (g : DirectGraph V) (u v : V) : Nat
 
 /-- `p̂(u,v)` — path count with the empty path at coincident endpoints

@@ -46,11 +46,22 @@ def universeNames (T : Store) (q : Query) (t : String) : List String :=
 def instances (T : Store) (q : Query) (t : String) : List String :=
   universeOf T q t false
 
-/-- An upper bound on recursion depth for the fuel-based spec (§5.1): the number
-    of distinct declared `(type, relation)` nodes reachable, over-approximated by
-    `|schema keys| + 2·|tuples| + 4` (the `+4` covers the query endpoints). Any
-    value ≥ the true fixpoint depth gives the same answer (fuel-monotonicity, T0a). -/
+/-- An upper bound on recursion depth for the fuel-based spec (§5.1).
+
+    The evaluator recurses over the state `(otype, oname, rel)`; the oracle's memo
+    stack forbids revisiting an in-progress state, so the maximum acyclic depth is
+    bounded by the number of *distinct* states = `|entities| · |relations|`. Hence
+    the bound is **multiplicative**: `|schema keys| · (2·|tuples| + 4)`, where
+    `2·|tuples| + 4` bounds the distinct `(type, name)` entities (two per tuple plus
+    two query endpoints, with slack). Any value ≥ the true fixpoint depth gives the
+    same answer (fuel-monotonicity, T0a).
+
+    NB: an *additive* bound `|keys| + 2|T| + 4` is UNSOUND — a schema whose
+    computed-relation chains (free in the schema) are linked across objects by TTU
+    traverses the object×relation grid, reaching depth `|keys|·|entities|` while the
+    additive bound stays `O(|keys| + |T|)`, cutting evaluation off early and
+    returning a spurious `false`. Caught by the `deep_grid` conformance regression.-/
 def fuelBound (S : Schema) (T : Store) : Nat :=
-  S.keys.length + T.length * 2 + 4
+  S.keys.length * (T.length * 2 + 4)
 
 end Zanzibar
