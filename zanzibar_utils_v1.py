@@ -756,6 +756,18 @@ def _iter_directs(expr: Expr):
     # Computed / TTU carry no direct restrictions
 
 
+def _iter_ttus(expr: Expr):
+    if isinstance(expr, TTU):
+        yield expr
+    elif isinstance(expr, (Union, Intersection)):
+        for c in expr.children:
+            yield from _iter_ttus(c)
+    elif isinstance(expr, Exclusion):
+        yield from _iter_ttus(expr.base)
+        yield from _iter_ttus(expr.subtract)
+    # Direct / Computed contain no TTUs
+
+
 def derive_schema_info(
         ast: SchemaAST,
         object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
@@ -776,18 +788,8 @@ def derive_schema_info(
     # as a TTU tupleset means the TTU rule will rewrite `S:* ts o` into a tuple
     # whose subject shape is (S, target_rel) -- that through-shape must be declared
     # or the graph rejects a schema-legal write the set engine accepts.
-    def walk_ttus(e):
-        if isinstance(e, TTU):
-            yield e
-        elif isinstance(e, (Union, Intersection)):
-            for c in e.children:
-                yield from walk_ttus(c)
-        elif isinstance(e, Exclusion):
-            yield from walk_ttus(e.base)
-            yield from walk_ttus(e.subtract)
-
     for (object_type, _rel), expr in ast.items():
-        for ttu in walk_ttus(expr):
+        for ttu in _iter_ttus(expr):
             ts_expr = ast.get((object_type, ttu.tupleset_rel))
             if ts_expr is None:
                 continue
@@ -887,41 +889,33 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
     their stored tuples live on dedicated storage leaves, which the boolean path
     already reads exclusively."""
     for (object_type, relation), expr in ast.items():
-        def walk(e: Expr) -> None:
-            if isinstance(e, TTU):
-                ts_key = (object_type, e.tupleset_rel)
-                if ts_key in ast and ts_key not in tainted and not _directs_only(ast[ts_key]):
-                    raise UnsupportedByGraphIndex(
-                        f"relation {object_type}#{relation}: tupleset "
-                        f"{e.tupleset_rel!r} has computed/rewritten arms; Zanzibar "
-                        f"tupleset semantics read stored tuples only, and the graph "
-                        f"index cannot separate raw from rewritten members of an "
-                        f"untainted relation (declare it direct-only, or make the "
-                        f"whole chain boolean so storage leaves apply)")
-                if ts_key in ast:
-                    # USERSET restrictions in tuplesets are rejected (OpenFGA model
-                    # rule): they bypassed taint analysis entirely (a relation
-                    # reading derived state compiled as pure union with no
-                    # invalidation wiring) and had drop-the-predicate parent
-                    # semantics no spec defines (blind-audit D3). Wildcard
-                    # restrictions stay ALLOWED -- star tuplesets are this repo's
-                    # deliberate object-wildcard extension (w_all machinery);
-                    # derive_schema_info derives their through-shapes.
-                    for d in _iter_directs(ast[ts_key]):
-                        for r in d.restrictions:
-                            if r.predicate != '...':
-                                raise UnsupportedByGraphIndex(
-                                    f"relation {object_type}#{relation}: tupleset "
-                                    f"{e.tupleset_rel!r} declares a userset "
-                                    f"restriction; tupleset relations must be "
-                                    f"directly assignable types (OpenFGA model rule)")
-            elif isinstance(e, (Union, Intersection)):
-                for c in e.children:
-                    walk(c)
-            elif isinstance(e, Exclusion):
-                walk(e.base)
-                walk(e.subtract)
-        walk(expr)
+        for e in _iter_ttus(expr):
+            ts_key = (object_type, e.tupleset_rel)
+            if ts_key in ast and ts_key not in tainted and not _directs_only(ast[ts_key]):
+                raise UnsupportedByGraphIndex(
+                    f"relation {object_type}#{relation}: tupleset "
+                    f"{e.tupleset_rel!r} has computed/rewritten arms; Zanzibar "
+                    f"tupleset semantics read stored tuples only, and the graph "
+                    f"index cannot separate raw from rewritten members of an "
+                    f"untainted relation (declare it direct-only, or make the "
+                    f"whole chain boolean so storage leaves apply)")
+            if ts_key in ast:
+                # USERSET restrictions in tuplesets are rejected (OpenFGA model
+                # rule): they bypassed taint analysis entirely (a relation
+                # reading derived state compiled as pure union with no
+                # invalidation wiring) and had drop-the-predicate parent
+                # semantics no spec defines (blind-audit D3). Wildcard
+                # restrictions stay ALLOWED -- star tuplesets are this repo's
+                # deliberate object-wildcard extension (w_all machinery);
+                # derive_schema_info derives their through-shapes.
+                for d in _iter_directs(ast[ts_key]):
+                    for r in d.restrictions:
+                        if r.predicate != '...':
+                            raise UnsupportedByGraphIndex(
+                                f"relation {object_type}#{relation}: tupleset "
+                                f"{e.tupleset_rel!r} declares a userset "
+                                f"restriction; tupleset relations must be "
+                                f"directly assignable types (OpenFGA model rule)")
 
 
 def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
@@ -948,12 +942,23 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
 
     tainted = compute_taint(ast)
     _validate_ttu_tuplesets(ast, tainted)
+    declared_shapes = schema_info.object_wildcard_shapes
+    # Scope guards run twice: on the declared shapes up front (early, precise
+    # rejection before plan construction can trip a coarser exclusivity error),
+    # and on the EXPANDED set after the rules close over the shapes -- a shape one
+    # rewrite hop upstream of a rejected position is the same shape post-expansion,
+    # and guarding declared shapes only re-admitted exactly the rejected class
+    # through Computed/TTU indirection.
+    _reject_object_wildcard_scope(ast, tainted, declared_shapes, declared_shapes)
     rules_and_filters = []
     for (object_type, relation_name), expr in ast.items():
         if (object_type, relation_name) not in tainted:
             _emit_expr(expr, object_type, relation_name, rules_and_filters)
-    compiled, schema_info = compile_boolean_schema(ast, schema_info, rules_and_filters)
+    compiled, schema_info = compile_boolean_schema(ast, schema_info, rules_and_filters,
+                                                   tainted)
     schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
+    _reject_object_wildcard_scope(ast, tainted, schema_info.object_wildcard_shapes,
+                                  declared_shapes)
     return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled)
 
 
@@ -983,6 +988,74 @@ def _expand_object_wildcard_shapes(rules_and_filters: list,
     if shapes == set(schema_info.object_wildcard_shapes):
         return schema_info
     return replace(schema_info, object_wildcard_shapes=frozenset(shapes))
+
+
+def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
+                                  shapes: frozenset,
+                                  declared: frozenset) -> None:
+    """Decision-15-family scope rejections, run AFTER ``_expand_object_wildcard_shapes``
+    so they cover the closed shape set, not just the declared one (guarding declared
+    shapes only silently re-admitted the rejected class one Computed/TTU hop upstream:
+    the expansion routed the same wildcard-object state into the guarded position).
+
+    Rejected: shapes on derived relations, shapes expanding onto compiled leaf
+    predicates (wildcard-object state inside a derived plan -- the delta processor
+    cannot map w_all deltas to derived keys), shapes on the TTU *target* of a tainted
+    plan (blind-audit D4: derived evaluation probes the closure directly and never
+    consults w_all), shapes on the TTU *tupleset* of a tainted plan (tupleset-parent
+    enumeration reads direct stored tuples on the tupleset node, so a wildcard-object
+    tupleset tuple would be silently invisible -- wrong denials with no invariant
+    tripping), and star-tupleset through-shapes landing on a derived TTU target (the
+    derived subject-wildcard shape is a wildcard userset over a derived relation,
+    which needs symbolic composition through residues -- same v1 scope hook as the
+    declared form)."""
+    for (t, r) in sorted(shapes):
+        if (t, r) in tainted:
+            raise UnsupportedByGraphIndex(
+                f"object-wildcard shape ({t}, {r}) targets a derived (boolean-tainted) "
+                f"relation; symbolic object state on derived relations needs a "
+                f"subject-keyed residue (v1 scope hook)")
+        if '.' in r:
+            if (t, r) in declared:
+                raise UnsupportedByGraphIndex(
+                    f"object-wildcard shape ({t}, {r}) names a compiled leaf predicate")
+            raise UnsupportedByGraphIndex(
+                f"object-wildcard shape ({t}, {r.rsplit('.', 1)[0]}) expands onto the "
+                f"compiled leaf predicate ({t}, {r}) through the rewrite rules; "
+                f"wildcard-object state cannot feed a derived relation (decision-15 "
+                f"family)")
+
+    for key in sorted(tainted):
+        for ttu in _iter_ttus(ast[key]):
+            ts_key = (key[0], ttu.tupleset_rel)
+            if ts_key in shapes:
+                raise UnsupportedByGraphIndex(
+                    f"object-wildcard shape {ts_key} is the tupleset of TTU "
+                    f"'{ttu.target_rel} from {ttu.tupleset_rel}' in derived relation "
+                    f"{key[0]}#{key[1]}; derived-TTU parent enumeration reads stored "
+                    f"tupleset tuples directly and cannot see object-wildcard (w_all) "
+                    f"state (decision-15 family)")
+            ts_expr = ast.get(ts_key)
+            if ts_expr is None:
+                continue
+            for direct in _iter_directs(ts_expr):
+                for restr in direct.restrictions:
+                    if (restr.type, ttu.target_rel) in shapes:
+                        raise UnsupportedByGraphIndex(
+                            f"object-wildcard shape ({restr.type}, {ttu.target_rel}) "
+                            f"is the TTU target of derived relation {key[0]}#{key[1]}; "
+                            f"derived evaluation probes the closure directly and "
+                            f"cannot see object-wildcard (w_all) state (decision-15 "
+                            f"family, blind-audit D4)")
+                    if (restr.wildcard and restr.predicate == '...'
+                            and (restr.type, ttu.target_rel) in tainted):
+                        raise UnsupportedByGraphIndex(
+                            f"relation {key[0]}#{key[1]}: star tupleset "
+                            f"[{restr.type}:*] on {ttu.tupleset_rel!r} derives the "
+                            f"wildcard userset shape ({restr.type}, {ttu.target_rel}) "
+                            f"over the derived relation {restr.type}#{ttu.target_rel}, "
+                            f"which needs symbolic composition through residues (v1 "
+                            f"scope hook; see spec-deviations)")
 
 
 # ===========================================================================
@@ -1600,56 +1673,14 @@ def _stratify(plans: dict) -> list[list[tuple[str, str]]]:
 
 
 def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
-                           rules_and_filters: list) -> tuple[CompiledBooleans, SchemaInfo]:
+                           rules_and_filters: list,
+                           tainted: frozenset) -> tuple[CompiledBooleans, SchemaInfo]:
     """Compile every tainted relation: plans + leaf routing appended to
     ``rules_and_filters``; returns the artifacts and a SchemaInfo enriched with the
-    derived/leaf namespace facts. Decision-15-family scope restrictions raise
-    ``UnsupportedByGraphIndex``; derived-dependency cycles raise ``ValueError``."""
-    tainted = compute_taint(ast)
-
-    # Scope restrictions (boolean spec decision 15): object wildcards on derived
-    # relations (and their leaves, which are unnameable lexically) are rejected.
-    for (t, r) in sorted(schema_info.object_wildcard_shapes):
-        if (t, r) in tainted:
-            raise UnsupportedByGraphIndex(
-                f"object-wildcard shape ({t}, {r}) targets a derived (boolean-tainted) "
-                f"relation; symbolic object state on derived relations needs a "
-                f"subject-keyed residue (v1 scope hook)")
-        if '.' in r:
-            raise UnsupportedByGraphIndex(
-                f"object-wildcard shape ({t}, {r}) names a compiled leaf predicate")
-
-    # Decision-15 family, extended (blind-audit D4): an object-wildcard shape on the
-    # TARGET relation of a TTU inside a tainted plan is also rejected. The plan's
-    # evaluator resolves TTU parents from stored tuples and probes each parent's
-    # target membership through the core closure -- a `parent_type:*` object-wildcard
-    # grant lives in w_all state that those probes never consult, so it would be
-    # silently invisible to derived evaluation.
-    def _walk_ttus(e):
-        if isinstance(e, TTU):
-            yield e
-        elif isinstance(e, (Union, Intersection)):
-            for c in e.children:
-                yield from _walk_ttus(c)
-        elif isinstance(e, Exclusion):
-            yield from _walk_ttus(e.base)
-            yield from _walk_ttus(e.subtract)
-
-    for key in sorted(tainted):
-        for ttu in _walk_ttus(ast[key]):
-            ts_expr = ast.get((key[0], ttu.tupleset_rel))
-            if ts_expr is None:
-                continue
-            for direct in _iter_directs(ts_expr):
-                for restr in direct.restrictions:
-                    if (restr.type, ttu.target_rel) in schema_info.object_wildcard_shapes:
-                        raise UnsupportedByGraphIndex(
-                            f"object-wildcard shape ({restr.type}, {ttu.target_rel}) "
-                            f"is the TTU target of derived relation {key[0]}#{key[1]}; "
-                            f"derived evaluation probes the closure directly and "
-                            f"cannot see object-wildcard (w_all) state (decision-15 "
-                            f"family, blind-audit D4)")
-
+    derived/leaf namespace facts. Derived-dependency cycles raise ``ValueError``.
+    The decision-15-family scope restrictions live in
+    ``_reject_object_wildcard_scope``, which the caller runs after shape expansion
+    (they must see the expanded shape set, not just the declared one)."""
     namespace: dict[tuple[str, str], LeafFamily | DerivedFamily] = {}
     plans: dict[tuple[str, str], Plan] = {}
     dependents: dict[tuple[str, str], list[DependentEdge]] = {}

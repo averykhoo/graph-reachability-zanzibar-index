@@ -43,11 +43,15 @@ def session():
 
 
 def test_save_load_round_trip(session):
-    save_schema(session, 's1', _SCHEMA, frozenset({('doc', 'blocked')}))
+    # (group, member) and not e.g. (doc, blocked): blocked feeds the boolean
+    # viewer's subtract leaf, and wildcard-object state cannot feed a derived
+    # relation (decision-15 family) -- save_schema compiles first, so that shape
+    # is now rejected before landing.
+    save_schema(session, 's1', _SCHEMA, frozenset({('group', 'member')}))
     session.commit()
     text, shapes = load_schema(session, 's1')
     assert text == _SCHEMA
-    assert shapes == frozenset({('doc', 'blocked')})
+    assert shapes == frozenset({('group', 'member')})
 
 
 def test_schema_is_write_once(session):

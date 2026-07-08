@@ -173,6 +173,14 @@ class SetEngine:
             self._ruleset = compile_ruleset(self.ast, self.schema_info)
         except (UnsupportedByGraphIndex, ValueError):
             self._ruleset = None
+        if self._ruleset is not None and self._ruleset.schema_info is not None:
+            # Adopt the compiled SchemaInfo: its object-wildcard shapes are CLOSED
+            # over the rewrite rules (_expand_object_wildcard_shapes), which is what
+            # the graph façade validates against -- validating the declared set here
+            # rejected star-object writes on rewrite-target shapes that the graph
+            # accepted (accept/reject divergence on exactly the shapes the expansion
+            # exists for).
+            self.schema_info = self._ruleset.schema_info
         self.rebuild()
 
     # ------------------------------------------------------------------ #

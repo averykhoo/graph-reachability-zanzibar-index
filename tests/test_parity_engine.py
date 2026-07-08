@@ -109,6 +109,31 @@ def test_regression_duplicate_raw_add_is_idempotent():
     pe.close()
 
 
+def test_star_object_write_on_expanded_shape_agrees():
+    """A declared object-wildcard shape closes over the rewrite rules on BOTH
+    backends: (doc, editor) expands to (doc, viewer) via `viewer: ... or editor`,
+    so a direct star-object write on viewer must be admitted (and answered)
+    identically everywhere. The set engine used to validate against the declared
+    set only -- reject where the graph accepted (review 3)."""
+    schema = '''
+        type user
+        type doc
+          relations
+            define editor: [user]
+            define viewer: [user] or editor
+    '''
+    pe = ParityEngine(schema, object_wildcard_shapes=frozenset({('doc', 'editor')}))
+    assert pe.graph is not None
+    # the declared shape itself, and the expanded rewrite-target shape
+    assert pe.add_tuple('...', 'user', 'alice', 'editor', 'doc', '*') is True
+    assert pe.add_tuple('...', 'user', 'bob', 'viewer', 'doc', '*') is True
+    pe.add_tuple('...', 'user', 'carol', 'viewer', 'doc', 'd1')
+    assert pe.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
+    assert pe.check('...', 'user', 'bob', 'viewer', 'doc', 'd1') is True
+    assert pe.check('...', 'user', 'bob', 'editor', 'doc', 'd1') is False
+    pe.close()
+
+
 def test_parity_engine_rejection_cleanliness_i12():
     """An op rejected by every backend must leave every backend's rows untouched."""
     schema = '''

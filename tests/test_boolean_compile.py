@@ -239,6 +239,86 @@ def test_wildcard_userset_over_derived_rejected():
         parse_openfga_schema(schema, enable_boolean=True)
 
 
+def test_object_wildcard_on_derived_ttu_tupleset_rejected():
+    """Decision-15 family: an object-wildcard shape on the TUPLESET relation of a
+    TTU inside a tainted plan. tupleset_parents enumerates direct stored tuples on
+    the tupleset node, so a `doc:p parent doc:*` grant (w_all state) would be
+    silently invisible to derived evaluation -- wrong denials with no invariant
+    tripping (review 3)."""
+    schema = '''
+        type user
+        type doc
+          relations
+            define public: [user:*]
+            define blocked: [user]
+            define viewer: public but not blocked
+            define parent: [doc]
+            define inherited: viewer from parent
+    '''
+    with pytest.raises(UnsupportedByGraphIndex, match='tupleset of TTU'):
+        parse_openfga_schema(schema, object_wildcard_shapes=frozenset({('doc', 'parent')}))
+
+
+def test_star_tupleset_through_shape_over_derived_rejected():
+    """A star tupleset [S:*] whose TTU target is derived: the through-shape
+    (S, target_rel) is a wildcard userset over a derived relation -- the same v1
+    scope hook _build_plan_tree rejects when declared directly. Left underived it
+    landed in bridged_in_shapes, which the processor's idx.node() path never
+    bridges, structurally violating I3 (review 3)."""
+    schema = '''
+        type user
+        type doc
+          relations
+            define public: [user:*]
+            define blocked: [user]
+            define viewer: public but not blocked
+            define parent: [doc:*]
+            define inherited: viewer from parent
+    '''
+    with pytest.raises(UnsupportedByGraphIndex, match='symbolic composition'):
+        parse_openfga_schema(schema)
+
+
+def test_object_wildcard_expanding_onto_leaf_rejected():
+    """Decision-15 ordering: the scope guards must run AFTER shape expansion. A
+    shape on an untainted relation that a tainted plan's closure leaf routes
+    (Rule editor -> view.0) is the same wildcard-object-into-derived-state class
+    the leaf guard rejects when declared directly; unguarded, the first legal
+    star-object write crashed the delta processor mid-transaction (review 3)."""
+    schema = '''
+        type user
+        type doc
+          relations
+            define editor: [user]
+            define banned: [user]
+            define view: editor but not banned
+    '''
+    with pytest.raises(UnsupportedByGraphIndex, match='compiled leaf predicate'):
+        parse_openfga_schema(schema, object_wildcard_shapes=frozenset({('doc', 'editor')}))
+
+
+def test_object_wildcard_upstream_of_derived_ttu_target_rejected():
+    """D4 through expansion: the shape is declared one Computed hop upstream of
+    the TTU target (folder#editor -> folder#viewer), so the declared-only guard
+    missed it while the rewrite rules routed the same w_all state into the
+    guarded position (review 3)."""
+    schema = '''
+        type user
+        type folder
+          relations
+            define editor: [user]
+            define viewer: [user] or editor
+        type doc
+          relations
+            define parent: [folder]
+            define banned: [user]
+            define access: viewer from parent but not banned
+    '''
+    with pytest.raises(UnsupportedByGraphIndex, match='TTU target'):
+        parse_openfga_schema(schema,
+                             object_wildcard_shapes=frozenset({('folder', 'editor')}))
+
+
 def test_rewritten_untainted_tupleset_rejected():
     """Zanzibar tupleset semantics read STORED tuples only. An untainted tupleset
     with computed arms would let the graph's TTU rule illegally propagate rewritten
