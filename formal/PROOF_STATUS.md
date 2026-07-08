@@ -24,6 +24,30 @@ decision here:
 Discipline: never commit a broken build; if a proof stalls past reasonable effort,
 leave a documented `sorry` and move on. Update this file continuously.
 
+## Overnight run RESULT (2026-07-10, end of session)
+
+Delivered, all green + pushed (see REVIEW.md for the digest):
+- **Found + fixed a real spec bug** (`fuelBound` additive→multiplicative), confirmed
+  empirically, locked with the `deep_grid` regression. This was the headline outcome.
+- **Conformance: 15 schemas, 60 tests green** (handwritten + randomized), three
+  evaluators (`sem` / oracle / real set engine) agree everywhere. Added adversarial
+  boolean corners (taint-over-boolean, nested boolean, double exclusion).
+- **Proved (axiom-clean):** full MemberSet algebra + membership/constructor lemmas;
+  `restrictionMatches_type` / T6c (real, not placeholder); `sem_fuel_stable` (T0a)
+  reduced to one pigeonhole lemma. Axiom audit shows no custom axioms.
+- **Tooling:** `zcli` CLI, `verify.sh` green gate, `Audit.lean` axiom check.
+- **Handled a Gemini review:** adopted the valid fuelBound catch + WellDef
+  decomposition (corrected); rejected the `phat_def` axiom (C4 cleanliness).
+
+Remaining = the irreducible hard core (9 sorries): T1 (needs concrete expand model),
+T2a/b + T5 (need concrete graph state machine), T4 counting (needs concrete pathCount
++ combinatorics), T0a pigeonhole core, T0b Kahn. All honestly deferred — NONE faked.
+These want fresh context + the statement-review feedback; each is multi-hour.
+
+**Next session resume:** Phase 3 — replace `opaque SetEngineModel.check` with the
+concrete MemberSet-expand model; T1's boolean cases reduce to `mem_ext_*` (proved),
+leaf/ghost cases need ~2 more lemmas (incl. the deferred `containsShape_ghost`).
+
 ## Current phase & resume point
 
 - **Phase 1 DONE** (Lean skeleton + all T0–T6 stated; `lake build` green with 9
