@@ -248,4 +248,45 @@ theorem reachedBy_of_direct {σ : GraphState} {S : Schema} {T : Store}
   | step t hd ih =>
     exact ReachedBy.step t ih (writeDirect_writeStep (reachedByDirect_inv hd).2.2 t)
 
+/-! ## Edges trace back to store tuples — the reachability→`sem` soundness groundwork
+
+For T2b's soundness half (a graph path is a genuine membership chain) the edge set
+must be pinned to the store. `writeDirect` adds exactly the single edge
+`subjNode t.subject → objNode t.object t.relation` (or nothing, if the write is
+cycle-rejected), so every edge of a `ReachedByDirect` state is the materialization
+of some stored tuple. This is unconditional (no acyclic-data hypothesis) and is the
+first half of the tuple↔edge correspondence T2b rests on. -/
+
+/-- **`writeDirect`'s edge effect, characterized.** An accepted write prepends the
+    single materialized edge; a rejected one leaves the edges unchanged. -/
+theorem writeDirect_edges (σ : GraphState) (t : Tuple) :
+    (σ.writeDirect t).edges =
+      (if σ.admitEdge (subjNode t.subject) (objNode t.object t.relation)
+       then (subjNode t.subject, objNode t.object t.relation) :: σ.edges
+       else σ.edges) := by
+  unfold GraphState.writeDirect
+  dsimp only
+  split <;> simp only [addEdge_edges, addNode_edges]
+
+/-- **Every edge of an untainted-reached state materializes a stored tuple.** By
+    induction over the write path: a fresh edge is exactly `t`'s endpoints, an old
+    edge is handled by the IH (with `t` prepended to the store). Unconditional. -/
+theorem reachedByDirect_edge_sound {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByDirect σ S T) :
+    ∀ a b, (a, b) ∈ σ.edges →
+      ∃ t ∈ T, a = subjNode t.subject ∧ b = objNode t.object t.relation := by
+  induction h with
+  | empty S => intro a b hab; simp [emptyState] at hab
+  | step t _hd ih =>
+    intro a b hab
+    rw [writeDirect_edges] at hab
+    split at hab
+    · rcases List.mem_cons.mp hab with heq | hmem
+      · obtain ⟨h1, h2⟩ := Prod.ext_iff.mp heq
+        exact ⟨t, List.mem_cons_self, h1, h2⟩
+      · obtain ⟨t', ht', h1, h2⟩ := ih a b hmem
+        exact ⟨t', List.mem_cons_of_mem _ ht', h1, h2⟩
+    · obtain ⟨t', ht', h1, h2⟩ := ih a b hab
+      exact ⟨t', List.mem_cons_of_mem _ ht', h1, h2⟩
+
 end Zanzibar
