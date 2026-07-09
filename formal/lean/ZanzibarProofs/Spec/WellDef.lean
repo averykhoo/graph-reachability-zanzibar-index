@@ -1,5 +1,6 @@
 import ZanzibarProofs.Spec.Semantics
 import ZanzibarProofs.Spec.Stratify
+import ZanzibarProofs.Spec.Confine
 import Mathlib.Data.Finset.Card
 import Mathlib.Combinatorics.Pigeonhole
 import Mathlib.Logic.Function.Iterate
@@ -33,29 +34,40 @@ def HasDerivedCycle (S : Schema) : Prop := ∃ k, Reaches (depEdges S) k k
 
 /-! ### T0a — fuel stability -/
 
-/-- **The pigeonhole core.** At or above `fuelBound`, one more unit of fuel does not
-    change the answer: the evaluation's distinct `(otype, oname, rel)` states number
-    at most `fuelBound`, so any acyclic recursion has already bottomed out and the
-    extra level is never reached (for a stratifiable schema, where the only
-    recursion the fuel could still cut is acyclic). Discharged in a later pass. -/
+/-- **The stabilization core.** At or above `fuelBound`, one more unit of fuel does
+    not change the answer. The convergence argument: on a `StoreDeclared` store every
+    `rec`-consultation is confined to `exprRefs × relevantNames` (`Spec/Confine.lean`),
+    so the untainted (boolean-free) fragment is a monotone iteration on a finite atom
+    space and stabilizes by its size, and each Kahn stratum of tainted keys stabilizes
+    one fuel step after its (strictly lower) inputs; the total fits under the
+    multiplicative `fuelBound`.
+
+    ⚠ **The `hDecl` hypothesis is NOT optional** — without it the statement is FALSE
+    (machine-checked refutation: `Spec/Counterexample.lean`): an admission-invalid
+    tupleset tuple lets `ttuLeaf` consult a key `depEdges` never sees, closing an
+    exclusion cycle that stratification misses, and `semAux` oscillates forever.
+    `hDecl` holds for every store the composed system can hold (`SEMANTICS.md` §8
+    "write-valid tuples"; the Python admission gate enforces it). -/
 theorem semAux_fuel_stable_step (S : Schema) (T : Store) (q : Query)
-    (_hStrat : Stratifiable S) :
+    (_hStrat : Stratifiable S) (_hDecl : StoreDeclared S T) :
     ∀ f, fuelBound S T ≤ f →
       semAux S q.subject T q f q.object.type q.object.name q.relation
         = semAux S q.subject T q (f + 1) q.object.type q.object.name q.relation := by
   sorry
 
-/-- **T0a.** `sem` is well-defined: fuel above the bound does not change the answer.
-    PROVED from `semAux_fuel_stable_step` by induction from the bound. -/
+/-- **T0a.** `sem` is well-defined: fuel above the bound does not change the answer
+    (stratifiable schema, admission-valid store — see `semAux_fuel_stable_step` for
+    why `hDecl` is required). PROVED from `semAux_fuel_stable_step` by induction from
+    the bound. -/
 theorem sem_fuel_stable (S : Schema) (T : Store) (q : Query)
-    (hStrat : Stratifiable S) :
+    (hStrat : Stratifiable S) (hDecl : StoreDeclared S T) :
     ∀ f, fuelBound S T ≤ f →
       semAux S q.subject T q f q.object.type q.object.name q.relation = sem S T q := by
   intro f hf
   induction f, hf using Nat.le_induction with
   | base => rfl
   | succ n hn ih =>
-      rw [← semAux_fuel_stable_step S T q hStrat n hn]; exact ih
+      rw [← semAux_fuel_stable_step S T q hStrat hDecl n hn]; exact ih
 
 /-! ### T0b — Kahn correctness helper lemmas -/
 

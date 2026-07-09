@@ -150,6 +150,15 @@ deletion is the exact inverse in `(ℤ,+)`.
 
 ## T0a — `semAux_fuel_stable_step` (subtle — Gemini's proof is WRONG here)
 
+**⚠ STATEMENT CORRECTED (2026-07-10): the pre-`StoreDeclared` statement is FALSE**
+— machine-checked refutation in `Spec/Counterexample.lean` (an admission-invalid
+tupleset tuple creates a consultation edge `depEdges` never sees, closing an
+exclusion cycle stratification misses; `semAux (n+2) = !(semAux n)` forever). The
+theorem now carries `hDecl : StoreDeclared S T` (`Spec/Confine.lean`), the
+documented §8 write-validity precondition (implied by the Python admission gate).
+Any proof attempt below is understood over `hDecl`; the confinement lemma the
+argument needs is *exactly* what `hDecl` makes true for the `ttu` case.
+
 **CORRECTION to Gemini:** it claims "the Tarjan-lowlink guard (which sem mimics)
 yields false on a revisit," so pigeonhole gives stability. **But `semAux` has NO
 visited-set** — it is pure fuel recursion. Pigeonhole on the state space does not

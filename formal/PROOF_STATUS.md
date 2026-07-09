@@ -54,6 +54,47 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (T0a FOUND FALSE AS STATED — restated over `StoreDeclared`)
+
+Attacking the last `sorry` (`semAux_fuel_stable_step`), the first move was to
+stress-test the *statement* — and it is **FALSE over an arbitrary store**,
+machine-checked in Lean (`Spec/Counterexample.lean`, axiom-clean, no
+`native_decide`):
+
+- **The hole:** `ttuLeaf` consults `rec` at the subject of every stored tupleset
+  tuple with **no restriction check** (faithful to the oracle's `ttu_leaf`, which
+  also has none). Taint/`depEdges` predict TTU consultations from the *declared*
+  restriction types (`directTypes`). An admission-invalid tuple therefore creates
+  a consultation edge invisible to stratification — and it can close a cycle
+  through an `excl` subtrahend.
+- **The counterexample** (2 keys, 3 tuples): `(A,p) := direct[user] but not
+  ttu(q, ts)`, `(C,q) := ttu(p, ts)` — `(A,ts)`/`(C,ts)` UNDECLARED — plus store
+  tuples `C:c ts A:o` and `A:o ts C:c` closing the loop `(A,p)@o → (C,q)@c →
+  (A,p)@o`. `S` is stratifiable (`depEdges = []`); `semAux` **oscillates with
+  period 4 forever**: the proved recurrence is `semAux (n+2) = !(semAux n)` at
+  the query atom (`T0aCounter.oscillates`), refuting the old statement
+  (`T0aCounter.fuel_stable_step_false`). Empirically confirmed by `#eval` first.
+- **Resolution (documented precondition materialized, NOT a weakening):**
+  `SEMANTICS.md` §8 already says stores hold *write-valid tuples*, and the real
+  admission gate (`engine.py:_validate` (2), shared by both backends) rejects
+  exactly such tuples ("matches no declared type restriction"). New
+  `StoreDeclared S T` (`Spec/Confine.lean`) captures the needed clause — every
+  stored tuple's `(object.type, relation)` is declared and its subject type is
+  among the declared restriction types; it is *implied by* the gate, so every
+  reachable store satisfies it. `semAux_fuel_stable_step` / `sem_fuel_stable`
+  now carry `hDecl : StoreDeclared S T`. The counterexample store violates it
+  (`T0aCounter.not_storeDeclared`).
+- **Conformance note:** the corpora are admission-valid, so `sem` = oracle stays
+  green; the divergence (oracle's visited-set answers `true` stably, `sem`
+  oscillates) exists only on stores the system cannot hold.
+- Also fixed pre-existing breakage: `Audit.lean` still referenced
+  `writeDirect_writeStep`/`reachedBy_of_direct` (deleted with the abstract
+  layer); the stale `.olean` had masked it. The audit now rebuilds clean.
+
+This is the third statement-level defect caught by attack-before-prove (after
+the additive `fuelBound` and the abstract-closure falsehood). The `sorry` count
+stays 1 — now a TRUE statement worth proving.
+
 ## Review handled 2026-07-10 (second Gemini review, post-restatement)
 
 User shared a Gemini review after the restatement. Vetted against the repo;

@@ -563,6 +563,13 @@ and a query `q`. Hypotheses, named for reuse:
   writes of `T` (with cascade) from empty. Graph theorems only.
 - `hValid : ∀ t ∈ T, WriteValid t` — every stored tuple passes
   `validate_write_identifiers` positional validity (§2.1).
+- `hDecl : StoreDeclared S T` — every stored tuple's `(object.type, relation)`
+  is declared and its subject type is among the declared restriction types
+  (`Spec/Confine.lean`). The semantic half of write-validity, implied by the
+  admission gate (`engine.py:_validate` (2)). **Required by T0a** — without it
+  the fuel-stability statement is FALSE (machine-checked:
+  `Spec/Counterexample.lean`; an admission-invalid tupleset tuple closes a
+  consultation cycle stratification never sees, and `semAux` oscillates).
 
 | ID | Statement |
 |----|-----------|

@@ -10,8 +10,10 @@ import ZanzibarProofs.Core.Store
 -- Specification
 import ZanzibarProofs.Spec.Semantics
 import ZanzibarProofs.Spec.Stratify
+import ZanzibarProofs.Spec.Confine
 import ZanzibarProofs.Spec.FuelStable
 import ZanzibarProofs.Spec.WellDef
+import ZanzibarProofs.Spec.Counterexample
 
 -- Set-engine model + T1
 import ZanzibarProofs.SetEngine.MemberSet

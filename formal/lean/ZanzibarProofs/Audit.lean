@@ -2,6 +2,7 @@ import ZanzibarProofs.Equiv
 import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
+import ZanzibarProofs.Spec.Counterexample
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.Correct
@@ -65,12 +66,12 @@ namespace Zanzibar
 #print axioms reach_iff_nreaches
 -- T2a concrete write model, untainted direct fragment (GraphIndex/Write.lean).
 -- All expect only the three standard axioms (no `sorryAx`):
+-- (`writeDirect_writeStep` / `reachedBy_of_direct` were deleted with the abstract
+-- `WriteStep`/`ReachedBy` layer, 2026-07-10 — removed from this list.)
 #print axioms structInv_writeDirect
 #print axioms inv_writeDirect
 #print axioms residueEmpty_writeDirect
-#print axioms writeDirect_writeStep
 #print axioms reachedByDirect_inv
-#print axioms reachedBy_of_direct
 -- T2b groundwork (this session) — read-side relational bridge, edge/tuple
 -- soundness, and the graph-reachability ⇒ membership-chain lemma, plus the T2b
 -- base case (empty state). All expect only the three standard axioms (no `sorryAx`):
@@ -100,6 +101,13 @@ namespace Zanzibar
 #print axioms backend_equivalence
 #print axioms exclusion_effective
 #print axioms no_ghost_grant
+
+-- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
+-- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the
+-- standard axioms (decide-based, no sorryAx, no ofReduceBool):
+#print axioms T0aCounter.oscillates
+#print axioms T0aCounter.fuel_stable_step_false
+#print axioms T0aCounter.not_storeDeclared
 
 -- Proved modulo a documented sorry — expect `sorryAx` (the tracked debt, not final):
 #print axioms sem_fuel_stable
