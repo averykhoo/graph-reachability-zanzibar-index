@@ -54,6 +54,50 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (abstract closure DELETED — T-theorems restated operationally)
+
+User adjudication: **"if anything is incorrect then delete it and rewrite the
+plan; the end goal is still a formally verified Zanzibar/OpenFGA model tied to
+the Python implementation."** Executed the deletion + restatement; `verify.sh`
+green (build + audit + 60 conformance).
+
+**What was deleted (false or assertion-backed, per the same-day FINDING):**
+- `WriteStep` / `ReachedBy` (State.lean) — the abstract postcondition closure;
+  admitted junk states (nothing tied `σ.edges`/`σ.residue` to the store).
+- `graph_correct`, `graph_reached_inv` (Correct.lean) — **false as stated**;
+  these were the 2 tracked T2 sorries.
+- `backend_equivalence`, `exclusion_effective`, `no_ghost_grant` (Equiv.lean) —
+  also false as stated (same junk-state counter-model); they had been "proved"
+  only by `rw` through the false `graph_correct`.
+- `cascade_converges` (old form) — true only because `WriteStep` *asserted*
+  drainedness; `writeDirect_writeStep`, `reachedBy_of_direct` (Write.lean).
+
+**⚠ `sorry` count 3 → 1 BY DELETION, NOT PROOF.** The full-scope obligations are
+not gone — they return as ROADMAP stage W4 (restatement over the completed
+operational write model). This is recorded loudly to keep the count honest.
+
+**What replaced it (all real, proved, axiom-clean, sorry-free):**
+- `graph_reached_inv` (T2a) + `cascade_converges` (T5) restated over
+  `ReachedByDirect` in Correct.lean (one-liners off `reachedByDirect_inv`;
+  fragment scope: writes produce no deltas, so T5 is trivially drained until
+  the reconcile model lands).
+- T2b = `graph_correct_direct` (DirectCorrect.lean, unchanged from the morning
+  session).
+- `backend_equivalence` (T3), `exclusion_effective` (T6a, deny-propagation at
+  this scope — the fragment has no exclusions; the exclusion content arrives at
+  W3/W4), `no_ghost_grant` (T6b) restated over `ReachedByAdmitted` in
+  Equiv.lean, proved via T1 ∘ T2b-fragment + new `stratifiable_pureDirect`.
+- Audit updated: `backend_equivalence` moved OUT of the sorryAx section; only
+  `sem_fuel_stable` (T0a) remains there.
+
+**Plan rewritten (ROADMAP top):** the end-goal architecture (sem↔Python via the
+conformance harness; T1 done; T2 via staged operational write model; T3/T6
+corollaries that widen per stage) + the staged T2 plan **W1 bridges → W2 rule
+routing → W3 reconcile → W4 full-scope restatement**, plus a Phase-6
+**graph-model conformance extension** (drive the Lean `writeDirect`/`check`
+against the Python graph index) so the graph side gets the same executable tie
+to the implementation that `sem` already has.
+
 ## Session 2026-07-10 (T2b SEMANTIC CORE CLOSED — `graph_correct_direct` on the fragment)
 
 User: "assess, update the plan, then start on the hardest thing." Two assessment
@@ -461,8 +505,8 @@ concrete models built first (see ROADMAP).
 | 1 | Lean skeleton + spec + theorem statements | **done** | builds green; all T0–T6 stated |
 | 2 | Conformance bridge v1 | **done** | three-way `sem`/oracle/set-engine over 11 schemas, 33 tests green; graph backend TODO in P4 |
 | 3 | Set-engine model + T1 | **done** | concrete expand model; T1 proved, axiom-clean |
-| 4 | Graph-index model + T2/T4/T5 | not started | ~half total effort |
-| 5 | Equivalence T3 + security T6 | statements done | T3/T6a/b `rw`-proved modulo T1/T2b |
+| 4 | Graph-index model + T2/T4/T5 | **fragment scope done** | T4 ✅; T2a/T2b/T5 proved at star-free pure-direct scope over the operational closure; widening = ROADMAP W1–W4 |
+| 5 | Equivalence T3 + security T6 | **fragment scope done** | T3/T6a/b real proved theorems at fragment scope; widen per W-stage |
 | 6 | Hardening + CI + handoff | not started | |
 | 7 | (optional) concurrency/crash in TLA+ | not started | separate go/no-go |
 
@@ -484,11 +528,11 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T1 distribution support | `WFp`, `wfp_normalize`, `mem_starpop_focus`, `mem_ext_focus`, `containsShape_normalize`, `wfp_atoms` | **proved** | Contains.lean building blocks |
 | T0a untainted monotonicity | `evalE_mono` | **proved** | FuelStable.lean; ingredient 1 (excl-free ⇒ `RecLe` preserves truth); axiom-clean `[propext, Quot.sound]` |
 | T0a monotonicity leaves | `memberOfGranted_mono`, `directLeaf_mono`, `ttuLeaf_mono` | **proved** | FuelStable.lean; positive `rec` use at leaves |
-| T2a graph invariant + materialize | `graph_reached_inv` | **proved-mod-deps** | `Quiescent` conjunct closed; `Inv` conjunct sorry (needs operational write path) |
-| T2b graph read = sem | `graph_correct` | stated (sorry) | residue case analysis; now over CONCRETE model |
-| graph model concretization | `GraphState`/`GraphModel.check`/`Inv`/`ReachedBy`/`Quiescent`/`GraphAccepts` | **concrete** | State.lean; 7 opaque placeholders → real defs, sorry-free |
+| T2a graph invariant + materialize | `graph_reached_inv` | **proved (fragment scope)** | RESTATED 2026-07-10 over `ReachedByDirect` (abstract version deleted as FALSE); full scope returns at ROADMAP W4 |
+| T2b graph read = sem | `graph_correct_direct` | **proved (fragment scope)** | abstract `graph_correct` DELETED as FALSE; fragment instance proved end-to-end (DirectCorrect.lean); full scope returns at W4 |
+| graph model concretization | `GraphState`/`GraphModel.check`/`Inv`/`Quiescent`/`GraphAccepts` | **concrete** | State.lean; opaque placeholders → real defs; the abstract `WriteStep`/`ReachedBy` closure deleted (operational closure lives in Write.lean/DirectCorrect.lean) |
 | graph model base cases | `inv_empty`, `quiescent_empty`, `reach_empty` | **proved** | axiom-clean; `emptyState` ⊨ `Inv`/`Quiescent`, reaches nothing |
-| T3 equivalence | `backend_equivalence` | **proved-mod-deps** | `rw` through T1∘T2b (real once those land) |
+| T3 equivalence | `backend_equivalence` | **proved (fragment scope)** | RESTATED over `ReachedByAdmitted`; real `rw` through T1∘T2b-fragment + `stratifiable_pureDirect`; widens per W-stage |
 | T4 counting-IVM (insert/delete) | `pathCount_addEdge/removeEdge` | **proved** | the crux; axiom-clean. Walk API + pigeonhole vanishing + recurrence-uniqueness |
 | T4 pigeonhole vanishing | `pathsOfLength_card_vanish` | **proved** | `Acyclic → no length-\|V\| walk`; the ROADMAP-flagged blocker |
 | T4 walk correspondence | `pathsOfLength_pos_iff` | **proved** | positivity ↔ `IsChain` vertex list |
@@ -497,9 +541,9 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T4 first-edge recurrence | `phat_recurrence` | **proved** | conditional on the DAG no-`|V|`-walk hyp; axiom-clean |
 | T4 boundary sum-identity | `phat_boundary` | **proved** | the sum-manipulation heart, no acyclicity; axiom-clean |
 | (lemma) sum-shift | `sum_Ico_shift_boundary` | **proved** | Nat induction |
-| T5 cascade converges | `cascade_converges` | **proved** | axiom-clean `[propext]`; outbox-drain quiescence by induction on `ReachedBy` |
-| T6a exclusion-effective | `exclusion_effective` | **proved-mod-deps** | via T1/T2b |
-| T6b no-ghost-grant | `no_ghost_grant` | **proved-mod-deps** | via T2b |
+| T5 cascade converges | `cascade_converges` | **proved (fragment scope)** | RESTATED over `ReachedByDirect` (old form held only by `WriteStep` assertion); becomes contentful at W3 (reconcile/outbox) |
+| T6a exclusion-effective | `exclusion_effective` | **proved (fragment scope)** | RESTATED over `ReachedByAdmitted`; deny-propagation at this scope — exclusion content arrives W3/W4 |
+| T6b no-ghost-grant | `no_ghost_grant` | **proved (fragment scope)** | RESTATED over `ReachedByAdmitted`; via T2b-fragment |
 | T6c wildcard scoping | `wildcard_scoping` | **proved** | real theorem now: `T:*` grants are type-scoped, via `restrictionMatches_type` |
 | (lemma) grant type-scoping | `restrictionMatches_type` | **proved** | axiom-clean `[propext, Quot.sound]` |
 | (lemma) `ext_normalize` | `MemberSet.ext_normalize` | **proved** | MemberSet renorm correctness |
@@ -508,8 +552,8 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | (lemmas) star laws | `stars_union/intersect/subtract` | **proved** | `rfl` |
 | (lemmas) star×boolean | `containsStar_union/intersect/subtract` | **proved** | the pinned intensional `'*'` table (§5.6) |
 | T2a write model (untainted) | `writeDirect`, `structInv_writeDirect`, `inv_writeDirect` | **proved** | Write.lean; concrete guarded edge write preserves the whole `Inv` on the residue-free fragment; axiom-clean |
-| T2a untainted write-closure | `ReachedByDirect`, `reachedByDirect_inv`, `reachedBy_of_direct` | **proved** | Write.lean; T2a's `Inv` conjunct honestly proved for the untainted fragment; embeds in abstract `ReachedBy` |
-| T2a write realizes spec | `writeDirect_writeStep`, `quiescent_writeDirect`, `residueEmpty_writeDirect` | **proved** | Write.lean; connects concrete op to the `ReachedBy` closure |
+| T2a untainted write-closure | `ReachedByDirect`, `reachedByDirect_inv` | **proved** | Write.lean; the operational closure + its running invariant (`reachedBy_of_direct`/`writeDirect_writeStep` deleted with the abstract layer) |
+| T2a write-effect projections | `quiescent_writeDirect`, `residueEmpty_writeDirect`, `writeDirect_outbox/watermark/schema/monoNodes` | **proved** | Write.lean |
 | T2b base case | `graph_correct_empty` | **proved** | Correct.lean; `check (emptyState S) q = sem S [] q` — the `ReachedBy.empty` case, axiom-clean |
 | T2b empty-store spec | `sem_empty_store`, `semAux_empty_store`, `evalE_empty_store` | **proved** | Correct.lean; `sem S [] q = false` by fuel induction |
 | T2b empty read | `check_empty`, `probeNonDerived_empty`, `probeDerived_empty` | **proved** | Correct.lean; empty index answers `false` (no edges, no residue) |
@@ -523,17 +567,17 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 ## `sorry` ledger
 
-**Count = 3** (was 9; **T4 + T0b + T1 closed 2026-07-09; T5 `cascade_converges`
-closed 2026-07-10**, monotone non-increasing). Locations:
+**Count = 1** (was 9). Location:
 - `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`) (1)
-- `GraphIndex/Correct.lean`: `graph_reached_inv` (only the `Inv` conjunct — the
-  `Quiescent` conjunct is proved), `graph_correct` (2)
 
-**⚠ The two `Correct.lean` sorries are FALSE AS STATED** (2026-07-10 finding, see
-ROADMAP): the thin `WriteStep` admits junk states. They are placeholders for the
-restatement over the operational write-closure — the honest fragment instance
-**`graph_correct_direct` (DirectCorrect.lean) is proved and axiom-clean**; do not
-sink effort into the abstract statements as written.
+**⚠ HONESTY NOTE on the 3 → 1 drop (2026-07-10):** the two `GraphIndex/Correct.
+lean` sorries (`graph_correct`, `graph_reached_inv`'s `Inv` conjunct) were
+**DELETED as false-as-stated, not proved** (user-directed; the abstract
+`WriteStep`/`ReachedBy` closure admitted junk states). Their obligations return
+at full scope as ROADMAP stage W4. The theorem names survive, restated over the
+operational closure at fragment scope, where they are genuinely proved
+(`graph_reached_inv`/`cascade_converges` over `ReachedByDirect`;
+`graph_correct_direct`/T3/T6a/T6b over `ReachedByAdmitted`).
 
 **`GraphIndex/DirectCorrect.lean` is `sorry`-free** — the T2b semantic core
 (userset lifting, chain ⇔ `sem`, both directions) and the end-to-end fragment

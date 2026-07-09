@@ -1,19 +1,74 @@
-# ROADMAP — closing the remaining `sorry`s (3 left, was 9)
+# ROADMAP — the staged path to the verified model (1 `sorry` left, was 9)
 
-A per-theorem plan for discharging the remaining deep obligations. Synthesizes a
-Gemini review roadmap **with corrections from actually type-checking against the
-code** (Gemini wrote without a compiler and made several concrete errors, flagged
-below). Read alongside `PROOF_STATUS.md` (status) and `SEMANTICS.md` (the spec).
+The plan of record toward the END GOAL: **a formally verified Zanzibar/OpenFGA
+model tied to the Python implementation.** Read alongside `PROOF_STATUS.md`
+(status) and `SEMANTICS.md` (the spec).
 
-Original 9 sorries; **✅ CLOSED: `pathCount_addEdge`/`pathCount_removeEdge` (T4),
-`stratify_none_iff_cycle`/`stratify_topological` (T0b), `setEngine_correct` (T1),
-`cascade_converges` (T5).** Remaining 3: `semAux_fuel_stable_step` (T0a);
-`graph_reached_inv` (only its `Inv` conjunct) and `graph_correct` (T2a/T2b).
+## The architecture (how the pieces add up to the goal)
 
-**Graph model concretized (2026-07-10):** all 7 opaque graph placeholders in
-`GraphIndex/State.lean` are now real definitions (`GraphState`, `GraphModel.check`,
-`Inv`, `ReachedBy`, `Quiescent`, `GraphAccepts`), so the remaining T2 sorries relate
-concrete definitions, not stubs. The next attempt at T2a/T2b starts from that model.
+1. **`sem` (Lean) is the normative spec.** It is tied to the Python
+   implementation *executably*: the conformance harness (`zcli` +
+   `formal/conformance/`, 60 tests) checks `sem` = oracle = real Python set
+   engine over 15 schema corpora. This is the model↔implementation bridge and
+   it is already load-bearing (it caught the `fuelBound` spec bug).
+2. **T1 (set engine = `sem`): ✅ DONE, axiom-clean.**
+3. **T2 (graph index = `sem`): the remaining core.** Stated over an
+   **operational write-closure** that grows in stages (below) until it covers
+   the full `GraphAccepts` scope. Current scope: star-free pure-direct
+   (`graph_correct_direct`, ✅ proved end-to-end).
+4. **T3/T6 (equivalence + security): ✅ proved at the current T2 scope**; they
+   are one-line corollaries that widen automatically with each T2 stage.
+5. **T0a (spec well-definedness): the single remaining `sorry`** — purely
+   spec-side, independent of the graph work.
+6. **Phase 6 hardening** closes the loop: sorries = 0, axiom audit as a hard
+   gate, and a **graph-model conformance extension** (drive the Lean
+   `writeDirect`/`check` model against the Python graph index over the fragment
+   corpora) so the *graph* side of the verified model is also executably tied
+   to the implementation, like `sem` already is.
+
+Original 9 sorries; ✅ CLOSED by proof: T4, T0b, T1, and (at fragment scope,
+restated) T2a/T2b/T3/T5/T6. ⚠ 2 sorries were **DELETED as false-as-stated, not
+proved** (2026-07-10, user-directed — see the FINDING below): the abstract
+`graph_correct` / `graph_reached_inv` quantified over a junk-admitting closure.
+Their obligations are NOT gone — they return as the full-scope restatements in
+stage W4 below. Remaining tracked `sorry`: `semAux_fuel_stable_step` (T0a).
+
+## The staged T2 plan (write-model growth → theorem scope growth)
+
+Each stage extends the concrete write model, widens the operational closure,
+and re-proves/widens the same named theorems. Every stage must keep
+`verify.sh` green and axiom-clean. No stage postulates its invariant.
+
+- **W1 — wildcard bridges.** Materialize `*` semantics in the write model:
+  concrete→`wAny` bridge edges (on both star-grant arrival and new-instance
+  arrival), `wAll` object-wildcard arrivals. Widen `graph_correct_direct` to
+  star data/queries (the read-side `wAny`/`wAll` promotion only covers the
+  first hop today; interior hops need the materialized bridges). Key new proof
+  content: bridge-completeness (every `instances` witness has its bridge) and
+  the `instances`-branch of `memberOfGranted` in both correspondence directions.
+- **W2 — rule routing (untainted boolean-free structure).** `computed`, `union`
+  of untainted operands, and TTU defs: writes route onto rule-derived families
+  (the Python `RuleSet.apply` / leaf-routing semantics), materializing the
+  extra closure edges. Widens the fragment to the full *untainted*
+  `GraphAccepts` scope. Key content: rule-edge soundness/completeness vs
+  `evalE`'s `computed`/`ttu`/`union` cases (TTU parents are STORED tupleset
+  tuples — the storage-leaf/rule-leaf split).
+- **W3 — derived reconcile (the residue path).** Faithful `reconcile` output
+  per derived key (residue `(stars, neg, upos)` = the §7.6 semantics), the
+  in-transaction cascade over the outbox, and the cross-key hazard (an edge
+  write re-reaching an existing residue key re-reconciles it). Closes full
+  T2a (`Inv` incl. I6 across reachability-affected keys) and the derived-read
+  half of T2b (residue = `sem` via the T1 MemberSet algebra + `negEdgeFree`
+  edge-hit disjointness). T5 becomes contentful (non-empty outbox drained).
+- **W4 — full-scope restatement.** The operational closure now covers
+  `GraphAccepts`; name it `ReachedBy` and state the final `graph_correct` /
+  `graph_reached_inv` / `backend_equivalence` / T6a (with real exclusion
+  content) / T6b over it. This discharges the obligations whose false
+  predecessors were deleted.
+- **T0a** (independent, any time): the per-rank stabilization argument — see
+  its section below.
+- **Phase 6**: sorry gate to 0, audit as hard gate, graph-model conformance
+  extension (above), final review doc.
 
 ---
 
@@ -213,9 +268,18 @@ for an unrelated `t`. Consequence: **no proof effort can close `graph_correct` o
 model is not merely "the blocker", it is *mandatory for the statements to be true*.
 Endgame: complete the operational write path (untainted `writeDirect` ✓ done;
 wildcard bridges; derived reconcile), then RESTATE T2a/T2b over that operational
-closure (either replace `WriteStep` by the concrete write or keep fragment-indexed
-theorems). The abstract statements stay as tracked sorries only as placeholders for
-the final restatement — do not sink proof effort into them as written.
+closure.
+
+**RESOLVED (2026-07-10, user-directed deletion).** The abstract
+`WriteStep`/`ReachedBy` layer and every statement over it (`graph_correct`,
+`graph_reached_inv`, `backend_equivalence`, `exclusion_effective`,
+`no_ghost_grant`, the assertion-backed `cascade_converges`) were **deleted** —
+the false statements removed, not proved. All six theorem names were restated
+over the operational closure (`ReachedByDirect`/`ReachedByAdmitted`) at the
+star-free pure-direct fragment's scope, where they are real, proved,
+axiom-clean, sorry-free (`Correct.lean`, `DirectCorrect.lean`, `Equiv.lean`).
+The `sorry` count dropped 3 → 1 **by deletion, not proof** — the full-scope
+obligations return in stage W4 of the staged plan (top of this file).
 
 **Remaining (the genuine multi-session cores):**
 - **T2b semantic core:** `TupleChain T u v ↔ sem`-membership — match the membership
@@ -277,29 +341,22 @@ the final restatement — do not sink proof effort into them as written.
 
 ## Suggested order
 
-1. ~~**T4**~~ ✅ DONE (axiom-clean; `Closure.lean` sorry-free). Unblocks T2b's edge reasoning.
-2. ~~**T0b**~~ ✅ DONE (axiom-clean; `WellDef.lean` T0b theorems sorry-free). Hand-rolled
-   Kahn correctness (`stuck_cycle` pigeonhole + `kahn_none_stuck`/`kahn_cycle_none` +
-   `kahn_topo`). The `List`-bookkeeping estimate held (needed hand-rolled `getD_app_*`).
-3. ~~**T1**~~ ✅ DONE (axiom-clean; `Correct.lean` sorry-free). Concrete expand model
-   + query-focused population + fuel/AST induction. Unblocks T3/T6 (route through T1∘T2b).
-4. **T2/T5** — graph model CONCRETIZED; **T5 `cascade_converges` ✅ DONE**; the
-   **reachability layer ✅ DONE** (2026-07-10: `reach ↔ NReaches` bridge, cycle-
-   rejection, structural write-primitive preservation, per-key `inv_putResidue`).
-   **T2b groundwork ✅ DONE** (base case + `probeNonDerived_iff` + `TupleChain`/
-   `reachedByDirect_nreaches_chain`). **T2b SEMANTIC CORE ✅ DONE** (2026-07-10:
-   `graph_correct_direct` — end-to-end `check = sem` on the star-free pure-direct
-   fragment, axiom-clean; userset lifting + chain⇔`sem` both directions,
-   `DirectCorrect.lean`). Remaining, in suggested order: (a) **wildcard bridges**
-   (materialize concrete→`wAny` bridges in the write model + extend the fragment
-   theorem to star data/queries); (b) **computed/union/TTU defs** (rule-routed
-   edge materialization — the graph writes edges onto rule-derived families);
-   (c) the **faithful reconcile model** (residue output) for T2a and the derived
-   T2b path; then (d) restate/replace the abstract `graph_correct`/
-   `graph_reached_inv` over the completed operational closure (they are FALSE as
-   currently stated — see the FINDING above).
-5. **T0a** (decide (a) vs (b) first) — the only remaining `Spec/` sorry; ingredient 1
-   (`evalE_mono`) proved.
+**→ Follow "The staged T2 plan" at the top of this file: W1 (wildcard bridges) →
+W2 (rule routing) → W3 (derived reconcile) → W4 (full-scope restatement), with
+T0a and the Phase-6 graph-model conformance extension schedulable in parallel.**
+
+Historical single-sorry order (all ✅ except T0a):
+1. ~~**T4**~~ ✅ DONE (axiom-clean; `Closure.lean` sorry-free).
+2. ~~**T0b**~~ ✅ DONE (axiom-clean; hand-rolled Kahn correctness).
+3. ~~**T1**~~ ✅ DONE (axiom-clean; concrete expand model + query-focused population).
+4. ~~**T2/T5 at fragment scope**~~ ✅ DONE (2026-07-10): model concretized;
+   reachability layer (`reach ↔ NReaches`); T2b groundwork (base case,
+   `probeNonDerived_iff`, `TupleChain`); **T2b semantic core
+   (`graph_correct_direct`, userset lifting + chain⇔`sem` both directions)**;
+   abstract-closure falsehood found, layer deleted, T2a/T2b/T3/T5/T6 restated
+   operationally at fragment scope, all proved.
+5. **T0a** — the only remaining `sorry`; ingredients 1 (`evalE_mono`) and the
+   evaluator fuel-monotonicity (`semAux_mono`) proved.
 
 ---
 
