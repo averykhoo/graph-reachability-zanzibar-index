@@ -54,6 +54,44 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (T2 graph model CONCRETIZED — T5 closed)
+
+**Scope decision (user-approved): "concretize + partial proofs," not the full T2
+close** (T2 is the ~half-effort multi-session core; a faithful full close isn't
+honestly doable in one pass, and a cooked `check := sem` model was explicitly
+rejected). Delivered, `verify.sh` green (build + 60 conformance + audit),
+count **4 → 3**:
+
+- **All 7 opaque graph placeholders are now CONCRETE** (`GraphIndex/State.lean`,
+  `sorry`-free): `GraphState` (nodes with `plain/wAny/wAll` variants, direct edges,
+  residues `(stars,neg,upos)`, outbox+watermark), `GraphModel.check` (the faithful
+  §7.5 ≤4-probe read + §7.6 residue path, routed by `isDerived`), `Inv` (I-series
+  core: node encoding, I1 endpoint existence, I2 acyclicity, I6 residue hygiene incl.
+  the load-bearing `neg ∩ edge-holders = ∅`), `ReachedBy` (inductive write-closure
+  from `emptyState` via a minimal operational `WriteStep`), `Quiescent`
+  (outbox-drain), `GraphAccepts` (decision-15 scope). The C4 "pending opaque" list
+  for the graph model is cleared.
+- **Reads model reachability, not path counts.** `check` probes a fuel-bounded
+  transitive closure `reachB` of the direct edges (`p(u,v)>0`), factoring the
+  path-*counting* layer out to `Closure.lean`/T4 — this dodges threading a
+  `Fintype NodeKey` (infinite key space) through the read and keeps `check`
+  executable. `Inv.acyclic` pins the DAG property T4 needs.
+- **T5 `cascade_converges` CLOSED, axiom-clean** (`[propext]`). The model bakes the
+  in-txn cascade into each write (§7.8 / A1, user-approved), so outbox-drain is a
+  `WriteStep` postcondition and `Quiescent` holds at every reachable state by
+  induction on `ReachedBy`.
+- **T2a `graph_reached_inv`**: the `Quiescent` conjunct is closed (via
+  `cascade_converges`); the `Inv` conjunct stays a tracked `sorry` (needs the full
+  operational write path — edge/bridge/reconcile — which `WriteStep` abstracts).
+- **Partial base-case lemmas, axiom-clean:** `inv_empty`, `quiescent_empty`,
+  `reach_empty` (`reachB [] = false`).
+
+**Remaining 3 sorries:** `semAux_fuel_stable_step` (T0a); `graph_reached_inv`'s `Inv`
+half and `graph_correct` (T2b, the read = `sem` completeness argument) — the genuine
+deep content, deferred as before. The concretization makes those statements relate
+*real* definitions (not opaque constants), so the next attempt starts from a concrete
+model rather than a stub.
+
 ## Session 2026-07-09 (T1 FULLY CLOSED — set engine = sem)
 
 **T1 is DONE** — `setEngine_correct` is proved and axiom-clean (`[propext,
@@ -244,8 +282,10 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T1 distribution support | `WFp`, `wfp_normalize`, `mem_starpop_focus`, `mem_ext_focus`, `containsShape_normalize`, `wfp_atoms` | **proved** | Contains.lean building blocks |
 | T0a untainted monotonicity | `evalE_mono` | **proved** | FuelStable.lean; ingredient 1 (excl-free ⇒ `RecLe` preserves truth); axiom-clean `[propext, Quot.sound]` |
 | T0a monotonicity leaves | `memberOfGranted_mono`, `directLeaf_mono`, `ttuLeaf_mono` | **proved** | FuelStable.lean; positive `rec` use at leaves |
-| T2a graph invariant + materialize | `graph_reached_inv` | stated (sorry) | hardest; Phase 4 |
-| T2b graph read = sem | `graph_correct` | stated (sorry) | residue case analysis |
+| T2a graph invariant + materialize | `graph_reached_inv` | **proved-mod-deps** | `Quiescent` conjunct closed; `Inv` conjunct sorry (needs operational write path) |
+| T2b graph read = sem | `graph_correct` | stated (sorry) | residue case analysis; now over CONCRETE model |
+| graph model concretization | `GraphState`/`GraphModel.check`/`Inv`/`ReachedBy`/`Quiescent`/`GraphAccepts` | **concrete** | State.lean; 7 opaque placeholders → real defs, sorry-free |
+| graph model base cases | `inv_empty`, `quiescent_empty`, `reach_empty` | **proved** | axiom-clean; `emptyState` ⊨ `Inv`/`Quiescent`, reaches nothing |
 | T3 equivalence | `backend_equivalence` | **proved-mod-deps** | `rw` through T1∘T2b (real once those land) |
 | T4 counting-IVM (insert/delete) | `pathCount_addEdge/removeEdge` | **proved** | the crux; axiom-clean. Walk API + pigeonhole vanishing + recurrence-uniqueness |
 | T4 pigeonhole vanishing | `pathsOfLength_card_vanish` | **proved** | `Acyclic → no length-\|V\| walk`; the ROADMAP-flagged blocker |
@@ -255,7 +295,7 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T4 first-edge recurrence | `phat_recurrence` | **proved** | conditional on the DAG no-`|V|`-walk hyp; axiom-clean |
 | T4 boundary sum-identity | `phat_boundary` | **proved** | the sum-manipulation heart, no acyclicity; axiom-clean |
 | (lemma) sum-shift | `sum_Ico_shift_boundary` | **proved** | Nat induction |
-| T5 cascade converges | `cascade_converges` | stated (sorry) | subsumed by T2a |
+| T5 cascade converges | `cascade_converges` | **proved** | axiom-clean `[propext]`; outbox-drain quiescence by induction on `ReachedBy` |
 | T6a exclusion-effective | `exclusion_effective` | **proved-mod-deps** | via T1/T2b |
 | T6b no-ghost-grant | `no_ghost_grant` | **proved-mod-deps** | via T2b |
 | T6c wildcard scoping | `wildcard_scoping` | **proved** | real theorem now: `T:*` grants are type-scoped, via `restrictionMatches_type` |
@@ -268,11 +308,14 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 ## `sorry` ledger
 
-**Count = 4** (was 9; **T4 + T0b closed 2026-07-09, T1 closed 2026-07-09**, monotone
-non-increasing). Locations:
+**Count = 3** (was 9; **T4 + T0b + T1 closed 2026-07-09; T5 `cascade_converges`
+closed 2026-07-10**, monotone non-increasing). Locations:
 - `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`) (1)
-- `GraphIndex/Correct.lean`: `graph_reached_inv`, `graph_correct`,
-  `cascade_converges` (3)
+- `GraphIndex/Correct.lean`: `graph_reached_inv` (only the `Inv` conjunct — the
+  `Quiescent` conjunct is proved), `graph_correct` (2)
+
+**`GraphIndex/State.lean` is `sorry`-free** — the 7 opaque graph placeholders are now
+concrete definitions; `cascade_converges` (T5) is closed off the concrete `ReachedBy`.
 
 **`SetEngine/Correct.lean` is now `sorry`-free** — `setEngine_correct` (T1) proved and
 axiom-clean; the `opaque SetEngineModel.check` is replaced by a concrete expand model.
@@ -311,12 +354,13 @@ opaque is removed; count unchanged.
 
 ## Pending axioms (opaque placeholders — to be replaced, flagged by the C4 axiom audit)
 
-`opaque` declarations standing in for not-yet-built models: `ValidIdent`
-(Core/Ident — intended to stay abstract), `GraphState`, `GraphModel.check`, `Inv`,
-`ReachedBy`, `Quiescent`, `GraphAccepts` (→ Phase 4 defs). (`pathCount` and
-`SetEngineModel.check` are now CONCRETE — no longer opaque.) The final axiom
-audit must show only `propext, Classical.choice, Quot.sound` — every remaining opaque
-must become a real definition before Phase 6.
+The only remaining `opaque` is `ValidIdent` (Core/Ident — intended to stay abstract
+per §2.1). **The entire graph model is now CONCRETE** — `GraphState`,
+`GraphModel.check`, `Inv`, `ReachedBy`, `Quiescent`, `GraphAccepts` became real
+definitions 2026-07-10 (State.lean); `pathCount` and `SetEngineModel.check` were
+concretized earlier. The final axiom audit must show only `propext, Classical.choice,
+Quot.sound` — no opaque model constants remain to eliminate (only the tracked
+`sorry`s in `graph_reached_inv`/`graph_correct`/`semAux_fuel_stable_step`).
 
 ---
 

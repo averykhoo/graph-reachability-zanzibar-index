@@ -1,4 +1,4 @@
-# ROADMAP — closing the remaining `sorry`s (4 left, was 9)
+# ROADMAP — closing the remaining `sorry`s (3 left, was 9)
 
 A per-theorem plan for discharging the remaining deep obligations. Synthesizes a
 Gemini review roadmap **with corrections from actually type-checking against the
@@ -6,9 +6,14 @@ code** (Gemini wrote without a compiler and made several concrete errors, flagge
 below). Read alongside `PROOF_STATUS.md` (status) and `SEMANTICS.md` (the spec).
 
 Original 9 sorries; **✅ CLOSED: `pathCount_addEdge`/`pathCount_removeEdge` (T4),
-`stratify_none_iff_cycle`/`stratify_topological` (T0b), `setEngine_correct` (T1).**
-Remaining 4: `semAux_fuel_stable_step` (T0a); `graph_reached_inv`, `graph_correct`,
-`cascade_converges` (T2/T5).
+`stratify_none_iff_cycle`/`stratify_topological` (T0b), `setEngine_correct` (T1),
+`cascade_converges` (T5).** Remaining 3: `semAux_fuel_stable_step` (T0a);
+`graph_reached_inv` (only its `Inv` conjunct) and `graph_correct` (T2a/T2b).
+
+**Graph model concretized (2026-07-10):** all 7 opaque graph placeholders in
+`GraphIndex/State.lean` are now real definitions (`GraphState`, `GraphModel.check`,
+`Inv`, `ReachedBy`, `Quiescent`, `GraphAccepts`), so the remaining T2 sorries relate
+concrete definitions, not stubs. The next attempt at T2a/T2b starts from that model.
 
 ---
 
@@ -147,22 +152,34 @@ topological-sort / acyclicity lemmas before hand-rolling.
 
 ## T2 / T5 — `graph_reached_inv`, `graph_correct`, `cascade_converges`
 
-**Plan (largest, Phase 4).** Replace `opaque GraphState`/`Inv`/`GraphModel.check`/
-`ReachedBy`/`Quiescent` with concrete definitions:
-- `GraphState := { edges : DirectGraph NodeKey, residues : … → Option Residue,
-  outbox : … }` (`NodeKey = (type,name,pred,variant)`; `Residue = (stars, neg, upos)`).
-- `GraphModel.check` = the ≤4-probe edge read + residue path (§7.5–7.6).
-- `Inv` = the I-series (I1 count algebra via `pathCount`, I2 `Acyclic`, I6 residue
-  hygiene `neg ∩ edge-holders = ∅`, etc.).
-- `ReachedBy` = fold of the write ops (with cascade) from empty.
+**✅ Model concretized + `cascade_converges` (T5) closed (2026-07-10).** The opaque
+placeholders are now real (`GraphIndex/State.lean`, `sorry`-free):
+- `GraphState := { schema, edges : List (NodeKey × NodeKey), nodes, residue : NodeKey
+  → String → Option Residue, outbox, watermark }` (`NodeKey = (type,name,pred,variant∈
+  {plain,wAny,wAll})`; `Residue = (stars, neg, upos)`).
+- `GraphModel.check` = the ≤4-probe read (`probeNonDerived`) + residue path
+  (`probeDerived`), routed by `isDerived` (§7.5–7.6). **Reads probe reachability
+  `reachB` (transitive closure of direct edges), not path counts** — the counting
+  layer stays factored in `Closure.lean`/T4, dodging a `Fintype NodeKey`.
+- `Inv` = the I-series core (node encoding, I1 endpoint existence, I2 `acyclic` via
+  `reach`, I6 residue hygiene incl. `neg ∩ edge-holders = ∅`).
+- `ReachedBy` = inductive write-closure from `emptyState` via `WriteStep` (a minimal
+  operational spec that bakes the in-txn cascade ⇒ outbox drained).
+- `cascade_converges` (T5) is **proved** (axiom-clean): `Quiescent` = outbox-drain is
+  a `WriteStep` postcondition, so it holds at every reachable state by induction.
+  Base cases `inv_empty`/`quiescent_empty`/`reach_empty` proved.
 
-**T2b** (`graph_correct`): case analysis on subject kind. Bare subject: edge-hit ⇒
-allow, justified because `Inv.residueHygiene` gives `neg ∩ edge-holders = ∅` (the
-edge fast-path ≡ full residue). Star/userset: residue = `ext_normalize` by `Inv`, so
-equals `sem`. Uses T4 (edges = path counts) and the T1 MemberSet lemmas.
-**T2a/T5**: induction over ops; cycle-rejection preserves `Acyclic`; `runCascade`
-descends strata (lower strata immutable while higher evaluate) ⇒ quiesces in
-`|strata|` rounds.
+**Remaining (deferred deep content):**
+- **T2b** (`graph_correct`): case analysis on subject kind. Bare subject: edge-hit ⇒
+  allow, justified because `Inv.negEdgeFree` gives `neg ∩ edge-holders = ∅` (the edge
+  fast-path ≡ full residue). Star/userset: residue = `ext_normalize` by `Inv`, so
+  equals `sem`. Uses T4 (edges = path counts) and the T1 MemberSet lemmas. This is the
+  read-completeness argument (§3.2 wildcard-spec: every semantic path decomposes as
+  leading-hop · materialized-closure · trailing-hop).
+- **T2a** (`graph_reached_inv`, `Inv` conjunct only — `Quiescent` conjunct done):
+  needs the concrete operational write path (`WriteStep` must realize edge/bridge
+  addition + reconcile) so that cycle-rejection preserves `acyclic` and the write
+  preserves node-encoding + residue hygiene by induction over ops.
 
 ---
 
@@ -174,8 +191,10 @@ descends strata (lower strata immutable while higher evaluate) ⇒ quiesces in
    `kahn_topo`). The `List`-bookkeeping estimate held (needed hand-rolled `getD_app_*`).
 3. ~~**T1**~~ ✅ DONE (axiom-clean; `Correct.lean` sorry-free). Concrete expand model
    + query-focused population + fuel/AST induction. Unblocks T3/T6 (route through T1∘T2b).
-4. **T2/T5** (largest; needs T2b for T3/T6 to become real). Needs the whole concrete
-   graph state machine built. Now the highest-leverage remaining target.
+4. **T2/T5** — graph model CONCRETIZED (State.lean sorry-free); **T5
+   `cascade_converges` ✅ DONE** (axiom-clean). Remaining: T2b `graph_correct` (read =
+   `sem`, the highest-leverage target; needed for T3/T6 to become real) and the `Inv`
+   conjunct of T2a `graph_reached_inv` (needs the operational `WriteStep` realization).
 5. **T0a** (decide (a) vs (b) first) — the only remaining `Spec/` sorry; ingredient 1
    (`evalE_mono`) proved.
 

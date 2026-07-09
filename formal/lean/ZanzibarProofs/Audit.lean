@@ -39,6 +39,13 @@ namespace Zanzibar
 #print axioms evalE_mono
 -- T1 — set engine computes sem (SetEngine/Correct.lean), now fully proved:
 #print axioms setEngine_correct
+-- T5 — cascade convergence (GraphIndex/Correct.lean), closed off the concrete
+-- `ReachedBy`; plus the concrete graph-model base-case lemmas. Expect only the
+-- three standard axioms (no `sorryAx`):
+#print axioms cascade_converges
+#print axioms inv_empty
+#print axioms quiescent_empty
+#print axioms reach_empty
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):
