@@ -99,8 +99,12 @@ theorem neg_subset_starpop (E : Finset Id) (S : Finset Shape) :
     (normalize pop E S).neg ⊆ starpop pop S := by
   intro x hx; simp only [normalize, Finset.mem_sdiff] at hx; exact hx.1
 
--- (A ghost-membership lemma `containsShape_ghost` will be added here when T1's leaf
---  case needs it; its `decide` bookkeeping is deferred to keep this file green.)
+-- T1's remaining nut (documented, not yet in Lean): the INTENSIONAL distribution of
+-- `containsShape` (concrete/ghost subjects) over union/intersect/subtract for
+-- well-formed (`pos ⟂ starpop`) operands — the analogue of `containsStar_*`. It is
+-- true but resisted `simp; tauto` (large expanded goal); see formal/ROADMAP.md for
+-- the intended route (a `containsShape` normal-form lemma + per-atom split). The star
+-- and extensional pieces (`containsStar_*`, `mem_ext_*`) are already proved.
 
 end MemberSet
 end Zanzibar

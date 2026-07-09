@@ -44,9 +44,15 @@ T2a/b + T5 (need concrete graph state machine), T4 counting (needs concrete path
 + combinatorics), T0a pigeonhole core, T0b Kahn. All honestly deferred — NONE faked.
 These want fresh context + the statement-review feedback; each is multi-hour.
 
-**Next session resume:** Phase 3 — replace `opaque SetEngineModel.check` with the
-concrete MemberSet-expand model; T1's boolean cases reduce to `mem_ext_*` (proved),
-leaf/ghost cases need ~2 more lemmas (incl. the deferred `containsShape_ghost`).
+**Next session resume:** see `formal/ROADMAP.md` (per-sorry plan, with corrections to
+a Gemini roadmap). Phase 3 T1: the boolean STAR cases are done (`containsStar_*`); the
+remaining nut is the INTENSIONAL `containsShape` distribution for concrete/ghost
+subjects under a WF invariant — attempted this session, `simp; tauto` did NOT close
+it (goal too large), so it's documented in ROADMAP with the intended route (a
+`containsShape` normal-form lemma + per-atom split) rather than left as a `sorry`.
+Gemini corrections logged: its set-engine model used `MemberSet String` (unsound —
+name collisions across types; use `String × String`); its T0a pigeonhole is invalid
+(our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
 ## Current phase & resume point
 
