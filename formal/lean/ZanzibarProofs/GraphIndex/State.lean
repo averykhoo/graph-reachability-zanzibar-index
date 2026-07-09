@@ -225,6 +225,55 @@ theorem acyclic_addEdge {edges : List (NodeKey × NodeKey)} {a b : NodeKey}
     · exact hne heq.symm
     · exact hback hr
 
+/-! ### Bridging the executable probe `reachB` to `NReaches`
+
+`reachB` (fuel-capped) and `NReaches` (fuel-free) agree once the fuel is large
+enough. **Soundness** (`reachB → NReaches`) holds at any fuel; **completeness**
+(`NReaches → reachB`) needs a fuel bound and is proved below via shortest-walk
+compression. Together they let a read theorem move between the executable probe and
+the relational invariant. -/
+
+/-- `reachB` is sound for `NReaches` at any fuel. -/
+theorem reachB_sound {edges : List (NodeKey × NodeKey)} :
+    ∀ (f : Nat) (u v : NodeKey), reachB edges f u v = true → NReaches edges u v := by
+  intro f
+  induction f with
+  | zero => intro u v h; simp [reachB] at h
+  | succ f ih =>
+    intro u v h
+    rw [reachB, List.any_eq_true] at h
+    obtain ⟨e, hmem, he⟩ := h
+    obtain ⟨e1, e2⟩ := e
+    simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] at he
+    obtain ⟨hu, hv | hr⟩ := he
+    · subst hu; subst hv; exact NReaches.edge hmem
+    · subst hu; exact NReaches.head hmem (ih e2 v hr)
+
+/-- `reachB` is monotone in fuel (one step). -/
+theorem reachB_mono_succ {edges : List (NodeKey × NodeKey)} :
+    ∀ (f : Nat) (u v : NodeKey),
+      reachB edges f u v = true → reachB edges (f + 1) u v = true := by
+  intro f
+  induction f with
+  | zero => intro u v h; simp [reachB] at h
+  | succ f ih =>
+    intro u v h
+    rw [reachB, List.any_eq_true] at h ⊢
+    obtain ⟨e, hmem, he⟩ := h
+    refine ⟨e, hmem, ?_⟩
+    obtain ⟨e1, e2⟩ := e
+    simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] at he ⊢
+    obtain ⟨hu, hv | hr⟩ := he
+    · exact ⟨hu, Or.inl hv⟩
+    · exact ⟨hu, Or.inr (ih e2 v hr)⟩
+
+/-- `reachB` is monotone in fuel. -/
+theorem reachB_mono {edges : List (NodeKey × NodeKey)} {f f' : Nat} (hle : f ≤ f')
+    {u v : NodeKey} (h : reachB edges f u v = true) : reachB edges f' u v = true := by
+  induction hle with
+  | refl => exact h
+  | step _ ih => exact reachB_mono_succ _ _ _ ih
+
 /-! ## §7.5, §7.6 — the read `GraphModel.check` -/
 
 namespace GraphModel
