@@ -1,5 +1,7 @@
 import ZanzibarProofs.Equiv
 import ZanzibarProofs.SetEngine.Algebra
+import ZanzibarProofs.SetEngine.Contains
+import ZanzibarProofs.Spec.FuelStable
 
 /-!
 # Axiom audit (plan C4)
@@ -27,6 +29,14 @@ namespace Zanzibar
 #print axioms pathsOfLength_card_vanish
 #print axioms pathCount_addEdge
 #print axioms pathCount_removeEdge
+#print axioms stratify_none_iff_cycle
+#print axioms stratify_topological
+-- T1 corrected containsShape distribution (SetEngine/Contains.lean):
+#print axioms MemberSet.containsShape_union_focus
+#print axioms MemberSet.containsShape_intersect_focus
+#print axioms MemberSet.containsShape_subtract_focus
+-- T0a ingredient 1 — untainted monotonicity (Spec/FuelStable.lean):
+#print axioms evalE_mono
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):

@@ -54,6 +54,78 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-09 (T1 core corrected + T0a ingredient 1)
+
+User asked to build T0a and T1. Both are multi-session (each needs its concrete
+model/infrastructure first — see ROADMAP). This session delivered genuine, committed,
+axiom-clean progress on both fronts; **no `sorry` discharged** (count held at 5), and
+`verify.sh` stays green (build + 60 conformance + audit).
+
+**Headline: the ROADMAP's T1 lemma was FALSE; corrected and proved.** The naive
+intensional distribution `containsShape (op M N) = containsShape M ⟨op⟩ containsShape N`
+under `WF` alone does NOT hold — `#eval`-confirmed counterexample with both operands
+`WF`: `a={stars:={σ}}`, `b={stars:={shape}, neg:={uid}}`, `uid∈pop σ`, `σ≠shape` ⇒
+both operands `false`, `union a b` `true`. This is exactly why last session's
+`simp; tauto` never closed it. **Root cause:** the query shape must be the subject's
+*own* shape and populations partition the id space by shape — the missing invariant
+`PopFocus pop uid shape := ∀ σ, uid∈pop σ → σ=shape`. New file `SetEngine/Contains.lean`
+(axiom-clean, `[propext, Classical.choice, Quot.sound]`):
+- `containsShape_union_focus` (needs `PopFocus` + `WFp`),
+- `containsShape_intersect_focus` / `containsShape_subtract_focus` (additionally need
+  `Grounded pop uid shape m := uid∈m.pos → uid∈pop shape` — else a positive *ghost* is
+  dropped by the extensional meet/difference; also `#eval`-confirmed false without it),
+- support: `WFp`, `wfp_normalize`/`wfp_union/intersect/subtract`, `PopFocus`,
+  `Grounded`, `mem_starpop_focus`, `mem_ext_focus`, `containsShape_normalize`,
+  `wfp_atoms`, `bool_ext`. Technique: reduce to 7 membership atoms, then
+  `by_cases`-on-all-7 `<;> simp_all` (tauto times out).
+**T1 next:** build the concrete `SetEngineModel.check` expand model whose `pop`/`Id`
+*satisfy `PopFocus`+`WFp`+`Grounded` per node*, then the `Direct`/`TTU` leaf-vs-`sem`
+equalities. The distribution core is now done.
+
+**T0a: decision + ingredient 1.** Chose option (a) (real proof, no spec change).
+New file `Spec/FuelStable.lean` (axiom-clean): `evalE_mono` — untainted/positive
+fragment monotonicity (`RecLe`-refinement preserves truth on exclusion-free exprs),
+via `memberOfGranted_mono`/`directLeaf_mono`/`ttuLeaf_mono` + `Expr.noExcl`. This is
+step 1 of the convergence argument (untainted fragment = monotone iteration). The
+full worked-out structure (untainted monotone layer + tainted Kahn-DAG ranks + the
+reachable-atom counting bound) is in the file header and ROADMAP. Confirmed: pure
+pigeonhole is invalid (no visited-set; `Φ` non-monotone via `.excl`).
+
+## Session 2026-07-09 (T0b fully closed — Kahn correctness)
+
+**T0b is DONE** — `stratify_none_iff_cycle` and `stratify_topological` are proved and
+axiom-clean (`[propext, Classical.choice, Quot.sound]`). All in `Spec/WellDef.lean`, built
+from scratch on the concrete `kahn`/`readyNodes`/`depEdges` (no new model needed, as the
+ROADMAP predicted). Count 7 → 5. `verify.sh` green (build + 60 conformance + audit).
+
+Infrastructure proved (all axiom-clean, reusable):
+- `mem_readyNodes_iff` — `n` ready ↔ remaining ∧ every out-edge leaves remaining.
+- `kahn_succ` — one-step unfolding of `kahn` on a non-empty remaining set (isolates the
+  definitional `if`/`let` churn once).
+- `stuck_cycle` — **the pigeonhole core**: a non-empty stuck set (no ready nodes) has a
+  cycle. Builds a total successor `g` (choice), iterates `g^[·]` into `R.toFinset`,
+  `Finset.exists_ne_map_eq_of_card_lt_of_maps_to` gives a repeat, `reaches_orbit` turns
+  the sub-walk into `Reaches edges k k`.
+- `kahn_none_stuck` (⟹): `kahn = none` ⇒ a stuck set exists. The invariant
+  `|remaining| ≤ fuel` (fuel starts at `|nodes|`, each round drops ≥1 via
+  `List.length_filter_eq_length_iff`) rules out the fuel-exhaustion branch, so only a
+  genuine stuck set can fail.
+- `first_edge` / `cyc_out` — a cycle node has an out-edge to another cycle node.
+- `kahn_cycle_none` (⟸): every cycle node persists in `remaining` (never ready), so the
+  run never empties ⇒ `none`.
+- `depEdges_mem` — both endpoints of a dependency edge are tainted keys (pins cycle
+  nodes ⊆ initial `remaining`).
+- `kahn_topo` — **the topological invariant**: threads (H1) `acc.reverse` is already
+  topological + (H2) peeled nodes' out-edges have left `remaining`. Newly-peeled ready
+  layer is appended last; readiness + H2 force its edges strictly earlier, so the
+  invariant is preserved and the final `L` is `TopoLayered`. Needed hand-rolled
+  `getD_app_lt`/`getD_app_ge`/`getD_ge_default`/`mem_getD_singleton` (this Mathlib has no
+  `getD_append`).
+
+**Next-most-tractable remaining:** T0a `semAux_fuel_stable_step` (subtle — see ROADMAP;
+may want the visited-set spec refactor + conformance re-validation), then T1/T2 which need
+their concrete models built first.
+
 ## Session 2026-07-09 (T4 fully closed)
 
 **T4 is DONE** — `GraphIndex/Closure.lean` is `sorry`-free and axiom-clean. Built the
@@ -117,8 +189,14 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 |---------|-----------|--------|------|
 | T0a spec well-defined (fuel-stable) | `sem_fuel_stable` | **proved-mod-deps** | proved from `semAux_fuel_stable_step` by `Nat.le_induction` |
 | T0a pigeonhole core | `semAux_fuel_stable_step` | stated (sorry) | one-more-fuel-is-a-no-op above the bound |
-| T0b stratify soundness | `stratify_none_iff_cycle`, `stratify_topological` | stated (sorry) | Kahn correctness — not as mechanical as plan hoped |
+| T0b stratify soundness | `stratify_none_iff_cycle`, `stratify_topological` | **proved** | Kahn correctness; axiom-clean. Pigeonhole `stuck_cycle` + fuel invariant `kahn_none_stuck` + cycle-persistence `kahn_cycle_none` + topo invariant `kahn_topo` |
+| T0b pigeonhole core | `stuck_cycle` | **proved** | stuck set (no ready nodes) ⇒ cycle, via orbit + `Finset` pigeonhole |
+| T0b Kahn helpers | `mem_readyNodes_iff`, `kahn_succ`, `kahn_none_stuck`, `kahn_cycle_none`, `kahn_topo`, `depEdges_mem` | **proved** | reusable Kahn/`readyNodes` API (WellDef.lean) |
 | T1 set engine = sem | `setEngine_correct` | stated (sorry) | Phase 3; needs concrete model first |
+| T1 containsShape distribution | `containsShape_union/intersect/subtract_focus` | **proved** | Contains.lean; corrected (naive WF-only version is FALSE) — needs `PopFocus`(+`Grounded` for ∩/∖); axiom-clean |
+| T1 distribution support | `WFp`, `wfp_normalize`, `mem_starpop_focus`, `mem_ext_focus`, `containsShape_normalize`, `wfp_atoms` | **proved** | Contains.lean building blocks |
+| T0a untainted monotonicity | `evalE_mono` | **proved** | FuelStable.lean; ingredient 1 (excl-free ⇒ `RecLe` preserves truth); axiom-clean `[propext, Quot.sound]` |
+| T0a monotonicity leaves | `memberOfGranted_mono`, `directLeaf_mono`, `ttuLeaf_mono` | **proved** | FuelStable.lean; positive `rec` use at leaves |
 | T2a graph invariant + materialize | `graph_reached_inv` | stated (sorry) | hardest; Phase 4 |
 | T2b graph read = sem | `graph_correct` | stated (sorry) | residue case analysis |
 | T3 equivalence | `backend_equivalence` | **proved-mod-deps** | `rw` through T1∘T2b (real once those land) |
@@ -143,12 +221,15 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 ## `sorry` ledger
 
-**Count = 7** (was 9; **T4 fully closed 2026-07-09**, monotone non-increasing). Locations:
-- `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`),
-  `stratify_none_iff_cycle`, `stratify_topological` (3)
+**Count = 5** (was 9; **T4 closed 2026-07-09, T0b closed 2026-07-09**, monotone
+non-increasing). Locations:
+- `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`) (1)
 - `SetEngine/Correct.lean`: `setEngine_correct` (1)
 - `GraphIndex/Correct.lean`: `graph_reached_inv`, `graph_correct`,
   `cascade_converges` (3)
+
+**`Spec/WellDef.lean`'s T0b theorems are now `sorry`-free** — `stratify_none_iff_cycle`
+and `stratify_topological` proved and axiom-clean.
 
 **`GraphIndex/Closure.lean` is now `sorry`-free** — `pathCount_addEdge` /
 `pathCount_removeEdge` proved and axiom-clean (`[propext, Classical.choice, Quot.sound]`).
@@ -158,7 +239,10 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 Run 2026-07-09. `#print axioms` on representative results:
 - `ext_normalize`, `ext_union`, `containsStar_subtract`, `mem_ext_union` →
   `[propext, Classical.choice, Quot.sound]` (the 3 standard axioms — clean).
-- `restrictionMatches_type`, `wildcard_scoping` → `[propext, Quot.sound]` (cleaner).
+- `restrictionMatches_type`, `wildcard_scoping`, `evalE_mono` → `[propext,
+  Quot.sound]` (cleaner).
+- `containsShape_union/intersect/subtract_focus` (T1 corrected core) → the 3 standard
+  axioms.
 - `sem_fuel_stable`, `backend_equivalence` → `[sorryAx]` (honestly flagged;
   route through tracked sorries). **No custom axioms** — Gemini's suggested
   `phat_def` axiom was rejected, keeping the surface clean for the final C4 gate.

@@ -1,14 +1,14 @@
-# ROADMAP — closing the 9 `sorry`s
+# ROADMAP — closing the remaining `sorry`s (5 left, was 9)
 
 A per-theorem plan for discharging the remaining deep obligations. Synthesizes a
 Gemini review roadmap **with corrections from actually type-checking against the
 code** (Gemini wrote without a compiler and made several concrete errors, flagged
 below). Read alongside `PROOF_STATUS.md` (status) and `SEMANTICS.md` (the spec).
 
-The 9 sorries: `setEngine_correct` (T1); `pathCount_addEdge`, `pathCount_removeEdge`
-(T4); `semAux_fuel_stable_step` (T0a); `stratify_none_iff_cycle`,
-`stratify_topological` (T0b); `graph_reached_inv`, `graph_correct`,
-`cascade_converges` (T2/T5).
+Original 9 sorries; **✅ CLOSED: `pathCount_addEdge`/`pathCount_removeEdge` (T4),
+`stratify_none_iff_cycle`/`stratify_topological` (T0b).** Remaining 5:
+`setEngine_correct` (T1); `semAux_fuel_stable_step` (T0a); `graph_reached_inv`,
+`graph_correct`, `cascade_converges` (T2/T5).
 
 ---
 
@@ -29,18 +29,34 @@ injectivity `sorry`. Fix both.
 (star-subject boolean cases — DONE), `ext_empty/singletonEntity/star`,
 `neg_subset_starpop`.
 
-**The remaining nut:** the INTENSIONAL distribution `containsShape (op M N) =
-containsShape M ⟨op⟩ containsShape N` for concrete/ghost subjects. It needs the
-well-formedness invariant `WF M := Disjoint M.pos (starpop M.stars) ∧ M.neg ⊆
-starpop M.stars` (a non-WF set breaks it — concrete counterexample: `uid` in both
-`pos` and the star population). `wf_normalize` (every op output is WF) is easy.
-`simp; tauto` did NOT close the distribution (expanded goal too large). Intended
-route: first prove a `containsShape` normal-form lemma
-`WF M → (containsShape M uid shape ↔ uid ∈ M.pos ∨ (shape ∈ M.stars ∧ uid ∉ M.neg))`,
-then a per-atom `by_cases` split (8 membership atoms) rather than `tauto`. Then the
-leaf cases: `Direct` expand = union of `star`/`singletonEntity` over grants + the
-userset flow-through recursion; `TTU` = union over stored parents. These must be
-shown equal to `sem`'s `directLeaf`/`ttuLeaf` — the largest piece.
+**The intensional distribution — RESOLVED as a corrected lemma (2026-07-09), in
+`SetEngine/Contains.lean`.** The naive law `containsShape (op M N) = containsShape M
+⟨op⟩ containsShape N` under `WF` alone is **FALSE** — I found and `#eval`-confirmed a
+counterexample where both operands are `WF`: `a = {stars := {σ}}`,
+`b = {stars := {shape}, neg := {uid}}` with `uid ∈ pop σ`, `σ ≠ shape`; both answer
+`false` for `shape` but `union a b` answers `true`. (This is why the previous
+`simp; tauto` never closed — it isn't a theorem.) The fix is the missing modeling
+invariant **`PopFocus pop uid shape := ∀ σ, uid ∈ pop σ → σ = shape`** — the set
+engine always queries a subject at *its own* shape, and populations partition the id
+space by shape. Proved, axiom-clean:
+- `containsShape_union_focus` — needs `PopFocus` + `WFp` operands;
+- `containsShape_intersect_focus` / `containsShape_subtract_focus` — additionally
+  need **`Grounded pop uid shape m := uid ∈ m.pos → uid ∈ pop shape`** (a concrete
+  positive member lies in its own population). Without it a positive *ghost* is
+  dropped by the extensional meet/difference (also `#eval`-confirmed false).
+Supporting: `wfp_normalize`/`wfp_union/intersect/subtract` (every op output is `WFp`),
+`mem_starpop_focus`, `mem_ext_focus`, `containsShape_normalize`, `wfp_atoms`. Proof
+technique that worked: reduce to the 7 membership atoms via those lemmas, then a
+`by_cases`-on-all-7 `<;> simp_all` (the ROADMAP's per-atom split; `tauto` alone
+times out on the nested goal).
+
+**What this leaves for T1's leaf cases:** `Direct` expand = union of
+`star`/`singletonEntity` over grants + the userset flow-through recursion; `TTU` =
+union over stored parents. These must be shown equal to `sem`'s
+`directLeaf`/`ttuLeaf`, and the concrete model must **establish `PopFocus` +
+`WFp` + `Grounded` per node** (populations partition by shape; `pos` members exist)
+— that is now the largest remaining piece, and the model's `pop`/`Id` must be built
+to satisfy exactly these three invariants.
 
 Once T1 + T2b land, **T3/T6a/T6b are already `rw`-proved** (they route through them).
 
@@ -96,9 +112,33 @@ pigeonhole applies cleanly — but it is a SPEC CHANGE and must be re-validated 
 conformance suite before relying on it. Prefer (b) if (a) proves too hard; do it
 before Phase 5.
 
+**DECISION (2026-07-09): pursue (a), no spec change.** Detailed structure worked out
+(see `Spec/FuelStable.lean` header) and **ingredient 1 is proved** (`evalE_mono`:
+untainted/positive-fragment monotonicity — on an exclusion-free expr, `evalE`
+preserves truth under a `rec` refinement `RecLe`). The full argument:
+1. Taint propagates upward ⇒ untainted keys reference only untainted keys and are
+   exclusion-free ⇒ a monotone fragment (converges by #reachable untainted atoms —
+   what makes `fuelBound` multiplicative; `evalE_mono` is this step).
+2. `depEdges` includes *all* tainted-tainted references and Kahn makes them a DAG ⇒
+   each tainted key's `Φ` depends only on strictly-lower-rank tainted atoms +
+   untainted atoms ⇒ each rank stabilizes one fuel-step after its inputs (**crucially,
+   a same-key different-name reference among tainted keys is a self-edge, rejected —
+   so no cross-entity chaining *within* a tainted rank; only untainted chains**).
+**Remaining to build (next pass):** the finite reachable-atom set + confinement lemma
+(`semAux` depends only on `rec` there), the untainted monotone-convergence count, the
+per-rank stabilization induction, and the arithmetic that the total level ≤
+`|keys|·(2|T|+4)`. This is the multi-session core; ingredient 1 is the foothold.
+
 ---
 
-## T0b — `stratify_none_iff_cycle`, `stratify_topological`
+## T0b — `stratify_none_iff_cycle` / `stratify_topological` — ✅ DONE (2026-07-09)
+
+**Closed and axiom-clean.** `Spec/WellDef.lean`'s T0b theorems are `sorry`-free. The plan
+below was executed almost verbatim (no Mathlib topological-sort lemma reused — hand-rolled
+on the concrete `kahn`). See PROOF_STATUS "Session 2026-07-09 (T0b fully closed)" for the
+full lemma list. Original plan retained below for the record.
+
+### (original plan)
 
 **Plan.** Standard Kahn correctness on `depEdges`/`kahn`. Forward
 (`none → cycle`): if `kahn` returns `none`, the surviving `remaining` set has every
@@ -135,15 +175,13 @@ descends strata (lower strata immutable while higher evaluate) ⇒ quiesces in
 ## Suggested order
 
 1. ~~**T4**~~ ✅ DONE (axiom-clean; `Closure.lean` sorry-free). Unblocks T2b's edge reasoning.
-2. **T0b** (self-contained graph theory; **next-most-tractable — no new model needed**).
-   Kahn correctness over the concrete `kahn`/`readyNodes`/`depEdges`. Expect heavy `List`
-   bookkeeping (`contains`/`filter`/`getD` on `Key = String × String`); budget a full
-   session. Key invariant for `stratify_topological`: a node peeled at round `r` has every
-   out-edge target already peeled (round `< r`), and nodes are peeled at most once.
+2. ~~**T0b**~~ ✅ DONE (axiom-clean; `WellDef.lean` T0b theorems sorry-free). Hand-rolled
+   Kahn correctness (`stuck_cycle` pigeonhole + `kahn_none_stuck`/`kahn_cycle_none` +
+   `kahn_topo`). The `List`-bookkeeping estimate held (needed hand-rolled `getD_app_*`).
 3. **T1** (scaffolding mostly proved; unblocks T3/T6). Needs the concrete
    `SetEngineModel.check` built first (still `opaque`).
 4. **T2/T5** (largest; needs T1 + T4). Needs the whole concrete graph state machine built.
-5. **T0a** (decide (a) vs (b) first).
+5. **T0a** (decide (a) vs (b) first) — now the only remaining `Spec/` sorry.
 
 ---
 
