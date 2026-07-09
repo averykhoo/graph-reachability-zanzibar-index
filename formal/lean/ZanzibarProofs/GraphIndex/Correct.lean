@@ -46,11 +46,84 @@ theorem graph_reached_inv (S : Schema) (T : Store) (σ : GraphState)
   refine ⟨?_, cascade_converges S T σ hStrat hAcc hReach⟩
   sorry
 
+/-! ## T2b base case — the empty store / empty state
+
+The `ReachedBy.empty` case of `graph_correct`, discharged end-to-end and axiom-clean.
+Both sides are constantly `false`: the empty store grants nothing (`sem_empty_store`),
+and the empty index reaches nothing / persists no residue (`check_empty`). This is
+the genuine base of the eventual `graph_correct` induction — no `sorry`. -/
+
+/-- On the empty store every `Direct`/`TTU` leaf is empty and `computed` recurses into
+    a uniformly-`false` `rec`, so structural evaluation of any expression is `false`. -/
+theorem evalE_empty_store {rec : Rec} {subject : SubjectRef} {q : Query}
+    {otype oname rel : String} (hrec : ∀ ot nm r, rec ot nm r = false) :
+    ∀ e : Expr, evalE rec subject [] q otype oname rel e = false := by
+  intro e
+  induction e with
+  | union a b iha ihb => simp [evalE, iha, ihb]
+  | inter a b iha ihb => simp [evalE, iha, ihb]
+  | excl a b iha _ => simp [evalE, iha]
+  | computed r => simpa [evalE] using hrec otype oname r
+  | direct rs => simp [evalE, directLeaf, grantsOf, memberOfGranted]
+  | ttu tr ts => simp [evalE, ttuLeaf]
+
+/-- The fuel-bounded evaluator is constantly `false` on the empty store, at every
+    fuel and state (induction on fuel, feeding the fuel-IH as the `rec` to
+    `evalE_empty_store`). -/
+theorem semAux_empty_store (S : Schema) (subject : SubjectRef) (q : Query) :
+    ∀ (fuel : Nat) (ot nm r : String), semAux S subject [] q fuel ot nm r = false := by
+  intro fuel
+  induction fuel with
+  | zero => intro ot nm r; rfl
+  | succ f ih =>
+    intro ot nm r
+    simp only [semAux, step]
+    cases hlk : S.lookup (ot, r) with
+    | none => rfl
+    | some e => exact evalE_empty_store ih e
+
+/-- **`sem` on the empty store is `false`.** Nothing is granted, so no query holds. -/
+theorem sem_empty_store (S : Schema) (q : Query) : sem S [] q = false := by
+  unfold sem
+  exact semAux_empty_store S q.subject q _ _ _ _
+
+/-- The non-derived read is `false` on the empty index: every reachability probe
+    misses (`reach_empty`). -/
+theorem probeNonDerived_empty (S : Schema) (q : Query) :
+    GraphModel.probeNonDerived (emptyState S) q = false := by
+  unfold GraphModel.probeNonDerived
+  simp [reach_empty]
+
+/-- The derived read is `false` on the empty index: no persisted residue (so `stars`
+    covers nothing) and no reachable derived edge. -/
+theorem probeDerived_empty (S : Schema) (q : Query) :
+    GraphModel.probeDerived (emptyState S) q = false := by
+  have hres : ∀ oN R, (emptyState S).residue oN R = none := fun _ _ => rfl
+  unfold GraphModel.probeDerived
+  simp only [hres, Option.getD_none, Residue.empty, List.contains_nil, reach_empty,
+    Bool.false_and, Bool.or_false]
+  split <;> simp
+
+/-- The empty index answers `false` to every query (both read paths). -/
+theorem check_empty (S : Schema) (q : Query) :
+    GraphModel.check (emptyState S) q = false := by
+  unfold GraphModel.check
+  split
+  · exact probeDerived_empty S q
+  · exact probeNonDerived_empty S q
+
+/-- **T2b, base case.** On the empty index / empty store the graph read matches the
+    specification (`ReachedBy.empty`): both are constantly `false`. -/
+theorem graph_correct_empty (S : Schema) (q : Query) :
+    GraphModel.check (emptyState S) q = sem S [] q := by
+  rw [check_empty, sem_empty_store]
+
 /-- **T2b (read correctness).** On any invariant-satisfying reachable state the
     graph read answers exactly the specification. Tracked `sorry`: the completeness
     argument (every semantic path decomposes as leading-hop · materialized-closure ·
     trailing-hop for the ≤4 probes; the residue fold reproduces the star×boolean
-    table) resting on T4 + the T1 MemberSet lemmas. -/
+    table) resting on T4 + the T1 MemberSet lemmas. The `ReachedBy.empty` base case
+    is `graph_correct_empty` above. -/
 theorem graph_correct (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (_hWF : WF S) (_hStrat : Stratifiable S) (_hAcc : GraphAccepts S)
     (_hInv : Inv S σ) (_hReach : ReachedBy σ S T) :
