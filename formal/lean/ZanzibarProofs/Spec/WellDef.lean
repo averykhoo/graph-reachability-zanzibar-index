@@ -395,6 +395,275 @@ theorem kahn_topo (edges : List (Key × Key)) :
             · have hall := ((mem_readyNodes_iff remaining edges a).mp ha).2
               exact fun hb => hall b hab (List.mem_of_mem_filter hb)
 
+/-! ### Kahn strictness, coverage, and size — the T0a rank-induction interface -/
+
+/-- The STRICT topological property: every edge points to a strictly earlier
+    layer. Holds for `kahn` output because a ready node's out-edges have all left
+    `remaining`, while its own layer is still remaining when peeled — so
+    within-layer (and self-) edges are impossible. -/
+def TopoLayeredStrict (edges : List (Key × Key)) (L : List (List Key)) : Prop :=
+  ∀ a b i j, (a, b) ∈ edges → a ∈ L.getD i [] → b ∈ L.getD j [] → j < i
+
+/-- `kahn_topo`, strengthened to the strict conclusion. Same invariant threading;
+    the new case (both endpoints in the freshly-peeled layer) contradicts the
+    peeled node's readiness. -/
+theorem kahn_topo_strict (edges : List (Key × Key)) :
+    ∀ (fuel : Nat) (remaining : List Key) (acc L : List (List Key)),
+      kahn edges fuel remaining acc = some L →
+      TopoLayeredStrict edges acc.reverse →
+      (∀ a b, (a, b) ∈ edges → a ∈ acc.reverse.flatten → b ∉ remaining) →
+      TopoLayeredStrict edges L := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro remaining acc L hkahn h1 _h2
+      simp only [kahn] at hkahn
+      split at hkahn
+      · rw [Option.some.injEq] at hkahn; subst hkahn; exact h1
+      · exact absurd hkahn (by simp)
+  | succ n ih =>
+      intro remaining acc L hkahn h1 h2
+      by_cases hRe : remaining = []
+      · subst hRe
+        simp only [kahn, List.isEmpty_nil, if_true] at hkahn
+        rw [Option.some.injEq] at hkahn; subst hkahn; exact h1
+      · rw [kahn_succ edges n remaining acc hRe] at hkahn
+        by_cases hready : (readyNodes remaining edges).isEmpty
+        · rw [if_pos hready] at hkahn; exact absurd hkahn (by simp)
+        · rw [if_neg hready] at hkahn
+          refine ih _ _ _ hkahn ?_ ?_
+          · rw [List.reverse_cons]
+            intro a b i j hab hai hbj
+            set P := acc.reverse with hP
+            set ready := readyNodes remaining edges with hrdef
+            rcases lt_or_ge i P.length with hi | hi
+            · -- a in an already-peeled layer i
+              rw [getD_app_lt _ _ _ hi] at hai
+              have haP : a ∈ P.flatten := by
+                have hEl : P.getD i [] = P[i] := by
+                  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi,
+                    Option.getD_some]
+                rw [hEl] at hai
+                exact List.mem_flatten.mpr ⟨P[i], List.getElem_mem hi, hai⟩
+              rcases lt_or_ge j P.length with hj | hj
+              · rw [getD_app_lt _ _ _ hj] at hbj
+                exact h1 a b i j hab hai hbj
+              · -- b would be in the freshly-peeled layer, contradicting H2
+                rw [getD_app_ge _ _ _ hj] at hbj
+                exact absurd (readyNodes_subset (mem_getD_singleton hbj))
+                  (h2 a b hab haP)
+            · rcases Nat.lt_or_ge i (P.length + 1) with hi2 | hi2
+              · -- a in the freshly-peeled last layer (index P.length)
+                have hieq : i = P.length := by omega
+                have haR : a ∈ ready := by
+                  rw [getD_app_ge _ _ _ hi] at hai
+                  exact mem_getD_singleton hai
+                rcases lt_or_ge j P.length with hj | hj
+                · omega
+                · rcases Nat.lt_or_ge j (P.length + 1) with hj2 | hj2
+                  · -- b in the fresh layer too: a's readiness is contradicted
+                    exfalso
+                    have hbR : b ∈ ready := by
+                      rw [getD_app_ge _ _ _ hj] at hbj
+                      exact mem_getD_singleton hbj
+                    have hall := ((mem_readyNodes_iff remaining edges a).mp haR).2
+                    exact hall b hab (readyNodes_subset hbR)
+                  · exfalso
+                    rw [getD_app_ge _ _ _ (by omega),
+                      getD_singleton_high ready (by omega)] at hbj
+                    simp at hbj
+              · exfalso
+                rw [getD_app_ge _ _ _ hi, getD_singleton_high ready (by omega)] at hai
+                simp at hai
+          · intro a b hab ha
+            rw [List.reverse_cons, List.flatten_append, List.flatten_cons,
+              List.flatten_nil, List.append_nil, List.mem_append] at ha
+            rcases ha with ha | ha
+            · exact fun hb => h2 a b hab ha (List.mem_of_mem_filter hb)
+            · have hall := ((mem_readyNodes_iff remaining edges a).mp ha).2
+              exact fun hb => hall b hab (List.mem_of_mem_filter hb)
+
+private theorem mem_flatten_of_mem_reverse {x : Key} {acc : List (List Key)}
+    (hx : x ∈ acc.flatten) : x ∈ acc.reverse.flatten := by
+  rw [List.mem_flatten] at hx ⊢
+  obtain ⟨l, hl, hxl⟩ := hx
+  exact ⟨l, List.mem_reverse.mpr hl, hxl⟩
+
+/-- **Coverage**: everything remaining or already peeled ends up in the output. -/
+theorem kahn_covers (edges : List (Key × Key)) :
+    ∀ (fuel : Nat) (R : List Key) (acc L : List (List Key)),
+      kahn edges fuel R acc = some L →
+      ∀ x, (x ∈ R ∨ x ∈ acc.flatten) → x ∈ L.flatten := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro R acc L hkahn x hx
+      simp only [kahn] at hkahn
+      split at hkahn
+      · rw [Option.some.injEq] at hkahn; subst hkahn
+        rcases hx with hx | hx
+        · rename_i hemp
+          rw [List.isEmpty_iff] at hemp; subst hemp; simp at hx
+        · exact mem_flatten_of_mem_reverse hx
+      · exact absurd hkahn (by simp)
+  | succ n ih =>
+      intro R acc L hkahn x hx
+      by_cases hRe : R = []
+      · subst hRe
+        simp only [kahn, List.isEmpty_nil, if_true, Option.some.injEq] at hkahn
+        subst hkahn
+        rcases hx with hx | hx
+        · simp at hx
+        · exact mem_flatten_of_mem_reverse hx
+      · rw [kahn_succ edges n R acc hRe] at hkahn
+        by_cases hready : (readyNodes R edges).isEmpty
+        · rw [if_pos hready] at hkahn; exact absurd hkahn (by simp)
+        · rw [if_neg hready] at hkahn
+          refine ih _ _ _ hkahn x ?_
+          rcases hx with hx | hx
+          · by_cases hxr : x ∈ readyNodes R edges
+            · right
+              rw [List.flatten_cons]
+              exact List.mem_append_left _ hxr
+            · left
+              rw [List.mem_filter]
+              refine ⟨hx, ?_⟩
+              simp [List.contains_eq_mem, hxr]
+          · right
+            rw [List.flatten_cons]
+            exact List.mem_append_right _ hx
+
+/-- Conversely, output layers only hold nodes that were remaining or peeled. -/
+theorem kahn_layers_sub (edges : List (Key × Key)) :
+    ∀ (fuel : Nat) (R : List Key) (acc L : List (List Key)),
+      kahn edges fuel R acc = some L →
+      ∀ x, x ∈ L.flatten → x ∈ R ∨ x ∈ acc.flatten := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro R acc L hkahn x hx
+      simp only [kahn] at hkahn
+      split at hkahn
+      · rw [Option.some.injEq] at hkahn; subst hkahn
+        refine Or.inr ?_
+        rw [List.mem_flatten] at hx ⊢
+        obtain ⟨l, hl, hxl⟩ := hx
+        exact ⟨l, List.mem_reverse.mp hl, hxl⟩
+      · exact absurd hkahn (by simp)
+  | succ n ih =>
+      intro R acc L hkahn x hx
+      by_cases hRe : R = []
+      · subst hRe
+        simp only [kahn, List.isEmpty_nil, if_true, Option.some.injEq] at hkahn
+        subst hkahn
+        refine Or.inr ?_
+        rw [List.mem_flatten] at hx ⊢
+        obtain ⟨l, hl, hxl⟩ := hx
+        exact ⟨l, List.mem_reverse.mp hl, hxl⟩
+      · rw [kahn_succ edges n R acc hRe] at hkahn
+        by_cases hready : (readyNodes R edges).isEmpty
+        · rw [if_pos hready] at hkahn; exact absurd hkahn (by simp)
+        · rw [if_neg hready] at hkahn
+          rcases ih _ _ _ hkahn x hx with hx' | hx'
+          · exact Or.inl (List.mem_of_mem_filter hx')
+          · rw [List.flatten_cons, List.mem_append] at hx'
+            rcases hx' with hx' | hx'
+            · exact Or.inl (readyNodes_subset hx')
+            · exact Or.inr hx'
+
+/-- Peeling at least one node per round bounds the number of layers. -/
+theorem kahn_length (edges : List (Key × Key)) :
+    ∀ (fuel : Nat) (R : List Key) (acc L : List (List Key)),
+      kahn edges fuel R acc = some L → L.length ≤ R.length + acc.length := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro R acc L hkahn
+      simp only [kahn] at hkahn
+      split at hkahn
+      · rw [Option.some.injEq] at hkahn; subst hkahn
+        simp
+      · exact absurd hkahn (by simp)
+  | succ n ih =>
+      intro R acc L hkahn
+      by_cases hRe : R = []
+      · subst hRe
+        simp only [kahn, List.isEmpty_nil, if_true, Option.some.injEq] at hkahn
+        subst hkahn
+        simp
+      · rw [kahn_succ edges n R acc hRe] at hkahn
+        by_cases hready : (readyNodes R edges).isEmpty
+        · rw [if_pos hready] at hkahn; exact absurd hkahn (by simp)
+        · rw [if_neg hready] at hkahn
+          have hlt : (R.filter (fun x => ¬ (readyNodes R edges).contains x)).length
+              < R.length := by
+            obtain ⟨r, hr⟩ := List.exists_mem_of_ne_nil _ (by
+              simpa only [List.isEmpty_iff] using hready)
+            have hrR : r ∈ R := List.mem_of_mem_filter hr
+            have hle := List.length_filter_le
+              (fun x => ¬ (readyNodes R edges).contains x) R
+            rcases lt_or_eq_of_le hle with h | h
+            · exact h
+            · exfalso
+              rw [List.length_filter_eq_length_iff] at h
+              have hthis := h r hrR
+              revert hthis
+              simp [List.contains_eq_mem, hr]
+          have := ih _ _ _ hkahn
+          simp only [List.length_cons] at this
+          omega
+
+/-- Flattened membership names a concrete layer index. -/
+theorem mem_flatten_getD {L : List (List Key)} {x : Key} (hx : x ∈ L.flatten) :
+    ∃ i, i < L.length ∧ x ∈ L.getD i [] := by
+  rw [List.mem_flatten] at hx
+  obtain ⟨l, hl, hxl⟩ := hx
+  obtain ⟨i, hi, hEl⟩ := List.getElem_of_mem hl
+  refine ⟨i, hi, ?_⟩
+  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some, hEl]
+  exact hxl
+
+/-! Stratify-level wrappers of the Kahn lemmas. -/
+
+/-- Every tainted key lands in some layer. -/
+theorem stratify_covers (S : Schema) {L : List (List Key)} (h : stratify S = some L) :
+    ∀ k ∈ taintedKeys S, ∃ i, i < L.length ∧ k ∈ L.getD i [] := by
+  intro k hk
+  exact mem_flatten_getD
+    (kahn_covers (depEdges S) (taintedKeys S).length (taintedKeys S) [] L h k
+      (Or.inl hk))
+
+/-- Layers hold only tainted keys. -/
+theorem stratify_layers_tainted (S : Schema) {L : List (List Key)}
+    (h : stratify S = some L) :
+    ∀ i, ∀ k ∈ L.getD i [], k ∈ taintedKeys S := by
+  intro i k hk
+  rcases Nat.lt_or_ge i L.length with hi | hi
+  · have hkfl : k ∈ L.flatten := by
+      have hEl : L.getD i [] = L[i] := by
+        rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some]
+      rw [hEl] at hk
+      exact List.mem_flatten.mpr ⟨L[i], List.getElem_mem hi, hk⟩
+    rcases kahn_layers_sub (depEdges S) (taintedKeys S).length (taintedKeys S) [] L h
+        k hkfl with h' | h'
+    · exact h'
+    · simp at h'
+  · rw [getD_ge_default _ _ hi] at hk
+    simp at hk
+
+/-- No more layers than tainted keys. -/
+theorem stratify_length (S : Schema) {L : List (List Key)} (h : stratify S = some L) :
+    L.length ≤ (taintedKeys S).length := by
+  have := kahn_length (depEdges S) (taintedKeys S).length (taintedKeys S) [] L h
+  simpa using this
+
+/-- The layering is STRICTLY topological. -/
+theorem stratify_topo_strict (S : Schema) {L : List (List Key)}
+    (h : stratify S = some L) : TopoLayeredStrict (depEdges S) L := by
+  apply kahn_topo_strict (depEdges S) _ (taintedKeys S) [] L h
+  · intro a b i j _ ha; simp at ha
+  · intro a b _ ha; simp at ha
+
 /-- **T0b (part 2).** When it succeeds, every dependency edge points to an
     earlier-or-equal layer (topological). -/
 theorem stratify_topological (S : Schema) (L : List (List Key)) (h : stratify S = some L) :
