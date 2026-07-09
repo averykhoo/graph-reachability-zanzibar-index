@@ -2,6 +2,7 @@ import ZanzibarProofs.Equiv
 import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
+import ZanzibarProofs.GraphIndex.Write
 
 /-!
 # Axiom audit (plan C4)
@@ -58,6 +59,12 @@ namespace Zanzibar
 #print axioms trail_compress
 #print axioms reach_complete
 #print axioms reach_iff_nreaches
+-- T2a concrete write model, untainted direct fragment (GraphIndex/Write.lean).
+-- All expect only the three standard axioms (no `sorryAx`):
+#print axioms structInv_writeDirect
+#print axioms inv_writeDirect
+#print axioms residueEmpty_writeDirect
+#print axioms writeDirect_writeStep
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):

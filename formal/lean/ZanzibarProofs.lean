@@ -23,6 +23,7 @@ import ZanzibarProofs.SetEngine.Correct
 -- Graph-index model + T2/T4/T5
 import ZanzibarProofs.GraphIndex.Closure
 import ZanzibarProofs.GraphIndex.State
+import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6
