@@ -274,6 +274,29 @@ theorem reachB_mono {edges : List (NodeKey × NodeKey)} {f f' : Nat} (hle : f �
   | refl => exact h
   | step _ ih => exact reachB_mono_succ _ _ _ ih
 
+/-- **Completeness at some fuel.** Every `NReaches` path is found by `reachB` at a
+    (sufficiently large, path-length) fuel. -/
+theorem reachB_of_nreaches {edges : List (NodeKey × NodeKey)} {u v : NodeKey}
+    (h : NReaches edges u v) : ∃ f, reachB edges f u v = true := by
+  induction h with
+  | @edge u v huv =>
+    exact ⟨1, by rw [reachB, List.any_eq_true]; exact ⟨(u, v), huv, by simp [reachB]⟩⟩
+  | @head u w v huw _ ih =>
+    obtain ⟨f, hf⟩ := ih
+    exact ⟨f + 1, by rw [reachB, List.any_eq_true]; exact ⟨(u, w), huw, by simp [hf]⟩⟩
+
+/-- **`reachB` and `NReaches` describe the same relation** (at unbounded fuel). The
+    remaining bridge for the *executable* probe `σ.reach` (fixed fuel
+    `nodes.length + 1`) is the shortest-walk length bound, factored into T2b. -/
+theorem nreaches_iff_reachB {edges : List (NodeKey × NodeKey)} {u v : NodeKey} :
+    NReaches edges u v ↔ ∃ f, reachB edges f u v = true :=
+  ⟨reachB_of_nreaches, fun ⟨_, hf⟩ => reachB_sound _ _ _ hf⟩
+
+/-- The executable probe is sound for `NReaches`: a `reach` hit is a genuine path. -/
+theorem reach_sound {σ : GraphState} {u v : NodeKey}
+    (h : σ.reach u v = true) : NReaches σ.edges u v :=
+  reachB_sound _ _ _ h
+
 /-! ## §7.5, §7.6 — the read `GraphModel.check` -/
 
 namespace GraphModel
