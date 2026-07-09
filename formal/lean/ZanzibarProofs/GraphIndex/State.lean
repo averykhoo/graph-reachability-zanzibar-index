@@ -297,6 +297,165 @@ theorem reach_sound {σ : GraphState} {u v : NodeKey}
     (h : σ.reach u v = true) : NReaches σ.edges u v :=
   reachB_sound _ _ _ h
 
+/-! ### Shortest-walk compression — the fixed-fuel bridge
+
+To move `NReaches` into the *executable* probe `σ.reach` (fuel `nodes.length + 1`)
+we bound the walk length: a walk whose intermediate vertices all lie in `nodes`
+compresses (pigeonhole: a repeat gives a removable cycle) to one with
+`≤ nodes.length` intermediates, which `reachB` finds within `nodes.length + 1`
+fuel. This is the stabilization the ROADMAP flagged as T2b's blocker. -/
+
+/-- A directed walk `u → v` with intermediate vertices `l` (excluding endpoints):
+    `Trail edges u v []` is a single edge `u→v`; `Trail edges u v (x :: xs)` is a
+    first edge `u→x` then a trail `x → v`. -/
+def Trail (edges : List (NodeKey × NodeKey)) : NodeKey → NodeKey → List NodeKey → Prop
+  | u, v, [] => (u, v) ∈ edges
+  | u, v, x :: xs => (u, x) ∈ edges ∧ Trail edges x v xs
+
+/-- Split a trail at an interior vertex: `u →* v` through `x` factors as `u →* x`
+    then `x →* v`, with intermediates `p` and `s`. -/
+theorem trail_split (edges : List (NodeKey × NodeKey)) (x v : NodeKey) (p : List NodeKey) :
+    ∀ (u : NodeKey) (s : List NodeKey),
+      Trail edges u v (p ++ x :: s) ↔ (Trail edges u x p ∧ Trail edges x v s) := by
+  induction p with
+  | nil => intro u s; simp [Trail]
+  | cons a p ih =>
+    intro u s
+    simp only [List.cons_append, Trail]
+    rw [ih a s]
+    tauto
+
+/-- `reachB` finds a trail within `length + 1` fuel. -/
+theorem reachB_of_trail {edges : List (NodeKey × NodeKey)} :
+    ∀ (l : List NodeKey) (u v : NodeKey),
+      Trail edges u v l → reachB edges (l.length + 1) u v = true := by
+  intro l
+  induction l with
+  | nil =>
+    intro u v ht
+    rw [reachB, List.any_eq_true]
+    exact ⟨(u, v), ht, by simp [reachB]⟩
+  | cons x xs ih =>
+    intro u v ht
+    obtain ⟨hux, htail⟩ := ht
+    have hrec := ih x v htail
+    simp only [List.length_cons]
+    rw [reachB, List.any_eq_true]
+    exact ⟨(u, x), hux, by simp [hrec]⟩
+
+/-- Every `NReaches` path is realized by a trail. -/
+theorem trail_of_nreaches {edges : List (NodeKey × NodeKey)} {u v : NodeKey}
+    (h : NReaches edges u v) : ∃ l, Trail edges u v l := by
+  induction h with
+  | @edge u v huv => exact ⟨[], huv⟩
+  | @head u w v huw _ ih => obtain ⟨l, hl⟩ := ih; exact ⟨w :: l, huw, hl⟩
+
+/-- A trail's interior vertices are all live nodes (from endpoint-closure). -/
+theorem trail_verts_mem {edges : List (NodeKey × NodeKey)} {N : List NodeKey}
+    (hcl : ∀ e ∈ edges, e.1 ∈ N ∧ e.2 ∈ N) :
+    ∀ (l : List NodeKey) (u v : NodeKey), Trail edges u v l → ∀ x ∈ l, x ∈ N := by
+  intro l
+  induction l with
+  | nil => intro u v _ x hx; simp at hx
+  | cons a xs ih =>
+    intro u v ht x hx
+    obtain ⟨hua, htail⟩ := ht
+    rcases List.mem_cons.mp hx with hxa | hxs
+    · rw [hxa]; exact (hcl (u, a) hua).2
+    · exact ih a v htail x hxs
+
+/-- A member splits its list: `a ∈ l → l = s ++ a :: t`. -/
+theorem mem_split_aux {α : Type} {a : α} :
+    ∀ {l : List α}, a ∈ l → ∃ s t, l = s ++ a :: t := by
+  intro l
+  induction l with
+  | nil => intro h; simp at h
+  | cons b t ih =>
+    intro h
+    rcases List.mem_cons.mp h with rfl | hmem
+    · exact ⟨[], t, rfl⟩
+    · obtain ⟨s, t', rfl⟩ := ih hmem
+      exact ⟨b :: s, t', rfl⟩
+
+/-- A duplicated element splits a non-`Nodup` list around its two occurrences. -/
+theorem exists_dup_split {α : Type} [DecidableEq α] :
+    ∀ (l : List α), ¬ l.Nodup → ∃ (x : α) (p q r : List α), l = p ++ x :: q ++ x :: r := by
+  intro l
+  induction l with
+  | nil => intro h; exact absurd List.nodup_nil h
+  | cons a t ih =>
+    intro h
+    by_cases ha : a ∈ t
+    · obtain ⟨q, r, rfl⟩ := mem_split_aux ha
+      exact ⟨a, [], q, r, by simp⟩
+    · have ht : ¬ t.Nodup := fun ht => h (List.nodup_cons.mpr ⟨ha, ht⟩)
+      obtain ⟨x, p, q, r, rfl⟩ := ih ht
+      exact ⟨x, a :: p, q, r, by simp⟩
+
+/-- A `Nodup` list whose elements lie in `N` is no longer than `N`. -/
+theorem nodup_len_le {α : Type} [DecidableEq α] {l N : List α} (hnd : l.Nodup)
+    (hsub : ∀ x ∈ l, x ∈ N) : l.length ≤ N.length := by
+  have h1 : l.toFinset.card = l.length := List.toFinset_card_of_nodup hnd
+  have h2 : l.toFinset ⊆ N.toFinset := by
+    intro x hx; simp only [List.mem_toFinset] at hx ⊢; exact hsub x hx
+  calc l.length = l.toFinset.card := h1.symm
+    _ ≤ N.toFinset.card := Finset.card_le_card h2
+    _ ≤ N.length := List.toFinset_card_le N
+
+/-- **Shortest-walk compression.** A trail with interior vertices in `N` compresses
+    to one with `≤ N.length` interior vertices (repeats give removable cycles). -/
+theorem trail_compress {edges : List (NodeKey × NodeKey)} {N : List NodeKey} {u v : NodeKey} :
+    ∀ (n : Nat) (l : List NodeKey), l.length ≤ n → Trail edges u v l →
+      (∀ x ∈ l, x ∈ N) → ∃ l', Trail edges u v l' ∧ l'.length ≤ N.length := by
+  intro n
+  induction n with
+  | zero =>
+    intro l hlen ht _
+    cases l with
+    | nil => exact ⟨[], ht, Nat.zero_le _⟩
+    | cons a t => simp only [List.length_cons] at hlen; omega
+  | succ n ih =>
+    intro l hlen ht hsub
+    by_cases hnd : l.Nodup
+    · exact ⟨l, ht, nodup_len_le hnd hsub⟩
+    · obtain ⟨x, p, q, r, rfl⟩ := exists_dup_split l hnd
+      -- `p ++ x :: q ++ x :: r`  parses as  `(p ++ x :: q) ++ x :: r`
+      -- split at the SECOND x, then at the FIRST x, dropping the `x →* x` cycle `q`.
+      have hcut : Trail edges u x (p ++ x :: q) ∧ Trail edges x v r :=
+        (trail_split edges x v (p ++ x :: q) u r).mp ht
+      have hcut2 : Trail edges u x p ∧ Trail edges x x q :=
+        (trail_split edges x x p u q).mp hcut.1
+      have hshort : Trail edges u v (p ++ x :: r) :=
+        (trail_split edges x v p u r).mpr ⟨hcut2.1, hcut.2⟩
+      have hlen2 : (p ++ x :: r).length ≤ n := by
+        simp only [List.length_append, List.length_cons] at hlen ⊢
+        omega
+      have hsub2 : ∀ y ∈ p ++ x :: r, y ∈ N := by
+        intro y hy
+        apply hsub y
+        simp only [List.mem_append, List.mem_cons] at hy ⊢
+        tauto
+      exact ih (p ++ x :: r) hlen2 hshort hsub2
+
+/-- **The executable probe is complete for `NReaches`** on any endpoint-closed state:
+    a genuine path is found by `σ.reach` at fuel `nodes.length + 1`. With
+    `reach_sound`, `σ.reach u v = true ↔ NReaches σ.edges u v`. -/
+theorem reach_complete {σ : GraphState}
+    (hcl : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes) {u v : NodeKey}
+    (hr : NReaches σ.edges u v) : σ.reach u v = true := by
+  obtain ⟨l, hl⟩ := trail_of_nreaches hr
+  have hsub : ∀ x ∈ l, x ∈ σ.nodes := trail_verts_mem hcl l u v hl
+  obtain ⟨l', hl', hlen⟩ := trail_compress l.length l (le_refl _) hl hsub
+  have hb := reachB_of_trail l' u v hl'
+  have : reachB σ.edges (σ.nodes.length + 1) u v = true := reachB_mono (by omega) hb
+  simpa [GraphState.reach] using this
+
+/-- The executable probe exactly decides `NReaches` on an endpoint-closed state. -/
+theorem reach_iff_nreaches {σ : GraphState}
+    (hcl : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes) {u v : NodeKey} :
+    σ.reach u v = true ↔ NReaches σ.edges u v :=
+  ⟨reach_sound, reach_complete hcl⟩
+
 /-! ## §7.5, §7.6 — the read `GraphModel.check` -/
 
 namespace GraphModel

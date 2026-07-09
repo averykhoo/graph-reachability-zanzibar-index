@@ -55,6 +55,9 @@ namespace Zanzibar
 #print axioms inv_putResidue
 #print axioms reachB_sound
 #print axioms nreaches_iff_reachB
+#print axioms trail_compress
+#print axioms reach_complete
+#print axioms reach_iff_nreaches
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):
