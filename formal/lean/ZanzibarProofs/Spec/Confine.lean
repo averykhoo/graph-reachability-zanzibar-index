@@ -53,7 +53,7 @@ def StoreDeclared (S : Schema) (T : Store) : Prop :=
 
 /-! ## Name confinement: everything `rec` is consulted at is a stored name or `oname` -/
 
-private theorem anyCongr {α} {l : List α} {f g : α → Bool}
+theorem anyCongr {α} {l : List α} {f g : α → Bool}
     (h : ∀ x ∈ l, f x = g x) : l.any f = l.any g := by
   induction l with
   | nil => rfl
