@@ -97,6 +97,15 @@ audited). `verify.sh` green (build + 60 conformance + audit; **sorries = 0**).
 `hStrat` in coverage + strict topology (without it a tainted key has no layer /
 no strictly-decreasing rank).
 
+**Phase-6 items pulled forward (same session):** `verify.sh` gates [2] and [4]
+are now HARD — sorry count must be 0, and every audited theorem must show only
+`propext`/`Classical.choice`/`Quot.sound` (any `sorryAx`, `ofReduceBool`, or
+custom axiom fails the gate; validated end-to-end green). Also: ROADMAP W1 got
+a grounded sub-staging design (W1a bare star grants = ZERO bridges via the
+wildcard-spec §3.2 bare-shape rule → W1b object wildcards → W1c userset stars +
+`instances`), each with the matching `sem` branch identified, plus an
+attack-first note. **Recommended next session: the W1a attack + widening.**
+
 ## Session 2026-07-10 (T0a FOUND FALSE AS STATED — restated over `StoreDeclared`)
 
 Attacking the last `sorry` (`semAux_fuel_stable_step`), the first move was to

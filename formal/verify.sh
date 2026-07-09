@@ -4,15 +4,13 @@
 #
 #   bash formal/verify.sh
 #
-# Checks, in order:
+# Checks, in order (ALL hard gates as of 2026-07-10 -- the tree reached 0 sorries):
 #   1. Lean library builds (lake build)          -- all theorem statements typecheck
-#   2. sorry inventory is reported (not gated yet; must reach 0 before Phase 6 sign-off)
+#   2. sorry inventory == 0 (HARD)               -- a new sorry fails the gate
 #   3. conformance CLI builds (lake build zcli)
-#   4. axiom audit prints (ZanzibarProofs.Audit) -- proved lemmas must be axiom-clean
+#   4. axiom audit (ZanzibarProofs.Audit, HARD)  -- no sorryAx / ofReduceBool / custom
+#      axioms may appear; only propext, Classical.choice, Quot.sound
 #   5. Python conformance suite passes           -- sem vs oracle vs set engine
-#
-# Exit non-zero on the first hard failure (build or conformance). The sorry count and
-# axiom audit are reported for review; they become hard gates in Phase 6.
 
 set -uo pipefail
 
@@ -24,19 +22,27 @@ export PATH="$HOME/.elan/bin:$PATH"
 echo "=== [1/5] lake build (library) ==="
 ( cd "$LEAN_DIR" && lake build ) || { echo "FAIL: lake build"; exit 1; }
 
-echo "=== [2/5] sorry inventory ==="
+echo "=== [2/5] sorry inventory (HARD gate: must be 0) ==="
 # Count only the `sorry` tactic on its own line (excludes prose/docstring mentions).
 SORRIES=$(grep -rhnE "^[[:space:]]*sorry[[:space:]]*$" "$LEAN_DIR/ZanzibarProofs" \
           --include=*.lean | wc -l | tr -d ' ')
-echo "  tracked sorries: $SORRIES (target 0 for Phase 6 sign-off)"
+echo "  tracked sorries: $SORRIES"
+[ "$SORRIES" = "0" ] || { echo "FAIL: sorry count is $SORRIES (gate requires 0)"; exit 1; }
 
 echo "=== [3/5] lake build zcli (conformance CLI) ==="
 ( cd "$LEAN_DIR" && lake build zcli ) || { echo "FAIL: lake build zcli"; exit 1; }
 
-echo "=== [4/5] axiom audit (ZanzibarProofs.Audit) ==="
-( cd "$LEAN_DIR" && rm -f .lake/build/lib/lean/ZanzibarProofs/Audit.olean \
-  && lake build ZanzibarProofs.Audit 2>&1 | grep -iE "depends on axioms" ) \
-  || echo "  (audit module not built; skipping)"
+echo "=== [4/5] axiom audit (ZanzibarProofs.Audit; HARD gate: standard axioms only) ==="
+AUDIT_OUT=$( cd "$LEAN_DIR" && rm -f .lake/build/lib/lean/ZanzibarProofs/Audit.olean \
+  && lake build ZanzibarProofs.Audit 2>&1 ) || { echo "FAIL: audit build"; exit 1; }
+echo "$AUDIT_OUT" | grep -iE "depends on axioms|does not depend on any axioms"
+BAD=$(echo "$AUDIT_OUT" | grep -iE "depends on axioms" \
+      | grep -vE "\[(propext|Classical\.choice|Quot\.sound)(, (propext|Classical\.choice|Quot\.sound))*\]$" || true)
+if [ -n "$BAD" ]; then
+  echo "FAIL: non-standard axioms in the audit:"
+  echo "$BAD"
+  exit 1
+fi
 
 echo "=== [5/5] Python conformance (sem vs oracle vs set engine) ==="
 ( cd "$REPO_ROOT" && "$PY" -m pytest formal/conformance/ -q ) \

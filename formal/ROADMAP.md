@@ -52,6 +52,36 @@ and re-proves/widens the same named theorems. Every stage must keep
   first hop today; interior hops need the materialized bridges). Key new proof
   content: bridge-completeness (every `instances` witness has its bridge) and
   the `instances`-branch of `memberOfGranted` in both correspondence directions.
+
+  **Sub-staging (designed 2026-07-10, grounded in wildcard-spec §1.1/§3.2 —
+  do W1a first):**
+  - **W1a — bare star grants, ZERO bridges.** Widen `StarFreeStore` to allow
+    subject `(T, *, BARE)` tuples (plain OpenFGA `[user:*]`). Wildcard-spec
+    §3.2's bare-shape rule: bare shapes never need in-bridges — a bare concrete
+    subject node has **no in-edges**, so any semantic path through the star is a
+    *leading* instance-hop, which is exactly probe 2's `wAny` endpoint
+    substitution; no interior hops exist to materialize. Semantic side matches:
+    `sem`'s bare-star branch of `directLeaf` is a pure type-match (no
+    `instances` recursion), and `memberOfGranted` *skips* BARE grants. So W1a =
+    `writeDirect` already-correct node mapping (`subjNode` sends `(T,*,BARE)` to
+    `wAny (T,BARE)`) + probe 1∨2 correspondence; no bridge machinery, no
+    `instances`. The chain lemmas need: an edge out of `wAny(T,BARE)` matches
+    `sem`'s "bare-star covers u" disjunct for every subject u of type T.
+  - **W1b — object wildcards (`wAll` + out-bridges).** Needs
+    `objectWildcards`-declared shapes, `wAll → concrete` bridges on instance
+    arrival, probe 3; `matchingObjects`' `[oname, STAR]` absorption is the
+    semantic counterpart.
+  - **W1c — userset stars (in-bridges + `instances`).** `concrete → wAny`
+    bridges for subject-wildcard USERSET shapes (`[group:*#member]`), the
+    `instances`-branch of `memberOfGranted`/`ttuLeaf`, probe 4, and the
+    no-`wAny→wAll`-bridge instance-leak argument (spec §1.1). The genuinely
+    hard one — bridge-completeness vs `instances T q` (note: `instances`
+    excludes query endpoints, so bridges — store-derived — cover exactly it).
+  - **Attack first (house move):** before proving, try to refute the widened
+    statement on W1a — e.g. a star query subject (`s.name = STAR`) mixes
+    probe 1 (exact star tuple) with flow-through `memberOfGranted`; check the
+    intensional D1 branch against the probes on a concrete example via `zcli`
+    or `#eval` before trusting the statement.
 - **W2 — rule routing (untainted boolean-free structure).** `computed`, `union`
   of untainted operands, and TTU defs: writes route onto rule-derived families
   (the Python `RuleSet.apply` / leaf-routing semantics), materializing the
