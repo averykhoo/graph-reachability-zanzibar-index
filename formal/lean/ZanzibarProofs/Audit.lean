@@ -46,6 +46,15 @@ namespace Zanzibar
 #print axioms inv_empty
 #print axioms quiescent_empty
 #print axioms reach_empty
+-- T2a write-path groundwork (GraphIndex/State.lean) — fuel-free reachability,
+-- cycle-rejection, primitive invariant preservation, reachB<->NReaches bridge.
+-- All expect only the three standard axioms (no `sorryAx`):
+#print axioms acyclic_addEdge
+#print axioms structInv_addNode
+#print axioms structInv_addEdge
+#print axioms inv_putResidue
+#print axioms reachB_sound
+#print axioms nreaches_iff_reachB
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):
