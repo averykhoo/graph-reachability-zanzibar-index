@@ -3,6 +3,7 @@ import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
 import ZanzibarProofs.GraphIndex.Write
+import ZanzibarProofs.GraphIndex.Correct
 
 /-!
 # Axiom audit (plan C4)
@@ -67,6 +68,16 @@ namespace Zanzibar
 #print axioms writeDirect_writeStep
 #print axioms reachedByDirect_inv
 #print axioms reachedBy_of_direct
+-- T2b groundwork (this session) — read-side relational bridge, edge/tuple
+-- soundness, and the graph-reachability ⇒ membership-chain lemma, plus the T2b
+-- base case (empty state). All expect only the three standard axioms (no `sorryAx`):
+#print axioms GraphModel.probeNonDerived_iff
+#print axioms writeDirect_edges
+#print axioms reachedByDirect_edge_sound
+#print axioms reachedByDirect_nreaches_chain
+#print axioms sem_empty_store
+#print axioms check_empty
+#print axioms graph_correct_empty
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):

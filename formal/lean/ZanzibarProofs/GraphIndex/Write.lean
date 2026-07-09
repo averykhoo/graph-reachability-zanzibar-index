@@ -289,4 +289,32 @@ theorem reachedByDirect_edge_sound {σ : GraphState} {S : Schema} {T : Store}
     · obtain ⟨t', ht', h1, h2⟩ := ih a b hab
       exact ⟨t', List.mem_cons_of_mem _ ht', h1, h2⟩
 
+/-- A **membership chain**: `u →* v` realized entirely by stored tuples, each hop the
+    materialized edge `subjNode t.subject → objNode t.object t.relation` of some
+    `t ∈ T`, consecutive hops sharing the intermediate node. The relational essence
+    of a graph path in the untainted fragment — the shape T2b matches against
+    `memberOfGranted`'s userset recursion (node-sharing = userset flow-through). -/
+inductive TupleChain (T : Store) : NodeKey → NodeKey → Prop where
+  | single (t : Tuple) (ht : t ∈ T) :
+      TupleChain T (subjNode t.subject) (objNode t.object t.relation)
+  | cons (t : Tuple) (ht : t ∈ T) {v : NodeKey}
+      (hrest : TupleChain T (objNode t.object t.relation) v) :
+      TupleChain T (subjNode t.subject) v
+
+/-- **Graph reachability ⇒ a stored-tuple membership chain.** Every `NReaches` path in
+    an untainted-reached state is a `TupleChain` over the store: unfold the path,
+    mapping each edge to its stored tuple via `reachedByDirect_edge_sound`. The
+    soundness direction of T2b's reachability half, fully relational and
+    axiom-clean. -/
+theorem reachedByDirect_nreaches_chain {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByDirect σ S T) {u v : NodeKey} (hr : NReaches σ.edges u v) :
+    TupleChain T u v := by
+  induction hr with
+  | @edge u v huv =>
+    obtain ⟨t, ht, h1, h2⟩ := reachedByDirect_edge_sound h u v huv
+    rw [h1, h2]; exact TupleChain.single t ht
+  | @head u w v huw _ ih =>
+    obtain ⟨t, ht, h1, h2⟩ := reachedByDirect_edge_sound h u w huw
+    rw [h1]; exact TupleChain.cons t ht (h2 ▸ ih)
+
 end Zanzibar
