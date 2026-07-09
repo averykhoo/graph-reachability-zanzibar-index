@@ -403,4 +403,163 @@ theorem inv_empty (S : Schema) : Inv S (emptyState S) where
 theorem quiescent_empty (S : Schema) : Quiescent (emptyState S) := by
   intro d hd; simp [emptyState] at hd
 
+/-! ## Write-path primitives and invariant preservation (§7.8, T2a)
+
+The write path is realized here as three primitive state mutations, each proved to
+preserve the invariant clauses it can affect:
+
+* `addNode` / `addEdge` maintain the **structural** invariant `StructInv` (schema,
+  node-encoding, endpoint-closure, acyclicity). `addEdge`'s acyclicity step is
+  exactly the cycle-rejection admission check (`acyclic_addEdge`: no back-path
+  `b →* a` and `a ≠ b`).
+* `putResidue` preserves the **whole** invariant `Inv`, provided the residue it
+  writes is I6-hygienic at its key (reconcile's per-key correctness spec) — the
+  other keys are untouched, and edges/nodes are unchanged.
+
+What these do **not** yet close is the residue conjuncts of `Inv` under `addEdge`:
+adding an edge can make an existing residue's `neg`/`upos` subject edge-reachable
+(breaking `negEdgeFree`/`uposEdgeFree`) until the cascade re-reconciles. Realizing
+that global reconcile (so a whole write re-establishes I6) is the remaining T2a
+content; it needs the `reach ↔ NReaches` bridge, deferred with T2b. -/
+
+/-- Add a live node. -/
+def GraphState.addNode (σ : GraphState) (k : NodeKey) : GraphState :=
+  { σ with nodes := k :: σ.nodes }
+
+/-- Add one direct edge `a → b`. -/
+def GraphState.addEdge (σ : GraphState) (a b : NodeKey) : GraphState :=
+  { σ with edges := (a, b) :: σ.edges }
+
+/-- Overwrite the residue at `(k, r)` (reconcile of one derived key). -/
+def GraphState.putResidue (σ : GraphState) (k : NodeKey) (r : String) (res : Residue) :
+    GraphState :=
+  { σ with residue := fun k' r' => if k' = k ∧ r' = r then some res else σ.residue k' r' }
+
+@[simp] theorem addNode_edges (σ : GraphState) (k : NodeKey) :
+    (σ.addNode k).edges = σ.edges := rfl
+@[simp] theorem addNode_residue (σ : GraphState) (k : NodeKey) :
+    (σ.addNode k).residue = σ.residue := rfl
+@[simp] theorem addNode_schema (σ : GraphState) (k : NodeKey) :
+    (σ.addNode k).schema = σ.schema := rfl
+@[simp] theorem addNode_nodes (σ : GraphState) (k : NodeKey) :
+    (σ.addNode k).nodes = k :: σ.nodes := rfl
+@[simp] theorem addEdge_nodes (σ : GraphState) (a b : NodeKey) :
+    (σ.addEdge a b).nodes = σ.nodes := rfl
+@[simp] theorem addEdge_residue (σ : GraphState) (a b : NodeKey) :
+    (σ.addEdge a b).residue = σ.residue := rfl
+@[simp] theorem addEdge_schema (σ : GraphState) (a b : NodeKey) :
+    (σ.addEdge a b).schema = σ.schema := rfl
+@[simp] theorem addEdge_edges (σ : GraphState) (a b : NodeKey) :
+    (σ.addEdge a b).edges = (a, b) :: σ.edges := rfl
+@[simp] theorem putResidue_edges (σ : GraphState) (k : NodeKey) (r : String) (res : Residue) :
+    (σ.putResidue k r res).edges = σ.edges := rfl
+@[simp] theorem putResidue_nodes (σ : GraphState) (k : NodeKey) (r : String) (res : Residue) :
+    (σ.putResidue k r res).nodes = σ.nodes := rfl
+@[simp] theorem putResidue_schema (σ : GraphState) (k : NodeKey) (r : String) (res : Residue) :
+    (σ.putResidue k r res).schema = σ.schema := rfl
+theorem putResidue_residue (σ : GraphState) (k : NodeKey) (r : String) (res : Residue)
+    (k' : NodeKey) (r' : String) :
+    (σ.putResidue k r res).residue k' r' =
+      if k' = k ∧ r' = r then some res else σ.residue k' r' := rfl
+
+/-- **`StructInv S σ`** — the structural (edge/node) core of `Inv`: everything
+    independent of the residue table. `addNode`/`addEdge` preserve exactly this. -/
+structure StructInv (S : Schema) (σ : GraphState) : Prop where
+  schemaEq : σ.schema = S
+  nodeEnc : ∀ k ∈ σ.nodes, (k.name = STAR ↔ k.variant ≠ Variant.plain)
+  edgesClosed : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes
+  acyclic : ∀ v, ¬ NReaches σ.edges v v
+
+/-- The structural clauses are part of `Inv`. -/
+theorem Inv.toStruct {S : Schema} {σ : GraphState} (h : Inv S σ) : StructInv S σ :=
+  ⟨h.schemaEq, h.nodeEnc, h.edgesClosed, h.acyclic⟩
+
+/-- Adding a live node (encoding-valid) preserves the structural invariant. -/
+theorem structInv_addNode {S : Schema} {σ : GraphState} (h : StructInv S σ) {k : NodeKey}
+    (hk : k.name = STAR ↔ k.variant ≠ Variant.plain) : StructInv S (σ.addNode k) where
+  schemaEq := h.schemaEq
+  nodeEnc := by
+    intro k' hk'
+    rw [addNode_nodes] at hk'
+    rcases List.mem_cons.mp hk' with rfl | hmem
+    · exact hk
+    · exact h.nodeEnc k' hmem
+  edgesClosed := by
+    intro e he
+    rw [addNode_edges] at he
+    obtain ⟨h1, h2⟩ := h.edgesClosed e he
+    exact ⟨List.mem_cons_of_mem _ h1, List.mem_cons_of_mem _ h2⟩
+  acyclic := h.acyclic
+
+/-- **Cycle-rejection preserves the structural invariant.** Adding `a → b` between
+    two live nodes with no back-path `b →* a` and `a ≠ b` keeps `StructInv`. -/
+theorem structInv_addEdge {S : Schema} {σ : GraphState} (h : StructInv S σ) {a b : NodeKey}
+    (ha : a ∈ σ.nodes) (hb : b ∈ σ.nodes)
+    (hback : ¬ NReaches σ.edges b a) (hne : a ≠ b) : StructInv S (σ.addEdge a b) where
+  schemaEq := h.schemaEq
+  nodeEnc := h.nodeEnc
+  edgesClosed := by
+    intro e he
+    rw [addEdge_edges] at he
+    rcases List.mem_cons.mp he with rfl | hmem
+    · exact ⟨ha, hb⟩
+    · exact h.edgesClosed e hmem
+  acyclic := by
+    rw [addEdge_edges]
+    exact acyclic_addEdge h.acyclic hback hne
+
+/-- **Reconcile of one key preserves the full invariant.** Writing an I6-hygienic
+    residue at `(k, r)` — `neg` star-covered, `neg`/`upos` edge-free, `upos`
+    disjoint from `neg` — keeps `Inv`: the other keys are untouched and edges/nodes
+    are unchanged. -/
+theorem inv_putResidue {S : Schema} {σ : GraphState} (h : Inv S σ)
+    {k : NodeKey} {r : String} {res : Residue}
+    (hns : ∀ n ∈ res.neg, res.stars.contains n.shape = true)
+    (hnf : ∀ n ∈ res.neg, ¬ NReaches σ.edges (subjNode n) k)
+    (huf : ∀ n ∈ res.upos, ¬ NReaches σ.edges (subjNode n) k)
+    (hun : ∀ n ∈ res.upos, res.neg.contains n = false) :
+    Inv S (σ.putResidue k r res) where
+  schemaEq := h.schemaEq
+  nodeEnc := h.nodeEnc
+  edgesClosed := h.edgesClosed
+  acyclic := h.acyclic
+  negStarCovered := by
+    intro k' r' res' hr' n hn
+    rw [putResidue_residue] at hr'
+    by_cases hkey : k' = k ∧ r' = r
+    · rw [if_pos hkey] at hr'
+      obtain rfl := Option.some.inj hr'
+      exact hns n hn
+    · rw [if_neg hkey] at hr'; exact h.negStarCovered k' r' res' hr' n hn
+  negEdgeFree := by
+    intro k' r' res' hr' n hn
+    rw [putResidue_residue] at hr'
+    by_cases hkey : k' = k ∧ r' = r
+    · rw [if_pos hkey] at hr'
+      obtain rfl := Option.some.inj hr'
+      obtain ⟨rfl, _⟩ := hkey
+      simpa using hnf n hn
+    · rw [if_neg hkey] at hr'; exact h.negEdgeFree k' r' res' hr' n hn
+  uposEdgeFree := by
+    intro k' r' res' hr' n hn
+    rw [putResidue_residue] at hr'
+    by_cases hkey : k' = k ∧ r' = r
+    · rw [if_pos hkey] at hr'
+      obtain rfl := Option.some.inj hr'
+      obtain ⟨rfl, _⟩ := hkey
+      simpa using huf n hn
+    · rw [if_neg hkey] at hr'; exact h.uposEdgeFree k' r' res' hr' n hn
+  uposNegDisjoint := by
+    intro k' r' res' hr' n hn
+    rw [putResidue_residue] at hr'
+    by_cases hkey : k' = k ∧ r' = r
+    · rw [if_pos hkey] at hr'
+      obtain rfl := Option.some.inj hr'
+      exact hun n hn
+    · rw [if_neg hkey] at hr'; exact h.uposNegDisjoint k' r' res' hr' n hn
+
+/-- The empty state satisfies the structural invariant. -/
+theorem structInv_empty (S : Schema) : StructInv S (emptyState S) :=
+  (inv_empty S).toStruct
+
 end Zanzibar
