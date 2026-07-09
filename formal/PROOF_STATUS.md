@@ -54,6 +54,69 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (T2b SEMANTIC CORE CLOSED — `graph_correct_direct` on the fragment)
+
+User: "assess, update the plan, then start on the hardest thing." Two assessment
+outcomes, then the proof work:
+
+**Assessment finding 1 (recorded in ROADMAP): the two T2 sorries are FALSE as
+stated, not merely unproven.** `WriteStep`'s three thin postconditions (schema
+fixed, nodes monotone, outbox drained) never tie `σ.edges`/`σ.residue` to the
+store, and neither does `Inv` — a junk state carrying one arbitrary acyclic edge
+satisfies `ReachedBy σ S [t]` + `Inv` + all schema hypotheses while `check` ≠
+`sem`. So no proof effort can close `graph_correct`/`graph_reached_inv(Inv)` as
+written; the operational write model is mandatory *for truth*. They stay as
+tracked sorries only as placeholders for the eventual restatement over the
+operational closure. Do not attack them as written.
+
+**Assessment finding 2:** `ReachedByDirect` prepends a *rejected* write's tuple to
+the store (writeDirect no-ops but `T` grows) — unfaithful to the composed system,
+where the raised rejection rolls back the store insert too. Hence
+`ReachedByAdmitted` (every step passed `admitEdge`), the faithful closure, on
+which the edge set is **complete** for the store, not just sound.
+
+**Proof work delivered (all green + pushed, axiom-clean, `verify.sh` full gate
+incl. 60 conformance; `sorry` count held at 3 — nothing faked, the new theorem is
+an addition, not a placeholder discharge):**
+
+- **`semAux_mono`** (`Spec/FuelStable.lean`): fuel monotonicity of the evaluator
+  on exclusion-free schemas (`Schema.noExclAll`), lifted from `evalE_mono`.
+  Dual-use: T2b soundness fuel plumbing + a T0a untainted-layer ingredient.
+- **New `GraphIndex/DirectCorrect.lean`** (~550 lines, sorry-free):
+  - Fragment predicates `PureDirect` / `StoreValid` (the Python admission gate) /
+    `StarFreeStore`, with `isDerived_pureDirect` (pure-direct ⇒ untainted ⇒ the
+    read routes to `probeNonDerived`), `lookup_rel_ne_bare` (declared relation ≠
+    `BARE`, via `WF.relNames` — `"..."` contains `'.'`), `lookup_keys_nonempty`.
+  - `ReachedByAdmitted` + embedding into `ReachedByDirect`,
+    **`admitted_edge_complete`** (every stored tuple's edge present), and
+    `admitted_nodes_length` (`nodes = 2·|T|`, the fuel-bound arithmetic).
+  - Star-free node algebra: `subjNode_plain`/`objNode_plain`, injectivity, and
+    **`objNode_eq_subjNode`** — the flow-through identity that makes chain hops
+    compose with `memberOfGranted`'s recursion.
+  - `TupleChainN` (length-indexed chains) + `chainN_of_trail`.
+  - The `directLeaf`/`memberOfGranted` interface: `grantsOf` pack/unpack,
+    `directLeaf_grant_self`, `directLeaf_of_mog`, `mog_intro`, and the star-free
+    eliminations `mog_elim`/`directLeaf_elim` (the `instances` branch cannot fire).
+  - **`semAux_lift` — the semantic heart.** Membership propagates through a
+    userset (`s ∈ s'` at fuel `f₀`, `s' ∈ v` at fuel `f` ⇒ `s ∈ v` at `f + f₀`):
+    every direct match of `s'` at a grant is absorbed by `s`'s flow-through on the
+    *same* grant (+ fuel monotonicity); every flow-through lifts by the fuel IH.
+  - **`semAux_of_chainN`** (soundness): a length-`n` chain is a `sem` membership
+    at fuel exactly `n` (base hop = self-grant at fuel 1; each hop lifts, f₀ = 1).
+  - **`nreaches_of_semAux`** (completeness): fuel induction; direct match ⇒ the
+    grant's own edge (edge-completeness), flow-through ⇒ IH + `.tail`.
+  - **`graph_correct_direct`** — `check σ q = sem S T q` on the fragment,
+    end-to-end: wildcard probes 2–4 die on star-free data (`nreaches_source/
+    target_plain`), probe 1 bridges `reach ↔ NReaches ↔ compressed trail ↔
+    TupleChainN ↔ sem`, chain fuel fits `fuelBound` (`2|T|+1 < |keys|·(2|T|+4)`).
+  - Audit: `graph_correct_direct` = `[propext, Classical.choice, Quot.sound]`.
+
+**This discharges the ROADMAP-isolated "T2b semantic core" (chain =
+`memberOfGranted` recursion, both directions) on the honest fragment.** What
+remains for T2: wildcard bridges (model + read, the `wAny`/`wAll` promotion only
+covers the first hop), TTU/computed/union defs (rule-routed materialization),
+the derived/residue path + faithful reconcile (T2a), then the restated full T2b.
+
 ## Session 2026-07-10 (T2b groundwork — read=sem base case + soundness scaffold)
 
 User: "keep going with the proof part T2; commit and push when ready." Scope
@@ -452,6 +515,11 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T2b empty read | `check_empty`, `probeNonDerived_empty`, `probeDerived_empty` | **proved** | Correct.lean; empty index answers `false` (no edges, no residue) |
 | T2b read→reachability | `probeNonDerived_iff` | **proved** | State.lean; ≤4-probe read = disjunction of four `NReaches` conditions (endpoint-closed), via `reach_iff_nreaches` |
 | T2b reachability→chain | `TupleChain`, `reachedByDirect_nreaches_chain`, `reachedByDirect_edge_sound`, `writeDirect_edges` | **proved** | Write.lean; untainted graph path = stored-tuple membership chain; edges trace to tuples |
+| evaluator fuel monotonicity | `Schema.noExclAll`, `semAux_le_succ`, `semAux_mono` | **proved** | FuelStable.lean; exclusion-free schemas are fuel-monotone (T2b fuel plumbing + T0a ingredient) |
+| **T2b fragment read = sem** | `graph_correct_direct` | **proved** | DirectCorrect.lean; end-to-end `check = sem` on the star-free pure-direct fragment, axiom-clean |
+| T2b semantic core, soundness | `semAux_lift`, `semAux_of_chainN`, `semAux_one_of_tuple` | **proved** | DirectCorrect.lean; userset lifting (membership through a userset) + chain⇒`sem` at fuel = chain length |
+| T2b semantic core, completeness | `nreaches_of_semAux` | **proved** | DirectCorrect.lean; `sem`⇒graph path (edge-completeness + flow-through `.tail`) |
+| T2b fragment infrastructure | `ReachedByAdmitted`, `admitted_edge_complete`, `admitted_nodes_length`, `TupleChainN`, `chainN_of_trail`, `isDerived_pureDirect`, `objNode_eq_subjNode`, leaf intro/elim lemmas | **proved** | DirectCorrect.lean; admitted-writes closure (faithful to composed-system rollback), grant/leaf interface, node algebra |
 
 ## `sorry` ledger
 
@@ -460,6 +528,16 @@ closed 2026-07-10**, monotone non-increasing). Locations:
 - `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`) (1)
 - `GraphIndex/Correct.lean`: `graph_reached_inv` (only the `Inv` conjunct — the
   `Quiescent` conjunct is proved), `graph_correct` (2)
+
+**⚠ The two `Correct.lean` sorries are FALSE AS STATED** (2026-07-10 finding, see
+ROADMAP): the thin `WriteStep` admits junk states. They are placeholders for the
+restatement over the operational write-closure — the honest fragment instance
+**`graph_correct_direct` (DirectCorrect.lean) is proved and axiom-clean**; do not
+sink effort into the abstract statements as written.
+
+**`GraphIndex/DirectCorrect.lean` is `sorry`-free** — the T2b semantic core
+(userset lifting, chain ⇔ `sem`, both directions) and the end-to-end fragment
+read-correctness theorem `graph_correct_direct`.
 
 **`GraphIndex/State.lean` is `sorry`-free** — the 7 opaque graph placeholders are now
 concrete definitions; `cascade_converges` (T5) is closed off the concrete `ReachedBy`.

@@ -225,8 +225,16 @@ the final restatement — do not sink proof effort into them as written.
   acyclic-*data* hypothesis (`writeDirect` drops cycle-forming edges while `sem`
   fuel-evaluates them). The read/reachability plumbing is done; this is the last mile.
 
-  **Plan of record (2026-07-10, in progress this session): close the semantic core
-  end-to-end on the star-free pure-direct fragment**, as a genuine, non-vacuous
+  **✅ EXECUTED (2026-07-10, same session): the semantic core is CLOSED on the
+  star-free pure-direct fragment** — `GraphIndex/DirectCorrect.lean` is sorry-free
+  and `graph_correct_direct` is axiom-clean (`[propext, Classical.choice,
+  Quot.sound]`, audited). The plan below was executed verbatim (steps 1–6 map to
+  `semAux_mono`, `TupleChainN`/`chainN_of_trail`, `semAux_lift`,
+  `semAux_of_chainN`, `nreaches_of_semAux`, `graph_correct_direct`). The original
+  plan is retained for the record:
+
+  Plan: close the semantic core end-to-end on the star-free pure-direct fragment,
+  as a genuine, non-vacuous
   `graph_correct_direct`. Fragment: every schema def is `.direct rs` (`PureDirect`),
   the store is admission-valid (`StoreValid`: each tuple's `(object.type, relation)`
   is declared `.direct rs` with `restrictionMatches rs t`; matches the Python
@@ -278,12 +286,18 @@ the final restatement — do not sink proof effort into them as written.
 4. **T2/T5** — graph model CONCRETIZED; **T5 `cascade_converges` ✅ DONE**; the
    **reachability layer ✅ DONE** (2026-07-10: `reach ↔ NReaches` bridge, cycle-
    rejection, structural write-primitive preservation, per-key `inv_putResidue`).
-   **T2b groundwork now DONE** (base case + `probeNonDerived_iff` + `TupleChain`/
-   `reachedByDirect_nreaches_chain`, all axiom-clean). Remaining: the **`TupleChain ↔
-   sem` semantic core** (chain = `memberOfGranted` recursion; + acyclic-data converse)
-   and, for T2a and the derived T2b path, the **faithful reconcile model** (residue
-   output). Once reconcile lands, T2a composes the `structInv_*`/`inv_putResidue`
-   lemmas; the derived T2b path combines it with the residue = `sem` algebra.
+   **T2b groundwork ✅ DONE** (base case + `probeNonDerived_iff` + `TupleChain`/
+   `reachedByDirect_nreaches_chain`). **T2b SEMANTIC CORE ✅ DONE** (2026-07-10:
+   `graph_correct_direct` — end-to-end `check = sem` on the star-free pure-direct
+   fragment, axiom-clean; userset lifting + chain⇔`sem` both directions,
+   `DirectCorrect.lean`). Remaining, in suggested order: (a) **wildcard bridges**
+   (materialize concrete→`wAny` bridges in the write model + extend the fragment
+   theorem to star data/queries); (b) **computed/union/TTU defs** (rule-routed
+   edge materialization — the graph writes edges onto rule-derived families);
+   (c) the **faithful reconcile model** (residue output) for T2a and the derived
+   T2b path; then (d) restate/replace the abstract `graph_correct`/
+   `graph_reached_inv` over the completed operational closure (they are FALSE as
+   currently stated — see the FINDING above).
 5. **T0a** (decide (a) vs (b) first) — the only remaining `Spec/` sorry; ingredient 1
    (`evalE_mono`) proved.
 
