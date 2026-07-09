@@ -507,6 +507,27 @@ def check (σ : GraphState) (q : Query) : Bool :=
   else
     probeNonDerived σ q
 
+/-- **The non-derived read, relationally.** On an endpoint-closed state the executable
+    ≤4-probe read is exactly the disjunction of the four `NReaches` conditions
+    (subject/object each either literal or promoted to its wildcard node). This lifts
+    the read out of the fixed-fuel probe `σ.reach` into the fuel-free reachability
+    relation `NReaches` — where the eventual `check = sem` correspondence is proved —
+    via `reach_iff_nreaches`. Reusable for T2b. -/
+theorem probeNonDerived_iff {σ : GraphState}
+    (hcl : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes) (q : Query) :
+    probeNonDerived σ q = true ↔
+      NReaches σ.edges (subjNode q.subject) (objNode q.object q.relation)
+      ∨ (q.subject.name ≠ STAR ∧
+          NReaches σ.edges (wAnyNode q.subject.shape) (objNode q.object q.relation))
+      ∨ (q.object.name ≠ STAR ∧
+          NReaches σ.edges (subjNode q.subject) (wAllNode q.object.type q.relation))
+      ∨ (q.subject.name ≠ STAR ∧ q.object.name ≠ STAR ∧
+          NReaches σ.edges (wAnyNode q.subject.shape) (wAllNode q.object.type q.relation)) := by
+  unfold probeNonDerived
+  simp only [Bool.or_eq_true, Bool.and_eq_true, bne_iff_ne, ne_eq,
+    reach_iff_nreaches hcl]
+  tauto
+
 end GraphModel
 
 /-! ## §8 — the graph scope predicate `GraphAccepts` (decision-15) -/
