@@ -178,6 +178,19 @@ preserves acyclicity); write-path primitives `addNode`/`addEdge`/`putResidue` wi
 pigeonhole). So the executable fixed-fuel probe now provably equals fuel-free
 reachability, and each write primitive's structural preservation is proved.
 
+**Write model STARTED (2026-07-10, `GraphIndex/Write.lean`, axiom-clean).** The
+untainted (residue-free) fragment of the faithful write model is now concrete:
+`writeDirect` (one guarded direct-edge write, cycle-rejection faithful to §7.3),
+`inv_writeDirect` (preserves the whole `Inv` — residue clauses vacuous on the
+fragment), and `ReachedByDirect`/`reachedByDirect_inv` (**T2a's `Inv` conjunct
+honestly proved for the untainted fragment**), embedding in the abstract
+`ReachedBy` via `writeDirect_writeStep`. Two blockers remain, now sharply isolated:
+(a) **derived reconcile** — residue materialization + the cross-key hazard (an edge
+write re-reaching an existing residue key breaks `negEdgeFree` until reconcile);
+(b) **T2b read = sem** — even the pure-direct case needs an acyclic-*data*
+hypothesis, because `writeDirect` drops cycle-forming edges while `sem`
+fuel-evaluates them.
+
 **Remaining (the single genuine multi-session core — a faithful WRITE model):**
 Both sorries now reduce to modeling *how one tuple write produces edges +
 reconciled residues*. `WriteStep` must realize edge/bridge addition + reconcile so

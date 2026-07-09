@@ -54,6 +54,52 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (T2a write model — untainted direct fragment)
+
+User: "clear T2 as much as possible; commit often, push when done." Scope call
+(user-adjudicated up front via a fidelity question): **build the concrete write
+model, honest, no discharge expected this session.** Continues the deliberate
+DEFER — the abstract `WriteStep` is now being *realized operationally* rather than
+strengthened by postulate. Two green+pushed increments; `sorry` count held at 3;
+all new results axiom-clean (audited).
+
+**New file `GraphIndex/Write.lean` — the concrete single-tuple write for the
+untainted (residue-free) fragment:**
+
+- `writeDirect` — materialize one direct tuple as the edge `subjNode s → objNode o
+  R`, **guarded by cycle-rejection** (§7.3: a self-loop or back-path-forming write
+  is rejected and leaves the state unchanged; the back-path premise for
+  `structInv_addEdge` comes from the executable admission probe via
+  `reach_complete`). `admitEdge` is the decidable admission Bool.
+- `nodeEnc_subjNode`/`nodeEnc_objNode` — endpoint nodes are always encoding-valid.
+- `structInv_writeDirect` — structural invariant preserved by the write.
+- `ResidueEmpty` + `residueEmpty_writeDirect` — the fragment (no persisted
+  residues) is closed under writes; `inv_writeDirect` then preserves the **whole**
+  `Inv` (residue clauses vacuous).
+- `writeDirect_writeStep` — the concrete op realizes the abstract `WriteStep`
+  (schema fixed, nodes monotone, quiescence preserved).
+- `ReachedByDirect` (concrete write-closure) + `reachedByDirect_inv` — **T2a's
+  `Inv` conjunct, honestly proved for the untainted fragment** (Inv ∧ ResidueEmpty
+  ∧ Quiescent at every reached state, by induction over the write path).
+  `reachedBy_of_direct` embeds it in the abstract `ReachedBy`.
+
+**What this does NOT yet close, sharply isolated for the next pass:**
+1. **Derived reconcile (rest of T2a).** `writeDirect` covers only untainted
+   closure edges. The derived path (§7.6/§7.8) must (a) materialize residues via a
+   faithful `reconcile`, and (b) handle the cross-key hazard the current fragment
+   dodges by `ResidueEmpty`: an edge write can make an existing residue's `neg`/
+   `upos` subject edge-reachable, breaking `negEdgeFree`/`uposEdgeFree` until the
+   cascade re-reconciles. `inv_putResidue` (State.lean) is the per-key tool; the
+   write must apply it to *all* reachability-affected keys with the correct
+   residues.
+2. **Read correspondence `check = sem` (T2b).** For the pure-direct fragment
+   `check` reduces (no-wildcard) to `reach = NReaches`, and NReaches on the
+   writeDirect-built edges *should* equal `directLeaf`'s transitive membership —
+   BUT the subtlety is cycle-rejection: `writeDirect` silently drops cycle-forming
+   edges, so on cyclic *data* the graph's edge set differs from "all tuples" while
+   `sem` fuel-evaluates. The correspondence needs an acyclic-data hypothesis (or to
+   account for rejected writes). Do NOT rush this — it is the genuine T2b core.
+
 ## Session 2026-07-10 (T2a groundwork — reachability layer fully proved)
 
 User: "get the rest of T2 finished; commit often, push whenever you can." Scope
@@ -350,6 +396,9 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | (lemmas) algebra ext laws | `ext_union/ext_intersect/ext_subtract` | **proved** | `ext (a⊕b) = ext a ⊕ ext b` (Algebra.lean); T1 workhorses |
 | (lemmas) star laws | `stars_union/intersect/subtract` | **proved** | `rfl` |
 | (lemmas) star×boolean | `containsStar_union/intersect/subtract` | **proved** | the pinned intensional `'*'` table (§5.6) |
+| T2a write model (untainted) | `writeDirect`, `structInv_writeDirect`, `inv_writeDirect` | **proved** | Write.lean; concrete guarded edge write preserves the whole `Inv` on the residue-free fragment; axiom-clean |
+| T2a untainted write-closure | `ReachedByDirect`, `reachedByDirect_inv`, `reachedBy_of_direct` | **proved** | Write.lean; T2a's `Inv` conjunct honestly proved for the untainted fragment; embeds in abstract `ReachedBy` |
+| T2a write realizes spec | `writeDirect_writeStep`, `quiescent_writeDirect`, `residueEmpty_writeDirect` | **proved** | Write.lean; connects concrete op to the `ReachedBy` closure |
 
 ## `sorry` ledger
 
@@ -361,6 +410,12 @@ closed 2026-07-10**, monotone non-increasing). Locations:
 
 **`GraphIndex/State.lean` is `sorry`-free** — the 7 opaque graph placeholders are now
 concrete definitions; `cascade_converges` (T5) is closed off the concrete `ReachedBy`.
+
+**`GraphIndex/Write.lean` is `sorry`-free** — the concrete write model for the untainted
+fragment (`writeDirect` + preservation + `ReachedByDirect`/`reachedByDirect_inv`); T2a's
+`Inv` conjunct is proved honestly for the residue-free fragment. The abstract
+`graph_reached_inv` sorry remains (its generality covers derived relations, which need
+the reconcile/residue-materialization half — the isolated remaining T2a content).
 
 **`SetEngine/Correct.lean` is now `sorry`-free** — `setEngine_correct` (T1) proved and
 axiom-clean; the `opaque SetEngineModel.check` is replaced by a concrete expand model.
