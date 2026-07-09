@@ -267,4 +267,157 @@ theorem chainN_mem {T : Store} {n : Nat} {u v : NodeKey}
   | single t ht => exact ⟨t, ht⟩
   | cons t ht _ => exact ⟨t, ht⟩
 
+/-! ## Grant-set and leaf lemmas
+
+The `directLeaf`/`memberOfGranted` interface the two directions of the
+correspondence share: membership/decomposition of `grantsOf`, introducing a leaf
+answer from a self-grant or a flow-through, and eliminating a leaf answer into
+one of the two. -/
+
+/-- Unpack membership in a grant set. -/
+theorem grantsOf_elim {T : Store} {rs : List Restriction} {ot on rel : String}
+    {g : Tuple} (hg : g ∈ grantsOf T rs ot on rel) :
+    g ∈ T ∧ g.relation = rel ∧ g.object.type = ot ∧
+      (matchingObjects on).contains g.object.name = true ∧
+      restrictionMatches rs g = true := by
+  unfold grantsOf at hg
+  obtain ⟨hT, hcond⟩ := List.mem_filter.mp hg
+  simp only [Bool.and_eq_true, beq_iff_eq] at hcond
+  exact ⟨hT, hcond.1.1.1, hcond.1.1.2, hcond.1.2, hcond.2⟩
+
+/-- Pack membership in a grant set. -/
+theorem grantsOf_intro {T : Store} {rs : List Restriction} {ot on rel : String}
+    {g : Tuple} (hT : g ∈ T) (h1 : g.relation = rel) (h2 : g.object.type = ot)
+    (h3 : (matchingObjects on).contains g.object.name = true)
+    (h4 : restrictionMatches rs g = true) : g ∈ grantsOf T rs ot on rel := by
+  unfold grantsOf
+  refine List.mem_filter.mpr ⟨hT, ?_⟩
+  simp only [Bool.and_eq_true, beq_iff_eq]
+  exact ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩
+
+/-- A star-free name matched by `matchingObjects on` is `on` itself. -/
+theorem matchingObjects_elim {on nm : String}
+    (h : (matchingObjects on).contains nm = true) (hnm : nm ≠ STAR) : nm = on := by
+  unfold matchingObjects at h
+  by_cases ho : on = STAR
+  · rw [if_pos ho] at h
+    simp only [List.contains_cons, List.contains_nil, Bool.or_false, beq_iff_eq] at h
+    exact absurd h hnm
+  · rw [if_neg ho] at h
+    simp only [List.contains_cons, List.contains_nil, Bool.or_false, Bool.or_eq_true,
+      beq_iff_eq] at h
+    rcases h with h | h
+    · exact h
+    · exact absurd h hnm
+
+/-- A concrete name is matched by its own `matchingObjects`. -/
+theorem matchingObjects_self (on : String) (h : on ≠ STAR) :
+    (matchingObjects on).contains on = true := by
+  unfold matchingObjects
+  rw [if_neg h]
+  simp
+
+/-- **Leaf introduction, self-grant.** A grant whose subject IS the (star-free)
+    query subject answers the leaf positively — for any `rec`. -/
+theorem directLeaf_grant_self {rec : Rec} {s : SubjectRef} {T : Store} {q : Query}
+    {rs : List Restriction} {ot on rel : String} {g : Tuple}
+    (hg : g ∈ grantsOf T rs ot on rel) (hsubj : g.subject = s) (hs : s.name ≠ STAR) :
+    directLeaf rec s T q rs ot on rel = true := by
+  subst hsubj
+  unfold directLeaf
+  rw [if_neg (by simpa using hs)]
+  by_cases hp : (g.subject.predicate == BARE) = true
+  · rw [if_pos hp, Bool.or_eq_true]
+    refine Or.inl (List.any_eq_true.mpr ⟨g, hg, ?_⟩)
+    simp [hs, hp]
+  · rw [if_neg hp, Bool.or_eq_true]
+    refine Or.inl (List.any_eq_true.mpr ⟨g, hg, ?_⟩)
+    have hp' : g.subject.predicate ≠ BARE := by simpa using hp
+    simp [hs, hp']
+
+/-- **Leaf introduction, flow-through.** A positive `memberOfGranted` answers the
+    leaf positively for any subject (every branch of `directLeaf` carries the
+    flow-through disjunct). -/
+theorem directLeaf_of_mog {rec : Rec} {s : SubjectRef} {T : Store} {q : Query}
+    {rs : List Restriction} {ot on rel : String}
+    (h : memberOfGranted rec T q (grantsOf T rs ot on rel) = true) :
+    directLeaf rec s T q rs ot on rel = true := by
+  unfold directLeaf
+  by_cases h1 : (s.name == STAR) = true
+  · rw [if_pos h1]; simp [h]
+  · rw [if_neg h1]
+    by_cases h2 : (s.predicate == BARE) = true
+    · rw [if_pos h2]; simp [h]
+    · rw [if_neg h2]; simp [h]
+
+/-- **Flow-through introduction.** A userset grant (star-free, non-bare subject)
+    whose userset node `rec` answers positively makes `memberOfGranted` positive. -/
+theorem mog_intro {rec : Rec} {T : Store} {q : Query} {grants : List Tuple}
+    {g : Tuple} (hg : g ∈ grants) (hpb : g.subject.predicate ≠ BARE)
+    (hps : g.subject.name ≠ STAR)
+    (hrec : rec g.subject.type g.subject.name g.subject.predicate = true) :
+    memberOfGranted rec T q grants = true := by
+  unfold memberOfGranted
+  refine List.any_eq_true.mpr ⟨g, hg, ?_⟩
+  rw [if_neg (by simpa using hpb), if_pos (by simpa using hps)]
+  exact hrec
+
+/-- **Flow-through elimination** (star-free store): a positive `memberOfGranted`
+    exhibits a userset grant whose node `rec` answers positively — the star
+    (`instances`) branch cannot fire. -/
+theorem mog_elim {rec : Rec} {T : Store} {q : Query} {rs : List Restriction}
+    {ot on rel : String} (hSF : StarFreeStore T)
+    (h : memberOfGranted rec T q (grantsOf T rs ot on rel) = true) :
+    ∃ g ∈ grantsOf T rs ot on rel, g.subject.predicate ≠ BARE ∧
+      g.subject.name ≠ STAR ∧
+      rec g.subject.type g.subject.name g.subject.predicate = true := by
+  unfold memberOfGranted at h
+  obtain ⟨g, hg, hgt⟩ := List.any_eq_true.mp h
+  have hstar : g.subject.name ≠ STAR := (hSF g (grantsOf_elim hg).1).1
+  by_cases hpb : (g.subject.predicate == BARE) = true
+  · rw [if_pos hpb] at hgt; exact absurd hgt (by simp)
+  · rw [if_neg hpb, if_pos (by simpa using hstar)] at hgt
+    exact ⟨g, hg, by simpa using hpb, hstar, hgt⟩
+
+/-- **Direct-match elimination** (star-free store and subject): a positive
+    match-disjunct of `directLeaf`'s bare/userset branch exhibits a grant whose
+    subject IS the query subject. Stated over the two concrete `any`-predicates
+    `directLeaf` uses. -/
+theorem directLeaf_elim {rec : Rec} {s : SubjectRef} {T : Store} {q : Query}
+    {rs : List Restriction} {ot on rel : String} (hSF : StarFreeStore T)
+    (hs : s.name ≠ STAR)
+    (h : directLeaf rec s T q rs ot on rel = true) :
+    (∃ g ∈ grantsOf T rs ot on rel, g.subject = s) ∨
+      memberOfGranted rec T q (grantsOf T rs ot on rel) = true := by
+  unfold directLeaf at h
+  rw [if_neg (by simpa using hs)] at h
+  by_cases hp : (s.predicate == BARE) = true
+  · rw [if_pos hp, Bool.or_eq_true] at h
+    rcases h with h | h
+    · obtain ⟨g, hg, hgt⟩ := List.any_eq_true.mp h
+      have hgstar : g.subject.name ≠ STAR := (hSF g (grantsOf_elim hg).1).1
+      have hsp : s.predicate = BARE := by simpa using hp
+      refine Or.inl ⟨g, hg, ?_⟩
+      obtain ⟨⟨gt, gn, gp⟩, grel, gobj⟩ := g
+      obtain ⟨st, sn, sp⟩ := s
+      simp only [Bool.or_eq_true, Bool.and_eq_true, bne_iff_ne, ne_eq,
+        beq_iff_eq] at hgt
+      rcases hgt with ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ | ⟨⟨h1, _⟩, _⟩
+      · simp_all
+      · exact absurd h1 hgstar
+    · exact Or.inr h
+  · rw [if_neg hp, Bool.or_eq_true] at h
+    rcases h with h | h
+    · obtain ⟨g, hg, hgt⟩ := List.any_eq_true.mp h
+      have hgstar : g.subject.name ≠ STAR := (hSF g (grantsOf_elim hg).1).1
+      refine Or.inl ⟨g, hg, ?_⟩
+      obtain ⟨⟨gt, gn, gp⟩, grel, gobj⟩ := g
+      obtain ⟨st, sn, sp⟩ := s
+      simp only [Bool.or_eq_true, Bool.and_eq_true, bne_iff_ne, ne_eq,
+        beq_iff_eq] at hgt
+      rcases hgt with ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ | ⟨⟨⟨h1, _⟩, _⟩, _⟩
+      · simp_all
+      · exact absurd h1 hgstar
+    · exact Or.inr h
+
 end Zanzibar
