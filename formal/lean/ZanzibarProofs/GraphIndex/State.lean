@@ -7,12 +7,12 @@ import ZanzibarProofs.GraphIndex.Closure
 
 `SEMANTICS.md` §7. Phase 1 stubbed the state, read, invariant, reachability,
 quiescence, and scope predicate as `opaque` placeholders so the T2/T5 statements
-could compile. **This file replaces all seven with concrete definitions** — the
-"concretize + partial proofs" pass. The deep theorems (`graph_correct`,
-the `Inv` half of `graph_reached_inv`) remain tracked `sorry`s in `Correct.lean`;
-`cascade_converges` and the `Quiescent` half of `graph_reached_inv` are *closed*
-here off the concrete `ReachedBy` (the model bakes the in-transaction cascade into
-each write — §7.8 / ambiguity A1, user-approved).
+could compile. **This file replaces them with concrete definitions** — the
+"concretize + partial proofs" pass. The reachable-state closure is *operational*
+(`ReachedByDirect`/`ReachedByAdmitted` over the concrete write in `Write.lean`);
+an earlier abstract postcondition-spec closure (`WriteStep`/`ReachedBy`) was
+deleted 2026-07-10 as unsound-by-weakness (it admitted junk states, making the
+theorems over it false — see the note at the end of this file and ROADMAP).
 
 ## Modeling choices (logged here + PROOF_STATUS)
 
@@ -28,11 +28,11 @@ each write — §7.8 / ambiguity A1, user-approved).
   no schema (the compiled artifacts — taint classification, declared shapes — are
   part of the persisted index), so `GraphState` carries `schema` and `Inv S σ`
   pins `σ.schema = S`.
-* **`WriteStep` is a minimal operational spec.** It records only the necessary
-  postconditions this pass exercises (schema fixed, nodes monotone, the cascade
-  drained in-txn). The full add-edge + bridge + reconcile realization is the
-  deferred T2a operational content; `graph_reached_inv`'s `Inv` conjunct stays
-  `sorry` because those clauses are *not* free from this thin step.
+* **Reachable states are an operational closure.** A state counts only if it is
+  literally built by the concrete write path from `emptyState` (`writeDirect`
+  today; bridges/rule-routing/reconcile as the model grows). The T2/T3/T5/T6
+  theorems quantify over that closure at its current scope — never over an
+  abstract postcondition spec, which cannot pin the state to the store.
 -/
 
 namespace Zanzibar
@@ -610,24 +610,16 @@ def emptyState (S : Schema) : GraphState :=
   { schema := S, edges := [], nodes := [], residue := fun _ _ => none,
     outbox := [], watermark := 0 }
 
-/-- **`WriteStep S σ σ' t`** — one accepted write incorporating tuple `t` (§7.8).
-    A minimal *operational spec*: the schema is fixed, existing nodes persist, and
-    the in-transaction cascade leaves the outbox drained (§7.8 / A1 — the model bakes
-    the cascade into every write). The full edge/bridge/reconcile realization (and
-    hence the preservation of the remaining `Inv` clauses) is the deferred T2a
-    content, so this step deliberately does *not* assert `Inv`. -/
-structure WriteStep (S : Schema) (σ σ' : GraphState) (t : Tuple) : Prop where
-  schemaEq : σ'.schema = σ.schema
-  monoNodes : ∀ k ∈ σ.nodes, k ∈ σ'.nodes
-  drained : ∀ d ∈ σ'.outbox, d.id ≤ σ'.watermark
-
-/-- **`ReachedBy σ S T`** — `σ` is reached by applying `T`'s writes (each with its
-    in-transaction cascade) from the empty state, under schema `S`. The transitive
-    closure of `WriteStep` from `emptyState`. -/
-inductive ReachedBy : GraphState → Schema → Store → Prop where
-  | empty (S : Schema) : ReachedBy (emptyState S) S []
-  | step {σ σ' : GraphState} {S : Schema} {T : Store} (t : Tuple) :
-      ReachedBy σ S T → WriteStep S σ σ' t → ReachedBy σ' S (t :: T)
+/-! **The abstract `WriteStep`/`ReachedBy` layer was DELETED (2026-07-10).** Its
+three thin postconditions (schema fixed, nodes monotone, outbox drained) never
+tied `σ.edges`/`σ.residue` to the store, so it admitted junk states — every
+theorem quantifying over it (`graph_correct`, `graph_reached_inv`,
+`backend_equivalence`, T6a/T6b) was FALSE as stated, and `cascade_converges`
+held only because the step *asserted* drainedness. The reachable-state closure
+is now **operational**: `ReachedByDirect` / `ReachedByAdmitted`
+(`GraphIndex/Write.lean`, `DirectCorrect.lean`), growing with the write model
+(bridges → rule routing → reconcile) until it covers the full `GraphAccepts`
+scope. See ROADMAP "FINDING (2026-07-10)". -/
 
 /-! ## Partial results (this pass) -/
 

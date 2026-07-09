@@ -3,10 +3,11 @@ import ZanzibarProofs.GraphIndex.State
 /-!
 # The concrete write model — untainted direct fragment (Phase 4, T2a)
 
-`SEMANTICS.md` §7.3–7.5. `State.lean` left `WriteStep` an abstract postcondition
-spec (schema fixed, nodes monotone, outbox drained) — deliberately thin, because
-the full edge/bridge/reconcile realization is the T2a operational content. **This
-file begins that realization concretely**, for the *untainted direct fragment*:
+`SEMANTICS.md` §7.3–7.5. The reachable-state closure is **operational** — a state
+counts only if it is literally built by the concrete write path (an earlier
+abstract `WriteStep` postcondition spec was deleted as unsound-by-weakness; see
+`State.lean` / ROADMAP). **This file is that write path**, for the *untainted
+direct fragment*:
 schemas whose writes materialize as ordinary closure edges with no residues (no
 `but not`/`and`, no derived relations). For that fragment a tuple write is one
 guarded edge insertion, and the whole `Inv` is preserved by the `structInv_*`
@@ -21,8 +22,9 @@ tracked deferred content. What lands here is genuine, axiom-clean, reusable:
   the state unchanged).
 * `structInv_writeDirect` / `inv_writeDirect` — the write preserves the structural
   (and, on the residue-free fragment, the whole) invariant.
-* `writeDirect_writeStep` — the concrete write realizes the abstract `WriteStep`
-  spec, connecting the operational model to the `ReachedBy` closure.
+* `ReachedByDirect` — the operational write-closure the T2 theorems quantify
+  over (at this fragment's scope), with its running invariant
+  `reachedByDirect_inv`.
 -/
 
 namespace Zanzibar
@@ -163,7 +165,7 @@ theorem inv_writeDirect {S : Schema} {σ : GraphState} (h : Inv S σ)
       uposNegDisjoint := by
         intro k r res hr _ _; exact absurd (hr.symm.trans (hre' k r)) (Option.some_ne_none res) }
 
-/-! ## Realizing the abstract `WriteStep` -/
+/-! ## Write-effect projections -/
 
 /-- The write leaves the outbox untouched (untainted fragment produces no deltas). -/
 theorem writeDirect_outbox (σ : GraphState) (t : Tuple) :
@@ -190,21 +192,6 @@ theorem writeDirect_monoNodes (σ : GraphState) (t : Tuple) :
   · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hk)
   · exact hk
 
-/-- **The concrete write realizes the abstract `WriteStep` spec.** Schema fixed,
-    nodes monotone, outbox drained (a `Quiescent` state stays quiescent because the
-    untainted write touches neither outbox nor watermark). This connects the
-    concrete operation to the `ReachedBy` write-closure the T2 theorems quantify
-    over. -/
-theorem writeDirect_writeStep {S : Schema} {σ : GraphState} (hq : Quiescent σ)
-    (t : Tuple) : WriteStep S σ (σ.writeDirect t) t where
-  schemaEq := writeDirect_schema σ t
-  monoNodes := writeDirect_monoNodes σ t
-  drained := by
-    intro d hd
-    rw [writeDirect_outbox] at hd
-    rw [writeDirect_watermark]
-    exact hq d hd
-
 /-- Quiescence is preserved by the write (outbox/watermark untouched). -/
 theorem quiescent_writeDirect {σ : GraphState} (hq : Quiescent σ) (t : Tuple) :
     Quiescent (σ.writeDirect t) := by
@@ -216,18 +203,17 @@ theorem quiescent_writeDirect {σ : GraphState} (hq : Quiescent σ) (t : Tuple) 
 /-! ## The untainted write-closure and its invariant -/
 
 /-- **`ReachedByDirect σ S T`** — `σ` is reached from the empty state by applying
-    `T`'s writes as untainted direct-edge writes (`writeDirect`). The concrete
-    counterpart of `ReachedBy` for the residue-free fragment. -/
+    `T`'s writes as untainted direct-edge writes (`writeDirect`). The operational
+    reachable-state closure at the residue-free fragment's scope. -/
 inductive ReachedByDirect : GraphState → Schema → Store → Prop where
   | empty (S : Schema) : ReachedByDirect (emptyState S) S []
   | step {σ : GraphState} {S : Schema} {T : Store} (t : Tuple) :
       ReachedByDirect σ S T → ReachedByDirect (σ.writeDirect t) S (t :: T)
 
-/-- **T2a's `Inv` conjunct for the untainted fragment.** Every state reached by
-    untainted direct writes satisfies the full I-series invariant, stays
-    residue-free, and is cascade-quiescent — proved honestly by induction over the
-    concrete write path (`inv_writeDirect`), not postulated as a `WriteStep`
-    postcondition. -/
+/-- **T2a for the untainted fragment.** Every state reached by untainted direct
+    writes satisfies the full I-series invariant, stays residue-free, and is
+    cascade-quiescent — proved honestly by induction over the concrete write path
+    (`inv_writeDirect`), never postulated as a write postcondition. -/
 theorem reachedByDirect_inv {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByDirect σ S T) : Inv S σ ∧ ResidueEmpty σ ∧ Quiescent σ := by
   induction h with
@@ -236,17 +222,6 @@ theorem reachedByDirect_inv {σ : GraphState} {S : Schema} {T : Store}
     obtain ⟨hInv, hRe, hQ⟩ := ih
     exact ⟨inv_writeDirect hInv hRe t, residueEmpty_writeDirect t hRe,
       quiescent_writeDirect hQ t⟩
-
-/-- The untainted write-closure embeds in the abstract `ReachedBy` closure: each
-    concrete `writeDirect` realizes a `WriteStep` (quiescence supplied by the
-    running invariant). So the concrete fragment is a genuine sub-model of the
-    states the T2 theorems quantify over. -/
-theorem reachedBy_of_direct {σ : GraphState} {S : Schema} {T : Store}
-    (h : ReachedByDirect σ S T) : ReachedBy σ S T := by
-  induction h with
-  | empty S => exact ReachedBy.empty S
-  | step t hd ih =>
-    exact ReachedBy.step t ih (writeDirect_writeStep (reachedByDirect_inv hd).2.2 t)
 
 /-! ## Edges trace back to store tuples — the reachability→`sem` soundness groundwork
 

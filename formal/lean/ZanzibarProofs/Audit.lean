@@ -42,10 +42,12 @@ namespace Zanzibar
 #print axioms evalE_mono
 -- T1 — set engine computes sem (SetEngine/Correct.lean), now fully proved:
 #print axioms setEngine_correct
--- T5 — cascade convergence (GraphIndex/Correct.lean), closed off the concrete
--- `ReachedBy`; plus the concrete graph-model base-case lemmas. Expect only the
--- three standard axioms (no `sorryAx`):
+-- T5 — cascade convergence + T2a — invariant preservation (GraphIndex/Correct.lean),
+-- restated 2026-07-10 over the OPERATIONAL closure `ReachedByDirect` (the abstract
+-- `WriteStep`/`ReachedBy` layer was deleted as unsound-by-weakness); plus the
+-- concrete graph-model base-case lemmas. Expect only the three standard axioms:
 #print axioms cascade_converges
+#print axioms graph_reached_inv
 #print axioms inv_empty
 #print axioms quiescent_empty
 #print axioms reach_empty
@@ -90,11 +92,16 @@ namespace Zanzibar
 #print axioms nreaches_of_semAux
 #print axioms admitted_edge_complete
 #print axioms isDerived_pureDirect
+#print axioms stratifiable_pureDirect
 #print axioms graph_correct_direct
-
--- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
--- opaque model constants (these are the tracked debts, not final):
-#print axioms sem_fuel_stable
+-- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
+-- at fragment scope — now REAL proved theorems (were false over the deleted
+-- abstract closure). Expect only the three standard axioms (no `sorryAx`):
 #print axioms backend_equivalence
+#print axioms exclusion_effective
+#print axioms no_ghost_grant
+
+-- Proved modulo a documented sorry — expect `sorryAx` (the tracked debt, not final):
+#print axioms sem_fuel_stable
 
 end Zanzibar

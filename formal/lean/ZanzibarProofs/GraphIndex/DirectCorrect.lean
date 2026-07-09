@@ -142,6 +142,14 @@ theorem isDerived_pureDirect {S : Schema} (h : PureDirect S) (k : Key) :
   rw [taintedKeys_pureDirect h]
   rfl
 
+/-- A pure-direct schema is trivially stratifiable (no tainted keys: Kahn on the
+    empty node set succeeds immediately). Supplies `setEngine_correct`'s
+    hypothesis in the fragment corollaries (T3/T6). -/
+theorem stratifiable_pureDirect {S : Schema} (h : PureDirect S) : Stratifiable S := by
+  unfold Stratifiable stratify
+  rw [taintedKeys_pureDirect h]
+  simp [kahn]
+
 /-! ## Star-free node keys: plain forms, injectivity -/
 
 /-- A star-free subject's node is the plain key. -/

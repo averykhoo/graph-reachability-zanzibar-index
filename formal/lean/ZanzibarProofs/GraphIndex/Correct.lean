@@ -1,4 +1,4 @@
-import ZanzibarProofs.GraphIndex.State
+import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.Spec.WellDef
 
 /-!
@@ -6,52 +6,54 @@ import ZanzibarProofs.Spec.WellDef
 
 `SEMANTICS.md` §8 (T2a, T2b, T5). Phase 4.
 
-**Status (concretize + partial pass).** The graph model is now concrete
-(`State.lean`): `GraphState`, `GraphModel.check`, `Inv`, `ReachedBy`, `Quiescent`,
-`GraphAccepts` are real definitions, not `opaque` placeholders. Off the concrete
-`ReachedBy` (which bakes the in-transaction cascade into each write, §7.8 / A1):
+**Restatement (2026-07-10).** The original statements here quantified over an
+abstract `WriteStep`/`ReachedBy` closure whose three thin postconditions never
+tied the graph state to the store — they admitted junk states, making
+`graph_correct` and `graph_reached_inv` **false as stated** (and
+`cascade_converges` true only by assertion). That layer was deleted; the false
+statements were deleted WITH it, not proved. The T-theorems are now stated over
+the **operational** write-closure at its current scope, and their scope widens
+with the write model:
 
-* **`cascade_converges` (T5) is CLOSED** — outbox-drain quiescence is a `WriteStep`
-  postcondition, so it holds at every reachable state by induction.
-* **`graph_reached_inv` (T2a)**: its `Quiescent` conjunct is closed the same way; the
-  `Inv` conjunct stays a tracked `sorry` (it needs the full operational write path —
-  edge/bridge/reconcile — to be realized, the deferred T2a content).
-* **`graph_correct` (T2b)** stays a tracked `sorry` — the read = `sem` completeness
-  argument (≤4-probe reachability decomposition + residue algebra), resting on T4
-  (edges = path counts) and the T1 MemberSet lemmas.
+* **T2a (`graph_reached_inv`)** and **T5 (`cascade_converges`)** — below, over
+  `ReachedByDirect` (the untainted direct fragment), proved by induction over
+  the concrete write path.
+* **T2b (`graph_correct_direct`)** — `DirectCorrect.lean`, over
+  `ReachedByAdmitted` on the star-free pure-direct fragment, proved end-to-end.
+* The full-`GraphAccepts`-scope statements return when the write model covers
+  wildcard bridges, rule routing, and the derived reconcile (ROADMAP order).
+
+The empty-store base case (`graph_correct_empty` and its supporting lemmas) is
+scope-independent and lives here.
 -/
 
 namespace Zanzibar
 
-/-- **T5 (cascade convergence).** Every reachable state is cascade-quiescent: the
-    in-transaction cascade drains the outbox on every write, so the drain frontier
-    covers all deltas at any state reached from empty. Each `but not` operand settles
-    before any consumer reads it (encoded by `Quiescent` + the stratum order). -/
-theorem cascade_converges (S : Schema) (T : Store) (σ : GraphState)
-    (_hStrat : Stratifiable S) (_hAcc : GraphAccepts S) (hReach : ReachedBy σ S T) :
-    Quiescent σ := by
-  induction hReach with
-  | empty S => exact quiescent_empty S
-  | step t _hprev hstep _ih => exact hstep.drained
+/-- **T5 (cascade convergence), untainted-fragment scope.** Every state reached
+    by the operational write path is cascade-quiescent. On this fragment writes
+    produce no deltas, so the outbox is trivially drained; the statement becomes
+    contentful (cascade drains a non-empty outbox in-transaction, §7.8) once the
+    derived write path is modeled. -/
+theorem cascade_converges {S : Schema} {T : Store} {σ : GraphState}
+    (hReach : ReachedByDirect σ S T) : Quiescent σ :=
+  (reachedByDirect_inv hReach).2.2
 
-/-- **T2a (invariant preservation).** Every reachable graph state satisfies the
-    I-series invariant and is cascade-quiescent (materialization = recompute from
-    scratch). The `Quiescent` conjunct is `cascade_converges`; the `Inv` conjunct
-    still needs the concrete write path (edge/bridge/reconcile maintenance) that
-    `WriteStep` abstracts — tracked `sorry`. -/
-theorem graph_reached_inv (S : Schema) (T : Store) (σ : GraphState)
-    (_hWF : WF S) (hStrat : Stratifiable S) (hAcc : GraphAccepts S)
-    (hReach : ReachedBy σ S T) :
-    Inv S σ ∧ Quiescent σ := by
-  refine ⟨?_, cascade_converges S T σ hStrat hAcc hReach⟩
-  sorry
+/-- **T2a (invariant preservation), untainted-fragment scope.** Every state
+    reached by the operational write path satisfies the I-series invariant and
+    is cascade-quiescent — by induction over the concrete writes
+    (`reachedByDirect_inv`), never postulated. The derived-relation half (residue
+    reconcile re-establishing I6 across reachability-affected keys) is the
+    remaining T2a content and arrives with the reconcile model. -/
+theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
+    (hReach : ReachedByDirect σ S T) : Inv S σ ∧ Quiescent σ :=
+  ⟨(reachedByDirect_inv hReach).1, (reachedByDirect_inv hReach).2.2⟩
 
 /-! ## T2b base case — the empty store / empty state
 
-The `ReachedBy.empty` case of `graph_correct`, discharged end-to-end and axiom-clean.
-Both sides are constantly `false`: the empty store grants nothing (`sem_empty_store`),
-and the empty index reaches nothing / persists no residue (`check_empty`). This is
-the genuine base of the eventual `graph_correct` induction — no `sorry`. -/
+Discharged end-to-end and axiom-clean, independent of any write-model scope.
+Both sides are constantly `false`: the empty store grants nothing
+(`sem_empty_store`), and the empty index reaches nothing / persists no residue
+(`check_empty`). Every operational closure starts here. -/
 
 /-- On the empty store every `Direct`/`TTU` leaf is empty and `computed` recurses into
     a uniformly-`false` `rec`, so structural evaluation of any expression is `false`. -/
@@ -113,21 +115,10 @@ theorem check_empty (S : Schema) (q : Query) :
   · exact probeNonDerived_empty S q
 
 /-- **T2b, base case.** On the empty index / empty store the graph read matches the
-    specification (`ReachedBy.empty`): both are constantly `false`. -/
+    specification: both are constantly `false`. The base of every operational
+    closure's read-correctness induction. -/
 theorem graph_correct_empty (S : Schema) (q : Query) :
     GraphModel.check (emptyState S) q = sem S [] q := by
   rw [check_empty, sem_empty_store]
-
-/-- **T2b (read correctness).** On any invariant-satisfying reachable state the
-    graph read answers exactly the specification. Tracked `sorry`: the completeness
-    argument (every semantic path decomposes as leading-hop · materialized-closure ·
-    trailing-hop for the ≤4 probes; the residue fold reproduces the star×boolean
-    table) resting on T4 + the T1 MemberSet lemmas. The `ReachedBy.empty` base case
-    is `graph_correct_empty` above. -/
-theorem graph_correct (S : Schema) (T : Store) (σ : GraphState) (q : Query)
-    (_hWF : WF S) (_hStrat : Stratifiable S) (_hAcc : GraphAccepts S)
-    (_hInv : Inv S σ) (_hReach : ReachedBy σ S T) :
-    GraphModel.check σ q = sem S T q := by
-  sorry
 
 end Zanzibar
