@@ -420,4 +420,104 @@ theorem directLeaf_elim {rec : Rec} {s : SubjectRef} {T : Store} {q : Query}
       · exact absurd h1 hgstar
     · exact Or.inr h
 
+/-! ## The userset-lifting lemma — the semantic heart of T2b
+
+Membership propagates through a userset: if `s ∈ s'` (the userset, as a node) and
+`s' ∈ v`, then `s ∈ v`. By fuel induction: every **direct match** of `s'` at a
+grant `g` (`g.subject = s'`) is absorbed by `s`'s `memberOfGranted` flow-through
+on the *same* grant — `g`'s userset node IS `s'`'s node, answered by `hmem` plus
+fuel monotonicity; and every **flow-through** of `s'` is a flow-through of `s` by
+the fuel IH. This is exactly why consecutive chain hops sharing a node
+(`objNode = subjNode`, the flow-through identity) compose into `sem` membership. -/
+
+theorem semAux_lift {S : Schema} {T : Store} {q : Query} {s s' : SubjectRef}
+    (hPD : PureDirect S) (hSF : StarFreeStore T)
+    (hs'n : s'.name ≠ STAR) (hs'p : s'.predicate ≠ BARE)
+    {f₀ : Nat} (hmem : semAux S s T q f₀ s'.type s'.name s'.predicate = true) :
+    ∀ (f : Nat) (ot on r : String),
+      semAux S s' T q f ot on r = true →
+      semAux S s T q (f + f₀) ot on r = true := by
+  intro f
+  induction f with
+  | zero => intro ot on r h; simp [semAux] at h
+  | succ f ih =>
+    intro ot on r h
+    have hgoalfuel : f + 1 + f₀ = (f + f₀) + 1 := by omega
+    rw [hgoalfuel, semAux, step]
+    rw [semAux, step] at h
+    cases hlk : S.lookup (ot, r) with
+    | none => rw [hlk] at h; simp at h
+    | some e =>
+      rw [hlk] at h
+      obtain ⟨rs, rfl⟩ := pureDirect_lookup hPD hlk
+      have h' : directLeaf (semAux S s' T q f) s' T q rs ot on r = true := h
+      show directLeaf (semAux S s T q (f + f₀)) s T q rs ot on r = true
+      rcases directLeaf_elim hSF hs'n h' with ⟨g, hg, hgs⟩ | hmog
+      · -- direct match of s' at g: absorb via s's flow-through on the same g
+        apply directLeaf_of_mog
+        refine mog_intro hg (by rw [hgs]; exact hs'p) (by rw [hgs]; exact hs'n) ?_
+        rw [hgs]
+        exact semAux_mono S (pureDirect_noExclAll hPD) s T q
+          (Nat.le_add_left f₀ f) _ _ _ hmem
+      · -- flow-through of s': the same grant flows for s by the fuel IH
+        obtain ⟨g, hg, hpb, hps, hrec⟩ := mog_elim hSF hmog
+        exact directLeaf_of_mog (mog_intro hg hpb hps (ih _ _ _ hrec))
+
+/-! ## Soundness: a membership chain is a `sem` membership -/
+
+/-- One stored tuple is a fuel-1 `sem` membership of its own object node (the
+    chain's base hop: a direct self-grant, no recursion). -/
+theorem semAux_one_of_tuple {S : Schema} {T : Store} {q : Query} {t : Tuple}
+    (hSV : StoreValid S T) (hSF : StarFreeStore T) (ht : t ∈ T) :
+    semAux S t.subject T q 1 t.object.type t.object.name t.relation = true := by
+  obtain ⟨rs, hlk, hrm⟩ := hSV t ht
+  rw [semAux, step]
+  rw [hlk]
+  show directLeaf (semAux S t.subject T q 0) t.subject T q rs
+    t.object.type t.object.name t.relation = true
+  refine directLeaf_grant_self ?_ rfl (hSF t ht).1
+  exact grantsOf_intro ht rfl rfl (matchingObjects_self _ (hSF t ht).2) hrm
+
+/-- **Soundness core.** A length-`n` membership chain from `subjNode s` to
+    `objNode ⟨ot, on⟩ r` is a `sem` membership at fuel `n` — by chain induction:
+    the base hop is a self-grant (`semAux_one_of_tuple`), and each further hop
+    lifts through its userset (`semAux_lift` with `f₀ = 1`). -/
+theorem semAux_of_chainN {S : Schema} {T : Store} {q : Query}
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T)
+    (hSF : StarFreeStore T) :
+    ∀ {n : Nat} {u v : NodeKey}, TupleChainN T n u v →
+      ∀ {s : SubjectRef}, s.name ≠ STAR → subjNode s = u →
+      ∀ {ot on r : String}, on ≠ STAR → objNode ⟨ot, on⟩ r = v →
+      semAux S s T q n ot on r = true := by
+  intro n u v hchain
+  induction hchain with
+  | single t ht =>
+    intro s hsn hsu ot on r hon hov
+    have hs' : s = t.subject := subjNode_inj hsn (hSF t ht).1 hsu
+    subst hs'
+    obtain ⟨hobj, hrel⟩ := objNode_inj hon (hSF t ht).2 hov
+    subst hrel
+    have h1 := semAux_one_of_tuple (q := q) hSV hSF ht
+    rw [← hobj] at h1
+    exact h1
+  | @cons t ht n v rest ih =>
+    intro s hsn hsu ot on r hon hov
+    have hs' : s = t.subject := subjNode_inj hsn (hSF t ht).1 hsu
+    subst hs'
+    -- the userset subject sitting at t's object node
+    have hs'n : (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).name ≠ STAR :=
+      (hSF t ht).2
+    have hs'p : (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).predicate ≠ BARE := by
+      obtain ⟨rs, hlk, _⟩ := hSV t ht
+      exact lookup_rel_ne_bare hWF hlk
+    have hsub : subjNode (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef) =
+        objNode t.object t.relation :=
+      (objNode_eq_subjNode (hSF t ht).2).symm
+    have hmem1 : semAux S t.subject T q 1
+        (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).type
+        (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).name
+        (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).predicate = true :=
+      semAux_one_of_tuple hSV hSF ht
+    exact semAux_lift hPD hSF hs'n hs'p hmem1 n ot on r (ih hs'n hsub hon hov)
+
 end Zanzibar
