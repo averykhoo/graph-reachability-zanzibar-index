@@ -24,6 +24,7 @@ import ZanzibarProofs.SetEngine.Correct
 import ZanzibarProofs.GraphIndex.Closure
 import ZanzibarProofs.GraphIndex.State
 import ZanzibarProofs.GraphIndex.Write
+import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6

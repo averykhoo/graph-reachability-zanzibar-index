@@ -520,4 +520,158 @@ theorem semAux_of_chainN {S : Schema} {T : Store} {q : Query}
       semAux_one_of_tuple hSV hSF ht
     exact semAux_lift hPD hSF hs'n hs'p hmem1 n ot on r (ih hs'n hsub hon hov)
 
+/-! ## Completeness: a `sem` membership is graph reachability -/
+
+/-- **Completeness core.** By fuel induction: a direct match contributes the
+    grant's own materialized edge (edge-completeness), and a flow-through
+    prepends the recursion's path via the `objNode = subjNode` identity. -/
+theorem nreaches_of_semAux {S : Schema} {T : Store} {q : Query} {σ : GraphState}
+    (hPD : PureDirect S) (hSF : StarFreeStore T)
+    (hEC : ∀ t ∈ T, (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges)
+    {s : SubjectRef} (hs : s.name ≠ STAR) :
+    ∀ (f : Nat) (ot on r : String), semAux S s T q f ot on r = true →
+      NReaches σ.edges (subjNode s) (objNode ⟨ot, on⟩ r) := by
+  intro f
+  induction f with
+  | zero => intro ot on r h; simp [semAux] at h
+  | succ f ih =>
+    intro ot on r h
+    rw [semAux, step] at h
+    cases hlk : S.lookup (ot, r) with
+    | none => rw [hlk] at h; simp at h
+    | some e =>
+      rw [hlk] at h
+      obtain ⟨rs, rfl⟩ := pureDirect_lookup hPD hlk
+      have h' : directLeaf (semAux S s T q f) s T q rs ot on r = true := h
+      rcases directLeaf_elim hSF hs h' with ⟨g, hg, hgs⟩ | hmog
+      · -- direct match: the grant's own edge
+        obtain ⟨hgT, hgrel, hgot, hgon, _⟩ := grantsOf_elim hg
+        have hedge := hEC g hgT
+        have hgon' : g.object.name = on := matchingObjects_elim hgon (hSF g hgT).2
+        have hobj : g.object = (⟨ot, on⟩ : ObjectRef) := by rw [← hgot, ← hgon']
+        rw [hobj, hgrel, hgs] at hedge
+        exact NReaches.edge hedge
+      · -- flow-through: recursion's path, extended by the grant's edge
+        obtain ⟨g, hg, hpb, hps, hrec⟩ := mog_elim hSF hmog
+        obtain ⟨hgT, hgrel, hgot, hgon, _⟩ := grantsOf_elim hg
+        have hmid := ih _ _ _ hrec
+        rw [objNode_eq_subjNode hps] at hmid
+        have hedge := hEC g hgT
+        have hgon' : g.object.name = on := matchingObjects_elim hgon (hSF g hgT).2
+        have hobj : g.object = (⟨ot, on⟩ : ObjectRef) := by rw [← hgot, ← hgon']
+        rw [hobj, hgrel] at hedge
+        exact hmid.tail hedge
+
+/-! ## Wildcard probes are dead on star-free data -/
+
+/-- Every edge endpoint of an admitted star-free state is a plain node. -/
+theorem admitted_edges_plain {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByAdmitted σ S T) (hSF : StarFreeStore T) :
+    ∀ e ∈ σ.edges, e.1.variant = Variant.plain ∧ e.2.variant = Variant.plain := by
+  intro e he
+  obtain ⟨t, htT, h1, h2⟩ :=
+    reachedByDirect_edge_sound (reachedByDirect_of_admitted h) e.1 e.2 he
+  constructor
+  · rw [h1, subjNode_plain (hSF t htT).1]
+  · rw [h2, objNode_plain (hSF t htT).2]
+
+/-- A path's source node is an edge source. -/
+theorem nreaches_source_plain {edges : List (NodeKey × NodeKey)}
+    (hpl : ∀ e ∈ edges, e.1.variant = Variant.plain) {u v : NodeKey}
+    (hr : NReaches edges u v) : u.variant = Variant.plain := by
+  cases hr with
+  | edge he => exact hpl _ he
+  | head he _ => exact hpl _ he
+
+/-- A path's target node is an edge target. -/
+theorem nreaches_target_plain {edges : List (NodeKey × NodeKey)}
+    (hpl : ∀ e ∈ edges, e.2.variant = Variant.plain) {u v : NodeKey}
+    (hr : NReaches edges u v) : v.variant = Variant.plain := by
+  induction hr with
+  | edge he => exact hpl _ he
+  | head _ _ ih => exact ih
+
+/-! ## T2b on the fragment, assembled -/
+
+/-- **T2b, star-free pure-direct fragment (a genuine end-to-end instance).**
+    On any state reached by admitted untainted writes of an admission-valid,
+    star-free store, the graph read answers exactly the specification, for every
+    star-free query. Soundness routes probe 1 through `reach ↔ NReaches`, trail
+    compression, `TupleChainN`, and the chain⇒`sem` induction (fuel fits
+    `fuelBound`); completeness routes `sem` back through `nreaches_of_semAux`
+    and `reach_complete`. The wildcard probes 2–4 are dead (star-free data
+    materializes no `wAny`/`wAll` endpoint). -/
+theorem graph_correct_direct (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hSF : StarFreeStore T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : ReachedByAdmitted σ S T) :
+    GraphModel.check σ q = sem S T q := by
+  have hInv : Inv S σ := (reachedByDirect_inv (reachedByDirect_of_admitted hReach)).1
+  have hcl := hInv.edgesClosed
+  have hplain := admitted_edges_plain hReach hSF
+  -- the read routes to the non-derived probe (pure-direct = untainted)
+  have hroute : GraphModel.check σ q = GraphModel.probeNonDerived σ q := by
+    unfold GraphModel.check
+    rw [hInv.schemaEq, isDerived_pureDirect hPD]
+    simp
+  -- the wildcard probes are dead
+  have hpAny : ∀ v, σ.reach (wAnyNode q.subject.shape) v = false := by
+    intro v
+    cases hcase : σ.reach (wAnyNode q.subject.shape) v with
+    | false => rfl
+    | true =>
+      exfalso
+      have hsrc := nreaches_source_plain (fun e he => (hplain e he).1) (reach_sound hcase)
+      simp [wAnyNode] at hsrc
+  have hpAll : ∀ u, σ.reach u (wAllNode q.object.type q.relation) = false := by
+    intro u
+    cases hcase : σ.reach u (wAllNode q.object.type q.relation) with
+    | false => rfl
+    | true =>
+      exfalso
+      have htgt := nreaches_target_plain (fun e he => (hplain e he).2) (reach_sound hcase)
+      simp [wAllNode] at htgt
+  have hprobe : GraphModel.probeNonDerived σ q =
+      σ.reach (subjNode q.subject) (objNode q.object q.relation) := by
+    unfold GraphModel.probeNonDerived
+    simp [hpAny, hpAll]
+  -- forward: a probe hit is a sem membership
+  have hfwd : σ.reach (subjNode q.subject) (objNode q.object q.relation) = true →
+      sem S T q = true := by
+    intro hr
+    obtain ⟨l, hl⟩ := trail_of_nreaches (reach_sound hr)
+    have hsub : ∀ x ∈ l, x ∈ σ.nodes := trail_verts_mem hcl l _ _ hl
+    obtain ⟨l', hl', hlen⟩ := trail_compress l.length l (le_refl _) hl hsub
+    have hchain := chainN_of_trail
+      (reachedByDirect_edge_sound (reachedByDirect_of_admitted hReach)) l' _ _ hl'
+    obtain ⟨t0, ht0⟩ := chainN_mem hchain
+    obtain ⟨rs0, hlk0, -⟩ := hSV t0 ht0
+    have hkeys := lookup_keys_nonempty hlk0
+    have hnodes := admitted_nodes_length hReach
+    have hfb : l'.length + 1 ≤ fuelBound S T := by
+      unfold fuelBound
+      have h2T : l'.length ≤ 2 * T.length := hnodes ▸ hlen
+      have hbase : T.length * 2 + 4 ≤ S.keys.length * (T.length * 2 + 4) := by
+        conv_lhs => rw [← Nat.one_mul (T.length * 2 + 4)]
+        exact Nat.mul_le_mul_right _ hkeys
+      omega
+    have hsem := semAux_of_chainN (q := q) hWF hPD hSV hSF hchain hqs rfl hqo rfl
+    unfold sem
+    exact semAux_mono S (pureDirect_noExclAll hPD) q.subject T q hfb _ _ _ hsem
+  -- backward: a sem membership is a probe hit
+  have hbwd : sem S T q = true →
+      σ.reach (subjNode q.subject) (objNode q.object q.relation) = true := by
+    intro hsem
+    unfold sem at hsem
+    have hnr := nreaches_of_semAux hPD hSF (admitted_edge_complete hReach) hqs
+      _ _ _ _ hsem
+    exact reach_complete hcl hnr
+  rw [hroute, hprobe]
+  cases hrch : σ.reach (subjNode q.subject) (objNode q.object q.relation) with
+  | true => exact (hfwd hrch).symm
+  | false =>
+    cases hsem : sem S T q with
+    | false => rfl
+    | true => exact absurd (hbwd hsem) (by simp [hrch])
+
 end Zanzibar

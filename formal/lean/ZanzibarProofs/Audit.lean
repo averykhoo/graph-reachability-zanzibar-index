@@ -3,6 +3,7 @@ import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
 import ZanzibarProofs.GraphIndex.Write
+import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -78,6 +79,18 @@ namespace Zanzibar
 #print axioms sem_empty_store
 #print axioms check_empty
 #print axioms graph_correct_empty
+-- Evaluator fuel monotonicity on exclusion-free schemas (Spec/FuelStable.lean).
+-- Expect only the three standard axioms (no `sorryAx`):
+#print axioms semAux_mono
+-- **T2b on the star-free pure-direct fragment (GraphIndex/DirectCorrect.lean)** —
+-- the semantic core (userset lifting, chain ⇔ sem) and the end-to-end fragment
+-- read-correctness theorem. All expect only the three standard axioms (no `sorryAx`):
+#print axioms semAux_lift
+#print axioms semAux_of_chainN
+#print axioms nreaches_of_semAux
+#print axioms admitted_edge_complete
+#print axioms isDerived_pureDirect
+#print axioms graph_correct_direct
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):
