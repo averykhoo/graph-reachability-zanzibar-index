@@ -191,21 +191,31 @@ write re-reaching an existing residue key breaks `negEdgeFree` until reconcile);
 hypothesis, because `writeDirect` drops cycle-forming edges while `sem`
 fuel-evaluates them.
 
-**Remaining (the single genuine multi-session core — a faithful WRITE model):**
-Both sorries now reduce to modeling *how one tuple write produces edges +
-reconciled residues*. `WriteStep` must realize edge/bridge addition + reconcile so
-that:
-- **T2a** (`graph_reached_inv`, `Inv` conjunct): the write re-establishes I6 for
+**T2b groundwork DONE (2026-07-10, axiom-clean) — read=`sem` scaffolded from both
+ends.** `GraphIndex/Correct.lean` + `State.lean` + `Write.lean`:
+- **Base case CLOSED:** `graph_correct_empty` (`check (emptyState S) q = sem S [] q`,
+  both `false`) — the `ReachedBy.empty` case, via `sem_empty_store` + `check_empty`.
+- **Read → reachability:** `probeNonDerived_iff` rewrites the executable ≤4-probe read
+  as a disjunction of four `NReaches` conditions (via `reach_iff_nreaches`).
+- **Reachability → chain:** `TupleChain` + `reachedByDirect_nreaches_chain`
+  (+`reachedByDirect_edge_sound`, `writeDirect_edges`) — an untainted graph path IS a
+  stored-tuple membership chain. This is T2b's reachability-half soundness, relational.
+
+**Remaining (the genuine multi-session cores):**
+- **T2b semantic core:** `TupleChain T u v ↔ sem`-membership — match the membership
+  chain against `directLeaf`/`memberOfGranted`'s userset recursion, the wildcard-node
+  promotion (`wAny`/`wAll` in `probeNonDerived_iff`), `instances`, `matchingObjects`.
+  Plus the converse edge-completeness (`TupleChain → NReaches`), which needs an
+  acyclic-*data* hypothesis (`writeDirect` drops cycle-forming edges while `sem`
+  fuel-evaluates them). The read/reachability plumbing is done; this is the last mile.
+- **T2b residue path:** for derived relations, residue = `sem` via `ext_normalize`/T1
+  MemberSet lemmas; bare-subject edge-hit ≡ full residue via `Inv.negEdgeFree`. Needs
+  the write model to know what the residues *are* (the reconcile output).
+- **T2a** (`graph_reached_inv`, `Inv` conjunct): the write must re-establish I6 for
   *all* reachability-affected keys with the semantically-correct residues.
-  `inv_putResidue` closes the per-key step; a delete-only reconcile-by-construction
-  is **unfaithful** (it changes residue meaning ⇒ breaks T2b), so the faithful delta
-  output must be modeled. Structural clauses (`nodeEnc`/`edgesClosed`/`acyclic`) are
-  already discharged by the `structInv_*` lemmas.
-- **T2b** (`graph_correct`): case analysis on subject kind. The reachability half of
-  the ≤4-probe decomposition is now `reach_iff_nreaches`; the residue half (residue =
-  `sem` via `ext_normalize`/T1 MemberSet lemmas; bare-subject edge-hit ≡ full residue
-  via `Inv.negEdgeFree`) still needs the write model to know what the residues *are*.
-  (§3.2 wildcard-spec: leading-hop · materialized-closure · trailing-hop.)
+  `inv_putResidue` closes the per-key step; a delete-only reconcile-by-construction is
+  **unfaithful** (changes residue meaning ⇒ breaks T2b), so the faithful delta output
+  must be modeled. Structural clauses already discharged by the `structInv_*` lemmas.
 
 ---
 
@@ -220,10 +230,12 @@ that:
 4. **T2/T5** — graph model CONCRETIZED; **T5 `cascade_converges` ✅ DONE**; the
    **reachability layer ✅ DONE** (2026-07-10: `reach ↔ NReaches` bridge, cycle-
    rejection, structural write-primitive preservation, per-key `inv_putResidue`).
-   Remaining for both T2a and T2b: **the faithful `WriteStep` write/reconcile model**
-   (edge/bridge addition + the delta processor's residue output). Once that lands, T2a
-   composes the `structInv_*`/`inv_putResidue` lemmas over the ops; T2b combines
-   `reach_iff_nreaches` (reachability half) with the residue = `sem` algebra.
+   **T2b groundwork now DONE** (base case + `probeNonDerived_iff` + `TupleChain`/
+   `reachedByDirect_nreaches_chain`, all axiom-clean). Remaining: the **`TupleChain ↔
+   sem` semantic core** (chain = `memberOfGranted` recursion; + acyclic-data converse)
+   and, for T2a and the derived T2b path, the **faithful reconcile model** (residue
+   output). Once reconcile lands, T2a composes the `structInv_*`/`inv_putResidue`
+   lemmas; the derived T2b path combines it with the residue = `sem` algebra.
 5. **T0a** (decide (a) vs (b) first) — the only remaining `Spec/` sorry; ingredient 1
    (`evalE_mono`) proved.
 

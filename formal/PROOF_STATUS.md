@@ -54,6 +54,54 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (T2b groundwork — read=sem base case + soundness scaffold)
+
+User: "keep going with the proof part T2; commit and push when ready." Scope
+continues the deliberate honest DEFER: no full T2b close (the `TupleChain ↔ sem`
+core is multi-session), but **four green+pushed axiom-clean increments building the
+read=`sem` correspondence from both ends.** `sorry` count held at 3; `verify.sh`
+green throughout (build + 60 conformance + audit; audit now tracks all seven new
+lemmas, no `sorryAx`).
+
+**T2b base case CLOSED end-to-end (`GraphIndex/Correct.lean`):**
+- `evalE_empty_store` / `semAux_empty_store` / **`sem_empty_store`** — `sem S [] q
+  = false` (empty store grants nothing; `computed` recurses into a uniformly-`false`
+  `rec`, by fuel induction).
+- `probeNonDerived_empty` / `probeDerived_empty` / **`check_empty`** — the empty
+  index reaches nothing and persists no residue, so `check (emptyState S) q = false`.
+- **`graph_correct_empty`** : `check (emptyState S) q = sem S [] q`. This is exactly
+  the `ReachedBy.empty` case of `graph_correct` — the genuine base of its eventual
+  induction, no `sorry`.
+
+**Read lifted into the relational world (`GraphIndex/State.lean`):**
+- **`probeNonDerived_iff`** — on an endpoint-closed state the executable ≤4-probe
+  read equals the disjunction of the four `NReaches` conditions (subject/object each
+  literal or promoted to its wildcard node), via `reach_iff_nreaches`. Moves the read
+  off the fixed-fuel probe `σ.reach` into fuel-free `NReaches`, where the semantic
+  correspondence will be argued.
+
+**Reachability→`sem` soundness scaffold (`GraphIndex/Write.lean`):**
+- **`writeDirect_edges`** — an accepted write prepends exactly the one materialized
+  edge `subjNode t.subject → objNode t.object t.relation`; a rejected write is the
+  identity on edges.
+- **`reachedByDirect_edge_sound`** — every edge of a `ReachedByDirect` state
+  materializes some stored tuple (unconditional; induction over the write path).
+- **`TupleChain`** + **`reachedByDirect_nreaches_chain`** — a graph path in the
+  untainted fragment IS a stored-tuple membership chain (consecutive hops share the
+  intermediate node = userset flow-through). Every `NReaches` path is a `TupleChain`.
+  This is the soundness direction of T2b's reachability half, fully relational.
+
+**The remaining T2b core, now sharply isolated:** the semantic content is
+**`TupleChain T u v ↔ sem`-membership** — matching the membership chain against
+`directLeaf`/`memberOfGranted`'s userset recursion, the wildcard nodes (`wAny`/`wAll`
+promotion in `probeNonDerived_iff`), `instances`, and `matchingObjects`. Plus the
+converse edge-completeness (`TupleChain → NReaches`) which needs an acyclic-*data*
+hypothesis (`writeDirect` drops cycle-forming edges while `sem` fuel-evaluates them —
+the T2b subtlety flagged last session). The read/reachability plumbing is now done
+on both ends; what is left is the genuine `chain = recursion` semantic core. The
+derived (residue) path of T2b and the full-generality `graph_reached_inv` `Inv`
+conjunct (derived reconcile) remain the other deferred halves, unchanged.
+
 ## Session 2026-07-10 (T2a write model — untainted direct fragment)
 
 User: "clear T2 as much as possible; commit often, push when done." Scope call
@@ -399,6 +447,11 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T2a write model (untainted) | `writeDirect`, `structInv_writeDirect`, `inv_writeDirect` | **proved** | Write.lean; concrete guarded edge write preserves the whole `Inv` on the residue-free fragment; axiom-clean |
 | T2a untainted write-closure | `ReachedByDirect`, `reachedByDirect_inv`, `reachedBy_of_direct` | **proved** | Write.lean; T2a's `Inv` conjunct honestly proved for the untainted fragment; embeds in abstract `ReachedBy` |
 | T2a write realizes spec | `writeDirect_writeStep`, `quiescent_writeDirect`, `residueEmpty_writeDirect` | **proved** | Write.lean; connects concrete op to the `ReachedBy` closure |
+| T2b base case | `graph_correct_empty` | **proved** | Correct.lean; `check (emptyState S) q = sem S [] q` — the `ReachedBy.empty` case, axiom-clean |
+| T2b empty-store spec | `sem_empty_store`, `semAux_empty_store`, `evalE_empty_store` | **proved** | Correct.lean; `sem S [] q = false` by fuel induction |
+| T2b empty read | `check_empty`, `probeNonDerived_empty`, `probeDerived_empty` | **proved** | Correct.lean; empty index answers `false` (no edges, no residue) |
+| T2b read→reachability | `probeNonDerived_iff` | **proved** | State.lean; ≤4-probe read = disjunction of four `NReaches` conditions (endpoint-closed), via `reach_iff_nreaches` |
+| T2b reachability→chain | `TupleChain`, `reachedByDirect_nreaches_chain`, `reachedByDirect_edge_sound`, `writeDirect_edges` | **proved** | Write.lean; untainted graph path = stored-tuple membership chain; edges trace to tuples |
 
 ## `sorry` ledger
 
@@ -415,7 +468,14 @@ concrete definitions; `cascade_converges` (T5) is closed off the concrete `Reach
 fragment (`writeDirect` + preservation + `ReachedByDirect`/`reachedByDirect_inv`); T2a's
 `Inv` conjunct is proved honestly for the residue-free fragment. The abstract
 `graph_reached_inv` sorry remains (its generality covers derived relations, which need
-the reconcile/residue-materialization half — the isolated remaining T2a content).
+the reconcile/residue-materialization half — the isolated remaining T2a content). Now
+also carries the reachability→`sem` soundness scaffold (`writeDirect_edges`,
+`reachedByDirect_edge_sound`, `TupleChain`, `reachedByDirect_nreaches_chain`).
+
+**`GraphIndex/Correct.lean`'s T2b base case is `sorry`-free** — `graph_correct_empty`
+(`= sem S [] q`, both `false`) discharges the `ReachedBy.empty` case end-to-end. The
+two full-generality `sorry`s (`graph_reached_inv`'s `Inv` conjunct, `graph_correct`)
+remain; the T2b core left is `TupleChain ↔ sem`-membership (see the session entry).
 
 **`SetEngine/Correct.lean` is now `sorry`-free** — `setEngine_correct` (T1) proved and
 axiom-clean; the `opaque SetEngineModel.check` is replaced by a concrete expand model.
