@@ -1,4 +1,4 @@
-# ROADMAP — the staged path to the verified model (1 `sorry` left, was 9)
+# ROADMAP — the staged path to the verified model (0 `sorry`s left, was 9)
 
 The plan of record toward the END GOAL: **a formally verified Zanzibar/OpenFGA
 model tied to the Python implementation.** Read alongside `PROOF_STATUS.md`
@@ -18,8 +18,12 @@ model tied to the Python implementation.** Read alongside `PROOF_STATUS.md`
    (`graph_correct_direct`, ✅ proved end-to-end).
 4. **T3/T6 (equivalence + security): ✅ proved at the current T2 scope**; they
    are one-line corollaries that widen automatically with each T2 stage.
-5. **T0a (spec well-definedness): the single remaining `sorry`** — purely
-   spec-side, independent of the graph work.
+5. **T0a (spec well-definedness): ✅ DONE (2026-07-10)** — found FALSE as
+   stated (machine-checked, `Spec/Counterexample.lean`), restated over
+   `StoreDeclared` (the documented write-validity precondition), then fully
+   proved: confinement (`Spec/Confine.lean`) + taint-fixpoint / untainted
+   counting (`Spec/Stabilize.lean`) + strict-Kahn rank induction
+   (`Spec/WellDef.lean`). Axiom-clean.
 6. **Phase 6 hardening** closes the loop: sorries = 0, axiom audit as a hard
    gate, and a **graph-model conformance extension** (drive the Lean
    `writeDirect`/`check` model against the Python graph index over the fragment
@@ -31,7 +35,9 @@ restated) T2a/T2b/T3/T5/T6. ⚠ 2 sorries were **DELETED as false-as-stated, not
 proved** (2026-07-10, user-directed — see the FINDING below): the abstract
 `graph_correct` / `graph_reached_inv` quantified over a junk-admitting closure.
 Their obligations are NOT gone — they return as the full-scope restatements in
-stage W4 below. Remaining tracked `sorry`: `semAux_fuel_stable_step` (T0a).
+stage W4 below. The last tracked `sorry` (`semAux_fuel_stable_step`, T0a) was
+closed 2026-07-10 — **the tree is sorry-free**; what remains is scope widening
+(W1–W4) and Phase 6 hardening.
 
 ## The staged T2 plan (write-model growth → theorem scope growth)
 
@@ -65,8 +71,7 @@ and re-proves/widens the same named theorems. Every stage must keep
   `graph_reached_inv` / `backend_equivalence` / T6a (with real exclusion
   content) / T6b over it. This discharges the obligations whose false
   predecessors were deleted.
-- **T0a** (independent, any time): the per-rank stabilization argument — see
-  its section below.
+- **T0a**: ✅ DONE (2026-07-10) — see its section below.
 - **Phase 6**: sorry gate to 0, audit as hard gate, graph-model conformance
   extension (above), final review doc.
 
@@ -148,7 +153,22 @@ deletion is the exact inverse in `(ℤ,+)`.
 
 ---
 
-## T0a — `semAux_fuel_stable_step` (subtle — Gemini's proof is WRONG here)
+## T0a — `semAux_fuel_stable_step` — ✅ DONE (2026-07-10)
+
+**Closed and axiom-clean**, in the same session as the falseness finding. The
+executed proof follows the "real option (a)" below, upgraded by two structural
+moves: (i) the confinement obligation became the reusable `evalE_congr`/
+`step_congr` layer (`Spec/Confine.lean`), with `StoreDeclared` exactly
+discharging the ttu case; (ii) the untainted monotone convergence became a
+generic bounded-chain lemma (`chain_stabilizes`, used for BOTH the taint
+fixpoint and the evaluation true-set), with the relative monotonicity obtained
+by MASKING `rec` outside the consulted space and reusing the global
+`evalE_mono` — no second leaf induction. The tainted phase is a strong
+induction over Kahn layers via the new strict topology (`kahn_topo_strict`) and
+coverage lemmas; the arithmetic `|atomsU| + 1 + |L| ≤ fuelBound` closes it.
+See PROOF_STATUS "T0a CLOSED" for the lemma map. Original notes retained below.
+
+### (original notes)
 
 **⚠ STATEMENT CORRECTED (2026-07-10): the pre-`StoreDeclared` statement is FALSE**
 — machine-checked refutation in `Spec/Counterexample.lean` (an admission-invalid
@@ -377,8 +397,8 @@ Historical single-sorry order (all ✅ except T0a):
    (`graph_correct_direct`, userset lifting + chain⇔`sem` both directions)**;
    abstract-closure falsehood found, layer deleted, T2a/T2b/T3/T5/T6 restated
    operationally at fragment scope, all proved.
-5. **T0a** — the only remaining `sorry`; ingredients 1 (`evalE_mono`) and the
-   evaluator fuel-monotonicity (`semAux_mono`) proved.
+5. ~~**T0a**~~ ✅ DONE (2026-07-10): restated over `StoreDeclared` + fully
+   proved (confinement / untainted counting / Kahn rank induction).
 
 ---
 

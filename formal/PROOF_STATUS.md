@@ -54,6 +54,49 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (T0a CLOSED — sorry count 0)
+
+Same session as the falseness finding below: after restating over
+`StoreDeclared`, the corrected theorem was **fully proved** — the last tracked
+`sorry` is discharged, axiom-clean (`[propext, Classical.choice, Quot.sound]`,
+audited). `verify.sh` green (build + 60 conformance + audit; **sorries = 0**).
+
+**The proof architecture (4 green commits, each layer reusable):**
+
+1. **Confinement (`Spec/Confine.lean`)** — `evalE_congr`/`step_congr`: two `rec`s
+   agreeing on the consulted atom space (`exprRefs` keys × own-name ∪
+   `storedNames`) evaluate identically. `directLeaf`'s certificate comes from
+   `grantsOf`'s restriction filter (unconditional); `ttuLeaf`'s is exactly
+   `StoreDeclared`. Undeclared keys are constantly `false` (`semAux_undeclared`).
+2. **Untainted phase (`Spec/Stabilize.lean`)** —
+   - `chain_stabilizes`: generic monotone + deterministic + `N`-bounded `Finset`
+     chains from `∅` are stable from `N` on (used twice).
+   - `untainted_closed`: `taintedKeys` is a genuine `taintStep` fixpoint (via the
+     chain lemma on the taint iteration!), so untainted declared keys are
+     boolean-free and reference only untainted keys.
+   - `semAux_mono_untainted`: relative fuel-monotonicity at untainted relevant
+     atoms — proved by **masking** `rec` outside the consulted space
+     (`evalE_congr` says evaluation can't tell) and reusing the *global*
+     `evalE_mono`; no second leaf induction. This trick halved the file.
+   - `untainted_stable`: the true-set on `atomsU = untaintedKeys × relevantNames`
+     grows monotonically, is deterministic (`step_congr`), hence stable from
+     `N = |atomsU|` on.
+3. **Kahn interface (`Spec/WellDef.lean`)** — `kahn_topo_strict` (dep edges point
+   to STRICTLY earlier layers; a within-layer edge contradicts readiness),
+   `stratify_covers` / `stratify_layers_tainted` (layers = exactly the tainted
+   keys), `stratify_length`.
+4. **Assembly (`Spec/WellDef.lean`)** — `layer_stable` (strong induction on the
+   layer index: a layer-`i` key consults only undeclared / untainted / strictly
+   lower layers, so it stabilizes at `N + 1 + i`), `all_stable` (every relevant
+   atom stable from `N + 1 + |L|`), and the arithmetic
+   `N + 1 + |L| ≤ K(2|T|+1) + 1 + K ≤ K(2|T|+4) = fuelBound` (needs `K ≥ 1`;
+   `K = 0` is the everything-undeclared case, trivially stable).
+
+**Where each hypothesis is load-bearing:** `hDecl` in `step_congr`'s ttu case
+(without it the consulted space leaves `exprRefs` — the counterexample below);
+`hStrat` in coverage + strict topology (without it a tainted key has no layer /
+no strictly-decreasing rank).
+
 ## Session 2026-07-10 (T0a FOUND FALSE AS STATED — restated over `StoreDeclared`)
 
 Attacking the last `sorry` (`semAux_fuel_stable_step`), the first move was to
@@ -541,15 +584,18 @@ concrete models built first (see ROADMAP).
 
 ## Current phase & resume point
 
+- **SORRY COUNT = 0 (2026-07-10).** Every stated theorem is proved at its
+  documented scope; the remaining work is SCOPE WIDENING (ROADMAP W1–W4: wildcard
+  bridges, rule routing, derived reconcile, full-scope restatement) plus Phase 6
+  hardening (audit as hard gate, graph-model conformance extension).
 - **Phase 1 DONE** (Lean skeleton + all T0–T6 stated; `lake build` green with 9
   `sorry`s). **Phase 2 CORE DONE ahead of schedule**: conformance CLI (`zcli`) live;
   spec-vs-oracle answer conformance green (6/6 grid comparisons). No adjudication
   events — the executable `sem` matches the reference oracle.
 - **User is reviewing `SEMANTICS.md` async** ("keep going, I'll review async"); A1 &
   A4 accepted. Continue proving; revisit if the review changes the spec.
-- **Resume point → Phase 3:** replace the `opaque SetEngineModel.check`
-  (`SetEngine/Eval.lean`) with a concrete MemberSet-expand model, prove T1
-  (`setEngine_correct`), and extend conformance to compare the set-engine MODEL.
+- **Resume point → ROADMAP W1** (wildcard bridges in the graph write model) or
+  Phase 6 hardening; T0a is closed, nothing is blocked on the spec side.
 - **Commands:** `cd formal/lean && lake build` (lib) / `lake build zcli` (CLI);
   `python -m pytest formal/conformance/ -q` (needs `zcli` built).
 
@@ -575,8 +621,12 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 | Theorem | Lean name | Status | Note |
 |---------|-----------|--------|------|
-| T0a spec well-defined (fuel-stable) | `sem_fuel_stable` | **proved-mod-deps** | proved from `semAux_fuel_stable_step` by `Nat.le_induction` |
-| T0a pigeonhole core | `semAux_fuel_stable_step` | stated (sorry) | one-more-fuel-is-a-no-op above the bound |
+| T0a spec well-defined (fuel-stable) | `sem_fuel_stable` | **proved** | axiom-clean; RESTATED over `StoreDeclared` (original FALSE — `Spec/Counterexample.lean`), then closed via confinement + untainted counting + Kahn rank induction |
+| T0a stabilization core | `semAux_fuel_stable_step` | **proved** | `layer_stable`/`all_stable` assembly; arithmetic fits `fuelBound` |
+| T0a confinement | `evalE_congr`, `step_congr`, `semAux_undeclared` | **proved** | Confine.lean; consulted atoms ⊆ `exprRefs × relevantNames` (ttu case = `StoreDeclared`) |
+| T0a untainted phase | `chain_stabilizes`, `untainted_closed`, `semAux_mono_untainted`, `untainted_stable` | **proved** | Stabilize.lean; taint fixpoint + masked monotonicity + counting |
+| T0a Kahn interface | `kahn_topo_strict`, `kahn_covers`, `kahn_layers_sub`, `kahn_length`, `stratify_covers`/`_layers_tainted`/`_length`/`_topo_strict` | **proved** | WellDef.lean; strict layering + coverage |
+| T0a refutation record | `T0aCounter.oscillates`, `T0aCounter.fuel_stable_step_false` | **proved** | Counterexample.lean; the pre-`StoreDeclared` statement is FALSE (period-4 oscillation) |
 | T0b stratify soundness | `stratify_none_iff_cycle`, `stratify_topological` | **proved** | Kahn correctness; axiom-clean. Pigeonhole `stuck_cycle` + fuel invariant `kahn_none_stuck` + cycle-persistence `kahn_cycle_none` + topo invariant `kahn_topo` |
 | T0b pigeonhole core | `stuck_cycle` | **proved** | stuck set (no ready nodes) ⇒ cycle, via orbit + `Finset` pigeonhole |
 | T0b Kahn helpers | `mem_readyNodes_iff`, `kahn_succ`, `kahn_none_stuck`, `kahn_cycle_none`, `kahn_topo`, `depEdges_mem` | **proved** | reusable Kahn/`readyNodes` API (WellDef.lean) |
@@ -626,8 +676,11 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 ## `sorry` ledger
 
-**Count = 1** (was 9). Location:
-- `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`) (1)
+**Count = 0** (was 9). `semAux_fuel_stable_step` — the last one — was first
+RESTATED (the original was FALSE over arbitrary stores; `StoreDeclared` added,
+counterexample machine-checked in `Spec/Counterexample.lean`) and then PROVED
+(2026-07-10; see the session entry). The `verify.sh` sorry inventory reports 0;
+`sem_fuel_stable` is axiom-clean in the audit.
 
 **⚠ HONESTY NOTE on the 3 → 1 drop (2026-07-10):** the two `GraphIndex/Correct.
 lean` sorries (`graph_correct`, `graph_reached_inv`'s `Inv` conjunct) were

@@ -1,6 +1,7 @@
 import ZanzibarProofs.Spec.Semantics
 import ZanzibarProofs.Spec.Stratify
 import ZanzibarProofs.Spec.Confine
+import ZanzibarProofs.Spec.Stabilize
 import Mathlib.Data.Finset.Card
 import Mathlib.Combinatorics.Pigeonhole
 import Mathlib.Logic.Function.Iterate
@@ -32,44 +33,10 @@ inductive Reaches (edges : List (Key × Key)) : Key → Key → Prop
 /-- A derived-dependency cycle exists. -/
 def HasDerivedCycle (S : Schema) : Prop := ∃ k, Reaches (depEdges S) k k
 
-/-! ### T0a — fuel stability -/
+/-! ### T0b — Kahn correctness helper lemmas
 
-/-- **The stabilization core.** At or above `fuelBound`, one more unit of fuel does
-    not change the answer. The convergence argument: on a `StoreDeclared` store every
-    `rec`-consultation is confined to `exprRefs × relevantNames` (`Spec/Confine.lean`),
-    so the untainted (boolean-free) fragment is a monotone iteration on a finite atom
-    space and stabilizes by its size, and each Kahn stratum of tainted keys stabilizes
-    one fuel step after its (strictly lower) inputs; the total fits under the
-    multiplicative `fuelBound`.
-
-    ⚠ **The `hDecl` hypothesis is NOT optional** — without it the statement is FALSE
-    (machine-checked refutation: `Spec/Counterexample.lean`): an admission-invalid
-    tupleset tuple lets `ttuLeaf` consult a key `depEdges` never sees, closing an
-    exclusion cycle that stratification misses, and `semAux` oscillates forever.
-    `hDecl` holds for every store the composed system can hold (`SEMANTICS.md` §8
-    "write-valid tuples"; the Python admission gate enforces it). -/
-theorem semAux_fuel_stable_step (S : Schema) (T : Store) (q : Query)
-    (_hStrat : Stratifiable S) (_hDecl : StoreDeclared S T) :
-    ∀ f, fuelBound S T ≤ f →
-      semAux S q.subject T q f q.object.type q.object.name q.relation
-        = semAux S q.subject T q (f + 1) q.object.type q.object.name q.relation := by
-  sorry
-
-/-- **T0a.** `sem` is well-defined: fuel above the bound does not change the answer
-    (stratifiable schema, admission-valid store — see `semAux_fuel_stable_step` for
-    why `hDecl` is required). PROVED from `semAux_fuel_stable_step` by induction from
-    the bound. -/
-theorem sem_fuel_stable (S : Schema) (T : Store) (q : Query)
-    (hStrat : Stratifiable S) (hDecl : StoreDeclared S T) :
-    ∀ f, fuelBound S T ≤ f →
-      semAux S q.subject T q f q.object.type q.object.name q.relation = sem S T q := by
-  intro f hf
-  induction f, hf using Nat.le_induction with
-  | base => rfl
-  | succ n hn ih =>
-      rw [← semAux_fuel_stable_step S T q hStrat hDecl n hn]; exact ih
-
-/-! ### T0b — Kahn correctness helper lemmas -/
+(The T0a theorems `semAux_fuel_stable_step` / `sem_fuel_stable` live at the END of
+this file — their proofs consume the Kahn interface below plus `Spec/Stabilize`.) -/
 
 /-- Membership in `readyNodes`: `n` is ready iff it's remaining and every out-edge
     from `n` leaves the remaining set. -/
@@ -674,5 +641,152 @@ theorem stratify_topological (S : Schema) (L : List (List Key)) (h : stratify S 
     · intro a b _ ha; simp at ha
   intro e he i j hei hej
   exact htopo e.1 e.2 i j he hei hej
+
+/-! ### T0a — fuel stability (the assembly)
+
+The convergence argument, assembled from `Spec/Confine` (consultation
+confinement), `Spec/Stabilize` (taint fixpoint + untainted counting
+stabilization), and the Kahn interface above:
+
+- undeclared keys are constantly `false`;
+- untainted declared atoms (relevant names) are stable from `N = |atomsU|` on;
+- a tainted key in Kahn layer `i` consults only undeclared keys, untainted keys,
+  and tainted keys in STRICTLY earlier layers (`stratify_topo_strict` — this is
+  where `StoreDeclared` is load-bearing, via `step_congr`'s ttu case), so layer
+  `i` stabilizes at `N + 1 + i`;
+- everything is stable from `N + 1 + |L| ≤ fuelBound` on. -/
+
+/-- Layer-indexed stabilization: a tainted key in layer `i` is fuel-stable at
+    relevant names from `N + 1 + i` on. -/
+theorem layer_stable (S : Schema) (T : Store) (q : Query) (hDecl : StoreDeclared S T)
+    {L : List (List Key)} (hL : stratify S = some L) :
+    ∀ i, ∀ k ∈ L.getD i [], ∀ m ∈ relevantNames T q,
+      ∀ f, (atomsU S T q).card + 1 + i ≤ f →
+      semAux S q.subject T q f k.1 m k.2
+        = semAux S q.subject T q (f + 1) k.1 m k.2 := by
+  intro i
+  induction i using Nat.strong_induction_on with
+  | _ i ih =>
+    intro k hk m hm f hf
+    obtain ⟨f', rfl⟩ : ∃ f', f = f' + 1 := ⟨f - 1, by omega⟩
+    show step S q.subject T q (semAux S q.subject T q f') k.1 m k.2
+      = step S q.subject T q (semAux S q.subject T q (f' + 1)) k.1 m k.2
+    refine step_congr S T q hDecl q.subject k.1 m k.2 (fun t' m' r' hk' hm' => ?_)
+    have hm'' : m' ∈ relevantNames T q := by
+      rcases hm' with rfl | hs
+      · exact hm
+      · exact List.mem_cons_of_mem _ hs
+    by_cases hdecl' : (t', r') ∈ S.keys
+    · by_cases htaint : (t', r') ∈ taintedKeys S
+      · -- tainted reference: a dependency edge into a strictly earlier layer
+        have hktaint : k ∈ taintedKeys S := stratify_layers_tainted S hL i k hk
+        have hedge : (k, (t', r')) ∈ depEdges S := by
+          unfold depEdges
+          refine List.mem_flatMap.mpr ⟨k, hktaint, ?_⟩
+          refine List.mem_filterMap.mpr ⟨(t', r'), hk', ?_⟩
+          have hc : ((taintedKeys S).contains (t', r')) = true := by
+            rw [List.contains_eq_mem, decide_eq_true_eq]
+            exact htaint
+          rw [if_pos hc]
+        obtain ⟨j, _, hbj⟩ := stratify_covers S hL (t', r') htaint
+        have hji : j < i := stratify_topo_strict S hL k (t', r') i j hedge hk hbj
+        exact ih j hji (t', r') hbj m' hm'' f' (by omega)
+      · exact untainted_stable S T q hDecl f' (by omega) t' r' hdecl' htaint m' hm''
+    · rw [semAux_undeclared S q.subject T q hdecl' f' m',
+        semAux_undeclared S q.subject T q hdecl' (f' + 1) m']
+
+/-- Every atom with a relevant name is fuel-stable from `N + 1 + |L|` on. -/
+theorem all_stable (S : Schema) (T : Store) (q : Query) (hDecl : StoreDeclared S T)
+    {L : List (List Key)} (hL : stratify S = some L) :
+    ∀ f, (atomsU S T q).card + 1 + L.length ≤ f →
+      ∀ t r m, m ∈ relevantNames T q →
+      semAux S q.subject T q f t m r = semAux S q.subject T q (f + 1) t m r := by
+  intro f hf t r m hm
+  by_cases hdecl : (t, r) ∈ S.keys
+  · by_cases htaint : (t, r) ∈ taintedKeys S
+    · obtain ⟨i, hi, hbi⟩ := stratify_covers S hL (t, r) htaint
+      exact layer_stable S T q hDecl hL i (t, r) hbi m hm f (by omega)
+    · exact untainted_stable S T q hDecl f (by omega) t r hdecl htaint m hm
+  · rw [semAux_undeclared S q.subject T q hdecl f m,
+      semAux_undeclared S q.subject T q hdecl (f + 1) m]
+
+theorem storedNames_length (T : Store) : (storedNames T).length = 2 * T.length := by
+  induction T with
+  | nil => rfl
+  | cons t rest ih =>
+      unfold storedNames at ih ⊢
+      simp only [List.flatMap_cons, List.length_append, ih, List.length_cons,
+        List.length_nil]
+      omega
+
+theorem taintedKeys_length_le (S : Schema) :
+    (taintedKeys S).length ≤ S.keys.length := by
+  show (taintChain S S.keys.length).length ≤ S.keys.length
+  cases hK : S.keys.length with
+  | zero => simp [taintChain, iterate]
+  | succ n =>
+      rw [taintChain_succ]
+      calc (taintStep S (taintChain S n)).length
+          ≤ S.keys.length := List.length_filter_le _ _
+        _ = n + 1 := hK
+
+/-- **The stabilization core.** At or above `fuelBound`, one more unit of fuel does
+    not change the answer.
+
+    ⚠ **The `hDecl` hypothesis is NOT optional** — without it the statement is FALSE
+    (machine-checked refutation: `Spec/Counterexample.lean`): an admission-invalid
+    tupleset tuple lets `ttuLeaf` consult a key `depEdges` never sees, closing an
+    exclusion cycle that stratification misses, and `semAux` oscillates forever.
+    `hDecl` holds for every store the composed system can hold (`SEMANTICS.md` §8
+    "write-valid tuples"; the Python admission gate enforces it). -/
+theorem semAux_fuel_stable_step (S : Schema) (T : Store) (q : Query)
+    (hStrat : Stratifiable S) (hDecl : StoreDeclared S T) :
+    ∀ f, fuelBound S T ≤ f →
+      semAux S q.subject T q f q.object.type q.object.name q.relation
+        = semAux S q.subject T q (f + 1) q.object.type q.object.name q.relation := by
+  intro f hf
+  by_cases hK : S.keys = []
+  · have hout : (q.object.type, q.relation) ∉ S.keys := by rw [hK]; simp
+    rw [semAux_undeclared S q.subject T q hout f q.object.name,
+        semAux_undeclared S q.subject T q hout (f + 1) q.object.name]
+  · obtain ⟨L, hL⟩ := Option.isSome_iff_exists.mp hStrat
+    refine all_stable S T q hDecl hL f ?_ _ _ _ (List.mem_cons_self ..)
+    -- arithmetic: N + 1 + |L| ≤ K·(2|T|+1) + 1 + K ≤ K·(2|T|+4) = fuelBound ≤ f
+    have hN : (atomsU S T q).card ≤ S.keys.length * (T.length * 2 + 1) := by
+      unfold atomsU
+      rw [Finset.card_product]
+      refine Nat.mul_le_mul ?_ ?_
+      · exact le_trans (Finset.card_le_card Finset.sdiff_subset)
+          (List.toFinset_card_le S.keys)
+      · have h1 := List.toFinset_card_le (relevantNames T q)
+        have h2 : (relevantNames T q).length = T.length * 2 + 1 := by
+          unfold relevantNames
+          rw [List.length_cons, storedNames_length]
+          omega
+        omega
+    have hLlen : L.length ≤ S.keys.length :=
+      le_trans (stratify_length S hL) (taintedKeys_length_le S)
+    have hK1 : 1 ≤ S.keys.length := by
+      cases hKs : S.keys with
+      | nil => exact absurd hKs hK
+      | cons a t => simp
+    have hmul : S.keys.length * (T.length * 2 + 1) + S.keys.length * 3
+        = S.keys.length * (T.length * 2 + 4) := by
+      rw [← Nat.mul_add]
+    unfold fuelBound at hf
+    omega
+
+/-- **T0a.** `sem` is well-defined: fuel above the bound does not change the answer
+    (stratifiable schema, admission-valid store — see `semAux_fuel_stable_step` for
+    why `hDecl` is required). -/
+theorem sem_fuel_stable (S : Schema) (T : Store) (q : Query)
+    (hStrat : Stratifiable S) (hDecl : StoreDeclared S T) :
+    ∀ f, fuelBound S T ≤ f →
+      semAux S q.subject T q f q.object.type q.object.name q.relation = sem S T q := by
+  intro f hf
+  induction f, hf using Nat.le_induction with
+  | base => rfl
+  | succ n hn ih =>
+      rw [← semAux_fuel_stable_step S T q hStrat hDecl n hn]; exact ih
 
 end Zanzibar

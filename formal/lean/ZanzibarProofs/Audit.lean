@@ -109,7 +109,21 @@ namespace Zanzibar
 #print axioms T0aCounter.fuel_stable_step_false
 #print axioms T0aCounter.not_storeDeclared
 
--- Proved modulo a documented sorry — expect `sorryAx` (the tracked debt, not final):
+-- **T0a — FULLY PROVED 2026-07-10** (sorry count 0): the confinement layer
+-- (Spec/Confine.lean), the taint-fixpoint + untainted counting stabilization
+-- (Spec/Stabilize.lean), the strict Kahn interface, and the rank-induction
+-- assembly (Spec/WellDef.lean). Expect only the three standard axioms:
+#print axioms evalE_congr
+#print axioms step_congr
+#print axioms untainted_closed
+#print axioms semAux_mono_untainted
+#print axioms untainted_stable
+#print axioms kahn_topo_strict
+#print axioms stratify_covers
+#print axioms stratify_topo_strict
+#print axioms layer_stable
+#print axioms all_stable
+#print axioms semAux_fuel_stable_step
 #print axioms sem_fuel_stable
 
 end Zanzibar
