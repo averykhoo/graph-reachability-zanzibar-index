@@ -201,6 +201,22 @@ ends.** `GraphIndex/Correct.lean` + `State.lean` + `Write.lean`:
   (+`reachedByDirect_edge_sound`, `writeDirect_edges`) — an untainted graph path IS a
   stored-tuple membership chain. This is T2b's reachability-half soundness, relational.
 
+**FINDING (2026-07-10, taking stock): the two T2 sorries are FALSE as stated, not
+merely unproven.** `WriteStep` is a thin postcondition spec (schema fixed, nodes
+monotone, outbox drained) and `Inv` never ties `σ.edges`/`σ.residue` to the store
+`T`. Counter-model: from `emptyState S`, one `WriteStep` into a state carrying a
+single arbitrary acyclic edge `(a,b)` (both nodes added, encoding-valid, outbox
+empty) satisfies `ReachedBy σ S [t]`, `Inv S σ`, and every schema hypothesis — yet
+`check` answers `true` on the corresponding query while `sem S [t]` answers `false`
+for an unrelated `t`. Consequence: **no proof effort can close `graph_correct` or
+`graph_reached_inv`'s `Inv` conjunct in their current form.** The operational write
+model is not merely "the blocker", it is *mandatory for the statements to be true*.
+Endgame: complete the operational write path (untainted `writeDirect` ✓ done;
+wildcard bridges; derived reconcile), then RESTATE T2a/T2b over that operational
+closure (either replace `WriteStep` by the concrete write or keep fragment-indexed
+theorems). The abstract statements stay as tracked sorries only as placeholders for
+the final restatement — do not sink proof effort into them as written.
+
 **Remaining (the genuine multi-session cores):**
 - **T2b semantic core:** `TupleChain T u v ↔ sem`-membership — match the membership
   chain against `directLeaf`/`memberOfGranted`'s userset recursion, the wildcard-node
@@ -208,6 +224,38 @@ ends.** `GraphIndex/Correct.lean` + `State.lean` + `Write.lean`:
   Plus the converse edge-completeness (`TupleChain → NReaches`), which needs an
   acyclic-*data* hypothesis (`writeDirect` drops cycle-forming edges while `sem`
   fuel-evaluates them). The read/reachability plumbing is done; this is the last mile.
+
+  **Plan of record (2026-07-10, in progress this session): close the semantic core
+  end-to-end on the star-free pure-direct fragment**, as a genuine, non-vacuous
+  `graph_correct_direct`. Fragment: every schema def is `.direct rs` (`PureDirect`),
+  the store is admission-valid (`StoreValid`: each tuple's `(object.type, relation)`
+  is declared `.direct rs` with `restrictionMatches rs t`; matches the Python
+  admission gate) and star-free; the state is reached by *admitted* writes
+  (`ReachedByAdmitted` — faithful to the composed system, where a cycle-rejected
+  write rolls back the tuple insert too, so the store never holds a rejected tuple).
+  Proof structure, worked out against the code:
+  1. `semAux_mono` (fuel monotonicity on exclusion-free schemas, from `evalE_mono`)
+     — dual-use: also T0a ingredient 1½.
+  2. Length-indexed chains `TupleChainN` + `chainN_of_trail` (via
+     `reachedByDirect_edge_sound`), giving NReaches → short chain (`trail_compress`).
+  3. **Userset lifting** (the heart): if `s ∈ sem`-member of userset `s'` at fuel f₀
+     and `s'` is a member of node `v` at fuel `f`, then `s ∈ v` at `f + f₀` — by fuel
+     induction; every direct-match of `s'` at a grant is absorbed by `s`'s
+     `memberOfGranted` flow-through on the same grant (needs `s'.predicate ≠ BARE`,
+     from `WF.relNames` since `BARE` contains `'.'`).
+  4. Soundness: `TupleChainN n → semAux` at fuel `n` (single = direct match at fuel 1;
+     cons = lifting with f₀ = 1); fuel fits `fuelBound` since `n ≤ nodes.length + 1
+     = 2·|T| + 1 < |keys|·(2|T|+4)` (keys nonempty from `StoreValid` + chain ≠ []).
+  5. Completeness: `∀ f, semAux s f ot on r → NReaches (subjNode s) (objNode ⟨ot,on⟩ r)`
+     by fuel induction: direct-match ⇒ the grant's own edge (edge-completeness from
+     `ReachedByAdmitted`); `memberOfGranted` ⇒ IH + `objNode ⟨g.sub.type,g.sub.name⟩
+     g.sub.pred = subjNode g.subject` (both plain, star-free) + `NReaches.tail`.
+  6. Assembly: `PureDirect → taintedKeys = []` (so `check` routes to
+     `probeNonDerived`); star-free store ⇒ no edge touches `wAny`/`wAll` nodes ⇒
+     probes 2–4 are `false`; probe 1 ↔ NReaches (`reach_iff_nreaches`) ↔ chain ↔ sem.
+  Wildcards (bridge materialization — the model has none yet; read-side promotion
+  only covers the *first* hop), TTU/computed/union defs, and the derived/residue path
+  are the explicitly deferred extensions, each widening the fragment.
 - **T2b residue path:** for derived relations, residue = `sem` via `ext_normalize`/T1
   MemberSet lemmas; bare-subject edge-hit ≡ full residue via `Inv.negEdgeFree`. Needs
   the write model to know what the residues *are* (the reconcile output).
