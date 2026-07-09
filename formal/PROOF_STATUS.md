@@ -54,6 +54,51 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (T2a groundwork — reachability layer fully proved)
+
+User: "get the rest of T2 finished; commit often, push whenever you can." Scope
+call (user-adjudicated mid-session via a fidelity question): **keep T2a honest,
+DEFER** — do not postulate I6 as a `WriteStep` postcondition (the A1-style
+operational shortcut was explicitly declined for `Inv`); instead **build toward the
+genuine close** (the `reach ↔ NReaches` stabilization + a faithful reconcile). No
+`sorry` discharged (count held at 3, as the user accepted); six green+pushed
+increments of genuine, axiom-clean infrastructure delivered. `verify.sh` green
+throughout (build + 60 conformance + audit).
+
+**All in `GraphIndex/State.lean`, all axiom-clean (three standard axioms or fewer):**
+
+- **Fuel-free reachability `NReaches`** (transitive closure of the edge list;
+  distinct from WellDef's `Key`-typed `Reaches`). `Inv`'s reachability clauses
+  (`acyclic`/`negEdgeFree`/`uposEdgeFree`) restated over it — this sidesteps the
+  `nodes.length`-fuel churn that perturbs a capped probe when a write adds nodes.
+  Lemmas: `NReaches.tail/trans/mono`, `NReachesR.trans`, `nreaches_nil`,
+  `nreaches_cons_split` (first-use decomposition), **`acyclic_addEdge`**
+  (cycle-rejection preserves acyclicity — the load-bearing I2 lemma).
+- **Write-path primitives + preservation.** `addNode`/`addEdge`/`putResidue` with
+  `@[simp]` projections; `StructInv` (the 4 structural clauses) + `structInv_addNode`
+  / `structInv_addEdge` (genuine, cycle-rejection via `acyclic_addEdge`) /
+  `structInv_empty` / `Inv.toStruct`; **`inv_putResidue`** (full `Inv` preserved by
+  writing one I6-hygienic residue — other keys untouched; depends on *no* axioms).
+- **`reach ↔ NReaches` BRIDGE — the ROADMAP-flagged "T2b blocker", now CLOSED.**
+  `reachB_sound` + `reachB_mono` (soundness, any fuel); `reachB_of_nreaches` +
+  `nreaches_iff_reachB` (unbounded equivalence); then the **shortest-walk
+  compression** — `Trail` walk API (`trail_split`, `reachB_of_trail`,
+  `trail_of_nreaches`, `trail_verts_mem`), pigeonhole plumbing (`mem_split_aux`,
+  `exists_dup_split`, `nodup_len_le`), **`trail_compress`** (a walk with interiors
+  in `nodes` shortens to ≤ `nodes.length` interiors), giving **`reach_complete`** and
+  **`reach_iff_nreaches`**: the executable fixed-fuel probe `σ.reach` EXACTLY decides
+  `NReaches` on any endpoint-closed state.
+
+**What still blocks the two T2 sorries (unchanged in kind, now sharply isolated):**
+the **faithful write/reconcile model** — how one tuple write produces the exact
+edges + reconciled residues. Needed by BOTH: T2a (global I6 re-establishment after
+edge changes — `inv_putResidue` handles one key; the write must cover all
+reachability-affected keys with the *semantically correct* residues, so a
+delete-only "reconcile-by-construction" is unfaithful and would break T2b) and T2b
+(`check = sem` — the ≤4-probe decomposition now has its reachability half via the
+bridge, but still needs the residue = `sem` half from the write model). This is the
+genuine multi-session core; the reachability layer under it is now done.
+
 ## Session 2026-07-10 (T2 graph model CONCRETIZED — T5 closed)
 
 **Scope decision (user-approved): "concretize + partial proofs," not the full T2

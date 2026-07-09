@@ -169,17 +169,30 @@ placeholders are now real (`GraphIndex/State.lean`, `sorry`-free):
   a `WriteStep` postcondition, so it holds at every reachable state by induction.
   Base cases `inv_empty`/`quiescent_empty`/`reach_empty` proved.
 
-**Remaining (deferred deep content):**
-- **T2b** (`graph_correct`): case analysis on subject kind. Bare subject: edge-hit ⇒
-  allow, justified because `Inv.negEdgeFree` gives `neg ∩ edge-holders = ∅` (the edge
-  fast-path ≡ full residue). Star/userset: residue = `ext_normalize` by `Inv`, so
-  equals `sem`. Uses T4 (edges = path counts) and the T1 MemberSet lemmas. This is the
-  read-completeness argument (§3.2 wildcard-spec: every semantic path decomposes as
-  leading-hop · materialized-closure · trailing-hop).
-- **T2a** (`graph_reached_inv`, `Inv` conjunct only — `Quiescent` conjunct done):
-  needs the concrete operational write path (`WriteStep` must realize edge/bridge
-  addition + reconcile) so that cycle-rejection preserves `acyclic` and the write
-  preserves node-encoding + residue hygiene by induction over ops.
+**Reachability layer DONE (2026-07-10, axiom-clean, `GraphIndex/State.lean`):**
+`Inv` restated over a fuel-free `NReaches`; `acyclic_addEdge` (cycle-rejection
+preserves acyclicity); write-path primitives `addNode`/`addEdge`/`putResidue` with
+`structInv_addNode`/`structInv_addEdge`/`inv_putResidue`; and — closing the
+**ROADMAP-flagged T2b blocker** — the full `reach ↔ NReaches` bridge
+(`reach_iff_nreaches`) via shortest-walk compression (`Trail` API + `trail_compress`
+pigeonhole). So the executable fixed-fuel probe now provably equals fuel-free
+reachability, and each write primitive's structural preservation is proved.
+
+**Remaining (the single genuine multi-session core — a faithful WRITE model):**
+Both sorries now reduce to modeling *how one tuple write produces edges +
+reconciled residues*. `WriteStep` must realize edge/bridge addition + reconcile so
+that:
+- **T2a** (`graph_reached_inv`, `Inv` conjunct): the write re-establishes I6 for
+  *all* reachability-affected keys with the semantically-correct residues.
+  `inv_putResidue` closes the per-key step; a delete-only reconcile-by-construction
+  is **unfaithful** (it changes residue meaning ⇒ breaks T2b), so the faithful delta
+  output must be modeled. Structural clauses (`nodeEnc`/`edgesClosed`/`acyclic`) are
+  already discharged by the `structInv_*` lemmas.
+- **T2b** (`graph_correct`): case analysis on subject kind. The reachability half of
+  the ≤4-probe decomposition is now `reach_iff_nreaches`; the residue half (residue =
+  `sem` via `ext_normalize`/T1 MemberSet lemmas; bare-subject edge-hit ≡ full residue
+  via `Inv.negEdgeFree`) still needs the write model to know what the residues *are*.
+  (§3.2 wildcard-spec: leading-hop · materialized-closure · trailing-hop.)
 
 ---
 
@@ -191,10 +204,13 @@ placeholders are now real (`GraphIndex/State.lean`, `sorry`-free):
    `kahn_topo`). The `List`-bookkeeping estimate held (needed hand-rolled `getD_app_*`).
 3. ~~**T1**~~ ✅ DONE (axiom-clean; `Correct.lean` sorry-free). Concrete expand model
    + query-focused population + fuel/AST induction. Unblocks T3/T6 (route through T1∘T2b).
-4. **T2/T5** — graph model CONCRETIZED (State.lean sorry-free); **T5
-   `cascade_converges` ✅ DONE** (axiom-clean). Remaining: T2b `graph_correct` (read =
-   `sem`, the highest-leverage target; needed for T3/T6 to become real) and the `Inv`
-   conjunct of T2a `graph_reached_inv` (needs the operational `WriteStep` realization).
+4. **T2/T5** — graph model CONCRETIZED; **T5 `cascade_converges` ✅ DONE**; the
+   **reachability layer ✅ DONE** (2026-07-10: `reach ↔ NReaches` bridge, cycle-
+   rejection, structural write-primitive preservation, per-key `inv_putResidue`).
+   Remaining for both T2a and T2b: **the faithful `WriteStep` write/reconcile model**
+   (edge/bridge addition + the delta processor's residue output). Once that lands, T2a
+   composes the `structInv_*`/`inv_putResidue` lemmas over the ops; T2b combines
+   `reach_iff_nreaches` (reachability half) with the residue = `sem` algebra.
 5. **T0a** (decide (a) vs (b) first) — the only remaining `Spec/` sorry; ingredient 1
    (`evalE_mono`) proved.
 
