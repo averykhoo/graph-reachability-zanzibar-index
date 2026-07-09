@@ -125,8 +125,66 @@ descends strata (lower strata immutable while higher evaluate) ⇒ quiesces in
 
 ## Suggested order
 
-1. **T4** (self-contained; the crux; unblocks T2b's edge reasoning).
+1. **T4** (self-contained; the crux; unblocks T2b's edge reasoning). *Heart already
+   proved* — `phat_boundary`/`phat_recurrence` in `Closure.lean`. What's left needs a
+   walk API (below).
 2. **T1** (scaffolding mostly proved; unblocks T3/T6).
 3. **T0b** (self-contained graph theory).
 4. **T2/T5** (largest; needs T1 + T4).
 5. **T0a** (decide (a) vs (b) first).
+
+---
+
+## Session handoff — environment & hard-won Lean/Mathlib notes
+
+For a fresh session. Read `PROOF_STATUS.md` (status/resume) → this file → the target
+`.lean`. Everything is committed; `.lake/` (mathlib clone + cache) is on disk and
+gitignored (regenerate with `lake exe cache get` if missing).
+
+**Build/verify commands** (Lean toolchain is at `~/.elan/bin`):
+```
+export PATH="$HOME/.elan/bin:$PATH"
+cd formal/lean && lake build                 # library (~min incremental; use background)
+lake build ZanzibarProofs.GraphIndex.Closure # one module (~20s)
+lake build zcli                              # conformance CLI
+rm -f .lake/build/lib/lean/ZanzibarProofs/Audit.olean && lake build ZanzibarProofs.Audit  # axiom audit
+bash formal/verify.sh                         # full gate (build + sorries + audit + pytest)
+```
+Conformance uses the repo conda env python (`.../envs/graph-reachability-zanzibar-index/python.exe -m pytest formal/conformance/ -q`). Lean = v4.31.0, Mathlib pinned v4.31.0.
+
+**Mathlib import quirks (v4.31.0) — these cost build cycles to find:**
+- `Finset.Ico` ← `import Mathlib.Order.Interval.Finset.Nat`
+- `Finset.sum_Ico_succ_top`, `sum_Ico_consecutive` ← `Mathlib.Algebra.BigOperators.Intervals`
+- big-operator ring lemmas (`Finset.mul_sum`, distribution) ← `Mathlib.Algebra.BigOperators.Ring.Finset`
+- `∑ w : V, …` Fintype sums ← `Mathlib.Data.Fintype.BigOperators`
+- `Finset.biUnion` ← `Mathlib.Data.Finset.Union`
+- `Mathlib.Algebra.BigOperators.Basic` / `.Ring` do **NOT** exist (reorganized). `ring`
+  tactic needs `Mathlib.Tactic.Ring` (not transitively available).
+
+**Tactic gotchas learned this session:**
+- To unfold a plain `def` inside a goal use `unfold f` or `simp only [f]`, **not**
+  `rw [f]` (rw usually won't fire on a non-pattern-matching def — this cost ~4 cycles
+  on `phat`). `pathCount`/`phat` unfold fine under `simp only [...]`.
+- `Nat` distribution: `exact Nat.left_distrib _ _ _` (term-mode, no import).
+- `omega` closes linear-Nat goals treating `∑`-terms as opaque atoms — ideal for
+  combining `have`s about sums (used to finish `phat_boundary`, `sum_Ico_shift_boundary`).
+- `simp only at h` with no lemmas errors "no progress"; drop it (elaboration already
+  beta-reduces instantiated lambdas, so `omega` sees the reduced form).
+- `Finset.sum_Ico_succ_top (h : a ≤ b)` peels the TOP term of `Ico a (b+1)`; supply the
+  witness for `b`, not `b+1` (e.g. `Nat.le_add_left 1 m : 1 ≤ m+1`, not `… (m+1)`).
+- Prefer explicit `have e1/e2 … ; calc` over `congr 1` for sum equalities — `congr 1`
+  split fragilely here.
+
+**The T4 blocker (do this first to finish T4):** a **walk API** for the Nat-weighted
+multigraph. Concretely: (i) `pathsOfLength g k u v > 0 ↔ ∃ (walk : List V) of length k
+from u to v with all edges positive` (induction on `k`); (ii) the **vanishing lemma**
+`Acyclic g → pathsOfLength g |V| w v = 0` (a length-`|V|` walk has `|V|+1` vertices ⇒
+pigeonhole repeat ⇒ closed sub-walk ⇒ `pathCount x x > 0` ⇒ ¬Acyclic) — this discharges
+`phat_recurrence`'s `hvanish`; (iii) `pathCount_addEdge` by decomposing `g'`-walks into
+"uses new edge `(u,v)` 0 or 1 times" (acyclic ⇒ ≤ 1). Check whether
+`Mathlib.Combinatorics.SimpleGraph.Walk` or `Quiver.Path` can be adapted before rolling
+your own. Once (ii)+(iii) land, `pathCount_removeEdge` is the `(ℤ,+)` inverse of (iii).
+
+**Realistic scope:** closing all 9 is multi-session. Each of T1/T2 needs its concrete
+model built first (see the per-theorem sections above); T0b/T0a and the T4 walk API are
+each self-contained multi-hour proofs.
