@@ -205,4 +205,47 @@ theorem writeDirect_writeStep {S : Schema} {σ : GraphState} (hq : Quiescent σ)
     rw [writeDirect_watermark]
     exact hq d hd
 
+/-- Quiescence is preserved by the write (outbox/watermark untouched). -/
+theorem quiescent_writeDirect {σ : GraphState} (hq : Quiescent σ) (t : Tuple) :
+    Quiescent (σ.writeDirect t) := by
+  intro d hd
+  rw [writeDirect_outbox] at hd
+  rw [writeDirect_watermark]
+  exact hq d hd
+
+/-! ## The untainted write-closure and its invariant -/
+
+/-- **`ReachedByDirect σ S T`** — `σ` is reached from the empty state by applying
+    `T`'s writes as untainted direct-edge writes (`writeDirect`). The concrete
+    counterpart of `ReachedBy` for the residue-free fragment. -/
+inductive ReachedByDirect : GraphState → Schema → Store → Prop where
+  | empty (S : Schema) : ReachedByDirect (emptyState S) S []
+  | step {σ : GraphState} {S : Schema} {T : Store} (t : Tuple) :
+      ReachedByDirect σ S T → ReachedByDirect (σ.writeDirect t) S (t :: T)
+
+/-- **T2a's `Inv` conjunct for the untainted fragment.** Every state reached by
+    untainted direct writes satisfies the full I-series invariant, stays
+    residue-free, and is cascade-quiescent — proved honestly by induction over the
+    concrete write path (`inv_writeDirect`), not postulated as a `WriteStep`
+    postcondition. -/
+theorem reachedByDirect_inv {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByDirect σ S T) : Inv S σ ∧ ResidueEmpty σ ∧ Quiescent σ := by
+  induction h with
+  | empty S => exact ⟨inv_empty S, residueEmpty_empty S, quiescent_empty S⟩
+  | step t _ ih =>
+    obtain ⟨hInv, hRe, hQ⟩ := ih
+    exact ⟨inv_writeDirect hInv hRe t, residueEmpty_writeDirect t hRe,
+      quiescent_writeDirect hQ t⟩
+
+/-- The untainted write-closure embeds in the abstract `ReachedBy` closure: each
+    concrete `writeDirect` realizes a `WriteStep` (quiescence supplied by the
+    running invariant). So the concrete fragment is a genuine sub-model of the
+    states the T2 theorems quantify over. -/
+theorem reachedBy_of_direct {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByDirect σ S T) : ReachedBy σ S T := by
+  induction h with
+  | empty S => exact ReachedBy.empty S
+  | step t hd ih =>
+    exact ReachedBy.step t ih (writeDirect_writeStep (reachedByDirect_inv hd).2.2 t)
+
 end Zanzibar

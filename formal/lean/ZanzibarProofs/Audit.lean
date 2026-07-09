@@ -65,6 +65,8 @@ namespace Zanzibar
 #print axioms inv_writeDirect
 #print axioms residueEmpty_writeDirect
 #print axioms writeDirect_writeStep
+#print axioms reachedByDirect_inv
+#print axioms reachedBy_of_direct
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):
