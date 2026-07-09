@@ -24,6 +24,9 @@ namespace Zanzibar
 #print axioms wildcard_scoping
 #print axioms phat_boundary
 #print axioms phat_recurrence
+#print axioms pathsOfLength_card_vanish
+#print axioms pathCount_addEdge
+#print axioms pathCount_removeEdge
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):

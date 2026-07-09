@@ -54,6 +54,31 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-09 (T4 fully closed)
+
+**T4 is DONE** — `GraphIndex/Closure.lean` is `sorry`-free and axiom-clean. Built the
+walk API the ROADMAP called the blocker, then the counting theorem, all from scratch on
+the concrete `pathsOfLength`:
+- `pathsOfLength_pos_iff` — walk-count positivity ↔ an `IsChain` vertex list (bridges to
+  Mathlib's `List.IsChain` reachability API).
+- `pathsOfLength_card_vanish` — **the pigeonhole vanishing lemma**: an acyclic graph has
+  no length-`|V|` walk (`|V|+1` vertices ⇒ repeat ⇒ closed sub-walk via `IsChain.drop/take`
+  + `getElem?_drop`/`getElem?_take_of_succ` ⇒ `pathCount x x > 0` ⇒ ⊥). Discharges the
+  `hvanish` hypothesis of `phat_recurrence`.
+- `pathsOfLength_succ_last` (last-edge decomposition), `pathsOfLength_mono`,
+  `acyclic_of_addEdge`, `no_back_path` (the new edge can't close a cycle — needs L2).
+- `rec_closed_form` / `rec_unique` — the affine recurrence `X a = c a + ∑ dcount·X`
+  has a **unique** solution in a DAG (unroll `|V|` steps; the `X`-tail vanishes, leaving a
+  matrix series in `c` only). No Nat subtraction anywhere.
+- `pathCount_addEdge` — `phat g'` and the target formula both solve `g'`'s recurrence, so
+  by `rec_unique` they coincide; the spurious back-path term vanishes by `no_back_path`.
+- `pathCount_removeEdge` — the exact inverse: `(g.removeEdge u v).addEdge u v = g`, so it
+  is `pathCount_addEdge` applied to `g.removeEdge u v`.
+
+Count 9 → 7. `verify.sh` green (build + 60 conformance + audit). **Next-most-tractable
+remaining: T0b Kahn** (self-contained, no new model needed); then T1/T2 need their
+concrete models built first (see ROADMAP).
+
 ## Current phase & resume point
 
 - **Phase 1 DONE** (Lean skeleton + all T0–T6 stated; `lake build` green with 9
@@ -97,7 +122,11 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T2a graph invariant + materialize | `graph_reached_inv` | stated (sorry) | hardest; Phase 4 |
 | T2b graph read = sem | `graph_correct` | stated (sorry) | residue case analysis |
 | T3 equivalence | `backend_equivalence` | **proved-mod-deps** | `rw` through T1∘T2b (real once those land) |
-| T4 counting-IVM (insert/delete) | `pathCount_addEdge/removeEdge` | stated (sorry) | the crux; `pathCount` now CONCRETE (opaque removed) |
+| T4 counting-IVM (insert/delete) | `pathCount_addEdge/removeEdge` | **proved** | the crux; axiom-clean. Walk API + pigeonhole vanishing + recurrence-uniqueness |
+| T4 pigeonhole vanishing | `pathsOfLength_card_vanish` | **proved** | `Acyclic → no length-\|V\| walk`; the ROADMAP-flagged blocker |
+| T4 walk correspondence | `pathsOfLength_pos_iff` | **proved** | positivity ↔ `IsChain` vertex list |
+| T4 recurrence uniqueness | `rec_unique`, `rec_closed_form` | **proved** | affine recurrence has unique solution in a DAG (matrix series) |
+| T4 last-edge / monotonicity | `pathsOfLength_succ_last`, `pathsOfLength_mono`, `no_back_path` | **proved** | supporting lemmas for the counting expansion |
 | T4 first-edge recurrence | `phat_recurrence` | **proved** | conditional on the DAG no-`|V|`-walk hyp; axiom-clean |
 | T4 boundary sum-identity | `phat_boundary` | **proved** | the sum-manipulation heart, no acyclicity; axiom-clean |
 | (lemma) sum-shift | `sum_Ico_shift_boundary` | **proved** | Nat induction |
@@ -114,13 +143,15 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 ## `sorry` ledger
 
-**Count = 9** (must be monotone non-increasing within a phase). Locations:
-- `Spec/WellDef.lean`: `sem_fuel_stable`, `stratify_none_iff_cycle`,
-  `stratify_topological` (3)
+**Count = 7** (was 9; **T4 fully closed 2026-07-09**, monotone non-increasing). Locations:
+- `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`),
+  `stratify_none_iff_cycle`, `stratify_topological` (3)
 - `SetEngine/Correct.lean`: `setEngine_correct` (1)
-- `GraphIndex/Closure.lean`: `pathCount_addEdge`, `pathCount_removeEdge` (2)
 - `GraphIndex/Correct.lean`: `graph_reached_inv`, `graph_correct`,
   `cascade_converges` (3)
+
+**`GraphIndex/Closure.lean` is now `sorry`-free** — `pathCount_addEdge` /
+`pathCount_removeEdge` proved and axiom-clean (`[propext, Classical.choice, Quot.sound]`).
 
 ## Axiom audit snapshot (C4) — `lake build ZanzibarProofs.Audit`
 

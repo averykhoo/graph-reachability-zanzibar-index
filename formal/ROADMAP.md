@@ -46,7 +46,16 @@ Once T1 + T2b land, **T3/T6a/T6b are already `rw`-proved** (they route through t
 
 ---
 
-## T4 — `pathCount_addEdge` / `pathCount_removeEdge` (self-contained, the crux)
+## T4 — `pathCount_addEdge` / `pathCount_removeEdge` — ✅ DONE (2026-07-09)
+
+**Closed and axiom-clean.** `GraphIndex/Closure.lean` is `sorry`-free. The plan below was
+executed: walk API (`pathsOfLength_pos_iff`) → pigeonhole vanishing
+(`pathsOfLength_card_vanish`) → last-edge/monotonicity/no-back-path → recurrence
+uniqueness (`rec_closed_form`/`rec_unique`) → `pathCount_addEdge`; `removeEdge` is its
+inverse via `(g.removeEdge u v).addEdge u v = g`. Kept over ℕ (no ℤ needed) with **no**
+custom axioms. Original plan retained below for the record.
+
+### (original plan)
 
 **Plan.** Replace `opaque pathCount`: add `[Fintype V]`, define
 `pathsOfLength : Nat → V → V → Nat` (`0 ↦ [u=v]`; `k+1 ↦ ∑ w, dcount u w *
@@ -125,12 +134,15 @@ descends strata (lower strata immutable while higher evaluate) ⇒ quiesces in
 
 ## Suggested order
 
-1. **T4** (self-contained; the crux; unblocks T2b's edge reasoning). *Heart already
-   proved* — `phat_boundary`/`phat_recurrence` in `Closure.lean`. What's left needs a
-   walk API (below).
-2. **T1** (scaffolding mostly proved; unblocks T3/T6).
-3. **T0b** (self-contained graph theory).
-4. **T2/T5** (largest; needs T1 + T4).
+1. ~~**T4**~~ ✅ DONE (axiom-clean; `Closure.lean` sorry-free). Unblocks T2b's edge reasoning.
+2. **T0b** (self-contained graph theory; **next-most-tractable — no new model needed**).
+   Kahn correctness over the concrete `kahn`/`readyNodes`/`depEdges`. Expect heavy `List`
+   bookkeeping (`contains`/`filter`/`getD` on `Key = String × String`); budget a full
+   session. Key invariant for `stratify_topological`: a node peeled at round `r` has every
+   out-edge target already peeled (round `< r`), and nodes are peeled at most once.
+3. **T1** (scaffolding mostly proved; unblocks T3/T6). Needs the concrete
+   `SetEngineModel.check` built first (still `opaque`).
+4. **T2/T5** (largest; needs T1 + T4). Needs the whole concrete graph state machine built.
 5. **T0a** (decide (a) vs (b) first).
 
 ---
