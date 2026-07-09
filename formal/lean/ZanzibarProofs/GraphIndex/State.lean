@@ -128,6 +128,103 @@ def reachB (edges : List (NodeKey × NodeKey)) : Nat → NodeKey → NodeKey →
 def GraphState.reach (σ : GraphState) (u v : NodeKey) : Bool :=
   reachB σ.edges (σ.nodes.length + 1) u v
 
+/-! ## Fuel-free reachability — the invariant / write-path layer
+
+`GraphState.reach` above is the *executable* probe: a fuel-capped closure whose
+fuel is tied to `nodes.length`. For the state invariant and the write-path proofs
+it is far cleaner to reason about reachability as a **fuel-free relation**
+`NReaches` — the transitive closure of the direct edges (≥ 1 hop). This sidesteps
+the `nodes.length`-fuel bookkeeping (adding a node changes the fuel, which would
+otherwise perturb a capped probe out from under an acyclicity argument). The bridge
+`reach ↔ NReaches` — that the fuel `nodes.length + 1` is always enough — is a
+stabilization (pigeonhole) fact needed only by the read theorem T2b, and is
+factored there. `Inv` below is stated over `NReaches`. -/
+
+/-- Fuel-free directed reachability: a path of ≥ 1 edge from `u` to `v`. -/
+inductive NReaches (edges : List (NodeKey × NodeKey)) : NodeKey → NodeKey → Prop where
+  | edge {u v} : (u, v) ∈ edges → NReaches edges u v
+  | head {u w v} : (u, w) ∈ edges → NReaches edges w v → NReaches edges u v
+
+/-- Reflexive closure of `NReaches` (a path of ≥ 0 edges). -/
+def NReachesR (edges : List (NodeKey × NodeKey)) (u v : NodeKey) : Prop :=
+  u = v ∨ NReaches edges u v
+
+/-- Extend a path by one trailing edge. -/
+theorem NReaches.tail {edges : List (NodeKey × NodeKey)} {u w v : NodeKey}
+    (h : NReaches edges u w) (e : (w, v) ∈ edges) : NReaches edges u v := by
+  induction h with
+  | edge huw => exact NReaches.head huw (NReaches.edge e)
+  | head huw _ ih => exact NReaches.head huw (ih e)
+
+/-- `NReaches` is transitive. -/
+theorem NReaches.trans {edges : List (NodeKey × NodeKey)} {u w v : NodeKey}
+    (h1 : NReaches edges u w) (h2 : NReaches edges w v) : NReaches edges u v := by
+  induction h1 with
+  | edge huw => exact NReaches.head huw h2
+  | head huw _ ih => exact NReaches.head huw (ih h2)
+
+/-- `NReachesR` is transitive. -/
+theorem NReachesR.trans {edges : List (NodeKey × NodeKey)} {u w v : NodeKey}
+    (h1 : NReachesR edges u w) (h2 : NReachesR edges w v) : NReachesR edges u v := by
+  rcases h1 with rfl | r1
+  · exact h2
+  · rcases h2 with rfl | r2
+    · exact Or.inr r1
+    · exact Or.inr (r1.trans r2)
+
+/-- The empty edge set reaches nothing. -/
+theorem nreaches_nil (u v : NodeKey) : ¬ NReaches [] u v := by
+  intro h; cases h <;> simp_all
+
+/-- Adding an edge never removes reachability. -/
+theorem NReaches.mono {edges : List (NodeKey × NodeKey)} {e : NodeKey × NodeKey}
+    {u v : NodeKey} (h : NReaches edges u v) : NReaches (e :: edges) u v := by
+  induction h with
+  | edge huv => exact NReaches.edge (List.mem_cons_of_mem _ huv)
+  | head huw _ ih => exact NReaches.head (List.mem_cons_of_mem _ huw) ih
+
+/-- **First-use decomposition.** A path in `(a,b) :: edges` either avoids the new
+    edge entirely (a path in the old edges) or factors through it as
+    `u →* a → b →* v` (the reflexive-closure legs use only old edges). -/
+theorem nreaches_cons_split {edges : List (NodeKey × NodeKey)} {a b u v : NodeKey}
+    (h : NReaches ((a, b) :: edges) u v) :
+    NReaches edges u v ∨ (NReachesR edges u a ∧ NReachesR edges b v) := by
+  induction h with
+  | @edge u v huv =>
+    rcases List.mem_cons.mp huv with heq | hmem
+    · obtain ⟨hu, hv⟩ := Prod.ext_iff.mp heq
+      exact Or.inr ⟨Or.inl hu, Or.inl hv.symm⟩
+    · exact Or.inl (NReaches.edge hmem)
+  | @head u w v huw _ ih =>
+    rcases List.mem_cons.mp huw with heq | hmem
+    · obtain ⟨hu, hw⟩ := Prod.ext_iff.mp heq
+      subst hu; subst hw
+      refine Or.inr ⟨Or.inl rfl, ?_⟩
+      rcases ih with hl | ⟨_, hr⟩
+      · exact Or.inr hl
+      · exact hr
+    · rcases ih with hl | ⟨hwa, hbv⟩
+      · exact Or.inl (NReaches.head hmem hl)
+      · refine Or.inr ⟨?_, hbv⟩
+        rcases hwa with rfl | hwa'
+        · exact Or.inr (NReaches.edge hmem)
+        · exact Or.inr (NReaches.head hmem hwa')
+
+/-- **Cycle-rejection preserves acyclicity.** Adding a direct edge `(a,b)` to an
+    acyclic edge set keeps it acyclic provided there is no back-path `b →* a` and
+    `a ≠ b` — exactly the admission check the write path performs (I2 / §7.7). -/
+theorem acyclic_addEdge {edges : List (NodeKey × NodeKey)} {a b : NodeKey}
+    (hac : ∀ v, ¬ NReaches edges v v)
+    (hback : ¬ NReaches edges b a) (hne : a ≠ b) :
+    ∀ v, ¬ NReaches ((a, b) :: edges) v v := by
+  intro v hv
+  rcases nreaches_cons_split hv with hl | ⟨hva, hbv⟩
+  · exact hac v hl
+  · have hba : NReachesR edges b a := hbv.trans hva
+    rcases hba with heq | hr
+    · exact hne heq.symm
+    · exact hback hr
+
 /-! ## §7.5, §7.6 — the read `GraphModel.check` -/
 
 namespace GraphModel
@@ -244,13 +341,13 @@ structure Inv (S : Schema) (σ : GraphState) : Prop where
   schemaEq : σ.schema = S
   nodeEnc : ∀ k ∈ σ.nodes, (k.name = STAR ↔ k.variant ≠ Variant.plain)
   edgesClosed : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes
-  acyclic : ∀ v, σ.reach v v = false
+  acyclic : ∀ v, ¬ NReaches σ.edges v v
   negStarCovered : ∀ k r res, σ.residue k r = some res →
       ∀ n ∈ res.neg, res.stars.contains n.shape = true
   negEdgeFree : ∀ k r res, σ.residue k r = some res →
-      ∀ n ∈ res.neg, σ.reach (subjNode n) k = false
+      ∀ n ∈ res.neg, ¬ NReaches σ.edges (subjNode n) k
   uposEdgeFree : ∀ k r res, σ.residue k r = some res →
-      ∀ n ∈ res.upos, σ.reach (subjNode n) k = false
+      ∀ n ∈ res.upos, ¬ NReaches σ.edges (subjNode n) k
   uposNegDisjoint : ∀ k r res, σ.residue k r = some res →
       ∀ n ∈ res.upos, res.neg.contains n = false
 
@@ -296,7 +393,7 @@ theorem inv_empty (S : Schema) : Inv S (emptyState S) where
   schemaEq := rfl
   nodeEnc := by intro k hk; simp [emptyState] at hk
   edgesClosed := by intro e he; simp [emptyState] at he
-  acyclic := fun v => reach_empty S v v
+  acyclic := fun v => nreaches_nil v v
   negStarCovered := by intro k r res h; simp [emptyState] at h
   negEdgeFree := by intro k r res h; simp [emptyState] at h
   uposEdgeFree := by intro k r res h; simp [emptyState] at h
