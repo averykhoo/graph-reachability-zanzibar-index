@@ -22,6 +22,8 @@ namespace Zanzibar
 #print axioms MemberSet.mem_ext_union
 #print axioms restrictionMatches_type
 #print axioms wildcard_scoping
+#print axioms phat_boundary
+#print axioms phat_recurrence
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):

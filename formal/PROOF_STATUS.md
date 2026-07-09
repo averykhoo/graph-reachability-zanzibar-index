@@ -97,7 +97,10 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T2a graph invariant + materialize | `graph_reached_inv` | stated (sorry) | hardest; Phase 4 |
 | T2b graph read = sem | `graph_correct` | stated (sorry) | residue case analysis |
 | T3 equivalence | `backend_equivalence` | **proved-mod-deps** | `rw` through T1∘T2b (real once those land) |
-| T4 counting-IVM (insert/delete) | `pathCount_addEdge/removeEdge` | stated (sorry) | the crux; opaque `pathCount` |
+| T4 counting-IVM (insert/delete) | `pathCount_addEdge/removeEdge` | stated (sorry) | the crux; `pathCount` now CONCRETE (opaque removed) |
+| T4 first-edge recurrence | `phat_recurrence` | **proved** | conditional on the DAG no-`|V|`-walk hyp; axiom-clean |
+| T4 boundary sum-identity | `phat_boundary` | **proved** | the sum-manipulation heart, no acyclicity; axiom-clean |
+| (lemma) sum-shift | `sum_Ico_shift_boundary` | **proved** | Nat induction |
 | T5 cascade converges | `cascade_converges` | stated (sorry) | subsumed by T2a |
 | T6a exclusion-effective | `exclusion_effective` | **proved-mod-deps** | via T1/T2b |
 | T6b no-ghost-grant | `no_ghost_grant` | **proved-mod-deps** | via T2b |
@@ -129,14 +132,27 @@ Run 2026-07-09. `#print axioms` on representative results:
   route through tracked sorries). **No custom axioms** — Gemini's suggested
   `phat_def` axiom was rejected, keeping the surface clean for the final C4 gate.
 
+## T4 progress (2026-07-10, this session)
+
+`GraphIndex/Closure.lean`: `pathCount` **concretized** (weighted-walk sum over
+`Fintype V`; the `opaque` is gone). Proved (axiom-clean): `pathsOfLength_zero/succ`,
+`sum_Ico_shift_boundary` (Nat induction), `phat_boundary` (the first-edge recurrence
+WITH the length-`|V|` boundary term, pure `Finset.sum` manipulation, no acyclicity),
+and `phat_recurrence` (the clean recurrence, taking the DAG no-`|V|`-walk property as
+an explicit hypothesis). Remaining T4 obligations (still `sorry`, count held at 9):
+`pathCount_addEdge`/`removeEdge` — the algebraic expansion — plus discharging the
+`hvanish` hypothesis via the pigeonhole vanishing lemma (needs a walk API; see
+ROADMAP). Net: the mathematical heart of the counting theorem is proved; the
+opaque is removed; count unchanged.
+
 ## Pending axioms (opaque placeholders — to be replaced, flagged by the C4 axiom audit)
 
 `opaque` declarations standing in for not-yet-built models: `ValidIdent`
 (Core/Ident — intended to stay abstract), `SetEngineModel.check` (→ Phase 3 def),
 `GraphState`, `GraphModel.check`, `Inv`, `ReachedBy`, `Quiescent`, `GraphAccepts`
-(→ Phase 4 defs), `pathCount` (→ Phase 4 def). The final axiom audit must show only
-`propext, Classical.choice, Quot.sound` — every opaque here must become a real
-definition before Phase 6.
+(→ Phase 4 defs). (`pathCount` is now CONCRETE — no longer opaque.) The final axiom
+audit must show only `propext, Classical.choice, Quot.sound` — every remaining opaque
+must become a real definition before Phase 6.
 
 ---
 
