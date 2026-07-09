@@ -182,6 +182,19 @@ preserves truth under a `rec` refinement `RecLe`). The full argument:
 (`semAux` depends only on `rec` there), the untainted monotone-convergence count, the
 per-rank stabilization induction, and the arithmetic that the total level ≤
 `|keys|·(2|T|+4)`. This is the multi-session core; ingredient 1 is the foothold.
+Ingredient 1½ (`semAux_mono`, evaluator-level fuel monotonicity on exclusion-free
+schemas) landed 2026-07-10.
+
+**Tactical framing (from a 2026-07-10 Gemini review, vetted):** formalize the
+untainted convergence as monotone iteration on a **finite Bool-lattice** — the
+evaluation state restricted to the reachable atoms, with `step` a monotone
+endomap (that is `evalE_mono`/`semAux_mono`) — and bound stabilization by the
+lattice *height* (≤ #atoms flips), rather than tracking "the set of true
+evaluations" explicitly. Kahn rank then adds one fuel step per tainted stratum.
+CAVEAT it glossed: `Rec = String³ → Bool` is not finite a priori — the
+**confinement lemma** (the evaluation only ever consults reachable atoms) is
+still the load-bearing prerequisite before any height argument applies; build it
+first.
 
 ---
 

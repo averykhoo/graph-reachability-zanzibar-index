@@ -54,6 +54,24 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Review handled 2026-07-10 (second Gemini review, post-restatement)
+
+User shared a Gemini review after the restatement. Vetted against the repo;
+outcomes (logged per the review-handling norm):
+- **T4 section MOOT / stale-state error:** it presents an algebraic path "to
+  close the `sorry`" in `pathCount_addEdge` and calls T4 a "main remaining
+  hurdle" — T4 was closed 2026-07-09 (sorry-free, axiom-clean, in the audit).
+  Its proposed expansion also uses ℕ-subtraction (`phat g a b - [a=b]`), the
+  exact trap the real proof avoided via `rec_unique`. No action.
+- **T0a lattice framing ADOPTED as a tactical note** (ROADMAP T0a section):
+  monotone iteration on a finite Bool-lattice bounded by height, + one fuel
+  step per Kahn rank. With the vetting caveat it glossed: `Rec` is not finite
+  a priori — the confinement-to-reachable-atoms lemma remains the load-bearing
+  prerequisite.
+- Endorsements (operational-trace restatement, `fuelBound` multiplicativity,
+  `instances`/`universe` ghost handling, W3 `upos ∩ neg = ∅` expected easy)
+  are consistent with the repo; no changes needed.
+
 ## Session 2026-07-10 (abstract closure DELETED — T-theorems restated operationally)
 
 User adjudication: **"if anything is incorrect then delete it and rewrite the
