@@ -54,6 +54,51 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-09 (T1 FULLY CLOSED — set engine = sem)
+
+**T1 is DONE** — `setEngine_correct` is proved and axiom-clean (`[propext,
+Classical.choice, Quot.sound]`, verified in `Audit.lean`). Count 5 → 4. `verify.sh`
+green (build + 60 conformance + audit). The `opaque SetEngineModel.check` is replaced
+by a concrete MemberSet-expand model. **T1 needs no WF/Stratifiable/AllValid** — the
+hypotheses are retained (underscored) but unused: the expansion computes `semAux` at
+*every* fuel, so equality at the shared `fuelBound` is unconditional.
+
+**The model (`SetEngine/Eval.lean`).** `Id := SubjectRef`; `expandAux` is pure
+fuel-recursion mirroring `semAux` (`expandStep`/`expandE` mirror `step`/`evalE`);
+boolean nodes fold with `union`/`intersect`/`subtract`; leaves are `grantMS`/`parentMS`
+(token `singletonEntity`/shape `star` + flow-through recursion), faithfully
+transcribing `engine.py:direct_expand`/`ttu_expand`. `check` = `containsShape` of the
+expanded query node at the query subject.
+
+**The key modeling insight (makes the whole thing tractable).** `containsShape` *never
+reads `pop`* — only `pos`/`stars`/`neg`. The distribution lemmas
+(`containsShape_*_focus`) prove the probe answer is invariant across *any* population
+satisfying `PopFocus`/`WFp`/`Grounded`. So I use a **query-focused population**
+`popOf s σ = {s}` at `s`'s own shape, `∅` elsewhere — which makes all three invariants
+hold *definitionally* (`popFocus_popOf`, `grounded_popOf` are trivial; `WFp` is every
+`normalize` output). This discharges the "confinement" obligation the ROADMAP flagged
+as the largest remaining piece, with **no** `pos ⊆ U` induction.
+
+**Proof structure (`SetEngine/Correct.lean`, all axiom-clean).**
+- `containsShape_unionFold` — probing a `union`-fold = `any` of the probes.
+- `containsShape_grantMS` — one grant's probe = `grantMatch || grantFlow` (4-way on
+  subject kind × wildness); `containsShape_expandDirect` assembles via `any_or_distrib`
+  and a per-subject-kind match, `directLeaf`'s `memberOfGranted` = `any grantFlow` by
+  `rfl`.
+- `any_filter_guard` + `containsShape_expandTtu` — `ttuLeaf`'s guarded `T.any` =
+  filtered `ttuParents.any`; per-parent probe matches by `pn == STAR` case split.
+- `containsShape_expandE` (structural: boolean via `*_focus`, leaves via the above,
+  `computed` = `HR`), `containsShape_expandAux` (fuel induction: `HR` = the fuel-IH,
+  `HW` = `wfp_expandAux`), then `setEngine_correct`.
+- Tactic notes for the leaf Bool-algebra: `beq_eq_decide` bridges `==`↔`decide`;
+  `bool_eq_of_iff` + expanding `= true` lemmas + `SubjectRef.eq_iff` reduces to pure
+  Props; `eq_comm` in *full* `simp_all` LOOPS with `decide`/`Bool` present (max-recursion)
+  — keep it out; canonicalize orientation at Prop level or fall back to `tauto`/`aesop`.
+
+**Now unblocked:** T3/T6a/T6b `rw`-route through T1∘T2b — they become real the moment
+T2b lands. Remaining 4 sorries: T0a `semAux_fuel_stable_step`; T2a/T2b/T5 (need the
+concrete graph state machine). Next-most-tractable: T0a (see ROADMAP option (a)).
+
 ## Session 2026-07-09 (T1 core corrected + T0a ingredient 1)
 
 User asked to build T0a and T1. Both are multi-session (each needs its concrete
@@ -175,7 +220,7 @@ concrete models built first (see ROADMAP).
 | 0.5 | verify compiler undefined-reference behavior (A3) | todo | refine `WF` in Phase 3/4 |
 | 1 | Lean skeleton + spec + theorem statements | **done** | builds green; all T0–T6 stated |
 | 2 | Conformance bridge v1 | **done** | three-way `sem`/oracle/set-engine over 11 schemas, 33 tests green; graph backend TODO in P4 |
-| 3 | Set-engine model + T1 | **in progress** | replace opaque check; prove T1 |
+| 3 | Set-engine model + T1 | **done** | concrete expand model; T1 proved, axiom-clean |
 | 4 | Graph-index model + T2/T4/T5 | not started | ~half total effort |
 | 5 | Equivalence T3 + security T6 | statements done | T3/T6a/b `rw`-proved modulo T1/T2b |
 | 6 | Hardening + CI + handoff | not started | |
@@ -192,7 +237,9 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T0b stratify soundness | `stratify_none_iff_cycle`, `stratify_topological` | **proved** | Kahn correctness; axiom-clean. Pigeonhole `stuck_cycle` + fuel invariant `kahn_none_stuck` + cycle-persistence `kahn_cycle_none` + topo invariant `kahn_topo` |
 | T0b pigeonhole core | `stuck_cycle` | **proved** | stuck set (no ready nodes) ⇒ cycle, via orbit + `Finset` pigeonhole |
 | T0b Kahn helpers | `mem_readyNodes_iff`, `kahn_succ`, `kahn_none_stuck`, `kahn_cycle_none`, `kahn_topo`, `depEdges_mem` | **proved** | reusable Kahn/`readyNodes` API (WellDef.lean) |
-| T1 set engine = sem | `setEngine_correct` | stated (sorry) | Phase 3; needs concrete model first |
+| T1 set engine = sem | `setEngine_correct` | **proved** | axiom-clean; concrete expand model + fuel/AST induction; WF/Strat/AllValid unused |
+| T1 leaf/structure/fuel | `containsShape_expandDirect/expandTtu/expandE/expandAux` | **proved** | grant/parent probe correspondence, structural + fuel inductions (Correct.lean) |
+| T1 model + invariants | `expandAux`, `popOf`, `wfp_expandAux`, `popFocus_popOf`, `grounded_popOf` | **proved** | query-focused population makes PopFocus/WFp/Grounded definitional |
 | T1 containsShape distribution | `containsShape_union/intersect/subtract_focus` | **proved** | Contains.lean; corrected (naive WF-only version is FALSE) — needs `PopFocus`(+`Grounded` for ∩/∖); axiom-clean |
 | T1 distribution support | `WFp`, `wfp_normalize`, `mem_starpop_focus`, `mem_ext_focus`, `containsShape_normalize`, `wfp_atoms` | **proved** | Contains.lean building blocks |
 | T0a untainted monotonicity | `evalE_mono` | **proved** | FuelStable.lean; ingredient 1 (excl-free ⇒ `RecLe` preserves truth); axiom-clean `[propext, Quot.sound]` |
@@ -221,12 +268,14 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 
 ## `sorry` ledger
 
-**Count = 5** (was 9; **T4 closed 2026-07-09, T0b closed 2026-07-09**, monotone
+**Count = 4** (was 9; **T4 + T0b closed 2026-07-09, T1 closed 2026-07-09**, monotone
 non-increasing). Locations:
 - `Spec/WellDef.lean`: `semAux_fuel_stable_step` (feeds `sem_fuel_stable`) (1)
-- `SetEngine/Correct.lean`: `setEngine_correct` (1)
 - `GraphIndex/Correct.lean`: `graph_reached_inv`, `graph_correct`,
   `cascade_converges` (3)
+
+**`SetEngine/Correct.lean` is now `sorry`-free** — `setEngine_correct` (T1) proved and
+axiom-clean; the `opaque SetEngineModel.check` is replaced by a concrete expand model.
 
 **`Spec/WellDef.lean`'s T0b theorems are now `sorry`-free** — `stratify_none_iff_cycle`
 and `stratify_topological` proved and axiom-clean.
@@ -263,9 +312,9 @@ opaque is removed; count unchanged.
 ## Pending axioms (opaque placeholders — to be replaced, flagged by the C4 axiom audit)
 
 `opaque` declarations standing in for not-yet-built models: `ValidIdent`
-(Core/Ident — intended to stay abstract), `SetEngineModel.check` (→ Phase 3 def),
-`GraphState`, `GraphModel.check`, `Inv`, `ReachedBy`, `Quiescent`, `GraphAccepts`
-(→ Phase 4 defs). (`pathCount` is now CONCRETE — no longer opaque.) The final axiom
+(Core/Ident — intended to stay abstract), `GraphState`, `GraphModel.check`, `Inv`,
+`ReachedBy`, `Quiescent`, `GraphAccepts` (→ Phase 4 defs). (`pathCount` and
+`SetEngineModel.check` are now CONCRETE — no longer opaque.) The final axiom
 audit must show only `propext, Classical.choice, Quot.sound` — every remaining opaque
 must become a real definition before Phase 6.
 

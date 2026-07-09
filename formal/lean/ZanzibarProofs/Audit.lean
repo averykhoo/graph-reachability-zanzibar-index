@@ -37,6 +37,8 @@ namespace Zanzibar
 #print axioms MemberSet.containsShape_subtract_focus
 -- T0a ingredient 1 — untainted monotonicity (Spec/FuelStable.lean):
 #print axioms evalE_mono
+-- T1 — set engine computes sem (SetEngine/Correct.lean), now fully proved:
+#print axioms setEngine_correct
 
 -- Proved modulo a documented sorry / opaque model — expect `sorryAx` and/or the
 -- opaque model constants (these are the tracked debts, not final):

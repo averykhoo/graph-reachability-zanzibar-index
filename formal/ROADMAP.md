@@ -1,4 +1,4 @@
-# ROADMAP — closing the remaining `sorry`s (5 left, was 9)
+# ROADMAP — closing the remaining `sorry`s (4 left, was 9)
 
 A per-theorem plan for discharging the remaining deep obligations. Synthesizes a
 Gemini review roadmap **with corrections from actually type-checking against the
@@ -6,13 +6,32 @@ code** (Gemini wrote without a compiler and made several concrete errors, flagge
 below). Read alongside `PROOF_STATUS.md` (status) and `SEMANTICS.md` (the spec).
 
 Original 9 sorries; **✅ CLOSED: `pathCount_addEdge`/`pathCount_removeEdge` (T4),
-`stratify_none_iff_cycle`/`stratify_topological` (T0b).** Remaining 5:
-`setEngine_correct` (T1); `semAux_fuel_stable_step` (T0a); `graph_reached_inv`,
-`graph_correct`, `cascade_converges` (T2/T5).
+`stratify_none_iff_cycle`/`stratify_topological` (T0b), `setEngine_correct` (T1).**
+Remaining 4: `semAux_fuel_stable_step` (T0a); `graph_reached_inv`, `graph_correct`,
+`cascade_converges` (T2/T5).
 
 ---
 
-## T1 — `setEngine_correct` (Phase 3, most tractable)
+## T1 — `setEngine_correct` — ✅ DONE (2026-07-09)
+
+**Closed and axiom-clean.** `SetEngine/Correct.lean` is `sorry`-free; the
+`opaque SetEngineModel.check` is a concrete expand model (`SetEngine/Eval.lean`). See
+PROOF_STATUS "Session 2026-07-09 (T1 FULLY CLOSED)" for the full lemma list and the
+tactic notes. Key wins vs. the original plan below:
+- **`Id := SubjectRef`** (as the correction demanded — `MemberSet String` was unsound).
+- **The confinement obligation evaporates.** `containsShape` never reads `pop`, so a
+  **query-focused population** `popOf s σ = {s}` at `s`'s shape (else `∅`) makes
+  `PopFocus`/`Grounded`/`WFp` hold *definitionally* — no `pos ⊆ U` induction. The
+  distribution lemmas guarantee the probe answer is pop-invariant, so this focused
+  population computes the same answers as the real global one.
+- **T1 needs no WF/Stratifiable/AllValid** — the expansion equals `semAux` at every
+  fuel; the hypotheses are retained (underscored) but unused.
+
+The distribution core (`containsShape_*_focus`, below) was the genuinely hard,
+previously-`FALSE`-then-corrected lemma; the leaves/structure/fuel inductions built on
+it. **T3/T6a/T6b now route through T1∘T2b — real the moment T2b lands.**
+
+### (original plan)
 
 **Plan.** Replace `opaque SetEngineModel.check` with a concrete `expand`-based model:
 `expandAux : Nat → … → MemberSet Id` (fuel-recursive like `sem`), booleans via
@@ -24,41 +43,16 @@ That is **unsound** — `alice:user` and `alice:group` collide in `pos`. Use
 `Id = String × String` (type, name) (or `SubjectRef`), and its `pop` had an unproved
 injectivity `sorry`. Fix both.
 
-**What's already proved (reusable):** `ext_union/intersect/subtract`,
-`mem_ext_union/intersect/subtract` (extensional boolean cases), `containsStar_*`
-(star-subject boolean cases — DONE), `ext_empty/singletonEntity/star`,
-`neg_subset_starpop`.
-
 **The intensional distribution — RESOLVED as a corrected lemma (2026-07-09), in
 `SetEngine/Contains.lean`.** The naive law `containsShape (op M N) = containsShape M
-⟨op⟩ containsShape N` under `WF` alone is **FALSE** — I found and `#eval`-confirmed a
-counterexample where both operands are `WF`: `a = {stars := {σ}}`,
-`b = {stars := {shape}, neg := {uid}}` with `uid ∈ pop σ`, `σ ≠ shape`; both answer
-`false` for `shape` but `union a b` answers `true`. (This is why the previous
-`simp; tauto` never closed — it isn't a theorem.) The fix is the missing modeling
-invariant **`PopFocus pop uid shape := ∀ σ, uid ∈ pop σ → σ = shape`** — the set
-engine always queries a subject at *its own* shape, and populations partition the id
-space by shape. Proved, axiom-clean:
+⟨op⟩ containsShape N` under `WF` alone is **FALSE** — `#eval`-confirmed counterexample
+with both operands `WF`: `a = {stars := {σ}}`, `b = {stars := {shape}, neg := {uid}}`
+with `uid ∈ pop σ`, `σ ≠ shape`; both answer `false` for `shape` but `union a b`
+answers `true`. The fix is the missing invariant **`PopFocus pop uid shape := ∀ σ,
+uid ∈ pop σ → σ = shape`**. Proved, axiom-clean:
 - `containsShape_union_focus` — needs `PopFocus` + `WFp` operands;
 - `containsShape_intersect_focus` / `containsShape_subtract_focus` — additionally
-  need **`Grounded pop uid shape m := uid ∈ m.pos → uid ∈ pop shape`** (a concrete
-  positive member lies in its own population). Without it a positive *ghost* is
-  dropped by the extensional meet/difference (also `#eval`-confirmed false).
-Supporting: `wfp_normalize`/`wfp_union/intersect/subtract` (every op output is `WFp`),
-`mem_starpop_focus`, `mem_ext_focus`, `containsShape_normalize`, `wfp_atoms`. Proof
-technique that worked: reduce to the 7 membership atoms via those lemmas, then a
-`by_cases`-on-all-7 `<;> simp_all` (the ROADMAP's per-atom split; `tauto` alone
-times out on the nested goal).
-
-**What this leaves for T1's leaf cases:** `Direct` expand = union of
-`star`/`singletonEntity` over grants + the userset flow-through recursion; `TTU` =
-union over stored parents. These must be shown equal to `sem`'s
-`directLeaf`/`ttuLeaf`, and the concrete model must **establish `PopFocus` +
-`WFp` + `Grounded` per node** (populations partition by shape; `pos` members exist)
-— that is now the largest remaining piece, and the model's `pop`/`Id` must be built
-to satisfy exactly these three invariants.
-
-Once T1 + T2b land, **T3/T6a/T6b are already `rw`-proved** (they route through them).
+  need **`Grounded pop uid shape m := uid ∈ m.pos → uid ∈ pop shape`**.
 
 ---
 
@@ -178,10 +172,12 @@ descends strata (lower strata immutable while higher evaluate) ⇒ quiesces in
 2. ~~**T0b**~~ ✅ DONE (axiom-clean; `WellDef.lean` T0b theorems sorry-free). Hand-rolled
    Kahn correctness (`stuck_cycle` pigeonhole + `kahn_none_stuck`/`kahn_cycle_none` +
    `kahn_topo`). The `List`-bookkeeping estimate held (needed hand-rolled `getD_app_*`).
-3. **T1** (scaffolding mostly proved; unblocks T3/T6). Needs the concrete
-   `SetEngineModel.check` built first (still `opaque`).
-4. **T2/T5** (largest; needs T1 + T4). Needs the whole concrete graph state machine built.
-5. **T0a** (decide (a) vs (b) first) — now the only remaining `Spec/` sorry.
+3. ~~**T1**~~ ✅ DONE (axiom-clean; `Correct.lean` sorry-free). Concrete expand model
+   + query-focused population + fuel/AST induction. Unblocks T3/T6 (route through T1∘T2b).
+4. **T2/T5** (largest; needs T2b for T3/T6 to become real). Needs the whole concrete
+   graph state machine built. Now the highest-leverage remaining target.
+5. **T0a** (decide (a) vs (b) first) — the only remaining `Spec/` sorry; ingredient 1
+   (`evalE_mono`) proved.
 
 ---
 
