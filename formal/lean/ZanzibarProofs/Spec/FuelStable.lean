@@ -111,6 +111,12 @@ theorem ttuLeaf_mono {rec1 rec2 : Rec} (h : RecLe rec1 rec2)
         exact Or.inr ⟨inst, hi, h _ _ _ hit⟩
   · simp only [hcond, Bool.false_eq_true, if_false] at htt
 
+/-- A schema whose every definition is exclusion-free (the fully-untainted /
+    positive fragment — e.g. any pure-`direct` schema). On such a schema the whole
+    evaluator is monotone in fuel (`semAux_mono` below). -/
+def Schema.noExclAll (S : Schema) : Prop :=
+  ∀ k e, S.lookup k = some e → e.noExcl
+
 /-- **T0a ingredient 1 — untainted monotonicity.** On an exclusion-free expression,
     `evalE` preserves truth under a `rec` refinement: more derivable facts never
     retract a positive answer. This is the step of the T0a convergence argument that
@@ -138,5 +144,40 @@ theorem evalE_mono {rec1 rec2 : Rec} (h : RecLe rec1 rec2)
   | computed r => intro _ he; simp only [evalE] at he ⊢; exact h _ _ _ he
   | direct rs => intro _ he; exact directLeaf_mono h subject T q rs otype oname rel he
   | ttu tr ts => intro _ he; exact ttuLeaf_mono h subject T q tr ts otype oname he
+
+/-! ## Fuel monotonicity of the evaluator on exclusion-free schemas
+
+On a `Schema.noExclAll` schema every definition is a `noExcl` expression, so one
+`step` is monotone in `rec` (`evalE_mono`), and hence `semAux` is monotone in fuel:
+more fuel never retracts a positive answer. This is the evaluator-level form of
+ingredient 1 — used by T2b's soundness direction (a membership chain found at its
+own length's fuel persists to `fuelBound`) and by the eventual T0a untainted layer. -/
+
+/-- One more unit of fuel never retracts a positive `semAux` answer (exclusion-free
+    schema). -/
+theorem semAux_le_succ (S : Schema) (hne : S.noExclAll) (subject : SubjectRef)
+    (T : Store) (q : Query) :
+    ∀ f, RecLe (semAux S subject T q f) (semAux S subject T q (f + 1)) := by
+  intro f
+  induction f with
+  | zero => intro o n r h; simp [semAux] at h
+  | succ f ih =>
+    intro o n r h
+    rw [semAux, step] at h ⊢
+    cases hlk : S.lookup (o, r) with
+    | none => rw [hlk] at h; simp at h
+    | some e =>
+      rw [hlk] at h
+      exact evalE_mono ih subject T q o n r e (hne _ e hlk) h
+
+/-- **Fuel monotonicity** (exclusion-free schema): a positive `semAux` answer at
+    fuel `f` persists to any fuel `f' ≥ f`. -/
+theorem semAux_mono (S : Schema) (hne : S.noExclAll) (subject : SubjectRef)
+    (T : Store) (q : Query) {f f' : Nat} (hle : f ≤ f') :
+    RecLe (semAux S subject T q f) (semAux S subject T q f') := by
+  induction hle with
+  | refl => exact fun _ _ _ h => h
+  | step _ ih =>
+    exact fun o n r h => semAux_le_succ S hne subject T q _ o n r (ih o n r h)
 
 end Zanzibar
