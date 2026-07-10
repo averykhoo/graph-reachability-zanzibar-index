@@ -8,6 +8,7 @@ import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarWrite
 import ZanzibarProofs.GraphIndex.ObjStarCorrect
+import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -133,6 +134,18 @@ namespace Zanzibar
 -- edge-completeness + the bridge hypothesis (the admitted, bridge-complete
 -- write-closure that discharges them is the deferred next increment):
 #print axioms reach_of_semAux_os
+-- **T2b stage W1b — the admitted, bridge-complete write-closure
+-- (GraphIndex/ObjStarClosure.lean)** — the composed-system closure
+-- `WildReachedAdmitted`, edge-completeness (`hEC`), Lemma A (a reachable `w_all`
+-- node forces a declared object-wildcard shape), bridge-completeness, the `hbr`
+-- discharge, and the operationally-closed completeness theorem (probe 1 ∨ probe 3).
+-- All expect only the three standard axioms (no `sorryAx`):
+#print axioms wildReachedAdmitted_edge_complete
+#print axioms wall_reach_isObjectWildcard
+#print axioms writeWild_subjBridge
+#print axioms wildReachedAdmitted_bridge_complete
+#print axioms wildReachedAdmitted_hbr
+#print axioms graph_complete_objStar
 -- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
 -- at fragment scope — now REAL proved theorems (were false over the deleted
 -- abstract closure). Expect only the three standard axioms (no `sorryAx`):

@@ -29,6 +29,8 @@ import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarWrite
+import ZanzibarProofs.GraphIndex.ObjStarCorrect
+import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6

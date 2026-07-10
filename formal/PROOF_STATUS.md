@@ -6,6 +6,68 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W1b COMPLETENESS CLOSED operationally — `graph_complete_objStar`)
+
+Resuming W1b from "both semantic cores done, discharge the operational hypotheses."
+Delivered the **admitted, bridge-complete write-closure** and used it to discharge
+**both** operational hypotheses (`hEC`, `hbr`) that `reach_of_semAux_os`
+(completeness core) was stated over — so the W1b completeness direction is now a
+real, operationally-closed theorem. New file `GraphIndex/ObjStarClosure.lean`,
+sorry-free, all six audited theorems axiom-clean (subset of the three standard
+axioms). `verify.sh` green throughout (build + 0 sorries + 60 conformance + audit).
+Sorry count held at 0.
+
+**Delivered (`GraphIndex/ObjStarClosure.lean`):**
+- `writeWildPre` (the fully-bridged pre-grant state) + `writeWild_eq_ite` (the write
+  as an `ite` over it, definitional) — lets the closure state grant admission over
+  the bridged state and lets edge lemmas skip the `let` chain.
+- Edge-monotonicity through the bridge machinery (`ensureBridges_edges_mono`,
+  `writeWildPre_edges_mono`, `writeWild_edges_mono`), the grant-edge and
+  bridge-edge creation lemmas (`writeWild_grant_edge`, `ensureBridges_creates_bridge`).
+- **`WildReachedAdmitted`** — the composed-system closure (W1b analog of
+  `ReachedByAdmitted`): each write's grant edge (`hadmGrant`) AND its *subject*
+  endpoint bridge (`hadmSub`) passed cycle-rejection. Carrying `hadmSub` is exactly
+  the "no wildcard-own-shape cycle on subjects" fragment on which bridge-completeness
+  holds; the object-endpoint bridge is handled internally by `ensureBridges` (both
+  outcomes are valid states), so it is not required. Embeds into `WildReached`
+  (`wildReached_of_admitted`); schema fixed (`wildReachedAdmitted_schema`).
+- **`wildReachedAdmitted_edge_complete`** (`hEC`) — every stored grant's edge is
+  present (mirror of `admitted_edge_complete`; new edges added, old edges monotone).
+- **`wall_reach_isObjectWildcard`** (Lemma A) — a reachable `w_all(T,R)` node forces
+  `S.isObjectWildcard T R`: its only in-edges are grant edges (bridge targets are
+  plain, `nreaches_last_edge` + the grant-or-bridge characterization), from
+  object-wildcard grants, which `ObjStarValid` puts on a declared object-wildcard
+  shape.
+- **`wildReachedAdmitted_bridge_complete`** (bridge-completeness) — every stored
+  grant whose *subject* shape is a declared object-wildcard has its materialized
+  `w_all → concrete` bridge (new writes create it via `writeWild_subjBridge`; old
+  bridges persist). This is the invariant that, with Lemma A, discharges `hbr`.
+- **`wildReachedAdmitted_hbr`** — the `hbr` discharge: reachability of `g.subject`'s
+  `w_all` node forces the object-wildcard shape (Lemma A), and bridge-completeness
+  then supplies the bridge.
+- **`graph_complete_objStar`** — the operationally-closed W1b completeness theorem:
+  on `WildReachedAdmitted` over an object-star, admission-valid, object-wildcard-valid
+  store, a `sem` membership at `fuelBound` is reachability to probe 1 (concrete
+  object node) ∨ probe 3 (`w_all` node). `reach_of_semAux_os`'s two operational
+  hypotheses are gone.
+
+**What remains for the full `graph_correct_objStar` (`check = sem`), sharply
+isolated — only the SOUNDNESS side + assembly:**
+1. **Fuel-bounded soundness assembly.** `semAux_of_grantReach` (done) gives fuel =
+   the `GrantReach` length `m`; the top-level theorem needs `m ≤ fuelBound`. The
+   crude `m ≤ nodes.length + 1` is too weak (duplicate `w_all` nodes inflate
+   `nodes.length` past `fuelBound` when `|keys| = 1`). The tight bound is `m ≤ 2|T|`
+   (distinct plain source nodes — each grant hop consumes a distinct plain source in
+   a compressed/nodup trail; `w_all` nodes are not plain). Formalizing that
+   distinctness bound (strengthen `grantReach_of_trail` to bound `m` by the plain
+   vertex count) is the remaining arithmetic. The *completeness* side needs no fuel
+   bound (this session).
+2. **Top-level `check = sem` assembly** — route the read to `probeNonDerived`
+   (pure-direct = untainted), kill probe 2 (star-free subjects) and probe 4, and
+   glue probe 1 ∨ probe 3 via `reach ↔ NReaches` to the two directions
+   (`graph_complete_objStar` backward; the fuel-bounded `GrantReach` chain forward).
+   Mirror of `graph_correct_direct` / `graph_correct_bareStar`.
+
 ## Overnight autonomous run (2026-07-09 → 07-10)
 
 User granted full autonomy ("keep going til you're done, I'll review tomorrow in one
