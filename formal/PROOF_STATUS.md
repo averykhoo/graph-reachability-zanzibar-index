@@ -8,6 +8,73 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11 (W3a Step A — the `hag` base reduction: schema restriction + `semAux` transfer + rewrite-preservation)
+
+Resuming W3a from HANDOFF "Step A — discharge `hag` on the base" via the recommended
+schema-restriction route. Two green+pushed axiom-clean increments (new file
+`GraphIndex/RestrictBase.lean` + `Audit.lean`); `verify.sh` green throughout (build + 0 sorries
++ zcli + audit standard-axioms-only + 60 conformance). Sorry count held at 0. This lands the
+**semantic heart** of Step A (the ledger's "genuine remaining core") plus the schema-combinatorial
+groundwork for the state transfer.
+
+**Attack-first (machine-checked `#eval` on a mixed `admin but not suspended` schema, then
+deleted).** Confirmed the three route claims computationally before proving: taint isolates
+exactly the derived key (`taintedKeys Smix = [(doc,can)]`), `schemaRewrites Smix =
+schemaRewrites (restrictU Smix)` (the derived key is `RootBoolean`, emits no arms), and `semAux`
+agrees on every operand relation (admin/viewer/suspended) at fuel 20. No refutation — statements
+survived, then proved.
+
+**Increment 1 — schema restriction + `semAux` transfer (`RestrictBase.lean`).**
+- `restrictUntainted S` (`S↾U`): drop every tainted-key def, keep object-wildcards. Membership /
+  subset / `NodupKeys`-preservation (`List.filter_sublist`-map-sublist).
+- `untaintedSchema_restrict` (under `NodupKeys`): `S↾U` is untainted — a kept def has an untainted
+  key, so its expr is boolean-free (`untainted_closed` ⇒ `baseTaint = false`, and `NodupKeys` makes
+  `baseTaint` read exactly this def's `containsBool`). `isDerived_restrict` collapses.
+- `restrictUntainted_lookup` (under `NodupKeys`): the schemas agree at every untainted key (declared
+  ⇒ its unique def is kept; undeclared ⇒ both `none`).
+- **`semAux_restrict` (the heart):** at every untainted key `(t,r)` and every name `m`, `semAux S`
+  and `semAux (S↾U)` coincide (any fuel). Fuel induction: at an untainted key the two schemas'
+  defs coincide (`restrictUntainted_lookup`), then `evalE_congr` (Confine) closes the step because
+  `evalE` consults `rec` only at that def's `exprRefs`, all untainted by heredity
+  (`untainted_closed`), where the IH supplies agreement. **Reduces the mixed-schema `hag` to a
+  whole-schema-`UntaintedSchema` W2 fact over `S↾U` — `graph_correct_rules` as a black box.**
+
+**Increment 2 — rewrite fan-out preserved (`RestrictBase.lean`).** The graph write path reads the
+schema only through `schemaRewrites` (`writeDirect`/`admitEdge`/`reach` schema-blind).
+- `filter_flatMap_eq`: flat-map over a filtered list is unchanged when removed elements map to `[]`.
+- `schemaRewrites_restrict` (given the fragment fact `hDrop`: every tainted def emits no arms —
+  `RootBoolean` ⇒ `exprArms_rootBoolean`): `schemaRewrites (S↾U) = schemaRewrites S`.
+- `rewriteStep_restrict`; `rewriteClosureAux_restrict`: the bounded closure is preserved at ANY
+  fixed fuel (pure structural — reads the schema only via `rewriteStep`).
+
+**Resume → finish Step A's state transfer + assembly (the fuel bridge is the one remaining
+subtlety).**
+1. **The fuel bridge (the crux).** The canonical closures run at DIFFERENT fuels: `rewriteClosure
+   S t` at `|S.keys|+1`, `rewriteClosure (S↾U) t` at the smaller `|S↾U.keys|+1`. With
+   `rewriteClosureAux_restrict`, `rewriteClosure (S↾U) t = rewriteClosureAux S (|S↾U.keys|+1) [t]`,
+   so the goal is **membership equality of the two S-closures across the fuel gap**. Both saturate:
+   `rewriteClosure_saturated` (RewriteRanked S) gives the `|S.keys|+1` side; the `|S↾U.keys|+1`
+   side needs that a rewrite chain from a stored (⇒ untainted, `exprDirects_rootBoolean` +
+   `StoreValidRules`) seed STAYS untainted (an arm's `outRel` is its def's relation; tainted defs
+   emit no arms ⇒ no rule outputs a tainted relation) and so has depth ≤ `|S↾U.keys|`. Formalize
+   as either `RewriteRanked (S↾U)` (a rank compressed to `S↾U`'s key count) or a direct
+   "untainted-cone saturates at `|S↾U.keys|+1`" lemma.
+2. **State transfer.** On the fully-*admitted* write path (`FoldAdmits` ⇒ no cycle rejection), a
+   `ReachedByRulesAdmitted` state's edges are characterized EXACTLY by `reachedByRules_edge_sound`
+   (⊆) + `reachedByRulesAdmitted_edge_complete` (⊇): `(a,b) ∈ σ.edges ↔ ∃ t∈T, ∃ u ∈ rewriteClosure
+   S t, materialise`. With (1) giving `rewriteClosure S t ≈ rewriteClosure (S↾U) t` (membership),
+   build the canonical `ReachedByRulesAdmitted σ' (S↾U) T` and show `σ'.edges ≈ σ.edges`
+   (membership). `reach` depends only on edge membership (`reach_iff_nreaches` + `edgesClosed`).
+3. **Base `hag` equation.** `graphRec σ0 s dt on r' = probeNonDerived σ0 ⟨s,r',⟨dt,on⟩⟩`
+   (`probeNonDerived_plainEdges`, plain edges) `= check σ' q'` (edges agree, `S↾U` untainted routes
+   to the probe) `= sem (S↾U) T q'` (`graph_correct_rules` over `S↾U`) `= sem S T q'`
+   (`semAux_restrict` + untainted-schema fuel stability to bridge `fuelBound (S↾U)` vs `fuelBound
+   S`). This is `hag` for the untainted operands; compose with `graphRec_reduce_base`. NB the
+   W3a base is currently `ReachedByRules` (not `…Admitted`) — the completeness (backward) half
+   needs an admitted W3a closure, which is **Step B**'s `ReachedByW3aAdmitted`; Step A can land the
+   soundness half + the equation over an *admitted* base as the reusable fact.
+4. Then Step B (candidate completeness + assembly `graph_correct_w3a`) and Step C (T3/T6 widening).
+
 ## Session 2026-07-11 (review/cleanup + handoff restructure + `hag` leaf-restriction fix)
 
 A consolidation session (user-directed): review everything for truth/cleanliness, fix
