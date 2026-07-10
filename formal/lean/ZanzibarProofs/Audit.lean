@@ -146,6 +146,19 @@ namespace Zanzibar
 #print axioms directLeaf_elim_us
 #print axioms mog_elim_us
 #print axioms reach_of_semAux_us
+-- W1c soundness semantic core (GraphIndex/UsStarCorrect.lean) — the userset-star-aware
+-- lift (`semAux_lift_us`, absorbing a userset-star intermediate via the outer subject's
+-- `instances`-branch flow-through), the in-bridge-absorbing chain `UsStarReach`, and its
+-- two directions: `UsStarReach ⇒ sem` (`semAux_of_usStarReach`, no `instances` needed —
+-- an in-bridge maps to a direct shape-match) and `trail ⇒ UsStarReach`
+-- (`usStarReach_of_trail`). Standard axioms only:
+#print axioms mog_intro_star
+#print axioms objectName_mem_instances
+#print axioms directLeaf_grant_usStar
+#print axioms semAux_lift_us
+#print axioms semAux_one_covers_us
+#print axioms semAux_of_usStarReach
+#print axioms usStarReach_of_trail
 -- **T2b stage W1b — the read-correspondence SOUNDNESS core
 -- (GraphIndex/ObjStarCorrect.lean)** — the grant-or-bridge edge characterization,
 -- the bridge-absorbing generalized grant chain `GrantReach`, and its two directions:

@@ -76,7 +76,8 @@ theorem bridgeLayers_edges_mem {σ : GraphState} {a b : NodeKey} {e : NodeKey ×
               |>.ensureInBridges b).edges) :
     e ∈ σ.edges
     ∨ (∃ c, e = (wAllNode c.type c.pred, c) ∧ c.variant = Variant.plain ∧ c.name ≠ STAR)
-    ∨ (∃ c, e = (c, wAnyNode (c.type, c.pred)) ∧ c.variant = Variant.plain ∧ c.name ≠ STAR) := by
+    ∨ (∃ c, e = (c, wAnyNode (c.type, c.pred)) ∧ c.variant = Variant.plain ∧ c.name ≠ STAR
+        ∧ c.pred ≠ BARE) := by
   -- in-bridge on b
   rcases ensureInBridges_edges_mem he with h1 | ⟨heq, hbc⟩
   · -- in-bridge on a
@@ -90,10 +91,10 @@ theorem bridgeLayers_edges_mem {σ : GraphState} {a b : NodeKey} {e : NodeKey ×
           exact Or.inr (Or.inl ⟨_, heq, hv, hn⟩)
       · obtain ⟨hv, hn, _⟩ := bridgedConcrete_elim hbc
         exact Or.inr (Or.inl ⟨_, heq, hv, hn⟩)
-    · obtain ⟨hv, hn, _, _⟩ := bridgedInConcrete_elim hbc
-      exact Or.inr (Or.inr ⟨_, heq, hv, hn⟩)
-  · obtain ⟨hv, hn, _, _⟩ := bridgedInConcrete_elim hbc
-    exact Or.inr (Or.inr ⟨_, heq, hv, hn⟩)
+    · obtain ⟨hv, hn, hp, _⟩ := bridgedInConcrete_elim hbc
+      exact Or.inr (Or.inr ⟨_, heq, hv, hn, hp⟩)
+  · obtain ⟨hv, hn, hp, _⟩ := bridgedInConcrete_elim hbc
+    exact Or.inr (Or.inr ⟨_, heq, hv, hn, hp⟩)
 
 /-- `writeUsStar`'s edge effect: an edge of `σ.writeUsStar t` is an old edge, the grant
     edge `(subjNode t.subject, objNode t.object t.relation)`, an out-bridge, or an
@@ -103,7 +104,8 @@ theorem writeUsStar_edges_mem {σ : GraphState} {t : Tuple} {e : NodeKey × Node
     e ∈ σ.edges
     ∨ e = (subjNode t.subject, objNode t.object t.relation)
     ∨ (∃ c, e = (wAllNode c.type c.pred, c) ∧ c.variant = Variant.plain ∧ c.name ≠ STAR)
-    ∨ (∃ c, e = (c, wAnyNode (c.type, c.pred)) ∧ c.variant = Variant.plain ∧ c.name ≠ STAR) := by
+    ∨ (∃ c, e = (c, wAnyNode (c.type, c.pred)) ∧ c.variant = Variant.plain ∧ c.name ≠ STAR
+        ∧ c.pred ≠ BARE) := by
   unfold GraphState.writeUsStar at he
   dsimp only at he
   split at he
@@ -126,12 +128,13 @@ theorem usStarReached_grant_or_bridge {σ : GraphState} {S : Schema} {T : Store}
     ∀ a b, (a, b) ∈ σ.edges →
       (∃ t ∈ T, a = subjNode t.subject ∧ b = objNode t.object t.relation)
       ∨ (a = wAllNode b.type b.pred ∧ b.variant = Variant.plain ∧ b.name ≠ STAR)
-      ∨ (b = wAnyNode (a.type, a.pred) ∧ a.variant = Variant.plain ∧ a.name ≠ STAR) := by
+      ∨ (b = wAnyNode (a.type, a.pred) ∧ a.variant = Variant.plain ∧ a.name ≠ STAR
+          ∧ a.pred ≠ BARE) := by
   induction h with
   | empty S => intro a b hab; simp [emptyState] at hab
   | @step σ S T t hprev ih =>
     intro a b hab
-    rcases writeUsStar_edges_mem hab with hold | hgrant | ⟨c, hc, hcv, hcn⟩ | ⟨c, hc, hcv, hcn⟩
+    rcases writeUsStar_edges_mem hab with hold | hgrant | ⟨c, hc, hcv, hcn⟩ | ⟨c, hc, hcv, hcn, hcp⟩
     · rcases ih a b hold with ⟨t', ht', h1, h2⟩ | hout | hin
       · exact Or.inl ⟨t', List.mem_cons_of_mem _ ht', h1, h2⟩
       · exact Or.inr (Or.inl hout)
@@ -145,7 +148,7 @@ theorem usStarReached_grant_or_bridge {σ : GraphState} {S : Schema} {T : Store}
     · simp only [Prod.mk.injEq] at hc
       obtain ⟨ha, hb⟩ := hc
       subst ha
-      exact Or.inr (Or.inr ⟨hb, hcv, hcn⟩)
+      exact Or.inr (Or.inr ⟨hb, hcv, hcn, hcp⟩)
 
 /-! ## `instances` excludes the star sentinel
 
@@ -378,5 +381,332 @@ theorem reach_of_semAux_us {S : Schema} {T : Store} {q : Query}
           rcases hmid with hL | hR
           · exact Or.inl ((hL.tail hbridge).tail hedge)
           · exact Or.inr ((hR.tail hbridge).tail hedge)
+
+/-! ## Soundness infrastructure — the userset-star-aware lift
+
+The soundness half (graph path ⇒ `sem`) must, like W1b's `semAux_of_grantReach`,
+lift membership through consecutive chain hops. The new content over W1b: an
+intermediate userset node `s'` may match a **userset-star** grant `g = (T,*,P)`
+directly (its shape equals `g`'s), and absorbing that into the outer subject `s`'s
+membership goes through `memberOfGranted`'s **`instances`-branch** — which fires for
+`s` with witness `s'.name` precisely when `s'.name ∈ instances T q s'.type`. So the
+W1c lift (`semAux_lift_us`) carries an instances hypothesis on `s'` that
+`semAux_lift_os` (star-free intermediates) did not need. Every intermediate the chain
+lifts through is a tuple object name, hence in `instances` (`objectName_mem_instances`),
+so the hypothesis is always dischargeable. -/
+
+/-- **Flow-through introduction via a userset-star grant.** A userset-star grant
+    `g = (T,*,P)` (`P ≠ BARE`) with a positive `instances` witness makes
+    `memberOfGranted` positive — the `instances`-branch introduction (dual of
+    `mog_intro`'s plain-userset branch). -/
+theorem mog_intro_star {rec : Rec} {T : Store} {q : Query} {grants : List Tuple}
+    {g : Tuple} (hg : g ∈ grants) (hpb : g.subject.predicate ≠ BARE)
+    (hps : g.subject.name = STAR) {inst : String}
+    (hinst : inst ∈ instances T q g.subject.type)
+    (hrec : rec g.subject.type inst g.subject.predicate = true) :
+    memberOfGranted rec T q grants = true := by
+  unfold memberOfGranted
+  refine List.any_eq_true.mpr ⟨g, hg, ?_⟩
+  rw [if_neg (by simpa using hpb), if_neg (by simp [hps])]
+  exact List.any_eq_true.mpr ⟨inst, hinst, hrec⟩
+
+/-- **A tuple's object name is in `instances`.** A star-free object position of a
+    stored tuple is a member of the `∃`-witness population for its type (`instances`
+    includes tuple positions, excludes only query endpoints). This is what discharges
+    the `instances` hypothesis of `semAux_lift_us` at every `hop` intermediate. -/
+theorem objectName_mem_instances {T : Store} {q : Query} {t : Tuple} (ht : t ∈ T)
+    (hne : t.object.name ≠ STAR) : t.object.name ∈ instances T q t.object.type := by
+  unfold instances universeOf
+  simp only [if_neg (Bool.false_ne_true), List.append_nil, List.mem_dedup]
+  induction T with
+  | nil => simp at ht
+  | cons tup rest ih =>
+      simp only [List.foldr_cons]
+      have hlift : ∀ {acc : List String},
+          t.object.name ∈ acc →
+          t.object.name ∈ (if tup.object.type = t.object.type ∧ tup.object.name ≠ STAR
+              then tup.object.name ::
+                (if tup.subject.type = t.object.type ∧ tup.subject.name ≠ STAR
+                 then tup.subject.name :: acc else acc)
+              else (if tup.subject.type = t.object.type ∧ tup.subject.name ≠ STAR
+                 then tup.subject.name :: acc else acc)) := by
+        intro acc hacc
+        split
+        · exact List.mem_cons_of_mem _ (by split <;> [exact List.mem_cons_of_mem _ hacc; exact hacc])
+        · split <;> [exact List.mem_cons_of_mem _ hacc; exact hacc]
+      rcases List.mem_cons.mp ht with rfl | hmem
+      · rw [if_pos ⟨rfl, hne⟩]; exact List.mem_cons_self
+      · exact hlift (ih hmem)
+
+/-- **Leaf introduction, userset-star.** A userset-star grant `g = (T,*,P)` answers
+    the leaf positively for *any* userset subject `s` of the same shape `(T,P)` — the
+    second disjunct of `directLeaf`'s userset branch (`SEMANTICS.md §5.4`, a pure
+    shape-match, no recursion). The userset analog of `directLeaf_grant_bareStar`. -/
+theorem directLeaf_grant_usStar {rec : Rec} {s : SubjectRef} {T : Store} {q : Query}
+    {rs : List Restriction} {ot on rel : String} {g : Tuple}
+    (hg : g ∈ grantsOf T rs ot on rel) (hgstar : g.subject.name = STAR)
+    (hgtype : g.subject.type = s.type) (hgp : g.subject.predicate = s.predicate)
+    (hs : s.name ≠ STAR) (hsp : s.predicate ≠ BARE) :
+    directLeaf rec s T q rs ot on rel = true := by
+  unfold directLeaf
+  rw [if_neg (by simpa using hs), if_neg (by simpa using hsp), Bool.or_eq_true]
+  refine Or.inl (List.any_eq_true.mpr ⟨g, hg, ?_⟩)
+  have hgpne : g.subject.predicate ≠ BARE := by rw [hgp]; exact hsp
+  simp only [Bool.or_eq_true, Bool.and_eq_true, bne_iff_ne, ne_eq, beq_iff_eq]
+  exact Or.inr ⟨⟨⟨hgstar, hgpne⟩, hgtype⟩, hgp⟩
+
+/-- One userset-star grant is a fuel-1 `sem` membership of its object node, for any
+    userset subject of the grant's shape. The base hop when the chain source is the
+    `wAny(s.shape)` node (probe 2). -/
+theorem semAux_one_of_usStarGrant {S : Schema} {T : Store} {q : Query} {t : Tuple}
+    {s : SubjectRef} (hSV : StoreValid S T) (hUS : UsStarStore T) (ht : t ∈ T)
+    (htstar : t.subject.name = STAR) (htype : t.subject.type = s.type)
+    (htp : t.subject.predicate = s.predicate) (hs : s.name ≠ STAR) (hsp : s.predicate ≠ BARE) :
+    semAux S s T q 1 t.object.type t.object.name t.relation = true := by
+  obtain ⟨rs, hlk, hrm⟩ := hSV t ht
+  rw [semAux, step, hlk]
+  show directLeaf (semAux S s T q 0) s T q rs
+    t.object.type t.object.name t.relation = true
+  refine directLeaf_grant_usStar ?_ htstar htype htp hs hsp
+  exact grantsOf_intro ht rfl rfl (matchingObjects_self _ (hUS t ht).1) hrm
+
+/-- **Userset-star-aware userset lifting.** Membership propagates through a userset
+    `s'`: if `s ∈ s'` (fuel `f₀`) and `s' ∈ v` (fuel `f`) then `s ∈ v`. Over a
+    userset-star store: an intermediate `s'` may match a **userset-star** grant
+    directly, and `s` absorbs that via `memberOfGranted`'s `instances`-branch (witness
+    `s'.name`, needing `hs'inst`); the plain-userset and flow-through cases are as
+    `semAux_lift_os`. This is the semantic heart of W1c soundness. -/
+theorem semAux_lift_us {S : Schema} {T : Store} {q : Query} {s s' : SubjectRef}
+    (hPD : PureDirect S) (hUS : UsStarStore T)
+    (hs'n : s'.name ≠ STAR) (hs'p : s'.predicate ≠ BARE)
+    (hs'inst : s'.name ∈ instances T q s'.type)
+    {f₀ : Nat} (hmem : semAux S s T q f₀ s'.type s'.name s'.predicate = true) :
+    ∀ (f : Nat) (ot on r : String),
+      semAux S s' T q f ot on r = true →
+      semAux S s T q (f + f₀) ot on r = true := by
+  intro f
+  induction f with
+  | zero => intro ot on r h; simp [semAux] at h
+  | succ f ih =>
+    intro ot on r h
+    have hgoalfuel : f + 1 + f₀ = (f + f₀) + 1 := by omega
+    rw [hgoalfuel, semAux, step]
+    rw [semAux, step] at h
+    cases hlk : S.lookup (ot, r) with
+    | none => rw [hlk] at h; simp at h
+    | some e =>
+      rw [hlk] at h
+      obtain ⟨rs, rfl⟩ := pureDirect_lookup hPD hlk
+      have h' : directLeaf (semAux S s' T q f) s' T q rs ot on r = true := h
+      show directLeaf (semAux S s T q (f + f₀)) s T q rs ot on r = true
+      rcases directLeaf_elim_us hUS hs'n h' with
+        ⟨g, hg, hgs⟩ | ⟨_, g, hg, hgstar, hgtype, hgpred⟩ | hmog
+      · -- exact match of s' at g (g plain userset): absorb via s's plain flow-through
+        apply directLeaf_of_mog
+        refine mog_intro hg (by rw [hgs]; exact hs'p) (by rw [hgs]; exact hs'n) ?_
+        rw [hgs]
+        exact semAux_mono S (pureDirect_noExclAll hPD) s T q
+          (Nat.le_add_left f₀ f) _ _ _ hmem
+      · -- userset-star direct match of s' at g: absorb via s's instances flow-through
+        apply directLeaf_of_mog
+        have hgpne : g.subject.predicate ≠ BARE := by rw [hgpred]; exact hs'p
+        refine mog_intro_star hg hgpne hgstar (inst := s'.name) (by rw [hgtype]; exact hs'inst) ?_
+        rw [hgtype, hgpred]
+        exact semAux_mono S (pureDirect_noExclAll hPD) s T q
+          (Nat.le_add_left f₀ f) _ _ _ hmem
+      · -- flow-through of s': the same grant flows for s by the fuel IH
+        rcases mog_elim_us hmog with
+          ⟨g, hg, hpb, hps, hrec⟩ | ⟨g, hg, hpb, hgstar, inst, hinst, hrec⟩
+        · exact directLeaf_of_mog (mog_intro hg hpb hps (ih _ _ _ hrec))
+        · exact directLeaf_of_mog (mog_intro_star hg hpb hgstar hinst (ih _ _ _ hrec))
+
+/-! ## `UsStarReach` — the in-bridge-absorbing membership chain
+
+The soundness half's chain (analog of W1b's `GrantReach`). A hop is a stored grant
+(`base`/`hop`, whose source `subjNode t.subject` is *plain* for a concrete-subject
+grant or the `w_any` node for a userset-star grant), or a `concrete → w_any`
+**in-bridge** (`inbridge`) — the new W1c machinery. Crucially, the in-bridge carries
+**no** instance witness: a concrete node reaching a userset-star grant through its
+in-bridge always corresponds to that node matching the grant *directly* in `sem` (a
+pure shape-match, unconditionally valid), so soundness never needs `instances`. The
+instance condition matters only for *completeness* (`reach_of_semAux_us`'s `hib`),
+where a `sem` flow-through demands a genuine witness. -/
+
+/-- **The bridge-absorbing membership chain (W1c).** `UsStarReach T n u v`: `u`
+    reaches `v` via `n` generalized hops — a stored grant (`base`/`hop`) or a
+    `concrete → w_any` in-bridge (`inbridge`). Objects are star-free, so every target
+    is a concrete `objNode`; the source `u` may be a plain node or a `w_any` node (a
+    userset-star grant's source, or an in-bridge's target). -/
+inductive UsStarReach (T : Store) : Nat → NodeKey → NodeKey → Prop where
+  | base (t : Tuple) (ht : t ∈ T) :
+      UsStarReach T 1 (subjNode t.subject) (objNode t.object t.relation)
+  | hop (t : Tuple) (ht : t ∈ T) (hon : t.object.name ≠ STAR) {n : Nat} {v : NodeKey}
+      (rest : UsStarReach T n (subjNode ⟨t.object.type, t.object.name, t.relation⟩) v) :
+      UsStarReach T (n + 1) (subjNode t.subject) v
+  | inbridge (c : SubjectRef) (hcn : c.name ≠ STAR) (hcp : c.predicate ≠ BARE)
+      {n : Nat} {v : NodeKey}
+      (rest : UsStarReach T n (wAnyNode (c.type, c.predicate)) v) :
+      UsStarReach T (n + 1) (subjNode c) v
+
+/-- A star-free subject `s` is *covered* by a chain-start node `u`: `u` is `s`'s own
+    plain node, or (if `s` is a userset) the `wAny(s.shape)` node a `[T:*#P]` grant
+    emanates from. Generalizes the equality `subjNode s = u` to the leading userset-star
+    hop of probe 2 (the userset analog of W1a's `Covers`). -/
+def UsCovers (s : SubjectRef) (u : NodeKey) : Prop :=
+  u = subjNode s ∨ (s.predicate ≠ BARE ∧ u = wAnyNode s.shape)
+
+/-- One plain-subject tuple is a fuel-1 `sem` membership of its object node (the base
+    hop for a concrete-subject grant). -/
+theorem semAux_one_of_tuple_us {S : Schema} {T : Store} {q : Query} {t : Tuple}
+    (hSV : StoreValid S T) (hUS : UsStarStore T) (ht : t ∈ T)
+    (htsub : t.subject.name ≠ STAR) :
+    semAux S t.subject T q 1 t.object.type t.object.name t.relation = true := by
+  obtain ⟨rs, hlk, hrm⟩ := hSV t ht
+  rw [semAux, step, hlk]
+  show directLeaf (semAux S t.subject T q 0) t.subject T q rs
+    t.object.type t.object.name t.relation = true
+  refine directLeaf_grant_self ?_ rfl htsub
+  exact grantsOf_intro ht rfl rfl (matchingObjects_self _ (hUS t ht).1) hrm
+
+/-- **Base hop.** A grant `t` whose source `subjNode t.subject` *covers* the star-free
+    subject `s` is a fuel-1 `sem` membership of its object node for `s`: either
+    `s = t.subject` (a plain concrete-subject grant) or `t` is a userset-star grant of
+    `s`'s shape (probe-2 leading hop). -/
+theorem semAux_one_covers_us {S : Schema} {T : Store} {q : Query} {t : Tuple}
+    {s : SubjectRef} (hSV : StoreValid S T) (hUS : UsStarStore T) (ht : t ∈ T)
+    (hsn : s.name ≠ STAR) (hcov : UsCovers s (subjNode t.subject)) :
+    semAux S s T q 1 t.object.type t.object.name t.relation = true := by
+  rcases hcov with hEq | ⟨hsp, hWany⟩
+  · -- subjNode t.subject = subjNode s
+    by_cases htstar : t.subject.name = STAR
+    · rw [subjNode, if_pos htstar, subjNode_plain hsn] at hEq
+      simp [NodeKey.mk.injEq] at hEq
+    · have hts : t.subject = s := subjNode_inj htstar hsn hEq
+      rw [← hts]; exact semAux_one_of_tuple_us hSV hUS ht htstar
+  · -- s covers via wAny: subjNode t.subject = wAnyNode s.shape ⇒ t userset-star of s's shape
+    have htstar : t.subject.name = STAR := by
+      by_contra hne
+      rw [subjNode_plain hne, wAnyNode, SubjectRef.shape] at hWany
+      simp [NodeKey.mk.injEq] at hWany
+    rw [subjNode, if_pos htstar, wAnyNode, SubjectRef.shape] at hWany
+    simp only [NodeKey.mk.injEq] at hWany
+    obtain ⟨htype, -, htp, -⟩ := hWany
+    exact semAux_one_of_usStarGrant hSV hUS ht htstar htype htp hsn hsp
+
+/-! ## `UsStarReach ⇒ sem` — soundness's semantic half -/
+
+/-- **`UsStarReach` is a `sem` membership.** A generalized chain of length `n` from a
+    node covering the star-free subject `s` to the concrete query object node is a
+    `sem` membership at fuel `n`. Base/hop hops use `semAux_one_covers_us` +
+    `semAux_lift_us` (the intermediate userset is a tuple object, hence in `instances`,
+    discharging the lift's hypothesis); an in-bridge hop from `c` recognizes `c`
+    matching the userset-star grant directly (`UsCovers`'s `wAny` disjunct) and bumps
+    fuel by one (`semAux_mono`). The bridge-aware analog of `semAux_of_grantReach`. -/
+theorem semAux_of_usStarReach {S : Schema} {T : Store} {q : Query}
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hUS : UsStarStore T) :
+    ∀ {n : Nat} {u v : NodeKey}, UsStarReach T n u v →
+      ∀ {s : SubjectRef}, s.name ≠ STAR → UsCovers s u →
+      ∀ {ot on r : String}, on ≠ STAR → v = objNode ⟨ot, on⟩ r →
+      semAux S s T q n ot on r = true := by
+  intro n u v hch
+  induction hch with
+  | base t ht =>
+    intro s hsn hcov ot on r hon hveq
+    have htobj : t.object.name ≠ STAR := (hUS t ht).1
+    rw [objNode_plain htobj, objNode_plain hon] at hveq
+    simp only [NodeKey.mk.injEq] at hveq
+    obtain ⟨hot, hon', hr, -⟩ := hveq
+    rw [← hot, ← hon', ← hr]
+    exact semAux_one_covers_us hSV hUS ht hsn hcov
+  | @hop t ht hon' n v rest ih =>
+    intro s hsn hcov ot on r hon hveq
+    have hmem1 := semAux_one_covers_us (q := q) hSV hUS ht hsn hcov
+    have hc'n : (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).name ≠ STAR := hon'
+    have hc'p : (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).predicate ≠ BARE := by
+      obtain ⟨rs, hlk, _⟩ := hSV t ht
+      exact lookup_rel_ne_bare hWF hlk
+    have hc'inst : (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).name ∈
+        instances T q (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef).type :=
+      objectName_mem_instances ht hon'
+    have htail := ih (s := ⟨t.object.type, t.object.name, t.relation⟩) hc'n (Or.inl rfl) hon hveq
+    exact semAux_lift_us hPD hUS hc'n hc'p hc'inst hmem1 n ot on r htail
+  | @inbridge c hcn hcp n v rest ih =>
+    intro s hsn hcov ot on r hon hveq
+    have hsc : s = c := by
+      rcases hcov with hEq | ⟨_, hWany⟩
+      · exact (subjNode_inj hcn hsn hEq).symm
+      · exfalso; rw [subjNode_plain hcn, wAnyNode, SubjectRef.shape] at hWany
+        simp [NodeKey.mk.injEq] at hWany
+    subst hsc
+    have hcov2 : UsCovers s (wAnyNode (s.type, s.predicate)) :=
+      Or.inr ⟨hcp, by rw [SubjectRef.shape]⟩
+    have htail := ih (s := s) hsn hcov2 hon hveq
+    exact semAux_mono S (pureDirect_noExclAll hPD) s T q (Nat.le_succ n) _ _ _ htail
+
+/-! ## `trail ⇒ UsStarReach` — soundness's reachability half -/
+
+/-- **Every graph trail from a plain-or-`wAny` node to a concrete node is a
+    `UsStarReach`.** Strong induction on the trail length: classify each first edge via
+    the edge characterization — a **grant** (`base`/`hop`, the object node continuing as
+    a userset subject), an **out-bridge** (source `w_all`, impossible from a plain/`wAny`
+    node), or an **in-bridge** (`inbridge`, `c → w_any`, continuing from the `w_any`
+    node). A path terminating on a `w_any` node is excluded because the target is a
+    concrete (plain) node. No fuel bound is threaded here (the tight bound — where a
+    userset-star grant's source is `w_any`, not plain — is the deferred assembly
+    increment). -/
+theorem usStarReach_of_trail {σ : GraphState} {S : Schema} {T : Store}
+    (h : UsStarReached σ S T) (hUS : UsStarStore T) :
+    ∀ (k : Nat) (l : List NodeKey), l.length ≤ k →
+      ∀ (u v : NodeKey),
+        (u.variant = Variant.plain ∨ u.variant = Variant.wAny) →
+        v.variant = Variant.plain →
+        Trail σ.edges u v l →
+        ∃ m, UsStarReach T m u v := by
+  have hchar := usStarReached_grant_or_bridge h
+  intro k
+  induction k with
+  | zero =>
+    intro l hlen u v hu hv ht
+    cases l with
+    | cons x xs => simp only [List.length_cons] at hlen; omega
+    | nil =>
+      have hedge : (u, v) ∈ σ.edges := ht
+      rcases hchar u v hedge with ⟨t, htT, h1, h2⟩ | ⟨hout, _, _⟩ | ⟨hin, _, _, _⟩
+      · subst h1; subst h2; exact ⟨1, UsStarReach.base t htT⟩
+      · exfalso; rw [hout] at hu; rcases hu with h | h <;> simp [wAllNode] at h
+      · exfalso; rw [hin] at hv; simp [wAnyNode] at hv
+  | succ k ih =>
+    intro l hlen u v hu hv ht
+    cases l with
+    | nil =>
+      have hedge : (u, v) ∈ σ.edges := ht
+      rcases hchar u v hedge with ⟨t, htT, h1, h2⟩ | ⟨hout, _, _⟩ | ⟨hin, _, _, _⟩
+      · subst h1; subst h2; exact ⟨1, UsStarReach.base t htT⟩
+      · exfalso; rw [hout] at hu; rcases hu with h | h <;> simp [wAllNode] at h
+      · exfalso; rw [hin] at hv; simp [wAnyNode] at hv
+    | cons x xs =>
+      obtain ⟨hfst, htail⟩ := ht
+      have hlen' : xs.length ≤ k := by simp only [List.length_cons] at hlen; omega
+      rcases hchar u x hfst with ⟨t, htT, h1, h2⟩ | ⟨hout, _, _⟩ | ⟨hin, hcv, hcn, hcp⟩
+      · -- grant u → x
+        subst h1
+        have htobj : t.object.name ≠ STAR := (hUS t htT).1
+        have hx : x = subjNode ⟨t.object.type, t.object.name, t.relation⟩ := by
+          rw [h2]; exact objNode_eq_subjNode htobj
+        have hxvar : (subjNode (⟨t.object.type, t.object.name, t.relation⟩ : SubjectRef)).variant
+            = Variant.plain := by rw [subjNode_plain htobj]
+        rw [hx] at htail
+        obtain ⟨m, hm⟩ := ih xs hlen' _ v (Or.inl hxvar) hv htail
+        exact ⟨m + 1, UsStarReach.hop t htT htobj hm⟩
+      · -- out-bridge u → x: source w_all, contradicts hu
+        exfalso; rw [hout] at hu; rcases hu with h | h <;> simp [wAllNode] at h
+      · -- in-bridge u → x: x = wAny(u.type,u.pred), u plain concrete
+        have hxwany : x.variant = Variant.wAny := by rw [hin]; rfl
+        obtain ⟨m, hm⟩ := ih xs hlen' x v (Or.inr hxwany) hv htail
+        have hueq : u = subjNode ⟨u.type, u.name, u.pred⟩ := by
+          rw [subjNode_plain (s := ⟨u.type, u.name, u.pred⟩) hcn, ← hcv]
+        rw [hueq]
+        rw [hin] at hm
+        exact ⟨m + 1, UsStarReach.inbridge ⟨u.type, u.name, u.pred⟩ hcn hcp hm⟩
 
 end Zanzibar
