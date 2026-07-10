@@ -20,6 +20,7 @@ import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.Reconcile
 import ZanzibarProofs.GraphIndex.ReconcileWrite
 import ZanzibarProofs.GraphIndex.ReconcileCorrect
+import ZanzibarProofs.GraphIndex.RestrictBase
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -446,5 +447,18 @@ namespace Zanzibar
 #print axioms reachedByW3a_edges_plain
 #print axioms probeNonDerived_plainEdges
 #print axioms graphRec_reduce_base
+
+-- **ROADMAP W3a Step A — schema restriction to the untainted fragment
+-- (GraphIndex/RestrictBase.lean, 2026-07-11).** The `hag` base reduction: restrict `S` to
+-- `S↾U := restrictUntainted S` (drop every tainted-key def), which is untainted
+-- (`untaintedSchema_restrict`, under `NodupKeys`), and transfer `sem` between `S` and `S↾U` on
+-- untainted keys (`semAux_restrict`) — untaintedness is hereditary (the taint fixpoint confines
+-- an untainted def's references to untainted keys, `untainted_closed`), so evaluating an untainted
+-- relation never consults a dropped derived def. `restrictUntainted_lookup`: the schemas agree at
+-- every untainted key. This lets `graph_correct_rules` (proved over whole-schema `UntaintedSchema`)
+-- discharge the mixed-schema `hag` as a black box. Standard axioms only:
+#print axioms untaintedSchema_restrict
+#print axioms restrictUntainted_lookup
+#print axioms semAux_restrict
 
 end Zanzibar
