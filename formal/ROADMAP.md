@@ -280,10 +280,18 @@ and re-proves/widens the same named theorems. Every stage must keep
   Python schema is a dict; `lookup_of_mem` is the payoff, `WF` doesn't give it) — carry
   it into W4. Fragment consequence lemmas: `untainted_noExclAll` (⇒ `semAux_mono`),
   `stratifiable_untainted` + `storeDeclared_of_validRules` (⇒ `sem_fuel_stable`).
-  **Remaining W2 (sharply isolated, see PROOF_STATUS "W2 SOUNDNESS core"):** (1) chain
-  composition — needs `semAux_lift` GENERALISED from `PureDirect` to `UntaintedSchema`
-  (userset flowing through a computed/ttu/union node), fuel via the T0a-stability
-  sidestep; (2) completeness `sem ⇒ reach`; (3) assembly `graph_correct_rules` + T3/T6.
+  **SOUNDNESS DIRECTION CLOSED (2026-07-10, `GraphIndex/RulesChain.lean`, sorry-free,
+  axiom-clean).** The stated blocker — `semAux_lift` GENERALISED to `UntaintedSchema`
+  (`semAux_lift_untainted`, via `evalE_lift`: direct = DirectCorrect logic, computed =
+  fuel IH, ttu = `ttuLeaf_elim`/`_intro_rec` stored-parent loop, union = OR) — plus chain
+  composition (`semAux_of_ruleChain`, base = `semAux_of_rewriteClosure`, step = the lift,
+  fuel existential) + preservation lemmas (`rewriteClosure_subjectName`/`_rel_ne_bare`) +
+  **`sem_of_rules_reach`** (graph reachability ⇒ `sem`, fuel via the T0a-stability
+  sidestep). **Remaining W2 (see PROOF_STATUS "W2 SOUNDNESS direction CLOSED"):** (1)
+  COMPLETENESS `sem ⇒ reach` — the remaining hard direction (needs an *admitted*
+  `writeRules` closure so the store grant's + rewrite outputs' edges are present, and the
+  computed-case closure-saturation — attack-first first); (2) assembly
+  `graph_correct_rules` (route to `probeNonDerived`, probes 2–4 dead, glue) + T3/T6.
 - **W3 — derived reconcile (the residue path).** Faithful `reconcile` output
   per derived key (residue `(stars, neg, upos)` = the §7.6 semantics), the
   in-transaction cascade over the outbox, and the cross-key hazard (an edge

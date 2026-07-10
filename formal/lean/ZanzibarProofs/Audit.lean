@@ -14,6 +14,7 @@ import ZanzibarProofs.GraphIndex.UsStarCorrect
 import ZanzibarProofs.GraphIndex.RulesWrite
 import ZanzibarProofs.GraphIndex.RulesCorrect
 import ZanzibarProofs.GraphIndex.RulesSound
+import ZanzibarProofs.GraphIndex.RulesChain
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -267,6 +268,18 @@ namespace Zanzibar
 #print axioms semAux_seed
 #print axioms semAux_step
 #print axioms semAux_of_rewriteClosure
+
+-- W2 SOUNDNESS direction end-to-end (GraphIndex/RulesChain.lean, 2026-07-10): the
+-- userset lift generalised from PureDirect to UntaintedSchema (`semAux_lift_untainted`,
+-- via `evalE_lift` — direct/computed/ttu/union), chain composition over the
+-- rewrite-closure (`semAux_of_ruleChain`), and the top-level `sem_of_rules_reach` (graph
+-- reachability ⇒ sem; fuel via the T0a-stability sidestep). Standard axioms only:
+#print axioms ttuLeaf_elim
+#print axioms semAux_lift_untainted
+#print axioms rewriteClosure_subjectName
+#print axioms rewriteClosure_rel_ne_bare
+#print axioms semAux_of_ruleChain
+#print axioms sem_of_rules_reach
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the

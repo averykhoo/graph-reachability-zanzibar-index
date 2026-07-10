@@ -6,6 +6,65 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W2 SOUNDNESS direction CLOSED — generalised lift + chain composition + `sem_of_rules_reach`)
+
+Continuing W2 from the soundness core (per-tuple membership) → the **whole soundness
+direction** (graph reachability ⇒ `sem`). One green+pushed axiom-clean increment
+(`GraphIndex/RulesChain.lean`, sorry-free, `[propext, Classical.choice, Quot.sound]`).
+`verify.sh` green (build + 0 sorries + 60 conformance + audit). Sorry count held at 0.
+
+**Delivered — the stated blocker cleared: `semAux_lift_untainted`** (the userset lift
+GENERALISED from `PureDirect` to `UntaintedSchema`). A userset now flows through a
+`computed`/`ttu`/`union` node, not just a `direct` one. Structure: a nested induction —
+fuel outside (`semAux_lift_untainted`), `Expr` inside (`evalE_lift`) — whose leaf cases
+are:
+- **direct** — the DirectCorrect logic verbatim (a direct match of `s'` at a grant is
+  absorbed by `s`'s flow-through on the same grant via `mog_intro`/`directLeaf_of_mog`;
+  a flow-through by the fuel IH). The DirectCorrect leaf lemmas (`directLeaf_elim`,
+  `mog_elim`, `mog_intro`, `directLeaf_of_mog`) are NOT `PureDirect`-specific, so reused
+  as-is.
+- **computed** — the fuel IH at the sub-node (`evalE`'s `computed r'` case is `rec ot on
+  r'`, so `s' ∈ (ot,on,r') ⇒ s ∈ (ot,on,r')` is `ih ot on r'`).
+- **ttu** — the stored-parent loop. `ttuLeaf_elim`/`ttuLeaf_intro_rec` (star branch dead
+  on star-free data): a *direct* parent-match (`s' = ⟨pt,pn,tr⟩`) becomes `hmem` (`s ∈
+  s'`, mono to fuel); a *parent-membership* (`rec` disjunct) the fuel IH. `ttuLeaf`'s
+  `rec`-disjunct is subject-independent, so `s` re-fires it identically.
+- **union** — the OR (both arms untainted, `containsBool = false`).
+
+**Chain composition + top-level.** `semAux_of_ruleChain` (mirror of DirectCorrect's
+`semAux_of_chainN`, but each hop's base membership is `semAux_of_rewriteClosure` at
+*some* fuel and the step is `semAux_lift_untainted`; fuel threaded existentially — no
+tight bound). New preservation lemmas: `rewriteClosure_subjectName` (rewrites keep the
+subject name ⇒ closure subjects star-free) and `rewriteClosure_rel_ne_bare` (a closure
+tuple's relation is the seed's or a rewrite output relation — both declared, so the
+userset intermediate's predicate ≠ `BARE`). **`sem_of_rules_reach`** (graph reachability
+⇒ `sem`) closes the soundness direction end-to-end: `reachedByRules_edge_sound` pins
+every edge to a `Tstar = ⋃_{t∈T} rewriteClosure S t` tuple, `chainN_of_trail` → chain,
+`semAux_of_ruleChain` → `sem` at some fuel, T0a-stability sidestep
+(`sem_fuel_stable` via `stratifiable_untainted` + `storeDeclared_of_validRules`) → `sem
+= true`. No fuel-count arithmetic (like W1c).
+
+**Resume → W2 COMPLETENESS + assembly.** Sharply isolated:
+1. **Completeness (`sem ⇒ reach`)** — the remaining hard direction. `sem S T q = true`
+   (at `fuelBound`) must be witnessed by a graph path over the materialised
+   rewrite-closure. Fuel-induction unfolding the query def: `direct` = a stored grant's
+   own edge (`admitted`-style edge-completeness for `writeRules`; NB the store tuple `t`
+   *is* in `rewriteClosure S t` as the seed, so its edge is materialised) + flow-through;
+   `computed`/`ttu`/`union` = the recursion is witnessed by a rewrite-closure chain. The
+   graph edge for a computed/ttu step comes from the *rewrite output* tuple being
+   materialised — so completeness needs "the rewrite-closure is saturated enough":
+   whenever `sem` recurses `rec ot on r'` (computed) it must find the materialised
+   rewrite edge. Attack-first the computed-case closure-saturation (the earlier W2 entry
+   flagged this — a `T*` tuple on `R'` whose def has `computed R'`-armed `R` should also
+   carry the `R`-rewrite in `T*`) before proving. Needs an *admitted* `writeRules`
+   closure (`ReachedByRules` admits cycle-rejected edges silently; completeness needs the
+   edge present) — the W2 analog of `ReachedByAdmitted`.
+2. **Assembly `graph_correct_rules`** — route `check → probeNonDerived`
+   (`check_eq_probeNonDerived`), kill probes 2–4 (star-free ⇒ no `wAny`/`wAll` endpoint,
+   mirror of `graph_correct_direct`), glue probe 1 via `reach ↔ NReaches` to
+   `sem_of_rules_reach` (forward) + completeness (backward). Then T3/T6 widening
+   (`Equiv.lean`, free corollaries).
+
 ## Session 2026-07-10 (W2 SOUNDNESS core — the rewrite-closure realises `evalE`'s recursion)
 
 Resuming W2 from "write model + read-routing + soundness groundwork + fragment nailed
