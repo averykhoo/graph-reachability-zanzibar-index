@@ -381,12 +381,16 @@ and re-proves/widens the same named theorems. Every stage must keep
       **`reachedByW3a_reach_collapse`** — a bare-subject path to `objNode ⟨dt,on⟩ R` is a
       single edge, given `hsrcbare` (every R-node in-edge source is bare — the isolated
       `NoRuleOutputs` gap).
-  - **Remaining (the correspondence, sharply isolated) — resume here.** (1) discharge
-    `hsrcbare` via **`NoRuleOutputs S R`** (found this session): on an `inter`/`excl`-rooted
-    def no `schemaRewrites` rule outputs `R` and no store tuple has relation `R`
-    (`ComputedOnly` ⇒ `exprDirects = []` ⇒ fails `StoreValidRules`), so every R-node in-edge
-    is a bare-sourced reconcile edge — then `reachedByW3a_reach_collapse` fires
-    unconditionally. (2) discharge the per-relation agreement `hag` — the **per-relation**
+  - **Remaining (the correspondence, sharply isolated) — resume here.** (1) ✅ **DONE
+    (2026-07-11):** discharged `hsrcbare` via **`NoRuleOutputs S dt R`**
+    (`GraphIndex/ReconcileCorrect.lean`, sorry-free, axiom-clean): on an `inter`/`excl`-rooted
+    (`RootBoolean`) def no `schemaRewrites` rule outputs `(dt,R)` (`noRuleOutputs_of_root`, via
+    `schemaRewrites_provenance` + `NodupKeys`) and no store tuple sits on it (`exprDirects_
+    rootBoolean = []` ⇒ fails `StoreValidRules`), so the base rewrite-closure leg on the R-node
+    is impossible and every R-node in-edge is a bare-sourced reconcile edge
+    (`reachedByW3a_Rnode_source_bare`; `ReachedByW3a.reconcile` strengthened with bare-candidate
+    `hcands`) — so `reachedByW3a_reach_collapse_root` fires unconditionally. (2) discharge the
+    per-relation agreement `hag` — the **per-relation**
     untainted-correctness lemma (STILL the deeper BLOCKER: `graph_correct_rules` needs
     whole-schema `UntaintedSchema`, too strong for W3's mixed schema — restate for one
     *hereditarily-untainted* relation; reconcile edges are reachability-inert for

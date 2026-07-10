@@ -6,6 +6,56 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-11 (W3a read correspondence — `hsrcbare` discharged via `NoRuleOutputs`; the reach-collapse fires unconditionally)
+
+Resuming W3a from "the reach-collapse spine done over a free `hsrcbare`; resume → (1)
+discharge `hsrcbare` via `NoRuleOutputs`, (2) the per-relation `hag` + candidate
+completeness + assembly." One green+pushed axiom-clean increment
+(`GraphIndex/ReconcileCorrect.lean`); `verify.sh` green throughout (build + 0 sorries + 60
+conformance + audit, standard axioms only — one new theorem axiom-free). Sorry count held at
+0. This closes **point 1** of the two remaining W3a correspondence pieces: the reach-collapse
+now fires with **no free hypothesis** on the boolean-rooted fragment.
+
+**The increment — `hsrcbare` discharged (`GraphIndex/ReconcileCorrect.lean`, axiom-clean).**
+The prior session left the reach-collapse (`reachedByW3a_reach_collapse`) stated over a free
+`hsrcbare` (every R-node in-edge source is bare). This session discharges it on the fragment
+where the derived def `e = lookup (dt, R)` is **`inter`/`excl`-rooted** — the analytic side
+condition (`NoRuleOutputs`, the W3a analog of W2's `TtuTuplesetsDirect`).
+- **`RootBoolean e`** (root is `inter`/`excl`) + `exprArms_rootBoolean` (emits no rewrite
+  arms — `exprArms` walks into `union` but stops at `inter`/`excl`) + `exprDirects_rootBoolean`
+  (carries no `Direct` storage arm).
+- **`NoRuleOutputs S dt R`** (no schema rewrite rule outputs `(dt,R)`) + **`noRuleOutputs_of_
+  root`** — via `schemaRewrites_provenance` + `NodupKeys` (`lookup_of_mem`): a rule with
+  `(objectType,outRel) = (dt,R)` comes from the def at key `(dt,R)` = `e`, boolean-rooted,
+  which emits no arms.
+- **`reachedByW3a_Rnode_source_bare`** (the payoff) — by induction over the W3a write path:
+  the **base** (rewrite-closure) leg landing on `objNode ⟨dt,on⟩ R` is IMPOSSIBLE (a closure
+  tuple there is a stored `(dt,R)` tuple — none, by `exprDirects_rootBoolean` +
+  `StoreValidRules`; or a rewrite output `(dt,R)` — none, by `noRuleOutputs_of_root`), so
+  every R-node in-edge is a **reconcile** edge, whose source `subjNode c` is bare because the
+  `reconcile` constructor now carries `hcands : ∀ c ∈ cands, c.predicate = BARE` (faithful —
+  the `_leaf_concretes` candidates are bare concretes). **`ReachedByW3a.reconcile` strengthened
+  with `hcands`** (the three existing inductions updated; harmless).
+- **`reachedByW3a_reach_collapse_root`** — the fully-discharged collapse: a path to the derived
+  object node is a *single* reconcile edge, no `hsrcbare` free. Ready to compose with
+  `checkFn_eq_semStep` for `reach ↔ [reconcile wrote s's edge] ↔ checkFn ↔ sem`.
+- Node-projection simp lemmas `objNode_type` / `subjNode_pred` added locally (the ObjStar
+  copies aren't in the W3a import chain).
+
+**Resume → close the W3a CORRESPONDENCE. One piece remains (point 2, the deeper blocker):**
+1. ✅ **DONE this session** — `hsrcbare` via `NoRuleOutputs` (`reachedByW3a_reach_collapse_root`).
+2. **Discharge `hag` — the per-relation untainted-correctness lemma**, then candidate
+   completeness + assembly `graph_correct_w3a`. `hag` (`graphRec σ s dt on r' = semAux S s T q f
+   dt on r'` for untainted operand `r'`) restates W2's `graph_correct_rules` per-relation within
+   the mixed schema (reconcile edges into derived-R nodes are reachability-inert for untainted-`r'`
+   object nodes — a derived edge's bare-candidate source is never an intermediate object node);
+   fuel via the T0a-stability sidestep. Then candidate completeness (an admitted
+   `ReachedByW3aAdmitted`: every `sem`-member bare subject is enumerated in some `cands` and
+   passes `checkFn`) + assembly: route → `probeDerived` → `check_derived_ResidueEmpty` → edge
+   probe → `reachedByW3a_reach_collapse_root` → `checkFn_eq_semStep` + `hag` → `sem`. Then widen
+   T3/T6 as free corollaries. **This is the genuine remaining core** — the per-relation restatement
+   of `graph_correct_rules` (whole-schema `UntaintedSchema` is too strong for W3's mixed schema).
+
 ## Session 2026-07-11 (W3a read correspondence — the bare-subject reach-collapse spine + attack-first NoRuleOutputs finding)
 
 Resuming W3a from "two structural spines done; resume → close the CORRESPONDENCE (three

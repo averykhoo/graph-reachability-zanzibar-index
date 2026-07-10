@@ -395,4 +395,15 @@ namespace Zanzibar
 #print axioms reachedByW3a_bareNode_no_inedge
 #print axioms reachedByW3a_reach_collapse
 
+-- **ROADMAP W3a — `hsrcbare` discharged via `NoRuleOutputs` (GraphIndex/ReconcileCorrect.lean,
+-- 2026-07-11).** The reach-collapse's `hsrcbare` hypothesis (every R-node in-edge source is
+-- bare) is discharged on the `RootBoolean` (inter/excl-rooted) derived-def fragment: such a
+-- def emits no rewrite arms and no `Direct` storage arm, so no rewrite outputs `(dt,R)`
+-- (`noRuleOutputs_of_root`) and no stored tuple sits on it — killing the base leg, leaving
+-- every R-node in-edge a bare-sourced reconcile edge (`reachedByW3a_Rnode_source_bare`).
+-- Hence the fully-discharged collapse `reachedByW3a_reach_collapse_root`. Standard axioms only:
+#print axioms noRuleOutputs_of_root
+#print axioms reachedByW3a_Rnode_source_bare
+#print axioms reachedByW3a_reach_collapse_root
+
 end Zanzibar

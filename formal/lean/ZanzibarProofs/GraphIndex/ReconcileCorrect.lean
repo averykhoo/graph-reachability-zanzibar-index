@@ -159,7 +159,7 @@ theorem reachedByW3a_edge_sound {σ : GraphState} {S : Schema} {T : Store}
           a = subjNode c ∧ b = objNode ⟨dt, on⟩ R) := by
   induction h with
   | base hr => intro a b hab; exact Or.inl (reachedByRules_edge_sound hr a b hab)
-  | reconcile dt on R e cands _hRne _ ih =>
+  | reconcile dt on R e cands _hRne _hcands _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, hac, hbc⟩
     · exact ih a b hold
@@ -194,6 +194,14 @@ gap as the isolated hypothesis `hsrcbare` (every R-node in-edge source is bare);
 @[simp] theorem objNode_pred (o : ObjectRef) (R : String) : (objNode o R).pred = R := by
   unfold objNode; split <;> rfl
 
+/-- An object node's type is its object's type (both variants keep it). -/
+@[simp] theorem objNode_type (o : ObjectRef) (R : String) : (objNode o R).type = o.type := by
+  unfold objNode; split <;> rfl
+
+/-- A subject node's predicate is its subject's predicate (both variants keep it). -/
+@[simp] theorem subjNode_pred (s : SubjectRef) : (subjNode s).pred = s.predicate := by
+  unfold subjNode; split <;> rfl
+
 /-- **Generic single-edge collapse.** If every source of an edge into `v` has itself no
     in-edge, then any path to `v` is a single edge: its last-edge source `x` (from
     `nreaches_last`) would otherwise carry an in-edge (the prefix `u →* x`'s last edge),
@@ -221,7 +229,7 @@ theorem reachedByW3a_edge_target_ne_bare {σ : GraphState} {S : Schema} {T : Sto
     intro a b hab
     obtain ⟨t, ht, u, hu, _, hbobj⟩ := reachedByRules_edge_sound hr a b hab
     rw [hbobj, objNode_pred]; exact rewriteClosure_rel_ne_bare hWF hSV ht hu
-  | reconcile dt on R e cands hRne _ ih =>
+  | reconcile dt on R e cands hRne _hcands _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, _, hbc⟩
     · exact ih hWF hSV a b hold
@@ -251,5 +259,119 @@ theorem reachedByW3a_reach_collapse {σ : GraphState} {S : Schema} {T : Store}
   refine nreaches_collapse_of_source_notarget ?_ hr
   intro x hxv
   exact reachedByW3a_bareNode_no_inedge hWF hSV h (hsrcbare x hxv)
+
+/-! ## Discharging `hsrcbare` via `NoRuleOutputs` (ROADMAP W3a, read half — increment 4)
+
+The reach-collapse (`reachedByW3a_reach_collapse`) needs `hsrcbare`: every in-edge source of
+the derived object node `objNode ⟨dt,on⟩ R` is bare. This increment discharges it on the
+W3a fragment where the derived def `e = lookup (dt, R)` is **`inter`/`excl`-rooted**
+(`RootBoolean` — the analytic side condition found last session, the W3a analog of W2's
+`TtuTuplesetsDirect`). The argument:
+
+* No `schemaRewrites S` rule outputs `(dt, R)` (`NoRuleOutputs`) — a `RootBoolean` def emits
+  no rewrite arms (`exprArms_rootBoolean`), so via `schemaRewrites_provenance` + `NodupKeys`
+  no rule carries `(objectType, outRel) = (dt, R)`.
+* No stored tuple sits on `(dt, R)` — a `RootBoolean` def has no `Direct` arm
+  (`exprDirects_rootBoolean = []`), so `StoreValidRules` forbids a stored `(dt, R)` tuple.
+
+Together these kill the **base** (rewrite-closure) leg of `reachedByW3a_edge_sound` on the
+R-node: a closure tuple landing there is neither the raw seed (no stored `(dt,R)` tuple) nor
+a rewrite output (`NoRuleOutputs`). So *every* in-edge of the R-node is a **reconcile** edge,
+whose source is a candidate — bare by the reconcile constructor's `hcands`. Hence `hsrcbare`
+holds unconditionally on the fragment, and the collapse fires (`reachedByW3a_reach_collapse_
+root`). -/
+
+/-- **`RootBoolean e`** — `e`'s root is a boolean operator (`inter`/`excl`). On the W3a
+    fragment this is the shape that keeps the derived key off the rewrite-fanout: a
+    boolean-rooted def emits no `computed`/`ttu` rewrite arms and carries no `Direct`
+    storage arm. The W3a analog of `directsOnly`/`TtuTuplesetsDirect` for the *derived*
+    relation itself. -/
+def RootBoolean : Expr → Prop
+  | .inter _ _ => True
+  | .excl _ _  => True
+  | _          => False
+
+/-- A boolean-rooted expr emits no rewrite arms (`exprArms` walks into `union` but stops at
+    `inter`/`excl`). -/
+theorem exprArms_rootBoolean (ot rel : String) {e : Expr} (h : RootBoolean e) :
+    exprArms ot rel e = [] := by
+  cases e <;> first | rfl | exact h.elim
+
+/-- A boolean-rooted expr carries no `Direct` storage arm. -/
+theorem exprDirects_rootBoolean {e : Expr} (h : RootBoolean e) : exprDirects e = [] := by
+  cases e <;> first | rfl | exact h.elim
+
+/-- **`NoRuleOutputs S dt R`** — no schema rewrite rule outputs the derived key `(dt, R)`.
+    On a boolean-rooted derived def this holds (`noRuleOutputs_of_root`), so W2's base
+    rewrite-closure never lands a tuple on the R-node — the fragment condition behind the
+    reach-collapse. -/
+def NoRuleOutputs (S : Schema) (dt R : String) : Prop :=
+  ∀ r ∈ schemaRewrites S, ¬(r.objectType = dt ∧ r.outRel = R)
+
+/-- **Boolean-rooted ⇒ no rewrite outputs `(dt, R)`.** A rule with `(objectType, outRel) =
+    (dt, R)` comes (via `schemaRewrites_provenance` + `NodupKeys`) from the def at key
+    `(dt, R)` — which is `e`, boolean-rooted, hence emits no arms (`exprArms_rootBoolean`),
+    a contradiction. -/
+theorem noRuleOutputs_of_root {S : Schema} {dt R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hNK : NodupKeys S) (hroot : RootBoolean e) :
+    NoRuleOutputs S dt R := by
+  intro r hr hcon
+  obtain ⟨d, hd, hkey, hrarm⟩ := schemaRewrites_provenance hr
+  have hkey' : d.1 = (dt, R) := by rw [hkey, hcon.1, hcon.2]
+  have hld : S.lookup d.1 = some d.2 := lookup_of_mem hNK hd
+  rw [hkey', hlk, Option.some.injEq] at hld
+  rw [← hld, exprArms_rootBoolean _ _ hroot] at hrarm
+  simp at hrarm
+
+/-- **Every in-edge source of the derived R-node is bare** on the W3a fragment. By induction
+    over the write path: the base (rewrite-closure) leg landing on `objNode ⟨dt,on⟩ R` is
+    impossible — the closure tuple would be a stored `(dt,R)` tuple (none, by
+    `exprDirects_rootBoolean` + `StoreValidRules`) or a rewrite output `(dt,R)` (none, by
+    `noRuleOutputs_of_root`); so every in-edge is a reconcile edge, whose source is a
+    candidate, bare by `hcands`. Discharges the `hsrcbare` hypothesis of the reach-collapse. -/
+theorem reachedByW3a_Rnode_source_bare {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String} {e : Expr}
+    (hSV : StoreValidRules S T) (hNK : NodupKeys S)
+    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e)
+    (h : ReachedByW3a σ S T) :
+    ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE := by
+  induction h with
+  | base hr =>
+    intro x hx
+    obtain ⟨t, ht, u, hu, _hasub, hbobj⟩ := reachedByRules_edge_sound hr x _ hx
+    exfalso
+    have htype : dt = u.object.type := by
+      simpa [objNode_type] using congrArg NodeKey.type hbobj
+    have hrel : R = u.relation := by
+      simpa [objNode_pred] using congrArg NodeKey.pred hbobj
+    rcases rewriteClosure_produced hu with heq | ⟨r, hr', hro, hrout⟩
+    · rw [heq] at htype hrel
+      obtain ⟨e', rs, hlk', hrs, _⟩ := hSV t ht
+      rw [← htype, ← hrel, hlk, Option.some.injEq] at hlk'
+      rw [← hlk', exprDirects_rootBoolean hroot] at hrs
+      simp at hrs
+    · exact noRuleOutputs_of_root hlk hNK hroot r hr'
+        ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+  | reconcile dt' on' R' e' cands _hRne hcands _ ih =>
+    intro x hx
+    rcases reconcileKey_edge_sound _ dt' on' R' e' cands x _ hx with hold | ⟨c, hc, hxc, _⟩
+    · exact ih hSV hNK hlk x hold
+    · rw [hxc, subjNode_pred]; exact hcands c hc
+
+/-- **The reach-collapse, fully discharged on the boolean-rooted W3a fragment.** Given the
+    derived def `e = lookup (dt, R)` is `inter`/`excl`-rooted (`RootBoolean`), any path to the
+    derived object node `objNode ⟨dt,on⟩ R` is a *single* reconcile edge — no `hsrcbare` left
+    free. This is the last structural link: `reach (subjNode s) (objNode ⟨dt,on⟩ R) ↔ [a
+    reconcile pass wrote s's edge]`, ready to compose with `checkFn_eq_semStep` for
+    `graph_correct_w3a`. -/
+theorem reachedByW3a_reach_collapse_root {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String} {e : Expr} {u : NodeKey}
+    (hWF : WF S) (hSV : StoreValidRules S T) (hNK : NodupKeys S)
+    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e)
+    (h : ReachedByW3a σ S T)
+    (hr : NReaches σ.edges u (objNode ⟨dt, on⟩ R)) :
+    (u, objNode ⟨dt, on⟩ R) ∈ σ.edges :=
+  reachedByW3a_reach_collapse hWF hSV h
+    (reachedByW3a_Rnode_source_bare hSV hNK hlk hroot h) hr
 
 end Zanzibar

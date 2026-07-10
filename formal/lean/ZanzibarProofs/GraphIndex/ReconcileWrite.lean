@@ -137,7 +137,8 @@ inductive ReachedByW3a : GraphState → Schema → Store → Prop where
   | base {σ : GraphState} {S : Schema} {T : Store} :
       ReachedByRules σ S T → ReachedByW3a σ S T
   | reconcile {σ : GraphState} {S : Schema} {T : Store}
-      (dt on R : String) (e : Expr) (cands : List SubjectRef) (hRne : R ≠ BARE) :
+      (dt on R : String) (e : Expr) (cands : List SubjectRef) (hRne : R ≠ BARE)
+      (hcands : ∀ c ∈ cands, c.predicate = BARE) :
       ReachedByW3a σ S T → ReachedByW3a (σ.reconcileKey T dt on R e cands) S T
 
 /-- **T2a for the W3a fragment.** Every state reached by W3a writes satisfies the
@@ -149,7 +150,7 @@ theorem reachedByW3a_inv {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3a σ S T) : Inv S σ ∧ ResidueEmpty σ ∧ Quiescent σ := by
   induction h with
   | base hr => exact reachedByRules_inv hr
-  | reconcile dt on R e cands _hRne _ ih =>
+  | reconcile dt on R e cands _hRne _hcands _ ih =>
     obtain ⟨hInv, hRe, hQ⟩ := ih
     exact ⟨inv_reconcileKey _ dt on R e cands hInv hRe,
       residueEmpty_reconcileKey _ dt on R e cands hRe,
