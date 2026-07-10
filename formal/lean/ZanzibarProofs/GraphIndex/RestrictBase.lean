@@ -157,4 +157,68 @@ theorem semAux_restrict {S : Schema} {T : Store} (hNK : NodupKeys S) (hDecl : St
         unfold isDerived; rw [List.contains_eq_mem]; exact decide_eq_false hb
       exact ih t' r' hud m'
 
+/-! ## The rewrite fan-out is preserved — the state-transfer groundwork
+
+The graph write path reads the schema only through `schemaRewrites` (`rewriteStep` =
+`(schemaRewrites S).filterMap …`; `writeDirect`/`admitEdge`/`reach` are schema-blind). On the
+W3a fragment every *dropped* (tainted) def is `RootBoolean`, hence emits no rewrite arms
+(`exprArms_rootBoolean`), so removing it leaves `schemaRewrites` — and therefore the whole
+rewrite fan-out — unchanged. This is the groundwork for transferring a `ReachedByRules`/
+`…Admitted` state from `S` to `S↾U` with identical edges. -/
+
+/-- Flat-mapping over a filtered list drops nothing when the removed elements map to `[]`. -/
+theorem filter_flatMap_eq {α β : Type} (p : α → Bool) (f : α → List β) :
+    ∀ (l : List α), (∀ x ∈ l, p x = false → f x = []) →
+      (l.filter p).flatMap f = l.flatMap f := by
+  intro l
+  induction l with
+  | nil => intro _; rfl
+  | cons a t ih =>
+    intro h
+    have iht := ih (fun x hx => h x (List.mem_cons_of_mem _ hx))
+    rw [List.filter_cons]
+    by_cases hp : p a
+    · rw [if_pos hp, List.flatMap_cons, List.flatMap_cons, iht]
+    · have hpf : p a = false := by simpa using hp
+      rw [if_neg hp, iht, List.flatMap_cons, h a List.mem_cons_self hpf, List.nil_append]
+
+/-- **`schemaRewrites` is preserved by the restriction** — given the W3a fragment fact that every
+    tainted (dropped) def emits no rewrite arms. The relations of `schemaRewrites S` are all
+    untainted (an arm's `outRel` is its def's own relation, and tainted defs emit none), so the
+    rewrite fan-out lives entirely in the untainted cone that `S↾U` keeps. -/
+theorem schemaRewrites_restrict {S : Schema}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = []) :
+    schemaRewrites (restrictUntainted S) = schemaRewrites S := by
+  unfold schemaRewrites restrictUntainted
+  refine filter_flatMap_eq _ _ S.defs (fun d hd hpf => ?_)
+  refine hDrop d hd ?_
+  unfold isDerived
+  simpa using hpf
+
+/-- The one-step rewrite is preserved (it reads the schema only via `schemaRewrites`). -/
+theorem rewriteStep_restrict {S : Schema}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
+    (t : Tuple) : rewriteStep (restrictUntainted S) t = rewriteStep S t := by
+  unfold rewriteStep; rw [schemaRewrites_restrict hDrop]
+
+/-- **The bounded rewrite closure is preserved at any fixed fuel** — a pure structural
+    consequence of `rewriteStep` agreeing (`rewriteClosureAux` reads the schema only through
+    `rewriteStep`). NB: the *canonical* closures `rewriteClosure S t` / `rewriteClosure (S↾U) t`
+    run at DIFFERENT fuels (`S.keys.length+1` vs the smaller `(S↾U).keys.length+1`); bridging
+    that gap (both saturate, so equal membership) is the remaining state-transfer step. -/
+theorem rewriteClosureAux_restrict {S : Schema}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = []) :
+    ∀ (n : Nat) (cur : List Tuple),
+      rewriteClosureAux (restrictUntainted S) n cur = rewriteClosureAux S n cur := by
+  intro n
+  induction n with
+  | zero => intro cur; rfl
+  | succ m ih =>
+    intro cur
+    rw [rewriteClosureAux, rewriteClosureAux]
+    have hstep : cur.flatMap (rewriteStep (restrictUntainted S)) = cur.flatMap (rewriteStep S) := by
+      refine List.flatMap_congr (fun t _ => ?_)
+      exact rewriteStep_restrict hDrop t
+    rw [hstep, ih]
+
 end Zanzibar

@@ -460,5 +460,10 @@ namespace Zanzibar
 #print axioms untaintedSchema_restrict
 #print axioms restrictUntainted_lookup
 #print axioms semAux_restrict
+-- The rewrite fan-out is preserved by the restriction (tainted defs emit no arms), the
+-- state-transfer groundwork: schemaRewrites unchanged, hence rewriteStep and the bounded
+-- closure (at any fixed fuel) unchanged. Standard axioms only:
+#print axioms schemaRewrites_restrict
+#print axioms rewriteClosureAux_restrict
 
 end Zanzibar
