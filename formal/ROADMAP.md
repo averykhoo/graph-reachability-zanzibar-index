@@ -55,7 +55,16 @@ and re-proves/widens the same named theorems. Every stage must keep
 
   **Sub-staging (designed 2026-07-10, grounded in wildcard-spec §1.1/§3.2 —
   do W1a first):**
-  - **W1a — bare star grants, ZERO bridges.** Widen `StarFreeStore` to allow
+  - **W1a — bare star grants, ZERO bridges. ✅ DONE (2026-07-10)** —
+    `graph_correct_bareStar` (`GraphIndex/BareStarCorrect.lean`, sorry-free,
+    axiom-clean). Attack-first confirmed the statement (no refutation) on concrete
+    bare-star scenarios, then proved: `BareStarStore` (weaker than `StarFreeStore`,
+    star subjects must be bare), `directLeaf_elim_bs` (3-way: exact | bare-star |
+    flow), `Covers` + `semAux_of_chainN_bs` (soundness with the leading bare-star
+    hop), `reach_of_semAux_bs` (completeness = probe-1 ∨ probe-2 disjunction),
+    `admitted_edge_source_char` (userset-`wAny` never an edge source ⇒ probe 2 dead
+    for usersets). The design below was executed exactly. **Next: W1b.**
+    (original design:) Widen `StarFreeStore` to allow
     subject `(T, *, BARE)` tuples (plain OpenFGA `[user:*]`). Wildcard-spec
     §3.2's bare-shape rule: bare shapes never need in-bridges — a bare concrete
     subject node has **no in-edges**, so any semantic path through the star is a

@@ -54,6 +54,71 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (W1a CLOSED — `graph_correct_bareStar`, bare star grants)
+
+First scope-widening increment after the tree hit 0 sorries: **ROADMAP stage
+W1a** — widen T2b (graph read = `sem`) to allow **bare star grants** `[user:*]`
+(subject `(T,*,BARE)` tuples) in the store. Per wildcard-spec §3.2's bare-shape
+rule this needs **ZERO materialized bridges**. `verify.sh` green (build + 0
+sorries + 60 conformance + audit); `graph_correct_bareStar` axiom-clean
+(`[propext, Classical.choice, Quot.sound]`). Sorry count held at 0.
+
+**House move first (attack before prove):** machine-checked `check = sem` via
+`#guard` on concrete bare-star scenarios in a scratch module — single grant,
+wrong-type non-coverage, no-leak-to-usersets, 2-hop bare-star→userset
+flow-through, concrete+star coexistence — **no refutation**, then deleted the
+scratch and proved it.
+
+**The modeling fact that makes W1a bridge-free** (spec §3.2): a bare-concrete
+subject node `⟨T,u,BARE,plain⟩` has **no in-edges** (an in-edge target is an
+`objNode`, whose predicate is a *relation* name, never `BARE`), and the star node
+`wAny(T,BARE) = ⟨T,*,BARE,wAny⟩` has no in-edges either. So a bare-star grant is a
+pure *leading* hop = the read-side `wAny` endpoint substitution of **probe 2**. No
+interior hop exists to materialize. `subjNode` already sends `(T,*,BARE) ↦
+wAny(T,BARE)`, so the write model is already correct — the work is entirely in the
+correspondence.
+
+**New file `GraphIndex/BareStarCorrect.lean` (sorry-free, axiom-clean):**
+- `BareStarStore` (star subjects must be bare; objects star-free) / `NoUsersetStar`
+  fragment predicates. `BareStarStore` is strictly weaker than `StarFreeStore`.
+- `directLeaf_elim_bs` — **3-way** leaf elimination (exact `g.subject = s` | a
+  bare-star grant covering a bare-concrete `s` | flow-through); the userset-star
+  disjunct is killed by `NoUsersetStar`. The 2-way `directLeaf_elim` of
+  DirectCorrect is *false* once bare-star grants can match a concrete subject.
+  `mog_elim_nus` is the `NoUsersetStar` generalization of `mog_elim`.
+- `semAux_lift_bs` — userset lifting, bare-star aware (the userset it lifts
+  through is non-bare, so the extra bare-star match is vacuous).
+- `Covers s u := u = subjNode s ∨ (s.predicate = BARE ∧ u = wAnyNode s.shape)` +
+  `semAux_one_covers` + **`semAux_of_chainN_bs`** (soundness): generalizes the
+  chain base from "the first tuple's subject *is* the query subject" to "*covers*
+  it" — a `[T:*]` grant covers every bare-concrete subject of type `T`
+  (`semAux_one_of_bareStar`, a pure type-match, `directLeaf`'s second bare-conc
+  disjunct). Interior hops stay plain (bare-star can only be the *first* tuple of a
+  chain, since after it every node is a plain `objNode`).
+- **`reach_of_semAux_bs`** (completeness): `sem` ⟹ reachability from `subjNode s`
+  **OR** from `wAny(s.shape)` — the probe-1 ∨ probe-2 disjunction. A bare-star
+  direct match reaches from the star node, not the plain subject node; exact match
+  and flow-through keep `s` fixed and preserve whichever disjunct the recursion
+  produced.
+- `admitted_edge_source_char` — every edge source is plain or a bare-`wAny` node
+  (`pred = BARE`); a **userset**-`wAny` node is *never* an edge source (would need a
+  userset-star tuple, forbidden by `BareStarStore`), so probe 2 is provably dead
+  for a userset query subject.
+- **`graph_correct_bareStar`** — `check = sem` on the widened fragment, end-to-end:
+  probes 3–4 dead (star-free objects ⇒ no `wAll` target), probe 1 (plain) + probe 2
+  (`wAny`-bare) live via `Covers`/`semAux_of_chainN_bs` (fwd) and
+  `reach_of_semAux_bs` (bwd); probe 2 dead for userset subjects.
+
+Reused unchanged from DirectCorrect: all pureDirect/lookup/node-algebra/grant/
+matchingObjects/`TupleChainN`/`chainN_of_trail`/`admitted_*`/`ReachedByAdmitted`/
+`directLeaf_grant_self`/`directLeaf_of_mog`/`mog_intro`/`semAux_mono` lemmas.
+`graph_correct_direct` (StarFreeStore) is left intact — `BareStarStore` is the
+weaker predicate; a future cleanup could make the star-free theorem a corollary,
+but it is not needed. Audit updated (6 new `#print axioms` lines).
+
+**Next: ROADMAP W1b** (object wildcards `wAll` + out-bridges) — the first stage
+that *does* need bridge machinery. Attack first (a `[T:*]`-object grant vs probe 3).
+
 ## Session 2026-07-10 (T0a CLOSED — sorry count 0)
 
 Same session as the falseness finding below: after restating over
@@ -597,14 +662,19 @@ concrete models built first (see ROADMAP).
   documented scope; the remaining work is SCOPE WIDENING (ROADMAP W1–W4: wildcard
   bridges, rule routing, derived reconcile, full-scope restatement) plus Phase 6
   hardening (audit as hard gate, graph-model conformance extension).
+- **W1a DONE (2026-07-10):** T2b widened to bare star grants `[user:*]`
+  (`graph_correct_bareStar`, `GraphIndex/BareStarCorrect.lean`, axiom-clean).
+  **Resume → ROADMAP W1b** (object wildcards `wAll` + out-bridges — the first
+  bridge-requiring stage).
 - **Phase 1 DONE** (Lean skeleton + all T0–T6 stated; `lake build` green with 9
   `sorry`s). **Phase 2 CORE DONE ahead of schedule**: conformance CLI (`zcli`) live;
   spec-vs-oracle answer conformance green (6/6 grid comparisons). No adjudication
   events — the executable `sem` matches the reference oracle.
 - **User is reviewing `SEMANTICS.md` async** ("keep going, I'll review async"); A1 &
   A4 accepted. Continue proving; revisit if the review changes the spec.
-- **Resume point → ROADMAP W1** (wildcard bridges in the graph write model) or
-  Phase 6 hardening; T0a is closed, nothing is blocked on the spec side.
+- **Resume point → ROADMAP W1b** (object wildcards `wAll` + out-bridges; W1a bare
+  star grants done) or Phase 6 hardening; T0a is closed, nothing is blocked on the
+  spec side.
 - **Commands:** `cd formal/lean && lake build` (lib) / `lake build zcli` (CLI);
   `python -m pytest formal/conformance/ -q` (needs `zcli` built).
 
@@ -682,6 +752,10 @@ Status: {planned, stated (compiles w/ sorry), proved-mod-deps, proved, blocked}.
 | T2b semantic core, soundness | `semAux_lift`, `semAux_of_chainN`, `semAux_one_of_tuple` | **proved** | DirectCorrect.lean; userset lifting (membership through a userset) + chain⇒`sem` at fuel = chain length |
 | T2b semantic core, completeness | `nreaches_of_semAux` | **proved** | DirectCorrect.lean; `sem`⇒graph path (edge-completeness + flow-through `.tail`) |
 | T2b fragment infrastructure | `ReachedByAdmitted`, `admitted_edge_complete`, `admitted_nodes_length`, `TupleChainN`, `chainN_of_trail`, `isDerived_pureDirect`, `objNode_eq_subjNode`, leaf intro/elim lemmas | **proved** | DirectCorrect.lean; admitted-writes closure (faithful to composed-system rollback), grant/leaf interface, node algebra |
+| **T2b stage W1a — bare star grants** | `graph_correct_bareStar` | **proved** | BareStarCorrect.lean; `check = sem` widened to `[user:*]` grants (`BareStarStore`), ZERO bridges (wildcard-spec §3.2); axiom-clean |
+| W1a soundness (covered chains) | `Covers`, `semAux_one_covers`, `semAux_of_chainN_bs`, `semAux_one_of_bareStar`, `semAux_lift_bs` | **proved** | BareStarCorrect.lean; chain base generalized from "is the subject" to "covers it" (leading bare-star hop) |
+| W1a completeness (probe disjunction) | `reach_of_semAux_bs` | **proved** | BareStarCorrect.lean; `sem` ⟹ reach from `subjNode s` OR `wAny(s.shape)` (probe 1 ∨ probe 2) |
+| W1a leaf elimination + edge chars | `directLeaf_elim_bs`, `mog_elim_nus`, `admitted_edge_source_char`, `admitted_edges_target_plain`, `nreaches_source_char` | **proved** | BareStarCorrect.lean; 3-way leaf elim (exact\|bare-star\|flow), userset-`wAny` never an edge source ⇒ probe 2 dead for usersets |
 
 ## `sorry` ledger
 
