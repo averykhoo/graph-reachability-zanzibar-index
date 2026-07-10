@@ -115,6 +115,12 @@ def objNode (o : ObjectRef) (R : String) : NodeKey :=
 /-- The `w_all` (∀) node for object-wildcard of type `t`, relation `R`. -/
 def wAllNode (t R : String) : NodeKey := ⟨t, STAR, R, Variant.wAll⟩
 
+/-- Is a node a `plain` (concrete/userset) node? Used by the object-wildcard
+    soundness fuel bound: `w_all`/`w_any` nodes are never chain *sources*, so a
+    generalized-grant chain's length is bounded by the count of distinct *plain*
+    trail vertices. -/
+def NodeKey.isPlain (k : NodeKey) : Bool := k.variant == Variant.plain
+
 /-! ## Reachability (transitive closure of the direct edges) -/
 
 /-- Fuel-bounded reachability: is there a directed path `u → v` of length `1..fuel`?
@@ -402,6 +408,17 @@ theorem nodup_len_le {α : Type} [DecidableEq α] {l N : List α} (hnd : l.Nodup
     _ ≤ N.toFinset.card := Finset.card_le_card h2
     _ ≤ N.length := List.toFinset_card_le N
 
+/-- A `Nodup` list's `countP` is bounded by the ambient list's `countP`: its
+    predicate-satisfying elements are distinct and all live in `N`, so they inject
+    into `N.filter p`. -/
+theorem nodup_countP_le {α : Type} [DecidableEq α] {l N : List α} {p : α → Bool}
+    (hnd : l.Nodup) (hsub : ∀ x ∈ l, x ∈ N) : l.countP p ≤ N.countP p := by
+  rw [List.countP_eq_length_filter, List.countP_eq_length_filter]
+  apply nodup_len_le (hnd.filter p)
+  intro x hx
+  rw [List.mem_filter] at hx ⊢
+  exact ⟨hsub x hx.1, hx.2⟩
+
 /-- **Shortest-walk compression.** A trail with interior vertices in `N` compresses
     to one with `≤ N.length` interior vertices (repeats give removable cycles). -/
 theorem trail_compress {edges : List (NodeKey × NodeKey)} {N : List NodeKey} {u v : NodeKey} :
@@ -436,6 +453,36 @@ theorem trail_compress {edges : List (NodeKey × NodeKey)} {N : List NodeKey} {u
         simp only [List.mem_append, List.mem_cons] at hy ⊢
         tauto
       exact ih (p ++ x :: r) hlen2 hshort hsub2
+
+/-- **Nodup compression.** Any trail compresses to one whose interior vertices are
+    `Nodup` (a repeated vertex bounds a removable `x →* x` cycle). Companion to
+    `trail_compress` that keeps distinctness rather than a length bound — the
+    object-wildcard soundness fuel bound counts *distinct plain* vertices. -/
+theorem trail_compress_nodup {edges : List (NodeKey × NodeKey)} {u v : NodeKey} :
+    ∀ (n : Nat) (l : List NodeKey), l.length ≤ n → Trail edges u v l →
+      ∃ l', Trail edges u v l' ∧ l'.Nodup := by
+  intro n
+  induction n with
+  | zero =>
+    intro l hlen ht
+    cases l with
+    | nil => exact ⟨[], ht, List.nodup_nil⟩
+    | cons a t => simp only [List.length_cons] at hlen; omega
+  | succ n ih =>
+    intro l hlen ht
+    by_cases hnd : l.Nodup
+    · exact ⟨l, ht, hnd⟩
+    · obtain ⟨x, p, q, r, rfl⟩ := exists_dup_split l hnd
+      have hcut : Trail edges u x (p ++ x :: q) ∧ Trail edges x v r :=
+        (trail_split edges x v (p ++ x :: q) u r).mp ht
+      have hcut2 : Trail edges u x p ∧ Trail edges x x q :=
+        (trail_split edges x x p u q).mp hcut.1
+      have hshort : Trail edges u v (p ++ x :: r) :=
+        (trail_split edges x v p u r).mpr ⟨hcut2.1, hcut.2⟩
+      have hlen2 : (p ++ x :: r).length ≤ n := by
+        simp only [List.length_append, List.length_cons] at hlen ⊢
+        omega
+      exact ih (p ++ x :: r) hlen2 hshort
 
 /-- **The executable probe is complete for `NReaches`** on any endpoint-closed state:
     a genuine path is found by `σ.reach` at fuel `nodes.length + 1`. With

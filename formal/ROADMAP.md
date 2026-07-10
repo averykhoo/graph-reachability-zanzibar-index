@@ -119,25 +119,24 @@ and re-proves/widens the same named theorems. Every stage must keep
       declared object-wildcard shape, using `ObjStarValid`) + **bridge-completeness**
       (`wildReachedAdmitted_bridge_complete`). Result: `graph_complete_objStar`
       (`sem` @ `fuelBound` ⇒ probe 1 ∨ probe 3), operationally closed.
-    - **Correspondence REMAINING** (`graph_correct_objStar` = full `check = sem`):
-      only the **SOUNDNESS side + top-level glue** now.
-      (1) the **fuel-bounded soundness assembly**: `semAux_of_grantReach` gives
-      fuel = the chain length `m`, and `m ≤ fuelBound` needs the tight `m ≤ 2|T|`
-      bound. The crude `m ≤ nodes.length+1` is too weak — `writeWild` adds up to
-      4 nodes/tuple (2 endpoints + up to 2 `w_all`), so `nodes.length ≤ 4|T|`, and
-      `fuelBound = |keys|(2|T|+4)` with `|keys| = 1` is only `2|T|+4`. The tight bound:
-      each `GrantReach` hop consumes a distinct *plain* source node (`w_all` nodes are
-      never hop sources — they are consumed mid-hop by a grant+bridge pair), and a
-      compressed **nodup** trail has ≤ `2|T|` distinct plain vertices. Route:
-      `trail_compress`-with-nodup + strengthen `grantReach_of_trail` to bound `m` by
-      the plain-vertex count + a plain-node characterization (every plain node is a
-      stored `subjNode t.subject` / concrete `objNode`, ≤ `2|T|`). This is the genuine
-      remaining multi-hour piece.
+    - **Correspondence CLOSED — `graph_correct_objStar` (full `check = sem`). ✅ DONE
+      (2026-07-10)** (`GraphIndex/ObjStarClosure.lean`, sorry-free, axiom-clean
+      `[propext, Classical.choice, Quot.sound]`). The remaining SOUNDNESS side +
+      top-level glue were delivered exactly as designed below:
+      (1) the **fuel-bounded soundness assembly** — the tight `m ≤ 2|T|+1 ≤ fuelBound`
+      bound. `trail_compress_nodup` (State.lean) compresses to a **nodup** trail;
+      `grantReach_of_trail` was strengthened to bound `m ≤ (subjNode s :: l).countP
+      NodeKey.isPlain` (every `GrantReach` hop's *source* is a `plain` node — `w_all`
+      nodes are consumed mid-hop by a grant+bridge pair, never a source); the
+      plain-node accounting (`ensureBridges_plainCount` / `writeWild_plainCount_le` /
+      `wildReachedAdmitted_plainNodes`) gives `plain-nodes ≤ 2|T|`; `nodup_countP_le`
+      + `NodeKey.isPlain` glue the count of a nodup trail's plain vertices to `2|T|`.
       (2) the **top-level `check = sem` glue** — route the read to `probeNonDerived`
-      (pure-direct = untainted), kill probe 2 (star-free subjects) and probe 4, glue
-      probe 1 ∨ probe 3 via `reach ↔ NReaches` to `graph_complete_objStar` (backward)
-      and the fuel-bounded `GrantReach` chain (forward). Mirror of
-      `graph_correct_direct` / `graph_correct_bareStar`.
+      (pure-direct), kill probes 2,4 (`w_any` subject never an edge source,
+      `wildReached_edge_source_ne_wAny`), glue probe 1 ∨ probe 3 via `reach ↔ NReaches`
+      to `graph_complete_objStar` (backward) and the fuel-bounded `GrantReach` chain
+      (forward). Mirror of `graph_correct_direct` / `graph_correct_bareStar`. **W1b is
+      now closed end-to-end (soundness + completeness). Next: W1c.**
   - **W1c — userset stars (in-bridges + `instances`).** `concrete → wAny`
     bridges for subject-wildcard USERSET shapes (`[group:*#member]`), the
     `instances`-branch of `memberOfGranted`/`ttuLeaf`, probe 4, and the

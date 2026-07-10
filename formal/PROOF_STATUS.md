@@ -6,6 +6,56 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W1b FULLY CLOSED — `graph_correct_objStar`, full `check = sem`)
+
+Resuming W1b from "both semantic cores done + completeness operationally closed;
+what remains is the SOUNDNESS side + top-level assembly." Delivered the
+**fuel-bounded soundness assembly** and the **top-level `check = sem` glue**, closing
+**W1b end-to-end**: `graph_correct_objStar` (`GraphIndex/ObjStarClosure.lean`,
+sorry-free, axiom-clean `[propext, Classical.choice, Quot.sound]`). `verify.sh` green
+throughout (build + 0 sorries + 60 conformance + audit). Sorry count held at 0. This
+is the first *object-wildcard* fragment where the graph read provably equals `sem`.
+
+**The fuel bound was the genuine remaining piece** (ROADMAP-flagged multi-hour). The
+soundness chain `semAux_of_grantReach` gives fuel = the `GrantReach` length `m`, and
+`m ≤ fuelBound` needs the tight `m ≤ 2|T|+1` — the crude `m ≤ nodes.length` is too
+weak because `writeWild` adds up to 4 nodes/tuple (2 endpoints + 2 `w_all`), so
+`nodes.length ≤ 4|T|` overshoots `fuelBound = |keys|(2|T|+4)` at `|keys|=1`. The key
+observation formalized: **every `GrantReach` hop's *source* is a `plain` node** —
+`w_all` nodes are consumed mid-hop by a grant+bridge pair, never a hop source — so the
+chain length is bounded by the count of *distinct plain* trail vertices, of which
+there are ≤ `2|T|`.
+
+**Delivered:**
+- **`NodeKey.isPlain`** + **`trail_compress_nodup`** + **`nodup_countP_le`**
+  (`GraphIndex/State.lean`) — a nodup-preserving trail compression, and the bound
+  `l.Nodup → (∀ x∈l, x∈N) → l.countP p ≤ N.countP p` (distinct predicate-hits inject
+  into `N.filter p`).
+- **`grantReach_of_trail` strengthened** (`GraphIndex/ObjStarCorrect.lean`) — now also
+  yields `m ≤ (subjNode s :: l).countP NodeKey.isPlain`. Each hop accounts for exactly
+  one plain vertex (its source); the `w_all` node of a bridge hop contributes 0. Base
+  hops account for the leading `subjNode s`. Threaded through the existing peeling
+  induction with no change to its structure. `isPlain_subjNode`/`isPlain_wAllNode`
+  helpers.
+- **Plain-node accounting** (`GraphIndex/ObjStarClosure.lean`):
+  `ensureBridges_plainCount` (bridges only ever add `w_all` nodes ⇒ plain count
+  unchanged), `writeWild_plainCount_le` (≤ 2 plain nodes/write), and
+  `wildReachedAdmitted_plainNodes` (`plain-node count ≤ 2|T|`).
+- **Dead `w_any` probes** — `wildReached_edge_source_ne_wAny` (an edge source is a
+  star-free `subjNode` grant source or a `w_all` bridge source, never `w_any`) +
+  `nreaches_first_edge`, killing read probes 2 and 4.
+- **`grantReach_mem`** — a `GrantReach` witnesses a stored tuple (for
+  `lookup_keys_nonempty` in the fuel arithmetic).
+- **`graph_correct_objStar`** — `check σ q = sem S T q` on the W1b fragment
+  (object-star, admission-valid, object-wildcard-valid store; star-free query),
+  end-to-end. Forward: probe-1/probe-3 hit → nodup trail → `GrantReach` →
+  `semAux_of_grantReach` at fuel `m ≤ 2|T|+1 ≤ fuelBound` → `semAux_mono`. Backward:
+  `graph_complete_objStar` + `reach_complete`. Probes 2,4 dead; audit updated
+  (5 new `#print axioms` lines).
+
+**Next: ROADMAP W1c** (userset stars `[group:*#member]` — in-bridges + `instances` +
+probe 4; the genuinely hard sub-stage). Attack-first first.
+
 ## Session 2026-07-10 (W1b COMPLETENESS CLOSED operationally — `graph_complete_objStar`)
 
 Resuming W1b from "both semantic cores done, discharge the operational hypotheses."

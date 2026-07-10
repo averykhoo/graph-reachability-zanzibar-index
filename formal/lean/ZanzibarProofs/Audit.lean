@@ -146,6 +146,16 @@ namespace Zanzibar
 #print axioms wildReachedAdmitted_bridge_complete
 #print axioms wildReachedAdmitted_hbr
 #print axioms graph_complete_objStar
+-- **T2b stage W1b — SOUNDNESS assembly + full `check = sem`
+-- (GraphIndex/ObjStarClosure.lean)** — the plain-node accounting (`≤ 2|T|`) that
+-- bounds the `GrantReach` chain length under `fuelBound`, the dead `w_any` probes,
+-- and the assembled `graph_correct_objStar` (probe 1 ∨ probe 3, both directions).
+-- All expect only the three standard axioms (no `sorryAx`):
+#print axioms wildReached_edge_source_ne_wAny
+#print axioms ensureBridges_plainCount
+#print axioms writeWild_plainCount_le
+#print axioms wildReachedAdmitted_plainNodes
+#print axioms graph_correct_objStar
 -- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
 -- at fragment scope — now REAL proved theorems (were false over the deleted
 -- abstract closure). Expect only the three standard axioms (no `sorryAx`):

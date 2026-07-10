@@ -75,6 +75,15 @@ theorem wAllNode_inj {t r t' r' : String} (h : wAllNode t r = wAllNode t' r') :
 @[simp] theorem wAllNode_pred (t r : String) : (wAllNode t r).pred = r := rfl
 @[simp] theorem wAllNode_variant (t r : String) : (wAllNode t r).variant = Variant.wAll := rfl
 
+/-- A star-free subject's `subjNode` is a `plain` node. -/
+theorem isPlain_subjNode {s : SubjectRef} (h : s.name ≠ STAR) :
+    NodeKey.isPlain (subjNode s) = true := by
+  unfold NodeKey.isPlain subjNode; rw [if_neg h]; rfl
+
+/-- A `w_all` node is never `plain`. -/
+theorem isPlain_wAllNode (t r : String) : NodeKey.isPlain (wAllNode t r) = false := by
+  unfold NodeKey.isPlain wAllNode; rfl
+
 /-! ## The bridged-concrete flag decomposed -/
 
 /-- `bridgedConcrete` decomposed: a bridged-concrete node is plain, star-free, and
@@ -359,17 +368,25 @@ theorem semAux_of_grantReach {S : Schema} {T : Store} {q : Query}
 
 /-! ## `trail ⇒ GrantReach` — soundness's reachability half -/
 
-/-- **Every graph trail from a star-free subject node is a `GrantReach`.** Strong
-    induction on the trail length: a first edge out of a plain node is a grant
+/-- **Every graph trail from a star-free subject node is a `GrantReach`, with the
+    chain length bounded by the count of `plain` trail vertices.** Strong induction
+    on the trail length: a first edge out of a plain node is a grant
     (`wildReached_grant_or_bridge`; bridges have `w_all` sources). If it lands on a
     concrete node, recurse (`hop`); if on a `w_all` node, the next edge is its
     bridge, and grant+bridge is absorbed into one hop against the bridged concrete
-    (`base`/`hop`). A path terminating on a `w_all` node is a `starBase`. -/
+    (`base`/`hop`). A path terminating on a `w_all` node is a `starBase`. The count
+    bound holds because every hop's *source* is a `plain` node (the query subject or
+    a concrete userset) — `w_all` nodes are consumed mid-hop by a bridge, never as a
+    source — so each hop accounts for one distinct plain vertex of the trail. This is
+    what fits the chain length under `fuelBound` (`w_all` nodes, up to `2|T|` of them,
+    would otherwise inflate a crude `nodes.length` bound past the bound). -/
 theorem grantReach_of_trail {S : Schema} {T : Store} {σ : GraphState}
     (h : WildReached σ S T) (hOS : ObjStarStore T) :
     ∀ (n : Nat) (l : List NodeKey), l.length ≤ n →
       ∀ (s : SubjectRef) (v : NodeKey), s.name ≠ STAR →
-        Trail σ.edges (subjNode s) v l → ∃ m, GrantReach T m (subjNode s) v := by
+        Trail σ.edges (subjNode s) v l →
+        ∃ m, GrantReach T m (subjNode s) v ∧
+          m ≤ (subjNode s :: l).countP NodeKey.isPlain := by
   have hchar := wildReached_grant_or_bridge h hOS
   intro n
   induction n with
@@ -380,17 +397,19 @@ theorem grantReach_of_trail {S : Schema} {T : Store} {σ : GraphState}
     | cons x xs => simp only [List.length_cons] at hlen; omega
     | nil =>
       have hedge : (subjNode s, v) ∈ σ.edges := ht
+      have hcnt : 1 ≤ (subjNode s :: ([] : List NodeKey)).countP NodeKey.isPlain := by
+        rw [List.countP_cons]; simp [isPlain_subjNode hs]
       rcases hchar _ _ hedge with ⟨t, htT, h1, hts, h2⟩ | ⟨hbr, _, _⟩
       · -- grant edge from subjNode s
         have hs_eq : s = t.subject := subjNode_inj hs hts h1
         subst hs_eq
         subst h2
         by_cases hobj : t.object.name = STAR
-        · refine ⟨1, ?_⟩
+        · refine ⟨1, ?_, hcnt⟩
           have : objNode t.object t.relation = wAllNode t.object.type t.relation := by
             unfold objNode wAllNode; rw [if_pos hobj]
           rw [this]; exact GrantReach.starBase t htT hobj
-        · refine ⟨1, ?_⟩
+        · refine ⟨1, ?_, hcnt⟩
           have : objNode t.object t.relation =
               objNode (⟨t.object.type, t.object.name⟩ : ObjectRef) t.relation := rfl
           rw [this]
@@ -405,19 +424,25 @@ theorem grantReach_of_trail {S : Schema} {T : Store} {σ : GraphState}
     | nil =>
       -- same as the zero base case (single edge)
       have hedge : (subjNode s, v) ∈ σ.edges := ht
+      have hcnt : 1 ≤ (subjNode s :: ([] : List NodeKey)).countP NodeKey.isPlain := by
+        rw [List.countP_cons]; simp [isPlain_subjNode hs]
       rcases hchar _ _ hedge with ⟨t, htT, h1, hts, h2⟩ | ⟨hbr, _, _⟩
       · have hs_eq : s = t.subject := subjNode_inj hs hts h1
         subst hs_eq; subst h2
         by_cases hobj : t.object.name = STAR
-        · refine ⟨1, ?_⟩
+        · refine ⟨1, ?_, hcnt⟩
           have : objNode t.object t.relation = wAllNode t.object.type t.relation := by
             unfold objNode wAllNode; rw [if_pos hobj]
           rw [this]; exact GrantReach.starBase t htT hobj
-        · refine ⟨1, ?_⟩
+        · refine ⟨1, ?_, hcnt⟩
           exact GrantReach.base t htT hobj (matchingObjects_self _ hobj)
       · rw [subjNode_plain hs, wAllNode] at hbr; simp [NodeKey.mk.injEq] at hbr
     | cons x xs =>
       obtain ⟨hfst, htail⟩ := ht
+      -- the source subjNode s contributes one plain vertex to the head count
+      have hheadcnt : ∀ (ys : List NodeKey),
+          (subjNode s :: ys).countP NodeKey.isPlain = ys.countP NodeKey.isPlain + 1 := by
+        intro ys; rw [List.countP_cons]; simp [isPlain_subjNode hs]
       rcases hchar _ _ hfst with ⟨t, htT, h1, hts, h2⟩ | ⟨hbr, _, _⟩
       · -- first hop is a grant from subjNode s to x = objNode t.object t.relation
         have hs_eq : s = t.subject := subjNode_inj hs hts h1
@@ -439,14 +464,16 @@ theorem grantReach_of_trail {S : Schema} {T : Store} {σ : GraphState}
               rw [hxwall] at hvbr
               obtain ⟨htype, hpred⟩ := wAllNode_inj hvbr.symm
               -- v = ⟨t.object.type, v.name, t.relation, plain⟩ = objNode ⟨.,v.name⟩ t.relation
-              refine ⟨1, ?_⟩
-              have hvobj : v = objNode (⟨t.object.type, v.name⟩ : ObjectRef) t.relation := by
-                rw [objNode_plain hvn]
-                have : v = ⟨v.type, v.name, v.pred, v.variant⟩ := rfl
-                rw [this, htype, hpred, hvv]
-              rw [hvobj]
-              exact GrantReach.base t htT hvn
-                (by rw [hobj]; exact matchingObjects_star_mem hvn)
+              refine ⟨1, ?_, ?_⟩
+              · have hvobj : v = objNode (⟨t.object.type, v.name⟩ : ObjectRef) t.relation := by
+                  rw [objNode_plain hvn]
+                  have : v = ⟨v.type, v.name, v.pred, v.variant⟩ := rfl
+                  rw [this, htype, hpred, hvv]
+                rw [hvobj]
+                exact GrantReach.base t htT hvn
+                  (by rw [hobj]; exact matchingObjects_star_mem hvn)
+              · -- count: [subjNode s, x] has ≥ 1 plain vertex (subjNode s itself)
+                rw [hheadcnt]; omega
           | cons y ys =>
             obtain ⟨hbfst, hbtail⟩ := htail
             -- first tail edge x → y is the bridge (x is w_all)
@@ -464,19 +491,31 @@ theorem grantReach_of_trail {S : Schema} {T : Store} {σ : GraphState}
               have hlen' : ys.length ≤ n := by
                 simp only [List.length_cons] at hlen; omega
               rw [hyeq] at hbtail
-              obtain ⟨m, hm⟩ := ih ys hlen' _ v hyn hbtail
-              refine ⟨m + 1, ?_⟩
-              exact GrantReach.hop t htT hvn
-                (by rw [hobj]; exact matchingObjects_star_mem hvn) hm
+              obtain ⟨m, hm, hmb⟩ := ih ys hlen' _ v hyn hbtail
+              refine ⟨m + 1, ?_, ?_⟩
+              · exact GrantReach.hop t htT hvn
+                  (by rw [hobj]; exact matchingObjects_star_mem hvn) hm
+              · -- count: subjNode s (plain, +1), x = w_all (+0), then y :: ys as in `hmb`
+                have hxnp : NodeKey.isPlain x = false := by rw [hxwall]; exact isPlain_wAllNode _ _
+                have hx0 : (x :: y :: ys).countP NodeKey.isPlain
+                    = (y :: ys).countP NodeKey.isPlain := by
+                  rw [List.countP_cons, hxnp]; simp
+                rw [hheadcnt, hx0]
+                rw [← hyeq] at hmb
+                omega
         · -- x is a concrete node = subjNode of the userset ⟨t.object.type, t.object.name, t.relation⟩
           have hxsubj : x = subjNode ⟨t.object.type, t.object.name, t.relation⟩ := by
             rw [h2]; exact objNode_eq_subjNode hobj
           have hlen' : xs.length ≤ n := by
             simp only [List.length_cons] at hlen; omega
           rw [hxsubj] at htail
-          obtain ⟨m, hm⟩ := ih xs hlen' _ v hobj htail
-          refine ⟨m + 1, ?_⟩
-          exact GrantReach.hop t htT hobj (matchingObjects_self _ hobj) hm
+          obtain ⟨m, hm, hmb⟩ := ih xs hlen' _ v hobj htail
+          refine ⟨m + 1, ?_, ?_⟩
+          · exact GrantReach.hop t htT hobj (matchingObjects_self _ hobj) hm
+          · -- count: subjNode s (plain, +1), then x = subjNode userset :: xs as in `hmb`
+            rw [hheadcnt]
+            rw [← hxsubj] at hmb
+            omega
       · rw [subjNode_plain hs, wAllNode] at hbr; simp [NodeKey.mk.injEq] at hbr
 
 /-! ## `sem ⇒ probe 1 ∨ probe 3` — the completeness semantic core

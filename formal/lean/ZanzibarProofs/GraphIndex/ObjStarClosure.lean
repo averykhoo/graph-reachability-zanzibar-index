@@ -280,4 +280,188 @@ theorem graph_complete_objStar {S : Schema} {T : Store} {σ : GraphState} {q : Q
     (wildReachedAdmitted_hbr hReach hOS hOV)
     (fuelBound S T) ot on r hon hsem
 
+/-! ## Soundness assembly — the fuel bound and the dead wildcard probes
+
+The completeness half (above) needs no fuel bound. The soundness half does:
+`semAux_of_grantReach` gives a `sem` membership at fuel = the `GrantReach` length
+`m`, and the top-level theorem needs `m ≤ fuelBound`. The crude `m ≤ nodes.length`
+is too weak — `writeWild` adds up to 4 nodes per tuple (2 endpoints + 2 `w_all`), so
+`nodes.length ≤ 4|T|`, exceeding `fuelBound = |keys|(2|T|+4)` when `|keys| = 1`. The
+tight bound is `m ≤ 2|T| + 1`: a `GrantReach` hop's *source* is always a `plain`
+node (`grantReach_of_trail`'s count bound), and there are ≤ `2|T|` distinct plain
+nodes (`w_all` nodes never count) — `wildReachedAdmitted_plainNodes`. -/
+
+/-- Every non-empty path has a first edge (out of its source). -/
+theorem nreaches_first_edge {edges : List (NodeKey × NodeKey)} {u v : NodeKey}
+    (h : NReaches edges u v) : ∃ w, (u, w) ∈ edges := by
+  cases h with
+  | edge he => exact ⟨_, he⟩
+  | head he _ => exact ⟨_, he⟩
+
+/-- An edge source in a `WildReached` state over an object-star store is never a
+    `w_any` node: it is either a (star-free) `subjNode` grant source (`plain`) or a
+    `w_all` bridge source. Kills read probes 2 and 4 (`w_any` subject). -/
+theorem wildReached_edge_source_ne_wAny {σ : GraphState} {S : Schema} {T : Store}
+    (h : WildReached σ S T) (hOS : ObjStarStore T) :
+    ∀ a b, (a, b) ∈ σ.edges → a.variant ≠ Variant.wAny := by
+  intro a b hab
+  rcases wildReached_grant_or_bridge h hOS a b hab with ⟨t, _, h1, hts, _⟩ | ⟨hbr, _, _⟩
+  · rw [h1, subjNode_plain hts]; simp
+  · rw [hbr, wAllNode]; simp
+
+/-- A `GrantReach` chain witnesses at least one stored tuple. -/
+theorem grantReach_mem {T : Store} {n : Nat} {u v : NodeKey}
+    (h : GrantReach T n u v) : ∃ t, t ∈ T := by
+  cases h with
+  | base t ht _ => exact ⟨t, ht⟩
+  | starBase t ht => exact ⟨t, ht⟩
+  | hop t ht _ _ => exact ⟨t, ht⟩
+
+/-! ## Plain-node accounting: at most `2|T|` plain nodes -/
+
+/-- `ensureBridges` never changes the *plain*-node count: it only ever prepends a
+    `w_all` node (or nothing), and `w_all` nodes are not plain. -/
+theorem ensureBridges_plainCount (σ : GraphState) (c : NodeKey) :
+    (σ.ensureBridges c).nodes.countP NodeKey.isPlain
+      = σ.nodes.countP NodeKey.isPlain := by
+  unfold GraphState.ensureBridges
+  by_cases hbr : σ.bridgedConcrete c = true
+  · rw [if_pos hbr]
+    split
+    · rw [addEdge_nodes, addNode_nodes, List.countP_cons, isPlain_wAllNode]; simp
+    · rw [addNode_nodes, List.countP_cons, isPlain_wAllNode]; simp
+  · rw [if_neg (by simpa using hbr)]
+
+/-- A single `writeWild` adds at most **two** plain nodes (the two endpoints; the
+    up-to-two `w_all` nodes are not plain, and the grant edge adds none). -/
+theorem writeWild_plainCount_le (σ : GraphState) (t : Tuple) :
+    (σ.writeWild t).nodes.countP NodeKey.isPlain
+      ≤ σ.nodes.countP NodeKey.isPlain + 2 := by
+  rw [writeWild_eq_ite]
+  split
+  · rw [addEdge_nodes]
+    unfold GraphState.writeWildPre
+    rw [ensureBridges_plainCount, ensureBridges_plainCount, addNode_nodes, addNode_nodes]
+    simp only [List.countP_cons]
+    split_ifs <;> omega
+  · omega
+
+/-- **At most `2|T|` plain nodes.** Each admitted write adds ≤ 2 plain nodes, so a
+    `WildReachedAdmitted` state has `plain`-node count ≤ `2·|T|`. This is the tight
+    bound the soundness fuel argument needs (the `w_all` nodes, up to `2|T|` of them,
+    do not count — they are never `GrantReach` hop sources). -/
+theorem wildReachedAdmitted_plainNodes {σ : GraphState} {S : Schema} {T : Store}
+    (h : WildReachedAdmitted σ S T) :
+    σ.nodes.countP NodeKey.isPlain ≤ 2 * T.length := by
+  induction h with
+  | empty S => simp [emptyState]
+  | @step σ S T t hprev hadmSub hadmGrant ih =>
+    have hstep := writeWild_plainCount_le σ t
+    simp only [List.length_cons]
+    omega
+
+/-! ## T2b on the W1b (object-wildcard) fragment, assembled -/
+
+/-- **T2b, object-wildcard fragment (W1b), the full `check = sem`.** On any state
+    reached by admitted bridge-materializing writes of an admission-valid,
+    object-wildcard-valid, object-star store (subjects star-free, objects may be
+    `T:*`), the graph read answers exactly `sem` for every star-free query. Probes 2,4
+    are dead (`w_any` subject is never an edge source, `wildReached_edge_source_ne_wAny`);
+    probe 1 (concrete object) and probe 3 (`w_all` object) are handled by the
+    bridge-absorbing `GrantReach` soundness chain (forward, fuel `m ≤ 2|T|+1 ≤
+    fuelBound`) and `graph_complete_objStar` (backward). This closes the W1b read
+    correspondence end-to-end. -/
+theorem graph_correct_objStar (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T)
+    (hOS : ObjStarStore T) (hOV : ObjStarValid S T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : WildReachedAdmitted σ S T) :
+    GraphModel.check σ q = sem S T q := by
+  have hWR : WildReached σ S T := wildReached_of_admitted hReach
+  have hInv : StructInv S σ := wildReached_structInv hWR
+  have hcl := hInv.edgesClosed
+  have hsch : σ.schema = S := wildReachedAdmitted_schema hReach
+  -- the read routes to probeNonDerived (pure-direct = untainted)
+  have hroute : GraphModel.check σ q = GraphModel.probeNonDerived σ q := by
+    unfold GraphModel.check
+    rw [hsch, isDerived_pureDirect hPD]; simp
+  -- probes 2,4 are dead: a w_any node is never an edge source
+  have hpAny : ∀ v, σ.reach (wAnyNode q.subject.shape) v = false := by
+    intro v
+    cases hcase : σ.reach (wAnyNode q.subject.shape) v with
+    | false => rfl
+    | true =>
+      exfalso
+      obtain ⟨w, hw⟩ := nreaches_first_edge (reach_sound hcase)
+      exact wildReached_edge_source_ne_wAny hWR hOS _ _ hw rfl
+  have hqob : (q.object.name != STAR) = true := by simp only [bne_iff_ne, ne_eq]; exact hqo
+  have hprobe : GraphModel.probeNonDerived σ q =
+      (σ.reach (subjNode q.subject) (objNode q.object q.relation)
+       || σ.reach (subjNode q.subject) (wAllNode q.object.type q.relation)) := by
+    unfold GraphModel.probeNonDerived
+    simp [hpAny, hqob]
+  -- forward: a probe-1 or probe-3 hit is a sem membership
+  have hfwd : ∀ w, (w = objNode q.object q.relation ∨ w = wAllNode q.object.type q.relation) →
+      NReaches σ.edges (subjNode q.subject) w → sem S T q = true := by
+    intro w hw hnr
+    obtain ⟨l, hl⟩ := trail_of_nreaches hnr
+    obtain ⟨l', hl', hnd'⟩ := trail_compress_nodup l.length l (le_refl _) hl
+    have hsub' : ∀ x ∈ l', x ∈ σ.nodes := trail_verts_mem hcl l' _ _ hl'
+    obtain ⟨m, hgr, hmb⟩ :=
+      grantReach_of_trail hWR hOS l'.length l' (le_refl _) q.subject w hqs hl'
+    -- fuel bound: m ≤ plain vertices ≤ 2|T| + 1 ≤ fuelBound
+    have hcount : (subjNode q.subject :: l').countP NodeKey.isPlain ≤ 2 * T.length + 1 := by
+      rw [List.countP_cons]
+      have h1 : l'.countP NodeKey.isPlain ≤ σ.nodes.countP NodeKey.isPlain :=
+        nodup_countP_le hnd' hsub'
+      have h2 : σ.nodes.countP NodeKey.isPlain ≤ 2 * T.length :=
+        wildReachedAdmitted_plainNodes hReach
+      split <;> omega
+    obtain ⟨t0, ht0⟩ := grantReach_mem hgr
+    obtain ⟨rs0, hlk0, -⟩ := hSV t0 ht0
+    have hkeys := lookup_keys_nonempty hlk0
+    have hfb : m ≤ fuelBound S T := by
+      unfold fuelBound
+      have hb : T.length * 2 + 4 ≤ S.keys.length * (T.length * 2 + 4) := by
+        conv_lhs => rw [← Nat.one_mul (T.length * 2 + 4)]
+        exact Nat.mul_le_mul_right _ hkeys
+      omega
+    have hmatch : matchesObj w q.object.type q.object.name q.relation := by
+      rcases hw with h | h
+      · exact Or.inl (by rw [h])
+      · exact Or.inr h
+    have hsem_m := semAux_of_grantReach (q := q) hWF hPD hSV hOS hgr hqs rfl hqo hmatch
+    unfold sem
+    exact semAux_mono S (pureDirect_noExclAll hPD) q.subject T q hfb _ _ _ hsem_m
+  -- backward: a sem membership hits probe 1 or probe 3 (graph_complete_objStar)
+  have hbwd : sem S T q = true →
+      NReaches σ.edges (subjNode q.subject) (objNode q.object q.relation)
+      ∨ NReaches σ.edges (subjNode q.subject) (wAllNode q.object.type q.relation) := by
+    intro hsem
+    have hsem' : semAux S q.subject T q (fuelBound S T)
+        q.object.type q.object.name q.relation = true := hsem
+    rcases graph_complete_objStar hPD hOS hOV hqs hReach hqo hsem' with h | h
+    · exact Or.inl h
+    · exact Or.inr h
+  rw [hroute, hprobe]
+  cases hsemc : sem S T q with
+  | true =>
+    rcases hbwd hsemc with h | h
+    · rw [reach_complete hcl h, Bool.true_or]
+    · rw [reach_complete hcl h, Bool.or_true]
+  | false =>
+    have hn1 : σ.reach (subjNode q.subject) (objNode q.object q.relation) = false := by
+      cases hc : σ.reach (subjNode q.subject) (objNode q.object q.relation) with
+      | false => rfl
+      | true =>
+        have := hfwd _ (Or.inl rfl) (reach_sound hc)
+        rw [hsemc] at this; exact absurd this (by simp)
+    have hn2 : σ.reach (subjNode q.subject) (wAllNode q.object.type q.relation) = false := by
+      cases hc : σ.reach (subjNode q.subject) (wAllNode q.object.type q.relation) with
+      | false => rfl
+      | true =>
+        have := hfwd _ (Or.inr rfl) (reach_sound hc)
+        rw [hsemc] at this; exact absurd this (by simp)
+    rw [hn1, hn2]; rfl
+
 end Zanzibar
