@@ -17,6 +17,7 @@ import ZanzibarProofs.GraphIndex.RulesSound
 import ZanzibarProofs.GraphIndex.RulesChain
 import ZanzibarProofs.GraphIndex.RulesSaturate
 import ZanzibarProofs.GraphIndex.RulesComplete
+import ZanzibarProofs.GraphIndex.Reconcile
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -336,5 +337,14 @@ namespace Zanzibar
 #print axioms all_stable
 #print axioms semAux_fuel_stable_step
 #print axioms sem_fuel_stable
+
+-- **ROADMAP W3a — the derived reconcile / residue path, read-side collapse
+-- (GraphIndex/Reconcile.lean, 2026-07-10).** On the star-free bare-subject fragment
+-- the processor stores no residue row, so the state stays `ResidueEmpty` and the
+-- derived read `probeDerived` collapses to the bare edge probe (a derived relation
+-- only adds edges — structurally an ordinary `writeDirect`). Standard axioms only:
+#print axioms GraphModel.probeDerived_residueEmpty
+#print axioms GraphModel.probeDerived_ResidueEmpty
+#print axioms GraphModel.check_derived_ResidueEmpty
 
 end Zanzibar
