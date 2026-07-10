@@ -374,4 +374,188 @@ theorem reachedByW3a_reach_collapse_root {σ : GraphState} {S : Schema} {T : Sto
   reachedByW3a_reach_collapse hWF hSV h
     (reachedByW3a_Rnode_source_bare hSV hNK hlk hroot h) hr
 
+/-! ## Reconcile-edge reachability inertness (ROADMAP W3a, read half — increment 5)
+
+The remaining W3a correspondence blocker (PROOF_STATUS point 2, `hag`) restates W2's
+`graph_correct_rules` *per untainted operand relation* `r'` within the mixed W3a schema.
+That restatement needs the reconcile-materialised derived edges to be **reachability-inert
+for the operand read** — the graph read `probeNonDerived σ ⟨s, r', ⟨dt,on'⟩⟩` on the full
+W3a `σ` must equal the read on the untainted base, so that the W2 argument transfers.
+
+**The flagged subtlety (PROOF_STATUS "R-node-source"): is the derived R-node ever an edge
+SOURCE?** A reconcile edge is `subjNode c → objNode ⟨dt,on⟩ R` (bare source, R-node target).
+Its bare source is never a target (`reachedByW3a_bareNode_no_inedge`), so it can only *start*
+a path; the path then continues out of the R-node. If the R-node has an out-edge, a reconcile
+edge can extend a path to a *further* node — NOT inert. A base (W2) edge source is
+`subjNode u.subject`; for a **userset** subject `⟨dt,on⟩#R` over the derived relation `R` this
+IS the R-node, so a stored/rewrite-closure operand tuple with such a subject would give the
+R-node an out-edge.
+
+**Resolution.** On the single-stratum W3a fragment the derived boolean `R` is *terminal*: it
+is neither a stored subject predicate (`NoStoreSubjectR`) nor a TTU target relation
+(`NoTtuTarget` — the Python `PDerivedTTU`/`PDerivedTuplesetTTU` "target from tupleset with
+derived target" shapes are deferred past W3a). A rewrite-closure tuple's subject predicate is
+the seed's (computed rewrites keep the subject) or a TTU rule's `tr` (ttu re-userset-s onto
+`tr`); under both conditions neither is `R`, so **no graph edge is ever sourced at an
+`R`-userset node** (`reachedByW3a_edge_source_ne_R`). The R-node has no out-edge, and a
+reconcile edge onto it is a pure trailing hop — inert for any read whose target is not that
+R-node (`reconcileKey_reach_inert`). -/
+
+/-- **Generic single-new-edge inertness.** If the target `b` of a prepended edge `(a,b)` is
+    never itself a *source* in the old edges, then for any `v ≠ b` a path in `(a,b) :: edges`
+    to `v` is already a path in `edges` — the new edge, if used, would have to be exited out
+    of `b` (impossible: `b` is not a source) or be the final hop (impossible: its target `b`
+    ≠ `v`). Axiom-free; via `nreaches_cons_split`. -/
+theorem nreaches_cons_inert {edges : List (NodeKey × NodeKey)} {a b u v : NodeKey}
+    (hbns : ∀ y, (b, y) ∉ edges) (hv : v ≠ b)
+    (h : NReaches ((a, b) :: edges) u v) : NReaches edges u v := by
+  rcases nreaches_cons_split h with hl | ⟨_, hbv⟩
+  · exact hl
+  · rcases hbv with heq | hr
+    · exact absurd heq.symm hv
+    · cases hr with
+      | edge hbw => exact absurd hbw (hbns _)
+      | head hbw _ => exact absurd hbw (hbns _)
+
+/-- **`NoTtuTarget S R`** — no schema rewrite rule re-userset-s a subject onto `R` (no TTU
+    rule has target relation `R`). On the single-stratum W3a fragment the derived boolean `R`
+    is terminal — the "target from a tupleset" shapes that would output an `R`-userset subject
+    are deferred (Python `PDerivedTTU`/`PDerivedTuplesetTTU`). -/
+def NoTtuTarget (S : Schema) (R : String) : Prop :=
+  ∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ R
+
+/-- **`NoStoreSubjectR T R`** — no stored tuple carries a subject that is a userset over the
+    derived relation `R`. On W3a the derived boolean is a top-level permission, never itself a
+    userset subject of a raw write. -/
+def NoStoreSubjectR (T : Store) (R : String) : Prop :=
+  ∀ t ∈ T, t.subject.predicate ≠ R
+
+/-- One rewrite step keeps a subject off predicate `R`: `computed` preserves the subject; a
+    `ttu tr` sets it to `tr ≠ R` by `NoTtuTarget`. -/
+theorem rewriteStep_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R)
+    {t u : Tuple} (ht : t.subject.predicate ≠ R) (h : u ∈ rewriteStep S t) :
+    u.subject.predicate ≠ R := by
+  unfold rewriteStep at h
+  obtain ⟨r, hr, hap⟩ := List.mem_filterMap.mp h
+  obtain ⟨ot, mr, or, kind⟩ := r
+  unfold applyRRule at hap
+  split at hap
+  · cases kind with
+    | computed => simp only [Option.some.injEq] at hap; rw [← hap]; exact ht
+    | ttu tr => simp only [Option.some.injEq] at hap; rw [← hap]; exact hnt _ hr tr rfl
+  · simp at hap
+
+/-- Subject-predicate avoidance across the bounded closure. -/
+theorem rewriteClosureAux_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R) :
+    ∀ (n : Nat) (cur : List Tuple), (∀ w ∈ cur, w.subject.predicate ≠ R) →
+      ∀ u ∈ rewriteClosureAux S n cur, u.subject.predicate ≠ R := by
+  intro n
+  induction n with
+  | zero => intro cur hcur u hu; exact hcur u hu
+  | succ m ih =>
+    intro cur hcur u hu
+    rw [rewriteClosureAux, List.mem_append] at hu
+    rcases hu with hin | hrec
+    · exact hcur u hin
+    · refine ih _ ?_ u hrec
+      intro w hw
+      rw [List.mem_flatMap] at hw
+      obtain ⟨x, hx, hwx⟩ := hw
+      exact rewriteStep_subject_pred_ne hnt (hcur x hx) hwx
+
+/-- **No rewrite-closure tuple of an `R`-avoiding seed has subject predicate `R`.** The seed
+    avoids `R` (`NoStoreSubjectR`); each rewrite hop keeps it off `R` (`rewriteStep_subject_
+    pred_ne`). -/
+theorem rewriteClosure_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R)
+    {t u : Tuple} (ht : t.subject.predicate ≠ R) (hu : u ∈ rewriteClosure S t) :
+    u.subject.predicate ≠ R := by
+  unfold rewriteClosure at hu
+  exact rewriteClosureAux_subject_pred_ne hnt _ _
+    (fun w hw => by rw [List.mem_singleton.mp hw]; exact ht) _ hu
+
+/-- **No W3a edge is sourced at an `R`-userset node.** A base edge's source is
+    `subjNode u.subject` for a closure tuple `u` (predicate ≠ `R` by
+    `rewriteClosure_subject_pred_ne`); a reconcile edge's source is a bare candidate
+    (predicate `BARE ≠ R`). By induction over the write path. Resolves the flagged
+    R-node-source subtlety: the derived R-node (predicate `R`) has no out-edge. -/
+theorem reachedByW3a_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
+    {R : String} (hnt : NoTtuTarget S R) (hns : NoStoreSubjectR T R) (hRne : R ≠ BARE)
+    (h : ReachedByW3a σ S T) :
+    ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
+  induction h with
+  | base hr =>
+    intro a b hab
+    obtain ⟨t, ht, u, hu, hasub, _⟩ := reachedByRules_edge_sound hr a b hab
+    rw [hasub, subjNode_pred]
+    exact rewriteClosure_subject_pred_ne hnt (hns t ht) hu
+  | reconcile dt on R' e cands _hRne hcands _ ih =>
+    intro a b hab
+    rcases reconcileKey_edge_sound _ dt on R' e cands a b hab with hold | ⟨c, hc, hac, _⟩
+    · exact ih hnt hns a b hold
+    · rw [hac, subjNode_pred, hcands c hc]; exact hRne.symm
+
+/-- **The derived R-node is never an edge source** (`hk : k.pred = R`) — the direct
+    consequence of `reachedByW3a_edge_source_ne_R`. So a reconcile edge onto the R-node is a
+    trailing hop: no path exits the R-node. -/
+theorem reachedByW3a_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
+    {R : String} (hnt : NoTtuTarget S R) (hns : NoStoreSubjectR T R) (hRne : R ≠ BARE)
+    (h : ReachedByW3a σ S T) {k : NodeKey} (hk : k.pred = R) :
+    ∀ y, (k, y) ∉ σ.edges := by
+  intro y hky
+  exact reachedByW3a_edge_source_ne_R hnt hns hRne h k y hky hk
+
+/-- **One reconcile pass is reachability-inert for a non-R-node read.** If the derived R-node
+    `objNode ⟨dt,on⟩ R'` is not a source in `σ` (its candidates are bare, `R' ≠ BARE`), then
+    reconciling key `(dt,R')` adds no reachability to any `v ≠` that R-node: every new edge is
+    a trailing hop onto the R-node. Peels the guarded `writeDirect` fold one candidate at a
+    time via `nreaches_cons_inert`, maintaining "R-node not a source" (each new edge's bare
+    source has predicate `BARE ≠ R'`). This is the per-pass inertness the multi-pass `hag`
+    transfer folds over the W3a write path. -/
+theorem reconcileKey_reach_inert {σ0 : GraphState} (T : Store)
+    (dt on R' : String) (e : Expr) (cands0 : List SubjectRef) (hR'ne : R' ≠ BARE)
+    {u v : NodeKey} (hv : v ≠ objNode ⟨dt, on⟩ R')
+    (hcb0 : ∀ c ∈ cands0, c.predicate = BARE)
+    (hRns0 : ∀ y, (objNode ⟨dt, on⟩ R', y) ∉ σ0.edges)
+    (h0 : NReaches (σ0.reconcileKey T dt on R' e cands0).edges u v) :
+    NReaches σ0.edges u v := by
+  suffices H : ∀ (cs : List SubjectRef) (σ : GraphState),
+      (∀ c ∈ cs, c.predicate = BARE) →
+      (∀ y, (objNode ⟨dt, on⟩ R', y) ∉ σ.edges) →
+      NReaches (σ.reconcileKey T dt on R' e cs).edges u v →
+      NReaches σ.edges u v from H cands0 σ0 hcb0 hRns0 h0
+  intro cs
+  induction cs with
+  | nil =>
+    intro σ _ _ h
+    unfold GraphState.reconcileKey at h
+    simpa using h
+  | cons s rest ih =>
+    intro σ hcb hRns h
+    unfold GraphState.reconcileKey at h
+    simp only [List.foldl_cons] at h
+    by_cases hc : σ.checkFn T s dt on R' e = true
+    · rw [if_pos hc] at h
+      have hsbare : s.predicate = BARE := hcb s List.mem_cons_self
+      have hRns' : ∀ y, (objNode ⟨dt, on⟩ R', y) ∉ (σ.writeDirect ⟨s, R', ⟨dt, on⟩⟩).edges := by
+        intro y hy
+        rw [writeDirect_edges] at hy
+        split at hy
+        · rcases List.mem_cons.mp hy with heq | hmem
+          · have h1 := (Prod.ext_iff.mp heq).1
+            have h2 : R' = s.predicate := by
+              have hp := congrArg NodeKey.pred h1
+              simpa [objNode_pred, subjNode_pred] using hp
+            rw [hsbare] at h2
+            exact hR'ne h2
+          · exact hRns y hmem
+        · exact hRns y hy
+      have hstep := ih (σ.writeDirect ⟨s, R', ⟨dt, on⟩⟩)
+        (fun c hcm => hcb c (List.mem_cons_of_mem _ hcm)) hRns' h
+      rw [writeDirect_edges] at hstep
+      split at hstep
+      · exact nreaches_cons_inert hRns hv hstep
+      · exact hstep
+    · rw [if_neg hc] at h
+      exact ih σ (fun c hcm => hcb c (List.mem_cons_of_mem _ hcm)) hRns h
+
 end Zanzibar

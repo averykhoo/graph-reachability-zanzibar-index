@@ -6,6 +6,70 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-11 (W3a read correspondence — R-node-source subtlety RESOLVED + reconcile-edge reachability inertness)
+
+Resuming W3a from "point 1 (`hsrcbare` via `NoRuleOutputs`) done; resume → point 2 (`hag` +
+candidate completeness + assembly), **but the prior handoff flagged: resolve the R-node-source
+subtlety FIRST — the inertness lemma may be false without an extra hypothesis.**" This session
+does exactly that: one green+pushed axiom-clean increment (`GraphIndex/ReconcileCorrect.lean`);
+`verify.sh` green throughout (build + 0 sorries + 60 conformance + audit, standard axioms only —
+two new theorems `[propext]`, three `[propext, Quot.sound]`). Sorry count held at 0.
+
+**The flagged subtlety, RESOLVED: is the derived R-node ever an edge SOURCE?** A reconcile edge
+`subjNode c → objNode ⟨dt,on⟩ R` has a bare source (never a target) and an R-node target; for it
+to be *reachability-inert* (so the operand read `probeNonDerived σ ⟨s, r', ⟨dt,on'⟩⟩` on the full
+W3a σ matches the untainted base — what `hag` needs), the R-node must have **no out-edge**. But a
+base (W2) edge source `subjNode u.subject` equals the R-node exactly when a stored/rewrite-closure
+operand tuple carries a **userset subject over the derived relation R** (`⟨dt,on⟩#R`). The Python
+DOES admit such usersets (`PDerivedUserset`, `zanzibar_utils_v1.py:1115`), so it is not
+unconditionally impossible — the subtlety was real.
+
+**Resolution — R is *terminal* on the single-stratum W3a fragment.** Two faithful fragment
+conditions (analogs of W2's `NodupKeys`/`RewriteRanked`, carried into W4): **`NoStoreSubjectR T R`**
+(no stored tuple has subject predicate R) and **`NoTtuTarget S R`** (no schema rewrite rule has
+target relation R — the "target from tupleset with derived target" shapes `PDerivedTTU`/
+`PDerivedTuplesetTTU` are deferred past W3a). A rewrite-closure tuple's subject predicate is the
+seed's (computed rewrites keep the subject) or a TTU rule's `tr`; under both conditions neither is
+R, so **no W3a edge is sourced at an R-userset node** and the R-node has no out-edge.
+
+**The increment (`GraphIndex/ReconcileCorrect.lean`, axiom-clean).**
+- **`nreaches_cons_inert`** (`[propext]`) — generic single-new-edge inertness: if the target `b` of
+  a prepended edge is never a *source* in the old edges, a path to any `v ≠ b` in `(a,b)::edges` is
+  already a path in `edges`. Via `nreaches_cons_split` (the new edge, if used, must exit `b` —
+  impossible — or be the final hop to `b ≠ v`).
+- **`NoTtuTarget` / `NoStoreSubjectR`** fragment predicates + subject-predicate avoidance across
+  the rewrite closure: `rewriteStep_subject_pred_ne` (one hop keeps the subject off R — computed
+  preserves it, `ttu tr` gives `tr ≠ R`) → `rewriteClosureAux_subject_pred_ne` →
+  **`rewriteClosure_subject_pred_ne`**.
+- **`reachedByW3a_edge_source_ne_R`** — no W3a edge is sourced at an R-userset node (base source =
+  closure subject pred ≠ R; reconcile source = bare candidate pred `BARE ≠ R`), by induction over
+  the write path. Corollary **`reachedByW3a_Rnode_not_source`** (`k.pred = R` ⇒ no out-edge). **This
+  resolves the flagged subtlety.**
+- **`reconcileKey_reach_inert`** (`[propext]`) — the payoff: one reconcile pass on key `(dt,R')`
+  (bare candidates, `R' ≠ BARE`, R'-node not a source in σ) adds no reachability to any
+  `v ≠ objNode ⟨dt,on⟩ R'`. Peels the guarded `writeDirect` fold one candidate at a time via
+  `nreaches_cons_inert`, maintaining "R'-node not a source" (each new edge's bare source has
+  predicate `BARE ≠ R'`). The **per-pass** inertness the multi-pass `hag` transfer folds over.
+
+**Resume → close the W3a CORRESPONDENCE (point 2, the deeper blocker), now unblocked on inertness:**
+1. **Multi-pass inertness (mechanical fold).** Induct over `ReachedByW3a` and fold
+   `reconcileKey_reach_inert` at each reconcile pass down to the `ReachedByRules` base, giving
+   `NReaches σ.edges (subjNode s) (objNode ⟨dt,on'⟩ r') → NReaches σ_base.edges …` for an untainted
+   operand `r'` (`r' ≠` any reconcile `R'`, since `r'` untainted / `R'` derived). Needs the fragment
+   to carry `NoTtuTarget`/`NoStoreSubjectR` for **every** derived relation with a reconcile pass
+   (schema-level: `∀ R, isDerived S (dt,R) → NoTtuTarget S R ∧ NoStoreSubjectR T R`), and the R'-node
+   not-a-source at each pre-pass sub-state (from `reachedByW3a_Rnode_not_source` on the sub-derivation).
+   NB the base ↔ full state relation: `ReachedByW3a` doesn't expose `σ_base` — either strengthen the
+   inductive to carry it, or prove the fold as a `σ`-relative statement (probeNonDerived on σ equals
+   probeNonDerived on the stripped edges).
+2. **Discharge `hag` — the per-relation untainted-correctness lemma (STILL the deeper blocker).**
+   With inertness (1), the operand read reduces to the untainted-base read; then restate W2's
+   `graph_correct_rules` **per hereditarily-untainted relation `r'`** within the mixed schema (the
+   whole-schema `UntaintedSchema` is too strong). Fuel via the T0a-stability sidestep.
+3. **Candidate completeness + assembly `graph_correct_w3a`** (an admitted `ReachedByW3aAdmitted`;
+   route → `probeDerived` → `check_derived_ResidueEmpty` → edge probe →
+   `reachedByW3a_reach_collapse_root` → `checkFn_eq_semStep` + `hag` → `sem`) + T3/T6 widening.
+
 ## Session 2026-07-11 (W3a read correspondence — `hsrcbare` discharged via `NoRuleOutputs`; the reach-collapse fires unconditionally)
 
 Resuming W3a from "the reach-collapse spine done over a free `hsrcbare`; resume → (1)

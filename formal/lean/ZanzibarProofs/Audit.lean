@@ -406,4 +406,19 @@ namespace Zanzibar
 #print axioms reachedByW3a_Rnode_source_bare
 #print axioms reachedByW3a_reach_collapse_root
 
+-- **ROADMAP W3a — reconcile-edge reachability inertness (GraphIndex/ReconcileCorrect.lean,
+-- 2026-07-11).** Resolves the flagged R-node-source subtlety: on the single-stratum W3a
+-- fragment the derived boolean `R` is terminal (`NoTtuTarget` + `NoStoreSubjectR`), so no
+-- rewrite-closure subject predicate is `R` (`rewriteClosure_subject_pred_ne`) and no W3a edge
+-- is sourced at an `R`-userset node (`reachedByW3a_edge_source_ne_R` /
+-- `reachedByW3a_Rnode_not_source`) — the R-node has no out-edge. Hence a reconcile pass is
+-- reachability-inert for any non-R-node read (`reconcileKey_reach_inert`, via the generic
+-- `nreaches_cons_inert`). The per-pass inertness the multi-pass `hag` transfer folds over.
+-- Standard axioms only (two axiom-free):
+#print axioms nreaches_cons_inert
+#print axioms rewriteClosure_subject_pred_ne
+#print axioms reachedByW3a_edge_source_ne_R
+#print axioms reachedByW3a_Rnode_not_source
+#print axioms reconcileKey_reach_inert
+
 end Zanzibar

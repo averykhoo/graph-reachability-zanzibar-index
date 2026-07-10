@@ -389,8 +389,18 @@ and re-proves/widens the same named theorems. Every stage must keep
     rootBoolean = []` ⇒ fails `StoreValidRules`), so the base rewrite-closure leg on the R-node
     is impossible and every R-node in-edge is a bare-sourced reconcile edge
     (`reachedByW3a_Rnode_source_bare`; `ReachedByW3a.reconcile` strengthened with bare-candidate
-    `hcands`) — so `reachedByW3a_reach_collapse_root` fires unconditionally. (2) discharge the
-    per-relation agreement `hag` — the **per-relation**
+    `hcands`) — so `reachedByW3a_reach_collapse_root` fires unconditionally. (1.5) ✅ **DONE
+    (2026-07-11): the flagged R-node-source subtlety RESOLVED + reconcile-edge reachability
+    inertness** (`GraphIndex/ReconcileCorrect.lean`, sorry-free, axiom-clean). The derived R-node
+    is never an edge SOURCE on the single-stratum fragment where R is *terminal*
+    (`NoStoreSubjectR T R` = no stored userset-over-R subject, `NoTtuTarget S R` = R never a TTU
+    target — the `PDerivedTTU` shapes are deferred): a rewrite-closure subject predicate is the
+    seed's or a `ttu tr`, neither is R (`rewriteClosure_subject_pred_ne`), so
+    `reachedByW3a_edge_source_ne_R` / `reachedByW3a_Rnode_not_source` (R-node has no out-edge).
+    Payoff `reconcileKey_reach_inert` (via generic `nreaches_cons_inert`): one reconcile pass adds
+    no reachability to a non-R-node — the **per-pass** inertness the multi-pass `hag` transfer
+    folds over. Carry `NoStoreSubjectR`/`NoTtuTarget` (per derived R) into the W3a/W4 fragment.
+    (2) discharge the per-relation agreement `hag` — the **per-relation**
     untainted-correctness lemma (STILL the deeper BLOCKER: `graph_correct_rules` needs
     whole-schema `UntaintedSchema`, too strong for W3's mixed schema — restate for one
     *hereditarily-untainted* relation; reconcile edges are reachability-inert for
