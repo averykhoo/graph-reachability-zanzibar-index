@@ -137,8 +137,37 @@ and re-proves/widens the same named theorems. Every stage must keep
       to `graph_complete_objStar` (backward) and the fuel-bounded `GrantReach` chain
       (forward). Mirror of `graph_correct_direct` / `graph_correct_bareStar`. **W1b is
       now closed end-to-end (soundness + completeness). Next: W1c.**
-  - **W1c — userset stars (in-bridges + `instances`). IN PROGRESS (2026-07-10):
-    BOTH SEMANTIC CORES CLOSED; write model + edge characterization done.**
+  - **W1c — userset stars (in-bridges + `instances`). ✅ DONE (2026-07-10)** —
+    `graph_correct_usStar` (`GraphIndex/UsStarClosure.lean`, sorry-free, axiom-clean
+    `[propext, Classical.choice, Quot.sound]`): full `check = sem` on the userset-star
+    fragment. The three remaining pieces were delivered as designed:
+    (1) **fuel-bounded soundness assembly — SIDESTEPPED via T0a stability.** The W1b
+    plain-node count does NOT transfer (a userset-star grant's source is a `w_any` node,
+    an in-bridge consumes a `w_any` target, and the chain over-counts an in-bridge the
+    `sem` derivation absorbs). Instead `sem_of_usStar_probe` discharges the fuel
+    obligation via `sem_fuel_stable`: the chain gives `semAux` at fuel `m` for SOME `m`,
+    and `sem = semAux (max m fuelBound) = true` by `semAux_mono` then stability — no
+    tight `m ≤ fuelBound` bound needed. Reusable for later W-stages.
+    (2) **the admitted bridge-complete closure** `UsStarReachedAdmitted` (grant +
+    guarded per-endpoint in-bridge admission) discharges `hEC`
+    (`usStarReachedAdmitted_edge_complete`) and `hib`
+    (`usStarReachedAdmitted_hib`) via the **liveness invariant**
+    `usStarReachedAdmitted_inbridge_live` (every live bridged-in node has its in-bridge —
+    it entered `nodes` as a write endpoint, so `ensureInBridges` ran on it) +
+    `isSWU_of_storeValid`.
+    (3) **top-level glue** `graph_correct_usStar` (probe 1 ∨ probe 2, probe 2 LIVE for
+    usersets / dead for bare via `usStarReached_edge_source_char`; probes 3,4 dead via
+    `usStarReached_edge_target_ne_wAll`). Mirror of `graph_correct_bareStar`.
+    **Correctness fix:** `reach_of_semAux_us`'s `hib` was reformulated to be GUARDED by
+    the concrete instance node having an in-edge — the prior unconditional form is FALSE
+    (a name in `instances T q T` may occur only with a predicate ≠ P, so `⟨T,inst,P⟩` is
+    never bridged; `sem` only flows through `inst` when `rec T inst P = true`, which
+    forces a stored P-grant → the in-edge). T3/T6 widened
+    (`backend_equivalence_usStar` / `exclusion_effective_usStar` /
+    `no_ghost_grant_usStar`). **W1 (wildcard bridges) is now complete across all three
+    sub-stages. Next: W2.** (prior-increment notes below.)
+  - **(prior) W1c — userset stars. BOTH SEMANTIC CORES CLOSED; write model + edge
+    characterization done.**
     - **Correspondence: BOTH SEMANTIC CORES DONE** (`GraphIndex/UsStarCorrect.lean`,
       sorry-free, axiom-clean). The read reduces to probe 1 ∨ probe 2 (objects star-free
       ⇒ probes 3,4 dead; probe 2 LIVE — a userset query subject's `wAny(s.shape)` sees

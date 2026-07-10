@@ -6,6 +6,86 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W1c FULLY CLOSED — `graph_correct_usStar`, full `check = sem`)
+
+Resuming W1c from "both semantic cores closed; resume → the assembly + closure"
+(the three sharply-isolated points below). Delivered all three as one green
+increment plus a soundness sub-increment: **`graph_correct_usStar`**
+(`GraphIndex/UsStarClosure.lean`, sorry-free, axiom-clean `[propext,
+Classical.choice, Quot.sound]`) — the first *userset-wildcard* fragment where the
+graph read provably equals `sem`. `verify.sh` green throughout (build + 0 sorries +
+60 conformance + audit, all standard-axioms-only). This closes ROADMAP stage **W1c
+end-to-end** (soundness + completeness), matching W1a/W1b.
+
+**Point 1 — fuel-bounded soundness assembly, SIDESTEPPED via T0a stability (the
+headline).** The ROADMAP flagged that the W1b plain-node fuel count "NEEDS ADAPTING"
+for W1c — and it genuinely does *not* transfer: a userset-star grant's source is a
+`w_any` node (not plain), an in-bridge consumes a `w_any` as a target, and the
+`UsStarReach` chain over-counts (an in-bridge is a separate hop that the `sem`
+derivation *absorbs* into the following userset-star grant). A tight `m ≤ fuelBound`
+count would need `#w_any ≤ |keys|` accounting (`w_any` nodes are keyed by
+`(type,relation)`). **Avoided entirely:** `semAux_of_usStarReach` gives a membership
+at fuel = the chain length `m` for *some* `m`; `sem_fuel_stable` (T0a) makes `sem`
+stable above `fuelBound`, so `sem = semAux (max m fuelBound) = true` by `semAux_mono`
+(up to the max) then stability (down to `sem`) — **no bound on `m` needed**.
+Delivered: `storeDeclared_of_storeValid` (the T0a `hDecl` hypothesis, from
+`restrictionMatches`), `sem_of_usStarReach`, and `sem_of_usStar_probe` (the forward
+direction from a covering probe source, via `usStarReach_of_trail`). This trick is
+reusable for W1's later stages where the graph-hop/`sem`-fuel mismatch recurs.
+
+**Point 2 — the admitted bridge-complete closure discharging `hEC` + `hib`.**
+`UsStarReachedAdmitted` (W1c analog of `WildReachedAdmitted`): each write's grant
+edge (`hadmGrant`) and — for each concrete bridged-in endpoint — its `c → w_any`
+in-bridge (`hadmInA`/`hadmInB`, guarded by `bridgedInConcrete`) passed
+cycle-rejection (the "no in-bridge cycle" fragment).
+- `hEC` = `usStarReachedAdmitted_edge_complete` (mirror of the W1b edge-complete).
+- **`hib` = `usStarReachedAdmitted_hib`**, the contentful part. Discharged via the
+  **liveness invariant `usStarReachedAdmitted_inbridge_live`**: in the admitted
+  closure, every *live* concrete bridged-in node has its in-bridge — because a
+  bridged-in node is plain, so it enters `nodes` only as a write endpoint
+  (`writeUsStar_new_plain_node`: the bridge machinery only adds non-plain `w_all` /
+  `w_any` nodes), and that write ran `ensureInBridges` on it, materializing the
+  bridge under the admission guard. `hib`'s in-edge guard (Point 3) → node live
+  (endpoint-closure) → invariant → bridge. Shape membership via
+  `isSWU_of_storeValid` (a stored userset-star grant's `(T,P)` is a declared
+  subject-wildcard-userset shape — the matched `(T,P,true)` restriction occurs in the
+  schema).
+
+**Point 3 — `reach_of_semAux_us`'s `hib` REFORMULATED (a correctness fix, not just
+plumbing).** The prior *unconditional* `hib` ("every `instances` witness of a
+userset-star grant has its in-bridge") is **FALSE and undischargeable**: a name
+`inst ∈ instances T q T` can occur in the store only with a predicate `≠ P`, so the
+node `⟨T,inst,P⟩` is never a tuple endpoint and never bridged. But `sem` only *flows
+through* such an `inst` when `rec T inst P = true`, which forces a stored `P`-grant
+on `⟨T,inst⟩` — hence an **in-edge** into `subjNode ⟨T,inst,P⟩`. So `hib` is now
+**guarded by that in-edge** (`∃ x, (x, subjNode ⟨T,inst,P⟩) ∈ edges`), which the
+completeness proof produces from the recursion's reachability (`nreaches_last_edge`)
+and the store-built graph provides (a reachable declared-SWU node was touched as an
+endpoint). Re-proved `reach_of_semAux_us` green with the guarded hypothesis. Without
+this fix the completeness core, though "proved," was stated over an unsatisfiable
+hypothesis — the attack-first "store-bridges ↔ `instances` agree" finding was right
+about the *live* names but the earlier `hib` over-claimed on all `instances`.
+
+**Top-level glue** (`graph_correct_usStar`, mirror of `graph_correct_bareStar`):
+routes to `probeNonDerived`; probes 3,4 dead (`usStarReached_edge_target_ne_wAll` —
+no edge targets a `w_all`, objects star-free); probe 1 ∨ probe 2, with **probe 2
+LIVE** for a userset query subject (its `wAny(s.shape)` sees userset-star direct
+grants) and dead for a *bare* query subject (`usStarReached_edge_source_char` — a
+bare-`w_any` node is never a source). Forward = `sem_of_usStar_probe`; backward =
+`reach_of_semAux_us` with `hEC`/`hib` discharged.
+
+**T3/T6 widened for free** (`Equiv.lean`): `backend_equivalence_usStar` /
+`exclusion_effective_usStar` / `no_ghost_grant_usStar` (T1 ∘ `graph_correct_usStar`),
+axiom-clean; audit +10 lines (7 W1c assembly + 3 corollaries).
+
+**Next: ROADMAP W2** (rule routing — `computed` / `union` of untainted operands /
+TTU defs route onto rule-derived families). W1 (wildcard bridges) is now complete
+across all three sub-stages (W1a bare star / W1b object wildcards / W1c userset
+stars), each with `graph_correct_*` closing `check = sem`. Note the W1c fragment
+isolates userset stars (objects star-free, no object wildcards in the store); W1's
+*combined* generality (userset + object wildcards together) lands with the full-scope
+restatement in W4. Attack-first the W2 rule-edge soundness before proving.
+
 ## Session 2026-07-10 (W1c BOTH SEMANTIC CORES CLOSED — completeness `reach_of_semAux_us` + soundness `UsStarReach`)
 
 Resuming W1c from "write model + edge characterization done; the read-correspondence

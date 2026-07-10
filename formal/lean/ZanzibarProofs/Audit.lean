@@ -159,6 +159,20 @@ namespace Zanzibar
 #print axioms semAux_one_covers_us
 #print axioms semAux_of_usStarReach
 #print axioms usStarReach_of_trail
+-- W1c ASSEMBLY (GraphIndex/UsStarClosure.lean) — closes `graph_correct_usStar`
+-- (`check = sem` on the userset-star fragment) end-to-end. Soundness discharges the
+-- fuel obligation via T0a stability (`sem_of_usStar_probe`, no tight chain-length
+-- bound — the W1b plain-node count fails since a userset-star grant's source is a
+-- `w_any` node). Completeness discharges `reach_of_semAux_us`'s `hEC`/`hib` over the
+-- admitted closure `UsStarReachedAdmitted` (`hib` = in-bridge completeness, via the
+-- liveness invariant + `isSWU_of_storeValid`). Standard axioms only:
+#print axioms storeDeclared_of_storeValid
+#print axioms sem_of_usStar_probe
+#print axioms isSWU_of_storeValid
+#print axioms usStarReachedAdmitted_edge_complete
+#print axioms usStarReachedAdmitted_inbridge_live
+#print axioms usStarReachedAdmitted_hib
+#print axioms graph_correct_usStar
 -- **T2b stage W1b — the read-correspondence SOUNDNESS core
 -- (GraphIndex/ObjStarCorrect.lean)** — the grant-or-bridge edge characterization,
 -- the bridge-absorbing generalized grant chain `GrantReach`, and its two directions:
@@ -207,6 +221,11 @@ namespace Zanzibar
 #print axioms backend_equivalence_objStar
 #print axioms exclusion_effective_objStar
 #print axioms no_ghost_grant_objStar
+-- T3 / T6a / T6b widened to the W1c userset-star fragment (Equiv.lean), one-line
+-- corollaries of T1 ∘ graph_correct_usStar. Expect only the three standard axioms:
+#print axioms backend_equivalence_usStar
+#print axioms exclusion_effective_usStar
+#print axioms no_ghost_grant_usStar
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the

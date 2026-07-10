@@ -1,6 +1,7 @@
 import ZanzibarProofs.SetEngine.Correct
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.ObjStarClosure
+import ZanzibarProofs.GraphIndex.UsStarClosure
 
 /-!
 # T3 / T6 — equivalence and the security corollaries
@@ -110,6 +111,42 @@ theorem no_ghost_grant_objStar (S : Schema) (T' : Store) (σ' : GraphState) (q :
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
   rw [graph_correct_objStar S T' σ' q hWF hPD hSV hOS hOV hqs hqo hReach]; exact hDeny
+
+/-! ## W1c (userset-star) scope — the same corollaries via `graph_correct_usStar` -/
+
+/-- **T3 (equivalence), W1c (userset-star) scope.** Both backends agree on stores with
+    userset-star subject grants (`[T:*#P]`), by transitivity through `sem`
+    (T1 ∘ `graph_correct_usStar`). -/
+theorem backend_equivalence_usStar (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hUS : UsStarStore T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : UsStarReachedAdmitted σ S T) (hValid : AllValid T) :
+    SetEngineModel.check S T q = GraphModel.check σ q := by
+  rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid,
+      graph_correct_usStar S T σ q hWF hPD hSV hUS hqs hqo hReach]
+
+/-- **T6a (deny-propagation), W1c scope.** Whenever the spec denies, both backends deny
+    — now including userset-star stores. -/
+theorem exclusion_effective_usStar (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hUS : UsStarStore T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : UsStarReachedAdmitted σ S T) (hValid : AllValid T)
+    (hDeny : sem S T q = false) :
+    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+  refine ⟨?_, ?_⟩
+  · rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid]; exact hDeny
+  · rw [graph_correct_usStar S T σ q hWF hPD hSV hUS hqs hqo hReach]; exact hDeny
+
+/-- **T6b (no-ghost-grant), W1c scope.** If removing a tuple makes the spec deny, the
+    graph backend denies after the removal — no stale userset-star grant survives the
+    loss of its last support. -/
+theorem no_ghost_grant_usStar (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T') (hUS : UsStarStore T')
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : UsStarReachedAdmitted σ' S T')
+    (hDeny : sem S T' q = false) :
+    GraphModel.check σ' q = false := by
+  rw [graph_correct_usStar S T' σ' q hWF hPD hSV hUS hqs hqo hReach]; exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)
     matches a stored tuple only when the tuple's subject type is one of the
