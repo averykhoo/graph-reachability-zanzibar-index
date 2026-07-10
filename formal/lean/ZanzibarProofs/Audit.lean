@@ -15,6 +15,7 @@ import ZanzibarProofs.GraphIndex.RulesWrite
 import ZanzibarProofs.GraphIndex.RulesCorrect
 import ZanzibarProofs.GraphIndex.RulesSound
 import ZanzibarProofs.GraphIndex.RulesChain
+import ZanzibarProofs.GraphIndex.RulesSaturate
 import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.Correct
 
@@ -289,6 +290,14 @@ namespace Zanzibar
 #print axioms reachedByRulesAdmitted_edge_complete
 #print axioms reachedByRulesAdmitted_seed_edge
 #print axioms reachedByRules_of_admitted
+
+-- W2 rewrite-closure saturation (GraphIndex/RulesSaturate.lean, 2026-07-10): under
+-- rewrite-acyclicity (RewriteRanked) the |keys|+1-level closure is closed under one
+-- more rewrite step — the depth-bound the completeness `computed` case consults.
+-- Expect only the three standard axioms:
+#print axioms rewriteClosure_saturated
+#print axioms stepN_rank_ge
+#print axioms rwKey_rank_lt
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the
