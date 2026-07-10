@@ -6,6 +6,69 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-11 (W3a read correspondence — the bare-subject reach-collapse spine + attack-first NoRuleOutputs finding)
+
+Resuming W3a from "two structural spines done; resume → close the CORRESPONDENCE (three
+sharply-isolated points)." One green+pushed axiom-clean increment (`GraphIndex/
+ReconcileCorrect.lean`); `verify.sh` green throughout (build + 0 sorries + 60 conformance
++ audit, standard axioms only — two of the four new theorems are **axiom-free**). Sorry
+count held at 0. This lands the **reach-collapse spine** (ROADMAP W3a read, point 2's
+structural half), plus an attack-first finding that narrows the fragment.
+
+**Attack-first HEADLINE (analytic case-analysis, not a correctness refutation): the naive
+single-edge reach-collapse is FALSE on the full `ComputedOnly` fragment — it needs a
+`NoRuleOutputs S R` side condition, the W3a analog of W2's `TtuTuplesetsDirect`.** The
+roadmap's stated collapse ("a derived edge's source is a bare candidate, never a target,
+so no hop can precede it") assumes *every* edge into the derived R-node is a reconcile
+edge from a **bare** source. But if the derived def `e = lookup (dt,R)` has a **top-level
+`union`** exposing a `computed` arm (`member or (admin but not suspended)`), `exprArms`
+emits a `computed` rewrite rule `… ↦ R`, so W2's base rewrite-closure *also* lands tuples
+on the R-node — and a `computed` rewrite carries the operand chain's subject, which for a
+ttu-derived operand is a **userset (non-bare)** node that CAN be an edge target. Then the
+path is genuinely ≥ 2 hops (`subjNode s → g#x → objNode R`) and the collapse fails.
+`check = sem` still HOLDS in both cases (both mechanisms agree — this is a *proof-shape*
+limitation, not unsoundness); the single-edge collapse holds exactly when **no rewrite
+rule outputs `R`** — i.e. the derived def is `inter`/`excl`-rooted (`exprArms … = []`).
+`member but not banned` (`.excl`-rooted) and `(a or b) but not c` (`.excl` at the root,
+union underneath) both satisfy this; only a union-rooted-with-tainted-arm def breaks it.
+
+**The increment — the reach-collapse spine (`GraphIndex/ReconcileCorrect.lean`, axiom-clean).**
+- **`ReachedByW3a.reconcile` strengthened** with `hRne : R ≠ BARE` (faithful — reconcile
+  only runs on declared derived relations; the two existing inductions ignore it).
+- **`nreaches_collapse_of_source_notarget`** (NO axioms) — generic: if every source of an
+  edge into `v` has itself no in-edge, any path to `v` is a single edge (`nreaches_last`
+  twice: the last-edge source's own in-edge would contradict the hypothesis).
+- **`reachedByW3a_edge_target_ne_bare`** — every W3a edge target has a non-`BARE`
+  predicate (base = `objNode u.object u.relation`, pred `u.relation ≠ BARE` via
+  `rewriteClosure_rel_ne_bare`; reconcile = `objNode ⟨dt,on⟩ R`, pred `R ≠ BARE` via the
+  new constructor field). Hence **`reachedByW3a_bareNode_no_inedge`** — a `BARE`-pred node
+  is never an edge target (the structural fact behind the collapse).
+- **`reachedByW3a_reach_collapse`** — assembly: a bare-subject path to the derived object
+  node `objNode ⟨dt,on⟩ R` is a *single* edge, given `hsrcbare` (every R-node in-edge
+  source is bare — the isolated `NoRuleOutputs` gap). This is the last structural link
+  before `reach ↔ [reconcile wrote s's edge] ↔ checkFn ↔ sem`.
+
+**Resume → close the W3a CORRESPONDENCE. Two pieces remain, further sharpened:**
+1. **Discharge `hsrcbare` via `NoRuleOutputs S R`** (the fragment side-condition found this
+   session). Prove: on an `inter`/`excl`-rooted derived def, no `schemaRewrites S` rule has
+   `outRel = R` (`exprArms` of an `.inter`/`.excl` root is `[]`), and no store tuple has
+   relation `R` (its `ComputedOnly` def has no direct arm ⇒ `exprDirects = []` ⇒ fails
+   `StoreValidRules`). So every edge into the R-node is a reconcile edge (via
+   `reachedByW3a_edge_sound`'s base leg being vacuous on relation `R`), whose source is a
+   bare candidate `c` — giving `hsrcbare`. Then `reachedByW3a_reach_collapse` fires
+   unconditionally on the fragment.
+2. **Discharge `hag` — the per-relation untainted-correctness lemma (STILL the deeper
+   blocker)**, then candidate completeness + assembly `graph_correct_w3a`. `hag`
+   (`graphRec σ s dt on r' = semAux S s T q f dt on r'` for untainted operand `r'`)
+   restates W2's `graph_correct_rules` per-relation within the mixed schema (the reconcile
+   edges into derived-R nodes are reachability-inert for untainted-`r'` object nodes: a
+   derived edge's bare-candidate source is never an intermediate object node); fuel via the
+   T0a-stability sidestep. With `hag` + `checkFn_eq_semStep` + the collapse (piece 1) +
+   candidate completeness (an admitted `ReachedByW3aAdmitted`: every `sem`-member bare
+   subject is enumerated in some `cands` and passes `checkFn`): route → `probeDerived` →
+   `check_derived_ResidueEmpty` → edge probe → `reachedByW3a_reach_collapse` → `checkFn` →
+   `sem`. Then widen T3/T6 as free corollaries.
+
 ## Session 2026-07-11 (W3a read correspondence — checkFn↔sem-step reduction + reconcile edge characterization)
 
 Resuming W3a from "write model + read collapse done; resume → the correspondence (three

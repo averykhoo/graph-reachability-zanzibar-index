@@ -159,10 +159,97 @@ theorem reachedByW3a_edge_sound {σ : GraphState} {S : Schema} {T : Store}
           a = subjNode c ∧ b = objNode ⟨dt, on⟩ R) := by
   induction h with
   | base hr => intro a b hab; exact Or.inl (reachedByRules_edge_sound hr a b hab)
-  | reconcile dt on R e cands _ ih =>
+  | reconcile dt on R e cands _hRne _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, hac, hbc⟩
     · exact ih a b hold
     · exact Or.inr ⟨dt, on, R, c, hac, hbc⟩
+
+/-! ## The bare-subject reach-collapse (ROADMAP W3a, read half — increment 3)
+
+The W3a assembly reads a derived query by routing to `probeDerived`, collapsing to the
+bare edge probe `reach (subjNode s) (objNode ⟨dt,on⟩ R)` (`check_derived_ResidueEmpty`),
+and then classifying that reachability. This increment lands the **reach-collapse spine**:
+on a bare-subject query the reachability to a derived object node is a *single* edge — no
+multi-hop path exists — so `reach ↔ [the reconcile wrote s's edge]`, the last link before
+`checkFn ↔ sem`.
+
+**Attack-first (analytic) finding — the single-edge collapse needs a NoRuleOutputs side
+condition (the W3a analog of W2's `TtuTuplesetsDirect`).** The collapse rests on: *every*
+edge into the derived R-node has a **bare** source node (predicate `BARE`), and a bare node
+is never an edge *target* (`reachedByW3a_edge_target_ne_bare`), so no hop can precede that
+source. The reconcile derived edges have bare sources by construction. But if the derived
+def `e = lookup (dt,R)` has a **top-level `union`** exposing a `computed` arm (e.g.
+`member or (admin but not suspended)`), `exprArms` emits a `computed` rewrite rule
+`… ↦ R`, so W2's base rewrite-closure *also* lands tuples on the R-node — and a `computed`
+rewrite carries the operand chain's subject, which for a ttu-derived operand is a **userset**
+(non-bare) node that CAN be an edge target. Then the R-node's in-edge sources are not all
+bare and the collapse fails (the path is genuinely ≥ 2 hops, `subjNode s → g#x →
+objNode R`). It holds exactly when no rewrite rule outputs `R` — i.e. the derived def is
+`inter`/`excl`-rooted (`exprArms … = []`). This session states the collapse over that
+gap as the isolated hypothesis `hsrcbare` (every R-node in-edge source is bare); the
+`NoRuleOutputs`-discharge of `hsrcbare` is the next increment. -/
+
+/-- An object node's predicate is its relation (both variants encode it in `pred`). -/
+@[simp] theorem objNode_pred (o : ObjectRef) (R : String) : (objNode o R).pred = R := by
+  unfold objNode; split <;> rfl
+
+/-- **Generic single-edge collapse.** If every source of an edge into `v` has itself no
+    in-edge, then any path to `v` is a single edge: its last-edge source `x` (from
+    `nreaches_last`) would otherwise carry an in-edge (the prefix `u →* x`'s last edge),
+    contradicting the hypothesis — so the prefix is empty and `(u,v)` is that edge. -/
+theorem nreaches_collapse_of_source_notarget {edges : List (NodeKey × NodeKey)}
+    {u v : NodeKey}
+    (H : ∀ x, (x, v) ∈ edges → ∀ y, (y, x) ∉ edges)
+    (h : NReaches edges u v) : (u, v) ∈ edges := by
+  obtain ⟨x, hux, hxv⟩ := nreaches_last h
+  rcases hux with rfl | hux
+  · exact hxv
+  · obtain ⟨z, _, hzx⟩ := nreaches_last hux
+    exact absurd hzx (H x hxv z)
+
+/-- **Every W3a edge target has a non-`BARE` predicate.** A base edge lands on
+    `objNode u.object u.relation` (predicate `u.relation ≠ BARE`, `rewriteClosure_rel_ne_
+    bare`); a reconcile derived edge lands on `objNode ⟨dt,on⟩ R` (predicate `R ≠ BARE`,
+    the reconcile constructor's declared-relation side condition). By induction over the
+    write path, using `reconcileKey_edge_sound` to classify the reconcile-pass edges. -/
+theorem reachedByW3a_edge_target_ne_bare {σ : GraphState} {S : Schema} {T : Store}
+    (hWF : WF S) (hSV : StoreValidRules S T) (h : ReachedByW3a σ S T) :
+    ∀ a b, (a, b) ∈ σ.edges → b.pred ≠ BARE := by
+  induction h with
+  | base hr =>
+    intro a b hab
+    obtain ⟨t, ht, u, hu, _, hbobj⟩ := reachedByRules_edge_sound hr a b hab
+    rw [hbobj, objNode_pred]; exact rewriteClosure_rel_ne_bare hWF hSV ht hu
+  | reconcile dt on R e cands hRne _ ih =>
+    intro a b hab
+    rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, _, hbc⟩
+    · exact ih hWF hSV a b hold
+    · rw [hbc, objNode_pred]; exact hRne
+
+/-- **A `BARE`-predicate node is never an edge target** in a W3a state — the structural
+    fact behind the reach-collapse (a bare candidate node has no in-edges, so no hop can
+    precede it). Immediate from `reachedByW3a_edge_target_ne_bare`. -/
+theorem reachedByW3a_bareNode_no_inedge {σ : GraphState} {S : Schema} {T : Store}
+    (hWF : WF S) (hSV : StoreValidRules S T) (h : ReachedByW3a σ S T)
+    {k : NodeKey} (hk : k.pred = BARE) : ∀ x, (x, k) ∉ σ.edges := by
+  intro x hxk
+  exact reachedByW3a_edge_target_ne_bare hWF hSV h x k hxk hk
+
+/-- **The bare-subject reach-collapse.** On a W3a state, if every source of an edge into
+    the derived object node `objNode ⟨dt,on⟩ R` is a bare node (`hsrcbare` — the
+    `NoRuleOutputs` gap, discharged next increment), then any path to that node is a
+    *single* edge. Combines the generic collapse with `reachedByW3a_bareNode_no_inedge`
+    (a bare source is never itself a target). This is the last structural link before
+    `reach ↔ [reconcile wrote s's edge] ↔ checkFn ↔ sem`. -/
+theorem reachedByW3a_reach_collapse {σ : GraphState} {S : Schema} {T : Store}
+    (hWF : WF S) (hSV : StoreValidRules S T) (h : ReachedByW3a σ S T)
+    {dt on R : String} {u : NodeKey}
+    (hsrcbare : ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE)
+    (hr : NReaches σ.edges u (objNode ⟨dt, on⟩ R)) :
+    (u, objNode ⟨dt, on⟩ R) ∈ σ.edges := by
+  refine nreaches_collapse_of_source_notarget ?_ hr
+  intro x hxv
+  exact reachedByW3a_bareNode_no_inedge hWF hSV h (hsrcbare x hxv)
 
 end Zanzibar

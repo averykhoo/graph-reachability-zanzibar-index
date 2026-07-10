@@ -364,19 +364,38 @@ and re-proves/widens the same named theorems. Every stage must keep
       materialised rewrite-closure tuple or a reconcile derived edge). The W3a analog of
       `reachedByDirect_edge_sound` — the spine the bare-subject reach-collapse classifies
       each last edge against.
-  - **Remaining (the correspondence, sharply isolated) — resume here.** (1) discharge the
-    per-relation agreement `hag` — the **per-relation** untainted-correctness lemma
-    (BLOCKER: `graph_correct_rules` needs whole-schema `UntaintedSchema`, too strong for
-    W3's mixed schema — restate for one *hereditarily-untainted* relation within a
-    partially-tainted schema; the reconcile edges are reachability-inert for untainted-`r'`
-    object nodes since a derived edge's bare-candidate source is never a target node; fuel
-    via the T0a-stability sidestep). (2) the bare-subject **reach-collapse** (a derived
-    edge's source is a bare candidate node, never an object-node target ⇒ `reach` to a
-    derived object node is a single reconcile edge — built on `reachedByW3a_edge_sound`) +
-    candidate completeness (an admitted `ReachedByW3aAdmitted`: every `sem`-member is a
-    positive-leaf concrete). (3) assembly `graph_correct_w3a` (route → `probeDerived` →
-    `check_derived_ResidueEmpty` → edge probe → collapse → `checkFn` → `sem`) + T3/T6
-    widening. Detail in PROOF_STATUS "W3a read correspondence".
+  - **Read correspondence — the bare-subject REACH-COLLAPSE spine DONE (2026-07-11,
+    `GraphIndex/ReconcileCorrect.lean`, sorry-free, axiom-clean; 2 of 4 axiom-free).**
+    - **Attack-first finding (analytic): the single-edge collapse needs `NoRuleOutputs S R`**
+      (the W3a analog of W2's `TtuTuplesetsDirect`). A **union-rooted** `ComputedOnly` def
+      (`member or (admin but not suspended)`) makes `exprArms` emit a `computed` rewrite
+      `… ↦ R`, so W2's base rewrite-closure also lands (possibly **userset, non-bare**)
+      tuples on the R-node — a genuine ≥ 2-hop path, so the collapse fails. `check = sem`
+      still holds (both mechanisms agree — a proof-shape limit, not unsoundness); the
+      collapse holds exactly on `inter`/`excl`-rooted defs (`exprArms … = []`).
+    - `ReachedByW3a.reconcile` strengthened with `R ≠ BARE` (faithful). Generic
+      **`nreaches_collapse_of_source_notarget`** (NO axioms — if every in-edge source of `v`
+      has no in-edge, a path to `v` is a single edge). **`reachedByW3a_edge_target_ne_bare`**
+      (every W3a edge target has a non-`BARE` predicate) ⇒ **`reachedByW3a_bareNode_no_
+      inedge`** (a `BARE`-pred node is never an edge target). Assembly
+      **`reachedByW3a_reach_collapse`** — a bare-subject path to `objNode ⟨dt,on⟩ R` is a
+      single edge, given `hsrcbare` (every R-node in-edge source is bare — the isolated
+      `NoRuleOutputs` gap).
+  - **Remaining (the correspondence, sharply isolated) — resume here.** (1) discharge
+    `hsrcbare` via **`NoRuleOutputs S R`** (found this session): on an `inter`/`excl`-rooted
+    def no `schemaRewrites` rule outputs `R` and no store tuple has relation `R`
+    (`ComputedOnly` ⇒ `exprDirects = []` ⇒ fails `StoreValidRules`), so every R-node in-edge
+    is a bare-sourced reconcile edge — then `reachedByW3a_reach_collapse` fires
+    unconditionally. (2) discharge the per-relation agreement `hag` — the **per-relation**
+    untainted-correctness lemma (STILL the deeper BLOCKER: `graph_correct_rules` needs
+    whole-schema `UntaintedSchema`, too strong for W3's mixed schema — restate for one
+    *hereditarily-untainted* relation; reconcile edges are reachability-inert for
+    untainted-`r'` object nodes since a derived edge's bare-candidate source is never a
+    target node; fuel via the T0a-stability sidestep). (3) candidate completeness (an
+    admitted `ReachedByW3aAdmitted`: every `sem`-member is a positive-leaf concrete) +
+    assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
+    edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +
+    T3/T6 widening. Detail in PROOF_STATUS "W3a read correspondence".
 - **W4 — full-scope restatement.** The operational closure now covers
   `GraphAccepts`; name it `ReachedBy` and state the final `graph_correct` /
   `graph_reached_inv` / `backend_equivalence` / T6a (with real exclusion

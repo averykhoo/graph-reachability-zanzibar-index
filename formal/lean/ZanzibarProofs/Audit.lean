@@ -382,4 +382,17 @@ namespace Zanzibar
 #print axioms reconcileKey_edge_sound
 #print axioms reachedByW3a_edge_sound
 
+-- **ROADMAP W3a — the bare-subject reach-collapse spine (GraphIndex/ReconcileCorrect.lean,
+-- 2026-07-11).** A generic single-edge collapse (`nreaches_collapse_of_source_notarget`),
+-- the structural fact that every W3a edge target has a non-`BARE` predicate — so a bare
+-- candidate node is never an edge target (`reachedByW3a_edge_target_ne_bare` /
+-- `reachedByW3a_bareNode_no_inedge`) — and their assembly: a bare-subject path to a derived
+-- object node collapses to a single edge, given every R-node in-edge source is bare
+-- (`reachedByW3a_reach_collapse`; the `NoRuleOutputs` gap is the next increment). Standard
+-- axioms only:
+#print axioms nreaches_collapse_of_source_notarget
+#print axioms reachedByW3a_edge_target_ne_bare
+#print axioms reachedByW3a_bareNode_no_inedge
+#print axioms reachedByW3a_reach_collapse
+
 end Zanzibar
