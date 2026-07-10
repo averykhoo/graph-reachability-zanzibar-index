@@ -293,10 +293,29 @@ The completeness half of the W1c read correspondence: for a star-free query subj
   grant edge out of `wAny(T,P)`.
 
 Stated over the two operational facts it consumes — edge-completeness (`hEC`) and
-**in-bridge completeness** (`hib`, every `instances` witness of a userset-star grant
-has its `concrete → w_any` bridge) — deferring the admitted, bridge-complete
+**in-bridge completeness** (`hib`) — deferring the admitted, bridge-complete
 write-closure that discharges them to the next increment, exactly as
-`reach_of_semAux_os` defers to `hEC`/`hbr`. -/
+`reach_of_semAux_os` defers to `hEC`/`hbr`.
+
+`hib` is **guarded by the concrete instance node already having an in-edge**. This
+guard is load-bearing for *dischargeability*: an unconditional "every `instances`
+witness has its in-bridge" is **FALSE** — a name `inst ∈ instances T q T` may occur
+in the store only with a predicate `≠ P`, so the node `⟨T,inst,P⟩` is never a tuple
+endpoint and never gets bridged. But `sem` only *flows through* such an `inst` when
+`rec T inst P = true`, which forces a stored `P`-grant on `⟨T,inst⟩` — hence an edge
+into `subjNode ⟨T,inst,P⟩`. The completeness proof produces exactly that in-edge (from
+the recursion's reachability), so the guarded `hib` is both what the proof needs and
+what the store-built graph provides (a node reachable / with an in-edge that is a
+declared subject-wildcard-userset shape is one `writeUsStar` touched as an endpoint,
+hence `ensureInBridges`-bridged). -/
+
+/-- Every path has a last edge (into its target); local copy for the completeness
+    core (the version in `ObjStarClosure` is downstream of this file). -/
+theorem nreaches_last_edge_us {edges : List (NodeKey × NodeKey)} {u v : NodeKey}
+    (h : NReaches edges u v) : ∃ x, (x, v) ∈ edges := by
+  induction h with
+  | edge he => exact ⟨_, he⟩
+  | head _ _ ih => exact ih
 
 /-- **Completeness core (W1c).** For a star-free query subject `s = q.subject`, a
     `sem` membership is reachability from `subjNode s` (probe 1) **or** from
@@ -311,6 +330,7 @@ theorem reach_of_semAux_us {S : Schema} {T : Store} {q : Query}
     (hEC : ∀ t ∈ T, (subjNode t.subject, objNode t.object t.relation) ∈ edges)
     (hib : ∀ g ∈ T, g.subject.name = STAR → g.subject.predicate ≠ BARE →
       ∀ inst ∈ instances T q g.subject.type,
+        (∃ x, (x, subjNode ⟨g.subject.type, inst, g.subject.predicate⟩) ∈ edges) →
         (subjNode ⟨g.subject.type, inst, g.subject.predicate⟩,
           wAnyNode (g.subject.type, g.subject.predicate)) ∈ edges) :
     ∀ (f : Nat) (ot on r : String),
@@ -369,7 +389,10 @@ theorem reach_of_semAux_us {S : Schema} {T : Store} {q : Query}
           have hinstne : inst ≠ STAR := instances_ne_star T q g.subject.type inst hinst
           have hmid := ih g.subject.type inst g.subject.predicate hrec
           rw [objNode_eq_subjNode hinstne] at hmid
-          have hbridge := hib g hgT hgstar hpb inst hinst
+          have hin : ∃ x,
+              (x, subjNode ⟨g.subject.type, inst, g.subject.predicate⟩) ∈ edges := by
+            rcases hmid with h | h <;> exact nreaches_last_edge_us h
+          have hbridge := hib g hgT hgstar hpb inst hinst hin
           have hgsubj : subjNode g.subject =
               wAnyNode (g.subject.type, g.subject.predicate) := by
             rw [subjNode, if_pos hgstar]; rfl
