@@ -6,6 +6,83 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W1c STARTED — userset stars `[group:*#member]`; attack-first + in-bridge write model + edge characterization)
+
+Resuming from W1b fully closed → **ROADMAP stage W1c** (userset-wildcard *subject*
+grants `[group:*#member]`, `concrete → w_any` **in-bridges** — the genuinely hard
+sub-stage, spec §1.1). Two green+pushed axiom-clean increments; `verify.sh` green
+throughout (build + 0 sorries + 60 conformance + audit). Sorry count held at 0.
+
+**Attack-first HEADLINE (machine-checked, no `native_decide`): the correspondence
+holds; `instances` ↔ store-bridges agree by construction.** Verified `GraphModel.check
+= sem` on 12 userset-star scenarios in a scratch module (deleted after), incl. the
+sharp **endpoint-exclusion** cases the ROADMAP flagged. The finding: a group name is
+in `sem`'s `instances T q group` iff it appears in a **tuple** (not merely as a query
+endpoint), which is **exactly** when the store-built graph has that concrete's
+in-bridge — so the store-derived bridge set and `instances` coincide; a query-only
+name (`ghost`) is in neither. No refutation. The one *apparent* divergence was an
+**admission-invalid tuple** (a concrete userset `group:eng#member` grant against a
+`[group:*#member]`-only restriction: `restrictionMatches` fails since the restriction
+requires `wildcard=true`), re-confirming StoreValid is load-bearing exactly as in the
+direct/objStar fragments. Unlike W1b (bridges proven MANDATORY), W1c had no
+statement-level surprise — the design was confirmed as-is.
+
+**Increment 1 — the faithful in-bridge write model (`GraphIndex/UsStarWrite.lean`,
+sorry-free, axiom-clean):**
+- `Schema.isSubjectWildcardUserset` — the `bridged_in_shapes` predicate
+  (`zanzibar_utils_v1.py:264-270,784-789`): `p ≠ BARE` and some `[t:*#p]` restriction
+  `(t,p,true)` occurs in the schema. (TTU-through-shape extension `:795-803` out of
+  scope for this TTU-free fragment.)
+- `GraphState.bridgedInConcrete` + `ensureInBridges` — lazily create
+  `w_any(c.type,c.pred)` + the guarded `c → w_any` in-bridge (cycle-rejection,
+  `wildcard.py:120-129`).
+- `GraphState.writeUsStar` — faithful `add_tuple`: endpoint nodes, out-bridges (W1b,
+  inert here) then in-bridges (bridge-before-grant), then the cycle-rejected grant; a
+  rejected grant rolls back the whole write.
+- `nodeEnc_wAnyNode` (needs NO axioms); `ensureInBridges_mono`/`_schema`.
+- `structInv_ensureInBridges` — an in-bridge preserves `StructInv` (w_any
+  encoding-valid; bridge edge cycle-admitted).
+- `structInv_writeUsStar` — the whole write preserves `StructInv` (acyclicity through
+  **both** bridge families + the grant).
+- `UsStarReached` (the W1c write-closure) + `usStarReached_structInv`/`_schema` —
+  `StructInv` at every W1c-reachable state.
+
+**Increment 2 — the edge characterization (`GraphIndex/UsStarCorrect.lean`, sorry-free,
+axiom-clean `[propext]`):** the structural fact the soundness chain will classify each
+trail hop against. `UsStarStore` (fragment predicate: objects star-free, star subjects
+non-bare); `bridgedInConcrete_elim`; `ensureInBridges_edges_mem`;
+`bridgeLayers_edges_mem` (peels the 2 out + 2 in bridge layers of `writeUsStar`);
+`writeUsStar_edges_mem`; **`usStarReached_grant_or_bridge`** — every edge of a
+`UsStarReached` state is a stored **grant**, a `w_all → concrete` **out-bridge**, or a
+`concrete → w_any` **in-bridge**, by induction over the write path.
+
+**What remains for `graph_correct_usStar` (`check = sem`), sharply isolated (the
+genuinely hard core — the ROADMAP-flagged W1c difficulty):**
+1. **The in-bridge-absorbing chain** (analog of W1b's `GrantReach`). The new
+   absorption: a `concrete c → w_any(shape)` in-bridge **followed by** a userset-star
+   grant `w_any(shape) → objNode` is one generalized hop — the graph counterpart of
+   `sem`'s `memberOfGranted` `instances`-branch (`Semantics.lean:50-56`: a userset-star
+   grant `g=(T,*,P)` expands over `instances T q T`, checking `rec T inst P` for each
+   `inst`). The soundness key: `inst = c.name` must be in `instances` (⇔ c appears in a
+   tuple ⇔ c has its in-bridge — the attack-first finding). NB the userset `w_any` node
+   here is BOTH an edge target (in-bridges) AND source (the grant) — unlike W1b's
+   `w_all` (target only) and W1a's bare `w_any` (source only).
+2. **The `instances`-branch of `memberOfGranted`** — the subject-side leaf lemmas
+   (`mog_elim`/`directLeaf_elim`) must now admit the star-userset grant disjunct
+   (currently killed by star-free-subject in W1b's `_os` versions). The `instances`
+   ∃-witness expansion is the new content vs W1a/W1b.
+3. **Probe 4** (`w_any → w_all`) — for a star *userset* query subject. Dead on W1b's
+   object side; live here.
+4. **Bridge-completeness** (an admitted closure, W1b-analog): every store concrete of a
+   bridged-in shape has its `c → w_any` bridge — `instances`-coverage. The endpoint
+   exclusion is what makes this match `instances` (store-derived, excludes query-only
+   names).
+5. **Fuel-bounded soundness assembly** — as W1b (`m ≤ 2|T|+1`); the in-bridge hops
+   consume `w_any` nodes (not plain sources), so the plain-node accounting should
+   transfer, but a `w_any` node is now also a source (the grant), so re-check the
+   `isPlain`-source argument (`grantReach_of_trail`'s "every hop source is plain" no
+   longer holds — a userset-star grant's source is `w_any`).
+
 ## Session 2026-07-10 (W1b FULLY CLOSED — `graph_correct_objStar`, full `check = sem`)
 
 Resuming W1b from "both semantic cores done + completeness operationally closed;

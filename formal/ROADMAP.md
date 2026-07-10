@@ -137,12 +137,31 @@ and re-proves/widens the same named theorems. Every stage must keep
       to `graph_complete_objStar` (backward) and the fuel-bounded `GrantReach` chain
       (forward). Mirror of `graph_correct_direct` / `graph_correct_bareStar`. **W1b is
       now closed end-to-end (soundness + completeness). Next: W1c.**
-  - **W1c — userset stars (in-bridges + `instances`).** `concrete → wAny`
-    bridges for subject-wildcard USERSET shapes (`[group:*#member]`), the
-    `instances`-branch of `memberOfGranted`/`ttuLeaf`, probe 4, and the
-    no-`wAny→wAll`-bridge instance-leak argument (spec §1.1). The genuinely
-    hard one — bridge-completeness vs `instances T q` (note: `instances`
-    excludes query endpoints, so bridges — store-derived — cover exactly it).
+  - **W1c — userset stars (in-bridges + `instances`). IN PROGRESS (2026-07-10):
+    attack-first done + write model + edge characterization.**
+    - **Attack-first (machine-checked, no surprise):** `check = sem` verified on 12
+      userset-star scenarios incl. the sharp endpoint-exclusion cases. Finding: a
+      group name is in `sem`'s `instances` iff it appears in a TUPLE (not merely as a
+      query endpoint), which is EXACTLY when the store-built graph has that concrete's
+      in-bridge — so store-bridges ↔ `instances` agree by construction. No refutation
+      (unlike W1b's bridges-mandatory finding — the W1c design was confirmed as-is).
+      The one apparent divergence was an admission-invalid tuple, re-confirming
+      StoreValid is load-bearing. See PROOF_STATUS "W1c STARTED".
+    - **Write model DONE** (`GraphIndex/UsStarWrite.lean`, axiom-clean): the faithful
+      `concrete → w_any` in-bridge for declared subject-wildcard userset shapes
+      (`Schema.isSubjectWildcardUserset` = `bridged_in_shapes`), `writeUsStar`
+      (out-bridges then in-bridges then cycle-rejected grant), `structInv_writeUsStar`,
+      and the `UsStarReached` closure with `usStarReached_structInv`.
+    - **Edge characterization DONE** (`GraphIndex/UsStarCorrect.lean`, axiom-clean):
+      `usStarReached_grant_or_bridge` — every edge is a grant, a `w_all → concrete`
+      out-bridge, or a `concrete → w_any` in-bridge.
+    - **Remaining (the genuinely hard core):** the in-bridge-absorbing chain (a
+      `concrete → w_any` in-bridge + the userset-star grant out of `w_any` = one
+      generalized hop, keyed through `instances`), the `instances`-branch of
+      `memberOfGranted`, probe 4 (star userset query subject), bridge-completeness
+      (= `instances`-coverage), and the fuel-bounded assembly — NB the `isPlain`-source
+      argument needs re-checking, a userset-star grant's source is `w_any` not plain.
+      Detail in PROOF_STATUS "W1c STARTED".
   - **Attack first (house move):** before proving, try to refute the widened
     statement on W1a — e.g. a star query subject (`s.name = STAR`) mixes
     probe 1 (exact star tuple) with flow-through `memberOfGranted`; check the
