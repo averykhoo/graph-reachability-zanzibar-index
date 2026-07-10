@@ -221,4 +221,44 @@ theorem rewriteClosureAux_restrict {S : Schema}
       exact rewriteStep_restrict hDrop t
     rw [hstep, ih]
 
+/-! ## The fuel bridge — closure membership across the fuel gap
+
+The canonical closures run at DIFFERENT fuels: `rewriteClosure S t` at `|S.keys|+1`,
+`rewriteClosure (S↾U) t` at the smaller `|S↾U.keys|+1`. Via `rewriteClosureAux_restrict`,
+`rewriteClosure (S↾U) t = rewriteClosureAux S (|S↾U.keys|+1) [t]`, so the two canonical
+closures are the SAME `S`-closure recurrence at two fuels. The gap direction that is
+*unconditional* — the smaller closure embeds in the bigger one — is landed here (fuel
+monotonicity + the key-count bound). The reverse embedding (the bigger closure adds no new
+members past the smaller fuel) needs saturation of the smaller closure and is deferred to
+the `RewriteRanked (S↾U)` step. -/
+
+/-- **Fuel monotonicity of the bounded rewrite closure.** More fuel never drops a member:
+    a closure member sits at some layer `k ≤ n` (`stepN_of_mem_aux`), and `k ≤ m` re-embeds
+    it (`mem_aux_of_stepN`). Reads only the layer algebra of `RulesSaturate`. -/
+theorem rewriteClosureAux_mono {S : Schema} {n m : Nat} (hnm : n ≤ m) {cur : List Tuple}
+    {w : Tuple} (hw : w ∈ rewriteClosureAux S n cur) : w ∈ rewriteClosureAux S m cur := by
+  obtain ⟨k, hk, hmem⟩ := stepN_of_mem_aux S n cur hw
+  exact mem_aux_of_stepN S m k cur (Nat.le_trans hk hnm) hmem
+
+/-- The restricted schema has no more keys than the original (its defs are a filtered
+    sublist; `map` preserves length). -/
+theorem restrictUntainted_keys_length_le {S : Schema} :
+    (restrictUntainted S).keys.length ≤ S.keys.length := by
+  unfold Schema.keys restrictUntainted
+  rw [List.length_map, List.length_map]
+  exact List.length_filter_le _ _
+
+/-- **The `S↾U`-closure embeds in the `S`-closure (the unconditional gap direction).** Both
+    are the same `S`-closure recurrence (`rewriteClosureAux_restrict`); the restricted one
+    runs at the smaller fuel `|S↾U.keys|+1 ≤ |S.keys|+1`, so fuel monotonicity re-embeds it.
+    This is the `⊇` half of the fuel bridge (`sem`-completeness side is unaffected). -/
+theorem rewriteClosure_restrict_subset {S : Schema}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
+    {t w : Tuple} (hw : w ∈ rewriteClosure (restrictUntainted S) t) :
+    w ∈ rewriteClosure S t := by
+  unfold rewriteClosure at hw ⊢
+  rw [rewriteClosureAux_restrict hDrop] at hw
+  exact rewriteClosureAux_mono
+    (Nat.succ_le_succ restrictUntainted_keys_length_le) hw
+
 end Zanzibar
