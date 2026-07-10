@@ -15,6 +15,7 @@ import ZanzibarProofs.GraphIndex.RulesWrite
 import ZanzibarProofs.GraphIndex.RulesCorrect
 import ZanzibarProofs.GraphIndex.RulesSound
 import ZanzibarProofs.GraphIndex.RulesChain
+import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -280,6 +281,14 @@ namespace Zanzibar
 #print axioms rewriteClosure_rel_ne_bare
 #print axioms semAux_of_ruleChain
 #print axioms sem_of_rules_reach
+
+-- W2 completeness groundwork (GraphIndex/RulesComplete.lean, 2026-07-10): the
+-- admitted rule-routed write-closure + edge-completeness of every materialised
+-- rewrite-closure tuple. Expect only the three standard axioms:
+#print axioms foldl_writeDirect_edge_complete
+#print axioms reachedByRulesAdmitted_edge_complete
+#print axioms reachedByRulesAdmitted_seed_edge
+#print axioms reachedByRules_of_admitted
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the
