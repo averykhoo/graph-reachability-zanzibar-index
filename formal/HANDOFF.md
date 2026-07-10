@@ -103,8 +103,17 @@ only adds edges). Done so far in W3a (`Reconcile.lean`, `ReconcileWrite.lean`,
   keys); **`semAux_restrict`** — `sem` over `S` and `S↾U` coincide at every untainted key
   (the semantic heart: untaintedness is hereditary, so an untainted read never touches a
   dropped def); and the rewrite fan-out is preserved (`schemaRewrites_restrict`,
-  `rewriteClosureAux_restrict`) — the state-transfer groundwork. **Remaining: the fuel
-  bridge + admitted state transfer + fuel-bridged assembly (see "The next task").**
+  `rewriteClosureAux_restrict`).
+- **Step A, the fuel bridge — CLOSED (`RestrictBase.lean`, 2026-07-11):**
+  **`rewriteClosure_restrict_mem_iff`** — `rewriteClosure S t` (fuel `|S.keys|+1`) and
+  `rewriteClosure (S↾U) t` (smaller fuel `|S↾U.keys|+1`) have identical membership. `⊇` is
+  unconditional fuel monotonicity (`rewriteClosureAux_mono` via the `stepN` layer algebra +
+  `restrictUntainted_keys_length_le`); `⊆` is saturation of the `S↾U`-closure, whose
+  `RewriteRanked (S↾U)` is built from `RewriteRanked S` by rank compression
+  (`rewriteRanked_restrict`), given the faithful side condition **`RewriteMatchDeclared`**
+  (every rewrite's match key is a declared untainted relation — to be discharged in the
+  fragment assembly). **Remaining: the admitted state transfer + base `hag` equation (see
+  "The next task").**
 
 **W3a fragment (assembled so far):** derived defs are `ComputedOnly` ∧ `RootBoolean`,
 operands untainted, `hterm` (every derived R: `NoTtuTarget S R ∧ NoStoreSubjectR T R`),
@@ -132,21 +141,29 @@ and the rewrite-fan-out preservation `schemaRewrites_restrict` / `rewriteStep_re
 `rewriteClosureAux_restrict` (the closure at any FIXED fuel is unchanged), given the fragment
 fact `hDrop` (every tainted def emits no arms — `RootBoolean` ⇒ `exprArms_rootBoolean`).
 
-**REMAINING — the fuel bridge, state transfer, and assembly:**
-1. **Fuel bridge (the crux).** The canonical closures run at DIFFERENT fuels: `rewriteClosure
-   S t` at `|S.keys|+1`, `rewriteClosure (S↾U) t` at the smaller `|S↾U.keys|+1`. Via
-   `rewriteClosureAux_restrict`, `rewriteClosure (S↾U) t = rewriteClosureAux S (|S↾U.keys|+1)
-   [t]`, so prove **membership equality of the two S-closures across the gap**. Both saturate:
-   `rewriteClosure_saturated` (RewriteRanked S) for the big side; the small side needs a rewrite
-   chain from a stored (⇒ untainted: `exprDirects_rootBoolean` + `StoreValidRules`) seed to STAY
-   untainted (an arm's `outRel` is its def's relation; tainted defs emit no arms ⇒ no rule
-   outputs a tainted relation) ⇒ depth ≤ `|S↾U.keys|`. Either build `RewriteRanked (S↾U)` (rank
-   compressed to `S↾U`'s key count) or a direct "untainted cone saturates at `|S↾U.keys|+1`".
-2. **State transfer.** On the *admitted* path (`FoldAdmits` ⇒ no cycle rejection), edges are
-   EXACTLY `reachedByRules_edge_sound` (⊆) + `reachedByRulesAdmitted_edge_complete` (⊇). With (1),
-   build `ReachedByRulesAdmitted σ' (S↾U) T` and show `σ'.edges ≈ σ0.edges` (membership); `reach`
-   depends only on edge membership (`reach_iff_nreaches` + `edgesClosed`).
-3. **Base `hag` equation.** `graphRec σ0 = probeNonDerived σ0` (`probeNonDerived_plainEdges`)
+**DONE (`RestrictBase.lean`, 2026-07-11): the fuel bridge.** `rewriteClosure_restrict_mem_iff`
+— `rewriteClosure S t` (fuel `|S.keys|+1`) and `rewriteClosure (S↾U) t` (fuel `|S↾U.keys|+1`)
+have identical membership. `⊇` unconditional (`rewriteClosureAux_mono` via the `stepN` layer
+algebra + `restrictUntainted_keys_length_le`); `⊆` by saturation of the `S↾U`-closure, whose
+`RewriteRanked (S↾U)` is built from `RewriteRanked S` by rank compression
+(`rewriteRanked_restrict`: count `S↾U`-keys ranked below `k`, bounded by `|S↾U.keys|`;
+`length_filter_lt_of_mem` is the strict filtered-length step), given the faithful side condition
+**`RewriteMatchDeclared S`** (every rewrite's match key `(objectType, matchRel)` is a declared
+untainted relation — mirrors the compiler routing arms over declared operands; discharge it in
+the fragment assembly, it is a hypothesis, NOT a postulate of the conclusion).
+
+**REMAINING — the state transfer + the base `hag` equation:**
+1. **State transfer (the open subtlety).** On the *admitted* path (`FoldAdmits` ⇒ no cycle
+   rejection), edges are EXACTLY `reachedByRules_edge_sound` (⊆) +
+   `reachedByRulesAdmitted_edge_complete` (⊇) — i.e. `(a,b) ∈ σ.edges ↔ ∃ t∈T, ∃ u ∈
+   rewriteClosure S t, materialise`. With the fuel bridge (`rewriteClosure_restrict_mem_iff`),
+   build a canonical `ReachedByRulesAdmitted σ' (S↾U) T` and show `σ'.edges ≈ σ0.edges`
+   (membership — both sides are the same materialised-closure characterization, now with equal
+   closures). `reach` depends only on edge membership (`reach_iff_nreaches` + `edgesClosed`). The
+   catch: σ' and σ0 fold `writeDirect` over DIFFERENT lists (differing by fuel/dups), so they are
+   not literally equal — go through edge membership, and transfer `FoldAdmits` across the
+   differing lists (σ' has fewer/equal edges at each step ⇒ still no cycle rejection).
+2. **Base `hag` equation.** `graphRec σ0 = probeNonDerived σ0` (`probeNonDerived_plainEdges`)
    `= check σ'` (edges agree, `S↾U` routes to the probe) `= sem (S↾U) T q'`
    (`graph_correct_rules`) `= sem S T q'` (`semAux_restrict` + untainted-schema fuel stability to
    bridge `fuelBound (S↾U)` vs `fuelBound S`). Compose with `graphRec_reduce_base`. The W3a base

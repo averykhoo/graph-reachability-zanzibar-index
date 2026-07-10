@@ -8,6 +8,61 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11 (W3a Step A — the fuel bridge, closed both directions)
+
+Resuming W3a Step A from HANDOFF "the fuel bridge is the one remaining subtlety." Three
+green+pushed increments (all in `GraphIndex/RestrictBase.lean` + `Audit.lean`); `verify.sh`
+green throughout (build + 0 sorries + zcli + audit standard-axioms-only + 60 conformance).
+Sorry count held at 0. **This closes the fuel bridge — the crux the roadmap named** — so the
+two canonical rewrite closures now have provably identical membership.
+
+**The result — `rewriteClosure_restrict_mem_iff`.** `rewriteClosure S t` (fuel `|S.keys|+1`)
+and `rewriteClosure (S↾U) t` (smaller fuel `|S↾U.keys|+1`) have identical membership on the W3a
+fragment. Both are the SAME `S`-closure recurrence at two fuels (via `rewriteClosureAux_restrict`
+from the prior session); the bridge is that the extra fuel adds nothing.
+
+**Increment 1 — the `⊇` half (unconditional).** `rewriteClosureAux_mono` (more fuel never drops
+a member — a member sits at some `stepN` layer `k ≤ n`, re-embedded at any `m ≥ k`, via the
+existing `RulesSaturate` layer algebra `stepN_of_mem_aux` / `mem_aux_of_stepN`);
+`restrictUntainted_keys_length_le` (`|S↾U.keys| ≤ |S.keys|`, filtered defs are a sublist, `map`
+preserves length); `rewriteClosure_restrict_subset` composes them — the smaller closure embeds in
+the bigger.
+
+**Increment 2 — the `⊆` half (via saturation + rank compression).** The bigger closure adds no
+new members past the smaller fuel because the `S↾U`-closure is SATURATED (closed under one more
+`rewriteStep S`), so it swallows every `S`-closure layer (`rewriteClosure_subset_restrict`, layer
+induction: seed at layer 0, each further step swallowed). Saturation needs
+`RewriteRanked (S↾U)`, built from `RewriteRanked S` by **rank compression**
+(`rewriteRanked_restrict`): reuse `S`'s rank `rrank`, compress to `restrictRank k :=`
+`|{j ∈ S↾U.keys : rrank j < rrank k}|` — now bounded by `|S↾U.keys|` (`length_filter_le`) and
+still strictly increased at each arm (`length_filter_lt_of_mem`, the strict filtered-length
+monotonicity: the match key `a` is counted by the out-key threshold but not its own). The one
+faithful side condition **`RewriteMatchDeclared S`** (every rewrite's match key
+`(objectType, matchRel)` is a declared untainted relation) makes `a ∈ S↾U.keys` so the strictness
+fires; it mirrors the compiler routing arms over declared operand relations, and must be
+discharged in the fragment assembly (a clearly-flagged hypothesis, NOT a postulate of the
+conclusion).
+
+**Housekeeping.** A stray `Scratch_chk.lean` (an `import Mathlib` lemma-signature probe) leaked
+into increment 2's commit when its cleanup was killed by a build timeout; removed in a follow-up
+commit (library builds the `ZanzibarProofs` target, so `verify.sh` was never affected).
+
+**Attack-first.** The bridge is a THEOREM consequence of `schemaRewrites` equality (attack-first
+verified last session) + saturation, so lower refutation risk; the genuinely new facts (fuel
+monotonicity, the key-count bound, rank compression) are pure combinatorics. No refutation.
+
+**Resume → the remaining Step A: state transfer + base `hag` equation.** The fuel bridge gives
+closure-membership equality; edges of a `ReachedByRulesAdmitted` state are EXACTLY the
+materialised closure tuples (`reachedByRules_edge_sound` ⊆ + `reachedByRulesAdmitted_edge_complete`
+⊇), so equal closure membership will give equal edges. **The open subtlety:** build a canonical
+`ReachedByRulesAdmitted σ' (S↾U) T` and show `σ'.edges ≈ σ0.edges` — the states fold `writeDirect`
+over DIFFERENT lists (`rewriteClosure S t` vs `rewriteClosure (S↾U) t`, differing by fuel/dups),
+so the states are not literally equal; the transfer must go through the edge-membership
+characterization, and `FoldAdmits` must transfer across the differing fold lists (fewer/equal
+edges ⇒ still no cycle rejection). Then the base `hag` equation: `graphRec σ0 = probeNonDerived σ0`
+`= check σ'` (edges agree) `= sem (S↾U) T q'` (`graph_correct_rules`) `= sem S T q'`
+(`semAux_restrict` + fuel). Then Step B (candidate completeness + assembly) and Step C (T3/T6).
+
 ## Session 2026-07-11 (W3a Step A — the `hag` base reduction: schema restriction + `semAux` transfer + rewrite-preservation)
 
 Resuming W3a from HANDOFF "Step A — discharge `hag` on the base" via the recommended
