@@ -162,6 +162,11 @@ namespace Zanzibar
 #print axioms backend_equivalence
 #print axioms exclusion_effective
 #print axioms no_ghost_grant
+-- T3 / T6a / T6b widened to the W1b object-wildcard fragment (Equiv.lean), one-line
+-- corollaries of T1 ∘ graph_correct_objStar. Expect only the three standard axioms:
+#print axioms backend_equivalence_objStar
+#print axioms exclusion_effective_objStar
+#print axioms no_ghost_grant_objStar
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the

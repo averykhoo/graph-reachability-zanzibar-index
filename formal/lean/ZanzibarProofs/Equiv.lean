@@ -1,5 +1,6 @@
 import ZanzibarProofs.SetEngine.Correct
 import ZanzibarProofs.GraphIndex.DirectCorrect
+import ZanzibarProofs.GraphIndex.ObjStarClosure
 
 /-!
 # T3 / T6 — equivalence and the security corollaries
@@ -65,6 +66,50 @@ theorem no_ghost_grant (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
   rw [graph_correct_direct S T' σ' q hWF hPD hSV hSF hqs hqo hReach]; exact hDeny
+
+/-! ## T3 / T6 widened to the W1b (object-wildcard) fragment
+
+Per the shared-spec architecture these are one-line corollaries that widen with the
+write model: `graph_correct_objStar` (T2b on the object-wildcard fragment) composed
+with T1 (`setEngine_correct`, general) gives backend equivalence and the security
+corollaries on stores with object wildcards `[T:*]` — a strictly wider scope than the
+star-free `*_objStar`-free versions above. -/
+
+/-- **T3 (equivalence), W1b (object-wildcard) scope.** Both backends agree on stores
+    with object wildcards, by transitivity through `sem` (T1 ∘ `graph_correct_objStar`). -/
+theorem backend_equivalence_objStar (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T)
+    (hOS : ObjStarStore T) (hOV : ObjStarValid S T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : WildReachedAdmitted σ S T) (hValid : AllValid T) :
+    SetEngineModel.check S T q = GraphModel.check σ q := by
+  rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid,
+      graph_correct_objStar S T σ q hWF hPD hSV hOS hOV hqs hqo hReach]
+
+/-- **T6a (deny-propagation), W1b scope.** Whenever the spec denies, both backends
+    deny — now including object-wildcard stores. -/
+theorem exclusion_effective_objStar (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T)
+    (hOS : ObjStarStore T) (hOV : ObjStarValid S T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : WildReachedAdmitted σ S T) (hValid : AllValid T)
+    (hDeny : sem S T q = false) :
+    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+  refine ⟨?_, ?_⟩
+  · rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid]; exact hDeny
+  · rw [graph_correct_objStar S T σ q hWF hPD hSV hOS hOV hqs hqo hReach]; exact hDeny
+
+/-- **T6b (no-ghost-grant), W1b scope.** If removing a tuple makes the spec deny, the
+    graph backend denies after the removal — no stale wildcard grant survives the loss
+    of its last support. -/
+theorem no_ghost_grant_objStar (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+    (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T')
+    (hOS : ObjStarStore T') (hOV : ObjStarValid S T')
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : WildReachedAdmitted σ' S T')
+    (hDeny : sem S T' q = false) :
+    GraphModel.check σ' q = false := by
+  rw [graph_correct_objStar S T' σ' q hWF hPD hSV hOS hOV hqs hqo hReach]; exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)
     matches a stored tuple only when the tuple's subject type is one of the

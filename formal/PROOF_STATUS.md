@@ -53,6 +53,12 @@ there are ≤ `2|T|`.
   `graph_complete_objStar` + `reach_complete`. Probes 2,4 dead; audit updated
   (5 new `#print axioms` lines).
 
+**T3/T6 widened for free (`Equiv.lean`):** since the equivalence + security
+corollaries are one-line `rw`s through `graph_correct_*`, added
+`backend_equivalence_objStar` / `exclusion_effective_objStar` /
+`no_ghost_grant_objStar` — T3/T6a/T6b now hold on object-wildcard stores too
+(T1 ∘ `graph_correct_objStar`). Axiom-clean; audit +3 lines.
+
 **Next: ROADMAP W1c** (userset stars `[group:*#member]` — in-bridges + `instances` +
 probe 4; the genuinely hard sub-stage). Attack-first first.
 
