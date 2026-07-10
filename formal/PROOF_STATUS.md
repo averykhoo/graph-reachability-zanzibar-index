@@ -6,6 +6,70 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W2 SOUNDNESS core — the rewrite-closure realises `evalE`'s recursion)
+
+Resuming W2 from "write model + read-routing + soundness groundwork + fragment nailed
+down (`TtuTuplesetsDirect`); resume → the reachability↔`sem` core". Delivered the
+**soundness half's heart** as one green+pushed axiom-clean increment
+(`GraphIndex/RulesSound.lean`, sorry-free, `[propext, Classical.choice, Quot.sound]`).
+`verify.sh` green throughout (build + 0 sorries + 60 conformance + audit). Sorry count
+held at 0. This is the first W2 lemma that ties the graph's rewrite-fanout to `sem`.
+
+**Headline: `semAux_of_rewriteClosure` — every rewrite-closure tuple of a stored tuple
+is a `sem` membership at some fuel.** For `t ∈ T` and `u ∈ rewriteClosure S t`, `sem`
+derives `u.subject ∈ (u.object, u.relation)`. This is *exactly* "the rewrite-closure
+realises `evalE`'s `computed`/`ttu`/`union` recursion", proved by a
+generalise-over-`cur` closure induction (mirrors `rewriteClosureAux_object`):
+- **seed** (`u = t`): a direct self-grant — `t`'s relation carries a `Direct` arm the
+  subject matches (`StoreValidRules`), fuel 1 (`semAux_seed`).
+- **computed** hop (`u = ⟨s, R, o⟩` from `⟨s, R', o⟩`): `evalE`'s `computed R'` case is
+  `rec o.type o.name R'`, which is *literally the predecessor's membership* — fuel `+1`,
+  no rewriting of the recursion needed once `(objectType, matchRel)` are normalised to
+  `x`'s fields.
+- **ttu** hop (`u = ⟨s#tr, R, o⟩`): the tupleset tuple is a *stored* raw tuple —
+  **`closure_tupleset_is_seed` (under `TtuTuplesetsDirect`) forces the predecessor `x`
+  to be the seed `t ∈ T`** (a deeper closure tuple can't sit on a TTU tupleset relation:
+  `no_rewrite_outputs_tupleset`). So `ttuLeaf`'s stored-tupleset read fires its **direct
+  disjunct** (`s = x.subject#tr` matches `⟨pt,pn,tr⟩` in both the `pn≠STAR` and star
+  branches) — **no recursion**, fuel 1. This is where the fragment condition earns its
+  keep operationally.
+- **union**: a true arm makes the OR-tree true (`evalE_{direct,computed,ttu}_arm`, one
+  induction each — an `UntaintedSchema` def is a leaf-OR-tree, no `inter`/`excl`).
+
+**Key modelling addition: `NodupKeys S`** (declared keys distinct — the Python schema is
+a *dict*). `schemaRewrites` fans out over *all* defs (`flatMap`), but `sem`/`evalE` reads
+`S.lookup` = the *first* def with a key; without key-uniqueness a rewrite rule's def
+need not be the one `sem` evaluates, and soundness would be FALSE. `lookup_of_mem`
+(`NodupKeys ⇒ d ∈ defs → lookup d.1 = some d.2`) is the payoff (hand-rolled `find?`
+induction; `WF` currently records only `relNames`, so key-uniqueness is a *new* faithful
+hypothesis, not derivable). **Worth flagging for W4:** the full-scope fragment should
+carry `NodupKeys`.
+
+**W2 read fragment (assembled):** `UntaintedSchema ∧ TtuTuplesetsDirect ∧ NodupKeys ∧
+StoreValidRules ∧ StarFreeStore` (+ `WF`). Consequence lemmas landed: `untainted_noExclAll`
+(⇒ `semAux_mono`), `stratifiable_untainted` + `storeDeclared_of_validRules` (⇒
+`sem_fuel_stable` for the T0a-stability fuel sidestep), `exprDirects` +
+`directTypes_mem_of_exprDirects`.
+
+**Resume → the rest of the W2 soundness half + completeness + assembly.** Sharply
+isolated:
+1. **Chain composition (soundness end-to-end).** `reachedByRules_edge_sound` pins every
+   edge to a rewrite-closure tuple of `Tstar := T.flatMap (rewriteClosure S)`; feed the
+   `chainN_of_trail` soundness function to get `TupleChainN Tstar`, then compose hops
+   with a **userset lift**. BLOCKER: `semAux_lift` (DirectCorrect) is stated for
+   `PureDirect` — W2 needs it generalised to `UntaintedSchema` (a userset flowing
+   through a `computed`/`ttu`/`union` node, not just a `direct` one). The per-hop base
+   membership is `semAux_of_rewriteClosure` (at *some* fuel `f_w`, not fuel 1) — so use
+   the W1c **T0a-stability sidestep** (`sem_fuel_stable`, whose hyps are the consequence
+   lemmas above) to discharge total fuel, no tight bound. Intermediate userset predicate
+   is `w.relation` (declared ⇒ ≠ `BARE`); subject names star-free (rewrites preserve
+   subject name) — both need small preservation lemmas.
+2. **Completeness (`sem ⇒ reach`).** `sem`'s computed/ttu/union recursion must be
+   witnessed by graph edges (materialised rewrite-closure tuples). The harder direction;
+   attack-first the computed-case closure-saturation the earlier entry flagged.
+3. **Assembly** `graph_correct_rules` (route to `probeNonDerived` via
+   `check_eq_probeNonDerived`; star-free ⇒ probes 2–4 dead) + T3/T6 widening.
+
 ## Session 2026-07-10 (W2 — attack-first KILLS the naive fragment; `TtuTuplesetsDirect` + rewrite-closure structure)
 
 Resuming W2 (untainted rule routing) from "write model + read-routing + soundness

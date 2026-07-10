@@ -13,6 +13,7 @@ import ZanzibarProofs.GraphIndex.UsStarWrite
 import ZanzibarProofs.GraphIndex.UsStarCorrect
 import ZanzibarProofs.GraphIndex.RulesWrite
 import ZanzibarProofs.GraphIndex.RulesCorrect
+import ZanzibarProofs.GraphIndex.RulesSound
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -253,6 +254,19 @@ namespace Zanzibar
 #print axioms rewriteClosure_object
 #print axioms rewriteClosure_seed
 #print axioms closure_tupleset_is_seed
+
+-- W2 SOUNDNESS core (GraphIndex/RulesSound.lean, 2026-07-10): the rewrite-closure
+-- realises `evalE`'s computed/ttu/union recursion. `semAux_of_rewriteClosure` — every
+-- rewrite-closure tuple of a stored tuple is a `sem` membership at some fuel (seed =
+-- direct self-grant; computed = the predecessor's membership under the computed arm;
+-- ttu = `ttuLeaf`'s stored-tupleset disjunct on the seed via `closure_tupleset_is_seed`).
+-- `lookup_of_mem` needs `NodupKeys` (the Python schema is a dict). Standard axioms only:
+#print axioms lookup_of_mem
+#print axioms untainted_noExclAll
+#print axioms storeDeclared_of_validRules
+#print axioms semAux_seed
+#print axioms semAux_step
+#print axioms semAux_of_rewriteClosure
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the

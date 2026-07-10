@@ -265,6 +265,25 @@ and re-proves/widens the same named theorems. Every stage must keep
   semantics `ttuLeaf` needs). The W2 fragment predicate is now
   `UntaintedSchema ∧ TtuTuplesetsDirect`. Resume → the reachability↔`sem` core above
   (fragment pinned); attack-first the computed-case closure-saturation first.
+
+  **SOUNDNESS CORE DONE (2026-07-10, `GraphIndex/RulesSound.lean`, sorry-free,
+  axiom-clean).** The heart of the W2 soundness half:
+  **`semAux_of_rewriteClosure`** — every rewrite-closure tuple `u ∈ rewriteClosure S t`
+  of a stored `t` is a `sem` membership `u.subject ∈ (u.object, u.relation)` at some
+  fuel, i.e. **the rewrite-closure realises `evalE`'s computed/ttu/union recursion**. A
+  generalise-over-`cur` closure induction: seed = direct self-grant (`semAux_seed`);
+  computed = the predecessor's membership under the `computed` arm, fuel `+1`; ttu =
+  `ttuLeaf`'s stored-tupleset **direct disjunct** on the seed (`closure_tupleset_is_seed`
+  forces the tupleset predecessor to be the raw `t ∈ T` — where `TtuTuplesetsDirect`
+  earns its keep); union = a true arm makes the OR-tree true (`evalE_{direct,computed,
+  ttu}_arm`). **New faithful hypothesis `NodupKeys S`** (declared keys distinct — the
+  Python schema is a dict; `lookup_of_mem` is the payoff, `WF` doesn't give it) — carry
+  it into W4. Fragment consequence lemmas: `untainted_noExclAll` (⇒ `semAux_mono`),
+  `stratifiable_untainted` + `storeDeclared_of_validRules` (⇒ `sem_fuel_stable`).
+  **Remaining W2 (sharply isolated, see PROOF_STATUS "W2 SOUNDNESS core"):** (1) chain
+  composition — needs `semAux_lift` GENERALISED from `PureDirect` to `UntaintedSchema`
+  (userset flowing through a computed/ttu/union node), fuel via the T0a-stability
+  sidestep; (2) completeness `sem ⇒ reach`; (3) assembly `graph_correct_rules` + T3/T6.
 - **W3 — derived reconcile (the residue path).** Faithful `reconcile` output
   per derived key (residue `(stars, neg, upos)` = the §7.6 semantics), the
   in-transaction cascade over the outbox, and the cross-key hazard (an edge
