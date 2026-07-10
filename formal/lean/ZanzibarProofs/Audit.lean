@@ -6,6 +6,7 @@ import ZanzibarProofs.Spec.Counterexample
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
+import ZanzibarProofs.GraphIndex.ObjStarWrite
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -106,6 +107,16 @@ namespace Zanzibar
 #print axioms reach_of_semAux_bs
 #print axioms admitted_edge_source_char
 #print axioms graph_correct_bareStar
+-- **T2b stage W1b — object wildcards, the bridge-materializing write model
+-- (GraphIndex/ObjStarWrite.lean)** — attack-first established bridges are MANDATORY
+-- (machine-checked, unlike the bridge-free W1a); the faithful `writeWild` model
+-- (bridge-before-grant + cycle-rejected grant), structural preservation through the
+-- `w_all → concrete` bridges, and the W1b write-closure `WildReached`. All expect
+-- only the three standard axioms (no `sorryAx`):
+#print axioms nodeEnc_wAllNode
+#print axioms structInv_ensureBridges
+#print axioms structInv_writeWild
+#print axioms wildReached_structInv
 -- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
 -- at fragment scope — now REAL proved theorems (were false over the deleted
 -- abstract closure). Expect only the three standard axioms (no `sorryAx`):

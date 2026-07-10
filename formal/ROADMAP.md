@@ -76,10 +76,32 @@ and re-proves/widens the same named theorems. Every stage must keep
     `wAny (T,BARE)`) + probe 1∨2 correspondence; no bridge machinery, no
     `instances`. The chain lemmas need: an edge out of `wAny(T,BARE)` matches
     `sem`'s "bare-star covers u" disjunct for every subject u of type T.
-  - **W1b — object wildcards (`wAll` + out-bridges).** Needs
-    `objectWildcards`-declared shapes, `wAll → concrete` bridges on instance
-    arrival, probe 3; `matchingObjects`' `[oname, STAR]` absorption is the
-    semantic counterpart.
+  - **W1b — object wildcards (`wAll` + out-bridges). IN PROGRESS (2026-07-10):
+    write model done, correspondence next.**
+    - **Attack-first finding (machine-checked): bridges are MANDATORY** — W1b is
+      NOT bridge-free (the optimistic "maybe symmetric to W1a" is refuted). A
+      `w_all` node is never an edge *source*, so one might hope probe 3 absorbs it
+      as a pure trailing hop; but an object-wildcard grant flowing into a *further*
+      userset hop needs the wildcard membership to reach the **concrete** object
+      node — only a `w_all → concrete` bridge provides it (wildcard-spec §3.4,
+      `subject → w_all(S) → concrete → …`). Refuted against real `check`/`sem`; see
+      PROOF_STATUS "W1b STARTED" for the exact scenario.
+    - **Write model DONE** (`GraphIndex/ObjStarWrite.lean`, axiom-clean): the
+      faithful `wildcard.py:222-259` `add_tuple` — bridge-before-grant
+      (`ensureBridges` per endpoint, `w_all` lazily created, guarded bridge edge)
+      then the cycle-rejected grant. Wildcard-own-shape cycles reject at the grant
+      (`wildcard.py:250-256`), so acyclicity holds. `structInv_writeWild` +
+      `WildReached`/`wildReached_structInv` give `StructInv` at every reachable
+      state.
+    - **Correspondence REMAINING** (`graph_correct_objStar`): the read reduces to
+      probe 1 ∨ probe 3 (subjects star-free ⇒ probes 2,4 dead, mirror of W1a). New
+      content: a graph path interleaves **grant hops** and **bridge hops**, and a
+      grant-into-`w_all` + bridge-out is EXACTLY the `matchingObjects on =
+      [on, STAR]` absorption (a STAR-object grant is in `grantsOf` for concrete
+      `o`). Needs: bridge-completeness invariant maintained along `WildReached`
+      (holds where no bridge cycle-rejects), then soundness/completeness inductions
+      (analogs of `semAux_of_chainN_bs`/`reach_of_semAux_bs`) that key the grant's
+      object match through `matchingObjects` and thread the bridge hop.
   - **W1c — userset stars (in-bridges + `instances`).** `concrete → wAny`
     bridges for subject-wildcard USERSET shapes (`[group:*#member]`), the
     `instances`-branch of `memberOfGranted`/`ttuLeaf`, probe 4, and the

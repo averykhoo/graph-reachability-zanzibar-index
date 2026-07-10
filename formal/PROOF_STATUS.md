@@ -54,6 +54,78 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (W1b STARTED — object wildcards; bridges proven MANDATORY + the bridge-materializing write model)
+
+Resuming from W1a → **ROADMAP stage W1b** (object wildcards `[T:*]`, `w_all` +
+out-bridges). `verify.sh` green throughout (build + 0 sorries + 60 conformance +
+audit); all four new theorems axiom-clean (`nodeEnc_wAllNode` needs *no* axioms;
+the rest `[propext, Classical.choice, Quot.sound]`). Sorry count held at 0.
+
+**Attack-first HEADLINE (machine-checked): W1b is NOT bridge-free.** The natural
+guess after W1a was symmetry: a bare-star *subject* node has no in-edges (pure
+*leading* hop, probe 2 absorbs it, zero bridges), so maybe an object-wildcard
+`w_all` node — never a `subjNode`, hence never an edge *source* — is a pure
+*trailing* hop that probe 3 absorbs, also bridge-free. **Refuted against the real
+`GraphModel.check`/`sem`** (`#eval`, no `native_decide`): an object-wildcard grant
+that flows into a *further* userset hop needs the wildcard membership to reach the
+**concrete** object node, which only a `w_all → concrete` bridge provides. The
+refuting scenario: `viewer := [group#member, user]`, `editor := [doc#viewer]`,
+`member := [user]`, object-wildcard `(doc, viewer)`; store `group:eng#member viewer
+doc:*`, `doc:readme#viewer editor doc:readme`, `user:alice member group:eng`; query
+`check(alice, editor, doc:readme)` — `sem = true` but the bridge-free `writeDirect`
+state answers **false** (`alice → group:eng#member → w_all(doc,viewer)` dead-ends;
+never reaches `⟨doc,readme,viewer,plain⟩` that `editor` routes through). Adding the
+single bridge `w_all(doc,viewer) → ⟨doc,readme,viewer,plain⟩` restores `true`. This
+realizes wildcard-spec §3.4's composition `subject → w_all(S) → concrete → …`. The
+ROADMAP W1a note's optimistic "maybe W1b is also bridge-free" is now closed off.
+
+**Cycle question RESOLVED from the Python** (`wildcard.py:222-259`): `add_tuple`
+is **bridge-before-grant** (`_ensure_bridges(subject); _ensure_bridges(obj)` first,
+creating `w_all` lazily + the out-bridge for each concrete endpoint of a bridged
+shape, then the cycle-rejected grant edge). A wildcard tuple whose object
+participates in its own shape would close a cycle through a bridge and is
+**rejected at the grant edge** (`wildcard.py:250-256`) — so acyclicity (I2) is
+preserved by cycle-rejection, not violated. A rejected write rolls back the whole
+transaction (bridges included). Per-endpoint `ensureBridges` maintains
+bridge-completeness with no separate `w_all`-arrival backfill: a concrete object
+node exists only as an edge endpoint, so it self-bridges the first time it is
+touched.
+
+**Delivered — the faithful bridge-materializing write model
+(`GraphIndex/ObjStarWrite.lean`, sorry-free, axiom-clean):**
+- `GraphState.bridgedConcrete` (a concrete node whose object-shape `(type,pred)` is
+  a declared `objectWildcards` shape — the nodes needing a `w_all → c` in-bridge).
+- `GraphState.ensureBridges c` — create `w_all(c.type,c.pred)` lazily + the guarded
+  bridge edge `w_all → c` (cycle-rejection via `admitEdge`, matching the core add).
+- `GraphState.writeWild t` — bridge-before-grant: add endpoint nodes, ensure both
+  endpoints' bridges, then the cycle-guarded grant edge; a rejected grant returns
+  the original state (full rollback).
+- `nodeEnc_wAllNode` (w_all nodes are encoding-valid); `ensureBridges_mono`
+  (nodes grow); `ensureBridges_schema`/`writeWild_schema`; `writeWild_monoNodes`.
+- **`structInv_ensureBridges`** — a bridge insertion preserves `StructInv` (the
+  `w_all` node is encoding-valid; the bridge edge is cycle-admitted so
+  `structInv_addEdge` applies; the concrete endpoint must already be live).
+- **`structInv_writeWild`** — the whole write preserves `StructInv` (node encoding,
+  endpoint closure, **acyclicity through both the bridges and the grant**).
+- `WildReached` (the W1b operational write-closure, analog of `ReachedByDirect`) +
+  **`wildReached_structInv`** — `StructInv` at every W1b-reachable state, by
+  induction over the bridge-materializing write path.
+
+**What remains for the W1b correspondence (`graph_correct_objStar`), sharply
+isolated:** (1) **bridge-completeness invariant** maintained along `WildReached`
+(every concrete of a bridged shape has its `w_all → c` bridge) — holds on the
+fragment where no bridge cycle-rejects, i.e. no wildcard-own-shape cycle; (2) the
+read = `sem` proof **with bridge hops**. The read reduces to probe 1 ∨ probe 3
+(subjects star-free ⇒ probes 2,4 dead, mirror of W1a's dead 3,4). The new semantic
+content: a graph path may now interleave **grant hops** (`subjNode s → objNode o R`)
+and **bridge hops** (`w_all(T,R) → ⟨T,o,R,plain⟩`), and a grant-into-`w_all`
+immediately followed by a bridge-out is EXACTLY the `matchingObjects on = [on, STAR]`
+absorption in `sem` (a STAR-object grant is in `grantsOf` for concrete query object
+`o`). The soundness/completeness inductions (analogs of `semAux_of_chainN_bs` /
+`reach_of_semAux_bs`) must key the terminal/interior grant's object match through
+`matchingObjects` rather than equality, and thread the bridge hop. This is the next
+increment; the write model + structural invariant under it is now done.
+
 ## Session 2026-07-10 (W1a CLOSED — `graph_correct_bareStar`, bare star grants)
 
 First scope-widening increment after the tree hit 0 sorries: **ROADMAP stage
@@ -664,17 +736,24 @@ concrete models built first (see ROADMAP).
   hardening (audit as hard gate, graph-model conformance extension).
 - **W1a DONE (2026-07-10):** T2b widened to bare star grants `[user:*]`
   (`graph_correct_bareStar`, `GraphIndex/BareStarCorrect.lean`, axiom-clean).
-  **Resume → ROADMAP W1b** (object wildcards `wAll` + out-bridges — the first
-  bridge-requiring stage).
+- **W1b STARTED (2026-07-10):** object wildcards `[T:*]`. Attack-first proved
+  (machine-checked) that bridges are **mandatory** here (unlike bridge-free W1a).
+  The faithful bridge-materializing write model is delivered + structurally sound
+  (`GraphIndex/ObjStarWrite.lean`: `writeWild`, `structInv_writeWild`,
+  `WildReached`, `wildReached_structInv`, all axiom-clean). **Resume → the W1b
+  read correspondence `graph_correct_objStar`** (bridge-completeness invariant +
+  soundness/completeness with grant/bridge-hop interleaving = `matchingObjects`
+  absorption; the read reduces to probe 1 ∨ probe 3, subjects star-free). See the
+  W1b session block above and ROADMAP W1b for the sharply-isolated remaining work.
 - **Phase 1 DONE** (Lean skeleton + all T0–T6 stated; `lake build` green with 9
   `sorry`s). **Phase 2 CORE DONE ahead of schedule**: conformance CLI (`zcli`) live;
   spec-vs-oracle answer conformance green (6/6 grid comparisons). No adjudication
   events — the executable `sem` matches the reference oracle.
 - **User is reviewing `SEMANTICS.md` async** ("keep going, I'll review async"); A1 &
   A4 accepted. Continue proving; revisit if the review changes the spec.
-- **Resume point → ROADMAP W1b** (object wildcards `wAll` + out-bridges; W1a bare
-  star grants done) or Phase 6 hardening; T0a is closed, nothing is blocked on the
-  spec side.
+- **Resume point → the W1b read correspondence** (`graph_correct_objStar`); the
+  W1b bridge-materializing write model + structural invariant are done. Or Phase 6
+  hardening; T0a is closed, nothing is blocked on the spec side.
 - **Commands:** `cd formal/lean && lake build` (lib) / `lake build zcli` (CLI);
   `python -m pytest formal/conformance/ -q` (needs `zcli` built).
 
