@@ -287,11 +287,36 @@ and re-proves/widens the same named theorems. Every stage must keep
   composition (`semAux_of_ruleChain`, base = `semAux_of_rewriteClosure`, step = the lift,
   fuel existential) + preservation lemmas (`rewriteClosure_subjectName`/`_rel_ne_bare`) +
   **`sem_of_rules_reach`** (graph reachability ⇒ `sem`, fuel via the T0a-stability
-  sidestep). **Remaining W2 (see PROOF_STATUS "W2 SOUNDNESS direction CLOSED"):** (1)
-  COMPLETENESS `sem ⇒ reach` — the remaining hard direction (needs an *admitted*
-  `writeRules` closure so the store grant's + rewrite outputs' edges are present, and the
-  computed-case closure-saturation — attack-first first); (2) assembly
-  `graph_correct_rules` (route to `probeNonDerived`, probes 2–4 dead, glue) + T3/T6.
+  sidestep).
+
+  **W2 FULLY CLOSED — `graph_correct_rules` (full `check = sem`). ✅ DONE (2026-07-10)**
+  (`GraphIndex/RulesComplete.lean` + `RulesSaturate.lean`, sorry-free, axiom-clean
+  `[propext, Classical.choice, Quot.sound]`). The completeness direction + assembly were
+  delivered as designed:
+  - **Attack-first (machine-checked, deleted): closure-saturation HOLDS at the `|keys|+1`
+    bound** — stressed against mutual-`ttu` cycles + predicate-ratcheting unions whose
+    *distinct* reachable count exceeds `|keys|+1` (`schemaRatchet2`: 6 > 4). The **rewrite
+    DEPTH**, not the count, is bounded by `|keys|`; no refutation. Saturation held even for
+    cyclic schemas (which `RewriteRanked` excludes — so it is sufficient, not necessary).
+  - **`RulesComplete.lean` increment A** (admitted W2 closure): `FoldAdmits` +
+    `foldl_writeDirect_edge_complete`, `ReachedByRulesAdmitted`,
+    `reachedByRulesAdmitted_edge_complete` (every closure tuple's edge present) +
+    `_seed_edge`.
+  - **`RulesSaturate.lean`** (increment B): `RewriteRanked` (faithful rewrite-acyclicity /
+    stratification) + the rewrite-layer algebra (`stepN`, `mem_aux_of_stepN`,
+    `stepN_of_mem_aux`) + rank bound (`rwKey_rank_lt`, `stepN_rank_ge`) →
+    **`rewriteClosure_saturated`**.
+  - **`RulesComplete.lean` increment C** (core + assembly): `nreaches_of_semAux_rules`
+    (`sem ⇒ reach`, fuel × def-expr induction; `computed` via the last-edge surgery
+    `nreaches_relation_rewrite`/`nreaches_last` + saturation; `ttu` via the depth-1
+    `rewriteStep_mem_closure`; direct/union verbatim). **Completeness needs NO
+    `TtuTuplesetsDirect`** (soundness-only). Assembly **`graph_correct_rules`** (route +
+    probes 2–4 dead via `reachedByRulesAdmitted_edges_plain` + glue).
+  - **T3/T6 widened** (`Equiv.lean`): `backend_equivalence_rules` /
+    `exclusion_effective_rules` / `no_ghost_grant_rules`.
+  W2 fragment: `WF ∧ UntaintedSchema ∧ TtuTuplesetsDirect ∧ NodupKeys ∧ RewriteRanked ∧
+  StoreValidRules ∧ StarFreeStore`. **W1 + W2 now both closed; next: W3** (derived
+  reconcile / residue path). Combined generality lands at W4.
 - **W3 — derived reconcile (the residue path).** Faithful `reconcile` output
   per derived key (residue `(stars, neg, upos)` = the §7.6 semantics), the
   in-transaction cascade over the outbox, and the cross-key hazard (an edge

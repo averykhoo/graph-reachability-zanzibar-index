@@ -6,6 +6,83 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W2 FULLY CLOSED — completeness `sem ⇒ reach` + `graph_correct_rules` + T3/T6 widened)
+
+Resuming W2 from "soundness direction closed; resume → W2 COMPLETENESS + assembly".
+Delivered the **whole W2 correspondence** — `graph_correct_rules` (full `check = sem` on
+the untainted rule-routing fragment) — as three green+pushed axiom-clean increments, plus
+the T3/T6 corollary widening. `verify.sh` green throughout (build + 0 sorries + 60
+conformance + audit). Sorry count held at 0. **ROADMAP stage W2 is now closed end-to-end
+(soundness + completeness), matching W1a/W1b/W1c.**
+
+**Attack-first HEADLINE (machine-checked `#eval`, then deleted): closure-saturation HOLDS
+at the write model's `|keys|+1` bound — no refutation.** The completeness `computed` case
+needs the materialised rewrite-closure closed under one more rewrite step. Attack-first
+stressed this against adversarial schemas: mutual-`ttu` cycles and **predicate-ratcheting
+unions whose distinct reachable-tuple count exceeds `|keys|+1`** (`schemaRatchet2`: 6
+distinct reachable > bound 4) — saturation held in every case. The finding: the **rewrite
+DEPTH** (shortest rewrite-path length), not the count, is bounded by `|keys|`, because each
+step advances the relation to a rule `outRel`. So `|keys|+1` closure levels capture every
+reachable tuple *and* leave the top layer's rewrite-image already inside. Notably
+saturation held even for the *cyclic* schemas, which the provable-path hypothesis
+(`RewriteRanked`) excludes — so `RewriteRanked` is sufficient, not necessary.
+
+**Increment 1 — the admitted W2 closure + edge-completeness (`GraphIndex/RulesComplete.lean`,
+axiom-clean `[propext]`).** `writeRules` folds `writeDirect` (guarded, cycle-rejecting) over
+the closure, so edge-completeness needs every fold write admitted. `FoldAdmits` records
+exactly that; `foldl_writeDirect_edges_mono` (writeDirect only adds edges) +
+`foldl_writeDirect_edge_complete` give it. `ReachedByRulesAdmitted` (the admitted W2
+closure) + `reachedByRulesAdmitted_edge_complete` (every rewrite-closure tuple of every
+stored write has its edge — the completeness analog of `reachedByRules_edge_sound`) +
+`reachedByRulesAdmitted_seed_edge` (the stored-seed case the direct/ttu cases consult).
+
+**Increment 2 — rewrite-closure saturation (`GraphIndex/RulesSaturate.lean`, axiom-clean
+`[propext, Quot.sound]`).** `RewriteRanked S` (the faithful fragment condition: the rewrite
+graph on relations is acyclic — a `|keys|`-bounded rank every rewrite rule strictly
+increases; Python stratification rejects computed-userset cycles). The rewrite-layer
+algebra `stepN` / `stepN_step_comm` / `mem_aux_of_stepN` / `stepN_of_mem_aux` decomposes
+`rewriteClosureAux` into depth layers; `rwKey_rank_lt` (a step strictly bumps rank) +
+`stepN_rank_ge` (a depth-`k` tuple has rank ≥ `k`) give the depth bound; **`rewriteClosure_
+saturated`** — `w ∈ rewriteClosure S t`, `u ∈ rewriteStep S w ⇒ u ∈ rewriteClosure S t`.
+
+**Increment 3 — the completeness core + assembly (`GraphIndex/RulesComplete.lean`,
+axiom-clean).** `nreaches_of_semAux_rules` (`sem ⇒ reach`) by fuel induction × def-expr
+inner induction:
+- **direct** — verbatim `nreaches_of_semAux` (direct match = the stored grant's own edge
+  via `reachedByRulesAdmitted_seed_edge`; flow-through = the recursion's path + the grant
+  edge, appended by `NReaches.tail`).
+- **computed** — the fuel IH gives a path to the `r'`-node; **`nreaches_relation_rewrite`**
+  redirects it to the `r`-node by **last-edge surgery** (`nreaches_last` exposes the final
+  edge = a closure tuple `w` on relation `r'`; its computed rewrite `⟨w.subject, r,
+  w.object⟩` stays in the closure by `rewriteClosure_saturated`, so *its* edge into the
+  `r`-node is materialised and replaces the last hop). This is the one case needing
+  saturation.
+- **ttu** — the stored tupleset tuple `w`'s ttu-rewrite is a **depth-1** closure member
+  (`rewriteStep_mem_closure`, no saturation), so its edge is materialised; direct
+  parent-match = that edge, `rec` disjunct = the parent-userset recursion + the edge.
+- **union** — the true arm (arms' rewrite provenance split via `harms`).
+**Key scope finding: completeness does NOT need `TtuTuplesetsDirect`** (that was a
+*soundness*-only condition — it stops the graph landing non-seed tuples on tupleset
+relations; going `sem ⇒ graph` the stored `w` genuinely exists). So `nreaches_of_semAux_
+rules` carries only `UntaintedSchema ∧ RewriteRanked ∧ StarFree ∧ admitted`. Assembly
+**`graph_correct_rules`** routes `check → probeNonDerived` (`check_eq_probeNonDerived`),
+kills probes 2–4 (`reachedByRulesAdmitted_edges_plain` — star-free ⇒ only plain endpoints,
+via `rewriteClosure_subjectName`/`_object`), and glues probe 1 through `reach ↔ NReaches`
+to soundness (`sem_of_rules_reach`) + completeness. **T3/T6 widened** (`Equiv.lean`):
+`backend_equivalence_rules` / `exclusion_effective_rules` / `no_ghost_grant_rules`
+(T1 ∘ `graph_correct_rules`, `sem`-stratifiability from `stratifiable_untainted`).
+
+**W2 fragment predicate (assembled):** `WF ∧ UntaintedSchema ∧ TtuTuplesetsDirect ∧
+NodupKeys ∧ RewriteRanked ∧ StoreValidRules ∧ StarFreeStore` (soundness needs `TtuTuplesets
+Direct`+`NodupKeys`; completeness needs `RewriteRanked`; both need the rest). Carry
+`NodupKeys` + `RewriteRanked` into W4 as faithful hypotheses (dict keys; stratification).
+
+**Next: ROADMAP W3** (derived reconcile — the residue path, `and`/`but not`, the processor
+cascade). W1 (wildcard bridges) + W2 (rule routing) are now both closed. The *combined*
+generality (wildcards + rules + booleans) lands at **W4** (full-scope restatement). NB the
+W2 fragment isolates untainted rule routing on star-free data; wildcards-in-rules and the
+residue path are still deferred. Attack-first the W3 reconcile output before proving.
+
 ## Session 2026-07-10 (W2 SOUNDNESS direction CLOSED — generalised lift + chain composition + `sem_of_rules_reach`)
 
 Continuing W2 from the soundness core (per-tuple membership) → the **whole soundness

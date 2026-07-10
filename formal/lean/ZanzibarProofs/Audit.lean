@@ -299,6 +299,20 @@ namespace Zanzibar
 #print axioms stepN_rank_ge
 #print axioms rwKey_rank_lt
 
+-- W2 completeness core + top-level (GraphIndex/RulesComplete.lean, 2026-07-10):
+-- sem ⇒ reach (nreaches_of_semAux_rules, with the computed-case last-edge rewrite
+-- nreaches_relation_rewrite) and the full check = sem assembly graph_correct_rules.
+-- Expect only the three standard axioms:
+#print axioms nreaches_relation_rewrite
+#print axioms nreaches_of_semAux_rules
+#print axioms graph_correct_rules
+
+-- T3/T6 widened to the W2 rule-routing fragment (Equiv.lean, 2026-07-10), free
+-- corollaries of T1 ∘ graph_correct_rules. Expect only the three standard axioms:
+#print axioms backend_equivalence_rules
+#print axioms exclusion_effective_rules
+#print axioms no_ghost_grant_rules
+
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the
 -- standard axioms (decide-based, no sorryAx, no ofReduceBool):

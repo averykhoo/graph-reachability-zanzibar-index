@@ -2,6 +2,7 @@ import ZanzibarProofs.SetEngine.Correct
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.UsStarClosure
+import ZanzibarProofs.GraphIndex.RulesComplete
 
 /-!
 # T3 / T6 — equivalence and the security corollaries
@@ -147,6 +148,49 @@ theorem no_ghost_grant_usStar (S : Schema) (T' : Store) (σ' : GraphState) (q : 
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
   rw [graph_correct_usStar S T' σ' q hWF hPD hSV hUS hqs hqo hReach]; exact hDeny
+
+/-! ## W2 (untainted rule-routing) scope — the same corollaries via `graph_correct_rules`
+
+The first fragment with `computed`/`ttu`/`union` (not just direct grants). `sem`'s
+stratifiability comes from `stratifiable_untainted` (no tainted keys), and the graph
+equivalence from `graph_correct_rules`. -/
+
+/-- **T3 (equivalence), W2 (rule-routing) scope.** Both backends agree on untainted
+    schemas with `computed`/`ttu`/`union` definitions, by transitivity through `sem`
+    (T1 ∘ `graph_correct_rules`). -/
+theorem backend_equivalence_rules (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hUT : UntaintedSchema S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : ReachedByRulesAdmitted σ S T) (hValid : AllValid T) :
+    SetEngineModel.check S T q = GraphModel.check σ q := by
+  rw [setEngine_correct S T q hWF (stratifiable_untainted hUT) hValid,
+      graph_correct_rules S T σ q hWF hUT hTT hNK hR hSV hSF hqs hqo hReach]
+
+/-- **T6a (deny-propagation), W2 scope.** Whenever the spec denies, both backends deny —
+    now including untainted rule-routed schemas. -/
+theorem exclusion_effective_rules (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hUT : UntaintedSchema S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : ReachedByRulesAdmitted σ S T) (hValid : AllValid T)
+    (hDeny : sem S T q = false) :
+    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+  refine ⟨?_, ?_⟩
+  · rw [setEngine_correct S T q hWF (stratifiable_untainted hUT) hValid]; exact hDeny
+  · rw [graph_correct_rules S T σ q hWF hUT hTT hNK hR hSV hSF hqs hqo hReach]; exact hDeny
+
+/-- **T6b (no-ghost-grant), W2 scope.** If removing a tuple makes the spec deny, the graph
+    backend denies after the removal — no stale computed/ttu/union grant survives the loss
+    of its supporting tuple. -/
+theorem no_ghost_grant_rules (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+    (hWF : WF S) (hUT : UntaintedSchema S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T') (hSF : StarFreeStore T')
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hReach : ReachedByRulesAdmitted σ' S T')
+    (hDeny : sem S T' q = false) :
+    GraphModel.check σ' q = false := by
+  rw [graph_correct_rules S T' σ' q hWF hUT hTT hNK hR hSV hSF hqs hqo hReach]; exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)
     matches a stored tuple only when the tuple's subject type is one of the
