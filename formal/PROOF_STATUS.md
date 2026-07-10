@@ -59,13 +59,19 @@ No statement-level surprise (like W1a/W1c; unlike W1b's bridges-mandatory findin
   case where `rewriteClosure = [t]`) + **`reachedByRules_inv`** (Inv ∧ ResidueEmpty ∧
   Quiescent at every W2-reachable state, by induction over the write path).
 
+**Read-routing DONE (same session, `GraphIndex/RulesCorrect.lean`, axiom-clean).**
+The fragment predicate `UntaintedSchema S` (no `.inter`/`.excl` in any def) collapses
+taint: `baseTaint_untainted` → `taintStep_nil_untainted` → (`iterate_nil_fixed`)
+`taintedKeys_untainted` (`= []`) → `isDerived_untainted` (`= false` for every key) →
+**`check_eq_probeNonDerived`** — on this fragment `GraphModel.check` reduces to the
+≤4-probe reachability read, the same one W1's `graph_correct_*` glue against. So the
+residue path is provably never taken, and the correspondence now reduces to a pure
+reachability ↔ `sem` argument.
+
 **What remains for `graph_correct_rules` (`check = sem` on the untainted fragment),
-the deferred next increment — the read correspondence:**
-1. **Fragment predicate** `UntaintedSchema S` (no `.inter`/`.excl` anywhere ⇒
-   `taintedKeys S = []` ⇒ `check` routes to `probeNonDerived`, the reachability read)
-   + the store-validity analog (`StoreValid`, raw writes name relations with a Direct
-   arm). Prove `isDerived` is `false` for every key on this fragment (so `probeDerived`
-   is never taken).
+the deferred next increment — the reachability ↔ `sem` core:**
+1. (routing ✓ above) + the store-validity analog (`StoreValid`: raw writes name
+   relations with a Direct arm).
 2. **The rewrite-closure ↔ `sem` correspondence** — the genuinely new content. The
    reduction that makes it tractable: `writeRules` materializes exactly the edges of the
    rewrite-closure `T*` of the store, so the goal factors as

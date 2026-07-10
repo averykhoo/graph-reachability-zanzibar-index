@@ -12,6 +12,7 @@ import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.UsStarWrite
 import ZanzibarProofs.GraphIndex.UsStarCorrect
 import ZanzibarProofs.GraphIndex.RulesWrite
+import ZanzibarProofs.GraphIndex.RulesCorrect
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -236,6 +237,10 @@ namespace Zanzibar
 #print axioms structInv_writeRules
 #print axioms inv_writeRules
 #print axioms reachedByRules_inv
+-- W2 read-routing (GraphIndex/RulesCorrect.lean): on the untainted fragment taint
+-- collapses, so `check` routes to `probeNonDerived` (pure reachability). Standard axioms:
+#print axioms taintedKeys_untainted
+#print axioms check_eq_probeNonDerived
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the
