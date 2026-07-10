@@ -56,6 +56,27 @@ condition (`NoRuleOutputs`, the W3a analog of W2's `TtuTuplesetsDirect`).
    T3/T6 as free corollaries. **This is the genuine remaining core** — the per-relation restatement
    of `graph_correct_rules` (whole-schema `UntaintedSchema` is too strong for W3's mixed schema).
 
+   **Design notes for the next session (analytic, this session — de-risk the assembly):**
+   - **`checkFn` is STABLE across reconcile passes on the fragment (the enabling fact).** A
+     `ComputedOnly` derived def references only *untainted operand* relations `r'` (no self-ref
+     to `R`). Reconcile passes add only derived-R-node edges; if those are **inert for operand
+     reads** (`probeNonDerived ⟨·, r', ·⟩` unchanged), then `checkFn` computed mid-fold equals
+     `checkFn` at the final σ — so the soundness link (edge present ⇒ `checkFn` was true ⇒ via
+     `hag` ⇒ `sem`) needs no fold-accumulator gymnastics. This is why the fragment forbids
+     `direct`/`ttu` leaves on the derived def and requires untainted operands.
+   - **SUBTLETY to check before proving inertness — is the derived R-node ever an edge SOURCE?**
+     A base (W2) edge source is `subjNode u.subject`; for a *userset* subject `⟨dt,on⟩#R`
+     (type dt, name on, pred R) this equals `objNode ⟨dt,on⟩ R` (both `⟨dt,on,R,plain⟩`). So if
+     a stored/rewritten operand tuple carries a userset subject over the **derived** relation `R`,
+     the R-node HAS an out-edge and the new reconcile edge is NOT reachability-inert. Need either
+     (a) a fragment condition forbidding usersets-over-derived-`R` as subjects (cf. the Python
+     `UnsupportedByGraphIndex` scope rejection for *wildcard* usersets over derived relations —
+     check whether plain usersets over derived relations are also excluded / admission-invalid),
+     or (b) prove such subjects can't be a stored/rewrite-closure subject under `StoreValidRules`
+     + `ComputedOnly`. Resolve this first; the inertness lemma (⇒ `hag` reduces to W2 per-relation
+     ⇒ assembly) hinges on it. Do NOT land an inertness lemma without settling the R-node-source
+     question — it may be false without an extra hypothesis.
+
 ## Session 2026-07-11 (W3a read correspondence — the bare-subject reach-collapse spine + attack-first NoRuleOutputs finding)
 
 Resuming W3a from "two structural spines done; resume → close the CORRESPONDENCE (three
