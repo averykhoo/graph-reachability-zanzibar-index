@@ -9,6 +9,7 @@ import ZanzibarProofs.GraphIndex.BareStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarWrite
 import ZanzibarProofs.GraphIndex.ObjStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarClosure
+import ZanzibarProofs.GraphIndex.UsStarWrite
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -119,6 +120,16 @@ namespace Zanzibar
 #print axioms structInv_ensureBridges
 #print axioms structInv_writeWild
 #print axioms wildReached_structInv
+-- **T2b stage W1c — the userset-star (in-bridge) write model
+-- (GraphIndex/UsStarWrite.lean)** — `concrete → w_any` in-bridges for declared
+-- subject-wildcard userset shapes, the faithful bridge-before-grant write
+-- `writeUsStar` (out-bridges then in-bridges then cycle-rejected grant), structural
+-- preservation through the in-bridges, and the W1c write-closure `UsStarReached`.
+-- All expect only the three standard axioms (no `sorryAx`):
+#print axioms nodeEnc_wAnyNode
+#print axioms structInv_ensureInBridges
+#print axioms structInv_writeUsStar
+#print axioms usStarReached_structInv
 -- **T2b stage W1b — the read-correspondence SOUNDNESS core
 -- (GraphIndex/ObjStarCorrect.lean)** — the grant-or-bridge edge characterization,
 -- the bridge-absorbing generalized grant chain `GrantReach`, and its two directions:
