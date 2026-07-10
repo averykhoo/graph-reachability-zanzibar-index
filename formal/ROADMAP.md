@@ -247,6 +247,24 @@ and re-proves/widens the same named theorems. Every stage must keep
   absorbed by the matching `evalE` case, TTU via the userset-flow lift; completeness: the
   recursion is a rewrite chain; fuel via the W1c T0a-stability sidestep); (3) top-level
   `graph_correct_rules` + T3/T6 widening. See PROOF_STATUS "W2 STARTED".
+
+  **ATTACK-FIRST FINDING (2026-07-10, machine-checked): the naive W2 fragment is
+  UNSOUND — `check ≠ sem` without a storage-only tupleset condition.** A TTU whose
+  tupleset relation is `computed` (untainted but NOT directs-only) makes the graph
+  rewrite-fanout fire the TTU rule on a *rewrite-produced* triple, while `sem`'s
+  `ttuLeaf` reads only STORED tuplesets → divergence (counterexample + agreeing
+  control in PROOF_STATUS "W2 — attack-first KILLS the naive fragment"). This is
+  exactly `zanzibar_utils_v1.py:_validate_ttu_tuplesets`; **`GraphAccepts` clause (3)
+  does NOT catch it** (a computed tupleset is untainted, `isDerived = false`), so the
+  W2 fragment needs the *stronger* directs-only condition. Landed axiom-clean
+  (`GraphIndex/RulesCorrect.lean`): **`directsOnly` / `TtuTuplesetsDirect`** (faithful
+  `_validate_ttu_tuplesets`), `exprArms_directsOnly` (directs-only ⇒ no rewrite arms),
+  `no_rewrite_outputs_tupleset`, rewrite-closure structure (`rewriteClosure_object`
+  object-preservation, `rewriteClosure_seed`), and the payoff **`closure_tupleset_is_
+  seed`** (a closure tuple on a tupleset relation is the raw seed — the storage-only
+  semantics `ttuLeaf` needs). The W2 fragment predicate is now
+  `UntaintedSchema ∧ TtuTuplesetsDirect`. Resume → the reachability↔`sem` core above
+  (fragment pinned); attack-first the computed-case closure-saturation first.
 - **W3 — derived reconcile (the residue path).** Faithful `reconcile` output
   per derived key (residue `(stars, neg, upos)` = the §7.6 semantics), the
   in-transaction cascade over the outbox, and the cross-key hazard (an edge

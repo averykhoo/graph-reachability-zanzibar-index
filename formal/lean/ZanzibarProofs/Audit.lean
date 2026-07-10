@@ -242,6 +242,17 @@ namespace Zanzibar
 #print axioms taintedKeys_untainted
 #print axioms check_eq_probeNonDerived
 #print axioms reachedByRules_edge_sound
+-- W2 storage-only tupleset fragment (GraphIndex/RulesCorrect.lean, 2026-07-10):
+-- attack-first found `check ≠ sem` without the `_validate_ttu_tuplesets` condition
+-- (a `computed` tupleset makes the rewrite-fanout fire a TTU on a rewrite-produced
+-- triple while `ttuLeaf` reads stored tuplesets). `TtuTuplesetsDirect` + the
+-- rewrite-closure structure lemmas: no rewrite outputs a tupleset relation, so a
+-- closure tuple on a tupleset relation is the raw seed. Standard axioms only:
+#print axioms exprArms_directsOnly
+#print axioms no_rewrite_outputs_tupleset
+#print axioms rewriteClosure_object
+#print axioms rewriteClosure_seed
+#print axioms closure_tupleset_is_seed
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the

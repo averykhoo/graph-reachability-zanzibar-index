@@ -6,6 +6,74 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W2 — attack-first KILLS the naive fragment; `TtuTuplesetsDirect` + rewrite-closure structure)
+
+Resuming W2 (untainted rule routing) from "write model + read-routing + soundness
+groundwork done; resume → the reachability↔`sem` core". Before proving that core,
+ran the house move (**attack-first**) on the correspondence's TTU case — and it
+**killed the naive W2 statement**: `check ≠ sem` without a storage-only tupleset
+side condition. One green+pushed axiom-clean increment
+(`GraphIndex/RulesCorrect.lean`, sorry count held at 0, `verify.sh` green: build +
+0 sorries + 60 conformance + audit). This is the **fourth false-statement kill by
+attack-first** (after additive `fuelBound`, the abstract `WriteStep` closure, and
+T0a-without-`StoreDeclared`).
+
+**Attack-first HEADLINE (machine-checked `#eval`, then deleted): the W2 `check =
+sem` correspondence is FALSE without `_validate_ttu_tuplesets`.** Counterexample
+(both `check`/`sem` evaluated in Lean on the operational `writeRules` state):
+schema `doc#viewer := ttu member parent`, `doc#parent := computed linked`,
+`doc#linked := direct [group]`, `group#member := direct [user]`; store
+`(group:g, linked, doc:d)`, `(user:alice, member, group:g)`; query
+`check(alice, viewer, doc:d)`. The graph rewrite-fanout of `(g, linked, d)`
+cascades the computed rule `linked ↦ parent` producing `(g, parent, d)`, then fires
+the TTU rule on that **rewrite-produced** triple → materialises
+`g#member → viewer(d)`, so **`check = true`**. But `sem`'s `ttuLeaf` reads only
+**stored** `parent` tuples (none — `parent` is computed) → **`sem = false`**.
+Control with a directs-only `parent` (raw stored tupleset): both `true`, agree.
+
+This is exactly `zanzibar_utils_v1.py:_validate_ttu_tuplesets` (:898): an *untainted*
+tupleset relation with computed/rewritten arms is rejected at compile ("the graph
+index cannot separate raw from rewritten members of an untainted relation"). **Key
+subtlety: `GraphAccepts` clause (3) does NOT catch this** — a `computed`-armed
+tupleset is untainted (`isDerived = false`), so it passes `GraphAccepts`. The W2
+fragment needs the *stronger* directs-only condition, not just non-derived.
+
+**Delivered (`GraphIndex/RulesCorrect.lean`, sorry-free, axiom-clean — all standard
+axioms):**
+- **`directsOnly : Expr → Bool`** (faithful `_directs_only`: `Direct` or `union`
+  thereof) + **`TtuTuplesetsDirect S`** (faithful `_validate_ttu_tuplesets`: every
+  TTU's tupleset relation, for every def carrying that key, is directs-only — stated
+  over all matching defs so no key-uniqueness lemma is needed; implied by Python's
+  dict keys).
+- `exprArms_key` (a rule from `exprArms ot rel e` carries `(objectType,outRel) =
+  (ot,rel)`) + **`exprArms_directsOnly`** (a directs-only expr yields NO rewrite arms
+  — the core of the finding) + `schemaRewrites_provenance`.
+- **`no_rewrite_outputs_tupleset`** — under `TtuTuplesetsDirect`, no schema rewrite
+  outputs a TTU's tupleset relation (such a rule would come from a directs-only def,
+  which contributes no arms).
+- `applyRRule_object`/`applyRRule_outRel`, `rewriteStep_object`/`rewriteStep_outRel`,
+  `rewriteClosureAux_object` → **`rewriteClosure_object`** (every closure tuple keeps
+  the raw write's object — rewrites only change `(subject, relation)`) and
+  **`rewriteClosure_seed`** (`t ∈ rewriteClosure S t`).
+- `rewriteClosureAux_produced`/`rewriteClosure_produced` (every closure tuple is the
+  raw seed or a rewrite output) → **`closure_tupleset_is_seed`** (the operational
+  payoff: under the fragment condition a closure tuple sitting on a TTU tupleset
+  relation IS the raw seed — so the graph only ever lands the raw seed on a tupleset
+  relation, matching `ttuLeaf`'s stored-tupleset read; this is what will keep the
+  deferred ttu correspondence sound).
+
+**Resume → the W2 reachability↔`sem` core, now with the fragment nailed down.** The
+fragment predicate is `UntaintedSchema S ∧ TtuTuplesetsDirect S` (+ `StoreValid`
+analog). Structural groundwork is in place (object preservation, seed membership,
+storage-only tuplesets). The remaining genuinely-new content is unchanged from the
+prior entry — `TupleChain over the rewrite-closure T* ↔ sem over T` (computed = the
+`rec`-indirection, absorbed by a rewrite hop; ttu = the stored-parent loop, now
+provably reading only raw seeds via `closure_tupleset_is_seed`; union = the OR; fuel
+via the W1c `sem_fuel_stable` sidestep) — then `graph_correct_rules` + T3/T6. NB the
+computed case needs a "closure closed under the computed rewrite" step (a `T*` tuple
+on relation `R'` whose def has a `computed R'`-armed relation `R` also has the
+`R`-rewrite in `T*`); attack-first that closure-saturation before proving.
+
 ## Session 2026-07-10 (W2 STARTED — untainted rule routing; attack-first + the rewrite-fanout write model)
 
 Resuming from W1 fully closed (all three sub-stages) → **ROADMAP stage W2** (rule
