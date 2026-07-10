@@ -10,6 +10,7 @@ import ZanzibarProofs.GraphIndex.ObjStarWrite
 import ZanzibarProofs.GraphIndex.ObjStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.UsStarWrite
+import ZanzibarProofs.GraphIndex.UsStarCorrect
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -130,6 +131,12 @@ namespace Zanzibar
 #print axioms structInv_ensureInBridges
 #print axioms structInv_writeUsStar
 #print axioms usStarReached_structInv
+-- W1c edge characterization (GraphIndex/UsStarCorrect.lean) — every edge of a
+-- `UsStarReached` state is a stored grant, a `w_all → concrete` out-bridge, or a
+-- `concrete → w_any` in-bridge (the new W1c machinery). Standard axioms only:
+#print axioms bridgedInConcrete_elim
+#print axioms ensureInBridges_edges_mem
+#print axioms usStarReached_grant_or_bridge
 -- **T2b stage W1b — the read-correspondence SOUNDNESS core
 -- (GraphIndex/ObjStarCorrect.lean)** — the grant-or-bridge edge characterization,
 -- the bridge-absorbing generalized grant chain `GrantReach`, and its two directions:
