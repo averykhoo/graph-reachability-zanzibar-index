@@ -93,15 +93,28 @@ and re-proves/widens the same named theorems. Every stage must keep
       (`wildcard.py:250-256`), so acyclicity holds. `structInv_writeWild` +
       `WildReached`/`wildReached_structInv` give `StructInv` at every reachable
       state.
-    - **Correspondence REMAINING** (`graph_correct_objStar`): the read reduces to
-      probe 1 ∨ probe 3 (subjects star-free ⇒ probes 2,4 dead, mirror of W1a). New
-      content: a graph path interleaves **grant hops** and **bridge hops**, and a
-      grant-into-`w_all` + bridge-out is EXACTLY the `matchingObjects on =
-      [on, STAR]` absorption (a STAR-object grant is in `grantsOf` for concrete
-      `o`). Needs: bridge-completeness invariant maintained along `WildReached`
-      (holds where no bridge cycle-rejects), then soundness/completeness inductions
-      (analogs of `semAux_of_chainN_bs`/`reach_of_semAux_bs`) that key the grant's
-      object match through `matchingObjects` and thread the bridge hop.
+    - **Correspondence: SOUNDNESS CORE DONE** (`GraphIndex/ObjStarCorrect.lean`,
+      sorry-free, axiom-clean). The read reduces to probe 1 ∨ probe 3 (subjects
+      star-free ⇒ probes 2,4 dead, mirror of W1a). The soundness half (graph path ⇒
+      `sem`) is proved via the **bridge-absorbing chain `GrantReach`**: each grant-
+      into-`w_all` + bridge-out pair is one hop against a *concrete* object, keyed
+      through `matchingObjects on = [on, STAR]` (a STAR-object grant is in `grantsOf`
+      for concrete `o`). Delivered: the **grant-or-bridge edge characterization**
+      (`wildReached_grant_or_bridge`), `GrantReach ⇒ sem` (`semAux_of_grantReach`,
+      via `semAux_lift_os`), and `trail ⇒ GrantReach` (`grantReach_of_trail`,
+      peeling grant/grant+bridge hops). **Needs neither bridge-completeness nor the
+      admitted-writes refinement** (soundness only reads edges).
+    - **Correspondence REMAINING** (`graph_correct_objStar`): (1) the **completeness
+      half** (`sem ⇒ probe 1 ∨ probe 3`, analog of `reach_of_semAux_bs`) — the
+      flow-through recursion may reach a userset via its `w_all` node, so it must
+      thread a bridge hop; this is what needs the **bridge-completeness invariant**
+      maintained along an *admitted* write-closure (grants AND bridges admitted —
+      the "no wildcard-own-shape cycle" fragment) plus `ObjStarValid` (a `T:*` tuple
+      is on a declared object-wildcard shape). (2) the **fuel-bounded assembly**:
+      `semAux_of_grantReach` gives fuel = the chain length `m`, and `m ≤ fuelBound`
+      needs the tight `m ≤ 2|T|` bound (distinct plain source nodes in a compressed
+      trail), since the crude `m ≤ nodes.length+1` is too weak (duplicate `w_all`
+      nodes inflate `nodes.length` past `fuelBound` when `|keys| = 1`).
   - **W1c — userset stars (in-bridges + `instances`).** `concrete → wAny`
     bridges for subject-wildcard USERSET shapes (`[group:*#member]`), the
     `instances`-branch of `memberOfGranted`/`ttuLeaf`, probe 4, and the

@@ -7,6 +7,7 @@ import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarWrite
+import ZanzibarProofs.GraphIndex.ObjStarCorrect
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -117,6 +118,17 @@ namespace Zanzibar
 #print axioms structInv_ensureBridges
 #print axioms structInv_writeWild
 #print axioms wildReached_structInv
+-- **T2b stage W1b — the read-correspondence SOUNDNESS core
+-- (GraphIndex/ObjStarCorrect.lean)** — the grant-or-bridge edge characterization,
+-- the bridge-absorbing generalized grant chain `GrantReach`, and its two directions:
+-- `GrantReach ⇒ sem` (via userset lifting, keyed through `matchingObjects`) and
+-- `trail ⇒ GrantReach` (peeling grant / grant+bridge hops). All expect only the
+-- three standard axioms (no `sorryAx`):
+#print axioms wildReached_grant_or_bridge
+#print axioms semAux_lift_os
+#print axioms semAux_one_of_grant
+#print axioms semAux_of_grantReach
+#print axioms grantReach_of_trail
 -- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
 -- at fragment scope — now REAL proved theorems (were false over the deleted
 -- abstract closure). Expect only the three standard axioms (no `sorryAx`):

@@ -54,6 +54,77 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
+## Session 2026-07-10 (W1b SOUNDNESS CORE — the bridge-absorbing chain, `GrantReach`)
+
+Resuming W1b (object wildcards `[T:*]`) from the write model (previous session).
+Scope call: deliver the **soundness half** of the read correspondence
+(`graph path ⇒ no more than `sem``) as a self-contained honest increment — it
+reads existing edges only, so it needs **neither bridge-completeness nor the
+admitted-writes refinement** (those are for the *completeness* half). New file
+`GraphIndex/ObjStarCorrect.lean`, sorry-free, all five audited theorems
+axiom-clean (`wildReached_grant_or_bridge` = `[propext]` only; the rest a subset
+of the three standard axioms). `verify.sh` green (build + 0 sorries + 60
+conformance + audit). Sorry count held at 0.
+
+**The idea that tames the bridges.** A W1b graph path interleaves *grant* hops
+(`subjNode s → objNode o R`, subjects star-free) and *bridge* hops
+(`w_all(T,R) → concrete`, materialized by `writeWild`). The soundness argument
+**absorbs each `grant-into-w_all` + `bridge-out` pair into a single generalized
+grant against a *concrete* object**, keyed through `matchingObjects`: a `T:*`
+grant is in `grantsOf` for *every* concrete object of type `T` (spec §3.4's
+`subject → w_all(S) → concrete` composition, realized semantically). So a wildcard
+grant plus its bridge is ONE hop in the abstracted chain; only the final target
+may be a bare `w_all` node (the read's probe-3 endpoint).
+
+**Delivered (`GraphIndex/ObjStarCorrect.lean`):**
+- `ObjStarStore` (subjects star-free; objects may be `T:*`).
+- **Edge characterization** `wildReached_grant_or_bridge` — every edge of a
+  `WildReached` state is a stored grant (`subjNode t.subject → objNode t.object
+  t.relation`, subject star-free) OR a `w_all → concrete` bridge
+  (`a = wAllNode b.type b.pred`, `b` plain concrete). By induction over the
+  bridge-materializing write path, via `writeWild_edges_mem` /
+  `ensureBridges_edges_mem` (the edge effect of the nested bridge-before-grant
+  write) and `bridgedConcrete_elim`.
+- **`GrantReach`** — the bridge-absorbing generalized grant chain (3 constructors:
+  `base` = one grant matching a concrete object via `matchingObjects`; `starBase`
+  = a terminal grant landing on the `w_all` node; `hop` = a grant then continue
+  from the concrete userset node). Every interior node is concrete; only the final
+  target may be `w_all`.
+- Object-star leaf lemmas (`mog_elim_os` / `directLeaf_elim_os` / `semAux_lift_os`
+  / `semAux_one_of_grant`) — the subject-side leaf interface reused from
+  DirectCorrect, needing only that grant *subjects* are star-free (object
+  wildcards live on the object side; `semAux_one_of_grant` takes the
+  `matchingObjects` match as a hypothesis so it covers both concrete and wildcard
+  grants uniformly).
+- **`semAux_of_grantReach`** (soundness's semantic half) — a `GrantReach` of
+  length `n` from a star-free subject node to a node matching the concrete query
+  object (`matchesObj`) is a `sem` membership at fuel `n`; base hops are
+  self-grants keyed through `matchingObjects`, each `hop` lifts via
+  `semAux_lift_os`. The bridge-aware analog of `semAux_of_chainN`.
+- **`grantReach_of_trail`** (soundness's reachability half) — every graph trail
+  from a star-free subject node is a `GrantReach`, by strong induction on trail
+  length, peeling a grant (1 edge, `hop`/`base`/`starBase`) or a grant+bridge
+  (2 edges, `hop`/`base`) at each step, classified by the edge characterization
+  (a plain-source edge is a grant; a `w_all`-source edge is a bridge).
+
+**What remains for `graph_correct_objStar`, sharply isolated:**
+1. **Completeness half** (`sem ⇒ probe 1 ∨ probe 3`) — the analog of
+   `reach_of_semAux_bs`, but the flow-through recursion may reach a userset via
+   its `w_all` node, so it must **thread a bridge hop** `w_all(T,R) → concrete`.
+   This is the piece that needs the **bridge-completeness invariant** (every live
+   bridged-concrete node has its `w_all → c` bridge) maintained along an
+   *admitted* write-closure (grants AND bridges admitted — the "no
+   wildcard-own-shape cycle" fragment), plus `ObjStarValid` (a `T:*` tuple is on a
+   declared object-wildcard shape, so a reached `w_all` node's shape is bridged).
+2. **Fuel-bounded top-level assembly** — `semAux_of_grantReach` gives fuel = the
+   `GrantReach` length `m`; the top-level theorem needs `m ≤ fuelBound`. The crude
+   `m ≤ nodes.length + 1` is too weak here (the write can create up to `~4|T|`
+   nodes incl. duplicate `w_all` nodes, and `fuelBound` with `|keys| = 1` is only
+   `2|T|+4`). The tight bound is `m ≤ (distinct plain source nodes) ≤ 2|T|` — each
+   grant hop consumes a distinct plain source node in a compressed (nodup) trail.
+   Formalizing that distinctness bound is the remaining arithmetic.
+Both are the next increment; the soundness semantic+reachability core is now done.
+
 ## Session 2026-07-10 (W1b STARTED — object wildcards; bridges proven MANDATORY + the bridge-materializing write model)
 
 Resuming from W1a → **ROADMAP stage W1b** (object wildcards `[T:*]`, `w_all` +
