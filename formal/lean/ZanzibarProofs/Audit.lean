@@ -19,6 +19,7 @@ import ZanzibarProofs.GraphIndex.RulesSaturate
 import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.Reconcile
 import ZanzibarProofs.GraphIndex.ReconcileWrite
+import ZanzibarProofs.GraphIndex.ReconcileCorrect
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -360,5 +361,15 @@ namespace Zanzibar
 #print axioms inv_reconcileKey
 #print axioms reachedByW3a_inv
 #print axioms reachedByW3a_residueEmpty
+
+-- **ROADMAP W3a — the `check_fn` ↔ `sem`-step reduction (GraphIndex/ReconcileCorrect.lean,
+-- 2026-07-10).** The first spine of the W3a read correspondence: on the `ComputedOnly`
+-- derived-def fragment (boolean tree over `computed` refs), `evalE`'s graph node-recursion
+-- and `sem`'s fuel recursion agree (`evalE_computedOnly`), so `checkFn` equals one `sem`
+-- immediate-consequence step of the derived key given per-relation graph↔`sem` agreement
+-- on the operands (`checkFn_eq_semStep`) — isolating the remaining blocker to that
+-- per-relation untainted fact. Standard axioms only:
+#print axioms evalE_computedOnly
+#print axioms checkFn_eq_semStep
 
 end Zanzibar
