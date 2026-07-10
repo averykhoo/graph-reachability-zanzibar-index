@@ -409,13 +409,23 @@ and re-proves/widens the same named theorems. Every stage must keep
     keys share `isDerived`); R-node-not-a-source from `reachedByW3a_Rnode_not_source` on the
     sub-derivation, via the schema-level terminal hypothesis `hterm : ∀ dt R, isDerived (dt,R) →
     NoTtuTarget S R ∧ NoStoreSubjectR T R` (carry into W3a/W4). **The reachability half of `hag`.**
-    (2) discharge the per-relation agreement `hag` — the **per-relation**
-    untainted-correctness lemma (STILL the deeper BLOCKER, now unblocked on inertness:
-    `graph_correct_rules` needs whole-schema `UntaintedSchema`, too strong for W3's mixed schema —
-    restate for one *hereditarily-untainted* relation; the operand read reduces to the base read
-    via `reachedByW3a_reach_inert` (+ `probeNonDerived_iff`/`reach_iff_nreaches` on both states,
-    star-free ⇒ probe 1 only; the reverse `σ0.edges ⊆ σ.edges` inclusion is free from
-    `reconcileKey_edges_mono`); fuel via the T0a-stability sidestep). (3) candidate completeness (an
+    (1.9) ✅ **DONE (2026-07-11): the operand-read reduction to the untainted base**
+    (`GraphIndex/ReconcileCorrect.lean` + `State.lean`, sorry-free, axiom-clean). The inertness
+    fold is upgraded to a biconditional (`reachedByW3a_reach_inert_iff`, backward via the new
+    general `NReaches.mono_subset` + the `σ0.edges ⊆ σ.edges` inclusion now carried by
+    `reachedByW3a_reach_inert`), then lifted to the `probeNonDerived` read `hag` consults: the
+    `reconcile` constructor gained two faithful star-free fields (`hcStar`/`honStar`) ⇒
+    `reachedByW3a_edges_plain` (every W3a edge endpoint plain) ⇒ `probeNonDerived_starFree`
+    (plain-edge read = probe 1) ⇒ **`graphRec_reduce_base`**: for every untainted operand `r'`,
+    `graphRec σ s dt on r' = graphRec σ0 s dt on r'` on the untainted base. **`hag` is now a pure
+    base-state W2 fact** — no residual W3a reasoning.
+    (2) discharge the per-relation agreement `hag` — the **per-relation** untainted-correctness
+    lemma (STILL the deeper BLOCKER, now W3a-free): with `graphRec_reduce_base` the operand read is
+    the *base* read `graphRec σ0 s dt on r'`, so `hag` reduces to
+    `graphRec σ0 s dt on r' = semAux … dt on r'` on a `ReachedByRules` σ0 — a W2 statement.
+    `graph_correct_rules` proves whole-schema `UntaintedSchema`, too strong for W3's mixed schema —
+    restate it (and its `sem_of_rules_reach` / `nreaches_of_semAux_rules` chain) with a
+    *hereditarily-untainted* hypothesis on `r'`; fuel via the T0a-stability sidestep. (3) candidate completeness (an
     admitted `ReachedByW3aAdmitted`: every `sem`-member is a positive-leaf concrete) +
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +

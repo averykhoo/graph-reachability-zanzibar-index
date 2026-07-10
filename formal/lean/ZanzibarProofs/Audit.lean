@@ -431,4 +431,20 @@ namespace Zanzibar
 -- `hterm`. The reachability half of the `hag` reduction (PROOF_STATUS point 2). Standard axioms:
 #print axioms reachedByW3a_reach_inert
 
+-- **ROADMAP W3a — the operand-read reduction to the untainted base
+-- (GraphIndex/ReconcileCorrect.lean + State.lean, 2026-07-11).** Upgrades the inertness fold to
+-- a biconditional (`reachedByW3a_reach_inert_iff`, backward via the general subset-monotonicity
+-- `NReaches.mono_subset` + `σ0.edges ⊆ σ.edges`), then lifts it to the `probeNonDerived` read
+-- `hag` consults: every W3a edge endpoint is plain on the star-free fragment
+-- (`reachedByW3a_edges_plain`, using the new star-free constructor fields), so the read collapses
+-- to probe 1 (`probeNonDerived_starFree`, strengthened to need only plain edges), and
+-- `graphRec_reduce_base` equates the operand read on the full W3a state to the read on the
+-- untainted base for every untainted operand relation. Reduces `hag` to a *base* per-relation W2
+-- fact. Standard axioms only:
+#print axioms NReaches.mono_subset
+#print axioms reachedByW3a_reach_inert_iff
+#print axioms reachedByW3a_edges_plain
+#print axioms probeNonDerived_starFree
+#print axioms graphRec_reduce_base
+
 end Zanzibar

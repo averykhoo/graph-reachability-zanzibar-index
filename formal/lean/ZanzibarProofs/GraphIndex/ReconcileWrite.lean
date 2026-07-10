@@ -138,14 +138,21 @@ theorem quiescent_reconcileKey {σ : GraphState} (T : Store)
     only ever runs on a declared *derived* relation. It is the fact that separates a
     reconciled derived key from an untainted operand key of the same object type (equal
     keys share `isDerived`), so a reconcile edge is reachability-inert for the untainted
-    operand reads the correspondence's `hag` consults (`reachedByW3a_reach_inert`). -/
+    operand reads the correspondence's `hag` consults (`reachedByW3a_reach_inert`).
+
+    The star-freeness side conditions `hcStar` (each candidate subject star-free) and
+    `honStar` (the reconciled object name star-free) are faithful to the W3a star-free
+    fragment: reconcile candidates are the `_leaf_concretes` (concrete bare subjects) and it
+    runs per concrete object. They keep every reconcile edge's endpoints *plain*
+    (`reachedByW3a_edges_plain`), so the wildcard probes 2–4 stay dead on the operand read. -/
 inductive ReachedByW3a : GraphState → Schema → Store → Prop where
   | base {σ : GraphState} {S : Schema} {T : Store} :
       ReachedByRules σ S T → ReachedByW3a σ S T
   | reconcile {σ : GraphState} {S : Schema} {T : Store}
       (dt on R : String) (e : Expr) (cands : List SubjectRef) (hRne : R ≠ BARE)
       (hcands : ∀ c ∈ cands, c.predicate = BARE)
-      (hder : isDerived S (dt, R) = true) :
+      (hder : isDerived S (dt, R) = true)
+      (hcStar : ∀ c ∈ cands, c.name ≠ STAR) (honStar : on ≠ STAR) :
       ReachedByW3a σ S T → ReachedByW3a (σ.reconcileKey T dt on R e cands) S T
 
 /-- **T2a for the W3a fragment.** Every state reached by W3a writes satisfies the
@@ -157,7 +164,7 @@ theorem reachedByW3a_inv {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3a σ S T) : Inv S σ ∧ ResidueEmpty σ ∧ Quiescent σ := by
   induction h with
   | base hr => exact reachedByRules_inv hr
-  | reconcile dt on R e cands _hRne _hcands _hder _ ih =>
+  | reconcile dt on R e cands _hRne _hcands _hder _hcStar _honStar _ ih =>
     obtain ⟨hInv, hRe, hQ⟩ := ih
     exact ⟨inv_reconcileKey _ dt on R e cands hInv hRe,
       residueEmpty_reconcileKey _ dt on R e cands hRe,

@@ -189,6 +189,15 @@ theorem NReaches.mono {edges : List (NodeKey × NodeKey)} {e : NodeKey × NodeKe
   | edge huv => exact NReaches.edge (List.mem_cons_of_mem _ huv)
   | head huw _ ih => exact NReaches.head (List.mem_cons_of_mem _ huw) ih
 
+/-- **Subset monotonicity.** A path over `edges` is a path over any superset. The
+    edge-set-inclusion generalisation of `NReaches.mono` (which adds a single edge);
+    the reverse direction of the reconcile inertness transfer (`σ0.edges ⊆ σ.edges`). -/
+theorem NReaches.mono_subset {edges edges' : List (NodeKey × NodeKey)} {u v : NodeKey}
+    (hsub : ∀ e ∈ edges, e ∈ edges') (h : NReaches edges u v) : NReaches edges' u v := by
+  induction h with
+  | edge huv => exact NReaches.edge (hsub _ huv)
+  | head huw _ ih => exact NReaches.head (hsub _ huw) ih
+
 /-- **First-use decomposition.** A path in `(a,b) :: edges` either avoids the new
     edge entirely (a path in the old edges) or factors through it as
     `u →* a → b →* v` (the reflexive-closure legs use only old edges). -/

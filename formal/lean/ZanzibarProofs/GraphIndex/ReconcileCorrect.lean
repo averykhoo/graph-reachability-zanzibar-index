@@ -159,7 +159,7 @@ theorem reachedByW3a_edge_sound {σ : GraphState} {S : Schema} {T : Store}
           a = subjNode c ∧ b = objNode ⟨dt, on⟩ R) := by
   induction h with
   | base hr => intro a b hab; exact Or.inl (reachedByRules_edge_sound hr a b hab)
-  | reconcile dt on R e cands _hRne _hcands _hder _ ih =>
+  | reconcile dt on R e cands _hRne _hcands _hder _hcStar _honStar _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, hac, hbc⟩
     · exact ih a b hold
@@ -229,7 +229,7 @@ theorem reachedByW3a_edge_target_ne_bare {σ : GraphState} {S : Schema} {T : Sto
     intro a b hab
     obtain ⟨t, ht, u, hu, _, hbobj⟩ := reachedByRules_edge_sound hr a b hab
     rw [hbobj, objNode_pred]; exact rewriteClosure_rel_ne_bare hWF hSV ht hu
-  | reconcile dt on R e cands hRne _hcands _hder _ ih =>
+  | reconcile dt on R e cands hRne _hcands _hder _hcStar _honStar _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, _, hbc⟩
     · exact ih hWF hSV a b hold
@@ -352,7 +352,7 @@ theorem reachedByW3a_Rnode_source_bare {σ : GraphState} {S : Schema} {T : Store
       simp at hrs
     · exact noRuleOutputs_of_root hlk hNK hroot r hr'
         ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
-  | reconcile dt' on' R' e' cands _hRne hcands _hder _ ih =>
+  | reconcile dt' on' R' e' cands _hRne hcands _hder _hcStar _honStar _ ih =>
     intro x hx
     rcases reconcileKey_edge_sound _ dt' on' R' e' cands x _ hx with hold | ⟨c, hc, hxc, _⟩
     · exact ih hSV hNK hlk x hold
@@ -488,7 +488,7 @@ theorem reachedByW3a_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
     obtain ⟨t, ht, u, hu, hasub, _⟩ := reachedByRules_edge_sound hr a b hab
     rw [hasub, subjNode_pred]
     exact rewriteClosure_subject_pred_ne hnt (hns t ht) hu
-  | reconcile dt on R' e cands _hRne hcands _hder _ ih =>
+  | reconcile dt on R' e cands _hRne hcands _hder _hcStar _honStar _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R' e cands a b hab with hold | ⟨c, hc, hac, _⟩
     · exact ih hnt hns a b hold
@@ -588,26 +588,162 @@ W3a defers the non-terminal `PDerivedTTU`/`PDerivedUserset` shapes). -/
     This transfers W2's per-relation untainted correctness through the mixed W3a schema: the
     operand reads `hag` consults see only the base edges, so the reconcile-materialised
     derived edges are inert for them. `hterm` is the faithful W3a fragment condition (every
-    derived relation is terminal — no TTU target, no stored userset subject). -/
+    derived relation is terminal — no TTU target, no stored userset subject).
+
+    The `σ0.edges ⊆ σ.edges` conjunct records that reconcile passes only *add* edges (each is
+    a guarded `writeDirect` fold, `reconcileKey_edges_mono`) — the reverse-direction companion
+    that upgrades the transfer to a biconditional (`reachedByW3a_reach_inert_iff`). -/
 theorem reachedByW3a_reach_inert {σ : GraphState} {S : Schema} {T : Store}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3a σ S T) :
+    ∃ σ0, ReachedByRules σ0 S T ∧ (∀ ab ∈ σ0.edges, ab ∈ σ.edges) ∧
+      ∀ {u v : NodeKey}, isDerived S (v.type, v.pred) = false →
+        NReaches σ.edges u v → NReaches σ0.edges u v := by
+  induction h with
+  | base hr => exact ⟨_, hr, fun _ hab => hab, fun _ hn => hn⟩
+  | reconcile dt on R e cands hRne hcands hder _hcStar _honStar h' ih =>
+    obtain ⟨σ0, hσ0, hsub, htrans⟩ := ih hterm
+    refine ⟨σ0, hσ0, ?_, ?_⟩
+    · -- reconcile only adds edges, so the base edges survive into the reconciled state
+      intro ab hab
+      exact reconcileKey_edges_mono _ dt on R e cands ab (hsub ab hab)
+    · intro u v hv hreach
+      obtain ⟨hnt, hns⟩ := hterm dt R hder
+      have hRns0 := reachedByW3a_Rnode_not_source hnt hns hRne h' (objNode_pred ⟨dt, on⟩ R)
+      have hvne : v ≠ objNode ⟨dt, on⟩ R := by
+        intro heq
+        rw [heq, objNode_type, objNode_pred, hder] at hv
+        exact absurd hv (by decide)
+      have hstep := reconcileKey_reach_inert _ dt on R e cands hRne hvne hcands hRns0 hreach
+      exact htrans hv hstep
+
+/-- **The reconcile inertness transfer, as a biconditional.** For a W3a state `σ` with
+    untainted base `σ0` (`ReachedByRules σ0 S T`), reachability into any *untainted-key* node
+    `v` (`isDerived S (v.type, v.pred) = false`) is the SAME on `σ` and `σ0`:
+    * forward (`σ ⇒ σ0`) — the multi-pass inertness fold `reachedByW3a_reach_inert` (reconcile
+      edges land only on derived R-nodes, never a source, so they extend no path to an
+      untainted node);
+    * backward (`σ0 ⇒ σ`) — free from `σ0.edges ⊆ σ.edges` via `NReaches.mono_subset`.
+
+    This is the reachability core of the `hag` reduction: an operand read
+    `probeNonDerived σ ⟨s, r', ⟨dt,on'⟩⟩` for an untainted relation `r'` (star-free ⇒ probe 1
+    only, target `objNode ⟨dt,on'⟩ r'` an untainted-key node) equals the read on the untainted
+    base `σ0`, where W2's per-relation correctness applies. -/
+theorem reachedByW3a_reach_inert_iff {σ : GraphState} {S : Schema} {T : Store}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3a σ S T) :
     ∃ σ0, ReachedByRules σ0 S T ∧
       ∀ {u v : NodeKey}, isDerived S (v.type, v.pred) = false →
-        NReaches σ.edges u v → NReaches σ0.edges u v := by
+        (NReaches σ.edges u v ↔ NReaches σ0.edges u v) := by
+  obtain ⟨σ0, hσ0, hsub, htrans⟩ := reachedByW3a_reach_inert hterm h
+  exact ⟨σ0, hσ0, fun hv => ⟨htrans hv, fun h0 => NReaches.mono_subset hsub h0⟩⟩
+
+/-! ## The operand-read reduction — reconcile edges are inert for the untainted operand read
+    (ROADMAP W3a, read half — increment 7)
+
+`reachedByW3a_reach_inert_iff` transfers *reachability* into an untainted-key node from the
+full W3a state to the untainted base. This increment lifts that to the `probeNonDerived`
+read the correspondence's `hag` actually consults — `graphRec σ s dt on r' = probeNonDerived
+σ ⟨s, r', ⟨dt,on⟩⟩` for an untainted operand `r'`. On the star-free fragment every W3a edge
+endpoint is plain (`reachedByW3a_edges_plain`), so the wildcard probes 2–4 are dead and
+`probeNonDerived` collapses to probe 1 (`probeNonDerived_starFree`); the biconditional then
+equates the two states' reads. -/
+
+/-- **Every W3a edge endpoint is a plain node** on the star-free fragment. A base (W2) edge
+    materialises a rewrite-closure tuple whose subject/object names inherit the star-free
+    store (`rewriteClosure_subjectName`/`_object`); a reconcile edge runs `subjNode c →
+    objNode ⟨dt,on⟩ R` for a star-free candidate `c` (`hcStar`) into a star-free object
+    (`honStar`). By induction over the write path. This kills the wildcard probes on the
+    operand read (a `wAny`/`wAll` node is never an edge endpoint). -/
+theorem reachedByW3a_edges_plain {σ : GraphState} {S : Schema} {T : Store}
+    (hSF : StarFreeStore T) (h : ReachedByW3a σ S T) :
+    ∀ e ∈ σ.edges, e.1.variant = Variant.plain ∧ e.2.variant = Variant.plain := by
   induction h with
-  | base hr => exact ⟨_, hr, fun _ hn => hn⟩
-  | reconcile dt on R e cands hRne hcands hder h' ih =>
-    obtain ⟨σ0, hσ0, htrans⟩ := ih hterm
-    refine ⟨σ0, hσ0, ?_⟩
-    intro u v hv hreach
-    obtain ⟨hnt, hns⟩ := hterm dt R hder
-    have hRns0 := reachedByW3a_Rnode_not_source hnt hns hRne h' (objNode_pred ⟨dt, on⟩ R)
-    have hvne : v ≠ objNode ⟨dt, on⟩ R := by
-      intro heq
-      rw [heq, objNode_type, objNode_pred, hder] at hv
-      exact absurd hv (by decide)
-    have hstep := reconcileKey_reach_inert _ dt on R e cands hRne hvne hcands hRns0 hreach
-    exact htrans hv hstep
+  | base hr =>
+    intro e he
+    obtain ⟨t, ht, w, hw, h1, h2⟩ := reachedByRules_edge_sound hr e.1 e.2 he
+    have hws : w.subject.name ≠ STAR := rewriteClosure_subjectName hw ▸ (hSF t ht).1
+    have hwo : w.object.name ≠ STAR := rewriteClosure_object hw ▸ (hSF t ht).2
+    exact ⟨by rw [h1, subjNode_plain hws], by rw [h2, objNode_plain hwo]⟩
+  | reconcile dt on R e cands _hRne _hcands _hder hcStar honStar _ ih =>
+    intro ab hab
+    rcases reconcileKey_edge_sound _ dt on R e cands ab.1 ab.2 hab with hold | ⟨c, hc, hac, hbc⟩
+    · exact ih hSF ab hold
+    · exact ⟨by rw [hac, subjNode_plain (hcStar c hc)], by rw [hbc, objNode_plain honStar]⟩
+
+/-- **A plain-edge non-derived read collapses to probe 1.** With every edge endpoint plain
+    (`hplain`), the wildcard probes 2–4 read `false` (a `wAny`/`wAll` node is never an edge
+    endpoint, so nothing reaches from/to it), so `probeNonDerived` equals the single
+    subject→object reachability probe. Extracted from `graph_correct_rules`, strengthened to
+    drop the query-star-free hypotheses (plain edges alone suffice), for reuse across the
+    mixed W3a schema. -/
+theorem probeNonDerived_starFree {σ : GraphState} (q : Query)
+    (hplain : ∀ e ∈ σ.edges, e.1.variant = Variant.plain ∧ e.2.variant = Variant.plain) :
+    GraphModel.probeNonDerived σ q =
+      σ.reach (subjNode q.subject) (objNode q.object q.relation) := by
+  have hpAny : ∀ v, σ.reach (wAnyNode q.subject.shape) v = false := by
+    intro v
+    cases hcase : σ.reach (wAnyNode q.subject.shape) v with
+    | false => rfl
+    | true =>
+      exfalso
+      have hsrc := nreaches_source_plain (fun e he => (hplain e he).1) (reach_sound hcase)
+      simp [wAnyNode] at hsrc
+  have hpAll : ∀ u, σ.reach u (wAllNode q.object.type q.relation) = false := by
+    intro u
+    cases hcase : σ.reach u (wAllNode q.object.type q.relation) with
+    | false => rfl
+    | true =>
+      exfalso
+      have htgt := nreaches_target_plain (fun e he => (hplain e he).2) (reach_sound hcase)
+      simp [wAllNode] at htgt
+  unfold GraphModel.probeNonDerived
+  simp [hpAny, hpAll]
+
+/-- **The operand read reduces to the untainted base.** For a subject `s`, object name `on`
+    and object type `dt`, the graph node-recursion `graphRec σ s dt on r'`
+    (`= probeNonDerived σ ⟨s, r', ⟨dt,on⟩⟩`) on the full W3a state equals the read on the
+    untainted base `σ0` (a `ReachedByRules` state) for every *untainted* operand relation `r'`
+    (`isDerived S (dt, r') = false`). The reconcile-materialised derived edges are inert for
+    it: the star-free store keeps every edge plain ⇒ probe 1 only (`probeNonDerived_starFree`
+    on both states, plain edges from `reachedByW3a_edges_plain` / `reachedByRules` plainness),
+    and the target `objNode ⟨dt,on⟩ r'` is an untainted-key node, so
+    `reachedByW3a_reach_inert_iff` equates the two reachabilities.
+
+    This is the reachability core of the `hag` reduction: `hag` for the untainted operands now
+    reduces to the *base* per-relation fact `graphRec σ0 s dt on r' = sem` — a W2 correctness
+    statement restated per hereditarily-untainted relation (the remaining blocker), with no
+    residual W3a-specific reasoning. -/
+theorem graphRec_reduce_base {σ : GraphState} {S : Schema} {T : Store}
+    (hSF : StarFreeStore T)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3a σ S T) {s : SubjectRef} {dt on : String} :
+    ∃ σ0, ReachedByRules σ0 S T ∧
+      ∀ r', isDerived S (dt, r') = false →
+        GraphModel.graphRec σ s dt on r' = GraphModel.graphRec σ0 s dt on r' := by
+  obtain ⟨σ0, hσ0, hbi⟩ := reachedByW3a_reach_inert_iff hterm h
+  refine ⟨σ0, hσ0, ?_⟩
+  intro r' hunt
+  -- both reads are star-free ⇒ probe 1 only; plain edges on both states
+  have hplainσ := reachedByW3a_edges_plain hSF h
+  have hplainσ0 : ∀ e ∈ σ0.edges, e.1.variant = Variant.plain ∧ e.2.variant = Variant.plain := by
+    intro e he
+    obtain ⟨t, ht, w, hw, h1, h2⟩ := reachedByRules_edge_sound hσ0 e.1 e.2 he
+    have hws : w.subject.name ≠ STAR := rewriteClosure_subjectName hw ▸ (hSF t ht).1
+    have hwo : w.object.name ≠ STAR := rewriteClosure_object hw ▸ (hSF t ht).2
+    exact ⟨by rw [h1, subjNode_plain hws], by rw [h2, objNode_plain hwo]⟩
+  unfold GraphModel.graphRec
+  rw [probeNonDerived_starFree _ hplainσ, probeNonDerived_starFree _ hplainσ0]
+  -- the two probe-1 reachabilities agree by the inertness biconditional (untainted target)
+  have hcl_σ := (reachedByW3a_inv h).1.edgesClosed
+  have hcl_σ0 := (reachedByRules_inv hσ0).1.edgesClosed
+  have hunt' : isDerived S ((objNode ⟨dt, on⟩ r').type, (objNode ⟨dt, on⟩ r').pred) = false := by
+    rw [objNode_type, objNode_pred]; exact hunt
+  have key : σ.reach (subjNode s) (objNode ⟨dt, on⟩ r') = true ↔
+             σ0.reach (subjNode s) (objNode ⟨dt, on⟩ r') = true := by
+    rw [reach_iff_nreaches hcl_σ, reach_iff_nreaches hcl_σ0]; exact hbi hunt'
+  cases h1 : σ.reach (subjNode s) (objNode ⟨dt, on⟩ r') <;>
+    cases h2 : σ0.reach (subjNode s) (objNode ⟨dt, on⟩ r') <;>
+    simp_all
 
 end Zanzibar

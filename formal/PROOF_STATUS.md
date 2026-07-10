@@ -6,6 +6,60 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-11 (W3a read correspondence — the operand-read reduction to the untainted base)
+
+Resuming W3a from "the multi-pass inertness fold (`reachedByW3a_reach_inert`) done; resume →
+point 2 step 2, discharge `hag` (the per-relation untainted-correctness lemma, the deeper
+blocker)." One green+pushed axiom-clean increment (`GraphIndex/ReconcileCorrect.lean` +
+`State.lean` + `ReconcileWrite.lean` constructor + `Audit.lean`); `verify.sh` green throughout
+(build + 0 sorries + 60 conformance + audit, standard axioms only — one new theorem axiom-free).
+Sorry count held at 0. This lands the **reachability core of the `hag` reduction**: the operand
+read `graphRec σ s dt on r'` W2's per-relation correctness consults now reduces, on the full W3a
+state, to the read on the untainted base — leaving `hag` a *pure base-state* W2 fact with no
+residual W3a-specific reasoning.
+
+**The increment.**
+- **`NReaches.mono_subset` (`State.lean`, axiom-free)** — general subset monotonicity of
+  reachability (`edges ⊆ edges' → NReaches edges → NReaches edges'`), the edge-set-inclusion
+  generalisation of the single-edge `NReaches.mono`. The reverse direction of the inertness
+  transfer.
+- **`reachedByW3a_reach_inert` strengthened** to also expose `σ0.edges ⊆ σ.edges` (reconcile
+  passes only add edges — `reconcileKey_edges_mono` folded). **`reachedByW3a_reach_inert_iff`** —
+  the biconditional: reachability into any untainted-key node agrees between the full W3a state
+  and the untainted base (forward = the inertness fold; backward = `NReaches.mono_subset` on the
+  subset inclusion).
+- **`ReachedByW3a.reconcile` gained two faithful star-free fields** — `hcStar` (each candidate
+  subject `c.name ≠ STAR`) and `honStar` (the reconciled object name `on ≠ STAR`). Faithful to the
+  W3a star-free fragment (reconcile candidates are the `_leaf_concretes`, run per concrete object).
+  They keep every reconcile edge's endpoints *plain*. The 7 `reconcile` match sites gained the two
+  placeholders.
+- **`reachedByW3a_edges_plain`** — every W3a edge endpoint is a plain node (base = rewrite-closure
+  tuple names inherit the star-free store; reconcile = star-free candidate/object via the new
+  fields). **`probeNonDerived_starFree`** — a plain-edge read collapses to probe 1 (wildcard probes
+  2–4 dead); strengthened vs `graph_correct_rules`'s inline version to need **only** plain edges
+  (the query-star-free hypotheses drop out).
+- **`graphRec_reduce_base` (the payoff)** — for every untainted operand relation `r'`
+  (`isDerived S (dt, r') = false`), `graphRec σ s dt on r' = graphRec σ0 s dt on r'` on the
+  untainted base `σ0`. Both reads collapse to probe 1 (plain edges on both states); the target
+  `objNode ⟨dt,on⟩ r'` is an untainted-key node, so `reachedByW3a_reach_inert_iff` equates the two
+  reachabilities. **Reduces `hag` to the base per-relation fact `graphRec σ0 s dt on r' = sem`.**
+
+**Resume → close the W3a CORRESPONDENCE. `hag` is now a pure W2 base-state fact:**
+1. **Discharge `hag` on the base — the per-relation untainted-correctness lemma (the remaining
+   blocker, now W3a-free).** With `graphRec_reduce_base`, `hag`'s untainted operands reduce to
+   `graphRec σ0 s dt on r' = semAux S s T q f dt on r'` on a `ReachedByRules` base `σ0` — a *W2*
+   statement. `graph_correct_rules` proves the whole-schema `UntaintedSchema` version; W3's mixed
+   schema needs it **per hereditarily-untainted relation `r'`**. Restate `graph_correct_rules` (and
+   its soundness `sem_of_rules_reach` / completeness `nreaches_of_semAux_rules` chain) with a
+   *hereditarily-untainted* hypothesis on `r'` in place of whole-schema `UntaintedSchema` (the
+   relation's `sem`/graph only consult the untainted cone). Fuel via the T0a-stability sidestep.
+   **This is the genuine remaining core** — a per-relation restatement threading through the W2
+   proof chain; no W3a-specific reasoning left.
+2. **Candidate completeness + assembly `graph_correct_w3a`** (an admitted `ReachedByW3aAdmitted`:
+   every `sem`-member bare subject is in some `cands` and passes `checkFn`) + assembly: route →
+   `probeDerived` → `check_derived_ResidueEmpty` → edge probe → `reachedByW3a_reach_collapse_root`
+   → `checkFn_eq_semStep` (with `hag` from step 1) → `sem`. Then widen T3/T6.
+
 ## Session 2026-07-11 (W3a read correspondence — multi-pass reconcile inertness folded to the untainted base)
 
 Resuming W3a from "reconcile-edge inertness resolved per-pass (`reconcileKey_reach_inert`);
