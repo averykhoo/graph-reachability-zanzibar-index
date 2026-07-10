@@ -138,7 +138,31 @@ and re-proves/widens the same named theorems. Every stage must keep
       (forward). Mirror of `graph_correct_direct` / `graph_correct_bareStar`. **W1b is
       now closed end-to-end (soundness + completeness). Next: W1c.**
   - **W1c — userset stars (in-bridges + `instances`). IN PROGRESS (2026-07-10):
-    attack-first done + write model + edge characterization.**
+    BOTH SEMANTIC CORES CLOSED; write model + edge characterization done.**
+    - **Correspondence: BOTH SEMANTIC CORES DONE** (`GraphIndex/UsStarCorrect.lean`,
+      sorry-free, axiom-clean). The read reduces to probe 1 ∨ probe 2 (objects star-free
+      ⇒ probes 3,4 dead; probe 2 LIVE — a userset query subject's `wAny(s.shape)` sees
+      userset-star direct grants, unlike W1b).
+      * *Completeness* (`reach_of_semAux_us`, `sem ⇒ probe 1 ∨ probe 2`): fuses W1a's
+        probe-2 disjunction with the `concrete → w_any` in-bridge threading. Stated over
+        `hEC` (edge-completeness) + `hib` (in-bridge completeness). New leaf elims
+        `directLeaf_elim_us` / `mog_elim_us` admit the userset-star direct-match and
+        `instances`-branch disjuncts; `instances_ne_star` supports the flow-through.
+      * *Soundness* (`UsStarReach` + `semAux_of_usStarReach` + `usStarReach_of_trail`):
+        the in-bridge-absorbing chain. **KEY FINDING: an in-bridge hop needs NO instance
+        witness for soundness** — a concrete reaching a userset-star grant via its
+        in-bridge matches the grant *directly* in `sem` (a shape-match, unconditional),
+        so the chain carries no `instances` and the trail lemma needs no in-bridge
+        soundness. The genuinely-new lift `semAux_lift_us` absorbs a userset-star
+        intermediate via the outer subject's `instances`-branch flow-through (witness
+        discharged by `objectName_mem_instances` — every intermediate is a tuple object).
+    - **Remaining (the assembly + closure, sharply isolated):** (1) fuel-bounded
+      soundness assembly — `usStarReach_of_trail` gives existence; the `isPlain`-source
+      count (W1b) needs ADAPTING since a userset-star grant's source is `w_any` not plain;
+      (2) the admitted bridge-complete closure discharging `hEC`/`hib` — `hib` (in-bridge
+      completeness = `instances`-coverage) is the contentful part; (3) top-level glue.
+      Detail in PROOF_STATUS "W1c BOTH SEMANTIC CORES CLOSED".
+    - **(prior) attack-first done + write model + edge characterization:**
     - **Attack-first (machine-checked, no surprise):** `check = sem` verified on 12
       userset-star scenarios incl. the sharp endpoint-exclusion cases. Finding: a
       group name is in `sem`'s `instances` iff it appears in a TUPLE (not merely as a

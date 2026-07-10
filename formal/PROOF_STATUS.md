@@ -6,6 +6,84 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W1c BOTH SEMANTIC CORES CLOSED — completeness `reach_of_semAux_us` + soundness `UsStarReach`)
+
+Resuming W1c from "write model + edge characterization done; the read-correspondence
+core is the genuinely hard remaining work." Delivered **both semantic halves** of the
+W1c read correspondence as two green+pushed axiom-clean increments — mirroring how W1b
+landed its two cores (`ObjStarCorrect.lean`) before the assembly (`ObjStarClosure.lean`).
+`verify.sh` green throughout (build + 0 sorries + 60 conformance + audit). Sorry count
+held at 0. All new theorems standard-axioms-only.
+
+**Increment 1 — the completeness core (`reach_of_semAux_us`, `sem ⇒ probe 1 ∨ probe 2`).**
+Fuses W1a's probe-2 disjunction with W1b's bridge threading — here the `concrete →
+w_any` **in-bridge**. Stated over the two operational facts it consumes: edge-completeness
+`hEC` and **in-bridge completeness** `hib` (every `instances` witness of a userset-star
+grant has its `c → w_any` bridge), deferring the discharging closure exactly as
+`reach_of_semAux_os` deferred to `hEC`/`hbr`. Supporting:
+- `instances_ne_star` — no `∃`-witness population name is the STAR sentinel (foldr
+  peeling, mirrors `instances_subset_storedNames`).
+- `directLeaf_elim_us` — userset-star-aware leaf elim (exact | userset-star direct match
+  of the query's shape | flow-through); the bare-star disjunct dies by `UsStarStore`.
+- `mog_elim_us` — flow-through elim admitting the `instances`-branch (plain userset |
+  userset-star + instance witness) that `mog_elim`/`_os` could not fire.
+- Cases: exact → probe 1; userset-star grant of `s`'s shape → probe 2 (`wAny(s.shape) →
+  objNode`, unreachable via probe 1 for a query-only ghost — the attack-first
+  endpoint-exclusion finding); plain flow → extend recursion by the grant edge;
+  userset-star flow → thread the concrete instance's in-bridge (`hib`) then the grant.
+
+**Increment 2 — the soundness core (`UsStarReach` chain + both directions).**
+- **KEY SIMPLIFYING FINDING: an in-bridge hop needs NO instance witness for soundness.**
+  A concrete `c` reaching a userset-star grant through its `c → w_any` in-bridge always
+  corresponds to `c` matching that grant **directly** in `sem` (a pure shape-match, `c`
+  has the grant's shape by construction — unconditionally valid, ghost or not). So
+  `UsStarReach`'s `inbridge` constructor carries no `instances` field and
+  `usStarReach_of_trail` needs **no** in-bridge-soundness hypothesis. The instance
+  condition is a *completeness*-only concern (`hib`), where `sem`'s flow-through demands
+  a genuine `instances` witness.
+- The lift is the crux and genuinely NEW vs W1b: `semAux_lift_os` **cannot** absorb a
+  userset-star grant (its `directLeaf_elim_os` has no userset-star disjunct). New
+  `semAux_lift_us`: an intermediate userset `s'` matching a userset-star grant directly
+  is absorbed via the **outer subject `s`'s `instances`-branch flow-through** (witness
+  `s'.name`) — needing `s'.name ∈ instances`, always dischargeable because every chain
+  intermediate is a tuple object (`objectName_mem_instances`). Where the instances
+  condition genuinely lives in soundness: not in the chain, but in this lift's hypothesis.
+- Supporting: `mog_intro_star`, `directLeaf_grant_usStar` / `semAux_one_of_usStarGrant`
+  (userset-star direct-match intros), `objectName_mem_instances`, `semAux_one_of_tuple_us`,
+  `UsCovers` (probe-1 ∨ probe-2 chain start, userset analog of W1a's `Covers`),
+  `semAux_one_covers_us`.
+- `UsStarReach T n u v` (base | hop | inbridge, no `q`/`instances`); `semAux_of_usStarReach`
+  (chain ⇒ `sem` at fuel `n`: base/hop via the lift, inbridge = a direct shape-match on
+  `c` + `semAux_mono` bump); `usStarReach_of_trail` (trail ⇒ chain: edge classification;
+  out-bridges dead from a plain/`wAny` source, `w_any` targets excluded because the
+  concrete query object node is plain). Existence only — no fuel bound threaded yet.
+- Strengthened `usStarReached_grant_or_bridge` (+ `writeUsStar_edges_mem` /
+  `bridgeLayers_edges_mem`) to expose `pred ≠ BARE` on in-bridge sources (needed for the
+  `inbridge` constructor's `hcp`).
+
+**What remains for `graph_correct_usStar` (full `check = sem`), sharply isolated:**
+1. **Fuel-bounded soundness assembly** — `usStarReach_of_trail` gives existence `∃ m,
+   UsStarReach m …`; the top-level needs `m ≤ fuelBound`. **The `isPlain`-source count
+   argument (W1b's `grantReach_of_trail` strengthening) needs ADAPTING**: a userset-star
+   grant's source is a `w_any` node, not plain, and an in-bridge consumes a `w_any` as a
+   target — so "every hop source is plain" (W1b) is FALSE here. Likely bound: count
+   distinct plain trail vertices + `w_any` vertices, or bound `m` by trail length
+   directly (each graph edge = ≤ 1 chain hop, and trail length ≤ nodes.length after
+   compression). Re-derive the tight `fuelBound` fit.
+2. **The admitted, bridge-complete write-closure** discharging `reach_of_semAux_us`'s
+   `hEC` + `hib` — the W1c analog of `ObjStarClosure.lean`'s `WildReachedAdmitted`. `hib`
+   (in-bridge completeness) is the contentful part: every store userset-star grant `g`
+   and every `inst ∈ instances T q g.subject.type` has its materialized `subjNode
+   ⟨T,inst,P⟩ → w_any(T,P)` bridge. This is exactly the attack-first "store-bridges ↔
+   `instances` agree by construction" finding, now to be proved operationally (a
+   concrete of a bridged-in shape gets its in-bridge when touched as a tuple endpoint —
+   `writeUsStar`'s `ensureInBridges`).
+3. **Top-level `check = sem` glue** — route to `probeNonDerived`, kill probes 3,4 (objects
+   star-free ⇒ no `w_all` target), glue probe 1 ∨ probe 2 via `reach ↔ NReaches` to
+   completeness (backward) and the fuel-bounded chain (forward). Probe 2 is LIVE here
+   (unlike W1b): a userset query subject's `wAny(s.shape)` sees userset-star direct
+   grants. Mirror of `graph_correct_bareStar` (which also had probe 2 live).
+
 ## Session 2026-07-10 (W1c STARTED — userset stars `[group:*#member]`; attack-first + in-bridge write model + edge characterization)
 
 Resuming from W1b fully closed → **ROADMAP stage W1c** (userset-wildcard *subject*
