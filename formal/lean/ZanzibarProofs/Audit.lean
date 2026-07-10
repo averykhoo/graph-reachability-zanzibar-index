@@ -485,4 +485,15 @@ namespace Zanzibar
 #print axioms foldAdmits_of_acyclic
 #print axioms exists_admitted_restrict
 
+-- **The base `hag` equation (2026-07-11) — Step A closed.** `graphRec_base_eq`: on an admitted
+-- rule-routed state `σ0` over the MIXED schema `S`, the operand read `graphRec σ0 s dt on r'`
+-- (for an untainted operand `r'`) equals `sem S T ⟨s, r', ⟨dt,on⟩⟩`. Composes the state transfer
+-- with `graph_correct_rules` over `S↾U`: `graphRec σ0 = probeNonDerived σ0 = probeNonDerived σ'`
+-- (edge agreement) `= check σ' = sem (S↾U) T q'` `= sem S T q'` (`semAux_restrict` at `fuelBound S`
+-- + fuel stability over the untainted `S↾U`). Fragment premises: `RootBoolean`-derived defs (⇒
+-- stored relations untainted, ⇒ the W2 restriction hypotheses transfer), `RewriteMatchDeclared`,
+-- and the W2 conditions on the base. This discharges the W3a correspondence blocker `hag` on an
+-- admitted base. Standard axioms only:
+#print axioms graphRec_base_eq
+
 end Zanzibar
