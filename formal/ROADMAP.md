@@ -109,17 +109,35 @@ and re-proves/widens the same named theorems. Every stage must keep
         `T:*` grant hits probe 3; a flow-through threads a bridge hop when the
         recursion reached the userset via its own `w_all` node. Stated over `hEC`
         (edge-completeness) + `hbr` (the bridge hypothesis). Needs no fuel bound.
-    - **Correspondence REMAINING** (`graph_correct_objStar`): (1) the **admitted,
-      bridge-complete write-closure** discharging `hEC`/`hbr` — needs the
-      bridge-completeness invariant maintained along a closure where grants AND
-      endpoint bridges are admitted (the "no wildcard-own-shape cycle" fragment),
-      plus `ObjStarValid` (a `T:*` tuple is on a declared object-wildcard shape); the
-      admission-threading through `writeWild`'s nested `ensureBridges` is the fiddly
-      part. (2) the **fuel-bounded assembly** (soundness side only):
-      `semAux_of_grantReach` gives fuel = the chain length `m`, and `m ≤ fuelBound`
-      needs the tight `m ≤ 2|T|` bound (distinct plain source nodes in a compressed
-      trail), since the crude `m ≤ nodes.length+1` is too weak (duplicate `w_all`
-      nodes inflate `nodes.length` past `fuelBound` when `|keys| = 1`).
+    - **Correspondence: COMPLETENESS CLOSED operationally** (2026-07-10,
+      `GraphIndex/ObjStarClosure.lean`, sorry-free, axiom-clean). The admitted,
+      bridge-complete write-closure `WildReachedAdmitted` (grant edge AND
+      subject-endpoint bridge cycle-admitted — the "no wildcard-own-shape cycle on
+      subjects" fragment) discharges **both** operational hypotheses of the
+      completeness core: `hEC` via `wildReachedAdmitted_edge_complete`, and `hbr` via
+      **Lemma A** (`wall_reach_isObjectWildcard`: a reachable `w_all` node forces a
+      declared object-wildcard shape, using `ObjStarValid`) + **bridge-completeness**
+      (`wildReachedAdmitted_bridge_complete`). Result: `graph_complete_objStar`
+      (`sem` @ `fuelBound` ⇒ probe 1 ∨ probe 3), operationally closed.
+    - **Correspondence REMAINING** (`graph_correct_objStar` = full `check = sem`):
+      only the **SOUNDNESS side + top-level glue** now.
+      (1) the **fuel-bounded soundness assembly**: `semAux_of_grantReach` gives
+      fuel = the chain length `m`, and `m ≤ fuelBound` needs the tight `m ≤ 2|T|`
+      bound. The crude `m ≤ nodes.length+1` is too weak — `writeWild` adds up to
+      4 nodes/tuple (2 endpoints + up to 2 `w_all`), so `nodes.length ≤ 4|T|`, and
+      `fuelBound = |keys|(2|T|+4)` with `|keys| = 1` is only `2|T|+4`. The tight bound:
+      each `GrantReach` hop consumes a distinct *plain* source node (`w_all` nodes are
+      never hop sources — they are consumed mid-hop by a grant+bridge pair), and a
+      compressed **nodup** trail has ≤ `2|T|` distinct plain vertices. Route:
+      `trail_compress`-with-nodup + strengthen `grantReach_of_trail` to bound `m` by
+      the plain-vertex count + a plain-node characterization (every plain node is a
+      stored `subjNode t.subject` / concrete `objNode`, ≤ `2|T|`). This is the genuine
+      remaining multi-hour piece.
+      (2) the **top-level `check = sem` glue** — route the read to `probeNonDerived`
+      (pure-direct = untainted), kill probe 2 (star-free subjects) and probe 4, glue
+      probe 1 ∨ probe 3 via `reach ↔ NReaches` to `graph_complete_objStar` (backward)
+      and the fuel-bounded `GrantReach` chain (forward). Mirror of
+      `graph_correct_direct` / `graph_correct_bareStar`.
   - **W1c — userset stars (in-bridges + `instances`).** `concrete → wAny`
     bridges for subject-wildcard USERSET shapes (`[group:*#member]`), the
     `instances`-branch of `memberOfGranted`/`ttuLeaf`, probe 4, and the
