@@ -6,6 +6,67 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-11 (W3a read correspondence — checkFn↔sem-step reduction + reconcile edge characterization)
+
+Resuming W3a from "write model + read collapse done; resume → the correspondence (three
+sharply-isolated points)." Two green+pushed axiom-clean increments in a new file
+(`GraphIndex/ReconcileCorrect.lean`); `verify.sh` green throughout (build + 0 sorries +
+60 conformance + audit, standard axioms only). Sorry count held at 0. This lands the two
+*structural* spines of the W3a read correspondence, isolating the remaining work to
+exactly the per-relation semantic fact.
+
+**Increment 1 — the `checkFn` ↔ `sem`-step reduction (axiom-clean, `[propext]`).** The
+W3a derived def is a boolean tree (`and`/`but not`/`or`) whose leaves are all `computed`
+refs — captured by **`ComputedOnly : Expr → Prop`** (allows `computed`/`union`/`inter`/
+`excl`; forbids `direct`/`ttu`, which would route onto leaf families, deferred past W3a).
+- **`evalE_computedOnly`** (NO axioms) — on a `ComputedOnly` expr `evalE` consults its
+  node-recursion `rec` only at `(dt, on, ·)` (never reaches a `direct`/`ttu` leaf), so two
+  `rec`s agreeing there evaluate the whole tree identically — independent of subject/store/
+  query/enclosing-relation. A one-shot `Expr` induction.
+- **`checkFn_eq_semStep`** (`[propext]`) — `σ.checkFn T s dt on R e = semAux S s T q (f+1)
+  dt on R`, given `S.lookup (dt,R) = some e`, `ComputedOnly e`, and the per-relation
+  agreement `hag : ∀ r', graphRec σ s dt on r' = semAux S s T q f dt on r'`. `checkFn`'s
+  graph node-recursion (`graphRec = probeNonDerived`) is swapped for `sem`'s fuel recursion
+  via `evalE_computedOnly`. **This reduces the reconcile guard `checkFn = sem`-membership to
+  exactly `hag` — the per-relation untainted graph↔`sem` fact, the stated W3a blocker.**
+
+**Increment 2 — the reconcile edge characterization (axiom-clean, `[propext]`).** The
+structural spine for the (bare-subject) reach-collapse — `reconcileKey` is a guarded
+`writeDirect` fold, so its edge effect is exactly:
+- **`reconcileKey_edges_mono`** — the fold only ever adds edges (old edges persist).
+- **`reconcileKey_edge_sound`** — every edge of `σ.reconcileKey T dt on R e cands` is an
+  old σ-edge or a candidate's derived edge `subjNode c → objNode ⟨dt,on⟩ R` (`c ∈ cands`).
+- **`reachedByW3a_edge_sound`** — every edge of a W3a-reached state is either a materialised
+  rewrite-closure tuple of a stored tuple (the untainted base — `reachedByRules_edge_sound`)
+  or a reconcile derived edge, by induction over the write path. The W3a analog of
+  `reachedByDirect_edge_sound` / the W2 edge-sound groundwork.
+
+**Resume → close the W3a CORRESPONDENCE. Two pieces remain, now sharply isolated:**
+1. **Discharge `hag` — the per-relation untainted-correctness lemma (THE blocker).** For an
+   untainted operand relation `r'` in the mixed W3a schema, `graphRec σ s dt on r' =
+   probeNonDerived σ ⟨s, r', ⟨dt,on⟩⟩` must equal `semAux S s T q f dt on r'` (at a fuel
+   reconciled by the T0a-stability sidestep). `graph_correct_rules` proves this for a whole
+   `UntaintedSchema`, too strong for W3's mixed schema — restate **per-relation** (an
+   untainted relation's graph read = its `sem` within a partially-tainted schema; its `sem`/
+   graph only consult the untainted cone, so it factors out of the W2 proof but must be
+   re-stated with a *hereditarily-untainted* hypothesis on `r'`, not whole-schema
+   `UntaintedSchema`). Also needs: the reconcile edges (into derived-`R` object nodes) are
+   reachability-inert for untainted-`r'` object nodes — a derived edge's source `subjNode c`
+   (bare candidate) is never an intermediate object node, so it cannot extend a path to an
+   untainted-relation node.
+2. **The reach-collapse + candidate completeness + assembly `graph_correct_w3a`.** With the
+   edge characterization (increment 2): for a bare-subject derived query, `reach (subjNode
+   s) (objNode ⟨dt,on⟩ R)` collapses to a *single* reconcile edge — a derived edge's source
+   is a bare candidate node, which (predicate `BARE` ≠ any relation) is never an edge
+   *target*, so no hop can precede it; hence `reach ↔ [reconcile wrote s's edge] ↔ checkFn
+   s ↔ sem` (via increment 1 + `hag`). Needs: (a) the single-edge structural lemma (bare
+   node never an object-node target — base edges via `rewriteClosure_rel_ne_bare`, derived
+   `R ≠ BARE`); (b) candidate completeness (every `sem`-member bare subject is enumerated in
+   some reconcile pass's `cands` and passes `checkFn` — an admitted `ReachedByW3aAdmitted`,
+   the W3a analog of `ReachedByRulesAdmitted`); (c) route → `probeDerived` →
+   `check_derived_ResidueEmpty` (already have) → the edge probe → the collapse. Then widen
+   T3/T6 as free corollaries.
+
 ## Session 2026-07-10 (W3 STARTED — derived reconcile / residue path; attack-first + W3a read collapse + write model)
 
 Resuming from W1 + W2 both closed → **ROADMAP stage W3** (derived reconcile: `and` /

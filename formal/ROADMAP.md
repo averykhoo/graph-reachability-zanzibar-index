@@ -350,15 +350,33 @@ and re-proves/widens the same named theorems. Every stage must keep
     per candidate iff `checkFn`), its full `Inv`/residue-free/quiescence preservation,
     the W3a write-closure `ReachedByW3a` + `reachedByW3a_inv` (T2a `Inv` conjunct) +
     `reachedByW3a_residueEmpty` (the read-side hook).
-  - **Remaining (the correspondence, sharply isolated) — resume here.** (1) `checkFn =
-    sem`-membership via `evalE_congr` + a **per-relation** untainted-correctness lemma
+  - **Read correspondence — TWO STRUCTURAL SPINES DONE (2026-07-11,
+    `GraphIndex/ReconcileCorrect.lean`, sorry-free, axiom-clean `[propext]`).**
+    - **`checkFn` ↔ `sem`-step reduction.** `ComputedOnly` (the W3a derived-def shape:
+      boolean tree over `computed` refs); `evalE_computedOnly` (NO axioms — `evalE` on such
+      a tree reads `rec` only at `(dt,on,·)`, so graph-recursion swaps for fuel-recursion);
+      **`checkFn_eq_semStep`** — `checkFn = semAux (f+1)` of the derived key given the
+      per-relation agreement `graphRec σ s dt on r' = semAux … f dt on r'`. **Reduces the
+      reconcile guard `checkFn = sem`-membership to exactly that per-relation fact.**
+    - **Reconcile edge characterization.** `reconcileKey_edges_mono` (the fold only adds
+      edges), `reconcileKey_edge_sound` (every new edge is a candidate's derived edge
+      `subjNode c → objNode ⟨dt,on⟩ R`), **`reachedByW3a_edge_sound`** (every W3a edge is a
+      materialised rewrite-closure tuple or a reconcile derived edge). The W3a analog of
+      `reachedByDirect_edge_sound` — the spine the bare-subject reach-collapse classifies
+      each last edge against.
+  - **Remaining (the correspondence, sharply isolated) — resume here.** (1) discharge the
+    per-relation agreement `hag` — the **per-relation** untainted-correctness lemma
     (BLOCKER: `graph_correct_rules` needs whole-schema `UntaintedSchema`, too strong for
-    W3's mixed schema — restate for one untainted relation within a partially-tainted
-    schema; fuel via the T0a-stability sidestep). (2) candidate completeness (the
-    `reconcile` leg fires on a given `cands`; saturate it — every `sem`-member is a
-    positive-leaf concrete, an admitted `ReachedByW3aAdmitted`). (3) assembly
-    `graph_correct_w3a` (route → `probeDerived` → edge probe → `checkFn` → `sem`) +
-    T3/T6 widening. Detail in PROOF_STATUS "W3 STARTED".
+    W3's mixed schema — restate for one *hereditarily-untainted* relation within a
+    partially-tainted schema; the reconcile edges are reachability-inert for untainted-`r'`
+    object nodes since a derived edge's bare-candidate source is never a target node; fuel
+    via the T0a-stability sidestep). (2) the bare-subject **reach-collapse** (a derived
+    edge's source is a bare candidate node, never an object-node target ⇒ `reach` to a
+    derived object node is a single reconcile edge — built on `reachedByW3a_edge_sound`) +
+    candidate completeness (an admitted `ReachedByW3aAdmitted`: every `sem`-member is a
+    positive-leaf concrete). (3) assembly `graph_correct_w3a` (route → `probeDerived` →
+    `check_derived_ResidueEmpty` → edge probe → collapse → `checkFn` → `sem`) + T3/T6
+    widening. Detail in PROOF_STATUS "W3a read correspondence".
 - **W4 — full-scope restatement.** The operational closure now covers
   `GraphAccepts`; name it `ReachedBy` and state the final `graph_correct` /
   `graph_reached_inv` / `backend_equivalence` / T6a (with real exclusion

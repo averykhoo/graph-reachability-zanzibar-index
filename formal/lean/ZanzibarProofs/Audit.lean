@@ -372,4 +372,14 @@ namespace Zanzibar
 #print axioms evalE_computedOnly
 #print axioms checkFn_eq_semStep
 
+-- **ROADMAP W3a — the reconcile edge characterization (GraphIndex/ReconcileCorrect.lean,
+-- 2026-07-10).** The structural spine for the bare-subject reach-collapse: the reconcile
+-- fold only adds edges (`reconcileKey_edges_mono`), every new edge is a candidate's derived
+-- edge (`reconcileKey_edge_sound`), and every edge of a W3a state is either a materialised
+-- rewrite-closure tuple (untainted base) or a reconcile derived edge
+-- (`reachedByW3a_edge_sound`). Standard axioms only:
+#print axioms reconcileKey_edges_mono
+#print axioms reconcileKey_edge_sound
+#print axioms reachedByW3a_edge_sound
+
 end Zanzibar
