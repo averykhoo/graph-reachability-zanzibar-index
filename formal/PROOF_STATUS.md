@@ -6,6 +6,87 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W2 STARTED — untainted rule routing; attack-first + the rewrite-fanout write model)
+
+Resuming from W1 fully closed (all three sub-stages) → **ROADMAP stage W2** (rule
+routing: `computed`, `union` of untainted operands, `ttu`). One green+pushed
+axiom-clean increment: the **attack-first validation** and the **W2 write model**
+(`GraphIndex/RulesWrite.lean`, sorry-free, axiom-clean `[propext, Classical.choice,
+Quot.sound]`). `verify.sh` green (build + 0 sorries + 60 conformance + audit). Sorry
+count held at 0. Mirrors how W1b/W1c landed their "write model DONE" increments before
+the read correspondence.
+
+**Attack-first HEADLINE (machine-checked `#eval` vs `sem`, then deleted): the
+rewrite-fanout design is confirmed, no refutation.** The key modeling discovery from
+reading `zanzibar_utils_v1.py` (`RuleSet.apply` / `_rewrite_rule` / `_emit_expr`): the
+untainted graph index does NOT materialize edges *between* relation nodes. Instead **a
+raw write of a public tuple `t` is expanded by `RuleSet.apply` into the rewrite-closure
+of `t`** under the schema's Computed/TTU Rules (fan-in through unions, iterated to a
+fixpoint), and *each* resulting triple is materialized as an ordinary direct closure
+edge; **the ≤4-probe reachability read is unchanged**. The two rewrite kinds
+(`_rewrite_rule`, `:834-852`):
+- **Computed** `R := computed R'` on object type `ot`: a tuple `(s, R', o)` (o.type=ot)
+  also produces `(s, R, o)` — same subject/object, relation `R'↦R`.
+- **TTU** `R := ttu tr ts` on object type `ot`: a tuple `(s, ts, o)` (o.type=ot)
+  produces `(⟨s.type, s.name, tr⟩, R, o)` — the tupleset parent `s` becomes the userset
+  `s#tr`, relation `ts↦R`. (Stored-parent semantics: fires on the STORED tupleset
+  tuple.) The produced edge is `objNode(⟨s.type,s.name⟩, tr) → objNode(o, R)`, which
+  reachability then composes (`u → parent#tr → o#R`).
+- **Union** `_emit_expr` walks INTO union nodes, so each arm's Computed/TTU leaf becomes
+  a rule targeting the SAME relation; `Direct` arms are admission Filters (no fan-out).
+
+Verified `sem` on a computed / chained-computed (`super:=editor:=viewer`) / ttu (±) /
+union / userset-flow corpus — all seven `#eval`s matched hand expectations exactly, so
+`sem`'s computed/union/ttu recursion is precisely what the rewrite-fanout materializes.
+No statement-level surprise (like W1a/W1c; unlike W1b's bridges-mandatory finding).
+
+**The write model (`GraphIndex/RulesWrite.lean`, axiom-clean):**
+- `RuleKind` (`computed` | `ttu tr`) + `RRule` (objectType, matchRel, outRel, kind);
+  `exprArms ot outRel : Expr → List RRule` (walks unions, one rule per Computed/TTU
+  leaf, `[]` for Direct/inter/excl); `schemaRewrites S` = all rules of the schema.
+- `applyRRule` (fire one rule on a matching tuple), `rewriteStep S t` (all matching
+  rules fire — fan-in), `rewriteClosureAux`/`rewriteClosure S t` (bounded fixpoint,
+  `|keys|+1` levels — the rewrite graph on relations is a DAG; duplicates harmless for
+  reachability, §11-A4).
+- **`GraphState.writeRules σ S t`** = `(rewriteClosure S t).foldl writeDirect σ` — the
+  faithful `RuleSet.apply t` + per-triple `add_tuple`. Reuses ALL of W1's `writeDirect`
+  machinery (cycle-rejection, residue-free).
+- Fold-preservation helpers (`structInv_/residueEmpty_/inv_/quiescent_/schema_foldl_
+  writeDirect`) ⇒ `structInv_writeRules`, `residueEmpty_writeRules`, **`inv_writeRules`**
+  (full I-series `Inv` on the residue-free fragment — W2's T2a `Inv` conjunct), and
+  `quiescent_writeRules`, all by folding the W1 single-write lemmas over the closure.
+- **`ReachedByRules`** (the W2 write-closure; `ReachedByDirect` = the no-rules special
+  case where `rewriteClosure = [t]`) + **`reachedByRules_inv`** (Inv ∧ ResidueEmpty ∧
+  Quiescent at every W2-reachable state, by induction over the write path).
+
+**What remains for `graph_correct_rules` (`check = sem` on the untainted fragment),
+the deferred next increment — the read correspondence:**
+1. **Fragment predicate** `UntaintedSchema S` (no `.inter`/`.excl` anywhere ⇒
+   `taintedKeys S = []` ⇒ `check` routes to `probeNonDerived`, the reachability read)
+   + the store-validity analog (`StoreValid`, raw writes name relations with a Direct
+   arm). Prove `isDerived` is `false` for every key on this fragment (so `probeDerived`
+   is never taken).
+2. **The rewrite-closure ↔ `sem` correspondence** — the genuinely new content. The
+   reduction that makes it tractable: `writeRules` materializes exactly the edges of the
+   rewrite-closure `T*` of the store, so the goal factors as
+   `probeNonDerived over T*-edges = sem over T`, and the existing W1 machinery already
+   gives `reach ↔ NReaches ↔ TupleChain over T*`. The new lemma is **`TupleChain over
+   T* ↔ sem over T`**: a rewrite-closure hop corresponds to `evalE`'s `computed`/`ttu`/
+   `union` recursion. Soundness: a `T*` edge from a Computed/TTU rewrite is absorbed by
+   the matching `evalE` case (computed = `rec otype oname R'`; ttu = the
+   `ttuLeaf` stored-parent loop with the userset subject `s#tr`; union = the OR). NB the
+   TTU rewrite produces a *userset* subject, so this reuses the userset-flow lift from
+   DirectCorrect/UsStar. Completeness: `sem`'s computed/ttu/union recursion is witnessed
+   by a rewrite-closure chain. Fuel: the T0a-stability sidestep (`sem_fuel_stable`) from
+   W1c should transfer (the graph-hop/`sem`-fuel mismatch recurs — a rewrite chain of
+   length `k` gives `semAux` at some fuel, lifted to `sem` by stability).
+3. **Top-level glue** `graph_correct_rules` — route to `probeNonDerived` (point 1), glue
+   the probe-1 disjunction via `reach ↔ NReaches` to the two directions. Then widen
+   T3/T6 (`Equiv.lean`) as free corollaries.
+NB W2's fragment is untainted rule routing ONLY; `and`/`but not` (residues, the
+processor cascade) is **W3**, and the *combined* generality (wildcards + rules together)
+lands at **W4**. Attack-first the correspondence's userset/TTU-flow lift before proving.
+
 ## Session 2026-07-10 (W1c FULLY CLOSED — `graph_correct_usStar`, full `check = sem`)
 
 Resuming W1c from "both semantic cores closed; resume → the assembly + closure"

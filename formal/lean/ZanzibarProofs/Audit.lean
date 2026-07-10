@@ -11,6 +11,7 @@ import ZanzibarProofs.GraphIndex.ObjStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.UsStarWrite
 import ZanzibarProofs.GraphIndex.UsStarCorrect
+import ZanzibarProofs.GraphIndex.RulesWrite
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -226,6 +227,15 @@ namespace Zanzibar
 #print axioms backend_equivalence_usStar
 #print axioms exclusion_effective_usStar
 #print axioms no_ghost_grant_usStar
+
+-- **T2b stage W2 — the untainted RULE-ROUTING write model
+-- (GraphIndex/RulesWrite.lean, 2026-07-10).** The rewrite-fanout write `writeRules`
+-- (computed / union / ttu materialized as the rewrite-closure of a raw write, each
+-- triple a guarded direct edge) and its full-`Inv`/residue-free/quiescence
+-- preservation + the W2 write-closure `ReachedByRules`. Standard axioms only:
+#print axioms structInv_writeRules
+#print axioms inv_writeRules
+#print axioms reachedByRules_inv
 
 -- T0a statement-level refutation (Spec/Counterexample.lean, 2026-07-10): the
 -- pre-`StoreDeclared` statement is machine-checked FALSE. Expect only the

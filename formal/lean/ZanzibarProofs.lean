@@ -34,6 +34,7 @@ import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.UsStarWrite
 import ZanzibarProofs.GraphIndex.UsStarCorrect
 import ZanzibarProofs.GraphIndex.UsStarClosure
+import ZanzibarProofs.GraphIndex.RulesWrite
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6

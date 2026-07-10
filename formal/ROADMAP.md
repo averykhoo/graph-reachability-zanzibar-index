@@ -227,6 +227,26 @@ and re-proves/widens the same named theorems. Every stage must keep
   `GraphAccepts` scope. Key content: rule-edge soundness/completeness vs
   `evalE`'s `computed`/`ttu`/`union` cases (TTU parents are STORED tupleset
   tuples — the storage-leaf/rule-leaf split).
+
+  **STARTED (2026-07-10): attack-first + write model DONE.** The modeling
+  discovery (from `RuleSet.apply` / `_rewrite_rule` / `_emit_expr`): the untainted
+  graph does NOT add edges *between* relation nodes — **a raw write is expanded into
+  its rewrite-closure** (Computed/TTU rewrites, fan-in through unions, iterated to a
+  fixpoint) and each resulting triple is a plain direct edge; the ≤4-probe read is
+  unchanged. Attack-first (machine-checked `#eval` vs `sem`, deleted after) confirmed
+  the design on a computed / chained-computed / ttu(±) / union / userset-flow corpus —
+  no refutation. **Write model:** `GraphIndex/RulesWrite.lean` (sorry-free,
+  axiom-clean) — `RRule`/`exprArms`/`schemaRewrites` (rule extraction), `rewriteStep`/
+  `rewriteClosure` (the bounded fixpoint), **`writeRules`** (fold `writeDirect` over the
+  closure), full-`Inv`/residue-free/quiescence preservation (`inv_writeRules` etc.), and
+  the W2 write-closure `ReachedByRules` + `reachedByRules_inv`. Reuses ALL W1
+  `writeDirect` machinery. **Remaining (the read correspondence — deferred next
+  increment):** (1) fragment predicate `UntaintedSchema` (⇒ `taintedKeys=[]` ⇒ route to
+  `probeNonDerived`) + `StoreValid` analog; (2) **`TupleChain over T* ↔ sem over T`** —
+  the rewrite-closure ↔ `computed`/`ttu`/`union` recursion (soundness: a rewrite hop is
+  absorbed by the matching `evalE` case, TTU via the userset-flow lift; completeness: the
+  recursion is a rewrite chain; fuel via the W1c T0a-stability sidestep); (3) top-level
+  `graph_correct_rules` + T3/T6 widening. See PROOF_STATUS "W2 STARTED".
 - **W3 — derived reconcile (the residue path).** Faithful `reconcile` output
   per derived key (residue `(stars, neg, upos)` = the §7.6 semantics), the
   in-transaction cascade over the outbox, and the cross-key hazard (an edge
