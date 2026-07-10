@@ -368,4 +368,123 @@ theorem rewriteClosure_restrict_mem_iff {S : Schema}
     w ∈ rewriteClosure (restrictUntainted S) t ↔ w ∈ rewriteClosure S t :=
   ⟨rewriteClosure_restrict_subset hDrop, rewriteClosure_subset_restrict hDrop hMatch hR⟩
 
+/-! ## The state transfer — a canonical admitted `S↾U`-state with agreeing edges
+
+The base `hag` equation reads the graph on an admitted rule-routed state `σ0` over the MIXED
+schema `S`, but `graph_correct_rules` (`check = sem`) needs a state built over an UNTAINTED
+schema. This section transfers `σ0` to a canonical `ReachedByRulesAdmitted σ' (S↾U) T` whose
+edges have identical membership.
+
+The one subtlety flagged by the roadmap: σ' and σ0 fold `writeDirect` over DIFFERENT lists
+(`rewriteClosure (S↾U) t` vs `rewriteClosure S t`, which differ by fuel/dups), so they are not
+literally equal — and admission (`FoldAdmits`, cycle-rejection) is order-sensitive. The bridge
+is that admission depends only on the *final* edge relation being acyclic: `foldAdmits_of_acyclic`
+shows every `writeDirect` in a fold admits as long as each materialised edge lands in an acyclic
+relation `Ef` that already contains the running edges. Since `σ0.edges` is acyclic (`Inv.acyclic`)
+and the fuel bridge makes the two closures materialise the SAME edges, both states' admissions —
+and hence their edge sets — coincide. -/
+
+/-- **Admission from acyclicity of the target relation.** Folding `writeDirect` over `us` from
+    `σ` admits every write, provided (i) `Ef` is acyclic, (ii) `σ`'s edges already sit inside
+    `Ef`, and (iii) every write's materialised edge is in `Ef`. Each step: the edge `a → b`
+    is not a self-loop (`(a,a) ∈ Ef` would be a 1-cycle) and has no back-path `b →* a` in the
+    running edges (which embed in `Ef`, so `b →* a → b` would be a cycle). The write keeps the
+    running edges inside `Ef` (`writeDirect_edges`), so the induction proceeds. Order-insensitive:
+    the only input from `us` is its set of materialised edges. -/
+theorem foldAdmits_of_acyclic {S' : Schema} {Ef : List (NodeKey × NodeKey)}
+    (hacyc : ∀ v, ¬ NReaches Ef v v) :
+    ∀ (us : List Tuple) {σ : GraphState}, StructInv S' σ →
+      (∀ e ∈ σ.edges, e ∈ Ef) →
+      (∀ u ∈ us, (subjNode u.subject, objNode u.object u.relation) ∈ Ef) →
+      FoldAdmits σ us := by
+  intro us
+  induction us with
+  | nil => intro σ _ _ _; exact trivial
+  | cons u rest ih =>
+    intro σ hSI hsub hmat
+    have hmatu : (subjNode u.subject, objNode u.object u.relation) ∈ Ef :=
+      hmat u List.mem_cons_self
+    refine ⟨?_, ?_⟩
+    · -- admission of the head write
+      have hne : subjNode u.subject ≠ objNode u.object u.relation := fun heq =>
+        hacyc _ (heq ▸ NReaches.edge hmatu)
+      have hnr : σ.reach (objNode u.object u.relation) (subjNode u.subject) = false := by
+        by_contra hc
+        rw [Bool.not_eq_false] at hc
+        exact hacyc _ (((reach_sound hc).mono_subset hsub).tail hmatu)
+      unfold GraphState.admitEdge
+      rw [Bool.and_eq_true, bne_iff_ne]
+      exact ⟨hne, by simp [hnr]⟩
+    · -- the rest of the fold, on the post-write state (edges still inside `Ef`)
+      refine ih (structInv_writeDirect hSI u) ?_ (fun u' hu' => hmat u' (List.mem_cons_of_mem _ hu'))
+      intro e he
+      rw [writeDirect_edges] at he
+      split at he
+      · rcases List.mem_cons.mp he with rfl | hmem
+        · exact hmatu
+        · exact hsub e hmem
+      · exact hsub e he
+
+/-- **The state transfer.** From an admitted rule-routed state `σ0` over the mixed schema `S`,
+    build a canonical admitted state `σ'` over the untainted restriction `S↾U` whose edges have
+    identical membership. Both states' edges are exactly the materialised rewrite-closure tuples
+    (`reachedByRules_edge_sound` ⊆ / `reachedByRulesAdmitted_edge_complete` ⊇), and the fuel
+    bridge (`rewriteClosure_restrict_mem_iff`) makes the two closures agree — so the edge sets
+    agree. The admissions transfer via `foldAdmits_of_acyclic` (target `σ0.edges`, acyclic by
+    `Inv.acyclic`). Proof by induction on the write path; the fragment side conditions (`hDrop`,
+    `RewriteMatchDeclared`, `RewriteRanked`) are premises, faithful and discharged in assembly. -/
+theorem exists_admitted_restrict {S : Schema} {T : Store} {σ0 : GraphState}
+    (h0 : ReachedByRulesAdmitted σ0 S T) :
+    (∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = []) →
+    RewriteMatchDeclared S → RewriteRanked S →
+    ∃ σ', ReachedByRulesAdmitted σ' (restrictUntainted S) T ∧
+      ∀ a b, ((a, b) ∈ σ'.edges ↔ (a, b) ∈ σ0.edges) := by
+  induction h0 with
+  | empty S =>
+    intro _ _ _
+    exact ⟨emptyState (restrictUntainted S), ReachedByRulesAdmitted.empty _,
+      by intro a b; simp [emptyState]⟩
+  | @step σp S T t hprev hadm ih =>
+    intro hDrop hMatch hR
+    obtain ⟨σ'p, h'prev, hedgeIH⟩ := ih hDrop hMatch hR
+    -- the current (step) admitted state over `S`, and its invariant
+    have h0 : ReachedByRulesAdmitted (σp.writeRules S t) S (t :: T) :=
+      ReachedByRulesAdmitted.step t hprev hadm
+    have hInv0 : Inv S (σp.writeRules S t) :=
+      (reachedByRules_inv (reachedByRules_of_admitted h0)).1
+    -- σ'p sits inside `Ef := (σp.writeRules S t).edges` and its writes materialise there
+    have hSI'p : StructInv (restrictUntainted S) σ'p :=
+      (reachedByRules_inv (reachedByRules_of_admitted h'prev)).1.toStruct
+    have hsub : ∀ e ∈ σ'p.edges, e ∈ (σp.writeRules S t).edges := by
+      rintro ⟨a, b⟩ he
+      exact foldl_writeDirect_edges_mono (rewriteClosure S t) (a, b) ((hedgeIH a b).mp he)
+    have hmat : ∀ u ∈ rewriteClosure (restrictUntainted S) t,
+        (subjNode u.subject, objNode u.object u.relation) ∈ (σp.writeRules S t).edges := by
+      intro u hu
+      exact reachedByRulesAdmitted_edge_complete h0 t List.mem_cons_self u
+        (rewriteClosure_restrict_subset hDrop hu)
+    -- admission of the restricted closure fold transfers by acyclicity of the target
+    have hFA : FoldAdmits σ'p (rewriteClosure (restrictUntainted S) t) :=
+      foldAdmits_of_acyclic hInv0.acyclic (rewriteClosure (restrictUntainted S) t) hSI'p hsub hmat
+    refine ⟨σ'p.writeRules (restrictUntainted S) t,
+      ReachedByRulesAdmitted.step t h'prev hFA, ?_⟩
+    -- edge agreement: both edge sets are the materialised closures, which agree (fuel bridge)
+    have h' : ReachedByRulesAdmitted (σ'p.writeRules (restrictUntainted S) t)
+        (restrictUntainted S) (t :: T) := ReachedByRulesAdmitted.step t h'prev hFA
+    intro a b
+    constructor
+    · intro hab
+      obtain ⟨t', ht', w, hw, h1, h2⟩ :=
+        reachedByRules_edge_sound (reachedByRules_of_admitted h') a b hab
+      have hwS : w ∈ rewriteClosure S t' := rewriteClosure_restrict_subset hDrop hw
+      have := reachedByRulesAdmitted_edge_complete h0 t' ht' w hwS
+      rwa [← h1, ← h2] at this
+    · intro hab
+      obtain ⟨t', ht', w, hw, h1, h2⟩ :=
+        reachedByRules_edge_sound (reachedByRules_of_admitted h0) a b hab
+      have hwU : w ∈ rewriteClosure (restrictUntainted S) t' :=
+        rewriteClosure_subset_restrict hDrop hMatch hR hw
+      have := reachedByRulesAdmitted_edge_complete h' t' ht' w hwU
+      rwa [← h1, ← h2] at this
+
 end Zanzibar

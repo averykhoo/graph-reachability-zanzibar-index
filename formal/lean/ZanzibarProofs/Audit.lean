@@ -475,4 +475,14 @@ namespace Zanzibar
 #print axioms rewriteRanked_restrict
 #print axioms rewriteClosure_restrict_mem_iff
 
+-- **The state transfer (2026-07-11).** From an admitted rule-routed state `σ0` over the MIXED
+-- schema `S`, `exists_admitted_restrict` builds a canonical `ReachedByRulesAdmitted σ' (S↾U) T`
+-- with identical edge membership. Both edge sets are exactly the materialised rewrite closures
+-- (`reachedByRules_edge_sound` / `reachedByRulesAdmitted_edge_complete`), which agree by the fuel
+-- bridge; the admissions transfer because they depend only on the acyclicity of the shared target
+-- relation `σ0.edges` (`foldAdmits_of_acyclic` — a `writeDirect` fold admits when every
+-- materialised edge lands in an acyclic relation containing the running edges). Standard axioms:
+#print axioms foldAdmits_of_acyclic
+#print axioms exists_admitted_restrict
+
 end Zanzibar
