@@ -1,8 +1,10 @@
 # ROADMAP — the staged path to the verified model (0 `sorry`s left, was 9)
 
-The plan of record toward the END GOAL: **a formally verified Zanzibar/OpenFGA
-model tied to the Python implementation.** Read alongside `PROOF_STATUS.md`
-(status) and `SEMANTICS.md` (the spec).
+**A fresh session reads `formal/HANDOFF.md` FIRST** (compact entry point + the next
+task); this file holds the per-stage designs and post-mortems — read the section for
+the stage you're working. The plan of record toward the END GOAL: **a formally
+verified Zanzibar/OpenFGA model tied to the Python implementation.** Read alongside
+`PROOF_STATUS.md` (ledger) and `SEMANTICS.md` (the spec).
 
 ## The architecture (how the pieces add up to the goal)
 
@@ -415,7 +417,7 @@ and re-proves/widens the same named theorems. Every stage must keep
     general `NReaches.mono_subset` + the `σ0.edges ⊆ σ.edges` inclusion now carried by
     `reachedByW3a_reach_inert`), then lifted to the `probeNonDerived` read `hag` consults: the
     `reconcile` constructor gained two faithful star-free fields (`hcStar`/`honStar`) ⇒
-    `reachedByW3a_edges_plain` (every W3a edge endpoint plain) ⇒ `probeNonDerived_starFree`
+    `reachedByW3a_edges_plain` (every W3a edge endpoint plain) ⇒ `probeNonDerived_plainEdges`
     (plain-edge read = probe 1) ⇒ **`graphRec_reduce_base`**: for every untainted operand `r'`,
     `graphRec σ s dt on r' = graphRec σ0 s dt on r'` on the untainted base. **`hag` is now a pure
     base-state W2 fact** — no residual W3a reasoning.
@@ -423,9 +425,15 @@ and re-proves/widens the same named theorems. Every stage must keep
     lemma (STILL the deeper BLOCKER, now W3a-free): with `graphRec_reduce_base` the operand read is
     the *base* read `graphRec σ0 s dt on r'`, so `hag` reduces to
     `graphRec σ0 s dt on r' = semAux … dt on r'` on a `ReachedByRules` σ0 — a W2 statement.
-    `graph_correct_rules` proves whole-schema `UntaintedSchema`, too strong for W3's mixed schema —
-    restate it (and its `sem_of_rules_reach` / `nreaches_of_semAux_rules` chain) with a
-    *hereditarily-untainted* hypothesis on `r'`; fuel via the T0a-stability sidestep. (3) candidate completeness (an
+    `graph_correct_rules` proves whole-schema `UntaintedSchema`, too strong for W3's mixed schema.
+    **Recommended route (design in HANDOFF.md step A): schema restriction** — evaluate on `S↾U`
+    (tainted keys' defs removed; `UntaintedSchema` by taint-heredity), transfer `semAux` for
+    untainted `r'` (confinement-style fuel×Expr induction), transfer the state (schema-field swap;
+    `schemaRewrites` unchanged since `RootBoolean` defs emit no arms), and reuse W2 as a black box;
+    fuel via the T0a-stability sidestep. Fallback: re-thread the W2 chain per-relation. NB
+    `checkFn_eq_semStep`'s `hag` is now restricted to `computedRefs e` (2026-07-11 fix — the
+    unrestricted `∀ r'` was undischargeable), so the assembly needs "every computed leaf of a
+    derived def is untainted" as a fragment fact. (3) candidate completeness (an
     admitted `ReachedByW3aAdmitted`: every `sem`-member is a positive-leaf concrete) +
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +
@@ -768,9 +776,9 @@ Historical single-sorry order (all ✅ except T0a):
 
 ## Session handoff — environment & hard-won Lean/Mathlib notes
 
-For a fresh session. Read `PROOF_STATUS.md` (status/resume) → this file → the target
-`.lean`. Everything is committed; `.lake/` (mathlib clone + cache) is on disk and
-gitignored (regenerate with `lake exe cache get` if missing).
+For a fresh session: read `HANDOFF.md` first (entry point), then the target `.lean`.
+Everything is committed; `.lake/` (mathlib clone + cache) is on disk and gitignored
+(regenerate with `lake exe cache get` if missing).
 
 **Build/verify commands** (Lean toolchain is at `~/.elan/bin`):
 ```
@@ -806,16 +814,6 @@ Conformance uses the repo conda env python (`.../envs/graph-reachability-zanziba
 - Prefer explicit `have e1/e2 … ; calc` over `congr 1` for sum equalities — `congr 1`
   split fragilely here.
 
-**The T4 blocker (do this first to finish T4):** a **walk API** for the Nat-weighted
-multigraph. Concretely: (i) `pathsOfLength g k u v > 0 ↔ ∃ (walk : List V) of length k
-from u to v with all edges positive` (induction on `k`); (ii) the **vanishing lemma**
-`Acyclic g → pathsOfLength g |V| w v = 0` (a length-`|V|` walk has `|V|+1` vertices ⇒
-pigeonhole repeat ⇒ closed sub-walk ⇒ `pathCount x x > 0` ⇒ ¬Acyclic) — this discharges
-`phat_recurrence`'s `hvanish`; (iii) `pathCount_addEdge` by decomposing `g'`-walks into
-"uses new edge `(u,v)` 0 or 1 times" (acyclic ⇒ ≤ 1). Check whether
-`Mathlib.Combinatorics.SimpleGraph.Walk` or `Quiver.Path` can be adapted before rolling
-your own. Once (ii)+(iii) land, `pathCount_removeEdge` is the `(ℤ,+)` inverse of (iii).
-
-**Realistic scope:** closing all 9 is multi-session. Each of T1/T2 needs its concrete
-model built first (see the per-theorem sections above); T0b/T0a and the T4 walk API are
-each self-contained multi-hour proofs.
+*(The historical "T4 blocker" walk-API notes and the original 9-sorry scoping that
+used to close this file were executed to completion — T4 and all original sorries are
+closed; see the per-theorem sections above for the retained plans-of-record.)*

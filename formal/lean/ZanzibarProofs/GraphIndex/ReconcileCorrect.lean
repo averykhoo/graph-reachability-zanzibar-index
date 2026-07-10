@@ -39,27 +39,50 @@ def ComputedOnly : Expr → Prop
   | .direct _ => False
   | .ttu _ _ => False
 
-/-- **`evalE` on a computed-only expr reads only `rec` at `(dt, on, ·)`.** Two `rec`s
-    agreeing there evaluate the whole tree identically — independently of the subject,
-    store, query and enclosing relation (a computed-only tree never reaches a
-    `direct` / `ttu` leaf, the only places those are consulted). This is the congruence
-    that lets `checkFn`'s graph node-recursion be swapped for `sem`'s fuel recursion. -/
+/-- The `computed` leaf references of an expression — the only relations a
+    `ComputedOnly` tree ever consults `rec` at. The assembly's per-relation agreement
+    (`hag`) needs to hold only HERE (all untainted on the W3a fragment), never at the
+    derived relation itself or at unrelated keys. -/
+def computedRefs : Expr → List String
+  | .computed r' => [r']
+  | .union a b => computedRefs a ++ computedRefs b
+  | .inter a b => computedRefs a ++ computedRefs b
+  | .excl a b => computedRefs a ++ computedRefs b
+  | .direct _ => []
+  | .ttu _ _ => []
+
+/-- **`evalE` on a computed-only expr reads only `rec` at `(dt, on, r')` for its
+    `computed` leaves `r' ∈ computedRefs e`.** Two `rec`s agreeing there evaluate the
+    whole tree identically — independently of the subject, store, query and enclosing
+    relation (a computed-only tree never reaches a `direct` / `ttu` leaf, the only
+    places those are consulted). This is the congruence that lets `checkFn`'s graph
+    node-recursion be swapped for `sem`'s fuel recursion — and the leaf-restricted
+    `hag` is what the assembly can actually supply (the leaves are untainted operands;
+    an unrestricted `∀ r'` would demand agreement at the derived key itself). -/
 theorem evalE_computedOnly {rec1 rec2 : Rec} {sub1 sub2 : SubjectRef}
-    {T1 T2 : Store} {q1 q2 : Query} {dt on rel1 rel2 : String}
-    (hag : ∀ r', rec1 dt on r' = rec2 dt on r') :
+    {T1 T2 : Store} {q1 q2 : Query} {dt on rel1 rel2 : String} :
     ∀ e : Expr, ComputedOnly e →
+      (∀ r' ∈ computedRefs e, rec1 dt on r' = rec2 dt on r') →
       evalE rec1 sub1 T1 q1 dt on rel1 e = evalE rec2 sub2 T2 q2 dt on rel2 e := by
   intro e
   induction e with
-  | computed r' => intro _; simp only [evalE]; exact hag r'
+  | computed r' =>
+    intro _ hag
+    simp only [evalE]; exact hag r' (List.mem_singleton.mpr rfl)
   | union a b iha ihb =>
-    intro hco; simp only [evalE]; rw [iha hco.1, ihb hco.2]
+    intro hco hag; simp only [evalE]
+    rw [iha hco.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hco.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
   | inter a b iha ihb =>
-    intro hco; simp only [evalE]; rw [iha hco.1, ihb hco.2]
+    intro hco hag; simp only [evalE]
+    rw [iha hco.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hco.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
   | excl a b iha ihb =>
-    intro hco; simp only [evalE]; rw [iha hco.1, ihb hco.2]
-  | direct rs => intro hco; exact hco.elim
-  | ttu tr ts => intro hco; exact hco.elim
+    intro hco hag; simp only [evalE]
+    rw [iha hco.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hco.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | direct rs => intro hco _; exact hco.elim
+  | ttu tr ts => intro hco _; exact hco.elim
 
 /-- **`checkFn` equals the derived key's `sem`-step, given per-relation agreement.**
     On the W3a fragment (`ComputedOnly` derived def `e = lookup (dt, R)`), the compiled
@@ -70,20 +93,22 @@ theorem evalE_computedOnly {rec1 rec2 : Rec} {sub1 sub2 : SubjectRef}
 
     This is the first spine of the W3a correspondence: it reduces `checkFn = sem`-membership
     (the reconcile guard) to exactly the per-relation agreement
-    `graphRec σ s dt on r' = semAux S s T q f dt on r'`, which the untainted operands' W2
-    correspondence supplies (restated per-relation within the mixed schema), plus the
-    fuel-stability sidestep for the fuel index. -/
+    `graphRec σ s dt on r' = semAux S s T q f dt on r'` **at the def's `computed` leaves**
+    (all untainted operands on the W3a fragment — which is what `graphRec_reduce_base` +
+    the per-relation W2 correspondence can supply), plus the fuel-stability sidestep for
+    the fuel index. -/
 theorem checkFn_eq_semStep {S : Schema} {σ : GraphState} {T : Store} {q : Query}
     {s : SubjectRef} {dt on R : String} {e : Expr} {f : Nat}
     (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
-    (hag : ∀ r', GraphModel.graphRec σ s dt on r' = semAux S s T q f dt on r') :
+    (hag : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRec σ s dt on r' = semAux S s T q f dt on r') :
     σ.checkFn T s dt on R e = semAux S s T q (f + 1) dt on R := by
   have hrhs : semAux S s T q (f + 1) dt on R
       = evalE (semAux S s T q f) s T q dt on R e := by
     simp only [semAux, step, hlk]
   rw [hrhs]
   unfold GraphState.checkFn
-  exact evalE_computedOnly hag e hco
+  exact evalE_computedOnly e hco hag
 
 /-! ## The reconcile edge characterization — structural groundwork for the reach-collapse
 
@@ -189,18 +214,6 @@ objNode R`). It holds exactly when no rewrite rule outputs `R` — i.e. the deri
 `inter`/`excl`-rooted (`exprArms … = []`). This session states the collapse over that
 gap as the isolated hypothesis `hsrcbare` (every R-node in-edge source is bare); the
 `NoRuleOutputs`-discharge of `hsrcbare` is the next increment. -/
-
-/-- An object node's predicate is its relation (both variants encode it in `pred`). -/
-@[simp] theorem objNode_pred (o : ObjectRef) (R : String) : (objNode o R).pred = R := by
-  unfold objNode; split <;> rfl
-
-/-- An object node's type is its object's type (both variants keep it). -/
-@[simp] theorem objNode_type (o : ObjectRef) (R : String) : (objNode o R).type = o.type := by
-  unfold objNode; split <;> rfl
-
-/-- A subject node's predicate is its subject's predicate (both variants keep it). -/
-@[simp] theorem subjNode_pred (s : SubjectRef) : (subjNode s).pred = s.predicate := by
-  unfold subjNode; split <;> rfl
 
 /-- **Generic single-edge collapse.** If every source of an edge into `v` has itself no
     in-edge, then any path to `v` is a single edge: its last-edge source `x` (from
@@ -646,7 +659,7 @@ full W3a state to the untainted base. This increment lifts that to the `probeNon
 read the correspondence's `hag` actually consults — `graphRec σ s dt on r' = probeNonDerived
 σ ⟨s, r', ⟨dt,on⟩⟩` for an untainted operand `r'`. On the star-free fragment every W3a edge
 endpoint is plain (`reachedByW3a_edges_plain`), so the wildcard probes 2–4 are dead and
-`probeNonDerived` collapses to probe 1 (`probeNonDerived_starFree`); the biconditional then
+`probeNonDerived` collapses to probe 1 (`probeNonDerived_plainEdges`); the biconditional then
 equates the two states' reads. -/
 
 /-- **Every W3a edge endpoint is a plain node** on the star-free fragment. A base (W2) edge
@@ -677,7 +690,7 @@ theorem reachedByW3a_edges_plain {σ : GraphState} {S : Schema} {T : Store}
     subject→object reachability probe. Extracted from `graph_correct_rules`, strengthened to
     drop the query-star-free hypotheses (plain edges alone suffice), for reuse across the
     mixed W3a schema. -/
-theorem probeNonDerived_starFree {σ : GraphState} (q : Query)
+theorem probeNonDerived_plainEdges {σ : GraphState} (q : Query)
     (hplain : ∀ e ∈ σ.edges, e.1.variant = Variant.plain ∧ e.2.variant = Variant.plain) :
     GraphModel.probeNonDerived σ q =
       σ.reach (subjNode q.subject) (objNode q.object q.relation) := by
@@ -705,7 +718,7 @@ theorem probeNonDerived_starFree {σ : GraphState} (q : Query)
     (`= probeNonDerived σ ⟨s, r', ⟨dt,on⟩⟩`) on the full W3a state equals the read on the
     untainted base `σ0` (a `ReachedByRules` state) for every *untainted* operand relation `r'`
     (`isDerived S (dt, r') = false`). The reconcile-materialised derived edges are inert for
-    it: the star-free store keeps every edge plain ⇒ probe 1 only (`probeNonDerived_starFree`
+    it: the star-free store keeps every edge plain ⇒ probe 1 only (`probeNonDerived_plainEdges`
     on both states, plain edges from `reachedByW3a_edges_plain` / `reachedByRules` plainness),
     and the target `objNode ⟨dt,on⟩ r'` is an untainted-key node, so
     `reachedByW3a_reach_inert_iff` equates the two reachabilities.
@@ -733,7 +746,7 @@ theorem graphRec_reduce_base {σ : GraphState} {S : Schema} {T : Store}
     have hwo : w.object.name ≠ STAR := rewriteClosure_object hw ▸ (hSF t ht).2
     exact ⟨by rw [h1, subjNode_plain hws], by rw [h2, objNode_plain hwo]⟩
   unfold GraphModel.graphRec
-  rw [probeNonDerived_starFree _ hplainσ, probeNonDerived_starFree _ hplainσ0]
+  rw [probeNonDerived_plainEdges _ hplainσ, probeNonDerived_plainEdges _ hplainσ0]
   -- the two probe-1 reachabilities agree by the inertness biconditional (untainted target)
   have hcl_σ := (reachedByW3a_inv h).1.edgesClosed
   have hcl_σ0 := (reachedByRules_inv hσ0).1.edgesClosed

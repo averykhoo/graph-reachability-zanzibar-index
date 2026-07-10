@@ -1,10 +1,10 @@
 # Formal Verification Plan — Set Engine, Graph Index, and Their Equivalence
 
-**Status:** draft v1, not yet started. Written 2026-07-09.
-**Executor:** Claude Code (Opus). This document is written to be executable across
-fresh sessions with no other context. Read this file top to bottom before doing
-anything. Then read `formal/PROOF_STATUS.md` (once it exists) to find the current
-phase and resume point.
+**Status:** written 2026-07-09, before the build; the strategy/honesty contract of
+record. **The build is well underway — a fresh working session reads
+`formal/HANDOFF.md` FIRST** (the compact entry point: current state, next task,
+house rules) and comes back here only for the phase definitions, process rules, and
+the §7 honesty clauses (the final report uses that wording verbatim).
 
 ---
 

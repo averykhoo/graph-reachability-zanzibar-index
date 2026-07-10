@@ -93,13 +93,6 @@ theorem ensureBridges_creates_bridge {σ : GraphState} {c : NodeKey}
   rw [if_pos hbc, if_pos hadm, addEdge_edges]
   exact List.mem_cons_self
 
-/-! ## `subjNode` field projections -/
-
-@[simp] theorem subjNode_type (s : SubjectRef) : (subjNode s).type = s.type := by
-  unfold subjNode; split <;> rfl
-@[simp] theorem subjNode_pred (s : SubjectRef) : (subjNode s).pred = s.predicate := by
-  unfold subjNode; split <;> rfl
-
 /-! ## The admitted bridge-materializing write-closure -/
 
 /-- **`WildReachedAdmitted σ S T`** — the composed-system reachable-state closure at

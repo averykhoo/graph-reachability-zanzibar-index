@@ -437,14 +437,14 @@ namespace Zanzibar
 -- `NReaches.mono_subset` + `σ0.edges ⊆ σ.edges`), then lifts it to the `probeNonDerived` read
 -- `hag` consults: every W3a edge endpoint is plain on the star-free fragment
 -- (`reachedByW3a_edges_plain`, using the new star-free constructor fields), so the read collapses
--- to probe 1 (`probeNonDerived_starFree`, strengthened to need only plain edges), and
+-- to probe 1 (`probeNonDerived_plainEdges`, strengthened to need only plain edges), and
 -- `graphRec_reduce_base` equates the operand read on the full W3a state to the read on the
 -- untainted base for every untainted operand relation. Reduces `hag` to a *base* per-relation W2
 -- fact. Standard axioms only:
 #print axioms NReaches.mono_subset
 #print axioms reachedByW3a_reach_inert_iff
 #print axioms reachedByW3a_edges_plain
-#print axioms probeNonDerived_starFree
+#print axioms probeNonDerived_plainEdges
 #print axioms graphRec_reduce_base
 
 end Zanzibar

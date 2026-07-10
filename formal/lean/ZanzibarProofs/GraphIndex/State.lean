@@ -121,6 +121,17 @@ def wAllNode (t R : String) : NodeKey := ⟨t, STAR, R, Variant.wAll⟩
     trail vertices. -/
 def NodeKey.isPlain (k : NodeKey) : Bool := k.variant == Variant.plain
 
+/-! ### Node-key field projections (variant-independent) -/
+
+@[simp] theorem subjNode_type (s : SubjectRef) : (subjNode s).type = s.type := by
+  unfold subjNode; split <;> rfl
+@[simp] theorem subjNode_pred (s : SubjectRef) : (subjNode s).pred = s.predicate := by
+  unfold subjNode; split <;> rfl
+@[simp] theorem objNode_type (o : ObjectRef) (R : String) : (objNode o R).type = o.type := by
+  unfold objNode; split <;> rfl
+@[simp] theorem objNode_pred (o : ObjectRef) (R : String) : (objNode o R).pred = R := by
+  unfold objNode; split <;> rfl
+
 /-! ## Reachability (transitive closure of the direct edges) -/
 
 /-- Fuel-bounded reachability: is there a directed path `u → v` of length `1..fuel`?

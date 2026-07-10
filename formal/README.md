@@ -7,26 +7,33 @@ Python implementations to the proven models.
 
 ## Orientation (read in this order)
 
-1. `../docs/formal-verification-plan.md` — the full plan: strategy, phases, process
-   rules, risk register. Written before the build; the executable contract.
-2. `PROOF_STATUS.md` — living status: current phase, resume point, theorem/`sorry`
-   ledgers, adjudications, and the variations log. **Read this to know where things
-   stand.**
-3. `SEMANTICS.md` — the Phase-0 specification (the trust root): the domain, AST,
+1. **`HANDOFF.md` — START HERE.** The compact entry point: state of the world,
+   house rules, build commands, and the precise next task. A working session needs
+   this file plus the target `.lean` and nothing else up front.
+2. `PROOF_STATUS.md` — the append-only session ledger (newest first). Read the top
+   entry for resume-point detail.
+3. `ROADMAP.md` — per-stage designs (W1–W4 staged widening) and post-mortems.
+4. `SEMANTICS.md` — the Phase-0 specification (the trust root): the domain, AST,
    well-formedness, the `sem` fixpoint semantics, both backend models, the exact
    theorem hypotheses, and the open ambiguities. Everything downstream proves things
    *about this document*.
+5. `../docs/formal-verification-plan.md` — the original full plan: strategy, phases,
+   process rules, risk register, and the §7 honesty clauses (final-report wording).
 
-## Layout (created as phases proceed)
+## Layout
 
 ```
 formal/
   README.md          -- this file
-  SEMANTICS.md       -- Phase 0 spec (done)
-  PROOF_STATUS.md    -- living status (done)
-  CORRESPONDENCE.md  -- Lean def ↔ Python file:line map (Phase 4)
-  lean/              -- the Lean 4 development (Phase 1+)
-  conformance/       -- pytest harness pinning Python to the Lean models (Phase 2+)
+  HANDOFF.md         -- session entry point (state + next task + rules)
+  SEMANTICS.md       -- Phase 0 spec
+  PROOF_STATUS.md    -- append-only ledger
+  ROADMAP.md         -- staged plan + designs
+  REVIEW.md          -- historical session digest (2026-07-09→10)
+  CORRESPONDENCE.md  -- Lean def ↔ Python file:line map (Phase 6, not yet written)
+  verify.sh          -- the one-command green gate
+  lean/              -- the Lean 4 development
+  conformance/       -- pytest harness pinning Python to the Lean models
 ```
 
 ## The claim (what this will and will NOT prove)
@@ -45,6 +52,9 @@ honesty clause; the final report will use its wording verbatim.
 
 ## Status
 
-Phase 0 complete; awaiting user sign-off on `SEMANTICS.md` (especially the §11
-ambiguities). No Lean written yet; toolchain not yet installed (needs user
-permission per repo rules).
+See `HANDOFF.md` (kept current every session). Snapshot 2026-07-11: the tree is
+**sorry-free and axiom-clean** (`bash formal/verify.sh` = build + 0 sorries + axiom
+audit + 60 conformance tests, all green). T1/T0a/T0b/T4 fully closed; T2/T3/T5/T6
+proved at staged fragment scope — W1 (wildcards) and W2 (rule routing) closed
+end-to-end, W3a (derived booleans) in flight; W4 (full scope) and Phase-6 hardening
+remain.

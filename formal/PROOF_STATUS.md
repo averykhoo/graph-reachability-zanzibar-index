@@ -1,10 +1,46 @@
-# PROOF_STATUS.md — living status / ledger / adjudications
+# PROOF_STATUS.md — the append-only session ledger
 
-The session-persistent brain for the formal-verification build (plan §8.3). Update
-this before ending ANY session. A fresh session should read, in order:
-`docs/formal-verification-plan.md` → this file → `formal/SEMANTICS.md`.
+**A fresh session reads `formal/HANDOFF.md` FIRST** (the compact entry point: state of
+the world, the next task, house rules). This file is the append-only ledger backing it
+— newest entry first; read only the TOP entry for resume-point detail, deeper entries
+on demand. Before ending ANY session: add a session entry at the top here AND refresh
+HANDOFF.md's "The next task".
 
 ---
+
+## Session 2026-07-11 (review/cleanup + handoff restructure + `hag` leaf-restriction fix)
+
+A consolidation session (user-directed): review everything for truth/cleanliness, fix
+weirdness, and restructure the docs so future sessions resume from a small, precise entry
+point. `verify.sh` green throughout; sorry count held at 0; one substantive proof fix landed.
+
+**The substantive fix — `checkFn_eq_semStep`'s `hag` was UNDISCHARGEABLE as stated.** It
+demanded `∀ r', graphRec σ s dt on r' = semAux … r'` — agreement at EVERY relation string,
+including the derived `R` itself and unrelated/derived keys — but `graphRec_reduce_base` (and
+any per-relation W2 restatement) can only ever supply it for *untainted* operands. The
+assembly would have hit a wall. Fixed by restricting `hag` to the def's `computed` leaves:
+new `computedRefs : Expr → List String`; `evalE_computedOnly` and `checkFn_eq_semStep` now
+take `hag : ∀ r' ∈ computedRefs e, …`. The assembly needs only the fragment fact "every
+computed leaf of a derived def is untainted" to compose with `graphRec_reduce_base`.
+
+**Cleanups.**
+- **Deduplicated node-projection simp lemmas** — `subjNode_pred` was declared IDENTICALLY in
+  `ObjStarClosure.lean` and `ReconcileCorrect.lean` (both imported by `Audit`); all four
+  projections (`subjNode_type`/`_pred`, `objNode_type`/`_pred`) now live once in `State.lean`
+  next to the node constructors; local copies deleted.
+- **Renamed `probeNonDerived_starFree` → `probeNonDerived_plainEdges`** (it takes only the
+  plain-edges hypothesis; the star-free name was stale after the strengthening).
+- **Stale docs fixed:** `README.md` (claimed "No Lean written yet"), the plan doc's header
+  (claimed "not yet started"), ROADMAP's tail ("T4 blocker: do this first" — T4 closed).
+
+**Handoff restructure (the main deliverable).** New **`formal/HANDOFF.md`** — the single
+compact entry point a fresh session reads first: state-of-the-world theorem inventory, house
+rules (honesty norm / attack-first / green gate / rhythm), build commands + Lean gotchas, the
+precise NEXT TASK (W3a steps A/B/C with the recommended schema-restriction route for `hag`),
+and the after-W3a road (W3b/c/d, W4, Phase 6). All other docs re-pointed at it (this file's
+header, ROADMAP header, README orientation, plan-doc header). This file remains the
+append-only ledger; end-of-session duty is now: session entry here + refresh HANDOFF's
+"next task".
 
 ## Session 2026-07-11 (W3a read correspondence — the operand-read reduction to the untainted base)
 
@@ -35,7 +71,7 @@ residual W3a-specific reasoning.
   placeholders.
 - **`reachedByW3a_edges_plain`** — every W3a edge endpoint is a plain node (base = rewrite-closure
   tuple names inherit the star-free store; reconcile = star-free candidate/object via the new
-  fields). **`probeNonDerived_starFree`** — a plain-edge read collapses to probe 1 (wildcard probes
+  fields). **`probeNonDerived_starFree`** (since renamed `probeNonDerived_plainEdges`) — a plain-edge read collapses to probe 1 (wildcard probes
   2–4 dead); strengthened vs `graph_correct_rules`'s inline version to need **only** plain edges
   (the query-star-free hypotheses drop out).
 - **`graphRec_reduce_base` (the payoff)** — for every untainted operand relation `r'`
