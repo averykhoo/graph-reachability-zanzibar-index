@@ -5,6 +5,7 @@ import ZanzibarProofs.Spec.FuelStable
 import ZanzibarProofs.Spec.Counterexample
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
+import ZanzibarProofs.GraphIndex.BareStarCorrect
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -95,6 +96,16 @@ namespace Zanzibar
 #print axioms isDerived_pureDirect
 #print axioms stratifiable_pureDirect
 #print axioms graph_correct_direct
+-- **T2b stage W1a — bare star grants `[user:*]`, ZERO bridges
+-- (GraphIndex/BareStarCorrect.lean)** — soundness over `Covers` (leading bare-star
+-- hop), the probe-1∨probe-2 completeness disjunction, and the end-to-end widened
+-- read-correctness theorem. All expect only the three standard axioms (no `sorryAx`):
+#print axioms directLeaf_elim_bs
+#print axioms semAux_lift_bs
+#print axioms semAux_of_chainN_bs
+#print axioms reach_of_semAux_bs
+#print axioms admitted_edge_source_char
+#print axioms graph_correct_bareStar
 -- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
 -- at fragment scope — now REAL proved theorems (were false over the deleted
 -- abstract closure). Expect only the three standard axioms (no `sorryAx`):
