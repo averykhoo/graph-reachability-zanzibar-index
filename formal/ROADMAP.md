@@ -324,6 +324,41 @@ and re-proves/widens the same named theorems. Every stage must keep
   T2a (`Inv` incl. I6 across reachability-affected keys) and the derived-read
   half of T2b (residue = `sem` via the T1 MemberSet algebra + `negEdgeFree`
   edge-hit disjointness). T5 becomes contentful (non-empty outbox drained).
+
+  **Sub-staging (designed 2026-07-10):** W3a star-free bare booleans → W3b
+  userset subjects (`upos`) → W3c star data (`stars`/`neg`) → W3d multi-stratum
+  cascade (cross-key re-reconcile hazard + contentful T5 drain). W3a is the
+  "zero residue content" analog of W1a's "zero bridges".
+
+  **W3a STARTED (2026-07-10): attack-first + read collapse + write model DONE.**
+  - **Attack-first (machine-checked `#eval` vs `sem`, deleted): the W3a
+    residue-read ↔ `sem` correspondence HOLDS — no refutation.** Key modeling fact:
+    on the star-free bare-subject fragment the processor stores **no residue row**
+    (`stars = neg = upos = ∅` ⇒ `_store_residue` never fires), so the state stays
+    `ResidueEmpty` and a derived relation only adds EDGES — a derived edge being
+    structurally an ordinary `writeDirect ⟨s, R, o⟩`. W3a reuses ALL of W2's write +
+    preservation machinery; the derived read collapses to a pure edge probe.
+  - **Read collapse DONE** (`GraphIndex/Reconcile.lean`, axiom-clean):
+    `probeDerived_residueEmpty` (the derived read on an empty residue is the bare edge
+    probe — object-wildcard / `'*'`-subject / userset all read `False`),
+    `probeDerived_ResidueEmpty`, `check_derived_ResidueEmpty` (routing: residue provably
+    inert on W3a).
+  - **Write model DONE** (`GraphIndex/ReconcileWrite.lean`, axiom-clean): `graphRec`
+    (`= probeNonDerived`) + `GraphState.checkFn` (the compiled `check_fn` modelled as
+    `evalE` reading the graph — on W3a every leaf dispatches to `leaf_check` =
+    `widx.check`), `GraphState.reconcileKey` (guarded `writeDirect` fold: derived edge
+    per candidate iff `checkFn`), its full `Inv`/residue-free/quiescence preservation,
+    the W3a write-closure `ReachedByW3a` + `reachedByW3a_inv` (T2a `Inv` conjunct) +
+    `reachedByW3a_residueEmpty` (the read-side hook).
+  - **Remaining (the correspondence, sharply isolated) — resume here.** (1) `checkFn =
+    sem`-membership via `evalE_congr` + a **per-relation** untainted-correctness lemma
+    (BLOCKER: `graph_correct_rules` needs whole-schema `UntaintedSchema`, too strong for
+    W3's mixed schema — restate for one untainted relation within a partially-tainted
+    schema; fuel via the T0a-stability sidestep). (2) candidate completeness (the
+    `reconcile` leg fires on a given `cands`; saturate it — every `sem`-member is a
+    positive-leaf concrete, an admitted `ReachedByW3aAdmitted`). (3) assembly
+    `graph_correct_w3a` (route → `probeDerived` → edge probe → `checkFn` → `sem`) +
+    T3/T6 widening. Detail in PROOF_STATUS "W3 STARTED".
 - **W4 — full-scope restatement.** The operational closure now covers
   `GraphAccepts`; name it `ReachedBy` and state the final `graph_correct` /
   `graph_reached_inv` / `backend_equivalence` / T6a (with real exclusion

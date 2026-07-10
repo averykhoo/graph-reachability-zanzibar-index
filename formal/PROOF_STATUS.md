@@ -6,6 +6,88 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-10 (W3 STARTED — derived reconcile / residue path; attack-first + W3a read collapse + write model)
+
+Resuming from W1 + W2 both closed → **ROADMAP stage W3** (derived reconcile: `and` /
+`but not`, the per-key residue `(stars, neg, upos)`, the processor cascade). Two
+green+pushed axiom-clean increments; `verify.sh` green throughout (build + 0 sorries +
+60 conformance + audit, standard axioms only). Sorry count held at 0. This starts the
+W3a sub-stage (star-free, bare-subject derived booleans), matching how W1/W2 each began
+with attack-first + a write model before the read correspondence.
+
+**Sub-staging plan (designed this session):** W3a star-free bare booleans → W3b userset
+subjects (`upos`) → W3c star data (`stars`/`neg`) → W3d multi-stratum cascade (the
+cross-key re-reconcile hazard + contentful T5 outbox drain). W3a is the "zero residue
+content" analog of W1a's "zero bridges".
+
+**Attack-first HEADLINE (machine-checked `#eval` vs `sem`, then deleted): the W3a
+residue-read ↔ `sem` correspondence HOLDS — no refutation.** On a `doc#viewer :=
+member but not banned` (both direct) star-free store, `check` (routed to `probeDerived`)
+equals `sem` on every query: the derived edge is materialised for the member-not-banned
+subject, none for the banned one, and the residue is EMPTY. This confirmed the key W3a
+modeling fact:
+
+> **On the star-free bare-subject fragment the processor stores NO residue row.**
+> `stars = neg = upos = ∅` ⇒ `_store_residue` never fires (I6's non-empty clause), so
+> the state stays `ResidueEmpty` and a derived relation only adds **edges** — a derived
+> edge being structurally an ordinary `writeDirect ⟨s, R, o⟩`. So W3a reuses ALL of W2's
+> write + preservation machinery, and the derived read collapses to a pure edge probe.
+
+**Increment 1 — the read-side collapse (`GraphIndex/Reconcile.lean`, axiom-clean).**
+`probeDerived_residueEmpty` — the derived read on an empty residue is the bare edge
+probe (object-wildcard / `'*'`-subject / userset all read `False` on empty
+`stars`/`neg`/`upos`; a bare non-`'*'` subject reduces to `reach (subjNode s) (objNode
+o R)`). `probeDerived_ResidueEmpty` (global corollary) + `check_derived_ResidueEmpty`
+(routing: a derived read on an empty residue is decided by the same reachability the
+non-derived read uses — the residue machinery is provably inert on W3a).
+
+**Increment 2 — the WRITE model (`GraphIndex/ReconcileWrite.lean`, axiom-clean).**
+Modeling discovery from `processor.py:_EvalContext`/`reconcile`: on the W3a fragment
+(derived def = boolean tree over `computed` refs to UNTAINTED relations, single stratum)
+the compiled `check_fn` evaluates that tree with every leaf dispatching to `leaf_check`
+= `widx.check` = the graph's ≤4-probe read (`probeNonDerived`). So `check_fn` is exactly
+`evalE` with `rec` reading the graph. Delivered:
+- `graphRec` (`= probeNonDerived`) + `GraphState.checkFn` (`= evalE (graphRec) …`).
+- `GraphState.reconcileKey` — a guarded `writeDirect` fold: materialise the derived
+  edge for each candidate bare subject iff `checkFn` (the `reconcile_subject` rule
+  `want_edge = should ∧ ¬covered`, `covered = false` star-free).
+- `structInv_/residueEmpty_/inv_/quiescent_reconcileKey` (guarded fold preserves
+  everything `writeDirect` does — each step is `writeDirect` or identity).
+- **`ReachedByW3a`** (write-closure: W2's `ReachedByRules` base + reconcile passes) +
+  **`reachedByW3a_inv`** (T2a `Inv` conjunct: `Inv ∧ ResidueEmpty ∧ Quiescent`, by
+  induction over the concrete path) + `reachedByW3a_residueEmpty` (the read-side hook).
+
+**Resume → the W3a CORRESPONDENCE (`checkFn = sem` + candidate completeness ⇒
+`graph_correct_w3a`), sharply isolated. KEY FINDING for the next session:**
+1. **`checkFn σ s = sem`-membership of `s` in the derived key.** Via `evalE_congr`
+   (`Spec/Confine.lean`: `evalE` agrees if `rec` agrees on the referenced keys over
+   `oname ∪ storedNames`) reducing it to: for each `computed r'` operand (untainted
+   `r'`), `graphRec σ s dt on r' = sem`-membership. **BLOCKER discovered:**
+   `graph_correct_rules` needs `UntaintedSchema S` (no `.inter`/`.excl` in ANY def) —
+   but W3a's schema HAS the derived `.excl`, so it does NOT apply to the whole schema.
+   The next increment needs a **per-relation** untainted-correctness lemma: an untainted
+   relation `r'`'s graph read (`probeNonDerived`) equals its `sem`-membership *within a
+   mixed (partially-tainted) schema*. The untainted relation's `sem`/graph only consult
+   the untainted edges + its own def, so this should factor out of the existing W2
+   proof, but it must be RE-STATED per-relation (the whole-schema `UntaintedSchema`
+   hypothesis is too strong for W3). Fuel via the T0a-stability sidestep (`sem_fuel_
+   stable`; the derived-key `sem` is `semAux` at `fuelBound`, `checkFn` reads the graph
+   at "infinite" fuel — reconcile the two by stability, as W1c/W2 did).
+2. **Candidate completeness.** `ReachedByW3a`'s `reconcile` leg fires on a GIVEN `cands`
+   list. Completeness (`sem ⇒ edge`) needs the closure SATURATED: every `sem`-member
+   bare subject is in some reconcile pass's `cands` AND passes `checkFn`. Model the
+   candidate enumeration (`_leaf_concretes`: concretes of the positive leaves) and prove
+   it covers every `sem`-member — the W3a analog of W2's edge-completeness / admitted
+   closure. Likely an admitted `ReachedByW3aAdmitted` (grant + reconcile edges present).
+3. **Assembly `graph_correct_w3a`.** For a derived query: route to `probeDerived`
+   (`isDerived`), collapse to the edge probe (`check_derived_ResidueEmpty` +
+   `reachedByW3a_residueEmpty`), then `reach (subjNode s) (objNode o R) ↔ [edge written]
+   ↔ checkFn ↔ sem`. For an untainted query: the per-relation lemma from (1). Then widen
+   T3/T6 (`Equiv.lean`) as free corollaries. NB W3a fragment: star-free, bare subjects,
+   derived def = boolean over `computed` refs to untainted relations (no direct/ttu arms
+   ON the derived relation — that adds leaf-family routing, defer). Attack-first any
+   widening before proving.
+
 ## Session 2026-07-10 (W2 FULLY CLOSED — completeness `sem ⇒ reach` + `graph_correct_rules` + T3/T6 widened)
 
 Resuming W2 from "soundness direction closed; resume → W2 COMPLETENESS + assembly".
