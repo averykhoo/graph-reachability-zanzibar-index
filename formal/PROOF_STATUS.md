@@ -6,6 +6,58 @@ this before ending ANY session. A fresh session should read, in order:
 
 ---
 
+## Session 2026-07-11 (W3a read correspondence — multi-pass reconcile inertness folded to the untainted base)
+
+Resuming W3a from "reconcile-edge inertness resolved per-pass (`reconcileKey_reach_inert`);
+resume → point 2's step 1, the **multi-pass inertness fold** down to the `ReachedByRules`
+base". One green+pushed axiom-clean increment (`GraphIndex/ReconcileCorrect.lean` +
+`ReconcileWrite.lean` constructor + `Audit.lean`); `verify.sh` green throughout (build + 0
+sorries + 60 conformance + audit, standard axioms only — the new theorem `[propext,
+Quot.sound]`). Sorry count held at 0. This lands **step 1 of point 2** (the reachability half
+of the `hag` reduction): reachability into an untainted-key node on the full W3a state agrees
+with the untainted base, so the reconcile-materialised derived edges are provably inert for the
+operand reads W2's per-relation correctness consults.
+
+**The increment.**
+- **Constructor strengthened (`ReconcileWrite.lean`): `ReachedByW3a.reconcile` now carries
+  `hder : isDerived S (dt, R) = true`** — faithful (reconcile only ever runs on a declared
+  *derived* relation). This is the fact that separates a reconciled derived key from an untainted
+  operand key of the same object type: equal keys share `isDerived`, so a `hder`-derived R-node is
+  distinct from every untainted target. The five existing `| reconcile …` matches gained a `_hder`
+  placeholder (harmless; no construction sites yet).
+- **`reachedByW3a_reach_inert` (`ReconcileCorrect.lean`, `[propext, Quot.sound]`)** — the
+  multi-pass fold. For a W3a state `σ` there is an untainted base `σ0` (`ReachedByRules σ0 S T`)
+  with `∀ {u v}, isDerived S (v.type, v.pred) = false → NReaches σ.edges u v → NReaches σ0.edges
+  u v`. By induction over the write path: **base** = identity; **reconcile** = peel one
+  `reconcileKey_reach_inert` then apply the IH. The pass's target-distinctness `v ≠ objNode
+  ⟨dt,on⟩ R` is discharged from `isDerived S (v.type,v.pred) = false` vs `hder` (equal keys share
+  `isDerived`); the pre-pass R-node-not-a-source premise comes from `reachedByW3a_Rnode_not_source`
+  on the sub-derivation, fed by the **schema-level terminal hypothesis** `hterm : ∀ dt R,
+  isDerived S (dt,R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R` (faithful: W3a defers the
+  non-terminal `PDerivedTTU`/`PDerivedUserset` shapes — carry `hterm` into the W3a/W4 fragment).
+
+**Resume → close the W3a CORRESPONDENCE. Point 2 step 2 (the deeper blocker) + step 3 remain:**
+1. ✅ **DONE this session** — the multi-pass inertness fold (`reachedByW3a_reach_inert`).
+2. **Discharge `hag` — the per-relation untainted-correctness lemma (STILL the deeper blocker).**
+   With the inertness fold, the operand read `probeNonDerived σ ⟨s, r', ⟨dt,on'⟩⟩` on the full W3a
+   `σ` reduces to the read on the base `σ0` (move `probeNonDerived` → `NReaches` via
+   `probeNonDerived_iff` + `reach_iff_nreaches` on both σ and σ0 — needs endpoint-closure `hcl`
+   from `reachedByW3a_inv`/`reachedByRules_inv`; star-free ⇒ only probe 1 (plain) survives, so the
+   read is exactly `NReaches …edges (subjNode s) (objNode ⟨dt,on'⟩ r')`, and `reachedByW3a_reach_
+   inert` transfers it — note the operand node has type `dt` = the derived key's type and untainted
+   relation `r'`, so `isDerived S (dt, r') = false` gives the target-key hypothesis). Then restate
+   W2's `graph_correct_rules` **per hereditarily-untainted relation `r'`** within the mixed schema
+   (whole-schema `UntaintedSchema` is too strong): its `sem`/graph only consult the untainted cone,
+   so it factors out of the W2 proof but must be re-stated with a *hereditarily-untainted*
+   hypothesis on `r'`. Fuel via the T0a-stability sidestep. **NB** the transfer above needs the
+   reverse direction too (`NReaches σ0 → NReaches σ`), which is free (`σ0.edges ⊆ σ.edges` by
+   `reconcileKey_edges_mono` folded — worth landing as a companion lemma, or strengthen
+   `reachedByW3a_reach_inert` to an `↔`).
+3. **Candidate completeness + assembly `graph_correct_w3a`** (an admitted `ReachedByW3aAdmitted`:
+   every `sem`-member bare subject is enumerated in some `cands` and passes `checkFn`) + assembly:
+   route → `probeDerived` → `check_derived_ResidueEmpty` → edge probe →
+   `reachedByW3a_reach_collapse_root` → `checkFn_eq_semStep` + `hag` → `sem`. Then widen T3/T6.
+
 ## Session 2026-07-11 (W3a read correspondence — R-node-source subtlety RESOLVED + reconcile-edge reachability inertness)
 
 Resuming W3a from "point 1 (`hsrcbare` via `NoRuleOutputs`) done; resume → point 2 (`hag` +

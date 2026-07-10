@@ -159,7 +159,7 @@ theorem reachedByW3a_edge_sound {σ : GraphState} {S : Schema} {T : Store}
           a = subjNode c ∧ b = objNode ⟨dt, on⟩ R) := by
   induction h with
   | base hr => intro a b hab; exact Or.inl (reachedByRules_edge_sound hr a b hab)
-  | reconcile dt on R e cands _hRne _hcands _ ih =>
+  | reconcile dt on R e cands _hRne _hcands _hder _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, hac, hbc⟩
     · exact ih a b hold
@@ -229,7 +229,7 @@ theorem reachedByW3a_edge_target_ne_bare {σ : GraphState} {S : Schema} {T : Sto
     intro a b hab
     obtain ⟨t, ht, u, hu, _, hbobj⟩ := reachedByRules_edge_sound hr a b hab
     rw [hbobj, objNode_pred]; exact rewriteClosure_rel_ne_bare hWF hSV ht hu
-  | reconcile dt on R e cands hRne _hcands _ ih =>
+  | reconcile dt on R e cands hRne _hcands _hder _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, _, hbc⟩
     · exact ih hWF hSV a b hold
@@ -352,7 +352,7 @@ theorem reachedByW3a_Rnode_source_bare {σ : GraphState} {S : Schema} {T : Store
       simp at hrs
     · exact noRuleOutputs_of_root hlk hNK hroot r hr'
         ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
-  | reconcile dt' on' R' e' cands _hRne hcands _ ih =>
+  | reconcile dt' on' R' e' cands _hRne hcands _hder _ ih =>
     intro x hx
     rcases reconcileKey_edge_sound _ dt' on' R' e' cands x _ hx with hold | ⟨c, hc, hxc, _⟩
     · exact ih hSV hNK hlk x hold
@@ -488,7 +488,7 @@ theorem reachedByW3a_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
     obtain ⟨t, ht, u, hu, hasub, _⟩ := reachedByRules_edge_sound hr a b hab
     rw [hasub, subjNode_pred]
     exact rewriteClosure_subject_pred_ne hnt (hns t ht) hu
-  | reconcile dt on R' e cands _hRne hcands _ ih =>
+  | reconcile dt on R' e cands _hRne hcands _hder _ ih =>
     intro a b hab
     rcases reconcileKey_edge_sound _ dt on R' e cands a b hab with hold | ⟨c, hc, hac, _⟩
     · exact ih hnt hns a b hold
@@ -557,5 +557,57 @@ theorem reconcileKey_reach_inert {σ0 : GraphState} (T : Store)
       · exact hstep
     · rw [if_neg hc] at h
       exact ih σ (fun c hcm => hcb c (List.mem_cons_of_mem _ hcm)) hRns h
+
+/-! ## Multi-pass reconcile inertness — the reachability transfer to the untainted base
+    (ROADMAP W3a, read half — increment 6)
+
+`reconcileKey_reach_inert` shows one reconcile pass adds no reachability to a non-R-node.
+This increment **folds that over the whole W3a write path**: every reconcile pass is peeled
+off, transferring reachability into an *untainted-key* node all the way down to the
+`ReachedByRules` base. This is the reachability half of the `hag` reduction (PROOF_STATUS
+point 2): the operand read `probeNonDerived σ ⟨s, r', ⟨dt,on'⟩⟩` on the full W3a state agrees
+with the read on the untainted base, so W2's per-relation correctness transfers.
+
+The target-key condition is `isDerived S (v.type, v.pred) = false` — an *untainted* node.
+Each reconcile pass writes only into `objNode ⟨dt,on⟩ R` with `isDerived S (dt, R) = true`
+(the constructor's `hder`); an untainted node has `isDerived` `false` at its own key, so it is
+distinct from every reconcile target (equal keys share `isDerived`) — exactly
+`reconcileKey_reach_inert`'s `v ≠` hypothesis. The per-pass R-node-not-a-source premise comes
+from `reachedByW3a_Rnode_not_source` on the pre-pass sub-derivation, using the schema-level
+terminal hypothesis `hterm` (every derived key is `NoTtuTarget`/`NoStoreSubjectR` — faithful:
+W3a defers the non-terminal `PDerivedTTU`/`PDerivedUserset` shapes). -/
+
+/-- **Every reconcile pass is reachability-inert for untainted-key reads — folded to the
+    base.** For a W3a state `σ`, there is an untainted base `σ0` (`ReachedByRules σ0 S T`,
+    the rewrite-closure of the store) such that reachability into any *untainted-key* node
+    `v` (`isDerived S (v.type, v.pred) = false`) agrees between `σ` and `σ0`. By induction
+    over the write path: the base leg is the identity; each reconcile leg peels one
+    `reconcileKey_reach_inert` (the pass writes only into its derived R-node, distinct from
+    the untainted target since equal keys share `isDerived`), then applies the IH.
+
+    This transfers W2's per-relation untainted correctness through the mixed W3a schema: the
+    operand reads `hag` consults see only the base edges, so the reconcile-materialised
+    derived edges are inert for them. `hterm` is the faithful W3a fragment condition (every
+    derived relation is terminal — no TTU target, no stored userset subject). -/
+theorem reachedByW3a_reach_inert {σ : GraphState} {S : Schema} {T : Store}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3a σ S T) :
+    ∃ σ0, ReachedByRules σ0 S T ∧
+      ∀ {u v : NodeKey}, isDerived S (v.type, v.pred) = false →
+        NReaches σ.edges u v → NReaches σ0.edges u v := by
+  induction h with
+  | base hr => exact ⟨_, hr, fun _ hn => hn⟩
+  | reconcile dt on R e cands hRne hcands hder h' ih =>
+    obtain ⟨σ0, hσ0, htrans⟩ := ih hterm
+    refine ⟨σ0, hσ0, ?_⟩
+    intro u v hv hreach
+    obtain ⟨hnt, hns⟩ := hterm dt R hder
+    have hRns0 := reachedByW3a_Rnode_not_source hnt hns hRne h' (objNode_pred ⟨dt, on⟩ R)
+    have hvne : v ≠ objNode ⟨dt, on⟩ R := by
+      intro heq
+      rw [heq, objNode_type, objNode_pred, hder] at hv
+      exact absurd hv (by decide)
+    have hstep := reconcileKey_reach_inert _ dt on R e cands hRne hvne hcands hRns0 hreach
+    exact htrans hv hstep
 
 end Zanzibar

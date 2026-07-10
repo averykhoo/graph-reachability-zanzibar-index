@@ -421,4 +421,14 @@ namespace Zanzibar
 #print axioms reachedByW3a_Rnode_not_source
 #print axioms reconcileKey_reach_inert
 
+-- **ROADMAP W3a — multi-pass reconcile inertness folded to the untainted base
+-- (GraphIndex/ReconcileCorrect.lean, 2026-07-11).** Folds `reconcileKey_reach_inert` over the
+-- whole W3a write path: for a W3a state there is an untainted base (`ReachedByRules`) with the
+-- same reachability into every *untainted-key* node (`isDerived S (v.type,v.pred) = false`).
+-- Each reconcile pass writes only into its derived R-node (`hder : isDerived (dt,R) = true`),
+-- distinct from any untainted target since equal keys share `isDerived`; the R-node-not-a-source
+-- premise comes from the pre-pass sub-derivation via the schema-level terminal hypothesis
+-- `hterm`. The reachability half of the `hag` reduction (PROOF_STATUS point 2). Standard axioms:
+#print axioms reachedByW3a_reach_inert
+
 end Zanzibar

@@ -400,12 +400,22 @@ and re-proves/widens the same named theorems. Every stage must keep
     Payoff `reconcileKey_reach_inert` (via generic `nreaches_cons_inert`): one reconcile pass adds
     no reachability to a non-R-node — the **per-pass** inertness the multi-pass `hag` transfer
     folds over. Carry `NoStoreSubjectR`/`NoTtuTarget` (per derived R) into the W3a/W4 fragment.
+    (1.75) ✅ **DONE (2026-07-11): multi-pass reconcile inertness folded to the untainted base**
+    (`GraphIndex/ReconcileCorrect.lean`, sorry-free, axiom-clean `[propext, Quot.sound]`). The
+    `reconcile` constructor now carries `hder : isDerived S (dt,R) = true` (faithful); the fold
+    `reachedByW3a_reach_inert` peels one `reconcileKey_reach_inert` per pass down to the
+    `ReachedByRules` base, giving `∀ {u v}, isDerived S (v.type,v.pred) = false → NReaches σ.edges
+    u v → NReaches σ0.edges u v` for an untainted base σ0. Target-distinctness from `hder` (equal
+    keys share `isDerived`); R-node-not-a-source from `reachedByW3a_Rnode_not_source` on the
+    sub-derivation, via the schema-level terminal hypothesis `hterm : ∀ dt R, isDerived (dt,R) →
+    NoTtuTarget S R ∧ NoStoreSubjectR T R` (carry into W3a/W4). **The reachability half of `hag`.**
     (2) discharge the per-relation agreement `hag` — the **per-relation**
-    untainted-correctness lemma (STILL the deeper BLOCKER: `graph_correct_rules` needs
-    whole-schema `UntaintedSchema`, too strong for W3's mixed schema — restate for one
-    *hereditarily-untainted* relation; reconcile edges are reachability-inert for
-    untainted-`r'` object nodes since a derived edge's bare-candidate source is never a
-    target node; fuel via the T0a-stability sidestep). (3) candidate completeness (an
+    untainted-correctness lemma (STILL the deeper BLOCKER, now unblocked on inertness:
+    `graph_correct_rules` needs whole-schema `UntaintedSchema`, too strong for W3's mixed schema —
+    restate for one *hereditarily-untainted* relation; the operand read reduces to the base read
+    via `reachedByW3a_reach_inert` (+ `probeNonDerived_iff`/`reach_iff_nreaches` on both states,
+    star-free ⇒ probe 1 only; the reverse `σ0.edges ⊆ σ.edges` inclusion is free from
+    `reconcileKey_edges_mono`); fuel via the T0a-stability sidestep). (3) candidate completeness (an
     admitted `ReachedByW3aAdmitted`: every `sem`-member is a positive-leaf concrete) +
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +
