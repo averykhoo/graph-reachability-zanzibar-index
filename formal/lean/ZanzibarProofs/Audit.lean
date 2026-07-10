@@ -137,6 +137,15 @@ namespace Zanzibar
 #print axioms bridgedInConcrete_elim
 #print axioms ensureInBridges_edges_mem
 #print axioms usStarReached_grant_or_bridge
+-- W1c completeness semantic core (GraphIndex/UsStarCorrect.lean) — the userset-star
+-- leaf eliminations (admitting the `instances`-branch / userset-star direct match),
+-- `instances_ne_star`, and `reach_of_semAux_us` (`sem ⇒ probe 1 ∨ probe 2`, threading
+-- the `concrete → w_any` in-bridge), parametrized by edge-completeness + in-bridge
+-- completeness. Standard axioms only:
+#print axioms instances_ne_star
+#print axioms directLeaf_elim_us
+#print axioms mog_elim_us
+#print axioms reach_of_semAux_us
 -- **T2b stage W1b — the read-correspondence SOUNDNESS core
 -- (GraphIndex/ObjStarCorrect.lean)** — the grant-or-bridge edge characterization,
 -- the bridge-absorbing generalized grant chain `GrantReach`, and its two directions:
