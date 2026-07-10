@@ -71,7 +71,10 @@ reachability ↔ `sem` argument.
 **What remains for `graph_correct_rules` (`check = sem` on the untainted fragment),
 the deferred next increment — the reachability ↔ `sem` core:**
 1. (routing ✓ above) + the store-validity analog (`StoreValid`: raw writes name
-   relations with a Direct arm).
+   relations with a Direct arm). **Soundness groundwork ✓** —
+   `reachedByRules_edge_sound` (`GraphIndex/RulesCorrect.lean`, axiom-clean): every edge
+   of a `ReachedByRules` state materializes some `u ∈ rewriteClosure S t` for a stored
+   `t` (the W2 analog of `reachedByDirect_edge_sound`, via `foldl_writeDirect_edges_sound`).
 2. **The rewrite-closure ↔ `sem` correspondence** — the genuinely new content. The
    reduction that makes it tractable: `writeRules` materializes exactly the edges of the
    rewrite-closure `T*` of the store, so the goal factors as

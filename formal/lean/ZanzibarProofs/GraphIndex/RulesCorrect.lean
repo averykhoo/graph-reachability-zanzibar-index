@@ -86,4 +86,55 @@ theorem check_eq_probeNonDerived {σ : GraphState} {S : Schema}
   rw [hsc, isDerived_untainted h]
   simp
 
+/-! ## Soundness groundwork — edges trace back to rewrite-closure tuples
+
+For the deferred reachability ⇒ `sem` half, the edge set must be pinned to the store's
+rewrite-closure. `writeRules` folds `writeDirect` over `rewriteClosure S t`, so every
+edge is either an old edge or the materialization of some closure tuple — the W2 analog
+of `reachedByDirect_edge_sound`. Unconditional, reusable. -/
+
+/-- Folding `writeDirect` over `us`: every resulting edge is an old edge of `σ` or the
+    materialization `subjNode u.subject → objNode u.object u.relation` of some `u ∈ us`. -/
+theorem foldl_writeDirect_edges_sound (us : List Tuple) :
+    ∀ {σ : GraphState} {a b : NodeKey},
+      (a, b) ∈ (us.foldl (fun acc u => acc.writeDirect u) σ).edges →
+      (a, b) ∈ σ.edges ∨
+        ∃ u ∈ us, a = subjNode u.subject ∧ b = objNode u.object u.relation := by
+  induction us with
+  | nil => intro σ a b hab; exact Or.inl hab
+  | cons t rest ih =>
+    intro σ a b hab
+    -- (t :: rest).foldl f σ = rest.foldl f (σ.writeDirect t)
+    rcases ih hab with hin | ⟨u, hu, h1, h2⟩
+    · -- edge is in (σ.writeDirect t).edges: either old, or t's materialization
+      rw [writeDirect_edges] at hin
+      split at hin
+      · rcases List.mem_cons.mp hin with heq | hmem
+        · obtain ⟨e1, e2⟩ := Prod.ext_iff.mp heq
+          exact Or.inr ⟨t, List.mem_cons_self, e1, e2⟩
+        · exact Or.inl hmem
+      · exact Or.inl hin
+    · exact Or.inr ⟨u, List.mem_cons_of_mem _ hu, h1, h2⟩
+
+/-- **Every edge of a W2-reached state materializes a rewrite-closure tuple.** By
+    induction over the rule-routed write path: a fresh edge comes from some `u` in the
+    rewrite-closure of the just-written `t`; an old edge is handled by the IH. The
+    soundness-half groundwork for `graph_correct_rules` — a graph path is a chain of
+    rewrite-closure materializations, which the `sem`-correspondence will match against
+    `evalE`'s computed/ttu/union recursion. -/
+theorem reachedByRules_edge_sound {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByRules σ S T) :
+    ∀ a b, (a, b) ∈ σ.edges →
+      ∃ t ∈ T, ∃ u ∈ rewriteClosure S t,
+        a = subjNode u.subject ∧ b = objNode u.object u.relation := by
+  induction h with
+  | empty S => intro a b hab; simp [emptyState] at hab
+  | @step σ S T t _hd ih =>
+    intro a b hab
+    -- σ.writeRules S t = (rewriteClosure S t).foldl writeDirect σ
+    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) hab with hin | ⟨u, hu, h1, h2⟩
+    · obtain ⟨t', ht', u, hu, h1, h2⟩ := ih a b hin
+      exact ⟨t', List.mem_cons_of_mem _ ht', u, hu, h1, h2⟩
+    · exact ⟨t, List.mem_cons_self, u, hu, h1, h2⟩
+
 end Zanzibar
