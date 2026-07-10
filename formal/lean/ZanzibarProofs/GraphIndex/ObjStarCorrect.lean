@@ -2,21 +2,21 @@ import ZanzibarProofs.GraphIndex.ObjStarWrite
 import ZanzibarProofs.GraphIndex.BareStarCorrect
 
 /-!
-# T2b, stage W1b — object wildcards `[T:*]`, the read-correspondence SOUNDNESS core
+# T2b, stage W1b — object wildcards `[T:*]`, the read-correspondence SEMANTIC CORES
 
 `SEMANTICS.md` §7.5; ROADMAP "The staged T2 plan", sub-stage **W1b**;
 `wildcard-materialization-spec.md §3.4` (the `w_all → concrete` bridge composition).
 
-This file proves the **soundness** half of the W1b read correspondence — a graph
-path answers no more than `sem` — on the object-wildcard fragment (subjects
-star-free, objects may be `T:*`). Unlike W1a (bare star *subjects*, zero bridges),
-W1b materializes `w_all → concrete` **bridge** edges (`ObjStarWrite.lean`), so a
-graph path now interleaves *grant* hops and *bridge* hops. The soundness argument
-absorbs each `grant-into-w_all` + `bridge-out` pair into a single generalized grant
-against a **concrete** object, keyed through `matchingObjects` (a `T:*` grant is in
-`grantsOf` for every concrete object of type `T`, `Semantics.matchingObjects`).
+This file proves **both semantic halves** of the W1b read correspondence on the
+object-wildcard fragment (subjects star-free, objects may be `T:*`). Unlike W1a
+(bare star *subjects*, zero bridges), W1b materializes `w_all → concrete` **bridge**
+edges (`ObjStarWrite.lean`), so a graph path interleaves *grant* hops and *bridge*
+hops. The absorbing idea (both directions): a `grant-into-w_all` + `bridge-out` pair
+is a single generalized grant against a **concrete** object, keyed through
+`matchingObjects` (a `T:*` grant is in `grantsOf` for every concrete object of type
+`T`, `Semantics.matchingObjects`).
 
-Concretely:
+**Soundness** (graph path ⇒ no more than `sem`):
 
 * `GrantReach` — a bridge-absorbing membership chain: each hop is a stored grant
   whose object matches a *concrete* object name via `matchingObjects` (so a
@@ -28,13 +28,20 @@ Concretely:
   `GrantReach`, peeling grant (1 edge) or grant+bridge (2 edges) at each step,
   classified by the edge characterization `wildReached_grant_or_bridge`.
 
-Bridge-*completeness* (needed only for the *completeness* half — constructing the
-bridge from a `sem` membership) and the fuel-bounded top-level assembly are the
-deferred next increments; nothing here needs them (soundness only *reads* edges).
+**Completeness** (`sem` ⇒ probe 1 ∨ probe 3):
 
-This file needs neither bridge-completeness nor the admitted-writes refinement:
-soundness reads whatever edges exist. It is stated over the raw `WildReached`
-closure.
+* `reach_of_semAux_os` — a `sem` membership is reachability to the concrete object
+  node (probe 1) or its `w_all` node (probe 3); a `T:*` direct match hits probe 3,
+  a flow-through threads a bridge hop when the recursion reached the userset via
+  its own `w_all` node.
+
+Both cores are stated over the *operational facts they consume* — soundness over
+the edge characterization (a derived property of `WildReached`); completeness over
+edge-completeness `hEC` + the bridge hypothesis `hbr`. The **admitted,
+bridge-complete write-closure** that discharges completeness's `hEC`/`hbr`, and the
+**fuel-bounded assembly** of soundness's chain length (`m ≤ fuelBound`), are the
+deferred next increments; neither core needs bridge-completeness threaded through
+its own induction.
 -/
 
 namespace Zanzibar
@@ -471,5 +478,102 @@ theorem grantReach_of_trail {S : Schema} {T : Store} {σ : GraphState}
           refine ⟨m + 1, ?_⟩
           exact GrantReach.hop t htT hobj (matchingObjects_self _ hobj) hm
       · rw [subjNode_plain hs, wAllNode] at hbr; simp [NodeKey.mk.injEq] at hbr
+
+/-! ## `sem ⇒ probe 1 ∨ probe 3` — the completeness semantic core
+
+The completeness half of the W1b read correspondence: a `sem` membership at a
+concrete query object is reachability from `subjNode s` to *either* the concrete
+object node (probe 1) *or* the `w_all` node covering it (probe 3). Mirrors W1a's
+`reach_of_semAux_bs`, but the disjunction is on the **object** side (probe 3, a
+wildcard grant lands on the `w_all` node) rather than the subject side, and the
+flow-through recursion may reach a userset via its **own** `w_all` node — which
+must be threaded through a `w_all → concrete` **bridge** hop to continue.
+
+Like the soundness core, this lemma is stated over the two operational facts it
+consumes — edge-completeness (`hEC`, every stored grant's edge is present) and a
+bridge hypothesis (`hbr`, a grant subject reachable via its `w_all` node has its
+materialized bridge) — deferring the write-closure that discharges them (the
+admitted, bridge-complete closure) to the next increment, exactly as
+`grantReach_of_trail` defers to the edge characterization it consumes. -/
+
+/-- **Completeness core (W1b).** For a star-free query subject `s` and concrete
+    query object name, a `sem` membership is reachability from `subjNode s` to the
+    concrete object node (probe 1) **or** its `w_all` node (probe 3). A direct
+    match on a concrete grant hits probe 1, on a `T:*` grant hits probe 3; a
+    flow-through prepends the recursion's path — through a bridge hop when the
+    recursion reached the userset via its own `w_all` node. -/
+theorem reach_of_semAux_os {S : Schema} {T : Store} {q : Query} {edges : List (NodeKey × NodeKey)}
+    (hPD : PureDirect S) (hOS : ObjStarStore T) (hqs : q.subject.name ≠ STAR)
+    (hEC : ∀ t ∈ T, (subjNode t.subject, objNode t.object t.relation) ∈ edges)
+    (hbr : ∀ g ∈ T, g.subject.name ≠ STAR →
+      NReaches edges (subjNode q.subject)
+        (wAllNode g.subject.type g.subject.predicate) →
+      (wAllNode g.subject.type g.subject.predicate, subjNode g.subject) ∈ edges) :
+    ∀ (f : Nat) (ot on r : String), on ≠ STAR →
+      semAux S q.subject T q f ot on r = true →
+      NReaches edges (subjNode q.subject) (objNode ⟨ot, on⟩ r)
+      ∨ NReaches edges (subjNode q.subject) (wAllNode ot r) := by
+  set s := q.subject with hs_def
+  have hsn : s.name ≠ STAR := hqs
+  intro f
+  induction f with
+  | zero => intro ot on r hon h; simp [semAux] at h
+  | succ f ih =>
+    intro ot on r hon h
+    rw [semAux, step] at h
+    cases hlk : S.lookup (ot, r) with
+    | none => rw [hlk] at h; simp at h
+    | some e =>
+      rw [hlk] at h
+      obtain ⟨rs, rfl⟩ := pureDirect_lookup hPD hlk
+      have h' : directLeaf (semAux S s T q f) s T q rs ot on r = true := h
+      rcases directLeaf_elim_os hOS hsn h' with ⟨g, hg, hgs⟩ | hmog
+      · -- direct match: the grant's own edge, to the concrete node or its w_all node
+        obtain ⟨hgT, hgrel, hgot, hgon, _⟩ := grantsOf_elim hg
+        have hedge := hEC g hgT
+        by_cases hostar : g.object.name = STAR
+        · -- w_all target (probe 3)
+          have hobj : objNode g.object g.relation = wAllNode ot r := by
+            unfold objNode wAllNode; rw [if_pos hostar, hgrel, hgot]
+          rw [hobj, hgs] at hedge
+          exact Or.inr (NReaches.edge hedge)
+        · -- concrete target (probe 1)
+          have hgon' : g.object.name = on := matchingObjects_elim hgon hostar
+          have hobj : objNode g.object g.relation = objNode (⟨ot, on⟩ : ObjectRef) r := by
+            rw [objNode_plain hostar, objNode_plain hon]
+            have : g.object = (⟨g.object.type, g.object.name⟩ : ObjectRef) := rfl
+            rw [this, hgot, hgon', hgrel]
+          rw [hobj, hgs] at hedge
+          exact Or.inl (NReaches.edge hedge)
+      · -- flow-through: recurse (same subject), then extend by the grant's edge
+        obtain ⟨g, hg, hpb, hps, hrec⟩ := mog_elim_os hOS hmog
+        obtain ⟨hgT, hgrel, hgot, hgon, _⟩ := grantsOf_elim hg
+        -- IH on the userset node of g (concrete, star-free)
+        have hrec' : semAux S s T q f g.subject.type g.subject.name g.subject.predicate = true :=
+          hrec
+        have hmid := ih g.subject.type g.subject.name g.subject.predicate hps hrec'
+        -- objNode of g's subject-userset = subjNode g.subject (flow-through)
+        have hflow : objNode (⟨g.subject.type, g.subject.name⟩ : ObjectRef) g.subject.predicate =
+            subjNode g.subject := objNode_eq_subjNode hps
+        rw [hflow] at hmid
+        -- reach to subjNode g.subject (directly, or via the bridge from its w_all node)
+        have hreachSub : NReaches edges (subjNode s) (subjNode g.subject) := by
+          rcases hmid with hL | hR
+          · exact hL
+          · exact hR.tail (hbr g hgT hps hR)
+        -- extend by g's grant edge, to the concrete node or its w_all node
+        have hedge := hEC g hgT
+        by_cases hostar : g.object.name = STAR
+        · have hobj : objNode g.object g.relation = wAllNode ot r := by
+            unfold objNode wAllNode; rw [if_pos hostar, hgrel, hgot]
+          rw [hobj] at hedge
+          exact Or.inr (hreachSub.tail hedge)
+        · have hgon' : g.object.name = on := matchingObjects_elim hgon hostar
+          have hobj : objNode g.object g.relation = objNode (⟨ot, on⟩ : ObjectRef) r := by
+            rw [objNode_plain hostar, objNode_plain hon]
+            have : g.object = (⟨g.object.type, g.object.name⟩ : ObjectRef) := rfl
+            rw [this, hgot, hgon', hgrel]
+          rw [hobj] at hedge
+          exact Or.inl (hreachSub.tail hedge)
 
 end Zanzibar

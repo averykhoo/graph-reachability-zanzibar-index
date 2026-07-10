@@ -129,6 +129,10 @@ namespace Zanzibar
 #print axioms semAux_one_of_grant
 #print axioms semAux_of_grantReach
 #print axioms grantReach_of_trail
+-- completeness semantic core (`sem ⇒ probe 1 ∨ probe 3`), parametrized by
+-- edge-completeness + the bridge hypothesis (the admitted, bridge-complete
+-- write-closure that discharges them is the deferred next increment):
+#print axioms reach_of_semAux_os
 -- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
 -- at fragment scope — now REAL proved theorems (were false over the deleted
 -- abstract closure). Expect only the three standard axioms (no `sorryAx`):

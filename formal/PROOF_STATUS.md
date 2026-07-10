@@ -54,17 +54,32 @@ Gemini corrections logged: its set-engine model used `MemberSet String` (unsound
 name collisions across types; use `String × String`); its T0a pigeonhole is invalid
 (our `semAux` has no visited-set); its T4 `phat_def` axiom rejected (C4 gate).
 
-## Session 2026-07-10 (W1b SOUNDNESS CORE — the bridge-absorbing chain, `GrantReach`)
+## Session 2026-07-10 (W1b SOUNDNESS + COMPLETENESS CORES — `GrantReach` + `reach_of_semAux_os`)
 
 Resuming W1b (object wildcards `[T:*]`) from the write model (previous session).
-Scope call: deliver the **soundness half** of the read correspondence
-(`graph path ⇒ no more than `sem``) as a self-contained honest increment — it
-reads existing edges only, so it needs **neither bridge-completeness nor the
-admitted-writes refinement** (those are for the *completeness* half). New file
-`GraphIndex/ObjStarCorrect.lean`, sorry-free, all five audited theorems
+Delivered **both semantic halves** of the read correspondence as self-contained
+honest increments (two green+pushed commits), each stated over the operational
+facts it consumes so the write-closure that discharges them can land next. New
+file `GraphIndex/ObjStarCorrect.lean`, sorry-free, all six audited theorems
 axiom-clean (`wildReached_grant_or_bridge` = `[propext]` only; the rest a subset
-of the three standard axioms). `verify.sh` green (build + 0 sorries + 60
-conformance + audit). Sorry count held at 0.
+of the three standard axioms). `verify.sh` green throughout (build + 0 sorries +
+60 conformance + audit). Sorry count held at 0.
+
+**Completeness core (`reach_of_semAux_os`)** — the analog of W1a's
+`reach_of_semAux_bs`, but the disjunction is on the **object** side (probe 1 =
+concrete object node ∨ probe 3 = `w_all` node): a direct match on a concrete grant
+hits probe 1, on a `T:*` grant hits probe 3; a flow-through prepends the
+recursion's path, **through a bridge hop** when the recursion reached the userset
+via its own `w_all` node. Stated over two operational facts (like the soundness
+core is stated over the edge characterization): `hEC` (edge-completeness — every
+stored grant's edge present) and `hbr` (a grant subject reachable via its `w_all`
+node has its materialized `w_all → concrete` bridge). Needs **no fuel bound** (it
+goes `sem ⇒ reach`, and `sem` is already at `fuelBound`). The write-closure that
+discharges `hEC`/`hbr` (an admitted, bridge-complete closure) is the deferred
+increment.
+
+The soundness core (below) reads existing edges only, so it needs **neither
+bridge-completeness nor the admitted-writes refinement**.
 
 **The idea that tames the bridges.** A W1b graph path interleaves *grant* hops
 (`subjNode s → objNode o R`, subjects star-free) and *bridge* hops
@@ -107,23 +122,28 @@ may be a bare `w_all` node (the read's probe-3 endpoint).
   (2 edges, `hop`/`base`) at each step, classified by the edge characterization
   (a plain-source edge is a grant; a `w_all`-source edge is a bridge).
 
-**What remains for `graph_correct_objStar`, sharply isolated:**
-1. **Completeness half** (`sem ⇒ probe 1 ∨ probe 3`) — the analog of
-   `reach_of_semAux_bs`, but the flow-through recursion may reach a userset via
-   its `w_all` node, so it must **thread a bridge hop** `w_all(T,R) → concrete`.
-   This is the piece that needs the **bridge-completeness invariant** (every live
-   bridged-concrete node has its `w_all → c` bridge) maintained along an
-   *admitted* write-closure (grants AND bridges admitted — the "no
-   wildcard-own-shape cycle" fragment), plus `ObjStarValid` (a `T:*` tuple is on a
-   declared object-wildcard shape, so a reached `w_all` node's shape is bridged).
-2. **Fuel-bounded top-level assembly** — `semAux_of_grantReach` gives fuel = the
-   `GrantReach` length `m`; the top-level theorem needs `m ≤ fuelBound`. The crude
-   `m ≤ nodes.length + 1` is too weak here (the write can create up to `~4|T|`
-   nodes incl. duplicate `w_all` nodes, and `fuelBound` with `|keys| = 1` is only
-   `2|T|+4`). The tight bound is `m ≤ (distinct plain source nodes) ≤ 2|T|` — each
-   grant hop consumes a distinct plain source node in a compressed (nodup) trail.
-   Formalizing that distinctness bound is the remaining arithmetic.
-Both are the next increment; the soundness semantic+reachability core is now done.
+**What remains for `graph_correct_objStar`, sharply isolated (both semantic
+halves are now DONE — what is left is the operational discharge + arithmetic):**
+1. **The admitted, bridge-complete write-closure** that discharges `hEC`
+   (edge-completeness — mirror of `admitted_edge_complete`) and `hbr` (the bridge
+   hypothesis). This needs the **bridge-completeness invariant** (every live
+   bridged-concrete node has its `w_all → c` bridge) maintained along a closure
+   where grants AND the endpoint bridges are admitted (the "no wildcard-own-shape
+   cycle" fragment), plus `ObjStarValid` (a `T:*` tuple is on a declared
+   object-wildcard shape, so a reached `w_all` node's shape is bridged — turning a
+   reached `w_all` into a live bridged-concrete whose bridge exists). The
+   admission-threading through `writeWild`'s nested `ensureBridges` is the fiddly
+   part; the semantic use-sites are already proved.
+2. **Fuel-bounded top-level assembly** (soundness side only) —
+   `semAux_of_grantReach` gives fuel = the `GrantReach` length `m`; the top-level
+   theorem needs `m ≤ fuelBound`. The crude `m ≤ nodes.length + 1` is too weak here
+   (the write can create up to `~4|T|` nodes incl. duplicate `w_all` nodes, and
+   `fuelBound` with `|keys| = 1` is only `2|T|+4`). The tight bound is `m ≤
+   (distinct plain source nodes) ≤ 2|T|` — each grant hop consumes a distinct plain
+   source node in a compressed (nodup) trail. Formalizing that distinctness bound is
+   the remaining arithmetic. (The *completeness* side needs no fuel bound.)
+These are the next increment; both semantic cores (soundness `GrantReach ⇒ sem` +
+`trail ⇒ GrantReach`, completeness `sem ⇒ probe 1 ∨ probe 3`) are done.
 
 ## Session 2026-07-10 (W1b STARTED — object wildcards; bridges proven MANDATORY + the bridge-materializing write model)
 
