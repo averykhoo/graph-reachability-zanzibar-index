@@ -446,11 +446,18 @@ and re-proves/widens the same named theorems. Every stage must keep
     `RewriteRanked S` by **rank compression** (`rewriteRanked_restrict`: count `S↾U`-keys ranked
     below `k`, bounded now by `|S↾U.keys|`), given the faithful side condition
     `RewriteMatchDeclared` (every rewrite's match key is a declared untainted relation — mirrors
-    the compiler routing arms over declared operands). **Remaining in Step A: the state transfer**
-    (build a canonical `ReachedByRulesAdmitted σ' (S↾U) T` with `σ'.edges ≈ σ0.edges` — edges are
-    exactly the materialised closure tuples, so equal closure membership gives equal edges; the
-    open subtlety is transferring `FoldAdmits` across the differing fold lists) + the base `hag`
-    equation. (3) candidate completeness (an
+    the compiler routing arms over declared operands).
+    (2.1) ✅ **DONE (2026-07-11): Step A CLOSED — state transfer + base `hag` equation**
+    (`GraphIndex/RestrictBase.lean`, sorry-free, axiom-clean). `foldAdmits_of_acyclic` (a
+    `writeDirect` fold admits every write when each materialised edge lands in an acyclic target
+    containing the running edges — order-insensitive, so the differing fold lists don't matter);
+    `exists_admitted_restrict` (canonical `ReachedByRulesAdmitted σ' (S↾U) T` with `σ'.edges ≈
+    σ0.edges` — both edge sets are the materialised closures, equal by the fuel bridge; admissions
+    transfer via acyclicity of the shared target `σ0.edges`); **`graphRec_base_eq`** (the
+    deliverable — `graphRec σ0 s dt on r' = sem S T ⟨s,r',⟨dt,on⟩⟩` for untainted `r'` on an
+    admitted mixed-`S` base, via `probeNonDerived σ0 = probeNonDerived σ' = check σ' = sem (S↾U) =
+    sem S`). Fragment premise `hRootB` (derived defs `RootBoolean`) supersedes `hDrop` and forces
+    stored relations untainted. **Remaining in W3a:** (3) candidate completeness (an
     admitted `ReachedByW3aAdmitted`: every `sem`-member is a positive-leaf concrete) +
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +

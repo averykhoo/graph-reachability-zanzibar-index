@@ -8,6 +8,56 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11 (W3a Step A — CLOSED: state transfer + base `hag` equation)
+
+Resuming W3a Step A from HANDOFF "the remaining Step A: state transfer + base `hag` equation."
+Two green+pushed axiom-clean increments (both in `GraphIndex/RestrictBase.lean` + `Audit.lean`);
+`verify.sh` green throughout (build + 0 sorries + zcli + audit standard-axioms-only + 60
+conformance). Sorry count held at 0. **This CLOSES Step A** — the mixed-schema `hag` base
+correspondence is now a single reusable theorem.
+
+**Increment 1 — the state transfer (`exists_admitted_restrict`, `foldAdmits_of_acyclic`).** The
+roadmap's flagged "open subtlety": σ0 (admitted over mixed `S`) and its restricted counterpart σ'
+(over `S↾U`) fold `writeDirect` over DIFFERENT lists (`rewriteClosure S t` vs `rewriteClosure
+(S↾U) t`, differing by fuel/dups), and admission (`FoldAdmits`, cycle-rejection) is order-sensitive
+— so the states are not literally equal. **The bridge:** admission depends only on the *final* edge
+relation being acyclic. `foldAdmits_of_acyclic` — a `writeDirect` fold admits every write provided
+each materialised edge lands in an acyclic target `Ef` already containing the running edges (a
+self-loop is a 1-cycle in `Ef`; a back-path `b →* a` plus the new `a → b` is a cycle in `Ef`; the
+write keeps the running edges inside `Ef` via `writeDirect_edges`). It is order-insensitive — the
+only input from the list is its *set* of materialised edges. `exists_admitted_restrict` then builds
+the canonical `ReachedByRulesAdmitted σ' (S↾U) T` by induction on the write path: at each step the
+target `Ef := σ0.edges` is acyclic (`Inv.acyclic`), σ'-prev sits inside it (edge-IH + writeRules
+monotonicity), and every restricted-closure write materialises there (fuel bridge `⊆` +
+`reachedByRulesAdmitted_edge_complete`). Edge agreement of the finished σ' vs σ0 is then immediate
+from the two edge characterizations (`reachedByRules_edge_sound` / `…Admitted_edge_complete`) + the
+fuel bridge — no reference to intermediate states.
+
+**Increment 2 — the base `hag` equation (`graphRec_base_eq`).** On an admitted rule-routed `σ0`
+over mixed `S` and untainted operand `r'`: `graphRec σ0 s dt on r' = sem S T ⟨s,r',⟨dt,on⟩⟩`. Chain:
+`graphRec σ0 = probeNonDerived σ0` (def) `= probeNonDerived σ'` (edge agreement ⇒ per-node `reach`
+agreement, `probeNonDerived` being a disjunction of `reach` probes) `= check σ'`
+(`check_eq_probeNonDerived`, `S↾U` untainted) `= sem (S↾U) T q'` (`graph_correct_rules` over `S↾U`
+as a black box) `= sem S T q'` (`semAux_restrict` at `fuelBound S T`, then `sem_fuel_stable` over
+the untainted `S↾U` to bridge `fuelBound (S↾U) T ≤ fuelBound S T`). The W2 restriction hypotheses
+transfer: WF/TtuTuplesetsDirect by `defs`-subset, RewriteRanked by `rewriteRanked_restrict`,
+StoreValidRules by `restrictUntainted_lookup` given stored relations untainted — which the fragment
+premise **`hRootB`** (every derived def `RootBoolean`, superseding the old `hDrop`) forces: a
+derived def would be `RootBoolean` ⇒ `exprDirects = []` ⇒ no `Direct` arm for `StoreValidRules` to
+match. **Wiring note:** RestrictBase now imports `ReconcileCorrect` (for `graphRec`/`RootBoolean`/
+`exprArms_rootBoolean`); no cycle (only `Audit.lean` imports RestrictBase).
+
+**Attack-first.** Both increments are THEOREM consequences of already-attack-verified facts (the
+fuel bridge, `semAux_restrict`, `graph_correct_rules`), so low refutation risk; the genuinely new
+content (acyclic-admission, the reach/probe congruence) is combinatorial. No refutation.
+
+**Resume → Step B (candidate completeness + assembly `graph_correct_w3a`).** See HANDOFF "The next
+task." Feed `graphRec_base_eq` (needs an *admitted* W3a base) through `graphRec_reduce_base` — whose
+`hag` half currently yields a `ReachedByRules` (not admitted) base, so either re-cut it to hand back
+`ReachedByRulesAdmitted`, or prove the reduction preserves admission. Then edge-provenance
+(`reconcileKey` peel), the admitted W3a closure `ReachedByW3aAdmitted`, and the derived/untainted
+query assembly.
+
 ## Session 2026-07-11 (W3a Step A — the fuel bridge, closed both directions)
 
 Resuming W3a Step A from HANDOFF "the fuel bridge is the one remaining subtlety." Three

@@ -111,9 +111,21 @@ only adds edges). Done so far in W3a (`Reconcile.lean`, `ReconcileWrite.lean`,
   `restrictUntainted_keys_length_le`); `⊆` is saturation of the `S↾U`-closure, whose
   `RewriteRanked (S↾U)` is built from `RewriteRanked S` by rank compression
   (`rewriteRanked_restrict`), given the faithful side condition **`RewriteMatchDeclared`**
-  (every rewrite's match key is a declared untainted relation — to be discharged in the
-  fragment assembly). **Remaining: the admitted state transfer + base `hag` equation (see
-  "The next task").**
+  (every rewrite's match key is a declared untainted relation).
+- **Step A — CLOSED (`RestrictBase.lean`, 2026-07-11): state transfer + base `hag` equation.**
+  **`foldAdmits_of_acyclic`** — a `writeDirect` fold admits every write when each materialised
+  edge lands in an acyclic target relation containing the running edges (order-insensitive: only
+  the *set* of materialised edges matters). **`exists_admitted_restrict`** — from an admitted
+  rule-routed state over mixed `S`, build a canonical `ReachedByRulesAdmitted σ' (S↾U) T` with
+  identical edge membership (both edge sets are the materialised closures, equal by the fuel
+  bridge; admissions transfer via acyclicity of the shared target `σ0.edges` — closes the flagged
+  "different fold lists" subtlety). **`graphRec_base_eq`** (the deliverable) — on an admitted base
+  over mixed `S`, `graphRec σ0 s dt on r' = sem S T ⟨s,r',⟨dt,on⟩⟩` for untainted `r'`, via
+  `graphRec σ0 = probeNonDerived σ0 = probeNonDerived σ' = check σ' = sem (S↾U) T q' = sem S T q'`
+  (edge agreement · `graph_correct_rules` over `S↾U` · `semAux_restrict` + fuel stability). The W2
+  restriction hyps transfer to `S↾U`; `RootBoolean`-derived defs force stored relations untainted.
+  **Fragment premise `hRootB` (every derived def `RootBoolean`) supersedes the old `hDrop`.** The
+  base is `…Admitted`; Step B supplies the admitted W3a closure to feed it.
 
 **W3a fragment (assembled so far):** derived defs are `ComputedOnly` ∧ `RootBoolean`,
 operands untainted, `hterm` (every derived R: `NoTtuTarget S R ∧ NoStoreSubjectR T R`),
@@ -123,56 +135,21 @@ star-freeness (`hcands` bare, `hcStar`/`honStar` star-free).
 
 ---
 
-## The next task — finish W3a (`graph_correct_w3a`), in three steps
+## The next task — finish W3a (`graph_correct_w3a`): Step B, then Step C
 
-### Step A — discharge `hag` on the base (schema-restriction route; ~half done)
+**Step A is CLOSED** (all of `GraphIndex/RestrictBase.lean`, 2026-07-11): the `hag` base
+correspondence is proved end-to-end as **`graphRec_base_eq`** — on an admitted rule-routed state
+over the MIXED schema `S`, the operand read equals `sem S T` for every untainted operand. See the
+"State of the world" bullets above for the shape (schema restriction · `semAux_restrict` · fuel
+bridge · state transfer · the composed equation). The reusable Step A fact requires an **admitted**
+base (`ReachedByRulesAdmitted`), which is exactly what Step B's admitted W3a closure will supply.
 
-Needed: for a `ReachedByRules σ0 S T` state over the MIXED schema `S` and an untainted
-operand `r'` (`isDerived S (dt, r') = false`),
-`graphRec σ0 s dt on r' = semAux S s T q f dt on r'`. `graph_correct_rules` proves this
-under WHOLE-schema `UntaintedSchema` — too strong for W3's mixed schema — so restrict `S`
-to `S↾U := restrictUntainted S` (drop tainted defs) and reuse W2 as a black box.
-
-**DONE (`GraphIndex/RestrictBase.lean`, 2026-07-11):** the restriction + its facts.
-`untaintedSchema_restrict` (`S↾U` untainted, under `NodupKeys`); `restrictUntainted_lookup`
-(schemas agree at untainted keys); **`semAux_restrict`** (the semantic heart: `sem` over `S`
-and `S↾U` coincide at every untainted key — heredity via `evalE_congr` + `untainted_closed`);
-and the rewrite-fan-out preservation `schemaRewrites_restrict` / `rewriteStep_restrict` /
-`rewriteClosureAux_restrict` (the closure at any FIXED fuel is unchanged), given the fragment
-fact `hDrop` (every tainted def emits no arms — `RootBoolean` ⇒ `exprArms_rootBoolean`).
-
-**DONE (`RestrictBase.lean`, 2026-07-11): the fuel bridge.** `rewriteClosure_restrict_mem_iff`
-— `rewriteClosure S t` (fuel `|S.keys|+1`) and `rewriteClosure (S↾U) t` (fuel `|S↾U.keys|+1`)
-have identical membership. `⊇` unconditional (`rewriteClosureAux_mono` via the `stepN` layer
-algebra + `restrictUntainted_keys_length_le`); `⊆` by saturation of the `S↾U`-closure, whose
-`RewriteRanked (S↾U)` is built from `RewriteRanked S` by rank compression
-(`rewriteRanked_restrict`: count `S↾U`-keys ranked below `k`, bounded by `|S↾U.keys|`;
-`length_filter_lt_of_mem` is the strict filtered-length step), given the faithful side condition
-**`RewriteMatchDeclared S`** (every rewrite's match key `(objectType, matchRel)` is a declared
-untainted relation — mirrors the compiler routing arms over declared operands; discharge it in
-the fragment assembly, it is a hypothesis, NOT a postulate of the conclusion).
-
-**REMAINING — the state transfer + the base `hag` equation:**
-1. **State transfer (the open subtlety).** On the *admitted* path (`FoldAdmits` ⇒ no cycle
-   rejection), edges are EXACTLY `reachedByRules_edge_sound` (⊆) +
-   `reachedByRulesAdmitted_edge_complete` (⊇) — i.e. `(a,b) ∈ σ.edges ↔ ∃ t∈T, ∃ u ∈
-   rewriteClosure S t, materialise`. With the fuel bridge (`rewriteClosure_restrict_mem_iff`),
-   build a canonical `ReachedByRulesAdmitted σ' (S↾U) T` and show `σ'.edges ≈ σ0.edges`
-   (membership — both sides are the same materialised-closure characterization, now with equal
-   closures). `reach` depends only on edge membership (`reach_iff_nreaches` + `edgesClosed`). The
-   catch: σ' and σ0 fold `writeDirect` over DIFFERENT lists (differing by fuel/dups), so they are
-   not literally equal — go through edge membership, and transfer `FoldAdmits` across the
-   differing lists (σ' has fewer/equal edges at each step ⇒ still no cycle rejection).
-2. **Base `hag` equation.** `graphRec σ0 = probeNonDerived σ0` (`probeNonDerived_plainEdges`)
-   `= check σ'` (edges agree, `S↾U` routes to the probe) `= sem (S↾U) T q'`
-   (`graph_correct_rules`) `= sem S T q'` (`semAux_restrict` + untainted-schema fuel stability to
-   bridge `fuelBound (S↾U)` vs `fuelBound S`). Compose with `graphRec_reduce_base`. The W3a base
-   is currently `ReachedByRules` not `…Admitted`; the completeness half needs Step B's admitted
-   W3a closure, so Step A can land the equation over an *admitted* base as the reusable fact.
-
-Fallback route (if the fuel bridge fights): re-thread `RulesSound`/`RulesChain`/`RulesComplete`
-per-relation, replacing `UntaintedSchema S` by untaintedness of the keys actually consulted.
-More churn; only if (1)–(3) stall.
+**Immediately usable in Step B:** `graphRec_base_eq` (base `hag`), `graphRec_reduce_base`
+(`ReconcileCorrect.lean` — reduces the full W3a state's operand read to the base read; NB it
+currently yields a `ReachedByRules` base, so its `hag` half still needs the admitted upgrade — the
+cleanest path is to re-cut `graphRec_reduce_base` to hand back a `ReachedByRulesAdmitted` base, or
+prove the reduction preserves admission). Both consume the `hRootB` fragment premise (every derived
+def `RootBoolean`) and `RewriteMatchDeclared`.
 
 ### Step B — candidate completeness + assembly `graph_correct_w3a` (~1 session)
 
