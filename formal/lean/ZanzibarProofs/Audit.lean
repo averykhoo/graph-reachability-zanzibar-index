@@ -465,5 +465,14 @@ namespace Zanzibar
 -- closure (at any fixed fuel) unchanged. Standard axioms only:
 #print axioms schemaRewrites_restrict
 #print axioms rewriteClosureAux_restrict
+-- **The fuel bridge, closed (2026-07-11).** The two canonical closures — `rewriteClosure S t`
+-- (fuel `|S.keys|+1`) and `rewriteClosure (S↾U) t` (smaller fuel `|S↾U.keys|+1`) — have identical
+-- membership. `⊇` is unconditional fuel monotonicity (`rewriteClosureAux_mono` via the `stepN`
+-- layer algebra); `⊆` is saturation of the `S↾U`-closure, whose `RewriteRanked (S↾U)` is built
+-- from `RewriteRanked S` by rank COMPRESSION (`rewriteRanked_restrict`, counting `S↾U`-keys ranked
+-- below `k`), given the faithful side condition `RewriteMatchDeclared` (every rewrite's match key
+-- is a declared untainted relation, confining each step to the kept cone). Standard axioms only:
+#print axioms rewriteRanked_restrict
+#print axioms rewriteClosure_restrict_mem_iff
 
 end Zanzibar

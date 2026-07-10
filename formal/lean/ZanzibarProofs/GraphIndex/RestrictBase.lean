@@ -261,4 +261,111 @@ theorem rewriteClosure_restrict_subset {S : Schema}
   exact rewriteClosureAux_mono
     (Nat.succ_le_succ restrictUntainted_keys_length_le) hw
 
+/-! ## The `⊆` half — the `S`-closure embeds in the `S↾U`-closure (via saturation)
+
+The bigger closure adds no new members past the smaller fuel: the `S↾U`-closure is
+saturated (closed under one more `rewriteStep S`), so it swallows every `S`-closure layer.
+Saturation needs `RewriteRanked (S↾U)`, which we build from `RewriteRanked S` by rank
+COMPRESSION — count the `S↾U`-keys ranked below `k` — bounded now by `|S↾U.keys|`. The one
+faithful side condition: every rewrite's *match* key is a declared untainted relation
+(`RewriteMatchDeclared`), so the compressed rank strictly increases at each arm. -/
+
+/-- A declared untainted key survives the restriction. -/
+theorem mem_restrictUntainted_keys {S : Schema} {k : String × String}
+    (hk : k ∈ S.keys) (hu : isDerived S k = false) : k ∈ (restrictUntainted S).keys := by
+  obtain ⟨p, hp, hpk⟩ := List.mem_map.mp hk
+  exact List.mem_map.mpr ⟨p, mem_restrictUntainted_defs.mpr ⟨hp, hpk ▸ hu⟩, hpk⟩
+
+/-- **`RewriteMatchDeclared S`** — every schema rewrite's *match* key `(objectType, matchRel)`
+    is a declared, untainted relation. Faithful to the compiler: rewrite arms are compiled
+    from operand reads routed through `RewriteFilter`s over DECLARED relations, and in the
+    boolean fragment every operand is untainted. This is what confines each rewrite step to
+    the untainted cone `S↾U` keeps, so the compressed rank (below) can be bounded by
+    `|S↾U.keys|`. -/
+def RewriteMatchDeclared (S : Schema) : Prop :=
+  ∀ r ∈ schemaRewrites S, (r.objectType, r.matchRel) ∈ S.keys ∧
+    isDerived S (r.objectType, r.matchRel) = false
+
+/-- **Strict `countP`-style monotonicity of a filtered length.** On one list `l`, if `p`
+    pointwise implies `q` and some `a ∈ l` is counted by `q` but not `p`, the `q`-filter is
+    strictly longer. (`p`-filter is a `q`-sublist by monotonicity; equal length would force
+    equal lists, contradicting `a`.) -/
+theorem length_filter_lt_of_mem {α : Type} {l : List α} {p q : α → Bool}
+    (hpq : ∀ x, p x = true → q x = true)
+    {a : α} (ha : a ∈ l) (hqa : q a = true) (hpa : p a = false) :
+    (l.filter p).length < (l.filter q).length := by
+  have hsub : List.Sublist (l.filter p) (l.filter q) := List.monotone_filter_right l hpq
+  rcases Nat.lt_or_ge (l.filter p).length (l.filter q).length with h | h
+  · exact h
+  · exfalso
+    have heq : l.filter p = l.filter q := hsub.eq_of_length_le h
+    have haq : a ∈ l.filter q := List.mem_filter.mpr ⟨ha, hqa⟩
+    rw [← heq] at haq
+    have hap : p a = true := (List.mem_filter.mp haq).2
+    rw [hpa] at hap; exact Bool.false_ne_true hap
+
+/-- **`RewriteRanked` transfers to the restriction** by rank COMPRESSION. Reuse `S`'s rank
+    `rrank`; the compressed rank of `k` counts the `S↾U`-keys ranked strictly below `k` —
+    bounded by `|S↾U.keys|` (`length_filter_le`). Each rewrite arm still strictly increases
+    it: its match key `a` (declared untainted, `RewriteMatchDeclared` ⇒ `a ∈ S↾U.keys`) is
+    counted by the out-key's threshold but not its own (`length_filter_lt_of_mem`). -/
+theorem rewriteRanked_restrict {S : Schema}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
+    (hMatch : RewriteMatchDeclared S) (hR : RewriteRanked S) :
+    RewriteRanked (restrictUntainted S) := by
+  obtain ⟨rrank, hinc, _hbound⟩ := hR
+  refine ⟨fun k => ((restrictUntainted S).keys.filter
+      (fun j => decide (rrank j < rrank k))).length, ?_, ?_⟩
+  · intro r hr
+    rw [schemaRewrites_restrict hDrop] at hr
+    have hlt : rrank (r.objectType, r.matchRel) < rrank (r.objectType, r.outRel) := hinc r hr
+    obtain ⟨hmemk, hmemu⟩ := hMatch r hr
+    have hak : (r.objectType, r.matchRel) ∈ (restrictUntainted S).keys :=
+      mem_restrictUntainted_keys hmemk hmemu
+    exact length_filter_lt_of_mem
+      (fun x hx => decide_eq_true (Nat.lt_trans (of_decide_eq_true hx) hlt))
+      hak (decide_eq_true hlt) (by simp)
+  · intro k; exact List.length_filter_le _ _
+
+/-- **The `S`-closure embeds in the `S↾U`-closure** — every `S`-closure layer stays inside
+    the saturated (`rewriteRanked_restrict`) `S↾U`-closure: layer 0 is the seed, and each
+    further `rewriteStep S` (= `rewriteStep (S↾U)`) is swallowed by saturation. This is the
+    conditional (`⊆`) half; with `rewriteClosure_restrict_subset` it closes the fuel bridge. -/
+theorem rewriteClosure_subset_restrict {S : Schema}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
+    (hMatch : RewriteMatchDeclared S) (hR : RewriteRanked S)
+    {t w : Tuple} (hw : w ∈ rewriteClosure S t) :
+    w ∈ rewriteClosure (restrictUntainted S) t := by
+  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hDrop hMatch hR
+  have hlayer : ∀ (k : Nat) (w' : Tuple), w' ∈ stepN S k [t] →
+      w' ∈ rewriteClosure (restrictUntainted S) t := by
+    intro k
+    induction k with
+    | zero =>
+      intro w' hw'
+      change w' ∈ [t] at hw'
+      rw [List.mem_singleton.mp hw']
+      exact rewriteClosure_seed (restrictUntainted S) t
+    | succ m ih =>
+      intro w' hw'
+      change w' ∈ (stepN S m [t]).flatMap (rewriteStep S) at hw'
+      obtain ⟨v, hv, hvw⟩ := List.mem_flatMap.mp hw'
+      have hvw' : w' ∈ rewriteStep (restrictUntainted S) v := by
+        rw [rewriteStep_restrict hDrop]; exact hvw
+      exact rewriteClosure_saturated hRU (ih v hv) hvw'
+  obtain ⟨k, _, hmem⟩ := stepN_of_mem_aux S (S.keys.length + 1) [t] hw
+  exact hlayer k w hmem
+
+/-- **The fuel bridge, closed** — the two canonical closures have identical membership on the
+    W3a fragment (`hDrop` + `RewriteMatchDeclared` + `RewriteRanked S`). The `⊆` half is
+    saturation of the `S↾U`-closure; the `⊇` half is unconditional fuel monotonicity. Edge
+    sets of a rule-routed admitted state are exactly the materialised closure tuples
+    (`reachedByRules_edge_sound` + `reachedByRulesAdmitted_edge_complete`), so equal closure
+    membership will give equal edges under the state transfer (Step A assembly). -/
+theorem rewriteClosure_restrict_mem_iff {S : Schema}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
+    (hMatch : RewriteMatchDeclared S) (hR : RewriteRanked S) {t w : Tuple} :
+    w ∈ rewriteClosure (restrictUntainted S) t ↔ w ∈ rewriteClosure S t :=
+  ⟨rewriteClosure_restrict_subset hDrop, rewriteClosure_subset_restrict hDrop hMatch hR⟩
+
 end Zanzibar

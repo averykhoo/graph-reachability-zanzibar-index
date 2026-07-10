@@ -433,7 +433,24 @@ and re-proves/widens the same named theorems. Every stage must keep
     fuel via the T0a-stability sidestep. Fallback: re-thread the W2 chain per-relation. NB
     `checkFn_eq_semStep`'s `hag` is now restricted to `computedRefs e` (2026-07-11 fix — the
     unrestricted `∀ r'` was undischargeable), so the assembly needs "every computed leaf of a
-    derived def is untainted" as a fragment fact. (3) candidate completeness (an
+    derived def is untainted" as a fragment fact.
+    (2.0) ✅ **DONE (2026-07-11): the schema-restriction foundation + `semAux` transfer**
+    (`GraphIndex/RestrictBase.lean`) — `restrictUntainted`, `untaintedSchema_restrict`,
+    `restrictUntainted_lookup`, `semAux_restrict` (the semantic heart), and the rewrite-fan-out
+    preservation (`schemaRewrites_restrict` / `rewriteClosureAux_restrict`).
+    (2.05) ✅ **DONE (2026-07-11): the fuel bridge, closed** (`GraphIndex/RestrictBase.lean`,
+    sorry-free, axiom-clean). `rewriteClosure S t` (fuel `|S.keys|+1`) and `rewriteClosure (S↾U) t`
+    (smaller fuel `|S↾U.keys|+1`) have **identical membership** (`rewriteClosure_restrict_mem_iff`).
+    `⊇` unconditional (`rewriteClosureAux_mono` via the `stepN` layer algebra + `keys_length_le`);
+    `⊆` by saturation of the `S↾U`-closure, whose `RewriteRanked (S↾U)` is built from
+    `RewriteRanked S` by **rank compression** (`rewriteRanked_restrict`: count `S↾U`-keys ranked
+    below `k`, bounded now by `|S↾U.keys|`), given the faithful side condition
+    `RewriteMatchDeclared` (every rewrite's match key is a declared untainted relation — mirrors
+    the compiler routing arms over declared operands). **Remaining in Step A: the state transfer**
+    (build a canonical `ReachedByRulesAdmitted σ' (S↾U) T` with `σ'.edges ≈ σ0.edges` — edges are
+    exactly the materialised closure tuples, so equal closure membership gives equal edges; the
+    open subtlety is transferring `FoldAdmits` across the differing fold lists) + the base `hag`
+    equation. (3) candidate completeness (an
     admitted `ReachedByW3aAdmitted`: every `sem`-member is a positive-leaf concrete) +
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +
