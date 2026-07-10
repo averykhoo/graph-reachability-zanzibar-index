@@ -18,6 +18,7 @@ import ZanzibarProofs.GraphIndex.RulesChain
 import ZanzibarProofs.GraphIndex.RulesSaturate
 import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.Reconcile
+import ZanzibarProofs.GraphIndex.ReconcileWrite
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -346,5 +347,18 @@ namespace Zanzibar
 #print axioms GraphModel.probeDerived_residueEmpty
 #print axioms GraphModel.probeDerived_ResidueEmpty
 #print axioms GraphModel.check_derived_ResidueEmpty
+
+-- **ROADMAP W3a — the derived reconcile WRITE model (GraphIndex/ReconcileWrite.lean,
+-- 2026-07-10).** `checkFn` (the compiled `check_fn`, modelled as `evalE` reading the
+-- graph via `graphRec`), the guarded `reconcileKey` derived-edge fold (a derived edge
+-- is structurally `writeDirect ⟨s,R,o⟩`), its full Inv/residue-free/quiescence
+-- preservation, the W3a write-closure `ReachedByW3a`, and its T2a `Inv` conjunct
+-- `reachedByW3a_inv` (residue-free ⇒ the read collapses to the edge probe). The
+-- correspondence (checkFn = sem + candidate completeness) is the next increment.
+-- Standard axioms only:
+#print axioms structInv_reconcileKey
+#print axioms inv_reconcileKey
+#print axioms reachedByW3a_inv
+#print axioms reachedByW3a_residueEmpty
 
 end Zanzibar
