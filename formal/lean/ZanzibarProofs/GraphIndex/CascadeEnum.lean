@@ -170,4 +170,80 @@ theorem checkFn_eq_coveredFn_of_not_mem {σ : GraphState} {T : Store} {s : Subje
     σ.checkFn T s dt on R e = σ.coveredFn T dt on R e s.shape :=
   checkFn_eq_coveredFn_of_no_extra hco hsn hon (no_extra_of_not_mem hcl hsn hnm)
 
+/-! ## Discharging the `W3dJobCoverage` completeness clauses
+
+Each clause is a contrapositive of the leg-state bridge `checkFn = sem`
+(`checkFn_eq_sem_w3d`, supplied here as `hbridge`) fed through
+`checkFn_eq_coveredFn_of_not_mem`: a subject NOT in the enumerated candidate list is
+not among the leaf concretes, so it reads exactly as its shape-star — but the
+hypotheses force its `sem` and its star's `sem` apart, a contradiction. The
+"`sem`-covered ⇒ declared" helper (`hdeclB`, the `coveredFn_declared` linchpin lifted
+to the leg, cf. `graph_correct_w3d`'s `hsem_ws`) discharges clause (2). -/
+
+/-- **Clause (2) discharge** — the uncovered `sem`-true bare candidate is enumerated.
+    An uncovered (`hunc`) bare star-free subject that is `sem`-true but NOT in `cands`
+    would not be among the leaf concretes, so `checkFn s = checkFn (starSubj s.shape)`;
+    both bridge to `sem`, giving `sem s = sem (starSubj s.shape)`, so the star is
+    `sem`-true — and `sem`-covered-of-a-bare-shape is declared (`hdeclB`), contradicting
+    `hunc`. -/
+theorem cands_complete_uncovered {S : Schema} {T : Store} {σ : GraphState}
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes) (hon : on ≠ STAR)
+    (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
+      σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
+    (hdeclB : ∀ sh : Shape, sh.2 = BARE →
+      sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true → sh ∈ wildcardShapes S)
+    {cands : List SubjectRef}
+    (hsub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE → u ∈ cands)
+    {s : SubjectRef} (hsb : s.predicate = BARE) (hsn : s.name ≠ STAR)
+    (hsem : sem S T ⟨s, R, ⟨dt, on⟩⟩ = true)
+    (hunc : ¬(s.shape ∈ wildcardShapes S ∧
+      sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true)) :
+    s ∈ cands := by
+  by_contra hnm
+  have hnl : s ∉ leafConcretes σ dt on e := fun h => hnm (hsub s h hsb)
+  have hkey : σ.checkFn T s dt on R e = σ.checkFn T (starSubj s.shape) dt on R e := by
+    rw [checkFn_eq_coveredFn_of_not_mem hco hcl hsn hon hnl]; rfl
+  have hbs : σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+    hbridge s (fun h => absurd h hsn)
+  have hshapeB : (starSubj s.shape).name = STAR → (starSubj s.shape).predicate = BARE :=
+    fun _ => hsb
+  have hbstar : σ.checkFn T (starSubj s.shape) dt on R e
+      = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) hshapeB
+  rw [hbs, hbstar] at hkey
+  have hstarTrue : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true := by
+    rw [← hkey]; exact hsem
+  exact hunc ⟨hdeclB s.shape hsb hstarTrue, hstarTrue⟩
+
+/-- **Clause (3) discharge** — the covered `sem`-false candidate is in `negCands`.
+    A star-free subject whose shape is covered (∈ `wildcardShapes`, hence bare under
+    `hWSb`) with the star `sem`-true but the subject `sem`-false: were it NOT enumerated
+    it would read as its star (`checkFn s = checkFn (starSubj s.shape)`), bridging to
+    `sem s = false` vs `sem (starSubj) = true`, a contradiction. -/
+theorem negCands_complete {S : Schema} {T : Store} {σ : GraphState}
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes) (hon : on ≠ STAR)
+    (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
+      σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
+    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    {negCands : List SubjectRef}
+    (hsub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE → u ∈ negCands)
+    {s : SubjectRef} (hsn : s.name ≠ STAR) (hcov : s.shape ∈ wildcardShapes S)
+    (hstar : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true)
+    (hsemF : sem S T ⟨s, R, ⟨dt, on⟩⟩ = false) :
+    s ∈ negCands := by
+  have hsb : s.predicate = BARE := hWSb s.shape hcov
+  by_contra hnm
+  have hnl : s ∉ leafConcretes σ dt on e := fun h => hnm (hsub s h hsb)
+  have hkey : σ.checkFn T s dt on R e = σ.checkFn T (starSubj s.shape) dt on R e := by
+    rw [checkFn_eq_coveredFn_of_not_mem hco hcl hsn hon hnl]; rfl
+  have hbs : σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+    hbridge s (fun h => absurd h hsn)
+  have hshapeB : (starSubj s.shape).name = STAR → (starSubj s.shape).predicate = BARE :=
+    fun _ => hsb
+  have hbstar : σ.checkFn T (starSubj s.shape) dt on R e
+      = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) hshapeB
+  rw [hbs, hbstar, hsemF, hstar] at hkey
+  exact absurd hkey (by decide)
+
 end Zanzibar
