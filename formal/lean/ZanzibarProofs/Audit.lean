@@ -1038,4 +1038,23 @@ namespace Zanzibar
 #print axioms writeLeg_sem_stable_sh
 #print axioms writeLeg_sem_stable2
 
+-- **W3d-2 invariant groundwork + the coverage chain
+-- (GraphIndex/CascadeStrataSettle.lean, 2026-07-12e, same session).** Every job of
+-- a routed logged batch EMITS a persistent frontier row
+-- (`reconcileJobsLR_emits`, the introduction dual of outbox soundness), so a
+-- round-1 pass at a stratum-1 key provably RE-DIRTIES its stratum-2 readers for
+-- round 2 (**`round1_emission_dirties`** -- the hinge of the stratum-staged case
+-- analysis: a stale round-1 recompute of a stratum-2 key is re-settled in round 2
+-- BECAUSE the operand pass's emission maps back to it, 12c finding (b) as a
+-- theorem). Edge discipline is batch-stable (`reconcileJobsLR_target_ne_bare` /
+-- `_source_bare`), giving the reach collapse at every MID-BATCH prefix state
+-- (`reconcileJobsLR_reach_collapse`) -- where the coming re-settlement lemma reads
+-- its guards. **`ReachedByW3d2C`**: the two-round coverage chain (per-round
+-- `W3dJobCoverage`; round 2 relative to the MID state) with the projection
+-- `reachedByW3d2C_toW3d2`. Standard axioms only:
+#print axioms reconcileJobsLR_emits
+#print axioms round1_emission_dirties
+#print axioms reconcileJobsLR_reach_collapse
+#print axioms reachedByW3d2C_toW3d2
+
 end Zanzibar

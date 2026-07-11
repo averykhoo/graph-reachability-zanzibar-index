@@ -1290,4 +1290,191 @@ theorem writeLeg_sem_stable2 {σ : GraphState} {S : Schema} {T : Store} {t : Tup
         checkFnR_eq_sem_settled hWF hTT hNK hR hSVw hBSw hTSw hRootB hMatch hStrat
           htermw hCO hWSbare h0 hsh hσS hlk hder hco hLU2e hops hs hon
 
+/-! ## Batch groundwork for the stratum-staged invariant
+
+The remaining pieces the `ReachedByW3d2C` settledness induction consumes at its
+cascade legs: every job EMITS a persistent frontier row (`reconcileJobsLR_emits` —
+so a round-1 pass at a stratum-1 key provably RE-DIRTIES its stratum-2 readers for
+round 2, `round1_emission_dirties`), and the edge discipline is batch-stable
+(targets stay non-`BARE`, R-node in-edge sources stay bare — so the reach collapse
+holds at every MID-BATCH prefix state, where the re-settlement lemma reads its
+guards). -/
+
+/-- Rows persist through a routed logged batch (emissions only prepend). -/
+theorem reconcileJobsLR_outbox_mono (S : Schema) (T : Store) :
+    ∀ (jobs : List W3cJob) (σ : GraphState), ∀ d ∈ σ.outbox,
+      d ∈ (reconcileJobsLR S T σ jobs).outbox := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ d hd; exact hd
+  | cons j rest ih =>
+    intro σ d hd
+    have hfold : reconcileJobsLR S T σ (j :: rest)
+        = reconcileJobsLR S T (j.applyLoggedR S T σ) rest := by
+      unfold reconcileJobsLR
+      rw [List.foldl_cons]
+    rw [hfold]
+    refine ih _ d ?_
+    unfold W3cJob.applyLoggedR
+    rw [pushDelta_outbox]
+    refine List.mem_cons_of_mem _ ?_
+    rw [W3cJob.applyDR_outbox]
+    exact hd
+
+/-- **Every job of a routed logged batch emits a row** at its own derived key, with
+    an id strictly above the pre-batch frontier — the introduction form dual to
+    `reconcileJobsLR_outbox_sound`. -/
+theorem reconcileJobsLR_emits (S : Schema) (T : Store) :
+    ∀ (jobs : List W3cJob) (σ : GraphState), ∀ j ∈ jobs,
+      ∃ d ∈ (reconcileJobsLR S T σ jobs).outbox,
+        d.node = objNode ⟨j.dt, j.on⟩ j.R ∧ d.relation = j.R ∧
+        max σ.maxOutboxId σ.watermark < d.id := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ j hj; exact absurd hj List.not_mem_nil
+  | cons j0 rest ih =>
+    intro σ j hj
+    have hfold : reconcileJobsLR S T σ (j0 :: rest)
+        = reconcileJobsLR S T (j0.applyLoggedR S T σ) rest := by
+      unfold reconcileJobsLR
+      rw [List.foldl_cons]
+    rw [hfold]
+    have hout1 : (j0.applyLoggedR S T σ).outbox
+        = ⟨σ.nextDeltaId, objNode ⟨j0.dt, j0.on⟩ j0.R, j0.R⟩ :: σ.outbox := by
+      unfold W3cJob.applyLoggedR
+      rw [pushDelta_outbox, W3cJob.applyDR_outbox, W3cJob.applyDR_nextDeltaId]
+    have hwm1 : (j0.applyLoggedR S T σ).watermark = σ.watermark := by
+      unfold W3cJob.applyLoggedR
+      rw [pushDelta_watermark, W3cJob.applyDR_watermark]
+    have hmax1 : (j0.applyLoggedR S T σ).maxOutboxId = σ.nextDeltaId := by
+      unfold W3cJob.applyLoggedR
+      rw [pushDelta_maxOutboxId, W3cJob.applyDR_nextDeltaId]
+    have hnext : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
+    rcases List.mem_cons.mp hj with rfl | hjr
+    · refine ⟨⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R⟩, ?_, rfl, rfl, ?_⟩
+      · refine reconcileJobsLR_outbox_mono S T rest _ _ ?_
+        rw [hout1]
+        exact List.mem_cons_self
+      · show max σ.maxOutboxId σ.watermark < σ.nextDeltaId
+        omega
+    · obtain ⟨d, hd, hn, hr, hgt⟩ := ih (j0.applyLoggedR S T σ) j hjr
+      refine ⟨d, hd, hn, hr, ?_⟩
+      rw [hmax1, hwm1] at hgt
+      omega
+
+/-- **A round-1 pass at an operand key re-dirties its readers for round 2**: if some
+    round-1 job targets `(dt, r', on)` and `(dt, R)`'s def reads `r'` as a computed
+    operand, then `(dt, R, on)` is in round-2 scope — the model-level content of
+    "the stratum-1 emission re-settles the stale stratum-2 key" (12c finding (b);
+    `_map_deltas_to_keys` on the pass's own emission). -/
+theorem round1_emission_dirties {σ : GraphState} {S : Schema} {T : Store}
+    {jobs1 : List W3cJob} {j1 : W3cJob} (hj1 : j1 ∈ jobs1)
+    {dt on R r' : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hr' : r' ∈ computedRefs e) (hon : on ≠ STAR)
+    (hkey : j1.key = (dt, r', on)) :
+    (dt, R, on) ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1)
+      (σ.frontierMax σ.watermark) := by
+  obtain ⟨d, hd, hnode, _, hgt⟩ := reconcileJobsLR_emits S T jobs1 σ j1 hj1
+  have h1 : j1.dt = dt := congrArg Prod.fst hkey
+  have h23 : (j1.R, j1.on) = (r', on) := congrArg Prod.snd hkey
+  have h2 : j1.R = r' := congrArg Prod.fst h23
+  have h3 : j1.on = on := congrArg Prod.snd h23
+  have hnode' : d.node = objNode ⟨dt, on⟩ r' := by rw [hnode, h1, h2, h3]
+  unfold cascadeKeysAbove
+  refine List.mem_flatMap.mpr ⟨d, ?_, ?_⟩
+  · unfold GraphState.frontierRowsAbove
+    refine List.mem_filter.mpr ⟨hd, decide_eq_true ?_⟩
+    have := σ.frontierMax_le σ.watermark
+    omega
+  · refine mem_affectedKeys hlk hder hr' hon ?_
+    unfold GraphState.affectedObjects
+    rw [← hnode']
+    exact List.mem_cons_self
+
+/-- Non-`BARE` edge targets are batch-stable (new edges land on job R-nodes). -/
+theorem reconcileJobsLR_target_ne_bare {S : Schema} {T : Store}
+    {jobs : List W3cJob} {σ : GraphState}
+    (hjv : ∀ j ∈ jobs, W3cJobValid S j)
+    (hbase : ∀ a b, (a, b) ∈ σ.edges → b.pred ≠ BARE) :
+    ∀ a b, (a, b) ∈ (reconcileJobsLR S T σ jobs).edges → b.pred ≠ BARE := by
+  intro a b hab
+  rcases reconcileJobsLR_edge_sound jobs σ a b hab with hold | ⟨j, hj, c, _, _, h2⟩
+  · exact hbase a b hold
+  · obtain ⟨hRne, _⟩ := hjv j hj
+    rw [h2, objNode_pred]
+    exact hRne
+
+/-- Bare in-edge sources at a FIXED derived R-node are batch-stable (new edges into
+    any R-node are sourced at bare candidates). -/
+theorem reconcileJobsLR_source_bare {S : Schema} {T : Store}
+    {jobs : List W3cJob} {σ : GraphState} {dt on R : String}
+    (hjv : ∀ j ∈ jobs, W3cJobValid S j)
+    (hbase : ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE) :
+    ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsLR S T σ jobs).edges →
+      x.pred = BARE := by
+  intro x hx
+  rcases reconcileJobsLR_edge_sound jobs σ x _ hx with hold | ⟨j, hj, c, hc, h1, _⟩
+  · exact hbase x hold
+  · obtain ⟨_, hcb, _⟩ := hjv j hj
+    rw [h1, subjNode_pred]
+    exact hcb c hc
+
+/-- **The reach collapse at MID-BATCH prefix states**: from a chain state's edge
+    discipline (targets non-bare, sources at the R-node bare), any prefix of a
+    routed logged batch keeps every path into the R-node a single edge — where the
+    re-settlement lemma reads its guards. -/
+theorem reconcileJobsLR_reach_collapse {S : Schema} {T : Store}
+    {jobs : List W3cJob} {σ : GraphState} {dt on R : String}
+    (hjv : ∀ j ∈ jobs, W3cJobValid S j)
+    (htb : ∀ a b, (a, b) ∈ σ.edges → b.pred ≠ BARE)
+    (hsb : ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE)
+    {u : NodeKey}
+    (hr : NReaches (reconcileJobsLR S T σ jobs).edges u (objNode ⟨dt, on⟩ R)) :
+    (u, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsLR S T σ jobs).edges := by
+  refine nreaches_collapse_of_source_notarget ?_ hr
+  intro x hxv y hxy
+  exact reconcileJobsLR_target_ne_bare hjv htb y x hxy
+    (reconcileJobsLR_source_bare hjv hsb x hxv)
+
+/-! ## `ReachedByW3d2C` — the two-round coverage chain
+
+`ReachedByW3d2` plus per-round audit-enumeration coverage: round-1 jobs coverage-
+complete relative to the LEG-START state, round-2 jobs relative to the MID state
+(their passes re-enumerate against the graph as round 1 left it —
+`processor.py:394-441` runs inside the round). Chain-side hypotheses as in W3d-1c;
+the state-derived discharge is the W3d-2 E-chain tail (with the residue-named
+candidates, 12c finding (c)). -/
+
+inductive ReachedByW3d2C : GraphState → Schema → Store → Prop where
+  | empty (S : Schema) : ReachedByW3d2C (emptyState S) S []
+  | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
+      (hadm : FoldAdmits σ (rewriteClosure S t))
+      (hprev : ReachedByW3d2C σ S T) :
+      ReachedByW3d2C (σ.writeLoggedRules S t) S (t :: T)
+  | cascade {σ : GraphState} {S : Schema} {T : Store} (jobs1 jobs2 : List W3cJob)
+      (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j)
+      (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j)
+      (hcover1 : ∀ k ∈ cascadeKeysAbove S σ σ.watermark, ∃ j ∈ jobs1, j.key = k)
+      (hscope1 : ∀ j ∈ jobs1, j.key ∈ cascadeKeysAbove S σ σ.watermark)
+      (hcover2 : ∀ k ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1)
+          (σ.frontierMax σ.watermark), ∃ j ∈ jobs2, j.key = k)
+      (hscope2 : ∀ j ∈ jobs2, j.key ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1)
+          (σ.frontierMax σ.watermark))
+      (hcovg1 : ∀ j ∈ jobs1, W3dJobCoverage S T σ j)
+      (hcovg2 : ∀ j ∈ jobs2, W3dJobCoverage S T (reconcileJobsLR S T σ jobs1) j)
+      (hprev : ReachedByW3d2C σ S T) :
+      ReachedByW3d2C (runCascade2 S T σ jobs1 jobs2) S T
+
+/-- The projection: every W3d-2 coverage-chain state is a plain W3d-2 state — the
+    whole structural/shadow/T5 layer applies. -/
+theorem reachedByW3d2C_toW3d2 {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2C σ S T) : ReachedByW3d2 σ S T := by
+  induction h with
+  | empty S => exact ReachedByW3d2.empty S
+  | write t hadm _ ih => exact ReachedByW3d2.write t hadm ih
+  | cascade jobs1 jobs2 hjv1 hjv2 hcover1 hscope1 hcover2 hscope2 _ _ _ ih =>
+    exact ReachedByW3d2.cascade jobs1 jobs2 hjv1 hjv2 hcover1 hscope1 hcover2
+      hscope2 ih
+
 end Zanzibar
