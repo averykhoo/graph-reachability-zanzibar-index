@@ -1,5 +1,6 @@
 import ZanzibarProofs.Equiv
 import ZanzibarProofs.FullScope
+import ZanzibarProofs.GraphIndex.CascadeStrataInv
 import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
@@ -1143,5 +1144,16 @@ namespace Zanzibar
 #print axioms W4Witness.accepts
 #print axioms W4Witness.fragment
 #print axioms W4Witness.within_scope
+-- W4 T2a groundwork (GraphIndex/CascadeStrataInv.lean): the three fragment-free
+-- Inv layers ported to the TWO-ROUND chains — StructInv / edge-free I6 residue
+-- hygiene / row-key declaredness, each at every ReachedByW3d2 / W3d2C / W3d2E
+-- state; the E-chain versions are HYPOTHESIS-FREE (enumerated jobs carry their
+-- key facts by construction). Standard axioms only:
+#print axioms reachedByW3d2_structInv
+#print axioms reachedByW3d2E_structInv
+#print axioms reachedByW3d2_residueHygienic
+#print axioms reachedByW3d2E_residueHygienic
+#print axioms reachedByW3d2_residueDeclared
+#print axioms reachedByW3d2E_residueDeclared
 
 end Zanzibar

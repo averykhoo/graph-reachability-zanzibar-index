@@ -63,3 +63,6 @@ import ZanzibarProofs.Equiv
 
 -- W4 full-scope restatement (ReachedBy / GraphAccepts / final T-theorems)
 import ZanzibarProofs.FullScope
+
+-- W4 T2a groundwork over the two-round chain
+import ZanzibarProofs.GraphIndex.CascadeStrataInv
