@@ -509,4 +509,13 @@ namespace Zanzibar
 #print axioms graphRec_reduce_base_adm
 #print axioms checkFn_eq_sem
 
+-- **Derived-edge soundness (2026-07-11) — Step B forward half.** `reachedByW3aAdmitted_derived_edge_
+-- sound`: on a W3a-admitted state a materialised derived edge `subjNode s → objNode ⟨dt,on⟩ R`
+-- (bare star-free `s`) witnesses `sem S T ⟨s,R,⟨dt,on⟩⟩ = true`. The base leg cannot feed the
+-- `RootBoolean` R-node (`reachedByRules_RootBoolean_no_inedge`); a reconcile leg either inherits the
+-- edge (IH) or wrote it, and the guard at a W3a-admitted prefix mid-state (`reconcileKey_edge_guard`)
+-- becomes `sem` via `checkFn_eq_sem`. Standard axioms only:
+#print axioms reconcileKey_edge_guard
+#print axioms reachedByW3aAdmitted_derived_edge_sound
+
 end Zanzibar

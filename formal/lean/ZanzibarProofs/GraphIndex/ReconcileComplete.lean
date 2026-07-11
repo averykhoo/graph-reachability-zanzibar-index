@@ -153,7 +153,7 @@ inductive ReachedByW3aAdmitted : GraphState → Schema → Store → Prop where
   | reconcile {σ : GraphState} {S : Schema} {T : Store}
       (dt on R : String) (e : Expr) (cands : List SubjectRef) (hRne : R ≠ BARE)
       (hcands : ∀ c ∈ cands, c.predicate = BARE)
-      (hder : isDerived S (dt, R) = true)
+      (hder : isDerived S (dt, R) = true) (hlke : S.lookup (dt, R) = some e)
       (hcStar : ∀ c ∈ cands, c.name ≠ STAR) (honStar : on ≠ STAR) :
       ReachedByW3aAdmitted σ S T → ReachedByW3aAdmitted (σ.reconcileKey T dt on R e cands) S T
 
@@ -162,7 +162,7 @@ theorem reachedByW3aAdmitted_toW3a {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3aAdmitted σ S T) : ReachedByW3a σ S T := by
   induction h with
   | base hr => exact ReachedByW3a.base (reachedByRules_of_admitted hr)
-  | reconcile dt on R e cands hRne hcands hder hcStar honStar _ ih =>
+  | reconcile dt on R e cands hRne hcands hder _hlke hcStar honStar _ ih =>
     exact ReachedByW3a.reconcile dt on R e cands hRne hcands hder hcStar honStar ih
 
 /-- **Multi-pass reconcile inertness, admitted base** — the admitted analog of
@@ -177,7 +177,7 @@ theorem reachedByW3aAdmitted_reach_inert {σ : GraphState} {S : Schema} {T : Sto
         NReaches σ.edges u v → NReaches σ0.edges u v := by
   induction h with
   | base hr => exact ⟨_, hr, fun _ hab => hab, fun _ hn => hn⟩
-  | reconcile dt on R e cands hRne hcands hder _hcStar _honStar h' ih =>
+  | reconcile dt on R e cands hRne hcands hder _hlke _hcStar _honStar h' ih =>
     obtain ⟨σ0, hσ0, hsub, htrans⟩ := ih hterm
     refine ⟨σ0, hσ0, ?_, ?_⟩
     · intro ab hab
@@ -249,5 +249,148 @@ theorem checkFn_eq_sem {S : Schema} {T : Store} {σ : GraphState}
   obtain ⟨σ0, h0, hred⟩ := graphRec_reduce_base_adm hSF hterm h (s := s) (dt := dt) (on := on)
   exact checkFn_eq_sem_of_base hWF hTT hNK hR hSV hSF hRootB hMatch hStrat h0 hlk hco hleafUnt
     (fun r' hr' => hred r' (hleafUnt r' hr')) hs hon
+
+/-! ## Derived-edge soundness — a materialised derived edge is `sem`-true
+
+The forward half of the derived-query correspondence: on a W3a-admitted state, a materialised
+derived edge `subjNode s → objNode ⟨dt,on⟩ R` implies `sem S T ⟨s,R,⟨dt,on⟩⟩ = true`. The edge was
+written by *some* reconcile pass whose guard (`checkFn` at a mid-fold state) held; that mid-state is
+itself W3a-admitted, so `checkFn_eq_sem` turns the guard into `sem`. -/
+
+/-- Node injectivity for star-free subjects. -/
+theorem subjNode_inj_of_ne_star {s c : SubjectRef} (hs : s.name ≠ STAR) (hc : c.name ≠ STAR)
+    (h : subjNode s = subjNode c) : s = c := by
+  unfold subjNode at h
+  rw [if_neg hs, if_neg hc] at h
+  obtain ⟨st, sn, sp⟩ := s; obtain ⟨ct, cn, cp⟩ := c
+  simp only [NodeKey.mk.injEq] at h
+  obtain ⟨h1, h2, h3, _⟩ := h
+  simp [h1, h2, h3]
+
+/-- Node injectivity for star-free objects (with relation). -/
+theorem objNode_inj_of_ne_star {dt on dt' on' R R' : String} (hon : on ≠ STAR) (hon' : on' ≠ STAR)
+    (h : objNode ⟨dt, on⟩ R = objNode ⟨dt', on'⟩ R') : dt = dt' ∧ on = on' ∧ R = R' := by
+  unfold objNode at h
+  rw [if_neg hon, if_neg hon'] at h
+  simp only [NodeKey.mk.injEq] at h
+  exact ⟨h.1, h.2.1, h.2.2.1⟩
+
+/-- **The reconcile fold's edge provenance.** Every edge of a `reconcileKey` fold either was
+    already present in the base `σ`, or was materialised at a mid-fold state whose guard held: it
+    equals `subjNode c → objNode ⟨dt,on⟩ R` for a candidate `c`, with `checkFn` TRUE at the
+    accumulator `σ.reconcileKey T … pre` reached after some *prefix* `pre`. The prefix mid-state is
+    what the assembly recognises as W3a-admitted, so `checkFn_eq_sem` applies there. -/
+theorem reconcileKey_edge_guard {T : Store} {dt on R : String} {e : Expr} :
+    ∀ (cands : List SubjectRef) (σ : GraphState) {a b : NodeKey},
+      (a, b) ∈ (σ.reconcileKey T dt on R e cands).edges →
+      (a, b) ∈ σ.edges ∨
+      ∃ (pre : List SubjectRef) (c : SubjectRef),
+        pre <+: cands ∧ c ∈ cands ∧ a = subjNode c ∧ b = objNode ⟨dt, on⟩ R ∧
+        (σ.reconcileKey T dt on R e pre).checkFn T c dt on R e = true := by
+  intro cands
+  induction cands with
+  | nil =>
+    intro σ a b h
+    rw [show σ.reconcileKey T dt on R e [] = σ from rfl] at h
+    exact Or.inl h
+  | cons s0 rest ih =>
+    intro σ a b h
+    have hfold : σ.reconcileKey T dt on R e (s0 :: rest)
+        = (if σ.checkFn T s0 dt on R e then σ.writeDirect ⟨s0, R, ⟨dt, on⟩⟩ else σ).reconcileKey
+            T dt on R e rest := by
+      unfold GraphState.reconcileKey; rw [List.foldl_cons]
+    rw [hfold] at h
+    set σ1 := if σ.checkFn T s0 dt on R e then σ.writeDirect ⟨s0, R, ⟨dt, on⟩⟩ else σ with hσ1
+    rcases ih σ1 h with hin1 | ⟨pre, c, hpre, hc, ha, hb, hchk⟩
+    · -- the edge is present at the head-step state `σ1`
+      by_cases hguard : σ.checkFn T s0 dt on R e = true
+      · rw [hσ1, if_pos hguard, writeDirect_edges] at hin1
+        split at hin1
+        · rcases List.mem_cons.mp hin1 with heq | hmem0
+          · exact Or.inr ⟨[], s0, List.nil_prefix, List.mem_cons_self,
+              congrArg Prod.fst heq, congrArg Prod.snd heq,
+              by rw [show σ.reconcileKey T dt on R e [] = σ from rfl]; exact hguard⟩
+          · exact Or.inl hmem0
+        · exact Or.inl hin1
+      · rw [hσ1, if_neg hguard] at hin1; exact Or.inl hin1
+    · -- the edge appears in the rest-fold from `σ1`; prepend `s0` to its prefix
+      obtain ⟨tl, htl⟩ := hpre
+      refine Or.inr ⟨s0 :: pre, c, ⟨tl, by rw [List.cons_append, htl]⟩,
+        List.mem_cons_of_mem _ hc, ha, hb, ?_⟩
+      have : σ.reconcileKey T dt on R e (s0 :: pre)
+          = σ1.reconcileKey T dt on R e pre := by
+        unfold GraphState.reconcileKey; rw [List.foldl_cons]
+      rw [this]; exact hchk
+
+/-- **A `RootBoolean` derived R-node has no in-edge in a rule-routed base.** A closure tuple landing
+    on `objNode ⟨dt,on⟩ R` would be either a stored `(dt,R)` tuple (none — `RootBoolean` ⇒ no
+    `Direct` arm, `StoreValidRules`) or a rewrite output `(dt,R)` (none — `noRuleOutputs_of_root`).
+    So the untainted base never feeds the R-node; every in-edge is a reconcile edge. -/
+theorem reachedByRules_RootBoolean_no_inedge {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String} {e : Expr}
+    (hSV : StoreValidRules S T) (hNK : NodupKeys S)
+    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e)
+    (h : ReachedByRules σ S T) :
+    ∀ x, (x, objNode ⟨dt, on⟩ R) ∉ σ.edges := by
+  intro x hx
+  obtain ⟨t, ht, u, hu, _hasub, hbobj⟩ := reachedByRules_edge_sound h x _ hx
+  have htype : dt = u.object.type := by
+    simpa [objNode_type] using congrArg NodeKey.type hbobj
+  have hrel : R = u.relation := by
+    simpa [objNode_pred] using congrArg NodeKey.pred hbobj
+  rcases rewriteClosure_produced hu with heq | ⟨r, hr', hro, hrout⟩
+  · rw [heq] at htype hrel
+    obtain ⟨e', rs, hlk', hrs, _⟩ := hSV t ht
+    rw [← htype, ← hrel, hlk, Option.some.injEq] at hlk'
+    rw [← hlk', exprDirects_rootBoolean hroot] at hrs
+    simp at hrs
+  · exact noRuleOutputs_of_root hlk hNK hroot r hr' ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+
+/-- **Derived-edge soundness (the forward half).** On a W3a-admitted state, every materialised
+    derived edge `subjNode s → objNode ⟨dt,on⟩ R` (bare, star-free `s`; `on ≠ STAR`) witnesses
+    `sem S T ⟨s,R,⟨dt,on⟩⟩ = true`. By induction over the write path: the base leg cannot feed the
+    `RootBoolean` R-node (`reachedByRules_RootBoolean_no_inedge`); a reconcile leg either inherits
+    the edge (IH — the predecessor is W3a-admitted) or wrote it fresh, and then the guard at a
+    W3a-admitted prefix mid-state gives `sem` via `checkFn_eq_sem`. -/
+theorem reachedByW3aAdmitted_derived_edge_sound {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : ReachedByW3aAdmitted σ S T) :
+    ∀ {s : SubjectRef} {dt on R : String} {e : Expr},
+      S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      s.name ≠ STAR → on ≠ STAR →
+      (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges → sem S T ⟨s, R, ⟨dt, on⟩⟩ = true := by
+  -- `induction` generalises the schema/store, reverting the S/T-dependent fragment facts into
+  -- each case; re-introduce them (order = signature) and thread them through the IH.
+  induction h with
+  | base hr =>
+    intro s dt on R e hlk hder _hs _hon hedge
+    have hroot : RootBoolean e := hRootB (⟨(dt, R), e⟩) (mem_defs_of_lookup hlk) hder
+    exact absurd hedge (reachedByRules_RootBoolean_no_inedge hSV hNK hlk hroot
+      (reachedByRules_of_admitted hr) (subjNode s))
+  | reconcile dt' on' R' e' cands hRne hcands hder' hlke' hcStar honStar hprev ih =>
+    intro s dt on R e hlk hder hs hon hedge
+    rcases reconcileKey_edge_guard cands _ hedge with hin | ⟨pre, c, hpre, hc, ha, hb, hchk⟩
+    · exact ih hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU hlk hder hs hon hin
+    · -- match endpoints: c = s, (dt',on',R') = (dt,on,R)
+      obtain ⟨hdt, hon', hRR⟩ := objNode_inj_of_ne_star hon honStar hb
+      subst hdt; subst hon'; subst hRR
+      have hcs : c = s := (subjNode_inj_of_ne_star hs (hcStar c hc) ha).symm
+      subst hcs
+      -- the prefix mid-state is W3a-admitted; checkFn there = sem (via the def `e'` at key (dt,R))
+      have hpremem : ∀ x ∈ pre, x ∈ cands := fun x hx => hpre.subset hx
+      have hmid := ReachedByW3aAdmitted.reconcile dt on R e' pre hRne
+        (fun x hx => hcands x (hpremem x hx)) hder' hlke'
+        (fun x hx => hcStar x (hpremem x hx)) honStar hprev
+      have hsem := checkFn_eq_sem hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hmid
+        hlke' (hCO _ _ _ hlke' hder') (hLU _ _ _ hlke' hder') (hcStar c hc) honStar
+      rw [hchk] at hsem
+      exact hsem.symm
 
 end Zanzibar
