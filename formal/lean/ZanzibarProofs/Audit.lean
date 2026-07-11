@@ -17,6 +17,7 @@ import ZanzibarProofs.GraphIndex.RulesSound
 import ZanzibarProofs.GraphIndex.RulesChain
 import ZanzibarProofs.GraphIndex.RulesSaturate
 import ZanzibarProofs.GraphIndex.RulesComplete
+import ZanzibarProofs.GraphIndex.RulesBareStar
 import ZanzibarProofs.GraphIndex.Reconcile
 import ZanzibarProofs.GraphIndex.ReconcileWrite
 import ZanzibarProofs.GraphIndex.ReconcileCorrect
@@ -605,5 +606,28 @@ namespace Zanzibar
 #print axioms graphRec_reconcileKey_inert
 #print axioms reachedByW3c_master
 #print axioms reachedByW3c_inv
+
+-- **ROADMAP W3c read half, step 1 — the untainted correspondence over BARE-STAR stores
+-- (GraphIndex/RulesBareStar.lean, 2026-07-11).** `graph_correct_rulesBS`: W2's `check = sem`
+-- re-proved with `StarFreeStore` weakened to `BareStarStore` + `TtuStarFree` (no wildcard TTU
+-- parents — attack-CONFIRMED necessary: a star tupleset tuple needs the W1c in-bridges the
+-- rule-routed write model does not materialise), and the query scope widened to STAR-BARE
+-- subjects (probe 1 at the `wAny` source) — the star-subject instance the W3c `stars ↔ sem`
+-- correspondence consumes. Machinery: closure star-characterisation
+-- (`rewriteClosure_star_subject`: no ttu arm ever fires on a star-subject closure member, so it
+-- carries the seed's full subject — bare), subject-generic per-hop soundness
+-- (`semAux_of_rewriteClosure_bs`) + userset lift (`semAux_lift_untainted_bs`) + chain composition
+-- (`semAux_of_ruleChain_bs`, via global `subjNode` injectivity), the star→concrete coverage
+-- transfer `semAux_star_to_bare` (probe-2 glue: a `wAny`-source chain IS a star-subject chain),
+-- and completeness `nreaches_of_semAux_rulesBS` (probe-1 ∨ probe-2 disjunction). Standard axioms
+-- only:
+#print axioms rewriteClosure_star_subject
+#print axioms semAux_of_rewriteClosure_bs
+#print axioms semAux_lift_untainted_bs
+#print axioms semAux_of_ruleChain_bs
+#print axioms semAux_star_to_bare
+#print axioms nreaches_of_semAux_rulesBS
+#print axioms rulesAdmitted_edge_endpoints_bs
+#print axioms graph_correct_rulesBS
 
 end Zanzibar
