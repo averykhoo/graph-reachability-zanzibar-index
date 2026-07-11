@@ -32,6 +32,7 @@ import ZanzibarProofs.GraphIndex.CascadeEnum
 import ZanzibarProofs.GraphIndex.CascadeStrata
 import ZanzibarProofs.GraphIndex.CascadeStrataSettle
 import ZanzibarProofs.GraphIndex.CascadeStrataEnum
+import ZanzibarProofs.GraphIndex.CascadeStrataAssemble
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -1107,5 +1108,24 @@ namespace Zanzibar
 #print axioms checkFnR_star_declared
 #print axioms w3d2_leg_context
 #print axioms w3dJobCoverage_enumJob2_state
+
+-- W3d-2 E-chain tail CLOSED — the closure ASSEMBLY (GraphIndex/CascadeStrataAssemble
+-- .lean). Attack-first (2026-07-12h, scratch deleted): the ROADMAP's round-1
+-- discharge ("round-1 keys are stratum-1") is REFUTED — a write to a DIRECT
+-- untainted leaf of a stratum-2 def dirties the stratum-2 key at the watermark, and
+-- the state-derived enumeration at leg start is NOT coverage-complete there; hence
+-- `ReachedByW3d2C` carries CONDITIONAL coverage (`W3dJobOpsSettled`), discharged
+-- from state per round. `ReachedByW3d2E`: the fully-operational two-round scheduler
+-- chain (cascade legs run the state-derived `enumJobs2R1`/`enumJobs2R2`, NO
+-- chain-side hypotheses); `reachedByW3d2E_toC` projects onto the coverage chain
+-- (validity via the residue star-freeness invariant + R-node source discipline;
+-- round-1 coverage via `w3dJobCoverage_enumJob2_state`, round-2 via the routed leg
+-- context at the transported MID state). **`graph_correct_w3d2E`**: `check = sem`
+-- at every fully-drained state of the operational two-stratum chain. Standard
+-- axioms only:
+#print axioms reachedByW3d2_residueStarFree
+#print axioms w3cJobValid_enumJob2
+#print axioms reachedByW3d2E_toC
+#print axioms graph_correct_w3d2E
 
 end Zanzibar
