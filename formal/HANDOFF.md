@@ -62,7 +62,7 @@ not `rw [f]`. `omega` treats `∑`-atoms as opaque — good for combining sum `h
 `NReaches` is head-oriented: back-append is `NReaches.tail`; back-REPLACE needs
 last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
-## State of the world (2026-07-12i — all sorry-free, axiom-clean, verify.sh green)
+## State of the world (2026-07-12j — all sorry-free, axiom-clean, verify.sh green)
 
 | theorem | file (`lean/ZanzibarProofs/`) | scope |
 |---|---|---|
@@ -99,9 +99,10 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | **`graph_correct_w3d2E`** / **`ReachedByW3d2E`** / **`reachedByW3d2E_toC`** + the CONDITIONAL coverage chain (`W3dJobOpsSettled`, `covg_of_opsSettled`) + `enumJobs2R1`/`enumJobs2R2`/`enumJobs2At_*` + `ResidueSubjectsStarFree`/`reachedByW3d2_residueStarFree` + `w3cJobValid_enumJob2` + R-node source star-freeness (chain+batch) | `GraphIndex/CascadeStrataAssemble.lean` (+ `CascadeStrataSettle/Resettle` hyp changes) | **W3d-2 CLOSED (2026-07-12h).** Attack-REFUTED (kill #6): "round-1 keys are stratum-1" is FALSE — a write to a DIRECT untainted leaf of a stratum-2 def dirties it at the watermark, where the leg-start enumeration provably misses a fresh grant living only in the dirty operand's future residue. So `ReachedByW3d2C`'s per-round coverage is CONDITIONAL on the job's operand baseline (`W3dJobOpsSettled` — exactly what the 12f re-settlement consumes), and the E-chain discharges it from state: round 1 hands the baseline premise to `w3dJobCoverage_enumJob2_state`, round 2 runs the routed leg context at the transported MID state. `check = sem` at every fully-drained state of the FULLY-OPERATIONAL two-round scheduler chain |
 
 | **W4** `ReachedBy`/`Drained` + **`GraphAdmission`** (Python-admission mirror, per-field citations, incl. `objWild`) / **`W4Fragment`** (the honest carries) + **`w4_within_scope`** (bundles ⇒ the spec's decision-15 `GraphAccepts`) + the FINAL unsuffixed **`graph_correct` / `backend_equivalence` / `exclusion_effective` / `no_ghost_grant`** (W1 versions renamed `*_direct`) + W2-subsumption lemmas (`drained_of_untainted`/`w4Fragment_of_untainted`) + **non-vacuity witnesses** (`W4Witness.accepts`/`fragment`/`within_scope` — both bundles inhabited by a real compiled boolean schema) | `FullScope.lean` | the deleted-as-false T2b/T3/T6 obligations DISCHARGED at the achieved scope; hypotheses split by provenance; honest-gaps list in ROADMAP W4 |
-| **W4 T2a groundwork** — `StructInv` / edge-free I6 (`ResidueHygienic`) / `ResidueDeclared` at every `ReachedByW3d2`/`W3d2C`/`W3d2E` state (E-chain versions HYPOTHESIS-FREE, `enumJobs2At_keyFacts`); **pass-local I6** `reconcileStarsKeyDR_row_edge_consistent` (+ `enumJob2_negCands_subset`) — the routed pass's row is edge-consistent with its OWN audit, no settled verdicts, so it holds at re-dirtied stale keys (12h attack shape) where the W3d-1 coverage route can't go | `GraphIndex/CascadeStrataInv.lean` | the fragment-free 3 of 8 `Inv` clauses over the OPERATIONAL chain + the core of the edge-referencing 2; assembly = the next task |
+| **W4 T2a groundwork** — `StructInv` / edge-free I6 (`ResidueHygienic`) / `ResidueDeclared` at every `ReachedByW3d2`/`W3d2C`/`W3d2E` state (E-chain versions HYPOTHESIS-FREE, `enumJobs2At_keyFacts`); **pass-local I6** `reconcileStarsKeyDR_row_edge_consistent` (+ `enumJob2_negCands_subset`) — the routed pass's row is edge-consistent with its OWN audit, no settled verdicts, so it holds at re-dirtied stale keys (12h attack shape) where the W3d-1 coverage route can't go | `GraphIndex/CascadeStrataInv.lean` | the fragment-free 3 of 8 `Inv` clauses over the OPERATIONAL chain + the core of the edge-referencing 2 |
+| **W4 T2a ASSEMBLY — `reachedByW3d2E_inv` (full 8-clause `Inv`, every state) + the final `graph_reached_inv`** (`EdgeHyg1` direct-edge form; `edgeHyg1_applyLoggedR`/`_reconcileJobsLR`/`_runCascade2` — pass-local at the job key, other-key fixedness elsewhere, batch of ENUMERATED jobs; `reachedByW3d2E_edgeHyg1`→`_edgeHygienic` via the reach collapse; write legs via `writeLeg_derived_inedges_eq`) | `GraphIndex/CascadeStrataEdge.lean` + `FullScope.lean` | **W4 CLOSED.** T2a over `ReachedBy` with the provenance-split bundles; W1 direct version renamed `graph_reached_inv_direct` |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ✅ → W3d-2 ✅ → W4 IN PROGRESS (opened 2026-07-12i — design pass + `FullScope.lean` restatements + T2a groundwork + pass-local I6; REMAINING: the T2a assembly below, then Phase 6).**
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ✅ → W3d-2 ✅ → W4 ✅ (CLOSED 2026-07-12j — full T2a/T2b/T3/T6 over `ReachedBy := ReachedByW3d2E`).** Remaining: **Phase 6 hardening only.**
 
 **W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* PROOF_STATUS entries and the
 ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
@@ -130,66 +131,51 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 
 ---
 
-## The next task — W4 T2a assembly: edge hygiene over `ReachedBy`, then `reachedByW3d2E_inv` + the `graph_reached_inv` restatement
+## The next task — Phase 6 (hardening): graph-state conformance mode, CORRESPONDENCE.md, final review doc
 
-**W4 is OPEN and mostly landed (2026-07-12i — READ THE TOP PROOF_STATUS ENTRY).**
-`FullScope.lean` has the final T2b/T3/T6 + bundles + witnesses;
-`CascadeStrataInv.lean` has `StructInv`/`ResidueHygienic`/`ResidueDeclared` over
-all three two-round chains plus the pass-local I6 core. What remains for W4 is
-T2a over the operational chain:
+**W4 is CLOSED (2026-07-12j — READ THE TOP PROOF_STATUS ENTRY).** The full
+verified-model arc T1 (set engine = `sem`) + T2a/T2b (graph index `Inv` + `check
+= sem`) + T3/T6 (equivalence + security) now stands over the operational closure
+`ReachedBy := ReachedByW3d2E`, with the honest `GraphAdmission`/`W4Fragment`
+hypothesis split (`FullScope.lean`) and non-vacuity witnesses. What remains is
+**Phase 6 hardening** — closing the loop between the Lean model and the Python
+implementation on the GRAPH side, the way `sem` is already tied via `zcli`:
 
-1. **`EdgeHyg1` batch induction (the assembly of the pass-local core).** Define
-   the single-EDGE hygiene predicate (`∀ k r res` row, no `(subjNode n, k)` edge
-   for `n ∈ neg ∪ upos`) and prove it preserved by `reconcileJobsLR` batches of
-   ENUMERATED jobs, by induction carrying the prefix-state context:
-   - at the job's own key: `reconcileStarsKeyDR_row_edge_consistent`
-     (`CascadeStrataInv.lean`) — its `hnc` from `enumJob2_negCands_subset`, `hup`
-     from `W3cJobValid` field 5, `hσS`/`hcl` from `StructInv` (preserved
-     stepwise, `structInv_applyLoggedR`), `hRns` from the R-node terminality
-     batch transports (12d layer, `CascadeStrata.lean`), `hsb` from
-     `reconcileJobsLR_source_bare` stepwise, `hrne` via `computedRefs_ne_self`
-     (`CascadeStrataResettle.lean:31`, needs `hLU2`), key facts from
-     `enumJobs2At_keyFacts`;
-   - at every other key: `applyLoggedR_other_key_fixed`
-     (`CascadeStrataSettle.lean:764` — row AND in-edges verbatim; the other key's
-     `on ≠ STAR` from `ResidueDeclared`).
-   Then `runCascade2` (two batches + watermark, reject = id) and the chain:
-   write legs are residue-inert with derived in-edges fixed
-   (`writeLeg_derived_inedges_eq`, needs `hRootB`/`hNK`/`hSV` + row declaredness).
-2. **`reachedByW3d2E_edgeHygienic`**: convert `EdgeHyg1` to the `Inv` clauses'
-   `¬NReaches` form via the reach collapse at chain states
-   (`reachedByW3d2_reach_collapse_root`, `CascadeStrataSettle.lean:256`).
-3. **`reachedByW3d2E_inv`** (the full 8-clause `Inv` at every operational state,
-   assembling 1–2 with the three fragment-free layers) and the **final
-   `graph_reached_inv`** restatement in `FullScope.lean` (T2a over `ReachedBy`,
-   hypothesis bundles as in `graph_correct`); Audit entries; tick ROADMAP.
-4. Then **Phase 6** (below).
+1. **Graph-state conformance mode** (the contentful piece). Today
+   `formal/conformance/` + `zcli` drive the Lean `sem` against the oracle and the
+   real Python SET engine over 15 corpora (60 tests). Extend it to drive the Lean
+   `writeDirect`/`check` GRAPH model against the PYTHON graph index
+   (`index_v4`/`WildcardIndex`) over the fragment corpora: emit the model's
+   materialized edge/residue state (or just its `check` verdicts) and diff against
+   the Python `WildcardIndex.check`. Start read-only (`check` parity on a fixed
+   store) before attempting write-path/state parity. Keep it a hard gate in
+   `verify.sh` if it lands green. Faithfulness note: the Lean model is add-only and
+   fragment-scoped — pick corpora inside `W4Fragment` (the witnesses `Sx`/`Tx` are
+   a starting seed) so the comparison is apples-to-apples.
+2. **`CORRESPONDENCE.md`** — the Lean-def ↔ Python-file:line map (the citations
+   already scattered through the proof headers and `GraphAdmission`/`W4Fragment`
+   field docs, collected into one table). This is what makes the "the code is
+   pinned to the model" claim auditable.
+3. **Final review doc** using plan §7 wording VERBATIM (the honest claim: a
+   machine-checked proof that both backends compute `sem`, with the Python pinned
+   to the Lean models by the conformance harness — never rounded up to "the code
+   is formally verified"). Cross-check every claim against what is actually proved
+   (the `Audit.lean` axiom-clean list) and the honest gaps (ROADMAP "W4 — honest
+   gaps": the fragment carries `rootB`/`computedOnly`/`twoStrata`/`wsBare`/
+   `bareStar`/`ttuStarFree`/`term` are all real scope restrictions).
 
-DESIGN NOTE (why NOT the W3d-1 route): `reachedByW3dC_edgeHygienic` went through
-settled verdicts, but W3d2C coverage is CONDITIONAL (12h) — at a re-dirtied
-round-1 stratum-2 key there is no `SettledKey`. The pass-local core needs no
-settledness at all: the last targeting pass's row and edges are mutually
-consistent against ITS OWN pass-start guard, stale or not. Attack duty for the
-new statements is light — they consume the proved `reconcileStarsKeyDR_edge_char`
-and the batch-fixedness layer; the one genuinely new claim (`EdgeHyg1` survives a
-batch) should still get a quick refutation pass at write-leg/star-key corners
-(row declaredness gives `on ≠ STAR`; write legs can add edges into UNTAINTED
-nodes only — check the derived-in-edge fixedness covers wAny sources).
-
-**After W4 → Phase 6** (graph-model conformance extension — drive the Lean
-`writeDirect`/`check` model against the PYTHON graph index over the fragment corpora;
-CORRESPONDENCE.md; final review doc using plan §7 wording verbatim).
+Attack-first still applies: before claiming graph-state parity, try to REFUTE it
+on a cross-stratum / stale-edge corpus (the 12h attack shape is a natural probe).
 
 ---
 
 ## After W3d (the remaining road)
-- **W4 — full-scope restatement. IN PROGRESS (2026-07-12i).** DONE: `ReachedBy` /
+- **W4 — full-scope restatement. ✅ CLOSED (2026-07-12j).** `ReachedBy` /
   `Drained`, the `GraphAdmission`/`W4Fragment` provenance split, `w4_within_scope`,
-  the final unsuffixed T2b/T3/T6 (`FullScope.lean`), W2-subsumption lemmas,
-  non-vacuity witnesses, and the T2a fragment-free layers + pass-local I6
-  (`CascadeStrataInv.lean`). REMAINING: the T2a assembly ("The next task" above) —
-  `EdgeHyg1` batch induction → `reachedByW3d2E_edgeHygienic` →
-  `reachedByW3d2E_inv` → the final `graph_reached_inv`.
+  the final unsuffixed T2b/T3/T6 + **T2a `graph_reached_inv`** (`FullScope.lean`),
+  W2-subsumption lemmas, non-vacuity witnesses, the T2a fragment-free layers +
+  pass-local I6 (`CascadeStrataInv.lean`), and the edge-hygiene ASSEMBLY
+  (`CascadeStrataEdge.lean`: `EdgeHyg1` → `reachedByW3d2E_inv`).
 - **Phase 6 — hardening.** (a) graph-model conformance extension: drive the Lean
   `writeDirect`/`check` model against the PYTHON graph index over the fragment corpora
   (zcli already exists for `sem`; add a graph-state mode); (b) `CORRESPONDENCE.md`

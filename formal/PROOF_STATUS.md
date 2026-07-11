@@ -8,6 +8,67 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12j (W4 T2a ASSEMBLY — `reachedByW3d2E_inv` + `graph_reached_inv`; **W4 CLOSED**)
+
+Resuming from HANDOFF "The next task — W4 T2a assembly". One green+pushed
+increment (new `GraphIndex/CascadeStrataEdge.lean`, +7 Audit entries);
+`verify.sh` green (build + 0 sorries + zcli + standard-axioms audit + 60
+conformance). **W4 is CLOSED** — the last W4 proof obligation (T2a over the
+operational chain) is discharged. The full T-theorem set (T2a/T2b/T3/T6a/T6b)
+now stands over `ReachedBy := ReachedByW3d2E`.
+
+**Design (as flagged in HANDOFF): the W3d-1 coverage route deliberately NOT
+reused.** `reachedByW3dC_edgeHygienic` went through the coverage chain's SETTLED
+verdicts, but W3d2C coverage is CONDITIONAL (12h) — at a re-dirtied round-1
+stratum-2 key there is no `SettledKey`. So the assembly works at the EDGE-DIRECT
+level (`EdgeHyg1`: no `neg`/`upos` member holds a direct in-edge at its key) with
+an invariant that never consumes settledness. Attack duty was light (HANDOFF
+noted it): the pass-local core was already proved (12i) and attack-refuted over
+the plain chain; the one genuinely new claim — `EdgeHyg1` survives a batch — is a
+straight preservation, so the corner check reduces to confirming the write-leg
+derived-in-edge fixedness covers `wAny` sources (it does: `writeLeg_derived_
+inedges_eq` fixes ALL in-edges of a `RootBoolean` R-node) and that row
+declaredness gives `on ≠ STAR` at the other-key branch (it does, `ResidueDeclared`).
+
+**Increment (`GraphIndex/CascadeStrataEdge.lean`).**
+- **`EdgeHyg1`** + the two all-key R-node invariants (`RnodeTerminalAll` /
+  `RnodeSourceBareAll`, each preserved by one pass via the `[j]`-batch instances
+  of `reconcileJobsLR_Rnode_not_source` / `_source_bare`).
+- **`edgeHyg1_applyLoggedR`** — one routed pass preserves `EdgeHyg1`: at the job's
+  OWN key the pass-local core (`reconcileStarsKeyDR_row_edge_consistent`, 12i)
+  re-establishes consistency FRESH whatever the guard said; at every OTHER key
+  the row and in-edges are verbatim (`applyLoggedR_other_key_fixed`, other key's
+  `on ≠ STAR` from `ResidueDeclared`), so the prior state's hygiene transports.
+  The candidate-discipline premise `hnc` (`negCands ⊆ cands`) is the E-chain's
+  `enumJob2_negCands_subset`.
+- **`edgeHyg1_reconcileJobsLR`** (batch, carrying `StructInv`/`ResidueDeclared`/
+  the two R-node invariants/schema, re-established per step) → **`edgeHyg1_
+  runCascade2`** (two enumerated batches with the MID context transported through
+  round 1, then the residue/edge-inert watermark bump; reject = id).
+- **`reachedByW3d2E_edgeHyg1`** — `EdgeHyg1` at every operational state, by chain
+  induction: empty vacuous; write legs transport via `writeLeg_derived_inedges_eq`
+  at the declared `RootBoolean` key; cascade legs re-establish via
+  `edgeHyg1_runCascade2`, the per-round enumerated jobs valid + candidate-audited
+  from state (the `hjv1`/`hjv2` derivation copied from `reachedByW3d2E_toC`).
+  Fragment threaded exactly as `toC` (hWF/hTT/hNK/hR/hRootB/hMatch/hStrat/hCO/
+  hLU2/hWSbare/hSV/hBS/hTS/hterm).
+- **`reachedByW3d2E_edgeHygienic`** lifts the direct-edge form to the `Inv`
+  clauses' `¬NReaches` form via `reachedByW3d2_reach_collapse_root`;
+  **`reachedByW3d2E_inv`** assembles the full 8-clause `Inv` (structural +
+  edge-free I6 from the 12i fragment-free layers, edge-referencing I6 from here)
+  at EVERY state — dirty/mid-drain included.
+- **`FullScope.graph_reached_inv`** — the FINAL T2a restatement over `ReachedBy`
+  with the `GraphAdmission`/`W4Fragment` bundles unpacked. The W1 pure-direct
+  `graph_reached_inv` (over `ReachedByDirect`) renamed **`graph_reached_inv_direct`**
+  (mirrors `graph_correct_direct`). 7 new Audit entries; all standard axioms.
+
+**Resume → Phase 6** (hardening): (a) graph-state conformance mode (drive the Lean
+`writeDirect`/`check` model against the PYTHON graph index over the fragment
+corpora, like `zcli` already does for `sem`); (b) `CORRESPONDENCE.md` (Lean def ↔
+Python file:line map); (c) the final review doc using plan §7 wording verbatim.
+
+---
+
 ## Session 2026-07-12i (W4 OPENED — scope inventory, `FullScope.lean` restatement layer, T2a groundwork over the two-round chains, pass-local I6)
 
 Resuming from HANDOFF "The next task — W4". FOUR green+pushed increments;

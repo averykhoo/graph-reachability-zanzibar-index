@@ -14,12 +14,15 @@ verified Zanzibar/OpenFGA model tied to the Python implementation.** Read alongs
    engine over 15 schema corpora. This is the model↔implementation bridge and
    it is already load-bearing (it caught the `fuelBound` spec bug).
 2. **T1 (set engine = `sem`): ✅ DONE, axiom-clean.**
-3. **T2 (graph index = `sem`): the remaining core.** Stated over an
-   **operational write-closure** that grows in stages (below) until it covers
-   the full `GraphAccepts` scope. Current scope: star-free pure-direct
-   (`graph_correct_direct`, ✅ proved end-to-end).
-4. **T3/T6 (equivalence + security): ✅ proved at the current T2 scope**; they
-   are one-line corollaries that widen automatically with each T2 stage.
+3. **T2 (graph index = `sem`): ✅ CLOSED (W4, 2026-07-12j).** Stated over the
+   **operational write-closure** `ReachedBy := ReachedByW3d2E`, grown through
+   stages W1→W4 until it covers the achieved `W4Fragment` scope (inside
+   `GraphAccepts`, `w4_within_scope`). Both halves proved: `graph_correct` (T2b,
+   `check = sem` at drained states) and `graph_reached_inv` (T2a, `Inv` at EVERY
+   state), `FullScope.lean`.
+4. **T3/T6 (equivalence + security): ✅ proved at full W4 scope**; they are
+   one-line corollaries through T1∘T2b (`backend_equivalence` /
+   `exclusion_effective` / `no_ghost_grant`, `FullScope.lean`).
 5. **T0a (spec well-definedness): ✅ DONE (2026-07-10)** — found FALSE as
    stated (machine-checked, `Spec/Counterexample.lean`), restated over
    `StoreDeclared` (the documented write-validity precondition), then fully
@@ -831,16 +834,29 @@ and re-proves/widens the same named theorems. Every stage must keep
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +
     T3/T6 widening. Detail in PROOF_STATUS "W3a read correspondence".
-- **W4 — full-scope restatement. IN PROGRESS (opened 2026-07-12i; design pass
-  below EXECUTED same session — decisions 1–3 + 5 landed in `FullScope.lean`
-  (with `GraphAccepts` kept as the spec predicate and the admission bundle named
-  `GraphAdmission`; `w4_within_scope` connects them), decision 4's fragment-free
-  layers + the pass-local I6 core landed in `CascadeStrataInv.lean`; REMAINING =
-  the T2a assembly, HANDOFF "The next task").** The
-  operational closure now covers the achieved scope; name it `ReachedBy` and state
-  the final `graph_correct` / `graph_reached_inv` / `backend_equivalence` / T6a
-  (with real exclusion content) / T6b over it. This discharges the obligations
-  whose false predecessors were deleted.
+- **W4 — full-scope restatement. ✅ CLOSED (2026-07-12j).** Opened 2026-07-12i
+  (decisions 1–3 + 5 → `FullScope.lean` with `GraphAccepts` kept as the spec
+  predicate and the admission bundle named `GraphAdmission`, `w4_within_scope`
+  connecting them; decision 4's fragment-free layers + the pass-local I6 core →
+  `CascadeStrataInv.lean`); the T2a ASSEMBLY closed it 2026-07-12j
+  (`CascadeStrataEdge.lean`: `EdgeHyg1` → `reachedByW3d2E_inv`, and the final
+  `graph_reached_inv` in `FullScope.lean`). The operational closure `ReachedBy :=
+  ReachedByW3d2E` now carries the full T-theorem set — `graph_correct` (T2b),
+  `graph_reached_inv` (T2a, `Inv` at every state), `backend_equivalence` (T3),
+  `exclusion_effective`/`no_ghost_grant` (T6a/T6b, real exclusion content). The W1
+  pure-direct versions are renamed `*_direct`. This discharges the obligations
+  whose false predecessors were deleted (2026-07-10).
+
+  **T2a assembly detail (2026-07-12j).** The W3d-1 `reachedByW3dC_edgeHygienic`
+  route (settled verdicts) does NOT port — W3d2C coverage is CONDITIONAL (12h), so
+  at a re-dirtied round-1 stratum-2 key there is no `SettledKey`. Instead the
+  edge-referencing I6 clauses are earned at the EDGE-DIRECT level (`EdgeHyg1`): a
+  routed pass preserves it (pass-local core at the job key `reconcileStarsKeyDR_
+  row_edge_consistent` — no settledness; other-key fixedness elsewhere), hence a
+  batch of ENUMERATED jobs (candidate discipline `enumJob2_negCands_subset`) and a
+  whole `runCascade2`; write legs transport via `writeLeg_derived_inedges_eq`. The
+  reach collapse lifts the direct-edge form to the `¬NReaches` `Inv` clauses. See
+  PROOF_STATUS 2026-07-12j.
 
   **Scope inventory (the opening design pass, 2026-07-12i).** All four closed read
   theorems share the query scope (`hqs : subject.name = STAR → subject.predicate =
@@ -889,12 +905,13 @@ and re-proves/widens the same named theorems. Every stage must keep
   3. Final statements: `graph_correct` (T2b) + the UNSUFFIXED `backend_equivalence`
      / `exclusion_effective` / `no_ghost_grant` move to full scope; the W1
      pure-direct versions currently holding those names are renamed `*_direct`.
-  4. **T2a full scope (`graph_reached_inv` over `ReachedBy`) is the main remaining
-     W4 PROOF**: `Inv` over the W3d2 chain does not exist yet (`CascadeInv.lean`
-     covers the W3d-1 chain only). Obligation: mirror `reachedByW3dC_inv`'s
-     architecture over routed batches — structural half via routed `StructInv`
-     mirrors, edge-free I6 fragment-free, edge-referencing I6 via the
-     three-disjunct settled invariant (`reachedByW3d2C_settled`).
+  4. **T2a full scope (`graph_reached_inv` over `ReachedBy`).** ✅ DONE (12j):
+     structural half via routed `StructInv` mirrors + edge-free I6 fragment-free
+     (both 12i, `CascadeStrataInv.lean`); the edge-referencing I6 clauses via the
+     EDGE-DIRECT `EdgeHyg1` preservation (12j, `CascadeStrataEdge.lean`) rather
+     than the `reachedByW3d2C_settled` route — the pass-local core needs no settled
+     verdicts, so it survives the 12h re-dirtied-key shape where coverage is
+     conditional.
   5. Non-vacuity witness: a concrete compiled-form schema+store satisfying
      `GraphAccepts ∧ W4Fragment` (guards the bundles against accidental
      unsatisfiability — the attack for a restatement stage).
