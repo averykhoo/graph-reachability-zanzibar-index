@@ -1444,7 +1444,28 @@ complete relative to the LEG-START state, round-2 jobs relative to the MID state
 (their passes re-enumerate against the graph as round 1 left it —
 `processor.py:394-441` runs inside the round). Chain-side hypotheses as in W3d-1c;
 the state-derived discharge is the W3d-2 E-chain tail (with the residue-named
-candidates, 12c finding (c)). -/
+candidates, 12c finding (c)).
+
+**Coverage is CONDITIONAL on the job's operand baseline (attack-established
+2026-07-12h, scratch deleted).** A round-1 key CAN be stratum-2 — a write to a
+DIRECT untainted leaf of a stratum-2 def (`r2 := r1 \ b` dirtied via pred `b`)
+lands the key in `cascadeKeysAbove` at the watermark — and when a leaf of its
+derived operand is dirtied in the same window, the state-derived audit enumeration
+at the leg start is NOT coverage-complete: the freshly-granted subject exists only
+in the dirty operand's FUTURE residue, invisible to leaf reach, `res.neg`/`res.upos`,
+and the R-node edges. Python survives this exactly because such a pass's output is
+provably stale-and-re-dirtied (`round1_emission_dirties`) and the round-2 re-run
+re-enumerates against the settled operand. So the chain hypothesises coverage only
+GIVEN that the job's derived operand keys are settled at the round's baseline —
+which is precisely what the re-settlement proof consumes (its Case B derives the
+baseline before using round-1 coverage; its Case A uses round-1 coverage only at
+stratum-1 operand keys, where the baseline is vacuous). -/
+
+/-- The operand baseline of one job at a state: every DERIVED operand key of the
+    job's def is settled+complete. Vacuous at stratum-1 keys. -/
+def W3dJobOpsSettled (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) : Prop :=
+  ∀ r' ∈ computedRefs j.e, isDerived S (j.dt, r') = true →
+    SettledKey S T σ j.dt j.on r' ∧ CompleteKey S T σ j.dt j.on r'
 
 inductive ReachedByW3d2C : GraphState → Schema → Store → Prop where
   | empty (S : Schema) : ReachedByW3d2C (emptyState S) S []
@@ -1461,10 +1482,34 @@ inductive ReachedByW3d2C : GraphState → Schema → Store → Prop where
           (σ.frontierMax σ.watermark), ∃ j ∈ jobs2, j.key = k)
       (hscope2 : ∀ j ∈ jobs2, j.key ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1)
           (σ.frontierMax σ.watermark))
-      (hcovg1 : ∀ j ∈ jobs1, W3dJobCoverage S T σ j)
-      (hcovg2 : ∀ j ∈ jobs2, W3dJobCoverage S T (reconcileJobsLR S T σ jobs1) j)
+      (hcovg1 : ∀ j ∈ jobs1, W3dJobOpsSettled S T σ j → W3dJobCoverage S T σ j)
+      (hcovg2 : ∀ j ∈ jobs2, W3dJobOpsSettled S T (reconcileJobsLR S T σ jobs1) j →
+          W3dJobCoverage S T (reconcileJobsLR S T σ jobs1) j)
       (hprev : ReachedByW3d2C σ S T) :
       ReachedByW3d2C (runCascade2 S T σ jobs1 jobs2) S T
+
+/-- Convert conditional batch coverage into keyMatch-restricted coverage at a key
+    whose operand baseline holds: a job targeting `(dt, on, R)` has `j.e = e` (valid
+    lookup) so its `W3dJobOpsSettled` is exactly the key's baseline. -/
+theorem covg_of_opsSettled {S : Schema} {T : Store} {σ : GraphState}
+    {jobs : List W3cJob} (hjv : ∀ j ∈ jobs, W3cJobValid S j)
+    (hcovg : ∀ j ∈ jobs, W3dJobOpsSettled S T σ j → W3dJobCoverage S T σ j)
+    {dt on R : String} {e : Expr} (hlk : S.lookup (dt, R) = some e)
+    (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
+    ∀ j ∈ jobs, j.keyMatch dt on R → W3dJobCoverage S T σ j := by
+  intro j hj hkm
+  refine hcovg j hj ?_
+  obtain ⟨h1, h2, h3⟩ := hkm
+  obtain ⟨_, _, _, _, _, _, _, hlke, _⟩ := hjv j hj
+  have hje : j.e = e := by
+    rw [h1, h3] at hlke
+    exact Option.some.inj (hlke.symm.trans hlk)
+  intro r' hr' hd'
+  rw [hje] at hr'
+  rw [h1] at hd'
+  rw [h1, h2]
+  exact hops r' hr' hd'
 
 /-- The projection: every W3d-2 coverage-chain state is a plain W3d-2 state — the
     whole structural/shadow/T5 layer applies. -/

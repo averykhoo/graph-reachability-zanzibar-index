@@ -622,8 +622,8 @@ theorem settledComplete_jobsLR_targeted {S : Schema} {T : Store} {σ σ0 : Graph
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (hσS : σ.schema = S)
     (hjv : ∀ j ∈ jobs, W3cJobValid S j)
-    (hcovg : ∀ j ∈ jobs, W3dJobCoverage S T σ j)
     {dt on R : String} {e : Expr}
+    (hcovg : ∀ j ∈ jobs, j.keyMatch dt on R → W3dJobCoverage S T σ j)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hon : on ≠ STAR)
     (hLU2e : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -652,7 +652,7 @@ theorem settledComplete_jobsLR_targeted {S : Schema} {T : Store} {σ σ0 : Graph
   have hjsOpsPre : ∀ j' ∈ pre, ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       ¬ j'.keyMatch dt on r' :=
     fun j' hj' => hjsOps j' (hsplit ▸ List.mem_append_left _ hj')
-  obtain ⟨hcovE, hcovC, hcovN, hcovU⟩ := hcovg j hjmem
+  obtain ⟨hcovE, hcovC, hcovN, hcovU⟩ := hcovg j hjmem hkm
   have hjvj := hjv j hjmem
   obtain ⟨jdt, jon, jR, je, jc, jn, ju⟩ := j
   obtain ⟨hRneJ, hcb, hcS, hnegS, huP, huS, hderJ, hlke, honj⟩ := hjvj
@@ -891,8 +891,9 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
         (σ.frontierMax σ.watermark), ∃ j ∈ jobs2, j.key = k)
     (hscope2 : ∀ j ∈ jobs2, j.key ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1)
         (σ.frontierMax σ.watermark))
-    (hcovg1 : ∀ j ∈ jobs1, W3dJobCoverage S T σ j)
-    (hcovg2 : ∀ j ∈ jobs2, W3dJobCoverage S T (reconcileJobsLR S T σ jobs1) j)
+    (hcovg1 : ∀ j ∈ jobs1, W3dJobOpsSettled S T σ j → W3dJobCoverage S T σ j)
+    (hcovg2 : ∀ j ∈ jobs2, W3dJobOpsSettled S T (reconcileJobsLR S T σ jobs1) j →
+        W3dJobCoverage S T (reconcileJobsLR S T σ jobs1) j)
     {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hon : on ≠ STAR)
@@ -976,7 +977,10 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
           intro r'' hr'' hd'' _ _ _ _
           cases (hLUe' r'' hr'').symm.trans hd''
         refine settledComplete_jobsLR_targeted hWF hTT hNK hR hSV hBS hTS hRootB hMatch
-          hStrat hterm hCO hWSbare h0 hsh hσS hjv1 hcovg1 hlk' hd' hon hLU2e' hRns' htb
+          hStrat hterm hCO hWSbare h0 hsh hσS hjv1
+          (covg_of_opsSettled hjv1 hcovg1 hlk'
+            (fun r'' hr'' hd'' => by cases (hLUe' r'' hr'').symm.trans hd''))
+          hlk' hd' hon hLU2e' hRns' htb
           ?_ ?_ ?_ ⟨j1, hj1, hkm1⟩
         · intro r'' hr'' hd''
           cases (hLUe' r'' hr'').symm.trans hd''
@@ -998,7 +1002,8 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
           exact ⟨settledKey_jobsLR_untargeted hjv1 hnot1 hon hset,
             completeKey_jobsLR_untargeted hjv1 hnot1 hon hcomp⟩
     have hsettled := settledComplete_jobsLR_targeted hWF hTT hNK hR hSV hBS hTS hRootB
-      hMatch hStrat hterm hCO hWSbare h0 hshmid hσmidS hjv2 hcovg2 hlk hder hon hLU2e
+      hMatch hStrat hterm hCO hWSbare h0 hshmid hσmidS hjv2
+      (covg_of_opsSettled hjv2 hcovg2 hlk hopsMid) hlk hder hon hLU2e
       hRnsmid htbmid hsbOpsmid hopsMid hfence hA
     rw [hacc]
     exact ⟨settledKey_congr rfl rfl hsettled.1, completeKey_congr rfl rfl hsettled.2⟩
@@ -1038,7 +1043,8 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
         exact hopsNoTgt j1 hj1 r' hr' hd' ⟨h1, h3, h2⟩
       · exact hsc
     have hsettled1 := settledComplete_jobsLR_targeted hWF hTT hNK hR hSV hBS hTS hRootB
-      hMatch hStrat hterm hCO hWSbare h0 hsh hσS hjv1 hcovg1 hlk hder hon hLU2e hRns
+      hMatch hStrat hterm hCO hWSbare h0 hsh hσS hjv1
+      (covg_of_opsSettled hjv1 hcovg1 hlk hopsS) hlk hder hon hLU2e hRns
       htb hsbOps hopsS hopsNoTgt htgtB
     have hnot2 : ∀ j ∈ jobs2, ¬ j.keyMatch dt on R :=
       fun j hj hkm => hA ⟨j, hj, hkm⟩
