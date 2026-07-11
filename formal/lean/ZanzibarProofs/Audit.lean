@@ -766,9 +766,30 @@ namespace Zanzibar
 #print axioms shadow_reach_agree
 #print axioms shadow_admitEdge_agree
 #print axioms untaintedShadow_foldAdmits
+#print axioms untaintedShadow_applyD
+#print axioms untaintedShadow_reconcileJobsD
 #print axioms untaintedShadow_cascade
 #print axioms reachedByW3d_shadow
 #print axioms shadow_graphRec_agree
 #print axioms checkFn_eq_sem_w3d
+
+-- **W3d-1b — SETTLEDNESS TRANSPORT (GraphIndex/CascadeStable.lean, 2026-07-11g).**
+-- Write legs cannot touch ANY derived key's representation: rows are write-inert
+-- (`writeLoggedRules_residue`) and no rule-routed edge lands on a `RootBoolean`
+-- R-node (`writeLeg_derived_inedges_eq` — model-level I5 exclusivity). The semantic
+-- complement `writeLeg_sem_stable`: at an UNMAPPED key the write does not change
+-- `sem` either — guard = `sem` on BOTH sides of the leg (the read bridge at both
+-- stores) and the guard is stable (fan-out completeness) — the cross-key hazard's
+-- absence, semantically. `SettledKey` (the soundness-side per-key predicate: row
+-- members carry their `sem` verdicts, derived edges witness `sem`-true subjects)
+-- transports across write legs at unmapped keys (`settledKey_writeLeg`) and across
+-- cascades at untargeted keys (`settledKey_cascade_untargeted` — passes touch only
+-- their own keys' rows/in-edges, store unchanged). Standard axioms only:
+#print axioms writeLoggedRules_residue
+#print axioms writeLeg_derived_inedges_eq
+#print axioms writeLeg_sem_stable
+#print axioms settledKey_writeLeg
+#print axioms reconcileJobsD_other_key_fixed
+#print axioms settledKey_cascade_untargeted
 
 end Zanzibar

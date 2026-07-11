@@ -737,10 +737,93 @@ theorem reconcileJobsD_nodes_mono {S : Schema} {T : Store} :
     rw [reconcileResidueKey_nodes]
     exact hk
 
-/-- **A cascade leg preserves the shadow** (the shadow state is untouched): pass
+/-- **One diffing pass preserves the shadow** (the shadow state untouched): pass
     edges are `DerNode`-targeted, removals never hit shadow edges (a rules state has
     no in-edge at a `RootBoolean` derived R-node), sources stay off the `DerNode`s
-    (bare candidates vs non-bare derived relations). -/
+    (bare candidates vs non-bare derived relations). Per-job form — every MID-BATCH
+    state of a cascade keeps the shadow, hence the read bridge. -/
+theorem untaintedShadow_applyD {S : Schema} {T : Store} {σ σ0 : GraphState}
+    {j : W3cJob}
+    (hsh : UntaintedShadow S σ σ0) (h0 : ReachedByRules σ0 S T)
+    (hSV : StoreValidRules S T) (hNK : NodupKeys S)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hjv : W3cJobValid S j) :
+    UntaintedShadow S (j.applyD S T σ) σ0 := by
+  obtain ⟨hRne, hcb, _, _, _, _, hder, hlke, hon⟩ := hjv
+  have hroot : RootBoolean j.e :=
+    hRootB ⟨(j.dt, j.R), j.e⟩ (mem_defs_of_lookup hlke) hder
+  have hnojob : ∀ ab ∈ σ0.edges, ab.2 ≠ objNode ⟨j.dt, j.on⟩ j.R := by
+    intro ab hab heq
+    have hno := reachedByRules_RootBoolean_no_inedge (on := j.on) hSV hNK hlke hroot h0 ab.1
+    rw [← heq] at hno
+    exact hno hab
+  have hsound : ∀ a b, (a, b) ∈ (j.applyD S T σ).edges →
+      (a, b) ∈ σ.edges ∨ ∃ c ∈ j.cands, a = subjNode c ∧ b = objNode ⟨j.dt, j.on⟩ j.R := by
+    intro a b hab
+    unfold W3cJob.applyD at hab
+    exact reconcileStarsKeyD_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
+      j.cands j.negCands j.uposCands σ a b hab
+  refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
+  · -- classify
+    intro ab hab
+    obtain ⟨a, b⟩ := ab
+    rcases hsound a b hab with hold | ⟨c, _, _, h2⟩
+    · exact hsh.classify (a, b) hold
+    · exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
+  · -- sub
+    intro ab hab
+    unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+    refine reconcileKeyD_edge_pres_target T j.dt j.on j.R j.e j.cands _ ab
+      (hnojob ab hab) ?_
+    rw [reconcileResidueKey_edges]
+    exact hsh.sub ab hab
+  · -- nodesSub
+    intro k hk
+    unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+    refine reconcileKeyD_nodes_mono T j.dt j.on j.R j.e j.cands _ k ?_
+    rw [reconcileResidueKey_nodes]
+    exact hsh.nodesSub k hk
+  · -- closed
+    intro ab hab
+    unfold W3cJob.applyD GraphState.reconcileStarsKeyD at hab ⊢
+    refine edgesClosed_reconcileKeyD T j.dt j.on j.R j.e j.cands _ ?_ ab hab
+    intro ab' hab'
+    rw [reconcileResidueKey_edges] at hab'
+    rw [reconcileResidueKey_nodes]
+    exact hsh.closed ab' hab'
+  · -- term
+    intro k hk y hy
+    rcases hsound k y hy with hold | ⟨c, hc, h1, _⟩
+    · exact hsh.term k hk y hold
+    · obtain ⟨dt, on, R, _, hRne', _, hkey⟩ := hk
+      have : R = c.predicate := by
+        have hp := congrArg NodeKey.pred (hkey.symm.trans h1)
+        simpa [objNode_pred, subjNode_pred] using hp
+      rw [hcb c hc] at this
+      exact hRne' this
+
+/-- The unlogged diffing batch preserves the shadow — every prefix state of a
+    cascade's job loop is shadowed, so the read bridge holds MID-BATCH. -/
+theorem untaintedShadow_reconcileJobsD {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
+      ReachedByRules σ0 S T → StoreValidRules S T → NodupKeys S →
+      (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+      (∀ j ∈ jobs, W3cJobValid S j) →
+      UntaintedShadow S (reconcileJobsD S T σ jobs) σ0 := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ σ0 hsh _ _ _ _ _; exact hsh
+  | cons j rest ih =>
+    intro σ σ0 hsh h0 hSV hNK hRootB hjv
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
+      rw [List.foldl_cons]
+    rw [hfold]
+    exact ih _ _ (untaintedShadow_applyD hsh h0 hSV hNK hRootB (hjv j List.mem_cons_self))
+      h0 hSV hNK hRootB (fun j' hj' => hjv j' (List.mem_cons_of_mem _ hj'))
+
+/-- **A cascade leg preserves the shadow** (the shadow state is untouched). -/
 theorem untaintedShadow_cascade {S : Schema} {T : Store} {σ σ0 : GraphState}
     {jobs : List W3cJob}
     (hsh : UntaintedShadow S σ σ0) (h0 : ReachedByRules σ0 S T)
@@ -751,57 +834,21 @@ theorem untaintedShadow_cascade {S : Schema} {T : Store} {σ σ0 : GraphState}
   rcases runCascade_cases S T σ jobs with hrc | hrc
   · rw [hrc]
     have hev := reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs
-    -- shadow edges never sit at a job's R-node (RootBoolean ⇒ no rules in-edge)
-    have hnojob : ∀ ab ∈ σ0.edges, ∀ j ∈ jobs, ab.2 ≠ objNode ⟨j.dt, j.on⟩ j.R := by
-      intro ab hab j hj heq
-      obtain ⟨_, _, _, _, _, _, hder, hlke, _⟩ := hjv j hj
-      have hroot : RootBoolean j.e :=
-        hRootB ⟨(j.dt, j.R), j.e⟩ (mem_defs_of_lookup hlke) hder
-      have hno := reachedByRules_RootBoolean_no_inedge (on := j.on) hSV hNK hlke hroot h0 ab.1
-      rw [← heq] at hno
-      exact hno hab
-    refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
-    · -- classify
-      intro ab hab
-      have hab' : ab ∈ (reconcileJobsL S T σ jobs).edges := hab
-      rw [hev.edges] at hab'
-      obtain ⟨a, b⟩ := ab
-      rcases reconcileJobsD_edge_sound jobs σ a b hab' with hold | ⟨j, hj, c, _, _, h2⟩
-      · exact hsh.classify (a, b) hold
-      · obtain ⟨hRne, _, _, _, _, _, hder, _, hon⟩ := hjv j hj
-        exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
-    · -- sub
-      intro ab hab
-      show ab ∈ (reconcileJobsL S T σ jobs).edges
-      rw [hev.edges]
-      exact reconcileJobsD_edge_pres_target jobs σ ab (hnojob ab hab) (hsh.sub ab hab)
-    · -- nodesSub
-      intro k hk
-      show k ∈ (reconcileJobsL S T σ jobs).nodes
-      rw [hev.nodes]
-      exact reconcileJobsD_nodes_mono jobs σ k (hsh.nodesSub k hk)
-    · -- closed
-      intro ab hab
-      have hab' : ab ∈ (reconcileJobsL S T σ jobs).edges := hab
-      rw [hev.edges] at hab'
-      have := edgesClosed_reconcileJobsD jobs σ hsh.closed ab hab'
-      show ab.1 ∈ (reconcileJobsL S T σ jobs).nodes
-        ∧ ab.2 ∈ (reconcileJobsL S T σ jobs).nodes
-      rw [hev.nodes]
-      exact this
-    · -- term
-      intro k hk y hy
-      have hy' : (k, y) ∈ (reconcileJobsL S T σ jobs).edges := hy
-      rw [hev.edges] at hy'
-      rcases reconcileJobsD_edge_sound jobs σ k y hy' with hold | ⟨j, hj, c, hc, h1, _⟩
-      · exact hsh.term k hk y hold
-      · obtain ⟨dt, on, R, _, hRne, _, hkey⟩ := hk
-        obtain ⟨_, hcb, _, _, _, _, _, _, _⟩ := hjv j hj
-        have : R = c.predicate := by
-          have hp := congrArg NodeKey.pred (hkey.symm.trans h1)
-          simpa [objNode_pred, subjNode_pred] using hp
-        rw [hcb c hc] at this
-        exact hRne this
+    have hD := untaintedShadow_reconcileJobsD jobs σ σ0 hsh h0 hSV hNK hRootB hjv
+    exact ⟨fun ab hab => hD.classify ab (by rw [← hev.edges]; exact hab),
+      fun ab hab => by
+        show ab ∈ (reconcileJobsL S T σ jobs).edges
+        rw [hev.edges]; exact hD.sub ab hab,
+      fun k hk => by
+        show k ∈ (reconcileJobsL S T σ jobs).nodes
+        rw [hev.nodes]; exact hD.nodesSub k hk,
+      fun ab hab => by
+        show ab.1 ∈ (reconcileJobsL S T σ jobs).nodes
+          ∧ ab.2 ∈ (reconcileJobsL S T σ jobs).nodes
+        rw [hev.nodes]
+        exact hD.closed ab (by rw [← hev.edges]; exact hab),
+      hD.closed0,
+      fun k hk y hy => hD.term k hk y (by rw [← hev.edges]; exact hy)⟩
   · rw [hrc]
     exact hsh
 
@@ -904,5 +951,275 @@ theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
   rw [hstep]
   exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
     (ReachedByW3aAdmitted.base h0) hlk hco hleafUnt hs hon
+
+/-! ## Write-leg settledness transport — unmapped keys keep representation AND meaning
+
+A logged write leg cannot touch any derived key's materialised representation (rows
+are write-inert, and no rule-routed edge lands on a `RootBoolean` R-node — model-level
+I5 exclusivity). The semantic complement (`writeLeg_sem_stable`): at an UNMAPPED key
+the write does not change `sem` either — because the guard equals `sem` on both sides
+of the leg (the W3d read bridge, at both stores) and the guard is unchanged
+(fan-out completeness). Together: `SettledKey` transports across write legs at
+unmapped keys (`settledKey_writeLeg`). -/
+
+/-- A write leg never touches any residue row. -/
+theorem writeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
+    (σ.writeLoggedRules S t).residue = σ.residue := by
+  rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).residue]
+  show ((rewriteClosure S t).foldl (fun acc u => acc.writeDirect u) σ).residue = σ.residue
+  generalize rewriteClosure S t = us
+  induction us generalizing σ with
+  | nil => rfl
+  | cons u rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih, writeDirect_residue]
+
+/-- **Write legs never touch a `RootBoolean` derived key's in-edges** (model-level I5
+    exclusivity): a routed closure member cannot land on the R-node (a stored `(dt,R)`
+    tuple would need a `Direct` arm, a rewrite output a rule onto `(dt,R)` — both dead
+    on `RootBoolean`), and write legs remove nothing. -/
+theorem writeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} {T : Store}
+    (hNK : NodupKeys S) (hSV : StoreValidRules S (t :: T))
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e) (u : NodeKey) :
+    ((u, objNode ⟨dt, on⟩ R) ∈ (σ.writeLoggedRules S t).edges
+      ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
+  constructor
+  · intro h
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges] at h
+    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) h with hold | ⟨w, hw, _h1, h2⟩
+    · exact hold
+    · exfalso
+      have htype : dt = w.object.type := by
+        simpa [objNode_type] using congrArg NodeKey.type h2
+      have hrel : R = w.relation := by
+        simpa [objNode_pred] using congrArg NodeKey.pred h2
+      rcases rewriteClosure_produced hw with heq | ⟨r, hr', hro, hrout⟩
+      · rw [heq] at htype hrel
+        obtain ⟨e', rs, hlk', hrs, _⟩ := hSV t List.mem_cons_self
+        rw [← htype, ← hrel, hlk, Option.some.injEq] at hlk'
+        rw [← hlk', exprDirects_rootBoolean hroot] at hrs
+        simp at hrs
+      · exact noRuleOutputs_of_root hlk hNK hroot r hr'
+          ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+  · exact fun h => writeLoggedRules_edges_mono σ S t _ h
+
+/-- `checkFn` ignores its store argument on `ComputedOnly` defs (the store feeds only
+    the dead `direct`/`ttu` leaves). -/
+theorem checkFn_store_irrel {σ : GraphState} (T1 T2 : Store) (s : SubjectRef)
+    (dt on R : String) {e : Expr} (hco : ComputedOnly e) :
+    σ.checkFn T1 s dt on R e = σ.checkFn T2 s dt on R e := by
+  unfold GraphState.checkFn
+  exact evalE_computedOnly e hco (fun _ _ => rfl)
+
+/-- **`writeLeg_sem_stable` — an unmapped key keeps its MEANING.** If a logged write
+    does not map the derived key, `sem` at that key is unchanged by the write: the
+    guard equals `sem` on both sides of the leg (the W3d read bridge at both stores)
+    and the guard itself is stable (fan-out completeness). The semantic form of the
+    cross-key hazard's absence. -/
+theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hSV : StoreValidRules S (t :: T)) (hBS : BareStarStore (t :: T))
+    (hTS : TtuStarFree S (t :: T))
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (h : ReachedByW3d σ S T) (hadm : FoldAdmits σ (rewriteClosure S t))
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    {s : SubjectRef} (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  -- the fragment weakens to the pre-write store
+  have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+  have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+  have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+  have htermw : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+    fun dt R hd => ⟨(hterm dt R hd).1,
+      fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+  have h' : ReachedByW3d (σ.writeLoggedRules S t) S (t :: T) :=
+    ReachedByW3d.write t hadm h
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d_shadow h' hNK hRootB hSV hterm
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hRootB hSVw htermw
+  have hclσ := reachedByW3d_edgesClosed h
+  have htp' := reachedByW3d_edges_target_plain h' hBS
+  calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
+      = (σ.writeLoggedRules S t).checkFn (t :: T) s dt on R e :=
+        (checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+          h0' hsh' hlk hco hleafUnt hs hon).symm
+    _ = σ.checkFn (t :: T) s dt on R e :=
+        writeLeg_checkFn_stable (t :: T) hclσ htp' hlk hder hco hon hunmapped s
+    _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
+    _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+        checkFn_eq_sem_w3d hWF hTT hNK hR hSVw hBSw hTSw hRootB hMatch hStrat htermw
+          h0 hsh hlk hco hleafUnt hs hon
+
+/-! ## `SettledKey` — the per-key soundness-side settledness predicate
+
+The derived key's materialised representation reads at `sem` level against the
+CURRENT store. This is the soundness half (what IS materialised is right); the
+completeness clauses (row existence, `neg`/`upos`/edge completeness) live with the
+audit-enumeration coverage layer (W3d-1c), mirroring the W3c split. -/
+
+/-- The row's members carry their `sem` verdicts; every derived edge witnesses a
+    `sem`-true bare star-free subject. -/
+def SettledKey (S : Schema) (T : Store) (σ : GraphState) (dt on R : String) : Prop :=
+  (∀ res, σ.residue (objNode ⟨dt, on⟩ R) R = some res →
+    (∀ sh, res.stars.contains sh = true ↔
+      (sh ∈ wildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
+    (∀ n ∈ res.neg, n.name ≠ STAR ∧ sem S T ⟨n, R, ⟨dt, on⟩⟩ = false) ∧
+    (∀ n ∈ res.upos, n.predicate ≠ BARE ∧ n.name ≠ STAR ∧
+      sem S T ⟨n, R, ⟨dt, on⟩⟩ = true)) ∧
+  (∀ s : SubjectRef, s.predicate = BARE → s.name ≠ STAR →
+    (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges →
+    sem S T ⟨s, R, ⟨dt, on⟩⟩ = true)
+
+/-- **Settledness transports across a write leg at an unmapped key**: the
+    representation is untouched (rows write-inert, derived in-edges fixed) and the
+    key's `sem` is unchanged (`writeLeg_sem_stable`). `hWSbare` scopes the star
+    subjects the row mentions to bare shapes (decision-15). -/
+theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hSV : StoreValidRules S (t :: T)) (hBS : BareStarStore (t :: T))
+    (hTS : TtuStarFree S (t :: T))
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d σ S T) (hadm : FoldAdmits σ (rewriteClosure S t))
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (hon : on ≠ STAR)
+    (hset : SettledKey S T σ dt on R) :
+    SettledKey S (t :: T) (σ.writeLoggedRules S t) dt on R := by
+  obtain ⟨hrow, hedge⟩ := hset
+  have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+  have hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
+      sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+    fun s hs => writeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat
+      hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
+  constructor
+  · intro res hres
+    rw [writeLoggedRules_residue] at hres
+    obtain ⟨h1, h2, h3⟩ := hrow res hres
+    refine ⟨?_, ?_, ?_⟩
+    · intro sh
+      rw [h1 sh]
+      constructor
+      · rintro ⟨hws, hsm⟩
+        refine ⟨hws, ?_⟩
+        rw [hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+        exact hsm
+      · rintro ⟨hws, hsm⟩
+        refine ⟨hws, ?_⟩
+        rw [← hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+        exact hsm
+    · intro n hn
+      obtain ⟨hnstar, hsm⟩ := h2 n hn
+      refine ⟨hnstar, ?_⟩
+      rw [hsem n (fun hx => absurd hx hnstar)]
+      exact hsm
+    · intro n hn
+      obtain ⟨hnp, hnstar, hsm⟩ := h3 n hn
+      refine ⟨hnp, hnstar, ?_⟩
+      rw [hsem n (fun hx => absurd hx hnstar)]
+      exact hsm
+  · intro s hb hstar hedge'
+    rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot (subjNode s)] at hedge'
+    rw [hsem s (fun hx => absurd hx hstar)]
+    exact hedge s hb hstar hedge'
+
+/-! ## Cascade legs at untargeted keys — settledness is untouched -/
+
+/-- A diffing pass touches no residue row and no in-edge at ANOTHER concrete key. -/
+theorem applyD_other_key_fixed {S : Schema} {T : Store} {σ : GraphState} {j : W3cJob}
+    (hjv : W3cJobValid S j) {dt on R : String} (hon : on ≠ STAR)
+    (hnot : ¬ j.keyMatch dt on R) :
+    (j.applyD S T σ).residue (objNode ⟨dt, on⟩ R) R = σ.residue (objNode ⟨dt, on⟩ R) R ∧
+    ∀ u : NodeKey, ((u, objNode ⟨dt, on⟩ R) ∈ (j.applyD S T σ).edges
+      ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
+  obtain ⟨_, _, _, _, _, _, _, _, honj⟩ := hjv
+  have hne_node : objNode ⟨dt, on⟩ R ≠ objNode ⟨j.dt, j.on⟩ j.R := by
+    intro heq
+    obtain ⟨h1, h2, h3⟩ := objNode_inj_of_ne_star hon honj heq
+    exact hnot ⟨h1.symm, h2.symm, h3.symm⟩
+  constructor
+  · show (σ.reconcileStarsKeyD T j.dt j.on j.R j.e (wildcardShapes S) j.cands j.negCands
+      j.uposCands).residue (objNode ⟨dt, on⟩ R) R = _
+    exact reconcileStarsKeyD_residue_other (fun h => hne_node h.1)
+  · intro u
+    constructor
+    · intro h
+      unfold W3cJob.applyD at h
+      rcases reconcileStarsKeyD_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
+        j.cands j.negCands j.uposCands σ u _ h with hold | ⟨c, _, _, h2⟩
+      · exact hold
+      · exact absurd h2 hne_node
+    · intro h
+      unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+      refine reconcileKeyD_edge_pres_target T j.dt j.on j.R j.e j.cands _
+        (u, objNode ⟨dt, on⟩ R) hne_node ?_
+      rw [reconcileResidueKey_edges]
+      exact h
+
+/-- The whole diffing batch leaves an untargeted concrete key's row and in-edges
+    untouched. -/
+theorem reconcileJobsD_other_key_fixed {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ : GraphState) {dt on R : String}, on ≠ STAR →
+      (∀ j ∈ jobs, W3cJobValid S j) → (∀ j ∈ jobs, ¬ j.keyMatch dt on R) →
+      (reconcileJobsD S T σ jobs).residue (objNode ⟨dt, on⟩ R) R
+          = σ.residue (objNode ⟨dt, on⟩ R) R ∧
+      ∀ u : NodeKey, ((u, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsD S T σ jobs).edges
+        ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ dt on R _ _ _; exact ⟨rfl, fun u => Iff.rfl⟩
+  | cons j rest ih =>
+    intro σ dt on R hon hjv hnot
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
+      rw [List.foldl_cons]
+    rw [hfold]
+    obtain ⟨hres1, hedge1⟩ := applyD_other_key_fixed (hjv j List.mem_cons_self) hon
+      (hnot j List.mem_cons_self)
+    obtain ⟨hres2, hedge2⟩ := ih (j.applyD S T σ) hon
+      (fun j' hj' => hjv j' (List.mem_cons_of_mem _ hj'))
+      (fun j' hj' => hnot j' (List.mem_cons_of_mem _ hj'))
+    exact ⟨hres2.trans hres1, fun u => (hedge2 u).trans (hedge1 u)⟩
+
+/-- **Settledness is untouched by a cascade at untargeted keys**: the store is
+    unchanged (so the key's `sem` is), and the passes touch only their own keys'
+    rows and in-edges. -/
+theorem settledKey_cascade_untargeted {S : Schema} {T : Store} {σ : GraphState}
+    {jobs : List W3cJob} {dt on R : String}
+    (hjv : ∀ j ∈ jobs, W3cJobValid S j)
+    (hnot : ∀ j ∈ jobs, ¬ j.keyMatch dt on R) (hon : on ≠ STAR)
+    (hset : SettledKey S T σ dt on R) :
+    SettledKey S T (runCascade S T σ jobs) dt on R := by
+  rcases runCascade_cases S T σ jobs with hrc | hrc
+  · rw [hrc]
+    obtain ⟨hrow, hedge⟩ := hset
+    have hev := reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs
+    obtain ⟨hres, hedges⟩ := reconcileJobsD_other_key_fixed jobs σ hon hjv hnot
+    constructor
+    · intro res hresrow
+      refine hrow res ?_
+      rw [← hres, ← hev.residue]
+      exact hresrow
+    · intro s hb hstar hedge'
+      refine hedge s hb hstar ?_
+      rw [← (hedges (subjNode s)), ← hev.edges]
+      exact hedge'
+  · rw [hrc]
+    exact hset
 
 end Zanzibar
