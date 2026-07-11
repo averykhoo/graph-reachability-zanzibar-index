@@ -54,7 +54,12 @@ import ZanzibarProofs.GraphIndex.CascadeEnum
 import ZanzibarProofs.GraphIndex.CascadeStrata
 import ZanzibarProofs.GraphIndex.CascadeStrataSettle
 import ZanzibarProofs.GraphIndex.CascadeStrataResettle
+import ZanzibarProofs.GraphIndex.CascadeStrataEnum
+import ZanzibarProofs.GraphIndex.CascadeStrataAssemble
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6
 import ZanzibarProofs.Equiv
+
+-- W4 full-scope restatement (ReachedBy / GraphAccepts / final T-theorems)
+import ZanzibarProofs.FullScope

@@ -29,10 +29,11 @@ scope the exclusion case of T6a becomes non-vacuous (the current fragment has no
 
 namespace Zanzibar
 
-/-- **T3 (equivalence), fragment scope.** On states operationally reached by
-    writing exactly `T`, the two backends agree — by transitivity through `sem`
-    (T1 ∘ T2b-fragment). -/
-theorem backend_equivalence (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+/-- **T3 (equivalence), star-free pure-direct fragment scope.** On states
+    operationally reached by writing exactly `T`, the two backends agree — by
+    transitivity through `sem` (T1 ∘ T2b-fragment). (Renamed `*_direct` at W4:
+    the unsuffixed names now live at full scope in `FullScope.lean`.) -/
+theorem backend_equivalence_direct (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hSF : StarFreeStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
     (hReach : ReachedByAdmitted σ S T) (hValid : AllValid T) :
@@ -52,7 +53,7 @@ is a one-line consequence of T1/T2b + a spec lemma, at the fragment's scope.
     exclusion property (`but not banned` always removes a banned subject); the
     pure-direct fragment has no exclusions, so here the content is the general
     soundness direction. -/
-theorem exclusion_effective (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+theorem exclusion_effective_direct (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hSF : StarFreeStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
     (hReach : ReachedByAdmitted σ S T) (hValid : AllValid T)
@@ -66,7 +67,7 @@ theorem exclusion_effective (S : Schema) (T : Store) (σ : GraphState) (q : Quer
     deny, the graph backend denies after the removal — no stale grant survives the
     loss of its last support. (`T'` is the post-removal store; `σ'` its
     operationally reached state.) -/
-theorem no_ghost_grant (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+theorem no_ghost_grant_direct (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T') (hSF : StarFreeStore T')
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
     (hReach : ReachedByAdmitted σ' S T')

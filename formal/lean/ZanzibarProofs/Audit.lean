@@ -1,4 +1,5 @@
 import ZanzibarProofs.Equiv
+import ZanzibarProofs.FullScope
 import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
@@ -235,9 +236,9 @@ namespace Zanzibar
 -- T3 / T6a / T6b (Equiv.lean), restated 2026-07-10 over the operational closure
 -- at fragment scope — now REAL proved theorems (were false over the deleted
 -- abstract closure). Expect only the three standard axioms (no `sorryAx`):
-#print axioms backend_equivalence
-#print axioms exclusion_effective
-#print axioms no_ghost_grant
+#print axioms backend_equivalence_direct
+#print axioms exclusion_effective_direct
+#print axioms no_ghost_grant_direct
 -- T3 / T6a / T6b widened to the W1b object-wildcard fragment (Equiv.lean), one-line
 -- corollaries of T1 ∘ graph_correct_objStar. Expect only the three standard axioms:
 #print axioms backend_equivalence_objStar
@@ -1127,5 +1128,20 @@ namespace Zanzibar
 #print axioms w3cJobValid_enumJob2
 #print axioms reachedByW3d2E_toC
 #print axioms graph_correct_w3d2E
+-- W4 full-scope restatement (FullScope.lean): the operational closure by name
+-- (`ReachedBy := ReachedByW3d2E`), the admission/fragment hypothesis split
+-- (`GraphAccepts` / `W4Fragment`), the FINAL unsuffixed T2b/T3/T6a/T6b, the W2
+-- subsumption lemmas, and the non-vacuity witnesses (both bundles inhabited by a
+-- concrete compiled boolean schema + store). Standard axioms only:
+#print axioms w4_within_scope
+#print axioms graph_correct
+#print axioms backend_equivalence
+#print axioms exclusion_effective
+#print axioms no_ghost_grant
+#print axioms drained_of_untainted
+#print axioms w4Fragment_of_untainted
+#print axioms W4Witness.accepts
+#print axioms W4Witness.fragment
+#print axioms W4Witness.within_scope
 
 end Zanzibar
