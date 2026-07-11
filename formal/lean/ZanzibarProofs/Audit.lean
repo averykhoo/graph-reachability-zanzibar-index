@@ -1,6 +1,7 @@
 import ZanzibarProofs.Equiv
 import ZanzibarProofs.FullScope
 import ZanzibarProofs.GraphIndex.CascadeStrataInv
+import ZanzibarProofs.GraphIndex.Exec
 import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
@@ -1182,5 +1183,19 @@ namespace Zanzibar
 #print axioms reachedByW3d2E_edgeHygienic
 #print axioms reachedByW3d2E_inv
 #print axioms graph_reached_inv
+-- Phase 6 — the executable graph-model driver (GraphIndex/Exec.lean): the zcli
+-- graph mode is a fold of the CHAIN'S OWN constructors, and that is a theorem.
+-- `foldAdmitsB_iff` (the runtime admission check decides `FoldAdmits`),
+-- `graphRun_reached` (every driver output is a `ReachedBy` state),
+-- `graphRun_store` (the chain store is the input writes), `drainedB_iff` (the
+-- runtime drain gate decides `Drained`), and the capstone
+-- `graphRun_check_eq_sem` (under the W4 bundles, every verdict the CLI prints
+-- for an in-scope query IS `sem` — `graph_correct` applied to the driver, no
+-- analogy). Standard axioms only:
+#print axioms foldAdmitsB_iff
+#print axioms graphRun_reached
+#print axioms graphRun_store
+#print axioms drainedB_iff
+#print axioms graphRun_check_eq_sem
 
 end Zanzibar

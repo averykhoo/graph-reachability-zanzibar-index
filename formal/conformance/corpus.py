@@ -219,4 +219,86 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "carol", "b", "doc", "d1")],
         (),
     ),
+    "cross_stratum_resettle": (
+        # Phase 6 attack probe (the 12h stale-edge shape, operationalized): alice
+        # is granted `e` (settling v=TRUE and the stratum-2 a=TRUE, materializing
+        # a's derived edge), THEN banned at stratum 1 — the later cascade must
+        # RETRACT the stale stratum-2 derived edge (the diffing pass,
+        # processor.py:359-367). Write ORDER is load-bearing: settle-then-retract.
+        """
+        type user
+        type doc
+          define e: [user]
+          define b: [user]
+          define v: e but not b
+          define m: [user]
+          define a: v but not m
+        """,
+        [mk_tuple("...", "user", "alice", "e", "doc", "d1"),
+         mk_tuple("...", "user", "dave", "e", "doc", "d1"),
+         mk_tuple("...", "user", "dave", "m", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "b", "doc", "d1")],
+        (),
+    ),
+    "star_two_strata_churn": (
+        # Phase 6 attack probe #2: a bare star grant feeding TWO strata, the
+        # exclusions arriving AFTER the star settles (add-only churn: the
+        # stratum-2 residue must re-settle under later stratum-1 negatives),
+        # plus a second object's star grant interleaved.
+        """
+        type user
+        type doc
+          define e: [user:*]
+          define b: [user]
+          define v: e but not b
+          define m: [user]
+          define a: v but not m
+        """,
+        [mk_tuple("...", "user", "*", "e", "doc", "d1"),
+         mk_tuple("...", "user", "mallory", "m", "doc", "d1"),
+         mk_tuple("...", "user", "mallory", "b", "doc", "d1"),
+         mk_tuple("...", "user", "*", "e", "doc", "d2"),
+         mk_tuple("...", "user", "zoe", "b", "doc", "d2")],
+        (),
+    ),
 }
+
+# ---------------------------------------------------------------------------
+# Phase 6 — graph-state conformance corpora (Lean graph model vs Python graph
+# index). The Lean write model is add-only and W4Fragment-scoped; these are the
+# corpora INSIDE the proved fragment (apples-to-apples with `graph_correct`):
+#   * untainted schemas subsume via `w4Fragment_of_untainted` (needs only
+#     wsBare/bareStar/ttuStarFree — all stars here are bare-subject grants);
+#   * boolean schemas need RootBoolean (inter/excl at the derived ROOT),
+#     ComputedOnly leaves, and <= two strata.
+# Excluded, with the honest reason (ROADMAP "W4 — honest gaps"):
+#   * taint_union_over_boolean — `approver: viewer or admin` is a UNION-rooted
+#     derived def; Python taints through union roots, the fragment's `rootB`
+#     does not (gap: rootB).
+#   * object_wildcard — the stored tuple has object name '*'; `BareStarStore`
+#     requires stored objects concrete (gap: bareStar / W1b object-star tuples
+#     are outside the operational chain's store scope).
+# Attack-first finding (2026-07-12k, scratch probe, deleted after recording):
+# BOTH excluded corpora — and a hand-crafted object-wildcard corpus with
+# concrete-object queries — showed 0 lean-graph/py-graph mismatches. The
+# exclusions are PROOF-scope-driven (what graph_correct covers), not observed
+# behavioral divergences; do not read them as known model/Python disagreements.
+# ---------------------------------------------------------------------------
+
+GRAPH_FRAGMENT: tuple[str, ...] = (
+    "deep_grid",
+    "union_computed",
+    "group_userset",
+    "ttu",
+    "wildcard_public",
+    "wildcard_group_member",
+    "boolean_exclusion",
+    "boolean_intersection",
+    "boolean_star_exclusion",
+    "two_stratum_cascade",
+    "nested_boolean",
+    "double_exclusion",
+    "demorgans",
+    "cross_stratum_resettle",
+    "star_two_strata_churn",
+)

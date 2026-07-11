@@ -93,15 +93,21 @@ def query_to_json(subject_predicate, subject_type, subject_name,
 def build_request(schema_text: str,
                   tuples: Iterable[OracleTuple],
                   queries: Iterable[tuple],
-                  object_wildcards: Iterable[tuple[str, str]] = ()) -> str:
+                  object_wildcards: Iterable[tuple[str, str]] = (),
+                  mode: str | None = None) -> str:
     """Assemble the full JSON request string for `zcli`.
 
     `queries` is an iterable of 6-tuples
     `(subject_predicate, subject_type, subject_name, relation, object_type, object_name)`.
+    `mode="graph"` makes zcli run the operational GRAPH model (`graphRun` +
+    `GraphModel.check`) instead of the spec `sem`; tuples are applied as writes
+    in list order (Phase 6 graph-state conformance).
     """
     req = {
         "schema": schema_to_json(schema_text, object_wildcards),
         "tuples": [tuple_to_json(t) for t in tuples],
         "queries": [query_to_json(*q) for q in queries],
     }
+    if mode is not None:
+        req["mode"] = mode
     return json.dumps(req)

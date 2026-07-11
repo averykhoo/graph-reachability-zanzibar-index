@@ -66,3 +66,6 @@ import ZanzibarProofs.FullScope
 
 -- W4 T2a groundwork over the two-round chain
 import ZanzibarProofs.GraphIndex.CascadeStrataInv
+
+-- Phase 6: the executable graph-model driver + honesty theorems (zcli graph mode)
+import ZanzibarProofs.GraphIndex.Exec

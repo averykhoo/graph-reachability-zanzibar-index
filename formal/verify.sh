@@ -10,7 +10,10 @@
 #   3. conformance CLI builds (lake build zcli)
 #   4. axiom audit (ZanzibarProofs.Audit, HARD)  -- no sorryAx / ofReduceBool / custom
 #      axioms may appear; only propext, Classical.choice, Quot.sound
-#   5. Python conformance suite passes           -- sem vs oracle vs set engine
+#   5. Python conformance suite passes           -- sem vs oracle vs set engine,
+#      plus (Phase 6) the Lean OPERATIONAL graph model (zcli mode "graph",
+#      GraphIndex/Exec.lean) vs the real Python graph index over the
+#      W4Fragment corpora
 
 set -uo pipefail
 
@@ -44,7 +47,7 @@ if [ -n "$BAD" ]; then
   exit 1
 fi
 
-echo "=== [5/5] Python conformance (sem vs oracle vs set engine) ==="
+echo "=== [5/5] Python conformance (sem vs oracle vs set engine vs graph model) ==="
 ( cd "$REPO_ROOT" && "$PY" -m pytest formal/conformance/ -q ) \
   || { echo "FAIL: conformance"; exit 1; }
 

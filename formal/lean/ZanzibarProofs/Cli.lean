@@ -1,4 +1,5 @@
 import ZanzibarProofs.Spec.Semantics
+import ZanzibarProofs.GraphIndex.Exec
 import Lean.Data.Json
 
 /-!
@@ -10,7 +11,8 @@ two backends six ways.
 
 Request format (the Python harness folds n-ary `or`/`and` into binary nodes):
 ```json
-{ "schema": { "defs": [ [[type, rel], <expr>], ... ],
+{ "mode": "spec" | "graph"  (optional, default "spec"),
+  "schema": { "defs": [ [[type, rel], <expr>], ... ],
               "objectWildcards": [ [type, rel], ... ] },
   "tuples": [ {"sp":.., "st":.., "sn":.., "rel":.., "ot":.., "on":..}, ... ],
   "queries": [ {"sp":.., "st":.., "sn":.., "rel":.., "ot":.., "on":..}, ... ] }
@@ -18,6 +20,15 @@ Request format (the Python harness folds n-ary `or`/`and` into binary nodes):
 `<expr>` is one of: `{"direct": [[type,pred,wild], ...]}`, `{"computed": rel}`,
 `{"ttu": [targetRel, tuplesetRel]}`, `{"union": [e,e]}`, `{"inter": [e,e]}`,
 `{"excl": [base, subtract]}`.
+
+Modes (Phase 6 — graph-state conformance):
+* `"spec"` (default) — answer each query with the executable spec `sem`.
+* `"graph"` — run the OPERATIONAL graph model (`graphRun`: per input tuple one
+  admitted logged write + one two-round cascade leg — the `ReachedBy` chain's
+  own constructors, `GraphIndex/Exec.lean`), then answer each query with the
+  graph read `GraphModel.check`. Errors (nonzero exit) if a write fails edge
+  admission (rc 2) or the final state is not drained (rc 3) — those inputs are
+  outside the proved scope and MUST NOT silently produce answers.
 
 Output: a JSON array of booleans, one per query. Usage: `zcli <request.json>`.
 -/
@@ -97,6 +108,16 @@ def decodeRequest (j : Json) : Except String (Schema × Store × List Query) := 
   let qs ← queriesJson.toList.mapM decodeQuery
   pure (S, T, qs)
 
+/-- The request mode: `"spec"` (default) or `"graph"`. -/
+def decodeMode (j : Json) : String :=
+  match j.getObjVal? "mode" with
+  | .ok m => match m.getStr? with | .ok s => s | .error _ => "spec"
+  | .error _ => "spec"
+
+def printAnswers (answers : List Bool) : IO UInt32 := do
+  IO.println ((Json.arr (answers.map Json.bool).toArray).compress)
+  pure 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | [path] =>
@@ -107,9 +128,25 @@ def main (args : List String) : IO UInt32 := do
       match decodeRequest j with
       | .error e => IO.eprintln s!"decode error: {e}"; pure 1
       | .ok (S, T, qs) =>
-        let answers := qs.map (fun q => sem S T q)
-        IO.println ((Json.arr (answers.map Json.bool).toArray).compress)
-        pure 0
+        match decodeMode j with
+        | "graph" =>
+          -- Phase 6: run the operational graph model; the honesty theorems
+          -- (`graphRun_reached`, `graphRun_check_eq_sem`) cover exactly what is
+          -- printed here. Refuse to answer outside the proved scope.
+          match graphRun S T with
+          | none =>
+            IO.eprintln "graph mode: a write failed edge admission \
+              (input outside the add-only chain)"
+            pure 2
+          | some (σ, _) =>
+            if drainedB S σ then
+              printAnswers (qs.map (fun q => GraphModel.check σ q))
+            else do
+              IO.eprintln "graph mode: final state not drained \
+                (outside the proved read scope)"
+              pure 3
+        | _ =>
+          printAnswers (qs.map (fun q => sem S T q))
   | _ => IO.eprintln "usage: zcli <request.json>"; pure 1
 
 end Zanzibar.Cli
