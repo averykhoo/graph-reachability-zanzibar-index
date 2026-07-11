@@ -6,6 +6,7 @@ import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.ReconcileComplete
 import ZanzibarProofs.GraphIndex.ReconcileUposComplete
 import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
+import ZanzibarProofs.GraphIndex.CascadeSettle
 
 /-!
 # T3 / T6 — equivalence and the security corollaries
@@ -397,6 +398,85 @@ theorem no_ghost_grant_w3c (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     GraphModel.check σ' q = false := by
   rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
     hWSbare h hqs hqo]
+  exact hDeny
+
+/-! ## W3d (the interleaved scheduler chain) scope — via `graph_correct_w3d`
+
+The graph state is no longer a one-shot batch build: it is any state of the
+`ReachedByW3dC` closure — logged write transactions interleaved with `runCascade`
+runs, in any order — read at a fully-drained point (`cascadeKeys = []`, which every
+accepted cascade produces: `cascade_drains` + `cascadeKeys_nil_of_quiescent`). The
+scheduler itself (outbox rows, delta→key fan-out, the drain loop, stale-edge
+retraction between transactions) is now inside the verified perimeter. -/
+
+/-- **T3 (equivalence), W3d scope.** Both backends agree at every fully-drained state
+    of the interleaved scheduler chain (T1 ∘ `graph_correct_w3d`). -/
+theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    SetEngineModel.check S T q = GraphModel.check σ q := by
+  rw [setEngine_correct S T q hWF hStrat hValid,
+      graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+        hWSbare h hq hqs hqo]
+
+/-- **T6a (deny-propagation), W3d scope.** Whenever the spec denies, both backends deny
+    — at every fully-drained scheduler state, including a subject whose grant was
+    retracted by a LATER transaction's cascade (the stale-edge retraction is what
+    keeps this true across transactions). -/
+theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T q = false) :
+    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+  refine ⟨?_, ?_⟩
+  · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
+  · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+      hWSbare h hq hqs hqo]
+    exact hDeny
+
+/-- **T6b (no-ghost-grant), W3d scope.** If the spec denies on the chain's own store,
+    the graph denies at any fully-drained state — no stale derived edge, `stars`
+    coverage, or `upos` entry survives a later transaction that removed its support. -/
+theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T')
+    (hBS : BareStarStore T') (hTS : TtuStarFree S T')
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3dC σ' S T') (hq : cascadeKeys S σ' = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T' q = false) :
+    GraphModel.check σ' q = false := by
+  rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+    hWSbare h hq hqs hqo]
   exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)

@@ -714,4 +714,397 @@ theorem settledComplete_cascade_targeted {σ : GraphState} {S : Schema} {T : Sto
   exact ⟨settledKey_congr hresEq hedgeEq hsettledD,
     completeKey_congr hresEq hedgeEq hcompleteD⟩
 
+/-! ## The settledness invariant over the coverage chain -/
+
+/-- `sem` is false at every declared derived key over the EMPTY store: the compiled
+    guard reads an edgeless graph (all four probes false at every leaf), and the
+    bridge holds at the empty admitted base. -/
+theorem sem_nil_derived_false {S : Schema}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (htermS : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hlu : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    {s : SubjectRef} (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    sem S [] ⟨s, R, ⟨dt, on⟩⟩ = false := by
+  have hSV : StoreValidRules S ([] : Store) := fun t ht => absurd ht List.not_mem_nil
+  have hBS : BareStarStore ([] : Store) := fun t ht => absurd ht List.not_mem_nil
+  have hTS : TtuStarFree S ([] : Store) := fun t ht => absurd ht List.not_mem_nil
+  have hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR ([] : Store) R :=
+    fun dt R hd => ⟨htermS dt R hd, fun t ht => absurd ht List.not_mem_nil⟩
+  rw [← checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+    (ReachedByW3aAdmitted.base (ReachedByRulesAdmitted.empty S)) hlk hco hlu hs hon]
+  cases hc : (emptyState S).checkFn ([] : Store) s dt on R e
+  · rfl
+  · exfalso
+    unfold GraphState.checkFn at hc
+    obtain ⟨r', _, hleaf⟩ := evalE_computedOnly_true_leaf e hco hc
+    have hreach : ∀ u v, (emptyState S).reach u v = false := by
+      intro u v
+      cases hr : (emptyState S).reach u v
+      · rfl
+      · exfalso
+        have hN := reach_sound hr
+        cases hN with
+        | edge hmem => simp [emptyState] at hmem
+        | head hmem _ => simp [emptyState] at hmem
+    unfold GraphModel.graphRec GraphModel.probeNonDerived at hleaf
+    simp [hreach] at hleaf
+
+/-- **The settledness invariant** (`reachedByW3dC_settled`): at every state of the
+    coverage chain, every declared derived key at a concrete object is DIRTY
+    (`∈ cascadeKeys`) or `SettledKey ∧ CompleteKey`. Write legs dirty their mapped
+    keys and transport the rest (fan-out completeness makes unmapped keys keep
+    representation AND meaning); cascade legs re-settle every targeted key (dirty
+    keys ARE targeted, `hcover`) and leave the untargeted ones alone. -/
+theorem reachedByW3dC_settled {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3dC σ S T) :
+    WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
+    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+    RewriteMatchDeclared S → Stratifiable S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) →
+    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    StoreValidRules S T → BareStarStore T → TtuStarFree S T →
+    (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    ∀ dt on R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → on ≠ STAR →
+      (dt, R, on) ∈ cascadeKeys S σ ∨
+      (SettledKey S T σ dt on R ∧ CompleteKey S T σ dt on R) := by
+  induction h with
+  | empty S =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare _hSV _hBS _hTS hterm
+      dt on R e hlk hder hon
+    have hsemF : ∀ (s : SubjectRef), (s.name = STAR → s.predicate = BARE) →
+        sem S [] ⟨s, R, ⟨dt, on⟩⟩ = false :=
+      fun s hs => sem_nil_derived_false hWF hTT hNK hR hRootB hMatch hStrat
+        (fun dt R hd => (hterm dt R hd).1) hlk (hCO _ _ _ hlk hder)
+        (hLU _ _ _ hlk hder) hs hon
+    refine Or.inr ⟨⟨?_, ?_⟩, ?_, ?_, ?_, ?_⟩
+    · intro res hres
+      simp [emptyState] at hres
+    · intro s _ _ hedge
+      simp [emptyState] at hedge
+    · intro sh hws hsm
+      have := hsemF (starSubj sh) (fun _ => hWSbare sh hws)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro s _ hstar hsm _
+      have := hsemF s (fun hx => absurd hx hstar)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro s _ hstar hsm
+      have := hsemF s (fun hx => absurd hx hstar)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro s hstar hws hsemStar _
+      have := hsemF (starSubj s.shape) (fun _ => hWSbare _ hws)
+      rw [hsemStar] at this
+      exact absurd this (by decide)
+  | @write σp S T t hadm hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+      dt on R e hlk hder hon
+    by_cases hmap : (dt, R, on) ∈ cascadeKeys S (σp.writeLoggedRules S t)
+    · exact Or.inl hmap
+    · have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+      have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+      have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+      have htermw : ∀ dt R, isDerived S (dt, R) = true →
+          NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+        fun dt R hd => ⟨(hterm dt R hd).1,
+          fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+      have hW3d : ReachedByW3d σp S T := reachedByW3dC_toW3d hprev
+      rcases ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSVw hBSw hTSw htermw
+          dt on R e hlk hder hon with hdirty | ⟨hset, hcomp⟩
+      · exact absurd
+          (cascadeKeys_writeLeg_mono (reachedByW3d_edgesClosed hW3d) _ hdirty) hmap
+      · exact Or.inr
+          ⟨settledKey_writeLeg hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+            hWSbare hW3d hadm hlk hder (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
+            hmap hon hset,
+          completeKey_writeLeg hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+            hWSbare hW3d hadm hlk hder (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
+            hmap hon hcomp⟩
+  | @cascade σp S T jobs hjv hcover hscope hcovg hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+      dt on R e hlk hder hon
+    have hW3d : ReachedByW3d σp S T := reachedByW3dC_toW3d hprev
+    by_cases htgt : ∃ j ∈ jobs, j.keyMatch dt on R
+    · exact Or.inr (settledComplete_cascade_targeted hWF hTT hNK hR hSV hBS hTS hRootB
+        hMatch hStrat hterm hCO hLU hWSbare hW3d hjv hcovg hlk hder hon htgt)
+    · have hnot : ∀ j ∈ jobs, ¬ j.keyMatch dt on R :=
+        fun j hj hkm => htgt ⟨j, hj, hkm⟩
+      rcases ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+          dt on R e hlk hder hon with hdirty | ⟨hset, hcomp⟩
+      · exfalso
+        obtain ⟨j, hj, hkey⟩ := hcover _ hdirty
+        have h1 : j.dt = dt := congrArg Prod.fst hkey
+        have h23 : (j.R, j.on) = (R, on) := congrArg Prod.snd hkey
+        have h2 : j.R = R := congrArg Prod.fst h23
+        have h3 : j.on = on := congrArg Prod.snd h23
+        exact htgt ⟨j, hj, h1, h3, h2⟩
+      · exact Or.inr ⟨settledKey_cascade_untargeted hjv hnot hon hset,
+          completeKey_cascade_untargeted hjv hnot hon hcomp⟩
+
+/-- A quiescent state's cascade key set is empty — the "fully drained" read scope
+    every accepted cascade run produces (`cascade_drains`). -/
+theorem cascadeKeys_nil_of_quiescent (S : Schema) {σ : GraphState} (h : Quiescent σ) :
+    cascadeKeys S σ = [] := by
+  unfold cascadeKeys GraphState.frontierRows
+  have hfil : σ.outbox.filter (fun d => σ.watermark < d.id) = [] := by
+    rw [List.filter_eq_nil_iff]
+    intro d hd hc
+    have hlt : σ.watermark < d.id := of_decide_eq_true hc
+    have hle := h d hd
+    omega
+  rw [hfil]
+  rfl
+
+/-! ## `graph_correct_w3d` — the W3d T2b -/
+
+/-- **T2b, W3d fragment (`graph_correct_w3d`) — `check = sem` at every fully-drained
+    state of the interleaved scheduler chain.** The state is any `ReachedByW3dC` state
+    with an empty cascade-key set (every accepted `runCascade` produces one:
+    `cascade_drains` + `cascadeKeys_nil_of_quiescent`); the store carries bare `T:*`
+    grants; subjects may be bare, star-BARE, or usersets.
+
+    * **Untainted query:** the untainted-core shadow + the star-relaxed base equation.
+    * **Derived query:** the settledness invariant with `cascadeKeys = []` leaves
+      every key settled+complete: star ⇒ the `stars` row (linchpin declaredness at
+      the shadow, row existence from `CompleteKey`); bare ⇒ edge ∨ (`stars` ∖ `neg`)
+      (the W3d reach collapse + the settled edge half; `neg` completeness for the
+      covered fallback); userset ⇒ exactly `upos`. -/
+theorem graph_correct_w3d {S : Schema} {T : Store} {σ : GraphState} (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem S T q := by
+  have hW3d : ReachedByW3d σ S T := reachedByW3dC_toW3d h
+  have hschema : σ.schema = S := reachedByW3d_schema hW3d
+  have hcl := reachedByW3d_edgesClosed hW3d
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow hW3d hNK hRootB hSV hterm
+  obtain ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := q
+  replace hqs : sn = STAR → sp = BARE := hqs
+  replace hqo : on ≠ STAR := hqo
+  by_cases hder : isDerived S (dt, R) = true
+  · -- ===== derived query: the residue/edge read at a settled+complete key =====
+    obtain ⟨e, hlk⟩ := isDerived_declared hder
+    have hco := hCO _ _ _ hlk hder
+    have hleafUnt := hLU _ _ _ hlk hder
+    have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+    obtain ⟨hset, hcomp⟩ :=
+      (reachedByW3dC_settled h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare
+        hSV hBS hTS hterm dt on R e hlk hder hqo).resolve_left
+        (by rw [hq]; exact List.not_mem_nil)
+    obtain ⟨hrowS, hedgeS⟩ := hset
+    obtain ⟨hrowE, hedgeC, huposC, hnegC⟩ := hcomp
+    have hroute : GraphModel.check σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.probeDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := by
+      unfold GraphModel.check
+      rw [hschema]
+      simp [hder]
+    rw [hroute, probeDerived_eq σ hqo]
+    -- LINCHPIN at the shadow: a `sem`-covered bare shape is DECLARED
+    have hsem_ws : ∀ sh : Shape, sh.2 = BARE →
+        sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true → sh ∈ wildcardShapes S := by
+      intro sh hshb hsm
+      refine coveredFn_declared hTT hSV hTS h0 hco (dt := dt) (on := on) (R := R) ?_
+      show σ0.checkFn T (starSubj sh) dt on R e = true
+      rw [checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+        (ReachedByW3aAdmitted.base h0) hlk hco hleafUnt (fun _ => hshb) hqo]
+      exact hsm
+    -- reach ⇒ sem for star-free bare subjects: the W3d collapse + the settled edges
+    have hreach_sem : sn ≠ STAR → sp = BARE →
+        σ.reach (subjNode ⟨st, sn, sp⟩) (objNode ⟨dt, on⟩ R) = true →
+        sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ = true := by
+      intro hsn hspb hr
+      have hedge := reachedByW3d_reach_collapse_root hWF hSV hNK hlk hroot hW3d
+        (reach_sound hr)
+      exact hedgeS ⟨st, sn, sp⟩ hspb hsn hedge
+    by_cases hstar : sn = STAR
+    · -- ---- star subject: the `stars` read ----
+      subst hstar
+      have hsp : sp = BARE := hqs rfl
+      subst hsp
+      rw [if_pos rfl]
+      cases hrow : σ.residue (objNode ⟨dt, on⟩ R) R with
+      | none =>
+        rw [Option.getD_none]
+        cases hsm : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩
+        · rfl
+        · exfalso
+          have hws := hsem_ws (st, BARE) rfl hsm
+          have hsome := hrowE (st, BARE) hws hsm
+          rw [hrow] at hsome
+          exact absurd hsome (by decide)
+      | some res =>
+        rw [Option.getD_some]
+        cases hc : res.stars.contains (st, BARE) <;>
+          cases hsm : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩
+        · rfl
+        · exfalso
+          have hws := hsem_ws (st, BARE) rfl hsm
+          have := ((hrowS res hrow).1 (st, BARE)).mpr ⟨hws, hsm⟩
+          rw [hc] at this
+          exact absurd this (by decide)
+        · exfalso
+          obtain ⟨_, hs⟩ := ((hrowS res hrow).1 (st, BARE)).mp hc
+          have hs' : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩ = true := hs
+          rw [hsm] at hs'
+          exact absurd hs' (by decide)
+        · rfl
+    · rw [if_neg hstar]
+      by_cases hbare : sp = BARE
+      · -- ---- bare subject: edge ∨ (stars ∖ neg) ----
+        subst hbare
+        rw [if_pos rfl]
+        cases hrow : σ.residue (objNode ⟨dt, on⟩ R) R with
+        | none =>
+          rw [Option.getD_none]
+          have hsimp : (Residue.empty.stars.contains (st, BARE) &&
+              !Residue.empty.neg.contains ⟨st, sn, BARE⟩) = false := rfl
+          rw [hsimp, Bool.or_false]
+          cases hr : σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R) <;>
+            cases hsm : sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            by_cases hcov : (st, BARE) ∈ wildcardShapes S ∧
+                sem S T ⟨starSubj (st, BARE), R, ⟨dt, on⟩⟩ = true
+            · have hsome := hrowE (st, BARE) hcov.1 hcov.2
+              rw [hrow] at hsome
+              exact absurd hsome (by decide)
+            · have hedge := hedgeC ⟨st, sn, BARE⟩ rfl hstar hsm hcov
+              have hrc := reach_complete hcl (NReaches.edge hedge)
+              rw [hr] at hrc
+              exact absurd hrc (by decide)
+          · exfalso
+            have hsemT := hreach_sem hstar rfl hr
+            rw [hsm] at hsemT
+            exact absurd hsemT (by decide)
+          · rfl
+        | some res =>
+          rw [Option.getD_some]
+          obtain ⟨hstars_iff, hnegRow, _⟩ := hrowS res hrow
+          have hfwd : (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
+              || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) = true →
+              sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩ = true := by
+            intro hread
+            rw [Bool.or_eq_true, Bool.and_eq_true] at hread
+            rcases hread with hr | ⟨hcS, hnN⟩
+            · exact hreach_sem hstar rfl hr
+            · by_contra hsm
+              rw [Bool.not_eq_true] at hsm
+              obtain ⟨hws, hsemStar⟩ := (hstars_iff (st, BARE)).mp hcS
+              obtain ⟨res', hres', hmem⟩ := hnegC ⟨st, sn, BARE⟩ hstar hws hsemStar hsm
+              rw [hrow] at hres'
+              obtain rfl := Option.some.inj hres'
+              have hcont : res.neg.contains ⟨st, sn, BARE⟩ = true := by
+                rw [List.contains_eq_mem]
+                exact decide_eq_true hmem
+              rw [hcont] at hnN
+              exact absurd hnN (by decide)
+          have hbwd : sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩ = true →
+              (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
+                || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) = true := by
+            intro hsm
+            rw [Bool.or_eq_true, Bool.and_eq_true]
+            by_cases hcov : (st, BARE) ∈ wildcardShapes S ∧
+                sem S T ⟨starSubj (st, BARE), R, ⟨dt, on⟩⟩ = true
+            · refine Or.inr ⟨(hstars_iff (st, BARE)).mpr hcov, ?_⟩
+              cases hcnt : res.neg.contains ⟨st, sn, BARE⟩
+              · rfl
+              · exfalso
+                have hmem : (⟨st, sn, BARE⟩ : SubjectRef) ∈ res.neg := by
+                  rw [List.contains_eq_mem] at hcnt
+                  exact of_decide_eq_true hcnt
+                obtain ⟨_, hsemF⟩ := hnegRow _ hmem
+                rw [hsm] at hsemF
+                exact absurd hsemF (by decide)
+            · exact Or.inl (reach_complete hcl (NReaches.edge
+                (hedgeC ⟨st, sn, BARE⟩ rfl hstar hsm hcov)))
+          cases hread : (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
+              || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) <;>
+            cases hsm : sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            have := hbwd hsm
+            rw [hread] at this
+            exact absurd this (by decide)
+          · exfalso
+            have := hfwd hread
+            rw [hsm] at this
+            exact absurd this (by decide)
+          · rfl
+      · -- ---- userset subject: the `upos` read ----
+        rw [if_neg hbare]
+        cases hrow : σ.residue (objNode ⟨dt, on⟩ R) R with
+        | none =>
+          rw [Option.getD_none]
+          show false = sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          cases hsm : sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            obtain ⟨res', hres', _⟩ := huposC ⟨st, sn, sp⟩ hbare hstar hsm
+            rw [hrow] at hres'
+            cases hres'
+        | some res =>
+          rw [Option.getD_some]
+          obtain ⟨hstars_iff, _, huposRow⟩ := hrowS res hrow
+          have hns : res.stars.contains (st, sp) = false := by
+            by_contra hcx
+            rw [Bool.not_eq_false] at hcx
+            obtain ⟨hws, _⟩ := (hstars_iff (st, sp)).mp hcx
+            exact hbare (hWSbare (st, sp) hws)
+          rw [hns]
+          show (if res.upos.contains ⟨st, sn, sp⟩ = true then true else false)
+              = sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          cases hu : res.upos.contains ⟨st, sn, sp⟩ <;>
+            cases hsm : sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            obtain ⟨res', hres', hmem⟩ := huposC ⟨st, sn, sp⟩ hbare hstar hsm
+            rw [hrow] at hres'
+            obtain rfl := Option.some.inj hres'
+            have hcontains : res.upos.contains ⟨st, sn, sp⟩ = true := by
+              rw [List.contains_eq_mem]
+              exact decide_eq_true hmem
+            rw [hu] at hcontains
+            exact absurd hcontains (by decide)
+          · exfalso
+            have hmem : (⟨st, sn, sp⟩ : SubjectRef) ∈ res.upos := by
+              rw [List.contains_eq_mem] at hu
+              exact of_decide_eq_true hu
+            obtain ⟨_, _, hsemT⟩ := huposRow _ hmem
+            rw [hsm] at hsemT
+            exact absurd hsemT (by decide)
+          · rfl
+  · -- ===== untainted query: the shadow + the star-relaxed base equation =====
+    have hd : isDerived S (dt, R) = false := by simpa using hder
+    have hroute : GraphModel.check σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.probeNonDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := by
+      unfold GraphModel.check
+      rw [hschema]
+      simp [hd]
+    rw [hroute]
+    calc GraphModel.probeNonDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.graphRec σ ⟨st, sn, sp⟩ dt on R := rfl
+      _ = GraphModel.graphRec σ0 ⟨st, sn, sp⟩ dt on R :=
+          shadow_graphRec_agree hsh ⟨st, sn, sp⟩ on hd
+      _ = sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ :=
+          graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch h0
+            (s := ⟨st, sn, sp⟩) (dt := dt) (on := on) hqs hqo R hd
+
 end Zanzibar

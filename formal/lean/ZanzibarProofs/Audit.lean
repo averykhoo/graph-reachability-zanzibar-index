@@ -792,4 +792,35 @@ namespace Zanzibar
 #print axioms reconcileJobsD_other_key_fixed
 #print axioms settledKey_cascade_untargeted
 
+-- **W3d-1b CLOSED — TARGETED RE-SETTLEMENT, THE INVARIANT, `graph_correct_w3d`
+-- (GraphIndex/CascadeSettle.lean, 2026-07-11h).** The coverage chain `ReachedByW3dC`
+-- carries, per cascade job, the audit-enumeration coverage clauses (`W3dJobCoverage`
+-- — `processor.py:394-441`; the edge-holder clause is attack-confirmed load-bearing:
+-- a pre-leg STALE edge holder missing from `cands` survives the diff audit and
+-- breaks `check = sem` at a fully-drained state). `settledComplete_cascade_targeted`:
+-- a cascade leg RE-SETTLES every targeted key — the last targeting job wholesale-
+-- rewrites the row and diff-audits the edges, guards read at mid-batch states where
+-- `checkFn = sem`. `reachedByW3dC_settled`: at EVERY chain state, every declared
+-- derived key is dirty (`∈ cascadeKeys`) or `SettledKey ∧ CompleteKey`. At a
+-- fully-drained state (`cascadeKeys = []` — what every accepted cascade produces,
+-- `cascade_drains` + `cascadeKeys_nil_of_quiescent`) all keys are settled, giving
+-- **`graph_correct_w3d`**: `check = sem` for bare/star-BARE/userset subjects at any
+-- state of the interleaved scheduler chain — writes, outbox fan-out, cascades, and
+-- stale-edge retraction all inside the verified perimeter. T3/T6 corollaries
+-- restated at W3d scope. Standard axioms only:
+#print axioms reachedByW3d_schema
+#print axioms reachedByW3d_reach_collapse_root
+#print axioms reachedByW3dC_toW3d
+#print axioms completeKey_writeLeg
+#print axioms completeKey_cascade_untargeted
+#print axioms reconcileJobsD_key_edge_sem
+#print axioms settledComplete_cascade_targeted
+#print axioms sem_nil_derived_false
+#print axioms reachedByW3dC_settled
+#print axioms cascadeKeys_nil_of_quiescent
+#print axioms graph_correct_w3d
+#print axioms backend_equivalence_w3d
+#print axioms exclusion_effective_w3d
+#print axioms no_ghost_grant_w3d
+
 end Zanzibar
