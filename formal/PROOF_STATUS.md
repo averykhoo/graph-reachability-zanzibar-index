@@ -8,6 +8,76 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12 (W3d-1c piece B CORE — `W3dJobCoverage` DISCHARGED as a theorem of a state-derived audit enumeration)
+
+Resuming from HANDOFF "The next task — W3d-1c piece B". Six green+pushed increments, all
+in the NEW `GraphIndex/CascadeEnum.lean` (+ root import, Audit import + 3 new entries);
+`verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms audit + 60
+conformance). This session turns `W3dJobCoverage` — carried as a chain-side hypothesis on
+every `ReachedByW3dC.cascade` leg — into a THEOREM of a state-derived enumeration
+(`w3dJobCoverage_enumJob`). The design was the one pinned in the 11j HANDOFF; it went
+through essentially as written, with one simplification (clause (4) needed no new
+`wAny`-node lemma).
+
+**The collapse spine (the intellectual core).**
+- **`probeNonDerived_concrete_decomp`**: for a star-free subject `s` and star-free object
+  name `on`, each operand leaf read decomposes POINTWISE as `probeNonDerived σ ⟨s,r',⟨dt,
+  on⟩⟩ = probeNonDerived σ ⟨starSubj s.shape, r', ⟨dt,on⟩⟩ || σ.reach (subjNode s)
+  (objNode ⟨dt,on⟩ r') || σ.reach (subjNode s) (wAllNode dt r')`. Proved by unfolding
+  `probeNonDerived` and boolean algebra: the concrete subject's probes 2/4 (`wAny`-
+  sourced) ARE the star subject's own probes 1/3 (`subjNode (starSubj sh) = wAnyNode
+  sh`), the star's probes 2/4 are dead (`name = STAR`); the two concrete-specific probes
+  are the residue (16-case `cases … <;> rfl` after guard-simp).
+- **`checkFn_eq_coveredFn_of_no_extra`**: a subject triggering NEITHER concrete-specific
+  probe at any `computed` leaf reads exactly like its shape-star — `checkFn σ T s dt on
+  R e = coveredFn σ T dt on R e s.shape` — by `evalE_computedOnly` congruence (leaf
+  reads equal pointwise ⇒ whole `evalE` tree equal, NO monotonicity, exclusion-safe).
+
+**The enumeration read off the state.** `nodeSubj u := ⟨u.type, u.name, u.pred⟩` decodes a
+node; `nodeSubj_subjNode : nodeSubj (subjNode s) = s` for EVERY `s` (subjNode only rewrites
+the variant — a `'*'` subject already IS its `wAny` node's decode). `leafConcretes σ dt on
+e` = plain star-free `σ.nodes` hitting a `computed`-leaf target (`objNode`/`wAllNode`),
+decoded; `mem_leafConcretes_of_hit` (a hitting subject is enumerated — its source is a
+node via `reach_source_mem_nodes` = edges-closed) + `no_extra_of_not_mem` (contrapositive:
+a non-enumerated star-free subject hits no probe) ⇒ `checkFn_eq_coveredFn_of_not_mem`.
+`edgeHolders`/`mem_edgeHolders` for clause (1) (by construction — `nodeSubj` recovers the
+subject from its variant-only-altered source node).
+
+**The leg context `w3d_leg_context`.** At any `ReachedByW3d` state, for a declared derived
+key with untainted leaves and star-free object, rebuilds (a) `hbridge` = the read bridge
+`checkFn = sem` (`checkFn_eq_sem_w3d`, subject-generic up to star-BARE), and (b) `hcovDecl`
+= "a `sem`-covered star's shape is DECLARED" (`coveredFn_declared` lifted across the shadow:
+`checkFn` of a star subject reads only untainted operands, so `checkFn_agree_of_graphRec` +
+`shadow_graphRec_agree` slide it to the rules-admitted shadow `σ0` where `coveredFn_declared`
+applies). Both from `reachedByW3d_shadow`.
+
+**The four clause discharges + assembly.** Each `W3dJobCoverage` clause is a contrapositive
+of `hbridge` through the collapse: `cands_complete_uncovered` (clause 2 — uncovered
+`sem`-true bare: `sem s = sem (starSubj s.shape)`, so the star is `sem`-true, so — bare
+shape — declared by `hcovDecl`, contradicting uncovered); `negCands_complete` (clause 3 —
+covered `sem`-false: `sem s = false` vs star `sem = true`); `uposCands_complete` (clause 4
+— `sem`-true userset: the userset star's shape is undeclared, so its coverage is `false`
+by `hcovDecl`'s contrapositive — the "dead userset coverage" fell out of `hcovDecl`, no
+separate `wAny`-node lemma); `mem_edgeHolders` (clause 1). `enumJob` (bare leaf concretes
+∪ edge holders as `cands`, bare leaf concretes as `negCands`, userset leaf concretes as
+`uposCands`) + **`w3dJobCoverage_enumJob`** proves all four at any W3d state.
+
+**Proof-engineering notes.** (1) `s.name != STAR` inside `&&` is a `Bool`, not `= true` —
+`bne_iff_ne` does NOT fire; feed `beq_eq_false_iff_ne.mpr` facts + `simp only [bne, …,
+beq_self_eq_true]` to resolve the guards, THEN `cases` the reach atoms `<;> rfl`. (2)
+`(starSubj sh).predicate` reduces to `sh.2` = `s.predicate` by `rfl` — `fun _ => hsb`
+serves the star-BARE side condition directly. (3) The clause theorems are parameterized by
+`hbridge`/`hcovDecl` (reconstructed by `w3d_leg_context`) so they prove cleanly without
+threading the whole fragment-hyp list; the assembly supplies them.
+
+**Resume → W3d-1c piece B TAIL** (HANDOFF "The next task" has the full plan): the
+enumerated-cascade restatement — `W3cJobValid (enumJob …)` (the one new lemma:
+`reachedByW3d_Rnode_source_name_ne_star`, the star-free analog of the existing
+`_source_bare`, same induction) + `hcover`/`hscope`, then restate `graph_correct_w3d` /
+`reachedByW3dC_inv` with NO `W3dJobCoverage` hypothesis. Then W3d-2 → W4 → Phase 6.
+
+---
+
 ## Session 2026-07-11j (W3d-1c piece A CLOSED — the plain-chain `Inv` REFUTED, the full 8-clause `reachedByW3dC_inv` proved over the coverage chain)
 
 Resuming from HANDOFF "The next task — W3d-1c", piece A (the two EDGE-referencing I6

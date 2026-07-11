@@ -498,18 +498,25 @@ and re-proves/widens the same named theorems. Every stage must keep
       `reachedByW3dC_settled`. **`reachedByW3dC_inv`** assembles StructInv +
       ResidueHygienic + EdgeHygienic into `Inv` at EVERY coverage-chain state — dirty
       keys and mid-drain states included.
-    * **(B) the audit enumeration** — model `_leaf_concretes` + the audit set
-      (`processor.py:394-441`) as a state-derived enumeration (plain concrete nodes
-      reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`
-      members); prove **`W3dJobCoverage` as a THEOREM of that enumeration** (all four
-      clauses — edge holders, `cands`/`negCands`/`uposCands` `sem`-completeness), so
-      `graph_correct_w3d`'s coverage is discharged, not hypothesized. **Statement fix
-      landed 2026-07-11j:** clause (2) now carries the UNCOVERED guard (matching
-      `CompleteKey`'s edge clause) — without it the clause was unsatisfiable by finite
-      jobs on covering stores (every fresh subject is `sem`-true under a `T:*` grant,
-      `#eval`-checked), i.e. no coverage-valid cascade existed there and the W3d
-      theorems were vacuously narrow on exactly the W3c stores; the weakening makes
-      every chain theorem strictly stronger (one-token consumer fix).
+    * **(B) the audit enumeration — CORE ✅ DONE (2026-07-12), tail remains**
+      (`GraphIndex/CascadeEnum.lean`). Modeled `_leaf_concretes` + the audit set
+      (`processor.py:394-441`) as a state-derived enumeration (`leafConcretes` = plain
+      star-free nodes reaching an operand/`wAll` node, decoded; `edgeHolders` = incoming
+      R-node concretes) and proved **`W3dJobCoverage` as a THEOREM** of it
+      (`w3dJobCoverage_enumJob`, all four clauses). The spine: the per-leaf pointwise
+      collapse `probeNonDerived_concrete_decomp` → `checkFn_eq_coveredFn_of_no_extra` (a
+      subject hitting no concrete-specific probe reads as its shape-star, `evalE`
+      congruence, exclusion-safe); `w3d_leg_context` rebuilds the read bridge +
+      coverage-declaredness at any W3d state through the shadow; each clause is a
+      contrapositive of the bridge fed through the collapse (clause (4)'s dead userset
+      coverage fell out of `hcovDecl`'s contrapositive — no separate `wAny`-node lemma).
+      **Statement fix (2026-07-11j):** clause (2) carries the UNCOVERED guard (without it
+      unsatisfiable by finite jobs on covering stores — every fresh subject `sem`-true
+      under a `T:*` grant, `#eval`-checked). **TAIL remaining:** the enumerated-cascade
+      restatement — `W3cJobValid (enumJob …)` (needs the star-free source analog
+      `reachedByW3d_Rnode_source_name_ne_star`, same induction as `_source_bare`) +
+      `hcover`/`hscope`, then restate `graph_correct_w3d`/`reachedByW3dC_inv` with NO
+      `W3dJobCoverage` hypothesis. Detail: PROOF_STATUS 2026-07-12.
   - **W3d-2 — two strata (derived-reading-derived).** Relax `hLU` to lower-stratum
     derived operands: `checkFn` leaf dispatch routes derived operands through
     `probeDerived` (a real model extension — Python's leaf calls `widx.check`, which
