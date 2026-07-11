@@ -332,6 +332,92 @@ and re-proves/widens the same named theorems. Every stage must keep
   cascade (cross-key re-reconcile hazard + contentful T5 drain). W3a is the
   "zero residue content" analog of W1a's "zero bridges".
 
+  **W3d — the multi-stratum cascade. DESIGN COMMITTED (2026-07-11e); W3d-1a first.**
+  Model source: `run_cascade` (`processor.py:694-740`), `_map_deltas_to_keys`
+  (`:585-652`), `_fan_out` (`:654-692`), `_emit` (`core.py:31-44` — one outbox row per
+  materialized closure-pair flip, inside the writing transaction, endpoints
+  denormalized at emission), `outbox.py`, `advance_index` (`connectedstore/apply.py:
+  79-87`: `wm` read BEFORE the row loop, `run_cascade(wm)` after — so the next txn's
+  frontier starts past everything this txn emitted, including the processor's own
+  rows); boolean spec §5.1–5.2.
+
+  **Modeling decisions (each with its faithfulness note):**
+  1. **Delta coalescing — one outbox row per ACCEPTED ROUTED EDGE, carrying the edge's
+     object node.** Python emits per closure-pair flip; the model materializes no
+     closure. For a routed edge `a→b` the Python rows' object ends are `{y : b ⇝ y}`,
+     which the model recovers at CASCADE time as `{d.node} ∪ {v ∈ σ.nodes : reach
+     d.node v}` — a superset of the write-time set (edges are add-only inside a txn),
+     and extra keys only trigger idempotent reconciles. **Per-SEED coalescing is WRONG
+     (design-phase attack finding, analytic):** a computed rewrite routes the seed onto
+     sibling family nodes (`editor@doc:1` also lands `viewer@doc:1` when
+     `viewer := editor or …`) with NO graph edge from the seed's object node to the
+     sibling node — the seed-node reach cone misses the sibling operand key. So
+     `writeLoggedRules` = W2's `writeRules` fold with a `pushDelta (objNode u.object
+     u.relation) u.relation` per accepted rewrite-closure member `u`.
+  2. **Fresh ids**: `nextDeltaId σ = max (maxOutboxId σ) σ.watermark + 1` — strictly
+     above BOTH existing rows and the watermark (plain `maxId+1` could mint a
+     born-drained row if the outbox were ever compacted below the watermark).
+  3. **Processor emission IS modeled**: a reconcile pass pushes ONE row at its derived
+     key (`objNode ⟨dt,on⟩ R`, `R`) — coalescing its per-flip rows, which all share
+     that object end by R-node terminality (`reachedByW3c_Rnode_not_source` under
+     `hterm`). This is what makes the leftover check contentful (decision 5).
+  4. **The key mapping** `affectedKeys S σ d`: over candidate object nodes
+     `v ∈ {d.node} ∪ reach-cone σ (d.node)`, plain ∧ `name ≠ '*'`, emit `(v.type, R,
+     v.name)` for every derived `(v.type, R) = some e` with `v.pred ∈ computedRefs e`.
+     = `_map_deltas_to_keys`'s LeafFamily branch + `_fan_out`'s `via='computed'`
+     branch, restricted to the fragment (`hLU`: operands are untainted computed refs;
+     the ttu/userset/tupleset-ttu dependent branches are out of fragment by
+     `hterm`/`hRootB`). The subject-level cheap path (`keys[key] = subject set`,
+     `reconcile_subject`) is NOT modeled — the model always full-object reconciles
+     (Python's general path; the cheap path is an optimization with its own §5.4
+     escalations to full).
+  5. **The loop**: single stratum ⇒ `rounds = len(strata) = 1`: one round (read rows
+     above the watermark, map to keys, one full-object `W3cJob` per key), then the
+     QUIESCENCE CHECK — Python re-maps the rows above the round frontier and RAISES
+     on any leftover key (`:729-739`). Model the raise as a REJECT branch (state
+     unchanged, like `writeDirect`'s cycle reject): `runCascade` advances the
+     watermark past everything iff the post-round leftover maps to no keys, else
+     identity. **T5 then has two halves:** (a) `runCascade_no_abort` — on the fragment
+     the reject NEVER fires (a pass-emitted row's object end is a terminal derived
+     R-node: empty reach cone by terminality, own pred derived ⇒ not an operand ⇒
+     `affectedKeys = []`); (b) post-cascade `Quiescent` — the watermark advance is
+     JUSTIFIED by (a), not asserted (the old `cascade_converges` sin). `_bumped`
+     fan-out is a single-stratum no-op (no derived dependents under `hLU`) — arrives
+     with W3d-2.
+  6. **Add-only**: the model still has no removes; the remove-side hazards (operand
+     removal re-reconcile, `neg` pruning after subject-node GC `:616-620`, REMOVED
+     deltas) are OUT OF SCOPE for all of W3d-1 and recorded as fragment conditions.
+
+  **Sub-staging:**
+  - **W3d-1a — the scheduling layer** (new `GraphIndex/Cascade.lean`): `pushDelta`/
+    `nextDeltaId`/`writeLoggedRules`/`affectedObjects`/`affectedKeys`/`frontierRows`/
+    `runCascade` (jobs parametric per key: `W3cJobValid` + job keys ≡ cascade keys,
+    both inclusions); closure `ReachedByW3d` (base → logged writes → cascades);
+    theorems: T5 halves (a)+(b) above, the **evaluation-core projection** to
+    `ReachedByW3c` (outbox/watermark now differ, so `CoreEq` is too strong — define
+    `EvalEq` on schema/edges/nodes/residue and re-derive the check/checkFn/read
+    congruences over it), `reachedByW3d_inv` (T2a carry through the projection).
+  - **W3d-1b — fan-out completeness (the cross-key re-reconcile hazard as a
+    THEOREM).** A logged write whose new edges semantically change an EXISTING
+    derived key maps to that key: a `sem` flip ⇒ some operand's `graphRec` changed ⇒
+    a new reachability pair into an operand node ⇒ that pair's head lies in some
+    routed delta's reach cone ⇒ `affectedKeys ∋ key`. Converts `W3cComplete`'s
+    row-existence and ∃-covering clauses from batch HYPOTHESES into consequences of
+    the cascade construction.
+  - **W3d-1c — the audit enumeration from state.** Model `_leaf_concretes` + the
+    audit set (`processor.py:394-441`) as a state-derived enumeration (plain concrete
+    nodes reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`
+    members); prove the ∀-targeting-jobs `negCands`/`uposCands` clauses as theorems
+    of that enumeration; assemble **`graph_correct_w3d`** (`check = sem` at every
+    cascaded `ReachedByW3d` state — coverage discharged, not hypothesized).
+  - **W3d-2 — two strata (derived-reading-derived).** Relax `hLU` to lower-stratum
+    derived operands: `checkFn` leaf dispatch routes derived operands through
+    `probeDerived` (a real model extension — Python's leaf calls `widx.check`, which
+    routes); `rounds = 2` with `_bumped` fan-out; per-stratum generalization of the
+    shadow + inertness (a stratum-k pass is inert for stratum-<k reads); processor-
+    emitted rows now MAP to dependent keys — the leftover check earns its round
+    structure, and `stratify_topological` (T0b) supplies the settle order.
+
   **W3c ✅ CLOSED (2026-07-11d): `graph_correct_w3c` + T3/T6 (`*_w3c`) — star-carrying
   stores.** The read half assembled in `GraphIndex/ReconcileStarsComplete.lean`: **the
   LINCHPIN `coveredFn_declared`** (no ghost star coverage — a `sem`-covered shape is
