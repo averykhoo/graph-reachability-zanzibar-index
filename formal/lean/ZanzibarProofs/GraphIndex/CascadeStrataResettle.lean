@@ -1305,4 +1305,203 @@ theorem reachedByW3d2C_settled {σ : GraphState} {S : Schema} {T : Store}
           completeKey_congr rfl rfl (completeKey_jobsLR_untargeted hjv2 hnot2 hon
             (completeKey_jobsLR_untargeted hjv1 hnot1 hon hcomp))⟩
 
+/-! ## No ghost star coverage at any stratum
+
+`coveredFn_declared` (the W3c linchpin) converts a TRUE guard at the admitted base
+into declaredness, but the UNROUTED guard at the base reads a stratum-2 def's
+derived leaves as dead probes — so it cannot carry the stratum-2 claim. The
+replacement: the drained-state ROUTED guard equals `sem`, and a true routed guard
+has a true leaf; an UNTAINTED leaf transfers to the shadow base, where the star
+subject's first out-edge is a materialised closure tuple whose seed matched a
+wildcard-flagged restriction (the factored `graphRec_star_declared`, steps 2–7 of
+`coveredFn_declared`); a DERIVED leaf is the settled operand's `stars` row read,
+whose members are declared by `SettledKey`. -/
+
+/-- A star subject with a TRUE untainted probe at an admitted rule-routed base has a
+    declared subject-wildcard shape (steps 2–7 of `coveredFn_declared`, factored so
+    the leaf can come from the ROUTED guard). -/
+theorem graphRec_star_declared {S : Schema} {T : Store} {σ0 : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hTS : TtuStarFree S T)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    {sh : Shape} {dt' on' r' : String}
+    (hleaf : GraphModel.graphRec σ0 (starSubj sh) dt' on' r' = true) :
+    sh ∈ wildcardShapes S := by
+  -- the star subject's probes leave from its own node (probes 2/4 dead: name = STAR)
+  have hstar : (starSubj sh).name = STAR := rfl
+  have hreach : ∃ v, σ0.reach (subjNode (starSubj sh)) v = true := by
+    unfold GraphModel.graphRec GraphModel.probeNonDerived at hleaf
+    simp only [starSubj, bne_self_eq_false, Bool.false_and, Bool.or_false,
+      Bool.or_eq_true, Bool.and_eq_true] at hleaf
+    rcases hleaf with h | ⟨_, h⟩
+    · exact ⟨_, h⟩
+    · exact ⟨_, h⟩
+  obtain ⟨v, hv⟩ := hreach
+  -- the first edge out is a materialised closure tuple sourced at the wAny node
+  obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound hv)
+  obtain ⟨t, ht, u, hu, hsubj, _hobj⟩ :=
+    reachedByRules_edge_sound (reachedByRules_of_admitted h0) _ y hy
+  -- the closure tuple's subject IS the star subject
+  have hustar : u.subject.name = STAR := by
+    by_contra hne
+    have hvar := congrArg NodeKey.variant hsubj
+    rw [subjNode, if_pos hstar, subjNode, if_neg hne] at hvar
+    have hvar' : Variant.wAny = Variant.plain := hvar
+    cases hvar'
+  have husubj : u.subject = starSubj sh := by
+    have h1 : sh.1 = u.subject.type := by
+      have := congrArg NodeKey.type hsubj
+      rw [subjNode, if_pos hstar, subjNode, if_pos hustar] at this
+      exact this
+    have h2 : sh.2 = u.subject.predicate := by
+      have := congrArg NodeKey.pred hsubj
+      rw [subjNode, if_pos hstar, subjNode, if_pos hustar] at this
+      exact this
+    show u.subject = (⟨sh.1, STAR, sh.2⟩ : SubjectRef)
+    have heta : u.subject = ⟨u.subject.type, u.subject.name, u.subject.predicate⟩ := rfl
+    rw [heta, ← h1, ← h2, hustar]
+  -- a star closure member carries the stored seed's subject
+  have hts : t.subject = starSubj sh :=
+    (rewriteClosure_star_subject hTT hTS ht hu hustar).symm.trans husubj
+  -- the seed matched a wildcard-flagged restriction of its declared def
+  obtain ⟨e', rs, hlk', hdirs, hrm⟩ := hSV t ht
+  unfold restrictionMatches at hrm
+  obtain ⟨r, hrmem, hrb⟩ := List.any_eq_true.mp hrm
+  simp only [Bool.and_eq_true, beq_iff_eq] at hrb
+  obtain ⟨⟨hty, hpred⟩, hwc⟩ := hrb
+  have htstar : t.subject.name = STAR := by rw [hts]; rfl
+  have hr22 : r.2.2 = true := by
+    rw [htstar] at hwc
+    simpa using hwc
+  have hsh1 : sh.1 = r.1 := by rw [← hty, hts]; rfl
+  have hsh2 : sh.2 = r.2.1 := by rw [← hpred, hts]; rfl
+  unfold wildcardShapes
+  refine List.mem_flatMap.mpr ⟨((t.object.type, t.relation), e'), mem_defs_of_lookup hlk', ?_⟩
+  refine List.mem_filterMap.mpr ⟨r, mem_exprRestrictions_of_directs hdirs hrmem, ?_⟩
+  rw [if_pos hr22, ← hsh1, ← hsh2]
+
+/-! ## `graph_correct_w3d2` — the W3d-2 T2b -/
+
+/-- **T2b, W3d-2 fragment (`graph_correct_w3d2`) — `check = sem` at every
+    fully-drained state of the TWO-STRATUM interleaved scheduler chain.** The state
+    is any `ReachedByW3d2C` state with an empty cascade-key set (every accepted
+    two-round cascade produces one: `cascade2_drains`); derived defs may read other
+    derived defs one stratum down (`hLU2`, strictly wider than W3d-1's `hLU`).
+
+    * **Untainted query:** the untainted-core shadow + the star-relaxed base
+      equation, as in W3d-1.
+    * **Derived query:** the three-disjunct settledness invariant with
+      `cascadeKeys = []` kills both dirtiness disjuncts — the key AND its operand
+      keys are settled+complete; the factored settled-key read
+      (`probeDerived_eq_sem_settled`) finishes, with no-ghost-star-coverage
+      discharged at BOTH strata through the drained-state ROUTED bridge. -/
+theorem graph_correct_w3d2 {S : Schema} {T : Store} {σ : GraphState} (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOnly e)
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem S T q := by
+  have hW3d2 : ReachedByW3d2 σ S T := reachedByW3d2C_toW3d2 h
+  have hschema : σ.schema = S := reachedByW3d2_schema hW3d2
+  have hcl := reachedByW3d2_edgesClosed hW3d2
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow hW3d2 hNK hRootB hSV hterm
+  obtain ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := q
+  replace hqs : sn = STAR → sp = BARE := hqs
+  replace hqo : on ≠ STAR := hqo
+  by_cases hder : isDerived S (dt, R) = true
+  · -- ===== derived query: the settled-key read =====
+    obtain ⟨e, hlk⟩ := isDerived_declared hder
+    have hco := hCO _ _ _ hlk hder
+    have hLU2e := hLU2 dt R e hlk hder
+    have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+    -- the invariant at the drained state: every declared derived key settled+complete
+    have hsettledAt : ∀ dt₀ on₀ R₀ e₀, S.lookup (dt₀, R₀) = some e₀ →
+        isDerived S (dt₀, R₀) = true → on₀ ≠ STAR →
+        SettledKey S T σ dt₀ on₀ R₀ ∧ CompleteKey S T σ dt₀ on₀ R₀ := by
+      intro dt₀ on₀ R₀ e₀ hlk₀ hder₀ hon₀
+      rcases reachedByW3d2C_settled h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2
+          hWSbare hSV hBS hTS hterm dt₀ on₀ R₀ e₀ hlk₀ hder₀ hon₀
+        with hdirty | hopdirty | hsc
+      · rw [hq] at hdirty
+        exact absurd hdirty List.not_mem_nil
+      · obtain ⟨_, _, _, hdirty'⟩ := hopdirty
+        rw [hq] at hdirty'
+        exact absurd hdirty' List.not_mem_nil
+      · exact hsc
+    obtain ⟨hset, hcomp⟩ := hsettledAt dt on R e hlk hder hqo
+    have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+        (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+          (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) := by
+      intro r' hr' hd'
+      obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+      have hroot' : RootBoolean e' :=
+        hRootB ⟨(dt, r'), e'⟩ (mem_defs_of_lookup hlk') hd'
+      obtain ⟨hset', hcomp'⟩ := hsettledAt dt on r' e' hlk' hd' hqo
+      exact ⟨hset', hcomp',
+        fun u hu => reachedByW3d2_reach_collapse_root hWF hSV hNK hlk' hroot' hW3d2 hu⟩
+    -- no ghost star coverage — at ANY stratum, via the drained-state routed bridge
+    have hsem_ws : ∀ sh : Shape, sh.2 = BARE →
+        sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true → sh ∈ wildcardShapes S := by
+      intro sh hshb hsm
+      have hchk : σ.checkFnR T (starSubj sh) dt on R e = true := by
+        rw [checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat
+          hterm hCO hWSbare h0 hsh hschema hlk hder hco hLU2e hops
+          (fun _ => hshb) hqo]
+        exact hsm
+      unfold GraphState.checkFnR at hchk
+      obtain ⟨r', hr', hleaf⟩ := evalE_computedOnly_true_leaf e hco hchk
+      unfold GraphModel.graphRecR at hleaf
+      cases hd' : isDerived S (dt, r') with
+      | false =>
+        rw [GraphModel.check_untainted _ _ (by rw [hschema]; exact hd')] at hleaf
+        have hleaf0 : GraphModel.graphRec σ0 (starSubj sh) dt on r' = true := by
+          rw [← shadow_graphRec_agree hsh (starSubj sh) on hd']
+          exact hleaf
+        exact graphRec_star_declared hTT hSV hTS h0 hleaf0
+      | true =>
+        rw [GraphModel.check_derived _ _ (by rw [hschema]; exact hd')] at hleaf
+        rw [probeDerived_eq _ hqo,
+          if_pos (show (starSubj sh).name = STAR from rfl)] at hleaf
+        obtain ⟨hset', _, _⟩ := hops r' hr' hd'
+        cases hrow : σ.residue (objNode ⟨dt, on⟩ r') r' with
+        | none =>
+          rw [hrow, Option.getD_none] at hleaf
+          exact absurd hleaf (Bool.false_ne_true)
+        | some res =>
+          rw [hrow, Option.getD_some] at hleaf
+          obtain ⟨hstars_iff, _, _⟩ := hset'.1 res hrow
+          exact ((hstars_iff sh).mp hleaf).1
+    have hroute : GraphModel.check σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.probeDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ :=
+      GraphModel.check_derived σ _ (by rw [hschema]; exact hder)
+    rw [hroute]
+    exact probeDerived_eq_sem_settled hWSbare hcl
+      (fun u hu => reachedByW3d2_reach_collapse_root hWF hSV hNK hlk hroot hW3d2 hu)
+      hsem_ws hset hcomp hqs hqo
+  · -- ===== untainted query: the shadow + the star-relaxed base equation =====
+    have hd : isDerived S (dt, R) = false := by simpa using hder
+    have hroute : GraphModel.check σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.probeNonDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ :=
+      GraphModel.check_untainted σ _ (by rw [hschema]; exact hd)
+    rw [hroute]
+    calc GraphModel.probeNonDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.graphRec σ ⟨st, sn, sp⟩ dt on R := rfl
+      _ = GraphModel.graphRec σ0 ⟨st, sn, sp⟩ dt on R :=
+          shadow_graphRec_agree hsh ⟨st, sn, sp⟩ on hd
+      _ = sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ :=
+          graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch h0
+            (s := ⟨st, sn, sp⟩) (dt := dt) (on := on) hqs hqo R hd
+
 end Zanzibar

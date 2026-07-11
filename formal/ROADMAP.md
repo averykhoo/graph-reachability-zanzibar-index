@@ -527,8 +527,9 @@ and re-proves/widens the same named theorems. Every stage must keep
       **`graph_correct_w3dE`** (`check = sem`, fully-drained) + **`reachedByW3dE_inv`**
       (the full 8-clause `Inv`, every state) hold UNCONDITIONALLY — `W3dJobCoverage` is a
       theorem, not a hypothesis. Detail: PROOF_STATUS 2026-07-12b.
-  - **W3d-2 — two strata (derived-reading-derived). ◐ OPENED (2026-07-12c,
-    `GraphIndex/CascadeStrata.lean`).** Relax `hLU` to lower-stratum derived operands:
+  - **W3d-2 — two strata (derived-reading-derived). ◐ ENDGAME CLOSED (2026-07-12f:
+    `graph_correct_w3d2` + T3/T6 over `ReachedByW3d2C`; only the E-chain tail
+    remains). Opened 2026-07-12c, `GraphIndex/CascadeStrata.lean`.** Relax `hLU` to lower-stratum derived operands:
     the leaf dispatch routes derived operands through `probeDerived` (a real model
     extension — Python's `_EvalContext` dispatches `derived_check` →
     `widx._check_derived`, `derived_stars` → residue stars; `member_check` routes on
@@ -577,10 +578,24 @@ and re-proves/widens the same named theorems. Every stage must keep
     invariant groundwork (`reconcileJobsLR_emits` → `round1_emission_dirties` —
     12c finding (b) as a theorem; mid-batch reach collapse); `ReachedByW3d2C`
     (two-round coverage chain; round-2 coverage relative to the MID state).
-    **Remaining**: the targeted re-settlement over the concatenated two-round batch
-    (the stratum-staged case analysis) → `reachedByW3d2C_settled` →
-    `graph_correct_w3d2`, then the E-chain tail (with residue-named candidates).
-    Detail: PROOF_STATUS 2026-07-12c/12d/12e.
+    **Done (12f — the ENDGAME, `GraphIndex/CascadeStrataResettle.lean`)**: the ROUTED
+    per-key edge characterisation (`reconcileStarsKeyDR_edge_char` — guard
+    fold-invariance from NO-SELF-REFERENCE under `hLU2`, `computedRefs_ne_self`);
+    the routed batch edge origin with the stratum-staged bridge at every prefix
+    state (`reconcileJobsLR_key_edge_sem`); the batch-level re-settlement
+    `settledComplete_jobsLR_targeted` (per-round instantiable) and the two-round
+    assembly `settledComplete_cascade2_targeted` (Case A: last targeting job in
+    round 2, operands re-settled/transported at MID, coverage baseline MID; Case B:
+    round-1-only targeting forces untargeted operands via `round1_emission_dirties`
+    + `hcover2`); `sem_nil_derived_false2`; the THREE-disjunct invariant
+    **`reachedByW3d2C_settled`**; no-ghost-star-coverage at any stratum
+    (`graphRec_star_declared` + the drained-state routed bridge); **T2b
+    `graph_correct_w3d2`** (`check = sem`, fully drained, two strata) + T3/T6
+    `*_w3d2`.
+    **Remaining**: the W3d-2 E-chain tail — extend `enumJobs` with the
+    residue-named candidates (12c finding (c)) and discharge the two-round
+    coverage/validity/scope hypotheses from the state (`ReachedByW3d2E`).
+    Detail: PROOF_STATUS 2026-07-12c/12d/12e/12f.
 
   **W3c ✅ CLOSED (2026-07-11d): `graph_correct_w3c` + T3/T6 (`*_w3c`) — star-carrying
   stores.** The read half assembled in `GraphIndex/ReconcileStarsComplete.lean`: **the

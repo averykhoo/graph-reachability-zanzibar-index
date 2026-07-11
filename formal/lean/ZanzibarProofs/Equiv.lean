@@ -7,6 +7,7 @@ import ZanzibarProofs.GraphIndex.ReconcileComplete
 import ZanzibarProofs.GraphIndex.ReconcileUposComplete
 import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 import ZanzibarProofs.GraphIndex.CascadeSettle
+import ZanzibarProofs.GraphIndex.CascadeStrataResettle
 
 /-!
 # T3 / T6 — equivalence and the security corollaries
@@ -477,6 +478,89 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     GraphModel.check σ' q = false := by
   rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
     hWSbare h hq hqs hqo]
+  exact hDeny
+
+/-! ## W3d-2 (two strata) scope — via `graph_correct_w3d2`
+
+Derived defs may now read other derived defs one stratum down (`hLU2`, strictly
+wider than W3d-1's all-untainted-operands `hLU`): the scheduler runs TWO rounds per
+cascade, round 1 re-settling stratum-1 keys and its emissions re-dirtying their
+stratum-2 readers for round 2. -/
+
+/-- **T3 (equivalence), W3d-2 scope.** Both backends agree at every fully-drained
+    state of the two-stratum interleaved scheduler chain (T1 ∘ `graph_correct_w3d2`). -/
+theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    SetEngineModel.check S T q = GraphModel.check σ q := by
+  rw [setEngine_correct S T q hWF hStrat hValid,
+      graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO
+        hLU2 hWSbare h hq hqs hqo]
+
+/-- **T6a (deny-propagation), W3d-2 scope.** Whenever the spec denies, both backends
+    deny — including a stratum-2 grant whose stratum-1 support was retracted (the
+    round-2 re-settle is what keeps this true). -/
+theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T q = false) :
+    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+  refine ⟨?_, ?_⟩
+  · rw [setEngine_correct S T q hWF hStrat hValid]
+    exact hDeny
+  · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO
+      hLU2 hWSbare h hq hqs hqo]
+    exact hDeny
+
+/-- **T6b (no-ghost-grant), W3d-2 scope.** If the spec denies on the chain's own
+    store, the graph denies at any fully-drained state — a stale stratum-2 edge left
+    by round 1 is retracted by its round-2 re-settle before the drain completes. -/
+theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T')
+    (hBS : BareStarStore T') (hTS : TtuStarFree S T')
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d2C σ' S T') (hq : cascadeKeys S σ' = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T' q = false) :
+    GraphModel.check σ' q = false := by
+  rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO
+    hLU2 hWSbare h hq hqs hqo]
   exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)

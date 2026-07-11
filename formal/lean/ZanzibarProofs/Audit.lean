@@ -1057,4 +1057,39 @@ namespace Zanzibar
 #print axioms reconcileJobsLR_reach_collapse
 #print axioms reachedByW3d2C_toW3d2
 
+-- **W3d-2 ENDGAME — the two-round targeted re-settlement, the stratum-staged
+-- invariant, and `graph_correct_w3d2` (GraphIndex/CascadeStrataResettle.lean,
+-- Equiv.lean, 2026-07-12f).** The ROUTED per-key edge characterisation
+-- (`reconcileStarsKeyDR_edge_char` -- guard fold-invariance now rests on
+-- NO-SELF-REFERENCE under `hLU2`, `computedRefs_ne_self`: the pass's edge edits at
+-- its own R-node are invisible to every leaf its guard consults, whatever the
+-- leaf's stratum); the routed batch edge origin with the stratum-staged bridge at
+-- every prefix state (`reconcileJobsLR_key_edge_sem`, operand settledness threaded
+-- stepwise); the batch-level re-settlement `settledComplete_jobsLR_targeted`
+-- (per-round instantiable: coverage baseline = batch start); the two-round
+-- assembly **`settledComplete_cascade2_targeted`** (Case A: last targeting job in
+-- round 2, operands re-settled/transported AT MID, coverage baseline MID; Case B:
+-- round-1-only targeting forces untargeted operands -- a round-1 operand pass's
+-- emission would re-dirty the key for round 2 and `hcover2` would produce a
+-- round-2 targeting job); `sem_nil_derived_false2` (both strata over the empty
+-- store, via the bridge at the empty chain state); the THREE-disjunct invariant
+-- **`reachedByW3d2C_settled`** (dirty ∨ some-derived-operand-key-dirty ∨
+-- settled+complete -- the 12e attack-shaped form -- at EVERY W3d-2 coverage-chain
+-- state); no-ghost-star-coverage at ANY stratum (`graphRec_star_declared`, the
+-- factored linchpin core, fed by the drained-state ROUTED bridge); and T2b
+-- **`graph_correct_w3d2`**: `check = sem` at every fully-drained state of the
+-- TWO-STRATUM scheduler chain, with T3/T6 corollaries. Standard axioms only:
+#print axioms computedRefs_ne_self
+#print axioms reconcileStarsKeyDR_edge_char
+#print axioms reconcileJobsLR_key_edge_sem
+#print axioms settledComplete_jobsLR_targeted
+#print axioms settledComplete_cascade2_targeted
+#print axioms sem_nil_derived_false2
+#print axioms reachedByW3d2C_settled
+#print axioms graphRec_star_declared
+#print axioms graph_correct_w3d2
+#print axioms backend_equivalence_w3d2
+#print axioms exclusion_effective_w3d2
+#print axioms no_ghost_grant_w3d2
+
 end Zanzibar
