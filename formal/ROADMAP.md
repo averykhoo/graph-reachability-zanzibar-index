@@ -351,11 +351,23 @@ and re-proves/widens the same named theorems. Every stage must keep
   full `Inv` with ALL FOUR I6 clauses contentful** (`negStarCovered`, `negEdgeFree` =
   the space rule cross-pass, `uposEdgeFree`, `uposNegDisjoint`) — no `StarFreeStore`
   hypothesis anywhere. Attack-first: 342-query grid incl. D1 flow-through coverage,
-  nested boolean roots, permuted/duplicated candidates — no refutation. **Read half
-  DEFERRED:** `graph_correct_w3c` needs the star-relaxed base equation
-  (`graphRec_base_eq`/`checkFn_eq_sem` without `StarFreeStore` — W1 bare-star × W2
-  rules composition) + the `W3cComplete` batch layer. Detail: PROOF_STATUS 2026-07-11
-  (W3c) + HANDOFF.
+  nested boolean roots, permuted/duplicated candidates — no refutation.
+
+  **W3c read half step 1 CLOSED (2026-07-11): the star-relaxed base equation.**
+  `graph_correct_rulesBS` (`GraphIndex/RulesBareStar.lean`): W2's untainted `check = sem`
+  re-proved over `BareStarStore` + `TtuStarFree` (no wildcard TTU parents — attack-
+  CONFIRMED necessary: a star tupleset tuple needs W1c in-bridges the rule-routed write
+  model does not materialise), with the query scope widened to star-BARE subjects (probe 1
+  at the `wAny` source; probe-2 hits transfer to the concrete subject via
+  `semAux_star_to_bare`). On top: `graphRec_base_eq_bs` (RestrictBase — `TtuStarFree`
+  transfers to `S↾U` since the restriction preserves `schemaRewrites`),
+  `graphRec_reduce_base_adm_bs` (ReconcileComplete — the plain-edges probe-killing
+  shortcut replaced by transferring ALL FOUR probes, both probe targets carrying the
+  untainted key `(dt, r')`), and `checkFn_eq_sem_bs` — the star-relaxed `checkFn ↔ sem`
+  bridge the W3c `coveredFn`/`stars ↔ sem` correspondence consumes. **Remaining for
+  `graph_correct_w3c`:** the `W3cComplete` batch/coverage layer + the assembly through
+  `probeDerived` (glue `checkFn_eq_sem_bs` to the W3c state via `reachedByW3c_master`'s
+  canonicity). Detail: PROOF_STATUS 2026-07-11 (both W3c entries) + HANDOFF.
 
   **W3b ✅ CLOSED (2026-07-11): `graph_correct_w3b` + T3/T6 (`*_w3b`) — userset `upos`.**
   The W3a bare-subject restriction LIFTED: userset subjects on derived keys are answered

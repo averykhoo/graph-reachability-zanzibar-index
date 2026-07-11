@@ -78,9 +78,11 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T2b `graph_correct_w3a` | `GraphIndex/ReconcileComplete.lean` | + one `RootBoolean` derived key, bare-subject queries |
 | T2b `graph_correct_w3b` | `GraphIndex/ReconcileUposComplete.lean` | + userset subjects via `upos` (bare-subject restriction LIFTED) |
 | T2a `reachedByW3c_inv` / `reachedByW3c_master` | `GraphIndex/ReconcileStars.lean` | W3c write half: `stars`/`neg` model, ALL I6 clauses contentful, star-general (no `StarFreeStore`) |
+| T2b `graph_correct_rulesBS` | `GraphIndex/RulesBareStar.lean` | W2 untainted correspondence over `BareStarStore`+`TtuStarFree`, star-BARE subjects incl. |
+| `graphRec_base_eq_bs` / `checkFn_eq_sem_bs` | `RestrictBase.lean` / `ReconcileComplete.lean` | the STAR-RELAXED base equation + `checkFn ↔ sem` bridge (no `StarFreeStore`) |
 | T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`, `_w3b`) |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ◐ (write half ✅, read half NEXT) → W3d → W4.**
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ◐ (write half ✅, read-half step 1 [star-relaxed base equation] ✅, batch layer + assembly NEXT) → W3d → W4.**
 **W3c write half is CLOSED (2026-07-11)** — `GraphIndex/ReconcileStars.lean`: the `stars`/`neg`
 residue model and **T2a with ALL FOUR I6 clauses contentful**, with **no `StarFreeStore`
 hypothesis anywhere in the file**. Machinery:
@@ -119,39 +121,57 @@ idempotent, key-order/candidate-permutation independent. No refutation.
 The W3b summary (upos machinery, `graph_correct_w3b`) and W3a summary are in the 2026-07-11
 PROOF_STATUS entries.
 
+**W3c read-half step 1 is CLOSED (2026-07-11)** — the star-relaxed base equation, three layers:
+- **`graph_correct_rulesBS`** (`GraphIndex/RulesBareStar.lean`): W2's untainted `check = sem`
+  over `BareStarStore` + **`TtuStarFree`** (no TTU arm matches a stored star tuple — attack-
+  CONFIRMED necessary: a `folder:* → doc#parent` tupleset tuple makes `sem` true via `ttuLeaf`'s
+  `instances` branch while the bridge-free `writeRules` graph answers false; star TTU parents
+  need the W1c in-bridge machinery, deferred). Query scope: object concrete, subject concrete
+  or star-BARE. Machinery: closure star-characterisation (`rewriteClosure_star_subject` — no
+  ttu arm ever fires on a star closure member, so it carries the seed's full bare subject),
+  subject-generic per-hop soundness/lift/chain composition (`subjNode_inj_total`), the
+  star→concrete transfer `semAux_star_to_bare` (a probe-2 `wAny`-source chain IS a star-subject
+  chain), completeness `nreaches_of_semAux_rulesBS` (probe-1 ∨ probe-2 disjunction).
+- **`graphRec_base_eq_bs`** (`RestrictBase.lean`): the mixed-schema admitted base's operand
+  read = `sem` — same schema-restriction route, `TtuStarFree` transfers to `S↾U` because the
+  restriction preserves `schemaRewrites` (`ttuStarFree_restrict`).
+- **`graphRec_reduce_base_adm_bs` + `checkFn_eq_sem_bs`** (`ReconcileComplete.lean`): the W3a-
+  admitted reduce-to-base with NO `StarFreeStore` — the plain-edges probe-killing shortcut is
+  replaced by transferring ALL FOUR probes (both probe targets carry the untainted key
+  `(dt, r')`, so `reachedByW3aAdmitted_reach_inert` applies verbatim) — and the composed
+  star-relaxed `checkFn ↔ sem` bridge, subject-generic up to star-BARE (the `coveredFn` reads).
+
 ---
 
-## The next task — W3c read half: the star-relaxed base equation → `graph_correct_w3c`
+## The next task — W3c read half, steps 2–3: the `W3cComplete` batch layer → `graph_correct_w3c`
 
-The graph-internal half is DONE (state content = the base's compiled boolean, see master above).
-What remains to lift `check = sem` to star-carrying stores:
+Step 1 (the star-relaxed base equation, `checkFn_eq_sem_bs`) is CLOSED — see above. What
+remains to close W3c:
 
-1. **The star-relaxed base equation** — `graphRec_base_eq` / `checkFn_eq_sem` WITHOUT
-   `StarFreeStore` (they currently assume it via `reachedByW3a_edges_plain` +
-   `probeNonDerived_plainEdges`, which kill wildcard probes 2–4). On a base store with bare
-   `user:*` grants, probe 2 (`wAnyNode s.shape → oN`) goes LIVE. Needed subject-generically:
-   the `stars ↔ sem` correspondence is exactly the STAR-subject instance (`sem`'s star branch:
-   exact-shape star grant ∨ D1 flow-through `memberOfGranted` — the attack corpus's doc:6 case).
-   Ingredients: W1's `graph_correct_bareStar` (pure-direct star machinery: `TupleChainN`
-   flow-through chains) composed with W2's rule routing (`RulesChain`/`RulesSaturate`);
-   `graphRec_reconcileKey_inert` (this session) already gives the reduce-to-base step without
-   star-freeness — only the BASE read ↔ `sem` equation itself needs the composition. Attack-first
-   any new statement (house rule 2): e.g. try to refute "base probe 1∨2 = sem for bare+star
-   subjects on rule-routed star-carrying stores" — mind rewrite arms fed BY star grants
-   (`RewriteFilter` routing a `user:*` write) and D1 chains crossing rewrite outputs.
-2. **The `W3cComplete` batch layer** (W3b-style): jobs = full-object `reconcileStarsKey` passes;
-   coverage clauses on the enumeration (edge cands ⊇ `sem`-true uncovered bare subjects; negCands
-   ⊇ negative-leaf concretes ∪ derived-neg ids, `processor.py:394-404`; uposCands ⊇ `sem`-true
-   uncovered usersets); persistence = canonical-content stability (rows are wholesale-recomputed
-   to the SAME canonical content — `reachedByW3c_master` already proves the content is
-   chain-position-independent).
+1. **The `W3cComplete` batch layer** (W3b-style, mirror `W3aComplete`/`W3bComplete`): jobs =
+   full-object `reconcileStarsKey` passes over a `ReachedByRulesAdmitted` base (note: the
+   admitted-closure analog of `ReachedByW3c` may need defining, as `ReachedByW3aAdmitted`
+   was); coverage clauses on the enumeration (edge cands ⊇ `sem`-true uncovered bare subjects;
+   negCands ⊇ negative-leaf concretes ∪ derived-neg ids, `processor.py:394-404`; uposCands ⊇
+   `sem`-true uncovered usersets); persistence = canonical-content stability (rows are
+   wholesale-recomputed to the SAME canonical content — `reachedByW3c_master` already proves
+   the content is chain-position-independent).
+2. **Glue `checkFn_eq_sem_bs` to the W3c state**: `reachedByW3c_master` pins residue content
+   to `coveredFn σ0`/`checkFn σ0` on the canonical base; `checkFn_eq_sem_bs` (over a
+   `ReachedByW3aAdmitted` state) turns base `checkFn`/`coveredFn` reads into `sem` — the W3c
+   chain's base is `ReachedByRules`; an ADMITTED variant of the W3c closure (or a master
+   restated over an admitted base) is likely needed so the bs bridge applies. The fragment
+   hypotheses now include `BareStarStore T` + `TtuStarFree S T` (replacing `StarFreeStore`).
 3. **Assembly** `graph_correct_w3c` through the (already fully general) `probeDerived`: bare ⇒
    edge ∨ (stars ∖ neg), star ⇒ stars, userset ⇒ upos ∨ (stars ∖ neg); each branch glued by
-   master's canonicity + the base equation + completeness. Then T3/T6 `*_w3c` in `Equiv.lean`.
+   master's canonicity + `checkFn_eq_sem_bs`/`graphRec_base_eq_bs` + completeness. The star
+   branch: `stars.contains s.shape` ↔ `coveredFn σ0 s.shape` (master) ↔ `sem` at the star-bare
+   subject (`checkFn_eq_sem_bs`). Then T3/T6 `*_w3c` in `Equiv.lean`.
 
 Scope guard (decision-15): object wildcards and wildcard usersets over derived relations stay
-rejected; `wildcardShapes` carries only bare-subject-star shapes on this fragment. `hterm`
-(`NoTtuTarget`/`NoStoreSubjectR`) and hCO/hLU/hRootB stay as in W3a/W3b.
+rejected; `wildcardShapes` carries only bare-subject-star shapes on this fragment; wildcard
+TTU parents excluded (`TtuStarFree`). `hterm` (`NoTtuTarget`/`NoStoreSubjectR`) and
+hCO/hLU/hRootB stay as in W3a/W3b.
 
 ---
 

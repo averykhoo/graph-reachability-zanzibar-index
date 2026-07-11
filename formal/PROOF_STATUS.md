@@ -8,6 +8,66 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11b (W3c read half step 1 — CLOSED: the star-relaxed base equation, `graph_correct_rulesBS` + `checkFn_eq_sem_bs`)
+
+Resuming from HANDOFF "W3c read half: the star-relaxed base equation." Two green+pushed
+axiom-clean increments (new file `GraphIndex/RulesBareStar.lean` ~700 lines; +
+`RestrictBase.lean`, `ReconcileComplete.lean`, `Audit.lean` [12 new entries], root aggregator);
+`verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms audit + 60
+conformance). Sorry count held at 0. **This closes HANDOFF step 1 of the W3c read half**: the
+base `hag` equation and the `checkFn ↔ sem` bridge now hold WITHOUT `StarFreeStore`, over
+`BareStarStore` + `TtuStarFree`, subject-generically up to star-BARE subjects — exactly the
+form the `coveredFn`/`stars ↔ sem` correspondence consumes.
+
+**Attack-first (recorded in `RulesBareStar.lean` header, scratch deleted).** Planned
+`graph_correct_rulesBS` vs `sem` on a ~180-query grid over a mixed `computed`/`ttu`/`union`
+schema: `user:*` feeding computed arms, D1 star flow-through (`user:* → group:g#mem`), a star
+grant on a TTU *target* relation, a D1 chain crossing a rewrite output fed by a star grant,
+star-bare + userset subjects, ghosts — zero mismatches; `semAux_star_to_bare` zero violations.
+**Necessity of `TtuStarFree` CONFIRMED** (a genuine refutation of the unconditioned statement):
+`folder:* → doc:d6#parent` makes `sem` true via `ttuLeaf`'s `instances` branch while the graph
+answers false — the rule-routed write model (`writeRules`, a plain `writeDirect` fold)
+materialises NO in-bridges; star TTU parents are W1c machinery, deferred. `TtuStarFree S T`
+(no TTU arm matches a stored star tuple) is the honest fragment condition.
+
+**Increment 1 — `graph_correct_rulesBS` (`RulesBareStar.lean`).** W2's untainted `check = sem`
+over `BareStarStore`, query scope = concrete object + (concrete ∨ star-BARE) subject:
+- closure star-characterisation `rewriteClosure_star_subject`/`_star_bare`: no ttu arm ever
+  fires on a star-subject closure member (seed case: `TtuStarFree`; output case:
+  `no_rewrite_outputs_tupleset`), and computed arms keep the subject — so star closure members
+  carry the seed's full bare subject;
+- subject-generic soundness: `semAux_seed_bs` (star seeds self-grant via the star branch's
+  exact-shape disjunct, `directLeaf_grant_starSelf`), `semAux_of_rewriteClosure_bs`,
+  `semAux_lift_untainted_bs` (lift with arm-provenance threading so `ttuLeaf_elim_nss` can
+  instantiate `TtuStarFree` per leaf), chain composition `semAux_of_ruleChain_bs` via GLOBAL
+  `subjNode` injectivity (`subjNode_inj_total` — star and plain nodes never collide);
+- the star→concrete coverage transfer `semAux_star_to_bare` (fuel-for-fuel; `RecLe` +
+  `memberOfGranted_mono` reused from FuelStable; probe-2 glue: a `wAny`-source chain IS the
+  star-subject chain at `subjNode ⟨T, *, BARE⟩`);
+- completeness `nreaches_of_semAux_rulesBS`: probe-1 ∨ probe-2 disjunction (star subject ⇒
+  probe 1 at its own `wAny` node; bare ⇒ probe 1 ∨ probe 2; userset ⇒ probe 1; flow-through
+  and `nreaches_relation_rewrite_bs` tail both disjuncts);
+- assembly: probes 3–4 dead (plain targets), probe-2-dead-for-usersets via
+  `rulesAdmitted_edge_endpoints_bs` (sources plain or `wAny`-BARE).
+
+**Increment 2 — the base equation + bridge.** `ttuStarFree_restrict` + `graphRec_base_eq_bs`
+(`RestrictBase.lean`): the schema-restriction route verbatim with `graph_correct_rulesBS` as
+the untainted black box (`TtuStarFree` transfers to `S↾U` since `schemaRewrites` is
+preserved). `graphRec_reduce_base_adm_bs` (`ReconcileComplete.lean`): NO `StarFreeStore` — the
+plain-edges shortcut (which killed probes 2–4) is replaced by transferring ALL FOUR probes to
+the base: both probe targets (`objNode ⟨dt,on⟩ r'`, `wAllNode dt r'`) carry the untainted key
+`(dt, r')`, so `reachedByW3aAdmitted_reach_inert` (never star-dependent) applies per probe.
+`checkFn_eq_sem_of_base_bs` + `checkFn_eq_sem_bs`: the composed star-relaxed bridge on
+W3a-admitted states, subject-generic up to star-BARE.
+
+**Resume → W3c read half steps 2–3 (see HANDOFF "The next task"):** the `W3cComplete`
+batch/coverage layer (jobs = `reconcileStarsKey` passes; an ADMITTED variant of the W3c
+closure is likely needed so `checkFn_eq_sem_bs` applies to the canonical base), then the
+`graph_correct_w3c` assembly through `probeDerived` (bare ⇒ edge ∨ stars∖neg, star ⇒ stars =
+canonical `coveredFn` = `sem` via the new bridge, userset ⇒ upos ∨ stars∖neg) + T3/T6 `*_w3c`.
+Fragment hypotheses on the store are now `BareStarStore` + `TtuStarFree` (replacing
+`StarFreeStore`).
+
 ## Session 2026-07-11 (W3c write half — CLOSED: stars/neg model, covered-filter collapse, T2a with all-contentful I6, guard canonicity)
 
 Resuming from HANDOFF "W3c (star data on derived keys → `stars`/`neg`)." Two green+pushed
