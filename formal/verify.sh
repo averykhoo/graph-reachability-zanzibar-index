@@ -22,15 +22,62 @@ LEAN_DIR="$REPO_ROOT/formal/lean"
 PY="C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe"
 export PATH="$HOME/.elan/bin:$PATH"
 
+BUILD_LOG="$(mktemp)"
+trap 'rm -f "$BUILD_LOG"' EXIT
+
 echo "=== [1/5] lake build (library) ==="
-( cd "$LEAN_DIR" && lake build ) || { echo "FAIL: lake build"; exit 1; }
+( cd "$LEAN_DIR" && lake build 2>&1 | tee "$BUILD_LOG" ) || { echo "FAIL: lake build"; exit 1; }
 
 echo "=== [2/5] sorry inventory (HARD gate: must be 0) ==="
-# Count only the `sorry` tactic on its own line (excludes prose/docstring mentions).
-SORRIES=$(grep -rhnE "^[[:space:]]*sorry[[:space:]]*$" "$LEAN_DIR/ZanzibarProofs" \
-          --include=*.lean | wc -l | tr -d ' ')
-echo "  tracked sorries: $SORRIES"
-[ "$SORRIES" = "0" ] || { echo "FAIL: sorry count is $SORRIES (gate requires 0)"; exit 1; }
+# Token-level scan: count every `sorry` TOKEN in the .lean sources OUTSIDE
+# comments (`--` line, nested `/- -/` block, `/-- -/` docstring) and string
+# literals — an inline `:= sorry` counts, a prose mention does not.
+SORRIES=$("$PY" - "$LEAN_DIR/ZanzibarProofs" <<'PYEOF'
+import re, sys, pathlib
+root = pathlib.Path(sys.argv[1])
+count = 0
+for p in sorted(root.rglob("*.lean")):
+    src = p.read_text(encoding="utf-8")
+    n, i, depth, out = len(src), 0, 0, []
+    while i < n:
+        if depth > 0:                      # inside (possibly nested) block comment
+            if src.startswith("/-", i):
+                depth += 1; i += 2
+            elif src.startswith("-/", i):
+                depth -= 1; i += 2
+                if depth == 0:
+                    out.append(" ")        # token barrier where the comment was
+            else:
+                i += 1
+            continue
+        if src.startswith("/-", i):        # block comment / docstring opens
+            depth = 1; i += 2; continue
+        if src.startswith("--", i):        # line comment
+            j = src.find("\n", i)
+            i = n if j < 0 else j          # keep the newline as the barrier
+            continue
+        if src.startswith("'\"'", i):      # the char literal '"' — not a string
+            out.append(" "); i += 3; continue
+        if src[i] == '"':                  # string literal: data, not a proof hole
+            i += 1
+            while i < n:
+                if src[i] == "\\": i += 2; continue
+                if src[i] == '"': i += 1; break
+                i += 1
+            out.append(" ")
+            continue
+        out.append(src[i]); i += 1
+    for m in re.finditer(r"\bsorry\b", "".join(out)):
+        count += 1
+        print(f"  sorry token: {p.relative_to(root)}", file=sys.stderr)
+print(count)
+PYEOF
+) || { echo "FAIL: sorry scanner errored"; exit 1; }
+# Belt and suspenders: the compiler's own verdict (Lake replays cached logs).
+WARNED=$(grep -c "declaration uses 'sorry'" "$BUILD_LOG" || true)
+echo "  tracked sorries: $SORRIES (token scan), $WARNED (build-log warnings)"
+[ "$SORRIES" = "0" ] || { echo "FAIL: sorry token count is $SORRIES (gate requires 0)"; exit 1; }
+[ "$WARNED" = "0" ] || { echo "FAIL: lake build reported $WARNED 'declaration uses sorry' warning(s)"; exit 1; }
 
 echo "=== [3/5] lake build zcli (conformance CLI) ==="
 ( cd "$LEAN_DIR" && lake build zcli ) || { echo "FAIL: lake build zcli"; exit 1; }
