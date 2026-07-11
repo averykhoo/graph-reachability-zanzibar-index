@@ -837,4 +837,17 @@ namespace Zanzibar
 #print axioms reachedByW3d_structInv
 #print axioms reachedByW3dC_structInv
 
+-- **W3d-1c (part 3b) — the edge-free I6 residue-hygiene clauses
+-- (GraphIndex/CascadeInv.lean).** `reachedByW3d_residueHygienic`: at every W3d state,
+-- every persisted residue row has `neg ⊆ stars-covered` (`negStarCovered`) and
+-- `upos ∩ neg = ∅` (`uposNegDisjoint`) — the two `Inv` clauses that read only the row,
+-- not the edges — with NO fragment hypotheses. `reconcileResidueKey` writes
+-- `neg = negCands.filter (stars.contains ∧ ¬checkFn)` and `upos = uposCands.filter
+-- (¬stars.contains ∧ checkFn)` (`processor.py:406-441`), so both clauses hold of every
+-- written row by construction; writes/pushes are residue-inert. This leaves only the
+-- two EDGE-referencing I6 clauses (`negEdgeFree`/`uposEdgeFree`, which need R-node
+-- terminality) open for the full `reachedByW3d_inv`. Standard axioms only:
+#print axioms residueHygienic_reconcileStarsKeyD
+#print axioms reachedByW3d_residueHygienic
+
 end Zanzibar
