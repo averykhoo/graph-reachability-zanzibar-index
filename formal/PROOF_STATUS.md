@@ -8,6 +8,56 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11 (W3a Step B + C — CLOSED: `graph_correct_w3a`, T3/T6 at W3a scope)
+
+Resuming W3a Step B from HANDOFF "candidate completeness + assembly." Three green+pushed
+axiom-clean increments (new file `GraphIndex/ReconcileComplete.lean` + `Equiv.lean` + `Audit.lean`);
+`verify.sh` green throughout (build + 0 sorries + zcli + audit standard-axioms-only + 60
+conformance). Sorry count held at 0. **This CLOSES W3a** — the derived-boolean read correspondence
+is proved end-to-end and the T3/T6 corollaries lifted.
+
+**Attack-first (recorded a scope finding).** `#eval` on `viewer := member but not banned` with a
+userset grant `doc:1#member@group:g#mem`: `sem ⟨group:g#mem, viewer, doc:1⟩ = true` (member ∧ ¬banned)
+while the graph's residue-empty `probeDerived` reads a userset subject as `false`. So W3a's
+derived-query correctness is **bare-subject only** — userset subjects on a derived key are exactly
+W3b's `upos` residue. `graph_correct_w3a` is scoped to `q.subject.predicate = BARE`; the untainted
+half stays subject-general (base reduction). Scratch deleted.
+
+**Increment 1 — the `checkFn ↔ sem` bridge.** `semAux_qirrel` (`sem` never reads the query except
+through `instances`, which discards it — so the operand `sem` at query `⟨s,r',o⟩` feeds
+`checkFn_eq_semStep`'s enclosing query `⟨s,R,o⟩`). `ReachedByW3aAdmitted` (admitted base leg;
+`hlke` def-lookup added to the reconcile constructor) + `reachedByW3aAdmitted_toW3a` (forgets to the
+plain W3a closure, so all soundness lemmas transfer) + `graphRec_reduce_base_adm` (the admitted
+analog of `graphRec_reduce_base`: the operand read reduces to an *admitted* base). **`checkFn_eq_sem`**
+— on a W3a-admitted state, `checkFn` at a `ComputedOnly` derived key (untainted leaves) equals
+`sem S T ⟨s,R,⟨dt,on⟩⟩` — composing `graphRec_reduce_base_adm` + Step A's `graphRec_base_eq` +
+`semAux_qirrel` + T0a fuel stability.
+
+**Increment 2 — derived-edge soundness (forward).** `reconcileKey_edge_guard` (every reconcile-fold
+edge is pre-existing or materialised at a *prefix mid-state* whose `checkFn` guard held);
+`reachedByRules_RootBoolean_no_inedge` (a `RootBoolean` R-node has no base in-edge, so the base leg
+is vacuous). **`reachedByW3aAdmitted_derived_edge_sound`** — a materialised derived edge witnesses
+`sem = true` (base leg vacuous; reconcile guard at a W3a-admitted mid-state ⟶ `checkFn_eq_sem`).
+
+**Increment 3 — candidate completeness (backward) + assembly + Step C.** `reconcileKey_edge_present`
+(a `sem`-true bare candidate's edge is materialised: guard fires at every prefix mid-state via
+`checkFn_eq_sem`; the write admits because the `RootBoolean` R-node is terminal ⇒ no back-path;
+persists to the pass end). `W3aJob`/`reconcileJobs`/`W3aComplete` — an admitted base + a
+**coverage-complete** batch of reconcile jobs (faithful to `reconcile`/`_leaf_concretes`,
+`processor.py:382-423,497-507`: the coverage clause is a property of the *enumeration*, not the edge
+conclusion). **`w3aComplete_derived_edge`** (`sem`-true ⇒ edge present: the covering job writes it,
+`reconcileJobs_edges_mono` persists it). **`graph_correct_w3a`** — `check = sem` on every
+bare-subject star-free query: untainted via the base reduction (`graphRec_reduce_base_adm` +
+`graphRec_base_eq`), derived via the residue-empty edge probe (`check_derived_ResidueEmpty`) glued by
+soundness (reach ⟶ `reachedByW3a_reach_collapse_root` ⟶ edge ⟶ `sem`) and completeness (`sem` ⟶ edge
+⟶ reach). `isDerived_declared` supplies the def. **Step C:** `backend_equivalence_w3a` /
+`exclusion_effective_w3a` / `no_ghost_grant_w3a` in `Equiv.lean` (T1 ∘ `graph_correct_w3a`); T6a's
+first real exclusion content.
+
+**Resume → W3b (userset subjects → `upos` residue).** See HANDOFF "The next task": attack-first the
+`upos` read/write path FIRST, then relax the residue-empty closure to a `upos`-carrying residue and
+widen the coverage/completeness to `upos` membership. `checkFn_eq_sem` is already subject-generic.
+
 ## Session 2026-07-11 (W3a Step A — CLOSED: state transfer + base `hag` equation)
 
 Resuming W3a Step A from HANDOFF "the remaining Step A: state transfer + base `hag` equation."

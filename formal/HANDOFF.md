@@ -75,119 +75,76 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T2b `graph_correct_objStar` | `GraphIndex/ObjStarClosure.lean` | + object wildcards (out-bridges) |
 | T2b `graph_correct_usStar` | `GraphIndex/UsStarClosure.lean` | + userset stars (in-bridges) |
 | T2b `graph_correct_rules` | `GraphIndex/RulesComplete.lean` | untainted computed/ttu/union |
-| T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries |
+| T2b `graph_correct_w3a` | `GraphIndex/ReconcileComplete.lean` | + one `RootBoolean` derived key, bare-subject queries |
+| T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`) |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3 (in flight) → W4.** Current stage: **W3a**
-(star-free bare-subject derived booleans — `and`/`but not` over `computed` refs to
-untainted operands; the processor stores NO residue row here, so a derived relation
-only adds edges). Done so far in W3a (`Reconcile.lean`, `ReconcileWrite.lean`,
-`ReconcileCorrect.lean`):
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b (next) → W3c → W3d → W4.**
+**W3a is CLOSED (2026-07-11):** star-free bare-subject derived booleans — `and`/`but not`
+over `computed` refs to untainted operands; the processor stores NO residue row, so a
+derived relation only adds edges, and the derived read collapses to a bare edge probe.
+The whole read correspondence `graph_correct_w3a` (`GraphIndex/ReconcileComplete.lean`) is
+proved: `check = sem` on every **bare-subject** star-free query, with the T3/T6a/T6b
+corollaries (`*_w3a` in `Equiv.lean`). Scope note (attack-first, recorded): a **userset**
+subject on a derived key can be `sem`-true while the residue-empty read is `false`, so
+W3a's derived-query claim is bare-subject-only — usersets are W3b's `upos` residue.
+
+W3a machinery, in dependency order (`Reconcile.lean`, `ReconcileWrite.lean`,
+`ReconcileCorrect.lean`, `RestrictBase.lean`, **`ReconcileComplete.lean`**):
 - read collapse (`check_derived_ResidueEmpty`: derived read = bare edge probe);
-- write model (`checkFn` = compiled check_fn as `evalE` reading the graph via
-  `graphRec` = `probeNonDerived`; `reconcileKey` guarded `writeDirect` fold; closure
-  `ReachedByW3a` with `Inv`/residue-free/quiescence preserved);
-- `checkFn_eq_semStep` (checkFn = one `sem` step, given per-relation agreement `hag`
-  at the def's `computed` leaves — `computedRefs`-restricted, so the assembly never
-  needs agreement at the derived key itself);
-- reach-collapse (`reachedByW3a_reach_collapse_root`: a path to the derived R-node is
-  a SINGLE reconcile edge, on `RootBoolean` defs — `inter`/`excl`-rooted, giving
-  `NoRuleOutputs`);
-- R-terminality (`NoTtuTarget`/`NoStoreSubjectR` ⇒ R-node never an edge source) and
-  reconcile-edge inertness folded to the untainted base
-  (`reachedByW3a_reach_inert_iff`);
-- **`graphRec_reduce_base`**: the operand read on the full W3a state equals the read
-  on an untainted `ReachedByRules` base σ0, for every untainted operand relation.
-- **Step A, the `hag` base reduction (`RestrictBase.lean`, 2026-07-11):** schema
-  restriction `S↾U := restrictUntainted S` (drop tainted defs) is untainted
-  (`untaintedSchema_restrict`); `restrictUntainted_lookup` (schemas agree at untainted
-  keys); **`semAux_restrict`** — `sem` over `S` and `S↾U` coincide at every untainted key
-  (the semantic heart: untaintedness is hereditary, so an untainted read never touches a
-  dropped def); and the rewrite fan-out is preserved (`schemaRewrites_restrict`,
-  `rewriteClosureAux_restrict`).
-- **Step A, the fuel bridge — CLOSED (`RestrictBase.lean`, 2026-07-11):**
-  **`rewriteClosure_restrict_mem_iff`** — `rewriteClosure S t` (fuel `|S.keys|+1`) and
-  `rewriteClosure (S↾U) t` (smaller fuel `|S↾U.keys|+1`) have identical membership. `⊇` is
-  unconditional fuel monotonicity (`rewriteClosureAux_mono` via the `stepN` layer algebra +
-  `restrictUntainted_keys_length_le`); `⊆` is saturation of the `S↾U`-closure, whose
-  `RewriteRanked (S↾U)` is built from `RewriteRanked S` by rank compression
-  (`rewriteRanked_restrict`), given the faithful side condition **`RewriteMatchDeclared`**
-  (every rewrite's match key is a declared untainted relation).
-- **Step A — CLOSED (`RestrictBase.lean`, 2026-07-11): state transfer + base `hag` equation.**
-  **`foldAdmits_of_acyclic`** — a `writeDirect` fold admits every write when each materialised
-  edge lands in an acyclic target relation containing the running edges (order-insensitive: only
-  the *set* of materialised edges matters). **`exists_admitted_restrict`** — from an admitted
-  rule-routed state over mixed `S`, build a canonical `ReachedByRulesAdmitted σ' (S↾U) T` with
-  identical edge membership (both edge sets are the materialised closures, equal by the fuel
-  bridge; admissions transfer via acyclicity of the shared target `σ0.edges` — closes the flagged
-  "different fold lists" subtlety). **`graphRec_base_eq`** (the deliverable) — on an admitted base
-  over mixed `S`, `graphRec σ0 s dt on r' = sem S T ⟨s,r',⟨dt,on⟩⟩` for untainted `r'`, via
-  `graphRec σ0 = probeNonDerived σ0 = probeNonDerived σ' = check σ' = sem (S↾U) T q' = sem S T q'`
-  (edge agreement · `graph_correct_rules` over `S↾U` · `semAux_restrict` + fuel stability). The W2
-  restriction hyps transfer to `S↾U`; `RootBoolean`-derived defs force stored relations untainted.
-  **Fragment premise `hRootB` (every derived def `RootBoolean`) supersedes the old `hDrop`.** The
-  base is `…Admitted`; Step B supplies the admitted W3a closure to feed it.
+- write model (`checkFn` = compiled check_fn as `evalE` via `graphRec` = `probeNonDerived`;
+  `reconcileKey` guarded `writeDirect` fold; closures `ReachedByW3a` / `ReachedByW3aAdmitted`);
+- `checkFn_eq_semStep` → **`checkFn_eq_sem`** (checkFn on a W3a-admitted state = `sem` of the
+  derived key), via `graphRec_reduce_base_adm` + Step A's `graphRec_base_eq` + `semAux_qirrel`
+  (`sem` is query-independent) + fuel stability;
+- **soundness** `reachedByW3aAdmitted_derived_edge_sound` (a materialised derived edge ⇒ `sem`;
+  reach-collapse `reachedByW3a_reach_collapse_root` + edge-provenance `reconcileKey_edge_guard`);
+- **completeness** `w3aComplete_derived_edge` (`sem` ⇒ edge; `W3aComplete` = admitted base + a
+  coverage-complete batch of reconcile jobs, `reconcileKey_edge_present` writes+persists);
+- assembly `graph_correct_w3a`; Step C corollaries `*_w3a`.
 
-**W3a fragment (assembled so far):** derived defs are `ComputedOnly` ∧ `RootBoolean`,
-operands untainted, `hterm` (every derived R: `NoTtuTarget S R ∧ NoStoreSubjectR T R`),
-plus the W2 fragment on the untainted part (`WF ∧ NodupKeys ∧ RewriteRanked ∧
-TtuTuplesetsDirect ∧ StoreValidRules ∧ StarFreeStore`) and the new constructor
-star-freeness (`hcands` bare, `hcStar`/`honStar` star-free).
+Step A detail (schema restriction `S↾U`, `semAux_restrict`, the fuel bridge, the state transfer,
+`graphRec_base_eq`) is in `RestrictBase.lean` and the PROOF_STATUS ledger (2026-07-11 entries).
+
+**W3a fragment hypotheses** (all faithful, carried by `graph_correct_w3a`): derived defs are
+`ComputedOnly` ∧ `RootBoolean` with untainted `computed` leaves (`hCO`/`hLU`); `hterm` (every
+derived R: `NoTtuTarget S R ∧ NoStoreSubjectR T R`); `hRootB`, `RewriteMatchDeclared`, `Stratifiable`;
+the W2 fragment on the untainted part (`WF ∧ NodupKeys ∧ RewriteRanked ∧ TtuTuplesetsDirect ∧
+StoreValidRules ∧ StarFreeStore`); the closure `W3aComplete` (admitted base + coverage-complete
+reconcile jobs); and bare-subject star-free queries.
 
 ---
 
-## The next task — finish W3a (`graph_correct_w3a`): Step B, then Step C
+## The next task — W3b (userset subjects on derived keys → `upos` residue)
 
-**Step A is CLOSED** (all of `GraphIndex/RestrictBase.lean`, 2026-07-11): the `hag` base
-correspondence is proved end-to-end as **`graphRec_base_eq`** — on an admitted rule-routed state
-over the MIXED schema `S`, the operand read equals `sem S T` for every untainted operand. See the
-"State of the world" bullets above for the shape (schema restriction · `semAux_restrict` · fuel
-bridge · state transfer · the composed equation). The reusable Step A fact requires an **admitted**
-base (`ReachedByRulesAdmitted`), which is exactly what Step B's admitted W3a closure will supply.
+**W3a is CLOSED.** Start W3b: the first residue **content** — userset subjects on a derived key. This
+is exactly the scope gap the W3a attack-first found: `sem ⟨us, R, o⟩` can be true for a userset `us`
+(e.g. a userset granted `member` under `viewer := member but not banned`), but the residue-empty read
+returns `false`. W3b makes the read's `upos` branch (`probeDerived`, `State.lean:562-565`) go live so
+usersets are answered.
 
-**Immediately usable in Step B:** `graphRec_base_eq` (base `hag`), `graphRec_reduce_base`
-(`ReconcileCorrect.lean` — reduces the full W3a state's operand read to the base read; NB it
-currently yields a `ReachedByRules` base, so its `hag` half still needs the admitted upgrade — the
-cleanest path is to re-cut `graphRec_reduce_base` to hand back a `ReachedByRulesAdmitted` base, or
-prove the reduction preserves admission). Both consume the `hRootB` fragment premise (every derived
-def `RootBoolean`) and `RewriteMatchDeclared`.
+1. **Attack-first the read + write semantics FIRST** (house rule 2). `#eval` the Python/`sem`
+   behaviour of userset subjects on derived keys against the graph's `probeDerived` `upos` path;
+   read `wildcard.py:398-432`, `_store_residue` (userset branch), boolean spec §7.6, and I6
+   hygiene (`uposEdgeFree` / `uposNegDisjoint` in `Inv`). Record any false statement killed.
+2. **Model `_store_residue` for usersets.** The processor stores a `upos` entry `⟨t,n,p⟩` at the
+   derived key when a userset is a member (edge-free — the P4 rule). The W3a closure currently keeps
+   `ResidueEmpty`; W3b relaxes that to a residue carrying `upos` (still `stars = neg = ∅`), so
+   `reachedByW3a*_inv`'s residue-free conjunct and `check_derived_ResidueEmpty` must be generalised
+   to a `upos`-only residue (new read-collapse lemma reading the `upos` branch).
+3. **Correspondence.** `checkFn` already evaluates the boolean for ANY subject (not just bare); the
+   new work is that a userset's membership lands in `upos` (not an edge) and the read consults `upos`.
+   Reuse `checkFn_eq_sem` (it is subject-generic — the `graphRec_base_eq` operand read holds for any
+   `s`, so only the bare-vs-userset MATERIALISATION differs). Widen `W3aComplete`'s coverage +
+   `w3aComplete_derived_edge` analog to `upos` membership.
 
-### Step B — candidate completeness + assembly `graph_correct_w3a` (~1 session)
-
-1. **Edge provenance with the guard:** strengthen the reconcile edge story — every
-   derived R-node in-edge `subjNode c → objNode ⟨dt,on⟩ R` was written by some fold
-   step whose mid-state `checkFn` was TRUE for `c` (new lemma peeling `reconcileKey`;
-   note a mid-fold state IS a `ReachedByW3a` state — a pass with a prefix of `cands`).
-2. **Admitted closure `ReachedByW3aAdmitted`** (analog of `ReachedByRulesAdmitted`):
-   models the processor's candidate enumeration `_leaf_concretes` — for every derived
-   key and every bare subject `s` with `sem S T ⟨s,R,o⟩ = true`, some reconcile pass
-   enumerated `s` in `cands` (then `checkFn` = `sem` = true ⇒ its edge is present;
-   edges persist by `reconcileKey_edges_mono`).
-3. **Assembly, derived query:** route → `probeDerived` → `check_derived_ResidueEmpty`
-   (residue provably empty) → edge probe → forward: reach ⇒ single edge
-   (`reachedByW3a_reach_collapse_root`) ⇒ provenance (1) ⇒ `checkFn` at that sub-state
-   ⇒ `checkFn_eq_semStep` + `hag` (Step A via `graphRec_reduce_base`, whose `computedRefs`
-   restriction needs the fragment fact "every computed leaf of a derived def is
-   untainted") ⇒ `sem`. Backward: `sem` ⇒ admitted enumeration (2) ⇒ `checkFn` true ⇒
-   edge ⇒ reach. **Untainted query:** reduce to the base read (`graphRec_reduce_base`
-   at query endpoints) + Step A's base fact.
-4. Fuel bookkeeping: everything through `sem_fuel_stable` (mixed schema IS
-   stratifiable — check/prove `stratifiable` for the W3a fragment; cf.
-   `stratifiable_untainted`).
-
-### Step C — widen T3/T6 (~1 hour)
-
-`backend_equivalence_w3a` / `exclusion_effective_w3a` / `no_ghost_grant_w3a` in
-`Equiv.lean`, mirroring the `_rules` versions (T1 ∘ `graph_correct_w3a`). T6a gets its
-first REAL exclusion content (a derived `but not` actually excluding). Add audit
-entries; update docs; this closes W3a — tick it in ROADMAP.
+**Immediately reusable from W3a** (`ReconcileComplete.lean`): `checkFn_eq_sem` (subject-generic),
+`graphRec_base_eq` / `graphRec_reduce_base_adm`, `reconcileKey_edge_guard` /
+`reconcileKey_edge_present` (adapt to `upos` writes), the `W3aJob`/`reconcileJobs`/`W3aComplete`
+scaffolding, `semAux_qirrel`, `isDerived_declared`.
 
 ---
 
-## After W3a (the remaining road)
-
-- **W3b — userset subjects on derived keys (`upos`).** First residue CONTENT: the
-  read's `upos` branch goes live. Model `_store_residue` for usersets; I6 hygiene.
-  Attack-first the read semantics (wildcard.py:398-432, boolean spec §7.6).
+## After W3b (the remaining road)
 - **W3c — star data on derived keys (`stars`/`neg`).** The `stars ∖ neg` fallback
   branch + `negEdgeFree` disjointness (I6) becomes contentful. The T1 `MemberSet`
   algebra is the reference for residue semantics.

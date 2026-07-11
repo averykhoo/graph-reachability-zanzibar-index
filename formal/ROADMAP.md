@@ -332,7 +332,17 @@ and re-proves/widens the same named theorems. Every stage must keep
   cascade (cross-key re-reconcile hazard + contentful T5 drain). W3a is the
   "zero residue content" analog of W1a's "zero bridges".
 
-  **W3a STARTED (2026-07-10): attack-first + read collapse + write model DONE.**
+  **W3a ✅ CLOSED (2026-07-11): `graph_correct_w3a` + T3/T6 (`*_w3a`).** `check = sem`
+  on every BARE-subject star-free query over a `W3aComplete` state (one `RootBoolean`
+  derived key per untainted operand cone) — untainted via the base reduction, derived
+  via the residue-empty edge probe glued by soundness (`reachedByW3aAdmitted_derived_
+  edge_sound`) + completeness (`w3aComplete_derived_edge`). `GraphIndex/ReconcileComplete
+  .lean`; Step C corollaries in `Equiv.lean`. **Scope finding (attack-first):** a userset
+  subject on a derived key can be `sem`-true while the residue-empty read is `false`, so
+  the derived-query claim is bare-subject only — usersets are W3b's `upos`. Detail:
+  PROOF_STATUS 2026-07-11 (Step B+C) + HANDOFF.
+
+  **W3a history (2026-07-10): attack-first + read collapse + write model DONE.**
   - **Attack-first (machine-checked `#eval` vs `sem`, deleted): the W3a
     residue-read ↔ `sem` correspondence HOLDS — no refutation.** Key modeling fact:
     on the star-free bare-subject fragment the processor stores **no residue row**
