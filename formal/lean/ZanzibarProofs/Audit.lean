@@ -518,4 +518,22 @@ namespace Zanzibar
 #print axioms reconcileKey_edge_guard
 #print axioms reachedByW3aAdmitted_derived_edge_sound
 
+-- **Candidate completeness + the W3a assembly (2026-07-11) — Step B closed.** `w3aComplete_derived_
+-- edge`: on a coverage-complete W3a state a `sem`-true bare subject's derived edge is materialised
+-- (the covering job enumerates it; guard = sem via `checkFn_eq_sem`; admitted terminal write;
+-- persists — `reconcileKey_edge_present` + `reconcileJobs_edges_mono`). `graph_correct_w3a`: on a
+-- W3a-complete state `check = sem` for every BARE-subject star-free query — untainted via the base
+-- reduction, derived via the residue-empty edge probe glued by soundness/completeness. Scope is
+-- bare-subject (attack-first: a userset on a derived key can be sem-true while the residue-empty
+-- read is false — W3b's `upos`). Standard axioms only:
+#print axioms w3aComplete_derived_edge
+#print axioms graph_correct_w3a
+
+-- **T3/T6 at W3a scope (2026-07-11) — Step C.** The backend-equivalence / deny-propagation /
+-- no-ghost-grant corollaries at the star-free bare-subject derived-boolean fragment (T1 ∘
+-- `graph_correct_w3a`); T6a carries the first real exclusion content. Standard axioms only:
+#print axioms backend_equivalence_w3a
+#print axioms exclusion_effective_w3a
+#print axioms no_ghost_grant_w3a
+
 end Zanzibar

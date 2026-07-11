@@ -393,4 +393,320 @@ theorem reachedByW3aAdmitted_derived_edge_sound {S : Schema} {T : Store} {σ : G
       rw [hchk] at hsem
       exact hsem.symm
 
+/-! ## Candidate completeness — a `sem`-true bare subject is materialised
+
+The backward half: on a suitably-covered W3a-admitted state, `sem S T ⟨s,R,⟨dt,on⟩⟩ = true` (bare
+star-free `s`) implies the derived edge is present. The reconcile pass covering `(dt,on,R)`
+enumerates `s`; its guard (`checkFn` at every prefix mid-state) is `sem = true` (`checkFn_eq_sem`),
+so the edge is admitted (the `RootBoolean` R-node is terminal, so no cycle rejects it) and persists.
+
+Coverage is modelled by an explicit list of reconcile *jobs* over an admitted base — faithful to
+`reconcile`/`_leaf_concretes` (`processor.py:382-423,497-507`): the processor enumerates, per
+derived key/object, all concrete candidate subjects. The completeness hypothesis is that this
+enumeration is *complete* (covers every `sem`-member) — a property of the construction, not the
+edge conclusion. -/
+
+/-- A node with no out-edge reaches nothing (`NReaches` is head-oriented). -/
+theorem nreaches_no_source {edges : List (NodeKey × NodeKey)} {b a : NodeKey}
+    (hb : ∀ y, (b, y) ∉ edges) : ¬ NReaches edges b a := by
+  intro h; cases h with
+  | edge hbv => exact hb _ hbv
+  | head hbw _ => exact hb _ hbw
+
+/-- **A `sem`-true candidate's edge is materialised by the reconcile pass.** If `s ∈ cands`, the
+    derived R-node is terminal in the base `σ` (`hRns` — maintained across the fold), and the guard
+    `checkFn` holds for `s` at every prefix mid-state (`hguard` — discharged via `checkFn_eq_sem`
+    since `sem = true`), then the reconcile pass materialises `subjNode s → objNode ⟨dt,on⟩ R`. The
+    write is admitted: the endpoints differ (`s` bare, `R ≠ BARE`) and the R-node has no in-path
+    (terminal), so no cycle rejects it; the edge then persists to the end of the pass. -/
+theorem reconcileKey_edge_present {T : Store} {dt on R : String} {e : Expr} (hRne : R ≠ BARE)
+    {s : SubjectRef} :
+    ∀ (cands : List SubjectRef) (σ : GraphState), (∀ c ∈ cands, c.predicate = BARE) →
+      s ∈ cands → (∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) →
+      (∀ pre, pre <+: cands → (σ.reconcileKey T dt on R e pre).checkFn T s dt on R e = true) →
+      (subjNode s, objNode ⟨dt, on⟩ R) ∈ (σ.reconcileKey T dt on R e cands).edges := by
+  -- a bare-sourced write onto the R-node is never a self-loop (BARE ≠ R)
+  have hsrcne : ∀ c : SubjectRef, c.predicate = BARE → subjNode c ≠ objNode ⟨dt, on⟩ R := by
+    intro c hcb heq
+    have := congrArg NodeKey.pred heq
+    rw [subjNode_pred, objNode_pred, hcb] at this
+    exact hRne this.symm
+  intro cands
+  induction cands with
+  | nil => intro σ _ hmem _ _; exact absurd hmem List.not_mem_nil
+  | cons s0 rest ih =>
+    intro σ hcb hmem hRns hguard
+    have hs0b : s0.predicate = BARE := hcb s0 List.mem_cons_self
+    have hfold : σ.reconcileKey T dt on R e (s0 :: rest)
+        = (if σ.checkFn T s0 dt on R e then σ.writeDirect ⟨s0, R, ⟨dt, on⟩⟩ else σ).reconcileKey
+            T dt on R e rest := by
+      unfold GraphState.reconcileKey; rw [List.foldl_cons]
+    -- the head write admits when its guard fires (R-node terminal ⇒ no back-path; distinct preds)
+    have hadmit : σ.admitEdge (subjNode s0) (objNode ⟨dt, on⟩ R) = true := by
+      unfold GraphState.admitEdge
+      have hnr : σ.reach (objNode ⟨dt, on⟩ R) (subjNode s0) = false := by
+        by_contra hc
+        rw [Bool.not_eq_false] at hc
+        exact nreaches_no_source hRns (reach_sound hc)
+      rw [Bool.and_eq_true, bne_iff_ne]; exact ⟨hsrcne s0 hs0b, by rw [hnr]; rfl⟩
+    rcases List.mem_cons.mp hmem with rfl | hmemrest
+    · -- s = s0: its guard fires at the empty prefix, so the write materialises the edge
+      have hg0 : σ.checkFn T s dt on R e = true := hguard [] List.nil_prefix
+      rw [hfold, if_pos hg0]
+      refine reconcileKey_edges_mono _ dt on R e rest _ ?_
+      rw [writeDirect_edges, if_pos hadmit]
+      exact List.mem_cons_self
+    · -- s ∈ rest: recurse from the head-step state (R-node still terminal, guard transfers)
+      rw [hfold]
+      set σ1 := if σ.checkFn T s0 dt on R e then σ.writeDirect ⟨s0, R, ⟨dt, on⟩⟩ else σ with hσ1
+      have hRns1 : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ1.edges := by
+        intro y hy
+        by_cases hg : σ.checkFn T s0 dt on R e = true
+        · rw [hσ1, if_pos hg, writeDirect_edges, if_pos hadmit] at hy
+          rcases List.mem_cons.mp hy with heq | hmem0
+          · exact hsrcne s0 hs0b (congrArg Prod.fst heq).symm
+          · exact hRns y hmem0
+        · rw [hσ1, if_neg hg] at hy; exact hRns y hy
+      have hguard1 : ∀ pre, pre <+: rest →
+          (σ1.reconcileKey T dt on R e pre).checkFn T s dt on R e = true := by
+        intro pre hpre
+        have : σ1.reconcileKey T dt on R e pre = σ.reconcileKey T dt on R e (s0 :: pre) := by
+          unfold GraphState.reconcileKey; rw [List.foldl_cons]
+        rw [this]
+        obtain ⟨tl, htl⟩ := hpre
+        exact hguard (s0 :: pre) ⟨tl, by rw [List.cons_append, htl]⟩
+      exact ih σ1 (fun c hc => hcb c (List.mem_cons_of_mem _ hc)) hmemrest hRns1 hguard1
+
+/-! ## The W3a-complete state — an admitted base plus a coverage-complete batch of reconcile jobs
+
+A W3a-complete state is an admitted rule-routed base with a batch of reconcile jobs (one per derived
+key/object), whose candidate enumeration is *complete*: every `sem`-true bare subject for a derived
+key is enumerated. Faithful to `build_index`/`reconcile` (`processor.py`): the processor reconciles
+every derived key over every object, enumerating all concrete candidates (`_leaf_concretes`). The
+completeness clause is a property of the *enumeration* (which subjects were fed to `reconcile`), not
+of the edge conclusion. -/
+
+/-- A reconcile job: reconcile derived key `(dt, R)` at object name `on` (def `e`) over `cands`. -/
+structure W3aJob where
+  dt : String
+  on : String
+  R : String
+  e : Expr
+  cands : List SubjectRef
+deriving Repr
+
+/-- Apply one reconcile job. -/
+def W3aJob.apply (T : Store) (σ : GraphState) (j : W3aJob) : GraphState :=
+  σ.reconcileKey T j.dt j.on j.R j.e j.cands
+
+/-- Run a batch of reconcile jobs left-to-right over a base state. -/
+def reconcileJobs (T : Store) (σ0 : GraphState) (jobs : List W3aJob) : GraphState :=
+  jobs.foldl (W3aJob.apply T) σ0
+
+/-- A job is valid on `S` iff it targets a declared *derived* key with its compiled def, over
+    star-free bare candidates at a star-free object — exactly a `ReachedByW3aAdmitted.reconcile`
+    leg's side conditions. -/
+def W3aJobValid (S : Schema) (j : W3aJob) : Prop :=
+  j.R ≠ BARE ∧ (∀ c ∈ j.cands, c.predicate = BARE) ∧ isDerived S (j.dt, j.R) = true ∧
+    S.lookup (j.dt, j.R) = some j.e ∧ (∀ c ∈ j.cands, c.name ≠ STAR) ∧ j.on ≠ STAR
+
+/-- Running valid jobs over any W3a-admitted state keeps it W3a-admitted (each job is a reconcile
+    leg). Base generalised so the fold recurses. -/
+theorem reconcileJobs_pres {S : Schema} {T : Store} :
+    ∀ (jobs : List W3aJob) (σ : GraphState), ReachedByW3aAdmitted σ S T →
+      (∀ j ∈ jobs, W3aJobValid S j) → ReachedByW3aAdmitted (reconcileJobs T σ jobs) S T := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ h _; exact h
+  | cons j js ih =>
+    intro σ h hv
+    obtain ⟨hRne, hcb, hder, hlke, hcStar, hon⟩ := hv j List.mem_cons_self
+    have hstep : ReachedByW3aAdmitted (j.apply T σ) S T :=
+      ReachedByW3aAdmitted.reconcile j.dt j.on j.R j.e j.cands hRne hcb hder hlke hcStar hon h
+    have : reconcileJobs T σ (j :: js) = reconcileJobs T (j.apply T σ) js := by
+      unfold reconcileJobs; rw [List.foldl_cons]
+    rw [this]
+    exact ih (j.apply T σ) hstep (fun j' hj' => hv j' (List.mem_cons_of_mem _ hj'))
+
+/-- Jobs only add edges: base edges survive the whole batch. -/
+theorem reconcileJobs_edges_mono {T : Store} :
+    ∀ (jobs : List W3aJob) (σ : GraphState) (ab : NodeKey × NodeKey),
+      ab ∈ σ.edges → ab ∈ (reconcileJobs T σ jobs).edges := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ ab h; exact h
+  | cons j js ih =>
+    intro σ ab h
+    have : reconcileJobs T σ (j :: js) = reconcileJobs T (j.apply T σ) js := by
+      unfold reconcileJobs; rw [List.foldl_cons]
+    rw [this]
+    exact ih (j.apply T σ) ab (reconcileKey_edges_mono T j.dt j.on j.R j.e j.cands ab h)
+
+/-- **`W3aComplete S T σ`** — `σ` is an admitted rule-routed base with a coverage-complete batch of
+    reconcile jobs. The base + jobs supply the `ReachedByW3aAdmitted` structure (soundness); the
+    coverage clause (every `sem`-true bare subject for a derived key/object is enumerated in some
+    job) supplies backward completeness. -/
+def W3aComplete (S : Schema) (T : Store) (σ : GraphState) : Prop :=
+  ∃ (σ0 : GraphState) (jobs : List W3aJob),
+    ReachedByRulesAdmitted σ0 S T ∧ σ = reconcileJobs T σ0 jobs ∧
+    (∀ j ∈ jobs, W3aJobValid S j) ∧
+    (∀ dt on R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ s : SubjectRef, s.predicate = BARE → s.name ≠ STAR → on ≠ STAR →
+        sem S T ⟨s, R, ⟨dt, on⟩⟩ = true →
+        ∃ j ∈ jobs, j.dt = dt ∧ j.on = on ∧ j.R = R ∧ s ∈ j.cands)
+
+/-- A W3a-complete state is W3a-admitted. -/
+theorem w3aComplete_reached {S : Schema} {T : Store} {σ : GraphState}
+    (h : W3aComplete S T σ) : ReachedByW3aAdmitted σ S T := by
+  obtain ⟨σ0, jobs, h0, hσ, hv, _⟩ := h
+  rw [hσ]; exact reconcileJobs_pres jobs σ0 (ReachedByW3aAdmitted.base h0) hv
+
+/-- **Candidate completeness (the backward half).** On a W3a-complete state, a `sem`-true bare
+    star-free subject `s` at a derived key `(dt,R)` (`on ≠ STAR`) has its derived edge materialised:
+    the covering job enumerates `s`; its guard is `sem = true` at every prefix mid-state
+    (`checkFn_eq_sem`); the write is admitted (terminal `RootBoolean` R-node) and persists through
+    the remaining jobs. -/
+theorem w3aComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : W3aComplete S T σ)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hsb : s.predicate = BARE) (hs : s.name ≠ STAR) (hon : on ≠ STAR)
+    (hsem : sem S T ⟨s, R, ⟨dt, on⟩⟩ = true) :
+    (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges := by
+  obtain ⟨σ0, jobs, h0, hσ, hv, hcov⟩ := h
+  obtain ⟨j, hj, hjdt, hjon, hjR, hjs⟩ := hcov dt on R e hlk hder s hsb hs hon hsem
+  obtain ⟨hjRne, hjcb, hjder, hjlke, hjcStar, hjon'⟩ := hv j hj
+  -- align the query key/def with the covering job's
+  subst hjdt; subst hjon; subst hjR
+  have hje : e = j.e := Option.some.inj (hlk.symm.trans hjlke)
+  subst hje
+  -- split the jobs at the covering job
+  obtain ⟨pre, post, hsplit⟩ := List.append_of_mem hj
+  have hσpre : ReachedByW3aAdmitted (reconcileJobs T σ0 pre) S T := by
+    refine reconcileJobs_pres pre σ0 (ReachedByW3aAdmitted.base h0) ?_
+    intro j' hj'; exact hv j' (hsplit ▸ List.mem_append_left _ hj')
+  set σpre := reconcileJobs T σ0 pre with hσpre_def
+  -- R-node terminal in σpre
+  obtain ⟨hnt, hns⟩ := hterm j.dt j.R hder
+  have hRns : ∀ y, (objNode ⟨j.dt, j.on⟩ j.R, y) ∉ σpre.edges :=
+    reachedByW3a_Rnode_not_source hnt hns hjRne
+      (reachedByW3aAdmitted_toW3a hσpre) (objNode_pred ⟨j.dt, j.on⟩ j.R)
+  -- guard: checkFn = sem = true at every prefix mid-state
+  have hguard : ∀ pre', pre' <+: j.cands →
+      (σpre.reconcileKey T j.dt j.on j.R j.e pre').checkFn T s j.dt j.on j.R j.e = true := by
+    intro pre' hpre'
+    have hcbpre : ∀ c ∈ pre', c.predicate = BARE := fun c hc => hjcb c (hpre'.subset hc)
+    have hcSpre : ∀ c ∈ pre', c.name ≠ STAR := fun c hc => hjcStar c (hpre'.subset hc)
+    have hmid : ReachedByW3aAdmitted (σpre.reconcileKey T j.dt j.on j.R j.e pre') S T :=
+      ReachedByW3aAdmitted.reconcile j.dt j.on j.R j.e pre' hjRne hcbpre hder hlk hcSpre hon hσpre
+    have := checkFn_eq_sem hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hmid
+      hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) hs hon
+    rw [this, hsem]
+  -- the covering job materialises the edge; it persists through `post`
+  have hedge_j : (subjNode s, objNode ⟨j.dt, j.on⟩ j.R) ∈ (j.apply T σpre).edges := by
+    show (subjNode s, objNode ⟨j.dt, j.on⟩ j.R) ∈
+      (σpre.reconcileKey T j.dt j.on j.R j.e j.cands).edges
+    exact reconcileKey_edge_present hjRne j.cands σpre hjcb hjs hRns hguard
+  -- reassemble: σ = reconcileJobs (j.apply σpre) post
+  have hσeq : σ = reconcileJobs T (j.apply T σpre) post := by
+    rw [hσ, hsplit, hσpre_def]
+    unfold reconcileJobs
+    rw [List.foldl_append, List.foldl_cons]
+  rw [hσeq]
+  exact reconcileJobs_edges_mono post (j.apply T σpre) _ hedge_j
+
+/-! ## The W3a assembly — `check = sem` on bare-subject star-free queries
+
+Combining soundness and completeness with the read collapse. Scope: **bare-subject** star-free
+queries — the derived read on a residue-empty state is the bare edge probe, so it can only decide
+bare subjects (an attack-first `#eval` confirmed a userset subject on a derived key can be
+`sem`-true while the residue-empty read is `false`; userset subjects are W3b's `upos` residue). -/
+
+/-- A derived key is declared, so it has a compiled def. -/
+theorem isDerived_declared {S : Schema} {k : String × String} (h : isDerived S k = true) :
+    ∃ e, S.lookup k = some e := by
+  have hmem : k ∈ taintedKeys S := by
+    unfold isDerived at h; rw [List.contains_eq_mem] at h; exact of_decide_eq_true h
+  exact lookup_some_of_mem S (taintChain_subset_keys S S.keys.length k hmem)
+
+/-- **T2b, W3a fragment (`graph_correct_w3a`) — `check = sem` on bare-subject star-free queries.**
+    On a W3a-complete state over the mixed (one `RootBoolean` derived key per untainted operand cone)
+    fragment, the graph read equals the specification for every bare-subject star-free query.
+
+    * **Untainted query:** the read routes to `probeNonDerived`, which reduces to the admitted base
+      (`graphRec_reduce_base_adm`) whose read is `sem` (`graphRec_base_eq`).
+    * **Derived query:** the residue-empty read collapses to the bare edge probe
+      (`check_derived_ResidueEmpty`); `reach ↔ sem` glues via soundness (reach ⇒ single reconcile
+      edge ⇒ `sem`, `reachedByW3aAdmitted_derived_edge_sound`) and completeness (`sem` ⇒ the covering
+      job's edge ⇒ reach, `w3aComplete_derived_edge`). -/
+theorem graph_correct_w3a {S : Schema} {T : Store} {σ : GraphState} (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : W3aComplete S T σ)
+    (hqbare : q.subject.predicate = BARE) (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem S T q := by
+  have hadm := w3aComplete_reached h
+  have hInv := (reachedByW3a_inv (reachedByW3aAdmitted_toW3a hadm)).1
+  have hcl := hInv.edgesClosed
+  by_cases hder : isDerived S (q.object.type, q.relation) = true
+  · -- derived query: residue-empty edge probe, glued by soundness/completeness
+    have hre : ResidueEmpty σ := reachedByW3a_residueEmpty (reachedByW3aAdmitted_toW3a hadm)
+    have hderσ : isDerived σ.schema (q.object.type, q.relation) = true := by rw [hInv.schemaEq]; exact hder
+    rw [GraphModel.check_derived_ResidueEmpty hre q hderσ]
+    have e1 : (q.object.name != STAR) = true := by rw [bne_iff_ne]; exact hqo
+    have e2 : (q.subject.name != STAR) = true := by rw [bne_iff_ne]; exact hqs
+    have e3 : (q.subject.predicate == BARE) = true := by rw [beq_iff_eq]; exact hqbare
+    rw [e1, e2, e3, Bool.true_and, Bool.true_and, Bool.true_and]
+    obtain ⟨e, hlk⟩ := isDerived_declared hder
+    have hroot : RootBoolean e := hRootB ⟨(q.object.type, q.relation), e⟩ (mem_defs_of_lookup hlk) hder
+    -- `reach ↔ sem`
+    have hfwd : σ.reach (subjNode q.subject) (objNode q.object q.relation) = true →
+        sem S T q = true := by
+      intro hr
+      have hN := reach_sound hr
+      have hedge := reachedByW3a_reach_collapse_root hWF hSV hNK hlk hroot
+        (reachedByW3aAdmitted_toW3a hadm) hN
+      exact reachedByW3aAdmitted_derived_edge_sound hWF hTT hNK hR hSV hSF hRootB hMatch hStrat
+        hterm hCO hLU hadm hlk hder hqs hqo hedge
+    have hbwd : sem S T q = true →
+        σ.reach (subjNode q.subject) (objNode q.object q.relation) = true := by
+      intro hsemq
+      have hedge := w3aComplete_derived_edge hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU
+        h hlk hder hqbare hqs hqo hsemq
+      exact reach_complete hcl (NReaches.edge hedge)
+    cases hr : σ.reach (subjNode q.subject) (objNode q.object q.relation) <;>
+      cases hsm : sem S T q <;> simp_all
+  · -- untainted query: reduce the non-derived probe to the admitted base
+    have hd : isDerived S (q.object.type, q.relation) = false := by
+      simpa using hder
+    have hroute : GraphModel.check σ q = GraphModel.probeNonDerived σ q := by
+      unfold GraphModel.check; rw [hInv.schemaEq, hd]; simp
+    rw [hroute]
+    obtain ⟨σ0, hσ0adm, hredx⟩ :=
+      graphRec_reduce_base_adm hSF hterm hadm (s := q.subject)
+        (dt := q.object.type) (on := q.object.name)
+    have h2 := hredx q.relation hd
+    have h3 := graphRec_base_eq hWF hTT hNK hR hSV hSF hRootB hMatch hσ0adm hqs hqo q.relation hd
+    -- graphRec σ q.subject … q.relation = probeNonDerived σ q  (definitional, via ObjectRef eta)
+    show GraphModel.probeNonDerived σ q = sem S T q
+    calc GraphModel.probeNonDerived σ q
+        = GraphModel.graphRec σ q.subject q.object.type q.object.name q.relation := rfl
+      _ = GraphModel.graphRec σ0 q.subject q.object.type q.object.name q.relation := h2
+      _ = sem S T ⟨q.subject, q.relation, ⟨q.object.type, q.object.name⟩⟩ := h3
+      _ = sem S T q := rfl
+
 end Zanzibar
