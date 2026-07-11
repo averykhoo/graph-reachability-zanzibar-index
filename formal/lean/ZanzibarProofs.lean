@@ -52,6 +52,7 @@ import ZanzibarProofs.GraphIndex.CascadeSettle
 import ZanzibarProofs.GraphIndex.CascadeInv
 import ZanzibarProofs.GraphIndex.CascadeEnum
 import ZanzibarProofs.GraphIndex.CascadeStrata
+import ZanzibarProofs.GraphIndex.CascadeStrataSettle
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6

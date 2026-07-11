@@ -30,6 +30,7 @@ import ZanzibarProofs.GraphIndex.CascadeStable
 import ZanzibarProofs.GraphIndex.CascadeInv
 import ZanzibarProofs.GraphIndex.CascadeEnum
 import ZanzibarProofs.GraphIndex.CascadeStrata
+import ZanzibarProofs.GraphIndex.CascadeStrataSettle
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -976,5 +977,35 @@ namespace Zanzibar
 #print axioms probeDerived_reconcileStarsKeyDR_other
 #print axioms check_reconcileStarsKeyDR_other
 #print axioms checkFnR_reconcileStarsKeyDR_other
+
+-- **W3d-2 stratum-staged shadow + the routed read bridge
+-- (GraphIndex/CascadeStrataSettle.lean, 2026-07-12e).** The two-round chain's
+-- structural facts (endpoint closure, non-BARE/plain edge targets, bare R-node
+-- in-edge sources, the reach collapse at `RootBoolean` R-nodes) and the
+-- untainted-core shadow at EVERY `ReachedByW3d2` state (`reachedByW3d2_shadow`,
+-- transported through routed logged batches -- `untaintedShadow_reconcileJobsLR`
+-- gives it at every MID-ROUND prefix state too). On top:
+-- `probeDerived_eq_sem_settled` (the settled-key derived read, factored out of
+-- `graph_correct_w3d`'s derived branch as a pure per-key lemma) and
+-- **`checkFnR_eq_sem_settled`** -- the stratum-staged read bridge: the ROUTED
+-- compiled guard of a derived def equals `sem` at any shadowed state whose derived
+-- operand keys (same object) are `SettledKey ∧ CompleteKey` and reach-collapsed;
+-- untainted leaves read through the shadow (W2), derived leaves read
+-- `probeDerived` at the settled operand key, `evalE` computes one `sem` step,
+-- fuel stability closes. Attack-first (2026-07-12e `#eval`, scratch deleted): the
+-- W3d-1-shaped invariant "dirty ∨ settled" is REFUTED at W3d-2 post-write states
+-- (on `c := x ∖ y, b := c ∨ z`, `write y` dirties only `(doc, c, 1)` while `b` is
+-- stale -- a write row can never reach the stratum-1 R-node, whose in-edge sources
+-- are bare and in-edge-free), so the W3d-2 settledness invariant must carry the
+-- third disjunct "some derived operand key dirty"; the bridge SURVIVED
+-- (post-round-1: `checkFnR = sem` while the stored representation is still stale;
+-- pre-round-1 the settledness hypothesis is load-bearing, `checkFnR ≠ sem`).
+-- Standard axioms only:
+#print axioms reachedByW3d2_edgesClosed
+#print axioms reachedByW3d2_edge_target_ne_bare
+#print axioms reachedByW3d2_reach_collapse_root
+#print axioms reachedByW3d2_shadow
+#print axioms probeDerived_eq_sem_settled
+#print axioms checkFnR_eq_sem_settled
 
 end Zanzibar
