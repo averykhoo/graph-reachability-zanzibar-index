@@ -8,6 +8,86 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11f (W3d-1b attack — add-only pass REFUTED; the DIFFING edge audit; per-key edge exactness)
+
+Resuming from HANDOFF "W3d-1b: fan-out completeness — attack-first". Two green+pushed
+increments; `verify.sh` green throughout (0 sorries, standard axioms, 60 conformance).
+
+**THE FINDING (machine-checked `#eval` vs the real `check`/`sem`; scratch deleted;
+recorded in the `ReconcileDiff.lean` header + ROADMAP decision 7).** The naive W3d-1b
+read statement — `check = sem` at every cascaded `ReachedByW3d` state — is **FALSE over
+the add-only pass model** (`reconcileStarsKey`/`reconcileKeyC`). Corpus `viewer :=
+member ∖ banned`, bare `user` restrictions, NO star grants: `write member(alice) →
+cascade` materialises the derived edge (alice is `sem`-true and UNCOVERED); `write
+banned(alice) → cascade` re-maps the viewer key (fan-out worked!), the second pass's
+residue recompute runs — but an add-only fold cannot RETRACT the edge whose guard
+flipped down, so at a fully-drained state `check = true ≠ sem = false`. Python retracts
+it: `reconcile_subject` diffs desired vs materialized and calls `_write_derived(...,
+add=False)` on `¬want_edge ∧ has_edge` (`processor.py:359-367`). W3a–W3c were immune
+because their chains hold the store FIXED — `checkFn = sem` at every pass start makes a
+once-true guard permanently true, so Python's removal branch is dead there; W3d's store
+GROWS between cascades and an `excl` operand ADD flips derived guards down. The W3d-1a
+attack corpus missed this because its banned subject was star-COVERED (answered by
+`stars ∖ neg`, no edge to go stale).
+
+**Increment 1 — the diffing edge audit (`GraphIndex/ReconcileDiff.lean`, new; Cascade
+re-greened over it).**
+- `removeEdgePair` (filter ALL copies of the pair — the refcount reaching zero; node GC
+  modeled away, read-safe, noted in the header) + structural simps.
+- `reconcileKeyD` (per candidate: `want = checkFn ∧ ¬covered` ⇒ `writeDirect`, else
+  `removeEdgePair`) and the atomic `reconcileStarsKeyD` (residue recompute THEN diffing
+  audit). W3c keeps the add-only pass (faithful there — removal branch dead).
+- `nreaches_remove_terminal`: an in-edge of a never-source node is only ever a path's
+  LAST hop, so removing it breaks no path to any other target — the removal-side
+  counterpart of `nreaches_cons_inert`. Gives reach inertness in BOTH directions off
+  the pass's terminal R-node (`reconcileKeyD_reach_inert` / `_pres` — NB `_pres`
+  genuinely needs `v ≠ R-node` now: retracting reach INTO the R-node is the point).
+- Edge soundness (`reconcileKeyD_edge_sound` — the converse "old edges survive" is
+  deliberately false now), R-node terminality preservation, outbox/watermark/residue
+  untouched, nodes monotone.
+- **Cascade.lean re-greened**: `W3cJob.applyD`/`reconcileJobsD`, `applyLogged` now
+  diffs, the `EvalEq` spine retargeted (`reconcileJobsL_evalEq` → `reconcileJobsD`),
+  outbox soundness / `reachedByW3d_edge_source_ne_R` / `reconcileJobsL_Rnode_not_source`
+  / **T5 re-earned** (`runCascade_no_abort`, `cascade_drains`) over the diffing pass.
+- Post-fix `#eval` (scratch deleted): the attack scenario now reads `check = sem` at
+  every cascaded state; idempotent empty cascade; NO over-removal (bob's edge written in
+  the same pass that keeps alice's retracted); the star-covered variant still answers
+  wholesale from `stars ∖ neg` with zero edges; star query correct.
+
+**Increment 2 — per-key edge EXACTNESS (the settledness core, in `ReconcileDiff.lean`).**
+- `graphRec_reconcileKeyD_inert`: the diffing fold is operand-read-inert for EVERY
+  subject at untainted keys (both probe targets differ from the R-node; endpoint
+  closure at the fold result DERIVED via `edgesClosed_reconcileKeyD`, not hypothesised).
+- `wantEdge` (the `processor.py:359` guard) + `wantEdge_reconcileKeyD_inert`: the guard
+  is FOLD-INVARIANT — each candidate's `want` is decided once, at pass start.
+- **`reconcileKeyD_edge_char`** (induction with the mid-fold state as the
+  singleton-prefix fold; `subjNode_inj_total` separates per-subject histories): after
+  the fold, subject `s`'s derived pair is present **iff** `s ∈ cands ∧ g s` or
+  `s ∉ cands ∧` it was already present — candidate history is ERASED.
+- **`reconcileStarsKeyD_edge_char`** (pass-level): guard at the ORIGINAL state —
+  `checkFn` ∧ shape ∉ the freshly-recomputed `stars` row. One full-object pass makes
+  the key's edge set exactly right for its enumeration; the wholesale re-settle as a
+  theorem. Plus `writeDirect_pair_present` (a wanted uncovered candidate's edge is
+  always ADMITTED at a terminal R-node: preds differ, no back-path).
+
+**Structural consequence for 1b (recorded in the Cascade header):** the W3a SHADOW does
+NOT extend over diffing passes (a removal is not a W3a reconcile leg), so the W3c
+`checkFn = sem` bridge does not transfer pointwise to W3d states. The 1b read bridge
+must be re-derived over the interleaved closure — expected route: settledness carries
+per-key `sem`-level row/edge characterisations directly (edge exactness + the W3c
+per-key filters), with the base equation applied at per-key reconstruction points, not
+through a global shadow.
+
+**Proof-engineering notes.** (1) A mid-fold state of `foldl f σ (c :: rest)` is
+DEFINITIONALLY `foldl f (foldl f σ [c]) rest` — expressing the step as the
+singleton-prefix fold lets every FOLD-level lemma (terminality, closure, guard
+inertness) act as its own single-step lemma; no separate one-step variants needed.
+(2) `induction h` auto-reverts hypotheses mentioning the motive's indices: the
+`nreaches_remove_terminal` `head` case receives `ih : v ≠ r → …` — apply `ih hv`.
+
+**Resume → W3d-1b proper (see HANDOFF "The next task"): fan-out completeness (`sem`
+stability off the mapped keys) + the settledness invariant over `ReachedByW3d`.**
+
 ## Session 2026-07-11e (W3d design + W3d-1a — the cascade scheduling layer: logged writes, delta→key mapping, `runCascade`, contentful T5)
 
 Resuming from HANDOFF "W3d: design first." Two green+pushed increments: (1) the W3d design

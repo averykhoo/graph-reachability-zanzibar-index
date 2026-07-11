@@ -384,9 +384,26 @@ and re-proves/widens the same named theorems. Every stage must keep
      JUSTIFIED by (a), not asserted (the old `cascade_converges` sin). `_bumped`
      fan-out is a single-stratum no-op (no derived dependents under `hLU`) — arrives
      with W3d-2.
-  6. **Add-only**: the model still has no removes; the remove-side hazards (operand
-     removal re-reconcile, `neg` pruning after subject-node GC `:616-620`, REMOVED
-     deltas) are OUT OF SCOPE for all of W3d-1 and recorded as fragment conditions.
+  6. **Add-only STORE**: the model has no store removes; the remove-side hazards
+     (operand removal re-reconcile, `neg` pruning after subject-node GC `:616-620`,
+     REMOVED deltas) are OUT OF SCOPE for all of W3d-1 and recorded as fragment
+     conditions.
+  7. **The W3d pass is the DIFFING edge audit (added 2026-07-11f — attack finding).**
+     The naive W3d-1b read statement over the add-only pass was REFUTED by `#eval`:
+     `viewer := member ∖ banned` with NO star grants — write member(alice) → cascade
+     (edge materialised, alice uncovered) → write banned(alice) → cascade (key
+     re-mapped, pass ran) leaves the edge STALE: `check = true ≠ sem = false` at a
+     fully-drained state. An add-only fold cannot retract an edge whose guard flipped
+     down; Python does (`reconcile_subject`: `¬want_edge ∧ has_edge ⇒
+     _write_derived(add=False)`, `processor.py:359-367`). W3d's pass is
+     `reconcileStarsKeyD` (`GraphIndex/ReconcileDiff.lean`): residue recompute, then
+     per candidate `want ⇒ writeDirect`, `¬want ⇒ removeEdgePair` (ALL copies — the
+     refcount reaching zero; node GC modeled away, read-safe). W3a–W3c keep the
+     add-only pass — their chains hold the store fixed, so `checkFn = sem` at every
+     pass start makes the removal branch provably dead there. NB the W3a SHADOW does
+     not extend over diffing passes, so the W3c `checkFn = sem` bridge does NOT
+     transfer pointwise to W3d states — 1b re-derives its read bridge over the
+     interleaved closure.
 
   **Sub-staging:**
   - **W3d-1a — the scheduling layer. ✅ DONE (2026-07-11e)** (`GraphIndex/Cascade.lean`,
@@ -414,6 +431,20 @@ and re-proves/widens the same named theorems. Every stage must keep
     routed delta's reach cone ⇒ `affectedKeys ∋ key`. Converts `W3cComplete`'s
     row-existence and ∃-covering clauses from batch HYPOTHESES into consequences of
     the cascade construction.
+    **STARTED (2026-07-11f):** the attack pass killed the add-only model (decision 7,
+    the diffing pass landed, Cascade re-greened, T5 re-earned), and the cascade-leg
+    settledness core is PROVED: `graphRec_reconcileKeyD_inert` (the diffing fold is
+    operand-read-inert both directions off its terminal R-node — removals are
+    in-edges of a non-source, `nreaches_remove_terminal`), guard fold-invariance
+    (`wantEdge_reconcileKeyD_inert`), and **per-key edge EXACTNESS**
+    (`reconcileStarsKeyD_edge_char`): one full-object pass makes the key's derived
+    edge set exactly `{c ∈ cands : checkFn ∧ shape ∉ fresh stars}` plus untouched
+    non-candidate edges — candidate history erased, the wholesale re-settle as a
+    theorem. REMAINING: write-leg `sem` stability off the mapped keys (the fan-out
+    contrapositive), the settledness invariant over `ReachedByW3d` (write legs keep
+    unmapped keys settled; cascade legs re-settle mapped keys via edge exactness +
+    the residue filters), the W3d read bridge (`checkFn = sem` at settled states —
+    NOT via the W3a shadow), and `reachedByW3d_inv` (the T2a carry).
   - **W3d-1c — the audit enumeration from state.** Model `_leaf_concretes` + the
     audit set (`processor.py:394-441`) as a state-derived enumeration (plain concrete
     nodes reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`
