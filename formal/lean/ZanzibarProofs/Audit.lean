@@ -26,6 +26,7 @@ import ZanzibarProofs.GraphIndex.ReconcileComplete
 import ZanzibarProofs.GraphIndex.ReconcileStars
 import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 import ZanzibarProofs.GraphIndex.Cascade
+import ZanzibarProofs.GraphIndex.CascadeStable
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -726,5 +727,27 @@ namespace Zanzibar
 #print axioms wantEdge_reconcileKeyD_inert
 #print axioms reconcileKeyD_edge_char
 #print axioms reconcileStarsKeyD_edge_char
+
+-- **W3d-1b — FAN-OUT COMPLETENESS (GraphIndex/CascadeStable.lean, 2026-07-11g).**
+-- The cross-key re-reconcile hazard as a theorem, contrapositive form: a derived key
+-- NOT in `cascadeKeys` after a logged write leg has its operand `graphRec` — hence
+-- the pass guard `checkFn`/`coveredFn` — unchanged by the leg. Route: a changed
+-- probe's new path factors through a routed edge (`nreaches_factor`) whose emitted
+-- frontier row (`writeLoggedRules_edge_delta`) has the operand node in its reach
+-- cone, putting the key in `affectedKeys` (`mem_affectedKeys`). Probes 3–4 stay dead
+-- on plain edge targets (`reachedByW3d_edges_target_plain` — the fence the attack
+-- found load-bearing: an OUT-of-fragment object-star write flips probe 3 at every
+-- object while mapping no keys, `processor.py:604-605`). Plus `cascadeKeys` write-leg
+-- monotonicity (dirty keys stay dirty until a cascade) and endpoint closure over the
+-- whole interleaved chain. Standard axioms only:
+#print axioms nreaches_factor
+#print axioms writeLoggedRules_edge_delta
+#print axioms reachedByW3d_edgesClosed
+#print axioms reachedByW3d_edges_target_plain
+#print axioms mem_affectedKeys
+#print axioms writeLeg_reach_stable
+#print axioms writeLeg_graphRec_stable
+#print axioms writeLeg_checkFn_stable
+#print axioms cascadeKeys_writeLeg_mono
 
 end Zanzibar
