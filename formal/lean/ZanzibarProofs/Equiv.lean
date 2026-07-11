@@ -5,6 +5,7 @@ import ZanzibarProofs.GraphIndex.UsStarClosure
 import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.ReconcileComplete
 import ZanzibarProofs.GraphIndex.ReconcileUposComplete
+import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 
 /-!
 # T3 / T6 — equivalence and the security corollaries
@@ -317,6 +318,85 @@ theorem no_ghost_grant_w3b (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
   rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqs hqo]
+  exact hDeny
+
+/-! ## W3c (star-carrying stores — the `stars`/`neg` residue) scope — via `graph_correct_w3c`
+
+The store may now hold bare `T:*` subject-wildcard grants (`BareStarStore` + `TtuStarFree`
+replace `StarFreeStore`), and the query subject may be a bare-star (`user:*`) subject. The
+graph answers covered subjects wholesale from the `stars` ∖ `neg` residue — the space rule —
+so T6a's exclusion content now includes a concrete subject excluded FROM UNDER a wildcard
+grant (`neg`), the headline W3c behaviour. `hWSbare` pins the decision-15 scope: only
+bare-subject wildcard shapes are declared. -/
+
+/-- **T3 (equivalence), W3c scope.** Both backends agree on the derived boolean fragment
+    over star-carrying stores, for bare, star-BARE, and userset subjects
+    (T1 ∘ `graph_correct_w3c`). -/
+theorem backend_equivalence_w3c (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : W3cComplete S T σ) (hValid : AllValid T)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    SetEngineModel.check S T q = GraphModel.check σ q := by
+  rw [setEngine_correct S T q hWF hStrat hValid,
+      graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+        hWSbare h hqs hqo]
+
+/-- **T6a (deny-propagation), W3c scope.** Whenever the spec denies, both backends deny —
+    now including a concrete subject excluded from under a `T:*` wildcard grant (the
+    `neg` residue: the space rule's exclusion actually excludes). -/
+theorem exclusion_effective_w3c (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : W3cComplete S T σ) (hValid : AllValid T)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T q = false) :
+    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+  refine ⟨?_, ?_⟩
+  · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
+  · rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+      hWSbare h hqs hqo]
+    exact hDeny
+
+/-- **T6b (no-ghost-grant), W3c scope.** If removing a tuple makes the spec deny, the
+    graph backend denies after the removal — no stale `stars` coverage, `upos` entry, or
+    derived edge survives its support. -/
+theorem no_ghost_grant_w3c (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T')
+    (hBS : BareStarStore T') (hTS : TtuStarFree S T')
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : W3cComplete S T' σ')
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T' q = false) :
+    GraphModel.check σ' q = false := by
+  rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+    hWSbare h hqs hqo]
   exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)

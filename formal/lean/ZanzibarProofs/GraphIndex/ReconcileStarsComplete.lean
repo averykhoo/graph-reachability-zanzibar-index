@@ -579,4 +579,495 @@ theorem reconcileJobsC_upos_complete {S : Schema} {T : Store}
         · exact absurd hm hkm
         · exact Or.inr ⟨j', hj's, hm⟩
 
+/-! ## The W3c-complete state and the assembly `graph_correct_w3c` -/
+
+/-- The full derived read (`probeDerived`, `wildcard.py:398-432`), unfolded on explicit
+    components at a concrete object: star ⇒ `stars`; bare ⇒ edge ∨ (`stars` ∖ `neg`);
+    userset ⇒ `upos` ∨ (`stars` ∖ `neg`) (with the `stars` gate). -/
+theorem probeDerived_eq (σ : GraphState) {st sn sp R dt on : String} (hon : on ≠ STAR) :
+    GraphModel.probeDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ =
+      (if sn = STAR then
+        ((σ.residue (objNode ⟨dt, on⟩ R) R).getD Residue.empty).stars.contains (st, sp)
+      else if sp = BARE then
+        σ.reach (subjNode ⟨st, sn, sp⟩) (objNode ⟨dt, on⟩ R)
+          || (((σ.residue (objNode ⟨dt, on⟩ R) R).getD Residue.empty).stars.contains (st, sp)
+              && !((σ.residue (objNode ⟨dt, on⟩ R) R).getD Residue.empty).neg.contains
+                    ⟨st, sn, sp⟩)
+      else if ((σ.residue (objNode ⟨dt, on⟩ R) R).getD Residue.empty).upos.contains
+          ⟨st, sn, sp⟩ then true
+      else if !((σ.residue (objNode ⟨dt, on⟩ R) R).getD Residue.empty).stars.contains
+          (st, sp) then false
+      else !((σ.residue (objNode ⟨dt, on⟩ R) R).getD Residue.empty).neg.contains
+        ⟨st, sn, sp⟩) := by
+  unfold GraphModel.probeDerived
+  by_cases h1 : sn = STAR
+  · simp [hon, h1, SubjectRef.shape]
+  · by_cases h2 : sp = BARE <;> simp [hon, h1, h2, SubjectRef.shape]
+
+/-- **`W3cComplete S T σ`** — an admitted rule-routed base plus a coverage-complete batch
+    of full-object star reconcile jobs. Faithful to `build_index`/`reconcile`
+    (`processor.py:382-459`): the processor reconciles every derived key over every
+    object, re-deriving the full audit enumeration each pass. Coverage clauses are
+    properties of the *enumeration*:
+
+    * every `sem`-true bare star-free subject is in some covering job's edge `cands`;
+    * every `sem`-true userset star-free subject is in EVERY targeting job's `uposCands`
+      (and some job targets its key) — the wholesale-recompute condition;
+    * every star-free subject with a declared `sem`-covered shape that is `sem`-false is
+      in EVERY targeting job's `negCands`;
+    * every key with a declared `sem`-covered shape is targeted by some job (row
+      existence for the star read). -/
+def W3cComplete (S : Schema) (T : Store) (σ : GraphState) : Prop :=
+  ∃ (σ0 : GraphState) (jobs : List W3cJob),
+    ReachedByRulesAdmitted σ0 S T ∧ σ = reconcileJobsC S T σ0 jobs ∧
+    (∀ j ∈ jobs, W3cJobValid S j) ∧
+    (∀ dt on R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ s : SubjectRef, s.predicate = BARE → s.name ≠ STAR → on ≠ STAR →
+        sem S T ⟨s, R, ⟨dt, on⟩⟩ = true →
+        ∃ j ∈ jobs, j.keyMatch dt on R ∧ s ∈ j.cands) ∧
+    (∀ dt on R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ s : SubjectRef, s.predicate ≠ BARE → s.name ≠ STAR → on ≠ STAR →
+        sem S T ⟨s, R, ⟨dt, on⟩⟩ = true →
+        (∃ j ∈ jobs, j.keyMatch dt on R) ∧
+        (∀ j ∈ jobs, j.keyMatch dt on R → s ∈ j.uposCands)) ∧
+    (∀ dt on R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ s : SubjectRef, s.name ≠ STAR → on ≠ STAR →
+        s.shape ∈ wildcardShapes S → sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true →
+        sem S T ⟨s, R, ⟨dt, on⟩⟩ = false →
+        ∀ j ∈ jobs, j.keyMatch dt on R → s ∈ j.negCands) ∧
+    (∀ dt on R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ sh ∈ wildcardShapes S, on ≠ STAR →
+        sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true →
+        ∃ j ∈ jobs, j.keyMatch dt on R)
+
+/-- A W3c-complete state is W3c-reached. -/
+theorem w3cComplete_reached {S : Schema} {T : Store} {σ : GraphState}
+    (h : W3cComplete S T σ) : ReachedByW3c σ S T := by
+  obtain ⟨σ0, jobs, h0, hσ, hv, _, _, _, _⟩ := h
+  rw [hσ]
+  exact reconcileJobsC_pres jobs σ0 (ReachedByW3c.base h0) hv
+
+/-- **Edge completeness at W3c.** A `sem`-true, canonically-UNCOVERED bare star-free
+    subject's derived edge is materialised: it survives the covering job's covered
+    filter (its pass-start `stars` row is the canonical one), its guard is `sem`-true
+    at every prefix mid-state (star-general inertness + the W3c bridge), the write is
+    admitted at the terminal R-node, and edges persist through the batch. -/
+theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : W3cComplete S T σ)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hsb : s.predicate = BARE) (hss : s.name ≠ STAR) (hon : on ≠ STAR)
+    (hnotcov : ¬(s.shape ∈ wildcardShapes S ∧
+      sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true))
+    (hsem : sem S T ⟨s, R, ⟨dt, on⟩⟩ = true) :
+    (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges := by
+  obtain ⟨σ0, jobs, h0, hσeq, hv, hcovE, _hcovU, _hcovN, _hrowEx⟩ := h
+  obtain ⟨j, hj, hkm, hjs⟩ := hcovE dt on R e hlk hder s hsb hss hon hsem
+  obtain ⟨jdt, jon, jR, je, jc, jn, ju⟩ := j
+  obtain ⟨hRne, hjcb, hjcS, _hjnS, _hjuP, _hjuS, hjder, hjlke, hjon⟩ := hv _ hj
+  obtain ⟨h1, h2, h3⟩ := hkm
+  have h1' : dt = jdt := h1.symm
+  have h2' : on = jon := h2.symm
+  have h3' : R = jR := h3.symm
+  subst h1'; subst h2'; subst h3'
+  have hje : e = je := by
+    simp only at hjlke
+    exact Option.some.inj (hlk.symm.trans hjlke)
+  subst hje
+  simp only at hjs hjcb hjcS hjder
+  -- split the batch at the covering job
+  obtain ⟨pre, post, hsplit⟩ := List.append_of_mem hj
+  have hσpre : ReachedByW3c (reconcileJobsC S T σ0 pre) S T := by
+    refine reconcileJobsC_pres pre σ0 (ReachedByW3c.base h0) ?_
+    intro j' hj'
+    exact hv j' (hsplit ▸ List.mem_append_left _ hj')
+  set σpre := reconcileJobsC S T σ0 pre with hσpre_def
+  -- the residue half, then the covered-filter collapse
+  set σ1 := σpre.reconcileResidueKey T dt on R e (wildcardShapes S) jn ju with hσ1
+  have hσ1e : σ1.edges = σpre.edges := by rw [hσ1]; rfl
+  have hσ1n : σ1.nodes = σpre.nodes := by rw [hσ1]; rfl
+  have hcoll : W3cJob.apply S T σpre ⟨dt, on, R, e, jc, jn, ju⟩
+      = σ1.reconcileKey T dt on R e
+          (jc.filter (fun c => !(σ1.coveredAt (objNode ⟨dt, on⟩ R) R c.shape))) := by
+    show σpre.reconcileStarsKey T dt on R e (wildcardShapes S) jc jn ju = _
+    unfold GraphState.reconcileStarsKey
+    rw [reconcileKeyC_eq_filter]
+  -- R-node terminality at the pass start
+  have hRns1 : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ1.edges := by
+    have hns := reachedByW3c_Rnode_not_source hterm hRne hjder hσpre (on := on)
+    intro y hy
+    rw [hσ1e] at hy
+    exact hns y hy
+  have hcl1 : ∀ ab ∈ σ1.edges, ab.1 ∈ σ1.nodes ∧ ab.2 ∈ σ1.nodes := by
+    have hec := reachedByW3c_edgesClosed hσpre
+    intro ab hab
+    rw [hσ1e] at hab
+    rw [hσ1n]
+    exact hec ab hab
+  -- s is canonically uncovered, so it survives the covered filter
+  have hcovAt : σ1.coveredAt (objNode ⟨dt, on⟩ R) R s.shape = false := by
+    unfold GraphState.coveredAt
+    rw [hσ1, reconcileResidueKey_residue_self]
+    simp only [Option.getD_some]
+    by_contra hc
+    rw [Bool.not_eq_false, List.contains_eq_mem] at hc
+    obtain ⟨hws, hcov⟩ := List.mem_filter.mp (of_decide_eq_true hc)
+    refine hnotcov ⟨hws, ?_⟩
+    rw [← checkFn_eq_sem_w3c (s := starSubj s.shape) hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+      hStrat hterm hσpre hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
+      (fun _ => hWSbare s.shape hws) hon]
+    exact hcov
+  have hsfil : s ∈ jc.filter (fun c => !(σ1.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)) := by
+    refine List.mem_filter.mpr ⟨hjs, ?_⟩
+    rw [hcovAt]
+    rfl
+  have hfilbare : ∀ c ∈ jc.filter (fun c => !(σ1.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)),
+      c.predicate = BARE := fun c hc => hjcb c (List.mem_of_mem_filter hc)
+  -- guard: checkFn = sem = true at every prefix mid-state of the filtered fold
+  have hguard : ∀ pre',
+      pre' <+: jc.filter (fun c => !(σ1.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)) →
+      (σ1.reconcileKey T dt on R e pre').checkFn T s dt on R e = true := by
+    intro pre' hpre'
+    have hpre_bare : ∀ x ∈ pre', x.predicate = BARE := fun x hx => hfilbare x (hpre'.subset hx)
+    have hpre_star : ∀ x ∈ pre', x.name ≠ STAR := fun x hx =>
+      hjcS x (List.mem_of_mem_filter (hpre'.subset hx))
+    obtain ⟨σ', hσ', hcore⟩ := reachedByW3c_shadow hσpre
+    have hcore1 : CoreEq σ' σ1 := by
+      rw [hσ1]
+      exact reconcileResidueKey_coreEq hcore T dt on R e (wildcardShapes S) jn ju
+    have hmidAdm : ReachedByW3aAdmitted (σ'.reconcileKey T dt on R e pre') S T :=
+      ReachedByW3aAdmitted.reconcile dt on R e pre' hRne hpre_bare hjder hlk hpre_star hjon hσ'
+    have hcoremid : CoreEq (σ'.reconcileKey T dt on R e pre')
+        (σ1.reconcileKey T dt on R e pre') := reconcileKey_coreEq pre' hcore1
+    have hclmid : ∀ ab ∈ (σ1.reconcileKey T dt on R e pre').edges,
+        ab.1 ∈ (σ1.reconcileKey T dt on R e pre').nodes
+          ∧ ab.2 ∈ (σ1.reconcileKey T dt on R e pre').nodes := by
+      have hInvm := (reachedByW3a_inv (reachedByW3aAdmitted_toW3a hmidAdm)).1
+      intro ab hab
+      rw [← hcoremid.edges] at hab
+      rw [← hcoremid.nodes]
+      exact hInvm.edgesClosed ab hab
+    have hmidag : ∀ (x : SubjectRef) (r' : String), isDerived S (dt, r') = false →
+        GraphModel.graphRec (σ1.reconcileKey T dt on R e pre') x dt on r'
+          = GraphModel.graphRec σ1 x dt on r' :=
+      fun x r' hunt => graphRec_reconcileKey_inert T dt on R e pre' hRne hpre_bare hRns1
+        hjon hjder hcl1 hclmid x dt on r' hunt
+    have hstep1 : (σ1.reconcileKey T dt on R e pre').checkFn T s dt on R e
+        = σ1.checkFn T s dt on R e :=
+      checkFn_agree_of_graphRec T s dt on R e (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
+        (fun x' r' hr' => hmidag x' r' hr')
+    have hstep2 : σ1.checkFn T s dt on R e = σpre.checkFn T s dt on R e :=
+      checkFn_congr hσ1e hσ1n T s dt on R e
+    have hstep3 : σpre.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+      checkFn_eq_sem_w3c hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hσpre hlk
+        (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) (fun hx => absurd hx hss) hon
+    rw [hstep1, hstep2, hstep3]
+    exact hsem
+  -- the covering job materialises the edge; it persists through the tail
+  have hedge_j : (subjNode s, objNode ⟨dt, on⟩ R)
+      ∈ (W3cJob.apply S T σpre ⟨dt, on, R, e, jc, jn, ju⟩).edges := by
+    rw [hcoll]
+    exact reconcileKey_edge_present hRne _ σ1 hfilbare hsfil hRns1 hguard
+  have hσeq2 : σ = reconcileJobsC S T (W3cJob.apply S T σpre ⟨dt, on, R, e, jc, jn, ju⟩) post := by
+    rw [hσeq, hsplit, hσpre_def]
+    unfold reconcileJobsC
+    rw [List.foldl_append, List.foldl_cons]
+  rw [hσeq2]
+  exact reconcileJobsC_edges_mono post _ _ hedge_j
+
+/-- **T2b, W3c fragment (`graph_correct_w3c`) — `check = sem` on star-CARRYING stores.**
+    The query subject may be bare, star-BARE, or a userset; the store may hold bare
+    `T:*` grants (`BareStarStore` + `TtuStarFree` replace `StarFreeStore`); the schema
+    is the one-`RootBoolean`-stratum fragment with bare-only declared wildcard shapes
+    (`hWSbare`, decision-15).
+
+    * **Untainted query:** shadow → admitted base → `graphRec_base_eq_bs`.
+    * **Derived, star subject:** the `stars` read = declared ∧ `sem`-covered (row char);
+      backward, the LINCHPIN turns `sem`-coverage into declaredness and the row-existence
+      clause materialises the row.
+    * **Derived, bare subject:** edge ∨ (`stars` ∖ `neg`): reach ⇒ single canonical edge ⇒
+      `sem` (master + bridge); covered fallback sound by `neg` completeness; backward, a
+      covered subject reads from the row (`neg` members are `sem`-false) and an uncovered
+      one gets its edge (`w3cComplete_derived_edge`).
+    * **Derived, userset subject:** its shape is never declared (`hWSbare`), so the read
+      is exactly `upos` — sound by the row char, complete by `upos` completeness. -/
+theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : W3cComplete S T σ)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem S T q := by
+  have hadm := w3cComplete_reached h
+  obtain ⟨hInv, _hQ⟩ := reachedByW3c_inv hWF hNK hSV hRootB hterm hCO hLU hadm
+  have hcl := hInv.edgesClosed
+  obtain ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := q
+  replace hqs : sn = STAR → sp = BARE := hqs
+  replace hqo : on ≠ STAR := hqo
+  by_cases hder : isDerived S (dt, R) = true
+  · -- ===== derived query: the residue read =====
+    obtain ⟨e, hlk⟩ := isDerived_declared hder
+    have hco := hCO _ _ _ hlk hder
+    have hleafUnt := hLU _ _ _ hlk hder
+    have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+    have hroute : GraphModel.check σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.probeDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := by
+      unfold GraphModel.check
+      rw [hInv.schemaEq]
+      simp [hder]
+    rw [hroute, probeDerived_eq σ hqo]
+    -- reach ⇒ sem for star-free subjects (row-independent: master's canonical edge)
+    have hreach_sem : sn ≠ STAR →
+        σ.reach (subjNode ⟨st, sn, sp⟩) (objNode ⟨dt, on⟩ R) = true →
+        sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ = true := by
+      intro hsn hr
+      obtain ⟨σsh, hσsh, hcore⟩ := reachedByW3c_shadow hadm
+      have hN : NReaches σsh.edges (subjNode ⟨st, sn, sp⟩) (objNode ⟨dt, on⟩ R) := by
+        rw [hcore.edges]
+        exact reach_sound hr
+      have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hNK hlk hroot
+        (reachedByW3aAdmitted_toW3a hσsh) hN
+      rw [hcore.edges] at hedge1
+      obtain ⟨σ0, hσ0, _hag2, _hres2, hedge⟩ := reachedByW3c_master hterm hCO hLU hadm
+      rcases hedge dt on R e hder hlk hqo _ hedge1 with hbase | ⟨c, huc, _hcb, hcS, _hunc, hchk⟩
+      · exact absurd hbase (reachedByRules_RootBoolean_no_inedge hSV hNK hlk hroot
+          (reachedByRules_of_admitted hσ0) _)
+      · have hcs : (⟨st, sn, sp⟩ : SubjectRef) = c := subjNode_inj_of_ne_star hsn hcS huc
+        rw [← checkFn_eq_sem_bs (s := (⟨st, sn, sp⟩ : SubjectRef)) hWF hTT hNK hR hSV hBS hTS
+          hRootB hMatch hStrat hterm (ReachedByW3aAdmitted.base hσ0) hlk hco hleafUnt
+          (fun hx => absurd hx hsn) hqo]
+        rw [hcs]
+        exact hchk
+    -- W3cComplete pieces (keep `h` intact for the edge-completeness call)
+    have hW := h
+    obtain ⟨σ0B, jobs, h0B, hσB, hvjobs, _hcovE, hcovU, hcovN, hrowEx⟩ := hW
+    by_cases hstar : sn = STAR
+    · -- ---- star subject: the `stars` read ----
+      subst hstar
+      have hsp : sp = BARE := hqs rfl
+      subst hsp
+      rw [if_pos rfl]
+      have hsem_ws : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩ = true →
+          (st, BARE) ∈ wildcardShapes S := by
+        intro hsm
+        refine coveredFn_declared hTT hSV hTS h0B hco (dt := dt) (on := on) (R := R) ?_
+        show σ0B.checkFn T (starSubj (st, BARE)) dt on R e = true
+        rw [checkFn_eq_sem_bs (s := starSubj (st, BARE)) hWF hTT hNK hR hSV hBS hTS hRootB
+          hMatch hStrat hterm (ReachedByW3aAdmitted.base h0B) hlk hco hleafUnt
+          (fun _ => rfl) hqo]
+        exact hsm
+      cases hrow : σ.residue (objNode ⟨dt, on⟩ R) R with
+      | none =>
+        rw [Option.getD_none]
+        cases hsm : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩
+        · rfl
+        · exfalso
+          obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE) (hsem_ws hsm) hqo hsm
+          have hsome := reconcileJobsC_row_isSome (S := S) (T := T) jobs σ0B
+            (Or.inr ⟨j, hj, hkm⟩)
+          rw [← hσB, hrow] at hsome
+          exact absurd hsome (by decide)
+      | some res =>
+        rw [Option.getD_some]
+        have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+          hCO hLU hWSbare hadm hlk hqo hrow
+        cases hc : res.stars.contains (st, BARE) <;>
+          cases hsm : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩
+        · rfl
+        · exfalso
+          have hcontains := (hchar.1 (st, BARE)).mpr ⟨hsem_ws hsm, hsm⟩
+          rw [hc] at hcontains
+          exact absurd hcontains (by decide)
+        · exfalso
+          obtain ⟨_, hs⟩ := (hchar.1 (st, BARE)).mp hc
+          have hs' : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩ = true := hs
+          rw [hsm] at hs'
+          exact absurd hs' (by decide)
+        · rfl
+    · -- star-free subject
+      rw [if_neg hstar]
+      by_cases hbare : sp = BARE
+      · -- ---- bare subject: edge ∨ (stars ∖ neg) ----
+        subst hbare
+        rw [if_pos rfl]
+        cases hrow : σ.residue (objNode ⟨dt, on⟩ R) R with
+        | none =>
+          rw [Option.getD_none]
+          have hsimp : (Residue.empty.stars.contains (st, BARE) &&
+              !Residue.empty.neg.contains ⟨st, sn, BARE⟩) = false := rfl
+          rw [hsimp, Bool.or_false]
+          cases hr : σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R) <;>
+            cases hsm : sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            by_cases hcov : (st, BARE) ∈ wildcardShapes S ∧
+                sem S T ⟨starSubj (st, BARE), R, ⟨dt, on⟩⟩ = true
+            · obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE) hcov.1 hqo hcov.2
+              have hsome := reconcileJobsC_row_isSome (S := S) (T := T) jobs σ0B
+                (Or.inr ⟨j, hj, hkm⟩)
+              rw [← hσB, hrow] at hsome
+              exact absurd hsome (by decide)
+            · have hedge := w3cComplete_derived_edge (s := ⟨st, sn, BARE⟩) hWF hTT hNK hR hSV
+                hBS hTS hRootB hMatch hStrat hterm hCO hLU hWSbare h hlk hder rfl hstar hqo
+                hcov hsm
+              have hrc := reach_complete hcl (NReaches.edge hedge)
+              rw [hr] at hrc
+              exact absurd hrc (by decide)
+          · exfalso
+            have hsemT := hreach_sem hstar hr
+            rw [hsm] at hsemT
+            exact absurd hsemT (by decide)
+          · rfl
+        | some res =>
+          rw [Option.getD_some]
+          have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+            hCO hLU hWSbare hadm hlk hqo hrow
+          have hfwd : (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
+              || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) = true →
+              sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩ = true := by
+            intro hread
+            rw [Bool.or_eq_true, Bool.and_eq_true] at hread
+            rcases hread with hr | ⟨hcS, hnN⟩
+            · exact hreach_sem hstar hr
+            · by_contra hsm
+              rw [Bool.not_eq_true] at hsm
+              obtain ⟨hws, hsemStar⟩ := (hchar.1 (st, BARE)).mp hcS
+              have hall := hcovN dt on R e hlk hder ⟨st, sn, BARE⟩ hstar hqo hws hsemStar hsm
+              obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE) hws hqo hsemStar
+              obtain ⟨res', hres', hmem⟩ := reconcileJobsC_neg_complete
+                (s := ⟨st, sn, BARE⟩) hWF hTT hNK hR hSV hBS
+                hTS hRootB hMatch hStrat hterm hCO hLU hWSbare hlk hstar hqo hws hsemStar hsm
+                jobs σ0B (ReachedByW3c.base h0B) hvjobs hall (Or.inr ⟨j, hj, hkm⟩)
+              rw [← hσB, hrow] at hres'
+              obtain rfl := Option.some.inj hres'
+              have hcont : res.neg.contains ⟨st, sn, BARE⟩ = true := by
+                rw [List.contains_eq_mem]
+                exact decide_eq_true hmem
+              rw [hcont] at hnN
+              exact absurd hnN (by decide)
+          have hbwd : sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩ = true →
+              (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
+                || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) = true := by
+            intro hsm
+            rw [Bool.or_eq_true, Bool.and_eq_true]
+            by_cases hcov : (st, BARE) ∈ wildcardShapes S ∧
+                sem S T ⟨starSubj (st, BARE), R, ⟨dt, on⟩⟩ = true
+            · refine Or.inr ⟨(hchar.1 (st, BARE)).mpr hcov, ?_⟩
+              cases hcnt : res.neg.contains ⟨st, sn, BARE⟩
+              · rfl
+              · exfalso
+                have hmem : (⟨st, sn, BARE⟩ : SubjectRef) ∈ res.neg := by
+                  rw [List.contains_eq_mem] at hcnt
+                  exact of_decide_eq_true hcnt
+                obtain ⟨_, hsemF⟩ := hchar.2.1 _ hmem
+                rw [hsm] at hsemF
+                exact absurd hsemF (by decide)
+            · exact Or.inl (reach_complete hcl (NReaches.edge
+                (w3cComplete_derived_edge (s := ⟨st, sn, BARE⟩) hWF hTT hNK hR hSV hBS hTS
+                  hRootB hMatch hStrat hterm hCO hLU hWSbare h hlk hder rfl hstar hqo hcov
+                  hsm)))
+          cases hread : (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
+              || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) <;>
+            cases hsm : sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            have := hbwd hsm
+            rw [hread] at this
+            exact absurd this (by decide)
+          · exfalso
+            have := hfwd hread
+            rw [hsm] at this
+            exact absurd this (by decide)
+          · rfl
+      · -- ---- userset subject: the `upos` read (its shape is never declared) ----
+        rw [if_neg hbare]
+        cases hrow : σ.residue (objNode ⟨dt, on⟩ R) R with
+        | none =>
+          rw [Option.getD_none]
+          show false = sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          cases hsm : sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            obtain ⟨⟨j, hj, hkm⟩, hall⟩ := hcovU dt on R e hlk hder ⟨st, sn, sp⟩ hbare hstar
+              hqo hsm
+            obtain ⟨res', hres', _⟩ := reconcileJobsC_upos_complete hWF hTT hNK hR hSV hBS hTS
+              hRootB hMatch hStrat hterm hCO hLU hWSbare hlk hbare hstar hqo hsm jobs σ0B
+              (ReachedByW3c.base h0B) hvjobs hall (Or.inr ⟨j, hj, hkm⟩)
+            rw [← hσB, hrow] at hres'
+            cases hres'
+        | some res =>
+          rw [Option.getD_some]
+          have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+            hCO hLU hWSbare hadm hlk hqo hrow
+          have hns : res.stars.contains (st, sp) = false := by
+            by_contra hcx
+            rw [Bool.not_eq_false] at hcx
+            obtain ⟨hws, _⟩ := (hchar.1 (st, sp)).mp hcx
+            exact hbare (hWSbare (st, sp) hws)
+          rw [hns]
+          show (if res.upos.contains ⟨st, sn, sp⟩ = true then true else false)
+              = sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          cases hu : res.upos.contains ⟨st, sn, sp⟩ <;>
+            cases hsm : sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+          · rfl
+          · exfalso
+            obtain ⟨⟨j, hj, hkm⟩, hall⟩ := hcovU dt on R e hlk hder ⟨st, sn, sp⟩ hbare hstar
+              hqo hsm
+            obtain ⟨res', hres', hmem⟩ := reconcileJobsC_upos_complete hWF hTT hNK hR hSV hBS
+              hTS hRootB hMatch hStrat hterm hCO hLU hWSbare hlk hbare hstar hqo hsm jobs σ0B
+              (ReachedByW3c.base h0B) hvjobs hall (Or.inr ⟨j, hj, hkm⟩)
+            rw [← hσB, hrow] at hres'
+            obtain rfl := Option.some.inj hres'
+            have hcontains : res.upos.contains ⟨st, sn, sp⟩ = true := by
+              rw [List.contains_eq_mem]
+              exact decide_eq_true hmem
+            rw [hu] at hcontains
+            exact absurd hcontains (by decide)
+          · exfalso
+            have hmem : (⟨st, sn, sp⟩ : SubjectRef) ∈ res.upos := by
+              rw [List.contains_eq_mem] at hu
+              exact of_decide_eq_true hu
+            obtain ⟨_, _, hsemT⟩ := hchar.2.2 _ hmem
+            rw [hsm] at hsemT
+            exact absurd hsemT (by decide)
+          · rfl
+  · -- ===== untainted query: shadow → admitted base → star-relaxed base equation =====
+    have hd : isDerived S (dt, R) = false := by simpa using hder
+    have hroute : GraphModel.check σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.probeNonDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := by
+      unfold GraphModel.check
+      rw [hInv.schemaEq]
+      simp [hd]
+    rw [hroute]
+    obtain ⟨σsh, hσsh, hcore⟩ := reachedByW3c_shadow hadm
+    obtain ⟨σ0, hσ0adm, hredx⟩ := graphRec_reduce_base_adm_bs hterm hσsh
+      (s := ⟨st, sn, sp⟩) (dt := dt) (on := on)
+    have h2 := hredx R hd
+    have h3 := graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hσ0adm
+      (s := ⟨st, sn, sp⟩) (dt := dt) (on := on) hqs hqo R hd
+    calc GraphModel.probeNonDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
+        = GraphModel.probeNonDerived σsh ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ :=
+          (probeNonDerived_congr hcore.edges hcore.nodes _).symm
+      _ = GraphModel.graphRec σsh ⟨st, sn, sp⟩ dt on R := rfl
+      _ = GraphModel.graphRec σ0 ⟨st, sn, sp⟩ dt on R := h2
+      _ = sem S T ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := h3
+
 end Zanzibar

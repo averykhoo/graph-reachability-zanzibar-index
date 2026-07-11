@@ -24,6 +24,7 @@ import ZanzibarProofs.GraphIndex.ReconcileCorrect
 import ZanzibarProofs.GraphIndex.RestrictBase
 import ZanzibarProofs.GraphIndex.ReconcileComplete
 import ZanzibarProofs.GraphIndex.ReconcileStars
+import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -645,5 +646,35 @@ namespace Zanzibar
 #print axioms graphRec_reduce_base_adm_bs
 #print axioms checkFn_eq_sem_of_base_bs
 #print axioms checkFn_eq_sem_bs
+
+-- **ROADMAP W3c read half CLOSED — the linchpin + the assembly
+-- (GraphIndex/ReconcileStarsComplete.lean + Equiv.lean, 2026-07-11).**
+-- `checkFn_eq_sem_w3c`: the star-relaxed `checkFn = sem` on ANY W3c state (through the
+-- W3a-admitted shadow). `coveredFn_declared` — THE LINCHPIN, no ghost star coverage: a
+-- `sem`-covered shape is DECLARED (true computed leaf → wAny-sourced probe → first edge →
+-- materialised closure tuple → the star seed carries its subject → `restrictionMatches`'
+-- wildcard flag names a `wildcardShapes` entry). `w3c_row_char`: every persisted row reads
+-- at `sem` level (master provenance + the star-relaxed bridge). Batch completeness for the
+-- WHOLESALE residue recompute: `reconcileJobsC_row_isSome` (row existence),
+-- `reconcileJobsC_neg_complete` / `reconcileJobsC_upos_complete` (an attack-first `#eval`
+-- confirmed the ∀-targeting-jobs enumeration form is NECESSARY — a second same-key pass
+-- with an incomplete `negCands` drops the exclusion), `w3cComplete_derived_edge` (the
+-- covered-filter survival + prefix-mid-state inertness + terminal admitted write).
+-- **T2b `graph_correct_w3c`**: `check = sem` on star-CARRYING stores (`BareStarStore` +
+-- `TtuStarFree`; `hWSbare` = decision-15 bare-only declared shapes) for bare, star-BARE,
+-- and userset subjects — all three `probeDerived` branches: star ⇒ `stars`, bare ⇒ edge ∨
+-- (`stars` ∖ `neg`), userset ⇒ `upos`. T3/T6 `*_w3c`: `backend_equivalence_w3c`,
+-- `exclusion_effective_w3c` (a concrete subject excluded from UNDER a `T:*` grant — the
+-- space rule's `neg` actually excludes), `no_ghost_grant_w3c`. Standard axioms only:
+#print axioms checkFn_eq_sem_w3c
+#print axioms coveredFn_declared
+#print axioms w3c_row_char
+#print axioms reconcileJobsC_neg_complete
+#print axioms reconcileJobsC_upos_complete
+#print axioms w3cComplete_derived_edge
+#print axioms graph_correct_w3c
+#print axioms backend_equivalence_w3c
+#print axioms exclusion_effective_w3c
+#print axioms no_ghost_grant_w3c
 
 end Zanzibar
