@@ -28,6 +28,7 @@ import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 import ZanzibarProofs.GraphIndex.Cascade
 import ZanzibarProofs.GraphIndex.CascadeStable
 import ZanzibarProofs.GraphIndex.CascadeInv
+import ZanzibarProofs.GraphIndex.CascadeEnum
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -868,5 +869,22 @@ namespace Zanzibar
 #print axioms reachedByW3d_residueDeclared
 #print axioms reachedByW3dC_edgeHygienic
 #print axioms reachedByW3dC_inv
+
+-- **W3d-1c piece B — the audit enumeration + `W3dJobCoverage` DISCHARGED.** The
+-- coverage clauses were carried as chain-side hypotheses; here they are proved of a
+-- state-derived enumeration. The spine: for a star-free subject each operand leaf read
+-- decomposes pointwise as its shape-star's read OR a concrete-specific reach probe
+-- (`probeNonDerived_concrete_decomp`), so a subject triggering neither probe reads
+-- exactly like its star (`checkFn_eq_coveredFn_of_no_extra`, `evalE` congruence,
+-- exclusion-safe). `leafConcretes` reads the enumeration off the state (plain star-free
+-- nodes hitting a computed-leaf target); `w3d_leg_context` reconstructs the read bridge
+-- (`checkFn = sem`) and coverage-declaredness at any W3d state through the shadow. Each
+-- `W3dJobCoverage` clause is then a contrapositive of the bridge fed through the
+-- collapse (`cands_complete_uncovered`, `negCands_complete`, `uposCands_complete`,
+-- `mem_edgeHolders`), assembled into **`w3dJobCoverage_enumJob`**: the enumerated job
+-- for a declared derived key satisfies all four clauses. Standard axioms only:
+#print axioms checkFn_eq_coveredFn_of_no_extra
+#print axioms w3d_leg_context
+#print axioms w3dJobCoverage_enumJob
 
 end Zanzibar

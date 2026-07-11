@@ -302,4 +302,90 @@ theorem mem_edgeHolders {σ : GraphState} {s : SubjectRef} {dt on R : String}
   rw [List.mem_filter]
   exact ⟨h, by simp⟩
 
+/-! ## The leg context — `hbridge` and `hcovDecl` at any W3d state
+
+The two leg-level helpers the clause discharges consume are reconstructed at every W3d
+state through the untainted-core shadow (`reachedByW3d_shadow`): `hbridge` is the W3d
+read bridge (`checkFn_eq_sem_w3d`); `hcovDecl` is the `coveredFn_declared` linchpin
+lifted across the shadow (`checkFn` of a star subject reads only untainted operands, so
+it agrees with the rules-admitted shadow, where a `true` coverage is declared). -/
+
+/-- **The leg context.** At any W3d state, for a declared derived key `(dt,R)` with
+    untainted computed leaves and a star-free object, the read bridge (`checkFn = sem`,
+    subject-generic up to star-BARE) and the coverage-declaredness helper both hold. -/
+theorem w3d_leg_context {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) (hon : on ≠ STAR) :
+    (∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
+      σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
+    (∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) := by
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hRootB hSV hterm
+  refine ⟨fun s' hs' => ?_, fun sh hcov => ?_⟩
+  · exact checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm h0 hsh
+      hlk hco hleafUnt hs' hon
+  · have hagree : σ.checkFn T (starSubj sh) dt on R e = σ0.checkFn T (starSubj sh) dt on R e :=
+      checkFn_agree_of_graphRec T (starSubj sh) dt on R e hco hleafUnt
+        (fun s' r' hr' => shadow_graphRec_agree hsh s' on hr')
+    have hcov0 : σ0.coveredFn T dt on R e sh = true := by
+      show σ0.checkFn T (starSubj sh) dt on R e = true
+      rw [← hagree]; exact hcov
+    exact coveredFn_declared hTT hSV hTS h0 hco hcov0
+
+/-! ## The enumerated job — `W3dJobCoverage` discharged from state
+
+`enumJob` bundles the state-derived enumeration for one key: bare leaf concretes ∪ edge
+holders as `cands`, bare leaf concretes as `negCands`, userset leaf concretes as
+`uposCands` (the persisted `neg`/`upos` the proofs don't need are dropped). Its
+`W3dJobCoverage` is exactly the four discharges above fed the leg context — no longer a
+hypothesis. -/
+
+/-- The state-derived enumerated job for one derived key `(dt,R)` at object `on`. -/
+def enumJob (σ : GraphState) (dt on R : String) (e : Expr) : W3cJob :=
+  { dt := dt, on := on, R := R, e := e,
+    cands := (leafConcretes σ dt on e).filter (fun u => u.predicate == BARE)
+             ++ edgeHolders σ dt on R,
+    negCands := (leafConcretes σ dt on e).filter (fun u => u.predicate == BARE),
+    uposCands := (leafConcretes σ dt on e).filter (fun u => u.predicate != BARE) }
+
+/-- **`W3dJobCoverage` as a theorem of the enumeration.** At any W3d state, the
+    enumerated job for a declared derived key satisfies all four coverage clauses —
+    discharging the chain-side hypothesis of `ReachedByW3dC.cascade`. -/
+theorem w3dJobCoverage_enumJob {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) (hon : on ≠ STAR)
+    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE) :
+    W3dJobCoverage S T σ (enumJob σ dt on R e) := by
+  obtain ⟨hbridge, hcovDecl⟩ := w3d_leg_context hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+    hStrat hterm h hlk hco hleafUnt hon
+  have hcl := reachedByW3d_edgesClosed h
+  have hbareSub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE →
+      u ∈ (leafConcretes σ dt on e).filter (fun u => u.predicate == BARE) :=
+    fun u hu hub => List.mem_filter.mpr ⟨hu, by simp [hub]⟩
+  refine ⟨fun s hs => ?_, fun s hsb hsn hsem hunc => ?_,
+    fun s hsn hcov hstar hsemF => ?_, fun s hsu hsn hsem => ?_⟩
+  · -- clause (1): edge holders
+    exact List.mem_append_right _ (mem_edgeHolders hs)
+  · -- clause (2): uncovered sem-true bare
+    exact List.mem_append_left _
+      (cands_complete_uncovered hco hcl hon hbridge hcovDecl hbareSub hsb hsn hsem hunc)
+  · -- clause (3): covered sem-false → negCands
+    exact negCands_complete hco hcl hon hbridge hWSb hbareSub hsn hcov hstar hsemF
+  · -- clause (4): sem-true userset → uposCands
+    refine uposCands_complete hco hcl hon hbridge hcovDecl hWSb ?_ hsu hsn hsem
+    exact fun u hu huu => List.mem_filter.mpr ⟨hu, by simp [huu]⟩
+
 end Zanzibar
