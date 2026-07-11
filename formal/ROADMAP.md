@@ -831,7 +831,12 @@ and re-proves/widens the same named theorems. Every stage must keep
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +
     T3/T6 widening. Detail in PROOF_STATUS "W3a read correspondence".
-- **W4 — full-scope restatement. OPENED 2026-07-12i (design pass below).** The
+- **W4 — full-scope restatement. IN PROGRESS (opened 2026-07-12i; design pass
+  below EXECUTED same session — decisions 1–3 + 5 landed in `FullScope.lean`
+  (with `GraphAccepts` kept as the spec predicate and the admission bundle named
+  `GraphAdmission`; `w4_within_scope` connects them), decision 4's fragment-free
+  layers + the pass-local I6 core landed in `CascadeStrataInv.lean`; REMAINING =
+  the T2a assembly, HANDOFF "The next task").** The
   operational closure now covers the achieved scope; name it `ReachedBy` and state
   the final `graph_correct` / `graph_reached_inv` / `backend_equivalence` / T6a
   (with real exclusion content) / T6b over it. This discharges the obligations

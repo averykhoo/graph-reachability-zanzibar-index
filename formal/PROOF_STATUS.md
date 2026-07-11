@@ -8,6 +8,80 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12i (W4 OPENED — scope inventory, `FullScope.lean` restatement layer, T2a groundwork over the two-round chains, pass-local I6)
+
+Resuming from HANDOFF "The next task — W4". FOUR green+pushed increments;
+`verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms audit +
+60 conformance). W4 items 1–3 + the witness attack are DONE; the remaining W4
+proof is T2a (`Inv` over the operational chain), of which the three fragment-free
+layers and the pass-local core landed this session.
+
+**Increment 1 — the design pass (ROADMAP W4 section).** Scope inventory of the
+four closed fragments (W2 `graph_correct_rulesBS`, W3c, W3d-1 E, W3d-2 E): shared
+query scope (`hqs` star⇒BARE, concrete object) and store hyps (`StoreValidRules` +
+`BareStarStore` + `TtuStarFree`); schema-side deltas: `hWSbare` is the ONLY W2
+generality W3d-2 lacks (schema-level wildcard-userset restrictions; Python rejects
+them only over derived, `zanzibar_utils_v1.py:1446-1451`); on `UntaintedSchema`
+every derived-scoped hyp is vacuous and every state drained. Decisions: the
+operational chain is canonical (`ReachedBy := ReachedByW3d2E`); hypotheses split
+by PROVENANCE (admission mirror vs honest carries); the deleted-as-false
+obligations return as the unsuffixed final theorems; honest-gaps list recorded.
+
+**Increment 2 — `FullScope.lean` (the W4 restatement layer).**
+- `ReachedBy := ReachedByW3d2E`, `Drained` (abbrevs).
+- **`GraphAdmission S T`** (Python-admission mirror, per-field citations: WF,
+  NodupKeys, Stratifiable, TtuTuplesetsDirect ← `_validate_ttu_tuplesets`,
+  RewriteMatchDeclared, RewriteRanked, `objWild` ← `_reject_object_wildcard_scope`,
+  StoreValidRules) / **`W4Fragment S T`** (the honest carries: rootB, computedOnly,
+  twoStrata `hLU2`, wsBare, bareStar, ttuStarFree, term; add-only = chain property).
+- **`w4_within_scope`**: the bundles imply the SPEC's decision-15 predicate
+  `GraphAccepts S` (`State.lean:625` — kept as-is; clause 2 from `wsBare`, clause 3
+  from `ttuDirect`+`rootB` via `directsOnly`); converse false — the surplus IS the
+  honest-gaps list.
+- Final UNSUFFIXED **`graph_correct` / `backend_equivalence` /
+  `exclusion_effective` / `no_ghost_grant`** over `ReachedBy` (W1 pure-direct
+  versions renamed `*_direct` in `Equiv.lean`).
+- W2 subsumption as theorems: `drained_of_untainted` (untainted ⇒ every state
+  drained — `affectedKeys` only emits derived keys), `w4Fragment_of_untainted`
+  (the fragment collapses to wsBare/bareStar/ttuStarFree).
+- **Non-vacuity witnesses** (the attack of record for a restatement stage — an
+  uninhabitable bundle would make everything vacuous): `W4Witness.Sx` (`doc#r :=
+  a but not b`, compiled form) / `Tx`; `accepts` / `fragment` / `within_scope`
+  machine-checked. NOTE: no `AllValid Tx` witness possible — `ValidIdent` is
+  deliberately opaque. Lean gotcha: `String.contains` is WF-recursion-backed and
+  does NOT kernel-reduce (`decide` sticks) — prove `relNameOK` goals via `simp`;
+  every other admission field decides.
+- Root aggregator now imports `CascadeStrataEnum`/`CascadeStrataAssemble` (were
+  Audit-only) + `FullScope`.
+
+**Increment 3 — `GraphIndex/CascadeStrataInv.lean` (T2a fragment-free layers over
+the two-round chains).** `StructInv` / `ResidueHygienic` (edge-free I6) /
+`ResidueDeclared` at every `ReachedByW3d2` / `W3d2C` / `W3d2E` state. The routed
+guard swap never changes which structural fields a fold branch touches, so the
+first two are guard-independent mirrors of `CascadeInv.lean`; declaredness over
+the E-chain is HYPOTHESIS-FREE (`enumJobs2At_keyFacts`: enumerated jobs carry
+their key facts by construction — `cascadeKeysAbove` props + the enumeration's
+own lookup).
+
+**Increment 4 — pass-local I6 (`reconcileStarsKeyDR_row_edge_consistent`).** The
+core of the remaining T2a piece, with a DESIGN SHIFT vs W3d-1's
+`reachedByW3dC_edgeHygienic`: no settled verdicts. The routed pass's own row is
+edge-consistent with its own audit at the post-pass state — a `neg` member failed
+the pass-start guard and, being a candidate (`hnc`), was audited against exactly
+that guard (`reconcileStarsKeyDR_edge_char`); a `upos` member is userset-shaped
+vs bare candidates/sources. Because no settledness is consumed, this holds at
+RE-DIRTIED round-1 stratum-2 keys (the 12h attack shape) where `SettledKey` is
+unavailable — the reason the W3d-1 coverage-based route would NOT port (W3d2C
+coverage is conditional). The E-chain discharges `hnc` by construction
+(`enumJob2_negCands_subset`). 19 new Audit entries total this session; all
+standard axioms.
+
+**Resume → W4 T2a assembly** (HANDOFF "The next task"): batch/chain edge hygiene
+over `ReachedByW3d2E` from the pass-local core, then `reachedByW3d2E_inv` and the
+`graph_reached_inv` restatement in `FullScope.lean`; then Phase 6.
+
+---
+
 ## Session 2026-07-12h (W3d-2 CLOSED — the E-chain closure assembly: attack-refuted round-1 stratum lemma, conditional coverage, `ReachedByW3d2E`, `graph_correct_w3d2E`)
 
 Resuming from HANDOFF "The next task — the W3d-2 E-chain tail: the CLOSURE ASSEMBLY".
