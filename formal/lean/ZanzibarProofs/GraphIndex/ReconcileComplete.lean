@@ -709,4 +709,101 @@ theorem graph_correct_w3a {S : Schema} {T : Store} {σ : GraphState} (q : Query)
       _ = sem S T ⟨q.subject, q.relation, ⟨q.object.type, q.object.name⟩⟩ := h3
       _ = sem S T q := rfl
 
+/-! ## The STAR-RELAXED `checkFn ↔ sem` stack (W3c read half, step 1 cont.)
+
+`checkFn_eq_sem` without `StarFreeStore`, subject-generic up to star-BARE subjects — the
+form the W3c `coveredFn` correspondence consumes. Two star-free shortcuts are replaced:
+
+* `graphRec_reduce_base_adm` killed the wildcard probes 2–4 via plain edges
+  (`probeNonDerived_plainEdges`). Star grants make probe 2 LIVE, so
+  `graphRec_reduce_base_adm_bs` instead transfers ALL FOUR probes to the base: every probe
+  target — `objNode ⟨dt,on⟩ r'` and `wAllNode dt r'` — carries the untainted key
+  `(dt, r')`, so the multi-pass reach-inertness (`reachedByW3aAdmitted_reach_inert`, which
+  never needed star-freeness) applies to each probe verbatim.
+* the base equation is `graphRec_base_eq_bs` (`RestrictBase.lean`). -/
+
+/-- **The operand read reduces to an admitted base — star-relaxed, all four probes.** -/
+theorem graphRec_reduce_base_adm_bs {σ : GraphState} {S : Schema} {T : Store}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3aAdmitted σ S T) {s : SubjectRef} {dt on : String} :
+    ∃ σ0, ReachedByRulesAdmitted σ0 S T ∧
+      ∀ r', isDerived S (dt, r') = false →
+        GraphModel.graphRec σ s dt on r' = GraphModel.graphRec σ0 s dt on r' := by
+  obtain ⟨σ0, hσ0, hsub, htrans⟩ := reachedByW3aAdmitted_reach_inert hterm h
+  refine ⟨σ0, hσ0, ?_⟩
+  intro r' hunt
+  have hcl_σ := (reachedByW3a_inv (reachedByW3aAdmitted_toW3a h)).1.edgesClosed
+  have hcl_σ0 := (reachedByRules_inv (reachedByRules_of_admitted hσ0)).1.edgesClosed
+  -- `reach` agrees between σ and σ0 at every untainted-key target
+  have key : ∀ (u v : NodeKey), isDerived S (v.type, v.pred) = false →
+      σ.reach u v = σ0.reach u v := by
+    intro u v hv
+    cases h1 : σ.reach u v <;> cases h2 : σ0.reach u v <;> try rfl
+    · exfalso
+      have := reach_complete hcl_σ (NReaches.mono_subset hsub (reach_sound h2))
+      rw [h1] at this; exact absurd this (by decide)
+    · exfalso
+      have := reach_complete hcl_σ0 (htrans hv (reach_sound h1))
+      rw [h2] at this; exact absurd this (by decide)
+  -- both probe targets carry the untainted key (dt, r')
+  have hobj : isDerived S ((objNode ⟨dt, on⟩ r').type, (objNode ⟨dt, on⟩ r').pred) = false := by
+    rw [objNode_type, objNode_pred]; exact hunt
+  have hall : isDerived S ((wAllNode dt r').type, (wAllNode dt r').pred) = false := hunt
+  show GraphModel.probeNonDerived σ ⟨s, r', ⟨dt, on⟩⟩
+     = GraphModel.probeNonDerived σ0 ⟨s, r', ⟨dt, on⟩⟩
+  unfold GraphModel.probeNonDerived
+  simp only
+  rw [key (subjNode s) _ hobj, key (wAnyNode (SubjectRef.shape s)) _ hobj,
+      key (subjNode s) _ hall, key (wAnyNode (SubjectRef.shape s)) _ hall]
+
+/-- **`checkFn` equals `sem` given the operand reads reduce to an admitted base —
+    star-relaxed** (mirror of `checkFn_eq_sem_of_base` over `graphRec_base_eq_bs`;
+    star-BARE subjects included). -/
+theorem checkFn_eq_sem_of_base_bs {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hinert : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRec σ s dt on r' = GraphModel.graphRec σ0 s dt on r')
+    (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hDecl : StoreDeclared S T := storeDeclared_of_validRules hSV
+  have hag : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRec σ s dt on r'
+        = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r' := by
+    intro r' hr'
+    rw [hinert r' hr',
+        graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch h0 hs hon r'
+          (hleafUnt r' hr')]
+    show sem S T ⟨s, r', ⟨dt, on⟩⟩ = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
+    exact semAux_qirrel S s T ⟨s, r', ⟨dt, on⟩⟩ ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
+  rw [checkFn_eq_semStep (S := S) (σ := σ) (T := T) (q := ⟨s, R, ⟨dt, on⟩⟩) hlk hco hag]
+  exact sem_fuel_stable S T ⟨s, R, ⟨dt, on⟩⟩ hStrat hDecl (fuelBound S T + 1) (Nat.le_succ _)
+
+/-- **`checkFn` equals `sem` on a W3a-admitted state — star-relaxed.** No `StarFreeStore`;
+    the query subject may be star-BARE (the `coveredFn` reads). Composition of
+    `graphRec_reduce_base_adm_bs` and `checkFn_eq_sem_of_base_bs`. -/
+theorem checkFn_eq_sem_bs {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3aAdmitted σ S T)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  obtain ⟨σ0, h0, hred⟩ := graphRec_reduce_base_adm_bs hterm h (s := s) (dt := dt) (on := on)
+  exact checkFn_eq_sem_of_base_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat h0 hlk hco
+    hleafUnt (fun r' hr' => hred r' (hleafUnt r' hr')) hs hon
+
 end Zanzibar

@@ -1,4 +1,5 @@
 import ZanzibarProofs.GraphIndex.ReconcileCorrect
+import ZanzibarProofs.GraphIndex.RulesBareStar
 import ZanzibarProofs.Spec.Stabilize
 
 /-!
@@ -577,6 +578,116 @@ theorem graphRec_base_eq {S : Schema} {T : Store} {σ0 : GraphState}
   have hgc : GraphModel.check σ' ⟨s, r', ⟨dt, on⟩⟩ = sem (restrictUntainted S) T ⟨s, r', ⟨dt, on⟩⟩ :=
     graph_correct_rules (restrictUntainted S) T σ' ⟨s, r', ⟨dt, on⟩⟩ hWFU hUT hTTU hNKU hRU hSVU hSF
       hs hon h'
+  -- sem (S↾U) T q' = sem S T q' (semAux_restrict at fuelBound S T + fuel stability over S↾U)
+  have hDecl : StoreDeclared S T := storeDeclared_of_validRules hSV
+  have hfuel_le : fuelBound (restrictUntainted S) T ≤ fuelBound S T := by
+    unfold fuelBound
+    exact Nat.mul_le_mul restrictUntainted_keys_length_le (le_refl _)
+  have hStableU := sem_fuel_stable (restrictUntainted S) T ⟨s, r', ⟨dt, on⟩⟩
+    (stratifiable_untainted hUT) (storeDeclared_of_validRules hSVU) (fuelBound S T) hfuel_le
+  have hsemR := semAux_restrict (S := S) hNK hDecl s ⟨s, r', ⟨dt, on⟩⟩ (fuelBound S T) dt r' hunt on
+  have hsembridge : sem (restrictUntainted S) T ⟨s, r', ⟨dt, on⟩⟩ = sem S T ⟨s, r', ⟨dt, on⟩⟩ := by
+    have e1 : sem (restrictUntainted S) T ⟨s, r', ⟨dt, on⟩⟩
+        = semAux (restrictUntainted S) s T ⟨s, r', ⟨dt, on⟩⟩ (fuelBound S T) dt on r' := hStableU.symm
+    have e3 : semAux S s T ⟨s, r', ⟨dt, on⟩⟩ (fuelBound S T) dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩ :=
+      rfl
+    exact e1.trans (hsemR.symm.trans e3)
+  -- assemble the chain
+  show GraphModel.graphRec σ0 s dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩
+  calc GraphModel.graphRec σ0 s dt on r'
+      = GraphModel.probeNonDerived σ0 ⟨s, r', ⟨dt, on⟩⟩ := rfl
+    _ = GraphModel.probeNonDerived σ' ⟨s, r', ⟨dt, on⟩⟩ := hprobe
+    _ = GraphModel.check σ' ⟨s, r', ⟨dt, on⟩⟩ := hcheck.symm
+    _ = sem (restrictUntainted S) T ⟨s, r', ⟨dt, on⟩⟩ := hgc
+    _ = sem S T ⟨s, r', ⟨dt, on⟩⟩ := hsembridge
+
+/-! ## The STAR-RELAXED base `hag` equation (W3c read half, step 1)
+
+`graphRec_base_eq` over `BareStarStore` instead of `StarFreeStore`: bare `T:*` grants in
+the base store, and the query subject widened to star-BARE subjects — the instance the
+W3c `coveredFn`/`stars ↔ sem` correspondence consumes. Same schema-restriction route; the
+untainted correspondence consumed as a black box is now `graph_correct_rulesBS`
+(`RulesBareStar.lean`), whose extra fragment condition `TtuStarFree` transfers to `S↾U`
+because the restriction preserves `schemaRewrites`. -/
+
+/-- `TtuStarFree` transfers to the untainted restriction (`schemaRewrites` preserved). -/
+theorem ttuStarFree_restrict {S : Schema} {T : Store}
+    (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
+    (hTS : TtuStarFree S T) : TtuStarFree (restrictUntainted S) T := by
+  intro t ht hstar a ha tr hk
+  rw [schemaRewrites_restrict hDrop] at ha
+  exact hTS t ht hstar a ha tr hk
+
+/-- **The star-relaxed base `hag` equation.** The operand read on the admitted
+    mixed-schema base over a `BareStarStore` + `TtuStarFree` store equals `sem`, for every
+    untainted operand relation `r'` and every subject that is concrete or star-bare —
+    including the STAR-subject reads `coveredFn` performs. Mirror of `graphRec_base_eq`
+    with `graph_correct_rulesBS` as the untainted black box. -/
+theorem graphRec_base_eq_bs {S : Schema} {T : Store} {σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    {s : SubjectRef} {dt on : String}
+    (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    ∀ r', isDerived S (dt, r') = false →
+      GraphModel.graphRec σ0 s dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩ := by
+  intro r' hunt
+  -- `hDrop` (tainted defs emit no arms) follows from the `RootBoolean` shape
+  have hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [] :=
+    fun d hd hder => exprArms_rootBoolean d.1.1 d.1.2 (hRootB d hd hder)
+  -- stored relations are untainted: a derived def is `RootBoolean` ⇒ no `Direct` arm to match
+  have hStoreUnt : ∀ t ∈ T, isDerived S (t.object.type, t.relation) = false := by
+    intro t ht
+    obtain ⟨e, rs, hlk, hdir, _⟩ := hSV t ht
+    by_contra hcon
+    rw [Bool.not_eq_false] at hcon
+    have hdmem := mem_defs_of_lookup hlk
+    rw [exprDirects_rootBoolean (hRootB _ hdmem hcon)] at hdir
+    simp at hdir
+  -- the untainted restriction and its hypotheses
+  have hUT : UntaintedSchema (restrictUntainted S) := untaintedSchema_restrict hNK
+  have hNKU : NodupKeys (restrictUntainted S) := restrictUntainted_nodup hNK
+  have hWFU : WF (restrictUntainted S) :=
+    ⟨fun p hp => hWF.relNames p (restrictUntainted_defs_subset hp)⟩
+  have hTTU : TtuTuplesetsDirect (restrictUntainted S) := by
+    intro d hd tt htt d' hd' hkey
+    exact hTT d (restrictUntainted_defs_subset hd) tt htt d'
+      (restrictUntainted_defs_subset hd') hkey
+  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hDrop hMatch hR
+  have hSVU : StoreValidRules (restrictUntainted S) T := by
+    intro t ht
+    obtain ⟨e, rs, hlk, hdir, hrm⟩ := hSV t ht
+    exact ⟨e, rs, by rw [restrictUntainted_lookup hNK (hStoreUnt t ht)]; exact hlk, hdir, hrm⟩
+  have hTSU : TtuStarFree (restrictUntainted S) T := ttuStarFree_restrict hDrop hTS
+  -- the canonical admitted restricted state with agreeing edges (the state transfer)
+  obtain ⟨σ', h', hEdge⟩ := exists_admitted_restrict h0 hDrop hMatch hR
+  -- edge-membership agreement ⇒ `reach` agreement (both states endpoint-closed)
+  have hcl0 := (reachedByRules_inv (reachedByRules_of_admitted h0)).1.edgesClosed
+  have hcl' := (reachedByRules_inv (reachedByRules_of_admitted h')).1.edgesClosed
+  have hsub01 : ∀ e ∈ σ0.edges, e ∈ σ'.edges := by rintro ⟨a, b⟩ h; exact (hEdge a b).mpr h
+  have hsub10 : ∀ e ∈ σ'.edges, e ∈ σ0.edges := by rintro ⟨a, b⟩ h; exact (hEdge a b).mp h
+  have hreach : ∀ a b, σ0.reach a b = σ'.reach a b := by
+    intro a b
+    cases h0r : σ0.reach a b <;> cases h'r : σ'.reach a b <;> try rfl
+    · have : NReaches σ0.edges a b := (reach_sound h'r).mono_subset hsub10
+      rw [reach_complete hcl0 this] at h0r; exact absurd h0r (by decide)
+    · have : NReaches σ'.edges a b := (reach_sound h0r).mono_subset hsub01
+      rw [reach_complete hcl' this] at h'r; exact absurd h'r (by decide)
+  -- graphRec σ0 = probeNonDerived σ0 q' = probeNonDerived σ' q' (reach agreement)
+  have hprobe : GraphModel.probeNonDerived σ0 ⟨s, r', ⟨dt, on⟩⟩
+      = GraphModel.probeNonDerived σ' ⟨s, r', ⟨dt, on⟩⟩ := by
+    unfold GraphModel.probeNonDerived; simp only [hreach]
+  -- probeNonDerived σ' = check σ' = sem (S↾U) T q' (graph_correct_rulesBS)
+  have hInv' := (reachedByRules_inv (reachedByRules_of_admitted h')).1
+  have hcheck : GraphModel.check σ' ⟨s, r', ⟨dt, on⟩⟩
+      = GraphModel.probeNonDerived σ' ⟨s, r', ⟨dt, on⟩⟩ :=
+    check_eq_probeNonDerived hInv'.schemaEq hUT _
+  have hgc : GraphModel.check σ' ⟨s, r', ⟨dt, on⟩⟩ = sem (restrictUntainted S) T ⟨s, r', ⟨dt, on⟩⟩ :=
+    graph_correct_rulesBS (restrictUntainted S) T σ' ⟨s, r', ⟨dt, on⟩⟩ hWFU hUT hTTU hNKU hRU
+      hSVU hBS hTSU hs hon h'
   -- sem (S↾U) T q' = sem S T q' (semAux_restrict at fuelBound S T + fuel stability over S↾U)
   have hDecl : StoreDeclared S T := storeDeclared_of_validRules hSV
   have hfuel_le : fuelBound (restrictUntainted S) T ≤ fuelBound S T := by

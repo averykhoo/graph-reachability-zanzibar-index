@@ -630,4 +630,20 @@ namespace Zanzibar
 #print axioms rulesAdmitted_edge_endpoints_bs
 #print axioms graph_correct_rulesBS
 
+-- **ROADMAP W3c read half, step 1 CLOSED — the star-relaxed base equation
+-- (RestrictBase.lean + ReconcileComplete.lean, 2026-07-11).** `graphRec_base_eq_bs`: the
+-- admitted mixed-schema base's operand read = `sem` over `BareStarStore` + `TtuStarFree`
+-- stores, subject-generic up to star-BARE subjects (the schema-restriction route with
+-- `graph_correct_rulesBS` as the untainted black box; `TtuStarFree` transfers to `S↾U`
+-- because the restriction preserves `schemaRewrites`). `graphRec_reduce_base_adm_bs`: the
+-- W3a-admitted state's operand read reduces to the base with NO `StarFreeStore` — the
+-- plain-edges probe-killing shortcut is replaced by transferring ALL FOUR probes (both
+-- probe targets carry the untainted key `(dt, r')`, so the reach-inertness applies to each
+-- verbatim). `checkFn_eq_sem_bs`: the composed star-relaxed `checkFn ↔ sem` bridge — the
+-- form the W3c `coveredFn`/`stars ↔ sem` correspondence consumes. Standard axioms only:
+#print axioms graphRec_base_eq_bs
+#print axioms graphRec_reduce_base_adm_bs
+#print axioms checkFn_eq_sem_of_base_bs
+#print axioms checkFn_eq_sem_bs
+
 end Zanzibar
