@@ -474,14 +474,27 @@ and re-proves/widens the same named theorems. Every stage must keep
     `cascade_drains` + `cascadeKeys_nil_of_quiescent`) + T3/T6 `*_w3d`. Deferred to a
     later increment: `reachedByW3d_inv` (the T2a carry over the interleaved chain).
     Detail: PROOF_STATUS 2026-07-11h.
-  - **W3d-1c — the audit enumeration from state.** Model `_leaf_concretes` + the
-    audit set (`processor.py:394-441`) as a state-derived enumeration (plain concrete
-    nodes reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`
-    members); prove **`W3dJobCoverage` as a THEOREM of that enumeration** (all four
-    clauses — edge holders, `cands`/`negCands`/`uposCands` `sem`-completeness), so
-    `graph_correct_w3d`'s coverage is discharged, not hypothesized. Plus the deferred
-    `reachedByW3d_inv` (T2a carry: `Inv` over the interleaved chain — acyclicity
-    through removals, I6 clauses at W3d rows).
+  - **W3d-1c — the audit enumeration from state + `reachedByW3d_inv`. ◐ PART 3
+    STARTED (2026-07-11i).** Two pieces remain (either order):
+    * **(A) `reachedByW3d_inv`** (the deferred T2a carry: `Inv` over the interleaved
+      chain). **Two of four residue clauses + all four structural clauses DONE**
+      (`GraphIndex/CascadeInv.lean`, sorry-free, axiom-clean): `reachedByW3d_structInv`
+      (schema/nodeEnc/edgesClosed/**acyclic** — acyclicity FREE, `writeDirect`
+      cycle-rejects + `removeEdgePair` shrinks reach) and `reachedByW3d_residueHygienic`
+      (the edge-FREE I6 clauses `negStarCovered`/`uposNegDisjoint` —
+      `reconcileResidueKey`'s filters give them by construction), BOTH with NO fragment
+      hypotheses. **Remaining: the two EDGE-referencing I6 clauses**
+      `negEdgeFree`/`uposEdgeFree` — reach into the R-node collapses to a single edge
+      (`reachedByW3d_reach_collapse_root`), but closing needs a per-key edge-source
+      canonicity at EVERY chain state (the W3c `master`'s `hedge` re-derived over the
+      diffing chain / the settledness content lifted off drained states). Fragment
+      carries then: `hterm`/`hRootB`/`hCO`/`hLU`/`hNK`/`hSV` as in `reachedByW3c_inv`.
+    * **(B) the audit enumeration** — model `_leaf_concretes` + the audit set
+      (`processor.py:394-441`) as a state-derived enumeration (plain concrete nodes
+      reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`
+      members); prove **`W3dJobCoverage` as a THEOREM of that enumeration** (all four
+      clauses — edge holders, `cands`/`negCands`/`uposCands` `sem`-completeness), so
+      `graph_correct_w3d`'s coverage is discharged, not hypothesized.
   - **W3d-2 — two strata (derived-reading-derived).** Relax `hLU` to lower-stratum
     derived operands: `checkFn` leaf dispatch routes derived operands through
     `probeDerived` (a real model extension — Python's leaf calls `widx.check`, which

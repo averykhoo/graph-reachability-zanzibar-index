@@ -8,6 +8,76 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11i (W3d-1c part 3 STARTED — the deferred `reachedByW3d_inv`, two of its four residue clauses + all four structural clauses discharged)
+
+Resuming from HANDOFF "The next task — W3d-1c". Two green+pushed increments, both in the
+NEW `GraphIndex/CascadeInv.lean` (+ root import, Audit import + 6 new entries);
+`verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms audit + 60
+conformance). Focus: the deferred T2a carry `reachedByW3d_inv` (`Inv` over the
+interleaved scheduler chain), the piece W3d-1c point 3. The 8-clause `Inv` splits into a
+STRUCTURAL half (`StructInv` — schema, nodeEnc, edgesClosed, acyclic) and the four I6
+residue-hygiene clauses; two of the I6 clauses are edge-FREE, two are edge-referencing.
+This session discharged the structural half AND the two edge-free I6 clauses, all with
+NO fragment hypotheses — leaving `reachedByW3d_inv` reduced to exactly `negEdgeFree` +
+`uposEdgeFree`.
+
+**Increment 1 — the structural invariant `reachedByW3d_structInv`.** `StructInv S σ` at
+every state of the interleaved chain (empty → logged writes → cascades, any order), NO
+fragment hypotheses. **Key observation: acyclicity is FREE on the chain** — every edge
+the model adds is a `writeDirect`, which cycle-rejects internally (`admitEdge` back-path
+probe via `reach_complete`, `Write.lean`), and every edge the diffing audit removes is a
+`removeEdgePair`, which only SHRINKS the edge set (so `NReaches` shrinks,
+`NReaches.mono_subset` / `removeEdgePair_edges_subset`). No R-node terminality needed
+here. `StructInv` preservation proved for every primitive:
+`removeEdgePair` / `reconcileResidueKey` (residue-only) / `reconcileKeyD` (fold of
+writeDirect|removeEdgePair) / `reconcileStarsKeyD` / `pushDelta` / `setWatermark` /
+`writeLoggedOne` / `writeLoggedRules` (fold) / `applyLogged` / `reconcileJobsL` (fold) /
+`runCascade` (accept = batch + watermark bump, both structural no-ops; reject =
+identity), then `reachedByW3d_structInv` by chain induction (+ the `ReachedByW3dC`
+projection `reachedByW3dC_structInv`).
+
+**Increment 2 — the edge-free I6 clauses `reachedByW3d_residueHygienic`.** At every W3d
+state, every persisted residue row satisfies `negStarCovered` (`∀ n ∈ neg,
+stars.contains n.shape`) and `uposNegDisjoint` (`∀ n ∈ upos, neg.contains n = false`) —
+the two `Inv` clauses that read only the row, NOT the edges — with NO fragment
+hypotheses. Both hold of every written row BY CONSTRUCTION: `reconcileResidueKey` writes
+`neg = negCands.filter (stars.contains c.shape && ¬checkFn)` and `upos = uposCands.filter
+(¬stars.contains c.shape && checkFn)` (`processor.py:406-441`), so a `neg` member's shape
+is covered (first filter conjunct) and a `upos` member is uncovered (so it fails the
+`neg` filter ⇒ `neg.contains = false`). Chain invariant `ResidueHygienic` folded through
+`reconcileStarsKeyD` (self-key = the filtered row via `reconcileStarsKeyD_residue_self` +
+`reconcileResidueKey_residue_self`; other keys via `_residue_other` + IH) / `applyLogged`
+/ `reconcileJobsL` / `runCascade` / `writeLoggedRules` (residue-inert,
+`writeLoggedRules_residue`). Axioms `[propext]` only.
+
+**Why the other two I6 clauses are the genuinely hard remainder** (deferred): `negEdgeFree`
+/ `uposEdgeFree` reference the CURRENT edges — a `neg`/`upos` member must have no reach
+into its key's R-node. Via `reachedByW3d_reach_collapse_root` (exists) this reduces to
+"no derived edge from the member", but the residue row and the current edges can be from
+DIFFERENT passes, so closing it needs a W3d MASTER-analog / the settledness content
+(`SettledKey`, currently only at fully-drained coverage-chain states) lifted to a
+per-key edge-source canonicity at EVERY chain state — the W3c inv proof's `hedge`
+canonicity (`reachedByW3c_master`) but re-derived over the interleaved diffing chain.
+That is the size of a full increment on its own.
+
+**Proof-engineering notes.** (1) `subst hr` on `hr : r = R` ELIMINATES `R` (keeps `r`),
+breaking every later mention of the schema binder `R` — use `rw [hk, hr, …]` to retarget
+the residue lemmas instead of `subst`. (2) `Bool.and_eq_true` is a `simp` lemma, not an
+`Iff` — `simp only [Bool.and_eq_true] at h` to split `(a && b) = true`; there is no
+`.mp`. (3) `set stars := shapes.filter …` / `set neg := negCands.filter …` before
+`obtain rfl := Option.some.inj hrow` keeps the row's filter expressions NAMED, so the
+membership extraction (`List.mem_filter` + `List.contains_eq_mem` + `of_decide_eq_true`)
+stays readable. (4) `runCascade`'s accept branch is `{… with watermark := …}` — a
+`structInv_setWatermark` / `residueHygienic_setWatermark` (both `= h`, fields defeq
+through the record update) crosses it.
+
+**Resume → W3d-1c remaining:** (a) `negEdgeFree` + `uposEdgeFree` ⇒ full
+`reachedByW3d_inv` (the master-analog / settledness lift above); (b) the audit
+enumeration model + discharging `W3dJobCoverage` as a theorem (parts 1–2, makes
+`graph_correct_w3d` unconditional). Both are full-increment-sized; either order.
+
+---
+
 ## Session 2026-07-11h (W3d-1b CLOSED — targeted-key re-settlement, the settledness invariant, `graph_correct_w3d` + T3/T6 `*_w3d`)
 
 Resuming from HANDOFF "W3d-1b (final leg)". Two green+pushed increments, all in the new
