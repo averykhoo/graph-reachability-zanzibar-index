@@ -27,6 +27,7 @@ import ZanzibarProofs.GraphIndex.ReconcileStars
 import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 import ZanzibarProofs.GraphIndex.Cascade
 import ZanzibarProofs.GraphIndex.CascadeStable
+import ZanzibarProofs.GraphIndex.CascadeInv
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -822,5 +823,18 @@ namespace Zanzibar
 #print axioms backend_equivalence_w3d
 #print axioms exclusion_effective_w3d
 #print axioms no_ghost_grant_w3d
+
+-- **W3d-1c (part 3a) — the STRUCTURAL invariant over the interleaved chain
+-- (GraphIndex/CascadeInv.lean).** The structural half of the deferred T2a carry
+-- `reachedByW3d_inv`: every W3d state satisfies `StructInv` (schema fixity, node
+-- encoding, edge endpoint-closure, ACYCLICITY) with NO fragment hypotheses.
+-- Acyclicity is free on the chain — every added edge is a cycle-rejecting `writeDirect`,
+-- every removed edge only shrinks reach (`removeEdgePair`/`NReaches.mono_subset`). The
+-- four I6 residue-hygiene clauses (which need the `RootBoolean`/terminality fragment)
+-- remain the open half of `reachedByW3d_inv`. Standard axioms only:
+#print axioms structInv_reconcileStarsKeyD
+#print axioms structInv_runCascade
+#print axioms reachedByW3d_structInv
+#print axioms reachedByW3dC_structInv
 
 end Zanzibar
