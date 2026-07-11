@@ -527,13 +527,28 @@ and re-proves/widens the same named theorems. Every stage must keep
       **`graph_correct_w3dE`** (`check = sem`, fully-drained) + **`reachedByW3dE_inv`**
       (the full 8-clause `Inv`, every state) hold UNCONDITIONALLY — `W3dJobCoverage` is a
       theorem, not a hypothesis. Detail: PROOF_STATUS 2026-07-12b.
-  - **W3d-2 — two strata (derived-reading-derived).** Relax `hLU` to lower-stratum
-    derived operands: `checkFn` leaf dispatch routes derived operands through
-    `probeDerived` (a real model extension — Python's leaf calls `widx.check`, which
-    routes); `rounds = 2` with `_bumped` fan-out; per-stratum generalization of the
+  - **W3d-2 — two strata (derived-reading-derived). ◐ OPENED (2026-07-12c,
+    `GraphIndex/CascadeStrata.lean`).** Relax `hLU` to lower-stratum derived operands:
+    the leaf dispatch routes derived operands through `probeDerived` (a real model
+    extension — Python's `_EvalContext` dispatches `derived_check` →
+    `widx._check_derived`, `derived_stars` → residue stars; `member_check` routes on
+    tainted); `rounds = 2` with `_bumped` fan-out; per-stratum generalization of the
     shadow + inertness (a stratum-k pass is inert for stratum-<k reads); processor-
     emitted rows now MAP to dependent keys — the leftover check earns its round
     structure, and `stratify_topological` (T0b) supplies the settle order.
+    **Done (12c)**: `graphRecR`/`checkFnR`/`coveredFnR` (the routed read),
+    conservativity (`checkFnR_eq_checkFn`, `reconcileStarsKeyDR_eq`,
+    `reconcileJobsLR_eq` — W3d-1 is the single-stratum image), `checkFnR_evalEq`
+    (routed read = exactly the `EvalEq` core), the routed diffing pass, `runCascade2`
+    (per-round frontier cursor, leftover reject), `ReachedByW3d2` (C-style two-batch
+    closure), `reachedByW3d2_schema`. Attack-first: fully-drained `check = sem`
+    SURVIVED cross-stratum union/exclusion/stars/userset-upos under both within-round
+    orders and sync/async batching; mid-drain staleness real (fully-drained scope);
+    within-round order not load-bearing; the E-chain `enumJobs` must add residue-named
+    candidates (`_derived_leaf_neg_ids`, `processor.py:461-495`; old `upos` `:425-429`).
+    **Remaining**: scheduler structural mirrors, `runCascade2_no_abort` under `hLU2`
+    (two-stratum condition), per-stratum inertness/shadow, the read bridge →
+    `graph_correct_w3d2`, the E-chain tail. Detail: PROOF_STATUS 2026-07-12c.
 
   **W3c ✅ CLOSED (2026-07-11d): `graph_correct_w3c` + T3/T6 (`*_w3c`) — star-carrying
   stores.** The read half assembled in `GraphIndex/ReconcileStarsComplete.lean`: **the

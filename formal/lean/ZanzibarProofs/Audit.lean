@@ -29,6 +29,7 @@ import ZanzibarProofs.GraphIndex.Cascade
 import ZanzibarProofs.GraphIndex.CascadeStable
 import ZanzibarProofs.GraphIndex.CascadeInv
 import ZanzibarProofs.GraphIndex.CascadeEnum
+import ZanzibarProofs.GraphIndex.CascadeStrata
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -903,5 +904,30 @@ namespace Zanzibar
 #print axioms reachedByW3dE_toC
 #print axioms graph_correct_w3dE
 #print axioms reachedByW3dE_inv
+
+-- **W3d-2 opening — the ROUTED leaf dispatch + the two-round scheduler (GraphIndex/
+-- CascadeStrata.lean, 2026-07-12c).** The W3d-2 model extension: `graphRecR` reads
+-- every operand leaf through the graph's own `check`, routing an untainted key to
+-- `probeNonDerived` (`leaf_check` -> `widx.check`) and a derived key to `probeDerived`
+-- (`derived_check` -> `widx._check_derived`; `derived_stars` = residue stars pointwise)
+-- -- `processor.py:43-70, 182-188`. Conservativity: on computed-only defs with
+-- untainted operands (the W3d-1 `hLU` fragment) the routed read IS the W3d read
+-- (`checkFnR_eq_checkFn`), and the routed diffing pass / logged batch collapse to
+-- their W3d counterparts (`reconcileStarsKeyDR_eq`, `reconcileJobsLR_eq`) -- W3d-1 is
+-- the single-stratum image of the routed scheduler. `checkFnR_evalEq`: the routed
+-- read consults exactly the `EvalEq` core (schema/edges/nodes/residue). `runCascade2`
+-- models `run_cascade` at `rounds = len(strata) = 2` (per-round frontier cursor,
+-- round 2 on round 1's emissions, final leftover reject); `ReachedByW3d2` is the
+-- two-stratum interleaved closure (C-style job batches, two-sided per-round
+-- coverage); `reachedByW3d2_schema` anchors the routed dispatch. Attack-first
+-- (2026-07-12c `#eval`): fully-drained `check = sem` SURVIVED cross-stratum union /
+-- exclusion / stars / userset-upos under both within-round orders and sync/async
+-- batching; mid-drain staleness is real (read theorem stays fully-drained-scoped).
+-- Standard axioms only:
+#print axioms checkFnR_eq_checkFn
+#print axioms checkFnR_evalEq
+#print axioms reconcileStarsKeyDR_eq
+#print axioms reconcileJobsLR_eq
+#print axioms reachedByW3d2_schema
 
 end Zanzibar
