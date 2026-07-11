@@ -370,4 +370,47 @@ theorem w3d2_leg_context {S : Schema} {T : Store} {σ σ0 : GraphState}
       hterm hCO hWSbare h0 hsh hschema hlk hder hco hLU2 hops hs' hqo,
    fun _ hchk => checkFnR_star_declared hTT hSV hTS h0 hsh hschema hco hqo hops hchk⟩
 
+/-! ## `W3dJobCoverage` for `enumJob2` at a W3d-2 state
+
+The state-level combining lemma: over any `ReachedByW3d2` state, given only that the
+derived operand keys are settled+complete (`hsettledOps` — the single remaining
+obligation the closure assembly discharges per round: vacuous at stratum-1/round-1
+keys, from round-1 re-settlement at stratum-2/round-2 keys), `enumJob2`'s coverage
+holds. The shadow (`reachedByW3d2_shadow`), edges-closedness
+(`reachedByW3d2_edgesClosed`), the schema anchor, and the per-operand reach collapse
+(`reachedByW3d2_reach_collapse_root`) are all read off the state. -/
+theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d2 σ S T) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e) (hqo : on ≠ STAR)
+    (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hsettledOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
+    W3dJobCoverage S T σ (enumJob2 σ dt on R e) := by
+  have hcl := reachedByW3d2_edgesClosed h
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hRootB hSV hterm
+  have hschema : σ.schema = S := reachedByW3d2_schema h
+  have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') → (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) := by
+    intro r' hr' hd'
+    obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+    have hroot' : RootBoolean e' := hRootB ⟨(dt, r'), e'⟩ (mem_defs_of_lookup hlk') hd'
+    obtain ⟨hset', hcomp'⟩ := hsettledOps r' hr' hd'
+    exact ⟨hset', hcomp',
+      fun u hu => reachedByW3d2_reach_collapse_root hWF hSV hNK hlk' hroot' h hu⟩
+  obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+    hStrat hterm hCO hWSbare h0 hsh hschema hlk hder hco hqo hLU2 hops
+  exact w3dJobCoverage_enumJob2 hco hcl hqo hbridge hcovDecl hWSbare
+
 end Zanzibar
