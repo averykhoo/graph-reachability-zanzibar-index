@@ -930,4 +930,31 @@ namespace Zanzibar
 #print axioms reconcileJobsLR_eq
 #print axioms reachedByW3d2_schema
 
+-- **W3d-2 structural layer + T5 at two strata (GraphIndex/CascadeStrata.lean,
+-- 2026-07-12d).** The W3d-1a scheduler layer re-earned over the ROUTED two-round
+-- scheduler: `reconcileJobsLR_outbox_sound` (every row original or a pass emission
+-- at a job's derived key, id above the pre-batch frontier), routed edge soundness
+-- (`reconcileJobsLR_edge_sound`), R-node terminality over the two-round closure
+-- (`reachedByW3d2_Rnode_not_source` + the batch-transported, round-stackable
+-- `reconcileJobsLR_Rnode_not_source`), and the cursor arithmetic
+-- (`outbox_le_frontierMax`: a round's read is exhaustive). **T5 at two strata**:
+-- `runCascade2_no_abort` -- under `hLU2` (every computed operand of a derived def
+-- untainted OR a derived key with all-untainted operands; the `len(strata) == 2`
+-- condition stated dependency-wise, strictly wider than W3d-1's `hLU` by
+-- `hLU2_of_hLU`) the leftover check always passes: round-2 rows above the round-2
+-- cursor are jobs2 emissions at derived R-nodes whose pred no derived def may read
+-- (a reader would force the emitting key's operands all-untainted, contradicting
+-- `hscope2`'s round-1 dirtying operand). `cascade2_drains`: the two-round watermark
+-- advance is justified, never asserted. Attack-first (2026-07-12d `#eval`): on the
+-- 3-stratum schema `a := b ∨ y, b := c ∨ x, c := x ∖ y` `hLU2` is FALSE and the
+-- reject FIRES (round-2 emission at `b` maps to key `a`); on the 2-stratum
+-- truncation `hLU2` TRUE / W3d-1 `hLU` FALSE, accept, fully-drained `check = sem`.
+-- Standard axioms only:
+#print axioms reconcileJobsLR_outbox_sound
+#print axioms reconcileJobsLR_edge_sound
+#print axioms reachedByW3d2_Rnode_not_source
+#print axioms hLU2_of_hLU
+#print axioms runCascade2_no_abort
+#print axioms cascade2_drains
+
 end Zanzibar

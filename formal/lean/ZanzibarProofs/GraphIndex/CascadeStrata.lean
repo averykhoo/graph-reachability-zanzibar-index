@@ -411,4 +411,503 @@ theorem reachedByW3d2_schema {σ : GraphState} {S : Schema} {T : Store}
       rw [reconcileJobsLR_schema, reconcileJobsLR_schema, ih]
     · exact ih
 
+/-! ## The W3d-2 structural layer — bookkeeping, outbox/edge soundness, terminality
+
+Mirrors of the W3d-1a layer (`Cascade.lean`) over the ROUTED pass: the routed guard
+changes which branch of the fold fires, never which state fields a branch touches.
+
+**Attack-first on `runCascade2_no_abort` (2026-07-12d, `#eval`, scratch deleted) —
+the statement SURVIVED and its hypotheses are load-bearing.** On the 3-stratum
+schema `a := b ∨ y, b := c ∨ x, c := x ∖ y` (all of `a`,`b`,`c` tainted), `hLU2`
+evaluates FALSE and the reject genuinely FIRES: the round-2 pass at `b`'s R-node
+emits a row that maps to key `(doc, a, 1)`, the leftover check fails, and
+`runCascade2` returns the pre-state — so no-abort WITHOUT `hLU2` is refuted, the
+condition is doing exactly the "two strata in disguise" rejection. On the
+2-stratum truncation (drop `a`), `hLU2` is TRUE while W3d-1's `hLU` is FALSE (the
+widening is contentful: `b` reads the derived `c`), the leftovers map to no keys
+(accept), and fully-drained `check = sem` held over the query grid for one- and
+three-write batches. -/
+
+@[simp] theorem reconcileResidueKeyR_edges (σ : GraphState) (T : Store) (dt on R : String)
+    (e : Expr) (shapes : List Shape) (negCands uposCands : List SubjectRef) :
+    (σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands).edges = σ.edges := rfl
+
+@[simp] theorem reconcileResidueKeyR_nodes (σ : GraphState) (T : Store) (dt on R : String)
+    (e : Expr) (shapes : List Shape) (negCands uposCands : List SubjectRef) :
+    (σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands).nodes = σ.nodes := rfl
+
+@[simp] theorem reconcileResidueKeyR_outbox (σ : GraphState) (T : Store) (dt on R : String)
+    (e : Expr) (shapes : List Shape) (negCands uposCands : List SubjectRef) :
+    (σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands).outbox = σ.outbox := rfl
+
+@[simp] theorem reconcileResidueKeyR_watermark (σ : GraphState) (T : Store)
+    (dt on R : String) (e : Expr) (shapes : List Shape)
+    (negCands uposCands : List SubjectRef) :
+    (σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands).watermark
+      = σ.watermark := rfl
+
+theorem reconcileKeyDR_outbox (T : Store) (dt on R : String) (e : Expr) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (σ.reconcileKeyDR T dt on R e cands).outbox = σ.outbox := by
+  intro cands
+  induction cands with
+  | nil => intro σ; rfl
+  | cons c rest ih =>
+    intro σ
+    rw [reconcileKeyDR_cons, ih]
+    split
+    · exact writeDirect_outbox σ _
+    · rfl
+
+theorem reconcileKeyDR_watermark (T : Store) (dt on R : String) (e : Expr) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (σ.reconcileKeyDR T dt on R e cands).watermark = σ.watermark := by
+  intro cands
+  induction cands with
+  | nil => intro σ; rfl
+  | cons c rest ih =>
+    intro σ
+    rw [reconcileKeyDR_cons, ih]
+    split
+    · exact writeDirect_watermark σ _
+    · rfl
+
+/-- One unlogged routed pass never touches the outbox. -/
+theorem W3cJob.applyDR_outbox (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
+    (j.applyDR S T σ).outbox = σ.outbox := by
+  unfold W3cJob.applyDR GraphState.reconcileStarsKeyDR
+  rw [reconcileKeyDR_outbox, reconcileResidueKeyR_outbox]
+
+/-- One unlogged routed pass never touches the watermark. -/
+theorem W3cJob.applyDR_watermark (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
+    (j.applyDR S T σ).watermark = σ.watermark := by
+  unfold W3cJob.applyDR GraphState.reconcileStarsKeyDR
+  rw [reconcileKeyDR_watermark, reconcileResidueKeyR_watermark]
+
+/-- One unlogged routed pass keeps the fresh-id source fixed. -/
+theorem W3cJob.applyDR_nextDeltaId (S : Schema) (T : Store) (σ : GraphState)
+    (j : W3cJob) : (j.applyDR S T σ).nextDeltaId = σ.nextDeltaId := by
+  unfold GraphState.nextDeltaId GraphState.maxOutboxId
+  rw [W3cJob.applyDR_outbox, W3cJob.applyDR_watermark]
+
+/-- The routed logged batch leaves the watermark untouched (the drain advance is
+    `runCascade2`'s final act, not the passes'). -/
+theorem reconcileJobsLR_watermark (S : Schema) (T : Store) :
+    ∀ (jobs : List W3cJob) (σ : GraphState),
+      (reconcileJobsLR S T σ jobs).watermark = σ.watermark := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ; rfl
+  | cons j rest ih =>
+    intro σ
+    show (reconcileJobsLR S T (j.applyLoggedR S T σ) rest).watermark = σ.watermark
+    rw [ih]
+    unfold W3cJob.applyLoggedR
+    rw [pushDelta_watermark, W3cJob.applyDR_watermark]
+
+/-- **Outbox soundness of the routed logged batch**: every row is an original row or
+    a pass-emitted row — at some job's derived key, with an id strictly above the
+    pre-batch frontier `max maxOutboxId watermark` (mirror of
+    `reconcileJobsL_outbox_sound`). -/
+theorem reconcileJobsLR_outbox_sound (S : Schema) (T : Store) :
+    ∀ (jobs : List W3cJob) (σ : GraphState), ∀ d ∈ (reconcileJobsLR S T σ jobs).outbox,
+      d ∈ σ.outbox ∨
+      ((∃ j ∈ jobs, d.node = objNode ⟨j.dt, j.on⟩ j.R ∧ d.relation = j.R) ∧
+        max σ.maxOutboxId σ.watermark < d.id) := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ d hd; exact Or.inl hd
+  | cons j rest ih =>
+    intro σ d hd
+    have hfold : reconcileJobsLR S T σ (j :: rest)
+        = reconcileJobsLR S T (j.applyLoggedR S T σ) rest := by
+      unfold reconcileJobsLR
+      rw [List.foldl_cons]
+    rw [hfold] at hd
+    have hout1 : (j.applyLoggedR S T σ).outbox
+        = ⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R⟩ :: σ.outbox := by
+      unfold W3cJob.applyLoggedR
+      rw [pushDelta_outbox, W3cJob.applyDR_outbox]
+      have := W3cJob.applyDR_nextDeltaId S T σ j
+      rw [this]
+    have hwm1 : (j.applyLoggedR S T σ).watermark = σ.watermark := by
+      unfold W3cJob.applyLoggedR
+      rw [pushDelta_watermark, W3cJob.applyDR_watermark]
+    have hmax1 : (j.applyLoggedR S T σ).maxOutboxId = σ.nextDeltaId := by
+      unfold W3cJob.applyLoggedR
+      rw [pushDelta_maxOutboxId, W3cJob.applyDR_nextDeltaId]
+    rcases ih (j.applyLoggedR S T σ) d hd with hin | ⟨⟨j', hj', hn, hr⟩, hgt⟩
+    · rw [hout1] at hin
+      rcases List.mem_cons.mp hin with rfl | hmem
+      · refine Or.inr ⟨⟨j, List.mem_cons_self, rfl, rfl⟩, ?_⟩
+        show max σ.maxOutboxId σ.watermark < σ.nextDeltaId
+        have : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
+        omega
+      · exact Or.inl hmem
+    · refine Or.inr ⟨⟨j', List.mem_cons_of_mem _ hj', hn, hr⟩, ?_⟩
+      rw [hmax1, hwm1] at hgt
+      have : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
+      omega
+
+/-! ## Edge soundness of the routed batch -/
+
+/-- Routed diff-fold edge soundness: every edge of the result is an old edge or a
+    candidate's derived edge onto the pass's own R-node (removal only shrinks). -/
+theorem reconcileKeyDR_edge_sound (T : Store) (dt on R : String) (e : Expr) :
+    ∀ (cands : List SubjectRef) (σ : GraphState) (a b : NodeKey),
+      (a, b) ∈ (σ.reconcileKeyDR T dt on R e cands).edges →
+      (a, b) ∈ σ.edges ∨ ∃ c ∈ cands, a = subjNode c ∧ b = objNode ⟨dt, on⟩ R := by
+  intro cands
+  induction cands with
+  | nil => intro σ a b h; exact Or.inl h
+  | cons c rest ih =>
+    intro σ a b h
+    rw [reconcileKeyDR_cons] at h
+    split at h
+    · rcases ih _ a b h with hprev | ⟨c', hc', hac, hbc⟩
+      · rw [writeDirect_edges] at hprev
+        split at hprev
+        · rcases List.mem_cons.mp hprev with heq | hmem
+          · obtain ⟨h1, h2⟩ := Prod.ext_iff.mp heq
+            exact Or.inr ⟨c, List.mem_cons_self, h1, h2⟩
+          · exact Or.inl hmem
+        · exact Or.inl hprev
+      · exact Or.inr ⟨c', List.mem_cons_of_mem _ hc', hac, hbc⟩
+    · rcases ih _ a b h with hprev | ⟨c', hc', hac, hbc⟩
+      · exact Or.inl (removeEdgePair_edges_subset σ _ _ _ hprev)
+      · exact Or.inr ⟨c', List.mem_cons_of_mem _ hc', hac, hbc⟩
+
+/-- Whole routed pass edge soundness (the residue half is edge-inert). -/
+theorem reconcileStarsKeyDR_edge_sound (T : Store) (dt on R : String) (e : Expr)
+    (shapes : List Shape) (cands negCands uposCands : List SubjectRef)
+    (σ : GraphState) (a b : NodeKey)
+    (h : (a, b) ∈ (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+      uposCands).edges) :
+    (a, b) ∈ σ.edges ∨ ∃ c ∈ cands, a = subjNode c ∧ b = objNode ⟨dt, on⟩ R := by
+  unfold GraphState.reconcileStarsKeyDR at h
+  rcases reconcileKeyDR_edge_sound T dt on R e cands _ a b h with hold | hc
+  · rw [reconcileResidueKeyR_edges] at hold
+    exact Or.inl hold
+  · exact Or.inr hc
+
+/-- Routed logged-batch edge soundness (the emission rows are edge-inert). -/
+theorem reconcileJobsLR_edge_sound {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ : GraphState) (a b : NodeKey),
+      (a, b) ∈ (reconcileJobsLR S T σ jobs).edges →
+      (a, b) ∈ σ.edges ∨
+        ∃ j ∈ jobs, ∃ c ∈ j.cands, a = subjNode c ∧ b = objNode ⟨j.dt, j.on⟩ j.R := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ a b h; exact Or.inl h
+  | cons j rest ih =>
+    intro σ a b h
+    have hfold : reconcileJobsLR S T σ (j :: rest)
+        = reconcileJobsLR S T (j.applyLoggedR S T σ) rest := by
+      unfold reconcileJobsLR
+      rw [List.foldl_cons]
+    rw [hfold] at h
+    rcases ih _ a b h with hin | ⟨j', hj', c, hc, h1, h2⟩
+    · have hedges : (j.applyLoggedR S T σ).edges = (j.applyDR S T σ).edges := by
+        unfold W3cJob.applyLoggedR
+        rw [pushDelta_edges]
+      rw [hedges] at hin
+      unfold W3cJob.applyDR at hin
+      rcases reconcileStarsKeyDR_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
+        j.cands j.negCands j.uposCands σ a b hin with hold | ⟨c, hc, h1, h2⟩
+      · exact Or.inl hold
+      · exact Or.inr ⟨j, List.mem_cons_self, c, hc, h1, h2⟩
+    · exact Or.inr ⟨j', List.mem_cons_of_mem _ hj', c, hc, h1, h2⟩
+
+/-! ## R-node terminality over the two-round closure -/
+
+/-- **No W3d-2 edge is sourced at an `R`-userset node** (the two-round analog of
+    `reachedByW3d_edge_source_ne_R`): a logged write's edge sources are rewrite-
+    closure subjects, either round's cascade edge sources are bare candidates. -/
+theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
+    {R : String} (hRne : R ≠ BARE) (h : ReachedByW3d2 σ S T) :
+    NoTtuTarget S R → NoStoreSubjectR T R → ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
+  induction h with
+  | empty S =>
+    intro _ _ a b hab
+    simp [emptyState] at hab
+  | @write σp S T t hadm hprev ih =>
+    intro hnt hns a b hab
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
+    unfold GraphState.writeRules at hab
+    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) hab with hin | ⟨u, hu, h1, _⟩
+    · exact ih hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
+    · rw [h1, subjNode_pred]
+      exact rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ hprev ih =>
+    intro hnt hns a b hab
+    unfold runCascade2 at hab
+    split at hab
+    · have hab' : (a, b) ∈ (reconcileJobsLR S T (reconcileJobsLR S T σp jobs1)
+          jobs2).edges := hab
+      rcases reconcileJobsLR_edge_sound jobs2 _ a b hab' with hmid | ⟨j, hj, c, hc, h1, _⟩
+      · rcases reconcileJobsLR_edge_sound jobs1 σp a b hmid
+          with hold | ⟨j, hj, c, hc, h1, _⟩
+        · exact ih hnt hns a b hold
+        · rw [h1, subjNode_pred]
+          obtain ⟨_, hcb, _⟩ := hjv1 j hj
+          rw [hcb c hc]
+          exact Ne.symm hRne
+      · rw [h1, subjNode_pred]
+        obtain ⟨_, hcb, _⟩ := hjv2 j hj
+        rw [hcb c hc]
+        exact Ne.symm hRne
+    · exact ih hnt hns a b hab
+
+/-- **The derived R-node is never an edge source on a W3d-2 state.** -/
+theorem reachedByW3d2_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hRne : R ≠ BARE) (hder : isDerived S (dt, R) = true) (h : ReachedByW3d2 σ S T) :
+    ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
+  obtain ⟨hnt, hns⟩ := hterm dt R hder
+  intro y hy
+  exact reachedByW3d2_edge_source_ne_R hRne h hnt hns _ y hy (objNode_pred ⟨dt, on⟩ R)
+
+/-- R-node terminality survives a routed logged batch, from any terminal base state
+    (the batch-transported form — stackable round over round). -/
+theorem reconcileJobsLR_Rnode_not_source {S : Schema} {T : Store} {jobs : List W3cJob}
+    {dt on R : String} (hRne : R ≠ BARE) (hjv : ∀ j ∈ jobs, W3cJobValid S j)
+    {σ : GraphState} (hbase : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) :
+    ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (reconcileJobsLR S T σ jobs).edges := by
+  intro y hy
+  rcases reconcileJobsLR_edge_sound jobs σ _ y hy with hold | ⟨j, hj, c, hc, h1, _⟩
+  · exact hbase y hold
+  · obtain ⟨_, hcb, _⟩ := hjv j hj
+    have hpred : (objNode ⟨dt, on⟩ R).pred = BARE := by
+      rw [h1, subjNode_pred, hcb c hc]
+    rw [objNode_pred] at hpred
+    exact hRne hpred
+
+/-! ## Frontier-cursor arithmetic -/
+
+/-- The cursor advance dominates its start. -/
+theorem GraphState.le_frontierMax (σ : GraphState) (n : Nat) : n ≤ σ.frontierMax n := by
+  unfold GraphState.frontierMax
+  exact foldl_max_init_le _ n
+
+/-- **Every outbox row sits at or below the advanced cursor**: a row above `n` is in
+    the round's frontier (hence folded into the max), a row at or below `n` is under
+    the start. This is what makes a round's read exhaustive — nothing between the old
+    cursor and the new one is skipped. -/
+theorem GraphState.outbox_le_frontierMax (σ : GraphState) (n : Nat) :
+    ∀ d ∈ σ.outbox, d.id ≤ σ.frontierMax n := by
+  intro d hd
+  by_cases hgt : n < d.id
+  · unfold GraphState.frontierMax GraphState.frontierRowsAbove
+    exact mem_le_foldl_max _ n d (List.mem_filter.mpr ⟨hd, decide_eq_true hgt⟩)
+  · exact le_trans (Nat.le_of_not_lt hgt) (σ.le_frontierMax n)
+
+/-! ## T5 over the two-round scheduler — the reject branch never fires
+
+The fragment condition **`hLU2`** (the 2-strata condition without invoking
+`stratify`): every `computed` operand of a derived def is untainted OR itself a
+declared derived key whose own `computed` operands are ALL untainted. Faithful to
+`len(strata) == 2` — `_stratify` (`zanzibar_utils_v1.py:1630`) layers the tainted
+keys by Kahn; two layers means every derived-reading-derived chain stops after one
+hop. Stated dependency-wise (as `hLU` was), not via `stratify`, so the W3d-1
+condition is literally the special case (`hLU2_of_hLU`). -/
+
+/-- W3d-1's single-stratum `hLU` implies the two-stratum `hLU2` (the widening is
+    conservative — vacuously, no operand is derived). -/
+theorem hLU2_of_hLU {S : Schema}
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) :
+    ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false := by
+  intro dt R e hlk hder r' hr' hder' _ _ _ _
+  cases (hLU dt R e hlk hder r' hr').symm.trans hder'
+
+/-- **`runCascade2_no_abort` (T5 half a, two strata).** Under `hLU2` the final
+    leftover check always passes. The round-2 rows above the round-2 cursor are
+    jobs2 emissions at derived R-nodes (original and round-1 rows sit at or below
+    the cursor by `outbox_le_frontierMax`); such a row's only candidate object is
+    the R-node itself (terminality), whose predicate `j.R` is a derived pred that —
+    by `hscope2` — was dirtied by a ROUND-1 emission, i.e. `j`'s def reads some
+    round-1 job's derived pred as a computed operand. `hLU2` then forces ALL of
+    `j`'s operands untainted — contradiction. So NO derived def reads `j.R`: the
+    emission maps to no keys, and Python's `InvariantViolation`
+    (`processor.py:736-739`) is dead code at two strata. -/
+theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
+    {jobs1 jobs2 : List W3cJob}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j)
+    (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j)
+    (hscope2 : ∀ j ∈ jobs2, j.key ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1)
+        (σ.frontierMax σ.watermark))
+    (h : ReachedByW3d2 σ S T) :
+    runCascade2 S T σ jobs1 jobs2
+      = { reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2 with
+          watermark := (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1)
+            jobs2).maxOutboxId } := by
+  unfold runCascade2
+  refine if_pos ?_
+  rw [List.all_eq_true]
+  intro d hd
+  unfold GraphState.frontierRowsAbove at hd
+  obtain ⟨hdmem, hdgt'⟩ := List.mem_filter.mp hd
+  have hdgt : (reconcileJobsLR S T σ jobs1).frontierMax (σ.frontierMax σ.watermark)
+      < d.id := of_decide_eq_true hdgt'
+  -- the row is a jobs2 emission: mid-state rows sit at or below the round-2 cursor
+  rcases reconcileJobsLR_outbox_sound S T jobs2 (reconcileJobsLR S T σ jobs1) d hdmem
+    with hin | ⟨⟨j, hj, hnode, _⟩, _⟩
+  · exfalso
+    have := (reconcileJobsLR S T σ jobs1).outbox_le_frontierMax
+      (σ.frontierMax σ.watermark) d hin
+    omega
+  obtain ⟨hRne2, _, _, _, _, _, hder2, hlke2, _⟩ := hjv2 j hj
+  -- (A) unfold `hscope2`: j's def reads a ROUND-1 job's derived pred as an operand
+  have hjk := hscope2 j hj
+  unfold cascadeKeysAbove at hjk
+  obtain ⟨d', hd'raw, hjk'⟩ := List.mem_flatMap.mp hjk
+  unfold GraphState.frontierRowsAbove at hd'raw
+  obtain ⟨hd'mem, hd'gt'⟩ := List.mem_filter.mp hd'raw
+  have hd'gt : σ.frontierMax σ.watermark < d'.id := of_decide_eq_true hd'gt'
+  -- the dirtying row is itself a round-1 emission: original rows sit at or below
+  -- the round-1 cursor
+  rcases reconcileJobsLR_outbox_sound S T jobs1 σ d' hd'mem
+    with hin' | ⟨⟨j1, hj1, hnode1, _⟩, _⟩
+  · exfalso
+    have := σ.outbox_le_frontierMax σ.watermark d' hin'
+    omega
+  obtain ⟨hRne1, _, _, _, _, _, hder1, _, _⟩ := hjv1 j1 hj1
+  -- j1's R-node is terminal at the mid state → the row's only candidate object is
+  -- the R-node itself
+  have hbase1 := reachedByW3d2_Rnode_not_source (on := j1.on) hterm hRne1 hder1 h
+  have hmidT1 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs1)
+    hRne1 hjv1 hbase1
+  have hreach1 : ∀ v, (reconcileJobsLR S T σ jobs1).reach d'.node v = false := by
+    intro v
+    by_contra hne
+    have htrue : (reconcileJobsLR S T σ jobs1).reach d'.node v = true := by
+      revert hne
+      cases (reconcileJobsLR S T σ jobs1).reach d'.node v <;> simp
+    obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound htrue)
+    rw [hnode1] at hy
+    exact hmidT1 y hy
+  have hobj1 : (reconcileJobsLR S T σ jobs1).affectedObjects d' = [d'.node] := by
+    unfold GraphState.affectedObjects
+    rw [List.filter_eq_nil_iff.mpr (fun v _ => by rw [hreach1 v]; exact Bool.false_ne_true)]
+  unfold affectedKeys at hjk'
+  obtain ⟨v, hv, hvk⟩ := List.mem_flatMap.mp hjk'
+  rw [hobj1] at hv
+  have hveq : v = d'.node := List.mem_singleton.mp hv
+  subst hveq
+  by_cases hst1 : d'.node.name = STAR
+  · rw [if_pos hst1] at hvk
+    simp at hvk
+  rw [if_neg hst1] at hvk
+  obtain ⟨k', hk'mem, hopt'⟩ := List.mem_filterMap.mp hvk
+  have hcond' : k'.1 = d'.node.type ∧ isDerived S k' = true ∧
+      ((S.lookup k').map (fun e => (computedRefs e).contains d'.node.pred)).getD false
+        = true := by
+    by_contra hnc
+    rw [if_neg hnc] at hopt'
+    simp at hopt'
+  rw [if_pos hcond'] at hopt'
+  obtain ⟨hc1, _, hc3⟩ := hcond'
+  have hkeq := Option.some.inj hopt'
+  have h1' : k'.1 = j.dt := congrArg (fun p => p.1) hkeq
+  have h2' : k'.2 = j.R := congrArg (fun p => p.2.1) hkeq
+  have hk'eq : k' = (j.dt, j.R) := by rw [← h1', ← h2']
+  have htype1 : d'.node.type = j1.dt := by rw [hnode1, objNode_type]
+  have hpred1 : d'.node.pred = j1.R := by rw [hnode1, objNode_pred]
+  rw [hk'eq, hlke2] at hc3
+  simp only [Option.map_some, Option.getD_some] at hc3
+  rw [hpred1, List.contains_eq_mem] at hc3
+  have hmemj1R : j1.R ∈ computedRefs j.e := of_decide_eq_true hc3
+  have hjdt : j.dt = j1.dt := by rw [← h1', hc1, htype1]
+  -- (B) j's own R-node is terminal at the final state → the emission's only
+  -- candidate object is itself, and no derived def may read j.R (hLU2)
+  have hbase2 := reachedByW3d2_Rnode_not_source (on := j.on) hterm hRne2 hder2 h
+  have hmidT2 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs1)
+    hRne2 hjv1 hbase2
+  have hfinT2 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs2)
+    hRne2 hjv2 hmidT2
+  have hreach2 : ∀ w, (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).reach
+      d.node w = false := by
+    intro w
+    by_contra hne
+    have htrue : (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).reach
+        d.node w = true := by
+      revert hne
+      cases (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).reach d.node w
+        <;> simp
+    obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound htrue)
+    rw [hnode] at hy
+    exact hfinT2 y hy
+  have hobj2 : (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1)
+      jobs2).affectedObjects d = [d.node] := by
+    unfold GraphState.affectedObjects
+    rw [List.filter_eq_nil_iff.mpr (fun w _ => by rw [hreach2 w]; exact Bool.false_ne_true)]
+  have htype : d.node.type = j.dt := by rw [hnode, objNode_type]
+  have hpredR : d.node.pred = j.R := by rw [hnode, objNode_pred]
+  have hkeys : affectedKeys S (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2)
+      d = [] := by
+    unfold affectedKeys
+    rw [hobj2]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    by_cases hst : d.node.name = STAR
+    · rw [if_pos hst]
+    · rw [if_neg hst]
+      rw [List.filterMap_eq_nil_iff]
+      intro k hk
+      have hcond : ¬(k.1 = d.node.type ∧ isDerived S k = true ∧
+          ((S.lookup k).map
+            (fun e => (computedRefs e).contains d.node.pred)).getD false = true) := by
+        rintro ⟨hk1, hkder, hkref⟩
+        cases hlk : S.lookup k with
+        | none => rw [hlk] at hkref; simp at hkref
+        | some e'' =>
+          rw [hlk] at hkref
+          simp only [Option.map_some, Option.getD_some] at hkref
+          have hmem : d.node.pred ∈ computedRefs e'' := by
+            rw [List.contains_eq_mem] at hkref
+            exact of_decide_eq_true hkref
+          have hlkj : S.lookup (k.1, d.node.pred) = some j.e := by
+            rw [hk1, htype, hpredR]
+            exact hlke2
+          have hderj : isDerived S (k.1, d.node.pred) = true := by
+            rw [hk1, htype, hpredR]
+            exact hder2
+          have hallU := hLU2 k.1 k.2 e'' hlk hkder d.node.pred hmem hderj j.e hlkj
+          have hfalse := hallU j1.R hmemj1R
+          have hkdt : k.1 = j1.dt := by rw [hk1, htype, hjdt]
+          rw [hkdt] at hfalse
+          cases hder1.symm.trans hfalse
+      rw [if_neg hcond]
+  rw [hkeys]
+  rfl
+
+/-- **`cascade2_drains` (T5 half b, two strata).** After a two-round cascade on the
+    fragment the state is `Quiescent`: the watermark advance past BOTH rounds'
+    emissions is JUSTIFIED by `runCascade2_no_abort` (the skipped rows provably map
+    to no keys), never asserted. -/
+theorem cascade2_drains {σ : GraphState} {S : Schema} {T : Store}
+    {jobs1 jobs2 : List W3cJob}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j)
+    (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j)
+    (hscope2 : ∀ j ∈ jobs2, j.key ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1)
+        (σ.frontierMax σ.watermark))
+    (h : ReachedByW3d2 σ S T) :
+    Quiescent (runCascade2 S T σ jobs1 jobs2) := by
+  rw [runCascade2_no_abort hterm hLU2 hjv1 hjv2 hscope2 h]
+  intro d hd
+  exact mem_outbox_le_maxOutboxId _ d hd
+
 end Zanzibar
