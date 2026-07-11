@@ -364,10 +364,17 @@ and re-proves/widens the same named theorems. Every stage must keep
   `graphRec_reduce_base_adm_bs` (ReconcileComplete — the plain-edges probe-killing
   shortcut replaced by transferring ALL FOUR probes, both probe targets carrying the
   untainted key `(dt, r')`), and `checkFn_eq_sem_bs` — the star-relaxed `checkFn ↔ sem`
-  bridge the W3c `coveredFn`/`stars ↔ sem` correspondence consumes. **Remaining for
-  `graph_correct_w3c`:** the `W3cComplete` batch/coverage layer + the assembly through
-  `probeDerived` (glue `checkFn_eq_sem_bs` to the W3c state via `reachedByW3c_master`'s
-  canonicity). Detail: PROOF_STATUS 2026-07-11 (both W3c entries) + HANDOFF.
+  bridge the W3c `coveredFn`/`stars ↔ sem` correspondence consumes.
+
+  **W3c read half step 2 part 1 (2026-07-11c): the batch scaffolding.**
+  `ReconcileStarsComplete.lean`: `checkFn_eq_sem_w3c` (star-relaxed `checkFn=sem` on any W3c
+  state, via `reachedByW3c_shadow` + `checkFn_eq_sem_bs`), and the `W3cJob`/`reconcileJobsC`/
+  `W3cJobValid` batch layer (`_pres`, `_edges_mono`; one job settles stars+neg+upos+edges via
+  the combined `reconcileStarsKey`). **Remaining for `graph_correct_w3c`:** (A) the LINCHPIN
+  `coveredFn σ0 sh = true → sh ∈ wildcardShapes S` (attack-CONFIRMED true & needed for all three
+  `probeDerived` branches — the `sem`-true bare-star ⇒ declared-shape fact; Route 2 = graph-level
+  via `reachedByRules_edge_sound` + `restrictionMatches` wildcard flag), then (B) `W3cComplete`
+  (with a row-existence coverage clause) + the assembly. Detail: PROOF_STATUS 2026-07-11c + HANDOFF.
 
   **W3b ✅ CLOSED (2026-07-11): `graph_correct_w3b` + T3/T6 (`*_w3b`) — userset `upos`.**
   The W3a bare-subject restriction LIFTED: userset subjects on derived keys are answered

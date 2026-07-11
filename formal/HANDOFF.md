@@ -80,6 +80,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T2a `reachedByW3c_inv` / `reachedByW3c_master` | `GraphIndex/ReconcileStars.lean` | W3c write half: `stars`/`neg` model, ALL I6 clauses contentful, star-general (no `StarFreeStore`) |
 | T2b `graph_correct_rulesBS` | `GraphIndex/RulesBareStar.lean` | W2 untainted correspondence over `BareStarStore`+`TtuStarFree`, star-BARE subjects incl. |
 | `graphRec_base_eq_bs` / `checkFn_eq_sem_bs` | `RestrictBase.lean` / `ReconcileComplete.lean` | the STAR-RELAXED base equation + `checkFn ↔ sem` bridge (no `StarFreeStore`) |
+| `checkFn_eq_sem_w3c` + W3c batch layer (`W3cJob`/`reconcileJobsC`/`W3cJobValid`/`_pres`/`_edges_mono`) | `ReconcileStarsComplete.lean` | star-relaxed `checkFn=sem` on W3c states (shadow) + the coverage-batch scaffolding |
 | T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`, `_w3b`) |
 
 **Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ◐ (write half ✅, read-half step 1 [star-relaxed base equation] ✅, batch layer + assembly NEXT) → W3d → W4.**
@@ -143,35 +144,43 @@ PROOF_STATUS entries.
 
 ---
 
-## The next task — W3c read half, steps 2–3: the `W3cComplete` batch layer → `graph_correct_w3c`
+## The next task — W3c read half, step 3: the linchpin lemma + `graph_correct_w3c`
 
-Step 1 (the star-relaxed base equation, `checkFn_eq_sem_bs`) is CLOSED — see above. What
-remains to close W3c:
+Steps 1 (star-relaxed base equation `checkFn_eq_sem_bs`) and 2 part 1 (the batch scaffolding
+`ReconcileStarsComplete.lean` + `checkFn_eq_sem_w3c`) are CLOSED. What remains:
 
-1. **The `W3cComplete` batch layer** (W3b-style, mirror `W3aComplete`/`W3bComplete`): jobs =
-   full-object `reconcileStarsKey` passes over a `ReachedByRulesAdmitted` base (note: the
-   admitted-closure analog of `ReachedByW3c` may need defining, as `ReachedByW3aAdmitted`
-   was); coverage clauses on the enumeration (edge cands ⊇ `sem`-true uncovered bare subjects;
-   negCands ⊇ negative-leaf concretes ∪ derived-neg ids, `processor.py:394-404`; uposCands ⊇
-   `sem`-true uncovered usersets); persistence = canonical-content stability (rows are
-   wholesale-recomputed to the SAME canonical content — `reachedByW3c_master` already proves
-   the content is chain-position-independent).
-2. **Glue `checkFn_eq_sem_bs` to the W3c state**: `reachedByW3c_master` pins residue content
-   to `coveredFn σ0`/`checkFn σ0` on the canonical base; `checkFn_eq_sem_bs` (over a
-   `ReachedByW3aAdmitted` state) turns base `checkFn`/`coveredFn` reads into `sem` — the W3c
-   chain's base is `ReachedByRules`; an ADMITTED variant of the W3c closure (or a master
-   restated over an admitted base) is likely needed so the bs bridge applies. The fragment
-   hypotheses now include `BareStarStore T` + `TtuStarFree S T` (replacing `StarFreeStore`).
-3. **Assembly** `graph_correct_w3c` through the (already fully general) `probeDerived`: bare ⇒
-   edge ∨ (stars ∖ neg), star ⇒ stars, userset ⇒ upos ∨ (stars ∖ neg); each branch glued by
-   master's canonicity + `checkFn_eq_sem_bs`/`graphRec_base_eq_bs` + completeness. The star
-   branch: `stars.contains s.shape` ↔ `coveredFn σ0 s.shape` (master) ↔ `sem` at the star-bare
-   subject (`checkFn_eq_sem_bs`). Then T3/T6 `*_w3c` in `Equiv.lean`.
+**(A) THE LINCHPIN — prove `coveredFn σ0 sh = true → sh ∈ wildcardShapes S`** (a `sem`-true
+BARE-star subject has a declared wildcard shape). Attack-first CONFIRMED this is true and NEEDED
+for ALL THREE `probeDerived` branches (see the 2026-07-11c PROOF_STATUS entry for the full
+argument): `res.stars = (wildcardShapes S).filter (coveredFn σ0)`, so the space rule's
+`res.stars.contains sh ↔ coveredFn σ0 sh` collapse holds iff coverage ⇒ declaredness. **Route 2
+(recommended, graph-level):** `coveredFn σ0 sh` reads `reach` from `wAnyNode sh` on σ0 ⇒ ∃ edge
+`(wAnyNode sh, y)` ⇒ (`reachedByRules_edge_sound`) closure tuple `subjNode = wAnyNode sh` ⇒
+(`rewriteClosure_star_subject` + `BareStarStore`/`TtuStarFree`) a STORED bare-star seed of shape
+sh ⇒ (`StoreValidRules` + `restrictionMatches` wildcard flag, à la `isSWU_of_storeValid`
+`UsStarClosure.lean:236`) `sh ∈ wildcardShapes S`. Node glue: `wAnyNode_eq_subjNode`
+(`RulesBareStar.lean:758`).
+
+**(B) `W3cComplete` + `graph_correct_w3c`.** Add fragment hyps `hWSbare : ∀ sh ∈ wildcardShapes
+S, sh.2 = BARE` (so `starSubj sh` is bare ⇒ `checkFn_eq_sem_bs` reaches `coveredFn`) and
+`hqbareStar : q.subject.name = STAR → q.subject.predicate = BARE`. Define `W3cComplete` (base +
+`W3cJob`s + `W3cJobValid` + coverage clauses incl. a **row-existence** clause for keys with a
+covered shape / any sem-true member — so `reachedByW3c_master` makes the queried row canonical).
+`w3cComplete_reached` = `reconcileJobsC_pres`. Assembly through `probeDerived` (State.lean:552):
+- **soundness** (read ⇒ sem) is nearly free from `reachedByW3c_master` (rows canonical; edges
+  canonically uncovered + guard-true) glued with `checkFn_eq_sem_w3c`;
+- **completeness** (sem ⇒ read): covering job's edge via `reconcileKey_edge_present` through the
+  `reconcileKeyC_eq_filter` collapse (a sem-true UNCOVERED bare survives the covered-filter) +
+  `reconcileJobsC_edges_mono`; upos/stars via the row-existence clause;
+- **star branch**: `res.stars.contains s.shape ↔ coveredFn σ0 s.shape` (linchpin + master) `↔ sem`
+  (`checkFn_eq_sem_w3c`, `s = starSubj s.shape` for bare-star).
+Then T3/T6 `*_w3c` in `Equiv.lean` and `Audit.lean` entries (`graph_correct_w3c`,
+`checkFn_eq_sem_w3c`).
 
 Scope guard (decision-15): object wildcards and wildcard usersets over derived relations stay
-rejected; `wildcardShapes` carries only bare-subject-star shapes on this fragment; wildcard
-TTU parents excluded (`TtuStarFree`). `hterm` (`NoTtuTarget`/`NoStoreSubjectR`) and
-hCO/hLU/hRootB stay as in W3a/W3b.
+rejected; `wildcardShapes` carries only bare-subject-star shapes (`hWSbare`); wildcard TTU
+parents excluded (`TtuStarFree`). `hterm`/hCO/hLU/hRootB stay as in W3a/W3b; store hyps are
+`BareStarStore` + `TtuStarFree` (replacing `StarFreeStore`).
 
 ---
 

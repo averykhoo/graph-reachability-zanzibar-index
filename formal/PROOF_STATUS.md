@@ -8,7 +8,75 @@ HANDOFF.md's "The next task".
 
 ---
 
-## Session 2026-07-11b (W3c read half step 1 — CLOSED: the star-relaxed base equation, `graph_correct_rulesBS` + `checkFn_eq_sem_bs`)
+## Session 2026-07-11c (W3c read half step 2 — the batch layer `ReconcileStarsComplete.lean` + attack-first: the no-ghost-star linchpin identified)
+
+Resuming from HANDOFF "W3c read half steps 2–3." One green+pushed axiom-clean increment (new
+file `GraphIndex/ReconcileStarsComplete.lean`); `verify.sh` green (build + 0 sorries + zcli +
+standard-axioms audit + 60 conformance). Sorry count held at 0. **This lands HANDOFF W3c read-half
+step 2, part 1** (the batch scaffolding + the shadow `checkFn` bridge); the assembly
+`graph_correct_w3c` is set up but NOT yet landed — see the precise plan + the linchpin below.
+
+**Increment — the W3c batch layer (`ReconcileStarsComplete.lean`).**
+- `checkFn_eq_sem_w3c`: the star-relaxed `checkFn = sem` on ANY W3c state, through the W3a-admitted
+  shadow (`reachedByW3c_shadow` + `checkFn_congr` + `checkFn_eq_sem_bs`). Subject-generic up to
+  star-BARE — the exact form the `coveredFn`/`stars ↔ sem` correspondence consumes. (The W3b
+  analog is `checkFn_eq_sem_w3b`.)
+- `reconcileStarsKey_edges_mono` (residue half edge-inert + `reconcileKeyC_edges_mono` through the
+  collapse); `W3cJob` (dt/on/R/e/cands/negCands/uposCands — shapes fixed to `wildcardShapes S`),
+  `W3cJob.apply` (parametrised by `S` for the fixed shapes), `reconcileJobsC`, `W3cJobValid` (=
+  a `ReachedByW3c.reconcileS` leg's side conditions), `reconcileJobsC_pres`,
+  `reconcileJobsC_edges_mono`. Mirror of the W3b `W3bJob`/`reconcileJobsB` layer, adapted to the
+  COMBINED `reconcileStarsKey` pass (one job settles stars+neg+upos+edges for a key at once — W3b
+  split edge and upos into separate job constructors).
+
+**Attack-first — THE LINCHPIN (recorded here; scratch/analysis only, no refutation).** Before
+designing the `probeDerived` assembly I traced the three branches (bare ⇒ edge ∨ (stars∖neg),
+star ⇒ stars, userset ⇒ upos ∨ (stars∖neg)) against `sem`. **Finding: every branch's
+space-rule correspondence needs a "no ghost star coverage" lemma — `coveredFn σ0 sh = true → sh
+∈ wildcardShapes S`** (equivalently, a `sem`-true BARE-star subject has a DECLARED wildcard
+shape). Reason: `res.stars = (wildcardShapes S).filter (coveredFn σ0)` (master), so
+`res.stars.contains sh ↔ (sh ∈ wildcardShapes S ∧ coveredFn σ0 sh)`, while the space rule needs it
+`↔ coveredFn σ0 sh` alone (= `sem` at the star subject, via `checkFn_eq_sem_bs`). The two agree
+iff coverage implies declaredness. **This lemma is TRUE** — confirmed against the `sem` defs
+(`Spec/Semantics.lean`): `restrictionMatches` gates a star grant by the wildcard flag
+(`((tup.subject.name == STAR) == r.2.2)`, `:38`), so a stored star grant matches only a
+`(type,pred,true)` restriction ⇒ its shape is in `wildcardShapes` (the `exprRestrictions`
+wildcard collector); the `directLeaf` star-exact branch (`:66-67`) reads exactly such a grant, and
+for a **bare** star the `ttuLeaf` exact-match branch is dead (`s.predicate = BARE ≠ targetRel`,
+`:96/99`) so no ttu ghost — the recursion (flow-through / `instances`) preserves the star subject
+and bottoms out at that gated directLeaf. The existing userset analog is
+`isSWU_of_storeValid` (`UsStarClosure.lean:236`).
+
+**Two proof routes for the linchpin (next session picks one):**
+- **Route 2 (graph-level, likely cleaner):** `coveredFn σ0 sh = σ0.checkFn (starSubj sh) …` reads
+  `graphRec σ0` at untainted leaves = `reach` from `wAnyNode sh` on σ0. A non-reflexive reach ⇒
+  ∃ edge `(wAnyNode sh, y) ∈ σ0.edges` ⇒ (`reachedByRules_edge_sound`) a closure tuple with
+  `subjNode = wAnyNode sh` ⇒ (`rewriteClosure_star_subject`/`BareStarStore`/`TtuStarFree`, cf.
+  `RulesBareStar.lean`) a STORED bare-star seed of shape sh ⇒ (`StoreValidRules` +
+  `restrictionMatches` wildcard flag, cf. `isSWU_of_storeValid`) `sh ∈ wildcardShapes S`.
+  `wAnyNode_eq_subjNode` (`RulesBareStar.lean:758`) and `subjNode`-of-star = `wAnyNode` are the
+  node glue.
+- **Route 1 (sem-level):** turn `coveredFn σ0 sh` into `sem S T ⟨starSubj sh, R, o⟩` via
+  `checkFn_eq_sem_bs`, then a `semAux` fuel induction "bare-star true ⇒ declared shape" over
+  union/inter/excl/computed/direct/ttu.
+
+**The remaining assembly plan (`graph_correct_w3c`), with the linchpin in hand.** Add fragment
+hyps: `hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE` (decision-15 defers userset-star coverage;
+makes `starSubj sh` bare so `checkFn_eq_sem_bs` applies to `coveredFn`), `hqbareStar :
+q.subject.name = STAR → q.subject.predicate = BARE` (bare-star queries only). Define `W3cComplete`
+(base + jobs + `W3cJobValid` + coverage: edge cands ⊇ sem-true uncovered bares, negCands ⊇
+neg-leaf concretes ∪ derived-neg ids, uposCands ⊇ sem-true uncovered usersets, AND a **row-
+existence** clause: every derived (dt,R)/on with a covered shape or any sem-true member has a job
+⇒ the row exists & is canonical by `reachedByW3c_master`). Soundness of all three branches is
+NEARLY FREE from `reachedByW3c_master` (rows canonical; edges canonically uncovered+guard-true) +
+`checkFn_eq_sem_w3c`/`_bs`; completeness needs the covering job (edge-present via
+`reconcileKey_edge_present` through the collapse — note the covered filter drops covered cands, so
+a sem-true UNCOVERED bare survives the filter — plus `reconcileJobsC_edges_mono`; upos/stars via
+row existence). Star branch: `res.stars.contains s.shape ↔ coveredFn σ0 s.shape` (linchpin) `↔
+sem` (bridge, `s = starSubj s.shape` since bare-star). Then T3/T6 `*_w3c` in `Equiv.lean`, and
+Audit.lean entries for `graph_correct_w3c` + `checkFn_eq_sem_w3c`.
+
+
 
 Resuming from HANDOFF "W3c read half: the star-relaxed base equation." Two green+pushed
 axiom-clean increments (new file `GraphIndex/RulesBareStar.lean` ~700 lines; +
