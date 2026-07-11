@@ -831,11 +831,75 @@ and re-proves/widens the same named theorems. Every stage must keep
     assembly `graph_correct_w3a` (route → `probeDerived` → `check_derived_ResidueEmpty` →
     edge probe → `reachedByW3a_reach_collapse` → `checkFn_eq_semStep` + `hag` → `sem`) +
     T3/T6 widening. Detail in PROOF_STATUS "W3a read correspondence".
-- **W4 — full-scope restatement.** The operational closure now covers
-  `GraphAccepts`; name it `ReachedBy` and state the final `graph_correct` /
-  `graph_reached_inv` / `backend_equivalence` / T6a (with real exclusion
-  content) / T6b over it. This discharges the obligations whose false
-  predecessors were deleted.
+- **W4 — full-scope restatement. OPENED 2026-07-12i (design pass below).** The
+  operational closure now covers the achieved scope; name it `ReachedBy` and state
+  the final `graph_correct` / `graph_reached_inv` / `backend_equivalence` / T6a
+  (with real exclusion content) / T6b over it. This discharges the obligations
+  whose false predecessors were deleted.
+
+  **Scope inventory (the opening design pass, 2026-07-12i).** All four closed read
+  theorems share the query scope (`hqs : subject.name = STAR → subject.predicate =
+  BARE`, `hqo : object.name ≠ STAR`) and the store hyps (`StoreValidRules` +
+  `BareStarStore` + `TtuStarFree`); the schema layer is where they differ:
+  - **W2** `graph_correct_rulesBS` (chain `ReachedByRulesAdmitted` — plain admitted
+    write folds): `WF`, `UntaintedSchema`, `TtuTuplesetsDirect`, `NodupKeys`,
+    `RewriteRanked`. No derived machinery; `Stratifiable` derived from `hUT`;
+    **no `hMatch`, no `hWSbare`**.
+  - **W3c** `graph_correct_w3c` (closure `W3cComplete` — reconcile-batch
+    scaffolding, superseded by the operational scheduler chains): adds `hRootB` /
+    `hMatch` / `hStrat` / `hterm` (`NoTtuTarget` + `NoStoreSubjectR`) / `hCO` /
+    `hLU` (ONE stratum) / `hWSbare`.
+  - **W3d-1** `graph_correct_w3dE` (`ReachedByW3dE`, fully drained): the same hyp
+    set as W3c, over the fully-operational single-stratum scheduler chain.
+  - **W3d-2** `graph_correct_w3d2E` (`ReachedByW3d2E`, fully drained): the same but
+    `hLU2` (TWO strata; strictly wider — `hLU2_of_hLU`).
+
+  Reconciliation deltas: (1) **`hWSbare` is the only schema-side generality W2 has
+  that W3d-2 lacks** — `BareStarStore` already excludes star-userset TUPLES on both
+  sides; `hWSbare` additionally bans *declared* wildcard-userset restrictions
+  (Python rejects them only over derived relations, `zanzibar_utils_v1.py:1446-1451`;
+  over untainted ones they're admitted — an honest W4 gap, documented not hidden).
+  (2) On an `UntaintedSchema` every derived-scoped hypothesis of
+  `graph_correct_w3d2E` (`hRootB`/`hterm`/`hCO`/`hLU2`) is vacuous (`taintedKeys =
+  []` ⇒ `isDerived = false` everywhere), and every state of the chain is drained
+  (`drained_of_untainted`, W4 lemma: `affectedKeys` only emits derived keys). So
+  the W3d-2 statement + the untainted shadow already SUBSUME W2's, modulo `hWSbare`
+  + `hMatch` and the chain difference. (3) The chains differ (plain write folds vs
+  logged writes + scheduler legs); W4 takes the OPERATIONAL chain (`ReachedByW3d2E`)
+  as the canonical closure — it is the model of `processor.py`'s actual write path.
+
+  **Design decisions (2026-07-12i):**
+  1. `ReachedBy := ReachedByW3d2E`; `Drained S σ := cascadeKeys S σ = []`
+     (`FullScope.lean`).
+  2. Two hypothesis bundles, split by PROVENANCE (the honesty line): `GraphAccepts
+     S T` = the model mirror of what `compile_ruleset` + write admission guarantee
+     for EVERY accepted schema/store (`WF`, `NodupKeys`, `Stratifiable`,
+     `TtuTuplesetsDirect` ← `_validate_ttu_tuplesets` `zanzibar_utils_v1.py:898-935`,
+     `RewriteMatchDeclared`, `RewriteRanked`, `StoreValidRules`), each field cited;
+     `W4Fragment S T` = the honest carries NOT implied by acceptance (`hRootB`,
+     `hCO` — no `PDerivedTTU`/`PDerivedUserset` leaves; `hLU2` — two strata;
+     `hWSbare`; `BareStarStore`; `TtuStarFree`; the `hterm` halves). The add-only
+     store restriction (decision 6) is a property of the chain (no remove legs),
+     not a hypothesis.
+  3. Final statements: `graph_correct` (T2b) + the UNSUFFIXED `backend_equivalence`
+     / `exclusion_effective` / `no_ghost_grant` move to full scope; the W1
+     pure-direct versions currently holding those names are renamed `*_direct`.
+  4. **T2a full scope (`graph_reached_inv` over `ReachedBy`) is the main remaining
+     W4 PROOF**: `Inv` over the W3d2 chain does not exist yet (`CascadeInv.lean`
+     covers the W3d-1 chain only). Obligation: mirror `reachedByW3dC_inv`'s
+     architecture over routed batches — structural half via routed `StructInv`
+     mirrors, edge-free I6 fragment-free, edge-referencing I6 via the
+     three-disjunct settled invariant (`reachedByW3d2C_settled`).
+  5. Non-vacuity witness: a concrete compiled-form schema+store satisfying
+     `GraphAccepts ∧ W4Fragment` (guards the bundles against accidental
+     unsatisfiability — the attack for a restatement stage).
+
+  Honest gaps at W4 close (each a scope restriction relative to the Python,
+  none hidden): >2 strata; non-root booleans (taint through `computed`/`union`
+  roots); `PDerivedTTU`/`PDerivedUserset` plan leaves; declared wildcard-userset
+  restrictions anywhere (Python: only over-derived rejected); object-wildcard
+  tuples (`w_all`) beyond W1b; userset-star tuples beyond W1c; removes (add-only
+  chain); star-subject queries with non-BARE predicate.
 - **T0a**: ✅ DONE (2026-07-10) — see its section below.
 - **Phase 6**: sorry gate to 0, audit as hard gate, graph-model conformance
   extension (above), final review doc.
