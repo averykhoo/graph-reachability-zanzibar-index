@@ -143,24 +143,47 @@ a one-token fix (`hnc` was already in scope). Build the piece-B enumeration agai
 the GUARDED clause.
 
 **B. Model the audit enumeration + discharge `W3dJobCoverage`** (makes `graph_correct_w3d`
-— and now also `reachedByW3dC_inv` — unconditional: the coverage is hypothesized today):
-1. **Model the enumeration from state** (`processor.py:394-441`): per key `(dt,R,on)` at
-   σ/T, (a) `_leaf_concretes` — store-supported concrete subjects of each operand leaf
-   (route: plain subject nodes with a path into `objNode ⟨dt,on⟩ r'`, or the stored
-   tuples' subjects on operand relations at the object — pick whichever makes clause (2)
-   provable), (b) persisted incoming R-node concretes (σ's in-edges — clause (1) by
-   construction), (c) the persisted row's `neg`/`upos`. `cands :=` (a)∪(b),
-   `negCands`/`uposCands :=` (a)∪(c).
-2. **Discharge `W3dJobCoverage` as a theorem**: clause (1) is construction; (2)–(4) need
-   "`sem`-true at the key ⇒ enumerated", route `sem` → `checkFn` (bridge) → true operand
-   leaf probe → store tuple/closure edge witnessing the CONCRETE subject (mirror
-   `coveredFn_declared` steps 2–5). Restate `graph_correct_w3d` with jobs BUILT from the
-   enumeration.
+— and now also `reachedByW3dC_inv` — unconditional: the coverage is hypothesized today).
+**Design pinned this session (read-only pass over `probeNonDerived`, `State.lean:535`):**
 
-Note the enumerated candidate lists need `W3cJobValid`'s shape constraints too (cands
-bare star-free, negCands star-free, uposCands userset star-free) — filter the
-enumeration by shape and prove the filters don't drop anything the coverage clauses
-name (their quantifiers already carry the matching shape guards).
+1. **Route (a) is the provable one — reach-based leaf concretes.** For a concrete
+   subject `s`, each operand leaf read decomposes POINTWISE as
+   `leaf(s) = leaf(starSubj s.shape) ∨ probe1(s) ∨ probe3(s)`: probes 2/4 of
+   `probeNonDerived` (`wAny`-sourced) are exactly the star subject's own probes 1/3
+   (`subjNode (starSubj sh) = wAnyNode sh`), and probes 1/3 are the concrete-specific
+   ones (`σ.reach (subjNode s) (objNode ⟨dt,on⟩ r')` / `σ.reach (subjNode s)
+   (wAllNode dt r')`). So define `leafConcretes σ dt on e` := plain star-free nodes
+   `u ∈ σ.nodes` with reach into `objNode ⟨dt,on⟩ r'` OR `wAllNode dt r'` for some
+   `r' ∈ computedRefs e`, decoded to `⟨u.type, u.name, u.pred⟩` (`nodeEnc` from
+   `StructInv` makes decode ∘ `subjNode` = id on plain nodes).
+2. **The KEY LEMMA (`checkFn_eq_coveredFn_of_no_extra`)**: if `s` triggers NO
+   concrete-specific probe at any leaf of `e` (`ComputedOnly` scopes `rec` calls to
+   `(dt, on, r')`), then `checkFn σ T s dt on R e = coveredFn σ T dt on R e s.shape`
+   by `evalE` congruence in `rec` — NO monotonicity argument needed (booleans equal
+   pointwise ⇒ equal, exclusion-safe). All three completeness clauses become
+   contrapositives of the bridge `checkFn = sem` (`checkFn_eq_sem_w3d`) at the leg
+   state:
+   * clause (2): uncovered ∧ `sem`-true ⇒ (if not enumerated) `checkFn = covered =
+     false` ⇒ `sem` false, contradiction;
+   * clause (3): covered ∧ `sem`-false ⇒ (if not enumerated) `checkFn = covered =
+     true` ⇒ `sem` true, contradiction;
+   * clause (4): userset `sem`-true ⇒ (if not enumerated) `checkFn = coveredFn` of
+     the USERSET shape, which is FALSE on the fragment (no userset-star seeds under
+     `BareStarStore` — needs a small dead-`wAny`-node lemma: `wAnyNode (t, p≠BARE)`
+     has no out-reach on the chain) ⇒ `sem` false, contradiction. NB the bridge is
+     applied to `s` itself (star-free), never to the userset star subject.
+3. `cands :=` bare-star-free `leafConcretes` ∪ decoded R-node in-edge sources
+   (clause (1) by construction; `reachedByW3d_Rnode_source_bare` keeps the bare
+   filter honest — may need the star-free analog `Rnode_source_name_ne_star`, same
+   induction, candidates are `W3cJobValid`-star-free); `negCands :=` bare
+   `leafConcretes` ∪ persisted `neg`; `uposCands :=` userset `leafConcretes` ∪
+   persisted `upos` (the persisted parts mirror Python; the proofs above don't need
+   them). `W3cJobValid` for the built job: shape filters by construction; `R ≠ BARE`
+   from the derived key; `isDerived`/`lookup`/`on ≠ STAR` from the key.
+4. **Restate**: an "enumerated cascade" (jobs built per dirty key) satisfies
+   `hjv`/`hcover`/`hscope`/`hcovg`, so `ReachedByW3dC.cascade` applies — add the
+   fully-operational chain corollary and restate `graph_correct_w3d` /
+   `reachedByW3dC_inv` over it.
 
 Fragment carries: `hterm`/`hCO`/`hLU`/`hRootB`/`hWSbare` + `BareStarStore`/`TtuStarFree`
 + W2 carries; add-only STORE (decision 6). House rule 6: subagents only for read-only

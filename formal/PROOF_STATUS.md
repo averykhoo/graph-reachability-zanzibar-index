@@ -74,11 +74,13 @@ clause (2) now carries the same UNCOVERED guard as `CompleteKey`'s edge clause
 targeted`'s CompleteKey clause-2 leg) already had `hnc` in scope — one-token fix.
 Piece B's enumeration is now actually provable-complete against clause (2).
 
-**Resume → W3d-1c piece B** (the audit enumeration; HANDOFF "The next task"): model
-`_leaf_concretes` + the audit set (`processor.py:394-441`) from state, prove
-`W3dJobCoverage` as a THEOREM of it (mind `W3cJobValid`'s shape filters), restate
-`graph_correct_w3d` (and `reachedByW3dC_inv`'s chain) with jobs BUILT from the
-enumeration. Then W3d-2 (two strata) → W4.
+**Resume → W3d-1c piece B** (the audit enumeration; HANDOFF "The next task" carries
+the full design pinned this session): route (a) reach-based `leafConcretes`; the key
+lemma `checkFn_eq_coveredFn_of_no_extra` (leaf reads decompose pointwise as
+`leaf(star) ∨ probe1(s) ∨ probe3(s)`, so a subject with no concrete-specific probe
+evaluates exactly like its shape's star — `evalE` congruence, exclusion-safe); all
+three completeness clauses = contrapositives of the `checkFn = sem` bridge; clause (1)
+by construction from decoded R-node in-edges. Then W3d-2 (two strata) → W4.
 
 ---
 
