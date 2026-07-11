@@ -546,9 +546,24 @@ and re-proves/widens the same named theorems. Every stage must keep
     orders and sync/async batching; mid-drain staleness real (fully-drained scope);
     within-round order not load-bearing; the E-chain `enumJobs` must add residue-named
     candidates (`_derived_leaf_neg_ids`, `processor.py:461-495`; old `upos` `:425-429`).
-    **Remaining**: scheduler structural mirrors, `runCascade2_no_abort` under `hLU2`
-    (two-stratum condition), per-stratum inertness/shadow, the read bridge →
-    `graph_correct_w3d2`, the E-chain tail. Detail: PROOF_STATUS 2026-07-12c.
+    **Done (12d)**: the scheduler structural layer over `ReachedByW3d2`
+    (`reconcileJobsLR_outbox_sound` / `_edge_sound` / `_watermark`, R-node terminality
+    over the two-round closure incl. the batch-transported round-stackable form,
+    `outbox_le_frontierMax` cursor arithmetic); **T5 at two strata** —
+    `runCascade2_no_abort` under `hLU2` (every computed operand of a derived def
+    untainted OR a derived key with all-untainted operands; strictly wider than `hLU`,
+    `hLU2_of_hLU`) + `cascade2_drains` (attack-first: on the 3-stratum
+    `a := b∨y, b := c∨x, c := x∖y` `hLU2` is FALSE and the reject FIRES — round-2
+    emission at `b` maps to key `a`; on the 2-stratum truncation `hLU2` TRUE / `hLU`
+    FALSE, accept, `check = sem`); **per-stratum operand-read inertness** — a routed
+    pass is read-inert at every OTHER key whatever its stratum
+    (`check_reconcileStarsKeyDR_other` via `graphRec_reconcileStarsKeyDR_inert` +
+    `probeDerived_reconcileStarsKeyDR_other`; guard form
+    `checkFnR_reconcileStarsKeyDR_other`), on routed mirrors of the W3d-1b
+    reach-inertness/closure/residue-other layer.
+    **Remaining**: the stratum-staged shadow/settledness generalization, the read
+    bridge → `graph_correct_w3d2`, the E-chain tail (with residue-named candidates).
+    Detail: PROOF_STATUS 2026-07-12c/12d.
 
   **W3c ✅ CLOSED (2026-07-11d): `graph_correct_w3c` + T3/T6 (`*_w3c`) — star-carrying
   stores.** The read half assembled in `GraphIndex/ReconcileStarsComplete.lean`: **the

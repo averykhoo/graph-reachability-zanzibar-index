@@ -8,6 +8,75 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12d (W3d-2 — scheduler structural layer, T5 at two strata, per-stratum operand-read inertness)
+
+Resuming from HANDOFF "The next task — W3d-2 continuation" (plan items 1–3; item 3's
+inertness half). Two green+pushed increments, both in `GraphIndex/CascadeStrata.lean`
+(+ 11 Audit entries); `verify.sh` green throughout (build + 0 sorries + zcli +
+standard-axioms audit + 60 conformance).
+
+**Attack-first (house rule 2) — `runCascade2_no_abort` SURVIVED; `hLU2` is
+load-bearing (scratch deleted).** On the 3-stratum schema `a := b ∨ y, b := c ∨ x,
+c := x ∖ y` a decidable `hLU2` evaluates FALSE and the reject genuinely FIRES: the
+round-2 pass at `b`'s R-node emits a row that maps to key `(doc, a, 1)`, the leftover
+check fails, `runCascade2` returns the pre-state — no-abort WITHOUT `hLU2` is
+refuted, the condition does exactly the "3 strata in disguise" rejection the HANDOFF
+demanded. On the 2-stratum truncation `hLU2` is TRUE while W3d-1's `hLU` is FALSE
+(the widening is contentful), the leftovers map to no keys, and fully-drained
+`check = sem` held on the grid for one- and three-write batches.
+
+**Increment 1 — the structural layer + T5.** Mirrors of W3d-1a over the routed
+batch (the routed guard changes which fold branch fires, never which fields a branch
+touches): `reconcileJobsLR_outbox_sound` / `_watermark` / `_edge_sound` (+ the
+`applyDR` bookkeeping and `reconcileKeyDR`/`reconcileResidueKeyR` field lemmas);
+R-node terminality over the two-round closure (`reachedByW3d2_edge_source_ne_R` →
+`reachedByW3d2_Rnode_not_source`, plus the batch-transported round-STACKABLE
+`reconcileJobsLR_Rnode_not_source` — base terminality in, post-batch terminality
+out, applied σ→mid→final); cursor arithmetic `le_frontierMax` /
+`outbox_le_frontierMax` (every outbox row sits at or below the advanced cursor — a
+round's read is exhaustive). **T5**: `runCascade2_no_abort` — hyps `hterm` + `hLU2`
++ `hjv1`/`hjv2` + `hscope2` + the chain; proof: a row above the round-2 cursor is a
+jobs2 emission (old/mid rows bounded by `outbox_le_frontierMax`); its only candidate
+object is its own terminal R-node; a derived reader `k` of `j.R` would trigger
+`hLU2` at `k` forcing ALL of `j.e`'s operands untainted — but `hscope2` says `j`'s
+key was dirtied by a ROUND-1 emission at `j1`'s R-node, so `j1.R ∈ computedRefs j.e`
+with `isDerived (j.dt, j1.R)` — contradiction. `cascade2_drains`: the two-round
+watermark advance justified, never asserted. `hLU2_of_hLU`: the W3d-1 condition is
+literally the special case.
+
+**Increment 2 — per-stratum operand-read inertness (item 3's inertness half).** A
+routed pass at `(dt, R, on)` writes residue only at its own R-node under `R` and
+touches edges only AT that terminal node, so every read anchored at any OTHER key is
+pass-constant: `graphRec_reconcileStarsKeyDR_inert` (untainted ≤4-probe read; probe
+targets never the derived R-node), `probeDerived_reconcileStarsKeyDR_other` (derived
+edge+residue read; node inequality from key inequality via `objNode_inj_of_ne_star`,
+STAR-object case by variant clash), assembled into **`check_reconcileStarsKeyDR_other`**
+(the routed leaf read, BOTH strata in one statement, routing stable since the pass
+fixes the schema) and **`checkFnR_reconcileStarsKeyDR_other`** (the routed compiled
+guard of any def whose computed leaves differ from the pass key — via
+`evalE_computedOnly`). Supporting routed mirrors of the W3d-1b `ReconcileDiff` layer:
+`reconcileKeyDR_reach_inert`/`_reach_pres` (both directions off the R-node),
+`edgesClosed_reconcileKeyDR`, `reconcileKeyDR_Rnode_terminal`,
+`reconcileKeyDR_residue` + `reconcileResidueKeyR_residue_other` +
+`reconcileStarsKeyDR_residue_other`.
+
+**Proof-engineering notes.** (1) `subst hveq` (with `hveq : v = d'.node`) eliminates
+`v` — later tactic text must say `d'.node`, not `v` (a stale `v` surfaces as
+`Unknown identifier` with a `sorry` placeholder in the goal display). (2) The
+`(k.1, k.2)` / `k` Prod-eta defeq lets `hlk : S.lookup k = some e''` feed
+`hLU2 k.1 k.2` directly. (3) The no-abort scope analysis hoists everything
+independent of the leftover row's reader key `k` (the `hscope2` unfolding down to
+`j1.R ∈ computedRefs j.e` and `j.dt = j1.dt`) BEFORE the per-`k` `filterMap`
+refutation — inside, `hLU2` + those facts close it in four lines.
+
+**Resume → W3d-2 remaining** (HANDOFF "The next task"): (a) the stratum-staged
+shadow/settledness generalization (inertness now in hand: a pass perturbs another
+key's guard only through the reconciled key itself), (b) the read bridge
+`checkFnR = sem` at fully-drained states by strata induction → `graph_correct_w3d2`,
+(c) the E-chain tail with residue-named candidates (12c finding (c)).
+
+---
+
 ## Session 2026-07-12c (W3d-2 OPENING — attack survival, the ROUTED leaf dispatch, conservativity, the two-round scheduler)
 
 Resuming from HANDOFF "The next task — W3d-2". One green+pushed increment: the NEW

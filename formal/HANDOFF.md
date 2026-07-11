@@ -90,8 +90,10 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | **`w3dJobCoverage_enumJob`** (+ the collapse `checkFn_eq_coveredFn_of_no_extra`, `leafConcretes`/`edgeHolders`, per-clause discharges, `w3d_leg_context`) | `GraphIndex/CascadeEnum.lean` | W3d-1c piece B CORE: **`W3dJobCoverage` is now a THEOREM** of a state-derived enumeration (was a chain-side hypothesis). Spine: a star-free subject's operand leaf reads decompose pointwise as star-read ∨ two concrete probes (`probeNonDerived_concrete_decomp`); a subject hitting neither probe reads exactly as its shape-star (`evalE` congruence, exclusion-safe). `w3d_leg_context` rebuilds the read bridge + coverage-declaredness at any W3d state via the shadow |
 | **`graph_correct_w3dE`** / **`reachedByW3dE_inv`** (+ `ReachedByW3dE`, `reachedByW3dE_toC`, `enumJobs`/`_valid`/`_cover`/`_scope`/`_covg`, `w3cJobValid_enumJob`, `reachedByW3d_Rnode_source_name_ne_star`) | `GraphIndex/CascadeEnum.lean` | **W3d-1c piece B TAIL — W3d-1c CLOSED.** The enumerated-cascade restatement: `ReachedByW3dE` is the fully-operational scheduler chain (cascade legs run the state-derived `enumJobs`, NO `W3dJobCoverage`/`hcover`/`hscope`/`hjv` in the constructor); `reachedByW3dE_toC` projects it to `ReachedByW3dC` (the four hyps discharged by `enumJobs_*`, store hyps weakened along write prefixes). `check = sem` (fully-drained) and the full 8-clause `Inv` (every state) now hold UNCONDITIONALLY over the operational chain |
 | the ROUTED leaf dispatch + conservativity + the TWO-ROUND scheduler | `GraphIndex/CascadeStrata.lean` | W3d-2 OPENING: `graphRecR`/`checkFnR`/`coveredFnR` (every operand leaf reads the graph's own `check` — untainted ⇒ `probeNonDerived`, derived ⇒ `probeDerived`; `processor.py:43-70, 182-188`), `checkFnR_eq_checkFn` (conservativity: on untainted-operand defs the routed read IS the W3d read), `checkFnR_evalEq` (the routed read consults exactly the `EvalEq` core — residue+schema now included), the routed diffing pass + `reconcileJobsLR_eq` (W3d-1 is the single-stratum image of the routed scheduler), `runCascade2` (rounds = 2, per-round frontier cursor, leftover reject), `ReachedByW3d2` (C-style two-batch closure), `reachedByW3d2_schema`. Attack-first: fully-drained `check = sem` SURVIVED all cross-stratum vectors; mid-drain staleness real; within-round order not load-bearing |
+| **T5 at TWO STRATA** — `runCascade2_no_abort` / `cascade2_drains` + the W3d-2 structural layer | `GraphIndex/CascadeStrata.lean` | W3d-2 items 1–2 (2026-07-12d): routed-batch outbox/edge soundness (`reconcileJobsLR_outbox_sound`/`_edge_sound`), R-node terminality over the two-round closure (+ the round-STACKABLE batch transport), cursor arithmetic (`outbox_le_frontierMax` — a round's read is exhaustive). The reject branch provably dead under **`hLU2`** (two-stratum condition, dependency-wise; strictly wider than `hLU`, `hLU2_of_hLU`); attack-confirmed load-bearing (3-stratum schema ⇒ `hLU2` FALSE and the reject FIRES) |
+| **per-stratum operand-read INERTNESS** — `check_reconcileStarsKeyDR_other` / `checkFnR_reconcileStarsKeyDR_other` | `GraphIndex/CascadeStrata.lean` | W3d-2 item 3a (2026-07-12d): a routed pass is read-inert at every OTHER key WHATEVER its stratum (untainted probe via `graphRec_reconcileStarsKeyDR_inert`, derived read via `probeDerived_reconcileStarsKeyDR_other` — node inequality from key inequality; guard form via `evalE_computedOnly`), on routed mirrors of the W3d-1b reach-inertness/closure/residue-other layer. The base fact for the stratum-staged settledness transport |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ✅ (piece A `reachedByW3dC_inv` ✅ 2026-07-11j; piece B core `w3dJobCoverage_enumJob` ✅ 2026-07-12; piece B tail — enumerated-cascade restatement, `graph_correct_w3dE`/`reachedByW3dE_inv` — ✅ 2026-07-12b) → W3d-2 ◐ (OPENED 2026-07-12c: routed dispatch + conservativity + two-round scheduler + `ReachedByW3d2`) → W4.**
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ✅ (piece A `reachedByW3dC_inv` ✅ 2026-07-11j; piece B core `w3dJobCoverage_enumJob` ✅ 2026-07-12; piece B tail — enumerated-cascade restatement, `graph_correct_w3dE`/`reachedByW3dE_inv` — ✅ 2026-07-12b) → W3d-2 ◐ (OPENED 2026-07-12c: routed dispatch + conservativity + two-round scheduler + `ReachedByW3d2`; 2026-07-12d: structural layer + T5-at-two-strata + per-stratum operand-read inertness) → W4.**
 
 **W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* PROOF_STATUS entries and the
 ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
@@ -120,65 +122,69 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 
 ---
 
-## The next task — W3d-2 continuation: scheduler structure + no-abort, then inertness/shadow
+## The next task — W3d-2 continuation: the stratum-staged shadow/settledness, then the read bridge
 
-**W3d-2 is OPENED (2026-07-12c — READ THE TOP PROOF_STATUS ENTRY).** In
-`GraphIndex/CascadeStrata.lean` (sorry-free, axiom-clean, verify.sh green):
-- **The routed read**: `graphRecR` (every operand leaf reads the graph's own `check`
-  — untainted key ⇒ `probeNonDerived`, derived key ⇒ `probeDerived`; faithful to
-  `_EvalContext.leaf_check`/`derived_check`/`derived_stars`, `processor.py:43-70`,
-  and `member_check` `:182-188`), `checkFnR`, `coveredFnR`.
-- **Conservativity**: `checkFnR_eq_checkFn` (untainted-operand defs read identically),
-  pass/batch collapses `reconcileStarsKeyDR_eq` / **`reconcileJobsLR_eq`** — W3d-1 is
-  the single-stratum image of the routed scheduler.
-- **Congruence**: `checkFnR_evalEq` (+ `probeDerived_congr`/`check_evalEq`) — the
-  routed read consults exactly the `EvalEq` core (residue + schema now live).
-- **The two-round scheduler**: `frontierRowsAbove`/`cascadeKeysAbove`/`frontierMax`
-  (per-round cursor), `runCascade2` (round 1 above the watermark, round 2 on round 1's
-  emissions, leftover reject), **`ReachedByW3d2`** (C-style: two job batches, validity
-  + two-sided coverage per round, round-2 coverage read at the mid-state),
-  `reachedByW3d2_schema`.
-- **Attack findings (recorded, scratch deleted)**: fully-drained `check = sem`
-  SURVIVED all cross-stratum vectors (union / exclusion both directions / stars /
-  userset-upos; sync + async; both within-round orders; no aborts); mid-drain
-  staleness is REAL (read theorem stays fully-drained-scoped; settledness must become
-  stratum-staged); within-round order NOT load-bearing (`:714-719` sort is an
-  optimization); the future W3d-2 `enumJobs` must add residue-named candidates —
-  Python pulls operand residues' `neg` ids (`_derived_leaf_neg_ids`, `:461-495`) and
-  old `upos` ids (`:425-429`), which are edge-free (I6) and invisible to reach probes.
+**W3d-2 items 1–3a are CLOSED (2026-07-12d — READ THE TOP PROOF_STATUS ENTRY).** In
+`GraphIndex/CascadeStrata.lean` (sorry-free, axiom-clean, verify.sh green), on top of
+the 12c opening (routed read `graphRecR`/`checkFnR`, conservativity
+`reconcileJobsLR_eq`, congruence `checkFnR_evalEq`, `runCascade2`, `ReachedByW3d2`):
+- **The structural layer**: `reconcileJobsLR_outbox_sound` / `_watermark` /
+  `_edge_sound`; R-node terminality over the two-round closure
+  (`reachedByW3d2_Rnode_not_source` + the round-STACKABLE batch transport
+  `reconcileJobsLR_Rnode_not_source` — base terminality in, post-batch out, applied
+  σ→mid→final); cursor arithmetic `le_frontierMax` / `outbox_le_frontierMax` (every
+  outbox row sits at or below the advanced cursor — a round's read is exhaustive).
+- **T5 at two strata**: **`runCascade2_no_abort`** under **`hLU2`** (every `computed`
+  operand of a derived def is untainted OR itself a declared derived key whose own
+  computed operands are ALL untainted — `len(strata) == 2` stated dependency-wise;
+  strictly wider than `hLU`, `hLU2_of_hLU`) + `hjv1`/`hjv2`/`hscope2`: a row above
+  the round-2 cursor is a jobs2 emission at a terminal derived R-node; a derived
+  reader of its pred would force (via `hLU2`) all the emitter's operands untainted,
+  contradicting `hscope2`'s round-1 dirtying operand (`j1.R ∈ computedRefs j.e`,
+  derived). `cascade2_drains`: the watermark advance justified. Attack-first
+  (recorded, scratch deleted): 3-stratum `a := b∨y, b := c∨x, c := x∖y` ⇒ `hLU2`
+  FALSE and the reject FIRES (round-2 emission at `b` maps to key `a`); 2-stratum
+  truncation ⇒ `hLU2` TRUE / `hLU` FALSE, accept, `check = sem` on the grid.
+- **Per-stratum operand-read inertness (item 3a)**: a routed pass at `(dt, R, on)`
+  is read-inert at every OTHER key WHATEVER its stratum —
+  **`check_reconcileStarsKeyDR_other`** (untainted branch
+  `graphRec_reconcileStarsKeyDR_inert`, derived branch
+  `probeDerived_reconcileStarsKeyDR_other`; node inequality from key inequality via
+  `objNode_inj_of_ne_star`, STAR-object by variant clash) and the guard form
+  **`checkFnR_reconcileStarsKeyDR_other`** (any def whose computed leaves differ
+  from the pass key, via `evalE_computedOnly`). Supporting routed mirrors:
+  `reconcileKeyDR_reach_inert`/`_reach_pres`, `edgesClosed_reconcileKeyDR`,
+  `reconcileKeyDR_Rnode_terminal`, `reconcileStarsKeyDR_residue_other`.
 
 **Next increments, in order:**
-1. **The scheduler structural layer over `ReachedByW3d2`** — mirrors of W3d-1a:
-   routed-batch outbox soundness (`reconcileJobsLR_outbox_sound`), watermark/nextId
-   bookkeeping, routed edge soundness (`reconcileJobsDR_edge_sound` analog), R-node
-   terminality over the two-round closure (the W3d-1 inductions transfer — cascade
-   legs still only add bare-candidate → own-R-node edges).
-2. **T5 halves** — `runCascade2_no_abort`: under the TWO-STRATUM `hLU2` (every
-   `computed` operand of a derived def is untainted OR itself a declared derived key
-   whose operands are ALL untainted — the 2-strata condition without invoking
-   `stratify`), round-1 emissions sit at R-nodes of keys that only stratum-2 defs
-   read (mapped and settled in round 2), and round-2 emissions map to NO keys (nothing
-   reads a top-stratum derived pred). The reject branch is provably dead; the
-   watermark advance is justified, not asserted.
-3. **Per-stratum operand-read inertness + the shadow generalization**: a pass at key
-   `(dt,R,on)` leaves every OTHER key's `probeDerived`/`probeNonDerived` reads
-   unchanged (`reconcileResidueKey_residue_other` + R-node-targeted edge writes);
-   generalize `reachedByW3d_shadow` from "untainted operands" to "lower-stratum
-   operands" — a stratum-2 guard evaluated after its operands' round-1 settle reads
-   settled stratum-1 state.
-4. **The read bridge + `graph_correct_w3d2`**: `checkFnR = sem`-step at fully-drained
-   states by strata induction (stratum-1 operand reads = `sem` via the W3d-1 bridge
-   at settled keys; untainted operands via the W2 transfer), then the fully-drained
-   read theorem over `ReachedByW3d2`. Scope: the W3d-1 subject/query scope.
-5. **The E-chain tail**: extend `enumJobs` with the residue-named candidates (attack
-   finding (c)) and discharge the coverage/validity hypotheses.
+1. **The stratum-staged shadow/settledness generalization (item 3b)**: generalize
+   the W3d-1 settledness machinery (`CascadeStable.lean`/`CascadeSettle.lean`
+   `SettledKey`/`CompleteKey` + transports) to the two-round chain — a stratum-1 key
+   settled by round 1 STAYS settled through the round's other passes (inertness, now
+   in hand) and through round 2 (whose passes sit at stratum-2 keys ≠ any stratum-1
+   key); a stratum-2 guard evaluated in round 2 reads settled stratum-1 state. The
+   shadow analog: at fully-drained states the ROUTED guard of a stratum-2 def equals
+   its `sem`-step because its derived operand reads hit settled stratum-1 keys
+   (whose `probeDerived = sem` by the W3d-1 read theorem shape) and its untainted
+   operand reads transfer by W2. Watch the write legs between cascades: writes dirty
+   keys but never touch residues (I5/`processor_writes`), so settledness transport
+   over `writeLoggedRules` mirrors `CascadeStable`'s `writeLeg_*` lemmas.
+2. **The read bridge + `graph_correct_w3d2` (item 4)**: `checkFnR = sem`-step at
+   fully-drained states by strata induction, then the fully-drained read theorem
+   over `ReachedByW3d2`. Scope: the W3d-1 subject/query scope; fragment carries
+   below.
+3. **The E-chain tail (item 5)**: extend `enumJobs` with the residue-named
+   candidates (12c finding (c): operand residues' `neg` ids via
+   `_derived_leaf_neg_ids`, `processor.py:461-495`, and old `upos` ids `:425-429` —
+   edge-free, invisible to reach probes) and discharge the two-round coverage/
+   validity/scope hypotheses from the state.
 
 Fragment carries: everything W3d-1 carried (`hterm`/`hCO`/`hRootB`/`hWSbare` +
 `BareStarStore`/`TtuStarFree` + W2 carries; add-only STORE, decision 6) EXCEPT `hLU`
-relaxed to `hLU2`. House rules: attack-first any NEW statement shape (e.g. before
-proving `runCascade2_no_abort`, try to make round-2 emissions map to a key on a
-3-stratum-in-disguise schema — `hLU2` must reject it); subagents only for read-only
-exploration.
+relaxed to `hLU2`. House rules: attack-first any NEW statement shape (e.g. before the
+stratum-staged settledness invariant, `#eval`-hunt a mid-round-2 state where a
+stratum-1 key is UNsettled — the 12c mid-drain staleness finding says the staging
+must be per-stratum, not global); subagents only for read-only exploration.
 
 **After W3d-2 → W4** (full-scope restatement — combine W1+W2+W3 generality, name the
 closure `ReachedBy`, restate at `GraphAccepts` scope), then **Phase 6** (graph-model
