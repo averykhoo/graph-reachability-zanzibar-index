@@ -79,4 +79,95 @@ theorem checkFn_eq_coveredFn_of_no_extra {σ : GraphState} {T : Store} {s : Subj
   obtain ⟨h1, h3⟩ := hno r' hr'
   rw [h1, h3, Bool.or_false, Bool.or_false]
 
+/-! ## The state-derived leaf enumeration `leafConcretes`
+
+`processor.py:394-441` (`_leaf_concretes`): the pass enumerates the store-supported
+concrete subjects of every operand leaf — those reaching the leaf's object node or its
+`w_all` node. The model reads them straight off the state: every plain star-free node
+that reaches a `computed`-leaf target. `nodeSubj` decodes a node back to a subject
+(left-inverse of `subjNode` on plain star-free nodes). -/
+
+/-- Decode a node to a subject reference (drop the variant). Left-inverse of `subjNode`
+    on a plain star-free node. -/
+def nodeSubj (u : NodeKey) : SubjectRef := ⟨u.type, u.name, u.pred⟩
+
+@[simp] theorem nodeSubj_subjNode {s : SubjectRef} (hsn : s.name ≠ STAR) :
+    nodeSubj (subjNode s) = s := by
+  unfold nodeSubj subjNode; rw [if_neg hsn]
+
+/-- Does node `u` reach some `computed`-leaf target of `e` — the object node
+    `⟨dt,on⟩` under a leaf relation `r'`, or that relation's `w_all` node? -/
+def hitsLeaf (σ : GraphState) (u : NodeKey) (dt on : String) (e : Expr) : Bool :=
+  (computedRefs e).any (fun r' =>
+    σ.reach u (objNode ⟨dt, on⟩ r') || σ.reach u (wAllNode dt r'))
+
+/-- **The leaf concretes** — the state-derived audit enumeration: every plain
+    star-free node that hits a leaf target, decoded to a subject. -/
+def leafConcretes (σ : GraphState) (dt on : String) (e : Expr) : List SubjectRef :=
+  (σ.nodes.filter (fun u => u.variant == Variant.plain && u.name != STAR
+    && hitsLeaf σ u dt on e)).map nodeSubj
+
+/-- The source of any reach is a node (edges-closed): a true `σ.reach u v` starts at
+    an edge out of `u`, whose source is in `σ.nodes`. -/
+theorem reach_source_mem_nodes {σ : GraphState}
+    (hcl : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes) {u v : NodeKey}
+    (h : σ.reach u v = true) : u ∈ σ.nodes := by
+  have hn := reach_sound h
+  cases hn with
+  | edge he => exact (hcl _ he).1
+  | head he _ => exact (hcl _ he).1
+
+/-- **Enumeration completeness for the leaf concretes.** A star-free subject `s`
+    whose graph node hits a `computed` leaf of `e` is enumerated. -/
+theorem mem_leafConcretes_of_hit {σ : GraphState} {s : SubjectRef} {dt on : String}
+    {e : Expr} (hcl : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) {r' : String} (hr' : r' ∈ computedRefs e)
+    (hhit : σ.reach (subjNode s) (objNode ⟨dt, on⟩ r') = true ∨
+            σ.reach (subjNode s) (wAllNode dt r') = true) :
+    s ∈ leafConcretes σ dt on e := by
+  have hmem : subjNode s ∈ σ.nodes := by
+    rcases hhit with h | h <;> exact reach_source_mem_nodes hcl h
+  have hplain : (subjNode s).variant = Variant.plain := by
+    unfold subjNode; rw [if_neg hsn]
+  have hnameNe : (subjNode s).name ≠ STAR := by
+    unfold subjNode; rw [if_neg hsn]; exact hsn
+  have hhitb : hitsLeaf σ (subjNode s) dt on e = true := by
+    unfold hitsLeaf
+    rw [List.any_eq_true]
+    exact ⟨r', hr', by rcases hhit with h | h <;> rw [h] <;> simp⟩
+  rw [leafConcretes, List.mem_map]
+  refine ⟨subjNode s, ?_, nodeSubj_subjNode hsn⟩
+  rw [List.mem_filter]
+  refine ⟨hmem, ?_⟩
+  simp only [hplain, beq_self_eq_true, bne_iff_ne, ne_eq, hnameNe, not_false_eq_true,
+    Bool.true_and, hhitb, Bool.and_true]
+
+/-- **The bridge to the key lemma's hypothesis.** A star-free subject NOT among the
+    leaf concretes triggers NEITHER concrete-specific probe at any leaf (contrapositive
+    of `mem_leafConcretes_of_hit`), so `checkFn_eq_coveredFn_of_no_extra` applies. -/
+theorem no_extra_of_not_mem {σ : GraphState} {s : SubjectRef} {dt on : String}
+    {e : Expr} (hcl : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) (hnm : s ∉ leafConcretes σ dt on e) :
+    ∀ r' ∈ computedRefs e,
+      σ.reach (subjNode s) (objNode ⟨dt, on⟩ r') = false ∧
+      σ.reach (subjNode s) (wAllNode dt r') = false := by
+  intro r' hr'
+  refine ⟨?_, ?_⟩
+  · by_contra h
+    exact hnm (mem_leafConcretes_of_hit hcl hsn hr' (Or.inl (by
+      simpa using h)))
+  · by_contra h
+    exact hnm (mem_leafConcretes_of_hit hcl hsn hr' (Or.inr (by
+      simpa using h)))
+
+/-- **Combined: a non-enumerated star-free subject reads as its coverage.** The key
+    lemma fed by the enumeration bridge — the exact shape the completeness clauses
+    contrapose against. -/
+theorem checkFn_eq_coveredFn_of_not_mem {σ : GraphState} {T : Store} {s : SubjectRef}
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hcl : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) (hon : on ≠ STAR) (hnm : s ∉ leafConcretes σ dt on e) :
+    σ.checkFn T s dt on R e = σ.coveredFn T dt on R e s.shape :=
+  checkFn_eq_coveredFn_of_no_extra hco hsn hon (no_extra_of_not_mem hcl hsn hnm)
+
 end Zanzibar
