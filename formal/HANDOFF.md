@@ -80,114 +80,77 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T2a `reachedByW3c_inv` / `reachedByW3c_master` | `GraphIndex/ReconcileStars.lean` | W3c write half: `stars`/`neg` model, ALL I6 clauses contentful, star-general (no `StarFreeStore`) |
 | T2b `graph_correct_rulesBS` | `GraphIndex/RulesBareStar.lean` | W2 untainted correspondence over `BareStarStore`+`TtuStarFree`, star-BARE subjects incl. |
 | `graphRec_base_eq_bs` / `checkFn_eq_sem_bs` | `RestrictBase.lean` / `ReconcileComplete.lean` | the STAR-RELAXED base equation + `checkFn ↔ sem` bridge (no `StarFreeStore`) |
-| `checkFn_eq_sem_w3c` + W3c batch layer (`W3cJob`/`reconcileJobsC`/`W3cJobValid`/`_pres`/`_edges_mono`) | `ReconcileStarsComplete.lean` | star-relaxed `checkFn=sem` on W3c states (shadow) + the coverage-batch scaffolding |
-| T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`, `_w3b`) |
+| T2b `graph_correct_w3c` + `coveredFn_declared` (the linchpin) + `w3c_row_char` + batch completeness | `ReconcileStarsComplete.lean` | + star-carrying stores: bare `T:*` grants, `stars`/`neg`/`upos` reads, bare/star-BARE/userset subjects |
+| T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`, `_w3b`, `_w3c`) |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ◐ (write half ✅, read-half step 1 [star-relaxed base equation] ✅, batch layer + assembly NEXT) → W3d → W4.**
-**W3c write half is CLOSED (2026-07-11)** — `GraphIndex/ReconcileStars.lean`: the `stars`/`neg`
-residue model and **T2a with ALL FOUR I6 clauses contentful**, with **no `StarFreeStore`
-hypothesis anywhere in the file**. Machinery:
-- **write model**: `wildcardShapes` (schema-fixed `subject_wildcard_shapes`), `coveredFn` (the
-  star-subject `checkFn` — the compiled star fold `plan.stars_fn` is POINTWISE the boolean
-  evaluation on the star subject: `∪/∩/−` over leaf star sets = `∨/∧/∧¬` over membership, a
-  closure leaf's star set being the graph's star-subject read), `reconcileResidueKey` (wholesale
-  stars/neg/upos recompute, one `putResidue`; `neg` = covered ∧ expr-false, `upos` = ¬covered ∧
-  expr-true), `reconcileKeyC` (edge fold with `want_edge = should ∧ ¬covered`,
-  `processor.py:359`), `reconcileStarsKey` = residue-THEN-edges (the faithful atomic unit —
-  `reconcile` stores the residue at `:446` before the edge audit `:450-455`; order load-bearing);
-- **covered-filter collapse** `reconcileKeyC_eq_filter`: the covered guard is fold-constant, so
-  the W3c edge fold IS a W3a `reconcileKey` on the covered-filtered candidates — all W3a fold
-  machinery transfers with zero new induction;
-- **shadow projection** `reachedByW3c_shadow` (W3b pattern; residue writes core-inert + collapse);
-- **star-general operand-read inertness** `graphRec_reconcileKey_inert` (NO `StarFreeStore`): a
-  pass adds only edges onto its terminal R-node and all four `probeNonDerived` targets at
-  untainted keys differ from it — subject-generic, star subjects included. This replaces the
-  plain-edges shortcut and is the TEMPLATE for the read-half base work;
-- **`reachedByW3c_master`**: one canonical base σ0 per chain — operand reads = base reads; every
-  residue row carries the CANONICAL stars (`wildcardShapes.filter (coveredFn σ0)`); **guard
-  canonicity**: `neg` members canonically expr-false, `upos` members canonically expr-true, every
-  R-node in-edge from a canonically-uncovered, canonically-expr-true bare candidate
-  (`reconcileKey_edge_guard` + prefix-mid-state inertness);
-- **T2a `reachedByW3c_inv`**: full `Inv` — `negStarCovered` (write-time filter),
-  `uposNegDisjoint` (covered vs ¬covered, same row), `uposEdgeFree` (userset member vs
-  bare-sourced collapsed edge), `negEdgeFree` (the space rule cross-pass: canonically covered
-  member vs canonically uncovered edge source — contradiction).
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d (multi-stratum cascade) NEXT → W4.**
 
-Attack-first (2026-07-11, recorded in `ReconcileStars.lean` header): planned model vs `sem`, 342
-queries, `viewer/viewer2/viewer3` (incl. nested root) over 6 objects with `user:*` operand
-grants — starred subtrahend kills coverage; mixed `and` uncovered; concrete-only exclusion does
-not defeat `*`; covered subjects hold zero edges; D1 flow-through coverage; userset-driven `neg`;
-idempotent, key-order/candidate-permutation independent. No refutation.
-
-The W3b summary (upos machinery, `graph_correct_w3b`) and W3a summary are in the 2026-07-11
-PROOF_STATUS entries.
-
-**W3c read-half step 1 is CLOSED (2026-07-11)** — the star-relaxed base equation, three layers:
-- **`graph_correct_rulesBS`** (`GraphIndex/RulesBareStar.lean`): W2's untainted `check = sem`
-  over `BareStarStore` + **`TtuStarFree`** (no TTU arm matches a stored star tuple — attack-
-  CONFIRMED necessary: a `folder:* → doc#parent` tupleset tuple makes `sem` true via `ttuLeaf`'s
-  `instances` branch while the bridge-free `writeRules` graph answers false; star TTU parents
-  need the W1c in-bridge machinery, deferred). Query scope: object concrete, subject concrete
-  or star-BARE. Machinery: closure star-characterisation (`rewriteClosure_star_subject` — no
-  ttu arm ever fires on a star closure member, so it carries the seed's full bare subject),
-  subject-generic per-hop soundness/lift/chain composition (`subjNode_inj_total`), the
-  star→concrete transfer `semAux_star_to_bare` (a probe-2 `wAny`-source chain IS a star-subject
-  chain), completeness `nreaches_of_semAux_rulesBS` (probe-1 ∨ probe-2 disjunction).
-- **`graphRec_base_eq_bs`** (`RestrictBase.lean`): the mixed-schema admitted base's operand
-  read = `sem` — same schema-restriction route, `TtuStarFree` transfers to `S↾U` because the
-  restriction preserves `schemaRewrites` (`ttuStarFree_restrict`).
-- **`graphRec_reduce_base_adm_bs` + `checkFn_eq_sem_bs`** (`ReconcileComplete.lean`): the W3a-
-  admitted reduce-to-base with NO `StarFreeStore` — the plain-edges probe-killing shortcut is
-  replaced by transferring ALL FOUR probes (both probe targets carry the untainted key
-  `(dt, r')`, so `reachedByW3aAdmitted_reach_inert` applies verbatim) — and the composed
-  star-relaxed `checkFn ↔ sem` bridge, subject-generic up to star-BARE (the `coveredFn` reads).
+**W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* PROOF_STATUS entries and the
+ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
+- **Write model** (`ReconcileStars.lean`): `wildcardShapes` / `coveredFn` (star-subject
+  `checkFn`) / `reconcileResidueKey` (wholesale stars+neg+upos recompute) / `reconcileKeyC`
+  (covered-guarded edge fold) / `reconcileStarsKey` (residue-THEN-edges, the faithful atomic
+  unit). Three structural devices: the **covered-filter collapse** (`reconcileKeyC_eq_filter` —
+  the W3c edge fold IS a W3a `reconcileKey` on filtered candidates), the **shadow projection**
+  (`reachedByW3c_shadow` — every W3c state has a W3a-admitted shadow with identical core), and
+  **star-general operand-read inertness** (`graphRec_reconcileKey_inert`, no `StarFreeStore`).
+  `reachedByW3c_master`: canonical base σ0 per chain — canonical `stars` rows + guard canonicity.
+  T2a `reachedByW3c_inv` with ALL FOUR I6 clauses contentful.
+- **Read half** (`ReconcileStarsComplete.lean`): `checkFn_eq_sem_w3c` (bridge on any W3c state);
+  **the LINCHPIN `coveredFn_declared`** (no ghost star coverage: a `sem`-covered shape is
+  DECLARED — first edge out of the `wAny` node is a materialised closure tuple whose star seed
+  matched a wildcard-flagged restriction); `w3c_row_char` (persisted rows read at `sem` level);
+  batch completeness for the WHOLESALE recompute (`reconcileJobsC_row_isSome`,
+  `_neg_complete`/`_upos_complete` with the **∀-targeting-jobs enumeration form** — attack-
+  confirmed necessary: a later same-key pass with an incomplete `negCands` drops the exclusion);
+  `w3cComplete_derived_edge`; **`graph_correct_w3c`** (star ⇒ `stars`, bare ⇒ edge ∨ `stars`∖`neg`,
+  userset ⇒ `upos` exactly — `hWSbare` kills userset coverage). Fragment hyps: `BareStarStore` +
+  `TtuStarFree` + `hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE` (decision-15) + the W3a/W3b
+  carries (`hterm`/`hCO`/`hLU`/`hRootB`); query scope `hqs : name = STAR → predicate = BARE`,
+  concrete object. T3/T6 `*_w3c` incl. `exclusion_effective_w3c` (a concrete subject excluded
+  from UNDER a `T:*` grant — the space rule's `neg` actually excludes).
 
 ---
 
-## The next task — W3c read half, step 3: the linchpin lemma + `graph_correct_w3c`
+## The next task — W3d: the multi-stratum cascade (design first)
 
-Steps 1 (star-relaxed base equation `checkFn_eq_sem_bs`) and 2 part 1 (the batch scaffolding
-`ReconcileStarsComplete.lean` + `checkFn_eq_sem_w3c`) are CLOSED. What remains:
+W3a–W3c all treat a reconcile pass as an externally-scheduled batch job over ONE derived
+stratum (every operand untainted, `hLU`). W3d models the processor's actual **scheduling
+loop** and (sub-stage 2) **derived-reading-derived** strata. Model source:
+`index_v4/processor.py` `run_cascade` (`:694-740`) + `_map_deltas_to_keys`/`_fan_out` +
+`outbox.py`; boolean spec §5.1. Shape of the Python loop: per stratum round, read outbox
+rows above the frontier, map deltas to affected derived keys (fan-out tables + pending
+residue bumps), reconcile each key **lower strata first**, flush; after `len(strata)`
+rounds a non-empty leftover raises (stratification guarantees drain).
 
-**(A) THE LINCHPIN — prove `coveredFn σ0 sh = true → sh ∈ wildcardShapes S`** (a `sem`-true
-BARE-star subject has a declared wildcard shape). Attack-first CONFIRMED this is true and NEEDED
-for ALL THREE `probeDerived` branches (see the 2026-07-11c PROOF_STATUS entry for the full
-argument): `res.stars = (wildcardShapes S).filter (coveredFn σ0)`, so the space rule's
-`res.stars.contains sh ↔ coveredFn σ0 sh` collapse holds iff coverage ⇒ declaredness. **Route 2
-(recommended, graph-level):** `coveredFn σ0 sh` reads `reach` from `wAnyNode sh` on σ0 ⇒ ∃ edge
-`(wAnyNode sh, y)` ⇒ (`reachedByRules_edge_sound`) closure tuple `subjNode = wAnyNode sh` ⇒
-(`rewriteClosure_star_subject` + `BareStarStore`/`TtuStarFree`) a STORED bare-star seed of shape
-sh ⇒ (`StoreValidRules` + `restrictionMatches` wildcard flag, à la `isSWU_of_storeValid`
-`UsStarClosure.lean:236`) `sh ∈ wildcardShapes S`. Node glue: `wAnyNode_eq_subjNode`
-(`RulesBareStar.lean:758`).
+**Start by DESIGNING the sub-staging (read-only exploration + attack-first, then commit a
+plan to ROADMAP before proving).** The natural split:
+- **W3d-1 — the drain loop on the current one-stratum fragment.** Model outbox writes
+  (`writeDirect` currently leaves the outbox empty in the model — decide whether to add
+  delta emission or to model `run_cascade` as "keys-to-reconcile computed from a delta
+  set") and the cascade as: compute affected keys from deltas, run `reconcileStarsKey`
+  per key, advance the watermark. Contentful **T5** (a non-empty outbox drains to
+  `Quiescent`) and the **cross-key re-reconcile hazard** (an operand edge write
+  re-reaching an EXISTING residue key must re-reconcile it — this is where the
+  ∀-targeting-jobs completeness clauses become theorems about the enumeration instead of
+  hypotheses: `_fan_out` is what guarantees every targeting pass sees the subject).
+- **W3d-2 — two strata (derived operand cones).** Relax `hLU`: a derived def may read a
+  LOWER-stratum derived relation. `checkFn`'s leaf dispatch must then route derived
+  operands through the residue read (`probeDerived`), not `probeNonDerived` — a real
+  model extension (Python's `check_fn` leaf calls `widx.check`, which routes). Expect the
+  W3a-admitted shadow and `graphRec_reconcileKey_inert` to need per-stratum
+  generalisation (inertness of a stratum-k pass for stratum-<k reads).
 
-**(B) `W3cComplete` + `graph_correct_w3c`.** Add fragment hyps `hWSbare : ∀ sh ∈ wildcardShapes
-S, sh.2 = BARE` (so `starSubj sh` is bare ⇒ `checkFn_eq_sem_bs` reaches `coveredFn`) and
-`hqbareStar : q.subject.name = STAR → q.subject.predicate = BARE`. Define `W3cComplete` (base +
-`W3cJob`s + `W3cJobValid` + coverage clauses incl. a **row-existence** clause for keys with a
-covered shape / any sem-true member — so `reachedByW3c_master` makes the queried row canonical).
-`w3cComplete_reached` = `reconcileJobsC_pres`. Assembly through `probeDerived` (State.lean:552):
-- **soundness** (read ⇒ sem) is nearly free from `reachedByW3c_master` (rows canonical; edges
-  canonically uncovered + guard-true) glued with `checkFn_eq_sem_w3c`;
-- **completeness** (sem ⇒ read): covering job's edge via `reconcileKey_edge_present` through the
-  `reconcileKeyC_eq_filter` collapse (a sem-true UNCOVERED bare survives the covered-filter) +
-  `reconcileJobsC_edges_mono`; upos/stars via the row-existence clause;
-- **star branch**: `res.stars.contains s.shape ↔ coveredFn σ0 s.shape` (linchpin + master) `↔ sem`
-  (`checkFn_eq_sem_w3c`, `s = starSubj s.shape` for bare-star).
-Then T3/T6 `*_w3c` in `Equiv.lean` and `Audit.lean` entries (`graph_correct_w3c`,
-`checkFn_eq_sem_w3c`).
+Attack-first candidates: outbox interleavings/watermark skips vs the Python loop; a
+stratum-2 def whose operand's residue is stale mid-cascade; re-reconcile after operand
+REMOVAL (the model has no removes yet — check whether W3d-1 stays add-only, and say so
+honestly in the fragment conditions).
 
-Scope guard (decision-15): object wildcards and wildcard usersets over derived relations stay
-rejected; `wildcardShapes` carries only bare-subject-star shapes (`hWSbare`); wildcard TTU
-parents excluded (`TtuStarFree`). `hterm`/hCO/hLU/hRootB stay as in W3a/W3b; store hyps are
-`BareStarStore` + `TtuStarFree` (replacing `StarFreeStore`).
+House rule 6 applies: use subagents only for the read-only design exploration.
 
 ---
 
-## After W3c (the remaining road)
-- **W3d — multi-stratum cascade.** The outbox/watermark loop (`run_cascade`), cross-key
-  re-reconcile hazard (an edge write re-reaching an existing residue key), contentful
-  T5 (non-empty outbox drained). `processor.py` is the model source.
+## After W3d (the remaining road)
 - **W4 — full-scope restatement.** Combine W1+W2+W3 generality; name the closure
   `ReachedBy`; restate `graph_correct` / `graph_reached_inv` / `backend_equivalence` /
   T6a/T6b over it at `GraphAccepts` scope (discharges the deleted-as-false abstract

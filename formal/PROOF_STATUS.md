@@ -8,6 +8,82 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11d (W3c read half step 3 — CLOSED: the linchpin, the batch completeness layer, `graph_correct_w3c`, T3/T6 `*_w3c`)
+
+Resuming from HANDOFF "W3c read half, step 3: the linchpin lemma + `graph_correct_w3c`." Two
+green+pushed axiom-clean increments (all in `GraphIndex/ReconcileStarsComplete.lean`, + `Equiv.lean`,
+`Audit.lean` [10 new entries]); `verify.sh` green throughout (build + 0 sorries + zcli +
+standard-axioms audit + 60 conformance). Sorry count held at 0. **This CLOSES W3c** — the full
+read↔`sem` correspondence on star-carrying stores, all three `probeDerived` branches.
+
+**Attack-first (recorded in the file's coverage-section header; scratch deleted).** Small
+`viewer := member ∖ banned` corpus with a `user:*` grant, a concrete-under-star exclusion, a
+userset member, and a group-routed concrete: (1) the planned `W3cComplete` read = `sem` on the
+full grid; (2) a second full same-key pass is idempotent; (3) **NECESSITY finding**: a second
+same-key pass whose `negCands` omit the excluded subject DROPS it from `neg` (the residue is a
+WHOLESALE per-pass recompute) and the read flips to `true` ≠ `sem` — so the completeness clauses
+MUST quantify over **every job targeting a key**, not one covering job (edges are monotone, so
+edge coverage stays ∃-form). Faithful to Python: every `reconcile` call re-derives the full audit
+enumeration (`_leaf_concretes` ∪ persisted ids). Linchpin sanity re-checked (`coveredFn` true
+exactly on the declared shape).
+
+**Increment 1 — the LINCHPIN + row char + batch completeness.**
+- `coveredFn_declared` (**the linchpin**, Route 2 graph-level as planned): `coveredFn σ0 sh =
+  true → sh ∈ wildcardShapes S`. Chain: `evalE_computedOnly_true_leaf` (a `ComputedOnly` tree is
+  true only via a true `computed` leaf) → the star subject's probes leave from its own `wAny`
+  node (probes 2/4 dead) → `nreaches_first_edge` → `reachedByRules_edge_sound` (the first edge is
+  a materialised closure tuple with `subjNode u.subject = wAnyNode sh`) →
+  `rewriteClosure_star_subject` (a star closure member carries its stored seed's subject) →
+  `StoreValidRules` + `restrictionMatches`' wildcard flag → `mem_exprRestrictions_of_directs` →
+  a `wildcardShapes` entry.
+- `w3c_row_char`: on any W3c state, a persisted row reads at `sem` level — `stars.contains sh ↔
+  (sh ∈ wildcardShapes S ∧ sem(starSubj sh))` (master + `checkFn_eq_sem_bs` at the master base;
+  `hWSbare` makes declared star subjects BARE), `neg` members star-free ∧ `sem`-false, `upos`
+  members star-free usersets ∧ `sem`-true.
+- `W3cJob.keyMatch`, `reconcileJobsC_row_isSome` (row existence: a targeting job creates the row;
+  rows never deleted), `reconcileJobsC_neg_complete` / `reconcileJobsC_upos_complete` (induction
+  over the batch: a targeting pass re-derives membership from its own guard — `checkFn = sem` at
+  every W3c-reached pass start via `checkFn_eq_sem_w3c`, pass-start `stars` = the canonical
+  filter; a non-targeting pass leaves the row; the ∀-targeting-jobs enumeration hypothesis
+  carries survival).
+
+**Increment 2 — `W3cComplete` + the assembly + T3/T6.**
+- `probeDerived_eq`: the full residue read unfolded on explicit components (star / bare / userset
+  branches) at a concrete object.
+- `W3cComplete`: admitted base + valid `W3cJob` batch + coverage clauses — edge cands ∃-covering
+  (per `sem`-true bare), `upos`/`neg` cands ∀-targeting-jobs (per `sem`-true userset / per
+  covered-`sem`-false star-free subject), and row existence (every key with a declared
+  `sem`-covered shape is targeted). `w3cComplete_reached`.
+- `w3cComplete_derived_edge`: a `sem`-true canonically-UNCOVERED bare's edge materialises — it
+  survives the covering job's covered filter (pass-start row = canonical stars, `coveredFn σpre =
+  sem` via the bridge), guard `sem`-true at every prefix mid-state (the master pattern:
+  W3a-admitted shadow of the pass start + `graphRec_reconcileKey_inert` + `checkFn_congr` across
+  the residue half), `reconcileKey_edge_present` at the terminal R-node, edges monotone through
+  the tail.
+- **T2b `graph_correct_w3c`**: `check = sem` for `W3cComplete` states over `BareStarStore` +
+  `TtuStarFree` stores, query scope = concrete object + (concrete ∨ star-BARE ∨ userset) subject
+  (`hqs : name = STAR → predicate = BARE`), fragment + `hWSbare` (decision-15: bare-only declared
+  wildcard shapes). Branches: star ⇒ `stars` (row char forward; linchpin + row existence
+  backward); bare ⇒ edge ∨ (`stars` ∖ `neg`) (reach ⇒ the shadow-collapsed single edge ⇒ master's
+  canonical guard ⇒ `sem`; fallback sound by `neg` completeness — `sem`-false would be IN `neg`;
+  backward: covered reads from the row, uncovered gets its edge); userset ⇒ `upos` exactly
+  (`hWSbare` kills userset coverage: the `stars` gate is always false); untainted ⇒ shadow +
+  `graphRec_reduce_base_adm_bs` + `graphRec_base_eq_bs`.
+- T3/T6 at W3c scope (`Equiv.lean`): `backend_equivalence_w3c`, `exclusion_effective_w3c` (**a
+  concrete subject excluded from UNDER a `T:*` wildcard grant — the space rule's `neg` actually
+  excludes**, the headline W3c security content), `no_ghost_grant_w3c`. `Audit.lean`: 10 new
+  entries, all `[propext, Classical.choice, Quot.sound]`.
+
+**Proof-engineering notes:** `subst` eliminates the RHS variable — orient equations so the
+JOB/∃-bound var is on the right (`have h1' : dt = jdt := h1.symm; subst h1'`). After
+`obtain ⟨⟨st,sn,sp⟩, R, ⟨dt,on⟩⟩ := q`, RE-TYPE the query hypotheses (`replace hqs : sn = STAR →
+sp = BARE := hqs`) — otherwise they carry unreduced `{…}.object.name` projections that break
+later `rw`s. Pass `(s := …)` explicitly when a lemma's implicit subject is only determined
+through `s.shape` (unification can't invert `.shape`). `cases hrow : σ.residue …` substitutes
+the scrutinee in the goal — don't `rw [hrow]` afterwards.
+
+**Resume → W3d (multi-stratum cascade; see HANDOFF "The next task").**
+
 ## Session 2026-07-11c (W3c read half step 2 — the batch layer `ReconcileStarsComplete.lean` + attack-first: the no-ghost-star linchpin identified)
 
 Resuming from HANDOFF "W3c read half steps 2–3." One green+pushed axiom-clean increment (new

@@ -332,6 +332,24 @@ and re-proves/widens the same named theorems. Every stage must keep
   cascade (cross-key re-reconcile hazard + contentful T5 drain). W3a is the
   "zero residue content" analog of W1a's "zero bridges".
 
+  **W3c ✅ CLOSED (2026-07-11d): `graph_correct_w3c` + T3/T6 (`*_w3c`) — star-carrying
+  stores.** The read half assembled in `GraphIndex/ReconcileStarsComplete.lean`: **the
+  LINCHPIN `coveredFn_declared`** (no ghost star coverage — a `sem`-covered shape is
+  DECLARED: true computed leaf → `wAny`-sourced probe → first edge → materialised closure
+  tuple → the star seed carries its subject → `restrictionMatches`' wildcard flag names a
+  `wildcardShapes` entry), the `sem`-level row characterisation `w3c_row_char` (master
+  provenance + `checkFn_eq_sem_bs` at the master base), and the batch completeness layer
+  for the WHOLESALE residue recompute — `reconcileJobsC_row_isSome`,
+  `reconcileJobsC_neg_complete`/`_upos_complete` with the **∀-targeting-jobs enumeration
+  form** (attack-first `#eval` confirmed necessity: a second same-key pass with an
+  incomplete `negCands` DROPS the exclusion), and `w3cComplete_derived_edge` (covered-filter
+  survival + prefix-mid-state inertness + terminal admitted write). **T2b
+  `graph_correct_w3c`**: `check = sem` on `W3cComplete` states over `BareStarStore` +
+  `TtuStarFree`, subjects bare / star-BARE / userset (`hWSbare` = decision-15 bare-only
+  declared shapes; userset coverage dead ⇒ userset read = `upos` exactly). T3/T6 `*_w3c`
+  incl. `exclusion_effective_w3c` — a concrete subject excluded from UNDER a `T:*` grant
+  (the space rule's `neg` actually excludes). Detail: PROOF_STATUS 2026-07-11d.
+
   **W3c ◐ WRITE HALF CLOSED (2026-07-11): `stars`/`neg` model + T2a with all-contentful
   I6 + guard canonicity (`GraphIndex/ReconcileStars.lean`).** The wholesale residue
   recompute `reconcileResidueKey` (`stars` = the star-subject `checkFn` filter — the
