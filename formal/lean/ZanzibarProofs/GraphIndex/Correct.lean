@@ -44,7 +44,7 @@ theorem cascade_converges {S : Schema} {T : Store} {σ : GraphState}
     (`reachedByDirect_inv`), never postulated. The derived-relation half (residue
     reconcile re-establishing I6 across reachability-affected keys) is the
     remaining T2a content and arrives with the reconcile model. -/
-theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
+theorem graph_reached_inv_direct {S : Schema} {T : Store} {σ : GraphState}
     (hReach : ReachedByDirect σ S T) : Inv S σ ∧ Quiescent σ :=
   ⟨(reachedByDirect_inv hReach).1, (reachedByDirect_inv hReach).2.2⟩
 

@@ -1,5 +1,6 @@
 import ZanzibarProofs.Equiv
 import ZanzibarProofs.GraphIndex.CascadeStrataAssemble
+import ZanzibarProofs.GraphIndex.CascadeStrataEdge
 
 /-!
 # W4 — the full-scope restatement (`ReachedBy`, `GraphAdmission`, the final T-theorems)
@@ -216,6 +217,21 @@ theorem no_ghost_grant {S : Schema} {T' : Store} {σ' : GraphState} (q : Query)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
   rw [graph_correct q hA hF h hq hqs hqo]; exact hDeny
+
+/-- **T2a (`graph_reached_inv`), full W4 scope.** The graph-index structural and
+    residue invariant `Inv` (I1–I3 well-formedness/acyclicity + the four I6
+    residue-hygiene clauses) holds at EVERY operationally-reached state — dirty
+    keys and mid-drain states included, NOT only the drained ones. This discharges
+    the T2a obligation whose abstract predecessor was deleted-as-false (2026-07-10,
+    it quantified over a junk-admitting closure); the honest restatement is over
+    `ReachedBy`, with the same provenance-split hypothesis bundle as
+    `graph_correct`. It is `reachedByW3d2E_inv` with the bundles unpacked. -/
+theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
+    (hA : GraphAdmission S T) (hF : W4Fragment S T) (h : ReachedBy σ S T) :
+    Inv S σ :=
+  reachedByW3d2E_inv h hA.wf hA.ttuDirect hA.nodup hA.ranked hF.rootB hA.matchDecl
+    hA.strat hF.computedOnly hF.twoStrata hF.wsBare hA.storeValid hF.bareStar
+    hF.ttuStarFree hF.term
 
 /-! ## The W2 subsumption — untainted schemas sit inside the full scope
 

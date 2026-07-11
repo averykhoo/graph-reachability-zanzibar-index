@@ -78,7 +78,7 @@ namespace Zanzibar
 -- `WriteStep`/`ReachedBy` layer was deleted as unsound-by-weakness); plus the
 -- concrete graph-model base-case lemmas. Expect only the three standard axioms:
 #print axioms cascade_converges
-#print axioms graph_reached_inv
+#print axioms graph_reached_inv_direct
 #print axioms inv_empty
 #print axioms quiescent_empty
 #print axioms reach_empty
@@ -1161,5 +1161,26 @@ namespace Zanzibar
 -- discipline by construction (enumJob2_negCands_subset). Standard axioms only:
 #print axioms reconcileStarsKeyDR_row_edge_consistent
 #print axioms enumJob2_negCands_subset
+-- W4 T2a ASSEMBLY (GraphIndex/CascadeStrataEdge.lean): the edge-referencing I6
+-- clauses over the OPERATIONAL two-round chain, assembled from the pass-local core
+-- WITHOUT settled verdicts (the W3d-1 coverage route is unavailable at re-dirtied
+-- round-1 stratum-2 keys, 12h). `EdgeHyg1` (the direct-edge form) is preserved by a
+-- routed logged pass (`edgeHyg1_applyLoggedR`: pass-local at the job's key,
+-- other-key fixedness elsewhere), hence by a batch of ENUMERATED jobs
+-- (`edgeHyg1_reconcileJobsLR`, the candidate discipline from
+-- `enumJobs2At_negCands_subset`) and a whole `runCascade2`
+-- (`edgeHyg1_runCascade2`); write legs transport it via `writeLeg_derived_inedges_eq`
+-- — so `reachedByW3d2E_edgeHyg1` holds at every operational state.
+-- `reachedByW3d2E_edgeHygienic` lifts it to the `Inv` clauses' ¬NReaches form via
+-- the reach collapse, and **`reachedByW3d2E_inv`** is the full 8-clause `Inv` at
+-- every state. **`graph_reached_inv`** (FullScope.lean) is the final T2a restatement
+-- over `ReachedBy` with the provenance-split bundles. Standard axioms only:
+#print axioms edgeHyg1_applyLoggedR
+#print axioms edgeHyg1_reconcileJobsLR
+#print axioms edgeHyg1_runCascade2
+#print axioms reachedByW3d2E_edgeHyg1
+#print axioms reachedByW3d2E_edgeHygienic
+#print axioms reachedByW3d2E_inv
+#print axioms graph_reached_inv
 
 end Zanzibar
