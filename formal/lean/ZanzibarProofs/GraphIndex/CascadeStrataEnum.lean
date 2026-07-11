@@ -126,4 +126,176 @@ theorem mem_residueNamed_of_upos {σ : GraphState} {dt on r' : String} {s : Subj
     (h : s ∈ ((σ.residue (objNode ⟨dt, on⟩ r') r').getD Residue.empty).upos) :
     s ∈ residueNamed σ dt on r' := List.mem_append_right _ h
 
+/-! ## The routed reads-as-star lemma (off the unified W3d-2 enumeration)
+
+The routed analog of `CascadeEnum.checkFn_eq_coveredFn_of_not_mem`. A star-free
+subject that is NOT among the leaf concretes (untainted leaves, reach-based) AND NOT
+residue-named at any derived leaf reads every operand leaf exactly as its shape-star,
+so the routed compiled guard `checkFnR` reads it exactly as its shape-star's. Crucially
+NO reach-collapse / settledness is needed here: a reach into any leaf's object node
+already makes the subject a leaf concrete (`mem_leafConcretes_of_hit`), so
+`∉ leafConcretes` gives `reach = false` directly. -/
+
+/-- **The per-leaf agreement, both leaf kinds.** Off the enumeration, `graphRecR` at
+    each operand leaf reads a star-free subject exactly as its shape-star: an untainted
+    leaf via `probeNonDerived_concrete_decomp` (the W3d-1 spine), a derived leaf via
+    `probeDerived_concrete_off_named` (piece 1). -/
+theorem graphRecR_leaf_agree {σ : GraphState} {s : SubjectRef} {dt on r' : String}
+    {e : Expr} (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) (hon : on ≠ STAR) (hr' : r' ∈ computedRefs e)
+    (hnl : s ∉ leafConcretes σ dt on e)
+    (hnm : isDerived σ.schema (dt, r') = true → s ∉ residueNamed σ dt on r') :
+    GraphModel.graphRecR σ s dt on r' = GraphModel.graphRecR σ (starSubj s.shape) dt on r' := by
+  by_cases hd : isDerived σ.schema (dt, r') = true
+  · have hnr : σ.reach (subjNode s) (objNode ⟨dt, on⟩ r') = false := by
+      by_contra hc; rw [Bool.not_eq_false] at hc
+      exact hnl (mem_leafConcretes_of_hit hcl hsn hr' (Or.inl hc))
+    have hnres := hnm hd
+    obtain ⟨st, sn, sp⟩ := s
+    have hnn : ((σ.residue (objNode ⟨dt, on⟩ r') r').getD Residue.empty).neg.contains
+        ⟨st, sn, sp⟩ = false := by
+      rw [List.contains_eq_mem]
+      exact decide_eq_false (fun h => hnres (mem_residueNamed_of_neg h))
+    have hnu : ((σ.residue (objNode ⟨dt, on⟩ r') r').getD Residue.empty).upos.contains
+        ⟨st, sn, sp⟩ = false := by
+      rw [List.contains_eq_mem]
+      exact decide_eq_false (fun h => hnres (mem_residueNamed_of_upos h))
+    rw [graphRecR_derived σ _ hd, graphRecR_derived σ _ hd,
+      probeDerived_concrete_off_named σ hon hsn hnr hnn hnu]
+    exact (probeDerived_star σ (st, sp) hon).symm
+  · rw [Bool.not_eq_true] at hd
+    rw [graphRecR_eq_graphRec s on hd, graphRecR_eq_graphRec (starSubj s.shape) on hd]
+    obtain ⟨h1, h3⟩ := no_extra_of_not_mem hcl hsn hnl r' hr'
+    show GraphModel.graphRec σ s dt on r' = GraphModel.graphRec σ (starSubj s.shape) dt on r'
+    unfold GraphModel.graphRec
+    rw [probeNonDerived_concrete_decomp σ s dt on r' hsn hon, h1, h3, Bool.or_false, Bool.or_false]
+
+/-- **The routed `checkFnR` reads a non-enumerated subject as its shape-star.** `evalE`
+    congruence (`evalE_computedOnly`) over the per-leaf agreement — the routed analog of
+    `checkFn_eq_coveredFn_of_not_mem`, the exact shape the W3d-2 coverage clauses
+    contrapose against. -/
+theorem checkFnR_eq_star_of_not_enum {σ : GraphState} {T : Store}
+    {s : SubjectRef} {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) (hon : on ≠ STAR) (hnl : s ∉ leafConcretes σ dt on e)
+    (hnm : ∀ r' ∈ computedRefs e, isDerived σ.schema (dt, r') = true →
+      s ∉ residueNamed σ dt on r') :
+    σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e := by
+  unfold GraphState.checkFnR
+  exact evalE_computedOnly e hco (fun r' hr' =>
+    graphRecR_leaf_agree hcl hsn hon hr' hnl (hnm r' hr'))
+
+/-! ## The W3d-2 enumerated job and its coverage
+
+`enumJob2` folds the residue-named candidates into W3d-1's `enumJob`: the per-key base
+list is the leaf concretes (untainted-leaf reach) UNION the residue-named subjects of
+every derived leaf. The four `W3dJobCoverage` clauses are then discharged exactly as in
+W3d-1 (`w3dJobCoverage_enumJob`), with the ROUTED leg context (`hbridge`/`hcovDecl`
+over `checkFnR`) in place of the unrouted one and `checkFnR_eq_star_of_not_enum` in
+place of `checkFn_eq_coveredFn_of_not_mem`. The leg context itself is discharged at
+actual W3d-2 states in a later increment (the routed bridge holds once the derived
+operand keys are settled). -/
+
+/-- The per-key base candidate list: leaf concretes ∪ every derived leaf's
+    residue-named subjects (`neg`+`upos`). -/
+def enum2Base (σ : GraphState) (dt on : String) (e : Expr) : List SubjectRef :=
+  leafConcretes σ dt on e ++ (computedRefs e).flatMap (fun r' => residueNamed σ dt on r')
+
+/-- The state-derived W3d-2 enumerated job for one derived key `(dt,R)` at object `on`:
+    bare base ∪ edge holders as `cands`, bare base as `negCands`, userset base as
+    `uposCands` (the residue-named `neg`/`upos` now included via `enum2Base`). -/
+def enumJob2 (σ : GraphState) (dt on R : String) (e : Expr) : W3cJob :=
+  { dt := dt, on := on, R := R, e := e,
+    cands := (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+             ++ edgeHolders σ dt on R,
+    negCands := (enum2Base σ dt on e).filter (fun u => u.predicate == BARE),
+    uposCands := (enum2Base σ dt on e).filter (fun u => u.predicate != BARE) }
+
+/-- Off the base list, `checkFnR` reads a star-free subject as its shape-star. The
+    bridge to `checkFnR_eq_star_of_not_enum`: `∉ enum2Base` splits into `∉ leafConcretes`
+    (left) and `∉ residueNamed` at each leaf (right, via `flatMap`). -/
+theorem checkFnR_eq_star_of_not_base {σ : GraphState} {T : Store} {s : SubjectRef}
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) (hon : on ≠ STAR) (hnb : s ∉ enum2Base σ dt on e) :
+    σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e := by
+  refine checkFnR_eq_star_of_not_enum hco hcl hsn hon
+    (fun h => hnb (List.mem_append_left _ h)) ?_
+  intro r' hr' _ h
+  exact hnb (List.mem_append_right _ (List.mem_flatMap.mpr ⟨r', hr', h⟩))
+
+/-- **`W3dJobCoverage` for `enumJob2` from the ROUTED leg context.** Given the routed
+    read bridge (`checkFnR = sem`, subject-generic up to star-BARE) and the routed
+    coverage-declaredness helper — both of which hold at a W3d-2 state whose derived
+    operand keys are settled — the four coverage clauses hold for the state-derived
+    `enumJob2`. Same contrapositive skeleton as `w3dJobCoverage_enumJob`. -/
+theorem w3dJobCoverage_enumJob2 {S : Schema} {T : Store} {σ : GraphState}
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes) (hon : on ≠ STAR)
+    (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
+      σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
+    (hcovDecl : ∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true →
+      sh ∈ wildcardShapes S)
+    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE) :
+    W3dJobCoverage S T σ (enumJob2 σ dt on R e) := by
+  -- a bare base member lands in the bare filter (the `cands`/`negCands` source)
+  have hbareSub : ∀ u ∈ enum2Base σ dt on e, u.predicate = BARE →
+      u ∈ (enum2Base σ dt on e).filter (fun u => u.predicate == BARE) :=
+    fun u hu hub => List.mem_filter.mpr ⟨hu, by simp [hub]⟩
+  refine ⟨fun s hs => ?_, fun s hsb hsn hsem hunc => ?_,
+    fun s hsn hcov hstar hsemF => ?_, fun s hsu hsn hsem => ?_⟩
+  · -- clause (1): edge holders ⊆ cands
+    exact List.mem_append_right _ (mem_edgeHolders hs)
+  · -- clause (2): uncovered sem-true bare ∈ cands
+    refine List.mem_append_left _ ?_
+    by_contra hnm
+    have hnb : s ∉ enum2Base σ dt on e := fun h => hnm (hbareSub s h hsb)
+    have hkey : σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e :=
+      checkFnR_eq_star_of_not_base hco hcl hsn hon hnb
+    have hbs : σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+      hbridge s (fun h => absurd h hsn)
+    have hshapeB : (starSubj s.shape).name = STAR → (starSubj s.shape).predicate = BARE :=
+      fun _ => hsb
+    have hbstar : σ.checkFnR T (starSubj s.shape) dt on R e
+        = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) hshapeB
+    have hchkStar : σ.checkFnR T (starSubj s.shape) dt on R e = true := by
+      rw [← hkey, hbs]; exact hsem
+    have hstarTrue : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true := by
+      rw [← hbstar]; exact hchkStar
+    exact hunc ⟨hcovDecl s.shape hchkStar, hstarTrue⟩
+  · -- clause (3): covered sem-false → negCands
+    have hsb : s.predicate = BARE := hWSb s.shape hcov
+    by_contra hnm
+    have hnb : s ∉ enum2Base σ dt on e := fun h => hnm (hbareSub s h hsb)
+    have hkey : σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e :=
+      checkFnR_eq_star_of_not_base hco hcl hsn hon hnb
+    have hbs : σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+      hbridge s (fun h => absurd h hsn)
+    have hshapeB : (starSubj s.shape).name = STAR → (starSubj s.shape).predicate = BARE :=
+      fun _ => hsb
+    have hbstar : σ.checkFnR T (starSubj s.shape) dt on R e
+        = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) hshapeB
+    have e1 : sem S T ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := by
+      rw [← hbs, hkey, hbstar]
+    have hsemF' : sem S T ⟨s, R, ⟨dt, on⟩⟩ = false := hsemF
+    have hstar' : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true := hstar
+    rw [hsemF', hstar'] at e1
+    exact absurd e1 (by decide)
+  · -- clause (4): sem-true userset → uposCands
+    refine List.mem_filter.mpr ⟨?_, by simp [hsu]⟩
+    by_contra hnm
+    have hnb : s ∉ enum2Base σ dt on e := fun h => hnm h
+    have hkey : σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e :=
+      checkFnR_eq_star_of_not_base hco hcl hsn hon hnb
+    have hbs : σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+      hbridge s (fun h => absurd h hsn)
+    have hcovF : σ.checkFnR T (starSubj s.shape) dt on R e = false := by
+      by_contra hc
+      rw [Bool.not_eq_false] at hc
+      exact hsu (hWSb s.shape (hcovDecl s.shape hc))
+    have hstarT : σ.checkFnR T (starSubj s.shape) dt on R e = true := by
+      rw [← hkey, hbs]; exact hsem
+    rw [hstarT] at hcovF
+    exact absurd hcovF (by decide)
+
 end Zanzibar
