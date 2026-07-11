@@ -31,6 +31,7 @@ import ZanzibarProofs.GraphIndex.CascadeInv
 import ZanzibarProofs.GraphIndex.CascadeEnum
 import ZanzibarProofs.GraphIndex.CascadeStrata
 import ZanzibarProofs.GraphIndex.CascadeStrataSettle
+import ZanzibarProofs.GraphIndex.CascadeStrataEnum
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -1091,5 +1092,20 @@ namespace Zanzibar
 #print axioms backend_equivalence_w3d2
 #print axioms exclusion_effective_w3d2
 #print axioms no_ghost_grant_w3d2
+
+-- W3d-2 E-chain tail (in progress): the coverage-discharge core over the two-round
+-- chain. The DERIVED-leaf concrete decomposition (`probeDerived_concrete_off_named`)
+-- + the residue-named candidates (finding (c)); the routed reads-as-star lemma
+-- (`checkFnR_eq_star_of_not_enum`); `enumJob2`'s W3dJobCoverage from the routed leg
+-- context (`w3dJobCoverage_enumJob2`); the routed leg context itself
+-- (`checkFnR_star_declared` / `w3d2_leg_context`); and the state-level combining
+-- lemma (`w3dJobCoverage_enumJob2_state`) — coverage over any ReachedByW3d2 state
+-- given only operand settledness. Standard axioms only:
+#print axioms probeDerived_concrete_off_named
+#print axioms checkFnR_eq_star_of_not_enum
+#print axioms w3dJobCoverage_enumJob2
+#print axioms checkFnR_star_declared
+#print axioms w3d2_leg_context
+#print axioms w3dJobCoverage_enumJob2_state
 
 end Zanzibar

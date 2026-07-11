@@ -8,6 +8,92 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12g (W3d-2 E-chain tail — the coverage-discharge CORE: derived-leaf decomposition, routed reads-as-star, enumJob2 coverage, the routed leg context)
+
+Resuming from HANDOFF "The next task — the W3d-2 E-chain tail". FOUR green+pushed
+increments, all in the NEW `GraphIndex/CascadeStrataEnum.lean` (+ Audit import + 6
+entries); `verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms
+audit + 60 conformance). This closes the mathematically hard part of the tail — the
+enumeration + its `W3dJobCoverage` over the two-round chain; what remains is the
+closure ASSEMBLY (cursor-parameterized `enumJobs2`, `ReachedByW3d2E`, discharging
+operand-settledness per round).
+
+**Attack-first (house rule 2).** No new attack scratch this session: the two central
+NEW statement shapes were pre-adjudicated. (a) The DERIVED-leaf decomposition —
+finding (c)'s residue-named candidates (`neg`/`upos` are edge-free/I6, invisible to
+reach-probe enumeration) — was #eval-confirmed real in session 12c against the Python
+(`_derived_leaf_neg_ids`, `processor.py:461-495`; old `upos` ids `:425-429`). (b) The
+`probeDerived` case analysis is a mechanical boolean identity checked exhaustively
+over all three predicate branches. Both mirror established W3d-1c-piece-B shapes.
+
+**Increment 1 — the derived-leaf concrete decomposition.** `graphRecR_derived` /
+`probeDerived_star` (routed reads at a derived leaf); `probeDerived_concrete_off_named`
+(a star-free subject triggering none of the three concrete-specific terms — incoming
+edge, `res.neg`, `res.upos` — reads the derived leaf exactly as its shape's `stars`
+row); `residueNamed` (the state-derived neg+upos candidates); the combined
+`graphRecR_derived_agree_off_named`.
+
+**Increment 2 — routed reads-as-star + `enumJob2` coverage.**
+`graphRecR_leaf_agree` (per-leaf agreement, BOTH leaf kinds: untainted via
+`probeNonDerived_concrete_decomp`, derived via piece 1) →
+`checkFnR_eq_star_of_not_enum` (the routed analog of W3d-1's
+`checkFn_eq_coveredFn_of_not_mem` — `evalE` congruence; KEY simplification: NO
+reach-collapse needed, since reach into a leaf node already makes the subject a leaf
+concrete). `enum2Base`/`enumJob2` (W3d-1's `enumJob` with residue-named candidates
+folded into the per-key base list). `w3dJobCoverage_enumJob2`: all four coverage
+clauses from the ROUTED leg context (`hbridge`/`hcovDecl` over `checkFnR`), same
+contrapositive skeleton as `w3dJobCoverage_enumJob`. (Design note: the coverage
+clause hypotheses carry `enumJob2` field projections, not plain `dt`/`on`/`R` — the
+final contradictions use `exact` (defeq-tolerant) instead of `rw` of the j-field
+`sem` hyps.)
+
+**Increment 3 — the routed leg context.** `checkFnR_star_declared` (routed
+no-ghost-star-coverage — factored VERBATIM from `graph_correct_w3d2`'s `hsem_ws`,
+`CascadeStrataResettle.lean:1458-1485`: a `checkFnR`-true star read has a true leaf;
+untainted → shadow → `graphRec_star_declared`; derived → the settled operand's
+`stars`-row read). `w3d2_leg_context`: bundles `hbridge` (`checkFnR_eq_sem_settled`)
++ `hcovDecl` (`checkFnR_star_declared`) at a shadowed W3d-2 state whose derived
+operand keys are settled (`hops`).
+
+**Increment 4 — `enumJob2` coverage at a W3d-2 state.**
+`w3dJobCoverage_enumJob2_state`: over ANY `ReachedByW3d2` state, `enumJob2`'s coverage
+holds given only that the derived operand keys are settled+complete (`hsettledOps`).
+The shadow (`reachedByW3d2_shadow`), edges-closedness, the schema anchor, and the
+per-operand reach collapse (`reachedByW3d2_reach_collapse_root`) are all read off the
+state. `hsettledOps` is the SINGLE remaining obligation for the closure assembly.
+
+**Resume → the closure assembly (the last mile of the E-chain tail).** With coverage
+discharged modulo `hsettledOps`, what remains is pure scheduler plumbing:
+1. **`enumJobs2`** — the two per-round enumerated job lists, cursor-parameterized:
+   round 1 over `cascadeKeysAbove S σ σ.watermark`, round 2 over
+   `cascadeKeysAbove S (reconcileJobsLR S T σ jobs1) (σ.frontierMax σ.watermark)` (the
+   MID state). Mirror `enumJobs`/`enumJobs_cover`/`_scope`/`_valid` (W3cJobValid for
+   `enumJob2` — cands/negCands bare+star-free via the bare filter and `edgeHolders`;
+   uposCands non-bare — need: residue-named `neg` members are star-free by
+   `SettledKey`, `upos` non-bare star-free by `SettledKey`; a subtlety absent from
+   W3d-1's `enumJob` whose base was reach-only).
+2. **Discharge `hsettledOps` per round.** Round 1: its keys are STRATUM-1 (untainted
+   operands) — `hsettledOps` VACUOUS. THE key sub-lemma to prove/find: a
+   `cascadeKeysAbove S σ σ.watermark` key has NO derived operand (the dual of
+   `round2_key_reads_derived`; the 12e attack established writes dirty only stratum-1
+   operand keys). Round 2: its keys' stratum-1 operands are settled by round 1 —
+   thread `settledComplete_cascade2_targeted` / `reachedByW3d2C_settled` (or the
+   per-round `SettledKey`/`CompleteKey` transports) to supply `hsettledOps` at the MID
+   state.
+3. **`ReachedByW3d2E`** (cascade legs run `enumJobs2` for both rounds) + the
+   projection `reachedByW3d2E_toC` discharging all 8 `ReachedByW3d2C.cascade` hyps
+   from state (`hjv1/hjv2/hcover1/hscope1/hcover2/hscope2` structurally,
+   `hcovg1/hcovg2` via `w3dJobCoverage_enumJob2_state` + the round-wise
+   `hsettledOps`). Payoff: **`graph_correct_w3d2E`** — the two-stratum read theorem
+   over the fully-operational scheduler chain, no chain-side coverage hypotheses.
+Then **W4**.
+
+Fragment carries: exactly W3d-2's (`hLU2`, `BareStarStore`/`TtuStarFree`,
+`hWSbare`, W2 carries, add-only STORE). House rules: attack-first the round-1
+stratum-1 sub-lemma (item 2) especially; subagents read-only.
+
+---
+
 ## Session 2026-07-12f (W3d-2 ENDGAME — the two-round re-settlement, the three-disjunct invariant, `graph_correct_w3d2`; only the E-chain tail remains)
 
 Resuming from HANDOFF "The next task — W3d-2 endgame" (increments 1–3). Three
