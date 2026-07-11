@@ -454,18 +454,34 @@ and re-proves/widens the same named theorems. Every stage must keep
     Settledness TRANSPORT proved: `writeLeg_sem_stable` (an unmapped key keeps its
     MEANING — the double-bridge trick), `SettledKey` + `settledKey_writeLeg` +
     `settledKey_cascade_untargeted` (rows write-inert; `writeLeg_derived_inedges_eq` =
-    model-level I5 exclusivity). REMAINING: cascade-leg RE-settlement at targeted keys
-    (row char via the mid-batch bridge + edge exactness; NEW job clause `cands ⊇
-    pre-batch edge holders`, Python's persisted-ids audit), the dirty-or-settled
-    invariant over `ReachedByW3d` (all keys settled at cascaded states via
-    `cascade_drains`), `graph_correct_w3d` assembly (+ the W3d reach-collapse analog),
-    and `reachedByW3d_inv` (the T2a carry). Detail: PROOF_STATUS 2026-07-11g.
+    model-level I5 exclusivity). Detail: PROOF_STATUS 2026-07-11g.
+    **✅ CLOSED (2026-07-11h, `GraphIndex/CascadeSettle.lean`):** the edge-holder
+    coverage clause attack-CONFIRMED load-bearing (a pre-leg STALE holder missing from
+    `cands` survives the diff audit — `check ≠ sem` at a fully-drained state; benign
+    for `sem`-true holders); `ReachedByW3dC` (the coverage chain: per-job
+    `W3dJobCoverage` = edge-holders ⊆ cands + `sem`-completeness of
+    `cands`/`negCands`/`uposCands`, Python's per-pass audit re-enumeration) with
+    projection to `ReachedByW3d`; `settledComplete_cascade_targeted` (the LAST
+    targeting job wholesale-rewrites the row and diff-audits the edges, all guards
+    read at mid-batch states via the bridge; `reconcileJobsD_key_edge_sem` = batch
+    edge origin: `sem`-true or pre-leg); `CompleteKey` (per-key completeness half:
+    row existence, uncovered-edge, `upos`, `neg` membership) + its write-leg/
+    untargeted-cascade transports; the DIRTY-OR-SETTLED invariant
+    `reachedByW3dC_settled` (empty case via `sem_nil_derived_false`); the W3d reach
+    collapse (`reachedByW3d_reach_collapse_root` via `Rnode_source_bare` +
+    `edge_target_ne_bare` over the interleaved chain); **`graph_correct_w3d`** at
+    every fully-drained state (`cascadeKeys = []`, produced by every accepted cascade:
+    `cascade_drains` + `cascadeKeys_nil_of_quiescent`) + T3/T6 `*_w3d`. Deferred to a
+    later increment: `reachedByW3d_inv` (the T2a carry over the interleaved chain).
+    Detail: PROOF_STATUS 2026-07-11h.
   - **W3d-1c — the audit enumeration from state.** Model `_leaf_concretes` + the
     audit set (`processor.py:394-441`) as a state-derived enumeration (plain concrete
     nodes reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`
-    members); prove the ∀-targeting-jobs `negCands`/`uposCands` clauses as theorems
-    of that enumeration; assemble **`graph_correct_w3d`** (`check = sem` at every
-    cascaded `ReachedByW3d` state — coverage discharged, not hypothesized).
+    members); prove **`W3dJobCoverage` as a THEOREM of that enumeration** (all four
+    clauses — edge holders, `cands`/`negCands`/`uposCands` `sem`-completeness), so
+    `graph_correct_w3d`'s coverage is discharged, not hypothesized. Plus the deferred
+    `reachedByW3d_inv` (T2a carry: `Inv` over the interleaved chain — acyclicity
+    through removals, I6 clauses at W3d rows).
   - **W3d-2 — two strata (derived-reading-derived).** Relax `hLU` to lower-stratum
     derived operands: `checkFn` leaf dispatch routes derived operands through
     `probeDerived` (a real model extension — Python's leaf calls `widx.check`, which

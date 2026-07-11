@@ -8,6 +8,92 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11h (W3d-1b CLOSED — targeted-key re-settlement, the settledness invariant, `graph_correct_w3d` + T3/T6 `*_w3d`)
+
+Resuming from HANDOFF "W3d-1b (final leg)". Two green+pushed increments, all in the new
+`GraphIndex/CascadeSettle.lean` (+ Equiv W3d section, Audit 14 new entries, root import);
+`verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms audit + 60
+conformance).
+
+**Attack-first (machine-checked `#eval` vs the real `writeLoggedRules`/`runCascade`/
+`check`/`sem`; scratch deleted; recorded in the CascadeSettle header).** The NEW
+edge-holder coverage clause (`j.cands ⊇ pre-leg edge holders at j's key`) attacked both
+ways on `viewer := member ∖ banned`, exactly per the HANDOFF hunt list:
+- **Refutation without the clause CONFIRMED**: `write member(alice) → cascade → write
+  banned(alice) → cascade with cands = []` reaches a FULLY-DRAINED state (`cascadeKeys
+  = []`) reading `check = true ≠ sem = false` — the diff audit keeps a non-candidate's
+  stale edge (`reconcileKeyD_edge_char`'s second disjunct). With `cands = [alice]` the
+  same chain reads `check = sem`. The clause is load-bearing.
+- A job missing an EARLIER same-leg job's added edge is benign (that edge carried a
+  `sem`-true guard) — the ∀-holders form is about STALE holders, and is what Python's
+  per-pass audit re-enumeration provides (`processor.py:394-441`).
+
+**Increment 1 — chain structure + the coverage chain + targeted re-settlement.**
+- Chain-level structure over `ReachedByW3d`: `reachedByW3d_schema`,
+  `reachedByW3d_edge_target_ne_bare` / `_bareNode_no_inedge` /
+  `_Rnode_source_bare` (write case just rewrites with `writeLeg_derived_inedges_eq`),
+  and **the W3d reach collapse** `reachedByW3d_reach_collapse_root` (any path into a
+  `RootBoolean` R-node is a single edge — the graph_correct bare branch's reach⇒sem).
+- **`ReachedByW3dC`** — the coverage chain (decision: a WRAPPER, `ReachedByW3d`'s shape
+  untouched; all W3d theorems transfer via `reachedByW3dC_toW3d`): each cascade leg
+  carries `W3dJobCoverage` per job — (1) pre-leg edge holders ⊆ `cands` (the attacked
+  clause), (2) `sem`-true bare star-free ⊆ `cands`, (3) covered-but-`sem`-false ⊆
+  `negCands`, (4) `sem`-true usersets ⊆ `uposCands`. These are the `sem`-level content
+  of `reconcile`'s audit enumeration; proving them about a modeled enumeration is 1c.
+- **`CompleteKey`** (the per-key completeness half, mirroring `W3cComplete`'s clause
+  shapes): row existence under declared `sem`-coverage, uncovered `sem`-true bare edge,
+  `upos` membership, `neg` membership. Transports: `completeKey_writeLeg` (via
+  `writeLeg_sem_stable` + row/in-edge fixity) and `completeKey_cascade_untargeted`.
+- **`settledComplete_cascade_targeted`**: a cascade leg re-establishes `SettledKey ∧
+  CompleteKey` at EVERY targeted key. Split the batch at the LAST targeting job
+  (`exists_last_targeting`); its wholesale row and diff audit are guard-read at ITS
+  mid-batch state σpre, where the shadow persists (`untaintedShadow_reconcileJobsD`)
+  and `checkFn = sem` (`checkFn_eq_sem_w3d`); later jobs never touch the key
+  (`reconcileJobsD_other_key_fixed`). Edge soundness composes
+  `reconcileStarsKeyD_edge_char` (candidates decided fresh by the `sem`-guard) with
+  **`reconcileJobsD_key_edge_sem`** (batch edge origin: `sem`-true or pre-LEG) and the
+  edge-holder clause (a pre-leg holder IS a candidate — the stale edge gets audited).
+  The reject branch is dead (`runCascade_no_abort`), so the accept form is total.
+
+**Increment 2 — the invariant + `graph_correct_w3d` + corollaries.**
+- `sem_nil_derived_false` (a derived key over the EMPTY store is `sem`-false: the
+  bridge at the empty admitted base + an edgeless graph has no true probe).
+- **`reachedByW3dC_settled`** — the settledness invariant: at every chain state, every
+  declared derived key (concrete object) is DIRTY (`∈ cascadeKeys`) or `SettledKey ∧
+  CompleteKey`. Write legs: mapped ⇒ dirty; unmapped ⇒ previously-settled (dirty is
+  sticky, `cascadeKeys_writeLeg_mono`) ⇒ both transports. Cascade legs: targeted ⇒
+  re-settled (increment 1); untargeted ⇒ was settled (dirty would be targeted by
+  `hcover`) ⇒ transports.
+- `cascadeKeys_nil_of_quiescent`: the fully-drained read scope, produced by every
+  accepted cascade (`cascade_drains`).
+- **`graph_correct_w3d`**: `check = sem` at every `ReachedByW3dC` state with
+  `cascadeKeys = []`, subjects bare/star-BARE/userset, store `BareStarStore` +
+  `TtuStarFree`. Derived branches read the settled+complete key (star: linchpin
+  declaredness via the W3d shadow + row existence; bare: collapse + settled edges,
+  `neg` completeness for the covered fallback; userset: exactly `upos`). Untainted
+  branch: `shadow_graphRec_agree` straight into `graphRec_base_eq_bs` (the W3d shadow
+  is already rules-ADMITTED — simpler than W3c's reduction).
+- T3/T6 at W3d scope (`backend_equivalence_w3d`, `exclusion_effective_w3d`,
+  `no_ghost_grant_w3d`) — the scheduler (outbox rows, delta→key fan-out, drain loop,
+  cross-transaction stale-edge retraction) is now inside the verified perimeter.
+
+**Deferred:** `reachedByW3d_inv` (the T2a carry over the interleaved chain) — folded
+into W3d-1c alongside the enumeration model.
+
+**Proof-engineering notes.** (1) `induction h` (h : ReachedByW3dC/W3d) auto-reverts even
+schema-only hypotheses (they mention the motive index `S`) — put EVERYTHING right of the
+colon and re-intro per case. (2) The `settledComplete_cascade_targeted` proof never
+inducts over the whole batch for the row: `exists_last_targeting` + per-key fixity of
+the post-suffix reduces everything to ONE pass at σpre; only the edge-soundness needs
+the batch-origin induction (`reconcileJobsD_key_edge_sem`), whose mid-states re-derive
+their own shadow/terminality/closedness stepwise from `hsh.closed` — no extra chain
+hypotheses.
+
+**Resume → W3d-1c (see HANDOFF "The next task"): the audit enumeration from state +
+discharging `W3dJobCoverage`; `reachedByW3d_inv`.**
+
+---
+
 ## Session 2026-07-11g (W3d-1b core — fan-out completeness, the untainted-core shadow / W3d read bridge, settledness transport)
 
 Resuming from HANDOFF "W3d-1b (continued): settledness + read bridge". Three green+pushed
