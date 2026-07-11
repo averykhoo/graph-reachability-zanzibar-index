@@ -44,6 +44,7 @@ import ZanzibarProofs.GraphIndex.RulesBareStar
 import ZanzibarProofs.GraphIndex.ReconcileUpos
 import ZanzibarProofs.GraphIndex.ReconcileUposComplete
 import ZanzibarProofs.GraphIndex.ReconcileStars
+import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6
