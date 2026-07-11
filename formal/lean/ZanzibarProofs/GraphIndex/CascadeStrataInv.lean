@@ -337,4 +337,99 @@ theorem reachedByW3d2E_residueDeclared {σ : GraphState} {S : Schema} {T : Store
       (enumJobs2At_keyFacts (fun k hk =>
         ⟨(mem_cascadeKeysAbove_props hk).1, (mem_cascadeKeysAbove_props hk).2.2⟩)) ih
 
+/-! ## Pass-local I6 — the routed pass writes an EDGE-CONSISTENT row
+
+The core of the remaining W4 T2a piece (the edge-referencing clauses
+`negEdgeFree`/`uposEdgeFree`). KEY DESIGN SHIFT vs the W3d-1 proof
+(`reachedByW3dC_edgeHygienic`): that proof went through the coverage chain's
+settled verdicts, because over `ReachedByW3dC`'s ARBITRARY covered jobs a `neg`
+candidate need not be audited by the edge fold. Over the OPERATIONAL closure the
+enumerated jobs audit their own residue candidates BY CONSTRUCTION
+(`enumJob2.negCands ⊆ enumJob2.cands`, below) — so the row and the edges written
+by ONE pass are mutually consistent whatever the guard said, settled or STALE.
+This is what makes the E-chain edge hygiene provable at re-dirtied round-1 keys
+(the 12h attack shape), where `SettledKey` is simply unavailable:
+
+* a `neg` member failed the guard at pass-start, and — being a candidate — had
+  its edge audited against THAT guard (`reconcileStarsKeyDR_edge_char`), so no
+  edge survives;
+* a `upos` member is userset-shaped (`W3cJobValid`), while candidates and
+  pre-pass in-edge sources at the R-node are bare — so it can hold no edge.
+
+The batch/chain assembly (prefix-state transports of `hRns`/`hcl`/`hsb`, the
+other-key fixedness walk, and the write legs) is the next-session item. -/
+
+/-- **Pass-local I6.** The row a routed pass writes at its own key is
+    edge-consistent with the pass's own edge audit — at the POST-pass state, no
+    `neg`/`upos` member holds an edge into the key. Hypotheses are the
+    `reconcileStarsKeyDR_edge_char` context plus the two candidate-discipline
+    facts (`hnc` : residue candidates are audited; `hup` : upos candidates are
+    userset-shaped) and pre-pass source-bareness (`hsb`). -/
+theorem reconcileStarsKeyDR_row_edge_consistent {S : Schema} {σ : GraphState}
+    (T : Store) (dt on R : String) (e : Expr) (shapes : List Shape)
+    (cands negCands uposCands : List SubjectRef)
+    (hσS : σ.schema = S) (hRne : R ≠ BARE) (honStar : on ≠ STAR)
+    (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
+    (hrne : ∀ r' ∈ computedRefs e, r' ≠ R)
+    (hcb : ∀ c ∈ cands, c.predicate = BARE)
+    (hnc : ∀ c ∈ negCands, c ∈ cands)
+    (hup : ∀ c ∈ uposCands, c.predicate ≠ BARE)
+    (hsb : ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) :
+    ∀ res, (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+        uposCands).residue (objNode ⟨dt, on⟩ R) R = some res →
+      (∀ n ∈ res.neg, (subjNode n, objNode ⟨dt, on⟩ R)
+          ∉ (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+              uposCands).edges) ∧
+      (∀ n ∈ res.upos, (subjNode n, objNode ⟨dt, on⟩ R)
+          ∉ (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+              uposCands).edges) := by
+  intro res hrow
+  have hrow' : res = ⟨shapes.filter (fun sh => σ.coveredFnR T dt on R e sh),
+      negCands.filter (fun c =>
+        (shapes.filter (fun sh => σ.coveredFnR T dt on R e sh)).contains c.shape
+          && !(σ.checkFnR T c dt on R e)),
+      uposCands.filter (fun c =>
+        !((shapes.filter (fun sh => σ.coveredFnR T dt on R e sh)).contains c.shape)
+          && σ.checkFnR T c dt on R e)⟩ := by
+    unfold GraphState.reconcileStarsKeyDR at hrow
+    rw [reconcileKeyDR_residue, reconcileResidueKeyR_residue_self] at hrow
+    exact (Option.some.inj hrow).symm
+  subst hrow'
+  constructor
+  · intro n hn hedge
+    obtain ⟨hnmem, hncond⟩ := List.mem_filter.mp hn
+    simp only [Bool.and_eq_true] at hncond
+    have hguardF : σ.checkFnR T n dt on R e = false := by
+      have := hncond.2
+      cases hc : σ.checkFnR T n dt on R e with
+      | false => rfl
+      | true => rw [hc] at this; exact absurd this (by decide)
+    rcases (reconcileStarsKeyDR_edge_char T dt on R e shapes cands negCands
+        uposCands hσS hRne honStar hder hco hrne hcb hRns hcl n).mp hedge with
+      ⟨_, hg⟩ | ⟨hnotc, _⟩
+    · rw [hguardF] at hg
+      simp at hg
+    · exact hnotc (hnc n hnmem)
+  · intro n hn hedge
+    obtain ⟨hnmem, _⟩ := List.mem_filter.mp hn
+    rcases (reconcileStarsKeyDR_edge_char T dt on R e shapes cands negCands
+        uposCands hσS hRne honStar hder hco hrne hcb hRns hcl n).mp hedge with
+      ⟨hc, _⟩ | ⟨_, hold⟩
+    · exact hup n hnmem (hcb n hc)
+    · have := hsb (subjNode n) hold
+      rw [subjNode_pred] at this
+      exact hup n hnmem this
+
+/-- The enumerated job audits its own residue candidates: `negCands ⊆ cands` (the
+    bare base list is the left summand of `cands`) — the E-chain discharge of
+    `hnc` above. -/
+theorem enumJob2_negCands_subset (σ : GraphState) (dt on R : String) (e : Expr) :
+    ∀ c ∈ (enumJob2 σ dt on R e).negCands, c ∈ (enumJob2 σ dt on R e).cands := by
+  intro c hc
+  show c ∈ (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+    ++ edgeHolders σ dt on R
+  exact List.mem_append_left _ hc
+
 end Zanzibar

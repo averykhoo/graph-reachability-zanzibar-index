@@ -1155,5 +1155,11 @@ namespace Zanzibar
 #print axioms reachedByW3d2E_residueHygienic
 #print axioms reachedByW3d2_residueDeclared
 #print axioms reachedByW3d2E_residueDeclared
+-- W4 T2a pass-local I6 (CascadeStrataInv.lean): the routed pass's own row is
+-- edge-consistent with its own audit — no settled verdicts needed, so it holds
+-- at re-dirtied (stale) keys too; the E-chain discharges the candidate
+-- discipline by construction (enumJob2_negCands_subset). Standard axioms only:
+#print axioms reconcileStarsKeyDR_row_edge_consistent
+#print axioms enumJob2_negCands_subset
 
 end Zanzibar
