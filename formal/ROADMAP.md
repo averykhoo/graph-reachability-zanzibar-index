@@ -561,9 +561,26 @@ and re-proves/widens the same named theorems. Every stage must keep
     `probeDerived_reconcileStarsKeyDR_other`; guard form
     `checkFnR_reconcileStarsKeyDR_other`), on routed mirrors of the W3d-1b
     reach-inertness/closure/residue-other layer.
-    **Remaining**: the stratum-staged shadow/settledness generalization, the read
-    bridge → `graph_correct_w3d2`, the E-chain tail (with residue-named candidates).
-    Detail: PROOF_STATUS 2026-07-12c/12d.
+    **Done (12e — item 3b, `GraphIndex/CascadeStrataSettle.lean`)**: the W3d2 chain
+    structural mirrors (endpoint closure, non-BARE/plain targets, bare R-node
+    sources, the reach collapse) + the untainted-core shadow at every
+    `ReachedByW3d2` state (`reachedByW3d2_shadow`; mid-round prefixes too);
+    `probeDerived_eq_sem_settled` (the settled-key derived read, factored from
+    `graph_correct_w3d`); **`checkFnR_eq_sem_settled`** — the stratum-staged read
+    bridge (routed guard = `sem` at shadowed states with settled+complete derived
+    operand keys; attack-first: the settledness hypothesis is load-bearing, and the
+    W3d-1-shaped invariant "dirty ∨ settled" is REFUTED at W3d-2 post-write states
+    — the invariant needs the third disjunct "some derived operand key dirty");
+    the settledness transport layer (routed other-key fixity, per-round
+    settled/complete batch transports, the stratum fence `round2_key_reads_derived`,
+    the write-leg layer at both strata capped by `writeLeg_sem_stable2`);
+    invariant groundwork (`reconcileJobsLR_emits` → `round1_emission_dirties` —
+    12c finding (b) as a theorem; mid-batch reach collapse); `ReachedByW3d2C`
+    (two-round coverage chain; round-2 coverage relative to the MID state).
+    **Remaining**: the targeted re-settlement over the concatenated two-round batch
+    (the stratum-staged case analysis) → `reachedByW3d2C_settled` →
+    `graph_correct_w3d2`, then the E-chain tail (with residue-named candidates).
+    Detail: PROOF_STATUS 2026-07-12c/12d/12e.
 
   **W3c ✅ CLOSED (2026-07-11d): `graph_correct_w3c` + T3/T6 (`*_w3c`) — star-carrying
   stores.** The read half assembled in `GraphIndex/ReconcileStarsComplete.lean`: **the
