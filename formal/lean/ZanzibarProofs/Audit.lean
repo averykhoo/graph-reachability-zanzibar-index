@@ -701,4 +701,20 @@ namespace Zanzibar
 #print axioms runCascade_no_abort
 #print axioms cascade_drains
 
+-- **ROADMAP W3d decision 7 — the DIFFING edge audit (GraphIndex/ReconcileDiff.lean,
+-- 2026-07-11f).** Attack-first `#eval` REFUTED the naive W3d-1b read statement over
+-- the add-only pass: on `viewer := member ∖ banned` (no star grants), a post-cascade
+-- `banned` add flips the derived guard down and the second cascade cannot retract the
+-- stale derived edge — `check = true ≠ sem = false` at a fully-drained state. Python
+-- retracts it (`reconcile_subject`, `processor.py:365-367`). The W3d pass is now the
+-- diffing audit `reconcileStarsKeyD` (add when `want`, remove ALL copies of the pair
+-- when `¬want`); T5 above is re-earned over it. Removal is path-inert off the pass's
+-- terminal R-node (`nreaches_remove_terminal`), giving BOTH inertness directions —
+-- the foundation for W3d-1b settledness. Standard axioms only:
+#print axioms nreaches_remove_terminal
+#print axioms reconcileKeyD_edge_sound
+#print axioms reconcileKeyD_Rnode_terminal
+#print axioms reconcileKeyD_reach_inert
+#print axioms reconcileKeyD_reach_pres
+
 end Zanzibar

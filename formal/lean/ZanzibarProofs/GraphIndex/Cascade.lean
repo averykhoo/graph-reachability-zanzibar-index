@@ -1,4 +1,4 @@
-import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
+import ZanzibarProofs.GraphIndex.ReconcileDiff
 
 /-!
 # The cascade scheduling layer — logged writes, delta→key mapping, the drain loop (ROADMAP W3d-1a)
@@ -37,11 +37,21 @@ Modeling decisions (ROADMAP W3d, decisions 1–6):
    cheap path is an optimization with its own §5.4 escalations to full).
 5. **The loop** at one stratum: one round, then the leftover check as the
    accept/reject branch of `runCascade`.
-6. **Add-only**: no removes; the remove-side hazards (operand-removal re-reconcile,
-   `neg` pruning after node GC) are out of scope for W3d-1.
+6. **Add-only STORE**: no store removes; the remove-side hazards (operand-removal
+   re-reconcile, `neg` pruning after node GC, REMOVED deltas) are out of scope for
+   W3d-1.
+7. **The pass is the DIFFING audit** (`reconcileStarsKeyD`, 2026-07-11f): W3d's store
+   grows between cascades, so a derived guard can flip DOWN (`excl` operand add) and
+   the pass must RETRACT the stale derived edge — exactly Python's
+   `reconcile_subject` removal branch (`processor.py:365-367`). The add-only pass
+   model was refuted by `#eval` at a cascaded state (see `ReconcileDiff.lean` header);
+   W3a–W3c keep the add-only pass, where fixed-store guard stability makes the
+   removal branch provably dead.
 
 The W3c read-correspondence transfer (via `EvalEq` + the W3d analog of the coverage
-clauses) is W3d-1b/1c — see ROADMAP.
+clauses) is W3d-1b/1c — see ROADMAP. NB the W3a SHADOW does not extend over diffing
+passes (a removal is not a W3a reconcile leg), so W3d-1b re-derives its read bridge
+over the interleaved closure directly.
 
 **Attack-first (2026-07-11e, machine-checked `#eval` vs the real `check`/`sem`,
 scratch deleted).** Corpus `viewer := member ∖ banned` (`member` admitting `user`,
@@ -263,41 +273,36 @@ theorem reconcileResidueKey_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (T 
     · rw [reconcileResidueKey_residue_other hk, reconcileResidueKey_residue_other hk]
       rw [h.residue]
 
-/-- The covered-guarded edge fold is `EvalEq`-congruent. -/
-theorem reconcileKeyC_evalEq (T : Store) (dt on R : String) (e : Expr) :
+/-- Edge removal is `EvalEq`-congruent. -/
+theorem removeEdgePair_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (a b : NodeKey) :
+    EvalEq (σ'.removeEdgePair a b) (σ.removeEdgePair a b) :=
+  ⟨h.schema, by rw [removeEdgePair_edges, removeEdgePair_edges, h.edges],
+   by rw [removeEdgePair_nodes, removeEdgePair_nodes, h.nodes],
+   by rw [removeEdgePair_residue, removeEdgePair_residue, h.residue]⟩
+
+/-- The diffing edge audit is `EvalEq`-congruent. -/
+theorem reconcileKeyD_evalEq (T : Store) (dt on R : String) (e : Expr) :
     ∀ (cands : List SubjectRef) {σ' σ : GraphState}, EvalEq σ' σ →
-      EvalEq (σ'.reconcileKeyC T dt on R e cands) (σ.reconcileKeyC T dt on R e cands) := by
+      EvalEq (σ'.reconcileKeyD T dt on R e cands) (σ.reconcileKeyD T dt on R e cands) := by
   intro cands
   induction cands with
   | nil => intro σ' σ h; exact h
   | cons c rest ih =>
     intro σ' σ h
-    have hstep' : σ'.reconcileKeyC T dt on R e (c :: rest)
-        = (if σ'.checkFn T c dt on R e
-              && !(σ'.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)
-           then σ'.writeDirect ⟨c, R, ⟨dt, on⟩⟩ else σ').reconcileKeyC T dt on R e rest := by
-      unfold GraphState.reconcileKeyC
-      rw [List.foldl_cons]
-    have hstep : σ.reconcileKeyC T dt on R e (c :: rest)
-        = (if σ.checkFn T c dt on R e
-              && !(σ.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)
-           then σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩ else σ).reconcileKeyC T dt on R e rest := by
-      unfold GraphState.reconcileKeyC
-      rw [List.foldl_cons]
-    rw [hstep', hstep, checkFn_congr h.edges h.nodes T c dt on R e,
+    rw [reconcileKeyD_cons, reconcileKeyD_cons, checkFn_congr h.edges h.nodes T c dt on R e,
       coveredAt_congr h.residue]
     split
     · exact ih (writeDirect_evalEq h ⟨c, R, ⟨dt, on⟩⟩)
-    · exact ih h
+    · exact ih (removeEdgePair_evalEq h _ _)
 
-/-- **The combined star pass is `EvalEq`-congruent.** -/
-theorem reconcileStarsKey_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (T : Store)
+/-- **The combined diffing pass is `EvalEq`-congruent.** -/
+theorem reconcileStarsKeyD_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (T : Store)
     (dt on R : String) (e : Expr) (shapes : List Shape)
     (cands negCands uposCands : List SubjectRef) :
-    EvalEq (σ'.reconcileStarsKey T dt on R e shapes cands negCands uposCands)
-      (σ.reconcileStarsKey T dt on R e shapes cands negCands uposCands) := by
-  unfold GraphState.reconcileStarsKey
-  exact reconcileKeyC_evalEq T dt on R e cands
+    EvalEq (σ'.reconcileStarsKeyD T dt on R e shapes cands negCands uposCands)
+      (σ.reconcileStarsKeyD T dt on R e shapes cands negCands uposCands) := by
+  unfold GraphState.reconcileStarsKeyD
+  exact reconcileKeyD_evalEq T dt on R e cands
     (reconcileResidueKey_evalEq h T dt on R e shapes negCands uposCands)
 
 /-! ## The delta → key mapping (decision 4) -/
@@ -337,12 +342,23 @@ def cascadeKeys (S : Schema) (σ : GraphState) : List (String × String × Strin
 /-- The `(dt, R, on)` key a job settles. -/
 def W3cJob.key (j : W3cJob) : String × String × String := (j.dt, j.R, j.on)
 
-/-- One reconcile pass plus its coalesced processor emission: a single row at the
-    derived key (all the pass's per-flip rows share that object end — the R-node is
-    terminal on the fragment). -/
+/-- Apply one W3d job — the DIFFING pass (decision 7; shapes fixed to the schema's
+    declared `wildcardShapes`). -/
+def W3cJob.applyD (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) : GraphState :=
+  σ.reconcileStarsKeyD T j.dt j.on j.R j.e (wildcardShapes S) j.cands j.negCands
+    j.uposCands
+
+/-- Run a batch of unlogged diffing jobs left-to-right. -/
+def reconcileJobsD (S : Schema) (T : Store) (σ0 : GraphState) (jobs : List W3cJob) :
+    GraphState :=
+  jobs.foldl (W3cJob.applyD S T) σ0
+
+/-- One diffing reconcile pass plus its coalesced processor emission: a single row at
+    the derived key (all the pass's per-flip rows — adds AND removes — share that
+    object end; the R-node is terminal on the fragment). -/
 def W3cJob.applyLogged (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
     GraphState :=
-  (j.apply S T σ).pushDelta (objNode ⟨j.dt, j.on⟩ j.R) j.R
+  (j.applyD S T σ).pushDelta (objNode ⟨j.dt, j.on⟩ j.R) j.R
 
 /-- Run a batch of logged reconcile jobs left-to-right (`run_cascade`'s per-round
     key loop; one-stratum, so ordering is irrelevant — operand reads are
@@ -351,81 +367,41 @@ def reconcileJobsL (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJo
     GraphState :=
   jobs.foldl (W3cJob.applyLogged S T) σ
 
-/-- A logged job batch's core is the unlogged `reconcileJobsC` batch — all W3c
-    per-pass facts transfer. -/
+/-- A logged job batch's core is the unlogged `reconcileJobsD` batch — all per-pass
+    facts about the diffing batch transfer. -/
 theorem reconcileJobsL_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (S : Schema)
     (T : Store) (jobs : List W3cJob) :
-    EvalEq (reconcileJobsL S T σ' jobs) (reconcileJobsC S T σ jobs) := by
-  unfold reconcileJobsL reconcileJobsC
+    EvalEq (reconcileJobsL S T σ' jobs) (reconcileJobsD S T σ jobs) := by
+  unfold reconcileJobsL reconcileJobsD
   induction jobs generalizing σ' σ with
   | nil => exact h
   | cons j rest ih =>
     simp only [List.foldl_cons]
     refine ih ?_
-    have happ : EvalEq (j.apply S T σ') (j.apply S T σ) :=
-      reconcileStarsKey_evalEq h T j.dt j.on j.R j.e (wildcardShapes S)
+    have happ : EvalEq (j.applyD S T σ') (j.applyD S T σ) :=
+      reconcileStarsKeyD_evalEq h T j.dt j.on j.R j.e (wildcardShapes S)
         j.cands j.negCands j.uposCands
     exact ⟨happ.schema, happ.edges, happ.nodes, happ.residue⟩
 
 /-! ### Outbox/watermark bookkeeping of the logged batch -/
 
-/-- The covered-guarded edge fold never touches the outbox. -/
-theorem reconcileKeyC_outbox (T : Store) (dt on R : String) (e : Expr) :
-    ∀ (cands : List SubjectRef) (σ : GraphState),
-      (σ.reconcileKeyC T dt on R e cands).outbox = σ.outbox := by
-  intro cands
-  induction cands with
-  | nil => intro σ; rfl
-  | cons c rest ih =>
-    intro σ
-    have hstep : σ.reconcileKeyC T dt on R e (c :: rest)
-        = (if σ.checkFn T c dt on R e
-              && !(σ.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)
-           then σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩ else σ).reconcileKeyC T dt on R e rest := by
-      unfold GraphState.reconcileKeyC
-      rw [List.foldl_cons]
-    rw [hstep, ih]
-    split
-    · exact writeDirect_outbox σ _
-    · rfl
+/-- One unlogged diffing pass never touches the outbox. -/
+theorem W3cJob.applyD_outbox (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
+    (j.applyD S T σ).outbox = σ.outbox := by
+  unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+  rw [reconcileKeyD_outbox, reconcileResidueKey_outbox]
 
-/-- The covered-guarded edge fold never touches the watermark. -/
-theorem reconcileKeyC_watermark (T : Store) (dt on R : String) (e : Expr) :
-    ∀ (cands : List SubjectRef) (σ : GraphState),
-      (σ.reconcileKeyC T dt on R e cands).watermark = σ.watermark := by
-  intro cands
-  induction cands with
-  | nil => intro σ; rfl
-  | cons c rest ih =>
-    intro σ
-    have hstep : σ.reconcileKeyC T dt on R e (c :: rest)
-        = (if σ.checkFn T c dt on R e
-              && !(σ.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)
-           then σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩ else σ).reconcileKeyC T dt on R e rest := by
-      unfold GraphState.reconcileKeyC
-      rw [List.foldl_cons]
-    rw [hstep, ih]
-    split
-    · exact writeDirect_watermark σ _
-    · rfl
+/-- One unlogged diffing pass never touches the watermark. -/
+theorem W3cJob.applyD_watermark (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
+    (j.applyD S T σ).watermark = σ.watermark := by
+  unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+  rw [reconcileKeyD_watermark, reconcileResidueKey_watermark]
 
-/-- One unlogged pass never touches the outbox. -/
-theorem W3cJob.apply_outbox (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
-    (j.apply S T σ).outbox = σ.outbox := by
-  unfold W3cJob.apply GraphState.reconcileStarsKey
-  rw [reconcileKeyC_outbox, reconcileResidueKey_outbox]
-
-/-- One unlogged pass never touches the watermark. -/
-theorem W3cJob.apply_watermark (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
-    (j.apply S T σ).watermark = σ.watermark := by
-  unfold W3cJob.apply GraphState.reconcileStarsKey
-  rw [reconcileKeyC_watermark, reconcileResidueKey_watermark]
-
-/-- One unlogged pass keeps the fresh-id source fixed. -/
-theorem W3cJob.apply_nextDeltaId (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
-    (j.apply S T σ).nextDeltaId = σ.nextDeltaId := by
+/-- One unlogged diffing pass keeps the fresh-id source fixed. -/
+theorem W3cJob.applyD_nextDeltaId (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
+    (j.applyD S T σ).nextDeltaId = σ.nextDeltaId := by
   unfold GraphState.nextDeltaId GraphState.maxOutboxId
-  rw [W3cJob.apply_outbox, W3cJob.apply_watermark]
+  rw [W3cJob.applyD_outbox, W3cJob.applyD_watermark]
 
 /-- The logged batch leaves the watermark untouched (the drain advance is
     `runCascade`'s final act, not the passes'). -/
@@ -443,7 +419,7 @@ theorem reconcileJobsL_watermark (S : Schema) (T : Store) :
       rw [List.foldl_cons]
     rw [hfold, ih]
     unfold W3cJob.applyLogged
-    rw [pushDelta_watermark, W3cJob.apply_watermark]
+    rw [pushDelta_watermark, W3cJob.applyD_watermark]
 
 /-- **Outbox soundness of the logged batch**: every row is an original row or a
     pass-emitted row — at some job's derived key, with an id strictly above the
@@ -466,15 +442,15 @@ theorem reconcileJobsL_outbox_sound (S : Schema) (T : Store) :
     have hout1 : (j.applyLogged S T σ).outbox
         = ⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R⟩ :: σ.outbox := by
       unfold W3cJob.applyLogged
-      rw [pushDelta_outbox, W3cJob.apply_outbox]
-      have := W3cJob.apply_nextDeltaId S T σ j
+      rw [pushDelta_outbox, W3cJob.applyD_outbox]
+      have := W3cJob.applyD_nextDeltaId S T σ j
       rw [this]
     have hwm1 : (j.applyLogged S T σ).watermark = σ.watermark := by
       unfold W3cJob.applyLogged
-      rw [pushDelta_watermark, W3cJob.apply_watermark]
+      rw [pushDelta_watermark, W3cJob.applyD_watermark]
     have hmax1 : (j.applyLogged S T σ).maxOutboxId = σ.nextDeltaId := by
       unfold W3cJob.applyLogged
-      rw [pushDelta_maxOutboxId, W3cJob.apply_nextDeltaId]
+      rw [pushDelta_maxOutboxId, W3cJob.applyD_nextDeltaId]
     rcases ih (j.applyLogged S T σ) d hd with hin | ⟨⟨j', hj', hn, hr⟩, hgt⟩
     · rw [hout1] at hin
       rcases List.mem_cons.mp hin with rfl | hmem
@@ -527,11 +503,12 @@ inductive ReachedByW3d : GraphState → Schema → Store → Prop where
 
 /-! ## Edge soundness and R-node terminality over the interleaved closure -/
 
-/-- Every edge added by an unlogged job batch is a candidate's derived edge onto the
-    job's own R-node. -/
-theorem reconcileJobsC_edge_sound {S : Schema} {T : Store} :
+/-- Every edge of an unlogged diffing batch is an old edge or a candidate's derived
+    edge onto the job's own R-node (removal only shrinks; NB old edges need NOT
+    survive — the stale-edge retraction). -/
+theorem reconcileJobsD_edge_sound {S : Schema} {T : Store} :
     ∀ (jobs : List W3cJob) (σ : GraphState) (a b : NodeKey),
-      (a, b) ∈ (reconcileJobsC S T σ jobs).edges →
+      (a, b) ∈ (reconcileJobsD S T σ jobs).edges →
       (a, b) ∈ σ.edges ∨
         ∃ j ∈ jobs, ∃ c ∈ j.cands, a = subjNode c ∧ b = objNode ⟨j.dt, j.on⟩ j.R := by
   intro jobs
@@ -539,17 +516,16 @@ theorem reconcileJobsC_edge_sound {S : Schema} {T : Store} :
   | nil => intro σ a b h; exact Or.inl h
   | cons j rest ih =>
     intro σ a b h
-    have hfold : reconcileJobsC S T σ (j :: rest)
-        = reconcileJobsC S T (j.apply S T σ) rest := by
-      unfold reconcileJobsC
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
       rw [List.foldl_cons]
     rw [hfold] at h
     rcases ih _ a b h with hin | ⟨j', hj', c, hc, h1, h2⟩
-    · unfold W3cJob.apply GraphState.reconcileStarsKey at hin
-      rcases reconcileKeyC_edge_sound T j.dt j.on j.R j.e j.cands a b hin
-        with hold | ⟨c, hc, h1, h2, _⟩
-      · rw [reconcileResidueKey_edges] at hold
-        exact Or.inl hold
+    · unfold W3cJob.applyD at hin
+      rcases reconcileStarsKeyD_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
+        j.cands j.negCands j.uposCands σ a b hin with hold | ⟨c, hc, h1, h2⟩
+      · exact Or.inl hold
       · exact Or.inr ⟨j, List.mem_cons_self, c, hc, h1, h2⟩
     · exact Or.inr ⟨j', List.mem_cons_of_mem _ hj', c, hc, h1, h2⟩
 
@@ -579,7 +555,7 @@ theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
     split at hab
     · have hab' : (a, b) ∈ (reconcileJobsL S T σp jobs).edges := hab
       rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).edges] at hab'
-      rcases reconcileJobsC_edge_sound jobs σp a b hab' with hold | ⟨j, hj, c, hc, h1, _⟩
+      rcases reconcileJobsD_edge_sound jobs σp a b hab' with hold | ⟨j, hj, c, hc, h1, _⟩
       · exact ih hnt hns a b hold
       · rw [h1, subjNode_pred]
         obtain ⟨_, hcb, _⟩ := hjv j hj
@@ -607,7 +583,7 @@ theorem reconcileJobsL_Rnode_not_source {σ : GraphState} {S : Schema} {T : Stor
     ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (reconcileJobsL S T σ jobs).edges := by
   intro y hy
   rw [(reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs).edges] at hy
-  rcases reconcileJobsC_edge_sound jobs σ _ y hy with hold | ⟨j, hj, c, hc, h1, _⟩
+  rcases reconcileJobsD_edge_sound jobs σ _ y hy with hold | ⟨j, hj, c, hc, h1, _⟩
   · exact reachedByW3d_Rnode_not_source hterm hRne hder h y hold
   · obtain ⟨_, hcb, _⟩ := hjv j hj
     have hpred : (objNode ⟨dt, on⟩ R).pred = BARE := by
