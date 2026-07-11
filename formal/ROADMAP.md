@@ -527,9 +527,10 @@ and re-proves/widens the same named theorems. Every stage must keep
       **`graph_correct_w3dE`** (`check = sem`, fully-drained) + **`reachedByW3dE_inv`**
       (the full 8-clause `Inv`, every state) hold UNCONDITIONALLY — `W3dJobCoverage` is a
       theorem, not a hypothesis. Detail: PROOF_STATUS 2026-07-12b.
-  - **W3d-2 — two strata (derived-reading-derived). ◐ ENDGAME CLOSED (2026-07-12f:
-    `graph_correct_w3d2` + T3/T6 over `ReachedByW3d2C`; only the E-chain tail
-    remains). Opened 2026-07-12c, `GraphIndex/CascadeStrata.lean`.** Relax `hLU` to lower-stratum derived operands:
+  - **W3d-2 — two strata (derived-reading-derived). ✅ CLOSED (2026-07-12h:
+    `graph_correct_w3d2E` over the fully-operational `ReachedByW3d2E`; 12f:
+    `graph_correct_w3d2` + T3/T6 over `ReachedByW3d2C`). Opened 2026-07-12c,
+    `GraphIndex/CascadeStrata.lean`.** Relax `hLU` to lower-stratum derived operands:
     the leaf dispatch routes derived operands through `probeDerived` (a real model
     extension — Python's `_EvalContext` dispatches `derived_check` →
     `widx._check_derived`, `derived_stars` → residue stars; `member_check` routes on
@@ -592,10 +593,27 @@ and re-proves/widens the same named theorems. Every stage must keep
     (`graphRec_star_declared` + the drained-state routed bridge); **T2b
     `graph_correct_w3d2`** (`check = sem`, fully drained, two strata) + T3/T6
     `*_w3d2`.
-    **Remaining**: the W3d-2 E-chain tail — extend `enumJobs` with the
-    residue-named candidates (12c finding (c)) and discharge the two-round
-    coverage/validity/scope hypotheses from the state (`ReachedByW3d2E`).
-    Detail: PROOF_STATUS 2026-07-12c/12d/12e/12f.
+    **Done (12g)**: the E-chain tail CORE — the derived-leaf concrete decomposition
+    (`probeDerived_concrete_off_named`, finding (c)'s `residueNamed`), routed
+    reads-as-star (`checkFnR_eq_star_of_not_enum`), `enumJob2` + its coverage from
+    the routed leg context (`w3dJobCoverage_enumJob2_state`).
+    **Done (12h — stage close)**: the closure ASSEMBLY. Attack (scratch deleted):
+    the hoped-for round-1 discharge ("round-1 keys are stratum-1") is REFUTED — a
+    write to a DIRECT untainted leaf of a stratum-2 def dirties the stratum-2 key
+    at the watermark, and with an operand leaf dirtied in the same window the
+    state-derived enumeration at leg start is NOT coverage-complete. Redesign:
+    `ReachedByW3d2C` carries CONDITIONAL coverage (`W3dJobOpsSettled` — the job's
+    derived operand keys settled at the round baseline), exactly what the 12f
+    re-settlement consumes (Case B derives the baseline first; Case A uses round-1
+    coverage only at stratum-1 operand keys). `CascadeStrataAssemble.lean`:
+    `enumJobs2R1`/`enumJobs2R2` (per-round, cursor-parameterized, round 2
+    enumerated at MID), validity via `ResidueSubjectsStarFree` (persisted residue
+    members star-free — new structural invariant) + R-node source discipline
+    (bare + star-free, chain + batch forms), `ReachedByW3d2E`,
+    `reachedByW3d2E_toC` (round-1 coverage via `w3dJobCoverage_enumJob2_state`,
+    round-2 via the routed leg context at the transported MID state), payoff
+    **`graph_correct_w3d2E`**.
+    Detail: PROOF_STATUS 2026-07-12c/12d/12e/12f/12g/12h.
 
   **W3c ✅ CLOSED (2026-07-11d): `graph_correct_w3c` + T3/T6 (`*_w3c`) — star-carrying
   stores.** The read half assembled in `GraphIndex/ReconcileStarsComplete.lean`: **the

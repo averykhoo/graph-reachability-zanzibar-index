@@ -8,6 +8,80 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12h (W3d-2 CLOSED — the E-chain closure assembly: attack-refuted round-1 stratum lemma, conditional coverage, `ReachedByW3d2E`, `graph_correct_w3d2E`)
+
+Resuming from HANDOFF "The next task — the W3d-2 E-chain tail: the CLOSURE ASSEMBLY".
+Two green+pushed increments; `verify.sh` green throughout (build + 0 sorries + zcli +
+standard-axioms audit + 60 conformance). **W3d-2 is CLOSED**: `graph_correct_w3d2E`
+— `check = sem` at every fully-drained state of the fully-operational two-round
+scheduler chain, no chain-side validity/cover/scope/coverage hypotheses.
+
+**Attack-first (house rule 2) — the flagged round-1 sub-lemma is REFUTED (a GOOD
+kill, the sixth).** The HANDOFF's hoped-for discharge — "a `cascadeKeysAbove S σ
+σ.watermark` key reads NO derived operand, so round-1 `hsettledOps` is vacuous" —
+is FALSE. `#eval` scenario (scratch deleted): `r1 := a \ b` (stratum 1),
+`r2 := r1 \ b` (stratum 2 but reading untainted `b` DIRECTLY); write an `a`-tuple
+(dirties `r1`) and a `b`-tuple (dirties `r2` via pred `b`) in the same window. Then
+`cascadeKeysAbove` at the watermark contains the STRATUM-2 key `r2`, and the
+state-derived `enumJob2` at leg start MISSES the freshly-granted subject (sem-true,
+bare, uncovered, `cands.contains = false` — it exists only in the dirty operand's
+FUTURE residue, invisible to leaf reach / `res.neg` / `res.upos` / R-node edges).
+So UNCONDITIONAL round-1 coverage is undischargeable from state. Python survives
+because such a round-1 pass is provably stale-and-re-dirtied
+(`round1_emission_dirties`) and round 2 re-enumerates against the settled operand.
+
+**Increment 1 — the conditional-coverage chain.** `W3dJobOpsSettled S T σ j` (the
+job's derived operand keys settled+complete at the round baseline; vacuous at
+stratum-1 keys). `ReachedByW3d2C.cascade`'s `hcovg1`/`hcovg2` weakened to
+`W3dJobOpsSettled → W3dJobCoverage` — exactly what the 12f re-settlement consumes:
+`settledComplete_jobsLR_targeted` used coverage ONLY at the last targeting job (now
+takes the keyMatch-restricted form); `settledComplete_cascade2_targeted` uses
+round-1 coverage at stratum-1 operand keys (baseline vacuous, Case A) and at the
+key itself only AFTER deriving `hopsS` (Case B); round 2 gets `hopsMid`.
+`covg_of_opsSettled` converts conditional batch coverage to the keyMatch form
+(the job's `e` pinned by valid lookup). `reachedByW3d2C_settled` /
+`graph_correct_w3d2` / T3/T6 unchanged in statement — the chain got STRICTLY
+easier to construct.
+
+**Increment 2 — the assembly (`GraphIndex/CascadeStrataAssemble.lean`, new).**
+- Structural: `mem_cascadeKeysAbove_props` (cursor-generic);
+  `reachedByW3d2_Rnode_source_name_ne_star` + `reconcileJobsLR_source_name_ne_star`
+  (star-free R-node in-edge discipline, chain + batch);
+  **`ResidueSubjectsStarFree`** (persisted `neg`/`upos` members star-free — the
+  structural invariant `enumJob2` validity needs, since residue-named subjects flow
+  into the candidate lists; sourced from `W3cJobValid` candidate star-freeness
+  through the routed recompute's filters) with pass/batch/chain preservation
+  (`reachedByW3d2_residueStarFree`); `enum2Base_name_ne_star`;
+  **`w3cJobValid_enumJob2`** (state-generic — explicit per-key edge-source facts so
+  it instantiates at leg start AND at MID via the batch transports).
+- `enumJobs2At` (jobs for a key set, enumerated at a given state) + `_cover`/
+  `_scope`/`_valid`; `enumJobs2R1` (watermark frontier at leg start) / `enumJobs2R2`
+  (round-1 emissions at MID — the state inside the definition IS the C-chain's
+  coverage baseline, definitionally).
+- **`ReachedByW3d2E`** (cascade legs run the two enumerated rounds) +
+  **`reachedByW3d2E_toC`**: round-1 conditional coverage discharged by
+  `w3dJobCoverage_enumJob2_state` at the leg start (the `W3dJobOpsSettled` premise
+  is handed to us as `hsettledOps` — no stratum case analysis needed at all);
+  round-2 by `w3d2_leg_context` + `w3dJobCoverage_enumJob2` at MID (shadow via
+  `untaintedShadow_reconcileJobsLR`, closedness via `edgesClosed_reconcileJobsLR`,
+  reach collapse via `reconcileJobsLR_reach_collapse` over the σp edge discipline).
+- **`graph_correct_w3d2E`** = `graph_correct_w3d2` ∘ the projection. Audit: 4 new
+  entries (`reachedByW3d2_residueStarFree`, `w3cJobValid_enumJob2`,
+  `reachedByW3d2E_toC`, `graph_correct_w3d2E`), standard axioms only.
+
+**Design note.** The conditional form turned the dreaded per-round stratum split
+into pure plumbing: round 1 never has to DECIDE whether a key is stratum-1 — the
+baseline premise is simply threaded through, and the C-chain's own re-settlement
+machinery (which already derives the baseline where it's needed) does the rest.
+The 12f statements were already the right shape; only their hypotheses moved.
+
+**Resume → W4** (full-scope restatement: combine W1+W2+W3 generality, name the
+closure `ReachedBy`, restate `graph_correct` / `graph_reached_inv` /
+`backend_equivalence` / T6a/T6b at `GraphAccepts` scope), then Phase 6 hardening
+(graph-state conformance mode, CORRESPONDENCE.md, final review doc).
+
+---
+
 ## Session 2026-07-12g (W3d-2 E-chain tail — the coverage-discharge CORE: derived-leaf decomposition, routed reads-as-star, enumJob2 coverage, the routed leg context)
 
 Resuming from HANDOFF "The next task — the W3d-2 E-chain tail". FOUR green+pushed
