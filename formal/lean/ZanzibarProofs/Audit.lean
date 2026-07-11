@@ -850,4 +850,23 @@ namespace Zanzibar
 #print axioms residueHygienic_reconcileStarsKeyD
 #print axioms reachedByW3d_residueHygienic
 
+-- **W3d-1c (part 3c) — the edge-referencing I6 clauses + the FULL W3d T2a
+-- (GraphIndex/CascadeInv.lean).** Attack-first REFUTED the plain-chain statement
+-- (`#eval`, CascadeInv header): without the coverage clauses a stale non-candidate
+-- edge survives the diff audit while a later pass writes its holder into `neg` —
+-- `negEdgeFree` is FALSE over `ReachedByW3d`, so the invariant lives on the coverage
+-- chain. `reachedByW3d_residueDeclared`: every persisted row names a declared derived
+-- key at a concrete object (no fragment hyps). `reachedByW3dC_edgeHygienic`: at every
+-- COVERAGE-chain state no `neg`/`upos` member reaches its key's R-node — write legs
+-- keep rows and derived in-edges (model-level I5) with the reach collapse turning any
+-- path into a single edge; targeted cascade keys land `SettledKey`, whose row verdicts
+-- contradict its edge verdicts (`neg` member `sem`-false vs edge holder `sem`-true;
+-- `upos` member userset-shaped vs edge source bare); untargeted keys keep row and
+-- in-edges verbatim. **`reachedByW3dC_inv`**: the full 8-clause `Inv` at EVERY state
+-- of the coverage chain — dirty keys and mid-drain states included — completing the
+-- deferred W3d T2a carry. Standard axioms only:
+#print axioms reachedByW3d_residueDeclared
+#print axioms reachedByW3dC_edgeHygienic
+#print axioms reachedByW3dC_inv
+
 end Zanzibar

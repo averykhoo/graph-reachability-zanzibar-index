@@ -475,20 +475,29 @@ and re-proves/widens the same named theorems. Every stage must keep
     later increment: `reachedByW3d_inv` (the T2a carry over the interleaved chain).
     Detail: PROOF_STATUS 2026-07-11h.
   - **W3d-1c — the audit enumeration from state + `reachedByW3d_inv`. ◐ PART 3
-    STARTED (2026-07-11i).** Two pieces remain (either order):
-    * **(A) `reachedByW3d_inv`** (the deferred T2a carry: `Inv` over the interleaved
-      chain). **Two of four residue clauses + all four structural clauses DONE**
-      (`GraphIndex/CascadeInv.lean`, sorry-free, axiom-clean): `reachedByW3d_structInv`
+    piece A ✅ CLOSED (2026-07-11j); piece B remains.**
+    * **(A) `reachedByW3dC_inv` ✅ DONE (2026-07-11j)** (the deferred T2a carry — the
+      full 8-clause `Inv` over the interleaved chain, `GraphIndex/CascadeInv.lean`,
+      sorry-free, axiom-clean). Parts 3a/3b (2026-07-11i): `reachedByW3d_structInv`
       (schema/nodeEnc/edgesClosed/**acyclic** — acyclicity FREE, `writeDirect`
       cycle-rejects + `removeEdgePair` shrinks reach) and `reachedByW3d_residueHygienic`
       (the edge-FREE I6 clauses `negStarCovered`/`uposNegDisjoint` —
       `reconcileResidueKey`'s filters give them by construction), BOTH with NO fragment
-      hypotheses. **Remaining: the two EDGE-referencing I6 clauses**
-      `negEdgeFree`/`uposEdgeFree` — reach into the R-node collapses to a single edge
-      (`reachedByW3d_reach_collapse_root`), but closing needs a per-key edge-source
-      canonicity at EVERY chain state (the W3c `master`'s `hedge` re-derived over the
-      diffing chain / the settledness content lifted off drained states). Fragment
-      carries then: `hterm`/`hRootB`/`hCO`/`hLU`/`hNK`/`hSV` as in `reachedByW3c_inv`.
+      hypotheses. Part 3c (2026-07-11j): **attack-first REFUTED the plain-chain
+      statement** (`#eval`, recorded in the CascadeInv header) — a stale non-candidate
+      edge survives the diff audit while a later pass writes its holder into `neg`, so
+      `negEdgeFree` is FALSE over plain `ReachedByW3d` and the invariant lives on the
+      COVERAGE chain (the coverage clauses are load-bearing for the INVARIANT, not just
+      for `graph_correct_w3d`). Proof: `reachedByW3d_residueDeclared` (rows only at
+      declared derived keys, no fragment hyps) + `reachedByW3dC_edgeHygienic` by chain
+      induction — write legs keep rows/derived in-edges (model-level I5) with the W3d
+      reach collapse; targeted cascade keys land `SettledKey` whose row verdicts
+      contradict its edge verdicts (`neg` member `sem`-false vs edge holder `sem`-true,
+      `upos` member userset vs bare edge source); untargeted keys keep row+in-edges
+      verbatim (`reconcileJobsD_other_key_fixed`). Fragment carries as in
+      `reachedByW3dC_settled`. **`reachedByW3dC_inv`** assembles StructInv +
+      ResidueHygienic + EdgeHygienic into `Inv` at EVERY coverage-chain state — dirty
+      keys and mid-drain states included.
     * **(B) the audit enumeration** — model `_leaf_concretes` + the audit set
       (`processor.py:394-441`) as a state-derived enumeration (plain concrete nodes
       reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`

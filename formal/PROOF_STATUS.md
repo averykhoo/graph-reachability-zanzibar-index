@@ -8,6 +8,65 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11j (W3d-1c piece A CLOSED — the plain-chain `Inv` REFUTED, the full 8-clause `reachedByW3dC_inv` proved over the coverage chain)
+
+Resuming from HANDOFF "The next task — W3d-1c", piece A (the two EDGE-referencing I6
+clauses `negEdgeFree`/`uposEdgeFree`, completing the deferred T2a carry). One green+
+pushed increment, all in `GraphIndex/CascadeInv.lean` (+ 3 Audit entries); `verify.sh`
+green throughout (build + 0 sorries + zcli + standard-axioms audit + 60 conformance).
+
+**Attack-first — the plain-chain statement is FALSE (statement-scoping finding,
+recorded in the CascadeInv header; scratch deleted).** `#eval` against the real
+`writeLoggedRules`/`runCascade` on `viewer := member ∖ banned` (`member` carrying a
+wildcard `user:*` restriction): `write member(alice) → cascade (cands=[alice], edge
+materialised) → write member(user:*) → write banned(alice) → cascade with cands = []
+(W3cJobValid but NOT coverage-valid), negCands = [alice]` reaches a fully-drained
+(`cascadeKeys = []`) plain-`ReachedByW3d` state whose row reads `neg = [alice]` while
+alice's STALE edge survives (a non-candidate is never audited — `reconcileKeyD_edge_char`'s
+untouched disjunct): `negEdgeFree` VIOLATED. With `cands = [alice]` (the `W3dJobCoverage`
+edge-holder clause) the same chain retracts the edge. So the HANDOFF's tentative route
+("lift settledness to ALL `ReachedByW3d` states") was unprovable as scoped — the
+coverage clauses are load-bearing for the INVARIANT itself, not just for
+`graph_correct_w3d`; the theorem lives on `ReachedByW3dC`.
+
+**The increment — `reachedByW3dC_inv` (the full W3d T2a).**
+- **`reachedByW3d_residueDeclared`** (NO fragment hyps): every persisted residue row
+  sits at `(objNode ⟨dt,on⟩ R, R)` for a DECLARED derived `(dt,R)`, concrete object —
+  rows are written only by passes at their own `W3cJobValid` key (the chain carries
+  `hjv`); write legs and `pushDelta` are residue-inert. This is what lets the edge
+  clauses fetch the key's `Expr` + `RootBoolean`ness.
+- **`reachedByW3dC_edgeHygienic`** — no `neg`/`upos` member reaches its key's R-node,
+  at EVERY coverage-chain state (fragment carries exactly as `reachedByW3dC_settled`).
+  Chain induction; every case funnels reach through
+  `reachedByW3d_reach_collapse_root` (path into the R-node = single edge):
+  * write leg: rows write-inert + derived in-edges fixed
+    (`writeLeg_derived_inedges_eq`, model-level I5) ⇒ the edge already existed ⇒ IH.
+  * cascade, targeted key: `settledComplete_cascade_targeted` lands `SettledKey`,
+    whose row verdicts CONTRADICT its edge verdicts — a `neg` member is `sem`-false
+    while a (bare, by `reachedByW3d_Rnode_source_bare` + `subjNode_pred`) edge holder
+    is `sem`-true; a `upos` member is userset-shaped while every edge source is bare.
+  * cascade, untargeted key: row + in-edges verbatim
+    (`reconcileJobsD_other_key_fixed` through `runCascade_cases` + `EvalEq`) ⇒ IH.
+- **`reachedByW3dC_inv`**: `StructInv` (11i) + `ResidueHygienic` (11i) + the two edge
+  clauses assemble the full 8-clause `Inv` at EVERY coverage-chain state — dirty keys
+  and mid-drain states included (unlike W3c's `reachedByW3c_inv`, which only saw
+  batch-boundary states, and unlike `graph_correct_w3d`, which reads only fully-drained
+  states). `Quiescent` was NOT bundled in: mid-drain W3d states are genuinely
+  non-quiescent, so it can't join a per-state invariant here.
+
+**Proof-engineering note.** The 11i `subst` pitfall struck again: `subst hr` on
+`hr : r = R` ELIMINATES `R`, breaking later mentions — use `rw [hr] at hrow` to
+retarget the row instead. Record-update projections (`{σ with watermark := w}.residue`)
+need an explicit `rfl`-`have` before `rw` can cross them.
+
+**Resume → W3d-1c piece B** (the audit enumeration; HANDOFF "The next task"): model
+`_leaf_concretes` + the audit set (`processor.py:394-441`) from state, prove
+`W3dJobCoverage` as a THEOREM of it (mind `W3cJobValid`'s shape filters), restate
+`graph_correct_w3d` (and `reachedByW3dC_inv`'s chain) with jobs BUILT from the
+enumeration. Then W3d-2 (two strata) → W4.
+
+---
+
 ## Session 2026-07-11i (W3d-1c part 3 STARTED — the deferred `reachedByW3d_inv`, two of its four residue clauses + all four structural clauses discharged)
 
 Resuming from HANDOFF "The next task — W3d-1c". Two green+pushed increments, both in the

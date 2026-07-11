@@ -86,9 +86,9 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | the DIFFING pass + per-key edge EXACTNESS | `GraphIndex/ReconcileDiff.lean` | W3d-1b groundwork: `reconcileStarsKeyD` (stale-edge retraction, `processor.py:359-367`), both-direction reach inertness, guard fold-invariance, `reconcileStarsKeyD_edge_char` (the re-settle as a theorem) |
 | FAN-OUT COMPLETENESS + the untainted-core shadow + settledness transport | `GraphIndex/CascadeStable.lean` | W3d-1b core: `writeLeg_checkFn_stable` (unmapped keys' guards unchanged), `reachedByW3d_shadow`/`checkFn_eq_sem_w3d` (guard = `sem` at EVERY W3d state, incl. mid-batch), `writeLeg_sem_stable` (unmapped keys keep their MEANING), `SettledKey` + write-leg/untargeted-cascade transport |
 | T2b **`graph_correct_w3d`** + the settledness invariant + targeted RE-settlement | `GraphIndex/CascadeSettle.lean` | W3d-1b CLOSED: `ReachedByW3dC` (coverage chain: per-job `W3dJobCoverage`, attack-confirmed edge-holder clause), `settledComplete_cascade_targeted`, `CompleteKey` + transports, `reachedByW3dC_settled` (dirty-or-settled at EVERY state), the W3d reach collapse, `check = sem` at every fully-drained (`cascadeKeys = []`) state; T3/T6 `*_w3d` |
-| T2a `reachedByW3d_structInv` + `reachedByW3d_residueHygienic` | `GraphIndex/CascadeInv.lean` | W3d-1c part 3 (partial): the deferred `reachedByW3d_inv` STRUCTURAL half (schema/nodeEnc/edgesClosed/**acyclic** — free: writeDirect cycle-rejects, removeEdgePair shrinks) + the two edge-FREE I6 clauses (`negStarCovered`/`uposNegDisjoint`, `reconcileResidueKey`'s filters). NO fragment hyps. Remaining for full `Inv`: `negEdgeFree`/`uposEdgeFree` (edge-referencing — need the settledness/master-analog lift) |
+| T2a **`reachedByW3dC_inv`** — the FULL 8-clause `Inv` (+ `reachedByW3d_structInv` / `reachedByW3d_residueHygienic` / `reachedByW3d_residueDeclared` / `reachedByW3dC_edgeHygienic`) | `GraphIndex/CascadeInv.lean` | W3d-1c piece A CLOSED: `Inv` at EVERY coverage-chain state (dirty keys, mid-drain included). Structural half + edge-free I6: NO fragment hyps. Edge-referencing I6 (`negEdgeFree`/`uposEdgeFree`): attack-REFUTED over the plain chain (stale non-candidate edge — the coverage clauses are load-bearing for the invariant itself, not just the read theorem); proved over `ReachedByW3dC` via row-key declaredness + the reach collapse + the `SettledKey` verdict clash at targeted keys |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ◐ (part 3 partial 2026-07-11i: structural + edge-free I6 `Inv` clauses) → W3d-2 → W4.**
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ◐ (piece A `reachedByW3dC_inv` ✅ 2026-07-11j; piece B the audit enumeration remains) → W3d-2 → W4.**
 
 **W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* PROOF_STATUS entries and the
 ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
@@ -117,39 +117,24 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 
 ---
 
-## The next task — W3d-1c: finish `reachedByW3d_inv` (2 edge clauses) + the audit enumeration (`W3dJobCoverage`)
+## The next task — W3d-1c piece B: the audit enumeration + discharge `W3dJobCoverage`
 
-**Session 2026-07-11i STARTED W3d-1c part 3 — READ ITS PROOF_STATUS ENTRY.** Two green
-increments in the NEW `GraphIndex/CascadeInv.lean` (imports CascadeSettle):
-- **`reachedByW3d_structInv`** — `StructInv` (schema/nodeEnc/edgesClosed/**acyclic**) at
-  every chain state, NO fragment hyps. Acyclicity is FREE: `writeDirect` cycle-rejects
-  internally, `removeEdgePair` only shrinks reach. Preservation proved for every
-  primitive (removeEdgePair/reconcileResidueKey/reconcileKeyD/reconcileStarsKeyD/
-  pushDelta/setWatermark/writeLoggedRules/reconcileJobsL/runCascade).
-- **`reachedByW3d_residueHygienic`** — the two edge-FREE I6 clauses `negStarCovered` +
-  `uposNegDisjoint` at every chain state, NO fragment hyps: `reconcileResidueKey`'s
-  filters (`neg = filter (covered ∧ ¬checkFn)`, `upos = filter (¬covered ∧ checkFn)`)
-  give both by construction; folded through the chain via `ResidueHygienic`.
-
-**W3d-1c remaining (two full-increment-sized pieces, either order):**
-
-**A. Finish `reachedByW3d_inv` — the two EDGE-referencing I6 clauses `negEdgeFree` +
-`uposEdgeFree`.** For a residue row at key `objNode ⟨dt,on⟩ R`, a `neg`/`upos` member
-must have no reach into the R-node. `reachedByW3d_reach_collapse_root` (CascadeSettle,
-exists) reduces reach ⇒ a single derived edge from the member; then contradiction needs
-the row and the CURRENT edges to be mutually consistent at THIS chain state — but they
-can be from different passes. Route: derive a **per-key edge-source canonicity at every
-chain state** (the W3d analog of W3c's `reachedByW3c_master`'s `hedge`: every R-node
-in-edge source is expr-true ∧ uncovered vs the row), then a `neg` member (covered/
-expr-false) or `upos` member (userset) can't be such a source. This is the settledness
-content (`SettledKey`, CascadeStable — currently only at drained coverage-chain states)
-lifted to ALL `ReachedByW3d` states. Fragment carries then needed: `hterm`/`hRootB`/
-`hCO`/`hLU`/`hNK`/`hSV` (as in `reachedByW3c_inv`). Assemble the full
-`Inv` = `reachedByW3d_structInv` (structural) + `reachedByW3d_residueHygienic` (2 clauses)
-+ these 2. Consider also carrying `Quiescent` (as `reachedByW3c_inv` does).
+**Session 2026-07-11j CLOSED piece A — READ ITS PROOF_STATUS ENTRY.** The full 8-clause
+T2a **`reachedByW3dC_inv`** now holds at EVERY coverage-chain state (dirty keys and
+mid-drain states included), in `GraphIndex/CascadeInv.lean`. Attack finding worth
+knowing: the plain-chain `reachedByW3d_inv` is FALSE (`#eval`-refuted, recorded in the
+CascadeInv header) — a stale non-candidate edge survives the diff audit while a later
+pass writes its holder into `neg`, so the edge-holder coverage clause is load-bearing
+for the INVARIANT itself. The edge-clause proof shape: `reachedByW3d_residueDeclared`
+(rows only at declared derived keys) + chain induction where write legs use
+`writeLeg_derived_inedges_eq` + the reach collapse, targeted cascade keys use
+`settledComplete_cascade_targeted` (a `SettledKey` row verdict contradicts its edge
+verdict: `neg` member `sem`-false vs edge holder `sem`-true; `upos` member userset vs
+bare source via `reachedByW3d_Rnode_source_bare`), untargeted keys use
+`reconcileJobsD_other_key_fixed`.
 
 **B. Model the audit enumeration + discharge `W3dJobCoverage`** (makes `graph_correct_w3d`
-unconditional — the coverage is hypothesized today):
+— and now also `reachedByW3dC_inv` — unconditional: the coverage is hypothesized today):
 1. **Model the enumeration from state** (`processor.py:394-441`): per key `(dt,R,on)` at
    σ/T, (a) `_leaf_concretes` — store-supported concrete subjects of each operand leaf
    (route: plain subject nodes with a path into `objNode ⟨dt,on⟩ r'`, or the stored
@@ -162,6 +147,11 @@ unconditional — the coverage is hypothesized today):
    leaf probe → store tuple/closure edge witnessing the CONCRETE subject (mirror
    `coveredFn_declared` steps 2–5). Restate `graph_correct_w3d` with jobs BUILT from the
    enumeration.
+
+Note the enumerated candidate lists need `W3cJobValid`'s shape constraints too (cands
+bare star-free, negCands star-free, uposCands userset star-free) — filter the
+enumeration by shape and prove the filters don't drop anything the coverage clauses
+name (their quantifiers already carry the matching shape guards).
 
 Fragment carries: `hterm`/`hCO`/`hLU`/`hRootB`/`hWSbare` + `BareStarStore`/`TtuStarFree`
 + W2 carries; add-only STORE (decision 6). House rule 6: subagents only for read-only

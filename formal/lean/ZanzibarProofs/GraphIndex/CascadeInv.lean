@@ -1,13 +1,29 @@
 import ZanzibarProofs.GraphIndex.CascadeSettle
 
 /-!
-# The structural invariant over the interleaved W3d chain (ROADMAP W3d-1c, part 3a)
+# The W3d invariant over the interleaved chain (ROADMAP W3d-1c, part 3)
 
 The deferred T2a carry for W3d (`reachedByW3d_inv`, HANDOFF "The next task", point 3)
 asks for `Inv S σ` at every state of the interleaved scheduler chain. This file
 discharges the **structural half** — `StructInv` (schema fixity, node encoding, edge
 endpoint-closure, and ACYCLICITY) — unconditionally, i.e. with none of the fragment
-hypotheses (`RootBoolean`/`hterm`/…) the residue-hygiene (I6) clauses need.
+hypotheses (`RootBoolean`/`hterm`/…) the residue-hygiene (I6) clauses need, then the
+two edge-FREE I6 clauses (`ResidueHygienic`), and finally the two EDGE-referencing I6
+clauses (`EdgeHygienic`) and the full assembly **`reachedByW3dC_inv`**.
+
+**Attack-first (2026-07-11j, machine-checked `#eval` vs the real `writeLoggedRules`/
+`runCascade`; scratch deleted): the full `Inv` is FALSE over the plain `ReachedByW3d`
+chain** — the coverage clauses are load-bearing for `negEdgeFree`, not just for
+`graph_correct_w3d`. On `viewer := member ∖ banned` (`member` carrying a wildcard
+`user:*` restriction): `write member(alice) → cascade (cands = [alice], edge
+materialised) → write member(user:*) → write banned(alice) → cascade with cands = []
+(W3cJobValid but NOT coverage-valid), negCands = [alice]` reaches a fully-drained
+(`cascadeKeys = []`) plain-chain state whose row has `neg = [alice]` while alice's
+STALE edge survives the diff audit (a non-candidate is never audited) — `negEdgeFree`
+violated. With the edge-holder coverage clause satisfied (`cands = [alice]`,
+`W3dJobCoverage` clause 1 = Python's audit re-enumerating persisted incoming R-node
+concretes, `processor.py:394-441`) the same chain retracts the edge. Hence the full
+invariant is stated over the coverage chain: **`reachedByW3dC_inv`**.
 
 The key observation is that acyclicity is *free* on the W3d chain: every edge added by
 the model is a `writeDirect`, which **cycle-rejects internally** (`admitEdge` probes for
@@ -300,5 +316,247 @@ theorem reachedByW3d_residueHygienic {σ : GraphState} {S : Schema} {T : Store}
   | empty S => exact residueHygienic_empty S
   | write t hadm hprev ih => exact residueHygienic_writeLoggedRules ih t
   | cascade jobs hjv hcover hscope hprev ih => exact residueHygienic_runCascade ih jobs
+
+/-! ## Residue rows live only at declared derived keys
+
+Every residue row is written by some pass's `reconcileResidueKey` at ITS key
+`(objNode ⟨dt, on⟩ R, R)`, and the chain only runs `W3cJobValid` jobs — so a persisted
+row always names a DECLARED derived key at a concrete object (`processor.py` only
+reconciles keys produced by the schema-driven fan-out). This is what lets the edge
+clauses fetch the key's `Expr` and `RootBoolean`ness. -/
+
+/-- Every residue row sits at `(objNode ⟨dt, on⟩ R, R)` for a declared derived
+    `(dt, R)` and a concrete object. -/
+def ResidueDeclared (S : Schema) (σ : GraphState) : Prop :=
+  ∀ k r res, σ.residue k r = some res →
+    ∃ dt on R e, k = objNode ⟨dt, on⟩ R ∧ r = R ∧ S.lookup (dt, R) = some e ∧
+      isDerived S (dt, R) = true ∧ on ≠ STAR
+
+/-- The diffing batch preserves row-key declaredness: each pass writes only its own
+    (valid) key's row. -/
+theorem residueDeclared_reconcileJobsD {S : Schema} (T : Store) :
+    ∀ (jobs : List W3cJob), (∀ j ∈ jobs, W3cJobValid S j) → ∀ {σ : GraphState},
+      ResidueDeclared S σ → ResidueDeclared S (reconcileJobsD S T σ jobs) := by
+  intro jobs
+  induction jobs with
+  | nil => intro _ σ h; exact h
+  | cons j rest ih =>
+    intro hjv σ h
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
+      rw [List.foldl_cons]
+    rw [hfold]
+    refine ih (fun j' hj' => hjv j' (List.mem_cons_of_mem _ hj')) ?_
+    intro k r res hrow
+    unfold W3cJob.applyD at hrow
+    by_cases hkey : k = objNode ⟨j.dt, j.on⟩ j.R ∧ r = j.R
+    · obtain ⟨_, _, _, _, _, _, hder, hlk, hon⟩ := hjv j List.mem_cons_self
+      exact ⟨j.dt, j.on, j.R, j.e, hkey.1, hkey.2, hlk, hder, hon⟩
+    · rw [reconcileStarsKeyD_residue_other hkey] at hrow
+      exact h k r res hrow
+
+/-- **Row-key declaredness at every W3d state** — no fragment hypotheses (the chain's
+    own `W3cJobValid` is enough). -/
+theorem reachedByW3d_residueDeclared {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d σ S T) : ResidueDeclared S σ := by
+  induction h with
+  | empty S =>
+    intro k r res hrow
+    simp [emptyState] at hrow
+  | write t hadm hprev ih =>
+    intro k r res hrow
+    rw [writeLoggedRules_residue] at hrow
+    exact ih k r res hrow
+  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
+    rcases runCascade_cases S T σp jobs with hrc | hrc
+    · intro k r res hrow
+      rw [hrc] at hrow
+      have hupd : ({ reconcileJobsL S T σp jobs with
+          watermark := (reconcileJobsL S T σp jobs).maxOutboxId }).residue
+            = (reconcileJobsL S T σp jobs).residue := rfl
+      rw [hupd, (reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).residue] at hrow
+      exact residueDeclared_reconcileJobsD T jobs hjv ih k r res hrow
+    · rw [hrc]
+      exact ih
+
+/-! ## The edge-referencing I6 clauses over the COVERAGE chain
+
+`negEdgeFree` / `uposEdgeFree`: a persisted `neg`/`upos` member has no reach into its
+key's R-node. Attack-first (header): FALSE over the plain chain — a stale
+non-candidate edge survives the diff audit while a later pass writes its holder into
+`neg`. Over `ReachedByW3dC` the edge-holder coverage clause forces every pre-leg
+holder into `cands`, so the last targeting pass audits it against the fresh
+(`checkFn = sem`) guard: targeted keys land `SettledKey` (whose row verdicts and edge
+verdicts CONTRADICT — a `neg` member is `sem`-false, an edge holder `sem`-true; a
+`upos` member is userset-shaped, an edge source bare); untargeted keys keep row and
+in-edges verbatim, and write legs never touch derived in-edges (model-level I5,
+`writeLeg_derived_inedges_eq`) — with the W3d reach collapse turning any path into
+the R-node into a single edge on both legs. -/
+
+/-- The two edge-referencing I6 clauses: no `neg`/`upos` member reaches its key. -/
+def EdgeHygienic (σ : GraphState) : Prop :=
+  ∀ k r res, σ.residue k r = some res →
+    (∀ n ∈ res.neg, ¬ NReaches σ.edges (subjNode n) k) ∧
+    (∀ n ∈ res.upos, ¬ NReaches σ.edges (subjNode n) k)
+
+/-- **The edge-referencing I6 clauses hold at every COVERAGE-chain state** (fragment
+    hypotheses as in `reachedByW3dC_settled`; the plain chain refutes this, see the
+    file header). -/
+theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3dC σ S T) :
+    WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
+    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+    RewriteMatchDeclared S → Stratifiable S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) →
+    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    StoreValidRules S T → BareStarStore T → TtuStarFree S T →
+    (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    EdgeHygienic σ := by
+  induction h with
+  | empty S =>
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ k r res hrow
+    simp [emptyState] at hrow
+  | @write σp S T t hadm hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+      k r res hrow
+    -- weaken the store-indexed hypotheses back to `T` for the IH
+    have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+    have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+    have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+    have htermw : ∀ dt R, isDerived S (dt, R) = true →
+        NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+      fun dt R hd => ⟨(hterm dt R hd).1,
+        fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+    have hW3dpost : ReachedByW3d (σp.writeLoggedRules S t) S (t :: T) :=
+      ReachedByW3d.write t hadm (reachedByW3dC_toW3d hprev)
+    have hEHp : EdgeHygienic σp :=
+      ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSVw hBSw hTSw htermw
+    -- the row is the pre-write row, at a declared derived key
+    rw [writeLoggedRules_residue] at hrow
+    obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
+      reachedByW3d_residueDeclared (reachedByW3dC_toW3d hprev) k r res hrow
+    subst hk
+    have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+    constructor
+    · intro n hn hre
+      have hedge := reachedByW3d_reach_collapse_root hWF hSV hNK hlk hroot hW3dpost hre
+      rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot (subjNode n)] at hedge
+      exact (hEHp _ _ _ hrow).1 n hn (NReaches.edge hedge)
+    · intro n hn hre
+      have hedge := reachedByW3d_reach_collapse_root hWF hSV hNK hlk hroot hW3dpost hre
+      rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot (subjNode n)] at hedge
+      exact (hEHp _ _ _ hrow).2 n hn (NReaches.edge hedge)
+  | @cascade σp S T jobs hjv hcover hscope hcovg hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+      k r res hrow
+    have hW3dpost : ReachedByW3d (runCascade S T σp jobs) S T :=
+      ReachedByW3d.cascade jobs hjv hcover hscope (reachedByW3dC_toW3d hprev)
+    obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
+      reachedByW3d_residueDeclared hW3dpost k r res hrow
+    subst hk
+    rw [hr] at hrow
+    have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+    by_cases htgt : ∃ j ∈ jobs, j.keyMatch dt on R
+    · -- targeted key: SettledKey verdicts vs the bare-sourced single edge
+      obtain ⟨⟨hrowS, hedgeS⟩, _⟩ :=
+        settledComplete_cascade_targeted hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+          hStrat hterm hCO hLU hWSbare (reachedByW3dC_toW3d hprev) hjv hcovg hlk hder
+          hon htgt
+      obtain ⟨_, h2, h3⟩ := hrowS res hrow
+      constructor
+      · intro n hn hre
+        have hedge :=
+          reachedByW3d_reach_collapse_root hWF hSV hNK hlk hroot hW3dpost hre
+        have hpred : n.predicate = BARE := by
+          have := reachedByW3d_Rnode_source_bare hW3dpost hNK hlk hroot hSV
+            (subjNode n) hedge
+          rwa [subjNode_pred] at this
+        have hsemT := hedgeS n hpred (h2 n hn).1 hedge
+        rw [(h2 n hn).2] at hsemT
+        exact absurd hsemT (by decide)
+      · intro n hn hre
+        have hedge :=
+          reachedByW3d_reach_collapse_root hWF hSV hNK hlk hroot hW3dpost hre
+        have hpred : n.predicate = BARE := by
+          have := reachedByW3d_Rnode_source_bare hW3dpost hNK hlk hroot hSV
+            (subjNode n) hedge
+          rwa [subjNode_pred] at this
+        exact absurd hpred (h3 n hn).1
+    · -- untargeted key: row and in-edges verbatim from the pre-leg state
+      have hnot : ∀ j ∈ jobs, ¬ j.keyMatch dt on R := fun j hj hkm => htgt ⟨j, hj, hkm⟩
+      have hEHp : EdgeHygienic σp :=
+        ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+      rcases runCascade_cases S T σp jobs with hrc | hrc
+      · have hev := reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs
+        have hupd_res : ({ reconcileJobsL S T σp jobs with
+            watermark := (reconcileJobsL S T σp jobs).maxOutboxId }).residue
+              = (reconcileJobsL S T σp jobs).residue := rfl
+        have hupd_edge : ({ reconcileJobsL S T σp jobs with
+            watermark := (reconcileJobsL S T σp jobs).maxOutboxId }).edges
+              = (reconcileJobsL S T σp jobs).edges := rfl
+        have hres_post : (runCascade S T σp jobs).residue
+            = (reconcileJobsD S T σp jobs).residue := by
+          rw [hrc, hupd_res, hev.residue]
+        have hedges_post : (runCascade S T σp jobs).edges
+            = (reconcileJobsD S T σp jobs).edges := by
+          rw [hrc, hupd_edge, hev.edges]
+        obtain ⟨hresD, hedgesD⟩ := reconcileJobsD_other_key_fixed jobs σp hon hjv hnot
+        have hrowp : σp.residue (objNode ⟨dt, on⟩ R) R = some res := by
+          rw [← hresD, ← hres_post]
+          exact hrow
+        constructor
+        · intro n hn hre
+          have hedge :=
+            reachedByW3d_reach_collapse_root hWF hSV hNK hlk hroot hW3dpost hre
+          rw [hedges_post] at hedge
+          exact (hEHp _ _ _ hrowp).1 n hn
+            (NReaches.edge ((hedgesD (subjNode n)).mp hedge))
+        · intro n hn hre
+          have hedge :=
+            reachedByW3d_reach_collapse_root hWF hSV hNK hlk hroot hW3dpost hre
+          rw [hedges_post] at hedge
+          exact (hEHp _ _ _ hrowp).2 n hn
+            (NReaches.edge ((hedgesD (subjNode n)).mp hedge))
+      · rw [hrc] at hrow ⊢
+        exact hEHp _ _ _ hrow
+
+/-! ## The full W3d T2a -/
+
+/-- **T2a, W3d fragment (`reachedByW3dC_inv`) — the full 8-clause `Inv` at every state
+    of the coverage chain**, dirty keys and mid-drain states included. Structural half
+    and the edge-free I6 clauses need no fragment hypotheses
+    (`reachedByW3d_structInv` / `reachedByW3d_residueHygienic`); the edge-referencing
+    I6 clauses (`reachedByW3dC_edgeHygienic`) carry the W3d fragment and genuinely
+    need the coverage clauses (the plain chain refutes them — file header). -/
+theorem reachedByW3dC_inv {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3dC σ S T)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hSV : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR T R) :
+    Inv S σ := by
+  have hst := reachedByW3dC_structInv h
+  have hhy := reachedByW3d_residueHygienic (reachedByW3dC_toW3d h)
+  have heh := reachedByW3dC_edgeHygienic h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU
+    hWSbare hSV hBS hTS hterm
+  exact
+    { schemaEq := hst.schemaEq
+      nodeEnc := hst.nodeEnc
+      edgesClosed := hst.edgesClosed
+      acyclic := hst.acyclic
+      negStarCovered := hhy.1
+      negEdgeFree := fun k r res hrow n hn => (heh k r res hrow).1 n hn
+      uposEdgeFree := fun k r res hrow n hn => (heh k r res hrow).2 n hn
+      uposNegDisjoint := hhy.2 }
 
 end Zanzibar
