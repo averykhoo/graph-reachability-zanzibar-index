@@ -957,4 +957,24 @@ namespace Zanzibar
 #print axioms runCascade2_no_abort
 #print axioms cascade2_drains
 
+-- **W3d-2 per-stratum operand-read inertness (GraphIndex/CascadeStrata.lean,
+-- 2026-07-12d, same session).** A routed pass at key `(dt, R, on)` writes the
+-- residue only at its own R-node under `R` and touches edges only AT that terminal
+-- R-node, so every read anchored at any OTHER key is constant across the pass:
+-- the untainted <=4-probe read (`graphRec_reconcileStarsKeyDR_inert`), the derived
+-- edge+residue read (`probeDerived_reconcileStarsKeyDR_other` -- node inequality
+-- from key inequality via `objNode` injectivity), hence the routed leaf read
+-- (`check_reconcileStarsKeyDR_other`, both strata in one statement) and the routed
+-- compiled guard of every other key (`checkFnR_reconcileStarsKeyDR_other`, via
+-- `evalE_computedOnly`). Mirrors of the W3d-1b `ReconcileDiff.lean` layer with
+-- routed guards (reach inertness/preservation both directions off the R-node,
+-- endpoint closure, R-node terminality along the fold, residue-other). This is the
+-- model-level reason a round settles keys in ANY order, and the base fact for the
+-- stratum-staged settledness transport (next). Standard axioms only:
+#print axioms reconcileStarsKeyDR_residue_other
+#print axioms graphRec_reconcileStarsKeyDR_inert
+#print axioms probeDerived_reconcileStarsKeyDR_other
+#print axioms check_reconcileStarsKeyDR_other
+#print axioms checkFnR_reconcileStarsKeyDR_other
+
 end Zanzibar

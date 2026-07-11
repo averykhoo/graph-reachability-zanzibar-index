@@ -910,4 +910,401 @@ theorem cascade2_drains {σ : GraphState} {S : Schema} {T : Store}
   intro d hd
   exact mem_outbox_le_maxOutboxId _ d hd
 
+/-! ## Per-stratum operand-read inertness — the routed pass off its own key
+
+A routed pass at key `(dt, R, on)` writes the residue only at its own R-node under
+`R`, and touches edges only AT that (terminal) R-node — so every read anchored at
+any OTHER key is constant across the pass: the untainted ≤4-probe read (`graphRec`),
+the derived edge+residue read (`probeDerived`), hence the routed leaf read (`check`)
+and the routed compiled guard (`checkFnR`) of every other key, WHATEVER its stratum.
+This is the model-level reason a round may settle its keys in any order (the
+2026-07-12c attack finding) and the base fact the stratum-staged settledness
+transport consumes: a stratum-2 guard is undisturbed by its own round's other
+passes, and a stratum-1 pass perturbs a stratum-2 guard only through the reconciled
+key itself. Mirrors of the `ReconcileDiff.lean` W3d-1b layer with routed guards —
+the guard swap never changes which fields a fold branch touches. -/
+
+theorem reconcileKeyDR_residue (T : Store) (dt on R : String) (e : Expr) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (σ.reconcileKeyDR T dt on R e cands).residue = σ.residue := by
+  intro cands
+  induction cands with
+  | nil => intro σ; rfl
+  | cons c rest ih =>
+    intro σ
+    rw [reconcileKeyDR_cons, ih]
+    split
+    · exact writeDirect_residue σ _
+    · rfl
+
+/-- The routed residue recompute leaves every other `(key, relation)` untouched. -/
+theorem reconcileResidueKeyR_residue_other {σ : GraphState} {T : Store}
+    {dt on R : String} {e : Expr} {shapes : List Shape}
+    {negCands uposCands : List SubjectRef} {k' : NodeKey} {r' : String}
+    (h : ¬(k' = objNode ⟨dt, on⟩ R ∧ r' = R)) :
+    (σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands).residue k' r'
+      = σ.residue k' r' := by
+  unfold GraphState.reconcileResidueKeyR
+  rw [putResidue_residue, if_neg h]
+
+/-- The whole routed pass leaves every other `(key, relation)` residue untouched. -/
+theorem reconcileStarsKeyDR_residue_other {σ : GraphState} {T : Store}
+    {dt on R : String} {e : Expr} {shapes : List Shape}
+    {cands negCands uposCands : List SubjectRef} {k' : NodeKey} {r' : String}
+    (h : ¬(k' = objNode ⟨dt, on⟩ R ∧ r' = R)) :
+    (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands uposCands).residue k' r'
+      = σ.residue k' r' := by
+  unfold GraphState.reconcileStarsKeyDR
+  rw [reconcileKeyDR_residue, reconcileResidueKeyR_residue_other h]
+
+/-- The routed fold maintains "the pass's R-node is never a source" step by step. -/
+theorem reconcileKeyDR_Rnode_terminal (T : Store) (dt on R : String) (e : Expr)
+    (hRne : R ≠ BARE) :
+    ∀ (cands : List SubjectRef), (∀ c ∈ cands, c.predicate = BARE) →
+      ∀ (σ : GraphState), (∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) →
+      ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (σ.reconcileKeyDR T dt on R e cands).edges := by
+  intro cands hcb σ hRns y hy
+  rcases reconcileKeyDR_edge_sound T dt on R e cands σ _ y hy with hold | ⟨c, hc, hac, _⟩
+  · exact hRns y hold
+  · have : (objNode ⟨dt, on⟩ R).pred = c.predicate := by rw [hac, subjNode_pred]
+    rw [objNode_pred, hcb c hc] at this
+    exact hRne this
+
+/-- Routed diff-fold reach inertness (post ⇒ pre) for `v ≠` the pass's R-node. -/
+theorem reconcileKeyDR_reach_inert {σ0 : GraphState} (T : Store)
+    (dt on R : String) (e : Expr) (cands0 : List SubjectRef) (hRne : R ≠ BARE)
+    {u v : NodeKey} (hv : v ≠ objNode ⟨dt, on⟩ R)
+    (hcb0 : ∀ c ∈ cands0, c.predicate = BARE)
+    (hRns0 : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ0.edges)
+    (h0 : NReaches (σ0.reconcileKeyDR T dt on R e cands0).edges u v) :
+    NReaches σ0.edges u v := by
+  suffices H : ∀ (cs : List SubjectRef) (σ : GraphState),
+      (∀ c ∈ cs, c.predicate = BARE) →
+      (∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) →
+      NReaches (σ.reconcileKeyDR T dt on R e cs).edges u v →
+      NReaches σ.edges u v from H cands0 σ0 hcb0 hRns0 h0
+  intro cs
+  induction cs with
+  | nil =>
+    intro σ _ _ h
+    exact h
+  | cons c rest ih =>
+    intro σ hcb hRns h
+    rw [reconcileKeyDR_cons] at h
+    split at h
+    · -- addition: peel with `nreaches_cons_inert`
+      have hRns' : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩).edges := by
+        intro y hy
+        rw [writeDirect_edges] at hy
+        split at hy
+        · rcases List.mem_cons.mp hy with heq | hmem
+          · have h1 := (Prod.ext_iff.mp heq).1
+            have h2 : R = c.predicate := by
+              have hp := congrArg NodeKey.pred h1
+              simpa [objNode_pred, subjNode_pred] using hp
+            rw [hcb c List.mem_cons_self] at h2
+            exact hRne h2
+          · exact hRns y hmem
+        · exact hRns y hy
+      have hstep := ih (σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩)
+        (fun x hx => hcb x (List.mem_cons_of_mem _ hx)) hRns' h
+      rw [writeDirect_edges] at hstep
+      split at hstep
+      · exact nreaches_cons_inert hRns hv hstep
+      · exact hstep
+    · -- removal: shrinking is trivially inert (subset)
+      have hRns' : ∀ y, (objNode ⟨dt, on⟩ R, y)
+          ∉ (σ.removeEdgePair (subjNode c) (objNode ⟨dt, on⟩ R)).edges := by
+        intro y hy
+        exact hRns y (removeEdgePair_edges_subset σ _ _ _ hy)
+      have hstep := ih (σ.removeEdgePair (subjNode c) (objNode ⟨dt, on⟩ R))
+        (fun x hx => hcb x (List.mem_cons_of_mem _ hx)) hRns' h
+      exact NReaches.mono_subset (removeEdgePair_edges_subset σ _ _) hstep
+
+/-- Routed diff-fold reach preservation (pre ⇒ post) for `v ≠` the pass's R-node. -/
+theorem reconcileKeyDR_reach_pres {σ0 : GraphState} (T : Store)
+    (dt on R : String) (e : Expr) (cands0 : List SubjectRef) (hRne : R ≠ BARE)
+    {u v : NodeKey} (hv : v ≠ objNode ⟨dt, on⟩ R)
+    (hcb0 : ∀ c ∈ cands0, c.predicate = BARE)
+    (hRns0 : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ0.edges)
+    (h0 : NReaches σ0.edges u v) :
+    NReaches (σ0.reconcileKeyDR T dt on R e cands0).edges u v := by
+  suffices H : ∀ (cs : List SubjectRef) (σ : GraphState),
+      (∀ c ∈ cs, c.predicate = BARE) →
+      (∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) →
+      NReaches σ.edges u v →
+      NReaches (σ.reconcileKeyDR T dt on R e cs).edges u v from H cands0 σ0 hcb0 hRns0 h0
+  intro cs
+  induction cs with
+  | nil =>
+    intro σ _ _ h
+    exact h
+  | cons c rest ih =>
+    intro σ hcb hRns h
+    rw [reconcileKeyDR_cons]
+    split
+    · -- addition: the path persists by monotonicity
+      have hRns' : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩).edges := by
+        intro y hy
+        rw [writeDirect_edges] at hy
+        split at hy
+        · rcases List.mem_cons.mp hy with heq | hmem
+          · have h1 := (Prod.ext_iff.mp heq).1
+            have h2 : R = c.predicate := by
+              have hp := congrArg NodeKey.pred h1
+              simpa [objNode_pred, subjNode_pred] using hp
+            rw [hcb c List.mem_cons_self] at h2
+            exact hRne h2
+          · exact hRns y hmem
+        · exact hRns y hy
+      refine ih (σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩)
+        (fun x hx => hcb x (List.mem_cons_of_mem _ hx)) hRns' ?_
+      exact NReaches.mono_subset (fun ed hed => writeDirect_edges_mono σ _ ed hed) h
+    · -- removal: path-inert off the terminal R-node
+      have hRns' : ∀ y, (objNode ⟨dt, on⟩ R, y)
+          ∉ (σ.removeEdgePair (subjNode c) (objNode ⟨dt, on⟩ R)).edges := by
+        intro y hy
+        exact hRns y (removeEdgePair_edges_subset σ _ _ _ hy)
+      refine ih (σ.removeEdgePair (subjNode c) (objNode ⟨dt, on⟩ R))
+        (fun x hx => hcb x (List.mem_cons_of_mem _ hx)) hRns' ?_
+      exact nreaches_remove_terminal hRns hv h
+
+/-- The routed diffing fold preserves edge endpoint-closure. -/
+theorem edgesClosed_reconcileKeyDR (T : Store) (dt on R : String) (e : Expr) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) →
+      ∀ ab ∈ (σ.reconcileKeyDR T dt on R e cands).edges,
+        ab.1 ∈ (σ.reconcileKeyDR T dt on R e cands).nodes
+          ∧ ab.2 ∈ (σ.reconcileKeyDR T dt on R e cands).nodes := by
+  intro cands
+  induction cands with
+  | nil => intro σ hcl; exact hcl
+  | cons c rest ih =>
+    intro σ hcl
+    rw [reconcileKeyDR_cons]
+    split
+    · exact ih _ (edgesClosed_writeDirect hcl _)
+    · exact ih _ (edgesClosed_removeEdgePair hcl _ _)
+
+/-- **The routed pass leaves the UNTAINTED read of every subject unchanged** (the
+    routed-pass analog of `graphRec_reconcileKeyD_inert`; the untainted key's probe
+    targets are never the pass's derived R-node). -/
+theorem graphRec_reconcileStarsKeyDR_inert {σ : GraphState} {S : Schema} (T : Store)
+    (dt on R : String) (e : Expr) (shapes : List Shape)
+    (cands negCands uposCands : List SubjectRef) (hRne : R ≠ BARE)
+    (hcands : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (s : SubjectRef) (dt' on' r' : String) (hunt : isDerived S (dt', r') = false) :
+    GraphModel.graphRec
+        (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands uposCands) s dt' on' r'
+      = GraphModel.graphRec σ s dt' on' r' := by
+  -- probe targets of the untainted read differ from the reconciled R-node
+  have hvne1 : objNode ⟨dt', on'⟩ r' ≠ objNode ⟨dt, on⟩ R := by
+    intro heq
+    have htype : dt' = dt := by
+      have := congrArg NodeKey.type heq
+      simpa [objNode_type] using this
+    have hpred : r' = R := by
+      have := congrArg NodeKey.pred heq
+      simpa [objNode_pred] using this
+    rw [htype, hpred, hder] at hunt
+    cases hunt
+  have hvne3 : wAllNode dt' r' ≠ objNode ⟨dt, on⟩ R := by
+    unfold wAllNode objNode
+    rw [if_neg honStar]
+    intro heq
+    have := congrArg NodeKey.variant heq
+    simp at this
+  -- the residue half is edge/node-inert: transport the pass-start facts
+  unfold GraphState.reconcileStarsKeyDR
+  set σr := σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands with hσr
+  have hE : σr.edges = σ.edges := by rw [hσr]; rfl
+  have hN : σr.nodes = σ.nodes := by rw [hσr]; rfl
+  have hRnsr : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σr.edges := by
+    intro y
+    rw [hE]
+    exact hRns y
+  have hclr : ∀ ab ∈ σr.edges, ab.1 ∈ σr.nodes ∧ ab.2 ∈ σr.nodes := by
+    intro ab hab
+    rw [hE] at hab
+    rw [hN]
+    exact hcl ab hab
+  have hcl2 := edgesClosed_reconcileKeyDR T dt on R e cands σr hclr
+  have hiff2 := GraphModel.probeNonDerived_iff hcl2 (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+  have hiffr := GraphModel.probeNonDerived_iff hclr (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+  have hpres1 : ∀ {u : NodeKey},
+      NReaches σr.edges u (objNode ⟨dt', on'⟩ r') →
+      NReaches (σr.reconcileKeyDR T dt on R e cands).edges u (objNode ⟨dt', on'⟩ r') :=
+    fun hn => reconcileKeyDR_reach_pres T dt on R e cands hRne hvne1 hcands hRnsr hn
+  have hpres3 : ∀ {u : NodeKey},
+      NReaches σr.edges u (wAllNode dt' r') →
+      NReaches (σr.reconcileKeyDR T dt on R e cands).edges u (wAllNode dt' r') :=
+    fun hn => reconcileKeyDR_reach_pres T dt on R e cands hRne hvne3 hcands hRnsr hn
+  have hinert1 : ∀ {u : NodeKey},
+      NReaches (σr.reconcileKeyDR T dt on R e cands).edges u (objNode ⟨dt', on'⟩ r') →
+      NReaches σr.edges u (objNode ⟨dt', on'⟩ r') :=
+    fun hn => reconcileKeyDR_reach_inert T dt on R e cands hRne hvne1 hcands hRnsr hn
+  have hinert3 : ∀ {u : NodeKey},
+      NReaches (σr.reconcileKeyDR T dt on R e cands).edges u (wAllNode dt' r') →
+      NReaches σr.edges u (wAllNode dt' r') :=
+    fun hn => reconcileKeyDR_reach_inert T dt on R e cands hRne hvne3 hcands hRnsr hn
+  -- the residue half itself is read-inert (edges/nodes untouched)
+  have hbase : GraphModel.probeNonDerived σr (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+      = GraphModel.probeNonDerived σ (⟨s, r', ⟨dt', on'⟩⟩ : Query) :=
+    probeNonDerived_congr hE hN _
+  show GraphModel.probeNonDerived (σr.reconcileKeyDR T dt on R e cands)
+      (⟨s, r', ⟨dt', on'⟩⟩ : Query) = GraphModel.probeNonDerived σ (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+  rw [← hbase]
+  cases hb2 : GraphModel.probeNonDerived (σr.reconcileKeyDR T dt on R e cands)
+      (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+    <;> cases hb1 : GraphModel.probeNonDerived σr (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+  · rfl
+  · exfalso
+    have hd := hiffr.mp hb1
+    have : GraphModel.probeNonDerived (σr.reconcileKeyDR T dt on R e cands)
+        (⟨s, r', ⟨dt', on'⟩⟩ : Query) = true := by
+      apply hiff2.mpr
+      rcases hd with h1 | ⟨hs, h2⟩ | ⟨ho, h3⟩ | ⟨hs, ho, h4⟩
+      · exact Or.inl (hpres1 h1)
+      · exact Or.inr (Or.inl ⟨hs, hpres1 h2⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨ho, hpres3 h3⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨hs, ho, hpres3 h4⟩))
+    rw [hb2] at this
+    cases this
+  · exfalso
+    have hd := hiff2.mp hb2
+    have : GraphModel.probeNonDerived σr (⟨s, r', ⟨dt', on'⟩⟩ : Query) = true := by
+      apply hiffr.mpr
+      rcases hd with h1 | ⟨hs, h2⟩ | ⟨ho, h3⟩ | ⟨hs, ho, h4⟩
+      · exact Or.inl (hinert1 h1)
+      · exact Or.inr (Or.inl ⟨hs, hinert1 h2⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨ho, hinert3 h3⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨hs, ho, hinert3 h4⟩))
+    rw [hb1] at this
+    cases this
+  · rfl
+
+/-- **The routed pass leaves the DERIVED read at every OTHER key unchanged**: the
+    residue write and every edge touch live at the pass's own R-node, and a
+    different `(type, name, relation)` key owns a different node. -/
+theorem probeDerived_reconcileStarsKeyDR_other {σ : GraphState} (T : Store)
+    (dt on R : String) (e : Expr) (shapes : List Shape)
+    (cands negCands uposCands : List SubjectRef) (hRne : R ≠ BARE)
+    (hcands : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) (honStar : on ≠ STAR)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (q : Query) (hne : ¬(q.object.type = dt ∧ q.object.name = on ∧ q.relation = R)) :
+    GraphModel.probeDerived
+        (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands uposCands) q
+      = GraphModel.probeDerived σ q := by
+  -- the queried object node is not the pass's R-node
+  have hvne : objNode q.object q.relation ≠ objNode ⟨dt, on⟩ R := by
+    intro heq
+    by_cases hoStar : q.object.name = STAR
+    · have hv := congrArg NodeKey.variant heq
+      unfold objNode at hv
+      rw [if_pos hoStar, if_neg honStar] at hv
+      simp at hv
+    · exact hne (objNode_inj_of_ne_star hoStar honStar heq)
+  -- residue at the queried key is untouched
+  have hres : (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+        uposCands).residue (objNode q.object q.relation) q.relation
+      = σ.residue (objNode q.object q.relation) q.relation :=
+    reconcileStarsKeyDR_residue_other (fun hand => hvne hand.1)
+  -- the bare-subject edge probe at the queried node is untouched (both directions)
+  have hreach : (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+        uposCands).reach (subjNode q.subject) (objNode q.object q.relation)
+      = σ.reach (subjNode q.subject) (objNode q.object q.relation) := by
+    unfold GraphState.reconcileStarsKeyDR
+    set σr := σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands with hσr
+    have hE : σr.edges = σ.edges := by rw [hσr]; rfl
+    have hN : σr.nodes = σ.nodes := by rw [hσr]; rfl
+    have hRnsr : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σr.edges := by
+      intro y
+      rw [hE]
+      exact hRns y
+    have hclr : ∀ ab ∈ σr.edges, ab.1 ∈ σr.nodes ∧ ab.2 ∈ σr.nodes := by
+      intro ab hab
+      rw [hE] at hab
+      rw [hN]
+      exact hcl ab hab
+    have hcl2 := edgesClosed_reconcileKeyDR T dt on R e cands σr hclr
+    have hbase : σr.reach (subjNode q.subject) (objNode q.object q.relation)
+        = σ.reach (subjNode q.subject) (objNode q.object q.relation) := by
+      unfold GraphState.reach
+      rw [hE, hN]
+    rw [← hbase]
+    cases hb2 : (σr.reconcileKeyDR T dt on R e cands).reach (subjNode q.subject)
+        (objNode q.object q.relation)
+      <;> cases hb1 : σr.reach (subjNode q.subject) (objNode q.object q.relation)
+    · rfl
+    · exfalso
+      have hn := reconcileKeyDR_reach_pres T dt on R e cands hRne hvne hcands hRnsr
+        (reach_sound hb1)
+      rw [reach_complete hcl2 hn] at hb2
+      cases hb2
+    · exfalso
+      have hn := reconcileKeyDR_reach_inert T dt on R e cands hRne hvne hcands hRnsr
+        (reach_sound hb2)
+      rw [reach_complete hclr hn] at hb1
+      cases hb1
+    · rfl
+  unfold GraphModel.probeDerived
+  simp only [hres, hreach]
+
+/-- **The routed leaf read is pass-inert off the pass's key** — `check` at any query
+    whose `(type, name, relation)` key differs from the reconciled key is unchanged
+    by a routed pass, whatever the queried key's stratum. The W3d-2 per-stratum
+    inertness core. -/
+theorem check_reconcileStarsKeyDR_other {σ : GraphState} {S : Schema} (T : Store)
+    (dt on R : String) (e : Expr) (shapes : List Shape)
+    (cands negCands uposCands : List SubjectRef)
+    (hσS : σ.schema = S) (hRne : R ≠ BARE)
+    (hcands : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (q : Query) (hne : ¬(q.object.type = dt ∧ q.object.name = on ∧ q.relation = R)) :
+    GraphModel.check (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+        uposCands) q
+      = GraphModel.check σ q := by
+  have hschema : (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands
+      uposCands).schema = σ.schema := reconcileStarsKeyDR_schema σ T dt on R e shapes
+    cands negCands uposCands
+  cases hd : isDerived S (q.object.type, q.relation) with
+  | false =>
+    rw [GraphModel.check_untainted _ q (by rw [hschema, hσS]; exact hd),
+      GraphModel.check_untainted σ q (by rw [hσS]; exact hd)]
+    exact graphRec_reconcileStarsKeyDR_inert (S := S) T dt on R e shapes cands negCands
+      uposCands hRne hcands hRns honStar hder hcl q.subject q.object.type q.object.name
+      q.relation hd
+  | true =>
+    rw [GraphModel.check_derived _ q (by rw [hschema, hσS]; exact hd),
+      GraphModel.check_derived σ q (by rw [hσS]; exact hd)]
+    exact probeDerived_reconcileStarsKeyDR_other T dt on R e shapes cands negCands
+      uposCands hRne hcands hRns honStar hcl q hne
+
+/-- **Per-stratum guard stability**: the routed compiled guard of any def whose
+    computed leaves all differ from the pass's key is constant across the pass —
+    whatever the leaves' strata. (The W3d-2 analog of the `wantEdge` check half; a
+    stratum-2 guard is perturbed only through the reconciled key itself.) -/
+theorem checkFnR_reconcileStarsKeyDR_other {σ : GraphState} {S : Schema} (T : Store)
+    (dt on R : String) (e : Expr) (shapes : List Shape)
+    (cands negCands uposCands : List SubjectRef)
+    (hσS : σ.schema = S) (hRne : R ≠ BARE)
+    (hcands : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (s : SubjectRef) (dt' on' R' : String) (e' : Expr) (hco : ComputedOnly e')
+    (hother : ∀ r' ∈ computedRefs e', ¬(dt' = dt ∧ on' = on ∧ r' = R)) :
+    (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands uposCands).checkFnR
+        T s dt' on' R' e'
+      = σ.checkFnR T s dt' on' R' e' :=
+  evalE_computedOnly e' hco (fun r' hr' =>
+    check_reconcileStarsKeyDR_other T dt on R e shapes cands negCands uposCands hσS
+      hRne hcands hRns honStar hder hcl ⟨s, r', ⟨dt', on'⟩⟩ (hother r' hr'))
+
 end Zanzibar
