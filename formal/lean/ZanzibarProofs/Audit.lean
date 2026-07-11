@@ -750,4 +750,25 @@ namespace Zanzibar
 #print axioms writeLeg_checkFn_stable
 #print axioms cascadeKeys_writeLeg_mono
 
+-- **W3d-1b — the UNTAINTED-CORE SHADOW and the W3d read bridge
+-- (GraphIndex/CascadeStable.lean, 2026-07-11g).** The W3a shadow does not extend
+-- over diffing passes, so W3d gets a weaker projection: every W3d state differs
+-- from a rules-ADMITTED state on the CURRENT store only in edges into terminal
+-- derived R-nodes (`UntaintedShadow`), which no untainted probe traverses
+-- (`shadow_reach_agree`). New content vs the W3c `CoreEq` shadow: the write-leg
+-- ADMISSION transfer (`shadow_admitEdge_agree` — the cycle probe's back-reach
+-- target is a closure subject node, never a `DerNode` on the fragment), so the
+-- logged fold and the shadow's `writeRules` fold accept the same edges. Corollary:
+-- **`checkFn_eq_sem_w3d`** — the pass guard equals `sem` at EVERY W3d state,
+-- cascaded or not (attack `#eval`: guard = sem across a 6-write chain with three
+-- deliberately uncascaded mid-transaction states; the DERIVED read is what goes
+-- stale, not the guard). Standard axioms only:
+#print axioms shadow_reach_agree
+#print axioms shadow_admitEdge_agree
+#print axioms untaintedShadow_foldAdmits
+#print axioms untaintedShadow_cascade
+#print axioms reachedByW3d_shadow
+#print axioms shadow_graphRec_agree
+#print axioms checkFn_eq_sem_w3d
+
 end Zanzibar

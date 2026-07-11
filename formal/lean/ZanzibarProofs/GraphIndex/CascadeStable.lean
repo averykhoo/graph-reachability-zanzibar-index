@@ -490,4 +490,419 @@ theorem cascadeKeys_writeLeg_mono {σ : GraphState} {S : Schema} {t : Tuple}
     obtain ⟨v, hv, hkv⟩ := List.mem_flatMap.mp hkd
     exact List.mem_flatMap.mpr ⟨v, affectedObjects_writeLeg_mono hclσ' d v hv, hkv⟩
 
+/-! ## The untainted-core shadow — the W3d read bridge
+
+The W3a shadow does not extend over diffing passes (a removal is not a W3a reconcile
+leg), so the W3c `checkFn = sem` bridge does not transfer pointwise to W3d states. The
+replacement: every W3d state differs from a `ReachedByRulesAdmitted` state ON THE
+CURRENT STORE only in edges into terminal derived R-nodes (`DerNode`s) — which no
+untainted probe ever traverses (through-hops die on terminality, landings on the
+target mismatch). So the untainted operand reads — hence the pass guard `checkFn` —
+agree with the rules base, where `checkFn_eq_sem_bs` applies: **`checkFn = sem` at
+EVERY W3d state** (`checkFn_eq_sem_w3d`), cascaded or not. (The DERIVED read is stale
+mid-transaction — that is settledness's business, scoped to cascaded states.)
+
+The new content vs W3c's `CoreEq` shadow is the write-leg ADMISSION transfer
+(`shadow_admitEdge_agree`): the logged fold and the shadow's `writeRules` fold accept
+the same edges, because the admission probe's back-reach target is a rewrite-closure
+subject node — never a `DerNode` (`hterm` keeps store/closure subjects off derived
+predicates) — so the reach agreement applies. -/
+
+/-- A derived R-node key: the target of processor-materialised derived edges
+    (concrete object, non-bare derived relation). -/
+def DerNode (S : Schema) (k : NodeKey) : Prop :=
+  ∃ dt on R, isDerived S (dt, R) = true ∧ R ≠ BARE ∧ on ≠ STAR ∧ k = objNode ⟨dt, on⟩ R
+
+/-- **The untainted-core shadow relation.** `σ`'s edges are `σ0`'s plus edges into
+    terminal `DerNode`s; both endpoint-closed; `σ0`'s core embeds. -/
+structure UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop where
+  classify : ∀ ab ∈ σ.edges, ab ∈ σ0.edges ∨ DerNode S ab.2
+  sub : ∀ ab ∈ σ0.edges, ab ∈ σ.edges
+  nodesSub : ∀ k ∈ σ0.nodes, k ∈ σ.nodes
+  closed : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes
+  closed0 : ∀ ab ∈ σ0.edges, ab.1 ∈ σ0.nodes ∧ ab.2 ∈ σ0.nodes
+  term : ∀ k, DerNode S k → ∀ y, (k, y) ∉ σ.edges
+
+/-- **Reach agreement off the `DerNode`s**: a probe into a non-`DerNode` target reads
+    the same on `σ` and its shadow — extra edges are trailing hops onto terminal
+    nodes the path can neither traverse nor end at. -/
+theorem shadow_reach_agree {S : Schema} {σ σ0 : GraphState}
+    (hsh : UntaintedShadow S σ σ0) {v : NodeKey} (hv : ¬ DerNode S v) (x : NodeKey) :
+    σ.reach x v = σ0.reach x v := by
+  cases h1 : σ.reach x v <;> cases h0 : σ0.reach x v
+  · rfl
+  · exfalso
+    have := reach_complete hsh.closed (NReaches.mono_subset hsh.sub (reach_sound h0))
+    rw [h1] at this
+    cases this
+  · exfalso
+    rcases nreaches_factor (P := fun ab => DerNode S ab.2) hsh.classify (reach_sound h1)
+      with hE | ⟨ab, hD, hR⟩
+    · have := reach_complete hsh.closed0 hE
+      rw [h0] at this
+      cases this
+    · rcases hR with heq | hr
+      · exact hv (heq ▸ hD)
+      · obtain ⟨y, hy⟩ := nreaches_first_edge hr
+        exact hsh.term ab.2 hD y hy
+  · rfl
+
+/-- Admission agreement across the shadow: the cycle probe's target is the write's
+    subject node, which is never a `DerNode` on the fragment. -/
+theorem shadow_admitEdge_agree {S : Schema} {σ σ0 : GraphState}
+    (hsh : UntaintedShadow S σ σ0) {a : NodeKey} (ha : ¬ DerNode S a) (b : NodeKey) :
+    σ.admitEdge a b = σ0.admitEdge a b := by
+  unfold GraphState.admitEdge
+  rw [shadow_reach_agree hsh ha b]
+
+/-- One parallel step: the logged write on `σ`, the plain write on the shadow —
+    admission agrees, so the shadow relation is maintained. -/
+theorem untaintedShadow_writeLoggedOne {S : Schema} {σ σ0 : GraphState}
+    (hsh : UntaintedShadow S σ σ0) {u : Tuple}
+    (ha : ¬ DerNode S (subjNode u.subject)) :
+    UntaintedShadow S (σ.writeLoggedOne u) (σ0.writeDirect u) := by
+  have hadm := shadow_admitEdge_agree hsh ha (objNode u.object u.relation)
+  unfold GraphState.writeLoggedOne
+  by_cases hb : σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true
+  · rw [if_pos hb]
+    have hb0 : σ0.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true := by
+      rw [← hadm]; exact hb
+    have hcl : ∀ ab ∈ (σ.writeDirect u).edges,
+        ab.1 ∈ (σ.writeDirect u).nodes ∧ ab.2 ∈ (σ.writeDirect u).nodes :=
+      edgesClosed_writeDirect hsh.closed u
+    have hcl0 : ∀ ab ∈ (σ0.writeDirect u).edges,
+        ab.1 ∈ (σ0.writeDirect u).nodes ∧ ab.2 ∈ (σ0.writeDirect u).nodes :=
+      edgesClosed_writeDirect hsh.closed0 u
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+    · -- classify
+      intro ab hab
+      rw [pushDelta_edges, writeDirect_edges, if_pos hb] at hab
+      rw [writeDirect_edges, if_pos hb0]
+      rcases List.mem_cons.mp hab with heq | hmem
+      · exact Or.inl (heq ▸ List.mem_cons_self)
+      · rcases hsh.classify ab hmem with h0 | hD
+        · exact Or.inl (List.mem_cons_of_mem _ h0)
+        · exact Or.inr hD
+    · -- sub
+      intro ab hab
+      rw [writeDirect_edges, if_pos hb0] at hab
+      rw [pushDelta_edges, writeDirect_edges, if_pos hb]
+      rcases List.mem_cons.mp hab with heq | hmem
+      · exact heq ▸ List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (hsh.sub ab hmem)
+    · -- nodesSub
+      intro k hk
+      rw [writeDirect_nodes, if_pos hb0] at hk
+      rw [pushDelta_nodes, writeDirect_nodes, if_pos hb]
+      rcases List.mem_cons.mp hk with heq | hk2
+      · exact heq ▸ List.mem_cons_self
+      · rcases List.mem_cons.mp hk2 with heq | hk3
+        · exact List.mem_cons_of_mem _ (heq ▸ List.mem_cons_self)
+        · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hsh.nodesSub k hk3))
+    · -- closed
+      intro ab hab
+      rw [pushDelta_edges] at hab
+      rw [pushDelta_nodes]
+      exact hcl ab hab
+    · -- closed0
+      exact hcl0
+    · -- term
+      intro k hk y hy
+      rw [pushDelta_edges, writeDirect_edges, if_pos hb] at hy
+      rcases List.mem_cons.mp hy with heq | hmem
+      · have h1 : k = subjNode u.subject := (Prod.ext_iff.mp heq).1
+        rw [h1] at hk
+        exact ha hk
+      · exact hsh.term k hk y hmem
+  · rw [if_neg hb]
+    have hb0 : σ0.admitEdge (subjNode u.subject) (objNode u.object u.relation) = false := by
+      rw [← hadm]
+      exact Bool.eq_false_iff.mpr hb
+    rw [writeDirect_reject hb0]
+    exact hsh
+
+/-- The parallel write-leg fold maintains the shadow. -/
+theorem untaintedShadow_writeLeg {S : Schema} :
+    ∀ (us : List Tuple) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
+      (∀ u ∈ us, ¬ DerNode S (subjNode u.subject)) →
+      UntaintedShadow S (us.foldl (fun acc u => acc.writeLoggedOne u) σ)
+        (us.foldl (fun acc u => acc.writeDirect u) σ0) := by
+  intro us
+  induction us with
+  | nil => intro σ σ0 hsh _; exact hsh
+  | cons u rest ih =>
+    intro σ σ0 hsh hs
+    simp only [List.foldl_cons]
+    exact ih _ _ (untaintedShadow_writeLoggedOne hsh (hs u List.mem_cons_self))
+      (fun x hx => hs x (List.mem_cons_of_mem _ hx))
+
+/-- `FoldAdmits` is `EvalEq`-congruent (it reads only edges/nodes through
+    `admitEdge`/`writeDirect`). -/
+theorem foldAdmits_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) :
+    ∀ (us : List Tuple), FoldAdmits σ us → FoldAdmits σ' us := by
+  intro us
+  induction us generalizing σ' σ with
+  | nil => intro _; exact trivial
+  | cons u rest ih =>
+    intro hfa
+    obtain ⟨hadm, hrest⟩ := hfa
+    refine ⟨by rw [admitEdge_evalEq h]; exact hadm, ?_⟩
+    exact ih (writeDirect_evalEq h u) hrest
+
+/-- **Admission transfers to the shadow**: the logged fold and the shadow's plain
+    fold accept the same writes. -/
+theorem untaintedShadow_foldAdmits {S : Schema} :
+    ∀ (us : List Tuple) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
+      (∀ u ∈ us, ¬ DerNode S (subjNode u.subject)) →
+      FoldAdmits σ us → FoldAdmits σ0 us := by
+  intro us
+  induction us with
+  | nil => intro σ σ0 _ _ _; exact trivial
+  | cons u rest ih =>
+    intro σ σ0 hsh hs hfa
+    obtain ⟨hadm1, hrest⟩ := hfa
+    have hadm0 : σ0.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true := by
+      rw [← shadow_admitEdge_agree hsh (hs u List.mem_cons_self) (objNode u.object u.relation)]
+      exact hadm1
+    refine ⟨hadm0, ?_⟩
+    -- the fold's next state on the σ side is `writeLoggedOne`'s CORE = `writeDirect`
+    have hstep : UntaintedShadow S (σ.writeLoggedOne u) (σ0.writeDirect u) :=
+      untaintedShadow_writeLoggedOne hsh (hs u List.mem_cons_self)
+    have hfd : FoldAdmits (σ.writeLoggedOne u) rest := by
+      -- `FoldAdmits σ (u :: rest)` continues at `σ.writeDirect u`; the logged step's
+      -- core equals it (`EvalEq`), and `FoldAdmits` reads only edges/nodes
+      have hev : EvalEq (σ.writeLoggedOne u) (σ.writeDirect u) :=
+        writeLoggedOne_evalEq (EvalEq.refl σ) u
+      exact foldAdmits_evalEq hev rest hrest
+    exact ih _ _ hstep (fun x hx => hs x (List.mem_cons_of_mem _ hx)) hfd
+
+/-! ### The cascade leg preserves the shadow (σ0 fixed) -/
+
+/-- Edges whose target is not the pass's R-node survive the diffing fold. -/
+theorem reconcileKeyD_edge_pres_target (T : Store) (dt on R : String) (e : Expr) :
+    ∀ (cands : List SubjectRef) (σ : GraphState) (ab : NodeKey × NodeKey),
+      ab.2 ≠ objNode ⟨dt, on⟩ R → ab ∈ σ.edges →
+      ab ∈ (σ.reconcileKeyD T dt on R e cands).edges := by
+  intro cands
+  induction cands with
+  | nil => intro σ ab _ hab; exact hab
+  | cons c rest ih =>
+    intro σ ab hne hab
+    rw [reconcileKeyD_cons]
+    split
+    · exact ih _ ab hne (writeDirect_edges_mono σ _ ab hab)
+    · refine ih _ ab hne ?_
+      obtain ⟨a, b⟩ := ab
+      exact mem_removeEdgePair_edges.mpr ⟨hab, fun h => hne h.2⟩
+
+/-- Edges whose target is no job's R-node survive the whole diffing batch. -/
+theorem reconcileJobsD_edge_pres_target {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ : GraphState) (ab : NodeKey × NodeKey),
+      (∀ j ∈ jobs, ab.2 ≠ objNode ⟨j.dt, j.on⟩ j.R) → ab ∈ σ.edges →
+      ab ∈ (reconcileJobsD S T σ jobs).edges := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ ab _ hab; exact hab
+  | cons j rest ih =>
+    intro σ ab hne hab
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
+      rw [List.foldl_cons]
+    rw [hfold]
+    refine ih _ ab (fun j' hj' => hne j' (List.mem_cons_of_mem _ hj')) ?_
+    unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+    refine reconcileKeyD_edge_pres_target T j.dt j.on j.R j.e j.cands _ ab
+      (hne j List.mem_cons_self) ?_
+    rw [reconcileResidueKey_edges]
+    exact hab
+
+/-- The diffing batch only adds nodes. -/
+theorem reconcileJobsD_nodes_mono {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ : GraphState), ∀ k ∈ σ.nodes,
+      k ∈ (reconcileJobsD S T σ jobs).nodes := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ k hk; exact hk
+  | cons j rest ih =>
+    intro σ k hk
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
+      rw [List.foldl_cons]
+    rw [hfold]
+    refine ih _ k ?_
+    unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+    refine reconcileKeyD_nodes_mono T j.dt j.on j.R j.e j.cands _ k ?_
+    rw [reconcileResidueKey_nodes]
+    exact hk
+
+/-- **A cascade leg preserves the shadow** (the shadow state is untouched): pass
+    edges are `DerNode`-targeted, removals never hit shadow edges (a rules state has
+    no in-edge at a `RootBoolean` derived R-node), sources stay off the `DerNode`s
+    (bare candidates vs non-bare derived relations). -/
+theorem untaintedShadow_cascade {S : Schema} {T : Store} {σ σ0 : GraphState}
+    {jobs : List W3cJob}
+    (hsh : UntaintedShadow S σ σ0) (h0 : ReachedByRules σ0 S T)
+    (hSV : StoreValidRules S T) (hNK : NodupKeys S)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hjv : ∀ j ∈ jobs, W3cJobValid S j) :
+    UntaintedShadow S (runCascade S T σ jobs) σ0 := by
+  rcases runCascade_cases S T σ jobs with hrc | hrc
+  · rw [hrc]
+    have hev := reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs
+    -- shadow edges never sit at a job's R-node (RootBoolean ⇒ no rules in-edge)
+    have hnojob : ∀ ab ∈ σ0.edges, ∀ j ∈ jobs, ab.2 ≠ objNode ⟨j.dt, j.on⟩ j.R := by
+      intro ab hab j hj heq
+      obtain ⟨_, _, _, _, _, _, hder, hlke, _⟩ := hjv j hj
+      have hroot : RootBoolean j.e :=
+        hRootB ⟨(j.dt, j.R), j.e⟩ (mem_defs_of_lookup hlke) hder
+      have hno := reachedByRules_RootBoolean_no_inedge (on := j.on) hSV hNK hlke hroot h0 ab.1
+      rw [← heq] at hno
+      exact hno hab
+    refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
+    · -- classify
+      intro ab hab
+      have hab' : ab ∈ (reconcileJobsL S T σ jobs).edges := hab
+      rw [hev.edges] at hab'
+      obtain ⟨a, b⟩ := ab
+      rcases reconcileJobsD_edge_sound jobs σ a b hab' with hold | ⟨j, hj, c, _, _, h2⟩
+      · exact hsh.classify (a, b) hold
+      · obtain ⟨hRne, _, _, _, _, _, hder, _, hon⟩ := hjv j hj
+        exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
+    · -- sub
+      intro ab hab
+      show ab ∈ (reconcileJobsL S T σ jobs).edges
+      rw [hev.edges]
+      exact reconcileJobsD_edge_pres_target jobs σ ab (hnojob ab hab) (hsh.sub ab hab)
+    · -- nodesSub
+      intro k hk
+      show k ∈ (reconcileJobsL S T σ jobs).nodes
+      rw [hev.nodes]
+      exact reconcileJobsD_nodes_mono jobs σ k (hsh.nodesSub k hk)
+    · -- closed
+      intro ab hab
+      have hab' : ab ∈ (reconcileJobsL S T σ jobs).edges := hab
+      rw [hev.edges] at hab'
+      have := edgesClosed_reconcileJobsD jobs σ hsh.closed ab hab'
+      show ab.1 ∈ (reconcileJobsL S T σ jobs).nodes
+        ∧ ab.2 ∈ (reconcileJobsL S T σ jobs).nodes
+      rw [hev.nodes]
+      exact this
+    · -- term
+      intro k hk y hy
+      have hy' : (k, y) ∈ (reconcileJobsL S T σ jobs).edges := hy
+      rw [hev.edges] at hy'
+      rcases reconcileJobsD_edge_sound jobs σ k y hy' with hold | ⟨j, hj, c, hc, h1, _⟩
+      · exact hsh.term k hk y hold
+      · obtain ⟨dt, on, R, _, hRne, _, hkey⟩ := hk
+        obtain ⟨_, hcb, _, _, _, _, _, _, _⟩ := hjv j hj
+        have : R = c.predicate := by
+          have hp := congrArg NodeKey.pred (hkey.symm.trans h1)
+          simpa [objNode_pred, subjNode_pred] using hp
+        rw [hcb c hc] at this
+        exact hRne this
+  · rw [hrc]
+    exact hsh
+
+/-! ### The shadow exists at every W3d state -/
+
+/-- **`reachedByW3d_shadow`** — every W3d state has an untainted-core shadow: a
+    rules-ADMITTED state on the CURRENT store agreeing on everything off the derived
+    R-nodes. The store-dependent hypotheses sit right of the colon and weaken along
+    the chain's prefix stores. -/
+theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d σ S T) :
+    NodupKeys S →
+    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+    StoreValidRules S T →
+    (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    ∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0 := by
+  induction h with
+  | empty S =>
+    intro _ _ _ _
+    refine ⟨emptyState S, ReachedByRulesAdmitted.empty S, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · intro ab hab; simp [emptyState] at hab
+    · intro ab hab; simp [emptyState] at hab
+    · intro k hk; simp [emptyState] at hk
+    · intro ab hab; simp [emptyState] at hab
+    · intro ab hab; simp [emptyState] at hab
+    · intro k _ y hy; simp [emptyState] at hy
+  | @write σp S T t hadm hprev ih =>
+    intro hNK hRootB hSV hterm
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hRootB
+      (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht'))
+      (fun dt R hder => ⟨(hterm dt R hder).1,
+        fun t' ht' => (hterm dt R hder).2 t' (List.mem_cons_of_mem _ ht')⟩)
+    have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) := by
+      rintro u hu ⟨dt, on, R, hder, _hRne, _hon, heq⟩
+      obtain ⟨hnt, hns⟩ := hterm dt R hder
+      have hpne : u.subject.predicate ≠ R :=
+        rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+      apply hpne
+      have hp := congrArg NodeKey.pred heq
+      simpa [subjNode_pred, objNode_pred] using hp
+    exact ⟨σ0.writeRules S t,
+      ReachedByRulesAdmitted.step t h0
+        (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
+      untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
+  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
+    intro hNK hRootB hSV hterm
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hRootB hSV hterm
+    exact ⟨σ0, h0,
+      untaintedShadow_cascade hsh (reachedByRules_of_admitted h0) hSV hNK hRootB hjv⟩
+
+/-! ### The W3d read bridge -/
+
+/-- Untainted operand reads agree with the shadow — for EVERY subject and object:
+    the probe targets (the operand node, the operand `wAll` node) are never
+    `DerNode`s, so all four probes read identically. -/
+theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
+    (hsh : UntaintedShadow S σ σ0) (s : SubjectRef) {dt' : String} (on' : String)
+    {r' : String} (hunt : isDerived S (dt', r') = false) :
+    GraphModel.graphRec σ s dt' on' r' = GraphModel.graphRec σ0 s dt' on' r' := by
+  have hv1 : ¬ DerNode S (objNode ⟨dt', on'⟩ r') := by
+    rintro ⟨dt, on, R, hder, _, _, heq⟩
+    have htype : dt' = dt := by
+      have := congrArg NodeKey.type heq
+      simpa [objNode_type] using this
+    have hpred : r' = R := by
+      have := congrArg NodeKey.pred heq
+      simpa [objNode_pred] using this
+    rw [htype, hpred, hder] at hunt
+    cases hunt
+  have hv3 : ¬ DerNode S (wAllNode dt' r') := by
+    rintro ⟨dt, on, R, _, _, hon, heq⟩
+    rw [objNode_plain hon] at heq
+    have := congrArg NodeKey.variant heq
+    simp [wAllNode] at this
+  unfold GraphModel.graphRec GraphModel.probeNonDerived
+  dsimp only
+  rw [shadow_reach_agree hsh hv1 (subjNode s), shadow_reach_agree hsh hv1 (wAnyNode s.shape),
+    shadow_reach_agree hsh hv3 (subjNode s), shadow_reach_agree hsh hv3 (wAnyNode s.shape)]
+
+/-- **The W3d read bridge (`checkFn_eq_sem_w3d`)**: the compiled pass guard equals
+    `sem` at EVERY W3d state — through the untainted-core shadow (`checkFn` reads
+    only untainted operands; `checkFn_eq_sem_bs` at the rules-admitted shadow).
+    Subject-generic up to star-BARE subjects. -/
+theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hstep : σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e :=
+    checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
+      (fun s' r' hr' => shadow_graphRec_agree hsh s' on hr')
+  rw [hstep]
+  exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+    (ReachedByW3aAdmitted.base h0) hlk hco hleafUnt hs hon
+
 end Zanzibar
