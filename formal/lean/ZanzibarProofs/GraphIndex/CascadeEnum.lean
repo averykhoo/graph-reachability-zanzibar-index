@@ -388,4 +388,322 @@ theorem w3dJobCoverage_enumJob {S : Schema} {T : Store} {σ : GraphState}
     refine uposCands_complete hco hcl hon hbridge hcovDecl hWSb ?_ hsu hsn hsem
     exact fun u hu huu => List.mem_filter.mpr ⟨hu, by simp [huu]⟩
 
+/-! ## W3d-1c piece B TAIL — the enumerated-cascade restatement
+
+`w3dJobCoverage_enumJob` discharges `W3dJobCoverage` for the state-derived `enumJob`.
+The last mile: assemble a fully-operational scheduler closure whose cascade legs are
+BUILT from `enumJobs` (the per-key `enumJob` list), so `graph_correct_w3d` /
+`reachedByW3dC_inv` no longer carry `W3dJobCoverage` (or `hcover`/`hscope`/`hjv`) as
+constructor hypotheses — they are discharged from the state. -/
+
+/-- Every leaf-concrete subject is star-free (`leafConcretes` filters `name != STAR`;
+    `nodeSubj` keeps the name). -/
+theorem leafConcretes_name_ne_star {σ : GraphState} {dt on : String} {e : Expr}
+    {c : SubjectRef} (h : c ∈ leafConcretes σ dt on e) : c.name ≠ STAR := by
+  rw [leafConcretes, List.mem_map] at h
+  obtain ⟨u, hu, hc⟩ := h
+  rw [List.mem_filter] at hu
+  obtain ⟨_, hcond⟩ := hu
+  rw [Bool.and_eq_true, Bool.and_eq_true] at hcond
+  obtain ⟨⟨_, hns⟩, _⟩ := hcond
+  rw [← hc]
+  show u.name ≠ STAR
+  intro heq; rw [heq] at hns; simp at hns
+
+/-- **The star-free analog of `reachedByW3d_Rnode_source_bare`.** Every in-edge source
+    at a `RootBoolean` derived R-node is star-free on a W3d state: write legs never
+    land there (model-level I5, `writeLeg_derived_inedges_eq`), cascade edges are
+    sourced at star-free candidates (`W3cJobValid`'s `cands` non-star clause). Same
+    induction as `_source_bare`. -/
+theorem reachedByW3d_Rnode_source_name_ne_star {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String} {e : Expr}
+    (h : ReachedByW3d σ S T) :
+    NodupKeys S → S.lookup (dt, R) = some e → RootBoolean e → StoreValidRules S T →
+    ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.name ≠ STAR := by
+  induction h with
+  | empty S =>
+    intro _ _ _ _ x hx
+    simp [emptyState] at hx
+  | @write σp S T t hadm hprev ih =>
+    intro hNK hlk hroot hSV x hx
+    rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot x] at hx
+    exact ih hNK hlk hroot (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hx
+  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
+    intro hNK hlk hroot hSV x hx
+    rcases runCascade_cases S T σp jobs with hrc | hrc
+    · rw [hrc] at hx
+      have hx' : (x, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsL S T σp jobs).edges := hx
+      rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).edges] at hx'
+      rcases reconcileJobsD_edge_sound jobs σp x _ hx' with hold | ⟨j, hj, c, hc, h1, _⟩
+      · exact ih hNK hlk hroot hSV x hold
+      · obtain ⟨_, _, hcStar, _⟩ := hjv j hj
+        rw [h1, subjNode_plain (hcStar c hc)]
+        exact hcStar c hc
+    · rw [hrc] at hx
+      exact ih hNK hlk hroot hSV x hx
+
+/-! ### Cascade-key structural facts
+
+Every cascade key `(dt, R, on)` is a declared derived key at a star-free object — read
+straight off `affectedKeys`' `_map_deltas_to_keys` branch (`isDerived`, `S.lookup`,
+`v.name ≠ STAR`). -/
+
+/-- Every `affectedKeys` triple names a declared derived key at a star-free object. -/
+theorem mem_affectedKeys_props {S : Schema} {σ : GraphState} {d : Delta}
+    {k : String × String × String} (hk : k ∈ affectedKeys S σ d) :
+    isDerived S (k.1, k.2.1) = true ∧ (∃ e, S.lookup (k.1, k.2.1) = some e) ∧
+      k.2.2 ≠ STAR := by
+  unfold affectedKeys at hk
+  obtain ⟨v, _, hkv⟩ := List.mem_flatMap.mp hk
+  by_cases hvs : v.name = STAR
+  · rw [if_pos hvs] at hkv; exact absurd hkv (List.not_mem_nil)
+  · rw [if_neg hvs] at hkv
+    obtain ⟨k', _, hfk⟩ := List.mem_filterMap.mp hkv
+    by_cases hc : k'.1 = v.type ∧ isDerived S k' = true ∧
+        ((S.lookup k').map (fun e => (computedRefs e).contains v.pred)).getD false = true
+    · rw [if_pos hc] at hfk
+      obtain rfl := (Option.some.inj hfk).symm
+      obtain ⟨_, hcder, hclk⟩ := hc
+      have hlksome : ∃ e, S.lookup k' = some e := by
+        cases hl : S.lookup k' with
+        | none => rw [hl] at hclk; simp at hclk
+        | some e => exact ⟨e, rfl⟩
+      exact ⟨hcder, hlksome, hvs⟩
+    · rw [if_neg hc] at hfk; exact absurd hfk (by simp)
+
+/-- Every cascade key names a declared derived key at a star-free object. -/
+theorem mem_cascadeKeys_props {S : Schema} {σ : GraphState}
+    {k : String × String × String} (hk : k ∈ cascadeKeys S σ) :
+    isDerived S (k.1, k.2.1) = true ∧ (∃ e, S.lookup (k.1, k.2.1) = some e) ∧
+      k.2.2 ≠ STAR := by
+  unfold cascadeKeys at hk
+  obtain ⟨_, _, hkd⟩ := List.mem_flatMap.mp hk
+  exact mem_affectedKeys_props hkd
+
+/-! ### `enumJob` is `W3cJobValid` -/
+
+/-- **`enumJob` is a valid W3c job.** The bare-filtered leaf concretes and the edge
+    holders give bare, star-free candidates (`reachedByW3d_Rnode_source_bare` /
+    `_source_name_ne_star` for the holders); the leaf concretes are star-free
+    (`leafConcretes_name_ne_star`); the userset candidates are non-bare by the filter;
+    the declared-derived key data comes from the enumeration hypotheses. -/
+theorem w3cJobValid_enumJob {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hNK : NodupKeys S) (hSV : StoreValidRules S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hon : on ≠ STAR) :
+    W3cJobValid S (enumJob σ dt on R e) := by
+  have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+  unfold W3cJobValid
+  refine ⟨lookup_rel_ne_bare hWF hlk, ?_, ?_, ?_, ?_, ?_, hder, hlk, hon⟩
+  · -- cands are bare
+    intro c hc
+    simp only [enumJob, List.mem_append] at hc
+    rcases hc with hcl | hcr
+    · rw [List.mem_filter] at hcl; exact eq_of_beq hcl.2
+    · rw [edgeHolders, List.mem_map] at hcr
+      obtain ⟨ed, hed, hce⟩ := hcr
+      rw [List.mem_filter] at hed
+      obtain ⟨hedm, hedeq⟩ := hed
+      have hb : ed.2 = objNode ⟨dt, on⟩ R := eq_of_beq hedeq
+      have hmem : (ed.1, objNode ⟨dt, on⟩ R) ∈ σ.edges := by rw [← hb]; exact hedm
+      rw [← hce]
+      exact reachedByW3d_Rnode_source_bare h hNK hlk hroot hSV ed.1 hmem
+  · -- cands are star-free
+    intro c hc
+    simp only [enumJob, List.mem_append] at hc
+    rcases hc with hcl | hcr
+    · exact leafConcretes_name_ne_star (List.mem_filter.mp hcl).1
+    · rw [edgeHolders, List.mem_map] at hcr
+      obtain ⟨ed, hed, hce⟩ := hcr
+      rw [List.mem_filter] at hed
+      obtain ⟨hedm, hedeq⟩ := hed
+      have hb : ed.2 = objNode ⟨dt, on⟩ R := eq_of_beq hedeq
+      have hmem : (ed.1, objNode ⟨dt, on⟩ R) ∈ σ.edges := by rw [← hb]; exact hedm
+      rw [← hce]
+      exact reachedByW3d_Rnode_source_name_ne_star h hNK hlk hroot hSV ed.1 hmem
+  · -- negCands are star-free
+    intro c hc
+    simp only [enumJob] at hc
+    exact leafConcretes_name_ne_star (List.mem_filter.mp hc).1
+  · -- uposCands are non-bare
+    intro c hc
+    simp only [enumJob] at hc
+    have hb := (List.mem_filter.mp hc).2
+    intro heq; rw [heq] at hb; simp at hb
+  · -- uposCands are star-free
+    intro c hc
+    simp only [enumJob] at hc
+    exact leafConcretes_name_ne_star (List.mem_filter.mp hc).1
+
+/-! ### `enumJobs` — the per-key enumerated cascade -/
+
+/-- The canonical cascade job list read off the state: one `enumJob` per cascade key
+    (with the key's declared def fetched from the schema). -/
+def enumJobs (S : Schema) (σ : GraphState) : List W3cJob :=
+  (cascadeKeys S σ).filterMap (fun k =>
+    (S.lookup (k.1, k.2.1)).map (fun e => enumJob σ k.1 k.2.2 k.2.1 e))
+
+/-- Every cascade key has an enumerated job (coverage by construction). -/
+theorem enumJobs_cover {S : Schema} {σ : GraphState} :
+    ∀ k ∈ cascadeKeys S σ, ∃ j ∈ enumJobs S σ, j.key = k := by
+  intro k hk
+  obtain ⟨_, ⟨e, hlk⟩, _⟩ := mem_cascadeKeys_props hk
+  refine ⟨enumJob σ k.1 k.2.2 k.2.1 e, ?_, rfl⟩
+  refine List.mem_filterMap.mpr ⟨k, hk, ?_⟩
+  rw [hlk]; rfl
+
+/-- Every enumerated job's key is a cascade key (scope by construction). -/
+theorem enumJobs_scope {S : Schema} {σ : GraphState} :
+    ∀ j ∈ enumJobs S σ, j.key ∈ cascadeKeys S σ := by
+  intro j hj
+  rw [enumJobs, List.mem_filterMap] at hj
+  obtain ⟨k, hk, hfk⟩ := hj
+  obtain ⟨e, _, hje⟩ := Option.map_eq_some_iff.mp hfk
+  rw [← hje]
+  exact hk
+
+/-- Every enumerated job is `W3cJobValid`. -/
+theorem enumJobs_valid {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hNK : NodupKeys S) (hSV : StoreValidRules S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (h : ReachedByW3d σ S T) :
+    ∀ j ∈ enumJobs S σ, W3cJobValid S j := by
+  intro j hj
+  rw [enumJobs, List.mem_filterMap] at hj
+  obtain ⟨k, hk, hfk⟩ := hj
+  obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
+  obtain ⟨hder, _, hon⟩ := mem_cascadeKeys_props hk
+  rw [← hje]
+  exact w3cJobValid_enumJob hWF hNK hSV hRootB h hlk hder hon
+
+/-- Every enumerated job satisfies `W3dJobCoverage` (the discharge from state). -/
+theorem enumJobs_covg {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d σ S T) :
+    ∀ j ∈ enumJobs S σ, W3dJobCoverage S T σ j := by
+  intro j hj
+  rw [enumJobs, List.mem_filterMap] at hj
+  obtain ⟨k, hk, hfk⟩ := hj
+  obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
+  obtain ⟨hder, _, hon⟩ := mem_cascadeKeys_props hk
+  rw [← hje]
+  exact w3dJobCoverage_enumJob hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm h
+    hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) hon hWSbare
+
+/-! ### The fully-operational scheduler closure and the unconditional restatements -/
+
+/-- **`ReachedByW3dE`** — the interleaved scheduler closure with FULLY-OPERATIONAL
+    cascade legs: each cascade runs the canonical `enumJobs` list read off the state.
+    No `W3cJobValid` / `hcover` / `hscope` / `W3dJobCoverage` hypotheses — they are
+    theorems of the enumeration (`enumJobs_valid`/`_cover`/`_scope`/`_covg`). -/
+inductive ReachedByW3dE : GraphState → Schema → Store → Prop where
+  | empty (S : Schema) : ReachedByW3dE (emptyState S) S []
+  | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
+      (hadm : FoldAdmits σ (rewriteClosure S t))
+      (hprev : ReachedByW3dE σ S T) :
+      ReachedByW3dE (σ.writeLoggedRules S t) S (t :: T)
+  | cascade {σ : GraphState} {S : Schema} {T : Store}
+      (hprev : ReachedByW3dE σ S T) :
+      ReachedByW3dE (runCascade S T σ (enumJobs S σ)) S T
+
+/-- **The projection `ReachedByW3dE ⇒ ReachedByW3dC`.** Each fully-operational cascade
+    leg's four coverage hypotheses are discharged from state by `enumJobs_*`; store
+    hypotheses weaken along write prefixes. All fragment hypotheses are threaded as
+    premises (the schema/store are inductive indices). -/
+theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3dE σ S T) :
+    WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
+    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+    RewriteMatchDeclared S → Stratifiable S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) →
+    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    StoreValidRules S T → BareStarStore T → TtuStarFree S T →
+    (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    ReachedByW3dC σ S T := by
+  induction h with
+  | empty S =>
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    exact ReachedByW3dC.empty S
+  | @write σp S T t hadm hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+    have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+    have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+    have htermw : ∀ dt R, isDerived S (dt, R) = true →
+        NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+      fun dt R hd => ⟨(hterm dt R hd).1,
+        fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+    exact ReachedByW3dC.write t hadm
+      (ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSVw hBSw hTSw htermw)
+  | @cascade σp S T hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    have hC : ReachedByW3dC σp S T :=
+      ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    have hW3d : ReachedByW3d σp S T := reachedByW3dC_toW3d hC
+    exact ReachedByW3dC.cascade (enumJobs S σp)
+      (enumJobs_valid hWF hNK hSV hRootB hW3d)
+      enumJobs_cover enumJobs_scope
+      (enumJobs_covg hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+        hWSbare hW3d)
+      hC
+
+/-- **T2b, W3d fragment, UNCONDITIONAL (`graph_correct_w3dE`) — `check = sem` at every
+    fully-drained state of the FULLY-OPERATIONAL scheduler chain.** Identical to
+    `graph_correct_w3d` but over `ReachedByW3dE`, whose cascade legs carry NO
+    `W3dJobCoverage` hypothesis — coverage is discharged from state. -/
+theorem graph_correct_w3dE {S : Schema} {T : Store} {σ : GraphState} (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3dE σ S T) (hq : cascadeKeys S σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem S T q :=
+  graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+    hWSbare
+    (reachedByW3dE_toC h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS
+      hterm)
+    hq hqs hqo
+
+/-- **T2a, W3d fragment, UNCONDITIONAL (`reachedByW3dE_inv`) — the full 8-clause `Inv`
+    at every state of the FULLY-OPERATIONAL scheduler chain.** Identical to
+    `reachedByW3dC_inv` but over `ReachedByW3dE`. -/
+theorem reachedByW3dE_inv {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3dE σ S T)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hSV : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR T R) :
+    Inv S σ :=
+  reachedByW3dC_inv
+    (reachedByW3dE_toC h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS
+      hterm)
+    hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+
 end Zanzibar

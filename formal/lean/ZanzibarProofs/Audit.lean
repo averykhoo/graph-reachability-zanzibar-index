@@ -887,4 +887,21 @@ namespace Zanzibar
 #print axioms w3d_leg_context
 #print axioms w3dJobCoverage_enumJob
 
+-- **W3d-1c piece B TAIL — the enumerated-cascade restatement (GraphIndex/CascadeEnum
+-- .lean, 2026-07-12).** `enumJobs` builds the canonical per-key cascade job list off
+-- the state; `enumJobs_valid`/`_cover`/`_scope`/`_covg` discharge the four constructor
+-- hypotheses of `ReachedByW3dC.cascade` (validity via `w3cJobValid_enumJob` +
+-- `reachedByW3d_Rnode_source_name_ne_star`, coverage via `w3dJobCoverage_enumJob`).
+-- `ReachedByW3dE` is the FULLY-OPERATIONAL scheduler closure (cascade legs run
+-- `enumJobs`, no coverage hypotheses); `reachedByW3dE_toC` projects it to
+-- `ReachedByW3dC`. The payoff: **`graph_correct_w3dE`** (`check = sem`) and
+-- **`reachedByW3dE_inv`** (the full 8-clause `Inv`) hold UNCONDITIONALLY over the
+-- operational chain — `W3dJobCoverage` is a theorem, not a hypothesis. Standard axioms
+-- only:
+#print axioms reachedByW3d_Rnode_source_name_ne_star
+#print axioms w3cJobValid_enumJob
+#print axioms reachedByW3dE_toC
+#print axioms graph_correct_w3dE
+#print axioms reachedByW3dE_inv
+
 end Zanzibar

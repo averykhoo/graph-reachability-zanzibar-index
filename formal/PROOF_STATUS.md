@@ -8,6 +8,67 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12b (W3d-1c piece B TAIL — the enumerated-cascade restatement; **W3d-1c fully CLOSED**)
+
+Resuming from HANDOFF "The next task — W3d-1c piece B TAIL". One green+pushed increment,
+all in `GraphIndex/CascadeEnum.lean` (+ 5 Audit entries); `verify.sh` green throughout
+(build + 0 sorries + zcli + standard-axioms audit + 60 conformance). This closes W3d-1c:
+`graph_correct_w3d` / `reachedByW3dC_inv` are now available UNCONDITIONALLY — over a
+fully-operational scheduler chain whose cascade legs are BUILT from the state-derived
+enumeration, so `W3dJobCoverage` (and `hcover`/`hscope`/`hjv`) are discharged, not
+assumed. The plan was the one pinned in the 2026-07-12 HANDOFF; it went through as
+written, no surprises.
+
+**The one genuinely new lemma.** `reachedByW3d_Rnode_source_name_ne_star` — the star-free
+analog of `reachedByW3d_Rnode_source_bare` (an in-edge source at a `RootBoolean` derived
+R-node is star-free): SAME induction (empty; write leg via `writeLeg_derived_inedges_eq`
+= model-level I5; cascade via `reconcileJobsD_edge_sound`, the new candidate edge's source
+`subjNode c` star-free by `W3cJobValid`'s cands-non-star clause + `subjNode_plain`). Needed
+for the edge-holder half of `enumJob`'s `cands`.
+
+**`enumJob` is `W3cJobValid` (`w3cJobValid_enumJob`).** All nine clauses: `R ≠ BARE`
+(`lookup_rel_ne_bare`); cands bare (bare-filtered leaf concretes by the filter, edge
+holders by `reachedByW3d_Rnode_source_bare`); cands/negCands/uposCands star-free (leaf
+concretes by `leafConcretes_name_ne_star` — the filter's `name != STAR`; edge holders by
+the new source lemma); uposCands non-bare (the filter); declared-derived key data from
+the enumeration hypotheses.
+
+**Cascade-key structural facts.** `mem_affectedKeys_props` / `mem_cascadeKeys_props`: every
+cascade key `(dt, R, on)` names a DECLARED DERIVED key at a STAR-FREE object — read
+straight off `affectedKeys`' `_map_deltas_to_keys` branch (`isDerived`, `S.lookup = some`,
+`v.name ≠ STAR`). The mp-direction companion of the existing `mem_affectedKeys` (intro).
+
+**The enumerated cascade + closure.** `enumJobs S σ` = `(cascadeKeys S σ).filterMap` fetching
+each key's def and building its `enumJob`. `enumJobs_cover`/`_scope` (coverage/scope by
+construction, `List.mem_filterMap` + `Option.map_eq_some_iff`), `enumJobs_valid`
+(`w3cJobValid_enumJob` per key), `enumJobs_covg` (`w3dJobCoverage_enumJob` per key).
+`ReachedByW3dE` — the fully-operational scheduler closure (cascade legs run `enumJobs`, NO
+coverage hypotheses in the constructor). `reachedByW3dE_toC` projects it to `ReachedByW3dC`
+by induction: the four cascade-leg hypotheses discharged by `enumJobs_*`, store hypotheses
+weakened along write prefixes (all fragment hyps threaded as premises since schema/store
+are inductive indices — the `reachedByW3dC_edgeHygienic` pattern).
+
+**The payoff.** `graph_correct_w3dE` (`check = sem` at every fully-drained state) and
+`reachedByW3dE_inv` (the full 8-clause `Inv` at every state) — one-line corollaries of the
+`*_w3d`/`*C` theorems through `reachedByW3dE_toC`. NO `W3dJobCoverage`, `hcover`, `hscope`,
+`hjv` hypotheses: the operational chain earns them all. W3d-1c is CLOSED.
+
+**Proof-engineering notes.** (1) `∃ e, S.lookup (k.1,k.2.1) = some e` from the `getD`-map
+condition: keep the `cases` on `S.lookup k'` SYNTACTIC (the condition mentions `k'`, the
+goal `(k.1,k.2.1)` — defeq but the `cases … : ` generalize matches syntactically), prove a
+`have hlksome : ∃ e, S.lookup k' = some e`, then close the defeq goal with it. (2)
+`List.mem_filterMap.mpr ⟨k, hk, ?_⟩` leaves `Option.map f (some e) = some (f e)` — `rw [hlk]`
+alone does not reduce it; append `; rfl`. (3) `(k.1, k.2.1, k.2.2) = k` is `rfl` (Prod eta),
+so `W3cJob.key (enumJob …) = k` and the scope/cover goals close by `rfl`.
+
+**Resume → W3d-2** (two strata, derived-reading-derived — `probeDerived` leaf dispatch,
+`rounds = 2`, `_bumped` fan-out to dependent keys, per-stratum shadow/inertness,
+`stratify_topological` settle order; relax `hLU`). Then **W4** (full-scope restatement),
+then **Phase 6** (graph-model conformance extension, CORRESPONDENCE.md, final review doc).
+Detail: HANDOFF "The next task" + ROADMAP "W3d-2".
+
+---
+
 ## Session 2026-07-12 (W3d-1c piece B CORE — `W3dJobCoverage` DISCHARGED as a theorem of a state-derived audit enumeration)
 
 Resuming from HANDOFF "The next task — W3d-1c piece B". Six green+pushed increments, all

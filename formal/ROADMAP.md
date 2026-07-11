@@ -474,8 +474,9 @@ and re-proves/widens the same named theorems. Every stage must keep
     `cascade_drains` + `cascadeKeys_nil_of_quiescent`) + T3/T6 `*_w3d`. Deferred to a
     later increment: `reachedByW3d_inv` (the T2a carry over the interleaved chain).
     Detail: PROOF_STATUS 2026-07-11h.
-  - **W3d-1c — the audit enumeration from state + `reachedByW3d_inv`. ◐ PART 3
-    piece A ✅ CLOSED (2026-07-11j); piece B remains.**
+  - **W3d-1c — the audit enumeration from state + `reachedByW3d_inv`. ✅ CLOSED
+    (2026-07-12b) — piece A ✅ (2026-07-11j), piece B core ✅ (2026-07-12), piece B
+    tail ✅ (2026-07-12b). W3d-1 (single stratum) is COMPLETE.**
     * **(A) `reachedByW3dC_inv` ✅ DONE (2026-07-11j)** (the deferred T2a carry — the
       full 8-clause `Inv` over the interleaved chain, `GraphIndex/CascadeInv.lean`,
       sorry-free, axiom-clean). Parts 3a/3b (2026-07-11i): `reachedByW3d_structInv`
@@ -512,11 +513,20 @@ and re-proves/widens the same named theorems. Every stage must keep
       coverage fell out of `hcovDecl`'s contrapositive — no separate `wAny`-node lemma).
       **Statement fix (2026-07-11j):** clause (2) carries the UNCOVERED guard (without it
       unsatisfiable by finite jobs on covering stores — every fresh subject `sem`-true
-      under a `T:*` grant, `#eval`-checked). **TAIL remaining:** the enumerated-cascade
-      restatement — `W3cJobValid (enumJob …)` (needs the star-free source analog
-      `reachedByW3d_Rnode_source_name_ne_star`, same induction as `_source_bare`) +
-      `hcover`/`hscope`, then restate `graph_correct_w3d`/`reachedByW3dC_inv` with NO
-      `W3dJobCoverage` hypothesis. Detail: PROOF_STATUS 2026-07-12.
+      under a `T:*` grant, `#eval`-checked). Detail: PROOF_STATUS 2026-07-12.
+    * **(B tail) the enumerated-cascade restatement ✅ DONE (2026-07-12b)**
+      (`GraphIndex/CascadeEnum.lean`). `enumJobs S σ` = `(cascadeKeys S σ).filterMap`
+      building each key's `enumJob`; `enumJobs_valid`/`_cover`/`_scope`/`_covg` discharge
+      the four `ReachedByW3dC.cascade` hypotheses (validity via `w3cJobValid_enumJob` +
+      the new star-free source analog `reachedByW3d_Rnode_source_name_ne_star`; coverage
+      via `w3dJobCoverage_enumJob`; `mem_cascadeKeys_props` pins every cascade key to a
+      declared derived key at a star-free object). **`ReachedByW3dE`** is the
+      fully-operational scheduler chain (cascade legs run `enumJobs`, NO coverage
+      hypotheses); `reachedByW3dE_toC` projects it to `ReachedByW3dC` (store hyps weakened
+      along write prefixes, all fragment hyps threaded as premises). Payoff:
+      **`graph_correct_w3dE`** (`check = sem`, fully-drained) + **`reachedByW3dE_inv`**
+      (the full 8-clause `Inv`, every state) hold UNCONDITIONALLY — `W3dJobCoverage` is a
+      theorem, not a hypothesis. Detail: PROOF_STATUS 2026-07-12b.
   - **W3d-2 — two strata (derived-reading-derived).** Relax `hLU` to lower-stratum
     derived operands: `checkFn` leaf dispatch routes derived operands through
     `probeDerived` (a real model extension — Python's leaf calls `widx.check`, which
