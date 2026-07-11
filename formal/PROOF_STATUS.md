@@ -8,6 +8,77 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11 (W3c write half — CLOSED: stars/neg model, covered-filter collapse, T2a with all-contentful I6, guard canonicity)
+
+Resuming from HANDOFF "W3c (star data on derived keys → `stars`/`neg`)." Two green+pushed
+axiom-clean increments (new file `GraphIndex/ReconcileStars.lean`; + `Audit.lean` [5 new
+entries], root aggregator); `verify.sh` green throughout (build + 0 sorries + zcli + audit
+standard-axioms-only + 60 conformance). Sorry count held at 0. **This closes the W3c WRITE
+half** (model + T2a + graph-internal correspondence); the READ half (`graph_correct_w3c`)
+is blocked on the star-relaxed base equation — see "Resume" below.
+
+**Attack-first (no refutation; recorded in `ReconcileStars.lean` header, scratch deleted).**
+Planned model vs `sem` on a 342-query grid: `viewer := member ∖ banned`, `viewer2 := member
+∩ editor`, `viewer3 := (member ∩ editor) ∖ banned` over 6 objects with `user:*` grants on
+operands — starred subtrahend kills coverage; `and` of starred+unstarred uncovered, of two
+starred covered; concrete-only exclusion does NOT defeat `*` (star query true while bob ∈
+neg); covered subjects hold ZERO edges; userset-driven `neg` under a star base; star
+coverage via **D1 flow-through** (`member@group:h#mem` + `group:h#mem@user:*` — no direct
+star grant); nested boolean root. Idempotent; reversed key order + permuted/DUPLICATED
+candidate lists agree. Load-bearing modeling discovery: **the compiled star fold
+`plan.stars_fn` is pointwise the boolean evaluation on the star subject** (`∪/∩/−` over
+leaf star sets = `∨/∧/∧¬` over leaf star membership; a closure leaf's star set is the
+graph's star-subject read) — so the model's `stars` is just `shapes.filter (checkFn on
+starSubj)`, and ALL `checkFn` machinery applies to coverage.
+
+**Increment 1 — write model + T2a (`ReconcileStars.lean`).** `wildcardShapes` (the
+schema-fixed `subject_wildcard_shapes`), `coveredFn` (star-subject `checkFn`),
+`reconcileResidueKey` (wholesale stars/neg/upos recompute, one `putResidue`, faithful to
+`reconcile` steps 1–3 `processor.py:388-446`), `reconcileKeyC` (covered-guarded edge fold,
+`want_edge = should ∧ ¬covered` `:359`), `reconcileStarsKey` (residue-THEN-edges — the
+faithful atomic unit; the order is load-bearing). Three structural devices:
+1. **Covered-filter collapse** `reconcileKeyC_eq_filter`: the covered guard reads the
+   persisted row, which `writeDirect` never touches ⇒ fold-constant ⇒ the W3c edge fold
+   IS a W3a `reconcileKey` over the covered-filtered candidates. All W3a fold lemmas
+   (edge soundness/guard, monotonicity, reach-inertness, CoreEq) transfer for free.
+2. **Shadow projection** `reachedByW3c_shadow` (W3b pattern): residue writes core-inert +
+   the collapse ⇒ every W3c state has a W3a-admitted shadow with identical core.
+3. **Star-general operand-read inertness** `graphRec_reconcileKey_inert` — NO
+   `StarFreeStore`: a reconcile pass adds only edges onto its terminal R-node; ALL FOUR
+   `probeNonDerived` probe targets at untainted keys (`objNode ⟨dt',on'⟩ r'`, `wAllNode`)
+   differ from it ⇒ the read is pass-invariant, subject-generically (star subjects incl.).
+`reachedByW3c_master`: one canonical base `σ0` per chain — operand reads = base reads;
+every residue row sits at a derived R-node key with `stars` = the CANONICAL star set
+(`wildcardShapes.filter (coveredFn σ0)`); every R-node in-edge is base (killed by
+`RootBoolean` no-inedge) or from a canonically-uncovered bare candidate. **T2a
+`reachedByW3c_inv`: full `Inv` with ALL FOUR I6 clauses contentful for the first time** —
+`negStarCovered` (write-time filter), `uposNegDisjoint` (covered vs ¬covered, same row),
+`uposEdgeFree` (userset member vs bare-sourced collapsed edge), `negEdgeFree` (the space
+rule cross-pass: a `neg` member is canonically covered, every edge source canonically
+uncovered — contradiction). No `StarFreeStore` hypothesis anywhere in the file.
+
+**Increment 2 — guard canonicity.** `reachedByW3c_master` extended: `neg` members are
+canonically expr-FALSE, `upos` members canonically expr-TRUE (write-time filters +
+`checkFn_agree_of_graphRec`), and every reconcile edge source canonically expr-TRUE
+(`reconcileKey_edge_guard` gives the guard at a prefix mid-fold state; the prefix fold is
+operand-inert — the mid-state is core-shadowed by a W3a-admitted state built from the
+pass prefix — so the mid-state guard = the base guard). The W3c state content is now
+FULLY characterized by the base's compiled boolean (`coveredFn σ0`/`checkFn σ0`).
+
+**Resume → W3c read half (the star-relaxed base equation).** What remains for
+`graph_correct_w3c`: (1) **`checkFn σ0 = sem` / `graphRec_base_eq` WITHOUT
+`StarFreeStore`** — the W2 untainted correspondence re-proved on stores carrying bare
+`user:*` grants (wildcard probes 1–2 go live on the base; W1's `graph_correct_bareStar`
+has the pure-direct star machinery — compose with W2 rule routing; also needed for STAR
+subjects, which `stars ↔ sem` requires — `graphRec_reduce_base_adm`'s star-free
+plain-edges shortcut must be replaced by per-probe reasoning, for which the new
+star-general inertness is the template); (2) the `W3cComplete` batch/coverage layer
+(W3b-style jobs + persistence — residue rows are wholesale-recomputed, so persistence =
+canonical-content stability + coverage clauses on the enumeration); (3) assembly through
+the (already general) `probeDerived` read. Scope note: userset-star shapes/object
+wildcards stay out (decision-15 rejects them on derived relations); `wildcardShapes` only
+carries declared bare-subject-star shapes on this fragment.
+
 ## Session 2026-07-11 (W3b — CLOSED in one session: `graph_correct_w3b`, userset `upos`, T3/T6 at W3b scope)
 
 Resuming from HANDOFF "W3b (userset subjects → `upos` residue)." Three green+pushed axiom-clean

@@ -332,6 +332,31 @@ and re-proves/widens the same named theorems. Every stage must keep
   cascade (cross-key re-reconcile hazard + contentful T5 drain). W3a is the
   "zero residue content" analog of W1a's "zero bridges".
 
+  **W3c ◐ WRITE HALF CLOSED (2026-07-11): `stars`/`neg` model + T2a with all-contentful
+  I6 + guard canonicity (`GraphIndex/ReconcileStars.lean`).** The wholesale residue
+  recompute `reconcileResidueKey` (`stars` = the star-subject `checkFn` filter — the
+  pointwise form of `plan.stars_fn`; `neg` = covered ∧ expr-false; `upos` with its
+  ¬covered guard), the covered-guarded edge fold (`want_edge = should ∧ ¬covered`) and
+  the combined `reconcileStarsKey` (residue-THEN-edges, the faithful atomic unit).
+  Three structural devices: the **covered-filter collapse** (`reconcileKeyC_eq_filter` —
+  the covered guard is fold-constant, so the W3c edge fold IS a W3a `reconcileKey` on
+  the filtered candidates; all W3a fold machinery transfers), the **shadow projection**
+  (`reachedByW3c_shadow`), and **star-general operand-read inertness**
+  (`graphRec_reconcileKey_inert`, NO `StarFreeStore` — all four probe targets of an
+  untainted-key read differ from the terminal R-node, subject-generically incl. star
+  subjects). `reachedByW3c_master` pins every persisted `stars` row to the canonical
+  star set of the chain base AND guard canonicity (neg canonically expr-false, upos
+  canonically expr-true, edge sources canonically expr-true ∧ uncovered — via
+  `reconcileKey_edge_guard` + prefix-mid-state inertness). **T2a `reachedByW3c_inv`:
+  full `Inv` with ALL FOUR I6 clauses contentful** (`negStarCovered`, `negEdgeFree` =
+  the space rule cross-pass, `uposEdgeFree`, `uposNegDisjoint`) — no `StarFreeStore`
+  hypothesis anywhere. Attack-first: 342-query grid incl. D1 flow-through coverage,
+  nested boolean roots, permuted/duplicated candidates — no refutation. **Read half
+  DEFERRED:** `graph_correct_w3c` needs the star-relaxed base equation
+  (`graphRec_base_eq`/`checkFn_eq_sem` without `StarFreeStore` — W1 bare-star × W2
+  rules composition) + the `W3cComplete` batch layer. Detail: PROOF_STATUS 2026-07-11
+  (W3c) + HANDOFF.
+
   **W3b ✅ CLOSED (2026-07-11): `graph_correct_w3b` + T3/T6 (`*_w3b`) — userset `upos`.**
   The W3a bare-subject restriction LIFTED: userset subjects on derived keys are answered
   by the edge-free `upos` residue (blind-audit P4). Write model `reconcileUposKey`

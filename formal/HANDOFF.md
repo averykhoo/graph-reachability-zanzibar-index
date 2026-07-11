@@ -77,81 +77,81 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T2b `graph_correct_rules` | `GraphIndex/RulesComplete.lean` | untainted computed/ttu/union |
 | T2b `graph_correct_w3a` | `GraphIndex/ReconcileComplete.lean` | + one `RootBoolean` derived key, bare-subject queries |
 | T2b `graph_correct_w3b` | `GraphIndex/ReconcileUposComplete.lean` | + userset subjects via `upos` (bare-subject restriction LIFTED) |
+| T2a `reachedByW3c_inv` / `reachedByW3c_master` | `GraphIndex/ReconcileStars.lean` | W3c write half: `stars`/`neg` model, ALL I6 clauses contentful, star-general (no `StarFreeStore`) |
 | T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`, `_w3b`) |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c (next) → W3d → W4.**
-**W3b is CLOSED (2026-07-11):** userset subjects on derived keys, answered by the edge-free
-`upos` residue (blind-audit P4). `graph_correct_w3b` (`GraphIndex/ReconcileUposComplete.lean`):
-`check = sem` on EVERY star-free query — bare AND userset subjects — over a `W3bComplete`
-state; T3/T6 corollaries `*_w3b` in `Equiv.lean` (T6a now covers a userset excluded by a
-derived `but not`). The W3a summary (`graph_correct_w3a`, `checkFn_eq_sem`, Step A restriction
-machinery) is in the 2026-07-11 PROOF_STATUS entries; fragment hypotheses are unchanged from
-W3a (hCO/hLU/hterm/hRootB/hMatch/hStrat + the W2 pack) — only the query scope widened.
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ◐ (write half ✅, read half NEXT) → W3d → W4.**
+**W3c write half is CLOSED (2026-07-11)** — `GraphIndex/ReconcileStars.lean`: the `stars`/`neg`
+residue model and **T2a with ALL FOUR I6 clauses contentful**, with **no `StarFreeStore`
+hypothesis anywhere in the file**. Machinery:
+- **write model**: `wildcardShapes` (schema-fixed `subject_wildcard_shapes`), `coveredFn` (the
+  star-subject `checkFn` — the compiled star fold `plan.stars_fn` is POINTWISE the boolean
+  evaluation on the star subject: `∪/∩/−` over leaf star sets = `∨/∧/∧¬` over membership, a
+  closure leaf's star set being the graph's star-subject read), `reconcileResidueKey` (wholesale
+  stars/neg/upos recompute, one `putResidue`; `neg` = covered ∧ expr-false, `upos` = ¬covered ∧
+  expr-true), `reconcileKeyC` (edge fold with `want_edge = should ∧ ¬covered`,
+  `processor.py:359`), `reconcileStarsKey` = residue-THEN-edges (the faithful atomic unit —
+  `reconcile` stores the residue at `:446` before the edge audit `:450-455`; order load-bearing);
+- **covered-filter collapse** `reconcileKeyC_eq_filter`: the covered guard is fold-constant, so
+  the W3c edge fold IS a W3a `reconcileKey` on the covered-filtered candidates — all W3a fold
+  machinery transfers with zero new induction;
+- **shadow projection** `reachedByW3c_shadow` (W3b pattern; residue writes core-inert + collapse);
+- **star-general operand-read inertness** `graphRec_reconcileKey_inert` (NO `StarFreeStore`): a
+  pass adds only edges onto its terminal R-node and all four `probeNonDerived` targets at
+  untainted keys differ from it — subject-generic, star subjects included. This replaces the
+  plain-edges shortcut and is the TEMPLATE for the read-half base work;
+- **`reachedByW3c_master`**: one canonical base σ0 per chain — operand reads = base reads; every
+  residue row carries the CANONICAL stars (`wildcardShapes.filter (coveredFn σ0)`); **guard
+  canonicity**: `neg` members canonically expr-false, `upos` members canonically expr-true, every
+  R-node in-edge from a canonically-uncovered, canonically-expr-true bare candidate
+  (`reconcileKey_edge_guard` + prefix-mid-state inertness);
+- **T2a `reachedByW3c_inv`**: full `Inv` — `negStarCovered` (write-time filter),
+  `uposNegDisjoint` (covered vs ¬covered, same row), `uposEdgeFree` (userset member vs
+  bare-sourced collapsed edge), `negEdgeFree` (the space rule cross-pass: canonically covered
+  member vs canonically uncovered edge source — contradiction).
 
-W3b machinery (`ReconcileUpos.lean` = write half, `ReconcileUposComplete.lean` = closure+assembly):
-- **write model** `reconcileUposStep`/`reconcileUposKey` — per-candidate insert/remove fold on the
-  key's `upos` list via `putResidue` (faithful to `reconcile_subject`'s userset branch,
-  `processor.py:345-357`; star-free ⇒ `covered = false` ⇒ `want_upos = should`, `want_neg = false`);
-- **congruence spine**: `reach`/`probeNonDerived`/`graphRec`/`checkFn_congr` — `checkFn` reads only
-  the edge/node core, so it is CONSTANT across the upos fold; whole-fold membership
-  characterization `reconcileUposKey_upos_mem` (x ∈ upos-after ⟺ candidate ∧ pass-start guard,
-  or non-candidate ∧ already-present);
-- **read collapse** `probeDerived_uposOnly`/`check_derived_uposOnly` on `ResidueUposOnly` states
-  (star ⇒ false, userset ⇒ `upos.contains`, bare ⇒ the W3a edge probe);
-- **`ReachedByW3b`** (admitted base + interleaved `reconcileKey`/`reconcileUposKey` legs) and the
-  **SHADOW PROJECTION** `reachedByW3b_shadow`: every W3b state has a W3a-admitted shadow with an
-  identical core (`CoreEq`, replay minus upos passes) — ALL W3a edge/reach facts (collapse,
-  terminality, edge soundness, `checkFn_eq_sem`) transfer with zero new induction;
-- **T2a** `reachedByW3b_inv`: full `Inv` with **contentful I6** — `uposEdgeFree` proved for real
-  (a upos member is userset-shaped; every path onto the `RootBoolean` R-node is a single
-  bare-sourced edge), `neg` clauses by emptiness; + residue provenance;
-- **correspondence**: `checkFn_eq_sem_w3b` (subject-generic, via the shadow); `upos` soundness
-  `reachedByW3b_upos_sound`; `upos` persistence `reconcileJobsB_upos_persist` (a same-key
-  re-reconcile re-evaluates the fold-constant guard = `sem` = true, so it keeps the entry);
-  `W3bComplete` (edge jobs cover `sem`-true bare subjects, upos jobs cover `sem`-true usersets);
-  `w3bComplete_derived_edge` / `w3bComplete_derived_upos`; assembly `graph_correct_w3b`.
+Attack-first (2026-07-11, recorded in `ReconcileStars.lean` header): planned model vs `sem`, 342
+queries, `viewer/viewer2/viewer3` (incl. nested root) over 6 objects with `user:*` operand
+grants — starred subtrahend kills coverage; mixed `and` uncovered; concrete-only exclusion does
+not defeat `*`; covered subjects hold zero edges; D1 flow-through coverage; userset-driven `neg`;
+idempotent, key-order/candidate-permutation independent. No refutation.
 
-Attack-first (2026-07-11, recorded in `ReconcileUpos.lean` header): planned model vs `sem` on a
-180-query grid over `viewer := member but not banned` with userset grants (direct + via computed
-union operand + banned + ghost + the derived key itself as a subject) — no refutation; pass order
-irrelevant, idempotent, P4 non-leak holds, upos members never reach the R-node (I6 confirmed).
+The W3b summary (upos machinery, `graph_correct_w3b`) and W3a summary are in the 2026-07-11
+PROOF_STATUS entries.
 
 ---
 
-## The next task — W3c (star data on derived keys → `stars` / `neg`)
+## The next task — W3c read half: the star-relaxed base equation → `graph_correct_w3c`
 
-**W3b is CLOSED.** Start W3c: the star-coverage residue content. On the derived key the processor
-persists `stars` (the star×boolean fold `plan.stars_fn`, `processor.py:388-389` — which shapes are
-wholesale-covered by wildcard grants through the boolean) and `neg` (star-covered ∧ expr-false
-concrete subjects, `processor.py:391-411`), and the reads' fallback branches go live: bare subject
-⇒ edge probe **∨ (shape ∈ stars ∧ ∉ neg)**; star subject ⇒ `shape ∈ stars`; userset `upos` branch
-gains its `stars`/`neg` fallback. Edge maintenance changes too: `want_edge = should ∧ ¬covered`
-(`processor.py:359`) — a covered subject holds NO edge, so the store is no longer star-free.
+The graph-internal half is DONE (state content = the base's compiled boolean, see master above).
+What remains to lift `check = sem` to star-carrying stores:
 
-1. **Attack-first** (house rule 2): `#eval` the star×boolean fold vs `sem` — the key subtleties are
-   (a) `stars_fn`'s boolean over shape coverage (an `and` of a starred and an unstarred operand is
-   NOT covered; `but not` with a starred subtrahend kills coverage), (b) concrete-only exclusion
-   does not defeat `*` (spec §5.4 — that is what `neg` is for), (c) `want_edge = should ∧ ¬covered`
-   drops edges that W3b would have written. Try to refute the planned read equation
-   `members = edges ∪ upos ∪ (⋃_{σ∈stars} pop(σ) ∖ neg)` against `sem` with wildcard grants on
-   operands. The T1 `MemberSet` algebra (`SetEngine/MemberSet.lean`) is the residue-semantics
-   reference; `boolean spec §5.3-5.4`, `wildcard.py:398-432`.
-2. **Relax `StarFreeStore`.** The W2 base machinery is proved under `StarFreeStore T`; star grants
-   on operand relations materialise as wildcard-bridge edges (W1's machinery). Expect this to be
-   the expensive half: the shadow projection survives (upos/stars writes are still edge-inert),
-   but the base leg needs W1+W2 composition (`ObjStar`/`UsStar` closures + rule routing).
-   Consider sub-staging: W3c-i = stars on the DERIVED key only (operand stores still star-free —
-   `stars_fn` folds over object-wildcard shapes declared for the derived type); W3c-ii = star
-   grants inside operand cones.
-3. **Model + correspondence.** Extend the residue write model with `stars`/`neg` maintenance
-   (wholesale recompute per pass, `processor.py:388-411`); relax `ResidueUposOnly`; new read
-   collapse; extend `W3bComplete` coverage to `neg` candidates (negative-leaf concretes ∪ derived
-   `neg` propagation) and star coverage; `negEdgeFree`/`negStarCovered` (I6) become contentful.
+1. **The star-relaxed base equation** — `graphRec_base_eq` / `checkFn_eq_sem` WITHOUT
+   `StarFreeStore` (they currently assume it via `reachedByW3a_edges_plain` +
+   `probeNonDerived_plainEdges`, which kill wildcard probes 2–4). On a base store with bare
+   `user:*` grants, probe 2 (`wAnyNode s.shape → oN`) goes LIVE. Needed subject-generically:
+   the `stars ↔ sem` correspondence is exactly the STAR-subject instance (`sem`'s star branch:
+   exact-shape star grant ∨ D1 flow-through `memberOfGranted` — the attack corpus's doc:6 case).
+   Ingredients: W1's `graph_correct_bareStar` (pure-direct star machinery: `TupleChainN`
+   flow-through chains) composed with W2's rule routing (`RulesChain`/`RulesSaturate`);
+   `graphRec_reconcileKey_inert` (this session) already gives the reduce-to-base step without
+   star-freeness — only the BASE read ↔ `sem` equation itself needs the composition. Attack-first
+   any new statement (house rule 2): e.g. try to refute "base probe 1∨2 = sem for bare+star
+   subjects on rule-routed star-carrying stores" — mind rewrite arms fed BY star grants
+   (`RewriteFilter` routing a `user:*` write) and D1 chains crossing rewrite outputs.
+2. **The `W3cComplete` batch layer** (W3b-style): jobs = full-object `reconcileStarsKey` passes;
+   coverage clauses on the enumeration (edge cands ⊇ `sem`-true uncovered bare subjects; negCands
+   ⊇ negative-leaf concretes ∪ derived-neg ids, `processor.py:394-404`; uposCands ⊇ `sem`-true
+   uncovered usersets); persistence = canonical-content stability (rows are wholesale-recomputed
+   to the SAME canonical content — `reachedByW3c_master` already proves the content is
+   chain-position-independent).
+3. **Assembly** `graph_correct_w3c` through the (already fully general) `probeDerived`: bare ⇒
+   edge ∨ (stars ∖ neg), star ⇒ stars, userset ⇒ upos ∨ (stars ∖ neg); each branch glued by
+   master's canonicity + the base equation + completeness. Then T3/T6 `*_w3c` in `Equiv.lean`.
 
-**Immediately reusable from W3b**: the congruence spine + shadow projection pattern
-(`ReconcileUposComplete.lean` — stars/neg writes are `putResidue`-only, so `CoreEq` and
-`checkFn`-constancy carry over verbatim), `reconcileUposKey_upos_mem`-style characterizations,
-`checkFn_eq_sem_w3b`, the `W3bJob` batch scaffolding, `uposAt_of_residue`/`residue_of_uposAt_mem`.
+Scope guard (decision-15): object wildcards and wildcard usersets over derived relations stay
+rejected; `wildcardShapes` carries only bare-subject-star shapes on this fragment. `hterm`
+(`NoTtuTarget`/`NoStoreSubjectR`) and hCO/hLU/hRootB stay as in W3a/W3b.
 
 ---
 
