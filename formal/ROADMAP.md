@@ -332,6 +332,20 @@ and re-proves/widens the same named theorems. Every stage must keep
   cascade (cross-key re-reconcile hazard + contentful T5 drain). W3a is the
   "zero residue content" analog of W1a's "zero bridges".
 
+  **W3b ✅ CLOSED (2026-07-11): `graph_correct_w3b` + T3/T6 (`*_w3b`) — userset `upos`.**
+  The W3a bare-subject restriction LIFTED: userset subjects on derived keys are answered
+  by the edge-free `upos` residue (blind-audit P4). Write model `reconcileUposKey`
+  (per-candidate insert/remove fold, `putResidue`-only) + the congruence spine (`checkFn`
+  reads only the edge/node core ⇒ CONSTANT across the upos fold) + the W3b read collapse
+  in `GraphIndex/ReconcileUpos.lean`; the closure `ReachedByW3b`, the **shadow
+  projection** (every W3b state has a W3a-admitted shadow with identical core — all W3a
+  edge facts transfer with zero new induction), contentful-I6 `reachedByW3b_inv`
+  (`uposEdgeFree` proved for real), `upos` soundness/persistence/completeness, and
+  `graph_correct_w3b` (`check = sem` on EVERY star-free query) in
+  `GraphIndex/ReconcileUposComplete.lean`; Step C corollaries in `Equiv.lean`.
+  Attack-first: 180-query grid, pass-order insensitivity, idempotence, P4 non-leak,
+  I6 edge-freeness — no refutation. Detail: PROOF_STATUS 2026-07-11 (W3b) + HANDOFF.
+
   **W3a ✅ CLOSED (2026-07-11): `graph_correct_w3a` + T3/T6 (`*_w3a`).** `check = sem`
   on every BARE-subject star-free query over a `W3aComplete` state (one `RootBoolean`
   derived key per untainted operand cone) — untainted via the base reduction, derived

@@ -8,6 +8,65 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11 (W3b — CLOSED in one session: `graph_correct_w3b`, userset `upos`, T3/T6 at W3b scope)
+
+Resuming from HANDOFF "W3b (userset subjects → `upos` residue)." Three green+pushed axiom-clean
+increments (new files `GraphIndex/ReconcileUpos.lean`, `GraphIndex/ReconcileUposComplete.lean`;
++ `Equiv.lean`, `Audit.lean` [16 new entries], root aggregator); `verify.sh` green throughout
+(build + 0 sorries + zcli + audit standard-axioms-only + 60 conformance). Sorry count held at 0.
+**This CLOSES W3b** — the W3a bare-subject scope restriction is LIFTED: `graph_correct_w3b` proves
+`check = sem` on EVERY star-free query (bare and userset subjects) over a `W3bComplete` state.
+
+**Attack-first (no refutation; recorded in `ReconcileUpos.lean` header, scratch deleted).** On
+`viewer := member but not banned` (member = direct ∪ computed editor) with userset grants
+(`group:{g,h,i}#mem` member/banned/editor-only, ghosts, the derived key itself as subject): the
+planned model's `check` = `sem` on a 180-query grid; bare/userset pass ORDER irrelevant; repeated
+pass idempotent; P4 non-leak (a banned member of an upos-true userset stays denied); upos members
+do NOT reach the R-node even though userset nodes carry operand out-edges (I6 confirmed). The
+load-bearing structural discovery: **the upos fold never touches edges/nodes, so `checkFn` is
+CONSTANT across the fold** — no prefix-mid-state bookkeeping (unlike the W3a edge fold, whose guard
+sees earlier writes; there it was terminality that saved it, here it is congruence).
+
+**Increment 1 — write model + read collapse (`ReconcileUpos.lean`).** `reconcileUposStep/Key`
+(per-candidate insert/remove on the key's `upos` via `putResidue`; faithful to `reconcile_subject`
+`processor.py:345-357`, star-free ⇒ `covered=false` ⇒ `want_upos=should`, `want_neg=false`; the
+model stores a possibly-empty row where Python deletes it — read-equivalent via `getD`). Congruence
+spine `reach_congr → probeNonDerived_congr → graphRec_congr → checkFn_congr` (agreement on
+edges+nodes). Whole-fold membership characterization `reconcileUposKey_upos_mem`. `ResidueUposOnly`
++ preservation (writeDirect/reconcileKey/reconcileUposKey). W3b read collapse `probeDerived_uposOnly`
+/ `check_derived_uposOnly` (star ⇒ false, userset ⇒ `upos.contains`, bare ⇒ W3a edge probe).
+
+**Increment 2 — closure + shadow + soundness (`ReconcileUposComplete.lean`).** `CoreEq`
+(residue-blind state agreement) with congruences (`writeDirect_coreEq`, `reconcileKey_coreEq`).
+`ReachedByW3b` (admitted base + interleaved bare-edge/upos legs; `reconcileU` side conditions
+faithful to the userset branch). **The shadow projection `reachedByW3b_shadow`** — every W3b state
+has a W3a-admitted shadow with identical core (replay minus upos passes) — the session's key
+economy: ALL W3a edge/reach facts (reach collapse, R-node terminality, derived-edge soundness,
+`checkFn_eq_sem`) transfer with ZERO new induction. Residue provenance (rows only at derived
+R-node keys; members concrete usersets). **T2a `reachedByW3b_inv`**: full `Inv` with contentful I6
+— `uposEdgeFree` proved for real (userset-shaped member vs single bare-sourced edge onto the
+`RootBoolean` R-node), `neg` clauses by emptiness; quiescence. `checkFn_eq_sem_w3b`
+(subject-generic). **`upos` soundness** `reachedByW3b_upos_sound` (entry ⇒ `sem`; the guard at the
+W3b pass-start state, no prefix machinery needed by fold-constancy).
+
+**Increment 3 — completeness + assembly + Step C.** `W3bJob` (edge|upos) / `reconcileJobsB` /
+validity / preservation / edge-monotonicity (upos jobs edge-inert). **`upos` persistence**
+`reconcileJobsB_upos_persist` — a `sem`-true entry survives every later valid job (edge jobs never
+touch residues; a same-key upos re-reconcile re-evaluates its fold-constant guard = `sem` = true ⇒
+re-adds, never removes). `W3bComplete` (admitted base + coverage-complete batch: edge jobs
+enumerate every `sem`-true BARE subject, upos jobs every `sem`-true USERSET — faithful to the
+audit enumeration `processor.py:413-441`). `w3bComplete_derived_edge` (the W3a argument through
+the covering edge job, shadow-transferred terminality) + `w3bComplete_derived_upos` (covering job
+writes; persistence carries). **`graph_correct_w3b`** — untainted via shadow + base reduction,
+derived-bare via edge probe, derived-userset via `upos`. **Step C**: `backend_equivalence_w3b` /
+`exclusion_effective_w3b` / `no_ghost_grant_w3b` — T6a now covers a userset excluded by a derived
+`but not` (P4 non-leak, both directions).
+
+**Resume → W3c (star data → `stars`/`neg`).** See HANDOFF "The next task": attack-first the
+star×boolean fold (`plan.stars_fn`) + `neg` recompute vs `sem`; the expensive half is relaxing
+`StarFreeStore` (consider sub-staging W3c-i stars-on-derived-key-only vs W3c-ii star grants in
+operand cones). The shadow-projection pattern survives (stars/neg writes are `putResidue`-only).
+
 ## Session 2026-07-11 (W3a Step B + C — CLOSED: `graph_correct_w3a`, T3/T6 at W3a scope)
 
 Resuming W3a Step B from HANDOFF "candidate completeness + assembly." Three green+pushed

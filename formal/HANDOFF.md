@@ -76,78 +76,86 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T2b `graph_correct_usStar` | `GraphIndex/UsStarClosure.lean` | + userset stars (in-bridges) |
 | T2b `graph_correct_rules` | `GraphIndex/RulesComplete.lean` | untainted computed/ttu/union |
 | T2b `graph_correct_w3a` | `GraphIndex/ReconcileComplete.lean` | + one `RootBoolean` derived key, bare-subject queries |
-| T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`) |
+| T2b `graph_correct_w3b` | `GraphIndex/ReconcileUposComplete.lean` | + userset subjects via `upos` (bare-subject restriction LIFTED) |
+| T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`, `_w3b`) |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b (next) → W3c → W3d → W4.**
-**W3a is CLOSED (2026-07-11):** star-free bare-subject derived booleans — `and`/`but not`
-over `computed` refs to untainted operands; the processor stores NO residue row, so a
-derived relation only adds edges, and the derived read collapses to a bare edge probe.
-The whole read correspondence `graph_correct_w3a` (`GraphIndex/ReconcileComplete.lean`) is
-proved: `check = sem` on every **bare-subject** star-free query, with the T3/T6a/T6b
-corollaries (`*_w3a` in `Equiv.lean`). Scope note (attack-first, recorded): a **userset**
-subject on a derived key can be `sem`-true while the residue-empty read is `false`, so
-W3a's derived-query claim is bare-subject-only — usersets are W3b's `upos` residue.
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c (next) → W3d → W4.**
+**W3b is CLOSED (2026-07-11):** userset subjects on derived keys, answered by the edge-free
+`upos` residue (blind-audit P4). `graph_correct_w3b` (`GraphIndex/ReconcileUposComplete.lean`):
+`check = sem` on EVERY star-free query — bare AND userset subjects — over a `W3bComplete`
+state; T3/T6 corollaries `*_w3b` in `Equiv.lean` (T6a now covers a userset excluded by a
+derived `but not`). The W3a summary (`graph_correct_w3a`, `checkFn_eq_sem`, Step A restriction
+machinery) is in the 2026-07-11 PROOF_STATUS entries; fragment hypotheses are unchanged from
+W3a (hCO/hLU/hterm/hRootB/hMatch/hStrat + the W2 pack) — only the query scope widened.
 
-W3a machinery, in dependency order (`Reconcile.lean`, `ReconcileWrite.lean`,
-`ReconcileCorrect.lean`, `RestrictBase.lean`, **`ReconcileComplete.lean`**):
-- read collapse (`check_derived_ResidueEmpty`: derived read = bare edge probe);
-- write model (`checkFn` = compiled check_fn as `evalE` via `graphRec` = `probeNonDerived`;
-  `reconcileKey` guarded `writeDirect` fold; closures `ReachedByW3a` / `ReachedByW3aAdmitted`);
-- `checkFn_eq_semStep` → **`checkFn_eq_sem`** (checkFn on a W3a-admitted state = `sem` of the
-  derived key), via `graphRec_reduce_base_adm` + Step A's `graphRec_base_eq` + `semAux_qirrel`
-  (`sem` is query-independent) + fuel stability;
-- **soundness** `reachedByW3aAdmitted_derived_edge_sound` (a materialised derived edge ⇒ `sem`;
-  reach-collapse `reachedByW3a_reach_collapse_root` + edge-provenance `reconcileKey_edge_guard`);
-- **completeness** `w3aComplete_derived_edge` (`sem` ⇒ edge; `W3aComplete` = admitted base + a
-  coverage-complete batch of reconcile jobs, `reconcileKey_edge_present` writes+persists);
-- assembly `graph_correct_w3a`; Step C corollaries `*_w3a`.
+W3b machinery (`ReconcileUpos.lean` = write half, `ReconcileUposComplete.lean` = closure+assembly):
+- **write model** `reconcileUposStep`/`reconcileUposKey` — per-candidate insert/remove fold on the
+  key's `upos` list via `putResidue` (faithful to `reconcile_subject`'s userset branch,
+  `processor.py:345-357`; star-free ⇒ `covered = false` ⇒ `want_upos = should`, `want_neg = false`);
+- **congruence spine**: `reach`/`probeNonDerived`/`graphRec`/`checkFn_congr` — `checkFn` reads only
+  the edge/node core, so it is CONSTANT across the upos fold; whole-fold membership
+  characterization `reconcileUposKey_upos_mem` (x ∈ upos-after ⟺ candidate ∧ pass-start guard,
+  or non-candidate ∧ already-present);
+- **read collapse** `probeDerived_uposOnly`/`check_derived_uposOnly` on `ResidueUposOnly` states
+  (star ⇒ false, userset ⇒ `upos.contains`, bare ⇒ the W3a edge probe);
+- **`ReachedByW3b`** (admitted base + interleaved `reconcileKey`/`reconcileUposKey` legs) and the
+  **SHADOW PROJECTION** `reachedByW3b_shadow`: every W3b state has a W3a-admitted shadow with an
+  identical core (`CoreEq`, replay minus upos passes) — ALL W3a edge/reach facts (collapse,
+  terminality, edge soundness, `checkFn_eq_sem`) transfer with zero new induction;
+- **T2a** `reachedByW3b_inv`: full `Inv` with **contentful I6** — `uposEdgeFree` proved for real
+  (a upos member is userset-shaped; every path onto the `RootBoolean` R-node is a single
+  bare-sourced edge), `neg` clauses by emptiness; + residue provenance;
+- **correspondence**: `checkFn_eq_sem_w3b` (subject-generic, via the shadow); `upos` soundness
+  `reachedByW3b_upos_sound`; `upos` persistence `reconcileJobsB_upos_persist` (a same-key
+  re-reconcile re-evaluates the fold-constant guard = `sem` = true, so it keeps the entry);
+  `W3bComplete` (edge jobs cover `sem`-true bare subjects, upos jobs cover `sem`-true usersets);
+  `w3bComplete_derived_edge` / `w3bComplete_derived_upos`; assembly `graph_correct_w3b`.
 
-Step A detail (schema restriction `S↾U`, `semAux_restrict`, the fuel bridge, the state transfer,
-`graphRec_base_eq`) is in `RestrictBase.lean` and the PROOF_STATUS ledger (2026-07-11 entries).
-
-**W3a fragment hypotheses** (all faithful, carried by `graph_correct_w3a`): derived defs are
-`ComputedOnly` ∧ `RootBoolean` with untainted `computed` leaves (`hCO`/`hLU`); `hterm` (every
-derived R: `NoTtuTarget S R ∧ NoStoreSubjectR T R`); `hRootB`, `RewriteMatchDeclared`, `Stratifiable`;
-the W2 fragment on the untainted part (`WF ∧ NodupKeys ∧ RewriteRanked ∧ TtuTuplesetsDirect ∧
-StoreValidRules ∧ StarFreeStore`); the closure `W3aComplete` (admitted base + coverage-complete
-reconcile jobs); and bare-subject star-free queries.
-
----
-
-## The next task — W3b (userset subjects on derived keys → `upos` residue)
-
-**W3a is CLOSED.** Start W3b: the first residue **content** — userset subjects on a derived key. This
-is exactly the scope gap the W3a attack-first found: `sem ⟨us, R, o⟩` can be true for a userset `us`
-(e.g. a userset granted `member` under `viewer := member but not banned`), but the residue-empty read
-returns `false`. W3b makes the read's `upos` branch (`probeDerived`, `State.lean:562-565`) go live so
-usersets are answered.
-
-1. **Attack-first the read + write semantics FIRST** (house rule 2). `#eval` the Python/`sem`
-   behaviour of userset subjects on derived keys against the graph's `probeDerived` `upos` path;
-   read `wildcard.py:398-432`, `_store_residue` (userset branch), boolean spec §7.6, and I6
-   hygiene (`uposEdgeFree` / `uposNegDisjoint` in `Inv`). Record any false statement killed.
-2. **Model `_store_residue` for usersets.** The processor stores a `upos` entry `⟨t,n,p⟩` at the
-   derived key when a userset is a member (edge-free — the P4 rule). The W3a closure currently keeps
-   `ResidueEmpty`; W3b relaxes that to a residue carrying `upos` (still `stars = neg = ∅`), so
-   `reachedByW3a*_inv`'s residue-free conjunct and `check_derived_ResidueEmpty` must be generalised
-   to a `upos`-only residue (new read-collapse lemma reading the `upos` branch).
-3. **Correspondence.** `checkFn` already evaluates the boolean for ANY subject (not just bare); the
-   new work is that a userset's membership lands in `upos` (not an edge) and the read consults `upos`.
-   Reuse `checkFn_eq_sem` (it is subject-generic — the `graphRec_base_eq` operand read holds for any
-   `s`, so only the bare-vs-userset MATERIALISATION differs). Widen `W3aComplete`'s coverage +
-   `w3aComplete_derived_edge` analog to `upos` membership.
-
-**Immediately reusable from W3a** (`ReconcileComplete.lean`): `checkFn_eq_sem` (subject-generic),
-`graphRec_base_eq` / `graphRec_reduce_base_adm`, `reconcileKey_edge_guard` /
-`reconcileKey_edge_present` (adapt to `upos` writes), the `W3aJob`/`reconcileJobs`/`W3aComplete`
-scaffolding, `semAux_qirrel`, `isDerived_declared`.
+Attack-first (2026-07-11, recorded in `ReconcileUpos.lean` header): planned model vs `sem` on a
+180-query grid over `viewer := member but not banned` with userset grants (direct + via computed
+union operand + banned + ghost + the derived key itself as a subject) — no refutation; pass order
+irrelevant, idempotent, P4 non-leak holds, upos members never reach the R-node (I6 confirmed).
 
 ---
 
-## After W3b (the remaining road)
-- **W3c — star data on derived keys (`stars`/`neg`).** The `stars ∖ neg` fallback
-  branch + `negEdgeFree` disjointness (I6) becomes contentful. The T1 `MemberSet`
-  algebra is the reference for residue semantics.
+## The next task — W3c (star data on derived keys → `stars` / `neg`)
+
+**W3b is CLOSED.** Start W3c: the star-coverage residue content. On the derived key the processor
+persists `stars` (the star×boolean fold `plan.stars_fn`, `processor.py:388-389` — which shapes are
+wholesale-covered by wildcard grants through the boolean) and `neg` (star-covered ∧ expr-false
+concrete subjects, `processor.py:391-411`), and the reads' fallback branches go live: bare subject
+⇒ edge probe **∨ (shape ∈ stars ∧ ∉ neg)**; star subject ⇒ `shape ∈ stars`; userset `upos` branch
+gains its `stars`/`neg` fallback. Edge maintenance changes too: `want_edge = should ∧ ¬covered`
+(`processor.py:359`) — a covered subject holds NO edge, so the store is no longer star-free.
+
+1. **Attack-first** (house rule 2): `#eval` the star×boolean fold vs `sem` — the key subtleties are
+   (a) `stars_fn`'s boolean over shape coverage (an `and` of a starred and an unstarred operand is
+   NOT covered; `but not` with a starred subtrahend kills coverage), (b) concrete-only exclusion
+   does not defeat `*` (spec §5.4 — that is what `neg` is for), (c) `want_edge = should ∧ ¬covered`
+   drops edges that W3b would have written. Try to refute the planned read equation
+   `members = edges ∪ upos ∪ (⋃_{σ∈stars} pop(σ) ∖ neg)` against `sem` with wildcard grants on
+   operands. The T1 `MemberSet` algebra (`SetEngine/MemberSet.lean`) is the residue-semantics
+   reference; `boolean spec §5.3-5.4`, `wildcard.py:398-432`.
+2. **Relax `StarFreeStore`.** The W2 base machinery is proved under `StarFreeStore T`; star grants
+   on operand relations materialise as wildcard-bridge edges (W1's machinery). Expect this to be
+   the expensive half: the shadow projection survives (upos/stars writes are still edge-inert),
+   but the base leg needs W1+W2 composition (`ObjStar`/`UsStar` closures + rule routing).
+   Consider sub-staging: W3c-i = stars on the DERIVED key only (operand stores still star-free —
+   `stars_fn` folds over object-wildcard shapes declared for the derived type); W3c-ii = star
+   grants inside operand cones.
+3. **Model + correspondence.** Extend the residue write model with `stars`/`neg` maintenance
+   (wholesale recompute per pass, `processor.py:388-411`); relax `ResidueUposOnly`; new read
+   collapse; extend `W3bComplete` coverage to `neg` candidates (negative-leaf concretes ∪ derived
+   `neg` propagation) and star coverage; `negEdgeFree`/`negStarCovered` (I6) become contentful.
+
+**Immediately reusable from W3b**: the congruence spine + shadow projection pattern
+(`ReconcileUposComplete.lean` — stars/neg writes are `putResidue`-only, so `CoreEq` and
+`checkFn`-constancy carry over verbatim), `reconcileUposKey_upos_mem`-style characterizations,
+`checkFn_eq_sem_w3b`, the `W3bJob` batch scaffolding, `uposAt_of_residue`/`residue_of_uposAt_mem`.
+
+---
+
+## After W3c (the remaining road)
 - **W3d — multi-stratum cascade.** The outbox/watermark loop (`run_cascade`), cross-key
   re-reconcile hazard (an edge write re-reaching an existing residue key), contentful
   T5 (non-empty outbox drained). `processor.py` is the model source.
