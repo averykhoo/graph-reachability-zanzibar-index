@@ -408,4 +408,372 @@ theorem reconcileKeyD_reach_pres {σ0 : GraphState} (T : Store)
         (fun x hx => hcb x (List.mem_cons_of_mem _ hx)) hRns' ?_
       exact nreaches_remove_terminal hRns hv h
 
+/-! ## Endpoint closure survives the diffing fold -/
+
+/-- `writeDirect` preserves edge endpoint-closure (accepted endpoints become nodes). -/
+theorem edgesClosed_writeDirect {σ : GraphState}
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) (t : Tuple) :
+    ∀ ab ∈ (σ.writeDirect t).edges,
+      ab.1 ∈ (σ.writeDirect t).nodes ∧ ab.2 ∈ (σ.writeDirect t).nodes := by
+  intro ab hab
+  rw [writeDirect_edges] at hab
+  rw [writeDirect_nodes]
+  by_cases hadm : σ.admitEdge (subjNode t.subject) (objNode t.object t.relation) = true
+  · rw [if_pos hadm] at hab ⊢
+    rcases List.mem_cons.mp hab with heq | hmem
+    · obtain ⟨h1, h2⟩ := Prod.ext_iff.mp heq
+      rw [h1, h2]
+      exact ⟨List.mem_cons_of_mem _ List.mem_cons_self, List.mem_cons_self⟩
+    · obtain ⟨ha, hb⟩ := hcl ab hmem
+      exact ⟨List.mem_cons_of_mem _ (List.mem_cons_of_mem _ ha),
+        List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hb)⟩
+  · rw [if_neg hadm] at hab ⊢
+    exact hcl ab hab
+
+/-- Removal preserves endpoint-closure (fewer edges, same nodes). -/
+theorem edgesClosed_removeEdgePair {σ : GraphState}
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) (a b : NodeKey) :
+    ∀ ab ∈ (σ.removeEdgePair a b).edges,
+      ab.1 ∈ (σ.removeEdgePair a b).nodes ∧ ab.2 ∈ (σ.removeEdgePair a b).nodes := by
+  intro ab hab
+  rw [removeEdgePair_nodes]
+  exact hcl ab (removeEdgePair_edges_subset σ a b ab hab)
+
+/-- The diffing fold preserves endpoint-closure. -/
+theorem edgesClosed_reconcileKeyD (T : Store) (dt on R : String) (e : Expr) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) →
+      ∀ ab ∈ (σ.reconcileKeyD T dt on R e cands).edges,
+        ab.1 ∈ (σ.reconcileKeyD T dt on R e cands).nodes
+          ∧ ab.2 ∈ (σ.reconcileKeyD T dt on R e cands).nodes := by
+  intro cands
+  induction cands with
+  | nil => intro σ hcl; exact hcl
+  | cons c rest ih =>
+    intro σ hcl
+    rw [reconcileKeyD_cons]
+    split
+    · exact ih _ (edgesClosed_writeDirect hcl _)
+    · exact ih _ (edgesClosed_removeEdgePair hcl _ _)
+
+/-! ## Guard fold-invariance — the diffing pass is operand-read-inert
+
+Both halves of a diffing step touch only edges at the pass's own terminal R-node, so
+every untainted operand read — hence the compiled guard `checkFn` itself — is constant
+along the fold. This is what makes the per-key edge characterisation below well-posed:
+each candidate's `want` is decided once, at pass start. -/
+
+/-- The diffing fold leaves the operand read of every untainted key unchanged, for
+    EVERY subject (the D analog of `graphRec_reconcileKey_inert`; endpoint closure at
+    the fold result is derived, not hypothesised). -/
+theorem graphRec_reconcileKeyD_inert {σ : GraphState} {S : Schema} (T : Store)
+    (dt on R : String) (e : Expr) (cands : List SubjectRef) (hRne : R ≠ BARE)
+    (hcands : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (s : SubjectRef) (dt' on' r' : String) (hunt : isDerived S (dt', r') = false) :
+    GraphModel.graphRec (σ.reconcileKeyD T dt on R e cands) s dt' on' r'
+      = GraphModel.graphRec σ s dt' on' r' := by
+  -- probe targets of the untainted read differ from the reconciled R-node
+  have hvne1 : objNode ⟨dt', on'⟩ r' ≠ objNode ⟨dt, on⟩ R := by
+    intro heq
+    have htype : dt' = dt := by
+      have := congrArg NodeKey.type heq
+      simpa [objNode_type] using this
+    have hpred : r' = R := by
+      have := congrArg NodeKey.pred heq
+      simpa [objNode_pred] using this
+    rw [htype, hpred, hder] at hunt
+    cases hunt
+  have hvne3 : wAllNode dt' r' ≠ objNode ⟨dt, on⟩ R := by
+    unfold wAllNode objNode
+    rw [if_neg honStar]
+    intro heq
+    have := congrArg NodeKey.variant heq
+    simp at this
+  have hcl2 := edgesClosed_reconcileKeyD T dt on R e cands σ hcl
+  have hiff2 := GraphModel.probeNonDerived_iff hcl2 (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+  have hiff1 := GraphModel.probeNonDerived_iff hcl (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+  have hpres1 : ∀ {u : NodeKey},
+      NReaches σ.edges u (objNode ⟨dt', on'⟩ r') →
+      NReaches (σ.reconcileKeyD T dt on R e cands).edges u (objNode ⟨dt', on'⟩ r') :=
+    fun hn => reconcileKeyD_reach_pres T dt on R e cands hRne hvne1 hcands hRns hn
+  have hpres3 : ∀ {u : NodeKey},
+      NReaches σ.edges u (wAllNode dt' r') →
+      NReaches (σ.reconcileKeyD T dt on R e cands).edges u (wAllNode dt' r') :=
+    fun hn => reconcileKeyD_reach_pres T dt on R e cands hRne hvne3 hcands hRns hn
+  have hinert1 : ∀ {u : NodeKey},
+      NReaches (σ.reconcileKeyD T dt on R e cands).edges u (objNode ⟨dt', on'⟩ r') →
+      NReaches σ.edges u (objNode ⟨dt', on'⟩ r') :=
+    fun hn => reconcileKeyD_reach_inert T dt on R e cands hRne hvne1 hcands hRns hn
+  have hinert3 : ∀ {u : NodeKey},
+      NReaches (σ.reconcileKeyD T dt on R e cands).edges u (wAllNode dt' r') →
+      NReaches σ.edges u (wAllNode dt' r') :=
+    fun hn => reconcileKeyD_reach_inert T dt on R e cands hRne hvne3 hcands hRns hn
+  unfold GraphModel.graphRec
+  cases hb2 : GraphModel.probeNonDerived (σ.reconcileKeyD T dt on R e cands)
+      (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+    <;> cases hb1 : GraphModel.probeNonDerived σ (⟨s, r', ⟨dt', on'⟩⟩ : Query)
+  · rfl
+  · exfalso
+    have hd := hiff1.mp hb1
+    have : GraphModel.probeNonDerived (σ.reconcileKeyD T dt on R e cands)
+        (⟨s, r', ⟨dt', on'⟩⟩ : Query) = true := by
+      apply hiff2.mpr
+      rcases hd with h1 | ⟨hs, h2⟩ | ⟨ho, h3⟩ | ⟨hs, ho, h4⟩
+      · exact Or.inl (hpres1 h1)
+      · exact Or.inr (Or.inl ⟨hs, hpres1 h2⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨ho, hpres3 h3⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨hs, ho, hpres3 h4⟩))
+    rw [hb2] at this
+    cases this
+  · exfalso
+    have hd := hiff2.mp hb2
+    have : GraphModel.probeNonDerived σ (⟨s, r', ⟨dt', on'⟩⟩ : Query) = true := by
+      apply hiff1.mpr
+      rcases hd with h1 | ⟨hs, h2⟩ | ⟨ho, h3⟩ | ⟨hs, ho, h4⟩
+      · exact Or.inl (hinert1 h1)
+      · exact Or.inr (Or.inl ⟨hs, hinert1 h2⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨ho, hinert3 h3⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨hs, ho, hinert3 h4⟩))
+    rw [hb1] at this
+    cases this
+  · rfl
+
+/-! ## Per-key edge exactness — the settledness core (ROADMAP W3d-1b)
+
+After ONE diffing pass, the derived edge set at the pass's key is EXACTLY
+`{c ∈ cands : want c at pass start}` plus the untouched edges of non-candidates —
+presence for candidates no longer depends on history. This is the cascade-leg heart
+of the W3d settledness invariant: a re-reconcile genuinely RE-SETTLES its key. -/
+
+/-- The per-candidate edge guard `want = should ∧ ¬covered`
+    (`reconcile_subject`, `processor.py:359`). -/
+def GraphState.wantEdge (σ : GraphState) (T : Store) (dt on R : String) (e : Expr)
+    (c : SubjectRef) : Bool :=
+  σ.checkFn T c dt on R e && !(σ.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)
+
+/-- A one-candidate fold is a single diff step, guard spelled via `wantEdge`. -/
+theorem reconcileKeyD_singleton (σ : GraphState) (T : Store) (dt on R : String)
+    (e : Expr) (c : SubjectRef) :
+    σ.reconcileKeyD T dt on R e [c]
+      = if σ.wantEdge T dt on R e c then σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩
+        else σ.removeEdgePair (subjNode c) (objNode ⟨dt, on⟩ R) := rfl
+
+/-- The guard is fold-invariant: `wantEdge` after the fold equals `wantEdge` at the
+    start (operand-read inertness + the fold never writes residues). -/
+theorem wantEdge_reconcileKeyD_inert {σ : GraphState} {S : Schema} (T : Store)
+    (dt on R : String) (e : Expr) (cands : List SubjectRef) (hRne : R ≠ BARE)
+    (hcands : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e)
+    (hlu : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) (x : SubjectRef) :
+    (σ.reconcileKeyD T dt on R e cands).wantEdge T dt on R e x
+      = σ.wantEdge T dt on R e x := by
+  unfold GraphState.wantEdge
+  have hchk : (σ.reconcileKeyD T dt on R e cands).checkFn T x dt on R e
+      = σ.checkFn T x dt on R e :=
+    checkFn_agree_of_graphRec (S := S) T x dt on R e hco hlu
+      (fun s' r' hr' => graphRec_reconcileKeyD_inert T dt on R e cands hRne hcands hRns
+        honStar hder hcl s' dt on r' hr')
+  have hcov : (σ.reconcileKeyD T dt on R e cands).coveredAt (objNode ⟨dt, on⟩ R) R x.shape
+      = σ.coveredAt (objNode ⟨dt, on⟩ R) R x.shape := by
+    unfold GraphState.coveredAt
+    rw [reconcileKeyD_residue]
+  rw [hchk, hcov]
+
+/-- The accepted derived edge: writing an uncovered wanted candidate at a terminal
+    R-node is always admitted (no self-loop — the preds differ; no back-path — the
+    R-node has no out-edges). -/
+theorem writeDirect_pair_present {σ : GraphState} {c : SubjectRef} {dt on R : String}
+    (hcb : c.predicate = BARE) (hRne : R ≠ BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) :
+    (subjNode c, objNode ⟨dt, on⟩ R) ∈ (σ.writeDirect ⟨c, R, ⟨dt, on⟩⟩).edges := by
+  have hadm : σ.admitEdge (subjNode c) (objNode ⟨dt, on⟩ R) = true := by
+    unfold GraphState.admitEdge
+    rw [Bool.and_eq_true]
+    constructor
+    · rw [bne_iff_ne]
+      intro heq
+      have hpred := congrArg NodeKey.pred heq
+      rw [subjNode_pred, objNode_pred, hcb] at hpred
+      exact hRne hpred.symm
+    · cases hr : σ.reach (objNode ⟨dt, on⟩ R) (subjNode c)
+      · rfl
+      · exfalso
+        obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound hr)
+        exact hRns y hy
+  rw [writeDirect_edges, if_pos hadm]
+  exact List.mem_cons_self
+
+/-- **The per-key edge characterisation** (guards abstracted to a fold-invariant `g`):
+    after the diffing fold, the derived pair of a subject `s` is present iff `s` is a
+    candidate with `g s` true, or a non-candidate whose pair was already present.
+    History for candidates is fully erased — the re-settle. -/
+theorem reconcileKeyD_edge_char {S : Schema} (T : Store) (dt on R : String) (e : Expr)
+    (hRne : R ≠ BARE) (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e)
+    (hlu : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (g : SubjectRef → Bool) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (∀ c ∈ cands, c.predicate = BARE) →
+      (∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) →
+      (∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) →
+      (∀ c ∈ cands, σ.wantEdge T dt on R e c = g c) →
+      ∀ s : SubjectRef,
+        ((subjNode s, objNode ⟨dt, on⟩ R) ∈ (σ.reconcileKeyD T dt on R e cands).edges
+          ↔ ((s ∈ cands ∧ g s = true) ∨
+             (s ∉ cands ∧ (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges))) := by
+  intro cands
+  induction cands with
+  | nil =>
+    intro σ _ _ _ _ s
+    show (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges ↔ _
+    simp
+  | cons c rest ih =>
+    intro σ hcb hRns hcl hg s
+    have hcb1 : ∀ x ∈ [c], x.predicate = BARE := by
+      intro x hx
+      rw [List.mem_singleton.mp hx]
+      exact hcb c List.mem_cons_self
+    -- the step state is the singleton fold
+    have hstep : σ.reconcileKeyD T dt on R e (c :: rest)
+        = (σ.reconcileKeyD T dt on R e [c]).reconcileKeyD T dt on R e rest := rfl
+    set σc := σ.reconcileKeyD T dt on R e [c] with hσc
+    -- step-state facts
+    have hRns1 : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σc.edges :=
+      reconcileKeyD_Rnode_terminal T dt on R e hRne [c] hcb1 σ hRns
+    have hcl1 : ∀ ab ∈ σc.edges, ab.1 ∈ σc.nodes ∧ ab.2 ∈ σc.nodes :=
+      edgesClosed_reconcileKeyD T dt on R e [c] σ hcl
+    have hg1 : ∀ x ∈ rest, σc.wantEdge T dt on R e x = g x := by
+      intro x hx
+      rw [hσc, wantEdge_reconcileKeyD_inert (S := S) T dt on R e [c] hRne hcb1 hRns
+        honStar hder hco hlu hcl x]
+      exact hg x (List.mem_cons_of_mem _ hx)
+    have hgc : σ.wantEdge T dt on R e c = g c := hg c List.mem_cons_self
+    -- the step-state pair membership, characterized
+    have hpairc : ∀ s : SubjectRef,
+        ((subjNode s, objNode ⟨dt, on⟩ R) ∈ σc.edges
+          ↔ ((s = c ∧ g c = true) ∨
+             (s ≠ c ∧ (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges))) := by
+      intro s
+      rw [hσc, reconcileKeyD_singleton, hgc]
+      cases hgcv : g c
+      · -- removal step
+        rw [if_neg (by simp), mem_removeEdgePair_edges]
+        constructor
+        · rintro ⟨hmem, hne⟩
+          refine Or.inr ⟨?_, hmem⟩
+          intro heq
+          exact hne ⟨by rw [heq], rfl⟩
+        · rintro (⟨_, hfalse⟩ | ⟨hne, hmem⟩)
+          · exact absurd hfalse (by simp)
+          · refine ⟨hmem, ?_⟩
+            rintro ⟨h1, _⟩
+            exact hne (subjNode_inj_total h1)
+      · -- write step
+        rw [if_pos rfl, writeDirect_edges]
+        have hadm : σ.admitEdge (subjNode c) (objNode ⟨dt, on⟩ R) = true := by
+          unfold GraphState.admitEdge
+          rw [Bool.and_eq_true]
+          constructor
+          · rw [bne_iff_ne]
+            intro heq
+            have hpred := congrArg NodeKey.pred heq
+            rw [subjNode_pred, objNode_pred, hcb c List.mem_cons_self] at hpred
+            exact hRne hpred.symm
+          · cases hr : σ.reach (objNode ⟨dt, on⟩ R) (subjNode c)
+            · rfl
+            · exfalso
+              obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound hr)
+              exact hRns y hy
+        rw [if_pos hadm]
+        constructor
+        · intro hmem
+          rcases List.mem_cons.mp hmem with heq | hold
+          · have h1 := (Prod.ext_iff.mp heq).1
+            exact Or.inl ⟨subjNode_inj_total h1, rfl⟩
+          · by_cases hsc : s = c
+            · exact Or.inl ⟨hsc, rfl⟩
+            · exact Or.inr ⟨hsc, hold⟩
+        · rintro (⟨hsc, _⟩ | ⟨_, hold⟩)
+          · rw [hsc]
+            exact List.mem_cons_self
+          · exact List.mem_cons_of_mem _ hold
+    -- assemble via the IH at the step state
+    rw [hstep]
+    rw [ih σc (fun x hx => hcb x (List.mem_cons_of_mem _ hx)) hRns1 hcl1 hg1 s]
+    rw [hpairc s]
+    constructor
+    · rintro (⟨hsr, hgs⟩ | ⟨hsr, (⟨hsc, hgc'⟩ | ⟨hsc, hold⟩)⟩)
+      · exact Or.inl ⟨List.mem_cons_of_mem _ hsr, hgs⟩
+      · exact Or.inl ⟨by rw [hsc]; exact List.mem_cons_self, by rw [hsc]; exact hgc'⟩
+      · refine Or.inr ⟨?_, hold⟩
+        intro hmem
+        rcases List.mem_cons.mp hmem with heq | hr
+        · exact hsc heq
+        · exact hsr hr
+    · rintro (⟨hmem, hgs⟩ | ⟨hmem, hold⟩)
+      · rcases List.mem_cons.mp hmem with heq | hr
+        · by_cases hsr : s ∈ rest
+          · exact Or.inl ⟨hsr, hgs⟩
+          · exact Or.inr ⟨hsr, Or.inl ⟨heq, by rw [← heq]; exact hgs⟩⟩
+        · exact Or.inl ⟨hr, hgs⟩
+      · have hsc : s ≠ c := fun heq => hmem (by rw [heq]; exact List.mem_cons_self)
+        have hsr : s ∉ rest := fun hr => hmem (List.mem_cons_of_mem _ hr)
+        exact Or.inr ⟨hsr, Or.inr ⟨hsc, hold⟩⟩
+
+/-- **Pass-level edge exactness** (`reconcileStarsKeyD_edge_char`): after one
+    full-object diffing pass, a subject's derived edge at the key is present iff it is
+    a candidate whose guard holds at the PASS-START state — `checkFn` true and its
+    shape not in the freshly-recomputed `stars` row — or a non-candidate whose edge
+    predates the pass. The wholesale re-settle, as a theorem. -/
+theorem reconcileStarsKeyD_edge_char {S : Schema} {σ : GraphState} (T : Store)
+    (dt on R : String) (e : Expr) (shapes : List Shape)
+    (cands negCands uposCands : List SubjectRef)
+    (hRne : R ≠ BARE) (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e)
+    (hlu : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hcb : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (s : SubjectRef) :
+    ((subjNode s, objNode ⟨dt, on⟩ R)
+        ∈ (σ.reconcileStarsKeyD T dt on R e shapes cands negCands uposCands).edges
+      ↔ ((s ∈ cands ∧ (σ.checkFn T s dt on R e
+            && !((shapes.filter (fun sh => σ.coveredFn T dt on R e sh)).contains
+                  s.shape)) = true) ∨
+         (s ∉ cands ∧ (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges))) := by
+  unfold GraphState.reconcileStarsKeyD
+  set σr := σ.reconcileResidueKey T dt on R e shapes negCands uposCands with hσr
+  have hedges : σr.edges = σ.edges := by rw [hσr]; rfl
+  have hnodes : σr.nodes = σ.nodes := by rw [hσr]; rfl
+  have hRnsr : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σr.edges := by
+    intro y
+    rw [hedges]
+    exact hRns y
+  have hclr : ∀ ab ∈ σr.edges, ab.1 ∈ σr.nodes ∧ ab.2 ∈ σr.nodes := by
+    intro ab hab
+    rw [hedges] at hab
+    rw [hnodes]
+    exact hcl ab hab
+  -- the fold-invariant guard, evaluated at the ORIGINAL σ
+  have hg : ∀ c ∈ cands, σr.wantEdge T dt on R e c
+      = (σ.checkFn T c dt on R e
+          && !((shapes.filter (fun sh => σ.coveredFn T dt on R e sh)).contains c.shape)) := by
+    intro c _
+    unfold GraphState.wantEdge
+    rw [checkFn_congr hedges hnodes T c dt on R e]
+    unfold GraphState.coveredAt
+    rw [hσr, reconcileResidueKey_residue_self]
+    rfl
+  have hchar := reconcileKeyD_edge_char (S := S) T dt on R e hRne honStar hder hco hlu
+    (fun c => σ.checkFn T c dt on R e
+      && !((shapes.filter (fun sh => σ.coveredFn T dt on R e sh)).contains c.shape))
+    cands σr hcb hRnsr hclr hg s
+  rw [hchar, hedges]
+
 end Zanzibar

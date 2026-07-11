@@ -717,4 +717,14 @@ namespace Zanzibar
 #print axioms reconcileKeyD_reach_inert
 #print axioms reconcileKeyD_reach_pres
 
+-- **W3d-1b groundwork — per-key edge EXACTNESS of the diffing pass.** The guard
+-- `wantEdge = checkFn ∧ ¬covered` is fold-invariant (operand-read inertness), so one
+-- full-object diffing pass makes the key's derived edge set EXACTLY the wanted
+-- candidates plus untouched non-candidates — candidate history is erased
+-- (`reconcileStarsKeyD_edge_char`, the cascade-leg heart of settledness):
+#print axioms graphRec_reconcileKeyD_inert
+#print axioms wantEdge_reconcileKeyD_inert
+#print axioms reconcileKeyD_edge_char
+#print axioms reconcileStarsKeyD_edge_char
+
 end Zanzibar
