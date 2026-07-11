@@ -48,6 +48,7 @@ import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
 import ZanzibarProofs.GraphIndex.ReconcileDiff
 import ZanzibarProofs.GraphIndex.Cascade
 import ZanzibarProofs.GraphIndex.CascadeStable
+import ZanzibarProofs.GraphIndex.CascadeSettle
 import ZanzibarProofs.GraphIndex.Correct
 
 -- Equivalence T3 + security T6
