@@ -510,16 +510,18 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
         ∃ dt on e', k = objNode ⟨dt, on⟩ r ∧ isDerived S (dt, r) = true ∧ r ≠ BARE ∧
           on ≠ STAR ∧ S.lookup (dt, r) = some e' ∧
           res.stars = (wildcardShapes S).filter (fun sh => σ0.coveredFn T dt on r e' sh) ∧
-          (∀ n ∈ res.neg, res.stars.contains n.shape = true ∧ n.name ≠ STAR) ∧
+          (∀ n ∈ res.neg, res.stars.contains n.shape = true ∧ n.name ≠ STAR ∧
+            σ0.checkFn T n dt on r e' = false) ∧
           (∀ n ∈ res.upos, res.stars.contains n.shape = false ∧ n.predicate ≠ BARE ∧
-            n.name ≠ STAR)) ∧
+            n.name ≠ STAR ∧ σ0.checkFn T n dt on r e' = true)) ∧
       (∀ (dt on r : String) (e' : Expr), isDerived S (dt, r) = true →
         S.lookup (dt, r) = some e' → on ≠ STAR →
         ∀ u, (u, objNode ⟨dt, on⟩ r) ∈ σ.edges →
           (u, objNode ⟨dt, on⟩ r) ∈ σ0.edges ∨
           ∃ c : SubjectRef, u = subjNode c ∧ c.predicate = BARE ∧ c.name ≠ STAR ∧
             ((wildcardShapes S).filter
-              (fun sh => σ0.coveredFn T dt on r e' sh)).contains c.shape = false) := by
+              (fun sh => σ0.coveredFn T dt on r e' sh)).contains c.shape = false ∧
+            σ0.checkFn T c dt on r e' = true) := by
   induction h with
   | base hr =>
     refine ⟨_, hr, fun _ _ _ _ _ => rfl, ?_, ?_⟩
@@ -581,15 +583,17 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
       exact graphRec_reconcileKey_inert T dt on R e _ hRne
         (fun c hc => hcands c (List.mem_of_mem_filter hc)) hRns1 honStar hder hcl1 hcl2
         s dt'' on'' r' hunt
+    -- checkFn at the pass start equals the canonical (base) checkFn — any subject
+    have hchk_eq : ∀ (x : SubjectRef), σp.checkFn T x dt on R e = σ0.checkFn T x dt on R e :=
+      fun x => checkFn_agree_of_graphRec T x dt on R e (hCO dt R e hlke hder)
+        (hLU dt R e hlke hder) (fun s' r' hr' => hag s' dt on r' hr')
     -- the pass-start star filter equals the canonical (base) star filter
     have hstars_eq : (wildcardShapes S).filter (fun sh => σp.coveredFn T dt on R e sh)
         = (wildcardShapes S).filter (fun sh => σ0.coveredFn T dt on R e sh) := by
       apply List.filter_congr
       intro sh _
       unfold GraphState.coveredFn
-      rw [checkFn_agree_of_graphRec T (starSubj sh) dt on R e
-        (hCO dt R e hlke hder) (hLU dt R e hlke hder)
-        (fun s' r' hr' => hag s' dt on r' hr')]
+      rw [hchk_eq (starSubj sh)]
     refine ⟨σ0, hσ0, ?_, ?_, ?_⟩
     · -- (1) operand-read agreement carries through the pass
       intro s dt'' on'' r' hunt
@@ -610,37 +614,82 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
         · intro n hn
           obtain ⟨hnmem, hnfil⟩ := List.mem_filter.mp hn
           simp only [Bool.and_eq_true, Bool.not_eq_true'] at hnfil
-          exact ⟨hnfil.1, hnegStar n hnmem⟩
+          refine ⟨hnfil.1, hnegStar n hnmem, ?_⟩
+          rw [hr, ← hchk_eq n]
+          exact hnfil.2
         · intro n hn
           obtain ⟨hnmem, hnfil⟩ := List.mem_filter.mp hn
           simp only [Bool.and_eq_true, Bool.not_eq_true'] at hnfil
-          exact ⟨hnfil.1, huposP n hnmem, huposStar n hnmem⟩
+          refine ⟨hnfil.1, huposP n hnmem, huposStar n hnmem, ?_⟩
+          rw [hr, ← hchk_eq n]
+          exact hnfil.2
       · rw [reconcileStarsKey_residue_other hkey] at hresrow
         exact hres k r res hresrow
     · -- (3) R-node in-edges: old edges by IH, new edges are canonically uncovered
+      -- AND canonically guard-true (`reconcileKey_edge_guard` + prefix-mid-state inertness)
       intro dtq onq rq eq' hderq hlkq honq u hu
       rw [hsplit] at hu
-      rcases reconcileKey_edge_sound T dt on R e _ u _ hu with hold | ⟨c, hcmem, hueq, hbeq⟩
+      rcases reconcileKey_edge_guard _ σ1 hu with hold | ⟨pre, c, hpre, hc, hueq, hbeq, hchk⟩
       · -- an old edge of σ1 = σp
         rw [hσ1e] at hold
         exact hedge dtq onq rq eq' hderq hlkq honq u hold
-      · -- a new edge: same key by injectivity, source canonically uncovered
+      · -- a new edge: same key by injectivity
         obtain ⟨hdt, hon, hR⟩ := objNode_inj_of_ne_star honq honStar hbeq
         have he : eq' = e := by
           rw [hdt, hR] at hlkq
           exact Option.some.inj (hlkq.symm.trans hlke)
-        obtain ⟨hcmem', hcunc⟩ := List.mem_filter.mp hcmem
-        refine Or.inr ⟨c, hueq, hcands c hcmem', hcStar c hcmem', ?_⟩
-        rw [hdt, hon, hR, he]
-        -- the persisted row the guard read is the pass-start filter = the canonical filter
-        have hrow : σ1.coveredAt (objNode ⟨dt, on⟩ R) R c.shape
-            = ((wildcardShapes S).filter
-                (fun sh => σp.coveredFn T dt on R e sh)).contains c.shape := by
-          unfold GraphState.coveredAt
-          rw [hσ1, reconcileResidueKey_residue_self]
-          rfl
-        rw [← hstars_eq, ← hrow]
-        simpa using hcunc
+        obtain ⟨hcmem', hcunc⟩ := List.mem_filter.mp hc
+        -- the prefix mid-state's guard is the canonical guard: the mid-state is
+        -- core-shadowed by a W3a-admitted state, and the prefix fold is operand-inert
+        have hpre_bare : ∀ x ∈ pre, x.predicate = BARE := fun x hx =>
+          hcands x (List.mem_of_mem_filter (hpre.subset hx))
+        obtain ⟨σ', hσ', hcore⟩ := reachedByW3c_shadow hprev
+        have hcore1 : CoreEq σ' σ1 := by
+          rw [hσ1]
+          exact reconcileResidueKey_coreEq hcore T dt on R e (wildcardShapes S)
+            negCands uposCands
+        have hmidAdm : ReachedByW3aAdmitted (σ'.reconcileKey T dt on R e pre) S T :=
+          ReachedByW3aAdmitted.reconcile dt on R e pre hRne hpre_bare hder hlke
+            (fun x hx => hcStar x (List.mem_of_mem_filter (hpre.subset hx))) honStar hσ'
+        have hcoremid : CoreEq (σ'.reconcileKey T dt on R e pre)
+            (σ1.reconcileKey T dt on R e pre) := reconcileKey_coreEq pre hcore1
+        have hclmid : ∀ ab ∈ (σ1.reconcileKey T dt on R e pre).edges,
+            ab.1 ∈ (σ1.reconcileKey T dt on R e pre).nodes
+              ∧ ab.2 ∈ (σ1.reconcileKey T dt on R e pre).nodes := by
+          have hInvm := (reachedByW3a_inv (reachedByW3aAdmitted_toW3a hmidAdm)).1
+          intro ab hab
+          rw [← hcoremid.edges] at hab
+          rw [← hcoremid.nodes]
+          exact hInvm.edgesClosed ab hab
+        have hmidag : ∀ (s : SubjectRef) (r' : String), isDerived S (dt, r') = false →
+            GraphModel.graphRec (σ1.reconcileKey T dt on R e pre) s dt on r'
+              = GraphModel.graphRec σ1 s dt on r' :=
+          fun s r' hunt' => graphRec_reconcileKey_inert T dt on R e pre hRne hpre_bare
+            hRns1 honStar hder hcl1 hclmid s dt on r' hunt'
+        have hguard0 : σ0.checkFn T c dt on R e = true := by
+          have h1 : (σ1.reconcileKey T dt on R e pre).checkFn T c dt on R e
+              = σ1.checkFn T c dt on R e :=
+            checkFn_agree_of_graphRec T c dt on R e (hCO dt R e hlke hder)
+              (hLU dt R e hlke hder) hmidag
+          have h2 : σ1.checkFn T c dt on R e = σp.checkFn T c dt on R e :=
+            checkFn_agree_of_graphRec T c dt on R e (hCO dt R e hlke hder)
+              (hLU dt R e hlke hder) (fun s' r' _ => hag1 s' dt on r')
+          have hcv := hchk
+          rw [h1, h2, hchk_eq c] at hcv
+          exact hcv
+        refine Or.inr ⟨c, hueq, hcands c hcmem', hcStar c hcmem', ?_, ?_⟩
+        · rw [hdt, hon, hR, he]
+          -- the persisted row the guard read is the pass-start filter = the canonical filter
+          have hrow : σ1.coveredAt (objNode ⟨dt, on⟩ R) R c.shape
+              = ((wildcardShapes S).filter
+                  (fun sh => σp.coveredFn T dt on R e sh)).contains c.shape := by
+            unfold GraphState.coveredAt
+            rw [hσ1, reconcileResidueKey_residue_self]
+            rfl
+          rw [← hstars_eq, ← hrow]
+          simpa using hcunc
+        · rw [hdt, hon, hR, he]
+          exact hguard0
 
 /-! ## T2a at W3c — the full invariant, every I6 clause contentful -/
 
@@ -695,12 +744,12 @@ theorem reachedByW3c_inv {σ : GraphState} {S : Schema} {T : Store}
         rw [hcore.edges]; exact hreach
       have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hNK hlkr hroot hW3a hreach'
       rw [hcore.edges] at hedge1
-      rcases hedge dt on r e' hderr hlkr honr (subjNode n) hedge1 with hbase | ⟨c, huc, _, hcs, hunc⟩
+      rcases hedge dt on r e' hderr hlkr honr (subjNode n) hedge1 with hbase | ⟨c, huc, _, hcs, hunc, _⟩
       · -- a base in-edge of a RootBoolean R-node is impossible
         exact reachedByRules_RootBoolean_no_inedge hSV hNK hlkr hroot
           (reachedByRules_of_admitted hσ0) (subjNode n) hbase
       · -- the reconcile edge's source is n itself: covered AND uncovered
-        obtain ⟨hcov, hnstar⟩ := hnegm n hn
+        obtain ⟨hcov, hnstar, _⟩ := hnegm n hn
         have hcn : c = n := subjNode_inj_of_ne_star hcs hnstar huc.symm
         rw [hstars] at hcov
         rw [hcn] at hunc
@@ -717,16 +766,16 @@ theorem reachedByW3c_inv {σ : GraphState} {S : Schema} {T : Store}
         rw [hcore.edges]; exact hreach
       have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hNK hlkr hroot hW3a hreach'
       rw [hcore.edges] at hedge1
-      rcases hedge dt on r e' hderr hlkr honr (subjNode n) hedge1 with hbase | ⟨c, huc, hcb, hcs, _⟩
+      rcases hedge dt on r e' hderr hlkr honr (subjNode n) hedge1 with hbase | ⟨c, huc, hcb, hcs, _, _⟩
       · exact reachedByRules_RootBoolean_no_inedge hSV hNK hlkr hroot
           (reachedByRules_of_admitted hσ0) (subjNode n) hbase
-      · obtain ⟨_, hnp, hnstar⟩ := huposm n hn
+      · obtain ⟨_, hnp, hnstar, _⟩ := huposm n hn
         have hcn : c = n := subjNode_inj_of_ne_star hcs hnstar huc.symm
         exact hnp (hcn ▸ hcb)
     · -- uposNegDisjoint: ¬covered (upos) vs covered (neg), same row
       intro k r res hrow n hn
       obtain ⟨_, _, _, _, _, _, _, _, _, hnegm, huposm⟩ := hres k r res hrow
-      obtain ⟨hnunc, _, _⟩ := huposm n hn
+      obtain ⟨hnunc, _, _, _⟩ := huposm n hn
       cases hcontains : res.neg.contains n
       · rfl
       · exfalso

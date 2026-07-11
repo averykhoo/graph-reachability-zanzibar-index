@@ -590,7 +590,11 @@ namespace Zanzibar
 -- W3a fold lemmas transfer); the shadow projection `reachedByW3c_shadow`; and STAR-GENERAL
 -- operand-read inertness `graphRec_reconcileKey_inert` (NO `StarFreeStore` — all four probe
 -- targets of an untainted-key read differ from the terminal R-node), which pins every persisted
--- `stars` row to the canonical star set of the chain base (`reachedByW3c_master`). T2a
+-- `stars` row to the canonical star set of the chain base (`reachedByW3c_master`) — and, via
+-- `reconcileKey_edge_guard` + prefix-mid-state inertness, pins GUARD CANONICITY: every `neg`
+-- member is canonically expr-false, every `upos` member canonically expr-true, every reconcile
+-- edge source canonically expr-true and uncovered (the graph-internal half of the W3c read
+-- correspondence; composing with a star-relaxed base equation `checkFn = sem` is what remains). T2a
 -- `reachedByW3c_inv`: the full `Inv` with ALL FOUR I6 clauses contentful for the first time —
 -- `negStarCovered` (write-time filter), `uposNegDisjoint` (covered vs ¬covered, same row),
 -- `uposEdgeFree` (userset member vs bare-sourced single edge), and `negEdgeFree` (the space rule
