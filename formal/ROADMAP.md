@@ -10,9 +10,11 @@ verified Zanzibar/OpenFGA model tied to the Python implementation.** Read alongs
 
 1. **`sem` (Lean) is the normative spec.** It is tied to the Python
    implementation *executably*: the conformance harness (`zcli` +
-   `formal/conformance/`, 60 tests) checks `sem` = oracle = real Python set
-   engine over 15 schema corpora. This is the model↔implementation bridge and
-   it is already load-bearing (it caught the `fuelBound` spec bug).
+   `formal/conformance/`, 98 tests as of 12k) checks `sem` = oracle = real
+   Python set engine over 17 schema corpora — and, since Phase 6, the Lean
+   OPERATIONAL graph model (zcli mode `"graph"`) against the real Python graph
+   index over the 15 in-fragment corpora. This is the model↔implementation
+   bridge and it is already load-bearing (it caught the `fuelBound` spec bug).
 2. **T1 (set engine = `sem`): ✅ DONE, axiom-clean.**
 3. **T2 (graph index = `sem`): ✅ CLOSED (W4, 2026-07-12j).** Stated over the
    **operational write-closure** `ReachedBy := ReachedByW3d2E`, grown through
@@ -29,11 +31,14 @@ verified Zanzibar/OpenFGA model tied to the Python implementation.** Read alongs
    proved: confinement (`Spec/Confine.lean`) + taint-fixpoint / untainted
    counting (`Spec/Stabilize.lean`) + strict-Kahn rank induction
    (`Spec/WellDef.lean`). Axiom-clean.
-6. **Phase 6 hardening** closes the loop: sorries = 0, axiom audit as a hard
-   gate, and a **graph-model conformance extension** (drive the Lean
-   `writeDirect`/`check` model against the Python graph index over the fragment
-   corpora) so the *graph* side of the verified model is also executably tied
-   to the implementation, like `sem` already is.
+6. **Phase 6 hardening ✅ items 1–3 CLOSED (2026-07-12k)**: sorries = 0, axiom
+   audit as a hard gate, the **graph-model conformance extension** (the Lean
+   operational chain run by `GraphIndex/Exec.lean`'s `graphRun` — with honesty
+   theorems tying the driver to `ReachedBy` and its verdicts to `sem` — diffed
+   against the Python graph index over the fragment corpora, hard-gated), plus
+   `CORRESPONDENCE.md` and `FINAL_REVIEW.md`. Remaining extras are optional
+   (FINAL_REVIEW §4): state-level conformance, exhaustive enumeration,
+   fragment widening, remove legs.
 
 Original 9 sorries; ✅ CLOSED by proof: T4, T0b, T1, and (at fragment scope,
 restated) T2a/T2b/T3/T5/T6. ⚠ 2 sorries were **DELETED as false-as-stated, not
@@ -923,8 +928,18 @@ and re-proves/widens the same named theorems. Every stage must keep
   tuples (`w_all`) beyond W1b; userset-star tuples beyond W1c; removes (add-only
   chain); star-subject queries with non-BARE predicate.
 - **T0a**: ✅ DONE (2026-07-10) — see its section below.
-- **Phase 6**: sorry gate to 0, audit as hard gate, graph-model conformance
-  extension (above), final review doc.
+- **Phase 6**: sorry gate to 0 ✅, audit as hard gate ✅ (both 2026-07-10);
+  graph-model conformance extension ✅, `CORRESPONDENCE.md` ✅, final review doc
+  (`FINAL_REVIEW.md`, plan-§7 wording + clause cross-check) ✅ (all 2026-07-12k).
+  **Phase 6 items 1–3 CLOSED.** The graph-state mode: `GraphIndex/Exec.lean`
+  (`graphRun` = the `ReachedBy` chain's own constructors as a driver, honesty
+  theorems `graphRun_reached` / `graphRun_check_eq_sem`; zcli mode `"graph"`
+  refuses non-admitted / non-drained runs), gated in `verify.sh` step 5 over the
+  15 `GRAPH_FRAGMENT` corpora incl. two designed attack corpora. Attack findings
+  (12k): stale-edge re-settle and star-churn parity GREEN; out-of-fragment
+  probes (union-rooted taint, object wildcards) ALSO green — fragment exclusions
+  are proof-scope-driven, not behavioral. Open (recorded in FINAL_REVIEW §4):
+  state-level conformance equality; exhaustive small-scope enumeration.
 
 ---
 

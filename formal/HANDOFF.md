@@ -33,7 +33,8 @@ never rounds up to "the code is formally verified" (plan §7).
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
    + **0 sorries** + zcli + axiom audit (only `[propext, Classical.choice, Quot.sound]`)
-   + 60 Python conformance tests. Add new key theorems to `lean/ZanzibarProofs/Audit.lean`.
+   + 98 Python conformance tests (incl. the Phase-6 graph-state mode). Add new key
+   theorems to `lean/ZanzibarProofs/Audit.lean`.
 4. **Rhythm.** Commit each green increment with a `formal: <stage> — <what>` message;
    push at session end. Before ending: update this file's "The next task" + add a
    PROOF_STATUS.md session entry (top) + tick the ROADMAP stage marker.
@@ -62,7 +63,7 @@ not `rw [f]`. `omega` treats `∑`-atoms as opaque — good for combining sum `h
 `NReaches` is head-oriented: back-append is `NReaches.tail`; back-REPLACE needs
 last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
-## State of the world (2026-07-12j — all sorry-free, axiom-clean, verify.sh green)
+## State of the world (2026-07-12k — all sorry-free, axiom-clean, verify.sh green)
 
 | theorem | file (`lean/ZanzibarProofs/`) | scope |
 |---|---|---|
@@ -102,7 +103,9 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | **W4 T2a groundwork** — `StructInv` / edge-free I6 (`ResidueHygienic`) / `ResidueDeclared` at every `ReachedByW3d2`/`W3d2C`/`W3d2E` state (E-chain versions HYPOTHESIS-FREE, `enumJobs2At_keyFacts`); **pass-local I6** `reconcileStarsKeyDR_row_edge_consistent` (+ `enumJob2_negCands_subset`) — the routed pass's row is edge-consistent with its OWN audit, no settled verdicts, so it holds at re-dirtied stale keys (12h attack shape) where the W3d-1 coverage route can't go | `GraphIndex/CascadeStrataInv.lean` | the fragment-free 3 of 8 `Inv` clauses over the OPERATIONAL chain + the core of the edge-referencing 2 |
 | **W4 T2a ASSEMBLY — `reachedByW3d2E_inv` (full 8-clause `Inv`, every state) + the final `graph_reached_inv`** (`EdgeHyg1` direct-edge form; `edgeHyg1_applyLoggedR`/`_reconcileJobsLR`/`_runCascade2` — pass-local at the job key, other-key fixedness elsewhere, batch of ENUMERATED jobs; `reachedByW3d2E_edgeHyg1`→`_edgeHygienic` via the reach collapse; write legs via `writeLeg_derived_inedges_eq`) | `GraphIndex/CascadeStrataEdge.lean` + `FullScope.lean` | **W4 CLOSED.** T2a over `ReachedBy` with the provenance-split bundles; W1 direct version renamed `graph_reached_inv_direct` |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ✅ → W3d-2 ✅ → W4 ✅ (CLOSED 2026-07-12j — full T2a/T2b/T3/T6 over `ReachedBy := ReachedByW3d2E`).** Remaining: **Phase 6 hardening only.**
+| **Phase 6 driver honesty** — `foldAdmitsB_iff` / **`graphRun_reached`** / `graphRun_store` / `drainedB_iff` / **`graphRun_check_eq_sem`** | `GraphIndex/Exec.lean` | the zcli graph mode IS the chain: the driver folds the `ReachedBy` constructors, its runtime gates decide the theorem's side conditions, and under the W4 bundles every printed verdict is `sem` |
+
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ✅ → W3d-2 ✅ → W4 ✅ (CLOSED 2026-07-12j — full T2a/T2b/T3/T6 over `ReachedBy := ReachedByW3d2E`). Phase 6 items 1–3 ✅ (CLOSED 2026-07-12k — graph-state conformance mode + `CORRESPONDENCE.md` + `FINAL_REVIEW.md`).**
 
 **W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* PROOF_STATUS entries and the
 ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
@@ -131,41 +134,39 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 
 ---
 
-## The next task — Phase 6 (hardening): graph-state conformance mode, CORRESPONDENCE.md, final review doc
+## The next task — Phase 6 extras (optional hardening), in FINAL_REVIEW §4 order
 
-**W4 is CLOSED (2026-07-12j — READ THE TOP PROOF_STATUS ENTRY).** The full
-verified-model arc T1 (set engine = `sem`) + T2a/T2b (graph index `Inv` + `check
-= sem`) + T3/T6 (equivalence + security) now stands over the operational closure
-`ReachedBy := ReachedByW3d2E`, with the honest `GraphAdmission`/`W4Fragment`
-hypothesis split (`FullScope.lean`) and non-vacuity witnesses. What remains is
-**Phase 6 hardening** — closing the loop between the Lean model and the Python
-implementation on the GRAPH side, the way `sem` is already tied via `zcli`:
+**Phase 6 items 1–3 are CLOSED (2026-07-12k — READ THE TOP PROOF_STATUS ENTRY).**
+The arc is complete and documented: T1 + T2a/T2b + T3/T6 over `ReachedBy`, the
+graph-state conformance mode (`GraphIndex/Exec.lean` + zcli mode `"graph"` +
+`test_conformance_graph.py`, hard-gated in verify.sh — 98 conformance tests),
+`CORRESPONDENCE.md` (the auditable Lean↔Python map), and `FINAL_REVIEW.md` (the
+plan-§7 claim, clause-checked, with the two explicitly-unearned clauses named).
+No open blocker for the claim as written in FINAL_REVIEW.md.
 
-1. **Graph-state conformance mode** (the contentful piece). Today
-   `formal/conformance/` + `zcli` drive the Lean `sem` against the oracle and the
-   real Python SET engine over 15 corpora (60 tests). Extend it to drive the Lean
-   `writeDirect`/`check` GRAPH model against the PYTHON graph index
-   (`index_v4`/`WildcardIndex`) over the fragment corpora: emit the model's
-   materialized edge/residue state (or just its `check` verdicts) and diff against
-   the Python `WildcardIndex.check`. Start read-only (`check` parity on a fixed
-   store) before attempting write-path/state parity. Keep it a hard gate in
-   `verify.sh` if it lands green. Faithfulness note: the Lean model is add-only and
-   fragment-scoped — pick corpora inside `W4Fragment` (the witnesses `Sx`/`Tx` are
-   a starting seed) so the comparison is apples-to-apples.
-2. **`CORRESPONDENCE.md`** — the Lean-def ↔ Python-file:line map (the citations
-   already scattered through the proof headers and `GraphAdmission`/`W4Fragment`
-   field docs, collected into one table). This is what makes the "the code is
-   pinned to the model" claim auditable.
-3. **Final review doc** using plan §7 wording VERBATIM (the honest claim: a
-   machine-checked proof that both backends compute `sem`, with the Python pinned
-   to the Lean models by the conformance harness — never rounded up to "the code
-   is formally verified"). Cross-check every claim against what is actually proved
-   (the `Audit.lean` axiom-clean list) and the honest gaps (ROADMAP "W4 — honest
-   gaps": the fragment carries `rootB`/`computedOnly`/`twoStrata`/`wsBare`/
-   `bareStar`/`ttuStarFree`/`term` are all real scope restrictions).
+What remains is OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
 
-Attack-first still applies: before claiming graph-state parity, try to REFUTE it
-on a cross-stratum / stale-edge corpus (the 12h attack shape is a natural probe).
+1. **State-level graph conformance** — extend zcli graph mode to EMIT the
+   model's materialized state (edges + residue rows) and diff against the
+   Python `EdgeV4`/`ResidueV1` rows (via a test-only extractor under
+   `formal/conformance/`; the Python modules stay read-only). This would earn
+   §7's "state-level equality" clause. Faithfulness care: node/edge encodings
+   differ (the model's `NodeKey` vs Python node rows; Python materializes
+   transitive closure edges and wildcard bridges the model reads via probes) —
+   define the comparison at a representation-neutral level (e.g. per-key residue
+   `(stars, neg)` sets + direct-edge presence) and document any projection.
+2. **Exhaustive small-scope enumeration** — all stores up to k tuples over 2–3
+   names per fragment schema shape; would earn §7's enumeration clause.
+3. **Fragment widening** — union-rooted derived defs first (`rootB` gap; the
+   12k probe found NO behavioral divergence there, so the model is likely
+   already faithful and only the proof is missing).
+4. **Remove legs** (the diffing pass models retraction but the chain is
+   add-only).
+
+Attack-first applies to each: for (1), before trusting a state diff, craft a
+corpus where check-parity holds but state differs (e.g. a redundant edge or a
+residue row Python prunes lazily) — that's the shape a state gate exists to
+catch; record whatever it finds.
 
 ---
 
@@ -176,11 +177,12 @@ on a cross-stratum / stale-edge corpus (the 12h attack shape is a natural probe)
   W2-subsumption lemmas, non-vacuity witnesses, the T2a fragment-free layers +
   pass-local I6 (`CascadeStrataInv.lean`), and the edge-hygiene ASSEMBLY
   (`CascadeStrataEdge.lean`: `EdgeHyg1` → `reachedByW3d2E_inv`).
-- **Phase 6 — hardening.** (a) graph-model conformance extension: drive the Lean
-  `writeDirect`/`check` model against the PYTHON graph index over the fragment corpora
-  (zcli already exists for `sem`; add a graph-state mode); (b) `CORRESPONDENCE.md`
-  (Lean def ↔ Python file:line map); (c) final review doc using plan §7 wording
-  verbatim.
+- **Phase 6 — hardening. ✅ items 1–3 CLOSED (2026-07-12k).** (a) the graph-state
+  conformance mode (`Exec.lean` driver + honesty theorems, zcli `"graph"`,
+  `test_conformance_graph.py` hard gate, attack corpora + findings);
+  (b) `CORRESPONDENCE.md`; (c) `FINAL_REVIEW.md` (plan §7 verbatim + cross-check).
+  Remaining extras (optional, FINAL_REVIEW §4): state-level conformance,
+  exhaustive small-scope enumeration, fragment widening, remove legs.
 
 Historical detail for every closed stage: `PROOF_STATUS.md` (ledger, newest first)
 and `ROADMAP.md` (designs + post-mortems).

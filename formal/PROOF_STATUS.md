@@ -8,6 +8,62 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12k (Phase 6 items 1–3 — graph-state conformance mode + CORRESPONDENCE.md + FINAL_REVIEW.md; **Phase 6 core CLOSED**)
+
+Resuming from HANDOFF "The next task — Phase 6". Two green+pushed increments;
+`verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms audit +
+**98** conformance tests, up from 60).
+
+**Increment 1 — the graph-state conformance mode (the contentful piece).**
+- **`GraphIndex/Exec.lean`** — the executable driver, built so the CLI is not a
+  second model but the CHAIN ITSELF: `foldAdmitsB` (+ `foldAdmitsB_iff`: the
+  runtime admission check DECIDES `FoldAdmits`), `cascadeLeg` (verbatim the
+  `cascade` constructor target), `graphRun` (per input tuple one admitted logged
+  write + one two-round cascade leg — synchronous v1), **`graphRun_reached`**
+  (every driver output is a `ReachedBy` state), `graphRun_store`, `drainedB_iff`,
+  and the capstone **`graphRun_check_eq_sem`** (under `GraphAdmission` +
+  `W4Fragment`, every verdict the CLI prints for an in-scope query IS `sem` —
+  `graph_correct` applied to the driver). 5 new Audit entries, standard axioms.
+- **zcli mode `"graph"`** (`Cli.lean`): runs `graphRun`, REFUSES (rc 2/3) on
+  admission failure or a non-drained final state — out-of-scope inputs fail
+  loudly instead of comparing garbage.
+- **Harness** (`formal/conformance/`): `backends.graphindex_answers` drives the
+  REAL `WildcardIndex` + `DeltaProcessor` through the synchronous write path
+  (mirror of `tests/test_matrix.py::GraphBackend`, paranoia ON);
+  `test_conformance_graph.py` gates lean-graph vs py-graph AND lean-graph vs
+  `sem` over the proved query scope (concrete objects, bare star subjects);
+  corpus gains **`cross_stratum_resettle`** (the 12h stale-edge shape: settle a
+  stratum-2 derived edge, then ban its subject at stratum 1 — the diffing pass
+  must retract) and **`star_two_strata_churn`** (bare star feeding two strata,
+  exclusions arriving after the star settles), plus the `GRAPH_FRAGMENT`
+  registry (15 in-fragment corpora; 2 documented exclusions).
+- **Attack-first findings (scratch probe, deleted after recording in corpus.py):**
+  both attack corpora GREEN; both OUT-of-fragment corpora probed anyway —
+  `taint_union_over_boolean` (union-rooted derived def, rootB gap) and a
+  hand-crafted object-wildcard corpus with concrete-object queries: **0
+  mismatches**. The fragment exclusions are proof-scope-driven, NOT observed
+  behavioral divergences. No adjudication events.
+
+**Increment 2 — the audit backbone + the final claim.**
+- **`CORRESPONDENCE.md`**: the Lean-def ↔ Python-file:line map in 7 layers
+  (spec / set engine / graph state+reads / write path / cascade / operational
+  closure+driver / intentional divergences), each row citing the enforcing
+  mechanism; the conformance-gate table up top.
+- **`FINAL_REVIEW.md`**: plan §7 quoted VERBATIM, then a clause-by-clause
+  cross-check. Two §7 clauses explicitly NOT claimed (state-level conformance
+  equality; exhaustive small-scope enumeration — what exists is check-level
+  five-corner conformance + seeded randomized fuzzing), fragment scope
+  explicitly subtracted; theorem inventory in English; the full residual-risk
+  list; next-marginal-assurance ranking. README.md claim/status refreshed.
+
+**Resume →** Phase 6 hardening extras, in FINAL_REVIEW §4 order: (a)
+state-level graph conformance (emit model edge/residue state, diff against
+`EdgeV4`/`ResidueV1`); (b) exhaustive small-scope enumeration; (c) fragment
+widening (union roots first — the 12k probe suggests the model is already
+faithful there); (d) remove legs. None is a blocker for the claim as written.
+
+---
+
 ## Session 2026-07-12j (W4 T2a ASSEMBLY — `reachedByW3d2E_inv` + `graph_reached_inv`; **W4 CLOSED**)
 
 Resuming from HANDOFF "The next task — W4 T2a assembly". One green+pushed

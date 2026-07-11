@@ -30,31 +30,36 @@ formal/
   PROOF_STATUS.md    -- append-only ledger
   ROADMAP.md         -- staged plan + designs
   REVIEW.md          -- historical session digest (2026-07-09→10)
-  CORRESPONDENCE.md  -- Lean def ↔ Python file:line map (Phase 6, not yet written)
+  CORRESPONDENCE.md  -- Lean def ↔ Python file:line map (the audit backbone)
+  FINAL_REVIEW.md    -- the final claim (plan §7 verbatim + clause cross-check)
   verify.sh          -- the one-command green gate
   lean/              -- the Lean 4 development
   conformance/       -- pytest harness pinning Python to the Lean models
 ```
 
-## The claim (what this will and will NOT prove)
+## The claim (what this does and does NOT prove)
 
-When complete, the honest claim is: the set-engine and graph-index **algorithms**,
+**See `FINAL_REVIEW.md`** — the plan-§7 claim verbatim, cross-checked clause by
+clause against the tree. Short form: the set-engine and graph-index **algorithms**,
 as modeled in Lean at the level of `CORRESPONDENCE.md`, are proven to compute the
-stratified perfect model and hence to be equivalent (machine-checked, axiom-audited).
-The **Python implementations** are pinned to those models by structural correspondence
-review, six-way differential conformance including state-level equality, and
-exhaustive small-scope enumeration. Residual unverified surface: the interner/bitmap
-representation layer, the SQL/transaction/concurrency layer, non-stratifiable schemas,
-`expand`/`lookup`, and the fidelity of the model-to-code correspondence itself.
+stratified perfect model and hence to be equivalent (machine-checked, axiom-audited;
+set engine at full scope, graph index at the documented `W4Fragment` scope). The
+**Python implementations** are pinned to those models by the correspondence map and
+check-level differential conformance (98 tests, including the Lean operational graph
+model vs the real graph index). Not yet earned: state-level conformance equality and
+exhaustive small-scope enumeration. Residual unverified surface: the fragment carries,
+the interner/bitmap representation layer, the SQL/transaction/concurrency layer,
+non-stratifiable schemas, `expand`/`lookup`, and the fidelity of the model-to-code
+correspondence itself.
 
-**This never rounds up to "the code is formally verified."** See the plan's §7
-honesty clause; the final report will use its wording verbatim.
+**This never rounds up to "the code is formally verified."**
 
 ## Status
 
-See `HANDOFF.md` (kept current every session). Snapshot 2026-07-11: the tree is
-**sorry-free and axiom-clean** (`bash formal/verify.sh` = build + 0 sorries + axiom
-audit + 60 conformance tests, all green). T1/T0a/T0b/T4 fully closed; T2/T3/T5/T6
-proved at staged fragment scope — W1 (wildcards) and W2 (rule routing) closed
-end-to-end, W3a (derived booleans) in flight; W4 (full scope) and Phase-6 hardening
-remain.
+See `HANDOFF.md` (kept current every session). Snapshot 2026-07-12k: the tree is
+**sorry-free and axiom-clean** (`bash formal/verify.sh` = build + 0 sorries + zcli +
+axiom audit + 98 conformance tests, all green). T0a/T0b/T1/T4 fully closed;
+T2a/T2b/T3/T5/T6 closed over the operational closure `ReachedBy` at `W4Fragment`
+scope (staged widening W1→W4 complete); Phase 6 hardening: graph-state conformance
+mode, `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` landed — state-level conformance
+remains the open item.
