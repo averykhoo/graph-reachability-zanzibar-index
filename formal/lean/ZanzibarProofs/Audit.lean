@@ -21,6 +21,7 @@ import ZanzibarProofs.GraphIndex.Reconcile
 import ZanzibarProofs.GraphIndex.ReconcileWrite
 import ZanzibarProofs.GraphIndex.ReconcileCorrect
 import ZanzibarProofs.GraphIndex.RestrictBase
+import ZanzibarProofs.GraphIndex.ReconcileComplete
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -495,5 +496,17 @@ namespace Zanzibar
 -- and the W2 conditions on the base. This discharges the W3a correspondence blocker `hag` on an
 -- admitted base. Standard axioms only:
 #print axioms graphRec_base_eq
+
+-- **The `check_fn` ↔ `sem` bridge (2026-07-11) — Step B increment 1.** `checkFn_eq_sem`: on a
+-- W3a-*admitted* state `σ`, the compiled `check_fn` for a bare subject `s` at a `ComputedOnly`
+-- derived key `(dt, R)` (untainted computed leaves) equals `sem S T ⟨s, R, ⟨dt,on⟩⟩`. Composes
+-- `graphRec_reduce_base_adm` (operand reads reduce to the admitted base — the admitted analog of
+-- `graphRec_reduce_base`), `graphRec_base_eq` (base read = `sem`), `semAux_qirrel` (`sem` never
+-- reads the query except through `instances`, which discards it — so the operand `sem` at query
+-- `⟨s,r',o⟩` feeds `checkFn_eq_semStep`'s enclosing query `⟨s,R,o⟩`), and T0a fuel stability.
+-- Standard axioms only:
+#print axioms semAux_qirrel
+#print axioms graphRec_reduce_base_adm
+#print axioms checkFn_eq_sem
 
 end Zanzibar
