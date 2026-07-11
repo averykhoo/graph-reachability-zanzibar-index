@@ -536,4 +536,47 @@ namespace Zanzibar
 #print axioms exclusion_effective_w3a
 #print axioms no_ghost_grant_w3a
 
+-- **ROADMAP W3b — the userset `upos` residue (GraphIndex/ReconcileUpos.lean, 2026-07-11).**
+-- The write model `reconcileUposKey` (per-candidate insert/remove on the `upos` list, faithful to
+-- `reconcile_subject`'s userset branch — edge-free, blind-audit P4), the congruence spine (`checkFn`
+-- reads only the edge/node core, hence is constant across the upos fold), the whole-fold membership
+-- characterization, and the W3b read collapse (`probeDerived` on a `upos`-only residue table:
+-- star ⇒ false, userset ⇒ `upos` membership, bare ⇒ the W3a edge probe). Standard axioms only:
+#print axioms checkFn_congr
+#print axioms reconcileUposKey_upos_mem
+#print axioms GraphModel.probeDerived_uposOnly
+#print axioms GraphModel.check_derived_uposOnly
+
+-- **W3b closure + shadow projection + T2a (GraphIndex/ReconcileUposComplete.lean, 2026-07-11).**
+-- `ReachedByW3b` (admitted base + interleaved bare-edge and userset-upos passes); the SHADOW
+-- PROJECTION `reachedByW3b_shadow` (every W3b state has a W3a-admitted shadow with identical core,
+-- so all W3a edge/reach facts transfer); residue provenance; `reachedByW3b_inv` — the full `Inv`
+-- with CONTENTFUL I6 (`uposEdgeFree` proved for real: a upos member is userset-shaped while every
+-- path onto the `RootBoolean` R-node is a single bare-sourced edge). Standard axioms only:
+#print axioms reachedByW3b_shadow
+#print axioms reachedByW3b_residue_provenance
+#print axioms reachedByW3b_inv
+
+-- **W3b correspondence + assembly (2026-07-11).** `checkFn_eq_sem_w3b` (subject-generic, via the
+-- shadow); `upos` soundness (an entry witnesses `sem`, the fold-constant guard at the W3b pass-start
+-- state); `upos` persistence + userset completeness (`w3bComplete_derived_upos`: the covering upos
+-- job writes the entry, later jobs keep it — a same-key re-reconcile re-evaluates the guard, which
+-- is `sem = true`); bare completeness through the covering edge job; and the W3b assembly
+-- `graph_correct_w3b`: `check = sem` on EVERY star-free query — the W3a bare-subject scope
+-- restriction is lifted, userset subjects on derived keys are answered by `upos`. Standard axioms
+-- only:
+#print axioms checkFn_eq_sem_w3b
+#print axioms reachedByW3b_upos_sound
+#print axioms reconcileJobsB_upos_persist
+#print axioms w3bComplete_derived_edge
+#print axioms w3bComplete_derived_upos
+#print axioms graph_correct_w3b
+
+-- **T3/T6 at W3b scope (2026-07-11).** The backend-equivalence / deny-propagation / no-ghost-grant
+-- corollaries with the bare-subject hypothesis GONE — T6a now covers a userset subject excluded by
+-- a derived `but not` (the P4 non-leak, both directions). Standard axioms only:
+#print axioms backend_equivalence_w3b
+#print axioms exclusion_effective_w3b
+#print axioms no_ghost_grant_w3b
+
 end Zanzibar

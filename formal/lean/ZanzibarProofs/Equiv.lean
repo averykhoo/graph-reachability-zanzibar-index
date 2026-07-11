@@ -4,6 +4,7 @@ import ZanzibarProofs.GraphIndex.ObjStarClosure
 import ZanzibarProofs.GraphIndex.UsStarClosure
 import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.ReconcileComplete
+import ZanzibarProofs.GraphIndex.ReconcileUposComplete
 
 /-!
 # T3 / T6 — equivalence and the security corollaries
@@ -254,6 +255,68 @@ theorem no_ghost_grant_w3a (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
   rw [graph_correct_w3a q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
+  exact hDeny
+
+/-! ## W3b (userset subjects on derived keys — the `upos` residue) scope — via `graph_correct_w3b`
+
+The W3a bare-subject restriction is LIFTED: the graph's edge-free `upos` residue now answers userset
+subjects on derived keys (blind-audit P4), so the corollaries hold for **every** star-free query.
+The schema fragment is unchanged (one `RootBoolean` derived stratum over untainted operands). -/
+
+/-- **T3 (equivalence), W3b scope.** Both backends agree on the star-free derived boolean fragment
+    for bare AND userset subjects (T1 ∘ `graph_correct_w3b`). -/
+theorem backend_equivalence_w3b (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : W3bComplete S T σ) (hValid : AllValid T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR) :
+    SetEngineModel.check S T q = GraphModel.check σ q := by
+  rw [setEngine_correct S T q hWF hStrat hValid,
+      graph_correct_w3b q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqs hqo]
+
+/-- **T6a (deny-propagation), W3b scope.** Whenever the spec denies, both backends deny — now
+    including a userset subject excluded by a derived `but not` (the P4 non-leak: a userset's
+    `upos` grant never bleeds past a member's own exclusion, and vice versa). -/
+theorem exclusion_effective_w3b (S : Schema) (T : Store) (σ : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : W3bComplete S T σ) (hValid : AllValid T)
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T q = false) :
+    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+  refine ⟨?_, ?_⟩
+  · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
+  · rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqs hqo]
+    exact hDeny
+
+/-- **T6b (no-ghost-grant), W3b scope.** If removing a tuple makes the spec deny, the graph backend
+    denies after the removal — no stale `upos` entry or derived edge survives its support. -/
+theorem no_ghost_grant_w3b (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T') (hSF : StarFreeStore T')
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : W3bComplete S T' σ')
+    (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
+    (hDeny : sem S T' q = false) :
+    GraphModel.check σ' q = false := by
+  rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqs hqo]
   exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)
