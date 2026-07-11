@@ -1008,4 +1008,34 @@ namespace Zanzibar
 #print axioms probeDerived_eq_sem_settled
 #print axioms checkFnR_eq_sem_settled
 
+-- **W3d-2 settledness transports (GraphIndex/CascadeStrataSettle.lean, 2026-07-12e,
+-- same session).** The per-ROUND transport layer for the stratum-staged settledness
+-- induction: routed other-key fixity (`applyLoggedR_other_key_fixed` /
+-- `reconcileJobsLR_other_key_fixed` -- a routed logged batch touches no residue row
+-- and no in-edge at any untargeted concrete key) with the batch-level
+-- `SettledKey`/`CompleteKey` transports (`settledKey_jobsLR_untargeted` /
+-- `completeKey_jobsLR_untargeted`); the STRATUM FENCE `round2_key_reads_derived`
+-- (a key in round-2 scope reads a derived operand -- the (A)-half of the no-abort
+-- analysis factored out: round 2 never targets a stratum-1 key, so round-1
+-- settlements survive round 2); and the WRITE-LEG layer at both strata:
+-- `writeLeg_probeDerived_stable` (the derived read is write-inert: residue fixed,
+-- reach into the R-node single-edge on both sides with the in-edge set fixed by
+-- I5), `writeLeg_checkFnR_stable` (the routed guard of an unmapped key is stable --
+-- untainted leaves by fan-out completeness, derived leaves by the above),
+-- `writeLeg_sem_stable_sh` (stratum-1 `sem` stability, chain-agnostic restatement
+-- consumable at W3d-2 states), `settledKey_writeLeg_sem`/`completeKey_writeLeg_sem`
+-- (representation transports given `sem` stability, stratum-generic), and
+-- **`writeLeg_sem_stable2`** -- at a derived-reading key unmapped both directly and
+-- through every derived operand key (the attack-confirmed third disjunct), `sem`
+-- is unchanged: the stratum-staged bridge at both ends of the leg (operand
+-- settledness transported by the stratum-1 half), the routed guard stable in the
+-- middle, store-irrelevance joining. Standard axioms only:
+#print axioms reconcileJobsLR_other_key_fixed
+#print axioms settledKey_jobsLR_untargeted
+#print axioms completeKey_jobsLR_untargeted
+#print axioms round2_key_reads_derived
+#print axioms writeLeg_checkFnR_stable
+#print axioms writeLeg_sem_stable_sh
+#print axioms writeLeg_sem_stable2
+
 end Zanzibar
