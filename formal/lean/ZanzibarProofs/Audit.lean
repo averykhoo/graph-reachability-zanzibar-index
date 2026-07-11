@@ -22,6 +22,7 @@ import ZanzibarProofs.GraphIndex.ReconcileWrite
 import ZanzibarProofs.GraphIndex.ReconcileCorrect
 import ZanzibarProofs.GraphIndex.RestrictBase
 import ZanzibarProofs.GraphIndex.ReconcileComplete
+import ZanzibarProofs.GraphIndex.ReconcileStars
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -578,5 +579,27 @@ namespace Zanzibar
 #print axioms backend_equivalence_w3b
 #print axioms exclusion_effective_w3b
 #print axioms no_ghost_grant_w3b
+
+-- **ROADMAP W3c — star coverage and the `stars`/`neg` residue, write half + T2a
+-- (GraphIndex/ReconcileStars.lean, 2026-07-11).** The wholesale residue recompute
+-- `reconcileResidueKey` (stars = the star-subject `checkFn` filter — the pointwise form of the
+-- compiled star fold `plan.stars_fn`; `neg` = covered ∧ expr-false; `upos` gains its ¬covered
+-- guard) and the covered-guarded edge fold (`want_edge = should ∧ ¬covered`). Three structural
+-- devices: the COVERED-FILTER COLLAPSE `reconcileKeyC_eq_filter` (the covered guard is
+-- fold-constant, so the W3c edge fold IS a W3a `reconcileKey` on the filtered candidates — all
+-- W3a fold lemmas transfer); the shadow projection `reachedByW3c_shadow`; and STAR-GENERAL
+-- operand-read inertness `graphRec_reconcileKey_inert` (NO `StarFreeStore` — all four probe
+-- targets of an untainted-key read differ from the terminal R-node), which pins every persisted
+-- `stars` row to the canonical star set of the chain base (`reachedByW3c_master`). T2a
+-- `reachedByW3c_inv`: the full `Inv` with ALL FOUR I6 clauses contentful for the first time —
+-- `negStarCovered` (write-time filter), `uposNegDisjoint` (covered vs ¬covered, same row),
+-- `uposEdgeFree` (userset member vs bare-sourced single edge), and `negEdgeFree` (the space rule
+-- cross-pass: a `neg` member is canonically covered, every reconcile edge source canonically
+-- uncovered) — with no `StarFreeStore` hypothesis anywhere. Standard axioms only:
+#print axioms reconcileKeyC_eq_filter
+#print axioms reachedByW3c_shadow
+#print axioms graphRec_reconcileKey_inert
+#print axioms reachedByW3c_master
+#print axioms reachedByW3c_inv
 
 end Zanzibar
