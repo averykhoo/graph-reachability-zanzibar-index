@@ -1048,4 +1048,261 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
       completeKey_congr rfl rfl
         (completeKey_jobsLR_untargeted hjv2 hnot2 hon hsettled1.2)⟩
 
+/-! ## `sem` is false at every derived key over the empty store — BOTH strata
+
+The stratum-2 extension of `sem_nil_derived_false`: the stratum-staged bridge at the
+empty chain state (whose stratum-1 keys are VACUOUSLY settled — empty representation,
+`sem` false by the stratum-1 lemma) turns the claim into "the routed guard reads an
+edgeless, residueless graph", where every leaf — untainted probe or derived read —
+is false. -/
+
+theorem sem_nil_derived_false2 {S : Schema}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (htermS : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOnly e)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hLU2e : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    {s : SubjectRef} (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    sem S [] ⟨s, R, ⟨dt, on⟩⟩ = false := by
+  have hSV : StoreValidRules S ([] : Store) := fun t ht => absurd ht List.not_mem_nil
+  have hBS : BareStarStore ([] : Store) := fun t ht => absurd ht List.not_mem_nil
+  have hTS : TtuStarFree S ([] : Store) := fun t ht => absurd ht List.not_mem_nil
+  have hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR ([] : Store) R :=
+    fun dt R hd => ⟨htermS dt R hd, fun t ht => absurd ht List.not_mem_nil⟩
+  have hco := hCO _ _ _ hlk hder
+  have hchain : ReachedByW3d2 (emptyState S) S [] := ReachedByW3d2.empty S
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow hchain hNK hRootB hSV hterm
+  have hσS : (emptyState S).schema = S := reachedByW3d2_schema hchain
+  have hreach : ∀ u v, (emptyState S).reach u v = false := by
+    intro u v
+    cases hr : (emptyState S).reach u v
+    · rfl
+    · exfalso
+      have hN := reach_sound hr
+      cases hN with
+      | edge hmem => simp [emptyState] at hmem
+      | head hmem _ => simp [emptyState] at hmem
+  -- every derived operand key is (vacuously) settled+complete+collapsed at empty
+  have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S [] (emptyState S) dt on r' ∧
+      CompleteKey S [] (emptyState S) dt on r' ∧
+      (∀ u, NReaches (emptyState S).edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ (emptyState S).edges) := by
+    intro r' hr' hd'
+    obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+    have hco' := hCO _ _ _ hlk' hd'
+    have hlu' := hLU2e r' hr' hd' e' hlk'
+    have hsemF' : ∀ (x : SubjectRef), (x.name = STAR → x.predicate = BARE) →
+        sem S [] ⟨x, r', ⟨dt, on⟩⟩ = false :=
+      fun x hx => sem_nil_derived_false hWF hTT hNK hR hRootB hMatch hStrat htermS
+        hlk' hco' hlu' hx hon
+    refine ⟨⟨?_, ?_⟩, ⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    · intro res hres
+      simp [emptyState] at hres
+    · intro x _ _ hedge
+      simp [emptyState] at hedge
+    · intro sh hws hsm
+      have := hsemF' (starSubj sh) (fun _ => hWSbare sh hws)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro x _ hstar hsm _
+      have := hsemF' x (fun hx => absurd hx hstar)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro x _ hstar hsm
+      have := hsemF' x (fun hx => absurd hx hstar)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro x hstar hws hsemStar _
+      have := hsemF' (starSubj x.shape) (fun _ => hWSbare _ hws)
+      rw [hsemStar] at this
+      exact absurd this (by decide)
+    · intro u hu
+      obtain ⟨y, hy⟩ := nreaches_first_edge hu
+      simp [emptyState] at hy
+  rw [← checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+    hCO hWSbare h0 hsh hσS hlk hder hco hLU2e hops hs hon]
+  -- the routed guard at the empty state reads all leaves false
+  cases hc : (emptyState S).checkFnR ([] : Store) s dt on R e
+  · rfl
+  · exfalso
+    unfold GraphState.checkFnR at hc
+    obtain ⟨r', _hr', hleaf⟩ := evalE_computedOnly_true_leaf e hco hc
+    unfold GraphModel.graphRecR at hleaf
+    cases hd' : isDerived S (dt, r') with
+    | false =>
+      rw [GraphModel.check_untainted _ _ (by rw [hσS]; exact hd')] at hleaf
+      unfold GraphModel.probeNonDerived at hleaf
+      simp [hreach] at hleaf
+    | true =>
+      rw [GraphModel.check_derived _ _ (by rw [hσS]; exact hd')] at hleaf
+      obtain ⟨st, sn, sp⟩ := s
+      rw [probeDerived_eq _ hon] at hleaf
+      have hrow : (emptyState S).residue (objNode ⟨dt, on⟩ r') r' = none := by
+        simp [emptyState]
+      rw [hrow] at hleaf
+      simp [Residue.empty, hreach] at hleaf
+
+/-! ## The stratum-staged settledness invariant
+
+The 12e attack-shaped THREE-disjunct form: at every `ReachedByW3d2C` state, every
+declared derived key at a concrete object is DIRTY, or has a dirty DERIVED OPERAND
+key (the attack-confirmed third disjunct: a write can never dirty a stratum-2 key
+directly — its rows reach only stratum-1 R-nodes), or is settled+complete. -/
+
+theorem reachedByW3d2C_settled {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2C σ S T) :
+    WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
+    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+    RewriteMatchDeclared S → Stratifiable S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOnly e) →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false) →
+    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    StoreValidRules S T → BareStarStore T → TtuStarFree S T →
+    (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    ∀ dt on R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → on ≠ STAR →
+      (dt, R, on) ∈ cascadeKeys S σ ∨
+      (∃ r' ∈ computedRefs e, isDerived S (dt, r') = true ∧
+        (dt, r', on) ∈ cascadeKeys S σ) ∨
+      (SettledKey S T σ dt on R ∧ CompleteKey S T σ dt on R) := by
+  induction h with
+  | empty S =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare _hSV _hBS _hTS hterm
+      dt on R e hlk hder hon
+    have hsemF : ∀ (x : SubjectRef), (x.name = STAR → x.predicate = BARE) →
+        sem S [] ⟨x, R, ⟨dt, on⟩⟩ = false :=
+      fun x hx => sem_nil_derived_false2 hWF hTT hNK hR hRootB hMatch hStrat
+        (fun dt R hd => (hterm dt R hd).1) hCO hWSbare hlk hder
+        (hLU2 dt R e hlk hder) hx hon
+    refine Or.inr (Or.inr ⟨⟨?_, ?_⟩, ?_, ?_, ?_, ?_⟩)
+    · intro res hres
+      simp [emptyState] at hres
+    · intro s _ _ hedge
+      simp [emptyState] at hedge
+    · intro sh hws hsm
+      have := hsemF (starSubj sh) (fun _ => hWSbare sh hws)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro s _ hstar hsm _
+      have := hsemF s (fun hx => absurd hx hstar)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro s _ hstar hsm
+      have := hsemF s (fun hx => absurd hx hstar)
+      rw [hsm] at this
+      exact absurd this (by decide)
+    · intro s hstar hws hsemStar _
+      have := hsemF (starSubj s.shape) (fun _ => hWSbare _ hws)
+      rw [hsemStar] at this
+      exact absurd this (by decide)
+  | @write σp S T t hadm hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+      dt on R e hlk hder hon
+    by_cases hmap : (dt, R, on) ∈ cascadeKeys S (σp.writeLoggedRules S t)
+    · exact Or.inl hmap
+    by_cases hopmap : ∃ r' ∈ computedRefs e, isDerived S (dt, r') = true ∧
+        (dt, r', on) ∈ cascadeKeys S (σp.writeLoggedRules S t)
+    · exact Or.inr (Or.inl hopmap)
+    have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+    have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+    have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+    have htermw : ∀ dt R, isDerived S (dt, R) = true →
+        NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+      fun dt R hd => ⟨(hterm dt R hd).1,
+        fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+    have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hprev
+    have hclp := reachedByW3d2_edgesClosed hW3d2
+    rcases ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw htermw
+        dt on R e hlk hder hon with hdirty | hopdirty | ⟨hset, hcomp⟩
+    · exact absurd (cascadeKeys_writeLeg_mono hclp _ hdirty) hmap
+    · obtain ⟨r', hr', hd', hdirty'⟩ := hopdirty
+      exact absurd ⟨r', hr', hd', cascadeKeys_writeLeg_mono hclp _ hdirty'⟩ hopmap
+    · -- settled at σp, key and every derived operand key unmapped: `sem` stable at
+      -- BOTH strata and the representation write-inert
+      have hopsSettled : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+          SettledKey S T σp dt on r' ∧ CompleteKey S T σp dt on r' := by
+        intro r' hr' hd'
+        obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+        rcases ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw
+            htermw dt on r' e' hlk' hd' hon with hdirty' | hopdirty' | hsc
+        · exact absurd ⟨r', hr', hd', cascadeKeys_writeLeg_mono hclp _ hdirty'⟩ hopmap
+        · obtain ⟨r'', hr'', hd'', _⟩ := hopdirty'
+          cases (hLU2 dt R e hlk hder r' hr' hd' e' hlk' r'' hr'').symm.trans hd''
+        · exact hsc
+      have hopsUnmapped : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+          (dt, r', on) ∉ cascadeKeys S (σp.writeLoggedRules S t) :=
+        fun r' hr' hd' hmem => hopmap ⟨r', hr', hd', hmem⟩
+      have hsem : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
+          sem S (t :: T) ⟨x, R, ⟨dt, on⟩⟩ = sem S T ⟨x, R, ⟨dt, on⟩⟩ :=
+        fun x hx => writeLeg_sem_stable2 hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat
+          hterm hCO hLU2 hWSbare hW3d2 hadm hlk hder hmap hopsUnmapped hopsSettled hx hon
+      exact Or.inr (Or.inr
+        ⟨settledKey_writeLeg_sem hNK hSV hRootB hWSbare hlk hder hsem hset,
+          completeKey_writeLeg_sem hNK hSV hRootB hWSbare hlk hder hsem hcomp⟩)
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 hcover1 hscope1 hcover2 hscope2 hcovg1 hcovg2
+      hprev ih =>
+    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+      dt on R e hlk hder hon
+    have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hprev
+    by_cases htgt : ∃ j ∈ jobs1 ++ jobs2, j.keyMatch dt on R
+    · -- targeted ⇒ re-settled by the two-round settle theorem
+      have hopsBase : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+          (dt, r', on) ∈ cascadeKeys S σp ∨
+          (SettledKey S T σp dt on r' ∧ CompleteKey S T σp dt on r') := by
+        intro r' hr' hd'
+        obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+        rcases ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+            dt on r' e' hlk' hd' hon with hdirty' | hopdirty' | hsc
+        · exact Or.inl hdirty'
+        · obtain ⟨r'', hr'', hd'', _⟩ := hopdirty'
+          cases (hLU2 dt R e hlk hder r' hr' hd' e' hlk' r'' hr'').symm.trans hd''
+        · exact Or.inr hsc
+      exact Or.inr (Or.inr (settledComplete_cascade2_targeted hWF hTT hNK hR hSV hBS hTS
+        hRootB hMatch hStrat hterm hCO hLU2 hWSbare hW3d2 hjv1 hjv2 hcover1 hcover2
+        hscope2 hcovg1 hcovg2 hlk hder hon hopsBase htgt))
+    · -- untargeted: both dirty disjuncts force a targeting job; settled transports
+      have hnot1 : ∀ j ∈ jobs1, ¬ j.keyMatch dt on R :=
+        fun j hj hkm => htgt ⟨j, List.mem_append_left _ hj, hkm⟩
+      have hnot2 : ∀ j ∈ jobs2, ¬ j.keyMatch dt on R :=
+        fun j hj hkm => htgt ⟨j, List.mem_append_right _ hj, hkm⟩
+      rcases ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+          dt on R e hlk hder hon with hdirty | hopdirty | ⟨hset, hcomp⟩
+      · exfalso
+        obtain ⟨j, hj, hkey⟩ := hcover1 _ hdirty
+        have h1 : j.dt = dt := congrArg Prod.fst hkey
+        have h23 : (j.R, j.on) = (R, on) := congrArg Prod.snd hkey
+        have h2 : j.R = R := congrArg Prod.fst h23
+        have h3 : j.on = on := congrArg Prod.snd h23
+        exact htgt ⟨j, List.mem_append_left _ hj, h1, h3, h2⟩
+      · exfalso
+        obtain ⟨r', hr', hd', hdirty'⟩ := hopdirty
+        obtain ⟨j1, hj1, hkey1⟩ := hcover1 _ hdirty'
+        have hscope := round1_emission_dirties (σ := σp) (T := T) hj1 hlk hder hr' hon
+          hkey1
+        obtain ⟨j2, hj2, hkey2⟩ := hcover2 _ hscope
+        have h1 : j2.dt = dt := congrArg Prod.fst hkey2
+        have h23 : (j2.R, j2.on) = (R, on) := congrArg Prod.snd hkey2
+        have h2 : j2.R = R := congrArg Prod.fst h23
+        have h3 : j2.on = on := congrArg Prod.snd h23
+        exact htgt ⟨j2, List.mem_append_right _ hj2, h1, h3, h2⟩
+      · have hacc := runCascade2_no_abort hterm hLU2 hjv1 hjv2 hscope2 hW3d2
+        refine Or.inr (Or.inr ?_)
+        rw [hacc]
+        exact ⟨settledKey_congr rfl rfl (settledKey_jobsLR_untargeted hjv2 hnot2 hon
+            (settledKey_jobsLR_untargeted hjv1 hnot1 hon hset)),
+          completeKey_congr rfl rfl (completeKey_jobsLR_untargeted hjv2 hnot2 hon
+            (completeKey_jobsLR_untargeted hjv1 hnot1 hon hcomp))⟩
+
 end Zanzibar
