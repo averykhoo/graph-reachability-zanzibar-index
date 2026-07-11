@@ -8,6 +8,80 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11g (W3d-1b core — fan-out completeness, the untainted-core shadow / W3d read bridge, settledness transport)
+
+Resuming from HANDOFF "W3d-1b (continued): settledness + read bridge". Three green+pushed
+increments, all in the new `GraphIndex/CascadeStable.lean` (+ root import, Audit 24 new
+entries); `verify.sh` green throughout (build + 0 sorries + zcli + standard-axioms audit +
+60 conformance).
+
+**Attack-first (machine-checked `#eval` vs the real `graphRec`/`cascadeKeys`/`sem`; scratch
+deleted; recorded in the CascadeStable header).** The fan-out completeness statement was
+hunted per the HANDOFF list — every IN-fragment hunt CONFIRMED it (multi-hop userset cones
+`dave → group:eng → doc:1#member` incl. 2-hop `group:sub`; sibling computed routing
+`editor@doc:3` dirtying the viewer key through decision-1's per-routed-edge rows; bare star
+grants dirtying via the routed edge's concrete head — probe-2 sources are irrelevant, only
+TARGETS matter; ghost writes onto fresh nodes fuel-inert at closed states; cross-key `excl`
+writes). **OUT-of-fragment REFUTATION live**: an object-star write `member@doc:*` flips
+probe 3 (`reach (subjNode s) (wAllNode doc member)`) at EVERY object of the type while
+mapping NO keys — the routed head is the `wAll` node, name `STAR`, which
+`_map_deltas_to_keys` skips (`processor.py:604-605`). Python is immune (its closure's
+out-bridges land per-flip rows at CONCRETE ends); the model's decision-1 row reconstruction
+has no out-bridges — so plain edge targets (`BareStarStore`'s object-star-freeness) is
+load-bearing, threaded as `reachedByW3d_edges_target_plain`. A second attack pass confirmed
+`checkFn_eq_sem_w3d`'s EVERY-state scope: guard = `sem` across a 6-write chain with three
+deliberately uncascaded mid-transaction states (the DERIVED read goes stale, never the guard).
+
+**Increment 1 — fan-out completeness (contrapositive).** `nreaches_factor` (a new path
+factors through a marked edge, rest-of-path from its head); `writeLoggedRules_edge_delta`
+(every new edge carries an outbox row above the unchanged watermark at the edge's own
+head); `mem_affectedKeys` (intro form of the LeafFamily/`via='computed'` branch);
+`reachedByW3d_edgesClosed` + `reachedByW3d_edges_target_plain` (closure/plain-targets over
+the whole interleaved chain); **`writeLeg_reach_stable` / `writeLeg_graphRec_stable` /
+`writeLeg_checkFn_stable`** — an unmapped derived key's operand reads, hence its pass
+guard, are unchanged by a logged write leg. Plus `cascadeKeys_writeLeg_mono` (dirty keys
+stay dirty until a cascade — frontier rows persist, reach cones grow).
+
+**Increment 2 — the untainted-core shadow + the W3d read bridge.** The W3a shadow does not
+extend over diffing passes; the replacement `UntaintedShadow S σ σ0`: a rules-ADMITTED
+state on the CURRENT store agreeing with σ off the derived R-nodes (σ's extra edges all
+target terminal `DerNode`s; `shadow_reach_agree` — through-hops die on terminality,
+landings mismatch untainted targets). NEW content vs W3c's `CoreEq` shadow: the write-leg
+ADMISSION transfer (`shadow_admitEdge_agree`/`untaintedShadow_foldAdmits` — the cycle
+probe's back-reach target is a closure subject node, never a `DerNode` under `hterm`), so
+the logged fold and the shadow's `writeRules` fold accept the same edges. Cascade legs keep
+the shadow with σ0 FIXED (pass edges are DerNode-targeted; removals never hit shadow edges
+— `reachedByRules_RootBoolean_no_inedge`). `reachedByW3d_shadow` (induction; store hyps
+right of the colon, prefix-weakened). **`checkFn_eq_sem_w3d`: guard = `sem` at EVERY W3d
+state**, cascaded or not.
+
+**Increment 3 — settledness transport.** (a) Mid-batch shadows: `untaintedShadow_applyD` /
+`untaintedShadow_reconcileJobsD` — every PREFIX state of a cascade's job loop keeps the
+shadow, so the read bridge holds MID-BATCH (the tool the targeted-key re-settlement will
+consume; `untaintedShadow_cascade` refactored through it). (b) Write-leg representation
+fixity: `writeLoggedRules_residue` (rows write-inert) + `writeLeg_derived_inedges_eq` (no
+routed edge lands on a `RootBoolean` R-node — stored `(dt,R)` tuples need a `Direct` arm,
+rewrite outputs need a rule onto `(dt,R)`, both dead: model-level I5 exclusivity). (c)
+**`writeLeg_sem_stable`** — at an UNMAPPED key the write doesn't change `sem` either:
+guard = `sem` on BOTH sides (the bridge at both stores; `checkFn_store_irrel` on
+`ComputedOnly`) and the guard is stable (fan-out completeness). (d) `SettledKey` (the
+soundness-side per-key predicate: row members carry their `sem` verdicts vs the CURRENT
+store, derived edges witness `sem`-true bare star-free subjects) transports across write
+legs at unmapped keys (`settledKey_writeLeg`) and across cascade legs at untargeted keys
+(`settledKey_cascade_untargeted`, via `reconcileJobsD_other_key_fixed`).
+
+**Proof-engineering notes.** (1) `induction h` (h : ReachedByW3d σ S T) auto-reverts even
+schema-only hypotheses (`NodupKeys S` mentions the index S) — put them right of the colon
+and re-intro per case, like the store hyps. (2) The double-bridge trick in
+`writeLeg_sem_stable` converts a GRAPH stability fact into a SEMANTIC one: sem(t::T) =
+guard σ' = guard σ = sem(T) — each equality by an already-proved theorem; no new sem-level
+induction needed.
+
+**Resume → W3d-1b remaining (see HANDOFF "The next task"): cascade-leg RE-settlement at
+targeted keys, the settledness invariant assembly, `graph_correct_w3d`.**
+
+---
+
 ## Session 2026-07-11f (W3d-1b attack — add-only pass REFUTED; the DIFFING edge audit; per-key edge exactness)
 
 Resuming from HANDOFF "W3d-1b: fan-out completeness — attack-first". Two green+pushed

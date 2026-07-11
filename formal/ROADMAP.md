@@ -440,11 +440,26 @@ and re-proves/widens the same named theorems. Every stage must keep
     (`reconcileStarsKeyD_edge_char`): one full-object pass makes the key's derived
     edge set exactly `{c ∈ cands : checkFn ∧ shape ∉ fresh stars}` plus untouched
     non-candidate edges — candidate history erased, the wholesale re-settle as a
-    theorem. REMAINING: write-leg `sem` stability off the mapped keys (the fan-out
-    contrapositive), the settledness invariant over `ReachedByW3d` (write legs keep
-    unmapped keys settled; cascade legs re-settle mapped keys via edge exactness +
-    the residue filters), the W3d read bridge (`checkFn = sem` at settled states —
-    NOT via the W3a shadow), and `reachedByW3d_inv` (the T2a carry).
+    theorem.
+    **CORE DONE (2026-07-11g, `GraphIndex/CascadeStable.lean`):** fan-out completeness
+    PROVED in contrapositive form (`writeLeg_checkFn_stable`: an unmapped key's operand
+    reads/guard are unchanged by a logged write — route `nreaches_factor` →
+    `writeLoggedRules_edge_delta` → `mem_affectedKeys`; attack found the OUT-of-fragment
+    refutation: object-star writes flip probe 3 at every object while mapping no keys,
+    so plain edge targets / `BareStarStore` are load-bearing,
+    `reachedByW3d_edges_target_plain`). The W3d READ BRIDGE proved at EVERY state
+    (`UntaintedShadow` — a rules-admitted state on the CURRENT store differing only in
+    edges into terminal `DerNode`s; the write-leg ADMISSION transfer is the new content;
+    `checkFn_eq_sem_w3d`, mid-batch included via `untaintedShadow_reconcileJobsD`).
+    Settledness TRANSPORT proved: `writeLeg_sem_stable` (an unmapped key keeps its
+    MEANING — the double-bridge trick), `SettledKey` + `settledKey_writeLeg` +
+    `settledKey_cascade_untargeted` (rows write-inert; `writeLeg_derived_inedges_eq` =
+    model-level I5 exclusivity). REMAINING: cascade-leg RE-settlement at targeted keys
+    (row char via the mid-batch bridge + edge exactness; NEW job clause `cands ⊇
+    pre-batch edge holders`, Python's persisted-ids audit), the dirty-or-settled
+    invariant over `ReachedByW3d` (all keys settled at cascaded states via
+    `cascade_drains`), `graph_correct_w3d` assembly (+ the W3d reach-collapse analog),
+    and `reachedByW3d_inv` (the T2a carry). Detail: PROOF_STATUS 2026-07-11g.
   - **W3d-1c — the audit enumeration from state.** Model `_leaf_concretes` + the
     audit set (`processor.py:394-441`) as a state-derived enumeration (plain concrete
     nodes reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`

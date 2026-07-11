@@ -61,7 +61,7 @@ not `rw [f]`. `omega` treats `∑`-atoms as opaque — good for combining sum `h
 `NReaches` is head-oriented: back-append is `NReaches.tail`; back-REPLACE needs
 last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
-## State of the world (2026-07-11f — all sorry-free, axiom-clean, verify.sh green)
+## State of the world (2026-07-11g — all sorry-free, axiom-clean, verify.sh green)
 
 | theorem | file (`lean/ZanzibarProofs/`) | scope |
 |---|---|---|
@@ -84,8 +84,9 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T3/T6 `backend_equivalence*` / `exclusion_effective*` / `no_ghost_grant*` | `Equiv.lean` | per-fragment corollaries (incl. `_w3a`, `_w3b`, `_w3c`) |
 | **T5** `runCascade_no_abort` / `cascade_drains` + `ReachedByW3d` | `GraphIndex/Cascade.lean` | W3d-1a: the scheduler in the model — logged writes, `affectedKeys`, the drain loop; reject branch provably dead at one stratum; `Quiescent` earned — RE-EARNED over the diffing pass (decision 7) |
 | the DIFFING pass + per-key edge EXACTNESS | `GraphIndex/ReconcileDiff.lean` | W3d-1b groundwork: `reconcileStarsKeyD` (stale-edge retraction, `processor.py:359-367`), both-direction reach inertness, guard fold-invariance, `reconcileStarsKeyD_edge_char` (the re-settle as a theorem) |
+| FAN-OUT COMPLETENESS + the untainted-core shadow + settledness transport | `GraphIndex/CascadeStable.lean` | W3d-1b core: `writeLeg_checkFn_stable` (unmapped keys' guards unchanged), `reachedByW3d_shadow`/`checkFn_eq_sem_w3d` (guard = `sem` at EVERY W3d state, incl. mid-batch), `writeLeg_sem_stable` (unmapped keys keep their MEANING), `SettledKey` + write-leg/untargeted-cascade transport |
 
-**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b STARTED (diffing pass ✅, edge exactness ✅; settledness + read bridge NEXT) → W3d-1c → W3d-2 → W4.**
+**Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b NEARLY DONE (fan-out completeness ✅, read bridge ✅, settledness transport ✅; targeted-key RE-settlement + assembly NEXT) → W3d-1c → W3d-2 → W4.**
 
 **W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* PROOF_STATUS entries and the
 ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
@@ -114,61 +115,65 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 
 ---
 
-## The next task — W3d-1b (continued): settledness over `ReachedByW3d` + the W3d read bridge
+## The next task — W3d-1b (final leg): targeted-key RE-settlement + the invariant + `graph_correct_w3d`
 
-**Session 2026-07-11f delivered the 1b groundwork — READ ITS PROOF_STATUS ENTRY.** In
-one line each:
-- **FINDING (attack-first):** the add-only pass model was REFUTED at cascaded states —
-  a store ADD to an `excl` operand flips a derived guard down and the pass could not
-  retract the stale edge (`check ≠ sem` fully drained). Python retracts
-  (`reconcile_subject`, `processor.py:359-367`).
-- **Decision 7:** W3d's pass is now the DIFFING audit `reconcileStarsKeyD`
-  (`GraphIndex/ReconcileDiff.lean`); Cascade.lean re-greened over it, T5 re-earned.
-  W3a–W3c keep the add-only pass (removal branch provably dead on a fixed store).
-- **Edge exactness (the cascade-leg settledness core):** `reconcileStarsKeyD_edge_char`
-  — after one full-object pass, the key's derived edge set is EXACTLY
-  `{c ∈ cands : σ.checkFn ∧ shape ∉ fresh stars}` ∪ untouched non-candidate edges.
-  Powered by `graphRec_reconcileKeyD_inert` (both-direction operand-read inertness:
-  additions are trailing hops onto the terminal R-node, removals are in-edges of a
-  non-source — `nreaches_remove_terminal`) and guard fold-invariance
-  (`wantEdge_reconcileKeyD_inert`).
-- **Structural constraint:** the W3a SHADOW does not extend over diffing passes (a
-  removal is not a W3a reconcile leg) — the W3c `checkFn = sem` bridge does NOT
-  transfer pointwise to W3d states. The 1b read bridge must be re-derived over the
-  interleaved closure.
+**Session 2026-07-11g delivered the 1b core — READ ITS PROOF_STATUS ENTRY.** All in
+`GraphIndex/CascadeStable.lean`:
+- **Fan-out completeness (contrapositive), PROVED**: `writeLeg_checkFn_stable` — an
+  unmapped key's operand `graphRec`/guard is unchanged by a logged write leg (route:
+  `nreaches_factor` → `writeLoggedRules_edge_delta` → `mem_affectedKeys`). Attack
+  finding: OUT-of-fragment object-star writes REFUTE it (the `wAll` head's name is
+  STAR, `processor.py:604-605` skips it) — plain edge targets
+  (`reachedByW3d_edges_target_plain`, from `BareStarStore`) are load-bearing.
+- **The W3d read bridge, PROVED at EVERY state**: `UntaintedShadow` (a rules-ADMITTED
+  state on the CURRENT store, differing only in edges into terminal `DerNode`s) +
+  `reachedByW3d_shadow` (the write-leg ADMISSION transfer is the new content) ⇒
+  `checkFn_eq_sem_w3d`. Mid-batch too: `untaintedShadow_applyD`/`_reconcileJobsD` —
+  every prefix state of a cascade's job loop keeps the shadow.
+- **Settledness transport, PROVED**: `writeLeg_sem_stable` (an unmapped key keeps its
+  MEANING — the double-bridge trick: sem(t::T) = guard σ' = guard σ = sem(T));
+  `SettledKey` (soundness-side: row members carry `sem` verdicts vs the CURRENT store;
+  derived edges witness `sem`-true bare subjects) transports across write legs at
+  unmapped keys (`settledKey_writeLeg` — rows write-inert, `writeLeg_derived_inedges_eq`
+  = model-level I5) and cascades at untargeted keys (`settledKey_cascade_untargeted`).
 
-**What remains for 1b (the plan, in dependency order):**
-1. **Write-leg `sem`/`graphRec` stability off the mapped keys** (fan-out completeness,
-   contrapositive form): if `(dt, R, on) ∉ cascadeKeys S σ'` after
-   `σ' = σ.writeLoggedRules S t`, then every operand `graphRec` at that key is
-   unchanged — a changed untainted probe needs a new path into an operand node, whose
-   first NEW edge is a routed edge of `t`, putting the operand node in that delta's
-   reach cone, hence the key in `affectedKeys`. Attack-first the statement (hunt: ghost
-   subjects via new NODES not edges; star grants changing `coveredFn` through probe 2/4
-   whose head differs from the routed edge's object node; userset flows threading
-   multiple hops). NB `cascadeKeys` is MONOTONE along a write leg (rows persist,
-   watermark fixed, reach cones grow) — dirty keys stay dirty until a cascade.
-2. **Settledness over `ReachedByW3d`**: per derived key, "row + edges equal a fresh
-   full-object reconcile at the current store" — phrased at `sem` level via the W3c
-   filter shapes (edge exactness gives the edge half at cascade legs; the residue half
-   is `reconcileResidueKey_residue_self` + a `checkFn = sem` bridge at the pass-start
-   state). Invariant form: every derived key is `∈ cascadeKeys S σ` (dirty) OR settled.
-   Write legs: unmapped keys keep settledness by step 1 (+ edges at the key untouched —
-   user writes route onto leaf families, `NoStoreSubjectR`/`hterm` keep them off
-   R-nodes... verify: a routed edge's TARGET can be an R-node only for a derived
-   relation write, which the fragment excludes — check `RewriteFilter` analog). Cascade
-   legs: mapped keys re-settle by edge exactness + the wholesale residue recompute;
-   `runCascade` accepts ⇒ frontier empty ⇒ ALL keys settled at cascaded states.
-3. **The W3d read bridge**: `checkFn = sem` at pass-start states inside the interleaved
-   chain — the W3c route (shadow → `checkFn_eq_sem_bs`) is closed; expected replacement:
-   settledness itself supplies the untainted-operand agreement with a per-key admitted
-   base for the CURRENT store (the untainted core of a W3d state should still be
-   shadowable — only the DERIVED edges differ from a `writeRules` fold, and untainted
-   probes never traverse them; consider an untainted-core shadow: `ReachedByRules` on
-   the current store with graphRec agreement at untainted keys).
-4. **Assemble** `graph_correct_w3d` at cascaded states + `reachedByW3d_inv` (T2a carry)
-   + T3/T6 `*_w3d` corollaries. Coverage clauses for candidate lists stay job-side
-   hypotheses until W3d-1c derives them from the audit enumeration.
+**What remains for 1b (in dependency order):**
+1. **Cascade-leg RE-settlement at targeted keys** (`settledKey_cascade_targeted`): after
+   `runCascade` (accept), a key targeted by a job is `SettledKey` w.r.t. the (unchanged)
+   store. Row half: the LAST targeting job wholesale-rewrites the row; its filters are
+   guard-evaluated at ITS mid-batch state, where the read bridge holds
+   (`untaintedShadow_reconcileJobsD` prefix + `checkFn_eq_sem_w3d`) — so `stars` =
+   declared ∧ `sem`-covered (needs `coveredFn_declared` for the ↔, as in `w3c_row_char`),
+   `neg`/`upos` members get their `sem` verdicts from their filter guards. Fold shape:
+   induction over the batch, "some job so far targeted the key ⇒ row settled", later
+   non-targeting jobs leave it (`applyD_other_key_fixed`), later targeting jobs re-derive
+   it. Edge half: `reconcileStarsKeyD_edge_char` per pass + a NEW job-side coverage
+   clause **`cands ⊇ pre-batch edge holders at the key`** (Python's audit enumerates
+   persisted incoming R-node concretes, `processor.py:394-441`): a post-batch edge is a
+   wanted candidate (guard = `sem`-true) or a non-candidate added by an EARLIER same-key
+   job as a wanted candidate (`sem`-true too); pre-batch stale edges are candidates and
+   get retracted. Attack-first the exact statement (hunt: two same-key jobs where the
+   second's `cands` misses the first's added edge — should be fine since sem-true; a
+   pre-batch stale edge NOT in cands — should break it, confirming the clause).
+2. **The settledness invariant over `ReachedByW3d`**: `∀ derived key, key ∈ cascadeKeys
+   S σ (dirty) ∨ SettledKey S T σ key`, by induction: write legs — dirty stays dirty
+   (`cascadeKeys_writeLeg_mono`), settled+unmapped stays settled (`settledKey_writeLeg`),
+   settled+mapped goes dirty (fine); cascade legs — `hcover` says every dirty key is
+   targeted (re-settles, step 1), untargeted keys were settled (`hscope` ensures jobs sit
+   at cascade keys; `settledKey_cascade_untargeted`); `cascade_drains`/no-abort ⇒ at
+   CASCADED states `cascadeKeys = []` (a `Quiescent` state has an empty frontier) ⇒ ALL
+   keys settled. NB the invariant needs the per-leg job coverage clauses (edge-holder
+   coverage, `negCands`/`uposCands`/`cands` sem-completeness) carried as chain-side
+   hypotheses — either strengthen `ReachedByW3d`'s cascade leg or define a
+   `ReachedByW3dC` wrapper; completeness clauses become theorems in W3d-1c.
+3. **Assemble `graph_correct_w3d`** at cascaded states: derived read via settledness
+   (soundness) + the completeness clauses (row existence, `neg`/`upos`/edge
+   completeness — mirror `W3cComplete`'s clause shapes as chain-side hypotheses);
+   untainted read via the shadow + `graphRec_base_eq_bs`. Needs the W3d analog of
+   `reachedByW3a_reach_collapse_root` (a multi-hop path into a derived R-node collapses
+   to a single edge — in-edge sources are bare plain candidate nodes, whose own
+   in-edges would be `BARE`-pred targets, dead on the fragment). Then
+   `reachedByW3d_inv` (T2a carry) + T3/T6 `*_w3d` corollaries.
 
 Fragment carries: `hterm`/`hCO`/`hLU`/`hRootB`/`hWSbare` + `BareStarStore`/`TtuStarFree`
 + W2 carries; add-only STORE (decision 6). House rule 6: subagents only for read-only
