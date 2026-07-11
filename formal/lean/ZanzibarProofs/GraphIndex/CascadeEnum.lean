@@ -88,12 +88,15 @@ that reaches a `computed`-leaf target. `nodeSubj` decodes a node back to a subje
 (left-inverse of `subjNode` on plain star-free nodes). -/
 
 /-- Decode a node to a subject reference (drop the variant). Left-inverse of `subjNode`
-    on a plain star-free node. -/
+    for EVERY subject: `subjNode` only ever rewrites the variant, so dropping it recovers
+    the subject (a `'*'` subject already IS its own `wAny` node's decode). -/
 def nodeSubj (u : NodeKey) : SubjectRef := ⟨u.type, u.name, u.pred⟩
 
-@[simp] theorem nodeSubj_subjNode {s : SubjectRef} (hsn : s.name ≠ STAR) :
-    nodeSubj (subjNode s) = s := by
-  unfold nodeSubj subjNode; rw [if_neg hsn]
+@[simp] theorem nodeSubj_subjNode (s : SubjectRef) : nodeSubj (subjNode s) = s := by
+  unfold nodeSubj subjNode
+  split
+  · rename_i h; rw [← h]
+  · rfl
 
 /-- Does node `u` reach some `computed`-leaf target of `e` — the object node
     `⟨dt,on⟩` under a leaf relation `r'`, or that relation's `w_all` node? -/
@@ -136,7 +139,7 @@ theorem mem_leafConcretes_of_hit {σ : GraphState} {s : SubjectRef} {dt on : Str
     rw [List.any_eq_true]
     exact ⟨r', hr', by rcases hhit with h | h <;> rw [h] <;> simp⟩
   rw [leafConcretes, List.mem_map]
-  refine ⟨subjNode s, ?_, nodeSubj_subjNode hsn⟩
+  refine ⟨subjNode s, ?_, nodeSubj_subjNode s⟩
   rw [List.mem_filter]
   refine ⟨hmem, ?_⟩
   simp only [hplain, beq_self_eq_true, bne_iff_ne, ne_eq, hnameNe, not_false_eq_true,
@@ -191,8 +194,8 @@ theorem cands_complete_uncovered {S : Schema} {T : Store} {σ : GraphState}
     (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes) (hon : on ≠ STAR)
     (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
-    (hdeclB : ∀ sh : Shape, sh.2 = BARE →
-      sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true → sh ∈ wildcardShapes S)
+    (hcovDecl : ∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true →
+      sh ∈ wildcardShapes S)
     {cands : List SubjectRef}
     (hsub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE → u ∈ cands)
     {s : SubjectRef} (hsb : s.predicate = BARE) (hsn : s.name ≠ STAR)
@@ -210,10 +213,11 @@ theorem cands_complete_uncovered {S : Schema} {T : Store} {σ : GraphState}
     fun _ => hsb
   have hbstar : σ.checkFn T (starSubj s.shape) dt on R e
       = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) hshapeB
-  rw [hbs, hbstar] at hkey
+  have hchkStar : σ.checkFn T (starSubj s.shape) dt on R e = true := by
+    rw [← hkey, hbs, hsem]
   have hstarTrue : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true := by
-    rw [← hkey]; exact hsem
-  exact hunc ⟨hdeclB s.shape hsb hstarTrue, hstarTrue⟩
+    rw [← hbstar]; exact hchkStar
+  exact hunc ⟨hcovDecl s.shape hchkStar, hstarTrue⟩
 
 /-- **Clause (3) discharge** — the covered `sem`-false candidate is in `negCands`.
     A star-free subject whose shape is covered (∈ `wildcardShapes`, hence bare under
@@ -245,5 +249,57 @@ theorem negCands_complete {S : Schema} {T : Store} {σ : GraphState}
       = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) hshapeB
   rw [hbs, hbstar, hsemF, hstar] at hkey
   exact absurd hkey (by decide)
+
+/-- **Clause (4) discharge** — the `sem`-true userset candidate is in `uposCands`.
+    A userset (`hsu`) star-free subject that is `sem`-true but NOT enumerated would read
+    as its shape-star; the subject bridges to `sem = true`, but the star's shape is
+    userset, hence undeclared (all wildcard shapes are bare, `hWSb`), so its coverage is
+    `false` by the contrapositive of `hcovDecl` — a contradiction. -/
+theorem uposCands_complete {S : Schema} {T : Store} {σ : GraphState}
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes) (hon : on ≠ STAR)
+    (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
+      σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
+    (hcovDecl : ∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true →
+      sh ∈ wildcardShapes S)
+    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    {uposCands : List SubjectRef}
+    (hsub : ∀ u ∈ leafConcretes σ dt on e, u.predicate ≠ BARE → u ∈ uposCands)
+    {s : SubjectRef} (hsu : s.predicate ≠ BARE) (hsn : s.name ≠ STAR)
+    (hsem : sem S T ⟨s, R, ⟨dt, on⟩⟩ = true) :
+    s ∈ uposCands := by
+  by_contra hnm
+  have hnl : s ∉ leafConcretes σ dt on e := fun h => hnm (hsub s h hsu)
+  have hkey : σ.checkFn T s dt on R e = σ.checkFn T (starSubj s.shape) dt on R e := by
+    rw [checkFn_eq_coveredFn_of_not_mem hco hcl hsn hon hnl]; rfl
+  have hbs : σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+    hbridge s (fun h => absurd h hsn)
+  -- the userset star's shape is undeclared, so its coverage is false
+  have hcovF : σ.checkFn T (starSubj s.shape) dt on R e = false := by
+    by_contra hc
+    rw [Bool.not_eq_false] at hc
+    exact hsu (hWSb s.shape (hcovDecl s.shape hc))
+  rw [hbs, hcovF, hsem] at hkey
+  exact absurd hkey (by decide)
+
+/-! ## The edge-holder enumeration (clause (1), by construction)
+
+`processor.py:394-441` also re-enumerates the persisted incoming R-node concretes — the
+attack-confirmed stale-holder clause. The model reads them straight off the edges: every
+source of an edge into the R-node, decoded. Clause (1) is then immediate — `nodeSubj`
+recovers the subject from its (variant-only-altered) source node. -/
+
+/-- The subjects whose graph node has an edge into the derived R-node `objNode ⟨dt,on⟩ R`
+    — the persisted edge holders, decoded. -/
+def edgeHolders (σ : GraphState) (dt on R : String) : List SubjectRef :=
+  (σ.edges.filter (fun ed => ed.2 == objNode ⟨dt, on⟩ R)).map (fun ed => nodeSubj ed.1)
+
+/-- **Clause (1) discharge** — every pre-leg edge holder at the key is enumerated. -/
+theorem mem_edgeHolders {σ : GraphState} {s : SubjectRef} {dt on R : String}
+    (h : (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges) : s ∈ edgeHolders σ dt on R := by
+  rw [edgeHolders, List.mem_map]
+  refine ⟨(subjNode s, objNode ⟨dt, on⟩ R), ?_, nodeSubj_subjNode s⟩
+  rw [List.mem_filter]
+  exact ⟨h, by simp⟩
 
 end Zanzibar
