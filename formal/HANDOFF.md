@@ -133,6 +133,15 @@ verdict: `neg` member `sem`-false vs edge holder `sem`-true; `upos` member users
 bare source via `reachedByW3d_Rnode_source_bare`), untargeted keys use
 `reconcileJobsD_other_key_fixed`.
 
+**Second 11j finding: `W3dJobCoverage` clause (2) now carries an UNCOVERED guard**
+(matching `CompleteKey`'s edge clause). Without it the clause was unsatisfiable by any
+finite job on covering stores (every fresh unstored subject is `sem`-true under a
+`T:*` grant — `#eval`-checked), so the coverage chain admitted NO cascade there and
+the W3d theorems were vacuously narrow on exactly the stores W3c added. The weakening
+makes every chain theorem strictly stronger; `settledComplete_cascade_targeted` needed
+a one-token fix (`hnc` was already in scope). Build the piece-B enumeration against
+the GUARDED clause.
+
 **B. Model the audit enumeration + discharge `W3dJobCoverage`** (makes `graph_correct_w3d`
 — and now also `reachedByW3dC_inv` — unconditional: the coverage is hypothesized today):
 1. **Model the enumeration from state** (`processor.py:394-441`): per key `(dt,R,on)` at

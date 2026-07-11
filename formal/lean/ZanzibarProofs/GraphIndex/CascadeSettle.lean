@@ -186,13 +186,26 @@ transfers through the projection. -/
 
 /-- **Per-job audit-enumeration coverage** (relative to the leg-start state `σ` and
     the store `T`): the job's edge candidates include every pre-leg edge holder at
-    its key (the attack-confirmed stale-holder clause) and every `sem`-true bare
-    star-free subject; its `negCands` include every covered-but-`sem`-false star-free
-    subject; its `uposCands` include every `sem`-true star-free userset subject. -/
+    its key (the attack-confirmed stale-holder clause) and every UNCOVERED `sem`-true
+    bare star-free subject; its `negCands` include every covered-but-`sem`-false
+    star-free subject; its `uposCands` include every `sem`-true star-free userset
+    subject.
+
+    The uncovered guard on clause (2) is load-bearing for SATISFIABILITY, not for the
+    proofs (2026-07-11j, `#eval`-checked): under a covering `T:*` grant EVERY fresh
+    unstored subject of the shape is `sem`-true — infinitely many — so without the
+    guard no finite job satisfies the clause and the coverage chain admits NO cascade
+    on covering stores (the W3d theorems would hold there only for write-only
+    histories). Covered subjects need no enumeration: they read through `stars ∖ neg`,
+    never through an edge (`want_edge = checkFn ∧ ¬covered`), which is exactly the
+    guard `CompleteKey`'s edge clause already carries. Python's `_leaf_concretes`
+    likewise only ever enumerates store-SUPPORTED subjects (`processor.py:394-441`). -/
 def W3dJobCoverage (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) : Prop :=
   (∀ s : SubjectRef, (subjNode s, objNode ⟨j.dt, j.on⟩ j.R) ∈ σ.edges → s ∈ j.cands) ∧
   (∀ s : SubjectRef, s.predicate = BARE → s.name ≠ STAR →
-    sem S T ⟨s, j.R, ⟨j.dt, j.on⟩⟩ = true → s ∈ j.cands) ∧
+    sem S T ⟨s, j.R, ⟨j.dt, j.on⟩⟩ = true →
+    ¬(s.shape ∈ wildcardShapes S ∧
+      sem S T ⟨starSubj s.shape, j.R, ⟨j.dt, j.on⟩⟩ = true) → s ∈ j.cands) ∧
   (∀ s : SubjectRef, s.name ≠ STAR → s.shape ∈ wildcardShapes S →
     sem S T ⟨starSubj s.shape, j.R, ⟨j.dt, j.on⟩⟩ = true →
     sem S T ⟨s, j.R, ⟨j.dt, j.on⟩⟩ = false → s ∈ j.negCands) ∧
@@ -673,7 +686,7 @@ theorem settledComplete_cascade_targeted {σ : GraphState} {S : Schema} {T : Sto
     · -- an uncovered `sem`-true bare subject's edge is materialised
       intro s hb hstar hsm hnc
       rw [hedgefinal s]
-      have hcmem : s ∈ jc := hcovC s hb hstar hsm
+      have hcmem : s ∈ jc := hcovC s hb hstar hsm hnc
       have hncov : ((wildcardShapes S).filter
           (fun sh => σpre.coveredFn T dt on R e sh)).contains s.shape = false := by
         by_contra hc

@@ -59,6 +59,21 @@ coverage clauses are load-bearing for the INVARIANT itself, not just for
 retarget the row instead. Record-update projections (`{σ with watermark := w}.residue`)
 need an explicit `rfl`-`have` before `rw` can cross them.
 
+**Second increment — `W3dJobCoverage` clause (2) was UNSATISFIABLE on covering stores
+(statement-quality fix, `#eval`-checked, scratch deleted).** Preparing piece B exposed
+it: clause (2) demanded EVERY `sem`-true bare star-free subject in `cands`, but under
+a covering `T:*` grant every fresh unstored subject of the shape is `sem`-true
+(`#eval`: `sem = true` for arbitrary never-mentioned names) — infinitely many, so no
+finite job satisfied the clause, the coverage chain admitted NO cascade on covering
+stores, and `graph_correct_w3d`/`reachedByW3dC_inv` held there only for write-only
+histories (vacuously narrower than advertised, on exactly the stores W3c added). Fix:
+clause (2) now carries the same UNCOVERED guard as `CompleteKey`'s edge clause
+(covered subjects read through `stars ∖ neg`, never through an edge — and Python's
+`_leaf_concretes` only enumerates store-supported subjects). The weakening makes every
+`∀`-chain theorem strictly STRONGER; the only consumer (`settledComplete_cascade_
+targeted`'s CompleteKey clause-2 leg) already had `hnc` in scope — one-token fix.
+Piece B's enumeration is now actually provable-complete against clause (2).
+
 **Resume → W3d-1c piece B** (the audit enumeration; HANDOFF "The next task"): model
 `_leaf_concretes` + the audit set (`processor.py:394-441`) from state, prove
 `W3dJobCoverage` as a THEOREM of it (mind `W3cJobValid`'s shape filters), restate

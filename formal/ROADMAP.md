@@ -503,7 +503,13 @@ and re-proves/widens the same named theorems. Every stage must keep
       reaching an operand node, incoming R-node concretes, persisted `upos`/`neg`
       members); prove **`W3dJobCoverage` as a THEOREM of that enumeration** (all four
       clauses — edge holders, `cands`/`negCands`/`uposCands` `sem`-completeness), so
-      `graph_correct_w3d`'s coverage is discharged, not hypothesized.
+      `graph_correct_w3d`'s coverage is discharged, not hypothesized. **Statement fix
+      landed 2026-07-11j:** clause (2) now carries the UNCOVERED guard (matching
+      `CompleteKey`'s edge clause) — without it the clause was unsatisfiable by finite
+      jobs on covering stores (every fresh subject is `sem`-true under a `T:*` grant,
+      `#eval`-checked), i.e. no coverage-valid cascade existed there and the W3d
+      theorems were vacuously narrow on exactly the W3c stores; the weakening makes
+      every chain theorem strictly stronger (one-token consumer fix).
   - **W3d-2 — two strata (derived-reading-derived).** Relax `hLU` to lower-stratum
     derived operands: `checkFn` leaf dispatch routes derived operands through
     `probeDerived` (a real model extension — Python's leaf calls `widx.check`, which
