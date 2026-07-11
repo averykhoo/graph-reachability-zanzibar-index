@@ -8,6 +8,85 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-11e (W3d design + W3d-1a — the cascade scheduling layer: logged writes, delta→key mapping, `runCascade`, contentful T5)
+
+Resuming from HANDOFF "W3d: design first." Two green+pushed increments: (1) the W3d design
+committed to ROADMAP ("W3d — the multi-stratum cascade", modeling decisions 1–6 + sub-staging
+1a/1b/1c/2); (2) W3d-1a delivered in new `GraphIndex/Cascade.lean` (+ `Audit.lean` 7 new
+entries, root aggregator). `verify.sh` green (build + 0 sorries + zcli + standard-axioms audit
++ 60 conformance). Sorry count held at 0.
+
+**Design-phase attack finding (analytic, recorded in ROADMAP decision 1): per-SEED delta
+coalescing is WRONG.** Python emits one outbox row per materialized closure-pair flip; the
+model materializes no closure, so rows must be reconstructed. Coalescing to one row per RAW
+write fails: a computed rewrite routes the seed onto sibling family nodes (`editor@doc:1`
+also lands `viewer@doc:1` under `viewer := editor or …`) with NO graph edge from the seed's
+object node to the sibling node — the seed-node reach cone misses the sibling operand key.
+Correct unit: one row per accepted ROUTED edge (`writeLoggedOne` inside the `writeRules`
+fold), object ends recovered at cascade time as the routed edge head's reach cone (add-only
+⇒ superset of the write-time per-flip set ⇒ at worst extra idempotent reconciles).
+
+**Structural finding: the W3a–W3c chain shape cannot host the scheduler.** `ReachedByW3c` is
+"one admitted base, then passes" — no write AFTER a reconcile is expressible, but the
+scheduler interleaves (write txn → cascade → write txn → cascade). So W3d gets a NEW
+interleaved closure `ReachedByW3d` (write legs carry `FoldAdmits`; cascade legs carry job
+validity + two-sided key coverage `hcover`/`hscope`), and the W3c master/`Inv` transfer is
+NOT pointwise — a mid-chain pass's residue row reflects a PREFIX store, and its current
+validity rests on "later writes didn't touch this key's operand cone", which is exactly the
+W3d-1b fan-out-completeness content (see HANDOFF "The next task").
+
+**Increment — `GraphIndex/Cascade.lean` (W3d-1a, the scheduling layer).**
+- Outbox primitives: `maxOutboxId` (+ fold-max algebra), `nextDeltaId = max maxOutboxId
+  watermark + 1` (decision 2: strictly above BOTH — plain `maxId+1` could mint a
+  born-drained row), `pushDelta` (+ core-untouched simps, `pushDelta_maxOutboxId`).
+- Logged writes: `writeLoggedOne` (emit iff admitted) / `writeLoggedRules`; **`EvalEq`** (the
+  read-relevant core: schema/edges/nodes/residue — `CoreEq` is too strong once outboxes
+  genuinely differ) with the congruence spine: `admitEdge_evalEq`, `writeDirect_evalEq`,
+  `writeLoggedRules_evalEq` (logged core = unlogged `writeRules` — ALL W2 edge facts
+  transfer), and the pass side `reconcileResidueKey_evalEq` / `reconcileKeyC_evalEq` /
+  `reconcileStarsKey_evalEq` / `reconcileJobsL_evalEq` (logged batch core = `reconcileJobsC`).
+- The mapping: `affectedObjects` (row node + cascade-time reach cone), `affectedKeys`
+  (declared derived keys reading a candidate object's predicate as a computed operand —
+  `_map_deltas_to_keys` LeafFamily branch + `_fan_out` `via='computed'`, fragment-restricted;
+  star-named objects excluded per `processor.py:604-605`), `frontierRows`, `cascadeKeys`.
+- The logged pass: `W3cJob.key`/`applyLogged` (pass + ONE coalesced row at its derived key —
+  faithful because ALL the pass's per-flip rows share that object end by R-node terminality),
+  `reconcileJobsL` + watermark/outbox bookkeeping (`reconcileJobsL_outbox_sound`: every row is
+  original or a pass row at a job key with id above the pre-batch frontier).
+- **`runCascade`** (decision 5): reconcile the mapped keys, then Python's final leftover check
+  (`InvariantViolation` at `processor.py:729-739`) as an accept/REJECT branch — reject = state
+  unchanged (the abort rolls the transaction back), accept = watermark past everything.
+- **T5, contentful, both halves**: `runCascade_no_abort` — on the fragment the reject NEVER
+  fires: a leftover row is pass-emitted (outbox soundness + id arithmetic), sits at a terminal
+  derived R-node (`reachedByW3d_edge_source_ne_R` re-proved by direct induction over the
+  interleaved closure: write-leg sources are rewrite-closure subjects ≠ R via `NoTtuTarget` +
+  prefix-weakened `NoStoreSubjectR`; cascade-leg sources are bare candidates ≠ R; plus the
+  mid-batch variant `reconcileJobsL_Rnode_not_source`), so its reach cone is empty and its own
+  predicate is derived — which no derived def reads as a computed operand (`hLU`) ⇒
+  `affectedKeys = []`. `cascade_drains` — the post-cascade state is `Quiescent`, the watermark
+  advance EARNED by no-abort, never asserted (the fix for the deleted-as-vacuous
+  `cascade_converges` shape).
+
+**Attack-first (machine-checked `#eval` vs the real `check`/`sem`; scratch deleted, recorded
+in the Cascade.lean header).** `viewer := member ∖ banned` (`member` admitting `user`,
+`user:*`, `group#mem`), 5 logged writes: all 5 frontier rows mapped to the viewer key (direct,
+star, userset, group-flow cones); `runCascade` with one covering job ACCEPTED (watermark 0→6),
+`Quiescent` held, and the 18-query grid matched `sem` exactly (bare incl. a ghost
+concrete-under-star, star, userset subjects). **Cross-key hazard confirmed live**: a
+post-cascade `banned` write re-mapped the EXISTING viewer key through the `banned` operand
+cone; until the second cascade the derived read was STALE (`check = true ≠ sem = false` for
+the newly-banned subject) — so the read-correctness claim scope is CASCADED states (faithful:
+Python runs `run_cascade` inside every writing transaction). The second cascade's own pass row
+mapped to `[]`; an empty-frontier cascade was a no-op accept. No refutation.
+
+**Proof-engineering notes:** hypotheses mentioning the inductive's indices (`S`, `T`) must sit
+RIGHT of the colon or `induction` auto-reverts them into the motive with surprising ih shapes
+(`reachedByW3d_edge_source_ne_R` takes `NoTtuTarget`/`NoStoreSubjectR` as explicit arrows, the
+store one re-derived per write leg by prefix weakening). `Prod` eta is definitional: `S.lookup
+k` vs `S.lookup (k.1, k.2)` interchange freely, so `hLU k.1 k.2 e hlk` typechecks directly.
+
+**Resume → W3d-1b (see HANDOFF "The next task").**
+
 ## Session 2026-07-11d (W3c read half step 3 — CLOSED: the linchpin, the batch completeness layer, `graph_correct_w3c`, T3/T6 `*_w3c`)
 
 Resuming from HANDOFF "W3c read half, step 3: the linchpin lemma + `graph_correct_w3c`." Two

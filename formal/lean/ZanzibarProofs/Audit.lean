@@ -25,6 +25,7 @@ import ZanzibarProofs.GraphIndex.RestrictBase
 import ZanzibarProofs.GraphIndex.ReconcileComplete
 import ZanzibarProofs.GraphIndex.ReconcileStars
 import ZanzibarProofs.GraphIndex.ReconcileStarsComplete
+import ZanzibarProofs.GraphIndex.Cascade
 import ZanzibarProofs.GraphIndex.Correct
 
 /-!
@@ -676,5 +677,28 @@ namespace Zanzibar
 #print axioms backend_equivalence_w3c
 #print axioms exclusion_effective_w3c
 #print axioms no_ghost_grant_w3c
+
+-- **ROADMAP W3d-1a — the cascade scheduling layer (GraphIndex/Cascade.lean,
+-- 2026-07-11e).** The scheduler is now IN the model: logged writes emit one outbox
+-- row per accepted routed edge (`writeLoggedRules`), `affectedKeys` maps a frontier
+-- row to the derived keys reading its reach cone (`_map_deltas_to_keys` + `_fan_out`
+-- `via='computed'`, fragment-restricted), and `runCascade` reconciles the mapped keys
+-- then models Python's final quiescence check (`InvariantViolation`,
+-- `processor.py:729-739`) as a reject branch. The interleaved closure `ReachedByW3d`
+-- admits writes AFTER cascades (the W3a–W3c chains could not). **T5, contentful and
+-- justified**: `runCascade_no_abort` — the reject branch never fires at one stratum
+-- (every pass-emitted row sits at a terminal derived R-node whose predicate no
+-- derived def reads as an operand, so it maps to no keys); `cascade_drains` — the
+-- post-cascade state is `Quiescent`, with the watermark advance EARNED by no-abort,
+-- never asserted (the fix for the deleted vacuous `cascade_converges` shape).
+-- R-node terminality re-proved over the interleaved closure
+-- (`reachedByW3d_edge_source_ne_R`). Standard axioms only:
+#print axioms writeLoggedRules_evalEq
+#print axioms reconcileJobsL_evalEq
+#print axioms reconcileJobsL_outbox_sound
+#print axioms reachedByW3d_edge_source_ne_R
+#print axioms reachedByW3d_Rnode_not_source
+#print axioms runCascade_no_abort
+#print axioms cascade_drains
 
 end Zanzibar

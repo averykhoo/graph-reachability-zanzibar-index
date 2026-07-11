@@ -389,14 +389,24 @@ and re-proves/widens the same named theorems. Every stage must keep
      deltas) are OUT OF SCOPE for all of W3d-1 and recorded as fragment conditions.
 
   **Sub-staging:**
-  - **W3d-1a — the scheduling layer** (new `GraphIndex/Cascade.lean`): `pushDelta`/
-    `nextDeltaId`/`writeLoggedRules`/`affectedObjects`/`affectedKeys`/`frontierRows`/
-    `runCascade` (jobs parametric per key: `W3cJobValid` + job keys ≡ cascade keys,
-    both inclusions); closure `ReachedByW3d` (base → logged writes → cascades);
-    theorems: T5 halves (a)+(b) above, the **evaluation-core projection** to
-    `ReachedByW3c` (outbox/watermark now differ, so `CoreEq` is too strong — define
-    `EvalEq` on schema/edges/nodes/residue and re-derive the check/checkFn/read
-    congruences over it), `reachedByW3d_inv` (T2a carry through the projection).
+  - **W3d-1a — the scheduling layer. ✅ DONE (2026-07-11e)** (`GraphIndex/Cascade.lean`,
+    sorry-free, axiom-clean): `pushDelta`/`nextDeltaId`/`writeLoggedRules`/
+    `affectedObjects`/`affectedKeys`/`frontierRows`/`runCascade` (jobs parametric per
+    key: `W3cJobValid` + two-sided key coverage); the INTERLEAVED closure
+    `ReachedByW3d` (empty → logged writes → cascades, any order — note: the W3a–W3c
+    base-then-passes chain shape could NOT express a write after a pass, so the W3c
+    master/`Inv` do NOT transfer pointwise; the W3d replacement is 1b's settledness);
+    `EvalEq` (schema/edges/nodes/residue — the read-relevant core) + the full
+    congruence spine (logged write core = `writeRules`, logged batch core =
+    `reconcileJobsC`); T5 halves (a) `runCascade_no_abort` (the reject branch is dead
+    at one stratum: pass rows sit at terminal derived R-nodes — terminality re-proved
+    by direct induction over the interleaved closure — and derived preds are not
+    operands by `hLU`) + (b) `cascade_drains` (earned `Quiescent`). Attack-first
+    `#eval` (recorded in the file header): full-grid `check = sem` at cascaded states,
+    live cross-key hazard remap, PRE-cascade staleness (`check ≠ sem` mid-txn —
+    fixing the 1b claim scope to cascaded states), pass-row leftover ↦ `[]`. The
+    deferred `reachedByW3d_inv` (T2a carry) lands with 1b settledness. Detail:
+    PROOF_STATUS 2026-07-11e.
   - **W3d-1b — fan-out completeness (the cross-key re-reconcile hazard as a
     THEOREM).** A logged write whose new edges semantically change an EXISTING
     derived key maps to that key: a `sem` flip ⇒ some operand's `graphRec` changed ⇒
