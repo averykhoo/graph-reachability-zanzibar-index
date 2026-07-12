@@ -10,21 +10,25 @@ import ZanzibarProofs.GraphIndex.CascadeSettle
 import ZanzibarProofs.GraphIndex.CascadeStrataResettle
 
 /-!
-# T3 / T6 — equivalence and the security corollaries
+# T3 / T6 — the historical per-stage corollary ladder
 
 `SEMANTICS.md` §8 (T3, T6). T3 is the whole point of the shared-spec architecture:
 prove each backend against `sem`, get backend-equivalence by transitivity in Lean.
 T6 are the review's headline security properties, one-line consequences of T1/T2b.
 
-**Restatement (2026-07-10).** The original statements quantified over the deleted
-abstract `ReachedBy` closure and were **false as stated** (junk states satisfied
-every hypothesis while only the set engine computed `sem`). They are now stated
-over the operational closure at its current scope — the star-free pure-direct
-fragment (`ReachedByAdmitted`, T2b = `graph_correct_direct`) — and are REAL,
-axiom-clean theorems, no `sorry`. Their scope widens with the write model
-(bridges → rule routing → reconcile, ROADMAP order); at full `GraphAccepts`
-scope the exclusion case of T6a becomes non-vacuous (the current fragment has no
-`but not`, so T6a's content here is deny-propagation).
+**What this file is now.** The original (pre-2026-07-10) statements quantified
+over a deleted abstract `ReachedBy` closure and were **false as stated** (junk
+states satisfied every hypothesis while only the set engine computed `sem`). They
+were restated over the operational closure at its then-current scope and re-proved
+as REAL, axiom-clean theorems; the scope then widened stage by stage with the
+write model (bridges → rule routing → reconcile → the scheduler chains). This file
+hosts that per-stage corollary LADDER (`*_direct` … `*_w3d2`), each rung kept
+exactly as proved at its stage. The FINAL full-scope statements — the unsuffixed
+`backend_equivalence` / `exclusion_effective` / `no_ghost_grant` (with
+`graph_correct` / `graph_reached_inv`) over `ReachedBy := ReachedByW3d2E` and the
+`GraphAdmission`/`W4Fragment` provenance split — live in `FullScope.lean`. From
+`*_w3a` onward T6a's exclusion case is non-vacuous (a derived `but not` genuinely
+excludes); on the earlier pure-direct rungs its content is deny-propagation.
 -/
 
 namespace Zanzibar
