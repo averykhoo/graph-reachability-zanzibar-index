@@ -35,12 +35,29 @@ _STATE_CACHE: dict[str, dict] = {}
 # runs — spawning the ~120 MB static binary in rapid succession under memory/desktop-
 # heap pressure intermittently trips these. zcli's OWN exit codes are exactly 0-4
 # (Cli.lean: 0 answers/state · 1 usage-parse · 2 admission · 3 not-drained · 4 unknown
-# mode), so a code below can NEVER be a zcli logic outcome and is safe to retry. An
-# IN-process crash (e.g. 0xC0000005 access violation) is deliberately NOT listed: that
-# would be a real fault and must still fail the gate, not be retried away.
+# mode), so a code below never comes from zcli's dispatch — but the code ALONE does
+# not prove a pre-main failure: 0xC0000017 can also be the exit status of an
+# IN-process allocation failure (an unhandled STATUS_NO_MEMORY after main). The
+# discriminator is output: a pre-main failure dies before any user code could write
+# to the (already-created) pipes, so it leaves stdout AND stderr empty, whereas an
+# in-process Lean failure normally prints a diagnostic first. So a listed code is
+# retried only when both streams are empty; a listed code WITH output is returned
+# immediately for the caller to fail on. Residual honesty: an in-process fault that
+# dies with a listed status without printing anything would still be retried — an
+# accepted, documented tradeoff. An in-process crash code (e.g. 0xC0000005 access
+# violation) is deliberately NOT listed: that is a real fault and must still fail
+# the gate, not be retried away.
 _TRANSIENT_INIT_RCS = frozenset({
     3221225794,   # 0xC0000142 STATUS_DLL_INIT_FAILED (observed)
     3221225495,   # 0xC0000017 STATUS_NO_MEMORY
+})
+# The same resource-pressure class can surface BEFORE a child process exists at all:
+# CreateProcess itself fails and subprocess.run raises OSError with no returncode to
+# inspect. Retry on the winerror instead; any other OSError is a real environment
+# fault and propagates.
+_TRANSIENT_SPAWN_WINERRORS = frozenset({
+    1455,   # ERROR_COMMITMENT_LIMIT "the paging file is too small"
+    1450,   # ERROR_NO_SYSTEM_RESOURCES "insufficient system resources"
 })
 _MAX_ATTEMPTS = 4          # 1 try + 3 retries
 _RETRY_BACKOFF_S = 0.25    # 0.25, 0.5, 1.0s — let the resource pressure subside
@@ -59,21 +76,34 @@ def zcli_path() -> Path:
         f"zcli not found under {_BIN_DIR}; run `lake build zcli` in formal/lean")
 
 
-def invoke_zcli(request_json: str, what: str = "zcli") -> tuple:
+def discard_request(req_path: str) -> None:
+    """Best-effort removal of an `invoke_zcli` request temp file — never fail a
+    green run over cleanup."""
+    try:
+        os.unlink(req_path)
+    except OSError:
+        pass
+
+
+def invoke_zcli(request_json: str,
+                what: str = "zcli") -> tuple[subprocess.CompletedProcess[str], str]:
     """Write `request_json` to a temp file and run zcli on it, with a hang timeout
-    and a bounded retry over transient Windows process-init failures.
+    and a bounded retry over transient Windows process-init failures (a child dying
+    with a pre-main init status AND output-free, or a spawn-time resource OSError).
 
     Returns `(completed_process, request_path)` — the CALLER interprets the return
     code (0-4 are zcli's own outcomes) and cleans up `request_path` (keep it on a
     failure you want to debug). Raises `RuntimeError` on timeout or once the
-    transient-init retries are exhausted; the request file is kept in that case.
+    transient retries are exhausted; the request file is kept in those cases (the
+    message names it). A non-transient spawn OSError propagates as-is, with the
+    request file discarded (the request content is not what failed).
     """
     exe = zcli_path()
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
                                      encoding="utf-8") as f:
         f.write(request_json)
         req_path = f.name
-    last = None
+    last: subprocess.CompletedProcess[str] | OSError | None = None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
             # zcli emits UTF-8 JSON; without an explicit encoding, text=True decodes
@@ -85,16 +115,33 @@ def invoke_zcli(request_json: str, what: str = "zcli") -> tuple:
             raise RuntimeError(
                 f"zcli {what} timed out after {_ZCLI_TIMEOUT_S}s "
                 f"(possible hang/loop); request kept at {req_path}")
-        if proc.returncode not in _TRANSIENT_INIT_RCS:
-            return proc, req_path
-        last = proc
+        except OSError as e:
+            if getattr(e, "winerror", None) not in _TRANSIENT_SPAWN_WINERRORS:
+                # A real environment fault, not spawn-time pressure. It carries no
+                # path of ours in its message, so don't leak the request file.
+                discard_request(req_path)
+                raise
+            last = e
+        else:
+            if proc.returncode not in _TRANSIENT_INIT_RCS:
+                return proc, req_path
+            if proc.stdout or proc.stderr:
+                # Output proves zcli's own code ran: an IN-process fault that died
+                # with an init-looking status. Return it for the caller to fail on
+                # rather than retrying a real fault away (non-masking).
+                return proc, req_path
+            last = proc
         if attempt < _MAX_ATTEMPTS:
             time.sleep(_RETRY_BACKOFF_S * (2 ** (attempt - 1)))
+    if isinstance(last, OSError):
+        detail = f"spawn OSError WinError {last.winerror}: {last}"
+    else:
+        detail = (f"rc={last.returncode} (0x{last.returncode & 0xFFFFFFFF:08X}), "
+                  f"stderr={last.stderr!r}, stdout={last.stdout!r}")
     raise RuntimeError(
-        f"zcli {what} failed with transient init error "
-        f"rc={last.returncode} (0x{last.returncode & 0xFFFFFFFF:08X}) after "
-        f"{_MAX_ATTEMPTS} attempts — Windows could not initialize the process "
-        f"(resource pressure from rapid large-binary spawns); "
+        f"zcli {what} still failing after {_MAX_ATTEMPTS} attempts — {detail}; "
+        f"either sustained Windows resource pressure (process-init failures from "
+        f"rapid large-binary spawns) or an intermittent zcli fault; "
         f"request kept at {req_path}")
 
 
@@ -125,10 +172,7 @@ def run_spec(request_json: str) -> list[bool]:
             f"{n_queries} queries — the spec and the harness disagree about the "
             f"request; positional comparison would be garbage. "
             f"Request kept at {req_path}")
-    try:
-        os.unlink(req_path)        # best-effort cleanup; never fail a green run
-    except OSError:
-        pass
+    discard_request(req_path)
     _SPEC_CACHE[request_json] = answers
     return answers
 
@@ -152,9 +196,6 @@ def run_state(request_json: str) -> dict:
             f"graph-state output shape unexpected: keys="
             f"{sorted(state) if isinstance(state, dict) else type(state)} "
             f"(request kept at {req_path})")
-    try:
-        os.unlink(req_path)
-    except OSError:
-        pass
+    discard_request(req_path)
     _STATE_CACHE[request_json] = state
     return state

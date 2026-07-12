@@ -13,7 +13,6 @@ Skips cleanly if the Lean `zcli` binary is not built.
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 
@@ -37,12 +36,11 @@ _RC_UNKNOWN_MODE = 4
 def _run_zcli(request_json: str):
     """Invoke the built zcli binary on a request; return the completed process so
     the caller can inspect rc + stderr (runner.run_spec raises on nonzero). Routes
-    through runner.invoke_zcli so these spawns share the transient-init retry."""
+    through runner.invoke_zcli so these spawns share the transient-init retry.
+    (invoke_zcli owns the request file across its OWN raise paths — kept and named
+    in the message, by design; here we only clean up the success path.)"""
     proc, req_path = runner.invoke_zcli(request_json, "cli-mode-test")
-    try:
-        os.unlink(req_path)
-    except OSError:
-        pass
+    runner.discard_request(req_path)
     return proc
 
 
