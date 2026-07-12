@@ -67,3 +67,32 @@ def run_spec(request_json: str) -> list[bool]:
     except OSError:
         pass
     return answers
+
+
+def run_state(request_json: str) -> dict:
+    """Feed a `mode="graph-state"` request to `zcli` and parse the canonical
+    state object `{"edges": [...], "residues": [...]}` it prints (Cli.lean
+    header). No per-query answer-count assertion applies — this mode ignores
+    queries. On any failure the request file is kept for debugging."""
+    exe = zcli_path()
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(request_json)
+        req_path = f.name
+    proc = subprocess.run([str(exe), req_path], capture_output=True, text=True,
+                          encoding="utf-8")
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"zcli graph-state failed (rc={proc.returncode}): "
+            f"{proc.stderr.strip()} (request kept at {req_path})")
+    state = json.loads(proc.stdout.strip())
+    if not isinstance(state, dict) or set(state) != {"edges", "residues"}:
+        raise AssertionError(
+            f"graph-state output shape unexpected: keys="
+            f"{sorted(state) if isinstance(state, dict) else type(state)} "
+            f"(request kept at {req_path})")
+    try:
+        os.unlink(req_path)
+    except OSError:
+        pass
+    return state

@@ -46,10 +46,9 @@ def _norm(pred: str | EllipsisType) -> str:
     return "..." if pred is Ellipsis else pred
 
 
-def graphindex_answers(schema_text: str, tuples, queries,
-                       object_wildcards=()) -> list[bool]:
-    """Build the real graph index, apply each tuple through the synchronous v1
-    write path (rule routing + same-transaction cascade), and answer each query.
+def graphindex_drive(schema_text: str, tuples, object_wildcards=()):
+    """Build the real graph index and apply each tuple through the synchronous
+    v1 write path (rule routing + same-transaction cascade).
 
     Mirrors `tests/test_matrix.py::GraphBackend` exactly: `RuleSet.apply` fans a
     raw write onto leaf families, `DeltaProcessor.run_cascade(wm)` drains the
@@ -58,6 +57,10 @@ def graphindex_answers(schema_text: str, tuples, queries,
     raises — conformance corpora must be admission-clean, matching the Lean
     driver's add-only accepted-writes-only chain (`graphRun` returns `none`
     there, and the test must treat both the same way).
+
+    Returns `(session, widx, store_id)` so callers can either answer queries
+    (`graphindex_answers`) or extract the final SQL state (the state-level
+    conformance extractor). The caller owns closing the session.
     """
     from index_v4.outbox import outbox_watermark
     from index_v4.processor import DeltaProcessor
@@ -85,6 +88,15 @@ def graphindex_answers(schema_text: str, tuples, queries,
             proc.run_cascade(wm)                    # synchronous v1: same txn
         session.commit()
 
+    return session, widx, "conf"
+
+
+def graphindex_answers(schema_text: str, tuples, queries,
+                       object_wildcards=()) -> list[bool]:
+    """Drive the real graph index (see `graphindex_drive`) and answer each
+    query."""
+    session, widx, _store_id = graphindex_drive(schema_text, tuples,
+                                                object_wildcards)
     answers = [
         bool(widx.check(sp, st, sn, rel, ot, on))
         for (sp, st, sn, rel, ot, on) in queries
