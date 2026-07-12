@@ -102,7 +102,7 @@ theorem neg_subset_starpop (E : Finset Id) (S : Finset Shape) :
 -- T1's remaining nut (documented, not yet in Lean): the INTENSIONAL distribution of
 -- `containsShape` (concrete/ghost subjects) over union/intersect/subtract for
 -- well-formed (`pos ⟂ starpop`) operands — the analogue of `containsStar_*`. It is
--- true but resisted `simp; tauto` (large expanded goal); see formal/ROADMAP.md for
+-- true but resisted `simp; tauto` (large expanded goal); see formal/history/ROADMAP.md for
 -- the intended route (a `containsShape` normal-form lemma + per-atom split). The star
 -- and extensional pieces (`containsStar_*`, `mem_ext_*`) are already proved.
 

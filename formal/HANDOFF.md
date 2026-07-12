@@ -5,11 +5,14 @@ to work on "The next task" below.** Pull in other docs only on demand:
 
 | doc | what it's for | when to read |
 |---|---|---|
-| `PROOF_STATUS.md` | append-only session ledger (newest first) | the TOP entry only, for fine detail on the resume point |
-| `ROADMAP.md` | per-stage designs + historical plans | the section for the stage you're working |
-| `SEMANTICS.md` | the Phase-0 spec (`sem`, models, theorem statements) | when touching spec-level defs |
+| `ARCHITECTURE.md` | the durable topical map (trust root, models, theorem table + scopes, pinning, residual surface) | for "how it all fits together" |
+| `FINAL_REVIEW.md` | the exact, clause-checked claim (plan §7 + cross-check) | for the precise wording of what is/isn't proved |
+| `SEMANTICS.md` | the spec / trust root (`sem`, models, theorem statements) | when touching spec-level defs |
+| `CORRESPONDENCE.md` | the Lean-def ↔ Python-file:line map | when auditing the model↔code tie |
+| `history/PROOF_STATUS.md` | append-only session ledger (newest first) | the TOP entry only, for fine detail on a resume point |
+| `history/ROADMAP.md` | per-stage designs + historical plans | the section for a stage's provenance |
+| `history/REVIEW.md` | historical one-shot session digest (2026-07-09→10) | never (history) |
 | `docs/formal-verification-plan.md` | original strategy/phases/honesty clauses | rarely; §7 for claim wording |
-| `REVIEW.md` | historical one-shot session digest (2026-07-09→10) | never (history) |
 
 **End goal:** a machine-checked proof that the set engine and graph index both compute
 the stratified-Datalog¬ perfect model `sem` — hence are equivalent — with the Python
@@ -32,14 +35,17 @@ never rounds up to "the code is formally verified" (plan §7).
    stratum-1"). A session that kills a false statement is a GOOD session; record the
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (only `[propext, Classical.choice, Quot.sound]`)
-   + 120 Python conformance tests, 0 skips (incl. the Phase-6 graph mode, the
-   state-level gate over zcli mode `"graph-state"`, the exhaustive small-scope
-   enumeration, and the zcli mode-rejection tests; the gate fails closed on any
-   skip or zero passes). Add new key theorems to `lean/ZanzibarProofs/Audit.lean`.
+   + **0 sorries** + zcli + axiom audit (412 `#print axioms` reports, one per audited
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + 133 Python conformance
+   tests, 0 skips
+   (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
+   the exhaustive small-scope enumeration, and the zcli mode-rejection tests; the gate
+   fails closed on any skip or zero passes). Add new key theorems to
+   `lean/ZanzibarProofs/Audit.lean`.
 4. **Rhythm.** Commit each green increment with a `formal: <stage> — <what>` message;
    push at session end. Before ending: update this file's "The next task" + add a
-   PROOF_STATUS.md session entry (top) + tick the ROADMAP stage marker.
+   `history/PROOF_STATUS.md` session entry (top) + tick the `history/ROADMAP.md` stage
+   marker.
 5. **Faithfulness.** Model hypotheses must be faithful to the Python (cite file:line
    or the spec §). New fragment conditions need a comment saying what Python mechanism
    they mirror. Where a spec and the code disagree on a name, the code wins.
@@ -65,7 +71,7 @@ not `rw [f]`. `omega` treats `∑`-atoms as opaque — good for combining sum `h
 `NReaches` is head-oriented: back-append is `NReaches.tail`; back-REPLACE needs
 last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
-## State of the world (2026-07-12k — all sorry-free, axiom-clean, verify.sh green)
+## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
 | theorem | file (`lean/ZanzibarProofs/`) | scope |
 |---|---|---|
@@ -109,8 +115,8 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 **Staged T2 widening: W1 ✅ → W2 ✅ → W3a ✅ → W3b ✅ → W3c ✅ → W3d-1a ✅ → W3d-1b ✅ → W3d-1c ✅ → W3d-2 ✅ → W4 ✅ (CLOSED 2026-07-12j — full T2a/T2b/T3/T6 over `ReachedBy := ReachedByW3d2E`). Phase 6 items 1–3 ✅ (CLOSED 2026-07-12k — graph-state conformance mode + `CORRESPONDENCE.md` + `FINAL_REVIEW.md`).**
 
-**W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* PROOF_STATUS entries and the
-ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
+**W3c is CLOSED (2026-07-11d).** Full detail: the 2026-07-11* `history/PROOF_STATUS.md`
+entries and the `history/ROADMAP.md` W3c paragraphs. The pieces a W3d session will reuse:
 - **Write model** (`ReconcileStars.lean`): `wildcardShapes` / `coveredFn` (star-subject
   `checkFn`) / `reconcileResidueKey` (wholesale stars+neg+upos recompute) / `reconcileKeyC`
   (covered-guarded edge fold) / `reconcileStarsKey` (residue-THEN-edges, the faithful atomic
@@ -136,24 +142,23 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 
 ---
 
-## The next task — Phase 6 extras (optional hardening), in FINAL_REVIEW §4 order
+## Status — the arc is COMPLETE; what remains is optional
 
-**Phase 6 items 1–3 are CLOSED (2026-07-12k), and the two §7 clauses that were
-explicitly unearned are now EARNED (2026-07-12m — READ THE TOP PROOF_STATUS
-ENTRY).** The arc: T1 + T2a/T2b + T3/T6 over `ReachedBy`, the graph conformance
-mode (zcli `"graph"` + `test_conformance_graph.py`), **state-level graph
-conformance** (zcli mode `"graph-state"` emitting the model's canonical final
-state; `formal/conformance/extractor.py` reading the Python `EdgeV4`/`ResidueV1`
-rows back to the same form under six DOCUMENTED projections P1–P6;
-`test_conformance_state.py`, 15 corpora — its first run FOUND the P6
-leaf-family divergence, recorded in CORRESPONDENCE §7), **exhaustive
-small-scope enumeration** (`test_conformance_enum.py`: ALL stores ≤ 3 tuples,
-2 names/type, four shapes, 527 stores, spec × oracle × set engine, counts
-asserted), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` (claim table updated —
-one subtraction + two scope qualifiers remain). verify.sh: 120 conformance
-tests, 0 skips. No open blocker for the claim as written in FINAL_REVIEW.md.
+**The formal-verification arc is finished.** T1 + T2a/T2b + T3/T6 over `ReachedBy`,
+the graph conformance mode (zcli `"graph"` + `test_conformance_graph.py`),
+**state-level graph conformance** (zcli mode `"graph-state"` emitting the model's
+canonical final state; `formal/conformance/extractor.py` reading the Python
+`EdgeV4`/`ResidueV1` rows back to the same form under six DOCUMENTED projections
+P1–P6; `test_conformance_state.py`, 15 corpora — its first run FOUND the P6
+leaf-family divergence, recorded in `CORRESPONDENCE.md` §7), **exhaustive small-scope
+enumeration** (`test_conformance_enum.py`: ALL stores ≤ 3 tuples, 2 names/type, four
+shapes, 527 stores, spec × oracle × set engine, counts asserted), `CORRESPONDENCE.md`,
+and `FINAL_REVIEW.md` are all landed and gated. verify.sh: 133 conformance tests, 0
+skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
+map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
+`history/`.
 
-What remains is OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
+What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
 
 1. **Fragment widening** — union-rooted derived defs first (`rootB` gap; the
    12k probe found NO behavioral divergence there, so the model is likely
@@ -180,5 +185,6 @@ What remains is OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
   (2026-07-12m)** — the two formerly-unearned §7 clauses. Remaining extras
   (optional, FINAL_REVIEW §4): fragment widening, remove legs, wider bounds.
 
-Historical detail for every closed stage: `PROOF_STATUS.md` (ledger, newest first)
-and `ROADMAP.md` (designs + post-mortems).
+Historical detail for every closed stage: `history/PROOF_STATUS.md` (ledger, newest
+first) and `history/ROADMAP.md` (designs + post-mortems); the topical synthesis is
+`ARCHITECTURE.md`.

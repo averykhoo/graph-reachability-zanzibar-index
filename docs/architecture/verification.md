@@ -87,3 +87,20 @@ torn-read detection on file-backed SQLite (WAL + real BEGIN semantics).
 `tests/scenarios/__init__.py`: declarative scenario tables where every expected
 boolean is computed by hand with a justifying comment — the human anchor the
 automated layers hang off.
+
+## Formal (machine-checked) verification
+
+Everything above is the **Python-side** redundancy. A separate, deeper layer lives
+under [`../../formal/`](../../formal/): a **Lean 4 proof** that the set-engine and
+graph-index **algorithms** (modeled in Lean) compute the stratified-Datalog¬ semantics
+`sem` and are therefore equivalent — machine-checked and axiom-audited. The Python
+implementations are pinned to those models by a conformance harness (the Lean spec is
+executable, so the same artifact is both proof subject and CLI oracle) that reuses this
+oracle's parser for independence, plus state-level equality and small-scope enumeration.
+Set engine is proved at full scope; the graph index at a documented fragment. It never
+rounds up to "the code is formally verified".
+
+- [`../../formal/ARCHITECTURE.md`](../../formal/ARCHITECTURE.md) — the topical map
+  (trust root, models, theorem table + scopes, how Python is pinned, residual surface).
+- [`../../formal/FINAL_REVIEW.md`](../../formal/FINAL_REVIEW.md) — the authoritative,
+  clause-checked claim (exactly what is and is not proved).

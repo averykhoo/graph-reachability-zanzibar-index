@@ -12,6 +12,7 @@ reference oracle and a validation matrix. Start here; go deeper per file:
 | [`graph-index.md`](./graph-index.md) | closure maintenance, path counts, wildcard split-node model, the ≤4-probe check |
 | [`derived-predicates.md`](./derived-predicates.md) | boolean operators in the graph index: taint, leaf routing, the delta processor, residues |
 | [`verification.md`](./verification.md) | oracle contract, validation matrix, ParityEngine, paranoia/invariants, hypothesis campaign |
+| [`../../formal/ARCHITECTURE.md`](../../formal/ARCHITECTURE.md) | the **Lean formal layer**: a machine-checked proof that both backend algorithms compute `sem` (hence are equivalent), pinned to Python by a conformance harness. The exact claim is [`../../formal/FINAL_REVIEW.md`](../../formal/FINAL_REVIEW.md) |
 | [`decision-log.md`](./decision-log.md) | load-bearing decisions + rejected alternatives, compressed from the specs |
 | [`../spec-deviations.md`](../spec-deviations.md) | dated implementation record: where the builds diverged from the specs and why |
 | [`../specs/`](../specs/) | the full original design specs (see "Citations" below) |

@@ -407,7 +407,7 @@ case (conformance failure), or a theorem is unprovable because the code's
 actual behavior differs from the drafted spec: **STOP. Do not** edit the
 oracle, goldens, or Python semantics; **do not** quietly weaken the theorem or
 the spec to match. Write the divergent case up in
-`formal/PROOF_STATUS.md#adjudications` (schema, ops, query, each system's
+`formal/history/PROOF_STATUS.md#adjudications` (schema, ops, query, each system's
 answer, your analysis of which is right per docs/specs), and ask the user.
 Every adjudication is potentially a real bug found — that is the project
 succeeding, not failing.

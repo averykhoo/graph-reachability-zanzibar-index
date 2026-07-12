@@ -606,7 +606,7 @@ name, the code wins):
   theorems only.
 - `hF : W4Fragment S T` (`FullScope.lean`) — the **honest fragment carries**:
   scope restrictions the current proof needs that Python admission does NOT
-  imply (each a documented gap — ROADMAP "W4 — honest gaps"): `rootB`
+  imply (each a documented gap — `history/ROADMAP.md` "W4 — honest gaps"): `rootB`
   (derived defs boolean-ROOTED; Python taints through `union`/`computed` roots
   too), `computedOnly` (derived defs read only computed operands),
   `twoStrata` (≤ 2 derived strata; attack-confirmed load-bearing), `wsBare`
@@ -687,7 +687,8 @@ section originally recapped the PLAN (C0–C4 — six-way answer conformance
 including rejection outcomes, state-level structural comparison, exhaustive
 small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
 clause-by-clause check. What exists (`formal/verify.sh` step 5;
-`formal/conformance/`; **120 tests, 0 skips, ~4 min**):*
+`formal/conformance/`; **133 tests, 0 skips, ~4 min** — 120 differential-conformance
+comparisons + 13 `test_sorry_scan.py` gate-tooling unit tests):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
   Python-`file:line` map, with the known intentional divergences listed.

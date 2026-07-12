@@ -116,7 +116,7 @@ independent corners.
 | `enumJobs2R1`/`enumJobs2R2` | per-round key enumeration off the state | `processor.py:701-727` per-round `_map_deltas_to_keys` |
 | `Drained` | outbox fully drained at commit boundary | boolean spec §7.8 / I9 `audit_fixpoint` |
 | `GraphAdmission` (wf/nodup/strat/ttuDirect/matchDecl/ranked/objWild/storeValid) | what compile+write admission guarantees | see field docs, `FullScope.lean:64-94` (e.g. `_validate_ttu_tuplesets` `zanzibar_utils_v1.py:898-935`) |
-| `W4Fragment` (rootB/computedOnly/twoStrata/wsBare/bareStar/ttuStarFree/term) | — the HONEST carries: restrictions Python does NOT impose | ROADMAP "W4 — honest gaps" |
+| `W4Fragment` (rootB/computedOnly/twoStrata/wsBare/bareStar/ttuStarFree/term) | — the HONEST carries: restrictions Python does NOT impose | `history/ROADMAP.md` "W4 — honest gaps" |
 | `Exec.lean` `graphRun` + `graphRun_reached`/`graphRun_check_eq_sem` | the conformance driver IS the chain (theorem, not analogy) | driven against `WildcardIndex` by `test_conformance_graph.py` (verdicts) and `test_conformance_state.py` (final state, zcli mode `"graph-state"` — same fold, same gates; the dump code in `Cli.lean` is driver-level, its projections documented in the mode header + `extractor.py`) |
 
 ## 7. Known intentional divergences (model ≠ code, by design)
