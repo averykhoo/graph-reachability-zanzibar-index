@@ -21,12 +21,14 @@ of exactly length `k` (first-edge decomposition); `pathCount` sums lengths `1..|
 (in a DAG every path has length < |V|, so this equals the true count), and `phat`
 adds the empty path.
 
-Proved here: the **boundary sum-identity** (`phat_boundary`) — the exact first-edge
-recurrence *with* the length-`|V|` boundary term, by pure `Finset.sum` manipulation,
-NO acyclicity. What remains for the full counting theorem is (a) the vanishing lemma
-`Acyclic → pathsOfLength |V| = 0` (a DAG has no walk of length |V| — pigeonhole), which
-turns `phat_boundary` into the clean recurrence, and (b) the algebraic expansion for
-`pathCount_addEdge`. Both are isolated as the two remaining `sorry`s.
+Proved here (the file is sorry-free; T4 closed 2026-07-10): the **boundary
+sum-identity** (`phat_boundary`) — the exact first-edge recurrence *with* the
+length-`|V|` boundary term, by pure `Finset.sum` manipulation, NO acyclicity; the
+**vanishing lemma** `pathsOfLength_card_vanish` (`Acyclic → pathsOfLength |V| = 0`,
+pigeonhole over the walk API), which turns `phat_boundary` into the clean recurrence
+`phat_recurrence`; and the **counting theorems** `pathCount_addEdge` /
+`pathCount_removeEdge` themselves, via the affine-recurrence closed form
+(`rec_closed_form` / `rec_unique`).
 -/
 
 namespace Zanzibar
@@ -123,11 +125,11 @@ theorem phat_boundary (g : DirectGraph V) (u v : V) :
     "no length-`|V|` walk" property (`hvanish`) as an explicit hypothesis:
     `phat u v = [u=v] + ∑_w dcount u w · phat w v`.
 
-    `hvanish` is exactly the remaining combinatorial obligation (`Acyclic g →
-    hvanish`, a pigeonhole: a length-`|V|` walk repeats a vertex ⇒ closed sub-walk ⇒
-    positive `pathCount x x` ⇒ ¬Acyclic). Stated as a hypothesis rather than a
-    separate `sorry` so this recurrence is a complete proof and the count stays on
-    the two genuine T4 obligations (`pathCount_addEdge/removeEdge`). See ROADMAP. -/
+    `hvanish` is the combinatorial obligation (`Acyclic g → hvanish`, a pigeonhole:
+    a length-`|V|` walk repeats a vertex ⇒ closed sub-walk ⇒ positive
+    `pathCount x x` ⇒ ¬Acyclic) — DISCHARGED below by `pathsOfLength_card_vanish`;
+    it is kept as an explicit hypothesis so the recurrence stands on its own
+    algebraic feet. -/
 theorem phat_recurrence (g : DirectGraph V) (u v : V)
     (hvanish : ∀ w : V, pathsOfLength g (Fintype.card V) w v = 0) :
     phat g u v = (if u = v then 1 else 0) + ∑ w : V, g.dcount u w * phat g w v := by

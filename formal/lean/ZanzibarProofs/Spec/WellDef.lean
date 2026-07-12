@@ -12,9 +12,10 @@ import Mathlib.Logic.Function.Iterate
 `SEMANTICS.md` §8, rows T0a/T0b.
 
 - **T0a** (`sem_fuel_stable`): the fuel-bounded evaluator is stable above
-  `fuelBound`. This file now PROVES it from a single step lemma
-  (`semAux_fuel_stable_step`, the pigeonhole argument) — the reduction is a clean
-  induction, so only the pigeonhole core remains `sorry`.
+  `fuelBound`. This file PROVES it from a single step lemma
+  (`semAux_fuel_stable_step`) — the reduction is a clean induction, and the step
+  lemma's stabilization core is discharged via `Spec/Confine` + `Spec/Stabilize`
+  (T0a closed 2026-07-10, sorry-free).
 - **T0b** (`stratify_none_iff_cycle`, `stratify_topological`): `stratify` computes a
   topological layering exactly when there is no derived-dependency cycle.
 

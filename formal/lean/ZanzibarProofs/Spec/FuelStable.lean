@@ -3,11 +3,11 @@ import ZanzibarProofs.Spec.Semantics
 /-!
 # T0a supporting lemmas — the fuel-stability convergence argument
 
-`SEMANTICS.md` §8 (T0a). The remaining `sorry` (`semAux_fuel_stable_step` in
-`Spec/WellDef.lean`) asserts that above `fuelBound`, one more unit of fuel does not
-change the answer. This file collects the reusable *ingredients* of the intended
-proof. It is deliberately kept separate from `WellDef.lean` so each ingredient is
-independently checkable.
+`SEMANTICS.md` §8 (T0a). The stabilization core `semAux_fuel_stable_step` in
+`Spec/WellDef.lean` — PROVED there (T0a closed 2026-07-10, sorry-free) — asserts
+that above `fuelBound`, one more unit of fuel does not change the answer. This file
+collects the reusable *ingredients* of that proof. It is deliberately kept separate
+from `WellDef.lean` so each ingredient is independently checkable.
 
 **Why the naive pigeonhole fails (ROADMAP correction, confirmed).** `semAux` has no
 visited-set: `semAux (n+1) = Φ(semAux n)` applies the immediate-consequence operator
@@ -27,9 +27,10 @@ eventual periodicity at ~`2^{#atoms}`. Stability by `fuelBound` genuinely needs
    strictly-lower-rank tainted atoms + untainted atoms; once those are stable, the
    tainted rank stabilizes one fuel-step later.
 
-Remaining to build (next pass): the finite *reachable-atom* set with a confinement
+The rest of the argument — the finite *reachable-atom* set with its confinement
 lemma (`semAux` depends only on `rec` there), the per-rank stabilization induction,
-and the arithmetic that the total level fits under `|keys|·(2|T|+4)`.
+and the arithmetic that the total level fits under `|keys|·(2|T|+4)` — lives in
+`Spec/Confine.lean` / `Spec/Stabilize.lean` and is consumed by `Spec/WellDef.lean`.
 
 This file supplies **ingredient 1** (untainted monotonicity) in full.
 -/
