@@ -6,10 +6,13 @@ own words, a clause-by-clause cross-check against what actually stands in the
 tree, the theorem inventory in English, and the residual risk. Nothing here
 rounds up.
 
-Verification state as of 2026-07-12k: `bash formal/verify.sh` green —
-`lake build` + **0 sorries** + `zcli` + axiom audit (every audited theorem
-depends only on `[propext, Classical.choice, Quot.sound]`) + **98** Python
-conformance tests.
+Verification state as of 2026-07-12 (post conformance-grid upgrade):
+`bash formal/verify.sh` green — `lake build` + **0 sorries** + `zcli` + axiom
+audit (every audited theorem depends only on `[propext, Classical.choice,
+Quot.sound]`; the gate requires exactly one observed report per `#print axioms`
+command) + **101** Python conformance tests (0 skips — the conformance step
+fails on any skipped test or zero passes; interpreter overridable via
+`ZANZIBAR_PY`).
 
 ---
 
@@ -37,7 +40,7 @@ Clause-by-clause, what is actually true today:
 | hence equivalent | ✅ `backend_equivalence` (T3), by transitivity through `sem`, same scope as T2b; plus `exclusion_effective` / `no_ghost_grant` (T6a/T6b) — the security corollaries with real exclusion content. |
 | machine-checked, axiom-audited | ✅ 0 sorries; the Audit module `#print axioms` every key theorem; `verify.sh` hard-fails on any axiom beyond `propext`, `Classical.choice`, `Quot.sound`. |
 | pinned by structural correspondence review | ✅ `CORRESPONDENCE.md` — the Lean-def ↔ Python-file:line map, with the known intentional divergences listed (add-only, fixed two rounds, fragment surplus, no leaf-family split). |
-| pinned by differential conformance | ✅ **check-verdict level, five corners** (`verify.sh` step 5, 98 tests): Lean `sem` (zcli) × independent oracle × real `SetEngine` over 17 corpora + 25-seed randomized substores, **plus (Phase 6)** the Lean *operational graph model* (zcli mode `"graph"`, whose runtime output is covered by the theorem via `graphRun_reached` / `graphRun_check_eq_sem` — the driver is the chain's own constructors, by proof, not analogy) × the real Python `WildcardIndex`+`DeltaProcessor` × `sem`, over the 15 in-fragment corpora including two designed attack corpora (stale-edge cross-stratum re-settle; star churn over two strata). The repository-wide validation matrix separately pins Python-graph × Python-set × oracle on every push. |
+| pinned by differential conformance | ✅ **check-verdict level, five corners** (`verify.sh` step 5, 101 tests): Lean `sem` (zcli) × independent oracle × real `SetEngine` over 17 corpora + 25-seed randomized substores, **plus (Phase 6)** the Lean *operational graph model* (zcli mode `"graph"`, whose runtime output is covered by the theorem via `graphRun_reached` / `graphRun_check_eq_sem` — the driver is the chain's own constructors, by proof, not analogy) × the real Python `WildcardIndex`+`DeltaProcessor` × `sem`, over the 15 in-fragment corpora including two designed attack corpora (stale-edge cross-stratum re-settle; star churn over two strata). All three answer suites share one query grid (`formal/conformance/grid.py`) that unions schema-DECLARED relations type-aware into the target set — so derived/boolean roots are queried on every corpus (previously targets came only from stored tuples and derived-only boolean roots went unqueried — the boolean-root conformance evidence was vacuous exactly there) — and emits concrete-named userset-shaped subjects over a bounded pool (inside the proved graph scope: `hqs` constrains only star-NAMED subjects). zcli's mode dispatch is itself conformance-tested (`test_cli_mode.py`: unknown / non-string `"mode"` → rc 4, never silently answered as spec). The repository-wide validation matrix separately pins Python-graph × Python-set × oracle on every push. |
 | … "including state-level equality" | ❌ **Not done.** Conformance compares `check` verdicts, not materialized edge/residue state. This clause of §7 is NOT yet earned and is excluded from the current claim (open item, HANDOFF). |
 | … "exhaustive small-scope enumeration up to the documented bounds" | ❌ **Not done as stated.** What exists is seeded randomized substore fuzzing (25 seeds × 17 corpora) plus the repo's Hypothesis campaign — sampling, not exhaustive small-scope enumeration. Excluded from the current claim. |
 | residual unverified surface | ✅ Acknowledged in full, and LARGER than §7's list — see §3. |

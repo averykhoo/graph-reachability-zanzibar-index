@@ -6,6 +6,12 @@ models. It is the **trust root**: if this document is wrong, every downstream
 proof is proving the wrong thing. It must be reviewed by the user before any Lean
 is written (plan §8.1 checkpoint 1).
 
+**Revision note (2026-07-12, post-close):** §3, §5.1, §8, and §10 have been
+revised to state exactly what was BUILT and PROVED; the Phase-0 proposals they
+replaced are kept only as explicitly marked historical notes. `FINAL_REVIEW.md`
+is the authoritative final-claim document; `CORRESPONDENCE.md` is the
+Lean↔Python map.
+
 Every non-trivial claim carries a `file:line` citation into the repo as it stood
 at commit `beecd08` (master). Where a spec doc and the code disagree, **the code
 wins** (CLAUDE.md), and the divergence is logged in §11. All line numbers were
@@ -42,12 +48,16 @@ fact we will make precise and prove:
 
 So `sem S T q` is defined as: *is the query `q` true in the stratified perfect
 model of the Datalog¬ program induced by schema `S` over stored tuples `T`?*
-Both backends are proven to compute `sem`; equivalence is the corollary.
+Both backends are proven to compute `sem` — the set engine at full scope, the
+graph index at the documented `GraphAdmission + W4Fragment` scope (§8) —
+and equivalence is the corollary at that same scope.
 
 **Scope of the verified `check`.** `q = (subject, relation, object)` with a
 *concrete, bare* subject is the primary obligation. Intensional `'*'`-subject
 queries and userset-subject queries are also in scope (they are part of the
-matrix grid and the pinned star×boolean table). `expand`/`lookup`/`lookup_reverse`
+matrix grid and the pinned star×boolean table) — on the graph side, a
+star-NAMED subject only with a bare predicate and a concrete query object
+(§8 `hqs`/`hqo`). `expand`/`lookup`/`lookup_reverse`
 are **out of scope** (plan §1 non-goals).
 
 ---
@@ -108,17 +118,22 @@ fixpoint over already-final lower strata.
 For the Lean spec we do **not** need to build a general Datalog engine. The oracle
 (`tests/oracle.py`) already *is* the perfect-model evaluator, realized as pointwise
 recursion with a provisional-False recursion guard. We formalize **that**
-evaluation and separately prove it computes the stratified perfect model. Concretely
-`sem` is defined twice and the two are proven equal (this equality is theorem T0a):
+evaluation directly. **As built** (`Spec/Semantics.lean`), `sem` is ONE
+executable `Bool`-valued definition: the fuel-bounded evaluator `semAux` — one
+application of the immediate-consequence step (`evalE`) per unit of fuel, fuel
+exhaustion playing the oracle's provisional-False — run at `fuelBound S T`. Its
+well-definedness theorem is **T0a = `sem_fuel_stable`** (`Spec/WellDef.lean`):
+over a stratifiable schema and a store whose tuples are declared
+(`StoreDeclared`, §8), any fuel at or above the bound gives the same answer.
 
-1. **Relational `Sem` (`Prop`-valued):** the inductively-defined perfect model.
-   Theorems quantify over this.
-2. **Executable `sem` (`Bool`-valued):** the fuel-bounded fixpoint iterator (or the
-   oracle-style memoized recursion). The conformance CLI runs this.
+*Historical (Phase-0 plan, superseded):* this section originally proposed
+defining `sem` twice — a relational `Prop`-valued perfect model `Sem` plus the
+executable evaluator — with T0a as their equivalence. **No relational `Sem` was
+ever built**; the honest T0a is the fuel-stability statement above (§8).
 
-Both are parameterized by a **stratification** of `S`; the theorems carry
-`stratify S = some strata` as a hypothesis (§8). On non-stratifiable schemas the
-spec is **partial / undefined** and out of the verified envelope (§4.4).
+The theorems carry stratifiability (`Stratifiable S`, i.e. `stratify S`
+succeeds) as a hypothesis (§8). On non-stratifiable schemas the spec is
+**partial / undefined** and out of the verified envelope (§4.4).
 
 ---
 
@@ -218,9 +233,12 @@ Tarjan-lowlink guard deciding which frames may be memoized (`:333-375`). For a
 stratified perfect model (the recursion only ever descends into strictly-lower
 strata for negated/intersected references, and same-stratum recursion is monotone
 union where provisional-False = least-fixpoint seed). The Lean executable `sem`
-may instead iterate a monotone step per stratum to a fuel bound `|universe|`; prove
-it equals the relational `Sem` (T0a). Either realization must agree with the oracle
-on all inputs (conformance C1).
+(as built) is primitive-recursive on fuel: `semAux (fuel+1)` applies the
+immediate-consequence step to `semAux fuel`, with fuel exhaustion = the oracle's
+provisional-False, run at the multiplicative `fuelBound S T`; T0a
+(`sem_fuel_stable`, §8) proves fuel above the bound never changes the answer
+(and requires `StoreDeclared` — see §8). Agreement with the oracle is pinned
+empirically by the conformance suite (§10), not by proof.
 
 ### 5.2 Universe (for star existential witnesses)
 
@@ -234,13 +252,16 @@ query endpoints must never *witness* existence (a ghost you asked about must not
 ### 5.3 Boolean composition (`tests/oracle.py:377-391`)
 
 ```
-Sem(Union cs)        = ∃ c ∈ cs, Sem(c)
-Sem(Intersection cs) = ∀ c ∈ cs, Sem(c)
-Sem(Exclusion b s)   = Sem(b) ∧ ¬ Sem(s)
-Sem(Computed r)      = sat(o_type, o_name, r)          -- recurse, same object, new relation
-Sem(Direct rs)       = direct_leaf(rs, o_type, o_name, relation)
-Sem(TTU tr ts)       = ttu_leaf(tr, ts, o_type, o_name)
+sem(Union cs)        = ∃ c ∈ cs, sem(c)
+sem(Intersection cs) = ∀ c ∈ cs, sem(c)
+sem(Exclusion b s)   = sem(b) ∧ ¬ sem(s)
+sem(Computed r)      = sat(o_type, o_name, r)          -- recurse, same object, new relation
+sem(Direct rs)       = direct_leaf(rs, o_type, o_name, relation)
+sem(TTU tr ts)       = ttu_leaf(tr, ts, o_type, o_name)
 ```
+
+(These are the clauses of the executable evaluator's step `evalE` —
+`Spec/Semantics.lean` — not a separate relational definition.)
 
 ### 5.4 Direct leaf (`tests/oracle.py:398-462`) — the subtle core
 
@@ -549,20 +570,26 @@ Resolve per §11-A4.
 
 ---
 
-## 8. Theorem statements — the precise hypotheses
+## 8. Theorem statements — what is actually proved, and at what scope
 
-All theorems quantify over a schema `S`, a finite store `T` (write-valid tuples),
-and a query `q`. Hypotheses, named for reuse:
+*Revised 2026-07-12 to state the PROVED shapes. The original Phase-0 table
+proposed abstract graph-side statements over `hAcc : GraphAccepts` and an
+abstract reached-state predicate; that shape was **deleted from the Lean tree
+as false** (2026-07-10 — the abstract closure admitted junk states), and the
+proved replacements live at the strictly narrower `GraphAdmission + W4Fragment`
+scope in `FullScope.lean`. The historical shape is kept only as the marked note
+at the end of this section.*
 
-- `hWF : WF S` (§4.2)
-- `hStrat : stratify S = some strata` (§4.4 — no claim without it)
-- `hAcc : GraphAccepts S` — the graph scope predicate: no object-wildcard on a
-  derived relation, no wildcard userset over a derived relation, no TTU whose
-  tupleset is derived (decision-15, `boolean-ivm-spec §1.15`). Graph theorems only.
-- `hReach : ReachedBy σ S T` — `σ` is the graph state reached by applying the
-  writes of `T` (with cascade) from empty. Graph theorems only.
-- `hValid : ∀ t ∈ T, WriteValid t` — every stored tuple passes
-  `validate_write_identifiers` positional validity (§2.1).
+All theorems quantify over a schema `S`, a finite store `T`, and a query `q`.
+Hypotheses, named as in the Lean tree (where a doc and the code disagree on a
+name, the code wins):
+
+- `hWF : WF S` (§4.2; `Core/Schema.lean`).
+- `hStrat : Stratifiable S` — `stratify S` succeeds (§4.4 — no claim without
+  it; `Spec/Stratify.lean`).
+- `hValid : AllValid T` (`SetEngine/Correct.lean`) — every stored tuple's
+  `subject.type`, `relation`, `object.type` satisfy `ValidIdent` (§2.1;
+  `ValidIdent` is deliberately opaque, `Core/Ident.lean`).
 - `hDecl : StoreDeclared S T` — every stored tuple's `(object.type, relation)`
   is declared and its subject type is among the declared restriction types
   (`Spec/Confine.lean`). The semantic half of write-validity, implied by the
@@ -570,22 +597,70 @@ and a query `q`. Hypotheses, named for reuse:
   the fuel-stability statement is FALSE (machine-checked:
   `Spec/Counterexample.lean`; an admission-invalid tupleset tuple closes a
   consultation cycle stratification never sees, and `semAux` oscillates).
+- `hA : GraphAdmission S T` (`FullScope.lean`) — the model-level **admission
+  bundle**: what the Python compiler + write admission guarantee for EVERY
+  accepted schema/store (each field's docstring cites the enforcing Python
+  mechanism): `wf`, `nodup`, `strat`, `ttuDirect` (untainted TTU tuplesets
+  direct-only, `_validate_ttu_tuplesets`), `matchDecl`, `ranked`, `objWild`
+  (object-wildcard shapes never on derived relations), `storeValid`. Graph
+  theorems only.
+- `hF : W4Fragment S T` (`FullScope.lean`) — the **honest fragment carries**:
+  scope restrictions the current proof needs that Python admission does NOT
+  imply (each a documented gap — ROADMAP "W4 — honest gaps"): `rootB`
+  (derived defs boolean-ROOTED; Python taints through `union`/`computed` roots
+  too), `computedOnly` (derived defs read only computed operands),
+  `twoStrata` (≤ 2 derived strata; attack-confirmed load-bearing), `wsBare`
+  (every declared wildcard restriction is bare `[T:*]`), `bareStar` (stored
+  star subjects bare, objects concrete), `ttuStarFree` (no stored star subject
+  feeds a TTU tupleset), `term` (derived relations never TTU targets nor
+  stored userset-subject predicates). Graph theorems only.
+- `h : ReachedBy σ S T` (`FullScope.lean`; `ReachedBy := ReachedByW3d2E`) —
+  `σ` is reached from empty by the OPERATIONAL chain: admitted logged
+  rule-routed writes interleaved with state-derived two-round cascade legs —
+  the model of the synchronous v1 Python write path. The chain is **add-only**
+  (no remove legs; a property of the chain, not a hypothesis).
+- `hq : Drained S σ` — no dirty derived key (`cascadeKeys S σ = []`); the
+  Python invariant at every commit boundary (§7.8). Read correctness holds
+  exactly here; mid-drain states are honestly stale.
+- Query scope (graph side): `hqs` — a star-NAMED subject must be
+  bare-predicate; `hqo` — the query object is concrete
+  (`q.object.name ≠ STAR`).
 
-| ID | Statement |
-|----|-----------|
-| **T0a** | `∀ S T q, WF S → hStrat → Sem S T q ↔ sem S T q = true` (relational ≡ executable; well-defined, terminating). |
-| **T0b** | `stratify` sound: `some strata` ⟹ dependency order respected; `none` ⟺ derived-dependency cycle exists. |
-| **T1** | `∀ S T q, hWF → hStrat → hValid → SetEngineModel.check S T q = sem S T q`. |
-| **T2a** | `∀ ops, (each op valid & accepted by GraphAccepts) → Inv (run ops) ∧ (run ops).materialized = materialize S (netTuples ops)`. |
-| **T2b** | `∀ σ q, Inv σ → hReach σ S T → GraphModel.check σ q = sem S T q`. |
-| **T3** | `hWF → hStrat → hAcc → hReach σ S T → hValid → SetEngineModel.check S T q = GraphModel.check σ q` (⟸ T1 ∘ T2b). |
-| **T4** | acyclic precondition ⟹ add/remove of a direct edge preserves `p = #paths` (the counting theorem; the DAG hypothesis is enforced by §7.3). |
-| **T5** | after `run_cascade`, derived state = stratified fixpoint of base state; each `but not` operand settled before its consumer reads it. |
-| **T6a** | exclusion-effectiveness: `Sem S T (in subtract-operand for subject) → GraphModel.check = SetEngineModel.check = false`. |
-| **T6b** | no-ghost-grant: removing the last supporting tuple ⟹ both models deny. |
-| **T6c** | wildcard scoping: a `T:*` grant matches subject `u` only if `u.type = T` on that relation/object. |
+`GraphAccepts S` (the decision-15 scope predicate, `GraphIndex/State.lean`)
+survives as orientation, not as a theorem hypothesis: `w4_within_scope`
+(`FullScope.lean`) proves `GraphAdmission ∧ W4Fragment → GraphAccepts` — the
+proved fragment sits INSIDE the accepted class. **The converse is false:**
+`GraphAccepts` admits schemas outside `W4Fragment` (union-rooted taint, > 2
+strata, `PDerivedTTU`/`PDerivedUserset` leaves, … — the honest-gaps list); no
+theorem covers that surplus.
 
-T3 and T6 are corollaries proved in Lean by rewriting with T1/T2b + spec lemmas.
+| ID | Lean name (file) | Actual proved statement |
+|----|------------------|-------------------------|
+| **T0a** | `sem_fuel_stable` (`Spec/WellDef.lean`) | `hStrat → hDecl → ∀ f ≥ fuelBound S T, semAux S q.subject T q f … = sem S T q` — fuel-stability of the executable evaluator over declared stores. (There is NO relational `Sem`; the Phase-0 "relational ≡ executable" T0a was never built — §3.) |
+| **T0b** | `stratify_none_iff_cycle` / `stratify_topological` (`Spec/WellDef.lean`) | `stratify` fails exactly on a derived-dependency cycle; on success, stratum assignment is topological (dependencies respect the layering). |
+| **T1** | `setEngine_correct` (`SetEngine/Correct.lean`) | `hWF → hStrat → hValid → SetEngineModel.check S T q = sem S T q`. Full scope. (The three hypotheses are retained but underscored/unneeded — the equality is unconditional; they match the statement `backend_equivalence` routes through.) |
+| **T2a** | `graph_reached_inv` (`FullScope.lean`) | `hA → hF → h → Inv S σ` — the 8-clause invariant (I1–I3 structural + the four I6 residue-hygiene clauses) at EVERY operationally-reached state, dirty keys and mid-drain included. (The Phase-0 shape additionally claimed `materialized = materialize S (netTuples ops)`; **no such state-equality theorem exists** — state-level conformance is an open item, §10.) |
+| **T2b** | `graph_correct` (`FullScope.lean`) | `hA → hF → h → hq → hqs → hqo → GraphModel.check σ q = sem S T q` — at every fully-drained reached state, derived AND untainted queries. |
+| **T3** | `backend_equivalence` (`FullScope.lean`) | T2b's hypotheses + `hValid` ⟹ `SetEngineModel.check S T q = GraphModel.check σ q` (T1 ∘ T2b, transitivity through `sem`; same scope as T2b, never wider). |
+| **T4** | `pathCount_addEdge` / `pathCount_removeEdge` (`GraphIndex/Closure.lean`) | acyclicity ⟹ add/remove of a direct edge preserves `p = #paths` (the counting theorem; the DAG hypothesis is enforced by §7.3). |
+| **T5** | `runCascade2_no_abort` / `cascade2_drains` (`GraphIndex/CascadeStrata.lean`) | the two-round cascade drains every dirty key, and the scheduler's abort branch is provably dead at ≤ 2 derived strata (`hLU2`; attack-confirmed LIVE at 3 strata — which is why `twoStrata` is an honest carry). |
+| **T6a** | `exclusion_effective` (`FullScope.lean`) | T3's hypotheses + `hDeny : sem S T q = false` ⟹ BOTH backends deny — with real exclusion content at this scope: a subject removed by a `but not` operand is denied by both (`exclusion_effective_w3c` exhibits the under-a-star-grant case). |
+| **T6b** | `no_ghost_grant` (`FullScope.lean`) | T2b's hypotheses + `sem S T' q = false` on the chain's own store `T'` ⟹ the graph denies at any fully-drained reached state — no stale edge or residue row survives the drain. (NOT the Phase-0 "removing the last supporting tuple" form — the chain is add-only; removes are outside every graph-side theorem.) |
+| **T6c** | `wildcard_scoping` (`Equiv.lean`) | `restrictionMatches rs tup = true → ∃ r ∈ rs, tup.subject.type = r.1` — a `T:*` grant can never leak to a subject of another type; both backends inherit it through T1/T2b + the shared leaf structure. |
+
+T3/T6a/T6b are corollaries in `FullScope.lean` by rewriting with T1/T2b — at
+the same `GraphAdmission + W4Fragment` scope as T2b. Non-vacuity: the
+hypothesis bundles are machine-checked inhabited by a real compiled boolean
+schema/store (`W4Witness`); the honesty caveat on the joint drained-state
+witness is in `FINAL_REVIEW.md` §2.
+
+*Historical note (superseded shape).* The table originally published here
+stated T2a/T2b/T3/T6 over `hAcc : GraphAccepts S`, an abstract
+`hReach : ReachedBy σ S T`, and an `Inv` hypothesis, and said "T3 and T6 are
+corollaries proved in Lean" in that shape. The abstract-closure versions were
+**deleted as false** (2026-07-10) and the obligations re-proved over the
+operational chain with the provenance-split bundles above. The W1 pure-direct
+versions survive under `*_direct` names in `Equiv.lean`.
 
 ---
 
@@ -594,7 +669,8 @@ T3 and T6 are corollaries proved in Lean by rewriting with T1/T2b + spec lemmas.
 `correctness.md:38-67` already gives four independent evaluators + paranoia + a
 hypothesis campaign. The formal effort is aimed where sampling is weakest:
 
-1. **Unbounded generalization** — T1/T2 quantify over all `S,T,q`; tests sample.
+1. **Unbounded generalization** — T1 quantifies over all `S,T,q` (T2 over all
+   of them within the `GraphAdmission + W4Fragment` scope, §8); tests sample.
 2. **The counting-IVM-under-acyclicity crux (T4)** — the group-inverse argument
    whose failure needs a rare diamond+remove+re-add; `theory.md:48-61` states it,
    nothing proves it.
@@ -604,15 +680,65 @@ hypothesis campaign. The formal effort is aimed where sampling is weakest:
 
 ---
 
-## 10. Conformance plan recap (how Python is pinned to `sem`)
+## 10. Conformance (how Python is pinned to `sem`) — as built
 
-Per plan §6: C0 correspondence table (Lean def ↔ Python `file:line`); C1 six-way
-answer conformance (Lean spec + 2 Lean models + oracle + 2 Python backends, on
-answers AND rejection outcomes) over the matrix/scenario corpora + hypothesis cases;
-C2 graph state-level conformance (edge counts + residues dumped and compared
-structurally — the strong signal); C3 exhaustive small-scope enumeration; C4 CI
-gates (zero `sorry`, axiom audit, conformance green). The Lean spec is
-**executable** so the same artifact is proof subject and CLI oracle.
+*Revised 2026-07-12: this section originally recapped the PLAN (C0–C4 —
+six-way answer conformance including rejection outcomes, state-level structural
+comparison, exhaustive small-scope enumeration). What was BUILT is narrower in
+two named places; `FINAL_REVIEW.md` §1 is the authoritative clause-by-clause
+check. What exists (`formal/verify.sh` step 5; `formal/conformance/`;
+**101 tests, 0 skips, ~2.5 min**):*
+
+- **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
+  Python-`file:line` map, with the known intentional divergences listed.
+- **Answer conformance — check-verdict level, five corners** (not the plan's
+  six; state-level equality is the missing corner):
+  - `test_conformance_spec.py` — Lean `sem` (zcli) × independent oracle × real
+    `SetEngine`, all 17 corpora;
+  - `test_conformance_random.py` — the same comparison over 25-seed randomized
+    substores per corpus;
+  - `test_conformance_graph.py` — the Lean OPERATIONAL graph model (zcli mode
+    `"graph"`, whose verdicts are covered by `graph_correct` via the driver
+    honesty theorems `graphRun_reached`/`graphRun_check_eq_sem`) × the real
+    Python `WildcardIndex`+`DeltaProcessor` × `sem`, over the 15 in-fragment
+    corpora (incl. two designed attack corpora);
+  - `test_cli_mode.py` — zcli mode-dispatch fail-closure: an unknown or
+    non-string `"mode"` is rejected with its own exit code (the rc enumeration
+    is 0 answers / 1 usage-parse / 2 admission / 3 not-drained / 4 unknown
+    mode), so spec answers can never masquerade as graph answers.
+- **The shared query grid** (`formal/conformance/grid.py` — the single source
+  for all three answer suites): stored-tuple-derived targets PLUS every
+  schema-DECLARED `(type, relation)` unioned type-aware, so derived/boolean
+  roots are queried on every corpus (before this upgrade the grid derived its
+  targets from stored tuples only, and corpora whose boolean root is
+  derived-only were never queried on it — the boolean-root conformance
+  evidence was vacuous exactly there); plus userset-shaped subjects
+  `(relation, type, name)` over a bounded pool (first 2 concrete names + a
+  ghost per type). Star subjects stay bare-predicate; the concrete-named
+  userset queries sit inside the proved graph query scope (`hqs` constrains
+  only star-NAMED subjects).
+- **C4 — the gate** (`formal/verify.sh`, fail-closed): lake build; 0 `sorry`
+  tokens AND 0 build-log sorry warnings; zcli builds and the binary's presence
+  is preflighted (a missing binary would make every Lean comparison skip);
+  axiom audit with report-count equality (exactly one observed report per
+  `#print axioms` command in `Audit.lean`; only
+  `propext`/`Classical.choice`/`Quot.sound`); the conformance step fails on
+  ANY skipped test or zero passes. Interpreter overridable via `ZANZIBAR_PY`.
+
+What the plan proposed and was **NOT built** (open items — `FINAL_REVIEW.md`
+§1's ❌ rows and §4):
+
+- **C2 state-level conformance** — no edge/residue state is dumped or compared
+  structurally; conformance compares `check` verdicts only.
+- **C3 exhaustive small-scope enumeration** — what exists is seeded randomized
+  substore sampling, not exhaustive enumeration up to documented bounds.
+- The plan's "rejection outcomes" corner of C1: there is no six-way
+  rejection-outcome comparison; what is exercised is zcli's own refusal
+  surface (admission rc 2, not-drained rc 3, unknown-mode rc 4) plus the
+  repo-wide validity parity of the existing test matrix.
+
+The Lean spec is **executable**, so the same artifact is proof subject and CLI
+oracle.
 
 ---
 
@@ -633,10 +759,13 @@ Each must be resolved or escalated before Phase 1 Lean. Proposed resolutions giv
 - **A2 — Provisional-False recursion vs stratum iteration.** The oracle uses
   Tarjan-lowlink provisional-False; the plan proposes per-stratum fixpoint iteration.
   *Proposed:* define the executable `sem` by stratum iteration (cleaner to prove
-  T0a/terminating), and prove it agrees with the oracle by conformance C1 rather than
+  T0a/terminating), and prove it agrees with the oracle by answer conformance
+  (§10) rather than
   by matching the oracle's exact control flow. For stratifiable schemas the two
   coincide; that coincidence is asserted empirically, not proven. Acceptable because
-  the oracle is being *demoted*, not verified.
+  the oracle is being *demoted*, not verified. *(Outcome: the built `sem` went the
+  OTHER way — oracle-style fuel-bounded recursion, not stratum iteration; the
+  `Spec/Semantics.lean` docstring logs the refinement of this item. See §3.)*
 - **A3 — Undefined reference = empty (spec) vs compile-reject (graph).** The oracle
   treats an undeclared `(o_type, rel)` as constantly False (`oracle.py:360-363`); the
   production compiler may reject. *Proposed:* `sem` follows the oracle (undefined ⇒
@@ -657,7 +786,8 @@ Each must be resolved or escalated before Phase 1 Lean. Proposed resolutions giv
   only.
 - **A6 — Interner/id-recycling & SetOps out of scope.** Confirmed non-goal (plan §1);
   the set-engine model uses abstract keys. The prior security audit found the
-  recycling sound; conformance C2/existing property tests cover it. No spec impact.
+  recycling sound; the repo's existing property tests cover it (the planned C2
+  state-level conformance was not built — §10). No spec impact.
 - **A7 — Object-wildcard shapes have no DSL syntax.** They enter via
   `object_wildcard_shapes` constructor args (CLAUDE.md gotcha). The spec must take
   the object-wildcard shape set as a *parameter* of `S`, not parse it from the DSL.

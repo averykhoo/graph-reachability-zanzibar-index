@@ -23,6 +23,16 @@ Conformance gates (`formal/verify.sh` step 5, `formal/conformance/`):
 | `test_conformance_spec.py` | Lean `sem` (zcli) vs `tests/oracle.py` vs real `SetEngine` | all 17 |
 | `test_conformance_random.py` | same, randomized stores | random |
 | `test_conformance_graph.py` | Lean **operational graph model** (zcli mode `"graph"`) vs real `WildcardIndex`+`DeltaProcessor`, and vs `sem` | the 15 `GRAPH_FRAGMENT` corpora |
+| `test_cli_mode.py` | zcli mode dispatch fails closed: unknown / non-string `"mode"` → rc 4 (rc enumeration: 0 answers / 1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode); absent mode defaults to spec | minimal |
+
+All three answer-comparing suites share ONE query grid
+(`formal/conformance/grid.py`): targets are the stored-tuple cross product PLUS
+every schema-DECLARED `(type, relation)` paired type-aware with that type's
+stored objects (so derived/boolean roots are queried on every corpus), and
+subjects include userset-shaped `(relation, type, name)` over a bounded pool
+(first 2 concrete names + a ghost per type). Star subjects stay bare-predicate;
+the concrete-named userset queries sit inside the proved graph query scope
+(`hqs` constrains only star-NAMED subjects).
 
 ---
 
@@ -37,7 +47,7 @@ independent corners.
 | `Core/Refs.lean` `SubjectRef`/`ObjectRef`/`Tuple` | tuple/query layout | `tests/oracle.py` `OracleTuple`; `zanzibar_utils_v1.RelationalTriple` |
 | `Core/Schema.lean` `Expr`/`Schema` (binary `union`/`inter`) | the parsed DSL AST (n-ary ops left-folded) | `tests/oracle.py` AST (`ODirect`/…/`OExclusion`); `formal/conformance/encode.py` does the fold |
 | `Core/Store.lean` `universeNames` | the query universe | `oracle.py:314-351` `_universe`/`instances` |
-| `Spec/Semantics.lean` `matchesRestriction`/`granted` | direct-grant matching | `oracle.py:393-411` |
+| `Spec/Semantics.lean` `restrictionMatches`/`grantsOf` | direct-grant matching | `oracle.py:393-411` `matching_objects`/`restriction_matches`/grants |
 | `Spec/Semantics.lean` `memberOfGranted` | transitive userset membership | `oracle.py:450-462` `_member_of_granted` |
 | `Spec/Semantics.lean` `directLeaf` | `Direct` leaf evaluation (star + userset branches) | `oracle.py:398-448` `direct_leaf` |
 | `Spec/Semantics.lean` `ttuLeaf` | stored-parent TTU rule | `oracle.py:464-485` `ttu_leaf` |
@@ -49,20 +59,20 @@ independent corners.
 | Lean | models | Python |
 |---|---|---|
 | `SetEngine/MemberSet.lean` `MemberSet` (`pos`/`stars`/`neg`) | the star-closed member-set algebra | `setengine/memberset.py` (union/inter/sub: `:99-105` etc.) |
-| `SetEngine/Eval.lean` `directExpand` | direct expansion | `setengine/engine.py:675-705` `direct_expand` |
-| `SetEngine/Eval.lean` TTU expansion | tupleset walk | `engine.py:707-724` |
-| `SetEngine/Eval.lean` `SetEngineModel.check` | `SetEngine.check` | `setengine/engine.py` |
+| `SetEngine/Eval.lean` `expandDirect` | direct expansion | `setengine/engine.py:675-705` `direct_expand` |
+| `SetEngine/Eval.lean` `expandTtu` | tupleset walk | `engine.py:707-724` `ttu_expand` |
+| `SetEngine/Eval.lean` `SetEngineModel.check` | `SetEngine.check` | `setengine/engine.py` `check` |
 | `SetEngine/Correct.lean` **`setEngine_correct`** (T1) | — the theorem: model `check` = `sem` | pinned empirically by `test_conformance_spec.py` (`sem` vs real `SetEngine`) |
 
 ## 3. The graph-index state and reads (T2 — `GraphIndex/State.lean`)
 
 | Lean | models | Python |
 |---|---|---|
-| `GraphState` (nodes/edges/residue/outbox/watermark) | materialized closure + residue + delta stream | `index_v4/models.py:32-36` (`EdgeV4`), `:80-107` (`ResidueV1` symbolic `(stars, neg)`), `outbox.py` (`DeltaOutboxV1`) |
+| `GraphState` (nodes/edges/residue/outbox/watermark) | materialized closure + residue + delta stream | `index_v4/models.py:30-46` (`NodeV4` identity/keying), `:57-77` (`EdgeV4`), `:80-107` (`ResidueV1` symbolic `(stars, neg)`), `outbox.py` (`DeltaOutboxV1`) |
 | `GraphState.reach` (fuel = node count) | the O(1) closure probe | `index_v4/core.py` path counts (`p > 0`) |
-| `GraphModel.probeNonDerived` (≤4 probes) | untainted read | `index_v4/wildcard.py:354-374` |
-| `GraphModel.probeDerived` (edge probe → `stars`∖`neg`, `upos`; edge hit skips `neg` — I6) | derived read path | `wildcard.py:398-432` |
-| `GraphModel.check` (route by `isDerived`) | `WildcardIndex.check` | `wildcard.py` check routing |
+| `GraphModel.probeNonDerived` (≤4 probes) | untainted read | `index_v4/wildcard.py:354-374` (probe assembly inside `check`, `:318-`) |
+| `GraphModel.probeDerived` (edge probe → `stars`∖`neg`, `upos`; edge hit skips `neg` — I6) | derived read path | `wildcard.py:398-432` `_check_derived` |
+| `GraphModel.check` (route by `isDerived`) | `WildcardIndex.check` | `wildcard.py:318` `check` (routes tainted relations to `_check_derived` `:398`) |
 | `GraphAccepts` | decision-15 compile-scope rejection | `zanzibar_utils_v1.py` `UnsupportedByGraphIndex` scope checks (object wildcards on derived `:1029-1034`; wildcard usersets over derived `:1446-1451`) |
 | `Inv` (8 clauses: I1–I3 structural + I6 residue hygiene ×4) | the invariant checker | `index_v4/invariants.py` (I1 `:89-101`, node encoding `:83-87`, …) |
 
@@ -70,22 +80,22 @@ independent corners.
 
 | Lean | models | Python |
 |---|---|---|
-| `GraphState.admitEdge` (`a ≠ b` ∧ no back-path) | cycle rejection | `index_v4/core.py` `_add_edge_locked` raise+rollback |
-| `GraphState.writeDirect` | one guarded closure-edge insert | `core.py` `add_tuple`/`add_edge` |
-| `RRule`/`exprArms`/`schemaRewrites` | compiled Computed/TTU rewrite rules | `zanzibar_utils_v1.py:834-852` `_rewrite_rule`/`_emit_expr` |
+| `GraphState.admitEdge` (`a ≠ b` ∧ no back-path) | cycle rejection | `index_v4/core.py:319-342` `_add_edge_locked` raise+rollback |
+| `GraphState.writeDirect` | one guarded closure-edge insert | `wildcard.py:222` `add_tuple` → `core.py:408` `add_edge` / `:344` `add_edge_by_id` |
+| `RRule`/`exprArms`/`schemaRewrites` | compiled Computed/TTU rewrite rules | `zanzibar_utils_v1.py:834-853` `_rewrite_rule`, `:870-888` `_emit_expr` |
 | `rewriteClosure` | the write fan-out worklist | `RuleSet.apply` |
-| `GraphState.writeLoggedOne`/`writeLoggedRules` | routed write + delta row per accepted flip | `RuleSet.apply` + per-triple `add_tuple`, `core.py` `_emit` |
+| `GraphState.writeLoggedOne`/`writeLoggedRules` | routed write + delta row per accepted flip | `RuleSet.apply` + per-triple `add_tuple`, `core.py:31` `_emit` |
 | `GraphState.nextDeltaId`/`pushDelta`/`maxOutboxId` | outbox append / autoincrement cursor | `index_v4/outbox.py` (`outbox_watermark` `:13-21`) |
 
 ## 5. The delta processor / cascade (T2 reconcile half + T5 — `ReconcileStars.lean`, `Cascade.lean`, `CascadeStrata.lean`)
 
 | Lean | models | Python |
 |---|---|---|
-| `wildcardShapes`/`leafStars` seeding | declared wildcard shapes → candidate stars | `processor.py:135` (`DeltaProcessor.__init__`), `:58-62` `leaf_stars` |
-| `coveredFn` (star-subject guard) | star-coverage read | `processor.py:62` (`'*'` as subject name) |
-| `reconcileResidueKey` (wholesale `stars`/`neg`/`upos` recompute) | `_residue_state` | `processor.py:388-446` (`neg`: `:406-411`) |
-| `reconcileKeyC`/`reconcileStarsKey` (residue-THEN-edges) | `reconcile` (residue written before edge audit) | `processor.py:382-459` (`:443-455`) |
-| `reconcileStarsKeyD` — the DIFFING pass (stale-edge retraction) | `reconcile_subject` want/have diff | `processor.py:345-357`, `want_edge = should ∧ ¬covered` `:359`, removal branch `:359-367` |
+| `wildcardShapes` seeding | declared wildcard shapes → candidate stars | `processor.py:135` (`DeltaProcessor.__init__` `subject_shapes`), `:58-62` `leaf_stars` |
+| `coveredFn` (star-subject guard) | star-coverage read | `processor.py:62` (`leaf_stars` passes `'*'` as subject name) |
+| `reconcileResidueKey` (wholesale `stars`/`neg`/`upos` recompute) | `reconcile` steps (1)–(2c): stars fold, `neg`, `upos` | `processor.py:388-441` (`neg`: `:406-411`); current-state read `_residue_state` `:166-180` |
+| `reconcileKeyC`/`reconcileStarsKey` (residue-THEN-edges) | `reconcile` (residue written before edge audit) | `processor.py:382-459` (upsert `:443-446`, edge audit `:448-455`) |
+| `reconcileStarsKeyD` — the DIFFING pass (stale-edge retraction) | `reconcile_subject` want/have edge diff | `processor.py:321-380`: `want_edge = should ∧ ¬covered` `:359`, edge diff `:359-369` (removal branch `:367-369`) |
 | `graphRecR`/`checkFnR`/`coveredFnR` — the ROUTED operand read | `_EvalContext` (untainted → `leaf_check`→`widx.check`; derived → residue read) | `processor.py:43-70`; `member_check` `:182-188`; `derived_stars` `:69-70` |
 | `affectedKeys` | delta → dirty derived keys (concrete only, `:604-605`) | `processor.py:585-652` `_map_deltas_to_keys` |
 | `frontierRowsAbove`/`frontierMax` | per-round outbox read + cursor | `processor.py:701-727` (`frontier_start = max id`, `:703`) |

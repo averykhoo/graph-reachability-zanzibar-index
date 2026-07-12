@@ -33,8 +33,9 @@ never rounds up to "the code is formally verified" (plan §7).
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
    + **0 sorries** + zcli + axiom audit (only `[propext, Classical.choice, Quot.sound]`)
-   + 98 Python conformance tests (incl. the Phase-6 graph-state mode). Add new key
-   theorems to `lean/ZanzibarProofs/Audit.lean`.
+   + 101 Python conformance tests, 0 skips (incl. the Phase-6 graph-state mode and the
+   zcli mode-rejection tests; the gate fails closed on any skip or zero passes). Add
+   new key theorems to `lean/ZanzibarProofs/Audit.lean`.
 4. **Rhythm.** Commit each green increment with a `formal: <stage> — <what>` message;
    push at session end. Before ending: update this file's "The next task" + add a
    PROOF_STATUS.md session entry (top) + tick the ROADMAP stage marker.
@@ -139,7 +140,10 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 **Phase 6 items 1–3 are CLOSED (2026-07-12k — READ THE TOP PROOF_STATUS ENTRY).**
 The arc is complete and documented: T1 + T2a/T2b + T3/T6 over `ReachedBy`, the
 graph-state conformance mode (`GraphIndex/Exec.lean` + zcli mode `"graph"` +
-`test_conformance_graph.py`, hard-gated in verify.sh — 98 conformance tests),
+`test_conformance_graph.py`, hard-gated in verify.sh — 101 conformance tests,
+0 skips, after the shared-grid upgrade: one grid in `formal/conformance/grid.py`
+querying derived/boolean roots on every corpus + userset-shaped subjects, plus
+the zcli mode-rejection tests in `test_cli_mode.py`),
 `CORRESPONDENCE.md` (the auditable Lean↔Python map), and `FINAL_REVIEW.md` (the
 plan-§7 claim, clause-checked, with the two explicitly-unearned clauses named).
 No open blocker for the claim as written in FINAL_REVIEW.md.
