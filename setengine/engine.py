@@ -55,13 +55,62 @@ def _denorm_pred(pred: str) -> str | EllipsisType:
     return Ellipsis if pred == '...' else pred
 
 
+def _candidate_reverse_deps(ast) -> tuple[dict, dict]:
+    """Static reverse-dependency tables for write-time candidate interning (the
+    engine's adaptation of spec §6.4's reverse propagation; see ``lookup``).
+
+    Returns ``(object_deps, chain_targets)``:
+
+    - ``object_deps[(T, r)]`` -> relations ``R`` on ``T`` (``R != r``) whose truth on
+      an object can be anchored by that object's stored tuples of relation ``r``
+      alone: ``R`` reaches ``r`` through Computed chains, or holds a TTU whose
+      tupleset relation is ``r`` (TTU parents are STORED tupleset tuples, so any
+      TTU-derived membership implies such a tuple on the object itself).
+    - ``chain_targets[(T, ts)]`` -> target relations of TTUs over tupleset ``ts`` on
+      ``T``: a stored tupleset tuple makes its (bare) subject ``p`` reach the object
+      as the from-chain userset ``p#target_rel`` (the Zanzibar from-chain rule).
+
+    Every expression position is walked, subtrahends included: over-approximate
+    candidates cost one check-verification each, while a missed one is a silently
+    dropped lookup result (the X1 gap this closes).
+    """
+    object_deps: dict[tuple[str, str], set[str]] = {}
+    chain_targets: dict[tuple[str, str], set[str]] = {}
+    for (t, root), expr in ast.items():
+        seen: set[str] = {root}
+        stack = [expr]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (Union, Intersection)):
+                stack.extend(node.children)
+            elif isinstance(node, Exclusion):
+                stack.append(node.base)
+                stack.append(node.subtract)
+            elif isinstance(node, Computed):
+                if node.relation != root:
+                    object_deps.setdefault((t, node.relation), set()).add(root)
+                if node.relation not in seen:
+                    seen.add(node.relation)
+                    ref = ast.get((t, node.relation))
+                    if ref is not None:
+                        stack.append(ref)
+            elif isinstance(node, TTU):
+                if node.tupleset_rel != root:
+                    object_deps.setdefault((t, node.tupleset_rel), set()).add(root)
+                chain_targets.setdefault((t, node.tupleset_rel), set()).add(node.target_rel)
+    return ({k: tuple(sorted(v)) for k, v in object_deps.items()},
+            {k: tuple(sorted(v)) for k, v in chain_targets.items()})
+
+
 class Interner:
     """Per-store, reference-counted interning of ``(type, name, predicate)`` to int32 ids.
 
     Two decoupled identities: the ``(type, name, predicate)`` key is the immutable
     *surrogate* (the stable identity, and what ``TupleV1`` persists), while the int32 id is
     a *reusable internal handle* for the bitmap algebra. Each id carries a reference count
-    (how many stored tuples mention it, in either position). When the last referencing
+    (how many stored tuples mention it, in either position -- plus one reference per tuple
+    that anchors it as a reverse-dependency candidate key, ``_apply_add``'s §6.4
+    interning). When the last referencing
     tuple is removed the count reaches zero, the surrogate->id mapping is dropped, the id
     is scrubbed from the population masks, and the id is returned to a free list for reuse.
     This bounds memory by the *live* entity count rather than the lifetime count -- so churn
@@ -160,6 +209,8 @@ class SetEngine:
         self.store_id = store_id
         self.ops = ops
         self.ast = parse_schema_ast(schema)
+        # Reverse-dependency tables for write-time candidate interning (§6.4).
+        self._object_deps, self._chain_targets = _candidate_reverse_deps(self.ast)
         self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes)
         self.filters = schema_filters(self.ast)
         # Reproduce the graph backend's raw-write edge graph (same RuleSet) and reject
@@ -287,6 +338,21 @@ class SetEngine:
             self.member_of[subject_id] = mo
         mo.add(object_id)
 
+        # Reverse-dependency candidate interning (spec §6.4 reverse propagation,
+        # adapted): a stored tuple of relation r anchors -- on this very object --
+        # every relation that reaches r in reverse through Computed chains or a
+        # TTU tupleset, so intern those object keys now (the lookup semi-join can
+        # then enumerate, and return real ids for, TTU-/Computed-only objects);
+        # and intern the TTU from-chain userset (subject, target_rel) so expand /
+        # lookup_reverse can represent it. Write-path only (reads stay
+        # side-effect-free); rebuild() replays the same acquisitions, and
+        # _apply_remove releases them symmetrically.
+        for dep in self._object_deps.get((o_type, relation), ()):
+            self.interner.acquire(o_type, o_name, dep)
+        if s_pred == '...' and s_name != '*':
+            for tgt in self._chain_targets.get((o_type, relation), ()):
+                self.interner.acquire(s_type, s_name, tgt)
+
         if pairs is None:
             pairs = self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name)
         for u, v in pairs:
@@ -313,6 +379,18 @@ class SetEngine:
         for u, v in self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name):
             if u != v:
                 self._flow_remove_edge(u, v)
+        # Release the reverse-dependency candidate references (mirrors _apply_add).
+        for dep in self._object_deps.get((o_type, relation), ()):
+            did = self.interner.get(o_type, o_name, dep)
+            if self.interner.release(o_type, o_name, dep) is not None:
+                self.node_sets.pop(did, None)
+                self.member_of.pop(did, None)
+        if s_pred == '...' and s_name != '*':
+            for tgt in self._chain_targets.get((o_type, relation), ()):
+                tid = self.interner.get(s_type, s_name, tgt)
+                if self.interner.release(s_type, s_name, tgt) is not None:
+                    self.node_sets.pop(tid, None)
+                    self.member_of.pop(tid, None)
         # Release interner references; a freed (recycled) id must not carry residual state.
         if self.interner.release(s_type, s_name, s_pred) is not None:
             self.node_sets.pop(subject_id, None)
@@ -743,25 +821,25 @@ class SetEngine:
     def lookup(self, subject_predicate, s_type: str, s_name: str) -> LookupResult:
         """Everything the subject can reach (§6.4).
 
-        A verify-based semi-join: every interned object node is a candidate, confirmed by
-        check mode (which is sound under booleans). Object-wildcard shapes the subject can
-        reach are reported as markers. (The candidate set is intentionally simple; a
-        reverse-propagation generator is a documented optimization.)"""
+        A verify-based semi-join: every interned relation key is a candidate, confirmed
+        by check mode (which is sound under booleans). Spec §6.4's reverse propagation is
+        realized at WRITE time (``_apply_add`` interns each tuple's reverse-dependent
+        object keys), so objects reachable only through TTU or Computed hops are real
+        candidates with real ids -- the candidate sweep stays linear in stored tuples.
+        Markers are intensional and exact by construction: one star-object check per
+        declared relation, so star coverage arriving through Computed/TTU hops surfaces
+        without enumerating names."""
         s_pred = _norm_pred(subject_predicate)
         result = LookupResult()
-        seen_rel_nodes: set[tuple[str, str, str]] = set()
+        for (t, rel) in self.ast:                          # declared (type, relation)
+            if self.check(s_pred, s_type, s_name, rel, t, '*'):
+                result.markers.add((t, rel))
         for (t, n, p) in list(self.interner.key_of.values()):
-            if p == '...':
-                continue                                   # entity nodes are not relations
-            key = (t, n, p)
-            if key in seen_rel_nodes:
-                continue
-            seen_rel_nodes.add(key)
-            if self.check(subject_predicate, s_type, s_name, p, t, n):
+            if p == '...' or n == '*':
+                continue                    # entity nodes are not relations; stars above
+            if self.check(s_pred, s_type, s_name, p, t, n):
                 oid = self.interner.get(t, n, p)
-                if n == '*':
-                    result.markers.add((t, p))
-                elif oid is not None:
+                if oid is not None:
                     result.node_ids.add(oid)
         return result
 

@@ -93,7 +93,14 @@ class _EvalContext:
     # -- derived-target TTU (untainted tupleset): ∃ tupleset-parent: derived target --
 
     def ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
+        sp, st, sn = s
         for (pt, pn) in self.proc.tupleset_parents(self.object_type, self.obj_name, ts, parent_types):
+            # from-chain identity rule (oracle ttu_leaf; lookup-gate X4a): a stored
+            # tupleset parent p makes the userset p#target itself a member,
+            # regardless of the target relation's own content -- the exact analogue
+            # of the untainted path's materialized rewrite edge
+            if (sp, st, sn) == (target, pt, pn):
+                return True
             if self.proc.member_check(pt, target, pn, s):
                 return True
         return False
@@ -109,8 +116,11 @@ class _EvalContext:
     #    membership), which for a derived tupleset live on its leaf families --
 
     def tupleset_ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
+        sp, st, sn = s
         for (pt, pn) in self.proc.derived_stored_parents(self.object_type, self.obj_name,
                                                          ts, parent_types):
+            if (sp, st, sn) == (target, pt, pn):
+                return True         # from-chain identity rule (oracle ttu_leaf; X4a)
             if self.proc.member_check(pt, target, pn, s):
                 return True
         return False
@@ -264,6 +274,59 @@ class DeltaProcessor:
                 seen[(pt, pn)] = None
         return list(seen)
 
+    def _keys_referencing(self, node_id: int) -> list[Key]:
+        """Reconcile keys of every residue whose ``neg``/``upos`` records this subject
+        node id. Cross-object memberships (TTU from-chain usersets and lifted userset
+        memberships, lookup-gate X4) are NOT justified by an edge on the recording
+        object, so the recorder must be findable from the id alone -- both for GC
+        anchoring and for pruning when the node dies."""
+        out: list[Key] = []
+        rows = self.session.exec(
+            select(ResidueV1).where(ResidueV1.store_id == self.store_id)).all()
+        for row in rows:
+            if node_id in json.loads(row.neg) or node_id in json.loads(row.upos):
+                obj = self.session.get(NodeV4, row.object_node_id)
+                if obj is not None:
+                    out.append((obj.type, obj.predicate, obj.name))
+        return out
+
+    def _residue_references(self, node_id: int) -> bool:
+        return bool(self._keys_referencing(node_id))
+
+    def _from_chain_keys(self, object_type: str, obj_name: str, plan) -> list[SubjectKey]:
+        """The from-chain userset subjects of every TTU leaf (any polarity): one key
+        ``(target_rel, parent_type, parent_name)`` per stored tupleset parent (oracle
+        ttu_leaf identity rule; lookup-gate X4a). Key-level -- the subjects need not
+        have nodes."""
+        keys: dict[SubjectKey, None] = {}
+        for spec, node in zip(plan.leaves, plan.leaf_nodes):
+            if spec.kind == 'derived-ttu':
+                parents = self.tupleset_parents(object_type, obj_name,
+                                                node.tupleset_rel, node.parent_types)
+            elif spec.kind == 'derived-tupleset-ttu':
+                parents = self.derived_stored_parents(object_type, obj_name,
+                                                      node.tupleset_rel, node.parent_types)
+            else:
+                continue
+            for (pt, pn) in parents:
+                keys[(node.target_rel, pt, pn)] = None
+        return list(keys)
+
+    def _ttu_target_upos_nodes(self, parents: list[tuple[str, str]], target: str
+                               ) -> list[NodeV4]:
+        """Live userset-shaped members recorded in a tainted TTU target's residues
+        (``upos``): usersets hold no edges (P4), so the dependent's enumeration must
+        read them from the parents' residues, not the closure (lookup-gate X4b)."""
+        out: list[NodeV4] = []
+        for (pt, pn) in parents:
+            if (pt, target) not in self.compiled.tainted:
+                continue
+            for nid in self._residue_state(pt, target, pn)[2]:
+                n = self.session.get(NodeV4, nid)
+                if n is not None:
+                    out.append(n)
+        return out
+
     def _stored_parent_objects_of_entity(self, e_type: str, e_name: str,
                                          object_type: str, ts: str) -> set[str]:
         """Objects obj with a stored tuple (entity, ts, obj) where ts is a derived
@@ -352,6 +415,8 @@ class DeltaProcessor:
                     (neg.add if want_neg else neg.discard)(s_node.id)
                     self._store_residue(object_type, rel, obj_name, stars, neg, upos)
                     changed = True
+                    if not want_upos and not want_neg:
+                        self._gc_subject_node(s_node.id)
             if changed:
                 self._gc_public_node(object_type, rel, obj_name)
             return changed
@@ -402,6 +467,25 @@ class DeltaProcessor:
                 n = self.session.get(NodeV4, nid)
                 if n is not None:
                     candidates[n.id] = n
+
+        # (2a) from-chain userset subjects of TTU leaves (oracle ttu_leaf identity
+        #      rule; lookup-gate X4a). Evaluated by KEY -- a from-chain userset may
+        #      have no node. A node is interned ONLY when the outcome must be
+        #      recorded (upos: true+uncovered / neg: false+covered); the two
+        #      residue-free outcomes are already answered exactly by the read path
+        #      (covered+true -> stars, uncovered+false -> miss).
+        for s in self._from_chain_keys(object_type, obj_name, plan):
+            sp, st, sn = s
+            n = self._node(sp, st, sn)
+            if n is None:
+                covered = _shape(sp, st) in stars
+                should = bool(plan.check_fn(ctx, s))
+                if should == covered:
+                    continue
+                n = self.idx.node(sp, st, sn, create_if_missing=True)
+                # I3: a fresh concrete of a bridged shape must get its bridges
+                self.widx._ensure_bridges(n)
+            candidates[n.id] = n
 
         neg: set[int] = set()
         for nid, n in candidates.items():
@@ -454,9 +538,34 @@ class DeltaProcessor:
             edges_changed |= self.reconcile_subject(
                 object_type, rel, obj_name, (n.predicate, n.type, n.name))
 
+        # (5) subject-node GC: ids dropped from neg/upos may have been interned
+        #     solely to anchor a cross-object recording (from-chain usersets, X4a);
+        #     once nothing references them they must go, or add-then-remove stops
+        #     being a row-multiset round trip.
+        if residue_changed:
+            for nid in (old_neg | old_upos) - (neg | upos):
+                self._gc_subject_node(nid)
+
         if residue_changed or edges_changed:
             self._gc_public_node(object_type, rel, obj_name)
         return residue_changed or edges_changed
+
+    def _gc_subject_node(self, node_id: int) -> None:
+        """Delete a recorded-subject node that anchors nothing anymore: edge-free,
+        residue-less, and referenced by no residue's neg/upos. Mirrors
+        ``_gc_public_node``'s policy for processor-created state (lookup-gate X4a:
+        from-chain userset nodes are interned by ``reconcile`` and must be collected
+        when their recording is dropped)."""
+        n = self.session.get(NodeV4, node_id)
+        if n is None or n.store_id != self.store_id or n.wildcard != '':
+            return
+        if self._residue_row(n.id) is not None or self._residue_references(n.id):
+            return
+        # strip pure-bridge scaffolding first (implicit GC then collects the node)
+        self.widx._maybe_remove_bridges(n)
+        n = self.session.get(NodeV4, node_id)
+        if n is not None and n.reference_count == 0:
+            self.session.delete(n)
 
     def _derived_leaf_neg_ids(self, object_type: str, obj_name: str, spec) -> set[int]:
         """The neg sets of one referenced derived leaf (§5.3 step 2): exclusions
@@ -508,22 +617,30 @@ class DeltaProcessor:
         if spec.kind == 'derived-ttu':
             node = self._find_leaf_node(spec)
             out: dict[int, NodeV4] = {}
-            for (pt, pn) in self.tupleset_parents(object_type, obj_name,
-                                                  node.tupleset_rel, node.parent_types):
+            parents = self.tupleset_parents(object_type, obj_name,
+                                            node.tupleset_rel, node.parent_types)
+            for (pt, pn) in parents:
                 p_node = self._node(node.target_rel, pt, pn)
                 if p_node is not None:
                     for n in self._incoming_concretes(p_node.id):
                         out[n.id] = n
+            # userset members of tainted targets are edge-free (P4): lift them from
+            # the parents' residue upos, or the dependent never sees them (X4b)
+            for n in self._ttu_target_upos_nodes(parents, node.target_rel):
+                out[n.id] = n
             return list(out.values())
         if spec.kind == 'derived-tupleset-ttu':
             node = self._find_leaf_node(spec)
             out = {}
-            for (pt, pn) in self.derived_stored_parents(object_type, obj_name,
-                                                        node.tupleset_rel, node.parent_types):
+            parents = self.derived_stored_parents(object_type, obj_name,
+                                                  node.tupleset_rel, node.parent_types)
+            for (pt, pn) in parents:
                 p_node = self._node(node.target_rel, pt, pn)
                 if p_node is not None:
                     for n in self._incoming_concretes(p_node.id):
                         out[n.id] = n
+            for n in self._ttu_target_upos_nodes(parents, node.target_rel):
+                out[n.id] = n           # X4b, derived-tupleset variant
             return list(out.values())
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
@@ -549,6 +666,11 @@ class DeltaProcessor:
         if node is None or node.reference_count != 0:
             return
         if self._residue_row(node.id) is not None:
+            return
+        if self._residue_references(node.id):
+            # the node doubles as a recorded SUBJECT in another object's residue
+            # (from-chain userset, X4a): deleting it would dangle that id -- the
+            # recording reconcile collects it once the reference is dropped
             return
         self.session.delete(node)
 
@@ -599,6 +721,13 @@ class DeltaProcessor:
             # already be GC'd within this transaction, and the mapping must survive that
             o_type, o_name, o_pred = r.object_type, r.object_name, r.object_predicate
             s_name, s_pred, s_type = r.subject_name, r.subject_predicate, r.subject_type
+            if self.session.get(NodeV4, r.subject_node_id) is None:
+                # the subject node was GC'd in this transaction: cross-object
+                # recordings of its id (from-chain/lifted userset memberships, X4)
+                # are not edge-justified on the recording object, so no other delta
+                # reaches them -- reconcile every residue still holding the id
+                for ref_key in self._keys_referencing(r.subject_node_id):
+                    full(ref_key)
             fam = self.compiled.namespace.get((o_type, o_pred))
             if isinstance(fam, LeafFamily):
                 assert not (o_name == '*'), \

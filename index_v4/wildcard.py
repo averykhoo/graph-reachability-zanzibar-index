@@ -489,6 +489,12 @@ class WildcardIndex:
         result = LookupResult()
 
         if (o_type, relation) in self.schema_info.derived_families:
+            if o_name == '*':
+                # object wildcards on derived relations are compile-rejected
+                # (decision 15): no object-star state can exist, so mirror the
+                # check path's False (P7 #3) with the empty result instead of the
+                # reserved-name ValueError (lookup gate X2)
+                return result
             self._collect_reverse(self._get_concrete(relation, o_type, o_name), result)
             stars, neg, upos = self._residue_state(relation, o_type, o_name)
             for (t, p) in stars:

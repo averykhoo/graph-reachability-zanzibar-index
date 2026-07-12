@@ -703,4 +703,111 @@ then flip the xfail):
 
 ---
 
+## 2026-07-13 — set-engine lookup completeness (X1 + X3 fixed)
+
+Both set-engine entries from the 2026-07-12 gate are fixed and their strict
+xfails flipped to plain regression pins (`tests/test_lookup_oracle.py`); the
+gate's S1/S3/S4 properties are now **exact two-sided over the whole candidate
+grid** (the one-sided uninterned escapes were removed, not relaxed).
+
+1. **X1 root cause**: `SetEngine.lookup`'s candidate universe was the interned
+   keys, and an object reachable only through TTU (or a Computed hop over
+   another relation's stored tuples) never interns its own
+   `(type, name, relation)` key — no id existed to return. **Fix (spec
+   set-engine §6.4 reverse propagation, mechanism adapted)**: reverse
+   propagation is realized at WRITE time instead of per-lookup. Compile-time
+   tables (`_candidate_reverse_deps`) invert the schema: for each stored tuple
+   of relation `r` on `(T, n)`, `_apply_add` also interns `(T, n, R)` for every
+   relation `R` on `T` that reaches `r` through Computed chains or holds a TTU
+   over tupleset `r` (any TTU-derived membership implies exactly such a stored
+   tuple on the object — TTU parents are stored tuples, P5 #1). All expression
+   positions count (subtrahends included): over-approximate candidates are
+   pruned by lookup's check-verification. `_apply_remove` releases
+   symmetrically, so interner refcounts stay balanced, `rebuild()` replays
+   identically (conformance `driven == rebuilt` fingerprints re-verified, incl.
+   full-churn drain-to-empty), and reads remain side-effect-free. Forward
+   `lookup` markers are now intensional and exact by construction: one
+   star-object `check` per **declared** relation (instead of per interned star
+   key), so star coverage arriving through Computed/TTU hops surfaces as a
+   marker. Cost: lookup stays a check semi-join, `O(declared relations +
+   interned relation keys)` checks; interner growth is linear in stored tuples
+   (× schema-bounded fan-out), never universe-bounded.
+
+2. **X3 adjudication: fixable, not representational.** The missing piece was
+   only the id: `ttu_expand` already emitted the from-chain userset when its id
+   existed (`singleton_entity(fid)`). The same write-time pass interns the
+   from-chain userset key `(subject_type, subject_name, target_rel)` for every
+   stored tupleset tuple with a bare concrete subject (star parents stay
+   symbolic via `stars`; userset-shaped parents are D3-rejected), so
+   `expand`/`lookup_reverse` now carry it in `pos`. No read-time interning, ids
+   stay recycled-int32, the `(type, name, predicate)` key remains the
+   surrogate.
+
+   Population note: pre-interned keys join `ids_of_shape[(T, rel)]`, so a
+   `[T:*#rel]` star's extensional population can now include from-chain-only
+   usersets — strictly more faithful (their exclusions become representable in
+   `neg`); no fixture stars a shape that pre-interning feeds.
+
+---
+
+## 2026-07-13 — graph derived-TTU userset subjects (X4 + X2 fixed)
+
+Both graph entries from the 2026-07-12 gate are fixed and their strict xfails
+flipped to plain regression pins (`tests/test_lookup_oracle.py`); the walks no
+longer skip any (subject, object) pair (`_make_derived_ttu_userset_gap`
+removed) and derived `'*'`-object reverse lookups are asserted like every
+other object. The repo-wide "identical semantics" claim no longer carries the
+X4 exception.
+
+1. **X4 root cause (both shapes).** The boolean spec is **silent** on
+   userset-shaped subjects flowing through a derived TTU's stored parents —
+   §5.3/§6 define residues over closure-leaf state and same-object usersets
+   only; the oracle (`ttu_leaf`) is the pin. (a) *From-chain*: the plan
+   evaluator's `ttu_check`/`tupleset_ttu_check` never implemented the
+   from-chain identity rule (a stored tupleset parent `p` makes `p#target_rel`
+   itself a member — exactly what the untainted path materializes as the
+   rewrite edge), and no reconcile step enumerated the from-chain keys.
+   (b) *Cross-object lift*: userset memberships of a tainted TTU target are
+   edge-free (`upos`, P4), so the dependent's audit set — built from closure
+   reverse lookups on the parents' public nodes — could never see them.
+   **Fix (processor only)**: `ttu_check`/`tupleset_ttu_check` gain the
+   identity rule; `reconcile` gains a from-chain pass (step 2a: keys per
+   stored parent, both polarities, interning a subject node ONLY when the
+   outcome must be recorded — upos: true∧uncovered, neg: false∧covered; the
+   other two outcomes are already exact via stars) and `_leaf_concretes`
+   lifts the tainted targets' residue `upos` members into the audit.
+   Cross-object recordings are not edge-justified on the recording object, so
+   two lifecycle pieces close the id-liveness loop: `_gc_public_node` keeps a
+   node that another residue's `neg`/`upos` still references (and the new
+   `_gc_subject_node` collects dropped anchor nodes symmetrically, keeping
+   add-then-remove a row-multiset round trip), and `_map_deltas_to_keys`
+   full-reconciles every residue referencing a subject node GC'd in the
+   transaction. Read paths unchanged — `check`/`lookup`/`lookup_reverse`
+   answer userset subjects from the (now complete) residue exactly as before.
+   Formal scope: derived-TTU shapes are outside `W4Fragment` (`computedOnly`),
+   and every new processor path is gated on `derived-ttu`/`derived-tupleset-ttu`
+   leaf kinds or on states (cross-residue references of dead/ref-0 nodes) that
+   in-fragment runs never reach; the state-level conformance gate (exact
+   edge+residue equality vs Lean) stayed green unchanged.
+
+   Residual THEORETICAL note (recorded, not observed): if a from-chain TARGET
+   were an untainted subject-wildcard-bridged shape with grants already sitting
+   in its `w_any`, interning a from-chain subject node mid-cascade could create
+   new bridge-fed truth and so require extra cascade rounds. No
+   currently-compilable schema class reaches this shape, and if one ever did it
+   fails LOUD — the cascade-quiescence check raises `InvariantViolation` —
+   never silently wrong.
+
+2. **X2**: `lookup_reverse` on a derived relation with `o_name='*'` now
+   short-circuits to the empty result before node resolution (decision 15: no
+   object-star state can exist), matching `check`'s False (P7 #3) and the set
+   engine's empty result instead of raising through the reserved-name guard.
+
+Grid widening (regression cover beyond the lookup gate): `_boolean_grid` adds
+the `doc#viewer` from-chain subjects, and the De Morgan grid derives every TTU
+from-chain userset shape from the AST (`_from_chain_userset_subjects`), so the
+matrix now queries userset subjects on derived-TTU families after every op.
+
+---
+
 *(subsequent phases append below)*

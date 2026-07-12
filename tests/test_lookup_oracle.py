@@ -40,9 +40,10 @@ Graph index (``WildcardIndex``) -- exact (two-sided) surfaces:
 Set engine (both ``SetOps``) -- exact where the representation is, one-sided where
 it drops information:
   S1  expand pointwise exactness: MemberSet coverage (pos wins; else shape in
-      stars and id not in neg; ghosts by shape-in-stars) == O, for every candidate
-      subject that is interned, a bare entity, or '*'. Star shapes are exact both
-      ways ('*' subjects: shape in stars == O).
+      stars and id not in neg; uninterned subjects by shape-in-stars) == O, for
+      EVERY candidate subject (userset-shaped included since the X3 fix: an
+      oracle-true userset subject is always interned or star-covered). Star
+      shapes are exact both ways ('*' subjects: shape in stars == O).
   S2  expand component sweeps: every ``pos`` id is O-true; every ``neg`` id is
       star-covered (its own shape in ``stars``) AND O-false.
   S3  lookup_reverse is the documented neg-dropping render of expand
@@ -52,46 +53,51 @@ it drops information:
       LEGAL (that is exactly the dropped neg).
   S4  forward lookup (check-backed): every node id and every marker is O-true
       (markers against the intensional '*'-object query); exact two-sided over
-      candidates whose (o_type, o_name, rel) key is interned; for uninterned
-      candidates coverage still implies O-truth.
+      ALL candidates -- tuple-anchored object keys are write-time interned
+      (§6.4 reverse-dependency interning, the X1 fix), and star-object truth is
+      carried exactly by the intensional markers.
 
-Known genuine divergences, pinned as strict xfails below (NOT worked around --
-each is a wrong/undefined read answer today; see the tests for full repros):
-  X1  Set forward ``lookup`` drops objects reachable ONLY via TTU whose
-      (type, name, relation) key was never interned (engine.py:753 candidate
-      universe = interned keys; spec set-engine §6.4 prescribes reverse
-      propagation incl. TTU). The graph returns them.
-  X2  Graph ``lookup_reverse`` on a derived relation with o_name='*' raises
-      ValueError (wildcard.py _get_concrete -> core.node reserved-name guard)
-      where ``check`` answers False (P7 #3) and the set engine returns empty.
-      The gate's grid therefore skips derived '*'-object reverse lookups.
-  X3  Set ``expand`` / ``lookup_reverse`` cannot represent an O-true from-chain
-      userset subject that was never interned (no id exists; check answers it
-      True via the from-chain rule, the graph returns its node). The gate's
-      completeness therefore skips uninterned userset-shaped subjects
-      (bare entities are unaffected: a tuple-less entity is only star-covered).
-  X4  CHECK-level divergence (found by this gate, wider than lookups): on a
-      DERIVED TTU, userset-shaped subjects whose truth flows through a stored
-      tupleset parent answer False on the graph where the oracle and BOTH set
-      engines answer True. Two flavors, both pinned:
-        (a) the from-chain userset itself (oracle ttu_leaf / engine.py ttu_leaf
-            from-chain rule): after ``doc:d1 parent doc:d2``,
-            check('viewer','doc','d1','inherited','doc','d2') = graph False /
-            others True -- while the graph's own UNTAINTED TTU path answers the
-            analogous wildcards.fga query True via the rewrite edge;
-        (b) userset membership lifted through the parent's target: after
-            ``group:g1#member editor doc:d2`` + ``doc:d2 parent doc:d1``,
-            check('member','group','g1','inherited','doc','d1') = graph False /
-            others True -- even though the graph itself answers
-            check('member','group','g1','viewer','doc','d2') True. The residue
-            ``upos`` of the dependent never receives cross-object userset
-            memberships (reconcile settles usersets from the object's own
-            stored tuples only).
-      The existing matrix/property grids never query userset subjects on
-      derived TTU families, which is why this survived P7. The walks skip
-      exactly the (subject, object) pairs where a stored tupleset tuple gives
-      the subject a TTU explanation on a derived family
-      (``_make_derived_ttu_userset_gap``); everything else stays strict.
+Genuine-divergence inventory (each was a wrong/undefined read answer when
+found; FIXED entries are pinned as plain regression tests below, open ones as
+strict xfails -- NOT worked around; see the tests for full repros):
+  X1  FIXED (2026-07-13; plain regression test below). Set forward ``lookup``
+      dropped objects reachable ONLY via TTU whose (type, name, relation) key
+      was never interned. Fixed per spec set-engine §6.4: writes intern each
+      tuple's reverse-dependent object keys (Computed chains + TTU tuplesets),
+      and lookup renders intensional markers per declared relation, so S4 is
+      now exact two-sided over the whole candidate grid.
+  X2  FIXED (2026-07-13; plain regression test below). Graph ``lookup_reverse``
+      on a derived relation with o_name='*' raised ValueError (wildcard.py
+      _get_concrete -> core.node reserved-name guard) where ``check`` answers
+      False (P7 #3) and the set engine returns empty. Fixed: the derived branch
+      now short-circuits o_name='*' to the empty result (decision 15: no
+      object-star state can exist), so the gate's grid asserts derived
+      '*'-object reverse lookups like every other object.
+  X3  FIXED (2026-07-13; plain regression test below). Set ``expand`` /
+      ``lookup_reverse`` could not represent an O-true from-chain userset
+      subject that was never interned (no id existed). Fixed by write-time
+      interning of the from-chain userset key (subject, target_rel) on every
+      stored tupleset tuple; the gate's S1/S3 completeness no longer skips
+      userset-shaped subjects -- uninterned subjects are asserted exactly via
+      star coverage.
+  X4  FIXED (2026-07-13; plain regression tests below). CHECK-level divergence
+      (found by this gate, wider than lookups): on a DERIVED TTU, userset-shaped
+      subjects whose truth flows through a stored tupleset parent answered False
+      on the graph where the oracle and BOTH set engines answer True. Two
+      flavors: (a) the from-chain userset itself (oracle ttu_leaf identity
+      rule) -- after ``doc:d1 parent doc:d2``,
+      check('viewer','doc','d1','inherited','doc','d2') was graph-False; and
+      (b) userset membership lifted through the parent's target -- after
+      ``group:g1#member editor doc:d2`` + ``doc:d2 parent doc:d1``,
+      check('member','group','g1','inherited','doc','d1') was graph-False.
+      Fixed in the delta processor (the boolean spec is silent on both shapes;
+      the oracle is the pin): ttu_check/tupleset_ttu_check implement the
+      from-chain identity rule, and reconcile enumerates from-chain userset
+      keys (interning a node only when the outcome must be recorded) plus the
+      tainted targets' residue ``upos`` members, so the dependent's residue is
+      complete for userset subjects and the ``check``/lookup surfaces answer
+      them exactly. The walks no longer skip any (subject, object) pair --
+      everything is strict.
 
 A tamper suite proves the gate can fail: corrupted results (leaked id, dropped
 id, cleared exclusions, dropped neg) must each trip the checkers.
@@ -103,7 +109,7 @@ import pytest
 
 from setengine import ALL_SETOPS, SetEngine
 from setengine.memberset import MemberSet
-from zanzibar_utils_v1 import (Direct, Computed, TTU, Union, Intersection, Exclusion,
+from zanzibar_utils_v1 import (Direct, TTU, Union, Intersection, Exclusion,
                                parse_openfga_schema, parse_schema_ast)
 from tests.oracle import Oracle, OracleTuple
 from tests.parity import _GraphSide, _SetSide, GHOST_NAME
@@ -186,52 +192,7 @@ def _is_leaf_pred(pred: str) -> bool:
     return pred != '...' and '.' in pred
 
 
-def _make_derived_ttu_userset_gap(ast, derived, present):
-    """Predicate for the X4 known divergence: a userset-shaped subject on a derived
-    family whose truth has a TTU explanation via a STORED tupleset parent of
-    exactly this object -- either the from-chain userset itself (X4a) or a
-    membership in the parent's target relation (X4b, decided by the oracle)."""
-    ttu_cache: dict[tuple[str, str], list] = {}
-
-    def closure_ttus(ot, rel):
-        key = (ot, rel)
-        if key not in ttu_cache:
-            out, seen = [], set()
-
-            def walk(t, r):
-                if (t, r) in seen:
-                    return
-                seen.add((t, r))
-                expr = ast.get((t, r))
-                if expr is None:
-                    return
-                for node in _iter_exprs(expr):
-                    if isinstance(node, TTU):
-                        out.append(node)
-                    elif isinstance(node, Computed):
-                        walk(t, node.relation)
-
-            walk(ot, rel)
-            ttu_cache[key] = out
-        return ttu_cache[key]
-
-    def gap(oc, sp, st, sn, rel, ot, on):
-        if sp == '...' or sn == '*' or (ot, rel) not in derived:
-            return False
-        for ttu in closure_ttus(ot, rel):
-            for (_p, tst, tsn, trel, tot, ton) in present:
-                if (trel, tot, ton) != (ttu.tupleset_rel, ot, on) or tsn == '*':
-                    continue
-                if sp == ttu.target_rel and (st, sn) == (tst, tsn):
-                    return True                     # X4a: the from-chain userset itself
-                if oc(sp, st, sn, ttu.target_rel, tst, tsn):
-                    return True                     # X4b: membership via parent's target
-        return False
-
-    return gap
-
-
-def _check_graph_forward(widx, ast, oc, subject, objects, res, known_gap=None):
+def _check_graph_forward(widx, ast, oc, subject, objects, res):
     sp, st, sn = subject
     for nid in res.node_ids:                                    # G2 soundness sweep
         node = widx._node_by_id(nid)
@@ -249,15 +210,12 @@ def _check_graph_forward(widx, ast, oc, subject, objects, res, known_gap=None):
         else:
             nid = _gnode_id(widx, rel, ot, on)
             got = (nid is not None and nid in res.node_ids) or marker
-        if got != expected and known_gap is not None \
-                and known_gap(oc, sp, st, sn, rel, ot, on):
-            continue                                            # X4 (pinned strict-xfail)
         assert got == expected, (
             f'graph.lookup{subject} vs oracle on {rel} {ot}:{on}: '
             f'graph={got} oracle={expected}')
 
 
-def _check_graph_reverse(widx, oc, subjects, obj, res, known_gap=None):
+def _check_graph_reverse(widx, oc, subjects, obj, res):
     rel, ot, on = obj
     markers_any = {(t, p) for (t, p, v) in res.markers if v == 'any'}
     for nid in res.node_ids:                                    # G4 soundness sweep
@@ -287,9 +245,6 @@ def _check_graph_reverse(widx, oc, subjects, obj, res, known_gap=None):
             got = (nid is not None and nid in res.node_ids) or (
                 (st, sp) in markers_any
                 and not (nid is not None and nid in res.excluded_node_ids))
-        if got != expected and known_gap is not None \
-                and known_gap(oc, sp, st, sn, rel, ot, on):
-            continue                                            # X4 (pinned strict-xfail)
         assert got == expected, (
             f'graph.lookup_reverse{obj} vs oracle on subject ({sp},{st},{sn}): '
             f'graph={got} oracle={expected}')
@@ -321,13 +276,11 @@ def _check_set_expand(se, oc, subjects, obj, m):
             continue
         uid = se.interner.get(st, sn, sp)
         if uid is None:
+            # uninterned subject (entity or userset): only star coverage can hold it.
+            # Exact since the X3 fix: every oracle-true userset subject is interned
+            # (stored tuples intern it; from-chain usersets are write-time interned)
+            # or star-covered, so shape-in-stars is the whole answer.
             got = (st, sp) in m.stars
-            if sp != '...':
-                # uninterned userset subject: representational gap X3 -- one-sided
-                assert not got or expected, (
-                    f'set.expand{obj} [{se.ops.name}] covers uninterned userset '
-                    f'({sp},{st},{sn}) that is oracle-false')
-                continue
         elif sp == '...':
             got = m.contains_entity(uid, st)
         else:
@@ -352,8 +305,6 @@ def _check_set_reverse(se, oc, subjects, obj, m, res):
         if sn == '*':
             continue                                            # star: pinned via stars in S1
         uid = se.interner.get(st, sn, sp)
-        if uid is None and sp != '...':
-            continue                                            # X3: no id can represent it
         if oc(sp, st, sn, rel, ot, on):
             covered = (uid is not None and uid in res.node_ids) or (st, sp) in res.markers
             assert covered, (
@@ -381,16 +332,13 @@ def _check_set_forward(se, oc, subject, objects, res):
             continue
         nid = se.interner.get(ot, on, rel)
         covered = (nid is not None and nid in res.node_ids) or (ot, rel) in res.markers
-        if nid is not None:
-            # exact over the engine's own candidate universe (interned keys);
-            # full completeness for uninterned keys is the strict-xfail gap X1
-            assert covered == expected, (
-                f'set.lookup{subject} [{se.ops.name}] vs oracle on {rel} {ot}:{on}: '
-                f'set={covered} oracle={expected}')
-        else:
-            assert not covered or expected, (
-                f'set.lookup{subject} [{se.ops.name}] covers uninterned {rel} '
-                f'{ot}:{on} that is oracle-false')
+        # Exact over ALL candidates since the X1 fix: every tuple-anchored object
+        # key is write-time interned (TTU/Computed reverse deps included), and the
+        # only remaining truth source for an uninterned key is star-object
+        # coverage, which the intensional markers carry exactly.
+        assert covered == expected, (
+            f'set.lookup{subject} [{se.ops.name}] vs oracle on {rel} {ot}:{on}: '
+            f'set={covered} oracle={expected}')
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +362,6 @@ class _Gate:
         self.derived = self.graph.widx.schema_info.derived_families
         self.present: set[tuple] = set()
         self.history: list[tuple] = []
-        self.known_gap = _make_derived_ttu_userset_gap(self.ast, self.derived, self.present)
 
     def apply(self, op, raw):
         ok = self.graph.apply(raw, op)
@@ -439,12 +386,10 @@ class _Gate:
         try:
             for subject in self.subjects:
                 _check_graph_forward(self.graph.widx, self.ast, oc, subject, self.objects,
-                                     self.graph.widx.lookup(*subject), self.known_gap)
+                                     self.graph.widx.lookup(*subject))
             for obj in self.objects:
-                if obj[2] == '*' and (obj[1], obj[0]) in self.derived:
-                    continue        # X2: derived '*'-object reverse raises today
                 _check_graph_reverse(self.graph.widx, oc, self.subjects, obj,
-                                     self.graph.widx.lookup_reverse(*obj), self.known_gap)
+                                     self.graph.widx.lookup_reverse(*obj))
             for side in self.sets:
                 se = side.se
                 for subject in self.subjects:
@@ -664,18 +609,19 @@ def test_tamper_set_expand_is_caught(ops):
 
 
 # ---------------------------------------------------------------------------
-# Genuine divergences found by this gate (strict xfails; do NOT delete or relax
-# these to make a refactor pass -- fix the underlying surface, then flip them)
+# Genuine divergences found by this gate. Open ones are strict xfails (do NOT
+# delete or relax them to make a refactor pass -- fix the underlying surface,
+# then flip them); fixed ones stay as plain regression pins of the exact repro.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason=(
-    'GENUINE GAP (X1): set-engine forward lookup enumerates candidates from the '
-    'interned keys only (setengine/engine.py lookup, "every interned object node is '
-    'a candidate"), so an object reachable ONLY via TTU -- whose (type,name,relation) '
-    'key no tuple ever interned -- is silently dropped even though check() and the '
-    'graph both answer True. Spec set-engine §6.4 prescribes reverse propagation '
-    'through TTU for candidate generation.'))
 def test_set_lookup_forward_ttu_completeness_gap(load_fga_schema):
+    """Regression pin for the FIXED gap X1: forward lookup used to enumerate
+    candidates from the interned keys only, silently dropping objects reachable
+    ONLY via TTU (whose (type,name,relation) key no tuple ever interned) even
+    though check() and the graph both answer True. Fixed per spec set-engine
+    §6.4 (reverse propagation), realized as write-time reverse-dependency
+    interning in ``_apply_add``: the tupleset tuple now interns the dependent
+    object key, so the semi-join enumerates and returns it."""
     from sqlmodel import Session, SQLModel, create_engine
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
@@ -692,28 +638,31 @@ def test_set_lookup_forward_ttu_completeness_gap(load_fga_schema):
         'forward lookup dropped a TTU-reachable object that check() grants'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'GENUINE GAP (X2): WildcardIndex.lookup_reverse on a derived relation with '
-    "o_name='*' raises ValueError (_get_concrete -> core.node reserved-name guard) "
-    "instead of returning the empty result that check() (False, deviations P7 #3) "
-    'and the set engine (empty LookupResult) give for the same query.'))
 def test_graph_reverse_star_object_on_derived_is_empty(load_fga_schema):
+    """Regression pin for the FIXED gap X2: WildcardIndex.lookup_reverse on a
+    derived relation with o_name='*' raised ValueError (_get_concrete ->
+    core.node reserved-name guard) instead of the empty result that check()
+    (False, deviations P7 #3) and the set engine (empty LookupResult) give for
+    the same query. Fixed: the derived branch short-circuits o_name='*' to the
+    empty result (decision 15: no object-star state can exist)."""
     from tests.test_processor import build
     session, widx, proc, write = build(load_fga_schema('boolean_wildcards.fga'))
     write('add', ('...', 'user', '*', 'public', 'doc', 'd1'))
-    res = widx.lookup_reverse('viewer', 'doc', '*')             # raises today
+    res = widx.lookup_reverse('viewer', 'doc', '*')
     assert res.node_ids == set() and res.markers == set() \
         and res.excluded_node_ids == set()
     session.close()
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'GENUINE GAP (X3): the set engine cannot represent an oracle-true from-chain '
-    'userset subject that was never interned -- lookup_reverse/expand return ids, '
-    'and no id exists for (folder,f1,viewer) when only the parent tuple is stored. '
-    'check() answers the same subject True via the from-chain rule '
-    '(engine.py ttu_leaf) and the graph lookup_reverse returns its node.'))
 def test_set_reverse_uninterned_from_chain_userset(load_fga_schema):
+    """Regression pin for the FIXED gap X3: expand/lookup_reverse could not
+    represent an oracle-true from-chain userset subject because no interned id
+    existed for (folder,f1,viewer) when only the parent tuple was stored --
+    while check() answered it True via the from-chain rule (engine.py ttu_leaf)
+    and the graph lookup_reverse returned its node. Fixed by write-time
+    interning of the from-chain userset key (``_apply_add``'s §6.4
+    chain-target interning): ``ttu_expand``'s existing singleton path now
+    always finds the id, so ``pos`` carries the subject."""
     from sqlmodel import Session, SQLModel, create_engine
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
@@ -729,41 +678,60 @@ def test_set_reverse_uninterned_from_chain_userset(load_fga_schema):
         'lookup_reverse dropped the oracle-true from-chain userset subject'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'GENUINE DIVERGENCE (X4, check-level): on a derived TTU, the graph answers the '
-    'from-chain userset subject itself False where the oracle and BOTH set engines '
-    'answer True (the Zanzibar from-chain rule: a stored tupleset parent p makes '
-    'p#target_rel reach the object; oracle ttu_leaf, setengine ttu_leaf), and where '
-    "the graph's own UNTAINTED TTU path answers the analogous query True via the "
-    'rewrite edge (cf. wildcards.fga: viewer-from-parent from-chain is graph-True). '
-    'The residue upos never records the from-chain userset. The matrix/property '
-    'grids never query from-chain userset subjects on derived families, so this '
-    'survived the P7 acceptance. Also reproduces on demorgans_reverse.fga: after '
-    "role:r1 assigned user:b, check('access','role','r1','access','user','b') is "
-    'graph-False / oracle-True / set-True.'))
 def test_graph_check_from_chain_userset_on_derived_ttu(load_fga_schema):
+    """Regression pin for the FIXED divergence X4a (check-level): on a derived
+    TTU, the graph answered the from-chain userset subject itself False where
+    the oracle and BOTH set engines answer True (the Zanzibar from-chain rule:
+    a stored tupleset parent p makes p#target_rel reach the object; oracle
+    ttu_leaf, setengine ttu_leaf) -- while the graph's own UNTAINTED TTU path
+    answers the analogous query True via the rewrite edge. Fixed: the delta
+    processor's ttu_check/tupleset_ttu_check implement the identity rule, and
+    reconcile records node-less from-chain usersets in the residue (interning
+    the subject node) so the read surfaces answer them exactly. The removal
+    leg pins the round trip: the recording and its anchoring node retire with
+    the parent tuple."""
     from tests.test_processor import build
     session, widx, proc, write = build(load_fga_schema('boolean_wildcards.fga'))
     write('add', ('...', 'doc', 'd1', 'parent', 'doc', 'd2'))
-    # oracle + set engines say True (from-chain rule); the graph says False today
     assert widx.check('viewer', 'doc', 'd1', 'inherited', 'doc', 'd2') is True
+    # the from-chain subject also appears on the lookup surfaces (G3 exactness)
+    subj = widx.idx.node('viewer', 'doc', 'd1', create_if_missing=False)
+    assert subj.id in widx.lookup_reverse('inherited', 'doc', 'd2').node_ids
+    # and retires with the parent tuple (row-multiset round trip)
+    write('remove', ('...', 'doc', 'd1', 'parent', 'doc', 'd2'))
+    assert widx.check('viewer', 'doc', 'd1', 'inherited', 'doc', 'd2') is False
     session.close()
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'GENUINE DIVERGENCE (X4b, check-level): a userset membership is not lifted '
-    'through a derived TTU. With group:g1#member granted editor on doc:d2 and '
-    "doc:d2 a parent of doc:d1, the graph answers check('member','group','g1',"
-    "'viewer','doc','d2') True but check('member','group','g1','inherited','doc',"
-    "'d1') False; the oracle and both set engines answer True. The dependent's "
-    'residue upos never receives cross-object userset memberships (reconcile '
-    "settles usersets from the object's own stored tuples only)."))
+def test_graph_check_from_chain_userset_demorgans_reverse(load_fga_schema):
+    """The demorgans_reverse.fga reproduction of X4a: a from-chain userset over
+    a chain of nested exclusions. After ``role:r1 assigned user:b``,
+    check('access','role','r1','access','user','b') was graph-False /
+    oracle-True / set-True."""
+    from tests.test_processor import build
+    session, widx, proc, write = build(load_fga_schema('demorgans_reverse.fga'))
+    write('add', ('...', 'role', 'r1', 'assigned', 'user', 'b'))
+    assert widx.check('access', 'role', 'r1', 'access', 'user', 'b') is True
+    session.close()
+
+
 def test_graph_check_userset_membership_through_derived_ttu(load_fga_schema):
+    """Regression pin for the FIXED divergence X4b (check-level): a userset
+    membership was not lifted through a derived TTU. With group:g1#member
+    granted editor on doc:d2 and doc:d2 a parent of doc:d1, the graph answered
+    check('member','group','g1','viewer','doc','d2') True but the 'inherited'
+    query on doc:d1 False; the oracle and both set engines answer True. Fixed:
+    the dependent's reconcile now lifts the tainted target's residue ``upos``
+    members (edge-free userset memberships, P4) into its own audit set, so its
+    ``upos`` receives cross-object userset memberships."""
     from tests.test_processor import build
     session, widx, proc, write = build(load_fga_schema('boolean_wildcards.fga'))
     write('add', ('member', 'group', 'g1', 'editor', 'doc', 'd2'))
     write('add', ('...', 'doc', 'd2', 'parent', 'doc', 'd1'))
     assert widx.check('member', 'group', 'g1', 'viewer', 'doc', 'd2') is True
-    # oracle + set engines say True (membership flows through the parent); graph: False
+    # membership flows through the stored parent (oracle + both set engines)
     assert widx.check('member', 'group', 'g1', 'inherited', 'doc', 'd1') is True
+    # and retires with the parent tuple
+    write('remove', ('...', 'doc', 'd2', 'parent', 'doc', 'd1'))
+    assert widx.check('member', 'group', 'g1', 'inherited', 'doc', 'd1') is False
     session.close()

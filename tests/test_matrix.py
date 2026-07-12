@@ -253,8 +253,13 @@ def _boolean_pool():
 
 
 def _boolean_grid():
+    # ('viewer','doc',...) are the TTU from-chain userset shapes of 'inherited'
+    # (lookup-gate X4a): userset subjects whose truth flows through a stored
+    # tupleset parent -- the P7 grids never queried them, which is how the
+    # derived-TTU from-chain divergence survived the acceptance event.
     subjects = [('...', 'user', 'u1'), ('...', 'user', 'ghostU'), ('...', 'user', '*'),
-                ('member', 'group', 'g1'), ('member', 'group', 'ghostG')]
+                ('member', 'group', 'g1'), ('member', 'group', 'ghostG'),
+                ('viewer', 'doc', 'd1'), ('viewer', 'doc', 'ghostD')]
     rels = ['viewer', 'restricted', 'inherited', 'editor', 'public', 'blocked']
     targets = [(r, 'doc', d) for r in rels for d in ['d1', 'd2', 'ghostD']]
     return [(sp, st, sn, r, ot, on) for (sp, st, sn) in subjects for (r, ot, on) in targets]
@@ -318,6 +323,38 @@ DEMORGAN_EQUIVS = {
 }
 
 
+def _from_chain_userset_subjects(schema_text, names):
+    """Userset-shaped query subjects ``(target_rel, parent_type, name)`` for every
+    TTU from-chain shape in the schema (lookup-gate X4a): a stored tupleset parent
+    ``p`` makes ``p#target_rel`` itself a member of the TTU relation, so these
+    subjects exercise the derived-TTU from-chain rule the old grids never queried."""
+    from zanzibar_utils_v1 import parse_schema_ast, TTU, Union, Intersection, Exclusion, _iter_directs
+    ast = parse_schema_ast(schema_text)
+    subs = []
+
+    def walk(o_type, e):
+        if isinstance(e, (Union, Intersection)):
+            for c in e.children:
+                walk(o_type, c)
+        elif isinstance(e, Exclusion):
+            walk(o_type, e.base)
+            walk(o_type, e.subtract)
+        elif isinstance(e, TTU):
+            tupleset = ast.get((o_type, e.tupleset_rel))
+            if tupleset is None:
+                return
+            for direct in _iter_directs(tupleset):
+                for r in direct.restrictions:
+                    if r.predicate != '...' or r.wildcard:
+                        continue        # parents are stored bare-entity tuples
+                    for n in names.get(r.type, [])[:1] + ['ghost']:
+                        subs.append((e.target_rel, r.type, n))
+
+    for (o_type, _rel), expr in ast.items():
+        walk(o_type, expr)
+    return list(dict.fromkeys(subs))
+
+
 def _demorgan_pool(schema_text):
     """All schema-valid raw tuples over a tiny universe, derived from the AST directions."""
     from zanzibar_utils_v1 import parse_schema_ast, Direct
@@ -349,9 +386,13 @@ def test_demorgan_oracle_equals_setengine_equals_graph(load_fga_schema, fixture,
     ast = parse_schema_ast(schema)
     rels = sorted({(ot, rel) for (ot, rel) in ast})
 
-    # a compact query grid: every relation, a couple of subjects, a couple of objects
+    # a compact query grid: every relation, a couple of subjects, a couple of objects,
+    # plus every TTU from-chain userset shape (lookup-gate X4a regression cover)
     subjects = [('...', 'user', 'a'), ('...', 'user', 'ghost'), ('...', 'user', '*'),
                 ('...', 'doc', 'dc1'), ('...', 'doc', '*')]
+    subjects += _from_chain_userset_subjects(
+        schema, {'user': ['a'], 'role': ['r1'], 'cond': ['c1'], 'attr': ['at1'],
+                 'doc': ['dc1'], 'group': ['g1']})
 
     rng = random.Random(0)
     for trial in range(4):
