@@ -67,7 +67,21 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
                   batch: int | None = None) -> int:
     """Apply log rows past the cursor to the index; advance the cursor; return the
     number of rows applied. The CALLER commits -- applied rows + cursor advance land
-    in one transaction (exactly-once, spec §2.6)."""
+    in one transaction (exactly-once, spec §2.6).
+
+    ``batch`` caps how many ``TupleLogV1`` rows are consumed per call (``None`` =
+    drain to the log head). Splitting a caller's logical write burst across several
+    batches is semantically safe because the log is a strict causal order:
+    ``TupleLogV1.id`` is a monotonically increasing primary key, so ``log_rows``
+    returns a contiguous, strictly ordered slice starting just past the cursor, and
+    each batch applies an exact PREFIX of that order. Every intermediate index state
+    is therefore a valid causal partial-progress point -- it reflects the source
+    through some earlier log id, never a gap or reordering (spec §4). The cursor
+    (``applied_log_id``) advances monotonically to ``rows[-1].id`` each batch, so
+    freshness tokens/watermarks only ever move forward; a reader comparing its token
+    against the cursor sees a truthful "reflects the source through N", whatever the
+    batch size. Batch size thus affects only latency/granularity, not the final
+    materialized state or any semantic guarantee."""
     # Serialize concurrent appliers on the index store BEFORE reading the cursor:
     # two workers reading the same cursor value would double-apply log rows (a
     # lost-update on ref-counted state). FOR UPDATE on PostgreSQL/MySQL; on SQLite

@@ -5,7 +5,7 @@ The write paths never materialise ``list[PermissionDelta]`` (spec decision 7); t
 and back-compat consumers drain a cursor range to a list with ``drain_deltas``.
 """
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from .models import DeltaOutboxV1, PermissionDelta
 
@@ -15,7 +15,7 @@ def outbox_watermark(session: Session, store_id: str) -> int:
     rows = session.exec(
         select(DeltaOutboxV1.id)
         .where(DeltaOutboxV1.store_id == store_id)
-        .order_by(DeltaOutboxV1.id.desc())  # type: ignore[union-attr]
+        .order_by(col(DeltaOutboxV1.id).desc())
         .limit(1)
     ).first()
     return rows or 0
@@ -27,7 +27,7 @@ def outbox_rows(session: Session, store_id: str, after_id: int = 0) -> list[Delt
         select(DeltaOutboxV1)
         .where(DeltaOutboxV1.store_id == store_id)
         .where(DeltaOutboxV1.id > after_id)
-        .order_by(DeltaOutboxV1.id)  # type: ignore[arg-type]
+        .order_by(col(DeltaOutboxV1.id))
     ).all())
 
 
