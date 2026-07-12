@@ -185,13 +185,26 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    legs remain the open part).
 3. **Widening the state/enumeration bounds** — graph backend inside the
    enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
+   (The current bounds, their runtime rationale, and why the graph side was
+   left out are documented in `test_conformance_enum.py`'s module docstring —
+   read it first; it is half the plan.)
 4. ~~**Fixing the derived-TTU userset-subject divergence** pinned in
    `tests/test_lookup_oracle.py`, then flipping its strict xfails.~~ ✅ **DONE
    (2026-07-13, Python-side — Lean untouched, `W4Fragment` unchanged;
    processor from-chain rule + `upos` lift, set-engine write-time interning;
    gate now 16 passed / 0 xfail; see the `history/PROOF_STATUS.md` top entry).**
 
----
+Repo-side (outside the formal effort, smaller, Python-only):
+
+- **Pure-union latent gap** — rule-routed members of an *untainted* tupleset
+  count as parents in the graph but not the oracle; no fixture exercises the
+  difference (`docs/spec-deviations.md` P5 #3). Write the fixture; if it
+  exposes a real divergence, fix or strict-xfail + dated deviations entry.
+- **Symmetric subject-keyed residues** — the engineering hook that would lift
+  the two remaining scope rejections (object wildcards on derived relations;
+  wildcard usersets over derived relations); `README.md` TODO list.
+- README editorial TODOs (unfinished narrative sections) — Avery's voice,
+  surgical edits only.
 
 ## After W3d (the remaining road)
 - **W4 — full-scope restatement. ✅ CLOSED (2026-07-12j).** `ReachedBy` /
