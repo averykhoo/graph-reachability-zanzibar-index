@@ -265,8 +265,9 @@ tests** (`tests/snapshots/`, `tests/test_compile_snapshot.py`) are the byte-iden
 on untainted compilation — the pin on the compiler artifacts the Lean model does not
 cover (§6). The **lookup-surface oracle gate** (`tests/test_lookup_oracle.py`,
 2026-07-12) pins `lookup`/`lookup_reverse`/`expand` on both Python backends by composing
-`oracle.check` into brute-force reference lookups; its strict xfails are pinned genuine
-divergences (§6 note).
+`oracle.check` into brute-force reference lookups; the four genuine divergences it found
+(X1–X4) were fixed 2026-07-13 Python-side and stand as plain regression pins (§6 note,
+`docs/spec-deviations.md` 2026-07-13).
 
 ---
 
@@ -300,14 +301,15 @@ The residual unverified surface, in full:
    open); star-subject queries with non-bare predicates; star-object queries on the graph
    side. *(Empirical note: the union-rooted-taint and object-wildcard corpora were probed
    anyway — zero check-level divergence observed; the exclusions are proof-scope, not
-   known disagreements. Exception, 2026-07-12: inside the `PDerivedTTU` gap a REAL
-   check-level divergence is now known — the graph index answers False on userset-shaped
-   subjects flowing through a stored tupleset parent of a derived TTU where the oracle
-   and both set engines answer True. Found by `tests/test_lookup_oracle.py`, pinned there
-   as strict xfails; outside `W4Fragment` (`computedOnly` bans `ttu` leaves in derived
-   defs) and outside the conformance grids' query surface, so the theorems and the
-   `formal/` gates are untouched — see `FINAL_REVIEW.md` §3's note and
-   `docs/spec-deviations.md`.)*
+   known disagreements. Inside the `PDerivedTTU` gap a REAL check-level divergence WAS
+   found (2026-07-12, by `tests/test_lookup_oracle.py`: the graph index answered False
+   on userset-shaped subjects flowing through a stored tupleset parent of a derived TTU
+   where the oracle and both set engines answer True) and FIXED 2026-07-13 Python-side
+   (processor from-chain rule + `upos` lift; xfails flipped to regression pins, matrix
+   grids widened) — the shape stays outside `W4Fragment` (`computedOnly` bans `ttu`
+   leaves in derived defs), so the theorems and the `formal/` gates were and remain
+   untouched; see `FINAL_REVIEW.md` §3's resolved note and `docs/spec-deviations.md`
+   2026-07-13.)*
 4. **The state-gate projections** — state-level conformance IS implemented, but a
    divergence strictly inside a projected class (P6 leaf-family edge content, P3 edge
    multiplicity, P2 bridge edges, P5 node GC) would not fail it; each is pinned elsewhere
@@ -330,9 +332,9 @@ The residual unverified surface, in full:
 proof is missing); (d) remove legs on the Lean side and the graph backend (the diffing
 pass models retraction but the chain is add-only; the set engine's remove path is now
 pinned, the graph's is not); (e) widening the state/enumeration bounds (graph backend in
-the enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores); (f)
-fixing the derived-TTU userset-subject divergence pinned in `tests/test_lookup_oracle.py`
-and flipping its strict xfails.
+the enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores). Item
+(f) — fixing the derived-TTU userset-subject divergence and flipping its strict xfails —
+is **DONE** (2026-07-13, Python-side; `FINAL_REVIEW.md` §3's resolved note).
 
 ---
 

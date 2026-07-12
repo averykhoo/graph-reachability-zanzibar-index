@@ -80,5 +80,6 @@ widening W1→W4 complete). Phase 6 hardening complete: the graph-state conforma
 mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**,
 **exhaustive small-scope enumeration**, the **remove-path answer gate**, and the
 **generated-schema answer gate** all landed. What remains is optional
-assurance-widening (fragment widening, Lean/graph-side remove legs, wider bounds,
-and fixing the pinned lookup-gate divergence — `FINAL_REVIEW.md` §4).
+assurance-widening (fragment widening, Lean/graph-side remove legs, wider
+bounds — `FINAL_REVIEW.md` §4; the once-pinned lookup-gate divergence was fixed
+2026-07-13 Python-side, `FINAL_REVIEW.md` §3's resolved note).

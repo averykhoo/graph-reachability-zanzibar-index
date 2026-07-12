@@ -459,12 +459,10 @@ the composed `ConnectedStore`) over
 **both** the union+wildcard fixtures **and** the boolean fixtures (the graph joined the
 boolean grids with the derived-predicate work — the boolean-IVM spec's acceptance
 event), with `check` compared across all backends over the full query grid after every
-operation — under **both** set representations. One known, pinned exception to "identical
-semantics" (2026-07-12, found by the lookup-surface oracle gate,
-`tests/test_lookup_oracle.py`): userset-shaped subjects whose access flows through a
-stored tupleset parent of a *derived* TTU answer False on the graph index where the
-oracle and set engine answer True — outside every matrix grid's query surface, pinned as
-strict xfails and awaiting a fix (`docs/spec-deviations.md`, 2026-07-12 entry).
+operation — under **both** set representations. The read surfaces (`lookup` /
+`lookup_reverse` / `expand`) are additionally pinned on both backends by a brute-force
+oracle-lookup gate (`tests/test_lookup_oracle.py`), which composes the oracle's `check`
+over the candidate universe into reference lookups.
 
 ### Cost model
 

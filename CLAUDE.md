@@ -84,9 +84,9 @@ IVM delta processor.
 - Property tests reuse a shared candidate pool + grid (`tests/test_wildcard_property.py`).
 - **`tests/test_lookup_oracle.py` is the lookup-surface oracle gate**: it composes
   `oracle.check` into brute-force reference lookups and pins `lookup` /
-  `lookup_reverse` / `expand` on both backends. Its **strict xfails are pinned genuine
-  divergences** (X1–X4, see `docs/spec-deviations.md` 2026-07-12) — fix the surface and
-  then flip the xfail; never relax the properties.
+  `lookup_reverse` / `expand` on both backends. **Any strict xfail there pins a genuine
+  divergence** — fix the surface and then flip the xfail; never relax the properties
+  (how X1–X4 were closed; see `docs/spec-deviations.md` 2026-07-12/13).
 - **Never edit a golden or oracle result just to make a refactor pass** — the oracle and
   goldens ARE the behavioral spec.
 

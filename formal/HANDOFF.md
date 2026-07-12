@@ -163,9 +163,11 @@ closes the disjoint-pools risk at answer level), `CORRESPONDENCE.md`,
 and `FINAL_REVIEW.md` are all landed and gated. verify.sh: 214 conformance tests, 0
 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
 map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
-`history/`. One KNOWN check-level graph-vs-set divergence (derived-TTU
-userset subjects — outside `W4Fragment` and the conformance grids) is pinned as
-strict xfails in `tests/test_lookup_oracle.py`; see `FINAL_REVIEW.md` §3's note.
+`history/`. The one known check-level graph-vs-set divergence (derived-TTU
+userset subjects — outside `W4Fragment` and the conformance grids) was FIXED
+2026-07-13 Python-side; its strict xfails in `tests/test_lookup_oracle.py` are
+now plain regression pins, Lean untouched — see `FINAL_REVIEW.md` §3's
+resolved note and `docs/spec-deviations.md` 2026-07-13.
 
 What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
 
@@ -178,8 +180,11 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    and the graph-side remove path remain the open part).
 3. **Widening the state/enumeration bounds** — graph backend inside the
    enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
-4. **Fixing the derived-TTU userset-subject divergence** pinned in
-   `tests/test_lookup_oracle.py`, then flipping its strict xfails.
+4. ~~**Fixing the derived-TTU userset-subject divergence** pinned in
+   `tests/test_lookup_oracle.py`, then flipping its strict xfails.~~ ✅ **DONE
+   (2026-07-13, Python-side — Lean untouched, `W4Fragment` unchanged;
+   processor from-chain rule + `upos` lift, set-engine write-time interning;
+   gate now 16 passed / 0 xfail; see the `history/PROOF_STATUS.md` top entry).**
 
 ---
 

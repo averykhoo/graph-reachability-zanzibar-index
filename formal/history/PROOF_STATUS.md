@@ -8,6 +8,63 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-13 (lookup-gate divergences X1–X4 FIXED, Python-side only — repo-side code + docs; NO Lean changes, NO formal-claim widening)
+
+All four pinned divergences from the 2026-07-12n lookup-surface oracle gate
+are fixed in the Python backends; Lean is untouched and derived-TTU shapes
+remain OUTSIDE `W4Fragment`, so no theorem, scope, or gate widened. The
+repo-wide "identical semantics" claim no longer carries a known exception.
+One-line mechanisms:
+
+* **X1** (set forward `lookup` dropped TTU-only objects): write-time
+  reverse-dependency interning — compile-time `_candidate_reverse_deps`
+  tables invert the schema; `_apply_add`/`_apply_remove` intern/release
+  symmetrically (reads stay side-effect-free, `rebuild()` replays
+  identically), plus intensional star markers; lookup stays linear in
+  relevant tuples.
+* **X3** (uninterned from-chain userset unrepresentable in
+  `expand`/`lookup_reverse`): adjudicated FIXABLE, not representational —
+  the same write pass interns `(subject_type, subject_name, target_rel)`
+  for stored tupleset tuples; `ttu_expand` already emitted the userset once
+  the id existed.
+* **X4a** (graph, from-chain): `ttu_check`/`tupleset_ttu_check` gain the
+  oracle's from-chain identity rule; reconcile gains step 2a enumerating
+  from-chain keys, interning subject nodes only when an outcome must be
+  recorded, with I3 bridge maintenance + the new GC lifecycle
+  (`_gc_subject_node`, residue-reference-aware `_gc_public_node`,
+  full-reconcile of residues referencing GC'd subject nodes).
+* **X4b** (graph, cross-object userset lift): `_leaf_concretes` lifts the
+  tainted target's residue `upos` members into candidates/audit (they are
+  edge-free by D2, invisible to the closure-based audit before).
+* **X2** (graph `lookup_reverse`, derived relation, `o_name='*'`):
+  short-circuits to the empty result (decision 15), matching `check` and
+  the set engine, instead of raising through the reserved-name guard.
+
+**Adjudication:** the boolean spec (§5.3/§6) is SILENT on userset subjects
+through derived-TTU stored parents; the oracle was followed — recorded in
+the two dated 2026-07-13 `docs/spec-deviations.md` entries (which also
+carry a residual THEORETICAL cascade-rounds note: an untainted
+subject-wildcard-bridged from-chain target could need extra rounds; no
+compilable schema class reaches it, and it fails LOUD via the
+cascade-quiescence `InvariantViolation`, never silently wrong).
+
+**Evidence:** in-fragment behavior byte-identical (every new graph path is
+gated on `derived-ttu`/`derived-tupleset-ttu` leaf kinds absent from the
+`W4Fragment` corpora); the state-level gate (exact edge+residue equality vs
+Lean, mode `"graph-state"`) passed UNCHANGED; I1–I13 + I9 green;
+`tests/test_lookup_oracle.py` xfails flipped to plain regression pins,
+walk-skip escapes removed (properties strengthened), one new
+demorgans_reverse regression — **16 passed, 0 xfail**; matrix grids widened
+(`_boolean_grid` from-chain subjects + `_from_chain_userset_subjects` on
+the De Morgan grid — the P7 gap that hid X4 is closed). formal/ conformance
+count unchanged at 214.
+
+Docs: FINAL_REVIEW §3 (open → resolved) + §4(f) done; ARCHITECTURE §5/§6;
+HANDOFF status + optional item 4; formal/README "what remains";
+`docs/architecture/correctness.md` gap bullet closed; root README
+exception sentence replaced with the read-surface gate note; CLAUDE.md
+lookup-gate bullet reworded to the standing convention.
+
 ## Session 2026-07-12n (three verification gates — remove-path + generated-schema conformance in formal/, the lookup-surface oracle gate in tests/; harness code + docs only, NO theorem changes)
 
 Conformance suite: 140 → **214** tests, 0 skips (verify.sh gates on

@@ -159,27 +159,35 @@ Everything §7 lists, plus the fragment carries:
    oracle's parser precisely so one backend parser bug cannot corrupt both
    sides).
 
-**Known open divergence (2026-07-12, found by the new repo-side lookup gate).**
-`tests/test_lookup_oracle.py` (the brute-force oracle-lookup parity gate,
-outside `formal/` — it pins `lookup`/`lookup_reverse`/`expand` by composing
-`oracle.check` over the candidate universe) found a CHECK-level graph-vs-set
-divergence, wider than the lookup surfaces it was built for: on a derived TTU,
-userset-shaped subjects whose truth flows through a stored tupleset parent
-answer **False on the graph index** where the oracle AND both set engines
-answer **True** — two shapes, the from-chain userset itself and userset
-membership lifted through the parent's target (the residue `upos` never
-receives cross-object userset memberships); it also reproduces on
-`demorgans_reverse.fga`. This shape is **outside `W4Fragment`**
-(`computedOnly` requires derived defs to have no `ttu` leaves,
-`FullScope.lean:124` / `ReconcileCorrect.lean:34-40`; `PDerivedTTU` plan
-leaves are already item 3's documented gap) and outside the conformance
-grids' query surface (they never query userset subjects on derived-TTU
-families — which is why it survived until now), so the Lean theorems and
-every `formal/` gate above are untouched. But the repository-wide "identical
-semantics" claim now has a known, pinned exception awaiting a fix: strict
-xfails in `tests/test_lookup_oracle.py` (X4; plus three narrower lookup-only
-divergences X1–X3 — see `docs/spec-deviations.md` 2026-07-12). Fix the
-surface, then flip the xfails — never relax the properties.
+**Resolved divergence (found 2026-07-12 by the new repo-side lookup gate;
+FIXED 2026-07-13, Python-side).** `tests/test_lookup_oracle.py` (the
+brute-force oracle-lookup parity gate, outside `formal/` — it pins
+`lookup`/`lookup_reverse`/`expand` by composing `oracle.check` over the
+candidate universe) found a CHECK-level graph-vs-set divergence, wider than
+the lookup surfaces it was built for: on a derived TTU, userset-shaped
+subjects whose truth flows through a stored tupleset parent answered
+**False on the graph index** where the oracle AND both set engines answer
+**True** — two shapes, the from-chain userset itself and userset membership
+lifted through the parent's target (the residue `upos` never received
+cross-object userset memberships); it also reproduced on
+`demorgans_reverse.fga` (X4; plus three narrower lookup-only divergences
+X1–X3). All four were fixed 2026-07-13 **on the Python side only** — the
+graph delta processor gained the from-chain identity rule + a from-chain
+reconcile pass + the cross-object `upos` lift; the set engine gained
+write-time reverse-dependency interning — the boolean spec being SILENT on
+these shapes, the oracle was followed (adjudication recorded in
+`docs/spec-deviations.md`, both 2026-07-13 entries). The strict xfails were
+flipped to plain regression pins (the gate now stands at 16 passed, 0
+xfail, with its one-sided walk escapes removed — properties strengthened,
+never relaxed), and the repo matrix grids were widened to query from-chain
+and userset subjects on derived-TTU families (closing the P7 grid gap that
+hid X4). **The FORMAL claim is unchanged:** derived-TTU shapes remain
+outside `W4Fragment` (`computedOnly` requires derived defs to have no `ttu`
+leaves, `FullScope.lean:124` / `ReconcileCorrect.lean:34-40`; `PDerivedTTU`
+plan leaves stay item 3's documented gap), every new graph behavior is
+gated on leaf kinds absent from the in-fragment corpora, and the
+state-level gate (exact edge+residue equality vs Lean) passed unchanged —
+no theorem, gate, or bound above widened.
 
 ## 4. Where the next marginal assurance is
 
@@ -195,6 +203,6 @@ backend (the delta processor's removal branch is modeled by the diffing pass
 but never exercised by the add-only chain; the graph index's Python remove
 path is deliberately outside the remove gate's spec×oracle×setengine scope);
 (e) widening the enumeration/state bounds (graph backend in the enumeration;
-k = 4; a userset/TTU shape; state gate over the enumerated stores); (f) fixing
-the derived-TTU userset-subject check divergence pinned in
-`tests/test_lookup_oracle.py` (§3 note) and flipping its strict xfails.
+k = 4; a userset/TTU shape; state gate over the enumerated stores). Item (f)
+— fixing the derived-TTU userset-subject check divergence and flipping its
+strict xfails — is **DONE** (2026-07-13, Python-side; §3's resolved note).
