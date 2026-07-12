@@ -193,13 +193,14 @@ one-command `formal/verify.sh`. The gate is **fail-closed** and currently green:
 
 > `lake build` + **0 sorries** (`formal/conformance/sorry_scan.py`) + `zcli` preflight +
 > **axiom audit** (412 observed reports = 412 `#print axioms` commands, exactly one per
-> command, only `[propext, Classical.choice, Quot.sound]`) + **133 conformance tests, 0
+> command, only `[propext, Classical.choice, Quot.sound]`) + **137 conformance tests, 0
 > skips** (the conformance step fails on any skipped test or zero passes).
 
 Because the Lean spec is executable, the same artifact is both proof subject and the CLI
-oracle `zcli`. The 133 tests are **120 differential-conformance comparisons** (the five
-items below) plus **13 `test_sorry_scan.py` unit tests** for the gate's own sorry-scanner
-(gate tooling, not a Lean-vs-Python comparison). The 120 break down as:
+oracle `zcli`. The 137 tests are **120 differential-conformance comparisons** (the five
+items below) plus **17 gate-tooling unit tests** (not Lean-vs-Python comparisons: 13 for
+the sorry-scanner, `test_sorry_scan.py`; 4 for the zcli-runner transient-init retry,
+`test_runner_retry.py`). The 120 break down as:
 
 - **Answer conformance — the five corners.** Over a shared query grid, `check` verdicts
   are compared five ways: Lean `sem` (zcli) × the independent oracle × the real

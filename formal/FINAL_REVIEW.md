@@ -10,14 +10,14 @@ Verification state as of 2026-07-12 (post state-level + enumeration gates):
 `bash formal/verify.sh` green — `lake build` + **0 sorries** + `zcli` + axiom
 audit (every audited theorem depends only on `[propext, Classical.choice,
 Quot.sound]`; the gate requires exactly one observed report per `#print axioms`
-command) + **133** tests under `formal/conformance/` (0 skips — the conformance
+command) + **137** tests under `formal/conformance/` (0 skips — the conformance
 step fails on any skipped test or zero passes; interpreter overridable via
-`ZANZIBAR_PY`). The 133 = **120 differential-conformance tests** (98 answer-corner
+`ZANZIBAR_PY`). The 137 = **120 differential-conformance tests** (98 answer-corner
 [`test_conformance_spec` 51 + `test_conformance_random` 17 + `test_conformance_graph`
 30] + 3 mode-dispatch [`test_cli_mode.py`] + 15 state-level [`test_conformance_state.py`]
-+ 4 exhaustive small-scope enumeration [`test_conformance_enum.py`]) + **13
-sorry-scanner unit tests** (`test_sorry_scan.py` — gate-tooling tests, not
-Lean-vs-Python comparisons).
++ 4 exhaustive small-scope enumeration [`test_conformance_enum.py`]) + **17
+gate-tooling unit tests** (not Lean-vs-Python comparisons: 13 sorry-scanner
+[`test_sorry_scan.py`] + 4 zcli-runner transient-retry [`test_runner_retry.py`]).
 
 ---
 

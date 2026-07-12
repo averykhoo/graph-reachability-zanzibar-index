@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +31,20 @@ _ZCLI_TIMEOUT_S = 120
 _SPEC_CACHE: dict[str, list[bool]] = {}
 _STATE_CACHE: dict[str, dict] = {}
 
+# Windows PROCESS-INITIALIZATION failures that the OS raises BEFORE zcli's own code
+# runs — spawning the ~120 MB static binary in rapid succession under memory/desktop-
+# heap pressure intermittently trips these. zcli's OWN exit codes are exactly 0-4
+# (Cli.lean: 0 answers/state · 1 usage-parse · 2 admission · 3 not-drained · 4 unknown
+# mode), so a code below can NEVER be a zcli logic outcome and is safe to retry. An
+# IN-process crash (e.g. 0xC0000005 access violation) is deliberately NOT listed: that
+# would be a real fault and must still fail the gate, not be retried away.
+_TRANSIENT_INIT_RCS = frozenset({
+    3221225794,   # 0xC0000142 STATUS_DLL_INIT_FAILED (observed)
+    3221225495,   # 0xC0000017 STATUS_NO_MEMORY
+})
+_MAX_ATTEMPTS = 4          # 1 try + 3 retries
+_RETRY_BACKOFF_S = 0.25    # 0.25, 0.5, 1.0s — let the resource pressure subside
+
 
 class ZcliUnavailable(RuntimeError):
     """The Lean conformance binary is not built."""
@@ -42,6 +57,45 @@ def zcli_path() -> Path:
             return p
     raise ZcliUnavailable(
         f"zcli not found under {_BIN_DIR}; run `lake build zcli` in formal/lean")
+
+
+def invoke_zcli(request_json: str, what: str = "zcli") -> tuple:
+    """Write `request_json` to a temp file and run zcli on it, with a hang timeout
+    and a bounded retry over transient Windows process-init failures.
+
+    Returns `(completed_process, request_path)` — the CALLER interprets the return
+    code (0-4 are zcli's own outcomes) and cleans up `request_path` (keep it on a
+    failure you want to debug). Raises `RuntimeError` on timeout or once the
+    transient-init retries are exhausted; the request file is kept in that case.
+    """
+    exe = zcli_path()
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(request_json)
+        req_path = f.name
+    last = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            # zcli emits UTF-8 JSON; without an explicit encoding, text=True decodes
+            # with the locale codepage (cp1252 on Windows) — F11.
+            proc = subprocess.run([str(exe), req_path], capture_output=True,
+                                  text=True, encoding="utf-8",
+                                  timeout=_ZCLI_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"zcli {what} timed out after {_ZCLI_TIMEOUT_S}s "
+                f"(possible hang/loop); request kept at {req_path}")
+        if proc.returncode not in _TRANSIENT_INIT_RCS:
+            return proc, req_path
+        last = proc
+        if attempt < _MAX_ATTEMPTS:
+            time.sleep(_RETRY_BACKOFF_S * (2 ** (attempt - 1)))
+    raise RuntimeError(
+        f"zcli {what} failed with transient init error "
+        f"rc={last.returncode} (0x{last.returncode & 0xFFFFFFFF:08X}) after "
+        f"{_MAX_ATTEMPTS} attempts — Windows could not initialize the process "
+        f"(resource pressure from rapid large-binary spawns); "
+        f"request kept at {req_path}")
 
 
 def run_spec(request_json: str) -> list[bool]:
@@ -57,21 +111,8 @@ def run_spec(request_json: str) -> list[bool]:
     cached = _SPEC_CACHE.get(request_json)
     if cached is not None:
         return cached
-    exe = zcli_path()
     n_queries = len(json.loads(request_json)["queries"])
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
-                                     encoding="utf-8") as f:
-        f.write(request_json)
-        req_path = f.name
-    # zcli emits UTF-8 JSON; without an explicit encoding, text=True decodes
-    # with the locale codepage (cp1252 on Windows) — F11.
-    try:
-        proc = subprocess.run([str(exe), req_path], capture_output=True, text=True,
-                              encoding="utf-8", timeout=_ZCLI_TIMEOUT_S)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"zcli timed out after {_ZCLI_TIMEOUT_S}s (possible hang/loop); "
-            f"request kept at {req_path}")
+    proc, req_path = invoke_zcli(request_json, "spec/graph")
     if proc.returncode != 0:
         raise RuntimeError(
             f"zcli failed (rc={proc.returncode}): {proc.stderr.strip()} "
@@ -100,18 +141,7 @@ def run_state(request_json: str) -> dict:
     cached = _STATE_CACHE.get(request_json)
     if cached is not None:
         return cached
-    exe = zcli_path()
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
-                                     encoding="utf-8") as f:
-        f.write(request_json)
-        req_path = f.name
-    try:
-        proc = subprocess.run([str(exe), req_path], capture_output=True, text=True,
-                              encoding="utf-8", timeout=_ZCLI_TIMEOUT_S)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"zcli graph-state timed out after {_ZCLI_TIMEOUT_S}s "
-            f"(possible hang/loop); request kept at {req_path}")
+    proc, req_path = invoke_zcli(request_json, "graph-state")
     if proc.returncode != 0:
         raise RuntimeError(
             f"zcli graph-state failed (rc={proc.returncode}): "

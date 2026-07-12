@@ -687,8 +687,8 @@ section originally recapped the PLAN (C0–C4 — six-way answer conformance
 including rejection outcomes, state-level structural comparison, exhaustive
 small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
 clause-by-clause check. What exists (`formal/verify.sh` step 5;
-`formal/conformance/`; **133 tests, 0 skips, ~4 min** — 120 differential-conformance
-comparisons + 13 `test_sorry_scan.py` gate-tooling unit tests):*
+`formal/conformance/`; **137 tests, 0 skips, ~4 min** — 120 differential-conformance
+comparisons + 17 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
   Python-`file:line` map, with the known intentional divergences listed.
