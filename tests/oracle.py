@@ -71,6 +71,13 @@ def _norm_pred(pred: str | EllipsisType) -> str:
     return '...' if (pred is Ellipsis or pred is None) else pred
 
 
+# Public alias for the subject-predicate normaliser. The internal name keeps its
+# leading underscore to avoid churn across this module's many call sites; external
+# reusers (e.g. the conformance encoder, which intentionally borrows this oracle's
+# independent parser) should import this public name instead of the private one.
+norm_pred = _norm_pred
+
+
 # ---------------------------------------------------------------------------
 # Independent boolean-aware AST + parser (deliberately NOT the production parser)
 # ---------------------------------------------------------------------------

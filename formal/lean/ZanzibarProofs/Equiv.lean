@@ -29,6 +29,16 @@ exactly as proved at its stage. The FINAL full-scope statements — the unsuffix
 `GraphAdmission`/`W4Fragment` provenance split — live in `FullScope.lean`. From
 `*_w3a` onward T6a's exclusion case is non-vacuous (a derived `but not` genuinely
 excludes); on the earlier pure-direct rungs its content is deny-propagation.
+
+**Why the ladder is deliberately KEPT (not dead code), despite being superseded by
+`FullScope.lean`.** Every rung here (`*_direct` … `*_w3d2`) is individually axiom-
+audited in `Audit.lean` (its own `#print axioms` command), so the rungs are a
+load-bearing part of the standing-axioms gate, not orphaned history: they document
+that each staged scope was reached with the standard axioms only. Removing a rung
+would drop its audit report and change the gate's expected report count, so the
+whole ladder is retained by design. The verbatim-repeated hypothesis blocks are the
+price of that per-stage record; the single source of truth for the CURRENT claim is
+the unsuffixed `FullScope.lean` theorems.
 -/
 
 namespace Zanzibar

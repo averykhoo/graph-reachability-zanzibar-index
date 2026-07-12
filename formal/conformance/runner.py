@@ -16,6 +16,20 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _BIN_DIR = _REPO_ROOT / "formal" / "lean" / ".lake" / "build" / "bin"
 
+# Guard against a hung/looping zcli wedging the whole suite forever (F17). A single
+# request is tiny — 120s is generously above any healthy run and only fires on a
+# genuine hang.
+_ZCLI_TIMEOUT_S = 120
+
+# In-process memo caches keyed on the EXACT request JSON string, so a test that
+# re-issues an identical (schema, tuples, queries[, mode]) request within a session
+# reuses the prior zcli result instead of re-spawning the binary (F17). Keying on
+# request content — the JSON string carries the mode field — keeps it correct: two
+# different requests never share a cache slot. Kept per-parser (spec vs state) since
+# their return shapes differ.
+_SPEC_CACHE: dict[str, list[bool]] = {}
+_STATE_CACHE: dict[str, dict] = {}
+
 
 class ZcliUnavailable(RuntimeError):
     """The Lean conformance binary is not built."""
@@ -40,6 +54,9 @@ def run_spec(request_json: str) -> list[bool]:
     instead of with an IndexError (or worse, a silent wrong-query comparison)
     in the caller. On any failure the request file is kept for debugging.
     """
+    cached = _SPEC_CACHE.get(request_json)
+    if cached is not None:
+        return cached
     exe = zcli_path()
     n_queries = len(json.loads(request_json)["queries"])
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
@@ -48,8 +65,13 @@ def run_spec(request_json: str) -> list[bool]:
         req_path = f.name
     # zcli emits UTF-8 JSON; without an explicit encoding, text=True decodes
     # with the locale codepage (cp1252 on Windows) — F11.
-    proc = subprocess.run([str(exe), req_path], capture_output=True, text=True,
-                          encoding="utf-8")
+    try:
+        proc = subprocess.run([str(exe), req_path], capture_output=True, text=True,
+                              encoding="utf-8", timeout=_ZCLI_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"zcli timed out after {_ZCLI_TIMEOUT_S}s (possible hang/loop); "
+            f"request kept at {req_path}")
     if proc.returncode != 0:
         raise RuntimeError(
             f"zcli failed (rc={proc.returncode}): {proc.stderr.strip()} "
@@ -66,6 +88,7 @@ def run_spec(request_json: str) -> list[bool]:
         os.unlink(req_path)        # best-effort cleanup; never fail a green run
     except OSError:
         pass
+    _SPEC_CACHE[request_json] = answers
     return answers
 
 
@@ -74,13 +97,21 @@ def run_state(request_json: str) -> dict:
     state object `{"edges": [...], "residues": [...]}` it prints (Cli.lean
     header). No per-query answer-count assertion applies — this mode ignores
     queries. On any failure the request file is kept for debugging."""
+    cached = _STATE_CACHE.get(request_json)
+    if cached is not None:
+        return cached
     exe = zcli_path()
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
                                      encoding="utf-8") as f:
         f.write(request_json)
         req_path = f.name
-    proc = subprocess.run([str(exe), req_path], capture_output=True, text=True,
-                          encoding="utf-8")
+    try:
+        proc = subprocess.run([str(exe), req_path], capture_output=True, text=True,
+                              encoding="utf-8", timeout=_ZCLI_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"zcli graph-state timed out after {_ZCLI_TIMEOUT_S}s "
+            f"(possible hang/loop); request kept at {req_path}")
     if proc.returncode != 0:
         raise RuntimeError(
             f"zcli graph-state failed (rc={proc.returncode}): "
@@ -95,4 +126,5 @@ def run_state(request_json: str) -> dict:
         os.unlink(req_path)
     except OSError:
         pass
+    _STATE_CACHE[request_json] = state
     return state

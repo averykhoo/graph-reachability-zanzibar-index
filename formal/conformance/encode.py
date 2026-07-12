@@ -24,7 +24,7 @@ from tests.oracle import (
     OExclusion,
     OracleTuple,
     parse_schema_ast,
-    _norm_pred,
+    norm_pred,
 )
 
 
@@ -68,7 +68,7 @@ def schema_to_json(schema_text: str,
 def tuple_to_json(tup: OracleTuple) -> dict:
     """A stored tuple in the CLI's flat form."""
     return {
-        "sp": _norm_pred(tup.subject_predicate),
+        "sp": norm_pred(tup.subject_predicate),
         "st": tup.subject_type,
         "sn": tup.subject_name,
         "rel": tup.relation,
@@ -81,7 +81,7 @@ def query_to_json(subject_predicate, subject_type, subject_name,
                   relation, object_type, object_name) -> dict:
     """A query in the CLI's flat form (same layout as a tuple)."""
     return {
-        "sp": _norm_pred(subject_predicate),
+        "sp": norm_pred(subject_predicate),
         "st": subject_type,
         "sn": subject_name,
         "rel": relation,
