@@ -36,9 +36,11 @@ chain (`ReachedByW3d2E`, `CascadeStrataAssemble.lean`). This file is the W4 asse
   schema every derived-scoped carry is vacuous and every chain state is drained —
   the W2 subsumption argument (ROADMAP W4 delta (2)) as theorems.
 
-**T2a at this scope (`graph_reached_inv` over `ReachedBy`) is the remaining W4
-proof obligation** — the full 8-clause `Inv` exists over the W3d-1 chain
-(`CascadeInv.lean`) but not yet over the two-round chain; see ROADMAP W4 item 4.
+**T2a at this scope (`graph_reached_inv` over `ReachedBy`) is PROVED** — the full
+8-clause `Inv` holds at every state of the two-round chain (`reachedByW3d2E_inv`,
+`CascadeStrataEdge.lean`), and the final `graph_reached_inv` assembles here; closed
+2026-07-12j (ROADMAP W4). The W1 pure-direct version keeps its proof as
+`graph_reached_inv_direct`.
 -/
 
 namespace Zanzibar

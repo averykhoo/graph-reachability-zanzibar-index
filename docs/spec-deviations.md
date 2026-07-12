@@ -141,6 +141,12 @@ Facts verified against the repo, with deviations from the spec text noted:
    **If the rejection was intentional and demorgans_law_1 was meant to stay 3-way,
    say so — the plan-node + feeder wiring is cleanly removable.**
 
+   **Resolved 2026-07-13 — KEEP (owner decision).** Avery confirms the decision-15
+   override stands: derived-tupleset-TTU support is retained and `demorgans_law_1`
+   stays 4-way (not reverted to 3-way). Consistent with P5 #1 below, which corrected
+   this path's semantics (TTU parents are STORED tupleset tuples) rather than removing
+   it — the plan-node + feeder wiring stays.
+
 2. **`Filter.rewrite_relation` is a subclass** (`RewriteFilter(Filter)`), not a new
    field on `Filter`: keeps pure-union compile output (and its P0 snapshot reprs)
    byte-identical. Mechanism-only change; behavior as specced (§3.3).

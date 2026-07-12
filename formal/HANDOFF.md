@@ -179,9 +179,10 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    12k probe found NO behavioral divergence there, so the model is likely
    already faithful and only the proof is missing).
 2. **Remove legs** (the diffing pass models retraction but the Lean chain is
-   add-only; the set engine's Python remove path is now pinned at answer +
-   rebuild-fingerprint level by `test_conformance_remove.py` — the Lean legs
-   and the graph-side remove path remain the open part).
+   add-only; BOTH Python remove paths are now pinned at answer level by
+   `test_conformance_remove.py` — the set engine at rebuild-fingerprint level, the
+   graph index by fresh-build state convergence + full drain — so only the Lean
+   legs remain the open part).
 3. **Widening the state/enumeration bounds** — graph backend inside the
    enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
 4. ~~**Fixing the derived-TTU userset-subject divergence** pinned in
