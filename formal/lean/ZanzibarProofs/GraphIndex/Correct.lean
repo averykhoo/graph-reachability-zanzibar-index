@@ -15,9 +15,9 @@ statements were deleted WITH it, not proved. The T-theorems are now stated over
 the **operational** write-closure at its current scope, and their scope widens
 with the write model:
 
-* **T2a (`graph_reached_inv`)** and **T5 (`cascade_converges`)** — below, over
-  `ReachedByDirect` (the untainted direct fragment), proved by induction over
-  the concrete write path.
+* **T2a (`graph_reached_inv_direct`)** and **T5 (`cascade_converges_direct`)** —
+  below, over `ReachedByDirect` (the untainted direct fragment), proved by
+  induction over the concrete write path.
 * **T2b (`graph_correct_direct`)** — `DirectCorrect.lean`, over
   `ReachedByAdmitted` on the star-free pure-direct fragment, proved end-to-end.
 * The full-`GraphAccepts`-scope statements return when the write model covers
@@ -31,10 +31,12 @@ namespace Zanzibar
 
 /-- **T5 (cascade convergence), untainted-fragment scope.** Every state reached
     by the operational write path is cascade-quiescent. On this fragment writes
-    produce no deltas, so the outbox is trivially drained; the statement becomes
-    contentful (cascade drains a non-empty outbox in-transaction, §7.8) once the
-    derived write path is modeled. -/
-theorem cascade_converges {S : Schema} {T : Store} {σ : GraphState}
+    produce no deltas, so the outbox is trivially drained. (Renamed from
+    `cascade_converges` at cleanup: this is the W1 untainted-chain quiescence;
+    the CONTENTFUL T5 — the scheduler draining a non-empty outbox — is
+    `runCascade_no_abort`/`cascade_drains` (`Cascade.lean`) and
+    `runCascade2_no_abort`/`cascade2_drains` (`CascadeStrata.lean`).) -/
+theorem cascade_converges_direct {S : Schema} {T : Store} {σ : GraphState}
     (hReach : ReachedByDirect σ S T) : Quiescent σ :=
   (reachedByDirect_inv hReach).2.2
 

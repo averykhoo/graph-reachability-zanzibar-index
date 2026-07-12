@@ -71,7 +71,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T0a `sem_fuel_stable` (over `StoreDeclared`) | `Spec/WellDef.lean` | full |
 | T0b `stratify_none_iff_cycle` / `stratify_topological` | `Spec/WellDef.lean` | full |
 | T4 `pathCount_addEdge` / `_removeEdge` | `GraphIndex/Closure.lean` | full |
-| T5 `cascade_converges`, T2a `graph_reached_inv` | `GraphIndex/Correct.lean` | fragment |
+| T5 `cascade_converges_direct`, T2a `graph_reached_inv_direct` | `GraphIndex/Correct.lean` | fragment (W1; the contentful T5 is `runCascade_no_abort`/`cascade2_drains`) |
 | T2b `graph_correct_direct` | `GraphIndex/DirectCorrect.lean` | star-free pure-direct |
 | T2b `graph_correct_bareStar` | `GraphIndex/BareStarCorrect.lean` | + bare `[user:*]` grants |
 | T2b `graph_correct_objStar` | `GraphIndex/ObjStarClosure.lean` | + object wildcards (out-bridges) |

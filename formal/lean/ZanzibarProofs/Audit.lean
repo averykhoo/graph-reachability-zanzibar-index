@@ -78,7 +78,7 @@ namespace Zanzibar
 -- restated 2026-07-10 over the OPERATIONAL closure `ReachedByDirect` (the abstract
 -- `WriteStep`/`ReachedBy` layer was deleted as unsound-by-weakness); plus the
 -- concrete graph-model base-case lemmas. Expect only the three standard axioms:
-#print axioms cascade_converges
+#print axioms cascade_converges_direct
 #print axioms graph_reached_inv_direct
 #print axioms inv_empty
 #print axioms quiescent_empty
