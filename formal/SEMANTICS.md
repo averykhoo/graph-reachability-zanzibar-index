@@ -688,7 +688,7 @@ section originally recapped the PLAN (C0–C4 — six-way answer conformance
 including rejection outcomes, state-level structural comparison, exhaustive
 small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
 clause-by-clause check. What exists (`formal/verify.sh` step 5;
-`formal/conformance/`; **214 tests, 0 skips** — 194 differential-conformance
+`formal/conformance/`; **248 tests, 0 skips** — 228 differential-conformance
 comparisons + 20 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
@@ -746,8 +746,14 @@ comparisons + 20 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
   convergence pins: driven == fresh `rebuild()` over the grid AND at id-free
   state-fingerprint level (interner keys/refcounts, population masks,
   node_sets/member_of, flow edges), and an add-all/remove-all/re-add churn
-  test asserting complete emptiness mid-cycle. Set-engine-side only: the Lean
-  chain stays add-only and the graph backend is out of scope here.
+  test asserting complete emptiness mid-cycle. **Extended 2026-07-13** to the
+  real GRAPH index: the SAME sequences/seeds through `WildcardIndex`
+  +`DeltaProcessor` (synchronous v1 write path, I5 leaf-routing symmetry) ==
+  oracle on the accepted final store, driven graph SQL state (`snapshot_rows`
+  + id-free symbolic residues) == a fresh add-only build's, and a full-churn
+  test asserting the graph drains to a fresh-EMPTY state with I12 non-mutation
+  on a rejected repeat remove. Both Python remove paths are now pinned; only
+  the Lean-side remove legs (the add-only operational chain) stay open.
 - **Generated-schema answer conformance** (2026-07-12):
   `test_conformance_generated.py` — 40 seeded generated schemas + stores
   (a deterministic re-implementation of the hypothesis `schema_asts`

@@ -55,10 +55,11 @@ implementations** are pinned to those models by the correspondence map, five-cor
 differential conformance (including the Lean operational graph model vs the real
 graph index), **state-level equality under six documented projections**,
 **exhaustive small-scope enumeration** up to tiny documented bounds, a
-**remove-path answer gate** (the driven set engine vs `sem` × oracle on the final
-store, plus driven == rebuild at state-fingerprint level; set-engine-side only),
+**remove-path answer gate** (the driven set engine AND the driven graph index vs
+`sem` × oracle on the final store, plus driven == a fresh build at state level;
+both Python remove paths pinned, only the Lean remove legs open),
 and a **generated-schema answer gate** (seeded generated schemas outside the
-curated corpora, spec-side only) — 214 tests, 20 of them gate-tooling unit tests
+curated corpora, spec-side only) — 248 tests, 20 of them gate-tooling unit tests
 rather than comparisons.
 Residual unverified surface: the fragment carries, the compiler artifacts, the
 interner/bitmap representation layer, the SQL/transaction/concurrency layer,
@@ -73,7 +74,7 @@ See `HANDOFF.md` (kept current every session). The arc is **complete**: the tree
 **sorry-free and axiom-clean**, and `bash formal/verify.sh` (the one-command,
 fail-closed gate) is green — `lake build` + 0 sorries + zcli preflight + axiom audit
 (412 `#print axioms` reports, one per audited theorem, only
-`[propext, Classical.choice, Quot.sound]`) + **214
+`[propext, Classical.choice, Quot.sound]`) + **248
 conformance tests, 0 skips**. T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over
 the operational closure `ReachedBy` at `GraphAdmission ∧ W4Fragment` scope (staged
 widening W1→W4 complete). Phase 6 hardening complete: the graph-state conformance

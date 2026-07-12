@@ -36,7 +36,7 @@ never rounds up to "the code is formally verified" (plan §7).
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
    + **0 sorries** + zcli + axiom audit (412 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + 214 Python conformance
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + 248 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
@@ -156,12 +156,16 @@ enumeration** (`test_conformance_enum.py`: ALL stores ≤ 3 tuples, 2 names/type
 shapes, 527 stores, spec × oracle × set engine, counts asserted), the **remove-path
 answer gate** (`test_conformance_remove.py`: seeded add/remove/re-add sequences ×
 17 corpora × 5 seeds, driven `SetEngine` == `sem` × oracle on the final store, driven
-== `rebuild()` at grid + state-fingerprint level; set-engine-side only), the
-**generated-schema answer gate** (`test_conformance_generated.py`: 40 seeded
-generated schemas outside the curated corpora, spec == oracle == set engine —
-closes the disjoint-pools risk at answer level), `CORRESPONDENCE.md`,
-and `FINAL_REVIEW.md` are all landed and gated. verify.sh: 214 conformance tests, 0
-skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
+== `rebuild()` at grid + state-fingerprint level — and, added 2026-07-13, the SAME
+sequences/seeds driven through the real GRAPH index (`WildcardIndex`+`DeltaProcessor`,
+I5 leaf-routing): driven graph `check` == oracle, driven graph SQL state == a fresh
+add-only build's, full-churn drains to a fresh-EMPTY graph with I12 non-mutation on a
+rejected repeat remove; so BOTH Python remove paths are now pinned, only the Lean
+remove legs stay open), the **generated-schema answer gate**
+(`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
+corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
+level), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` are all landed and gated.
+verify.sh: 248 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
 map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
 `history/`. The one known check-level graph-vs-set divergence (derived-TTU
 userset subjects — outside `W4Fragment` and the conformance grids) was FIXED

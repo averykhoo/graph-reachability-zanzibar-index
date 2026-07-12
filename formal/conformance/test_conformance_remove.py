@@ -39,19 +39,22 @@ preflights the binary, so the gate never actually skips).
 from __future__ import annotations
 
 import random
+from collections import Counter
 
 import pytest
 
 from sqlmodel import select
 
 from tests.oracle import Oracle, t as mk_tuple
+from tests.wildcard_helpers import assert_wildcard_invariants
 from setengine.models import TupleV1
 
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
 from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
 from formal.conformance import runner
-from formal.conformance.backends import _fresh_session
+from formal.conformance.backends import (
+    _fresh_session, GraphDriver, graphindex_drive_ops)
 
 SEEDS = list(range(5))
 
@@ -332,3 +335,196 @@ def test_full_churn_restores(name):
             f'[{name}] spec/churned-engine disagreement (ADJUDICATION EVENT — '
             f'plan §8.2):\n{_fmt(mism, "spec", "churned")}')
     session.close()
+
+
+# ---------------------------------------------------------------------------
+# Graph backend (index_v4) — the SAME remove sequences, driven through the
+# synchronous v1 write path (rule routing + same-transaction cascade, I5).
+#
+# Scope note. zcli `sem` parity is NOT re-run here for the graph: the sibling
+# `test_remove_sequences` already pins `sem(final) == oracle(final)` on these
+# exact corpora/seeds, so pinning `graph == oracle` below pins `graph == sem`
+# transitively. And the Lean OPERATIONAL graph model is add-only
+# (ARCHITECTURE.md §3.2 / FINAL_REVIEW §4 remove legs), so it is out of scope as
+# a post-remove reference — item (d)'s Lean half stays deferred; the Python graph
+# remove path is what these tests pin for the first time.
+# ---------------------------------------------------------------------------
+
+def _residues_by_name(session, widx):
+    """Symbolic residues keyed by (object_type, object_name, relation) with the
+    neg set carried as id-free (predicate, type, name) triples — the id-stable
+    idiom from tests/test_hypothesis.py, so a driven index and a fresh add-only
+    build (which assign different node ids) compare equal."""
+    import json
+    from sqlmodel import select
+    from index_v4.models import ResidueV1
+    out = {}
+    for r in session.exec(select(ResidueV1)).all():
+        node = widx._node_by_id(r.object_node_id)
+        neg = frozenset((n.predicate, n.type, n.name)
+                        for n in (widx._node_by_id(i) for i in json.loads(r.neg))
+                        if n is not None)
+        out[(node.type, node.name, r.relation)] = (r.stars, neg)
+    return out
+
+
+def _graph_state(session, widx):
+    """Id-free graph fingerprint: (snapshot_rows, residues_by_name).
+
+    Uses `snapshot_rows` (I11/I12 multiset), NOT `extract_sql_state` — the
+    latter's P2/P6 projections would hide a stale bridge or leaf edge that a
+    remove-path residue leak leaves behind, which is exactly what this gate must
+    catch."""
+    from index_v4.invariants import snapshot_rows
+    return snapshot_rows(session, widx.idx.store_id), _residues_by_name(session, widx)
+
+
+@pytest.mark.parametrize('name', sorted(SCHEMAS))
+def test_graph_remove_sequences(name):
+    """Seeded interleaved add/remove sequences per corpus, driven through the
+    REAL graph index (index_v4) — the first end-to-end pin of the graph remove
+    path. Identical universe/ops to `test_remove_sequences` (same generators,
+    same seeds). Asserts, on the driven final state: (a) I1-I8 invariants and, on
+    boolean schemas, the I9 fixpoint audit; (b) driven grid `check` ==
+    oracle(accepted_final) — the primary correctness pin; (c) driven graph state
+    == a fresh add-only build's state (remove-path residue: stale bridge / leaf
+    edge / residue leak shows up here); (d) driven grid == fresh-build grid.
+
+    (Scope: sem/Lean deferred — see the module-level note above.)"""
+    schema_text, corpus_tuples, obj_wild = SCHEMAS[name]
+
+    for seed in SEEDS:
+        rng = random.Random(seed)
+        universe = list(corpus_tuples) + _extras(rng, corpus_tuples)
+        ops = _sequence(rng, universe)
+        # grid over the FULL universe: removed/never-present names stay probed
+        queries = queries_for(schema_text, universe)
+
+        session, widx, proc, _store_id, final = graphindex_drive_ops(
+            schema_text, ops, obj_wild)
+        assert len(final) < len(universe), 'sequence must net-remove something'
+
+        # (a) invariants + fixpoint audit on the driven final state
+        assert_wildcard_invariants(widx)
+        if proc is not None:
+            proc.audit_fixpoint()                       # I9, all keys
+
+        driven = [bool(widx.check(*q)) for q in queries]
+
+        # (b) primary pin: driven graph == oracle on the accepted final store.
+        final_tuples = sorted(final)
+        orc = Oracle(schema_text, final_tuples)
+        oracle = [orc.check(*q) for q in queries]
+        mism = [(queries[i], driven[i], oracle[i]) for i in range(len(queries))
+                if driven[i] != oracle[i]]
+        assert not mism, (
+            f'[{name} seed={seed}] driven-graph/oracle disagreement on the '
+            f'final store:\n{_fmt(mism, "driven", "oracle")}')
+
+        # (c)+(d)+(e) convergence: the driven state must equal a FRESH add-only
+        # build over accepted_final, both at id-free state level (no ghost/dup
+        # edges, no stale bridge/residue — the graph analog of the set-engine
+        # row-multiset check) and pointwise over the grid.
+        fsession, fwidx, _fproc, _fstore, _ffinal = graphindex_drive_ops(
+            schema_text, [('add', t) for t in final_tuples], obj_wild)
+        driven_state = _graph_state(session, widx)
+        fresh_state = _graph_state(fsession, fwidx)
+        assert driven_state == fresh_state, (
+            f'[{name} seed={seed}] driven/fresh-build STATE divergence '
+            f'(remove-path residue — stale bridge/leaf edge or residue leak):\n'
+            f'  driven nodes={driven_state[0][0]}\n  fresh  nodes={fresh_state[0][0]}\n'
+            f'  driven edges={driven_state[0][1]}\n  fresh  edges={fresh_state[0][1]}\n'
+            f'  driven residues={driven_state[1]}\n  fresh  residues={fresh_state[1]}')
+        fresh = [bool(fwidx.check(*q)) for q in queries]
+        mism = [(queries[i], driven[i], fresh[i]) for i in range(len(queries))
+                if driven[i] != fresh[i]]
+        assert not mism, (
+            f'[{name} seed={seed}] driven/fresh-build grid disagreement:\n'
+            f'{_fmt(mism, "driven", "fresh")}')
+
+        fsession.close()
+        session.close()
+
+
+@pytest.mark.parametrize('name', sorted(SCHEMAS))
+def test_graph_full_churn_restores(name):
+    """Add every corpus tuple to the graph index, remove ALL of them (shuffled),
+    assert the graph SQL state is FULLY DRAINED (no NodeV4/EdgeV4/ResidueV1 rows —
+    empirically the drain equals a fresh-EMPTY index; permanent scaffolding like
+    the store row is not a graph row and legitimately remains), then re-add all
+    and assert the churned state + grid match a fresh add-only build and the
+    oracle. Between the drain and the re-add, a repeat remove of a corpus tuple
+    must raise `ValueError('Non-existent edge ...')` AND leave state unchanged
+    (I12: a rejected remove must not mutate).
+
+    (Scope: sem/Lean deferred — see the module-level note above.)"""
+    schema_text, corpus_tuples, obj_wild = SCHEMAS[name]
+    rng = random.Random(0xC0FFEE)
+    queries = queries_for(schema_text, corpus_tuples)
+
+    # Fresh-empty reference: what "fully drained" must equal.
+    empty = GraphDriver(schema_text, obj_wild)
+    empty_state = _graph_state(empty.session, empty.widx)
+    empty.close()
+
+    drv = GraphDriver(schema_text, obj_wild)
+    for tup in corpus_tuples:
+        assert drv.apply(tup, 'add'), f'[{name}] corpus add rejected: {tup}'
+    removal_order = list(corpus_tuples)
+    rng.shuffle(removal_order)
+    for tup in removal_order:
+        assert drv.apply(tup, 'remove'), f'[{name}] corpus remove rejected: {tup}'
+
+    # Fully drained: no closure edges, no nodes, no residues — == fresh-empty.
+    drained_state = _graph_state(drv.session, drv.widx)
+    assert drained_state == empty_state, (
+        f'[{name}] graph state not fully drained after removing every tuple:\n'
+        f'  drained nodes={drained_state[0][0]} edges={drained_state[0][1]} '
+        f'residues={drained_state[1]}')
+    assert drained_state[0] == (Counter(), Counter()) and not drained_state[1], (
+        f'[{name}] residual graph rows survived full removal: {drained_state}')
+    assert_wildcard_invariants(drv.widx)
+    if drv.proc is not None:
+        drv.proc.audit_fixpoint()
+
+    # I12: a repeat remove of a now-absent edge must raise AND not mutate.
+    before = _graph_state(drv.session, drv.widx)
+    with pytest.raises(ValueError, match='Non-existent edge'):
+        drv._route(corpus_tuples[0], 'remove')
+    drv.session.rollback()
+    assert _graph_state(drv.session, drv.widx) == before, (
+        f'[{name}] a rejected remove mutated graph state (I12 violation)')
+
+    # Re-add all (freed node ids recycled), then converge to a fresh build.
+    readd_order = list(corpus_tuples)
+    rng.shuffle(readd_order)
+    for tup in readd_order:
+        assert drv.apply(tup, 'add'), f'[{name}] corpus re-add rejected: {tup}'
+
+    fsession, fwidx, _fproc, _fstore, _ffinal = graphindex_drive_ops(
+        schema_text, [('add', t) for t in corpus_tuples], obj_wild)
+    churned_state = _graph_state(drv.session, drv.widx)
+    fresh_state = _graph_state(fsession, fwidx)
+    assert churned_state == fresh_state, (
+        f'[{name}] churned/fresh-build STATE divergence after full '
+        f'add-remove-readd cycle:\n'
+        f'  churned nodes={churned_state[0][0]}\n  fresh   nodes={fresh_state[0][0]}\n'
+        f'  churned edges={churned_state[0][1]}\n  fresh   edges={fresh_state[0][1]}\n'
+        f'  churned residues={churned_state[1]}\n  fresh   residues={fresh_state[1]}')
+
+    churned = [bool(drv.widx.check(*q)) for q in queries]
+    fresh = [bool(fwidx.check(*q)) for q in queries]
+    mism = [(queries[i], churned[i], fresh[i]) for i in range(len(queries))
+            if churned[i] != fresh[i]]
+    assert not mism, (f'[{name}] churned/fresh-build grid disagreement:\n'
+                      f'{_fmt(mism, "churned", "fresh")}')
+
+    orc = Oracle(schema_text, list(corpus_tuples))
+    oracle = [orc.check(*q) for q in queries]
+    mism = [(queries[i], churned[i], oracle[i]) for i in range(len(queries))
+            if churned[i] != oracle[i]]
+    assert not mism, (f'[{name}] churned-graph/oracle disagreement:\n'
+                      f'{_fmt(mism, "churned", "oracle")}')
+
+    fsession.close()
+    drv.close()
