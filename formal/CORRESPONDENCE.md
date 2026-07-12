@@ -10,6 +10,12 @@ The theorems are about the Lean models; the pin to Python is *empirical*
 (`verify.sh` step 5). Line numbers are as of 2026-07-12; where a spec and the
 code disagree on a name, the code wins.
 
+**Scope note (five corners, not six):** the conformance gates below compare
+`check` VERDICTS only — five corners (Lean `sem` · oracle · real `SetEngine` ·
+Lean operational graph model · real graph index); plan §7's sixth corner,
+state-level equality of materialized edge/residue state, is OPEN
+(`FINAL_REVIEW.md` §1's ❌ row).
+
 Conformance gates (`formal/verify.sh` step 5, `formal/conformance/`):
 
 | gate | compares | corpora |
