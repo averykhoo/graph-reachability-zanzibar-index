@@ -77,7 +77,12 @@ All in `formal/lean/ZanzibarProofs/`, all sorry-free, all axiom-audited.
   (`graphRun_check_eq_sem`).
 * **Non-vacuity** (`FullScope.lean` `W4Witness`): the hypothesis bundles are
   machine-checked inhabited by a real compiled boolean schema — the final
-  theorems are not vacuous.
+  theorems are not vacuous. Honesty caveat: what is kernel-checked is
+  inhabitation of the hypothesis BUNDLES (`GraphAdmission ∧ W4Fragment`).
+  Joint inhabitation of a drained, non-trivially-REACHED state is demonstrated
+  empirically — the zcli graph mode folds real corpora through the chain and
+  refuses non-drained final states — together with the proved
+  `cascade2_drains`; that joint witness is not itself a kernel-checked term.
 
 Method note: six false theorem statements were killed by attack-first `#eval`
 refutation before proving (additive fuel bound; abstract write-step closure;
@@ -93,7 +98,16 @@ Everything §7 lists, plus the fragment carries:
 1. **Model-to-code fidelity** — the theorems are about the Lean models; the tie
    to Python is `CORRESPONDENCE.md` + empirical conformance. A Python behavior
    outside the corpora/grids could diverge without failing the gate.
-2. **Fragment scope** (each a documented gap, none hidden — ROADMAP "W4 —
+2. **The Python COMPILER artifacts are trusted, not modeled.** `compile_ruleset`'s
+   outputs — the taint computation, strata assignment, derived-predicate plans
+   and fan-out tables, and leaf-family routing — have no Lean counterpart: the
+   Lean model reads the RAW boolean defs and derives taint/strata/jobs itself
+   (`isDerived`, `stratify`, the state-derived job enumerations). The pins are
+   the compiled-RuleSet snapshot tests (`tests/snapshots/`) and the conformance
+   corpora (which drive the real compiled artifacts through the Python write
+   path); a compiler bug on a schema shape those pins don't exercise would not
+   fail any Lean gate.
+3. **Fragment scope** (each a documented gap, none hidden — ROADMAP "W4 —
    honest gaps"): > 2 derived strata; non-root booleans (Python taints through
    `union`/`computed` roots); `PDerivedTTU`/`PDerivedUserset` plan leaves;
    declared wildcard-userset restrictions (`[T#p:*]`-style) anywhere; stored
@@ -103,13 +117,13 @@ Everything §7 lists, plus the fragment carries:
    *Empirical note (2026-07-12k): union-rooted-taint and object-wildcard
    corpora were probed anyway — zero check-level divergence observed; the
    exclusions are proof-scope, not known disagreements.*
-3. **State-level conformance** — not yet implemented (check verdicts only).
-4. **The representation layers** — interner/bitmap (`setengine`), SQL rows /
+4. **State-level conformance** — not yet implemented (check verdicts only).
+5. **The representation layers** — interner/bitmap (`setengine`), SQL rows /
    ref-counted closure storage (`index_v4`), sessions/transactions/concurrency
    (the `_lock_store` protocol), `rebuild()`/crash recovery.
-5. **Non-stratifiable schemas** (rejected upstream; the model assumes
+6. **Non-stratifiable schemas** (rejected upstream; the model assumes
    stratifiability), `expand` / `lookup` / `list-objects` read surfaces.
-6. **The toolchain trust base** — Lean 4 kernel + the pinned Mathlib, and the
+7. **The toolchain trust base** — Lean 4 kernel + the pinned Mathlib, and the
    conformance harness's own encoder (`encode.py` reuses the independent
    oracle's parser precisely so one backend parser bug cannot corrupt both
    sides).
