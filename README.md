@@ -31,6 +31,41 @@ All this is to help with indexing permissions in [Google Zanzibar](https://zanzi
 Please read the the code to understand how it works.
 ~~If it doesn't work then this repo will probably be archived.~~
 
+Okay fine, there are docs now. Start at
+[`docs/architecture/overview.md`](./docs/architecture/overview.md) for the module map
+and the short version of everything. The actual *why* lives in
+[`docs/architecture/theory.md`](./docs/architecture/theory.md) (path-counting
+closure, split wildcard nodes, stratified fixpoints, the star-closed set algebra)
+and [`docs/architecture/correctness.md`](./docs/architecture/correctness.md) (what's
+proved by construction vs pinned by redundant implementations, and the known gaps).
+The full design specs (with the rejected alternatives) are in
+[`docs/specs/`](./docs/specs/), decisions distilled in
+[`docs/architecture/decision-log.md`](./docs/architecture/decision-log.md).
+The code cites the specs by section number (`spec §N` / `boolean spec §N`), so they're
+reference material, not just history.
+
+## Repo layout
+
+```
+zanzibar_utils_v1.py   shared schema layer (DSL + OpenFGA JSON parsers, compile,
+                       validation)
+index_v4/              the graph index (closure core, wildcard façade,
+                       boolean delta processor, invariants, outbox)
+setengine/             the set engine (bitmap evaluation, MemberSet, interner)
+connectedstore/        the composed system: source-of-truth tuples + permanent
+                       log feeding the index (sync or async), freshness tokens,
+                       offline index builds - the Zanzibar/Leopard split
+formal/                Lean 4 machine-checked proofs that the two backend
+                       algorithms (as modeled) compute the same
+                       stratified-Datalog¬ semantics; the Python is pinned to
+                       the models by a conformance harness, not itself verified
+                       (start at formal/HANDOFF.md)
+legacy/                v1-v3, superseded but runnable documentation
+tests/                 incl. the independent oracle + the validation matrix
+docs/                  architecture notes, design specs, deviations log
+benchmarks/            set-engine + scale benchmarks
+```
+
 ## Why does it work
 
 ### Starting with a trivial lookup table
@@ -377,7 +412,8 @@ schema rewrite to rules/filters
 | `(... and ...)`                  | parsed to `Intersection`                | graph: compiled to a derived predicate (leaf routing + delta processor); set engine: bitmap `&`          |
 | `(... but not ...)`              | parsed to `Exclusion`                   | graph: compiled to a derived predicate (edge + residue state); set engine: bitmap `-`                    |
 
-* note: the current rewrite logic is too simple to express the second of those rules right now
+* ~~note: the current rewrite logic is too simple to express the second of those rules right now~~
+  (TTU rewrites landed in `_emit_expr` — `X from Y` compiles to a rule carrying the target relation in the subject predicate)
 * schema type checking, so that all relations always resolve to a single type?
     * or resolve by relations and do duck-typing checks instead? this is more correct maybe but also more effort
 * need some way to track explicitly added tuples vs auto-included tuples?
@@ -417,12 +453,18 @@ regardless, so this is defense-in-depth). Internal ids stay strictly numeric, de
 from these strings.
 
 Same questions, same answers, opposite place to spend the work. The **validation matrix**
-(`tests/test_matrix.py`) is what pins "same semantics": a 4-way comparison
-(handwritten expectations · reference oracle · set engine · graph `WildcardIndex`) over
+(`tests/test_matrix.py`) is what pins "same semantics": a lockstep comparison
+(handwritten expectations · reference oracle · set engine · graph `WildcardIndex` ·
+the composed `ConnectedStore`) over
 **both** the union+wildcard fixtures **and** the boolean fixtures (the graph joined the
 boolean grids with the derived-predicate work — the boolean-IVM spec's acceptance
 event), with `check` compared across all backends over the full query grid after every
-operation — under **both** set representations.
+operation — under **both** set representations. One known, pinned exception to "identical
+semantics" (2026-07-12, found by the lookup-surface oracle gate,
+`tests/test_lookup_oracle.py`): userset-shaped subjects whose access flows through a
+stored tupleset parent of a *derived* TTU answer False on the graph index where the
+oracle and set engine answer True — outside every matrix grid's query surface, pinned as
+strict xfails and awaiting a fix (`docs/spec-deviations.md`, 2026-07-12 entry).
 
 ### Cost model
 
@@ -522,11 +564,26 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
 
-* re-introduce invariant checks for the index v3, and think of more checks
-* re-introduce randomized testing for v3
+* ~~re-introduce invariant checks for the index v3, and think of more checks~~
+  v4 has I1–I12 + paranoia mode now (`index_v4/invariants.py`); v3 is `legacy/`
+* ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
+  the ParityEngine walks, and the hypothesis campaign (`tests/test_hypothesis.py`)
 * support tracking user-triples and rule-triples in the index
-* parse the fga schema (json) into filters and rewrite rules
-* store the filters and rewrite rules in the database
-* support namespacing within the database
-    * or just use a new database each time? probably better for it to be in the database though
-* output the new edges and newly removed edges for external indexing
+    * partially there: derived-relation storage leaves vs routed leaves make the
+      distinction for boolean relations; pure-union relations still mix them
+* ~~parse the fga schema (json) into filters and rewrite rules~~
+  `parse_openfga_json` (OpenFGA 1.1 authorization-model JSON → the same AST)
+* ~~store the filters and rewrite rules in the database~~ resolved by decision:
+  the schema *source* is stored (`SchemaV4`, write-once); compiled rules are a
+  deterministic cache, recompiled on open (persisting them would be a drift surface)
+* ~~support namespacing within the database~~ every table is `store_id`-scoped from
+  the start (`StoreV4`); see `TestMultiStoreIsolation`
+* ~~output the new edges and newly removed edges for external indexing~~
+  `DeltaOutboxV1` + `index_v4/outbox.py`'s `drain_deltas` (transactional, replayable)
+* ~~async outbox worker~~ `ConnectedStore(sync=False)` + `catch_up()` — the worker
+  body exists and is tested (lag, crash-retry exactly-once, convergence); a daemon
+  would just call it on a timer
+* symmetric subject-keyed residues, to lift the two remaining scope rejections
+  (object wildcards on derived relations; wildcard usersets over derived relations)
+* a real service wrapper (deliberately skipped: the store is a plain callable API)
+* log compaction, if the tuple log ever outgrows "humans wrote this"

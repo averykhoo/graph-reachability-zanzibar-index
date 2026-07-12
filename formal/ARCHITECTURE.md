@@ -193,14 +193,14 @@ one-command `formal/verify.sh`. The gate is **fail-closed** and currently green:
 
 > `lake build` + **0 sorries** (`formal/conformance/sorry_scan.py`) + `zcli` preflight +
 > **axiom audit** (412 observed reports = 412 `#print axioms` commands, exactly one per
-> command, only `[propext, Classical.choice, Quot.sound]`) + **137 conformance tests, 0
+> command, only `[propext, Classical.choice, Quot.sound]`) + **214 conformance tests, 0
 > skips** (the conformance step fails on any skipped test or zero passes).
 
 Because the Lean spec is executable, the same artifact is both proof subject and the CLI
-oracle `zcli`. The 137 tests are **120 differential-conformance comparisons** (the five
-items below) plus **17 gate-tooling unit tests** (not Lean-vs-Python comparisons: 13 for
-the sorry-scanner, `test_sorry_scan.py`; 4 for the zcli-runner transient-init retry,
-`test_runner_retry.py`). The 120 break down as:
+oracle `zcli`. The 214 tests are **194 differential-conformance comparisons** (the seven
+items below) plus **20 gate-tooling unit tests** (not Lean-vs-Python comparisons: 13 for
+the sorry-scanner, `test_sorry_scan.py`; 7 for the zcli-runner transient-init retry,
+`test_runner_retry.py`). The 194 break down as:
 
 - **Answer conformance — the five corners.** Over a shared query grid, `check` verdicts
   are compared five ways: Lean `sem` (zcli) × the independent oracle × the real
@@ -240,12 +240,33 @@ the sorry-scanner, `test_sorry_scan.py`; 4 for the zcli-runner transient-init re
   silently drift. spec × oracle × set engine over the shared grid; zero disagreements. The
   graph backend is deliberately not enumerated (it stays pinned by the curated-corpora
   graph + state gates), and the bounds are deliberately tiny.
+- **Remove-path conformance** (`test_conformance_remove.py`, 34 tests, 2026-07-12): the
+  REAL `SetEngine` driven through seeded interleaved add/remove/re-add sequences (all 17
+  spec-scope corpora × 5 seeds) equals `sem` (zcli) × the oracle on the FINAL store — the
+  first ANSWER-LEVEL pin on Python's remove path — plus two Python-internal convergence
+  pins: the driven engine equals a fresh `rebuild()` over the grid AND at id-free
+  state-fingerprint granularity (interner keys/refcounts, population masks,
+  node_sets/member_of, flow-graph edges), and a full add-all/remove-all/re-add churn test
+  asserts complete state emptiness mid-cycle. Scope honesty: spec × oracle × set engine
+  only — the Lean chain stays add-only, the GRAPH-side remove legs remain open (§6), and
+  the fingerprint comparison is driven-vs-rebuild Python-internal, never vs Lean.
+- **Generated-schema conformance** (`test_conformance_generated.py`, 40 tests,
+  2026-07-12): a seeded deterministic re-implementation of the hypothesis `schema_asts`
+  generator (NO hypothesis dependency — the formal/ convention; inside
+  `formal/conformance/` so `verify.sh` gates it fail-closed) produces schemas + stores
+  OUTSIDE the 17 curated corpora, asserting zcli `sem` == oracle == real `SetEngine` over
+  the shared grid. This closes the disjoint-pools gap — a `sem`/model-fidelity divergence
+  on non-curated schema shapes was previously invisible to every gate (§6 item 1).
+  Answer-level, spec-side only; the graph backend stays pinned by the curated corpora.
 
 Separately, the repository-wide **validation matrix** (`tests/test_matrix.py`) pins
 Python-graph × Python-set × oracle on every push, and the **compiled-RuleSet snapshot
 tests** (`tests/snapshots/`, `tests/test_compile_snapshot.py`) are the byte-identity gate
 on untainted compilation — the pin on the compiler artifacts the Lean model does not
-cover (§6).
+cover (§6). The **lookup-surface oracle gate** (`tests/test_lookup_oracle.py`,
+2026-07-12) pins `lookup`/`lookup_reverse`/`expand` on both Python backends by composing
+`oracle.check` into brute-force reference lookups; its strict xfails are pinned genuine
+divergences (§6 note).
 
 ---
 
@@ -261,7 +282,10 @@ The residual unverified surface, in full:
 
 1. **Model-to-code fidelity itself** — the theorems are about the Lean models; the tie to
    Python is `CORRESPONDENCE.md` + empirical conformance. A Python behavior outside the
-   corpora/grids could diverge without failing the gate.
+   corpora/grids could diverge without failing the gate. *Narrowed 2026-07-12:* the
+   schema-SHAPE half of this risk is closed at answer level, spec-side, by the
+   generated-schema gate (`test_conformance_generated.py`, §5); behaviors outside the
+   generated envelope, and the graph backend on non-curated shapes, remain unpinned.
 2. **The Python COMPILER artifacts are trusted, not modeled** — `compile_ruleset`'s taint
    computation, strata assignment, derived-predicate plans, fan-out tables, and
    leaf-family routing have no Lean counterpart (the Lean model reads the RAW boolean defs
@@ -270,14 +294,27 @@ The residual unverified surface, in full:
 3. **Fragment carries** — the `W4Fragment` gaps (§4.1): > 2 derived strata; non-root
    booleans (union/computed-rooted taint); `PDerivedTTU`/`PDerivedUserset` plan leaves;
    declared wildcard-userset restrictions anywhere; stored object-wildcard tuples; stored
-   userset-star tuples; **removes** (the chain is add-only); star-subject queries with
-   non-bare predicates; star-object queries on the graph side. *(Empirical note: the
-   union-rooted-taint and object-wildcard corpora were probed anyway — zero check-level
-   divergence observed; the exclusions are proof-scope, not known disagreements.)*
+   userset-star tuples; **removes** (the chain is add-only — the Python SET-ENGINE remove
+   path is now pinned at answer level + rebuild state-fingerprint by
+   `test_conformance_remove.py`; the Lean remove legs and the graph-side remove path stay
+   open); star-subject queries with non-bare predicates; star-object queries on the graph
+   side. *(Empirical note: the union-rooted-taint and object-wildcard corpora were probed
+   anyway — zero check-level divergence observed; the exclusions are proof-scope, not
+   known disagreements. Exception, 2026-07-12: inside the `PDerivedTTU` gap a REAL
+   check-level divergence is now known — the graph index answers False on userset-shaped
+   subjects flowing through a stored tupleset parent of a derived TTU where the oracle
+   and both set engines answer True. Found by `tests/test_lookup_oracle.py`, pinned there
+   as strict xfails; outside `W4Fragment` (`computedOnly` bans `ttu` leaves in derived
+   defs) and outside the conformance grids' query surface, so the theorems and the
+   `formal/` gates are untouched — see `FINAL_REVIEW.md` §3's note and
+   `docs/spec-deviations.md`.)*
 4. **The state-gate projections** — state-level conformance IS implemented, but a
    divergence strictly inside a projected class (P6 leaf-family edge content, P3 edge
    multiplicity, P2 bridge edges, P5 node GC) would not fail it; each is pinned elsewhere
-   and documented in `extractor.py`.
+   and documented in `extractor.py`. Two artifacts sit outside the canonical form
+   entirely: the `EdgeV4.derived` flag and the outbox rows/watermark (drained-ness is
+   gated as a boolean, not row equality) — pinned only by Python-internal I5/I10 + the
+   §8.3 verifier, never against Lean.
 5. **The representation layers** — interner/bitmap (`setengine`), SQL rows / ref-counted
    closure storage (`index_v4`), sessions/transactions/concurrency (`_lock_store`),
    `rebuild()` / crash recovery.
@@ -288,11 +325,14 @@ The residual unverified surface, in full:
    one parser bug cannot corrupt both sides).
 
 **Where the next marginal assurance is** (`FINAL_REVIEW.md` §4; state-level + enumeration
-are DONE): (c) widening `W4Fragment` (union roots first — the probe suggests the model is
-already faithful there and only the proof is missing); (d) remove legs (the diffing pass
-models retraction but the chain is add-only); (e) widening the state/enumeration bounds
-(graph backend in the enumeration, k = 4, a userset/TTU shape, state gate over enumerated
-stores).
++ the remove-path and generated-schema answer gates are DONE): (c) widening `W4Fragment`
+(union roots first — the probe suggests the model is already faithful there and only the
+proof is missing); (d) remove legs on the Lean side and the graph backend (the diffing
+pass models retraction but the chain is add-only; the set engine's remove path is now
+pinned, the graph's is not); (e) widening the state/enumeration bounds (graph backend in
+the enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores); (f)
+fixing the derived-TTU userset-subject divergence pinned in `tests/test_lookup_oracle.py`
+and flipping its strict xfails.
 
 ---
 

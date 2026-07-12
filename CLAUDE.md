@@ -82,6 +82,11 @@ IVM delta processor.
   generated-schema round-trips, and a stateful ParityEngine machine. Profiles: `ci`
   (default) / `HYPOTHESIS_PROFILE=deep` locally.
 - Property tests reuse a shared candidate pool + grid (`tests/test_wildcard_property.py`).
+- **`tests/test_lookup_oracle.py` is the lookup-surface oracle gate**: it composes
+  `oracle.check` into brute-force reference lookups and pins `lookup` /
+  `lookup_reverse` / `expand` on both backends. Its **strict xfails are pinned genuine
+  divergences** (X1–X4, see `docs/spec-deviations.md` 2026-07-12) — fix the surface and
+  then flip the xfail; never relax the properties.
 - **Never edit a golden or oracle result just to make a refactor pass** — the oracle and
   goldens ARE the behavioral spec.
 

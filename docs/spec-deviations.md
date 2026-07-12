@@ -647,4 +647,60 @@ Full suite after: 497 passed (18 of them the new regression pins).
 
 ---
 
+## 2026-07-12 — lookup-surface oracle gate (`tests/test_lookup_oracle.py`)
+
+Closes the gap logged as P0 recon finding #3 / P1 finding #2: the oracle is
+check-only, so `lookup` / `lookup_reverse` / `expand` had **no independent
+reference** — ParityEngine serves them from a single "richest live backend"
+with no cross-assertion. The new gate composes `oracle.check` over a
+schema-derived candidate universe into brute-force reference lookups
+(`oracle_lookup(subject, rel, T) = {n | check(subject, rel, T:n)}` and its
+reverse) and asserts BOTH backends' lookup surfaces against it after every
+accepted op of seeded add/remove walks (drained to the empty store) plus
+dense scripted states — **exact (two-sided) where the API is exact, one-sided
+where the API drops information by design** (set `lookup_reverse` drops `neg`,
+`setengine/engine.py:738-740`). Coverage: `wildcards.fga` (+object wildcards),
+`boolean_wildcards.fga`, `demorgans_reverse.fga`. Permanent tamper tests
+(leaked id, dropped id, cleared exclusions, dropped neg) prove the checkers
+bite. 15 tests: 10 pass + 5 **strict xfails** — the xfails pin GENUINE
+divergences (the properties were NOT weakened around them; fix the surface,
+then flip the xfail):
+
+1. **X4 — CHECK-level graph divergence on derived-TTU userset subjects (the
+   significant one; wider than lookups).** On a derived TTU, userset-shaped
+   subjects whose truth flows through a stored tupleset parent answer False
+   on the graph index where the oracle AND both set engines answer True. Two
+   shapes: (a) the from-chain userset itself — after `doc:d1 parent doc:d2`,
+   `check('viewer','doc','d1','inherited','doc','d2')` = graph False / others
+   True (the graph's own *untainted* TTU path answers the analogous
+   `wildcards.fga` query True via the rewrite edge); (b) cross-object userset
+   membership lift — after `group:g1#member editor doc:d2` +
+   `doc:d2 parent doc:d1`, `check('member','group','g1','inherited','doc','d1')`
+   = graph False / others True, even though the graph answers the `viewer`
+   query on `doc:d2` True: the dependent's residue `upos` never receives
+   cross-object userset memberships (reconcile settles usersets from the
+   object's OWN stored tuples only). Also reproduces on
+   `demorgans_reverse.fga`. The matrix/property grids never query userset
+   subjects on derived-TTU families, which is why it survived P7. Formal
+   scope note: the shape is outside `W4Fragment` (`computedOnly` bans `ttu`
+   leaves in derived defs; `PDerivedTTU` was already a documented proof gap),
+   so the Lean theorems are untouched — but the repo-wide "identical
+   semantics" claim now carries this known, pinned exception
+   (`formal/FINAL_REVIEW.md` §3 note) awaiting a fix.
+2. **X1 — set forward `lookup` drops TTU-only objects.** Objects reachable
+   ONLY via TTU whose `(type, name, relation)` key was never interned are
+   silently missing (`engine.py:753`: the candidate universe is interned keys
+   only) where set-engine spec §6.4 prescribes reverse propagation including
+   TTU. The graph returns them.
+3. **X2 — graph `lookup_reverse` on a derived relation with `o_name='*'`
+   raises `ValueError`** (the `_get_concrete` → `core.node` reserved-name
+   guard) where `check` answers False (P7 #3) and the set engine returns
+   empty — an inconsistent refusal, not a wrong grant.
+4. **X3 — set `expand`/`lookup_reverse` cannot represent an oracle-true
+   uninterned from-chain userset subject** (no interned id exists; `check`
+   answers it True via the from-chain rule, and the graph returns its node).
+   Representational, not evaluative.
+
+---
+
 *(subsequent phases append below)*

@@ -682,13 +682,14 @@ hypothesis campaign. The formal effort is aimed where sampling is weakest:
 
 ## 10. Conformance (how Python is pinned to `sem`) — as built
 
-*Revised 2026-07-12 (second pass — state + enumeration gates added): this
+*Revised 2026-07-12 (third pass — remove-path + generated-schema gates added;
+second pass added the state + enumeration gates): this
 section originally recapped the PLAN (C0–C4 — six-way answer conformance
 including rejection outcomes, state-level structural comparison, exhaustive
 small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
 clause-by-clause check. What exists (`formal/verify.sh` step 5;
-`formal/conformance/`; **137 tests, 0 skips, ~4 min** — 120 differential-conformance
-comparisons + 17 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
+`formal/conformance/`; **214 tests, 0 skips** — 194 differential-conformance
+comparisons + 20 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
   Python-`file:line` map, with the known intentional divergences listed.
@@ -738,6 +739,21 @@ comparisons + 17 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
   tuple space over 2 names/type, four fragment shapes (93 + 93 + 299 + 42 =
   527 stores, counts asserted), spec × oracle × set engine over the shared
   grid.
+- **Remove-path answer conformance** (2026-07-12):
+  `test_conformance_remove.py` — the REAL `SetEngine` driven through seeded
+  interleaved add/remove/re-add sequences (all 17 spec-scope corpora ×
+  5 seeds) == `sem` (zcli) × oracle on the FINAL store; plus Python-internal
+  convergence pins: driven == fresh `rebuild()` over the grid AND at id-free
+  state-fingerprint level (interner keys/refcounts, population masks,
+  node_sets/member_of, flow edges), and an add-all/remove-all/re-add churn
+  test asserting complete emptiness mid-cycle. Set-engine-side only: the Lean
+  chain stays add-only and the graph backend is out of scope here.
+- **Generated-schema answer conformance** (2026-07-12):
+  `test_conformance_generated.py` — 40 seeded generated schemas + stores
+  (a deterministic re-implementation of the hypothesis `schema_asts`
+  strategy, no hypothesis dependency), shapes OUTSIDE the 17 curated corpora,
+  spec == oracle == real `SetEngine` over the shared grid — closes the
+  disjoint-pools gap at answer level, spec-side.
 
 What the plan proposed and was **NOT built** (`FINAL_REVIEW.md` §1/§4):
 

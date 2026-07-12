@@ -8,6 +8,64 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12n (three verification gates — remove-path + generated-schema conformance in formal/, the lookup-surface oracle gate in tests/; harness code + docs only, NO theorem changes)
+
+Conformance suite: 140 → **214** tests, 0 skips (verify.sh gates on
+0-skips/>0-passes, so it needed no change): 194 differential (120 prior + 34
+remove-path + 40 generated-schema) + 20 gate-tooling. No Lean changes; no new
+axioms; no sorries.
+
+**(1) Remove-path answer gate** (`formal/conformance/test_conformance_remove.py`,
+34 tests — narrows FINAL_REVIEW §4(d)): the REAL `SetEngine` driven through
+seeded interleaved add/remove/re-add sequences (all 17 spec-scope corpora ×
+5 seeds) == `sem` (zcli) × oracle on the FINAL store — the first answer-level
+pin on the Python remove path — plus driven == fresh `rebuild()` at grid AND
+id-free state-fingerprint granularity (interner keys/refcounts, population
+masks, node_sets/member_of, flow edges), plus an add-all/remove-all/re-add
+churn test asserting complete state emptiness mid-cycle. Scope honesty: the
+Lean chain stays add-only; the GRAPH-side remove legs remain open; the
+fingerprint comparison is Python-internal (driven vs rebuild), never vs Lean.
+Attack-first: a deliberate `_apply_remove` early-return was caught 14×; a
+deliberate interner mask-scrub skip was caught 34×.
+
+**(2) Generated-schema answer gate**
+(`formal/conformance/test_conformance_generated.py`, 40 tests — closes
+FINAL_REVIEW's former risk #1, the disjoint pools): a seeded deterministic
+re-implementation of the hypothesis `schema_asts` generator (NO hypothesis
+dependency, per the formal/ convention; inside formal/conformance/ so
+verify.sh gates it fail-closed) feeds generated schemas + stores — shapes
+outside the 17 curated corpora — asserting zcli spec == oracle == real
+`SetEngine` over the shared grid. Answer-level, spec-side only; the graph
+backend stays pinned by the curated corpora. Attack-first: a deliberately
+wrong exclusion encode tag was caught on 26/40 cases.
+
+**(3) Lookup-surface oracle gate** (`tests/test_lookup_oracle.py`, repo side —
+NOT under verify.sh; 15 tests: 10 pass + 5 strict xfails): composes
+`oracle.check` over the candidate universe into brute-force reference lookups
+pinning `lookup`/`lookup_reverse`/`expand` on BOTH backends — exact
+(two-sided) where the API is exact, one-sided where the API drops information
+by design (set `lookup_reverse` drops `neg`, engine.py:738-740). Closes
+deviations-log #3's gap (ParityEngine served lookups from one backend,
+unasserted). Attack-first: deliberate graph neg-drop and reverse node-drop
+both caught; permanent tamper tests keep the checkers honest. **FINDING (the
+significant one, X4)**: a CHECK-level graph-vs-set divergence on derived-TTU
+userset subjects — truth flowing through a stored tupleset parent answers
+False on the graph vs True on oracle + both set engines (from-chain shape and
+cross-object `upos` lift shape; also on demorgans_reverse.fga). Adjudication:
+OUTSIDE `W4Fragment` (`computedOnly` bans `ttu` leaves in derived defs;
+`PDerivedTTU` already a documented gap) and outside the conformance grids'
+query surface — theorems untouched, but the repo-wide "identical semantics"
+claim now carries a known, pinned exception awaiting a fix. Plus three
+narrower lookup-only divergences X1–X3. All pinned as strict xfails,
+properties NOT weakened; full shapes in `docs/spec-deviations.md` 2026-07-12.
+
+Docs: FINAL_REVIEW header/§1/§3/§4 (counts 214, the two new gate
+descriptions, disjoint-pools narrowed, remove narrowed, the X4 known-open-
+divergence note); ARCHITECTURE §5/§6 to match; HANDOFF rule 3 + status +
+optional list; formal/README counts + gate list; SEMANTICS §10 (third pass);
+`docs/spec-deviations.md` new entry; root CLAUDE.md testing-conventions
+bullet; root README honest-exception sentence.
+
 ## Session 2026-07-12m (Phase 6 extras (a)+(b) — state-level graph conformance + exhaustive small-scope enumeration; driver/harness code only, NO theorem changes)
 
 The two explicitly-unearned FINAL_REVIEW §1 clauses are now EARNED. Conformance

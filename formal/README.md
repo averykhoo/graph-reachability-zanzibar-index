@@ -53,8 +53,13 @@ to be equivalent (machine-checked, axiom-audited; set engine at full scope, grap
 index at the documented `GraphAdmission ∧ W4Fragment` scope). The **Python
 implementations** are pinned to those models by the correspondence map, five-corner
 differential conformance (including the Lean operational graph model vs the real
-graph index), **state-level equality under six documented projections**, and
-**exhaustive small-scope enumeration** up to tiny documented bounds (133 tests).
+graph index), **state-level equality under six documented projections**,
+**exhaustive small-scope enumeration** up to tiny documented bounds, a
+**remove-path answer gate** (the driven set engine vs `sem` × oracle on the final
+store, plus driven == rebuild at state-fingerprint level; set-engine-side only),
+and a **generated-schema answer gate** (seeded generated schemas outside the
+curated corpora, spec-side only) — 214 tests, 20 of them gate-tooling unit tests
+rather than comparisons.
 Residual unverified surface: the fragment carries, the compiler artifacts, the
 interner/bitmap representation layer, the SQL/transaction/concurrency layer,
 non-stratifiable schemas, `expand`/`lookup`, and the fidelity of the model-to-code
@@ -68,11 +73,12 @@ See `HANDOFF.md` (kept current every session). The arc is **complete**: the tree
 **sorry-free and axiom-clean**, and `bash formal/verify.sh` (the one-command,
 fail-closed gate) is green — `lake build` + 0 sorries + zcli preflight + axiom audit
 (412 `#print axioms` reports, one per audited theorem, only
-`[propext, Classical.choice, Quot.sound]`) + **133
+`[propext, Classical.choice, Quot.sound]`) + **214
 conformance tests, 0 skips**. T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over
 the operational closure `ReachedBy` at `GraphAdmission ∧ W4Fragment` scope (staged
 widening W1→W4 complete). Phase 6 hardening complete: the graph-state conformance
-mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**, and
-**exhaustive small-scope enumeration** all landed. What remains is optional
-assurance-widening (fragment widening, remove legs, wider bounds — `FINAL_REVIEW.md`
-§4).
+mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**,
+**exhaustive small-scope enumeration**, the **remove-path answer gate**, and the
+**generated-schema answer gate** all landed. What remains is optional
+assurance-widening (fragment widening, Lean/graph-side remove legs, wider bounds,
+and fixing the pinned lookup-gate divergence — `FINAL_REVIEW.md` §4).

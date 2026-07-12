@@ -77,6 +77,14 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   tuplesets with computed/rewritten arms are now rejected at compile — the OpenFGA
   model-validation approach — so the graph can no longer silently propagate
   rewrite-derived parents the raw-tuple backends never see.
+* **Open check-level divergence on derived-TTU userset subjects** (2026-07-12,
+  found by the lookup-surface oracle gate): userset-shaped subjects whose truth
+  flows through a stored tupleset parent of a *derived* TTU answer False on the
+  graph index where the oracle and both set engines answer True (the dependent's
+  residue `upos` never receives cross-object userset memberships). Outside every
+  matrix grid's query surface, which is why it survived; pinned as strict xfails
+  in `tests/test_lookup_oracle.py` and awaiting a fix — full shapes in
+  `docs/spec-deviations.md` (2026-07-12 entry).
 * **SQLite rowid-reuse corners**: the dead-id-in-neg hazard is mitigated
   (full-reconcile pruning); I7's corner turned out to be a *false positive* (a
   same-transaction recreate reusing the max rowid), now handled by the version-1
