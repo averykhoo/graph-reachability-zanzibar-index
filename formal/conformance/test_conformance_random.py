@@ -13,45 +13,21 @@ comparisons if `zcli` is unbuilt; oracle-vs-set-engine always runs.
 
 from __future__ import annotations
 
-import itertools
 import random
 
 import pytest
 
-from tests.oracle import check_oracle
+from tests.oracle import Oracle
 
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
+# F7: ONE shared grid for all three suites (was a copy-paste of the spec
+# suite's `_grid`/`_queries`).
+from formal.conformance.grid import queries_for
 from formal.conformance import runner
 from formal.conformance.backends import setengine_answers
 
 SEEDS = list(range(25))
-
-
-def _grid(tuples):
-    names_by_type: dict[str, set[str]] = {}
-    relations: set[str] = set()
-    objects: set[tuple[str, str]] = set()
-    for tup in tuples:
-        for ty, nm in ((tup.subject_type, tup.subject_name),
-                       (tup.object_type, tup.object_name)):
-            names_by_type.setdefault(ty, set())
-            if nm != "*":
-                names_by_type[ty].add(nm)
-        relations.add(tup.relation)
-        objects.add((tup.object_type, tup.object_name))
-    subjects = []
-    for ty in sorted(names_by_type):
-        for nm in sorted(names_by_type[ty]) + [f"ghost_{ty}", "*"]:
-            subjects.append(("...", ty, nm))
-    return subjects, sorted(relations), sorted(objects)
-
-
-def _queries(tuples):
-    subjects, relations, objects = _grid(tuples)
-    return [(sp, st, sn, rel, ot, on)
-            for (sp, st, sn), rel, (ot, on)
-            in itertools.product(subjects, relations, objects)]
 
 
 def _random_subset(rng, tuples):
@@ -69,13 +45,15 @@ def test_random_stores(name):
     except runner.ZcliUnavailable:
         have_zcli = False
 
+    # grid uses the FULL tuple set's names so ghosts/queries stay stable across subsets
+    queries = queries_for(schema_text, all_tuples)
+
     for seed in SEEDS:
         rng = random.Random(seed)
         tuples = _random_subset(rng, all_tuples)
-        # grid uses the FULL tuple set's names so ghosts/queries stay stable across subsets
-        queries = _queries(all_tuples)
 
-        oracle = [check_oracle(schema_text, tuples, *q) for q in queries]
+        orc = Oracle(schema_text, tuples)   # parse once per store, not per query
+        oracle = [orc.check(*q) for q in queries]
         se = setengine_answers(schema_text, tuples, queries, obj_wild)
         mism_os = [(queries[i], oracle[i], se[i]) for i in range(len(queries))
                    if oracle[i] != se[i]]

@@ -21,7 +21,10 @@ Scope discipline (apples-to-apples with the proved theorem):
   * corpora: `GRAPH_FRAGMENT` only (inside GraphAdmission + W4Fragment — see
     corpus.py for the two documented exclusions);
   * queries: the proved query scope — concrete objects (`hqo`), star subjects
-    only bare (`hqs`; the shared grid only emits bare-predicate subjects);
+    only bare (`hqs`; the shared grid's userset subjects are all concrete-named,
+    so they satisfy `hqs` vacuously and stay IN scope — W3b/W3c reach userset
+    subjects via `upos`, and zcli's graph-mode gates are corpus-level
+    (admission + drained), not per-query);
   * zcli refuses (nonzero rc) on admission failure or a non-drained final
     state, so an out-of-scope run FAILS loudly instead of comparing garbage.
 
@@ -38,18 +41,19 @@ from formal.conformance import runner
 from formal.conformance.backends import graphindex_answers
 from formal.conformance.corpus import SCHEMAS, GRAPH_FRAGMENT
 from formal.conformance.encode import build_request
-from formal.conformance.test_conformance_spec import _grid, _fmt
+from formal.conformance.grid import grid as _grid, fmt_mismatches as _fmt
 
 
-def _graph_queries_for(tuples):
+def _graph_queries_for(schema_text, tuples):
     """The shared query grid, restricted to the PROVED query scope: concrete
     objects only (`hqo : q.object.name != STAR`). Star subjects stay — the grid
-    emits them bare-predicate, satisfying `hqs`."""
-    subjects, relations, objects = _grid(tuples)
-    objects = [(ot, on) for (ot, on) in objects if on != "*"]
+    emits them bare-predicate only (userset subjects are concrete-named),
+    satisfying `hqs` (`graphRun_check_eq_sem`, GraphIndex/Exec.lean)."""
+    subjects, targets = _grid(schema_text, tuples)
+    targets = [(rel, ot, on) for (rel, ot, on) in targets if on != "*"]
     return [
         (sp, st, sn, rel, ot, on)
-        for (sp, st, sn), rel, (ot, on) in itertools.product(subjects, relations, objects)
+        for (sp, st, sn), (rel, ot, on) in itertools.product(subjects, targets)
     ]
 
 
@@ -62,7 +66,7 @@ def test_leangraph_vs_pythongraph(name):
     except runner.ZcliUnavailable:
         pytest.skip("zcli not built (run `lake build zcli` in formal/lean)")
 
-    queries = _graph_queries_for(tuples)
+    queries = _graph_queries_for(schema_text, tuples)
     lean_graph = runner.run_spec(
         build_request(schema_text, tuples, queries, obj_wild, mode="graph"))
     py_graph = graphindex_answers(schema_text, tuples, queries, obj_wild)
@@ -85,7 +89,7 @@ def test_leangraph_vs_spec(name):
     except runner.ZcliUnavailable:
         pytest.skip("zcli not built")
 
-    queries = _graph_queries_for(tuples)
+    queries = _graph_queries_for(schema_text, tuples)
     lean_graph = runner.run_spec(
         build_request(schema_text, tuples, queries, obj_wild, mode="graph"))
     spec = runner.run_spec(build_request(schema_text, tuples, queries, obj_wild))

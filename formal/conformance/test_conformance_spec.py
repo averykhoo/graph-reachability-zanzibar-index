@@ -2,7 +2,7 @@
 
 SEMANTICS.md §10 / plan §6. The cheap validation that the Lean spec is the RIGHT
 spec (Phase 2, before deep proofs). Over a full query grid per schema we compare:
-  * the repository oracle (`tests/oracle.check_oracle`),
+  * the repository oracle (`tests/oracle.Oracle`, one instance per store),
   * the Lean executable spec (`zcli`), and
   * the real Python set engine (`setengine.SetEngine`).
 A disagreement is a spec-adjudication event (plan §8.2): STOP and record it.
@@ -15,50 +15,21 @@ oracle-vs-setengine comparison always runs.
 
 from __future__ import annotations
 
-import itertools
-
 import pytest
 
-from tests.oracle import check_oracle
+from tests.oracle import Oracle
 
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
+from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
 from formal.conformance import runner
 from formal.conformance.backends import setengine_answers
 
 
-def _grid(tuples):
-    """Query grid: per type, concrete names in tuples + one ghost + '*' (bare
-    subjects), crossed with every (relation, object) in the tuples."""
-    names_by_type: dict[str, set[str]] = {}
-    relations: set[str] = set()
-    objects: set[tuple[str, str]] = set()
-    for tup in tuples:
-        for ty, nm in ((tup.subject_type, tup.subject_name),
-                       (tup.object_type, tup.object_name)):
-            names_by_type.setdefault(ty, set())
-            if nm != "*":
-                names_by_type[ty].add(nm)
-        relations.add(tup.relation)
-        objects.add((tup.object_type, tup.object_name))
-    subjects = []
-    for ty in sorted(names_by_type):
-        for nm in sorted(names_by_type[ty]) + [f"ghost_{ty}", "*"]:
-            subjects.append(("...", ty, nm))
-    return subjects, sorted(relations), sorted(objects)
-
-
-def _queries_for(tuples):
-    subjects, relations, objects = _grid(tuples)
-    return [
-        (sp, st, sn, rel, ot, on)
-        for (sp, st, sn), rel, (ot, on) in itertools.product(subjects, relations, objects)
-    ]
-
-
-def _fmt(mismatches, a_name, b_name):
-    return "\n".join(
-        f"  query={q} {a_name}={a} {b_name}={b}" for q, a, b in mismatches[:20])
+def _oracle_answers(schema_text, tuples, queries):
+    """One Oracle per store (parse the schema once), pointwise checks."""
+    orc = Oracle(schema_text, tuples)
+    return [orc.check(*q) for q in queries]
 
 
 @pytest.mark.parametrize("name", sorted(SCHEMAS))
@@ -69,9 +40,9 @@ def test_spec_vs_oracle(name):
     except runner.ZcliUnavailable:
         pytest.skip("zcli not built (run `lake build zcli` in formal/lean)")
 
-    queries = _queries_for(tuples)
+    queries = queries_for(schema_text, tuples)
     spec = runner.run_spec(build_request(schema_text, tuples, queries, obj_wild))
-    oracle = [check_oracle(schema_text, tuples, *q) for q in queries]
+    oracle = _oracle_answers(schema_text, tuples, queries)
 
     mism = [(queries[i], spec[i], oracle[i]) for i in range(len(queries))
             if spec[i] != oracle[i]]
@@ -87,7 +58,7 @@ def test_spec_vs_setengine(name):
     except runner.ZcliUnavailable:
         pytest.skip("zcli not built")
 
-    queries = _queries_for(tuples)
+    queries = queries_for(schema_text, tuples)
     spec = runner.run_spec(build_request(schema_text, tuples, queries, obj_wild))
     se = setengine_answers(schema_text, tuples, queries, obj_wild)
 
@@ -101,8 +72,8 @@ def test_spec_vs_setengine(name):
 def test_oracle_vs_setengine(name):
     """Independent of the Lean toolchain — always runs."""
     schema_text, tuples, obj_wild = SCHEMAS[name]
-    queries = _queries_for(tuples)
-    oracle = [check_oracle(schema_text, tuples, *q) for q in queries]
+    queries = queries_for(schema_text, tuples)
+    oracle = _oracle_answers(schema_text, tuples, queries)
     se = setengine_answers(schema_text, tuples, queries, obj_wild)
 
     mism = [(queries[i], oracle[i], se[i]) for i in range(len(queries))
