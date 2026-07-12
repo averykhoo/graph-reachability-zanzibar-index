@@ -8,6 +8,56 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12l (cleanup — post-close hygiene pass; NO theorem/proof changes)
+
+Seven audit-ranked cleanup items, one commit each, `verify.sh` fully green before
+every commit (lake build + 0 sorries + zcli + standard-axioms audit + 98
+conformance tests); full pytest suite green before the push (603 passed).
+
+1. **verify.sh sorry gate STRENGTHENED** (the old whole-line grep missed an inline
+   `:= sorry`): now a comment/docstring/string-aware token scan over `*.lean`
+   (`--` line + nested `/- -/` block comments handled; strings skipped so a `--`
+   inside a string can't hide code) PLUS a grep of the lake build log for the
+   compiler's own `declaration uses 'sorry'` warnings (Lake replays cached logs).
+   Trip-tested: a temp file with `:= sorry` and `by sorry` counts exactly 2 while
+   comment/docstring/string mentions count 0; the real tree scans 0 (the naive
+   token grep finds ~21 prose mentions — all excluded correctly).
+2. **Stale "remaining sorry" docstrings purged** (`Closure.lean` header +
+   `phat_recurrence`, `FuelStable.lean`, `WellDef.lean` — all describe sorries
+   closed 2026-07-10); `Core/Ident.lean` no longer promises never-written
+   `ValidIdent.ne_star`/`ne_bare` lemmas — it now documents what is true:
+   `ValidIdent` opaque, `AllValid` carried (underscored, unused) and not
+   dischargeable for concrete stores (cf. the `W4Witness` note).
+3. **`Equiv.lean` module header rewritten**: the file is the historical per-stage
+   corollary ladder; the final unsuffixed theorems live in `FullScope.lean`.
+4. **FINAL_REVIEW.md honesty caveats**: §3 gains "compiler artifacts trusted, not
+   modeled" (taint/strata/plans/fan-out/leaf-routing have no Lean counterpart;
+   pins = snapshot tests + conformance corpora); §2 non-vacuity bullet now says
+   the kernel-checked witness inhabits the hypothesis BUNDLES only — the drained
+   reached-state witness is empirical (zcli graph mode) + `cascade2_drains`.
+5. **The 27 per-stage T3/T6 corollaries tagged "Historical milestone"**
+   (docstrings only; nothing deleted/renamed, Audit untouched). FINDING while
+   tagging: the audit's "two real exceptions" (`_direct` different chain; W2
+   rules-family residual generality, no `hMatch`/`hWSbare`) UNDERCOUNTS — the
+   W1b/W1c rungs also retain real store scope (`w_all` object-wildcard /
+   userset-star tuples violate the W4 `bareStar` carry; both already in ROADMAP
+   "W4 — honest gaps"). Tagged accordingly instead of "strictly subsumed".
+6. **CORRESPONDENCE.md scope note**: conformance is check-verdict level, FIVE
+   corners; plan §7's sixth (state-level equality) is OPEN (matches FINAL_REVIEW
+   §1's ❌ row).
+7. **Rename** `cascade_converges` → `cascade_converges_direct`
+   (`GraphIndex/Correct.lean`, W1 untainted-chain quiescence; the contentful T5
+   is `runCascade_no_abort`/`cascade_drains` + `runCascade2_no_abort`/
+   `cascade2_drains`); Audit line + HANDOFF table updated. Prose mentions of the
+   pre-2026-07-10 DELETED `cascade_converges` shape are left as history.
+
+No goldens/snapshots/oracle results touched; no theorem statement changed.
+
+**Resume →** unchanged from 2026-07-12k: Phase 6 hardening extras in
+FINAL_REVIEW §4 order (state-level conformance first).
+
+---
+
 ## Session 2026-07-12k (Phase 6 items 1–3 — graph-state conformance mode + CORRESPONDENCE.md + FINAL_REVIEW.md; **Phase 6 core CLOSED**)
 
 Resuming from HANDOFF "The next task — Phase 6". Two green+pushed increments;
