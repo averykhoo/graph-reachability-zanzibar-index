@@ -16,7 +16,8 @@ total and structurally terminating. All the boolean/leaf logic lives in `step`,
 which is parameterized by the sub-node answer function `rec` and so needs no
 termination reasoning of its own. `sem` runs `semAux` at `fuelBound S T`.
 
-`T0a` (well-definedness) will state fuel-monotonicity above the bound.
+`T0a` (well-definedness) is proved as `sem_fuel_stable` (`Spec/WellDef.lean`,
+~line 783): fuel above `fuelBound` does not change the answer.
 -/
 
 namespace Zanzibar

@@ -30,6 +30,15 @@ Modes (Phase 6 — graph-state conformance):
   admission (rc 2) or the final state is not drained (rc 3) — those inputs are
   outside the proved scope and MUST NOT silently produce answers.
 
+An unrecognized mode — a `"mode"` value that is present but not a string, or a
+string other than `"spec"`/`"graph"` — is rejected with rc 4 (stderr message).
+A mislabeled mode must never silently fall through to spec answers, or the
+graph-vs-spec conformance pin would void.
+
+Exit codes: 0 = answers printed · 1 = usage / JSON parse / decode error ·
+2 = graph write failed admission · 3 = graph state not drained ·
+4 = unrecognized mode.
+
 Output: a JSON array of booleans, one per query. Usage: `zcli <request.json>`.
 -/
 
@@ -108,11 +117,17 @@ def decodeRequest (j : Json) : Except String (Schema × Store × List Query) := 
   let qs ← queriesJson.toList.mapM decodeQuery
   pure (S, T, qs)
 
-/-- The request mode: `"spec"` (default) or `"graph"`. -/
-def decodeMode (j : Json) : String :=
+/-- The request mode string. `.ok "spec"` when the `"mode"` key is absent (the
+    preserved default); the string value when present; `.error` when the key is
+    present but not a string — a non-string `"mode"` must be rejected, never
+    silently coerced to spec. Recognized-mode validation happens at dispatch. -/
+def decodeMode (j : Json) : Except String String :=
   match j.getObjVal? "mode" with
-  | .ok m => match m.getStr? with | .ok s => s | .error _ => "spec"
-  | .error _ => "spec"
+  | .ok m =>
+    match m.getStr? with
+    | .ok s => .ok s
+    | .error _ => .error s!"\"mode\" must be a string, got {m.compress}"
+  | .error _ => .ok "spec"
 
 def printAnswers (answers : List Bool) : IO UInt32 := do
   IO.println ((Json.arr (answers.map Json.bool).toArray).compress)
@@ -129,7 +144,8 @@ def main (args : List String) : IO UInt32 := do
       | .error e => IO.eprintln s!"decode error: {e}"; pure 1
       | .ok (S, T, qs) =>
         match decodeMode j with
-        | "graph" =>
+        | .error e => IO.eprintln s!"mode error: {e}"; pure 4
+        | .ok "graph" =>
           -- Phase 6: run the operational graph model; the honesty theorems
           -- (`graphRun_reached`, `graphRun_check_eq_sem`) cover exactly what is
           -- printed here. Refuse to answer outside the proved scope.
@@ -145,8 +161,11 @@ def main (args : List String) : IO UInt32 := do
               IO.eprintln "graph mode: final state not drained \
                 (outside the proved read scope)"
               pure 3
-        | _ =>
+        | .ok "spec" =>
           printAnswers (qs.map (fun q => sem S T q))
+        | .ok other =>
+          IO.eprintln s!"unknown mode: {other} (expected \"spec\" or \"graph\")"
+          pure 4
   | _ => IO.eprintln "usage: zcli <request.json>"; pure 1
 
 end Zanzibar.Cli
