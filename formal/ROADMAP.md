@@ -36,9 +36,12 @@ verified Zanzibar/OpenFGA model tied to the Python implementation.** Read alongs
    operational chain run by `GraphIndex/Exec.lean`'s `graphRun` — with honesty
    theorems tying the driver to `ReachedBy` and its verdicts to `sem` — diffed
    against the Python graph index over the fragment corpora, hard-gated), plus
-   `CORRESPONDENCE.md` and `FINAL_REVIEW.md`. Remaining extras are optional
-   (FINAL_REVIEW §4): state-level conformance, exhaustive enumeration,
-   fragment widening, remove legs.
+   `CORRESPONDENCE.md` and `FINAL_REVIEW.md`. **Extras (a)+(b) CLOSED
+   (2026-07-12m)**: state-level conformance (zcli `"graph-state"` +
+   `extractor.py` + `test_conformance_state.py`, projections P1–P6 documented)
+   and exhaustive small-scope enumeration (`test_conformance_enum.py`, 527
+   stores at the documented bounds). Remaining extras are optional
+   (FINAL_REVIEW §4): fragment widening, remove legs, wider bounds.
 
 Original 9 sorries; ✅ CLOSED by proof: T4, T0b, T1, and (at fragment scope,
 restated) T2a/T2b/T3/T5/T6. ⚠ 2 sorries were **DELETED as false-as-stated, not
@@ -938,8 +941,12 @@ and re-proves/widens the same named theorems. Every stage must keep
   15 `GRAPH_FRAGMENT` corpora incl. two designed attack corpora. Attack findings
   (12k): stale-edge re-settle and star-churn parity GREEN; out-of-fragment
   probes (union-rooted taint, object wildcards) ALSO green — fragment exclusions
-  are proof-scope-driven, not behavioral. Open (recorded in FINAL_REVIEW §4):
-  state-level conformance equality; exhaustive small-scope enumeration.
+  are proof-scope-driven, not behavioral. The two FINAL_REVIEW §4 extras closed
+  2026-07-12m: state-level conformance equality (zcli `"graph-state"` +
+  `extractor.py` projections P1–P6 + `test_conformance_state.py`; the gate's
+  first run FOUND the P6 leaf-family divergence — CORRESPONDENCE §7 corrected)
+  and exhaustive small-scope enumeration (`test_conformance_enum.py`, 527
+  stores, zero adjudication events).
 
 ---
 

@@ -8,6 +8,83 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-12m (Phase 6 extras (a)+(b) — state-level graph conformance + exhaustive small-scope enumeration; driver/harness code only, NO theorem changes)
+
+The two explicitly-unearned FINAL_REVIEW §1 clauses are now EARNED. Conformance
+suite: 101 → **120** tests, 0 skips (verify.sh auto-collects; its summary gates
+unchanged). `lake build zcli` clean; no sorries introduced; no new axioms; no
+new theorems (the dump code is driver-level, like Cli.lean's existing modes).
+
+**(a) State-level graph conformance** (`FINAL_REVIEW` §4(a), the §7
+"state-level equality" clause):
+* zcli mode **`"graph-state"`** (`Cli.lean`): the SAME `graphRun` fold and the
+  SAME rc 2/3 admission/drain gates as graph mode, emitting the final state as
+  canonical JSON (sorted + deduped by compressed rendering): the direct-edge
+  set over `[type,name,pred,variant]` node keys (variant = the Python
+  `NodeV4.wildcard` encoding) + every persisted residue row (`stars`/`neg`/
+  `upos`), including all-empty rows, RAW. Residue-key enumeration honesty note
+  in the mode header (keys enumerated over derived defs × store/state names —
+  exhaustive for the chain since `putResidue` keys come from delta nodes /
+  edge endpoints). rc 4 unknown-mode dispatch unchanged (`test_cli_mode.py`
+  still green; error text now names all three modes).
+* `formal/conformance/extractor.py`: drives the real `WildcardIndex` +
+  `DeltaProcessor` exactly as the graph suite does (shared
+  `backends.graphindex_drive`, refactored out of `graphindex_answers`), then
+  decodes `EdgeV4`/`ResidueV1` through `NodeV4` into the same canonical form.
+  SIX documented projections, each justified in the module docstring:
+  P1 closure rows (`direct_edge_count = 0`) — a function of the direct set;
+  P2 bridges (target-`w_any` / source-`w_all`) — with the honesty note that
+  bridged shapes compile EMPTY on all 15 fragment corpora, so P2 is currently
+  inert; P3 multiplicity (refcount vs repeated list entries) — sets both
+  sides; P4 all-empty residue rows (model stores, Python deletes) — dropped
+  Python-side so the raw divergence stays observable; P5 node sets (GC);
+  P6 leaf-family closure-leaf copies (below).
+* `test_conformance_state.py` (15 `GRAPH_FRAGMENT` corpora): Lean final state
+  == Python final SQL state, symmetric-difference failure message.
+* **ATTACK-FIRST FINDINGS** (probes run before trusting the green, scratch
+  deleted): (1) the gate's FIRST run found **P6**: even on ComputedOnly
+  boolean defs, Python's compiler creates `storage=False` CLOSURE leaf
+  families and `RuleSet.apply` routes operand-write copies onto them
+  (`editor` write → `viewer.0` edge) — state divergence under FULL
+  check-parity, contradicting CORRESPONDENCE §7's old "the shapes coincide"
+  note (now corrected there; the leaf class is projected on the reserved `'.'`
+  predicate with the pin argument recorded). NOT an adjudication event — a
+  documented representation divergence, semantics pinned by the plans' output
+  (residues + derived edges, compared exactly) + check conformance + RuleSet
+  snapshots. (2) duplicate-tuple probe: Python `direct_edge_count = 2` vs the
+  model's repeated list entry — check-parity holds; P3 is what keeps the gate
+  honest-green (multiplicity is projected, documented). (3) empty-residue
+  probe: `boolean_exclusion` — the model stores `(doc,d1,viewer) = ([],[],[])`
+  where Python deletes; raw zcli dump shows the row; without P4 the gate
+  fails. (4) corrupted-extraction demonstration: mutating one edge endpoint in
+  the extractor makes the gate FAIL with the symmetric diff — the gate can
+  fail. Residues compared non-trivially on `boolean_star_exclusion` (1 row)
+  and `star_two_strata_churn` (4 rows).
+
+**(b) Exhaustive small-scope enumeration** (`FINAL_REVIEW` §4(b), the §7
+"exhaustive ... documented bounds" clause):
+* `test_conformance_enum.py`: ALL stores of ≤ 3 tuples from the DECLARED tuple
+  space (admission-valid writes from the oracle-parsed Direct restrictions)
+  over pool {user: u1,u2; doc: d1,d2}, four shapes — boolean_exclusion (8-tuple
+  space, 93 stores), boolean_intersection (8, 93), two_stratum_cascade (12,
+  299), boolean_star_exclusion (6, 42) = **527 stores**, spec × oracle × set
+  engine over ONE shared grid per shape (grid.py over the full space). Space
+  sizes and store counts ASSERTED so the documented bounds cannot drift.
+  Runtime ~68 s. Non-vacuity verified: every non-empty store yields TRUE
+  verdicts (320/1212/300 TRUEs for the three probed shapes). Graph backend
+  deliberately NOT enumerated (runtime ×3; documented in the module docstring).
+  **ZERO adjudication events across all 527 stores.**
+
+Docs: FINAL_REVIEW §1 rows flipped ✅ (with the projection/bounds qualifiers in
+the claim paragraph), §3 item 4 → the projection residual, §4 reranked;
+CORRESPONDENCE scope note (six corners) + gate table + §7 P6 correction;
+HANDOFF green-gate count + next-task rewrite.
+
+**Resume →** optional extras, FINAL_REVIEW §4: fragment widening (union roots),
+remove legs, wider state/enumeration bounds.
+
+---
+
 ## Session 2026-07-12l (cleanup — post-close hygiene pass; NO theorem/proof changes)
 
 Seven audit-ranked cleanup items, one commit each, `verify.sh` fully green before

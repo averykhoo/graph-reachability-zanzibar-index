@@ -10,11 +10,15 @@ The theorems are about the Lean models; the pin to Python is *empirical*
 (`verify.sh` step 5). Line numbers are as of 2026-07-12; where a spec and the
 code disagree on a name, the code wins.
 
-**Scope note (five corners, not six):** the conformance gates below compare
-`check` VERDICTS only — five corners (Lean `sem` · oracle · real `SetEngine` ·
-Lean operational graph model · real graph index); plan §7's sixth corner,
-state-level equality of materialized edge/residue state, is OPEN
-(`FINAL_REVIEW.md` §1's ❌ row).
+**Scope note (six corners, 2026-07-12):** the verdict gates compare `check`
+answers five ways (Lean `sem` · oracle · real `SetEngine` · Lean operational
+graph model · real graph index); plan §7's sixth corner — state-level equality
+of the materialized edge/residue state — is now gated by
+`test_conformance_state.py` at the representation-neutral canonical form of
+`formal/conformance/extractor.py`, under its six DOCUMENTED projections
+(P1–P6: closure rows, bridges, multiplicity, empty residues, node GC,
+leaf-family split). See `FINAL_REVIEW.md` §1 for the honest statement of what
+that row earns.
 
 Conformance gates (`formal/verify.sh` step 5, `formal/conformance/`):
 
@@ -23,7 +27,9 @@ Conformance gates (`formal/verify.sh` step 5, `formal/conformance/`):
 | `test_conformance_spec.py` | Lean `sem` (zcli) vs `tests/oracle.py` vs real `SetEngine` | all 17 |
 | `test_conformance_random.py` | same, randomized stores | random |
 | `test_conformance_graph.py` | Lean **operational graph model** (zcli mode `"graph"`) vs real `WildcardIndex`+`DeltaProcessor`, and vs `sem` | the 15 `GRAPH_FRAGMENT` corpora |
-| `test_cli_mode.py` | zcli mode dispatch fails closed: unknown / non-string `"mode"` → rc 4 (rc enumeration: 0 answers / 1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode); absent mode defaults to spec | minimal |
+| `test_conformance_state.py` | Lean graph model **FINAL STATE** (zcli mode `"graph-state"`: canonical direct-edge set + residues) vs the Python graph index's final SQL rows (`EdgeV4`/`ResidueV1` via `NodeV4`), projections per `extractor.py` | the 15 `GRAPH_FRAGMENT` corpora |
+| `test_conformance_enum.py` | **exhaustive small-scope enumeration**: spec vs oracle vs set engine on ALL stores ≤ 3 tuples over 2 names/type (93 + 93 + 299 + 42 = 527 stores; counts asserted) | 4 fragment shapes |
+| `test_cli_mode.py` | zcli mode dispatch fails closed: unknown / non-string `"mode"` → rc 4 (rc enumeration: 0 answers-or-state / 1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode); absent mode defaults to spec | minimal |
 
 All three answer-comparing suites share ONE query grid
 (`formal/conformance/grid.py`): targets are the stored-tuple cross product PLUS
@@ -111,7 +117,7 @@ independent corners.
 | `Drained` | outbox fully drained at commit boundary | boolean spec §7.8 / I9 `audit_fixpoint` |
 | `GraphAdmission` (wf/nodup/strat/ttuDirect/matchDecl/ranked/objWild/storeValid) | what compile+write admission guarantees | see field docs, `FullScope.lean:64-94` (e.g. `_validate_ttu_tuplesets` `zanzibar_utils_v1.py:898-935`) |
 | `W4Fragment` (rootB/computedOnly/twoStrata/wsBare/bareStar/ttuStarFree/term) | — the HONEST carries: restrictions Python does NOT impose | ROADMAP "W4 — honest gaps" |
-| `Exec.lean` `graphRun` + `graphRun_reached`/`graphRun_check_eq_sem` | the conformance driver IS the chain (theorem, not analogy) | driven against `WildcardIndex` by `test_conformance_graph.py` |
+| `Exec.lean` `graphRun` + `graphRun_reached`/`graphRun_check_eq_sem` | the conformance driver IS the chain (theorem, not analogy) | driven against `WildcardIndex` by `test_conformance_graph.py` (verdicts) and `test_conformance_state.py` (final state, zcli mode `"graph-state"` — same fold, same gates; the dump code in `Cli.lean` is driver-level, its projections documented in the mode header + `extractor.py`) |
 
 ## 7. Known intentional divergences (model ≠ code, by design)
 
@@ -127,6 +133,15 @@ independent corners.
   proof-scope, not observed disagreement (`corpus.py` note).
 * **No leaf-family split.** The model reads raw boolean defs (`ComputedOnly`
   leaves); Python's compiler splits derived storage onto `<relation>.<index>`
-  leaf families. On `ComputedOnly` defs there are no storage leaves, so the
-  shapes coincide; schemas needing the split (`Direct`/TTU arms under a boolean)
-  are outside `computedOnly`.
+  leaf families. **State-gate correction (2026-07-12):** the earlier note here
+  claimed "on ComputedOnly defs there are no storage leaves, so the shapes
+  coincide" — that holds only for `storage=True` leaves. Even on ComputedOnly
+  defs the compiler creates `storage=False` CLOSURE leaves and `RuleSet.apply`
+  routes copies of the untainted operand writes onto them (e.g. an `editor`
+  write also lands on `viewer.0`), so the SQL edge state carries `<rel>.<i>`
+  rows the model never has. The read shapes still coincide (the model reads the
+  raw operand relations; the plans read the leaf copies — same content), and
+  the state gate projects the class out explicitly (`extractor.py` P6, keyed on
+  the reserved `'.'` in the target predicate) with the pin argument recorded
+  there. Schemas needing genuine storage leaves (`Direct`/TTU arms under a
+  boolean) remain outside `computedOnly`.

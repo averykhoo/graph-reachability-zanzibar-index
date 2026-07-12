@@ -682,17 +682,16 @@ hypothesis campaign. The formal effort is aimed where sampling is weakest:
 
 ## 10. Conformance (how Python is pinned to `sem`) — as built
 
-*Revised 2026-07-12: this section originally recapped the PLAN (C0–C4 —
-six-way answer conformance including rejection outcomes, state-level structural
-comparison, exhaustive small-scope enumeration). What was BUILT is narrower in
-two named places; `FINAL_REVIEW.md` §1 is the authoritative clause-by-clause
-check. What exists (`formal/verify.sh` step 5; `formal/conformance/`;
-**101 tests, 0 skips, ~2.5 min**):*
+*Revised 2026-07-12 (second pass — state + enumeration gates added): this
+section originally recapped the PLAN (C0–C4 — six-way answer conformance
+including rejection outcomes, state-level structural comparison, exhaustive
+small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
+clause-by-clause check. What exists (`formal/verify.sh` step 5;
+`formal/conformance/`; **120 tests, 0 skips, ~4 min**):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
   Python-`file:line` map, with the known intentional divergences listed.
-- **Answer conformance — check-verdict level, five corners** (not the plan's
-  six; state-level equality is the missing corner):
+- **Answer conformance — check-verdict level, five corners**:
   - `test_conformance_spec.py` — Lean `sem` (zcli) × independent oracle × real
     `SetEngine`, all 17 corpora;
   - `test_conformance_random.py` — the same comparison over 25-seed randomized
@@ -725,13 +724,22 @@ check. What exists (`formal/verify.sh` step 5; `formal/conformance/`;
   `propext`/`Classical.choice`/`Quot.sound`); the conformance step fails on
   ANY skipped test or zero passes. Interpreter overridable via `ZANZIBAR_PY`.
 
-What the plan proposed and was **NOT built** (open items — `FINAL_REVIEW.md`
-§1's ❌ rows and §4):
+- **C2 state-level conformance** (2026-07-12m): `test_conformance_state.py` —
+  the Lean graph model's FINAL STATE (zcli mode `"graph-state"`: the same
+  `graphRun` fold and rc 2/3 gates as graph mode, emitting the canonical
+  direct-edge set + residue rows) diffed against the Python graph index's
+  final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4`), 15
+  in-fragment corpora, under the SIX documented projections of
+  `formal/conformance/extractor.py` (closure rows / bridges / multiplicity /
+  empty residues / node GC / leaf-family split).
+- **C3 exhaustive small-scope enumeration** (2026-07-12m):
+  `test_conformance_enum.py` — ALL stores of ≤ 3 tuples from the declared
+  tuple space over 2 names/type, four fragment shapes (93 + 93 + 299 + 42 =
+  527 stores, counts asserted), spec × oracle × set engine over the shared
+  grid.
 
-- **C2 state-level conformance** — no edge/residue state is dumped or compared
-  structurally; conformance compares `check` verdicts only.
-- **C3 exhaustive small-scope enumeration** — what exists is seeded randomized
-  substore sampling, not exhaustive enumeration up to documented bounds.
+What the plan proposed and was **NOT built** (`FINAL_REVIEW.md` §1/§4):
+
 - The plan's "rejection outcomes" corner of C1: there is no six-way
   rejection-outcome comparison; what is exercised is zcli's own refusal
   surface (admission rc 2, not-drained rc 3, unknown-mode rc 4) plus the

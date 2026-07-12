@@ -33,9 +33,10 @@ never rounds up to "the code is formally verified" (plan §7).
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
    + **0 sorries** + zcli + axiom audit (only `[propext, Classical.choice, Quot.sound]`)
-   + 101 Python conformance tests, 0 skips (incl. the Phase-6 graph-state mode and the
-   zcli mode-rejection tests; the gate fails closed on any skip or zero passes). Add
-   new key theorems to `lean/ZanzibarProofs/Audit.lean`.
+   + 120 Python conformance tests, 0 skips (incl. the Phase-6 graph mode, the
+   state-level gate over zcli mode `"graph-state"`, the exhaustive small-scope
+   enumeration, and the zcli mode-rejection tests; the gate fails closed on any
+   skip or zero passes). Add new key theorems to `lean/ZanzibarProofs/Audit.lean`.
 4. **Rhythm.** Commit each green increment with a `formal: <stage> — <what>` message;
    push at session end. Before ending: update this file's "The next task" + add a
    PROOF_STATUS.md session entry (top) + tick the ROADMAP stage marker.
@@ -137,40 +138,30 @@ ROADMAP W3c paragraphs. The pieces a W3d session will actually reuse:
 
 ## The next task — Phase 6 extras (optional hardening), in FINAL_REVIEW §4 order
 
-**Phase 6 items 1–3 are CLOSED (2026-07-12k — READ THE TOP PROOF_STATUS ENTRY).**
-The arc is complete and documented: T1 + T2a/T2b + T3/T6 over `ReachedBy`, the
-graph-state conformance mode (`GraphIndex/Exec.lean` + zcli mode `"graph"` +
-`test_conformance_graph.py`, hard-gated in verify.sh — 101 conformance tests,
-0 skips, after the shared-grid upgrade: one grid in `formal/conformance/grid.py`
-querying derived/boolean roots on every corpus + userset-shaped subjects, plus
-the zcli mode-rejection tests in `test_cli_mode.py`),
-`CORRESPONDENCE.md` (the auditable Lean↔Python map), and `FINAL_REVIEW.md` (the
-plan-§7 claim, clause-checked, with the two explicitly-unearned clauses named).
-No open blocker for the claim as written in FINAL_REVIEW.md.
+**Phase 6 items 1–3 are CLOSED (2026-07-12k), and the two §7 clauses that were
+explicitly unearned are now EARNED (2026-07-12m — READ THE TOP PROOF_STATUS
+ENTRY).** The arc: T1 + T2a/T2b + T3/T6 over `ReachedBy`, the graph conformance
+mode (zcli `"graph"` + `test_conformance_graph.py`), **state-level graph
+conformance** (zcli mode `"graph-state"` emitting the model's canonical final
+state; `formal/conformance/extractor.py` reading the Python `EdgeV4`/`ResidueV1`
+rows back to the same form under six DOCUMENTED projections P1–P6;
+`test_conformance_state.py`, 15 corpora — its first run FOUND the P6
+leaf-family divergence, recorded in CORRESPONDENCE §7), **exhaustive
+small-scope enumeration** (`test_conformance_enum.py`: ALL stores ≤ 3 tuples,
+2 names/type, four shapes, 527 stores, spec × oracle × set engine, counts
+asserted), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` (claim table updated —
+one subtraction + two scope qualifiers remain). verify.sh: 120 conformance
+tests, 0 skips. No open blocker for the claim as written in FINAL_REVIEW.md.
 
 What remains is OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
 
-1. **State-level graph conformance** — extend zcli graph mode to EMIT the
-   model's materialized state (edges + residue rows) and diff against the
-   Python `EdgeV4`/`ResidueV1` rows (via a test-only extractor under
-   `formal/conformance/`; the Python modules stay read-only). This would earn
-   §7's "state-level equality" clause. Faithfulness care: node/edge encodings
-   differ (the model's `NodeKey` vs Python node rows; Python materializes
-   transitive closure edges and wildcard bridges the model reads via probes) —
-   define the comparison at a representation-neutral level (e.g. per-key residue
-   `(stars, neg)` sets + direct-edge presence) and document any projection.
-2. **Exhaustive small-scope enumeration** — all stores up to k tuples over 2–3
-   names per fragment schema shape; would earn §7's enumeration clause.
-3. **Fragment widening** — union-rooted derived defs first (`rootB` gap; the
+1. **Fragment widening** — union-rooted derived defs first (`rootB` gap; the
    12k probe found NO behavioral divergence there, so the model is likely
    already faithful and only the proof is missing).
-4. **Remove legs** (the diffing pass models retraction but the chain is
+2. **Remove legs** (the diffing pass models retraction but the chain is
    add-only).
-
-Attack-first applies to each: for (1), before trusting a state diff, craft a
-corpus where check-parity holds but state differs (e.g. a redundant edge or a
-residue row Python prunes lazily) — that's the shape a state gate exists to
-catch; record whatever it finds.
+3. **Widening the state/enumeration bounds** — graph backend inside the
+   enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
 
 ---
 
@@ -185,8 +176,9 @@ catch; record whatever it finds.
   conformance mode (`Exec.lean` driver + honesty theorems, zcli `"graph"`,
   `test_conformance_graph.py` hard gate, attack corpora + findings);
   (b) `CORRESPONDENCE.md`; (c) `FINAL_REVIEW.md` (plan §7 verbatim + cross-check).
-  Remaining extras (optional, FINAL_REVIEW §4): state-level conformance,
-  exhaustive small-scope enumeration, fragment widening, remove legs.
+  **State-level conformance + exhaustive small-scope enumeration ✅ CLOSED
+  (2026-07-12m)** — the two formerly-unearned §7 clauses. Remaining extras
+  (optional, FINAL_REVIEW §4): fragment widening, remove legs, wider bounds.
 
 Historical detail for every closed stage: `PROOF_STATUS.md` (ledger, newest first)
 and `ROADMAP.md` (designs + post-mortems).
