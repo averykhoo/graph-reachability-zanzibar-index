@@ -158,7 +158,11 @@ Everything §7 lists, plus the fragment carries:
    ref-counted closure storage (`index_v4`), sessions/transactions/concurrency
    (the `_lock_store` protocol), `rebuild()`/crash recovery.
 6. **Non-stratifiable schemas** (rejected upstream; the model assumes
-   stratifiability), `expand` / `lookup` / `list-objects` read surfaces.
+   stratifiability). The `expand` / `lookup` / `lookup_reverse` (list-objects /
+   list-users) read surfaces are **not yet modeled in Lean** — a deferred
+   low-priority TODO (§4, last item), NOT a permanent exclusion; both backends'
+   surfaces are pinned empirically by `tests/test_lookup_oracle.py` and, since
+   2026-07-13, the hypothesis campaign (`tests/test_hypothesis.py`).
 7. **The toolchain trust base** — Lean 4 kernel + the pinned Mathlib, and the
    conformance harness's own encoder (`encode.py` reuses the independent
    oracle's parser precisely so one backend parser bug cannot corrupt both
@@ -228,3 +232,13 @@ oracle/`sem`, only the Lean legs stay open);
 k = 4; a userset/TTU shape; state gate over the enumerated stores). Item (f)
 — fixing the derived-TTU userset-subject check divergence and flipping its
 strict xfails — is **DONE** (2026-07-13, Python-side; §3's resolved note).
+
+Lowest priority — **(g) model the read surfaces in Lean** (`lookup` /
+`lookup_reverse` / `expand` = list-objects / list-users): give them a Lean spec
+(a comprehension over the already-proved `sem`) and prove the Python computes
+it. Deferred to the eventual full-spec effort — the definition is cheap, but the
+completeness proof pulls in the interner/candidate-universe layer T1 abstracts
+away, and the surface is empirically subtle (the X1/X3/X4 divergences all lived
+here). Until then both backends' surfaces are pinned by
+`tests/test_lookup_oracle.py` + the hypothesis campaign (added 2026-07-13), not
+proved. This is a deferred TODO, NOT a permanent non-goal.

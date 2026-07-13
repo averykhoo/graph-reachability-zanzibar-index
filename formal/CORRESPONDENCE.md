@@ -145,3 +145,23 @@ independent corners.
   the reserved `'.'` in the target predicate) with the pin argument recorded
   there. Schemas needing genuine storage leaves (`Direct`/TTU arms under a
   boolean) remain outside `computedOnly`.
+
+## 8. Keeping the model in sync when optimizing the Python (READ THIS before perf work)
+
+The theorems are about the **Lean models**, which are *algorithm-twins* of the
+Python (this whole table). A proof only means something if the Lean definition
+still describes the algorithm the Python actually runs. So, when optimizing:
+
+* A **behavior-preserving micro-optimization** (same algorithm, faster) needs no
+  Lean change — the differential matrix / hypothesis / conformance gates are the
+  net that it didn't change observable answers.
+* An optimization that **changes the modeled algorithm** (a new candidate-pruning
+  rule, a different cascade order, a restructured closure/residue update, a new
+  fast path with its own logic) means the Lean definition it maps to (see the
+  rows above) now describes *dead code*. **Update the corresponding Lean model to
+  match, and re-run `formal/verify.sh`** — otherwise the proof silently verifies
+  an algorithm you no longer ship. If the new algorithm is hard to model, that is
+  a signal to keep the old one behind the model, or to widen the model
+  deliberately (a real formal task, not a silent drift). Either way: never let
+  the code and the model diverge unrecorded — if you must ship ahead of the
+  model, log it in §7 as an intentional divergence with the reason.

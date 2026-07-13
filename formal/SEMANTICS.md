@@ -57,8 +57,14 @@ and equivalence is the corollary at that same scope.
 queries and userset-subject queries are also in scope (they are part of the
 matrix grid and the pinned star×boolean table) — on the graph side, a
 star-NAMED subject only with a bare predicate and a concrete query object
-(§8 `hqs`/`hqo`). `expand`/`lookup`/`lookup_reverse`
-are **out of scope** (plan §1 non-goals).
+(§8 `hqs`/`hqo`). `expand`/`lookup`/`lookup_reverse` are **not yet modeled in
+Lean** — a deferred, low-priority TODO for the eventual full spec
+(`FINAL_REVIEW.md` §4, last item), NOT a permanent non-goal. Their Lean spec is
+a comprehension over the already-proved `sem`; the completeness proof pulls in
+the interner/candidate-universe layer, which is why it waits. Meanwhile both
+backends' lookup surfaces are pinned empirically by the brute-force oracle gate
+(`tests/test_lookup_oracle.py`) and, as of 2026-07-13, the hypothesis campaign
+(`tests/test_hypothesis.py`).
 
 ---
 

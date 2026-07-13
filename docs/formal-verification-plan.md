@@ -75,9 +75,15 @@ fixpoint semantics defined in §3. "Correct" means:
   wrong tool in Lean. Optional Phase 7 models them in TLA+/TLC; the core plan
   treats all state transitions as atomic, matching the single-writer-per-store
   contract the code enforces via `_lock_store`.
-- **`expand` / `lookup`.** Scope is `check` only. `lookup` in the set engine is
-  a verify-based semi-join over `check` and inherits its correctness; `expand`
-  can be a stretch goal (T7, optional) after T3 is closed.
+- **`expand` / `lookup` / `lookup_reverse` — DEFERRED, not a permanent non-goal
+  (updated 2026-07-13).** The proved theorems' scope is `check`; these read
+  surfaces are simply not modeled YET. Their Lean spec is a comprehension over
+  the already-proved `sem` (cheap to state); the completeness proof pulls in the
+  interner/candidate-universe layer, which is why it waits for the full-spec
+  effort (`FINAL_REVIEW.md` §4, last item). `lookup` in the set engine is a
+  verify-based semi-join over `check` and inherits its correctness. Both
+  backends' lookup surfaces are pinned empirically by `tests/test_lookup_oracle.py`
+  and the hypothesis campaign (2026-07-13).
 - **Performance, termination bounds beyond well-definedness, DoS.**
 - **The oracle (`tests/oracle.py`).** See §2.3.
 

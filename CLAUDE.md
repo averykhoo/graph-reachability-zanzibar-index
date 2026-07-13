@@ -113,3 +113,11 @@ IVM delta processor.
 - **Never edit a golden/oracle result to make a refactor pass** — and the compiled-
   RuleSet snapshots (`tests/snapshots/`) are the byte-identity gate for untainted
   compilation.
+- **Perf work & the Lean model.** The Lean proofs (`formal/`) verify *algorithm-twins*
+  of the Python (`formal/CORRESPONDENCE.md` is the model↔code map). A behavior-preserving
+  micro-optimization needs no Lean change (the differential matrix + hypothesis +
+  conformance are the net). But an optimization that **changes the modeled algorithm**
+  (candidate pruning, cascade order, closure/residue update, a new fast path) makes the
+  corresponding Lean definition describe dead code — update that Lean model and re-run
+  `formal/verify.sh`, or log the gap in `CORRESPONDENCE.md` §7. Don't let code and model
+  drift unrecorded (`CORRESPONDENCE.md` §8).

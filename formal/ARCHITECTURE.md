@@ -328,8 +328,11 @@ The residual unverified surface, in full:
 5. **The representation layers** — interner/bitmap (`setengine`), SQL rows / ref-counted
    closure storage (`index_v4`), sessions/transactions/concurrency (`_lock_store`),
    `rebuild()` / crash recovery.
-6. **Non-stratifiable schemas** (rejected upstream; the model assumes stratifiability) and
-   the `expand` / `lookup` / `list-objects` read surfaces.
+6. **Non-stratifiable schemas** (rejected upstream; the model assumes stratifiability). The
+   `expand` / `lookup` / `lookup_reverse` (list-objects / list-users) read surfaces are
+   **not yet modeled in Lean** — a deferred low-priority TODO (`FINAL_REVIEW.md` §4, last
+   item), not a permanent exclusion; both backends' surfaces are pinned empirically by
+   `tests/test_lookup_oracle.py` and, since 2026-07-13, the hypothesis campaign.
 7. **The toolchain trust base** — the Lean 4 kernel + pinned Mathlib, and the conformance
    harness's own encoder (`encode.py` reuses the independent oracle's parser precisely so
    one parser bug cannot corrupt both sides).

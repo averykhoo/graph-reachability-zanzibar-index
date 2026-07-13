@@ -290,6 +290,22 @@ Facts verified against the repo, with deviations from the spec text noted:
    tuples only. No fixture exercises the difference; noted as a latent gap in the
    pure-union path, not introduced here.
 
+   **Resolution (2026-07-13, fixture added — `tests/test_pure_union_ttu.py`).** The
+   gap is **unreachable on the graph; closed as benign.** For rule-routed members to
+   land on a tupleset node the tupleset relation would need a Computed/TTU arm (a
+   rewrite rule only ever lands edges on the relation it *defines*, `_rewrite_rule` /
+   `_emit_expr`), but `_validate_ttu_tuplesets` (zanzibar_utils_v1.py) **rejects** any
+   untainted tupleset that is not directs-only with `UnsupportedByGraphIndex`. So the
+   only untainted tuplesets that compile receive raw stored edges exclusively, and
+   `tupleset_parents` cannot see a rule-routed member — the over-granting shape never
+   materializes. The fixture pins this three ways: the graph *rejects* the rule-routed
+   schema at compile time (both `enable_boolean` paths); the set engine and oracle
+   (stored-only) *accept* it and agree it does **not** grant `can_read` through the
+   rule-routed `backlink` arm (no over-grant), while a genuinely stored `linked` tuple
+   does grant; and on the compilable directs-only sibling all three backends agree
+   pointwise. No backend fix was needed — the guard already adjudicates to the
+   oracle/Zanzibar stored-parent semantics.
+
 4. **Untainted `check` consolidation counts**: node-id resolution (≤2 concrete
    lookups; w-ids cached) stays separate from the single edge-probe statement
    (`tuple_(subject_id, object_id).in_(keys) ... LIMIT 1`), per the spec's own
@@ -813,6 +829,51 @@ Grid widening (regression cover beyond the lookup gate): `_boolean_grid` adds
 the `doc#viewer` from-chain subjects, and the De Morgan grid derives every TTU
 from-chain userset shape from the AST (`_from_chain_userset_subjects`), so the
 matrix now queries userset subjects on derived-TTU families after every op.
+
+---
+
+## 2026-07-13 — OPEN: self-referential TTU-parent add/remove state non-restoration (answer-benign)
+
+**Status: OPEN (documented, not yet fixed).** Found by the hypothesis campaign
+(`tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`) during a
+heavy multi-run session; a new falsifying example was discovered and persisted to
+the (gitignored) `.hypothesis/` DB, so the test now fails deterministically until
+fixed. Pre-existing — reproduces on a clean tree; not introduced by any change in
+this session.
+
+**Shape.** A self-referential tupleset tuple `doc:d1 parent doc:d1` (d1 is its own
+`parent`) present in the store, a derived intersection `r0: [user] and [user]`, and
+a TTU that reads it back on the same object `r4: r0 from parent or [user, user:*]`.
+Adding then removing `u1 r0 d1` does **not** restore the materialized state.
+
+**Symptom (answer-benign).** After the add/remove: `check` is CORRECT on every
+query (`check(u1,r0,d1)` and `check(u1,r4,d1)` both False, matching the oracle),
+and `DeltaProcessor.audit_fixpoint()` PASSES — the ending state is a valid
+fixpoint. What drifts is a single NODE row (`snapshot_rows`): the node
+`(r0, doc, d1)` ends with `implicit=False` where the before-state and a fresh
+add-only build have `implicit=True`, both at `reference_count=0`. So it is a
+refcount-0 node left un-GC'd with a stale `implicit` flag on the remove path — the
+"node GC" representation class the formal state gate deliberately projects out
+(`extractor.py` P5). It violates the repo's canonical-representation *uniqueness*
+guarantee (add/remove exact-state restoration), which `test_add_then_remove_...`
+pins, but does NOT affect answers, the fixpoint, or any check-level parity.
+
+**Adjudication (allow, don't reject — fix the canonicalization).** OpenFGA
+*supports* self-referential tuples (the `IsSelfDefining` concept; the documented
+"self-defining relation" attribute-marker pattern, e.g. `document:1#viewer@document:1#viewer`),
+so rejecting self-parent tuples at write time would be a divergence FROM OpenFGA
+and would drop a legitimate feature. The fix belongs in the node-GC / `implicit`-flag
+handling on the remove/cascade path (a refcount-0 node reached only through the
+self-referential TTU cascade should be GC'd, or its `implicit` flag restored, so
+the state canonicalizes to the fresh-build form). Note the graph's existing
+closure-cycle rejection (`core.py:319-342`, for the T4 acyclicity precondition)
+does NOT catch this: `parent` tuples are tupleset/entity edges consumed by the TTU
+rule, not closure self-loops, so the tuple is accepted and the self-reference
+manifests only in the derived cascade.
+
+**Formal scope:** unaffected. Derived-TTU shapes are outside `W4Fragment`; the
+Lean chain is add-only (no remove legs); and the state-level conformance gate
+projects the node-GC class out (P5). No theorem, gate, or bound is touched.
 
 ---
 

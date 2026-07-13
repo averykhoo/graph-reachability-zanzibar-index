@@ -208,6 +208,15 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    left out are documented in `test_conformance_enum.py`'s module docstring —
    read it first; it is half the plan.) **[my recommendation #3, first half —
    Python-only; the graph-in-enumeration half is the meaty part.]**
+4. **Model the read surfaces in Lean** — LOWEST priority, deferred to the
+   eventual full-spec effort. `lookup` / `lookup_reverse` / `expand`
+   (list-objects / list-users) have no Lean model yet. Cheap to specify (a
+   comprehension over `sem`) but the completeness proof drags in the
+   interner/candidate-universe layer T1 abstracts away, and the surface is
+   empirically subtle (X1/X3/X4 all lived here). Pinned empirically for now by
+   `tests/test_lookup_oracle.py` + the hypothesis campaign (lookup coverage
+   added 2026-07-13). NOT out of scope — just not done; see `FINAL_REVIEW.md`
+   §4(g).
 4. ~~**Fixing the derived-TTU userset-subject divergence** pinned in
    `tests/test_lookup_oracle.py`, then flipping its strict xfails.~~ ✅ **DONE
    (2026-07-13, Python-side — Lean untouched, `W4Fragment` unchanged;
@@ -216,10 +225,14 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
 
 Repo-side (outside the formal effort, smaller, Python-only):
 
-- **Pure-union latent gap** — rule-routed members of an *untainted* tupleset
-  count as parents in the graph but not the oracle; no fixture exercises the
-  difference (`docs/spec-deviations.md` P5 #3). Write the fixture; if it
-  exposes a real divergence, fix or strict-xfail + dated deviations entry.
+- ~~**Pure-union latent gap**~~ — **DONE 2026-07-13.** Fixture written
+  (`tests/test_pure_union_ttu.py`); **no real divergence** — the shape is
+  unreachable on the graph. `_validate_ttu_tuplesets` rejects any untainted
+  tupleset with a computed arm at compile time, so a directs-only tupleset only
+  ever gets raw stored edges (a rewrite rule lands edges only on the relation it
+  defines). Set engine + oracle accept the schema and agree (stored-only, no
+  over-grant). Closed as benign; resolution appended to `docs/spec-deviations.md`
+  P5 #3.
 - **Symmetric subject-keyed residues** — the engineering hook that would lift
   the two remaining scope rejections (object wildcards on derived relations;
   wildcard usersets over derived relations); `README.md` TODO list.
