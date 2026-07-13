@@ -132,27 +132,34 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   - **Not** dropped in the sibling `memberset._starpop` (star path): the
     `Population` callable there may return a bare iterable (the memberset tests
     pass plain tuples), so `ops.new()` is load-bearing as a normalizer, not just a
-    copy. Removing it broke `test_memberset_algebra_homomorphism`. See target #2.
+    copy. Removing it broke `test_memberset_algebra_homomorphism`. See target #1.
+
+- ✅ **set-engine `lookup` — O(store) sweep → O(reachable) reverse walk (P1),
+  FIXED 2026-07-14** (was target #2). Replaced the full-store candidate sweep
+  (`check` over every interned key) with a reverse BFS (dual of `expand`):
+  `_reverse_neighbors` propagates `member_of` fan-in + wildcard-sentinel coverage
+  + `_object_deps` (Computed/TTU-tupleset) + a new `_ttu_map` (TTU from-chain),
+  verifying each candidate with the unchanged `check`. **Lookup is now flat in
+  store size: `simple` ~22,400/s at 64k tuples (was ~3.4/s at 100k — the −1.03
+  O(N) slope); `gdrive` ~322/s flat across 8.4k–134k tuples.** Absolute rate now
+  tracks the reachable-set size, not the store. Gated by `test_lookup_oracle.py`
+  (exact two-sided vs the oracle) + full suite (**794 passed**). Lean: forward
+  `lookup` is an unmodeled surface — recorded in `CORRESPONDENCE.md §8.1`.
 
 ## Optimization targets (ranked)
+
+*(P1 landed — see Applied. Remaining, renumbered; full ranked worklist with the
+graph-index and composition items in `docs/perf-optimization-handoff.md`.)*
 
 1. **`memberset._starpop` population copy (`memberset.py:87`).** Same O(population)
    copy, but on the *star* path (star-heavy workloads: wide/demorgans). Can't just
    drop `ops.new()` (contract: `pop` may yield a bare iterable). Needs a `SetOps`
    bulk-union primitive that accepts an iterable without a full intermediate copy,
    or an engine-level guarantee that `pop` returns an ops set. Medium risk.
-2. **set-engine `lookup` — O(N) → O(reachable).** Biggest structural win: both
-   backends, R²=1.000 linear, and the graph already demonstrates the flat
-   alternative. Replace the full-store candidate sweep with an on-the-fly *reverse
-   walk* (the dual of `expand`, reusing the existing `member_of` +
-   `_candidate_reverse_deps` tables) — NOT a materialized per-subject index (that
-   would move cost to writes, defeating the set engine). **Full design +
-   implementation checklist: [`docs/lookup-reverse-walk-plan.md`](../../docs/lookup-reverse-walk-plan.md).**
-   *(Algorithm change — updates the Lean model per CLAUDE.md's "Perf work & the
-   Lean model" note.)*
-3. **graph write path** (closure materialization + boolean `backfill()`), 15–156
-   writes/s — the only thing blocking graph numbers at scale.
-4. check and reverse (roaring) are already O(1) and fast — low leverage.
+2. **graph write path** (closure materialization + boolean `backfill()`), 15–156
+   writes/s — the only thing blocking graph numbers at scale. *(P2 landed the
+   closure-region batching 2026-07-14; the boolean cascade cost remains.)*
+3. check and reverse (roaring) are already O(1) and fast — low leverage.
 
 ## Notes
 

@@ -25,10 +25,10 @@ targeted oracle gate for the surface touched (`tests/test_lookup_oracle.py` for
 lookup/expand; `tests/test_matrix.py` for check/write parity). Never edit a
 golden/oracle result to make an opt pass.
 
-**Landed 2026-07-14** (commits `1d60d2b`, `bc20398`, `41fe499`, `75fa0d4`;
-pushed on master, full suite 794 passed + verify.sh all-green): **P0, P2, P5,
-P8**. Integration lesson recorded inline on each. Still open: P1 (has its own
-plan doc), P3, P4, P6, P7, P9–P12.
+**Landed 2026-07-14** (full suite 794 passed + verify.sh all-green): **P0**
+(`1d60d2b`+`75fa0d4`), **P5+P8** (`bc20398`), **P2** (`41fe499`), **P1**
+(`30a3439`). Integration lessons recorded inline on each. Still open: P3, P4,
+P6, P7, P9–P12 (graph-reconcile reads + smaller/conditional items).
 
 ---
 
@@ -76,7 +76,14 @@ plan doc), P3, P4, P6, P7, P9–P12.
 
 ## Tier 1 — large structural wins (algorithm changes → Lean work)
 
-### P1. Set-engine `lookup`: O(store) sweep → O(reachable) reverse walk
+### P1. Set-engine `lookup`: O(store) sweep → O(reachable) reverse walk ✅ LANDED
+> **Done** (`30a3439`). Reverse BFS (`_reverse_neighbors`: `member_of` fan-in +
+> wildcard-sentinel coverage + `_object_deps` + new `_ttu_map`), each candidate
+> verified by the unchanged `check`. **Lookup now flat in store size:** `simple`
+> ~22,400/s at 64k tuples (was ~3.4/s at 100k); `gdrive` ~322/s flat 8.4k–134k.
+> Two star-coverage misses the oracle gate caught (ghost subject via `[type:*]`;
+> intermediate userset-star) fixed during bring-up. Lean: forward `lookup` is
+> unmodeled — recorded in `CORRESPONDENCE.md §8.1`.
 - **Where:** `setengine/engine.py:825` (`lookup`). Full design +
   implementation checklist already written:
   [`docs/lookup-reverse-walk-plan.md`](lookup-reverse-walk-plan.md).
