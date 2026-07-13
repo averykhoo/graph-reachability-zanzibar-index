@@ -93,7 +93,11 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
     rows = log_rows(session, cursor.source_store_id, cursor.applied_log_id, limit=batch)
     if not rows:
         return 0
-    wm = outbox_watermark(session, widx.idx.store_id)
+    # The cascade replays the outbox rows these applies write (id > wm), so the
+    # watermark must be captured BEFORE the apply loop. Only the delta processor
+    # consumes it -- pure-union stores (proc is None) never cascade, so skip the
+    # SELECT entirely for them.
+    wm = outbox_watermark(session, widx.idx.store_id) if proc is not None else None
     for row in rows:
         _apply_row(row, widx, ruleset)
     if proc is not None:

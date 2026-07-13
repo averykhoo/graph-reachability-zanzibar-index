@@ -357,7 +357,19 @@ class RuleSet:
             else:
                 return
 
-        unprocessed = set(seeds)
+        # Fast path (the dominant case: a direct restriction with no rewrite rule):
+        # if no rule can fire on any seed relation the worklist can never grow, and
+        # `seeds` is already a deduped set, so it IS the output. Draining a static
+        # set via .pop() yields the same order as iterating it, so this is
+        # byte-identical to the worklist below.
+        rules = self._rules
+        if not any(self._candidates(rules, t.relation) for t in seeds):
+            yield from seeds
+            return
+
+        # `seeds` is freshly built and owned here (a set comprehension or {triple}),
+        # so drain it in place as the worklist rather than copying it into a new set.
+        unprocessed = seeds
         processed = set()
         while unprocessed:
             relational_triple = unprocessed.pop()
@@ -366,7 +378,7 @@ class RuleSet:
             yield relational_triple
 
             processed.add(relational_triple)
-            for _, rule in self._candidates(self._rules, relational_triple.relation):
+            for _, rule in self._candidates(rules, relational_triple.relation):
                 if (_result := rule.apply(relational_triple)) is not None:
                     unprocessed.add(_result)
 

@@ -58,12 +58,15 @@ class ConnectedStore:
         self.session = session
         self.store_id = store_id
         self.sync = sync
+        boot_ruleset = None
         if schema is not None:
-            ensure_schema(session, store_id, schema, object_wildcard_shapes)
+            # On first bootstrap ensure_schema compiles the schema; reuse that
+            # RuleSet below instead of re-parsing the identical text.
+            _, boot_ruleset = ensure_schema(session, store_id, schema, object_wildcard_shapes)
             session.flush()
         # Graph side first: its compiled RuleSet is handed to the set engine so the
         # shared schema is parsed + compiled once, not once per backend.
-        self.widx, self.ruleset = open_graph_index(session, store_id)
+        self.widx, self.ruleset = open_graph_index(session, store_id, ruleset=boot_ruleset)
         self.source = TupleSource(session, store_id, ops=ops, ruleset=self.ruleset)
         compiled = self.ruleset.compiled
         self.proc = (DeltaProcessor(self.widx, compiled)

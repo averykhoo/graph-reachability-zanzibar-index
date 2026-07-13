@@ -46,8 +46,11 @@ def build_index(session: Session, source_store_id: str,
     try:
         watermark = log_watermark(session, source_store_id)
         schema_text, shapes = load_schema(session, source_store_id)
+        boot_ruleset = None
         if index_store_id != source_store_id:
-            ensure_schema(session, index_store_id, schema_text, shapes)
+            # Copying the schema to a separate index store compiles it here; reuse
+            # that RuleSet in open_graph_index instead of re-parsing the same text.
+            _, boot_ruleset = ensure_schema(session, index_store_id, schema_text, shapes)
 
         existing_cursor = session.exec(
             select(IndexCursorV1)
@@ -65,7 +68,7 @@ def build_index(session: Session, source_store_id: str,
                 f"index store {index_store_id!r} already holds graph state; "
                 f"build_index is for fresh builds")
 
-        widx, ruleset = open_graph_index(session, index_store_id)
+        widx, ruleset = open_graph_index(session, index_store_id, ruleset=boot_ruleset)
 
         # bulk-load the snapshot through the rewrite fan-out (leaf writes only)
         rows = session.exec(

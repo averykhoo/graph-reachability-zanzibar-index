@@ -28,19 +28,22 @@ class SchemaMismatch(ValueError):
 
 
 def save_schema(session: Session, store_id: str, schema_text: str,
-                object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset()) -> SchemaV4:
+                object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset()
+                ) -> tuple[SchemaV4, RuleSet]:
     """Persist a store's schema, write-once (spec §2.1).
 
     Compiles first so an invalid schema is rejected before anything lands. Raises
     ``ValueError`` if the store already has a schema -- schemas are static; a new
-    schema means a new store.
+    schema means a new store. Returns the persisted row and the compiled ``RuleSet``
+    so a bootstrapping caller can reuse it instead of re-parsing the same text via
+    ``open_graph_index`` (the schema is compiled once, not twice).
     """
     existing = session.get(SchemaV4, store_id)
     if existing is not None:
         raise ValueError(
             f"store {store_id!r} already has a schema (schemas are static -- "
             f"create a new store for a new schema)")
-    parse_openfga_schema(schema_text, object_wildcard_shapes=object_wildcard_shapes)
+    ruleset = parse_openfga_schema(schema_text, object_wildcard_shapes=object_wildcard_shapes)
     row = SchemaV4(
         store_id=store_id,
         schema_text=schema_text,
@@ -48,7 +51,7 @@ def save_schema(session: Session, store_id: str, schema_text: str,
     )
     session.add(row)
     session.flush()
-    return row
+    return row, ruleset
 
 
 def load_schema(session: Session, store_id: str) -> tuple[str, frozenset[tuple[str, str]]]:
@@ -62,10 +65,15 @@ def load_schema(session: Session, store_id: str) -> tuple[str, frozenset[tuple[s
 
 def ensure_schema(session: Session, store_id: str, schema_text: str,
                   object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset()
-                  ) -> SchemaV4:
+                  ) -> tuple[SchemaV4, RuleSet | None]:
     """Idempotent bootstrap: persist the schema if the store has none, verify it
     matches if it does (spec §5-S1: an explicit schema must agree with a persisted
-    one -- loud ``SchemaMismatch``, never silent divergence)."""
+    one -- loud ``SchemaMismatch``, never silent divergence).
+
+    Returns ``(row, ruleset)``; ``ruleset`` is the freshly compiled ``RuleSet`` when
+    this call bootstrapped the schema (so the caller can hand it to
+    ``open_graph_index`` and avoid a second parse), else ``None`` (the schema was
+    already present and only verified, so nothing was compiled)."""
     row = session.get(SchemaV4, store_id)
     if row is None:
         return save_schema(session, store_id, schema_text, object_wildcard_shapes)
@@ -74,7 +82,7 @@ def ensure_schema(session: Session, store_id: str, schema_text: str,
         raise SchemaMismatch(
             f"explicit schema for store {store_id!r} disagrees with its persisted "
             f"schema; schemas are static (write-once)")
-    return row
+    return row, None
 
 
 def open_set_engine(session: Session, store_id: str, *,
@@ -88,11 +96,14 @@ def open_set_engine(session: Session, store_id: str, *,
 
 
 def open_graph_index(session: Session, store_id: str,
-                     *, create_store_row: bool = True) -> tuple[WildcardIndex, RuleSet]:
+                     *, create_store_row: bool = True,
+                     ruleset: RuleSet | None = None) -> tuple[WildcardIndex, RuleSet]:
     """Open the graph index on a self-describing store: load + compile the schema,
-    return the wildcard façade and its compiled RuleSet (plans included)."""
-    schema_text, shapes = load_schema(session, store_id)
-    ruleset = parse_openfga_schema(schema_text, object_wildcard_shapes=shapes)
+    return the wildcard façade and its compiled RuleSet (plans included).
+    ``ruleset`` skips re-parsing a schema the caller just compiled (bootstrap reuse)."""
+    if ruleset is None:
+        schema_text, shapes = load_schema(session, store_id)
+        ruleset = parse_openfga_schema(schema_text, object_wildcard_shapes=shapes)
     if create_store_row and session.get(StoreV4, store_id) is None:
         session.add(StoreV4(id=store_id))
         session.flush()
