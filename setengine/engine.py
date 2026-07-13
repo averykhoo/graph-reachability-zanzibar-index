@@ -286,8 +286,8 @@ class SetEngine:
         evaluator rebuild). This backend computes no deltas (§6.1)."""
         s_pred = _norm_pred(subject_predicate)
         validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
-        if self._row(s_pred, s_type, s_name, relation, o_type, o_name) is not None:
-            return False                               # idempotent: septuple already present
+        if self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
+            return False                               # idempotent: septuple already present (in-memory, no SELECT)
         # one rewrite fan-out per accepted add: validation and application share it
         pairs = self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name)
         self._validate(s_pred, s_type, s_name, relation, o_type, o_name, pairs)
@@ -304,11 +304,31 @@ class SetEngine:
         as ``add_tuple``)."""
         s_pred = _norm_pred(subject_predicate)
         validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
-        row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
-        if row is None:
+        # Cheap in-memory existence test first; only fetch the ORM row (needed for
+        # session.delete) when the tuple is actually present -- an absent tuple is
+        # rejected without a DB round-trip.
+        if not self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
             raise ValueError('non-existent tuple cannot be removed')
+        row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
         self.session.delete(row)
         self._apply_remove(s_pred, s_type, s_name, relation, o_type, o_name)
+
+    def _tuple_present(self, s_pred, s_type, s_name, relation, o_type, o_name) -> bool:
+        """Authoritative in-memory existence test for one raw septuple, replacing the
+        per-write ``_row`` SELECT (P0). The tuple is present iff both endpoints are
+        interned AND the subject id sits in the object node's membership set --
+        ``entities`` for a bare '...' subject, ``usersets`` otherwise. ``node_sets``
+        membership is populated ONLY by real ``_apply_add``s (never by the reverse-
+        dependency candidate interning in ``_apply_add``), so this is exact, not an
+        over-approximation."""
+        subject_id = self.interner.get(s_type, s_name, s_pred)
+        object_id = self.interner.get(o_type, o_name, relation)
+        if subject_id is None or object_id is None:
+            return False
+        ns = self.node_sets.get(object_id)
+        if ns is None:
+            return False
+        return subject_id in (ns.entities if s_pred == '...' else ns.usersets)
 
     def _row(self, s_pred, s_type, s_name, relation, o_type, o_name) -> TupleV1 | None:
         return self.session.exec(
