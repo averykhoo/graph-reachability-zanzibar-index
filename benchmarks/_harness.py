@@ -109,18 +109,32 @@ def build_set(schema: str, shapes, ops: SetOps, tuples, store_id: str = 'sb') ->
     return se, n
 
 
-def build_graph(schema: str, shapes, tuples, store_id: str = 'gb') -> tuple[object, int]:
+def build_graph(schema: str, shapes, tuples, store_id: str = 'gb',
+                paranoia: bool = False, commit_every: int = 0) -> tuple[object, int]:
     """Load raw septuples into the graph index (WildcardIndex), routing each
     write through ``RuleSet.apply`` and running a boolean ``backfill()`` when the
     schema compiles derived predicates. Returns (widx, tuple_count).
 
-    paranoia=False: benchmarks measure index maintenance, not the invariant
-    checker (per wildcard_helpers / CLAUDE.md -- paranoia runs the full I1-I13
-    sweep plus a per-pair outbox BFS around every commit).
+    paranoia defaults False: benchmarks measure index maintenance, not the
+    invariant checker (per wildcard_helpers / CLAUDE.md -- paranoia runs the full
+    I1-I13 sweep plus a per-pair outbox BFS around every commit). Pass
+    paranoia=True to quantify that checker's overhead. (Paranoia is a graph-index
+    feature; the set engine has no equivalent.)
+
+    commit_every: 0 (default) batches all writes into one final commit -- fastest
+    load, but paranoia then fires only once, understating its true per-commit cost.
+    N>0 commits every N raw tuples (production-like), so paranoia is exercised the
+    way it is paid in a real writer. Per-write commits are only valid on schemas
+    with no derived cascade (simple / gdrive); on a boolean schema an intermediate
+    commit would land in a state the cascade hasn't reconciled -> paranoia raises.
     """
     from index_v4.processor import DeltaProcessor
     ruleset = parse_openfga_schema(schema, object_wildcard_shapes=shapes)
-    session, widx = make_wildcard_index(ruleset.schema_info, store_id=store_id, paranoia=False)
+    session, widx = make_wildcard_index(ruleset.schema_info, store_id=store_id, paranoia=paranoia)
+    boolean = ruleset.compiled is not None and ruleset.compiled.plans
+    if commit_every and boolean:
+        raise ValueError('commit_every>0 is invalid on a boolean schema '
+                         '(intermediate commit precedes cascade reconcile)')
     n = 0
     for raw in tuples:
         sp = Ellipsis if raw[0] == '...' else raw[0]
@@ -129,7 +143,9 @@ def build_graph(schema: str, shapes, tuples, store_id: str = 'gb') -> tuple[obje
             widx.add_tuple('...' if d.subject_predicate is Ellipsis else d.subject_predicate,
                            d.subject.type, d.subject.name, d.relation, d.object.type, d.object.name)
         n += 1
-    if ruleset.compiled is not None and ruleset.compiled.plans:
+        if commit_every and n % commit_every == 0:
+            widx.idx.session.commit()
+    if boolean:
         DeltaProcessor(widx, ruleset.compiled).backfill()   # offline bootstrap of derived state
     widx.idx.session.commit()
     return widx, n

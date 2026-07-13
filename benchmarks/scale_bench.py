@@ -306,7 +306,8 @@ def _rsz(result) -> int:
 
 
 def run(workload: str, backend: str, scale: int, checks: int, lookups: int,
-        time_box: float, ops_name: str, emit_json: bool) -> None:
+        time_box: float, ops_name: str, emit_json: bool, paranoia: bool = False,
+        commit_every: int = 0) -> None:
     spec = WORKLOADS[workload]
     schema, shapes = spec['schema'], spec['shapes']
     tuples = list(spec['gen'](scale))
@@ -322,8 +323,8 @@ def run(workload: str, backend: str, scale: int, checks: int, lookups: int,
         be, n = build_set(schema, shapes, ops, tuples)
         impl = f'set:{ops.name}'
     else:
-        be, n = build_graph(schema, shapes, tuples)
-        impl = 'graph'
+        be, n = build_graph(schema, shapes, tuples, paranoia=paranoia, commit_every=commit_every)
+        impl = 'graph:paranoia' if paranoia else 'graph'    # distinct jsonl key
     build_s = time.perf_counter() - t0
     gc.collect()
     rss_after = rss_mb('current')
@@ -369,6 +370,7 @@ def run(workload: str, backend: str, scale: int, checks: int, lookups: int,
         out = Path(__file__).resolve().parent / 'results'
         out.mkdir(exist_ok=True)
         rec = dict(workload=workload, impl=impl, scale=scale, tuples=n,
+                   paranoia=paranoia, commit_every=commit_every,
                    build_s=round(build_s, 3), writes_per_s=round(n / build_s, 1),
                    rss_after_mb=round(rss_after, 1) if rss_after else None,
                    rss_delta_mb=round(tuples_ram, 1) if tuples_ram is not None else None,
@@ -399,9 +401,21 @@ def main():
     p.add_argument('--time-box', type=float, default=20.0, dest='time_box',
                    help='per-surface wall-clock cap (s); a slow lookup at large N stops here')
     p.add_argument('--impl', choices=['py', 'roaring'], default='roaring')
+    p.add_argument('--paranoia', action='store_true',
+                   help='graph backend only: run the invariant checker + delta verifier '
+                        'inside every commit (quantifies paranoia overhead)')
+    p.add_argument('--commit-every', type=int, default=0, dest='commit_every',
+                   help='graph backend only: commit every N writes (0=batch at end). '
+                        'Use N=1 with --paranoia for production-like per-commit cost; '
+                        'invalid on the boolean demorgans schema')
     p.add_argument('--json', action='store_true', help='append a record to results/scale_bench.jsonl')
     a = p.parse_args()
-    run(a.workload, a.backend, a.scale, a.checks, a.lookups, a.time_box, a.impl, a.json)
+    if a.paranoia and a.backend != 'graph':
+        p.error('--paranoia applies to the graph backend only (the set engine has no paranoia mode)')
+    if a.commit_every and a.backend != 'graph':
+        p.error('--commit-every applies to the graph backend only')
+    run(a.workload, a.backend, a.scale, a.checks, a.lookups, a.time_box, a.impl, a.json,
+        paranoia=a.paranoia, commit_every=a.commit_every)
 
 
 if __name__ == '__main__':
