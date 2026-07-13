@@ -84,6 +84,10 @@ def star(shape: Shape, ops: SetOps) -> MemberSet:
 def _starpop(stars, ops: SetOps, pop: Population):
     acc = ops.new()
     for shape in stars:
+        # ops.new() also NORMALIZES: the Population contract only promises an
+        # iterable of ids (tests pass plain tuples), so `acc |= pop(shape)` would
+        # break on a non-ops iterable. The star-path O(population) copy that
+        # remains here is a separate future target -- see PERF_ANALYSIS.md.
         acc |= ops.new(pop(shape))
     return acc
 

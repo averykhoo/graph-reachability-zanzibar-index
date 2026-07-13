@@ -103,7 +103,9 @@ Ratio = roaring rate / py rate; **>1 ⇒ Roaring faster, <1 ⇒ PySets faster.**
   confirming allocation-copy, not GC. **Verified fix** — drop the redundant copy
   (`ops.new(ns.entities) & pop(...)`, `&` returns a new set so the mask is
   untouched): the intersection goes **flat** on both backends (py **1,614 →
-  2.93M/s at 100k, 1817×**; roaring 2.8×). See optimization target #1.
+  2.93M/s at 100k, 1817×**; roaring 2.8×). **Applied 2026-07-14** (see *Applied*):
+  end-to-end simple reverse is now flat — PySets **1,944 → 57,136/s at 100k (29×)**,
+  RoaringSets 27k → 35k. The baseline tables/plot above are the *pre-fix* snapshot.
 
 **Verdict:** `RoaringSets` remains the right default (it is) — it never regresses
 asymptotically and holds reverse flat at scale. `PySets` is a legitimate, slightly
@@ -118,16 +120,27 @@ confirm the design: graph reads are DB-round-trip-bound and flat
 engine once N is nontrivial** (simple: graph 534/s vs set 3.4/s at 100k) — the
 materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
+## Applied
+
+- ✅ **`direct_expand` population copy (`engine.py:768`) — FIXED 2026-07-14.**
+  Dropped the redundant `ops.new()` around the persistent population mask
+  (`ops.new(ns.entities) & pop((rtype,'...'))`). Turned the reverse/expand direct
+  path from O(population) to O(result). **End-to-end (simple reverse): PySets
+  1,944 → 57,136/s at 100k — now flat across 1k–100k (29×); RoaringSets 27k →
+  35k.** Behavior-preserving, so no Lean change (CLAUDE.md); gated by the full
+  suite (**794 passed**).
+  - **Not** dropped in the sibling `memberset._starpop` (star path): the
+    `Population` callable there may return a bare iterable (the memberset tests
+    pass plain tuples), so `ops.new()` is load-bearing as a normalizer, not just a
+    copy. Removing it broke `test_memberset_algebra_homomorphism`. See target #2.
+
 ## Optimization targets (ranked)
 
-1. **`direct_expand` population copy (`engine.py:768`) — verified one-line fix.**
-   Drop the redundant `ops.new()` around the persistent population mask:
-   `ops.new(ns.entities) & pop((rtype,'...'))`. Turns the reverse/expand direct path
-   from O(population) to O(result): **PySets flat, +1817× at 100k; RoaringSets
-   +2.8×.** Behavior-preserving (identical intersection), so no Lean change per
-   CLAUDE.md — gated by the differential matrix + hypothesis + conformance. Lowest
-   risk, immediate win; do this first. *(Also check the sibling star/userset
-   branches and `ttu_expand` for the same `ops.new(pop(...))` pattern.)*
+1. **`memberset._starpop` population copy (`memberset.py:87`).** Same O(population)
+   copy, but on the *star* path (star-heavy workloads: wide/demorgans). Can't just
+   drop `ops.new()` (contract: `pop` may yield a bare iterable). Needs a `SetOps`
+   bulk-union primitive that accepts an iterable without a full intermediate copy,
+   or an engine-level guarantee that `pop` returns an ops set. Medium risk.
 2. **set-engine `lookup` — O(N) → aim for O(result).** Biggest structural win:
    both backends, R²=1.000 linear, and the graph already demonstrates the flat
    alternative. A reverse/per-subject index removes the full-store candidate

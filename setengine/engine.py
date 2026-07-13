@@ -765,7 +765,11 @@ class SetEngine:
                         if sid is not None and sid in ns.entities:
                             stars.add((rtype, '...'))
                     else:
-                        pos |= (ops.new(ns.entities) & ops.new(pop((rtype, '...'))))
+                        # intersect the (small) node entities against the persistent
+                        # type-population mask directly; wrapping pop(...) in ops.new()
+                        # copied the whole O(population) mask per expand (& returns a
+                        # new set, so the mask is not mutated).
+                        pos |= (ops.new(ns.entities) & pop((rtype, '...')))
                 for uid in ns.usersets:
                     t, n, p = self.interner.key(uid)
                     if n != '*':
