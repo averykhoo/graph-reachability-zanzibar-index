@@ -102,6 +102,32 @@ def _candidate_reverse_deps(ast) -> tuple[dict, dict]:
             {k: tuple(sorted(v)) for k, v in chain_targets.items()})
 
 
+def _ttu_reverse_map(ast) -> dict:
+    """``(object_type, tupleset_rel, target_rel)`` -> relations ``R`` on that object
+    type whose expression contains a TTU ``R: target_rel from tupleset_rel``.
+
+    Drives the ``lookup`` reverse walk's TTU from-chain hop (the dual of
+    ``ttu_expand``): a subject that is a member of ``parent#target_rel`` reaches
+    ``object#R`` whenever ``parent`` is a stored tupleset tuple of ``object`` (the
+    Zanzibar from-chain rule). Computed is treated as opaque -- a TTU reached
+    through a Computed chain surfaces via the target relation's own entry plus the
+    ``object_deps`` Computed hop, so this map holds only the DIRECT TTU nodes of
+    each relation's expression."""
+    m: dict[tuple[str, str, str], set[str]] = {}
+    for (t, root), expr in ast.items():
+        stack = [expr]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (Union, Intersection)):
+                stack.extend(node.children)
+            elif isinstance(node, Exclusion):
+                stack.append(node.base)
+                stack.append(node.subtract)
+            elif isinstance(node, TTU):
+                m.setdefault((t, node.tupleset_rel, node.target_rel), set()).add(root)
+    return {k: tuple(sorted(v)) for k, v in m.items()}
+
+
 class Interner:
     """Per-store, reference-counted interning of ``(type, name, predicate)`` to int32 ids.
 
@@ -209,8 +235,10 @@ class SetEngine:
         self.store_id = store_id
         self.ops = ops
         self.ast = parse_schema_ast(schema)
-        # Reverse-dependency tables for write-time candidate interning (§6.4).
+        # Reverse-dependency tables for write-time candidate interning (§6.4) and
+        # the read-time lookup reverse walk (TTU from-chain hop).
         self._object_deps, self._chain_targets = _candidate_reverse_deps(self.ast)
+        self._ttu_map = _ttu_reverse_map(self.ast)
         self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes)
         self.filters = schema_filters(self.ast)
         # Reproduce the graph backend's raw-write edge graph (same RuleSet) and reject
@@ -850,29 +878,103 @@ class SetEngine:
         result.markers = set(m.stars)
         return result
 
-    def lookup(self, subject_predicate, s_type: str, s_name: str) -> LookupResult:
-        """Everything the subject can reach (§6.4).
+    def _reverse_neighbors(self, oid: int) -> list[int]:
+        """Candidate object nodes one reverse membership hop from a node the subject
+        is (a candidate) member of -- the dual of ``expand``'s forward edges:
 
-        A verify-based semi-join: every interned relation key is a candidate, confirmed
-        by check mode (which is sound under booleans). Spec §6.4's reverse propagation is
-        realized at WRITE time (``_apply_add`` interns each tuple's reverse-dependent
-        object keys), so objects reachable only through TTU or Computed hops are real
-        candidates with real ids -- the candidate sweep stays linear in stored tuples.
-        Markers are intensional and exact by construction: one star-object check per
-        declared relation, so star coverage arriving through Computed/TTU hops surfaces
-        without enumerating names."""
+        - **H1 userset fan-in:** ``member_of[oid]`` -- objects that granted this
+          userset node a relation (``group:g#member viewer doc:x`` etc.).
+        - **H2 same-object Computed/TTU-tupleset dependents:** ``_object_deps`` --
+          relations ``R`` on the SAME object anchored by this node's relation.
+        - **H3 TTU from-chain:** the entity's stored tupleset memberships
+          (``member_of`` of the bare node) crossed with ``_ttu_map`` -- a stored
+          parent tuple lets ``parent#target_rel`` reach ``object#R``.
+
+        Returns interned ids only; an unreachable/uninterned candidate is dropped
+        (it can carry no result). Bare-entity/star nodes contribute their H1 edges
+        but generate no H2/H3 (their relation slot is not a declared relation)."""
+        t, n, rel = self.interner.key(oid)
+        out: list[int] = []
+        mo = self.member_of.get(oid)                       # H1 direct fan-in
+        if mo is not None:
+            out.extend(mo)
+        if n != '*':                                       # H1 star coverage
+            # the wildcard sibling (t, '*', rel) covers this node: a `[t:*]`
+            # (bare) or `[t:*#rel]` (userset) grant made to the star sentinel is
+            # inherited by every concrete member of the shape (check's star-restr
+            # branch). Verified downstream by check() like any other candidate.
+            star_id = self.interner.get(t, '*', rel)
+            if star_id is not None:
+                mos = self.member_of.get(star_id)
+                if mos is not None:
+                    out.extend(mos)
+        if rel != '...':
+            for R in self._object_deps.get((t, rel), ()):  # H2
+                rid = self.interner.get(t, n, R)
+                if rid is not None:
+                    out.append(rid)
+            bare_id = self.interner.get(t, n, '...')        # H3 (bare parent tuplesets)
+            if bare_id is not None:
+                mob = self.member_of.get(bare_id)
+                if mob is not None:
+                    for pid in mob:
+                        ot, on, ts = self.interner.key(pid)
+                        for R in self._ttu_map.get((ot, ts, rel), ()):
+                            rid = self.interner.get(ot, on, R)
+                            if rid is not None:
+                                out.append(rid)
+        return out
+
+    def lookup(self, subject_predicate, s_type: str, s_name: str) -> LookupResult:
+        """Everything the subject can reach (§6.4), via an O(reachable) reverse walk.
+
+        The dual of ``expand``: a reverse BFS over membership edges from the subject
+        (seeded by its direct memberships, propagated by ``_reverse_neighbors``'s
+        H1/H2/H3 hops -- the mirror of ``check``'s direct-userset / Computed / TTU
+        recursion). Each surfaced candidate is confirmed by ``check`` (exact under
+        booleans, so an over-approximate candidate that an ``and``/``but not`` excludes
+        is dropped), and only confirmed nodes propagate -- so the walk touches the
+        subject's reachable neighborhood, never the whole store. Replaces the former
+        O(stored-tuples) candidate sweep; the write-time reverse-dependency interning
+        (``_apply_add``) still guarantees every reachable object key has an id for the
+        walk to find. Markers are intensional and exact by construction: one
+        star-object check per declared relation, so star coverage arriving through
+        Computed/TTU hops surfaces without enumerating names."""
         s_pred = _norm_pred(subject_predicate)
         result = LookupResult()
         for (t, rel) in self.ast:                          # declared (type, relation)
             if self.check(s_pred, s_type, s_name, rel, t, '*'):
                 result.markers.add((t, rel))
-        for (t, n, p) in list(self.interner.key_of.values()):
-            if p == '...' or n == '*':
-                continue                    # entity nodes are not relations; stars above
-            if self.check(s_pred, s_type, s_name, p, t, n):
-                oid = self.interner.get(t, n, p)
-                if oid is not None:
-                    result.node_ids.add(oid)
+        # Seed from the subject's memberships (``_reverse_neighbors`` folds in the
+        # subject-wildcard sentinel's grants via its H1 star coverage). A
+        # ghost/uninterned subject can still reach concretes purely through a
+        # `[type:*]` grant, so seed from the bare/userset star sentinel directly.
+        subject_id = self.interner.get(s_type, s_name, s_pred)
+        if subject_id is not None:
+            queue: list[int] = self._reverse_neighbors(subject_id)
+        elif s_name != '*':
+            star_id = self.interner.get(s_type, '*', s_pred)
+            queue = self._reverse_neighbors(star_id) if star_id is not None else []
+        else:
+            queue = []
+        if not queue:
+            return result                   # reaches nothing concrete (only markers, if any)
+        visited: set[int] = set()
+        while queue:
+            oid = queue.pop()
+            if oid in visited:
+                continue
+            visited.add(oid)
+            t, n, p = self.interner.key(oid)
+            if p == '...':
+                continue                    # entity node: not a relation result
+            if not self.check(s_pred, s_type, s_name, p, t, n):
+                continue                    # over-approximate candidate refuted (boolean, etc.)
+            if n != '*':
+                result.node_ids.add(oid)    # concrete result; star objects carried by markers
+            for nxt in self._reverse_neighbors(oid):        # propagate only from confirmed nodes
+                if nxt not in visited:
+                    queue.append(nxt)
         return result
 
 

@@ -189,3 +189,22 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   the outbox/processor tests, the remove-path and hypothesis add/remove-
   restoration gates, and `verify.sh`'s state-level graph conformance
   (`test_conformance_state.py`) net empirically.
+
+* **P1 — set-engine forward `lookup`: O(store) sweep → O(reachable) reverse walk
+  (`setengine/engine.py`, 2026-07-14).** The forward `lookup` surface is **not
+  modeled in Lean.** §2 models the set-engine *semantics* (`MemberSet`,
+  `expandDirect`/`expandTtu`, `check`, and the T1 `setEngine_correct` theorem =
+  model `check` ≡ `sem`); `lookup_reverse` is `expand` rendered and rides on the
+  `expand` model — **both unchanged by P1.** `lookup` itself was a Python-only
+  composition: `check` over *every interned key* (O(stored tuples)). P1 replaces
+  the candidate sweep with a reverse BFS (`_reverse_neighbors`: `member_of`
+  fan-in + wildcard-sentinel coverage + `_object_deps` (Computed/TTU-tupleset) +
+  `_ttu_map` (TTU from-chain) — the reverse mirror of `check`'s
+  direct-userset / Computed / TTU recursion), **verifying every surfaced
+  candidate with the unchanged `check`** and keeping the intensional marker loop.
+  So the observable output is identical (same `node_ids` + `markers`), and no
+  modeled Lean definition describes `lookup`'s candidate generation — nothing
+  becomes dead code. Pinned **exact two-sided** by
+  `tests/test_lookup_oracle.py` (S4) against the independent brute-force oracle
+  over the full candidate grid — a differential net stronger here than a Lean
+  twin would be — plus the hypothesis lookup coverage and the validation matrix.
