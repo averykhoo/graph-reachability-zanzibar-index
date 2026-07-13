@@ -10,16 +10,20 @@ Verification state as of 2026-07-12 (post remove-path + generated-schema gates):
 `bash formal/verify.sh` green — `lake build` + **0 sorries** + `zcli` + axiom
 audit (every audited theorem depends only on `[propext, Classical.choice,
 Quot.sound]`; the gate requires exactly one observed report per `#print axioms`
-command) + **248** tests under `formal/conformance/` (0 skips — the conformance
+command) + **257** tests under `formal/conformance/` (0 skips — the conformance
 step fails on any skipped test or zero passes; interpreter overridable via
-`ZANZIBAR_PY`). The 248 = **228 differential-conformance tests** (98 answer-corner
-[`test_conformance_spec` 51 + `test_conformance_random` 17 + `test_conformance_graph`
+`ZANZIBAR_PY`). The 257 = **237 differential-conformance tests** (107 answer-corner
+[`test_conformance_spec` 60 + `test_conformance_random` 17 + `test_conformance_graph`
 30] + 3 mode-dispatch [`test_cli_mode.py`] + 15 state-level [`test_conformance_state.py`]
 + 4 exhaustive small-scope enumeration [`test_conformance_enum.py`] + 68 remove-path
 [`test_conformance_remove.py`: 34 set-engine + 34 graph-index] + 40 generated-schema
 [`test_conformance_generated.py`])
 + **20 gate-tooling unit tests** (not Lean-vs-Python comparisons: 13 sorry-scanner
 [`test_sorry_scan.py`] + 7 zcli-runner transient-retry [`test_runner_retry.py`]).
+`test_conformance_spec` grew 51 → 60 (2026-07-13): three spec-side
+`TTU_USERSET_SCHEMAS` corpora anchor `sem` on the X4 userset-through-TTU shapes
+(§3 resolved note) — full-scope spec/oracle/set-engine only, outside `SCHEMAS`
+so the graph-side suites stay `W4Fragment`-scoped.
 
 ---
 
@@ -189,6 +193,20 @@ plan leaves stay item 3's documented gap), every new graph behavior is
 gated on leaf kinds absent from the in-fragment corpora, and the
 state-level gate (exact edge+residue equality vs Lean) passed unchanged —
 no theorem, gate, or bound above widened.
+
+**`sem` anchor (2026-07-13).** The fix above followed the ORACLE where the
+boolean spec is silent; the Lean spec `sem` — the formal trust root the oracle
+stands in for — is now checked directly on these shapes. Three spec-side
+corpora (`TTU_USERSET_SCHEMAS` in `formal/conformance/corpus.py`: from-chain
+userset through an untainted TTU, the cross-object membership lift, and
+from-chain userset through a TTU over a DERIVED boolean target) run through
+`test_conformance_spec`'s full-scope spec/oracle/set-engine comparisons, and
+`sem` == oracle == set engine on every grid query (the from-chain userset
+answers True on all three, matching the oracle the graph was fixed toward). So
+the adjudication is anchored to `sem`, not asserted from the oracle alone. The
+corpora are kept OUT of `SCHEMAS`/`GRAPH_FRAGMENT` — the shapes are outside
+`W4Fragment`, so the graph/state/remove gates do not carry them; the anchor is
+spec-side, where the set engine is proved to compute `sem` at full scope (T1).
 
 ## 4. Where the next marginal assurance is
 

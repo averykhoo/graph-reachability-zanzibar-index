@@ -19,11 +19,20 @@ import pytest
 
 from tests.oracle import Oracle
 
-from formal.conformance.corpus import SCHEMAS
+from formal.conformance.corpus import SCHEMAS, TTU_USERSET_SCHEMAS
 from formal.conformance.encode import build_request
 from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
 from formal.conformance import runner
 from formal.conformance.backends import setengine_answers
+
+
+# The spec comparisons (spec `sem` / oracle / set engine) are FULL-SCOPE — T1
+# places no fragment restriction on the set engine, and `sem`/oracle are the
+# reference for every stratifiable schema — so they additionally carry the TTU
+# userset-subject corpora (the 2026-07-13 X4 shapes; docs/spec-deviations.md /
+# FINAL_REVIEW §3). Those are kept OUT of the base SCHEMAS so the graph-side
+# suites (graph / state / remove) don't carry out-of-W4Fragment shapes.
+_SPEC_SCHEMAS = {**SCHEMAS, **TTU_USERSET_SCHEMAS}
 
 
 def _oracle_answers(schema_text, tuples, queries):
@@ -32,9 +41,9 @@ def _oracle_answers(schema_text, tuples, queries):
     return [orc.check(*q) for q in queries]
 
 
-@pytest.mark.parametrize("name", sorted(SCHEMAS))
+@pytest.mark.parametrize("name", sorted(_SPEC_SCHEMAS))
 def test_spec_vs_oracle(name):
-    schema_text, tuples, obj_wild = SCHEMAS[name]
+    schema_text, tuples, obj_wild = _SPEC_SCHEMAS[name]
     try:
         runner.zcli_path()
     except runner.ZcliUnavailable:
@@ -50,9 +59,9 @@ def test_spec_vs_oracle(name):
                       f"(ADJUDICATION EVENT — plan §8.2):\n{_fmt(mism, 'spec', 'oracle')}")
 
 
-@pytest.mark.parametrize("name", sorted(SCHEMAS))
+@pytest.mark.parametrize("name", sorted(_SPEC_SCHEMAS))
 def test_spec_vs_setengine(name):
-    schema_text, tuples, obj_wild = SCHEMAS[name]
+    schema_text, tuples, obj_wild = _SPEC_SCHEMAS[name]
     try:
         runner.zcli_path()
     except runner.ZcliUnavailable:
@@ -68,10 +77,10 @@ def test_spec_vs_setengine(name):
                       f"(ADJUDICATION EVENT — plan §8.2):\n{_fmt(mism, 'spec', 'setengine')}")
 
 
-@pytest.mark.parametrize("name", sorted(SCHEMAS))
+@pytest.mark.parametrize("name", sorted(_SPEC_SCHEMAS))
 def test_oracle_vs_setengine(name):
     """Independent of the Lean toolchain — always runs."""
-    schema_text, tuples, obj_wild = SCHEMAS[name]
+    schema_text, tuples, obj_wild = _SPEC_SCHEMAS[name]
     queries = queries_for(schema_text, tuples)
     oracle = _oracle_answers(schema_text, tuples, queries)
     se = setengine_answers(schema_text, tuples, queries, obj_wild)

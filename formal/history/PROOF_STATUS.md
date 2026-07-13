@@ -8,6 +8,54 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-13 (X4 adjudication ANCHORED to `sem` — three spec-side TTU userset-subject conformance corpora; harness + docs only, NO Lean changes, NO claim widening)
+
+The 2026-07-13 X4 fix (previous entry) followed the ORACLE where the boolean
+spec is SILENT on userset-shaped subjects flowing through a TTU's stored
+tupleset parents. Gap noticed this session: the formal trust root `sem` had
+**never been consulted on those exact shapes** — `corpus.py` carried no corpus
+that put a from-chain / cross-object userset subject over a TTU, so the
+adjudication rested on the oracle alone, unanchored to the Lean spec the oracle
+stands in for. Closed it.
+
+**What landed** (`formal/conformance/`):
+* `corpus.py` — new module-level `TTU_USERSET_SCHEMAS` (3 corpora), separate
+  from `SCHEMAS`: (a) `ttu_fromchain` — from-chain userset through an UNTAINTED
+  TTU (`inherited: viewer from parent`, `doc:d1#viewer` ∈ `inherited@doc:d2`);
+  (b) `ttu_fromchain_group` — the cross-object membership LIFT (`group:g1#member`
+  an editor of `doc:d2`, member of `inherited@doc:d1` via parent); (c)
+  `derived_ttu_fromchain` — from-chain userset through a TTU over a DERIVED
+  (boolean) target (`viewer: editor but not banned`), the genuinely derived-TTU
+  case central to X4 (cf. `demorgans_reverse.fga`), minimized.
+* `test_conformance_spec.py` — the three FULL-SCOPE comparisons (spec `sem` /
+  oracle / set engine) now parametrize over `{**SCHEMAS, **TTU_USERSET_SCHEMAS}`.
+  T1 places no fragment restriction on the set engine and `sem`/oracle are the
+  reference for every stratifiable schema, so these comparisons legitimately
+  carry the new shapes.
+
+**Scope honesty.** `TTU_USERSET_SCHEMAS` is DELIBERATELY separate from `SCHEMAS`
+(and thus absent from `GRAPH_FRAGMENT`): the shapes are outside `W4Fragment`
+(`computedOnly` bans `ttu` leaves in derived defs; `PDerivedTTU` plan leaves are
+a documented proof gap), so `test_conformance_graph` / `_state` / `_random` /
+`_remove` (which iterate `SCHEMAS` and drive the graph index) must NOT carry
+them. Only the spec-side comparisons do. No theorem, gate, bound, or fragment
+widened; the Lean tree is untouched.
+
+**Attack-first.** Before adding, a scratch probe ran all three shapes through
+oracle + set engine + zcli `sem`: on every from-chain / cross-object userset
+query the shape reproduces (oracle == set engine == True, matching the oracle
+the graph was fixed toward) AND `sem` agrees — spec == oracle == set engine on
+ALL queries, zero disagreement. The good outcome: the adjudication is anchored,
+not contradicted. (Had `sem` disagreed, the fix would have been pinned to the
+oracle AGAINST the formal spec — a finding worth surfacing; it did not.) Scratch
+deleted after recording.
+
+**Evidence.** `test_conformance_spec.py` 51 → 60 (20 corpora × 3); full
+conformance suite 248 → 257, 0 skips; `verify.sh` green (Lean unchanged, 0
+sorries, axiom audit unchanged). Docs: HANDOFF status + count + the ranked
+optional items annotated; FINAL_REVIEW §1 count + §3 resolved-note anchor;
+this entry.
+
 ## Session 2026-07-13 (lookup-gate divergences X1–X4 FIXED, Python-side only — repo-side code + docs; NO Lean changes, NO formal-claim widening)
 
 All four pinned divergences from the 2026-07-12n lookup-surface oracle gate

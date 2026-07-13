@@ -302,3 +302,82 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
     "cross_stratum_resettle",
     "star_two_strata_churn",
 )
+
+# ---------------------------------------------------------------------------
+# TTU userset-subject corpora — SPEC-SIDE ONLY (spec `sem` × oracle × set engine).
+#
+# These pin the Lean spec `sem` on the exact shapes the 2026-07-13 X4 fix
+# adjudicated to the ORACLE: userset-shaped subjects whose truth flows through a
+# TTU's stored tupleset parents (the from-chain identity rule, and the
+# cross-object membership lift). The boolean spec is SILENT on those shapes
+# (docs/spec-deviations.md 2026-07-13; formal/FINAL_REVIEW.md §3), so the fix
+# followed the oracle — and `sem` is the formal trust root that oracle stands in
+# for. These corpora check the choice is anchored: probed 2026-07-13, sem ==
+# oracle == set engine on every grid query (the from-chain userset answers True
+# on all three, matching the oracle the graph was fixed toward).
+#
+# DELIBERATELY separate from SCHEMAS (and thus from GRAPH_FRAGMENT): the shapes
+# are OUTSIDE `W4Fragment` (`computedOnly` bans `ttu` leaves in derived defs;
+# `PDerivedTTU` plan leaves are a documented proof gap — FINAL_REVIEW §3 item 3),
+# so the graph conformance / state / remove gates must NOT carry them. Only
+# test_conformance_spec's comparisons consume them — those are full-scope (T1
+# places no fragment restriction on the set engine; `sem`/oracle are the
+# reference for every stratifiable schema).
+# ---------------------------------------------------------------------------
+
+TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
+    # (a) X4 shape (a): from-chain userset through an UNTAINTED TTU. doc:d1#viewer
+    # is a member of `inherited` on doc:d2 — d2's parent is d1, and d1#viewer
+    # trivially has viewer on d1 (the from-chain identity rule the graph's
+    # untainted TTU path materializes as a rewrite edge).
+    "ttu_fromchain": (
+        """
+        type user
+        type doc
+          define viewer: [user]
+          define parent: [doc]
+          define inherited: viewer from parent
+        """,
+        [mk_tuple("...", "user", "alice", "viewer", "doc", "d1"),
+         mk_tuple("...", "doc", "d1", "parent", "doc", "d2")],
+        (),
+    ),
+    # (b) X4 shape (b): cross-object userset LIFT through a TTU. group:g1#member
+    # is an editor of doc:d2 via a userset grant, and doc:d2 is the parent of
+    # doc:d1, so group:g1#member is a member of `inherited` on doc:d1 — a
+    # membership that flows across objects (the graph residue-`upos` lift).
+    "ttu_fromchain_group": (
+        """
+        type user
+        type group
+          define member: [user]
+        type doc
+          define editor: [user, group#member]
+          define parent: [doc]
+          define inherited: editor from parent
+        """,
+        [mk_tuple("...", "user", "alice", "member", "group", "g1"),
+         mk_tuple("member", "group", "g1", "editor", "doc", "d2"),
+         mk_tuple("...", "doc", "d2", "parent", "doc", "d1")],
+        (),
+    ),
+    # (c) from-chain userset through a TTU over a DERIVED (boolean) target
+    # relation: folder:f1#viewer (viewer = editor but not banned) is a member of
+    # `inherited` on doc:d1 (d1's parent is f1). The genuinely derived-TTU case
+    # central to X4 (cf. demorgans_reverse.fga), minimized.
+    "derived_ttu_fromchain": (
+        """
+        type user
+        type folder
+          define editor: [user]
+          define banned: [user]
+          define viewer: editor but not banned
+        type doc
+          define parent: [folder]
+          define inherited: viewer from parent
+        """,
+        [mk_tuple("...", "user", "alice", "editor", "folder", "f1"),
+         mk_tuple("...", "folder", "f1", "parent", "doc", "d1")],
+        (),
+    ),
+}

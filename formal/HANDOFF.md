@@ -36,11 +36,11 @@ never rounds up to "the code is formally verified" (plan §7).
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
    + **0 sorries** + zcli + axiom audit (412 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + 248 Python conformance
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + 257 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
-   gates, and the zcli mode-rejection tests; the gate
+   gates, the TTU userset-subject spec corpora, and the zcli mode-rejection tests; the gate
    fails closed on any skip or zero passes). Add new key theorems to
    `lean/ZanzibarProofs/Audit.lean`.
 4. **Rhythm.** Commit each green increment with a `formal: <stage> — <what>` message;
@@ -165,7 +165,7 @@ remove legs stay open), the **generated-schema answer gate**
 (`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
 corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
 level), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` are all landed and gated.
-verify.sh: 248 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
+verify.sh: 257 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
 map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
 `history/`. The one known check-level graph-vs-set divergence (derived-TTU
 userset subjects — outside `W4Fragment` and the conformance grids) was FIXED
@@ -173,21 +173,41 @@ userset subjects — outside `W4Fragment` and the conformance grids) was FIXED
 now plain regression pins, Lean untouched — see `FINAL_REVIEW.md` §3's
 resolved note and `docs/spec-deviations.md` 2026-07-13.
 
+**Done 2026-07-13 (spec-side, no Lean changes) — the X4 adjudication is now
+anchored to `sem`.** The 2026-07-13 X4 fix followed the ORACLE where the boolean
+spec is SILENT on userset subjects through a TTU's stored tupleset parents; the
+formal trust root (`sem`) had never been consulted on those exact shapes (no
+corpus exercised them). Three spec-side corpora now do — `TTU_USERSET_SCHEMAS`
+in `corpus.py` (from-chain userset through an untainted TTU; the cross-object
+membership lift; from-chain userset through a TTU over a DERIVED boolean target),
+consumed ONLY by `test_conformance_spec.py`'s full-scope spec/oracle/set-engine
+comparisons (T1 places no fragment restriction). Result: `sem` == oracle == set
+engine on every grid query (the from-chain userset answers True on all three,
+matching the oracle the graph was fixed toward) — the adjudication is anchored,
+not merely asserted. Kept OUT of `SCHEMAS`/`GRAPH_FRAGMENT` on purpose: the
+shapes are outside `W4Fragment`, so the graph/state/remove gates must not carry
+them. Conformance 248 → 257 (+9 = 3 corpora × 3 comparisons).
+
 What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
 
 1. **Fragment widening** — union-rooted derived defs first (`rootB` gap; the
    12k probe found NO behavioral divergence there, so the model is likely
-   already faithful and only the proof is missing).
+   already faithful and only the proof is missing). **[my recommendation #2 — the
+   highest value-per-effort next step: no answer-level pin exists for the
+   `rootB` gap, and closing it un-excludes `taint_union_over_boolean` from
+   `GRAPH_FRAGMENT`, widening the gate with the theorem.]**
 2. **Remove legs** (the diffing pass models retraction but the Lean chain is
    add-only; BOTH Python remove paths are now pinned at answer level by
    `test_conformance_remove.py` — the set engine at rebuild-fingerprint level, the
    graph index by fresh-build state convergence + full drain — so only the Lean
-   legs remain the open part).
+   legs remain the open part). **[my recommendation #3, second half — biggest
+   lift, highest ceiling: makes the Lean model a post-remove reference.]**
 3. **Widening the state/enumeration bounds** — graph backend inside the
    enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
    (The current bounds, their runtime rationale, and why the graph side was
    left out are documented in `test_conformance_enum.py`'s module docstring —
-   read it first; it is half the plan.)
+   read it first; it is half the plan.) **[my recommendation #3, first half —
+   Python-only; the graph-in-enumeration half is the meaty part.]**
 4. ~~**Fixing the derived-TTU userset-subject divergence** pinned in
    `tests/test_lookup_oracle.py`, then flipping its strict xfails.~~ ✅ **DONE
    (2026-07-13, Python-side — Lean untouched, `W4Fragment` unchanged;
