@@ -29,63 +29,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlmodel import Session, SQLModel, create_engine
-
 from setengine import SetEngine, PySets, RoaringSets
 from setengine.setops import SetOps
 from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
 from tests.wildcard_helpers import make_wildcard_index
 
+# Shared plumbing (RSS reader, session, time-boxed timing) -- see benchmarks/_harness.py.
+# peak_rss_mb / _fresh_session are thin adapters kept so the call sites below read
+# unchanged; timed() is re-exported (its 3rd return value, iters-completed, is unused here).
+from benchmarks._harness import rss_mb, timed, fresh_session as _fresh_session
 
-# ---------------------------------------------------------------------------
-# Memory / timing helpers
-# ---------------------------------------------------------------------------
 
 def peak_rss_mb() -> float | None:
-    """Best-effort peak resident set size in MB (roaring lives in C, so this matters)."""
-    try:
-        import resource  # POSIX
-        kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        return kb / 1024.0
-    except ImportError:
-        pass
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        class PMC(ctypes.Structure):
-            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
-                        ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
-                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                        ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
-
-        counters = PMC()
-        counters.cb = ctypes.sizeof(PMC)
-        k32 = ctypes.windll.kernel32
-        k32.GetCurrentProcess.restype = ctypes.c_void_p     # HANDLE is 64-bit; avoid truncation
-        psapi = ctypes.windll.psapi
-        psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD]
-        if psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
-            return counters.PeakWorkingSetSize / (1024.0 * 1024.0)
-    except Exception:
-        pass
-    return None
-
-
-def _fresh_session() -> Session:
-    engine = create_engine('sqlite:///:memory:')
-    SQLModel.metadata.create_all(engine)
-    return Session(engine)
-
-
-def timed(fn, iters: int) -> tuple[float, float]:
-    """Return (ops_per_sec, elapsed_s) for `iters` invocations of fn(i)."""
-    start = time.perf_counter()
-    for i in range(iters):
-        fn(i)
-    elapsed = time.perf_counter() - start
-    return (iters / elapsed if elapsed else float('inf')), elapsed
+    return rss_mb('peak')
 
 
 # ---------------------------------------------------------------------------
@@ -178,8 +134,8 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
     print(header)
     for ops in ops_list:
         se = build_deep_set(ops, depth, chains)
-        rate, el = timed(lambda i: se.check('...', 'user', f'u{i % chains}', 'member',
-                                            'group', f'g{i % chains}_{depth}'), checks)
+        rate, el, _ = timed(lambda i: se.check('...', 'user', f'u{i % chains}', 'member',
+                                               'group', f'g{i % chains}_{depth}'), checks)
         rss = peak_rss_mb()
         print(f'{"deep check":<22}{ops.name:<10}{rate:>14,.0f}{el:>14.3f}'
               f'{(f"{rss:.0f}" if rss else "n/a"):>14}')
@@ -187,8 +143,8 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
 
     # (a') graph comparison -- read AND write
     session, widx = build_deep_graph(depth, chains)
-    rate, el = timed(lambda i: widx.check('...', 'user', f'u{i % chains}', 'member',
-                                          'group', f'g{i % chains}_{depth}'), checks)
+    rate, el, _ = timed(lambda i: widx.check('...', 'user', f'u{i % chains}', 'member',
+                                             'group', f'g{i % chains}_{depth}'), checks)
     rss = peak_rss_mb()
     print(f'{"deep check":<22}{"graph":<10}{rate:>14,.0f}{el:>14.3f}'
           f'{(f"{rss:.0f}" if rss else "n/a"):>14}')
@@ -220,7 +176,7 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
     print(header)
     for ops in ops_list:
         se = build_wide(ops, pop, blocked)
-        rate, el = timed(lambda i: se.expand('viewer', 'doc', 'd'), max(1, checks // 100))
+        rate, el, _ = timed(lambda i: se.expand('viewer', 'doc', 'd'), max(1, checks // 100))
         rss = peak_rss_mb()
         print(f'{"wide expand":<22}{ops.name:<10}{rate:>14,.1f}{el:>14.3f}'
               f'{(f"{rss:.0f}" if rss else "n/a"):>14}')
@@ -232,7 +188,7 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
     for ops in ops_list:
         se = build_wide(ops, pop, blocked)
         m = se.expand('viewer', 'doc', 'd')                    # one expand, reused
-        rate, el = timed(lambda i: m.contains_entity(i % max(1, pop), 'user'), checks)
+        rate, el, _ = timed(lambda i: m.contains_entity(i % max(1, pop), 'user'), checks)
         rss = peak_rss_mb()
         print(f'{"batch membership":<22}{ops.name:<10}{rate:>14,.0f}{el:>14.3f}'
               f'{(f"{rss:.0f}" if rss else "n/a"):>14}')

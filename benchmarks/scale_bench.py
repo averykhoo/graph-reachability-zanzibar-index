@@ -1,29 +1,43 @@
-"""Scaling benchmark: does per-check latency grow with tuple count? (review-3 follow-up)
+"""Scaling benchmark: do the read surfaces (check / lookup / reverse) and the
+write path grow with tuple count? (review-3 follow-up, extended for lookup.)
 
 Unlike ``set_engine_bench.py`` (synthetic deep/wide micro-schemas), this runs the
 REAL fixture schemas at increasing data sizes and reports, per backend:
 
   * tuple count actually loaded,
   * build time (raw-tuple load; for the graph, closure materialisation + one
-    ``backfill()`` for boolean schemas),
+    ``backfill()`` for boolean schemas) -- the WRITE surface,
   * peak/current RSS after build (memory footprint at scale),
-  * check throughput over a fixed, representative query mix,
-  * whether check throughput is FLAT or DEGRADES as N grows (the OpenFGA question).
+  * throughput of the three read surfaces over fixed, representative query mixes:
+      - ``check``          -- one (subject, relation, object) point query,
+      - ``lookup``         -- everything a subject can reach,
+      - ``lookup_reverse`` -- everything that can reach an object,
+  * whether each stays FLAT or DEGRADES as N grows (the OpenFGA question).
 
-Two workloads:
+Three schema-complexity tiers:
+  * ``simple``   -- a direct-only ``define viewer: [user]`` floor: no hierarchy,
+                    no booleans. Isolates the per-op constant cost from traversal.
   * ``gdrive``   -- pure-union TTU/computed hierarchy (folders, groups, docs). The
                     graph index materialises the full closure; the set engine walks
-                    it on the fly. Local queries (a doc + its ancestor folders +
-                    their groups) touch a bounded neighbourhood regardless of N.
+                    it on the fly. Local checks touch a bounded neighbourhood
+                    regardless of N.
   * ``demorgans``-- demorgans_law_2.fga: a 5-level boolean+TTU derived cascade over
                     attrs/conds/roles. Graph maintains derived state via the
                     processor; set engine evaluates the booleans pointwise.
 
+Note on ``lookup``: the set engine's ``lookup`` is a full-store candidate sweep
+(one ``check`` per interned key -- O(stored tuples) per call), so it is EXPECTED to
+degrade with N, unlike ``check``. The graph walks the materialised closure, so its
+lookup is bounded by the reachable set. That asymmetry is the headline this bench
+now captures. Timing is time-boxed (``--time-box``) so a slow lookup at large N
+can't hang the sweep.
+
 Run ONE (workload, backend, scale) per process so RSS is clean:
 
-    python -m benchmarks.scale_bench --workload gdrive   --backend set   --scale 1000
-    python -m benchmarks.scale_bench --workload gdrive   --backend graph --scale 250
-    python -m benchmarks.scale_bench --workload demorgans --backend set  --scale 400
+    python -m benchmarks.scale_bench --workload gdrive    --backend set   --scale 1000
+    python -m benchmarks.scale_bench --workload gdrive    --backend graph --scale 250
+    python -m benchmarks.scale_bench --workload demorgans --backend set   --scale 400
+    python -m benchmarks.scale_bench --workload simple    --backend set   --scale 10000
 
 ``--json`` appends a one-line JSON record to benchmarks/results/scale_bench.jsonl.
 Deterministic: all data derived by modular arithmetic, no RNG in measured paths.
@@ -40,58 +54,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlmodel import Session, SQLModel, create_engine
+from setengine import PySets, RoaringSets
 
-from setengine import SetEngine, PySets, RoaringSets
-from setengine.setops import SetOps
-from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
-from tests.wildcard_helpers import make_wildcard_index
+from benchmarks._harness import rss_mb, timed, build_set, build_graph
 
 
 # ---------------------------------------------------------------------------
-# Memory / timing
-# ---------------------------------------------------------------------------
-
-def _rss_mb(which: str) -> float | None:
-    """current or peak working-set in MB (Windows PSAPI / POSIX rusage)."""
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        class PMC(ctypes.Structure):
-            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
-                        ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
-                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                        ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
-
-        c = PMC(); c.cb = ctypes.sizeof(PMC)
-        k32 = ctypes.windll.kernel32
-        k32.GetCurrentProcess.restype = ctypes.c_void_p
-        psapi = ctypes.windll.psapi
-        psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD]
-        if psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(c), c.cb):
-            field = c.PeakWorkingSetSize if which == 'peak' else c.WorkingSetSize
-            return field / (1024.0 * 1024.0)
-    except Exception:
-        pass
-    try:
-        import resource
-        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
-    except Exception:
-        return None
-
-
-def timed(fn, iters: int) -> tuple[float, float]:
-    start = time.perf_counter()
-    for i in range(iters):
-        fn(i)
-    elapsed = time.perf_counter() - start
-    return (iters / elapsed if elapsed else float('inf')), elapsed
-
-
-# ---------------------------------------------------------------------------
-# Schemas (the real fixtures)
+# Schemas (the real fixtures + a direct-only floor)
 # ---------------------------------------------------------------------------
 
 _FIX = Path(__file__).resolve().parent.parent / 'tests' / 'fga_schemas'
@@ -105,10 +74,55 @@ GDRIVE = (_FIX / 'gdrive.fga').read_text()
 # real conditions and attributes.
 DEMORGANS = (_FIX / 'demorgans_law_2.fga').read_text()
 
+# The complexity floor: one direct relation, no hierarchy, no booleans, no stars.
+# Every read surface here measures raw per-op overhead with a trivial neighbourhood.
+SIMPLE = '''
+type user
+type doc
+  relations
+    define viewer: [user]
+'''
+
 
 # ---------------------------------------------------------------------------
-# Data generators (deterministic; yield raw septuples)
+# Data + query generators (deterministic; tuples are raw septuples)
 # ---------------------------------------------------------------------------
+
+# --- simple (direct-only floor) --------------------------------------------
+
+_SIMPLE_VIEWERS = 4
+
+
+def gen_simple(n: int):
+    """N docs over a user pool of N; each doc has _SIMPLE_VIEWERS direct viewers."""
+    for d in range(n):
+        for v in range(_SIMPLE_VIEWERS):
+            yield ('...', 'user', f'u{(d + v) % n}', 'viewer', 'doc', f'd{d}')
+
+
+def simple_checks(n: int, count: int):
+    qs = []
+    for i in range(count):
+        d = i % n
+        if i % 3 == 2:
+            qs.append(('...', 'user', f'ghost{i}', 'viewer', 'doc', f'd{d}'))     # miss
+        else:
+            qs.append(('...', 'user', f'u{(d + (i % _SIMPLE_VIEWERS)) % n}', 'viewer', 'doc', f'd{d}'))  # hit
+    return qs
+
+
+def simple_lookups(n: int, count: int):
+    """Subjects to expand. Reals reach ~_SIMPLE_VIEWERS docs; ghosts reach nothing."""
+    return [('...', 'user', f'ghost{i}') if i % 4 == 2 else ('...', 'user', f'u{i % n}')
+            for i in range(count)]
+
+
+def simple_reverses(n: int, count: int):
+    return [('viewer', 'doc', f'ghost{i}') if i % 4 == 2 else ('viewer', 'doc', f'd{i % n}')
+            for i in range(count)]
+
+
+# --- gdrive (pure-union hierarchy) -----------------------------------------
 
 def gen_gdrive(n: int, *, group_size: int = 8, chain_len: int = 5,
                viewers_per_doc: int = 3):
@@ -155,6 +169,30 @@ def gdrive_queries(n: int, count: int):
             qs.append(('...', 'user', f'u{(d + 2) % n}', 'can_read', 'doc', f'd{d}'))  # viewer
     return qs
 
+
+def gdrive_lookups(n: int, count: int):
+    """Subjects to expand: a user reaches its groups, owned folders/docs, and
+    viewer-granted docs. Ghosts reach nothing."""
+    return [('...', 'user', f'ghost{i}') if i % 4 == 2 else ('...', 'user', f'u{i % n}')
+            for i in range(count)]
+
+
+def gdrive_reverses(n: int, count: int):
+    """Reverse targets: who can_read a doc (deep TTU fan-in), who is viewer of a
+    folder (group + direct), and ghost objects (empty)."""
+    qs = []
+    for i in range(count):
+        kind = i % 3
+        if kind == 0:
+            qs.append(('can_read', 'doc', f'd{i % n}'))
+        elif kind == 1:
+            qs.append(('viewer', 'folder', f'f{i % n}'))
+        else:
+            qs.append(('can_read', 'doc', f'ghost{i}'))     # miss
+    return qs
+
+
+# --- demorgans (boolean + TTU cascade) -------------------------------------
 
 _DM_USERS_PER_ROLE = 6
 _DM_ROLES_PER_DOC = 2
@@ -231,99 +269,100 @@ def demorgans_queries(n: int, count: int):
     return qs
 
 
+def demorgans_lookups(n: int, count: int):
+    """Subjects to expand: a real user reaches its attrs (has_attr) and roles
+    (assigned); ghosts reach nothing."""
+    n_users, _, _, _ = _demorgans_sizes(n)
+    return [('...', 'user', f'ghost{i}') if i % 4 == 2 else ('...', 'user', f'u{i % n_users}')
+            for i in range(count)]
+
+
+def demorgans_reverses(n: int, count: int):
+    """Reverse targets: who has ``access`` to a doc (the boolean cascade + star
+    markers), and ghost docs (empty)."""
+    return [('access', 'doc', f'ghost{i}') if i % 3 == 2 else ('access', 'doc', f'd{i % n}')
+            for i in range(count)]
+
+
 WORKLOADS = {
-    'gdrive':   (GDRIVE,   gen_gdrive,    gdrive_queries,    frozenset({('doc', 'viewer'), ('folder', 'viewer')})),
-    'demorgans': (DEMORGANS, gen_demorgans, demorgans_queries, frozenset()),
+    'simple': dict(schema=SIMPLE, shapes=frozenset(), gen=gen_simple,
+                   checks=simple_checks, lookups=simple_lookups, reverses=simple_reverses),
+    'gdrive': dict(schema=GDRIVE, shapes=frozenset({('doc', 'viewer'), ('folder', 'viewer')}),
+                   gen=gen_gdrive, checks=gdrive_queries, lookups=gdrive_lookups,
+                   reverses=gdrive_reverses),
+    'demorgans': dict(schema=DEMORGANS, shapes=frozenset(), gen=gen_demorgans,
+                      checks=demorgans_queries, lookups=demorgans_lookups,
+                      reverses=demorgans_reverses),
 }
-
-
-# ---------------------------------------------------------------------------
-# Backend builders
-# ---------------------------------------------------------------------------
-
-def _fresh_session() -> Session:
-    engine = create_engine('sqlite:///:memory:')
-    SQLModel.metadata.create_all(engine)
-    return Session(engine)
-
-
-def build_set(schema: str, shapes, ops: SetOps, tuples) -> tuple[SetEngine, int]:
-    se = SetEngine(_fresh_session(), 'sb', schema, object_wildcard_shapes=shapes, ops=ops)
-    n = 0
-    for raw in tuples:
-        se.add_tuple(*raw)
-        n += 1
-    se.session.commit()
-    return se, n
-
-
-def build_graph(schema: str, shapes, tuples) -> tuple[object, int]:
-    from index_v4.processor import DeltaProcessor
-    ruleset = parse_openfga_schema(schema, object_wildcard_shapes=shapes)
-    session, widx = make_wildcard_index(ruleset.schema_info, store_id='gb', paranoia=False)
-    n = 0
-    for raw in tuples:
-        sp = Ellipsis if raw[0] == '...' else raw[0]
-        tr = RelationalTriple(Entity(raw[1], raw[2]), raw[3], Entity(raw[4], raw[5]), sp)
-        for d in ruleset.apply(tr):
-            widx.add_tuple('...' if d.subject_predicate is Ellipsis else d.subject_predicate,
-                           d.subject.type, d.subject.name, d.relation, d.object.type, d.object.name)
-        n += 1
-    proc = None
-    if ruleset.compiled is not None and ruleset.compiled.plans:
-        proc = DeltaProcessor(widx, ruleset.compiled)
-        proc.backfill()                              # offline bootstrap of derived state
-    widx.idx.session.commit()
-    return widx, n
 
 
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
-def run(workload: str, backend: str, scale: int, checks: int, ops_name: str,
-        emit_json: bool) -> None:
-    schema, gen, queries, shapes = WORKLOADS[workload]
-    tuples = list(gen(scale))
-    q = queries(scale, checks)
+def _rsz(result) -> int:
+    """Result magnitude: concrete ids + symbolic markers (both backends)."""
+    return len(result.node_ids) + len(result.markers)
+
+
+def run(workload: str, backend: str, scale: int, checks: int, lookups: int,
+        time_box: float, ops_name: str, emit_json: bool) -> None:
+    spec = WORKLOADS[workload]
+    schema, shapes = spec['schema'], spec['shapes']
+    tuples = list(spec['gen'](scale))
+    cq = spec['checks'](scale, checks)
+    lq = spec['lookups'](scale, lookups)
+    rq = spec['reverses'](scale, lookups)
 
     gc.collect()
-    rss_before = _rss_mb('current')
+    rss_before = rss_mb('current')
     t0 = time.perf_counter()
     if backend == 'set':
         ops = RoaringSets if (ops_name == 'roaring' and RoaringSets) else PySets
         be, n = build_set(schema, shapes, ops, tuples)
-        check = be.check
         impl = f'set:{ops.name}'
     else:
         be, n = build_graph(schema, shapes, tuples)
-        check = be.check
         impl = 'graph'
     build_s = time.perf_counter() - t0
     gc.collect()
-    rss_after = _rss_mb('current')
-    rss_peak = _rss_mb('peak')
+    rss_after = rss_mb('current')
+    rss_peak = rss_mb('peak')
 
-    # correctness spot-check: at least one query must be True and one False, else
-    # the query mix is degenerate and the throughput number is meaningless
-    sample = [bool(check(*qq)) for qq in q[:200]]
+    check, lookup, reverse = be.check, be.lookup, be.lookup_reverse
+
+    # check correctness spot-check: at least one True and one False over the sample,
+    # else the query mix is degenerate and the throughput number is meaningless.
+    sample = [bool(check(*qq)) for qq in cq[:200]]
     trues = sum(sample)
     assert 0 < trues < len(sample), (
-        f'degenerate query mix ({trues}/{len(sample)} true): throughput would be meaningless')
+        f'degenerate check mix ({trues}/{len(sample)} true): throughput would be meaningless')
     # Per-query answer signature over the sample: equal sigs for two backends at the
-    # same (workload, scale) prove per-query agreement on these 200 queries; equal
-    # trues_of_200 counts alone would not.
+    # same (workload, scale) prove per-query agreement on these 200 queries.
     answers_sig = f'{int("".join("01"[b] for b in sample), 2):x}'
-    rate, el = timed(lambda i: check(*q[i % len(q)]), checks)
+
+    # lookup / reverse non-degeneracy: a small pre-sample (kept tiny because set
+    # lookup is O(stored tuples) per call) must produce at least one non-empty
+    # result, else we'd be timing an all-empty fast path. Also captures mean size.
+    l_sizes = [_rsz(lookup(*qq)) for qq in lq[:5]]
+    r_sizes = [_rsz(reverse(*qq)) for qq in rq[:5]]
+    assert any(s > 0 for s in l_sizes), 'degenerate lookup mix (all empty)'
+    assert any(s > 0 for s in r_sizes), 'degenerate reverse mix (all empty)'
+
+    check_rate, _, check_done = timed(lambda i: check(*cq[i % len(cq)]), checks, time_box)
+    lookup_rate, _, lookup_done = timed(lambda i: lookup(*lq[i % len(lq)]), lookups, time_box)
+    reverse_rate, _, reverse_done = timed(lambda i: reverse(*rq[i % len(rq)]), lookups, time_box)
 
     tuples_ram = (rss_after - rss_before) if (rss_after and rss_before) else None
     print(f'\n{workload}/{impl}  scale={scale}')
     print(f'  raw tuples loaded : {n:,}')
-    print(f'  build time        : {build_s:,.2f} s  ({n / build_s:,.0f} writes/s)')
+    print(f'  build (write)     : {build_s:,.2f} s  ({n / build_s:,.0f} writes/s)')
     print(f'  RSS after build   : {rss_after:,.0f} MB' if rss_after else '  RSS: n/a')
     print(f'  RSS delta (data)  : {tuples_ram:,.0f} MB' if tuples_ram is not None else '')
     print(f'  peak RSS          : {rss_peak:,.0f} MB' if rss_peak else '')
-    print(f'  check throughput  : {rate:,.0f} checks/s  ({checks} checks, {trues}/200 true)')
+    print(f'  check             : {check_rate:>12,.1f} /s  ({check_done} done, {trues}/200 true)')
+    print(f'  lookup            : {lookup_rate:>12,.1f} /s  ({lookup_done} done, ~{max(l_sizes)} max result)')
+    print(f'  lookup_reverse    : {reverse_rate:>12,.1f} /s  ({reverse_done} done, ~{max(r_sizes)} max result)')
     print(f'  answers signature : {answers_sig}')
 
     if emit_json:
@@ -334,8 +373,12 @@ def run(workload: str, backend: str, scale: int, checks: int, ops_name: str,
                    rss_after_mb=round(rss_after, 1) if rss_after else None,
                    rss_delta_mb=round(tuples_ram, 1) if tuples_ram is not None else None,
                    peak_rss_mb=round(rss_peak, 1) if rss_peak else None,
-                   checks=checks, checks_per_s=round(rate, 1), trues_of_200=trues,
-                   answers_sig=answers_sig)
+                   checks=check_done, checks_per_s=round(check_rate, 1),
+                   lookups=lookup_done, lookups_per_s=round(lookup_rate, 2),
+                   reverses=reverse_done, reverses_per_s=round(reverse_rate, 2),
+                   mean_lookup_size=round(sum(l_sizes) / len(l_sizes), 1),
+                   mean_reverse_size=round(sum(r_sizes) / len(r_sizes), 1),
+                   trues_of_200=trues, answers_sig=answers_sig)
         with (out / 'scale_bench.jsonl').open('a') as fh:
             fh.write(json.dumps(rec) + '\n')
 
@@ -351,10 +394,14 @@ def main():
     p.add_argument('--backend', choices=['set', 'graph'], required=True)
     p.add_argument('--scale', type=int, required=True, help='N (users≈groups≈folders≈docs)')
     p.add_argument('--checks', type=int, default=5000)
+    p.add_argument('--lookups', type=int, default=500,
+                   help='iteration cap for lookup / lookup_reverse (also time-boxed)')
+    p.add_argument('--time-box', type=float, default=20.0, dest='time_box',
+                   help='per-surface wall-clock cap (s); a slow lookup at large N stops here')
     p.add_argument('--impl', choices=['py', 'roaring'], default='roaring')
     p.add_argument('--json', action='store_true', help='append a record to results/scale_bench.jsonl')
     a = p.parse_args()
-    run(a.workload, a.backend, a.scale, a.checks, a.impl, a.json)
+    run(a.workload, a.backend, a.scale, a.checks, a.lookups, a.time_box, a.impl, a.json)
 
 
 if __name__ == '__main__':
