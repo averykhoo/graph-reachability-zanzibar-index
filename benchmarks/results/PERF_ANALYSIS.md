@@ -141,11 +141,15 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
    drop `ops.new()` (contract: `pop` may yield a bare iterable). Needs a `SetOps`
    bulk-union primitive that accepts an iterable without a full intermediate copy,
    or an engine-level guarantee that `pop` returns an ops set. Medium risk.
-2. **set-engine `lookup` — O(N) → aim for O(result).** Biggest structural win:
-   both backends, R²=1.000 linear, and the graph already demonstrates the flat
-   alternative. A reverse/per-subject index removes the full-store candidate
-   sweep. *(Algorithm change — updates the Lean model per CLAUDE.md's "Perf work &
-   the Lean model" note.)*
+2. **set-engine `lookup` — O(N) → O(reachable).** Biggest structural win: both
+   backends, R²=1.000 linear, and the graph already demonstrates the flat
+   alternative. Replace the full-store candidate sweep with an on-the-fly *reverse
+   walk* (the dual of `expand`, reusing the existing `member_of` +
+   `_candidate_reverse_deps` tables) — NOT a materialized per-subject index (that
+   would move cost to writes, defeating the set engine). **Full design +
+   implementation checklist: [`docs/lookup-reverse-walk-plan.md`](../../docs/lookup-reverse-walk-plan.md).**
+   *(Algorithm change — updates the Lean model per CLAUDE.md's "Perf work & the
+   Lean model" note.)*
 3. **graph write path** (closure materialization + boolean `backfill()`), 15–156
    writes/s — the only thing blocking graph numbers at scale.
 4. check and reverse (roaring) are already O(1) and fast — low leverage.
