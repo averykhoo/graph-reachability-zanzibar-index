@@ -1,0 +1,11 @@
+# OPTIONAL deps for the benchmark ANALYSIS / PLOT tooling -- NOT project runtime,
+# NOT needed to run the benchmarks or the test suite. Kept out of the top-level
+# requirements.txt so CI and the index/engine stay lean.
+#
+#   benchmarks/analyze.py      -- pure Python, needs NONE of these (log-log fits by hand)
+#   benchmarks/plot_curves.py  -- needs matplotlib
+#
+# Installed into the project env on 2026-07-14 for the perf-baseline analysis.
+matplotlib>=3.8
+numpy>=1.26        # handy for ad-hoc analysis; not imported by the committed tools
+# scipy / pandas were also installed for exploration but no committed tool imports them.
