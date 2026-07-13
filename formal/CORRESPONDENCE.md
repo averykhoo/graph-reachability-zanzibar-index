@@ -165,3 +165,27 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   deliberately (a real formal task, not a silent drift). Either way: never let
   the code and the model diverge unrecorded — if you must ship ahead of the
   model, log it in §7 as an intentional divergence with the reason.
+
+### 8.1 Logged behavior-preserving perf optimizations (no Lean change)
+
+* **P2 — batched closure-region access (`index_v4/core.py`, 2026-07-14).**
+  `_add_direct_edge_unsafe`'s three expansion loops previously called
+  `_add_db_edges_unsafe` once per closure pair, each a point `SELECT` + write
+  (N+1). They now gather the whole `(from, to, indirect_delta)` region and apply
+  it via `_add_indirect_edges_batch_unsafe`: one chunked row-value `IN` `SELECT`,
+  in-memory increments, one flush. **This is below the model's abstraction level
+  and needs no Lean change.** The T4 model (`Closure.lean` `pathCount_addEdge` /
+  `pathCount_removeEdge`, §3 `GraphState.reach`) states the closed-form *final*
+  path counts per pair; the batched code applies the identical per-pair
+  arithmetic (`phat a u · phat v b` products), so the final `EdgeV4` state is
+  unchanged — `DirectGraph` is a pure `V → V → Nat`, with no notion of a DB
+  round-trip to restructure. The outbox model (§4 `pushDelta` /
+  `writeLoggedRules`) is likewise preserved: the loops enumerate **distinct**
+  pairs (subject ∉ ancestors, object ∉ descendants, no self-edges), so each pair
+  already flipped at most once, and the batch emits the same action per pair in
+  the same loop order — the *final* per-pair outbox action `verify_outbox_deltas`
+  and the cascade key off is byte-identical. Observational equivalence (same
+  final edge state + same per-pair delta stream) is what the differential matrix,
+  the outbox/processor tests, the remove-path and hypothesis add/remove-
+  restoration gates, and `verify.sh`'s state-level graph conformance
+  (`test_conformance_state.py`) net empirically.

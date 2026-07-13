@@ -1,4 +1,5 @@
 from types import EllipsisType
+from sqlalchemy import tuple_
 from sqlmodel import Session, select
 
 from legacy.index_v1 import MultiSet
@@ -152,6 +153,98 @@ class ReachabilityIndex:
             if old_indirect == 0 and new_indirect > 0:
                 self._emit(triple.subject_id, triple.object_id, "ADDED")
 
+    def _add_indirect_edges_batch_unsafe(
+            self, deltas: list[tuple[int, int, int]]
+    ) -> None:
+        """Batched, indirect-only form of ``_add_db_edges_unsafe`` for the
+        O(ancestors x descendants) closure region emitted by the expansion loops.
+
+        Each entry is a CONCRETE ``(from_id, to_id, indirect_delta)`` with an
+        implicit ``direct_count == 0`` -- the expansion loops only touch indirect
+        path counts (the direct edge is applied separately: subtracted first on
+        removal, added last on addition). Because those loops enumerate
+        ancestors x descendants plus the subject/object fringes -- and subject is
+        never an ancestor, object never a descendant, and there are no self-edges
+        -- every emitted pair is DISTINCT. So one region ``SELECT`` (chunked
+        row-value ``IN``), in-memory increments, and a single flush reproduce the
+        per-pair ``_add_db_edges_unsafe`` EXACTLY: identical final ref counts,
+        identical delete-when-both-zero, the ``derived`` flag untouched (never a
+        derived grant with ``direct_count == 0``), and one outbox action per pair
+        in loop order (each distinct pair flips at most once, so the *final*
+        per-pair action ``verify_outbox_deltas`` keys off is preserved). This
+        collapses the N+1 point-``SELECT`` round trip (perf handoff P2); the
+        ref-count math below is a faithful copy of ``_add_db_edges_unsafe``
+        specialised to ``direct_count == 0`` concrete endpoints.
+        """
+        if not deltas:
+            return
+
+        # One region read, chunked so the row-value IN never exceeds the driver's
+        # bind-parameter cap (2 params/pair; ~400 pairs stays well under SQLite's
+        # 999 default). Load the WHOLE region before any mutation, so no chunk's
+        # autoflush can observe an increment applied for an earlier chunk (moot for
+        # distinct pairs, but keeps the batch read a pure snapshot).
+        existing: dict[tuple[int, int], EdgeV4] = {}
+        _CHUNK = 400
+        for start in range(0, len(deltas), _CHUNK):
+            pairs = [(f, t) for (f, t, _d) in deltas[start:start + _CHUNK]]
+            rows = self.session.exec(
+                select(EdgeV4).where(EdgeV4.store_id == self.store_id)
+                .where(tuple_(EdgeV4.subject_id, EdgeV4.object_id).in_(pairs))
+            ).all()
+            for r in rows:
+                existing[(r.subject_id, r.object_id)] = r
+
+        for from_id, to_id, indirect_delta in deltas:
+            triple = existing.get((from_id, to_id))
+
+            # Brand-new edge (mirrors the `if not triples` arm of _add_db_edges_unsafe).
+            if triple is None:
+                if not indirect_delta:
+                    continue
+                assert indirect_delta > 0
+                edge = EdgeV4(
+                    store_id=self.store_id,
+                    subject_id=from_id,
+                    object_id=to_id,
+                    direct_edge_count=0,
+                    indirect_edge_count=indirect_delta,
+                    derived=False,  # direct_count == 0 -> never a derived grant
+                )
+                self.session.add(edge)
+                existing[(from_id, to_id)] = edge
+                self._emit(from_id, to_id, "ADDED")
+                continue
+
+            # Update existing edge. With direct_count == 0, new_direct == old_direct,
+            # so direct_will_be_zero iff the direct count was already zero.
+            old_indirect = triple.indirect_edge_count
+            new_indirect = old_indirect + indirect_delta
+
+            # If both fall to zero, delete entirely (direct is zero here iff it was).
+            if triple.direct_edge_count == 0 and new_indirect == 0:
+                self.session.delete(triple)
+                del existing[(from_id, to_id)]
+                self._emit(triple.subject_id, triple.object_id, "REMOVED")
+                continue
+
+            triple.indirect_edge_count = new_indirect
+
+            assert triple.indirect_edge_count >= triple.direct_edge_count
+            assert triple.indirect_edge_count > 0
+
+            # Derived flag follows the direct edge (boolean spec I5): a surviving
+            # indirect-only row is closure state, not a derived grant. With
+            # direct_count == 0 the "set" branch is unreachable; the clear branch
+            # mirrors _add_db_edges_unsafe's `if direct_will_be_zero`.
+            if triple.direct_edge_count == 0:
+                triple.derived = False
+
+            self.session.add(triple)
+
+            if old_indirect == 0 and new_indirect > 0:
+                self._emit(triple.subject_id, triple.object_id, "ADDED")
+
     def _add_direct_edge_unsafe(self, subject_id: int, object_id: int, count: int) -> None:
         assert count in {-1, 1}
 
@@ -204,16 +297,25 @@ class ReachabilityIndex:
         assert reachable_before_subject[object_id] == 0, "Cycle detected in backward path"
         assert reachable_after_object[subject_id] == 0, "Cycle detected in forward path"
 
-        # Expand transitive paths
+        # Expand transitive paths. The three loops enumerate DISTINCT concrete
+        # pairs (subject is never an ancestor, object never a descendant, no
+        # self-edges), each with a pure-indirect delta -- so gathering them and
+        # applying the closure region in one batched pass reproduces the per-pair
+        # _add_db_edges_unsafe EXACTLY while collapsing its N+1 SELECT round trip
+        # (perf handoff P2). The append order below is the original loop order, so
+        # the emitted outbox rows keep their order too.
+        indirect_deltas: list[tuple[int, int, int]] = []
         for from_node_id, from_count in reachable_before_subject.items():
             for to_node_id, to_count in reachable_after_object.items():
-                self._add_db_edges_unsafe(from_node_id, to_node_id, 0, from_count * to_count * count)
+                indirect_deltas.append((from_node_id, to_node_id, from_count * to_count * count))
 
         for to_node_id, path_count in reachable_after_object.items():
-            self._add_db_edges_unsafe(subject_id, to_node_id, 0, path_count * count)
+            indirect_deltas.append((subject_id, to_node_id, path_count * count))
 
         for from_node_id, path_count in reachable_before_subject.items():
-            self._add_db_edges_unsafe(from_node_id, object_id, 0, path_count * count)
+            indirect_deltas.append((from_node_id, object_id, path_count * count))
+
+        self._add_indirect_edges_batch_unsafe(indirect_deltas)
 
         # Add the direct edge last to preserve invariants on addition
         if subject_id != object_id and count > 0:
