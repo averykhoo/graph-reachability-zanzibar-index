@@ -25,11 +25,25 @@ targeted oracle gate for the surface touched (`tests/test_lookup_oracle.py` for
 lookup/expand; `tests/test_matrix.py` for check/write parity). Never edit a
 golden/oracle result to make an opt pass.
 
+**Landed 2026-07-14** (commits `1d60d2b`, `bc20398`, `41fe499`, `75fa0d4`;
+pushed on master, full suite 794 passed + verify.sh all-green): **P0, P2, P5,
+P8**. Integration lesson recorded inline on each. Still open: P1 (has its own
+plan doc), P3, P4, P6, P7, P9–P12.
+
 ---
 
 ## Tier 0 — do first: biggest win, lowest risk, fully independent
 
-### P0. Set-engine writes: drop the per-write `_row` duplicate-check SELECT ⭐ NEW
+### P0. Set-engine writes: drop the per-write `_row` duplicate-check SELECT ✅ LANDED
+> **Done** (`1d60d2b` + fix `75fa0d4`). Measured ~5.9× set-engine build speedup
+> (35.8s→6.1s on 16k tuples). **Integration gotcha:** the removed `_row` SELECT
+> was *implicitly autoflushing* pending ops per add; without it, an uncommitted
+> add→remove→re-add of the same septuple leaves INSERT+DELETE pending on one
+> unique key and SQLAlchemy orders INSERT-before-DELETE → `tuple_v1` UNIQUE
+> violation. Caught by `formal/conformance/test_conformance_remove.py` in the
+> **full** suite — NOT by the subagent's targeted `test_matrix`+hypothesis gate.
+> Fixed with a `session.flush()` in `remove_tuple`. Lesson: run the full suite at
+> integration; targeted gates miss uncommitted-churn interactions.
 - **Where:** `setengine/engine.py:289` (`add_tuple`) → `:313` (`_row`), and the
   mirror in `remove_tuple` (`:307`).
 - **What:** every `add_tuple` issues a 7-column equality `SELECT` against
@@ -83,7 +97,14 @@ golden/oracle result to make an opt pass.
   `lookup` model. Can run concurrently with P0 (different methods, same file — mind
   the merge) and all graph-index items (different module).
 
-### P2. Graph-index writes: batch the O(A×D) closure region SELECT/UPSERT
+### P2. Graph-index writes: batch the O(A×D) closure region SELECT/UPSERT ✅ LANDED
+> **Done** (`41fe499`). Batched the indirect-closure region into one chunked
+> row-value `IN` SELECT + in-memory increments + one flush (`_add_indirect_edges_batch_unsafe`);
+> the direct edge stays a single-pair call to preserve subtract-first/add-last
+> ordering. Lean: **logged observational equivalence** in `CORRESPONDENCE.md §8.1`
+> (zero `.lean` files changed — the batch applies the identical per-pair
+> arithmetic, so final edge state + per-pair outbox actions are unchanged).
+> verify.sh green.
 - **Where:** `index_v4/core.py:208-216` (expansion loops) → `:78-84`
   (`_add_db_edges_unsafe`, one point `SELECT` per pair).
 - **What:** a single edge add grows the closure by ≈`(|ancestors|+1)×(|descendants|+1)`
@@ -128,7 +149,10 @@ golden/oracle result to make an opt pass.
 - **Lean:** none. **Risk:** Low (preserve per-row filter predicates).
   **Independent:** yes.
 
-### P5. Shared `RuleSet.apply`: fast-path the trivial single-match fan-out
+### P5. Shared `RuleSet.apply`: fast-path the trivial single-match fan-out ✅ LANDED
+> **Done** (`bc20398`). Fast-path yields `seeds` directly when the seed relation
+> has no rule candidates; drains in place otherwise. Snapshot byte-identity gate
+> (`test_compile_snapshot.py`) green.
 - **Where:** `zanzibar_utils_v1.py:322-371`.
 - **What:** called ≥1× per raw write in **both** backends (`engine.py:418`
   `_derived_pairs`; `connectedstore/apply.py`). On the dominant case (a `[user]`
@@ -163,7 +187,10 @@ golden/oracle result to make an opt pass.
   scan (normalize `neg`/`upos` into an indexed child table) is a schema change and
   *would* touch Lean — separate, larger item. **Risk:** Low for the guard/hoist.
 
-### P8. Composition: kill the redundant bootstrap double-parse; guard union `outbox_watermark`
+### P8. Composition: kill the redundant bootstrap double-parse; guard union `outbox_watermark` ✅ LANDED
+> **Done** (`bc20398`). Bootstrap now compiles once (`save_schema`/`ensure_schema`
+> return the compiled `RuleSet`, threaded into `open_graph_index` via `ruleset=`);
+> union stores skip the unused per-batch `outbox_watermark` SELECT.
 - **Where:** `connectedstore/schema_io.py:43` (throwaway `parse_openfga_schema`
   whose result is discarded, then `:95` re-parses the same text) and
   `connectedstore/apply.py:96` (`outbox_watermark` read unconditionally even when
