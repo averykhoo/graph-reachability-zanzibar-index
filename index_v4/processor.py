@@ -219,6 +219,20 @@ class DeltaProcessor:
         ).all()
         return [n for n in nodes if n.wildcard == '']
 
+    def _nodes_by_ids(self, ids) -> dict[int, NodeV4]:
+        """Batch-load nodes by id in one ``IN`` query, replacing per-id
+        ``session.get`` N+1 loops. Already-loaded rows come from the identity map,
+        so the returned instances are identical to what ``session.get`` would hand
+        back per id -- this only collapses the round trips for the cold ids."""
+        want = [i for i in dict.fromkeys(ids) if i is not None]
+        if not want:
+            return {}
+        rows = self.session.exec(
+            select(NodeV4).where(NodeV4.store_id == self.store_id)
+            .where(NodeV4.id.in_(want))  # type: ignore[attr-defined]
+        ).all()
+        return {n.id: n for n in rows}
+
     def _direct_incoming(self, obj_node_id: int) -> list[EdgeV4]:
         return list(self.session.exec(
             select(EdgeV4).where(EdgeV4.store_id == self.store_id)
@@ -233,9 +247,11 @@ class DeltaProcessor:
         leaf_node = self._node(leaf, object_type, obj_name)
         if leaf_node is None:
             return []
+        edges = self._direct_incoming(leaf_node.id)
+        nodes = self._nodes_by_ids(e.subject_id for e in edges)
         out = []
-        for e in self._direct_incoming(leaf_node.id):
-            n = self.session.get(NodeV4, e.subject_id)
+        for e in edges:
+            n = nodes.get(e.subject_id)
             if n is not None and n.wildcard == '' and (n.type, n.predicate) == (t, p):
                 out.append(n.name)
         return out
@@ -248,9 +264,11 @@ class DeltaProcessor:
         ts_node = self._node(ts, object_type, obj_name)
         if ts_node is None:
             return []
+        edges = self._direct_incoming(ts_node.id)
+        nodes = self._nodes_by_ids(e.subject_id for e in edges)
         out = []
-        for e in self._direct_incoming(ts_node.id):
-            n = self.session.get(NodeV4, e.subject_id)
+        for e in edges:
+            n = nodes.get(e.subject_id)
             if (n is not None and n.wildcard == '' and n.predicate == '...'
                     and n.type in parent_types):
                 out.append((n.type, n.name))
@@ -321,8 +339,10 @@ class DeltaProcessor:
         for (pt, pn) in parents:
             if (pt, target) not in self.compiled.tainted:
                 continue
-            for nid in self._residue_state(pt, target, pn)[2]:
-                n = self.session.get(NodeV4, nid)
+            upos_ids = self._residue_state(pt, target, pn)[2]
+            nodes = self._nodes_by_ids(upos_ids)
+            for nid in upos_ids:
+                n = nodes.get(nid)
                 if n is not None:
                     out.append(n)
         return out
@@ -341,8 +361,9 @@ class DeltaProcessor:
             .where(EdgeV4.subject_id == ent.id)
             .where(EdgeV4.direct_edge_count > 0)  # type: ignore[arg-type]
         ).all()
+        nodes = self._nodes_by_ids(e.object_id for e in edges)
         for e in edges:
-            o = self.session.get(NodeV4, e.object_id)
+            o = nodes.get(e.object_id)
             if o is not None and o.type == object_type and o.predicate in leaf_preds:
                 out.add(o.name)
         return out
@@ -463,8 +484,10 @@ class DeltaProcessor:
             for n in self._leaf_concretes(object_type, obj_name, spec):
                 candidates[n.id] = n
         for spec in plan.leaves:
-            for nid in self._derived_leaf_neg_ids(object_type, obj_name, spec):
-                n = self.session.get(NodeV4, nid)
+            neg_ids = self._derived_leaf_neg_ids(object_type, obj_name, spec)
+            nodes = self._nodes_by_ids(neg_ids)
+            for nid in neg_ids:
+                n = nodes.get(nid)
                 if n is not None:
                     candidates[n.id] = n
 
@@ -515,8 +538,9 @@ class DeltaProcessor:
             for n in self._leaf_concretes(object_type, obj_name, spec):
                 audit[n.id] = n
         old_stars, old_neg, old_upos = self._residue_state(object_type, rel, obj_name)
+        upos_nodes = self._nodes_by_ids(old_upos)
         for nid in old_upos:
-            n = self.session.get(NodeV4, nid)
+            n = upos_nodes.get(nid)
             if n is not None:
                 audit[n.id] = n
 
