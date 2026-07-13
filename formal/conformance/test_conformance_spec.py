@@ -19,7 +19,8 @@ import pytest
 
 from tests.oracle import Oracle
 
-from formal.conformance.corpus import SCHEMAS, TTU_USERSET_SCHEMAS
+from formal.conformance.corpus import (
+    SCHEMAS, TTU_USERSET_SCHEMAS, SELF_REFERENTIAL_SCHEMAS)
 from formal.conformance.encode import build_request
 from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
 from formal.conformance import runner
@@ -29,10 +30,11 @@ from formal.conformance.backends import setengine_answers
 # The spec comparisons (spec `sem` / oracle / set engine) are FULL-SCOPE — T1
 # places no fragment restriction on the set engine, and `sem`/oracle are the
 # reference for every stratifiable schema — so they additionally carry the TTU
-# userset-subject corpora (the 2026-07-13 X4 shapes; docs/spec-deviations.md /
+# userset-subject corpora (the 2026-07-13 X4 shapes) and the self-referential-tuple
+# corpora (the 2026-07-13 self-referential fix; both docs/spec-deviations.md /
 # FINAL_REVIEW §3). Those are kept OUT of the base SCHEMAS so the graph-side
 # suites (graph / state / remove) don't carry out-of-W4Fragment shapes.
-_SPEC_SCHEMAS = {**SCHEMAS, **TTU_USERSET_SCHEMAS}
+_SPEC_SCHEMAS = {**SCHEMAS, **TTU_USERSET_SCHEMAS, **SELF_REFERENTIAL_SCHEMAS}
 
 
 def _oracle_answers(schema_text, tuples, queries):

@@ -10,20 +10,22 @@ Verification state as of 2026-07-12 (post remove-path + generated-schema gates):
 `bash formal/verify.sh` green — `lake build` + **0 sorries** + `zcli` + axiom
 audit (every audited theorem depends only on `[propext, Classical.choice,
 Quot.sound]`; the gate requires exactly one observed report per `#print axioms`
-command) + **257** tests under `formal/conformance/` (0 skips — the conformance
+command) + **263** tests under `formal/conformance/` (0 skips — the conformance
 step fails on any skipped test or zero passes; interpreter overridable via
-`ZANZIBAR_PY`). The 257 = **237 differential-conformance tests** (107 answer-corner
-[`test_conformance_spec` 60 + `test_conformance_random` 17 + `test_conformance_graph`
+`ZANZIBAR_PY`). The 263 = **243 differential-conformance tests** (113 answer-corner
+[`test_conformance_spec` 66 + `test_conformance_random` 17 + `test_conformance_graph`
 30] + 3 mode-dispatch [`test_cli_mode.py`] + 15 state-level [`test_conformance_state.py`]
 + 4 exhaustive small-scope enumeration [`test_conformance_enum.py`] + 68 remove-path
 [`test_conformance_remove.py`: 34 set-engine + 34 graph-index] + 40 generated-schema
 [`test_conformance_generated.py`])
 + **20 gate-tooling unit tests** (not Lean-vs-Python comparisons: 13 sorry-scanner
 [`test_sorry_scan.py`] + 7 zcli-runner transient-retry [`test_runner_retry.py`]).
-`test_conformance_spec` grew 51 → 60 (2026-07-13): three spec-side
+`test_conformance_spec` grew 51 → 60 → 66 (2026-07-13): three spec-side
 `TTU_USERSET_SCHEMAS` corpora anchor `sem` on the X4 userset-through-TTU shapes
-(§3 resolved note) — full-scope spec/oracle/set-engine only, outside `SCHEMAS`
-so the graph-side suites stay `W4Fragment`-scoped.
+(§3 resolved note), plus two `SELF_REFERENTIAL_SCHEMAS` corpora anchoring `sem` on
+self-referential tuples (the self-defining flag pattern + the fixed self-parent-TTU
+shape) — full-scope spec/oracle/set-engine only, outside `SCHEMAS` so the
+graph-side suites stay `W4Fragment`-scoped.
 
 ---
 

@@ -381,3 +381,54 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
         (),
     ),
 }
+
+# ---------------------------------------------------------------------------
+# Self-referential-tuple corpora — SPEC-SIDE ONLY (spec `sem` × oracle × set engine).
+#
+# Anchors `sem` on self-referential tuples (subject entity == object entity), which
+# OpenFGA supports (the `IsSelfDefining` concept / self-defining attribute-marker
+# idiom). This is the trust-root confirmation for the 2026-07-13 self-referential
+# fix (index_v4 node-GC/implicit canonicalization; docs/spec-deviations.md): the fix
+# followed the oracle, and `sem` agrees. Probed 2026-07-13: sem == oracle == set
+# engine on every grid query, including the self-referential rows.
+#
+# Separate from SCHEMAS (and GRAPH_FRAGMENT): both shapes are outside `W4Fragment`
+# (`self_flag` has Direct arms under a boolean — genuine storage leaves, not
+# `computedOnly`; `self_ttu_parent` is a TTU over a derived relation), so the
+# graph-side gates must not carry them. Only test_conformance_spec's full-scope
+# comparisons consume them (T1 places no fragment restriction on the set engine).
+# ---------------------------------------------------------------------------
+
+SELF_REFERENTIAL_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
+    # OpenFGA self-defining / attribute-marker idiom: a self-referential tuple as a
+    # boolean flag, gating a derived (exclusion) relation. `resource:r1 activated
+    # resource:r1` sets the flag; `usable = activated but not deprecated` reads it.
+    "self_flag": (
+        """
+        type user
+        type resource
+          define activated: [resource]
+          define deprecated: [resource]
+          define usable: activated but not deprecated
+        """,
+        [mk_tuple("...", "resource", "r1", "activated", "resource", "r1"),
+         mk_tuple("...", "resource", "r2", "activated", "resource", "r2"),
+         mk_tuple("...", "resource", "r2", "deprecated", "resource", "r2")],
+        (),
+    ),
+    # The fixed-bug shape: a self-referential TTU parent (doc:d1 parent doc:d1)
+    # feeding a derived relation read back on the SAME object. The from-chain
+    # userset doc:d1#r0 is a member of r4@d1 by the identity rule (self-parent).
+    "self_ttu_parent": (
+        """
+        type user
+        type doc
+          define parent: [doc]
+          define r0: [user] and [user]
+          define r4: r0 from parent or [user, user:*]
+        """,
+        [mk_tuple("...", "doc", "d1", "parent", "doc", "d1"),
+         mk_tuple("...", "user", "u1", "r0", "doc", "d1")],
+        (),
+    ),
+}

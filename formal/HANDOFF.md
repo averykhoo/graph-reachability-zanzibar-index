@@ -36,11 +36,12 @@ never rounds up to "the code is formally verified" (plan §7).
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
    + **0 sorries** + zcli + axiom audit (412 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + 257 Python conformance
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + 263 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
-   gates, the TTU userset-subject spec corpora, and the zcli mode-rejection tests; the gate
+   gates, the TTU userset-subject and self-referential-tuple spec corpora, and the
+   zcli mode-rejection tests; the gate
    fails closed on any skip or zero passes). Add new key theorems to
    `lean/ZanzibarProofs/Audit.lean`.
 4. **Rhythm.** Commit each green increment with a `formal: <stage> — <what>` message;
