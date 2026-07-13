@@ -311,6 +311,14 @@ class SetEngine:
             raise ValueError('non-existent tuple cannot be removed')
         row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
         self.session.delete(row)
+        # Flush the delete now. The old per-add ``_row`` SELECT (dropped in P0)
+        # implicitly autoflushed pending ops on every add, so a delete never sat
+        # pending when a later same-key add queued its insert. Without that, a
+        # re-add of a just-removed septuple leaves INSERT+DELETE pending on the
+        # same unique key in one uncommitted batch, and SQLAlchemy's unit-of-work
+        # orders the INSERT before the DELETE -> UNIQUE violation on flush.
+        # Flushing here restores the delete-before-reinsert ordering.
+        self.session.flush()
         self._apply_remove(s_pred, s_type, s_name, relation, o_type, o_name)
 
     def _tuple_present(self, s_pred, s_type, s_name, relation, o_type, o_name) -> bool:
