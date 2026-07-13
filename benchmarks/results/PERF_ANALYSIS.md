@@ -58,9 +58,12 @@ tuples (slope ≈ 1 ⇒ linear load). Fits are over 3 scale points/curve; R² sh
   sweep (`engine.py:821`). demorgans is ~O(N^0.8) — slightly shallower because its
   result set *also* grows with N (mean lookup result 245 → 3,560 ids), so the
   time-box caps completed iterations rather than the sweep alone setting the rate.
-- **reverse — O(1) for RoaringSets; O(N^0.7) for PySets on `simple` ⚠.** This is
-  the one place the backend choice changes the *asymptotics*, not just the
-  constant. See below.
+- **reverse — O(1) for RoaringSets; O(N^0.7) for PySets on `simple` ⚠.** This
+  looks backend-specific but isn't: `direct_expand` copies the whole type
+  population per call (`engine.py:768`), which is O(N) work for *both* backends —
+  PySets surfaces it (Python set copy), RoaringSets hides it (fast C bitmap copy).
+  A one-line fix removes the copy and flattens both. See PySets-vs-Roaring and
+  optimization target #1.
 
 ## PySets vs RoaringSets
 
@@ -87,13 +90,20 @@ Ratio = roaring rate / py rate; **>1 ⇒ Roaring faster, <1 ⇒ PySets faster.**
   `BASELINE_2026-07-13.md`.)
 - **lookup ≈ tie** (0.97×) — both are dominated by the same O(N) `check` sweep, so
   the per-check backend difference washes out.
-- **reverse: RoaringSets wins overall (1.20×), and *decisively at scale*.** The
-  geomean hides the shape: at 100k tuples on `simple`, PySets reverse is **14×
-  slower** (2.0k vs 27k/s — reproduced on a second run: 2.0k again). PySets
-  `lookup_reverse` (= `expand`, which allocates a fresh Python `set` per call)
-  degrades ~O(N^0.7) under the growing heap — most plausibly Python cyclic-GC
-  pressure over 100k+ set/int objects — while RoaringSets' C bitmaps stay flat.
-  On gdrive/demorgans (fewer, denser objects) the effect is muted.
+- **reverse: RoaringSets wins overall (1.20×), and *decisively at scale*** — at
+  100k tuples on `simple`, PySets reverse is **14× slower** (2.0k vs 27k/s,
+  reproduced). **Root-caused (not GC):** `direct_expand` at `engine.py:768` does
+  `ops.new(ns.entities) & ops.new(pop((rtype,'...')))`, and `pop(...)` already
+  returns the *persistent* type-population mask (`population()`, engine.py:270).
+  The redundant `ops.new()` **copies the entire N-element population every call**,
+  just to intersect it against ~4 entities — O(population) per expand, regardless
+  of the tiny result. PySets pays it as a Python `set(100k)` copy (the cliff);
+  RoaringSets pays it as a fast C `BitMap` copy (looks flat). Disabling GC does
+  **not** help (1.79k → 1.85k), and a fixed-key expand craters identically —
+  confirming allocation-copy, not GC. **Verified fix** — drop the redundant copy
+  (`ops.new(ns.entities) & pop(...)`, `&` returns a new set so the mask is
+  untouched): the intersection goes **flat** on both backends (py **1,614 →
+  2.93M/s at 100k, 1817×**; roaring 2.8×). See optimization target #1.
 
 **Verdict:** `RoaringSets` remains the right default (it is) — it never regresses
 asymptotically and holds reverse flat at scale. `PySets` is a legitimate, slightly
@@ -110,16 +120,21 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Optimization targets (ranked)
 
-1. **set-engine `lookup` — O(N) → aim for O(result).** Biggest, cleanest win:
+1. **`direct_expand` population copy (`engine.py:768`) — verified one-line fix.**
+   Drop the redundant `ops.new()` around the persistent population mask:
+   `ops.new(ns.entities) & pop((rtype,'...'))`. Turns the reverse/expand direct path
+   from O(population) to O(result): **PySets flat, +1817× at 100k; RoaringSets
+   +2.8×.** Behavior-preserving (identical intersection), so no Lean change per
+   CLAUDE.md — gated by the differential matrix + hypothesis + conformance. Lowest
+   risk, immediate win; do this first. *(Also check the sibling star/userset
+   branches and `ttu_expand` for the same `ops.new(pop(...))` pattern.)*
+2. **set-engine `lookup` — O(N) → aim for O(result).** Biggest structural win:
    both backends, R²=1.000 linear, and the graph already demonstrates the flat
    alternative. A reverse/per-subject index removes the full-store candidate
    sweep. *(Algorithm change — updates the Lean model per CLAUDE.md's "Perf work &
    the Lean model" note.)*
-2. **graph write path** (closure materialization + boolean `backfill()`), 15–156
+3. **graph write path** (closure materialization + boolean `backfill()`), 15–156
    writes/s — the only thing blocking graph numbers at scale.
-3. **PySets `reverse` O(N^0.7) cliff** — real but *already avoided by the default
-   RoaringSets*, so low priority unless PySets must stay viable at scale (then look
-   at GC pressure / object churn in `expand`).
 4. check and reverse (roaring) are already O(1) and fast — low leverage.
 
 ## Notes
