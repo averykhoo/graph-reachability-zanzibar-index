@@ -482,7 +482,15 @@ class DeltaProcessor:
                 should = bool(plan.check_fn(ctx, s))
                 if should == covered:
                     continue
-                n = self.idx.node(sp, st, sn, create_if_missing=True)
+                # A recorded from-chain subject must be NON-implicit: it survives on
+                # its upos/neg residue reference alone and is collected only by
+                # _gc_subject_node (step 5). Interned implicit, core's implicit-GC
+                # would drop it the moment its own refcount hit 0 -- dangling the
+                # residue reference and drifting the canonical form (a self-referential
+                # TTU parent, where this node doubles as the target relation's own
+                # node, exposed this: add-then-remove left it explicit while a fresh
+                # build interned it implicit). See docs/spec-deviations.md 2026-07-13.
+                n = self.idx.node(sp, st, sn, create_if_missing=True, implicit=False)
                 # I3: a fresh concrete of a bridged shape must get its bridges
                 self.widx._ensure_bridges(n)
             candidates[n.id] = n

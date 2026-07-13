@@ -832,14 +832,19 @@ matrix now queries userset subjects on derived-TTU families after every op.
 
 ---
 
-## 2026-07-13 — OPEN: self-referential TTU-parent add/remove state non-restoration (answer-benign)
+## 2026-07-13 — FIXED: self-referential TTU-parent add/remove state non-restoration (answer-benign)
 
-**Status: OPEN (documented, not yet fixed).** Found by the hypothesis campaign
-(`tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`) during a
-heavy multi-run session; a new falsifying example was discovered and persisted to
-the (gitignored) `.hypothesis/` DB, so the test now fails deterministically until
-fixed. Pre-existing — reproduces on a clean tree; not introduced by any change in
-this session.
+**Status: FIXED 2026-07-13** (`index_v4/processor.py` reconcile step 2a; regression
+`tests/test_self_referential_tuples.py`). Found by the hypothesis campaign
+(`tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`); a
+falsifying example was discovered and persisted to the (gitignored) `.hypothesis/`
+DB. Pre-existing — reproduced on a clean tree; not introduced by the surrounding
+session's work.
+
+**Self-referential tuples ARE supported** (OpenFGA `IsSelfDefining`; the
+self-defining / attribute-marker idiom — `document:1#viewer@document:1#viewer`, or
+a `resource:r1 activated resource:r1` flag). The bug was a canonicalization drift,
+not an evaluation error, so the fix keeps accepting them (does NOT reject).
 
 **Shape.** A self-referential tupleset tuple `doc:d1 parent doc:d1` (d1 is its own
 `parent`) present in the store, a derived intersection `r0: [user] and [user]`, and
@@ -858,18 +863,29 @@ refcount-0 node left un-GC'd with a stale `implicit` flag on the remove path —
 guarantee (add/remove exact-state restoration), which `test_add_then_remove_...`
 pins, but does NOT affect answers, the fixpoint, or any check-level parity.
 
-**Adjudication (allow, don't reject — fix the canonicalization).** OpenFGA
-*supports* self-referential tuples (the `IsSelfDefining` concept; the documented
-"self-defining relation" attribute-marker pattern, e.g. `document:1#viewer@document:1#viewer`),
-so rejecting self-parent tuples at write time would be a divergence FROM OpenFGA
-and would drop a legitimate feature. The fix belongs in the node-GC / `implicit`-flag
-handling on the remove/cascade path (a refcount-0 node reached only through the
-self-referential TTU cascade should be GC'd, or its `implicit` flag restored, so
-the state canonicalizes to the fresh-build form). Note the graph's existing
-closure-cycle rejection (`core.py:319-342`, for the T4 acyclicity precondition)
-does NOT catch this: `parent` tuples are tupleset/entity edges consumed by the TTU
-rule, not closure self-loops, so the tuple is accepted and the self-reference
-manifests only in the derived cascade.
+**Root cause.** By node keying `(predicate, type, name)`, the object's own derived
+node `(r0, doc, d1)` is the SAME node as the from-chain userset subject `doc:d1#r0`
+that the self-referential TTU records in `r4@d1`'s residue `upos` (X4a from-chain
+rule). That node therefore plays two roles: a derived-public node (pinned
+`implicit=False` while it holds an edge) AND a recorded from-chain subject (kept
+alive by the `upos` reference). Reconcile step 2a interned the from-chain subject
+node with the DEFAULT `implicit=True`, so a fresh build created it implicit; but on
+the add path it had first held r0's derived edge, which promoted it to explicit
+(`implicit=False`, and "explicit is sticky", `core.py:284-287`). Add-then-remove
+thus ended explicit where a fresh build was implicit — a one-node canonical-form
+divergence. Answers were never affected (the read path resolves the from-chain
+identity directly; `audit_fixpoint` passed). Note the graph's closure-cycle
+rejection (`core.py:319-342`, T4 acyclicity) does not catch this: `parent` tuples
+are tupleset/entity edges consumed by the TTU rule, not closure self-loops.
+
+**Fix (allow, don't reject).** From-chain subject nodes are now interned
+**NON-implicit** in reconcile step 2a (`processor.py`): a recorded subject must
+survive on its `upos`/`neg` reference alone and be collected only by
+`_gc_subject_node` (step 5) — an implicit one would be premature-GC'd and dangle
+the reference. Both the incremental and fresh-build paths now intern it explicit,
+so add/remove is again an exact row-multiset round trip. Rejecting self-referential
+tuples was NOT chosen: OpenFGA supports them and they have real use (the flag
+pattern above).
 
 **Formal scope:** unaffected. Derived-TTU shapes are outside `W4Fragment`; the
 Lean chain is add-only (no remove legs); and the state-level conformance gate
