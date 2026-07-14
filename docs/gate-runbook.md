@@ -29,25 +29,38 @@ Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/py
 `tests/` alone (without `formal/conformance/`) fits under the cap. **Capture `$?`
 directly** — piping through `tee` returns tee's exit code (0) and masks a failure.
 
-### 2. Lean + conformance — pre-warm, then one clean `verify.sh` run
-`verify.sh`'s step 5 (`pytest formal/conformance/`, ≈ 5.5 min) is the *other* half
-of `pytest -q`, so steps 1 + 2 together == the whole suite + all Lean gates.
+### 2. Lean + conformance
+`verify.sh`'s step 5 (`pytest formal/conformance/`, ≈ 5.5–7 min) is the *other* half
+of `pytest -q`, so step 1 + conformance together == the whole suite + the
+conformance gate.
 
-**Pre-warm the Lean build as its own step** so `verify.sh` steps 1–4 are cache
-hits and only conformance runs live (fits the cap):
-```bash
-cd formal/lean && export PATH="$HOME/.elan/bin:$PATH"
-lake build && lake build zcli && lake build ZanzibarProofs.Audit
-```
-Then, from the repo root, in one shot:
-```bash
-bash formal/verify.sh; echo "VERIFY_EXIT=$?"
-```
+**Reality check: `verify.sh` does NOT reliably fit the 10-min cap, even warm.**
+Step 1 (`lake build`) *replays* all ~2144 modules every run (~4–5 min inherent for
+a Mathlib-scale project — a warm rebuild is not instant), and conformance is another
+5.5–7 min, so the total is ~10–12 min. It sometimes squeaks under, often doesn't.
+So:
+
+- **For a change that touches NO `.lean` file** (Python-only perf work is the
+  usual case): the Lean *proofs* (steps 1–4: build, `sorry`=0, `zcli`, axiom audit)
+  are unaffected — verify they were green earlier and confirm `git diff` shows no
+  `formal/lean/**/*.lean` change. Then run only the part that exercises your code:
+  ```bash
+  "$PY" -m pytest formal/conformance/ -q; echo "EXIT=$?"
+  ```
+  That + step 1 == the full `pytest -q` coverage; the proofs ride on "unchanged".
+- **For a change that DOES touch `.lean`**, or when you need the classifier's
+  end-to-end `verify.sh` green (it rejects a reconstructed pass): run
+  `bash formal/verify.sh` **uncapped** — from an interactive shell, or in this
+  harness via the user typing `! bash formal/verify.sh` (the user's shell has no
+  10-min cap). Pre-warm first (`cd formal/lean && lake build && lake build zcli &&
+  lake build ZanzibarProofs.Audit`) to minimise its runtime.
+
 **Never kill `verify.sh` mid-run.** Its step 4 does `rm -f Audit.olean` then rebuilds
 it; a kill in between leaves `Audit.olean` missing (and the default `lake build`
 does *not* rebuild the `Audit` target), so the next run fails the layout-drift
 guard (`FAIL: audit olean not at expected path`). Recovery:
-`cd formal/lean && lake build ZanzibarProofs.Audit`, then re-run `verify.sh`.
+`cd formal/lean && lake build ZanzibarProofs.Audit`, then re-run. This corruption
+cost several retries this session — treat `verify.sh` as uninterruptible.
 
 ### 3. Fuzzing before an algorithm change (do NOT skip — see the P1 lesson)
 The `ci` profile (max_examples=12, stateful_step_count=8) is the per-commit floor
