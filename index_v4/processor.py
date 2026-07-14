@@ -36,6 +36,18 @@ from .wildcard import WildcardIndex
 SubjectKey = tuple[str, str, str]      # (predicate, type, name); predicate '...' for bare
 Key = tuple[str, str, str]             # (object_type, relation, object_name)
 
+# N3: leaf kinds whose recordings are always LOCAL -- a subject id they put in a
+# residue's neg/upos is edge-justified on the recording object (closure leaves store
+# raw tuples; derived-computed reads only the SAME object's referenced residue). The
+# other kinds (derived-ttu / derived-tupleset-ttu / derived-userset) can record a
+# CROSS-OBJECT subject id -- a from-chain userset (X4a) or lifted userset membership
+# (X4) that holds no edge on the recording object -- which is the only case the full
+# ``ResidueV1`` scan in ``_keys_referencing`` exists to find. A schema all of whose
+# leaves are in this set therefore has provably-empty ``_keys_referencing`` and can
+# skip the scan. WHITELIST, not blocklist: any unrecognized/future leaf kind disables
+# the elision, so GC correctness never rests on enumerating the dangerous kinds.
+_RESIDUE_LOCAL_LEAF_KINDS = frozenset({'closure', 'derived-computed'})
+
 
 def _shape(pred: str, s_type: str) -> tuple[str, str]:
     return (s_type, pred)
@@ -152,6 +164,14 @@ class DeltaProcessor:
             for plan in compiled.plans.values()
             for spec, node in zip(plan.leaves, plan.leaf_nodes)
         }
+        # N3: does any leaf kind admit a cross-object subject recording? If not, the
+        # full ResidueV1 scan in _keys_referencing is provably empty and is skipped
+        # (see _RESIDUE_LOCAL_LEAF_KINDS). Computed once; the schema is static.
+        self._cross_object_recordings_possible = any(
+            spec.kind not in _RESIDUE_LOCAL_LEAF_KINDS
+            for plan in compiled.plans.values()
+            for spec in plan.leaves
+        )
         # residue bumps of the current round, consumed by the cascade as extra
         # invalidations for the next round (spec §5.2: version bumps enqueue the same
         # dependent keys; they emit no outbox rows).
@@ -299,6 +319,8 @@ class DeltaProcessor:
         memberships, lookup-gate X4) are NOT justified by an edge on the recording
         object, so the recorder must be findable from the id alone -- both for GC
         anchoring and for pruning when the node dies."""
+        if not self._cross_object_recordings_possible:
+            return []           # N3: no leaf kind records a foreign id (see __init__)
         out: list[Key] = []
         rows = self.session.exec(
             select(ResidueV1).where(ResidueV1.store_id == self.store_id)).all()
@@ -781,19 +803,50 @@ class DeltaProcessor:
             if keys.get(key, set()) is not None:
                 keys.setdefault(key, set()).add(s)
 
+        # P6: P2's closure expansion emits O(ancestors x descendants) outbox rows,
+        # and the pre-coalescing loop redid the per-row work (a subject_node SELECT,
+        # a residue scan for GC'd subjects, and the whole dependent/tupleset/target
+        # fan-out) once PER ROW. Two facts let us collapse it: (1) the subject-GC
+        # residue scan depends only on ``subject_node_id``; (2) all the dependent
+        # fan-out (leaf tupleset-ttu dependents, DerivedFamily ``_fan_out``, tupleset
+        # and target feeders) depends only on ``(o_type, o_name, o_pred)`` -- never on
+        # the subject. Only the leaf's OWN-key full/subject decision is subject-shaped.
+        # ``_map_deltas_to_keys`` mutates no node/residue state, so a per-call
+        # ``session.get`` memo is exact; ``full``/``subject`` merge order-independently
+        # and idempotently, so running each object's fan-out once is equivalent.
+        node_by_id: dict[int, NodeV4 | None] = {}
+
+        def get_by_id(nid: int) -> NodeV4 | None:
+            if nid not in node_by_id:
+                node_by_id[nid] = self.session.get(NodeV4, nid)
+            return node_by_id[nid]
+
+        node_by_key: dict[SubjectKey, NodeV4 | None] = {}
+
+        def get_by_key(pred: str, e_type: str, name: str) -> NodeV4 | None:
+            k = (pred, e_type, name)
+            if k not in node_by_key:
+                node_by_key[k] = self._node(pred, e_type, name)
+            return node_by_key[k]
+
+        # (A) subject-GC residue scan, deduped by subject_node_id: the subject node
+        # was GC'd in this transaction, so its cross-object recordings (from-chain /
+        # lifted userset memberships, X4) are not edge-justified anywhere and no other
+        # delta reaches them -- reconcile every residue still holding the id.
+        for nid in {r.subject_node_id for r in rows}:
+            if get_by_id(nid) is None:
+                for ref_key in self._keys_referencing(nid):
+                    full(ref_key)
+
+        processed_objects: set[tuple[str, str, str]] = set()
         for r in rows:
             # endpoints come from the row's denormalized columns: the node rows may
             # already be GC'd within this transaction, and the mapping must survive that
             o_type, o_name, o_pred = r.object_type, r.object_name, r.object_predicate
             s_name, s_pred, s_type = r.subject_name, r.subject_predicate, r.subject_type
-            if self.session.get(NodeV4, r.subject_node_id) is None:
-                # the subject node was GC'd in this transaction: cross-object
-                # recordings of its id (from-chain/lifted userset memberships, X4)
-                # are not edge-justified on the recording object, so no other delta
-                # reaches them -- reconcile every residue still holding the id
-                for ref_key in self._keys_referencing(r.subject_node_id):
-                    full(ref_key)
             fam = self.compiled.namespace.get((o_type, o_pred))
+
+            # -- subject-shaped: the leaf's own-key full/subject decision (per row) --
             if isinstance(fam, LeafFamily):
                 assert not (o_name == '*'), \
                     'wildcard-object delta mapped to a derived key (decision-15 shape leaked)'
@@ -807,13 +860,21 @@ class DeltaProcessor:
                     # the cheap path left order-dependent stale state (blind-audit
                     # P3: symbolic in effect, so full-object like §5.4)
                     full(key)
-                elif self._node(s_pred, s_type, s_name) is None:
+                elif get_by_key(s_pred, s_type, s_name) is None:
                     # subject node GC'd within this transaction: its id may linger in
                     # the residue's neg; a full reconcile recomputes neg from live
                     # candidates and prunes it (id-reuse hazard otherwise)
                     full(key)
                 else:
                     subject(key, (s_pred, s_type, s_name))
+
+            # -- object-shaped fan-out: identical for every row of this (type, name,
+            #    predicate), so run it exactly once (idempotent full/subject merges) --
+            obj_ident = (o_type, o_name, o_pred)
+            if obj_ident in processed_objects:
+                continue
+            processed_objects.add(obj_ident)
+            if isinstance(fam, LeafFamily):
                 # a stored tuple of a derived TUPLESET changed: the parent set of its
                 # tupleset-ttu dependents changed on this object (stored-tuple TTU
                 # semantics -- membership changes alone don't move parents)
