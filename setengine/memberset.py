@@ -95,21 +95,32 @@ def _starpop(stars, ops: SetOps, pop: Population):
     return acc
 
 
+# INVARIANT (N4): MemberSet.pos/neg are ALWAYS ops.freeze() outputs (verified at
+# every construction site). Nothing enforces this at runtime -- the 3000-case
+# homomorphism/ghost-safety property test (tests/test_memberset.py, both SetOps)
+# is the net. It licenses the copy-free `-=`/`|=` below: both backends' mutable
+# type accepts the frozen type directly as an operand (`set` vs `frozenset`,
+# `BitMap` vs `FrozenBitMap`), so the old defensive `ops.new(...)` wraps around
+# m.neg/m.pos/ext_set/starpop were pure O(set) copies (~7 per algebra op -> 1;
+# same copy class as _starpop's P10 fix and direct_expand's 78cfc2f).
+
 def _ext(m: MemberSet, ops: SetOps, pop: Population):
     """ext(M) = pos ∪ (starpop − neg), as a fresh mutable set."""
-    acc = _starpop(m.stars, ops, pop)
-    acc -= ops.new(m.neg)
-    acc |= ops.new(m.pos)                      # pos wins over neg
+    acc = _starpop(m.stars, ops, pop)          # already fresh & owned
+    acc -= m.neg                               # frozen operand read directly
+    acc |= m.pos                               # pos wins over neg
     return acc
 
 
 def _normalize(ext_set, stars, ops: SetOps, pop: Population) -> MemberSet:
+    # ext_set is caller-owned: READ only, never mutated. starpop is fresh & owned,
+    # so we reuse it in place as the `neg` accumulator. Order is load-bearing:
+    # `pos -= starpop` must read starpop BEFORE `starpop -= ext_set` mutates it.
     starpop = _starpop(stars, ops, pop)
     pos = ops.new(ext_set)
     pos -= starpop                             # ids not covered by any star population
-    neg = ops.new(starpop)
-    neg -= ops.new(ext_set)                    # starred ids that must be excluded
-    return MemberSet(ops.freeze(pos), frozenset(stars), ops.freeze(neg))
+    starpop -= ext_set                         # reuse as neg: starred ids to exclude
+    return MemberSet(ops.freeze(pos), frozenset(stars), ops.freeze(starpop))
 
 
 # ---------------------------------------------------------------------------
