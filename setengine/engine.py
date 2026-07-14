@@ -235,6 +235,12 @@ class SetEngine:
         self.store_id = store_id
         self.ops = ops
         self.ast = parse_schema_ast(schema)
+        # P9: the per-Direct-node restriction key set is fully determined by the
+        # (frozen, lifetime-stable) AST node -- cache it once instead of rebuilding
+        # the comprehension on every direct_leaf / direct_expand call. Keyed by
+        # id(direct); safe because self.ast pins every node for the engine's life
+        # (rebuild() only resets tuple state, never reparses the AST).
+        self._restr_cache: dict[int, frozenset[tuple[str, str, bool]]] = {}
         # Reverse-dependency tables for write-time candidate interning (§6.4) and
         # the read-time lookup reverse walk (TTU from-chain hop).
         self._object_deps, self._chain_targets = _candidate_reverse_deps(self.ast)
@@ -294,6 +300,22 @@ class SetEngine:
     # ------------------------------------------------------------------ #
     # Population masks (for the MemberSet algebra)
     # ------------------------------------------------------------------ #
+
+    def _restrictions_of(self, direct) -> frozenset[tuple[str, str, bool]]:
+        """P9: cached (type, predicate, wildcard) key set for a ``Direct`` node.
+
+        Identical content to ``{(r.type, r.predicate, r.wildcard) for r in
+        direct.restrictions}``; computed once per node and reused across the
+        check and expand leaves (the node is lifetime-stable, see __init__).
+        """
+        key = id(direct)
+        restr = self._restr_cache.get(key)
+        if restr is None:
+            restr = frozenset(
+                (r.type, r.predicate, r.wildcard) for r in direct.restrictions
+            )
+            self._restr_cache[key] = restr
+        return restr
 
     def population(self, shape: tuple[str, str]):
         """Concrete member ids of a shape: ids_of_type[T] for bare, ids_of_shape[(T,P)]."""
@@ -648,7 +670,7 @@ class SetEngine:
             raise TypeError(f'unknown AST node {expr!r}')
 
         def direct_leaf(direct, ot: str, on: str, rel: str) -> bool:
-            restr = {(r.type, r.predicate, r.wildcard) for r in direct.restrictions}
+            restr = self._restrictions_of(direct)
             nodes = [self.node_sets[i] for i in self._object_ids(ot, on, rel) if i in self.node_sets]
             if not nodes:
                 return False
@@ -807,7 +829,7 @@ class SetEngine:
             raise TypeError(f'unknown AST node {expr!r}')
 
         def direct_expand(direct, ot, on, rel) -> MemberSet:
-            restr = {(r.type, r.predicate, r.wildcard) for r in direct.restrictions}
+            restr = self._restrictions_of(direct)
             nodes = [self.node_sets[i] for i in self._object_ids(ot, on, rel) if i in self.node_sets]
             pos = ops.new()
             stars: set[tuple[str, str]] = set()
