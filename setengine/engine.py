@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from itertools import chain
 from types import EllipsisType
 
 from sqlmodel import Session, select
@@ -272,7 +273,71 @@ class SetEngine:
             # accepted (accept/reject divergence on exactly the shapes the expansion
             # exists for).
             self.schema_info = self._ruleset.schema_info
+        # P1 follow-up: forward-`lookup` fallback gate, precomputed once from the
+        # finalized schema_info + the reverse-dependency tables (see the method).
+        self._owc_needs_sweep = self._owc_lookup_needs_sweep()
         self.rebuild()
+
+    def _owc_lookup_needs_sweep(self) -> bool:
+        """Whether forward ``lookup`` must fall back to the exact O(store) sweep
+        (``_lookup_sweep``) for this schema's object wildcards instead of the
+        O(reachable) reverse walk (P1 follow-up; ``CORRESPONDENCE.md §8.1``).
+
+        An object-wildcard grant ``s #... rel T:*`` makes ``s`` a member of every
+        concrete ``(T, X, rel)``. The reverse walk (``_reverse_neighbors``) only ever
+        reaches the ``(T, '*', rel)`` star node, never the wildcard-covered concrete
+        siblings ``(T, X, rel)``. That is harmless while those concretes are *direct*
+        results -- the intensional marker ``(T, rel)`` covers them exactly (S4) -- but
+        the walk then silently drops any DOWNSTREAM object whose membership is
+        inherited THROUGH such a concrete node, which the marker does NOT cover (the
+        object-wildcard×TTU completeness bug this gate exists for).
+
+        ``check`` crosses from one object's membership to another's by exactly two
+        mechanisms (see ``member_via_usersets`` / ``ttu_leaf``):
+          (a) a NON-wildcard userset restriction ``[T#r]`` on some relation -- a
+              stored grant ``Q:q#R @ T:X#r`` lifts ``T:X#r``'s members onto ``Q:q#R``;
+          (b) a TTU from-chain ``R2: r from ts`` -- a stored tupleset parent ``T:X``
+              is evaluated at relation ``r`` on ``T``.
+        A *wildcard* userset restriction ``[T:*#r]`` is NOT a gap: its grant lands on
+        the ``(T, '*', r)`` star node, which the walk reaches via ``member_of`` (H1) --
+        empirically confirmed -- so only NON-wildcard restrictions count. Members
+        injected by the wildcard flow from ``rel`` into every relation ``r`` on ``T``
+        that Computed-references ``rel``; ``_object_deps[(T, rel)]`` is exactly that
+        reverse closure (its Computed entries), so both mechanisms are tested over
+        ``{rel} ∪ _object_deps[(T, rel)]``.
+
+        Deliberately OVER-approximates (the risk is asymmetric -- a needless fallback
+        merely reruns the old O(store) sweep, a MISSED one drops a real result): the
+        TTU arm matches ``r`` against any TTU target regardless of parent type, and
+        ``_object_deps`` also folds in TTU-tupleset (non-membership) edges. Netted by
+        ``tests/test_lookup_oracle.py`` (exact two-sided) + the multi-seed hypothesis
+        sweep on the object-wildcard corpus (``wildcards.fga``)."""
+        shapes = self.schema_info.object_wildcard_shapes
+        if not shapes:
+            return False
+        ttu_targets = {target for (_ot, _ts, target) in self._ttu_map}
+        # (type, predicate) of every NON-wildcard userset restriction in the schema.
+        userset_restr: set[tuple[str, str]] = set()
+        for expr in self.ast.values():
+            stack = [expr]
+            while stack:
+                node = stack.pop()
+                if isinstance(node, (Union, Intersection)):
+                    stack.extend(node.children)
+                elif isinstance(node, Exclusion):
+                    stack.append(node.base)
+                    stack.append(node.subtract)
+                elif isinstance(node, Direct):
+                    for r in node.restrictions:
+                        if r.predicate != '...' and not r.wildcard:
+                            userset_restr.add((r.type, r.predicate))
+        for (T, rel) in shapes:
+            reach = {rel}
+            reach.update(self._object_deps.get((T, rel), ()))
+            for r in reach:
+                if r in ttu_targets or (T, r) in userset_restr:
+                    return True
+        return False
 
     # ------------------------------------------------------------------ #
     # State (rebuilt on open)
@@ -604,11 +669,23 @@ class SetEngine:
                 ids.append(si)
         return ids
 
-    def _instances_of_type(self, t: str, query_names: set[tuple[str, str]]) -> set[str]:
-        """Concrete instance names of a type (interner keys ∪ query endpoints), for the
-        strict ∀⇒∃ expansion of star tuplesets. Rare path (star parents)."""
+    def _instances_of_type(self, t: str, memo: dict[str, set[str]]) -> set[str]:
+        """Concrete instance names of a type (interner keys), for the strict ∀⇒∃
+        expansion of star tuplesets. Rare path (star parents).
+
+        N7: memoized per evaluation. This scans ALL interned keys (O(interner)); the
+        interner never mutates during a read, so one scan per type serves an entire
+        ``check`` / ``expand`` call. ``memo`` is a CALL-LOCAL dict, never persisted
+        across writes (interner ids are only guaranteed stable within a single read).
+        The returned set is shared read-only across calls in one evaluation -- callers
+        only iterate it. The former ``query_names`` union arm is dropped: every call
+        site passed ``frozenset()`` (query endpoints must never act as ∃-witnesses --
+        strict ∀⇒∃), so the arm was always empty."""
+        cached = memo.get(t)
+        if cached is not None:
+            return cached
         names = {n for (kt, n, _p) in self.interner.key_of.values() if kt == t and n != '*'}
-        names |= {qn for (qt, qn) in query_names if qt == t and qn != '*'}
+        memo[t] = names
         return names
 
     # ------------------------------------------------------------------ #
@@ -619,8 +696,8 @@ class SetEngine:
               relation: str, o_type: str, o_name: str) -> bool:
         s_pred = _norm_pred(subject_predicate)
         subject = (s_type, s_name, s_pred)
-        query_names = {(s_type, s_name), (o_type, o_name)}
         memo: dict[tuple[str, str, str], bool] = {}
+        inst_memo: dict[str, set[str]] = {}             # N7: per-eval _instances_of_type cache
         stack: dict[tuple[str, str, str], int] = {}     # key -> stack depth
         # Lowlink memo guard (see tests/oracle.py sat, kept in lockstep): a frame
         # whose subtree consulted an in-progress key computed only a provisional
@@ -730,7 +807,7 @@ class SetEngine:
                         # (blind-audit: never from ids_of_shape, which misses members
                         # via Computed/TTU; and never from query endpoints, which
                         # would let a ghost witness its own existence -- strict ∀⇒∃)
-                        for inst in self._instances_of_type(t, frozenset()):
+                        for inst in self._instances_of_type(t, inst_memo):
                             if sat(t, inst, p):
                                 return True
             return False
@@ -741,7 +818,8 @@ class SetEngine:
             for ns in nodes:
                 # tupleset subjects (parents) live in entities (bare) -- iterated per §6.3;
                 # userset tuplesets are unusual but handled for completeness.
-                for pid in list(ns.entities) + list(ns.usersets):
+                # N8: reads never mutate node_sets, so iterate lazily (no list copies).
+                for pid in chain(ns.entities, ns.usersets):
                     pt, pn, _pp = self.interner.key(pid)
                     if pn != '*':
                         if (s_type, s_name, s_pred) == (pt, pn, target_rel):
@@ -753,7 +831,7 @@ class SetEngine:
                             return True                       # star/userset subject of that shape
                         # tuple-mentioned instances only: query endpoints must not
                         # act as ∃-witnesses (strict ∀⇒∃; blind-audit O3)
-                        for inst in self._instances_of_type(pt, frozenset()):
+                        for inst in self._instances_of_type(pt, inst_memo):
                             if sat(pt, inst, target_rel):
                                 return True
             return False
@@ -772,6 +850,7 @@ class SetEngine:
         shapes in ``stars`` (never enumerated). Never interns on read."""
         if memo is None:
             memo = {}
+        inst_memo: dict[str, set[str]] = {}             # N7: per-eval _instances_of_type cache
         stack: dict[tuple[str, str, str], int] = {}     # key -> stack depth
         ops, pop = self.ops, self.population
         # Lowlink memo guard, same as check()/the oracle: a frame whose subtree
@@ -846,8 +925,9 @@ class SetEngine:
                         # intersect the (small) node entities against the persistent
                         # type-population mask directly; wrapping pop(...) in ops.new()
                         # copied the whole O(population) mask per expand (& returns a
-                        # new set, so the mask is not mutated).
-                        pos |= (ops.new(ns.entities) & pop((rtype, '...')))
+                        # new set, so neither operand is mutated). N8: drop the copy of
+                        # ns.entities too -- `&` reads it without mutating.
+                        pos |= (ns.entities & pop((rtype, '...')))
                 for uid in ns.usersets:
                     t, n, p = self.interner.key(uid)
                     if n != '*':
@@ -859,7 +939,7 @@ class SetEngine:
                         # tuple-mentioned instances, not ids_of_shape: an instance
                         # whose P-membership exists only via Computed/TTU never
                         # interns (T, n, P) and would be missed (blind-audit E2)
-                        for inst in self._instances_of_type(t, frozenset()):
+                        for inst in self._instances_of_type(t, inst_memo):
                             acc = ms.union(acc, do(t, inst, p), ops, pop)
             local = MemberSet(ops.freeze(pos), frozenset(stars), ops.freeze())
             return ms.union(local, acc, ops, pop)
@@ -869,7 +949,8 @@ class SetEngine:
                      if i in self.node_sets]
             acc = ms.empty(ops)
             for ns in nodes:
-                for pid in list(ns.entities) + list(ns.usersets):
+                # N8: reads never mutate node_sets, so iterate lazily (no list copies).
+                for pid in chain(ns.entities, ns.usersets):
                     pt, pn, _pp = self.interner.key(pid)
                     if pn != '*':
                         acc = ms.union(acc, do(pt, pn, target), ops, pop)
@@ -879,7 +960,7 @@ class SetEngine:
                     else:
                         acc = ms.union(acc, ms.star((pt, target), ops), ops, pop)
                         # tuple-mentioned instances only (no endpoint witnesses; O3)
-                        for inst in self._instances_of_type(pt, frozenset()):
+                        for inst in self._instances_of_type(pt, inst_memo):
                             acc = ms.union(acc, do(pt, inst, target), ops, pop)
             return acc
 
@@ -967,15 +1048,18 @@ class SetEngine:
         for (t, rel) in self.ast:                          # declared (type, relation)
             if self.check(s_pred, s_type, s_name, rel, t, '*'):
                 result.markers.add((t, rel))
-        # Object wildcards interact with TTU from-chains in a way the reverse walk
-        # does not enumerate: a subject granted `T:*` (object wildcard) is a member
-        # of every concrete (T, X, rel), so it reaches every object whose stored
-        # tupleset parent is such a T -- but the walk only reaches the (T,'*',rel)
-        # wildcard node, never the wildcard-covered concrete parents that feed the
-        # TTU (lookup-oracle hypothesis finding, 2026-07-14). Fall back to the exact
-        # O(store) sweep for these (uncommon) schemas; the O(reachable) walk covers
-        # every object-wildcard-free schema (the default).
-        if self.schema_info.object_wildcard_shapes:
+        # Object wildcards can interact with downstream inheritance in a way the
+        # reverse walk does not enumerate: a subject granted `T:*` (object wildcard)
+        # is a member of every concrete (T, X, rel), but the walk reaches only the
+        # (T,'*',rel) star node, never the wildcard-covered concrete siblings -- so a
+        # DOWNSTREAM object inheriting membership through such a concrete node (a TTU
+        # from-chain, or a non-wildcard userset restriction) is dropped and is not
+        # marker-covered. `_owc_needs_sweep` (precomputed, see _owc_lookup_needs_sweep)
+        # is True exactly for schemas where that bridge can exist; those fall back to
+        # the exact O(store) sweep. Every object-wildcard-free schema, AND every
+        # object-wildcard schema whose wildcards feed no such bridge (direct grants,
+        # or only [T:*#rel] wildcard usersets), gets the O(reachable) walk.
+        if self._owc_needs_sweep:
             self._lookup_sweep(s_pred, s_type, s_name, result)
             return result
         # Seed from the subject's memberships (``_reverse_neighbors`` folds in the
