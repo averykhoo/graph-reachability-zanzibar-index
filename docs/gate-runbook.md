@@ -26,11 +26,18 @@ CPU-contention between concurrent heavy jobs has corrupted measurements before
 
 Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`
 
-### 1. Backend + differential suite (~5 min)
+### 1. Backend + differential suite — run it SPLIT (~7 + 4 min)
+`pytest tests/ -q` in one shot is **right at the cap** (~10:30 on 2026-07-14/15;
+it has finished at 628 s once and been killed with no verdict twice). Run the
+tiled split instead — together the two halves are exactly the 531-test suite:
+
 ```bash
-"$PY" -m pytest tests/ -q; echo "EXIT=$?"
+"$PY" -m pytest tests/ -q --ignore=tests/test_hypothesis.py --ignore=tests/test_matrix.py; echo "EXIT=$?"   # ~407 s, 507 passed
+"$PY" -m pytest tests/test_hypothesis.py tests/test_matrix.py -q; echo "EXIT=$?"                            # ~230 s, 24 passed
 ```
-`tests/` alone (without `formal/conformance/`) fits under the cap. **Capture `$?`
+
+Tiling check: 507 + 24 = 531. A newly added test file automatically lands in the
+first half (the split only ever names the two heavy files). **Capture `$?`
 directly** — piping through `tee` returns tee's exit code (0) and masks a failure.
 
 ### 2. Lean + conformance — the split `verify.sh` gate
@@ -104,10 +111,13 @@ anti-vacuous guards, so three green phases satisfy the gate on their own — no
 uncapped `verify.sh all` and no user hand-off is required (except to pre-warm a
 cold Lean build; see §2).
 
-## Gotchas (all hit this session, 2026-07-14)
+## Gotchas (hit 2026-07-14/15)
 
 - `tee` masks pytest's exit code → capture `$?`.
-- Background commands are capped the same ~10 min as foreground.
+- Background commands are capped the same ~10 min as foreground — and an
+  explicit per-command timeout kills a background run at that timeout **with no
+  verdict** (hit 2026-07-15: full suite killed at ~67%). A killed run tells you
+  nothing; use the §1 split instead of gambling on the monolith.
 - A killed `lean` phase no longer wedges the Lean cache — step 4 self-heals a missing
   `Audit.olean` (was: manual `lake build ZanzibarProofs.Audit` before retry).
 - **Algorithm changes need the fuzz gate BEFORE pushing.** P1 (lookup reverse

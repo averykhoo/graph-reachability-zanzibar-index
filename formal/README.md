@@ -71,8 +71,9 @@ correspondence itself.
 ## Status
 
 See `HANDOFF.md` (kept current every session). The arc is **complete**: the tree is
-**sorry-free and axiom-clean**, and `bash formal/verify.sh` (the one-command,
-fail-closed gate) is green — `lake build` + 0 sorries + zcli preflight + axiom audit
+**sorry-free and axiom-clean**, and `bash formal/verify.sh` (the fail-closed gate;
+agents run it **phased** per [`docs/gate-runbook.md`](../docs/gate-runbook.md) —
+the one-shot exceeds the ~10-min command cap) is green — `lake build` + 0 sorries + zcli preflight + axiom audit
 (412 `#print axioms` reports, one per audited theorem, only
 `[propext, Classical.choice, Quot.sound]`) + **248
 conformance tests, 0 skips**. T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over

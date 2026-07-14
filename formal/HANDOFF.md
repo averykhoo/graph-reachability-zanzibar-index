@@ -60,8 +60,14 @@ never rounds up to "the code is formally verified" (plan §7).
 export PATH="$HOME/.elan/bin:$PATH"                    # Lean v4.31.0, Mathlib pinned
 cd formal/lean && lake build                            # library (incremental ~1 min)
 lake build ZanzibarProofs.GraphIndex.ReconcileCorrect   # one module (~20 s)
-bash formal/verify.sh                                   # THE gate (from repo root; ~5 min)
+bash formal/verify.sh                                   # THE gate (from repo root)
 ```
+
+⚠ The one-shot `verify.sh` is now ~13–16 min and **blows the agent harness's
+~10-min command cap** — agents run it PHASED: `verify.sh lean` → `conf-heavy` →
+`conf-rest` (each cap-fitting, same anti-vacuous guards; three green phases ≡ a
+green one-shot). Full recipe + suite-split + fuzz gate:
+[`docs/gate-runbook.md`](../docs/gate-runbook.md).
 
 Python side runs under the repo conda env
 (`C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`).

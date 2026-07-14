@@ -4,7 +4,8 @@ Fitted scaling laws and a **PySets vs RoaringSets** comparison over the pre-perf
 baseline (`scale_bench.jsonl`, 21 rows: `set:roaring` ×9, `set:py` ×9, `graph`
 ×3 — one session, `paranoia=False`, in-memory SQLite). Raw throughput/RSS tables
 and reproduce commands live in [`BASELINE_2026-07-13.md`](BASELINE_2026-07-13.md);
-this file is the *analysis*.
+this file is the *analysis*. Statements-per-operation baseline (composition-layer
+sync writes, P12-M) lives in [`STMT_BASELINE_2026-07-14.md`](STMT_BASELINE_2026-07-14.md).
 
 Regenerate:
 
@@ -211,6 +212,90 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   Behavior-preserving (no modeled-algorithm change) — no Lean. Gated by 531 passed
   **incl. paranoia-mode invariant checker + delta verifier** + 263 conformance + a
   3-seed cascade/stateful-parity hypothesis sweep.
+
+- ✅ **P13 — bulk closure builder for `build_index`
+  (`index_v4/bulk_build.py`, `connectedstore/build.py`, 2026-07-15).**
+  `build_index(..., bulk=True)` (default) constructs the pre-backfill state
+  directly: route snapshot → natural-key direct multigraph → topo sort →
+  sparse integer path-count DP (T4's closed form) → bulk INSERT of
+  nodes/edges/outbox. Incremental loop retained as `bulk=False` (the identity
+  gate's reference side; the online write path is untouched). **Measured:
+  pure-union `build_index` 81.1 s → 1.67 s at 3.3k tuples and 407.8 s → 9.3 s
+  at 16.9k (43.9–48.6×); boolean load phase isolated 127.9 s → 3.8 s at 3.0k
+  (33.6×); boolean *total* build only 1.44× because the unchanged shared
+  `backfill()` dominates it (next candidate).** Correctness: the differential
+  identity gate (`tests/test_bulk_build.py`) builds the same snapshot both
+  ways over 4 corpora — union+wildcards (both bridge directions), boolean
+  (residues, version counts), De Morgan TTU, and a **multigraph fan-in corpus
+  (direct multiplicity ≥ 2 + pure-indirect counts multiplied through an m=2
+  edge — the dimension the first three corpora never reach)** — and asserts
+  exact equality of the four id-independent canonical projections
+  (nodes/edges/residues/outbox), plus I1–I13 invariant checker green and an
+  oracle read-parity grid on the bulk stores. Lean: unchanged (alternative
+  constructor of the same modeled state; logged in `CORRESPONDENCE.md §8.1`).
+  Design doc: `docs/p13-bulk-build-design.md`.
+
+- ✅ **Wave 2 (round 3) — N6 + N7 + N9 + P1-follow-up, 2026-07-15.** Two parallel
+  subagent tracks; integration gate green (531 passed split cap-safe 507+24 +
+  `verify.sh lean`/`conf-heavy` 68/`conf-rest` 195). Statement counts vs the
+  post-wave-1 run:
+  - **N6 — graph lookup classify batch (`index_v4/wildcard.py`).** The K-result
+    classify N+1 now batch-loads via `_load_nodes` (chunked `IN`, `_node_by_id`
+    fallback on a map miss). **lookup 74.5 → 3.0 stmts/op (union), 134.8 → 5.0
+    (boolean); lookup_reverse 14.3 → 2.9 / 14.4 → 4.8; ops/s 13 → 134 and
+    9 → 78.** Behavior-preserving; forward lookup unmodeled (§8.1).
+  - **N9 — trusted apply-path write (`wildcard.py` + `connectedstore/apply.py`).**
+    `_apply_row` now uses `_add/_remove_tuple_trusted` (skips only
+    `validate_write_identifiers`; provably always-passing there — admission
+    validated the raw tuple, `RuleSet.apply` copies identifiers verbatim and
+    rewrites only the relation to a charset-valid leaf predicate). Public API
+    validates unchanged; sole external trusted caller is `_apply_row`
+    (grep-verified). CPU constant, no stmt change.
+  - **N7 — `_instances_of_type` per-eval memo (`setengine/engine.py`).** One
+    O(interner) scan per type per evaluation (was per call); dead `query_names`
+    param + unused var in `check` deleted (all call sites passed empty).
+  - **P1 follow-up — tighter object-wildcard lookup fallback
+    (`setengine/engine.py`), ALGORITHM CHANGE, fuzz-swept.** `_owc_needs_sweep`
+    precomputed once: sweep only if some wildcard shape can bridge into a TTU
+    **target** or a non-wildcard userset restriction over its Computed
+    reverse-closure (the 2026-07-14 spec had the TTU end inverted and missed
+    the userset bridge — corrected + recorded in `docs/perf-next-round.md`).
+    Over-inclusive by design. Walk arm oracle-exact over ~1600 random states;
+    strict `test_lookup_oracle.py` + 6-seed `test_lookup_hypothesis.py` sweep
+    all green. github/boolean/demorgans now walk; wildcards/gdrive still sweep.
+
+- ✅ **Wave 1 (round 3) — P12a + P12b + N4 + N5 + N8, 2026-07-14.** Landed as three
+  parallel subagent tracks over disjoint files; full integration gate green (531
+  passed + `verify.sh lean`/`conf-heavy`/`conf-rest` = 68+195 conformance).
+  Statement-count after-numbers (re-run of `stmt_bench`, vs
+  `STMT_BASELINE_2026-07-14.md`): pure-union add **50.6 → 46.2 stmts/write**,
+  boolean add **221.2 → 206.7**; removes 43.0 → 38.8 / 187.2 → 173.8.
+  - **P12a — transaction-scoped `_lock_store` memo (`index_v4/core.py`).**
+    `SELECT…FOR UPDATE` re-takes per sync write: **4.32 → 1.00** (union),
+    **14.52 → 1.00** (boolean). Memo keyed on the live `SessionTransaction`
+    object's identity (fresh object per txn ⇒ structurally rollback-safe; repo
+    has no savepoints). Behavior-preserving — no Lean.
+  - **P12b — sync-gated log-row handoff (`connectedstore/`).** `log_rows`
+    SELECT per sync write: **1.00 → 0.00**. The just-flushed `TupleLogV1` row is
+    threaded to `advance_index(rows_hint=…)`, used only under the guard
+    `cursor.applied_log_id == hint[0].id − 1` (+ contiguity), else exact
+    fallback to `log_rows`. Single-slot pending buffer (bounded for direct
+    `TupleSource` users). Below the model (row *source*, not content) — logged
+    in `CORRESPONDENCE.md §8.1`.
+  - **N4 + N8 — memberset `_ext`/`_normalize` copy elimination + read micros
+    (`setengine/`).** Dropped ~6 defensive O(set) copies per algebra op (pos/neg
+    are always `freeze()` outputs — verified at every construction site; both
+    backends accept frozen operands in `-=`/`|=`/`&`). Micro-bench (indicative):
+    union/intersect/subtract **−13…−29%** across both SetOps
+    (`benchmarks/microbench_memberset.py`). Plus `itertools.chain` in the TTU
+    walks and the small `ns.entities` copy drop in `direct_expand`.
+  - **N5 — DB index audit (3 models files).** Dropped 13 write-only/redundant
+    secondary indexes (TupleV1 ×6, NodeV4 ×4, EdgeV4 store_id+subject_id,
+    ResidueV1 relation, IndexCursorV1 dup) — all grep-audited as covered by
+    composite-unique prefixes/PK; added composite keyset indexes
+    `edge_v4(store_id,object_id)`, `delta_outbox_v1(store_id,id)`,
+    `tuple_log_v1(store_id,id)`. Biggest payoff on PostgreSQL/MySQL (SQLite
+    understates index maintenance); InnoDB FK caveat documented on EdgeV4.
 
 - ✅ **N3 — graph-index residue-scan elision (`index_v4/processor.py`),
   2026-07-14.** `_keys_referencing` / `_residue_references` scanned the whole

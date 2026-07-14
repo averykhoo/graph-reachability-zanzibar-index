@@ -159,7 +159,9 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   rule, a different cascade order, a restructured closure/residue update, a new
   fast path with its own logic) means the Lean definition it maps to (see the
   rows above) now describes *dead code*. **Update the corresponding Lean model to
-  match, and re-run `formal/verify.sh`** — otherwise the proof silently verifies
+  match, and re-run `formal/verify.sh`** (phased — `lean` → `conf-heavy` →
+  `conf-rest` — per [`docs/gate-runbook.md`](../docs/gate-runbook.md) §2; the
+  one-shot blows the agent command cap) — otherwise the proof silently verifies
   an algorithm you no longer ship. If the new algorithm is hard to model, that is
   a signal to keep the old one behind the model, or to widen the model
   deliberately (a real formal task, not a silent drift). Either way: never let
@@ -214,3 +216,41 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   `tests/test_lookup_oracle.py` (S4) against the independent brute-force oracle
   over the full candidate grid — a differential net stronger here than a Lean
   twin would be — plus the hypothesis lookup coverage and the validation matrix.
+
+* **P12a/P12b — composition write-path round-trip elision
+  (`index_v4/core.py` `_lock_store`, `connectedstore/`, 2026-07-14).** Both
+  below the model's abstraction; no Lean def describes them. `ReachedByW3d2E`
+  (§6) models the sync write path as *admitted write + same-transaction
+  cascade* — WHAT is applied and THAT it is one transaction. P12a memoizes the
+  `SELECT…FOR UPDATE` store-lock re-take per transaction (locking/concurrency
+  is unmodeled; the lock is still taken, once, before the cursor read). P12b
+  hands `advance_index` the just-flushed `TupleLogV1` row instead of
+  re-SELECTing it, guarded by `cursor.applied_log_id == hint[0].id − 1` (+
+  strict contiguity) with an exact `log_rows` fallback — the same rows in the
+  same order reach the same apply loop, so the modeled chain (routed writes →
+  outbox → cascade) is byte-identical; only the row *source* changed (the P2
+  precedent: DB round-trips are below `DirectGraph`/the chain's abstraction).
+  Exactly-once/commit structure untouched. Netted by the full differential
+  suite + `test_connectedstore_*` (exactly-once, rollback, StaleRead) + graph
+  conformance (verdict + state).
+
+* **P13 — bulk closure builder for `build_index`
+  (`index_v4/bulk_build.py`, `connectedstore/build.py`, 2026-07-15).** The
+  offline bootstrap can now construct the pre-backfill graph state directly:
+  route the tuple snapshot to a natural-key direct multigraph, topo-sort,
+  compute per-pair path counts by sparse integer DP (`P(a,b) = m(a,b) +
+  Σ_v m(a,v)·P(v,b)` — **T4's closed form computed directly**), and bulk-write
+  nodes/edges/outbox. The modeled algorithm (incremental `pathCount_addEdge`
+  maintenance) is unchanged and remains the default for every online write
+  (`advance_index`/`add_tuple`); the bulk path is an **alternative constructor
+  of the same state**, kept behind `build_index(..., bulk=True)` with the
+  incremental loop retained as `bulk=False`. **The net is the differential
+  identity gate** (`tests/test_bulk_build.py`): same snapshot built both ways
+  across four corpora (union+wildcards both bridge directions, boolean+residues,
+  De Morgan TTU, and a multigraph fan-in corpus with direct multiplicity ≥ 2
+  and pure-indirect counts multiplied through an m≥2 edge), compared on
+  id-independent canonical projections — nodes `(implicit, reference_count)`,
+  edges `(direct, indirect, derived)`, residues, outbox multiset — all exactly
+  equal, plus the I1–I13 invariant checker and an oracle read-parity grid on
+  the bulk-built stores. No modeled definition describes dead code; nothing to
+  widen.
