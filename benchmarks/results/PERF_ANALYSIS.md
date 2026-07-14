@@ -150,21 +150,54 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   hypothesis sweep + full suite. Lean: forward `lookup` is an unmodeled surface —
   recorded in `CORRESPONDENCE.md §8.1`. A tighter fallback condition (only when an
   object-wildcard type is a TTU parent) would extend the walk to more schemas —
-  future work.
+  future work (P1 follow-up, `docs/perf-next-round.md`).
+
+- ✅ **P9 — set-engine `restr` frozenset cache (`setengine/engine.py`),
+  2026-07-14.** `direct_leaf` / `direct_expand` rebuilt `{(r.type, r.predicate,
+  r.wildcard) for r in direct.restrictions}` on every call — 0.77s tottime /
+  199k calls in the demorgans lookup profile. Now computed once per (frozen,
+  lifetime-stable) `Direct` node, keyed by `id(direct)`, reused across both
+  leaves; `rebuild()` never reparses the AST so no reset. Behavior-preserving
+  (identical set content) — no Lean. Gated by the full suite (531 passed).
+
+- ✅ **P3 — graph-index `_residue_state` per-reconcile memo (`index_v4/
+  wildcard.py`, `processor.py`), 2026-07-14.** The same `(type, rel, name)`
+  residue was re-fetched (node SELECT + residue SELECT + `json.loads`) many times
+  within one reconcile (via `stars_fn`/`derived_check`/`member_stars`/leaf
+  callbacks). A per-reconcile read cache on `WildcardIndex` (None outside a
+  reconcile ⇒ read path unchanged) memoizes it; `_store_residue` invalidates the
+  key it writes, so a post-write read of the object's own residue never sees the
+  pre-write snapshot. Cache holds immutable snapshots; every read returns fresh
+  mutable `neg`/`upos` sets. Behavior-preserving — no Lean. Gated by 531 passed
+  **incl. the paranoia-mode invariant checker + delta-scoped verifier** (the real
+  net for a residue-caching change).
+
+- ✅ **P7 — graph-index `_emit` region-snapshot hoist (`index_v4/core.py`),
+  2026-07-14.** `_emit` did two `session.get` calls per delta to denormalize
+  endpoint identity — O(A×D) round trips per write over the closure region. Now a
+  `{id: NodeV4}` snapshot of A∪D∪{subject,object} is loaded once (chunked `IN`)
+  and threaded through `_add_indirect_edges_batch_unsafe` → `_emit`; a map miss
+  falls back to `session.get`, endpoint identity fields are never mutated by
+  edge/refcount updates, and the batch deletes no nodes, so emitted rows are
+  byte-identical. (P7's GC-scan short-circuit was already present in
+  `_gc_public_node` — no change needed there.) Behavior-preserving — no Lean.
+  Gated by 531 passed.
 
 ## Optimization targets (ranked)
 
-*(P1 landed — see Applied. Remaining, renumbered; full ranked worklist with the
-graph-index and composition items in `docs/perf-optimization-handoff.md`.)*
+*(P1/P3/P7/P9 landed — see Applied. Full remaining worklist (P6, P10, P11, P12,
+the P1 follow-up, and new scopes N1–N3) is now in
+[`docs/perf-next-round.md`](../../docs/perf-next-round.md).)*
 
 1. **`memberset._starpop` population copy (`memberset.py:87`).** Same O(population)
    copy, but on the *star* path (star-heavy workloads: wide/demorgans). Can't just
    drop `ops.new()` (contract: `pop` may yield a bare iterable). Needs a `SetOps`
    bulk-union primitive that accepts an iterable without a full intermediate copy,
-   or an engine-level guarantee that `pop` returns an ops set. Medium risk.
+   or an engine-level guarantee that `pop` returns an ops set. Medium risk. (P10.)
 2. **graph write path** (closure materialization + boolean `backfill()`), 15–156
    writes/s — the only thing blocking graph numbers at scale. *(P2 landed the
-   closure-region batching 2026-07-14; the boolean cascade cost remains.)*
+   closure-region batching, P7 hoisted the per-emit node fetches, both 2026-07-14;
+   the boolean cascade coalescing — P6 — remains.)*
 3. check and reverse (roaring) are already O(1) and fast — low leverage.
 
 ## Notes
