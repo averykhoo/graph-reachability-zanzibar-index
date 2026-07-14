@@ -9,9 +9,16 @@ IVM delta processor.
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
   Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`
-- The full suite is the gate (450+ tests): run
-  `"C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe" -m pytest -q`
-  from the repo root before claiming a change is done.
+- The full suite is the gate (~794 tests: `tests/` 531 + `formal/conformance/` 263):
+  `"$PY" -m pytest -q` from the repo root before claiming a change is done. It
+  exceeds the harness's ~10-min command cap — run it **cap-safe** per
+  [`docs/gate-runbook.md`](docs/gate-runbook.md): `pytest tests/` (§1) + the phased
+  Lean gate below (§2).
+- **Formal gate** = `bash formal/verify.sh` (Lean build + `sorry`=0 + axiom audit +
+  conformance). The one-shot blows the cap; it takes a **phase arg** so an agent can
+  run it unattended, in order: `verify.sh lean` → `conf-heavy` → `conf-rest` (each
+  fits the cap; same anti-vacuous guards as the one-shot). **Push only after**
+  `pytest tests/` + all three phases green (+ a fuzz sweep for an algorithm change).
 - Deps: `sqlmodel`, `pytest`, `pyroaring` (set-engine default bitmap backend),
   `hypothesis` (property/stateful fuzzing).
 
@@ -119,5 +126,6 @@ IVM delta processor.
   conformance are the net). But an optimization that **changes the modeled algorithm**
   (candidate pruning, cascade order, closure/residue update, a new fast path) makes the
   corresponding Lean definition describe dead code — update that Lean model and re-run
-  `formal/verify.sh`, or log the gap in `CORRESPONDENCE.md` §7. Don't let code and model
-  drift unrecorded (`CORRESPONDENCE.md` §8).
+  `formal/verify.sh` (phased: `lean` → `conf-heavy` → `conf-rest`, per gate-runbook §2),
+  or log the gap in `CORRESPONDENCE.md` §7. Don't let code and model drift unrecorded
+  (`CORRESPONDENCE.md` §8).

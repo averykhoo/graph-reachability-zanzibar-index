@@ -2,16 +2,20 @@
 
 The full validation gate is three heavy jobs — the pytest suite, the hypothesis
 campaign, and the Lean `verify.sh`. Run naively they exceed the harness's **~10-min
-per-command execution cap**, get killed mid-run, and leave no verdict (or, for
-`verify.sh`, a *corrupted* Lean cache). This runbook is the cap-safe recipe.
+per-command execution cap** and get killed mid-run, leaving no verdict. This runbook
+is the cap-safe recipe. **`verify.sh` now takes a phase argument so the whole formal
+gate runs as three cap-fitting commands an agent can execute unattended (§2)** — the
+old "the user must run it uncapped" requirement survives only for a cold Lean build.
 
 ## The constraint
 
 - One shell command is killed at ~10 min (600 s), foreground **or** background.
 - `pytest -q` (whole repo) ≈ 655 s — right at the edge; it *has* been killed at
   ~64%.
-- `verify.sh` = Lean build (cache-hit ≈ fast, cold ≈ 20-40 min) + conformance
-  (≈ 5.5 min). Cold, or after a prior kill, it blows the cap.
+- `verify.sh all` (one shot) = Lean build (warm ≈ 90 s / 1082 jobs, cold ≈ 20-40 min)
+  + conformance (≈ 11-13 min today) ≈ 13-16 min — blows the cap. Run it **phased**
+  instead (§2): `verify.sh lean | conf-heavy | conf-rest`, each of which fits with
+  margin (worst phase `conf-heavy` ≈ 6.5 min).
 - `HYPOTHESIS_PROFILE=deep` (max_examples=120, stateful_step_count=25) is ~30× the
   `ci` profile — a single deep test file blows the cap.
 
@@ -29,38 +33,53 @@ Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/py
 `tests/` alone (without `formal/conformance/`) fits under the cap. **Capture `$?`
 directly** — piping through `tee` returns tee's exit code (0) and masks a failure.
 
-### 2. Lean + conformance
-`verify.sh`'s step 5 (`pytest formal/conformance/`, ≈ 5.5–7 min) is the *other* half
-of `pytest -q`, so step 1 + conformance together == the whole suite + the
-conformance gate.
+### 2. Lean + conformance — the split `verify.sh` gate
+`verify.sh` takes a **phase argument** so the whole formal gate (its 5 steps) runs
+as three cap-fitting commands an agent can execute unattended. Warm timings on the
+dev box:
 
-**Reality check: `verify.sh` does NOT reliably fit the 10-min cap, even warm.**
-Step 1 (`lake build`) *replays* all ~2144 modules every run (~4–5 min inherent for
-a Mathlib-scale project — a warm rebuild is not instant), and conformance is another
-5.5–7 min, so the total is ~10–12 min. It sometimes squeaks under, often doesn't.
-So:
+```bash
+bash formal/verify.sh lean        # steps 1-4: lake build + sorry=0 + zcli + axiom audit   (~0.5-3 min warm)
+bash formal/verify.sh conf-heavy  # step 5, the slow file only (test_conformance_remove)   (~6.5 min)
+bash formal/verify.sh conf-rest   # step 5, every OTHER conformance file                    (~4 min)
+```
 
-- **For a change that touches NO `.lean` file** (Python-only perf work is the
-  usual case): the Lean *proofs* (steps 1–4: build, `sorry`=0, `zcli`, axiom audit)
-  are unaffected — verify they were green earlier and confirm `git diff` shows no
-  `formal/lean/**/*.lean` change. Then run only the part that exercises your code:
-  ```bash
-  "$PY" -m pytest formal/conformance/ -q; echo "EXIT=$?"
-  ```
-  That + step 1 == the full `pytest -q` coverage; the proofs ride on "unchanged".
-- **For a change that DOES touch `.lean`**, or when you need the classifier's
-  end-to-end `verify.sh` green (it rejects a reconstructed pass): run
-  `bash formal/verify.sh` **uncapped** — from an interactive shell, or in this
-  harness via the user typing `! bash formal/verify.sh` (the user's shell has no
-  10-min cap). Pre-warm first (`cd formal/lean && lake build && lake build zcli &&
-  lake build ZanzibarProofs.Audit`) to minimise its runtime.
+Run them **in that order** — the `lean` phase builds the `zcli` binary the conf
+phases preflight on (a conf phase run without it FAILs loudly rather than skipping
+vacuously). All three must print `PASSED`. Together they == `pytest tests/` (step 1)
++ a full `verify.sh all`.
 
-**Never kill `verify.sh` mid-run.** Its step 4 does `rm -f Audit.olean` then rebuilds
-it; a kill in between leaves `Audit.olean` missing (and the default `lake build`
-does *not* rebuild the `Audit` target), so the next run fails the layout-drift
-guard (`FAIL: audit olean not at expected path`). Recovery:
-`cd formal/lean && lake build ZanzibarProofs.Audit`, then re-run. This corruption
-cost several retries this session — treat `verify.sh` as uninterruptible.
+- **Coverage is complete, by construction.** `conf-rest` is the conformance dir
+  MINUS the heavy file (`--ignore=…/test_conformance_remove.py`), so the two conf
+  phases *tile* `formal/conformance/` with no gap and any newly-added conformance
+  file automatically lands in `conf-rest`. Tiling check: `conf-heavy` + `conf-rest`
+  pass counts sum to the full total (68 + 195 = 263 today).
+- **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
+  guards as the one-shot — olean layout-drift guard + `#print axioms` observed==expected
+  (Lean), zcli-binary preflight + no-skip + passed>0 (conformance). So three green
+  phases ≡ a green `verify.sh all`; there is no reconstructed-pass hole to manage.
+- **`bash formal/verify.sh` with no arg** still runs all 5 steps in one shot
+  (~13-16 min) — for an uncapped shell or CI only; it does NOT fit the cap.
+
+**When can `lean` blow the cap?** Only a genuinely **cold** Lean build (fresh
+checkout, cleaned `.lake`, or a toolchain bump) is 20-40 min. A **warm** tree — the
+case for any Python-only change, since nothing invalidates the Lean cache — is
+~0.5-3 min (`lake build` ≈ 90 s cold-of-session, then near-instant; the audit
+rebuild ≈ 85 s). If `lean` is killed on a cold build, pre-warm once from an uncapped
+shell (`cd formal/lean && lake build && lake build zcli`) or have the user run
+`! bash formal/verify.sh lean`; after that the capped phases work.
+
+**For a change that touches NO `.lean` file** (Python-only perf work is the usual
+case): the Lean *proofs* are unaffected — you may confirm `git diff` shows no
+`formal/lean/**/*.lean` change and lean on the last green `lean` phase — but running
+`verify.sh lean` warm costs ~1 min, so just run it. Then `conf-heavy` + `conf-rest`.
+
+**A killed `lean` phase no longer wedges the cache.** Step 4 (`rm -f Audit.olean`
+then rebuild) is now **self-healing**: it rebuilds a missing `Audit.olean` before
+asserting the expected path, so a prior kill can't leave the layout-drift guard
+tripped. (The guard still catches genuine path drift: a rebuild at a drifted path
+leaves the expected path empty and FAILs.) Recovery from an *older* kill (pre-self-heal
+state) if ever needed: `cd formal/lean && lake build ZanzibarProofs.Audit`.
 
 ### 3. Fuzzing before an algorithm change (do NOT skip — see the P1 lesson)
 The `ci` profile (max_examples=12, stateful_step_count=8) is the per-commit floor
@@ -77,16 +96,20 @@ surface, run a deeper campaign. Two cap-safe options:
   nightly/offline job, not a single command.
 
 ### Push gate
-Push only after: step 1 green, step 2 green **end-to-end in one `verify.sh`
-invocation** (the push-gate classifier rejects a reconstructed pass — a
-killed-at-step-5 run + a separate conformance run does not count), and — for an
-algorithm change — a fuzz sweep (step 3) green.
+Push only after ALL of: step 1 (`pytest tests/`) green; the three `verify.sh`
+phases (`lean` → `conf-heavy` → `conf-rest`) each green; and — for an algorithm
+change — a fuzz sweep (step 3) green. The phased gate is fully **agent-runnable
+within the cap** (worst phase ≈ 6.5 min), and each phase carries the one-shot's
+anti-vacuous guards, so three green phases satisfy the gate on their own — no
+uncapped `verify.sh all` and no user hand-off is required (except to pre-warm a
+cold Lean build; see §2).
 
 ## Gotchas (all hit this session, 2026-07-14)
 
 - `tee` masks pytest's exit code → capture `$?`.
 - Background commands are capped the same ~10 min as foreground.
-- A killed `verify.sh` corrupts the Lean cache (`Audit.olean`); rebuild before retry.
+- A killed `lean` phase no longer wedges the Lean cache — step 4 self-heals a missing
+  `Audit.olean` (was: manual `lake build ZanzibarProofs.Audit` before retry).
 - **Algorithm changes need the fuzz gate BEFORE pushing.** P1 (lookup reverse
   walk) shipped an object-wildcard×TTU completeness bug because only the `ci`
   profile ran pre-push; a multi-seed / deep sweep caught it the next run. The
