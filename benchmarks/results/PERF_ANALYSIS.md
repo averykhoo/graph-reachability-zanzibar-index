@@ -135,16 +135,22 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
     copy. Removing it broke `test_memberset_algebra_homomorphism`. See target #1.
 
 - ✅ **set-engine `lookup` — O(store) sweep → O(reachable) reverse walk (P1),
-  FIXED 2026-07-14** (was target #2). Replaced the full-store candidate sweep
-  (`check` over every interned key) with a reverse BFS (dual of `expand`):
+  2026-07-14** (was target #2), **HYBRID**. Reverse BFS (dual of `expand`):
   `_reverse_neighbors` propagates `member_of` fan-in + wildcard-sentinel coverage
-  + `_object_deps` (Computed/TTU-tupleset) + a new `_ttu_map` (TTU from-chain),
-  verifying each candidate with the unchanged `check`. **Lookup is now flat in
-  store size: `simple` ~22,400/s at 64k tuples (was ~3.4/s at 100k — the −1.03
-  O(N) slope); `gdrive` ~322/s flat across 8.4k–134k tuples.** Absolute rate now
-  tracks the reachable-set size, not the store. Gated by `test_lookup_oracle.py`
-  (exact two-sided vs the oracle) + full suite (**794 passed**). Lean: forward
-  `lookup` is an unmodeled surface — recorded in `CORRESPONDENCE.md §8.1`.
+  + `_object_deps` (Computed/TTU-tupleset) + `_ttu_map` (TTU from-chain), each
+  candidate confirmed by the unchanged `check`. **Wildcard-free schemas get the
+  flat O(reachable) walk: `simple` ~20,000/s at 64k tuples, flat (was ~3.4/s at
+  100k — the −1.03 O(N) slope).** **Object-wildcard schemas keep the exact O(store)
+  sweep** (`_lookup_sweep`): a subject granted `T:*` reaches every object whose
+  stored tupleset parent is a concrete `T`, which the walk reaches only as the
+  `(T,'*',rel)` node — a **hypothesis-deep completeness finding** (the initial
+  walk-only version dropped it). So `gdrive`/`wildcards` (both declare object
+  wildcards) are unchanged from baseline (still O(store)); no schema regresses.
+  Gated by `test_lookup_oracle.py` (exact two-sided vs the oracle) + a 6-seed
+  hypothesis sweep + full suite. Lean: forward `lookup` is an unmodeled surface —
+  recorded in `CORRESPONDENCE.md §8.1`. A tighter fallback condition (only when an
+  object-wildcard type is a TTU parent) would extend the walk to more schemas —
+  future work.
 
 ## Optimization targets (ranked)
 

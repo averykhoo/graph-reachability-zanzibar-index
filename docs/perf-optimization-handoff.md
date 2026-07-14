@@ -25,10 +25,11 @@ targeted oracle gate for the surface touched (`tests/test_lookup_oracle.py` for
 lookup/expand; `tests/test_matrix.py` for check/write parity). Never edit a
 golden/oracle result to make an opt pass.
 
-**Landed 2026-07-14** (full suite 794 passed + verify.sh all-green): **P0**
-(`1d60d2b`+`75fa0d4`), **P5+P8** (`bc20398`), **P2** (`41fe499`), **P1**
-(`30a3439`). Integration lessons recorded inline on each. Still open: P3, P4,
-P6, P7, P9–P12 (graph-reconcile reads + smaller/conditional items).
+**Landed 2026-07-14**: **P0** (`1d60d2b`+`75fa0d4`), **P5+P8** (`bc20398`), **P2**
+(`41fe499`), **P1** (`30a3439`+hybrid `990c6ed`), **P4** (`43fa4bf`). Integration
+lessons recorded inline on each; the P1 object-wildcard bug is the case study in
+[`docs/gate-runbook.md`](gate-runbook.md) (run the fuzz gate before shipping an
+algorithm change). Still open: P3, P6, P7, P9–P12.
 
 ---
 
@@ -76,14 +77,19 @@ P6, P7, P9–P12 (graph-reconcile reads + smaller/conditional items).
 
 ## Tier 1 — large structural wins (algorithm changes → Lean work)
 
-### P1. Set-engine `lookup`: O(store) sweep → O(reachable) reverse walk ✅ LANDED
-> **Done** (`30a3439`). Reverse BFS (`_reverse_neighbors`: `member_of` fan-in +
-> wildcard-sentinel coverage + `_object_deps` + new `_ttu_map`), each candidate
-> verified by the unchanged `check`. **Lookup now flat in store size:** `simple`
-> ~22,400/s at 64k tuples (was ~3.4/s at 100k); `gdrive` ~322/s flat 8.4k–134k.
-> Two star-coverage misses the oracle gate caught (ghost subject via `[type:*]`;
-> intermediate userset-star) fixed during bring-up. Lean: forward `lookup` is
-> unmodeled — recorded in `CORRESPONDENCE.md §8.1`.
+### P1. Set-engine `lookup`: O(store) sweep → O(reachable) reverse walk ✅ LANDED (hybrid)
+> **Done** (`30a3439` + hybrid fix `990c6ed`). Reverse BFS (`_reverse_neighbors`:
+> `member_of` fan-in + wildcard-sentinel coverage + `_object_deps` + `_ttu_map`),
+> each candidate verified by the unchanged `check`. **Wildcard-free schemas: flat
+> O(reachable) walk — `simple` ~20,000/s at 64k tuples (was ~3.4/s at 100k).**
+> **Object-wildcard schemas fall back to the exact O(store) sweep** (`_lookup_sweep`)
+> — the walk can't bridge a `T:*` grant through a wildcard-covered concrete TTU
+> parent (a hypothesis-deep finding; the walk-only version shipped this bug and
+> was fixed). No schema regresses vs. baseline. Three completeness gaps caught by
+> the gates during bring-up (ghost subject via `[type:*]`; intermediate
+> userset-star; object-wildcard×TTU). Lean: forward `lookup` unmodeled —
+> `CORRESPONDENCE.md §8.1`. **Follow-up:** a tighter fallback (only when an
+> object-wildcard type is a TTU parent) would extend the walk to more schemas.
 - **Where:** `setengine/engine.py:825` (`lookup`). Full design +
   implementation checklist already written:
   [`docs/lookup-reverse-walk-plan.md`](lookup-reverse-walk-plan.md).
@@ -145,7 +151,11 @@ P6, P7, P9–P12 (graph-reconcile reads + smaller/conditional items).
 - **Lean:** none (pure read caching). **Risk:** Low-Medium (must not serve stale
   residue across the reconcile's own write). **Independent:** yes.
 
-### P4. Graph index: batch the N+1 `session.get(NodeV4, id)` loops
+### P4. Graph index: batch the N+1 `session.get(NodeV4, id)` loops ✅ LANDED
+> **Done** (`43fa4bf`). Added `_nodes_by_ids` (one `IN` query) and routed the six
+> reconcile enumeration helpers through it. Behavior-preserving (identity-mapped
+> rows unchanged). The remaining per-id gets in `_keys_referencing`/cascade are
+> P7/P6.
 - **Where:** `index_v4/processor.py:237-241` (`stored_userset_subjects`),
   `:252-257` (`tupleset_parents`), `:344-348`
   (`_stored_parent_objects_of_entity`), `:468`/`:519` (reconcile passes),
