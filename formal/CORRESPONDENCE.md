@@ -202,7 +202,13 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   `_ttu_map` (TTU from-chain) — the reverse mirror of `check`'s
   direct-userset / Computed / TTU recursion), **verifying every surfaced
   candidate with the unchanged `check`** and keeping the intensional marker loop.
-  So the observable output is identical (same `node_ids` + `markers`), and no
+  **Hybrid:** object-wildcard schemas (`object_wildcard_shapes` non-empty) keep
+  the exact O(store) sweep (`_lookup_sweep`) — a subject granted `T:*` reaches
+  every object whose stored tupleset parent is a concrete `T`, which the walk
+  reaches only as the `(T,'*',rel)` node, not the wildcard-covered concrete
+  parents that feed the TTU (a hypothesis-deep finding). The O(reachable) walk
+  runs for every wildcard-free schema (the default). Either way the observable
+  output is identical (same `node_ids` + `markers`), and no
   modeled Lean definition describes `lookup`'s candidate generation — nothing
   becomes dead code. Pinned **exact two-sided** by
   `tests/test_lookup_oracle.py` (S4) against the independent brute-force oracle

@@ -945,6 +945,17 @@ class SetEngine:
         for (t, rel) in self.ast:                          # declared (type, relation)
             if self.check(s_pred, s_type, s_name, rel, t, '*'):
                 result.markers.add((t, rel))
+        # Object wildcards interact with TTU from-chains in a way the reverse walk
+        # does not enumerate: a subject granted `T:*` (object wildcard) is a member
+        # of every concrete (T, X, rel), so it reaches every object whose stored
+        # tupleset parent is such a T -- but the walk only reaches the (T,'*',rel)
+        # wildcard node, never the wildcard-covered concrete parents that feed the
+        # TTU (lookup-oracle hypothesis finding, 2026-07-14). Fall back to the exact
+        # O(store) sweep for these (uncommon) schemas; the O(reachable) walk covers
+        # every object-wildcard-free schema (the default).
+        if self.schema_info.object_wildcard_shapes:
+            self._lookup_sweep(s_pred, s_type, s_name, result)
+            return result
         # Seed from the subject's memberships (``_reverse_neighbors`` folds in the
         # subject-wildcard sentinel's grants via its H1 star coverage). A
         # ghost/uninterned subject can still reach concretes purely through a
@@ -976,6 +987,21 @@ class SetEngine:
                 if nxt not in visited:
                     queue.append(nxt)
         return result
+
+    def _lookup_sweep(self, s_pred, s_type: str, s_name: str, result: LookupResult) -> None:
+        """Exact O(stored-tuples) candidate sweep: every interned relation key is a
+        candidate, confirmed by ``check`` (sound under booleans). The write-time
+        reverse-dependency interning (``_apply_add``) guarantees TTU/Computed-only
+        reachable object keys have ids, so this is complete. The fallback path for
+        object-wildcard schemas the reverse walk does not fully cover (see
+        ``lookup``); appends concrete ids to ``result.node_ids`` in place."""
+        for (t, n, p) in list(self.interner.key_of.values()):
+            if p == '...' or n == '*':
+                continue                    # entity nodes are not relations; stars are markers
+            if self.check(s_pred, s_type, s_name, p, t, n):
+                oid = self.interner.get(t, n, p)
+                if oid is not None:
+                    result.node_ids.add(oid)
 
 
 # The backend protocol (§6.5) is exactly SetEngine's surface: add_tuple / remove_tuple /
