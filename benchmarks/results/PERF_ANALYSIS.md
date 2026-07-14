@@ -183,6 +183,50 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   `_gc_public_node` — no change needed there.) Behavior-preserving — no Lean.
   Gated by 531 passed.
 
+- ✅ **P10 — `memberset._starpop` population copy (`setengine/memberset.py`,
+  `setops.py`), 2026-07-14.** Added a copy-free `SetOps.update(acc, it)` primitive
+  (in-place union accepting any iterable — `set.update` / `BitMap.update` both
+  normalise bare tuples, generators, and peer sets) and rewrote `_starpop` from
+  `acc |= ops.new(pop(shape))` to `ops.update(acc, pop(shape))`, dropping the
+  redundant full-population copy per star shape. **Constant-factor, not asymptotic**
+  (unlike its `direct_expand` twin): `_starpop` over a covered shape is inherently
+  O(population). Isolated micro-bench (100k-id population, single shape): PySets
+  6,518 → 3,467 µs/call (**1.88×**), RoaringSets 5.9 → 3.2 µs/call (**1.85×**);
+  full `_ext` (tiny result / huge neg) 1.2–1.3×. Invisible on `scale_bench`
+  demorgans-reverse (users capped at 250 ⇒ bounded star population — measured flat
+  602 → 565/s from 17.7k to 86.8k tuples), so the uncapped micro-bench is the
+  justification. Behavior-preserving (`ext` identical old==new) — no Lean. Gated by
+  the full suite (531 + 263).
+
+- ✅ **P6 — graph-index cascade outbox coalescing (`index_v4/processor.py`),
+  2026-07-14.** P2's closure expansion emits O(ancestors×descendants) outbox rows;
+  `_map_deltas_to_keys` redid the per-row work (a `subject_node` SELECT, a residue
+  scan for GC'd subjects, and the whole dependent/tupleset/target fan-out) once per
+  row. Rewrote it to run the object-level fan-out exactly **once per distinct
+  `(o_type, o_name, o_pred)`** (that fan-out never depends on the subject) and to
+  dedupe the `session.get(subject_node_id)` / `_node(subject)` lookups via per-call
+  memos; only the leaf's own-key full/subject decision stays per-row. The function
+  mutates no node/residue state (memo is exact) and `full`/`subject` merge
+  order-independently and idempotently, so the coalesced key set is identical.
+  Behavior-preserving (no modeled-algorithm change) — no Lean. Gated by 531 passed
+  **incl. paranoia-mode invariant checker + delta verifier** + 263 conformance + a
+  3-seed cascade/stateful-parity hypothesis sweep.
+
+- ✅ **N3 — graph-index residue-scan elision (`index_v4/processor.py`),
+  2026-07-14.** `_keys_referencing` / `_residue_references` scanned the whole
+  `ResidueV1` table + JSON-decoded every row's neg/upos on every GC call in the
+  cascade — but that scan is load-bearing ONLY for cross-object subject recordings
+  (from-chain usersets X4a, lifted userset memberships X4), which arise solely from
+  `derived-ttu` / `derived-tupleset-ttu` / `derived-userset` leaf kinds. A schema
+  whose every leaf is `closure` or `derived-computed` records only edge-justified,
+  same-object ids (already covered by the `reference_count` guards in the GC paths
+  and the fully-deleted-subject precondition on the delta-map scan), so the scan is
+  provably empty. Precompute a one-shot flag from `compiled.plans` (WHITELIST of the
+  two safe kinds — any unrecognized/future kind auto-disables the elision, so GC
+  correctness never rests on enumerating dangerous kinds) and short-circuit to `[]`.
+  Real win on pure-boolean (and/but-not over direct+computed) schemas; TTU/userset
+  schemas (e.g. demorgans) keep the scan. Behavior-preserving — no Lean. Gated as P6.
+
 ## Optimization targets (ranked)
 
 *(P1/P3/P7/P9 landed — see Applied. Full remaining worklist (P6, P10, P11, P12,

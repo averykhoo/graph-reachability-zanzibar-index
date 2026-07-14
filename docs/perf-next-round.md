@@ -7,8 +7,16 @@ The living list of **remaining** performance opportunities. Supersedes the retir
 cap-safe gate recipe stays [`docs/gate-runbook.md`](gate-runbook.md).
 
 **Landed so far (git log is the audit trail):** P0, P1 (lookup reverse walk,
-hybrid), P2, P3, P4, P5, P7, P8, P9. See `PERF_ANALYSIS.md` "Applied" for the
-per-item numbers/mechanism.
+hybrid), P2, P3, P4, P5, P6, P7, P8, P9, P10, N3. See `PERF_ANALYSIS.md`
+"Applied" for the per-item numbers/mechanism. **P11 struck** (2026-07-14): the
+deployment reuses one `ConnectedStore` instance rather than opening one
+per-request, so caching the compiled `RuleSet` across opens has no value — the
+schema is static (a new schema means a new store) and compilation already happens
+once per store. **N1/N2 measured and skipped** (2026-07-14): profiling showed
+neither is hot — N1's evaluation-scoped memo target has 0 redundant `_object_ids`
+calls (`sat`/`do` already memoize per key), and N2's restr bool test is <1% of the
+lookup profile (the traversal machinery dominates). Left for a future round only if
+the hot path shifts.
 
 **Reading the Lean column.** Per CLAUDE.md "Perf work & the Lean model": a
 behavior-preserving micro-opt needs no Lean change (differential matrix +
@@ -31,7 +39,7 @@ lookup/expand; `tests/test_matrix.py` for check/write parity), then
 
 ## Deferred from this round (with reasons — not silently dropped)
 
-### P6. Graph index: coalesce cascade outbox rows before per-row work
+### P6. Graph index: coalesce cascade outbox rows before per-row work — ✅ LANDED 2026-07-14
 - **Where:** `index_v4/processor.py` `_map_deltas_to_keys` (~L715–789).
 - **What:** P2's expansion emits O(A×D) outbox rows; the cascade then does a
   `self._node(...)` SELECT + dependent/tupleset/target fan-out **per row**, once
@@ -43,7 +51,7 @@ lookup/expand; `tests/test_matrix.py` for check/write parity), then
 - **Lean:** coalescing that preserves the final key set is behavior-preserving;
   changing fan-out semantics is not.
 
-### P10. `memberset._starpop` star-path population copy
+### P10. `memberset._starpop` star-path population copy — ✅ LANDED 2026-07-14
 - **Where:** `setengine/memberset.py` `_starpop` (~L84–92).
 - **What:** the twin of the already-fixed `direct_expand` copy (`78cfc2f`).
   `acc |= ops.new(pop(shape))` copies the whole O(population) mask per star shape.
@@ -56,7 +64,7 @@ lookup/expand; `tests/test_matrix.py` for check/write parity), then
   engine-level guarantee that `pop` returns an ops set. Medium risk.
 - **Lean:** none if behavior-preserving.
 
-### P11. Composition: cache compiled `RuleSet` across store opens
+### P11. Composition: cache compiled `RuleSet` across store opens — ✂ STRUCK 2026-07-14 (store is reused, not per-request)
 - **Where:** no memoization on `parse_openfga_schema` / `compile_ruleset`
   (`connectedstore/schema_io.py`, `store.py`). Every `ConnectedStore` reopen
   recompiles (`compute_taint` O(rel²), `_expand_object_wildcard_shapes` O(rules²)).
@@ -111,7 +119,7 @@ lookup/expand; `tests/test_matrix.py` for check/write parity), then
   combined set) to drop the bool test on the hot loop. **Lean:** none. Low risk.
   Small constant-factor; pairs with N1 and P9.
 
-### N3. Graph index: schema-level elision of the full-store residue scan
+### N3. Graph index: schema-level elision of the full-store residue scan — ✅ LANDED 2026-07-14
 - **Where:** `index_v4/processor.py` `_gc_public_node`, `_gc_subject_node`,
   `_map_deltas_to_keys` (~L761) — all run `_residue_references` / a full
   `ResidueV1` scan + JSON decode.
