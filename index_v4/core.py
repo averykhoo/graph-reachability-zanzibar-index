@@ -28,6 +28,10 @@ class ReachabilityIndex:
         # §4/I5). Only the delta processor's façade path sets this, around its own
         # writes into derived-public families.
         self._writing_derived = False
+        # Identity of the SessionTransaction under which this store's FOR UPDATE lock
+        # is already held (perf P12a). ``None`` = no lock taken in the current
+        # transaction. See ``_lock_store``.
+        self._locked_txn = None
 
     def _emit(self, subject_id: int, object_id: int, action: str,
               node_map: dict[int, NodeV4] | None = None) -> None:
@@ -92,10 +96,27 @@ class ReachabilityIndex:
         commits/rolls back. On SQLite ``with_for_update()`` renders to nothing (the engine
         already takes a database-level write lock), so tests are unaffected. A missing
         store row simply yields no lock (harmless).
+
+        Transaction-scoped memo (perf P12a): the lock is held for the whole transaction,
+        so re-issuing the ``SELECT ... FOR UPDATE`` on a row this transaction already
+        locked is a pure no-op round trip. We remember the ``SessionTransaction`` object
+        under which the lock was taken and short-circuit while it is still live. Keying
+        on the object *identity* (not a boolean) is what makes this rollback-safe:
+        ``Session.get_transaction()`` returns a fresh ``SessionTransaction`` after every
+        commit/rollback and ``None`` before autobegin, so the memo can never match into a
+        retried transaction -- a retry re-takes the real lock, which is exactly the
+        lost-update guard this method exists to provide. (No savepoints/``begin_nested``
+        in the repo, so root-transaction identity is the whole story.)
         """
+        txn = self.session.get_transaction()
+        if txn is not None and txn is self._locked_txn:
+            return
         self.session.exec(
             select(StoreV4).where(StoreV4.id == self.store_id).with_for_update()
         ).first()
+        # Capture AFTER the select: the lock SELECT itself may have autobegun the
+        # transaction, so ``get_transaction()`` was potentially None above.
+        self._locked_txn = self.session.get_transaction()
 
     def _add_db_edges_unsafe(
             self,
