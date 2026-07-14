@@ -29,13 +29,29 @@ class ReachabilityIndex:
         # writes into derived-public families.
         self._writing_derived = False
 
-    def _emit(self, subject_id: int, object_id: int, action: str) -> None:
+    def _emit(self, subject_id: int, object_id: int, action: str,
+              node_map: dict[int, NodeV4] | None = None) -> None:
         """Record a reachability flip in the outbox (boolean spec §4: deltas are rows
         inserted inside the writing transaction, never in-memory lists). Endpoint
         identities are denormalized at emission -- the nodes are alive here, but
-        implicit-node GC may delete them before the cascade reads the row."""
-        s = self.session.get(NodeV4, subject_id)
-        o = self.session.get(NodeV4, object_id)
+        implicit-node GC may delete them before the cascade reads the row.
+
+        ``node_map`` is an optional ``{id: NodeV4}`` region snapshot hoisted by the
+        caller (perf P7b) to collapse the per-emit ``session.get`` round trips. It is
+        a pure optimization: a miss falls back to ``session.get``, so the emitted
+        identity is byte-identical to the unhoisted path. Endpoint node identity
+        (type/name/predicate) is never mutated by edge/refcount updates, and the
+        batch expansion deletes no nodes, so a snapshot taken at the driving call
+        site stays valid for every emit it feeds."""
+        def _resolve(nid: int) -> NodeV4 | None:
+            if node_map is not None:
+                hit = node_map.get(nid)
+                if hit is not None:
+                    return hit
+            return self.session.get(NodeV4, nid)
+
+        s = _resolve(subject_id)
+        o = _resolve(object_id)
         self.session.add(DeltaOutboxV1(
             store_id=self.store_id, subject_node_id=subject_id, object_node_id=object_id,
             action=action,
@@ -43,6 +59,23 @@ class ReachabilityIndex:
             subject_predicate=s.predicate if s else '',
             object_type=o.type if o else '', object_name=o.name if o else '',
             object_predicate=o.predicate if o else ''))
+
+    def _load_nodes(self, ids) -> dict[int, NodeV4]:
+        """Batch-load nodes by id in chunked ``IN`` queries (perf P7b). Used to hoist
+        a region snapshot for ``_emit``; a returned instance is identical to what
+        ``session.get`` would hand back per id (SQLAlchemy identity map), so passing
+        this map into ``_emit`` never changes the denormalized endpoint identity."""
+        want = [i for i in dict.fromkeys(ids) if i is not None]
+        out: dict[int, NodeV4] = {}
+        _CHUNK = 900  # single-column IN: stay under SQLite's 999 bind-param default
+        for start in range(0, len(want), _CHUNK):
+            rows = self.session.exec(
+                select(NodeV4).where(NodeV4.store_id == self.store_id)
+                .where(NodeV4.id.in_(want[start:start + _CHUNK]))  # type: ignore[attr-defined]
+            ).all()
+            for n in rows:
+                out[n.id] = n
+        return out
 
     def _lock_store(self) -> None:
         """Serialize concurrent writers to this store for the rest of the transaction.
@@ -154,7 +187,8 @@ class ReachabilityIndex:
                 self._emit(triple.subject_id, triple.object_id, "ADDED")
 
     def _add_indirect_edges_batch_unsafe(
-            self, deltas: list[tuple[int, int, int]]
+            self, deltas: list[tuple[int, int, int]],
+            node_map: dict[int, NodeV4] | None = None
     ) -> None:
         """Batched, indirect-only form of ``_add_db_edges_unsafe`` for the
         O(ancestors x descendants) closure region emitted by the expansion loops.
@@ -213,7 +247,7 @@ class ReachabilityIndex:
                 )
                 self.session.add(edge)
                 existing[(from_id, to_id)] = edge
-                self._emit(from_id, to_id, "ADDED")
+                self._emit(from_id, to_id, "ADDED", node_map)
                 continue
 
             # Update existing edge. With direct_count == 0, new_direct == old_direct,
@@ -225,7 +259,7 @@ class ReachabilityIndex:
             if triple.direct_edge_count == 0 and new_indirect == 0:
                 self.session.delete(triple)
                 del existing[(from_id, to_id)]
-                self._emit(triple.subject_id, triple.object_id, "REMOVED")
+                self._emit(triple.subject_id, triple.object_id, "REMOVED", node_map)
                 continue
 
             triple.indirect_edge_count = new_indirect
@@ -243,7 +277,7 @@ class ReachabilityIndex:
             self.session.add(triple)
 
             if old_indirect == 0 and new_indirect > 0:
-                self._emit(triple.subject_id, triple.object_id, "ADDED")
+                self._emit(triple.subject_id, triple.object_id, "ADDED", node_map)
 
     def _add_direct_edge_unsafe(self, subject_id: int, object_id: int, count: int) -> None:
         assert count in {-1, 1}
@@ -315,7 +349,18 @@ class ReachabilityIndex:
         for from_node_id, path_count in reachable_before_subject.items():
             indirect_deltas.append((from_node_id, object_id, path_count * count))
 
-        self._add_indirect_edges_batch_unsafe(indirect_deltas)
+        # Hoist the region's {id: node} snapshot ONCE (perf P7b): every pair the
+        # batch emits has its endpoints in A (reachable_before_subject) ∪ D
+        # (reachable_after_object) ∪ {subject, object}, so one IN-query replaces the
+        # per-emit session.get round trips. The batch mutates only edges (no node is
+        # deleted until the tail, after this call), so the snapshot stays valid for
+        # every emit; a miss falls back to session.get, keeping it byte-identical.
+        region_ids: set[int] = {subject_id, object_id}
+        region_ids.update(k for k, _ in reachable_before_subject.items())
+        region_ids.update(k for k, _ in reachable_after_object.items())
+        node_map = self._load_nodes(region_ids)
+
+        self._add_indirect_edges_batch_unsafe(indirect_deltas, node_map)
 
         # Add the direct edge last to preserve invariants on addition
         if subject_id != object_id and count > 0:
