@@ -73,15 +73,21 @@ def timed(fn, iters: int, max_seconds: float | None = None) -> tuple[float, floa
     The time box matters for the ``lookup`` surface: set-engine lookup is a
     full-store candidate sweep (O(stored tuples) per call), so at large N a
     single call can take seconds -- a fixed iteration count would hang the sweep.
-    The elapsed clock is only sampled every 256 iters so the check is free for
-    fast ops (``check`` runs at tens of thousands/s).
+    The elapsed clock is sampled after EVERY iteration so the box is honoured even
+    when a single op takes seconds (perf_counter is ~tens of ns, negligible even
+    for a check surface running at ~10^5/s). A prior version sampled only every
+    256 iters "so the check is free for fast ops"; but at ~2 s/lookup that made the
+    box ineffective (256 iters = ~560 s before the first clock read), which under a
+    ~10-min command cap turns a slow lookup into a killed run. The reported *rate*
+    (done/elapsed) is unchanged by the sampling granularity -- only the iteration
+    count at which the box trips changes.
     """
     start = time.perf_counter()
     done = 0
     for i in range(iters):
         fn(i)
         done += 1
-        if max_seconds is not None and (done & 0xFF) == 0 \
+        if max_seconds is not None \
                 and (time.perf_counter() - start) >= max_seconds:
             break
     elapsed = time.perf_counter() - start

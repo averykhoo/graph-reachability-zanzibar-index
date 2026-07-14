@@ -307,7 +307,7 @@ def _rsz(result) -> int:
 
 def run(workload: str, backend: str, scale: int, checks: int, lookups: int,
         time_box: float, ops_name: str, emit_json: bool, paranoia: bool = False,
-        commit_every: int = 0) -> None:
+        commit_every: int = 0, out_name: str = 'scale_bench.jsonl') -> None:
     spec = WORKLOADS[workload]
     schema, shapes = spec['schema'], spec['shapes']
     tuples = list(spec['gen'](scale))
@@ -381,7 +381,7 @@ def run(workload: str, backend: str, scale: int, checks: int, lookups: int,
                    mean_lookup_size=round(sum(l_sizes) / len(l_sizes), 1),
                    mean_reverse_size=round(sum(r_sizes) / len(r_sizes), 1),
                    trues_of_200=trues, answers_sig=answers_sig)
-        with (out / 'scale_bench.jsonl').open('a') as fh:
+        with (out / out_name).open('a') as fh:
             fh.write(json.dumps(rec) + '\n')
 
     if backend == 'set':
@@ -408,14 +408,17 @@ def main():
                    help='graph backend only: commit every N writes (0=batch at end). '
                         'Use N=1 with --paranoia for production-like per-commit cost; '
                         'invalid on the boolean demorgans schema')
-    p.add_argument('--json', action='store_true', help='append a record to results/scale_bench.jsonl')
+    p.add_argument('--json', action='store_true', help='append a record to results/<out>')
+    p.add_argument('--out', default='scale_bench.jsonl', dest='out_name',
+                   help='jsonl filename under results/ to append to (default scale_bench.jsonl). '
+                        'Use a NEW name to avoid touching the committed baseline.')
     a = p.parse_args()
     if a.paranoia and a.backend != 'graph':
         p.error('--paranoia applies to the graph backend only (the set engine has no paranoia mode)')
     if a.commit_every and a.backend != 'graph':
         p.error('--commit-every applies to the graph backend only')
     run(a.workload, a.backend, a.scale, a.checks, a.lookups, a.time_box, a.impl, a.json,
-        paranoia=a.paranoia, commit_every=a.commit_every)
+        paranoia=a.paranoia, commit_every=a.commit_every, out_name=a.out_name)
 
 
 if __name__ == '__main__':

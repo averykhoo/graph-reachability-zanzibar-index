@@ -151,7 +151,8 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   hypothesis sweep + full suite. Lean: forward `lookup` is an unmodeled surface —
   recorded in `CORRESPONDENCE.md §8.1`. A tighter fallback condition (only when an
   object-wildcard type is a TTU parent) would extend the walk to more schemas —
-  future work (P1 follow-up, `docs/perf-next-round.md`).
+  landed as the P1 follow-up (see Applied below; round-3 record in
+  `docs/history/perf-round3-2026-07.md`).
 
 - ✅ **P9 — set-engine `restr` frozenset cache (`setengine/engine.py`),
   2026-07-14.** `direct_leaf` / `direct_expand` rebuilt `{(r.type, r.predicate,
@@ -259,7 +260,8 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
     precomputed once: sweep only if some wildcard shape can bridge into a TTU
     **target** or a non-wildcard userset restriction over its Computed
     reverse-closure (the 2026-07-14 spec had the TTU end inverted and missed
-    the userset bridge — corrected + recorded in `docs/perf-next-round.md`).
+    the userset bridge — corrected + recorded in
+    `docs/history/perf-round3-2026-07.md`).
     Over-inclusive by design. Walk arm oracle-exact over ~1600 random states;
     strict `test_lookup_oracle.py` + 6-seed `test_lookup_hypothesis.py` sweep
     all green. github/boolean/demorgans now walk; wildcards/gdrive still sweep.
@@ -314,8 +316,9 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Optimization targets (ranked)
 
-*(P1/P3/P7/P9 landed — see Applied. Full remaining worklist (P6, P10, P11, P12,
-the P1 follow-up, and new scopes N1–N3) is now in
+*(Rounds 1–3 landed — see Applied above; the retired round-3 worklist/execution
+record is `docs/history/perf-round3-2026-07.md`. The living **open** worklist
+(wave-3 conditionals, round-4 candidates, the P12c fence) is
 [`docs/perf-next-round.md`](../../docs/perf-next-round.md).)*
 
 1. **`memberset._starpop` population copy (`memberset.py:87`).** Same O(population)
@@ -337,3 +340,15 @@ the P1 follow-up, and new scopes N1–N3) is now in
 - `analyze.py` is dependency-free (reproducible anywhere); `plot_curves.py` needs
   matplotlib (`benchmarks/requirements-analysis.txt`). numpy was **not** required —
   the fits are hand-rolled log-log least squares.
+
+---
+
+> **Round-3 after-numbers + graph-at-scale crossover (2026-07-15):**
+> [`ROUND3_COMPARISON_2026-07-15.md`](ROUND3_COMPARISON_2026-07-15.md). Re-runs this
+> baseline (→ `scale_bench_2026-07-15.jsonl`) and adds the P13-bulk graph curves at
+> 10⁴–10⁵ tuples vs the set engine (→ `graph_scale_2026-07-15.jsonl`). Headline: set
+> `lookup` O(N)→O(1) on wildcard-free schemas (up to ~3000×), PySets `reverse`
+> O(N^0.7)→O(1) (16× at 100 k), write ~1.6× (N5). Crossover: after P1 the graph index's
+> only read-side win is forward `lookup` on **object-wildcard** schemas at scale
+> (gdrive 100 k: graph flat ~150/s vs set 0.27/s); the set engine dominates everywhere
+> else. (Re-run captured under memory pressure — read its session caveat first.)
