@@ -45,6 +45,19 @@ class WildcardIndex:
         # processor may write incoming direct edges on a derived-public family. The
         # processor sets this flag around its own writes.
         self.processor_writes = False
+        # Per-reconcile residue read cache (perf P3). None outside a reconcile: the
+        # read path then behaves exactly as before (no memoization). The delta
+        # processor installs a fresh dict for the duration of one full-object /
+        # subject reconcile, and invalidates the key it writes via ``_store_residue``,
+        # so a cached read can never return pre-write state to a post-write consumer
+        # (the only residue written in a reconcile is that of the object being
+        # reconciled, which is never read through this cache -- stratification forbids
+        # a plan from referencing its own relation, and the object's own residue is
+        # read only through the direct ``_residue_state`` calls, which the write
+        # invalidates). Values are immutable snapshots; every read hands back fresh
+        # mutable neg/upos sets, preserving the callers that mutate them in place.
+        self._residue_cache: dict[tuple[str, str, str],
+                                  tuple[frozenset, tuple[int, ...], tuple[int, ...]]] | None = None
 
     def _assert_derived_exclusivity(self, relation: str, o_type: str) -> None:
         if self.processor_writes:
@@ -381,19 +394,36 @@ class WildcardIndex:
     def _residue_state(self, relation: str, o_type: str, o_name: str
                        ) -> tuple[frozenset, set[int], set[int]]:
         """(stars, neg, upos) of the derived relation's residue; empty if no
-        row/node. Read-only: never interns."""
+        row/node. Read-only: never interns.
+
+        When a per-reconcile cache is installed (perf P3) the node SELECT, residue
+        SELECT and JSON decode are memoized by ``(o_type, relation, o_name)``. The
+        cache holds only immutable snapshots; every call reconstructs fresh mutable
+        ``neg``/``upos`` sets, so callers that mutate the returned sets in place
+        (``reconcile_subject``) can never corrupt a cached entry."""
+        cache = self._residue_cache
+        if cache is not None:
+            hit = cache.get((o_type, relation, o_name))
+            if hit is not None:
+                stars, neg_ids, upos_ids = hit
+                return stars, set(neg_ids), set(upos_ids)
+
         node = self._get_concrete(relation, o_type, o_name)
-        if node is None:
-            return frozenset(), set(), set()
-        row = self.idx.session.exec(
+        row = None if node is None else self.idx.session.exec(
             select(ResidueV1)
             .where(ResidueV1.store_id == self.idx.store_id)
             .where(ResidueV1.object_node_id == node.id)
         ).first()
         if row is None:
-            return frozenset(), set(), set()
-        return (frozenset(tuple(s) for s in json.loads(row.stars)),
-                set(json.loads(row.neg)), set(json.loads(row.upos)))
+            stars, neg_ids, upos_ids = frozenset(), (), ()
+        else:
+            stars = frozenset(tuple(s) for s in json.loads(row.stars))
+            neg_ids = tuple(json.loads(row.neg))
+            upos_ids = tuple(json.loads(row.upos))
+
+        if cache is not None:
+            cache[(o_type, relation, o_name)] = (stars, neg_ids, upos_ids)
+        return stars, set(neg_ids), set(upos_ids)
 
     def _check_derived(self, s_pred: str, s_type: str, s_name: str,
                        relation: str, o_type: str, o_name: str) -> bool:

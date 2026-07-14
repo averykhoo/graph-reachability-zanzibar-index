@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from contextlib import contextmanager
 
 from sqlmodel import select
 
@@ -402,8 +403,30 @@ class DeltaProcessor:
     # Reconciliation (§5.3 / §5.4) -- idempotent by construction
     # ------------------------------------------------------------------ #
 
+    @contextmanager
+    def _residue_cache_scope(self):
+        """Install a per-reconcile residue read cache on the façade for the duration
+        of one (outermost) reconcile (perf P3). Reentrant: a full-object reconcile's
+        nested ``reconcile_subject`` calls share the same cache; only the outermost
+        entry tears it down. Correctness rests on ``_store_residue`` invalidating the
+        key it writes, so a post-write read of the object's own residue never sees the
+        pre-write snapshot (see ``WildcardIndex._residue_cache``)."""
+        outer = self.widx._residue_cache is None
+        if outer:
+            self.widx._residue_cache = {}
+        try:
+            yield
+        finally:
+            if outer:
+                self.widx._residue_cache = None
+
     def reconcile_subject(self, object_type: str, rel: str, obj_name: str,
                           s: SubjectKey) -> bool:
+        with self._residue_cache_scope():
+            return self._reconcile_subject(object_type, rel, obj_name, s)
+
+    def _reconcile_subject(self, object_type: str, rel: str, obj_name: str,
+                           s: SubjectKey) -> bool:
         """Cheap path: reconcile one subject's membership representation.
 
         Canonical representation (deterministic across op orders, and the space rule
@@ -466,6 +489,10 @@ class DeltaProcessor:
         return changed
 
     def reconcile(self, object_type: str, rel: str, obj_name: str) -> bool:
+        with self._residue_cache_scope():
+            return self._reconcile(object_type, rel, obj_name)
+
+    def _reconcile(self, object_type: str, rel: str, obj_name: str) -> bool:
         """Full-object reconcile (§5.3): star fold, neg recompute, residue upsert,
         edge audit. Returns True iff anything changed (I9: fixpoint ⇒ False)."""
         plan = self.compiled.plans[(object_type, rel)]
@@ -567,7 +594,7 @@ class DeltaProcessor:
         for n in audit.values():
             if n.predicate != '...':
                 continue
-            edges_changed |= self.reconcile_subject(
+            edges_changed |= self._reconcile_subject(
                 object_type, rel, obj_name, (n.predicate, n.type, n.name))
 
         # (5) subject-node GC: ids dropped from neg/upos may have been interned
@@ -713,6 +740,12 @@ class DeltaProcessor:
         # The processor may intern the public object node on the write path (spec §4);
         # non-implicit so residue-only objects (star coverage, zero edges) survive GC.
         node = self.idx.node(rel, object_type, obj_name, create_if_missing=True, implicit=False)
+        # Invalidate the per-reconcile residue cache for the key being written (perf
+        # P3): the object's own residue is read (via the direct ``_residue_state``
+        # calls) both before and after this write within one reconcile, so a stale
+        # cached snapshot must never survive the mutation.
+        if self.widx._residue_cache is not None:
+            self.widx._residue_cache.pop((object_type, rel, obj_name), None)
         row = self._residue_row(node.id)
         empty = not stars and not neg and not upos
         if row is None:
