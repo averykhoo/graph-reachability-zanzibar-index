@@ -73,6 +73,14 @@ class TupleSource:
         self.evaluator_watermark = log_watermark(session, store_id)
         self.engine: SetEngine = open_set_engine(session, store_id, ops=ops,
                                                  ruleset=ruleset)
+        # The row flushed by the most recent ``_append``, until ``pop_pending_rows``
+        # drains it (perf P12b). Under the sync schedule the caller drains this
+        # immediately after each write and hands it to ``advance_index`` as a
+        # log-read hint, so it never spans a transaction boundary. The duplicate-add
+        # path appends nothing (natural empty hint). A single slot, not a list: one
+        # write appends exactly one row, and overwriting keeps the buffer bounded
+        # even for a direct ``TupleSource`` user that never pops.
+        self._pending_row: TupleLogV1 | None = None
 
     # ------------------------------------------------------------------ #
     # Writes (validate -> TupleV1 -> log append; one transaction)
@@ -112,7 +120,19 @@ class TupleSource:
         self.session.add(row)
         self.session.flush()            # autoincrement id now; still uncommitted
         assert row.id is not None
+        # Stash the flushed row for the sync fast path (perf P12b): the caller drains
+        # it via ``pop_pending_rows`` before the transaction ends.
+        self._pending_row = row
         return row.id
+
+    def pop_pending_rows(self) -> list[TupleLogV1]:
+        """Return the row(s) flushed since the last pop and reset the buffer (perf P12b).
+
+        The sync write path drains this right after a successful append to hand
+        ``advance_index`` the exact rows it would otherwise re-SELECT; the rollback/except
+        paths drain-and-discard it so no row ever survives into a later transaction."""
+        row, self._pending_row = self._pending_row, None
+        return [] if row is None else [row]
 
     # ------------------------------------------------------------------ #
     # Reads (the always-fresh online evaluator)

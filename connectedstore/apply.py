@@ -50,7 +50,13 @@ def _apply_row(row: TupleLogV1, widx: WildcardIndex, ruleset: RuleSet) -> None:
     sp = Ellipsis if row.subject_predicate == '...' else row.subject_predicate
     triple = RelationalTriple(Entity(row.subject_type, row.subject_name), row.relation,
                               Entity(row.object_type, row.object_name), sp)
-    fn = widx.add_tuple if row.op == 'ADD' else widx.remove_tuple
+    # Trusted graph-write fast path (perf N9): the raw tuple was charset-validated at
+    # admission (spec §2.4) and ``ruleset.apply`` only rewrites the relation to a
+    # compiler-generated leaf predicate ``<rel>.<idx>`` (charset-valid by construction),
+    # so re-running ``validate_write_identifiers`` per derived triple is provably
+    # redundant. Skip ONLY that check via the trusted entry points -- everything else
+    # (derived-exclusivity assert, cycle handling) is unchanged.
+    fn = widx._add_tuple_trusted if row.op == 'ADD' else widx._remove_tuple_trusted
     try:
         for d in ruleset.apply(triple):
             fn(_norm(d.subject_predicate), d.subject.type, d.subject.name,
@@ -64,7 +70,8 @@ def _apply_row(row: TupleLogV1, widx: WildcardIndex, ruleset: RuleSet) -> None:
 
 def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
                   ruleset: RuleSet, proc: DeltaProcessor | None, *,
-                  batch: int | None = None) -> int:
+                  batch: int | None = None,
+                  rows_hint: list[TupleLogV1] | None = None) -> int:
     """Apply log rows past the cursor to the index; advance the cursor; return the
     number of rows applied. The CALLER commits -- applied rows + cursor advance land
     in one transaction (exactly-once, spec §2.6).
@@ -81,7 +88,17 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
     freshness tokens/watermarks only ever move forward; a reader comparing its token
     against the cursor sees a truthful "reflects the source through N", whatever the
     batch size. Batch size thus affects only latency/granularity, not the final
-    materialized state or any semantic guarantee."""
+    materialized state or any semantic guarantee.
+
+    ``rows_hint`` (perf P12b) is the sync fast path: the just-flushed ``TupleLogV1``
+    rows this transaction appended, handed straight through so ⑤ (re-SELECTing rows
+    this transaction wrote) is skipped. It is USED only when it is provably equal to
+    what ``log_rows`` would return -- non-empty, its first id is exactly one past the
+    (post-refresh) cursor, and its ids are strictly contiguous ascending -- so the
+    contract above stays literally true: same contiguous prefix, same monotone cursor
+    advance, same exactly-once shape. Any mismatch (empty hint, or a store reopened
+    ``sync=True`` with leftover async-era lag between the cursor and the hint) falls
+    back to ``log_rows`` exactly as today."""
     # Serialize concurrent appliers on the index store BEFORE reading the cursor:
     # two workers reading the same cursor value would double-apply log rows (a
     # lost-update on ref-counted state). FOR UPDATE on PostgreSQL/MySQL; on SQLite
@@ -90,7 +107,11 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
     widx.idx._lock_store()
     session.refresh(cursor)
 
-    rows = log_rows(session, cursor.source_store_id, cursor.applied_log_id, limit=batch)
+    if rows_hint and cursor.applied_log_id == rows_hint[0].id - 1 and all(
+            rows_hint[i].id == rows_hint[i - 1].id + 1 for i in range(1, len(rows_hint))):
+        rows = rows_hint
+    else:
+        rows = log_rows(session, cursor.source_store_id, cursor.applied_log_id, limit=batch)
     if not rows:
         return 0
     # The cascade replays the outbox rows these applies write (id > wm), so the

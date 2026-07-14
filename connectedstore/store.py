@@ -94,6 +94,19 @@ class ConnectedStore:
                            relation, o_type, o_name)
 
     def _write(self, op: str, *raw) -> int:
+        # P12b — pending-row drain contract. ``source._append`` stashes each flushed
+        # log row in ``source._pending_rows``; we hand those rows to ``advance_index``
+        # as a read hint on the sync fast path, then this buffer MUST be empty before
+        # ``_write`` returns so no row survives into a later transaction. Every exit
+        # path is covered:
+        #   * admission rejection (fn raises): nothing was flushed on the reject path
+        #     (``add`` returns early on a duplicate WITHOUT appending; ``remove``
+        #     raises before its append), but the store may carry a stale row from a
+        #     prior aborted write, so we drain-and-discard.
+        #   * sync success: ``pop_pending_rows`` drains it into the hint below.
+        #   * async success (``sync=False``): drained-and-discarded (the async worker
+        #     re-reads from the log; no hint).
+        #   * apply/commit failure: drained-and-discarded before re-raising.
         fn = self.source.add if op == 'add' else self.source.remove
         try:
             token = fn(*raw)
@@ -102,19 +115,31 @@ class ConnectedStore:
             # its in-memory state (SetEngine.add_tuple/remove_tuple contract), so
             # the rollback alone restores truth -- no O(N) evaluator rebuild on the
             # hot rejection path
+            self.source.pop_pending_rows()  # discard: nothing must span the rollback
             self.session.rollback()
             raise
         except Exception:
+            self.source.pop_pending_rows()  # discard: nothing must span the rollback
             self.session.rollback()
             self.source.refresh_evaluator()
             raise
         try:
             if self.sync:
-                # the async apply step, inlined (sync schedule): cursor rides the head
-                advance_index(self.session, self.cursor, self.widx, self.ruleset, self.proc)
+                # the async apply step, inlined (sync schedule): cursor rides the head.
+                # Hand the just-flushed log rows through so the apply step skips
+                # re-SELECTing them (P12b); the guard in advance_index only trusts the
+                # hint when it equals what log_rows would return.
+                hint = self.source.pop_pending_rows()
+                advance_index(self.session, self.cursor, self.widx, self.ruleset,
+                              self.proc, rows_hint=hint or None)
+            else:
+                # async schedule: the worker re-reads from the log; drop the hint so
+                # it can never leak into a later transaction.
+                self.source.pop_pending_rows()
             self.session.commit()
             return token
         except Exception:
+            self.source.pop_pending_rows()  # discard: nothing must span the rollback
             self.session.rollback()
             # past admission the evaluator HAS the write in memory: it is a cache
             # over TupleV1, so rebuild it from the rolled-back truth (also resets
