@@ -244,6 +244,23 @@ class WildcardIndex:
         (connectedstore.TupleSource / the harness adapters). Do not feed raw user
         writes here directly unless you deduplicate them yourself."""
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
+        self._add_tuple_trusted(subject_predicate, s_type, s_name, relation, o_type, o_name)
+
+    def _add_tuple_trusted(self, subject_predicate: str | EllipsisType, s_type: str,
+                           s_name: str, relation: str, o_type: str, o_name: str) -> None:
+        """``add_tuple`` minus the ``validate_write_identifiers`` charset check (perf N9).
+
+        TRUST CONTRACT: the caller MUST guarantee every identifier already came from
+        an admission-validated raw tuple routed through ``RuleSet.apply`` -- the raw
+        tuple was charset-checked at admission (``SetEngine.add_tuple`` /
+        ``TupleSource``), and rewrite fan-out only ever rewrites the *relation* field
+        to a compiler-generated leaf predicate ``<relation>.<index>``, which is
+        charset-valid by construction (``.`` is in the identifier charset). Skipping
+        the re-validation therefore changes NO accept/reject behaviour: on this path
+        the check provably always passes, so it is pure redundant work. The public
+        ``add_tuple`` above (used directly by tests/harness) keeps validating. The
+        ONLY sanctioned caller of this trusted entry point is ``_apply_row`` in
+        ``connectedstore/apply.py``; do not widen that."""
         self._assert_derived_exclusivity(relation, o_type)
         # Lock BEFORE resolution, exactly like core.add_edge (blind-audit C2): a
         # concurrent remove_node in the resolve-then-mutate gap would hand us stale
@@ -274,6 +291,15 @@ class WildcardIndex:
     def remove_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
                      relation: str, o_type: str, o_name: str) -> None:
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
+        self._remove_tuple_trusted(subject_predicate, s_type, s_name, relation, o_type, o_name)
+
+    def _remove_tuple_trusted(self, subject_predicate: str | EllipsisType, s_type: str,
+                              s_name: str, relation: str, o_type: str, o_name: str) -> None:
+        """``remove_tuple`` minus ``validate_write_identifiers`` (perf N9). Same TRUST
+        CONTRACT as ``_add_tuple_trusted``: identifiers must originate from an
+        admission-validated raw tuple routed through ``RuleSet.apply``; the skipped
+        check provably always passes here, so accept/reject behaviour is unchanged.
+        Sole sanctioned caller: ``_apply_row`` in ``connectedstore/apply.py``."""
         self._assert_derived_exclusivity(relation, o_type)
         self.idx._lock_store()   # lock before resolution (blind-audit C2)
         try:
@@ -544,20 +570,30 @@ class WildcardIndex:
     def _collect_reachable(self, node: NodeV4 | None, result: LookupResult) -> None:
         if node is None:
             return
-        for nid in self.idx.lookup_reachable(node.id):
-            self._classify_into(nid, result)
+        self._classify_ids(self.idx.lookup_reachable(node.id), result)
 
     def _collect_reverse(self, node: NodeV4 | None, result: LookupResult) -> None:
         if node is None:
             return
-        for nid in self.idx.lookup_reverse(node.id):
-            self._classify_into(nid, result)
+        self._classify_ids(self.idx.lookup_reverse(node.id), result)
 
-    def _classify_into(self, node_id: int, result: LookupResult) -> None:
-        n = self._node_by_id(node_id)
-        if n is None:
-            return
-        if n.wildcard == '':
-            result.node_ids.add(node_id)
-        else:
-            result.markers.add((n.type, n.predicate, n.wildcard))
+    def _classify_ids(self, node_ids, result: LookupResult) -> None:
+        """Classify a whole reachable/reverse id set concrete-vs-wildcard (perf N6).
+
+        Batch-load the entire id set in one chunked ``IN`` (``idx._load_nodes``,
+        SQLite-bind-safe) instead of a per-id ``_node_by_id`` round trip -- K+1
+        point SELECTs for K results collapse to ``ceil(K/900)`` batched SELECTs.
+        The classification is byte-identical to the old per-id path: the identity
+        map makes a batched row the same instance ``_node_by_id`` would return, and
+        a map miss (defensive parity, P7's pattern) falls back to ``_node_by_id``."""
+        node_map = self.idx._load_nodes(node_ids)
+        for nid in node_ids:
+            n = node_map.get(nid)
+            if n is None:
+                n = self._node_by_id(nid)
+            if n is None:
+                continue
+            if n.wildcard == '':
+                result.node_ids.add(nid)
+            else:
+                result.markers.add((n.type, n.predicate, n.wildcard))
