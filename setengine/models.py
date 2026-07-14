@@ -31,10 +31,13 @@ class TupleV1(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     store_id: str = Field(index=True)
-    subject_predicate: str = Field(index=True)
-    subject_type: str = Field(index=True)
-    subject_name: str = Field(index=True)
-    relation: str = Field(index=True)
-    object_type: str = Field(index=True)
-    object_name: str = Field(index=True)
+    # The per-column indexes were dropped (N5 audit 2026-07-14): the only filtered
+    # query (`SetEngine._row`) conjoins all seven tuple columns and is served by
+    # `tuple_v1_unique`'s prefix; `rebuild()` filters `store_id` only (index kept).
+    subject_predicate: str
+    subject_type: str
+    subject_name: str
+    relation: str
+    object_type: str
+    object_name: str
     created_at: float = Field(default_factory=time.time)

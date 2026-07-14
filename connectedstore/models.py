@@ -15,6 +15,7 @@ transactionality IS the exactly-once guarantee (spec §2.6).
 
 import time
 
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
@@ -30,10 +31,17 @@ class SchemaV4(SQLModel, table=True):
 
 class TupleLogV1(SQLModel, table=True):
     __tablename__ = "tuple_log_v1"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        # Composite replaces the single `store_id` index (N5 audit 2026-07-14):
+        # `log_rows` (`store_id AND id > ? ORDER BY id`, per sync write) and
+        # `log_watermark` (`store_id ... ORDER BY id DESC`) are keyset/max-id shapes;
+        # the log is append-only forever, so this is asymptotic protection as it grows.
+        Index('ix_tuple_log_v1_store_id_id', 'store_id', 'id'),
+        {'extend_existing': True},
+    )
 
     id: int | None = Field(default=None, primary_key=True)   # the token / cursor domain
-    store_id: str = Field(index=True)
+    store_id: str
     op: str                                                  # 'ADD' | 'REMOVE'
     subject_predicate: str
     subject_type: str
@@ -52,6 +60,8 @@ class IndexCursorV1(SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    index_store_id: str = Field(index=True)
+    # `index_store_id` index dropped (N5 audit 2026-07-14): `index_cursor_v1_unique`
+    # already indexes it (it's the sole constraint column).
+    index_store_id: str
     source_store_id: str = Field(index=True)
     applied_log_id: int = Field(default=0)

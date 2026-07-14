@@ -2,6 +2,7 @@ import time
 from typing import NamedTuple
 from types import EllipsisType
 
+from sqlalchemy import Index
 from sqlalchemy.orm import RelationshipProperty
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
@@ -37,13 +38,16 @@ class NodeV4(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     store_id: str = Field(foreign_key="store_v4.id", index=True)
-    predicate: str = Field(index=True)
-    type: str = Field(index=True)
-    name: str = Field(index=True)
+    # The per-column indexes were dropped (N5 audit 2026-07-14): every NodeV4 query
+    # filters a `(store_id, predicate, type[, name][, wildcard])` leftmost prefix or by
+    # id, all served by `node_v4_unique_constraint`. `store_id` is kept for the FK.
+    predicate: str
+    type: str
+    name: str
     # '' for concrete nodes, 'any' or 'all' for split wildcard nodes (spec §1.2/§1.3).
     # Empty string (NOT NULL) is deliberate: SQLite treats NULLs as distinct in a
     # unique constraint, which would silently permit duplicate concrete nodes.
-    wildcard: str = Field(default='', index=True)
+    wildcard: str = Field(default='')
     implicit: bool = Field(default=True)
     reference_count: int = Field(default=0)
 
@@ -58,13 +62,24 @@ class EdgeV4(SQLModel, table=True):
     __tablename__ = "edge_v4"
     __table_args__ = (
         UniqueConstraint('store_id', 'subject_id', 'object_id', name='edge_v4_unique_constraint'),
+        # Object-keyed scans (`core.py:320,617`, `processor.py:260`) filter
+        # `(store_id, object_id)` without `subject_id`, so the unique constraint's
+        # prefix cannot serve them; this composite does (N5 audit 2026-07-14).
+        Index('ix_edge_v4_store_object', 'store_id', 'object_id'),
         {'extend_existing': True},
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    store_id: str = Field(foreign_key="store_v4.id", index=True)
-    subject_id: int = Field(foreign_key="node_v4.id", index=True)
-    object_id: int = Field(foreign_key="node_v4.id", index=True)
+    # `store_id` and `subject_id` single-column indexes dropped (N5 audit 2026-07-14):
+    # every subject-keyed scan filters `store_id` too, served by the
+    # `(store_id, subject_id, ...)` unique-constraint prefix; object-keyed scans use
+    # the composite above. MySQL/InnoDB caveat: InnoDB auto-creates an index whose
+    # leftmost column is an FK column if none exists, so dropping `subject_id`'s index
+    # is a no-op there (a hidden one returns) but a real per-insert win on
+    # SQLite/PostgreSQL.
+    store_id: str = Field(foreign_key="store_v4.id")
+    subject_id: int = Field(foreign_key="node_v4.id")
+    object_id: int = Field(foreign_key="node_v4.id")
     direct_edge_count: int = Field(default=0)
     indirect_edge_count: int = Field(default=0)
     # True iff the direct edge was written by the delta processor into a derived-public
@@ -82,8 +97,9 @@ class ResidueV1(SQLModel, table=True):
     ``(stars, neg)`` record `check` consults alongside the edge probe (boolean spec §4).
 
     ``object_node_id`` is the derived relation's public object node, whose identity
-    already encodes the relation; ``relation`` is denormalized for ``lookup()``'s
-    by-relation residue scan. ``stars``/``neg`` are JSON (list of [type, predicate]
+    already encodes the relation; ``relation`` is denormalized (unindexed) purely for
+    debuggability/inspection -- no query filters on it (residue scans go by
+    ``store_id`` or ``object_node_id``). ``stars``/``neg`` are JSON (list of [type, predicate]
     shapes / list of concrete subject node ids) -- layout adaptable per spec §4;
     cursor-free, one row per object. Empty residues are deleted, never stored.
     """
@@ -96,7 +112,7 @@ class ResidueV1(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     store_id: str = Field(index=True)
     object_node_id: int = Field(foreign_key="node_v4.id", index=True)
-    relation: str = Field(index=True)
+    relation: str  # unindexed: denormalized for inspection only (N5 audit 2026-07-14)
     stars: str = Field(default='[]')     # JSON: [[type, predicate], ...]
     neg: str = Field(default='[]')       # JSON: [subject_node_id, ...]
     # userset-shaped subjects whose membership is TRUE (blind-audit P4): a derived
@@ -119,10 +135,16 @@ class DeltaOutboxV1(SQLModel, table=True):
     docs/spec-deviations.md P4).
     """
     __tablename__ = "delta_outbox_v1"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        # Composite replaces the single `store_id` index (N5 audit 2026-07-14): serves
+        # both the keyset drain (`store_id AND id > ? ORDER BY id`) and the watermark
+        # (`store_id ... ORDER BY id DESC LIMIT 1`) as index-only seeks.
+        Index('ix_delta_outbox_v1_store_id_id', 'store_id', 'id'),
+        {'extend_existing': True},
+    )
 
     id: int | None = Field(default=None, primary_key=True)
-    store_id: str = Field(index=True)
+    store_id: str
     subject_node_id: int
     object_node_id: int
     action: str                          # 'ADDED' | 'REMOVED'
