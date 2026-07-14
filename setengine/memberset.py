@@ -84,11 +84,14 @@ def star(shape: Shape, ops: SetOps) -> MemberSet:
 def _starpop(stars, ops: SetOps, pop: Population):
     acc = ops.new()
     for shape in stars:
-        # ops.new() also NORMALIZES: the Population contract only promises an
-        # iterable of ids (tests pass plain tuples), so `acc |= pop(shape)` would
-        # break on a non-ops iterable. The star-path O(population) copy that
-        # remains here is a separate future target -- see PERF_ANALYSIS.md.
-        acc |= ops.new(pop(shape))
+        # ops.update NORMALISES without copying: the Population contract only
+        # promises an iterable of ids (tests pass plain tuples), so `acc |=
+        # pop(shape)` would break on a non-ops iterable. The old `acc |=
+        # ops.new(pop(shape))` normalised by copying the whole O(population) mask
+        # per star shape just to union it in; the SetOps.update primitive folds
+        # any iterable straight into acc in place -- O(result), not O(population)
+        # (P10; twin of the direct_expand copy fixed in 78cfc2f).
+        ops.update(acc, pop(shape))
     return acc
 
 

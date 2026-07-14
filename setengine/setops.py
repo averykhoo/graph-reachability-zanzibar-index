@@ -24,17 +24,22 @@ class SetOps:
 
     ``new`` builds a mutable set, ``freeze`` an immutable one, each from an optional
     iterable of int32 ids (the intern table issues sequential int32s, so 32-bit roaring
-    is sufficient).
+    is sufficient). ``update`` unions an arbitrary iterable INTO an existing mutable set
+    in place, without materialising a full intermediate copy -- both backends' native
+    ``.update`` normalises any iterable (bare tuples, generators, or a peer set/bitmap),
+    so it is a copy-free normaliser (see ``memberset._starpop``).
     """
     name: str
     new: Callable[..., object]      # (Iterable[int] = ()) -> MutSet
     freeze: Callable[..., object]   # (Iterable[int] = ()) -> FrozSet
+    update: Callable[[object, object], None]  # (MutSet, Iterable[int]) -> None, in place
 
 
 PySets = SetOps(
     name='py',
     new=lambda it=(): set(it),
     freeze=lambda it=(): frozenset(it),
+    update=lambda acc, it: acc.update(it),      # builtin set.update: any iterable
 )
 
 try:
@@ -43,6 +48,7 @@ try:
         name='roaring',
         new=lambda it=(): BitMap(it),
         freeze=lambda it=(): FrozenBitMap(it),
+        update=lambda acc, it: acc.update(it),  # BitMap.update: iterables + peer BitMaps
     )
 except ImportError:                 # pyroaring is a declared dependency; guard only for dev envs
     RoaringSets = None
