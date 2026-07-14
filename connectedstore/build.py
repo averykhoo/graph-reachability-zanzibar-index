@@ -17,6 +17,7 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from index_v4 import NodeV4, WildcardIndex
+from index_v4.bulk_build import bulk_build
 from index_v4.processor import DeltaProcessor
 from setengine.models import TupleV1
 from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet
@@ -29,12 +30,20 @@ from .source import log_watermark
 
 def build_index(session: Session, source_store_id: str,
                 index_store_id: str | None = None,
+                *, bulk: bool = True,
                 ) -> tuple[IndexCursorV1, WildcardIndex, RuleSet]:
     """Build a fresh graph index from a tuple store's current snapshot.
 
     One transaction (committed on success, rolled back on failure). Refuses to run
     on an index that already has state -- a fresh build wants a fresh store; use
     ``advance_index`` to catch an existing index up instead.
+
+    ``bulk`` (default True, P13) constructs the final pre-backfill state directly via
+    ``index_v4.bulk_build`` -- one in-memory pass + bulk INSERTs -- instead of replaying
+    every routed triple through the incremental ``widx.add_tuple``. ``bulk=False`` keeps
+    that per-tuple loop; it is byte-identical in effect and is the identity gate's
+    reference side (``tests/test_bulk_build.py``). Everything else (guards, backfill,
+    watermark re-check, cursor) is shared by both paths.
     """
     index_store_id = index_store_id or source_store_id
 
@@ -70,18 +79,26 @@ def build_index(session: Session, source_store_id: str,
 
         widx, ruleset = open_graph_index(session, index_store_id, ruleset=boot_ruleset)
 
-        # bulk-load the snapshot through the rewrite fan-out (leaf writes only)
-        rows = session.exec(
-            select(TupleV1).where(TupleV1.store_id == source_store_id)
-            .order_by(TupleV1.id)  # type: ignore[arg-type]
-        ).all()
-        for r in rows:
-            sp = Ellipsis if r.subject_predicate == '...' else r.subject_predicate
-            triple = RelationalTriple(Entity(r.subject_type, r.subject_name), r.relation,
-                                      Entity(r.object_type, r.object_name), sp)
-            for d in ruleset.apply(triple):
-                widx.add_tuple(_norm(d.subject_predicate), d.subject.type, d.subject.name,
-                               d.relation, d.object.type, d.object.name)
+        if bulk:
+            # P13: construct the final pre-backfill state directly (one in-memory pass
+            # + bulk INSERTs), identical in effect to the per-tuple loop below.
+            bulk_build(session, source_store_id, index_store_id, ruleset,
+                       widx.schema_info)
+        else:
+            # Reference path: bulk-load the snapshot through the rewrite fan-out one
+            # routed triple at a time (leaf writes only). This IS the identity gate's
+            # reference side, so it stays maintained.
+            rows = session.exec(
+                select(TupleV1).where(TupleV1.store_id == source_store_id)
+                .order_by(TupleV1.id)  # type: ignore[arg-type]
+            ).all()
+            for r in rows:
+                sp = Ellipsis if r.subject_predicate == '...' else r.subject_predicate
+                triple = RelationalTriple(Entity(r.subject_type, r.subject_name), r.relation,
+                                          Entity(r.object_type, r.object_name), sp)
+                for d in ruleset.apply(triple):
+                    widx.add_tuple(_norm(d.subject_predicate), d.subject.type, d.subject.name,
+                                   d.relation, d.object.type, d.object.name)
 
         # derive the boolean state in one offline pass (P6 backfill precedent)
         proc = None
