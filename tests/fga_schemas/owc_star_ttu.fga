@@ -1,0 +1,24 @@
+model
+  schema 1.1
+
+type user
+
+type group
+  relations
+    define member: [user, group#member]
+
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define blocked: [user]
+    define editor: [user, group#member]
+    define viewer: [user, user:*, group#member] or viewer from parent
+    define restricted: editor but not blocked
+
+type doc
+  relations
+    define parent: [folder, folder:*]
+    define blocked: [user]
+    define editor: [user, group#member]
+    define viewer: [user, user:*, group#member] or viewer from parent
+    define restricted: editor but not blocked

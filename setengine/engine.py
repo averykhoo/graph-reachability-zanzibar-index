@@ -273,71 +273,20 @@ class SetEngine:
             # accepted (accept/reject divergence on exactly the shapes the expansion
             # exists for).
             self.schema_info = self._ruleset.schema_info
-        # P1 follow-up: forward-`lookup` fallback gate, precomputed once from the
-        # finalized schema_info + the reverse-dependency tables (see the method).
-        self._owc_needs_sweep = self._owc_lookup_needs_sweep()
+        # N17: per-type object-wildcard bridge-seeding reach, precomputed once from
+        # the finalized schema_info + the reverse-dependency tables. Maps each type
+        # T that declares an object-wildcard shape to the relations r' a star
+        # injection on T can reach ({r0} plus its Computed/TTU-tupleset reverse
+        # closure), which `lookup`'s walk loop uses to seed the wildcard-covered
+        # concrete siblings the reverse walk cannot reach on its own (see `lookup`).
+        self._owc_bridge_reach: dict[str, tuple[str, ...]] = {}
+        _reach_acc: dict[str, set[str]] = {}
+        for (T, r0) in self.schema_info.object_wildcard_shapes:
+            acc = _reach_acc.setdefault(T, set())
+            acc.add(r0)
+            acc.update(self._object_deps.get((T, r0), ()))
+        self._owc_bridge_reach = {t: tuple(sorted(rs)) for t, rs in _reach_acc.items()}
         self.rebuild()
-
-    def _owc_lookup_needs_sweep(self) -> bool:
-        """Whether forward ``lookup`` must fall back to the exact O(store) sweep
-        (``_lookup_sweep``) for this schema's object wildcards instead of the
-        O(reachable) reverse walk (P1 follow-up; ``CORRESPONDENCE.md §8.1``).
-
-        An object-wildcard grant ``s #... rel T:*`` makes ``s`` a member of every
-        concrete ``(T, X, rel)``. The reverse walk (``_reverse_neighbors``) only ever
-        reaches the ``(T, '*', rel)`` star node, never the wildcard-covered concrete
-        siblings ``(T, X, rel)``. That is harmless while those concretes are *direct*
-        results -- the intensional marker ``(T, rel)`` covers them exactly (S4) -- but
-        the walk then silently drops any DOWNSTREAM object whose membership is
-        inherited THROUGH such a concrete node, which the marker does NOT cover (the
-        object-wildcard×TTU completeness bug this gate exists for).
-
-        ``check`` crosses from one object's membership to another's by exactly two
-        mechanisms (see ``member_via_usersets`` / ``ttu_leaf``):
-          (a) a NON-wildcard userset restriction ``[T#r]`` on some relation -- a
-              stored grant ``Q:q#R @ T:X#r`` lifts ``T:X#r``'s members onto ``Q:q#R``;
-          (b) a TTU from-chain ``R2: r from ts`` -- a stored tupleset parent ``T:X``
-              is evaluated at relation ``r`` on ``T``.
-        A *wildcard* userset restriction ``[T:*#r]`` is NOT a gap: its grant lands on
-        the ``(T, '*', r)`` star node, which the walk reaches via ``member_of`` (H1) --
-        empirically confirmed -- so only NON-wildcard restrictions count. Members
-        injected by the wildcard flow from ``rel`` into every relation ``r`` on ``T``
-        that Computed-references ``rel``; ``_object_deps[(T, rel)]`` is exactly that
-        reverse closure (its Computed entries), so both mechanisms are tested over
-        ``{rel} ∪ _object_deps[(T, rel)]``.
-
-        Deliberately OVER-approximates (the risk is asymmetric -- a needless fallback
-        merely reruns the old O(store) sweep, a MISSED one drops a real result): the
-        TTU arm matches ``r`` against any TTU target regardless of parent type, and
-        ``_object_deps`` also folds in TTU-tupleset (non-membership) edges. Netted by
-        ``tests/test_lookup_oracle.py`` (exact two-sided) + the multi-seed hypothesis
-        sweep on the object-wildcard corpus (``wildcards.fga``)."""
-        shapes = self.schema_info.object_wildcard_shapes
-        if not shapes:
-            return False
-        ttu_targets = {target for (_ot, _ts, target) in self._ttu_map}
-        # (type, predicate) of every NON-wildcard userset restriction in the schema.
-        userset_restr: set[tuple[str, str]] = set()
-        for expr in self.ast.values():
-            stack = [expr]
-            while stack:
-                node = stack.pop()
-                if isinstance(node, (Union, Intersection)):
-                    stack.extend(node.children)
-                elif isinstance(node, Exclusion):
-                    stack.append(node.base)
-                    stack.append(node.subtract)
-                elif isinstance(node, Direct):
-                    for r in node.restrictions:
-                        if r.predicate != '...' and not r.wildcard:
-                            userset_restr.add((r.type, r.predicate))
-        for (T, rel) in shapes:
-            reach = {rel}
-            reach.update(self._object_deps.get((T, rel), ()))
-            for r in reach:
-                if r in ttu_targets or (T, r) in userset_restr:
-                    return True
-        return False
 
     # ------------------------------------------------------------------ #
     # State (rebuilt on open)
@@ -631,6 +580,24 @@ class SetEngine:
         # by construction that the graph backend also rejects (§1.5).
         if s_name == '*' and s_pred != '...' and (s_type, s_pred) == (o_type, relation):
             return True
+
+        # The same self-reference at the ROUTED level: a rewrite can MINT the star
+        # userset from a bare star subject -- e.g. `folder:* parent folder:f2` routes
+        # (via the TTU rewrite's through-shape) to `folder:*#viewer viewer folder:f2`,
+        # whose object participates in the wildcard's own (subject-wildcard) shape.
+        # The graph rejects that write by construction: bridge-before-grant gives the
+        # object node an in-bridge to the star userset node, and the grant edge closes
+        # the two-cycle (wildcard.py's reworded cycle error). The raw-level check
+        # above cannot see it (the raw subject is bare), and the flow graph cannot
+        # either (it carries only RuleSet-derived edges, never the materialized
+        # bridges), so mirror it over every derived pair. The through-shape guard is
+        # documentation-exactness: a routed star userset's shape is always declared
+        # (`_expand_object_wildcard_shapes` / the D3 through-shape derivation), so it
+        # never blocks a pair the graph would accept.
+        for (ut, un, up), (vt, _vn, vr) in pairs:
+            if (un == '*' and up != '...' and (ut, up) == (vt, vr)
+                    and (ut, up) in self.schema_info.subject_wildcard_shapes):
+                return True
 
         # A derived pair whose endpoints coincide is the trivial cycle (e.g.
         # doc:x#viewer viewer doc:x) -- blind-audit E3: the graph backend rejects
@@ -990,17 +957,29 @@ class SetEngine:
         - **H2 same-object Computed/TTU-tupleset dependents:** ``_object_deps`` --
           relations ``R`` on the SAME object anchored by this node's relation.
         - **H3 TTU from-chain:** the entity's stored tupleset memberships
-          (``member_of`` of the bare node) crossed with ``_ttu_map`` -- a stored
-          parent tuple lets ``parent#target_rel`` reach ``object#R``.
+          (``member_of`` of the bare / star-bare node) crossed with ``_ttu_map`` -- a
+          stored parent tuple lets ``parent#target_rel`` reach ``object#R``.
 
         Returns interned ids only; an unreachable/uninterned candidate is dropped
         (it can carry no result). Bare-entity/star nodes contribute their H1 edges
         but generate no H2/H3 (their relation slot is not a declared relation)."""
-        t, n, rel = self.interner.key(oid)
+        return self._reverse_neighbors_key(*self.interner.key(oid), oid=oid)
+
+    def _reverse_neighbors_key(self, t: str, n: str, rel: str,
+                               oid: int | None = None) -> list[int]:
+        """``_reverse_neighbors`` addressed by SURROGATE KEY rather than interned id,
+        so the walk can seed from an UNINTERNED subject shape (H2/H3 need only the
+        bare siblings interned, not the ``(t, n, rel)`` node itself). ``oid`` is the
+        node's id when known (drives H1 ``member_of``); pass ``None`` for a key with
+        no live node -- H1 is then empty, but the H1-star-coverage and H2/H3 hops
+        still fire off the (interned) siblings. See ``_reverse_neighbors``."""
         out: list[int] = []
-        mo = self.member_of.get(oid)                       # H1 direct fan-in
-        if mo is not None:
-            out.extend(mo)
+        if oid is None:
+            oid = self.interner.get(t, n, rel)
+        if oid is not None:
+            mo = self.member_of.get(oid)                   # H1 direct fan-in
+            if mo is not None:
+                out.extend(mo)
         if n != '*':                                       # H1 star coverage
             # the wildcard sibling (t, '*', rel) covers this node: a `[t:*]`
             # (bare) or `[t:*#rel]` (userset) grant made to the star sentinel is
@@ -1054,51 +1033,122 @@ class SetEngine:
         booleans, so an over-approximate candidate that an ``and``/``but not`` excludes
         is dropped), and only confirmed nodes propagate -- so the walk touches the
         subject's reachable neighborhood, never the whole store. Replaces the former
-        O(stored-tuples) candidate sweep; the write-time reverse-dependency interning
-        (``_apply_add``) still guarantees every reachable object key has an id for the
-        walk to find. Markers are intensional and exact by construction: one
-        star-object check per declared relation, so star coverage arriving through
-        Computed/TTU hops surfaces without enumerating names."""
+        O(stored-tuples) candidate sweep (``_lookup_sweep``, kept as the differential
+        test reference); the write-time reverse-dependency interning (``_apply_add``)
+        still guarantees every reachable object key has an id for the walk to find.
+        Markers are intensional and exact by construction: one star-object check per
+        declared relation, so star coverage arriving through Computed/TTU hops
+        surfaces without enumerating names.
+
+        N17 -- **wildcard-bridge seeding.** An object-wildcard grant ``s #... rel T:*``
+        makes ``s`` a member of every concrete ``(T, X, rel)``, but the reverse walk
+        only ever reaches the ``(T, '*', rel)`` star node, never the wildcard-covered
+        concrete siblings ``(T, X, rel)``. That is harmless while those concretes are
+        *direct* results -- the intensional marker ``(T, rel)`` covers them exactly
+        (S4) -- but the walk would then silently drop any DOWNSTREAM object whose
+        membership is inherited THROUGH such a concrete node (a TTU from-chain, or a
+        non-wildcard userset restriction), which no marker covers. ``check`` crosses
+        from one object's membership to another's by exactly two mechanisms (see
+        ``member_via_usersets`` / ``ttu_leaf``): (a) a NON-wildcard userset restriction
+        ``[T#r]`` lifts ``T:X#r``'s members onto a grantee, and (b) a TTU from-chain
+        ``R2: r from ts`` evaluates a stored tupleset parent ``T:X`` at ``r``. To keep
+        the whole walk O(reachable) rather than falling back to the O(store) sweep for
+        such schemas, when the walk DEQUEUES any star node ``(T, '*', p)`` (bare or
+        userset; the trigger is per-TYPE and fires before the entity-node skip and
+        regardless of the star node's own check outcome), it bridges T once: for each
+        declared shape ``(T, r0)`` and each relation ``r'`` the injection reaches
+        (``{r0} plus _object_deps[(T, r0)]`` -- ``_owc_bridge_reach[T]``), it enqueues
+        (1) every interned concrete ``(T, X, r')`` (``ids_of_shape`` -- stored userset
+        subjects, TTU chain-target-interned keys, dep-interned keys) so mechanisms (a)
+        and the concrete-parent arm of (b) are seeded, and (2) the star-parent cross
+        for the triple combo owc x star-parent x TTU where NO concrete ``(T, X, r')``
+        is interned: for each object ``Q:q`` that stored ``T:*`` as a tupleset parent
+        (``member_of`` of ``(T, '*', '...')``) and each ``R`` with ``R: r' from ts``,
+        it enqueues ``(Q, q, R)``. Bridged nodes then propagate through the normal
+        confirmed-only walk, so chained shapes compose.
+
+        **Completeness (the bridge trigger + seeds cover every wildcard route):**
+        1. Star-injection of the subject on shape ``(T, rel)`` requires the subject's
+           membership among the star node ``(T, '*', rel)``'s direct members (the only
+           truth source beyond stored-at-X tuples; ``_object_ids`` adds the star node
+           only for shapes). Every such membership route enqueues a star node of T:
+           (i) a direct grant / subject-star sentinel -> the seed's H1 (+ the line-1004
+           H1 star fold); (ii) a stored userset ``u`` at the star node with ``sat(u)``
+           true -> each intermediate hop is check-true and ``member_of``-connected, so
+           ``u`` is visited & confirmed and ``member_of[u]`` contains the star node;
+           (iii) a star userset sentinel ``(T2, '*', p)`` -> any confirmed instance
+           ``(T2, inst, p)`` folds ``member_of[(T2, '*', p)]`` (the H1 star fold),
+           which contains the star node; when the instance key is uninterned under
+           boolean mixing, the stored non-star arm interns it via dep-interning and
+           connects it (mixing requires stored arms). The trigger is per-TYPE (any
+           dequeued ``(T, '*', *)``, bare included), strictly wider than per-shape.
+        2. Given the trigger, every cross-object crossing out of a star-injected
+           concrete is seeded: a userset lift needs a stored subject ``(T, X, r')``
+           -> in ``ids_of_shape``; a TTU crossing from a concrete parent chain-interns
+           ``(T, X, r')`` -> in ``ids_of_shape``; a TTU crossing from a STAR parent is
+           seeded by the explicit star-parent cross (and ``(Q, q, R)`` is dep-interned
+           by the parent-tuple write). Chained shapes compose because bridged nodes
+           propagate through the normal confirmed-only walk, which can dequeue further
+           star nodes.
+        3. Soundness is unconditional: every candidate is confirmed by ``check`` before
+           entering ``node_ids`` or propagating, and ``n == '*'`` nodes never enter
+           ``node_ids`` (markers carry them)."""
         s_pred = _norm_pred(subject_predicate)
         result = LookupResult()
         for (t, rel) in self.ast:                          # declared (type, relation)
             if self.check(s_pred, s_type, s_name, rel, t, '*'):
                 result.markers.add((t, rel))
-        # Object wildcards can interact with downstream inheritance in a way the
-        # reverse walk does not enumerate: a subject granted `T:*` (object wildcard)
-        # is a member of every concrete (T, X, rel), but the walk reaches only the
-        # (T,'*',rel) star node, never the wildcard-covered concrete siblings -- so a
-        # DOWNSTREAM object inheriting membership through such a concrete node (a TTU
-        # from-chain, or a non-wildcard userset restriction) is dropped and is not
-        # marker-covered. `_owc_needs_sweep` (precomputed, see _owc_lookup_needs_sweep)
-        # is True exactly for schemas where that bridge can exist; those fall back to
-        # the exact O(store) sweep. Every object-wildcard-free schema, AND every
-        # object-wildcard schema whose wildcards feed no such bridge (direct grants,
-        # or only [T:*#rel] wildcard usersets), gets the O(reachable) walk.
-        if self._owc_needs_sweep:
-            self._lookup_sweep(s_pred, s_type, s_name, result)
-            return result
-        # Seed from the subject's memberships (``_reverse_neighbors`` folds in the
-        # subject-wildcard sentinel's grants via its H1 star coverage). A
-        # ghost/uninterned subject can still reach concretes purely through a
-        # `[type:*]` grant, so seed from the bare/userset star sentinel directly.
-        subject_id = self.interner.get(s_type, s_name, s_pred)
-        if subject_id is not None:
-            queue: list[int] = self._reverse_neighbors(subject_id)
-        elif s_name != '*':
-            star_id = self.interner.get(s_type, '*', s_pred)
-            queue = self._reverse_neighbors(star_id) if star_id is not None else []
-        else:
-            queue = []
+        # Seed from the subject's memberships, addressed by SHAPE via
+        # ``_reverse_neighbors_key`` so an UNINTERNED subject is seeded too (it
+        # resolves its own id for H1 when live). A ghost/uninterned subject can still
+        # reach concretes -- through a `[type:*]` grant (H1 star coverage), or, for a
+        # userset subject `T:X#r` (concrete, ghost, OR the `*` shape itself), as a
+        # from-chain identity member of every object with a stored `T`/`T:*` tupleset
+        # parent whose TTU targets `r` (ttu_leaf's concrete + star identity branches;
+        # H3, needing only the bare siblings interned, not the subject node). A
+        # star-sibling-only / empty seed missed the from-chain star identity for
+        # uninterned userset subjects on star-able tuplesets.
+        queue: list[int] = self._reverse_neighbors_key(s_type, s_name, s_pred)
         if not queue:
-            return result                   # reaches nothing concrete (only markers, if any)
+            return result                   # reaches nothing concrete: no seed, so no
+                                            # star node can be dequeued to bridge (only
+                                            # markers, if any)
         visited: set[int] = set()
+        bridged_types: set[str] = set()     # N17: object-wildcard types already bridged
         while queue:
             oid = queue.pop()
             if oid in visited:
                 continue
             visited.add(oid)
             t, n, p = self.interner.key(oid)
+            # N17 wildcard-bridge seeding: on dequeuing any star node of a type that
+            # declares an object-wildcard shape, enqueue the wildcard-covered concrete
+            # siblings the reverse walk cannot reach on its own (see docstring). Fires
+            # before the entity-node skip and regardless of this node's check outcome
+            # (a star node refuted at the intensional '*' object can still be
+            # star-injected at concretes under boolean mixing).
+            if n == '*' and t not in bridged_types:
+                reach = self._owc_bridge_reach.get(t)
+                if reach is not None:
+                    bridged_types.add(t)
+                    bs = self.interner.get(t, '*', '...')       # star bare tupleset node
+                    star_parents = self.member_of.get(bs) if bs is not None else None
+                    for r_prime in reach:
+                        # (1) userset/TTU intermediates: every interned concrete
+                        # (t, X, r') (.get -- never index the defaultdict).
+                        for iid in self.interner.ids_of_shape.get((t, r_prime), ()):
+                            if iid not in visited:
+                                queue.append(iid)
+                        # (2) star-parent cross: owc x star-parent x TTU where no
+                        # concrete (t, X, r') is interned (unconditional -- must not
+                        # depend on the '*'-object confirmation of any star sibling).
+                        if star_parents is not None:
+                            for pid in star_parents:
+                                qt, qn, ts = self.interner.key(pid)
+                                for R in self._ttu_map.get((qt, ts, r_prime), ()):
+                                    rid = self.interner.get(qt, qn, R)
+                                    if rid is not None and rid not in visited:
+                                        queue.append(rid)
             if p == '...':
                 continue                    # entity node: not a relation result
             if not self.check(s_pred, s_type, s_name, p, t, n):
@@ -1114,9 +1164,15 @@ class SetEngine:
         """Exact O(stored-tuples) candidate sweep: every interned relation key is a
         candidate, confirmed by ``check`` (sound under booleans). The write-time
         reverse-dependency interning (``_apply_add``) guarantees TTU/Computed-only
-        reachable object keys have ids, so this is complete. The fallback path for
-        object-wildcard schemas the reverse walk does not fully cover (see
-        ``lookup``); appends concrete ids to ``result.node_ids`` in place."""
+        reachable object keys have ids, so this is complete; appends concrete ids to
+        ``result.node_ids`` in place.
+
+        No longer a runtime path: since N17 ``lookup`` walks on EVERY schema (the
+        object-wildcard bridge is seeded inline). This is retained as the DIFFERENTIAL
+        REFERENCE for that walk -- its trivially-complete sweep is the ground truth the
+        property test ``test_owc_bridge_walk_vs_sweep`` asserts the walk's covered set
+        (node_ids union marker-covered) equals over random add/remove states, the
+        direct net for the N17 bridge-trigger completeness claim."""
         for (t, n, p) in list(self.interner.key_of.values()):
             if p == '...' or n == '*':
                 continue                    # entity nodes are not relations; stars are markers

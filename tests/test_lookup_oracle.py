@@ -459,6 +459,63 @@ def test_lookup_oracle_gate_demorgans_reverse(load_fga_schema):
 
 
 # ---------------------------------------------------------------------------
+# N17 corpus: object-wildcard shapes + a STAR-able tupleset ([folder, folder:*]
+# parent) + TTU from-chains + a boolean relation, all live at once. This is the
+# constellation the N17 wildcard-bridge walk exists for -- the owc shape feeds a
+# TTU whose tupleset parent can itself be a star (`folder:*`), the exact triple
+# combo the reverse walk cannot reach without the star-parent cross. Kept
+# graph-acceptable: the boolean `restricted` uses a separate `editor` arm, so the
+# object-wildcard shape closure never lands on a derived family (owc-on-derived
+# is a decision-15 graph refusal), letting `_Gate` run the graph backend too.
+# ---------------------------------------------------------------------------
+
+OWC_STAR_TTU_SHAPES = frozenset({('folder', 'viewer'), ('doc', 'viewer')})
+
+
+def _owc_star_ttu_pool() -> list[tuple]:
+    """Schema-valid raw tuples for ``owc_star_ttu.fga`` over a small universe,
+    combining object wildcards (viewer of ``folder:*``/``doc:*``), a star-able
+    tupleset (``folder:*`` as a ``parent`` subject), group usersets, TTU chains and
+    the boolean ``restricted``."""
+    USERS = ['u1', 'u2']
+    FOLDERS = ['f1', 'f2']
+    DOCS = ['d1']
+    viewer_objs = [('folder', f) for f in FOLDERS] + [('doc', d) for d in DOCS]
+    viewer_objs_wc = viewer_objs + [('folder', '*'), ('doc', '*')]
+    out = []
+    # group membership
+    for u in USERS:
+        out.append(('...', 'user', u, 'member', 'group', 'g1'))
+    # editor + blocked (the boolean's arms; blocked also mentions instances)
+    for (ot, on) in viewer_objs:
+        for u in USERS:
+            out.append(('...', 'user', u, 'editor', ot, on))
+        out.append(('member', 'group', 'g1', 'editor', ot, on))
+        out.append(('...', 'user', 'u1', 'blocked', ot, on))
+    # viewer grants incl. subject-star + object-wildcard objects + group usersets
+    for (ot, on) in viewer_objs_wc:
+        for u in USERS:
+            out.append(('...', 'user', u, 'viewer', ot, on))
+        out.append(('...', 'user', '*', 'viewer', ot, on))
+        out.append(('member', 'group', 'g1', 'viewer', ot, on))
+    # parent hierarchy incl. the STAR tupleset parent (folder:* is a parent)
+    out.append(('...', 'folder', 'f1', 'parent', 'folder', 'f2'))
+    for d in DOCS:
+        out.append(('...', 'folder', 'f1', 'parent', 'doc', d))
+        out.append(('...', 'folder', '*', 'parent', 'doc', d))       # star parent
+    out.append(('...', 'folder', '*', 'parent', 'folder', 'f2'))     # star parent
+    return out
+
+
+@pytest.mark.parametrize('seed', [0, 1])
+def test_lookup_oracle_gate_owc_star_ttu(load_fga_schema, seed):
+    """N17 corpus (owc shapes + star tupleset + TTU + boolean), 4-backend two-sided
+    vs the oracle after every op -- the fixed-fixture net for the bridge walk."""
+    _run_gate(load_fga_schema('owc_star_ttu.fga'), OWC_STAR_TTU_SHAPES,
+              _owc_star_ttu_pool(), seed, walk_steps=6)
+
+
+# ---------------------------------------------------------------------------
 # Dense scripted states: the seeded walks may miss specific residue/bridge
 # constellations, so these pin them deterministically (attack-first finding:
 # an injected neg-drop in the graph's forward residue scan survived the walks
@@ -735,3 +792,308 @@ def test_graph_check_userset_membership_through_derived_ttu(load_fga_schema):
     write('remove', ('...', 'doc', 'd2', 'parent', 'doc', 'd1'))
     assert widx.check('member', 'group', 'g1', 'inherited', 'doc', 'd1') is False
     session.close()
+
+
+# ---------------------------------------------------------------------------
+# N17 handwritten regressions: the star-parent / object-wildcard-bridge walk
+# scenarios, pinned as SetEngine-vs-oracle forward-lookup exactness (the same
+# two-sided S4 checker the gate uses). Several use object wildcards feeding a
+# boolean arm -- a decision-15 graph refusal -- so they are set-engine-only (the
+# oracle is the independent reference). Constructed after the fixed X-scenarios
+# above; do NOT relax these (they pin genuine walk completeness).
+# ---------------------------------------------------------------------------
+
+def _assert_set_forward_vs_oracle(schema, object_wc, tuples, *, subjects=None):
+    """Build a ``SetEngine`` on ``tuples`` under BOTH ``SetOps`` and assert its
+    forward ``lookup`` surface exactly two-sided against the oracle over the
+    schema-derived candidate grid (reusing the gate's ``_check_set_forward``)."""
+    from sqlmodel import Session, SQLModel, create_engine
+    ast = parse_schema_ast(schema)
+    names = _names_by_type(tuples)
+    subj_grid = subjects if subjects is not None else _subject_candidates(ast, names)
+    objects = _object_candidates(ast, names)
+    oracle = Oracle(schema, [OracleTuple(*t) for t in tuples])
+    memo: dict = {}
+
+    def oc(*q):
+        if q not in memo:
+            memo[q] = oracle.check(*q)
+        return memo[q]
+
+    for ops in ALL_SETOPS:
+        engine = create_engine('sqlite:///:memory:')
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            se = SetEngine(session, 'w', schema, object_wildcard_shapes=object_wc, ops=ops)
+            for t in tuples:
+                se.add_tuple(*t)
+            session.commit()
+            for subj in subj_grid:
+                _check_set_forward(se, oc, subj, objects, se.lookup(*subj))
+
+
+def _forward_keys(schema, object_wc, tuples, subject, ops=None):
+    """(node_id key set, markers, interner-getter) for one forward lookup -- lets a
+    regression pin that a concrete surfaces via ``node_ids`` (not just a marker)."""
+    from sqlmodel import Session, SQLModel, create_engine
+    ops = ops or ALL_SETOPS[0]
+    engine = create_engine('sqlite:///:memory:')
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    se = SetEngine(session, 'w', schema, object_wildcard_shapes=object_wc, ops=ops)
+    for t in tuples:
+        se.add_tuple(*t)
+    session.commit()
+    res = se.lookup(*subject)
+    keys = {se.interner.key(i) for i in res.node_ids}
+    interned = se.interner.get
+    return keys, res.markers, interned
+
+
+_STAR_PARENT_SCHEMA = '''
+type user
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder, folder:*]
+    define viewer: [user] or viewer from parent
+'''
+
+
+def test_reg1_star_bare_parent_from_chain():
+    """(1) Commit-1 H3 star-bare fold: a star parent ``folder:* parent doc:d1``
+    makes every folder a parent of doc:d1, so a subject that is a viewer of one
+    concrete folder inherits viewer on doc:d1. The walk dropped it because
+    ``_reverse_neighbors`` folded only the CONCRETE bare parent, not the star bare.
+    owc-free schema (the walk ran here even pre-N17)."""
+    tuples = [('...', 'folder', '*', 'parent', 'doc', 'd1'),
+              ('...', 'user', 'alice', 'viewer', 'folder', 'f1')]
+    _assert_set_forward_vs_oracle(_STAR_PARENT_SCHEMA, frozenset(), tuples)
+    keys, markers, _ = _forward_keys(_STAR_PARENT_SCHEMA, frozenset(), tuples,
+                                     ('...', 'user', 'alice'))
+    assert ('doc', 'd1', 'viewer') in keys and ('doc', 'viewer') not in markers
+
+
+_OWC_TTU_SCHEMA = '''
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define viewer: [user, user:*] or viewer from parent
+type doc
+  relations
+    define parent: [folder, folder:*]
+    define viewer: [user, user:*] or viewer from parent
+'''
+_OWC_TTU_SHAPES = frozenset({('folder', 'viewer'), ('doc', 'viewer')})
+
+
+def test_reg2_owc_ttu_downstream_two_hops():
+    """(2) The original owc x TTU bug shape, now WALKED: an object-wildcard grant
+    ``alice viewer folder:*`` makes alice a viewer of every concrete folder, and a
+    stored ``folder:f1 parent doc:d1`` inherits that onto doc:d1#viewer (2 hops:
+    folder:* star node -> bridged folder:f1#viewer -> doc:d1#viewer)."""
+    tuples = [('...', 'user', 'alice', 'viewer', 'folder', '*'),      # owc grant
+              ('...', 'folder', 'f1', 'parent', 'doc', 'd1')]
+    _assert_set_forward_vs_oracle(_OWC_TTU_SCHEMA, _OWC_TTU_SHAPES, tuples)
+    keys, _, _ = _forward_keys(_OWC_TTU_SCHEMA, _OWC_TTU_SHAPES, tuples,
+                               ('...', 'user', 'alice'))
+    assert ('doc', 'd1', 'viewer') in keys
+
+
+_OWC_LIFT_SCHEMA = '''
+type user
+type folder
+  relations
+    define viewer: [user, user:*]
+type doc
+  relations
+    define editor: [folder#viewer]
+'''
+
+
+def test_reg3_owc_nonwildcard_userset_lift():
+    """(3) owc x NON-wildcard userset lift: a stored ``folder:f1#viewer editor
+    doc:d1`` lifts folder:f1#viewer's members onto doc:d1#editor, and alice's ONLY
+    route into folder:f1#viewer is the object wildcard ``alice viewer folder:*``.
+    The bridge enqueues the interned folder:f1#viewer (ids_of_shape), then H1
+    fan-in reaches doc:d1#editor."""
+    tuples = [('...', 'user', 'alice', 'viewer', 'folder', '*'),          # owc grant
+              ('viewer', 'folder', 'f1', 'editor', 'doc', 'd1')]          # userset lift
+    _assert_set_forward_vs_oracle(_OWC_LIFT_SCHEMA, frozenset({('folder', 'viewer')}), tuples)
+    keys, _, _ = _forward_keys(_OWC_LIFT_SCHEMA, frozenset({('folder', 'viewer')}),
+                               tuples, ('...', 'user', 'alice'))
+    assert ('doc', 'd1', 'editor') in keys
+
+
+_OWC_BOOL_SCHEMA = '''
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define blocked: [user]
+    define public: [user]
+    define viewer: [user, user:*] or viewer from parent
+    define both: viewer and public
+type doc
+  relations
+    define parent: [folder, folder:*]
+    define blocked: [user]
+    define viewer: [user, user:*] or viewer from parent
+    define guarded: viewer but not blocked
+'''
+_OWC_BOOL_SHAPES = frozenset({('folder', 'viewer'), ('doc', 'viewer')})
+
+
+def test_reg4a_owc_boolean_intersection_arm():
+    """(4a) owc feeding an intersection ``both = viewer and public``: the star grant
+    lands on viewer's shape, ``public`` is stored at ONE concrete (folder:f1). That
+    concrete must surface via node_ids, and NO ``both`` marker exists (the marker is
+    false: public is not granted at the star object folder:*). Set-engine-only (owc
+    closes onto the derived ``both`` -- a graph refusal)."""
+    tuples = [('...', 'user', 'alice', 'viewer', 'folder', '*'),   # owc grant on viewer
+              ('...', 'user', 'alice', 'public', 'folder', 'f1')]  # public at one concrete
+    _assert_set_forward_vs_oracle(_OWC_BOOL_SCHEMA, _OWC_BOOL_SHAPES, tuples)
+    keys, markers, _ = _forward_keys(_OWC_BOOL_SCHEMA, _OWC_BOOL_SHAPES, tuples,
+                                     ('...', 'user', 'alice'))
+    assert ('folder', 'f1', 'both') in keys and ('folder', 'both') not in markers
+
+
+def test_reg4b_owc_boolean_exclusion_arm():
+    """(4b) owc feeding an exclusion ``guarded = viewer but not blocked`` on doc,
+    reached via the star parent (so viewer -- hence guarded -- is FALSE at the star
+    object doc:*, keeping the guarded marker false per S4). alice is a viewer of
+    every doc via ``folder:* parent`` + owc-on-folder; blocking doc:d1 must keep
+    doc:d1#guarded OUT while doc:d2#guarded surfaces. Set-engine-only."""
+    tuples = [('...', 'user', 'alice', 'viewer', 'folder', '*'),   # owc on folder viewer
+              ('...', 'folder', '*', 'parent', 'doc', 'd1'),       # star parents
+              ('...', 'folder', '*', 'parent', 'doc', 'd2'),
+              ('...', 'user', 'x', 'blocked', 'folder', 'f1'),     # mentions folder:f1 instance
+              ('...', 'user', 'alice', 'blocked', 'doc', 'd1')]    # ban d1
+    _assert_set_forward_vs_oracle(_OWC_BOOL_SCHEMA, _OWC_BOOL_SHAPES, tuples)
+    keys, markers, _ = _forward_keys(_OWC_BOOL_SCHEMA, _OWC_BOOL_SHAPES, tuples,
+                                     ('...', 'user', 'alice'))
+    assert ('doc', 'd2', 'guarded') in keys                         # unbanned surfaces
+    assert ('doc', 'd1', 'guarded') not in keys                     # banned excluded
+    assert ('doc', 'guarded') not in markers                        # marker stays false
+
+
+def test_reg5_triple_combo_star_parent_cross_no_concrete():
+    """(5) Triple combo owc x star-parent x TTU with NO concrete (folder,X,viewer)
+    interned -- exercises the bridge's star-parent cross (step 2). folder:f1 is
+    mentioned only via a ``blocked`` tuple, so folder:f1#viewer is never interned;
+    the ONLY route to doc:d1#viewer is the star-parent cross over member_of of the
+    star bare folder:* crossed with the doc TTU."""
+    tuples = [('...', 'user', 'alice', 'viewer', 'folder', '*'),   # owc grant
+              ('...', 'folder', '*', 'parent', 'doc', 'd1'),       # star bare parent
+              ('...', 'user', 'x', 'blocked', 'folder', 'f1')]     # mention f1 (no viewer intern)
+    _assert_set_forward_vs_oracle(_OWC_BOOL_SCHEMA, _OWC_BOOL_SHAPES, tuples)
+    keys, _, interned = _forward_keys(_OWC_BOOL_SCHEMA, _OWC_BOOL_SHAPES, tuples,
+                                      ('...', 'user', 'alice'))
+    assert interned('folder', 'f1', 'viewer') is None              # step-2, not step-1
+    assert ('doc', 'd1', 'viewer') in keys
+
+
+_OWC_CHAIN_SCHEMA = '''
+type user
+type folder
+  relations
+    define viewer: [user, user:*]
+type doc
+  relations
+    define viewer: [user, user:*, folder#viewer]
+'''
+_OWC_CHAIN_SHAPES = frozenset({('folder', 'viewer'), ('doc', 'viewer')})
+
+
+def test_reg6_shape_chaining():
+    """(6) Shape chaining: the shape-1 injection (owc ``alice viewer folder:*``)
+    makes alice a member of the stored userset ``folder:f1#viewer``, which is granted
+    viewer on the doc wildcard object (shape-2's star). Reaching doc:*#viewer must
+    fire the DOC bridge, surfacing the mentioned concrete doc:d1#viewer."""
+    tuples = [('...', 'user', 'alice', 'viewer', 'folder', '*'),        # shape-1 owc
+              ('viewer', 'folder', 'f1', 'viewer', 'doc', '*'),         # userset -> doc:* (shape-2)
+              ('...', 'user', 'z', 'viewer', 'doc', 'd1')]              # mention doc:d1
+    _assert_set_forward_vs_oracle(_OWC_CHAIN_SCHEMA, _OWC_CHAIN_SHAPES, tuples)
+    keys, _, _ = _forward_keys(_OWC_CHAIN_SCHEMA, _OWC_CHAIN_SHAPES, tuples,
+                               ('...', 'user', 'alice'))
+    assert ('doc', 'd1', 'viewer') in keys
+
+
+_OWC_GHOST_SCHEMA = '''
+type user
+type folder
+  relations
+    define viewer: [user, user:*]
+'''
+
+
+def test_reg7_ghost_subject_via_subject_star():
+    """(7) A ghost (uninterned) subject covered only by a ``[user:*]`` subject-wildcard
+    grant, on an owc schema: ``user:* viewer folder:f1`` makes every user (including a
+    ghost) a viewer of folder:f1. The seed resolves the ghost's star sibling
+    (user:* bare) via ``_reverse_neighbors_key`` H1 star coverage."""
+    tuples = [('...', 'user', '*', 'viewer', 'folder', 'f1')]
+    _assert_set_forward_vs_oracle(_OWC_GHOST_SCHEMA, frozenset({('folder', 'viewer')}), tuples)
+    keys, markers, _ = _forward_keys(_OWC_GHOST_SCHEMA, frozenset({('folder', 'viewer')}),
+                                     tuples, ('...', 'user', 'zz-ghost-user'))
+    assert ('folder', 'f1', 'viewer') in keys
+
+
+def test_reg8_bridge_tuple_add_remove_roundtrip():
+    """(8) add -> assert -> remove -> assert: the walk is stateless, so removing the
+    bridge tuples (which releases the interner refs and scrubs ids_of_shape /
+    member_of) must leave the walk surfacing nothing. Pins interner-release /
+    ids_of_shape maintenance on the star-parent cross state (regression 5)."""
+    from sqlmodel import Session, SQLModel, create_engine
+    add_tuples = [('...', 'user', 'alice', 'viewer', 'folder', '*'),
+                  ('...', 'folder', '*', 'parent', 'doc', 'd1'),
+                  ('...', 'user', 'x', 'blocked', 'folder', 'f1')]
+    for ops in ALL_SETOPS:
+        engine = create_engine('sqlite:///:memory:')
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            se = SetEngine(session, 'w', _OWC_BOOL_SCHEMA,
+                           object_wildcard_shapes=_OWC_BOOL_SHAPES, ops=ops)
+            for t in add_tuples:
+                se.add_tuple(*t)
+            session.commit()
+            res = se.lookup('...', 'user', 'alice')
+            assert ('doc', 'd1', 'viewer') in {se.interner.key(i) for i in res.node_ids}
+            for t in add_tuples:
+                se.remove_tuple(*t)
+            session.commit()
+            res2 = se.lookup('...', 'user', 'alice')
+            assert res2.node_ids == set() and res2.markers == set()
+            # interner fully drained (no leaked bridge/dep candidate ids)
+            assert se.interner.get('doc', 'd1', 'viewer') is None
+            assert se.interner.get('folder', '*', '...') is None
+
+
+def test_reg9_same_type_star_parent_accept_reject_parity(load_fga_schema):
+    """(9) Accept/reject parity on star tupleset parents (found by the seed-7 fuzz
+    sweep on the owc_star_ttu corpus). A SAME-TYPE star parent (`folder:* parent
+    folder:f2`) routes via the TTU rewrite's through-shape to `folder:*#viewer
+    viewer folder:f2` -- a wildcard tuple whose object participates in the
+    wildcard's own shape, which the graph rejects by construction (in-bridge +
+    grant = two-cycle). The set engine's raw-level same-shape check could not see
+    it (the raw subject is bare), so it ACCEPTED -- an accept/reject divergence.
+    Pins: both backends reject same-type, both accept cross-type."""
+    from tests.test_matrix import GraphBackend, SetBackend
+    schema = load_fga_schema('owc_star_ttu.fga')
+    same_type = ('...', 'folder', '*', 'parent', 'folder', 'f2')
+    cross_type = ('...', 'folder', '*', 'parent', 'doc', 'd1')
+    backends = [GraphBackend(schema, OWC_STAR_TTU_SHAPES)] + [
+        SetBackend(schema, OWC_STAR_TTU_SHAPES, ops) for ops in ALL_SETOPS]
+    try:
+        for b in backends:
+            assert b.apply(same_type, 'add') is False, (
+                f'{b.name} accepted the same-type star parent (routed same-shape '
+                f'wildcard self-reference; graph rejects it by construction)')
+            assert b.apply(cross_type, 'add') is True, (
+                f'{b.name} rejected the acyclic cross-type star parent')
+    finally:
+        for b in backends:
+            b.close()

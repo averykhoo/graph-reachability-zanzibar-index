@@ -216,6 +216,37 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   `tests/test_lookup_oracle.py` (S4) against the independent brute-force oracle
   over the full candidate grid — a differential net stronger here than a Lean
   twin would be — plus the hypothesis lookup coverage and the validation matrix.
+  **Superseded by N17 (below):** the `_lookup_sweep` hybrid/fallback is removed;
+  `lookup` now walks on every schema.
+
+* **N17 — set-engine forward `lookup`: O(store) sweep fully removed; walk on every
+  schema via wildcard-bridge seeding (`setengine/engine.py`, 2026-07-15).** Same
+  disposition as P1: forward `lookup` is **not modeled in Lean** (§2 models the
+  set-engine semantics + `expand`; `lookup` is a Python-only `check`-verified
+  candidate composition), so no modeled definition describes its candidate
+  generation and nothing becomes dead code. N17 deletes P1's object-wildcard
+  `_lookup_sweep` fallback (`_owc_needs_sweep` / `_owc_lookup_needs_sweep` gone) so
+  the O(reachable) reverse walk runs for **every** schema, including object-wildcard
+  ones (which P1 kept on the O(store) sweep). Candidate generation is **widened**,
+  the observable output unchanged: (a) an inline *wildcard-bridge seeding* step — on
+  dequeuing a star node of an object-wildcard type, enqueue the wildcard-covered
+  concrete siblings (interned `ids_of_shape` members + a star-parent × TTU cross)
+  the reverse walk cannot reach on its own; and (b) an H3 *star-bare fold* in
+  `_reverse_neighbors` plus a subject-shape walk seed (the Commit-1 bug fix, below).
+  `_lookup_sweep` is retained only as the **differential test reference**. Every
+  surfaced candidate is still confirmed by the unchanged `check`, and the observable
+  output (`node_ids` + `markers`) is identical to the removed sweep — pinned
+  **exact two-sided** by `tests/test_lookup_oracle.py` (S4, incl. the new
+  `owc_star_ttu` corpus + 8 handwritten star-parent/bridge regressions) and a new
+  **walk == sweep** differential property test (`test_owc_bridge_walk_vs_sweep`,
+  both `SetOps`), plus the hypothesis lookup machine over the widened corpus set.
+  **Commit-1 completeness bug (no Lean impact):** the pre-existing candidate
+  generation was *incomplete*, not the modeled semantics — `_reverse_neighbors`'s H3
+  TTU from-chain folded only the concrete bare parent, dropping the STAR bare parent
+  (`T:*` as a tupleset parent, ttu_leaf's ∀⇒∃ star branch); and the walk seed
+  skipped uninterned userset subjects whose reachability is a from-chain star
+  identity. Both are candidate-generation completeness fixes on an unmodeled surface
+  — no Lean definition changes.
 
 * **P12a/P12b — composition write-path round-trip elision
   (`index_v4/core.py` `_lock_store`, `connectedstore/`, 2026-07-14).** Both

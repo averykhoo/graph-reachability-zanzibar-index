@@ -34,7 +34,8 @@ from pathlib import Path
 from hypothesis import HealthCheck, Phase, settings, strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, initialize, invariant, rule
 
-from tests.test_lookup_oracle import _Gate
+from tests.test_lookup_oracle import (_Gate, OWC_STAR_TTU_SHAPES,
+                                       _owc_star_ttu_pool)
 from tests.test_matrix import _boolean_pool, _demorgan_pool
 from tests.test_wildcard_property import OBJECT_WC, _candidate_raw_tuples
 
@@ -62,10 +63,12 @@ def _corpus(name: str):
     if name == 'demorgans_reverse':
         schema = _load_fga('demorgans_reverse.fga')
         return schema, frozenset(), _demorgan_pool(schema)
+    if name == 'owc_star_ttu':
+        return _load_fga('owc_star_ttu.fga'), OWC_STAR_TTU_SHAPES, _owc_star_ttu_pool()
     raise AssertionError(name)
 
 
-_CORPORA = ['wildcards', 'boolean', 'demorgans_reverse']
+_CORPORA = ['wildcards', 'boolean', 'demorgans_reverse', 'owc_star_ttu']
 
 
 class LookupSurfaceMachine(RuleBasedStateMachine):
@@ -111,3 +114,85 @@ class LookupSurfaceMachine(RuleBasedStateMachine):
 
 
 TestLookupSurfaceMachine = LookupSurfaceMachine.TestCase
+
+
+# ---------------------------------------------------------------------------
+# N17 differential: bridge walk == exact O(store) sweep on the object-wildcard
+# corpora. `_lookup_sweep` (retained as the reference) is trivially complete --
+# every interned relation key confirmed by `check` -- so this pins the walk's
+# candidate generation (the wildcard-bridge seeding + the H3 star-bare fold)
+# directly, without the oracle. Cheaper per state than the oracle gate (SetEngine
+# only, no graph, no brute-force reference), so it runs many more random states;
+# both SetOps, since the bridge iterates ops-backed sets (`ids_of_shape`,
+# `member_of`).
+# ---------------------------------------------------------------------------
+
+import random
+
+import pytest
+from sqlmodel import Session, SQLModel, create_engine
+
+from setengine import ALL_SETOPS, SetEngine
+from setengine.engine import LookupResult
+from tests.test_lookup_oracle import _names_by_type, _subject_candidates
+from zanzibar_utils_v1 import parse_schema_ast
+
+_OWC_CORPORA = ['wildcards', 'owc_star_ttu']
+
+
+def _covered(res, keyed_ids) -> set:
+    """The forward-lookup covered set: concretes in ``node_ids`` union every
+    interned concrete whose (type, relation) is marker-covered (S4's ``covered``)."""
+    cov = {k for (k, kid) in keyed_ids if kid in res.node_ids}
+    cov |= {k for (k, _kid) in keyed_ids if (k[0], k[2]) in res.markers}
+    return cov
+
+
+@pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
+@pytest.mark.parametrize('corpus', _OWC_CORPORA)
+@pytest.mark.parametrize('seed', [0, 1, 2, 3])
+def test_owc_bridge_walk_vs_sweep(corpus, ops, seed):
+    schema, object_wc, pool = _corpus(corpus)
+    ast = parse_schema_ast(schema)
+    subjects = _subject_candidates(ast, _names_by_type(pool))
+    engine = create_engine('sqlite:///:memory:')
+    SQLModel.metadata.create_all(engine)
+    rng = random.Random(seed)
+    present: set[tuple] = set()
+    history: list[tuple] = []
+    with Session(engine) as session:
+        se = SetEngine(session, 'w', schema, object_wildcard_shapes=object_wc, ops=ops)
+
+        def assert_walk_eq_sweep():
+            # every interned relation key (concrete object, declared-ish predicate)
+            keyed_ids = [(k, se.interner.get(*k))
+                         for k in list(se.interner.key_of.values())
+                         if k[2] != '...' and k[1] != '*']
+            for subj in subjects:
+                res = se.lookup(*subj)
+                ref = LookupResult()
+                se._lookup_sweep(subj[0], subj[1], subj[2], ref)
+                ref.markers = res.markers          # same intensional markers
+                walk_cov = _covered(res, keyed_ids)
+                sweep_cov = _covered(ref, keyed_ids)
+                assert walk_cov == sweep_cov, (
+                    f'[{corpus}/{ops.name} seed={seed}] walk != sweep for {subj}\n'
+                    f'  walk-only: {sorted(walk_cov - sweep_cov)}\n'
+                    f'  sweep-only: {sorted(sweep_cov - walk_cov)}\n'
+                    f'  history:\n' + '\n'.join(f'    {op} {raw}' for op, raw in history))
+
+        for _ in range(30):
+            cands = [r for r in pool if r not in present]
+            if not present or (cands and rng.random() < 0.7):
+                op, raw = 'add', rng.choice(cands)
+            else:
+                op, raw = 'remove', rng.choice(sorted(present))
+            try:
+                (se.add_tuple if op == 'add' else se.remove_tuple)(*raw)
+                session.commit()
+            except ValueError:
+                session.rollback()
+                continue
+            (present.add if op == 'add' else present.discard)(raw)
+            history.append((op, raw))
+            assert_walk_eq_sweep()

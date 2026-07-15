@@ -123,6 +123,43 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Applied
 
+- ✅ **N17 — set-engine `lookup`: O(store) sweep fully removed; O(reachable) walk on
+  EVERY schema via wildcard-bridge seeding (`setengine/engine.py`), 2026-07-15,
+  ALGORITHM CHANGE on candidate generation, oracle+fuzz-gated.** P1 left
+  object-wildcard schemas on the exact O(store) `_lookup_sweep` (the M2 verdict's
+  worst read surface: gdrive owc lookup 0.27/s @100k). N17 deletes the
+  `_owc_needs_sweep` gate so the reverse walk runs everywhere, seeding the
+  wildcard-covered concrete siblings the walk cannot reach on its own: on dequeuing
+  a `(T,'*',·)` star node it enqueues `ids_of_shape[(T,r')]` + a star-parent×TTU
+  cross (`member_of` of the star bare `T:*` crossed with `_ttu_map`), all
+  `check`-confirmed. `_lookup_sweep` is kept only as the differential test
+  reference. **Quick sanity (30-s inline timing, owc `[user,user:*]` schema, subject
+  reaching 5 objects): walk stays flat while the old sweep collapses —
+  N=2k 8,549/s vs 37.9/s (225×); N=10k 7,399/s vs 5.2/s (1,435×), the gap widening
+  with N (O(reachable) vs O(store)).** Owc-free `simple` lookup unchanged (~5.4k/s
+  flat at 2k/10k; it always walked — the added H3 star-bare fold is ~2 dict probes
+  per visited node). **Scale bench (post-gate, `n17_scale_2026-07-15.jsonl`,
+  gdrive set:roaring): lookup 222 / 221 / 224 / 207 /s at scale 250/1k/4k/10k
+  (4.2k → 168k raw tuples) — FLAT, vs the sweep baselines 7.4 → 1.8 → 0.44/s over
+  4.2k → 67k tuples (`scale_bench_2026-07-15.jsonl`): ~25× at 4.2k tuples,
+  ~500× at 67k, ~1,000×+ extrapolated at 168k. `simple` control 13.2k/14.0k /s at
+  16k/64k (baseline band 10.1k–16.6k); checks unchanged.** Also fixes THREE
+  pre-existing set-engine bugs, all on star-tupleset (`[T, T:*]`) × TTU states no
+  prior corpus built (full record `docs/spec-deviations.md` 2026-07-15):
+  `_reverse_neighbors`'s H3 folded only the concrete bare parent, dropping the
+  STAR bare parent (`T:*` tupleset parent → every instance is a parent, ttu_leaf
+  ∀⇒∃; Commit-1); the walk seed skipped uninterned userset
+  from-chain-star-identity subjects; and an accept/reject parity divergence — the
+  set engine accepted same-type star parents the graph rejects as routed
+  same-shape wildcard self-reference cycles (`_would_cycle` now runs the §1.5
+  check over derived pairs; found by the seed-7 hypothesis sweep). Gated:
+  `test_lookup_oracle.py` (new `owc_star_ttu` 4-backend corpus + 8 handwritten
+  regressions, exact two-sided vs oracle), a new `test_owc_bridge_walk_vs_sweep`
+  differential (walk covered-set == sweep covered-set, both `SetOps`, 4 seeds ×
+  30-step walks), + `test_lookup_hypothesis.py` machine over the widened corpus set,
+  + matrix/wildcard-property/blind-audit. **Lean: none** (forward `lookup` unmodeled;
+  `CORRESPONDENCE.md §8.1` N17 entry).
+
 - ✅ **`direct_expand` population copy (`engine.py:768`) — FIXED 2026-07-14.**
   Dropped the redundant `ops.new()` around the persistent population mask
   (`ops.new(ns.entities) & pop((rtype,'...'))`). Turned the reverse/expand direct

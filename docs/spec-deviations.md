@@ -893,4 +893,64 @@ projects the node-GC class out (P5). No theorem, gate, or bound is touched.
 
 ---
 
+## 2026-07-15 — set-engine lookup completeness ×2 + accept/reject parity (star tuplesets)
+
+Three pre-existing set-engine divergences, all on states combining star tupleset
+parents (`[T, T:*]`) with TTU chains — a constellation NO prior corpus built. The
+first was found by the N17 design review (a `check`-recursion vs walk-hop audit),
+the other two by N17's new fuzz artifacts on their first runs. All fixed
+2026-07-15 (`setengine/engine.py`), landed with N17; the graph index and oracle
+were never wrong — these are set-engine-only surface/admission bugs.
+
+1. **Walk drops downstream objects behind a STAR bare parent (H3 gap).** A stored
+   star parent tuple `Q:q ts T:*` makes every tuple-mentioned instance of `T` a
+   parent of `Q:q` (`ttu_leaf`'s ∀⇒∃ star branch), but `_reverse_neighbors`' H3
+   hop folded only the CONCRETE bare sibling — so a subject confirmed on
+   `(T, X, rel)` never hopped to `(Q, q, R)`. `check` said True (engine AND
+   oracle), `lookup` dropped the object, no marker covered it — an S4 violation
+   live on any walked schema with a star-able tupleset. **Fix:** H3 also folds the
+   star bare sibling `(t, '*', '...')` through the same `member_of × _ttu_map`
+   cross. Pinned: `test_reg1_star_bare_parent_from_chain` + the `owc_star_ttu`
+   corpus gates.
+
+2. **Walk seed empty for uninterned from-chain star-identity subjects.** A userset
+   subject `T:X#r` (ghost, or the `*` shape itself) is a member of every object
+   with a stored `T`/`T:*` tupleset parent whose TTU targets `r` (`ttu_leaf`'s
+   identity branches) — with NO stored tuple at the subject key, so the old
+   interned-id seed (and its star-sentinel fallback) produced nothing. Found by
+   the walk≡sweep differential on its first run, oracle-confirmed. **Fix:** the
+   seed is addressed by SHAPE (`_reverse_neighbors_key`); H2/H3 need only the
+   bare siblings interned, not the subject node.
+
+3. **Accept/reject divergence: routed same-shape wildcard self-reference.** A
+   same-type star parent `folder:* parent folder:f2` routes (TTU-rewrite
+   through-shape) to `folder:*#viewer viewer folder:f2`, which the graph rejects
+   by construction (bridge-before-grant: the object's in-bridge to the star
+   userset node + the grant edge = two-cycle; `index_v4/wildcard.py`'s reworded
+   cycle error). The set engine's §1.5 same-shape check only saw the RAW tuple
+   (bare subject) and its flow graph carries only RuleSet-derived edges, never
+   the materialized bridges — so it ACCEPTED. Found by the seed-7 hypothesis
+   sweep over the new corpus (`_Gate` unanimity assert). **Fix:** the same-shape
+   wildcard self-reference test now also runs over every DERIVED pair
+   (`_would_cycle`), guarded by the through-shape's presence in
+   `subject_wildcard_shapes` (always true for routed stars — the D3 derivation —
+   so it never blocks a pair the graph accepts). Pinned:
+   `test_reg9_same_type_star_parent_accept_reject_parity` (both backends reject
+   same-type, both accept cross-type).
+
+   **Known residual (documented, not fixed):** the flow graph still omits bridge
+   edges, so a MULTI-HOP cycle through a star bridge (a rule edge chain re-entering
+   a concrete of the same subject-wildcard shape) would still diverge
+   (set-accepts / graph-rejects). Constructing one requires a rule edge OUT of a
+   star userset AND a rule edge chain back INTO a concrete of its shape — no
+   current corpus/pool can build it (the 6-seed sweep is green). A full mirror
+   means bridge-aware flow edges; filed in `docs/perf-next-round.md` minor notes.
+
+**Formal scope:** unaffected. Forward `lookup` is unmodeled (CORRESPONDENCE §8.1
+N17 entry); set-engine write admission is unmodeled (`GraphAdmission` mirrors the
+GRAPH's admission, unchanged); conformance corpora contain no star tupleset
+parents, and all three verify.sh phases re-ran green.
+
+---
+
 *(subsequent phases append below)*

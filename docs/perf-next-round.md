@@ -157,19 +157,39 @@ Binding constraint at scale is now bulk-build RAM (gdrive 200k peaked 3.51 GB,
 survived via swap) → N18 below. Original follow-ups: (b) N17 below stands;
 (c) is now N18.
 
-### N17. Set engine: sub-O(store) lookup for object-wildcard schemas (NEW 2026-07-15)
+### N17. Set engine: sub-O(store) lookup for object-wildcard schemas — ✅ DONE 2026-07-15 (gate + scale bench green)
 - **Why:** the M2 verdict — owc `lookup` at 0.27/s @100k is now the worst read
   surface in the system by orders of magnitude. Mitigations by deployment: the
   composed system already graph-serves lookup (flat); this item is for
   set-engine-standalone use.
-- **What:** replace the full O(store) sweep with the O(reachable) walk PLUS an
-  explicit wildcard-bridge enumeration: when the walk reaches a `(T,'*',rel)`
-  star node, additionally enumerate the concrete `T` objects stored as TTU
-  tupleset parents (the exact case CORRESPONDENCE §8.1 documents the walk
-  missing) instead of falling back wholesale. ALGORITHM CHANGE on the surface
-  that shipped the owc×TTU bug — strict `test_lookup_oracle.py` + multi-seed
-  fuzz gate mandatory; over-include when in doubt. **Lean:** none (forward
-  lookup unmodeled). Design review before implementation.
+- **What (shipped):** deleted the `_owc_needs_sweep` gate so the O(reachable)
+  reverse walk runs on EVERY schema; the object-wildcard case is covered by inline
+  **wildcard-bridge seeding** — on dequeuing a `(T,'*',·)` star node the walk
+  enqueues the wildcard-covered concrete siblings (`ids_of_shape[(T,r')]` + a
+  star-parent×TTU cross), every candidate `check`-confirmed. `_lookup_sweep`
+  retained as the differential test reference. ALGORITHM CHANGE on candidate
+  generation; gated by strict `test_lookup_oracle.py` (new `owc_star_ttu` corpus +
+  8 handwritten regressions) + a `test_owc_bridge_walk_vs_sweep` differential
+  (walk == sweep, both SetOps) + the hypothesis lookup machine. **Lean:** none
+  (forward lookup unmodeled; `CORRESPONDENCE.md §8.1` N17 entry).
+- **Scale bench (`n17_scale_2026-07-15.jsonl`, gdrive set:roaring): the owc
+  lookup curve is now FLAT — 222 / 221 / 224 / 207 lookups/s at scale
+  250/1k/4k/10k = 4.2k → 168k raw tuples — vs the old sweep's O(store) collapse
+  (7.4 → 1.8 → 0.44/s over 4.2k → 67k tuples, `scale_bench_2026-07-15.jsonl`
+  baselines): ~25× at 4.2k tuples growing to ~1,000×+ at 168k, widening with N.**
+  `simple` control unchanged (13.2k/14.0k /s at 16k/64k vs the 10.1k–16.6k
+  baseline band); checks unchanged. Gate: split suite 543+24 green, verify.sh
+  lean/conf-heavy/conf-rest green, 6-seed hypothesis sweep green.
+- **Discovered + fixed THREE pre-existing set-engine bugs** (full record:
+  `docs/spec-deviations.md` 2026-07-15), all on star-tupleset (`[T, T:*]`) × TTU
+  states no prior corpus built: (1) the walk's H3 folded only the concrete bare
+  parent, dropping downstream objects behind a STAR bare parent (design-review
+  find, oracle-confirmed); (2) the walk seed was empty for uninterned from-chain
+  star-identity userset subjects (walk≡sweep differential find, first run); (3)
+  an ACCEPT/REJECT divergence — the set engine accepted a same-type star parent
+  (`folder:* parent folder:f2`) that the graph rejects as a routed same-shape
+  wildcard self-reference cycle (seed-7 hypothesis find; `_would_cycle` now runs
+  the §1.5 check over derived pairs; `test_reg9` pins parity both ways).
 
 ### N18. Chunk/stream the bulk-build DP (RAM ceiling) (NEW 2026-07-15, from the M2 follow-up)
 - **Why:** the bulk builder holds the whole closure DP in memory: gdrive/200k
@@ -188,6 +208,13 @@ survived via swap) → N18 below. Original follow-ups: (b) N17 below stands;
 ### Minor notes (grab-bag, land opportunistically with adjacent work)
 - `core.py:377-403` remove_node neighbour-debit tail N+1 (batchable `IN`; cold
   path). `core.py:454-464` `_require_live_nodes` 2 SELECTs → 1.
+- **Set-engine flow graph lacks bridge edges** (from the N17 parity find,
+  `docs/spec-deviations.md` 2026-07-15 §3 residual): a MULTI-HOP cycle through a
+  star bridge (rule edge out of a star userset + a rule chain back into a
+  concrete of its shape) would still be set-accepted / graph-rejected. Needs
+  bridge-aware `_flow_reaches` edges (in-bridges concrete→star per
+  subject-wildcard shape, out-bridges star→concrete per owc shape). Correctness
+  parity, not perf; no known corpus can build the shape today.
 - `wildcard.py:502-508` `_collect_residue_memberships` builds sets for
   single-membership tests and decodes `upos` unconditionally.
 - `invariants.py:322-368` paranoia delta verifier is O(pairs × edges) per
