@@ -254,3 +254,31 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   equal, plus the I1–I13 invariant checker and an oracle read-parity grid on
   the bulk-built stores. No modeled definition describes dead code; nothing to
   widen.
+
+* **R4-BF — bulk boolean backfill for `build_index`
+  (`index_v4/bulk_backfill.py`, `index_v4/bulk_build.py`,
+  `connectedstore/build.py`, 2026-07-15).** Same disposition as P13, one layer
+  out. The **incremental backfill/cascade is the modeled algorithm** — the
+  per-flip reconcile + per-stratum cascade over the outbox (§4/§5) still runs
+  for every online write, and `DeltaProcessor.backfill()` itself is unchanged
+  (it survives as the repair path and the `bulk=False` reference side). The
+  bulk backfill is an **alternative constructor of the same modeled state**: on
+  a fresh build (empty derived state, add-only) it computes the final derived
+  edges / residues / from-chain nodes and their closure/refcount/outbox effects
+  directly in a new in-memory Phase D that mirrors `backfill()`'s exact
+  iteration and **reuses the compiled plan closures** (`plan.check_fn` /
+  `plan.stars_fn` via a `_BulkEvalContext` matching the `processor._EvalContext`
+  callback protocol — boolean logic shared, only state access mirrored), then
+  writes everything in one extended Phase W. **The net is the extended
+  differential identity gate** (`tests/test_bulk_build.py`, now **6 corpora**:
+  the P13 four plus `derived_member` — derived-userset leaf + sticky
+  implicit→explicit promotion under a raw userset subject over a derived
+  relation — and `demorgan1`/`demorgans_law_1` — derived-tupleset-ttu leaf + ≥3
+  boolean strata + an edge-free explicit rc=0 residue-anchored node — with X4b
+  upos-lift assertions added on the existing `demorgan` corpus, each guarded by
+  anti-vacuity assertions): the same snapshot built both ways, compared on the
+  four id-independent canonical projections (nodes/edges/residues/outbox), plus
+  the I1–I13 invariant checker and an oracle read-parity grid on the bulk
+  stores. No Lean definition becomes dead code (the incremental processor runs
+  for every online write; `backfill()` remains the repair path and the
+  reference side); nothing to widen.

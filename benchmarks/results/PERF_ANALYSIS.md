@@ -236,6 +236,48 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   constructor of the same modeled state; logged in `CORRESPONDENCE.md §8.1`).
   Design doc: `docs/p13-bulk-build-design.md`.
 
+- ✅ **R4-BF — bulk boolean backfill for `build_index`
+  (`index_v4/bulk_backfill.py`, `index_v4/bulk_build.py`,
+  `connectedstore/build.py`, 2026-07-15).** P13 bulk-built the pre-backfill
+  closure but left the per-object `DeltaProcessor.backfill()` on the boolean
+  build path, where it dominated the total (P13 boolean total was 1.44×). R4-BF
+  computes the final derived state **in memory** during the same bulk build: a
+  new Phase D mirrors `DeltaProcessor.backfill()`'s exact iteration (strata in
+  order, relations in stratum order, `_live_keys_of` names sorted), **reusing
+  the compiled plan closures** (`plan.check_fn`/`plan.stars_fn`) via a mirrored
+  `_BulkEvalContext` implementing the same callback protocol as
+  `processor._EvalContext` — the boolean expression logic is shared, only state
+  access is mirrored. Within-stratum immediate visibility (bridge-on-intern) is
+  reproduced by maintaining **reachability incrementally on every edge add**; a
+  single final DP over the final direct multigraph recovers the path counts;
+  the extended Phase W writes nodes/edges/residues/outbox in one pass.
+  `connectedstore/build.py`'s bulk branch no longer calls `proc.backfill()`
+  (the `bulk=False` branch keeps it, unchanged). **Measured (single-run,
+  in-memory SQLite, `build_index(bulk=True)` total wall; before = pre-R4-BF
+  HEAD where `backfill()` was 98.7–99.8% of the total): demorgans (5-level
+  boolean+TTU cascade) 9.38 → 0.11 s at 188 tuples, 22.38 → 0.17 s at 330,
+  75.22 → 0.41 s at 980, 163.36 → 0.81 s at 1950 (~201×) — the before-curve was
+  strongly superlinear (~3.4× per scale-doubling), the after tracks the load
+  phase ~linearly; boolean_wildcards (userset+TTU+exclusion) 8.04 → 0.14 s at
+  390 tuples, 31.82 → 0.40 s at 1455, 70.69 → 1.18 s at 3051 (~60×).**
+  Correctness: the differential identity gate (`tests/test_bulk_build.py`)
+  extended from 4 to **6 corpora** — a new `derived_member` corpus
+  (derived-userset leaf + sticky implicit→explicit public-node promotion under
+  a raw userset subject over a derived relation), a new `demorgan1`
+  (`demorgans_law_1`) corpus (derived-tupleset-ttu leaf + ≥3 boolean strata +
+  edge-free explicit rc=0 residue-anchored node), and X4b upos-lift assertions
+  on the existing `demorgan` corpus — each with anti-vacuity assertions that
+  the design §5 features (a–e) are actually reached; both build paths still
+  compared on the four id-independent canonical projections
+  (nodes/edges/residues/outbox) + I1–I13 checker + oracle read-parity grid.
+  Full gate green (split suite 513+24=537 passed; `verify.sh`
+  lean/conf-heavy 68/conf-rest 195 all PASSED) + multi-seed fuzz sweep
+  (`test_hypothesis.py`, `test_lookup_hypothesis.py`, seeds 7/19/31/53/71/97).
+  `DeltaProcessor.backfill()` itself is unchanged (repair path + `bulk=False`
+  reference side). Lean: unchanged (alternative constructor of the same modeled
+  state; logged in `CORRESPONDENCE.md §8.1`). Design doc:
+  `docs/r4bf-bulk-backfill-design.md`.
+
 - ✅ **Wave 2 (round 3) — N6 + N7 + N9 + P1-follow-up, 2026-07-15.** Two parallel
   subagent tracks; integration gate green (531 passed split cap-safe 507+24 +
   `verify.sh lean`/`conf-heavy` 68/`conf-rest` 195). Statement counts vs the

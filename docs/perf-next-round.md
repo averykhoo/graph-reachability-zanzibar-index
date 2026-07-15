@@ -90,27 +90,16 @@ build/apply throughput, in ROI order. Note the asymmetry: steady-state
 is O(ancestors×descendants) per write — the memoization you're buying); the
 big recoverable waste is in **bulk construction** and per-batch SQL overhead.
 
-### R4-BF. Bulk the boolean `backfill()` phase — now the dominant boolean build cost
-- **Where:** `index_v4/processor.py` `backfill()` (the residue/derived-edge
-  bootstrap pass), invoked from `connectedstore/build.py`. P13 bulk-built the
-  direct-closure state around it but left `backfill()` on its per-item path, so
-  it dominates the boolean *total* build (P13's boolean total = 1.44× vs 33.6×
-  on the isolated non-backfill load phase — the residual is here).
-- **What:** apply the P13 pattern one layer out — compute the final residue /
-  derived-edge state for a whole snapshot directly and bulk-write it, rather
-  than deriving it per contributing flip. The P13 design
-  (`docs/p13-bulk-build-design.md`) is the precedent for the "alternative
-  constructor of the same state" shape.
-- **Pin:** the same differential **bulk ≡ incremental-replay state-equality
-  gate** P13 uses (`tests/test_bulk_build.py`): build the same store both ways,
-  compare full node/edge/residue/outbox canonical projections + I1–I13 checker
-  + oracle read-parity grid. **Lean:** the incremental cascade is the modeled
-  algorithm; a bulk backfill is an alternative constructor of the same modeled
-  state — log in `CORRESPONDENCE.md §7/§8` with the state-equality gate as the
-  net (same disposition as P13), or model it if it becomes load-bearing.
-  Orchestrator/design review required before implementation.
-- **Risk:** medium-high (touches derived/residue construction — the trickiest
-  ref-counted state). The state-equality gate is what makes it shippable.
+### R4-BF. Bulk the boolean `backfill()` phase — ✅ LANDED 2026-07-15
+In-memory Phase D mirror of `DeltaProcessor.backfill()` on the bulk build path
+(`index_v4/bulk_backfill.py` + extended `index_v4/bulk_build.py`;
+`connectedstore/build.py`'s bulk branch skips `proc.backfill()`). Boolean
+*total* build ~201× on demorgans / ~60× on boolean_wildcards; `backfill()`
+itself unchanged (repair path + `bulk=False` reference side). Design:
+[`docs/r4bf-bulk-backfill-design.md`](r4bf-bulk-backfill-design.md); numbers +
+correctness story in [`benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
+"Applied"; Lean disposition (alternative constructor of the same modeled state)
+in [`formal/CORRESPONDENCE.md §8.1`](../formal/CORRESPONDENCE.md).
 
 ### N15. Per-batch node-resolution cache in the apply/cascade path
 - **What:** node_v4 SELECTs are 11.6/write (union) and 103/write (boolean) —
@@ -152,7 +141,9 @@ Results: [`benchmarks/results/ROUND3_COMPARISON_2026-07-15.md`](../benchmarks/re
   graph's architectural wins (durability, multi-replica, no per-process
   rebuild, freshness tokens) remain unmeasured by a single-process bench.
 **Follow-ups this creates:** (a) R4-BF is now ALSO what blocks 200k+/demorgans
-curves (backfill-bound builds blow the command cap); (b) a NEW candidate below
+curves (backfill-bound builds blow the command cap) — **R4-BF landed 2026-07-15,
+so the 200k+/demorgans scale-bench rerun is now unblocked** (a fresh M2
+follow-up run is future work, not yet done); (b) a NEW candidate below
 (N17); (c) chunk/stream the bulk-build DP if >100k builds matter (RAM).
 
 ### N17. Set engine: sub-O(store) lookup for object-wildcard schemas (NEW 2026-07-15)
@@ -220,8 +211,8 @@ composition-write round-trips that would change the modeled algorithm; leave the
   per-track targeted gates (the P0 lesson; the paranoia checker only runs in
   the full index_v4 suite). Cap-safe recipe: [`docs/gate-runbook.md`](gate-runbook.md).
 - **Algorithm changes fuzz before push** (gate-runbook §3) — any item whose
-  Lean line says it touches modeled territory (N14, R4-BF) ends with the
-  multi-seed fuzz sweep.
+  Lean line says it touches modeled territory (N14 pending; R4-BF landed
+  2026-07-15 with its multi-seed sweep) ends with the multi-seed fuzz sweep.
 - **Measurement hygiene:** never two bench/pytest processes at once. New
   statement-count results go in `STMT_BASELINE_2026-07-14.md` +
   `PERF_ANALYSIS.md` "Applied" entries; never overwrite `scale_bench.jsonl`.

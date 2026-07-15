@@ -163,12 +163,111 @@ def _fanin_grid() -> list[tuple]:
             for i in range(1, 5)]
 
 
+# R4-BF gate extension (design docs/r4bf-bulk-backfill-design.md §5). The boolean/
+# demorgan corpora already drive the in-memory backfill; these reach the state-shaping
+# features the four originals do not:
+#
+#  (a) DERIVED-USERSET LEAF + STICKY PROMOTION + DERIVED NODE WITH OUTGOING EDGES:
+#      ``member`` is derived on ``group`` (``[user] but not banned``); a raw tuple whose
+#      subject is the userset ``group:g#member`` creates the public node
+#      ``(member, group, g)`` IMPLICIT during load (a userset subject), and the processor
+#      sticky-promotes it explicit when it reconciles ``(group, member, g)``. That public
+#      node has an OUTGOING edge (the userset tuple onto viewer's leaf), so derived edges
+#      into it extend the closure THROUGH it. ``viewer = [group#member] but not blocked``
+#      makes viewer's storage leaf a ``derived-userset`` kind (member derived).
+_DERIVED_MEMBER = """
+model
+  schema 1.1
+
+type user
+
+type group
+  relations
+    define banned: [user]
+    define member: [user] but not banned
+
+type doc
+  relations
+    define blocked: [user]
+    define viewer: [group#member] but not blocked
+"""
+
+
+def _derived_member_tuples(nusers=4, ngroups=3, ndocs=3) -> list[tuple]:
+    users = [f'u{i}' for i in range(1, nusers + 1)]
+    groups = [f'g{i}' for i in range(1, ngroups + 1)]
+    docs = [f'd{i}' for i in range(1, ndocs + 1)]
+    out: list[tuple] = []
+    for u in users:
+        for g in groups:
+            out.append(('...', 'user', u, 'member', 'group', g))   # routes to member.0
+    for i, u in enumerate(users):
+        for j, g in enumerate(groups):
+            if (i + j) % 3 == 0:
+                out.append(('...', 'user', u, 'banned', 'group', g))   # but-not input
+    for g in groups:
+        for d in docs:
+            # userset subject OVER a derived relation: creates the (member, group, g)
+            # public node during load; derived edges into it extend the closure to viewer.
+            out.append(('member', 'group', g, 'viewer', 'doc', d))
+    for i, u in enumerate(users):
+        for j, d in enumerate(docs):
+            if (i + j) % 2 == 0:
+                out.append(('...', 'user', u, 'blocked', 'doc', d))
+    return list(dict.fromkeys(out))
+
+
+def _derived_member_grid() -> list[tuple]:
+    subjects = ([('...', 'user', f'u{i}') for i in range(1, 6)]
+                + [('member', 'group', f'g{i}') for i in range(1, 4)])
+    return [(sp, st, sn, rel, ot, on)
+            for (sp, st, sn) in subjects
+            for (rel, ot) in (('member', 'group'), ('viewer', 'doc'))
+            for on in ([f'g{i}' for i in range(1, 4)] if ot == 'group'
+                       else [f'd{i}' for i in range(1, 4)])]
+
+
+#  (c) DERIVED-TUPLESET-TTU (derived tupleset) + (d) >= 3 BOOLEAN STRATA + X4b/from-chain:
+#      demorgans_law_1 chains three ``derived-tupleset-ttu`` leaves (each TTU's tupleset is
+#      itself derived) across five strata; its from-chain nodes are recorded edge-free
+#      (no bridged shape) -> the rc=0 explicit-node case (e).
+_DEMORGAN1 = _load_fga('demorgans_law_1.fga')
+
+
+def _demorgan1_tuples(nusers=3, nroles=2, nconds=2, nattrs=3, ndocs=2) -> list[tuple]:
+    users = [f'u{i}' for i in range(1, nusers + 1)]
+    roles = [f'r{i}' for i in range(1, nroles + 1)]
+    conds = [f'c{i}' for i in range(1, nconds + 1)]
+    attrs = [f'a{i}' for i in range(1, nattrs + 1)]
+    docs = [f'd{i}' for i in range(1, ndocs + 1)]
+    out: list[tuple] = []
+    for u in users:
+        for r in roles:
+            out.append(('...', 'user', u, 'granted', 'role', r))
+    for r in roles:
+        for c in conds:
+            out.append(('...', 'role', r, 'assigned', 'cond', c))
+    for c in conds:
+        for a in attrs:
+            out.append(('...', 'cond', c, 'required_by', 'attr', a))
+    for j, d in enumerate(docs):
+        out.append(('...', 'attr', '*', '_all_attrs', 'doc', d))   # attr:* subject wildcard
+        out.append(('...', 'cond', '*', '_all_conds', 'doc', d))   # cond:* subject wildcard
+        for i, a in enumerate(attrs):
+            if (i + j) % 2 == 0:                                    # label a varying subset
+                out.append(('...', 'attr', a, 'labels', 'doc', d))
+    return list(dict.fromkeys(out))
+
+
 # (name, schema_text, object_wildcard_shapes, tuples, read-parity grid or None)
 _CORPORA = [
     ('wildcards', _WILDCARDS, OBJECT_WC, _wildcards_tuples(), _query_grid()),
     ('boolean', _BOOLEAN, frozenset(), _boolean_tuples(), _boolean_grid()),
     ('demorgan', _DEMORGAN, frozenset(), _demorgan_pool(_DEMORGAN), None),
     ('fanin', _FANIN, frozenset(), _fanin_tuples(), _fanin_grid()),
+    ('derived_member', _DERIVED_MEMBER, frozenset(), _derived_member_tuples(),
+     _derived_member_grid()),
+    ('demorgan1', _DEMORGAN1, frozenset(), _demorgan1_tuples(), None),
 ]
 
 
@@ -255,6 +354,65 @@ def _seed_source(session: Session, store_id: str, schema: str, object_wc, tuples
                         r.relation, r.object_type, r.object_name) for r in rows]
 
 
+def _leaf_kinds(compiled) -> set:
+    return {spec.kind for plan in compiled.plans.values() for spec in plan.leaves}
+
+
+def _assert_r4bf_features(name: str, compiled, nodes: dict, edges: dict,
+                          residues: dict) -> None:
+    """Anti-vacuity for the R4-BF gate extension (design §5): each new corpus must
+    actually REACH the state-shaping feature it was added for, so it can't silently
+    degrade into not testing the thing. Same spirit as the fanin multiplicity checks."""
+    if compiled is None:
+        return
+    edge_keys = {a for (a, b) in edges} | {b for (a, b) in edges}
+    subject_keys = {a for (a, b) in edges}
+    # nodes pinned explicit (implicit False) that hold no edge and rc 0: a residue /
+    # from-chain anchor alone keeps them alive (design item e).
+    edge_free_explicit = {k for k, (implicit, rc) in nodes.items()
+                          if implicit is False and rc == 0 and k not in edge_keys}
+    recorded_in_residue: set = set()
+    have_upos = False
+    for obj_key, (stars, neg, upos, version) in residues.items():
+        recorded_in_residue |= set(neg) | set(upos)
+        if upos:
+            have_upos = True
+
+    if name == 'derived_member':
+        # (a) derived-userset leaf + sticky promotion of a pre-existing implicit public
+        #     node that also has an OUTGOING edge (closure extends through it).
+        assert 'derived-userset' in _leaf_kinds(compiled), \
+            '[derived_member] expected a derived-userset leaf kind'
+        promoted_out = [k for k, (implicit, rc) in nodes.items()
+                        if k[0] == 'member' and k[1] == 'group' and k[3] == ''
+                        and implicit is False and k in subject_keys]
+        assert promoted_out, \
+            '[derived_member] expected a sticky-promoted member(group) public node ' \
+            'with an outgoing edge (derived node extending the closure)'
+        assert any(d for (_a, _b), (_dir, _ind, d) in edges.items()), \
+            '[derived_member] expected processor-written derived edges'
+
+    if name == 'demorgan1':
+        # (c) derived-tupleset-ttu leaf + (d) >= 3 boolean strata; and an edge-free
+        #     explicit rc=0 node (e).
+        assert 'derived-tupleset-ttu' in _leaf_kinds(compiled), \
+            '[demorgan1] expected a derived-tupleset-ttu leaf kind'
+        assert len(compiled.strata) >= 3, \
+            f'[demorgan1] expected >= 3 boolean strata; got {len(compiled.strata)}'
+        assert edge_free_explicit, \
+            '[demorgan1] expected an edge-free explicit rc=0 node (residue-anchored)'
+
+    if name == 'demorgan':
+        # (b) X4b upos lift + (e) a from-chain node recorded in upos/neg that is itself
+        #     edge-free, explicit, rc=0 (anchored by the residue reference alone).
+        assert 'derived-ttu' in _leaf_kinds(compiled), \
+            '[demorgan] expected a derived-ttu leaf kind (X4b target)'
+        assert have_upos, '[demorgan] expected a residue with non-empty upos (X4b lift)'
+        assert recorded_in_residue & edge_free_explicit, \
+            '[demorgan] expected a from-chain node recorded in a residue that is ' \
+            'edge-free/explicit/rc=0'
+
+
 @pytest.mark.parametrize('corpus', _CORPORA, ids=lambda c: c[0])
 def test_bulk_build_identical_to_incremental(session, corpus):
     name, schema, object_wc, tuples, grid = corpus
@@ -299,6 +457,11 @@ def test_bulk_build_identical_to_incremental(session, corpus):
             f'[fanin] expected direct fan-in multiplicity >= 2; got max {max_direct}'
         assert any(v[0] == 0 and v[1] >= 2 for v in edges.values()), \
             '[fanin] expected a pure-indirect pair with count >= 2 through an m>=2 edge'
+
+    # R4-BF gate extension (design §5): the new corpora must actually reach the
+    # state-shaping features they were added for (anti-vacuity).
+    _assert_r4bf_features(name, rs_bulk.compiled, _nodes_proj(session, bulk_store),
+                          edges, _residues_proj(session, bulk_store))
 
     # I1-I13 invariant checker runs green on the bulk-built store.
     check_invariants(session, bulk_store, rs_bulk.schema_info, residue_versions={})

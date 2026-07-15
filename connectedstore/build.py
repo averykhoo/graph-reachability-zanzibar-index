@@ -80,14 +80,17 @@ def build_index(session: Session, source_store_id: str,
         widx, ruleset = open_graph_index(session, index_store_id, ruleset=boot_ruleset)
 
         if bulk:
-            # P13: construct the final pre-backfill state directly (one in-memory pass
-            # + bulk INSERTs), identical in effect to the per-tuple loop below.
+            # P13 + R4-BF: construct the final state directly (one in-memory pass + bulk
+            # INSERTs) -- including, on a boolean schema, the derived state that the
+            # incremental path produces via DeltaProcessor.backfill(). Identical in effect
+            # to the bulk=False reference path below, so this branch skips backfill().
             bulk_build(session, source_store_id, index_store_id, ruleset,
                        widx.schema_info)
         else:
             # Reference path: bulk-load the snapshot through the rewrite fan-out one
-            # routed triple at a time (leaf writes only). This IS the identity gate's
-            # reference side, so it stays maintained.
+            # routed triple at a time (leaf writes only), then derive the boolean state
+            # in one offline pass (P6 backfill precedent). This IS the identity gate's
+            # reference side (tests/test_bulk_build.py), so it stays maintained.
             rows = session.exec(
                 select(TupleV1).where(TupleV1.store_id == source_store_id)
                 .order_by(TupleV1.id)  # type: ignore[arg-type]
@@ -100,11 +103,8 @@ def build_index(session: Session, source_store_id: str,
                     widx.add_tuple(_norm(d.subject_predicate), d.subject.type, d.subject.name,
                                    d.relation, d.object.type, d.object.name)
 
-        # derive the boolean state in one offline pass (P6 backfill precedent)
-        proc = None
-        if ruleset.compiled is not None and ruleset.compiled.plans:
-            proc = DeltaProcessor(widx, ruleset.compiled)
-            proc.backfill()
+            if ruleset.compiled is not None and ruleset.compiled.plans:
+                DeltaProcessor(widx, ruleset.compiled).backfill()
 
         # Blind-audit X1: watermark and snapshot were two unserialized reads -- a
         # write committed between them would be IN the snapshot AND above the

@@ -22,15 +22,21 @@ Phases (design "Bulk algorithm"):
   C  topological sort of the direct graph; a cycle is a corruption signal.
   P  sparse integer DP in reverse topo order: ``P(a, b) = m(a, b) + sum_v m(a, v)*P(v, b)``
      -- the total weighted path count (== incremental ``indirect_edge_count``).
-  W  bulk-INSERT nodes (implicit, reference_count = sum of incident direct multiplicities),
-     edges (direct=m, indirect=P, derived=False), and one outbox ADDED row per final pair.
+  D  (R4-BF, boolean schemas only) in-memory boolean backfill: compute the FINAL derived
+     state (derived edges, residues, from-chain nodes and their closure/refcount effects)
+     over ``m``, byte-identical to running ``DeltaProcessor.backfill()`` per object -- see
+     ``index_v4.bulk_backfill``.
+  W  bulk-INSERT nodes (implicit unless processor-pinned explicit, reference_count = sum of
+     incident direct multiplicities), edges (direct=m, indirect=P, derived flag from the
+     processor-written pairs), residues, and one outbox ADDED row per final pair.
 
-Everything a plain load leaves implicit/False is left implicit/False here; derived state
-and residues are produced afterwards by the unchanged ``DeltaProcessor.backfill()``.
+On a non-boolean schema Phase D is skipped and this is exactly the P13 pre-backfill build;
+``connectedstore.build_index``'s bulk branch no longer runs ``DeltaProcessor.backfill()``.
 """
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -40,8 +46,9 @@ from sqlmodel import Session, select
 from setengine.models import TupleV1
 from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet, norm_pred
 
+from .bulk_backfill import _BulkBackfill
 from .invariants import InvariantViolation
-from .models import DeltaOutboxV1, EdgeV4, NodeV4
+from .models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueV1
 
 if TYPE_CHECKING:
     from zanzibar_utils_v1 import SchemaInfo
@@ -174,19 +181,43 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
             if bridge not in m:
                 m[bridge] = 1
 
-    # -- Node set + reference counts (sum of incident direct multiplicities). ------
+    # -- Seed node set (routed-triple + bridge endpoints). -------------------------
     nodes: set[NodeKey] = set()
-    ref_count: dict[NodeKey, int] = defaultdict(int)
-    succ: dict[NodeKey, list[tuple[NodeKey, int]]] = defaultdict(list)
-    for (a, b), mult in m.items():
+    for (a, b) in m:
         nodes.add(a)
         nodes.add(b)
-        ref_count[a] += mult
-        ref_count[b] += mult
-        succ[a].append((b, mult))
 
     if not nodes:
         return   # empty snapshot: nothing to build (backfill will also find nothing)
+
+    # -- Phase D: in-memory boolean backfill (R4-BF). ------------------------------
+    # On a boolean schema, compute the FINAL derived state (derived edges, residues,
+    # from-chain nodes) in memory -- byte-identical to running DeltaProcessor.backfill()
+    # per object afterwards -- so Phase W writes the union of load + derived state.
+    # ``bf`` mutates ``m`` (adds derived edges + mid-backfill bridges, mult 1) and
+    # ``nodes`` (interns public / from-chain / w nodes, including edge-free ones) in
+    # place. On a non-boolean schema this is skipped and the build is exactly P13.
+    compiled = ruleset.compiled
+    derived_pairs: set[tuple[NodeKey, NodeKey]] = set()
+    explicit: set[NodeKey] = set()
+    residues: dict[tuple[str, str, str], object] = {}
+    if compiled is not None and compiled.plans:
+        bf = _BulkBackfill(m, nodes, schema_info, compiled)
+        bf.run()
+        derived_pairs = bf.derived_pairs
+        explicit = bf.explicit
+        residues = bf.residues
+
+    # -- Reference counts + successor lists over the FINAL direct multigraph. -------
+    # reference_count = sum of incident direct multiplicities (derived + bridge edges
+    # included). Isolated interned nodes (residue-only publics, edge-free from-chain
+    # nodes) carry rc 0 and appear in ``nodes`` but not ``m``.
+    ref_count: dict[NodeKey, int] = defaultdict(int)
+    succ: dict[NodeKey, list[tuple[NodeKey, int]]] = defaultdict(list)
+    for (a, b), mult in m.items():
+        ref_count[a] += mult
+        ref_count[b] += mult
+        succ[a].append((b, mult))
 
     # -- Phase C: topological sort (cycle => InvariantViolation). ------------------
     order = _topo_order(nodes, succ)
@@ -204,14 +235,16 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
         pvec[a] = pa
 
     # -- Phase W: bulk writes. -----------------------------------------------------
-    # (1) nodes: implicit=True, reference_count computed above; ORM add + one flush so
-    #     the auto-increment ids are available for the edge/outbox foreign keys.
+    # (1) nodes: implicit unless the processor pinned the key explicit (residue anchor /
+    #     derived-edge public node / recorded from-chain node -- core.node sticky rule);
+    #     reference_count computed above; ORM add + one flush so the auto-increment ids
+    #     are available for the edge/outbox/residue foreign keys.
     node_objs: dict[NodeKey, NodeV4] = {}
     for key in sorted(nodes):
         pred, typ, name, wild = key
         node_objs[key] = NodeV4(
             store_id=store_id, predicate=pred, type=typ, name=name, wildcard=wild,
-            implicit=True, reference_count=ref_count[key])
+            implicit=key not in explicit, reference_count=ref_count[key])
     session.add_all(node_objs.values())
     session.flush()
     node_id = {key: n.id for key, n in node_objs.items()}
@@ -223,6 +256,8 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
         (a, b) for a in order for b in pvec[a] if pvec[a][b] > 0)
 
     # (2) edges: one executemany INSERT. direct=m (0 for pure-indirect pairs), indirect=P.
+    #     derived=True exactly on pairs holding a processor-written direct edge (I5); every
+    #     other pair -- including pure-indirect pairs created THROUGH derived edges -- False.
     edge_rows = [
         {
             'store_id': store_id,
@@ -230,12 +265,30 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
             'object_id': node_id[b],
             'direct_edge_count': m.get((a, b), 0),
             'indirect_edge_count': pvec[a][b],
-            'derived': False,
+            'derived': (a, b) in derived_pairs,
         }
         for (a, b) in edge_pairs
     ]
     if edge_rows:
         session.execute(insert(EdgeV4), edge_rows)
+
+    # (2b) residues: one row per non-empty derived residue (R4-BF). version=1 on a fresh
+    #      build unless a step-4 neg bump raised it; stars sorted JSON, neg/upos node keys
+    #      translated to the just-flushed ids. Empty residues were never recorded.
+    residue_rows = []
+    for (o_type, rel, o_name), res in residues.items():
+        public_id = node_id[(rel, o_type, o_name, '')]
+        residue_rows.append({
+            'store_id': store_id,
+            'object_node_id': public_id,
+            'relation': rel,
+            'stars': json.dumps(sorted([list(s) for s in res.stars])),
+            'neg': json.dumps(sorted(node_id[k] for k in res.neg)),
+            'upos': json.dumps(sorted(node_id[k] for k in res.upos)),
+            'version': res.version,
+        })
+    if residue_rows:
+        session.execute(insert(ResidueV1), residue_rows)
 
     # (3) outbox: one ADDED row per final pair, endpoint identities denormalized from
     #     the node keys (== what ``_emit`` captures from the live node rows). An add-only
