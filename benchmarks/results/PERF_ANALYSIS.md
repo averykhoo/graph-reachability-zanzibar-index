@@ -123,6 +123,35 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Applied
 
+- ✅ **N10 — defer flow-graph construction off read-triggered `rebuild()`
+  (`setengine/engine.py`), 2026-07-16, lazy first-touch build, behavior-preserving.**
+  `rebuild()` (and the constructor's replay) replayed every `TupleV1` row through
+  `_apply_add` → `_derived_pairs` (the full `RuleSet.apply` rewrite fan-out) purely to
+  populate `_flow_adj` / `_edge_count` — write-only cycle-detection state that reads
+  NEVER consult; `refresh_evaluator` (rollback / tokened-read fallback) fires this and
+  is often followed by reads only. Now `_flow_built` gates all flow work: replay skips
+  the entire `_derived_pairs` fan-out, and a single `_ensure_flow_graph()` guard on the
+  flow touch points (`_flow_reaches` reads + `_flow_add_edge` / `_flow_remove_edge`
+  mutations) builds the complete graph on demand exactly once, before the first write's
+  cycle check. Reconstructed from the engine's in-memory `node_sets` (which holds
+  EXACTLY the stored septuples — the same completeness `_tuple_present` relies on to
+  answer SELECT-free), so the lazy build needs no DB read; the edge multiset is
+  byte-identical to the old per-row replay (`_flow_add_edge` is count-based /
+  order-independent). Incremental `_apply_add` / `_apply_remove` maintenance is
+  unchanged once built. **gdrive scale 4000 (67,200 tuples, set:roaring): `rebuild()`
+  4.99 s → 1.26 s (~4.0×); the flow-graph fan-out was 74.8% of the eager rebuild
+  wall.** A read-only reopen (constructor + 50 checks + 10 lookups + 10 reverses)
+  never builds the flow graph (`_flow_built` stays False). Accept/reject parity
+  (including the N17 §1.5 routed-star check, `test_reg9`) is unchanged — the graph is
+  identical the moment any cycle check reads it. Gated: `test_matrix.py` (12),
+  setengine/storage/engine/lookup_oracle (94), `test_hypothesis.py` (12). **Companion
+  (integration, orchestrator-owned `formal/`):** the `test_conformance_remove.py`
+  white-box `_fingerprint` reads `_edge_count` / `_flow_adj` directly and asserts a
+  bare `rebuild()` reproduces them — a one-line adaptation (`eng._ensure_flow_graph()`
+  before snapshotting, on both driven + rebuilt engines) keeps the exact same
+  flow-graph-convergence assertion under lazy materialization. **Lean: none** (below
+  model — write-only auxiliary state, no modeled-algorithm change).
+
 - ✅ **N17 — set-engine `lookup`: O(store) sweep fully removed; O(reachable) walk on
   EVERY schema via wildcard-bridge seeding (`setengine/engine.py`), 2026-07-15,
   ALGORITHM CHANGE on candidate generation, oracle+fuzz-gated.** P1 left

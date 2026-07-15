@@ -298,8 +298,16 @@ class SetEngine:
         self.member_of: dict[int, object] = {}         # subject id -> object ids it appears in
         # Write-time cycle-detection index over the graph backend's DERIVED edges
         # (union schemas only). NOT read state -- reads never consult it.
+        # N10: built LAZILY (``_ensure_flow_graph``) on the first flow-graph touch,
+        # never during replay -- ``rebuild()`` skips the whole ``_derived_pairs``
+        # fan-out (60% of true rebuild wall on union/TTU schemas), so a read-only
+        # reopen (the ``refresh_evaluator`` rollback / tokened-read-fallback path)
+        # pays nothing for state only writes consult. ``_flow_built`` gates both the
+        # incremental maintenance in ``_apply_add`` / ``_apply_remove`` and the
+        # one-shot build.
         self._flow_adj: dict[NodeKey, set[NodeKey]] = {}
         self._edge_count: dict[tuple[NodeKey, NodeKey], int] = {}
+        self._flow_built: bool = False
 
     def rebuild(self) -> None:
         """Replay the TupleV1 table into fresh in-memory state (spec §3, §6.5)."""
@@ -445,11 +453,18 @@ class SetEngine:
             for tgt in self._chain_targets.get((o_type, relation), ()):
                 self.interner.acquire(s_type, s_name, tgt)
 
-        if pairs is None:
-            pairs = self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name)
-        for u, v in pairs:
-            if u != v:
-                self._flow_add_edge(u, v)
+        # N10: flow-graph maintenance is deferred until the graph is built. During
+        # replay (rebuild / constructor) ``_flow_built`` is False, so the whole
+        # ``_derived_pairs`` fan-out is skipped -- the eventual lazy build reads the
+        # final in-memory state. Once built, every accepted add maintains it
+        # incrementally (``pairs`` is passed in by ``add_tuple``, already computed
+        # for ``_validate``'s cycle check).
+        if self._flow_built:
+            if pairs is None:
+                pairs = self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name)
+            for u, v in pairs:
+                if u != v:
+                    self._flow_add_edge(u, v)
 
     def _apply_remove(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
         subject_id = self.interner.get(s_type, s_name, s_pred)
@@ -468,9 +483,13 @@ class SetEngine:
             mo.discard(object_id)
             if len(mo) == 0:
                 self.member_of.pop(subject_id, None)
-        for u, v in self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name):
-            if u != v:
-                self._flow_remove_edge(u, v)
+        # N10: maintain the flow graph only once it is built; a remove arriving
+        # first on a never-read (unbuilt) graph must not decrement it (the eventual
+        # lazy build reads the post-remove state -- node_sets is pruned above).
+        if self._flow_built:
+            for u, v in self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name):
+                if u != v:
+                    self._flow_remove_edge(u, v)
         # Release the reverse-dependency candidate references (mirrors _apply_add).
         for dep in self._object_deps.get((o_type, relation), ()):
             did = self.interner.get(o_type, o_name, dep)
@@ -509,13 +528,45 @@ class SetEngine:
                  (d.object.type, d.object.name, d.relation))
                 for d in self._ruleset.apply(triple)]
 
+    def _ensure_flow_graph(self) -> None:
+        """N10: build the write-time cycle-detection flow graph lazily, exactly once,
+        on the first flow-graph touch (a ``_would_cycle`` / ``_flow_reaches`` read, or
+        a ``_flow_add_edge`` / ``_flow_remove_edge`` mutation). ``rebuild()`` and the
+        constructor's replay skip all ``_derived_pairs`` work, so a read-only reopen
+        never pays for state reads never consult.
+
+        Reconstructed from the engine's own in-memory raw-tuple state -- ``node_sets``
+        holds EXACTLY the stored septuples (it is populated only by real ``_apply_add``s,
+        never by the §6.4 reverse-dependency candidate interning; the same completeness
+        ``_tuple_present`` relies on to answer without a SELECT), so no DB read is
+        needed. Iterating it and re-running ``_derived_pairs`` over every membership
+        reproduces the identical edge multiset the old per-row replay built (
+        ``_flow_add_edge`` is count-based and order-independent). ``_flow_built`` is set
+        BEFORE populating so the ``_flow_add_edge`` calls below re-enter as no-ops.
+        Boolean / ruleset-less schemas build nothing (``_derived_pairs`` is empty)."""
+        if self._flow_built:
+            return
+        self._flow_built = True
+        if self._ruleset is None:
+            return
+        for object_id, ns in self.node_sets.items():
+            o_type, o_name, relation = self.interner.key(object_id)
+            for subject_id in chain(ns.entities, ns.usersets):
+                s_type, s_name, s_pred = self.interner.key(subject_id)
+                for u, v in self._derived_pairs(s_pred, s_type, s_name, relation,
+                                                o_type, o_name):
+                    if u != v:
+                        self._flow_add_edge(u, v)
+
     def _flow_add_edge(self, u: NodeKey, v: NodeKey) -> None:
+        self._ensure_flow_graph()
         c = self._edge_count.get((u, v), 0)
         self._edge_count[(u, v)] = c + 1
         if c == 0:
             self._flow_adj.setdefault(u, set()).add(v)
 
     def _flow_remove_edge(self, u: NodeKey, v: NodeKey) -> None:
+        self._ensure_flow_graph()
         c = self._edge_count.get((u, v), 0)
         if c <= 1:
             self._edge_count.pop((u, v), None)
@@ -527,6 +578,7 @@ class SetEngine:
 
     def _flow_reaches(self, src: NodeKey, dst: NodeKey, extra: list[tuple[NodeKey, NodeKey]]) -> bool:
         """Is dst reachable from src in the flow graph plus `extra` (tentative) edges?"""
+        self._ensure_flow_graph()
         seen: set[NodeKey] = set()
         stack = [src]
         while stack:

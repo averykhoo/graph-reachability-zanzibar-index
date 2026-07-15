@@ -27,17 +27,31 @@ heavy jobs (bench or pytest) concurrently** (CPU contention corrupts bench numbe
 
 ## Wave 3 — conditional items (need measurement or a design call first)
 
-### N10. Defer flow-graph construction on read-triggered `rebuild()`
-`setengine/engine.py:290-298,:434-438`: rebuild replays every tuple through
-`_ruleset.apply()` purely to populate `_flow_adj`/`_edge_count` — state that
-only write-time cycle detection reads. `refresh_evaluator` fires on
-rollback/tokened-read fallback and is often followed by reads only. Lazy-build
-on first write instead. **Medium risk** (flow graph must be complete before
-the first cycle check; lazy build must reconstruct from in-memory state).
-Distinct from the fenced incremental-catch-up (no watermark contact). Boolean
-schemas already skip (`:489`) — this is for union/TTU schemas. Gate:
-`test_matrix.py` cycle-rejection parity, storage/eval tests,
-`conf-heavy` (rebuild-after-remove), hypothesis restoration.
+### N10. Defer flow-graph construction on read-triggered `rebuild()` — ✅ LANDED 2026-07-16 (targeted gate green; one `formal/` companion pending, see note)
+Rebuild replayed every tuple through `_ruleset.apply()` (the full `_derived_pairs`
+rewrite fan-out) purely to populate `_flow_adj`/`_edge_count` — write-only
+cycle-detection state reads never consult. Now `_flow_built` gates all flow work:
+`rebuild()` / constructor replay skip the fan-out entirely, and a single
+`_ensure_flow_graph()` guard on every flow touch point (`_flow_reaches` read +
+`_flow_add_edge`/`_flow_remove_edge` mutations) builds the complete graph on demand,
+exactly once, before the first write's cycle check. Reconstructed from the in-memory
+`node_sets` (the complete stored-septuple collection `_tuple_present` answers from —
+no DB read), byte-identical edge multiset to the old per-row replay. Incremental
+maintenance unchanged once built; boolean schemas still build nothing. **gdrive scale
+4000 (67,200 tuples, set:roaring): `rebuild()` 4.99 s → 1.26 s (~4.0×); flow fan-out
+was 74.8% of the eager wall.** Read-only reopen never builds the graph. Accept/reject
+parity (incl. the N17 §1.5 routed-star check, `test_reg9`) unchanged. Gate:
+`test_matrix.py` (12), setengine/storage/engine/lookup_oracle (94),
+`test_hypothesis.py` (12) — all green. **`formal/` companion (integration,
+orchestrator-owned):** `formal/conformance/test_conformance_remove.py`'s white-box
+`_fingerprint` (`:189-190`) reads `_edge_count`/`_flow_adj` directly and asserts a
+bare `rebuild()` reproduces them eagerly — which lazy rebuild deliberately no longer
+does. One-line, assertion-preserving adaptation: call `eng._ensure_flow_graph()`
+before snapshotting the two flow-graph keys in `_fingerprint`, so both driven and
+rebuilt engines materialize before the (unchanged) convergence comparison. Outside
+the setengine track's file scope; flagged for the `conf-heavy` integration step.
+Numbers + mechanism in [`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
+"Applied". Lean: none (below model — write-only auxiliary state).
 
 ### N11. Duplicate-add: return the known watermark instead of `SELECT MAX(id)`
 `connectedstore/source.py:88-91`. One round trip per duplicate write; bites
