@@ -1016,16 +1016,32 @@ class SetEngine:
                 rid = self.interner.get(t, n, R)
                 if rid is not None:
                     out.append(rid)
-            bare_id = self.interner.get(t, n, '...')        # H3 (bare parent tuplesets)
-            if bare_id is not None:
+            # H3 (TTU from-chain over bare parent tuplesets): the concrete bare
+            # sibling (t, n, '...') carries this entity's stored parent tuples, and
+            # -- when (t, n) is a concrete instance -- so does the STAR bare sibling
+            # (t, '*', '...'). A stored star parent tuple `Q:q ts t:*` makes EVERY
+            # tuple-mentioned instance of t a parent of Q:q (check's strict forall=>
+            # exists, ttu_leaf's star branch), so a subject confirmed on (t, n, rel)
+            # must hop to (Q, q, R) for R in _ttu_map[(Q, ts, rel)] just as for a
+            # concrete parent. This is the bare twin of the H1 star fold above (line
+            # ~1009). For n == '*' the concrete bare_id already IS the star bare, so
+            # do not double-process. Candidates are check-confirmed at visit, so this
+            # is a pure completeness addition (over-approx safe).
+            bare_ids = [self.interner.get(t, n, '...')]     # H3 concrete bare parent
+            if n != '*':
+                bare_ids.append(self.interner.get(t, '*', '...'))  # H3 star bare parent
+            for bare_id in bare_ids:
+                if bare_id is None:
+                    continue
                 mob = self.member_of.get(bare_id)
-                if mob is not None:
-                    for pid in mob:
-                        ot, on, ts = self.interner.key(pid)
-                        for R in self._ttu_map.get((ot, ts, rel), ()):
-                            rid = self.interner.get(ot, on, R)
-                            if rid is not None:
-                                out.append(rid)
+                if mob is None:
+                    continue
+                for pid in mob:
+                    ot, on, ts = self.interner.key(pid)
+                    for R in self._ttu_map.get((ot, ts, rel), ()):
+                        rid = self.interner.get(ot, on, R)
+                        if rid is not None:
+                            out.append(rid)
         return out
 
     def lookup(self, subject_predicate, s_type: str, s_name: str) -> LookupResult:
