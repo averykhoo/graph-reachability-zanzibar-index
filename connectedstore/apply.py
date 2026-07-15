@@ -119,10 +119,17 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
     # consumes it -- pure-union stores (proc is None) never cascade, so skip the
     # SELECT entirely for them.
     wm = outbox_watermark(session, widx.idx.store_id) if proc is not None else None
-    for row in rows:
-        _apply_row(row, widx, ruleset)
-    if proc is not None:
-        proc.run_cascade(wm)
+    # Per-batch node-resolution cache (perf N15) spanning the apply loop AND the
+    # synchronous cascade of this one batch: the same subject/object/bridge/leaf nodes
+    # are re-resolved across the batch's rewrite fan-out and the cascade. The scope is
+    # reentrant, so ``proc.run_cascade`` shares this outer cache instead of installing
+    # its own. It is torn down before the CALLER commits, so no entry survives a
+    # commit/rollback (advance_index never commits; exactly-once is the caller's, §2.6).
+    with widx.idx._node_cache_scope():
+        for row in rows:
+            _apply_row(row, widx, ruleset)
+        if proc is not None:
+            proc.run_cascade(wm)
     cursor.applied_log_id = rows[-1].id
     session.add(cursor)
     session.flush()

@@ -101,16 +101,19 @@ correctness story in [`benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/resul
 "Applied"; Lean disposition (alternative constructor of the same modeled state)
 in [`formal/CORRESPONDENCE.md §8.1`](../formal/CORRESPONDENCE.md).
 
-### N15. Per-batch node-resolution cache in the apply/cascade path
-- **What:** node_v4 SELECTs are 11.6/write (union) and 103/write (boolean) —
-  25–50% of all write statements; the same subject/object/bridge/leaf nodes
-  are re-resolved per row within one `advance_index` batch / cascade run.
-  Cache `(pred, type, name, wildcard) → NodeV4` for the duration of a batch,
-  invalidating on node creation/GC-deletion (the hard part — GC deletes node
-  rows mid-cascade; a stale hit would resurrect a dead id, so the cache must
-  be invalidated by the GC paths or keyed to check liveness).
-- **Risk:** medium (GC invalidation). **Lean:** none (resolution is below the
-  model). **Gate:** full suite incl. paranoia + conformance; stmt_bench delta.
+### N15. Per-batch node-resolution cache in the apply/cascade path — ✅ LANDED 2026-07-15
+Per-batch `(pred,type,name,wildcard) → NodeV4|MISSING` cache on
+`ReachabilityIndex`, `None` outside a batch, reentrant scope at
+`advance_index` + standalone `run_cascade`; all five NodeV4 delete sites
+evict, the `node()` creation choke point overwrites negatives; identity-tuple
+keys sidestep the W2 id-cache hazards (within-txn, torn down before commit so
+paranoia reads cache-blind). **Boolean node_v4 SELECTs 103.4 → 46.7/write
+(−55%); boolean totals −26–29%; union ~flat** (its residue is id-based —
+deliberately uncached: `_require_live_nodes` is a liveness check). Id-keyed
+caching of the refcount tail/`_load_nodes` deferred (rowid-reuse-safe eviction
+needed; small win). Mechanism + gate:
+[`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md) "Applied"; stmt
+deltas in `STMT_BASELINE_2026-07-14.md` addendum 2. Lean: none (below model).
 
 ### N16. Bulk-INSERT the emit/outbox rows — ✅ LANDED 2026-07-15 (edge rows descoped)
 Outbox `_emit` rows now stage as dicts and bulk-insert in ONE

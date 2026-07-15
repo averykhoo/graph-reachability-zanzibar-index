@@ -182,11 +182,11 @@ class DeltaProcessor:
     # ------------------------------------------------------------------ #
 
     def _node(self, predicate: str, e_type: str, name: str) -> NodeV4 | None:
-        return self.session.exec(
-            select(NodeV4).where(NodeV4.store_id == self.store_id)
-            .where(NodeV4.predicate == predicate).where(NodeV4.type == e_type)
-            .where(NodeV4.name == name).where(NodeV4.wildcard == '')
-        ).first()
+        # Route concrete resolution through the shared per-batch cache (perf N15):
+        # identical single point SELECT when no batch cache is installed, but during a
+        # cascade the same subject/object/leaf concretes are re-resolved dozens of times
+        # (leaf_check probes, residue reads, reconcile) -- this collapses them.
+        return self.idx.cached_concrete_node(predicate, e_type, name)
 
     def _residue_row(self, object_node_id: int) -> ResidueV1 | None:
         return self.session.exec(
@@ -646,6 +646,7 @@ class DeltaProcessor:
         self.widx._maybe_remove_bridges(n)
         n = self.session.get(NodeV4, node_id)
         if n is not None and n.reference_count == 0:
+            self.idx._evict_node(n)             # N15: evict before delete
             self.session.delete(n)
 
     def _derived_leaf_neg_ids(self, object_type: str, obj_name: str, spec) -> set[int]:
@@ -753,6 +754,7 @@ class DeltaProcessor:
             # (from-chain userset, X4a): deleting it would dangle that id -- the
             # recording reconcile collects it once the reference is dropped
             return
+        self.idx._evict_node(node)              # N15: evict before delete
         self.session.delete(node)
 
     def _store_residue(self, object_type: str, rel: str, obj_name: str,
@@ -948,7 +950,21 @@ class DeltaProcessor:
 
     def run_cascade(self, txn_start_watermark: int) -> None:
         """The in-transaction cascade (§5.1): per stratum round, map the frontier's
-        deltas (plus pending residue bumps) to keys, reconcile each, advance."""
+        deltas (plus pending residue bumps) to keys, reconcile each, advance.
+
+        Wrapped in the per-batch node-resolution cache (perf N15): the cascade
+        re-resolves the same concrete subject/object/leaf nodes across every reconcile,
+        leaf probe and residue read of a round, so one scope over the whole cascade
+        collapses the ``node_v4`` SELECTs (with negative caching for the many absent
+        probes). Reentrant, so under ``advance_index`` (which installs its own outer
+        scope) this is a no-op and under a standalone ``run_cascade`` (test-matrix
+        GraphBackend) it is the outermost -- exercised under paranoia either way. The
+        scope closes before the caller commits, so the paranoia checker reads true
+        state (see ``ReachabilityIndex._node_cache_scope``)."""
+        with self.idx._node_cache_scope():
+            self._run_cascade(txn_start_watermark)
+
+    def _run_cascade(self, txn_start_watermark: int) -> None:
         self.session.flush()
         frontier_start = txn_start_watermark
         rounds = len(self.compiled.strata)

@@ -378,6 +378,32 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   small marginal win. Behavior-preserving — no Lean. Gated: full `tests/` (537
   passed incl. paranoia) + conf-heavy (68) + conf-rest (195).
 
+- ✅ **N15 — per-batch node-resolution cache (`index_v4/core.py`, `processor.py`,
+  `connectedstore/apply.py`), 2026-07-15.** The same subject/object/bridge/leaf
+  nodes were re-resolved by point SELECT dozens of times within one
+  `advance_index` batch / cascade (probe attribution: boolean 103.4 node_v4
+  SELECTs/write — `check`→`_get_concrete` 19.0, processor `_node` ~18.7,
+  `_resolve`→`node()` 12.8, plus residue/`_write_derived` probes). Now a
+  per-batch `(predicate, type, name, wildcard) → NodeV4 | MISSING` cache on
+  `ReachabilityIndex`, `None` outside a batch (uninstalled ⇒ byte-identical
+  pre-N15 behavior), installed by a REENTRANT scope at two seams:
+  `advance_index` (apply loop + cascade) and `run_cascade` (standalone — the
+  test-matrix GraphBackend path, so paranoia/I9 exercise the cache). All
+  resolution funnels through `node()` / `cached_concrete_node()` (the wildcard
+  façade's `_resolve`/`_w_node`/`_get_concrete` all delegate to `node()`).
+  **Negative caching included** — honest because the FIVE NodeV4 delete sites
+  evict (→MISSING) and the sole creation choke point (`node()`) overwrites.
+  Identity-tuple keys (not ids) — the blind-audit W2 hazards (cross-session
+  staleness, rowid reuse) don't apply to a within-txn cache torn down before
+  commit; the paranoia checker (`before_commit`) always reads cache-blind
+  state. `_require_live_nodes` and `invariants.py` deliberately uncached.
+  **stmt_bench node_v4 SELECTs/write: boolean add 103.4 → 46.7 (−55%), boolean
+  totals 194.4 → 137.7/op (−29%), remove 161.9 → 119.8 (−26%); union add
+  11.6 → 11.0** (union's residual redundancy is id-based — refcount tail,
+  `_load_nodes` — deliberately not cached). I/U/D counts byte-identical.
+  Behavior-preserving — no Lean. Gated: full `tests/` (537 passed incl.
+  paranoia + delta verifier) + conf-heavy (68) + conf-rest (195).
+
 ## Optimization targets (ranked)
 
 *(Rounds 1–3 landed — see Applied above; the retired round-3 worklist/execution

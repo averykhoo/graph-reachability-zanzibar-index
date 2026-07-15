@@ -210,3 +210,22 @@ attributions re-measured byte-identical (S/U/D, `delta_outbox_v1` reads still
 Edge-row INSERTs are untouched (descoped: identity-map read-modify-write within
 the op — see `PERF_ANALYSIS.md` Applied/N16). The remaining INSERT floor is edge
 rows + log row + node interning.
+
+## Addendum 2026-07-15 (2) — N15 landed (per-batch node-resolution cache)
+
+N15 (`index_v4/core.py` + `processor.py` + `connectedstore/apply.py`: per-batch
+`(pred,type,name,wildcard)→NodeV4|MISSING` cache with delete-site eviction and
+creation-site overwrite) changes ONLY node_v4 SELECT counts; I/U/D and all other
+SELECT-table attributions byte-identical.
+
+| op | node_v4 SELECT/write | total stmts/op |
+|---|---|---|
+| union add_tuple | 11.62 → **10.96** | 38.9 → 38.2 |
+| union remove_tuple | — | 31.9 → 31.2 |
+| boolean add_tuple | 103.42 → **46.66** (−55%) | 194.4 → 137.7 |
+| boolean remove_tuple | — | 161.9 → 119.8 |
+
+Union's residual node redundancy is id-based (`_require_live_nodes` — a
+deliberate liveness check, never cached — plus the refcount tail and
+`_load_nodes`, which ride the identity map); id-keyed caching was evaluated and
+deferred (needs rowid-reuse-safe eviction for a small marginal win).

@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from types import EllipsisType
 from sqlalchemy import insert, tuple_
 from sqlmodel import Session, select
@@ -5,6 +6,12 @@ from sqlmodel import Session, select
 from legacy.index_v1 import MultiSet
 from zanzibar_utils_v1 import validate_write_identifiers, validate_node_identifiers
 from .models import DeltaOutboxV1, EdgeV4, NodeV4, Edge, Node, StoreV4
+
+# Per-batch node-resolution cache sentinels (perf N15). ``_UNCACHED`` distinguishes
+# "key absent from the cache" (do the DB lookup) from ``_MISSING`` ("known-absent this
+# batch" -- a negative cache entry). Both are private module singletons.
+_UNCACHED = object()
+_MISSING = object()
 
 
 class ReachabilityIndex:
@@ -44,6 +51,56 @@ class ReachabilityIndex:
         # ``outbox_watermark``, the paranoia delta verifier) still observes a fully
         # materialized stream. The row dicts are byte-identical to the old ORM path.
         self._outbox_buffer: list[dict] = []
+        # Per-batch node-resolution cache (perf N15): ``(predicate, type, name,
+        # wildcard) -> NodeV4 | _MISSING``. ``None`` outside a write batch, so every
+        # ``node`` / ``cached_concrete_node`` resolution behaves exactly as pre-N15
+        # (no memoization). Installed only for the bounded duration of one write batch
+        # via ``_node_cache_scope`` (an ``advance_index`` apply-loop + cascade, or a
+        # standalone ``run_cascade``); the five NodeV4 delete sites evict through
+        # ``_evict_node`` and the sole creation choke point (``node``) overwrites the
+        # negative entry, so a stale hit can never resurrect a dead node. Keyed by the
+        # IMMUTABLE identity tuple (only ``implicit`` / ``reference_count`` mutate), so
+        # it is immune to the SQLite rowid reuse that sank every id-based cache
+        # (blind-audit W2 -- that hazard was cross-session; this cache never survives a
+        # commit/rollback, see ``_node_cache_scope``).
+        self._node_cache: dict[tuple[str, str, str, str], NodeV4] | None = None
+
+    @contextmanager
+    def _node_cache_scope(self):
+        """Install the per-batch node-resolution cache for one write batch (perf N15).
+
+        Reentrant, mirroring the processor's ``_residue_cache_scope`` (perf P3): a
+        nested entry shares the outer cache and only the OUTERMOST installs/tears down,
+        so ``advance_index`` can wrap its whole batch while the ``run_cascade`` it calls
+        just no-ops its own scope. A standalone ``run_cascade`` (e.g. the test-matrix
+        GraphBackend) is the outermost and installs its own.
+
+        The cache MUST NOT survive a commit/rollback: callers commit AFTER the scope
+        closes (``advance_index`` / GraphBackend both commit past ``run_cascade``), so
+        the paranoia checker (fires on ``before_commit``) always reads TRUE state with
+        the cache already torn down, and no cross-transaction entry is ever served."""
+        outer = self._node_cache is None
+        if outer:
+            self._node_cache = {}
+        try:
+            yield
+        finally:
+            if outer:
+                self._node_cache = None
+
+    def _evict_node(self, node: NodeV4) -> None:
+        """Evict a node from the per-batch cache immediately before deleting its row
+        (perf N15). The row is removed in this transaction, so a later same-batch
+        resolution must miss -- we record ``_MISSING`` rather than dropping the key, so
+        repeated probes for the now-dead identity stay cheap. Keyed by the node's
+        immutable identity, so a subsequent re-creation of the same identity through
+        ``node`` re-populates the entry. No-op when no batch cache is installed. MUST be
+        called at every NodeV4 ``session.delete`` site (three in
+        ``_add_direct_edge_unsafe_impl``; ``DeltaProcessor._gc_subject_node`` /
+        ``_gc_public_node``)."""
+        cache = self._node_cache
+        if cache is not None:
+            cache[(node.predicate, node.type, node.name, node.wildcard)] = _MISSING
 
     def _emit(self, subject_id: int, object_id: int, action: str,
               node_map: dict[int, NodeV4] | None = None) -> None:
@@ -452,6 +509,7 @@ class ReachabilityIndex:
                     continue
                 assert _n.reference_count - debit >= 0
                 if _n.reference_count - debit == 0 and _n.implicit:
+                    self._evict_node(_n)            # N15: evict before delete
                     self.session.delete(_n)
                 else:
                     _n.reference_count -= debit
@@ -459,6 +517,7 @@ class ReachabilityIndex:
             _node = self.session.exec(
                 select(NodeV4).where(NodeV4.store_id == self.store_id).where(NodeV4.id == subject_id)).first()
             if _node:
+                self._evict_node(_node)             # N15: evict before delete
                 self.session.delete(_node)
         else:
             for node_id in (subject_id, object_id):
@@ -467,6 +526,7 @@ class ReachabilityIndex:
                 if _node:
                     assert _node.reference_count + count >= 0
                     if _node.reference_count + count == 0 and _node.implicit:
+                        self._evict_node(_node)     # N15: evict before delete
                         self.session.delete(_node)
                     else:
                         _node.reference_count += count
@@ -488,14 +548,21 @@ class ReachabilityIndex:
                 f"{entity_name=!r}, {wildcard=!r}"
             )
 
-        found = self.session.exec(
-            select(NodeV4)
-            .where(NodeV4.store_id == self.store_id)
-            .where(NodeV4.predicate == predicate)
-            .where(NodeV4.type == entity_type)
-            .where(NodeV4.name == entity_name)
-            .where(NodeV4.wildcard == wildcard)
-        ).first()
+        # Per-batch resolution cache (perf N15). Serve/record positive and negative
+        # (``_MISSING``) hits keyed by the identity tuple; ``None`` cache => the
+        # unmemoized pre-N15 path. Negative caching is what collapses the boolean
+        # cascade's repeated probes for absent nodes (ghost subjects etc.).
+        cache = self._node_cache
+        key = (predicate, entity_type, entity_name, wildcard)
+        if cache is not None:
+            entry = cache.get(key, _UNCACHED)
+            if entry is _UNCACHED:
+                found = self._db_node(predicate, entity_type, entity_name, wildcard)
+                cache[key] = found if found is not None else _MISSING
+            else:
+                found = None if entry is _MISSING else entry
+        else:
+            found = self._db_node(predicate, entity_type, entity_name, wildcard)
 
         if found is not None:
             # explicit is sticky: an implicit node can be promoted to explicit, never
@@ -519,7 +586,45 @@ class ReachabilityIndex:
                        wildcard=wildcard, implicit=implicit)
         self.session.add(_node)
         self.session.flush()  # flush to get auto-increment id immediately without committing transaction
+        # Creation-site invalidation (perf N15): this is the SOLE node-creation choke
+        # point on the batch path, so overwriting the (possibly ``_MISSING``) entry here
+        # is what keeps a negative cache honest -- a subsequent resolution of the same
+        # identity sees the freshly created node.
+        if cache is not None:
+            cache[key] = _node
         return _node
+
+    def _db_node(self, predicate: str, entity_type: str, entity_name: str,
+                 wildcard: str) -> NodeV4 | None:
+        """The raw ``NodeV4`` identity SELECT shared by ``node`` and
+        ``cached_concrete_node`` (perf N15). No caching, no interning."""
+        return self.session.exec(
+            select(NodeV4)
+            .where(NodeV4.store_id == self.store_id)
+            .where(NodeV4.predicate == predicate)
+            .where(NodeV4.type == entity_type)
+            .where(NodeV4.name == entity_name)
+            .where(NodeV4.wildcard == wildcard)
+        ).first()
+
+    def cached_concrete_node(self, predicate: str, entity_type: str,
+                             name: str) -> NodeV4 | None:
+        """Read-only, cache-aware resolution of a CONCRETE node (``wildcard == ''``);
+        returns the node or ``None``, never creates, never promotes implicit->explicit
+        (perf N15). Shares ``node``'s per-batch cache, so a concrete resolved, created,
+        or evicted through the ``node`` choke point stays coherent with this read path.
+        Outside a batch (cache ``None``) it is a single point SELECT -- byte-identical
+        to the pre-N15 ``DeltaProcessor._node``, whose sole implementation this is."""
+        cache = self._node_cache
+        key = (predicate, entity_type, name, '')
+        if cache is not None:
+            entry = cache.get(key, _UNCACHED)
+            if entry is not _UNCACHED:
+                return None if entry is _MISSING else entry
+        row = self._db_node(predicate, entity_type, name, '')
+        if cache is not None:
+            cache[key] = row if row is not None else _MISSING
+        return row
 
     def _require_live_nodes(self, *node_ids: int) -> None:
         """Both endpoints must still exist (checked INSIDE the store lock): a stale
