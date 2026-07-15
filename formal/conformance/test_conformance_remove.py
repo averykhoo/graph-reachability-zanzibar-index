@@ -173,6 +173,9 @@ def _fingerprint(eng):
     keys: interner mappings + refcounts, the population masks, node_sets /
     member_of memberships, and the flow-graph (cycle-detection) edge counts.
     Empty masks/sets are dropped — replay never creates them."""
+    # Flow graph is lazy since N10; materialize it before comparing so the
+    # driven and rebuilt engines snapshot equivalent (built) state.
+    eng._ensure_flow_graph()
     intr = eng.interner
     return {
         'keys': frozenset(intr.id_of),

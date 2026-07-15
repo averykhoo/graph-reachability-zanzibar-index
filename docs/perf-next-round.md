@@ -27,7 +27,7 @@ heavy jobs (bench or pytest) concurrently** (CPU contention corrupts bench numbe
 
 ## Wave 3 — conditional items (need measurement or a design call first)
 
-### N10. Defer flow-graph construction on read-triggered `rebuild()` — ✅ LANDED 2026-07-16 (targeted gate green; one `formal/` companion pending, see note)
+### N10. Defer flow-graph construction on read-triggered `rebuild()` — ✅ LANDED 2026-07-16 (targeted gate green; `formal/` companion landed, see note)
 Rebuild replayed every tuple through `_ruleset.apply()` (the full `_derived_pairs`
 rewrite fan-out) purely to populate `_flow_adj`/`_edge_count` — write-only
 cycle-detection state reads never consult. Now `_flow_built` gates all flow work:
@@ -49,7 +49,7 @@ bare `rebuild()` reproduces them eagerly — which lazy rebuild deliberately no 
 does. One-line, assertion-preserving adaptation: call `eng._ensure_flow_graph()`
 before snapshotting the two flow-graph keys in `_fingerprint`, so both driven and
 rebuilt engines materialize before the (unchanged) convergence comparison. Outside
-the setengine track's file scope; flagged for the `conf-heavy` integration step.
+the setengine track's file scope; companion landed e25b386.
 Numbers + mechanism in [`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
 "Applied". Lean: none (below model — write-only auxiliary state).
 
