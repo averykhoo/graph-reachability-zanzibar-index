@@ -53,19 +53,48 @@ the setengine track's file scope; companion landed 859b677.
 Numbers + mechanism in [`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
 "Applied". Lean: none (below model — write-only auxiliary state).
 
-### N11. Duplicate-add: return the known watermark instead of `SELECT MAX(id)`
-`connectedstore/source.py:88-91`. One round trip per duplicate write; bites
-retry-heavy workloads only. **Semantic judgement required**: `log_watermark`
-is the global store head, `evaluator_watermark` this session's — equal in the
-single-session deployment, but confirm the token contract only needs "≥ enough
-to see this (absent) write" before changing. Skip unless `stmt_bench` shows
-duplicates matter.
+### N11. Duplicate-add: return the known watermark instead of `SELECT MAX(id)` — ❌ DESIGN-SKIP 2026-07-16 (token contract forbids the only cheap substitute)
+`connectedstore/source.py:89-99`. **Semantic judgement (done): the substitution
+is unsafe.** The only session-local watermark we could return without the
+`SELECT MAX(id)` is `evaluator_watermark`, and it can *lag the engine's actual
+contents*: `refresh_evaluator` reads the watermark BEFORE the rebuild query, so a
+row committed by another session in that gap is included in the rebuilt engine but
+NOT claimed by the watermark (the documented "conservative" rebuild,
+`source.py:144-152`). A duplicate `add` is reached precisely when the tuple is
+already in the engine — including such an ahead-of-watermark tuple `T@k` with
+`k > evaluator_watermark`. The freshness-token contract (spec §2.5) is "a read at
+cursor ≥ token reflects this write"; for a duplicate the observable effect is "T is
+present", so the returned token must be ≥ `k`. Returning `evaluator_watermark < k`
+would let a later `check(at_least=token)` be served by a graph index whose cursor
+sits at that lower value and has NOT yet applied `T` → a stale "absent" answer under
+an explicit freshness demand. The current global-head `SELECT MAX(id)` is the only
+cheaply-computable value guaranteed ≥ `k` (the tuple's true log id is unknown without
+a query). Existing gate `tests/test_connectedstore_source.py::test_duplicate_add_is_idempotent_no_log_row`
+(`t2 == t1`) only pins the single-session case where head == `k`; it does not
+cover the multi-session race, so it would not have caught the bug. Cost is one
+SELECT per *duplicate* write only (retry-heavy workloads); not worth a
+freshness-correctness hazard. No code change.
 
-### N12. Cache `EntityPattern`s in `RelationalTriplePattern`
-`zanzibar_utils_v1.py:174-182`: `@property`s rebuild frozen sub-patterns per
-`match()` call. Low risk, likely <1% (P0 dispatch already prunes candidates).
-Must preserve compiled-RuleSet snapshot bytes (`tests/snapshots/`). Bundle
-with any future compile-layer touch rather than standalone.
+### N12. Cache `EntityPattern`s in `RelationalTriplePattern` — ✅ LANDED 2026-07-16 (micro 2.1× on gdrive `apply`; snapshot bytes preserved)
+`zanzibar_utils_v1.py`: the `.subject`/`.object` `@property`s rebuilt a fresh
+frozen `EntityPattern` on every `match()`/`replace()` call. Now built ONCE at
+construction (compile time) into two `field(init=False, repr=False, compare=False)`
+cache slots populated in `__post_init__` via `object.__setattr__` (frozen bypass);
+the properties return the cached instances. `init=False` keeps the `__init__`
+signature, `repr=False` keeps the compiled-RuleSet snapshot bytes byte-identical
+(the snapshot gate is `repr()` of the dataclass fields), `compare=False` keeps
+`eq`/`order` over the declared fields only. Patterns are compile-time artifacts —
+never rebuilt per write — so the cost is paid once and amortized over all writes.
+**Micro (`RuleSet.apply`, gdrive fixture, 20 reps × 600 triples, best of 7,
+stable over 3 runs): 155 → 73.5 ms (2.1×, −53%)** — the profile attributed ~20% of
+`apply` tottime to the two properties, but gdrive's TTU/union `replace` fan-out
+multiplies the builds, so eliminating them halves the wall. demorgans flat (~12.5 ms;
+its derived-family path builds fewer patterns per `apply`). End-to-end write loop
+(closure/SQL-dominated, ~500 graph writes) 9704 → 9336 ms — not a regression (apply
+is a tiny fraction there, as the worklist predicted). Snapshot gate + matrix +
+lookup_oracle + boolean_compile + schema/parse/compile/utils + hypothesis all green.
+Numbers in [`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md) "Applied".
+Lean: none (below model — construction-caching, identical results).
 
 ### N13. Graph `check`: batch node resolution (3–5 sequential point SELECTs → ~2) — DEPRIORITIZED
 `index_v4/wildcard.py:331-388,:428-462`. check IS round-trip-bound (388–682/s

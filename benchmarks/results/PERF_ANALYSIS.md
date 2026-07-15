@@ -123,6 +123,30 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Applied
 
+- ✅ **N12 — cache the frozen sub-patterns in `RelationalTriplePattern`
+  (`zanzibar_utils_v1.py`), 2026-07-16, behavior-preserving.** The `.subject` /
+  `.object` `@property`s rebuilt a fresh frozen `EntityPattern` on every
+  `match()` / `replace()` call (the write-path fan-out, `RuleSet.apply`). Now built
+  ONCE at construction into two `field(init=False, repr=False, compare=False)` cache
+  slots populated in `__post_init__` via `object.__setattr__`; the properties return
+  the cached instances. `init=False` preserves the `__init__` signature, `repr=False`
+  preserves the compiled-RuleSet snapshot bytes (the snapshot gate is `repr()` over
+  the declared fields), `compare=False` preserves `eq`/`order`. Patterns are
+  compile-time artifacts, never rebuilt per write, so the build cost is paid once and
+  amortized. **Micro (`RuleSet.apply`, gdrive fixture, 20 reps × 600 triples, best of
+  7, stable across 3 runs): 155 → 73.5 ms (2.1×, −53%).** A `cProfile` attributed
+  ~20% of `apply` tottime to the two properties in isolation, but gdrive's TTU/union
+  `replace` fan-out multiplies the per-apply `EntityPattern` builds, so eliminating
+  them roughly halves the wall. demorgans flat (~12.5 ms — its derived-family path
+  builds fewer patterns per apply). **End-to-end** graph write loop
+  (closure/SQL-dominated, ~500 writes): 9704 → 9336 ms — not a regression (apply is a
+  tiny fraction end-to-end, as the worklist predicted; the win is the micro).
+  Verified snapshot bytes, `eq`, and pickle round-trip unchanged. Gated: snapshot
+  (13), `test_matrix.py` + `test_lookup_oracle.py` + `test_boolean_compile.py` +
+  `test_compile_snapshot.py` (93), schema/parse/compile/utils selector (136),
+  `test_hypothesis.py` (generated-schema round-trips). **Lean: none** (below model —
+  construction-caching, identical results).
+
 - ✅ **Grab-bag micros (index_v4 minor notes), 2026-07-16, behavior-preserving.**
   Three independent small edits, each measured before landing:
   - **`_require_live_nodes` 2 point SELECTs → 1 `IN` (`index_v4/core.py`).** The

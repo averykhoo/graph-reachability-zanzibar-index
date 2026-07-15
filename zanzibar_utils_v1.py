@@ -166,6 +166,22 @@ class RelationalTriplePattern:
     # a tuple merely for having a wildcard object -- that validity is the façade's job
     # (declared object-wildcard shapes). Defaults to `match_wildcards` when unset.
     object_match_wildcards: bool | None = None
+    # Cached frozen sub-patterns (perf N12). The subject/object EntityPatterns are a
+    # pure function of the fields above, so build them ONCE at construction (compile
+    # time) instead of rebuilding a fresh frozen dataclass on every match()/replace()
+    # -- the property construction was ~20% of RuleSet.apply's tottime. init=False keeps
+    # them out of __init__, repr=False keeps the compiled-RuleSet snapshot bytes
+    # byte-identical, compare=False keeps eq/order over the declared fields only.
+    _subject: 'EntityPattern' = field(init=False, repr=False, compare=False, default=None)
+    _object: 'EntityPattern' = field(init=False, repr=False, compare=False, default=None)
+
+    def __post_init__(self):
+        omw = (self.match_wildcards if self.object_match_wildcards is None
+               else self.object_match_wildcards)
+        object.__setattr__(self, '_subject', EntityPattern(
+            type=self.subject_type, name=self.subject_name, match_wildcards=self.match_wildcards))
+        object.__setattr__(self, '_object', EntityPattern(
+            type=self.object_type, name=self.object_name, match_wildcards=omw))
 
     @property
     def _object_match_wildcards(self) -> bool:
@@ -173,13 +189,11 @@ class RelationalTriplePattern:
 
     @property
     def subject(self):
-        return EntityPattern(type=self.subject_type, name=self.subject_name,
-                             match_wildcards=self.match_wildcards)
+        return self._subject
 
     @property
     def object(self):
-        return EntityPattern(type=self.object_type, name=self.object_name,
-                             match_wildcards=self._object_match_wildcards)
+        return self._object
 
     def match(self, relational_triple: RelationalTriple) -> bool:
         if not isinstance(relational_triple, RelationalTriple):
