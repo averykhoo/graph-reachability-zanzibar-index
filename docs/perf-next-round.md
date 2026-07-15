@@ -123,7 +123,7 @@ in [`formal/CORRESPONDENCE.md §8.1`](../formal/CORRESPONDENCE.md).
   **Lean:** none. **Gate:** full suite + conformance (outbox order is
   load-bearing for the cascade) + stmt_bench.
 
-### M2. Graph scale-bench: find the pareto crossover — ✅ RUN 2026-07-15 (to 100k; 200k+ blocked on R4-BF)
+### M2. Graph scale-bench: find the pareto crossover — ✅ CLOSED 2026-07-15 (follow-up run done; verdict final)
 Results: [`benchmarks/results/ROUND3_COMPARISON_2026-07-15.md`](../benchmarks/results/ROUND3_COMPARISON_2026-07-15.md)
 (new curves in `graph_scale_2026-07-15.jsonl`; run under memory pressure —
 ~1.6× systematic offset, de-trended against the unchanged `check` control).
@@ -140,11 +140,17 @@ Results: [`benchmarks/results/ROUND3_COMPARISON_2026-07-15.md`](../benchmarks/re
   peaked 1.79 GB at 100k — the DP holds the whole closure in memory), and the
   graph's architectural wins (durability, multi-replica, no per-process
   rebuild, freshness tokens) remain unmeasured by a single-process bench.
-**Follow-ups this creates:** (a) R4-BF is now ALSO what blocks 200k+/demorgans
-curves (backfill-bound builds blow the command cap) — **R4-BF landed 2026-07-15,
-so the 200k+/demorgans scale-bench rerun is now unblocked** (a fresh M2
-follow-up run is future work, not yet done); (b) a NEW candidate below
-(N17); (c) chunk/stream the bulk-build DP if >100k builds matter (RAM).
+**Follow-up run ✅ 2026-07-15 (post-R4-BF), results in
+[`M2_FOLLOWUP_2026-07-15.md`](../benchmarks/results/M2_FOLLOWUP_2026-07-15.md):**
+demorgans graph curves at 4.8k–163k tuples + both 200k anchors, all built within
+the cap. **Final verdict: the graph has NO second read-side win.** On boolean
+(demorgans, wildcard-free) schemas the set engine beats the graph on every
+surface at every scale (check ~26×, build 5×, RAM 1.5–2.6×); the graph's only
+read-side niche remains forward `lookup` on object-wildcard schemas (~1,066× at
+200k, widening with N). demorgans graph build is linear (O(N^1.03)) post-R4-BF.
+Binding constraint at scale is now bulk-build RAM (gdrive 200k peaked 3.51 GB,
+survived via swap) → N18 below. Original follow-ups: (b) N17 below stands;
+(c) is now N18.
 
 ### N17. Set engine: sub-O(store) lookup for object-wildcard schemas (NEW 2026-07-15)
 - **Why:** the M2 verdict — owc `lookup` at 0.27/s @100k is now the worst read
@@ -159,6 +165,20 @@ follow-up run is future work, not yet done); (b) a NEW candidate below
   that shipped the owc×TTU bug — strict `test_lookup_oracle.py` + multi-seed
   fuzz gate mandatory; over-include when in doubt. **Lean:** none (forward
   lookup unmodeled). Design review before implementation.
+
+### N18. Chunk/stream the bulk-build DP (RAM ceiling) (NEW 2026-07-15, from the M2 follow-up)
+- **Why:** the bulk builder holds the whole closure DP in memory: gdrive/200k
+  peaked **3.51 GB** working set (vs the set engine's 0.92 GB) and built only by
+  swapping; simple/100k peaked 1.8 GB in round 3. RAM — not the cap — is now the
+  binding constraint for >100k object-wildcard graph builds, exactly the niche
+  (owc forward lookup) where the graph is worth building at all.
+- **What:** stream/partition the Phase-C/D DP (topo-stratified chunks, spill or
+  per-stratum flush) so peak RSS is bounded by a stratum, not the closure.
+- **Risk:** medium-high (bulk builder must keep producing byte-identical state —
+  the build-vs-incremental equivalence tests are the net). **Lean:** bulk build
+  is an alternative constructor of the same modeled state (CORRESPONDENCE §8.1);
+  a chunked DP that produces identical rows needs no model change, but log it in
+  §8.1 alongside the R4-BF entry. Conditional: only if >100k builds matter.
 
 ### Minor notes (grab-bag, land opportunistically with adjacent work)
 - `core.py:377-403` remove_node neighbour-debit tail N+1 (batchable `IN`; cold

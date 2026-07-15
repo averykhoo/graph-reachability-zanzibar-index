@@ -85,17 +85,20 @@ def scaling_section(rows: list[dict]) -> None:
         if len(rs) < 3:
             print(f'| {impl} | {wl} | (all) | {len(rs)} | - | - | single/low N, no fit |')
             continue
-        # write: time vs tuples
-        ys = [math.log10(r['build_s']) for r in rs]
-        b, _, r2 = linfit(xs, ys)
-        print(f'| {impl} | {wl} | write(time) | {len(rs)} | {b:+.2f} | {r2:.3f} | {cost_law(b)} |')
+        # write: time vs tuples (build_s on scale_bench/graph rows; the bulk bench's
+        # set rows carry rebuild_s instead and would TypeError on log10(None))
+        pts = [(x, math.log10(t)) for x, r in zip(xs, rs)
+               if (t := (r.get('build_s') or r.get('rebuild_s')))]
+        if len(pts) >= 3:
+            b, _, r2 = linfit([p[0] for p in pts], [p[1] for p in pts])
+            print(f'| {impl} | {wl} | write(time) | {len(pts)} | {b:+.2f} | {r2:.3f} | {cost_law(b)} |')
         # throughput surfaces: rate vs tuples; cost exponent = -slope
         for label, field in THROUGHPUT:
-            ys = [math.log10(r[field]) for r in rs if r.get(field)]
-            if len(ys) < 3:
+            pts = [(x, math.log10(r[field])) for x, r in zip(xs, rs) if r.get(field)]
+            if len(pts) < 3:
                 continue
-            b, _, r2 = linfit(xs[:len(ys)], ys)
-            print(f'| {impl} | {wl} | {label} | {len(ys)} | {b:+.2f} | {r2:.3f} | {cost_law(-b)} |')
+            b, _, r2 = linfit([p[0] for p in pts], [p[1] for p in pts])
+            print(f'| {impl} | {wl} | {label} | {len(pts)} | {b:+.2f} | {r2:.3f} | {cost_law(-b)} |')
     print()
 
 
