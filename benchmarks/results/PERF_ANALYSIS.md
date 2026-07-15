@@ -356,6 +356,28 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   Real win on pure-boolean (and/but-not over direct+computed) schemas; TTU/userset
   schemas (e.g. demorgans) keep the scan. Behavior-preserving — no Lean. Gated as P6.
 
+- ✅ **N16 — graph-index bulk-INSERT of outbox emit rows (`index_v4/core.py`),
+  2026-07-15.** `_emit` `session.add`-ed one `DeltaOutboxV1` per reachability flip
+  and the ORM unit-of-work flushed them **one INSERT statement per row** (verified
+  by echo probe, SQLAlchemy 2.0.51). Now `_emit` stages a plain dict (endpoint-
+  identity capture unchanged — still eager, while the nodes are alive) and
+  `_flush_outbox()` drains the buffer in ONE `session.execute(insert(DeltaOutboxV1),
+  rows)` at the end of `_add_direct_edge_unsafe` — the sole emit driver, during
+  which nothing reads the outbox, so every reader (cascade frontier drain,
+  `outbox_watermark`, paranoia §8.3 verifier) still sees a fully materialized
+  stream and ids stay monotone in emission order (empirically verified on SQLite;
+  Postgres: single insertmanyvalues statement, ids ascend in list order; no
+  RETURNING consumed — same pattern as `bulk_build.py`). A `finally` leak guard
+  drops the buffer on error paths (the caller's contract is rollback, matching the
+  old pending-`add` semantics). **stmt_bench INSERTs/op: union add 20.4 → 13.0
+  (−36%), union remove 9.2 → 2.2 (−76%), boolean add 40.8 → 28.5 (−30%), boolean
+  remove 19.1 → 7.2 (−62%); union add total 46.2 → 38.9/op.** All other statement
+  counts byte-identical. Edge-row batching DESCOPED: new `EdgeV4` ORM instances are
+  read-modify-written and deleted through the identity map within the same op, so
+  Core-inserting them would require restaging the P2 ref-count batch — high risk,
+  small marginal win. Behavior-preserving — no Lean. Gated: full `tests/` (537
+  passed incl. paranoia) + conf-heavy (68) + conf-rest (195).
+
 ## Optimization targets (ranked)
 
 *(Rounds 1–3 landed — see Applied above; the retired round-3 worklist/execution

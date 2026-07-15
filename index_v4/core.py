@@ -1,5 +1,5 @@
 from types import EllipsisType
-from sqlalchemy import tuple_
+from sqlalchemy import insert, tuple_
 from sqlmodel import Session, select
 
 from legacy.index_v1 import MultiSet
@@ -32,6 +32,18 @@ class ReachabilityIndex:
         # is already held (perf P12a). ``None`` = no lock taken in the current
         # transaction. See ``_lock_store``.
         self._locked_txn = None
+        # Outbox emit buffer (perf N16): ``_emit`` denormalizes endpoint identities
+        # eagerly (while the nodes are alive) but stages the row as a plain dict here
+        # instead of ``session.add``-ing an ORM instance. ``_flush_outbox`` drains the
+        # whole buffer in ONE ``insert(DeltaOutboxV1), [rows]`` (SQLAlchemy
+        # insertmanyvalues -> a single INSERT statement) at the end of every
+        # ``_add_direct_edge_unsafe`` -- the sole driver of ``_emit`` and a call during
+        # which nothing reads the outbox -- so the emitted ids stay monotone in
+        # emission order (SQLite/Postgres autoincrement is monotone in list order,
+        # empirically verified) and every outbox reader (cascade frontier drain,
+        # ``outbox_watermark``, the paranoia delta verifier) still observes a fully
+        # materialized stream. The row dicts are byte-identical to the old ORM path.
+        self._outbox_buffer: list[dict] = []
 
     def _emit(self, subject_id: int, object_id: int, action: str,
               node_map: dict[int, NodeV4] | None = None) -> None:
@@ -39,6 +51,11 @@ class ReachabilityIndex:
         inserted inside the writing transaction, never in-memory lists). Endpoint
         identities are denormalized at emission -- the nodes are alive here, but
         implicit-node GC may delete them before the cascade reads the row.
+
+        The row is staged in ``self._outbox_buffer`` and bulk-inserted by
+        ``_flush_outbox`` at the end of the driving ``_add_direct_edge_unsafe`` (perf
+        N16); the endpoint-identity capture below is UNCHANGED and still happens here,
+        eagerly, so a later implicit-node GC can never strip the denormalized columns.
 
         ``node_map`` is an optional ``{id: NodeV4}`` region snapshot hoisted by the
         caller (perf P7b) to collapse the per-emit ``session.get`` round trips. It is
@@ -56,13 +73,29 @@ class ReachabilityIndex:
 
         s = _resolve(subject_id)
         o = _resolve(object_id)
-        self.session.add(DeltaOutboxV1(
+        self._outbox_buffer.append(dict(
             store_id=self.store_id, subject_node_id=subject_id, object_node_id=object_id,
             action=action,
             subject_type=s.type if s else '', subject_name=s.name if s else '',
             subject_predicate=s.predicate if s else '',
             object_type=o.type if o else '', object_name=o.name if o else '',
             object_predicate=o.predicate if o else ''))
+
+    def _flush_outbox(self) -> None:
+        """Bulk-insert the buffered outbox rows in one statement, then reset the buffer
+        (perf N16). Called at the end of ``_add_direct_edge_unsafe`` -- the sole emit
+        driver -- so the buffer is empty whenever control leaves that method and no
+        outbox reader (all of which run BETWEEN write ops or at commit) can observe a
+        starved stream. ``session.execute(insert(...), rows)`` runs synchronously and
+        assigns autoincrement ids monotone in list order, i.e. in emission order, which
+        the cascade's ``id > watermark`` frontier drain and the §8.3 delta verifier
+        both depend on. A Core insert (not ORM ``add``) does not populate the identity
+        map, which is irrelevant: outbox rows are append-only and every reader
+        re-SELECTs them fresh."""
+        if not self._outbox_buffer:
+            return
+        rows, self._outbox_buffer = self._outbox_buffer, []
+        self.session.execute(insert(DeltaOutboxV1), rows)
 
     def _load_nodes(self, ids) -> dict[int, NodeV4]:
         """Batch-load nodes by id in chunked ``IN`` queries (perf P7b). Used to hoist
@@ -301,6 +334,22 @@ class ReachabilityIndex:
                 self._emit(triple.subject_id, triple.object_id, "ADDED", node_map)
 
     def _add_direct_edge_unsafe(self, subject_id: int, object_id: int, count: int) -> None:
+        """N16 outbox-drain boundary: this is the SOLE driver of ``_emit`` (every
+        ``_add_db_edges_unsafe`` / ``_add_indirect_edges_batch_unsafe`` call originates
+        here) and nothing reads the outbox for its duration, so draining the emit buffer
+        exactly once at its end keeps outbox ids monotone in emission order while
+        collapsing the per-row INSERTs into one statement. The ``finally`` is a leak
+        guard: on any error path the buffered rows were never inserted and belong to a
+        transaction the caller rolls back, so we drop them -- mirroring how the old
+        ``session.add`` path relied on rollback to discard pending outbox rows, so a
+        reused index instance never bleeds them into a later successful transaction."""
+        try:
+            self._add_direct_edge_unsafe_impl(subject_id, object_id, count)
+            self._flush_outbox()
+        finally:
+            self._outbox_buffer = []
+
+    def _add_direct_edge_unsafe_impl(self, subject_id: int, object_id: int, count: int) -> None:
         assert count in {-1, 1}
 
         # Remove direct edge first to preserve invariant on subtraction

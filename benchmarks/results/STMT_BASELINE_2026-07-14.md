@@ -189,3 +189,24 @@ already optimized under P2/P4/P6/P7 and NOT what P12a/P12b target.
   bearing number, the spread is real workload variance, not noise.
 - Wall-time `ops/s` (union add 27/s, boolean add 5/s) is a SQLite-only artifact of
   the statement counts and should not be read as a production throughput figure.
+
+---
+
+## Addendum 2026-07-15 — N16 landed (outbox emit rows bulk-inserted)
+
+N16 (`index_v4/core.py`: `_emit` stages dicts; `_flush_outbox()` drains one
+`insert(DeltaOutboxV1), [rows]` per `_add_direct_edge_unsafe`) changes ONLY the
+INSERT counts above; every other statement class and all SELECT-table
+attributions re-measured byte-identical (S/U/D, `delta_outbox_v1` reads still
+3.00/op boolean, all read ops unchanged).
+
+| op | INSERT/op before | after | Δ | total/op before → after |
+|---|--:|--:|--:|---|
+| union add_tuple | 20.4 | **13.0** | −36% | 46.2 → 38.9 |
+| union remove_tuple | 9.2 | **2.2** | −76% | — |
+| boolean add_tuple | 40.8 | **28.5** | −30% | — |
+| boolean remove_tuple | 19.1 | **7.2** | −62% | — |
+
+Edge-row INSERTs are untouched (descoped: identity-map read-modify-write within
+the op — see `PERF_ANALYSIS.md` Applied/N16). The remaining INSERT floor is edge
+rows + log row + node interning.

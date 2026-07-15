@@ -112,16 +112,18 @@ in [`formal/CORRESPONDENCE.md §8.1`](../formal/CORRESPONDENCE.md).
 - **Risk:** medium (GC invalidation). **Lean:** none (resolution is below the
   model). **Gate:** full suite incl. paranoia + conformance; stmt_bench delta.
 
-### N16. Bulk-INSERT the emit/outbox and edge rows
-- **What:** INSERTs are ~40% of union write statements (20.4/write). Outbox
-  `_emit` rows are plain value inserts — batchable via `executemany`/
-  `session.execute(insert(...), [rows])` at flush points; edge inserts ride
-  the P2 batch already but flush row-at-a-time. Constant-factor; biggest on
-  networked DBs (per-statement latency), visible in stmt counts everywhere.
-- **Risk:** low-medium (ordering: outbox ids must stay monotone within the
-  txn — verify autoincrement behavior under executemany on SQLite/Postgres).
-  **Lean:** none. **Gate:** full suite + conformance (outbox order is
-  load-bearing for the cascade) + stmt_bench.
+### N16. Bulk-INSERT the emit/outbox rows — ✅ LANDED 2026-07-15 (edge rows descoped)
+Outbox `_emit` rows now stage as dicts and bulk-insert in ONE
+`insert(DeltaOutboxV1), [rows]` per `_add_direct_edge_unsafe` (the sole emit
+driver; ids verified monotone in emission order). INSERTs/op: union add
+20.4→13.0, union remove 9.2→2.2, boolean add 40.8→28.5, boolean remove
+19.1→7.2; all other statement counts byte-identical. **Edge-row batching
+descoped** (new EdgeV4 instances are identity-map read-modify-written and
+deleted within the same op — Core inserts would force restaging the P2
+ref-count batch; high risk, small marginal win). Mechanism + gate:
+[`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md) "Applied";
+stmt deltas in `STMT_BASELINE_2026-07-14.md` addendum. Lean: none (below
+model).
 
 ### M2. Graph scale-bench: find the pareto crossover — ✅ CLOSED 2026-07-15 (follow-up run done; verdict final)
 Results: [`benchmarks/results/ROUND3_COMPARISON_2026-07-15.md`](../benchmarks/results/ROUND3_COMPARISON_2026-07-15.md)
