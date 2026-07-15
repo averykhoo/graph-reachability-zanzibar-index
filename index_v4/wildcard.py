@@ -522,16 +522,19 @@ class WildcardIndex:
         rows = self.idx.session.exec(
             select(ResidueV1).where(ResidueV1.store_id == self.idx.store_id)
         ).all()
+        want = list(shape)
         for row in rows:
             # stars first (small, and the common filter) so the per-row upos/neg
-            # JSON decodes only run on the branch that needs them
-            covered = shape in frozenset(tuple(s) for s in json.loads(row.stars))
+            # JSON decodes only run on the branch that needs them. Point membership
+            # reads the decoded list directly -- no set/frozenset materialization for
+            # a single ``in`` probe, and ``upos`` decodes only when its branch is hit.
+            covered = want in json.loads(row.stars)
             if covered:
-                if concrete and s_node.id in set(json.loads(row.neg)) \
-                        and s_node.id not in set(json.loads(row.upos)):
+                if concrete and s_node.id in json.loads(row.neg) \
+                        and s_node.id not in json.loads(row.upos):
                     continue
                 result.node_ids.add(row.object_node_id)
-            elif concrete and s_node.id in set(json.loads(row.upos)):
+            elif concrete and s_node.id in json.loads(row.upos):
                 result.node_ids.add(row.object_node_id)     # edge-free userset membership
 
     def lookup_reverse(self, relation: str, o_type: str, o_name: str) -> LookupResult:

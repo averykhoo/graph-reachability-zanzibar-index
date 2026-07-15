@@ -501,10 +501,12 @@ class ReachabilityIndex:
             # removed node keeps an inflated count forever, defeating bridge GC
             # (wildcard §7.3) and _gc_public_node. Done here, after the expansion
             # loops, so every REMOVED delta was emitted while its endpoints lived.
+            # One IN-query hoists the neighbours + the subject node in place of the
+            # per-neighbour point SELECTs (debits differ per neighbour, so they are
+            # applied in Python, not a single UPDATE); by-id fetch, so identical rows.
+            nodes = self._load_nodes(list(neighbour_debits.keys()) + [subject_id])
             for other_id, debit in neighbour_debits.items():
-                _n = self.session.exec(
-                    select(NodeV4).where(NodeV4.store_id == self.store_id)
-                    .where(NodeV4.id == other_id)).first()
+                _n = nodes.get(other_id)
                 if _n is None:
                     continue
                 assert _n.reference_count - debit >= 0
@@ -514,8 +516,7 @@ class ReachabilityIndex:
                 else:
                     _n.reference_count -= debit
                     self.session.add(_n)
-            _node = self.session.exec(
-                select(NodeV4).where(NodeV4.store_id == self.store_id).where(NodeV4.id == subject_id)).first()
+            _node = nodes.get(subject_id)
             if _node:
                 self._evict_node(_node)             # N15: evict before delete
                 self.session.delete(_node)
@@ -630,12 +631,15 @@ class ReachabilityIndex:
         """Both endpoints must still exist (checked INSIDE the store lock): a stale
         id from a pre-lock resolution racing a concurrent remove_node would otherwise
         insert a dangling edge -- and SQLite rowid reuse could later turn it into a
-        phantom permission on an unrelated node (blind-audit C2)."""
+        phantom permission on an unrelated node (blind-audit C2). Cache-blind by
+        contract: this is a liveness check, so it hits the DB directly (never the
+        N15 node cache) -- one IN-query for both endpoints, not a SELECT per id."""
+        live = set(self.session.exec(
+            select(NodeV4.id).where(NodeV4.store_id == self.store_id)
+            .where(NodeV4.id.in_(list(dict.fromkeys(node_ids))))  # type: ignore[attr-defined]
+        ).all())
         for nid in node_ids:
-            row = self.session.exec(
-                select(NodeV4).where(NodeV4.store_id == self.store_id)
-                .where(NodeV4.id == nid)).first()
-            if row is None:
+            if nid not in live:
                 raise ValueError(f'node id {nid} no longer exists (concurrent removal?)')
 
     def _add_edge_locked(self, subject_id: int, object_id: int) -> None:

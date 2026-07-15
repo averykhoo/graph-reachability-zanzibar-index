@@ -229,3 +229,24 @@ Union's residual node redundancy is id-based (`_require_live_nodes` — a
 deliberate liveness check, never cached — plus the refcount tail and
 `_load_nodes`, which ride the identity map); id-keyed caching was evaluated and
 deferred (needs rowid-reuse-safe eviction for a small marginal win).
+
+## Addendum 2026-07-16 (3) — grab-bag micros (`_require_live_nodes` 2 SELECTs → 1 IN)
+
+`_require_live_nodes` (`index_v4/core.py`) now checks both edge endpoints with a
+single `select(NodeV4.id).where(id.in_(...))` instead of one point SELECT per id
+(still cache-blind — a liveness probe, never the N15 node cache). Changes ONLY
+node_v4 SELECT counts; I/U/D and every other SELECT-table attribution byte-identical.
+
+| op | node_v4 SELECT/write | total stmts/op |
+|---|---|---|
+| union add_tuple | 10.96 → **9.30** | 38.2 → 36.6 |
+| union remove_tuple | — | 31.2 → 29.6 |
+| boolean add_tuple | 46.66 → **39.90** | 137.7 → 130.9 |
+| boolean remove_tuple | — | 119.8 → 113.6 |
+
+The same batch landed two more micros invisible to this bench's op mix: the
+`remove_node` neighbour-debit tail (N+1 → 1 IN query; cold node-GC path, verified
+separately — node_v4 SELECTs during `remove_node` on an N-neighbour star go N+3 →
+flat 3, total 34/114/414/814 at N=10/50/200/400 → flat 14) and a CPU-only
+`_collect_residue_memberships` scan cleanup (set/frozenset elimination, ~23% on the
+isolated inner loop). Full record: `PERF_ANALYSIS.md` "Applied" (grab-bag entry).

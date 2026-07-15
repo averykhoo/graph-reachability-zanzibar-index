@@ -123,6 +123,42 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Applied
 
+- ✅ **Grab-bag micros (index_v4 minor notes), 2026-07-16, behavior-preserving.**
+  Three independent small edits, each measured before landing:
+  - **`_require_live_nodes` 2 point SELECTs → 1 `IN` (`index_v4/core.py`).** The
+    liveness re-check on every `add_edge_by_id` / `remove_edge_by_id` SELECTed each
+    endpoint separately; now one `select(NodeV4.id).where(id.in_(...))` covers both,
+    unchanged error semantics (first missing id in call order raises), still
+    **cache-blind by contract** (never the N15 node cache — it is a liveness probe).
+    **`stmt_bench` (real ConnectedStore, sync, paranoia-off): union add node_v4
+    SELECT 10.96 → 9.30, total 38.2 → 36.6; union remove 31.2 → 29.6; boolean add
+    node_v4 46.66 → 39.90, total 137.7 → 130.9; boolean remove 119.8 → 113.6.** All
+    I/U/D and other SELECT-table attributions byte-identical.
+  - **`remove_node` neighbour-debit tail N+1 → 1 `IN` (`index_v4/core.py`).** The
+    Blind-audit C1 tail applied per-neighbour refcount debits with one point SELECT
+    per neighbour; now `_load_nodes(neighbours + [subject])` hoists them in one IN
+    query, debits applied in Python (they differ per neighbour, so no single UPDATE)
+    with the identical implicit-GC rule and N15 eviction. **When** debits apply is
+    unchanged (still the tail, after the expansion loops emit their REMOVED deltas).
+    Cold path (node GC), absent from `stmt_bench`'s op mix — verified with a
+    `before_cursor_execute` scratch driving `remove_node` on an N-neighbour star:
+    **node_v4 SELECTs during remove_node N+3 → flat 3; total statements 34 / 114 /
+    414 / 814 (N = 10/50/200/400) → flat 14.**
+  - **`_collect_residue_memberships` set/frozenset elimination + lazy `upos`
+    (`index_v4/wildcard.py`).** The per-residue-row scan built a `frozenset` for a
+    single `shape in …` test and wrapped `neg`/`upos` in `set()` for point
+    membership; now the decoded JSON lists are probed directly (`want in
+    json.loads(stars)`, `id in json.loads(neg)`), so `upos` decodes only on the
+    branch that needs it. CPU-only (no statement change). **Isolated inner-loop A/B
+    (800 synthetic rows, identical decisions asserted equal): steady-state 14.6 →
+    11.2 ms/scan (−23%); diluted to ~2.5% end-to-end behind the SQL fetch + graph
+    walk.**
+  Gated: `test_matrix.py` (12), the index_v4 selector (wildcard/index/invariant/
+  processor/bulk/connectedstore/matrix/lookup_oracle/blind_audit/remove_node/reads/
+  self_referential, 287, paranoia inside), `test_hypothesis.py` (12) — all green.
+  Stmt deltas in `STMT_BASELINE_2026-07-14.md` addendum 3. **Lean: none** (below
+  model — SQL-shape / CPU micro-opts, no modeled-algorithm change).
+
 - ✅ **N18 — stream the bulk builder's Phase-W writes + Phase-R snapshot read
   (`index_v4/bulk_build.py`), 2026-07-16, RAM ceiling, behavior-preserving
   (byte-identical rows in identical order).** RESHAPED from the original

@@ -249,8 +249,13 @@ survived via swap) → N18 below. Original follow-ups: (b) N17 below stands;
   "Applied"; results note `benchmarks/results/N18_FOLLOWUP_2026-07-16.md`.
 
 ### Minor notes (grab-bag, land opportunistically with adjacent work)
-- `core.py:377-403` remove_node neighbour-debit tail N+1 (batchable `IN`; cold
-  path). `core.py:454-464` `_require_live_nodes` 2 SELECTs → 1.
+- ✅ **LANDED 2026-07-16** (grab-bag micros; `PERF_ANALYSIS.md` "Applied",
+  `STMT_BASELINE` addendum 3): `remove_node` neighbour-debit tail N+1 → 1 `IN`
+  query (cold node-GC path — node_v4 SELECTs during `remove_node` on an
+  N-neighbour star N+3 → flat 3); `_require_live_nodes` 2 point SELECTs → 1
+  `IN` (still cache-blind — union add node_v4 10.96→9.30, boolean 46.66→39.90);
+  `_collect_residue_memberships` set/frozenset elimination + lazy `upos` decode
+  (CPU-only, ~23% on the isolated residue-scan inner loop).
 - **Set-engine flow graph lacks bridge edges** (from the N17 parity find,
   `docs/spec-deviations.md` 2026-07-15 §3 residual): a MULTI-HOP cycle through a
   star bridge (rule edge out of a star userset + a rule chain back into a
