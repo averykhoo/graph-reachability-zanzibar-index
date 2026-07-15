@@ -49,7 +49,7 @@ bare `rebuild()` reproduces them eagerly — which lazy rebuild deliberately no 
 does. One-line, assertion-preserving adaptation: call `eng._ensure_flow_graph()`
 before snapshotting the two flow-graph keys in `_fingerprint`, so both driven and
 rebuilt engines materialize before the (unchanged) convergence comparison. Outside
-the setengine track's file scope; companion landed e25b386.
+the setengine track's file scope; companion landed 859b677.
 Numbers + mechanism in [`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
 "Applied". Lean: none (below model — write-only auxiliary state).
 
@@ -205,19 +205,48 @@ survived via swap) → N18 below. Original follow-ups: (b) N17 below stands;
   wildcard self-reference cycle (seed-7 hypothesis find; `_would_cycle` now runs
   the §1.5 check over derived pairs; `test_reg9` pins parity both ways).
 
-### N18. Chunk/stream the bulk-build DP (RAM ceiling) (NEW 2026-07-15, from the M2 follow-up)
-- **Why:** the bulk builder holds the whole closure DP in memory: gdrive/200k
-  peaked **3.51 GB** working set (vs the set engine's 0.92 GB) and built only by
-  swapping; simple/100k peaked 1.8 GB in round 3. RAM — not the cap — is now the
-  binding constraint for >100k object-wildcard graph builds, exactly the niche
-  (owc forward lookup) where the graph is worth building at all.
-- **What:** stream/partition the Phase-C/D DP (topo-stratified chunks, spill or
-  per-stratum flush) so peak RSS is bounded by a stratum, not the closure.
-- **Risk:** medium-high (bulk builder must keep producing byte-identical state —
-  the build-vs-incremental equivalence tests are the net). **Lean:** bulk build
-  is an alternative constructor of the same modeled state (CORRESPONDENCE §8.1);
-  a chunked DP that produces identical rows needs no model change, but log it in
-  §8.1 alongside the R4-BF entry. Conditional: only if >100k builds matter.
+### N18. Bulk-build RAM ceiling — ✅ LANDED 2026-07-16 (RESHAPED by the tracemalloc probe: Phase-W/R streaming, DP untouched)
+- **Why:** the M2 follow-up's binding constraint — gdrive/200k peaked **3.51 GB**
+  working set (vs the set engine's 0.92 GB) and built only by swapping; RAM, not
+  the cap, gated >100k object-wildcard graph builds, exactly the niche (owc
+  forward lookup) where the graph is worth building at all.
+- **RESHAPED (2026-07-16 tracemalloc probe): the DP is NOT the hog.** The closure
+  grows linearly on gdrive (100,548 / 402,948 / 1,209,348 pairs at 16.8k / 67.2k
+  / 201.6k tuples) and the Phase-P `pvec` holds only ~210 MB at 201.6k; a
+  release-vectors-when-consumed schedule would reclaim only ~9% (91% of vectors
+  simultaneously live). The original chunk/stream/spill-the-DP plan was dropped —
+  **phases R/B/C/P are logically untouched**. The real hogs were: Phase W's
+  `edge_rows` + `outbox_rows` (two full per-row-dict lists, ~3× the DP, ~700 MB
+  at 200k, handed to single giant `session.execute(insert(...), rows)` calls
+  that reprocess them inside SQLAlchemy); the Phase-R `.all()` snapshot (~200k
+  ORM `TupleV1` objects referenced for the whole build); and ~165k `NodeV4` ORM
+  instances parked in the session identity map after the flush.
+- **What (shipped, all in `index_v4/bulk_build.py`):** (a) Phase W generates +
+  executes + frees the edge/residue/outbox row dicts in bounded 50k-row chunks
+  (slices of the sorted `edge_pairs` / `residues.items()`) — same rows, same
+  order, so per-table auto-increment ids assign exactly as the old single
+  INSERTs; (b) Phase R streams the snapshot via
+  `.execution_options(yield_per=10_000)` selecting only the six routed columns
+  (no ORM entities enter the identity map), same `order_by(TupleV1.id)`; (c) the
+  flushed `NodeV4` instances are expunged after `node_id` capture (nothing
+  downstream needs them — `connectedstore/build.py`'s `ensure_cursor`/commit
+  path re-reads via fresh queries). `bulk=False` reference path and
+  `bulk_backfill.py` untouched.
+- **Measured (gdrive graph, `n18_followup_2026-07-16.jsonl`, the M2 §6 Phase-B
+  flags, ~2.87 GB free of 15.8 GB at run start): 201.6k tuples peak RSS 3,512 →
+  1,117 MB (−68%, 3.14×); build 390.5 → 314.2 s, comfortably under the cap
+  (cross-session wall not comparable — RSS is the headline; peak now fits in
+  free RAM, no swap). 67.2k sanity point: peak 405 MB, vs round-3's 925 MB
+  @50.4k / 1,788 MB @100.8k curve. `answers_sig` byte-identical to the M2
+  follow-up gdrive value (`d9ddd99d…9999`) at both scales.** Remaining peak is
+  the in-memory graph state itself (`m`/`succ`/`pvec`/`edge_pairs`) — linear in
+  closure, no longer SQLAlchemy row staging.
+- **Gate:** `tests/test_bulk_build.py` (6 — the build-vs-incremental identity
+  gate) + the connectedstore suite + `test_matrix.py`, 60 green total. **Lean:**
+  none — same rows, same modeled state, alternative constructor unchanged in
+  effect; logged in `formal/CORRESPONDENCE.md §8.1` alongside P13/R4-BF.
+  Mechanism + numbers in [`PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
+  "Applied"; results note `benchmarks/results/N18_FOLLOWUP_2026-07-16.md`.
 
 ### Minor notes (grab-bag, land opportunistically with adjacent work)
 - `core.py:377-403` remove_node neighbour-debit tail N+1 (batchable `IN`; cold

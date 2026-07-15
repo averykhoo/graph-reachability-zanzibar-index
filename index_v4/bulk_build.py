@@ -57,6 +57,13 @@ if TYPE_CHECKING:
 # ``ReachabilityIndex.node`` dedupes on, so it is id-independent by construction.
 NodeKey = tuple[str, str, str, str]
 
+# N18 (RAM ceiling): the Phase-W writes generate + execute + free their row dicts in
+# bounded chunks instead of materializing full per-row-dict lists (which peaked ~3x the
+# DP at 200k tuples). ``_WRITE_CHUNK`` rows per ``session.execute(insert(...), rows)``;
+# ``_ROW_STREAM_BATCH`` rows per Phase-R fetch. Same rows, same insertion order.
+_WRITE_CHUNK = 50_000
+_ROW_STREAM_BATCH = 10_000
+
 
 def _subject_key(subject_predicate, s_type: str, s_name: str,
                  schema_info: 'SchemaInfo') -> NodeKey:
@@ -137,15 +144,23 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
     store_id = index_store_id
 
     # -- Phase R: route -> direct-multigraph multiplicities m(skey, okey). --------
+    # N18: stream the snapshot in id order instead of ``.all()`` -- select only the
+    # six routed columns (no ORM entities, so ~200k TupleV1 instances never enter the
+    # identity map) and ``yield_per`` so the driver fetches in bounded batches. Same
+    # rows, same ``.order_by(TupleV1.id)`` order as the incremental reference path.
     m: dict[tuple[NodeKey, NodeKey], int] = defaultdict(int)
-    rows = session.exec(
-        select(TupleV1).where(TupleV1.store_id == source_store_id)
+    row_stream = session.exec(
+        select(TupleV1.subject_predicate, TupleV1.subject_type, TupleV1.subject_name,
+               TupleV1.relation, TupleV1.object_type, TupleV1.object_name)
+        .where(TupleV1.store_id == source_store_id)
         .order_by(TupleV1.id)  # type: ignore[arg-type]
-    ).all()
-    for r in rows:
-        sp = Ellipsis if r.subject_predicate == '...' else r.subject_predicate
-        triple = RelationalTriple(Entity(r.subject_type, r.subject_name), r.relation,
-                                  Entity(r.object_type, r.object_name), sp)
+        .execution_options(yield_per=_ROW_STREAM_BATCH)
+    )
+    for (subject_predicate, subject_type, subject_name,
+         relation, object_type, object_name) in row_stream:
+        sp = Ellipsis if subject_predicate == '...' else subject_predicate
+        triple = RelationalTriple(Entity(subject_type, subject_name), relation,
+                                  Entity(object_type, object_name), sp)
         for d in ruleset.apply(triple):
             skey = _subject_key(d.subject_predicate, d.subject.type, d.subject.name,
                                 schema_info)
@@ -248,6 +263,14 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
     session.add_all(node_objs.values())
     session.flush()
     node_id = {key: n.id for key, n in node_objs.items()}
+    # N18: the INSERT is flushed and every id is captured in ``node_id``; nothing
+    # downstream (Phase W below, or the caller in ``connectedstore/build.py`` -- which
+    # re-reads all graph state via fresh queries) touches the live instances again.
+    # Expunge them so ~165k NodeV4 objects do not sit in the identity map for the rest
+    # of the build; drop the dict too.
+    for n in node_objs.values():
+        session.expunge(n)
+    node_objs.clear()
 
     # Final edge pairs, sorted by (subject_key, object_key) so edge and outbox writes
     # share one deterministic order (the outbox order is provably inert -- design
@@ -255,59 +278,67 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
     edge_pairs = sorted(
         (a, b) for a in order for b in pvec[a] if pvec[a][b] > 0)
 
-    # (2) edges: one executemany INSERT. direct=m (0 for pure-indirect pairs), indirect=P.
-    #     derived=True exactly on pairs holding a processor-written direct edge (I5); every
-    #     other pair -- including pure-indirect pairs created THROUGH derived edges -- False.
-    edge_rows = [
-        {
-            'store_id': store_id,
-            'subject_id': node_id[a],
-            'object_id': node_id[b],
-            'direct_edge_count': m.get((a, b), 0),
-            'indirect_edge_count': pvec[a][b],
-            'derived': (a, b) in derived_pairs,
-        }
-        for (a, b) in edge_pairs
-    ]
-    if edge_rows:
-        session.execute(insert(EdgeV4), edge_rows)
+    # (2) edges: executemany INSERT, chunked (N18). direct=m (0 for pure-indirect pairs),
+    #     indirect=P. derived=True exactly on pairs holding a processor-written direct edge
+    #     (I5); every other pair -- including pure-indirect pairs created THROUGH derived
+    #     edges -- False. Row dicts are generated per chunk (slice of the sorted
+    #     ``edge_pairs``) and freed before the next chunk, never accumulated into one list,
+    #     so peak RSS is bounded by ``_WRITE_CHUNK`` rows, not the whole closure. Chunks run
+    #     in ``edge_pairs`` order, so per-table auto-increment ids are assigned in the exact
+    #     same order as the old single INSERT.
+    for start in range(0, len(edge_pairs), _WRITE_CHUNK):
+        chunk = [
+            {
+                'store_id': store_id,
+                'subject_id': node_id[a],
+                'object_id': node_id[b],
+                'direct_edge_count': m.get((a, b), 0),
+                'indirect_edge_count': pvec[a][b],
+                'derived': (a, b) in derived_pairs,
+            }
+            for (a, b) in edge_pairs[start:start + _WRITE_CHUNK]
+        ]
+        session.execute(insert(EdgeV4), chunk)
 
-    # (2b) residues: one row per non-empty derived residue (R4-BF). version=1 on a fresh
-    #      build unless a step-4 neg bump raised it; stars sorted JSON, neg/upos node keys
-    #      translated to the just-flushed ids. Empty residues were never recorded.
-    residue_rows = []
-    for (o_type, rel, o_name), res in residues.items():
-        public_id = node_id[(rel, o_type, o_name, '')]
-        residue_rows.append({
-            'store_id': store_id,
-            'object_node_id': public_id,
-            'relation': rel,
-            'stars': json.dumps(sorted([list(s) for s in res.stars])),
-            'neg': json.dumps(sorted(node_id[k] for k in res.neg)),
-            'upos': json.dumps(sorted(node_id[k] for k in res.upos)),
-            'version': res.version,
-        })
-    if residue_rows:
-        session.execute(insert(ResidueV1), residue_rows)
+    # (2b) residues: one row per non-empty derived residue (R4-BF), chunked (N18). version=1
+    #      on a fresh build unless a step-4 neg bump raised it; stars sorted JSON, neg/upos
+    #      node keys translated to the just-flushed ids. Empty residues were never recorded.
+    #      ``residues.items()`` iteration order (== the old single-INSERT order) is preserved.
+    residue_items = list(residues.items())
+    for start in range(0, len(residue_items), _WRITE_CHUNK):
+        chunk = [
+            {
+                'store_id': store_id,
+                'object_node_id': node_id[(rel, o_type, o_name, '')],
+                'relation': rel,
+                'stars': json.dumps(sorted([list(s) for s in res.stars])),
+                'neg': json.dumps(sorted(node_id[k] for k in res.neg)),
+                'upos': json.dumps(sorted(node_id[k] for k in res.upos)),
+                'version': res.version,
+            }
+            for (o_type, rel, o_name), res in residue_items[start:start + _WRITE_CHUNK]
+        ]
+        session.execute(insert(ResidueV1), chunk)
 
-    # (3) outbox: one ADDED row per final pair, endpoint identities denormalized from
-    #     the node keys (== what ``_emit`` captures from the live node rows). An add-only
-    #     load flips each closure pair 0->positive exactly once, so exactly one ADDED per
-    #     pair and no REMOVED (design section 5).
-    outbox_rows = [
-        {
-            'store_id': store_id,
-            'subject_node_id': node_id[a],
-            'object_node_id': node_id[b],
-            'action': 'ADDED',
-            'subject_type': a[1],
-            'subject_name': a[2],
-            'subject_predicate': a[0],
-            'object_type': b[1],
-            'object_name': b[2],
-            'object_predicate': b[0],
-        }
-        for (a, b) in edge_pairs
-    ]
-    if outbox_rows:
-        session.execute(insert(DeltaOutboxV1), outbox_rows)
+    # (3) outbox: one ADDED row per final pair, chunked (N18), endpoint identities
+    #     denormalized from the node keys (== what ``_emit`` captures from the live node
+    #     rows). An add-only load flips each closure pair 0->positive exactly once, so
+    #     exactly one ADDED per pair and no REMOVED (design section 5). Same ``edge_pairs``
+    #     order as the edge INSERTs; the outbox order is provably inert regardless.
+    for start in range(0, len(edge_pairs), _WRITE_CHUNK):
+        chunk = [
+            {
+                'store_id': store_id,
+                'subject_node_id': node_id[a],
+                'object_node_id': node_id[b],
+                'action': 'ADDED',
+                'subject_type': a[1],
+                'subject_name': a[2],
+                'subject_predicate': a[0],
+                'object_type': b[1],
+                'object_name': b[2],
+                'object_predicate': b[0],
+            }
+            for (a, b) in edge_pairs[start:start + _WRITE_CHUNK]
+        ]
+        session.execute(insert(DeltaOutboxV1), chunk)

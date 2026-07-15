@@ -313,3 +313,24 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   stores. No Lean definition becomes dead code (the incremental processor runs
   for every online write; `backfill()` remains the repair path and the
   reference side); nothing to widen.
+
+* **N18 — stream the bulk builder's Phase-W writes + Phase-R snapshot read
+  (`index_v4/bulk_build.py`, 2026-07-16).** A pure RAM-ceiling optimization on
+  the same alternative constructor P13/R4-BF introduced; **no rows, no state, and
+  no modeled algorithm change**. The Phase-P DP itself is untouched (a 2026-07-16
+  tracemalloc probe showed the DP holds only ~210 MB at 201.6k tuples — 91% of its
+  vectors are simultaneously live, so it is not the hog and is left exactly as
+  modeled). What changed is *how the already-computed rows reach the DB*: (a) Phase
+  W builds + executes + frees the edge / residue / outbox row dicts in bounded
+  `_WRITE_CHUNK`-row chunks (slices of the sorted `edge_pairs` / `residues.items()`)
+  instead of materializing three full per-row-dict lists, so peak RSS is bounded by
+  a chunk, not the whole closure — the chunks run in the identical order, so
+  per-table auto-increment ids are assigned exactly as the old single INSERT; (b)
+  Phase R streams the snapshot with `yield_per`, selecting only the six routed
+  columns (no ORM `TupleV1` entities enter the identity map) in the same
+  `order_by(TupleV1.id)` order; (c) the flushed `NodeV4` instances are expunged
+  after `node_id` capture (the caller re-reads via fresh queries). The written
+  nodes/edges/residues/outbox multiset is byte-identical — pinned by the same
+  differential identity gate (`tests/test_bulk_build.py`, six corpora) that pins
+  P13/R4-BF. As with those, no modeled definition describes DB round-trips or
+  buffering (`DirectGraph` is a pure `V → V → Nat`), so nothing becomes dead code.

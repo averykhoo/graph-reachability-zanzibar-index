@@ -123,6 +123,35 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Applied
 
+- ✅ **N18 — stream the bulk builder's Phase-W writes + Phase-R snapshot read
+  (`index_v4/bulk_build.py`), 2026-07-16, RAM ceiling, behavior-preserving
+  (byte-identical rows in identical order).** RESHAPED from the original
+  "chunk/stream the DP" plan by a 2026-07-16 tracemalloc probe: the Phase-P DP
+  (`pvec`) holds only ~210 MB at gdrive/201.6k (closure linear: 100,548 /
+  402,948 / 1,209,348 pairs at 16.8k / 67.2k / 201.6k tuples; 91% of vectors
+  simultaneously live, so a release-when-consumed schedule reclaims ~9%) —
+  phases R/B/C/P left logically untouched. The actual hogs were SQLAlchemy row
+  staging: Phase W's `edge_rows` + `outbox_rows` per-row-dict lists (~3× the DP,
+  ~700 MB at 200k) fed to single giant `session.execute(insert(...), rows)`
+  calls; the Phase-R `.all()` snapshot holding ~200k ORM `TupleV1` objects for
+  the whole build; and ~165k flushed `NodeV4` instances parked in the identity
+  map. Now: Phase W builds + executes + frees edge/residue/outbox row dicts in
+  bounded 50k-row chunks (slices of the sorted `edge_pairs` / `residues.items()`
+  — same rows, same order, auto-increment ids assigned exactly as before);
+  Phase R streams via `.execution_options(yield_per=10_000)` selecting only the
+  six routed columns (no ORM entities); the `NodeV4` objects are expunged after
+  the flush + `node_id` capture (the caller re-reads via fresh queries).
+  **gdrive graph 201.6k tuples (`n18_followup_2026-07-16.jsonl`, M2 §6 Phase-B
+  flags, ~2.87 GB free at start): peak RSS 3,512 → 1,117 MB (−68%, 3.14×);
+  build 390.5 → 314.2 s under the cap (cross-session wall not comparable — the
+  M2 baseline ran under heavier pressure; peak RSS is the headline, and the
+  build no longer swaps). 67.2k sanity: peak 405 MB (round-3 curve: 925 MB
+  @50.4k / 1,788 MB @100.8k). `answers_sig` byte-identical to the M2 follow-up
+  gdrive value at both scales.** Gated: `tests/test_bulk_build.py` (6, the
+  build-vs-incremental identity gate) + connectedstore suite + `test_matrix.py`
+  (60 green). **Lean: none** (alternative constructor of the same modeled
+  state, same rows — `CORRESPONDENCE.md §8.1` N18 entry).
+
 - ✅ **N10 — defer flow-graph construction off read-triggered `rebuild()`
   (`setengine/engine.py`), 2026-07-16, lazy first-touch build, behavior-preserving.**
   `rebuild()` (and the constructor's replay) replayed every `TupleV1` row through
