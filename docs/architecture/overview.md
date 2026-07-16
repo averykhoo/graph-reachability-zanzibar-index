@@ -14,6 +14,8 @@ reference oracle and a validation matrix. Start here; go deeper per file:
 | [`verification.md`](./verification.md) | oracle contract, validation matrix, ParityEngine, paranoia/invariants, hypothesis campaign |
 | [`../../formal/ARCHITECTURE.md`](../../formal/ARCHITECTURE.md) | the **Lean formal layer**: a machine-checked proof that both backend algorithms compute `sem` (hence are equivalent), pinned to Python by a conformance harness. The exact claim is [`../../formal/FINAL_REVIEW.md`](../../formal/FINAL_REVIEW.md) |
 | [`decision-log.md`](./decision-log.md) | load-bearing decisions + rejected alternatives, compressed from the specs |
+| [`p13-bulk-build-design.md`](./p13-bulk-build-design.md) | the P13/N18 bulk closure builder for `build_index` (offline bootstrap fast path) |
+| [`r4bf-bulk-backfill-design.md`](./r4bf-bulk-backfill-design.md) | the R4-BF in-memory Phase-D boolean backfill used by the bulk builder |
 | [`../spec-deviations.md`](../spec-deviations.md) | dated implementation record: where the builds diverged from the specs and why |
 | [`../specs/`](../specs/) | the full original design specs (see "Citations" below) |
 
@@ -43,6 +45,9 @@ index_v4/
   outbox.py              DeltaOutboxV1 helpers: watermark / rows / drain_deltas
   invariants.py          I1-I12 checker, paranoia mode, delta-scoped verifier
   models.py              StoreV4 / NodeV4 / EdgeV4(.derived) / ResidueV1 / DeltaOutboxV1
+  bulk_build.py          P13/N18 bulk closure builder for build_index (offline
+                         bootstrap fast path): direct in-memory closure construction
+  bulk_backfill.py       R4-BF in-memory Phase-D boolean backfill used by bulk_build
 setengine/
   engine.py              SetEngine: interner (ref-counted, recycled int32 ids),
                          NodeSets, check/expand/lookup, rebuild() from TupleV1
@@ -99,7 +104,8 @@ from the boolean spec are recorded in `docs/spec-deviations.md`.
 
 ## Running things
 
-Conda env named after the repo folder. Full suite is the gate (~470 tests):
+Conda env named after the repo folder. Full suite is the gate (~794 tests: `tests/`
+531 + `formal/conformance/` 263):
 
 ```
 "C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe" -m pytest -q

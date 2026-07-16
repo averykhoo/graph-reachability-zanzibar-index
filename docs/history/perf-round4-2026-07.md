@@ -60,7 +60,7 @@ In-memory Phase D mirror of `DeltaProcessor.backfill()` on the bulk build path
 `connectedstore/build.py`'s bulk branch skips `proc.backfill()`). Boolean
 *total* build ~201× on demorgans / ~60× on boolean_wildcards; `backfill()`
 itself unchanged (repair path + `bulk=False` reference side). Design:
-[`docs/r4bf-bulk-backfill-design.md`](../r4bf-bulk-backfill-design.md); numbers +
+[`docs/architecture/r4bf-bulk-backfill-design.md`](../architecture/r4bf-bulk-backfill-design.md); numbers +
 correctness story in [`benchmarks/results/PERF_ANALYSIS.md`](../../benchmarks/results/PERF_ANALYSIS.md)
 "Applied"; Lean disposition (alternative constructor of the same modeled state)
 in [`formal/CORRESPONDENCE.md §8.1`](../../formal/CORRESPONDENCE.md).

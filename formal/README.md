@@ -24,7 +24,7 @@ The effort is **complete**. The four durable docs point:
 
 For provenance — the append-only session ledger, the staged-widening designs, and the
 early digest — see [`history/`](./history/README.md) (`PROOF_STATUS.md`, `ROADMAP.md`,
-`REVIEW.md`). The original full plan is `../docs/formal-verification-plan.md`.
+`REVIEW.md`). The original full plan is `history/formal-verification-plan.md`.
 
 ## Layout
 

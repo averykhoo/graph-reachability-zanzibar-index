@@ -1,5 +1,5 @@
 """R4-BF -- the in-memory boolean backfill for the bulk builder (design:
-docs/r4bf-bulk-backfill-design.md).
+docs/architecture/r4bf-bulk-backfill-design.md).
 
 P13 (``bulk_build``) constructs the pre-backfill closure directly; on a boolean
 schema the total build was then dominated by the per-object SQL-backed

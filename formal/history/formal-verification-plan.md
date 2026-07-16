@@ -1,3 +1,4 @@
+<!-- RETIRED 2026-07-16: this is the ORIGINAL pre-build formal-verification plan (written 2026-07-09). The formal effort is now complete (sorry-free, axiom-clean); this file is archived here as a historical planning record. The living formal docs are formal/README.md, formal/HANDOFF.md, formal/CORRESPONDENCE.md. -->
 # Formal Verification Plan — Set Engine, Graph Index, and Their Equivalence
 
 **Status:** written 2026-07-09, before the build; the strategy/honesty contract of
@@ -471,7 +472,7 @@ formal/
     extractor.py            -- Python graph-state dump for C2
     small_scope.py          -- C3 enumerators
     test_conformance_spec.py test_conformance_state.py
-docs/formal-verification-plan.md   -- this file
+formal/history/formal-verification-plan.md   -- this file
 ```
 
 ---

@@ -4344,7 +4344,7 @@ theorem to match.
 
 ## Decisions & variations log
 
-Variations from the plan (`docs/formal-verification-plan.md`) or from the repo's
+Variations from the plan (`formal/history/formal-verification-plan.md`) or from the repo's
 own specs, with rationale. (The user asked that variations be documented.)
 
 - **2026-07-09 — Phase 0 delivered as SEMANTICS.md + PROOF_STATUS.md + README.md**

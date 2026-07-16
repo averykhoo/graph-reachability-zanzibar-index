@@ -31,7 +31,10 @@ IVM delta processor.
   cascade over the outbox), `outbox.py` (transactional `DeltaOutboxV1` stream +
   watermark/drain helpers — write paths return None, deltas are rows), `invariants.py`
   (I1–I12 checker, paranoia mode wiring, §8.3 delta-scoped verifier), `models.py`
-  (adds `EdgeV4.derived`, `ResidueV1` symbolic `(stars, neg)` state).
+  (adds `EdgeV4.derived`, `ResidueV1` symbolic `(stars, neg)` state). **Offline bulk
+  bootstrap for `build_index`**: `bulk_build.py` (P13/N18 bulk closure builder —
+  direct in-memory closure construction) with `bulk_backfill.py` (R4-BF in-memory
+  boolean Phase-D backfill).
 - **`setengine/`** — the set engine. Stores only raw tuples (`TupleV1`), builds no
   closure, computes memberships on the fly with bitmap algebra, and **supports `and` /
   `but not`**.

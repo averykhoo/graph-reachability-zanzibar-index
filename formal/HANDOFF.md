@@ -12,7 +12,7 @@ to work on "The next task" below.** Pull in other docs only on demand:
 | `history/PROOF_STATUS.md` | append-only session ledger (newest first) | the TOP entry only, for fine detail on a resume point |
 | `history/ROADMAP.md` | per-stage designs + historical plans | the section for a stage's provenance |
 | `history/REVIEW.md` | historical one-shot session digest (2026-07-09→10) | never (history) |
-| `docs/formal-verification-plan.md` | original strategy/phases/honesty clauses | rarely; §7 for claim wording |
+| `formal/history/formal-verification-plan.md` | original strategy/phases/honesty clauses | rarely; §7 for claim wording |
 
 **End goal:** a machine-checked proof that the set engine and graph index both compute
 the stratified-Datalog¬ perfect model `sem` — hence are equivalent — with the Python

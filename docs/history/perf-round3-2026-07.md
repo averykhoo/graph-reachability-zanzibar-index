@@ -474,7 +474,7 @@ attack build/apply throughput, in ROI order. Note the asymmetry: steady-state
 is O(ancestors×descendants) per write — the memoization you're buying); the
 big recoverable waste is in **bulk construction** and per-batch SQL overhead.
 
-### P13. Bulk closure builder for `build_index` — ✅ LANDED 2026-07-15; **43.9–48.6× on pure-union builds, 33.6× on the isolated boolean load phase** (boolean *total* build 1.44× — the unchanged shared `backfill()` dominates it; that's the next bulk-phase candidate). Identity gate green over 4 corpora incl. multigraph fan-in (m≥2); design: `docs/p13-bulk-build-design.md`
+### P13. Bulk closure builder for `build_index` — ✅ LANDED 2026-07-15; **43.9–48.6× on pure-union builds, 33.6× on the isolated boolean load phase** (boolean *total* build 1.44× — the unchanged shared `backfill()` dominates it; that's the next bulk-phase candidate). Identity gate green over 4 corpora incl. multigraph fan-in (m≥2); design: `docs/architecture/p13-bulk-build-design.md`
 - **Where:** `connectedstore/build.py` (currently replays per tuple through
   `ruleset.apply` → `widx.add_tuple`, paying the full incremental closure
   update + admission-grade SQL per triple); `index_v4` gains a bulk

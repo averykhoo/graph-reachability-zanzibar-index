@@ -95,6 +95,24 @@ Everything before (watermark/schema/fresh-store guards) and after
      provably inert per §5 above; the identity gate compares content as a
      multiset.)
 
+## Post-landing updates (round 4)
+
+The 2026-07-15 design text above is preserved verbatim; two mechanism changes
+landed afterward. Both are answer-inert — the built state is IDENTICAL; only the
+construction mechanism differs.
+
+- **Phase D (R4-BF, boolean schemas):** for boolean schemas the builder now
+  computes the derived state (derived edges, residues, from-chain nodes plus
+  their closure/outbox/refcount effects) IN MEMORY in a new Phase D between P and
+  W, and NO LONGER runs `DeltaProcessor.backfill()` afterward for boolean. Only
+  non-boolean schemas still have the "everything after Phase W is unchanged"
+  property stated in the Bulk algorithm intro. See the sibling
+  `docs/architecture/r4bf-bulk-backfill-design.md` and `index_v4/bulk_backfill.py`.
+- **N18 streaming Phase W:** Phase W now STREAMS its writes in batches (generate +
+  execute + free row dicts in chunks) rather than holding all rows in memory and
+  doing one monolithic flush / bulk-INSERT, for a RAM ceiling. Same
+  state/content.
+
 ## The identity gate (the crux — lands WITH the builder, in the same commit)
 
 New test `tests/test_bulk_build.py`: for a corpus of schemas spanning every
@@ -130,7 +148,7 @@ the default apply step; only `build_index`'s loop is replaced).
 Identity gate (new) + split full suite + phased `verify.sh` (`lean` →
 `conf-heavy` → `conf-rest`) per `docs/gate-runbook.md` + build-throughput
 before/after measurement (time `build_index` bulk vs incremental at ≥2 scales,
-recorded in `PERF_ANALYSIS.md`). The builder is add-only by construction
+recorded in `benchmarks/results/PERF_ANALYSIS.md`). The builder is add-only by construction
 (fresh-store guard already refuses non-empty targets), so the remove-path fuzz
 surface is untouched; the hypothesis cascade/stateful nets still run in the
 suite.

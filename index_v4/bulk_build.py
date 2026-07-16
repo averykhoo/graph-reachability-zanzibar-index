@@ -1,4 +1,4 @@
-"""P13 -- the bulk closure builder for ``build_index`` (design: docs/p13-bulk-build-design.md).
+"""P13 -- the bulk closure builder for ``build_index`` (design: docs/architecture/p13-bulk-build-design.md).
 
 Constructs the graph index's final pre-backfill state DIRECTLY -- one in-memory pass
 over the tuple snapshot plus bulk writes -- instead of replaying every routed triple

@@ -389,7 +389,7 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   (nodes/edges/residues/outbox), plus I1–I13 invariant checker green and an
   oracle read-parity grid on the bulk stores. Lean: unchanged (alternative
   constructor of the same modeled state; logged in `CORRESPONDENCE.md §8.1`).
-  Design doc: `docs/p13-bulk-build-design.md`.
+  Design doc: `docs/architecture/p13-bulk-build-design.md`.
 
 - ✅ **R4-BF — bulk boolean backfill for `build_index`
   (`index_v4/bulk_backfill.py`, `index_v4/bulk_build.py`,
@@ -431,7 +431,7 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   `DeltaProcessor.backfill()` itself is unchanged (repair path + `bulk=False`
   reference side). Lean: unchanged (alternative constructor of the same modeled
   state; logged in `CORRESPONDENCE.md §8.1`). Design doc:
-  `docs/r4bf-bulk-backfill-design.md`.
+  `docs/architecture/r4bf-bulk-backfill-design.md`.
 
 - ✅ **Wave 2 (round 3) — N6 + N7 + N9 + P1-follow-up, 2026-07-15.** Two parallel
   subagent tracks; integration gate green (531 passed split cap-safe 507+24 +

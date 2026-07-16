@@ -1,5 +1,5 @@
 """P13 identity gate: the bulk closure builder produces state BYTE-IDENTICAL to the
-incremental per-tuple load (``docs/p13-bulk-build-design.md``).
+incremental per-tuple load (``docs/architecture/p13-bulk-build-design.md``).
 
 For each corpus schema (spanning union / computed chains / TTU / subject-wildcard /
 object-wildcard bridged in AND out / userset restrictions / boolean and-but-not), a
@@ -163,7 +163,7 @@ def _fanin_grid() -> list[tuple]:
             for i in range(1, 5)]
 
 
-# R4-BF gate extension (design docs/r4bf-bulk-backfill-design.md §5). The boolean/
+# R4-BF gate extension (design docs/architecture/r4bf-bulk-backfill-design.md §5). The boolean/
 # demorgan corpora already drive the in-memory backfill; these reach the state-shaping
 # features the four originals do not:
 #

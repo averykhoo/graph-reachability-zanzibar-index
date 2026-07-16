@@ -1,6 +1,6 @@
 # R4-BF — bulk boolean `backfill()` for `build_index` (design, 2026-07-15)
 
-Goal: apply the P13 pattern one layer out. P13 (`docs/p13-bulk-build-design.md`,
+Goal: apply the P13 pattern one layer out. P13 (`docs/architecture/p13-bulk-build-design.md`,
 `index_v4/bulk_build.py`) bulk-builds the **pre-backfill** closure state; on boolean
 schemas the total build is then dominated by the unchanged per-object
 `DeltaProcessor.backfill()` (P13 boolean total = 1.44× vs 33.6× on the isolated load

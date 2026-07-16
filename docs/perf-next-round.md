@@ -1,14 +1,22 @@
-# Perf optimization — open worklist (slim, opened 2026-07-16 after round 4)
+# Perf — standing notes & guardrails (worklist currently empty; arc closed at round 5)
 
-The living list of **remaining, not-yet-landed** performance opportunities.
+The living home for perf work. **The active worklist is currently empty.** The
+measured optimization arc ran rounds 1–5 and **round 5 concluded the worklist is
+exhausted** for everything the current harnesses can measure — the last two
+candidates (N13, N14) were assessed and declined on a fresh 2026-07-16 profile.
+What remains here is the **durable guidance** any future round must read first:
+the fence, the confirmed dead-ends, an open correctness note, and the
+measurement/gate hygiene.
 
-- Round 3 (P12-M, P12a/b, N4–N9, the P1 follow-up, P13) landed and pushed; its
-  full worklist + execution record is retired verbatim in
-  [`docs/history/perf-round3-2026-07.md`](history/perf-round3-2026-07.md).
+- Round 3 (P12-M, P12a/b, N4–N9, the P1 follow-up, P13) landed and pushed; retired
+  verbatim in [`docs/history/perf-round3-2026-07.md`](history/perf-round3-2026-07.md).
 - Round 4 (R4-BF, N15, N16, M2 + follow-up, N17, N10, N18, the index_v4 grab-bag
-  micros, N12; N11 design-skipped) landed and pushed; its execution record is
-  retired verbatim in
+  micros, N12; N11 design-skipped) landed and pushed; retired verbatim in
   [`docs/history/perf-round4-2026-07.md`](history/perf-round4-2026-07.md).
+- Round 5 (2026-07-16) landed **nothing** — it assessed the two remaining
+  candidates (N13, N14) and declined both on a fresh profile; the assessment
+  record (with both candidate write-ups verbatim) is retired in
+  [`docs/history/perf-round5-2026-07.md`](history/perf-round5-2026-07.md).
 
 - **Measured numbers** (all landed items, per-item mechanism/before-after):
   [`benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
@@ -22,38 +30,17 @@ The living list of **remaining, not-yet-landed** performance opportunities.
   behavior-preserving micro-opt needs no Lean change (differential matrix +
   hypothesis + conformance are the net). An optimization that *changes the modeled
   algorithm* must update the corresponding Lean def and re-run `formal/verify.sh`
-  (phased), or log the gap in `formal/CORRESPONDENCE.md §7`. Each item's Lean line
-  below states which side it sits on.
+  (phased), or log the gap in `formal/CORRESPONDENCE.md §7`.
 
-Everything here is **conditional**: it needs a motivating measurement (from
-`benchmarks/stmt_bench.py` / `scale_bench` / a fresh profile) or a design call before
-it's worth landing. Nothing below is expected to need Lean work unless its line says
-so. **Never edit a golden/oracle/snapshot result to make an opt pass. Never run two
-heavy jobs (bench or pytest) concurrently** (CPU contention corrupts bench numbers).
+## Reopening a round
 
----
-
-## Wave 3 — conditional items (need measurement or a design call first)
-
-### N13. Graph `check`: batch node resolution (3–5 sequential point SELECTs → ~2) — DEPRIORITIZED
-`index_v4/wildcard.py:331-388,:428-462`. check IS round-trip-bound (388–682/s
-flat), so this is real — but **`stmt_bench` measured graph `check` at 2.7–3.1
-stmts/op already (little headroom)**, so it's deprioritized: resolution
-restructuring must preserve exact probe semantics (position rule,
-missing-node-drops-key, `:349,:363-374`), and it's fiddly, for a small win.
-Revisit only if a fresh statements-per-check profile shows more headroom;
-medium risk. Behavior-preserving if done right. Gate: matrix 4-way + lookup
-oracle + conformance.
-
-### N14. Hoist `_keys_referencing` to one residue scan per `_map_deltas_to_keys` call
-`index_v4/processor.py:316-332`, called per GC'd subject at `:836-839`. M
-subject GCs = M full ResidueV1 scans + JSON decodes; hoist to one snapshot
-scan building `subject_id → [Key]`. **Scope to the step-A loop only** (the
-reconcile-step-5 calls mutate residues mid-flight). Only bites TTU/userset
-schemas N3 doesn't already elide, on churn-heavy removes. Medium risk —
-modeled delta→key territory (same class as P6): behavior-preserving only if
-the key set is provably identical; full differential + hypothesis + paranoia
-gate. Niche; needs a workload that shows it first.
+Any new item is **conditional**: it needs a motivating measurement (from
+`benchmarks/stmt_bench.py` / `scale_bench` / a fresh profile) or a design call
+before it's worth landing. **Never edit a golden/oracle/snapshot result to make
+an opt pass. Never run two heavy jobs (bench or pytest) concurrently** (CPU
+contention corrupts bench numbers). Round 5's two declines are the current
+evidence that the measurable surfaces are tapped out — re-derive a fresh profile
+before reopening either.
 
 ---
 
@@ -72,7 +59,8 @@ gate. Niche; needs a workload that shows it first.
 - Dead ends already confirmed, do NOT chase: rc pre-guard on `_gc_subject_node`
   (bridge-stripping drops rc post-scan — load-bearing scan); removing
   `ops.new()` in `_starpop` without the `update` primitive (Population
-  contract); N1/N2 (measured cold); P11 (struck).
+  contract); N1/N2 (measured cold); P11 (struck); N13 (no headroom, round 5);
+  N14 (no workload exercises it, round 5).
 
 ---
 
@@ -98,8 +86,8 @@ composition-write round-trips that would change the modeled algorithm; leave the
   incrementally undone without an undo journal, and *that* is a new algorithm
   on the evaluator-freshness watermark contract. Cold path anyway (ordinary
   rejections take the cheap branch, `store.py:100-106`). Cost documented;
-  not changing. (N10 archived above deferred *write-only auxiliary* state off the
-  rebuild — a different, narrower thing.)
+  not changing. (N10 deferred *write-only auxiliary* state off the rebuild —
+  a different, narrower thing.)
 
 ---
 
@@ -112,12 +100,11 @@ composition-write round-trips that would change the modeled algorithm; leave the
   per-track targeted gates (the P0 lesson; the paranoia checker only runs in
   the full index_v4 suite). Cap-safe recipe: [`docs/gate-runbook.md`](gate-runbook.md).
 - **Algorithm changes fuzz before push** (gate-runbook §3) — any item whose
-  Lean line says it touches modeled territory (N14 pending; R4-BF landed
-  2026-07-15 with its multi-seed sweep) ends with the multi-seed fuzz sweep.
+  Lean line says it touches modeled territory ends with the multi-seed fuzz sweep.
 - **Measurement hygiene:** never two bench/pytest processes at once. New
   statement-count results go in `STMT_BASELINE_2026-07-14.md` +
   `PERF_ANALYSIS.md` "Applied" entries; never overwrite `scale_bench.jsonl`.
-- Model policy (the loop that landed rounds 1–3): Fable orchestrates and
+- Model policy (the loop that landed rounds 1–4): Fable orchestrates and
   reviews (trust contracts, wave gates, any Lean touch); Opus subagents
   implement below-the-model items. Scope drift toward a modeled algorithm
   stops the track and escalates.
