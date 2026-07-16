@@ -38,6 +38,29 @@ _None in flight._ The repo is in a clean, fully-gated state awaiting the next
 direction. **When you start a task, add it here** (with owner/date if useful) and
 move it to the history/changelog trail when done.
 
+### Deferred / backlog (documented feature work, deliberately not yet done)
+
+Migrated from the `README.md` "TODO" list (its struck-through items already
+shipped) + the formal deferred-modeling notes. None are urgent; none block.
+
+- [ ] **Symmetric subject-keyed residues → lift the two remaining scope
+      rejections.** Object wildcards on derived relations, and wildcard usersets
+      over derived relations, currently raise `UnsupportedByGraphIndex` (loud
+      compile-error hooks). Both need symbolic composition through residues; the
+      documented hook is a symmetric subject-keyed residue. This is the meatiest
+      real feature gap. **Also the one item not yet modeled in Lean** (wildcard
+      usersets over derived relations — a deferred, low-priority modeling TODO;
+      see `formal/FINAL_REVIEW.md` §4 last item / `formal/ARCHITECTURE.md`). Refs:
+      `README.md` "TODO"; scope-hook notes in `docs/spec-deviations.md`.
+- [ ] **Track user-triples vs rule-triples in the index** — partial today:
+      boolean relations already distinguish storage leaves from routed leaves, but
+      pure-union relations still mix user-added and rule-derived triples. (The dead
+      `legacy/index_v3.py` `user_edge_count` musing was the v3 gesture at this.)
+- [ ] **Someday / conditional (explicitly optional):** a real service wrapper
+      (deliberately skipped — the store is a plain callable API); tuple-log
+      compaction (only if the log ever outgrows "humans wrote this" scale). Listed
+      for completeness; not planned.
+
 ### Standing / latent (non-blocking — no action needed unless a motivating case appears)
 
 - [ ] **Set-engine flow graph omits bridge edges** (correctness parity, latent).

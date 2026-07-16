@@ -50,8 +50,6 @@ class Edge(SQLModel, table=True):
     direct_edge_count: int = Field(default=0)  # how many tuples were inserted
     indirect_edge_count: int = Field(default=0)
 
-    # TODO: some kind of `user_edge_count` to differentiate user-added triples
-
     # the `foreign_keys` bit looks sus but it works
     # note: it must be called within a db session at least once to use it later
     subject: Node = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[Edge.subject_id]'))
@@ -135,9 +133,6 @@ def _add_direct_edge_unsafe(subject_id: int,
                             object_id: int,
                             count: int,
                             ):
-    # TODO: support adding/removing multiple edges at once? and use the multiset to collate the changes
-    # this is not compatible with node removal though, since that operation is inherently ordered
-    # probably take in a dict like {(subject_id, object_id): count}
     # read all we need, and cache in a local multiset so it's still correct
     # then collate changes in multi-sets for direct and indirect edge counts (and user edge counts)
     # and only at the end, make all the changes in one transaction
@@ -225,7 +220,7 @@ def node(predicate: str | EllipsisType,
          entity_type: str,
          entity_name: str,
          *,
-         create_if_missing: bool,  # TODO: decide whether to default to True or False
+         create_if_missing: bool,
          implicit: bool | None = None,
          ):
     if predicate is Ellipsis:
@@ -322,7 +317,6 @@ def check_reachable(subject_predicate: str | EllipsisType,
                     object_type: str,
                     object_name: str,
                     ):
-    # TODO: does not yet handle subject:* relations
     try:
         _subject = node(subject_predicate, subject_type, subject_name, create_if_missing=False)
         _object = node(relation, object_type, object_name, create_if_missing=False)
@@ -342,8 +336,6 @@ def check_reachable(subject_predicate: str | EllipsisType,
 
 
 def lookup_reachable(subject_id: int):
-    # TODO: need some sort of sql table join to select object type
-    # TODO: return nodes or something more useful instead of node ids
     with Session(engine) as session:
         triples = session.exec(select(Edge)
                                .where(Edge.subject_id == subject_id)
@@ -359,8 +351,6 @@ def lookup_reachable(subject_id: int):
 
 
 def lookup_reverse(object_id: int):
-    # TODO: need some sort of sql table join to select subject type
-    # TODO: return nodes or something more useful instead of node ids
     with Session(engine) as session:
         triples = session.exec(select(Edge)
                                .where(Edge.object_id == object_id)

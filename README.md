@@ -562,6 +562,9 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
 
+> Live/open tracking now lives in [`HANDOFF.md`](HANDOFF.md); the list below is the
+> record of what shipped (struck = done) plus a few deliberately-deferred items.
+
 * ~~re-introduce invariant checks for the index v3, and think of more checks~~
   v4 has I1–I12 + paranoia mode now (`index_v4/invariants.py`); v3 is `legacy/`
 * ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
