@@ -586,5 +586,8 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
   would just call it on a timer
 * symmetric subject-keyed residues, to lift the two remaining scope rejections
   (object wildcards on derived relations; wildcard usersets over derived relations)
+  — low priority: the OpenFGA DSL doesn't support these either (it rejects `<type>:*`
+  in a tuple's object field and rejects wildcard usersets), so it's a deliberate
+  boundary, not a gap
 * a real service wrapper (deliberately skipped: the store is a plain callable API)
 * log compaction, if the tuple log ever outgrows "humans wrote this"
