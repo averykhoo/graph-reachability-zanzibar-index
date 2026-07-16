@@ -938,13 +938,11 @@ were never wrong — these are set-engine-only surface/admission bugs.
    `test_reg9_same_type_star_parent_accept_reject_parity` (both backends reject
    same-type, both accept cross-type).
 
-   **Known residual (documented, not fixed):** the flow graph still omits bridge
-   edges, so a MULTI-HOP cycle through a star bridge (a rule edge chain re-entering
-   a concrete of the same subject-wildcard shape) would still diverge
-   (set-accepts / graph-rejects). Constructing one requires a rule edge OUT of a
-   star userset AND a rule edge chain back INTO a concrete of its shape — no
-   current corpus/pool can build it (the 6-seed sweep is green). A full mirror
-   means bridge-aware flow edges; filed in `docs/perf-next-round.md` minor notes.
+   **Known residual — NOW FIXED (2026-07-16, see the dated entry at the end of this
+   file).** The multi-hop version turned out to be *constructible* after all (the
+   "no current corpus" claim was true only of the existing fuzz pool, not of
+   reachability): a 3-relation schema + 2 writes builds it. The flow graph is now
+   bridge-aware and rejects it, restoring accept/reject parity.
 
 **Formal scope:** unaffected. Forward `lookup` is unmodeled (CORRESPONDENCE §8.1
 N17 entry); set-engine write admission is unmodeled (`GraphAdmission` mirrors the
@@ -952,5 +950,47 @@ GRAPH's admission, unchanged); conformance corpora contain no star tupleset
 parents, and all three verify.sh phases re-ran green.
 
 ---
+
+## 2026-07-16 — bridge-aware set-engine admission (the "Known residual" §3 above, FIXED)
+
+**What.** The multi-hop star-bridge accept/reject divergence documented as the
+"Known residual" in §3 (set engine accepts a bridge-mediated cycle the graph
+rejects) was believed unbuildable ("no current corpus/pool can build it"). It is
+**buildable** — a minimal red repro (pinned as
+`tests/test_lookup_oracle.py::test_reg10_multihop_star_bridge_cycle_accept_reject_parity`):
+
+```
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define admin:  [user, folder:*#admin, folder#viewer]
+    define viewer: [user] or admin from parent
+```
+writes `folder:* parent folder:c` then `folder:c#viewer admin folder:y`. The graph
+rejects the 2nd (cycle `(folder,c,viewer) → (folder,y,admin) →[in-bridge] w_any(folder,admin)
+→[rule] (folder,c,viewer)`); the set engine's flow graph carried the two rule edges
+but not the materialized in-bridge, so it accepted. `ParityEngine` fires.
+
+**Fix (set engine only — `setengine/engine.py`).** The write-time cycle check
+(`_flow_reaches` / `_would_cycle`) is now **bridge-aware**, mirroring
+`index_v4/wildcard.py` `_ensure_bridges`: concrete `(T,x,p)` → `w_any(T,p)` for
+`bridged_in_shapes`, and `w_all(T,p)` → concrete for `bridged_out_shapes`, with
+`w_any`/`w_all` kept **distinct** (flow-graph star nodes are position-tagged 4-tuples
+`(T,'*',p,'any'|'all')`) so an in-bridge and an out-bridge on the same shape can't fuse
+into a spurious path. Bridges are computed virtually during traversal (no new state, no
+DB reads); an OUT-bridge shape→concrete index is maintained only when the schema
+declares object wildcards. Both `SetOps` now reject the repro, matching the graph.
+
+**Fix direction rationale.** The graph's exact path-counting closure fundamentally
+requires an acyclic routed graph; its admission is the authoritative acyclicity gate,
+and Lean's `GraphAdmission` models *it*. The set engine must mirror that gate (reject),
+not the other way round — so **no Lean change** (set-engine write admission is unmodeled;
+the graph/Lean side already rejected). Verified: full `pytest tests/` (544+24), all three
+`verify.sh` phases (lean + conf 68+195), and a 6-seed hypothesis fuzz sweep — all green.
+
+**Residual (hardening follow-up, not a divergence).** The fuzzer's schema generator
+still can't *build* this shape class (that's why the bug hid); `test_reg10` pins the
+instance. Teaching the generator to emit star-tupleset-parent + self-referential-userset
+shapes would fuzz the class — filed in `HANDOFF.md` backlog.
 
 *(subsequent phases append below)*

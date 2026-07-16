@@ -1097,3 +1097,50 @@ def test_reg9_same_type_star_parent_accept_reject_parity(load_fga_schema):
     finally:
         for b in backends:
             b.close()
+
+
+REG10_SCHEMA = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define admin: [user, folder:*#admin, folder#viewer]
+    define viewer: [user] or admin from parent
+"""
+
+
+def test_reg10_multihop_star_bridge_cycle_accept_reject_parity():
+    """(10) MULTI-HOP generalization of reg9: a cycle that closes only through a
+    materialized subject-wildcard IN-bridge. W1 (`folder:* parent folder:c`) mints the
+    derived edge `w_any(folder,admin) -> folder:c#viewer` (via the TTU rewrite); W2
+    (`folder:c#viewer admin folder:y`) adds `folder:c#viewer -> folder:y#admin`. The
+    shape (folder, admin) is a subject-wildcard USERSET shape, so the concrete
+    `folder:y#admin` carries an IN-bridge to `w_any(folder,admin)`, closing
+    `folder:c#viewer -> folder:y#admin ->[in-bridge] w_any(folder,admin) ->
+    folder:c#viewer`. The graph REJECTS W2 as a cycle; the set engine's flow graph is
+    now bridge-aware (mirrors index_v4/wildcard.py `_ensure_bridges`) so it rejects it
+    too. Pins accept/reject parity (no ParityEngine): both backends reject W2 after W1,
+    and an acyclic control (W1 present, a DIFFERENT viewer subject that never returns to
+    the loop) is accepted by both."""
+    from tests.test_matrix import GraphBackend, SetBackend
+    W1 = ('...', 'folder', '*', 'parent', 'folder', 'c')       # folder:*  parent  folder:c
+    W2 = ('viewer', 'folder', 'c', 'admin', 'folder', 'y')     # folder:c#viewer admin folder:y (cycle)
+    # Acyclic control: same W1, but the admin grant is FROM a different viewer subject
+    # (folder:d#viewer). Its IN-bridge still reaches w_any(folder,admin) -> folder:c#viewer,
+    # but folder:c#viewer never returns to folder:d#viewer, so no loop closes.
+    CTRL = ('viewer', 'folder', 'd', 'admin', 'folder', 'y')   # folder:d#viewer admin folder:y (acyclic)
+
+    for W2_case, expect, label in ((W2, False, 'cycle'), (CTRL, True, 'acyclic control')):
+        backends = [GraphBackend(REG10_SCHEMA)] + [
+            SetBackend(REG10_SCHEMA, frozenset(), ops) for ops in ALL_SETOPS]
+        try:
+            for b in backends:
+                assert b.apply(W1, 'add') is True, (
+                    f'{b.name} rejected the star parent W1 ({label} case)')
+                assert b.apply(W2_case, 'add') is expect, (
+                    f'{b.name} disagreed on the {label} admin grant '
+                    f'(expected {"accept" if expect else "reject"})')
+        finally:
+            for b in backends:
+                b.close()

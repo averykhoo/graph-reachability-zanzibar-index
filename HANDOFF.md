@@ -21,6 +21,13 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 - **Everything is complete and green.** Both evaluation backends (set engine +
   graph index), the composition layer, and the Lean formal layer all pass their
   gates. Lean is sorry-free and axiom-clean (412/412). No known correctness bug.
+- **2026-07-16 — found + fixed a real set-engine/graph admission divergence.** The
+  previously-latent "bridge-edge residual" turned out to be constructible (a
+  multi-hop cycle through a star bridge: set-accepted / graph-rejected). Fixed by
+  making the set engine's flow-graph cycle check bridge-aware, mirroring the graph's
+  `_ensure_bridges` (in-bridges concrete→`w_any`, out-bridges `w_all`→concrete, kept
+  distinct). Parity restored; pinned by `test_reg10...`; no Lean change (set-engine
+  admission is unmodeled). See `docs/spec-deviations.md`.
 - **Perf optimization arc is CLOSED at round 5** — the measured worklist is
   exhausted (the last candidates N13/N14 were assessed and declined on a fresh
   profile). Record: [`docs/history/perf-round5-2026-07.md`](docs/history/perf-round5-2026-07.md).
@@ -46,6 +53,12 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
       boolean relations already distinguish storage leaves from routed leaves, but
       pure-union relations still mix user-added and rule-derived triples. (The dead
       `legacy/index_v3.py` `user_edge_count` musing was the v3 gesture at this.)
+- [ ] **Extend the hypothesis schema generator to emit star-bridge cycle shapes.**
+      The multi-hop bridge-edge divergence (found + fixed 2026-07-16) was invisible to
+      the fuzzer: its generator can't build a star-tupleset parent + a userset
+      restriction routing back into that shape. `test_reg10...` pins the specific
+      instance; teaching the generator to emit this shape class would fuzz the whole
+      class, closing the blind spot that let the bug hide. Good hardening follow-up.
 
 ### Someday / out of scope (low priority — revisit only on a concrete need)
 
@@ -67,16 +80,9 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
 
 ### Standing / latent (non-blocking — no action needed unless a motivating case appears)
 
-- [ ] **Set-engine flow graph omits bridge edges** (correctness parity, latent).
-      A multi-hop cycle through a star bridge (a rule edge out of a star userset +
-      a rule chain back into a concrete of the same subject-wildcard shape) would
-      be **set-accepted but graph-rejected**. Fix would add bridge-aware
-      `_flow_reaches` edges (in-bridges concrete→star per subject-wildcard shape,
-      out-bridges star→concrete per owc shape). **No known corpus can build the
-      shape today**, so it is filed, not fixed. Refs:
-      [`docs/perf-next-round.md`](docs/perf-next-round.md) minor notes;
-      [`docs/spec-deviations.md`](docs/spec-deviations.md) (2026-07-15 §3 residual /
-      "Known residual").
+- [x] ~~**Set-engine flow graph omits bridge edges**~~ — RESOLVED 2026-07-16 (was a
+      real, constructible divergence, not merely latent). Fixed; see the Current
+      status note above and `docs/spec-deviations.md`.
 - [ ] **Other documented latent/theoretical notes** — a handful of
       "documented, no corpus exercises it, not urgent" corners (e.g. a from-chain
       TARGET theoretical note; tupleset-of-derived latent gap). The full inventory

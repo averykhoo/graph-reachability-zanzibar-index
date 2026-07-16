@@ -46,13 +46,11 @@ before reopening either.
 
 ## Minor notes (grab-bag, land opportunistically with adjacent work)
 
-- **Set-engine flow graph lacks bridge edges** (from the N17 parity find,
-  `docs/spec-deviations.md` 2026-07-15 §3 residual): a MULTI-HOP cycle through a
-  star bridge (rule edge out of a star userset + a rule chain back into a
-  concrete of its shape) would still be set-accepted / graph-rejected. Needs
-  bridge-aware `_flow_reaches` edges (in-bridges concrete→star per
-  subject-wildcard shape, out-bridges star→concrete per owc shape). Correctness
-  parity, not perf; no known corpus can build the shape today.
+- ~~**Set-engine flow graph lacks bridge edges**~~ — RESOLVED 2026-07-16. The
+  multi-hop star-bridge cycle proved constructible (not merely latent) and the
+  flow graph is now bridge-aware; both backends reject it. See
+  `docs/spec-deviations.md` (2026-07-16 entry) and `HANDOFF.md`. Correctness
+  parity, was never a perf item.
 - `invariants.py:322-368` paranoia delta verifier is O(pairs × edges) per
   commit — production-paranoia cost, out of scope for bench numbers; noted so
   nobody profiles paranoia-on and panics.

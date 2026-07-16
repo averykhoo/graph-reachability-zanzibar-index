@@ -286,6 +286,12 @@ class SetEngine:
             acc.add(r0)
             acc.update(self._object_deps.get((T, r0), ()))
         self._owc_bridge_reach = {t: tuple(sorted(rs)) for t, rs in _reach_acc.items()}
+        # Bridge-aware flow graph (see _flow_reaches): the shape->concrete index that
+        # feeds w_all OUT-bridges is only needed when the schema declares object
+        # wildcards (bridged_out_shapes). The common case (subject wildcards only, or
+        # none) skips that bookkeeping entirely; IN-bridges need no index (they are a
+        # single concrete->w_any hop computed from node identity).
+        self._maintain_shape_index = bool(self.schema_info.bridged_out_shapes)
         self.rebuild()
 
     # ------------------------------------------------------------------ #
@@ -308,6 +314,14 @@ class SetEngine:
         self._flow_adj: dict[NodeKey, set[NodeKey]] = {}
         self._edge_count: dict[tuple[NodeKey, NodeKey], int] = {}
         self._flow_built: bool = False
+        # Bridge-aware flow graph: concrete-shape index for w_all OUT-bridges only.
+        # ``_shape_nodes[(type, pred)]`` = set of concrete flow-keys of that shape
+        # present as a flow-graph node; ``_flow_node_refs`` reference-counts each
+        # concrete key by the number of distinct directed edges touching it (so it is
+        # added on the first incident edge and dropped on the last). Populated only
+        # when ``_maintain_shape_index`` (object wildcards declared).
+        self._shape_nodes: dict[tuple[str, str], set[NodeKey]] = {}
+        self._flow_node_refs: dict[NodeKey, int] = {}
 
     def rebuild(self) -> None:
         """Replay the TupleV1 table into fresh in-memory state (spec §3, §6.5)."""
@@ -464,7 +478,7 @@ class SetEngine:
                 pairs = self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name)
             for u, v in pairs:
                 if u != v:
-                    self._flow_add_edge(u, v)
+                    self._flow_add_edge(*self._flow_pair(u, v))
 
     def _apply_remove(self, s_pred, s_type, s_name, relation, o_type, o_name) -> None:
         subject_id = self.interner.get(s_type, s_name, s_pred)
@@ -489,7 +503,7 @@ class SetEngine:
         if self._flow_built:
             for u, v in self._derived_pairs(s_pred, s_type, s_name, relation, o_type, o_name):
                 if u != v:
-                    self._flow_remove_edge(u, v)
+                    self._flow_remove_edge(*self._flow_pair(u, v))
         # Release the reverse-dependency candidate references (mirrors _apply_add).
         for dep in self._object_deps.get((o_type, relation), ()):
             did = self.interner.get(o_type, o_name, dep)
@@ -556,7 +570,55 @@ class SetEngine:
                 for u, v in self._derived_pairs(s_pred, s_type, s_name, relation,
                                                 o_type, o_name):
                     if u != v:
-                        self._flow_add_edge(u, v)
+                        self._flow_add_edge(*self._flow_pair(u, v))
+
+    # -- star-position tagging (mirrors index_v4/wildcard.py's distinct w_any/w_all) --
+    #
+    # The graph materializes a wildcard shape as TWO distinct nodes that both key as
+    # (type, '*', pred): ``w_any`` (subject-position star -- concrete IN-bridges point
+    # INTO it) and ``w_all`` (object-position star -- OUT-bridges point OUT of it). The
+    # flow graph must keep them distinct so an IN-bridge and an OUT-bridge on the same
+    # shape do not fuse into a spurious w_any->w_all path. In a derived pair the FROM
+    # endpoint is always subject-position and the TO endpoint object-position, so a
+    # star subject -> w_any and a star object -> w_all. Concretes stay 3-tuples; star
+    # flow-keys are 4-tuples ``(type, '*', pred, 'any'|'all')``.
+
+    @staticmethod
+    def _fk_subject(node: NodeKey) -> NodeKey:
+        t, n, p = node
+        return (t, '*', p, 'any') if n == '*' else node
+
+    @staticmethod
+    def _fk_object(node: NodeKey) -> NodeKey:
+        t, n, p = node
+        return (t, '*', p, 'all') if n == '*' else node
+
+    def _flow_pair(self, u: NodeKey, v: NodeKey) -> tuple[NodeKey, NodeKey]:
+        """Map a raw derived (subject, object) node pair to its position-tagged flow
+        keys. Used at every site that feeds the flow graph (stored edges AND the
+        tentative edges ``_would_cycle`` hands ``_flow_reaches``) so tagging is uniform."""
+        return (self._fk_subject(u), self._fk_object(v))
+
+    def _shape_node_ref(self, key: NodeKey, delta: int) -> None:
+        """Reference-count a concrete flow node in the shape->concrete index (OUT-bridge
+        support only). Star keys (4-tuples) are ignored -- only concretes are OUT-bridge
+        targets. Added on the first incident edge, dropped on the last."""
+        if len(key) != 3:
+            return
+        r = self._flow_node_refs.get(key, 0) + delta
+        if r <= 0:
+            self._flow_node_refs.pop(key, None)
+            t, _n, p = key
+            s = self._shape_nodes.get((t, p))
+            if s is not None:
+                s.discard(key)
+                if not s:
+                    self._shape_nodes.pop((t, p), None)
+        else:
+            self._flow_node_refs[key] = r
+            if r == 1:
+                t, _n, p = key
+                self._shape_nodes.setdefault((t, p), set()).add(key)
 
     def _flow_add_edge(self, u: NodeKey, v: NodeKey) -> None:
         self._ensure_flow_graph()
@@ -564,6 +626,9 @@ class SetEngine:
         self._edge_count[(u, v)] = c + 1
         if c == 0:
             self._flow_adj.setdefault(u, set()).add(v)
+            if self._maintain_shape_index:
+                self._shape_node_ref(u, +1)
+                self._shape_node_ref(v, +1)
 
     def _flow_remove_edge(self, u: NodeKey, v: NodeKey) -> None:
         self._ensure_flow_graph()
@@ -573,12 +638,34 @@ class SetEngine:
             succ = self._flow_adj.get(u)
             if succ is not None:
                 succ.discard(v)
+            if self._maintain_shape_index:
+                self._shape_node_ref(u, -1)
+                self._shape_node_ref(v, -1)
         else:
             self._edge_count[(u, v)] = c - 1
 
     def _flow_reaches(self, src: NodeKey, dst: NodeKey, extra: list[tuple[NodeKey, NodeKey]]) -> bool:
-        """Is dst reachable from src in the flow graph plus `extra` (tentative) edges?"""
+        """Is dst reachable from src in the flow graph plus `extra` (tentative) edges?
+
+        BRIDGE-AWARE: the graph index materializes wildcard bridge edges the stored
+        flow graph omits (index_v4/wildcard.py ``_ensure_bridges``), and a cycle can
+        close only through one. We add those bridges VIRTUALLY at each visited node,
+        computed from node identity + shape -- never enumerated or stored -- so the
+        traversal sees exactly the graph's reachability:
+
+          * concrete ``(T, x, p)`` with ``(T, p)`` in ``bridged_in_shapes`` -> a step to
+            ``w_any(T, p)`` (the concrete->w_any IN-bridge);
+          * ``w_all(T, p)`` with ``(T, p)`` in ``bridged_out_shapes`` -> a step to every
+            concrete ``(T, x, p)`` present as a flow node (``_shape_nodes``) or as an
+            ``extra`` endpoint (the w_all->concrete OUT-bridge);
+          * ``w_any`` contributes only its stored rule-edge successors (IN-bridges point
+            INTO w_any, never out).
+
+        These fire for every visited node, tentative-edge endpoints included, so the new
+        write's own concrete endpoints get their IN-bridge automatically."""
         self._ensure_flow_graph()
+        bridged_in = self.schema_info.bridged_in_shapes
+        bridged_out = self.schema_info.bridged_out_shapes
         seen: set[NodeKey] = set()
         stack = [src]
         while stack:
@@ -590,6 +677,21 @@ class SetEngine:
             seen.add(node)
             stack.extend(self._flow_adj.get(node, ()))
             stack.extend(v for (a, v) in extra if a == node)
+            if len(node) == 3:
+                # concrete (T, x, p), x != '*' (stars are 4-tuples): IN-bridge to w_any
+                t, _x, p = node
+                if (t, p) in bridged_in:
+                    stack.append((t, '*', p, 'any'))
+            elif node[3] == 'all' and (node[0], node[2]) in bridged_out:
+                # w_all(T, p): OUT-bridge to every concrete (T, x, p) sibling present as
+                # a flow node or as a tentative-edge endpoint.
+                t, _s, p, _v = node
+                for ck in self._shape_nodes.get((t, p), ()):
+                    stack.append(ck)
+                for (a, b) in extra:
+                    for ck in (a, b):
+                        if len(ck) == 3 and ck[0] == t and ck[2] == p:
+                            stack.append(ck)
         return False
 
     # ------------------------------------------------------------------ #
@@ -639,13 +741,14 @@ class SetEngine:
         # whose object participates in the wildcard's own (subject-wildcard) shape.
         # The graph rejects that write by construction: bridge-before-grant gives the
         # object node an in-bridge to the star userset node, and the grant edge closes
-        # the two-cycle (wildcard.py's reworded cycle error). The raw-level check
-        # above cannot see it (the raw subject is bare), and the flow graph cannot
-        # either (it carries only RuleSet-derived edges, never the materialized
-        # bridges), so mirror it over every derived pair. The through-shape guard is
-        # documentation-exactness: a routed star userset's shape is always declared
-        # (`_expand_object_wildcard_shapes` / the D3 through-shape derivation), so it
-        # never blocks a pair the graph would accept.
+        # the two-cycle (wildcard.py's reworded cycle error). This one-hop guard stays
+        # for documentation-exactness and cheapness; it is now largely SUBSUMED by the
+        # bridge-aware reachability below (the star object v tags to w_all/w_any, the
+        # concrete side takes its IN-bridge), but the raw-level guard above still cannot
+        # see it (the raw subject is bare) and this catches it without a traversal. The
+        # through-shape guard keeps it from over-rejecting: a routed star userset's shape
+        # is always declared (`_expand_object_wildcard_shapes` / the D3 through-shape
+        # derivation), so it never blocks a pair the graph would accept.
         for (ut, un, up), (vt, _vn, vr) in pairs:
             if (un == '*' and up != '...' and (ut, up) == (vt, vr)
                     and (ut, up) in self.schema_info.subject_wildcard_shapes):
@@ -657,10 +760,14 @@ class SetEngine:
         if any(u == v for u, v in pairs):
             return True
 
-        # Would adding any DERIVED edge u->v close a loop? (v already reaches u.) This
-        # reproduces the graph backend's reachability cycle check exactly, so both accept
-        # and reject the same op sequences -- including from-chain cycles.
-        edges = [(u, v) for u, v in pairs if u != v]
+        # Would adding any DERIVED edge u->v close a loop? (v already reaches u.) The
+        # flow graph is now BRIDGE-AWARE (``_flow_reaches`` mirrors index_v4/wildcard.py
+        # ``_ensure_bridges``: concrete->w_any IN-bridges and w_all->concrete OUT-bridges,
+        # with w_any/w_all kept distinct), so a cycle that closes only through a
+        # materialized wildcard bridge -- invisible to a bare RuleSet-edge walk -- is now
+        # caught here. The tentative edges must carry the SAME star-position tagging as
+        # the stored graph, so tag them via ``_flow_pair`` before feeding ``_flow_reaches``.
+        edges = [self._flow_pair(u, v) for u, v in pairs if u != v]
         for u, v in edges:
             if self._flow_reaches(v, u, edges):
                 return True
