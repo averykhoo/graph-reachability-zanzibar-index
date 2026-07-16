@@ -1144,3 +1144,60 @@ def test_reg10_multihop_star_bridge_cycle_accept_reject_parity():
         finally:
             for b in backends:
                 b.close()
+
+
+# The object-wildcard / OUT-bridge analog of reg10. Where reg10 closes a cycle through
+# a subject-wildcard IN-bridge (concrete -> w_any), this closes one through an
+# object-wildcard OUT-bridge (w_all -> concrete). Object wildcards have no DSL syntax, so
+# the shape is enabled via ``object_wildcard_shapes``: ``(folder, parent)`` lets a tuple's
+# OBJECT be ``folder:*`` and ``(folder, viewer)`` gives ``w_all(folder, viewer)`` its
+# out-bridges to concrete viewer nodes.
+REG11_OWC_SHAPES = frozenset({('folder', 'viewer'), ('folder', 'parent')})
+REG11_SCHEMA = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define viewer: [user] or viewer from parent
+"""
+
+
+def test_reg11_out_bridge_object_wildcard_self_cycle_accept_reject_parity():
+    """(11) The OUT-bridge mirror of reg10 (object-wildcard analog). Writing
+    ``folder:a parent folder:*`` routes via the ``viewer from parent`` TTU to the derived
+    edge ``folder:a#viewer -> folder:*#viewer``; the star object ``folder:*#viewer`` is an
+    OBJECT-wildcard shape, so it carries a materialized OUT-bridge
+    ``w_all(folder,viewer) -> folder:a#viewer``, closing the two-cycle
+    ``folder:a#viewer -> w_all(folder,viewer) ->[out-bridge] folder:a#viewer``. The graph
+    REJECTS it; the set engine's flow graph is now OUT-bridge-aware (``_flow_reaches``
+    steps ``w_all(T,p) -> concrete`` for ``bridged_out_shapes``) so it rejects it too --
+    without that branch the set engine ACCEPTS while the graph rejects (verified: blinding
+    ``bridged_out_shapes`` to empty flips this write to accepted). Pins accept/reject
+    parity on the out-bridge branch (reg10 exercises only the in-bridge branch), plus an
+    acyclic control (a concrete parent ``folder:a parent folder:b`` -- no star object, no
+    bridge) accepted by both.
+
+    Note: only this SINGLE-hop out-bridge self-cycle is realizable; the multi-hop
+    generalization of reg10 is unreachable in this direction. Any derived edge INTO
+    ``w_all(T,p)`` is minted by a ``T:x <tupleset> T:*`` write whose own subject is a
+    same-shape concrete ``T:x#p``, which the out-bridge immediately reaches back -- so such
+    a write always self-cycles at admission and can never persist for a later write to
+    build a longer loop on (verified: writing ``folder:b parent folder:a`` first, then
+    ``folder:a parent folder:*`` is still rejected on the second write, by both backends)."""
+    from tests.test_matrix import GraphBackend, SetBackend
+    W_OUT = ('...', 'folder', 'a', 'parent', 'folder', '*')   # object star -> out-bridge self-cycle
+    CTRL = ('...', 'folder', 'a', 'parent', 'folder', 'b')    # concrete parent -> acyclic
+
+    for W_case, expect, label in ((W_OUT, False, 'out-bridge cycle'),
+                                  (CTRL, True, 'acyclic control')):
+        backends = [GraphBackend(REG11_SCHEMA, REG11_OWC_SHAPES)] + [
+            SetBackend(REG11_SCHEMA, REG11_OWC_SHAPES, ops) for ops in ALL_SETOPS]
+        try:
+            for b in backends:
+                assert b.apply(W_case, 'add') is expect, (
+                    f'{b.name} disagreed on the {label} parent write '
+                    f'(expected {"accept" if expect else "reject"})')
+        finally:
+            for b in backends:
+                b.close()

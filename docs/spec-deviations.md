@@ -994,3 +994,52 @@ instance. Teaching the generator to emit star-tupleset-parent + self-referential
 shapes would fuzz the class — filed in `HANDOFF.md` backlog.
 
 *(subsequent phases append below)*
+
+## 2026-07-16 — star-bridge fuzzer generator + out-bridge regression (reg11); two new latent OWC divergences filed
+
+**What (hardening, the follow-up above, DONE).** Closed the fuzzer blind spot that let the
+reg10 bug hide. Two additions:
+- `tests/test_lookup_oracle.py::test_reg11_out_bridge_object_wildcard_self_cycle_accept_reject_parity`
+  — the **object-wildcard / OUT-bridge analog of reg10**. Where reg10 closes a cycle through
+  a subject-wildcard IN-bridge (concrete→`w_any`), reg11 closes one through an object-wildcard
+  OUT-bridge (`w_all`→concrete): `folder:a parent folder:*` (with `(folder,parent)` and
+  `(folder,viewer)` object-wildcard shapes) routes via the `viewer from parent` TTU to
+  `folder:a#viewer → folder:*#viewer`, and the `w_all(folder,viewer) → folder:a#viewer`
+  out-bridge closes the two-cycle. Both backends reject; blinding `bridged_out_shapes` to
+  empty flips the set engine to *accept* (the pre-fix divergence), so reg11 gives real
+  coverage to the OUT-bridge branch of the fix (reg10 exercises only the IN-bridge branch).
+  **Only this single-hop out-bridge self-cycle is realizable**: any derived edge into
+  `w_all(T,p)` is minted by a `T:x <tupleset> T:*` write whose own subject is a same-shape
+  concrete `T:x#p`, which the out-bridge immediately reaches back — so such a write always
+  self-cycles at admission and can never persist for a later write to build a longer loop on.
+  The multi-hop generalization of reg10 is therefore **unreachable** in the out-bridge
+  direction (verified: `folder:b parent folder:a` then `folder:a parent folder:*` is still
+  rejected on the second write, both backends).
+- `tests/test_hypothesis.py` — a dedicated **star-bridge schema generator** (`star_bridge_configs`
+  + `_star_bridge_pool`) emitting the `parent:[T,T:*]` / `A:[user,T:*#A,T#B]` /
+  `B:[user] or A from parent` class the stock `schema_asts` cannot build, plus a deterministic
+  pin and a `StarBridgeParityMachine` (order-dependent admission fuzzing through a 4-way
+  ParityEngine). Authoring check: blinding the set engine's bridge awareness makes both fire
+  the reg10 accept/reject disagreement, confirming the class is now actually fuzzed.
+
+**Two NEW latent divergences surfaced by the generator (NOT chased — out of scope; filed).**
+Both require an **object wildcard on the relation that also carries the `T:*#A`
+wildcard-userset restriction** (i.e. `(T, A) ∈ object_wildcard_shapes`) — a pathological
+config where the `T:*` star node plays both the object-wildcard and the subject-userset role.
+This is an orthogonal axis to the star-bridge *cycle* class, so the generator draws OWC only
+over `{(T,'parent'), (T, B)}` and these stay unexercised by the committed fuzzer. Minimal repros:
+- **F1 (graph incomplete — check divergence).** Schema `viewer:[user,folder:*#viewer,folder#admin]`,
+  `admin:[user] or viewer from parent`; OWC `{(folder,parent),(folder,viewer)}`; writes
+  `folder:* parent folder:*` then `folder:x#admin viewer folder:*`. Then
+  `check(folder:x#admin, admin, folder:x)` = **graph `False`, set + oracle `True`** — the graph
+  misses a membership routed through the double-wildcard (`folder:* parent folder:*`) parent.
+- **F2 (graph over-permissive — accept/reject divergence).** Schema
+  `admin:[user,folder:*#admin,folder#viewer]`; OWC `{(folder,admin)}`; write
+  `folder:*#admin admin folder:*` = **graph accepts, set rejects** (the reg9 same-shape
+  wildcard self-reference, but with the wildcard *object* — the graph's cycle check doesn't
+  catch it when the object is itself `T:*`). Set (rejecting) matches the reg9 semantics.
+
+These are genuinely exotic OWC-on-self-referential-userset-relation corners (OpenFGA does not
+support wildcard usersets at all), consistent with the "latent/theoretical, no corpus forces
+it" class — **do not chase speculatively**; filed in the HANDOFF backlog for triage. F1 is a
+graph *completeness* gap (graph vs oracle), so if either is ever prioritized, F1 first.

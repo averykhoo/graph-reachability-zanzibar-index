@@ -28,6 +28,14 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
   `_ensure_bridges` (in-bridges concrete→`w_any`, out-bridges `w_all`→concrete, kept
   distinct). Parity restored; pinned by `test_reg10...`; no Lean change (set-engine
   admission is unmodeled). See `docs/spec-deviations.md`.
+- **2026-07-16 — hardened the fuzzer against the whole star-bridge class.** Added a
+  dedicated star-bridge schema generator + `StarBridgeParityMachine` to
+  `tests/test_hypothesis.py`, a deterministic class pin, and `test_reg11...` (the
+  object-wildcard / OUT-bridge analog of reg10). Closed the blind spot that let the
+  reg10 bug hide. The new generator also surfaced **two exotic OWC-on-self-referential-
+  relation divergences (F1 graph-incomplete, F2 graph-over-permissive)** — filed as
+  latent/out-of-scope (backlog + `docs/spec-deviations.md`), NOT chased. Test-only
+  change; no backend/Lean change.
 - **Perf optimization arc is CLOSED at round 5** — the measured worklist is
   exhausted (the last candidates N13/N14 were assessed and declined on a fresh
   profile). Record: [`docs/history/perf-round5-2026-07.md`](docs/history/perf-round5-2026-07.md).
@@ -53,12 +61,15 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
       boolean relations already distinguish storage leaves from routed leaves, but
       pure-union relations still mix user-added and rule-derived triples. (The dead
       `legacy/index_v3.py` `user_edge_count` musing was the v3 gesture at this.)
-- [ ] **Extend the hypothesis schema generator to emit star-bridge cycle shapes.**
-      The multi-hop bridge-edge divergence (found + fixed 2026-07-16) was invisible to
-      the fuzzer: its generator can't build a star-tupleset parent + a userset
-      restriction routing back into that shape. `test_reg10...` pins the specific
-      instance; teaching the generator to emit this shape class would fuzz the whole
-      class, closing the blind spot that let the bug hide. Good hardening follow-up.
+- [x] ~~**Extend the hypothesis schema generator to emit star-bridge cycle shapes.**~~
+      DONE 2026-07-16. Added a dedicated star-bridge generator + `StarBridgeParityMachine`
+      to `tests/test_hypothesis.py` (emits `parent:[T,T:*]` / `A:[user,T:*#A,T#B]` /
+      `B:[user] or A from parent`), a deterministic class pin, and the OUT-bridge analog
+      of reg10 (`test_reg11...` in `tests/test_lookup_oracle.py`) — the object-wildcard
+      mirror; verified only the single-hop out-bridge self-cycle is realizable (the
+      multi-hop generalization is unreachable). See the dated `docs/spec-deviations.md`
+      entry. The generator ALSO surfaced two new latent OWC divergences — see the
+      Standing/latent section below.
 
 ### Someday / out of scope (low priority — revisit only on a concrete need)
 
@@ -83,6 +94,16 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
 - [x] ~~**Set-engine flow graph omits bridge edges**~~ — RESOLVED 2026-07-16 (was a
       real, constructible divergence, not merely latent). Fixed; see the Current
       status note above and `docs/spec-deviations.md`.
+- [ ] **Two OWC-on-self-referential-relation divergences (F1/F2, found 2026-07-16 by the
+      new star-bridge fuzzer).** Both need an object wildcard on the relation that also
+      carries a `T:*#A` wildcard-userset restriction (`(T,A) ∈ object_wildcard_shapes`).
+      **F1** (graph *incomplete*): `check` returns graph `False` where set + oracle say
+      `True`, routed through a double-wildcard `T:* parent T:*` parent. **F2** (graph
+      *over-permissive*): `T:*#A A T:*` accepted by graph, rejected by set (the reg9
+      same-shape self-reference with a wildcard object). Minimal repros + rationale in the
+      dated `docs/spec-deviations.md` entry. Exotic (OpenFGA has no wildcard usersets);
+      do NOT chase speculatively — but **F1 is a completeness gap**, so triage it first if
+      either is ever prioritized.
 - [ ] **Other documented latent/theoretical notes** — a handful of
       "documented, no corpus exercises it, not urgent" corners (e.g. a from-chain
       TARGET theoretical note; tupleset-of-derived latent gap). The full inventory

@@ -410,3 +410,158 @@ class ParityMachine(RuleBasedStateMachine):
 
 
 TestParityMachine = ParityMachine.TestCase
+
+
+# ---------------------------------------------------------------------------
+# Star-bridge shape class (regressions reg9/reg10/reg11; deviations 2026-07-16).
+#
+# The multi-hop star-bridge accept/reject divergence (set engine accepted a
+# bridge-mediated cycle the graph rejects) hid from the fuzzer because the stock
+# ``schema_asts`` generator CANNOT build the shape: it emits only user-typed Direct
+# leaves over a single ``doc`` type -- no same-type star tupleset parent and no
+# wildcard-userset-over-shape. This dedicated generator emits the whole class --
+#     define parent: [T, T:*]                 # star tupleset parent (in/out bridge feeder)
+#     define A: [user, T:*#A, T#B]            # self-referential wildcard userset over A
+#     define B: [user] or A from parent       # a TTU routing back into the shape
+# -- and fuzzes the write-time cycle-admission surface where the bug lived, driven
+# through a ParityEngine whose per-op accept/reject-parity assertion (parity.py) is
+# exactly what fires on a bridge divergence. Verified during authoring: blinding the
+# set engine's bridge awareness (``_flow_reaches`` -> no bridges) makes both the
+# deterministic pin and this machine reproduce the reg10 disagreement.
+#
+# The candidate pool is schema-VALID by construction (subjects match a declared type
+# restriction) -- like every other corpus here. This is deliberate: the graph backend
+# admits a restriction-invalid tuple as a silent no-op (empty rewrite fan-out) while the
+# set engine strictly rejects it, a long-standing by-design admission asymmetry the
+# corpora avoid; feeding invalid tuples would trip accept/reject parity on that unrelated
+# axis rather than on the bridge shape under test.
+# ---------------------------------------------------------------------------
+
+_SB_TYPES = ['folder', 'doc']
+_SB_RELS = ['admin', 'viewer', 'editor', 'owner']
+_SB_OBJS = ['x', 'y']
+_SB_USERS = ['u1']
+
+
+def _star_bridge_schema(T: str, A: str, B: str) -> str:
+    return (f'type user\n'
+            f'type {T}\n'
+            f'  relations\n'
+            f'    define parent: [{T}, {T}:*]\n'
+            f'    define {A}: [user, {T}:*#{A}, {T}#{B}]\n'
+            f'    define {B}: [user] or {A} from parent\n')
+
+
+def _star_bridge_pool(T, A, B, owc):
+    """Schema-VALID raw tuples for the star-bridge schema (subject matches a declared
+    restriction). Covers the reg9/reg10/reg11 admission instances:
+      * ``T:* parent T:x``         -- subject-star parent (reg9/reg10 in-bridge feeder)
+      * ``T:x parent T:*``         -- object-star parent (reg11 out-bridge feeder), valid
+                                      only when (T,'parent') is an object-wildcard shape
+      * ``T:x#B  A  T:y``          -- the userset grant that closes the reg10 cycle
+      * ``T:*#A  A  T:y``          -- the self-referential wildcard userset (reg9 family)
+    plus direct user grants and, per declared object-wildcard shape, the T:* object
+    variants (extra out-bridge coverage)."""
+    out = set()
+
+    def objects_for(rel):
+        objs = [(T, o) for o in _SB_OBJS]
+        if (T, rel) in owc:
+            objs.append((T, '*'))
+        return objs
+
+    for (ot, on) in objects_for('parent'):          # parent: [T, T:*]
+        for x in _SB_OBJS:
+            out.add(('...', T, x, 'parent', ot, on))
+        out.add(('...', T, '*', 'parent', ot, on))
+    for (ot, on) in objects_for(A):                  # A: [user, T:*#A, T#B]
+        for u in _SB_USERS:
+            out.add(('...', 'user', u, A, ot, on))
+        out.add((A, T, '*', A, ot, on))              # T:*#A  (self-ref wildcard userset)
+        for x in _SB_OBJS:
+            out.add((B, T, x, A, ot, on))            # T:x#B  (routes via the TTU)
+    for (ot, on) in objects_for(B):                  # B: [user] (the "A from parent" arm is a rule)
+        for u in _SB_USERS:
+            out.add(('...', 'user', u, B, ot, on))
+    return sorted(out)
+
+
+@st.composite
+def star_bridge_configs(draw):
+    """A star-bridge schema (T, distinct A/B) + a drawn object-wildcard-shape subset +
+    the matching valid-tuple pool. Every config keeps the graph 4-way (asserted in the
+    machine's setup), so a graph/set admission divergence is actually compared."""
+    T = draw(st.sampled_from(_SB_TYPES))
+    A = draw(st.sampled_from(_SB_RELS))
+    B = draw(st.sampled_from([r for r in _SB_RELS if r != A]))
+    # Object-wildcard shapes are drawn only over ``parent`` (out-bridge feeder, reg11) and
+    # ``B`` (the TTU target -- its w_all node gets the out-bridge). Deliberately NOT over
+    # ``A``: an object wildcard on the relation that ALSO carries the ``T:*#A``
+    # wildcard-userset restriction opens an orthogonal axis (the star node plays BOTH the
+    # object-wildcard and the subject-userset role) with its own pre-existing graph
+    # divergences, unrelated to the bridge-cycle class under test -- see the 2026-07-16
+    # star-bridge-fuzzer entry in docs/spec-deviations.md (F1/F2) and the HANDOFF backlog.
+    owc = frozenset(draw(st.sets(
+        st.sampled_from([(T, 'parent'), (T, B)]), max_size=2)))
+    return _star_bridge_schema(T, A, B), owc, _star_bridge_pool(T, A, B, owc)
+
+
+def test_star_bridge_class_deterministic_pin():
+    """Deterministic guard that the star-bridge class stays closed regardless of
+    hypothesis sampling: apply the whole valid pool for the canonical reg10 config
+    (folder/admin/viewer, all three object-wildcard shapes) through a ParityEngine.
+    The pool contains the reg9/reg10/reg11 instances; ParityEngine asserts accept/reject
+    + full-grid parity on every op, and the sequence includes real bridge REJECTIONS (so
+    the bridge branch is exercised, not merely bypassed). Authoring check: blinding the
+    set engine's bridge awareness makes this fire the reg10 accept/reject disagreement."""
+    T, A, B = 'folder', 'admin', 'viewer'
+    owc = frozenset({(T, 'parent'), (T, B)})   # in-bridge (parent star) + out-bridge (B's w_all)
+    pool = _star_bridge_pool(T, A, B, owc)
+    pe = ParityEngine(_star_bridge_schema(T, A, B), object_wildcard_shapes=owc, grid_cap=150)
+    assert pe.graph is not None, 'star-bridge schema must stay 4-way (graph must join)'
+    try:
+        decisions = [pe.add_tuple(*t) for t in pool]
+    finally:
+        pe.close()
+    assert any(decisions) and not all(decisions), (
+        'expected the pool to exercise BOTH accepts and bridge-cycle rejections; '
+        f'got {sum(decisions)}/{len(decisions)} accepted')
+
+
+class StarBridgeParityMachine(RuleBasedStateMachine):
+    """Weighted add/remove/check ops over a GENERATED star-bridge schema, driven through
+    a ParityEngine (4-way: graph + both set engines + oracle). Every accepted op runs
+    unanimity + I12 + full-grid oracle parity + paranoia inside the engine; the point
+    here is the ADMISSION sequence -- order-dependent bridge cycles (reg10 is W1-then-W2)
+    only surface when writes interleave, which the stock ParityMachine can't build."""
+
+    @initialize(cfg=star_bridge_configs())
+    def setup(self, cfg):
+        schema, owc, pool = cfg
+        self.pool = pool
+        self.pe = ParityEngine(schema, object_wildcard_shapes=owc, grid_cap=150)
+        # 4-way is the invariant that makes this catch graph/set divergences; if a future
+        # change drops the graph on this shape, fail loudly rather than fuzz 3-way blind.
+        assert self.pe.graph is not None, 'star-bridge schema unexpectedly dropped the graph'
+        self.live: list = []
+
+    @rule(data=st.data())
+    def add(self, data):
+        raw = data.draw(st.sampled_from(self.pool))
+        if self.pe.add_tuple(*raw):
+            self.live.append(raw)
+
+    @rule(data=st.data())
+    def remove(self, data):
+        if not self.live:
+            return
+        raw = data.draw(st.sampled_from(sorted(set(self.live))))
+        if self.pe.remove_tuple(*raw):
+            self.live.remove(raw)
+
+    def teardown(self):
+        if hasattr(self, 'pe'):
+            self.pe.close()
+
+
+TestStarBridgeParityMachine = StarBridgeParityMachine.TestCase
