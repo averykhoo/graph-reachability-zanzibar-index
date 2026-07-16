@@ -2,7 +2,11 @@
 
 Zanzibar-style relationship/permission indexing: **two evaluation backends with
 identical semantics and opposite cost models**, pinned together by an independent
-reference oracle and a validation matrix. Start here; go deeper per file:
+reference oracle and a validation matrix.
+
+> For current project status and the open-TODO board, see the root
+> [`HANDOFF.md`](../../HANDOFF.md) (the session entry point). This file is the
+> architecture index — start here for the code, go deeper per file:
 
 | doc | covers |
 |---|---|

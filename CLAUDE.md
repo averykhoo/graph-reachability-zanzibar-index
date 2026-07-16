@@ -6,6 +6,17 @@ independent reference oracle. Both backends support boolean operators (`and` / `
 the set engine natively, the graph index via derived predicates maintained by a stratified
 IVM delta processor.
 
+## Start here (every session)
+- **Read [`HANDOFF.md`](HANDOFF.md) first** — the mutable session state: current
+  status + the open-TODO board. This file (`CLAUDE.md`) is the durable contract;
+  `HANDOFF.md` is what changes session-to-session. Keep its TODO board current as
+  you pick up / finish work.
+- **Always run the gate before pushing.** Never push red or unverified: `pytest
+  tests/` green + the phased `verify.sh` (`lean` → `conf-heavy` → `conf-rest`) all
+  `PASSED` (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in
+  [`docs/gate-runbook.md`](docs/gate-runbook.md); details under "Running things"
+  below. Commit and push **only when asked**.
+
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
   Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`
