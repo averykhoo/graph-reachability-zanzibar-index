@@ -739,22 +739,21 @@ theorem reconcileJobsD_nodes_mono {S : Schema} {T : Store} :
 
 /-- **One diffing pass preserves the shadow** (the shadow state untouched): pass
     edges are `DerNode`-targeted, removals never hit shadow edges (a rules state has
-    no in-edge at a `RootBoolean` derived R-node), sources stay off the `DerNode`s
+    no in-edge at a derived R-node), sources stay off the `DerNode`s
     (bare candidates vs non-bare derived relations). Per-job form — every MID-BATCH
     state of a cascade keeps the shadow, hence the read bridge. -/
 theorem untaintedShadow_applyD {S : Schema} {T : Store} {σ σ0 : GraphState}
     {j : W3cJob}
     (hsh : UntaintedShadow S σ σ0) (h0 : ReachedByRules σ0 S T)
     (hSV : StoreValidRules S T) (hNK : NodupKeys S)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hjv : W3cJobValid S j) :
     UntaintedShadow S (j.applyD S T σ) σ0 := by
   obtain ⟨hRne, hcb, _, _, _, _, hder, hlke, hon⟩ := hjv
-  have hroot : RootBoolean j.e :=
-    hRootB ⟨(j.dt, j.R), j.e⟩ (mem_defs_of_lookup hlke) hder
+  have hco : ComputedOnly j.e := hCO j.dt j.R j.e hlke hder
   have hnojob : ∀ ab ∈ σ0.edges, ab.2 ≠ objNode ⟨j.dt, j.on⟩ j.R := by
     intro ab hab heq
-    have hno := reachedByRules_RootBoolean_no_inedge (on := j.on) hSV hNK hlke hroot h0 ab.1
+    have hno := reachedByRules_derived_no_inedge (on := j.on) hSV hlke hder hco h0 ab.1
     rw [← heq] at hno
     exact hno hab
   have hsound : ∀ a b, (a, b) ∈ (j.applyD S T σ).edges →
@@ -807,34 +806,34 @@ theorem untaintedShadow_applyD {S : Schema} {T : Store} {σ σ0 : GraphState}
 theorem untaintedShadow_reconcileJobsD {S : Schema} {T : Store} :
     ∀ (jobs : List W3cJob) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
       ReachedByRules σ0 S T → StoreValidRules S T → NodupKeys S →
-      (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+      (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
       (∀ j ∈ jobs, W3cJobValid S j) →
       UntaintedShadow S (reconcileJobsD S T σ jobs) σ0 := by
   intro jobs
   induction jobs with
   | nil => intro σ σ0 hsh _ _ _ _ _; exact hsh
   | cons j rest ih =>
-    intro σ σ0 hsh h0 hSV hNK hRootB hjv
+    intro σ σ0 hsh h0 hSV hNK hCO hjv
     have hfold : reconcileJobsD S T σ (j :: rest)
         = reconcileJobsD S T (j.applyD S T σ) rest := by
       unfold reconcileJobsD
       rw [List.foldl_cons]
     rw [hfold]
-    exact ih _ _ (untaintedShadow_applyD hsh h0 hSV hNK hRootB (hjv j List.mem_cons_self))
-      h0 hSV hNK hRootB (fun j' hj' => hjv j' (List.mem_cons_of_mem _ hj'))
+    exact ih _ _ (untaintedShadow_applyD hsh h0 hSV hNK hCO (hjv j List.mem_cons_self))
+      h0 hSV hNK hCO (fun j' hj' => hjv j' (List.mem_cons_of_mem _ hj'))
 
 /-- **A cascade leg preserves the shadow** (the shadow state is untouched). -/
 theorem untaintedShadow_cascade {S : Schema} {T : Store} {σ σ0 : GraphState}
     {jobs : List W3cJob}
     (hsh : UntaintedShadow S σ σ0) (h0 : ReachedByRules σ0 S T)
     (hSV : StoreValidRules S T) (hNK : NodupKeys S)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hjv : ∀ j ∈ jobs, W3cJobValid S j) :
     UntaintedShadow S (runCascade S T σ jobs) σ0 := by
   rcases runCascade_cases S T σ jobs with hrc | hrc
   · rw [hrc]
     have hev := reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs
-    have hD := untaintedShadow_reconcileJobsD jobs σ σ0 hsh h0 hSV hNK hRootB hjv
+    have hD := untaintedShadow_reconcileJobsD jobs σ σ0 hsh h0 hSV hNK hCO hjv
     exact ⟨fun ab hab => hD.classify ab (by rw [← hev.edges]; exact hab),
       fun ab hab => by
         show ab ∈ (reconcileJobsL S T σ jobs).edges
@@ -861,7 +860,7 @@ theorem untaintedShadow_cascade {S : Schema} {T : Store} {σ σ0 : GraphState}
 theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d σ S T) :
     NodupKeys S →
-    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     StoreValidRules S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     ∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0 := by
@@ -876,8 +875,8 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     · intro ab hab; simp [emptyState] at hab
     · intro k _ y hy; simp [emptyState] at hy
   | @write σp S T t hadm hprev ih =>
-    intro hNK hRootB hSV hterm
-    obtain ⟨σ0, h0, hsh⟩ := ih hNK hRootB
+    intro hNK hCO hSV hterm
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO
       (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht'))
       (fun dt R hder => ⟨(hterm dt R hder).1,
         fun t' ht' => (hterm dt R hder).2 t' (List.mem_cons_of_mem _ ht')⟩)
@@ -894,10 +893,10 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
         (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
       untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    intro hNK hRootB hSV hterm
-    obtain ⟨σ0, h0, hsh⟩ := ih hNK hRootB hSV hterm
+    intro hNK hCO hSV hterm
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm
     exact ⟨σ0, h0,
-      untaintedShadow_cascade hsh (reachedByRules_of_admitted h0) hSV hNK hRootB hjv⟩
+      untaintedShadow_cascade hsh (reachedByRules_of_admitted h0) hSV hNK hCO hjv⟩
 
 /-! ### The W3d read bridge -/
 
@@ -936,7 +935,7 @@ theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
@@ -949,13 +948,13 @@ theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
     checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
       (fun s' r' hr' => shadow_graphRec_agree hsh s' on hr')
   rw [hstep]
-  exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+  exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
     (ReachedByW3aAdmitted.base h0) hlk hco hleafUnt hs hon
 
 /-! ## Write-leg settledness transport — unmapped keys keep representation AND meaning
 
 A logged write leg cannot touch any derived key's materialised representation (rows
-are write-inert, and no rule-routed edge lands on a `RootBoolean` R-node — model-level
+are write-inert, and no rule-routed edge lands on a derived R-node — model-level
 I5 exclusivity). The semantic complement (`writeLeg_sem_stable`): at an UNMAPPED key
 the write does not change `sem` either — because the guard equals `sem` on both sides
 of the leg (the W3d read bridge, at both stores) and the guard is unchanged
@@ -974,14 +973,15 @@ theorem writeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
     simp only [List.foldl_cons]
     rw [ih, writeDirect_residue]
 
-/-- **Write legs never touch a `RootBoolean` derived key's in-edges** (model-level I5
+/-- **Write legs never touch a derived key's in-edges** (model-level I5
     exclusivity): a routed closure member cannot land on the R-node (a stored `(dt,R)`
     tuple would need a `Direct` arm, a rewrite output a rule onto `(dt,R)` — both dead
-    on `RootBoolean`), and write legs remove nothing. -/
+    on a `ComputedOnly` derived def / the taint filter), and write legs remove nothing. -/
 theorem writeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} {T : Store}
-    (hNK : NodupKeys S) (hSV : StoreValidRules S (t :: T))
+    (hSV : StoreValidRules S (t :: T))
     {dt on R : String} {e : Expr}
-    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e) (u : NodeKey) :
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
+    (u : NodeKey) :
     ((u, objNode ⟨dt, on⟩ R) ∈ (σ.writeLoggedRules S t).edges
       ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
   constructor
@@ -998,9 +998,9 @@ theorem writeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} {
       · rw [heq] at htype hrel
         obtain ⟨e', rs, hlk', hrs, _⟩ := hSV t List.mem_cons_self
         rw [← htype, ← hrel, hlk, Option.some.injEq] at hlk'
-        rw [← hlk', exprDirects_rootBoolean hroot] at hrs
+        rw [← hlk', exprDirects_computedOnly hco] at hrs
         simp at hrs
-      · exact noRuleOutputs_of_root hlk hNK hroot r hr'
+      · exact noRuleOutputs_of_derived hder r hr'
           ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
   · exact fun h => writeLoggedRules_edges_mono σ S t _ h
 
@@ -1021,7 +1021,7 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
     (hSV : StoreValidRules S (t :: T)) (hBS : BareStarStore (t :: T))
     (hTS : TtuStarFree S (t :: T))
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
@@ -1043,19 +1043,19 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
       fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
   have h' : ReachedByW3d (σ.writeLoggedRules S t) S (t :: T) :=
     ReachedByW3d.write t hadm h
-  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d_shadow h' hNK hRootB hSV hterm
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hRootB hSVw htermw
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d_shadow h' hNK hCO hSV hterm
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hCO hSVw htermw
   have hclσ := reachedByW3d_edgesClosed h
   have htp' := reachedByW3d_edges_target_plain h' hBS
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.writeLoggedRules S t).checkFn (t :: T) s dt on R e :=
-        (checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+        (checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
           h0' hsh' hlk hco hleafUnt hs hon).symm
     _ = σ.checkFn (t :: T) s dt on R e :=
         writeLeg_checkFn_stable (t :: T) hclσ htp' hlk hder hco hon hunmapped s
     _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3d hWF hTT hNK hR hSVw hBSw hTSw hRootB hMatch hStrat htermw
+        checkFn_eq_sem_w3d hWF hTT hNK hR hSVw hBSw hTSw hCO hMatch hStrat htermw
           h0 hsh hlk hco hleafUnt hs hon
 
 /-! ## `SettledKey` — the per-key soundness-side settledness predicate
@@ -1086,7 +1086,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
     (hSV : StoreValidRules S (t :: T)) (hBS : BareStarStore (t :: T))
     (hTS : TtuStarFree S (t :: T))
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
@@ -1101,10 +1101,9 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hset : SettledKey S T σ dt on R) :
     SettledKey S (t :: T) (σ.writeLoggedRules S t) dt on R := by
   obtain ⟨hrow, hedge⟩ := hset
-  have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
   have hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
       sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-    fun s hs => writeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat
+    fun s hs => writeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat
       hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
   constructor
   · intro res hres
@@ -1133,7 +1132,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
       rw [hsem n (fun hx => absurd hx hnstar)]
       exact hsm
   · intro s hb hstar hedge'
-    rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot (subjNode s)] at hedge'
+    rw [writeLeg_derived_inedges_eq hSV hlk hder hco (subjNode s)] at hedge'
     rw [hsem s (fun hx => absurd hx hstar)]
     exact hedge s hb hstar hedge'
 

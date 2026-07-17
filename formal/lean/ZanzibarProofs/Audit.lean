@@ -413,12 +413,12 @@ namespace Zanzibar
 
 -- **ROADMAP W3a — `hsrcbare` discharged via `NoRuleOutputs` (GraphIndex/ReconcileCorrect.lean,
 -- 2026-07-11).** The reach-collapse's `hsrcbare` hypothesis (every R-node in-edge source is
--- bare) is discharged on the `RootBoolean` (inter/excl-rooted) derived-def fragment: such a
--- def emits no rewrite arms and no `Direct` storage arm, so no rewrite outputs `(dt,R)`
--- (`noRuleOutputs_of_root`) and no stored tuple sits on it — killing the base leg, leaving
+-- bare) is discharged on the `ComputedOnly` derived-def fragment: such a
+-- def emits no `Direct` storage arm, and the taint filter emits no rewrite outputting `(dt,R)`
+-- (`noRuleOutputs_of_derived`) and no stored tuple sits on it — killing the base leg, leaving
 -- every R-node in-edge a bare-sourced reconcile edge (`reachedByW3a_Rnode_source_bare`).
 -- Hence the fully-discharged collapse `reachedByW3a_reach_collapse_root`. Standard axioms only:
-#print axioms noRuleOutputs_of_root
+#print axioms noRuleOutputs_of_derived
 #print axioms reachedByW3a_Rnode_source_bare
 #print axioms reachedByW3a_reach_collapse_root
 
@@ -505,7 +505,7 @@ namespace Zanzibar
 -- (for an untainted operand `r'`) equals `sem S T ⟨s, r', ⟨dt,on⟩⟩`. Composes the state transfer
 -- with `graph_correct_rules` over `S↾U`: `graphRec σ0 = probeNonDerived σ0 = probeNonDerived σ'`
 -- (edge agreement) `= check σ' = sem (S↾U) T q'` `= sem S T q'` (`semAux_restrict` at `fuelBound S`
--- + fuel stability over the untainted `S↾U`). Fragment premises: `RootBoolean`-derived defs (⇒
+-- + fuel stability over the untainted `S↾U`). Fragment premises: `ComputedOnly`-derived defs (⇒
 -- stored relations untainted, ⇒ the W2 restriction hypotheses transfer), `RewriteMatchDeclared`,
 -- and the W2 conditions on the base. This discharges the W3a correspondence blocker `hag` on an
 -- admitted base. Standard axioms only:
@@ -526,7 +526,7 @@ namespace Zanzibar
 -- **Derived-edge soundness (2026-07-11) — Step B forward half.** `reachedByW3aAdmitted_derived_edge_
 -- sound`: on a W3a-admitted state a materialised derived edge `subjNode s → objNode ⟨dt,on⟩ R`
 -- (bare star-free `s`) witnesses `sem S T ⟨s,R,⟨dt,on⟩⟩ = true`. The base leg cannot feed the
--- `RootBoolean` R-node (`reachedByRules_RootBoolean_no_inedge`); a reconcile leg either inherits the
+-- derived R-node (`reachedByRules_derived_no_inedge`); a reconcile leg either inherits the
 -- edge (IH) or wrote it, and the guard at a W3a-admitted prefix mid-state (`reconcileKey_edge_guard`)
 -- becomes `sem` via `checkFn_eq_sem`. Standard axioms only:
 #print axioms reconcileKey_edge_guard
@@ -566,7 +566,7 @@ namespace Zanzibar
 -- PROJECTION `reachedByW3b_shadow` (every W3b state has a W3a-admitted shadow with identical core,
 -- so all W3a edge/reach facts transfer); residue provenance; `reachedByW3b_inv` — the full `Inv`
 -- with CONTENTFUL I6 (`uposEdgeFree` proved for real: a upos member is userset-shaped while every
--- path onto the `RootBoolean` R-node is a single bare-sourced edge). Standard axioms only:
+-- path onto the derived R-node is a single bare-sourced edge). Standard axioms only:
 #print axioms reachedByW3b_shadow
 #print axioms reachedByW3b_residue_provenance
 #print axioms reachedByW3b_inv
@@ -784,7 +784,7 @@ namespace Zanzibar
 
 -- **W3d-1b — SETTLEDNESS TRANSPORT (GraphIndex/CascadeStable.lean, 2026-07-11g).**
 -- Write legs cannot touch ANY derived key's representation: rows are write-inert
--- (`writeLoggedRules_residue`) and no rule-routed edge lands on a `RootBoolean`
+-- (`writeLoggedRules_residue`) and no rule-routed edge lands on a derived
 -- R-node (`writeLeg_derived_inedges_eq` — model-level I5 exclusivity). The semantic
 -- complement `writeLeg_sem_stable`: at an UNMAPPED key the write does not change
 -- `sem` either — guard = `sem` on BOTH sides of the leg (the read bridge at both
@@ -838,7 +838,7 @@ namespace Zanzibar
 -- encoding, edge endpoint-closure, ACYCLICITY) with NO fragment hypotheses.
 -- Acyclicity is free on the chain — every added edge is a cycle-rejecting `writeDirect`,
 -- every removed edge only shrinks reach (`removeEdgePair`/`NReaches.mono_subset`). The
--- four I6 residue-hygiene clauses (which need the `RootBoolean`/terminality fragment)
+-- four I6 residue-hygiene clauses (which need the `ComputedOnly`/terminality fragment)
 -- remain the open half of `reachedByW3d_inv`. Standard axioms only:
 #print axioms structInv_reconcileStarsKeyD
 #print axioms structInv_runCascade
@@ -986,7 +986,7 @@ namespace Zanzibar
 -- **W3d-2 stratum-staged shadow + the routed read bridge
 -- (GraphIndex/CascadeStrataSettle.lean, 2026-07-12e).** The two-round chain's
 -- structural facts (endpoint closure, non-BARE/plain edge targets, bare R-node
--- in-edge sources, the reach collapse at `RootBoolean` R-nodes) and the
+-- in-edge sources, the reach collapse at derived R-nodes) and the
 -- untainted-core shadow at EVERY `ReachedByW3d2` state (`reachedByW3d2_shadow`,
 -- transported through routed logged batches -- `untaintedShadow_reconcileJobsLR`
 -- gives it at every MID-ROUND prefix state too). On top:

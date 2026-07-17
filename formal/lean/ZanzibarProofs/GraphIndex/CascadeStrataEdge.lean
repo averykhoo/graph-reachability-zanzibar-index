@@ -35,7 +35,7 @@ namespace Zanzibar
 /-! ## The edge-direct hygiene predicate and the all-key R-node invariants -/
 
 /-- **The edge-DIRECT form of the two edge-referencing I6 clauses.** No `neg`/`upos`
-    member holds a direct in-edge at its key. Over a `RootBoolean` derived key the
+    member holds a direct in-edge at its key. Over a derived key the
     reach collapse turns this into the `Inv` clauses' `¬NReaches` form. -/
 def EdgeHyg1 (σ : GraphState) : Prop :=
   ∀ k r res, σ.residue k r = some res →
@@ -230,14 +230,13 @@ theorem enumJobs2At_negCands_subset {S : Schema} {σe : GraphState}
 
 /-- **The edge-direct hygiene holds at every operational (`ReachedByW3d2E`) state.**
     Empty vacuous; write legs transport it (`writeLoggedRules_residue` +
-    `writeLeg_derived_inedges_eq` at the declared `RootBoolean` derived key); cascade
+    `writeLeg_derived_inedges_eq` at the declared derived key); cascade
     legs re-establish it via `edgeHyg1_runCascade2`, whose per-round enumerated jobs
     are valid and candidate-audited from state. Fragment threaded as in
     `reachedByW3d2E_toC`. -/
 theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) :
     WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
-    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
     RewriteMatchDeclared S → Stratifiable S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -250,10 +249,10 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     EdgeHyg1 σ := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _
     exact edgeHyg1_empty S
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
     have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
     have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
@@ -262,24 +261,24 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
       fun dt R hd => ⟨(hterm dt R hd).1,
         fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
     have hEHp : EdgeHyg1 σp :=
-      ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw htermw
+      ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw htermw
     intro k r res hrow
     rw [writeLoggedRules_residue] at hrow
     obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
       reachedByW3d2E_residueDeclared hprev k r res hrow
     subst hk
-    have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+    have hco : ComputedOnly e := hCO dt R e hlk hder
     refine ⟨fun n hn hedge => ?_, fun n hn hedge => ?_⟩
-    · rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot (subjNode n)] at hedge
+    · rw [writeLeg_derived_inedges_eq hSV hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).1 n hn hedge
-    · rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot (subjNode n)] at hedge
+    · rw [writeLeg_derived_inedges_eq hSV hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).2 n hn hedge
   | @cascade σp S T hprev ih =>
-    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hEHp : EdgeHyg1 σp :=
-      ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+      ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hW3d2 : ReachedByW3d2 σp S T :=
-      reachedByW3d2C_toW3d2 (reachedByW3d2E_toC hprev hWF hTT hNK hR hRootB hMatch
+      reachedByW3d2C_toW3d2 (reachedByW3d2E_toC hprev hWF hTT hNK hR hMatch
         hStrat hCO hLU2 hWSbare hSV hBS hTS hterm)
     -- σp facts
     have hσS : σp.schema = S := reachedByW3d2_schema hW3d2
@@ -291,8 +290,8 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     have hsb : RnodeSourceBareAll S σp := by
       intro dt on R hder hRne x hx
       obtain ⟨e', hlk'⟩ := isDerived_declared hder
-      have hroot' : RootBoolean e' := hRootB ⟨(dt, R), e'⟩ (mem_defs_of_lookup hlk') hder
-      exact reachedByW3d2_Rnode_source_bare hW3d2 hNK hlk' hroot' hSV x hx
+      have hco' : ComputedOnly e' := hCO dt R e' hlk' hder
+      exact reachedByW3d2_Rnode_source_bare hW3d2 hlk' hder hco' hSV x hx
     have hres_p : ResidueSubjectsStarFree σp := reachedByW3d2_residueStarFree hW3d2
     -- round-1 validity (copy of `reachedByW3d2E_toC`)
     have hjv1 : ∀ j ∈ enumJobs2R1 S σp, W3cJobValid S j := by
@@ -302,9 +301,9 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
         exact ⟨hd, hon⟩
       · intro k hk
         obtain ⟨hd, ⟨e', hlk'⟩, _⟩ := mem_cascadeKeysAbove_props hk
-        have hroot' : RootBoolean e' := hRootB ⟨(k.1, k.2.1), e'⟩ (mem_defs_of_lookup hlk') hd
-        exact ⟨reachedByW3d2_Rnode_source_bare hW3d2 hNK hlk' hroot' hSV,
-          reachedByW3d2_Rnode_source_name_ne_star hW3d2 hNK hlk' hroot' hSV⟩
+        have hco' : ComputedOnly e' := hCO k.1 k.2.1 e' hlk' hd
+        exact ⟨reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd hco' hSV,
+          reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV⟩
     -- MID-state facts transported through round 1
     have hres_mid : ResidueSubjectsStarFree (reconcileJobsLR S T σp (enumJobs2R1 S σp)) :=
       residueSubjectsStarFree_reconcileJobsLR _ σp hjv1 hres_p
@@ -316,23 +315,22 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
         exact ⟨hd, hon⟩
       · intro k hk
         obtain ⟨hd, ⟨e', hlk'⟩, _⟩ := mem_cascadeKeysAbove_props hk
-        have hroot' : RootBoolean e' := hRootB ⟨(k.1, k.2.1), e'⟩ (mem_defs_of_lookup hlk') hd
+        have hco' : ComputedOnly e' := hCO k.1 k.2.1 e' hlk' hd
         exact ⟨reconcileJobsLR_source_bare hjv1
-            (reachedByW3d2_Rnode_source_bare hW3d2 hNK hlk' hroot' hSV),
+            (reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd hco' hSV),
           reconcileJobsLR_source_name_ne_star hjv1
-            (reachedByW3d2_Rnode_source_name_ne_star hW3d2 hNK hlk' hroot' hSV)⟩
+            (reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV)⟩
     exact edgeHyg1_runCascade2 hCO hLU2 hσS hStruct hRD hRns hsb hjv1 hjv2
       (enumJobs2At_negCands_subset) (enumJobs2At_negCands_subset) hEHp
 
 /-! ## From edge-direct hygiene to the `Inv` clauses -/
 
 /-- **The edge-referencing I6 clauses over the operational chain.** The reach
-    collapse at a `RootBoolean` derived R-node turns `EdgeHyg1`'s direct-edge form
+    collapse at a derived R-node turns `EdgeHyg1`'s direct-edge form
     into the `Inv` clauses' `¬NReaches` form. -/
 theorem reachedByW3d2E_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
@@ -346,22 +344,22 @@ theorem reachedByW3d2E_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
       NoTtuTarget S R ∧ NoStoreSubjectR T R) :
     EdgeHygienic σ := by
   have hW3d2 : ReachedByW3d2 σ S T :=
-    reachedByW3d2C_toW3d2 (reachedByW3d2E_toC h hWF hTT hNK hR hRootB hMatch hStrat
+    reachedByW3d2C_toW3d2 (reachedByW3d2E_toC h hWF hTT hNK hR hMatch hStrat
       hCO hLU2 hWSbare hSV hBS hTS hterm)
   have hEH : EdgeHyg1 σ :=
-    reachedByW3d2E_edgeHyg1 h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare
+    reachedByW3d2E_edgeHyg1 h hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare
       hSV hBS hTS hterm
   have hRD : ResidueDeclared S σ := reachedByW3d2E_residueDeclared h
   intro k r res hrow
   obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ := hRD k r res hrow
   subst hk
   rw [hr] at hrow
-  have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+  have hco : ComputedOnly e := hCO dt R e hlk hder
   refine ⟨fun n hn hre => ?_, fun n hn hre => ?_⟩
   · exact (hEH _ _ _ hrow).1 n hn
-      (reachedByW3d2_reach_collapse_root hWF hSV hNK hlk hroot hW3d2 hre)
+      (reachedByW3d2_reach_collapse_root hWF hSV hlk hder hco hW3d2 hre)
   · exact (hEH _ _ _ hrow).2 n hn
-      (reachedByW3d2_reach_collapse_root hWF hSV hNK hlk hroot hW3d2 hre)
+      (reachedByW3d2_reach_collapse_root hWF hSV hlk hder hco hW3d2 hre)
 
 /-! ## The full W4 T2a invariant -/
 
@@ -374,7 +372,6 @@ theorem reachedByW3d2E_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
 theorem reachedByW3d2E_inv {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
@@ -389,7 +386,7 @@ theorem reachedByW3d2E_inv {σ : GraphState} {S : Schema} {T : Store}
     Inv S σ := by
   have hst := reachedByW3d2E_structInv h
   have hhy := reachedByW3d2E_residueHygienic h
-  have heh := reachedByW3d2E_edgeHygienic h hWF hTT hNK hR hRootB hMatch hStrat hCO
+  have heh := reachedByW3d2E_edgeHygienic h hWF hTT hNK hR hMatch hStrat hCO
     hLU2 hWSbare hSV hBS hTS hterm
   exact
     { schemaEq := hst.schemaEq

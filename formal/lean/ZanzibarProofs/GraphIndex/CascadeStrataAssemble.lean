@@ -48,7 +48,7 @@ theorem mem_cascadeKeysAbove_props {S : Schema} {σ : GraphState} {n : Nat}
 Mirrors of `reachedByW3d_Rnode_source_name_ne_star` (`CascadeEnum.lean`) and
 `reconcileJobsLR_source_bare` (`CascadeStrataSettle.lean`): cascade edges are
 sourced at star-free candidates (`W3cJobValid`), write legs never land on a
-`RootBoolean` derived R-node (model-level I5). -/
+derived R-node (model-level I5). -/
 
 /-- Star-free in-edge sources at a FIXED derived R-node are batch-stable. -/
 theorem reconcileJobsLR_source_name_ne_star {S : Schema} {T : Store}
@@ -64,23 +64,24 @@ theorem reconcileJobsLR_source_name_ne_star {S : Schema} {T : Store}
     rw [h1, subjNode_plain (hcS c hc)]
     exact hcS c hc
 
-/-- **Every in-edge source at a `RootBoolean` derived R-node is star-free** on a
+/-- **Every in-edge source at a derived R-node is star-free** on a
     W3d-2 state (mirror of `reachedByW3d2_Rnode_source_bare`). -/
 theorem reachedByW3d2_Rnode_source_name_ne_star {σ : GraphState} {S : Schema}
     {T : Store} {dt on R : String} {e : Expr}
     (h : ReachedByW3d2 σ S T) :
-    NodupKeys S → S.lookup (dt, R) = some e → RootBoolean e → StoreValidRules S T →
+    S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e →
+    StoreValidRules S T →
     ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.name ≠ STAR := by
   induction h with
   | empty S =>
     intro _ _ _ _ x hx
     simp [emptyState] at hx
   | @write σp S T t hadm hprev ih =>
-    intro hNK hlk hroot hSV x hx
-    rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot x] at hx
-    exact ih hNK hlk hroot (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hx
+    intro hlk hder hco hSV x hx
+    rw [writeLeg_derived_inedges_eq hSV hlk hder hco x] at hx
+    exact ih hlk hder hco (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hx
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
-    intro hNK hlk hroot hSV x hx
+    intro hlk hder hco hSV x hx
     unfold runCascade2 at hx
     split at hx
     · have hx' : (x, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsLR S T
@@ -88,14 +89,14 @@ theorem reachedByW3d2_Rnode_source_name_ne_star {σ : GraphState} {S : Schema}
       rcases reconcileJobsLR_edge_sound jobs2 _ x _ hx' with hmid | ⟨j, hj, c, hc, h1, _⟩
       · rcases reconcileJobsLR_edge_sound jobs1 σp x _ hmid
           with hold | ⟨j, hj, c, hc, h1, _⟩
-        · exact ih hNK hlk hroot hSV x hold
+        · exact ih hlk hder hco hSV x hold
         · obtain ⟨_, _, hcS, _⟩ := hjv1 j hj
           rw [h1, subjNode_plain (hcS c hc)]
           exact hcS c hc
       · obtain ⟨_, _, hcS, _⟩ := hjv2 j hj
         rw [h1, subjNode_plain (hcS c hc)]
         exact hcS c hc
-    · exact ih hNK hlk hroot hSV x hx
+    · exact ih hlk hder hco hSV x hx
 
 /-! ## Residue members are star-free — the W3d-2 structural residue invariant
 
@@ -341,7 +342,6 @@ inductive ReachedByW3d2E : GraphState → Schema → Store → Prop where
 theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) :
     WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
-    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
     RewriteMatchDeclared S → Stratifiable S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e) →
@@ -355,10 +355,10 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     ReachedByW3d2C σ S T := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _
     exact ReachedByW3d2C.empty S
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
     have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
     have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
@@ -367,11 +367,11 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
       fun dt R hd => ⟨(hterm dt R hd).1,
         fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
     exact ReachedByW3d2C.write t hadm
-      (ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw htermw)
+      (ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw htermw)
   | @cascade σp S T hprev ih =>
-    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hC : ReachedByW3d2C σp S T :=
-      ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+      ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hC
     have hres_p : ResidueSubjectsStarFree σp := reachedByW3d2_residueStarFree hW3d2
     -- round-1 validity: per-key edge facts at the leg start
@@ -382,9 +382,9 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
         exact ⟨hd, hon⟩
       · intro k hk
         obtain ⟨hd, ⟨e', hlk'⟩, _⟩ := mem_cascadeKeysAbove_props hk
-        have hroot' : RootBoolean e' := hRootB ⟨(k.1, k.2.1), e'⟩ (mem_defs_of_lookup hlk') hd
-        exact ⟨reachedByW3d2_Rnode_source_bare hW3d2 hNK hlk' hroot' hSV,
-          reachedByW3d2_Rnode_source_name_ne_star hW3d2 hNK hlk' hroot' hSV⟩
+        have hco' : ComputedOnly e' := hCO k.1 k.2.1 e' hlk' hd
+        exact ⟨reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd hco' hSV,
+          reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV⟩
     -- MID-state facts, transported through the round-1 batch
     have hσS : σp.schema = S := reachedByW3d2_schema hW3d2
     have hσmidS : (reconcileJobsLR S T σp (enumJobs2R1 S σp)).schema = S := by
@@ -397,10 +397,10 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
       edgesClosed_reconcileJobsLR _ σp (reachedByW3d2_edgesClosed hW3d2)
     have htb : ∀ a b, (a, b) ∈ σp.edges → b.pred ≠ BARE :=
       reachedByW3d2_edge_target_ne_bare hW3d2 hWF hSV
-    obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow hW3d2 hNK hRootB hSV hterm
+    obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow hW3d2 hNK hCO hSV hterm
     have hshmid : UntaintedShadow S (reconcileJobsLR S T σp (enumJobs2R1 S σp)) σ0 :=
       untaintedShadow_reconcileJobsLR _ σp σ0 hsh (reachedByRules_of_admitted h0)
-        hSV hNK hRootB hjv1
+        hSV hNK hCO hjv1
     -- round-2 validity: per-key edge facts transported to MID
     have hjv2 : ∀ j ∈ enumJobs2R2 S T σp, W3cJobValid S j := by
       refine enumJobs2At_valid hWF ?_ ?_ hres_mid
@@ -409,11 +409,11 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
         exact ⟨hd, hon⟩
       · intro k hk
         obtain ⟨hd, ⟨e', hlk'⟩, _⟩ := mem_cascadeKeysAbove_props hk
-        have hroot' : RootBoolean e' := hRootB ⟨(k.1, k.2.1), e'⟩ (mem_defs_of_lookup hlk') hd
+        have hco' : ComputedOnly e' := hCO k.1 k.2.1 e' hlk' hd
         exact ⟨reconcileJobsLR_source_bare hjv1
-            (reachedByW3d2_Rnode_source_bare hW3d2 hNK hlk' hroot' hSV),
+            (reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd hco' hSV),
           reconcileJobsLR_source_name_ne_star hjv1
-            (reachedByW3d2_Rnode_source_name_ne_star hW3d2 hNK hlk' hroot' hSV)⟩
+            (reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV)⟩
     -- round-1 CONDITIONAL coverage: `w3dJobCoverage_enumJob2_state` at the leg start
     have hcovg1 : ∀ j ∈ enumJobs2R1 S σp, W3dJobOpsSettled S T σp j →
         W3dJobCoverage S T σp j := by
@@ -423,7 +423,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
       obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
       obtain ⟨hder, _, hon⟩ := mem_cascadeKeysAbove_props hk
       rw [← hje] at hops ⊢
-      exact w3dJobCoverage_enumJob2_state hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+      exact w3dJobCoverage_enumJob2_state hWF hTT hNK hR hSV hBS hTS hMatch
         hStrat hterm hCO hWSbare hW3d2 hlk hder (hCO _ _ _ hlk hder) hon
         (hLU2 _ _ _ hlk hder) (fun r' hr' hd' => hops r' hr' hd')
     -- round-2 CONDITIONAL coverage: the routed leg context at the MID state
@@ -449,13 +449,12 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
         intro r' hr' hd'
         obtain ⟨hset, hcomp⟩ := hops r' hr' hd'
         obtain ⟨e', hlk'⟩ := isDerived_declared hd'
-        have hroot' : RootBoolean e' :=
-          hRootB ⟨(k.1, r'), e'⟩ (mem_defs_of_lookup hlk') hd'
+        have hco' : ComputedOnly e' := hCO k.1 r' e' hlk' hd'
         refine ⟨hset, hcomp, ?_⟩
         intro u hu
         exact reconcileJobsLR_reach_collapse hjv1 htb
-          (reachedByW3d2_Rnode_source_bare hW3d2 hNK hlk' hroot' hSV) hu
-      obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS hRootB
+          (reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd' hco' hSV) hu
+      obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS
         hMatch hStrat hterm hCO hWSbare h0 hshmid hσmidS hlk hder hco hon hLU2e hopsC
       exact w3dJobCoverage_enumJob2 hco hclmid hon hbridge hcovDecl hWSbare
     exact ReachedByW3d2C.cascade (enumJobs2R1 S σp) (enumJobs2R2 S T σp)
@@ -477,7 +476,6 @@ theorem graph_correct_w3d2E {S : Schema} {T : Store} {σ : GraphState} (q : Quer
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -491,9 +489,9 @@ theorem graph_correct_w3d2E {S : Schema} {T : Store} {σ : GraphState} (q : Quer
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
     GraphModel.check σ q = sem S T q :=
-  graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU2
+  graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU2
     hWSbare
-    (reachedByW3d2E_toC h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU2 hWSbare hSV hBS
+    (reachedByW3d2E_toC h hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS
       hTS hterm)
     hq hqs hqo
 

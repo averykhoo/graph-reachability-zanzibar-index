@@ -277,15 +277,15 @@ theorem reachedByW3a_reach_collapse {σ : GraphState} {S : Schema} {T : Store}
 
 The reach-collapse (`reachedByW3a_reach_collapse`) needs `hsrcbare`: every in-edge source of
 the derived object node `objNode ⟨dt,on⟩ R` is bare. This increment discharges it on the
-W3a fragment where the derived def `e = lookup (dt, R)` is **`inter`/`excl`-rooted**
-(`RootBoolean` — the analytic side condition found last session, the W3a analog of W2's
-`TtuTuplesetsDirect`). The argument:
+W3a fragment where the derived def `e = lookup (dt, R)` is **`ComputedOnly`** (a boolean tree
+whose leaves are all `computed` refs). The argument:
 
-* No `schemaRewrites S` rule outputs `(dt, R)` (`NoRuleOutputs`) — a `RootBoolean` def emits
-  no rewrite arms (`exprArms_rootBoolean`), so via `schemaRewrites_provenance` + `NodupKeys`
-  no rule carries `(objectType, outRel) = (dt, R)`.
-* No stored tuple sits on `(dt, R)` — a `RootBoolean` def has no `Direct` arm
-  (`exprDirects_rootBoolean = []`), so `StoreValidRules` forbids a stored `(dt, R)` tuple.
+* No `schemaRewrites S` rule outputs `(dt, R)` (`NoRuleOutputs`) — the taint filter in
+  `schemaRewrites` skips every derived def's arms, so via `schemaRewrites_provenance`
+  no rule carries `(objectType, outRel) = (dt, R)` (`noRuleOutputs_of_derived`, from
+  `isDerived S (dt,R) = true` alone).
+* No stored tuple sits on `(dt, R)` — a `ComputedOnly` def has no `Direct` arm
+  (`exprDirects_computedOnly = []`), so `StoreValidRules` forbids a stored `(dt, R)` tuple.
 
 Together these kill the **base** (rewrite-closure) leg of `reachedByW3a_edge_sound` on the
 R-node: a closure tuple landing there is neither the raw seed (no stored `(dt,R)` tuple) nor
@@ -294,55 +294,32 @@ whose source is a candidate — bare by the reconcile constructor's `hcands`. He
 holds unconditionally on the fragment, and the collapse fires (`reachedByW3a_reach_collapse_
 root`). -/
 
-/-- **`RootBoolean e`** — `e`'s root is a boolean operator (`inter`/`excl`). On the W3a
-    fragment this is the shape that keeps the derived key off the rewrite-fanout: a
-    boolean-rooted def emits no `computed`/`ttu` rewrite arms and carries no `Direct`
-    storage arm. The W3a analog of `directsOnly`/`TtuTuplesetsDirect` for the *derived*
-    relation itself. -/
-def RootBoolean : Expr → Prop
-  | .inter _ _ => True
-  | .excl _ _  => True
-  | _          => False
-
-/-- A boolean-rooted expr emits no rewrite arms (`exprArms` walks into `union` but stops at
-    `inter`/`excl`). -/
-theorem exprArms_rootBoolean (ot rel : String) {e : Expr} (h : RootBoolean e) :
-    exprArms ot rel e = [] := by
-  cases e <;> first | rfl | exact h.elim
-
-/-- A boolean-rooted expr carries no `Direct` storage arm. -/
-theorem exprDirects_rootBoolean {e : Expr} (h : RootBoolean e) : exprDirects e = [] := by
-  cases e <;> first | rfl | exact h.elim
+/-- A `ComputedOnly` expr carries no `Direct` storage arm (its leaves are all `computed`,
+    and `exprDirects` collects only `Direct` arms through unions). -/
+theorem exprDirects_computedOnly : ∀ {e : Expr}, ComputedOnly e → exprDirects e = [] := by
+  intro e
+  induction e with
+  | computed _ => intro _; rfl
+  | direct _ => intro h; exact h.elim
+  | ttu _ _ => intro h; exact h.elim
+  | union a b iha ihb =>
+    intro h; simp only [exprDirects, iha h.1, ihb h.2, List.append_nil]
+  | inter a b _ _ => intro _; rfl
+  | excl a b _ _ => intro _; rfl
 
 /-- **`NoRuleOutputs S dt R`** — no schema rewrite rule outputs the derived key `(dt, R)`.
-    On a boolean-rooted derived def this holds (`noRuleOutputs_of_root`), so W2's base
-    rewrite-closure never lands a tuple on the R-node — the fragment condition behind the
-    reach-collapse. -/
+    On a derived def this holds unconditionally (`noRuleOutputs_of_derived`, via the taint
+    filter), so W2's base rewrite-closure never lands a tuple on the R-node — the fragment
+    condition behind the reach-collapse. -/
 def NoRuleOutputs (S : Schema) (dt R : String) : Prop :=
   ∀ r ∈ schemaRewrites S, ¬(r.objectType = dt ∧ r.outRel = R)
-
-/-- **Boolean-rooted ⇒ no rewrite outputs `(dt, R)`.** A rule with `(objectType, outRel) =
-    (dt, R)` comes (via `schemaRewrites_provenance` + `NodupKeys`) from the def at key
-    `(dt, R)` — which is `e`, boolean-rooted, hence emits no arms (`exprArms_rootBoolean`),
-    a contradiction. -/
-theorem noRuleOutputs_of_root {S : Schema} {dt R : String} {e : Expr}
-    (hlk : S.lookup (dt, R) = some e) (hNK : NodupKeys S) (hroot : RootBoolean e) :
-    NoRuleOutputs S dt R := by
-  intro r hr hcon
-  obtain ⟨d, hd, hkey, hrarm⟩ := schemaRewrites_provenance hr
-  have hkey' : d.1 = (dt, R) := by rw [hkey, hcon.1, hcon.2]
-  have hld : S.lookup d.1 = some d.2 := lookup_of_mem hNK hd
-  rw [hkey', hlk, Option.some.injEq] at hld
-  rw [← hld, exprArms_rootBoolean _ _ hroot] at hrarm
-  simp at hrarm
 
 /-- **Derived ⇒ no rewrite outputs `(dt, R)`.** The direct consequence of the taint filter
     in `schemaRewrites`: a rule outputting `(dt, R)` comes from a def `d` that survived the
     filter (`isDerived S d.1 = false`) and whose key is `(dt, R)` (`exprArms_key`); so
-    `isDerived S (dt, R) = false`, contradicting `hder`. Unlike `noRuleOutputs_of_root` this
-    needs no `NodupKeys` and no root-shape side condition — the filter alone forbids derived
-    outputs. The foundation the next leg uses to discharge `NoRuleOutputs` without
-    `RootBoolean`. -/
+    `isDerived S (dt, R) = false`, contradicting `hder`. Needs no `NodupKeys` and no root-shape
+    side condition — the filter alone forbids derived outputs. The foundation used to discharge
+    `NoRuleOutputs` on the widened (`ComputedOnly`) derived-def fragment. -/
 theorem noRuleOutputs_of_derived {S : Schema} {dt R : String}
     (hder : isDerived S (dt, R) = true) : NoRuleOutputs S dt R := by
   intro r hr hcon
@@ -362,13 +339,13 @@ theorem noRuleOutputs_of_derived {S : Schema} {dt R : String}
 /-- **Every in-edge source of the derived R-node is bare** on the W3a fragment. By induction
     over the write path: the base (rewrite-closure) leg landing on `objNode ⟨dt,on⟩ R` is
     impossible — the closure tuple would be a stored `(dt,R)` tuple (none, by
-    `exprDirects_rootBoolean` + `StoreValidRules`) or a rewrite output `(dt,R)` (none, by
-    `noRuleOutputs_of_root`); so every in-edge is a reconcile edge, whose source is a
+    `exprDirects_computedOnly` + `StoreValidRules`) or a rewrite output `(dt,R)` (none, by
+    `noRuleOutputs_of_derived`); so every in-edge is a reconcile edge, whose source is a
     candidate, bare by `hcands`. Discharges the `hsrcbare` hypothesis of the reach-collapse. -/
 theorem reachedByW3a_Rnode_source_bare {σ : GraphState} {S : Schema} {T : Store}
     {dt on R : String} {e : Expr}
-    (hSV : StoreValidRules S T) (hNK : NodupKeys S)
-    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e)
+    (hSV : StoreValidRules S T)
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
     (h : ReachedByW3a σ S T) :
     ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE := by
   induction h with
@@ -384,31 +361,31 @@ theorem reachedByW3a_Rnode_source_bare {σ : GraphState} {S : Schema} {T : Store
     · rw [heq] at htype hrel
       obtain ⟨e', rs, hlk', hrs, _⟩ := hSV t ht
       rw [← htype, ← hrel, hlk, Option.some.injEq] at hlk'
-      rw [← hlk', exprDirects_rootBoolean hroot] at hrs
+      rw [← hlk', exprDirects_computedOnly hco] at hrs
       simp at hrs
-    · exact noRuleOutputs_of_root hlk hNK hroot r hr'
+    · exact noRuleOutputs_of_derived hder r hr'
         ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
   | reconcile dt' on' R' e' cands _hRne hcands _hder _hcStar _honStar _ ih =>
     intro x hx
     rcases reconcileKey_edge_sound _ dt' on' R' e' cands x _ hx with hold | ⟨c, hc, hxc, _⟩
-    · exact ih hSV hNK hlk x hold
+    · exact ih hSV hlk hder x hold
     · rw [hxc, subjNode_pred]; exact hcands c hc
 
-/-- **The reach-collapse, fully discharged on the boolean-rooted W3a fragment.** Given the
-    derived def `e = lookup (dt, R)` is `inter`/`excl`-rooted (`RootBoolean`), any path to the
+/-- **The reach-collapse, fully discharged on the `ComputedOnly` W3a fragment.** Given the
+    derived def `e = lookup (dt, R)` is `ComputedOnly` and its key derived, any path to the
     derived object node `objNode ⟨dt,on⟩ R` is a *single* reconcile edge — no `hsrcbare` left
     free. This is the last structural link: `reach (subjNode s) (objNode ⟨dt,on⟩ R) ↔ [a
     reconcile pass wrote s's edge]`, ready to compose with `checkFn_eq_semStep` for
     `graph_correct_w3a`. -/
 theorem reachedByW3a_reach_collapse_root {σ : GraphState} {S : Schema} {T : Store}
     {dt on R : String} {e : Expr} {u : NodeKey}
-    (hWF : WF S) (hSV : StoreValidRules S T) (hNK : NodupKeys S)
-    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e)
+    (hWF : WF S) (hSV : StoreValidRules S T)
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
     (h : ReachedByW3a σ S T)
     (hr : NReaches σ.edges u (objNode ⟨dt, on⟩ R)) :
     (u, objNode ⟨dt, on⟩ R) ∈ σ.edges :=
   reachedByW3a_reach_collapse hWF hSV h
-    (reachedByW3a_Rnode_source_bare hSV hNK hlk hroot h) hr
+    (reachedByW3a_Rnode_source_bare hSV hlk hder hco h) hr
 
 /-! ## Reconcile-edge reachability inertness (ROADMAP W3a, read half — increment 5)
 

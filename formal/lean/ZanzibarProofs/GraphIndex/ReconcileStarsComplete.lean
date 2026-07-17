@@ -24,7 +24,7 @@ This file assembles the **read half**:
   branch glued by the master's canonicity, the `checkFn_eq_sem_bs` bridge, and completeness.
 
 Fragment hypotheses on the store are `BareStarStore T` + `TtuStarFree S T` (replacing
-`StarFreeStore`); the schema stays one `RootBoolean` derived stratum over untainted `computed`
+`StarFreeStore`); the schema stays one `ComputedOnly` derived stratum over untainted `computed`
 operands (decision-15 scope: object wildcards and wildcard usersets over derived relations stay
 rejected; `wildcardShapes` carries only bare-subject-star shapes).
 -/
@@ -41,7 +41,7 @@ theorem checkFn_eq_sem_w3c {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3c σ S T)
@@ -52,7 +52,7 @@ theorem checkFn_eq_sem_w3c {S : Schema} {T : Store} {σ : GraphState}
     σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
   obtain ⟨σ', hσ', hcore⟩ := reachedByW3c_shadow h
   rw [← checkFn_congr hcore.edges hcore.nodes T s dt on R e]
-  exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hσ'
+  exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hσ'
     hlk hco hleafUnt hs hon
 
 /-! ## Whole-pass edge monotonicity -/
@@ -292,7 +292,6 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -318,7 +317,7 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
   subst he'
   have hbridge : ∀ (x : SubjectRef), (x.name = STAR → x.predicate = BARE) →
       σ0.checkFn T x dt on R e = sem S T ⟨x, R, ⟨dt, on⟩⟩ := fun x hx =>
-    checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+    checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
       (ReachedByW3aAdmitted.base hσ0) hlk (hCO _ _ _ hlk hder') (hLU _ _ _ hlk hder') hx hon
   refine ⟨?_, ?_, ?_⟩
   · intro sh
@@ -407,7 +406,6 @@ theorem reconcileJobsC_neg_complete {S : Schema} {T : Store}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -464,11 +462,11 @@ theorem reconcileJobsC_neg_complete {S : Schema} {T : Store}
       refine ⟨_, hrow, ?_⟩
       refine List.mem_filter.mpr ⟨hcand _ List.mem_cons_self ⟨rfl, rfl, rfl⟩, ?_⟩
       have hchkS : σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3c hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hσ hlk
+        checkFn_eq_sem_w3c hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hσ hlk
           (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) (fun hx => absurd hx hsstar) hon
       have hcovS : σ.coveredFn T dt on R e s.shape = true := by
         show σ.checkFn T (starSubj s.shape) dt on R e = true
-        rw [checkFn_eq_sem_w3c (s := starSubj s.shape) hWF hTT hNK hR hSV hBS hTS hRootB
+        rw [checkFn_eq_sem_w3c (s := starSubj s.shape) hWF hTT hNK hR hSV hBS hTS hCO
           hMatch hStrat hterm hσ hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
           (fun _ => hWSbare s.shape hshWS) hon]
         exact hsemStar
@@ -501,7 +499,6 @@ theorem reconcileJobsC_upos_complete {S : Schema} {T : Store}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -555,7 +552,7 @@ theorem reconcileJobsC_upos_complete {S : Schema} {T : Store}
       refine ⟨_, hrow, ?_⟩
       refine List.mem_filter.mpr ⟨hcand _ List.mem_cons_self ⟨rfl, rfl, rfl⟩, ?_⟩
       have hchkS : σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3c hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hσ hlk
+        checkFn_eq_sem_w3c hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hσ hlk
           (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) (fun hx => absurd hx hsstar) hon
       have hnc : ((wildcardShapes S).filter
           (fun sh => σ.coveredFn T dt on R e sh)).contains s.shape = false := by
@@ -656,7 +653,6 @@ theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -723,7 +719,7 @@ theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     rw [Bool.not_eq_false, List.contains_eq_mem] at hc
     obtain ⟨hws, hcov⟩ := List.mem_filter.mp (of_decide_eq_true hc)
     refine hnotcov ⟨hws, ?_⟩
-    rw [← checkFn_eq_sem_w3c (s := starSubj s.shape) hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+    rw [← checkFn_eq_sem_w3c (s := starSubj s.shape) hWF hTT hNK hR hSV hBS hTS hCO hMatch
       hStrat hterm hσpre hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
       (fun _ => hWSbare s.shape hws) hon]
     exact hcov
@@ -769,7 +765,7 @@ theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     have hstep2 : σ1.checkFn T s dt on R e = σpre.checkFn T s dt on R e :=
       checkFn_congr hσ1e hσ1n T s dt on R e
     have hstep3 : σpre.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-      checkFn_eq_sem_w3c hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hσpre hlk
+      checkFn_eq_sem_w3c hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hσpre hlk
         (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) (fun hx => absurd hx hss) hon
     rw [hstep1, hstep2, hstep3]
     exact hsem
@@ -788,7 +784,7 @@ theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
 /-- **T2b, W3c fragment (`graph_correct_w3c`) — `check = sem` on star-CARRYING stores.**
     The query subject may be bare, star-BARE, or a userset; the store may hold bare
     `T:*` grants (`BareStarStore` + `TtuStarFree` replace `StarFreeStore`); the schema
-    is the one-`RootBoolean`-stratum fragment with bare-only declared wildcard shapes
+    is the one-derived-stratum (`ComputedOnly`) fragment with bare-only declared wildcard shapes
     (`hWSbare`, decision-15).
 
     * **Untainted query:** shadow → admitted base → `graphRec_base_eq_bs`.
@@ -805,7 +801,6 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -817,7 +812,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hqo : q.object.name ≠ STAR) :
     GraphModel.check σ q = sem S T q := by
   have hadm := w3cComplete_reached h
-  obtain ⟨hInv, _hQ⟩ := reachedByW3c_inv hWF hNK hSV hRootB hterm hCO hLU hadm
+  obtain ⟨hInv, _hQ⟩ := reachedByW3c_inv hWF hNK hSV hterm hCO hLU hadm
   have hcl := hInv.edgesClosed
   obtain ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := q
   replace hqs : sn = STAR → sp = BARE := hqs
@@ -827,7 +822,6 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     obtain ⟨e, hlk⟩ := isDerived_declared hder
     have hco := hCO _ _ _ hlk hder
     have hleafUnt := hLU _ _ _ hlk hder
-    have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
     have hroute : GraphModel.check σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
         = GraphModel.probeDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ := by
       unfold GraphModel.check
@@ -843,16 +837,16 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
       have hN : NReaches σsh.edges (subjNode ⟨st, sn, sp⟩) (objNode ⟨dt, on⟩ R) := by
         rw [hcore.edges]
         exact reach_sound hr
-      have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hNK hlk hroot
+      have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hlk hder hco
         (reachedByW3aAdmitted_toW3a hσsh) hN
       rw [hcore.edges] at hedge1
       obtain ⟨σ0, hσ0, _hag2, _hres2, hedge⟩ := reachedByW3c_master hterm hCO hLU hadm
       rcases hedge dt on R e hder hlk hqo _ hedge1 with hbase | ⟨c, huc, _hcb, hcS, _hunc, hchk⟩
-      · exact absurd hbase (reachedByRules_RootBoolean_no_inedge hSV hNK hlk hroot
+      · exact absurd hbase (reachedByRules_derived_no_inedge hSV hlk hder hco
           (reachedByRules_of_admitted hσ0) _)
       · have hcs : (⟨st, sn, sp⟩ : SubjectRef) = c := subjNode_inj_of_ne_star hsn hcS huc
         rw [← checkFn_eq_sem_bs (s := (⟨st, sn, sp⟩ : SubjectRef)) hWF hTT hNK hR hSV hBS hTS
-          hRootB hMatch hStrat hterm (ReachedByW3aAdmitted.base hσ0) hlk hco hleafUnt
+          hCO hMatch hStrat hterm (ReachedByW3aAdmitted.base hσ0) hlk hco hleafUnt
           (fun hx => absurd hx hsn) hqo]
         rw [hcs]
         exact hchk
@@ -870,7 +864,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
         intro hsm
         refine coveredFn_declared hTT hSV hTS h0B hco (dt := dt) (on := on) (R := R) ?_
         show σ0B.checkFn T (starSubj (st, BARE)) dt on R e = true
-        rw [checkFn_eq_sem_bs (s := starSubj (st, BARE)) hWF hTT hNK hR hSV hBS hTS hRootB
+        rw [checkFn_eq_sem_bs (s := starSubj (st, BARE)) hWF hTT hNK hR hSV hBS hTS hCO
           hMatch hStrat hterm (ReachedByW3aAdmitted.base h0B) hlk hco hleafUnt
           (fun _ => rfl) hqo]
         exact hsm
@@ -887,7 +881,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
           exact absurd hsome (by decide)
       | some res =>
         rw [Option.getD_some]
-        have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+        have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
           hCO hLU hWSbare hadm hlk hqo hrow
         cases hc : res.stars.contains (st, BARE) <;>
           cases hsm : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩
@@ -926,7 +920,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
               rw [← hσB, hrow] at hsome
               exact absurd hsome (by decide)
             · have hedge := w3cComplete_derived_edge (s := ⟨st, sn, BARE⟩) hWF hTT hNK hR hSV
-                hBS hTS hRootB hMatch hStrat hterm hCO hLU hWSbare h hlk hder rfl hstar hqo
+                hBS hTS hMatch hStrat hterm hCO hLU hWSbare h hlk hder rfl hstar hqo
                 hcov hsm
               have hrc := reach_complete hcl (NReaches.edge hedge)
               rw [hr] at hrc
@@ -938,7 +932,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
           · rfl
         | some res =>
           rw [Option.getD_some]
-          have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+          have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
             hCO hLU hWSbare hadm hlk hqo hrow
           have hfwd : (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
               || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) = true →
@@ -954,7 +948,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
               obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE) hws hqo hsemStar
               obtain ⟨res', hres', hmem⟩ := reconcileJobsC_neg_complete
                 (s := ⟨st, sn, BARE⟩) hWF hTT hNK hR hSV hBS
-                hTS hRootB hMatch hStrat hterm hCO hLU hWSbare hlk hstar hqo hws hsemStar hsm
+                hTS hMatch hStrat hterm hCO hLU hWSbare hlk hstar hqo hws hsemStar hsm
                 jobs σ0B (ReachedByW3c.base h0B) hvjobs hall (Or.inr ⟨j, hj, hkm⟩)
               rw [← hσB, hrow] at hres'
               obtain rfl := Option.some.inj hres'
@@ -982,7 +976,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
                 exact absurd hsemF (by decide)
             · exact Or.inl (reach_complete hcl (NReaches.edge
                 (w3cComplete_derived_edge (s := ⟨st, sn, BARE⟩) hWF hTT hNK hR hSV hBS hTS
-                  hRootB hMatch hStrat hterm hCO hLU hWSbare h hlk hder rfl hstar hqo hcov
+                  hMatch hStrat hterm hCO hLU hWSbare h hlk hder rfl hstar hqo hcov
                   hsm)))
           cases hread : (σ.reach (subjNode ⟨st, sn, BARE⟩) (objNode ⟨dt, on⟩ R)
               || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) <;>
@@ -1009,13 +1003,13 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
             obtain ⟨⟨j, hj, hkm⟩, hall⟩ := hcovU dt on R e hlk hder ⟨st, sn, sp⟩ hbare hstar
               hqo hsm
             obtain ⟨res', hres', _⟩ := reconcileJobsC_upos_complete hWF hTT hNK hR hSV hBS hTS
-              hRootB hMatch hStrat hterm hCO hLU hWSbare hlk hbare hstar hqo hsm jobs σ0B
+              hMatch hStrat hterm hCO hLU hWSbare hlk hbare hstar hqo hsm jobs σ0B
               (ReachedByW3c.base h0B) hvjobs hall (Or.inr ⟨j, hj, hkm⟩)
             rw [← hσB, hrow] at hres'
             cases hres'
         | some res =>
           rw [Option.getD_some]
-          have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm
+          have hchar := w3c_row_char hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
             hCO hLU hWSbare hadm hlk hqo hrow
           have hns : res.stars.contains (st, sp) = false := by
             by_contra hcx
@@ -1032,7 +1026,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
             obtain ⟨⟨j, hj, hkm⟩, hall⟩ := hcovU dt on R e hlk hder ⟨st, sn, sp⟩ hbare hstar
               hqo hsm
             obtain ⟨res', hres', hmem⟩ := reconcileJobsC_upos_complete hWF hTT hNK hR hSV hBS
-              hTS hRootB hMatch hStrat hterm hCO hLU hWSbare hlk hbare hstar hqo hsm jobs σ0B
+              hTS hMatch hStrat hterm hCO hLU hWSbare hlk hbare hstar hqo hsm jobs σ0B
               (ReachedByW3c.base h0B) hvjobs hall (Or.inr ⟨j, hj, hkm⟩)
             rw [← hσB, hrow] at hres'
             obtain rfl := Option.some.inj hres'
@@ -1061,7 +1055,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     obtain ⟨σ0, hσ0adm, hredx⟩ := graphRec_reduce_base_adm_bs hterm hσsh
       (s := ⟨st, sn, sp⟩) (dt := dt) (on := on)
     have h2 := hredx R hd
-    have h3 := graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hσ0adm
+    have h3 := graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hσ0adm
       (s := ⟨st, sn, sp⟩) (dt := dt) (on := on) hqs hqo R hd
     calc GraphModel.probeNonDerived σ ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩
         = GraphModel.probeNonDerived σsh ⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩ :=

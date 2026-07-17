@@ -317,7 +317,7 @@ theorem w3d_leg_context {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
@@ -326,9 +326,9 @@ theorem w3d_leg_context {S : Schema} {T : Store} {σ : GraphState}
     (∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
     (∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) := by
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hRootB hSV hterm
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hCO hSV hterm
   refine ⟨fun s' hs' => ?_, fun sh hcov => ?_⟩
-  · exact checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm h0 hsh
+  · exact checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm h0 hsh
       hlk hco hleafUnt hs' hon
   · have hagree : σ.checkFn T (starSubj sh) dt on R e = σ0.checkFn T (starSubj sh) dt on R e :=
       checkFn_agree_of_graphRec T (starSubj sh) dt on R e hco hleafUnt
@@ -361,7 +361,7 @@ theorem w3dJobCoverage_enumJob {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
@@ -369,7 +369,7 @@ theorem w3dJobCoverage_enumJob {S : Schema} {T : Store} {σ : GraphState}
     (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) (hon : on ≠ STAR)
     (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE) :
     W3dJobCoverage S T σ (enumJob σ dt on R e) := by
-  obtain ⟨hbridge, hcovDecl⟩ := w3d_leg_context hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+  obtain ⟨hbridge, hcovDecl⟩ := w3d_leg_context hWF hTT hNK hR hSV hBS hTS hCO hMatch
     hStrat hterm h hlk hco hleafUnt hon
   have hcl := reachedByW3d_edgesClosed h
   have hbareSub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE →
@@ -411,36 +411,37 @@ theorem leafConcretes_name_ne_star {σ : GraphState} {dt on : String} {e : Expr}
   intro heq; rw [heq] at hns; simp at hns
 
 /-- **The star-free analog of `reachedByW3d_Rnode_source_bare`.** Every in-edge source
-    at a `RootBoolean` derived R-node is star-free on a W3d state: write legs never
+    at a derived R-node is star-free on a W3d state: write legs never
     land there (model-level I5, `writeLeg_derived_inedges_eq`), cascade edges are
     sourced at star-free candidates (`W3cJobValid`'s `cands` non-star clause). Same
     induction as `_source_bare`. -/
 theorem reachedByW3d_Rnode_source_name_ne_star {σ : GraphState} {S : Schema} {T : Store}
     {dt on R : String} {e : Expr}
     (h : ReachedByW3d σ S T) :
-    NodupKeys S → S.lookup (dt, R) = some e → RootBoolean e → StoreValidRules S T →
+    S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e →
+    StoreValidRules S T →
     ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.name ≠ STAR := by
   induction h with
   | empty S =>
     intro _ _ _ _ x hx
     simp [emptyState] at hx
   | @write σp S T t hadm hprev ih =>
-    intro hNK hlk hroot hSV x hx
-    rw [writeLeg_derived_inedges_eq hNK hSV hlk hroot x] at hx
-    exact ih hNK hlk hroot (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hx
+    intro hlk hder hco hSV x hx
+    rw [writeLeg_derived_inedges_eq hSV hlk hder hco x] at hx
+    exact ih hlk hder hco (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hx
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    intro hNK hlk hroot hSV x hx
+    intro hlk hder hco hSV x hx
     rcases runCascade_cases S T σp jobs with hrc | hrc
     · rw [hrc] at hx
       have hx' : (x, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsL S T σp jobs).edges := hx
       rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).edges] at hx'
       rcases reconcileJobsD_edge_sound jobs σp x _ hx' with hold | ⟨j, hj, c, hc, h1, _⟩
-      · exact ih hNK hlk hroot hSV x hold
+      · exact ih hlk hder hco hSV x hold
       · obtain ⟨_, _, hcStar, _⟩ := hjv j hj
         rw [h1, subjNode_plain (hcStar c hc)]
         exact hcStar c hc
     · rw [hrc] at hx
-      exact ih hNK hlk hroot hSV x hx
+      exact ih hlk hder hco hSV x hx
 
 /-! ### Cascade-key structural facts
 
@@ -489,12 +490,12 @@ theorem mem_cascadeKeys_props {S : Schema} {σ : GraphState}
     the declared-derived key data comes from the enumeration hypotheses. -/
 theorem w3cJobValid_enumJob {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hNK : NodupKeys S) (hSV : StoreValidRules S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hon : on ≠ STAR) :
     W3cJobValid S (enumJob σ dt on R e) := by
-  have hroot : RootBoolean e := hRootB ⟨(dt, R), e⟩ (mem_defs_of_lookup hlk) hder
+  have hco : ComputedOnly e := hCO dt R e hlk hder
   unfold W3cJobValid
   refine ⟨lookup_rel_ne_bare hWF hlk, ?_, ?_, ?_, ?_, ?_, hder, hlk, hon⟩
   · -- cands are bare
@@ -509,7 +510,7 @@ theorem w3cJobValid_enumJob {S : Schema} {T : Store} {σ : GraphState}
       have hb : ed.2 = objNode ⟨dt, on⟩ R := eq_of_beq hedeq
       have hmem : (ed.1, objNode ⟨dt, on⟩ R) ∈ σ.edges := by rw [← hb]; exact hedm
       rw [← hce]
-      exact reachedByW3d_Rnode_source_bare h hNK hlk hroot hSV ed.1 hmem
+      exact reachedByW3d_Rnode_source_bare h hlk hder hco hSV ed.1 hmem
   · -- cands are star-free
     intro c hc
     simp only [enumJob, List.mem_append] at hc
@@ -522,7 +523,7 @@ theorem w3cJobValid_enumJob {S : Schema} {T : Store} {σ : GraphState}
       have hb : ed.2 = objNode ⟨dt, on⟩ R := eq_of_beq hedeq
       have hmem : (ed.1, objNode ⟨dt, on⟩ R) ∈ σ.edges := by rw [← hb]; exact hedm
       rw [← hce]
-      exact reachedByW3d_Rnode_source_name_ne_star h hNK hlk hroot hSV ed.1 hmem
+      exact reachedByW3d_Rnode_source_name_ne_star h hlk hder hco hSV ed.1 hmem
   · -- negCands are star-free
     intro c hc
     simp only [enumJob] at hc
@@ -567,7 +568,7 @@ theorem enumJobs_scope {S : Schema} {σ : GraphState} :
 /-- Every enumerated job is `W3cJobValid`. -/
 theorem enumJobs_valid {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hNK : NodupKeys S) (hSV : StoreValidRules S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (h : ReachedByW3d σ S T) :
     ∀ j ∈ enumJobs S σ, W3cJobValid S j := by
   intro j hj
@@ -576,14 +577,13 @@ theorem enumJobs_valid {S : Schema} {T : Store} {σ : GraphState}
   obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
   obtain ⟨hder, _, hon⟩ := mem_cascadeKeys_props hk
   rw [← hje]
-  exact w3cJobValid_enumJob hWF hNK hSV hRootB h hlk hder hon
+  exact w3cJobValid_enumJob hWF hNK hSV hCO h hlk hder hon
 
 /-- Every enumerated job satisfies `W3dJobCoverage` (the discharge from state). -/
 theorem enumJobs_covg {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -598,7 +598,7 @@ theorem enumJobs_covg {S : Schema} {T : Store} {σ : GraphState}
   obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
   obtain ⟨hder, _, hon⟩ := mem_cascadeKeys_props hk
   rw [← hje]
-  exact w3dJobCoverage_enumJob hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm h
+  exact w3dJobCoverage_enumJob hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm h
     hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) hon hWSbare
 
 /-! ### The fully-operational scheduler closure and the unconditional restatements -/
@@ -624,7 +624,6 @@ inductive ReachedByW3dE : GraphState → Schema → Store → Prop where
 theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3dE σ S T) :
     WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
-    (∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2) →
     RewriteMatchDeclared S → Stratifiable S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -635,10 +634,10 @@ theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
     ReachedByW3dC σ S T := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _
     exact ReachedByW3dC.empty S
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
     have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
     have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
     have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
@@ -647,16 +646,16 @@ theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
       fun dt R hd => ⟨(hterm dt R hd).1,
         fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
     exact ReachedByW3dC.write t hadm
-      (ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSVw hBSw hTSw htermw)
+      (ih hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSVw hBSw hTSw htermw)
   | @cascade σp S T hprev ih =>
-    intro hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
     have hC : ReachedByW3dC σp S T :=
-      ih hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+      ih hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
     have hW3d : ReachedByW3d σp S T := reachedByW3dC_toW3d hC
     exact ReachedByW3dC.cascade (enumJobs S σp)
-      (enumJobs_valid hWF hNK hSV hRootB hW3d)
+      (enumJobs_valid hWF hNK hSV hCO hW3d)
       enumJobs_cover enumJobs_scope
-      (enumJobs_covg hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+      (enumJobs_covg hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
         hWSbare hW3d)
       hC
 
@@ -668,7 +667,6 @@ theorem graph_correct_w3dE {S : Schema} {T : Store} {σ : GraphState} (q : Query
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -679,9 +677,9 @@ theorem graph_correct_w3dE {S : Schema} {T : Store} {σ : GraphState} (q : Query
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
     GraphModel.check σ q = sem S T q :=
-  graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+  graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
     hWSbare
-    (reachedByW3dE_toC h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS
+    (reachedByW3dE_toC h hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS
       hterm)
     hq hqs hqo
 
@@ -691,7 +689,6 @@ theorem graph_correct_w3dE {S : Schema} {T : Store} {σ : GraphState} (q : Query
 theorem reachedByW3dE_inv {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3dE σ S T)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -702,8 +699,8 @@ theorem reachedByW3dE_inv {σ : GraphState} {S : Schema} {T : Store}
       NoTtuTarget S R ∧ NoStoreSubjectR T R) :
     Inv S σ :=
   reachedByW3dC_inv
-    (reachedByW3dE_toC h hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS
+    (reachedByW3dE_toC h hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS
       hterm)
-    hWF hTT hNK hR hRootB hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
 
 end Zanzibar

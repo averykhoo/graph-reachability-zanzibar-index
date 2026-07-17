@@ -99,8 +99,6 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
     current proof needs that Python admission does NOT imply (each is a documented
     gap, ROADMAP "W4 — honest gaps at W4 close"):
 
-    * `rootB` — derived defs are boolean-ROOTED (`inter`/`excl` at the top).
-      Python taints through `union`/`computed` roots too.
     * `computedOnly` — derived defs read only computed operands (the compiled
       leaf-split form with `PClosureLeaf`-as-computed-leaf). Python also compiles
       `PDerivedTTU`/`PDerivedUserset` plan leaves — out of scope (W3a decision).
@@ -122,7 +120,6 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
     The ADD-ONLY store restriction (decision 6) is a property of the chain — no
     remove legs in `ReachedBy` — not a hypothesis here. -/
 structure W4Fragment (S : Schema) (T : Store) : Prop where
-  rootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2
   computedOnly : ∀ dt R e, S.lookup (dt, R) = some e →
     isDerived S (dt, R) = true → ComputedOnly e
   twoStrata : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -136,15 +133,27 @@ structure W4Fragment (S : Schema) (T : Store) : Prop where
 
 /-! ## The bundles sit inside the spec's accepted scope -/
 
+/-- A `ComputedOnly` expr is never `directs-only` — its leaves are all `computed`,
+    which `directsOnly` rejects (and `inter`/`excl` roots are rejected outright). -/
+theorem directsOnly_of_computedOnly : ∀ {e : Expr}, ComputedOnly e → directsOnly e = false := by
+  intro e
+  induction e with
+  | computed _ => intro _; rfl
+  | direct _ => intro h; exact h.elim
+  | ttu _ _ => intro h; exact h.elim
+  | union a b iha ihb => intro h; simp only [directsOnly, iha h.1, Bool.false_and]
+  | inter _ _ _ _ => intro _; rfl
+  | excl _ _ _ _ => intro _; rfl
+
 /-- **The W4 hypotheses imply the decision-15 scope predicate `GraphAccepts S`**
     (`SEMANTICS.md` §8): (1) object wildcards land on untainted relations —
     admission field `objWild`; (2) a wildcard USERSET restriction cannot reference
     a derived relation — `wsBare` bans non-bare wildcard restrictions outright;
-    (3) a TTU tupleset relation is never derived — a derived def is boolean-rooted
-    (`rootB`), boolean roots are not directs-only, and `ttuDirect` forces declared
-    tupleset defs to be directs-only. The CONVERSE is false: `GraphAccepts` admits
-    schemas outside `W4Fragment` (the honest-gaps list); this lemma orients the
-    fragment inside the accepted class, it does not claim to cover it. -/
+    (3) a TTU tupleset relation is never derived — a derived def is `ComputedOnly`
+    (`computedOnly`), `ComputedOnly` exprs are not directs-only, and `ttuDirect`
+    forces declared tupleset defs to be directs-only. The CONVERSE is false:
+    `GraphAccepts` admits schemas outside `W4Fragment` (the honest-gaps list); this
+    lemma orients the fragment inside the accepted class, it does not claim to cover it. -/
 theorem w4_within_scope {S : Schema} {T : Store}
     (hA : GraphAdmission S T) (hF : W4Fragment S T) : GraphAccepts S := by
   refine ⟨hA.objWild, ?_, ?_⟩
@@ -153,15 +162,16 @@ theorem w4_within_scope {S : Schema} {T : Store}
     exact absurd (hF.wsBare (r.1, r.2.1)
       (List.mem_flatMap.mpr ⟨d, hd, List.mem_filterMap.mpr
         ⟨r, hr, by rw [hwild]; rfl⟩⟩)) hne
-  · -- derived TTU tuplesets: boolean-rooted defs are never directs-only
+  · -- derived TTU tuplesets: `ComputedOnly` defs are never directs-only
     intro d hd tt htt
     by_contra hder
     rw [Bool.not_eq_false] at hder
     obtain ⟨e, hlk⟩ := isDerived_declared hder
     have hdo := hA.ttuDirect d hd tt htt ((d.1.1, tt.2), e)
       (mem_defs_of_lookup hlk) rfl
-    have hroot := hF.rootB ((d.1.1, tt.2), e) (mem_defs_of_lookup hlk) hder
-    cases e <;> simp [directsOnly] at hdo <;> simp [RootBoolean] at hroot
+    have hco := hF.computedOnly d.1.1 tt.2 e hlk hder
+    rw [directsOnly_of_computedOnly hco] at hdo
+    exact absurd hdo (by decide)
 
 /-! ## The final T-theorems -/
 
@@ -177,7 +187,7 @@ theorem graph_correct {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hqo : q.object.name ≠ STAR) :
     GraphModel.check σ q = sem S T q :=
   graph_correct_w3d2E q hA.wf hA.ttuDirect hA.nodup hA.ranked hA.storeValid
-    hF.bareStar hF.ttuStarFree hF.rootB hA.matchDecl hA.strat hF.term
+    hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hF.term
     hF.computedOnly hF.twoStrata hF.wsBare h hq hqs hqo
 
 /-- **T3 (`backend_equivalence`), full W4 scope.** The set engine and the graph
@@ -231,7 +241,7 @@ theorem no_ghost_grant {S : Schema} {T' : Store} {σ' : GraphState} (q : Query)
 theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
     (hA : GraphAdmission S T) (hF : W4Fragment S T) (h : ReachedBy σ S T) :
     Inv S σ :=
-  reachedByW3d2E_inv h hA.wf hA.ttuDirect hA.nodup hA.ranked hF.rootB hA.matchDecl
+  reachedByW3d2E_inv h hA.wf hA.ttuDirect hA.nodup hA.ranked hA.matchDecl
     hA.strat hF.computedOnly hF.twoStrata hF.wsBare hA.storeValid hF.bareStar
     hF.ttuStarFree hF.term
 
@@ -266,7 +276,6 @@ theorem drained_of_untainted {S : Schema} (hUT : UntaintedSchema S)
 theorem w4Fragment_of_untainted {S : Schema} {T : Store} (hUT : UntaintedSchema S)
     (hWS : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T) : W4Fragment S T where
-  rootB := fun _ _ hder => absurd hder (by simp [isDerived_untainted hUT])
   computedOnly := fun dt R _ _ hder => absurd hder (by simp [isDerived_untainted hUT])
   twoStrata := fun dt R _ _ hder => absurd hder (by simp [isDerived_untainted hUT])
   wsBare := hWS
@@ -318,13 +327,6 @@ theorem accepts : GraphAdmission Sx Tx where
 
 /-- The fragment bundle is inhabited by the witness schema/store. -/
 theorem fragment : W4Fragment Sx Tx where
-  rootB := by
-    intro d hd hder
-    simp only [Sx, List.mem_cons, List.not_mem_nil, or_false] at hd
-    rcases hd with rfl | rfl | rfl
-    · exact absurd hder (by decide)
-    · exact absurd hder (by decide)
-    · exact trivial
   computedOnly := by
     intro dt R e hlk hder
     have hmem := mem_defs_of_lookup hlk

@@ -32,7 +32,7 @@ Modeling decisions (ROADMAP W3d, decisions 1–6):
 4. **The key mapping** `affectedKeys` = `_map_deltas_to_keys`'s LeafFamily branch +
    `_fan_out`'s `via='computed'` branch, restricted to the fragment (`hLU`: operands
    are same-object untainted computed refs; the ttu/userset/tupleset-ttu dependent
-   branches are out of fragment by `hterm`/`hRootB`). The subject-level cheap path is
+   branches are out of fragment by `hterm`/`hCO`). The subject-level cheap path is
    NOT modeled (the model always full-object reconciles — Python's general path; the
    cheap path is an optimization with its own §5.4 escalations to full).
 5. **The loop** at one stratum: one round, then the leftover check as the

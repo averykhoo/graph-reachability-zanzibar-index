@@ -368,7 +368,7 @@ theorem reachedByW3c_edgesClosed {σ : GraphState} {S : Schema} {T : Store}
   rw [← hcore.edges, ← hcore.nodes]
   exact hInv.edgesClosed
 
-/-- A derived `RootBoolean`-fragment R-node is never an edge source on a W3c state
+/-- A derived (`ComputedOnly`-fragment) R-node is never an edge source on a W3c state
     (through the shadow; `hterm` supplies the no-TTU-target / no-store-subject
     terminality conditions). -/
 theorem reachedByW3c_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
@@ -701,7 +701,7 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
     * `uposNegDisjoint` — `upos` demands `¬covered`, `neg` demands `covered`, over
       the same row.
     * `uposEdgeFree` — a `upos` member is userset-shaped; every path onto the
-      `RootBoolean` R-node collapses to a single bare-sourced edge (shadow).
+      derived R-node collapses to a single bare-sourced edge (shadow).
     * `negEdgeFree` — the space rule, cross-pass: a `neg` member is *canonically*
       covered (master), every reconcile edge source is *canonically* uncovered
       (master), and canonical coverage is pass-invariant (star-general inertness) —
@@ -711,7 +711,6 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
     stores. -/
 theorem reachedByW3c_inv {σ : GraphState} {S : Schema} {T : Store}
     (hWF : WF S) (hNK : NodupKeys S) (hSV : StoreValidRules S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -737,16 +736,15 @@ theorem reachedByW3c_inv {σ : GraphState} {S : Schema} {T : Store}
       obtain ⟨dt, on, e', hk, hderr, hRner, honr, hlkr, hstars, hnegm, _⟩ :=
         hres k r res hrow
       subst hk
-      have hroot : RootBoolean e' :=
-        hRootB ⟨(dt, r), e'⟩ (mem_defs_of_lookup hlkr) hderr
+      have hco' : ComputedOnly e' := hCO dt r e' hlkr hderr
       -- collapse the path to a single edge (through the shadow)
       have hreach' : NReaches σ'.edges (subjNode n) (objNode ⟨dt, on⟩ r) := by
         rw [hcore.edges]; exact hreach
-      have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hNK hlkr hroot hW3a hreach'
+      have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hlkr hderr hco' hW3a hreach'
       rw [hcore.edges] at hedge1
       rcases hedge dt on r e' hderr hlkr honr (subjNode n) hedge1 with hbase | ⟨c, huc, _, hcs, hunc, _⟩
-      · -- a base in-edge of a RootBoolean R-node is impossible
-        exact reachedByRules_RootBoolean_no_inedge hSV hNK hlkr hroot
+      · -- a base in-edge of a derived R-node is impossible
+        exact reachedByRules_derived_no_inedge hSV hlkr hderr hco'
           (reachedByRules_of_admitted hσ0) (subjNode n) hbase
       · -- the reconcile edge's source is n itself: covered AND uncovered
         obtain ⟨hcov, hnstar, _⟩ := hnegm n hn
@@ -760,14 +758,13 @@ theorem reachedByW3c_inv {σ : GraphState} {S : Schema} {T : Store}
       obtain ⟨dt, on, e', hk, hderr, _hRner, honr, hlkr, _hstars, _, huposm⟩ :=
         hres k r res hrow
       subst hk
-      have hroot : RootBoolean e' :=
-        hRootB ⟨(dt, r), e'⟩ (mem_defs_of_lookup hlkr) hderr
+      have hco' : ComputedOnly e' := hCO dt r e' hlkr hderr
       have hreach' : NReaches σ'.edges (subjNode n) (objNode ⟨dt, on⟩ r) := by
         rw [hcore.edges]; exact hreach
-      have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hNK hlkr hroot hW3a hreach'
+      have hedge1 := reachedByW3a_reach_collapse_root hWF hSV hlkr hderr hco' hW3a hreach'
       rw [hcore.edges] at hedge1
       rcases hedge dt on r e' hderr hlkr honr (subjNode n) hedge1 with hbase | ⟨c, huc, hcb, hcs, _, _⟩
-      · exact reachedByRules_RootBoolean_no_inedge hSV hNK hlkr hroot
+      · exact reachedByRules_derived_no_inedge hSV hlkr hderr hco'
           (reachedByRules_of_admitted hσ0) (subjNode n) hbase
       · obtain ⟨_, hnp, hnstar, _⟩ := huposm n hn
         have hcn : c = n := subjNode_inj_of_ne_star hcs hnstar huc.symm

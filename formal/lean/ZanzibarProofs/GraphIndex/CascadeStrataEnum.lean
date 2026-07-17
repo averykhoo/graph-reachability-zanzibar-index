@@ -348,7 +348,6 @@ theorem w3d2_leg_context {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -366,7 +365,7 @@ theorem w3d2_leg_context {S : Schema} {T : Store} {σ σ0 : GraphState}
     (∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
     (∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) :=
-  ⟨fun s' hs' => checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat
+  ⟨fun s' hs' => checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hMatch hStrat
       hterm hCO hWSbare h0 hsh hschema hlk hder hco hLU2 hops hs' hqo,
    fun _ hchk => checkFnR_star_declared hTT hSV hTS h0 hsh hschema hco hqo hops hchk⟩
 
@@ -383,7 +382,6 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -398,18 +396,18 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
     W3dJobCoverage S T σ (enumJob2 σ dt on R e) := by
   have hcl := reachedByW3d2_edgesClosed h
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hRootB hSV hterm
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hCO hSV hterm
   have hschema : σ.schema = S := reachedByW3d2_schema h
   have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
       (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') → (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) := by
     intro r' hr' hd'
     obtain ⟨e', hlk'⟩ := isDerived_declared hd'
-    have hroot' : RootBoolean e' := hRootB ⟨(dt, r'), e'⟩ (mem_defs_of_lookup hlk') hd'
+    have hco' : ComputedOnly e' := hCO dt r' e' hlk' hd'
     obtain ⟨hset', hcomp'⟩ := hsettledOps r' hr' hd'
     exact ⟨hset', hcomp',
-      fun u hu => reachedByW3d2_reach_collapse_root hWF hSV hNK hlk' hroot' h hu⟩
-  obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS hRootB hMatch
+      fun u hu => reachedByW3d2_reach_collapse_root hWF hSV hlk' hd' hco' h hu⟩
+  obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS hMatch
     hStrat hterm hCO hWSbare h0 hsh hschema hlk hder hco hqo hLU2 hops
   exact w3dJobCoverage_enumJob2 hco hcl hqo hbridge hcovDecl hWSbare
 

@@ -261,7 +261,7 @@ theorem no_ghost_grant_rules (S : Schema) (T' : Store) (σ' : GraphState) (q : Q
 /-! ## W3a (star-free bare-subject derived booleans) scope — via `graph_correct_w3a`
 
 The first fragment with a DERIVED (`and`/`but not`) relation actually maintained by the delta
-processor: one `RootBoolean` derived key per untainted operand cone. `sem`'s stratifiability is the
+processor: one `ComputedOnly` derived key per untainted operand cone. `sem`'s stratifiability is the
 carried `Stratifiable S` (mixed schema); the graph equivalence is `graph_correct_w3a`. Scope:
 bare-subject star-free queries (userset subjects on derived keys are W3b's `upos` residue). T6a here
 carries the first REAL exclusion content — a derived `but not` actually excluding. -/
@@ -277,7 +277,6 @@ carries the first REAL exclusion content — a derived `but not` actually exclud
 theorem backend_equivalence_w3a (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -287,7 +286,7 @@ theorem backend_equivalence_w3a (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hqbare : q.subject.predicate = BARE) (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q hWF hStrat hValid,
-      graph_correct_w3a q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
+      graph_correct_w3a q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
 
 /-- **Historical milestone (W3a; see the `backend_equivalence_w3a` tag).**
 
@@ -296,7 +295,6 @@ theorem backend_equivalence_w3a (S : Schema) (T : Store) (σ : GraphState) (q : 
 theorem exclusion_effective_w3a (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -308,7 +306,7 @@ theorem exclusion_effective_w3a (S : Schema) (T : Store) (σ : GraphState) (q : 
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
-  · rw [graph_correct_w3a q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
+  · rw [graph_correct_w3a q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
     exact hDeny
 
 /-- **Historical milestone (W3a; see the `backend_equivalence_w3a` tag).**
@@ -318,7 +316,6 @@ theorem exclusion_effective_w3a (S : Schema) (T : Store) (σ : GraphState) (q : 
 theorem no_ghost_grant_w3a (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T') (hSF : StarFreeStore T')
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -328,14 +325,14 @@ theorem no_ghost_grant_w3a (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hqbare : q.subject.predicate = BARE) (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3a q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
+  rw [graph_correct_w3a q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
   exact hDeny
 
 /-! ## W3b (userset subjects on derived keys — the `upos` residue) scope — via `graph_correct_w3b`
 
 The W3a bare-subject restriction is LIFTED: the graph's edge-free `upos` residue now answers userset
 subjects on derived keys (blind-audit P4), so the corollaries hold for **every** star-free query.
-The schema fragment is unchanged (one `RootBoolean` derived stratum over untainted operands). -/
+The schema fragment is unchanged (one `ComputedOnly` derived stratum over untainted operands). -/
 
 /-- **Historical milestone (W3b) — superseded by the unsuffixed theorems in
     `FullScope.lean`**, which widen stores to bare-star (`BareStarStore`), admit
@@ -348,7 +345,6 @@ The schema fragment is unchanged (one `RootBoolean` derived stratum over untaint
 theorem backend_equivalence_w3b (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -358,7 +354,7 @@ theorem backend_equivalence_w3b (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q hWF hStrat hValid,
-      graph_correct_w3b q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqs hqo]
+      graph_correct_w3b q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqs hqo]
 
 /-- **Historical milestone (W3b; see the `backend_equivalence_w3b` tag).**
 
@@ -368,7 +364,6 @@ theorem backend_equivalence_w3b (S : Schema) (T : Store) (σ : GraphState) (q : 
 theorem exclusion_effective_w3b (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -380,7 +375,7 @@ theorem exclusion_effective_w3b (S : Schema) (T : Store) (σ : GraphState) (q : 
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
-  · rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqs hqo]
+  · rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqs hqo]
     exact hDeny
 
 /-- **Historical milestone (W3b; see the `backend_equivalence_w3b` tag).**
@@ -390,7 +385,6 @@ theorem exclusion_effective_w3b (S : Schema) (T : Store) (σ : GraphState) (q : 
 theorem no_ghost_grant_w3b (S : Schema) (T' : Store) (σ' : GraphState) (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T') (hSF : StarFreeStore T')
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -400,7 +394,7 @@ theorem no_ghost_grant_w3b (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU h hqs hqo]
+  rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqs hqo]
   exact hDeny
 
 /-! ## W3c (star-carrying stores — the `stars`/`neg` residue) scope — via `graph_correct_w3c`
@@ -424,7 +418,6 @@ theorem backend_equivalence_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -436,7 +429,7 @@ theorem backend_equivalence_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q hWF hStrat hValid,
-      graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+      graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
         hWSbare h hqs hqo]
 
 /-- **Historical milestone (W3c; see the `backend_equivalence_w3c` tag).**
@@ -448,7 +441,6 @@ theorem exclusion_effective_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -462,7 +454,7 @@ theorem exclusion_effective_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
-  · rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+  · rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
       hWSbare h hqs hqo]
     exact hDeny
 
@@ -475,7 +467,6 @@ theorem no_ghost_grant_w3c (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T')
     (hBS : BareStarStore T') (hTS : TtuStarFree S T')
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -487,7 +478,7 @@ theorem no_ghost_grant_w3c (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+  rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
     hWSbare h hqs hqo]
   exact hDeny
 
@@ -511,7 +502,6 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -523,7 +513,7 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q hWF hStrat hValid,
-      graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+      graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
         hWSbare h hq hqs hqo]
 
 /-- **Historical milestone (W3d-1; see the `backend_equivalence_w3d` tag).**
@@ -536,7 +526,6 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -550,7 +539,7 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
-  · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+  · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
       hWSbare h hq hqs hqo]
     exact hDeny
 
@@ -563,7 +552,6 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T')
     (hBS : BareStarStore T') (hTS : TtuStarFree S T')
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -575,7 +563,7 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO hLU
+  rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
     hWSbare h hq hqs hqo]
   exact hDeny
 
@@ -597,7 +585,6 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -611,7 +598,7 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q hWF hStrat hValid,
-      graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO
+      graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO
         hLU2 hWSbare h hq hqs hqo]
 
 /-- **Historical milestone (W3d-2; see the `backend_equivalence_w3d2` tag).**
@@ -623,7 +610,6 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -640,7 +626,7 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hWF hStrat hValid]
     exact hDeny
-  · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO
+  · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO
       hLU2 hWSbare h hq hqs hqo]
     exact hDeny
 
@@ -653,7 +639,6 @@ theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Qu
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T')
     (hBS : BareStarStore T') (hTS : TtuStarFree S T')
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -667,7 +652,7 @@ theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Qu
     (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat hterm hCO
+  rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO
     hLU2 hWSbare h hq hqs hqo]
   exact hDeny
 

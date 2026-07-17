@@ -108,7 +108,7 @@ theorem semAux_qirrel (S : Schema) (subject : SubjectRef) (T : Store) (q1 q2 : Q
 theorem checkFn_eq_sem_of_base {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (h0 : ReachedByRulesAdmitted σ0 S T)
     {s : SubjectRef} {dt on R : String} {e : Expr}
@@ -125,7 +125,7 @@ theorem checkFn_eq_sem_of_base {S : Schema} {T : Store} {σ σ0 : GraphState}
         = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r' := by
     intro r' hr'
     rw [hinert r' hr',
-        graphRec_base_eq hWF hTT hNK hR hSV hSF hRootB hMatch h0 hs hon r' (hleafUnt r' hr')]
+        graphRec_base_eq hWF hTT hNK hR hSV hSF hCO hMatch h0 hs hon r' (hleafUnt r' hr')]
     -- sem S T ⟨s,r',o⟩ = semAux S s T ⟨s,r',o⟩ fuelBound dt on r' (def); query-independence to ⟨s,R,o⟩
     show sem S T ⟨s, r', ⟨dt, on⟩⟩ = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
     exact semAux_qirrel S s T ⟨s, r', ⟨dt, on⟩⟩ ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
@@ -237,7 +237,7 @@ theorem graphRec_reduce_base_adm {σ : GraphState} {S : Schema} {T : Store}
 theorem checkFn_eq_sem {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3aAdmitted σ S T)
@@ -247,7 +247,7 @@ theorem checkFn_eq_sem {S : Schema} {T : Store} {σ : GraphState}
     (hs : s.name ≠ STAR) (hon : on ≠ STAR) :
     σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
   obtain ⟨σ0, h0, hred⟩ := graphRec_reduce_base_adm hSF hterm h (s := s) (dt := dt) (on := on)
-  exact checkFn_eq_sem_of_base hWF hTT hNK hR hSV hSF hRootB hMatch hStrat h0 hlk hco hleafUnt
+  exact checkFn_eq_sem_of_base hWF hTT hNK hR hSV hSF hCO hMatch hStrat h0 hlk hco hleafUnt
     (fun r' hr' => hred r' (hleafUnt r' hr')) hs hon
 
 /-! ## Derived-edge soundness — a materialised derived edge is `sem`-true
@@ -322,14 +322,15 @@ theorem reconcileKey_edge_guard {T : Store} {dt on R : String} {e : Expr} :
         unfold GraphState.reconcileKey; rw [List.foldl_cons]
       rw [this]; exact hchk
 
-/-- **A `RootBoolean` derived R-node has no in-edge in a rule-routed base.** A closure tuple landing
-    on `objNode ⟨dt,on⟩ R` would be either a stored `(dt,R)` tuple (none — `RootBoolean` ⇒ no
-    `Direct` arm, `StoreValidRules`) or a rewrite output `(dt,R)` (none — `noRuleOutputs_of_root`).
-    So the untainted base never feeds the R-node; every in-edge is a reconcile edge. -/
-theorem reachedByRules_RootBoolean_no_inedge {σ : GraphState} {S : Schema} {T : Store}
+/-- **A derived R-node has no in-edge in a rule-routed base.** A closure tuple landing
+    on `objNode ⟨dt,on⟩ R` would be either a stored `(dt,R)` tuple (none — a `ComputedOnly` def
+    has no `Direct` arm, `StoreValidRules`) or a rewrite output `(dt,R)` (none —
+    `noRuleOutputs_of_derived`, from the taint filter). So the untainted base never feeds the
+    R-node; every in-edge is a reconcile edge. -/
+theorem reachedByRules_derived_no_inedge {σ : GraphState} {S : Schema} {T : Store}
     {dt on R : String} {e : Expr}
-    (hSV : StoreValidRules S T) (hNK : NodupKeys S)
-    (hlk : S.lookup (dt, R) = some e) (hroot : RootBoolean e)
+    (hSV : StoreValidRules S T)
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
     (h : ReachedByRules σ S T) :
     ∀ x, (x, objNode ⟨dt, on⟩ R) ∉ σ.edges := by
   intro x hx
@@ -342,20 +343,19 @@ theorem reachedByRules_RootBoolean_no_inedge {σ : GraphState} {S : Schema} {T :
   · rw [heq] at htype hrel
     obtain ⟨e', rs, hlk', hrs, _⟩ := hSV t ht
     rw [← htype, ← hrel, hlk, Option.some.injEq] at hlk'
-    rw [← hlk', exprDirects_rootBoolean hroot] at hrs
+    rw [← hlk', exprDirects_computedOnly hco] at hrs
     simp at hrs
-  · exact noRuleOutputs_of_root hlk hNK hroot r hr' ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+  · exact noRuleOutputs_of_derived hder r hr' ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
 
 /-- **Derived-edge soundness (the forward half).** On a W3a-admitted state, every materialised
     derived edge `subjNode s → objNode ⟨dt,on⟩ R` (bare, star-free `s`; `on ≠ STAR`) witnesses
     `sem S T ⟨s,R,⟨dt,on⟩⟩ = true`. By induction over the write path: the base leg cannot feed the
-    `RootBoolean` R-node (`reachedByRules_RootBoolean_no_inedge`); a reconcile leg either inherits
+    derived R-node (`reachedByRules_derived_no_inedge`); a reconcile leg either inherits
     the edge (IH — the predecessor is W3a-admitted) or wrote it fresh, and then the guard at a
     W3a-admitted prefix mid-state gives `sem` via `checkFn_eq_sem`. -/
 theorem reachedByW3aAdmitted_derived_edge_sound {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -371,13 +371,12 @@ theorem reachedByW3aAdmitted_derived_edge_sound {S : Schema} {T : Store} {σ : G
   induction h with
   | base hr =>
     intro s dt on R e hlk hder _hs _hon hedge
-    have hroot : RootBoolean e := hRootB (⟨(dt, R), e⟩) (mem_defs_of_lookup hlk) hder
-    exact absurd hedge (reachedByRules_RootBoolean_no_inedge hSV hNK hlk hroot
+    exact absurd hedge (reachedByRules_derived_no_inedge hSV hlk hder (hCO _ _ _ hlk hder)
       (reachedByRules_of_admitted hr) (subjNode s))
   | reconcile dt' on' R' e' cands hRne hcands hder' hlke' hcStar honStar hprev ih =>
     intro s dt on R e hlk hder hs hon hedge
     rcases reconcileKey_edge_guard cands _ hedge with hin | ⟨pre, c, hpre, hc, ha, hb, hchk⟩
-    · exact ih hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU hlk hder hs hon hin
+    · exact ih hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU hlk hder hs hon hin
     · -- match endpoints: c = s, (dt',on',R') = (dt,on,R)
       obtain ⟨hdt, hon', hRR⟩ := objNode_inj_of_ne_star hon honStar hb
       subst hdt; subst hon'; subst hRR
@@ -388,7 +387,7 @@ theorem reachedByW3aAdmitted_derived_edge_sound {S : Schema} {T : Store} {σ : G
       have hmid := ReachedByW3aAdmitted.reconcile dt on R e' pre hRne
         (fun x hx => hcands x (hpremem x hx)) hder' hlke'
         (fun x hx => hcStar x (hpremem x hx)) honStar hprev
-      have hsem := checkFn_eq_sem hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hmid
+      have hsem := checkFn_eq_sem hWF hTT hNK hR hSV hSF hCO hMatch hStrat hterm hmid
         hlke' (hCO _ _ _ hlke' hder') (hLU _ _ _ hlke' hder') (hcStar c hc) honStar
       rw [hchk] at hsem
       exact hsem.symm
@@ -398,7 +397,7 @@ theorem reachedByW3aAdmitted_derived_edge_sound {S : Schema} {T : Store} {σ : G
 The backward half: on a suitably-covered W3a-admitted state, `sem S T ⟨s,R,⟨dt,on⟩⟩ = true` (bare
 star-free `s`) implies the derived edge is present. The reconcile pass covering `(dt,on,R)`
 enumerates `s`; its guard (`checkFn` at every prefix mid-state) is `sem = true` (`checkFn_eq_sem`),
-so the edge is admitted (the `RootBoolean` R-node is terminal, so no cycle rejects it) and persists.
+so the edge is admitted (the derived R-node is terminal, so no cycle rejects it) and persists.
 
 Coverage is modelled by an explicit list of reconcile *jobs* over an admitted base — faithful to
 `reconcile`/`_leaf_concretes` (`processor.py:382-423,497-507`): the processor enumerates, per
@@ -564,12 +563,11 @@ theorem w3aComplete_reached {S : Schema} {T : Store} {σ : GraphState}
 /-- **Candidate completeness (the backward half).** On a W3a-complete state, a `sem`-true bare
     star-free subject `s` at a derived key `(dt,R)` (`on ≠ STAR`) has its derived edge materialised:
     the covering job enumerates `s`; its guard is `sem = true` at every prefix mid-state
-    (`checkFn_eq_sem`); the write is admitted (terminal `RootBoolean` R-node) and persists through
+    (`checkFn_eq_sem`); the write is admitted (terminal derived R-node) and persists through
     the remaining jobs. -/
 theorem w3aComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -607,7 +605,7 @@ theorem w3aComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     have hcSpre : ∀ c ∈ pre', c.name ≠ STAR := fun c hc => hjcStar c (hpre'.subset hc)
     have hmid : ReachedByW3aAdmitted (σpre.reconcileKey T j.dt j.on j.R j.e pre') S T :=
       ReachedByW3aAdmitted.reconcile j.dt j.on j.R j.e pre' hjRne hcbpre hder hlk hcSpre hon hσpre
-    have := checkFn_eq_sem hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hmid
+    have := checkFn_eq_sem hWF hTT hNK hR hSV hSF hCO hMatch hStrat hterm hmid
       hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) hs hon
     rw [this, hsem]
   -- the covering job materialises the edge; it persists through `post`
@@ -638,7 +636,7 @@ theorem isDerived_declared {S : Schema} {k : String × String} (h : isDerived S 
   exact lookup_some_of_mem S (taintChain_subset_keys S S.keys.length k hmem)
 
 /-- **T2b, W3a fragment (`graph_correct_w3a`) — `check = sem` on bare-subject star-free queries.**
-    On a W3a-complete state over the mixed (one `RootBoolean` derived key per untainted operand cone)
+    On a W3a-complete state over the mixed (one `ComputedOnly` derived key per untainted operand cone)
     fragment, the graph read equals the specification for every bare-subject star-free query.
 
     * **Untainted query:** the read routes to `probeNonDerived`, which reduces to the admitted base
@@ -650,7 +648,6 @@ theorem isDerived_declared {S : Schema} {k : String × String} (h : isDerived S 
 theorem graph_correct_w3a {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -672,20 +669,20 @@ theorem graph_correct_w3a {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     have e3 : (q.subject.predicate == BARE) = true := by rw [beq_iff_eq]; exact hqbare
     rw [e1, e2, e3, Bool.true_and, Bool.true_and, Bool.true_and]
     obtain ⟨e, hlk⟩ := isDerived_declared hder
-    have hroot : RootBoolean e := hRootB ⟨(q.object.type, q.relation), e⟩ (mem_defs_of_lookup hlk) hder
+    have hco : ComputedOnly e := hCO _ _ _ hlk hder
     -- `reach ↔ sem`
     have hfwd : σ.reach (subjNode q.subject) (objNode q.object q.relation) = true →
         sem S T q = true := by
       intro hr
       have hN := reach_sound hr
-      have hedge := reachedByW3a_reach_collapse_root hWF hSV hNK hlk hroot
+      have hedge := reachedByW3a_reach_collapse_root hWF hSV hlk hder hco
         (reachedByW3aAdmitted_toW3a hadm) hN
-      exact reachedByW3aAdmitted_derived_edge_sound hWF hTT hNK hR hSV hSF hRootB hMatch hStrat
+      exact reachedByW3aAdmitted_derived_edge_sound hWF hTT hNK hR hSV hSF hMatch hStrat
         hterm hCO hLU hadm hlk hder hqs hqo hedge
     have hbwd : sem S T q = true →
         σ.reach (subjNode q.subject) (objNode q.object q.relation) = true := by
       intro hsemq
-      have hedge := w3aComplete_derived_edge hWF hTT hNK hR hSV hSF hRootB hMatch hStrat hterm hCO hLU
+      have hedge := w3aComplete_derived_edge hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU
         h hlk hder hqbare hqs hqo hsemq
       exact reach_complete hcl (NReaches.edge hedge)
     cases hr : σ.reach (subjNode q.subject) (objNode q.object q.relation) <;>
@@ -700,7 +697,7 @@ theorem graph_correct_w3a {S : Schema} {T : Store} {σ : GraphState} (q : Query)
       graphRec_reduce_base_adm hSF hterm hadm (s := q.subject)
         (dt := q.object.type) (on := q.object.name)
     have h2 := hredx q.relation hd
-    have h3 := graphRec_base_eq hWF hTT hNK hR hSV hSF hRootB hMatch hσ0adm hqs hqo q.relation hd
+    have h3 := graphRec_base_eq hWF hTT hNK hR hSV hSF hCO hMatch hσ0adm hqs hqo q.relation hd
     -- graphRec σ q.subject … q.relation = probeNonDerived σ q  (definitional, via ObjectRef eta)
     show GraphModel.probeNonDerived σ q = sem S T q
     calc GraphModel.probeNonDerived σ q
@@ -763,7 +760,7 @@ theorem checkFn_eq_sem_of_base_bs {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (h0 : ReachedByRulesAdmitted σ0 S T)
     {s : SubjectRef} {dt on R : String} {e : Expr}
@@ -779,7 +776,7 @@ theorem checkFn_eq_sem_of_base_bs {S : Schema} {T : Store} {σ σ0 : GraphState}
         = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r' := by
     intro r' hr'
     rw [hinert r' hr',
-        graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch h0 hs hon r'
+        graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch h0 hs hon r'
           (hleafUnt r' hr')]
     show sem S T ⟨s, r', ⟨dt, on⟩⟩ = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
     exact semAux_qirrel S s T ⟨s, r', ⟨dt, on⟩⟩ ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
@@ -793,7 +790,7 @@ theorem checkFn_eq_sem_bs {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
-    (hRootB : ∀ d ∈ S.defs, isDerived S d.1 = true → RootBoolean d.2)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3aAdmitted σ S T)
@@ -803,7 +800,7 @@ theorem checkFn_eq_sem_bs {S : Schema} {T : Store} {σ : GraphState}
     (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
     σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
   obtain ⟨σ0, h0, hred⟩ := graphRec_reduce_base_adm_bs hterm h (s := s) (dt := dt) (on := on)
-  exact checkFn_eq_sem_of_base_bs hWF hTT hNK hR hSV hBS hTS hRootB hMatch hStrat h0 hlk hco
+  exact checkFn_eq_sem_of_base_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat h0 hlk hco
     hleafUnt (fun r' hr' => hred r' (hleafUnt r' hr')) hs hon
 
 end Zanzibar
