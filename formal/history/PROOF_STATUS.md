@@ -8,6 +8,49 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18h (#4 remove legs — Leg R2 landed: retraction substrate + the R5 ripple map)
+
+Second Lean-editing leg of #4. ADDITIVE (140 ins, 0 del across `Cascade.lean` +112 /
+`CascadeInv.lean` +28), sorry-free, verify.sh lean 415/415 (Audit.lean untouched). Landed the
+STANDALONE retraction substrate — NOT the constructor (see the architectural finding).
+
+- `GraphState.removeLoggedOne` (guarded erase-one + retraction `pushDelta` iff a copy was
+  present — retract mirror of `writeLoggedOne`), `removeLoggedRules S t` (fold over the SAME
+  `rewriteClosure S t` the write path uses), `RemoveAdmits σ T t := t ∈ T` + schema/nodes/
+  watermark `@[simp]` mirrors; `structInv_removeLoggedOne/_Rules` (fold `structInv_removeEdgeOne`).
+  Python mirrors cited: `apply.py:48-68` (ADD+REMOVE share `ruleset.apply`), `core.py:686-704`
+  (`_remove_edge_locked` → `-1`), `core.py:278` (`_emit("REMOVED")`), `source.py:104-112`.
+- **Delta-faithfulness finding:** `removeLoggedRules` mirrors the UNTAINTED routed retraction
+  (dual of `writeLoggedRules`), NOT the processor's derived diffing removal (that's already
+  modeled by `removeEdgePair`); per-actual-erase emission is the exact dual of the write's
+  per-admitted-add — mirror-symmetric, no asymmetry. No kill.
+
+**★ ARCHITECTURAL FINDING (reshapes the leg plan — green-gate driven).** Adding the `remove`
+CONSTRUCTOR to `ReachedByW3d2E` is NOT additive: Lean's total-match requirement breaks every
+downstream induction until each remove case is discharged, and those need R4. So per house
+rule 3 the constructor moves to a FINAL leg **R5**, and the standalone substrate (R2) +
+occurrence-count invariant (R3) + confluence (R4) all land additively-green FIRST. R2 mapped
+the full R5 ripple surface:
+- **Group A** (4 direct inductions — `reachedByW3d2E_edgeHyg1`/`_structInv`/`_residueHygienic`/
+  `_residueDeclared`): all membership-read conclusions ⇒ EvalEq-invariant ⇒ remove case rides
+  R4→rebuild.
+- **★ The one obstruction:** `reachedByW3d2E_toC` (`CascadeStrataAssemble.lean:342`) has codomain
+  `ReachedByW3d2C` — an OPERATIONAL stateful inductive (pins outbox/watermark/edge multiplicity),
+  NOT membership-read ⇒ NOT EvalEq-invariant ⇒ R4 can't discharge it. **Fix (iii):** retire
+  `toC` from the remove path (its 3 callers restructure to induct on `ReachedByW3d2E` directly).
+- **Group B** rides automatically; **Group C** (Exec.lean driver) is optional additive.
+
+**Gate:** verify.sh lean 415/415 sorries=0. Change is additive Lean, driver (`Exec.lean`)
+UNTOUCHED and the new defs are outside zcli's call graph ⇒ zcli behavior byte-identical ⇒ conf
+unaffected (conf-heavy 76 + conf-rest 220 last green at R1; leaned on per gate-runbook §2's
+driver-untouched reasoning). `pytest tests/` (561+32) stands (no Python touched). Committed + pushed.
+
+**RESUME #4: Leg R3** — the occurrence-count invariant over `removeLoggedRules` (untainted edge
+`count = Σ` admitted occurrences; derived ∈ {0,1} by I5). Additive ⇒ green. Then R4 (confluence
+EvalEq), then R5 (constructor + discharge Group A + retire `toC`). Design file Target #4.
+
+---
+
 ## Session 2026-07-18g (#4 remove legs — Leg R1 landed: erase-one primitive + structInv)
 
 First Lean-editing leg of #4 (Route 1). ADDITIVE (96 insertions, 0 deletions across

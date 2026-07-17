@@ -108,14 +108,19 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > statement in-fragment (rc≥2 shared derivation drops a surviving edge); faithful op is
 > `List.erase` (decrement one), and NO `GraphState` ripple (edges already a multiset =
 > ref-count). Corrected legs R1–R4 in the design file (R3 occurrence-count invariant is the
-> hard content). **Leg R1 LANDED (2026-07-18g)** — `GraphState.removeEdgeOne` (erase-one,
-> mirror of `core.py`'s `-1` update) + membership/`count` lemmas + `structInv_removeEdgeOne`;
-> additive, verify.sh lean 415/415, conf re-green. **THE NEXT TASK: #4 Leg R2** — land
-> `removeLoggedRules`/`removeLoggedOne` (the deferred rewrite-closure fold + retraction-delta
-> emission) + the `remove` constructor on `ReachedByW3d2E` + `RemoveAdmits` + thread hyps
-> through `reachedByW3d2E_toC`. Then R3 (hard occurrence-count invariant), R4 (confluence).
-> After #4: back to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1
-> TTU/userset half, #2 strata, #4 legs R2–R4.
+> hard content). Legs R1+R2 LANDED (2026-07-18g/h). R1:
+> `GraphState.removeEdgeOne` (erase-one) + `count`/membership lemmas + `structInv_removeEdgeOne`.
+> R2: the standalone retraction substrate `removeLoggedOne`/`removeLoggedRules`/`RemoveAdmits`
+> + `structInv_removeLoggedOne/_Rules`, all additive; verify.sh lean 415/415. **Green-gate
+> finding: the `remove` CONSTRUCTOR must land LAST** (leg R5, armed with the R4 confluence) —
+> adding it to `ReachedByW3d2E` breaks every downstream induction until discharged. R2 mapped
+> the full R5 ripple surface (design file); the one obstruction is `reachedByW3d2E_toC`
+> (codomain `ReachedByW3d2C` not EvalEq-invariant → retire from the remove path, fix iii).
+> **THE NEXT TASK: #4 Leg R3** — the occurrence-count invariant over `removeLoggedRules`
+> (untainted edge `count = Σ` admitted occurrences; derived ∈ {0,1} by I5; ADDITIVE ⇒ green).
+> Then R4 (confluence EvalEq), R5 (constructor + discharge Group A + retire `toC`). After #4:
+> back to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1 TTU/userset half,
+> #2 strata, #4 legs R3–R5.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and

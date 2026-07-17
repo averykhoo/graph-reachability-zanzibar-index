@@ -251,30 +251,66 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
   first-occurrence == decrement-one confirmed). **`removeLoggedRules`/`removeLoggedOne` +
   retraction deltas DEFERRED to R2** (delta wiring wants the constructor's context; a
   fold-without-deltas now would be an unfaithful half-primitive).
-- **Leg R2 — `removeLoggedRules` (deferred from R1) + `remove` constructor + `RemoveAdmits`.**
-  First land `removeLoggedOne`/`removeLoggedRules S t` = fold `removeEdgeOne` over
-  `rewriteClosure S t` (mirror `writeLoggedRules` `Cascade.lean:161`/`writeLoggedOne` `:153`)
-  WITH the retraction-delta emission (mirror `writeLoggedOne.pushDelta`). Then the
-  4th constructor on `ReachedByW3d2E`:
-  `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with `RemoveAdmits σ T t`
-  (`t ∈ T`, mirror `source.py:104-112`). Thread fragment/store hyps through
-  `reachedByW3d2E_toC` (`:342`), weakening along `T.erase t` as `write` weakens along `t::T`.
+- **Leg R2 — standalone retraction substrate + consumer-surface map. ✅ DONE (2026-07-18h).**
+  Landed additive (140 ins, 0 del, verify.sh lean 415/415). `Cascade.lean`:
+  `GraphState.removeLoggedOne` (guarded erase-one + retraction `pushDelta` iff a copy was
+  present — mirror `writeLoggedOne`; Python mirrors `apply.py:48-68` routes ADD+REMOVE through
+  the SAME `ruleset.apply` fan-out, `core.py:686-704` `_remove_edge_locked` → `-1`,
+  `core.py:278` `_emit("REMOVED")`), `GraphState.removeLoggedRules S t` (fold over the SAME
+  `rewriteClosure S t`), `RemoveAdmits σ T t := t ∈ T` (mirror `source.py:104-112`) + schema/
+  nodes/watermark `@[simp]` mirrors. `CascadeInv.lean`: `structInv_removeLoggedOne/_Rules`.
+  **Delta-faithfulness finding:** `removeLoggedRules` mirrors the UNTAINTED routed retraction
+  (dual of `writeLoggedRules`), NOT the processor's derived diffing removal (already modeled
+  by `removeEdgePair`); emission is per-actual-erase (multiset shrink), exact dual of the
+  write's per-admitted-add — write/remove paths mirror-symmetric, no asymmetry.
+  **CRITICAL: the `remove` CONSTRUCTOR is NOT here** — adding it to `ReachedByW3d2E` breaks
+  every downstream induction until each remove case is discharged (needs R4), so per the
+  green gate the constructor moves to the FINAL leg R5. R2 is pure additive substrate.
 - **Leg R3 — the occurrence-count invariant (THE HARDEST SUB-LEMMA — the whole content).**
   By induction on the add-only chain: for every UNTAINTED edge, `count (a,b) σ.edges =
   Σ_{t∈T} (admitted occurrences of (a,b) in rewriteClosure S t)`; for every DERIVED edge
   (I5), count ∈ {0,1}. In-fragment (StructInv acyclic + DAG rewrite graph) admitEdge always
   passes for non-self rewrite edges ⇒ collapses to occurrence-counting; derived arm reuses
-  the diffing pass rc≡1 discipline. This is the ref-count decision made concrete.
+  the diffing pass rc≡1 discipline. This is the ref-count decision made concrete. ADDITIVE
+  (lemmas over `removeLoggedRules`, no inductive touched) ⇒ stays green.
 - **Leg R4 — the confluence lemma.** `EvalEq (removeLoggedRules σ t |> drain)
   (rebuild (T.erase t))` at edge-MEMBERSHIP (set) level, fed by R3: erase-one drops `(a,b)`
   from the read-set iff its surviving count hits 0 iff no surviving seed derives it = the
-  rebuild's membership. Then the `remove` case of every chain-inducting theorem rewrites to
-  the rebuild via `EvalEq` — **zero re-proof of T2a/T2b/T3/T6** (they fire at any drained
-  state, read via membership). Same `twoStrata`/`hLU2` bound (reuse 12f re-settlement).
+  rebuild's membership. Same `twoStrata`/`hLU2` bound (reuse 12f re-settlement). ADDITIVE ⇒
+  stays green.
+- **Leg R5 — the constructor + discharge the consumer surface (THE ONE non-additive leg;
+  lands green in ONE commit armed with R4).** Add the 4th `remove` constructor to
+  `ReachedByW3d2E`: `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with
+  `RemoveAdmits`. Then discharge the ripple surface mapped in R2:
+  - **Group A (direct `induction h`, each MUST get a remove case):** `reachedByW3d2E_edgeHyg1`
+    (`CascadeStrataEdge.lean:237`), `reachedByW3d2E_structInv` (`CascadeStrataInv.lean:122`),
+    `_residueHygienic` (`:223`), `_residueDeclared` (`:323`) — all four conclusions
+    (`EdgeHyg1`/`StructInv`/`ResidueHygienic`/`ResidueDeclared`) are MEMBERSHIP-READ ⇒
+    EvalEq-invariant ⇒ remove case = R4 confluence → theorem@rebuild → EvalEq-transport. NOTE
+    #3-5 actually delegate to the NON-E `reachedByW3d2_*` inductions (`CascadeStrataInv.lean:
+    109/211/285`, `Assemble:164/75`) — those may need remove cases too (check whether the
+    constructor is added to `ReachedByW3d2` as well, or the E-chain projects).
+  - **Group B (ride automatically):** `graph_correct_w3d2E`, `reachedByW3d2E_edgeHygienic`,
+    `reachedByW3d2E_inv`, `graph_correct`/`graph_reached_inv` (`FullScope.lean:183/241`),
+    T3/T6 (`Equiv.lean`) — no own induction; ride once Group A closes.
+  - **★ The one obstruction — `reachedByW3d2E_toC` (`CascadeStrataAssemble.lean:342`).** Its
+    codomain `ReachedByW3d2C` is an OPERATIONAL stateful inductive (pins outbox/watermark/edge
+    MULTIPLICITY), NOT membership-read ⇒ NOT EvalEq-invariant ⇒ R4 does NOT discharge its
+    remove case. **Recommended fix (iii):** RETIRE `toC` from the remove path — its only 3
+    callers (`graph_correct_w3d2E:494`, `edgeHyg1:281`, `edgeHygienic:347`) are all in the
+    surface; restructure them to induct on `ReachedByW3d2E` directly (empty/write/cascade via
+    the existing route; remove via R4→rebuild→EvalEq-invariance of the membership-read
+    conclusion). Alternatives (i) cascade the constructor down `ReachedByW3d2C`/`ReachedByW3d2`
+    (more inductive surgery) or (ii) an `EvalEq`-transport for `ReachedByW3d2C` (likely
+    intractable) are the fallbacks.
+  - **Group C (driver, optional):** `graphRunAux`/`graphRun_reached` (`Exec.lean:65-106`)
+    CONSTRUCT the constructors; extend the input type + fold with a `.remove` branch ONLY if
+    the zcli graph driver is to exercise removes (additive; not required for the theorems).
 
 - Route 2 (direct preservation — `remove` case in each chain-inducting proof, touches
   `CascadeStrataEdge/Inv/Assemble.lean`) is the fallback if R3 proves intractable; strictly
   MORE work (same erase-one op + same multiplicity reasoning, done locally everywhere).
 
 **Lift:** as predicted, ~one W3d sub-stage — but R3 (occurrence-count invariant) is GENUINE
-new content, not a reused primitive; R1/R2/R4 are clone-and-mirror. **RESUME: start Leg R1.**
+new content; R1/R2 clone-and-mirror; R4 the confluence; R5 the one non-additive assembly
+(green in one commit, with the `toC` retire as its trickiest piece). **RESUME: start Leg R3.**

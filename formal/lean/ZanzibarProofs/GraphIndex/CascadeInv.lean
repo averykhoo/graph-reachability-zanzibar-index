@@ -145,6 +145,34 @@ theorem structInv_writeLoggedRules {S : Schema} {σ : GraphState} (h : StructInv
       exact ih (structInv_writeLoggedOne h u)
   exact hgen (rewriteClosure S t) h
 
+/-- A single logged routed-edge retraction preserves `StructInv` (present branch =
+    `removeEdgeOne` then `pushDelta`; absent branch = identity). Retract mirror of
+    `structInv_writeLoggedOne`; the erase-one leg is `structInv_removeEdgeOne`. -/
+theorem structInv_removeLoggedOne {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (t : Tuple) : StructInv S (σ.removeLoggedOne t) := by
+  unfold GraphState.removeLoggedOne
+  split
+  · exact structInv_pushDelta (structInv_removeEdgeOne h _ _) _ _
+  · exact h
+
+/-- The logged rule-routed retraction preserves `StructInv` (a fold of
+    `structInv_removeLoggedOne` — the retract mirror of `structInv_writeLoggedRules`).
+    Same nodes/schema throughout; acyclicity is free because every step only ERASES an
+    edge (`removeEdgeOne_edges_subset`), so `NReaches` can only shrink. -/
+theorem structInv_removeLoggedRules {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (t : Tuple) : StructInv S (σ.removeLoggedRules S t) := by
+  unfold GraphState.removeLoggedRules
+  have hgen : ∀ (us : List Tuple) {σ : GraphState}, StructInv S σ →
+      StructInv S (us.foldl (fun acc u => acc.removeLoggedOne u) σ) := by
+    intro us
+    induction us with
+    | nil => intro σ h; exact h
+    | cons u rest ih =>
+      intro σ h
+      rw [List.foldl_cons]
+      exact ih (structInv_removeLoggedOne h u)
+  exact hgen (rewriteClosure S t) h
+
 /-- One W3d logged reconcile job (diffing pass then the coalesced processor emission)
     preserves `StructInv`. -/
 theorem structInv_applyLogged {S : Schema} {σ : GraphState} (h : StructInv S σ)

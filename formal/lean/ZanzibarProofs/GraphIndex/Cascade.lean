@@ -239,6 +239,118 @@ theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
     · rw [pushDelta_watermark, writeDirect_watermark]
     · rfl
 
+/-! ## Logged retractions (W3d remove-leg R2 substrate — the retract mirror of the
+    logged writes above)
+
+`_apply_row` (`connectedstore/apply.py:48-68`) routes BOTH an ADD and a REMOVE log row
+through the IDENTICAL `ruleset.apply(triple)` rewrite fan-out (`apply.py:61`), then applies
+`_add_tuple_trusted` (ADD) or `_remove_tuple_trusted` (REMOVE) per rewrite-closure member.
+So the retraction of a raw tuple is the fold of a per-member edge decrement over the SAME
+`rewriteClosure S t` the write path folds `writeLoggedOne` over — modelled below as
+`removeLoggedRules`, the exact retract mirror of `writeLoggedRules`. The per-member step
+uses `removeEdgeOne` (erase ONE copy — the ref-counted `-1`, NOT the filter-all
+`removeEdgePair`; see the `ReconcileDiff.lean` R1 KILL note) and emits its retraction
+delta the way `writeLoggedOne` emits its write delta. These are STANDALONE additive defs:
+the `remove` constructor on `ReachedByW3d2E` (which consumes them) is a LATER leg (R5),
+armed with the R4 confluence — added last so every increment stays green. -/
+
+/-- One logged routed-edge retraction: erase ONE copy of the guarded direct edge and,
+    iff a copy was actually present to remove, emit its retraction delta row. The exact
+    retract mirror of `writeLoggedOne`: where the write emits iff the edge was ADMITTED
+    (the direct-edge multiset GREW), the retraction emits iff the edge was PRESENT (the
+    multiset SHRANK) — same "emit on an actual flip of the direct-edge multiset" rule, one
+    delta at the object node with the tuple's relation. Mirror of Python
+    `_remove_tuple_trusted` → `remove_edge_by_id` → `_remove_edge_locked`
+    (`index_v4/core.py:686-704`): the ref-counted `-1` update
+    (`_add_direct_edge_unsafe(subject_id, object_id, -1)`, `core.py:704`) is the sole
+    driver of `_emit(subject_id, object_id, "REMOVED")` on the reachability flip
+    (`core.py:278`, denormalised over the closure; the model reconstructs that cone at
+    cascade time via `affectedObjects`, decision 1). The presence guard mirrors the
+    `direct_edge_count == 0 ⇒ ValueError` reject (`core.py:700-702`) / the
+    non-existent-endpoint `ValueError` (`index_v4/wildcard.py:320-323`); store consistency
+    makes the else-branch dead at every admitted removal (an R3 fact), so it is present
+    only for totality. -/
+def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
+  if (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
+  then (σ.removeEdgeOne (subjNode t.subject) (objNode t.object t.relation)).pushDelta
+    (objNode t.object t.relation) t.relation
+  else σ
+
+/-- **The logged rule-routed retraction**: the retract mirror of `writeLoggedRules` — fold
+    `removeLoggedOne` over the SAME `rewriteClosure S t` the write path folds
+    `writeLoggedOne` over (`RuleSet.apply t` as a list, `RulesWrite.lean:106`). Mirrors
+    `_apply_row`'s REMOVE branch: `ruleset.apply(triple)` fan-out
+    (`connectedstore/apply.py:61`) with `_remove_tuple_trusted` per member. -/
+def GraphState.removeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
+  (rewriteClosure S t).foldl (fun acc u => acc.removeLoggedOne u) σ
+
+/-- **The chain-level retraction admission guard** — the retract mirror of the write leg's
+    `FoldAdmits`. A raw tuple may be retracted only if it is IN the store: `t ∈ T`. Mirror
+    of `TupleSource.remove` (`connectedstore/source.py:104-112`), whose `engine.remove_tuple`
+    raises `ValueError` and logs nothing on an absent tuple. `σ` is carried for constructor
+    symmetry with the write leg's `hadm : FoldAdmits σ …` (the guard itself is store-only). -/
+def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
+
+/-- One logged retraction leaves the schema fixed. -/
+@[simp] theorem removeLoggedOne_schema (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).schema = σ.schema := by
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [pushDelta_schema, removeEdgeOne_schema]
+  · rfl
+
+/-- One logged retraction leaves the nodes fixed (node GC is modeled away, cf.
+    `removeEdgeOne`). -/
+@[simp] theorem removeLoggedOne_nodes (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).nodes = σ.nodes := by
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [pushDelta_nodes, removeEdgeOne_nodes]
+  · rfl
+
+/-- One logged retraction leaves the watermark untouched (it only decrements an edge and
+    appends a frontier row — the drain watermark advances in the cascade, not here). -/
+@[simp] theorem removeLoggedOne_watermark (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).watermark = σ.watermark := by
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [pushDelta_watermark, removeEdgeOne_watermark]
+  · rfl
+
+/-- The logged retraction keeps the schema fixed (a fold of `removeLoggedOne_schema`). -/
+theorem removeLoggedRules_schema (σ : GraphState) (S : Schema) (t : Tuple) :
+    (σ.removeLoggedRules S t).schema = σ.schema := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = ts
+  induction ts generalizing σ with
+  | nil => rfl
+  | cons u rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih]; exact removeLoggedOne_schema σ u
+
+/-- The logged retraction keeps the nodes fixed (a fold of `removeLoggedOne_nodes`). -/
+theorem removeLoggedRules_nodes (σ : GraphState) (S : Schema) (t : Tuple) :
+    (σ.removeLoggedRules S t).nodes = σ.nodes := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = ts
+  induction ts generalizing σ with
+  | nil => rfl
+  | cons u rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih]; exact removeLoggedOne_nodes σ u
+
+/-- The logged retraction leaves the watermark untouched (mirror of
+    `writeLoggedRules_watermark`; a fold of `removeLoggedOne_watermark`). -/
+theorem removeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
+    (σ.removeLoggedRules S t).watermark = σ.watermark := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = ts
+  induction ts generalizing σ with
+  | nil => rfl
+  | cons u rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih]; exact removeLoggedOne_watermark σ u
+
 /-! ## The reconcile pass is `EvalEq`-congruent -/
 
 /-- Persisted coverage is residue-determined. -/
