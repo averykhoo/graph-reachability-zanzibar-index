@@ -19,8 +19,8 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 ## Current status — 2026-07-17
 
 - **2026-07-17 — the three OPEN 2026-07-17 divergences CLOSED (+ a 4th found en route)
-  + reg13 admission wart fixed + fuzzer exclusions reverted; full gate GREEN; UNCOMMITTED
-  (awaiting Avery's go-ahead).**
+  + reg13 admission wart fixed + fuzzer exclusions reverted; full gate GREEN; committed
+  as `d517fb5`.**
   The three OPEN/latent divergences filed earlier today (below) were root-caused and fixed,
   their strict xfails flipped to plain pins: **Fix A** — the reconcile audit-set builder
   (`processor._leaf_concretes`, + `bulk_backfill` mirror) now lifts a referenced tainted
@@ -41,7 +41,7 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
   Details: `docs/spec-deviations.md` 2026-07-17 ("the three OPEN 2026-07-17 divergences CLOSED");
   formal note in `formal/CORRESPONDENCE.md` §7.
 - **2026-07-17 — F1/F2 CLOSED + fuzzer blind-spot hardening landed; full gate green;
-  UNCOMMITTED (awaiting Avery's go-ahead).** The F1/F2 divergences (and their
+  committed as `d517fb5`.** The F1/F2 divergences (and their
   newly-found "detonation" — innocent-write lockout, a 3rd divergence) are closed by a
   compile-time scope rejection (`DoublyBridgedShapeError`, both backends, literal
   `T:*#p` ∩ object-wildcard criterion) + a set-engine ghost-hop safeguard (never
@@ -75,15 +75,25 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
   profile). Record: [`docs/history/perf-round5-2026-07.md`](docs/history/perf-round5-2026-07.md).
   Standing perf guardrails (fence, dead-ends, hygiene) live in
   [`docs/perf-next-round.md`](docs/perf-next-round.md).
-- **Clean on `master`.** Last change: docs cleanup (commit `972993d`, retire
-  completed design/planning docs + align docs to code).
+- **Clean on `master`.** Last change: the 2026-07-17 divergence closures above
+  (commit `d517fb5`).
 
 ---
 
 ## Open-TODO board
 
 ### Active work
-- [x] **DONE 2026-07-17 (full gate GREEN; uncommitted — commit pending Avery's go-ahead).** **Closed the three OPEN 2026-07-17 divergences (+ a 4th
+- [ ] **IN PROGRESS 2026-07-17 (Claude): formal fragment widening — the `rootB` gap**
+      (union-rooted derived defs; `formal/HANDOFF.md` §4 recommendation #2). Recon +
+      attack probes done: the Lean operational chain is byte-identical to Python on
+      `taint_union_over_boolean` (check + state), but mid-chain the write leg materializes
+      the union fanout edge on the derived R-node and the cascade diff retracts it —
+      Python never creates it (`compile_ruleset` taint-routes off the fanout). Plan:
+      taint-filter `schemaRewrites` (model-faithfulness fix), replace the ~8 contentful
+      `RootBoolean` leaf lemmas with `isDerived`-based ones, drop/weaken `rootB` from
+      `W4Fragment` + the `hRootB` threading (~114 audited theorems gain scope), then
+      un-exclude `taint_union_over_boolean` from `GRAPH_FRAGMENT`.
+- [x] **DONE 2026-07-17 (full gate GREEN; committed as `d517fb5`).** **Closed the three OPEN 2026-07-17 divergences (+ a 4th
       found en route) + the reg13 admission wart; reverted the fuzzer exclusions.** Fix A (the
       `processor._leaf_concretes` `upos` lift for `derived-computed`/`derived-userset` leaves,
       mirrored in `bulk_backfill`) closed the two graph completeness gaps + the new 4th; Fix B
@@ -96,7 +106,7 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
       `test_pderived_recording_promote_demote_hysteresis` + `test_i6_upos_userset_implicit_bites`;
       three prior strict xfails flipped to plain pins. Details: `docs/spec-deviations.md`
       2026-07-17; formal note in `formal/CORRESPONDENCE.md` §7.
-- [x] **DONE 2026-07-17 (gate green; uncommitted — commit pending Avery's go-ahead).**
+- [x] **DONE 2026-07-17 (gate green; committed as `d517fb5`).**
       **F1/F2 fix (started 2026-07-17, Claude+Avery):** compile-time scope rejection of
       shapes in `bridged_in ∩ bridged_out` (a shape that is both a wildcard-userset
       shape and an object-wildcard shape — the F1/F2 precondition). Decision: reject at
@@ -121,10 +131,25 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 Migrated from the `README.md` "TODO" list (its struck-through items already shipped).
 
-- [ ] **Track user-triples vs rule-triples in the index** — partial today:
-      boolean relations already distinguish storage leaves from routed leaves, but
-      pure-union relations still mix user-added and rule-derived triples. (The dead
-      `legacy/index_v3.py` `user_edge_count` musing was the v3 gesture at this.)
+- [x] ~~**Track user-triples vs rule-triples in the index.**~~
+      CLOSED as outsourced-by-design 2026-07-17. Raw user tuples are stored exactly
+      once — `TupleV1` + `TupleLogV1` are the source of truth; the set engine is
+      in-memory and rebuilds from `TupleV1`. The graph index is a provenance-blind
+      materialized view: its direct edges are its own materialization (post
+      rule-routing), not a second tuple store. The correctness hazard the split would
+      guard (a remove of a never-added tuple whose pure-union edge exists only via
+      rule routing silently corrupting the mixed `direct_edge_count`) is already
+      closed at the right layer: `TupleSource.remove` validates against stored tuples
+      and raises before logging (`connectedstore/source.py`), and the
+      log-replayability contract declares apply-time rejection a corruption signal,
+      never an op rejection. The residual audit exists empirically:
+      `formal/conformance/test_conformance_remove.py` pins driven graph state == a
+      fresh add-only rebuild. Boolean relations' storage-leaf/routed-leaf split
+      exists for TTU semantics, not provenance; the pure-union TTU analog was closed
+      as unreachable 2026-07-13 (`_validate_ttu_tuplesets`). All that would remain is
+      defense-in-depth for direct standalone `WildcardIndex` misuse — the same trust
+      boundary every other invariant (I5, log replayability) already assumes. (The
+      dead `legacy/index_v3.py` `user_edge_count` musing was the v3 gesture at this.)
 - [x] ~~**Extend the hypothesis schema generator to emit star-bridge cycle shapes.**~~
       DONE 2026-07-16. Added a dedicated star-bridge generator + `StarBridgeParityMachine`
       to `tests/test_hypothesis.py` (emits `parent:[T,T:*]` / `A:[user,T:*#A,T#B]` /
@@ -186,9 +211,14 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
       state-functional `implicit` flag — promote step 2d + demote-on-release, I6 extended;
       hysteresis pin `test_pderived_recording_promote_demote_hysteresis`).
 - [ ] **Other documented latent/theoretical notes** — a handful of
-      "documented, no corpus exercises it, not urgent" corners (e.g. a from-chain
-      TARGET theoretical note; tupleset-of-derived latent gap). The full inventory
-      is the divergence log: [`docs/spec-deviations.md`](docs/spec-deviations.md).
+      "documented, no corpus exercises it, not urgent" corners. As of 2026-07-17 the
+      inventory is: the from-chain TARGET theoretical note (unreachable by any
+      compilable schema; fails LOUD via cascade quiescence if ever reached —
+      2026-07-13 X4 entry) and the I7 checker corner (an in-place residue-version
+      regression to exactly 1 is undetectable; checker sensitivity, not system
+      correctness — P6 #1). The tupleset-of-derived latent gap formerly cited here
+      was RESOLVED 2026-07-13 (P5 #3 resolution: unreachable, closed as benign).
+      The full log: [`docs/spec-deviations.md`](docs/spec-deviations.md).
       Do not chase these speculatively; act only if a real schema/corpus surfaces one.
 
 _(Declined / dead-end items — do NOT re-chase — are listed in

@@ -472,7 +472,15 @@ class DeltaProcessor:
         s_node = self._node(sp, st, sn)
 
         if sp != '...':
-            # userset subject: upos, never edges
+            # userset subject: upos, never edges. UNREACHABLE from the cascade today
+            # (the sole caller): _map_deltas_to_keys forces userset-subject deltas on
+            # 'userset-storage' leaves to a full reconcile, and 'closure' leaves can
+            # never receive a userset-subject flip -- their stored subjects are bare,
+            # bare ('...') nodes have no incoming edges (objects always carry a
+            # relation predicate; bridges target relation-predicated nodes), so no
+            # transitive userset path into them exists. Kept correct-if-reached as
+            # belt-and-braces against future routing changes; see
+            # docs/spec-deviations.md 2026-07-17 Fix B code-health note.
             if s_node is not None:
                 want_upos = should and not covered
                 want_neg = covered and not should

@@ -569,9 +569,12 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
   v4 has I1–I12 + paranoia mode now (`index_v4/invariants.py`); v3 is `legacy/`
 * ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
   the ParityEngine walks, and the hypothesis campaign (`tests/test_hypothesis.py`)
-* support tracking user-triples and rule-triples in the index
-    * partially there: derived-relation storage leaves vs routed leaves make the
-      distinction for boolean relations; pure-union relations still mix them
+* ~~support tracking user-triples and rule-triples in the index~~ resolved by
+  decision (2026-07-17): raw tuples live exactly once in `TupleV1`/`TupleLogV1`;
+  the index's direct edges are its own materialization, not a second tuple store,
+  and `TupleSource.remove` already guards the remove hazard at the source layer
+  (full rationale in `HANDOFF.md`; the boolean storage-leaf vs routed-leaf split
+  is for TTU semantics, not provenance)
 * ~~parse the fga schema (json) into filters and rewrite rules~~
   `parse_openfga_json` (OpenFGA 1.1 authorization-model JSON → the same AST)
 * ~~store the filters and rewrite rules in the database~~ resolved by decision:

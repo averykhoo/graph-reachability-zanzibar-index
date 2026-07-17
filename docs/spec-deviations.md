@@ -1415,6 +1415,16 @@ with an incoming direct edge). Two symmetric halves:
   full `_reconcile` rather than the cheap subject path), so its promote logic is belt-and-braces —
   correct if ever reached, but not exercised by the current write routing.
 
+  *Resolution (2026-07-17, verified — the hedge made precise).* The branch is genuinely
+  unreachable from the cascade, its sole caller. `_map_deltas_to_keys` routes every
+  userset-subject delta on a `'userset-storage'` leaf to a full reconcile (blind-audit P3),
+  and the only other `LeafFamily` kind, `'closure'`, cannot receive a userset-subject flip:
+  its stored subjects are bare, and bare (`'...'`) nodes have no incoming edges (objects
+  always carry a relation predicate; bridges target relation-predicated nodes), so no
+  transitive userset path into a closure leaf exists. Kept correct-if-reached (not converted
+  to an assert) as belt-and-braces against future routing changes; the argument is now also
+  a comment at the branch itself (`processor.py::_reconcile_subject`).
+
 ### reg13 — cross-reference (not duplicated)
 
 The graph vacuous-accept admission wart in `zanzibar_utils_v1.py::RuleSet.apply` (pure-union no-match
@@ -1458,4 +1468,6 @@ by projected-out flags or by strictly-lower-stratum residue reads — the state-
 writes (never loosens), toward a `matchDecl` guarantee the model already assumed. See
 `formal/CORRESPONDENCE.md` §7 for the model↔code note. **NOTE: the phased `verify.sh` is being run
 separately by the orchestrator and is NOT claimed green here** — only the `pytest`/hypothesis runs
-above were executed in this session.
+above were executed in this session. *(Follow-up: the orchestrator subsequently ran the full gate
+green — `verify.sh` lean sorry-free 412/412 / conf-heavy 68 / conf-rest 195 all PASSED plus the
+6-seed fuzz sweep — recorded in `HANDOFF.md` 2026-07-17 and landed as commit `d517fb5`.)*
