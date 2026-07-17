@@ -460,12 +460,39 @@ class _BulkBackfill:
         return node
 
     def _leaf_concretes(self, o_type: str, o_name: str, spec) -> list[NodeKey]:
-        if spec.kind in ('closure', 'derived-userset'):
+        if spec.kind == 'closure':
             leaf_key = self._concrete_key(spec.predicate, o_type, o_name)
             return [] if leaf_key is None else self._incoming_concretes(leaf_key)
+        if spec.kind == 'derived-userset':
+            # storage leaf concretes PLUS, for each stored userset X ([T#P], P derived)
+            # granted on it, the members of P(X): edge-free userset memberships (P4)
+            # recorded only in X's residue upos -- lift or the dependent never sees them
+            # (closes the userset-subject-through-derived lookup-gate, 2026-07-17; X4b analog)
+            leaf_key = self._concrete_key(spec.predicate, o_type, o_name)
+            out: dict[NodeKey, None] = {}
+            if leaf_key is not None:
+                for n in self._incoming_concretes(leaf_key):
+                    out[n] = None
+            node = self._find_leaf_node(spec)
+            for x in self._stored_userset_subjects(o_type, o_name, spec.predicate,
+                                                   node.subject_type, node.subject_predicate):
+                for n in self._ttu_target_upos_nodes([(node.subject_type, x)],
+                                                     node.subject_predicate):
+                    out[n] = None
+            return list(out)
         if spec.kind == 'derived-computed':
+            # aliased relation's incoming concretes PLUS its edge-free userset
+            # memberships from its residue upos (P4): a Computed alias over a tainted
+            # relation must lift them or never sees userset-shaped members
+            # (closes the from-chain-through-computed-alias lookup-gate, 2026-07-17; X4b analog)
             d_key = self._concrete_key(spec.predicate, o_type, o_name)
-            return [] if d_key is None else self._incoming_concretes(d_key)
+            out = {}
+            if d_key is not None:
+                for n in self._incoming_concretes(d_key):
+                    out[n] = None
+            for n in self._ttu_target_upos_nodes([(o_type, o_name)], spec.predicate):
+                out[n] = None
+            return list(out)
         if spec.kind in ('derived-ttu', 'derived-tupleset-ttu'):
             node = self._find_leaf_node(spec)
             if spec.kind == 'derived-ttu':
@@ -668,6 +695,17 @@ class _BulkBackfill:
                 continue
             if plan.check_fn(ctx, (pred, typ, name)):
                 upos.add(nkey)
+
+        # (2d) promote-on-record mirror (processor _reconcile step 2d): every USERSET-
+        #      shaped node recorded in neg/upos is pinned EXPLICIT (state-functional
+        #      canonical form). Bare-entity ('...') keys are excluded, matching the
+        #      processor. Bulk needs NO demote counterpart -- it builds from scratch, so
+        #      it is already state-functional (an un-recorded node is simply never
+        #      promoted here).
+        for nkey in (neg | upos):
+            pred, typ, name, wild = nkey
+            if pred != '...' and wild == '':
+                self._intern(nkey, implicit=False)
 
         # (3) residue upsert iff changed (fresh build: iff non-empty), version=1.
         if (stars != old_stars) or (neg != old_neg) or (upos != old_upos):

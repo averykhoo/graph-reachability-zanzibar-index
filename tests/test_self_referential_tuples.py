@@ -136,3 +136,65 @@ def test_self_referential_ttu_parent_add_remove_restores():
     wr2('add', self_parent)
     assert after == _state(s2, w2), 'post-remove state diverges from a fresh build'
     s2.close()
+
+
+# --------------------------------------------------------------------------- #
+# 3. Promote-on-record + demote-on-release make the `implicit` flag state-
+#    functional (2026-07-17). This pins BOTH halves of the fix in one construction.
+# --------------------------------------------------------------------------- #
+
+# `r0` is UNTAINTED ([user]); its object node (r0,doc,d1) doubles as the from-chain
+# userset subject `doc:d1#r0` of the derived `r4` (an intersection of two identical
+# TTUs). A raw grant `u9 r0 d1` first creates (r0,doc,d1) as an implicit endpoint;
+# adding the parent tuple records it in r4@d2's upos (promote -> explicit); removing
+# the parent drops the recording while the node survives on u9 (demote -> implicit).
+HYSTERESIS_SCHEMA = ('type user\n'
+                     'type doc\n'
+                     '  relations\n'
+                     '    define parent: [doc]\n'
+                     '    define r0: [user]\n'
+                     '    define r4: (r0 from parent) and (r0 from parent)\n')
+
+
+def test_pderived_recording_promote_demote_hysteresis():
+    """State-functional canonical form of the `implicit` flag, both halves:
+
+    (2) promote-on-record: after `u9 r0 d1` (creates (r0,doc,d1) implicit, rc>=1) and
+        `d1 parent d2`, the from-chain pass records doc:d1#r0 in r4@d2's upos and
+        promotes the pre-existing node explicit -- so the driven state equals a fresh
+        build of the SAME two tuples in the OPPOSITE order (before the promote half,
+        the fresh-vs-driven comparison was order-dependent).
+    (3) demote-on-release: removing the parent drops the recording; the node survives
+        on the u9 grant and is demoted back to implicit, so the state returns EXACTLY
+        to the pre-parent snapshot (this assertion FAILS without the demote half --
+        the node would stay stuck explicit, hysteresis drift)."""
+    from tests.oracle import Oracle, OracleTuple
+
+    grant = ('...', 'user', 'u9', 'r0', 'doc', 'd1')
+    parent = ('...', 'doc', 'd1', 'parent', 'doc', 'd2')
+
+    session, widx, proc, write = build(HYSTERESIS_SCHEMA)
+    write('add', grant)
+    before = _state(session, widx)
+
+    # (2) record -> promote. Driven [grant, parent] == fresh [parent, grant].
+    write('add', parent)
+    s2, w2, _p2, wr2 = build(HYSTERESIS_SCHEMA)
+    wr2('add', parent)
+    wr2('add', grant)
+    assert _state(session, widx) == _state(s2, w2), \
+        'promote-on-record: driven vs opposite-order fresh build diverge'
+    s2.close()
+
+    # (3) un-record -> demote. State returns exactly to the pre-parent snapshot.
+    write('remove', parent)
+    assert _state(session, widx) == before, \
+        'demote-on-release: post-remove state diverges from the pre-parent state'
+    proc.audit_fixpoint()
+
+    # answers still track the oracle (grant-only state)
+    oracle = Oracle(HYSTERESIS_SCHEMA, [OracleTuple(*grant)])
+    for q in [('...', 'user', 'u9', 'r0', 'doc', 'd1'),
+              ('r0', 'doc', 'd1', 'r4', 'doc', 'd2')]:
+        assert widx.check(*q) == oracle.check(*q), q
+    session.close()

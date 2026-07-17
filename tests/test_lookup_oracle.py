@@ -103,16 +103,27 @@ A tamper suite proves the gate can fail: corrupted results (leaked id, dropped
 id, cleared exclusions, dropped neg) must each trip the checkers.
 """
 
+import os
 import random
 
 import pytest
+from hypothesis import HealthCheck, assume, given, settings, strategies as st
+
+# Deep-aware cap for the (expensive, brute-force-referenced) generated-schema gate: a real
+# hunt under HYPOTHESIS_PROFILE=deep, a cheap safety net otherwise.
+_GATE_MAX_EXAMPLES = 30 if os.environ.get('HYPOTHESIS_PROFILE') == 'deep' else 6
 
 from setengine import ALL_SETOPS, SetEngine
 from setengine.memberset import MemberSet
 from zanzibar_utils_v1 import (Direct, TTU, Union, Intersection, Exclusion,
-                               parse_openfga_schema, parse_schema_ast)
+                               parse_openfga_schema, parse_schema_ast,
+                               derive_schema_info, unparse_schema_ast,
+                               UnsupportedByGraphIndex,
+                               DoublyBridgedShapeError,
+                               wildcard_userset_restriction_shapes)
 from tests.oracle import Oracle, OracleTuple
 from tests.parity import _GraphSide, _SetSide, GHOST_NAME
+from tests.test_hypothesis import schema_asts, _op_pool
 from tests.test_matrix import _boolean_pool, _demorgan_pool
 from tests.test_wildcard_property import OBJECT_WC, _candidate_raw_tuples
 
@@ -459,6 +470,51 @@ def test_lookup_oracle_gate_demorgans_reverse(load_fga_schema):
 
 
 # ---------------------------------------------------------------------------
+# G4 (deviations 2026-07-17): the lookup-surface battery over GENERATED schemas
+# (schema_asts, with the G2 concrete-userset leaf) instead of only the 5 handwritten
+# fixtures with fixed seeds. A drawn op sequence is applied through the gate's graph +
+# both set backends, and the full two-sided surface battery runs after every accepted op.
+# Low example count: the brute-force oracle reference is expensive, so this is a safety
+# net, not a load test. Object wildcards are not used (schema_asts never emits them), so
+# the graph always joins (stratifiable-by-construction => compiles).
+#
+# Fuzzes the FULL generated schema space (usersets ON, TTU-in-boolean-arm ON). Until
+# 2026-07-17 this gate excluded userset leaves + TTU boolean arms (`allow_usersets=False`,
+# `ttu_in_boolean=False`) to dodge a graph completeness gap in the X4/D2/upos family:
+# userset-subject membership was not fully propagated through a derived relation (graph=False
+# where set + oracle=True), needing a userset subject, a derived relation referencing the
+# relation that holds the userset, and -- in one variant -- a wildcard star arm or a TTU
+# boolean arm. That gap is now FIXED (the ``processor._leaf_concretes`` upos lift, both the
+# derived-computed and derived-userset branches) and pinned by strict regression tests
+# ``test_graph_from_chain_userset_through_boolean_ttu_arm``,
+# ``test_graph_userset_subject_through_derived_wildcard_gap``, and
+# ``test_graph_userset_member_through_granted_userset_over_derived`` below, so the exclusion
+# is retired. The gate now fuzzes booleans, Computed, whole-definition + boolean-arm TTU, AND
+# userset leaves over generated derived schemas on the lookup surfaces (deviations 2026-07-17).
+# ---------------------------------------------------------------------------
+
+@settings(max_examples=_GATE_MAX_EXAMPLES, deadline=None,
+          suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large])
+@given(ast=schema_asts(), data=st.data())
+def test_lookup_oracle_gate_generated_schemas(ast, data):
+    pool = _op_pool(ast)
+    assume(pool)
+    schema = unparse_schema_ast(ast)
+    ops = data.draw(st.lists(st.sampled_from(pool), min_size=1, max_size=4, unique=True))
+    gate = _Gate(schema, frozenset(), pool)
+    try:
+        gate.assert_surfaces(context='generated: initial')
+        for raw in ops:
+            if gate.apply('add', raw):
+                gate.assert_surfaces(context=f'generated: after add {raw}')
+        for raw in list(gate.present):
+            if gate.apply('remove', raw):
+                gate.assert_surfaces(context=f'generated: after remove {raw}')
+    finally:
+        gate.close()
+
+
+# ---------------------------------------------------------------------------
 # N17 corpus: object-wildcard shapes + a STAR-able tupleset ([folder, folder:*]
 # parent) + TTU from-chains + a boolean relation, all live at once. This is the
 # constellation the N17 wildcard-bridge walk exists for -- the owc shape feeds a
@@ -792,6 +848,148 @@ def test_graph_check_userset_membership_through_derived_ttu(load_fga_schema):
     write('remove', ('...', 'doc', 'd2', 'parent', 'doc', 'd1'))
     assert widx.check('member', 'group', 'g1', 'inherited', 'doc', 'd1') is False
     session.close()
+
+
+def test_graph_from_chain_userset_through_boolean_ttu_arm():
+    """Regression pin for the FIXED from-chain-through-computed-alias divergence
+    (X4 family; found by the G4 generated-schema gate, filed 2026-07-17, fixed same
+    day). After ``doc:d1 parent doc:d1``, ``doc:d1#r0`` is a member of ``r2`` where
+    ``r1: (r0 from parent) and (r0 from parent)`` and ``r2: r1``: the from-chain identity
+    rule (a stored tupleset parent ``p`` makes ``p#r0`` a member of ``r0 from parent``)
+    grants it, so set engines + oracle answer True.
+
+    The graph already applied that identity for a BARE derived-TTU relation (X4a) and for
+    the boolean ``r1`` queried DIRECTLY, but ``check('r0','doc','d1','r2','doc','d1')``
+    answered graph=False on exactly this combination: a Computed alias (``r2: r1``) reading
+    a boolean relation whose arm is a direct TTU. Root cause: the ``derived-computed``
+    branch of ``processor._leaf_concretes`` pulled only edge-justified incoming concretes
+    of the aliased relation and never lifted its edge-free userset memberships (residue
+    ``upos``, P4), so the from-chain userset the boolean arm computes on the fly never
+    reached the alias's audit set. Fixed by the ``_leaf_concretes`` upos lift (the
+    ``derived-computed`` branch now merges ``_ttu_target_upos_nodes`` for the aliased
+    relation, symmetric to the X4b TTU lift). The direct-TTU arm and the outer Computed
+    alias are both load-bearing (either alone is graph-correct)."""
+    schema = ('type user\n'
+              'type doc\n'
+              '  relations\n'
+              '    define parent: [doc]\n'
+              '    define r0: [user]\n'
+              '    define r1: (r0 from parent) and (r0 from parent)\n'
+              '    define r2: r1\n')
+    rs = parse_openfga_schema(schema)
+    graph = _GraphSide(rs, paranoia=True)
+    sets = [_SetSide(schema, frozenset(), ops) for ops in ALL_SETOPS]
+    write = ('...', 'doc', 'd1', 'parent', 'doc', 'd1')
+    query = ('r0', 'doc', 'd1', 'r2', 'doc', 'd1')
+    try:
+        assert graph.apply(write, 'add') is True
+        for s in sets:
+            assert s.apply(write, 'add') is True
+        oracle = Oracle(schema, [OracleTuple(*write)])
+        # The from-chain userset subject IS granted by set engines and the oracle:
+        assert oracle.check(*query) is True
+        for s in sets:
+            assert s.se.check(*query) is True
+        # Fixed by the _leaf_concretes upos lift (derived-computed branch):
+        assert graph.widx.check(*query) is True
+    finally:
+        graph.close()
+        for s in sets:
+            s.close()
+
+
+def test_graph_userset_subject_through_derived_wildcard_gap():
+    """Regression pin for the FIXED userset-subject-through-derived divergence (X4/D2/upos
+    family; found by the G4 generated-schema gate + the deep ParityMachine hunt, filed
+    2026-07-17, fixed same day). Repro: ``r0`` a wildcard/exclusion relation,
+    ``r1: r0 or ([user] or [doc#r0])`` (so a userset subject ``doc:d1#r0`` can be STORED on
+    r1 via the ``[doc#r0]`` arm), and ``r3: r1 but not [doc#r1] or [doc#r1]``. After the
+    shown writes, ``check('r0','doc','d1','r3','doc','d2')`` answered graph=False where both
+    set engines + oracle answer True -- the graph did not lift the userset-subject
+    membership of ``r1`` into the dependent ``r3``.
+
+    Root cause: the ``derived-userset`` branch of ``processor._leaf_concretes`` pulled only
+    edge-justified incoming concretes on the storage leaf; the members of ``P(X)`` for a
+    stored userset ``X`` (here the members of ``r1(doc:d1)`` reached through the ``[doc#r1]``
+    arm) are edge-free userset memberships (residue ``upos``, P4) and were never lifted. The
+    complex ``r0`` is load-bearing (with ``r0: [user]`` the graph was already correct),
+    isolating the userset-subject × wildcard × derived interaction. Fixed by the
+    ``_leaf_concretes`` upos lift (the ``derived-userset`` branch now merges
+    ``_ttu_target_upos_nodes`` for each stored userset's residue, symmetric to the X4b TTU
+    lift). The write ORDER is preserved from the reduced hunter finding."""
+    schema = ('type user\n'
+              'type doc\n'
+              '  relations\n'
+              '    define r0: [user:*] or [user:*] but not ([user:*] but not [user, user:*])\n'
+              '    define r1: r0 or ([user] or [doc#r0])\n'
+              '    define r3: r1 but not [doc#r1] or [doc#r1]\n')
+    writes = [('...', 'user', 'u1', 'r0', 'doc', 'd2'),
+              ('...', 'user', 'u1', 'r1', 'doc', 'd1'),
+              ('r0', 'doc', 'd1', 'r1', 'doc', 'd2')]     # doc:d1#r0 stored on r1
+    query = ('r0', 'doc', 'd1', 'r3', 'doc', 'd2')        # is doc:d1#r0 a member of r3@d2?
+    rs = parse_openfga_schema(schema)
+    graph = _GraphSide(rs, paranoia=True)
+    sets = [_SetSide(schema, frozenset(), ops) for ops in ALL_SETOPS]
+    try:
+        for w in writes:
+            assert graph.apply(w, 'add') is True
+            for s in sets:
+                assert s.apply(w, 'add') is True
+        oracle = Oracle(schema, [OracleTuple(*w) for w in writes])
+        assert oracle.check(*query) is True
+        for s in sets:
+            assert s.se.check(*query) is True
+        # Fixed by the _leaf_concretes upos lift (derived-userset branch):
+        assert graph.widx.check(*query) is True
+    finally:
+        graph.close()
+        for s in sets:
+            s.close()
+
+
+def test_graph_userset_member_through_granted_userset_over_derived():
+    """Regression pin for the FIXED userset-member-through-granted-userset-over-derived
+    divergence (X4/upos family; found while root-causing the two pins above, filed +
+    fixed 2026-07-17). A chain of granted usersets over derived relations:
+    ``r0: [user] and [user]``, ``r1: [user] or [doc#r0]``, ``r3: [user] or [doc#r1]``. With
+    ``doc:d1#r0`` stored on r1@dx and ``doc:dx#r1`` stored on r3@dy, ``doc:d1#r0`` is a
+    member of ``r3@dy`` (it is a member of the granted userset ``doc:dx#r1``, whose
+    membership is the edge-free userset set of the derived ``r1``), so oracle + both set
+    engines answer True.
+
+    The graph answered False in BOTH write orders: the ``derived-userset`` branch of
+    ``processor._leaf_concretes`` never lifted ``P(X)`` for the stored userset ``X`` (edge-
+    free residue ``upos``, P4). Fixed by the same ``_leaf_concretes`` upos lift that closed
+    the two pins above; pinned in both write orders (fresh backends per order) because the
+    gap was state-dependent."""
+    schema = ('type user\n'
+              'type doc\n'
+              '  relations\n'
+              '    define r0: [user] and [user]\n'
+              '    define r1: [user] or [doc#r0]\n'
+              '    define r3: [user] or [doc#r1]\n')
+    writes = [('r0', 'doc', 'd1', 'r1', 'doc', 'dx'),    # doc:d1#r0 stored on r1@dx
+              ('r1', 'doc', 'dx', 'r3', 'doc', 'dy')]     # doc:dx#r1 stored on r3@dy
+    query = ('r0', 'doc', 'd1', 'r3', 'doc', 'dy')        # member of a granted userset over derived r1
+    for order in ([0, 1], [1, 0]):
+        rs = parse_openfga_schema(schema)
+        graph = _GraphSide(rs, paranoia=True)
+        sets = [_SetSide(schema, frozenset(), ops) for ops in ALL_SETOPS]
+        try:
+            for i in order:
+                assert graph.apply(writes[i], 'add') is True
+                for s in sets:
+                    assert s.apply(writes[i], 'add') is True
+            oracle = Oracle(schema, [OracleTuple(*w) for w in writes])
+            assert oracle.check(*query) is True
+            for s in sets:
+                assert s.se.check(*query) is True
+            # Fixed by the _leaf_concretes upos lift (derived-userset branch):
+            assert graph.widx.check(*query) is True
+        finally:
+            graph.close()
+            for s in sets:
+                s.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1201,3 +1399,297 @@ def test_reg11_out_bridge_object_wildcard_self_cycle_accept_reject_parity():
         finally:
             for b in backends:
                 b.close()
+
+
+# ===========================================================================
+# reg12 -- doubly-bridged shape rejection (F1/F2 CLOSED, 2026-07-17)
+# ===========================================================================
+#
+# The star-bridge fuzzer surfaced two latent divergences (docs/spec-deviations.md
+# 2026-07-16 "two new latent OWC divergences" + the 2026-07-17 CLOSED entry). Both
+# need a shape (T,p) that is SIMULTANEOUSLY a wildcard-userset shape (a `T:*#p`
+# restriction -> bridged_in_shapes) and an object-wildcard shape (bridged_out_shapes)
+# -- the "doubly-bridged" precondition. When such a shape exists, wildcard writes
+# materialize a `w_any(T,p) -> w_all(T,p)` path; every present-or-future concrete node
+# of that shape carries both bridges (concrete->w_any in, w_all->concrete out), so the
+# path is a latent CYCLE:
+#   * F1: graph `check` returns False where set + oracle say True (completeness gap);
+#   * F2: graph accepts a wildcard self-reference the set engine rejects;
+#   * DETONATION (both): after the wildcard write is accepted, the graph's _ensure_bridges
+#     closes the cycle, so every later INNOCENT concrete write of that shape is
+#     permanently graph-REJECTED (set + oracle accept) -- a 3rd divergence and the
+#     reason the state must be unconstructible, not merely papered over at read time.
+# Fix: reject at COMPILE (DoublyBridgedShapeError, the third decision-15 scope
+# rejection; OpenFGA supports neither wildcard usersets nor object-wildcard tuple
+# objects). BOTH backends must reject identically -- the graph via parse_openfga_schema,
+# the set engine by re-raising the subclass (the other scope rejections it swallows into
+# an oracle-only mode; this one it must refuse). See docs/spec-deviations.md 2026-07-17.
+
+def _assert_doubly_bridged_rejected(schema, owc, expect_shape):
+    """Both backends must raise DoublyBridgedShapeError at CONSTRUCTION."""
+    from tests.test_matrix import _fresh_session
+    # DoublyBridgedShapeError is a subclass of UnsupportedByGraphIndex, so external
+    # graph-optional catchers still degrade -- but it is its OWN type so the set engine
+    # can re-raise it (both backends reject identically).
+    assert issubclass(DoublyBridgedShapeError, UnsupportedByGraphIndex)
+    with pytest.raises(DoublyBridgedShapeError, match=expect_shape):
+        parse_openfga_schema(schema, object_wildcard_shapes=owc)
+    with pytest.raises(DoublyBridgedShapeError, match=expect_shape):
+        SetEngine(_fresh_session(), 'w', schema, object_wildcard_shapes=owc)
+
+
+# --- F1: the graph-incomplete + detonation repro ---
+F1_SCHEMA = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define viewer: [user, folder:*#viewer, folder#admin]
+    define admin: [user] or viewer from parent
+"""
+F1_OWC = frozenset({('folder', 'parent'), ('folder', 'viewer')})
+
+
+def test_reg12_f1_doubly_bridged_rejected_both_backends():
+    """F1: `(folder, viewer)` is declared both a wildcard-userset shape (folder:*#viewer)
+    and an object-wildcard shape (F1_OWC). The compiler also propagates (folder, admin)
+    into object_wildcard_shapes (TTU head), but (folder, viewer) is already doubly-bridged
+    at declaration. Both backends reject at construction."""
+    _assert_doubly_bridged_rejected(F1_SCHEMA, F1_OWC, r'folder, viewer')
+
+
+# --- F2: the graph-over-permissive + detonation repro ---
+F2_SCHEMA = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define viewer: [user]
+    define admin: [user, folder:*#admin, folder#viewer]
+"""
+F2_OWC = frozenset({('folder', 'admin')})
+
+
+def test_reg12_f2_doubly_bridged_rejected_both_backends():
+    """F2: `(folder, admin)` is both a wildcard-userset shape (folder:*#admin) and a
+    declared object-wildcard shape. Both backends reject at construction."""
+    _assert_doubly_bridged_rejected(F2_SCHEMA, F2_OWC, r'folder, admin')
+
+
+# --- Propagation-derived: the user never declares the intersecting shape ---
+# `viewer` carries the folder:*#viewer wildcard userset (so (folder,viewer) is a
+# wildcard-userset shape); the user declares object-wildcard ONLY on (folder,parent).
+# `_expand_object_wildcard_shapes` closes the OWC set over the `viewer from parent` TTU
+# head, ADDING (folder,viewer) to object_wildcard_shapes -- which makes it doubly-bridged
+# even though the user never asked for an object wildcard on viewer.
+P_SCHEMA = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define viewer: [user, folder:*#viewer] or viewer from parent
+"""
+P_OWC = frozenset({('folder', 'parent')})
+
+
+def test_reg12_propagation_derived_doubly_bridged_rejected():
+    """The intersection is created by compiler PROPAGATION, not by the user. Verify
+    empirically that expansion puts (folder, viewer) into object_wildcard_shapes, and
+    that both backends then reject."""
+    # Unexpanded derive: the intersection does NOT yet exist (bridged_out is parent-only).
+    ast = parse_schema_ast(P_SCHEMA)
+    raw = derive_schema_info(ast, P_OWC)
+    assert ('folder', 'viewer') in raw.bridged_in_shapes
+    assert ('folder', 'viewer') not in raw.object_wildcard_shapes
+    assert not (frozenset(raw.bridged_in_shapes) & frozenset(raw.bridged_out_shapes)), (
+        'unexpanded schema_info must NOT be doubly-bridged -- the intersection is '
+        'purely propagation-derived (proving the check must run post-expansion)')
+    # Both backends reject after expansion propagates (folder, viewer) into the OWC set.
+    _assert_doubly_bridged_rejected(P_SCHEMA, P_OWC, r'folder, viewer')
+
+
+# --- Negative controls: rich-but-legal star-bridge schemas still compile ---
+def test_reg12_negative_controls_reg10_reg11_not_doubly_bridged():
+    """reg10 (subject-wildcard IN-bridge, no OWC) and reg11 (object-wildcard OUT-bridge,
+    OWC declared) are legal star-bridge schemas: their doubly-bridged set is EMPTY, so
+    they compile fine on both backends (their existing reg10/reg11 parity tests still
+    pass). The doubly-bridged LEFT FACTOR is the set of LITERAL wildcard-userset
+    restrictions (writable T:*#p), NOT the full bridged_in_shapes:
+
+      * reg10's (folder, admin) IS a literal wildcard-userset (folder:*#admin) but has
+        no object wildcard (OWC empty) -> intersection empty.
+      * reg11 has NO literal wildcard-userset restriction at all -- its (folder, viewer)
+        lands in bridged_in only as a STAR-TUPLESET THROUGH-SHAPE (from [folder:*] on the
+        TTU tupleset `parent`), which is not a writable userset and cannot mint a
+        persistent w_any node, so it does not detonate. Using the full bridged_in_shapes
+        here would over-reject reg11 (verified: bridged_in ∩ bridged_out is NON-empty for
+        reg11, but the narrow literal-restriction ∩ bridged_out is empty)."""
+    # reg10: literal wildcard-userset (folder, admin), but no OWC -> empty intersection.
+    rs10 = parse_openfga_schema(REG10_SCHEMA, object_wildcard_shapes=frozenset())
+    si10 = rs10.schema_info
+    lit10 = wildcard_userset_restriction_shapes(parse_schema_ast(REG10_SCHEMA))
+    assert ('folder', 'admin') in lit10                            # literal T:*#admin
+    assert not (lit10 & frozenset(si10.bridged_out_shapes))
+    # reg11: NO literal wildcard-userset -> empty intersection despite the coarse overlap.
+    rs11 = parse_openfga_schema(REG11_SCHEMA, object_wildcard_shapes=REG11_OWC_SHAPES)
+    si11 = rs11.schema_info
+    lit11 = wildcard_userset_restriction_shapes(parse_schema_ast(REG11_SCHEMA))
+    assert lit11 == frozenset()                                    # no writable T:*#p
+    assert not (lit11 & frozenset(si11.bridged_out_shapes))
+    # The coarse bridged_in ∩ bridged_out IS non-empty for reg11 -- documenting why the
+    # narrow left factor is required (the reg11 test must keep passing).
+    assert ('folder', 'viewer') in (frozenset(si11.bridged_in_shapes)
+                                    & frozenset(si11.bridged_out_shapes))
+
+
+# --- The ghost-hop safeguard never fires on legal schemas ---
+def test_reg12_ghost_hop_never_fires_on_legal_star_bridges():
+    """The set-engine flow-graph ghost hop (w_all->w_any for doubly-bridged shapes) is a
+    defense-in-depth safeguard: post-rejection its trigger set is always empty. Build
+    SetEngines on the rich-but-legal reg10/reg11 star-bridge schemas, replay their write
+    sequences (including the rejected cycle-forming writes, which is exactly when the flow
+    reachability walk runs), and assert the ghost hop NEVER fired and doubly_bridged is
+    empty."""
+    from tests.test_matrix import _fresh_session
+    # reg10: subject-wildcard IN-bridge class, no OWC.
+    for ops in ALL_SETOPS:
+        se = SetEngine(_fresh_session(), 'w', REG10_SCHEMA, ops=ops)
+        assert se.doubly_bridged == frozenset()
+        se.add_tuple('...', 'folder', '*', 'parent', 'folder', 'c')     # W1 accepted
+        with pytest.raises(ValueError):
+            se.add_tuple('viewer', 'folder', 'c', 'admin', 'folder', 'y')  # W2 cycle-rejected
+        assert se._ghost_hop_fired is False
+    # reg11: object-wildcard OUT-bridge class, OWC declared.
+    for ops in ALL_SETOPS:
+        se = SetEngine(_fresh_session(), 'w', REG11_SCHEMA,
+                       object_wildcard_shapes=REG11_OWC_SHAPES, ops=ops)
+        assert se.doubly_bridged == frozenset()
+        with pytest.raises(ValueError):
+            se.add_tuple('...', 'folder', 'a', 'parent', 'folder', '*')  # out-bridge cycle-rejected
+        se.add_tuple('...', 'folder', 'a', 'parent', 'folder', 'b')      # acyclic control accepted
+        assert se._ghost_hop_fired is False
+
+
+# ===========================================================================
+# reg13 -- no-restriction-match write: accept/reject parity (2026-07-17)
+# ===========================================================================
+#
+# Scout-flagged accept/reject divergence: `group:*#member editor doc:d1` -- a
+# WILDCARD-userset subject (group:*#member) against a CONCRETE [group#member]
+# restriction -- was ACCEPTED by the graph backend and REJECTED by the set engine.
+#
+# Root cause (adjudicated): a general graph-admission wart, NOT specific to wildcard
+# usersets. `RuleSet.apply` (the graph's raw-write routing) SILENTLY DROPPED any raw
+# tuple matching no declared type restriction (the pure-union `else: return` branch),
+# so the graph harnesses (GraphBackend/_GraphSide) reported True having written
+# nothing -- a VACUOUS accept. The set engine's `_validate` step 2 RAISES ValueError
+# on the same tuple. Same class as the derived-family branch of `RuleSet.apply`, which
+# already RAISED. Answers were never affected (0 routed triples, 0 stored rows, every
+# downstream check False on all backends) -- purely a unanimity break, for ANY
+# no-restriction-match write (wrong subject type / predicate, wildcard userset under a
+# concrete restriction, nonexistent relation, ...).
+#
+# Adjudication: the set engine's rejection is correct (OpenFGA rejects a tuple matching
+# no type restriction; the answer -- no grant -- is what both backends already agreed
+# on). The graph should reject too. Fix (zanzibar_utils_v1.py `RuleSet.apply`): the
+# pure-union no-match branch RAISES ValueError for schema-derived rulesets (schema_info
+# is not None), mirroring the set engine; hand-built rulesets keep silent-drop filter
+# semantics. See docs/spec-deviations.md 2026-07-17.
+
+REG13_TAINTED_SCHEMA = """model
+  schema 1.1
+type user
+type group
+  relations
+    define member: [user, group#member]
+type doc
+  relations
+    define editor: [user, group#member]
+    define viewer: (editor) or editor
+"""  # `viewer` boolean-taints `editor`; editor's restriction stays concrete [group#member]
+
+REG13_DECLARED_STAR_SCHEMA = """model
+  schema 1.1
+type user
+type group
+  relations
+    define member: [user, group#member]
+type doc
+  relations
+    define editor: [user, group#member, group:*#member]
+"""  # declares the wildcard userset [group:*#member] -> group:*#member is admissible
+
+REG13_USERSTAR_SCHEMA = """model
+  schema 1.1
+type user
+type doc
+  relations
+    define public: [user:*]
+    define blocked: [user]
+"""  # public declares [user:*]; blocked does not
+
+
+def _reg13_unanimous(schema, raw, expect, owc=frozenset()):
+    """Every backend (graph + both set ops) must agree accept/reject on `raw`."""
+    from tests.test_matrix import GraphBackend, SetBackend
+    backends = [GraphBackend(schema, owc)] + [
+        SetBackend(schema, owc, ops) for ops in ALL_SETOPS]
+    try:
+        for b in backends:
+            got = b.apply(raw, 'add')
+            assert got is expect, (
+                f'{b.name} {"accepted" if got else "rejected"} {raw} '
+                f'(expected {"accept" if expect else "reject"})')
+    finally:
+        for b in backends:
+            b.close()
+
+
+def test_reg13_wildcard_userset_under_concrete_restriction_rejected_both():
+    """Prong 1 (the reported divergence): group:*#member (wildcard userset) against a
+    concrete [group#member] restriction on a boolean-tainted `editor` is REJECTED by
+    BOTH backends. Pre-fix: graph accepted (silent drop) / set rejected."""
+    _reg13_unanimous(REG13_TAINTED_SCHEMA,
+                     ('member', 'group', '*', 'editor', 'doc', 'd1'), False)
+
+
+def test_reg13_no_restriction_match_variants_rejected_both():
+    """The divergence class is general -- ANY no-restriction-match raw write is rejected
+    by both backends (not just the wildcard-userset instance): wrong subject type, wrong
+    userset predicate, bare write to a userset-only shape, nonexistent relation."""
+    for raw in (
+        ('foo', 'doc', 'x', 'editor', 'doc', 'd1'),      # wrong subject type (userset)
+        ('...', 'doc', 'x', 'editor', 'doc', 'd1'),      # wrong subject type (bare)
+        ('admin', 'group', 'g', 'editor', 'doc', 'd1'),  # wrong userset predicate
+        ('...', 'group', 'g', 'editor', 'doc', 'd1'),    # bare subject, no [group] restriction
+        ('...', 'user', 'alice', 'bogus', 'doc', 'd1'),  # nonexistent relation
+    ):
+        _reg13_unanimous(REG13_TAINTED_SCHEMA, raw, False)
+
+
+def test_reg13_valid_writes_still_accepted_both():
+    """Guard: real writes matching a declared restriction stay ACCEPTED by both
+    backends (the fix rejects only no-match tuples, not valid ones)."""
+    for raw in (
+        ('...', 'user', 'alice', 'editor', 'doc', 'd1'),   # [user]
+        ('member', 'group', 'g', 'editor', 'doc', 'd1'),   # [group#member]
+    ):
+        _reg13_unanimous(REG13_TAINTED_SCHEMA, raw, True)
+
+
+def test_reg13_declared_wildcard_userset_accepted_both():
+    """Prong 2: when [group:*#member] IS declared, group:*#member is ADMISSIBLE and both
+    backends ACCEPT it (the reg10/reg11 bridged-in shape family -- must stay unchanged)."""
+    _reg13_unanimous(REG13_DECLARED_STAR_SCHEMA,
+                     ('member', 'group', '*', 'editor', 'doc', 'd1'), True)
+
+
+def test_reg13_plain_user_star_sentinel_behavior_unchanged():
+    """Prong 3: plain user:* subject behavior is unchanged -- accepted where [user:*] is
+    declared (`public`), rejected where it is not (`blocked`), on both backends."""
+    _reg13_unanimous(REG13_USERSTAR_SCHEMA,
+                     ('...', 'user', '*', 'public', 'doc', 'd1'), True)
+    _reg13_unanimous(REG13_USERSTAR_SCHEMA,
+                     ('...', 'user', '*', 'blocked', 'doc', 'd1'), False)

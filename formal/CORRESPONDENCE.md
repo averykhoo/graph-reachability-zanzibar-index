@@ -79,7 +79,7 @@ independent corners.
 | `GraphModel.probeNonDerived` (≤4 probes) | untainted read | `index_v4/wildcard.py:354-374` (probe assembly inside `check`, `:318-`) |
 | `GraphModel.probeDerived` (edge probe → `stars`∖`neg`, `upos`; edge hit skips `neg` — I6) | derived read path | `wildcard.py:398-432` `_check_derived` |
 | `GraphModel.check` (route by `isDerived`) | `WildcardIndex.check` | `wildcard.py:318` `check` (routes tainted relations to `_check_derived` `:398`) |
-| `GraphAccepts` | decision-15 compile-scope rejection | `zanzibar_utils_v1.py` `UnsupportedByGraphIndex` scope checks (object wildcards on derived `:1029-1034`; wildcard usersets over derived `:1446-1451`) |
+| `GraphAccepts` | decision-15 compile-scope rejection | `zanzibar_utils_v1.py` `UnsupportedByGraphIndex` scope checks: object wildcards on derived + wildcard usersets over derived (`_reject_object_wildcard_scope`), and doubly-bridged shapes — a literal `T:*#p` userset restriction that is also an object-wildcard shape (`_reject_doubly_bridged_shapes`, `DoublyBridgedShapeError`, both backends; F1/F2, see spec-deviations 2026-07-17). Each only NARROWS the admissible schema space — no modeled algorithm change (`GraphState.admitEdge` untouched) |
 | `Inv` (8 clauses: I1–I3 structural + I6 residue hygiene ×4) | the invariant checker | `index_v4/invariants.py` (I1 `:89-101`, node encoding `:83-87`, …) |
 
 ## 4. The write path (T2 write half — `GraphIndex/Write.lean`, `RulesWrite.lean`, `Cascade.lean`)
@@ -145,6 +145,33 @@ independent corners.
   the reserved `'.'` in the target predicate) with the pin argument recorded
   there. Schemas needing genuine storage leaves (`Direct`/TTU arms under a
   boolean) remain outside `computedOnly`.
+
+* **Out-of-fragment `upos`-lift and node-flag lifecycle (2026-07-17).** Two
+  processor changes this session added paths that the Lean reconcile model
+  (`ReconcileStars.lean`, §5) does not describe, and both are **outside
+  `W4Fragment`** so they do not touch any graph-side theorem or the state gate.
+  (a) The **reconcile audit-set builder** `_leaf_concretes` now lifts a referenced
+  tainted relation's residue `upos` (edge-free userset-shaped memberships, P4/D2)
+  for the `derived-computed` and `derived-userset` leaf kinds, extending the X4b
+  TTU lift (2026-07-13) to those two branches. The lift only *widens* the
+  candidate set (membership still decided by `plan.check_fn`) and reads
+  strictly-lower-stratum residues — no new cascade rounds. These userset-on-derived
+  shapes are the same `computedOnly`/edge-free `upos` corner the 2026-07-13 X4 note
+  already flagged as a proof gap; in-fragment runs never produce the state that
+  activates the branch. (b) The **node-flag lifecycle** gained a state-functional
+  `implicit`-flag rule — promote-on-record (reconcile step 2d) + a
+  demote-on-release exception to core's "explicit is sticky" (`_demote_released_node`
+  on the survive paths of `_gc_subject_node`/`_gc_public_node`). Node `implicit`
+  flags are **projected out** of the state-level conformance gate by the extractor
+  (P5, the node-GC class), so this canonical-form convergence is invisible to the
+  gate by construction — the differential matrix + hypothesis add/remove-restoration
+  net it instead. Both mirrored into `index_v4/bulk_backfill.py` for built-vs-live
+  equivalence. Details: `docs/spec-deviations.md` 2026-07-17 ("the three OPEN
+  2026-07-17 divergences CLOSED"). (Same-session reg13: `RuleSet.apply` now raises
+  on a raw write matching no declared restriction instead of silently dropping it —
+  this only *tightens* admission toward the `matchDecl` guarantee `GraphAdmission`
+  (§6) already assumes; `GraphAccepts`/`GraphAdmission` are untouched, so no §3 row
+  change — see the reg13 entry in `docs/spec-deviations.md`.)
 
 ## 8. Keeping the model in sync when optimizing the Python (READ THIS before perf work)
 

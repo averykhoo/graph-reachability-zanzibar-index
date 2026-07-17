@@ -80,11 +80,15 @@ type document
 
 
 def test_concrete_filter_rejects_wildcard_tuple():
-    # [user] must keep rejecting a user:* tuple (spec §2.1): no filter matches, so
-    # RuleSet.apply yields nothing.
+    # [user] must keep rejecting a user:* tuple (spec §2.1). A raw tuple matching no
+    # declared restriction is REJECTED LOUDLY (ValueError), not silently dropped: a
+    # silent drop vacuously "accepts" (graph writes nothing) while the set engine
+    # raises on the same tuple -- an accept/reject divergence (see reg13 in
+    # tests/test_lookup_oracle.py, docs/spec-deviations.md 2026-07-17).
     ruleset = parse_openfga_schema(CONCRETE_ONLY_SCHEMA)
     wildcard_tuple = RelationalTriple(Entity('user', '*'), 'viewer', Entity('document', 'x'), Ellipsis)
-    assert list(ruleset.apply(wildcard_tuple)) == []
+    with pytest.raises(ValueError, match='no declared type restriction'):
+        list(ruleset.apply(wildcard_tuple))
     # ...but a concrete user still passes.
     concrete = RelationalTriple(Entity('user', 'alice'), 'viewer', Entity('document', 'x'), Ellipsis)
     assert len(list(ruleset.apply(concrete))) == 1

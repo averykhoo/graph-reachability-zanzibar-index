@@ -1043,3 +1043,419 @@ These are genuinely exotic OWC-on-self-referential-userset-relation corners (Ope
 support wildcard usersets at all), consistent with the "latent/theoretical, no corpus forces
 it" class — **do not chase speculatively**; filed in the HANDOFF backlog for triage. F1 is a
 graph *completeness* gap (graph vs oracle), so if either is ever prioritized, F1 first.
+
+## 2026-07-17 — F1/F2 CLOSED by compile-time scope rejection (doubly-bridged shapes)
+
+**What.** The two latent OWC divergences filed 2026-07-16 (F1 graph-incomplete, F2
+graph-over-permissive) are **closed** by a new compile-time scope rejection — the THIRD
+entry in the decision-15 scope-rejection family (alongside object wildcards on derived
+relations and wildcard usersets over derived relations). Both F1 and F2 need a
+**doubly-bridged shape**: a shape `(T,p)` that is simultaneously a **literal
+wildcard-userset restriction** `T:*#p` in the schema AND an **object-wildcard shape**
+(declared or compiler-propagated through a TTU head). When such a shape exists, a wildcard
+write materializes a `w_any(T,p) → w_all(T,p)` path in the graph closure; every
+present-or-future concrete node of that shape carries both bridges (concrete→`w_any`
+in-bridge, `w_all`→concrete out-bridge), so the path is a **latent cycle**.
+
+**New findings recorded en route (not in the original F1/F2 filing).**
+
+- **(a) Detonation — a THIRD divergence.** Both F1 and F2 states lock out *innocent*
+  concrete writes. After the wildcard write is graph-accepted, the graph's
+  `_ensure_bridges` closes the `w_any → … → w_all` cycle; every later plain concrete
+  write of the doubly-bridged shape is then permanently graph-**REJECTED** while the set
+  engine and oracle accept it (verified: F1's `folder:* parent folder:*` + `folder:x#admin
+  viewer folder:*`, then an innocent `user:v viewer folder:q` is graph-rejected; F2's
+  `folder:*#admin admin folder:*`, then `user:v admin folder:y` graph-rejected). This is
+  the decisive reason the state must be made **unconstructible**, not papered over at read
+  time: the ref-counted closure cannot host the data cycle at all.
+
+- **(b) "all → any" is NOT read semantics (no completeness fix warranted).** We checked
+  whether F1's missing membership was a genuine read-path gap ("`p` of ALL `T` ⊆ the
+  wildcard userset `T:*#p`", i.e. all→any). It is not: an **acyclic cross-type probe**
+  (`user:u member group:*` + `group:*#member viewer folder:z`) answers **False on all four
+  backends** (graph, both set ops, oracle) — the oracle does not read all→any either. So
+  the F1 "graph False vs set/oracle True" was an artifact of the *cyclic* doubly-bridged
+  topology, not a real completeness rule the graph was missing. No read-path change made.
+
+- **(c) Decision rationale — compile rejection over a write-time ghost-hop gate.** Zero
+  spec pressure: OpenFGA supports **neither** wildcard usersets (`[group:*#member]`) **nor**
+  object-wildcard tuple objects (`folder:*` in a tuple's object field), so this corner is
+  doubly out of spec. OpenFGA/Zanzibar tolerate *data* cycles at read time, but that is
+  fundamentally incompatible with our ref-counted transitive-closure materialization — our
+  write/compile-time acyclicity strictness is the standing documented deviation, and this
+  is one more instance of it. A write-time gate (reg9/reg10/reg11-style admission check)
+  was considered and rejected as unnecessarily complex given the above.
+
+**Precision of the criterion (empirical correction to the original framing).** The
+precondition was first framed as `bridged_in_shapes ∩ bridged_out_shapes ≠ ∅`. That is
+**too coarse** and over-rejects the legal reg11 class: `bridged_in_shapes` also carries
+**star-tupleset through-shapes** (reg11's `(folder,viewer)`, derived from `[folder:*]` on
+the TTU tupleset `parent`), which are NOT writable usersets and cannot mint a persistent
+`w_any` node — reg11's dangerous writes self-cycle and are rejected on both backends, so
+nothing detonates. The implemented left factor is therefore the set of **literal `T:*#p`
+restriction shapes** (`wildcard_userset_restriction_shapes(ast)`), a strict subset of
+`bridged_in_shapes`. Verified empirically: reg11's coarse intersection is non-empty but its
+literal-restriction intersection is empty (legal); the shared `CANON_SCHEMA` used by
+`test_wildcard`/`test_integration` (`viewer:[user:*,user,folder:*#viewer] …` **with** an
+object-wildcard on `viewer`) IS genuinely doubly-bridged and **did** exhibit the F2
+accept/reject divergence (`folder:x#viewer viewer folder:*` graph-accepted, set-rejected) —
+those three tests were migrated to drop the superfluous, never-exercised OWC.
+
+**Fix (both backends, symmetric).** `zanzibar_utils_v1.py`:
+- New `DoublyBridgedShapeError(UnsupportedByGraphIndex)` — its OWN type so the set engine
+  can single it out (the other scope rejections the set engine *swallows* into an
+  oracle-only/ruleset-less mode; this one it must **re-raise**, so both backends reject
+  identically — the state is unconstructible everywhere, not merely graph-incomplete).
+- `_reject_doubly_bridged_shapes(ast, schema_info)` raises it when
+  `wildcard_userset_restriction_shapes(ast) ∩ bridged_out_shapes ≠ ∅`, run in
+  `compile_ruleset` **after** `_expand_object_wildcard_shapes` (so it catches the
+  propagation-derived intersection — the P3 case, where `viewer` is never *declared* an
+  object wildcard but the compiler propagates it onto the OWC set through the `viewer from
+  parent` TTU head).
+- `setengine/engine.py` re-raises `DoublyBridgedShapeError` (instead of swallowing it with
+  the other `UnsupportedByGraphIndex` scope rejections). Because the compiler runs
+  expansion internally, this also covers the P3 propagation case the set engine's own
+  *unexpanded* `schema_info` would miss.
+
+**(d) Safeguard (defense-in-depth, always-on, never fires).** `setengine/engine.py`
+`_flow_reaches` gains a **ghost hop**: at a `w_all(T,p)` node whose shape is doubly-bridged
+(`self.doubly_bridged`, computed once from the literal-restriction ∩ object-wildcard set),
+it ALSO steps `w_all(T,p) → w_any(T,p)` — the virtual composition of the out-bridge and the
+in-bridge through any present-or-future concrete of the shape — closing the F1/F2 latent
+cycle at write time so set/graph admission stay in parity. **Post-rejection this hop is
+unreachable** (`self.doubly_bridged` is always empty for any constructible engine); a
+`self._ghost_hop_fired` flag (init `False`) flips only if the compile gate is
+bypassed/regressed, and `test_reg12_ghost_hop_never_fires_on_legal_star_bridges` asserts it
+never fires on the legal reg10/reg11 star-bridge sequences. A mirror-side note (no assert,
+since the precise check needs the AST) documents the same in `index_v4/wildcard.py`
+`WildcardIndex.__init__`.
+
+**Regression pins** (`tests/test_lookup_oracle.py`, the reg12 block): F1 + F2 rejected on
+**both** backends at construction; the **propagation-derived** case (constructible —
+verified: expansion adds `(folder,viewer)` to the OWC set the user never declared, both
+backends reject); negative controls (reg10 no-OWC + reg11 with-OWC still compile, their
+literal-restriction ∩ object-wildcard set empty, existing reg10/reg11 parity tests still
+green); and the ghost-hop never-fires flag.
+
+**Formal scope:** unaffected. This change only NARROWS the admissible schema space (a new
+compile rejection); no modeled algorithm changes (`GraphState.admitEdge` untouched). Logged
+under the `GraphAccepts` row in `CORRESPONDENCE.md §3` alongside the other two scope
+rejections. `pytest tests/` green (576, +6 reg12) and the hypothesis smoke (14) re-ran
+green; the phased `verify.sh` gate is the orchestrator's to run after integration.
+
+## 2026-07-17 — fuzzer blind-spot hardening (generator coverage: booleans × wildcards/
+usersets/bridges) + two OPEN divergences filed
+
+**What.** A blind-spot audit found the two schema generators disjoint on the axis where
+every historical bug lived: `tests/test_hypothesis.py::schema_asts` fuzzed booleans but only
+bare `user`/`user:*` subjects, while `star_bridge_configs` fuzzed wildcards/usersets/bridges
+but was provably pure-union — so the PRODUCT (booleans × wildcards/usersets/bridges) was
+covered only by handwritten pins. Test-only change (NO backend/Lean change); generators
+hardened across six items:
+
+- **G2 — concrete usersets in `schema_asts`** (`schema_asts` `expr`): the leaf strategy now
+  optionally emits a CONCRETE userset `[doc#r_k]` over an earlier (possibly derived)
+  relation. When `r_k` is tainted this compiles to a `PDerivedUserset` and drives the
+  `ResidueV1.upos` / `_find_leaf_node` reconcile paths (2× historical CRITICALs found by
+  review, not fuzzing — 2026-07-08 D2, review-2 #1). `_op_pool` already routes the userset
+  subject-predicate writes. Deterministic pin: `test_pderived_userset_add_remove_
+  deterministic_pin`.
+- **D4 — explicit `check` rule** added to `StarBridgeParityMachine` (and the new boolean
+  machine): the machines relied on ParityEngine's post-write grid parity, which SAMPLES the
+  grid (cap 150); a drawn check asserts cross-backend equality on a query of the harness's
+  choosing.
+- **G1 — booleans × star-bridge** (`bool_star_bridge_configs` + `BoolStarBridgeParityMachine`
+  + `test_bool_star_bridge_deterministic_pin`): crosses the star-bridge template with a
+  boolean arm on `B` (`([user] or A from parent) but not blk`). A draw that compiles runs a
+  ParityEngine (3-way when a boolean `B` drops the graph via owc-on-derived, else 4-way); a
+  draw that rejects is asserted consistent per each backend's contract (reusing ParityEngine's
+  own behavior). Also WIDENED `star_bridge_configs`' OWC domain to include `(T, A)` — the
+  previously-excluded F1/F2 axis — now asserting configs whose OWC hits the literal-userset
+  intersection raise `DoublyBridgedShapeError` on both backends and are skipped, all others
+  proceed as before. Ghost-hop never-fires asserted in every machine teardown that reaches a
+  SetEngine.
+- **G5 — `rebuild` + `remove_node`**: a low-frequency `rebuild_sets` rule (set-engine replay
+  from `TupleV1`, spec §6.5, asserting post-rebuild grid equality) added to both machines. A
+  `remove_node` PARITY rule was NOT added — the set engine has no node-level removal, so it
+  cannot fan out through ParityEngine without a set-engine API change (declined per the
+  no-forced-API-change instruction); remove_node + I13 (the 2026-07-08 refcount CRITICAL) is
+  instead pinned on the graph surface that exists by `test_graph_remove_node_invariants_and_
+  answers` (invariants I1–I13 + answers vs an oracle over the remaining tuples).
+- **Item 4a — OWC propagation through a Computed hop** (`test_owc_propagates_through_computed_
+  hop`): an object-wildcard shape on `w` propagates through `v: w` onto `(doc, v)` (the
+  type-agnostic wildcard-relation branch of `_expand_object_wildcard_shapes`); an object-star
+  write on `w` is accepted unanimously and the grant flows through `v`. Not a doubly-bridged
+  landing (`v` is Computed — no writable `doc:*#v`), so it compiles.
+- **G4 — lookup-surface gate over GENERATED schemas** (`test_lookup_oracle_gate_generated_
+  schemas`): the `_Gate` two-sided lookup/lookup_reverse/expand battery, previously only 5
+  handwritten fixtures, now runs over drawn `schema_asts` schemas (low example count — the
+  brute-force oracle reference is expensive; deep-aware cap).
+
+**Exclusion scope for the G2 userset leaf (empirically calibrated by the deep hunt).** When
+`r_k` is tainted, the userset `[doc#r_k]` makes a schema carry userset-shaped subjects
+(`doc:X#r_k`) over a derived relation — which trips TWO pre-existing graph behaviours the deep
+hunt surfaced: (i) the answer-benign implicit-flag CANONICAL DRIFT (a derived object node
+doubling as a self-referential userset subject) breaks the exact-state-equality property of
+`test_cascade_replay_from_zero` / `test_permutation_invariance` / `test_add_then_remove_
+restores_row_multiset`; (ii) the userset-subject-through-derived COMPLETENESS GAP breaks the
+check/lookup parity of `ParityMachine` / the G4 gate. Because the *valuable* case (userset over
+a TAINTED relation) is exactly what trips both, `allow_usersets` is made OPT-IN (default OFF):
+- OFF (the default) in every BACKEND-driven consumer: the three state-restoration tests,
+  `ParityMachine`, and the G4 gate (which also uses `ttu_in_boolean=False`).
+- ON only in `test_parser_round_trip_generated` (pure parse/unparse of userset restrictions —
+  no backend, so neither gap can bite).
+- The PDerivedUserset reconcile WRITE path (`upos` / `_find_leaf_node`) — G2's real value — is
+  covered DETERMINISTICALLY by `test_pderived_userset_add_remove_deterministic_pin` instead.
+  Userset LOOKUP surfaces remain pinned by the handwritten fixture gates (wildcards/boolean/
+  demorgans, which carry usersets and pass) + the X4 regression pins. Net: G2's achievement is
+  finding the three gaps below; live random userset fuzzing over derived schemas is blocked by
+  them (can't leave a strict-xfail-per-example on a random generator), so it is excluded and
+  the gaps are filed.
+
+**THREE OPEN/latent divergences surfaced by the new generators — FILED not fixed** (per the
+fuzzer-hardening failure protocol: file a minimal repro as a strict xfail, exclude the
+offending class from the generator with a dated comment, keep the suite GREEN; do NOT change
+backend code). All pinned by strict `xfail(strict=True)` tests that xpass-alert when the
+underlying gap is closed:
+
+1. **Answer-benign implicit-flag canonical drift (PDerivedUserset path)** —
+   `test_hypothesis.py::test_pderived_userset_self_ref_cascade_replay_drift`. Surfaced by G2
+   in `test_cascade_replay_from_zero`. Schema: derived `r0` (intersection), `r1` with a
+   concrete userset over r0 (`[doc#r0]`), TTU `r4: r0 from parent`; writes `doc:d1 parent
+   doc:d1` (self-ref) + `doc:d1#r0 r1 doc:d1`. Node `(r0, doc, d1)` is BOTH r0's derived-public
+   node AND the userset subject `doc:d1#r0`; the live cascade gives it a transient r0 edge
+   (promoted `implicit=False`, "explicit is sticky"), where bulk replay-from-zero interns it
+   fresh at `implicit=True`. States differ by that ONE flag only — **answer-benign** (both
+   builds answer every check identically and match the oracle, both pass `audit_fixpoint`).
+   Exactly the class the 2026-07-13 self-referential-TTU entry FIXED for the from-chain path,
+   here in the PDerivedUserset path (unfixed). Excluded from `test_cascade_replay_from_zero`
+   only (via `schema_asts(allow_usersets=False)` — the one test comparing incremental vs bulk
+   CANONICAL state); usersets stay ON in every other consumer (they fuzz ANSWER correctness,
+   which this drift never touches).
+
+2. **Graph from-chain-identity completeness gap through a Computed alias of a boolean TTU
+   arm (X4 family, OPEN)** — `test_lookup_oracle.py::test_graph_from_chain_userset_through_
+   boolean_ttu_arm`. Surfaced by G4. After `doc:d1 parent doc:d1`, with `r1: (r0 from parent)
+   and (r0 from parent)` and `r2: r1`, `check('r0','doc','d1','r2','doc','d1')` = **graph
+   False / set engines + oracle True** — an answer-level completeness gap (the graph denies a
+   real grant). The X4a from-chain identity rule (2026-07-13) IS applied for a bare
+   derived-TTU, through a Computed alias over a whole-definition TTU, and for the boolean `r1`
+   queried directly (all verified graph-True); it fails ONLY on the combination of a Computed
+   alias reading a boolean relation whose arm is a DIRECT TTU. A graph *completeness* gap
+   (graph vs oracle), same family as X4.
+
+3. **Graph userset-subject-through-derived completeness gap (wildcard variant; X4/D2/upos
+   family, OPEN)** — `test_lookup_oracle.py::test_graph_userset_subject_through_derived_
+   wildcard_gap`. Surfaced by the deep `ParityMachine` hunt (the G2 userset leaf expanded
+   ParityEngine's grid to CHECK userset subjects on derived relations). With `r0` a
+   wildcard/exclusion relation, `r1: r0 or ([user] or [doc#r0])` (so `doc:d1#r0` can be STORED
+   on r1), and `r3: r1 but not [doc#r1] or [doc#r1]`, after the shown writes
+   `check('r0','doc','d1','r3','doc','d2')` = **graph False / set engines + oracle True** — the
+   graph does not lift `r1`'s userset-subject membership into the dependent `r3`. The complex
+   `r0` (a `user:*` / nested-exclusion arm) is LOAD-BEARING (`r0: [user]` is graph-correct), so
+   this is the userset-subject × wildcard × derived interaction — the edge-free `upos` (D2) /
+   X4 family (userset memberships on derived relations). State-dependent (the write ORDER
+   matters; hypothesis could not shrink it), so pinned as-is with the deterministic
+   3-relation / 3-write repro. This is the divergence the usersets-off exclusion above avoids.
+
+**Formal scope:** unaffected — test-only; no modeled algorithm or schema-admission change.
+All three OPEN/latent gaps are outside `W4Fragment` (from-chain-through-boolean, userset-
+subject-through-derived `upos`, and PDerivedUserset node-GC canonical form are already-
+documented proof gaps). `pytest tests/test_hypothesis.py tests/test_lookup_oracle.py` green;
+full `pytest tests/` green; a `HYPOTHESIS_PROFILE=deep` hunt on the new generators drove the
+exclusion calibration above (the star-bridge/boolean machines + the state-restoration
+consumers ran clean at 120 examples; the userset-subject CHECK gap on generated derived
+schemas is the excluded-and-filed class).
+
+---
+
+## 2026-07-17 — FIXED: graph silently dropped no-restriction-match writes (accept/reject parity)
+
+**Status: FIXED** (`zanzibar_utils_v1.py` `RuleSet.apply`; regression `tests/test_lookup_oracle.py`
+reg13 block; test update `tests/test_wildcard_schema.py::test_concrete_filter_rejects_wildcard_tuple`).
+
+**Scout report.** On `boolean_wildcards`-shaped schemas the write `group:*#member editor doc:d1`
+— tuple subject `group:*#member` (a WILDCARD-userset subject) against a CONCRETE `[group#member]`
+restriction — was **accepted by the graph backend and rejected by the set engine** (a reg9-family
+accept/reject / unanimity break).
+
+**Reproduced, and found BROADER than reported.** The divergence is a **general** graph-admission
+wart, not specific to wildcard usersets. The graph's raw-write routing `RuleSet.apply` had a
+pure-union `else: return` branch that **silently dropped** any raw tuple matching no declared type
+restriction, so the direct-drive graph harnesses (`GraphBackend`/`_GraphSide`) reported `True`
+having written nothing — a **vacuous accept**. The set engine's `_validate` step 2 (`if not
+any(f.apply(triple) for f in self.filters): raise ValueError`) rejects the same tuple. Confirmed
+divergent for the whole class: wrong subject type (`doc:x#foo editor`), wrong userset predicate
+(`group:g#admin editor`), a bare write to a userset-only shape, a nonexistent relation
+(`user:alice bogus doc:d1`), and the reported `group:*#member` case. Note the **derived-family**
+branch of `RuleSet.apply` already RAISED on no-match; only the pure-union branch dropped silently.
+
+**Which layer.** Graph: `RuleSet.apply` (pure-union no-match → silent `return`). Set engine:
+`SetEngine._validate` step 2 → `ValueError`. `validate_write_identifiers` (charset only) is not
+involved. In the PRODUCTION composed path the divergence never manifests: `connectedstore.TupleSource`
+uses the SET ENGINE as the admission validator, so a no-match tuple is rejected before it ever
+reaches `RuleSet.apply` / `advance_index` — the wart lived only in the standalone graph test
+harnesses (`GraphBackend`, `_GraphSide`) that drive the graph without that gate.
+
+**Adjudication (evidence, not assumption): set engine's rejection is right; graph should reject.**
+(1) OpenFGA rejects a tuple matching no type restriction. (2) The admitted state materializes
+NOTHING on the graph — `RuleSet.apply` yields 0 routed triples, 0 stored rows, and every
+downstream `check` is False on ALL backends (graph, both set ops, oracle). So this is a pure
+accept/reject wart, NOT a completeness gap, and NOT "the graph legitimately materializes state"
+(removal/GC unaffected) — squarely the "clean admission-gate change" case, not the file-and-pin case.
+
+**Fix (`RuleSet.apply`, one branch).** The pure-union no-match branch now RAISES `ValueError`
+("matches no declared type restriction") instead of silently returning — mirroring the
+derived-family branch directly above it and the set engine. **Scoped to schema-derived rulesets**
+(`self.schema_info is not None`, always set by `parse_openfga_schema`): a hand-built `RuleSet([...])`
+used as a pure filter/rewrite engine (schema_info None — tests only; no production construction, no
+set-engine counterpart) keeps the historical silent-drop filtering semantics. The production
+`advance_index` already treats any `ruleset.apply` ValueError as a hard corruption signal
+(`InvariantViolation`), and production tuples are set-engine-admitted, so the new raise can only
+fire there on genuine corruption — exactly the intended behavior.
+
+**Regression pins** (`tests/test_lookup_oracle.py` reg13 block): the reported wildcard-userset case
++ the general no-match variants rejected on both backends; valid writes still accepted; the declared
+`[group:*#member]` shape still accepted on both (reg10/reg11 bridged-in family UNCHANGED); plain
+`user:*` sentinel behavior unchanged (accepted under `[user:*]`, rejected without). Updated
+`test_concrete_filter_rejects_wildcard_tuple` to assert the loud reject (was pinning the silent
+drop) — the test's stated intent ("[user] must keep rejecting a user:* tuple") is preserved and
+strengthened.
+
+**Formal scope:** unaffected. This only NARROWS admissible raw writes (a stricter admission gate);
+no modeled algorithm changes. The graph's acyclicity/admission model (`GraphAccepts` /
+`GraphAdmission`) is untouched — matching-no-restriction was never a modeled accept.
+
+---
+
+## 2026-07-17 — FIXED: the three OPEN 2026-07-17 divergences CLOSED (+ a 4th found en route)
+
+**Status: FIXED** (`index_v4/processor.py`, `index_v4/bulk_backfill.py`, `index_v4/invariants.py`).
+The three OPEN/latent divergences filed earlier today (the "fuzzer blind-spot hardening" entry
+above) were root-caused and fixed — no longer file-and-pin, now closed with the strict xfails
+flipped to plain regression pins. A **4th** divergence in the same family surfaced during
+root-causing (previously unfiled) and is pinned too. The fixes are two independent processor
+changes (Fix A — answer-level; Fix B — answer-benign canonical form), each mirrored into the
+bulk backfill so built-vs-live equivalence holds. (The reg13 admission wart found by a scout in
+the same session is its own entry directly above — cross-referenced here, not duplicated.)
+
+### Fix A — audit-set `upos` lift for `derived-computed` / `derived-userset` leaves (both answer-level gaps)
+
+**Root cause.** `DeltaProcessor._leaf_concretes` (the reconcile audit-set builder) lifted a
+referenced tainted relation's residue `upos` (edge-free userset-shaped memberships, P4/D2) into
+the audit set **only** for the `derived-ttu` / `derived-tupleset-ttu` leaf kinds — the X4b lift
+landed 2026-07-13. The `derived-computed` and `derived-userset` branches pulled only
+edge-justified incoming concretes off the closure, never the referenced relation's `upos`. (The
+`neg` side was already lifted for **all** derived kinds via `_derived_leaf_neg_ids`; only the
+positive `upos` side was asymmetric.) So a userset-shaped member recorded *only* in a referenced
+relation's `upos` was invisible to any dependent whose leaf is a Computed alias or a concrete
+userset over that relation; the dependent's residue stayed incomplete and `_check_derived`
+answered **False** where the oracle + both set engines answer **True** — a graph *completeness*
+gap (denies a real grant), same family as X4.
+
+**Fix (`_leaf_concretes`, `derived-computed` + `derived-userset` branches; `_ttu_target_upos_nodes`
+helper).** Both branches now lift the referenced relation's residue `upos` members into the audit
+set — the direct analog of the X4b TTU lift. **Safety:** the lift only *widens* the candidate set;
+membership is still decided by `plan.check_fn` (evaluation), so it cannot over-grant, and it reads
+strictly-lower-stratum residues (no new cascade rounds, no quiescence risk). Mirrored into
+`index_v4/bulk_backfill.py` (same two branches) so bulk build sees the same members. Closes:
+- **xfail #2** `test_lookup_oracle.py::test_graph_from_chain_userset_through_boolean_ttu_arm` —
+  flipped to a plain regression pin.
+- **xfail #3** `test_lookup_oracle.py::test_graph_userset_subject_through_derived_wildcard_gap` —
+  flipped to a plain pin.
+- **NEW 4th divergence** (found by a planning probe, previously unfiled): a userset member of a
+  granted userset **over a derived relation**. With `r0: [user] and [user]`, `r1: [user] or
+  [doc#r0]`, `r3: [user] or [doc#r1]` and the writes `doc:d1#r0 → r1 @ dx`, `doc:dx#r1 → r3 @ dy`,
+  `check(doc:d1#r0, r3, dy)` was graph **False** / oracle + both set engines **True** in **both**
+  write orders. Pinned: `test_lookup_oracle.py::test_graph_userset_member_through_granted_userset_over_derived`.
+
+### Fix B — state-functional `implicit` flag (the answer-benign canonical drift, divergence #1)
+
+**Root cause (canonical drift, answer-benign).** Reconcile step 2a interned a recorded from-chain /
+userset subject node with `implicit=False` **only when the node did not already exist**. A
+pre-existing raw-endpoint node (default `implicit=True`) that then got recorded into a residue
+`neg`/`upos` stayed `implicit=True` on the live path, while a bulk replay-from-zero interned it
+fresh — order-dependent flag → live-vs-bulk canonical-form drift by exactly one node's `implicit`
+bit. Answers, `audit_fixpoint`, and every check-parity were unaffected (this is the
+2026-07-13 self-referential-TTU drift's analog in the PDerivedUserset path). Convergence direction
+is forced *explicit* (core's "explicit is sticky" forbids demotion in the write path;
+`_write_derived` / `_store_residue` pin explicit as edges transit).
+
+**Fix — make the flag state-functional** (invariant target: a node is `implicit=False` ⟺ it owns a
+residue row **∨** is referenced by any residue's `neg`/`upos` **∨** is an active derived-public node
+with an incoming direct edge). Two symmetric halves:
+- **promote-on-record** — new reconcile **step 2d** in `_reconcile` (plus the cheap
+  `_reconcile_subject` path): every userset-shaped node still `implicit` in `neg | upos` is
+  sticky-promoted to explicit. **Bare-entity ids are deliberately excluded** — their canonical
+  convergence still relies on the existing implicit-GC + full-reconcile-prune dance (P4 #1), so
+  the promote guard is `predicate != '...'` and `wildcard == ''`.
+- **demote-on-release** — new `_demote_released_node` (+ helpers `_has_incoming_direct_edge`,
+  `_any_residue_reference`) wired into the *survive* paths of `_gc_subject_node` /
+  `_gc_public_node`. This is a **DELIBERATE, documented exception to core's "explicit is sticky"
+  rule**, and it is *necessary*: promote-only reintroduces the drift one op later (hysteresis — a
+  node recorded then un-recorded that survives on an unrelated reference would stay stuck explicit
+  where a fresh build interns it implicit). On release, a node is demoted back to `implicit=True`
+  unless a canonical explicit-reason still holds (owns a residue row, is referenced by any residue,
+  or is a derived-public node holding an incoming direct edge).
+- **N3 subtlety (worth recording).** The `_cross_object_recordings_possible` (N3) elision makes
+  the fast `_residue_references` scan see only *cross-object* recordings — that is safe for the
+  DELETE decision (refcount keeps the node alive regardless) but **wrong for the DEMOTE decision**,
+  which must not miss a same-object reference. Hence the separate complete-scan `_any_residue_reference`
+  used only on the demote path.
+- **I6 extended** (`invariants.py`): userset-shaped `neg` subjects (`predicate != '...'`) and **all**
+  `upos` subjects must be `implicit == False`. Tamper pin: `tests/test_invariants_derived.py::test_i6_upos_userset_implicit_bites`.
+- **Bulk mirror**: `bulk_backfill.py` mirrors promote-on-record (no demote leg — a from-scratch
+  build is state-functional by construction; an un-recorded node is simply never promoted). The
+  built-vs-live equivalence suites stay green.
+- Flipped **xfail #1** `test_hypothesis.py::test_pderived_userset_self_ref_cascade_replay_drift` to
+  a plain regression pin. Both halves are covered end-to-end by the new
+  `tests/test_self_referential_tuples.py::test_pderived_recording_promote_demote_hysteresis`.
+- **Code-health note (scout observation, not a bug).** The `sp != '...'` userset branch of
+  `_reconcile_subject` appears effectively unreachable in practice (userset-storage deltas force a
+  full `_reconcile` rather than the cheap subject path), so its promote logic is belt-and-braces —
+  correct if ever reached, but not exercised by the current write routing.
+
+### reg13 — cross-reference (not duplicated)
+
+The graph vacuous-accept admission wart in `zanzibar_utils_v1.py::RuleSet.apply` (pure-union no-match
+branch silently dropped a raw tuple where the set engine raises) was found by a scout in this same
+session and is written up in its own dated entry directly above ("graph silently dropped
+no-restriction-match writes"). It is a unanimity wart, not a completeness gap (0 rows materialized),
+production-unexposed (`TupleSource` admits via the set engine first), and the fix narrows accepted
+writes (raise, scoped to schema-derived rulesets).
+
+### Scout campaign (recorded as evidence — no further findings)
+
+Two read-only scouts swept for MORE gaps after the fixes: **(1) read/enumeration symmetry** —
+`lookup` / `lookup_reverse` / `expand` / `_check_derived` / stars-folds / backfill enumeration
+audited against oracle-composed references: **no further silent graph≠oracle omission** (it also
+confirmed the X4-family fixes live). **(2) delta/fan-out/lifecycle** — ~3,800 randomized
+remove-heavy sequences over 9 targeted schemas (cross-object userset fan-out, computed-chain
+quiescence, from-chain removal, wildcard-mediated `target_feeders`, GC races, removal-order
+permutations on the new lift sources): live ≡ replay-from-zero ≡ oracle throughout, `audit_fixpoint`
++ paranoia green; **zero confirmed findings**. The only code-health observation is the effectively
+unreachable `_reconcile_subject` userset branch noted under Fix B.
+
+### Fuzzer exclusions reverted (test-only; no active 2026-07-17 generator exclusions remain)
+
+With the gaps closed, the earlier calibration was undone: `schema_asts`' `allow_usersets` default
+was flipped **ON** (the G2 concrete-userset leaf is now fully fuzzed everywhere, not opt-in), and
+the `ttu_in_boolean` knob was **removed entirely** (the G4 lookup-oracle gate now fuzzes the full
+space — booleans × Computed × whole-definition + boolean-arm TTU × userset leaves over generated
+derived schemas). No active 2026-07-17 generator exclusion remains. **Validation — full deep hunt
+green** (`HYPOTHESIS_PROFILE=deep`, run in this session): the state-equality trio (3 passed, 87 s),
+the stateful machines (3 passed, 310 s), the remaining hypothesis tests (14 passed, 629 s), and the
+deep G4 gate (1 passed, 45 s). No falsifying examples.
+
+**Formal scope:** unaffected. Every touched path is **outside `W4Fragment`**: the `upos`
+userset-membership machinery and the derived-TTU/derived-userset/derived-computed lift shapes are
+already-documented proof gaps (userset subjects on derived relations are edge-free, `computedOnly`),
+and node `implicit` flags are **projected out** of the state-level gate by the extractor (P5, the
+node-GC representation class). So the promote/demote lifecycle and the audit-set lift add processor
+paths gated on tainted userset/`upos` state that in-fragment runs never produce, decided entirely
+by projected-out flags or by strictly-lower-stratum residue reads — the state-level conformance gate
+(`test_conformance_state.py`) is unaffected. The reg13 admission change only narrows accepted raw
+writes (never loosens), toward a `matchDecl` guarantee the model already assumed. See
+`formal/CORRESPONDENCE.md` §7 for the model↔code note. **NOTE: the phased `verify.sh` is being run
+separately by the orchestrator and is NOT claimed green here** — only the `pytest`/hypothesis runs
+above were executed in this session.

@@ -116,6 +116,25 @@ def test_i6_empty_residue_row():
     session.close()
 
 
+def test_i6_upos_userset_implicit_bites():
+    """State-functional canonical form (2026-07-17): a userset-shaped subject recorded
+    in a residue's upos must be EXPLICIT (it survives on the residue reference alone;
+    an implicit one would be dropped by core's implicit-GC at rc-0). Seed a valid-
+    otherwise upos recording whose node is implicit and prove I6 bites."""
+    session, widx, proc, write = _populated()
+    d2 = widx.idx.node('viewer', 'doc', 'd2', create_if_missing=False)
+    # a userset-shaped node (doc:d1#editor), forced implicit
+    us = widx.idx.node('editor', 'doc', 'd1', create_if_missing=True, implicit=True)
+    session.add(ResidueV1(store_id='test', object_node_id=d2.id, relation='viewer',
+                          stars=json.dumps([['user', '...']]),
+                          neg='[]', upos=json.dumps([us.id]), version=1))
+    session.flush()
+    with pytest.raises(InvariantViolation, match='must be explicit'):
+        check_invariants(session, 'test', widx.schema_info)
+    session.rollback()
+    session.close()
+
+
 def test_i7_version_regression():
     session, widx, proc, write = _populated()
     row = session.exec(select(ResidueV1)).first()

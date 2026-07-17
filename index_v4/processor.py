@@ -481,7 +481,15 @@ class DeltaProcessor:
                     (neg.add if want_neg else neg.discard)(s_node.id)
                     self._store_residue(object_type, rel, obj_name, stars, neg, upos)
                     changed = True
-                    if not want_upos and not want_neg:
+                    if want_upos or want_neg:
+                        # promote-on-record (state-functional form; mirrors _reconcile
+                        # step 2d): a recorded userset subject must be explicit, or
+                        # core's implicit-GC drops it at rc-0 and dangles the residue
+                        # reference. The cheap path records here too, so it must promote.
+                        if s_node.wildcard == '' and s_node.implicit:
+                            self.idx.node(s_node.predicate, s_node.type, s_node.name,
+                                          create_if_missing=False, implicit=False)
+                    else:
                         self._gc_subject_node(s_node.id)
             if changed:
                 self._gc_public_node(object_type, rel, obj_name)
@@ -562,6 +570,10 @@ class DeltaProcessor:
                 # TTU parent, where this node doubles as the target relation's own
                 # node, exposed this: add-then-remove left it explicit while a fresh
                 # build interned it implicit). See docs/spec-deviations.md 2026-07-13.
+                # NOTE: this fresh-intern covers only from-chain subjects that have NO
+                # node yet; a PRE-EXISTING recorded node (e.g. a raw-write endpoint,
+                # interned implicit) is promoted uniformly by the state-functional
+                # promote pass after step 2c below (2026-07-17 generalization).
                 n = self.idx.node(sp, st, sn, create_if_missing=True, implicit=False)
                 # I3: a fresh concrete of a bridged shape must get its bridges
                 self.widx._ensure_bridges(n)
@@ -605,6 +617,27 @@ class DeltaProcessor:
             if plan.check_fn(ctx, (n.predicate, n.type, n.name)):
                 upos.add(nid)
 
+        # (2d) promote-on-record (state-functional canonical form): every USERSET-
+        #      shaped node recorded in neg/upos must be EXPLICIT, uniformly -- whether
+        #      reconcile freshly interned it (step 2a) or it pre-existed as a raw-write
+        #      endpoint (default implicit, core.py). A recorded subject survives on its
+        #      residue reference alone; interned implicit, core's implicit-GC would drop
+        #      it at rc-0, dangling the reference and drifting the canonical form vs a
+        #      fresh build (which path -- parent-tuple-first vs grant-first -- ran first
+        #      otherwise decided the flag). Bare-entity ('...') ids are DELIBERATELY
+        #      excluded: their canonical convergence rests on the implicit-GC + full-
+        #      reconcile-prune dance (_map_deltas_to_keys, P4 #1), and promoting them
+        #      would strand rc-0 bare nodes in neg where a fresh build has no node at
+        #      all. Un-recording demotes back (_gc_subject_node / _gc_public_node). See
+        #      docs/spec-deviations.md 2026-07-13 + 2026-07-17.
+        for nid in (neg | upos):
+            n = audit.get(nid) or candidates.get(nid)
+            if n is not None and n.predicate != '...' and n.wildcard == '' and n.implicit:
+                # the node provably exists (audit/candidates member) -> create_if_missing
+                # =False surfaces a bug rather than masking it by creating.
+                self.idx.node(n.predicate, n.type, n.name,
+                              create_if_missing=False, implicit=False)   # sticky promote
+
         # (3) upsert/delete the residue iff changed.
         residue_changed = (stars != old_stars) or (neg != old_neg) or (upos != old_upos)
         if residue_changed:
@@ -645,9 +678,68 @@ class DeltaProcessor:
         # strip pure-bridge scaffolding first (implicit GC then collects the node)
         self.widx._maybe_remove_bridges(n)
         n = self.session.get(NodeV4, node_id)
-        if n is not None and n.reference_count == 0:
+        if n is None:
+            return
+        if n.reference_count == 0:
             self.idx._evict_node(n)             # N15: evict before delete
             self.session.delete(n)
+        else:
+            # survives on an unrelated reference (e.g. a raw grant tuple): its recording
+            # was just dropped, so demote it back to implicit -- a fresh build interns it
+            # implicit, and leaving it explicit would drift the canonical form (Edit 2).
+            self._demote_released_node(n)
+
+    def _has_incoming_direct_edge(self, node_id: int) -> bool:
+        """Whether any DIRECT edge terminates on this node (limit-1 probe). On a
+        derived-public family this means an active member -- I5 makes incoming direct
+        edges there exclusively processor-written derived grants."""
+        return self.session.exec(
+            select(EdgeV4).where(EdgeV4.store_id == self.store_id)
+            .where(EdgeV4.object_id == node_id)
+            .where(EdgeV4.direct_edge_count > 0)  # type: ignore[arg-type]
+        ).first() is not None
+
+    def _any_residue_reference(self, node_id: int) -> bool:
+        """Whether ANY residue's neg/upos references this node id -- a COMPLETE scan.
+        Unlike ``_residue_references`` (which honours the N3 cross-object elision and so
+        finds only cross-object recordings), this also finds LOCAL edge-justified
+        recordings. GC's *deletion* decision can elide locals (a local recording implies
+        an edge, so refcount > 0 keeps the node alive anyway), but the *demote* decision
+        cannot: a locally-recorded userset subject must stay EXPLICIT even though its own
+        edge, not the residue, keeps it alive."""
+        rows = self.session.exec(
+            select(ResidueV1).where(ResidueV1.store_id == self.store_id)).all()
+        for row in rows:
+            if node_id in json.loads(row.neg) or node_id in json.loads(row.upos):
+                return True
+        return False
+
+    def _demote_released_node(self, n: NodeV4) -> None:
+        """Demote a surviving node back to ``implicit=True`` once its recording is
+        dropped, unless a canonical explicit-reason still holds. This is a DELIBERATE,
+        documented exception to core's "explicit is sticky" rule (core.py), owned by
+        the processor at exactly the two lifecycle points where recordings are dropped
+        (_gc_subject_node / _gc_public_node). Without it, a node recorded-then-un-
+        recorded that survives on an unrelated reference stays stuck explicit while a
+        fresh build interns it implicit (hysteresis drift).
+
+        State-functional canonical form: a node is EXPLICIT iff it has its OWN residue
+        row, OR is referenced by ANY residue's neg/upos (local or cross-object), OR is an
+        active derived-public node with an incoming direct edge (matching _write_derived's
+        / _store_residue's pinning -- a public node holding derived edges is explicit in a
+        fresh build too). Self-contained (re-checks all three reasons via a COMPLETE
+        residue scan), so either call site is a one-liner regardless of what it already
+        established."""
+        if n.implicit:
+            return
+        if self._residue_row(n.id) is not None:
+            return
+        if self._any_residue_reference(n.id):
+            return
+        if (n.type, n.predicate) in self.compiled.plans and self._has_incoming_direct_edge(n.id):
+            return
+        n.implicit = True
+        self.session.add(n)
 
     def _derived_leaf_neg_ids(self, object_type: str, obj_name: str, spec) -> set[int]:
         """The neg sets of one referenced derived leaf (§5.3 step 2): exclusions
@@ -687,15 +779,47 @@ class DeltaProcessor:
 
     def _leaf_concretes(self, object_type: str, obj_name: str, spec) -> list[NodeV4]:
         """Concrete members, on this object, of one plan leaf (any kind)."""
-        if spec.kind in ('closure', 'derived-userset'):
-            # storage families: reverse concretes on the leaf node (closure includes
-            # members flowing through userset nodes and, for derived-userset leaves,
-            # through processor-written derived edges)
+        if spec.kind == 'closure':
+            # storage family: reverse concretes on the leaf node (closure includes
+            # members flowing through userset nodes and processor-written derived edges)
             leaf_node = self._node(spec.predicate, object_type, obj_name)
             return [] if leaf_node is None else self._incoming_concretes(leaf_node.id)
+        if spec.kind == 'derived-userset':
+            # storage family: edge-justified incoming concretes on the leaf node, PLUS
+            # -- for each stored userset X granted on this leaf ([T#P], P derived) --
+            # the members of P(X). Those are userset-shaped memberships of a tainted
+            # target: edge-free (P4), recorded only in X's residue upos, so lift them
+            # here or the dependent never sees them (closes the
+            # userset-subject-through-derived lookup-gate divergence, 2026-07-17;
+            # analog of the X4b TTU lift below).
+            leaf_node = self._node(spec.predicate, object_type, obj_name)
+            out: dict[int, NodeV4] = {}
+            if leaf_node is not None:
+                for n in self._incoming_concretes(leaf_node.id):
+                    out[n.id] = n
+            tree_node = self._find_leaf_node(spec)
+            for x in self.stored_userset_subjects(object_type, obj_name, spec.predicate,
+                                                  tree_node.subject_type,
+                                                  tree_node.subject_predicate):
+                for n in self._ttu_target_upos_nodes([(tree_node.subject_type, x)],
+                                                     tree_node.subject_predicate):
+                    out[n.id] = n
+            return list(out.values())
         if spec.kind == 'derived-computed':
+            # edge-justified incoming concretes of the aliased relation's public node,
+            # PLUS its edge-free userset memberships: a Computed alias over a tainted
+            # relation reads that relation's residue upos (P4), so lift it here or the
+            # alias never sees userset-shaped members (closes the
+            # from-chain-through-computed-alias lookup-gate divergence, 2026-07-17;
+            # analog of the X4b TTU lift below).
             d_node = self._node(spec.predicate, object_type, obj_name)
-            return [] if d_node is None else self._incoming_concretes(d_node.id)
+            out = {}
+            if d_node is not None:
+                for n in self._incoming_concretes(d_node.id):
+                    out[n.id] = n
+            for n in self._ttu_target_upos_nodes([(object_type, obj_name)], spec.predicate):
+                out[n.id] = n
+            return list(out.values())
         if spec.kind == 'derived-ttu':
             node = self._find_leaf_node(spec)
             out: dict[int, NodeV4] = {}
@@ -745,17 +869,25 @@ class DeltaProcessor:
         with zero direct edges can hold no closure rows either). Keeps add-then-remove
         an exact row-multiset round trip."""
         node = self._node(rel, object_type, obj_name)
-        if node is None or node.reference_count != 0:
+        if node is None:
             return
-        if self._residue_row(node.id) is not None:
+        # Deletable iff NOTHING remains: no edges (reference_count counts direct-edge
+        # degree, and zero-degree nodes hold no closure rows), no own residue row, and
+        # no residue references it as a subject (from-chain userset, X4a: deleting it
+        # would dangle that id -- the recording reconcile collects it once the reference
+        # is dropped).
+        if (node.reference_count == 0
+                and self._residue_row(node.id) is None
+                and not self._residue_references(node.id)):
+            self.idx._evict_node(node)          # N15: evict before delete
+            self.session.delete(node)
             return
-        if self._residue_references(node.id):
-            # the node doubles as a recorded SUBJECT in another object's residue
-            # (from-chain userset, X4a): deleting it would dangle that id -- the
-            # recording reconcile collects it once the reference is dropped
-            return
-        self.idx._evict_node(node)              # N15: evict before delete
-        self.session.delete(node)
+        # survives -> demote back to implicit unless a canonical explicit-reason still
+        # holds (own residue row / residue reference / active derived-public with an
+        # incoming direct edge). Edit 2: without this a public node that shed its last
+        # member but survives on an unrelated reference stays stuck explicit vs a fresh
+        # build's implicit intern.
+        self._demote_released_node(node)
 
     def _store_residue(self, object_type: str, rel: str, obj_name: str,
                        stars: frozenset, neg: set[int], upos: set[int]) -> None:

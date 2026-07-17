@@ -17,6 +17,8 @@ from sqlmodel import Session, select
 
 from zanzibar_utils_v1 import (
     CyclicDerivedDependency,
+    DoublyBridgedShapeError,
+    wildcard_userset_restriction_shapes,
     Entity,
     RelationalTriple,
     norm_pred as _norm_pred,
@@ -260,6 +262,16 @@ class SetEngine:
         else:
             try:
                 self._ruleset = compile_ruleset(self.ast, self.schema_info)
+            except DoublyBridgedShapeError:
+                # Doubly-bridged shapes (F1/F2, 2026-07-17) must reject on BOTH
+                # backends identically -- the state is unconstructible everywhere,
+                # not merely graph-incomplete. Unlike the other scope rejections
+                # (below), which the set engine degrades past into an oracle-only
+                # mode, re-raise this one so the set engine refuses too. The
+                # compiler runs _expand_object_wildcard_shapes before it fires, so
+                # this also catches the PROPAGATION-derived intersection (P3) that
+                # this engine's own unexpanded schema_info would miss.
+                raise
             except (UnsupportedByGraphIndex, CyclicDerivedDependency):
                 # Only the graph's documented refusals leave us ruleset-less; any
                 # other ValueError from compile is a regression that must surface
@@ -292,6 +304,21 @@ class SetEngine:
         # none) skips that bookkeeping entirely; IN-bridges need no index (they are a
         # single concrete->w_any hop computed from node identity).
         self._maintain_shape_index = bool(self.schema_info.bridged_out_shapes)
+        # Doubly-bridged shapes (F1/F2, 2026-07-17): shapes that are BOTH a LITERAL
+        # wildcard-userset shape (a writable T:*#p restriction) and an object-wildcard
+        # shape (bridged_out). Precomputed once for the flow-graph ghost-hop safeguard
+        # in _flow_reaches. Uses ``wildcard_userset_restriction_shapes`` (the literal
+        # restrictions), NOT the full ``bridged_in_shapes``, so it matches the compile
+        # gate exactly and stays EMPTY for the legal reg11 class (whose (T, viewer) is a
+        # star-tupleset through-shape in bridged_in, not a writable userset). ALWAYS
+        # EMPTY for any constructible engine -- compile rejects such schemas up front
+        # (DoublyBridgedShapeError, re-raised above), so no SetEngine can be built with a
+        # nonempty set. Kept as a defense-in-depth belt: if that compile gate is ever
+        # bypassed/regresses, the ghost hop keeps set/graph admission in parity (and
+        # _ghost_hop_fired flips so a test can assert it never fires).
+        self.doubly_bridged = (wildcard_userset_restriction_shapes(self.ast)
+                               & frozenset(self.schema_info.bridged_out_shapes))
+        self._ghost_hop_fired = False
         self.rebuild()
 
     # ------------------------------------------------------------------ #
@@ -662,7 +689,19 @@ class SetEngine:
             INTO w_any, never out).
 
         These fire for every visited node, tentative-edge endpoints included, so the new
-        write's own concrete endpoints get their IN-bridge automatically."""
+        write's own concrete endpoints get their IN-bridge automatically.
+
+        DEFENSE-IN-DEPTH ghost hop (F1/F2, 2026-07-17): for a DOUBLY-bridged shape
+        (both a wildcard-userset shape and an object-wildcard shape) we ALSO step
+        ``w_all(T,p) -> w_any(T,p)`` -- the virtual composition of the out-bridge and
+        the in-bridge THROUGH any present-or-future concrete node of that shape (w_all ->
+        [out-bridge] concrete -> [in-bridge] w_any). That closes the F1/F2 latent
+        ``w_any -> w_all`` cycle at write time so set/graph admission stay in parity.
+        This hop is UNREACHABLE for any constructible engine: compile rejects
+        doubly-bridged schemas (``DoublyBridgedShapeError``), so ``self.doubly_bridged``
+        is always empty. It fires only if that compile gate is bypassed/regressed; when
+        it does, ``self._ghost_hop_fired`` flips True so a test can assert it never
+        fires. See docs/spec-deviations.md 2026-07-17."""
         self._ensure_flow_graph()
         bridged_in = self.schema_info.bridged_in_shapes
         bridged_out = self.schema_info.bridged_out_shapes
@@ -692,6 +731,14 @@ class SetEngine:
                     for ck in (a, b):
                         if len(ck) == 3 and ck[0] == t and ck[2] == p:
                             stack.append(ck)
+                # Defense-in-depth ghost hop: for a doubly-bridged shape, ALSO step
+                # w_all -> w_any (out-bridge then in-bridge THROUGH any present-or-future
+                # concrete of the shape). Unreachable for any constructible engine
+                # (compile rejects doubly-bridged schemas); the flag lets a test pin
+                # that it never fires. See the docstring + spec-deviations 2026-07-17.
+                if (t, p) in self.doubly_bridged:
+                    self._ghost_hop_fired = True
+                    stack.append((t, '*', p, 'any'))
         return False
 
     # ------------------------------------------------------------------ #

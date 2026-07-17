@@ -468,7 +468,12 @@ def test_integration_wildcard_two_hop_hierarchy():
         define parent_folder: [folder, folder:*]
         define viewer: [user:*, user, folder:*#viewer] or viewer from parent_folder
     '''
-    ruleset = parse_openfga_schema(schema, object_wildcard_shapes={('folder', 'viewer')})
+    # Only SUBJECT wildcards are exercised (user:* viewer, folder:* parent_folder), never
+    # a folder:* OBJECT on viewer, so no object-wildcard shape is needed. Declaring
+    # {('folder','viewer')} would make this schema doubly-bridged (folder:*#viewer userset
+    # + object-wildcard on the same shape) -- now compile-rejected as F1/F2
+    # (docs/spec-deviations.md 2026-07-17).
+    ruleset = parse_openfga_schema(schema)
     backend = V4WildcardBackend(ruleset.schema_info)
 
     # user:* views folder xyz; folder:* is the parent of doc1 -> everyone views doc1

@@ -330,7 +330,13 @@ def test_wildcard_through_computed_userset():
 
 
 def test_wildcard_through_from_chain():
-    rs = parse_openfga_schema(CANON_SCHEMA, object_wildcard_shapes={('folder', 'viewer')})
+    # No object-wildcard on viewer: this test exercises only user:* (subject wildcard)
+    # + from-chain propagation, never a folder:* OBJECT on viewer. Declaring
+    # {('folder','viewer')} here would make CANON_SCHEMA doubly-bridged (folder:*#viewer
+    # userset + object-wildcard on the same shape) -- now compile-rejected as F1/F2
+    # (docs/spec-deviations.md 2026-07-17). The OWC was superfluous; dropping it keeps
+    # the feature under test intact.
+    rs = parse_openfga_schema(CANON_SCHEMA)
     session, widx = make_wildcard_index(rs.schema_info)
     _ingest(widx, rs, RelationalTriple(Entity('user', '*'), 'viewer', Entity('folder', 'root'), Ellipsis))
     _ingest(widx, rs, RelationalTriple(Entity('folder', 'root'), 'parent_folder', Entity('document', 'child'), Ellipsis))
@@ -375,8 +381,11 @@ def test_all_folders_grant_reaches_child_docs():
 
 
 def test_two_hop_user_star_folder_star():
-    # The canonical §3.2 regression, end-to-end.
-    rs = parse_openfga_schema(CANON_SCHEMA, object_wildcard_shapes={('folder', 'viewer')})
+    # The canonical §3.2 regression, end-to-end. Uses only SUBJECT wildcards
+    # (user:* viewer, folder:* parent_folder) -- no folder:* OBJECT on viewer -- so the
+    # object-wildcard on viewer is unneeded. Declaring it would make CANON_SCHEMA
+    # doubly-bridged (now compile-rejected as F1/F2; docs/spec-deviations.md 2026-07-17).
+    rs = parse_openfga_schema(CANON_SCHEMA)
     session, widx = make_wildcard_index(rs.schema_info)
     _ingest(widx, rs, RelationalTriple(Entity('user', '*'), 'viewer', Entity('folder', 'xyz'), Ellipsis))
     _ingest(widx, rs, RelationalTriple(Entity('folder', '*'), 'parent_folder', Entity('document', '1'), Ellipsis))

@@ -41,6 +41,18 @@ class WildcardIndex:
     def __init__(self, idx: ReachabilityIndex, schema_info: SchemaInfo):
         self.idx = idx
         self.schema_info = schema_info
+        # Mirror-side belt (F1/F2, 2026-07-17): a doubly-bridged shape -- a LITERAL
+        # wildcard-userset restriction (T:*#p) that is also an object-wildcard shape --
+        # admits wildcard writes whose materialized bridges form a latent w_any->w_all
+        # cycle (set/graph divergence + innocent-write lockout). ``compile_ruleset``
+        # rejects such schemas up front (``DoublyBridgedShapeError``), so no
+        # WildcardIndex is ever built with one. We deliberately DON'T assert here: the
+        # PRECISE check needs the AST to tell a literal T:*#p restriction from a
+        # star-tupleset through-shape (the legal reg11 class has (T, viewer) in
+        # ``bridged_in_shapes`` but no writable userset, so a ``bridged_in ∩
+        # bridged_out`` assert would false-positive on it), and the AST is not available
+        # here. The compile-time gate (both backends) is the real guard; see
+        # docs/spec-deviations.md 2026-07-17.
         # Derived-family write exclusivity (boolean spec §3.3/I5): only the delta
         # processor may write incoming direct edges on a derived-public family. The
         # processor sets this flag around its own writes.

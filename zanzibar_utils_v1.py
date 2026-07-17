@@ -369,7 +369,28 @@ class RuleSet:
                     seeds = {relational_triple}
                     break
             else:
-                return
+                # No declared type restriction admits this raw tuple.
+                if self.schema_info is None:
+                    # Hand-built ruleset used as a pure filter/rewrite engine: it has
+                    # no "declared restrictions" concept and no set-engine counterpart,
+                    # so keep the historical silent-drop-on-no-match filtering semantics.
+                    return
+                # Schema-derived ruleset: REJECT loudly (ValueError) -- do NOT silently
+                # drop. A silent drop vacuously "accepts" (the graph test harnesses
+                # report True, having written nothing) while the set engine's
+                # `_validate` step 2 raises `ValueError` on the same tuple: an
+                # accept/reject (unanimity) divergence for ANY no-restriction-match
+                # write -- a wrong-type/wrong-predicate subject, a wildcard userset
+                # `T:*#p` under a concrete `[T#p]` restriction, a bare write to a
+                # computed-only relation, etc. This mirrors the derived-family branch
+                # above (which already raises) and the set engine, restoring parity.
+                # In the production apply path tuples are admission-validated by the
+                # set engine before they ever reach here, so this only fires on genuine
+                # corruption -- exactly what advance_index treats it as
+                # (InvariantViolation).
+                raise ValueError(
+                    f"tuple {relational_triple} matches no declared type restriction "
+                    f"for {o_type}#{rel}")
 
         # Fast path (the dominant case: a direct restriction with no rewrite rule):
         # if no rule can fire on any seed relation the worklist can never grow, and
@@ -482,6 +503,25 @@ class UnsupportedByGraphIndex(Exception):
     Raised by ``compile_ruleset`` naming the offending relation. The set-engine
     backend handles these; the closure-materialising graph index does not.
     """
+
+
+class DoublyBridgedShapeError(UnsupportedByGraphIndex):
+    """A shape that is BOTH a wildcard-userset shape (``T:*#p`` restriction ->
+    ``bridged_in_shapes``) and an object-wildcard shape (``bridged_out_shapes``)
+    -- the "doubly-bridged" precondition of the F1/F2 divergences (see
+    docs/spec-deviations.md 2026-07-17). A wildcard write on such a shape
+    materializes a ``w_any(T,p) -> w_all(T,p)`` path; every present-or-future
+    concrete node of that shape carries both bridges (concrete->w_any in-bridge,
+    w_all->concrete out-bridge), so the path is a latent cycle -- the graph
+    accepts the wildcard write then permanently REJECTS every later innocent
+    concrete write of that shape (accept/reject + completeness divergences vs the
+    set engine, plus an innocent-write lockout).
+
+    A subclass of ``UnsupportedByGraphIndex`` (the third entry in the
+    decision-15 scope-rejection family), but its OWN type so the set engine can
+    re-raise it -- unlike the other scope rejections, which the set engine
+    swallows to degrade to a ruleset-less/oracle-only mode, this one must reject
+    on BOTH backends identically (the state must be unconstructible everywhere)."""
 
 
 class CyclicDerivedDependency(ValueError):
@@ -981,6 +1021,7 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
         for (object_type, relation_name), expr in ast.items():
             _emit_expr(expr, object_type, relation_name, rules_and_filters)
         schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
+        _reject_doubly_bridged_shapes(ast, schema_info)
         return RuleSet(rules_and_filters, schema_info=schema_info)
 
     tainted = compute_taint(ast)
@@ -1002,6 +1043,7 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
     schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
     _reject_object_wildcard_scope(ast, tainted, schema_info.object_wildcard_shapes,
                                   declared_shapes)
+    _reject_doubly_bridged_shapes(ast, schema_info)
     return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled)
 
 
@@ -1031,6 +1073,73 @@ def _expand_object_wildcard_shapes(rules_and_filters: list,
     if shapes == set(schema_info.object_wildcard_shapes):
         return schema_info
     return replace(schema_info, object_wildcard_shapes=frozenset(shapes))
+
+
+def wildcard_userset_restriction_shapes(ast: SchemaAST) -> frozenset[tuple[str, str]]:
+    """Shapes ``(T, p)`` that carry a LITERAL wildcard-userset restriction ``T:*#p``
+    (``p != '...'``) somewhere in the schema.
+
+    A strict subset of ``bridged_in_shapes``: it EXCLUDES the star-tupleset
+    through-shapes ``derive_schema_info`` also folds into ``subject_wildcard_shapes``
+    (a ``[S:*]`` bare tupleset used by a TTU derives the through-shape ``(S, target)``).
+    That distinction is the whole difference between F1/F2 and reg11: only a literal
+    ``T:*#p`` restriction lets a ``T:*#p ... o`` tuple be WRITTEN, minting a persistent
+    ``w_any(T,p)`` userset node -- the thing that detonates against a matching object
+    wildcard. A through-shape is never a writable userset subject (reg11's dangerous
+    writes self-cycle and are rejected on both backends, so nothing persists), so
+    counting it would over-reject the legal reg11 class. This is the precise left factor
+    of the doubly-bridged precondition (see ``_reject_doubly_bridged_shapes``)."""
+    shapes: set[tuple[str, str]] = set()
+    for expr in ast.values():
+        for direct in _iter_directs(expr):
+            for r in direct.restrictions:
+                if r.wildcard and r.predicate != '...':
+                    shapes.add((r.type, r.predicate))
+    return frozenset(shapes)
+
+
+def _reject_doubly_bridged_shapes(ast: SchemaAST, schema_info: SchemaInfo) -> None:
+    """Decision-15-family scope rejection (the THIRD entry, 2026-07-17): a shape that is
+    simultaneously a LITERAL wildcard-userset shape (a writable ``T:*#p`` restriction,
+    ``wildcard_userset_restriction_shapes``) and an object-wildcard shape
+    (``bridged_out_shapes``) -- the "doubly-bridged" precondition of F1/F2.
+
+    Run AFTER ``_expand_object_wildcard_shapes`` so it sees the CLOSED object-wildcard
+    set (a shape can become doubly-bridged only via compiler propagation through TTU
+    heads -- the F1 case propagates ``(folder, admin)`` and the P3 case propagates the
+    intersecting ``(folder, viewer)`` the user never declared).
+
+    NOTE on the left factor: we intersect against the LITERAL ``T:*#p`` restriction
+    shapes, NOT the full ``bridged_in_shapes``. ``bridged_in_shapes`` also carries
+    star-tupleset through-shapes (reg11's ``(folder, viewer)`` from ``[folder:*]`` on a
+    TTU tupleset), which are NOT writable usersets and cannot mint a persistent w_any --
+    reg11 is legal (both backends agree, dangerous writes self-cycle). Using the full
+    ``bridged_in_shapes`` here over-rejects that legal class.
+
+    Such a shape admits wildcard writes whose materialized bridges form a latent cycle
+    ``w_any(T,p) -> w_all(T,p)`` in the graph closure (closed by any present-or-future
+    concrete node's concrete->w_any in-bridge and w_all->concrete out-bridge): the graph
+    accepts the wildcard write, then permanently REJECTS every later innocent concrete
+    write of that shape -- the F1/F2 accept/reject + completeness divergences plus the
+    innocent-write lockout ("detonation"). Neither wildcard usersets nor object-wildcard
+    tuple objects exist in OpenFGA, so this corner is doubly out of spec; lift via the
+    symmetric subject-keyed residue design if ever needed. See docs/spec-deviations.md
+    2026-07-17."""
+    doubly = (wildcard_userset_restriction_shapes(ast)
+              & frozenset(schema_info.bridged_out_shapes))
+    if doubly:
+        offending = ', '.join(f'({t}, {p})' for (t, p) in sorted(doubly))
+        raise DoublyBridgedShapeError(
+            f"shape(s) {offending} are BOTH a wildcard-userset shape (a T:*#p "
+            f"restriction) and an object-wildcard shape; a wildcard write on such a "
+            f"shape materializes bridges that form a latent cycle in the graph closure "
+            f"(w_any -> w_all closed by any present-or-future concrete node's in/out "
+            f"bridges), so the graph accepts the wildcard write then permanently rejects "
+            f"every later innocent concrete write of that shape -- set/graph divergences "
+            f"plus innocent-write lockout. Neither wildcard usersets nor object-wildcard "
+            f"tuple objects exist in OpenFGA; lift via the symmetric subject-keyed "
+            f"residue design if ever needed (decision-15 scope family; see "
+            f"docs/spec-deviations.md 2026-07-17)")
 
 
 def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,

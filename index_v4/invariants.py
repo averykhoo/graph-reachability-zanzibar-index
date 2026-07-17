@@ -249,6 +249,13 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
                 _fail(f'I6: residue neg holds a wildcard node {s} on {node}')
             if (s.type, s.predicate) not in stars:
                 _fail(f'I6: neg subject {s} not star-covered by {stars} on {node}')
+            # state-functional canonical form (2026-07-17): a USERSET-shaped recorded
+            # subject survives on its residue reference alone, so it must be EXPLICIT
+            # (an implicit one would be dropped by core's implicit-GC at rc-0, dangling
+            # the reference). Bare-entity neg ids stay implicit-eligible (excluded).
+            if s.predicate != '...' and s.implicit:
+                _fail(f'I6: userset neg subject {s} is implicit on {node} '
+                      f'(recorded subjects must be explicit -- state-functional form)')
         if neg & derived_edge_subjects.get(r.object_node_id, set()):
             _fail(f'I6: neg overlaps derived-edge holders on {node} '
                   f'(an edge means expr-true; neg means expr-false)')
@@ -270,6 +277,11 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
             if (s.type, s.predicate) in stars:
                 _fail(f'I6: upos subject {s} is star-covered by {stars} on {node} '
                       f'(covered subjects are answered by stars/neg, not upos)')
+            # state-functional canonical form (2026-07-17): every upos subject is
+            # userset-shaped and survives on its residue reference alone -> EXPLICIT.
+            if s.implicit:
+                _fail(f'I6: upos subject {s} is implicit on {node} '
+                      f'(recorded subjects must be explicit -- state-functional form)')
 
     # I7: version monotonicity per residue ROW (empty rows are deleted, so a
     # recreated residue legitimately restarts its lineage at version 1 -- lineage is

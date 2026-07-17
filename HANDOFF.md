@@ -16,11 +16,45 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## Current status — 2026-07-16
+## Current status — 2026-07-17
 
-- **Everything is complete and green.** Both evaluation backends (set engine +
-  graph index), the composition layer, and the Lean formal layer all pass their
-  gates. Lean is sorry-free and axiom-clean (412/412). No known correctness bug.
+- **2026-07-17 — the three OPEN 2026-07-17 divergences CLOSED (+ a 4th found en route)
+  + reg13 admission wart fixed + fuzzer exclusions reverted; full gate GREEN; UNCOMMITTED
+  (awaiting Avery's go-ahead).**
+  The three OPEN/latent divergences filed earlier today (below) were root-caused and fixed,
+  their strict xfails flipped to plain pins: **Fix A** — the reconcile audit-set builder
+  (`processor._leaf_concretes`, + `bulk_backfill` mirror) now lifts a referenced tainted
+  relation's residue `upos` for `derived-computed`/`derived-userset` leaves (the X4b lift
+  extended), closing the two answer-level completeness gaps **and a NEW 4th** (userset member
+  of a granted userset over a derived relation). **Fix B** — a state-functional `implicit` flag
+  (promote-on-record step 2d + a demote-on-release exception to core's explicit-is-sticky rule,
+  I6 extended) closes the answer-benign canonical drift. **reg13** — `RuleSet.apply` now raises
+  (not silent-drops) a raw write matching no declared restriction (a unanimity wart; production
+  unexposed). Fuzzer exclusions reverted: `allow_usersets` default ON, `ttu_in_boolean` knob
+  removed — zero active 2026-07-17 generator exclusions remain. `HYPOTHESIS_PROFILE=deep` hunt
+  green (state trio 3/87 s, machines 3/310 s, rest 14/629 s, deep G4 1/45 s; no falsifying
+  examples). Two read-only scout sweeps (read/enumeration symmetry; ~3,800 remove-heavy
+  delta/lifecycle sequences) found ZERO further gaps. **Gate GREEN (2026-07-17): `pytest tests/`
+  561 + 32 = 593 passed, 0 xfailed (cap-safe split); `verify.sh` lean PASSED (sorry-free,
+  412/412) / conf-heavy 68 PASSED / conf-rest 195 PASSED; 6-seed fuzz sweep on
+  `tests/test_hypothesis.py` (seeds 7/19/31/53/71/97) all 20 passed.**
+  Details: `docs/spec-deviations.md` 2026-07-17 ("the three OPEN 2026-07-17 divergences CLOSED");
+  formal note in `formal/CORRESPONDENCE.md` §7.
+- **2026-07-17 — F1/F2 CLOSED + fuzzer blind-spot hardening landed; full gate green;
+  UNCOMMITTED (awaiting Avery's go-ahead).** The F1/F2 divergences (and their
+  newly-found "detonation" — innocent-write lockout, a 3rd divergence) are closed by a
+  compile-time scope rejection (`DoublyBridgedShapeError`, both backends, literal
+  `T:*#p` ∩ object-wildcard criterion) + a set-engine ghost-hop safeguard (never
+  fires, test-pinned). The generator blind-spot audit + hardening (G1/G2/G4/G5/D4
+  + pins) landed; the deep hunt filed **three NEW latent divergences** (1 answer-benign
+  drift, 2 graph completeness gaps — X4 family) as strict xfails — see Standing/latent.
+  Gate: `pytest tests/` 582 passed + 3 xfailed; `verify.sh` lean (sorry-free, 412/412) /
+  conf-heavy (68) / conf-rest (195) all PASSED; 6-seed fuzz sweep on
+  `tests/test_hypothesis.py` green. Details: `docs/spec-deviations.md` 2026-07-17.
+- **Everything green.** Both evaluation backends (set engine + graph index), the
+  composition layer, and the Lean formal layer all pass their gates. Lean is
+  sorry-free and axiom-clean (412/412). Known correctness bugs: only the two
+  strict-xfail graph completeness gaps filed 2026-07-17 (Standing/latent).
 - **2026-07-16 — found + fixed a real set-engine/graph admission divergence.** The
   previously-latent "bridge-edge residual" turned out to be constructible (a
   multi-hop cycle through a star bridge: set-accepted / graph-rejected). Fixed by
@@ -49,9 +83,39 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 ## Open-TODO board
 
 ### Active work
-_None in flight._ The repo is in a clean, fully-gated state awaiting the next
-direction. **When you start a task, add it here** (with owner/date if useful) and
-move it to the history/changelog trail when done.
+- [x] **DONE 2026-07-17 (full gate GREEN; uncommitted — commit pending Avery's go-ahead).** **Closed the three OPEN 2026-07-17 divergences (+ a 4th
+      found en route) + the reg13 admission wart; reverted the fuzzer exclusions.** Fix A (the
+      `processor._leaf_concretes` `upos` lift for `derived-computed`/`derived-userset` leaves,
+      mirrored in `bulk_backfill`) closed the two graph completeness gaps + the new 4th; Fix B
+      (state-functional `implicit` flag — promote-on-record step 2d + demote-on-release, I6
+      extended) closed the answer-benign canonical drift; reg13 made `RuleSet.apply` raise on a
+      no-restriction-match raw write. `allow_usersets` default flipped ON, `ttu_in_boolean` knob
+      removed — no active 2026-07-17 generator exclusions remain. `HYPOTHESIS_PROFILE=deep` hunt
+      green; two read-only scout sweeps found zero further gaps. New pins: reg13 block +
+      `test_graph_userset_member_through_granted_userset_over_derived` +
+      `test_pderived_recording_promote_demote_hysteresis` + `test_i6_upos_userset_implicit_bites`;
+      three prior strict xfails flipped to plain pins. Details: `docs/spec-deviations.md`
+      2026-07-17; formal note in `formal/CORRESPONDENCE.md` §7.
+- [x] **DONE 2026-07-17 (gate green; uncommitted — commit pending Avery's go-ahead).**
+      **F1/F2 fix (started 2026-07-17, Claude+Avery):** compile-time scope rejection of
+      shapes in `bridged_in ∩ bridged_out` (a shape that is both a wildcard-userset
+      shape and an object-wildcard shape — the F1/F2 precondition). Decision: reject at
+      compile (`UnsupportedByGraphIndex`, third entry in the scope-rejection family;
+      OpenFGA supports neither construct) rather than a write-time ghost-hop gate.
+      Plus: always-on set-engine flow-graph ghost-hop safeguard (w_all→w_any for
+      doubly-bridged shapes; unreachable post-rejection, hypothesis asserts it never
+      fires), regression pins, fuzzer blind-spot audit + generator hardening.
+      New findings recorded en route: both F1/F2 states detonate on innocent later
+      writes (graph rejects plain grants set+oracle accept — a 3rd divergence), and
+      all→any is NOT read semantics (oracle-pinned via acyclic cross-type probe).
+      **Generator-hardening sub-item LANDED 2026-07-17** (fuzzer blind-spot audit closed):
+      `schema_asts` now emits concrete usersets (G2), a new `bool_star_bridge_configs` +
+      `BoolStarBridgeParityMachine` cross booleans × star-bridge (G1), the machines gained
+      `check`/`rebuild` rules + ghost-hop never-fires teardown asserts (D4/G5), and the
+      lookup gate runs over generated schemas (G4). THREE OPEN/latent divergences filed as
+      strict xfails (a deep `HYPOTHESIS_PROFILE=deep` hunt drove the exclusion calibration) —
+      see the Standing/latent section below and `docs/spec-deviations.md` 2026-07-17 (fuzzer
+      blind-spot hardening).
 
 ### Deferred / backlog (documented, none urgent; none block)
 
@@ -94,16 +158,33 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
 - [x] ~~**Set-engine flow graph omits bridge edges**~~ — RESOLVED 2026-07-16 (was a
       real, constructible divergence, not merely latent). Fixed; see the Current
       status note above and `docs/spec-deviations.md`.
-- [ ] **Two OWC-on-self-referential-relation divergences (F1/F2, found 2026-07-16 by the
-      new star-bridge fuzzer).** Both need an object wildcard on the relation that also
-      carries a `T:*#A` wildcard-userset restriction (`(T,A) ∈ object_wildcard_shapes`).
-      **F1** (graph *incomplete*): `check` returns graph `False` where set + oracle say
-      `True`, routed through a double-wildcard `T:* parent T:*` parent. **F2** (graph
-      *over-permissive*): `T:*#A A T:*` accepted by graph, rejected by set (the reg9
-      same-shape self-reference with a wildcard object). Minimal repros + rationale in the
-      dated `docs/spec-deviations.md` entry. Exotic (OpenFGA has no wildcard usersets);
-      do NOT chase speculatively — but **F1 is a completeness gap**, so triage it first if
-      either is ever prioritized.
+- [x] ~~**Two OWC-on-self-referential-relation divergences (F1/F2, found 2026-07-16 by the
+      new star-bridge fuzzer).**~~ — RESOLVED 2026-07-17 by a **compile-time scope
+      rejection** (the third decision-15 entry): a *doubly-bridged* shape — a literal
+      `T:*#p` wildcard-userset restriction that is also an object-wildcard shape — now
+      raises `DoublyBridgedShapeError` on **both** backends at construction (the set engine
+      re-raises it rather than degrading). Also surfaced en route: both states **detonate**
+      (after the wildcard write, innocent later concrete writes of the shape are permanently
+      graph-rejected — a 3rd divergence), and *all→any is NOT read semantics* (oracle-pinned
+      via an acyclic cross-type probe, so no read-path fix was warranted). Belt-and-braces
+      set-engine ghost-hop safeguard added (never fires post-rejection). Pinned by the
+      `reg12` block in `tests/test_lookup_oracle.py`; see the dated `docs/spec-deviations.md`
+      entry. (Note: the criterion is the *literal-restriction* ∩ object-wildcard set, not
+      the coarse `bridged_in ∩ bridged_out`, which over-rejects the legal reg11 class.)
+- [x] ~~**THREE OPEN/latent divergences filed 2026-07-17 by the hardened generators**~~ —
+      **RESOLVED 2026-07-17 (+ a 4th found en route).** All three were root-caused and fixed,
+      their strict xfails flipped to plain regression pins, and the generator exclusions
+      reverted (`allow_usersets` default ON, `ttu_in_boolean` removed). See the Current-status
+      top bullet and `docs/spec-deviations.md` 2026-07-17 ("the three OPEN 2026-07-17
+      divergences CLOSED"). Summary: #2/#3 (the graph *completeness* gaps —
+      `test_graph_from_chain_userset_through_boolean_ttu_arm`,
+      `test_graph_userset_subject_through_derived_wildcard_gap`) + a new 4th
+      (`test_graph_userset_member_through_granted_userset_over_derived`) fixed by **Fix A**
+      (the `processor._leaf_concretes` `upos` lift for `derived-computed`/`derived-userset`
+      leaves + `bulk_backfill` mirror); #1 (the answer-benign implicit-flag canonical drift,
+      `test_pderived_userset_self_ref_cascade_replay_drift`) fixed by **Fix B** (the
+      state-functional `implicit` flag — promote step 2d + demote-on-release, I6 extended;
+      hysteresis pin `test_pderived_recording_promote_demote_hysteresis`).
 - [ ] **Other documented latent/theoretical notes** — a handful of
       "documented, no corpus exercises it, not urgent" corners (e.g. a from-chain
       TARGET theoretical note; tupleset-of-derived latent gap). The full inventory
