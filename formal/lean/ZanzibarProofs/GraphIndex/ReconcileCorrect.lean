@@ -917,4 +917,183 @@ theorem graphRec_reduce_base {σ : GraphState} {S : Schema} {T : Store}
     cases h2 : σ0.reach (subjNode s) (objNode ⟨dt, on⟩ r') <;>
     simp_all
 
+/-! ## Write-half admission for bare Direct-arm tuples on a derived key (leg 2, step 1)
+
+`StoreValidRules` (`RulesSound.lean:201`) admits a stored tuple only when its
+`(object.type, relation)` carries a `Direct` arm reachable through **unions** (`exprDirects`,
+which returns `[]` under `inter`/`excl`). So a raw write `alice ∈ approver` on a boolean
+derived def `approver = [user] but not banned` — modelled RAW as
+`excl (direct [user]) (computed banned)` (`CORRESPONDENCE.md` §7, no leaf-family split) — is
+**rejected**: `exprDirects (excl …) = []`, so `exprDirects_computedOnly … = []` and the
+`reachedByW3a_Rnode_source_bare` base leg derives a contradiction from any stored `(dt,R)`
+tuple. That rejection is exactly what keeps the ADD-ONLY W3a read half sound (the obstruction:
+a stored-on-R base edge cannot be retracted when the subject is later excluded).
+
+This section widens the **admission** — faithfully — so a bare Direct-arm tuple on a derived
+key is admissible, while preserving **I5 exclusivity** by requiring the stored subject to be
+BARE (`[user]`-style, never a userset flowing onto the derived family). It is the write-half
+companion the diffing chain (`ReachedByW3d2E`) consumes to RESTORE soundness — the add-only
+W3a read half stays on the narrow `StoreValidRules`; only the additive `_d` lemmas below carry
+the widened admission.
+
+`exprDirectsAll` recurses into `inter`/`excl` (unlike `exprDirects`), mirroring Python's leaf
+extraction: `compile_ruleset` splits out every `Direct` leaf of a def regardless of the
+enclosing boolean, routing raw writes to that leaf family (`zanzibar_utils_v1.py`; `RuleSet.apply`
++ I5). It is a SEPARATE function — `exprDirects` is left untouched, so `evalE_direct_arm`
+(false for `excl`, a negation) and all W2 storage-arm machinery are unaffected. -/
+
+/-- The `Direct` restriction-lists reachable through **any** boolean nesting (`inter`/`excl`
+    included) — the faithful admission-side leaf extraction (Python's compiled leaf split;
+    `CORRESPONDENCE.md` §7). Distinct from `exprDirects` (unions only), which drives the W2
+    `evalE`-truth arm lemmas and must keep returning `[]` under `excl`. -/
+def exprDirectsAll : Expr → List (List Restriction)
+  | .direct rs => [rs]
+  | .computed _ => []
+  | .ttu _ _ => []
+  | .union a b => exprDirectsAll a ++ exprDirectsAll b
+  | .inter a b => exprDirectsAll a ++ exprDirectsAll b
+  | .excl a b => exprDirectsAll a ++ exprDirectsAll b
+
+/-- **`StoreValidRulesD S T`** — the widened store admission (leg 2, write half). Each stored
+    tuple is EITHER
+    * on an **untainted** key, matching a union-reachable `Direct` arm (the W2 route,
+      `exprDirects`), OR
+    * on a **derived** key, with a **BARE** subject, matching a `Direct` leaf reachable through
+      any boolean nesting (`exprDirectsAll`) all of whose restrictions are BARE.
+
+    The `isDerived` fields PARTITION the disjuncts, so a tuple on a derived key MUST take the
+    second (derived-direct) disjunct — hence has a bare subject. Strictly wider than
+    `StoreValidRules` on the `ComputedOnly` fragment (`storeValidRulesD_of_storeValidRules`).
+    The BARE restriction + BARE subject requirement preserves **I5**: no userset flow-through
+    onto the derived family (mirrors `DirectArmsBare`; `Semantics.lean:36` restrictionMatches). -/
+def StoreValidRulesD (S : Schema) (T : Store) : Prop :=
+  ∀ t ∈ T,
+    (isDerived S (t.object.type, t.relation) = false ∧
+      ∃ e rs, S.lookup (t.object.type, t.relation) = some e ∧
+        rs ∈ exprDirects e ∧ restrictionMatches rs t = true)
+    ∨ (isDerived S (t.object.type, t.relation) = true ∧ t.subject.predicate = BARE ∧
+      ∃ e rs, S.lookup (t.object.type, t.relation) = some e ∧
+        rs ∈ exprDirectsAll e ∧ restrictionMatches rs t = true ∧ (∀ r ∈ rs, r.2.1 = BARE))
+
+/-- **`StoreValidRules` ⇒ `StoreValidRulesD` on the `ComputedOnly` fragment.** When every
+    derived def is `ComputedOnly` (the current W3a–W3d scope hypothesis `hCO`), a
+    `StoreValidRules` store has NO stored tuple on a derived key (`exprDirects_computedOnly`),
+    so every tuple takes the untainted disjunct. This records that `StoreValidRulesD` STRICTLY
+    widens the current admission — it admits exactly the extra stored-on-derived-key tuples the
+    fragment forbids. -/
+theorem storeValidRulesD_of_storeValidRules {S : Schema} {T : Store}
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hSV : StoreValidRules S T) : StoreValidRulesD S T := by
+  intro t ht
+  obtain ⟨e, rs, hlk, hrs, hrm⟩ := hSV t ht
+  left
+  refine ⟨?_, e, rs, hlk, hrs, hrm⟩
+  by_contra hcon
+  rw [Bool.not_eq_false] at hcon
+  rw [exprDirects_computedOnly (hCO _ _ _ hlk hcon)] at hrs
+  simp at hrs
+
+/-- **R-node in-edge sources stay BARE under the widened admission (leg 2, step 2a).** The
+    reach-collapse's `hsrcbare` re-derived over `StoreValidRulesD`: a base (rewrite-closure)
+    edge landing on the derived R-node `objNode ⟨dt,on⟩ R` is now ADMITTED — it comes from a
+    stored bare Direct-arm tuple (the second admission disjunct forces its subject BARE) — but
+    a rewrite OUTPUT on `(dt,R)` is still impossible (`noRuleOutputs_of_derived`); the reconcile
+    edges' sources are bare candidates. So every in-edge source is bare, and the single-edge
+    collapse survives the extra base edges (needs no `ComputedOnly` — the bareness comes from the
+    admission, not the def shape). -/
+theorem reachedByW3a_Rnode_source_bare_d {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String}
+    (hSV : StoreValidRulesD S T) (hder : isDerived S (dt, R) = true)
+    (h : ReachedByW3a σ S T) :
+    ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE := by
+  induction h with
+  | base hr =>
+    intro x hx
+    obtain ⟨t, ht, u, hu, hasub, hbobj⟩ := reachedByRules_edge_sound hr x _ hx
+    have htype : dt = u.object.type := by
+      simpa [objNode_type] using congrArg NodeKey.type hbobj
+    have hrel : R = u.relation := by
+      simpa [objNode_pred] using congrArg NodeKey.pred hbobj
+    rcases rewriteClosure_produced hu with heq | ⟨r, hr', hro, hrout⟩
+    · -- seed: `u = t`, so `t` sits on the derived key `(dt,R)` ⇒ bare via the admission
+      rcases hSV t ht with ⟨hf, _⟩ | ⟨_, hbare, _⟩
+      · rw [← heq, ← htype, ← hrel] at hf; simp [hder] at hf
+      · rw [hasub, subjNode_pred, heq]; exact hbare
+    · exact absurd (⟨hro.trans htype.symm, hrout.trans hrel.symm⟩)
+        (noRuleOutputs_of_derived hder r hr')
+  | reconcile dt' on' R' e' cands _hRne hcands _hder _hcStar _honStar _ ih =>
+    intro x hx
+    rcases reconcileKey_edge_sound _ dt' on' R' e' cands x _ hx with hold | ⟨c, hc, hxc, _⟩
+    · exact ih hSV hder x hold
+    · rw [hxc, subjNode_pred]; exact hcands c hc
+
+/-- Declaredness carries through the widened admission — BOTH admission disjuncts pin a stored
+    tuple's `(object.type, relation)` to a declared def. The only fact the collapse's non-bare
+    edge-target argument needs from store-validity. -/
+theorem storeValidRulesD_declared {S : Schema} {T : Store} (hSV : StoreValidRulesD S T) :
+    ∀ t ∈ T, ∃ e, S.lookup (t.object.type, t.relation) = some e := by
+  intro t ht
+  rcases hSV t ht with ⟨_, e, _, hlk, _⟩ | ⟨_, _, e, _, hlk, _⟩ <;> exact ⟨e, hlk⟩
+
+/-- `rewriteClosure_rel_ne_bare` under the widened admission — a closure tuple's relation is a
+    declared (non-`BARE`) relation. Same argument; the seed leg reads declaredness from
+    `storeValidRulesD_declared` instead of `StoreValidRules`. -/
+theorem rewriteClosure_rel_ne_bare_d {S : Schema} {T : Store} (hWF : WF S)
+    (hSV : StoreValidRulesD S T) {t : Tuple} (ht : t ∈ T) {u : Tuple}
+    (hu : u ∈ rewriteClosure S t) : u.relation ≠ BARE := by
+  rcases rewriteClosure_produced hu with heq | ⟨r, hr, _, hrout⟩
+  · rw [heq]
+    obtain ⟨e, hlk⟩ := storeValidRulesD_declared hSV t ht
+    exact lookup_rel_ne_bare hWF hlk
+  · obtain ⟨d, hd, hd1, _⟩ := schemaRewrites_provenance hr
+    intro hbare
+    have hd12 : d.1.2 = BARE := by
+      have hsnd : d.1.2 = r.outRel := congrArg Prod.snd hd1
+      rw [hsnd, hrout]; exact hbare
+    have hrel : relNameOK d.1.2 := hWF.relNames d hd
+    rw [hd12] at hrel
+    exact hrel (by simp [BARE, String.contains])
+
+/-- Every W3a edge target has a non-`BARE` predicate under the widened admission — the D-mirror
+    of `reachedByW3a_edge_target_ne_bare` (a base edge's object relation is declared via
+    `rewriteClosure_rel_ne_bare_d`; a reconcile edge's target is the declared derived `R'`). -/
+theorem reachedByW3a_edge_target_ne_bare_d {σ : GraphState} {S : Schema} {T : Store}
+    (hWF : WF S) (hSV : StoreValidRulesD S T) (h : ReachedByW3a σ S T) :
+    ∀ a b, (a, b) ∈ σ.edges → b.pred ≠ BARE := by
+  induction h with
+  | base hr =>
+    intro a b hab
+    obtain ⟨t, ht, u, hu, _, hbobj⟩ := reachedByRules_edge_sound hr a b hab
+    rw [hbobj, objNode_pred]; exact rewriteClosure_rel_ne_bare_d hWF hSV ht hu
+  | reconcile dt on R e cands hRne _hcands _hder _hcStar _honStar _ ih =>
+    intro a b hab
+    rcases reconcileKey_edge_sound _ dt on R e cands a b hab with hold | ⟨c, _, _, hbc⟩
+    · exact ih hWF hSV a b hold
+    · rw [hbc, objNode_pred]; exact hRne
+
+/-- A `BARE`-predicate node is never an edge target under the widened admission. -/
+theorem reachedByW3a_bareNode_no_inedge_d {σ : GraphState} {S : Schema} {T : Store}
+    (hWF : WF S) (hSV : StoreValidRulesD S T) (h : ReachedByW3a σ S T)
+    {k : NodeKey} (hk : k.pred = BARE) : ∀ x, (x, k) ∉ σ.edges := by
+  intro x hxk
+  exact reachedByW3a_edge_target_ne_bare_d hWF hSV h x k hxk hk
+
+/-- **The reach-collapse under the widened admission (leg 2, step 2a).** Any path to the derived
+    object node `objNode ⟨dt,on⟩ R` is a single edge, now allowing stored bare Direct-arm base
+    edges on the R-node. Structurally identical to `reachedByW3a_reach_collapse_root`, discharging
+    `hsrcbare` via `reachedByW3a_Rnode_source_bare_d` (sources stay bare) and a bare source's
+    no-in-edge via `reachedByW3a_bareNode_no_inedge_d`. This is the single-edge spine the diffing
+    retraction (`reconcileKeyD_edge_char_cd`) uses to remove the STALE base edge when the subject
+    is excluded — the crux the add-only chain cannot. -/
+theorem reachedByW3a_reach_collapse_root_d {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String} {u : NodeKey}
+    (hWF : WF S) (hSV : StoreValidRulesD S T) (hder : isDerived S (dt, R) = true)
+    (h : ReachedByW3a σ S T)
+    (hr : NReaches σ.edges u (objNode ⟨dt, on⟩ R)) :
+    (u, objNode ⟨dt, on⟩ R) ∈ σ.edges := by
+  refine nreaches_collapse_of_source_notarget ?_ hr
+  intro x hxv
+  exact reachedByW3a_bareNode_no_inedge_d hWF hSV h
+    (reachedByW3a_Rnode_source_bare_d hSV hder h x hxv)
+
 end Zanzibar

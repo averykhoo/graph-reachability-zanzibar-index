@@ -726,6 +726,199 @@ theorem reconcileKeyD_edge_char {S : Schema} (T : Store) (dt on R : String) (e :
         have hsr : s ∉ rest := fun hr => hmem (List.mem_cons_of_mem _ hr)
         exact Or.inr ⟨hsr, Or.inr ⟨hsc, hold⟩⟩
 
+/-! ## Diffing retraction over a bare `Direct`-arm derived def (leg 2, step 2b — the crux)
+
+The obstruction: a tuple stored DIRECTLY on a derived key's `Direct` arm
+(`approver = [user] but not banned`, modelled RAW as `excl (direct [user]) (computed banned)`,
+`CORRESPONDENCE.md` §7 — no leaf-family split) lands a BASE rewrite-closure edge on the R-node.
+An ADD-ONLY pass cannot retract it, so once the subject is excluded (`banned`) the graph
+over-grants (`check = true ≠ sem = false`). Attack-first `#eval` (2026-07-18, deleted scratch)
+confirmed against the real `check`/`sem`: on exactly this shape the DIFFING pass `reconcileKeyD`
+retracts the stale base edge — `removeEdgePair (subjNode c) (objNode R)` filters EVERY copy of
+the pair, the base seed edge included — and `check` drops to `false = sem`. Soundness RESTORED.
+
+`reconcileKeyD_edge_char` already proves the "candidate history erased" retraction, but only for
+a `ComputedOnly` def — it uses `wantEdge_reconcileKeyD_inert`, whose guard fold-invariance rests
+on the `ComputedOnly` read congruence `evalE_computedOnly`. A bare `Direct`-arm def is
+`ComputedOrDirect` + `DirectArmsBare`, so these `_cd` variants swap in leg 1's widened congruence
+`evalE_computedOrDirect`. The result: the diffing retraction holds over the motivating shape —
+the crux, formalized at the pass level. -/
+
+/-- `checkFn` agreement across two states agreeing on the def's `computed` leaves, WIDENED to a
+    `ComputedOrDirect` def with bare `Direct` arms (leg 1's `evalE_computedOrDirect`). Subject-
+    SHARED (a `Direct` arm reads the store at the fixed subject — the varying-subject form is
+    refuted; `ReconcileCorrect` widening-leg note); only `rec`/query vary, all `wantEdge` needs. -/
+theorem checkFn_agree_of_graphRec_cd {σ σ0 : GraphState} {S : Schema} (T : Store)
+    (s : SubjectRef) (dt on R : String) (e : Expr)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hag : ∀ (s' : SubjectRef) (r' : String), isDerived S (dt, r') = false →
+      GraphModel.graphRec σ s' dt on r' = GraphModel.graphRec σ0 s' dt on r') :
+    σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e := by
+  unfold GraphState.checkFn
+  exact evalE_computedOrDirect e hcd hba (fun r' hr' => hag s r' (hleafUnt r' hr'))
+
+/-- The guard `wantEdge` is fold-invariant over a `ComputedOrDirect` + bare-`Direct` derived def
+    (the `_cd` mirror of `wantEdge_reconcileKeyD_inert`; only the `checkFn`-agreement step swaps
+    to `checkFn_agree_of_graphRec_cd`, the covered-row half is def-shape-independent). -/
+theorem wantEdge_reconcileKeyD_inert_cd {σ : GraphState} {S : Schema} (T : Store)
+    (dt on R : String) (e : Expr) (cands : List SubjectRef) (hRne : R ≠ BARE)
+    (hcands : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hlu : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) (x : SubjectRef) :
+    (σ.reconcileKeyD T dt on R e cands).wantEdge T dt on R e x
+      = σ.wantEdge T dt on R e x := by
+  unfold GraphState.wantEdge
+  have hchk : (σ.reconcileKeyD T dt on R e cands).checkFn T x dt on R e
+      = σ.checkFn T x dt on R e :=
+    checkFn_agree_of_graphRec_cd (S := S) T x dt on R e hcd hba hlu
+      (fun s' r' hr' => graphRec_reconcileKeyD_inert T dt on R e cands hRne hcands hRns
+        honStar hder hcl s' dt on r' hr')
+  have hcov : (σ.reconcileKeyD T dt on R e cands).coveredAt (objNode ⟨dt, on⟩ R) R x.shape
+      = σ.coveredAt (objNode ⟨dt, on⟩ R) R x.shape := by
+    unfold GraphState.coveredAt
+    rw [reconcileKeyD_residue]
+  rw [hchk, hcov]
+
+/-- **The per-key edge characterisation over a bare `Direct`-arm derived def** — the `_cd`
+    mirror of `reconcileKeyD_edge_char`. After the diffing fold the derived pair of `s` is
+    present iff `s` is a candidate with `g s`, or a non-candidate whose pair predated the pass;
+    candidate history — INCLUDING a stored base seed edge — is fully erased. Proof identical to
+    `reconcileKeyD_edge_char` except the guard fold-invariance uses `wantEdge_reconcileKeyD_inert_cd`. -/
+theorem reconcileKeyD_edge_char_cd {S : Schema} (T : Store) (dt on R : String) (e : Expr)
+    (hRne : R ≠ BARE) (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hlu : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (g : SubjectRef → Bool) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (∀ c ∈ cands, c.predicate = BARE) →
+      (∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges) →
+      (∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) →
+      (∀ c ∈ cands, σ.wantEdge T dt on R e c = g c) →
+      ∀ s : SubjectRef,
+        ((subjNode s, objNode ⟨dt, on⟩ R) ∈ (σ.reconcileKeyD T dt on R e cands).edges
+          ↔ ((s ∈ cands ∧ g s = true) ∨
+             (s ∉ cands ∧ (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges))) := by
+  intro cands
+  induction cands with
+  | nil =>
+    intro σ _ _ _ _ s
+    show (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges ↔ _
+    simp
+  | cons c rest ih =>
+    intro σ hcb hRns hcl hg s
+    have hcb1 : ∀ x ∈ [c], x.predicate = BARE := by
+      intro x hx
+      rw [List.mem_singleton.mp hx]
+      exact hcb c List.mem_cons_self
+    have hstep : σ.reconcileKeyD T dt on R e (c :: rest)
+        = (σ.reconcileKeyD T dt on R e [c]).reconcileKeyD T dt on R e rest := rfl
+    set σc := σ.reconcileKeyD T dt on R e [c] with hσc
+    have hRns1 : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σc.edges :=
+      reconcileKeyD_Rnode_terminal T dt on R e hRne [c] hcb1 σ hRns
+    have hcl1 : ∀ ab ∈ σc.edges, ab.1 ∈ σc.nodes ∧ ab.2 ∈ σc.nodes :=
+      edgesClosed_reconcileKeyD T dt on R e [c] σ hcl
+    have hg1 : ∀ x ∈ rest, σc.wantEdge T dt on R e x = g x := by
+      intro x hx
+      rw [hσc, wantEdge_reconcileKeyD_inert_cd (S := S) T dt on R e [c] hRne hcb1 hRns
+        honStar hder hcd hba hlu hcl x]
+      exact hg x (List.mem_cons_of_mem _ hx)
+    have hgc : σ.wantEdge T dt on R e c = g c := hg c List.mem_cons_self
+    have hpairc : ∀ s : SubjectRef,
+        ((subjNode s, objNode ⟨dt, on⟩ R) ∈ σc.edges
+          ↔ ((s = c ∧ g c = true) ∨
+             (s ≠ c ∧ (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges))) := by
+      intro s
+      rw [hσc, reconcileKeyD_singleton, hgc]
+      cases hgcv : g c
+      · rw [if_neg (by simp), mem_removeEdgePair_edges]
+        constructor
+        · rintro ⟨hmem, hne⟩
+          refine Or.inr ⟨?_, hmem⟩
+          intro heq
+          exact hne ⟨by rw [heq], rfl⟩
+        · rintro (⟨_, hfalse⟩ | ⟨hne, hmem⟩)
+          · exact absurd hfalse (by simp)
+          · refine ⟨hmem, ?_⟩
+            rintro ⟨h1, _⟩
+            exact hne (subjNode_inj_total h1)
+      · rw [if_pos rfl, writeDirect_edges]
+        have hadm : σ.admitEdge (subjNode c) (objNode ⟨dt, on⟩ R) = true := by
+          unfold GraphState.admitEdge
+          rw [Bool.and_eq_true]
+          constructor
+          · rw [bne_iff_ne]
+            intro heq
+            have hpred := congrArg NodeKey.pred heq
+            rw [subjNode_pred, objNode_pred, hcb c List.mem_cons_self] at hpred
+            exact hRne hpred.symm
+          · cases hr : σ.reach (objNode ⟨dt, on⟩ R) (subjNode c)
+            · rfl
+            · exfalso
+              obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound hr)
+              exact hRns y hy
+        rw [if_pos hadm]
+        constructor
+        · intro hmem
+          rcases List.mem_cons.mp hmem with heq | hold
+          · have h1 := (Prod.ext_iff.mp heq).1
+            exact Or.inl ⟨subjNode_inj_total h1, rfl⟩
+          · by_cases hsc : s = c
+            · exact Or.inl ⟨hsc, rfl⟩
+            · exact Or.inr ⟨hsc, hold⟩
+        · rintro (⟨hsc, _⟩ | ⟨_, hold⟩)
+          · rw [hsc]
+            exact List.mem_cons_self
+          · exact List.mem_cons_of_mem _ hold
+    rw [hstep]
+    rw [ih σc (fun x hx => hcb x (List.mem_cons_of_mem _ hx)) hRns1 hcl1 hg1 s]
+    rw [hpairc s]
+    constructor
+    · rintro (⟨hsr, hgs⟩ | ⟨hsr, (⟨hsc, hgc'⟩ | ⟨hsc, hold⟩)⟩)
+      · exact Or.inl ⟨List.mem_cons_of_mem _ hsr, hgs⟩
+      · exact Or.inl ⟨by rw [hsc]; exact List.mem_cons_self, by rw [hsc]; exact hgc'⟩
+      · refine Or.inr ⟨?_, hold⟩
+        intro hmem
+        rcases List.mem_cons.mp hmem with heq | hr
+        · exact hsc heq
+        · exact hsr hr
+    · rintro (⟨hmem, hgs⟩ | ⟨hmem, hold⟩)
+      · rcases List.mem_cons.mp hmem with heq | hr
+        · by_cases hsr : s ∈ rest
+          · exact Or.inl ⟨hsr, hgs⟩
+          · exact Or.inr ⟨hsr, Or.inl ⟨heq, by rw [← heq]; exact hgs⟩⟩
+        · exact Or.inl ⟨hr, hgs⟩
+      · have hsc : s ≠ c := fun heq => hmem (by rw [heq]; exact List.mem_cons_self)
+        have hsr : s ∉ rest := fun hr => hmem (List.mem_cons_of_mem _ hr)
+        exact Or.inr ⟨hsr, Or.inr ⟨hsc, hold⟩⟩
+
+/-- **The crux, named: the diffing pass RETRACTS a stale base edge for an excluded candidate.**
+    Over a bare `Direct`-arm derived def, if `c` is a candidate whose pass-start guard is
+    absent (`want = false` — e.g. `checkFn` flipped down by a later `but not` exclusion) then
+    the derived pair `(subjNode c, objNode ⟨dt,on⟩ R)` is ABSENT after the diffing pass — even
+    if it PRE-EXISTED as a stored base seed edge (`alice ∈ approver` on the raw `Direct` arm).
+    This is the machine-checked counterpart of the attack-first `#eval`: the add-only chain
+    cannot retract this edge; the diffing pass does. -/
+theorem reconcileKeyD_retracts_excluded {S : Schema} (T : Store) (dt on R : String) (e : Expr)
+    (hRne : R ≠ BARE) (honStar : on ≠ STAR) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hlu : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (cands : List SubjectRef) (σ : GraphState)
+    (hcb : ∀ c ∈ cands, c.predicate = BARE)
+    (hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges)
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    {c : SubjectRef} (hc : c ∈ cands) (hwant : σ.wantEdge T dt on R e c = false) :
+    (subjNode c, objNode ⟨dt, on⟩ R) ∉ (σ.reconcileKeyD T dt on R e cands).edges := by
+  have hchar := reconcileKeyD_edge_char_cd (S := S) T dt on R e hRne honStar hder hcd hba hlu
+    (fun x => σ.wantEdge T dt on R e x) cands σ hcb hRns hcl (fun _ _ => rfl) c
+  rw [hchar]
+  rintro (⟨_, hg⟩ | ⟨hnc, _⟩)
+  · rw [hwant] at hg; exact absurd hg (by simp)
+  · exact hnc hc
+
 /-- **Pass-level edge exactness** (`reconcileStarsKeyD_edge_char`): after one
     full-object diffing pass, a subject's derived edge at the key is present iff it is
     a candidate whose guard holds at the PASS-START state — `checkFn` true and its
