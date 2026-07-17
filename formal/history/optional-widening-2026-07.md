@@ -266,18 +266,42 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
   **CRITICAL: the `remove` CONSTRUCTOR is NOT here** — adding it to `ReachedByW3d2E` breaks
   every downstream induction until each remove case is discharged (needs R4), so per the
   green gate the constructor moves to the FINAL leg R5. R2 is pure additive substrate.
-- **Leg R3 — the occurrence-count invariant (THE HARDEST SUB-LEMMA — the whole content).**
-  By induction on the add-only chain: for every UNTAINTED edge, `count (a,b) σ.edges =
-  Σ_{t∈T} (admitted occurrences of (a,b) in rewriteClosure S t)`; for every DERIVED edge
-  (I5), count ∈ {0,1}. In-fragment (StructInv acyclic + DAG rewrite graph) admitEdge always
-  passes for non-self rewrite edges ⇒ collapses to occurrence-counting; derived arm reuses
-  the diffing pass rc≡1 discipline. This is the ref-count decision made concrete. ADDITIVE
-  (lemmas over `removeLoggedRules`, no inductive touched) ⇒ stays green.
+- **Leg R3 — the occurrence-count invariant. ✅ UNTAINTED ARM DONE (2026-07-18i); derived arm
+  KILLED as false.** New additive file `RemoveOccCount.lean` (+ 3-line aggregator import),
+  verify.sh lean 415/415. Headline `reachedByW3d2E_untOccCount`: over every `ReachedByW3d2E`
+  state, for an untainted `(a,b)` (`isDerived S (b.type,b.pred) = false`),
+  `σ.edges.count (a,b) = untOccCount S T a b` where `untOccCount := ((T.flatMap (rewriteClosure
+  S)).map edgeOfTuple).count (a,b)` — the ref-count made concrete (edges is a multiset ⇒
+  `List.count` IS `direct_edge_count`). Supporting (all R4-reusable): `count_foldl_writeDirect`
+  (admitted `writeDirect` fold = occurrence count, keyed off the write ctor's own `FoldAdmits`
+  hyp — NO acyclicity argument needed, the admitEdge-passes question dissolved),
+  `count_writeLoggedRules`, and the cascade-preserves-untainted-count stack
+  (`count_reconcileKeyDR_of_ne` → `…StarsKeyDR…` → `…applyLoggedR…` → `…reconcileJobsLR…` →
+  `count_runCascade2_of_ne`; every enumerated job is at a DERIVED R-node via
+  `enumJobs2At_keyFacts`, so untainted `(a,b)` differs by `objNode_type/_pred`).
+  - **★ KILL (house rule 2): the design's DERIVED arm `count ∈ {0,1}` is MODEL-FALSE.** `#eval`
+    `viewer := a but not b` (write alice@a→cascade→write bob@a→cascade): `count(alice→viewer)`
+    = 1 then **4**. The diffing pass `reconcileKeyD` (`ReconcileDiff.lean:212`) writes on
+    `checkFn ∧ ¬covered` and does NOT probe `¬has_edge` like Python (`processor.py:359-367`),
+    so it STACKS duplicate derived copies (the documented `ReconcileDiff` header decision,
+    compensated by filter-all `removeEdgePair`). The faithful derived-side property is
+    MEMBERSHIP (filter-all zeroes the pair), NOT a count bound — R4 must consume that, not
+    `∈{0,1}`.
+  - **Faithfulness nuance (reported, benign):** Lean `rewriteClosure` doesn't dedupe; Python
+    `RuleSet.apply` does — on a reconvergent diamond the model over-counts (count 2 vs Python
+    `direct_edge_count` 1). Read-invisible (reads test membership) + remove-consistent
+    (`removeLoggedRules` folds the SAME closure) ⇒ doesn't affect the membership-level R4/R5
+    target; extends the pre-existing `RulesWrite.lean:100` "duplicates harmless — reachability
+    not counts" note to the remove path. The theorem characterizes the MODEL ref-count in
+    terms of MODEL `rewriteClosure` occurrences (the design's exact phrasing), not a
+    Python-count claim in reconvergent schemas.
 - **Leg R4 — the confluence lemma.** `EvalEq (removeLoggedRules σ t |> drain)
-  (rebuild (T.erase t))` at edge-MEMBERSHIP (set) level, fed by R3: erase-one drops `(a,b)`
-  from the read-set iff its surviving count hits 0 iff no surviving seed derives it = the
-  rebuild's membership. Same `twoStrata`/`hLU2` bound (reuse 12f re-settlement). ADDITIVE ⇒
-  stays green.
+  (rebuild (T.erase t))` at edge-MEMBERSHIP (set) level. **UNTAINTED side** fed by R3's
+  `untOccCount`: erase-one/removeLoggedRules decrements the occurrence count; `(a,b)` leaves
+  the read-set iff surviving count hits 0 iff no surviving seed derives it = the rebuild's
+  membership (`count > 0 ↔ mem`). **DERIVED side** (RESHAPED by the R3 kill): NOT a count
+  bound — use the membership story (filter-all `removeEdgePair` zeroing + the diffing pass
+  re-settle). Same `twoStrata`/`hLU2` bound (reuse 12f re-settlement). ADDITIVE ⇒ stays green.
 - **Leg R5 — the constructor + discharge the consumer surface (THE ONE non-additive leg;
   lands green in ONE commit armed with R4).** Add the 4th `remove` constructor to
   `ReachedByW3d2E`: `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with
@@ -313,4 +337,6 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
 
 **Lift:** as predicted, ~one W3d sub-stage — but R3 (occurrence-count invariant) is GENUINE
 new content; R1/R2 clone-and-mirror; R4 the confluence; R5 the one non-additive assembly
-(green in one commit, with the `toC` retire as its trickiest piece). **RESUME: start Leg R3.**
+(green in one commit, with the `toC` retire as its trickiest piece). **RESUME: start Leg R4**
+(untainted side fed by R3's `untOccCount`; derived side via the membership story, NOT the
+killed `∈{0,1}` bound).

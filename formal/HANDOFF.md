@@ -116,11 +116,16 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > adding it to `ReachedByW3d2E` breaks every downstream induction until discharged. R2 mapped
 > the full R5 ripple surface (design file); the one obstruction is `reachedByW3d2E_toC`
 > (codomain `ReachedByW3d2C` not EvalEq-invariant → retire from the remove path, fix iii).
-> **THE NEXT TASK: #4 Leg R3** — the occurrence-count invariant over `removeLoggedRules`
-> (untainted edge `count = Σ` admitted occurrences; derived ∈ {0,1} by I5; ADDITIVE ⇒ green).
-> Then R4 (confluence EvalEq), R5 (constructor + discharge Group A + retire `toC`). After #4:
-> back to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1 TTU/userset half,
-> #2 strata, #4 legs R3–R5.
+> Leg R3 LANDED (2026-07-18i): the UNTAINTED
+> occurrence-count invariant `reachedByW3d2E_untOccCount` (`RemoveOccCount.lean`) — an
+> untainted edge's model ref-count = its occurrence count over the store's rewrite closures.
+> **KILL: the design's derived arm `count ∈ {0,1}` is model-FALSE** (the model stacks derived
+> duplicates, compensated by filter-all `removeEdgePair`) — the derived side of R4 is a
+> MEMBERSHIP story, not a count bound. **THE NEXT TASK: #4 Leg R4** — the confluence
+> `EvalEq(removeLoggedRules…|>drain, rebuild(T.erase t))` at membership level (untainted side
+> fed by `untOccCount`, `count>0↔mem`; derived side via `removeEdgePair` zeroing). Then R5
+> (constructor + discharge Group A + retire `toC`). After #4: back to #1 Direct-arm leg 4+ /
+> TTU half, #2 strata (>2). Not started: #1 TTU/userset half, #2 strata, #4 legs R4–R5.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and

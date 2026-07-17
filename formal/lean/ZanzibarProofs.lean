@@ -67,5 +67,8 @@ import ZanzibarProofs.FullScope
 -- W4 T2a groundwork over the two-round chain
 import ZanzibarProofs.GraphIndex.CascadeStrataInv
 
+-- Remove-leg R3: the untainted occurrence-count invariant (ref-count made concrete)
+import ZanzibarProofs.GraphIndex.RemoveOccCount
+
 -- Phase 6: the executable graph-model driver + honesty theorems (zcli graph mode)
 import ZanzibarProofs.GraphIndex.Exec

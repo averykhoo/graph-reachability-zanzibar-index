@@ -8,6 +8,48 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18i (#4 remove legs — Leg R3: untainted occurrence-count invariant + a KILL of the derived arm)
+
+Third (and hardest) Lean-editing leg of #4. ADDITIVE — one new file `RemoveOccCount.lean` +
+a 3-line aggregator import in `ZanzibarProofs.lean`; inducts on the EXISTING `ReachedByW3d2E`
+chain, no constructor/inductive touched. verify.sh lean 415/415 sorries=0 (Audit untouched).
+
+- **Landed the FULL UNTAINTED arm:** `reachedByW3d2E_untOccCount` — over every `ReachedByW3d2E`
+  state, an untainted `(a,b)` has `σ.edges.count (a,b) = untOccCount S T a b` where
+  `untOccCount := ((T.flatMap (rewriteClosure S)).map edgeOfTuple).count (a,b)`. The ref-count
+  made concrete (`edges` is a multiset ⇒ `List.count` == `direct_edge_count`, `core.py:686-704`).
+  Supporting/R4-reusable: `count_foldl_writeDirect` (the count collapses to occurrence-count off
+  the write ctor's own `FoldAdmits` hyp — the "admitEdge never rejects a non-self rewrite edge"
+  question DISSOLVED, no acyclicity argument needed), `count_writeLoggedRules`, and the
+  cascade-preserves-untainted-count stack (`count_reconcileKeyDR_of_ne` →`…StarsKeyDR…`
+  →`…applyLoggedR…` →`…reconcileJobsLR…` →`count_runCascade2_of_ne`; every enumerated job at a
+  DERIVED R-node via `enumJobs2At_keyFacts` ⇒ untainted `(a,b)` differs by `objNode_type/_pred`).
+- **★ KILL (house rule 2) — the design's DERIVED arm `count ∈ {0,1}` is MODEL-FALSE.** `#eval`
+  `viewer := a but not b` (write alice@a→cascade→write bob@a→cascade): `count(alice→viewer)`
+  = 1 then 4. The diffing pass `reconcileKeyD` writes on `checkFn ∧ ¬covered` and does NOT
+  probe `¬has_edge` like Python (`processor.py:359-367`) — it STACKS derived duplicates (the
+  documented `ReconcileDiff` header decision, compensated by filter-all `removeEdgePair`). So
+  the faithful derived-side property is MEMBERSHIP (filter-all zeroing), NOT a count bound —
+  R4's derived side is reshaped accordingly.
+- **Faithfulness nuance (benign):** Lean `rewriteClosure` doesn't dedupe (Python `RuleSet.apply`
+  does) ⇒ reconvergent-diamond over-count (model 2 vs Python `direct_edge_count` 1);
+  read-invisible + remove-consistent (same closure folded on remove) ⇒ doesn't affect the
+  membership-level R4/R5 target; extends the `RulesWrite.lean:100` "duplicates harmless" note
+  to the remove path. The theorem is a MODEL-ref-count characterization, not a Python-count claim.
+
+**Gate:** verify.sh lean 415/415 sorries=0. Additive Lean (new module + import), driver
+(`Exec.lean`) untouched and the new module is outside zcli's call graph ⇒ conf byte-identical
+(conf-heavy 76 + conf-rest 220 last green at R1; leaned on, gate-runbook §2). `pytest tests/`
+(561+32) stands. Committed + pushed.
+
+**RESUME #4: Leg R4** — the confluence `EvalEq(removeLoggedRules…|>drain, rebuild(T.erase t))`
+at membership level: untainted side fed by `untOccCount` (`count>0 ↔ mem`, erase-one
+decrements); DERIVED side via the membership story (filter-all `removeEdgePair` zeroing + the
+diffing re-settle), NOT the killed `∈{0,1}` bound. Then R5 (constructor + discharge Group A +
+retire `toC`). Design file Target #4.
+
+---
+
 ## Session 2026-07-18h (#4 remove legs — Leg R2 landed: retraction substrate + the R5 ripple map)
 
 Second Lean-editing leg of #4. ADDITIVE (140 ins, 0 del across `Cascade.lean` +112 /
