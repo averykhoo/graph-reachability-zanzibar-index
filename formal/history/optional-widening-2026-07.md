@@ -153,13 +153,16 @@ Reusable driver `graphindex_answers` ALREADY EXISTS (`formal/conformance/backend
 mirrors `tests/test_matrix.py::GraphBackend`; I5 leaf-routing + cascade).
 
 ### Recommended order (each an independent green increment)
-1. **(c) userset/TTU shape** — cheapest. Generator already supports userset restrictions
-   (`_direct_restrictions` returns them). Add `"group":("g1","g2")` (and `folder` for TTU)
-   to `_POOL`; add `group_userset` (and/or `ttu`, both in `SCHEMAS`/`GRAPH_FRAGMENT`,
-   `corpus.py`) to `_SHAPES` with asserted `(space, store-count)` bounds. Keep the
-   derived-TTU-userset shapes (`TTU_USERSET_SCHEMAS`, out of `W4Fragment`) OUT of any graph
-   leg.
-2. **(a) graph-in-enum, answer level** — ~2 lines on top of `graphindex_answers` + two
+1. **(c) userset/TTU shape** — ✅ **DONE (2026-07-18b, commit pending push at write time).**
+   `_POOL` +`group`/`folder`; `_SHAPES` +`wildcard_group_member` (10-tuple space, 176
+   stores — the existing acyclic `viewer:[group#member]`+`user:*` shape) +`ttu`
+   (`viewer: viewer from parent`, 8-tuple space, 93 stores), asserted counts empirical.
+   **Attack-first finding:** the brief's `group_userset` (self-referential
+   `member:[user,group#member]`) is admission-INVALID for the set engine on 132/299 stores
+   (cycle guard `engine.py:770`) — an admission-domain difference, not a check divergence;
+   NOT used (docstring records it). Spec==oracle==set-engine on every enumerated store; no
+   graph leg (that's (a)). Gate green incl. conf phases (290 conf, +2 params).
+2. **(a) graph-in-enum, answer level** — ⭐ NEXT. — ~2 lines on top of `graphindex_answers` + two
    mismatch asserts, BUT copy the query-scope filter `_graph_queries_for`
    (`test_conformance_graph.py:47-57`: concrete objects only, star subjects bare) or it
    compares out-of-scope garbage. Confirm no enumerated store trips a rejected-write

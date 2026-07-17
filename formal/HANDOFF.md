@@ -90,10 +90,15 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > write-half admission `StoreValidRulesD` + the diffing retraction crux
 > `reconcileKeyD_retracts_excluded`, `8a9bee1` base-equation WALL characterized —
 > `graphRec_base_eq_d` needs a `NoStoreSubjectR` hyp, attack-pinned). Direct-arm leg 4 =
-> the wall (3 named lemmas A/B/C, see the design file). Not started: #1 TTU/userset half,
-> #2 strata (>2), #3 state/enum bounds (mostly Python — recommended NEXT), #4 remove legs
-> (Route 1 confluence). Gate GREEN at `8a9bee1` (verify.sh lean 415/415; each leg was
-> Lean-only additive so pytest/conformance unaffected). No Python behavior change.
+> the wall (3 named lemmas A/B/C, see the design file). **#3 state/enum widening
+> increment (c) LANDED (2026-07-18b)** — userset (`wildcard_group_member`, 176 stores) +
+> TTU (`ttu`, 93 stores) enum shapes added to `test_conformance_enum.py` (spec×oracle×
+> set-engine, exhaustive K=3; the self-referential `group_userset` was attack-rejected as
+> admission-cyclic for the set engine, recorded as a finding). Full gate green incl. conf
+> phases (290 conf, 0 skip). **THE NEXT TASK: #3 increment (a)** — graph-in-enum at answer
+> level (see design file Target #3; copy the `_graph_queries_for` scope filter). Not
+> started: #1 TTU/userset half, #2 strata (>2), #3 (b)/(d), #4 remove legs (Route 1
+> confluence).
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and

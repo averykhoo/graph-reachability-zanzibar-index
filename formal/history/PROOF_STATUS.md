@@ -8,6 +8,49 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18b (#3 state/enum widening — increment (c) userset + TTU enum shapes landed)
+
+Interleave plan continues: banking the tractable #3 (state/enum) increments before the
+deep grinds. First green increment of the state/enum widening — **#3(c)**: widen the
+exhaustive small-scope enumeration (`formal/conformance/test_conformance_enum.py`) with a
+userset shape and a TTU shape (spec×oracle×set-engine pointwise, exhaustive at K=3; NO
+graph leg yet — that is increment (a)). Python-only, one file touched.
+
+- **Attack-first finding of record (not a failure — house rule 2).** The design brief's
+  suggested `group_userset` schema (`member: [user, group#member]`, self-referential) is
+  DELIBERATELY NOT used: at K=3, 132 of its 299 stores are admission-INVALID for the set
+  engine (its userset-membership cycle guard, `engine.py:770`, rejects `g1#member member
+  g1` and the g1↔g2 2-cycle), which breaks the enum's "exhaustive over admission-valid
+  writes" premise. On the 167 acyclic stores spec/oracle/set engine agree exactly — so
+  this is an admission-DOMAIN difference, not a check-semantics divergence. Recorded in the
+  test module docstring. Used the existing acyclic `wildcard_group_member`
+  (`viewer: [group#member]` + public `user:*`, already in SCHEMAS/GRAPH_FRAGMENT) for the
+  userset branch instead — same userset-subject read path, no cycle problem, no corpus
+  change.
+- **Landed:** `_POOL` +`group`/`folder`; `_SHAPES` +`wildcard_group_member` (10-tuple
+  space, 176 stores) +`ttu` (`viewer: viewer from parent`, 8-tuple space, 93 stores) with
+  empirically-observed asserted counts; docstring updated (four→six shapes, 527→796
+  stores, the finding, runtime note). The four pre-existing shapes' asserted counts
+  (8/93, 8/93, 12/299, 6/42) are unperturbed by the pool additions (their restriction
+  types are only user/doc) — verified green.
+- **Spec == oracle == set engine on every enumerated store** for both wired shapes (0
+  divergences, exhaustive at K=3). The TTU shape reaches the tupleset→userset rewrite read
+  branch the four boolean shapes never touched.
+
+**Gate GREEN (full, since state/enum touches conformance):** `pytest tests/` split 561+32;
+`verify.sh lean` PASSED (audit 415/415, sorries=0); `conf-heavy` 76; `conf-rest` 214
+(76+214 = 290, +2 new enum params, 0 skips). Committed + pushed.
+
+**Resume #3:** next increments in the recommended order — **(a)** graph-in-enum at answer
+level (reuse `graphindex_answers`, MUST copy the `_graph_queries_for` scope filter from
+`test_conformance_graph.py:47-57`, confirm no store trips a rejected-write `ValueError`),
+then **(b)** k=4 (re-assert counts; shard `two_stratum_cascade` to fit cap), then **(d)**
+state gate over enumerated stores (sample/shard; reuse `extractor.py` P1–P6). Then #4
+remove, then back to #1 Direct-arm leg 4+ and #2 strata. Full brief:
+`history/optional-widening-2026-07.md` Target #3.
+
+---
+
 ## Session 2026-07-18 (OPTIONAL widening arc OPENED — 4 targets scoped; #1 Leaf/Direct-arm legs 1–3 landed)
 
 Opened the optional assurance-widening arc (`FINAL_REVIEW.md §4`). All four targets

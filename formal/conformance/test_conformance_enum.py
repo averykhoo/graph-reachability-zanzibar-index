@@ -1,6 +1,6 @@
 """Phase 6 extra — EXHAUSTIVE small-scope enumeration (FINAL_REVIEW §4(b)).
 
-Replaces sampling with genuine exhaustion at tiny scope: for each of the four
+Replaces sampling with genuine exhaustion at tiny scope: for each of the six
 representative fragment shapes below, enumerate ALL stores of up to K tuples
 from the DECLARED tuple space (every write matching a direct restriction of a
 declared relation — exactly the admission-valid writes) over a 2-names-per-type
@@ -12,15 +12,31 @@ share one grid):
 
 THE DOCUMENTED BOUNDS (the §7 claim's "up to the documented bounds"):
 
-    name pool   : user in {u1, u2}, doc in {d1, d2}   (2 names per type)
+    name pool   : user in {u1, u2}, doc in {d1, d2}, group in {g1, g2},
+                  folder in {f1, f2}                 (2 names per type)
     K           : 3 tuples per store (all stores of size 0, 1, 2, 3)
     shapes      : boolean_exclusion      —  8-tuple space,  93 stores
                   boolean_intersection   —  8-tuple space,  93 stores
                   two_stratum_cascade    — 12-tuple space, 299 stores
                   boolean_star_exclusion —  6-tuple space,  42 stores
-                  (total: 527 stores, exhaustive at K=3; each shape's space
+                  wildcard_group_member  — 10-tuple space, 176 stores
+                  ttu                    —  8-tuple space,  93 stores
+                  (total: 796 stores, exhaustive at K=3; each shape's space
                   and store count is ASSERTED below so the documented bound
                   cannot silently drift)
+
+The last two shapes (added 2026-07-18, widening §4(e) increment (c)) reach the
+userset-subject and TTU read branches the four boolean shapes never touched:
+`wildcard_group_member` (`viewer: [group#member]`) exercises userset subjects
+plus the public `user:*` group member; `ttu` (`viewer: viewer from parent`)
+exercises the tupleset-to-userset rewrite. The SELF-referential nested-group
+schema `group_userset` (`member: [user, group#member]`) is DELIBERATELY NOT used
+here: at K=3 it makes 132 of its 299 stores admission-INVALID for the set engine
+(its userset-membership cycle guard, engine.py:770, rejects `g1#member member g1`
+and the g1<->g2 2-cycle), which would break the "exhaustive over admission-valid
+writes" premise. On the 167 acyclic stores spec/oracle/set engine agree exactly
+(probed 2026-07-18) — the exclusion is an admission-domain difference, not a
+check-semantics divergence.
 
 Stores are SETS of tuples (Zanzibar raw tuples are a set; multiplicity is a
 write-path concern outside `sem`), enumerated as sorted-space combinations, so
@@ -30,7 +46,9 @@ Scope notes (honest, not silent):
   * one zcli invocation per store — the request format carries ONE store per
     call (Cli.lean: a single `"tuples"` array), so batching happens at the
     query level (the full grid rides in each call). Runtime for the whole
-    module is ~90 s on the reference machine, inside the ~2 min budget.
+    module is ~90 s on the reference machine (796 stores over six shapes; the
+    zcli spec cache absorbs most of the added shapes' cost), inside the
+    conf-rest phase cap.
   * the GRAPH side (zcli mode "graph" × the real `WildcardIndex`) is NOT
     enumerated here: it would roughly triple the runtime (a second zcli run
     plus a full SQL index build + cascade per store, 527×). The required core
@@ -63,7 +81,10 @@ from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
 from formal.conformance.grid import grid as _grid, fmt_mismatches as _fmt
 
-_POOL: dict[str, tuple[str, ...]] = {"user": ("u1", "u2"), "doc": ("d1", "d2")}
+_POOL: dict[str, tuple[str, ...]] = {
+    "user": ("u1", "u2"), "doc": ("d1", "d2"),
+    "group": ("g1", "g2"), "folder": ("f1", "f2"),
+}
 _K = 3
 
 # shape -> (expected tuple-space size, expected store count at K) — asserted,
@@ -73,6 +94,11 @@ _SHAPES: dict[str, tuple[int, int]] = {
     "boolean_intersection": (8, 93),
     "two_stratum_cascade": (12, 299),
     "boolean_star_exclusion": (6, 42),
+    # userset-subject + TTU read branches (widening §4(e) increment (c),
+    # 2026-07-18). Both are acyclic under the pool — no admission-cycle skips,
+    # spec == oracle == set engine on every enumerated store.
+    "wildcard_group_member": (10, 176),
+    "ttu": (8, 93),
 }
 
 
