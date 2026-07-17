@@ -110,6 +110,164 @@ theorem checkFn_eq_semStep {S : Schema} {σ : GraphState} {T : Store} {q : Query
   unfold GraphState.checkFn
   exact evalE_computedOnly e hco hag
 
+/-! ## Widening leg — admitting a bare `Direct` arm in a derived def (READ-half workhorse)
+
+`CORRESPONDENCE.md` §7 ("No leaf-family split") records that the Lean model reads the
+**raw** boolean def, not Python's compiled `<relation>.<index>` leaf split — so a derived
+def written `approver = [user] but not banned` is modelled RAW, as
+`excl (direct [user]) (computed banned)`, carrying an INLINE `.direct` operand. Today
+`ComputedOnly` (above) bans that arm outright (`.direct ↦ False`); this section widens the
+READ-half congruence to admit it, for the faithful sub-shape where every `Direct` arm is
+**bare** (`[user]`-style, no userset flow-through) — exactly the leg's motivating example
+`approver = [user] but not banned`.
+
+**Why the widening is NON-TRIVIAL, and why the shared-subject form is the honest one.**
+The `ComputedOnly` congruence `evalE_computedOnly` quantifies over DIFFERENT subjects /
+stores / queries / enclosing relations — sound there precisely because a computed-only
+tree never touches a `.direct` / `.ttu` leaf, so those arguments never matter. A `Direct`
+arm READS the store at the fixed subject (`directLeaf`, `Semantics.lean:61`), so its value
+genuinely depends on the subject: attack-first `#eval` (deleted scratch, 2026-07-17)
+exhibited `evalE … (.direct [user]) = true` at `alice` (granted) and `false` at `bob`
+(ungranted) under the SAME `rec`/store — so the fully-general (varying-subject) congruence
+is FALSE for `.direct`. The honest generalization therefore SHARES the subject / store /
+enclosing relation and leaves only `rec`/`query` free (which is all `checkFn_eq_semStep`
+and `checkFnR_eq_checkFn` ever vary): on a **bare** `Direct` arm the leaf consults neither
+`rec` nor the query (`directLeaf_bare_indep`), so the tree congruence transports exactly as
+for `ComputedOnly`. -/
+
+/-- **`ComputedOrDirect e`** — the widened derived-def shape: a boolean tree
+    (`union` / `inter` / `excl`) whose leaves are `computed` refs OR `direct` grant arms.
+    `.ttu` stays banned (`↦ False`) — that is a separate later leg. Strictly wider than
+    `ComputedOnly` (`computedOnly_computedOrDirect`). Mirrors the raw `SchemaAST` a derived
+    def carries once a `Direct` arm is admitted inside a boolean root (the Python entry is
+    an `Exclusion`/`Intersection` root or a reference to an already-derived relation;
+    `zanzibar_utils_v1.py` `compile_ruleset`, `CORRESPONDENCE.md` §7). -/
+def ComputedOrDirect : Expr → Prop
+  | .computed _ => True
+  | .direct _ => True
+  | .union a b => ComputedOrDirect a ∧ ComputedOrDirect b
+  | .inter a b => ComputedOrDirect a ∧ ComputedOrDirect b
+  | .excl a b => ComputedOrDirect a ∧ ComputedOrDirect b
+  | .ttu _ _ => False
+
+/-- **`DirectArmsBare e`** — every `Direct` arm of `e` carries only BARE restrictions
+    (restriction predicate `= BARE`, i.e. `[user]`-style, never a userset `[group#member]`).
+    A bare restriction only ever matches a bare-predicate stored subject
+    (`restrictionMatches`, `Semantics.lean:36`), so `memberOfGranted`'s userset flow-through
+    is dead — the arm reads the store alone, independent of `rec` and the query. This is the
+    faithful side-condition under which the widened READ congruence holds; the userset-arm
+    case (flow-through into another relation) is out of scope for this leg. -/
+def DirectArmsBare : Expr → Prop
+  | .computed _ => True
+  | .direct rs => ∀ r ∈ rs, r.2.1 = BARE
+  | .union a b => DirectArmsBare a ∧ DirectArmsBare b
+  | .inter a b => DirectArmsBare a ∧ DirectArmsBare b
+  | .excl a b => DirectArmsBare a ∧ DirectArmsBare b
+  | .ttu _ _ => True
+
+/-- `ComputedOrDirect` is strictly WIDER than `ComputedOnly`: a computed-only tree has no
+    `Direct` arm, so admitting them can only add shapes. -/
+theorem computedOnly_computedOrDirect : ∀ {e : Expr}, ComputedOnly e → ComputedOrDirect e := by
+  intro e
+  induction e with
+  | computed _ => intro _; trivial
+  | direct _ => intro h; exact h.elim
+  | ttu _ _ => intro h; exact h.elim
+  | union a b iha ihb => intro h; exact ⟨iha h.1, ihb h.2⟩
+  | inter a b iha ihb => intro h; exact ⟨iha h.1, ihb h.2⟩
+  | excl a b iha ihb => intro h; exact ⟨iha h.1, ihb h.2⟩
+
+/-- A `ComputedOnly` tree vacuously satisfies `DirectArmsBare` (it has no `Direct` arm at
+    all), so the widened congruence subsumes `evalE_computedOnly` at shared arguments. -/
+theorem computedOnly_directArmsBare : ∀ {e : Expr}, ComputedOnly e → DirectArmsBare e := by
+  intro e
+  induction e with
+  | computed _ => intro _; trivial
+  | direct _ => intro h; exact h.elim
+  | ttu _ _ => intro _; trivial
+  | union a b iha ihb => intro h; exact ⟨iha h.1, ihb h.2⟩
+  | inter a b iha ihb => intro h; exact ⟨iha h.1, ihb h.2⟩
+  | excl a b iha ihb => intro h; exact ⟨iha h.1, ihb h.2⟩
+
+/-- Every grant of a bare-restriction `Direct` leaf has a BARE-predicate subject — a
+    restriction with predicate `BARE` only matches a stored tuple whose subject predicate is
+    `BARE` (`restrictionMatches`). -/
+theorem grantsOf_bare_subjects (T : Store) (rs : List Restriction) (ot on rel : String)
+    (hb : ∀ r ∈ rs, r.2.1 = BARE) :
+    ∀ g ∈ grantsOf T rs ot on rel, g.subject.predicate = BARE := by
+  intro g hg
+  unfold grantsOf at hg
+  rw [List.mem_filter] at hg
+  obtain ⟨_, hcond⟩ := hg
+  rw [Bool.and_eq_true] at hcond
+  obtain ⟨_, hrm⟩ := hcond
+  unfold restrictionMatches at hrm
+  rw [List.any_eq_true] at hrm
+  obtain ⟨r, hrmem, hmatch⟩ := hrm
+  rw [Bool.and_eq_true, Bool.and_eq_true] at hmatch
+  obtain ⟨⟨_, hpred⟩, _⟩ := hmatch
+  rw [beq_iff_eq] at hpred
+  rw [hpred, hb r hrmem]
+
+/-- A `Direct` leaf whose grants all have BARE subjects never fires `memberOfGranted`
+    (the userset flow-through short-circuits `false` on a bare subject). -/
+theorem memberOfGranted_of_bareGrants (rec : Rec) (T : Store) (q : Query) (grants : List Tuple)
+    (hg : ∀ g ∈ grants, g.subject.predicate = BARE) :
+    memberOfGranted rec T q grants = false := by
+  unfold memberOfGranted
+  rw [List.any_eq_false]
+  intro g hgm
+  simp [hg g hgm]
+
+/-- **A bare `Direct` leaf is `rec`- and query-INDEPENDENT.** Its grants are read straight
+    off the store at the fixed subject, and the only `rec`/query consumer (`memberOfGranted`
+    / `instances`) is dead on bare grants — so two evaluations with any `rec`/query agree.
+    This is what lets a `.direct` arm ride the READ congruence: `checkFn` (graph `rec`,
+    query `⟨s,R,⟨dt,on⟩⟩`) and one `sem` step (fuel `rec`, external query `q`) compute the
+    same value at the arm. -/
+theorem directLeaf_bare_indep {rec1 rec2 : Rec} {sub : SubjectRef} {T : Store}
+    {q1 q2 : Query} {rs : List Restriction} {ot on rel : String}
+    (hb : ∀ r ∈ rs, r.2.1 = BARE) :
+    directLeaf rec1 sub T q1 rs ot on rel = directLeaf rec2 sub T q2 rs ot on rel := by
+  have hmog : ∀ (rec : Rec) (q : Query),
+      memberOfGranted rec T q (grantsOf T rs ot on rel) = false :=
+    fun rec q => memberOfGranted_of_bareGrants rec T q _ (grantsOf_bare_subjects T rs ot on rel hb)
+  unfold directLeaf
+  simp only [hmog, Bool.or_false]
+
+/-- **The widened READ congruence (`ComputedOrDirect` + bare `Direct` arms).** Two `rec`s
+    agreeing on `computedRefs e` — at the SAME subject / store / enclosing relation, with any
+    queries — evaluate the tree identically. Generalizes `evalE_computedOnly` (which subsumes
+    the direct-free case at shared arguments, `computedOnly_directArmsBare`) to admit a bare
+    `Direct` operand arm. The subject/store/rel are SHARED (varying them is refuted for
+    `.direct`, see the section note); the query stays free because a bare arm is
+    query-independent. This is the read-half workhorse the `checkFn`/`checkFnR` reductions of
+    the Direct-arm leg will consume once the write-half (below) admits the arm's stored rows. -/
+theorem evalE_computedOrDirect {rec1 rec2 : Rec} {sub : SubjectRef}
+    {T : Store} {q1 q2 : Query} {dt on rel : String} :
+    ∀ e : Expr, ComputedOrDirect e → DirectArmsBare e →
+      (∀ r' ∈ computedRefs e, rec1 dt on r' = rec2 dt on r') →
+      evalE rec1 sub T q1 dt on rel e = evalE rec2 sub T q2 dt on rel e := by
+  intro e
+  induction e with
+  | computed r' =>
+    intro _ _ hag; simp only [evalE]; exact hag r' (List.mem_singleton.mpr rfl)
+  | direct rs =>
+    intro _ hb _; simp only [evalE]; exact directLeaf_bare_indep hb
+  | union a b iha ihb =>
+    intro hcd hba hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | inter a b iha ihb =>
+    intro hcd hba hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | excl a b iha ihb =>
+    intro hcd hba hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | ttu tr ts => intro hcd _ _; exact hcd.elim
+
 /-! ## The reconcile edge characterization — structural groundwork for the reach-collapse
 
 `reconcileKey` is a guarded `writeDirect` fold; every step either adds the single derived
