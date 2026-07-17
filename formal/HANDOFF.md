@@ -81,6 +81,20 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
+> **Update 2026-07-18 — OPTIONAL assurance-widening arc OPENED (4 targets scoped;
+> `FINAL_REVIEW.md §4`).** All four remaining optional widenings were recon'd + (for #1)
+> attack-first probed; the durable design + resume state for ALL of them is
+> [`history/optional-widening-2026-07.md`](history/optional-widening-2026-07.md) —
+> **read it to resume any target.** Progress so far: **#1 Leaf widening (Direct arm)**
+> legs 1–3 LANDED (commits `98773d3` read-half `evalE_computedOrDirect`, `0dd8d7b`
+> write-half admission `StoreValidRulesD` + the diffing retraction crux
+> `reconcileKeyD_retracts_excluded`, `8a9bee1` base-equation WALL characterized —
+> `graphRec_base_eq_d` needs a `NoStoreSubjectR` hyp, attack-pinned). Direct-arm leg 4 =
+> the wall (3 named lemmas A/B/C, see the design file). Not started: #1 TTU/userset half,
+> #2 strata (>2), #3 state/enum bounds (mostly Python — recommended NEXT), #4 remove legs
+> (Route 1 confluence). Gate GREEN at `8a9bee1` (verify.sh lean 415/415; each leg was
+> Lean-only additive so pytest/conformance unaffected). No Python behavior change.
+
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and
 > the shape condition is `ComputedOnly` alone, so union- and computed-rooted
@@ -220,7 +234,10 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    `twoStrata` still caps at ≤ 2 derived strata (attack-confirmed load-bearing:
    a 3-stratum schema fires the round-2 reject). Widening either is the open
    fragment work; both are genuine proof effort (not just a probe-faithful gap
-   like roots was).
+   like roots was). **IN PROGRESS 2026-07-18:** the LEAF Direct-arm sub-legs 1–3
+   landed (`98773d3`/`0dd8d7b`/`8a9bee1`); leg 4 (the base-equation wall) + leg 5
+   + the TTU/userset half + strata all scoped in
+   [`history/optional-widening-2026-07.md`](history/optional-widening-2026-07.md).
 2. **Remove legs** (the diffing pass models retraction but the Lean chain is
    add-only; BOTH Python remove paths are now pinned at answer level by
    `test_conformance_remove.py` — the set engine at rebuild-fingerprint level, the

@@ -16,8 +16,16 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## Current status — 2026-07-17
+## Current status — 2026-07-18
 
+- **2026-07-18 — OPTIONAL assurance-widening arc OPENED; #1 Leaf/Direct-arm legs 1–3 pushed
+  (`98773d3`/`0dd8d7b`/`8a9bee1`); gate GREEN; no Python change.** All four `FINAL_REVIEW.md
+  §4` optional widenings scoped (recon + attack-first); durable design/resume state in
+  [`formal/history/optional-widening-2026-07.md`](formal/history/optional-widening-2026-07.md).
+  Direct-arm read-half + write-half admission + the diffing retraction crux are proven; the
+  base-equation wall is characterized (`NoStoreSubjectR`-gated, leg 4 = 3 lemmas). Each leg
+  Lean-only additive (`verify.sh lean` 415/415). See the Active-work board item + the design
+  file to resume. Next (interleave plan): bank #3 state/enum (mostly Python) + #4 remove.
 - **2026-07-17 — formal `rootB` fragment widening LANDED (Lean-only; no Python change).**
   `W4Fragment` no longer restricts the derived-def root operator — union- and
   computed-rooted derived defs are now in the proved scope (`RootBoolean` deleted;
@@ -96,6 +104,16 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 ## Open-TODO board
 
 ### Active work
+- [ ] **IN PROGRESS 2026-07-18 (Claude): OPTIONAL assurance-widening arc (`FINAL_REVIEW.md §4`).**
+      Four targets scoped (recon + attack-first probes); durable design + resume state for
+      ALL of them in [`formal/history/optional-widening-2026-07.md`](formal/history/optional-widening-2026-07.md).
+      **#1 Leaf widening (Direct arm)** legs 1–3 landed + pushed (`98773d3` read-half
+      `evalE_computedOrDirect`; `0dd8d7b` write-half admission + diffing retraction crux
+      `reconcileKeyD_retracts_excluded`; `8a9bee1` base-equation wall characterized —
+      needs a `NoStoreSubjectR` hyp). Each leg Lean-only additive, gate GREEN (`verify.sh
+      lean` 415/415). **Resume:** Direct-arm leg 4 = the wall (3 lemmas A/B/C). Remaining:
+      #1 TTU/userset half, #2 strata (>2), #3 state/enum bounds (mostly Python — planned
+      NEXT via interleave), #4 remove legs (Route 1 confluence). See the design file.
 - [x] **DONE 2026-07-17 (Claude): formal fragment widening — the `rootB` gap CLOSED (gate GREEN).**
       Union- and computed-rooted derived defs are now inside the proved `W4Fragment`
       (the derived-def ROOT operator is unrestricted; shape condition is `ComputedOnly`

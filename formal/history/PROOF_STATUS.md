@@ -8,6 +8,44 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18 (OPTIONAL widening arc OPENED — 4 targets scoped; #1 Leaf/Direct-arm legs 1–3 landed)
+
+Opened the optional assurance-widening arc (`FINAL_REVIEW.md §4`). All four targets
+recon'd; durable design + resume state in `history/optional-widening-2026-07.md`
+(read it to resume ANY target). Orchestrated via subagents (recon Explore → attack-first
+`#eval` probe → sequential Opus implementation legs, each ending lake-green, committed
+after an orchestrator diff spot-check verifying no top-level statement was weakened).
+
+**#1 Leaf fragment widening (Direct arm) — legs 1–3, all additive/green/axiom-clean:**
+- Attack-first ground truth (no live Python divergence): tainting needs an excl/inter
+  root or a ref to an already-derived relation (plain `or` compiles untainted); a Direct
+  arm → `PClosureLeaf(storage=True)` `<rel>.<index>`, raw writes admission-accepted onto
+  it (I5 kept); Python has no 2-stratum cap.
+- **Leg 1 `98773d3`** — read-half workhorse `evalE_computedOrDirect` (+ `ComputedOrDirect`
+  / `DirectArmsBare` / bare-Direct-leaf lemmas). Refuted: varying-subject congruence is
+  FALSE for `.direct` (⇒ subject/store/rel shared, query free).
+- **Leg 2 `0dd8d7b`** — write-half admission `StoreValidRulesD`/`exprDirectsAll` (I5
+  partition) + reach-collapse `reachedByW3a_*_d` + the diffing retraction CRUX
+  `reconcileKeyD_edge_char_cd`/`reconcileKeyD_retracts_excluded` (attack-`#eval`-confirmed
+  the diffing pass retracts the stale stored-base over-grant edge for an excluded subject).
+- **Leg 3 `8a9bee1`** — base-equation WALL characterized. Attack-first: widened
+  `graphRec_base_eq_d` is FALSE without a `NoStoreSubjectR` hyp (userset-over-derived flow
+  → graph=true/sem=false), TRUE with it (faithful via `hterm`). Landed
+  `storeValidRules_untaintedFilter`. Refinement: the base state's derived-key seed edge is
+  a harmless dead-end (item 1 = dead-end/reach-invariance gated by `NoStoreSubjectR`, not
+  leg-2's drained retraction).
+
+**Resume:** Direct-arm leg 4 = the wall (3 new lemmas A dead-end-seed / B untainted-reach-
+invariance / C sem-store-restriction; see the design file + `8a9bee1` message). Then leg 5
+(consumers + widen `W4Fragment` + `W4WitnessDirect` + conformance), then the TTU/userset
+half. Interleave plan (2026-07-18): bank #3 (state/enum, mostly Python) + #4 (remove, Route
+1 confluence) next, then return to the deep #1 leg-4+/TTU + #2 strata.
+
+Gate GREEN at each leg: `verify.sh lean` PASSED (lake 1082 jobs, sorries=0, axiom audit
+415/415 clean). Each leg Lean-only additive ⇒ pytest/conformance provably unaffected.
+
+---
+
 ## Session 2026-07-17 (rootB fragment widening — union-/computed-rooted derived defs now in scope; `RootBoolean` deleted, `schemaRewrites` taint-filtered, a model-faithfulness STATE fix, witness + corpus widening)
 
 The last standing SHAPE gap of `W4Fragment` was `rootB`: derived defs had to be
