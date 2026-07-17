@@ -993,6 +993,27 @@ theorem storeValidRulesD_of_storeValidRules {S : Schema} {T : Store}
   rw [exprDirects_computedOnly (hCO _ _ _ hlk hcon)] at hrs
   simp at hrs
 
+/-- **The untainted-key sub-store of a `StoreValidRulesD` store is `StoreValidRules`-valid
+    (leg 3, restrict-`T` entry).** Dropping every derived-key (over-grant) tuple leaves a store
+    each of whose tuples takes the FIRST admission disjunct — an `exprDirects` (unions-only)
+    Direct arm on an untainted key — i.e. exactly `StoreValidRules`. This is the first step of
+    the base-equation (`graphRec_base_eq`) generalization: the widened store restricts to a
+    W2-valid store on untainted keys, so — composed with the existing `restrictUntainted_lookup`
+    conversion (`StoreValidRules S T↾U → StoreValidRules (S↾U) T↾U`, every kept key untainted) —
+    the untainted-schema black box `graph_correct_rules` applies to the untainted sub-store.
+    The derived-key seed edges dropped here are dead-ends for untainted reads (attack-first
+    confirmed: they perturb an untainted read only through a stored userset-over-derived subject,
+    which `NoStoreSubjectR` forbids — see the leg-3 handoff note). -/
+theorem storeValidRules_untaintedFilter {S : Schema} {T : Store}
+    (hSV : StoreValidRulesD S T) :
+    StoreValidRules S (T.filter (fun t => !isDerived S (t.object.type, t.relation))) := by
+  intro t ht
+  rw [List.mem_filter] at ht
+  obtain ⟨htT, hut⟩ := ht
+  rcases hSV t htT with ⟨_, e, rs, hlk, hrs, hrm⟩ | ⟨hd, _⟩
+  · exact ⟨e, rs, hlk, hrs, hrm⟩
+  · rw [hd] at hut; simp at hut
+
 /-- **R-node in-edge sources stay BARE under the widened admission (leg 2, step 2a).** The
     reach-collapse's `hsrcbare` re-derived over `StoreValidRulesD`: a base (rewrite-closure)
     edge landing on the derived R-node `objNode ⟨dt,on⟩ R` is now ADMITTED — it comes from a
