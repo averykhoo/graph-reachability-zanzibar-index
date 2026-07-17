@@ -212,35 +212,59 @@ Goal (`FINAL_REVIEW.md §4 item 2`, "biggest lift, highest ceiling"): the Lean c
 `reconcileStarsKeyD_edge_char` `:922-942`). Python remove paths already pinned empirically
 (`test_conformance_remove.py`). OPEN = the Lean CHAIN-level legs only.
 
-### Design / resume — Route 1 (recommended: reuse, near-zero re-proof)
-1. Add a **`remove` constructor** to `ReachedByW3d2E` (4th, retract-mirror of `write`):
-   `(σ, t::T) → (σ.removeLoggedRules S t, T.erase t)` with a `RemoveAdmits`-style guard
-   (mirror `TupleSource.remove` `connectedstore/source.py:104-112` — reject absent tuple).
-2. Define **`removeLoggedRules`** (retract-mirror of `writeLoggedRules` `Cascade.lean:161`):
-   fold a ref-counted decrement of the rewrite-closure edges (`removeEdgePair`) then
-   re-cascade affected keys through the diffing pass. Mirror `core.py:687-704` +
-   `processor.reconcile_subject:445-516` (removal branch `:514-515`).
-3. **The ONE hard lemma — confluence:** `remove + drain == fresh add-only rebuild of the
-   surviving store`. Because `sem` is a pure function of the FINAL store and the read/inv
-   theorems fire at ANY drained closure state, proving this makes EVERY existing T2a/T2b/
-   T3/T6 theorem apply unchanged (zero re-proof). This is the Lean form of what
-   `test_conformance_remove.py` pins empirically (driven==rebuild). Induction on the
-   extended chain; `write`/`cascade`/`empty` cases trivial; `remove` case = the confluence
-   lemma. Under the SAME `twoStrata`/`hLU2` bound (cross-stratum re-settlement of a
-   guard-flipped-down edge).
-- **Risk (probe FIRST):** the model has NO edge ref-count — `removeEdgePair` filters ALL
-  copies vs Python decrements by 1. Sound on DERIVED families (I5 ⇒ rc≡1); a stored-edge
-  remove shared by two derivations may force adding edge multiplicity to `GraphState`
-  (would ripple). Probes: remove-then-readd exact-state (ref-count/multiplicity);
-  remove-a-needed-operand cross-stratum retraction (mid-drain staleness); I6 residue-version
-  regression on a remove that makes a `neg`/`upos` subject edge-unreachable; node-GC
-  divergence on full drain (Python reaps, Lean keeps nodes monotone — read-safe, confirm
-  for state equivalence); non-present-remove admission (Python raises).
-- Route 2 (direct preservation — extend every chain-inducting proof with a `remove` case)
-  is the fallback if confluence fails; more local but touches `CascadeStrataEdge/Inv/
-  Assemble.lean`.
+### RECON + ATTACK-FIRST PROBE — DONE (2026-07-18f). Verdict: **Route 1 GO**, with a KILL.
+Read-only recon + the five design probes ran against the real Python backends / model.
 
-**Lift:** structurally bounded (one constructor + one state op + `RemoveAdmits`); the
-invariant-preservation primitives all exist; the entire content is the ONE confluence
-lemma + the ref-count decision. Comparable to one W3d sub-stage — between #1-leaf (medium)
-and #2-strata (largest).
+**★ KILL (house rule 2 — the design's step 2 was a FALSE statement).** The original
+step 2 ("fold `removeEdgePair`" = filter-ALL-copies) is UNSOUND in-fragment. `#eval`
+refutation (untainted `viewer = editor or manager`, alice granted both ⇒ `alice → viewer:doc:1`
+has `direct_edge_count = 2`): removing `(alice,editor)` decrements rc 2→1, the edge SURVIVES,
+`check` stays True (via manager) == `sem` == fresh rebuild of `{(alice,manager,doc:1)}`. A
+filter-all `removeEdgePair` would drop the edge → `check=False` → divergence. Reachable
+inside `W4Fragment`/`twoStrata` (plain untainted union; also boolean-operand leaves at rc≥2).
+The faithful op is **`List.erase (a,b)` — decrement ONE occurrence** (mirror of Python
+`_add_direct_edge_unsafe(..., -1)`, `core.py:686-704`). `removeEdgePair` stays valid ONLY
+where I5 guarantees rc≡1 (the diffing pass `reconcileStarsKeyD`), NEVER the chain-level
+untainted fold.
+
+**★ NO `GraphState` ripple (the pivotal positive finding).** `GraphState.edges :
+List (NodeKey × NodeKey)` is ALREADY a multiset — `addEdge = (a,b) :: σ.edges` prepends
+unconditionally (`State.lean:742`), `admitEdge` only checks `a≠b ∧ ¬reach b a` (`Write.lean:69`),
+so a parallel copy of an acyclic rewrite edge is always admitted and the list multiplicity
+== Python `direct_edge_count`. Reads (`reachB`/`NReaches`) test only membership, so
+multiplicity is read-inert: **multiset for writes (ref-count), set for reads.** `List.erase`
+(remove one) is therefore the exact faithful mirror with NO new field. Probes 2–6 all clean
+(remove-readd symbolic-state identical, extractor P5 doesn't compare nodes so node-GC is
+already modeled-away/read-safe; cross-stratum retraction `check==sem`; I6 residue diff
+clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
+
+### Corrected leg breakdown — Route 1 (sequential, one Lean-editing leg each)
+- **Leg R1 — erase-one primitive + invariants.** `GraphState.removeEdgeOne σ a b :=
+  { σ with edges := σ.edges.erase (a,b) }`; `removeLoggedOne`/`removeLoggedRules S t` = fold
+  `removeEdgeOne` over `rewriteClosure S t` (mirror `writeLoggedRules` `Cascade.lean:161`;
+  emit retraction deltas mirroring `writeLoggedOne.pushDelta`). Prove `structInv_removeEdgeOne`
+  (erase ⊆ subset ⇒ acyclicity preserved) + the erase membership characterization. Small,
+  mechanical. **Use `List.erase`, NOT `removeEdgePair` (the kill).**
+- **Leg R2 — `remove` constructor + `RemoveAdmits`.** 4th constructor on `ReachedByW3d2E`:
+  `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with `RemoveAdmits σ T t`
+  (`t ∈ T`, mirror `source.py:104-112`). Thread fragment/store hyps through
+  `reachedByW3d2E_toC` (`:342`), weakening along `T.erase t` as `write` weakens along `t::T`.
+- **Leg R3 — the occurrence-count invariant (THE HARDEST SUB-LEMMA — the whole content).**
+  By induction on the add-only chain: for every UNTAINTED edge, `count (a,b) σ.edges =
+  Σ_{t∈T} (admitted occurrences of (a,b) in rewriteClosure S t)`; for every DERIVED edge
+  (I5), count ∈ {0,1}. In-fragment (StructInv acyclic + DAG rewrite graph) admitEdge always
+  passes for non-self rewrite edges ⇒ collapses to occurrence-counting; derived arm reuses
+  the diffing pass rc≡1 discipline. This is the ref-count decision made concrete.
+- **Leg R4 — the confluence lemma.** `EvalEq (removeLoggedRules σ t |> drain)
+  (rebuild (T.erase t))` at edge-MEMBERSHIP (set) level, fed by R3: erase-one drops `(a,b)`
+  from the read-set iff its surviving count hits 0 iff no surviving seed derives it = the
+  rebuild's membership. Then the `remove` case of every chain-inducting theorem rewrites to
+  the rebuild via `EvalEq` — **zero re-proof of T2a/T2b/T3/T6** (they fire at any drained
+  state, read via membership). Same `twoStrata`/`hLU2` bound (reuse 12f re-settlement).
+
+- Route 2 (direct preservation — `remove` case in each chain-inducting proof, touches
+  `CascadeStrataEdge/Inv/Assemble.lean`) is the fallback if R3 proves intractable; strictly
+  MORE work (same erase-one op + same multiplicity reasoning, done locally everywhere).
+
+**Lift:** as predicted, ~one W3d sub-stage — but R3 (occurrence-count invariant) is GENUINE
+new content, not a reused primitive; R1/R2/R4 are clone-and-mirror. **RESUME: start Leg R1.**

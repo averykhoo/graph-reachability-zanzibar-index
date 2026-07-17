@@ -103,10 +103,15 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `test_conformance_enum_state.py` — stride-4 sampled (257/1021) Lean-model vs Python-graph
 > STATE compare under `extractor.py` P1–P6, all six shapes, ZERO mismatches. **TARGET #3
 > (state/enum widening) COMPLETE** (all of c/a/b/d green, no divergence). Conf now 296, 0
-> skip. **THE NEXT TASK: #4 remove legs** (Route 1 confluence, Lean — PROBE the edge
-> ref-count risk FIRST per the design file; single-Lean-editing-leg discipline). Then back
-> to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1 TTU/userset half, #2
-> strata, #4 remove.
+> skip. **#4 remove legs RECON+PROBE DONE (2026-07-18f):
+> Route 1 GO with a KILL** — the design's "fold `removeEdgePair` (filter-all)" is a FALSE
+> statement in-fragment (rc≥2 shared derivation drops a surviving edge); faithful op is
+> `List.erase` (decrement one), and NO `GraphState` ripple (edges already a multiset =
+> ref-count). Corrected legs R1–R4 in the design file (R3 occurrence-count invariant is the
+> hard content). **THE NEXT TASK: #4 Leg R1** — the erase-one primitive + `structInv_
+> removeEdgeOne` (mechanical, additive, Lean; ONE leg at a time; use `List.erase`). Then
+> R2→R3→R4. After #4: back to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started:
+> #1 TTU/userset half, #2 strata, #4 legs R1–R4.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and

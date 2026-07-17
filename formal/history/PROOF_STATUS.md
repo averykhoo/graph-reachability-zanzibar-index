@@ -8,6 +8,41 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18f (#4 remove legs — RECON + attack-first probe; Route 1 GO with a KILL)
+
+Target #3 complete ⇒ moved to #4 (model chain-level REMOVE in Lean). Read-only recon + the
+five design probes (against the real Python backends / model). NO Lean edited (probe scratch
+deleted). Verdict: **Route 1 GO** — but the design's step 2 was a FALSE statement:
+
+- **KILL (house rule 2):** "chain-level `removeLoggedRules` = fold `removeEdgePair`
+  (filter-ALL-copies)" is UNSOUND in-fragment. `#eval` refutation: untainted
+  `viewer = editor or manager`, alice granted both ⇒ `alice → viewer:doc:1` has
+  `direct_edge_count = 2`; removing `(alice,editor)` decrements rc 2→1, edge SURVIVES,
+  `check` True (via manager) == `sem` == rebuild. Filter-all would drop it → divergence.
+  Reachable in `W4Fragment`/`twoStrata`. Faithful op = **`List.erase` (decrement ONE)**,
+  mirror of `_add_direct_edge_unsafe(...,-1)` (`core.py:686-704`). `removeEdgePair` valid
+  only where I5 ⇒ rc≡1 (the diffing pass), never the chain-level untainted fold.
+- **Pivotal positive finding — NO `GraphState` ripple.** `GraphState.edges :
+  List (NodeKey × NodeKey)` is ALREADY a multiset (`addEdge` prepends unconditionally
+  `State.lean:742`; `admitEdge` only checks `a≠b ∧ ¬reach b a` `Write.lean:69`), multiplicity
+  == Python `direct_edge_count`; reads test membership only ⇒ multiset-for-writes /
+  set-for-reads. `List.erase` is the exact mirror with NO new field. Probes 2–6 clean
+  (remove-readd symbolic-state identical; node-GC already modeled-away, extractor P5 doesn't
+  compare nodes; cross-stratum retraction `check==sem`; I6 residue diff clean; non-present
+  remove raises ⇒ `RemoveAdmits` faithful).
+
+Corrected leg breakdown recorded in the design file (`optional-widening-2026-07.md` Target
+#4): **R1** erase-one primitive + `structInv_removeEdgeOne` (mechanical) → **R2** `remove`
+constructor + `RemoveAdmits` + `reachedByW3d2E_toC` threading → **R3** the occurrence-count
+invariant (untainted `count = Σ` admitted occurrences; derived ∈ {0,1} by I5 — THE HARDEST
+SUB-LEMMA, the whole content) → **R4** confluence `EvalEq(remove+drain, rebuild)` at
+membership level ⇒ zero re-proof of T2a/T2b/T3/T6. Route 2 (direct preservation) is the
+fallback if R3 is intractable (strictly more work). No gate run (docs-only; Lean untouched).
+
+**RESUME #4: start Leg R1** (use `List.erase`, NOT `removeEdgePair`).
+
+---
+
 ## Session 2026-07-18e (#3 state/enum widening — increment (d) state gate over enumerated stores — TARGET #3 COMPLETE)
 
 Fourth and final #3 increment — the state-level gate. New file
