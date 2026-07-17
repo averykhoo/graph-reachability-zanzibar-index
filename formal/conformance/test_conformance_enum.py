@@ -9,6 +9,7 @@ pool, and for EVERY enumerated store compare, over the full shared query grid
 share one grid):
 
     Lean spec `sem` (zcli)  ×  independent oracle  ×  real `SetEngine`
+                            ×  real graph index (`WildcardIndex` + cascade)
 
 THE DOCUMENTED BOUNDS (the §7 claim's "up to the documented bounds"):
 
@@ -49,12 +50,20 @@ Scope notes (honest, not silent):
     module is ~90 s on the reference machine (796 stores over six shapes; the
     zcli spec cache absorbs most of the added shapes' cost), inside the
     conf-rest phase cap.
-  * the GRAPH side (zcli mode "graph" × the real `WildcardIndex`) is NOT
-    enumerated here: it would roughly triple the runtime (a second zcli run
-    plus a full SQL index build + cascade per store, 527×). The required core
-    — spec × oracle × set engine — is the three-way this suite exhausts; the
-    graph model stays pinned by `test_conformance_graph.py` /
-    `test_conformance_state.py` over the curated corpora.
+  * the GRAPH side (the real `WildcardIndex` + `DeltaProcessor`, I5 leaf-
+    routing + same-txn cascade) IS enumerated here as of §4(e) increment (a)
+    (2026-07-18): for every enumerated store whose shape is inside
+    `GRAPH_FRAGMENT` (all six shapes qualify) the real graph index `check` is
+    compared, over the PROVED graph query scope (concrete objects, star
+    subjects bare — `_graph_query_filter`), against the already-agreed
+    `sem` (== oracle == set engine). This drives write-order / partial-store
+    interleavings the curated corpora never reached — exactly the class of run
+    that historically FOUND the P6 leaf-family and 2026-07-17 stale-fanout
+    divergences. No zcli "graph" run is needed: the answer-level pin against
+    `sem` covers it (the Lean graph model is pinned to `sem` by `graph_correct`
+    and to the Python graph by `test_conformance_graph.py`). Adds ~a full SQL
+    index build + cascade per store, but no second zcli call, so it stays in
+    the conf-rest phase cap.
   * K=3 was chosen so no shape's space exceeds ~20k stores (the largest is
     299); no shape needed the documented K=2 fallback.
 """
@@ -76,8 +85,8 @@ from tests.oracle import (
 )
 
 from formal.conformance import runner
-from formal.conformance.backends import setengine_answers
-from formal.conformance.corpus import SCHEMAS
+from formal.conformance.backends import setengine_answers, graphindex_answers
+from formal.conformance.corpus import SCHEMAS, GRAPH_FRAGMENT
 from formal.conformance.encode import build_request
 from formal.conformance.grid import grid as _grid, fmt_mismatches as _fmt
 
@@ -137,6 +146,19 @@ def _all_stores(space: list, k: int):
         yield from itertools.combinations(space, size)
 
 
+def _graph_query_filter(subjects, targets):
+    """Restrict the shared grid to the PROVED graph query scope (mirrors
+    `test_conformance_graph._graph_queries_for`): concrete objects only
+    (`hqo : q.object.name != STAR`); star subjects stay, since the grid emits
+    them bare-predicate only (userset subjects are concrete-named), satisfying
+    `hqs` (`graphRun_check_eq_sem`, GraphIndex/Exec.lean)."""
+    targets = [(rel, ot, on) for (rel, ot, on) in targets if on != "*"]
+    return [
+        (sp, st, sn, rel, ot, on)
+        for (sp, st, sn), (rel, ot, on) in itertools.product(subjects, targets)
+    ]
+
+
 @pytest.mark.parametrize("name", sorted(_SHAPES))
 def test_exhaustive_small_scope(name):
     """spec == oracle == set engine on EVERY store up to the documented bound."""
@@ -160,6 +182,17 @@ def test_exhaustive_small_scope(name):
         for (sp, st, sn), (rel, ot, on) in itertools.product(subjects, targets)
     ]
 
+    # Graph leg (widening §4(e) increment (a)): exhaustively drive the REAL
+    # graph index (WildcardIndex + DeltaProcessor, I5 leaf-routing + cascade)
+    # over EVERY enumerated store, compared at ANSWER level against the already-
+    # agreed spec (== oracle == set engine). Gated to shapes inside
+    # GRAPH_FRAGMENT (apples-to-apples with graph_correct); all six enum shapes
+    # qualify. Query scope narrowed to the PROVED graph scope (`_graph_query_
+    # filter`); graph_queries is a subset of `queries`, so the spec answers
+    # computed above are the reference (no extra zcli call).
+    run_graph = name in GRAPH_FRAGMENT
+    graph_queries = _graph_query_filter(subjects, targets) if run_graph else []
+
     n_stores = 0
     for store in _all_stores(space, _K):
         n_stores += 1
@@ -182,6 +215,19 @@ def test_exhaustive_small_scope(name):
             f"[{name}] spec/set-engine disagreement (ADJUDICATION EVENT — "
             f"plan §8.2) at enumerated store #{n_stores} = {store}:\n"
             f"{_fmt(mism, 'spec', 'setengine')}")
+
+        if run_graph:
+            ref = {q: spec[i] for i, q in enumerate(queries)}  # spec == agreed
+            graph = graphindex_answers(schema_text, store, graph_queries,
+                                       obj_wild)
+            mism = [(graph_queries[i], ref[graph_queries[i]], graph[i])
+                    for i in range(len(graph_queries))
+                    if ref[graph_queries[i]] != graph[i]]
+            assert not mism, (
+                f"[{name}] graph/spec disagreement (ADJUDICATION EVENT — plan "
+                f"§8.2; graph check != sem == oracle == set engine) at "
+                f"enumerated store #{n_stores} = {store}:\n"
+                f"{_fmt(mism, 'spec', 'graph')}")
 
     assert n_stores == exp_stores, (
         f"[{name}] enumerated {n_stores} stores but the documented bound says "

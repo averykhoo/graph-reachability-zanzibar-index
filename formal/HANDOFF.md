@@ -91,14 +91,16 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `reconcileKeyD_retracts_excluded`, `8a9bee1` base-equation WALL characterized —
 > `graphRec_base_eq_d` needs a `NoStoreSubjectR` hyp, attack-pinned). Direct-arm leg 4 =
 > the wall (3 named lemmas A/B/C, see the design file). **#3 state/enum widening
-> increment (c) LANDED (2026-07-18b)** — userset (`wildcard_group_member`, 176 stores) +
-> TTU (`ttu`, 93 stores) enum shapes added to `test_conformance_enum.py` (spec×oracle×
-> set-engine, exhaustive K=3; the self-referential `group_userset` was attack-rejected as
-> admission-cyclic for the set engine, recorded as a finding). Full gate green incl. conf
-> phases (290 conf, 0 skip). **THE NEXT TASK: #3 increment (a)** — graph-in-enum at answer
-> level (see design file Target #3; copy the `_graph_queries_for` scope filter). Not
-> started: #1 TTU/userset half, #2 strata (>2), #3 (b)/(d), #4 remove legs (Route 1
-> confluence).
+> increments (c) + (a) LANDED (2026-07-18b/c).** (c): userset (`wildcard_group_member`,
+> 176 stores) + TTU (`ttu`, 93 stores) enum shapes added to `test_conformance_enum.py`
+> (the self-referential `group_userset` attack-rejected as admission-cyclic for the set
+> engine, recorded). (a): the REAL graph index (`WildcardIndex`+`DeltaProcessor`) now runs
+> INSIDE the enum at answer level over all six in-`GRAPH_FRAGMENT` shapes — attack-first
+> found NO graph≠sem divergence, NO `ValueError` (796 stores × graph grid). Full gate green
+> incl. conf phases (290 conf, 0 skip). **THE NEXT TASK: #3 increment (b) k=4** (`_K=4` +
+> re-assert counts; shard `two_stratum_cascade` or cap it — won't fit alongside the graph
+> leg in one phase; see design file Target #3). Not started: #1 TTU/userset half, #2 strata
+> (>2), #3 (d) state gate, #4 remove legs (Route 1 confluence).
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and

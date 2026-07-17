@@ -8,6 +8,36 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18c (#3 state/enum widening — increment (a) real graph index inside the enum)
+
+Second green increment of #3. Added the REAL graph index (`WildcardIndex`+`DeltaProcessor`,
+I5 leaf-routing + same-txn cascade) to the exhaustive enum
+(`formal/conformance/test_conformance_enum.py`) at ANSWER level, `formal/conformance/`-only
+(one file). All six enum shapes are in `GRAPH_FRAGMENT`, so ALL get the graph leg
+(`run_graph = name in GRAPH_FRAGMENT`; none skipped). New `_graph_query_filter` mirrors
+`test_conformance_graph._graph_queries_for` (concrete objects, star subjects bare); per
+store, `graphindex_answers` over the filtered grid is asserted == spec (== the already-
+agreed oracle/set-engine answer). No new zcli call (answer-level pin against `sem`).
+
+**Attack-first (the point of this increment).** Exhaustively driving the real graph over
+ALL sub-stores is the class of run that historically FOUND the P6 leaf-family and
+2026-07-17 stale-fanout divergences. Result this run: **graph `check` == `sem` on EVERY
+in-fragment enumerated store (796 stores × the graph query grid, all six shapes), NO
+rejected-write `ValueError`, NO divergence.** No adjudication event — clean pass. (Kept for
+future runs at wider bounds where a divergence could still appear.)
+
+**Gate:** enum file ~5 min standalone (conf-rest); no shapes/queries dropped (no silent
+cap). No new test params (the graph leg rides inside the existing 6 enum tests) ⇒ conf
+count stays 290, 0 skip. `git diff` scope = the one enum file only, so `pytest tests/`
+(561+32, this session) and `verify.sh lean` (415/415, this session) are provably
+unaffected and stand; conf-heavy 76 + conf-rest 214 re-run green. Committed + pushed.
+
+**Resume #3:** (b) k=4 (`_K=4` + re-assert counts, ~2.23× blow-up; shard `two_stratum_
+cascade` or cap it at k=3 — does NOT fit alongside the graph leg in one phase, ~10 min),
+then (d) state gate over enumerated stores (sample/shard). Design file Target #3.
+
+---
+
 ## Session 2026-07-18b (#3 state/enum widening — increment (c) userset + TTU enum shapes landed)
 
 Interleave plan continues: banking the tractable #3 (state/enum) increments before the

@@ -162,12 +162,16 @@ mirrors `tests/test_matrix.py::GraphBackend`; I5 leaf-routing + cascade).
    (cycle guard `engine.py:770`) — an admission-domain difference, not a check divergence;
    NOT used (docstring records it). Spec==oracle==set-engine on every enumerated store; no
    graph leg (that's (a)). Gate green incl. conf phases (290 conf, +2 params).
-2. **(a) graph-in-enum, answer level** — ⭐ NEXT. — ~2 lines on top of `graphindex_answers` + two
-   mismatch asserts, BUT copy the query-scope filter `_graph_queries_for`
-   (`test_conformance_graph.py:47-57`: concrete objects only, star subjects bare) or it
-   compares out-of-scope garbage. Confirm no enumerated store trips a rejected-write
-   `ValueError`. Fits cap at k=3 (~+3 min in `conf-rest`, → ~7 min, ok).
-3. **(b) k=4** — `_K=4` + re-assert counts. ~2.23× blow-up (527→1177; `two_stratum_cascade`
+2. **(a) graph-in-enum, answer level** — ✅ **DONE (2026-07-18c).** All six enum shapes are
+   in `GRAPH_FRAGMENT`, so ALL get the graph leg (none skipped; `run_graph = name in
+   GRAPH_FRAGMENT`). Added `_graph_query_filter` (mirrors `test_conformance_graph.
+   _graph_queries_for`: concrete objects, star subjects bare) + a per-store
+   `graphindex_answers` == spec (== oracle == set engine) assert. **Attack-first: graph ==
+   sem on EVERY in-fragment enumerated store (796 × graph grid), NO `ValueError`, NO
+   divergence** — no P6/stale-fanout-class event this run. Enum file ~5 min standalone
+   (conf-rest); no shapes/queries dropped. No new test params (rides inside the 6 enum
+   tests) ⇒ conf still 290, 0 skip.
+3. **(b) k=4** — ⭐ NEXT. `_K=4` + re-assert counts. ~2.23× blow-up (527→1177; `two_stratum_cascade`
    dominates, N=12). Fits ALONE (~200s) but NOT alongside graph-in-enum in one phase (~10
    min). Shard by shape (already a `parametrize` axis) across `conf-heavy`/`conf-rest`, or
    cap `two_stratum_cascade` at k=3. No within-file sharding pattern exists today.
