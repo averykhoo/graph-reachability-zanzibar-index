@@ -27,7 +27,10 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
   (`taint_union_over_boolean` moved in; `taint_union_userset_arm` state-regression pin;
   `taint_computed_root_over_boolean`). Gate GREEN: `verify.sh` lean (415/415 audit) /
   conf-heavy 76 / conf-rest 212; full conformance 288/0-skip. `pytest tests/` unaffected
-  (no backend change). Detail: `formal/history/PROOF_STATUS.md` 2026-07-17. **Not yet committed.**
+  (no backend change; 561 + 32 = 593 passed re-verified pre-push). Detail:
+  `formal/history/PROOF_STATUS.md` 2026-07-17. **Committed as `397f975` (leg 1,
+  taint filter) + `c3d3113` (leg 2, RootBoolean removal) + `265995d` (leg 3,
+  witness + conformance + docs); pushed.**
 - **2026-07-17 — the three OPEN 2026-07-17 divergences CLOSED (+ a 4th found en route)
   + reg13 admission wart fixed + fuzzer exclusions reverted; full gate GREEN; committed
   as `d517fb5`.**
@@ -85,8 +88,8 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
   profile). Record: [`docs/history/perf-round5-2026-07.md`](docs/history/perf-round5-2026-07.md).
   Standing perf guardrails (fence, dead-ends, hygiene) live in
   [`docs/perf-next-round.md`](docs/perf-next-round.md).
-- **Clean on `master`.** Last change: the 2026-07-17 divergence closures above
-  (commit `d517fb5`).
+- **Clean on `master`.** Last change: the formal `rootB` fragment widening above
+  (commits `397f975` / `c3d3113` / `265995d`).
 
 ---
 
