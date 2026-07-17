@@ -261,6 +261,50 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "zoe", "b", "doc", "d2")],
         (),
     ),
+    "taint_union_userset_arm": (
+        # Regression pin for the 2026-07-17 taint-filter fix (the stale userset-
+        # sourced fanout edge). `approver = viewer or admin` unions a boolean
+        # `viewer` with `admin`, and `admin` accepts a USERSET subject
+        # (group#member). Before the taint filter on schemaRewrites, the Lean model
+        # leaked a stale fanout edge group:eng#member -> approver (the union arm
+        # firing on the userset-subject stored tuple) into the DRAINED state — a
+        # real Lean-model-vs-Python state divergence. The taint filter routes the
+        # derived `approver` off the fanout (as compile_ruleset does); the state
+        # gate now pins that stale edge's absence.
+        """
+        type user
+        type group
+          define member: [user]
+        type doc
+          define base: [user:*]
+          define blocked: [user]
+          define viewer: base but not blocked
+          define admin: [user, group#member]
+          define approver: viewer or admin
+        """,
+        [mk_tuple("...", "user", "*", "base", "doc", "d1"),
+         mk_tuple("...", "user", "mallory", "blocked", "doc", "d1"),
+         mk_tuple("member", "group", "eng", "admin", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "member", "group", "eng")],
+        (),
+    ),
+    "taint_computed_root_over_boolean": (
+        # Computed roots taint too (compile_ruleset): `approver = viewer` is a bare
+        # computed reference to a boolean relation, so `approver` is derived. In
+        # scope since the 2026-07-17 fragment widening (ComputedOnly derived def,
+        # union/computed roots no longer rejected by W4Fragment).
+        """
+        type user
+        type doc
+          define base: [user:*]
+          define blocked: [user]
+          define viewer: base but not blocked
+          define approver: viewer
+        """,
+        [mk_tuple("...", "user", "*", "base", "doc", "d1"),
+         mk_tuple("...", "user", "mallory", "blocked", "doc", "d1")],
+        (),
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -269,20 +313,20 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # corpora INSIDE the proved fragment (apples-to-apples with `graph_correct`):
 #   * untainted schemas subsume via `w4Fragment_of_untainted` (needs only
 #     wsBare/bareStar/ttuStarFree — all stars here are bare-subject grants);
-#   * boolean schemas need RootBoolean (inter/excl at the derived ROOT),
-#     ComputedOnly leaves, and <= two strata.
+#   * boolean schemas need ComputedOnly derived defs (boolean tree over computed
+#     leaves) and <= two strata. The derived ROOT operator is UNRESTRICTED — an
+#     inter/excl/union/computed root all qualify (the rootB gap CLOSED 2026-07-17,
+#     `W4Fragment.rootB`/`RootBoolean` deleted; taint routing on `schemaRewrites`
+#     now mirrors compile_ruleset).
 # Excluded, with the honest reason (ROADMAP "W4 — honest gaps"):
-#   * taint_union_over_boolean — `approver: viewer or admin` is a UNION-rooted
-#     derived def; Python taints through union roots, the fragment's `rootB`
-#     does not (gap: rootB).
 #   * object_wildcard — the stored tuple has object name '*'; `BareStarStore`
 #     requires stored objects concrete (gap: bareStar / W1b object-star tuples
 #     are outside the operational chain's store scope).
 # Attack-first finding (2026-07-12k, scratch probe, deleted after recording):
-# BOTH excluded corpora — and a hand-crafted object-wildcard corpus with
-# concrete-object queries — showed 0 lean-graph/py-graph mismatches. The
-# exclusions are PROOF-scope-driven (what graph_correct covers), not observed
-# behavioral divergences; do not read them as known model/Python disagreements.
+# the object_wildcard corpus — and the (now in-fragment) union-rooted corpus —
+# showed 0 lean-graph/py-graph mismatches. The remaining exclusion is PROOF-scope-
+# driven (what graph_correct covers), not an observed behavioral divergence; do
+# not read it as a known model/Python disagreement.
 # ---------------------------------------------------------------------------
 
 GRAPH_FRAGMENT: tuple[str, ...] = (
@@ -296,6 +340,9 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
     "boolean_intersection",
     "boolean_star_exclusion",
     "two_stratum_cascade",
+    "taint_union_over_boolean",
+    "taint_union_userset_arm",
+    "taint_computed_root_over_boolean",
     "nested_boolean",
     "double_exclusion",
     "demorgans",

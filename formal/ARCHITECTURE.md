@@ -161,9 +161,10 @@ restriction comes from (`FullScope.lean`):
   shapes never on derived relations), `storeValid`. This bundle imposes **nothing Python
   does not already impose**.
 - **`W4Fragment S T`** — the **honest carries**: scope restrictions the current proof
-  needs that Python admission does **not** imply. Fields: `rootB` (derived defs
-  boolean-ROOTED — Python taints through `union`/`computed` roots too), `computedOnly`
-  (derived defs read only computed operands), `twoStrata` (≤ 2 derived strata —
+  needs that Python admission does **not** imply. Fields: `computedOnly`
+  (derived defs read only computed operands — the sole SHAPE condition since the
+  2026-07-17 widening deleted `rootB`/`RootBoolean`; the derived-def ROOT operator is
+  unrestricted, so union-/computed-rooted derived defs are in scope), `twoStrata` (≤ 2 derived strata —
   attack-confirmed load-bearing), `wsBare` (declared wildcard restrictions all bare
   `[T:*]`), `bareStar` (stored star subjects bare, objects concrete), `ttuStarFree` (no
   stored star subject feeds a TTU tupleset), `term` (derived relations never TTU targets
@@ -300,16 +301,22 @@ The residual unverified surface, in full:
    leaf-family routing have no Lean counterpart (the Lean model reads the RAW boolean defs
    and derives taint/strata/jobs itself). Pinned by the snapshot tests + the conformance
    corpora; a compiler bug on an unexercised shape would not fail any Lean gate.
-3. **Fragment carries** — the `W4Fragment` gaps (§4.1): > 2 derived strata; non-root
-   booleans (union/computed-rooted taint); `PDerivedTTU`/`PDerivedUserset` plan leaves;
+3. **Fragment carries** — the `W4Fragment` gaps (§4.1): > 2 derived strata; non-`ComputedOnly`
+   derived operand leaves (`Direct`/TTU arms under a boolean — `PDerivedTTU`/`PDerivedUserset`
+   plan leaves; the derived-ROOT operator is NO LONGER a gap, widened 2026-07-17);
    declared wildcard-userset restrictions anywhere; stored object-wildcard tuples; stored
    userset-star tuples; **removes** (the operational chain is add-only — BOTH Python remove
    paths are now pinned at answer level: the SET-ENGINE by rebuild state-fingerprint and the
    GRAPH-INDEX by fresh-build state convergence + full drain, `test_conformance_remove.py`;
    only the Lean remove legs stay open); star-subject queries with non-bare predicates;
-   star-object queries on the graph side. *(Empirical note: the union-rooted-taint and object-wildcard corpora were probed
-   anyway — zero check-level divergence observed; the exclusions are proof-scope, not
-   known disagreements. Inside the `PDerivedTTU` gap a REAL check-level divergence WAS
+   star-object queries on the graph side. *(Empirical note: the derived-ROOT gap was CLOSED 2026-07-17 — union- and
+   computed-rooted derived defs are now in scope and in `GRAPH_FRAGMENT` (check + state); only the object-wildcard
+   corpus stays probe-confirmed-but-excluded — zero check-level divergence observed, the exclusion is proof-scope, not a
+   known disagreement. Inside the `PDerivedTTU` gap a REAL check-level divergence WAS
+   found (2026-07-12, by `tests/test_lookup_oracle.py`: the graph index answered False
+   on userset-shaped subjects flowing through a stored tupleset parent of a derived TTU
+   where the oracle and both set engines answer True) and FIXED 2026-07-13 Python-side
+   (processor from-chain rule + `upos` lift; xfails flipped to regression pins, matrix Inside the `PDerivedTTU` gap a REAL check-level divergence WAS
    found (2026-07-12, by `tests/test_lookup_oracle.py`: the graph index answered False
    on userset-shaped subjects flowing through a stored tupleset parent of a derived TTU
    where the oracle and both set engines answer True) and FIXED 2026-07-13 Python-side

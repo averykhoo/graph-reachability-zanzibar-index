@@ -35,8 +35,8 @@ never rounds up to "the code is formally verified" (plan §7).
    stratum-1"). A session that kills a false statement is a GOOD session; record the
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (412 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + 263 Python conformance
+   + **0 sorries** + zcli + axiom audit (415 `#print axioms` reports, one per audited
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + 288 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
@@ -81,6 +81,21 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
+> **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
+> no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and
+> the shape condition is `ComputedOnly` alone, so union- and computed-rooted
+> derived defs are inside the proved scope. Three commits: (1) `397f975` —
+> `schemaRewrites` taint-filtered (`S.defs.filter (!isDerived …)`, the faithful
+> mirror of `compile_ruleset`'s taint routing; a probe had found the UNFILTERED
+> fanout leaked a stale userset-sourced edge `group:eng#member → approver` at a
+> union-rooted derived R-node into the drained state — a real model-vs-Python
+> state divergence); (2) `c3d3113` — `RootBoolean` deleted, `W4Fragment` widened;
+> (3) this leg — the union-rooted non-vacuity witness `W4WitnessUnion`
+> (`FullScope.lean`, audited) + the conformance widening: `taint_union_over_boolean`
+> moved INTO `GRAPH_FRAGMENT`, two new pins added (`taint_union_userset_arm` — the
+> stale-fanout STATE regression; `taint_computed_root_over_boolean` — computed
+> roots). Gate green: audit 415, conformance 288/0-skip.
+
 | theorem | file (`lean/ZanzibarProofs/`) | scope |
 |---|---|---|
 | T1 `setEngine_correct` | `SetEngine/Correct.lean` | full |
@@ -93,7 +108,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 | T2b `graph_correct_objStar` | `GraphIndex/ObjStarClosure.lean` | + object wildcards (out-bridges) |
 | T2b `graph_correct_usStar` | `GraphIndex/UsStarClosure.lean` | + userset stars (in-bridges) |
 | T2b `graph_correct_rules` | `GraphIndex/RulesComplete.lean` | untainted computed/ttu/union |
-| T2b `graph_correct_w3a` | `GraphIndex/ReconcileComplete.lean` | + one `RootBoolean` derived key, bare-subject queries |
+| T2b `graph_correct_w3a` | `GraphIndex/ReconcileComplete.lean` | + one `ComputedOnly` derived key (root operator UNRESTRICTED since the 2026-07-17 `RootBoolean` removal), bare-subject queries |
 | T2b `graph_correct_w3b` | `GraphIndex/ReconcileUposComplete.lean` | + userset subjects via `upos` (bare-subject restriction LIFTED) |
 | T2a `reachedByW3c_inv` / `reachedByW3c_master` | `GraphIndex/ReconcileStars.lean` | W3c write half: `stars`/`neg` model, ALL I6 clauses contentful, star-general (no `StarFreeStore`) |
 | T2b `graph_correct_rulesBS` | `GraphIndex/RulesBareStar.lean` | W2 untainted correspondence over `BareStarStore`+`TtuStarFree`, star-BARE subjects incl. |
@@ -172,7 +187,7 @@ remove legs stay open), the **generated-schema answer gate**
 (`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
 corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
 level), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` are all landed and gated.
-verify.sh: 257 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
+verify.sh: 288 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
 map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
 `history/`. The one known check-level graph-vs-set divergence (derived-TTU
 userset subjects — outside `W4Fragment` and the conformance grids) was FIXED
@@ -197,12 +212,15 @@ them. Conformance 248 → 257 (+9 = 3 corpora × 3 comparisons).
 
 What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
 
-1. **Fragment widening** — union-rooted derived defs first (`rootB` gap; the
-   12k probe found NO behavioral divergence there, so the model is likely
-   already faithful and only the proof is missing). **[my recommendation #2 — the
-   highest value-per-effort next step: no answer-level pin exists for the
-   `rootB` gap, and closing it un-excludes `taint_union_over_boolean` from
-   `GRAPH_FRAGMENT`, widening the gate with the theorem.]**
+1. **Fragment widening (leaves + strata)** — the derived-def ROOT gap is ✅ **DONE
+   (2026-07-17)**: `RootBoolean` deleted, union-/computed-rooted derived defs in
+   scope, `taint_union_over_boolean` + two new pins now in `GRAPH_FRAGMENT`. What
+   REMAINS is the LEAF/strata fragment — `computedOnly` still bans `Direct`/TTU
+   arms in derived defs (`PDerivedTTU`/`PDerivedUserset` plan leaves), and
+   `twoStrata` still caps at ≤ 2 derived strata (attack-confirmed load-bearing:
+   a 3-stratum schema fires the round-2 reject). Widening either is the open
+   fragment work; both are genuine proof effort (not just a probe-faithful gap
+   like roots was).
 2. **Remove legs** (the diffing pass models retraction but the Lean chain is
    add-only; BOTH Python remove paths are now pinned at answer level by
    `test_conformance_remove.py` — the set engine at rebuild-fingerprint level, the
@@ -259,7 +277,8 @@ Repo-side (outside the formal effort, smaller, Python-only):
   (b) `CORRESPONDENCE.md`; (c) `FINAL_REVIEW.md` (plan §7 verbatim + cross-check).
   **State-level conformance + exhaustive small-scope enumeration ✅ CLOSED
   (2026-07-12m)** — the two formerly-unearned §7 clauses. Remaining extras
-  (optional, FINAL_REVIEW §4): fragment widening, remove legs, wider bounds.
+  (optional, FINAL_REVIEW §4): fragment widening (the ROOT-operator gap is DONE
+  2026-07-17; the LEAF/strata gaps remain), remove legs, wider bounds.
 
 Historical detail for every closed stage: `history/PROOF_STATUS.md` (ledger, newest
 first) and `history/ROADMAP.md` (designs + post-mortems); the topical synthesis is

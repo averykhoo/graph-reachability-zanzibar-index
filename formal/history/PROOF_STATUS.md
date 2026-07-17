@@ -8,6 +8,68 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-17 (rootB fragment widening — union-/computed-rooted derived defs now in scope; `RootBoolean` deleted, `schemaRewrites` taint-filtered, a model-faithfulness STATE fix, witness + corpus widening)
+
+The last standing SHAPE gap of `W4Fragment` was `rootB`: derived defs had to be
+`inter`/`excl`-ROOTED, even though Python taints through `union`/`computed` roots
+too. Closed it — the derived-def root operator is now UNRESTRICTED (the shape
+condition is `ComputedOnly` alone), so union-rooted (`approver := viewer or
+admin`) and computed-rooted (`approver := viewer`) derived defs are inside the
+proved scope. Three legs (commits `397f975`, `c3d3113`, this leg).
+
+**Attack-first (the finding of record).** Before widening, a probe drove
+union-rooted derived schemas through the Lean graph model vs the Python graph
+backend. At CHECK level: no divergence (as the 12k probe had suggested). But at
+STATE level, with the fanout UNFILTERED (`schemaRewrites S := S.defs.flatMap …`):
+a union-rooted derived def with a USERSET-subject stored tuple matching an
+untainted arm (`group:eng#member → admin` under `approver := viewer or admin`)
+leaked a stale fanout edge `group:eng#member → approver` into the DRAINED Lean
+state — a real Lean-model-vs-Python state divergence (Python routes derived keys
+OFF the fanout entirely). So the widening was NOT purely a probe-faithful
+"proof-only" gap at state level; it needed a model fix.
+
+**What landed.**
+* **Leg 1 (`397f975`) — the taint filter.** `schemaRewrites` (`RulesWrite.lean:81`)
+  now filters `S.defs.filter (fun d => !(isDerived S d.1))` before the `exprArms`
+  flatMap — the faithful mirror of `compile_ruleset:1027-1044` (`if key not in
+  tainted: fan out; else: derived plan`). `isDerived` (the taint fixpoint) IS the
+  compiler's `tainted` set. Restored set/graph accept-reject parity and killed the
+  stale userset-sourced fanout edge.
+* **Leg 2 (`c3d3113`) — `RootBoolean` DELETED.** The `W4Fragment.rootB` field and
+  the `RootBoolean` predicate are gone; the intermediate lemmas that carried
+  `hRootB`/`RootBoolean` leaf conditions were re-based onto `isDerived`/`ComputedOnly`.
+  `RootBoolean` no longer appears anywhere in `ZanzibarProofs/` (verified by grep —
+  only a prose mention survives, in the new witness docstring).
+* **Leg 3 (this session) — the witness + the corpus widening.**
+  - `FullScope.lean`: a SECOND non-vacuity witness `W4WitnessUnion` (`Sy`/`Ty` =
+    the corpus `taint_union_over_boolean` in compiled form — a union-ROOTED derived
+    `approver` over the boolean `viewer := base ∖ blocked`, bare-star base). Same
+    three theorems as `W4Witness` (`accepts : GraphAdmission`, `fragment :
+    W4Fragment`, `within_scope : GraphAccepts`), decide-style. Because the taint
+    filter routes the derived `approver` off the fanout, `schemaRewrites Sy = []`,
+    so `ttuStarFree`/`term`/`ranked`/`matchDecl` mirror the original witness; the
+    contentful new work is `computedOnly`/`twoStrata` over the two-stratum
+    `viewer`→`approver` chain and `storeValid` over the bare-star base tuple.
+    Audited (`Audit.lean`, +3 `#print axioms`); standard axioms only.
+  - `formal/conformance/corpus.py`: `taint_union_over_boolean` MOVED into
+    `GRAPH_FRAGMENT`; the exclusion comment rewritten (rootB gap CLOSED; only the
+    object-wildcard corpus stays excluded, `bareStar`). Two NEW corpora, in both
+    `SCHEMAS` and `GRAPH_FRAGMENT`: `taint_union_userset_arm` — THE regression pin
+    for the stale-fanout STATE divergence (the `group:eng#member → admin` userset
+    arm under a union root; the state gate now pins the stale `→ approver` edge's
+    ABSENCE); `taint_computed_root_over_boolean` — a computed-ROOT derived def
+    (`approver := viewer`), pinning that computed roots taint too.
+
+**Evidence / gate.** `verify.sh lean` PASSED (0 sorries; axiom audit 412 → **415**
+observed == expected, standard axioms only — the 3 new witness theorems). Conformance
+263 → **288**, 0 skips: `conf-heavy` 68 → **76**, `conf-rest` 195 → **212** (each
+phase ~3 min wall, well under the 8.5-min cap). Full `formal/conformance/` 288 passed.
+No Python behavior changed (no `docs/spec-deviations.md` entry) — the taint filter is a
+model-side faithfulness fix; the compiler already routed derived keys off the fanout.
+Docs synced: `FINAL_REVIEW.md` §3/§4, `CORRESPONDENCE.md` (schemaRewrites row + §7
+dated note), `ARCHITECTURE.md`, `HANDOFF.md` (formal + root), `ROADMAP.md` (W4 honest
+gaps), `CLAUDE.md`/`gate-runbook.md` counts, this entry.
+
 ## Session 2026-07-13 (X4 adjudication ANCHORED to `sem` — three spec-side TTU userset-subject conformance corpora; harness + docs only, NO Lean changes, NO claim widening)
 
 The 2026-07-13 X4 fix (previous entry) followed the ORACLE where the boolean

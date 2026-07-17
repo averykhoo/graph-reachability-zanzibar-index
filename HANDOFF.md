@@ -18,6 +18,16 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ## Current status — 2026-07-17
 
+- **2026-07-17 — formal `rootB` fragment widening LANDED (Lean-only; no Python change).**
+  `W4Fragment` no longer restricts the derived-def root operator — union- and
+  computed-rooted derived defs are now in the proved scope (`RootBoolean` deleted;
+  `schemaRewrites` taint-filtered to mirror `compile_ruleset`, closing a stale
+  userset-sourced fanout-edge STATE divergence found by probe). Added the union-rooted
+  witness `W4WitnessUnion` + three now-in-fragment conformance corpora
+  (`taint_union_over_boolean` moved in; `taint_union_userset_arm` state-regression pin;
+  `taint_computed_root_over_boolean`). Gate GREEN: `verify.sh` lean (415/415 audit) /
+  conf-heavy 76 / conf-rest 212; full conformance 288/0-skip. `pytest tests/` unaffected
+  (no backend change). Detail: `formal/history/PROOF_STATUS.md` 2026-07-17. **Not yet committed.**
 - **2026-07-17 — the three OPEN 2026-07-17 divergences CLOSED (+ a 4th found en route)
   + reg13 admission wart fixed + fuzzer exclusions reverted; full gate GREEN; committed
   as `d517fb5`.**
@@ -83,16 +93,22 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 ## Open-TODO board
 
 ### Active work
-- [ ] **IN PROGRESS 2026-07-17 (Claude): formal fragment widening — the `rootB` gap**
-      (union-rooted derived defs; `formal/HANDOFF.md` §4 recommendation #2). Recon +
-      attack probes done: the Lean operational chain is byte-identical to Python on
-      `taint_union_over_boolean` (check + state), but mid-chain the write leg materializes
-      the union fanout edge on the derived R-node and the cascade diff retracts it —
-      Python never creates it (`compile_ruleset` taint-routes off the fanout). Plan:
-      taint-filter `schemaRewrites` (model-faithfulness fix), replace the ~8 contentful
-      `RootBoolean` leaf lemmas with `isDerived`-based ones, drop/weaken `rootB` from
-      `W4Fragment` + the `hRootB` threading (~114 audited theorems gain scope), then
-      un-exclude `taint_union_over_boolean` from `GRAPH_FRAGMENT`.
+- [x] **DONE 2026-07-17 (Claude): formal fragment widening — the `rootB` gap CLOSED (gate GREEN).**
+      Union- and computed-rooted derived defs are now inside the proved `W4Fragment`
+      (the derived-def ROOT operator is unrestricted; shape condition is `ComputedOnly`
+      alone). Three legs: (1) `397f975` — `schemaRewrites` taint-filtered (mirror of
+      `compile_ruleset`'s taint routing; a probe had found the UNFILTERED fanout leaked a
+      stale userset-sourced edge `group:eng#member → approver` into the drained Lean state
+      — a real model-vs-Python state divergence); (2) `c3d3113` — `RootBoolean` deleted,
+      `W4Fragment` widened; (3) this leg — the union-rooted non-vacuity witness
+      `W4WitnessUnion` (`FullScope.lean`, audited) + the conformance widening:
+      `taint_union_over_boolean` moved INTO `GRAPH_FRAGMENT`, two new pins added
+      (`taint_union_userset_arm` — the stale-fanout STATE regression;
+      `taint_computed_root_over_boolean` — computed roots). Gate: `verify.sh` lean
+      (sorry-free, axiom audit **415/415**) / conf-heavy **76** / conf-rest **212** all
+      PASSED; full `formal/conformance/` **288** passed, 0 skips. No Python behavior
+      change (no `docs/spec-deviations.md` entry). Detail: `formal/history/PROOF_STATUS.md`
+      2026-07-17. Remaining fragment work: `computedOnly` leaves (`Direct`/TTU arms) + >2 strata.
 - [x] **DONE 2026-07-17 (full gate GREEN; committed as `d517fb5`).** **Closed the three OPEN 2026-07-17 divergences (+ a 4th
       found en route) + the reg13 admission wart; reverted the fuzzer exclusions.** Fix A (the
       `processor._leaf_concretes` `upos` lift for `derived-computed`/`derived-userset` leaves,

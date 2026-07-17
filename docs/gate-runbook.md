@@ -60,7 +60,7 @@ vacuously). All three must print `PASSED`. Together they == `pytest tests/` (ste
   MINUS the heavy file (`--ignore=…/test_conformance_remove.py`), so the two conf
   phases *tile* `formal/conformance/` with no gap and any newly-added conformance
   file automatically lands in `conf-rest`. Tiling check: `conf-heavy` + `conf-rest`
-  pass counts sum to the full total (68 + 195 = 263 today).
+  pass counts sum to the full total (76 + 212 = 288 today).
 - **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
   guards as the one-shot — olean layout-drift guard + `#print axioms` observed==expected
   (Lean), zcli-binary preflight + no-skip + passed>0 (conformance). So three green
@@ -150,7 +150,7 @@ optimization this session.
 controlled than test runtime): time a **deterministic, rarely-changing,
 hot-path-heavy subset**. Best candidates, because they change by design only when
 behavior changes:
-- the conformance corpora (`formal/conformance/`, 263 deterministic tests),
+- the conformance corpora (`formal/conformance/`, 288 deterministic tests),
 - the validation matrix (`tests/test_matrix.py`),
 - the compiled-RuleSet snapshots (`tests/snapshots/`).
 Track these via `pytest --durations=20` across commits and eyeball for a step

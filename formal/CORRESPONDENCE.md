@@ -88,7 +88,7 @@ independent corners.
 |---|---|---|
 | `GraphState.admitEdge` (`a ≠ b` ∧ no back-path) | cycle rejection | `index_v4/core.py:319-342` `_add_edge_locked` raise+rollback |
 | `GraphState.writeDirect` | one guarded closure-edge insert | `wildcard.py:222` `add_tuple` → `core.py:408` `add_edge` / `:344` `add_edge_by_id` |
-| `RRule`/`exprArms`/`schemaRewrites` | compiled Computed/TTU rewrite rules | `zanzibar_utils_v1.py:834-853` `_rewrite_rule`, `:870-888` `_emit_expr` |
+| `RRule`/`exprArms`/`schemaRewrites` (**taint-filtered** — derived keys emit no arms) | compiled Computed/TTU rewrite rules, fanned out ONLY for untainted keys | `zanzibar_utils_v1.py:834-853` `_rewrite_rule`, `:870-888` `_emit_expr`; the taint routing (`compile_ruleset:1027-1044` — `if key not in tainted: fan out; else: derived plan`) mirrored by the `S.defs.filter (!isDerived …)` in `schemaRewrites` (RulesWrite.lean:81, added 2026-07-17 — see §7) |
 | `rewriteClosure` | the write fan-out worklist | `RuleSet.apply` |
 | `GraphState.writeLoggedOne`/`writeLoggedRules` | routed write + delta row per accepted flip | `RuleSet.apply` + per-triple `add_tuple`, `core.py:31` `_emit` |
 | `GraphState.nextDeltaId`/`pushDelta`/`maxOutboxId` | outbox append / autoincrement cursor | `index_v4/outbox.py` (`outbox_watermark` `:13-21`) |
@@ -116,7 +116,7 @@ independent corners.
 | `enumJobs2R1`/`enumJobs2R2` | per-round key enumeration off the state | `processor.py:701-727` per-round `_map_deltas_to_keys` |
 | `Drained` | outbox fully drained at commit boundary | boolean spec §7.8 / I9 `audit_fixpoint` |
 | `GraphAdmission` (wf/nodup/strat/ttuDirect/matchDecl/ranked/objWild/storeValid) | what compile+write admission guarantees | see field docs, `FullScope.lean:64-94` (e.g. `_validate_ttu_tuplesets` `zanzibar_utils_v1.py:898-935`) |
-| `W4Fragment` (rootB/computedOnly/twoStrata/wsBare/bareStar/ttuStarFree/term) | — the HONEST carries: restrictions Python does NOT impose | `history/ROADMAP.md` "W4 — honest gaps" |
+| `W4Fragment` (computedOnly/twoStrata/wsBare/bareStar/ttuStarFree/term) | — the HONEST carries: restrictions Python does NOT impose (`rootB` deleted 2026-07-17 — the derived-def ROOT operator is unrestricted, only the LEAVES must be `ComputedOnly`) | `history/ROADMAP.md` "W4 — honest gaps" |
 | `Exec.lean` `graphRun` + `graphRun_reached`/`graphRun_check_eq_sem` | the conformance driver IS the chain (theorem, not analogy) | driven against `WildcardIndex` by `test_conformance_graph.py` (verdicts) and `test_conformance_state.py` (final state, zcli mode `"graph-state"` — same fold, same gates; the dump code in `Cli.lean` is driver-level, its projections documented in the mode header + `extractor.py`) |
 
 ## 7. Known intentional divergences (model ≠ code, by design)
@@ -126,11 +126,29 @@ independent corners.
 * **Fixed two rounds.** `runCascade2` always runs 2 rounds; Python runs
   `len(strata)`. Same drained fixpoint at ≤2 strata (T5); ≥3 strata are outside
   the fragment (`hLU2` attack-confirmed load-bearing).
-* **Fragment surplus.** Python accepts more than `W4Fragment` (union-rooted
-  taint, object-wildcard tuples, wildcard usersets over untainted relations,
-  arbitrary strata). The Phase 6 attack probe (2026-07-12k) found NO behavioral
-  divergence on union-rooted / object-wildcard corpora — the exclusions are
+* **Fragment surplus.** Python accepts more than `W4Fragment` (non-`ComputedOnly`
+  derived leaves — `Direct`/TTU arms under a boolean, object-wildcard tuples,
+  wildcard usersets over untainted relations, arbitrary strata). Union- and
+  computed-ROOTED derived defs are NO LONGER surplus — they entered the fragment
+  2026-07-17 (next bullet). The Phase 6 attack probe (2026-07-12k) found NO
+  behavioral divergence on the object-wildcard corpus — that exclusion is
   proof-scope, not observed disagreement (`corpus.py` note).
+
+* **Root-boolean fragment widening + the taint-filter faithfulness fix
+  (2026-07-17).** `W4Fragment.rootB`/`RootBoolean` (which restricted derived defs
+  to an `inter`/`excl` ROOT) was DELETED — the shape condition is now `ComputedOnly`
+  alone, so union- and computed-rooted derived defs (`approver := viewer or admin`,
+  `approver := viewer`) are inside the proved scope. **No Python change** — Python
+  always tainted through `union`/`computed` roots; this only widens the proof.
+  Landed with a **model-faithfulness fix**: `schemaRewrites` was unfiltered
+  (`S.defs.flatMap …`), so at a union-rooted derived R-node the union arm
+  materialized a transient fanout edge; with a USERSET-subject stored tuple matching
+  that arm (`group:eng#member → admin` under `approver := viewer or admin`) the
+  stale fanout edge `group:eng#member → approver` SURVIVED to the drained Lean
+  state — a real Lean-model-vs-Python state divergence (found by probe). The taint
+  filter (`S.defs.filter (!isDerived …)`, RulesWrite.lean:81) is the faithful mirror
+  of `compile_ruleset:1027-1044` (§4 row), and the new `taint_union_userset_arm`
+  state corpus pins the stale edge's absence.
 * **No leaf-family split.** The model reads raw boolean defs (`ComputedOnly`
   leaves); Python's compiler splits derived storage onto `<relation>.<index>`
   leaf families. **State-gate correction (2026-07-12):** the earlier note here

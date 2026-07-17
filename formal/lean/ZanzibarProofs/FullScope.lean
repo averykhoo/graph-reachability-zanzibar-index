@@ -381,4 +381,131 @@ theorem within_scope : GraphAccepts Sx := w4_within_scope accepts fragment
 -- T3/T6 inhabitation claim is `GraphAdmission ∧ W4Fragment` + the T2b witness above.)
 
 end W4Witness
+
+/-! ## A UNION-ROOTED derived witness (the exact scope Legs 1-2 widened)
+
+`Sy`/`Ty` is the conformance corpus `taint_union_over_boolean` in compiled form:
+a boolean `viewer := base ∖ blocked` over a bare-star base, then a
+UNION-rooted derived def `approver := viewer ∪ admin`. Before the rootB widening
+the fragment's `rootB` field rejected this (a union at the derived root); with
+`RootBoolean` deleted (Leg 2) and the taint filter on `schemaRewrites` (Leg 1),
+BOTH bundles are inhabited — so the widened `W4Fragment` non-vacuously admits a
+union-rooted derived schema, and the final theorems have content there. The taint
+filter is what makes `schemaRewrites Sy = []` (the `approver` union arms are
+routed OFF the fanout because `approver` is derived), exactly as `compile_ruleset`
+does — the mirror that closed the stale-fanout state divergence (2026-07-17). -/
+
+namespace W4WitnessUnion
+
+/-- `doc#base := [user:*]` (bare star), `doc#blocked := [user]`,
+    `doc#viewer := base but not blocked`, `doc#admin := [user]`,
+    `doc#approver := viewer or admin` (UNION at the derived root). -/
+def Sy : Schema :=
+  ⟨[(("doc", "base"), .direct [("user", BARE, true)]),
+    (("doc", "blocked"), .direct [("user", BARE, false)]),
+    (("doc", "viewer"), .excl (.computed "base") (.computed "blocked")),
+    (("doc", "admin"), .direct [("user", BARE, false)]),
+    (("doc", "approver"), .union (.computed "viewer") (.computed "admin"))], []⟩
+
+/-- The corpus's three admitted writes: `user:*` (bare star) ∈ base@doc:d1,
+    `user:mallory` ∈ blocked@doc:d1, `user:root` ∈ admin@doc:d1. -/
+def Ty : Store :=
+  [⟨⟨"user", STAR, BARE⟩, "base", ⟨"doc", "d1"⟩⟩,
+   ⟨⟨"user", "mallory", BARE⟩, "blocked", ⟨"doc", "d1"⟩⟩,
+   ⟨⟨"user", "root", BARE⟩, "admin", ⟨"doc", "d1"⟩⟩]
+
+/-- The admission bundle is inhabited by the union-rooted witness. -/
+theorem accepts : GraphAdmission Sy Ty where
+  wf := ⟨by
+    intro p hp
+    simp only [Sy, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl | rfl <;> simp [relNameOK]⟩
+  nodup := by unfold NodupKeys; decide
+  strat := by unfold Stratifiable; decide
+  ttuDirect := by unfold TtuTuplesetsDirect; decide
+  matchDecl := by unfold RewriteMatchDeclared; decide
+  ranked := ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩
+  objWild := by decide
+  storeValid := by
+    intro t ht
+    simp only [Ty, List.mem_cons, List.not_mem_nil, or_false] at ht
+    rcases ht with rfl | rfl | rfl
+    · exact ⟨.direct [("user", BARE, true)], [("user", BARE, true)],
+        rfl, by simp [exprDirects], by decide⟩
+    · exact ⟨.direct [("user", BARE, false)], [("user", BARE, false)],
+        rfl, by simp [exprDirects], by decide⟩
+    · exact ⟨.direct [("user", BARE, false)], [("user", BARE, false)],
+        rfl, by simp [exprDirects], by decide⟩
+
+/-- The fragment bundle is inhabited by the union-rooted witness. -/
+theorem fragment : W4Fragment Sy Ty where
+  computedOnly := by
+    intro dt R e hlk hder
+    have hmem := mem_defs_of_lookup hlk
+    simp only [Sy, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+    rcases hmem with ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩ |
+      ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩
+    · exact absurd hder (by decide)                    -- base (untainted)
+    · exact absurd hder (by decide)                    -- blocked (untainted)
+    · exact ⟨trivial, trivial⟩                          -- viewer := excl (computed) (computed)
+    · exact absurd hder (by decide)                    -- admin (untainted)
+    · exact ⟨trivial, trivial⟩                          -- approver := union (computed) (computed)
+  twoStrata := by
+    intro dt R e hlk hder r' hr' hder' e' hlk' r'' hr''
+    have hmem := mem_defs_of_lookup hlk
+    simp only [Sy, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+    rcases hmem with ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩ |
+      ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩
+    · exact absurd hder (by decide)                    -- base
+    · exact absurd hder (by decide)                    -- blocked
+    · -- viewer's operands `base`/`blocked` are untainted, contradicting `hder'`
+      simp only [computedRefs, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false] at hr'
+      rcases hr' with rfl | rfl
+      · exact absurd hder' (by decide)
+      · exact absurd hder' (by decide)
+    · exact absurd hder (by decide)                    -- admin
+    · -- approver's operands are `viewer` (derived, stratum 2) and `admin` (untainted)
+      simp only [computedRefs, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false] at hr'
+      rcases hr' with rfl | rfl
+      · -- r' = viewer; its def `excl base blocked` reads only untainted leaves
+        rw [show Sy.lookup ("doc", "viewer")
+              = some (Expr.excl (.computed "base") (.computed "blocked")) from rfl,
+            Option.some.injEq] at hlk'
+        subst hlk'
+        simp only [computedRefs, List.cons_append, List.nil_append,
+          List.mem_cons, List.not_mem_nil, or_false] at hr''
+        rcases hr'' with rfl | rfl
+        · decide                                        -- isDerived (doc, base) = false
+        · decide                                        -- isDerived (doc, blocked) = false
+      · exact absurd hder' (by decide)                  -- r' = admin (untainted)
+  wsBare := by decide
+  bareStar := by unfold BareStarStore; decide
+  ttuStarFree := by
+    intro t _ _ a ha tr _
+    rw [show schemaRewrites Sy = [] from by decide] at ha
+    cases ha
+  term := by
+    intro dt R hder
+    -- `R` is one of the two derived relations `viewer`/`approver` — neither is `...`
+    have hkey : (dt, R) = ("doc", "viewer") ∨ (dt, R) = ("doc", "approver") := by
+      unfold isDerived at hder
+      rw [show taintedKeys Sy = [("doc", "viewer"), ("doc", "approver")] from by decide] at hder
+      simpa using hder
+    refine ⟨?_, ?_⟩
+    · intro r hr tr _
+      rw [show schemaRewrites Sy = [] from by decide] at hr
+      cases hr
+    · -- every stored subject is bare (`...`); a derived relation name is never `...`
+      have hRne : R ≠ BARE := by
+        rcases hkey with h | h <;> (rw [Prod.mk.injEq] at h; rw [h.2]; decide)
+      intro t ht
+      simp only [Ty, List.mem_cons, List.not_mem_nil, or_false] at ht
+      rcases ht with rfl | rfl | rfl <;> exact hRne.symm
+
+/-- The union-rooted witness bundles are jointly inside the spec's accepted scope. -/
+theorem within_scope : GraphAccepts Sy := w4_within_scope accepts fragment
+
+end W4WitnessUnion
 end Zanzibar

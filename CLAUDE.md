@@ -20,7 +20,7 @@ IVM delta processor.
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
   Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`
-- The full suite is the gate (~794 tests: `tests/` 531 + `formal/conformance/` 263):
+- The full suite is the gate (~819 tests: `tests/` 531 + `formal/conformance/` 288):
   `"$PY" -m pytest -q` from the repo root before claiming a change is done. It
   exceeds the harness's ~10-min command cap — run it **cap-safe** per
   [`docs/gate-runbook.md`](docs/gate-runbook.md): `pytest tests/` (§1) + the phased

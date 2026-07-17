@@ -930,6 +930,18 @@ and re-proves/widens the same named theorems. Every stage must keep
   restrictions anywhere (Python: only over-derived rejected); object-wildcard
   tuples (`w_all`) beyond W1b; userset-star tuples beyond W1c; removes (add-only
   chain); star-subject queries with non-BARE predicate.
+  - **CLOSED 2026-07-17 — the "non-root booleans" gap.** `RootBoolean`/`rootB`
+    deleted; the derived-def ROOT operator is now unrestricted, so union- and
+    computed-rooted derived defs are in scope (the shape condition is `ComputedOnly`
+    alone). Landed with a model-faithfulness fix: `schemaRewrites` is now
+    taint-filtered (`S.defs.filter (!isDerived …)`, the mirror of
+    `compile_ruleset`'s taint routing) — the unfiltered fanout had leaked a stale
+    userset-sourced edge at a union-rooted derived R-node into the drained state
+    (probe finding). Witness `W4WitnessUnion` (`FullScope.lean`); pinned by
+    `taint_union_over_boolean` (moved into `GRAPH_FRAGMENT`) + the new
+    `taint_union_userset_arm` (state regression) / `taint_computed_root_over_boolean`
+    corpora. See PROOF_STATUS 2026-07-17. The remaining SHAPE gap is now the LEAVES
+    only (`computedOnly` still bans `Direct`/TTU arms in derived defs) plus >2 strata.
 - **T0a**: ✅ DONE (2026-07-10) — see its section below.
 - **Phase 6**: sorry gate to 0 ✅, audit as hard gate ✅ (both 2026-07-10);
   graph-model conformance extension ✅, `CORRESPONDENCE.md` ✅, final review doc

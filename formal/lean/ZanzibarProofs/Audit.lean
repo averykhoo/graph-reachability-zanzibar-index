@@ -1145,6 +1145,12 @@ namespace Zanzibar
 #print axioms W4Witness.accepts
 #print axioms W4Witness.fragment
 #print axioms W4Witness.within_scope
+-- The UNION-ROOTED non-vacuity witness (FullScope.lean, 2026-07-17): the exact
+-- scope Legs 1-2 widened — a union-rooted derived def (`approver := viewer or
+-- admin`) over a boolean `viewer`, both bundles inhabited. Standard axioms only:
+#print axioms W4WitnessUnion.accepts
+#print axioms W4WitnessUnion.fragment
+#print axioms W4WitnessUnion.within_scope
 -- W4 T2a groundwork (GraphIndex/CascadeStrataInv.lean): the three fragment-free
 -- Inv layers ported to the TWO-ROUND chains — StructInv / edge-free I6 residue
 -- hygiene / row-key declaredness, each at every ReachedByW3d2 / W3d2C / W3d2E

@@ -137,8 +137,9 @@ Everything §7 lists, plus the fragment carries:
    path); a compiler bug on a schema shape those pins don't exercise would not
    fail any Lean gate.
 3. **Fragment scope** (each a documented gap, none hidden — `history/ROADMAP.md`
-   "W4 — honest gaps"): > 2 derived strata; non-root booleans (Python taints through
-   `union`/`computed` roots); `PDerivedTTU`/`PDerivedUserset` plan leaves;
+   "W4 — honest gaps"): > 2 derived strata; non-`ComputedOnly` derived operand
+   leaves — `Direct`/TTU arms under a boolean, i.e. `PDerivedTTU`/`PDerivedUserset`
+   plan leaves (the derived-def ROOT operator is NO LONGER a gap — see the note);
    declared wildcard-userset restrictions (`[T#p:*]`-style) anywhere; stored
    object-wildcard (`w_all`) tuples; stored userset-star tuples; **removes**
    (the chain is add-only — though BOTH Python remove paths are now pinned at
@@ -146,9 +147,15 @@ Everything §7 lists, plus the fragment carries:
    by fresh-build state convergence, `test_conformance_remove.py`; only the Lean
    remove legs stay open, §4(d)); star-subject queries with non-bare
    predicates; star-object queries on the graph side.
-   *Empirical note (2026-07-12k): union-rooted-taint and object-wildcard
-   corpora were probed anyway — zero check-level divergence observed; the
-   exclusions are proof-scope, not known disagreements.*
+   *Empirical note (2026-07-12k / 2026-07-17): the derived-ROOT operator is no
+   longer a fragment gap — union- and computed-rooted derived defs entered the
+   proved scope 2026-07-17 (`W4Fragment.rootB`/`RootBoolean` deleted; the shape
+   condition is `ComputedOnly` alone; taint routing on `schemaRewrites` now
+   mirrors `compile_ruleset`), and their corpora (`taint_union_over_boolean`,
+   `taint_union_userset_arm`, `taint_computed_root_over_boolean`) are now IN
+   `GRAPH_FRAGMENT` at both check AND state level. Only the object-wildcard corpus
+   stays probe-confirmed-but-excluded — zero check-level divergence observed, the
+   exclusion is proof-scope (`bareStar`), not a known disagreement.*
 4. **The state-gate projections** — state-level conformance IS implemented
    (§1), but a divergence strictly inside a projected class would not fail it:
    leaf-family edge content (P6 — pinned instead by the plans' evaluation
@@ -224,9 +231,15 @@ remove-path gate pinned the set engine's remove path (answer level +
 rebuild state-fingerprint). A **2026-07-13** addition pinned the GRAPH-INDEX
 Python remove path too (answer level + fresh-build state convergence + full
 drain, `test_conformance_remove.py::test_graph_*`). In descending
-value-per-effort, what remains: (c) widening `W4Fragment` (union roots first —
-the probe already suggests the model is faithful there); (d) remove legs on the
-LEAN side (the delta processor's removal branch is modeled by the diffing pass
+value-per-effort, what remains: (c) further widening `W4Fragment` — the
+derived-ROOT operator gap is **DONE 2026-07-17** (union- and computed-rooted
+derived defs now in scope: `rootB`/`RootBoolean` deleted, the taint filter on
+`schemaRewrites` restored set/graph parity and closed a stale userset-sourced
+fanout edge, pinned by `taint_union_userset_arm`); what remains under (c) is the
+*leaf* fragment — the derived defs must still be `ComputedOnly` (computed operand
+leaves only, no `Direct`/TTU arms), ≤ `twoStrata`, `wsBare` — so widening to
+`PDerivedTTU`/`PDerivedUserset` leaves and > 2 strata is the open work; (d) remove
+legs on the LEAN side (the delta processor's removal branch is modeled by the diffing pass
 but never exercised by the add-only operational chain, so the Lean model is not
 yet a post-remove reference; both Python remove paths are now gated against
 oracle/`sem`, only the Lean legs stay open);
