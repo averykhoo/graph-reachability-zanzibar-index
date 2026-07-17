@@ -239,13 +239,23 @@ already modeled-away/read-safe; cross-stratum retraction `check==sem`; I6 residu
 clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
 
 ### Corrected leg breakdown — Route 1 (sequential, one Lean-editing leg each)
-- **Leg R1 — erase-one primitive + invariants.** `GraphState.removeEdgeOne σ a b :=
-  { σ with edges := σ.edges.erase (a,b) }`; `removeLoggedOne`/`removeLoggedRules S t` = fold
-  `removeEdgeOne` over `rewriteClosure S t` (mirror `writeLoggedRules` `Cascade.lean:161`;
-  emit retraction deltas mirroring `writeLoggedOne.pushDelta`). Prove `structInv_removeEdgeOne`
-  (erase ⊆ subset ⇒ acyclicity preserved) + the erase membership characterization. Small,
-  mechanical. **Use `List.erase`, NOT `removeEdgePair` (the kill).**
-- **Leg R2 — `remove` constructor + `RemoveAdmits`.** 4th constructor on `ReachedByW3d2E`:
+- **Leg R1 — erase-one primitive + invariants. ✅ DONE (2026-07-18g).** Landed additive
+  (96 insertions, 0 deletions), verify.sh lean 415/415 sorries=0. `ReconcileDiff.lean`:
+  `GraphState.removeEdgeOne σ a b := { σ with edges := σ.edges.erase (a,b) }` (cited to
+  `core.py:704`/`686-704`; header comment records the KILL) + 6 `@[simp]` accessors +
+  `removeEdgeOne_edges_subset` (`List.mem_of_mem_erase`) + `mem_removeEdgeOne_edges` /
+  `mem_removeEdgeOne_edges_of_ne` (`List.mem_erase_of_ne`) + `count_removeEdgeOne_self`
+  (`List.count_erase_self`, the `count-1` decrement seeding R3) / `count_removeEdgeOne_of_ne`
+  + `edgesClosed_removeEdgeOne`. `CascadeInv.lean`: `structInv_removeEdgeOne` (line-for-line
+  analog of `structInv_removeEdgePair` via the subset acyclicity). No kill this leg (erase-
+  first-occurrence == decrement-one confirmed). **`removeLoggedRules`/`removeLoggedOne` +
+  retraction deltas DEFERRED to R2** (delta wiring wants the constructor's context; a
+  fold-without-deltas now would be an unfaithful half-primitive).
+- **Leg R2 — `removeLoggedRules` (deferred from R1) + `remove` constructor + `RemoveAdmits`.**
+  First land `removeLoggedOne`/`removeLoggedRules S t` = fold `removeEdgeOne` over
+  `rewriteClosure S t` (mirror `writeLoggedRules` `Cascade.lean:161`/`writeLoggedOne` `:153`)
+  WITH the retraction-delta emission (mirror `writeLoggedOne.pushDelta`). Then the
+  4th constructor on `ReachedByW3d2E`:
   `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with `RemoveAdmits σ T t`
   (`t ∈ T`, mirror `source.py:104-112`). Thread fragment/store hyps through
   `reachedByW3d2E_toC` (`:342`), weakening along `T.erase t` as `write` weakens along `t::T`.

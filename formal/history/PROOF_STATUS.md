@@ -8,6 +8,41 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18g (#4 remove legs — Leg R1 landed: erase-one primitive + structInv)
+
+First Lean-editing leg of #4 (Route 1). ADDITIVE (96 insertions, 0 deletions across
+`ReconcileDiff.lean` + `CascadeInv.lean`), sorry-free, verify.sh lean 415/415 (Audit.lean
+untouched — R1 is infrastructure, not a top-level key theorem).
+
+- `GraphState.removeEdgeOne σ a b := { σ with edges := σ.edges.erase (a,b) }` — the faithful
+  erase-ONE-copy op (mirror of Python `_add_direct_edge_unsafe(...,-1)`, `core.py:704`/
+  `686-704`; header comment records the KILL: filter-all `removeEdgePair` is unsound at
+  rc≥2, valid only in the diffing pass where I5 ⇒ rc≡1). `edges` is already a multiset ⇒ no
+  new field. + 6 `@[simp]` accessors.
+- Membership/count lemmas: `removeEdgeOne_edges_subset` (`List.mem_of_mem_erase`),
+  `mem_removeEdgeOne_edges`, `mem_removeEdgeOne_edges_of_ne` (`List.mem_erase_of_ne`,
+  pointwise read-inertness at other pairs), `count_removeEdgeOne_self`
+  (`List.count_erase_self`, the concrete `count-1` decrement — seeds R3's occurrence-count
+  invariant), `count_removeEdgeOne_of_ne`, `edgesClosed_removeEdgeOne`.
+- `structInv_removeEdgeOne` (`CascadeInv.lean`) — erase-one preserves `StructInv`;
+  line-for-line analog of `structInv_removeEdgePair` (schema/nodes fixed; endpoint closure
+  via `edgesClosed_removeEdgeOne`; acyclicity via `NReaches.mono_subset` on the erase subset
+  — the subset argument doesn't care whether one copy or all are dropped).
+- No kill this leg (erase-first-occurrence == decrement-one confirmed, stated+proved not
+  asserted). Only adjustment: dropped explicit args to the implicit-arg Mathlib `count_erase`
+  lemmas. `removeLoggedRules`/deltas DEFERRED to R2.
+
+**Gate:** verify.sh lean 415/415 sorries=0; conf-heavy 76 + conf-rest 220 re-run green
+(zcli rebuilt; conformance byte-identical — the additive defs aren't wired into the driver).
+`pytest tests/` (561+32) stands (no Python touched this session since). Committed + pushed.
+
+**RESUME #4: Leg R2** — land `removeLoggedRules`/`removeLoggedOne` (the deferred rewrite-
+closure fold + retraction-delta emission) + the `remove` constructor on `ReachedByW3d2E` +
+`RemoveAdmits` + thread hyps through `reachedByW3d2E_toC`. Then R3 (the hard occurrence-count
+invariant), R4 (confluence). Design file Target #4.
+
+---
+
 ## Session 2026-07-18f (#4 remove legs — RECON + attack-first probe; Route 1 GO with a KILL)
 
 Target #3 complete ⇒ moved to #4 (model chain-level REMOVE in Lean). Read-only recon + the

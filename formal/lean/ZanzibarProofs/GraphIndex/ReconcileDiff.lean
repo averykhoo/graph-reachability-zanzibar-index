@@ -90,6 +90,89 @@ theorem mem_removeEdgePair_edges {σ : GraphState} {a b : NodeKey}
     · exact Or.inr (fun h2 => hne ⟨h1, h2⟩)
     · exact Or.inl h1
 
+/-! ## Edge removal — the erase-ONE-copy primitive (W3d remove-leg R1)
+
+`removeEdgePair` (above) filters ALL copies — the ref-count-to-zero op the DIFFING pass
+uses, valid there only because I5 guarantees the derived closure pair has ref-count ≡ 1
+(the processor is its sole writer). The CHAIN-level UNTAINTED retraction is different: a
+shared derivation can put `direct_edge_count ≥ 2` on one closure pair, and a single remove
+must DECREMENT ONE occurrence, NOT drop the edge. (Attack-refuted: filter-all is UNSOUND at
+rc ≥ 2 — `viewer := editor or manager`, alice granted both ⇒ removing `(alice, editor)`
+must leave the surviving `manager`-derived copy; see `history/optional-widening-2026-07.md`
+§Target #4 KILL.) The faithful op is `List.erase` (remove the FIRST matching copy) — the
+exact mirror of Python's ref-counted `-1` update `_add_direct_edge_unsafe(subject_id,
+object_id, -1)` (`index_v4/core.py:704`, driven from `_remove_edge_locked`,
+`core.py:686-704`). `GraphState.edges : List (NodeKey × NodeKey)` is ALREADY a multiset
+(list multiplicity == `direct_edge_count`; `addEdge` prepends unconditionally,
+`State.lean:742`), so erase-one is the exact faithful mirror with NO new field; reads
+(`reachB`/`NReaches`) test only membership, so removing one of several copies is read-inert. -/
+
+/-- Remove ONE copy of the direct edge `(a, b)` — the ref-counted `-1` update
+    (`_add_direct_edge_unsafe(subject_id, object_id, -1)`, `index_v4/core.py:704`).
+    Nodes/residue/outbox/watermark are untouched (node GC is a modeled-away optimization,
+    cf. `removeEdgePair`). Uses `List.erase`, which drops the FIRST matching copy. -/
+def GraphState.removeEdgeOne (σ : GraphState) (a b : NodeKey) : GraphState :=
+  { σ with edges := σ.edges.erase (a, b) }
+
+@[simp] theorem removeEdgeOne_schema (σ : GraphState) (a b : NodeKey) :
+    (σ.removeEdgeOne a b).schema = σ.schema := rfl
+@[simp] theorem removeEdgeOne_nodes (σ : GraphState) (a b : NodeKey) :
+    (σ.removeEdgeOne a b).nodes = σ.nodes := rfl
+@[simp] theorem removeEdgeOne_residue (σ : GraphState) (a b : NodeKey) :
+    (σ.removeEdgeOne a b).residue = σ.residue := rfl
+@[simp] theorem removeEdgeOne_outbox (σ : GraphState) (a b : NodeKey) :
+    (σ.removeEdgeOne a b).outbox = σ.outbox := rfl
+@[simp] theorem removeEdgeOne_watermark (σ : GraphState) (a b : NodeKey) :
+    (σ.removeEdgeOne a b).watermark = σ.watermark := rfl
+@[simp] theorem removeEdgeOne_edges (σ : GraphState) (a b : NodeKey) :
+    (σ.removeEdgeOne a b).edges = σ.edges.erase (a, b) := rfl
+
+/-- Erase-one only shrinks the edge set (`List.erase_subset`). The read-inert half of the
+    "multiset for writes, set for reads" finding: fewer edges ⇒ `NReaches` can only shrink. -/
+theorem removeEdgeOne_edges_subset (σ : GraphState) (a b : NodeKey) :
+    ∀ ed ∈ (σ.removeEdgeOne a b).edges, ed ∈ σ.edges := by
+  intro ed hed
+  exact List.mem_of_mem_erase hed
+
+/-- Membership after erase-one, forward direction: an edge surviving the erase was present
+    before (a copy of `(a,b)` may or may not survive — this is the safe read direction). -/
+theorem mem_removeEdgeOne_edges {σ : GraphState} {a b : NodeKey} {ed : NodeKey × NodeKey}
+    (hed : ed ∈ (σ.removeEdgeOne a b).edges) : ed ∈ σ.edges :=
+  List.mem_of_mem_erase hed
+
+/-- Membership after erase-one at a DISTINCT pair is unchanged: erasing `(a,b)` touches no
+    other edge's presence. (`List.mem_erase_of_ne`; the pointwise read-inertness at ed ≠ (a,b).) -/
+theorem mem_removeEdgeOne_edges_of_ne {σ : GraphState} {a b : NodeKey}
+    {ed : NodeKey × NodeKey} (hne : ed ≠ (a, b)) :
+    ed ∈ (σ.removeEdgeOne a b).edges ↔ ed ∈ σ.edges := by
+  rw [removeEdgeOne_edges]
+  exact List.mem_erase_of_ne hne
+
+/-- Multiplicity after erasing ITS OWN pair: the ref-count of `(a,b)` drops by one
+    (`List.count_erase_self`). This is the concrete "decrement one occurrence" the Python
+    `-1` update makes; the seed for the R3 occurrence-count invariant. -/
+theorem count_removeEdgeOne_self (σ : GraphState) (a b : NodeKey) :
+    (σ.removeEdgeOne a b).edges.count (a, b) = σ.edges.count (a, b) - 1 := by
+  rw [removeEdgeOne_edges]
+  exact List.count_erase_self
+
+/-- Multiplicity of any OTHER pair is unchanged by erase-one (`List.count_erase_of_ne`). -/
+theorem count_removeEdgeOne_of_ne {σ : GraphState} {a b : NodeKey}
+    {ed : NodeKey × NodeKey} (hne : ed ≠ (a, b)) :
+    (σ.removeEdgeOne a b).edges.count ed = σ.edges.count ed := by
+  rw [removeEdgeOne_edges]
+  exact List.count_erase_of_ne hne
+
+/-- Erase-one preserves endpoint-closure (fewer edges, same nodes) — mirror of
+    `edgesClosed_removeEdgePair` via the erase subset. -/
+theorem edgesClosed_removeEdgeOne {σ : GraphState}
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) (a b : NodeKey) :
+    ∀ ab ∈ (σ.removeEdgeOne a b).edges,
+      ab.1 ∈ (σ.removeEdgeOne a b).nodes ∧ ab.2 ∈ (σ.removeEdgeOne a b).nodes := by
+  intro ab hab
+  rw [removeEdgeOne_nodes]
+  exact hcl ab (removeEdgeOne_edges_subset σ a b ab hab)
+
 /-- **Removal of an in-edge of a non-source node is path-inert for other targets.**
     If `r` is never an edge *source*, an edge into `r` can only be a path's LAST hop —
     so removing `(a, r)` breaks no path to any `v ≠ r`. The removal-side counterpart of

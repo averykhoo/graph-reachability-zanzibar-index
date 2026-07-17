@@ -53,6 +53,19 @@ theorem structInv_removeEdgePair {S : Schema} {σ : GraphState} (h : StructInv S
   acyclic := fun v hv =>
     h.acyclic v (NReaches.mono_subset (removeEdgePair_edges_subset σ a b) hv)
 
+/-- **Erase-one preserves the structural invariant** (W3d remove-leg R1). Same
+    nodes/schema; endpoint closure via `edgesClosed_removeEdgeOne`; acyclicity because
+    the erased edge set is a subset (`removeEdgeOne_edges_subset`) so `NReaches` can only
+    shrink (`NReaches.mono_subset`). Identical shape to `structInv_removeEdgePair` — the
+    subset-of-edges acyclicity argument does not care whether we drop one copy or all. -/
+theorem structInv_removeEdgeOne {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (a b : NodeKey) : StructInv S (σ.removeEdgeOne a b) where
+  schemaEq := by rw [removeEdgeOne_schema]; exact h.schemaEq
+  nodeEnc := by rw [removeEdgeOne_nodes]; exact h.nodeEnc
+  edgesClosed := edgesClosed_removeEdgeOne h.edgesClosed a b
+  acyclic := fun v hv =>
+    h.acyclic v (NReaches.mono_subset (removeEdgeOne_edges_subset σ a b) hv)
+
 /-- The residue recompute is residue-only, so it preserves `StructInv` verbatim. -/
 theorem structInv_reconcileResidueKey {S : Schema} {σ : GraphState} (h : StructInv S σ)
     (T : Store) (dt on R : String) (e : Expr) (shapes : List Shape)

@@ -108,10 +108,14 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > statement in-fragment (rc≥2 shared derivation drops a surviving edge); faithful op is
 > `List.erase` (decrement one), and NO `GraphState` ripple (edges already a multiset =
 > ref-count). Corrected legs R1–R4 in the design file (R3 occurrence-count invariant is the
-> hard content). **THE NEXT TASK: #4 Leg R1** — the erase-one primitive + `structInv_
-> removeEdgeOne` (mechanical, additive, Lean; ONE leg at a time; use `List.erase`). Then
-> R2→R3→R4. After #4: back to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started:
-> #1 TTU/userset half, #2 strata, #4 legs R1–R4.
+> hard content). **Leg R1 LANDED (2026-07-18g)** — `GraphState.removeEdgeOne` (erase-one,
+> mirror of `core.py`'s `-1` update) + membership/`count` lemmas + `structInv_removeEdgeOne`;
+> additive, verify.sh lean 415/415, conf re-green. **THE NEXT TASK: #4 Leg R2** — land
+> `removeLoggedRules`/`removeLoggedOne` (the deferred rewrite-closure fold + retraction-delta
+> emission) + the `remove` constructor on `ReachedByW3d2E` + `RemoveAdmits` + thread hyps
+> through `reachedByW3d2E_toC`. Then R3 (hard occurrence-count invariant), R4 (confluence).
+> After #4: back to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1
+> TTU/userset half, #2 strata, #4 legs R2–R4.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and
