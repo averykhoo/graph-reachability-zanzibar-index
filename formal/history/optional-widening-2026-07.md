@@ -171,11 +171,18 @@ mirrors `tests/test_matrix.py::GraphBackend`; I5 leaf-routing + cascade).
    divergence** — no P6/stale-fanout-class event this run. Enum file ~5 min standalone
    (conf-rest); no shapes/queries dropped. No new test params (rides inside the 6 enum
    tests) ⇒ conf still 290, 0 skip.
-3. **(b) k=4** — ⭐ NEXT. `_K=4` + re-assert counts. ~2.23× blow-up (527→1177; `two_stratum_cascade`
-   dominates, N=12). Fits ALONE (~200s) but NOT alongside graph-in-enum in one phase (~10
-   min). Shard by shape (already a `parametrize` axis) across `conf-heavy`/`conf-rest`, or
-   cap `two_stratum_cascade` at k=3. No within-file sharding pattern exists today.
-4. **(d) state gate over enumerated stores** — highest cost (a `graph-state` zcli run per
+3. **(b) k=4** — ✅ **DONE (2026-07-18d).** Lever (1): `_SHAPES` now carries a PER-SHAPE K
+   `(space, K, count)`. Four shapes reach K=4 (`boolean_exclusion`/`boolean_intersection`
+   163, `boolean_star_exclusion` 57, `ttu` 163); the two dominators stay K=3
+   (`two_stratum_cascade` 299 — 12-tuple space; `wildcard_group_member` 176 — 10-tuple).
+   Measured: with only `two_stratum` capped the enum was ~7.6 min (conf-rest ~9.2, too
+   tight against the graph-leg-inflated cap); capping BOTH large spaces → enum ~6.4 min,
+   conf-rest ~7.9 min (≥2 min margin). Caps documented in the docstring (no silent caps);
+   counts asserted empirically. **Attack-first: graph == sem on every in-fragment store at
+   K=4, no `ValueError`, no divergence** (the four K=4 shapes + `wildcard` at K=4 during the
+   measurement run were all clean). Total 1021 stores (naive all-six K=4 = 1726 would blow
+   the cap). No verify.sh phase-structure change needed.
+4. **(d) state gate over enumerated stores** — ⭐ NEXT (land last per the brief). — highest cost (a `graph-state` zcli run per
    store). Reuse `extractor.py` P1-P6 unchanged; almost certainly must SAMPLE/shard to fit
    the cap. Land last.
 

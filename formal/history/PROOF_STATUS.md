@@ -8,6 +8,34 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18d (#3 state/enum widening — increment (b) K=4 per-shape)
+
+Third green increment of #3. Widened the enum (`formal/conformance/test_conformance_enum.py`)
+from uniform K=3 to a PER-SHAPE K. Because increment (a) put the real graph index (SQL build
++ cascade per store) inside the enum, a naive all-shapes K=4 (1726 stores) blows the ~10-min
+conf-rest command cap — so K is per-shape (lever 1, measured, no silent caps):
+- K=4: `boolean_exclusion` (163), `boolean_intersection` (163), `boolean_star_exclusion`
+  (57), `ttu` (163).
+- K=3 CAPPED (the two dominators): `two_stratum_cascade` (299 — 12-tuple space, the single
+  largest leg) and `wildcard_group_member` (176 — 10-tuple, next-largest). Measured: only
+  `two_stratum` capped → enum ~7.6 min / conf-rest ~9.2 min (too tight); both capped → enum
+  ~6.4 min / conf-rest ~7.9 min (≥2 min margin). Total 1021 stores. `_SHAPES` now
+  `(space, K, count)`, all three asserted; caps documented in the docstring.
+
+**Attack-first:** graph `check` == `sem` on every in-fragment enumerated store at K=4 (incl.
+`wildcard` at K=4 during the measurement pass), NO `ValueError`, NO divergence. Clean.
+
+**Gate:** enum file 6:22 standalone; conf-rest 214 passed 0 skip 7:51 (within cap, ≥2 min
+margin). `git diff` scope = the one enum file, so `pytest tests/` (561+32) and `verify.sh
+lean` (415/415) stand from this session; conf-heavy 76 re-run green. No new params ⇒ conf
+still 290, 0 skip. Committed + pushed.
+
+**Resume #3:** only (d) left — the state gate over enumerated stores (a `graph-state` zcli
+run per store; highest cost, reuse `extractor.py` P1–P6, MUST sample/shard to fit the cap).
+Design file Target #3.
+
+---
+
 ## Session 2026-07-18c (#3 state/enum widening — increment (a) real graph index inside the enum)
 
 Second green increment of #3. Added the REAL graph index (`WildcardIndex`+`DeltaProcessor`,

@@ -15,16 +15,44 @@ THE DOCUMENTED BOUNDS (the §7 claim's "up to the documented bounds"):
 
     name pool   : user in {u1, u2}, doc in {d1, d2}, group in {g1, g2},
                   folder in {f1, f2}                 (2 names per type)
-    K           : 3 tuples per store (all stores of size 0, 1, 2, 3)
-    shapes      : boolean_exclusion      —  8-tuple space,  93 stores
-                  boolean_intersection   —  8-tuple space,  93 stores
-                  two_stratum_cascade    — 12-tuple space, 299 stores
-                  boolean_star_exclusion —  6-tuple space,  42 stores
-                  wildcard_group_member  — 10-tuple space, 176 stores
-                  ttu                    —  8-tuple space,  93 stores
-                  (total: 796 stores, exhaustive at K=3; each shape's space
-                  and store count is ASSERTED below so the documented bound
-                  cannot silently drift)
+    K           : PER SHAPE (see "K per shape" below) — four shapes reach K=4
+                  (all stores of size 0..4); the two largest tuple spaces stay
+                  at K=3 for runtime (documented, never silent)
+    shapes      : boolean_exclusion      —  8-tuple space, K=4, 163 stores
+                  boolean_intersection   —  8-tuple space, K=4, 163 stores
+                  two_stratum_cascade    — 12-tuple space, K=3, 299 stores
+                  boolean_star_exclusion —  6-tuple space, K=4,  57 stores
+                  wildcard_group_member  — 10-tuple space, K=3, 176 stores
+                  ttu                    —  8-tuple space, K=4, 163 stores
+                  (total: 1021 stores; each shape's space, K, and store count
+                  is ASSERTED below so the documented bound cannot silently
+                  drift)
+
+K per shape (widening §4(e) increment (b), 2026-07-18 — NO silent caps):
+
+    Increment (b) widens the enumeration from a uniform K=3 to K=4. But
+    increment (a) had already put the REAL graph index (a full SQL index build
+    + cascade) inside the enumeration per store, so per-store cost roughly
+    doubled; a naive all-shapes K=4 (1726 stores) blows the ~10-min conf-rest
+    command cap. K is therefore PER SHAPE, chosen from measured runtime on the
+    reference machine:
+
+      * K=4 (reached):  boolean_exclusion, boolean_intersection,
+                        boolean_star_exclusion, ttu.
+      * K=3 (CAPPED):   two_stratum_cascade (12-tuple space — dominates: 794
+                        stores and ~137 s at K=3 already, the single largest
+                        leg) and wildcard_group_member (10-tuple space — 386
+                        stores/~132 s at K=4, the next-largest). Both stay at
+                        K=3.
+
+    Why these two: at K=4 the enum module alone measured ~7.6 min (conf-rest
+    ~9.2 min) with only two_stratum capped — too tight against the 10-min cap.
+    Capping BOTH large shapes at K=3 brings the module to ~6.4 min (conf-rest
+    ~7.9 min), restoring the ≥1-min margin the phase budget wants. This is the
+    sanctioned lever: cap the two dominating tuple spaces, take the other four
+    shapes to K=4 (they exercise every read branch — plain/star exclusion,
+    intersection, TTU — at the wider depth). The capped shapes remain fully
+    exhaustive at K=3; only their size-4 stratum is deferred.
 
 The last two shapes (added 2026-07-18, widening §4(e) increment (c)) reach the
 userset-subject and TTU read branches the four boolean shapes never touched:
@@ -47,13 +75,14 @@ Scope notes (honest, not silent):
   * one zcli invocation per store — the request format carries ONE store per
     call (Cli.lean: a single `"tuples"` array), so batching happens at the
     query level (the full grid rides in each call). Runtime for the whole
-    module is ~90 s on the reference machine (796 stores over six shapes; the
-    zcli spec cache absorbs most of the added shapes' cost), inside the
-    conf-rest phase cap.
+    module is ~6.4 min on the reference machine (1021 stores over six shapes at
+    the per-shape K above, including the graph leg; the zcli spec cache absorbs
+    most of the per-shape cost), inside the conf-rest phase cap.
   * the GRAPH side (the real `WildcardIndex` + `DeltaProcessor`, I5 leaf-
     routing + same-txn cascade) IS enumerated here as of §4(e) increment (a)
-    (2026-07-18): for every enumerated store whose shape is inside
-    `GRAPH_FRAGMENT` (all six shapes qualify) the real graph index `check` is
+    (2026-07-18), over the per-shape K above: for every enumerated store whose
+    shape is inside `GRAPH_FRAGMENT` (all six shapes qualify) the real graph
+    index `check` is
     compared, over the PROVED graph query scope (concrete objects, star
     subjects bare — `_graph_query_filter`), against the already-agreed
     `sem` (== oracle == set engine). This drives write-order / partial-store
@@ -64,8 +93,10 @@ Scope notes (honest, not silent):
     and to the Python graph by `test_conformance_graph.py`). Adds ~a full SQL
     index build + cascade per store, but no second zcli call, so it stays in
     the conf-rest phase cap.
-  * K=3 was chosen so no shape's space exceeds ~20k stores (the largest is
-    299); no shape needed the documented K=2 fallback.
+  * the per-shape K (above) is bounded by the conf-rest command cap, not by
+    the combinatorial store count: even the K=4 shapes stay small (largest is
+    163 stores); the caps on two_stratum_cascade / wildcard_group_member are
+    purely a per-store runtime (graph-leg) budget, not a store-count blowup.
 """
 
 from __future__ import annotations
@@ -94,20 +125,24 @@ _POOL: dict[str, tuple[str, ...]] = {
     "user": ("u1", "u2"), "doc": ("d1", "d2"),
     "group": ("g1", "g2"), "folder": ("f1", "f2"),
 }
-_K = 3
 
-# shape -> (expected tuple-space size, expected store count at K) — asserted,
-# so the docstring's documented bounds cannot silently drift from the code.
-_SHAPES: dict[str, tuple[int, int]] = {
-    "boolean_exclusion": (8, 93),
-    "boolean_intersection": (8, 93),
-    "two_stratum_cascade": (12, 299),
-    "boolean_star_exclusion": (6, 42),
+# shape -> (tuple-space size, PER-SHAPE enumeration depth K, store count at K) —
+# all three asserted, so neither the documented bounds nor the per-shape K can
+# silently drift from the code. K is PER-SHAPE (widening §4(e) increment (b),
+# 2026-07-18): four shapes reach K=4; the two largest tuple spaces stay at K=3
+# because the graph leg (increment (a)) makes a naive all-shapes K=4 blow the
+# ~10-min conf-rest command cap. See the module docstring's "K per shape" block
+# for the measured runtime rationale — no cap is silent.
+_SHAPES: dict[str, tuple[int, int, int]] = {
+    "boolean_exclusion": (8, 4, 163),
+    "boolean_intersection": (8, 4, 163),
+    "two_stratum_cascade": (12, 3, 299),      # CAPPED K=3 (12-tuple space)
+    "boolean_star_exclusion": (6, 4, 57),
     # userset-subject + TTU read branches (widening §4(e) increment (c),
     # 2026-07-18). Both are acyclic under the pool — no admission-cycle skips,
     # spec == oracle == set engine on every enumerated store.
-    "wildcard_group_member": (10, 176),
-    "ttu": (8, 93),
+    "wildcard_group_member": (10, 3, 176),    # CAPPED K=3 (10-tuple space)
+    "ttu": (8, 4, 163),
 }
 
 
@@ -169,7 +204,7 @@ def test_exhaustive_small_scope(name):
         pytest.skip("zcli not built (run `lake build zcli` in formal/lean)")
 
     space = _tuple_space(schema_text)
-    exp_space, exp_stores = _SHAPES[name]
+    exp_space, k, exp_stores = _SHAPES[name]
     assert len(space) == exp_space, (
         f"[{name}] declared tuple space drifted: {len(space)} tuples "
         f"(documented bound says {exp_space}) — update the documented bounds "
@@ -194,7 +229,7 @@ def test_exhaustive_small_scope(name):
     graph_queries = _graph_query_filter(subjects, targets) if run_graph else []
 
     n_stores = 0
-    for store in _all_stores(space, _K):
+    for store in _all_stores(space, k):
         n_stores += 1
         store = list(store)
         spec = runner.run_spec(build_request(schema_text, store, queries,

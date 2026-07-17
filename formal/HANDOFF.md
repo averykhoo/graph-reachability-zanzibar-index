@@ -97,10 +97,14 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > engine, recorded). (a): the REAL graph index (`WildcardIndex`+`DeltaProcessor`) now runs
 > INSIDE the enum at answer level over all six in-`GRAPH_FRAGMENT` shapes — attack-first
 > found NO graph≠sem divergence, NO `ValueError` (796 stores × graph grid). Full gate green
-> incl. conf phases (290 conf, 0 skip). **THE NEXT TASK: #3 increment (b) k=4** (`_K=4` +
-> re-assert counts; shard `two_stratum_cascade` or cap it — won't fit alongside the graph
-> leg in one phase; see design file Target #3). Not started: #1 TTU/userset half, #2 strata
-> (>2), #3 (d) state gate, #4 remove legs (Route 1 confluence).
+> incl. conf phases (290 conf, 0 skip). (b) k=4 LANDED (2026-07-18d): per-shape
+> K (four shapes K=4, the two dominators `two_stratum_cascade`/`wildcard_group_member`
+> capped at K=3 for the graph-leg-inflated cap; caps documented, counts asserted; graph ==
+> sem clean). **THE NEXT TASK: #3 increment (d)** — the state gate over enumerated stores
+> (a `graph-state` zcli run per store; highest cost, MUST sample/shard to fit the cap;
+> reuse `extractor.py` P1–P6; see design file Target #3). Then #4 remove legs, then back to
+> #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1 TTU/userset half, #2
+> strata, #3 (d), #4 remove.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and
