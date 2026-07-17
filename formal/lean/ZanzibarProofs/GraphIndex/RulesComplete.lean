@@ -198,7 +198,7 @@ defers to `nreaches_relation_rewrite`. `inter`/`excl` are dead on the untainted 
 
 /-- The def a successful lookup returns is a declared def, so its rewrite arms are schema
     rewrites. -/
-theorem lookup_exprArms_sub {S : Schema} {ot r : String} {e : Expr}
+theorem lookup_exprArms_sub {S : Schema} (hUT : UntaintedSchema S) {ot r : String} {e : Expr}
     (hlk : S.lookup (ot, r) = some e) :
     ∀ a ∈ exprArms ot r e, a ∈ schemaRewrites S := by
   intro a ha
@@ -210,8 +210,11 @@ theorem lookup_exprArms_sub {S : Schema} {ot r : String} {e : Expr}
     simp only [Option.map_some, Option.some.injEq] at hlk
     have hkey : p.1 = (ot, r) := by simpa using List.find?_some hf
     have hp : p ∈ S.defs := List.mem_of_find?_eq_some hf
+    -- the def survives the taint filter: on an untainted schema no key is derived
+    have hfilt : (!(isDerived S p.1)) = true := by
+      rw [isDerived_untainted hUT p.1]; rfl
     unfold schemaRewrites
-    refine List.mem_flatMap.mpr ⟨p, hp, ?_⟩
+    refine List.mem_flatMap.mpr ⟨p, List.mem_filter.mpr ⟨hp, hfilt⟩, ?_⟩
     rw [hkey]; simp only; rw [hlk]; exact ha
 
 /-- A depth-1 rewrite of a tuple is in its own closure (the `ttu` case's rewrite fires on
@@ -325,7 +328,7 @@ theorem nreaches_of_semAux_rules {S : Schema} {T : Store} {q : Query} {σ : Grap
           · exact ihb hcb.2 harmsb hb
         | inter _ _ _ _ => intro hcb; simp [containsBool] at hcb
         | excl _ _ _ _ => intro hcb; simp [containsBool] at hcb
-      exact inner e (containsBool_lookup hUT hlk) (lookup_exprArms_sub hlk) h
+      exact inner e (containsBool_lookup hUT hlk) (lookup_exprArms_sub hUT hlk) h
 
 /-! ## Wildcard probes are dead on the star-free rule-routed fragment -/
 

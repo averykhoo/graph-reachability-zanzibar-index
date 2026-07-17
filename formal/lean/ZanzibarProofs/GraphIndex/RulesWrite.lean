@@ -1,4 +1,5 @@
 import ZanzibarProofs.GraphIndex.Write
+import ZanzibarProofs.Spec.Stratify
 
 /-!
 # The concrete write model — untainted RULE ROUTING (ROADMAP W2, write half)
@@ -65,9 +66,20 @@ def exprArms (ot outRel : String) : Expr → List RRule
   | .inter _ _  => []
   | .excl _ _   => []
 
-/-- All rewrite rules of a schema (`RuleSet`'s Computed/TTU Rules). -/
+/-- All rewrite rules of a schema (`RuleSet`'s Computed/TTU Rules).
+
+    **Taint filter — faithful mirror of the Python** (`zanzibar_utils_v1.py`
+    `compile_ruleset` :1027-1044): the compiler routes every DERIVED (tainted / boolean)
+    key OFF the rewrite fanout entirely (`if key not in tainted: fan out; else: derived
+    plan`), so it NEVER emits a rewrite rule whose output is a tainted relation. The
+    earlier unfiltered model (`S.defs.flatMap …`) materialized a transient fanout edge at
+    a union-rooted derived R-node; with a userset-subject stored tuple matching the arm
+    that stale fanout edge SURVIVED to the drained state — a real Lean-model-vs-Python
+    state divergence (found 2026-07-17). Skipping derived defs here is the faithful
+    mirror: `isDerived` (taint fixpoint, `Spec/Stratify.lean`) is exactly the compiler's
+    `tainted` set. -/
 def schemaRewrites (S : Schema) : List RRule :=
-  S.defs.flatMap (fun d => exprArms d.1.1 d.1.2 d.2)
+  (S.defs.filter (fun d => !(isDerived S d.1))).flatMap (fun d => exprArms d.1.1 d.1.2 d.2)
 
 /-- Apply one rewrite rule to a tuple, if it matches (relation + object type). -/
 def applyRRule (r : RRule) (t : Tuple) : Option Tuple :=

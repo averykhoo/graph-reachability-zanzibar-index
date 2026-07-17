@@ -336,6 +336,29 @@ theorem noRuleOutputs_of_root {S : Schema} {dt R : String} {e : Expr}
   rw [← hld, exprArms_rootBoolean _ _ hroot] at hrarm
   simp at hrarm
 
+/-- **Derived ⇒ no rewrite outputs `(dt, R)`.** The direct consequence of the taint filter
+    in `schemaRewrites`: a rule outputting `(dt, R)` comes from a def `d` that survived the
+    filter (`isDerived S d.1 = false`) and whose key is `(dt, R)` (`exprArms_key`); so
+    `isDerived S (dt, R) = false`, contradicting `hder`. Unlike `noRuleOutputs_of_root` this
+    needs no `NodupKeys` and no root-shape side condition — the filter alone forbids derived
+    outputs. The foundation the next leg uses to discharge `NoRuleOutputs` without
+    `RootBoolean`. -/
+theorem noRuleOutputs_of_derived {S : Schema} {dt R : String}
+    (hder : isDerived S (dt, R) = true) : NoRuleOutputs S dt R := by
+  intro r hr hcon
+  unfold schemaRewrites at hr
+  rw [List.mem_flatMap] at hr
+  obtain ⟨d, hd, hrarm⟩ := hr
+  obtain ⟨hdmem, hfilt⟩ := List.mem_filter.mp hd
+  obtain ⟨hoT, hoR⟩ := exprArms_key d.2 hrarm
+  -- d.1 = (r.objectType, r.outRel) = (dt, R)
+  have hkey : d.1 = (dt, R) := by
+    have h1 : d.1.1 = dt := by rw [← hoT, hcon.1]
+    have h2 : d.1.2 = R := by rw [← hoR, hcon.2]
+    exact Prod.ext h1 h2
+  rw [hkey, hder] at hfilt
+  simp at hfilt
+
 /-- **Every in-edge source of the derived R-node is bare** on the W3a fragment. By induction
     over the write path: the base (rewrite-closure) leg landing on `objNode ⟨dt,on⟩ R` is
     impossible — the closure tuple would be a stored `(dt,R)` tuple (none, by

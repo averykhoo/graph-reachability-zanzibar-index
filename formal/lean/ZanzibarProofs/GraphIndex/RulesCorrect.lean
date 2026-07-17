@@ -230,6 +230,8 @@ theorem schemaRewrites_provenance {S : Schema} {r : RRule} (hr : r ∈ schemaRew
   unfold schemaRewrites at hr
   rw [List.mem_flatMap] at hr
   obtain ⟨d, hd, hrarm⟩ := hr
+  -- the def comes from the taint-filtered list; drop the (unused) untaintedness fact
+  have hd : d ∈ S.defs := (List.mem_filter.mp hd).1
   obtain ⟨hoT, hoR⟩ := exprArms_key d.2 hrarm
   exact ⟨d, hd, by rw [hoT, hoR], hrarm⟩
 

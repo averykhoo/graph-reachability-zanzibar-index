@@ -377,7 +377,7 @@ theorem semAux_lift_untainted_bs {S : Schema} {T : Store} {q : Query} {s s' : Su
       rw [hlk] at h
       show evalE (semAux S s T q (f + f₀)) s T q ot on r e = true
       exact evalE_lift_bs (untainted_noExclAll hUT) hBS hTS hs'n hs'p hmem ih e
-        (containsBool_lookup hUT hlk) ot on r (lookup_exprArms_sub hlk) h
+        (containsBool_lookup hUT hlk) ot on r (lookup_exprArms_sub hUT hlk) h
 
 /-! ## Chain composition — a graph path is a `sem` membership, subject-generic -/
 
@@ -729,7 +729,7 @@ theorem nreaches_of_semAux_rulesBS {S : Schema} {T : Store} {q : Query} {σ : Gr
           · exact ihb hcb.2 harmsb hb
         | inter _ _ _ _ => intro hcb; simp [containsBool] at hcb
         | excl _ _ _ _ => intro hcb; simp [containsBool] at hcb
-      exact inner e (containsBool_lookup hUT hlk) (lookup_exprArms_sub hlk) h
+      exact inner e (containsBool_lookup hUT hlk) (lookup_exprArms_sub hUT hlk) h
 
 /-! ## Edge-endpoint characterisation and the assembly -/
 

@@ -187,27 +187,38 @@ theorem filter_flatMap_eq {α β : Type} (p : α → Bool) (f : α → List β) 
     tainted (dropped) def emits no rewrite arms. The relations of `schemaRewrites S` are all
     untainted (an arm's `outRel` is its def's own relation, and tainted defs emit none), so the
     rewrite fan-out lives entirely in the untainted cone that `S↾U` keeps. -/
-theorem schemaRewrites_restrict {S : Schema}
+theorem schemaRewrites_restrict {S : Schema} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = []) :
     schemaRewrites (restrictUntainted S) = schemaRewrites S := by
-  unfold schemaRewrites restrictUntainted
+  -- both sides drop only the arms of tainted-key defs, which are empty (`hDrop`); on the
+  -- restricted schema every key is untainted (`isDerived_restrict`), so its own taint filter
+  -- is a no-op — and `restrictUntainted` already dropped exactly the S-tainted defs.
+  have key : ∀ (S' : Schema),
+      (∀ d ∈ S'.defs, isDerived S' d.1 = true → exprArms d.1.1 d.1.2 d.2 = []) →
+      schemaRewrites S' = S'.defs.flatMap (fun d => exprArms d.1.1 d.1.2 d.2) := by
+    intro S' hD
+    unfold schemaRewrites
+    refine filter_flatMap_eq _ _ S'.defs (fun d hd hpf => ?_)
+    exact hD d hd (by simpa using hpf)
+  rw [key (restrictUntainted S) (fun d _ hder => absurd hder (by simp [isDerived_restrict hNK])),
+      key S hDrop]
+  -- (restrictUntainted S).defs = S.defs.filter (untainted in S); its tainted-drops emit no arms
+  unfold restrictUntainted
   refine filter_flatMap_eq _ _ S.defs (fun d hd hpf => ?_)
-  refine hDrop d hd ?_
-  unfold isDerived
-  simpa using hpf
+  exact hDrop d hd (by unfold isDerived; simpa using hpf)
 
 /-- The one-step rewrite is preserved (it reads the schema only via `schemaRewrites`). -/
-theorem rewriteStep_restrict {S : Schema}
+theorem rewriteStep_restrict {S : Schema} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
     (t : Tuple) : rewriteStep (restrictUntainted S) t = rewriteStep S t := by
-  unfold rewriteStep; rw [schemaRewrites_restrict hDrop]
+  unfold rewriteStep; rw [schemaRewrites_restrict hNK hDrop]
 
 /-- **The bounded rewrite closure is preserved at any fixed fuel** — a pure structural
     consequence of `rewriteStep` agreeing (`rewriteClosureAux` reads the schema only through
     `rewriteStep`). NB: the *canonical* closures `rewriteClosure S t` / `rewriteClosure (S↾U) t`
     run at DIFFERENT fuels (`S.keys.length+1` vs the smaller `(S↾U).keys.length+1`); bridging
     that gap (both saturate, so equal membership) is the remaining state-transfer step. -/
-theorem rewriteClosureAux_restrict {S : Schema}
+theorem rewriteClosureAux_restrict {S : Schema} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = []) :
     ∀ (n : Nat) (cur : List Tuple),
       rewriteClosureAux (restrictUntainted S) n cur = rewriteClosureAux S n cur := by
@@ -219,7 +230,7 @@ theorem rewriteClosureAux_restrict {S : Schema}
     rw [rewriteClosureAux, rewriteClosureAux]
     have hstep : cur.flatMap (rewriteStep (restrictUntainted S)) = cur.flatMap (rewriteStep S) := by
       refine List.flatMap_congr (fun t _ => ?_)
-      exact rewriteStep_restrict hDrop t
+      exact rewriteStep_restrict hNK hDrop t
     rw [hstep, ih]
 
 /-! ## The fuel bridge — closure membership across the fuel gap
@@ -253,12 +264,12 @@ theorem restrictUntainted_keys_length_le {S : Schema} :
     are the same `S`-closure recurrence (`rewriteClosureAux_restrict`); the restricted one
     runs at the smaller fuel `|S↾U.keys|+1 ≤ |S.keys|+1`, so fuel monotonicity re-embeds it.
     This is the `⊇` half of the fuel bridge (`sem`-completeness side is unaffected). -/
-theorem rewriteClosure_restrict_subset {S : Schema}
+theorem rewriteClosure_restrict_subset {S : Schema} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
     {t w : Tuple} (hw : w ∈ rewriteClosure (restrictUntainted S) t) :
     w ∈ rewriteClosure S t := by
   unfold rewriteClosure at hw ⊢
-  rw [rewriteClosureAux_restrict hDrop] at hw
+  rw [rewriteClosureAux_restrict hNK hDrop] at hw
   exact rewriteClosureAux_mono
     (Nat.succ_le_succ restrictUntainted_keys_length_le) hw
 
@@ -310,7 +321,7 @@ theorem length_filter_lt_of_mem {α : Type} {l : List α} {p q : α → Bool}
     bounded by `|S↾U.keys|` (`length_filter_le`). Each rewrite arm still strictly increases
     it: its match key `a` (declared untainted, `RewriteMatchDeclared` ⇒ `a ∈ S↾U.keys`) is
     counted by the out-key's threshold but not its own (`length_filter_lt_of_mem`). -/
-theorem rewriteRanked_restrict {S : Schema}
+theorem rewriteRanked_restrict {S : Schema} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
     (hMatch : RewriteMatchDeclared S) (hR : RewriteRanked S) :
     RewriteRanked (restrictUntainted S) := by
@@ -318,7 +329,7 @@ theorem rewriteRanked_restrict {S : Schema}
   refine ⟨fun k => ((restrictUntainted S).keys.filter
       (fun j => decide (rrank j < rrank k))).length, ?_, ?_⟩
   · intro r hr
-    rw [schemaRewrites_restrict hDrop] at hr
+    rw [schemaRewrites_restrict hNK hDrop] at hr
     have hlt : rrank (r.objectType, r.matchRel) < rrank (r.objectType, r.outRel) := hinc r hr
     obtain ⟨hmemk, hmemu⟩ := hMatch r hr
     have hak : (r.objectType, r.matchRel) ∈ (restrictUntainted S).keys :=
@@ -332,12 +343,12 @@ theorem rewriteRanked_restrict {S : Schema}
     the saturated (`rewriteRanked_restrict`) `S↾U`-closure: layer 0 is the seed, and each
     further `rewriteStep S` (= `rewriteStep (S↾U)`) is swallowed by saturation. This is the
     conditional (`⊆`) half; with `rewriteClosure_restrict_subset` it closes the fuel bridge. -/
-theorem rewriteClosure_subset_restrict {S : Schema}
+theorem rewriteClosure_subset_restrict {S : Schema} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
     (hMatch : RewriteMatchDeclared S) (hR : RewriteRanked S)
     {t w : Tuple} (hw : w ∈ rewriteClosure S t) :
     w ∈ rewriteClosure (restrictUntainted S) t := by
-  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hDrop hMatch hR
+  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hNK hDrop hMatch hR
   have hlayer : ∀ (k : Nat) (w' : Tuple), w' ∈ stepN S k [t] →
       w' ∈ rewriteClosure (restrictUntainted S) t := by
     intro k
@@ -352,7 +363,7 @@ theorem rewriteClosure_subset_restrict {S : Schema}
       change w' ∈ (stepN S m [t]).flatMap (rewriteStep S) at hw'
       obtain ⟨v, hv, hvw⟩ := List.mem_flatMap.mp hw'
       have hvw' : w' ∈ rewriteStep (restrictUntainted S) v := by
-        rw [rewriteStep_restrict hDrop]; exact hvw
+        rw [rewriteStep_restrict hNK hDrop]; exact hvw
       exact rewriteClosure_saturated hRU (ih v hv) hvw'
   obtain ⟨k, _, hmem⟩ := stepN_of_mem_aux S (S.keys.length + 1) [t] hw
   exact hlayer k w hmem
@@ -363,11 +374,11 @@ theorem rewriteClosure_subset_restrict {S : Schema}
     sets of a rule-routed admitted state are exactly the materialised closure tuples
     (`reachedByRules_edge_sound` + `reachedByRulesAdmitted_edge_complete`), so equal closure
     membership will give equal edges under the state transfer (Step A assembly). -/
-theorem rewriteClosure_restrict_mem_iff {S : Schema}
+theorem rewriteClosure_restrict_mem_iff {S : Schema} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
     (hMatch : RewriteMatchDeclared S) (hR : RewriteRanked S) {t w : Tuple} :
     w ∈ rewriteClosure (restrictUntainted S) t ↔ w ∈ rewriteClosure S t :=
-  ⟨rewriteClosure_restrict_subset hDrop, rewriteClosure_subset_restrict hDrop hMatch hR⟩
+  ⟨rewriteClosure_restrict_subset hNK hDrop, rewriteClosure_subset_restrict hNK hDrop hMatch hR⟩
 
 /-! ## The state transfer — a canonical admitted `S↾U`-state with agreeing edges
 
@@ -436,18 +447,19 @@ theorem foldAdmits_of_acyclic {S' : Schema} {Ef : List (NodeKey × NodeKey)}
     `RewriteMatchDeclared`, `RewriteRanked`) are premises, faithful and discharged in assembly. -/
 theorem exists_admitted_restrict {S : Schema} {T : Store} {σ0 : GraphState}
     (h0 : ReachedByRulesAdmitted σ0 S T) :
+    NodupKeys S →
     (∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = []) →
     RewriteMatchDeclared S → RewriteRanked S →
     ∃ σ', ReachedByRulesAdmitted σ' (restrictUntainted S) T ∧
       ∀ a b, ((a, b) ∈ σ'.edges ↔ (a, b) ∈ σ0.edges) := by
   induction h0 with
   | empty S =>
-    intro _ _ _
+    intro _ _ _ _
     exact ⟨emptyState (restrictUntainted S), ReachedByRulesAdmitted.empty _,
       by intro a b; simp [emptyState]⟩
   | @step σp S T t hprev hadm ih =>
-    intro hDrop hMatch hR
-    obtain ⟨σ'p, h'prev, hedgeIH⟩ := ih hDrop hMatch hR
+    intro hNK hDrop hMatch hR
+    obtain ⟨σ'p, h'prev, hedgeIH⟩ := ih hNK hDrop hMatch hR
     -- the current (step) admitted state over `S`, and its invariant
     have h0 : ReachedByRulesAdmitted (σp.writeRules S t) S (t :: T) :=
       ReachedByRulesAdmitted.step t hprev hadm
@@ -463,7 +475,7 @@ theorem exists_admitted_restrict {S : Schema} {T : Store} {σ0 : GraphState}
         (subjNode u.subject, objNode u.object u.relation) ∈ (σp.writeRules S t).edges := by
       intro u hu
       exact reachedByRulesAdmitted_edge_complete h0 t List.mem_cons_self u
-        (rewriteClosure_restrict_subset hDrop hu)
+        (rewriteClosure_restrict_subset hNK hDrop hu)
     -- admission of the restricted closure fold transfers by acyclicity of the target
     have hFA : FoldAdmits σ'p (rewriteClosure (restrictUntainted S) t) :=
       foldAdmits_of_acyclic hInv0.acyclic (rewriteClosure (restrictUntainted S) t) hSI'p hsub hmat
@@ -477,14 +489,14 @@ theorem exists_admitted_restrict {S : Schema} {T : Store} {σ0 : GraphState}
     · intro hab
       obtain ⟨t', ht', w, hw, h1, h2⟩ :=
         reachedByRules_edge_sound (reachedByRules_of_admitted h') a b hab
-      have hwS : w ∈ rewriteClosure S t' := rewriteClosure_restrict_subset hDrop hw
+      have hwS : w ∈ rewriteClosure S t' := rewriteClosure_restrict_subset hNK hDrop hw
       have := reachedByRulesAdmitted_edge_complete h0 t' ht' w hwS
       rwa [← h1, ← h2] at this
     · intro hab
       obtain ⟨t', ht', w, hw, h1, h2⟩ :=
         reachedByRules_edge_sound (reachedByRules_of_admitted h0) a b hab
       have hwU : w ∈ rewriteClosure (restrictUntainted S) t' :=
-        rewriteClosure_subset_restrict hDrop hMatch hR hw
+        rewriteClosure_subset_restrict hNK hDrop hMatch hR hw
       have := reachedByRulesAdmitted_edge_complete h' t' ht' w hwU
       rwa [← h1, ← h2] at this
 
@@ -547,13 +559,13 @@ theorem graphRec_base_eq {S : Schema} {T : Store} {σ0 : GraphState}
     intro d hd tt htt d' hd' hkey
     exact hTT d (restrictUntainted_defs_subset hd) tt htt d'
       (restrictUntainted_defs_subset hd') hkey
-  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hDrop hMatch hR
+  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hNK hDrop hMatch hR
   have hSVU : StoreValidRules (restrictUntainted S) T := by
     intro t ht
     obtain ⟨e, rs, hlk, hdir, hrm⟩ := hSV t ht
     exact ⟨e, rs, by rw [restrictUntainted_lookup hNK (hStoreUnt t ht)]; exact hlk, hdir, hrm⟩
   -- the canonical admitted restricted state with agreeing edges (the state transfer)
-  obtain ⟨σ', h', hEdge⟩ := exists_admitted_restrict h0 hDrop hMatch hR
+  obtain ⟨σ', h', hEdge⟩ := exists_admitted_restrict h0 hNK hDrop hMatch hR
   -- edge-membership agreement ⇒ `reach` agreement (both states endpoint-closed)
   have hcl0 := (reachedByRules_inv (reachedByRules_of_admitted h0)).1.edgesClosed
   have hcl' := (reachedByRules_inv (reachedByRules_of_admitted h')).1.edgesClosed
@@ -611,11 +623,11 @@ untainted correspondence consumed as a black box is now `graph_correct_rulesBS`
 because the restriction preserves `schemaRewrites`. -/
 
 /-- `TtuStarFree` transfers to the untainted restriction (`schemaRewrites` preserved). -/
-theorem ttuStarFree_restrict {S : Schema} {T : Store}
+theorem ttuStarFree_restrict {S : Schema} {T : Store} (hNK : NodupKeys S)
     (hDrop : ∀ d ∈ S.defs, isDerived S d.1 = true → exprArms d.1.1 d.1.2 d.2 = [])
     (hTS : TtuStarFree S T) : TtuStarFree (restrictUntainted S) T := by
   intro t ht hstar a ha tr hk
-  rw [schemaRewrites_restrict hDrop] at ha
+  rw [schemaRewrites_restrict hNK hDrop] at ha
   exact hTS t ht hstar a ha tr hk
 
 /-- **The star-relaxed base `hag` equation.** The operand read on the admitted
@@ -656,14 +668,14 @@ theorem graphRec_base_eq_bs {S : Schema} {T : Store} {σ0 : GraphState}
     intro d hd tt htt d' hd' hkey
     exact hTT d (restrictUntainted_defs_subset hd) tt htt d'
       (restrictUntainted_defs_subset hd') hkey
-  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hDrop hMatch hR
+  have hRU : RewriteRanked (restrictUntainted S) := rewriteRanked_restrict hNK hDrop hMatch hR
   have hSVU : StoreValidRules (restrictUntainted S) T := by
     intro t ht
     obtain ⟨e, rs, hlk, hdir, hrm⟩ := hSV t ht
     exact ⟨e, rs, by rw [restrictUntainted_lookup hNK (hStoreUnt t ht)]; exact hlk, hdir, hrm⟩
-  have hTSU : TtuStarFree (restrictUntainted S) T := ttuStarFree_restrict hDrop hTS
+  have hTSU : TtuStarFree (restrictUntainted S) T := ttuStarFree_restrict hNK hDrop hTS
   -- the canonical admitted restricted state with agreeing edges (the state transfer)
-  obtain ⟨σ', h', hEdge⟩ := exists_admitted_restrict h0 hDrop hMatch hR
+  obtain ⟨σ', h', hEdge⟩ := exists_admitted_restrict h0 hNK hDrop hMatch hR
   -- edge-membership agreement ⇒ `reach` agreement (both states endpoint-closed)
   have hcl0 := (reachedByRules_inv (reachedByRules_of_admitted h0)).1.edgesClosed
   have hcl' := (reachedByRules_inv (reachedByRules_of_admitted h')).1.edgesClosed
