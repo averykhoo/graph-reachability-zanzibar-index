@@ -8,6 +8,43 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-18e (#3 state/enum widening — increment (d) state gate over enumerated stores — TARGET #3 COMPLETE)
+
+Fourth and final #3 increment — the state-level gate. New file
+`formal/conformance/test_conformance_enum_state.py`: for a deterministic stride-4 SAMPLE of
+the enumerated stores (`stores[::4]`, spread across every store size since the list is
+size-ordered), compare the Lean graph model's canonical final state (zcli `"graph-state"`,
+the `graphRun` fold) vs the real Python graph index's extracted `EdgeV4`/`ResidueV1` state
+under `extractor.py`'s P1–P6 projections UNCHANGED (`lean_graph_state`/`python_graph_state`/
+`diff_states` reused, nothing re-implemented or widened).
+
+- **All six enum shapes state-gated, none excluded** — all in `GRAPH_FRAGMENT`; zero Lean
+  admission/drain (rc 2/3) errors on any sampled store, so graph-state admits+drains every
+  one (incl. `two_stratum_cascade` 2-stratum, wildcard/TTU star+residue state).
+- **Sampling (documented, no silent caps):** 257 of 1021 stores (~25%) state-checked; the
+  other ~75% stay answer-pinned by increment (a). Per-shape sample sizes ASSERTED
+  (`_STATE_SAMPLE`, ceil(N/4)) so the fraction can't silently drift; fraction table in the
+  module docstring. Measured ~180 ms/store (zcli graph-state spawn + SQL build/cascade/
+  extraction); +47s.
+- **Attack-first (the point):** state-level enumeration is EXACTLY the class of run that
+  originally found the P6 leaf-family (`CORRESPONDENCE.md` §7) and 2026-07-17 stale-fanout
+  state divergences. Result: **state match on every sampled store under P1–P6 — ZERO
+  mismatches, zero Lean errors** (257 sampled + 207 more during the measurement passes = 464
+  distinct comparisons). No adjudication event.
+
+**Gate:** new test 6 passed 0 skip 47.8s; conf-rest 220 passed 0 skip 8:34 (within cap,
+~85s below the 600s command cap). +6 params ⇒ conf 290→296, 0 skip. Change is
+`formal/conformance`-only (one new file), so `pytest tests/` (561+32) and `verify.sh lean`
+(415/415) stand from this session; conf-heavy 76 re-run green. Committed + pushed.
+
+**#3 (state/enum bounds widening) is COMPLETE** — all of (c) userset+TTU shapes, (a) real
+graph index in the enum, (b) per-shape K=4, (d) sampled state gate landed, all green, no
+divergence surfaced. **Next per the interleave plan: #4 remove legs (Route 1 confluence,
+Lean — probe the ref-count risk FIRST), then back to #1 Direct-arm leg 4+ / TTU half, #2
+strata.** Design briefs: `history/optional-widening-2026-07.md` Targets #4/#1/#2.
+
+---
+
 ## Session 2026-07-18d (#3 state/enum widening — increment (b) K=4 per-shape)
 
 Third green increment of #3. Widened the enum (`formal/conformance/test_conformance_enum.py`)

@@ -182,9 +182,17 @@ mirrors `tests/test_matrix.py::GraphBackend`; I5 leaf-routing + cascade).
    K=4, no `ValueError`, no divergence** (the four K=4 shapes + `wildcard` at K=4 during the
    measurement run were all clean). Total 1021 stores (naive all-six K=4 = 1726 would blow
    the cap). No verify.sh phase-structure change needed.
-4. **(d) state gate over enumerated stores** — ⭐ NEXT (land last per the brief). — highest cost (a `graph-state` zcli run per
-   store). Reuse `extractor.py` P1-P6 unchanged; almost certainly must SAMPLE/shard to fit
-   the cap. Land last.
+4. **(d) state gate over enumerated stores** — ✅ **DONE (2026-07-18e) — TARGET #3 COMPLETE.**
+   New file `test_conformance_enum_state.py`: for a deterministic stride-4 SAMPLE (257 of
+   1021 stores, ~25%, spread across every store size; per-shape sample sizes asserted) it
+   compares the Lean graph model's canonical final state (zcli `"graph-state"`) vs the real
+   Python graph index's extracted `EdgeV4`/`ResidueV1` state under `extractor.py`'s P1–P6
+   projections UNCHANGED. All six shapes covered (none excluded — all in `GRAPH_FRAGMENT`,
+   zero Lean admission/drain errors). **Attack-first: state match on every sampled store
+   under P1–P6, ZERO mismatches** (this is the exact run class that originally found the P6
+   leaf-family + 2026-07-17 stale-fanout divergences — none this run). ~180 ms/store; +47s
+   → conf-rest 8:34 (within cap). +6 params → conf 296, 0 skip. The other ~75% of stores
+   stay answer-pinned by increment (a).
 
 **Findings, not failures (house rule 2).** Exhaustively driving the real graph index over
 all sub-stores exercises write-order/partial-store interleavings never before driven —

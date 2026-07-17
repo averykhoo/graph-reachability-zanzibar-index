@@ -99,12 +99,14 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > found NO graph≠sem divergence, NO `ValueError` (796 stores × graph grid). Full gate green
 > incl. conf phases (290 conf, 0 skip). (b) k=4 LANDED (2026-07-18d): per-shape
 > K (four shapes K=4, the two dominators `two_stratum_cascade`/`wildcard_group_member`
-> capped at K=3 for the graph-leg-inflated cap; caps documented, counts asserted; graph ==
-> sem clean). **THE NEXT TASK: #3 increment (d)** — the state gate over enumerated stores
-> (a `graph-state` zcli run per store; highest cost, MUST sample/shard to fit the cap;
-> reuse `extractor.py` P1–P6; see design file Target #3). Then #4 remove legs, then back to
-> #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1 TTU/userset half, #2
-> strata, #3 (d), #4 remove.
+> capped at K=3 for the graph-leg-inflated cap). (d) state gate LANDED (2026-07-18e): new
+> `test_conformance_enum_state.py` — stride-4 sampled (257/1021) Lean-model vs Python-graph
+> STATE compare under `extractor.py` P1–P6, all six shapes, ZERO mismatches. **TARGET #3
+> (state/enum widening) COMPLETE** (all of c/a/b/d green, no divergence). Conf now 296, 0
+> skip. **THE NEXT TASK: #4 remove legs** (Route 1 confluence, Lean — PROBE the edge
+> ref-count risk FIRST per the design file; single-Lean-editing-leg discipline). Then back
+> to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1 TTU/userset half, #2
+> strata, #4 remove.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and
