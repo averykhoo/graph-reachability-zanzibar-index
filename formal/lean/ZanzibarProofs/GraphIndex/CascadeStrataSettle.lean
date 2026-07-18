@@ -128,6 +128,10 @@ theorem reachedByW3d2_edgesClosed {σ : GraphState} {S : Schema} {T : Store}
     rw [hev.edges] at hab
     rw [hev.nodes]
     exact edgesClosed_foldl_writeDirect (rewriteClosure S t) σp ih ab hab
+  | @remove σp S T t _ _ _ _ _ _ _ ih =>
+    intro ab hab
+    rw [removeLoggedRules_nodes]
+    exact ih ab (mem_removeLoggedRules_edges hab)
   | @cascade σp S T jobs1 jobs2 _ _ _ _ _ _ _ ih =>
     intro ab hab
     rcases runCascade2_cases S T σp jobs1 jobs2 with hrc | hrc
@@ -153,6 +157,9 @@ theorem reachedByW3d2_edge_target_ne_bare {σ : GraphState} {S : Schema} {T : St
     · exact ih hWF (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) a b hold
     · rw [h2, objNode_pred]
       exact rewriteClosure_rel_ne_bare hWF hSV List.mem_cons_self hu
+  | @remove σp S T t _ _ hSVT _ _ _ _ ih =>
+    intro hWF _ a b hab
+    exact ih hWF hSVT a b (mem_removeLoggedRules_edges hab)
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     intro hWF hSV a b hab
     unfold runCascade2 at hab
@@ -198,6 +205,9 @@ theorem reachedByW3d2_edges_target_plain {σ : GraphState} {S : Schema} {T : Sto
         rw [rewriteClosure_object hw]
         exact (hBS t List.mem_cons_self).2
       rw [h2, objNode_plain hwo]
+  | @remove σp S T t _ _ _ hBST _ _ _ ih =>
+    intro _ ab hab
+    exact ih hBST ab (mem_removeLoggedRules_edges hab)
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     intro hBS ab hab
     unfold runCascade2 at hab
@@ -234,6 +244,9 @@ theorem reachedByW3d2_Rnode_source_bare {σ : GraphState} {S : Schema} {T : Stor
     intro hlk hder hco hSV x hx
     rw [writeLeg_derived_inedges_eq hSV hlk hder hco x] at hx
     exact ih hlk hder hco (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hx
+  | @remove σp S T t _ _ hSVT _ _ _ _ ih =>
+    intro hlk hder hco _ x hx
+    exact ih hlk hder hco hSVT x (mem_removeLoggedRules_edges hx)
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     intro hlk hder hco hSV x hx
     unfold runCascade2 at hx
@@ -596,6 +609,11 @@ theorem reachedByW3d2_shadow {σ : GraphState} {S : Schema} {T : Store}
       ReachedByRulesAdmitted.step t h0
         (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
       untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
+  | @remove σp S T t hadm _ hSVT _ _ htermT hprev ih =>
+    intro hNK hCO _ _
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSVT htermT
+    obtain ⟨σ0', h0', hsub⟩ := exists_admitted_erase h0 t
+    exact ⟨σ0', h0', untaintedShadow_removeLeg hprev hsh h0 hadm h0' hsub hSVT hCO⟩
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ hprev ih =>
     intro hNK hCO hSV hterm
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm
@@ -1637,6 +1655,18 @@ inductive ReachedByW3d2C : GraphState → Schema → Store → Prop where
       (hadm : FoldAdmits σ (rewriteClosure S t))
       (hprev : ReachedByW3d2C σ S T) :
       ReachedByW3d2C (σ.writeLoggedRules S t) S (t :: T)
+  | remove {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
+      (hadm : RemoveAdmits σ T t) (hdrain : cascadeKeys S σ = [])
+      (hSVT : StoreValidRules S T) (hBST : BareStarStore T) (hTST : TtuStarFree S T)
+      (htermT : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+      (hprev : ReachedByW3d2C σ S T) :
+      ReachedByW3d2C (σ.removeLoggedRules S t) S (T.erase t)
+  -- hSVT/hBST/hTST/htermT: the pre-remove store T was validly built. FAITHFUL — Python's
+  -- TupleSource.remove (connectedstore/source.py) only retracts admission-validated tuples
+  -- (validate_write_identifiers + matching Direct arm = StoreValidRules); the star/ttu/term
+  -- conditions are the W4Fragment carries graph_correct already assumes about the store.
+  -- hdrain: Python drains the view between applied log rows (cascadeKeys non-monotone under
+  -- retraction, so remove-from-undrained is unfaithful and would break reachedByW3d2C_settled).
   | cascade {σ : GraphState} {S : Schema} {T : Store} (jobs1 jobs2 : List W3cJob)
       (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j)
       (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j)
@@ -1682,6 +1712,8 @@ theorem reachedByW3d2C_toW3d2 {σ : GraphState} {S : Schema} {T : Store}
   induction h with
   | empty S => exact ReachedByW3d2.empty S
   | write t hadm _ ih => exact ReachedByW3d2.write t hadm ih
+  | remove t hadm hdrain hSVT hBST hTST htermT _ ih =>
+    exact ReachedByW3d2.remove t hadm hdrain hSVT hBST hTST htermT ih
   | cascade jobs1 jobs2 hjv1 hjv2 hcover1 hscope1 hcover2 hscope2 _ _ _ ih =>
     exact ReachedByW3d2.cascade jobs1 jobs2 hjv1 hjv2 hcover1 hscope1 hcover2
       hscope2 ih

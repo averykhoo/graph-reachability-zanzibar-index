@@ -101,6 +101,50 @@ theorem structInv_runCascade2 {S : Schema} {T : Store} {σ : GraphState}
       (structInv_reconcileJobsLR T jobs2 (structInv_reconcileJobsLR T jobs1 h)) _
   · exact h
 
+/-! ## The retraction is residue-inert — the T2a Group-A remove-case substrate (R5 pre-discharge)
+
+The logged rule-routed retraction `removeLoggedRules` touches ONLY the edge multiset (via
+`removeEdgeOne`) and the outbox (via `pushDelta`); it never writes a `residue` row. So the
+STRUCTURAL invariant clauses that read only `residue` (`ResidueHygienic`, `ResidueDeclared`)
+transport verbatim across a retraction. -/
+
+/-- One logged retraction leaves the residue map untouched (`removeEdgeOne`/`pushDelta` are
+    both residue-inert). -/
+@[simp] theorem removeLoggedOne_residue (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).residue = σ.residue := by
+  unfold GraphState.removeLoggedOne
+  by_cases hmem : (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
+  · rw [if_pos hmem, pushDelta_residue, removeEdgeOne_residue]
+  · rw [if_neg hmem]
+
+/-- The logged rule-routed retraction leaves the residue map untouched (fold of the above). -/
+theorem removeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
+    (σ.removeLoggedRules S t).residue = σ.residue := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = us
+  induction us generalizing σ with
+  | nil => rfl
+  | cons u rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih (σ.removeLoggedOne u), removeLoggedOne_residue]
+
+/-- **`ResidueHygienic` survives a retraction** (both clauses read only `residue`, which is
+    inert). The R5 `reachedByW3d2E_residueHygienic` remove-case discharge. -/
+theorem residueHygienic_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
+    (h : ResidueHygienic σ) : ResidueHygienic (σ.removeLoggedRules S t) := by
+  obtain ⟨h1, h2⟩ := h
+  refine ⟨fun k r res hrow n hn => ?_, fun k r res hrow n hn => ?_⟩
+  · rw [removeLoggedRules_residue] at hrow; exact h1 k r res hrow n hn
+  · rw [removeLoggedRules_residue] at hrow; exact h2 k r res hrow n hn
+
+/-- **`ResidueDeclared` survives a retraction** (reads only `residue`). The R5
+    `reachedByW3d2E_residueDeclared` remove-case discharge. -/
+theorem residueDeclared_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
+    (h : ResidueDeclared S σ) : ResidueDeclared S (σ.removeLoggedRules S t) := by
+  intro k r res hrow
+  rw [removeLoggedRules_residue] at hrow
+  exact h k r res hrow
+
 /-- **T2a structural half over the two-round chain** — schema fixity, node
     encoding, edge endpoint-closure, acyclicity at EVERY `ReachedByW3d2` state,
     with NO fragment hypotheses. -/
@@ -109,6 +153,7 @@ theorem reachedByW3d2_structInv {σ : GraphState} {S : Schema} {T : Store}
   induction h with
   | empty S => exact structInv_empty S
   | write t hadm hprev ih => exact structInv_writeLoggedRules ih t
+  | remove t _ _ _ _ _ _ _ ih => exact structInv_removeLoggedRules ih t
   | cascade jobs1 jobs2 _ _ _ _ _ _ _ ih => exact structInv_runCascade2 ih jobs1 jobs2
 
 /-- The two-round coverage chain inherits the structural invariant. -/
@@ -124,6 +169,7 @@ theorem reachedByW3d2E_structInv {σ : GraphState} {S : Schema} {T : Store}
   induction h with
   | empty S => exact structInv_empty S
   | write t hadm hprev ih => exact structInv_writeLoggedRules ih t
+  | remove t _ _ _ _ _ _ _ ih => exact structInv_removeLoggedRules ih t
   | cascade hprev ih => exact structInv_runCascade2 ih _ _
 
 /-! ## The edge-free I6 clauses through the routed pass -/
@@ -211,6 +257,7 @@ theorem reachedByW3d2_residueHygienic {σ : GraphState} {S : Schema} {T : Store}
   induction h with
   | empty S => exact residueHygienic_empty S
   | write t hadm hprev ih => exact residueHygienic_writeLoggedRules ih t
+  | @remove σp S T t _ _ _ _ _ _ _ ih => exact residueHygienic_removeLoggedRules S t ih
   | cascade jobs1 jobs2 _ _ _ _ _ _ _ ih => exact residueHygienic_runCascade2 ih jobs1 jobs2
 
 /-- The two-round coverage chain inherits residue hygiene. -/
@@ -225,6 +272,7 @@ theorem reachedByW3d2E_residueHygienic {σ : GraphState} {S : Schema} {T : Store
   induction h with
   | empty S => exact residueHygienic_empty S
   | write t hadm hprev ih => exact residueHygienic_writeLoggedRules ih t
+  | @remove σp S T t _ _ _ _ _ _ _ ih => exact residueHygienic_removeLoggedRules S t ih
   | cascade hprev ih => exact residueHygienic_runCascade2 ih _ _
 
 /-! ## Row-key declaredness over the two-round chains -/
@@ -290,6 +338,7 @@ theorem reachedByW3d2_residueDeclared {σ : GraphState} {S : Schema} {T : Store}
     intro k r res hrow
     rw [writeLoggedRules_residue] at hrow
     exact ih k r res hrow
+  | @remove σp S T t _ _ _ _ _ _ _ ih => exact residueDeclared_removeLoggedRules S t ih
   | cascade jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     exact residueDeclared_runCascade2
       (fun j hj => w3cJobKeyFacts_of_valid (hjv1 j hj))
@@ -330,6 +379,7 @@ theorem reachedByW3d2E_residueDeclared {σ : GraphState} {S : Schema} {T : Store
     intro k r res hrow
     rw [writeLoggedRules_residue] at hrow
     exact ih k r res hrow
+  | @remove σp S T t _ _ _ _ _ _ _ ih => exact residueDeclared_removeLoggedRules S t ih
   | @cascade σp S T hprev ih =>
     exact residueDeclared_runCascade2
       (enumJobs2At_keyFacts (fun k hk =>
@@ -431,49 +481,5 @@ theorem enumJob2_negCands_subset (σ : GraphState) (dt on R : String) (e : Expr)
   show c ∈ (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
     ++ edgeHolders σ dt on R
   exact List.mem_append_left _ hc
-
-/-! ## The retraction is residue-inert — the T2a Group-A remove-case substrate (R5 pre-discharge)
-
-The logged rule-routed retraction `removeLoggedRules` touches ONLY the edge multiset (via
-`removeEdgeOne`) and the outbox (via `pushDelta`); it never writes a `residue` row. So the
-STRUCTURAL invariant clauses that read only `residue` (`ResidueHygienic`, `ResidueDeclared`)
-transport verbatim across a retraction. -/
-
-/-- One logged retraction leaves the residue map untouched (`removeEdgeOne`/`pushDelta` are
-    both residue-inert). -/
-@[simp] theorem removeLoggedOne_residue (σ : GraphState) (t : Tuple) :
-    (σ.removeLoggedOne t).residue = σ.residue := by
-  unfold GraphState.removeLoggedOne
-  by_cases hmem : (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
-  · rw [if_pos hmem, pushDelta_residue, removeEdgeOne_residue]
-  · rw [if_neg hmem]
-
-/-- The logged rule-routed retraction leaves the residue map untouched (fold of the above). -/
-theorem removeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
-    (σ.removeLoggedRules S t).residue = σ.residue := by
-  unfold GraphState.removeLoggedRules
-  generalize rewriteClosure S t = us
-  induction us generalizing σ with
-  | nil => rfl
-  | cons u rest ih =>
-    simp only [List.foldl_cons]
-    rw [ih (σ.removeLoggedOne u), removeLoggedOne_residue]
-
-/-- **`ResidueHygienic` survives a retraction** (both clauses read only `residue`, which is
-    inert). The R5 `reachedByW3d2E_residueHygienic` remove-case discharge. -/
-theorem residueHygienic_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
-    (h : ResidueHygienic σ) : ResidueHygienic (σ.removeLoggedRules S t) := by
-  obtain ⟨h1, h2⟩ := h
-  refine ⟨fun k r res hrow n hn => ?_, fun k r res hrow n hn => ?_⟩
-  · rw [removeLoggedRules_residue] at hrow; exact h1 k r res hrow n hn
-  · rw [removeLoggedRules_residue] at hrow; exact h2 k r res hrow n hn
-
-/-- **`ResidueDeclared` survives a retraction** (reads only `residue`). The R5
-    `reachedByW3d2E_residueDeclared` remove-case discharge. -/
-theorem residueDeclared_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
-    (h : ResidueDeclared S σ) : ResidueDeclared S (σ.removeLoggedRules S t) := by
-  intro k r res hrow
-  rw [removeLoggedRules_residue] at hrow
-  exact h k r res hrow
 
 end Zanzibar

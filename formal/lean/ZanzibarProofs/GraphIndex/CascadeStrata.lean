@@ -383,6 +383,18 @@ inductive ReachedByW3d2 : GraphState → Schema → Store → Prop where
       (hadm : FoldAdmits σ (rewriteClosure S t))
       (hprev : ReachedByW3d2 σ S T) :
       ReachedByW3d2 (σ.writeLoggedRules S t) S (t :: T)
+  | remove {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
+      (hadm : RemoveAdmits σ T t) (hdrain : cascadeKeys S σ = [])
+      (hSVT : StoreValidRules S T) (hBST : BareStarStore T) (hTST : TtuStarFree S T)
+      (htermT : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+      (hprev : ReachedByW3d2 σ S T) :
+      ReachedByW3d2 (σ.removeLoggedRules S t) S (T.erase t)
+  -- hSVT/hBST/hTST/htermT: the pre-remove store T was validly built. FAITHFUL — Python's
+  -- TupleSource.remove (connectedstore/source.py) only retracts admission-validated tuples
+  -- (validate_write_identifiers + matching Direct arm = StoreValidRules); the star/ttu/term
+  -- conditions are the W4Fragment carries graph_correct already assumes about the store.
+  -- hdrain: Python drains the view between applied log rows (cascadeKeys non-monotone under
+  -- retraction, so remove-from-undrained is unfaithful and would break reachedByW3d2C_settled).
   | cascade {σ : GraphState} {S : Schema} {T : Store} (jobs1 jobs2 : List W3cJob)
       (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j)
       (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j)
@@ -403,6 +415,9 @@ theorem reachedByW3d2_schema {σ : GraphState} {S : Schema} {T : Store}
   | @write σp S T t _ _ ih =>
     show (σp.writeLoggedRules S t).schema = S
     rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema, writeRules_schema, ih]
+  | @remove σp S T t _ _ _ _ _ _ _ ih =>
+    show (σp.removeLoggedRules S t).schema = S
+    rw [removeLoggedRules_schema, ih]
   | @cascade σp S T jobs1 jobs2 _ _ _ _ _ _ _ ih =>
     show (runCascade2 S T σp jobs1 jobs2).schema = S
     unfold runCascade2
@@ -888,6 +903,10 @@ theorem reachedByW3d2_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
     omega
+  | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
+    intro a b hb
+    rw [count_removeLoggedRules (a, b) S t σp, ih a b hb, untOccCount_erase S T t a b hadm]
+    omega
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     intro a b hb
     have h1 : ∀ j ∈ jobs1, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs1 hjv1
@@ -1024,6 +1043,10 @@ theorem reachedByW3d2_srcOccCount {σ : GraphState} {S : Schema} {T : Store}
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
     omega
+  | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
+    intro a b ha
+    rw [count_removeLoggedRules (a, b) S t σp, ih a b ha, untOccCount_erase S T t a b hadm]
+    omega
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     intro a b ha
     have h1 : ∀ j ∈ jobs1, ∀ c ∈ j.cands, c.predicate = BARE :=
@@ -1053,6 +1076,30 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
     · exact ih hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
     · rw [h1, subjNode_pred]
       exact rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+  | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
+    intro hnt hns a b hab
+    -- The removed-store edge `(a,b)` with a source-`R` predicate would need a stored
+    -- tuple in `T.erase t` whose subject predicate is `R` (via the source occurrence
+    -- count), contradicting `NoStoreSubjectR (T.erase t) R`.
+    intro haR
+    have haBARE : a.pred ≠ BARE := by rw [haR]; exact hRne
+    have hrem : ReachedByW3d2 (σp.removeLoggedRules S t) S (T.erase t) :=
+      ReachedByW3d2.remove t hadm hdrain hSVT hBST hTST htermT hprev
+    have hcount := reachedByW3d2_srcOccCount hrem a b haBARE
+    have hne : untOccCount S (T.erase t) a b ≠ 0 := by
+      rw [← hcount]
+      intro hz
+      exact (List.count_eq_zero.mp hz) hab
+    have hmem : (a, b) ∈ ((T.erase t).flatMap (rewriteClosure S)).map edgeOfTuple := by
+      by_contra hnm
+      exact hne (List.count_eq_zero.mpr hnm)
+    rw [List.mem_map] at hmem
+    obtain ⟨u, hu, heq⟩ := hmem
+    rw [List.mem_flatMap] at hu
+    obtain ⟨t', ht', hu'⟩ := hu
+    have hsrc : subjNode u.subject = a := congrArg Prod.fst heq
+    exact rewriteClosure_subject_pred_ne hnt (hns t' ht') hu'
+      (by rw [← subjNode_pred u.subject, hsrc, haR])
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ hprev ih =>
     intro hnt hns a b hab
     unfold runCascade2 at hab

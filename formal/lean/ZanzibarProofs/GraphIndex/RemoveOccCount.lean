@@ -122,6 +122,10 @@ theorem reachedByW3d2E_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
     omega
+  | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
+    intro a b hb
+    rw [count_removeLoggedRules (a, b) S t σp, ih a b hb, untOccCount_erase S T t a b hadm]
+    omega
   | @cascade σp S T hprev ih =>
     intro a b hb
     have hkfacts : ∀ (σe : GraphState) (n : Nat),

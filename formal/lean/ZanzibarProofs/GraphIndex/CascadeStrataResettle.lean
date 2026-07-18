@@ -1251,6 +1251,45 @@ theorem reachedByW3d2C_settled {σ : GraphState} {S : Schema} {T : Store}
       exact Or.inr (Or.inr
         ⟨settledKey_writeLeg_sem hNK hSV hCO hWSbare hlk hder hsem hset,
           completeKey_writeLeg_sem hNK hSV hCO hWSbare hlk hder hsem hcomp⟩)
+  | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare _hSV _hBS _hTS _hterm
+      dt on R e hlk hder hon
+    by_cases hmap : (dt, R, on) ∈ cascadeKeys S (σp.removeLoggedRules S t)
+    · exact Or.inl hmap
+    by_cases hopmap : ∃ r' ∈ computedRefs e, isDerived S (dt, r') = true ∧
+        (dt, r', on) ∈ cascadeKeys S (σp.removeLoggedRules S t)
+    · exact Or.inr (Or.inl hopmap)
+    -- The pre-state σp is DRAINED (`hdrain`), so every key is settled+complete at σp
+    -- (both dirty disjuncts of the IH are vacuous); transport across the retraction leg.
+    have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hprev
+    rcases ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVT hBST hTST htermT
+        dt on R e hlk hder hon with hdirty | hopdirty | ⟨hset, hcomp⟩
+    · rw [hdrain] at hdirty; exact absurd hdirty List.not_mem_nil
+    · obtain ⟨_, _, _, hdirty'⟩ := hopdirty
+      rw [hdrain] at hdirty'; exact absurd hdirty' List.not_mem_nil
+    · have hopsSettled : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+          SettledKey S T σp dt on r' ∧ CompleteKey S T σp dt on r' := by
+        intro r' hr' hd'
+        obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+        rcases ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVT hBST hTST htermT
+            dt on r' e' hlk' hd' hon with hdirty' | hopdirty' | hsc
+        · rw [hdrain] at hdirty'; exact absurd hdirty' List.not_mem_nil
+        · obtain ⟨r'', hr'', hd'', _⟩ := hopdirty'
+          cases (hLU2 dt R e hlk hder r' hr' hd' e' hlk' r'' hr'').symm.trans hd''
+        · exact hsc
+      have hopsUnmapped : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+          (dt, r', on) ∉ cascadeKeys S (σp.removeLoggedRules S t) :=
+        fun r' hr' hd' hmem => hopmap ⟨r', hr', hd', hmem⟩
+      obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow hW3d2 hNK hCO hSVT htermT
+      obtain ⟨σ0', h0', hsub⟩ := exists_admitted_erase h0 t
+      have hsem : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
+          sem S (T.erase t) ⟨x, R, ⟨dt, on⟩⟩ = sem S T ⟨x, R, ⟨dt, on⟩⟩ :=
+        fun x hx => removeLeg_sem_stable2 hWF hTT hNK hR hSVT hBST hTST hMatch hStrat
+          htermT hCO hLU2 hWSbare hW3d2 hadm h0 hsh h0' hsub hlk hder hmap hopsUnmapped
+          hopsSettled hx hon
+      exact Or.inr (Or.inr
+        ⟨settledKey_removeLeg_sem hNK hSVT hadm hCO hWSbare hlk hder hsem hset,
+          completeKey_removeLeg_sem hNK hSVT hadm hCO hWSbare hlk hder hsem hcomp⟩)
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 hcover1 hscope1 hcover2 hscope2 hcovg1 hcovg2
       hprev ih =>
     intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm

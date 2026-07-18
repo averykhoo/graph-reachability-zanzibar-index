@@ -80,6 +80,9 @@ theorem reachedByW3d2_Rnode_source_name_ne_star {σ : GraphState} {S : Schema}
     intro hlk hder hco hSV x hx
     rw [writeLeg_derived_inedges_eq hSV hlk hder hco x] at hx
     exact ih hlk hder hco (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hx
+  | @remove σp S T t _ _ hSVT _ _ _ _ ih =>
+    intro hlk hder hco _ x hx
+    exact ih hlk hder hco hSVT x (mem_removeLoggedRules_edges hx)
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     intro hlk hder hco hSV x hx
     unfold runCascade2 at hx
@@ -166,6 +169,10 @@ theorem reachedByW3d2_residueStarFree {σ : GraphState} {S : Schema} {T : Store}
   | @write σp S T t hadm hprev ih =>
     intro k r res hres
     rw [writeLoggedRules_residue] at hres
+    exact ih k r res hres
+  | @remove σp S T t _ _ _ _ _ _ _ ih =>
+    intro k r res hres
+    rw [removeLoggedRules_residue_eq] at hres
     exact ih k r res hres
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
     rcases runCascade2_cases S T σp jobs1 jobs2 with hrc | hrc
@@ -328,6 +335,18 @@ inductive ReachedByW3d2E : GraphState → Schema → Store → Prop where
       (hadm : FoldAdmits σ (rewriteClosure S t))
       (hprev : ReachedByW3d2E σ S T) :
       ReachedByW3d2E (σ.writeLoggedRules S t) S (t :: T)
+  | remove {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
+      (hadm : RemoveAdmits σ T t) (hdrain : cascadeKeys S σ = [])
+      (hSVT : StoreValidRules S T) (hBST : BareStarStore T) (hTST : TtuStarFree S T)
+      (htermT : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+      (hprev : ReachedByW3d2E σ S T) :
+      ReachedByW3d2E (σ.removeLoggedRules S t) S (T.erase t)
+  -- hSVT/hBST/hTST/htermT: the pre-remove store T was validly built. FAITHFUL — Python's
+  -- TupleSource.remove (connectedstore/source.py) only retracts admission-validated tuples
+  -- (validate_write_identifiers + matching Direct arm = StoreValidRules); the star/ttu/term
+  -- conditions are the W4Fragment carries graph_correct already assumes about the store.
+  -- hdrain: Python drains the view between applied log rows (cascadeKeys non-monotone under
+  -- retraction, so remove-from-undrained is unfaithful and would break reachedByW3d2C_settled).
   | cascade {σ : GraphState} {S : Schema} {T : Store}
       (hprev : ReachedByW3d2E σ S T) :
       ReachedByW3d2E (runCascade2 S T σ (enumJobs2R1 S σ) (enumJobs2R2 S T σ)) S T
@@ -368,6 +387,10 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
         fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
     exact ReachedByW3d2C.write t hadm
       (ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw htermw)
+  | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare _hSV _hBS _hTS _hterm
+    exact ReachedByW3d2C.remove t hadm hdrain hSVT hBST hTST htermT
+      (ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVT hBST hTST htermT)
   | @cascade σp S T hprev ih =>
     intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hC : ReachedByW3d2C σp S T :=

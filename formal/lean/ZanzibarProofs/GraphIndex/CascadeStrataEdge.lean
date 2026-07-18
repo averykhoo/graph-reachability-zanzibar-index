@@ -273,6 +273,21 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
       exact (hEHp _ _ _ hrow).1 n hn hedge
     · rw [writeLeg_derived_inedges_eq hSV hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).2 n hn hedge
+  | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
+    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare _hSV _hBS _hTS _hterm
+    have hEHp : EdgeHyg1 σp :=
+      ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVT hBST hTST htermT
+    intro k r res hrow
+    rw [removeLoggedRules_residue] at hrow
+    obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
+      reachedByW3d2E_residueDeclared hprev k r res hrow
+    subst hk
+    have hco : ComputedOnly e := hCO dt R e hlk hder
+    refine ⟨fun n hn hedge => ?_, fun n hn hedge => ?_⟩
+    · rw [removeLeg_derived_inedges_eq hSVT hadm hlk hder hco (subjNode n)] at hedge
+      exact (hEHp _ _ _ hrow).1 n hn hedge
+    · rw [removeLeg_derived_inedges_eq hSVT hadm hlk hder hco (subjNode n)] at hedge
+      exact (hEHp _ _ _ hrow).2 n hn hedge
   | @cascade σp S T hprev ih =>
     intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
     have hEHp : EdgeHyg1 σp :=
