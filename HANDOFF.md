@@ -121,18 +121,19 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
       REACHABLE via `foldAdmits_of_acyclic`. **Landed additively (green):** the T2a Group-A
       STRUCTURAL remove-case discharges (`removeLoggedRules_residue`, `mem_removeLoggedRules_edges`,
       `residueHygienic_/residueDeclared_removeLoggedRules`). **R5a LANDED 2026-07-19d** (build-FROM-store
-      `exists_admitted_erase`, additive, green). **#4 Leg R5b RECON+WALL 2026-07-19e — RE-SEQUENCED,
-      tree left GREEN (no edits).** Full trace found R5b is NOT a one-session landing: (1) DESIGN
-      CORRECTION — the `remove` constructor MUST carry a drained-prior guard `hdrain : cascadeKeys S σ = []`
-      (`cascadeKeys` is non-monotone under retraction — cones shrink — so remove-from-undrained breaks
-      `reachedByW3d2C_settled`; `hdrain` is faithful, Python drains between log rows); (2) MODULE-DAG
-      INVERSION WALL — the remove-case content (R3/R4/R5a + residue-edge substrate) sits ABOVE the low
-      inductives it must discharge, and `reachedByW3d2_shadow`'s remove case (low) needs R3's untainted-
-      count invariant (top). **Sequence:** R5b-i relocate substrate DOWN (mechanical); R5b-ii re-derive R3
-      at the `ReachedByW3d2` level + `untaintedShadow_removeLeg` (the crux); R5b-iii the constructor
-      (route a, WITH `hdrain`) + 20-site ripple (18 mechanical + shadow + `reachedByW3d2C_settled` via a
-      ~10-theorem settledness-dual stack). Also remaining: #1 Direct-arm leg 4 (the wall), #1 TTU/userset
-      half, #2 strata (>2). See `formal/history/PROOF_STATUS.md` 2026-07-19e + the design file.
+      `exists_admitted_erase`, additive, green). **#4 R5b-i/ii/iii-a LANDED + PUSHED 2026-07-19f**
+      (`d7d6f7d`/`2b7456f`/`a16c927`; all additive, `verify.sh lean` green, audit 415/415): the substrate
+      relocation, the crux (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`), and the 9-lemma
+      settledness-dual stack. **#4 R5b-iii-b (the `remove` constructor) hit a NEW design blocker 2026-07-19f
+      — reverted to green baseline (no red/sorry).** Root cause: the **erase store-hypothesis DIRECTION** —
+      discipline theorems carry store hyps at the reached store `T`; the remove induction case gets them at
+      `T.erase t` but needs full `T` (subset→superset), requiring the removed tuple `t`'s own validity,
+      unrecoverable from `RemoveAdmits = t ∈ T` (`rewriteClosure_notarget_derived` uses `hSV t ht`; no
+      `ReachedBy… → StoreValidRules` invariant exists). **THE FIX (faithful, do next):** strengthen the
+      `remove` guard to carry the pre-remove store `T`'s disciplines (Python's `TupleSource.remove` only
+      retracts validly-admitted tuples); scope becomes "…correct after removing a VALIDLY-STORED tuple".
+      Also remaining: #1 Direct-arm leg 4 (the wall), #1 TTU/userset half, #2 strata (>2).
+      See `formal/history/PROOF_STATUS.md` 2026-07-19f + `formal/HANDOFF.md` "THE NEXT TASK".
 - [x] **DONE 2026-07-17 (Claude): formal fragment widening — the `rootB` gap CLOSED (gate GREEN).**
       Union- and computed-rooted derived defs are now inside the proved `W4Fragment`
       (the derived-def ROOT operator is unrestricted; shape condition is `ComputedOnly`

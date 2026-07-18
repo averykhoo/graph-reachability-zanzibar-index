@@ -8,6 +8,97 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19f (#4 remove legs — R5b-i/ii/iii-a LANDED+PUSHED; R5b-iii-b constructor hits a NEW design blocker: the erase store-hypothesis direction ⇒ the guard must carry the removed tuple's store-discipline)
+
+Ninth session of #4. Orchestrated via sequential Opus subagents (fresh context each), each
+gate-green and diff-reviewed before commit. THREE additive legs LANDED + PUSHED (all
+`verify.sh lean` PASSED, audit 415/415, sorries=0):
+
+- **R5b-i (`d7d6f7d`) — substrate relocation DOWN for the future DAG (pure move).** Out of
+  `RemoveConfluence.lean`: count stack → `RemoveOccCount`; residue substrate
+  (`removeLoggedOne_/removeLoggedRules_residue`, `residueHygienic_/residueDeclared_removeLoggedRules`)
+  → `CascadeStrataInv`; `exists_admitted_*` → `RestrictBase`. `mem_removeLoggedRules_edges` lands
+  in `RemoveOccCount` (cites `count_removeLoggedRules`, its true lowest position). No proof change.
+- **R5b-ii (`2b7456f`) — the crux.** (1) Relocated the count stack + `untOccCount`/`edgeOfTuple`
+  defs further DOWN into `CascadeStrata` (all cite only low `runCascade2`/reconcile defs);
+  `enumJobs2At_Rnode_ne` + `reachedByW3d2E_untOccCount` stay in `RemoveOccCount`. (2)
+  `reachedByW3d2_untOccCount` — R3's untainted occurrence-count invariant at the LOW
+  `ReachedByW3d2` chain (template of the E-level proof; cascade case via new
+  `w3cJobsValid_Rnode_ne`). (3) `untaintedShadow_removeLeg` (`CascadeStrataSettle`, before
+  `reachedByW3d2_shadow`) — transports `UntaintedShadow` across the retraction: `classify`/`sub`
+  via `count_removeLoggedRules` + `reachedByW3d2_untOccCount` + `untOccCount_erase` landing both
+  sides on `untOccCount S (T.erase t)`, bridged to membership on R5a's rebuild σ0' via
+  `reachedByRules_edge_sound`/`_edge_complete`; structural fields via the relocated substrate +
+  the prior shadow. Supporting: `mem_edges_iff_untOccCount_pos`,
+  `reachedByRulesAdmitted_edge_target_untainted`, `foldl_writeDirect_nodesFromEdges`,
+  `reachedByRulesAdmitted_nodesFromEdges`.
+- **R5b-iii-a (`a16c927`) — the settledness-dual stack (9 duals, additive, 749 lines).** All
+  attack-verified TRUE (no dual needed a missing-monotonicity fact — `hunmapped` + the R5a
+  rebuild carry the drained/settled reasoning). `CascadeStable`: `removeLeg_graphRec_stable`,
+  `_checkFn_stable`, `_derived_inedges_eq` (retraction never touches a DerNode's in-edges via
+  `noRuleOutputs_of_derived`) + path helpers `nreaches_factor_last`/`removeLoggedRules_edge_delta`/
+  `removeLeg_reach_stable`. `CascadeStrataSettle`: `removeLeg_sem_stable`/`_sem_stable_sh`/
+  `_sem_stable2`, `settledKey_removeLeg`/`_sem`, `completeKey_removeLeg_sem` + stratum-2 guard
+  primitives `removeLeg_probeDerived_stable`/`_checkFnR_stable`. Hypothesis-shape deltas vs the
+  writeLeg templates (deliberate, documented): plainness/closure fences on the PRE-state
+  (anti-monotone); store shifts `T ⊢ (T.erase t)`; the R5a rebuild triple `(σ0', h0', hsub)`
+  replaces the in-place `ReachedByW3d.write` shadow. NOTE: the substrate lemmas ALREADY take
+  `(hSV : StoreValidRules S T) (ht : t ∈ T)` at FULL `T`.
+
+- **★ R5b-iii-b BLOCKER (attack-first, root-caused through the full dependency chain; tree
+  reverted to GREEN baseline — no red/sorry partial left).** Added the three `remove`
+  constructors (route a, `RemoveAdmits σ T t := t ∈ T` + `hdrain`), discharged the clean cases,
+  and found a genuine obstruction the recon missed: **the erase store-hypothesis DIRECTION.**
+  Every discipline/settledness theorem takes a store hyp indexed by the reached store `T`
+  (`StoreValidRules S T`, `NoStoreSubjectR T R`, `BareStarStore T`, `TtuStarFree S T`).
+  `induction h` re-generalizes `T`: the **write** case gets the hyp at `t :: T` and weakens DOWN
+  to `T` (`List.mem_cons_of_mem` — superset→subset, fine); the **remove** case gets it at
+  `T.erase t` and must supply it at FULL `T` (subset→superset), which needs the predicate to hold
+  for the **removed tuple `t` itself** — NOT available from `t ∈ T`. **Not cosmetic:** the chain
+  `reachedByW3d2C_settled → settledKey_removeLeg_sem/removeLeg_sem_stable/untaintedShadow_removeLeg
+  → removeLeg_derived_inedges_eq (CascadeStable:1540) → rewriteClosure_notarget_derived
+  (CascadeStable:1507) uses `hSV t ht`** — the validity of the specific removed tuple. Without it
+  `t`'s rewrite closure could target a DerNode, so `removeLeg_derived_inedges_eq` is FALSE and the
+  settled remove case is not even true. `ReachedByW3d2.write` admits via `FoldAdmits` (acyclicity),
+  NEVER `StoreValidRules`, and grep confirms NO `ReachedBy… → StoreValidRules` invariant exists —
+  so `t`'s validity is genuinely unrecoverable and must be SUPPLIED. `hdrain` handles the
+  cascade-key non-monotonicity as designed but does nothing for this store-validity gap.
+
+- **★ THE FIX (design decision — faithful; do this next).** Strengthen the `remove` constructor's
+  guard to carry the **pre-remove store `T`'s disciplines** (the `hprev` store): `StoreValidRules S T`
+  (+ the fragment-carried `BareStarStore T` / `TtuStarFree S T` / the `NoStoreSubjectR`/`hterm`
+  facts the substrate consumes). Then each remove case HAS the full-`T` hyps directly (the erased-store
+  versions follow by subset), and the entire landed substrate applies as intended. **Faithful:**
+  Python's `TupleSource.remove` only retracts tuples that were validly admitted on write
+  (`validate_write_identifiers` + a matching `Direct` arm = exactly `StoreValidRules`), and the
+  fragment conditions are `W4Fragment` carries `graph_correct` already assumes about the store; the
+  pre-remove store is a validly-built fragment store. **SCOPE NOTE:** this strengthens an inductive
+  (`ReachedByW3d2`/`C`/`E`) that audited `graph_correct`/`graph_reached_inv`/`Exec.graphRun_check_eq_sem`
+  quantify over, so the honest claim becomes "…correct after removing a VALIDLY-STORED tuple" — the
+  correct, faithful scope (Python guarantees exactly this). No EXISTING consumer constructs a
+  remove-state (the exec driver is add-only), so nothing breaks; audit must stay 415/415. Alternative
+  (per-tuple guard `φ(t)` + `List.mem_erase` reconstruction) also works but is heavier; the pre-remove-
+  store guard is cleaner.
+
+- **Residual obstructions BEYOND the guard (from the R5b-iii-b site trace, to expect even after the
+  fix):** most sites become the "mechanical mirror" the design expected, BUT
+  `reachedByW3d2_edge_target_ne_bare`/`_edges_target_plain` need ~15-line target-discipline proofs
+  (via the `untOccCount` characterization + `lookup_rel_ne_bare`), and `_edges_target_plain`'s
+  DERIVED sub-case may need an extra node-encoding lemma (`on ≠ STAR` for a derived target).
+  `reachedByW3d2E_untOccCount` is a **+1 induction site beyond the listed 20** (it inducts on
+  `ReachedByW3d2`; closed cleanly: `count_removeLoggedRules` + `untOccCount_erase` + `omega`).
+
+**RESUME #4 R5b-iii-b (v2): apply THE FIX above.** (1) Strengthen the 3 `remove` constructors with the
+pre-remove-store discipline guard (faithful comment citing `TupleSource.remove` + W4Fragment). (2)
+Re-discharge the 20+1 sites bottom-up per the R5b-iii-b site map (§this entry): mechanical via the
+relocated substrate; `reachedByW3d2_shadow` off `exists_admitted_erase` + `untaintedShadow_removeLeg`;
+`reachedByW3d2C_settled` off the R5b-iii-a dual stack; `toC`/`toW3d2` trivial `.remove`. (3) Work the
+residual ~15-line discipline sub-cases + the possible node-encoding lemma. (4) `graph_correct_w3d2E`
+(Assemble:475) needs NO bespoke case (applies `graph_correct_w3d2` through `reachedByW3d2E_toC` under
+`hq`, so it closes once `toC`+`settled` carry remove cases). Keep audit 415/415; update `Audit.lean`
+ONLY if a new top-level theorem is added (none expected). Then update `FINAL_REVIEW.md` scope wording
+to reflect the validly-stored-tuple remove precondition.
+
 ## Session 2026-07-19e (#4 remove legs — Leg R5b RECON+WALL: the constructor is blocked by a module-DAG inversion + a design correction; tree left GREEN, no edits)
 
 Eighth session of #4. Went in to land the `remove` constructor (route a) + discharge the 20-site

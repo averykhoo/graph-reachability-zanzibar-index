@@ -81,22 +81,28 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
-> **THE NEXT TASK (2026-07-19e) — #4 Leg R5b, RE-SEQUENCED into three additive sub-legs after a
-> RECON+WALL (tree left GREEN, no edits).** A full read-only trace found R5b is NOT a one-session
-> landing: (1) a **DESIGN CORRECTION** — the `remove` constructor MUST carry a drained-prior guard
-> `hdrain : cascadeKeys S σ = []`, because `cascadeKeys` is NON-MONOTONE under a retraction (cones
-> shrink), so remove-from-undrained can un-dirty a stale key and break `reachedByW3d2C_settled`
-> (`hdrain` is faithful — Python drains between log rows — and makes the remove case mirror the write
-> case's unmapped subcase); (2) a **MODULE-DAG INVERSION WALL** — the remove-case content (R3 count /
-> R4 confluence / R5a existence / the residue-edge substrate) all sits ABOVE the low inductives it must
-> discharge, and `reachedByW3d2_shadow`'s remove case (low, `…Settle`) needs R3's untainted-count
-> invariant (top, tied to `ReachedByW3d2E`) to establish `UntaintedShadow σ_rem σ0'`. **Sequence:**
-> **R5b-i** relocate the count/residue/edge/existence substrate DOWN (mechanical); **R5b-ii** re-derive
-> R3 at the `ReachedByW3d2` level (`reachedByW3d2_untOccCount`) + `untaintedShadow_removeLeg` (the crux,
-> new low content); **R5b-iii** add the `remove` constructor (route a, WITH `hdrain`) + discharge the 20
-> mapped induction sites (18 mechanical + shadow off R5b-ii + `reachedByW3d2C_settled` off a ~10-theorem
-> settledness-dual stack). Full detail + the exhaustive 20-site ripple map: `history/PROOF_STATUS.md`
-> 2026-07-19e + `history/optional-widening-2026-07.md` Target #4 R5b. R1–R5a stay landed/green. After #4:
+> **THE NEXT TASK (2026-07-19f) — #4 Leg R5b-iii-b (v2): apply THE GUARD FIX, then discharge the
+> constructor.** R5b-i/ii/iii-a are LANDED + PUSHED (`d7d6f7d`/`2b7456f`/`a16c927`; all additive,
+> `verify.sh lean` green, audit 415/415): the substrate relocation, the crux
+> (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`), and the 9-lemma settledness-dual stack.
+> R5b-iii-b (add the `remove` constructor + discharge 20+1 sites) hit a **NEW, root-caused design
+> blocker** and was reverted to green baseline (no red/sorry partial): the **erase store-hypothesis
+> DIRECTION.** Discipline/settledness theorems carry store hyps indexed by the reached store `T`
+> (`StoreValidRules S T`, `NoStoreSubjectR T R`, `BareStarStore T`, `TtuStarFree S T`); `induction`
+> gives the remove case its hyp at `T.erase t` but the IH + substrate need it at FULL `T`
+> (subset→superset), which requires the **removed tuple `t`'s own validity** — unrecoverable from
+> `RemoveAdmits = t ∈ T`. Not cosmetic: `removeLeg_derived_inedges_eq → rewriteClosure_notarget_derived`
+> literally uses `hSV t ht`, and NO `ReachedBy… → StoreValidRules` invariant exists (grep-confirmed).
+> **THE FIX (faithful):** strengthen the 3 `remove` constructors' guard to carry the **pre-remove store
+> `T`'s disciplines** (`StoreValidRules S T` + the fragment carries) — Python's `TupleSource.remove` only
+> retracts validly-admitted tuples, and the fragment conds are `W4Fragment` carries `graph_correct`
+> already assumes; **scope becomes "…correct after removing a VALIDLY-STORED tuple"** (the honest,
+> correct scope; no existing add-only exec consumer constructs a remove-state, so nothing breaks; keep
+> audit 415/415, then reword `FINAL_REVIEW.md`). Residual sub-obstructions after the fix (from the
+> R5b-iii-b site trace): `reachedByW3d2_edge_target_ne_bare`/`_edges_target_plain` need ~15-line
+> target-discipline proofs (+ a possible node-encoding lemma for the derived `on ≠ STAR` sub-case);
+> `graph_correct_w3d2E` needs NO bespoke case (routes through `reachedByW3d2E_toC`). Full site map +
+> fix detail: `history/PROOF_STATUS.md` 2026-07-19f. R1–R5b-iii-a stay landed/green. After #4:
 > #1 Direct-arm leg 4 / TTU-userset half, #2 strata (>2).
 
 > **Update 2026-07-18 — OPTIONAL assurance-widening arc OPENED (4 targets scoped;
