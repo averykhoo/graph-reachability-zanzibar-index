@@ -1221,4 +1221,331 @@ theorem settledKey_cascade_untargeted {S : Schema} {T : Store} {σ : GraphState}
   · rw [hrc]
     exact hset
 
+/-! ## Retraction-leg duals (R5b-iii-a) — the settledness-dual stack, reach/edge level
+
+Retraction duals of the write-leg stability lemmas above, for `removeLoggedRules`. The
+write leg ADDS edges (monotone); the retraction ERASES edges (anti-monotone), so the
+"fragment fence"/plainness hypotheses land on the BIGGER state — here the PRE-state `σ`
+(the write leg fences its post-state, likewise the bigger one). Two path helpers carry
+the anti-monotone reasoning: `nreaches_factor_last` (a LAST-marked-edge decomposition
+with the suffix in the smaller kept edge set — mirror of `nreaches_factor`'s FIRST-marked
+decomposition) and `removeLoggedRules_edge_delta` (a retracted edge carries a frontier
+row at its target — mirror of `writeLoggedRules_edge_delta`). -/
+
+/-- **Last-marked-edge decomposition** (retraction dual of `nreaches_factor`). A path over
+    `E` whose edges are each kept (`∈ E'`) or marked (`P`) either lives entirely in the kept
+    set `E'`, or passes through a marked edge whose HEAD reaches `v` using only kept edges —
+    the LAST marked edge on the path, so the suffix runs in the smaller set `E'`. -/
+theorem nreaches_factor_last {P : NodeKey × NodeKey → Prop}
+    {E E' : List (NodeKey × NodeKey)} {u v : NodeKey}
+    (hclass : ∀ ab ∈ E, ab ∈ E' ∨ P ab) (h : NReaches E u v) :
+    NReaches E' u v ∨ ∃ ab, P ab ∧ NReachesR E' ab.2 v := by
+  induction h with
+  | @edge u v huv =>
+    rcases hclass _ huv with hE | hP
+    · exact Or.inl (NReaches.edge hE)
+    · exact Or.inr ⟨(u, v), hP, Or.inl rfl⟩
+  | @head u w v huw _ ih =>
+    rcases ih with hE | hP
+    · rcases hclass _ huw with hEw | hPw
+      · exact Or.inl (NReaches.head hEw hE)
+      · exact Or.inr ⟨(u, w), hPw, Or.inr hE⟩
+    · exact Or.inr hP
+
+/-- One logged retraction only shrinks the edge multiset (a local subset fact, upstream of
+    the count law `mem_removeLoggedRules_edges`). -/
+theorem removeLoggedOne_edges_subset (σ : GraphState) (u : Tuple) :
+    ∀ ab ∈ (σ.removeLoggedOne u).edges, ab ∈ σ.edges := by
+  intro ab hab
+  unfold GraphState.removeLoggedOne at hab
+  split at hab
+  · rw [pushDelta_edges, removeEdgeOne_edges] at hab
+    exact List.mem_of_mem_erase hab
+  · exact hab
+
+/-- The retraction fold only shrinks the edge multiset. -/
+theorem foldl_removeLoggedOne_edges_subset (us : List Tuple) :
+    ∀ (σ : GraphState),
+      ∀ ab ∈ (us.foldl (fun acc u => acc.removeLoggedOne u) σ).edges, ab ∈ σ.edges := by
+  induction us with
+  | nil => intro σ ab hab; exact hab
+  | cons u rest ih =>
+    intro σ ab hab
+    simp only [List.foldl_cons] at hab
+    exact removeLoggedOne_edges_subset σ u ab (ih _ ab hab)
+
+/-- The whole logged retraction only shrinks the edge multiset (local mirror of the
+    monotone `writeLoggedRules_edges_mono`). -/
+theorem removeLoggedRules_edges_subset (σ : GraphState) (S : Schema) (t : Tuple) :
+    ∀ ab ∈ (σ.removeLoggedRules S t).edges, ab ∈ σ.edges := by
+  unfold GraphState.removeLoggedRules
+  exact foldl_removeLoggedOne_edges_subset (rewriteClosure S t) σ
+
+/-- One logged retraction only pushes outbox rows. -/
+theorem removeLoggedOne_outbox_mono (σ : GraphState) (u : Tuple) :
+    ∀ d ∈ σ.outbox, d ∈ (σ.removeLoggedOne u).outbox := by
+  intro d hd
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [pushDelta_outbox]
+    refine List.mem_cons_of_mem _ ?_
+    rw [removeEdgeOne_outbox]
+    exact hd
+  · exact hd
+
+/-- The retraction fold only pushes outbox rows. -/
+theorem foldl_removeLoggedOne_outbox_mono (us : List Tuple) :
+    ∀ (σ : GraphState), ∀ d ∈ σ.outbox,
+      d ∈ (us.foldl (fun acc u => acc.removeLoggedOne u) σ).outbox := by
+  induction us with
+  | nil => intro σ d hd; exact hd
+  | cons u rest ih =>
+    intro σ d hd
+    simp only [List.foldl_cons]
+    exact ih _ d (removeLoggedOne_outbox_mono σ u d hd)
+
+/-- **Retracted edges carry frontier rows** (retraction dual of `writeLoggedRules_edge_delta`).
+    Any edge PRESENT in `σ` but ABSENT after the logged retraction was erased by some
+    `removeLoggedOne` step, which emitted an outbox row (id above the unchanged watermark)
+    denormalized at the edge's own head. -/
+theorem removeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) :
+    ∀ ab, ab ∈ σ.edges → ab ∉ (σ.removeLoggedRules S t).edges →
+      ∃ d ∈ (σ.removeLoggedRules S t).outbox, σ.watermark < d.id ∧ d.node = ab.2 := by
+  unfold GraphState.removeLoggedRules
+  suffices H : ∀ (us : List Tuple) (σc : GraphState), σc.watermark = σ.watermark →
+      ∀ ab, ab ∈ σc.edges → ab ∉ (us.foldl (fun acc u => acc.removeLoggedOne u) σc).edges →
+        ∃ d ∈ (us.foldl (fun acc u => acc.removeLoggedOne u) σc).outbox,
+          σ.watermark < d.id ∧ d.node = ab.2 from
+    H (rewriteClosure S t) σ rfl
+  intro us
+  induction us with
+  | nil => intro σc _ ab hin hout; exact absurd hin hout
+  | cons u rest ih =>
+    intro σc hwm ab hin hout
+    simp only [List.foldl_cons] at hout ⊢
+    by_cases hin1 : ab ∈ (σc.removeLoggedOne u).edges
+    · exact ih (σc.removeLoggedOne u) (by rw [removeLoggedOne_watermark, hwm]) ab hin1 hout
+    · by_cases hp : (subjNode u.subject, objNode u.object u.relation) ∈ σc.edges
+      · have hσ1 : σc.removeLoggedOne u
+            = (σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).pushDelta
+                (objNode u.object u.relation) u.relation := by
+          unfold GraphState.removeLoggedOne; rw [if_pos hp]
+        rw [hσ1, pushDelta_edges, removeEdgeOne_edges] at hin1
+        have hpeq : ab = (subjNode u.subject, objNode u.object u.relation) := by
+          by_contra hne
+          exact hin1 ((List.mem_erase_of_ne hne).mpr hin)
+        subst hpeq
+        refine ⟨⟨(σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).nextDeltaId,
+            objNode u.object u.relation, u.relation⟩, ?_, ?_, rfl⟩
+        · refine foldl_removeLoggedOne_outbox_mono rest _ _ ?_
+          rw [hσ1, pushDelta_outbox]
+          exact List.mem_cons_self
+        · show σ.watermark
+            < (σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).nextDeltaId
+          have hdef : (σc.removeEdgeOne (subjNode u.subject)
+                (objNode u.object u.relation)).nextDeltaId
+              = max (σc.removeEdgeOne (subjNode u.subject)
+                  (objNode u.object u.relation)).maxOutboxId
+                (σc.removeEdgeOne (subjNode u.subject)
+                  (objNode u.object u.relation)).watermark + 1 := rfl
+          have hw : (σc.removeEdgeOne (subjNode u.subject)
+              (objNode u.object u.relation)).watermark = σc.watermark :=
+            removeEdgeOne_watermark σc _ _
+          rw [hwm] at hw
+          omega
+      · exfalso
+        apply hin1
+        unfold GraphState.removeLoggedOne
+        rw [if_neg hp]
+        exact hin
+
+/-- **Retraction-leg `reach` stability off the mapped keys** (dual of `writeLeg_reach_stable`).
+    A path into an unmapped derived key's operand node cannot be broken by the retraction:
+    breaking it would erase an edge whose frontier row dirties `(dt, R, on)`. The `false, true`
+    arm (a lost path) factors through the LAST retracted edge, whose delta re-dirties the key
+    — the anti-monotone mirror of the write leg's new-edge arm. -/
+theorem removeLeg_reach_stable {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt on R r' : String} {e : Expr}
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hr' : r' ∈ computedRefs e) (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (x : NodeKey) :
+    (σ.removeLoggedRules S t).reach x (objNode ⟨dt, on⟩ r')
+      = σ.reach x (objNode ⟨dt, on⟩ r') := by
+  have hclσ' : ∀ ab ∈ (σ.removeLoggedRules S t).edges,
+      ab.1 ∈ (σ.removeLoggedRules S t).nodes ∧ ab.2 ∈ (σ.removeLoggedRules S t).nodes := by
+    intro ab hab
+    rw [removeLoggedRules_nodes]
+    exact hclσ ab (removeLoggedRules_edges_subset σ S t ab hab)
+  cases h' : (σ.removeLoggedRules S t).reach x (objNode ⟨dt, on⟩ r')
+    <;> cases h0 : σ.reach x (objNode ⟨dt, on⟩ r')
+  · rfl
+  · -- lost path: factor through the LAST retracted edge, map the key
+    exfalso
+    have hN := reach_sound h0
+    rcases nreaches_factor_last
+      (P := fun ab => ∃ d ∈ (σ.removeLoggedRules S t).outbox,
+        σ.watermark < d.id ∧ d.node = ab.2)
+      (E := σ.edges) (E' := (σ.removeLoggedRules S t).edges)
+      (fun ab hab => by
+        by_cases hpost : ab ∈ (σ.removeLoggedRules S t).edges
+        · exact Or.inl hpost
+        · exact Or.inr (removeLoggedRules_edge_delta σ S t ab hab hpost))
+      hN with hpost | ⟨ab, ⟨d, hd, hgt, hnode⟩, hR⟩
+    · have := reach_complete hclσ' hpost
+      rw [h'] at this
+      cases this
+    · apply hunmapped
+      have hfront : d ∈ (σ.removeLoggedRules S t).frontierRows := by
+        unfold GraphState.frontierRows
+        refine List.mem_filter.mpr ⟨hd, ?_⟩
+        rw [removeLoggedRules_watermark]
+        exact decide_eq_true hgt
+      refine List.mem_flatMap.mpr ⟨d, hfront, ?_⟩
+      refine mem_affectedKeys hlk hder hr' hon ?_
+      unfold GraphState.affectedObjects
+      rcases hR with heq | hreach
+      · rw [hnode, ← heq]
+        exact List.mem_cons_self
+      · refine List.mem_cons_of_mem _ (List.mem_filter.mpr ⟨?_, ?_⟩)
+        · obtain ⟨y, _, hyv⟩ := nreaches_last hreach
+          exact (hclσ' _ hyv).2
+        · rw [hnode]
+          exact reach_complete hclσ' hreach
+  · -- new path: impossible, edges only shrink
+    exfalso
+    have hmono := NReaches.mono_subset (removeLoggedRules_edges_subset σ S t) (reach_sound h')
+    have := reach_complete hclσ hmono
+    rw [h0] at this
+    cases this
+  · rfl
+
+/-- Reach into the operand's `wAll` node is `false` on both sides of a retraction leg whose
+    (PRE-state) edge targets are plain (dual of `writeLeg_reach_wAll_false`; the plainness
+    fence sits on `σ`, the bigger multiset, and transfers to the post-state by subset). -/
+theorem removeLeg_reach_wAll_false {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt r' : String}
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain) :
+    (∀ u, (σ.removeLoggedRules S t).reach u (wAllNode dt r') = false) ∧
+    (∀ u, σ.reach u (wAllNode dt r') = false) := by
+  have htpp : ∀ ab ∈ (σ.removeLoggedRules S t).edges, ab.2.variant = Variant.plain :=
+    fun ab hab => htp ab (removeLoggedRules_edges_subset σ S t ab hab)
+  constructor
+  · intro u
+    cases hc : (σ.removeLoggedRules S t).reach u (wAllNode dt r') with
+    | false => rfl
+    | true =>
+      exfalso
+      have := nreaches_target_plain htpp (reach_sound hc)
+      simp [wAllNode] at this
+  · intro u
+    cases hc : σ.reach u (wAllNode dt r') with
+    | false => rfl
+    | true =>
+      exfalso
+      have := nreaches_target_plain htp (reach_sound hc)
+      simp [wAllNode] at this
+
+/-- **Retraction-leg `graphRec` stability off the mapped keys** (dual of
+    `writeLeg_graphRec_stable`): an unmapped derived key's operand read is unchanged by the
+    logged retraction, for EVERY subject. The plainness fence `htp` sits on the PRE-state `σ`
+    (bigger multiset) — the sole hypothesis-shape change from the write leg. -/
+theorem removeLeg_graphRec_stable {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt on R r' : String} {e : Expr}
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain)
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hr' : r' ∈ computedRefs e) (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (s : SubjectRef) :
+    GraphModel.graphRec (σ.removeLoggedRules S t) s dt on r'
+      = GraphModel.graphRec σ s dt on r' := by
+  obtain ⟨hwall', hwall0⟩ := removeLeg_reach_wAll_false (σ := σ) (S := S) (t := t)
+    (dt := dt) (r' := r') htp
+  unfold GraphModel.graphRec GraphModel.probeNonDerived
+  dsimp only
+  rw [removeLeg_reach_stable hclσ hlk hder hr' hon hunmapped (subjNode s),
+    removeLeg_reach_stable hclσ hlk hder hr' hon hunmapped (wAnyNode s.shape),
+    hwall' (subjNode s), hwall0 (subjNode s),
+    hwall' (wAnyNode s.shape), hwall0 (wAnyNode s.shape)]
+
+/-- **Retraction-leg `checkFn` stability off the mapped keys** (dual of
+    `writeLeg_checkFn_stable`): the compiled pass guard is unchanged by a logged retraction
+    that does not map the key. Plainness fence `htp` on the PRE-state. -/
+theorem removeLeg_checkFn_stable {σ : GraphState} {S : Schema} {t : Tuple} (T' : Store)
+    {dt on R : String} {e : Expr}
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain)
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e) (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (s : SubjectRef) :
+    (σ.removeLoggedRules S t).checkFn T' s dt on R e = σ.checkFn T' s dt on R e := by
+  unfold GraphState.checkFn
+  refine evalE_computedOnly e hco ?_
+  intro r' hr'
+  exact removeLeg_graphRec_stable hclσ htp hlk hder hr' hon hunmapped s
+
+/-- No rewrite-closure member of a derived-def store tuple targets the derived R-node
+    `objNode ⟨dt,on⟩ R` (the `writeLeg_derived_inedges_eq` fragment argument, reused for the
+    retraction): a stored `(dt,R)` tuple needs a `Direct` arm (dead on `ComputedOnly`), a
+    rewrite output `(dt,R)` is forbidden by `noRuleOutputs_of_derived`. -/
+theorem rewriteClosure_notarget_derived {S : Schema} {T : Store} {t : Tuple}
+    (hSV : StoreValidRules S T) (ht : t ∈ T)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
+    (w : Tuple) (hw : w ∈ rewriteClosure S t) :
+    objNode w.object w.relation ≠ objNode ⟨dt, on⟩ R := by
+  intro h2
+  have htype : dt = w.object.type := by
+    simpa [objNode_type] using (congrArg NodeKey.type h2).symm
+  have hrel : R = w.relation := by
+    simpa [objNode_pred] using (congrArg NodeKey.pred h2).symm
+  rcases rewriteClosure_produced hw with heq | ⟨r, hr', hro, hrout⟩
+  · rw [heq] at htype hrel
+    obtain ⟨e', rs, hlk', hrs, _⟩ := hSV t ht
+    rw [← htype, ← hrel, hlk, Option.some.injEq] at hlk'
+    rw [← hlk', exprDirects_computedOnly hco] at hrs
+    simp at hrs
+  · exact noRuleOutputs_of_derived hder r hr' ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+
+/-- Membership of `(a,b)` survives one retraction step when no closure member targets `b`. -/
+theorem mem_removeLoggedOne_edges_iff_of_ne {σ : GraphState} {u : Tuple} {a b : NodeKey}
+    (hne : objNode u.object u.relation ≠ b) :
+    ((a, b) ∈ (σ.removeLoggedOne u).edges ↔ (a, b) ∈ σ.edges) := by
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [pushDelta_edges]
+    exact mem_removeEdgeOne_edges_of_ne (by intro h; exact hne (congrArg Prod.snd h).symm)
+  · exact Iff.rfl
+
+/-- Membership of `(a,b)` survives the retraction fold when no closure member targets `b`. -/
+theorem mem_foldl_removeLoggedOne_edges_iff_of_notarget (us : List Tuple) {a b : NodeKey}
+    (hnt : ∀ w ∈ us, objNode w.object w.relation ≠ b) :
+    ∀ (σ : GraphState),
+      ((a, b) ∈ (us.foldl (fun acc u => acc.removeLoggedOne u) σ).edges ↔ (a, b) ∈ σ.edges) := by
+  induction us with
+  | nil => intro σ; exact Iff.rfl
+  | cons u rest ih =>
+    intro σ
+    simp only [List.foldl_cons]
+    rw [ih (fun w hw => hnt w (List.mem_cons_of_mem _ hw)) (σ.removeLoggedOne u)]
+    exact mem_removeLoggedOne_edges_iff_of_ne (hnt u List.mem_cons_self)
+
+/-- **The retraction never touches a derived key's in-edges** (dual of
+    `writeLeg_derived_inedges_eq`): via `noRuleOutputs_of_derived` no rewrite-closure member
+    targets a `DerNode`, so no in-edge into `objNode ⟨dt,on⟩ R` is erased. Clean — no path
+    surgery, just fold-preservation. -/
+theorem removeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} {T : Store}
+    (hSV : StoreValidRules S T) (ht : t ∈ T)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
+    (u : NodeKey) :
+    ((u, objNode ⟨dt, on⟩ R) ∈ (σ.removeLoggedRules S t).edges
+      ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
+  unfold GraphState.removeLoggedRules
+  exact mem_foldl_removeLoggedOne_edges_iff_of_notarget (rewriteClosure S t)
+    (fun w hw => rewriteClosure_notarget_derived hSV ht hlk hder hco w hw) σ
+
 end Zanzibar
