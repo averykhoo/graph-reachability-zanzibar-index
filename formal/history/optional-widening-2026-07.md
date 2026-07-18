@@ -336,9 +336,44 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
     constructor — documented, not faked (a green infrastructure landing over a fragile forced close).
   - **Audit:** kept `ReadEq`+congruence OUT of `Audit.lean` (infrastructure, matching part 1's
     untainted arm and the peer `check_evalEq` congruence — neither audited); count stays 415/415.
-- **Leg R5 — RE-SCOPED (2026-07-19c): the constructor is MONOLITHIC and gated on a MISSING
-  prerequisite (rebuild-existence). Split into R5a (rebuild-existence, additive) + R5b (the
-  constructor).** The design's "lands green in ONE commit armed with R4" is FALSE — traced
+- **Leg R5a — rebuild-existence (build-FROM-store admitted witness). ✅ DONE (2026-07-19d).**
+  Landed additive in `RemoveConfluence.lean` (verify.sh lean 415/415 sorries=0, audit
+  standard-axioms-only; additive ⇒ conf unchanged 296). The build-FROM-store admitted term both
+  R5b routes need, as the **STORE-restriction dual of `exists_admitted_restrict`** (which restricts
+  the SCHEMA). Three lemmas:
+  - `exists_admitted_ofAcyclicTarget` (the core): given a FIXED acyclic target `Ef` containing
+    every materialised closure edge of a store `T'`, folds `∃ σ0', ReachedByRulesAdmitted σ0' S T'
+    ∧ edges ⊆ Ef` by induction on `T'` — each `writeDirect` fold admits via `foldAdmits_of_acyclic`
+    (`RestrictBase.lean:392`), `σp.edges ⊆ Ef` recovered per-step from `reachedByRules_edge_sound`.
+  - `exists_admitted_ofSubset` (route-agnostic): `ReachedByRulesAdmitted σ0 S T → T' ⊆ T →
+    ∃ σ0', ReachedByRulesAdmitted σ0' S T' ∧ edges ⊆ σ0.edges`. Target `Ef := σ0.edges`, acyclic by
+    `Inv.acyclic`, complete by `reachedByRulesAdmitted_edge_complete`.
+  - `exists_admitted_erase` (the R5b tool): `ReachedByRulesAdmitted σ0 S T → ∀ t, ∃ σ0',
+    ReachedByRulesAdmitted σ0' S (T.erase t) ∧ edges ⊆ σ0.edges` (via `List.erase_subset`). This is
+    exactly what route (a)'s `reachedByW3d2_shadow` remove case consumes (IH hands the admitted
+    chain over `T`; erase yields the rebuild over `T.erase t`). **Route (b) note:** the E-chain
+    drained rebuild `∃ σ, ReachedByW3d2E σ S (T.erase t) ∧ Drained` is NOT provided (no add-only
+    lift exists as a one-liner) — but route (a) is the recommendation and consumes only the
+    admitted term, so R5b is unblocked as-is; its untainted-core shadow reduces to this term.
+  - **The new ingredient (closure-acyclicity) is INHERITED, not proved from scratch.** Acyclicity
+    of the admission target comes from the larger admitted store's `Inv.acyclic` — a sub-store's
+    materialised graph is a subgraph of an acyclic one. **★ Attack-first SCOPING KILL (house rule
+    2):** rebuild-existence over an ARBITRARY store is FALSE even under `RewriteRanked` — the
+    userset 2-cycle store `{⟨group:g1#member, member, group:g2⟩, ⟨group:g2#member, member,
+    group:g1⟩}` (no rewrite rules, so `RewriteRanked` vacuous) materialises
+    `objNode(g1,member)⇄objNode(g2,member)`, which `admitEdge` (`a≠b ∧ ¬reach b a`) rejects on the
+    2nd write — no `ReachedByRulesAdmitted` chain exists (Python rolls the cyclic write back
+    identically). So from-scratch admissibility is NOT free; it is free only over a SUB-store of an
+    admitted store — the only shape R5b needs. This SHAPES R5b: derive the erased store's
+    admissibility FROM the pre-remove store's (as `exists_admitted_erase` does), never assert it.
+  - **What R5b now has:** `exists_admitted_erase h0 t` (the admitted rebuild over `T.erase t` +
+    edge ⊆) for `reachedByW3d2_shadow`'s remove case; the R4 `ReadEq`/`check_readEq` transport +
+    untainted arm; the Group-A structural substrate (`residueHygienic_/residueDeclared_/
+    structInv_removeLoggedRules` + `mem_removeLoggedRules_edges`). Remaining R5b work: add the
+    `remove` constructor to `ReachedByW3d2`/`C`/`E` (route a — mirror `write`), build the
+    settledness duals + `reachedByW3d2_shadow`/`reachedByW3d2C_settled` remove cases, `toC` trivial.
+- **Leg R5b — RE-SCOPED (2026-07-19c): the constructor is MONOLITHIC and gated on the (now-landed
+  R5a) rebuild-existence.** The design's "lands green in ONE commit armed with R4" is FALSE — traced
   end-to-end this session (tree left green; T2a Group-A structural discharges landed additively in
   `RemoveConfluence.lean`; constructor NOT added). Full trace in `history/PROOF_STATUS.md`
   2026-07-19c. The corrected picture:

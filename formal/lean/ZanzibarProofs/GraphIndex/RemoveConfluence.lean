@@ -364,4 +364,99 @@ theorem residueDeclared_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tu
   rw [removeLoggedRules_residue] at hrow
   exact h k r res hrow
 
+/-! ## R5a — build-FROM-store rebuild-existence (the sub-store admitted rebuild)
+
+The `remove` constructor (leg R5b) removes a tuple `t ∈ T` from the store, landing over
+`T.erase t`. BOTH discharge routes traced in `history/PROOF_STATUS.md` (2026-07-19c) converge
+on a build-FROM-store admitted witness over the SMALLER store — route (a)'s
+`reachedByW3d2_shadow` remove case needs `∃ σ0, ReachedByRulesAdmitted σ0 S (T.erase t)`,
+route (b)'s `ReadEq` transport needs a drained `ReachedByW3d2E` rebuild over `T.erase t`, whose
+untainted-core shadow is again this admitted term. The tree lacked it: every existing
+`∃ …, ReachedByRulesAdmitted …` is a shadow-FROM-an-existing-chain (`reachedByW3d2_shadow`),
+never a build-FROM-store.
+
+We build it as the **store-restriction dual of `exists_admitted_restrict`** (`RestrictBase.lean`,
+which restricts the SCHEMA). The one new ingredient the recon flagged — closure-acyclicity of the
+admission target over the smaller store — is obtained NOT from scratch but by INHERITANCE from an
+already-admitted larger store: its complete edge relation `σ0.edges` is acyclic (`Inv.acyclic`)
+and already contains every materialised closure edge of every sub-store
+(`reachedByRulesAdmitted_edge_complete`); a subgraph of an acyclic graph is acyclic, so
+`foldAdmits_of_acyclic` (`RestrictBase.lean:392`) discharges every `writeDirect` fold over the
+sub-store against `Ef := σ0.edges`. This is exactly what R5b has in hand — it removes from a store
+already carrying an admitted chain.
+
+**★ Attack-first (house rule 2) — a SCOPING KILL of the more-general statement, not of this
+lemma.** Rebuild-existence over an ARBITRARY store is FALSE, even under `RewriteRanked`. Witness:
+the userset 2-cycle store `{⟨group:g1#member, member, group:g2⟩, ⟨group:g2#member, member,
+group:g1⟩}`. It uses NO rewrite rules (so `RewriteRanked` holds vacuously), yet its two
+materialised closure edges are `objNode(g1,member) → objNode(g2,member)` and
+`objNode(g2,member) → objNode(g1,member)` (a userset subject `o#r` materialises at `objNode o r`),
+forming a 2-cycle. `admitEdge` (`State.lean`, `a ≠ b ∧ ¬reach b a`) REJECTS the second write once
+the first edge is present (`reach (objNode g1 member) (objNode g2 member) = true`), so no
+`FoldAdmits` and no `ReachedByRulesAdmitted` chain exists over this store — the Python graph index
+rolls the cyclic write back identically. So from-scratch admissibility is NOT free; it is free ONLY
+over a SUB-store of an admitted store (a subgraph of an acyclic graph), which is the only shape R5b
+consumes. Hence the statement is honestly premised on `ReachedByRulesAdmitted σ0 S T`, never
+free-standing. This SHAPES R5b: the erased store's admissibility must be derived FROM the
+pre-remove store's (as `exists_admitted_erase` does), not asserted. -/
+
+/-- **The from-store admitted-rebuild core.** Given a FIXED acyclic target relation `Ef`
+    already containing every materialised closure edge of every tuple of a store `T'`, fold an
+    admitted rule-routed chain over `T'`: each write's fold admits by `foldAdmits_of_acyclic`
+    (target `Ef`, `σp.edges ⊆ Ef` recovered from `reachedByRules_edge_sound`), and the built
+    edges stay inside `Ef`. The store-analog of the write-path induction inside
+    `exists_admitted_restrict`, with the acyclic target supplied rather than reconstructed. -/
+theorem exists_admitted_ofAcyclicTarget {S : Schema} {Ef : List (NodeKey × NodeKey)}
+    (hacyc : ∀ v, ¬ NReaches Ef v v) :
+    ∀ T' : Store,
+      (∀ t' ∈ T', ∀ u ∈ rewriteClosure S t',
+        (subjNode u.subject, objNode u.object u.relation) ∈ Ef) →
+      ∃ σ0', ReachedByRulesAdmitted σ0' S T' ∧ (∀ e ∈ σ0'.edges, e ∈ Ef) := by
+  intro T'
+  induction T' with
+  | nil =>
+    intro _
+    exact ⟨emptyState S, ReachedByRulesAdmitted.empty S,
+      by intro e he; simp [emptyState] at he⟩
+  | cons t' T'' ih =>
+    intro hmatAll
+    obtain ⟨σp, hp, hsubp⟩ := ih (fun t'' ht'' u hu =>
+      hmatAll t'' (List.mem_cons_of_mem _ ht'') u hu)
+    have hSI : StructInv S σp :=
+      (reachedByRules_inv (reachedByRules_of_admitted hp)).1.toStruct
+    have hmat : ∀ u ∈ rewriteClosure S t',
+        (subjNode u.subject, objNode u.object u.relation) ∈ Ef :=
+      fun u hu => hmatAll t' List.mem_cons_self u hu
+    have hFA : FoldAdmits σp (rewriteClosure S t') :=
+      foldAdmits_of_acyclic hacyc (rewriteClosure S t') hSI hsubp hmat
+    refine ⟨σp.writeRules S t', ReachedByRulesAdmitted.step t' hp hFA, ?_⟩
+    -- every edge of the new state materialises a closure tuple of `t' :: T''`, all in `Ef`
+    rintro ⟨a, b⟩ hab
+    obtain ⟨t'', ht'', u, hu, h1, h2⟩ :=
+      reachedByRules_edge_sound
+        (reachedByRules_of_admitted (ReachedByRulesAdmitted.step t' hp hFA)) a b hab
+    rw [h1, h2]
+    exact hmatAll t'' ht'' u hu
+
+/-- **Rebuild-existence over a SUBSET store.** From an admitted chain over `T`, any store `T'`
+    whose tuples all lie in `T` admits its own rule-routed chain, with edges inside `σ0`'s.
+    Acyclicity is inherited from `σ0` (`Inv.acyclic`); completeness of the target from
+    `reachedByRulesAdmitted_edge_complete`. Route-agnostic (stated over ⊆, not just `erase`). -/
+theorem exists_admitted_ofSubset {S : Schema} {T T' : Store} {σ0 : GraphState}
+    (h0 : ReachedByRulesAdmitted σ0 S T) (hsub : T' ⊆ T) :
+    ∃ σ0', ReachedByRulesAdmitted σ0' S T' ∧ (∀ e ∈ σ0'.edges, e ∈ σ0.edges) := by
+  refine exists_admitted_ofAcyclicTarget
+    ((reachedByRules_inv (reachedByRules_of_admitted h0)).1.acyclic) T' ?_
+  intro t' ht' u hu
+  exact reachedByRulesAdmitted_edge_complete h0 t' (hsub ht') u hu
+
+/-- **Rebuild-existence over `T.erase t` — the R5b tool.** The specific instance route (a)'s
+    `reachedByW3d2_shadow` remove case consumes: erasing one occurrence yields a subset store
+    (`List.erase_subset`), so an admitted rebuild exists over it, with edges ⊆ `σ0`'s. R5b will
+    match this rebuild against the actual retraction state via the R4 confluence (`ReadEq`). -/
+theorem exists_admitted_erase {S : Schema} {T : Store} {σ0 : GraphState}
+    (h0 : ReachedByRulesAdmitted σ0 S T) (t : Tuple) :
+    ∃ σ0', ReachedByRulesAdmitted σ0' S (T.erase t) ∧ (∀ e ∈ σ0'.edges, e ∈ σ0.edges) :=
+  exists_admitted_ofSubset h0 (List.erase_subset)
+
 end Zanzibar

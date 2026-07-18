@@ -8,6 +8,72 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19d (#4 remove legs — Leg R5a: build-FROM-store rebuild-existence LANDED, the R5b prerequisite)
+
+Seventh Lean-editing leg of #4. ADDITIVE — extends `RemoveConfluence.lean` only (no constructor /
+inductive / existing-def / Audit touched). verify.sh **lean phase PASSED: sorries=0, audit 415/415
+standard-axioms-only**; additive ⇒ conf unchanged (296). Full library builds (2144 jobs).
+
+- **Landed the R5a deliverable: the build-FROM-store admitted witness both R5b routes were BLOCKED
+  on.** 2026-07-19c traced that adding the `remove` constructor forces `graph_correct_w3d2E`'s
+  remove case immediately, and BOTH routes need a term `∃ σ0, ReachedByRulesAdmitted σ0 S (T.erase
+  t)` built FROM A STORE (every existing such term is shadow-FROM-chain). R5a builds it as the
+  **STORE-restriction dual of `exists_admitted_restrict`** (`RestrictBase.lean:434`, which restricts
+  the SCHEMA). Three lemmas in `RemoveConfluence.lean`:
+  - `exists_admitted_ofAcyclicTarget` (core) — given a FIXED acyclic `Ef` containing every
+    materialised closure edge of a store `T'`, folds `∃ σ0', ReachedByRulesAdmitted σ0' S T' ∧
+    (∀ e ∈ σ0'.edges, e ∈ Ef)` by induction on `T'`; each fold admits via `foldAdmits_of_acyclic`
+    (`:392`), `σp.edges ⊆ Ef` recovered per-step from `reachedByRules_edge_sound`, the final
+    edge-⊆ from `edge_sound` on the built chain.
+  - `exists_admitted_ofSubset` (route-agnostic) — `ReachedByRulesAdmitted σ0 S T → T' ⊆ T →
+    ∃ σ0', ReachedByRulesAdmitted σ0' S T' ∧ edges ⊆ σ0.edges`. Target `Ef := σ0.edges`, acyclic
+    by `Inv.acyclic`, complete by `reachedByRulesAdmitted_edge_complete`.
+  - **`exists_admitted_erase`** (the R5b tool) — `ReachedByRulesAdmitted σ0 S T → ∀ t, ∃ σ0',
+    ReachedByRulesAdmitted σ0' S (T.erase t) ∧ edges ⊆ σ0.edges` (via `List.erase_subset`).
+    Unblocks **route (a)** (recommended): `reachedByW3d2_shadow`'s remove case gets the admitted
+    rebuild over `T.erase t` from the IH's admitted chain over `T`. Route (b)'s untainted-core
+    shadow reduces to the same term; the drained E-chain lift is NOT provided (no add-only one-liner
+    lift), but route (a) needs only the admitted term, so R5b is unblocked as-is.
+- **The new ingredient — closure-acyclicity — is INHERITED, not proved from scratch.** The admission
+  target's acyclicity comes from the larger admitted store's `Inv.acyclic` (a sub-store's
+  materialised graph is a subgraph of an acyclic one). `ReachedByRules` (`RulesWrite.lean:200`) is
+  unconditional (internal `writeDirect` cycle-guard), so `reachedByRules_inv` gives `Inv` (hence
+  `acyclic`) for free; the ADMITTED chain adds completeness (`reachedByRulesAdmitted_edge_complete`),
+  so `σ0.edges` is BOTH acyclic and contains every sub-store materialised edge — exactly the
+  `foldAdmits_of_acyclic` target.
+- **★ ATTACK-FIRST SCOPING KILL (house rule 2; reasoned from `admitEdge`'s definition, airtight).**
+  Rebuild-existence over an ARBITRARY store is FALSE even under `RewriteRanked`. Witness: the userset
+  2-cycle store `{⟨group:g1#member, member, group:g2⟩, ⟨group:g2#member, member, group:g1⟩}` — NO
+  rewrite rules (so `RewriteRanked` holds vacuously), yet a userset subject `o#r` materialises at
+  `objNode o r`, so the two closure edges are `objNode(g1,member) → objNode(g2,member)` and the
+  reverse: a 2-cycle. `admitEdge` (`State.lean`, `a≠b ∧ ¬reach b a`) REJECTS the 2nd write once the
+  1st edge is present, so no `FoldAdmits`/`ReachedByRulesAdmitted` chain exists (the Python graph
+  index rolls the cyclic write back identically). ⇒ from-scratch admissibility is NOT free; it is
+  free ONLY over a SUB-store of an admitted store. This is why R5a is honestly premised on
+  `ReachedByRulesAdmitted σ0 S T` (never free-standing) and SHAPES R5b: derive the erased store's
+  admissibility FROM the pre-remove store's, never assert it. NOT a kill of the landed lemma (which
+  is proved green) — a kill of the more-general from-scratch statement, recorded to save R5b.
+- **Audit decision:** kept `exists_admitted_erase` OUT of `Audit.lean` — `Audit.lean` does not import
+  `RemoveConfluence` (matching R3/R4's remove-leg lemmas, all unaudited infrastructure so far). Adding
+  the import is a structural change deferred to R5b, which audits the final `graph_correct` remove-path
+  discharge. The peer template `exists_admitted_restrict` IS audited only because it lives in the
+  imported `RestrictBase`. Count stays 415/415.
+- **No kill of the deliverable** (the sub-store confluence is TRUE and proved; the kill is of the
+  over-general from-scratch statement).
+
+**RESUME #4: Leg R5b — the `remove` constructor (the ONE non-additive leg), now fully unblocked.**
+Add the 4th `remove` constructor (route a — mirror `write`: `(σ, T) → (σ.removeLoggedRules S t,
+T.erase t)` with `RemoveAdmits σ T t := t ∈ T`, NO bundled drain) to `ReachedByW3d2`/`C`/`E`.
+Discharge Group-A structural remove cases with this session's + R4's substrate
+(`residueHygienic_/residueDeclared_/structInv_removeLoggedRules`, `mem_removeLoggedRules_edges`);
+`reachedByW3d2_shadow`'s remove case off `exists_admitted_erase` (R5a); `reachedByW3d2C_settled`'s
+remove case mirroring its write case (`CascadeStrataResettle.lean:1210-1253`); the settledness duals
+(`removeLeg_sem_stable2`/`settledKey_removeLeg`/`cascadeKeys_removeLeg_mono`/
+`removeLeg_derived_inedges_eq`, duals of `CascadeStrataSettle.lean:1064-1207`); `toC`'s remove case
+trivial (`ReachedByW3d2C.remove`). `graph_correct_w3d2E`'s remove case transports `check=sem` via R4's
+`check_readEq` to the R5a rebuild. `RemoveConfluence.lean` is the toolkit; the write-leg stack is the
+dual template.
+
 ## Session 2026-07-19c (#4 remove legs — Leg R5 RECON+BLOCKER: the `remove` constructor is monolithic and gated on rebuild-existence; T2a Group-A structural discharges LANDED additively)
 
 Sixth Lean-editing leg of #4. Went in to land the `remove` constructor + discharge the consumer

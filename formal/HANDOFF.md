@@ -142,8 +142,13 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > closure-acyclicity. **LANDED additively this session (green):** the T2a Group-A STRUCTURAL remove-case
 > discharges — `removeLoggedOne_/removeLoggedRules_residue`, `mem_removeLoggedRules_edges`,
 > `residueHygienic_/residueDeclared_removeLoggedRules` (`RemoveConfluence.lean`) — the retraction is
-> residue-inert + edge-shrinking. **THE NEXT TASK: #4 Leg R5a — REBUILD-EXISTENCE (additive), then
-> R5b — the (undrained, route-a) `remove` constructor** on `ReachedByW3d2`/`C`/`E` + the settledness
+> residue-inert + edge-shrinking. **Leg R5a — REBUILD-EXISTENCE LANDED (2026-07-19d, additive, lean
+> 415/415):** `exists_admitted_erase`/`_ofSubset`/`_ofAcyclicTarget` (`RemoveConfluence.lean`) — the
+> build-FROM-store admitted witness `∃ σ0, ReachedByRulesAdmitted σ0 S (T.erase t)` (STORE-restriction
+> dual of `exists_admitted_restrict`), acyclicity INHERITED from the larger admitted store's
+> `Inv.acyclic` (attack-first KILL: from-scratch arbitrary-store rebuild is FALSE — a userset 2-cycle
+> store is admission-rejected; free only over a SUB-store, the exact R5b shape). **THE NEXT TASK: #4
+> Leg R5b — the (undrained, route-a) `remove` constructor** on `ReachedByW3d2`/`C`/`E` + the settledness
 > duals (`removeLeg_sem_stable2` / `settledKey_removeLeg` / `cascadeKeys_removeLeg_mono` /
 > `removeLeg_derived_inedges_eq`, duals of `CascadeStrataSettle.lean:1064-1207`) + `reachedByW3d2_shadow`
 > /`reachedByW3d2C_settled` remove cases. Recommend route (a) — undrained mirrors `write`, so `toC`'s
