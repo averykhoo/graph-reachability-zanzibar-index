@@ -109,10 +109,13 @@ occurrence-count invariant** `reachedByW3d2_srcOccCount` — the mirror of the t
 `reachedByW3d2_Rnode_not_source` is used at ~:799–848).
 
 **RESUME #4 (revised): source-occurrence infra leg FIRST, then the constructor.**
-- **Leg R5b-iii-a2 (IN PROGRESS 2026-07-19f, additive, self-contained, green on its own):** relocate the
-  count block UP above `CascadeStrata:639`; add `reachedByW3d2_srcOccCount` (`a.pred ≠ BARE ⇒
-  σ.edges.count (a,b) = untOccCount S T a b`, cascade edges bare-sourced ⇒ contribute 0) + the source-keyed
-  count lemmas. Attack-first the exact side-condition.
+- **Leg R5b-iii-a2 (LANDED 2026-07-19f, additive, green, audit 415/415):** relocated the count block UP to
+  `CascadeStrata:621` (above `_edge_source_ne_R`, now :1041); added `reachedByW3d2_srcOccCount`
+  (`:1013`: `a.pred ≠ BARE ⇒ σ.edges.count (a,b) = untOccCount S T a b`) + the source-keyed count stack
+  (`count_reconcileKeyDR_of_src` … `count_runCascade2_of_src` + `w3cJobsValid_cands_bare`). Attack-first
+  CONFIRMED cascade edges are BARE-sourced (`W3cJobValid.hcb` forces candidate `c.predicate = BARE`), so
+  `a.pred ≠ BARE` is the clean guard (write case source-agnostic; only cascade uses it). Pure move + new
+  content; only `CascadeStrata.lean` touched.
 - **Leg R5b-iii-b (v3, the constructor — now the mechanical grind the design intended):** add the 3 `remove`
   constructors with the CONFIRMED minimal guard (faithful comment citing `TupleSource.remove` + W4Fragment);
   discharge the 21 sites — 20 via the guard as above, `_edge_source_ne_R` via `reachedByW3d2_srcOccCount`

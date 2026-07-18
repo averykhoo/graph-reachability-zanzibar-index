@@ -81,10 +81,22 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
-> **THE NEXT TASK (2026-07-19f) — #4 Leg R5b-iii-b (v2): apply THE GUARD FIX, then discharge the
-> constructor.** R5b-i/ii/iii-a are LANDED + PUSHED (`d7d6f7d`/`2b7456f`/`a16c927`; all additive,
-> `verify.sh lean` green, audit 415/415): the substrate relocation, the crux
-> (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`), and the 9-lemma settledness-dual stack.
+> **THE NEXT TASK (2026-07-19f) — #4 Leg R5b-iii-b (v3): add the `remove` constructor + discharge (now
+> a mechanical grind).** ALL substrate is landed + pushed and the guard is CONFIRMED. R5b-i/ii/iii-a/a2
+> (`d7d6f7d`/`2b7456f`/`a16c927`/pending-commit; all additive, `verify.sh lean` green, audit 415/415):
+> the substrate relocation, the crux (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`), the
+> 9-lemma settledness-dual stack, and (a2) the SOURCE-side occurrence-count invariant
+> `reachedByW3d2_srcOccCount` (`a.pred ≠ BARE ⇒ count = untOccCount`; cascade edges bare-sourced) + its
+> count stack + count-block relocation above `CascadeStrata:639`. The v2 pass CONFIRMED the minimal guard
+> `(hSVT : StoreValidRules S T) (hBST : BareStarStore T) (hTST : TtuStarFree S T) (htermT : ∀ dt R,
+> isDerived → NoTtuTarget S R ∧ NoStoreSubjectR T R)` resolves 20/21 sites (both hard sites read-verified
+> feasible); the 21st, `reachedByW3d2_edge_source_ne_R`, is now unblocked by `reachedByW3d2_srcOccCount`.
+> **v3 = add the 3 `remove` constructors (route a: mirror `write` + `hdrain : cascadeKeys S σ = []` + the
+> guard, faithful comment citing `TupleSource.remove` + W4Fragment) to `ReachedByW3d2`/`C`/`E`, discharge
+> the 21 sites (20 via the guard's full-`T` disciplines + `subset`/dual-stack/`exists_admitted_erase`; the
+> source site via `reachedByW3d2_srcOccCount`), `graph_correct_w3d2E` needs no bespoke case, keep audit
+> 415/415, then reword `FINAL_REVIEW.md` to the validly-stored-tuple remove scope.** Prior context (the
+> guard-fix rationale, the site map) below + `history/PROOF_STATUS.md` 2026-07-19f.
 > R5b-iii-b (add the `remove` constructor + discharge 20+1 sites) hit a **NEW, root-caused design
 > blocker** and was reverted to green baseline (no red/sorry partial): the **erase store-hypothesis
 > DIRECTION.** Discipline/settledness theorems carry store hyps indexed by the reached store `T`

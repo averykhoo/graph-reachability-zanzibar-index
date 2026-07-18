@@ -618,6 +618,421 @@ theorem reconcileJobsLR_edge_sound {S : Schema} {T : Store} :
       · exact Or.inr ⟨j, List.mem_cons_self, c, hc, h1, h2⟩
     · exact Or.inr ⟨j', List.mem_cons_of_mem _ hj', c, hc, h1, h2⟩
 
+/-! ## The untainted occurrence-count stack (W3d remove-leg R3, LOW chain)
+
+Relocated DOWN from `RemoveOccCount.lean` so the R3 occurrence-count characterisation is
+available at the LOW `ReachedByW3d2` level (consumed by `reachedByW3d2_untOccCount` below and
+by the R5b shadow-transport crux `untaintedShadow_removeLeg` in `CascadeStrataSettle.lean`).
+Every lemma here is about the LOW `runCascade2`/reconcile/`writeLoggedRules`/`removeLoggedRules`
+defs, all defined at/below this module. The TOP-level `reachedByW3d2E_untOccCount` (over
+`ReachedByW3d2E`) still lives in `RemoveOccCount.lean` — it imports this module so these
+relocated lemmas remain visible to it. -/
+
+open scoped List
+
+/-- The direct edge a tuple materializes: `subjNode subject → objNode object relation`
+    (exactly the edge `writeDirect` adds, `Write.lean:77-82` / `writeDirect_edges`). -/
+def edgeOfTuple (u : Tuple) : NodeKey × NodeKey :=
+  (subjNode u.subject, objNode u.object u.relation)
+
+/-- The model-internal occurrence count of edge `(a,b)` across the store's rewrite
+    closures — `Σ_{t ∈ T}` (occurrences of `(a,b)` among `rewriteClosure S t`). The RHS of
+    the R3 invariant. -/
+def untOccCount (S : Schema) (T : Store) (a b : NodeKey) : Nat :=
+  ((T.flatMap (rewriteClosure S)).map edgeOfTuple).count (a, b)
+
+/-! ### The retraction's count-shrink law -/
+
+/-- One logged retraction's effect on `count p`: it decrements by one iff `u`'s materialized
+    edge IS `p` (Nat subtraction floors the absent case). The exact dual of `writeLoggedOne`'s
+    `+1` (`count_foldl_writeDirect`'s per-step growth). -/
+theorem count_removeLoggedOne (u : Tuple) (p : NodeKey × NodeKey) (σ : GraphState) :
+    (σ.removeLoggedOne u).edges.count p
+      = σ.edges.count p - (if edgeOfTuple u = p then 1 else 0) := by
+  unfold GraphState.removeLoggedOne edgeOfTuple
+  by_cases hmem : (subjNode u.subject, objNode u.object u.relation) ∈ σ.edges
+  · rw [if_pos hmem, pushDelta_edges, removeEdgeOne_edges]
+    by_cases hp : (subjNode u.subject, objNode u.object u.relation) = p
+    · rw [if_pos hp]; subst hp; exact List.count_erase_self
+    · rw [if_neg hp, Nat.sub_zero]
+      exact List.count_erase_of_ne (fun h => hp h.symm)
+  · rw [if_neg hmem]
+    by_cases hp : (subjNode u.subject, objNode u.object u.relation) = p
+    · rw [if_pos hp]; subst hp
+      have hz : σ.edges.count (subjNode u.subject, objNode u.object u.relation) = 0 :=
+        List.count_eq_zero.mpr hmem
+      omega
+    · rw [if_neg hp, Nat.sub_zero]
+
+/-- The logged rule-routed retraction's count-shrink law: `count p` drops by the number of
+    closure members whose materialized edge is `p` — the exact dual of R3's
+    `count_writeLoggedRules`. UNCONDITIONAL (Nat subtraction). -/
+theorem count_removeLoggedRules (p : NodeKey × NodeKey) (S : Schema) (t : Tuple) :
+    ∀ (σ : GraphState),
+      (σ.removeLoggedRules S t).edges.count p
+        = σ.edges.count p - ((rewriteClosure S t).map edgeOfTuple).count p := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = us
+  induction us with
+  | nil => intro σ; simp
+  | cons u rest ih =>
+    intro σ
+    simp only [List.foldl_cons]
+    rw [ih (σ.removeLoggedOne u), count_removeLoggedOne u p σ, List.map_cons]
+    by_cases hp : edgeOfTuple u = p
+    · subst hp
+      rw [if_pos rfl, List.count_cons_self]
+      omega
+    · rw [if_neg hp, List.count_cons_of_ne hp]
+      omega
+
+/-! ### The store-erase split of the occurrence count -/
+
+/-- Erasing a stored tuple `t ∈ T` splits the occurrence count: the total over `T` is the
+    total over `T.erase t` plus `t`'s own closure occurrences. `List.erase` drops the FIRST
+    copy, and `List.count` is permutation-invariant, so this holds even if `t` recurs in `T`
+    (a store multiset). The store-side identity R4's confluence needs to match the smaller
+    rebuild. -/
+theorem untOccCount_erase (S : Schema) (T : Store) (t : Tuple) (a b : NodeKey) (ht : t ∈ T) :
+    untOccCount S T a b
+      = untOccCount S (T.erase t) a b
+        + ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
+  unfold untOccCount
+  have hperm : T ~ t :: T.erase t := List.perm_cons_erase ht
+  have h1 := ((hperm.flatMap_right (rewriteClosure S)).map edgeOfTuple).count_eq (a, b)
+  rw [h1, List.flatMap_cons, List.map_append, List.count_append]
+  omega
+
+/-- The retraction only SHRINKS the edge multiset: any surviving edge was already present.
+    (Off the R4 count-shrink law `count_removeLoggedRules` — a present edge has positive
+    count, which the retraction can only lower, so it was positive, hence present, in `σ`.) -/
+theorem mem_removeLoggedRules_edges {σ : GraphState} {S : Schema} {t : Tuple}
+    {e : NodeKey × NodeKey} (h : e ∈ (σ.removeLoggedRules S t).edges) : e ∈ σ.edges := by
+  rw [← List.count_pos_iff] at h ⊢
+  rw [count_removeLoggedRules e S t σ] at h
+  omega
+
+/-! ### Filter preserves the count of a kept element -/
+
+/-- Filtering by a predicate `q` that HOLDS at `x` leaves `x`'s count unchanged (the
+    kept-element case of `List.count`/`List.filter`). Used for the `removeEdgePair`
+    (filter-all) arm of the diffing fold: a non-R-node edge is never the removed pair. -/
+theorem count_filter_of_true {α : Type _} [BEq α] [LawfulBEq α] (q : α → Bool) (x : α)
+    (hx : q x = true) : ∀ l : List α, (l.filter q).count x = l.count x := by
+  intro l
+  induction l with
+  | nil => rfl
+  | cons y rest ih =>
+    rw [List.filter_cons]
+    by_cases hy : q y = true
+    · rw [if_pos hy, List.count_cons, List.count_cons, ih]
+    · rw [if_neg hy, ih]
+      have hyx : (y == x) = false := by
+        rw [beq_eq_false_iff_ne]
+        intro h; subst h; exact hy hx
+      rw [List.count_cons, hyx]
+      simp
+
+/-! ### The write leg — an admitted `writeDirect` fold counts occurrences -/
+
+/-- **The write-fold count-growth lemma.** When every write in the fold is ADMITTED
+    (`FoldAdmits`, the write constructor's hypothesis — `RulesComplete.lean:54`), each
+    `writeDirect` prepends its materialized edge, so `count (a,b)` grows by exactly the
+    number of fold tuples whose materialized edge is `(a,b)` — a pure occurrence count.
+    (No acyclicity argument needed: admission is the constructor's own hypothesis.) -/
+theorem count_foldl_writeDirect (a b : NodeKey) :
+    ∀ (us : List Tuple) {σ : GraphState}, FoldAdmits σ us →
+      (us.foldl (fun acc u => acc.writeDirect u) σ).edges.count (a, b)
+        = σ.edges.count (a, b) + (us.map edgeOfTuple).count (a, b) := by
+  intro us
+  induction us with
+  | nil => intro σ _; simp
+  | cons u rest ih =>
+    intro σ hfa
+    obtain ⟨hadm, hrest⟩ := hfa
+    have hstep : (σ.writeDirect u).edges = edgeOfTuple u :: σ.edges := by
+      rw [writeDirect_edges, if_pos hadm]; rfl
+    simp only [List.foldl_cons]
+    rw [ih hrest, hstep, List.count_cons, List.map_cons, List.count_cons]
+    omega
+
+/-- The logged rule-routed write's count-growth: the edge count grows by the closure's
+    occurrence count of `(a,b)` (the logged core is the unlogged `writeRules`,
+    `writeLoggedRules_evalEq`; then `count_foldl_writeDirect` under `FoldAdmits`). -/
+theorem count_writeLoggedRules (a b : NodeKey) (σ : GraphState) (S : Schema) (t : Tuple)
+    (hadm : FoldAdmits σ (rewriteClosure S t)) :
+    (σ.writeLoggedRules S t).edges.count (a, b)
+      = σ.edges.count (a, b) + ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
+  rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges]
+  unfold GraphState.writeRules
+  exact count_foldl_writeDirect a b (rewriteClosure S t) hadm
+
+/-! ### The cascade leg — a routed diffing pass is untainted-count-inert
+
+The diffing edge audit `reconcileKeyDR` touches ONLY edges into the job's own terminal R-node
+`objNode ⟨dt,on⟩ R` — each fold step is either `writeDirect ⟨c,R,⟨dt,on⟩⟩` or
+`removeEdgePair (subjNode c) (objNode ⟨dt,on⟩ R)`. So an edge `(a,b)` with
+`b ≠ objNode ⟨dt,on⟩ R` keeps its exact count, and the whole two-round cascade is
+untainted-count-inert. -/
+
+/-- The routed diffing edge audit preserves `count (a,b)` when `b` is not the job's R-node. -/
+theorem count_reconcileKeyDR_of_ne (T : Store) (dt on R : String) (e : Expr)
+    {a b : NodeKey} (hb : b ≠ objNode ⟨dt, on⟩ R) :
+    ∀ (cands : List SubjectRef) (σ : GraphState),
+      (σ.reconcileKeyDR T dt on R e cands).edges.count (a, b) = σ.edges.count (a, b) := by
+  intro cands
+  induction cands with
+  | nil => intro σ; rfl
+  | cons c rest ih =>
+    intro σ
+    rw [reconcileKeyDR_cons, ih]
+    split
+    · rw [writeDirect_edges]
+      split
+      · rw [List.count_cons]
+        have hne : ((subjNode c, objNode ⟨dt, on⟩ R) == (a, b)) = false := by
+          rw [beq_eq_false_iff_ne]
+          intro h; exact hb (congrArg Prod.snd h).symm
+        rw [hne]; simp
+      · rfl
+    · rw [removeEdgePair_edges]
+      refine count_filter_of_true _ (a, b) ?_ σ.edges
+      have hbne : (b == objNode ⟨dt, on⟩ R) = false := by
+        rw [beq_eq_false_iff_ne]; exact hb
+      simp [hbne]
+
+/-- The routed full-object pass preserves `count (a,b)` off the job's R-node (the residue
+    recompute `reconcileResidueKeyR` leaves edges untouched, then `reconcileKeyDR`). -/
+theorem count_reconcileStarsKeyDR_of_ne (T : Store) (dt on R : String) (e : Expr)
+    (shapes : List Shape) (cands negCands uposCands : List SubjectRef)
+    {a b : NodeKey} (hb : b ≠ objNode ⟨dt, on⟩ R) (σ : GraphState) :
+    (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands uposCands).edges.count (a, b)
+      = σ.edges.count (a, b) := by
+  unfold GraphState.reconcileStarsKeyDR
+  rw [count_reconcileKeyDR_of_ne T dt on R e hb cands, reconcileResidueKeyR_edges]
+
+/-- One routed logged job preserves `count (a,b)` off its R-node (the emission
+    `pushDelta` leaves edges untouched). -/
+theorem count_applyLoggedR_of_ne (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob)
+    {a b : NodeKey} (hb : b ≠ objNode ⟨j.dt, j.on⟩ j.R) :
+    (j.applyLoggedR S T σ).edges.count (a, b) = σ.edges.count (a, b) := by
+  unfold W3cJob.applyLoggedR W3cJob.applyDR
+  rw [pushDelta_edges]
+  exact count_reconcileStarsKeyDR_of_ne T j.dt j.on j.R j.e (wildcardShapes S)
+    j.cands j.negCands j.uposCands hb σ
+
+/-- A routed logged batch preserves `count (a,b)` if `b` is off EVERY job's R-node. -/
+theorem count_reconcileJobsLR_of_ne (S : Schema) (T : Store) {a b : NodeKey} :
+    ∀ (jobs : List W3cJob), (∀ j ∈ jobs, b ≠ objNode ⟨j.dt, j.on⟩ j.R) →
+      ∀ (σ : GraphState),
+        (reconcileJobsLR S T σ jobs).edges.count (a, b) = σ.edges.count (a, b) := by
+  intro jobs
+  induction jobs with
+  | nil => intro _ σ; rfl
+  | cons j rest ih =>
+    intro hjobs σ
+    show (reconcileJobsLR S T (j.applyLoggedR S T σ) rest).edges.count (a, b)
+      = σ.edges.count (a, b)
+    rw [ih (fun j' hj' => hjobs j' (List.mem_cons_of_mem _ hj'))]
+    exact count_applyLoggedR_of_ne S T σ j (hjobs j List.mem_cons_self)
+
+/-- The two-round drain loop preserves `count (a,b)` if `b` is off every job's R-node in
+    BOTH rounds (accept: two batches, watermark bump is edge-inert; reject: identity). -/
+theorem count_runCascade2_of_ne (S : Schema) (T : Store) (σ : GraphState)
+    (jobs1 jobs2 : List W3cJob) {a b : NodeKey}
+    (h1 : ∀ j ∈ jobs1, b ≠ objNode ⟨j.dt, j.on⟩ j.R)
+    (h2 : ∀ j ∈ jobs2, b ≠ objNode ⟨j.dt, j.on⟩ j.R) :
+    (runCascade2 S T σ jobs1 jobs2).edges.count (a, b) = σ.edges.count (a, b) := by
+  unfold runCascade2
+  split
+  · show (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).edges.count (a, b)
+      = σ.edges.count (a, b)
+    rw [count_reconcileJobsLR_of_ne S T jobs2 h2,
+      count_reconcileJobsLR_of_ne S T jobs1 h1]
+  · rfl
+
+/-! ### The R3 invariant over the LOW two-round chain -/
+
+/-- Every VALID cascade job (`W3cJobValid`) is at a DERIVED R-node, so an untainted edge's
+    object endpoint differs from every job's R-node — the LOW-chain analog of
+    `enumJobs2At_Rnode_ne` (which is stated over `enumJobs2At` and stays in
+    `RemoveOccCount.lean`). -/
+theorem w3cJobsValid_Rnode_ne {S : Schema} {b : NodeKey}
+    (hb : isDerived S (b.type, b.pred) = false) :
+    ∀ (jobs : List W3cJob), (∀ j ∈ jobs, W3cJobValid S j) →
+      ∀ j ∈ jobs, b ≠ objNode ⟨j.dt, j.on⟩ j.R := by
+  intro jobs hjv j hj heq
+  obtain ⟨_, _, _, _, _, _, hder, _, _⟩ := hjv j hj
+  have ht : (objNode ⟨j.dt, j.on⟩ j.R).type = j.dt := objNode_type _ _
+  have hp : (objNode ⟨j.dt, j.on⟩ j.R).pred = j.R := objNode_pred _ _
+  rw [heq, ht, hp, hder] at hb
+  exact Bool.noConfusion hb
+
+/-- **R3 at the LOW chain — the untainted occurrence-count invariant over `ReachedByW3d2`.**
+    For every UNTAINTED direct edge `(a,b)` (`b.pred` not a derived relation of `b.type`), its
+    ref-count in `σ.edges` is the total occurrence count of `(a,b)` across the stored writes'
+    rewrite closures. A copy of `reachedByW3d2E_untOccCount` re-based on `ReachedByW3d2`'s own
+    `empty`/`write`/`cascade` constructors; the `cascade` case reads the R-node-ne facts off
+    each job's `W3cJobValid` (`w3cJobsValid_Rnode_ne`) rather than off `enumJobs2At`. -/
+theorem reachedByW3d2_untOccCount {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2 σ S T) :
+    ∀ a b : NodeKey, isDerived S (b.type, b.pred) = false →
+      σ.edges.count (a, b) = untOccCount S T a b := by
+  induction h with
+  | empty S =>
+    intro a b _
+    simp [untOccCount, emptyState]
+  | @write σp S T t hadm hprev ih =>
+    intro a b hb
+    rw [count_writeLoggedRules a b σp S t hadm, ih a b hb]
+    unfold untOccCount
+    rw [List.flatMap_cons, List.map_append, List.count_append]
+    omega
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
+    intro a b hb
+    have h1 : ∀ j ∈ jobs1, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs1 hjv1
+    have h2 : ∀ j ∈ jobs2, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs2 hjv2
+    rw [count_runCascade2_of_ne S T σp jobs1 jobs2 h1 h2]
+    exact ih a b hb
+
+/-! ### The cascade leg — a routed diffing pass is NON-BARE-SOURCE-count-inert (R5b source leg)
+
+The SOURCE-keyed mirror of the R-node target reasoning above. The diffing edge audit
+`reconcileKeyDR` touches ONLY edges sourced at a candidate node `subjNode c` — each fold step is
+`writeDirect ⟨c,R,⟨dt,on⟩⟩` (adds source `subjNode c`) or `removeEdgePair (subjNode c)
+(objNode ⟨dt,on⟩ R)` (removes source `subjNode c`). A valid job's candidates are BARE-predicate
+(`W3cJobValid`, `hcb`), so `subjNode c` has predicate `BARE`. Hence an edge `(a,b)` with
+`a.pred ≠ BARE` keeps its exact count, and the whole two-round cascade is non-bare-source-count-
+inert — attack-first CONFIRMED via the existing `reachedByW3d2_edge_source_ne_R` (cascade edge
+sources are bare candidates, lines above). This is the SOURCE analog of the `*_of_ne` stack the
+R5b remove-leg's source-keyed retraction fact needs. -/
+
+/-- The routed diffing edge audit preserves `count (a,b)` when the source `a` is non-BARE and
+    every candidate is BARE (so every touched edge is BARE-sourced, `a ≠ subjNode c`). -/
+theorem count_reconcileKeyDR_of_src (T : Store) (dt on R : String) (e : Expr)
+    {a b : NodeKey} (ha : a.pred ≠ BARE) :
+    ∀ (cands : List SubjectRef), (∀ c ∈ cands, c.predicate = BARE) →
+      ∀ (σ : GraphState),
+        (σ.reconcileKeyDR T dt on R e cands).edges.count (a, b) = σ.edges.count (a, b) := by
+  intro cands
+  induction cands with
+  | nil => intro _ σ; rfl
+  | cons c rest ih =>
+    intro hcb σ
+    have hane : a ≠ subjNode c := by
+      intro h; exact ha (by rw [h, subjNode_pred, hcb c List.mem_cons_self])
+    rw [reconcileKeyDR_cons, ih (fun c' hc' => hcb c' (List.mem_cons_of_mem _ hc'))]
+    split
+    · rw [writeDirect_edges]
+      split
+      · rw [List.count_cons]
+        have hne : ((subjNode c, objNode ⟨dt, on⟩ R) == (a, b)) = false := by
+          rw [beq_eq_false_iff_ne]
+          intro h; exact hane (congrArg Prod.fst h).symm
+        rw [hne]; simp
+      · rfl
+    · rw [removeEdgePair_edges]
+      refine count_filter_of_true _ (a, b) ?_ σ.edges
+      have hane' : (a == subjNode c) = false := by
+        rw [beq_eq_false_iff_ne]; exact hane
+      simp [hane']
+
+/-- The routed full-object pass preserves `count (a,b)` for a non-BARE source (the residue
+    recompute `reconcileResidueKeyR` leaves edges untouched, then `reconcileKeyDR`). -/
+theorem count_reconcileStarsKeyDR_of_src (T : Store) (dt on R : String) (e : Expr)
+    (shapes : List Shape) (cands negCands uposCands : List SubjectRef)
+    {a b : NodeKey} (ha : a.pred ≠ BARE) (hcb : ∀ c ∈ cands, c.predicate = BARE)
+    (σ : GraphState) :
+    (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands uposCands).edges.count (a, b)
+      = σ.edges.count (a, b) := by
+  unfold GraphState.reconcileStarsKeyDR
+  rw [count_reconcileKeyDR_of_src T dt on R e ha cands hcb, reconcileResidueKeyR_edges]
+
+/-- One routed logged job preserves `count (a,b)` for a non-BARE source (the emission
+    `pushDelta` leaves edges untouched). -/
+theorem count_applyLoggedR_of_src (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob)
+    {a b : NodeKey} (ha : a.pred ≠ BARE) (hcb : ∀ c ∈ j.cands, c.predicate = BARE) :
+    (j.applyLoggedR S T σ).edges.count (a, b) = σ.edges.count (a, b) := by
+  unfold W3cJob.applyLoggedR W3cJob.applyDR
+  rw [pushDelta_edges]
+  exact count_reconcileStarsKeyDR_of_src T j.dt j.on j.R j.e (wildcardShapes S)
+    j.cands j.negCands j.uposCands ha hcb σ
+
+/-- A routed logged batch preserves `count (a,b)` for a non-BARE source if every job's
+    candidates are BARE. -/
+theorem count_reconcileJobsLR_of_src (S : Schema) (T : Store) {a b : NodeKey}
+    (ha : a.pred ≠ BARE) :
+    ∀ (jobs : List W3cJob), (∀ j ∈ jobs, ∀ c ∈ j.cands, c.predicate = BARE) →
+      ∀ (σ : GraphState),
+        (reconcileJobsLR S T σ jobs).edges.count (a, b) = σ.edges.count (a, b) := by
+  intro jobs
+  induction jobs with
+  | nil => intro _ σ; rfl
+  | cons j rest ih =>
+    intro hjobs σ
+    show (reconcileJobsLR S T (j.applyLoggedR S T σ) rest).edges.count (a, b)
+      = σ.edges.count (a, b)
+    rw [ih (fun j' hj' => hjobs j' (List.mem_cons_of_mem _ hj'))]
+    exact count_applyLoggedR_of_src S T σ j ha (hjobs j List.mem_cons_self)
+
+/-- The two-round drain loop preserves `count (a,b)` for a non-BARE source if every job's
+    candidates are BARE in BOTH rounds (accept: two batches; reject: identity). -/
+theorem count_runCascade2_of_src (S : Schema) (T : Store) (σ : GraphState)
+    (jobs1 jobs2 : List W3cJob) {a b : NodeKey} (ha : a.pred ≠ BARE)
+    (h1 : ∀ j ∈ jobs1, ∀ c ∈ j.cands, c.predicate = BARE)
+    (h2 : ∀ j ∈ jobs2, ∀ c ∈ j.cands, c.predicate = BARE) :
+    (runCascade2 S T σ jobs1 jobs2).edges.count (a, b) = σ.edges.count (a, b) := by
+  unfold runCascade2
+  split
+  · show (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).edges.count (a, b)
+      = σ.edges.count (a, b)
+    rw [count_reconcileJobsLR_of_src S T ha jobs2 h2,
+      count_reconcileJobsLR_of_src S T ha jobs1 h1]
+  · rfl
+
+/-! ### The R3 SOURCE invariant over the LOW two-round chain -/
+
+/-- Every VALID cascade job (`W3cJobValid`) has BARE-predicate candidates — the source-side
+    fact the cascade case of `reachedByW3d2_srcOccCount` reads (the analog of
+    `w3cJobsValid_Rnode_ne`, off the `hcb` clause rather than the derived-R-node clause). -/
+theorem w3cJobsValid_cands_bare {S : Schema} :
+    ∀ (jobs : List W3cJob), (∀ j ∈ jobs, W3cJobValid S j) →
+      ∀ j ∈ jobs, ∀ c ∈ j.cands, c.predicate = BARE := by
+  intro jobs hjv j hj c hc
+  obtain ⟨_, hcb, _⟩ := hjv j hj
+  exact hcb c hc
+
+/-- **R3 SOURCE at the LOW chain — the non-bare-source occurrence-count invariant over
+    `ReachedByW3d2`.** For every direct edge `(a,b)` whose SOURCE predicate `a.pred` is not
+    `BARE`, its ref-count in `σ.edges` is the total occurrence count of `(a,b)` across the
+    stored writes' rewrite closures — because such edges arise ONLY from stored-tuple closures
+    (`write`), never from a cascade pass (cascade/reconcile edges are BARE-sourced candidate
+    edges, so a non-bare source count is cascade-inert, `count_runCascade2_of_src`). The SOURCE
+    mirror of `reachedByW3d2_untOccCount` (whose guard is on the edge TARGET, `b.pred` non-
+    derived); the R5b remove-leg's source-keyed retraction discharge needs THIS form. -/
+theorem reachedByW3d2_srcOccCount {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2 σ S T) :
+    ∀ a b : NodeKey, a.pred ≠ BARE →
+      σ.edges.count (a, b) = untOccCount S T a b := by
+  induction h with
+  | empty S =>
+    intro a b _
+    simp [untOccCount, emptyState]
+  | @write σp S T t hadm hprev ih =>
+    intro a b ha
+    rw [count_writeLoggedRules a b σp S t hadm, ih a b ha]
+    unfold untOccCount
+    rw [List.flatMap_cons, List.map_append, List.count_append]
+    omega
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
+    intro a b ha
+    have h1 : ∀ j ∈ jobs1, ∀ c ∈ j.cands, c.predicate = BARE :=
+      w3cJobsValid_cands_bare jobs1 hjv1
+    have h2 : ∀ j ∈ jobs2, ∀ c ∈ j.cands, c.predicate = BARE :=
+      w3cJobsValid_cands_bare jobs2 hjv2
+    rw [count_runCascade2_of_src S T σp jobs1 jobs2 ha h1 h2]
+    exact ih a b ha
+
 /-! ## R-node terminality over the two-round closure -/
 
 /-- **No W3d-2 edge is sourced at an `R`-userset node** (the two-round analog of
@@ -1306,282 +1721,5 @@ theorem checkFnR_reconcileStarsKeyDR_other {σ : GraphState} {S : Schema} (T : S
   evalE_computedOnly e' hco (fun r' hr' =>
     check_reconcileStarsKeyDR_other T dt on R e shapes cands negCands uposCands hσS
       hRne hcands hRns honStar hder hcl ⟨s, r', ⟨dt', on'⟩⟩ (hother r' hr'))
-
-/-! ## The untainted occurrence-count stack (W3d remove-leg R3, LOW chain)
-
-Relocated DOWN from `RemoveOccCount.lean` so the R3 occurrence-count characterisation is
-available at the LOW `ReachedByW3d2` level (consumed by `reachedByW3d2_untOccCount` below and
-by the R5b shadow-transport crux `untaintedShadow_removeLeg` in `CascadeStrataSettle.lean`).
-Every lemma here is about the LOW `runCascade2`/reconcile/`writeLoggedRules`/`removeLoggedRules`
-defs, all defined at/below this module. The TOP-level `reachedByW3d2E_untOccCount` (over
-`ReachedByW3d2E`) still lives in `RemoveOccCount.lean` — it imports this module so these
-relocated lemmas remain visible to it. -/
-
-open scoped List
-
-/-- The direct edge a tuple materializes: `subjNode subject → objNode object relation`
-    (exactly the edge `writeDirect` adds, `Write.lean:77-82` / `writeDirect_edges`). -/
-def edgeOfTuple (u : Tuple) : NodeKey × NodeKey :=
-  (subjNode u.subject, objNode u.object u.relation)
-
-/-- The model-internal occurrence count of edge `(a,b)` across the store's rewrite
-    closures — `Σ_{t ∈ T}` (occurrences of `(a,b)` among `rewriteClosure S t`). The RHS of
-    the R3 invariant. -/
-def untOccCount (S : Schema) (T : Store) (a b : NodeKey) : Nat :=
-  ((T.flatMap (rewriteClosure S)).map edgeOfTuple).count (a, b)
-
-/-! ### The retraction's count-shrink law -/
-
-/-- One logged retraction's effect on `count p`: it decrements by one iff `u`'s materialized
-    edge IS `p` (Nat subtraction floors the absent case). The exact dual of `writeLoggedOne`'s
-    `+1` (`count_foldl_writeDirect`'s per-step growth). -/
-theorem count_removeLoggedOne (u : Tuple) (p : NodeKey × NodeKey) (σ : GraphState) :
-    (σ.removeLoggedOne u).edges.count p
-      = σ.edges.count p - (if edgeOfTuple u = p then 1 else 0) := by
-  unfold GraphState.removeLoggedOne edgeOfTuple
-  by_cases hmem : (subjNode u.subject, objNode u.object u.relation) ∈ σ.edges
-  · rw [if_pos hmem, pushDelta_edges, removeEdgeOne_edges]
-    by_cases hp : (subjNode u.subject, objNode u.object u.relation) = p
-    · rw [if_pos hp]; subst hp; exact List.count_erase_self
-    · rw [if_neg hp, Nat.sub_zero]
-      exact List.count_erase_of_ne (fun h => hp h.symm)
-  · rw [if_neg hmem]
-    by_cases hp : (subjNode u.subject, objNode u.object u.relation) = p
-    · rw [if_pos hp]; subst hp
-      have hz : σ.edges.count (subjNode u.subject, objNode u.object u.relation) = 0 :=
-        List.count_eq_zero.mpr hmem
-      omega
-    · rw [if_neg hp, Nat.sub_zero]
-
-/-- The logged rule-routed retraction's count-shrink law: `count p` drops by the number of
-    closure members whose materialized edge is `p` — the exact dual of R3's
-    `count_writeLoggedRules`. UNCONDITIONAL (Nat subtraction). -/
-theorem count_removeLoggedRules (p : NodeKey × NodeKey) (S : Schema) (t : Tuple) :
-    ∀ (σ : GraphState),
-      (σ.removeLoggedRules S t).edges.count p
-        = σ.edges.count p - ((rewriteClosure S t).map edgeOfTuple).count p := by
-  unfold GraphState.removeLoggedRules
-  generalize rewriteClosure S t = us
-  induction us with
-  | nil => intro σ; simp
-  | cons u rest ih =>
-    intro σ
-    simp only [List.foldl_cons]
-    rw [ih (σ.removeLoggedOne u), count_removeLoggedOne u p σ, List.map_cons]
-    by_cases hp : edgeOfTuple u = p
-    · subst hp
-      rw [if_pos rfl, List.count_cons_self]
-      omega
-    · rw [if_neg hp, List.count_cons_of_ne hp]
-      omega
-
-/-! ### The store-erase split of the occurrence count -/
-
-/-- Erasing a stored tuple `t ∈ T` splits the occurrence count: the total over `T` is the
-    total over `T.erase t` plus `t`'s own closure occurrences. `List.erase` drops the FIRST
-    copy, and `List.count` is permutation-invariant, so this holds even if `t` recurs in `T`
-    (a store multiset). The store-side identity R4's confluence needs to match the smaller
-    rebuild. -/
-theorem untOccCount_erase (S : Schema) (T : Store) (t : Tuple) (a b : NodeKey) (ht : t ∈ T) :
-    untOccCount S T a b
-      = untOccCount S (T.erase t) a b
-        + ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
-  unfold untOccCount
-  have hperm : T ~ t :: T.erase t := List.perm_cons_erase ht
-  have h1 := ((hperm.flatMap_right (rewriteClosure S)).map edgeOfTuple).count_eq (a, b)
-  rw [h1, List.flatMap_cons, List.map_append, List.count_append]
-  omega
-
-/-- The retraction only SHRINKS the edge multiset: any surviving edge was already present.
-    (Off the R4 count-shrink law `count_removeLoggedRules` — a present edge has positive
-    count, which the retraction can only lower, so it was positive, hence present, in `σ`.) -/
-theorem mem_removeLoggedRules_edges {σ : GraphState} {S : Schema} {t : Tuple}
-    {e : NodeKey × NodeKey} (h : e ∈ (σ.removeLoggedRules S t).edges) : e ∈ σ.edges := by
-  rw [← List.count_pos_iff] at h ⊢
-  rw [count_removeLoggedRules e S t σ] at h
-  omega
-
-/-! ### Filter preserves the count of a kept element -/
-
-/-- Filtering by a predicate `q` that HOLDS at `x` leaves `x`'s count unchanged (the
-    kept-element case of `List.count`/`List.filter`). Used for the `removeEdgePair`
-    (filter-all) arm of the diffing fold: a non-R-node edge is never the removed pair. -/
-theorem count_filter_of_true {α : Type _} [BEq α] [LawfulBEq α] (q : α → Bool) (x : α)
-    (hx : q x = true) : ∀ l : List α, (l.filter q).count x = l.count x := by
-  intro l
-  induction l with
-  | nil => rfl
-  | cons y rest ih =>
-    rw [List.filter_cons]
-    by_cases hy : q y = true
-    · rw [if_pos hy, List.count_cons, List.count_cons, ih]
-    · rw [if_neg hy, ih]
-      have hyx : (y == x) = false := by
-        rw [beq_eq_false_iff_ne]
-        intro h; subst h; exact hy hx
-      rw [List.count_cons, hyx]
-      simp
-
-/-! ### The write leg — an admitted `writeDirect` fold counts occurrences -/
-
-/-- **The write-fold count-growth lemma.** When every write in the fold is ADMITTED
-    (`FoldAdmits`, the write constructor's hypothesis — `RulesComplete.lean:54`), each
-    `writeDirect` prepends its materialized edge, so `count (a,b)` grows by exactly the
-    number of fold tuples whose materialized edge is `(a,b)` — a pure occurrence count.
-    (No acyclicity argument needed: admission is the constructor's own hypothesis.) -/
-theorem count_foldl_writeDirect (a b : NodeKey) :
-    ∀ (us : List Tuple) {σ : GraphState}, FoldAdmits σ us →
-      (us.foldl (fun acc u => acc.writeDirect u) σ).edges.count (a, b)
-        = σ.edges.count (a, b) + (us.map edgeOfTuple).count (a, b) := by
-  intro us
-  induction us with
-  | nil => intro σ _; simp
-  | cons u rest ih =>
-    intro σ hfa
-    obtain ⟨hadm, hrest⟩ := hfa
-    have hstep : (σ.writeDirect u).edges = edgeOfTuple u :: σ.edges := by
-      rw [writeDirect_edges, if_pos hadm]; rfl
-    simp only [List.foldl_cons]
-    rw [ih hrest, hstep, List.count_cons, List.map_cons, List.count_cons]
-    omega
-
-/-- The logged rule-routed write's count-growth: the edge count grows by the closure's
-    occurrence count of `(a,b)` (the logged core is the unlogged `writeRules`,
-    `writeLoggedRules_evalEq`; then `count_foldl_writeDirect` under `FoldAdmits`). -/
-theorem count_writeLoggedRules (a b : NodeKey) (σ : GraphState) (S : Schema) (t : Tuple)
-    (hadm : FoldAdmits σ (rewriteClosure S t)) :
-    (σ.writeLoggedRules S t).edges.count (a, b)
-      = σ.edges.count (a, b) + ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
-  rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges]
-  unfold GraphState.writeRules
-  exact count_foldl_writeDirect a b (rewriteClosure S t) hadm
-
-/-! ### The cascade leg — a routed diffing pass is untainted-count-inert
-
-The diffing edge audit `reconcileKeyDR` touches ONLY edges into the job's own terminal R-node
-`objNode ⟨dt,on⟩ R` — each fold step is either `writeDirect ⟨c,R,⟨dt,on⟩⟩` or
-`removeEdgePair (subjNode c) (objNode ⟨dt,on⟩ R)`. So an edge `(a,b)` with
-`b ≠ objNode ⟨dt,on⟩ R` keeps its exact count, and the whole two-round cascade is
-untainted-count-inert. -/
-
-/-- The routed diffing edge audit preserves `count (a,b)` when `b` is not the job's R-node. -/
-theorem count_reconcileKeyDR_of_ne (T : Store) (dt on R : String) (e : Expr)
-    {a b : NodeKey} (hb : b ≠ objNode ⟨dt, on⟩ R) :
-    ∀ (cands : List SubjectRef) (σ : GraphState),
-      (σ.reconcileKeyDR T dt on R e cands).edges.count (a, b) = σ.edges.count (a, b) := by
-  intro cands
-  induction cands with
-  | nil => intro σ; rfl
-  | cons c rest ih =>
-    intro σ
-    rw [reconcileKeyDR_cons, ih]
-    split
-    · rw [writeDirect_edges]
-      split
-      · rw [List.count_cons]
-        have hne : ((subjNode c, objNode ⟨dt, on⟩ R) == (a, b)) = false := by
-          rw [beq_eq_false_iff_ne]
-          intro h; exact hb (congrArg Prod.snd h).symm
-        rw [hne]; simp
-      · rfl
-    · rw [removeEdgePair_edges]
-      refine count_filter_of_true _ (a, b) ?_ σ.edges
-      have hbne : (b == objNode ⟨dt, on⟩ R) = false := by
-        rw [beq_eq_false_iff_ne]; exact hb
-      simp [hbne]
-
-/-- The routed full-object pass preserves `count (a,b)` off the job's R-node (the residue
-    recompute `reconcileResidueKeyR` leaves edges untouched, then `reconcileKeyDR`). -/
-theorem count_reconcileStarsKeyDR_of_ne (T : Store) (dt on R : String) (e : Expr)
-    (shapes : List Shape) (cands negCands uposCands : List SubjectRef)
-    {a b : NodeKey} (hb : b ≠ objNode ⟨dt, on⟩ R) (σ : GraphState) :
-    (σ.reconcileStarsKeyDR T dt on R e shapes cands negCands uposCands).edges.count (a, b)
-      = σ.edges.count (a, b) := by
-  unfold GraphState.reconcileStarsKeyDR
-  rw [count_reconcileKeyDR_of_ne T dt on R e hb cands, reconcileResidueKeyR_edges]
-
-/-- One routed logged job preserves `count (a,b)` off its R-node (the emission
-    `pushDelta` leaves edges untouched). -/
-theorem count_applyLoggedR_of_ne (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob)
-    {a b : NodeKey} (hb : b ≠ objNode ⟨j.dt, j.on⟩ j.R) :
-    (j.applyLoggedR S T σ).edges.count (a, b) = σ.edges.count (a, b) := by
-  unfold W3cJob.applyLoggedR W3cJob.applyDR
-  rw [pushDelta_edges]
-  exact count_reconcileStarsKeyDR_of_ne T j.dt j.on j.R j.e (wildcardShapes S)
-    j.cands j.negCands j.uposCands hb σ
-
-/-- A routed logged batch preserves `count (a,b)` if `b` is off EVERY job's R-node. -/
-theorem count_reconcileJobsLR_of_ne (S : Schema) (T : Store) {a b : NodeKey} :
-    ∀ (jobs : List W3cJob), (∀ j ∈ jobs, b ≠ objNode ⟨j.dt, j.on⟩ j.R) →
-      ∀ (σ : GraphState),
-        (reconcileJobsLR S T σ jobs).edges.count (a, b) = σ.edges.count (a, b) := by
-  intro jobs
-  induction jobs with
-  | nil => intro _ σ; rfl
-  | cons j rest ih =>
-    intro hjobs σ
-    show (reconcileJobsLR S T (j.applyLoggedR S T σ) rest).edges.count (a, b)
-      = σ.edges.count (a, b)
-    rw [ih (fun j' hj' => hjobs j' (List.mem_cons_of_mem _ hj'))]
-    exact count_applyLoggedR_of_ne S T σ j (hjobs j List.mem_cons_self)
-
-/-- The two-round drain loop preserves `count (a,b)` if `b` is off every job's R-node in
-    BOTH rounds (accept: two batches, watermark bump is edge-inert; reject: identity). -/
-theorem count_runCascade2_of_ne (S : Schema) (T : Store) (σ : GraphState)
-    (jobs1 jobs2 : List W3cJob) {a b : NodeKey}
-    (h1 : ∀ j ∈ jobs1, b ≠ objNode ⟨j.dt, j.on⟩ j.R)
-    (h2 : ∀ j ∈ jobs2, b ≠ objNode ⟨j.dt, j.on⟩ j.R) :
-    (runCascade2 S T σ jobs1 jobs2).edges.count (a, b) = σ.edges.count (a, b) := by
-  unfold runCascade2
-  split
-  · show (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).edges.count (a, b)
-      = σ.edges.count (a, b)
-    rw [count_reconcileJobsLR_of_ne S T jobs2 h2,
-      count_reconcileJobsLR_of_ne S T jobs1 h1]
-  · rfl
-
-/-! ### The R3 invariant over the LOW two-round chain -/
-
-/-- Every VALID cascade job (`W3cJobValid`) is at a DERIVED R-node, so an untainted edge's
-    object endpoint differs from every job's R-node — the LOW-chain analog of
-    `enumJobs2At_Rnode_ne` (which is stated over `enumJobs2At` and stays in
-    `RemoveOccCount.lean`). -/
-theorem w3cJobsValid_Rnode_ne {S : Schema} {b : NodeKey}
-    (hb : isDerived S (b.type, b.pred) = false) :
-    ∀ (jobs : List W3cJob), (∀ j ∈ jobs, W3cJobValid S j) →
-      ∀ j ∈ jobs, b ≠ objNode ⟨j.dt, j.on⟩ j.R := by
-  intro jobs hjv j hj heq
-  obtain ⟨_, _, _, _, _, _, hder, _, _⟩ := hjv j hj
-  have ht : (objNode ⟨j.dt, j.on⟩ j.R).type = j.dt := objNode_type _ _
-  have hp : (objNode ⟨j.dt, j.on⟩ j.R).pred = j.R := objNode_pred _ _
-  rw [heq, ht, hp, hder] at hb
-  exact Bool.noConfusion hb
-
-/-- **R3 at the LOW chain — the untainted occurrence-count invariant over `ReachedByW3d2`.**
-    For every UNTAINTED direct edge `(a,b)` (`b.pred` not a derived relation of `b.type`), its
-    ref-count in `σ.edges` is the total occurrence count of `(a,b)` across the stored writes'
-    rewrite closures. A copy of `reachedByW3d2E_untOccCount` re-based on `ReachedByW3d2`'s own
-    `empty`/`write`/`cascade` constructors; the `cascade` case reads the R-node-ne facts off
-    each job's `W3cJobValid` (`w3cJobsValid_Rnode_ne`) rather than off `enumJobs2At`. -/
-theorem reachedByW3d2_untOccCount {σ : GraphState} {S : Schema} {T : Store}
-    (h : ReachedByW3d2 σ S T) :
-    ∀ a b : NodeKey, isDerived S (b.type, b.pred) = false →
-      σ.edges.count (a, b) = untOccCount S T a b := by
-  induction h with
-  | empty S =>
-    intro a b _
-    simp [untOccCount, emptyState]
-  | @write σp S T t hadm hprev ih =>
-    intro a b hb
-    rw [count_writeLoggedRules a b σp S t hadm, ih a b hb]
-    unfold untOccCount
-    rw [List.flatMap_cons, List.map_append, List.count_append]
-    omega
-  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
-    intro a b hb
-    have h1 : ∀ j ∈ jobs1, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs1 hjv1
-    have h2 : ∀ j ∈ jobs2, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs2 hjv2
-    rw [count_runCascade2_of_ne S T σp jobs1 jobs2 h1 h2]
-    exact ih a b hb
 
 end Zanzibar
