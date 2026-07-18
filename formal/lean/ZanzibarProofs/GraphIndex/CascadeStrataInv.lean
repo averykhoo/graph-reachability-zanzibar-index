@@ -432,4 +432,48 @@ theorem enumJob2_negCands_subset (σ : GraphState) (dt on R : String) (e : Expr)
     ++ edgeHolders σ dt on R
   exact List.mem_append_left _ hc
 
+/-! ## The retraction is residue-inert — the T2a Group-A remove-case substrate (R5 pre-discharge)
+
+The logged rule-routed retraction `removeLoggedRules` touches ONLY the edge multiset (via
+`removeEdgeOne`) and the outbox (via `pushDelta`); it never writes a `residue` row. So the
+STRUCTURAL invariant clauses that read only `residue` (`ResidueHygienic`, `ResidueDeclared`)
+transport verbatim across a retraction. -/
+
+/-- One logged retraction leaves the residue map untouched (`removeEdgeOne`/`pushDelta` are
+    both residue-inert). -/
+@[simp] theorem removeLoggedOne_residue (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).residue = σ.residue := by
+  unfold GraphState.removeLoggedOne
+  by_cases hmem : (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
+  · rw [if_pos hmem, pushDelta_residue, removeEdgeOne_residue]
+  · rw [if_neg hmem]
+
+/-- The logged rule-routed retraction leaves the residue map untouched (fold of the above). -/
+theorem removeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
+    (σ.removeLoggedRules S t).residue = σ.residue := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = us
+  induction us generalizing σ with
+  | nil => rfl
+  | cons u rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih (σ.removeLoggedOne u), removeLoggedOne_residue]
+
+/-- **`ResidueHygienic` survives a retraction** (both clauses read only `residue`, which is
+    inert). The R5 `reachedByW3d2E_residueHygienic` remove-case discharge. -/
+theorem residueHygienic_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
+    (h : ResidueHygienic σ) : ResidueHygienic (σ.removeLoggedRules S t) := by
+  obtain ⟨h1, h2⟩ := h
+  refine ⟨fun k r res hrow n hn => ?_, fun k r res hrow n hn => ?_⟩
+  · rw [removeLoggedRules_residue] at hrow; exact h1 k r res hrow n hn
+  · rw [removeLoggedRules_residue] at hrow; exact h2 k r res hrow n hn
+
+/-- **`ResidueDeclared` survives a retraction** (reads only `residue`). The R5
+    `reachedByW3d2E_residueDeclared` remove-case discharge. -/
+theorem residueDeclared_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
+    (h : ResidueDeclared S σ) : ResidueDeclared S (σ.removeLoggedRules S t) := by
+  intro k r res hrow
+  rw [removeLoggedRules_residue] at hrow
+  exact h k r res hrow
+
 end Zanzibar

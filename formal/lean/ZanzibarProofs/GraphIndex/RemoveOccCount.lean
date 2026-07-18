@@ -66,6 +66,8 @@ and touches no existing def/theorem/inductive. Not in `Audit.lean` (R3 is infras
 
 namespace Zanzibar
 
+open scoped List
+
 /-- The direct edge a tuple materializes: `subjNode subject → objNode object relation`
     (exactly the edge `writeDirect` adds, `Write.lean:77-82` / `writeDirect_edges`). -/
 def edgeOfTuple (u : Tuple) : NodeKey × NodeKey :=
@@ -76,6 +78,77 @@ def edgeOfTuple (u : Tuple) : NodeKey × NodeKey :=
     the R3 invariant. -/
 def untOccCount (S : Schema) (T : Store) (a b : NodeKey) : Nat :=
   ((T.flatMap (rewriteClosure S)).map edgeOfTuple).count (a, b)
+
+/-! ## The retraction's count-shrink law -/
+
+/-- One logged retraction's effect on `count p`: it decrements by one iff `u`'s materialized
+    edge IS `p` (Nat subtraction floors the absent case). The exact dual of `writeLoggedOne`'s
+    `+1` (`count_foldl_writeDirect`'s per-step growth). -/
+theorem count_removeLoggedOne (u : Tuple) (p : NodeKey × NodeKey) (σ : GraphState) :
+    (σ.removeLoggedOne u).edges.count p
+      = σ.edges.count p - (if edgeOfTuple u = p then 1 else 0) := by
+  unfold GraphState.removeLoggedOne edgeOfTuple
+  by_cases hmem : (subjNode u.subject, objNode u.object u.relation) ∈ σ.edges
+  · rw [if_pos hmem, pushDelta_edges, removeEdgeOne_edges]
+    by_cases hp : (subjNode u.subject, objNode u.object u.relation) = p
+    · rw [if_pos hp]; subst hp; exact List.count_erase_self
+    · rw [if_neg hp, Nat.sub_zero]
+      exact List.count_erase_of_ne (fun h => hp h.symm)
+  · rw [if_neg hmem]
+    by_cases hp : (subjNode u.subject, objNode u.object u.relation) = p
+    · rw [if_pos hp]; subst hp
+      have hz : σ.edges.count (subjNode u.subject, objNode u.object u.relation) = 0 :=
+        List.count_eq_zero.mpr hmem
+      omega
+    · rw [if_neg hp, Nat.sub_zero]
+
+/-- The logged rule-routed retraction's count-shrink law: `count p` drops by the number of
+    closure members whose materialized edge is `p` — the exact dual of R3's
+    `count_writeLoggedRules`. UNCONDITIONAL (Nat subtraction). -/
+theorem count_removeLoggedRules (p : NodeKey × NodeKey) (S : Schema) (t : Tuple) :
+    ∀ (σ : GraphState),
+      (σ.removeLoggedRules S t).edges.count p
+        = σ.edges.count p - ((rewriteClosure S t).map edgeOfTuple).count p := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = us
+  induction us with
+  | nil => intro σ; simp
+  | cons u rest ih =>
+    intro σ
+    simp only [List.foldl_cons]
+    rw [ih (σ.removeLoggedOne u), count_removeLoggedOne u p σ, List.map_cons]
+    by_cases hp : edgeOfTuple u = p
+    · subst hp
+      rw [if_pos rfl, List.count_cons_self]
+      omega
+    · rw [if_neg hp, List.count_cons_of_ne hp]
+      omega
+
+/-! ## The store-erase split of the occurrence count -/
+
+/-- Erasing a stored tuple `t ∈ T` splits the occurrence count: the total over `T` is the
+    total over `T.erase t` plus `t`'s own closure occurrences. `List.erase` drops the FIRST
+    copy, and `List.count` is permutation-invariant, so this holds even if `t` recurs in `T`
+    (a store multiset). The store-side identity R4's confluence needs to match the smaller
+    rebuild. -/
+theorem untOccCount_erase (S : Schema) (T : Store) (t : Tuple) (a b : NodeKey) (ht : t ∈ T) :
+    untOccCount S T a b
+      = untOccCount S (T.erase t) a b
+        + ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
+  unfold untOccCount
+  have hperm : T ~ t :: T.erase t := List.perm_cons_erase ht
+  have h1 := ((hperm.flatMap_right (rewriteClosure S)).map edgeOfTuple).count_eq (a, b)
+  rw [h1, List.flatMap_cons, List.map_append, List.count_append]
+  omega
+
+/-- The retraction only SHRINKS the edge multiset: any surviving edge was already present.
+    (Off the R4 count-shrink law `count_removeLoggedRules` — a present edge has positive
+    count, which the retraction can only lower, so it was positive, hence present, in `σ`.) -/
+theorem mem_removeLoggedRules_edges {σ : GraphState} {S : Schema} {t : Tuple}
+    {e : NodeKey × NodeKey} (h : e ∈ (σ.removeLoggedRules S t).edges) : e ∈ σ.edges := by
+  rw [← List.count_pos_iff] at h ⊢
+  rw [count_removeLoggedRules e S t σ] at h
+  omega
 
 /-! ## Filter preserves the count of a kept element -/
 
