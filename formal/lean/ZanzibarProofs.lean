@@ -70,5 +70,8 @@ import ZanzibarProofs.GraphIndex.CascadeStrataInv
 -- Remove-leg R3: the untainted occurrence-count invariant (ref-count made concrete)
 import ZanzibarProofs.GraphIndex.RemoveOccCount
 
+-- Remove-leg R4 (untainted arm): the remove-then-drain confluence over T.erase t
+import ZanzibarProofs.GraphIndex.RemoveConfluence
+
 -- Phase 6: the executable graph-model driver + honesty theorems (zcli graph mode)
 import ZanzibarProofs.GraphIndex.Exec

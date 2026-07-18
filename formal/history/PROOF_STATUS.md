@@ -8,6 +8,55 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19a (#4 remove legs — Leg R4 part 1: the UNTAINTED confluence arm)
+
+Fourth Lean-editing leg of #4, first increment. ADDITIVE — one new file `RemoveConfluence.lean`
++ a 1-line aggregator import in `ZanzibarProofs.lean`; inducts on / reuses the EXISTING
+`ReachedByW3d2E` chain + R3, no constructor/inductive/existing-def touched. verify.sh green:
+lean 415/415 sorries=0 (Audit untouched), conf-heavy 76, conf-rest 220 (conf 296, 0 skip).
+
+- **Attack-first CONFIRMED the full R4 confluence (house rule 2; `#eval` vs real `check`/`sem`,
+  scratch deleted).** Schema `viewer := editor or manager` (rc≥2 untainted survival) +
+  `r := a but not b` (derived exclusion); built the add-only chain over a 5-tuple store, then for
+  EACH of five removed tuples computed `check (runCascade2 … (removeLoggedRules σ t)) q` vs
+  `sem S (T.erase t) q` across the full query grid — **ZERO mismatch**, incl. the rc=2 survival
+  case (remove `(alice,manager)`, viewer edge survives via `editor`) and the derived-exclusion
+  flips (`(alice,a)` flips `r@alice`, `(bob,b)` flips `r@bob`). The confluence is TRUE; the leg
+  is the proof, not a discovery.
+- **Landed the UNTAINTED arm** (`RemoveConfluence.lean`): the retraction count-shrink law
+  `count_removeLoggedOne`/`count_removeLoggedRules` (exact dual of R3's
+  `count_foldl_writeDirect`/`count_writeLoggedRules`; UNCONDITIONAL — Nat subtraction floors the
+  absent-copy case, no "enough copies" guard needed for the arithmetic); the store-erase split
+  `untOccCount_erase` (`t ∈ T ⇒ untOccCount S T = untOccCount S (T.erase t) + t-closure-occ`, via
+  `List.perm_cons_erase` + `Perm.flatMap_right`/`.map`/`.count_eq`); the pre-drain confluence
+  `removeLoggedRules_untOccCount` (untainted `(a,b)`'s post-retraction multiplicity = its occ
+  count over `T.erase t` — R3 supplies the `≥` making the Nat sub exact); the drained form
+  `drain_removeLoggedRules_untOccCount` (the two-round diffing cascade is untainted-count-inert,
+  R3's `count_runCascade2_of_ne` + `enumJobs2At_Rnode_ne`); and the membership corollary
+  `mem_drain_removeLoggedRules_untainted` (`count>0 ↔ mem`). So a drained post-remove UNTAINTED
+  edge's multiplicity is BIT-IDENTICAL to R3 on a fresh add-only rebuild over `T.erase t` — hence
+  membership matches, the design's untainted-side confluence target.
+- **No kill this increment** (the arithmetic is exactly as the R3 kill reshaped it: untainted =
+  occurrence-count story, derived = membership story deferred).
+
+**Gate:** verify.sh lean 415/415 sorries=0, conf-heavy 76, conf-rest 220 (all PASSED, cap-safe
+phased). Additive Lean (new module + import), driver (`Exec.lean`) untouched and `RemoveConfluence`
+is outside zcli's call graph ⇒ conf ran green as expected. `pytest tests/` (561+32) stands (no
+Python touched). Committed + pushed.
+
+**RESUME #4: Leg R4 part 2 — the DERIVED membership arm + the confluence assembly.** The untainted
+edges now provably match the rebuild at multiplicity level. Remaining for R4: (i) the DERIVED-edge
+membership arm — after remove+drain, a derived pair's presence matches the rebuild via the
+filter-all `removeEdgePair` zeroing + the two-round re-settlement (reuse the 12f re-settlement;
+NOT a count bound — the R3 derived-arm KILL); (ii) the residue equality (the cascade recomputes
+residue wholesale — `reconcileResidueKey`); (iii) fold (i)+(ii)+untainted into a membership-level
+read-equivalence to the rebuild (define `ReadEq` — schema/nodes/residue eq + edge-SET membership
+eq — and prove `check`/`reachB` congruent under it, since full `EvalEq`'s LIST-edge equality is
+FALSE across the differing fold orders). Then R5 (the `remove` constructor + discharge Group A via
+ReadEq-transport + retire `toC`). Design file Target #4; the untainted arm is the template.
+
+---
+
 ## Session 2026-07-18i (#4 remove legs — Leg R3: untainted occurrence-count invariant + a KILL of the derived arm)
 
 Third (and hardest) Lean-editing leg of #4. ADDITIVE — one new file `RemoveOccCount.lean` +

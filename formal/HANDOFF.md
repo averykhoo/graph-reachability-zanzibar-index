@@ -121,11 +121,21 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > untainted edge's model ref-count = its occurrence count over the store's rewrite closures.
 > **KILL: the design's derived arm `count ∈ {0,1}` is model-FALSE** (the model stacks derived
 > duplicates, compensated by filter-all `removeEdgePair`) — the derived side of R4 is a
-> MEMBERSHIP story, not a count bound. **THE NEXT TASK: #4 Leg R4** — the confluence
-> `EvalEq(removeLoggedRules…|>drain, rebuild(T.erase t))` at membership level (untainted side
-> fed by `untOccCount`, `count>0↔mem`; derived side via `removeEdgePair` zeroing). Then R5
-> (constructor + discharge Group A + retire `toC`). After #4: back to #1 Direct-arm leg 4+ /
-> TTU half, #2 strata (>2). Not started: #1 TTU/userset half, #2 strata, #4 legs R4–R5.
+> MEMBERSHIP story, not a count bound. **Leg R4 part 1 — the UNTAINTED arm — LANDED (2026-07-19a):**
+> new `RemoveConfluence.lean` (additive; verify.sh lean 415/415, conf 296). Attack-first CONFIRMED
+> the full confluence (`check(drain(removeLoggedRules σ t)) = sem S (T.erase t)`, zero mismatch over
+> the rc≥2-survival + derived-exclusion probe grid). Proved the retraction count-shrink law
+> (`count_removeLoggedRules`, dual of R3's write growth), the store-erase split (`untOccCount_erase`),
+> and the pre-drain/drained untainted confluence (`drain_removeLoggedRules_untOccCount` +
+> `mem_drain_removeLoggedRules_untainted`, `count>0↔mem`): a drained post-remove UNTAINTED edge's
+> multiplicity is bit-identical to R3 on a fresh rebuild over `T.erase t`. **THE NEXT TASK: #4 Leg R4
+> part 2 — the DERIVED membership arm + assembly.** (i) derived-pair presence matches rebuild via
+> filter-all `removeEdgePair` zeroing + the 12f two-round re-settlement (NOT a count bound — R3 kill);
+> (ii) residue equality (cascade recomputes wholesale); (iii) fold into a membership-level `ReadEq`
+> (schema/nodes/residue eq + edge-SET membership eq — full `EvalEq`'s LIST-edge equality is FALSE
+> across the differing fold orders) with `check`/`reachB` congruence. Then R5 (constructor + discharge
+> Group A via ReadEq-transport + retire `toC`). After #4: back to #1 Direct-arm leg 4+ / TTU half,
+> #2 strata (>2). Not started: #1 TTU/userset half, #2 strata, #4 R4-part-2 + R5.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and

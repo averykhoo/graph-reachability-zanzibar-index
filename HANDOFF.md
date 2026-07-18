@@ -111,9 +111,12 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
       `evalE_computedOrDirect`; `0dd8d7b` write-half admission + diffing retraction crux
       `reconcileKeyD_retracts_excluded`; `8a9bee1` base-equation wall characterized —
       needs a `NoStoreSubjectR` hyp). Each leg Lean-only additive, gate GREEN (`verify.sh
-      lean` 415/415). **Resume:** Direct-arm leg 4 = the wall (3 lemmas A/B/C). Remaining:
-      #1 TTU/userset half, #2 strata (>2), #3 state/enum bounds (mostly Python — planned
-      NEXT via interleave), #4 remove legs (Route 1 confluence). See the design file.
+      lean` 415/415). **#3 state/enum widening COMPLETE** (2026-07-18b–e). **#4 remove legs
+      R1–R3 landed** (`36e6762`/`ebdf6f9`/`de93853`) **+ R4 part 1 (the UNTAINTED confluence
+      arm) landed 2026-07-19a** (`RemoveConfluence.lean`, additive; gate GREEN: lean 415/415,
+      conf-heavy 76, conf-rest 220). **Resume:** #4 Leg R4 part 2 = the DERIVED membership arm
+      + the `ReadEq` assembly (design file Target #4); then R5 (constructor). Also remaining:
+      #1 Direct-arm leg 4 (the wall), #1 TTU/userset half, #2 strata (>2). See the design file.
 - [x] **DONE 2026-07-17 (Claude): formal fragment widening — the `rootB` gap CLOSED (gate GREEN).**
       Union- and computed-rooted derived defs are now inside the proved `W4Fragment`
       (the derived-def ROOT operator is unrestricted; shape condition is `ComputedOnly`

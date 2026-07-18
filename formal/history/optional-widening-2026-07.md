@@ -295,13 +295,25 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
     not counts" note to the remove path. The theorem characterizes the MODEL ref-count in
     terms of MODEL `rewriteClosure` occurrences (the design's exact phrasing), not a
     Python-count claim in reconvergent schemas.
-- **Leg R4 — the confluence lemma.** `EvalEq (removeLoggedRules σ t |> drain)
-  (rebuild (T.erase t))` at edge-MEMBERSHIP (set) level. **UNTAINTED side** fed by R3's
-  `untOccCount`: erase-one/removeLoggedRules decrements the occurrence count; `(a,b)` leaves
-  the read-set iff surviving count hits 0 iff no surviving seed derives it = the rebuild's
-  membership (`count > 0 ↔ mem`). **DERIVED side** (RESHAPED by the R3 kill): NOT a count
-  bound — use the membership story (filter-all `removeEdgePair` zeroing + the diffing pass
-  re-settle). Same `twoStrata`/`hLU2` bound (reuse 12f re-settlement). ADDITIVE ⇒ stays green.
+- **Leg R4 — the confluence lemma. ✅ UNTAINTED ARM DONE (2026-07-19a); derived arm + assembly
+  OPEN.** `EvalEq (removeLoggedRules σ t |> drain) (rebuild (T.erase t))` at edge-MEMBERSHIP (set)
+  level. New additive file `RemoveConfluence.lean` (verify.sh lean 415/415, conf 296). Attack-first
+  CONFIRMED the full confluence at answer level (`check(drain(remove)) = sem S (T.erase t)`, zero
+  mismatch over rc≥2-survival + derived-exclusion probes).
+  - **UNTAINTED side ✅** fed by R3's `untOccCount`: `count_removeLoggedRules` (retraction
+    count-shrink, dual of R3's write growth, unconditional Nat sub) + `untOccCount_erase`
+    (`t∈T ⇒ untOccCount S T = untOccCount S (T.erase t) + t-occ`, via `List.perm_cons_erase`) ⇒
+    `drain_removeLoggedRules_untOccCount` (drained untainted multiplicity = `untOccCount S (T.erase
+    t)` = R3 on a fresh rebuild) + `mem_drain_removeLoggedRules_untainted` (`count>0 ↔ mem`). The
+    two-round drain is untainted-count-inert (R3's `count_runCascade2_of_ne`).
+  - **DERIVED side + assembly — OPEN (RESUME HERE).** (RESHAPED by the R3 kill): NOT a count bound —
+    the membership story (filter-all `removeEdgePair` zeroing + the two-round diffing re-settle, reuse
+    12f re-settlement; same `twoStrata`/`hLU2` bound). Plus residue equality (`reconcileResidueKey`
+    wholesale recompute) and the ASSEMBLY: fold untainted+derived+residue into a membership-level
+    `ReadEq` relation (schema/nodes/residue eq + edge-SET membership eq) with `check`/`reachB`
+    congruence — full `EvalEq`'s LIST-edge equality is FALSE across the differing add-chain vs
+    remove+drain fold orders, so R5's Group A must transport via `ReadEq`, not `EvalEq`. ADDITIVE ⇒
+    stays green. The untainted arm is the template.
 - **Leg R5 — the constructor + discharge the consumer surface (THE ONE non-additive leg;
   lands green in ONE commit armed with R4).** Add the 4th `remove` constructor to
   `ReachedByW3d2E`: `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with
@@ -337,6 +349,8 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
 
 **Lift:** as predicted, ~one W3d sub-stage — but R3 (occurrence-count invariant) is GENUINE
 new content; R1/R2 clone-and-mirror; R4 the confluence; R5 the one non-additive assembly
-(green in one commit, with the `toC` retire as its trickiest piece). **RESUME: start Leg R4**
-(untainted side fed by R3's `untOccCount`; derived side via the membership story, NOT the
-killed `∈{0,1}` bound).
+(green in one commit, with the `toC` retire as its trickiest piece). **RESUME: Leg R4 part 2**
+— the DERIVED membership arm (filter-all `removeEdgePair` zeroing + 12f re-settle, NOT the killed
+`∈{0,1}` bound) + residue equality + the `ReadEq` assembly (membership-level, since `EvalEq`'s
+LIST-edge equality fails across the add-chain vs remove+drain fold orders). The untainted arm
+(`RemoveConfluence.lean`, 2026-07-19a) is the template.
