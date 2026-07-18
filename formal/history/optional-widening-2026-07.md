@@ -336,10 +336,46 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
     constructor — documented, not faked (a green infrastructure landing over a fragile forced close).
   - **Audit:** kept `ReadEq`+congruence OUT of `Audit.lean` (infrastructure, matching part 1's
     untainted arm and the peer `check_evalEq` congruence — neither audited); count stays 415/415.
-- **Leg R5 — the constructor + discharge the consumer surface (THE ONE non-additive leg;
-  lands green in ONE commit armed with R4).** Add the 4th `remove` constructor to
-  `ReachedByW3d2E`: `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with
-  `RemoveAdmits`. Then discharge the ripple surface mapped in R2:
+- **Leg R5 — RE-SCOPED (2026-07-19c): the constructor is MONOLITHIC and gated on a MISSING
+  prerequisite (rebuild-existence). Split into R5a (rebuild-existence, additive) + R5b (the
+  constructor).** The design's "lands green in ONE commit armed with R4" is FALSE — traced
+  end-to-end this session (tree left green; T2a Group-A structural discharges landed additively in
+  `RemoveConfluence.lean`; constructor NOT added). Full trace in `history/PROOF_STATUS.md`
+  2026-07-19c. The corrected picture:
+  - **Monolithic, no partial landing.** `graph_correct_w3d2E` is ∀-quantified over `ReachedByW3d2E`
+    and consumed by `FullScope.graph_correct` + `Exec.graphRun_check_eq_sem`, so adding the
+    constructor FORCES its T2b remove case (`check = sem` post-remove) immediately.
+  - **Both routes need REBUILD-EXISTENCE over `T.erase t`** — a term `∃ σ, ReachedByW3d2E σ S T' ∧
+    Drained` (route b, for the `ReadEq` transport target) or `∃ σ0, ReachedByRulesAdmitted σ0 S T'`
+    (route a, for `reachedByW3d2_shadow`'s remove case). ABSENT in the tree (every `∃ σ,
+    ReachedByRules…` is shadow-FROM-chain, never build-FROM-store). This is what R4-part-2's "no
+    add-only rebuild-existence TERM exists" was pointing at; it is load-bearing for BOTH routes.
+  - **REACHABLE though:** `foldAdmits_of_acyclic` (`RestrictBase.lean:392`) discharges `FoldAdmits`
+    from target-relation acyclicity; `exists_admitted_restrict` (`:434`) is the build-from-a-chain
+    template. Building it FROM A STORE needs closure-acyclicity from `RewriteRanked`/`Stratifiable`.
+  - **Leg R5a (do FIRST, additive):** prove rebuild-existence — `∃ σ0, ReachedByRulesAdmitted σ0 S T`
+    (untainted) and/or `∃ σ, ReachedByW3d2E σ S T ∧ Drained S σ` (full) from a store, via
+    `foldAdmits_of_acyclic` + closure-acyclicity. A self-contained additive sub-leg.
+  - **Leg R5b (the constructor, armed with R5a).** RECOMMEND **route (a) — undrained `remove`**
+    (mirror `write`: `(σ, t::T) → (σ.removeLoggedRules S t, T.erase t)`, NO bundled drain — the
+    existing `cascade` constructor drains), added to ALL THREE inductives `ReachedByW3d2`/`C`/`E`.
+    Then `removeLoggedRules σ t` IS a `ReachedByW3d2` (via `ReachedByW3d2.remove`), so
+    `settledComplete_cascade2_targeted` applies verbatim and `toC`'s remove case is trivial
+    (`ReachedByW3d2C.remove`) — the design's fix-(iii) obstruction DISSOLVES (it was an artefact of
+    the BUNDLED/drained constructor, where σ_rem is not a C-cascade state). Discharge the STRUCTURAL
+    Group-A cases with this session's substrate (`residueHygienic_/residueDeclared_/structInv_removeLoggedRules`
+    + `mem_removeLoggedRules_edges`); build the settledness duals `removeLeg_sem_stable2` /
+    `settledKey_removeLeg` / `cascadeKeys_removeLeg_mono` / `removeLeg_derived_inedges_eq` (semantic
+    duals of the writeLeg stack `CascadeStrataSettle.lean:1064-1207`, `CascadeStable.lean:471/980/1020`);
+    `reachedByW3d2_shadow`'s remove case off R5a; `reachedByW3d2C_settled`'s remove case (mirror its
+    write case, `CascadeStrataResettle.lean:1210-1253`).
+  - **T2a structural substrate LANDED this session (green, additive):** `removeLoggedOne_residue`,
+    `removeLoggedRules_residue`, `mem_removeLoggedRules_edges`, `residueHygienic_removeLoggedRules`,
+    `residueDeclared_removeLoggedRules` (`RemoveConfluence.lean`). These + R2's `structInv_removeLoggedRules`
+    ARE the `reachedByW3d2E_{structInv,residueHygienic,residueDeclared,edgeHyg1}` remove-case bodies.
+
+  Original R5 plan (superseded by the R5a/R5b split above), for reference — add the 4th `remove`
+  constructor to `ReachedByW3d2E` and discharge the ripple surface mapped in R2:
   - **Group A (direct `induction h`, each MUST get a remove case):** `reachedByW3d2E_edgeHyg1`
     (`CascadeStrataEdge.lean:237`), `reachedByW3d2E_structInv` (`CascadeStrataInv.lean:122`),
     `_residueHygienic` (`:223`), `_residueDeclared` (`:323`) — all four conclusions

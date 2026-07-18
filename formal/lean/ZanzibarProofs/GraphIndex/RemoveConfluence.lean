@@ -304,4 +304,64 @@ theorem untEdgeMem_drain_removeLoggedRules_rebuild {σ σr : GraphState} {S : Sc
   rw [mem_drain_removeLoggedRules_untainted h t ht a b hb,
     ← reachedByW3d2E_untOccCount hr a b hb, List.count_pos_iff]
 
+/-! ## The retraction is residue-inert and edge-shrinking — the T2a Group-A remove-case
+substrate (R5 pre-discharge)
+
+The logged rule-routed retraction `removeLoggedRules` touches ONLY the edge multiset (via
+`removeEdgeOne`) and the outbox (via `pushDelta`); it never writes a `residue` row. So the
+STRUCTURAL invariant clauses that read only `residue` (`ResidueHygienic`, `ResidueDeclared`)
+transport verbatim across a retraction, and any "no edge here" clause (`EdgeHyg1`, once in
+scope) transports because the edge SET only shrinks. Together with the already-landed
+`structInv_removeLoggedRules` (`CascadeInv.lean`, R2) these are exactly the discharges the
+R5 `remove` constructor's Group-A cases will consume — proved here additively, ahead of the
+constructor, so they carry no chain hypotheses. (`EdgeHyg1` lives downstream in
+`CascadeStrataEdge.lean`; its remove case is `mem_removeLoggedRules_edges` + the residue-eq
+below, placed with the constructor.) -/
+
+/-- One logged retraction leaves the residue map untouched (`removeEdgeOne`/`pushDelta` are
+    both residue-inert). -/
+@[simp] theorem removeLoggedOne_residue (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).residue = σ.residue := by
+  unfold GraphState.removeLoggedOne
+  by_cases hmem : (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
+  · rw [if_pos hmem, pushDelta_residue, removeEdgeOne_residue]
+  · rw [if_neg hmem]
+
+/-- The logged rule-routed retraction leaves the residue map untouched (fold of the above). -/
+theorem removeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
+    (σ.removeLoggedRules S t).residue = σ.residue := by
+  unfold GraphState.removeLoggedRules
+  generalize rewriteClosure S t = us
+  induction us generalizing σ with
+  | nil => rfl
+  | cons u rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih (σ.removeLoggedOne u), removeLoggedOne_residue]
+
+/-- The retraction only SHRINKS the edge multiset: any surviving edge was already present.
+    (Off the R4 count-shrink law `count_removeLoggedRules` — a present edge has positive
+    count, which the retraction can only lower, so it was positive, hence present, in `σ`.) -/
+theorem mem_removeLoggedRules_edges {σ : GraphState} {S : Schema} {t : Tuple}
+    {e : NodeKey × NodeKey} (h : e ∈ (σ.removeLoggedRules S t).edges) : e ∈ σ.edges := by
+  rw [← List.count_pos_iff] at h ⊢
+  rw [count_removeLoggedRules e S t σ] at h
+  omega
+
+/-- **`ResidueHygienic` survives a retraction** (both clauses read only `residue`, which is
+    inert). The R5 `reachedByW3d2E_residueHygienic` remove-case discharge. -/
+theorem residueHygienic_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
+    (h : ResidueHygienic σ) : ResidueHygienic (σ.removeLoggedRules S t) := by
+  obtain ⟨h1, h2⟩ := h
+  refine ⟨fun k r res hrow n hn => ?_, fun k r res hrow n hn => ?_⟩
+  · rw [removeLoggedRules_residue] at hrow; exact h1 k r res hrow n hn
+  · rw [removeLoggedRules_residue] at hrow; exact h2 k r res hrow n hn
+
+/-- **`ResidueDeclared` survives a retraction** (reads only `residue`). The R5
+    `reachedByW3d2E_residueDeclared` remove-case discharge. -/
+theorem residueDeclared_removeLoggedRules {σ : GraphState} (S : Schema) (t : Tuple)
+    (h : ResidueDeclared S σ) : ResidueDeclared S (σ.removeLoggedRules S t) := by
+  intro k r res hrow
+  rw [removeLoggedRules_residue] at hrow
+  exact h k r res hrow
+
 end Zanzibar

@@ -128,14 +128,28 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > (`count_removeLoggedRules`, dual of R3's write growth), the store-erase split (`untOccCount_erase`),
 > and the pre-drain/drained untainted confluence (`drain_removeLoggedRules_untOccCount` +
 > `mem_drain_removeLoggedRules_untainted`, `count>0↔mem`): a drained post-remove UNTAINTED edge's
-> multiplicity is bit-identical to R3 on a fresh rebuild over `T.erase t`. **THE NEXT TASK: #4 Leg R4
-> part 2 — the DERIVED membership arm + assembly.** (i) derived-pair presence matches rebuild via
-> filter-all `removeEdgePair` zeroing + the 12f two-round re-settlement (NOT a count bound — R3 kill);
-> (ii) residue equality (cascade recomputes wholesale); (iii) fold into a membership-level `ReadEq`
-> (schema/nodes/residue eq + edge-SET membership eq — full `EvalEq`'s LIST-edge equality is FALSE
-> across the differing fold orders) with `check`/`reachB` congruence. Then R5 (constructor + discharge
-> Group A via ReadEq-transport + retire `toC`). After #4: back to #1 Direct-arm leg 4+ / TTU half,
-> #2 strata (>2). Not started: #1 TTU/userset half, #2 strata, #4 R4-part-2 + R5.
+> multiplicity is bit-identical to R3 on a fresh rebuild over `T.erase t`. **R4 part 2 LANDED
+> (2026-07-19b):** the `ReadEq` relation + `check`/`reachB` read-congruence (`check_readEq`) + the
+> untainted `edgeMem` arm; the derived/residue arms attack-pinned CHAIN-BOUND. **Leg R5 RE-SCOPED
+> (2026-07-19c) — the constructor is MONOLITHIC and gated on a MISSING prerequisite.** Deep trace
+> (tree left GREEN, lean 415/415, conf 296): `graph_correct_w3d2E` is ∀-quantified over `ReachedByW3d2E`
+> + consumed by `FullScope`/`Exec`, so the constructor FORCES its T2b remove case with no partial
+> landing; BOTH discharge routes (undrained-all-3-inductives via `settledComplete_cascade2_targeted`,
+> or drained-E via `ReadEq`-transport) converge on **REBUILD-EXISTENCE over `T.erase t`** — a build-
+> FROM-STORE `∃ σ, ReachedByW3d2E σ S T' ∧ Drained` / `∃ σ0, ReachedByRulesAdmitted σ0 S T'` — which
+> is ABSENT (every existing `∃ ReachedByRules…` is shadow-FROM-chain). REACHABLE via
+> `foldAdmits_of_acyclic` (`RestrictBase.lean:392`, discharges `FoldAdmits` from acyclicity) +
+> closure-acyclicity. **LANDED additively this session (green):** the T2a Group-A STRUCTURAL remove-case
+> discharges — `removeLoggedOne_/removeLoggedRules_residue`, `mem_removeLoggedRules_edges`,
+> `residueHygienic_/residueDeclared_removeLoggedRules` (`RemoveConfluence.lean`) — the retraction is
+> residue-inert + edge-shrinking. **THE NEXT TASK: #4 Leg R5a — REBUILD-EXISTENCE (additive), then
+> R5b — the (undrained, route-a) `remove` constructor** on `ReachedByW3d2`/`C`/`E` + the settledness
+> duals (`removeLeg_sem_stable2` / `settledKey_removeLeg` / `cascadeKeys_removeLeg_mono` /
+> `removeLeg_derived_inedges_eq`, duals of `CascadeStrataSettle.lean:1064-1207`) + `reachedByW3d2_shadow`
+> /`reachedByW3d2C_settled` remove cases. Recommend route (a) — undrained mirrors `write`, so `toC`'s
+> remove case is trivial (`ReachedByW3d2C.remove`) and the fix-(iii) obstruction dissolves. Full detail:
+> `history/PROOF_STATUS.md` 2026-07-19c + `history/optional-widening-2026-07.md` Leg R5. After #4:
+> back to #1 Direct-arm leg 4+ / TTU half, #2 strata (>2). Not started: #1 TTU/userset half, #2 strata.
 
 > **Update 2026-07-17 — rootB fragment widening LANDED (3 legs).** `W4Fragment`
 > no longer restricts the derived-def ROOT operator: `RootBoolean` is DELETED and

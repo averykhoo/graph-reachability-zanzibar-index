@@ -112,11 +112,18 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
       `reconcileKeyD_retracts_excluded`; `8a9bee1` base-equation wall characterized —
       needs a `NoStoreSubjectR` hyp). Each leg Lean-only additive, gate GREEN (`verify.sh
       lean` 415/415). **#3 state/enum widening COMPLETE** (2026-07-18b–e). **#4 remove legs
-      R1–R3 landed** (`36e6762`/`ebdf6f9`/`de93853`) **+ R4 part 1 (the UNTAINTED confluence
-      arm) landed 2026-07-19a** (`RemoveConfluence.lean`, additive; gate GREEN: lean 415/415,
-      conf-heavy 76, conf-rest 220). **Resume:** #4 Leg R4 part 2 = the DERIVED membership arm
-      + the `ReadEq` assembly (design file Target #4); then R5 (constructor). Also remaining:
-      #1 Direct-arm leg 4 (the wall), #1 TTU/userset half, #2 strata (>2). See the design file.
+      R1–R4 landed** (`36e6762`/`ebdf6f9`/`de93853`/R4-part-1+2 in `RemoveConfluence.lean`;
+      additive; gate GREEN: lean 415/415, conf-heavy 76, conf-rest 220). **#4 Leg R5 RE-SCOPED
+      2026-07-19c — the `remove` constructor is MONOLITHIC and gated on a MISSING prerequisite
+      (rebuild-existence over `T.erase t`).** Deep trace this session (tree left GREEN): the
+      constructor forces `graph_correct_w3d2E`'s T2b remove case (no partial landing), and BOTH
+      discharge routes need a build-FROM-STORE `∃ σ, ReachedByW3d2E σ S T' ∧ Drained` — absent, but
+      REACHABLE via `foldAdmits_of_acyclic`. **Landed additively (green):** the T2a Group-A
+      STRUCTURAL remove-case discharges (`removeLoggedRules_residue`, `mem_removeLoggedRules_edges`,
+      `residueHygienic_/residueDeclared_removeLoggedRules`). **Resume:** #4 Leg R5a = rebuild-existence
+      (additive), then R5b = the (undrained, route-a) `remove` constructor + settledness duals. Also
+      remaining: #1 Direct-arm leg 4 (the wall), #1 TTU/userset half, #2 strata (>2). See
+      `formal/history/PROOF_STATUS.md` 2026-07-19c + the design file.
 - [x] **DONE 2026-07-17 (Claude): formal fragment widening — the `rootB` gap CLOSED (gate GREEN).**
       Union- and computed-rooted derived defs are now inside the proved `W4Fragment`
       (the derived-def ROOT operator is unrestricted; shape condition is `ComputedOnly`

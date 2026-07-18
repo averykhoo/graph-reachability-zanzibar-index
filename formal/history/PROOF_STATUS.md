@@ -8,6 +8,80 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19c (#4 remove legs — Leg R5 RECON+BLOCKER: the `remove` constructor is monolithic and gated on rebuild-existence; T2a Group-A structural discharges LANDED additively)
+
+Sixth Lean-editing leg of #4. Went in to land the `remove` constructor + discharge the consumer
+surface. Deep trace found the constructor **cannot land green this session** — its T2b case has no
+additive discharge and needs a foundational lemma (rebuild-existence) that does not exist. Landed
+the achievable additive substrate instead; **tree GREEN** (lean 415/415 sorries=0, conf-heavy 76,
+conf-rest 220 — conf 296, 0 skip). Constructor NOT added. Honest re-scope of R5 below.
+
+- **★ FINDING (the constructor is MONOLITHIC — no partial landing).** `graph_correct_w3d2E` is
+  universally quantified over `ReachedByW3d2E` and is consumed by `FullScope.graph_correct` +
+  `Exec.graphRun_check_eq_sem`. So the instant a `remove` constructor is added to `ReachedByW3d2E`,
+  `graph_correct_w3d2E` MUST prove its remove case (T2b `check = sem` post-remove) or the library
+  does not compile. There is no "T2a-only" or "structural-only" landing with the constructor in.
+- **★ FINDING (both routes converge on the SAME missing prerequisite: REBUILD-EXISTENCE).** Traced
+  the two routes end-to-end:
+  - **Route (a) — undrained constructor** (mirror `write`: `remove` produces `removeLoggedRules σ t`
+    over `T.erase t`, added to ALL THREE inductives `ReachedByW3d2`/`C`/`E`). This is the task's
+    intended "pre-drain witness" design — `removeLoggedRules σ t` becomes a `ReachedByW3d2` state via
+    `ReachedByW3d2.remove`, so `settledComplete_cascade2_targeted` (which takes `ReachedByW3d2 σ' S T'`)
+    applies. BUT `settledComplete_cascade2_targeted` internally calls `reachedByW3d2_shadow`, whose
+    remove case needs an **untainted-core shadow over `T.erase t`** — a `ReachedByRulesAdmitted σ0' S
+    (T.erase t)`. `ReachedByRulesAdmitted` is add-only (`empty`/`step`), so the shadow of a remove
+    state is a fresh rebuild over the smaller store. `reachedByW3d2C_settled`'s remove case likewise
+    needs the settledness duals `removeLeg_sem_stable2` / `settledKey_removeLeg` / `cascadeKeys_removeLeg_mono`
+    / `removeLeg_derived_inedges_eq` (semantic duals of the writeLeg stack, `CascadeStrataSettle.lean:1064-1207`).
+  - **Route (b) — drained constructor on `ReachedByW3d2E` only + retire `toC` (design fix iii)**.
+    `graph_correct_w3d2E`'s remove case then transports `check(σ_rem) = check(σr)` via R4's
+    `check_readEq` to an add-only rebuild `σr : ReachedByW3d2E σr S (T.erase t)` (drained), whose
+    correctness comes from the untouched add-only route. Needs (i) the rebuild `σr` to EXIST, and
+    (ii) the FULL `ReadEq σ_rem σr` — the derived-edge SET + residue clauses, which R4-part-2 pinned
+    CHAIN-BOUND (both = the sem-characterisation only if both states are settled; σ_rem's settledness
+    is exactly route (a)'s blocker).
+  - **Both** need a term of the form `∃ σ, ReachedByW3d2E σ S T' ∧ Drained S σ` (route b) or
+    `∃ σ0, ReachedByRulesAdmitted σ0 S T'` (route a's shadow) built FROM A STORE `T'` — which is
+    absent (confirmed: every `∃ σ, ReachedByRules…` in the tree is a shadow-FROM-an-existing-chain,
+    never a build-from-store). This is the **true R5 prerequisite** the design's "lands green in one
+    commit armed with R4" missed (R4-part-2 already began walking it back — "no add-only rebuild-
+    existence TERM exists"; this session confirms it is load-bearing for BOTH routes, not just the
+    `ReadEq` transport).
+- **★ GOOD NEWS (rebuild-existence is REACHABLE, just unbuilt).** `foldAdmits_of_acyclic`
+  (`RestrictBase.lean:392`) DISCHARGES `FoldAdmits` from acyclicity of a target relation `Ef`
+  (`admitEdge` never rejects when the materialised edge lands in an acyclic `Ef` already containing
+  the running edges); `exists_admitted_restrict` (`:434`) is the working template (it builds a fresh
+  `ReachedByRulesAdmitted` over `restrictUntainted S` this way). So building `∃ σ0,
+  ReachedByRulesAdmitted σ0 S T'` from a store `T'` is a self-contained additive sub-leg (the one new
+  ingredient is closure-acyclicity of `T'` from `RewriteRanked`/`Stratifiable` — `Inv.acyclic` gives
+  it for a reached state, and the fold builds it incrementally). Recommend it as **Leg R5a** (rebuild-
+  existence), THEN **Leg R5b** (the constructor + settledness duals / `ReadEq` transport).
+- **LANDED additively (green, in `RemoveConfluence.lean`): the T2a Group-A STRUCTURAL remove-case
+  discharges.** The retraction is residue-inert + edge-shrinking, so the invariant clauses that read
+  only `residue`/only "no edge here" transport verbatim: `removeLoggedOne_residue` (`@[simp]`) /
+  `removeLoggedRules_residue` (retraction never writes a residue row), `mem_removeLoggedRules_edges`
+  (edge multiset only shrinks — off R4's `count_removeLoggedRules`), `residueHygienic_removeLoggedRules`,
+  `residueDeclared_removeLoggedRules`. With the existing `structInv_removeLoggedRules` (R2) these ARE
+  the `reachedByW3d2E_{structInv,residueHygienic,residueDeclared}` remove-case bodies, plus
+  `reachedByW3d2E_edgeHyg1`'s remove case (= `mem_removeLoggedRules_edges` + the residue-eq, to be
+  placed with the constructor since `EdgeHyg1` lives downstream in `CascadeStrataEdge.lean`). So the
+  T2a-invariant-preservation half of Group A is pre-discharged; only the T2b (`graph_correct`) half
+  + `toC` are blocked on rebuild-existence. Additive ⇒ Audit untouched (415), conf unchanged (296).
+- **Architecture recommendation:** prefer **route (a)** (undrained, all three inductives) — it mirrors
+  `write` exactly and reuses `settledComplete_cascade2_targeted` verbatim, whereas (b) must retire
+  `toC` and re-derive the E-native structural facts. Either way, **Leg R5a (rebuild-existence) FIRST**.
+- **No kill this session** (the confluence stays TRUE per R4's attack-first; the finding is a scoping
+  correction, not a false statement).
+
+**RESUME #4: Leg R5a — rebuild-existence, THEN R5b — the constructor.** R5a: prove
+`∃ σ0, ReachedByRulesAdmitted σ0 S T` (untainted) and/or `∃ σ, ReachedByW3d2E σ S T ∧ Drained S σ`
+from a store, via `foldAdmits_of_acyclic` + closure-acyclicity (template `exists_admitted_restrict`).
+R5b: add the (undrained, route-a) `remove` constructor to `ReachedByW3d2`/`C`/`E`; discharge the
+STRUCTURAL Group-A cases with this session's substrate; build the settledness duals + `reachedByW3d2_shadow`
+remove case (off R5a) + `reachedByW3d2C_settled` remove case; `toC`'s remove case is then trivial
+(`ReachedByW3d2C.remove`). `RemoveConfluence.lean` is the toolkit; the write-leg stack
+(`CascadeStrataSettle.lean:1064-1207`, `CascadeStable.lean:471/980/1020`) is the dual template.
+
 ## Session 2026-07-19b (#4 remove legs — Leg R4 part 2: the `ReadEq` assembly + attack-pinned chain-bound derived/residue arms)
 
 Fifth Lean-editing leg of #4. ADDITIVE — extends `RemoveConfluence.lean` only (no constructor /
