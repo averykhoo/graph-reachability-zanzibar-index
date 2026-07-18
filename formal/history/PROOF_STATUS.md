@@ -88,16 +88,38 @@ gate-green and diff-reviewed before commit. THREE additive legs LANDED + PUSHED 
   `reachedByW3d2E_untOccCount` is a **+1 induction site beyond the listed 20** (it inducts on
   `ReachedByW3d2`; closed cleanly: `count_removeLoggedRules` + `untOccCount_erase` + `omega`).
 
-**RESUME #4 R5b-iii-b (v2): apply THE FIX above.** (1) Strengthen the 3 `remove` constructors with the
-pre-remove-store discipline guard (faithful comment citing `TupleSource.remove` + W4Fragment). (2)
-Re-discharge the 20+1 sites bottom-up per the R5b-iii-b site map (§this entry): mechanical via the
-relocated substrate; `reachedByW3d2_shadow` off `exists_admitted_erase` + `untaintedShadow_removeLeg`;
-`reachedByW3d2C_settled` off the R5b-iii-a dual stack; `toC`/`toW3d2` trivial `.remove`. (3) Work the
-residual ~15-line discipline sub-cases + the possible node-encoding lemma. (4) `graph_correct_w3d2E`
-(Assemble:475) needs NO bespoke case (applies `graph_correct_w3d2` through `reachedByW3d2E_toC` under
-`hq`, so it closes once `toC`+`settled` carry remove cases). Keep audit 415/415; update `Audit.lean`
-ONLY if a new top-level theorem is added (none expected). Then update `FINAL_REVIEW.md` scope wording
-to reflect the validly-stored-tuple remove precondition.
+**★ v2 ATTEMPT RESULT (2026-07-19f, second Opus pass; tree reverted to green baseline).** Applied the
+guard fix and VALIDATED it: the **minimal guard is confirmed** —
+`(hSVT : StoreValidRules S T) (hBST : BareStarStore T) (hTST : TtuStarFree S T)
+(htermT : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)` (all resolve in
+`CascadeStrata`, the constructors elaborate). The guard **resolves 20 of the 21 sites**: the mechanical
+discipline sites collapse to `subset + ih` one-liners (the guard's full-`T` disciplines replace the
+incoming erased ones — the recon's "~15-line untOccCount" estimate was a v1-guard artefact); BOTH HARD
+sites are read-verified feasible (shadow = `exists_admitted_erase` + `untaintedShadow_removeLeg`;
+settled = the R5b-iii-a dual stack, all taking full-`T` `hSV/hBS/hTS/hterm` = the guard, `hdrain`
+vacuating the dirty disjuncts). **★ THE ONE REMAINING SUB-OBSTRUCTION: `reachedByW3d2_edge_source_ne_R`
+(`CascadeStrata.lean:~639`).** Its `NoStoreSubjectR T R` is a motive parameter over an ARBITRARY (incl.
+non-derived) `R`; the remove IH needs it at full `T` but the caller has only `NoStoreSubjectR (T.erase t) R`,
+and reconstructing it fails when the removed `t`'s subject predicate = a non-derived `R` (the guard's
+`htermT` only covers DERIVED `R`, and no faithful fact about `t` bounds `t.subject.predicate`). The site
+is still TRUE (all of `t`'s source-`R` edges are removed) but the honest proof needs a **SOURCE-side
+occurrence-count invariant** `reachedByW3d2_srcOccCount` — the mirror of the target-side
+`reachedByW3d2_untOccCount` — which does NOT exist, PLUS a module-internal relocation (the count block at
+`CascadeStrata` ~1323–1598 sits BELOW :639; `_edge_source_ne_R` can't move down, its consumer
+`reachedByW3d2_Rnode_not_source` is used at ~:799–848).
+
+**RESUME #4 (revised): source-occurrence infra leg FIRST, then the constructor.**
+- **Leg R5b-iii-a2 (IN PROGRESS 2026-07-19f, additive, self-contained, green on its own):** relocate the
+  count block UP above `CascadeStrata:639`; add `reachedByW3d2_srcOccCount` (`a.pred ≠ BARE ⇒
+  σ.edges.count (a,b) = untOccCount S T a b`, cascade edges bare-sourced ⇒ contribute 0) + the source-keyed
+  count lemmas. Attack-first the exact side-condition.
+- **Leg R5b-iii-b (v3, the constructor — now the mechanical grind the design intended):** add the 3 `remove`
+  constructors with the CONFIRMED minimal guard (faithful comment citing `TupleSource.remove` + W4Fragment);
+  discharge the 21 sites — 20 via the guard as above, `_edge_source_ne_R` via `reachedByW3d2_srcOccCount`
+  (source-R edges all from `t`, removed by the retraction). `graph_correct_w3d2E` (Assemble:475) needs NO
+  bespoke case (routes through `reachedByW3d2E_toC` under `hq`). Keep audit 415/415 (no new top-level
+  theorem expected; don't touch `Audit.lean`). Then update `FINAL_REVIEW.md` scope wording to the
+  validly-stored-tuple remove precondition.
 
 ## Session 2026-07-19e (#4 remove legs — Leg R5b RECON+WALL: the constructor is blocked by a module-DAG inversion + a design correction; tree left GREEN, no edits)
 
