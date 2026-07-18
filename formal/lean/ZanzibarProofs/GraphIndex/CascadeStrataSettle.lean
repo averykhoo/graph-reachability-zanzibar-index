@@ -389,6 +389,175 @@ theorem untaintedShadow_cascade2 {S : Schema} {T : Store} {σ σ0 : GraphState}
     exact ⟨hD.classify, hD.sub, hD.nodesSub, hD.closed, hD.closed0, hD.term⟩
   · exact hsh
 
+/-! ## The remove-leg shadow transport — R5b-ii crux
+
+A future `remove` constructor (R5b-iii) needs `reachedByW3d2_shadow`'s remove case to
+transport the prior state's shadow across the logged retraction `removeLoggedRules S t`,
+retargeting it at R5a's fresh rebuild `σ0'` over `T.erase t` (from `exists_admitted_erase`).
+The heart is a COUNT argument: `removeLoggedRules` decrements each untainted edge's ref-count
+by its occurrences in `t`'s rewrite closure (`count_removeLoggedRules`), R3 pins the pre-state
+count to `untOccCount S T` (`reachedByW3d2_untOccCount`), and the store-erase split
+(`untOccCount_erase`) lands it on `untOccCount S (T.erase t)` — exactly the count that
+characterises the untainted edges of `σ0'` (the admitted-rebuild count bridge below). The
+derived edges are untouched (`removeLoggedRules` only erases untainted edges) and stay
+`DerNode`-classified from the prior shadow. -/
+
+/-- **The admitted-rebuild count bridge.** On a rules-admitted state, an edge `(a,b)` is
+    present iff its occurrence count over the store's rewrite closures is positive: forward by
+    `reachedByRules_edge_sound` (the edge materialises a closure tuple), backward by
+    `reachedByRulesAdmitted_edge_complete` (a materialised closure edge is present). This is the
+    membership↔`untOccCount` characterisation for the fresh rebuild `σ0'`. -/
+theorem mem_edges_iff_untOccCount_pos {σ0 : GraphState} {S : Schema} {T : Store}
+    (h0 : ReachedByRulesAdmitted σ0 S T) (a b : NodeKey) :
+    (a, b) ∈ σ0.edges ↔ 0 < untOccCount S T a b := by
+  unfold untOccCount
+  rw [List.count_pos_iff]
+  constructor
+  · intro hmem
+    obtain ⟨t', ht', u, hu, hasub, hbobj⟩ :=
+      reachedByRules_edge_sound (reachedByRules_of_admitted h0) a b hmem
+    subst hasub; subst hbobj
+    exact List.mem_map.mpr ⟨u, List.mem_flatMap.mpr ⟨t', ht', hu⟩, rfl⟩
+  · intro hpos
+    obtain ⟨u, humem, hueq⟩ := List.mem_map.mp hpos
+    obtain ⟨t', ht', hu⟩ := List.mem_flatMap.mp humem
+    have hc := reachedByRulesAdmitted_edge_complete h0 t' ht' u hu
+    unfold edgeOfTuple at hueq
+    rwa [hueq] at hc
+
+/-- **Rules-admitted edges are untainted.** Every edge target on a rules-admitted state has a
+    non-derived predicate: the edge materialises a closure tuple `u` on relation `u.relation`,
+    which is never a derived key (`reachedByRules_derived_no_inedge`). -/
+theorem reachedByRulesAdmitted_edge_target_untainted {σ0 : GraphState} {S : Schema} {T : Store}
+    (hSV : StoreValidRules S T)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (h0 : ReachedByRulesAdmitted σ0 S T) :
+    ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false := by
+  intro a b hab
+  by_contra hcon
+  rw [Bool.not_eq_false] at hcon
+  obtain ⟨t', ht', u, hu, hasub, hbobj⟩ :=
+    reachedByRules_edge_sound (reachedByRules_of_admitted h0) a b hab
+  have htype : b.type = u.object.type := by rw [hbobj, objNode_type]
+  have hrel : b.pred = u.relation := by rw [hbobj, objNode_pred]
+  rw [htype, hrel] at hcon
+  obtain ⟨e, hlk⟩ := isDerived_declared hcon
+  have hco := hCO u.object.type u.relation e hlk hcon
+  have hab2 : (a, objNode (⟨u.object.type, u.object.name⟩ : ObjectRef) u.relation) ∈ σ0.edges := by
+    rw [hbobj] at hab; exact hab
+  exact reachedByRules_derived_no_inedge hSV hlk hcon hco
+    (reachedByRules_of_admitted h0) a hab2
+
+/-- **Rules-admitted nodes are edge endpoints.** Every node of a rules-admitted state is an
+    endpoint of some edge (the `empty` base has no nodes; `writeDirect` only ever adds a node
+    together with the edge it participates in). Used to embed `σ0'.nodes` into `σp.nodes` via
+    the prior shadow's `sub`/`closed`. -/
+theorem foldl_writeDirect_nodesFromEdges (us : List Tuple) :
+    ∀ (σ : GraphState),
+      (∀ k ∈ σ.nodes, ∃ ab ∈ σ.edges, k = ab.1 ∨ k = ab.2) →
+      ∀ k ∈ (us.foldl (fun acc u => acc.writeDirect u) σ).nodes,
+        ∃ ab ∈ (us.foldl (fun acc u => acc.writeDirect u) σ).edges, k = ab.1 ∨ k = ab.2 := by
+  induction us with
+  | nil => intro σ h; exact h
+  | cons u rest ih =>
+    intro σ h
+    refine ih (σ.writeDirect u) ?_
+    intro k hk
+    by_cases hadm : σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true
+    · rw [writeDirect_nodes, if_pos hadm] at hk
+      rw [writeDirect_edges, if_pos hadm]
+      rcases List.mem_cons.mp hk with rfl | hk1
+      · exact ⟨_, List.mem_cons_self, Or.inr rfl⟩
+      · rcases List.mem_cons.mp hk1 with rfl | hk2
+        · exact ⟨_, List.mem_cons_self, Or.inl rfl⟩
+        · obtain ⟨ab, hab, hor⟩ := h k hk2
+          exact ⟨ab, List.mem_cons_of_mem _ hab, hor⟩
+    · rw [Bool.not_eq_true] at hadm
+      rw [writeDirect_reject hadm] at hk ⊢
+      exact h k hk
+
+theorem reachedByRulesAdmitted_nodesFromEdges {σ0 : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByRulesAdmitted σ0 S T) :
+    ∀ k ∈ σ0.nodes, ∃ ab ∈ σ0.edges, k = ab.1 ∨ k = ab.2 := by
+  induction h with
+  | empty S => intro k hk; simp [emptyState] at hk
+  | @step σ S T t hprev hadm ih =>
+    show ∀ k ∈ (σ.writeRules S t).nodes,
+      ∃ ab ∈ (σ.writeRules S t).edges, k = ab.1 ∨ k = ab.2
+    unfold GraphState.writeRules
+    exact foldl_writeDirect_nodesFromEdges (rewriteClosure S t) σ ih
+
+/-- **`untaintedShadow_removeLeg`** — the R5b-ii shadow-transport crux. Given a `ReachedByW3d2`
+    state `σp` with prior untainted-core shadow `σ0` over `T`, and R5a's fresh admitted rebuild
+    `σ0'` over `T.erase t` (edges ⊆ `σ0`'s, from `exists_admitted_erase`), the logged retraction
+    `σp.removeLoggedRules S t` is shadowed by `σ0'`. The untainted edge SETS agree by the count
+    argument (`count_removeLoggedRules` + `reachedByW3d2_untOccCount` + `untOccCount_erase` land
+    both on `untOccCount S (T.erase t)`, bridged to membership on each side); the derived edges
+    are untouched by the retraction (`mem_removeLoggedRules_edges`) and stay `DerNode`-classified
+    from `σ0` via the prior shadow. -/
+theorem untaintedShadow_removeLeg {σp σ0 σ0' : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hrb : ReachedByW3d2 σp S T)
+    (hsh : UntaintedShadow S σp σ0)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    (hadm : RemoveAdmits σp T t)
+    (h0' : ReachedByRulesAdmitted σ0' S (T.erase t))
+    (hsub : ∀ e ∈ σ0'.edges, e ∈ σ0.edges)
+    (hSV : StoreValidRules S T)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) :
+    UntaintedShadow S (σp.removeLoggedRules S t) σ0' := by
+  have ht : t ∈ T := hadm
+  have hSV' : StoreValidRules S (T.erase t) :=
+    fun t' ht' => hSV t' (List.mem_of_mem_erase ht')
+  have hnodes : (σp.removeLoggedRules S t).nodes = σp.nodes := removeLoggedRules_nodes σp S t
+  have hmem0' : ∀ a b, (a, b) ∈ σ0'.edges ↔ 0 < untOccCount S (T.erase t) a b :=
+    mem_edges_iff_untOccCount_pos h0'
+  have hσ0unt : ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false :=
+    reachedByRulesAdmitted_edge_target_untainted hSV hCO h0
+  have hσ0'unt : ∀ a b, (a, b) ∈ σ0'.edges → isDerived S (b.type, b.pred) = false :=
+    reachedByRulesAdmitted_edge_target_untainted hSV' hCO h0'
+  -- the untainted count on the retracted state lands on `untOccCount S (T.erase t)`
+  have hmemrem : ∀ a b, isDerived S (b.type, b.pred) = false →
+      ((a, b) ∈ (σp.removeLoggedRules S t).edges ↔ 0 < untOccCount S (T.erase t) a b) := by
+    intro a b hb
+    have hcount : (σp.removeLoggedRules S t).edges.count (a, b)
+        = untOccCount S (T.erase t) a b := by
+      rw [count_removeLoggedRules (a, b) S t σp, reachedByW3d2_untOccCount hrb a b hb,
+        untOccCount_erase S T t a b ht]
+      omega
+    rw [← hcount, List.count_pos_iff]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · -- classify
+    intro ab hab
+    obtain ⟨a, b⟩ := ab
+    have habp : (a, b) ∈ σp.edges := mem_removeLoggedRules_edges hab
+    rcases hsh.classify (a, b) habp with h0e | hD
+    · have hbunt : isDerived S (b.type, b.pred) = false := hσ0unt a b h0e
+      exact Or.inl ((hmem0' a b).mpr ((hmemrem a b hbunt).mp hab))
+    · exact Or.inr hD
+  · -- sub
+    intro ab hab
+    obtain ⟨a, b⟩ := ab
+    have hbunt : isDerived S (b.type, b.pred) = false := hσ0'unt a b hab
+    exact (hmemrem a b hbunt).mpr ((hmem0' a b).mp hab)
+  · -- nodesSub
+    intro k hk
+    rw [hnodes]
+    obtain ⟨ab, hab, hor⟩ := reachedByRulesAdmitted_nodesFromEdges h0' k hk
+    have habp : ab ∈ σp.edges := hsh.sub ab (hsub ab hab)
+    obtain ⟨h1, h2⟩ := hsh.closed ab habp
+    rcases hor with rfl | rfl
+    · exact h1
+    · exact h2
+  · -- closed
+    intro ab hab
+    rw [hnodes]
+    exact hsh.closed ab (mem_removeLoggedRules_edges hab)
+  · -- closed0
+    exact (reachedByRules_inv (reachedByRules_of_admitted h0')).1.edgesClosed
+  · -- term
+    intro k hk y hy
+    exact hsh.term k hk y (mem_removeLoggedRules_edges hy)
+
 /-- **`reachedByW3d2_shadow`** — every W3d-2 state has an untainted-core shadow:
     a rules-ADMITTED state on the CURRENT store agreeing on everything off the
     derived R-nodes. Mirror of `reachedByW3d_shadow` over the two-round legs. -/
