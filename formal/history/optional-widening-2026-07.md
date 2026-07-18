@@ -372,6 +372,48 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
     structInv_removeLoggedRules` + `mem_removeLoggedRules_edges`). Remaining R5b work: add the
     `remove` constructor to `ReachedByW3d2`/`C`/`E` (route a — mirror `write`), build the
     settledness duals + `reachedByW3d2_shadow`/`reachedByW3d2C_settled` remove cases, `toC` trivial.
+- **Leg R5b — RE-SEQUENCED into three additive sub-legs (2026-07-19e RECON+WALL).** The 2026-07-19d
+  "unblocked as-is" was optimistic: a full read-only trace (tree left GREEN, no edits) found TWO
+  obstructions the recon missed — a design correction + a module-DAG inversion. **R5b is NOT a
+  one-session landing; sequence it R5b-i → R5b-ii → R5b-iii.**
+  - **★ DESIGN CORRECTION — the `remove` constructor MUST carry `hdrain : cascadeKeys S σ = []`
+    (drained prior).** `cascadeKeys` is NON-MONOTONE under a retraction (`affectedObjects` filters by
+    reach-cone, which SHRINKS when `removeLoggedRules` shrinks the edge multiset), so a remove from an
+    UNDRAINED state can un-dirty a STALE key without re-settling it ⇒ `reachedByW3d2C_settled`'s invariant
+    is violated. The write case dodges this via monotonicity (`cascadeKeys_writeLeg_mono`), which has NO
+    retraction dual. With `hdrain`, the IH gives all-keys-settled at the prior state (dirty disjuncts
+    vacuous) and the remove case mirrors the write case's unmapped subcase exactly. FAITHFUL — Python
+    drains between every applied log row (`advance_index`/`catch_up`), so remove-from-undrained never
+    occurs; `hdrain` is a restriction strictly inside Python behaviour. So route (a)'s constructor is
+    `(σ, T) → (σ.removeLoggedRules S t, T.erase t)` with `RemoveAdmits σ T t` AND `hdrain : cascadeKeys S σ = []`.
+  - **★ WALL — MODULE-DAG INVERSION.** Import order bottom→top: `CascadeStrata` (`ReachedByW3d2`) →
+    `…Settle` (`ReachedByW3d2C`, `reachedByW3d2_shadow`) → `…Resettle` (`reachedByW3d2C_settled`) →
+    `…Assemble` (`ReachedByW3d2E`) → `CascadeStrataInv` → `RemoveOccCount` (R3) → `RemoveConfluence`
+    (R4 + R5a). The constructor forces remove-case discharges INSIDE the LOW inductives, but their
+    content is HIGH. The mechanical relocations (count arithmetic → RemoveOccCount; residue/edge substrate
+    → CascadeInv; `exists_admitted_erase` → below RestrictBase) are easy. The HARD wall is
+    `reachedByW3d2_shadow`'s remove case (in the low `…Settle`): building `UntaintedShadow S σ_rem σ0'`
+    (edge-SET agreement between the multiset-erased `σp` and R5a's fresh rebuild `σ0'`) needs a
+    COUNT/multiplicity characterisation of `σp`'s untainted edges (= R3's `untOccCount` over `T`) — which
+    is TOP-level and tied to `ReachedByW3d2E`, unavailable and un-importable at the shadow's low level.
+    Breaking it requires **re-deriving R3's untainted-count invariant at the `ReachedByW3d2` level in
+    `CascadeStrata`/`…Settle`** (relocate the RemoveOccCount count stack DOWN + re-state
+    `untOccCount`/`reachedByW3d2_untOccCount` there). Genuine new low content, high-risk relocation.
+  - **The settledness-dual stack (~10 theorems)** for `reachedByW3d2C_settled`'s remove case are duals of
+    the write-leg stack (`CascadeStable.lean:432/471/980/1020`, `CascadeStrataSettle.lean:1064/1106/1149/1193`),
+    buildable below Resettle once the shadow works: `untaintedShadow_removeLeg`, `removeLeg_graphRec_/checkFn_stable`,
+    `removeLeg_derived_inedges_eq` (retraction erases ONLY untainted edges — `noRuleOutputs_of_derived`, no
+    closure member targets a DerNode), `removeLeg_sem_stable/_sh/_stable2`, `settledKey_/completeKey_removeLeg_sem`
+    (residue-inert via the landed `removeLoggedRules_residue`). `cascadeKeys_writeLeg_mono` has NO dual
+    (that is what `hdrain` sidesteps).
+  - **R5b sub-legs (each additive, green before the next):** **R5b-i** relocate the count/residue/edge/
+    existence substrate DOWN to respect the future DAG (pure move, no proof change). **R5b-ii** the low
+    untainted-count invariant `reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg` (the crux; new
+    content). **R5b-iii** the constructor (route a, WITH `hdrain`) + 18 mechanical discharges + shadow
+    (off R5b-ii) + settled (off the dual stack) + `toC`/`toW3d2` trivial; audit the `graph_correct`
+    remove path.
+  - **★ No kill** (the confluence stays TRUE per R4). The findings SHAPE R5b; the target is not refuted.
+
 - **Leg R5b — RE-SCOPED (2026-07-19c): the constructor is MONOLITHIC and gated on the (now-landed
   R5a) rebuild-existence.** The design's "lands green in ONE commit armed with R4" is FALSE — traced
   end-to-end this session (tree left green; T2a Group-A structural discharges landed additively in

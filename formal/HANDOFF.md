@@ -81,6 +81,24 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
+> **THE NEXT TASK (2026-07-19e) — #4 Leg R5b, RE-SEQUENCED into three additive sub-legs after a
+> RECON+WALL (tree left GREEN, no edits).** A full read-only trace found R5b is NOT a one-session
+> landing: (1) a **DESIGN CORRECTION** — the `remove` constructor MUST carry a drained-prior guard
+> `hdrain : cascadeKeys S σ = []`, because `cascadeKeys` is NON-MONOTONE under a retraction (cones
+> shrink), so remove-from-undrained can un-dirty a stale key and break `reachedByW3d2C_settled`
+> (`hdrain` is faithful — Python drains between log rows — and makes the remove case mirror the write
+> case's unmapped subcase); (2) a **MODULE-DAG INVERSION WALL** — the remove-case content (R3 count /
+> R4 confluence / R5a existence / the residue-edge substrate) all sits ABOVE the low inductives it must
+> discharge, and `reachedByW3d2_shadow`'s remove case (low, `…Settle`) needs R3's untainted-count
+> invariant (top, tied to `ReachedByW3d2E`) to establish `UntaintedShadow σ_rem σ0'`. **Sequence:**
+> **R5b-i** relocate the count/residue/edge/existence substrate DOWN (mechanical); **R5b-ii** re-derive
+> R3 at the `ReachedByW3d2` level (`reachedByW3d2_untOccCount`) + `untaintedShadow_removeLeg` (the crux,
+> new low content); **R5b-iii** add the `remove` constructor (route a, WITH `hdrain`) + discharge the 20
+> mapped induction sites (18 mechanical + shadow off R5b-ii + `reachedByW3d2C_settled` off a ~10-theorem
+> settledness-dual stack). Full detail + the exhaustive 20-site ripple map: `history/PROOF_STATUS.md`
+> 2026-07-19e + `history/optional-widening-2026-07.md` Target #4 R5b. R1–R5a stay landed/green. After #4:
+> #1 Direct-arm leg 4 / TTU-userset half, #2 strata (>2).
+
 > **Update 2026-07-18 — OPTIONAL assurance-widening arc OPENED (4 targets scoped;
 > `FINAL_REVIEW.md §4`).** All four remaining optional widenings were recon'd + (for #1)
 > attack-first probed; the durable design + resume state for ALL of them is

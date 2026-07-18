@@ -120,10 +120,19 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
       discharge routes need a build-FROM-STORE `∃ σ, ReachedByW3d2E σ S T' ∧ Drained` — absent, but
       REACHABLE via `foldAdmits_of_acyclic`. **Landed additively (green):** the T2a Group-A
       STRUCTURAL remove-case discharges (`removeLoggedRules_residue`, `mem_removeLoggedRules_edges`,
-      `residueHygienic_/residueDeclared_removeLoggedRules`). **Resume:** #4 Leg R5a = rebuild-existence
-      (additive), then R5b = the (undrained, route-a) `remove` constructor + settledness duals. Also
-      remaining: #1 Direct-arm leg 4 (the wall), #1 TTU/userset half, #2 strata (>2). See
-      `formal/history/PROOF_STATUS.md` 2026-07-19c + the design file.
+      `residueHygienic_/residueDeclared_removeLoggedRules`). **R5a LANDED 2026-07-19d** (build-FROM-store
+      `exists_admitted_erase`, additive, green). **#4 Leg R5b RECON+WALL 2026-07-19e — RE-SEQUENCED,
+      tree left GREEN (no edits).** Full trace found R5b is NOT a one-session landing: (1) DESIGN
+      CORRECTION — the `remove` constructor MUST carry a drained-prior guard `hdrain : cascadeKeys S σ = []`
+      (`cascadeKeys` is non-monotone under retraction — cones shrink — so remove-from-undrained breaks
+      `reachedByW3d2C_settled`; `hdrain` is faithful, Python drains between log rows); (2) MODULE-DAG
+      INVERSION WALL — the remove-case content (R3/R4/R5a + residue-edge substrate) sits ABOVE the low
+      inductives it must discharge, and `reachedByW3d2_shadow`'s remove case (low) needs R3's untainted-
+      count invariant (top). **Sequence:** R5b-i relocate substrate DOWN (mechanical); R5b-ii re-derive R3
+      at the `ReachedByW3d2` level + `untaintedShadow_removeLeg` (the crux); R5b-iii the constructor
+      (route a, WITH `hdrain`) + 20-site ripple (18 mechanical + shadow + `reachedByW3d2C_settled` via a
+      ~10-theorem settledness-dual stack). Also remaining: #1 Direct-arm leg 4 (the wall), #1 TTU/userset
+      half, #2 strata (>2). See `formal/history/PROOF_STATUS.md` 2026-07-19e + the design file.
 - [x] **DONE 2026-07-17 (Claude): formal fragment widening — the `rootB` gap CLOSED (gate GREEN).**
       Union- and computed-rooted derived defs are now inside the proved `W4Fragment`
       (the derived-def ROOT operator is unrestricted; shape condition is `ComputedOnly`

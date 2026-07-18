@@ -8,6 +8,104 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19e (#4 remove legs — Leg R5b RECON+WALL: the constructor is blocked by a module-DAG inversion + a design correction; tree left GREEN, no edits)
+
+Eighth session of #4. Went in to land the `remove` constructor (route a) + discharge the 20-site
+ripple. Deep read-only trace (no Lean edits — **tree GREEN throughout**, working copy clean, baseline
+`lake build` 1065 jobs OK) found R5b **cannot land green in one session**: two independent walls, one
+structural (a module-DAG inversion) and one a genuine design correction the recon missed. Recorded
+here as an actionable plan for the next session (house rule 2 — a documented wall beats a red/fake tree).
+
+- **Ripple fully mapped (20 induction sites, exhaustive).** Adding `remove` to the three inductives
+  breaks exactly 20 `induction … with` proofs (no `cases`/`rcases`/`match`/`.rec` complications):
+  `reachedByW3d2_schema`/`_edge_source_ne_R` (CascadeStrata); `_structInv`/`_E`, `_residueHygienic`/`_E`,
+  `_residueDeclared`/`_E` (CascadeStrataInv); `_edgesClosed`/`_edge_target_ne_bare`/`_edges_target_plain`/
+  `_Rnode_source_bare`/`reachedByW3d2_shadow`/`reachedByW3d2C_toW3d2` (CascadeStrataSettle);
+  `_Rnode_source_name_ne_star`/`_residueStarFree`/`reachedByW3d2E_toC` (CascadeStrataAssemble);
+  `reachedByW3d2E_edgeHyg1` (CascadeStrataEdge); `reachedByW3d2C_settled` (CascadeStrataResettle);
+  `reachedByW3d2E_untOccCount` (RemoveOccCount). **18 of 20 are mechanical** (edge-shrink/residue-inert
+  transport via the landed R2/R5-recon substrate + `toC`/`toW3d2` trivial `.remove`); the 2 hard sites
+  are `reachedByW3d2_shadow` and `reachedByW3d2C_settled`.
+
+- **★ DESIGN CORRECTION (attack-first, reasoned from `affectedObjects`/`cascadeKeys` — the recon
+  missed this). The `remove` constructor MUST carry a drained-prior guard `hdrain : cascadeKeys S σ = []`.**
+  `cascadeKeys` is NON-MONOTONE under a retraction: `affectedObjects` filters by reach-cone
+  (`affectedObjects_writeLeg_mono` relies on edges GROWING), and `removeLoggedRules` SHRINKS the edge
+  multiset, so an OLD frontier delta's cone shrinks and a previously-dirty key can become CLEAN. From an
+  UNDRAINED `σp` with a stale dirty key `K`, a remove that erases an edge on `K`'s reach-path un-dirties
+  `K` while its representation stays stale ⇒ `reachedByW3d2C_settled`'s "dirty ∨ opdirty ∨ settled"
+  invariant is VIOLATED at the remove state. The write case survives undrained `σp` only via monotonicity
+  (`cascadeKeys_writeLeg_mono`, dirty-stays-dirty), which has NO retraction dual. Fix: guard the remove
+  constructor with `hdrain` (drained prior). Then the IH gives all-keys-settled at `σp` (both dirty
+  disjuncts vacuous), and the remove case becomes the exact mirror of the write case's unmapped subcase
+  (`by_cases` key-mapped / operand-mapped / else settled-transports). **Faithful:** Python drains the
+  materialised view between every applied log row (`advance_index`/`catch_up`), so remove-from-undrained
+  never occurs — `hdrain` is a faithful RESTRICTION, strictly inside Python behaviour, not a weakening.
+  Asymmetry with `write` (no `hdrain`) is mathematically forced and benign (the driver cascades after
+  every write anyway; a drained state always precedes a remove).
+
+- **★ WALL (structural — a MODULE-DAG INVERSION). The remove-case content lives ABOVE the inductives it
+  must discharge.** Import order (bottom→top): `CascadeStrata` (defines `ReachedByW3d2`) → `…Settle`
+  (`ReachedByW3d2C`, `reachedByW3d2_shadow`) → `…Resettle` (`reachedByW3d2C_settled`) → `…Enum` →
+  `…Assemble` (`ReachedByW3d2E`) → `CascadeStrataInv` → {`CascadeStrataEdge`, `RemoveOccCount` (R3
+  `untOccCount` + count stack)} → `RemoveConfluence` (R4 confluence + R5a `exists_admitted_erase` + the
+  residue/edge substrate). Adding the constructor forces remove-case discharges INSIDE the low inductives,
+  but their content is all HIGH:
+  - `reachedByW3d2E_untOccCount` (RemoveOccCount) needs `count_removeLoggedRules`/`untOccCount_erase`
+    (RemoveConfluence, above) — relocate DOWN into RemoveOccCount (pure arithmetic, no R4 dep). Mechanical.
+  - `_residueHygienic`/`_residueDeclared`/`_structInv` E-sites (CascadeStrataInv) need
+    `residueHygienic_/residueDeclared_removeLoggedRules`, `mem_removeLoggedRules_edges`,
+    `removeLoggedRules_residue` (RemoveConfluence, above) — relocate DOWN to ≤ CascadeInv. Mechanical
+    (they only use `removeLoggedOne_residue`/`count_removeLoggedRules`).
+  - **`reachedByW3d2_shadow`'s remove case (CascadeStrataSettle) is the hard wall.** It must produce
+    `∃ σ0', ReachedByRulesAdmitted σ0' S (T.erase t) ∧ UntaintedShadow S (σp.removeLoggedRules S t) σ0'`.
+    R5a's `exists_admitted_erase` supplies σ0' (relocate DOWN below RestrictBase — it uses only
+    RulesWrite/RestrictBase, no cascade dep — mechanical), BUT establishing `UntaintedShadow` (edge-SET
+    agreement between the multiset-erased `σp` and the fresh rebuild `σ0'`) requires a COUNT/multiplicity
+    characterisation of `σp`'s untainted edges (= `untOccCount` over `T`): an untainted `e ∈ σ_rem` iff
+    `count_σp(e) − closure-occ_t(e) > 0`, which must equal "`e` still derived by some `t' ∈ T.erase t`"
+    (`σ0'` membership via `reachedByRules_edge_sound`/`_edge_complete`). That count fact is R3, currently
+    TOP-level and tied to `ReachedByW3d2E`. At the shadow's LOW level (`CascadeStrataSettle`) it does NOT
+    exist and cannot be imported (cycle). **Breaking it needs re-deriving R3's untainted-count invariant
+    at the `ReachedByW3d2` (or `ReachedByRulesAdmitted`-shadow) level in `CascadeStrata`/`…Settle`** —
+    i.e. relocating the whole RemoveOccCount count stack (`count_reconcileKeyDR…` → `count_runCascade2_of_ne`,
+    all about the low `runCascade2`/reconcile defs) DOWN and re-stating `untOccCount`/`reachedByW3d2_untOccCount`
+    there. Major relocation of the foundational count file + genuine new low content, high-risk.
+
+- **The settledness-dual stack (~10 theorems) for `reachedByW3d2C_settled`'s remove case.** Duals of the
+  write-leg stack, each ~30–80 lines, buildable below Resettle ONCE the shadow-remove-leg works:
+  `untaintedShadow_removeLeg`, `removeLeg_graphRec_stable`/`_checkFn_stable` (dual of
+  `writeLeg_graphRec_stable`/`_checkFn_stable`, `CascadeStable.lean:432`), `removeLeg_derived_inedges_eq`
+  (dual of `writeLeg_derived_inedges_eq` `:980` — via `noRuleOutputs_of_derived`, closure members never
+  target a DerNode so the retraction erases ONLY untainted edges), `removeLeg_sem_stable`/`_sem_stable_sh`/
+  `_sem_stable2` (duals of `CascadeStable.lean:1020`/`CascadeStrataSettle.lean:1064`/`:1193`),
+  `settledKey_removeLeg_sem`/`completeKey_removeLeg_sem` (duals of `:1106`/`:1149`, residue-inert via the
+  landed `removeLoggedRules_residue`). NOTE the retraction touches ONLY untainted edges
+  (`noRuleOutputs_of_derived`: no rule targets a derived relation ⇒ no closure member's edge lands into a
+  DerNode), so `removeLoggedRules_residue` + edge-shrink give the representation-transport half cleanly;
+  the sem-stability half is the content.
+
+- **★ No kill of any statement** (the confluence stays TRUE per R4's attack-first). The findings are: a
+  design correction (`hdrain` necessary) + a structural obstruction (DAG inversion). Both SHAPE R5b; the
+  target is not refuted.
+
+**RESUME #4: Leg R5b, RE-SEQUENCED into three additive sub-legs (do in order; each green before the next):**
+1. **R5b-i (relocation, mechanical, green).** Move the count/residue/edge/existence substrate DOWN to
+   respect the future DAG: `count_removeLoggedOne`/`count_removeLoggedRules`/`untOccCount_erase` →
+   RemoveOccCount; `removeLoggedRules_residue`/`mem_removeLoggedRules_edges`/`residueHygienic_`/
+   `residueDeclared_removeLoggedRules` → CascadeInv (after the `ResidueHygienic`/`ResidueDeclared` defs);
+   `exists_admitted_ofAcyclicTarget`/`_ofSubset`/`_erase` → just below RestrictBase. Pure relocation, no
+   proof change; verify green.
+2. **R5b-ii (the low untainted-count invariant, NEW content).** Re-derive R3 at the `ReachedByW3d2` level
+   in `CascadeStrata`/`…Settle`: relocate the RemoveOccCount count stack (all about low `runCascade2`/
+   reconcile) DOWN, state `reachedByW3d2_untOccCount`, then build `untaintedShadow_removeLeg`
+   (edge-SET agreement `σ_rem ↔ σ0'` via the count fact + `reachedByRules_edge_sound`/`_edge_complete`).
+   This is the crux; land it additive & green.
+3. **R5b-iii (the constructor + discharges).** Add `remove` (route a, WITH `hdrain`) to
+   `ReachedByW3d2`/`C`/`E`; discharge the 18 mechanical cases from the relocated substrate;
+   `reachedByW3d2_shadow` off R5b-ii; `reachedByW3d2C_settled` off the settledness duals (build them here,
+   below Resettle); `toC`/`toW3d2` trivial `.remove`. Audit `graph_correct` remove path.
+
 ## Session 2026-07-19d (#4 remove legs — Leg R5a: build-FROM-store rebuild-existence LANDED, the R5b prerequisite)
 
 Seventh Lean-editing leg of #4. ADDITIVE — extends `RemoveConfluence.lean` only (no constructor /
