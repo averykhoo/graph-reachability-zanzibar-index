@@ -295,25 +295,47 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
     not counts" note to the remove path. The theorem characterizes the MODEL ref-count in
     terms of MODEL `rewriteClosure` occurrences (the design's exact phrasing), not a
     Python-count claim in reconvergent schemas.
-- **Leg R4 — the confluence lemma. ✅ UNTAINTED ARM DONE (2026-07-19a); derived arm + assembly
-  OPEN.** `EvalEq (removeLoggedRules σ t |> drain) (rebuild (T.erase t))` at edge-MEMBERSHIP (set)
-  level. New additive file `RemoveConfluence.lean` (verify.sh lean 415/415, conf 296). Attack-first
-  CONFIRMED the full confluence at answer level (`check(drain(remove)) = sem S (T.erase t)`, zero
-  mismatch over rc≥2-survival + derived-exclusion probes).
-  - **UNTAINTED side ✅** fed by R3's `untOccCount`: `count_removeLoggedRules` (retraction
+- **Leg R4 — the confluence lemma. ✅ UNTAINTED ARM + `ReadEq` ASSEMBLY DONE (part 1 2026-07-19a,
+  part 2 2026-07-19b); the DERIVED-membership + residue arms are chain-bound ⇒ R5.** New additive
+  file `RemoveConfluence.lean` (verify.sh lean 415/415 sorries=0, additive ⇒ conf unchanged 296).
+  Attack-first CONFIRMED the full confluence at answer level (`check(drain(remove)) = sem S (T.erase
+  t)`, zero mismatch over rc≥2-survival + derived-exclusion probes).
+  - **UNTAINTED side ✅ (part 1)** fed by R3's `untOccCount`: `count_removeLoggedRules` (retraction
     count-shrink, dual of R3's write growth, unconditional Nat sub) + `untOccCount_erase`
     (`t∈T ⇒ untOccCount S T = untOccCount S (T.erase t) + t-occ`, via `List.perm_cons_erase`) ⇒
     `drain_removeLoggedRules_untOccCount` (drained untainted multiplicity = `untOccCount S (T.erase
     t)` = R3 on a fresh rebuild) + `mem_drain_removeLoggedRules_untainted` (`count>0 ↔ mem`). The
     two-round drain is untainted-count-inert (R3's `count_runCascade2_of_ne`).
-  - **DERIVED side + assembly — OPEN (RESUME HERE).** (RESHAPED by the R3 kill): NOT a count bound —
-    the membership story (filter-all `removeEdgePair` zeroing + the two-round diffing re-settle, reuse
-    12f re-settlement; same `twoStrata`/`hLU2` bound). Plus residue equality (`reconcileResidueKey`
-    wholesale recompute) and the ASSEMBLY: fold untainted+derived+residue into a membership-level
-    `ReadEq` relation (schema/nodes/residue eq + edge-SET membership eq) with `check`/`reachB`
-    congruence — full `EvalEq`'s LIST-edge equality is FALSE across the differing add-chain vs
-    remove+drain fold orders, so R5's Group A must transport via `ReadEq`, not `EvalEq`. ADDITIVE ⇒
-    stays green. The untainted arm is the template.
+  - **`ReadEq` ASSEMBLY ✅ (part 2, deliverable iii)** — the membership-level read-agreement
+    relation + full read-congruence, the transport vehicle R5 needs. `structure ReadEq` (schema eq +
+    nodes eq + residue eq + edge-SET membership eq `∀ e, e∈σ'.edges ↔ e∈σ.edges`) + `refl`/`symm`/
+    `trans` + `EvalEq.toReadEq` (LIST-eq ⇒ SET-eq). Congruence suite: `any_congr_of_mem` (`List.any`
+    is order/multiplicity-blind — the base fact) → `reachB_congr_of_mem` (fuel induction; `reachB`
+    reads edges ONLY via `.any` ⇒ edge-SET congruent) → `reach_readEq`/`reachB_readEq` →
+    `probeNonDerived_readEq` / `probeDerived_readEq` → **`check_readEq`** (the headline; R5 transports
+    `check(post-remove)=sem` through a `ReadEq` to a rebuild). Confirmed why `ReadEq` not `EvalEq`:
+    the add-chain vs remove+drain fold orders give equal edge SETS but UNEQUAL lists (stacked derived
+    dups + untainted-count order artifact), so `EvalEq`'s LIST equality is FALSE — `ReadEq` is
+    satisfiable AND congruent for the whole read surface. Also landed the UNTAINTED half of the
+    cross-state `edgeMem` clause: `untEdgeMem_drain_removeLoggedRules_rebuild` (drained-remove vs ANY
+    rebuild `σr` over `T.erase t` agree on every untainted edge's membership — both `↔ 0 <
+    untOccCount S (T.erase t)`, off R3 for `σr` + the untainted arm).
+  - **★ FINDING (attack-first, negative — house rule 2): the DERIVED-membership + residue arms are
+    NOT additively separable from the constructor.** The design's (i)/(ii) — derived-pair presence +
+    residue = `sem S (T.erase t)` at the drained-remove state — are CHAIN-BOUND. Traced every route:
+    `graph_correct_w3d2` (`ReachedByW3d2C` hyp), `reachedByW3d2C_settled` (`ReachedByW3d2C`),
+    `settledComplete_cascade2_targeted` (**needs `ReachedByW3d2 σ S T`** for the two-round drain), and
+    `settledComplete_jobsLR_targeted` (shadow-based but SINGLE-round only + wants operand keys already
+    settled). No add-only rebuild-existence TERM exists (only the `ReachedByW3d2E` inductive + the
+    `graphRun`/`graphRun_reached` driver), so no witness can be supplied additively for the
+    drained-remove state. These arms close in R5: the `remove` constructor makes the drained state a
+    `ReachedByW3d2E`, at which the EXISTING `graph_correct_w3d2E` gives `check=sem` for ALL queries
+    (untainted AND derived) in one shot — the derived/residue equality is then free, not a separate
+    additive lemma. So part 2 lands the reusable `ReadEq`+congruence (transport vehicle) + the
+    untainted arm; the derived/residue `edgeMem`/`residue` clauses are R5's, discharged against the
+    constructor — documented, not faked (a green infrastructure landing over a fragile forced close).
+  - **Audit:** kept `ReadEq`+congruence OUT of `Audit.lean` (infrastructure, matching part 1's
+    untainted arm and the peer `check_evalEq` congruence — neither audited); count stays 415/415.
 - **Leg R5 — the constructor + discharge the consumer surface (THE ONE non-additive leg;
   lands green in ONE commit armed with R4).** Add the 4th `remove` constructor to
   `ReachedByW3d2E`: `(σ, t::T) → (σ.removeLoggedRules S t |> runCascade2 …, T.erase t)` with
@@ -349,8 +371,11 @@ clean; non-present remove raises `ValueError` ⇒ `RemoveAdmits` faithful).
 
 **Lift:** as predicted, ~one W3d sub-stage — but R3 (occurrence-count invariant) is GENUINE
 new content; R1/R2 clone-and-mirror; R4 the confluence; R5 the one non-additive assembly
-(green in one commit, with the `toC` retire as its trickiest piece). **RESUME: Leg R4 part 2**
-— the DERIVED membership arm (filter-all `removeEdgePair` zeroing + 12f re-settle, NOT the killed
-`∈{0,1}` bound) + residue equality + the `ReadEq` assembly (membership-level, since `EvalEq`'s
-LIST-edge equality fails across the add-chain vs remove+drain fold orders). The untainted arm
-(`RemoveConfluence.lean`, 2026-07-19a) is the template.
+(green in one commit, with the `toC` retire as its trickiest piece). **RESUME: Leg R5** — the
+`remove` constructor + consumer-surface discharge (the ONE non-additive leg). R4 is now fully
+scoped: part 1 (untainted arm) + part 2 (`ReadEq` relation + `check`/`reachB` congruence +
+untainted `edgeMem`) LANDED; the derived-membership + residue arms were attack-pinned CHAIN-BOUND
+(no additive rebuild witness) and MOVE INTO R5, where the constructor lets `graph_correct_w3d2E`
+discharge `check=sem` for all queries directly. R5 transports through `ReadEq` (`check_readEq`) for
+the Group-A membership-read invariants and retires `reachedByW3d2E_toC` from the remove path
+(fix iii). `RemoveConfluence.lean` (2026-07-19a/b) is the template + the transport toolkit.

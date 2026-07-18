@@ -8,6 +8,44 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19b (#4 remove legs — Leg R4 part 2: the `ReadEq` assembly + attack-pinned chain-bound derived/residue arms)
+
+Fifth Lean-editing leg of #4. ADDITIVE — extends `RemoveConfluence.lean` only (no constructor /
+inductive / existing-def touched). verify.sh **lean phase PASSED: sorries=0, audit 415/415**
+(Audit untouched — infrastructure, see below); additive ⇒ conf unchanged (not re-run this leg, per
+the additive-conformance rule). Full library builds (1065 jobs).
+
+- **Landed deliverable (iii): the `ReadEq` relation + full read-congruence** — the membership-level
+  transport vehicle R5 needs. `structure ReadEq` (schema eq + nodes eq + residue eq + edge-SET
+  membership eq `∀ e, e∈σ'.edges ↔ e∈σ.edges`) + `ReadEq.refl`/`.symm`/`.trans` + `EvalEq.toReadEq`
+  (LIST-eq ⇒ SET-eq). Congruence chain: `any_congr_of_mem` (`List.any` is order/multiplicity-blind —
+  the base fact) → `reachB_congr_of_mem` (fuel induction; `reachB` reads edges ONLY through `.any`,
+  so equal edge SETS ⇒ equal `reachB`) → `reach_readEq` / `reachB_readEq` → `probeNonDerived_readEq`
+  / `probeDerived_readEq` → **`check_readEq`** (the headline congruence — R5 transports
+  `check(post-remove) = sem` through a `ReadEq` to a rebuild). Also `untEdgeMem_drain_removeLoggedRules_rebuild`
+  (the UNTAINTED half of the cross-state `edgeMem`: drained-remove vs ANY rebuild `σr` over `T.erase t`
+  agree on every untainted edge's membership — both `↔ 0 < untOccCount S (T.erase t)`, off R3
+  `reachedByW3d2E_untOccCount` for `σr` + part-1's `mem_drain_removeLoggedRules_untainted`).
+- **★ FINDING (attack-first, negative — house rule 2): the DERIVED-membership + residue arms are
+  NOT additively separable from the `remove` constructor.** The design's (i) derived-pair presence
+  and (ii) residue equality at the drained-remove state = `sem S (T.erase t)` are CHAIN-BOUND. Traced
+  every settledness route via the machinery map: `graph_correct_w3d2` and `reachedByW3d2C_settled`
+  take a `ReachedByW3d2C` hyp; `settledComplete_cascade2_targeted` (the TWO-round drain's re-settle)
+  **requires `ReachedByW3d2 σ S T`**; `settledComplete_jobsLR_targeted` is shadow-based but SINGLE-round
+  only and pre-supposes operand-key settledness. And there is **no add-only rebuild-existence TERM**
+  (only the `ReachedByW3d2E` inductive + the `graphRun`/`graphRun_reached` executable driver), so no
+  chain witness for the drained-remove state can be produced additively. ⇒ These arms belong to R5:
+  the `remove` constructor makes the drained state a `ReachedByW3d2E`, at which the EXISTING
+  `graph_correct_w3d2E` discharges `check = sem` for ALL queries (untainted AND derived) at once —
+  the derived/residue equality is then free, not a separate additive lemma. So part 2 lands the
+  reusable `ReadEq`+congruence + the untainted arm; the derived/residue clauses are documented as
+  R5's, not faked (green infrastructure over a fragile forced close — house rule 1).
+- **Audit decision:** kept `ReadEq`+congruence out of `Audit.lean` — infrastructure, matching part 1's
+  untainted arm (not audited) and the peer `check_evalEq` congruence (not audited). Count stays 415.
+- **RESUME → Leg R5** (the one non-additive leg): add the 4th `remove` constructor to `ReachedByW3d2E`,
+  discharge Group A via `check_readEq`-transport + direct preservation, retire `reachedByW3d2E_toC`
+  from the remove path (fix iii). R4 is fully scoped; `RemoveConfluence.lean` is template + toolkit.
+
 ## Session 2026-07-19a (#4 remove legs — Leg R4 part 1: the UNTAINTED confluence arm)
 
 Fourth Lean-editing leg of #4, first increment. ADDITIVE — one new file `RemoveConfluence.lean`
