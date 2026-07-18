@@ -81,22 +81,27 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
-> **THE NEXT TASK (2026-07-19f) — #4 Leg R5b-iii-b (v3): add the `remove` constructor + discharge (now
-> a mechanical grind).** ALL substrate is landed + pushed and the guard is CONFIRMED. R5b-i/ii/iii-a/a2
-> (`d7d6f7d`/`2b7456f`/`a16c927`/pending-commit; all additive, `verify.sh lean` green, audit 415/415):
-> the substrate relocation, the crux (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`), the
-> 9-lemma settledness-dual stack, and (a2) the SOURCE-side occurrence-count invariant
-> `reachedByW3d2_srcOccCount` (`a.pred ≠ BARE ⇒ count = untOccCount`; cascade edges bare-sourced) + its
-> count stack + count-block relocation above `CascadeStrata:639`. The v2 pass CONFIRMED the minimal guard
-> `(hSVT : StoreValidRules S T) (hBST : BareStarStore T) (hTST : TtuStarFree S T) (htermT : ∀ dt R,
-> isDerived → NoTtuTarget S R ∧ NoStoreSubjectR T R)` resolves 20/21 sites (both hard sites read-verified
-> feasible); the 21st, `reachedByW3d2_edge_source_ne_R`, is now unblocked by `reachedByW3d2_srcOccCount`.
-> **v3 = add the 3 `remove` constructors (route a: mirror `write` + `hdrain : cascadeKeys S σ = []` + the
-> guard, faithful comment citing `TupleSource.remove` + W4Fragment) to `ReachedByW3d2`/`C`/`E`, discharge
-> the 21 sites (20 via the guard's full-`T` disciplines + `subset`/dual-stack/`exists_admitted_erase`; the
-> source site via `reachedByW3d2_srcOccCount`), `graph_correct_w3d2E` needs no bespoke case, keep audit
-> 415/415, then reword `FINAL_REVIEW.md` to the validly-stored-tuple remove scope.** Prior context (the
-> guard-fix rationale, the site map) below + `history/PROOF_STATUS.md` 2026-07-19f.
+> **★ #4's LEAN REMOVE LEG IS COMPLETE (2026-07-19f).** The `remove` constructor now lives on all three
+> inductives `ReachedByW3d2`/`C`/`E`, so T2a (full `Inv`) + T2b (`check = sem`) hold over remove-states, and
+> the audited `graph_correct` / `graph_reached_inv` / `Exec.graphRun_check_eq_sem` cover retraction — SCOPE:
+> removing a **validly-stored** tuple. Landed across R5b-i…iii-b (`d7d6f7d`/`2b7456f`/`a16c927`/`09eb272`/
+> `7a594bb`; all additive, `verify.sh lean` green, audit 415/415, standard axioms): substrate relocation →
+> the crux (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`) → the 9-lemma settledness-dual stack
+> → the source-occurrence invariant (`reachedByW3d2_srcOccCount`) → the constructor + guard
+> (`hdrain` + `StoreValidRules/BareStarStore/TtuStarFree/htermT` about the pre-remove store, faithful to
+> `TupleSource.remove` + W4Fragment) + the 21-site discharge. Full detail: `history/PROOF_STATUS.md`
+> 2026-07-19f.
+>
+> **THE NEXT TASK — #4 follow-ups (non-blocking), then the other optional widenings.** (1) **`FINAL_REVIEW.md`
+> scope-wording sweep** — §4(d) + the ~3 "Lean remove legs stay open" references (≈lines 92/144–148/241–245)
+> now UNDER-claim (stale-conservative = SAFE, but update: the Lean model IS a post-remove reference for
+> validly-stored-tuple removes; state the precondition). (2) **Exec-driver remove hardening (optional)** —
+> the zcli graph mode / `Exec.lean` fold is still add-only (constructs no remove-state), so the chain PROVES
+> remove-correctness but the DRIVER doesn't EXERCISE it end-to-end; wire a remove op into `foldAdmits`/zcli
+> to close "proved" vs "driven". (3) **User review of the guard design decision** (validly-stored scope —
+> faithful, strengthens an audited inductive; flagged for Avery). Then the remaining optional widenings:
+> #1 Direct-arm leg 4 (the base-equation wall) / TTU-userset half, #2 strata (>2). Prior R5b context
+> (guard-fix rationale, site map) below + `history/PROOF_STATUS.md` 2026-07-19f.
 > R5b-iii-b (add the `remove` constructor + discharge 20+1 sites) hit a **NEW, root-caused design
 > blocker** and was reverted to green baseline (no red/sorry partial): the **erase store-hypothesis
 > DIRECTION.** Discipline/settledness theorems carry store hyps indexed by the reached store `T`

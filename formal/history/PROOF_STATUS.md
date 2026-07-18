@@ -116,13 +116,37 @@ occurrence-count invariant** `reachedByW3d2_srcOccCount` — the mirror of the t
   CONFIRMED cascade edges are BARE-sourced (`W3cJobValid.hcb` forces candidate `c.predicate = BARE`), so
   `a.pred ≠ BARE` is the clean guard (write case source-agnostic; only cascade uses it). Pure move + new
   content; only `CascadeStrata.lean` touched.
-- **Leg R5b-iii-b (v3, the constructor — now the mechanical grind the design intended):** add the 3 `remove`
-  constructors with the CONFIRMED minimal guard (faithful comment citing `TupleSource.remove` + W4Fragment);
-  discharge the 21 sites — 20 via the guard as above, `_edge_source_ne_R` via `reachedByW3d2_srcOccCount`
-  (source-R edges all from `t`, removed by the retraction). `graph_correct_w3d2E` (Assemble:475) needs NO
-  bespoke case (routes through `reachedByW3d2E_toC` under `hq`). Keep audit 415/415 (no new top-level
-  theorem expected; don't touch `Audit.lean`). Then update `FINAL_REVIEW.md` scope wording to the
-  validly-stored-tuple remove precondition.
+- **Leg R5b-iii-b (v3) — LANDED 2026-07-19f (`7a594bb`), FULLY GREEN, audit 415/415, standard axioms.**
+  Added the 3 `remove` constructors (route a: `write`-mirror + `hdrain` + the CONFIRMED minimal guard
+  `hSVT/hBST/hTST/htermT`, faithful comment citing `TupleSource.remove` + W4Fragment) to
+  `ReachedByW3d2`/`C`/`E`; discharged all 21 sites. Mechanical (guard full-`T` disciplines + edge-subset +
+  IH / count substrate): `_schema`, `_untOccCount` low+E, `_srcOccCount`, `_structInv`/`_E`,
+  `_residueHygienic`/`_E`, `_residueDeclared`/`_E`, `_edgesClosed`, `_edge_target_ne_bare`,
+  `_edges_target_plain`, `_Rnode_source_bare`, `_Rnode_source_name_ne_star`, `_residueStarFree`,
+  `C_toW3d2`, `E_toC` — all collapsed to one-liners (the guard carries the full-`T` disciplines, so the v1
+  "~15-line untOccCount" fear was a v1-guard artefact). Real work: `_edge_source_ne_R` (via
+  `reachedByW3d2_srcOccCount` — a source-`R` edge forces `untOccCount S (T.erase t) > 0` ⇒ a subject-`R`
+  tuple in `T.erase t`, contradicting `NoStoreSubjectR (T.erase t) R` via `rewriteClosure_subject_pred_ne`);
+  `reachedByW3d2_shadow` (`exists_admitted_erase` + `untaintedShadow_removeLeg`); `reachedByW3d2C_settled`
+  (`hdrain` vacates both dirty disjuncts, then `removeLeg_sem_stable2`/`settledKey_/completeKey_removeLeg_sem`
+  transport); `E_edgeHyg1` (`removeLoggedRules_residue` + `removeLeg_derived_inedges_eq`).
+  `graph_correct_w3d2E` needed NO bespoke case (routes through `E_toC` under `hq`), as predicted. ONE
+  within-file relocation in `CascadeStrataInv` (residue-inert block moved above its consumers; pure move).
+  Purely additive + that move; no existing statement changed; `Audit.lean`/`FullScope`/`Exec` files
+  untouched (they rebuilt green — the audited `graph_correct`/`graph_reached_inv`/`Exec.graphRun_check_eq_sem`
+  now cover remove-states). **★ #4's LEAN REMOVE LEG IS COMPLETE:** T2a (full `Inv`) + T2b (`check = sem`)
+  now hold over remove-states of a VALIDLY-STORED tuple.
+
+- **REMAINING #4 follow-ups (NOT blocking; next session):** (1) **`FINAL_REVIEW.md` scope-wording sweep** —
+  §4(d) + the ~3 other "the Lean remove legs stay open" references (lines ~92/144–148/241–245) now UNDER-claim
+  (stale-conservative — safe direction, but update them: the Lean model IS now a post-remove reference for
+  validly-stored-tuple removes; state the `TupleSource.remove`-faithful precondition). (2) **Exec-driver
+  remove hardening (optional):** the zcli graph mode / `Exec.lean` fold is still add-only (constructs no
+  remove-state), so the operational chain proves remove-correctness but the DRIVER doesn't yet EXERCISE it
+  end-to-end; wiring a remove op into `foldAdmits`/the zcli mode would close the last gap between "proved"
+  and "driven" for removes. (3) **User review of the guard design decision** (the validly-stored-tuple scope
+  — faithful, but it strengthens an audited inductive; flagged for Avery). After #4: #1 Direct-arm leg 4 /
+  TTU-userset half, #2 strata (>2).
 
 ## Session 2026-07-19e (#4 remove legs — Leg R5b RECON+WALL: the constructor is blocked by a module-DAG inversion + a design correction; tree left GREEN, no edits)
 

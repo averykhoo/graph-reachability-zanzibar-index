@@ -121,19 +121,21 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
       REACHABLE via `foldAdmits_of_acyclic`. **Landed additively (green):** the T2a Group-A
       STRUCTURAL remove-case discharges (`removeLoggedRules_residue`, `mem_removeLoggedRules_edges`,
       `residueHygienic_/residueDeclared_removeLoggedRules`). **R5a LANDED 2026-07-19d** (build-FROM-store
-      `exists_admitted_erase`, additive, green). **#4 R5b-i/ii/iii-a LANDED + PUSHED 2026-07-19f**
-      (`d7d6f7d`/`2b7456f`/`a16c927`; all additive, `verify.sh lean` green, audit 415/415): the substrate
-      relocation, the crux (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`), and the 9-lemma
-      settledness-dual stack. **#4 R5b-iii-b (the `remove` constructor) hit a NEW design blocker 2026-07-19f
-      — reverted to green baseline (no red/sorry).** Root cause: the **erase store-hypothesis DIRECTION** —
-      discipline theorems carry store hyps at the reached store `T`; the remove induction case gets them at
-      `T.erase t` but needs full `T` (subset→superset), requiring the removed tuple `t`'s own validity,
-      unrecoverable from `RemoveAdmits = t ∈ T` (`rewriteClosure_notarget_derived` uses `hSV t ht`; no
-      `ReachedBy… → StoreValidRules` invariant exists). **THE FIX (faithful, do next):** strengthen the
-      `remove` guard to carry the pre-remove store `T`'s disciplines (Python's `TupleSource.remove` only
-      retracts validly-admitted tuples); scope becomes "…correct after removing a VALIDLY-STORED tuple".
-      Also remaining: #1 Direct-arm leg 4 (the wall), #1 TTU/userset half, #2 strata (>2).
-      See `formal/history/PROOF_STATUS.md` 2026-07-19f + `formal/HANDOFF.md` "THE NEXT TASK".
+      `exists_admitted_erase`). **★ #4's LEAN REMOVE LEG COMPLETE 2026-07-19f** — landed + pushed across
+      R5b-i…iii-b (`d7d6f7d`/`2b7456f`/`a16c927`/`09eb272`/`7a594bb`; all additive, `verify.sh lean` green,
+      audit 415/415, standard axioms). The `remove` constructor now lives on `ReachedByW3d2`/`C`/`E`, so
+      T2a (full `Inv`) + T2b (`check = sem`) hold over remove-states and the audited `graph_correct` /
+      `graph_reached_inv` / `Exec.graphRun_check_eq_sem` cover retraction — SCOPE: removing a
+      **validly-stored** tuple (the constructor carries the pre-remove store's disciplines + `hdrain`,
+      faithful to `TupleSource.remove` + the W4Fragment carries). Arc: substrate relocation → the crux
+      (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`) → the settledness-dual stack → the
+      source-occurrence invariant (`reachedByW3d2_srcOccCount`) → the constructor + 21-site discharge; a
+      mid-arc blocker (the erase store-hypothesis direction) was root-caused and fixed by the guard.
+      **#4 follow-ups (non-blocking):** (1) `FINAL_REVIEW.md` scope-wording sweep (§4(d) etc. now
+      under-claim — stale-conservative); (2) optional Exec-driver remove hardening (the zcli/`Exec` fold is
+      still add-only, so removes are PROVED but not DRIVEN end-to-end); (3) Avery to review the guard design
+      decision. Then the remaining optional widenings: #1 Direct-arm leg 4 (the wall) / TTU-userset half,
+      #2 strata (>2). See `formal/history/PROOF_STATUS.md` 2026-07-19f + `formal/HANDOFF.md` "THE NEXT TASK".
 - [x] **DONE 2026-07-17 (Claude): formal fragment widening — the `rootB` gap CLOSED (gate GREEN).**
       Union- and computed-rooted derived defs are now inside the proved `W4Fragment`
       (the derived-def ROOT operator is unrestricted; shape condition is `ComputedOnly`
