@@ -1223,5 +1223,28 @@ namespace Zanzibar
 #print axioms graphRunOps_reached
 #print axioms graphRunOps_store
 #print axioms graphRunOps_check_eq_sem
+-- #1 Leaf widening (Direct arm) leg 4 — the base-equation WALL discharged
+-- (GraphIndex/RestrictBase.lean, 2026-07-19). The WIDENED base `hag` equations:
+-- on an admitted rule-routed base over a `StoreValidRulesD` store — stored BARE
+-- Direct-arm tuples on DERIVED keys now admitted — the untainted operand read
+-- equals `sem`, with NO `ComputedOnly` hypothesis. Route: restrict the STORE to
+-- its untainted-key tuples; a derived-key tuple's rewrite closure is the seed
+-- alone (`rewriteClosure_derived_eq_seed`, match keys are untainted), so the
+-- graph transport drops only dead-end seed edges — never a path source under
+-- `hterm`'s `NoTtuTarget`/`NoStoreSubjectR` (`probeNonDerived_untaintedFilter`;
+-- attack-first: FALSE without `NoStoreSubjectR`, the leg-3 userset-over-derived
+-- kill reproduced at lemma level) — and `sem` is store-filter-invariant on
+-- untainted reads (`sem_untaintedFilter`, via the untainted schema restriction +
+-- T0a fuel stability; attack-first: needs NO terminality hypothesis, and a
+-- derived query genuinely diverges, so the untainted scope is load-bearing).
+-- The audited W3a/W3c statements `graphRec_base_eq`/`_bs` are UNCHANGED — they
+-- now delegate to the hypothesis-factored cores `graphRec_base_eq_unt`/`_bs_unt`.
+-- Standard axioms only:
+#print axioms rewriteClosure_derived_eq_seed
+#print axioms probeNonDerived_untaintedFilter
+#print axioms sem_untaintedFilter
+#print axioms storeDeclared_of_validRulesD
+#print axioms graphRec_base_eq_d
+#print axioms graphRec_base_eq_bs_d
 
 end Zanzibar

@@ -55,31 +55,73 @@ Attack-first ground truth (all backends agree; NO live Python divergence):
   ADMITTED base state where the derived-key seed edge is a harmless DEAD-END; item 1 leans
   on a dead-end/reach-invariance argument gated by `NoStoreSubjectR`, NOT on leg-2's
   drained-read retraction.
+- **Leg 4 DONE (2026-07-19, this session — UNCOMMITTED at write time; verify.sh lean
+  PASSED, audit 431/431, sorries=0, all new theorems standard-axioms-only).** The
+  base-equation WALL is DISCHARGED. All in `RestrictBase.lean` (+ 6 Audit entries):
+  - **`graphRec_base_eq_d` / `graphRec_base_eq_bs_d`** — the WIDENED base equations:
+    admitted base over a `StoreValidRulesD` store (stored BARE Direct-arm tuples on
+    derived keys ADMITTED), untainted operand read = `sem`, **NO `ComputedOnly`/`hCO`
+    hypothesis**; instead the `hterm` bundle
+    `∀ dt R, isDerived → NoTtuTarget S R ∧ NoStoreSubjectR T R` — the EXACT bundle every
+    chain consumer already carries (so downstream threading needs no new fragment field).
+  - **Design lemma A** = `rewriteClosure_derived_eq_seed`: a derived-key tuple's closure
+    is `[t]`. SIMPLER than designed — no `exprRefs`-heredity/`TtuTuplesetsDirect` needed:
+    a firing rule's match key would BE the derived key, but `RewriteMatchDeclared`
+    (already a base-eq premise) says every match key is declared UNTAINTED. Recorded
+    divergence from the design's lemma-A recipe; the compiler agreed.
+  - **Design lemma B** = `probeNonDerived_untaintedFilter` (+ `untaintedFilter_extra_edge_derived`,
+    `untaintedFilter_derivedNode_not_source`, generic `nreaches_extra_inert`): the ≤4-probe
+    read agrees between the full-store admitted base and the untainted-filter rebuild
+    (`exists_admitted_ofSubset` — the R5a tool, no new state-transfer needed). Extra edges
+    are derived SEED edges; dead ends under `hterm` (never a source — `rewriteClosure_subject_pred_ne`,
+    string-level); both probe targets carry the untainted `(dt, r')` key so they differ
+    from every extra target by taint. Attack-first `#eval` (deleted): the agreement is
+    (true, false)-REFUTED without `NoStoreSubjectR` — the leg-3 kill reproduced at lemma
+    level — and confirmed on direct/ttu/userset-flow/bare-star/star-subject shapes.
+  - **Design lemma C** = `sem_untaintedFilter` (+ `semAux_untaintedFilter`,
+    `evalE_untaintedFilter`, `ttuLeaf_untaintedFilter`, `memberOfGranted_untaintedFilter`,
+    `grantsOf_untaintedFilter`, `filter_absorb`/`any_filter_absorb`): `sem S T q =
+    sem S (T↾U) q` on untainted reads. Route DIVERGES from the design (recorded): the
+    store-congruence is proved over the untainted schema restriction `S↾U` at EVERY fuel
+    and EVERY key (undeclared keys false on both stores ⇒ the rec-agreement IH needs no
+    taint bookkeeping), then both ends close via `semAux_restrict` + T0a over `S↾U` —
+    avoiding any `Stratifiable S` premise on the MIXED schema. Hypotheses: `NodupKeys`,
+    `StoreDeclared S T` (⇐ new `storeDeclared_of_validRulesD` via new
+    `directTypes_mem_of_exprDirectsAll`), `NoUsersetStar T`, `TtuStarFree S T` (both ⇐
+    `StarFreeStore` in the plain variant; ⇐ `BareStarStore`+given in `_bs`) — the
+    `instances` branches are the only store reads that don't filter by an untainted key,
+    and they are dead. Attack-first: NO `NoStoreSubjectR` needed on the sem side
+    (confirmed equal even on the kill store); a DERIVED query genuinely diverges
+    ((true, false)) so the untainted-query scope is load-bearing.
+  - **Refactor (audited statements UNCHANGED):** `graphRec_base_eq`/`_bs` are now 8-line
+    wrappers deriving the no-stored-derived-key fact from `hCO` and delegating to the new
+    hypothesis-factored cores `graphRec_base_eq_unt`/`_bs_unt` (`hStoreUnt` premise) —
+    which leg-4 applies at the sub-store `T↾U` where `hStoreUnt` is free. Zero call-site
+    churn; axiom audit re-verified both audited originals.
 
-### Direct-arm — RESUME (leg 4 = the wall; details in commit `8a9bee1` message)
-Start from `graphRec_base_eq` (`RestrictBase.lean:516`) / `_bs` (`:631`). Add hypothesis
-`∀ dt R, isDerived S (dt,R) → NoStoreSubjectR T R`; replace `hStoreUnt`/`hSVU` with the
-restrict-T route using `storeValidRules_untaintedFilter`. Prove three NEW lemmas:
-- **A (dead-end seed):** `rewriteClosure` of a derived-key tuple is the seed alone — via
-  `exprArms`-matchRel ⊆ `exprRefs` + heredity (`untainted_closed`) + `TtuTuplesetsDirect`.
-- **B (untainted-read reach-invariance):** `probeNonDerived σ0 q' = probeNonDerived σ0_U q'`
-  for untainted `q'` (σ0_U drops derived seed edges; given `NoStoreSubjectR` the derived
-  node is never a path source).
-- **C (sem store-restriction):** `sem S (T↾U) q' = sem S T q'` on untainted reads (store
-  analog of `semAux_restrict`).
-Then build/obtain an admitted state over `T↾U` (or generalize `sem_of_rules_reach` to
-`StoreValidRulesD`+`NoStoreSubjectR`); thread `StoreValidRulesD` through
-`reachedByW3d2E_toC` (`CascadeStrataAssemble.lean:342-355`); ensure `enumJobs2*`
-(`CascadeStrataEnum.lean`) includes stored-on-R BARE subjects.
-**Leg 5:** migrate subject-varying consumers (`checkFn_eq_coveredFn_of_no_extra`
-`CascadeEnum.lean:66`, `coveredFn`/star machinery `ReconcileStars.lean:483`,
-`CascadeStrataEnum.lean:185` — FALSE as-is for a concrete Direct grant, need a
-star/concrete split gated on `DirectArmsBare`); widen `W4Fragment.computedOnly` to
-`ComputedOrDirect ∧ DirectArmsBare`; re-prove `w4_within_scope` (`FullScope.lean:165-174`;
-`directsOnly_of_computedOnly` needs a `directsOnly (excl …) = false` variant); add witness
-`W4WitnessDirect` (`approver := excl (direct [user]) (computed banned)` + a store granting
-`user:alice`) to `Audit.lean`; conformance: move a Direct-arm corpus INTO `GRAPH_FRAGMENT`
-(`corpus.py`) + a state pin. Keep derived-TTU-userset shapes OUT of the graph leg.
+### Direct-arm — RESUME (leg 5 = consumer migration; leg 4 CLOSED above)
+The wall is down; what remains is threading the widened admission through the CHAIN and
+the fragment/witness/conformance surface. Sub-steps (from the leg-4 recon, order matters):
+1. **Thread `StoreValidRulesD` + the widened base eqs through the chain**: the W3a/W3c
+   read-half consumers of `graphRec_base_eq`/`_bs` (`ReconcileComplete.lean:128/700/779`,
+   `ReconcileStarsComplete.lean:1058`, `CascadeSettle.lean:1116`,
+   `CascadeStrataSettle.lean:884`, `CascadeStrataResettle.lean:1540`) all pass `hCO` — they
+   must offer the `_d` forms under `StoreValidRulesD` (their own `hSV : StoreValidRules`
+   hypotheses widen; the write-half reach-collapse `_d` mirrors from leg 2 exist).
+   `reachedByW3d2E_toC` (`CascadeStrataAssemble.lean:341`) already carries `hterm`.
+2. **Migrate subject-varying consumers** (`checkFn_eq_coveredFn_of_no_extra`
+   `CascadeEnum.lean:66`, `coveredFn`/star machinery `ReconcileStars.lean:483`,
+   `CascadeStrataEnum.lean:185` — FALSE as-is for a concrete Direct grant, need a
+   star/concrete split gated on `DirectArmsBare`); ensure `enumJobs2*`
+   (`CascadeStrataEnum.lean`) includes stored-on-R BARE subjects.
+3. **Widen `W4Fragment.computedOnly`** to `ComputedOrDirect ∧ DirectArmsBare`; re-prove
+   `w4_within_scope` (`FullScope.lean:165-174`; `directsOnly_of_computedOnly` needs a
+   `directsOnly (excl …) = false` variant); add witness `W4WitnessDirect`
+   (`approver := excl (direct [user]) (computed banned)` + a store granting `user:alice`)
+   to `Audit.lean`; conformance: move a Direct-arm corpus INTO `GRAPH_FRAGMENT`
+   (`corpus.py`) + a state pin. Keep derived-TTU-userset shapes OUT of the graph leg.
+Leg 5 did NOT fall out of leg 4 (step 2's consumers are attack-flagged FALSE-as-is and
+need genuinely new star/concrete splits) — it is its own leg.
 
 ### TTU/userset half — NOT STARTED (deeper; after Direct arm)
 `PDerivedTTU` (TTU arm, store-state dependent, +1 stratum) and `PDerivedUserset`
