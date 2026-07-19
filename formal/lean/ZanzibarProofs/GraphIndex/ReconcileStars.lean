@@ -601,9 +601,20 @@ theorem checkFn_agree_of_graphRec {σ σ0 : GraphState} {S : Schema} (T : Store)
   unfold GraphState.checkFn
   exact evalE_computedOnly e hco (fun r' hr' => hag s r' (hleafUnt r' hr'))
 
--- NOTE: the `_cd` cross-state agreement `checkFn_agree_of_graphRec_cd` (the widened
--- form of `checkFn_agree_of_graphRec`, the ReconcileStars:483-cited site) ALREADY
--- landed in leg 2 (`ReconcileDiff.lean`, via `evalE_computedOrDirect`); no duplicate here.
+/-- `checkFn` agreement across two states agreeing on the def's `computed` leaves, WIDENED to a
+    `ComputedOrDirect` def with bare `Direct` arms (leg 1's `evalE_computedOrDirect`). Subject-
+    SHARED (a `Direct` arm reads the store at the fixed subject — the varying-subject form is
+    refuted; `ReconcileCorrect` widening-leg note); only `rec`/query vary, all `wantEdge` needs.
+    (Lives here, not `ReconcileDiff`, so the W3c master `_d` core can consume it.) -/
+theorem checkFn_agree_of_graphRec_cd {σ σ0 : GraphState} {S : Schema} (T : Store)
+    (s : SubjectRef) (dt on R : String) (e : Expr)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hag : ∀ (s' : SubjectRef) (r' : String), isDerived S (dt, r') = false →
+      GraphModel.graphRec σ s' dt on r' = GraphModel.graphRec σ0 s' dt on r') :
+    σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e := by
+  unfold GraphState.checkFn
+  exact evalE_computedOrDirect e hcd hba (fun r' hr' => hag s r' (hleafUnt r' hr'))
 
 /-! ## The master provenance — canonical stars, covered `neg`, uncovered edges
 
@@ -620,9 +631,10 @@ canonically covered, edge sources are canonically uncovered. That contradiction 
     carries the canonical `stars` row, filter-guaranteed `neg`/`upos` members, and
     (3) every in-edge of a derived R-node is a base edge or a canonically-uncovered
     bare reconcile edge. -/
-theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
+theorem reachedByW3c_master_d {σ : GraphState} {S : Schema} {T : Store}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hcd : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOrDirect e)
+    (hba : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → DirectArmsBare e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (h : ReachedByW3c σ S T) :
@@ -655,7 +667,7 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
       exact Or.inl hu
   | @reconcileS σp S T dt on R e cands negCands uposCands hRne hcands hcStar hnegStar
       huposP huposStar hder hlke honStar hprev ih =>
-    obtain ⟨σ0, hσ0, hag, hres, hedge⟩ := ih hterm hCO hLU
+    obtain ⟨σ0, hσ0, hag, hres, hedge⟩ := ih hterm hcd hba hLU
     -- the current state is a W3c state too
     have hcur : ReachedByW3c
         (σp.reconcileStarsKey T dt on R e (wildcardShapes S) cands negCands uposCands) S T :=
@@ -708,8 +720,8 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
         s dt'' on'' r' hunt
     -- checkFn at the pass start equals the canonical (base) checkFn — any subject
     have hchk_eq : ∀ (x : SubjectRef), σp.checkFn T x dt on R e = σ0.checkFn T x dt on R e :=
-      fun x => checkFn_agree_of_graphRec T x dt on R e (hCO dt R e hlke hder)
-        (hLU dt R e hlke hder) (fun s' r' hr' => hag s' dt on r' hr')
+      fun x => checkFn_agree_of_graphRec_cd T x dt on R e (hcd dt R e hlke hder)
+        (hba dt R e hlke hder) (hLU dt R e hlke hder) (fun s' r' hr' => hag s' dt on r' hr')
     -- the pass-start star filter equals the canonical (base) star filter
     have hstars_eq : (wildcardShapes S).filter (fun sh => σp.coveredFn T dt on R e sh)
         = (wildcardShapes S).filter (fun sh => σ0.coveredFn T dt on R e sh) := by
@@ -792,11 +804,11 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
         have hguard0 : σ0.checkFn T c dt on R e = true := by
           have h1 : (σ1.reconcileKey T dt on R e pre).checkFn T c dt on R e
               = σ1.checkFn T c dt on R e :=
-            checkFn_agree_of_graphRec T c dt on R e (hCO dt R e hlke hder)
-              (hLU dt R e hlke hder) hmidag
+            checkFn_agree_of_graphRec_cd T c dt on R e (hcd dt R e hlke hder)
+              (hba dt R e hlke hder) (hLU dt R e hlke hder) hmidag
           have h2 : σ1.checkFn T c dt on R e = σp.checkFn T c dt on R e :=
-            checkFn_agree_of_graphRec T c dt on R e (hCO dt R e hlke hder)
-              (hLU dt R e hlke hder) (fun s' r' _ => hag1 s' dt on r')
+            checkFn_agree_of_graphRec_cd T c dt on R e (hcd dt R e hlke hder)
+              (hba dt R e hlke hder) (hLU dt R e hlke hder) (fun s' r' _ => hag1 s' dt on r')
           have hcv := hchk
           rw [h1, h2, hchk_eq c] at hcv
           exact hcv
@@ -813,6 +825,40 @@ theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
           simpa using hcunc
         · rw [hdt, hon, hR, he]
           exact hguard0
+
+/-- **`reachedByW3c_master`** — the `ComputedOnly` wrapper over the `_d` core
+    `reachedByW3c_master_d`. Byte-identical statement to HEAD; delegates by deriving
+    `ComputedOrDirect`/`DirectArmsBare` from `ComputedOnly` at each derived key
+    (`computedOnly_computedOrDirect`/`_directArmsBare`). -/
+theorem reachedByW3c_master {σ : GraphState} {S : Schema} {T : Store}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : ReachedByW3c σ S T) :
+    ∃ σ0, ReachedByRulesAdmitted σ0 S T ∧
+      (∀ (s : SubjectRef) (dt on r' : String), isDerived S (dt, r') = false →
+        GraphModel.graphRec σ s dt on r' = GraphModel.graphRec σ0 s dt on r') ∧
+      (∀ k r res, σ.residue k r = some res →
+        ∃ dt on e', k = objNode ⟨dt, on⟩ r ∧ isDerived S (dt, r) = true ∧ r ≠ BARE ∧
+          on ≠ STAR ∧ S.lookup (dt, r) = some e' ∧
+          res.stars = (wildcardShapes S).filter (fun sh => σ0.coveredFn T dt on r e' sh) ∧
+          (∀ n ∈ res.neg, res.stars.contains n.shape = true ∧ n.name ≠ STAR ∧
+            σ0.checkFn T n dt on r e' = false) ∧
+          (∀ n ∈ res.upos, res.stars.contains n.shape = false ∧ n.predicate ≠ BARE ∧
+            n.name ≠ STAR ∧ σ0.checkFn T n dt on r e' = true)) ∧
+      (∀ (dt on r : String) (e' : Expr), isDerived S (dt, r) = true →
+        S.lookup (dt, r) = some e' → on ≠ STAR →
+        ∀ u, (u, objNode ⟨dt, on⟩ r) ∈ σ.edges →
+          (u, objNode ⟨dt, on⟩ r) ∈ σ0.edges ∨
+          ∃ c : SubjectRef, u = subjNode c ∧ c.predicate = BARE ∧ c.name ≠ STAR ∧
+            ((wildcardShapes S).filter
+              (fun sh => σ0.coveredFn T dt on r e' sh)).contains c.shape = false ∧
+            σ0.checkFn T c dt on r e' = true) :=
+  reachedByW3c_master_d hterm
+    (fun dt R e hlk hder => computedOnly_computedOrDirect (hCO dt R e hlk hder))
+    (fun dt R e hlk hder => computedOnly_directArmsBare (hCO dt R e hlk hder))
+    hLU h
 
 /-! ## T2a at W3c — the full invariant, every I6 clause contentful -/
 

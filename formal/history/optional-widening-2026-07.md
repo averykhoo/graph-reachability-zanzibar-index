@@ -210,8 +210,79 @@ confirmed the ghost direction: a wildcard arm with NO bare-STAR grant reads `fal
   ones (`coveredFn_declared_d`, `checkFnR_eq_sem_settled_d`, `checkFnR_star_declared_d`,
   `w3dJobCoverage_enumJob2D`, `w3d2_leg_context_d`) added to `Audit.lean`.
 
-### Direct-arm — RESUME (the state-level `_d` clones need the `_d` CHAIN; then sub-step 3)
-**★ WALL / DESIGN REFINEMENT (this session).** The read-bridge + coverage-discharge `_d` clones are
+### Direct-arm — leg 5d: the `_d` CHAIN — W3c branch LANDED; W3d2 shadow KILLED (naive), re-scoped (2026-07-19, this session — UNCOMMITTED; `verify.sh lean` PASSED, audit 446 → 448, sorries=0, standard axioms only)
+Additive, no fragment/conformance change (lean-only gate). Two banks landed + one attack-first KILL.
+
+**LANDED — the W3c-branch `_d` clones (they DERIVE their base from `reachedByW3c_master`, which has
+NO `StoreValidRules`/`UntaintedShadow` dependency — only `hterm`/`hCO`/`hLU` — so they widen cleanly):**
+- **`reachedByW3c_master_d`** (`ReconcileStars.lean`, factored: original is now a byte-identical wrapper).
+  The ONLY `hCO`-consuming site in the master is the pass-start `checkFn` agreement (3 call sites), which
+  swaps to the leg-2 **`checkFn_agree_of_graphRec_cd`** (via `evalE_computedOrDirect`; a bare `Direct` arm
+  reads the store subject-independently). **Module-DAG fix:** `checkFn_agree_of_graphRec_cd` was RELOCATED
+  UP from `ReconcileDiff` → `ReconcileStars` (it was downstream of the master; pure move, proof only needs
+  the upstream `evalE_computedOrDirect`). Wrapper derives `ComputedOrDirect`/`DirectArmsBare` from
+  `ComputedOnly`.
+- **`w3c_row_char_d`** (`ReconcileStarsComplete.lean`, factored: original is a byte-identical wrapper via
+  `storeValidRulesD_of_storeValidRules` + `computedOnly_*`). Base = `reachedByW3c_master_d`; the star-relaxed
+  Direct-arm bridge is `checkFn_eq_sem_bs_d` (leg 5b). No `UntaintedShadow`, no W3d2 chain — falls out.
+
+**★ ATTACK-FIRST KILL (house rule 2) — `reachedByW3d2_shadow_d` (naive, full-store σ0) is FALSE.** Probed
+the design's expected shadow BEFORE proving. `#eval` (deleted): `approver := excl (direct [user]) (computed
+banned)`, `banned := direct [user]`; store `{(alice,approver,doc),(alice,banned,doc)}` (valid under
+`StoreValidRulesD`, `sem(alice,approver,doc)=false` — banned). Results: `rewriteClosure S (alice,approver,doc)
+= [(alice,approver,doc)]` ⇒ the full-store admitted σ0 (`ReachedByRulesAdmitted σ0 S T`, built by folding
+`writeRules`) CONTAINS the base seed edge `subjNode(alice) → objNode(doc,approver)` (confirmed
+`σ0.edges.contains seed = true`); the DRAINED W3d2 σ (via `graphRun`) does NOT — the W3d diffing pass
+`reconcileKeyD_retracts_excluded` retracts the excluded seed (`drained σ.edges = [(alice→banned)]` only,
+`contains seed = false`). So **`UntaintedShadow.sub` (σ0 ⊆ σ) FAILS** (`σ0.edges.all (∈ σ.edges) = false`):
+there is NO σ0 that is BOTH the full-`T` `ReachedByRulesAdmitted` rebuild AND an `UntaintedShadow` of the
+drained σ whenever a stored Direct-arm subject is ALSO excluded. The design's leg-5a note ("the shadow
+admits Direct-arm derived keys … correspondence at the DRAINED state") mis-scoped this: admitting the seed
+into σ0 is exactly what breaks `sub`.
+
+**★ WHAT THE KILL IMPLIES — the leg-5c bridges took the WRONG σ0.** The landed
+`checkFnR_eq_sem_settled_d` / `w3d2_leg_context_d` (leg 5c) take BOTH `h0 : ReachedByRulesAdmitted σ0 S T`
+(full store) AND `hsh : UntaintedShadow S σ σ0` — an UNSATISFIABLE pair at any drained chain state carrying
+an excluded stored Direct-arm subject. They are green (implications with never-jointly-satisfiable
+hypotheses) but **CANNOT be discharged by a real `_d` chain as written.** The fix is a DIFFERENT σ0.
+
+**★ THE RE-SCOPED PLAN (the drained σ.edges = exactly the untainted core ⇒ σ0 = untainted-FILTER rebuild).**
+The probe also shows the rescue: `drained σ.edges = [(alice→banned)]` = the untainted-core edges. So
+`reachedByW3d2_shadow_d` must produce **σ0 = `ReachedByRulesAdmitted σ0 S (T.filter untainted)`** (the
+`T↾U` rebuild, NO derived-key tuples ⇒ NO seed edges ⇒ σ0 purely untainted-targeted), for which
+`UntaintedShadow S σ σ0` holds (`sub`: untainted edges persist; `classify`: σ's surviving-seed + reconcile
+edges target `DerNode`s; `term`: unchanged). This needs, in order:
+  1. **`reachedByW3d2_shadow_d` with a filtered σ0** — a genuinely NEW shadow construction (NOT a clone):
+     - WRITE case: a Direct-arm derived-key tuple `t` (`t ∉ T↾U`) must go to σ (real state) only, NOT σ0;
+       its new σ edge targets a `DerNode` (classify right branch) — a new `untaintedShadow_writeLeg`-style
+       lemma for the derived-key write (σ-only, DerNode-classified). Untainted writes fold into both as now.
+     - CASCADE case: `untaintedShadow_cascade2` over the filtered σ0 — σ0 has NO seeds, so cascade retracting
+       seeds cannot break `sub`; and `reachedByRulesAdmitted_edge_target_untainted` now HOLDS over `T↾U` (all
+       σ0 edges genuinely untainted-targeted). This should reuse the existing cascade machinery closely.
+     - REMOVE case: as now, but over `T↾U`.
+  2. **`T↾U`-store variants of the leg-5c/leg-4 consumers** (additive, factored — do NOT weaken the audited
+     full-`T` ones): `graphRec_base_eq_bs_d`/`graphRec_star_declared_d`/`checkFn_eq_sem_bs_d`/
+     `coveredFn_declared_d`/`checkFnR_eq_sem_settled_d`/`w3d2_leg_context_d` re-routed to take
+     `ReachedByRulesAdmitted σ0 S (T↾U)`, composing with **`sem_untaintedFilter`** (leg 4 lemma C, landed:
+     `sem S (T↾U) q = sem S T q` on untainted reads) to recover `= sem S T`. The derived-operand branch reads
+     the RESIDUE (over full `T`, via `hops`/settled), not σ0's store, so it is unaffected; the untainted-leaf
+     + star-declaredness reads route through `T↾U` cleanly.
+  3. **`reachedByW3d2C_settled_d`** (its settled-consumer duals `writeLeg_sem_stable2`/`settledKey_*`/
+     `removeLeg_*`/`settledComplete_cascade2_targeted` all take `hSV`/`hCO`, need `_d` + filtered-σ0 forms)
+     and **`graph_correct_w3d2_d`** (untainted branch = filtered-σ0 base eq + `sem_untaintedFilter`; derived
+     branch = the re-routed `checkFnR_eq_sem_settled_d` + `probeDerived_eq_sem_settled`). Then fall out.
+This is genuine multi-session chain content (a NEW filtered-shadow substrate + a parallel `T↾U`-σ0 bridge
+family), NOT the additive hypothesis-factored clone the design assumed. `reachedByW3c_master_d` +
+`w3c_row_char_d` are the tractable slice; they are DONE and independent of the shadow.
+
+### Direct-arm — RESUME (the W3d2 `_d` chain needs a FILTERED-σ0 shadow; then sub-step 3)
+**Next: the filtered-σ0 W3d2 chain (steps 1–3 above), then sub-step 3.** The W3c branch (`reachedByW3c_master_d`,
+`w3c_row_char_d`) is LANDED. The W3d2 branch is walled on the σ0 mismatch (KILL above); resume at step 1
+(`reachedByW3d2_shadow_d` with `σ0 = T↾U` rebuild). Historical design note follows (SUPERSEDED by the KILL —
+kept for the machinery pointers it cites).
+
+**★ WALL / DESIGN REFINEMENT (2026-07-19g, SUPERSEDED by leg 5d's KILL — the full-store σ0 it assumed is
+model-FALSE).** The read-bridge + coverage-discharge `_d` clones are
 DONE and are exactly the hypothesis-factored cores the design promised — they take the shadow (`h0 :
 ReachedByRulesAdmitted σ0 S T`, `hsh : UntaintedShadow`) as INPUTS, so they need NO `_d` chain. BUT the
 design's expectation that the settled-consumer clones "just need `coveredFn_declared_d` + enum" was

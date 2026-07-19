@@ -827,20 +827,6 @@ on the `ComputedOnly` read congruence `evalE_computedOnly`. A bare `Direct`-arm 
 `evalE_computedOrDirect`. The result: the diffing retraction holds over the motivating shape —
 the crux, formalized at the pass level. -/
 
-/-- `checkFn` agreement across two states agreeing on the def's `computed` leaves, WIDENED to a
-    `ComputedOrDirect` def with bare `Direct` arms (leg 1's `evalE_computedOrDirect`). Subject-
-    SHARED (a `Direct` arm reads the store at the fixed subject — the varying-subject form is
-    refuted; `ReconcileCorrect` widening-leg note); only `rec`/query vary, all `wantEdge` needs. -/
-theorem checkFn_agree_of_graphRec_cd {σ σ0 : GraphState} {S : Schema} (T : Store)
-    (s : SubjectRef) (dt on R : String) (e : Expr)
-    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
-    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hag : ∀ (s' : SubjectRef) (r' : String), isDerived S (dt, r') = false →
-      GraphModel.graphRec σ s' dt on r' = GraphModel.graphRec σ0 s' dt on r') :
-    σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e := by
-  unfold GraphState.checkFn
-  exact evalE_computedOrDirect e hcd hba (fun r' hr' => hag s r' (hleafUnt r' hr'))
-
 /-- The guard `wantEdge` is fold-invariant over a `ComputedOrDirect` + bare-`Direct` derived def
     (the `_cd` mirror of `wantEdge_reconcileKeyD_inert`; only the `checkFn`-agreement step swaps
     to `checkFn_agree_of_graphRec_cd`, the covered-row half is def-shape-independent). -/

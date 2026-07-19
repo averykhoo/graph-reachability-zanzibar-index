@@ -1334,4 +1334,30 @@ namespace Zanzibar
 #print axioms w3dJobCoverage_enumJob2D
 #print axioms w3d2_leg_context_d
 
+-- #1 Leaf widening (Direct arm) leg 5d — the `_d` CHAIN, PARTIAL (GraphIndex/ReconcileStars.lean
+-- + ReconcileStarsComplete.lean, 2026-07-19). The W3c-branch `_d` clones (they DERIVE their base
+-- from `reachedByW3c_master`, which has NO `StoreValidRules`/`UntaintedShadow` dependency, so they
+-- widen cleanly). **`reachedByW3c_master_d`** — the canonical-base provenance over a
+-- `ComputedOrDirect`/`DirectArmsBare` derived def: the ONLY `hCO`-consuming site is the pass-start
+-- `checkFn` agreement, which swaps to the leg-2 `checkFn_agree_of_graphRec_cd` (relocated UP from
+-- `ReconcileDiff` to `ReconcileStars` so the master core can consume it; via `evalE_computedOrDirect`,
+-- the bare `Direct` arm reads the store subject-independently). `reachedByW3c_master` is now a
+-- byte-identical wrapper deriving `ComputedOrDirect`/`DirectArmsBare` from `ComputedOnly`.
+-- **`w3c_row_char_d`** — every persisted W3c row reads at `sem` level under `StoreValidRulesD` + a
+-- Direct-arm def (master_d base + the star-relaxed Direct-arm bridge `checkFn_eq_sem_bs_d`);
+-- `w3c_row_char` is now a byte-identical wrapper (`storeValidRulesD_of_storeValidRules` +
+-- `computedOnly_*`). **★ ATTACK-FIRST KILL (house rule 2) — the naive `reachedByW3d2_shadow_d` is
+-- FALSE.** The `_d` shadow cannot produce `∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0`
+-- over the FULL store: a stored BARE Direct-arm tuple on a derived key that is ALSO excluded
+-- (`{(alice,approver,doc),(alice,banned,doc)}`, `approver := excl (direct [user]) (computed banned)`)
+-- materialises a base seed edge in the full-store admitted σ0 (`rewriteClosure` = `[t]` ⇒
+-- `subjNode alice → objNode(doc,approver)`), which the W3d diffing pass RETRACTS from the drained σ
+-- (`reconcileKeyD_retracts_excluded`; `#eval`-confirmed drained σ.edges = `[(alice→banned)]` only),
+-- so `UntaintedShadow.sub` (σ0 ⊆ σ) FAILS. The W3d2 chain-clone (`reachedByW3d2_shadow_d`/
+-- `reachedByW3d2C_settled_d`/`graph_correct_w3d2_d`) needs σ0 = the UNTAINTED-FILTER rebuild (over
+-- `T↾U`), which then requires `T↾U`-store variants of the leg-5c bridges — see design file RESUME.
+-- Standard axioms only:
+#print axioms reachedByW3c_master_d
+#print axioms w3c_row_char_d
+
 end Zanzibar

@@ -8,6 +8,46 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19h (#1 Direct-arm leg 5d — the `_d` CHAIN: W3c branch LANDED, W3d2 shadow KILLED (naive) + re-scoped to a filtered-σ0 substrate; audit 446→448, verify.sh lean PASSED)
+
+Eleventh session of the optional arc. Goal: leg 5d = the `_d` CHAIN (`reachedByW3d2_shadow_d` /
+`reachedByW3c_master_d` / `reachedByW3d2C_settled_d`, then `graph_correct_w3d2_d` / `w3c_row_char_d`).
+Landed the tractable W3c half GREEN + additive; ATTACK-FIRST KILLED the naive W3d2 shadow and re-scoped
+it precisely. Tree left GREEN (uncommitted, for orchestrator review).
+
+- **W3c branch LANDED (target c + the falls-out deliverable).** **`reachedByW3c_master_d`**
+  (`ReconcileStars.lean`) — the canonical-base provenance over a `ComputedOrDirect ∧ DirectArmsBare`
+  derived def; the ONLY `hCO` use is the pass-start `checkFn` agreement (3 sites) → swapped to leg-2's
+  **`checkFn_agree_of_graphRec_cd`** (via `evalE_computedOrDirect`). Module-DAG fix: relocated
+  `checkFn_agree_of_graphRec_cd` UP from `ReconcileDiff` → `ReconcileStars` (it was downstream of the
+  master; pure move). **`w3c_row_char_d`** (`ReconcileStarsComplete.lean`) — every W3c row reads at `sem`
+  under `StoreValidRulesD` + a Direct-arm def (master_d + `checkFn_eq_sem_bs_d`). Both audited originals
+  refactored to **byte-identical wrappers** (verified vs HEAD; only `:= by`→`:=` differs). Audit 446 → 448.
+- **★ ATTACK-FIRST KILL (house rule 2) — the naive `reachedByW3d2_shadow_d` is FALSE.** `#eval` (deleted):
+  `approver := excl (direct [user]) (computed banned)`, store `{(alice,approver,doc),(alice,banned,doc)}`.
+  The full-store admitted σ0 (`ReachedByRulesAdmitted σ0 S T`) CONTAINS the base seed `subjNode(alice) →
+  objNode(doc,approver)` (`rewriteClosure = [t]`), but the DRAINED W3d2 σ RETRACTS it
+  (`reconcileKeyD_retracts_excluded`; drained `σ.edges = [(alice→banned)]` only), so **`UntaintedShadow.sub`
+  (σ0 ⊆ σ) FAILS.** No σ0 is both the full-`T` rebuild AND an untainted shadow of the drained σ when a stored
+  Direct-arm subject is excluded. **Implication:** the leg-5c bridges `checkFnR_eq_sem_settled_d` /
+  `w3d2_leg_context_d` take BOTH `h0 : ReachedByRulesAdmitted σ0 S T` (full store) AND `hsh : UntaintedShadow
+  S σ σ0` — an UNSATISFIABLE pair at excluded-Direct-arm drained states; green but un-dischargeable by a real
+  `_d` chain as written.
+- **★ RE-SCOPE (the probe also gives the rescue).** Drained `σ.edges` = exactly the untainted core, so the
+  `_d` shadow must produce **σ0 = the untainted-FILTER rebuild** (`ReachedByRulesAdmitted σ0 S (T↾U)`, no
+  derived-key tuples ⇒ no seed edges), a genuinely NEW shadow construction (NOT a clone), PLUS additive
+  `T↾U`-store variants of the leg-4/5c consumers composing with `sem_untaintedFilter` (leg 4 lemma C).
+  Full step-by-step plan in `history/optional-widening-2026-07.md` leg-5d section + RESUME. This is genuine
+  multi-session chain content; the W3d2 `_d` clones (`reachedByW3d2_shadow_d`/`reachedByW3d2C_settled_d`/
+  `graph_correct_w3d2_d`) remain OPEN, blocked on this substrate.
+- **Gate:** `verify.sh lean` PASSED (sorries=0, standard axioms; audit 448/448). No fragment/conformance
+  change ⇒ conf phases not re-run. Zero `.lean` deletions of content (the 3 removed theorem lines are
+  relocations/wrappers; `checkFn_agree_of_graphRec_cd` moved, `reachedByW3c_master`/`w3c_row_char` became
+  byte-identical wrappers).
+- **NEXT:** leg 5d cont. — the filtered-σ0 W3d2 chain (`reachedByW3d2_shadow_d` over `T↾U` + the `T↾U`-σ0
+  bridge family + `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d`), then sub-step 3. Then TTU/userset
+  half, #2 strata. Exact resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
+
 ## Session 2026-07-19g (#4 FULLY CLOSED: docs sweep + Exec-driver remove hardening — removes now DRIVEN; #1 Direct-arm legs 4/5a/5b/5c LANDED: the base-equation wall discharged, two attack kills, audit 425→446)
 
 Tenth session of the optional arc; orchestrated (Fable main, parallel where files were disjoint):

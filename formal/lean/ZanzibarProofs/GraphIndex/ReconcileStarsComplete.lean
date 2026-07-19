@@ -507,13 +507,14 @@ what the bridge's subject scope admits. -/
     declared derived key satisfies: `stars` contains exactly the declared shapes whose
     star subject is `sem`-true; every `neg` member is star-free and `sem`-false; every
     `upos` member is a star-free userset and `sem`-true. -/
-theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
+theorem w3c_row_char_d {S : Schema} {T : Store} {σ : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
-    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hcd : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOrDirect e)
+    (hba : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → DirectArmsBare e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
@@ -526,7 +527,7 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
     (∀ n ∈ res.neg, n.name ≠ STAR ∧ sem S T ⟨n, R, ⟨dt, on⟩⟩ = false) ∧
     (∀ n ∈ res.upos, n.predicate ≠ BARE ∧ n.name ≠ STAR ∧
       sem S T ⟨n, R, ⟨dt, on⟩⟩ = true) := by
-  obtain ⟨σ0, hσ0, _hag, hres, _hedge⟩ := reachedByW3c_master hterm hCO hLU h
+  obtain ⟨σ0, hσ0, _hag, hres, _hedge⟩ := reachedByW3c_master_d hterm hcd hba hLU h
   obtain ⟨dt', on', e', hk, hder', _hRne', hon', hlk', hstars, hnegm, huposm⟩ :=
     hres _ _ res hrow
   obtain ⟨hdt, honn, _⟩ := objNode_inj_of_ne_star hon hon' hk
@@ -536,8 +537,9 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
   subst he'
   have hbridge : ∀ (x : SubjectRef), (x.name = STAR → x.predicate = BARE) →
       σ0.checkFn T x dt on R e = sem S T ⟨x, R, ⟨dt, on⟩⟩ := fun x hx =>
-    checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
-      (ReachedByW3aAdmitted.base hσ0) hlk (hCO _ _ _ hlk hder') (hLU _ _ _ hlk hder') hx hon
+    checkFn_eq_sem_bs_d hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+      (ReachedByW3aAdmitted.base hσ0) hlk (hcd _ _ _ hlk hder') (hba _ _ _ hlk hder')
+      (hLU _ _ _ hlk hder') hx hon
   refine ⟨?_, ?_, ?_⟩
   · intro sh
     rw [hstars]
@@ -563,6 +565,35 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
   · intro n hn
     obtain ⟨_hunc, hnp, hnstar, hchk⟩ := huposm n hn
     exact ⟨hnp, hnstar, by rw [← hbridge n (fun hx => absurd hx hnstar)]; exact hchk⟩
+
+/-- **`w3c_row_char`** — the `ComputedOnly` wrapper over the `_d` core `w3c_row_char_d`.
+    Byte-identical statement to HEAD; delegates by deriving `StoreValidRulesD` and the
+    `ComputedOrDirect`/`DirectArmsBare` def conditions from `StoreValidRules`/`ComputedOnly`
+    (`storeValidRulesD_of_storeValidRules`, `computedOnly_computedOrDirect`/`_directArmsBare`). -/
+theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRules S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3c σ S T)
+    {dt on R : String} {e : Expr} {res : Residue}
+    (hlk : S.lookup (dt, R) = some e) (hon : on ≠ STAR)
+    (hrow : σ.residue (objNode ⟨dt, on⟩ R) R = some res) :
+    (∀ sh, res.stars.contains sh = true ↔
+      (sh ∈ wildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
+    (∀ n ∈ res.neg, n.name ≠ STAR ∧ sem S T ⟨n, R, ⟨dt, on⟩⟩ = false) ∧
+    (∀ n ∈ res.upos, n.predicate ≠ BARE ∧ n.name ≠ STAR ∧
+      sem S T ⟨n, R, ⟨dt, on⟩⟩ = true) :=
+  w3c_row_char_d hWF hTT hNK hR (storeValidRulesD_of_storeValidRules hCO hSV) hBS hTS
+    hMatch hStrat hterm
+    (fun dt R e hlk hder => computedOnly_computedOrDirect (hCO dt R e hlk hder))
+    (fun dt R e hlk hder => computedOnly_directArmsBare (hCO dt R e hlk hder))
+    hLU hWSbare h hlk hon hrow
 
 /-! ## Per-key job coverage — row existence and `neg`/`upos` completeness
 

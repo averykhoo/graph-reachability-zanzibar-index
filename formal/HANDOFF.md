@@ -95,8 +95,12 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > DECISION APPROVED BY AVERY (2026-07-19): the validly-stored + drained-prior scope is accepted as
 > the honest, faithful framing — no longer an open flag.
 >
-> **#1 Direct-arm widening ADVANCED (2026-07-19g): legs 4 + 5a + 5b + 5c landed** (`128d7e6`/
-> `53c5d34`/`4a01c2d`/`62ab8f4`; all additive, audited statements byte-identical, audit 425 → **446**).
+> **#1 Direct-arm widening ADVANCED (2026-07-19g/h): legs 4 + 5a + 5b + 5c + 5d-W3c landed** (`128d7e6`/
+> `53c5d34`/`4a01c2d`/`62ab8f4` + leg-5d uncommitted; all additive, audited statements byte-identical,
+> audit 425 → **448**). Leg 5d (2026-07-19h): the W3c-branch `_d` clones `reachedByW3c_master_d` /
+> `w3c_row_char_d` landed (originals → byte-identical wrappers); the naive W3d2 `reachedByW3d2_shadow_d`
+> was attack-KILLED (full-store σ0 ⊄ drained σ) and re-scoped to a filtered-σ0 substrate (see THE NEXT
+> TASK below).
 > Leg 4 (Fable): the base-equation wall DISCHARGED — `graphRec_base_eq_d`/`_bs_d` (no `ComputedOnly`;
 > premise = the `hterm` bundle consumers already carry) via design lemmas A (`rewriteClosure_derived_
 > eq_seed`, simpler than designed), B (`probeNonDerived_untaintedFilter`), C (`sem_untaintedFilter`,
@@ -118,15 +122,33 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `checkFnR_star_declared_d`). Attack NO-KILL recorded: a stored bare Direct-arm subject lives in
 > the FIXED store, so the 12h future-residue kill shape does not apply — enumerable at every state.
 >
-> **THE NEXT TASK — #1 leg 5d: the `_d` CHAIN, then sub-step 3.** (1) The state-level correspondence
-> theorems (`w3c_row_char` ReconcileStarsComplete:291, `graph_correct_w3d2` CascadeStrataResettle:1436,
-> `w3dJobCoverage_enumJob2_state`) derive their shadow/master from the chain gated on `hCO`+`hSV`
-> (CascadeStrataSettle:577-582), so full `_d` clones need a **`_d` chain**: `reachedByW3d2_shadow_d` /
-> `reachedByW3c_master_d` / `reachedByW3d2C_settled_d` admitting `StoreValidRulesD` + a
-> `ComputedOrDirect ∧ DirectArmsBare` def — genuine chain-level effort (the same machinery sub-step 3
-> needs); the 5b/5c spine (`NoConcDirect` split + `enumJob2D` + `coveredFn_declared_d` +
-> `checkFnR_eq_sem_settled_d`) is exactly what it consumes; then `graph_correct_w3d2_d` /
-> `w3c_row_char_d` fall out. (2) **Sub-step 3 (gated on 1):** widen `W4Fragment.computedOnly` →
+> **#1 Direct-arm leg 5d (2026-07-19h) — the `_d` CHAIN: W3c branch LANDED; W3d2 shadow KILLED (naive)
+> + re-scoped.** Audit 446 → **448**, `verify.sh lean` PASSED, additive, tree GREEN (uncommitted).
+> **LANDED (W3c branch, tractable + independent of the shadow):** `reachedByW3c_master_d`
+> (`ReconcileStars.lean`; only `hCO` use = the pass-start `checkFn` agreement → leg-2's
+> `checkFn_agree_of_graphRec_cd`, which was relocated UP `ReconcileDiff`→`ReconcileStars`) and
+> `w3c_row_char_d` (`ReconcileStarsComplete.lean`; master_d + `checkFn_eq_sem_bs_d`). Both audited
+> originals refactored to BYTE-IDENTICAL wrappers (verified vs HEAD). **★ ATTACK-FIRST KILL — the naive
+> `reachedByW3d2_shadow_d` (full-store σ0) is FALSE:** `#eval` — a stored Direct-arm subject that is ALSO
+> excluded (`approver := excl (direct[user]) banned`, `{(alice,approver,doc),(alice,banned,doc)}`) puts the
+> base seed `subjNode(alice)→objNode(doc,approver)` in the full-`T` admitted σ0 (`rewriteClosure=[t]`), but
+> the drained W3d2 σ RETRACTS it (`reconcileKeyD_retracts_excluded`; drained `σ.edges=[(alice→banned)]`), so
+> `UntaintedShadow.sub` (σ0⊆σ) FAILS. So the leg-5c bridges `checkFnR_eq_sem_settled_d`/`w3d2_leg_context_d`
+> (which take `h0 : ReachedByRulesAdmitted σ0 S T` full-store ∧ `hsh : UntaintedShadow`) are UNSATISFIABLE
+> jointly at those states — un-dischargeable by a real `_d` chain as written. **RE-SCOPE:** the drained
+> σ.edges = the untainted core, so the shadow needs **σ0 = the untainted-FILTER (`T↾U`) rebuild** (a NEW
+> construction) + additive `T↾U`-store variants of the leg-4/5c consumers composing with `sem_untaintedFilter`
+> (leg 4 lemma C). Full step plan: `history/optional-widening-2026-07.md` leg-5d section + RESUME.
+>
+> **THE NEXT TASK — #1 leg 5d cont.: the FILTERED-σ0 W3d2 chain, then sub-step 3.** (1) The W3d2 `_d`
+> clones remain OPEN, blocked on the σ0 mismatch (KILL above): re-prove `reachedByW3d2_shadow_d` with
+> **σ0 = `ReachedByRulesAdmitted σ0 S (T↾U)`** (WRITE case routes a Direct-arm derived-key write to σ only
+> as a `DerNode`-classified edge, σ0 unchanged; CASCADE case reuses `untaintedShadow_cascade2` since the
+> filtered σ0 has no seeds and `reachedByRulesAdmitted_edge_target_untainted` now HOLDS over `T↾U`), then
+> the `T↾U`-σ0 bridge family (`graphRec_base_eq_bs_d`/`checkFnR_eq_sem_settled_d`/… re-routed +
+> `sem_untaintedFilter`), then `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d`. Genuine multi-session
+> chain content (a NEW filtered-shadow substrate), NOT an additive clone. (2) **Sub-step 3 (gated on 1):**
+> widen `W4Fragment.computedOnly` →
 > `ComputedOrDirect ∧ DirectArmsBare`, re-prove `w4_within_scope`, witness `W4WitnessDirect`,
 > conformance corpus into `GRAPH_FRAGMENT` + pins (conf phases required). The durable plan + exact
 > resume state: `history/optional-widening-2026-07.md` Target #1 RESUME. After #1's Direct arm:
