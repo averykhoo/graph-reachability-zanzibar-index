@@ -799,7 +799,6 @@ theorem w3d2_leg_context_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h0 : ReachedByRulesAdmitted σ0 S
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
@@ -807,6 +806,8 @@ theorem w3d2_leg_context_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hschema : σ.schema = S) {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) (hqo : on ≠ STAR)
+    (hCOop : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e')
     (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       ∀ e', S.lookup (dt, r') = some e' →
         ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
@@ -817,7 +818,7 @@ theorem w3d2_leg_context_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
       σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
     (∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) :=
   ⟨fun s' hs' => checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat
-      hterm hCO hWSbare h0 hsh hschema hlk hder hcd hba hLU2 hops hs' hqo,
+      hterm hWSbare h0 hsh hschema hlk hder hcd hba hCOop hLU2 hops hs' hqo,
    fun _ hchk => checkFnR_star_declared_d_filt hTT hSV hTS h0 hsh hschema hlk hcd hba hqo
       hops hchk⟩
 

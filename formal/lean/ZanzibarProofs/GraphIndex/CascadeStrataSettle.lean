@@ -1746,15 +1746,17 @@ theorem sem_untaintedFilter_co {S : Schema} {T : Store}
     (`checkFnR_eq_sem_settled_d_filt`).** `checkFnR_eq_sem_settled_d` with the base witness
     σ0 admitted over `T↾U` — the pair `reachedByW3d2_shadow_d` actually produces. Same
     conclusion: the routed guard at the REAL drained state σ equals `sem` over the FULL
-    store `T`. The audited full-store version stays in place, untouched. -/
+    store `T`. The audited full-store version stays in place, untouched.
+
+    2026-07-20d: the operand-def `ComputedOnly` hypothesis is now PER-KEY
+    (`hCOop`, exactly the uses in the body) — the former schema-wide `hCO` covered the
+    ROOT def too and was thus unsatisfiable on any genuine Direct-arm schema. -/
 theorem checkFnR_eq_sem_settled_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
-      ComputedOnly e)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h0 : ReachedByRulesAdmitted σ0 S
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
@@ -1763,6 +1765,8 @@ theorem checkFnR_eq_sem_settled_d_filt {S : Schema} {T : Store} {σ σ0 : GraphS
     {s : SubjectRef} {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hCOop : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e')
     (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       ∀ e', S.lookup (dt, r') = some e' →
         ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
@@ -1809,7 +1813,7 @@ theorem checkFnR_eq_sem_settled_d_filt {S : Schema} {T : Store} {σ σ0 : GraphS
         obtain ⟨e', hlk'⟩ := isDerived_declared hd'
         have hleafUnt' : ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false :=
           hLU2 r' hr' hd' e' hlk'
-        have hco' : ComputedOnly e' := hCO dt r' e' hlk' hd'
+        have hco' : ComputedOnly e' := hCOop r' hr' hd' e' hlk'
         have hsem_ws' : ∀ sh : Shape, sh.2 = BARE →
             sem S T ⟨starSubj sh, r', ⟨dt, on⟩⟩ = true → sh ∈ wildcardShapes S := by
           intro sh hshb hsm
@@ -3065,5 +3069,560 @@ theorem removeLeg_sem_stable2 {σ σ0 σ0' : GraphState} {S : Schema} {T : Store
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
         checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hMatch hStrat
           hterm hCO hWSbare h0 hsh hσS hlk hder hco hLU2e hops hs hon
+
+/-! ## Direct-arm settledness-transport groundwork (leg 5d, steps 2–3)
+
+The `_d` clones of the settledness-transport family need four groundwork layers the
+`ComputedOnly` originals never did:
+
+1. **`sem` over the empty store is FALSE, unconditionally** (`sem_nil_false`) — the
+   only truth sources in `sem` are stored tuples, so the `_d` induction's `empty`
+   case needs none of the fragment machinery `sem_nil_derived_false2` threads.
+2. **A raw write/remove on a derived key DIRTIES its own key**
+   (`writeLeg_own_key_dirty` / `removeLeg_own_key_dirty`) — the 2026-07-20c
+   `affectedKeys` LeafFamily own-key branch (`Delta.leaf`), made chain-usable. This
+   is what lets an UNMAPPED key conclude the leg's tuple sits at a DIFFERENT
+   derived node (`writeLeg_inedges_eq_of_unmapped`), replacing the `ComputedOnly`
+   "no stored derived-key tuples" argument (`exprDirects_computedOnly`) that is
+   FALSE under `StoreValidRulesD`.
+3. **In-edge preservation from node inequality alone**
+   (`rewriteClosure_notarget_of_ne` + the `_of_unmapped` wrappers) — fragment-free.
+4. **Store-argument invariance of the ROUTED guard on `ComputedOrDirect` defs**
+   (`evalE_cd_grants_agree`, `checkFnR_cons_irrel_cd`, `checkFnR_erase_irrel_cd`) —
+   a `Direct` arm reads the store, so `checkFnR_store_irrel` is FALSE for CD defs;
+   the honest replacement conditions on the changed tuple missing the key's grant
+   window (`grantsOf_cons_of_ne` / `grantsOf_erase_of_ne`), discharged in context
+   from own-key dirtiness. -/
+
+/-- Every `evalE` truth source reads the store; with a constantly-false recursion and
+    an EMPTY store every leaf — `direct` (no grants), `ttu` (no parents), `computed`
+    (the recursion) — is false, hence so is every boolean combination. -/
+theorem evalE_nil_false {rec : Rec} {sub : SubjectRef} {q : Query} {dt on rel : String}
+    (hrec : ∀ ot onm r, rec ot onm r = false) :
+    ∀ e : Expr, evalE rec sub ([] : Store) q dt on rel e = false := by
+  intro e
+  induction e with
+  | computed r' => simp only [evalE]; exact hrec dt on r'
+  | direct rs => simp [evalE, directLeaf, grantsOf, memberOfGranted]
+  | ttu tr ts => simp [evalE, ttuLeaf]
+  | union a b iha ihb => simp only [evalE]; rw [iha, ihb]; rfl
+  | inter a b iha ihb => simp only [evalE]; rw [iha, ihb]; rfl
+  | excl a b iha ihb => simp only [evalE]; rw [iha, ihb]; rfl
+
+/-- `semAux` over the empty store is false at every fuel and node. -/
+theorem semAux_nil_false (S : Schema) (sub : SubjectRef) (q : Query) :
+    ∀ (n : Nat) (ot onm r : String), semAux S sub ([] : Store) q n ot onm r = false := by
+  intro n
+  induction n with
+  | zero => intro ot onm r; rfl
+  | succ n ih =>
+    intro ot onm r
+    show step S sub ([] : Store) q (semAux S sub ([] : Store) q n) ot onm r = false
+    unfold step
+    cases hlk : S.lookup (ot, r) with
+    | none => rfl
+    | some e => exact evalE_nil_false (fun ot' onm' r' => ih ot' onm' r') e
+
+/-- **`sem` over the empty store is FALSE for every query** — hypothesis-free. -/
+theorem sem_nil_false (S : Schema) (q : Query) : sem S ([] : Store) q = false :=
+  semAux_nil_false S q.subject q (fuelBound S ([] : Store)) q.object.type
+    q.object.name q.relation
+
+/-- **A raw admitted write on a derived key dirties its OWN key** — the chain-level
+    form of the `affectedKeys` LeafFamily own-key branch (`processor.py:991-1011`;
+    the 2026-07-20c model fix): the seed delta carries `leaf = true` at the concrete
+    object node of the derived relation, and its id lands above the watermark. -/
+theorem writeLeg_own_key_dirty {σ : GraphState} {S : Schema} {t : Tuple}
+    (hNK : NodupKeys S) (hadm : FoldAdmits σ (rewriteClosure S t))
+    (hd : isDerived S (t.object.type, t.relation) = true)
+    (honT : t.object.name ≠ STAR) :
+    (t.object.type, t.relation, t.object.name)
+      ∈ cascadeKeys S (σ.writeLoggedRules S t) := by
+  have hcl : rewriteClosure S t = [t] := rewriteClosure_derived_eq_seed_nk hNK hd
+  have hone : σ.writeLoggedRules S t = σ.writeLoggedOne t := by
+    unfold GraphState.writeLoggedRules
+    rw [hcl]
+    simp only [List.foldl_cons, List.foldl_nil]
+  rw [hcl] at hadm
+  obtain ⟨hadm1, -⟩ := hadm
+  have hpush : σ.writeLoggedOne t
+      = (σ.writeDirect t).pushDelta (objNode t.object t.relation) t.relation true := by
+    unfold GraphState.writeLoggedOne
+    rw [if_pos hadm1]
+  set d : Delta :=
+    ⟨(σ.writeDirect t).nextDeltaId, objNode t.object t.relation, t.relation, true⟩
+    with hd_def
+  have hout : d ∈ (σ.writeLoggedOne t).outbox := by
+    rw [hpush, pushDelta_outbox]
+    exact List.mem_cons_self
+  have hwm : (σ.writeLoggedOne t).watermark = σ.watermark := by
+    rw [hpush, pushDelta_watermark, writeDirect_watermark]
+  have hgt : (σ.writeLoggedOne t).watermark < d.id := by
+    rw [hwm]
+    have hnext : (σ.writeDirect t).nextDeltaId
+        = max (σ.writeDirect t).maxOutboxId (σ.writeDirect t).watermark + 1 := rfl
+    have hwmw : (σ.writeDirect t).watermark = σ.watermark := writeDirect_watermark σ t
+    show σ.watermark < (σ.writeDirect t).nextDeltaId
+    omega
+  rw [hone]
+  unfold cascadeKeys
+  refine List.mem_flatMap.mpr ⟨d, ?_, ?_⟩
+  · unfold GraphState.frontierRows
+    exact List.mem_filter.mpr ⟨hout, decide_eq_true hgt⟩
+  · unfold affectedKeys
+    refine List.mem_append_left _ ?_
+    have hnode : d.node = ⟨t.object.type, t.object.name, t.relation, Variant.plain⟩ := by
+      show objNode t.object t.relation = _
+      rw [objNode_plain honT]
+    rw [if_pos ?_]
+    · rw [hnode]
+      exact List.mem_singleton.mpr rfl
+    · refine ⟨rfl, ?_, ?_⟩
+      · rw [hnode]; exact honT
+      · rw [hnode]; exact hd
+
+/-- **A raw remove on a derived key whose seed edge is PRESENT dirties its OWN key**
+    (the retraction mirror: `removeLoggedOne` emits `leaf = true` on the actual
+    edge-multiset flip). -/
+theorem removeLeg_own_key_dirty {σ : GraphState} {S : Schema} {t : Tuple}
+    (hNK : NodupKeys S)
+    (hpres : (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges)
+    (hd : isDerived S (t.object.type, t.relation) = true)
+    (honT : t.object.name ≠ STAR) :
+    (t.object.type, t.relation, t.object.name)
+      ∈ cascadeKeys S (σ.removeLoggedRules S t) := by
+  have hcl : rewriteClosure S t = [t] := rewriteClosure_derived_eq_seed_nk hNK hd
+  have hone : σ.removeLoggedRules S t = σ.removeLoggedOne t := by
+    unfold GraphState.removeLoggedRules
+    rw [hcl]
+    simp only [List.foldl_cons, List.foldl_nil]
+  have hpush : σ.removeLoggedOne t
+      = (σ.removeEdgeOne (subjNode t.subject) (objNode t.object t.relation)).pushDelta
+          (objNode t.object t.relation) t.relation true := by
+    unfold GraphState.removeLoggedOne
+    rw [if_pos hpres]
+  set σr := σ.removeEdgeOne (subjNode t.subject) (objNode t.object t.relation)
+    with hσr_def
+  set d : Delta := ⟨σr.nextDeltaId, objNode t.object t.relation, t.relation, true⟩
+    with hd_def
+  have hout : d ∈ (σ.removeLoggedOne t).outbox := by
+    rw [hpush, pushDelta_outbox]
+    exact List.mem_cons_self
+  have hwm : (σ.removeLoggedOne t).watermark = σ.watermark := by
+    rw [hpush, pushDelta_watermark, removeEdgeOne_watermark]
+  have hgt : (σ.removeLoggedOne t).watermark < d.id := by
+    rw [hwm]
+    have hnext : σr.nextDeltaId = max σr.maxOutboxId σr.watermark + 1 := rfl
+    have hwmw : σr.watermark = σ.watermark := by
+      rw [hσr_def]; exact removeEdgeOne_watermark σ _ _
+    show σ.watermark < σr.nextDeltaId
+    omega
+  rw [hone]
+  unfold cascadeKeys
+  refine List.mem_flatMap.mpr ⟨d, ?_, ?_⟩
+  · unfold GraphState.frontierRows
+    exact List.mem_filter.mpr ⟨hout, decide_eq_true hgt⟩
+  · unfold affectedKeys
+    refine List.mem_append_left _ ?_
+    have hnode : d.node = ⟨t.object.type, t.object.name, t.relation, Variant.plain⟩ := by
+      show objNode t.object t.relation = _
+      rw [objNode_plain honT]
+    rw [if_pos ?_]
+    · rw [hnode]
+      exact List.mem_singleton.mpr rfl
+    · refine ⟨rfl, ?_, ?_⟩
+      · rw [hnode]; exact honT
+      · rw [hnode]; exact hd
+
+/-- No rewrite-closure member of `t` targets the derived node `objNode ⟨dt,on⟩ R`,
+    given `t`'s own seed node differs — fragment-free (rule outputs are killed by
+    `noRuleOutputs_of_derived`, the seed by the hypothesis). -/
+theorem rewriteClosure_notarget_of_ne {S : Schema} {t : Tuple} {dt on R : String}
+    (hder : isDerived S (dt, R) = true)
+    (hne : objNode t.object t.relation ≠ objNode ⟨dt, on⟩ R) :
+    ∀ w ∈ rewriteClosure S t, objNode w.object w.relation ≠ objNode ⟨dt, on⟩ R := by
+  intro w hw h2
+  have htype : dt = w.object.type := by
+    simpa [objNode_type] using (congrArg NodeKey.type h2).symm
+  have hrel : R = w.relation := by
+    simpa [objNode_pred] using (congrArg NodeKey.pred h2).symm
+  rcases rewriteClosure_produced hw with heq | ⟨r, hr', hro, hrout⟩
+  · rw [heq] at h2
+    exact hne h2
+  · exact noRuleOutputs_of_derived hder r hr' ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+
+/-- No rewrite-closure member of an UNTAINTED-key tuple targets a derived node —
+    the seed's key disagrees on taint, rule outputs are untainted. -/
+theorem rewriteClosure_notarget_of_untainted {S : Schema} {t : Tuple} {dt on R : String}
+    (hd : isDerived S (t.object.type, t.relation) = false)
+    (hder : isDerived S (dt, R) = true) :
+    ∀ w ∈ rewriteClosure S t, objNode w.object w.relation ≠ objNode ⟨dt, on⟩ R := by
+  refine rewriteClosure_notarget_of_ne hder ?_
+  intro h2
+  have htype : t.object.type = dt := by
+    simpa [objNode_type] using congrArg NodeKey.type h2
+  have hrel : t.relation = R := by
+    simpa [objNode_pred] using congrArg NodeKey.pred h2
+  rw [htype, hrel, hder] at hd
+  exact Bool.noConfusion hd
+
+/-- **Write-leg in-edge preservation at a derived node, from node inequality alone**
+    (the `_d` replacement for `writeLeg_derived_inedges_eq`, whose `ComputedOnly`
+    seed-branch argument is dead under `StoreValidRulesD`). -/
+theorem writeLeg_derived_inedges_eq_d {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt on R : String}
+    (hder : isDerived S (dt, R) = true)
+    (hne : objNode t.object t.relation ≠ objNode ⟨dt, on⟩ R)
+    (u : NodeKey) :
+    ((u, objNode ⟨dt, on⟩ R) ∈ (σ.writeLoggedRules S t).edges
+      ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
+  constructor
+  · intro h
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges] at h
+    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) h with hold | ⟨w, hw, _h1, h2⟩
+    · exact hold
+    · exact absurd h2.symm (rewriteClosure_notarget_of_ne hder hne w hw)
+  · exact fun h => writeLoggedRules_edges_mono σ S t _ h
+
+/-- **Retraction-leg in-edge preservation at a derived node, from node inequality
+    alone** (the `_d` replacement for `removeLeg_derived_inedges_eq`). -/
+theorem removeLeg_derived_inedges_eq_d {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt on R : String}
+    (hder : isDerived S (dt, R) = true)
+    (hne : objNode t.object t.relation ≠ objNode ⟨dt, on⟩ R)
+    (u : NodeKey) :
+    ((u, objNode ⟨dt, on⟩ R) ∈ (σ.removeLoggedRules S t).edges
+      ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
+  unfold GraphState.removeLoggedRules
+  exact mem_foldl_removeLoggedOne_edges_iff_of_notarget (rewriteClosure S t)
+    (rewriteClosure_notarget_of_ne hder hne) σ
+
+/-- The seed node of an UNMAPPED derived key's write differs from the key's node:
+    were they equal, the write would sit on the (derived) key itself and the
+    own-key branch would have dirtied it. -/
+theorem write_node_ne_of_unmapped {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt on R : String}
+    (hNK : NodupKeys S) (hadm : FoldAdmits σ (rewriteClosure S t))
+    (hder : isDerived S (dt, R) = true) (hon : on ≠ STAR)
+    (honT : t.object.name ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t)) :
+    objNode t.object t.relation ≠ objNode ⟨dt, on⟩ R := by
+  intro heq
+  have heq' : objNode ⟨t.object.type, t.object.name⟩ t.relation = objNode ⟨dt, on⟩ R := heq
+  obtain ⟨h1, h2, h3⟩ := objNode_inj_of_ne_star honT hon heq'
+  have hd : isDerived S (t.object.type, t.relation) = true := by
+    rw [h1, h3]
+    exact hder
+  have := writeLeg_own_key_dirty hNK hadm hd honT
+  rw [h1, h2, h3] at this
+  exact hunmapped this
+
+/-- **Write-leg in-edge preservation at an UNMAPPED derived key** — the packaged
+    form the settledness transports consume: either the write's seed node differs
+    (preservation from node inequality), or it coincides — but then the own-key
+    branch dirties the key, contradicting unmappedness. -/
+theorem writeLeg_inedges_eq_of_unmapped {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt on R : String}
+    (hNK : NodupKeys S) (hadm : FoldAdmits σ (rewriteClosure S t))
+    (hder : isDerived S (dt, R) = true) (hon : on ≠ STAR)
+    (honT : t.object.name ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (u : NodeKey) :
+    ((u, objNode ⟨dt, on⟩ R) ∈ (σ.writeLoggedRules S t).edges
+      ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) :=
+  writeLeg_derived_inedges_eq_d hder
+    (write_node_ne_of_unmapped hNK hadm hder hon honT hunmapped) u
+
+/-- **Retraction-leg in-edge preservation at an UNMAPPED derived key.** Node
+    inequality gives preservation; node equality splits on the seed edge: present ⇒
+    the retraction dirties the own key (contradiction), absent ⇒ the retraction is
+    the identity (the singleton derived closure's `removeLoggedOne` guard fails). -/
+theorem removeLeg_inedges_eq_of_unmapped {σ : GraphState} {S : Schema} {t : Tuple}
+    {dt on R : String}
+    (hNK : NodupKeys S)
+    (hder : isDerived S (dt, R) = true) (hon : on ≠ STAR)
+    (honT : t.object.name ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (u : NodeKey) :
+    ((u, objNode ⟨dt, on⟩ R) ∈ (σ.removeLoggedRules S t).edges
+      ↔ (u, objNode ⟨dt, on⟩ R) ∈ σ.edges) := by
+  by_cases hne : objNode t.object t.relation = objNode ⟨dt, on⟩ R
+  · -- the tuple sits on the key itself
+    have heq' : objNode ⟨t.object.type, t.object.name⟩ t.relation = objNode ⟨dt, on⟩ R := hne
+    obtain ⟨h1, h2, h3⟩ := objNode_inj_of_ne_star honT hon heq'
+    have hd : isDerived S (t.object.type, t.relation) = true := by
+      rw [h1, h3]
+      exact hder
+    by_cases hpres : (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
+    · exfalso
+      have := removeLeg_own_key_dirty hNK hpres hd honT
+      rw [h1, h2, h3] at this
+      exact hunmapped this
+    · -- absent seed edge: the retraction is the identity on the state
+      have hcl : rewriteClosure S t = [t] := rewriteClosure_derived_eq_seed_nk hNK hd
+      have hone : σ.removeLoggedRules S t = σ := by
+        unfold GraphState.removeLoggedRules
+        rw [hcl]
+        simp only [List.foldl_cons, List.foldl_nil]
+        unfold GraphState.removeLoggedOne
+        rw [if_neg hpres]
+      rw [hone]
+  · exact removeLeg_derived_inedges_eq_d hder hne u
+
+/-! ### The two-round chain's structural facts under the widened admission -/
+
+/-- **Every W3d-2 edge target has a non-`BARE` predicate under `StoreValidRulesD`**
+    (`_d` mirror of `reachedByW3d2_edge_target_ne_bare`; the seed leg reads
+    declaredness from `rewriteClosure_rel_ne_bare_d`). `hDAB` converts the `remove`
+    constructor's plain pre-store validity to the widened form. -/
+theorem reachedByW3d2_edge_target_ne_bare_d {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2 σ S T) :
+    WF S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → DirectArmsBare e) →
+    StoreValidRulesD S T → ∀ a b, (a, b) ∈ σ.edges → b.pred ≠ BARE := by
+  induction h with
+  | empty S =>
+    intro _ _ _ a b hab
+    simp [emptyState] at hab
+  | @write σp S T t hadm hprev ih =>
+    intro hWF hDAB hSV a b hab
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
+    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) hab with hold | ⟨u, hu, _, h2⟩
+    · exact ih hWF hDAB (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) a b hold
+    · rw [h2, objNode_pred]
+      exact rewriteClosure_rel_ne_bare_d hWF hSV List.mem_cons_self hu
+  | @remove σp S T t _ _ hSVT _ _ _ _ ih =>
+    intro hWF hDAB _ a b hab
+    exact ih hWF hDAB (storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB)
+      a b (mem_removeLoggedRules_edges hab)
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
+    intro hWF hDAB hSV a b hab
+    unfold runCascade2 at hab
+    split at hab
+    · have hab' : (a, b) ∈ (reconcileJobsLR S T (reconcileJobsLR S T σp jobs1)
+          jobs2).edges := hab
+      rcases reconcileJobsLR_edge_sound jobs2 _ a b hab' with hmid | ⟨j, hj, c, _, _, h2⟩
+      · rcases reconcileJobsLR_edge_sound jobs1 σp a b hmid
+          with hold | ⟨j, hj, c, _, _, h2⟩
+        · exact ih hWF hDAB hSV a b hold
+        · obtain ⟨hRne, _⟩ := hjv1 j hj
+          rw [h2, objNode_pred]
+          exact hRne
+      · obtain ⟨hRne, _⟩ := hjv2 j hj
+        rw [h2, objNode_pred]
+        exact hRne
+    · exact ih hWF hDAB hSV a b hab
+
+/-- A `BARE`-predicate node is never an edge target on a W3d-2 state, widened
+    admission. -/
+theorem reachedByW3d2_bareNode_no_inedge_d {σ : GraphState} {S : Schema} {T : Store}
+    (hWF : WF S)
+    (hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e)
+    (hSV : StoreValidRulesD S T) (h : ReachedByW3d2 σ S T)
+    {k : NodeKey} (hk : k.pred = BARE) : ∀ x, (x, k) ∉ σ.edges := by
+  intro x hxk
+  exact reachedByW3d2_edge_target_ne_bare_d h hWF hDAB hSV x k hxk hk
+
+/-- **Every in-edge source at a derived R-node is bare, widened admission** (`_d`
+    mirror of `reachedByW3d2_Rnode_source_bare` — no `ComputedOnly` at the key: the
+    write leg's seed edge MAY land on the R-node, but the widened admission pins its
+    stored subject BARE). -/
+theorem reachedByW3d2_Rnode_source_bare_d {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String}
+    (h : ReachedByW3d2 σ S T) :
+    isDerived S (dt, R) = true →
+    (∀ dt' R' e', S.lookup (dt', R') = some e' → isDerived S (dt', R') = true →
+      DirectArmsBare e') →
+    StoreValidRulesD S T →
+    ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE := by
+  induction h with
+  | empty S =>
+    intro _ _ _ x hx
+    simp [emptyState] at hx
+  | @write σp S T t hadm hprev ih =>
+    intro hder hDAB hSV x hx
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hx
+    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) hx with hold | ⟨w, hw, h1, h2⟩
+    · exact ih hder hDAB (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hold
+    · -- a fresh closure edge into the R-node: the seed's stored subject is BARE by
+      -- the widened admission; rule outputs never land on a derived key
+      have htype : dt = w.object.type := by
+        simpa [objNode_type] using congrArg NodeKey.type h2
+      have hrel : R = w.relation := by
+        simpa [objNode_pred] using congrArg NodeKey.pred h2
+      rcases rewriteClosure_produced hw with heq | ⟨r, hr', hro, hrout⟩
+      · rcases hSV t List.mem_cons_self with ⟨hf, _⟩ | ⟨_, hbare, _⟩
+        · rw [← heq, ← htype, ← hrel, hder] at hf
+          exact Bool.noConfusion hf
+        · rw [h1, subjNode_pred, heq]
+          exact hbare
+      · exact absurd ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+          (noRuleOutputs_of_derived hder r hr')
+  | @remove σp S T t _ _ hSVT _ _ _ _ ih =>
+    intro hder hDAB _ x hx
+    exact ih hder hDAB (storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB)
+      x (mem_removeLoggedRules_edges hx)
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
+    intro hder hDAB hSV x hx
+    unfold runCascade2 at hx
+    split at hx
+    · have hx' : (x, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsLR S T
+          (reconcileJobsLR S T σp jobs1) jobs2).edges := hx
+      rcases reconcileJobsLR_edge_sound jobs2 _ x _ hx' with hmid | ⟨j, hj, c, hc, h1, _⟩
+      · rcases reconcileJobsLR_edge_sound jobs1 σp x _ hmid
+          with hold | ⟨j, hj, c, hc, h1, _⟩
+        · exact ih hder hDAB hSV x hold
+        · obtain ⟨_, hcb, _⟩ := hjv1 j hj
+          rw [h1, subjNode_pred]
+          exact hcb c hc
+      · obtain ⟨_, hcb, _⟩ := hjv2 j hj
+        rw [h1, subjNode_pred]
+        exact hcb c hc
+    · exact ih hder hDAB hSV x hx
+
+/-- **The W3d-2 reach collapse at a derived R-node, widened admission**: any path
+    into the R-node is a single edge (sources bare, bare nodes have no in-edges). -/
+theorem reachedByW3d2_reach_collapse_root_d {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String} {u : NodeKey}
+    (hWF : WF S)
+    (hDAB : ∀ dt' R' e', S.lookup (dt', R') = some e' → isDerived S (dt', R') = true →
+      DirectArmsBare e')
+    (hSV : StoreValidRulesD S T)
+    (hder : isDerived S (dt, R) = true)
+    (h : ReachedByW3d2 σ S T)
+    (hr : NReaches σ.edges u (objNode ⟨dt, on⟩ R)) :
+    (u, objNode ⟨dt, on⟩ R) ∈ σ.edges := by
+  refine nreaches_collapse_of_source_notarget ?_ hr
+  intro x hxv
+  exact reachedByW3d2_bareNode_no_inedge_d hWF hDAB hSV h
+    (reachedByW3d2_Rnode_source_bare_d h hder hDAB hSV x hxv)
+
+/-! ### Store-argument invariance of the routed guard on CD defs -/
+
+/-- A cons'd tuple missing the key's grant window leaves `grantsOf` unchanged. -/
+theorem grantsOf_cons_of_ne {T : Store} {t : Tuple} (rs : List Restriction)
+    {dt on rel : String} (hon : on ≠ STAR)
+    (hne : ¬ (t.relation = rel ∧ t.object.type = dt ∧
+      (t.object.name = on ∨ t.object.name = STAR))) :
+    grantsOf (t :: T) rs dt on rel = grantsOf T rs dt on rel := by
+  unfold grantsOf
+  rw [List.filter_cons, if_neg]
+  intro hp
+  rw [Bool.and_eq_true, Bool.and_eq_true, Bool.and_eq_true] at hp
+  obtain ⟨⟨⟨hrel, htype⟩, hcont⟩, _⟩ := hp
+  refine hne ⟨beq_iff_eq.mp hrel, beq_iff_eq.mp htype, ?_⟩
+  have hmem : t.object.name ∈ matchingObjects on := by
+    rw [List.contains_eq_mem] at hcont
+    exact of_decide_eq_true hcont
+  unfold matchingObjects at hmem
+  rw [if_neg hon] at hmem
+  rcases List.mem_cons.mp hmem with h | h
+  · exact Or.inl h
+  · exact Or.inr (List.mem_singleton.mp h)
+
+/-- An erased tuple missing the key's grant window leaves `grantsOf` unchanged. -/
+theorem grantsOf_erase_of_ne {T : Store} {t : Tuple} (rs : List Restriction)
+    {dt on rel : String} (hon : on ≠ STAR)
+    (hne : ¬ (t.relation = rel ∧ t.object.type = dt ∧
+      (t.object.name = on ∨ t.object.name = STAR))) :
+    grantsOf (T.erase t) rs dt on rel = grantsOf T rs dt on rel := by
+  unfold grantsOf
+  refine filter_erase_neg ?_ T
+  by_contra hp
+  rw [Bool.not_eq_false, Bool.and_eq_true, Bool.and_eq_true, Bool.and_eq_true] at hp
+  obtain ⟨⟨⟨hrel, htype⟩, hcont⟩, _⟩ := hp
+  refine hne ⟨beq_iff_eq.mp hrel, beq_iff_eq.mp htype, ?_⟩
+  have hmem : t.object.name ∈ matchingObjects on := by
+    rw [List.contains_eq_mem] at hcont
+    exact of_decide_eq_true hcont
+  unfold matchingObjects at hmem
+  rw [if_neg hon] at hmem
+  rcases List.mem_cons.mp hmem with h | h
+  · exact Or.inl h
+  · exact Or.inr (List.mem_singleton.mp h)
+
+/-- A bare `Direct` leaf with EQUAL grants evaluates identically across recursions,
+    stores and queries (the userset flow-through is dead on bare grants on both
+    sides). -/
+theorem directLeaf_bare_agree_of_grants_eq {rec1 rec2 : Rec} {sub : SubjectRef}
+    {T1 T2 : Store} {q1 q2 : Query} {rs : List Restriction} {ot on rel : String}
+    (hb : ∀ r ∈ rs, r.2.1 = BARE)
+    (hg : grantsOf T1 rs ot on rel = grantsOf T2 rs ot on rel) :
+    directLeaf rec1 sub T1 q1 rs ot on rel = directLeaf rec2 sub T2 q2 rs ot on rel := by
+  have hmog1 : memberOfGranted rec1 T1 q1 (grantsOf T1 rs ot on rel) = false :=
+    memberOfGranted_of_bareGrants rec1 T1 q1 _ (grantsOf_bare_subjects T1 rs ot on rel hb)
+  have hmog2 : memberOfGranted rec2 T2 q2 (grantsOf T2 rs ot on rel) = false :=
+    memberOfGranted_of_bareGrants rec2 T2 q2 _ (grantsOf_bare_subjects T2 rs ot on rel hb)
+  unfold directLeaf
+  rw [hg] at hmog1 ⊢
+  simp only [hmog1, hmog2, Bool.or_false]
+
+/-- **The CD-tree store congruence**: two evaluations of a `ComputedOrDirect` +
+    `DirectArmsBare` tree agree when their recursions agree on the `computed` leaves
+    and their stores agree on every `Direct` arm's grants at the key. -/
+theorem evalE_cd_grants_agree {rec1 rec2 : Rec} {sub : SubjectRef}
+    {T1 T2 : Store} {q1 q2 : Query} {dt on rel : String} :
+    ∀ e : Expr, ComputedOrDirect e → DirectArmsBare e →
+      (∀ r' ∈ computedRefs e, rec1 dt on r' = rec2 dt on r') →
+      (∀ rs ∈ exprDirectsAll e, grantsOf T1 rs dt on rel = grantsOf T2 rs dt on rel) →
+      evalE rec1 sub T1 q1 dt on rel e = evalE rec2 sub T2 q2 dt on rel e := by
+  intro e
+  induction e with
+  | computed r' =>
+    intro _ _ hag _
+    simp only [evalE]
+    exact hag r' (List.mem_singleton.mpr rfl)
+  | direct rs =>
+    intro _ hb _ hg
+    simp only [evalE]
+    exact directLeaf_bare_agree_of_grants_eq hb
+      (hg rs (by simp [exprDirectsAll]))
+  | union a b iha ihb =>
+    intro hcd hba hag hg
+    simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun r' hr' => hag r' (List.mem_append_left _ hr'))
+        (fun rs hrs => hg rs (List.mem_append_left _ hrs)),
+      ihb hcd.2 hba.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))
+        (fun rs hrs => hg rs (List.mem_append_right _ hrs))]
+  | inter a b iha ihb =>
+    intro hcd hba hag hg
+    simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun r' hr' => hag r' (List.mem_append_left _ hr'))
+        (fun rs hrs => hg rs (List.mem_append_left _ hrs)),
+      ihb hcd.2 hba.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))
+        (fun rs hrs => hg rs (List.mem_append_right _ hrs))]
+  | excl a b iha ihb =>
+    intro hcd hba hag hg
+    simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun r' hr' => hag r' (List.mem_append_left _ hr'))
+        (fun rs hrs => hg rs (List.mem_append_left _ hrs)),
+      ihb hcd.2 hba.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))
+        (fun rs hrs => hg rs (List.mem_append_right _ hrs))]
+  | ttu tr ts => intro hcd _ _ _; exact hcd.elim
+
+/-- **Routed-guard store invariance across a cons, CD defs**: a written tuple that
+    misses the key's grant window leaves `checkFnR` unchanged (the `_d` replacement
+    for `checkFnR_store_irrel`'s cons instance). -/
+theorem checkFnR_cons_irrel_cd {σ : GraphState} {T : Store} {t : Tuple}
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) (hon : on ≠ STAR)
+    (hne : ¬ (t.relation = R ∧ t.object.type = dt ∧
+      (t.object.name = on ∨ t.object.name = STAR))) :
+    σ.checkFnR (t :: T) s dt on R e = σ.checkFnR T s dt on R e := by
+  unfold GraphState.checkFnR
+  exact evalE_cd_grants_agree e hcd hba (fun _ _ => rfl)
+    (fun rs _ => grantsOf_cons_of_ne rs hon hne)
+
+/-- **Routed-guard store invariance across an erase, CD defs.** -/
+theorem checkFnR_erase_irrel_cd {σ : GraphState} {T : Store} {t : Tuple}
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) (hon : on ≠ STAR)
+    (hne : ¬ (t.relation = R ∧ t.object.type = dt ∧
+      (t.object.name = on ∨ t.object.name = STAR))) :
+    σ.checkFnR (T.erase t) s dt on R e = σ.checkFnR T s dt on R e := by
+  unfold GraphState.checkFnR
+  exact evalE_cd_grants_agree e hcd hba (fun _ _ => rfl)
+    (fun rs _ => grantsOf_erase_of_ne rs hon hne)
 
 end Zanzibar
