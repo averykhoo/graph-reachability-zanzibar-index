@@ -305,6 +305,37 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "mallory", "blocked", "doc", "d1")],
         (),
     ),
+    "direct_arm_exclusion": (
+        # Direct-arm boolean shape (moved INTO SCHEMAS/GRAPH_FRAGMENT 2026-07-20e,
+        # the #1 leg-5d widening): `approver = [user] but not banned` — the
+        # exclusion's BASE is a **Direct storage arm ON the derived relation**
+        # (AST `excl (direct[user]) (computed banned)`), not a separately-named
+        # computed relation like `boolean_exclusion`'s `editor`. Lean coverage is
+        # the C-chain T2b `graph_correct_w3d2_d` (CascadeStrataResettle.lean,
+        # audited; witness `W4WitnessDirect` = exactly this corpus in compiled
+        # form). NOTE the shape is still outside `W4Fragment`/the E-chain final
+        # theorems (`computedOnly`) — the add-only graph/state gates carry it on
+        # the C-chain theorem's scope; the REMOVE-stream Lean gate cannot (see
+        # test_conformance_remove_graph._REMOVE_EXCLUDED: the model's remove
+        # guard is plain StoreValidRules, which provably rejects any store
+        # holding a Direct-arm-under-exclusion tuple — `hNoUD`, 2026-07-20d/e).
+        # Store exercises the full truth table:
+        #   alice — approver only            -> True  (Direct arm, not excluded)
+        #   bob   — approver AND banned      -> False (excluded by the subtrahend)
+        #   carol — banned only              -> False (never granted approver)
+        #   (ghost / dave — nothing          -> False, via the grid's ghost subject)
+        """
+        type user
+        type doc
+          define banned: [user]
+          define approver: [user] but not banned
+        """,
+        [mk_tuple("...", "user", "alice", "approver", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "approver", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "banned", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "banned", "doc", "d1")],
+        (),
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -318,6 +349,12 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 #     inter/excl/union/computed root all qualify (the rootB gap CLOSED 2026-07-17,
 #     `W4Fragment.rootB`/`RootBoolean` deleted; taint routing on `schemaRewrites`
 #     now mirrors compile_ruleset).
+#   * direct_arm_exclusion (added 2026-07-20e) rides the C-CHAIN Direct-arm T2b
+#     `graph_correct_w3d2_d` instead of the E-chain `graph_correct` (its Direct
+#     storage arm is outside `W4Fragment.computedOnly`); the witness
+#     `W4WitnessDirect` pins the corpus-to-theorem tie. Its add-only zcli runs
+#     were attack-probed first (full truth table `check = sem`, drained); the
+#     remove-stream Lean gate excludes it (see its entry above).
 # Excluded, with the honest reason (ROADMAP "W4 — honest gaps"):
 #   * object_wildcard — the stored tuple has object name '*'; `BareStarStore`
 #     requires stored objects concrete (gap: bareStar / W1b object-star tuples
@@ -348,6 +385,7 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
     "demorgans",
     "cross_stratum_resettle",
     "star_two_strata_churn",
+    "direct_arm_exclusion",
 )
 
 # ---------------------------------------------------------------------------
@@ -447,44 +485,19 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Direct-arm boolean corpora — PYTHON-SIDE ONLY (oracle × set engine × real graph
-# index). Widens the boolean corpus to a derived relation whose definition has a
-# **Direct arm under an exclusion**: `approver := (direct[user]) but not banned`,
-# i.e. AST `excl (direct[user]) (computed banned)` with `banned := direct[user]`.
-#
-# The excluded-FROM operand is a DIRECT arm (a genuine storage leaf ON the derived
-# relation) rather than a computed union — contrast `boolean_exclusion`, whose
-# base `editor` is a separately-declared relation referenced by name. Because the
-# derived def carries a Direct storage leaf it is NOT `computedOnly`, so — exactly
-# like `self_flag` above — it sits OUTSIDE `W4Fragment`; it is DELIBERATELY kept
-# out of `SCHEMAS`/`GRAPH_FRAGMENT` so the Lean graph-side gates do not carry it.
-# The real Python graph index DOES serve the shape (a Direct arm under an
-# exclusion routes onto its leaf family and cascades like any boolean root); the
-# dedicated python-only differential (`test_conformance_direct_arm.py`) pins
-# oracle == set engine == graph index over the full grid, under both SetOps.
+# Direct-arm boolean corpora — the names of the SCHEMAS entries whose derived
+# defs carry a **Direct arm under an exclusion** (`approver := (direct[user])
+# but not banned`, AST `excl (direct[user]) (computed banned)`). The entries
+# LIVE in SCHEMAS/GRAPH_FRAGMENT since 2026-07-20e (the #1 leg-5d widening —
+# Lean coverage via the C-chain `graph_correct_w3d2_d` + `W4WitnessDirect`,
+# see the `direct_arm_exclusion` entry's comment); this name list survives so
+# the dedicated python-only 3-backend differential
+# (`test_conformance_direct_arm.py`: oracle == set engine == real graph index
+# under BOTH SetOps + the exhaustive small-store attack) keeps its focused
+# parametrization.
 # ---------------------------------------------------------------------------
 
-DIRECT_ARM_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
-    # `approver = [user] but not banned` (Direct arm as the exclusion's base),
-    # helper `banned = [user]`. Store exercises the full truth table:
-    #   alice — approver only            -> True  (Direct arm, not excluded)
-    #   bob   — approver AND banned      -> False (excluded by the subtrahend)
-    #   carol — banned only              -> False (never granted approver)
-    #   (ghost / dave — nothing          -> False, via the grid's ghost subject)
-    "direct_arm_exclusion": (
-        """
-        type user
-        type doc
-          define banned: [user]
-          define approver: [user] but not banned
-        """,
-        [mk_tuple("...", "user", "alice", "approver", "doc", "d1"),
-         mk_tuple("...", "user", "bob", "approver", "doc", "d1"),
-         mk_tuple("...", "user", "bob", "banned", "doc", "d1"),
-         mk_tuple("...", "user", "carol", "banned", "doc", "d1")],
-        (),
-    ),
-}
+DIRECT_ARM_NAMES: tuple[str, ...] = ("direct_arm_exclusion",)
 
 
 SELF_REFERENTIAL_SCHEMAS: dict[str, tuple[str, list, tuple]] = {

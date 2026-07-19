@@ -85,7 +85,23 @@ def _graph_queries_for(schema_text, tuples):
 # The gate fails on ANY skip, so filter non-removable corpora (< 2 tuples, e.g.
 # `wildcard_public`) out of the parametrization rather than skipping them —
 # net-removal needs at least two tuples in the op universe.
-_REMOVABLE = sorted(n for n in GRAPH_FRAGMENT if len(SCHEMAS[n][1]) >= 2)
+#
+# `direct_arm_exclusion` is excluded on PROOF-SCOPE grounds (2026-07-20e,
+# attack-probed via `#eval` first): the Lean chain's `remove` constructor
+# guards its PRE store with PLAIN `StoreValidRules`, under which a stored
+# Direct-arm-under-exclusion tuple is inadmissible (`exprDirects = []` on the
+# derived def — the `hNoUD` fragment scoping, PROOF_STATUS 2026-07-20d), so
+# `removeGateB` REJECTS every remove while such a tuple is in store and
+# `graphRunOps` fails closed (rc != 0) on essentially every seeded stream.
+# That is the model's honest fail-closed signal, not a divergence: the real
+# Python remove path over this corpus IS differentially gated (python-side) by
+# `test_conformance_remove.py`, and the add-only Lean gates (graph/state)
+# carry the corpus. Lifting this exclusion needs the remove-leg guard widened
+# to `StoreValidRulesD` (with the star->concrete `sem` monotonicity lemma the
+# `hNoUD` lift requires) — recorded follow-up in HANDOFF.
+_REMOVE_EXCLUDED = frozenset({"direct_arm_exclusion"})
+_REMOVABLE = sorted(n for n in GRAPH_FRAGMENT
+                    if len(SCHEMAS[n][1]) >= 2 and n not in _REMOVE_EXCLUDED)
 
 
 def _final_store(ops):

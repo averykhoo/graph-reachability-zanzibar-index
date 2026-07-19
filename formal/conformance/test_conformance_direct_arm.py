@@ -2,12 +2,14 @@
 
 Widens the boolean corpus to a derived relation with a **Direct arm under an
 exclusion**: `approver := (direct[user]) but not banned`, AST
-`excl (direct[user]) (computed banned)` with `banned := direct[user]` (see
-`corpus.DIRECT_ARM_SCHEMAS`). The excluded-FROM operand is a genuine storage leaf
-ON the derived relation (not a named computed union like `boolean_exclusion`'s
-`editor` base), so — like `self_flag` — the shape is OUTSIDE `W4Fragment` and is
-kept out of `SCHEMAS`/`GRAPH_FRAGMENT`; the Lean graph-side integration is done
-separately later.
+`excl (direct[user]) (computed banned)` with `banned := direct[user]` (the
+`corpus.DIRECT_ARM_NAMES` entries of `SCHEMAS`). The excluded-FROM operand is a
+genuine storage leaf ON the derived relation (not a named computed union like
+`boolean_exclusion`'s `editor` base). Since 2026-07-20e the corpus lives in
+`SCHEMAS`/`GRAPH_FRAGMENT` (Lean side covered by the C-chain
+`graph_correct_w3d2_d` + the `W4WitnessDirect` witness), so the zcli
+graph/state/spec gates carry it too; this file remains the DEDICATED
+both-SetOps 3-backend differential plus the exhaustive small-store attack.
 
 This is the repo's "validation matrix" spirit, restricted to the THREE Python
 backends and run entirely in-process (no zcli, so nothing here builds Lean):
@@ -36,7 +38,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from tests.oracle import Oracle, t as mk_tuple
 
 from formal.conformance.backends import graphindex_answers
-from formal.conformance.corpus import DIRECT_ARM_SCHEMAS
+from formal.conformance.corpus import DIRECT_ARM_NAMES, SCHEMAS
 from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
 
 
@@ -69,10 +71,10 @@ def _three_way(schema_text, tuples, obj_wild, ops):
 
 
 @pytest.mark.parametrize("ops", ALL_SETOPS, ids=lambda o: o.name)
-@pytest.mark.parametrize("name", sorted(DIRECT_ARM_SCHEMAS))
+@pytest.mark.parametrize("name", sorted(DIRECT_ARM_NAMES))
 def test_direct_arm_three_way(name, ops):
     """oracle == set engine == graph index over the full grid, both SetOps."""
-    schema_text, tuples, obj_wild = DIRECT_ARM_SCHEMAS[name]
+    schema_text, tuples, obj_wild = SCHEMAS[name]
     _q, se_mism, gr_mism = _three_way(schema_text, tuples, obj_wild, ops)
     assert not se_mism, (
         f"[{name}/{ops.name}] oracle/set-engine disagreement:\n"
@@ -87,7 +89,7 @@ def test_direct_arm_three_way(name, ops):
 # valid writes (banned + approver over {u1,u2} x {d1}) = 4 tuples, every store of
 # size 0..4 = 16 stores. Each store re-runs the SAME three-way differential, so a
 # graph-vs-oracle divergence on ANY store fails loudly with the store printed.
-_ATK_SCHEMA = DIRECT_ARM_SCHEMAS["direct_arm_exclusion"][0]
+_ATK_SCHEMA = SCHEMAS["direct_arm_exclusion"][0]
 _ATK_SPACE = [
     mk_tuple("...", "user", u, rel, "doc", "d1")
     for rel in ("banned", "approver") for u in ("u1", "u2")
