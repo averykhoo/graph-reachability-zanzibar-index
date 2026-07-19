@@ -3625,4 +3625,790 @@ theorem checkFnR_erase_irrel_cd {σ : GraphState} {T : Store} {t : Tuple}
   exact evalE_cd_grants_agree e hcd hba (fun _ _ => rfl)
     (fun rs _ => grantsOf_erase_of_ne rs hon hne)
 
+/-! ### Leg-level guard stability, widened admission
+
+The `_d` clones of the write/remove-leg guard-stability layer. Two changes vs the
+`ComputedOnly` originals: the tree congruence is `evalE_computedOrDirect` (a bare
+`Direct` arm rides — same store both sides here), and the derived-operand
+`probeDerived` stability derives its in-edge preservation from own-key dirtiness
+(`*_inedges_eq_of_unmapped`) instead of the dead `ComputedOnly` store argument. -/
+
+/-- Write-leg `probeDerived` stability at an UNMAPPED derived operand key, `_d`. -/
+theorem writeLeg_probeDerived_stable_d {σ : GraphState} {S : Schema} {t : Tuple}
+    (hNK : NodupKeys S) (hadm : FoldAdmits σ (rewriteClosure S t))
+    {dt on r' : String}
+    (hder' : isDerived S (dt, r') = true) (honT : t.object.name ≠ STAR)
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (hclσ' : ∀ ab ∈ (σ.writeLoggedRules S t).edges,
+      ab.1 ∈ (σ.writeLoggedRules S t).nodes ∧ ab.2 ∈ (σ.writeLoggedRules S t).nodes)
+    (hcol : ∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+      (u, objNode ⟨dt, on⟩ r') ∈ σ.edges)
+    (hcol' : ∀ u, NReaches (σ.writeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+      (u, objNode ⟨dt, on⟩ r') ∈ (σ.writeLoggedRules S t).edges)
+    (hunm' : (dt, r', on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    {st sn sp : String} (hon : on ≠ STAR) :
+    GraphModel.probeDerived (σ.writeLoggedRules S t) ⟨⟨st, sn, sp⟩, r', ⟨dt, on⟩⟩
+      = GraphModel.probeDerived σ ⟨⟨st, sn, sp⟩, r', ⟨dt, on⟩⟩ := by
+  have hres : (σ.writeLoggedRules S t).residue = σ.residue :=
+    writeLoggedRules_residue σ S t
+  have hreach : ∀ x : NodeKey, (σ.writeLoggedRules S t).reach x (objNode ⟨dt, on⟩ r')
+      = σ.reach x (objNode ⟨dt, on⟩ r') := by
+    intro x
+    cases h1 : (σ.writeLoggedRules S t).reach x (objNode ⟨dt, on⟩ r')
+      <;> cases h0 : σ.reach x (objNode ⟨dt, on⟩ r')
+    · rfl
+    · exfalso
+      have hedge := hcol x (reach_sound h0)
+      have hedge' := (writeLeg_inedges_eq_of_unmapped hNK hadm hder' hon honT hunm' x).mpr
+        hedge
+      have := reach_complete hclσ' (NReaches.edge hedge')
+      rw [h1] at this
+      cases this
+    · exfalso
+      have hedge' := hcol' x (reach_sound h1)
+      have hedge := (writeLeg_inedges_eq_of_unmapped hNK hadm hder' hon honT hunm' x).mp
+        hedge'
+      have := reach_complete hclσ (NReaches.edge hedge)
+      rw [h0] at this
+      cases this
+    · rfl
+  rw [probeDerived_eq _ hon, probeDerived_eq σ hon, hres,
+    hreach (subjNode ⟨st, sn, sp⟩)]
+
+/-- **The routed guard is stable across an unmapped write leg, CD defs** (`_d` clone
+    of `writeLeg_checkFnR_stable`): untainted leaves by fan-out completeness, derived
+    leaves by the `_d` write-inert derived read, the `Direct` arm rides the CD tree
+    congruence (same store both sides). -/
+theorem writeLeg_checkFnR_stable_d {σ : GraphState} {S : Schema} {t : Tuple} (T' : Store)
+    (hNK : NodupKeys S) (hadm : FoldAdmits σ (rewriteClosure S t))
+    (honT : t.object.name ≠ STAR)
+    (hσS : σ.schema = S)
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant = Variant.plain)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hcolOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) ∧
+      (∀ u, NReaches (σ.writeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ (σ.writeLoggedRules S t).edges))
+    (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (hopsUnmapped : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (dt, r', on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (s : SubjectRef) :
+    (σ.writeLoggedRules S t).checkFnR T' s dt on R e = σ.checkFnR T' s dt on R e := by
+  have hσ'S : (σ.writeLoggedRules S t).schema = S := by
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).schema, writeRules_schema, hσS]
+  have hclσ' : ∀ ab ∈ (σ.writeLoggedRules S t).edges,
+      ab.1 ∈ (σ.writeLoggedRules S t).nodes ∧ ab.2 ∈ (σ.writeLoggedRules S t).nodes := by
+    have hev := writeLoggedRules_evalEq (EvalEq.refl σ) S t
+    intro ab hab
+    rw [hev.edges] at hab
+    rw [hev.nodes]
+    exact edgesClosed_foldl_writeDirect (rewriteClosure S t) σ hclσ ab hab
+  unfold GraphState.checkFnR
+  refine evalE_computedOrDirect e hcd hba ?_
+  intro r' hr'
+  cases hd' : isDerived S (dt, r') with
+  | false =>
+    rw [GraphModel.graphRecR_eq_graphRec s on (by rw [hσ'S]; exact hd'),
+      GraphModel.graphRecR_eq_graphRec s on (by rw [hσS]; exact hd')]
+    exact writeLeg_graphRec_stable hclσ htp' hlk hder hr' hon hunmapped s
+  | true =>
+    obtain ⟨hcol, hcol'⟩ := hcolOps r' hr' hd'
+    show GraphModel.check (σ.writeLoggedRules S t) ⟨s, r', ⟨dt, on⟩⟩
+        = GraphModel.check σ ⟨s, r', ⟨dt, on⟩⟩
+    rw [GraphModel.check_derived _ ⟨s, r', ⟨dt, on⟩⟩ (by rw [hσ'S]; exact hd'),
+      GraphModel.check_derived σ ⟨s, r', ⟨dt, on⟩⟩ (by rw [hσS]; exact hd')]
+    obtain ⟨st, sn, sp⟩ := s
+    exact writeLeg_probeDerived_stable_d hNK hadm hd' honT hclσ hclσ' hcol hcol'
+      (hopsUnmapped r' hr' hd') hon
+
+/-- Retraction-leg `probeDerived` stability at an UNMAPPED derived operand key, `_d`. -/
+theorem removeLeg_probeDerived_stable_d {σ : GraphState} {S : Schema} {t : Tuple}
+    (hNK : NodupKeys S)
+    {dt on r' : String}
+    (hder' : isDerived S (dt, r') = true) (honT : t.object.name ≠ STAR)
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (hclσ' : ∀ ab ∈ (σ.removeLoggedRules S t).edges,
+      ab.1 ∈ (σ.removeLoggedRules S t).nodes ∧ ab.2 ∈ (σ.removeLoggedRules S t).nodes)
+    (hcol : ∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+      (u, objNode ⟨dt, on⟩ r') ∈ σ.edges)
+    (hcol' : ∀ u, NReaches (σ.removeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+      (u, objNode ⟨dt, on⟩ r') ∈ (σ.removeLoggedRules S t).edges)
+    (hunm' : (dt, r', on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    {st sn sp : String} (hon : on ≠ STAR) :
+    GraphModel.probeDerived (σ.removeLoggedRules S t) ⟨⟨st, sn, sp⟩, r', ⟨dt, on⟩⟩
+      = GraphModel.probeDerived σ ⟨⟨st, sn, sp⟩, r', ⟨dt, on⟩⟩ := by
+  have hres : (σ.removeLoggedRules S t).residue = σ.residue :=
+    removeLoggedRules_residue_eq σ S t
+  have hreach : ∀ x : NodeKey, (σ.removeLoggedRules S t).reach x (objNode ⟨dt, on⟩ r')
+      = σ.reach x (objNode ⟨dt, on⟩ r') := by
+    intro x
+    cases h1 : (σ.removeLoggedRules S t).reach x (objNode ⟨dt, on⟩ r')
+      <;> cases h0 : σ.reach x (objNode ⟨dt, on⟩ r')
+    · rfl
+    · exfalso
+      have hedge := hcol x (reach_sound h0)
+      have hedge' := (removeLeg_inedges_eq_of_unmapped hNK hder' hon honT hunm' x).mpr
+        hedge
+      have := reach_complete hclσ' (NReaches.edge hedge')
+      rw [h1] at this
+      cases this
+    · exfalso
+      have hedge' := hcol' x (reach_sound h1)
+      have hedge := (removeLeg_inedges_eq_of_unmapped hNK hder' hon honT hunm' x).mp
+        hedge'
+      have := reach_complete hclσ (NReaches.edge hedge)
+      rw [h0] at this
+      cases this
+    · rfl
+  rw [probeDerived_eq _ hon, probeDerived_eq σ hon, hres,
+    hreach (subjNode ⟨st, sn, sp⟩)]
+
+/-- **The routed guard is stable across an unmapped retraction leg, CD defs** (`_d`
+    clone of `removeLeg_checkFnR_stable`). Plainness fence `htp` on the PRE-state. -/
+theorem removeLeg_checkFnR_stable_d {σ : GraphState} {S : Schema} {t : Tuple} (T' : Store)
+    (hNK : NodupKeys S) (honT : t.object.name ≠ STAR)
+    (hσS : σ.schema = S)
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hcolOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) ∧
+      (∀ u, NReaches (σ.removeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ (σ.removeLoggedRules S t).edges))
+    (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (hopsUnmapped : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (dt, r', on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (s : SubjectRef) :
+    (σ.removeLoggedRules S t).checkFnR T' s dt on R e = σ.checkFnR T' s dt on R e := by
+  have hσ'S : (σ.removeLoggedRules S t).schema = S := by
+    rw [removeLoggedRules_schema, hσS]
+  have hclσ' : ∀ ab ∈ (σ.removeLoggedRules S t).edges,
+      ab.1 ∈ (σ.removeLoggedRules S t).nodes ∧ ab.2 ∈ (σ.removeLoggedRules S t).nodes := by
+    intro ab hab
+    rw [removeLoggedRules_nodes]
+    exact hclσ ab (removeLoggedRules_edges_subset σ S t ab hab)
+  unfold GraphState.checkFnR
+  refine evalE_computedOrDirect e hcd hba ?_
+  intro r' hr'
+  cases hd' : isDerived S (dt, r') with
+  | false =>
+    rw [GraphModel.graphRecR_eq_graphRec s on (by rw [hσ'S]; exact hd'),
+      GraphModel.graphRecR_eq_graphRec s on (by rw [hσS]; exact hd')]
+    exact removeLeg_graphRec_stable hclσ htp hlk hder hr' hon hunmapped s
+  | true =>
+    obtain ⟨hcol, hcol'⟩ := hcolOps r' hr' hd'
+    show GraphModel.check (σ.removeLoggedRules S t) ⟨s, r', ⟨dt, on⟩⟩
+        = GraphModel.check σ ⟨s, r', ⟨dt, on⟩⟩
+    rw [GraphModel.check_derived _ ⟨s, r', ⟨dt, on⟩⟩ (by rw [hσ'S]; exact hd'),
+      GraphModel.check_derived σ ⟨s, r', ⟨dt, on⟩⟩ (by rw [hσS]; exact hd')]
+    obtain ⟨st, sn, sp⟩ := s
+    exact removeLeg_probeDerived_stable_d hNK hd' honT hclσ hclσ' hcol hcol'
+      (hopsUnmapped r' hr' hd') hon
+
+/-! ### The stratum-1 W3d read bridge over the FILTERED shadow -/
+
+/-- **`checkFn = sem` at any shadowed state, filtered-σ0 form**
+    (`checkFn_eq_sem_w3d_filt`): the untainted-core agreement lands the guard at the
+    σ0 rebuild over `T↾U`, where the widened base bridge (`checkFn_eq_sem_bs_d`)
+    reads it at `sem S (T↾U)`; the derived-key filter bridge
+    (`sem_untaintedFilter_co`) lifts to the FULL store. The stratum-1 bridge every
+    `_d` operand transport consumes in place of `checkFn_eq_sem_w3d`. -/
+theorem checkFn_eq_sem_w3d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hSV : StoreValidRulesD S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h0 : ReachedByRulesAdmitted σ0 S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (hsh : UntaintedShadow S σ σ0)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hDecl : StoreDeclared S T := storeDeclared_of_validRulesD hSV
+  have hSVU : StoreValidRules S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    storeValidRules_untaintedFilter hSV
+  have hStoreUntU : ∀ t ∈ T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)),
+      isDerived S (t.object.type, t.relation) = false := by
+    intro t ht
+    simpa using (List.mem_filter.mp ht).2
+  have hSVU_D : StoreValidRulesD S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    fun t ht => Or.inl ⟨hStoreUntU t ht, hSVU t ht⟩
+  have hBSU : BareStarStore (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    fun t ht => hBS t (List.mem_filter.mp ht).1
+  have hTSU : TtuStarFree S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    fun t ht => hTS t (List.mem_filter.mp ht).1
+  have htermU : ∀ dt' R', isDerived S (dt', R') = true → NoTtuTarget S R' ∧
+      NoStoreSubjectR (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) R' :=
+    fun dt' R' hd => ⟨(hterm dt' R' hd).1,
+      fun t ht => (hterm dt' R' hd).2 t (List.mem_filter.mp ht).1⟩
+  calc σ.checkFn T s dt on R e
+      = σ0.checkFn T s dt on R e :=
+        checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
+          (fun s' r' hr' => shadow_graphRec_agree hsh s' on hr')
+    _ = σ0.checkFn (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          s dt on R e :=
+        checkFn_store_irrel _ _ s dt on R hco
+    _ = sem S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ⟨s, R, ⟨dt, on⟩⟩ :=
+        checkFn_eq_sem_bs_d hWF hTT hNK hR hSVU_D hBSU hTSU hMatch hStrat htermU
+          (ReachedByW3aAdmitted.base h0) hlk (computedOnly_computedOrDirect hco)
+          (computedOnly_directArmsBare hco) hleafUnt hs hon
+    _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+        (sem_untaintedFilter_co hNK hDecl hBS.noUsersetStar hTS hStrat hlk hco
+          hleafUnt).symm
+
+/-- **Stratum-1 `sem` stability across a write leg, filtered-σ0 form** (`_d` clone of
+    `writeLeg_sem_stable_sh`): the guard is stable and reads at `sem` through the
+    filtered bridge at both ends of the leg. -/
+theorem writeLeg_sem_stable_sh_d {σ σ0 σ0' : GraphState} {S : Schema} {T : Store}
+    {t : Tuple}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hSV : StoreValidRulesD S (t :: T)) (hBS : BareStarStore (t :: T))
+    (hTS : TtuStarFree S (t :: T))
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (h0 : ReachedByRulesAdmitted σ0 S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (hsh : UntaintedShadow S σ σ0)
+    (h0' : ReachedByRulesAdmitted σ0' S
+      ((t :: T).filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (hsh' : UntaintedShadow S (σ.writeLoggedRules S t) σ0')
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant = Variant.plain)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    {s : SubjectRef} (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hSVw : StoreValidRulesD S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+  have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+  have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+  have htermw : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+    fun dt R hd => ⟨(hterm dt R hd).1,
+      fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+  calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
+      = (σ.writeLoggedRules S t).checkFn (t :: T) s dt on R e :=
+        (checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+          h0' hsh' hlk hco hleafUnt hs hon).symm
+    _ = σ.checkFn (t :: T) s dt on R e :=
+        writeLeg_checkFn_stable (t :: T) hclσ htp' hlk hder hco hon hunmapped s
+    _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
+    _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+        checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSVw hBSw hTSw hMatch hStrat htermw
+          h0 hsh hlk hco hleafUnt hs hon
+
+/-- **Stratum-1 `sem` stability across a retraction leg, filtered-σ0 form** (`_d`
+    clone of `removeLeg_sem_stable_sh`). -/
+theorem removeLeg_sem_stable_sh_d {σ σ0 σ0' : GraphState} {S : Schema} {T : Store}
+    {t : Tuple}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hSV : StoreValidRulesD S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (ht : t ∈ T)
+    (h0 : ReachedByRulesAdmitted σ0 S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (hsh : UntaintedShadow S σ σ0)
+    (h0' : ReachedByRulesAdmitted σ0' S
+      ((T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (hsh' : UntaintedShadow S (σ.removeLoggedRules S t) σ0')
+    (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    {s : SubjectRef} (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hSVe : StoreValidRulesD S (T.erase t) :=
+    fun t' ht' => hSV t' (List.mem_of_mem_erase ht')
+  have hBSe : BareStarStore (T.erase t) := fun t' ht' => hBS t' (List.mem_of_mem_erase ht')
+  have hTSe : TtuStarFree S (T.erase t) := fun t' ht' => hTS t' (List.mem_of_mem_erase ht')
+  have hterme : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR (T.erase t) R :=
+    fun dt R hd => ⟨(hterm dt R hd).1,
+      fun t' ht' => (hterm dt R hd).2 t' (List.mem_of_mem_erase ht')⟩
+  calc sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩
+      = (σ.removeLoggedRules S t).checkFn (T.erase t) s dt on R e :=
+        (checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSVe hBSe hTSe hMatch hStrat hterme
+          h0' hsh' hlk hco hleafUnt hs hon).symm
+    _ = σ.checkFn (T.erase t) s dt on R e :=
+        removeLeg_checkFn_stable (T.erase t) hclσ htp hlk hder hco hon hunmapped s
+    _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
+    _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+        checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+          h0 hsh hlk hco hleafUnt hs hon
+
+/-! ### Per-key settledness transports, widened admission -/
+
+/-- **`SettledKey` transports across a write leg given `sem` stability, `_d`** —
+    representation untouched: rows write-inert, and the UNMAPPED key's derived
+    in-edges fixed by own-key dirtiness (no `StoreValidRules`/`ComputedOnly`). -/
+theorem settledKey_writeLeg_sem_d {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hNK : NodupKeys S) (hadm : FoldAdmits σ (rewriteClosure S t))
+    (honT : t.object.name ≠ STAR)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    {dt on R : String}
+    (hder : isDerived S (dt, R) = true) (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
+      sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩)
+    (hset : SettledKey S T σ dt on R) :
+    SettledKey S (t :: T) (σ.writeLoggedRules S t) dt on R := by
+  obtain ⟨hrow, hedge⟩ := hset
+  constructor
+  · intro res hres
+    rw [writeLoggedRules_residue] at hres
+    obtain ⟨h1, h2, h3⟩ := hrow res hres
+    refine ⟨?_, ?_, ?_⟩
+    · intro sh
+      rw [h1 sh]
+      constructor
+      · rintro ⟨hws, hsm⟩
+        refine ⟨hws, ?_⟩
+        rw [hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+        exact hsm
+      · rintro ⟨hws, hsm⟩
+        refine ⟨hws, ?_⟩
+        rw [← hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+        exact hsm
+    · intro n hn
+      obtain ⟨hnstar, hsm⟩ := h2 n hn
+      refine ⟨hnstar, ?_⟩
+      rw [hsem n (fun hx => absurd hx hnstar)]
+      exact hsm
+    · intro n hn
+      obtain ⟨hnp, hnstar, hsm⟩ := h3 n hn
+      refine ⟨hnp, hnstar, ?_⟩
+      rw [hsem n (fun hx => absurd hx hnstar)]
+      exact hsm
+  · intro s hb hstar hedge'
+    rw [writeLeg_inedges_eq_of_unmapped hNK hadm hder hon honT hunmapped
+      (subjNode s)] at hedge'
+    rw [hsem s (fun hx => absurd hx hstar)]
+    exact hedge s hb hstar hedge'
+
+/-- **`CompleteKey` transports across a write leg given `sem` stability, `_d`.** -/
+theorem completeKey_writeLeg_sem_d {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hNK : NodupKeys S) (hadm : FoldAdmits σ (rewriteClosure S t))
+    (honT : t.object.name ≠ STAR)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    {dt on R : String}
+    (hder : isDerived S (dt, R) = true) (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
+      sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩)
+    (hcomp : CompleteKey S T σ dt on R) :
+    CompleteKey S (t :: T) (σ.writeLoggedRules S t) dt on R := by
+  obtain ⟨hrowE, hedgeC, huposC, hnegC⟩ := hcomp
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro sh hws hsm
+    rw [writeLoggedRules_residue]
+    refine hrowE sh hws ?_
+    rw [← hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+    exact hsm
+  · intro s hb hstar hsm hnc
+    rw [writeLeg_inedges_eq_of_unmapped hNK hadm hder hon honT hunmapped (subjNode s)]
+    refine hedgeC s hb hstar ?_ ?_
+    · rw [← hsem s (fun hx => absurd hx hstar)]
+      exact hsm
+    · rintro ⟨hws, hsemstar⟩
+      refine hnc ⟨hws, ?_⟩
+      rw [hsem (starSubj s.shape) (fun _ => hWSbare _ hws)]
+      exact hsemstar
+  · intro s hu hstar hsm
+    rw [writeLoggedRules_residue]
+    refine huposC s hu hstar ?_
+    rw [← hsem s (fun hx => absurd hx hstar)]
+    exact hsm
+  · intro s hstar hws hsemStar hsemF
+    rw [writeLoggedRules_residue]
+    refine hnegC s hstar hws ?_ ?_
+    · rw [← hsem (starSubj s.shape) (fun _ => hWSbare _ hws)]
+      exact hsemStar
+    · rw [← hsem s (fun hx => absurd hx hstar)]
+      exact hsemF
+
+/-- **`SettledKey` transports across a retraction leg given `sem` stability, `_d`.** -/
+theorem settledKey_removeLeg_sem_d {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hNK : NodupKeys S) (honT : t.object.name ≠ STAR)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    {dt on R : String}
+    (hder : isDerived S (dt, R) = true) (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
+      sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩)
+    (hset : SettledKey S T σ dt on R) :
+    SettledKey S (T.erase t) (σ.removeLoggedRules S t) dt on R := by
+  obtain ⟨hrow, hedge⟩ := hset
+  constructor
+  · intro res hres
+    rw [removeLoggedRules_residue_eq] at hres
+    obtain ⟨h1, h2, h3⟩ := hrow res hres
+    refine ⟨?_, ?_, ?_⟩
+    · intro sh
+      rw [h1 sh]
+      constructor
+      · rintro ⟨hws, hsm⟩
+        refine ⟨hws, ?_⟩
+        rw [hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+        exact hsm
+      · rintro ⟨hws, hsm⟩
+        refine ⟨hws, ?_⟩
+        rw [← hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+        exact hsm
+    · intro n hn
+      obtain ⟨hnstar, hsm⟩ := h2 n hn
+      refine ⟨hnstar, ?_⟩
+      rw [hsem n (fun hx => absurd hx hnstar)]
+      exact hsm
+    · intro n hn
+      obtain ⟨hnp, hnstar, hsm⟩ := h3 n hn
+      refine ⟨hnp, hnstar, ?_⟩
+      rw [hsem n (fun hx => absurd hx hnstar)]
+      exact hsm
+  · intro s hb hstar hedge'
+    rw [removeLeg_inedges_eq_of_unmapped hNK hder hon honT hunmapped
+      (subjNode s)] at hedge'
+    rw [hsem s (fun hx => absurd hx hstar)]
+    exact hedge s hb hstar hedge'
+
+/-- **`CompleteKey` transports across a retraction leg given `sem` stability, `_d`.** -/
+theorem completeKey_removeLeg_sem_d {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hNK : NodupKeys S) (honT : t.object.name ≠ STAR)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    {dt on R : String}
+    (hder : isDerived S (dt, R) = true) (hon : on ≠ STAR)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
+      sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩)
+    (hcomp : CompleteKey S T σ dt on R) :
+    CompleteKey S (T.erase t) (σ.removeLoggedRules S t) dt on R := by
+  obtain ⟨hrowE, hedgeC, huposC, hnegC⟩ := hcomp
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro sh hws hsm
+    rw [removeLoggedRules_residue_eq]
+    refine hrowE sh hws ?_
+    rw [← hsem (starSubj sh) (fun _ => hWSbare sh hws)]
+    exact hsm
+  · intro s hb hstar hsm hnc
+    rw [removeLeg_inedges_eq_of_unmapped hNK hder hon honT hunmapped (subjNode s)]
+    refine hedgeC s hb hstar ?_ ?_
+    · rw [← hsem s (fun hx => absurd hx hstar)]
+      exact hsm
+    · rintro ⟨hws, hsemstar⟩
+      refine hnc ⟨hws, ?_⟩
+      rw [hsem (starSubj s.shape) (fun _ => hWSbare _ hws)]
+      exact hsemstar
+  · intro s hu hstar hsm
+    rw [removeLoggedRules_residue_eq]
+    refine huposC s hu hstar ?_
+    rw [← hsem s (fun hx => absurd hx hstar)]
+    exact hsm
+  · intro s hstar hws hsemStar hsemF
+    rw [removeLoggedRules_residue_eq]
+    refine hnegC s hstar hws ?_ ?_
+    · rw [← hsem (starSubj s.shape) (fun _ => hWSbare _ hws)]
+      exact hsemStar
+    · rw [← hsem s (fun hx => absurd hx hstar)]
+      exact hsemF
+
+/-! ### Stratum-2 `sem` stability, widened admission
+
+The `_d` clones of `writeLeg_sem_stable2` / `removeLeg_sem_stable2`. Fragment pack:
+schema-wide `ComputedOrDirect` + `DirectArmsBare` on derived defs, derived OPERAND
+defs `ComputedOnly` (`hCOop` — the landed `_filt` machinery's scope), `hLU2` two
+strata. The store steps go through the CD grant-window congruences, keyed off
+own-key dirtiness; both read ends are the filtered-σ0 bridge with shadows derived
+from the chain states (`reachedByW3d2_shadow_d`).
+
+The RETRACTION clone additionally carries **`hNoUD`** (`exprDirects e = []` on
+derived defs — every `Direct` arm sits under an `inter`/`excl`, the canonical
+`but not` shape): the `remove` constructor guards its PRE store with the PLAIN
+`StoreValidRules`, under which a derived-key tuple is storable exactly through a
+union-reachable `Direct` arm; erasing such a tuple whose seed edge was retracted
+(covered subject) changes the key's Direct-arm grants with NO own-key delta, and
+proving `sem` stability there needs a star→concrete `sem` coverage monotonicity
+lemma this leg does not build. `hNoUD` closes that door honestly: the pre store
+then contains NO derived-key tuples at all. The motivating fragment
+(`approver := excl(direct[user], computed banned)`) satisfies it; lifting it is
+follow-up work, recorded in the session notes. -/
+
+/-- **Stratum-2 `sem` stability across a write leg, widened admission**
+    (`writeLeg_sem_stable2_d`). -/
+theorem writeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hSV : StoreValidRulesD S (t :: T)) (hBS : BareStarStore (t :: T))
+    (hTS : TtuStarFree S (t :: T))
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOrDirect e)
+    (hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e)
+    (hCOop : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e')
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d2 σ S T) (hadm : FoldAdmits σ (rewriteClosure S t))
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (hopsUnmapped : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (dt, r', on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
+    (hopsSettled : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r')
+    {s : SubjectRef} (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  -- the weakened (pre-write) fragment pack
+  have hSVw : StoreValidRulesD S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+  have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+  have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+  have htermw : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+    fun dt R hd => ⟨(hterm dt R hd).1,
+      fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+  have hcd := hCD dt R e hlk hder
+  have hba := hDAB dt R e hlk hder
+  have hCOop_e := hCOop dt R e hlk hder
+  have honT : t.object.name ≠ STAR := (hBS t List.mem_cons_self).2
+  have h' : ReachedByW3d2 (σ.writeLoggedRules S t) S (t :: T) :=
+    ReachedByW3d2.write t hadm h
+  have hσS : σ.schema = S := reachedByW3d2_schema h
+  have hσ'S : (σ.writeLoggedRules S t).schema = S := reachedByW3d2_schema h'
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSVw htermw hWF hBSw
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow_d h' hNK hCD hDAB hSV hterm hWF hBS
+  have hclσ := reachedByW3d2_edgesClosed h
+  have htp' := reachedByW3d2_edges_target_plain h' hBS
+  -- collapse at each derived operand key, on both sides of the leg
+  have hcolOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) ∧
+      (∀ u, NReaches (σ.writeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ (σ.writeLoggedRules S t).edges) := by
+    intro r' hr' hd'
+    exact ⟨fun u hu => reachedByW3d2_reach_collapse_root_d hWF hDAB hSVw hd' h hu,
+      fun u hu => reachedByW3d2_reach_collapse_root_d hWF hDAB hSV hd' h' hu⟩
+  -- operand settledness transports to the post state / post store (the stratum-1 half)
+  have hops' : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S (t :: T) (σ.writeLoggedRules S t) dt on r' ∧
+      CompleteKey S (t :: T) (σ.writeLoggedRules S t) dt on r' ∧
+      (∀ u, NReaches (σ.writeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ (σ.writeLoggedRules S t).edges) := by
+    intro r' hr' hd'
+    obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+    have hco' : ComputedOnly e' := hCOop_e r' hr' hd' e' hlk'
+    have hleafUnt' := hLU2 dt R e hlk hder r' hr' hd' e' hlk'
+    have hsem_op : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
+        sem S (t :: T) ⟨x, r', ⟨dt, on⟩⟩ = sem S T ⟨x, r', ⟨dt, on⟩⟩ :=
+      fun x hx => writeLeg_sem_stable_sh_d hWF hTT hNK hR hSV hBS hTS hMatch
+        hStrat hterm h0 hsh h0' hsh' hclσ htp' hlk' hd' hco' hleafUnt'
+        (hopsUnmapped r' hr' hd') hx hon
+    obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
+    exact ⟨settledKey_writeLeg_sem_d hNK hadm honT hWSbare hd' hon
+        (hopsUnmapped r' hr' hd') hsem_op hset,
+      completeKey_writeLeg_sem_d hNK hadm honT hWSbare hd' hon
+        (hopsUnmapped r' hr' hd') hsem_op hcomp,
+      (hcolOps r' hr' hd').2⟩
+  have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) := by
+    intro r' hr' hd'
+    obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
+    exact ⟨hset, hcomp, (hcolOps r' hr' hd').1⟩
+  have hLU2e : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false :=
+    fun r' hr' hd' e' hlk' => hLU2 dt R e hlk hder r' hr' hd' e' hlk'
+  -- the written tuple misses the key's grant window (else the own-key branch fires)
+  have hneKey : ¬ (t.relation = R ∧ t.object.type = dt ∧
+      (t.object.name = on ∨ t.object.name = STAR)) := by
+    rintro ⟨h1, h2, h3 | h3⟩
+    · refine write_node_ne_of_unmapped hNK hadm hder hon honT hunmapped ?_
+      show objNode t.object t.relation = objNode ⟨dt, on⟩ R
+      rw [show t.object = (⟨t.object.type, t.object.name⟩ : ObjectRef) from rfl,
+        h1, h2, h3]
+    · exact honT h3
+  calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
+      = (σ.writeLoggedRules S t).checkFnR (t :: T) s dt on R e :=
+        (checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat
+          hterm hWSbare h0' hsh' hσ'S hlk hder hcd hba hCOop_e hLU2e hops' hs hon).symm
+    _ = (σ.writeLoggedRules S t).checkFnR T s dt on R e :=
+        checkFnR_cons_irrel_cd hcd hba hon hneKey
+    _ = σ.checkFnR T s dt on R e :=
+        writeLeg_checkFnR_stable_d T hNK hadm honT hσS hclσ htp' hlk hder hcd hba
+          hcolOps hon hunmapped hopsUnmapped s
+    _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+        checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSVw hBSw hTSw hMatch hStrat
+          htermw hWSbare h0 hsh hσS hlk hder hcd hba hCOop_e hLU2e hops hs hon
+
+/-- **Stratum-2 `sem` stability across a retraction leg, widened admission**
+    (`removeLeg_sem_stable2_d`). Carries the `remove` constructor's own guards (the
+    pre store is PLAIN-valid and drained) plus `hNoUD`, under which the pre store
+    provably contains NO derived-key tuple — the erased tuple's key is untainted, so
+    every derived key's grant window and in-edges are untouched. -/
+theorem removeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : Tuple}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
+    (hSVT : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOrDirect e)
+    (hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e)
+    (hCOop : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e')
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hNoUD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      exprDirects e = [])
+    (h : ReachedByW3d2 σ S T) (hadm : RemoveAdmits σ T t)
+    (hdrain : cascadeKeys S σ = [])
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (hopsUnmapped : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (dt, r', on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
+    (hopsSettled : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r')
+    {s : SubjectRef} (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have ht : t ∈ T := hadm
+  have honT : t.object.name ≠ STAR := (hBS t ht).2
+  -- the erased tuple's key is UNTAINTED: a derived-key tuple would need a
+  -- union-reachable Direct arm, dead under `hNoUD`
+  have htu : isDerived S (t.object.type, t.relation) = false := by
+    by_contra hcon
+    rw [Bool.not_eq_false] at hcon
+    obtain ⟨e', rs, hlk', hrs, _⟩ := hSVT t ht
+    rw [hNoUD _ _ _ hlk' hcon] at hrs
+    exact absurd hrs List.not_mem_nil
+  have hSVD : StoreValidRulesD S T :=
+    storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB
+  have hSVTe : StoreValidRules S (T.erase t) :=
+    fun t' ht' => hSVT t' (List.mem_of_mem_erase ht')
+  have hSVDe : StoreValidRulesD S (T.erase t) :=
+    fun t' ht' => hSVD t' (List.mem_of_mem_erase ht')
+  have hBSe : BareStarStore (T.erase t) := fun t' ht' => hBS t' (List.mem_of_mem_erase ht')
+  have hTSe : TtuStarFree S (T.erase t) := fun t' ht' => hTS t' (List.mem_of_mem_erase ht')
+  have hterme : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR (T.erase t) R :=
+    fun dt R hd => ⟨(hterm dt R hd).1,
+      fun t' ht' => (hterm dt R hd).2 t' (List.mem_of_mem_erase ht')⟩
+  have hcd := hCD dt R e hlk hder
+  have hba := hDAB dt R e hlk hder
+  have hCOop_e := hCOop dt R e hlk hder
+  have h' : ReachedByW3d2 (σ.removeLoggedRules S t) S (T.erase t) :=
+    ReachedByW3d2.remove t hadm hdrain hSVT hBS hTS hterm h
+  have hσS : σ.schema = S := reachedByW3d2_schema h
+  have hσ'S : (σ.removeLoggedRules S t).schema = S := by
+    rw [removeLoggedRules_schema, hσS]
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSVD hterm hWF hBS
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow_d h' hNK hCD hDAB hSVDe hterme hWF hBSe
+  have hclσ := reachedByW3d2_edgesClosed h
+  have htp := reachedByW3d2_edges_target_plain h hBS
+  -- no closure member of the untainted-key tuple targets any derived node
+  have hneOp : ∀ r', isDerived S (dt, r') = true →
+      objNode t.object t.relation ≠ objNode ⟨dt, on⟩ r' := by
+    intro r' hd' heq
+    have htype : t.object.type = dt := by
+      simpa [objNode_type] using congrArg NodeKey.type heq
+    have hrel : t.relation = r' := by
+      simpa [objNode_pred] using congrArg NodeKey.pred heq
+    rw [htype, hrel, hd'] at htu
+    exact Bool.noConfusion htu
+  -- collapse at each derived operand key, on both sides of the leg
+  have hcolOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) ∧
+      (∀ u, NReaches (σ.removeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ (σ.removeLoggedRules S t).edges) := by
+    intro r' hr' hd'
+    have hpre : ∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges :=
+      fun u hu => reachedByW3d2_reach_collapse_root_d hWF hDAB hSVD hd' h hu
+    refine ⟨hpre, ?_⟩
+    intro u hu
+    have hpreu : (u, objNode ⟨dt, on⟩ r') ∈ σ.edges :=
+      hpre u (NReaches.mono_subset (removeLoggedRules_edges_subset σ S t) hu)
+    exact (removeLeg_derived_inedges_eq_d hd' (hneOp r' hd') u).mpr hpreu
+  -- operand settledness transports to the post state / post store
+  have hops' : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S (T.erase t) (σ.removeLoggedRules S t) dt on r' ∧
+      CompleteKey S (T.erase t) (σ.removeLoggedRules S t) dt on r' ∧
+      (∀ u, NReaches (σ.removeLoggedRules S t).edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ (σ.removeLoggedRules S t).edges) := by
+    intro r' hr' hd'
+    obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+    have hco' : ComputedOnly e' := hCOop_e r' hr' hd' e' hlk'
+    have hleafUnt' := hLU2 dt R e hlk hder r' hr' hd' e' hlk'
+    have hsem_op : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
+        sem S (T.erase t) ⟨x, r', ⟨dt, on⟩⟩ = sem S T ⟨x, r', ⟨dt, on⟩⟩ :=
+      fun x hx => removeLeg_sem_stable_sh_d hWF hTT hNK hR hSVD hBS hTS hMatch
+        hStrat hterm ht h0 hsh h0' hsh' hclσ htp hlk' hd' hco' hleafUnt'
+        (hopsUnmapped r' hr' hd') hx hon
+    obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
+    exact ⟨settledKey_removeLeg_sem_d hNK honT hWSbare hd' hon
+        (hopsUnmapped r' hr' hd') hsem_op hset,
+      completeKey_removeLeg_sem_d hNK honT hWSbare hd' hon
+        (hopsUnmapped r' hr' hd') hsem_op hcomp,
+      (hcolOps r' hr' hd').2⟩
+  have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) := by
+    intro r' hr' hd'
+    obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
+    exact ⟨hset, hcomp, (hcolOps r' hr' hd').1⟩
+  have hLU2e : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false :=
+    fun r' hr' hd' e' hlk' => hLU2 dt R e hlk hder r' hr' hd' e' hlk'
+  -- the erased tuple misses the key's grant window (its key is untainted)
+  have hneKey : ¬ (t.relation = R ∧ t.object.type = dt ∧
+      (t.object.name = on ∨ t.object.name = STAR)) := by
+    rintro ⟨h1, h2, -⟩
+    rw [h2, h1, hder] at htu
+    exact Bool.noConfusion htu
+  calc sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩
+      = (σ.removeLoggedRules S t).checkFnR (T.erase t) s dt on R e :=
+        (checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSVDe hBSe hTSe hMatch hStrat
+          hterme hWSbare h0' hsh' hσ'S hlk hder hcd hba hCOop_e hLU2e hops' hs hon).symm
+    _ = (σ.removeLoggedRules S t).checkFnR T s dt on R e :=
+        checkFnR_erase_irrel_cd hcd hba hon hneKey
+    _ = σ.checkFnR T s dt on R e :=
+        removeLeg_checkFnR_stable_d T hNK honT hσS hclσ htp hlk hder hcd hba
+          hcolOps hon hunmapped hopsUnmapped s
+    _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+        checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSVD hBS hTS hMatch hStrat
+          hterm hWSbare h0 hsh hσS hlk hder hcd hba hCOop_e hLU2e hops hs hon
+
 end Zanzibar
