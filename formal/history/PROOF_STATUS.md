@@ -8,6 +8,76 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-20e (#1 leg 5d step 4 — the Direct-arm correctness made USER-FACING on the honest conservative fork: `W4WitnessDirect` LANDED (audit 450 → **455**) + `direct_arm_exclusion` moved INTO `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → **326**, state pin CLEAN); the E-chain/`W4Fragment` widening ASSESSED and deliberately NOT taken — the gap is recorded, with two fresh attack findings)
+
+Picked up THE NEXT TASK (task step 4 = widening sub-step 3). The step's ★ HONESTY FORK was assessed
+FIRST, attack-first, and resolved to the sanctioned CONSERVATIVE path: items 1+2 landed (the witness +
+the conformance move), `W4Fragment`/the final unsuffixed theorems left `ComputedOnly`-scoped, the
+E-chain widening scoped precisely and recorded. Two green commits (`b91d488` witness, `9e0d3b3`
+conformance move) + docs; `verify.sh lean` 455/455 + `conf-heavy` (80) + `conf-rest` + `pytest tests/`
+green for the push.
+
+- **★ THE FORK DECISION (why NOT widen `W4Fragment`).** Widening the final theorems requires widening
+  the OPERATIONAL E-chain (`ReachedByW3d2E`), and that is a genuine MODEL CHANGE, not a re-proof:
+  (i) the chain's baked-in enumeration `enumJob2` is not coverage-complete on Direct-arm defs — the
+  Direct-arm subjects live in the fixed store, which is exactly why leg 5c built `enumJob2D`
+  (`enum2BaseD = enum2Base ++ storedDirectSubjects`); the honest widening swaps the enumeration inside
+  `enumJobs2At` (a `Delta.leaf`-scale ripple: Assemble + StrataEdge/Inv E-chain layers + `Exec.lean`
+  driver + the graph-state conformance, with a behavioral-identity argument on the ComputedOnly scope
+  — `storedDirectSubjects = []` under `ComputedOnly`); (ii) `w3cJobValid` for `enumJob2D` has an OPEN
+  star-freeness hole — under `wsBare` a WILDCARD-flagged restriction may sit on a derived Direct arm,
+  so `storedDirectSubjects` can contain a `user:*` grant subject and `W3cJobValid`'s star-free-cands
+  clause fails: the widening needs either a STAR-filter inside the enumeration (a change to landed
+  leg-5c defs + their consumers) or a new fragment clause banning wildcard restrictions on derived
+  Direct arms; (iii) a full `_d` clone of the ~100-line `reachedByW3d2E_toC` cascade discharge
+  (round-1 `w3dJobCoverage_enumJob2D` packaged at a chain state via `reachedByW3d2_shadow_d`, round-2
+  via `w3d2_leg_context_d_filt` at the MID state + the `_d` transports); (iv) `GraphAdmission.
+  storeValid` (plain `StoreValidRules`) must widen to `StoreValidRulesD` — at a Direct-arm store the
+  CURRENT admission bundle is UNSATISFIABLE (see finding B). Multi-session scale ⇒ conservative path.
+- **★ ATTACK FINDING A (`#eval`, scratch deleted): the model REJECTS removes on Direct-arm stores —
+  fail-closed, not wrong.** Driving `graphRunOps` over `approver := excl(direct[user], computed
+  banned)` with ops add(bob→approver), add(bob→banned), remove(bob→banned) returns `none`: the
+  `remove` constructor guards its PRE store with PLAIN `StoreValidRules`, and a stored
+  Direct-arm-under-`excl` tuple fails it (`exprDirects = []` on the derived def — the 20d `hNoUD`
+  scoping, now OPERATIONALLY confirmed: `storeValidRulesB Sd [bobBanned, bobApprover] = false`). So
+  the un-ban re-grant shape — where `enumJob2`'s enumeration WOULD be incomplete (the retracted seed
+  is in the OWN key's neg residue, which `enum2Base` does NOT enumerate — it reads operand residues
+  only) — is UNREACHABLE on the current chain. Consequence for the conformance move: seeded remove
+  streams over the corpus die with rc ≠ 0, so the Lean remove-stream gate must EXCLUDE the corpus
+  (documented filter, see below). Lifting this needs the remove-guard widened to `StoreValidRulesD`
+  + the `hNoUD` lift (the star→concrete `sem` monotonicity lemma).
+- **★ ATTACK FINDING B (control probes, same scratch): the add-only Direct-arm corpus is FULLY SERVED
+  by the operational chain.** `graphRunOps` over the 4-tuple `direct_arm_exclusion` store drains with
+  `check = sem` on the whole truth table (alice T / bob F / carol F / ghost F, `cascadeKeys = []`) —
+  the enumeration gap does NOT bite add-only states (an excluded Direct-arm subject stays enumerable
+  through its operand leaf reach / the operand's residue), consistent with 20d's kill-schema confirm.
+- **`W4WitnessDirect` (`b91d488`, FullScope.lean, audit 450 → 455).** `Sd`/`Td` = the corpus in
+  compiled form; five audited theorems: `accepts` (the admission side with `StoreValidRulesD` in
+  place of `storeValid`), `fragment` (ALL the `_d` carries: `ComputedOrDirect`/`DirectArmsBare`/
+  operand-`ComputedOnly`/`hLU2`/`hWSbare`/`hNoUD`/`BareStarStore`/`TtuStarFree`/terminality),
+  `within_scope` (`GraphAccepts Sd`, decision 15), **`correct_applies`** (the bundle JOINTLY
+  discharges the audited C-chain T2b `graph_correct_w3d2_d` at `(Sd, Td)` — satisfiability of the
+  whole hypothesis set, the attack of record for a widening), and **`outside_old_admission`**
+  (¬`StoreValidRules Sd Td` — the store is PROVABLY rejected by the old admission bundle, so the
+  `StoreValidRulesD` widening is contentful, not a relabeling).
+- **The conformance move (`9e0d3b3`, +11 tests, 315 → 326).** `direct_arm_exclusion` moved into
+  `SCHEMAS` + `GRAPH_FRAGMENT` (the retired `DIRECT_ARM_SCHEMAS` dict → a `DIRECT_ARM_NAMES` name
+  list so `test_conformance_direct_arm.py` keeps its focused both-SetOps 3-backend differential).
+  Now carried by: zcli graph answers (+2), **the graph-STATE pin (+1) — ran CLEAN, the Lean model's
+  drained state == Python `EdgeV4`/`ResidueV1` under P1–P6 on a Direct-arm store (first time
+  gated)**, spec `sem`×oracle×set-engine (+3), 25-seed random substores (+1), and the PYTHON-side
+  remove churn (+4: real set engine + real graph index over seeded add/remove/re-add, 5 seeds —
+  clean, so the real Python remove path over Direct-arm stores is now differentially pinned).
+  `test_conformance_remove_graph.py` EXCLUDES the corpus from its parametrization with the finding-A
+  reason documented in situ (`_REMOVE_EXCLUDED` — fail-closed rejection is the model's honest
+  signal, not a divergence; no oracle/golden touched).
+- **REMAINING GAP (recorded, the next widening step).** The final unsuffixed `graph_correct`/
+  `graph_reached_inv`/`Exec.graphRun_check_eq_sem` + `W4Fragment` are still `ComputedOnly`-scoped;
+  the Direct-arm scope is C-chain-only (`graph_correct_w3d2_d` + `W4WitnessDirect`). The E-chain
+  widening plan is the fork list above (enumeration swap + star-freeness resolution + toC `_d`
+  projection + `GraphAdmission.storeValid` → `StoreValidRulesD`); optional strengthenings unchanged
+  (lift `hNoUD`; Direct-arm OPERANDS).
+
 ## Session 2026-07-20d (#1 leg 5d steps 2-3 — the `_d` SETTLEDNESS CHAIN CLOSED: `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d` LANDED, audit 448 → **450**; attack-first CONFIRMED the model fix retracts the excluded seed at the drained state; the `remove` leg honestly scoped by a new `hNoUD` fragment hypothesis)
 
 Picked up THE NEXT TASK (steps 2-3): the settledness-transport `_d` clones + the Direct-arm T2b,

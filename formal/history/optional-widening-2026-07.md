@@ -275,7 +275,53 @@ This is genuine multi-session chain content (a NEW filtered-shadow substrate + a
 family), NOT the additive hypothesis-factored clone the design assumed. `reachedByW3c_master_d` +
 `w3c_row_char_d` are the tractable slice; they are DONE and independent of the shadow.
 
-### Direct-arm — RESUME (2026-07-20d: steps 2-3 DONE — the `_d` settledness chain + T2b LANDED; step 4 = fragment widening remains)
+### Direct-arm — RESUME (2026-07-20e: step 4 CLOSED conservative — witness + conformance move LANDED; the E-CHAIN widening is the remaining gap, scoped below)
+
+**★ 2026-07-20e — task step 4 taken on the HONEST CONSERVATIVE fork (commits `b91d488`/`9e0d3b3`).**
+`W4WitnessDirect` (FullScope.lean, audit 450 → 455): the C-chain `graph_correct_w3d2_d` hypothesis
+bundle machine-checked satisfiable at the `direct_arm_exclusion` pair — `accepts` /`fragment`/
+`within_scope`/`correct_applies` + `outside_old_admission` (plain `StoreValidRules` provably rejects
+the Direct-arm store — the `StoreValidRulesD` widening is contentful). `direct_arm_exclusion` moved
+into `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → 326): zcli graph answers + the graph-STATE pin (CLEAN —
+first Direct-arm state-level Lean-vs-Python gate) + spec/random + the PYTHON-side remove churn;
+`test_conformance_remove_graph.py` excludes it via `_REMOVE_EXCLUDED` (documented in situ).
+
+**The E-CHAIN widening (NOT done — the assessed fork cost, multi-session):**
+1. **Enumeration model change**: `enumJobs2At` must run `enumJob2D` (Direct-arm subjects live in the
+   fixed store; `enumJob2` is not coverage-complete on Direct-arm defs — leg 5c's raison d'être).
+   `Delta.leaf`-scale ripple: `CascadeStrataAssemble` (chain def + toC + validity), `CascadeStrataEdge`/
+   `CascadeStrataInv` (E-chain inv layers), `Exec.lean` (driver recomputes), graph-state conformance;
+   behavioral identity on the CO scope via `storedDirectSubjects = []` under `ComputedOnly`.
+2. **Star-freeness hole (OPEN attack surface)**: under `wsBare` a WILDCARD-flagged restriction may sit
+   on a derived Direct arm, so `storedDirectSubjects` can contain a `user:*` subject and
+   `W3cJobValid`'s star-free-cands clause FAILS for `enumJob2D`. Resolve by a star-filter inside
+   `storedDirectSubjects` (touches landed leg-5c defs/consumers; `concMatch` already implies
+   name ≠ STAR, so `noConcDirect_of_not_mem` survives) OR a new fragment clause banning wildcard
+   restrictions on derived Direct arms. Attack-first probe which is faithful to Python's audit
+   enumeration before choosing.
+3. **The toC `_d` projection**: a full `_d` clone of the `reachedByW3d2E_toC` cascade case — round-1
+   coverage = `w3dJobCoverage_enumJob2D` packaged at a chain state (`reachedByW3d2_shadow_d` at leg
+   start), round-2 via `w3d2_leg_context_d_filt` at the MID state (`untaintedShadow_reconcileJobsLR_d`
+   transport), `_d` Rnode-source/edge-target facts, reach collapse at MID.
+4. **`GraphAdmission.storeValid` → `StoreValidRulesD`** (the CURRENT bundle is UNSATISFIABLE at a
+   Direct-arm store — `W4WitnessDirect.outside_old_admission` is the machine-checked proof), then
+   widen `W4Fragment.computedOnly` → the `_d` clauses, re-prove `w4_within_scope` (its clause 3
+   currently routes through `directsOnly_of_computedOnly` — needs the `ComputedOrDirect` analog
+   w/ `hNoUD`... note a Direct-arm def IS `directsOnly`-false since `inter`/`excl` roots are rejected
+   outright and a `but not` root is the canonical shape — re-derive), re-base the final theorems on
+   the widened E-chain theorem.
+5. **Remove legs on Direct-arm stores** (if the remove-stream conformance exclusion is to be lifted):
+   the `remove` constructor's pre-store guard must widen to `StoreValidRulesD` AND the `hNoUD` lift
+   must land (the star→concrete `sem` monotonicity lemma) — finding A (20e): `removeGateB` currently
+   rejects every remove while a Direct-arm tuple is stored (fail-closed, operationally confirmed).
+
+**Landed prior state (2026-07-20d, steps 2-3):** `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d`
+(audit 448 → 450), three green commits `c41829b`/`36926dd`/`d5f6071` — see the [historical] section
+below for the substrate list.
+
+---
+
+### [historical] Direct-arm — RESUME (2026-07-20d: steps 2-3 DONE — the `_d` settledness chain + T2b LANDED; step 4 = fragment widening remains)
 
 **★ 2026-07-20d — `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d` LANDED (audit 448 → 450; three
 green commits `c41829b`/`36926dd`/`d5f6071`).** Attack-first confirmed the model fix first (the 20b kill

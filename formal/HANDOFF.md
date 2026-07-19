@@ -35,8 +35,8 @@ never rounds up to "the code is formally verified" (plan §7).
    stratum-1"). A session that kills a false statement is a GOOD session; record the
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (446 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + 315 Python conformance
+   + **0 sorries** + zcli + axiom audit (455 `#print axioms` reports, one per audited
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + 326 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
@@ -185,17 +185,36 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > store otherwise admits union-reachable Direct-arm seeds whose covered-state erase needs an unbuilt
 > star→concrete `sem` monotonicity lemma — recorded follow-up). See `history/PROOF_STATUS.md` 2026-07-20d.
 >
-> **THE NEXT TASK — #1 Direct arm task step 4 = widening sub-step 3 (conf phases REQUIRED).**
-> Widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare` (+ operand-`ComputedOnly` +
-> `hNoUD` as honest fragment clauses), re-prove `w4_within_scope` (`FullScope.lean:165-174`), add the
-> non-vacuity witness `W4WitnessDirect` (`approver := excl (direct [user]) (computed banned)` + a store
-> granting `user:alice`) to `Audit.lean`, move `direct_arm_exclusion` INTO `GRAPH_FRAGMENT` (`corpus.py`)
-> + a state pin. NOTE the operational E-chain (`ReachedByW3d2E`/`graph_correct_w3d2E`) is still
-> ComputedOnly-scoped — widening it (the `enumJob2D` coverage discharge via `w3d2_leg_context_d_filt`)
-> is part of this step, OR scope the witness to the C-chain `graph_correct_w3d2_d` and record. Optional
-> strengthenings after: lift `hNoUD` (prove `sem` star→concrete coverage monotonicity over the fenced
-> fragment); admit Direct-arm OPERANDS (needs a Direct-arm-aware `sem_untaintedFilter_co`). Then the
-> TTU/userset half, #2 strata (>2). Exact resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
+> **★ 2026-07-20e — task step 4 CLOSED on the HONEST CONSERVATIVE fork: `W4WitnessDirect` LANDED
+> (audit 450 → 455) + `direct_arm_exclusion` moved INTO `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → 326,
+> the graph-STATE pin ran CLEAN); `W4Fragment`/the final theorems deliberately NOT widened.** The
+> witness (`FullScope.lean`) inhabits the C-chain `graph_correct_w3d2_d` bundle at the corpus pair:
+> `accepts` (admission with `StoreValidRulesD`), `fragment` (all `_d` carries incl. `hNoUD`),
+> `within_scope`, `correct_applies` (the bundle JOINTLY discharges the audited T2b), and
+> `outside_old_admission` (plain `StoreValidRules` PROVABLY rejects the store — the widening is
+> contentful). ★ Attack findings (scratch `#eval`s, deleted): (A) the chain REJECTS removes on
+> Direct-arm stores fail-closed (`removeGateB`'s plain-`StoreValidRules` pre-store guard; the 20d
+> `hNoUD` scoping made operational) — so `test_conformance_remove_graph.py` EXCLUDES the corpus with
+> the reason documented in situ (`_REMOVE_EXCLUDED`), while the PYTHON-side remove churn
+> (`test_conformance_remove.py`) now carries it clean; (B) add-only, the operational chain serves the
+> full corpus truth table (`check = sem`, drained). WHY the E-chain was not widened (the fork's
+> assessed cost, multi-session): the operational enumeration must CHANGE (`enumJob2` → `enumJob2D`
+> inside `enumJobs2At` — a `Delta.leaf`-scale ripple: Assemble/StrataEdge/StrataInv/Exec + graph-state
+> conformance, behavioral-identity on the CO scope); `w3cJobValid_enumJob2D` has an OPEN star-freeness
+> hole (a WILDCARD restriction on a derived Direct arm puts `user:*` in `storedDirectSubjects` —
+> needs a star-filter or a new fragment clause); the ~100-line `reachedByW3d2E_toC` cascade discharge
+> needs a full `_d` clone; and `GraphAdmission.storeValid` must widen to `StoreValidRulesD` (at a
+> Direct-arm store the CURRENT admission bundle is unsatisfiable). See PROOF_STATUS 2026-07-20e.
+>
+> **THE NEXT TASK — #1 Direct arm: the E-CHAIN widening (the recorded gap), OR pivot.** Options in
+> rank order: (a) the E-chain widening per the 20e fork list above — payoff: `W4Fragment` widened to
+> the `_d` fragment, the final unsuffixed `graph_correct`/`graph_reached_inv`/
+> `Exec.graphRun_check_eq_sem` cover Direct arms, and the remove-stream conformance exclusion can be
+> revisited (needs the remove-guard → `StoreValidRulesD` + the `hNoUD` lift too); (b) the `hNoUD`
+> lift (the star→concrete `sem` coverage monotonicity lemma over the fenced fragment) — smaller,
+> self-contained, unlocks the remove leg on union-reachable Direct arms; (c) Direct-arm OPERANDS
+> (needs a Direct-arm-aware `sem_untaintedFilter_co`); (d) the TTU/userset leaf half or #2 strata
+> (> 2). Exact resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
 > ⚠ OPERATIONAL: `verify.sh conf-rest` observed 9–13 min (often over the 10-min cap) — background w/ 600s
 > timeout, retry if cap-killed; consider splitting the phase.
 
@@ -388,7 +407,7 @@ guard's validly-stored scope decision is APPROVED by Avery 2026-07-19), the
 (`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
 corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
 level), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` are all landed and gated.
-verify.sh: 315 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
+verify.sh: 326 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
 map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
 `history/`. The one known check-level graph-vs-set divergence (derived-TTU
 userset subjects — outside `W4Fragment` and the conformance grids) was FIXED
