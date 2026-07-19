@@ -438,6 +438,89 @@ theorem mem_edges_iff_untOccCount_pos {σ0 : GraphState} {S : Schema} {T : Store
     unfold edgeOfTuple at hueq
     rwa [hueq] at hc
 
+/-- A bare Direct-arm restriction only matches a bare-predicate subject. -/
+theorem restrictionMatches_bare {rs : List Restriction} {t : Tuple}
+    (hbare : ∀ r ∈ rs, r.2.1 = BARE)
+    (hmatch : restrictionMatches rs t = true) :
+    t.subject.predicate = BARE := by
+  unfold restrictionMatches at hmatch
+  rw [List.any_eq_true] at hmatch
+  obtain ⟨r, hr, hcond⟩ := hmatch
+  rw [Bool.and_eq_true, Bool.and_eq_true] at hcond
+  obtain ⟨⟨_htype, hpred⟩, _hstar⟩ := hcond
+  rw [beq_iff_eq] at hpred
+  rw [hpred]; exact hbare r hr
+
+/-- `exprDirects e ⊆ exprDirectsAll e` (exprDirects only recurses through unions). -/
+theorem exprDirects_subset_exprDirectsAll (e : Expr) :
+    ∀ rs, rs ∈ exprDirects e → rs ∈ exprDirectsAll e := by
+  induction e with
+  | direct rs' => intro rs h; simpa [exprDirects, exprDirectsAll] using h
+  | computed _ => intro rs h; simp [exprDirects] at h
+  | ttu _ _ => intro rs h; simp [exprDirects] at h
+  | union a b iha ihb =>
+      intro rs h
+      simp only [exprDirects, exprDirectsAll, List.mem_append] at h ⊢
+      exact h.imp (iha rs) (ihb rs)
+  | inter a b iha ihb => intro rs h; simp [exprDirects] at h
+  | excl a b iha ihb => intro rs h; simp [exprDirects] at h
+
+/-- Under `DirectArmsBare e`, every arm collected by `exprDirects` is all-BARE. -/
+theorem directArmsBare_exprDirects {e : Expr} (hba : DirectArmsBare e) :
+    ∀ rs ∈ exprDirects e, ∀ r ∈ rs, r.2.1 = BARE := by
+  induction e with
+  | direct rs' =>
+      intro rs h r hr
+      simp only [exprDirects, List.mem_singleton] at h; subst h
+      simp only [DirectArmsBare] at hba; exact hba r hr
+  | computed _ => intro rs h; simp [exprDirects] at h
+  | ttu _ _ => intro rs h; simp [exprDirects] at h
+  | union a b iha ihb =>
+      simp only [DirectArmsBare] at hba
+      intro rs h r hr
+      simp only [exprDirects, List.mem_append] at h
+      rcases h with h | h
+      · exact iha hba.1 rs h r hr
+      · exact ihb hba.2 rs h r hr
+  | inter a b iha ihb => intro rs h; simp [exprDirects] at h
+  | excl a b iha ihb => intro rs h; simp [exprDirects] at h
+
+/-- `StoreValidRules` + all-derived-defs-`DirectArmsBare` ⇒ `StoreValidRulesD`. -/
+theorem storeValidRulesD_of_storeValidRules_directArmsBare {S : Schema} {T : Store}
+    (hSV : StoreValidRules S T)
+    (hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → DirectArmsBare e) :
+    StoreValidRulesD S T := by
+  intro t ht
+  obtain ⟨e, rs, hlk, hrs, hmatch⟩ := hSV t ht
+  by_cases hder : isDerived S (t.object.type, t.relation) = true
+  · have hbare := directArmsBare_exprDirects (hDAB _ _ e hlk hder) rs hrs
+    exact Or.inr ⟨hder, restrictionMatches_bare hbare hmatch, e, rs, hlk,
+      exprDirects_subset_exprDirectsAll e rs hrs, hmatch, hbare⟩
+  · rw [Bool.not_eq_true] at hder
+    exact Or.inl ⟨hder, e, rs, hlk, hrs, hmatch⟩
+
+/-- **The load-bearing one.** A rules-admitted state over an UNTAINTED-ONLY store (no
+    derived-key tuples) has NO derived-target edges — WITHOUT needing `hCO`/ComputedOnly.
+    (Mirror of `reachedByRulesAdmitted_edge_target_untainted` just below, but the
+    seed-tuple branch is killed by `hND` instead of by `exprDirects_computedOnly`.) -/
+theorem reachedByRulesAdmitted_untStore_edge_untainted {σ0 : GraphState} {S : Schema} {T : Store}
+    (hND : ∀ t ∈ T, isDerived S (t.object.type, t.relation) = false)
+    (h0 : ReachedByRulesAdmitted σ0 S T) :
+    ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false := by
+  intro a b hab
+  by_contra hcon
+  rw [Bool.not_eq_false] at hcon
+  obtain ⟨t', ht', u, hu, hasub, hbobj⟩ :=
+    reachedByRules_edge_sound (reachedByRules_of_admitted h0) a b hab
+  have htype : b.type = u.object.type := by rw [hbobj, objNode_type]
+  have hrel : b.pred = u.relation := by rw [hbobj, objNode_pred]
+  rw [htype, hrel] at hcon
+  rcases rewriteClosure_produced hu with heq | ⟨r, hr', hro, hrout⟩
+  · subst heq
+    rw [hND u ht'] at hcon
+    exact absurd hcon (by simp)
+  · exact noRuleOutputs_of_derived hcon r hr' ⟨hro, hrout⟩
+
 /-- **Rules-admitted edges are untainted.** Every edge target on a rules-admitted state has a
     non-derived predicate: the edge materialises a closure tuple `u` on relation `u.relation`,
     which is never a derived key (`reachedByRules_derived_no_inedge`). -/
