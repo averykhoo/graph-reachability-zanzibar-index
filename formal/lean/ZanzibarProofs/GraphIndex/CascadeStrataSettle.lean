@@ -1666,6 +1666,174 @@ theorem checkFnR_eq_sem_settled_d {S : Schema} {T : Store} {σ σ0 : GraphState}
   exact sem_fuel_stable S T ⟨s, R, ⟨dt, on⟩⟩ hStrat hDecl (fuelBound S T + 1)
     (Nat.le_succ _)
 
+/-! ## The FILTERED-σ0 read bridge (Direct-arm leg 5d cont.)
+
+`checkFnR_eq_sem_settled_d` takes a FULL-store base pair (`h0` over `T` + the shadow) —
+jointly unsatisfiable on the widened fragment (the `reachedByW3d2_shadow_d` header's kill:
+a stored-and-excluded Direct-arm seed is in the full-`T` σ0 but retracted from the drained
+σ). The filtered shadow instead produces `h0 : ReachedByRulesAdmitted σ0 S (T↾U)` where
+`T↾U := T.filter (fun tp => !isDerived S …)`. The `_filt` variants below consume exactly
+that pair and conclude the SAME full-store `= sem S T`: untainted operand reads land at
+`sem S (T↾U)` and bridge back on design lemma C (`sem_untaintedFilter`); the derived
+operand's no-ghost star coverage routes the leg-5b/5c linchpins AT `T↾U` and converts the
+full-store `sem` premise with the derived-key filter bridge `sem_untaintedFilter_co`.
+Attack-first (2026-07-20, scratch deleted): (1) `coveredFn`'s store argument is fully
+irrelevant on a `ComputedOnly` def (general proof via `checkFn_store_irrel` compiled) —
+the `T↾U` phrasing loses nothing; (2) `sem_untaintedFilter_co`'s statement survived an
+`#eval` grid over stored derived-key tuples (bare subject, userset subject, and the
+exclusion kill shape) — stored derived-key tuples are `sem`-invisible through a
+`ComputedOnly` def with untainted refs. -/
+
+/-- **The derived-key `sem` filter bridge (`sem_untaintedFilter_co`).** `sem` at a DERIVED
+    key whose def is `ComputedOnly` with UNTAINTED `computed` refs is invariant under the
+    untainted store filter: the top step never reads the store (`evalE_computedOnly`), and
+    each operand read is store-filter-invariant by design lemma C (`sem_untaintedFilter`).
+    This is what lets a full-store `sem` fact at a derived OPERAND key be read over `T↾U`. -/
+theorem sem_untaintedFilter_co {S : Schema} {T : Store}
+    (hNK : NodupKeys S) (hDecl : StoreDeclared S T) (hNUS : NoUsersetStar T)
+    (hTS : TtuStarFree S T) (hStrat : Stratifiable S)
+    {s : SubjectRef} {dt on r' : String} {e' : Expr}
+    (hlk' : S.lookup (dt, r') = some e') (hco' : ComputedOnly e')
+    (hleafUnt' : ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false) :
+    sem S T ⟨s, r', ⟨dt, on⟩⟩
+      = sem S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ⟨s, r', ⟨dt, on⟩⟩ := by
+  have hDeclU : StoreDeclared S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    fun t ht => hDecl t (List.mem_filter.mp ht).1
+  have hag : ∀ r'' ∈ computedRefs e',
+      semAux S s T ⟨s, r', ⟨dt, on⟩⟩ (fuelBound S T) dt on r''
+        = semAux S s (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+            ⟨s, r', ⟨dt, on⟩⟩
+            (fuelBound S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+            dt on r'' := by
+    intro r'' hr''
+    have h1 : semAux S s T ⟨s, r', ⟨dt, on⟩⟩ (fuelBound S T) dt on r''
+        = sem S T ⟨s, r'', ⟨dt, on⟩⟩ :=
+      semAux_qirrel S s T ⟨s, r', ⟨dt, on⟩⟩ ⟨s, r'', ⟨dt, on⟩⟩ (fuelBound S T) dt on r''
+    have h2 : semAux S s (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ⟨s, r', ⟨dt, on⟩⟩
+          (fuelBound S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+          dt on r''
+        = sem S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+            ⟨s, r'', ⟨dt, on⟩⟩ :=
+      semAux_qirrel S s _ ⟨s, r', ⟨dt, on⟩⟩ ⟨s, r'', ⟨dt, on⟩⟩ _ dt on r''
+    rw [h1, h2]
+    exact sem_untaintedFilter hNK hDecl hNUS hTS ⟨s, r'', ⟨dt, on⟩⟩ (hleafUnt' r'' hr'')
+  calc sem S T ⟨s, r', ⟨dt, on⟩⟩
+      = semAux S s T ⟨s, r', ⟨dt, on⟩⟩ (fuelBound S T + 1) dt on r' :=
+        (sem_fuel_stable S T ⟨s, r', ⟨dt, on⟩⟩ hStrat hDecl (fuelBound S T + 1)
+          (Nat.le_succ _)).symm
+    _ = evalE (semAux S s T ⟨s, r', ⟨dt, on⟩⟩ (fuelBound S T)) s T ⟨s, r', ⟨dt, on⟩⟩
+          dt on r' e' := by
+        simp only [semAux, step, hlk']
+    _ = evalE (semAux S s (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+            ⟨s, r', ⟨dt, on⟩⟩
+            (fuelBound S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))))
+          s (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ⟨s, r', ⟨dt, on⟩⟩ dt on r' e' :=
+        evalE_computedOnly e' hco' hag
+    _ = semAux S s (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ⟨s, r', ⟨dt, on⟩⟩
+          (fuelBound S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) + 1)
+          dt on r' := by
+        simp only [semAux, step, hlk']
+    _ = sem S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ⟨s, r', ⟨dt, on⟩⟩ :=
+        sem_fuel_stable S _ ⟨s, r', ⟨dt, on⟩⟩ hStrat hDeclU _ (Nat.le_succ _)
+
+/-- **The stratum-staged read bridge over the FILTERED shadow
+    (`checkFnR_eq_sem_settled_d_filt`).** `checkFnR_eq_sem_settled_d` with the base witness
+    σ0 admitted over `T↾U` — the pair `reachedByW3d2_shadow_d` actually produces. Same
+    conclusion: the routed guard at the REAL drained state σ equals `sem` over the FULL
+    store `T`. The audited full-store version stays in place, untouched. -/
+theorem checkFnR_eq_sem_settled_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOnly e)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h0 : ReachedByRulesAdmitted σ0 S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (hsh : UntaintedShadow S σ σ0)
+    (hσS : σ.schema = S)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges))
+    (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hDecl : StoreDeclared S T := storeDeclared_of_validRulesD hSV
+  -- the `T↾U` hypothesis pack
+  have hSVU : StoreValidRules S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    storeValidRules_untaintedFilter hSV
+  have hStoreUntU : ∀ t ∈ T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)),
+      isDerived S (t.object.type, t.relation) = false := by
+    intro t ht
+    simpa using (List.mem_filter.mp ht).2
+  have hSVU_D : StoreValidRulesD S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    fun t ht => Or.inl ⟨hStoreUntU t ht, hSVU t ht⟩
+  have hBSU : BareStarStore (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    fun t ht => hBS t (List.mem_filter.mp ht).1
+  have hTSU : TtuStarFree S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) :=
+    fun t ht => hTS t (List.mem_filter.mp ht).1
+  have htermU : ∀ dt' R', isDerived S (dt', R') = true → NoTtuTarget S R' ∧
+      NoStoreSubjectR (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) R' :=
+    fun dt' R' hd => ⟨(hterm dt' R' hd).1,
+      fun t ht => (hterm dt' R' hd).2 t (List.mem_filter.mp ht).1⟩
+  have hag : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRecR σ s dt on r'
+        = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r' := by
+    intro r' hr'
+    have hstep : GraphModel.graphRecR σ s dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩ := by
+      cases hd' : isDerived S (dt, r') with
+      | false =>
+        rw [GraphModel.graphRecR_eq_graphRec s on (by rw [hσS]; exact hd'),
+          shadow_graphRec_agree hsh s on hd',
+          graphRec_base_eq_bs_unt hWF hTT hNK hR hSVU hBSU hTSU hStoreUntU hMatch h0
+            hs hon r' hd']
+        exact (sem_untaintedFilter hNK hDecl hBS.noUsersetStar hTS ⟨s, r', ⟨dt, on⟩⟩ hd').symm
+      | true =>
+        obtain ⟨hset', hcomp', hcollapse'⟩ := hops r' hr' hd'
+        obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+        have hleafUnt' : ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false :=
+          hLU2 r' hr' hd' e' hlk'
+        have hco' : ComputedOnly e' := hCO dt r' e' hlk' hd'
+        have hsem_ws' : ∀ sh : Shape, sh.2 = BARE →
+            sem S T ⟨starSubj sh, r', ⟨dt, on⟩⟩ = true → sh ∈ wildcardShapes S := by
+          intro sh hshb hsm
+          refine coveredFn_declared_d hTT hSVU_D hTSU h0 hlk'
+            (computedOnly_computedOrDirect hco') (computedOnly_directArmsBare hco')
+            (dt := dt) (on := on) (R := r') ?_
+          show σ0.checkFn (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+            (starSubj sh) dt on r' e' = true
+          rw [checkFn_eq_sem_bs_d hWF hTT hNK hR hSVU_D hBSU hTSU hMatch hStrat htermU
+            (ReachedByW3aAdmitted.base h0) hlk' (computedOnly_computedOrDirect hco')
+            (computedOnly_directArmsBare hco') hleafUnt' (fun _ => hshb) hon,
+            ← sem_untaintedFilter_co hNK hDecl hBS.noUsersetStar hTS hStrat hlk' hco'
+              hleafUnt']
+          exact hsm
+        show GraphModel.check σ ⟨s, r', ⟨dt, on⟩⟩ = sem S T ⟨s, r', ⟨dt, on⟩⟩
+        rw [GraphModel.check_derived σ ⟨s, r', ⟨dt, on⟩⟩ (by rw [hσS]; exact hd')]
+        exact probeDerived_eq_sem_settled hWSbare hsh.closed hcollapse' hsem_ws'
+          hset' hcomp' hs hon
+    rw [hstep]
+    exact semAux_qirrel S s T ⟨s, r', ⟨dt, on⟩⟩ ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
+  rw [checkFnR_eq_semStep_cd hlk hcd hba hag]
+  exact sem_fuel_stable S T ⟨s, R, ⟨dt, on⟩⟩ hStrat hDecl (fuelBound S T + 1)
+    (Nat.le_succ _)
+
 /-! ## The routed transport layer — untargeted keys keep their representation
 
 Mirrors of the W3d-1 `applyD_other_key_fixed` / `reconcileJobsD_other_key_fixed`
