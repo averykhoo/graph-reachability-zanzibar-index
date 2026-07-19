@@ -1360,4 +1360,36 @@ namespace Zanzibar
 #print axioms reachedByW3c_master_d
 #print axioms w3c_row_char_d
 
+-- #1 Leaf widening (Direct arm) leg 5d steps 2–3 — the `_d` SETTLEDNESS CHAIN CLOSED
+-- (GraphIndex/CascadeStrataSettle.lean + CascadeStrataResettle.lean, 2026-07-20d). The
+-- 2026-07-20b KILL was repaired by the 2026-07-20c `affectedKeys` LeafFamily own-key model fix
+-- (`Delta.leaf`), and the drained-state correspondence now PROVES over the widened fragment:
+-- schema-wide `ComputedOrDirect ∧ DirectArmsBare` derived defs (derived OPERAND defs
+-- `ComputedOnly` — the two-strata `hLU2` scope), stores admitted by `StoreValidRulesD` (BARE
+-- Direct-arm seeds on derived keys STORED), plus `hNoUD` (`exprDirects e = []` on derived defs:
+-- Direct arms only under `inter`/`excl`, the canonical `but not` shape) scoping the `remove` leg
+-- (a union-reachable Direct-arm erase at a covered retracted-edge state needs a star→concrete
+-- `sem` monotonicity lemma this leg does not build — recorded follow-up).
+-- **`reachedByW3d2C_settled_d`** — the THREE-disjunct settledness invariant (dirty ∨
+-- operand-dirty ∨ settled+complete) at EVERY `ReachedByW3d2C` state on the Direct-arm fragment.
+-- The `empty` case is discharged by the new hypothesis-free `sem_nil_false`; the `write` case
+-- consumes `writeLeg_sem_stable2_d` (filtered-σ0 shadows from `reachedByW3d2_shadow_d`, store
+-- steps through the CD grant-window congruence `checkFnR_cons_irrel_cd`, in-edge preservation
+-- from OWN-KEY DIRTINESS `writeLeg_own_key_dirty` — the model-fix branch made load-bearing); the
+-- `remove` case its dual under the constructor's plain pre-store guard + `hNoUD`; the `cascade`
+-- case `settledComplete_cascade2_targeted_d` (both rounds through
+-- `settledComplete_jobsLR_targeted_d` / `reconcileJobsLR_key_edge_sem_d` /
+-- `reconcileStarsKeyDR_edge_char_d`, guard fold-invariance via `evalE_computedOrDirect`).
+-- **`graph_correct_w3d2_d`** — the Direct-arm T2b: `check = sem` at every FULLY-DRAINED
+-- `ReachedByW3d2C` state on the widened fragment. Derived queries via the settled invariant +
+-- `checkFnR_eq_sem_settled_d_filt` + `probeDerived_eq_sem_settled`, star declaredness through
+-- `graphRec_star_declared_d`/`directArm_star_declared`; untainted queries via the filtered
+-- shadow + `graphRec_base_eq_bs_unt` + `sem_untaintedFilter`. ★ Attack-first: the 2026-07-20b
+-- kill state (`banned := direct[user]`, `approver := excl(direct[user], computed banned)`,
+-- ban+approve alice) was `#eval`-driven to its drained state BEFORE proving — the seed IS
+-- retracted, `check = false = sem` (order-reversed ops and a non-banned subject confirmed too).
+-- Standard axioms only:
+#print axioms reachedByW3d2C_settled_d
+#print axioms graph_correct_w3d2_d
+
 end Zanzibar
