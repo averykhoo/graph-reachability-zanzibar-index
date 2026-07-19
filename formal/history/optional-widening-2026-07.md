@@ -281,6 +281,19 @@ family), NOT the additive hypothesis-factored clone the design assumed. `reached
 (`reachedByW3d2_shadow_d` with `σ0 = T↾U` rebuild). Historical design note follows (SUPERSEDED by the KILL —
 kept for the machinery pointers it cites).
 
+**★ 2026-07-20 — filtered-σ0 SUBSTRATE draft ATTEMPTED, did NOT build (discarded, tree kept green).** A
+worktree Opus leg drafted 5 substrate helper lemmas in `CascadeStrataSettle.lean` for step 1's σ0 =
+`T↾U` rebuild — `restrictionMatches_bare` (a bare Direct-arm restriction only matches a bare-predicate
+subject), `exprDirects_subset_exprDirectsAll`, `directArmsBare_exprDirects` (every `exprDirects` arm is
+BARE under `DirectArmsBare`), `storeValidRulesD_of_storeValidRules_directArmsBare` (`StoreValidRules` +
+`DirectArmsBare` ⇒ `StoreValidRulesD`), and the key one **`reachedByRulesAdmitted_untStore_edge_untainted`**
+(σ0 over an untainted-only store has NO derived-target edges — the fact that makes `UntaintedShadow.sub`
+hold for the filtered σ0). The statements are the right substrate, but the draft had **type mismatches at
+`CascadeStrataSettle.lean:692` and `:696`** (application-arg mismatches — the proof route was flawed), so it
+was discarded rather than fixed under context pressure. NEXT SESSION: re-derive these 5 lemmas cleanly
+(they are small; the last is the load-bearing one), then proceed to `reachedByW3d2_shadow_d` step 1. Two
+`hNK` unused-variable-linter warnings in the draft are cosmetic.
+
 **★ WALL / DESIGN REFINEMENT (2026-07-19g, SUPERSEDED by leg 5d's KILL — the full-store σ0 it assumed is
 model-FALSE).** The read-bridge + coverage-discharge `_d` clones are
 DONE and are exactly the hypothesis-factored cores the design promised — they take the shadow (`h0 :

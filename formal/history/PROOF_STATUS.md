@@ -8,6 +8,31 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-20a (#1 leg 5d — W3c branch PUSHED (`cda9b2c`, full 3-phase gate green); filtered-σ0 SUBSTRATE draft attempted in a worktree, did NOT build, DISCARDED — tree kept green)
+
+Continuation of leg 5d. Committed + PUSHED the W3c branch from 2026-07-19h (`cda9b2c`:
+`reachedByW3c_master_d` / `w3c_row_char_d`, audit 448) after the full three-phase gate went green
+independently (`verify.sh lean` 448/448; conf-heavy 76; conf-rest 239, 0 skips — conf-rest ran 60 min
+this pass due to CPU contention with a parallel worktree cold-build, a lesson: don't overlap a
+fresh-worktree lake build with a conformance phase). Then attempted step 1's filtered-σ0 substrate
+(σ0 = `T↾U` rebuild) in an isolated worktree (Opus).
+
+- **Substrate draft (5 helper lemmas in `CascadeStrataSettle.lean`) DID NOT BUILD — discarded.** The
+  worktree agent stalled twice on orphaned background builds (never reached a green confirmation, ~268k
+  tokens); on takeover its diff (+95/−0, no `sorry`) was applied to the warm main tree and built: **type
+  mismatches at `CascadeStrataSettle.lean:692` and `:696`** (application-arg errors — the proof route was
+  flawed). Reverted to clean `cda9b2c`; worktree + branch removed. The lemma STATEMENTS are the right
+  substrate (`restrictionMatches_bare`, `exprDirects_subset_exprDirectsAll`, `directArmsBare_exprDirects`,
+  `storeValidRulesD_of_storeValidRules_directArmsBare`, and the load-bearing
+  `reachedByRulesAdmitted_untStore_edge_untainted` — σ0 over an untainted-only store has no derived-target
+  edges); recorded in `optional-widening-2026-07.md` Direct-arm RESUME for clean re-derivation next session.
+- **Net this session:** W3c branch landed + PUSHED (audit 448); the filtered-σ0 W3d2 chain remains OPEN
+  (genuine multi-session crux). No red/sorry left; master green at `cda9b2c` + docs.
+- **NEXT:** re-derive the 5 substrate lemmas cleanly, then `reachedByW3d2_shadow_d` (filtered σ0, step 1) →
+  the `T↾U`-σ0 bridge family → `reachedByW3d2C_settled_d` → `graph_correct_w3d2_d`, then sub-step 3
+  (fragment widening + `W4WitnessDirect` + conformance). Then TTU/userset half, #2 strata. Exact resume:
+  `optional-widening-2026-07.md` Direct-arm RESUME.
+
 ## Session 2026-07-19h (#1 Direct-arm leg 5d — the `_d` CHAIN: W3c branch LANDED, W3d2 shadow KILLED (naive) + re-scoped to a filtered-σ0 substrate; audit 446→448, verify.sh lean PASSED)
 
 Eleventh session of the optional arc. Goal: leg 5d = the `_d` CHAIN (`reachedByW3d2_shadow_d` /
