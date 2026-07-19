@@ -140,22 +140,40 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > construction) + additive `T↾U`-store variants of the leg-4/5c consumers composing with `sem_untaintedFilter`
 > (leg 4 lemma C). Full step plan: `history/optional-widening-2026-07.md` leg-5d section + RESUME.
 >
-> **THE NEXT TASK — #1 leg 5d cont.: the FILTERED-σ0 W3d2 chain, then sub-step 3.** (1) The W3d2 `_d`
-> clones remain OPEN, blocked on the σ0 mismatch (KILL above): re-prove `reachedByW3d2_shadow_d` with
-> **σ0 = `ReachedByRulesAdmitted σ0 S (T↾U)`** (WRITE case routes a Direct-arm derived-key write to σ only
-> as a `DerNode`-classified edge, σ0 unchanged; CASCADE case reuses `untaintedShadow_cascade2` since the
-> filtered σ0 has no seeds and `reachedByRulesAdmitted_edge_target_untainted` now HOLDS over `T↾U`), then
-> the `T↾U`-σ0 bridge family (`graphRec_base_eq_bs_d`/`checkFnR_eq_sem_settled_d`/… re-routed +
-> `sem_untaintedFilter`), then `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d`. Genuine multi-session
-> chain content (a NEW filtered-shadow substrate), NOT an additive clone. (2) **Sub-step 3 (gated on 1):**
-> widen `W4Fragment.computedOnly` →
-> `ComputedOrDirect ∧ DirectArmsBare`, re-prove `w4_within_scope`, witness `W4WitnessDirect`,
-> conformance corpus into `GRAPH_FRAGMENT` + pins (conf phases required). The durable plan + exact
-> resume state: `history/optional-widening-2026-07.md` Target #1 RESUME. After #1's Direct arm:
-> the TTU/userset half, #2 strata (>2). ⚠ OPERATIONAL: `verify.sh conf-rest` observed at 9–13 min
-> on 2026-07-19 (the new per-op zcli remove gate grew it; often OVER the 10-min tool cap) — run it
-> in background w/ 600s timeout and retry if cap-killed; consider splitting the phase (runbook
-> carries the timing note).
+> **★ 2026-07-20b — the FILTERED-σ0 chain LANDED (substrate + shadow_d + bridge, 4 pushed increments), then
+> the settledness/correctness clones ATTACK-KILLED on a REAL model gap.** LANDED+PUSHED: `49cec70` the 5
+> substrate helpers (incl. `reachedByRulesAdmitted_untStore_edge_untainted`) · `6fc42ce`
+> **`reachedByW3d2_shadow_d`** (the filtered σ0 = `ReachedByRulesAdmitted σ0 S (T↾U)` + `UntaintedShadow`;
+> write case splits untainted-fold vs derived-key-drop with a DerNode-classified seed edge; added `WF S` +
+> `BareStarStore T` DerNode carries; ★ NodupKeys attack-finding) · `011ac74` the **T↾U-σ0 bridge**
+> (`checkFnR_eq_sem_settled_d_filt` + `sem_untaintedFilter_co` + `w3d2_leg_context_d_filt`) · `0ec31d2` a
+> Direct-arm Python conformance corpus (`direct_arm_exclusion`, 3-backend, held out of GRAPH_FRAGMENT). All
+> `verify.sh lean` 448/448, additive, audited originals untouched. **★★ ATTACK-FIRST KILL (house rule 2):
+> `reachedByW3d2C_settled_d` AND `graph_correct_w3d2_d` are FALSE as specified** — Lean's `affectedKeys`
+> (`GraphIndex/Cascade.lean:433`) is READER-ONLY and LACKS Python's LeafFamily own-key branch
+> (`processor.py:991-1011`), so a Direct-arm seed write never dirties its own derived key ⇒ a drained
+> `ReachedByW3d2C` state with `check=true` but `sem=false` (structurally validated; the `Cascade.lean:428`
+> doc comment claims the branch, the code omits it — faithful only within the ComputedOnly scope). The
+> landed substrate/shadow_d/bridge are SOUND + reusable (conditional on settledness the bad state fails —
+> nothing to revert).
+>
+> **THE NEXT TASK — #1 Direct arm is BLOCKED on a Lean MODEL FIX (the KILL re-scopes it).** (1) **Extend
+> `affectedKeys`** (`Cascade.lean:433`) with the LeafFamily own-key branch — a delta node `v` with
+> `isDerived S (v.type, v.pred) = true` ALSO dirties `(v.type, v.pred, v.name)` (mirror
+> `processor.py:991-1011`; guard `v.name ≠ STAR`), and update `CORRESPONDENCE.md` for the model change.
+> (2) **Repair the downstream cascade stack** for the now-stricter `Drained`/coverage: `enumJobs`/`enumJobs2*`
+> must enumerate the new own-keys; `runCascade*_no_abort`/`cascade*_drains` re-earned; the settledness
+> transports re-derived. ⚠ Attack-first: this touches the closed W3d/W3d2 scheduler proofs — a wide ripple;
+> confirm the ComputedOnly scope is UNAFFECTED (no leaf-family delta ever lands on a derived key there, so
+> the new branch is dead ⇒ existing proofs should carry with the branch as a provably-empty addition).
+> (3) **THEN re-attempt `reachedByW3d2C_settled_d`** (now TRUE) **+ `graph_correct_w3d2_d`**, consuming the
+> already-landed `reachedByW3d2_shadow_d` + `checkFnR_eq_sem_settled_d_filt` bridges. (4) **Sub-step 3
+> (gated on 3):** widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare`, `w4_within_scope`,
+> witness `W4WitnessDirect`, move `direct_arm_exclusion` into `GRAPH_FRAGMENT` + a state pin (conf phases
+> required — but ONLY after the model fix, else the graph gate fails on interleaved-drain op orders). After
+> #1's Direct arm: the TTU/userset half, #2 strata (>2). Exact resume: `history/optional-widening-2026-07.md`
+> Direct-arm RESUME. ⚠ OPERATIONAL: `verify.sh conf-rest` observed 9–13 min (often over the 10-min cap) —
+> background w/ 600s timeout, retry if cap-killed; consider splitting the phase.
 
 > **Update 2026-07-18 — OPTIONAL assurance-widening arc OPENED (4 targets scoped;
 > `FINAL_REVIEW.md §4`).** All four remaining optional widenings were recon'd + (for #1)

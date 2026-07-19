@@ -122,6 +122,22 @@ independent corners.
 
 ## 7. Known intentional divergences (model ≠ code, by design)
 
+* **`affectedKeys` omits the LeafFamily own-key branch (scope-faithful gap; BLOCKS the
+  Direct-arm widening — found 2026-07-20b).** Lean's `affectedKeys` (`Cascade.lean:433`)
+  maps a delta only to keys that READ its predicate as a computed operand — the
+  `_fan_out via='computed'` / `DerivedFamily` branch (`processor.py:1026-1027`). Python
+  ALSO has a **LeafFamily own-key branch** (`processor.py:991-1011`): a delta landing on a
+  leaf-family row dirties `(o_type, fam.owner_relation, o_name)` — its OWN derived key.
+  This is FAITHFUL within the currently-proved scope (`W4Fragment.computedOnly`): there,
+  derived defs have no Direct/leaf-storage arms, so a leaf-family delta never lands on a
+  derived key and the missing branch is provably dead. But it is model-**FALSE** the moment
+  a derived def carries a Direct arm: an attack-first `#eval` (2026-07-20b) built a drained
+  `ReachedByW3d2C` state (`approver := excl(direct[user], computed banned)`, ban+approve
+  alice) where the seed edge survives ⇒ `check=true` but `sem=false`. So the Direct-arm
+  widening (`reachedByW3d2C_settled_d`/`graph_correct_w3d2_d`) is BLOCKED until `affectedKeys`
+  gains the own-key branch and the cascade coverage/no-abort/settledness stack is repaired.
+  (The Cascade.lean:428 doc comment already claims the LeafFamily branch — it is aspirational,
+  not yet realised.) Resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
 * **Scoped removes (decision 6 — resolved/scoped 2026-07-19).** The chain now
   carries a `remove` constructor on `ReachedByW3d2`/`C`/`E` (2026-07-19f), gated on
   removing a validly-stored tuple (`t ∈ T`) from a drained prior state

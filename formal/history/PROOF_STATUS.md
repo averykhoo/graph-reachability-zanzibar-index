@@ -8,6 +8,72 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-20b (#1 leg 5d — filtered-σ0 SUBSTRATE + `reachedByW3d2_shadow_d` + the T↾U-σ0 BRIDGE family LANDED+PUSHED; then `reachedByW3d2C_settled_d`/`graph_correct_w3d2_d` ATTACK-KILLED — a real MODEL gap: `affectedKeys` lacks Python's LeafFamily own-key branch)
+
+Orchestrated (Fable main + parallel where files were disjoint): sequential Fable proof agents on
+the σ0 chain (house rule 6 — no proof-parallelism), one Opus Python-corpus agent in parallel
+(disjoint files, no lake). FOUR green increments pushed, then a headline attack-first KILL.
+
+- **Substrate (`49cec70`) — the 5 helpers re-derived CLEAN** (the 2026-07-20a worktree draft's
+  `:692/:696` route discarded). `restrictionMatches_bare`, `exprDirects_subset_exprDirectsAll`,
+  `directArmsBare_exprDirects`, `storeValidRulesD_of_storeValidRules_directArmsBare`, and the
+  load-bearing **`reachedByRulesAdmitted_untStore_edge_untainted`** (σ0 over an untainted-only
+  store has NO derived-target edges WITHOUT `hCO` — the seed-tuple branch of
+  `reachedByRules_derived_no_inedge` is killed by "no derived-key tuples in the store" instead of
+  `ComputedOnly`; the rule-output branch never used `hco`). All additive, `verify.sh lean` 448/448.
+- **`reachedByW3d2_shadow_d` (`6fc42ce`) — the FILTERED-σ0 shadow (the crux the 5d KILL demanded).**
+  σ0 = `ReachedByRulesAdmitted σ0 S (T↾U)` (untainted-filter rebuild), while the real σ is over full
+  T. Write case splits on `isDerived (t.key)`: untainted t folds into σ0 as before; a derived-key t
+  is DROPPED by the filter (σ0 fixed) and its seed-only closure edge is DerNode-classified. New:
+  `rewriteClosure_derived_eq_seed_nk` (derived-key closure = `[seed]` under **NodupKeys alone** —
+  ★ attack-first: NodupKeys LOAD-BEARING, a duplicate-key schema leaks an untainted fanout),
+  `untaintedShadow_writeLeg_derived`, `_applyLoggedR_d`/`_reconcileJobsLR_d`/`_cascade2_d` (cascade
+  transport takes σ0 edge-target untaintedness DIRECTLY from the substrate — the flagged
+  `untaintedShadow_cascade2` hCO obstruction DISSOLVED), `untaintedShadow_removeLeg_d`. Added
+  hypotheses `WF S` + `BareStarStore T` (the DerNode caveat: `R ≠ BARE`, `on ≠ STAR`) — both
+  established fragment disciplines.
+- **The T↾U-σ0 BRIDGE (`011ac74`) — filtered-shadow read consumers.** `checkFnR_eq_sem_settled_d_filt`
+  (real σ over T, shadow σ0 over T↾U decoupled; untainted operand → base-eq at T↾U → `sem S T` via
+  `sem_untaintedFilter.symm`; derived operand residue read over σ unchanged), the store-arg
+  sub-lemma `sem_untaintedFilter_co` (★ attack NO-KILL), `checkFnR_star_declared_d_filt` +
+  `w3d2_leg_context_d_filt`. coveredFn store-irrelevance CONFIRMED as a proof. Additive; the audited
+  full-store `_d` originals (KILLED unsatisfiable pair) untouched.
+- **Direct-arm Python conformance corpus (`0ec31d2`, parallel Opus, Python-only).** `direct_arm_exclusion`
+  (`approver: [user] but not banned`; `banned: [user]` — a Direct STORAGE leaf under an exclusion) +
+  `test_conformance_direct_arm.py`: oracle == set engine == real graph index over the grid AND all 16
+  exhaustive ≤4-tuple attack stores, both SetOps (4 passed, ZERO divergence). Held OUT of
+  SCHEMAS/GRAPH_FRAGMENT (Direct leaf ⇒ outside `W4Fragment.computedOnly`).
+- **★★ ATTACK-FIRST KILL (house rule 2) — `reachedByW3d2C_settled_d` AND `graph_correct_w3d2_d` are
+  FALSE as specified; a REAL model↔Python gap.** Found BEFORE writing the settledness proof.
+  Schema `banned := direct[user]` (untainted) + `approver := excl(direct[user], computed banned)`
+  (derived, CD+DAB); ops `[(alice,banned,doc),(alice,approver,doc)]`. The Direct-arm seed write
+  materialises `subjNode(alice)→objNode(doc)approver` and emits its delta AT the approver R-node,
+  but Lean's **`affectedKeys` (`Cascade.lean:433`) is READER-ONLY** (`computedRefs`/`_fan_out
+  via='computed'` = the `DerivedFamily` branch) — it lacks Python's **LeafFamily own-key branch**
+  (`processor.py:991-1011`: a delta on a leaf-family row dirties `key = (o_type,
+  fam.owner_relation, o_name)`, its OWN derived key). So the seed's own key is never dirtied; the
+  drain is a no-op; the drained state (`cascadeKeys = []`, `ReachedByW3d2C`) has the edge present ⇒
+  **`check = true` but `sem = false`** (alice is banned). Every hypothesis of the specified clone
+  holds there → the three-disjunct settledness invariant FALSE, `graph_correct_w3d2_d` FALSE.
+  ★ Independently validated structurally by the orchestrator (read `Cascade.lean:433` +
+  `processor.py:991-1011` — the doc comment at `Cascade.lean:428` even CLAIMS the LeafFamily
+  branch, but the code omits it; faithful only within the ComputedOnly scope where no leaf-family
+  delta ever lands on a derived key). The landed substrate/shadow_d/bridge are SOUND and REUSABLE
+  (they're conditional on settledness, which the bad state simply fails to satisfy — nothing to
+  revert; they'll be consumed once the model is fixed).
+- **Gate:** every Lean commit `verify.sh lean` PASSED (448/448, sorries=0, standard axioms — audit
+  count UNCHANGED, no `Audit.lean` edits). `test_conformance_direct_arm.py` 4 passed. Tree GREEN.
+- **NEXT (re-scoped by the KILL): a Lean MODEL FIX gates the rest of #1's Direct arm.** (1) Extend
+  `affectedKeys` (`Cascade.lean:433`) with the LeafFamily own-key branch — a delta node `v` with
+  `isDerived S (v.type, v.pred) = true` ALSO dirties `(v.type, v.pred, v.name)` (cite
+  `processor.py:991-1011`; guard `v.name ≠ STAR`). (2) Repair the downstream cascade stack for the
+  now-stricter `Drained`/coverage: `enumJobs`/`enumJobs2*` must enumerate the new own-keys,
+  `runCascade*_no_abort`/`cascade*_drains` re-earned, the settledness transports re-derived. (3)
+  THEN re-attempt `reachedByW3d2C_settled_d` (now TRUE) + `graph_correct_w3d2_d` consuming the landed
+  shadow_d + `_filt` bridges. (4) Then sub-step 3 (W4Fragment widening + `W4WitnessDirect` +
+  conformance, conf phases). Update `CORRESPONDENCE.md` for the `affectedKeys` model change. Exact
+  resume: `optional-widening-2026-07.md` Direct-arm RESUME.
+
 ## Session 2026-07-20a (#1 leg 5d — W3c branch PUSHED (`cda9b2c`, full 3-phase gate green); filtered-σ0 SUBSTRATE draft attempted in a worktree, did NOT build, DISCARDED — tree kept green)
 
 Continuation of leg 5d. Committed + PUSHED the W3c branch from 2026-07-19h (`cda9b2c`:

@@ -275,11 +275,49 @@ This is genuine multi-session chain content (a NEW filtered-shadow substrate + a
 family), NOT the additive hypothesis-factored clone the design assumed. `reachedByW3c_master_d` +
 `w3c_row_char_d` are the tractable slice; they are DONE and independent of the shadow.
 
-### Direct-arm — RESUME (the W3d2 `_d` chain needs a FILTERED-σ0 shadow; then sub-step 3)
-**Next: the filtered-σ0 W3d2 chain (steps 1–3 above), then sub-step 3.** The W3c branch (`reachedByW3c_master_d`,
-`w3c_row_char_d`) is LANDED. The W3d2 branch is walled on the σ0 mismatch (KILL above); resume at step 1
-(`reachedByW3d2_shadow_d` with `σ0 = T↾U` rebuild). Historical design note follows (SUPERSEDED by the KILL —
-kept for the machinery pointers it cites).
+### Direct-arm — RESUME (BLOCKED on a Lean MODEL FIX — the settledness/correctness clones are model-FALSE)
+
+**★★ 2026-07-20b — the filtered-σ0 chain LANDED, then the settledness/correctness clones were ATTACK-KILLED
+on a real model↔Python gap. #1's Direct arm is now BLOCKED on a Lean MODEL FIX, not more proof.**
+- **LANDED + PUSHED (all additive, `verify.sh lean` 448/448, audited originals untouched):**
+  - `49cec70` — the 5 substrate helpers re-derived clean (`restrictionMatches_bare`,
+    `exprDirects_subset_exprDirectsAll`, `directArmsBare_exprDirects`,
+    `storeValidRulesD_of_storeValidRules_directArmsBare`, and the load-bearing
+    **`reachedByRulesAdmitted_untStore_edge_untainted`**). In `CascadeStrataSettle.lean` ~441-522.
+  - `6fc42ce` — **`reachedByW3d2_shadow_d`** (step 1 DONE): σ0 = `ReachedByRulesAdmitted σ0 S (T↾U)` +
+    `UntaintedShadow`, under `StoreValidRulesD`+`ComputedOrDirect`+`DirectArmsBare`+**`WF S`+`BareStarStore T`**
+    (the DerNode carries: `R ≠ BARE`, `on ≠ STAR`). Write case splits untainted-fold vs derived-key-drop;
+    helpers `rewriteClosure_derived_eq_seed_nk` (closure=[seed] under NodupKeys ALONE — ★ NodupKeys
+    load-bearing, duplicate-key schema leaks an untainted fanout), `untaintedShadow_writeLeg_derived`,
+    `_applyLoggedR_d`/`_reconcileJobsLR_d`/`_cascade2_d` (the `untaintedShadow_cascade2` hCO obstruction
+    DISSOLVED via the substrate), `untaintedShadow_removeLeg_d`. In `CascadeStrataSettle.lean` ~707-1310.
+  - `011ac74` — **the T↾U-σ0 bridge** (step 2 DONE): `checkFnR_eq_sem_settled_d_filt` (real σ over T, shadow
+    σ0 over T↾U decoupled; untainted operand → base-eq at T↾U → `sem S T` via `sem_untaintedFilter.symm`),
+    `sem_untaintedFilter_co`, `checkFnR_star_declared_d_filt`, `w3d2_leg_context_d_filt`.
+  - `0ec31d2` — Direct-arm Python conformance corpus `direct_arm_exclusion` (Python-only, 3-backend, held OUT
+    of GRAPH_FRAGMENT).
+- **★★ THE KILL (house rule 2) — `reachedByW3d2C_settled_d` AND `graph_correct_w3d2_d` are FALSE as specified.**
+  Found BEFORE proving. Lean's **`affectedKeys` (`Cascade.lean:433`) is READER-ONLY** (`computedRefs`/
+  `_fan_out via='computed'` = the `DerivedFamily` branch) and LACKS Python's **LeafFamily own-key branch**
+  (`processor.py:991-1011`: a delta on a leaf-family row dirties `key = (o_type, fam.owner_relation,
+  o_name)`, its OWN derived key). So a Direct-arm seed write (`approver := excl(direct[user], computed
+  banned)`, ban+approve alice) never dirties `approver`; the drained `ReachedByW3d2C` state keeps the seed
+  edge ⇒ `check=true` but `sem=false`. Every hypothesis of the specified clone holds there. Structurally
+  validated (the `Cascade.lean:428` doc comment CLAIMS the LeafFamily branch — the code omits it; faithful
+  only within the ComputedOnly scope, where no leaf-family delta lands on a derived key). The landed
+  shadow_d + bridge are SOUND (conditional on settledness the bad state fails; not consumed until the fix).
+- **RE-SCOPED NEXT (the model fix gates everything else):** (1) extend `affectedKeys` with the LeafFamily
+  own-key branch (delta node `v`, `isDerived S (v.type,v.pred)=true` ⇒ dirties `(v.type,v.pred,v.name)`;
+  guard `v.name ≠ STAR`); update `CORRESPONDENCE.md`. (2) repair the cascade coverage/enum/no-abort/
+  settledness stack for the stricter `Drained` (confirm the ComputedOnly scope is unaffected — the new
+  branch is provably empty there). (3) re-attempt `reachedByW3d2C_settled_d` (now TRUE) +
+  `graph_correct_w3d2_d` consuming the landed shadow_d/`_filt` bridges. (4) sub-step 3 (fragment widening
+  + `W4WitnessDirect` + move `direct_arm_exclusion` into GRAPH_FRAGMENT — ONLY after the fix).
+
+**[historical, pre-KILL] Next: the filtered-σ0 W3d2 chain (steps 1–3 above), then sub-step 3.** The W3c branch
+(`reachedByW3c_master_d`, `w3c_row_char_d`) is LANDED. Steps 1–2 (shadow_d + bridge) are now DONE (2026-07-20b);
+step 3 is the KILLED settledness clone — see the model-fix re-scope above. Historical design note follows (its
+step-1/2 machinery pointers are now REALISED by the landed lemmas).
 
 **★ 2026-07-20 — filtered-σ0 SUBSTRATE draft ATTEMPTED, did NOT build (discarded, tree kept green).** A
 worktree Opus leg drafted 5 substrate helper lemmas in `CascadeStrataSettle.lean` for step 1's σ0 =
