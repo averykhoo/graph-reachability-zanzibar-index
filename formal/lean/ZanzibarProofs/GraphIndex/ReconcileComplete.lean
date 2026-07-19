@@ -250,6 +250,64 @@ theorem checkFn_eq_sem {S : Schema} {T : Store} {σ : GraphState}
   exact checkFn_eq_sem_of_base hWF hTT hNK hR hSV hSF hCO hMatch hStrat h0 hlk hco hleafUnt
     (fun r' hr' => hred r' (hleafUnt r' hr')) hs hon
 
+/-! ## The leaf-widened `checkFn = sem` bridge (Direct-arm leg 5, sub-step 1)
+
+The `_d` variants of `checkFn_eq_sem_of_base` / `checkFn_eq_sem`: they admit a derived def
+carrying **bare `Direct` arms** (`ComputedOrDirect e ∧ DirectArmsBare e`) in place of the
+`ComputedOnly` restriction, routing the operand read through the widened base equation
+`graphRec_base_eq_d` (`StoreValidRulesD` store, the `hterm` bundle — no `hCO`) and the
+widened read bridge `checkFn_eq_semStep_cd`. The `.direct` arm rides for free: a bare arm
+reads the store alone at the fixed subject, independent of `rec`/query
+(`directLeaf_bare_indep`), so only the `computed` operand leaves need the base agreement —
+exactly what `graphRec_reduce_base_adm` + `graphRec_base_eq_d` supply. Concrete-subject
+scope (`hs : s.name ≠ STAR`); the star-subject/coverage half is sub-step 2. -/
+
+/-- **Widened `checkFn = sem` from an admitted base (Direct arm).** `checkFn_eq_sem_of_base`
+    over `StoreValidRulesD` + `ComputedOrDirect`/`DirectArmsBare`, via `checkFn_eq_semStep_cd`
+    and `graphRec_base_eq_d`. -/
+theorem checkFn_eq_sem_of_base_d {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T) (hSF : StarFreeStore T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hinert : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRec σ s dt on r' = GraphModel.graphRec σ0 s dt on r')
+    (hs : s.name ≠ STAR) (hon : on ≠ STAR) :
+    σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hDecl : StoreDeclared S T := storeDeclared_of_validRulesD hSV
+  have hag : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRec σ s dt on r'
+        = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r' := by
+    intro r' hr'
+    rw [hinert r' hr',
+        graphRec_base_eq_d hWF hTT hNK hR hSV hSF hMatch hterm h0 hs hon r' (hleafUnt r' hr')]
+    show sem S T ⟨s, r', ⟨dt, on⟩⟩ = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
+    exact semAux_qirrel S s T ⟨s, r', ⟨dt, on⟩⟩ ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
+  rw [checkFn_eq_semStep_cd (S := S) (σ := σ) (T := T) (q := ⟨s, R, ⟨dt, on⟩⟩) hlk hcd hba hag]
+  exact sem_fuel_stable S T ⟨s, R, ⟨dt, on⟩⟩ hStrat hDecl (fuelBound S T + 1) (Nat.le_succ _)
+
+/-- **Widened `checkFn = sem` on a W3a-admitted state (Direct arm).** `checkFn_eq_sem` over
+    `StoreValidRulesD` + `ComputedOrDirect`/`DirectArmsBare`; discharges `hinert` via
+    `graphRec_reduce_base_adm` and delegates to `checkFn_eq_sem_of_base_d`. -/
+theorem checkFn_eq_sem_d {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T) (hSF : StarFreeStore T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (h : ReachedByW3aAdmitted σ S T)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hs : s.name ≠ STAR) (hon : on ≠ STAR) :
+    σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  obtain ⟨σ0, h0, hred⟩ := graphRec_reduce_base_adm hSF hterm h (s := s) (dt := dt) (on := on)
+  exact checkFn_eq_sem_of_base_d hWF hTT hNK hR hSV hSF hMatch hStrat hterm h0 hlk hcd hba hleafUnt
+    (fun r' hr' => hred r' (hleafUnt r' hr')) hs hon
+
 /-! ## Derived-edge soundness — a materialised derived edge is `sem`-true
 
 The forward half of the derived-query correspondence: on a W3a-admitted state, a materialised

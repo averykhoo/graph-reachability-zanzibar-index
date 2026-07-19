@@ -1247,4 +1247,24 @@ namespace Zanzibar
 #print axioms graphRec_base_eq_d
 #print axioms graphRec_base_eq_bs_d
 
+-- #1 Leaf widening (Direct arm) leg 5 sub-step 1 — the leaf-widened READ bridge
+-- (GraphIndex/ReconcileCorrect.lean + ReconcileComplete.lean, 2026-07-19). The
+-- `ComputedOrDirect` + `DirectArmsBare` analogs of the `checkFn = sem` read
+-- spine, routing the operand read through `graphRec_base_eq_d`: on a derived key
+-- whose def is a boolean tree of `computed` refs and BARE `Direct` arms, the
+-- compiled `check_fn` coincides with one `sem` step (`checkFn_eq_semStep_cd`, via
+-- `evalE_computedOrDirect` — bare arms are `rec`/query-independent, so no extra
+-- agreement at the arm), and hence equals `sem` on a W3a-admitted state for a
+-- CONCRETE bare subject (`checkFn_eq_sem_of_base_d`/`checkFn_eq_sem_d`, over
+-- `StoreValidRulesD` + the `hterm` bundle). Scope: the read half only — the
+-- write-half derived-edge soundness/completeness (`graph_correct_w3a`) does NOT
+-- widen (attack-first: a stored bare Direct-arm seed on a BANNED subject leaves a
+-- reach-true edge in the raw reconcile state where `sem = false`; retraction only
+-- runs in the W3d diffing pass, so the widening must thread through the W3d2
+-- DRAINED state — see optional-widening-2026-07.md Target #1 RESUME). Standard
+-- axioms only:
+#print axioms checkFn_eq_semStep_cd
+#print axioms checkFn_eq_sem_of_base_d
+#print axioms checkFn_eq_sem_d
+
 end Zanzibar

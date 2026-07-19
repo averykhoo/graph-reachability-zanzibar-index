@@ -99,6 +99,52 @@ Attack-first ground truth (all backends agree; NO live Python divergence):
     which leg-4 applies at the sub-store `T↾U` where `hStoreUnt` is free. Zero call-site
     churn; axiom audit re-verified both audited originals.
 
+### Direct-arm — leg 5 PROGRESS (2026-07-19, this session — UNCOMMITTED; verify.sh lean PASSED, audit 434, sorries=0, standard axioms only)
+**Sub-step 1 read-bridge foundation LANDED (additive, green).** Three `_d`/`_cd`
+read-bridge lemmas, no fragment/conformance change (so lean-only gate):
+- `checkFn_eq_semStep_cd` (`ReconcileCorrect.lean`, after `evalE_computedOrDirect`) — the
+  `ComputedOrDirect ∧ DirectArmsBare` analog of `checkFn_eq_semStep`: `checkFn = semAux(f+1)`
+  at a derived key whose def is a boolean tree of `computed` refs + BARE `Direct` arms,
+  given operand agreement on `computedRefs e`. The `.direct` arm rides via
+  `evalE_computedOrDirect` (bare arm is `rec`/query-independent), so no arm-side agreement.
+- `checkFn_eq_sem_of_base_d` / `checkFn_eq_sem_d` (`ReconcileComplete.lean`, after
+  `checkFn_eq_sem`) — the `StoreValidRulesD` + `ComputedOrDirect`/`DirectArmsBare` analogs of
+  `checkFn_eq_sem_of_base`/`checkFn_eq_sem`, routing the operand read through
+  `graphRec_base_eq_d` (the leg-4 widened base eq) + `checkFn_eq_semStep_cd`. Concrete bare
+  subject scope (`hs : s.name ≠ STAR`).
+
+**★ ATTACK-FIRST KILL (house rule 2) — the W3a-level vertical slice `graph_correct_w3a_d`
+is FALSE.** Probed the natural "widen `graph_correct_w3a` under `StoreValidRulesD`" path
+before proving it. `#eval` (deleted): schema `approver := excl (direct [user]) (computed
+banned)`, `banned := direct [user]`; store `{(alice,approver,doc), (alice,banned,doc)}`
+(valid under `StoreValidRulesD` — a stored BARE Direct-arm tuple on the derived `approver`
+key). `sem(alice,approver,doc) = FALSE` (direct arm matches but alice is banned ⇒ excl =
+true ∧ ¬true). BUT the stored seed tuple materialises a base seed edge `subjNode(alice) →
+objNode(doc:doc,approver)` (leg-2 `reachedByW3a_*_d`), so the RAW W3a reconcile state has
+`reach(alice→approver:doc) = true` — the residue-empty derived read (`check_derived_
+ResidueEmpty`) returns `true ≠ sem`. Structural root: `graph_correct_w3a`'s soundness base
+case (`reachedByW3aAdmitted_derived_edge_sound`, `ReconcileComplete.lean:432`) uses
+`reachedByRules_derived_no_inedge` = "a derived key has NO base in-edge", which is FALSE
+under `StoreValidRulesD` (a stored Direct-arm tuple IS an in-edge). The W3a reconcile model
+runs NO diffing retraction; the excluded/banned stored seed persists. **So the read half
+widens cleanly (landed) but the WRITE half of the Direct-arm widening must thread through
+the W3d DIFFING pass** (`ReconcileDiff.lean` `reconcileKeyD` / leg-2's
+`reconcileKeyD_retracts_excluded`, which retracts the excluded seed), i.e. the widened
+correspondence lives at the W3d2 DRAINED state, NOT the W3a assembly. This refines sub-step
+2 below: it is not only the STAR/coverage split — the base derived-edge soundness itself
+requires the retraction, so there is no useful `graph_correct_w3a_d` milestone.
+
+**Remaining leg-5 work (sub-steps 1-cont/2/3 below):** the read-bridge `_d` lemmas are the
+reusable foundation for the W3d2 derived-read consumers; the W3a-assembly consumers
+(`ReconcileComplete.lean:700` `graph_correct_w3a` derived path) are a DEAD END (above), so
+skip them — thread `StoreValidRulesD` into the W3d2 diffing/settled consumers
+(`CascadeStrataSettle.lean:884`, `CascadeStrataResettle.lean:1540`, and the diffing edge
+char / retraction from leg 2) directly. The untainted-operand read consumers
+(`ReconcileComplete.lean:128`/`779`, `ReconcileStarsComplete.lean:1058`,
+`CascadeSettle.lean:1116`) can offer `_d` forms off `checkFn_eq_sem_of_base_d`/the base eqs
+without the write-half wall. Then sub-steps 2 (coveredFn star/concrete split) + 3 (widen
+`W4Fragment` + witness `W4WitnessDirect` + conformance) as below.
+
 ### Direct-arm — RESUME (leg 5 = consumer migration; leg 4 CLOSED above)
 The wall is down; what remains is threading the widened admission through the CHAIN and
 the fragment/witness/conformance surface. Sub-steps (from the leg-4 recon, order matters):

@@ -268,6 +268,27 @@ theorem evalE_computedOrDirect {rec1 rec2 : Rec} {sub : SubjectRef}
         ihb hcd.2 hba.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
   | ttu tr ts => intro hcd _ _; exact hcd.elim
 
+/-- **The widened `checkFn`-equals-`sem`-step read bridge (Direct-arm leg).** The
+    `ComputedOrDirect` + `DirectArmsBare` analog of `checkFn_eq_semStep`: on a derived key
+    `(dt, R)` whose def `e` is a boolean tree of `computed` refs and **bare** `Direct` arms,
+    the compiled `check_fn` (graph node-recursion) coincides with one `sem` step, provided the
+    graph and fuel reads agree on every `computed` operand. The `.direct` arm rides via
+    `evalE_computedOrDirect` (bare arms are `rec`/query-independent), so no extra agreement
+    at the arm is needed. This is the leaf-widened first spine the Direct-arm chain consumes
+    in place of `checkFn_eq_semStep`. -/
+theorem checkFn_eq_semStep_cd {S : Schema} {σ : GraphState} {T : Store} {q : Query}
+    {s : SubjectRef} {dt on R : String} {e : Expr} {f : Nat}
+    (hlk : S.lookup (dt, R) = some e) (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hag : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRec σ s dt on r' = semAux S s T q f dt on r') :
+    σ.checkFn T s dt on R e = semAux S s T q (f + 1) dt on R := by
+  have hrhs : semAux S s T q (f + 1) dt on R
+      = evalE (semAux S s T q f) s T q dt on R e := by
+    simp only [semAux, step, hlk]
+  rw [hrhs]
+  unfold GraphState.checkFn
+  exact evalE_computedOrDirect e hcd hba hag
+
 /-! ## The reconcile edge characterization — structural groundwork for the reach-collapse
 
 `reconcileKey` is a guarded `writeDirect` fold; every step either adds the single derived
