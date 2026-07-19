@@ -104,6 +104,125 @@ def GraphState.coveredFn (σ : GraphState) (T : Store) (dt on R : String) (e : E
     (sh : Shape) : Bool :=
   σ.checkFn T (starSubj sh) dt on R e
 
+/-! ## The Direct-arm star/concrete coverage split (leg 5 sub-step 2)
+
+`checkFn_eq_coveredFn_of_no_extra` (`CascadeEnum.lean`) says a star-free subject that
+triggers no concrete leaf-reach reads as its shape-star's coverage. That is FALSE once the
+def carries a bare `Direct` arm: a subject with its OWN concrete `[user]` grant reads the arm
+`true`, but its shape-star reads it `false` (attack-first `#eval` KILL 2026-07-19: schema
+`approver := excl (direct [user]) (computed banned)`, store `{(alice,approver,doc)}` — `checkFn
+alice = true ≠ coveredFn * = false`; `directLeaf` at `alice` fires the bare-concrete match
+disjunct that the star branch lacks). The FIX (probe-confirmed): gate the split on the subject
+having NO concrete Direct-arm grant (`NoConcDirect`) — under it the bare-concrete match disjunct
+is dead, so `directLeaf` at the subject reduces to the SAME `[user:*]`-coverage read as at the
+star (both fire iff a bare STAR grant of the shape exists). Concrete grants are exactly the
+subjects the coverage enumeration must additionally enumerate (sub-step 2's second half). -/
+
+/-- A grant tuple whose subject is a bare CONCRETE match for `s` (the `directLeaf`
+    bare-subject-branch disjunct that has no counterpart in the star branch). -/
+def concMatch (s : SubjectRef) (g : Tuple) : Bool :=
+  g.subject.name != STAR && g.subject.predicate == BARE
+    && g.subject.type == s.type && g.subject.name == s.name
+
+/-- **`NoConcDirect T s dt on rel e`** — subject `s` has no concrete grant on any `Direct`
+    arm of `e` (same object `(dt, on)` / enclosing relation `rel`). The faithful gate under
+    which the star/concrete coverage split holds: it kills exactly `directLeaf`'s
+    bare-concrete match disjunct, leaving the `[user:*]`-coverage read shared with the star. -/
+def NoConcDirect (T : Store) (s : SubjectRef) (dt on rel : String) : Expr → Prop
+  | .computed _ => True
+  | .direct rs => (grantsOf T rs dt on rel).any (concMatch s) = false
+  | .union a b => NoConcDirect T s dt on rel a ∧ NoConcDirect T s dt on rel b
+  | .inter a b => NoConcDirect T s dt on rel a ∧ NoConcDirect T s dt on rel b
+  | .excl a b => NoConcDirect T s dt on rel a ∧ NoConcDirect T s dt on rel b
+  | .ttu _ _ => True
+
+/-- `List.any` congruence on members (order/multiplicity blind), local to this module. -/
+theorem any_congr_mem {α : Type _} (l : List α) (f g : α → Bool)
+    (h : ∀ x ∈ l, f x = g x) : l.any f = l.any g := by
+  induction l with
+  | nil => rfl
+  | cons a t ih =>
+    simp only [List.any_cons]
+    rw [h a (List.mem_cons_self ..), ih (fun x hx => h x (List.mem_cons_of_mem a hx))]
+
+/-- **The bare `Direct` leaf reads the same at a no-concrete-grant subject and its star.**
+    For a bare-concrete `s` with no concrete grant (`hnc`) on a leaf whose restrictions are
+    all bare (`hb`), `directLeaf` at `s` equals `directLeaf` at `starSubj s.shape`: both reduce
+    to the shape's bare-STAR coverage read (`memberOfGranted` dead on bare grants; the
+    concrete-match disjunct dead by `hnc`). Any `rec`/query on either side (bare-arm
+    independence). -/
+theorem directLeaf_star_of_noConc {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query}
+    {s : SubjectRef} {rs : List Restriction} {ot on rel : String}
+    (hb : ∀ r ∈ rs, r.2.1 = BARE) (hsn : s.name ≠ STAR) (hsp : s.predicate = BARE)
+    (hnc : (grantsOf T rs ot on rel).any (concMatch s) = false) :
+    directLeaf rec1 s T q1 rs ot on rel
+      = directLeaf rec2 (starSubj s.shape) T q2 rs ot on rel := by
+  have hbareG : ∀ g ∈ grantsOf T rs ot on rel, g.subject.predicate = BARE :=
+    grantsOf_bare_subjects T rs ot on rel hb
+  have hmog : ∀ (rec : Rec) (q : Query),
+      memberOfGranted rec T q (grantsOf T rs ot on rel) = false :=
+    fun rec q => memberOfGranted_of_bareGrants rec T q _ hbareG
+  unfold directLeaf
+  have hsn' : (s.name == STAR) = false := beq_eq_false_iff_ne.mpr hsn
+  have hstar : (starSubj s.shape).name == STAR := by
+    show (STAR == STAR) = true; simp
+  simp only [hsn', hsp, if_false, beq_self_eq_true, if_true, hstar, hmog, Bool.or_false,
+    starSubj, SubjectRef.shape]
+  -- LHS: any (concMatch ∨ starBare); RHS: any (starBare'); concMatch-any is false (hnc)
+  rw [any_congr_mem _ _ (fun g =>
+        (g.subject.name == STAR && g.subject.type == s.type && g.subject.predicate == BARE))]
+  · -- from hnc + reordering: any(A ∨ B) = any B
+    have : (grantsOf T rs ot on rel).any (fun g =>
+        (g.subject.name != STAR && g.subject.predicate == BARE
+          && g.subject.type == s.type && g.subject.name == s.name)
+        || (g.subject.name == STAR && g.subject.predicate == BARE && g.subject.type == s.type))
+      = (grantsOf T rs ot on rel).any (fun g =>
+          g.subject.name == STAR && g.subject.type == s.type && g.subject.predicate == BARE) := by
+      apply any_congr_mem
+      intro g hg
+      have hAg : concMatch s g = false := by
+        have := List.any_eq_false.mp hnc g hg; simpa [concMatch] using this
+      simp only [concMatch] at hAg
+      -- A g = false; reorder B
+      cases hb1 : (g.subject.name == STAR) <;>
+        cases hb2 : (g.subject.type == s.type) <;>
+        cases hb3 : (g.subject.predicate == BARE) <;>
+        cases hb4 : (g.subject.name == s.name) <;>
+        simp_all [Bool.and_eq_true, Bool.or_eq_true]
+    exact this
+  · intro g _; rfl
+
+/-- **The star/concrete `evalE` split over a `ComputedOrDirect` tree.** Given a bare-concrete
+    subject `s` with no concrete Direct-arm grant (`NoConcDirect`) and computed-leaf `rec`
+    agreement between `s` and its star, `evalE` at `s` equals `evalE` at `starSubj s.shape`:
+    computed leaves ride the `rec` agreement, bare `Direct` arms ride
+    `directLeaf_star_of_noConc`. The `_cd` analog of the subject-varying `evalE_computedOnly`. -/
+theorem evalE_star_of_noConc {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query} {s : SubjectRef}
+    {dt on rel : String} (hsn : s.name ≠ STAR) (hsp : s.predicate = BARE) :
+    ∀ e : Expr, ComputedOrDirect e → DirectArmsBare e → NoConcDirect T s dt on rel e →
+      (∀ r' ∈ computedRefs e, rec1 dt on r' = rec2 dt on r') →
+      evalE rec1 s T q1 dt on rel e = evalE rec2 (starSubj s.shape) T q2 dt on rel e := by
+  intro e
+  induction e with
+  | computed r' =>
+    intro _ _ _ hag; simp only [evalE]; exact hag r' (List.mem_singleton.mpr rfl)
+  | direct rs =>
+    intro _ hb hnc _; simp only [evalE]
+    exact directLeaf_star_of_noConc hb hsn hsp hnc
+  | union a b iha ihb =>
+    intro hcd hba hnc hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 hnc.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 hnc.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | inter a b iha ihb =>
+    intro hcd hba hnc hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 hnc.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 hnc.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | excl a b iha ihb =>
+    intro hcd hba hnc hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 hnc.1 (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 hnc.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | ttu tr ts => intro hcd _ _ _; exact hcd.elim
+
 /-- **The wholesale residue recompute** for one derived key (`reconcile` steps 1–3,
     `processor.py:388-446`): `stars` = the covered shapes; `neg` = the candidate
     subjects that are star-covered ∧ expr-false (`:406-411`); `upos` = the userset
@@ -481,6 +600,10 @@ theorem checkFn_agree_of_graphRec {σ σ0 : GraphState} {S : Schema} (T : Store)
     σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e := by
   unfold GraphState.checkFn
   exact evalE_computedOnly e hco (fun r' hr' => hag s r' (hleafUnt r' hr'))
+
+-- NOTE: the `_cd` cross-state agreement `checkFn_agree_of_graphRec_cd` (the widened
+-- form of `checkFn_agree_of_graphRec`, the ReconcileStars:483-cited site) ALREADY
+-- landed in leg 2 (`ReconcileDiff.lean`, via `evalE_computedOrDirect`); no duplicate here.
 
 /-! ## The master provenance — canonical stars, covered `neg`, uncovered edges
 

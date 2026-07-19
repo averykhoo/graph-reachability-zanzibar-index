@@ -79,6 +79,32 @@ theorem checkFn_eq_coveredFn_of_no_extra {σ : GraphState} {T : Store} {s : Subj
   obtain ⟨h1, h3⟩ := hno r' hr'
   rw [h1, h3, Bool.or_false, Bool.or_false]
 
+/-- **The Direct-arm star/concrete split (`checkFn_eq_coveredFn_of_no_extra_cd`).** The
+    `ComputedOrDirect` + `DirectArmsBare` analog of `checkFn_eq_coveredFn_of_no_extra`, gated on
+    the attack-first-mandated `NoConcDirect` (subject `s` bare-concrete with NO concrete
+    Direct-arm grant): computed leaves collapse onto the shape-star (`probeNonDerived_concrete_
+    decomp` + `hno`), bare `Direct` arms read the same at `s` and its star
+    (`directLeaf_star_of_noConc`), so `evalE` transports the whole tree
+    (`evalE_star_of_noConc`). Without `NoConcDirect` this is FALSE (a subject with its own
+    concrete `[user]` grant reads `true` where its shape-star reads `false` — the attack KILL);
+    such subjects are exactly the ones the coverage enumeration must enumerate explicitly. -/
+theorem checkFn_eq_coveredFn_of_no_extra_cd {σ : GraphState} {T : Store} {s : SubjectRef}
+    {dt on R : String} {e : Expr} (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hsn : s.name ≠ STAR) (hsp : s.predicate = BARE) (hon : on ≠ STAR)
+    (hnc : NoConcDirect T s dt on R e)
+    (hno : ∀ r' ∈ computedRefs e,
+      σ.reach (subjNode s) (objNode ⟨dt, on⟩ r') = false ∧
+      σ.reach (subjNode s) (wAllNode dt r') = false) :
+    σ.checkFn T s dt on R e = σ.coveredFn T dt on R e s.shape := by
+  unfold GraphState.coveredFn GraphState.checkFn
+  refine evalE_star_of_noConc hsn hsp e hcd hba hnc ?_
+  intro r' hr'
+  show GraphModel.graphRec σ s dt on r' = GraphModel.graphRec σ (starSubj s.shape) dt on r'
+  unfold GraphModel.graphRec
+  rw [probeNonDerived_concrete_decomp σ s dt on r' hsn hon]
+  obtain ⟨h1, h3⟩ := hno r' hr'
+  rw [h1, h3, Bool.or_false, Bool.or_false]
+
 /-! ## The state-derived leaf enumeration `leafConcretes`
 
 `processor.py:394-441` (`_leaf_concretes`): the pass enumerates the store-supported

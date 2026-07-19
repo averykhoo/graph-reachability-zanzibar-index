@@ -1267,4 +1267,40 @@ namespace Zanzibar
 #print axioms checkFn_eq_sem_of_base_d
 #print axioms checkFn_eq_sem_d
 
+-- #1 Leaf widening (Direct arm) leg 5 sub-step 1 cont. — the STAR-RELAXED + ROUTED
+-- read spine (GraphIndex/ReconcileComplete.lean + CascadeStrataSettle.lean,
+-- 2026-07-19). The `_bs_d` variants (`checkFn_eq_sem_of_base_bs_d`/`checkFn_eq_sem_bs_d`)
+-- are the `BareStarStore`+`TtuStarFree` star-relaxed analogs of the concrete-subject
+-- `_d` bridges, routing the untainted operand read through `graphRec_base_eq_bs_d`
+-- (leg 4) + `checkFn_eq_semStep_cd`; the W3c/W3d star-relaxed read-half consumers of
+-- `graphRec_base_eq_bs`/`checkFn_eq_sem_bs` migrate onto these under `StoreValidRulesD`.
+-- `checkFnR_eq_semStep_cd` is the ROUTED (`graphRecR`) `cd` step bridge (via
+-- `evalE_computedOrDirect`), the foundation for the W3d2 settled read bridge. Read half
+-- only — same write-half wall as leg 5a (retraction lives in the W3d diffing pass).
+-- Standard axioms only:
+#print axioms checkFn_eq_sem_of_base_bs_d
+#print axioms checkFn_eq_sem_bs_d
+#print axioms checkFnR_eq_semStep_cd
+
+-- #1 Leaf widening (Direct arm) leg 5 sub-step 2 — the coveredFn star/concrete SPLIT
+-- (GraphIndex/ReconcileStars.lean + CascadeEnum.lean + CascadeStrataEnum.lean,
+-- 2026-07-19). ATTACK-FIRST (`#eval` KILL, house rule 2): the naive widening of
+-- `checkFn_eq_coveredFn_of_no_extra` under `ComputedOrDirect`/`DirectArmsBare` is
+-- FALSE — a bare subject with its OWN concrete `[user]` grant reads the `Direct` arm
+-- `true` where its shape-star reads `false` (schema `approver := excl (direct [user])
+-- banned`, store `{(alice,approver,doc)}`: `checkFn alice = true ≠ coveredFn * =
+-- false`). The FIX (probe-confirmed both ways): gate the split on `NoConcDirect` —
+-- the subject has NO concrete Direct-arm grant — under which `directLeaf` at the
+-- subject reduces to the SAME `[user:*]`-coverage read as at the star
+-- (`directLeaf_star_of_noConc`), so `evalE_star_of_noConc` transports the tree.
+-- `checkFn_eq_coveredFn_of_no_extra_cd` (unrouted, `CascadeEnum`) +
+-- `checkFnR_eq_star_of_not_enum_cd` (routed, `CascadeStrataEnum`) are the split at the
+-- W3d-1/W3d-2 coverage sites; the concrete-grant subjects are exactly those the
+-- coverage enumeration must enumerate explicitly (sub-step 2's second half, not landed
+-- this leg). Standard axioms only:
+#print axioms directLeaf_star_of_noConc
+#print axioms evalE_star_of_noConc
+#print axioms checkFn_eq_coveredFn_of_no_extra_cd
+#print axioms checkFnR_eq_star_of_not_enum_cd
+
 end Zanzibar

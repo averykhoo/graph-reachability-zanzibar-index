@@ -185,6 +185,27 @@ theorem checkFnR_eq_star_of_not_enum {σ : GraphState} {T : Store}
   exact evalE_computedOnly e hco (fun r' hr' =>
     graphRecR_leaf_agree hcl hsn hon hr' hnl (hnm r' hr'))
 
+/-- **The routed Direct-arm star/concrete split (`checkFnR_eq_star_of_not_enum_cd`).** The
+    `ComputedOrDirect` + `DirectArmsBare` analog of `checkFnR_eq_star_of_not_enum`, gated on the
+    attack-mandated `NoConcDirect` (`ReconcileStars.lean`): computed leaves ride
+    `graphRecR_leaf_agree` (unchanged), bare `Direct` arms ride `directLeaf_star_of_noConc`, so
+    `evalE_star_of_noConc` transports the routed read. The routed foundation the W3d-2 coverage
+    clauses contrapose against for a Direct-arm operand (the concrete-grant subjects are
+    enumerated separately, sub-step 2's second half). -/
+theorem checkFnR_eq_star_of_not_enum_cd {σ : GraphState} {T : Store}
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) (hsp : s.predicate = BARE) (hon : on ≠ STAR)
+    (hnc : NoConcDirect T s dt on R e)
+    (hnl : s ∉ leafConcretes σ dt on e)
+    (hnm : ∀ r' ∈ computedRefs e, isDerived σ.schema (dt, r') = true →
+      s ∉ residueNamed σ dt on r') :
+    σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e := by
+  unfold GraphState.checkFnR
+  exact evalE_star_of_noConc hsn hsp e hcd hba hnc (fun r' hr' =>
+    graphRecR_leaf_agree hcl hsn hon hr' hnl (hnm r' hr'))
+
 /-! ## The W3d-2 enumerated job and its coverage
 
 `enumJob2` folds the residue-named candidates into W3d-1's `enumJob`: the per-key base

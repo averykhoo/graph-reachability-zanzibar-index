@@ -834,6 +834,26 @@ theorem checkFnR_eq_semStep {S : Schema} {σ : GraphState} {T : Store} {q : Quer
   unfold GraphState.checkFnR
   exact evalE_computedOnly e hco hag
 
+/-- **The routed `cd` step bridge (Direct-arm leg 5, sub-step 1 cont.)** — the
+    `ComputedOrDirect` + `DirectArmsBare` analog of `checkFnR_eq_semStep`, via
+    `evalE_computedOrDirect`: on a derived key whose def is a boolean tree of `computed`
+    refs and BARE `Direct` arms, the routed compiled guard coincides with one `sem` step
+    given operand agreement on the `computed` leaves (the `.direct` arm rides for free,
+    `directLeaf_bare_indep`). The routed foundation the W3d2 settled read bridge migrates
+    onto under `StoreValidRulesD`. -/
+theorem checkFnR_eq_semStep_cd {S : Schema} {σ : GraphState} {T : Store} {q : Query}
+    {s : SubjectRef} {dt on R : String} {e : Expr} {f : Nat}
+    (hlk : S.lookup (dt, R) = some e) (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hag : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRecR σ s dt on r' = semAux S s T q f dt on r') :
+    σ.checkFnR T s dt on R e = semAux S s T q (f + 1) dt on R := by
+  have hrhs : semAux S s T q (f + 1) dt on R
+      = evalE (semAux S s T q f) s T q dt on R e := by
+    simp only [semAux, step, hlk]
+  rw [hrhs]
+  unfold GraphState.checkFnR
+  exact evalE_computedOrDirect e hcd hba hag
+
 /-- `checkFnR` ignores its store argument on `ComputedOnly` defs (the routed
     node-recursion reads only the graph state; the store feeds dead leaves). -/
 theorem checkFnR_store_irrel {σ : GraphState} (T1 T2 : Store) (s : SubjectRef)
