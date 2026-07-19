@@ -157,23 +157,32 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > landed substrate/shadow_d/bridge are SOUND + reusable (conditional on settledness the bad state fails —
 > nothing to revert).
 >
-> **THE NEXT TASK — #1 Direct arm is BLOCKED on a Lean MODEL FIX (the KILL re-scopes it).** (1) **Extend
-> `affectedKeys`** (`Cascade.lean:433`) with the LeafFamily own-key branch — a delta node `v` with
-> `isDerived S (v.type, v.pred) = true` ALSO dirties `(v.type, v.pred, v.name)` (mirror
-> `processor.py:991-1011`; guard `v.name ≠ STAR`), and update `CORRESPONDENCE.md` for the model change.
-> (2) **Repair the downstream cascade stack** for the now-stricter `Drained`/coverage: `enumJobs`/`enumJobs2*`
-> must enumerate the new own-keys; `runCascade*_no_abort`/`cascade*_drains` re-earned; the settledness
-> transports re-derived. ⚠ Attack-first: this touches the closed W3d/W3d2 scheduler proofs — a wide ripple;
-> confirm the ComputedOnly scope is UNAFFECTED (no leaf-family delta ever lands on a derived key there, so
-> the new branch is dead ⇒ existing proofs should carry with the branch as a provably-empty addition).
-> (3) **THEN re-attempt `reachedByW3d2C_settled_d`** (now TRUE) **+ `graph_correct_w3d2_d`**, consuming the
-> already-landed `reachedByW3d2_shadow_d` + `checkFnR_eq_sem_settled_d_filt` bridges. (4) **Sub-step 3
-> (gated on 3):** widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare`, `w4_within_scope`,
-> witness `W4WitnessDirect`, move `direct_arm_exclusion` into `GRAPH_FRAGMENT` + a state pin (conf phases
-> required — but ONLY after the model fix, else the graph gate fails on interleaved-drain op orders). After
-> #1's Direct arm: the TTU/userset half, #2 strata (>2). Exact resume: `history/optional-widening-2026-07.md`
-> Direct-arm RESUME. ⚠ OPERATIONAL: `verify.sh conf-rest` observed 9–13 min (often over the 10-min cap) —
-> background w/ 600s timeout, retry if cap-killed; consider splitting the phase.
+> **★ 2026-07-20c — THE MODEL FIX LANDED (step 1 DONE); the naive fix was ATTACK-KILLED first.** `affectedKeys`
+> now carries the LeafFamily own-key branch via a **`Delta.leaf : Bool`** provenance tag (the faithful
+> discriminator — the collapsed model lands both a raw Direct-arm seed write and a reconcile emission at the
+> SAME `objNode ⟨o⟩ R`, so the branch can't key on `isDerived` alone). ★ House-rule-2: the handoff's PROPOSED
+> naive branch (`isDerived ⇒ dirty own key`, any delta) was REFUTED — it re-dirties reconcile emissions'
+> own keys (Python's `_fan_out` never does), breaking quiescence (`runCascade_no_abort` FAILS empirically).
+> `writeLoggedOne`/`removeLoggedOne` push `leaf=true`; reconcile emissions `false`; the own-key branch is
+> provably `[]` for `leaf=false` + untainted `leaf=true`, so the ComputedOnly scope is behaviorally identical
+> (audited statements + meanings UNCHANGED). Cascade/fence stack repaired (`d.leaf=false` threaded through
+> `reconcileJobsL(R)_outbox_sound` → the no-abort/fence proofs). `verify.sh lean` 448/448 + `conf-heavy` green;
+> `CORRESPONDENCE.md` §5/§7 updated (divergence RESOLVED). See `history/PROOF_STATUS.md` 2026-07-20c.
+>
+> **THE NEXT TASK — #1 Direct arm is now UNBLOCKED (task steps 2-4 remain; genuine chain-level proof).**
+> (2/3) **Re-attempt `reachedByW3d2C_settled_d`** (now TRUE) **+ `graph_correct_w3d2_d`**, consuming the
+> landed `reachedByW3d2_shadow_d` (`CascadeStrataSettle.lean:1173`) + `checkFnR_eq_sem_settled_d_filt` (`:1750`)
+> + `w3d2_leg_context_d_filt` (`CascadeStrataEnum.lean:796`). This is the design-flagged genuine effort:
+> `_d`/filtered-σ0 clones of the settledness-transport family (`writeLeg_sem_stable2` / `settledKey_*` /
+> `settledComplete_cascade2_targeted` and the `reachedByW3d2C_settled` induction, `CascadeStrataResettle.lean:1162`)
+> under `StoreValidRulesD` + `ComputedOrDirect ∧ DirectArmsBare`. The KILL state now DRAINS: the Direct-arm
+> seed write's `leaf=true` delta dirties `approver`, the diffing pass (`reconcileKeyD_retracts_excluded`)
+> retracts the excluded seed. (4) **Sub-step 3 (gated on 2/3):** widen `W4Fragment.computedOnly` →
+> `ComputedOrDirect ∧ DirectArmsBare`, `w4_within_scope`, witness `W4WitnessDirect`, move
+> `direct_arm_exclusion` into `GRAPH_FRAGMENT` + a state pin (conf phases required). After #1's Direct arm:
+> the TTU/userset half, #2 strata (>2). Exact resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
+> ⚠ OPERATIONAL: `verify.sh conf-rest` observed 9–13 min (often over the 10-min cap) — background w/ 600s
+> timeout, retry if cap-killed; consider splitting the phase.
 
 > **Update 2026-07-18 — OPTIONAL assurance-widening arc OPENED (4 targets scoped;
 > `FINAL_REVIEW.md §4`).** All four remaining optional widenings were recon'd + (for #1)

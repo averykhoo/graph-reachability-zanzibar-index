@@ -135,7 +135,7 @@ theorem writeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) :
       rcases List.mem_cons.mp hab' with heq | hmem
       · -- the fresh edge: its row is the pushed head
         refine Or.inr ⟨⟨(σc.writeDirect u).nextDeltaId, objNode u.object u.relation,
-          u.relation⟩, List.mem_cons_self, ?_, ?_⟩
+          u.relation, true⟩, List.mem_cons_self, ?_, ?_⟩
         · show σ.watermark < (σc.writeDirect u).nextDeltaId
           have h1 : (σc.writeDirect u).nextDeltaId
               = max (σc.writeDirect u).maxOutboxId (σc.writeDirect u).watermark + 1 := rfl
@@ -143,7 +143,7 @@ theorem writeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) :
             writeDirect_watermark σc u
           omega
         · show (⟨(σc.writeDirect u).nextDeltaId, objNode u.object u.relation,
-            u.relation⟩ : Delta).node = ab'.2
+            u.relation, true⟩ : Delta).node = ab'.2
           rw [heq]
       · rcases h ab' hmem with hold | ⟨d, hd, hgt, hnode⟩
         · exact Or.inl hold
@@ -303,7 +303,7 @@ theorem mem_affectedKeys {S : Schema} {σ' : GraphState} {d : Delta}
   have hname : (objNode ⟨dt, on⟩ r').name = on := by
     rw [objNode_plain hon]
   unfold affectedKeys
-  refine List.mem_flatMap.mpr ⟨objNode ⟨dt, on⟩ r', hobj, ?_⟩
+  refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨objNode ⟨dt, on⟩ r', hobj, ?_⟩)
   rw [if_neg (by rw [hname]; exact hon)]
   refine List.mem_filterMap.mpr ⟨(dt, R), ?_, ?_⟩
   · exact List.mem_map.mpr ⟨((dt, R), e), mem_defs_of_lookup hlk, rfl⟩
@@ -487,8 +487,11 @@ theorem cascadeKeys_writeLeg_mono {σ : GraphState} {S : Schema} {t : Tuple}
     rw [writeLoggedRules_watermark]
     exact hdgt
   · unfold affectedKeys at hkd ⊢
-    obtain ⟨v, hv, hkv⟩ := List.mem_flatMap.mp hkd
-    exact List.mem_flatMap.mpr ⟨v, affectedObjects_writeLeg_mono hclσ' d v hv, hkv⟩
+    rcases List.mem_append.mp hkd with hown | hfan
+    · exact List.mem_append_left _ hown
+    · obtain ⟨v, hv, hkv⟩ := List.mem_flatMap.mp hfan
+      exact List.mem_append_right _
+        (List.mem_flatMap.mpr ⟨v, affectedObjects_writeLeg_mono hclσ' d v hv, hkv⟩)
 
 /-! ## The untainted-core shadow — the W3d read bridge
 
@@ -1328,7 +1331,7 @@ theorem removeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) 
     · by_cases hp : (subjNode u.subject, objNode u.object u.relation) ∈ σc.edges
       · have hσ1 : σc.removeLoggedOne u
             = (σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).pushDelta
-                (objNode u.object u.relation) u.relation := by
+                (objNode u.object u.relation) u.relation true := by
           unfold GraphState.removeLoggedOne; rw [if_pos hp]
         rw [hσ1, pushDelta_edges, removeEdgeOne_edges] at hin1
         have hpeq : ab = (subjNode u.subject, objNode u.object u.relation) := by
@@ -1336,7 +1339,7 @@ theorem removeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) 
           exact hin1 ((List.mem_erase_of_ne hne).mpr hin)
         subst hpeq
         refine ⟨⟨(σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).nextDeltaId,
-            objNode u.object u.relation, u.relation⟩, ?_, ?_, rfl⟩
+            objNode u.object u.relation, u.relation, true⟩, ?_, ?_, rfl⟩
         · refine foldl_removeLoggedOne_outbox_mono rest _ _ ?_
           rw [hσ1, pushDelta_outbox]
           exact List.mem_cons_self

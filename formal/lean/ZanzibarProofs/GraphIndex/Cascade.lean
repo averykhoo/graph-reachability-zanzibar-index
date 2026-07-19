@@ -118,27 +118,32 @@ def GraphState.nextDeltaId (σ : GraphState) : Nat :=
   max σ.maxOutboxId σ.watermark + 1
 
 /-- Append one delta row (`core.py:_emit` — a row inserted inside the writing
-    transaction; the autoincrement id is the cursor). -/
-def GraphState.pushDelta (σ : GraphState) (k : NodeKey) (r : String) : GraphState :=
-  { σ with outbox := ⟨σ.nextDeltaId, k, r⟩ :: σ.outbox }
+    transaction; the autoincrement id is the cursor). `leaf` records the row's
+    provenance (Python LeafFamily vs DerivedFamily, see `Delta`): reconcile emissions
+    default to `false`; raw leaf-routed writes/removes pass `true`. Only `affectedKeys`
+    reads it, so every other observation is `leaf`-agnostic (the simp lemmas quantify
+    over it). -/
+def GraphState.pushDelta (σ : GraphState) (k : NodeKey) (r : String)
+    (leaf : Bool := false) : GraphState :=
+  { σ with outbox := ⟨σ.nextDeltaId, k, r, leaf⟩ :: σ.outbox }
 
-@[simp] theorem pushDelta_schema (σ : GraphState) (k : NodeKey) (r : String) :
-    (σ.pushDelta k r).schema = σ.schema := rfl
-@[simp] theorem pushDelta_edges (σ : GraphState) (k : NodeKey) (r : String) :
-    (σ.pushDelta k r).edges = σ.edges := rfl
-@[simp] theorem pushDelta_nodes (σ : GraphState) (k : NodeKey) (r : String) :
-    (σ.pushDelta k r).nodes = σ.nodes := rfl
-@[simp] theorem pushDelta_residue (σ : GraphState) (k : NodeKey) (r : String) :
-    (σ.pushDelta k r).residue = σ.residue := rfl
-@[simp] theorem pushDelta_watermark (σ : GraphState) (k : NodeKey) (r : String) :
-    (σ.pushDelta k r).watermark = σ.watermark := rfl
-@[simp] theorem pushDelta_outbox (σ : GraphState) (k : NodeKey) (r : String) :
-    (σ.pushDelta k r).outbox = ⟨σ.nextDeltaId, k, r⟩ :: σ.outbox := rfl
+@[simp] theorem pushDelta_schema (σ : GraphState) (k : NodeKey) (r : String) (b : Bool) :
+    (σ.pushDelta k r b).schema = σ.schema := rfl
+@[simp] theorem pushDelta_edges (σ : GraphState) (k : NodeKey) (r : String) (b : Bool) :
+    (σ.pushDelta k r b).edges = σ.edges := rfl
+@[simp] theorem pushDelta_nodes (σ : GraphState) (k : NodeKey) (r : String) (b : Bool) :
+    (σ.pushDelta k r b).nodes = σ.nodes := rfl
+@[simp] theorem pushDelta_residue (σ : GraphState) (k : NodeKey) (r : String) (b : Bool) :
+    (σ.pushDelta k r b).residue = σ.residue := rfl
+@[simp] theorem pushDelta_watermark (σ : GraphState) (k : NodeKey) (r : String) (b : Bool) :
+    (σ.pushDelta k r b).watermark = σ.watermark := rfl
+@[simp] theorem pushDelta_outbox (σ : GraphState) (k : NodeKey) (r : String) (b : Bool) :
+    (σ.pushDelta k r b).outbox = ⟨σ.nextDeltaId, k, r, b⟩ :: σ.outbox := rfl
 
 /-- Pushing a row moves `maxOutboxId` to exactly the fresh id. -/
-theorem pushDelta_maxOutboxId (σ : GraphState) (k : NodeKey) (r : String) :
-    (σ.pushDelta k r).maxOutboxId = σ.nextDeltaId := by
-  show (⟨σ.nextDeltaId, k, r⟩ :: σ.outbox).foldl (fun m d => max m d.id) 0
+theorem pushDelta_maxOutboxId (σ : GraphState) (k : NodeKey) (r : String) (b : Bool) :
+    (σ.pushDelta k r b).maxOutboxId = σ.nextDeltaId := by
+  show (⟨σ.nextDeltaId, k, r, b⟩ :: σ.outbox).foldl (fun m d => max m d.id) 0
     = σ.nextDeltaId
   rw [List.foldl_cons, foldl_max_comm]
   show max (max 0 σ.nextDeltaId) σ.maxOutboxId = σ.nextDeltaId
@@ -152,7 +157,7 @@ theorem pushDelta_maxOutboxId (σ : GraphState) (k : NodeKey) (r : String) :
     inserts nothing). -/
 def GraphState.writeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
   if σ.admitEdge (subjNode t.subject) (objNode t.object t.relation)
-  then (σ.writeDirect t).pushDelta (objNode t.object t.relation) t.relation
+  then (σ.writeDirect t).pushDelta (objNode t.object t.relation) t.relation true
   else σ
 
 /-- **The logged rule-routed write**: W2's `writeRules` fold with a delta row per
@@ -273,7 +278,7 @@ armed with the R4 confluence — added last so every increment stays green. -/
 def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
   if (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
   then (σ.removeEdgeOne (subjNode t.subject) (objNode t.object t.relation)).pushDelta
-    (objNode t.object t.relation) t.relation
+    (objNode t.object t.relation) t.relation true
   else σ
 
 /-- **The logged rule-routed retraction**: the retract mirror of `writeLoggedRules` — fold
@@ -425,14 +430,30 @@ theorem reconcileStarsKeyD_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (T :
 def GraphState.affectedObjects (σ : GraphState) (d : Delta) : List NodeKey :=
   d.node :: σ.nodes.filter (fun v => σ.reach d.node v)
 
-/-- **The delta → derived-key mapping** (`_map_deltas_to_keys` LeafFamily branch +
-    `_fan_out` `via='computed'`, fragment-restricted): a candidate object node `v`
-    (concrete — derived keys are never star-named, `processor.py:604-605`) dirties
-    every declared derived key `(v.type, R)` whose def reads `v.pred` as a computed
-    operand, at object `v.name`. Keys are `(dt, R, on)` triples. -/
+/-- **The delta → derived-key mapping** (`_map_deltas_to_keys`, `processor.py:989-1027`).
+
+    Two branches, matching Python's LeafFamily/DerivedFamily split on the delta row:
+
+    * **LeafFamily own-key branch** (`processor.py:991-1011`): a RAW leaf-routed
+      write/remove (`d.leaf = true`) on a DERIVED relation dirties its OWN derived key
+      `(d.node.type, d.node.pred, d.node.name)` (Python routes the write onto the
+      storage leaf `<R>.<i>` and dirties `key = (o_type, fam.owner_relation, o_name)`).
+      Guarded `d.node.name ≠ STAR` (`processor.py:993`: a wildcard-object delta on a
+      derived key is a leaked decision-15 shape) and `isDerived` (untainted leaves have
+      no derived own-key; and reconcile emissions carry `leaf = false`, so this branch is
+      empty for them — the fence that lets the cascade quiesce, since `_fan_out` never
+      re-dirties its own key).
+    * **DerivedFamily fan-out** (`_fan_out via='computed'`, fragment-restricted): a
+      candidate object node `v` (concrete — derived keys are never star-named,
+      `processor.py:604-605`) dirties every declared derived key `(v.type, R)` whose def
+      reads `v.pred` as a computed operand, at object `v.name`.
+
+    Keys are `(dt, R, on)` triples. -/
 def affectedKeys (S : Schema) (σ : GraphState) (d : Delta) :
     List (String × String × String) :=
-  (σ.affectedObjects d).flatMap (fun v =>
+  (if d.leaf = true ∧ d.node.name ≠ STAR ∧ isDerived S (d.node.type, d.node.pred) = true
+   then [(d.node.type, d.node.pred, d.node.name)] else [])
+  ++ (σ.affectedObjects d).flatMap (fun v =>
     if v.name = STAR then []
     else S.keys.filterMap (fun k =>
       if k.1 = v.type ∧ isDerived S k = true ∧
@@ -539,7 +560,7 @@ theorem reconcileJobsL_watermark (S : Schema) (T : Store) :
 theorem reconcileJobsL_outbox_sound (S : Schema) (T : Store) :
     ∀ (jobs : List W3cJob) (σ : GraphState), ∀ d ∈ (reconcileJobsL S T σ jobs).outbox,
       d ∈ σ.outbox ∨
-      ((∃ j ∈ jobs, d.node = objNode ⟨j.dt, j.on⟩ j.R ∧ d.relation = j.R) ∧
+      ((∃ j ∈ jobs, d.node = objNode ⟨j.dt, j.on⟩ j.R ∧ d.relation = j.R ∧ d.leaf = false) ∧
         max σ.maxOutboxId σ.watermark < d.id) := by
   intro jobs
   induction jobs with
@@ -552,7 +573,7 @@ theorem reconcileJobsL_outbox_sound (S : Schema) (T : Store) :
       rw [List.foldl_cons]
     rw [hfold] at hd
     have hout1 : (j.applyLogged S T σ).outbox
-        = ⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R⟩ :: σ.outbox := by
+        = ⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R, false⟩ :: σ.outbox := by
       unfold W3cJob.applyLogged
       rw [pushDelta_outbox, W3cJob.applyD_outbox]
       have := W3cJob.applyD_nextDeltaId S T σ j
@@ -563,15 +584,15 @@ theorem reconcileJobsL_outbox_sound (S : Schema) (T : Store) :
     have hmax1 : (j.applyLogged S T σ).maxOutboxId = σ.nextDeltaId := by
       unfold W3cJob.applyLogged
       rw [pushDelta_maxOutboxId, W3cJob.applyD_nextDeltaId]
-    rcases ih (j.applyLogged S T σ) d hd with hin | ⟨⟨j', hj', hn, hr⟩, hgt⟩
+    rcases ih (j.applyLogged S T σ) d hd with hin | ⟨⟨j', hj', hn, hr, hl⟩, hgt⟩
     · rw [hout1] at hin
       rcases List.mem_cons.mp hin with rfl | hmem
-      · refine Or.inr ⟨⟨j, List.mem_cons_self, rfl, rfl⟩, ?_⟩
+      · refine Or.inr ⟨⟨j, List.mem_cons_self, rfl, rfl, rfl⟩, ?_⟩
         show max σ.maxOutboxId σ.watermark < σ.nextDeltaId
         have : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
         omega
       · exact Or.inl hmem
-    · refine Or.inr ⟨⟨j', List.mem_cons_of_mem _ hj', hn, hr⟩, ?_⟩
+    · refine Or.inr ⟨⟨j', List.mem_cons_of_mem _ hj', hn, hr, hl⟩, ?_⟩
       rw [hmax1, hwm1] at hgt
       have : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
       omega
@@ -727,7 +748,7 @@ theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
   obtain ⟨hdmem, hdgt⟩ := List.mem_filter.mp hd
   have hdgt' : max σ.maxOutboxId σ.watermark < d.id := of_decide_eq_true hdgt
   rcases reconcileJobsL_outbox_sound S T jobs σ d hdmem
-    with hold | ⟨⟨j, hj, hnode, hrel⟩, _⟩
+    with hold | ⟨⟨j, hj, hnode, hrel, hleaf⟩, _⟩
   · -- an original row sits at or below the frontier — it cannot be in the filter
     exfalso
     have := mem_outbox_le_maxOutboxId σ d hold
@@ -755,6 +776,9 @@ theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
     have hkeys : affectedKeys S (reconcileJobsL S T σ jobs) d = [] := by
       unfold affectedKeys
       rw [hobj]
+      have hleaf_ne : ¬(d.leaf = true ∧ d.node.name ≠ STAR ∧
+          isDerived S (d.node.type, d.node.pred) = true) := by rw [hleaf]; simp
+      rw [if_neg hleaf_ne, List.nil_append]
       simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
       by_cases hst : d.node.name = STAR
       · rw [if_pos hst]

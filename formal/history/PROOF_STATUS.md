@@ -8,6 +8,48 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-20c (#1 leg 5d — the MODEL FIX LANDED: `affectedKeys` gains the LeafFamily own-key branch via a `Delta.leaf` provenance tag; the previous session's proposed NAIVE fix was ATTACK-KILLED as unfaithful first. `verify.sh lean`+`conf-heavy` green, cascade/fence stack repaired)
+
+Picked up the 2026-07-20b KILL blocker: `affectedKeys` (`Cascade.lean:433`) lacked Python's LeafFamily
+own-key branch, so a Direct-arm seed write never dirtied its own derived key ⇒ the settledness/correctness
+clones were model-FALSE. Task step 1 = extend `affectedKeys`. **★★ ATTACK-FIRST (house rule 2) — the
+handoff's PROPOSED naive fix is UNFAITHFUL, refuted before adopting.** The handoff proposed
+"`isDerived S (v.type,v.pred)=true ⇒ dirty (v.type,v.pred,v.name)`, keyed on ANY delta." Static + empirical
+refutation: in the collapsed model a **Direct-arm raw write** and a **reconcile emission** BOTH push
+`pushDelta (objNode ⟨o⟩ R) R` at the SAME derived R-node (`writeLoggedOne`/`Cascade.lean:155` vs
+`applyLoggedR`/`CascadeStrata.lean:282`), so an `isDerived`-only branch fires on cascade emissions too —
+but Python's `_fan_out` (`processor.py:1054`) iterates `dependents.get(source)` (readers of the source), so a
+reconcile emission NEVER re-dirties its own key (self-cycle = rejected). Re-dirtying it breaks quiescence:
+applied the naive branch, `runCascade_no_abort` (`Cascade.lean:764`) + the two-stratum fence FAILED to
+compile. So the own-key dirtying must fire ONLY on raw-write/leaf deltas.
+
+- **THE FAITHFUL FIX (landed, `verify.sh lean` 448/448, 0 sorries, standard axioms; audited statements
+  UNCHANGED).** Added a **`Delta.leaf : Bool`** provenance tag (`State.lean`) = Python's LeafFamily-vs-
+  DerivedFamily row split. `pushDelta` gains a defaulted `leaf` param (simp lemmas quantify over it, so
+  every cascade call site + `rw [pushDelta_*]` is unchanged); `writeLoggedOne`/`removeLoggedOne` pass
+  `true`, reconcile emissions default `false`. `affectedKeys` (`Cascade.lean`) now = **own-key branch**
+  (`if d.leaf ∧ d.node.name≠STAR ∧ isDerived S (d.node.type,d.node.pred) then [(…own key…)] else []`) **++
+  the fan-out branch** (unchanged). For `leaf=false` reconcile emissions and untainted `leaf=true` writes the
+  own-key branch is provably `[]`, so **the whole ComputedOnly scope is behaviorally identical** (the audited
+  chain theorems keep their exact statements + meanings — no vacuity).
+- **Cascade/fence stack repaired (mechanical ripple, ~8 modules).** Threaded `d.leaf = false` through the
+  emission characterizations `reconcileJobsL_outbox_sound`/`reconcileJobsLR_outbox_sound` and consumed it to
+  kill the own-key branch in `runCascade_no_abort` + the two-stratum no-abort fence (`CascadeStrata.lean`
+  1263/1320) + the round-1 re-dirty derivation (`CascadeStrataSettle.lean:2010`). `mem_affectedKeys_props`
+  (own-key triple satisfies the props via `isDerived_declared`), `cascadeKeys_writeLeg_mono`/`mem_affectedKeys`
+  (append split), `drained_of_untainted` (own-key branch empty on untainted), `structInv_pushDelta` (leaf
+  param). All Delta literals gained the 4th field.
+- **Gate: `verify.sh lean` PASSED (448/448) + `conf-heavy` PASSED (76). `conf-rest` running.** The model change
+  does NOT touch the conformance corpus behavior (GRAPH_FRAGMENT is ComputedOnly ⇒ own-key branch dead;
+  `direct_arm_exclusion` held out). `CORRESPONDENCE.md` §5 + §7 updated (the divergence is now RESOLVED).
+- **NEXT (now UNBLOCKED — task steps 2-4).** With the model faithful, re-attempt `reachedByW3d2C_settled_d`
+  (now TRUE) + `graph_correct_w3d2_d`, consuming the landed `reachedByW3d2_shadow_d` (`CascadeStrataSettle.lean:1173`)
+  + `checkFnR_eq_sem_settled_d_filt` (`:1750`) + `w3d2_leg_context_d_filt` (`CascadeStrataEnum.lean:796`). This
+  is the genuine chain-level effort the design flagged: `_d`/filtered-σ0 clones of the settledness-transport
+  family (`writeLeg_sem_stable2` / `settledKey_*` / `settledComplete_cascade2_targeted` /
+  `reachedByW3d2C_settled` induction, `CascadeStrataResettle.lean:1162`). Then sub-step 3 (widen
+  `W4Fragment.computedOnly`, `W4WitnessDirect`, move `direct_arm_exclusion` into GRAPH_FRAGMENT — conf phases).
+
 ## Session 2026-07-20b (#1 leg 5d — filtered-σ0 SUBSTRATE + `reachedByW3d2_shadow_d` + the T↾U-σ0 BRIDGE family LANDED+PUSHED; then `reachedByW3d2C_settled_d`/`graph_correct_w3d2_d` ATTACK-KILLED — a real MODEL gap: `affectedKeys` lacks Python's LeafFamily own-key branch)
 
 Orchestrated (Fable main + parallel where files were disjoint): sequential Fable proof agents on

@@ -73,11 +73,21 @@ deriving DecidableEq, Repr, Inhabited
 def Residue.empty : Residue := ⟨[], [], []⟩
 
 /-- A delta-outbox row (§7.8, `outbox.py`) — an id plus the `(node, relation)` it
-    dirties. Enough structure to state outbox-drain quiescence (I10). -/
+    dirties. Enough structure to state outbox-drain quiescence (I10).
+
+    `leaf` records the row's provenance = Python's LeafFamily-vs-DerivedFamily split
+    (`_map_deltas_to_keys`, `processor.py:989-1027`): a `true` row is a RAW leaf-routed
+    write/remove on a storage leaf (the own-key branch of `_map_deltas_to_keys` dirties
+    its OWN derived key, `processor.py:991-1011`); a `false` row is a reconcile emission
+    at a derived R-node (fans out to DEPENDENTS only, `_fan_out via='computed'`,
+    `processor.py:1054-1057` — never re-dirties its own key, which is exactly the fence
+    that lets the cascade quiesce). In the collapsed model both land at `objNode ⟨o⟩ R`,
+    so the tag is the only faithful discriminator. -/
 structure Delta where
   id : Nat
   node : NodeKey
   relation : String
+  leaf : Bool := false
 deriving DecidableEq, Repr, Inhabited
 
 /-! ## §7.1 — the materialized state -/

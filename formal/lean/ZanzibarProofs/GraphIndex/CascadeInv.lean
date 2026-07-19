@@ -107,7 +107,7 @@ theorem structInv_reconcileStarsKeyD {S : Schema} {σ : GraphState} (h : StructI
 
 /-- Pushing a delta row is outbox-only, so it preserves `StructInv`. -/
 theorem structInv_pushDelta {S : Schema} {σ : GraphState} (h : StructInv S σ)
-    (k : NodeKey) (r : String) : StructInv S (σ.pushDelta k r) where
+    (k : NodeKey) (r : String) (b : Bool := false) : StructInv S (σ.pushDelta k r b) where
   schemaEq := by rw [pushDelta_schema]; exact h.schemaEq
   nodeEnc := by rw [pushDelta_nodes]; exact h.nodeEnc
   edgesClosed := by rw [pushDelta_edges, pushDelta_nodes]; exact h.edgesClosed
@@ -127,7 +127,7 @@ theorem structInv_writeLoggedOne {S : Schema} {σ : GraphState} (h : StructInv S
     (t : Tuple) : StructInv S (σ.writeLoggedOne t) := by
   unfold GraphState.writeLoggedOne
   split
-  · exact structInv_pushDelta (structInv_writeDirect h t) _ _
+  · exact structInv_pushDelta (structInv_writeDirect h t) _ _ true
   · exact h
 
 /-- The logged rule-routed write preserves `StructInv` (a fold of `writeLoggedOne`). -/
@@ -152,7 +152,7 @@ theorem structInv_removeLoggedOne {S : Schema} {σ : GraphState} (h : StructInv 
     (t : Tuple) : StructInv S (σ.removeLoggedOne t) := by
   unfold GraphState.removeLoggedOne
   split
-  · exact structInv_pushDelta (structInv_removeEdgeOne h _ _) _ _
+  · exact structInv_pushDelta (structInv_removeEdgeOne h _ _) _ _ true
   · exact h
 
 /-- The logged rule-routed retraction preserves `StructInv` (a fold of

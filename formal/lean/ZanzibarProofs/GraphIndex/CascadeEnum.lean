@@ -481,22 +481,32 @@ theorem mem_affectedKeys_props {S : Schema} {σ : GraphState} {d : Delta}
     isDerived S (k.1, k.2.1) = true ∧ (∃ e, S.lookup (k.1, k.2.1) = some e) ∧
       k.2.2 ≠ STAR := by
   unfold affectedKeys at hk
-  obtain ⟨v, _, hkv⟩ := List.mem_flatMap.mp hk
-  by_cases hvs : v.name = STAR
-  · rw [if_pos hvs] at hkv; exact absurd hkv (List.not_mem_nil)
-  · rw [if_neg hvs] at hkv
-    obtain ⟨k', _, hfk⟩ := List.mem_filterMap.mp hkv
-    by_cases hc : k'.1 = v.type ∧ isDerived S k' = true ∧
-        ((S.lookup k').map (fun e => (computedRefs e).contains v.pred)).getD false = true
-    · rw [if_pos hc] at hfk
-      obtain rfl := (Option.some.inj hfk).symm
-      obtain ⟨_, hcder, hclk⟩ := hc
-      have hlksome : ∃ e, S.lookup k' = some e := by
-        cases hl : S.lookup k' with
-        | none => rw [hl] at hclk; simp at hclk
-        | some e => exact ⟨e, rfl⟩
-      exact ⟨hcder, hlksome, hvs⟩
-    · rw [if_neg hc] at hfk; exact absurd hfk (by simp)
+  rcases List.mem_append.mp hk with hown | hfan
+  · -- LeafFamily own-key branch: `k = (d.node.type, d.node.pred, d.node.name)`
+    by_cases hc : d.leaf = true ∧ d.node.name ≠ STAR ∧
+        isDerived S (d.node.type, d.node.pred) = true
+    · rw [if_pos hc] at hown
+      obtain rfl := List.mem_singleton.mp hown
+      obtain ⟨_, hname, hder⟩ := hc
+      exact ⟨hder, isDerived_declared hder, hname⟩
+    · rw [if_neg hc] at hown; exact absurd hown List.not_mem_nil
+  · -- DerivedFamily fan-out branch
+    obtain ⟨v, _, hkv⟩ := List.mem_flatMap.mp hfan
+    by_cases hvs : v.name = STAR
+    · rw [if_pos hvs] at hkv; exact absurd hkv (List.not_mem_nil)
+    · rw [if_neg hvs] at hkv
+      obtain ⟨k', _, hfk⟩ := List.mem_filterMap.mp hkv
+      by_cases hc : k'.1 = v.type ∧ isDerived S k' = true ∧
+          ((S.lookup k').map (fun e => (computedRefs e).contains v.pred)).getD false = true
+      · rw [if_pos hc] at hfk
+        obtain rfl := (Option.some.inj hfk).symm
+        obtain ⟨_, hcder, hclk⟩ := hc
+        have hlksome : ∃ e, S.lookup k' = some e := by
+          cases hl : S.lookup k' with
+          | none => rw [hl] at hclk; simp at hclk
+          | some e => exact ⟨e, rfl⟩
+        exact ⟨hcder, hlksome, hvs⟩
+      · rw [if_neg hc] at hfk; exact absurd hfk (by simp)
 
 /-- Every cascade key names a declared derived key at a star-free object. -/
 theorem mem_cascadeKeys_props {S : Schema} {σ : GraphState}

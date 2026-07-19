@@ -262,6 +262,7 @@ theorem drained_of_untainted {S : Schema} (hUT : UntaintedSchema S)
   rw [List.flatMap_eq_nil_iff]
   intro d _
   unfold affectedKeys
+  rw [if_neg (by simp [isDerived_untainted hUT]), List.nil_append]
   rw [List.flatMap_eq_nil_iff]
   intro v _
   split

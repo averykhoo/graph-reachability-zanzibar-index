@@ -527,7 +527,7 @@ theorem reconcileJobsLR_watermark (S : Schema) (T : Store) :
 theorem reconcileJobsLR_outbox_sound (S : Schema) (T : Store) :
     ∀ (jobs : List W3cJob) (σ : GraphState), ∀ d ∈ (reconcileJobsLR S T σ jobs).outbox,
       d ∈ σ.outbox ∨
-      ((∃ j ∈ jobs, d.node = objNode ⟨j.dt, j.on⟩ j.R ∧ d.relation = j.R) ∧
+      ((∃ j ∈ jobs, d.node = objNode ⟨j.dt, j.on⟩ j.R ∧ d.relation = j.R ∧ d.leaf = false) ∧
         max σ.maxOutboxId σ.watermark < d.id) := by
   intro jobs
   induction jobs with
@@ -540,7 +540,7 @@ theorem reconcileJobsLR_outbox_sound (S : Schema) (T : Store) :
       rw [List.foldl_cons]
     rw [hfold] at hd
     have hout1 : (j.applyLoggedR S T σ).outbox
-        = ⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R⟩ :: σ.outbox := by
+        = ⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R, false⟩ :: σ.outbox := by
       unfold W3cJob.applyLoggedR
       rw [pushDelta_outbox, W3cJob.applyDR_outbox]
       have := W3cJob.applyDR_nextDeltaId S T σ j
@@ -551,15 +551,15 @@ theorem reconcileJobsLR_outbox_sound (S : Schema) (T : Store) :
     have hmax1 : (j.applyLoggedR S T σ).maxOutboxId = σ.nextDeltaId := by
       unfold W3cJob.applyLoggedR
       rw [pushDelta_maxOutboxId, W3cJob.applyDR_nextDeltaId]
-    rcases ih (j.applyLoggedR S T σ) d hd with hin | ⟨⟨j', hj', hn, hr⟩, hgt⟩
+    rcases ih (j.applyLoggedR S T σ) d hd with hin | ⟨⟨j', hj', hn, hr, hl⟩, hgt⟩
     · rw [hout1] at hin
       rcases List.mem_cons.mp hin with rfl | hmem
-      · refine Or.inr ⟨⟨j, List.mem_cons_self, rfl, rfl⟩, ?_⟩
+      · refine Or.inr ⟨⟨j, List.mem_cons_self, rfl, rfl, rfl⟩, ?_⟩
         show max σ.maxOutboxId σ.watermark < σ.nextDeltaId
         have : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
         omega
       · exact Or.inl hmem
-    · refine Or.inr ⟨⟨j', List.mem_cons_of_mem _ hj', hn, hr⟩, ?_⟩
+    · refine Or.inr ⟨⟨j', List.mem_cons_of_mem _ hj', hn, hr, hl⟩, ?_⟩
       rw [hmax1, hwm1] at hgt
       have : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
       omega
@@ -1222,7 +1222,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
       < d.id := of_decide_eq_true hdgt'
   -- the row is a jobs2 emission: mid-state rows sit at or below the round-2 cursor
   rcases reconcileJobsLR_outbox_sound S T jobs2 (reconcileJobsLR S T σ jobs1) d hdmem
-    with hin | ⟨⟨j, hj, hnode, _⟩, _⟩
+    with hin | ⟨⟨j, hj, hnode, _, hleafd⟩, _⟩
   · exfalso
     have := (reconcileJobsLR S T σ jobs1).outbox_le_frontierMax
       (σ.frontierMax σ.watermark) d hin
@@ -1238,7 +1238,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
   -- the dirtying row is itself a round-1 emission: original rows sit at or below
   -- the round-1 cursor
   rcases reconcileJobsLR_outbox_sound S T jobs1 σ d' hd'mem
-    with hin' | ⟨⟨j1, hj1, hnode1, _⟩, _⟩
+    with hin' | ⟨⟨j1, hj1, hnode1, _, hd'leaf⟩, _⟩
   · exfalso
     have := σ.outbox_le_frontierMax σ.watermark d' hin'
     omega
@@ -1261,6 +1261,9 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
     unfold GraphState.affectedObjects
     rw [List.filter_eq_nil_iff.mpr (fun v _ => by rw [hreach1 v]; exact Bool.false_ne_true)]
   unfold affectedKeys at hjk'
+  -- d' is a round-1 emission (`leaf = false`), so its own-key branch is empty: the key
+  -- can only come from the fan-out branch
+  rw [if_neg (by rw [hd'leaf]; simp), List.nil_append] at hjk'
   obtain ⟨v, hv, hvk⟩ := List.mem_flatMap.mp hjk'
   rw [hobj1] at hv
   have hveq : v = d'.node := List.mem_singleton.mp hv
@@ -1318,6 +1321,9 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
       d = [] := by
     unfold affectedKeys
     rw [hobj2]
+    rw [if_neg (show ¬(d.leaf = true ∧ d.node.name ≠ STAR ∧
+        isDerived S (d.node.type, d.node.pred) = true) by rw [hleafd]; simp),
+      List.nil_append]
     simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
     by_cases hst : d.node.name = STAR
     · rw [if_pos hst]

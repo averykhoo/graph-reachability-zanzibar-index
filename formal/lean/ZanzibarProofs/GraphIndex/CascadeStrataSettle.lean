@@ -2008,7 +2008,7 @@ theorem round2_key_reads_derived {σ : GraphState} {S : Schema} {T : Store}
   have hd'gt : σ.frontierMax σ.watermark < d'.id := of_decide_eq_true hd'gt'
   -- the dirtying row is a round-1 emission (original rows sit at or below the cursor)
   rcases reconcileJobsLR_outbox_sound S T jobs1 σ d' hd'mem
-    with hin' | ⟨⟨j1, hj1, hnode1, _⟩, _⟩
+    with hin' | ⟨⟨j1, hj1, hnode1, _, hd'leaf⟩, _⟩
   · exfalso
     have := σ.outbox_le_frontierMax σ.watermark d' hin'
     omega
@@ -2030,6 +2030,7 @@ theorem round2_key_reads_derived {σ : GraphState} {S : Schema} {T : Store}
     unfold GraphState.affectedObjects
     rw [List.filter_eq_nil_iff.mpr (fun v _ => by rw [hreach1 v]; exact Bool.false_ne_true)]
   unfold affectedKeys at hjk'
+  rw [if_neg (by rw [hd'leaf]; simp), List.nil_append] at hjk'
   obtain ⟨v, hv, hvk⟩ := List.mem_flatMap.mp hjk'
   rw [hobj1] at hv
   have hveq : v = d'.node := List.mem_singleton.mp hv
@@ -2447,7 +2448,7 @@ theorem reconcileJobsLR_emits (S : Schema) (T : Store) :
       rw [List.foldl_cons]
     rw [hfold]
     have hout1 : (j0.applyLoggedR S T σ).outbox
-        = ⟨σ.nextDeltaId, objNode ⟨j0.dt, j0.on⟩ j0.R, j0.R⟩ :: σ.outbox := by
+        = ⟨σ.nextDeltaId, objNode ⟨j0.dt, j0.on⟩ j0.R, j0.R, false⟩ :: σ.outbox := by
       unfold W3cJob.applyLoggedR
       rw [pushDelta_outbox, W3cJob.applyDR_outbox, W3cJob.applyDR_nextDeltaId]
     have hwm1 : (j0.applyLoggedR S T σ).watermark = σ.watermark := by
@@ -2458,7 +2459,7 @@ theorem reconcileJobsLR_emits (S : Schema) (T : Store) :
       rw [pushDelta_maxOutboxId, W3cJob.applyDR_nextDeltaId]
     have hnext : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
     rcases List.mem_cons.mp hj with rfl | hjr
-    · refine ⟨⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R⟩, ?_, rfl, rfl, ?_⟩
+    · refine ⟨⟨σ.nextDeltaId, objNode ⟨j.dt, j.on⟩ j.R, j.R, false⟩, ?_, rfl, rfl, ?_⟩
       · refine reconcileJobsLR_outbox_mono S T rest _ _ ?_
         rw [hout1]
         exact List.mem_cons_self

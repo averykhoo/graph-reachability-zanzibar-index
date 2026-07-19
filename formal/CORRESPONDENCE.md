@@ -103,7 +103,8 @@ independent corners.
 | `reconcileKeyC`/`reconcileStarsKey` (residue-THEN-edges) | `reconcile` (residue written before edge audit) | `processor.py:382-459` (upsert `:443-446`, edge audit `:448-455`) |
 | `reconcileStarsKeyD` — the DIFFING pass (stale-edge retraction) | `reconcile_subject` want/have edge diff | `processor.py:321-380`: `want_edge = should ∧ ¬covered` `:359`, edge diff `:359-369` (removal branch `:367-369`) |
 | `graphRecR`/`checkFnR`/`coveredFnR` — the ROUTED operand read | `_EvalContext` (untainted → `leaf_check`→`widx.check`; derived → residue read) | `processor.py:43-70`; `member_check` `:182-188`; `derived_stars` `:69-70` |
-| `affectedKeys` | delta → dirty derived keys (concrete only, `:604-605`) | `processor.py:585-652` `_map_deltas_to_keys` |
+| `affectedKeys` (**two branches**: LeafFamily own-key + DerivedFamily fan-out) | delta → dirty derived keys (concrete only, `:604-605`): a `leaf=true` raw write/remove on a derived key dirties its OWN key; a `leaf=false` reconcile emission fans out to computed-operand readers only | `processor.py:989-1027` `_map_deltas_to_keys` (own-key `:991-1011`, fan-out `_fan_out via='computed'` `:1054-1057`) |
+| `Delta.leaf` | the outbox row's LeafFamily-vs-DerivedFamily provenance (set `true` by `writeLoggedOne`/`removeLoggedOne`, `false` by the reconcile emissions) | the family type `namespace.get((o_type, o_pred))` decides the branch in `_map_deltas_to_keys` — LeafFamily vs DerivedFamily |
 | `frontierRowsAbove`/`frontierMax` | per-round outbox read + cursor | `processor.py:701-727` (`frontier_start = max id`, `:703`) |
 | `runCascade2` (two rounds + quiescence check; reject branch) | `run_cascade` (`rounds = len(strata)`), leftover ⇒ `InvariantViolation` | `processor.py:694-740` (abort `:729-739`) |
 | **T5** `runCascade2_no_abort`/`cascade2_drains` | — the abort is dead code at ≤2 strata | `processor.py:736-739` |
@@ -122,22 +123,22 @@ independent corners.
 
 ## 7. Known intentional divergences (model ≠ code, by design)
 
-* **`affectedKeys` omits the LeafFamily own-key branch (scope-faithful gap; BLOCKS the
-  Direct-arm widening — found 2026-07-20b).** Lean's `affectedKeys` (`Cascade.lean:433`)
-  maps a delta only to keys that READ its predicate as a computed operand — the
-  `_fan_out via='computed'` / `DerivedFamily` branch (`processor.py:1026-1027`). Python
-  ALSO has a **LeafFamily own-key branch** (`processor.py:991-1011`): a delta landing on a
-  leaf-family row dirties `(o_type, fam.owner_relation, o_name)` — its OWN derived key.
-  This is FAITHFUL within the currently-proved scope (`W4Fragment.computedOnly`): there,
-  derived defs have no Direct/leaf-storage arms, so a leaf-family delta never lands on a
-  derived key and the missing branch is provably dead. But it is model-**FALSE** the moment
-  a derived def carries a Direct arm: an attack-first `#eval` (2026-07-20b) built a drained
-  `ReachedByW3d2C` state (`approver := excl(direct[user], computed banned)`, ban+approve
-  alice) where the seed edge survives ⇒ `check=true` but `sem=false`. So the Direct-arm
-  widening (`reachedByW3d2C_settled_d`/`graph_correct_w3d2_d`) is BLOCKED until `affectedKeys`
-  gains the own-key branch and the cascade coverage/no-abort/settledness stack is repaired.
-  (The Cascade.lean:428 doc comment already claims the LeafFamily branch — it is aspirational,
-  not yet realised.) Resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
+* **~~`affectedKeys` omits the LeafFamily own-key branch~~ — RESOLVED 2026-07-20c.**
+  `affectedKeys` (`Cascade.lean`) now carries BOTH Python branches: the **LeafFamily own-key
+  branch** (`processor.py:991-1011` — a `leaf=true` raw write/remove on a derived key dirties
+  its OWN key) and the **DerivedFamily fan-out** (`_fan_out via='computed'`,
+  `processor.py:1054-1057` — a `leaf=false` reconcile emission fans out to computed-operand
+  readers only, never re-dirtying its own key: the fence that lets the cascade quiesce). The
+  discriminator is the new `Delta.leaf` tag, because the collapsed model lands both a raw
+  Direct-arm seed write and a reconcile emission at the same `objNode ⟨o⟩ R`.
+  **★ House-rule-2 finding (2026-07-20c):** the earlier session's proposed naive branch
+  (`isDerived ⇒ dirty own key`, keyed on ANY delta) was ATTACK-KILLED as unfaithful — it
+  would re-dirty reconcile emissions' own keys (which Python's `_fan_out` never does),
+  breaking quiescence (`runCascade_no_abort`/`cascade2_drains` empirically fail). The faithful
+  fix is the provenance tag. The ComputedOnly scope is unaffected (no leaf-family delta ever
+  lands on a derived key there; and the own-key branch is provably empty for `leaf=false`
+  reconcile emissions and for untainted `leaf=true` writes). This unblocks the Direct-arm
+  widening (`reachedByW3d2C_settled_d`/`graph_correct_w3d2_d`).
 * **Scoped removes (decision 6 — resolved/scoped 2026-07-19).** The chain now
   carries a `remove` constructor on `ReachedByW3d2`/`C`/`E` (2026-07-19f), gated on
   removing a validly-stored tuple (`t ∈ T`) from a drained prior state

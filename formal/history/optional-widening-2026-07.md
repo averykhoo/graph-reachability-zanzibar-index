@@ -275,7 +275,29 @@ This is genuine multi-session chain content (a NEW filtered-shadow substrate + a
 family), NOT the additive hypothesis-factored clone the design assumed. `reachedByW3c_master_d` +
 `w3c_row_char_d` are the tractable slice; they are DONE and independent of the shadow.
 
-### Direct-arm — RESUME (BLOCKED on a Lean MODEL FIX — the settledness/correctness clones are model-FALSE)
+### Direct-arm — RESUME (2026-07-20c: the MODEL FIX LANDED; steps 2-4 now UNBLOCKED)
+
+**★ 2026-07-20c — the `affectedKeys` MODEL FIX is DONE (task step 1).** The 2026-07-20b KILL blocker is
+cleared. `affectedKeys` (`Cascade.lean`) now carries the LeafFamily own-key branch, discriminated by a new
+**`Delta.leaf : Bool`** provenance tag (set `true` by `writeLoggedOne`/`removeLoggedOne`, `false` by reconcile
+emissions). **★ ATTACK-FIRST (house rule 2): the handoff's proposed naive branch was UNFAITHFUL** — keying the
+own-key dirtying on `isDerived` alone fires on reconcile emissions too (both a raw Direct-arm write and a
+reconcile emission push `pushDelta (objNode ⟨o⟩ R) R` at the SAME node in the collapsed model), but Python's
+`_fan_out` never re-dirties a source's own key, so the naive branch breaks quiescence (`runCascade_no_abort`
+fails to compile). The tag is the faithful discriminator. The own-key branch is provably `[]` for `leaf=false`
+reconcile emissions + untainted `leaf=true` writes ⇒ ComputedOnly scope behaviorally identical, audited
+statements unchanged, `verify.sh lean` 448/448 + `conf-heavy` green. Fence/cascade ripple repaired by threading
+`d.leaf = false` through `reconcileJobsL(R)_outbox_sound`. `CORRESPONDENCE.md` §5/§7 updated.
+
+**NEXT (steps 2-4).** Re-attempt `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d` (now TRUE) consuming the
+landed shadow_d/`_filt` bridges; this is the genuine chain-level effort — `_d`/filtered-σ0 clones of the
+settledness-transport family (`writeLeg_sem_stable2`/`settledKey_*`/`settledComplete_cascade2_targeted` + the
+`reachedByW3d2C_settled` induction at `CascadeStrataResettle.lean:1162`) under `StoreValidRulesD` +
+`ComputedOrDirect ∧ DirectArmsBare`. Then sub-step 3 (fragment widening + `W4WitnessDirect` + conformance).
+
+---
+
+**[historical, pre-fix] The block that the 2026-07-20c fix cleared:**
 
 **★★ 2026-07-20b — the filtered-σ0 chain LANDED, then the settledness/correctness clones were ATTACK-KILLED
 on a real model↔Python gap. #1's Direct arm is now BLOCKED on a Lean MODEL FIX, not more proof.**
