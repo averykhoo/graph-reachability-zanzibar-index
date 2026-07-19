@@ -446,6 +446,47 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # comparisons consume them (T1 places no fragment restriction on the set engine).
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Direct-arm boolean corpora — PYTHON-SIDE ONLY (oracle × set engine × real graph
+# index). Widens the boolean corpus to a derived relation whose definition has a
+# **Direct arm under an exclusion**: `approver := (direct[user]) but not banned`,
+# i.e. AST `excl (direct[user]) (computed banned)` with `banned := direct[user]`.
+#
+# The excluded-FROM operand is a DIRECT arm (a genuine storage leaf ON the derived
+# relation) rather than a computed union — contrast `boolean_exclusion`, whose
+# base `editor` is a separately-declared relation referenced by name. Because the
+# derived def carries a Direct storage leaf it is NOT `computedOnly`, so — exactly
+# like `self_flag` above — it sits OUTSIDE `W4Fragment`; it is DELIBERATELY kept
+# out of `SCHEMAS`/`GRAPH_FRAGMENT` so the Lean graph-side gates do not carry it.
+# The real Python graph index DOES serve the shape (a Direct arm under an
+# exclusion routes onto its leaf family and cascades like any boolean root); the
+# dedicated python-only differential (`test_conformance_direct_arm.py`) pins
+# oracle == set engine == graph index over the full grid, under both SetOps.
+# ---------------------------------------------------------------------------
+
+DIRECT_ARM_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
+    # `approver = [user] but not banned` (Direct arm as the exclusion's base),
+    # helper `banned = [user]`. Store exercises the full truth table:
+    #   alice — approver only            -> True  (Direct arm, not excluded)
+    #   bob   — approver AND banned      -> False (excluded by the subtrahend)
+    #   carol — banned only              -> False (never granted approver)
+    #   (ghost / dave — nothing          -> False, via the grid's ghost subject)
+    "direct_arm_exclusion": (
+        """
+        type user
+        type doc
+          define banned: [user]
+          define approver: [user] but not banned
+        """,
+        [mk_tuple("...", "user", "alice", "approver", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "approver", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "banned", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "banned", "doc", "d1")],
+        (),
+    ),
+}
+
+
 SELF_REFERENTIAL_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # OpenFGA self-defining / attribute-marker idiom: a self-referential tuple as a
     # boolean flag, gating a derived (exclusion) relation. `resource:r1 activated
