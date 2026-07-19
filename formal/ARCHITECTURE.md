@@ -104,9 +104,12 @@ interleaved as Python interleaves them (`connectedstore.advance_index` →
 (`t ∈ T`) from a drained prior state (`cascadeKeys = []`), with the pre-remove
 store's disciplines carried, faithful to `TupleSource.remove` — was added to
 `ReachedByW3d2`/`C`/`E`, so T2a/T2b now cover retraction at that scope. The Exec
-driver / zcli graph mode remains add-only as of 2026-07-19 (it constructs no
-remove-state), so remove-correctness is proved over the chain but not yet driven
-end-to-end. `CORRESPONDENCE.md` §4–6 maps
+driver / zcli graph mode now DRIVES removes end-to-end (2026-07-19, `5a35ec3`):
+the op-stream driver `graphRunOps` runs one runtime-gated `remove` chain leg
+(`removeGateB`, fail-closed) per op and zcli takes an optional `"ops"` add/remove
+stream, so remove-correctness is now both proved over the chain AND driven
+end-to-end (differential-gated at answer level by `test_conformance_remove_graph.py`).
+`CORRESPONDENCE.md` §4–6 maps
 every step (`reconcileStarsKeyD`, `graphRecR`/`checkFnR`, `affectedKeys`, `runCascade2`)
 to `processor.py` line ranges.
 
@@ -264,9 +267,12 @@ the sorry-scanner, `test_sorry_scan.py`; 7 for the zcli-runner transient-init re
   rejected repeat remove. Scope honesty: BOTH Python remove paths are now pinned to
   oracle/`sem` (the graph transitively, via `graph == oracle` on the corpora the set-engine
   leg pins `sem == oracle`); the Lean-side remove leg is now CLOSED too (2026-07-19f, §6)
-  at the validly-stored + drained-prior scope, with only the Exec-driver end-to-end
-  exercise remaining, and the state
-  comparisons are driven-vs-fresh-build Python-internal, never vs Lean.
+  at the validly-stored + drained-prior scope, and the Exec driver DRIVES it
+  end-to-end (2026-07-19, `graphRunOps` / zcli `"ops"`; `test_conformance_remove_graph.py`
+  differential-gates seeded add/remove/re-add streams == the real Python graph index
+  == oracle on the erased store, at ANSWER level), so remove-correctness is both
+  proved AND driven; the Lean-vs-Python state
+  comparisons remain driven-vs-fresh-build Python-internal, never vs Lean.
 - **Generated-schema conformance** (`test_conformance_generated.py`, 40 tests,
   2026-07-12): a seeded deterministic re-implementation of the hypothesis `schema_asts`
   generator (NO hypothesis dependency — the formal/ convention; inside
@@ -317,8 +323,10 @@ The residual unverified surface, in full:
    prior state, 2026-07-19f — the `remove` constructor on `ReachedByW3d2`/`C`/`E` carries
    T2a/T2b under `t ∈ T` + `cascadeKeys = []` + the pre-remove store's disciplines, faithful
    to `TupleSource.remove`; BOTH Python remove paths were already answer-pinned via
-   `test_conformance_remove.py`; residual open slice: the Exec driver / zcli graph mode is
-   still add-only as of 2026-07-19, so remove-correctness is proved not yet driven end-to-end);
+   `test_conformance_remove.py`; the Exec driver / zcli graph mode now DRIVES removes
+   end-to-end too (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`), so
+   remove-correctness is both proved AND driven end-to-end — only the guard's
+   validly-stored scope decision stays flagged for review);
    star-subject queries with non-bare predicates;
    star-object queries on the graph side. *(Empirical note: the derived-ROOT gap was CLOSED 2026-07-17 — union- and
    computed-rooted derived defs are now in scope and in `GRAPH_FRAGMENT` (check + state); only the object-wildcard
@@ -362,9 +370,9 @@ proof is missing); (d) remove legs on the Lean side — **DONE 2026-07-19f** at 
 validly-stored + drained-prior scope: the `remove` constructor on `ReachedByW3d2`/`C`/`E`
 makes T2a/T2b + `Exec.graphRun_check_eq_sem` cover retraction of a `t ∈ T` from a drained
 state under the pre-remove store's disciplines (faithful to `TupleSource.remove`), so the
-Lean model IS now a post-remove reference at that scope; only the Exec-driver end-to-end
-exercise (still add-only as of 2026-07-19) and the guard's validly-stored scope review
-remain; (e) widening the state/enumeration bounds (graph backend in
+Lean model IS now a post-remove reference at that scope; the Exec driver DRIVES removes
+end-to-end too (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`), leaving
+only the guard's validly-stored scope review; (e) widening the state/enumeration bounds (graph backend in
 the enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores). Item
 (f) — fixing the derived-TTU userset-subject divergence and flipping its strict xfails —
 is **DONE** (2026-07-13, Python-side; `FINAL_REVIEW.md` §3's resolved note).

@@ -627,8 +627,9 @@ name, the code wins):
   carries a `remove` constructor — gated on removing a validly-stored tuple
   (`t ∈ T`) from a drained prior state (`cascadeKeys = []`), with the pre-remove
   store's disciplines carried, faithful to `TupleSource.remove` — so T2a/T2b cover
-  retraction at that scope. The Exec driver stays add-only as of 2026-07-19
-  (remove-correctness is proved over the chain, not yet driven end-to-end).
+  retraction at that scope. The Exec driver DRIVES removes end-to-end too
+  (2026-07-19, `graphRunOps` / zcli `"ops"`; `test_conformance_remove_graph.py`),
+  so remove-correctness is both proved over the chain AND driven end-to-end.
 - `hq : Drained S σ` — no dirty derived key (`cascadeKeys S σ = []`); the
   Python invariant at every commit boundary (§7.8). Read correctness holds
   exactly here; mid-drain states are honestly stale.
@@ -655,7 +656,7 @@ theorem covers that surplus.
 | **T4** | `pathCount_addEdge` / `pathCount_removeEdge` (`GraphIndex/Closure.lean`) | acyclicity ⟹ add/remove of a direct edge preserves `p = #paths` (the counting theorem; the DAG hypothesis is enforced by §7.3). |
 | **T5** | `runCascade2_no_abort` / `cascade2_drains` (`GraphIndex/CascadeStrata.lean`) | the two-round cascade drains every dirty key, and the scheduler's abort branch is provably dead at ≤ 2 derived strata (`hLU2`; attack-confirmed LIVE at 3 strata — which is why `twoStrata` is an honest carry). |
 | **T6a** | `exclusion_effective` (`FullScope.lean`) | T3's hypotheses + `hDeny : sem S T q = false` ⟹ BOTH backends deny — with real exclusion content at this scope: a subject removed by a `but not` operand is denied by both (`exclusion_effective_w3c` exhibits the under-a-star-grant case). |
-| **T6b** | `no_ghost_grant` (`FullScope.lean`) | T2b's hypotheses + `sem S T' q = false` on the chain's own store `T'` ⟹ the graph denies at any fully-drained reached state — no stale edge or residue row survives the drain. (NOT the Phase-0 "removing the last supporting tuple" form; but as of 2026-07-19f the chain DOES carry a scoped `remove` constructor — retraction of a validly-stored tuple `t ∈ T` from a drained prior state — so post-remove drained states are reached states this theorem now covers at that scope. The Exec driver stays add-only as of 2026-07-19.) |
+| **T6b** | `no_ghost_grant` (`FullScope.lean`) | T2b's hypotheses + `sem S T' q = false` on the chain's own store `T'` ⟹ the graph denies at any fully-drained reached state — no stale edge or residue row survives the drain. (NOT the Phase-0 "removing the last supporting tuple" form; but as of 2026-07-19f the chain DOES carry a scoped `remove` constructor — retraction of a validly-stored tuple `t ∈ T` from a drained prior state — so post-remove drained states are reached states this theorem now covers at that scope. The Exec driver DRIVES removes end-to-end too as of 2026-07-19 (`graphRunOps` / `test_conformance_remove_graph.py`).) |
 | **T6c** | `wildcard_scoping` (`Equiv.lean`) | `restrictionMatches rs tup = true → ∃ r ∈ rs, tup.subject.type = r.1` — a `T:*` grant can never leak to a subject of another type; both backends inherit it through T1/T2b + the shared leaf structure. |
 
 T3/T6a/T6b are corollaries in `FullScope.lean` by rewriting with T1/T2b — at
@@ -698,8 +699,8 @@ section originally recapped the PLAN (C0–C4 — six-way answer conformance
 including rejection outcomes, state-level structural comparison, exhaustive
 small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
 clause-by-clause check. What exists (`formal/verify.sh` step 5;
-`formal/conformance/`; **248 tests, 0 skips** — 228 differential-conformance
-comparisons + 20 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
+`formal/conformance/`; **315 tests, 0 skips** — 295 differential-conformance
+comparisons + 20 gate-tooling unit tests [sorry-scanner + zcli-runner retry]; 315 − 20 = 295):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
   Python-`file:line` map, with the known intentional divergences listed.
@@ -765,8 +766,11 @@ comparisons + 20 gate-tooling unit tests [sorry-scanner + zcli-runner retry]):*
   on a rejected repeat remove. Both Python remove paths are now pinned; the
   Lean-side remove leg is now CLOSED too (2026-07-19f) at the validly-stored +
   drained-prior scope (the `remove` constructor on `ReachedByW3d2`/`C`/`E`;
-  faithful to `TupleSource.remove`), leaving only the Exec-driver end-to-end
-  exercise (still add-only as of 2026-07-19).
+  faithful to `TupleSource.remove`), and the Exec driver DRIVES it end-to-end
+  (2026-07-19, `graphRunOps` / zcli `"ops"`; `test_conformance_remove_graph.py`
+  differential-gates seeded add/remove/re-add streams == the real Python graph
+  index == oracle on the erased store, at ANSWER level), leaving only the guard's
+  validly-stored scope review.
 - **Generated-schema answer conformance** (2026-07-12):
   `test_conformance_generated.py` — 40 seeded generated schemas + stores
   (a deterministic re-implementation of the hypothesis `schema_asts`

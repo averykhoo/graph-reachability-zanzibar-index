@@ -13,9 +13,10 @@ old "the user must run it uncapped" requirement survives only for a cold Lean bu
 - `pytest -q` (whole repo) ≈ 655 s — right at the edge; it *has* been killed at
   ~64%.
 - `verify.sh all` (one shot) = Lean build (warm ≈ 90 s / 1082 jobs, cold ≈ 20-40 min)
-  + conformance (≈ 11-13 min today) ≈ 13-16 min — blows the cap. Run it **phased**
-  instead (§2): `verify.sh lean | conf-heavy | conf-rest`, each of which fits with
-  margin (worst phase `conf-heavy` ≈ 6.5 min).
+  + conformance (≈ 15-16 min today) ≈ 16-18 min — blows the cap. Run it **phased**
+  instead (§2): `verify.sh lean | conf-heavy | conf-rest`, each of which fits the
+  cap (worst phase is now `conf-rest` ≈ 9 min / ~544 s — close to the 600 s cap; then
+  `conf-heavy` ≈ 6.5 min).
 - `HYPOTHESIS_PROFILE=deep` (max_examples=120, stateful_step_count=25) is ~30× the
   `ci` profile — a single deep test file blows the cap.
 
@@ -48,7 +49,7 @@ dev box:
 ```bash
 bash formal/verify.sh lean        # steps 1-4: lake build + sorry=0 + zcli + axiom audit   (~0.5-3 min warm)
 bash formal/verify.sh conf-heavy  # step 5, the slow file only (test_conformance_remove)   (~6.5 min)
-bash formal/verify.sh conf-rest   # step 5, every OTHER conformance file                    (~4 min)
+bash formal/verify.sh conf-rest   # step 5, every OTHER conformance file          (~9 min / ~544 s — near the 600 s cap)
 ```
 
 Run them **in that order** — the `lean` phase builds the `zcli` binary the conf
@@ -60,7 +61,9 @@ vacuously). All three must print `PASSED`. Together they == `pytest tests/` (ste
   MINUS the heavy file (`--ignore=…/test_conformance_remove.py`), so the two conf
   phases *tile* `formal/conformance/` with no gap and any newly-added conformance
   file automatically lands in `conf-rest`. Tiling check: `conf-heavy` + `conf-rest`
-  pass counts sum to the full total (76 + 212 = 288 today).
+  pass counts sum to the full total (76 + 239 = 315 today; the new
+  `test_conformance_remove_graph.py` lands in `conf-rest` and, because it drives zcli
+  `graphRunOps` per op, is what pushed `conf-rest` to ~544 s — near the cap).
 - **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
   guards as the one-shot — olean layout-drift guard + `#print axioms` observed==expected
   (Lean), zcli-binary preflight + no-skip + passed>0 (conformance). So three green
@@ -106,7 +109,7 @@ surface, run a deeper campaign. Two cap-safe options:
 Push only after ALL of: step 1 (`pytest tests/`) green; the three `verify.sh`
 phases (`lean` → `conf-heavy` → `conf-rest`) each green; and — for an algorithm
 change — a fuzz sweep (step 3) green. The phased gate is fully **agent-runnable
-within the cap** (worst phase ≈ 6.5 min), and each phase carries the one-shot's
+within the cap** (worst phase is now `conf-rest` ≈ 9 min / ~544 s, near the 600 s cap), and each phase carries the one-shot's
 anti-vacuous guards, so three green phases satisfy the gate on their own — no
 uncapped `verify.sh all` and no user hand-off is required (except to pre-warm a
 cold Lean build; see §2).
@@ -150,7 +153,7 @@ optimization this session.
 controlled than test runtime): time a **deterministic, rarely-changing,
 hot-path-heavy subset**. Best candidates, because they change by design only when
 behavior changes:
-- the conformance corpora (`formal/conformance/`, 288 deterministic tests),
+- the conformance corpora (`formal/conformance/`, 315 deterministic tests),
 - the validation matrix (`tests/test_matrix.py`),
 - the compiled-RuleSet snapshots (`tests/snapshots/`).
 Track these via `pytest --durations=20` across commits and eyeball for a step

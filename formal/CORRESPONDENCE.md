@@ -118,11 +118,24 @@ independent corners.
 | `GraphAdmission` (wf/nodup/strat/ttuDirect/matchDecl/ranked/objWild/storeValid) | what compile+write admission guarantees | see field docs, `FullScope.lean:64-94` (e.g. `_validate_ttu_tuplesets` `zanzibar_utils_v1.py:898-935`) |
 | `W4Fragment` (computedOnly/twoStrata/wsBare/bareStar/ttuStarFree/term) | — the HONEST carries: restrictions Python does NOT impose (`rootB` deleted 2026-07-17 — the derived-def ROOT operator is unrestricted, only the LEAVES must be `ComputedOnly`) | `history/ROADMAP.md` "W4 — honest gaps" |
 | `Exec.lean` `graphRun` + `graphRun_reached`/`graphRun_check_eq_sem` | the conformance driver IS the chain (theorem, not analogy) | driven against `WildcardIndex` by `test_conformance_graph.py` (verdicts) and `test_conformance_state.py` (final state, zcli mode `"graph-state"` — same fold, same gates; the dump code in `Cli.lean` is driver-level, its projections documented in the mode header + `extractor.py`) |
+| `Exec.lean` `GraphOp` (add/remove) + `graphRunOps` (per op: one chain leg — `write` / the runtime-gated `remove` — then one cascade leg) + `removeGateB` (one Bool gate deciding the full remove-constructor guard: `t ∈ T`, drained prior, `StoreValidRules`/`BareStarStore`/`TtuStarFree`/`htermT`; fail-closed) + `graphRunOps_reached`/`graphRunOps_store`/`graphRunOps_check_eq_sem` | the op-stream driver over the chain, add/remove interleaved (theorem, not analogy — every printed verdict = `sem` under the W4 bundles + runtime drain gate, removes included, via `graph_correct`) | zcli graph/graph-state modes take an optional `"ops"` add/remove stream (absent ⇒ the legacy add-only `graphRun`, byte-identical; spec mode rejects `"ops"` with rc 5, `test_cli_mode.py`); driven against the real Python graph index by `test_conformance_remove_graph.py` (verdicts, ANSWER-level, differential vs oracle on the erased store) |
 
 ## 7. Known intentional divergences (model ≠ code, by design)
 
-* **Add-only.** The chain has no remove legs (decision 6); Python supports
-  `remove_tuple`. Removal is outside every graph-side theorem.
+* **Scoped removes (decision 6 — resolved/scoped 2026-07-19).** The chain now
+  carries a `remove` constructor on `ReachedByW3d2`/`C`/`E` (2026-07-19f), gated on
+  removing a validly-stored tuple (`t ∈ T`) from a drained prior state
+  (`cascadeKeys = []`) with the pre-remove store's `StoreValidRules` /
+  `BareStarStore` / `TtuStarFree` / `htermT` disciplines carried — faithful to
+  `TupleSource.remove`, which only retracts validly-admitted tuples. T2a/T2b
+  (`graph_reached_inv`/`graph_correct`) cover retraction at that scope, and the
+  driver DRIVES removes end-to-end via `graphRunOps` / zcli `"ops"` (2026-07-19,
+  `5a35ec3`) — its honesty theorems `graphRunOps_reached`/`graphRunOps_store`/
+  `graphRunOps_check_eq_sem` make every printed verdict equal `sem` over the op
+  stream (removes included, via `graph_correct`), differential-gated at answer level
+  by `test_conformance_remove_graph.py`. What remains intentional is the SCOPE: only
+  validly-stored tuples from drained states are retractable — exactly Python's
+  behavior (`TupleSource.remove` rejects a not-present tuple).
 * **Fixed two rounds.** `runCascade2` always runs 2 rounds; Python runs
   `len(strata)`. Same drained fixpoint at ≤2 strata (T5); ≥3 strata are outside
   the fragment (`hLU2` attack-confirmed load-bearing).

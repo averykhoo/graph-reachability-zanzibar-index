@@ -35,8 +35,8 @@ never rounds up to "the code is formally verified" (plan §7).
    stratum-1"). A session that kills a false statement is a GOOD session; record the
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (415 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + 288 Python conformance
+   + **0 sorries** + zcli + axiom audit (425 `#print axioms` reports, one per audited
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + 315 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
@@ -302,14 +302,16 @@ rejected repeat remove; so BOTH Python remove paths are now pinned, and the Lean
 remove leg is now CLOSED too (2026-07-19f) at the validly-stored + drained-prior
 scope — the `remove` constructor on `ReachedByW3d2`/`C`/`E` carries T2a/T2b +
 `Exec.graphRun_check_eq_sem` over retraction of a `t ∈ T` from a drained state
-under the pre-remove store's disciplines, faithful to `TupleSource.remove`; the
-only residual is the Exec driver / zcli graph mode, still add-only as of
-2026-07-19 — proved over the chain, not yet driven end-to-end), the
+under the pre-remove store's disciplines, faithful to `TupleSource.remove`; and the
+Exec driver / zcli graph mode now DRIVES removes end-to-end too (2026-07-19,
+`graphRunOps` / `removeGateB` / `test_conformance_remove_graph.py`), so
+remove-correctness is now both proved over the chain AND driven end-to-end — leaving
+only the guard's validly-stored scope decision flagged for user review), the
 **generated-schema answer gate**
 (`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
 corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
 level), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` are all landed and gated.
-verify.sh: 288 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
+verify.sh: 315 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
 map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
 `history/`. The one known check-level graph-vs-set divergence (derived-TTU
 userset subjects — outside `W4Fragment` and the conformance grids) was FIXED
@@ -355,11 +357,15 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    already answer-pinned by `test_conformance_remove.py` (the set engine at
    rebuild-fingerprint level, the graph index by fresh-build state convergence +
    full drain). So the Lean model IS now a post-remove reference under that
-   precondition. **Remaining open part:** the Exec driver / zcli graph mode is
-   still add-only as of 2026-07-19 (constructs no remove-state), so remove-
-   correctness is PROVED but not yet DRIVEN end-to-end — wire a remove op into
-   `foldAdmits`/zcli to close "proved" vs "driven"; and the guard's validly-stored
-   scope decision is flagged for user review.
+   precondition. **Done 2026-07-19 (`5a35ec3`) — the Exec-driver remove hardening
+   LANDED:** `graphRunOps` drives one runtime-gated `remove` chain leg (`removeGateB`,
+   fail-closed) per op, zcli graph/graph-state modes take an optional `"ops"`
+   add/remove stream (absent ⇒ the legacy add-only `graphRun`, byte-identical), and
+   `test_conformance_remove_graph.py` differential-gates seeded add/remove/re-add
+   streams (zcli `graphRunOps`) against the real Python graph index and the oracle
+   on the erased store (ANSWER-level), so remove-correctness is now both PROVED and
+   DRIVEN end-to-end. **Remaining open part:** only the guard's validly-stored scope
+   decision is flagged for user review.
 3. **Widening the state/enumeration bounds** — graph backend inside the
    enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
    (The current bounds, their runtime rationale, and why the graph side was

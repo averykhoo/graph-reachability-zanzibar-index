@@ -58,8 +58,9 @@ graph index), **state-level equality under six documented projections**,
 **remove-path answer gate** (the driven set engine AND the driven graph index vs
 `sem` × oracle on the final store, plus driven == a fresh build at state level;
 both Python remove paths pinned, and the Lean remove leg now CLOSED at the
-validly-stored + drained-prior scope (2026-07-19f) — leaving only the Exec-driver
-end-to-end exercise open),
+validly-stored + drained-prior scope (2026-07-19f) and DRIVEN end-to-end by the Exec
+driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`),
+leaving only the guard's validly-stored scope decision flagged for review),
 and a **generated-schema answer gate** (seeded generated schemas outside the
 curated corpora, spec-side only) — 248 tests, 20 of them gate-tooling unit tests
 rather than comparisons.
@@ -84,7 +85,9 @@ widening W1→W4 complete). Phase 6 hardening complete: the graph-state conforma
 mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**,
 **exhaustive small-scope enumeration**, the **remove-path answer gate**, and the
 **generated-schema answer gate** all landed. What remains is optional
-assurance-widening (fragment widening, the Exec-driver remove exercise — the Lean
-remove leg itself is DONE 2026-07-19f at the validly-stored + drained-prior scope —
+assurance-widening (fragment widening — the Lean
+remove leg itself is DONE 2026-07-19f at the validly-stored + drained-prior scope and
+DRIVEN end-to-end by the Exec driver 2026-07-19 (`graphRunOps`/`test_conformance_remove_graph.py`),
+so only the guard's validly-stored scope review remains there —
 wider bounds — `FINAL_REVIEW.md` §4; the once-pinned lookup-gate divergence was fixed
 2026-07-13 Python-side, `FINAL_REVIEW.md` §3's resolved note).
