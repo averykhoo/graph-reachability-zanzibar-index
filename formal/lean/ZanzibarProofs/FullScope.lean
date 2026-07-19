@@ -509,4 +509,193 @@ theorem fragment : W4Fragment Sy Ty where
 theorem within_scope : GraphAccepts Sy := w4_within_scope accepts fragment
 
 end W4WitnessUnion
+
+/-! ## A DIRECT-ARM derived witness (the C-chain `graph_correct_w3d2_d` scope)
+
+`Sd`/`Td` is the conformance corpus `direct_arm_exclusion` in compiled form:
+`approver := [user] but not banned` — a derived def whose exclusion BASE is a
+**`Direct` storage arm on the derived relation itself** (AST
+`excl (direct [user]) (computed banned)`), with `banned := [user]` untainted and
+a store granting `user:alice` through that Direct arm.
+
+This is the leg-5d fragment's motivating shape, and it sits OUTSIDE the final
+theorems' current scope on TWO counts (the honest record, 2026-07-20e):
+
+* `W4Fragment.computedOnly` rejects the `direct` leaf in the derived def; the
+  final `graph_correct`/`graph_reached_inv` are E-chain theorems
+  (`graph_correct_w3d2E`), still `ComputedOnly`-scoped — widening them needs the
+  operational enumeration model change (`enumJob2` → `enumJob2D`) plus a `_d`
+  projection of `reachedByW3d2E_toC` (recorded follow-up, NOT done).
+* `GraphAdmission.storeValid` (plain `StoreValidRules`) is FALSE at `Td`: the
+  Direct arm sits under `excl`, so `exprDirects = []` on the derived def and a
+  stored Direct-arm grant is only admissible under the WIDENED
+  `StoreValidRulesD` (leg 5a) — `Td` is machine-checked to be genuinely outside
+  the old bundle (`outside_old_admission` below).
+
+What IS proved at this scope is the C-chain T2b **`graph_correct_w3d2_d`**
+(`CascadeStrataResettle.lean`, audited): `check = sem` at every fully-drained
+`ReachedByW3d2C` state on the Direct-arm fragment. The theorems below inhabit
+its FULL hypothesis bundle at `Sd`/`Td` — `accepts` (the admission side, with
+`StoreValidRulesD` in place of `storeValid`), `fragment` (the `_d` fragment
+carries: `ComputedOrDirect` + `DirectArmsBare` + operand-`ComputedOnly` +
+`hLU2` + `hWSbare` + `hNoUD` + the store disciplines), and `correct_applies`
+(the bundle is JOINTLY dischargeable: `graph_correct_w3d2_d` instantiates at
+the witness pair with every schema/store hypothesis closed). Non-vacuity of the
+chain itself is operational: the Exec driver reaches drained `ReachedByW3d2C`
+states over exactly this schema (attack-run 2026-07-20e: the 4-tuple corpus
+store drains with `check = sem` on the full truth table). -/
+
+namespace W4WitnessDirect
+
+/-- `doc#banned := [user]` (untainted), `doc#approver := [user] but not banned`
+    (compiled form: the exclusion's base is a `Direct` arm ON the derived def). -/
+def Sd : Schema :=
+  ⟨[(("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "approver"), .excl (.direct [("user", BARE, false)]) (.computed "banned"))], []⟩
+
+/-- One admitted write THROUGH THE DIRECT ARM of the derived def:
+    `user:alice ∈ approver@doc:d1`. -/
+def Td : Store := [⟨⟨"user", "alice", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩]
+
+/-- **The witness store is genuinely outside the OLD admission bundle**: plain
+    `StoreValidRules` (= `GraphAdmission.storeValid`) rejects the Direct-arm
+    grant — its arm is under `excl`, so `exprDirects` on the derived def is
+    empty. The widening is contentful, not a relabeling. -/
+theorem outside_old_admission : ¬ StoreValidRules Sd Td := by
+  intro h
+  obtain ⟨e, rs, hlk, hrs, _⟩ := h ⟨⟨"user", "alice", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
+    (List.mem_singleton.mpr rfl)
+  rw [show Sd.lookup ("doc", "approver")
+        = some (Expr.excl (.direct [("user", BARE, false)]) (.computed "banned")) from rfl,
+      Option.some.injEq] at hlk
+  subst hlk
+  simp [exprDirects] at hrs
+
+/-- The admission side of `graph_correct_w3d2_d`'s bundle is inhabited —
+    `GraphAdmission` with `storeValid` WIDENED to `StoreValidRulesD` (the
+    faithful mirror of Python admission on Direct-arm schemas: `RuleSet.apply`
+    routes a public-name write onto the derived def's Direct leaf family). -/
+theorem accepts : WF Sd ∧ NodupKeys Sd ∧ Stratifiable Sd ∧ TtuTuplesetsDirect Sd ∧
+    RewriteMatchDeclared Sd ∧ RewriteRanked Sd ∧ StoreValidRulesD Sd Td := by
+  refine ⟨⟨?_⟩, by unfold NodupKeys; decide, by unfold Stratifiable; decide,
+    by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
+    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, ?_⟩
+  · intro p hp
+    simp only [Sd, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl <;> simp [relNameOK]
+  · intro t ht
+    simp only [Td, List.mem_singleton] at ht
+    subst ht
+    refine Or.inr ⟨by decide, rfl,
+      .excl (.direct [("user", BARE, false)]) (.computed "banned"),
+      [("user", BARE, false)], rfl, ?_, by decide, ?_⟩
+    · simp [exprDirectsAll]
+    · intro r hr
+      simp only [List.mem_singleton] at hr
+      subst hr; rfl
+
+/-- The `_d` fragment carries are inhabited: schema-wide `ComputedOrDirect` +
+    `DirectArmsBare` on derived defs, derived OPERANDS `ComputedOnly` (vacuous —
+    `banned` is untainted), two strata, bare wildcard shapes, `hNoUD` (the Direct
+    arm sits under `excl`, the canonical `but not` shape), and the store
+    disciplines (`BareStarStore`/`TtuStarFree`/terminality). -/
+theorem fragment :
+    (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true →
+      ComputedOrDirect e) ∧
+    (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true →
+      DirectArmsBare e) ∧
+    (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived Sd (dt, r') = true →
+        ∀ e', Sd.lookup (dt, r') = some e' → ComputedOnly e') ∧
+    (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived Sd (dt, r') = true →
+        ∀ e', Sd.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived Sd (dt, r'') = false) ∧
+    (∀ sh ∈ wildcardShapes Sd, sh.2 = BARE) ∧
+    (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true →
+      exprDirects e = []) ∧
+    BareStarStore Td ∧ TtuStarFree Sd Td ∧
+    (∀ dt R, isDerived Sd (dt, R) = true → NoTtuTarget Sd R ∧ NoStoreSubjectR Td R) := by
+  have hkeys : ∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true →
+      (dt, R) = ("doc", "approver") ∧
+      e = Expr.excl (.direct [("user", BARE, false)]) (.computed "banned") := by
+    intro dt R e hlk hder
+    have hmem := mem_defs_of_lookup hlk
+    simp only [Sd, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+    rcases hmem with ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩
+    · exact absurd hder (by decide)
+    · exact ⟨rfl, rfl⟩
+  refine ⟨?_, ?_, ?_, ?_, by decide, ?_, by unfold BareStarStore; decide, ?_, ?_⟩
+  · intro dt R e hlk hder
+    obtain ⟨_, rfl⟩ := hkeys dt R e hlk hder
+    exact ⟨trivial, trivial⟩
+  · intro dt R e hlk hder
+    obtain ⟨_, rfl⟩ := hkeys dt R e hlk hder
+    refine ⟨?_, trivial⟩
+    intro r hr
+    simp only [List.mem_singleton] at hr
+    subst hr; rfl
+  · -- operand-`ComputedOnly`: approver's only computed ref is `banned`, untainted
+    intro dt R e hlk hder r' hr' hder'
+    obtain ⟨⟨rfl, rfl⟩, rfl⟩ := hkeys dt R e hlk hder
+    simp only [computedRefs, List.nil_append,
+      List.mem_cons, List.not_mem_nil, or_false] at hr'
+    subst hr'
+    exact absurd hder' (by decide)
+  · -- two strata: same vacuity — the only computed ref is untainted
+    intro dt R e hlk hder r' hr' hder'
+    obtain ⟨⟨rfl, rfl⟩, rfl⟩ := hkeys dt R e hlk hder
+    simp only [computedRefs, List.nil_append,
+      List.mem_cons, List.not_mem_nil, or_false] at hr'
+    subst hr'
+    exact absurd hder' (by decide)
+  · -- `hNoUD`: the Direct arm sits under `excl`, so no union-reachable arm
+    intro dt R e hlk hder
+    obtain ⟨_, rfl⟩ := hkeys dt R e hlk hder
+    rfl
+  · intro t _ _ a ha tr _
+    rw [show schemaRewrites Sd = [] from rfl] at ha
+    cases ha
+  · intro dt R hder
+    have hkey : (dt, R) = ("doc", "approver") := by
+      unfold isDerived at hder
+      rw [show taintedKeys Sd = [("doc", "approver")] from by decide] at hder
+      simpa using hder
+    rw [Prod.mk.injEq] at hkey
+    obtain ⟨rfl, rfl⟩ := hkey
+    refine ⟨?_, ?_⟩
+    · intro r hr tr _
+      rw [show schemaRewrites Sd = [] from rfl] at hr
+      cases hr
+    · intro t ht
+      simp only [Td, List.mem_singleton] at ht
+      subst ht
+      decide
+
+/-- The witness schema is inside the spec's decision-15 accepted scope. -/
+theorem within_scope : GraphAccepts Sd := by
+  refine ⟨by decide, ?_, by decide⟩
+  intro d hd r hr hwild _
+  simp only [Sd, List.mem_cons, List.not_mem_nil, or_false] at hd
+  rcases hd with rfl | rfl <;>
+    (simp only [exprRestrictions, List.mem_cons, List.append_nil,
+        List.not_mem_nil, or_false] at hr;
+     subst hr; exact absurd hwild (by decide))
+
+/-- **The bundle is JOINTLY dischargeable**: the audited Direct-arm T2b
+    `graph_correct_w3d2_d` instantiates at the witness pair with every
+    schema/store hypothesis closed by `accepts` + `fragment` — the machine check
+    that the Direct-arm fragment's hypothesis set is satisfiable by a real
+    compiled Direct-arm boolean schema (the attack of record for a widening). -/
+theorem correct_applies {σ : GraphState} (q : Query)
+    (h : ReachedByW3d2C σ Sd Td) (hq : cascadeKeys Sd σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem Sd Td q := by
+  obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
+  obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, hNoUD, hBS, hTS, hterm⟩ := fragment
+  exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+    hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo
+
+end W4WitnessDirect
 end Zanzibar

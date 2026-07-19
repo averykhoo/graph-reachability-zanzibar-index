@@ -1392,4 +1392,31 @@ namespace Zanzibar
 #print axioms reachedByW3d2C_settled_d
 #print axioms graph_correct_w3d2_d
 
+-- #1 Leaf widening (Direct arm) task step 4 — the NON-VACUITY WITNESS `W4WitnessDirect`
+-- (FullScope.lean, 2026-07-20e). `Sd`/`Td` = the conformance corpus `direct_arm_exclusion`
+-- in compiled form (`approver := excl (direct [user]) (computed banned)`, `banned :=
+-- direct [user]`, a store granting `user:alice` THROUGH the Direct arm) — the hypothesis
+-- bundle of the C-chain T2b `graph_correct_w3d2_d` is machine-checked satisfiable by a real
+-- compiled Direct-arm boolean schema. **`outside_old_admission`** — the store is provably
+-- REJECTED by plain `StoreValidRules` (the Direct arm sits under `excl` ⇒ `exprDirects = []`),
+-- so the `StoreValidRulesD` widening is contentful, not a relabeling. **`accepts`** /
+-- **`fragment`** — the admission side (with `StoreValidRulesD`) and the full `_d` fragment
+-- carries (`ComputedOrDirect`/`DirectArmsBare`/operand-`ComputedOnly`/`hLU2`/`hWSbare`/
+-- `hNoUD`/store disciplines) inhabited. **`within_scope`** — `GraphAccepts Sd` (decision 15).
+-- **`correct_applies`** — the bundle is JOINTLY dischargeable: `graph_correct_w3d2_d`
+-- instantiates at `(Sd, Td)` with every schema/store hypothesis closed. ★ HONEST SCOPE: this
+-- witnesses the C-CHAIN theorem; the final unsuffixed `graph_correct`/`graph_reached_inv`
+-- (E-chain, `ReachedByW3d2E`) and `W4Fragment` remain `ComputedOnly`-scoped — the E-chain
+-- widening (operational enumeration `enumJob2` → `enumJob2D` + a `_d` projection of
+-- `reachedByW3d2E_toC`) is the recorded remaining gap (HANDOFF). ★ Attack-run 2026-07-20e
+-- (scratch deleted): the Exec driver over the 4-tuple corpus store drains with `check = sem`
+-- on the full truth table (alice T / bob F / carol F / ghost F); REMOVE ops on stores holding
+-- a Direct-arm grant are `removeGateB`-REJECTED (fail-closed — the constructor's plain
+-- `StoreValidRules` pre-store guard, the `hNoUD` scoping made operational). Standard axioms only:
+#print axioms W4WitnessDirect.outside_old_admission
+#print axioms W4WitnessDirect.accepts
+#print axioms W4WitnessDirect.fragment
+#print axioms W4WitnessDirect.within_scope
+#print axioms W4WitnessDirect.correct_applies
+
 end Zanzibar
