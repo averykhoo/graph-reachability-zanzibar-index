@@ -236,6 +236,33 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
 - [ ] **A real service wrapper** — deliberately skipped; the store is a plain
       callable API.
 - [ ] **Tuple-log compaction** — only if the log ever outgrows "humans wrote this" scale.
+- [ ] **Bulk-merge write path (batch closure update seeded from EXISTING state).** The one
+      high-value UNBUILT write optimization (never filed in the perf arc — it crosses the
+      Lean/identity bar, so it isn't a micro-opt). Sits between the two shipped paths:
+      incremental `advance_index` (per-edge `O(anc×desc)`, writes only the delta) and
+      from-empty `bulk_build`/`bulk_backfill` (one topo+DP pass, 30–200×, but REFUSES a
+      non-empty store). Goal: apply a large batch to an already-populated index by loading
+      the affected region, recomputing the merged closure delta in memory (bulk-builder DP
+      seeded with existing boundary path-counts), and writing back ONLY changed rows.
+      **When it wins:** batch touches ~>2–3% of the closure (incremental's summed regions
+      get expensive) but far less than the whole graph (a full rebuild wastefully rewrites
+      the untouched majority). **Why it's hard / the crux:** a merge must reproduce, against
+      PRE-EXISTING rows, all the coupled invariants the from-empty builders are add-only
+      exempt from — `EdgeV4` direct/indirect counts (incl. boundary composition), the I5
+      `derived` flag, `ResidueV1` stars/neg/upos+version, from-chain nodes, node
+      `reference_count`/implicit GC (order-sensitive), sticky explicit-promotion — plus
+      remove/GC/diff cases (`_gc_*` deletes) the mirrors never hit. **Reuse:** `bulk_build.py`
+      Phases R/C/P/W + a `_BulkBackfill` recompute SCOPED to affected derived keys. **Gates:**
+      changes a modeled algorithm → differential identity gate (mirror `tests/test_bulk_build.py`:
+      bulk-merge == incremental `advance_index`, byte-identical mod row-ids), hypothesis
+      campaign (esp. removes), a Lean twin + `CORRESPONDENCE.md §7/§8` entry (an "alternative
+      constructor" like P13/R4-BF), full phased `verify.sh` + fuzz. **Phasing:** bench first
+      (no large-batch-on-large-index bench exists today — build one, and confirm whether the
+      cascade or the closure DP dominates), then add-only merge behind a distinct entry point,
+      then removes. Watch the P12c fence (outbox/watermark/cascade coupling). A fuller
+      design sketch was produced 2026-07-19 in a read-only session but not yet written to a
+      `docs/` design doc — write it up (match `docs/architecture/p13-bulk-build-design.md`
+      style) before implementing. Revisit only on a concrete large-batch ingest need.
 
 ### Standing / latent (non-blocking — no action needed unless a motivating case appears)
 
