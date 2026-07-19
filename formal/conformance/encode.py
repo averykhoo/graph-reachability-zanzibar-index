@@ -77,6 +77,14 @@ def tuple_to_json(tup: OracleTuple) -> dict:
     }
 
 
+def op_to_json(kind: str, tup: OracleTuple) -> dict:
+    """A driver op in the CLI's `"ops"` form: an `"op"` kind atop the flat tuple
+    fields (`Cli.lean` `decodeOp`). `kind` is `"add"` or `"remove"`."""
+    d = tuple_to_json(tup)
+    d["op"] = kind
+    return d
+
+
 def query_to_json(subject_predicate, subject_type, subject_name,
                   relation, object_type, object_name) -> dict:
     """A query in the CLI's flat form (same layout as a tuple)."""
@@ -94,7 +102,8 @@ def build_request(schema_text: str,
                   tuples: Iterable[OracleTuple],
                   queries: Iterable[tuple],
                   object_wildcards: Iterable[tuple[str, str]] = (),
-                  mode: str | None = None) -> str:
+                  mode: str | None = None,
+                  ops: Iterable[tuple[str, OracleTuple]] | None = None) -> str:
     """Assemble the full JSON request string for `zcli`.
 
     `queries` is an iterable of 6-tuples
@@ -102,6 +111,12 @@ def build_request(schema_text: str,
     `mode="graph"` makes zcli run the operational GRAPH model (`graphRun` +
     `GraphModel.check`) instead of the spec `sem`; tuples are applied as writes
     in list order (Phase 6 graph-state conformance).
+
+    `ops` (graph / graph-state modes only) is an interleaved add/remove op stream
+    `[(kind, OracleTuple), ...]` with `kind in {"add", "remove"}`. When present it
+    is emitted as the request's `"ops"` field, driving `graphRunOps` (the
+    Exec-driver remove path); `"tuples"` is then unused by the graph driver but is
+    still emitted (harmless) for shape stability.
     """
     req = {
         "schema": schema_to_json(schema_text, object_wildcards),
@@ -110,4 +125,6 @@ def build_request(schema_text: str,
     }
     if mode is not None:
         req["mode"] = mode
+    if ops is not None:
+        req["ops"] = [op_to_json(kind, t) for (kind, t) in ops]
     return json.dumps(req)

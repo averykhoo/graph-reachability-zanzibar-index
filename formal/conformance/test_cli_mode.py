@@ -31,6 +31,8 @@ _QUERIES = [("...", "user", "alice", "viewer", "doc", "d1")]
 
 # Distinct exit code for an unrecognized mode (Cli.lean rc enumeration).
 _RC_UNKNOWN_MODE = 4
+# Distinct exit code for an `"ops"` stream in spec mode (unsupported there).
+_RC_OPS_IN_SPEC = 5
 
 
 def _run_zcli(request_json: str):
@@ -92,3 +94,33 @@ def test_absent_mode_defaults_to_spec():
         f"stderr={proc.stderr!r}")
     answers = json.loads(proc.stdout.strip())
     assert answers == [True], f"spec default answer mismatch: {answers!r}"
+
+
+def test_ops_in_spec_mode_rejected():
+    """An `"ops"` stream is meaningless in spec mode (which evaluates `sem` over
+    the static store) and MUST be rejected with the distinct rc 5, never silently
+    ignored — otherwise a caller's removes would vanish and the answers would be
+    mislabeled. Graph / graph-state DO support ops; only spec rejects them."""
+    _require_zcli()
+    req = build_request(_SCHEMA, _TUPLES, _QUERIES, mode="spec",
+                        ops=[("add", _TUPLES[0])])
+    proc = _run_zcli(req)
+    assert proc.returncode == _RC_OPS_IN_SPEC, (
+        f"expected rc {_RC_OPS_IN_SPEC} for ops in spec mode, got "
+        f"{proc.returncode}; stderr={proc.stderr!r}")
+    assert "ops" in proc.stderr, (
+        f"stderr should mention the unsupported ops stream; got {proc.stderr!r}")
+    assert proc.stdout.strip() == "", (
+        f"a rejected request must print no answers; stdout={proc.stdout!r}")
+
+
+def test_absent_ops_field_preserves_spec():
+    """Backward-compat: a spec request with no `"ops"` key behaves exactly as
+    before (rc 0, one answer per query) — the ops extension is inert when unused."""
+    _require_zcli()
+    req = build_request(_SCHEMA, _TUPLES, _QUERIES, mode="spec")  # no ops
+    proc = _run_zcli(req)
+    assert proc.returncode == 0, (
+        f"spec with no ops must stay rc 0, got {proc.returncode}; "
+        f"stderr={proc.stderr!r}")
+    assert json.loads(proc.stdout.strip()) == [True]

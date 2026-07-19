@@ -1203,5 +1203,25 @@ namespace Zanzibar
 #print axioms graphRun_store
 #print axioms drainedB_iff
 #print axioms graphRun_check_eq_sem
+-- Exec-driver remove hardening (GraphIndex/Exec.lean): the op-stream driver
+-- exercises the completed Lean remove leg end-to-end. The remove constructor's
+-- store-discipline guard is DECIDED at runtime by Bool mirrors, each pinned to
+-- its `Prop` by an iff (`storeValidRulesB_iff` / `bareStarStoreB_iff` /
+-- `ttuStarFreeB_iff` / `noStoreSubjectRB_iff` / `noTtuTargetB_iff` / `htermB_iff`),
+-- bundled into `removeGateB_gate`; the honesty theorems `graphRunOps_reached`
+-- (every op-driver output — remove ops included — is a `ReachedBy` state),
+-- `graphRunOps_store` (the chain store is the op stream's accepted fold), and the
+-- capstone `graphRunOps_check_eq_sem` (under the W4 bundles every printed verdict
+-- IS `sem`) extend the add-only trio to the widened stream. Standard axioms only:
+#print axioms storeValidRulesB_iff
+#print axioms bareStarStoreB_iff
+#print axioms ttuStarFreeB_iff
+#print axioms noStoreSubjectRB_iff
+#print axioms noTtuTargetB_iff
+#print axioms htermB_iff
+#print axioms removeGateB_gate
+#print axioms graphRunOps_reached
+#print axioms graphRunOps_store
+#print axioms graphRunOps_check_eq_sem
 
 end Zanzibar

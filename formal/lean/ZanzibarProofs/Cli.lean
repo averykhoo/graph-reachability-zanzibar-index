@@ -11,12 +11,17 @@ two backends six ways.
 
 Request format (the Python harness folds n-ary `or`/`and` into binary nodes):
 ```json
-{ "mode": "spec" | "graph"  (optional, default "spec"),
+{ "mode": "spec" | "graph" | "graph-state"  (optional, default "spec"),
   "schema": { "defs": [ [[type, rel], <expr>], ... ],
               "objectWildcards": [ [type, rel], ... ] },
   "tuples": [ {"sp":.., "st":.., "sn":.., "rel":.., "ot":.., "on":..}, ... ],
+  "ops":    [ {"op": "add"|"remove", "sp":.., ...}, ... ]  (optional),
   "queries": [ {"sp":.., "st":.., "sn":.., "rel":.., "ot":.., "on":..}, ... ] }
 ```
+The optional `"ops"` field (graph / graph-state modes only) is an interleaved
+add/remove op stream driven by `graphRunOps` (`GraphIndex/Exec.lean`): per op one
+chain leg (`write` for add / the runtime-gated `remove` for remove) then one
+cascade leg. Absent `"ops"` ⇒ the add-only `graphRun` over `"tuples"` (unchanged).
 `<expr>` is one of: `{"direct": [[type,pred,wild], ...]}`, `{"computed": rel}`,
 `{"ttu": [targetRel, tuplesetRel]}`, `{"union": [e,e]}`, `{"inter": [e,e]}`,
 `{"excl": [base, subtract]}`.
@@ -26,7 +31,10 @@ Modes (Phase 6 — graph-state conformance):
 * `"graph"` — run the OPERATIONAL graph model (`graphRun`: per input tuple one
   admitted logged write + one two-round cascade leg — the `ReachedBy` chain's
   own constructors, `GraphIndex/Exec.lean`), then answer each query with the
-  graph read `GraphModel.check`. Errors (nonzero exit) if a write fails edge
+  graph read `GraphModel.check`. With an `"ops"` field, runs `graphRunOps` over
+  the add/remove stream instead (a remove is the `ReachedByW3d2E.remove`
+  constructor, whose guard `removeGateB` decides at runtime — fail-closed on a
+  gate miss). Errors (nonzero exit) if an op fails its gate / a write fails edge
   admission (rc 2) or the final state is not drained (rc 3) — those inputs are
   outside the proved scope and MUST NOT silently produce answers.
 * `"graph-state"` — run the SAME `graphRun` fold under the SAME rc 2/3 gates,
@@ -63,8 +71,8 @@ string other than `"spec"`/`"graph"`/`"graph-state"` — is rejected with rc 4
 answers, or the graph-vs-spec conformance pin would void.
 
 Exit codes: 0 = answers/state printed · 1 = usage / JSON parse / decode error ·
-2 = graph write failed admission · 3 = graph state not drained ·
-4 = unrecognized mode.
+2 = a graph op failed its gate (write admission / remove guard) · 3 = graph state
+not drained · 4 = unrecognized mode · 5 = `"ops"` in spec mode (unsupported).
 
 Output: a JSON array of booleans, one per query (spec/graph modes), or the
 canonical state object (graph-state mode). Usage: `zcli <request.json>`.
@@ -144,6 +152,29 @@ def decodeRequest (j : Json) : Except String (Schema × Store × List Query) := 
   let queriesJson ← (← j.getObjVal? "queries").getArr?
   let qs ← queriesJson.toList.mapM decodeQuery
   pure (S, T, qs)
+
+/-- One driver op: `{"op": "add"|"remove", "sp":.., "st":.., "sn":.., "rel":..,
+    "ot":.., "on":..}` — the tuple fields are decoded exactly as a stored tuple. -/
+def decodeOp (j : Json) : Except String GraphOp := do
+  let kind ← (← j.getObjVal? "op").getStr?
+  let t ← decodeTuple j
+  match kind with
+  | "add" => pure (GraphOp.add t)
+  | "remove" => pure (GraphOp.remove t)
+  | other => .error s!"unknown op kind: {other} (expected \"add\"/\"remove\")"
+
+/-- The optional `"ops"` field — the interleaved add/remove op stream for the
+    graph / graph-state modes. `.ok none` when the key is absent (the add-only
+    path over `"tuples"` is preserved verbatim); `.ok (some ops)` when present;
+    `.error` on a malformed op. The graph modes drive `graphRunOps`; spec mode
+    rejects any `"ops"` field (a remove has no spec-level meaning). -/
+def decodeOps (j : Json) : Except String (Option (List GraphOp)) :=
+  match j.getObjVal? "ops" with
+  | .ok opsJson => do
+    let arr ← opsJson.getArr?
+    let ops ← arr.toList.mapM decodeOp
+    pure (some ops)
+  | .error _ => pure none
 
 /-- The request mode string. `.ok "spec"` when the `"mode"` key is absent (the
     preserved default); the string value when present; `.error` when the key is
@@ -240,39 +271,64 @@ def main (args : List String) : IO UInt32 := do
         | .error e => IO.eprintln s!"mode error: {e}"; pure 4
         | .ok "graph" =>
           -- Phase 6: run the operational graph model; the honesty theorems
-          -- (`graphRun_reached`, `graphRun_check_eq_sem`) cover exactly what is
-          -- printed here. Refuse to answer outside the proved scope.
-          match graphRun S T with
-          | none =>
-            IO.eprintln "graph mode: a write failed edge admission \
-              (input outside the add-only chain)"
-            pure 2
-          | some (σ, _) =>
-            if drainedB S σ then
-              printAnswers (qs.map (fun q => GraphModel.check σ q))
-            else do
-              IO.eprintln "graph mode: final state not drained \
-                (outside the proved read scope)"
-              pure 3
+          -- (`graphRun_reached`/`graphRunOps_reached`,
+          -- `graphRun_check_eq_sem`/`graphRunOps_check_eq_sem`) cover exactly
+          -- what is printed here. Refuse to answer outside the proved scope.
+          -- With an `"ops"` field, drive the interleaved add/remove op stream
+          -- (`graphRunOps`); without it, the add-only `graphRun` over `"tuples"`
+          -- (byte-identical to before).
+          match decodeOps j with
+          | .error e => IO.eprintln s!"ops decode error: {e}"; pure 1
+          | .ok opsOpt =>
+            let run := match opsOpt with
+              | some ops => graphRunOps S ops
+              | none => graphRun S T
+            match run with
+            | none =>
+              IO.eprintln "graph mode: an op failed its runtime gate \
+                (write admission / remove guard — outside the operational chain)"
+              pure 2
+            | some (σ, _) =>
+              if drainedB S σ then
+                printAnswers (qs.map (fun q => GraphModel.check σ q))
+              else do
+                IO.eprintln "graph mode: final state not drained \
+                  (outside the proved read scope)"
+                pure 3
         | .ok "graph-state" =>
           -- Same driver + same rc 2/3 gates as graph mode; emits the final
-          -- state instead of answers (queries ignored). The store passed to
-          -- the residue enumeration is the chain store the driver accumulated.
-          match graphRun S T with
-          | none =>
-            IO.eprintln "graph-state mode: a write failed edge admission \
-              (input outside the add-only chain)"
-            pure 2
-          | some (σ, Tc) =>
-            if drainedB S σ then do
-              IO.println (stateJson S σ Tc).compress
-              pure 0
-            else do
-              IO.eprintln "graph-state mode: final state not drained \
-                (outside the proved read scope)"
-              pure 3
+          -- state instead of answers (queries ignored). Supports the `"ops"`
+          -- stream too; the store passed to the residue enumeration is the
+          -- chain store the driver accumulated.
+          match decodeOps j with
+          | .error e => IO.eprintln s!"ops decode error: {e}"; pure 1
+          | .ok opsOpt =>
+            let run := match opsOpt with
+              | some ops => graphRunOps S ops
+              | none => graphRun S T
+            match run with
+            | none =>
+              IO.eprintln "graph-state mode: an op failed its runtime gate \
+                (write admission / remove guard — outside the operational chain)"
+              pure 2
+            | some (σ, Tc) =>
+              if drainedB S σ then do
+                IO.println (stateJson S σ Tc).compress
+                pure 0
+              else do
+                IO.eprintln "graph-state mode: final state not drained \
+                  (outside the proved read scope)"
+                pure 3
         | .ok "spec" =>
-          printAnswers (qs.map (fun q => sem S T q))
+          -- Spec mode evaluates `sem` over the static store; an `"ops"` stream
+          -- (removes especially) has no spec-level meaning and MUST be rejected
+          -- rather than silently ignored (rc 5).
+          match decodeOps j with
+          | .ok (some _) =>
+            IO.eprintln "spec mode does not support an \"ops\" stream \
+              (use \"graph\"/\"graph-state\")"
+            pure 5
+          | _ => printAnswers (qs.map (fun q => sem S T q))
         | .ok other =>
           IO.eprintln s!"unknown mode: {other} \
             (expected \"spec\", \"graph\", or \"graph-state\")"
