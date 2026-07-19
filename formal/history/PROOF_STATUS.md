@@ -8,7 +8,7 @@ HANDOFF.md's "The next task".
 
 ---
 
-## Session 2026-07-19g (#4 FULLY CLOSED: docs sweep + Exec-driver remove hardening — removes now DRIVEN; #1 Direct-arm legs 4/5a/5b LANDED: the base-equation wall discharged, two attack kills, audit 425→441)
+## Session 2026-07-19g (#4 FULLY CLOSED: docs sweep + Exec-driver remove hardening — removes now DRIVEN; #1 Direct-arm legs 4/5a/5b/5c LANDED: the base-equation wall discharged, two attack kills, audit 425→446)
 
 Tenth session of the optional arc; orchestrated (Fable main, parallel where files were disjoint):
 one Opus docs agent + one Opus Lean agent concurrently, then Fable for the leg-4 proof wall, then
@@ -69,14 +69,30 @@ two sequential Opus proof legs. Six commits, all gated; pushed incrementally.
   threading — they route through `coveredFn_declared` + the enumeration, so they are blocked on the
   enum half: `enumJob2`/`enum2Base` must enumerate the stored-on-R BARE Direct-arm subjects (the
   `NoConcDirect`-failing ones) + a `coveredFn_declared_d`. Audit 434 → 441.
+- **#1 leg 5c (`62ab8f4`, Opus) — the enum half.** The linchpin widened: **`coveredFn_declared_d`**
+  (a true computed leaf traces to a wildcard-flagged restriction; a true Direct arm at the star is a
+  stored bare-STAR grant → declared shape) via `graphRec_star_declared_d`/`directArm_star_declared`.
+  Direct-arm-aware enumeration: `storedDirectSubjects`, `enum2BaseD`/`enumJob2D` (= `enum2Base` ∪ the
+  stored-on-R BARE Direct-arm subjects — exactly the `NoConcDirect`-failing ones),
+  `checkFnR_eq_star_of_not_baseD`, `w3dJobCoverage_enumJob2D`, `w3d2_leg_context_d`; routed settled
+  read bridge `checkFnR_eq_sem_settled_d` + `checkFnR_star_declared_d`. Attack-first NO-KILL: a
+  stored bare Direct-arm subject lives in the FIXED store (`grantsOf T`), not any mutating residue —
+  the 12h future-residue kill shape does not apply; enumerable at every cascade state. **WALL
+  REFINEMENT:** the state-level correspondence theorems (`w3c_row_char`, `graph_correct_w3d2`,
+  `w3dJobCoverage_enumJob2_state`) derive their shadow/master FROM THE CHAIN gated on `hCO`+`hSV`
+  (CascadeStrataSettle:577-582), so full `_d` clones need a **`_d` chain**
+  (`reachedByW3d2_shadow_d`/`reachedByW3c_master_d`/`reachedByW3d2C_settled_d` admitting
+  `StoreValidRulesD` + `ComputedOrDirect ∧ DirectArmsBare`) — chain-level effort, the same machinery
+  sub-step 3 needs; the 5b/5c spine is exactly what it will consume. Audit 441 → 446.
 - **Gate state:** every Lean commit `verify.sh lean` PASSED (sorries=0, standard axioms; final audit
-  441/441); conf-heavy + conf-rest re-run green at `128d7e6` (76 / 239, 0 skips) and again at session
-  end; `pytest tests/` 593 passed. ⚠ conf-rest observed at 9–13 min today (often over the 10-min
+  446/446); conf-heavy + conf-rest re-run green at `128d7e6`, at `4a01c2d`, and at session end on
+  `62ab8f4` (76 / 239, 0 skips each); `pytest tests/` 593 passed. ⚠ conf-rest observed at 9–13 min today (often over the 10-min
   tool cap; the per-op zcli remove gate grew it) — runbook carries the warning; consider splitting
   the phase.
 - **STILL FLAGGED FOR AVERY:** the remove-guard design decision (validly-stored scope strengthens the
   audited inductives `ReachedByW3d2`/`C`/`E`).
-- **NEXT:** #1 leg 5 final slice — the enum half + the settled-consumer `_d` clones, then sub-step 3
+- **NEXT:** #1 leg 5d — the `_d` CHAIN (`reachedByW3d2_shadow_d`/`reachedByW3c_master_d`/
+  `reachedByW3d2C_settled_d`; then `graph_correct_w3d2_d`/`w3c_row_char_d` fall out), then sub-step 3
   (widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare`, `w4_within_scope`,
   `W4WitnessDirect`, conformance corpus + pins, conf phases). Then the TTU/userset half, #2 strata.
   Exact resume state: `history/optional-widening-2026-07.md` Target #1 RESUME.

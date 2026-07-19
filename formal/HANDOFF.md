@@ -35,7 +35,7 @@ never rounds up to "the code is formally verified" (plan §7).
    stratum-1"). A session that kills a false statement is a GOOD session; record the
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (441 `#print axioms` reports, one per audited
+   + **0 sorries** + zcli + axiom audit (446 `#print axioms` reports, one per audited
    theorem, only `[propext, Classical.choice, Quot.sound]`) + 315 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
@@ -94,8 +94,8 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > README/CORRESPONDENCE §7 now state the scoped-removes claim + live counts). STILL FLAGGED FOR
 > AVERY: the guard design decision (validly-stored scope strengthens an audited inductive).
 >
-> **#1 Direct-arm widening ADVANCED (2026-07-19g): legs 4 + 5a + 5b landed** (`128d7e6`/`53c5d34`/
-> `4a01c2d`; all additive, audited statements byte-identical, audit 425 → **441**).
+> **#1 Direct-arm widening ADVANCED (2026-07-19g): legs 4 + 5a + 5b + 5c landed** (`128d7e6`/
+> `53c5d34`/`4a01c2d`/`62ab8f4`; all additive, audited statements byte-identical, audit 425 → **446**).
 > Leg 4 (Fable): the base-equation wall DISCHARGED — `graphRec_base_eq_d`/`_bs_d` (no `ComputedOnly`;
 > premise = the `hterm` bundle consumers already carry) via design lemmas A (`rewriteClosure_derived_
 > eq_seed`, simpler than designed), B (`probeNonDerived_untaintedFilter`), C (`sem_untaintedFilter`,
@@ -110,12 +110,22 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > its star read); corrected split landed gated on **`NoConcDirect`** (`evalE_star_of_noConc`,
 > `checkFn_eq_coveredFn_of_no_extra_cd`, `checkFnR_eq_star_of_not_enum_cd`).
 >
-> **THE NEXT TASK — #1 leg 5 final slice, then sub-step 3.** (1) **The enum half:** `enumJob2`/
-> `enum2Base` must additionally enumerate the stored-on-R BARE Direct-arm subjects (the
-> `NoConcDirect`-failing ones) + a `coveredFn_declared_d`; then the W3d2 settled-consumer `_d` clones
-> (`checkFnR_eq_sem_settled` CascadeStrataSettle:884, W3c row-char ReconcileStarsComplete:1058,
-> CascadeStrataResettle:1540) — they route through `coveredFn_declared` + the enumeration, NOT pure
-> read-bridge threading. (2) **Sub-step 3 (gated on 1):** widen `W4Fragment.computedOnly` →
+> Leg 5c (`62ab8f4`, the enum half): the linchpin widened — **`coveredFn_declared_d`** (via
+> `graphRec_star_declared_d`/`directArm_star_declared`), the Direct-arm-aware enumeration
+> (`storedDirectSubjects`, `enum2BaseD`/`enumJob2D`, `w3dJobCoverage_enumJob2D`,
+> `w3d2_leg_context_d`) + the routed settled read bridge (`checkFnR_eq_sem_settled_d`,
+> `checkFnR_star_declared_d`). Attack NO-KILL recorded: a stored bare Direct-arm subject lives in
+> the FIXED store, so the 12h future-residue kill shape does not apply — enumerable at every state.
+>
+> **THE NEXT TASK — #1 leg 5d: the `_d` CHAIN, then sub-step 3.** (1) The state-level correspondence
+> theorems (`w3c_row_char` ReconcileStarsComplete:291, `graph_correct_w3d2` CascadeStrataResettle:1436,
+> `w3dJobCoverage_enumJob2_state`) derive their shadow/master from the chain gated on `hCO`+`hSV`
+> (CascadeStrataSettle:577-582), so full `_d` clones need a **`_d` chain**: `reachedByW3d2_shadow_d` /
+> `reachedByW3c_master_d` / `reachedByW3d2C_settled_d` admitting `StoreValidRulesD` + a
+> `ComputedOrDirect ∧ DirectArmsBare` def — genuine chain-level effort (the same machinery sub-step 3
+> needs); the 5b/5c spine (`NoConcDirect` split + `enumJob2D` + `coveredFn_declared_d` +
+> `checkFnR_eq_sem_settled_d`) is exactly what it consumes; then `graph_correct_w3d2_d` /
+> `w3c_row_char_d` fall out. (2) **Sub-step 3 (gated on 1):** widen `W4Fragment.computedOnly` →
 > `ComputedOrDirect ∧ DirectArmsBare`, re-prove `w4_within_scope`, witness `W4WitnessDirect`,
 > conformance corpus into `GRAPH_FRAGMENT` + pins (conf phases required). The durable plan + exact
 > resume state: `history/optional-widening-2026-07.md` Target #1 RESUME. After #1's Direct arm:
