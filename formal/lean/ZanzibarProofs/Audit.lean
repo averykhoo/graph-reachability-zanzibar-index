@@ -1303,4 +1303,35 @@ namespace Zanzibar
 #print axioms checkFn_eq_coveredFn_of_no_extra_cd
 #print axioms checkFnR_eq_star_of_not_enum_cd
 
+-- #1 Leaf widening (Direct arm) leg 5 FINAL SLICE — the ENUM half + the read-bridge `_d`
+-- clones (GraphIndex/ReconcileStarsComplete.lean + CascadeStrataSettle.lean +
+-- CascadeStrataEnum.lean, 2026-07-19). ATTACK-FIRST (`#eval`, house rule 2 — NO KILL): a
+-- stored BARE Direct-arm subject lives in the FIXED store `T` (`grantsOf T rs dt on R`),
+-- NOT in any mutating operand residue, so — unlike the 12h kill (a fresh grant appearing
+-- only in a dirty operand's FUTURE residue) — it is enumerable at EVERY cascade state
+-- directly from `T`; the `NoConcDirect`-failing subject IS its own grant's subject, hence
+-- in `storedDirectSubjects`. **`coveredFn_declared_d`** — the linchpin no-ghost-coverage
+-- widened to `StoreValidRulesD` + a `ComputedOrDirect`/`DirectArmsBare` def: a true COMPUTED
+-- leaf traces to a wildcard-flagged restriction (seed classification takes the
+-- `StoreValidRulesD` disjunction, `exprDirects`∨`exprDirectsAll`), a true `Direct` arm at the
+-- star subject is a stored bare-STAR grant whose STAR-only-matches-wildcard restriction is a
+-- declared shape (`directArm_star_declared`). **`checkFnR_eq_sem_settled_d`** — the routed
+-- stratum-staged read bridge over a Direct-arm def (`checkFnR_eq_semStep_cd` for the arm;
+-- `graphRec_base_eq_bs_d`/`coveredFn_declared_d`/`checkFn_eq_sem_bs_d` for the operands, still
+-- `ComputedOnly`). **`checkFnR_star_declared_d`** — routed no-ghost-coverage (untainted leaf via
+-- `graphRec_star_declared_d`, derived leaf via the settled `stars` row, `Direct` arm via
+-- `directArm_star_declared`). **`w3dJobCoverage_enumJob2D`** — the coverage of the widened job
+-- `enumJob2D` (base = `enum2Base` ∪ `storedDirectSubjects`): a `NoConcDirect` subject reads as
+-- its star (`checkFnR_eq_star_of_not_baseD` via `evalE_star_bareArms`, both subject kinds), the
+-- concrete-grant subjects are enumerated directly; **`w3d2_leg_context_d`** packages the routed
+-- bridge + declaredness. All hypothesis-factored (take the shadow `h0`/`hsh` as inputs) so they
+-- need NO `_d` chain — the state-level `_d` clones (`w3c_row_char`/`graph_correct_w3d2`, which
+-- DERIVE the shadow from `reachedByW3c_master`/`reachedByW3d2_shadow`, both gated on `ComputedOnly`
+-- + `StoreValidRules`) await the `_d` chain/master/shadow (sub-step 3). Standard axioms only:
+#print axioms coveredFn_declared_d
+#print axioms checkFnR_eq_sem_settled_d
+#print axioms checkFnR_star_declared_d
+#print axioms w3dJobCoverage_enumJob2D
+#print axioms w3d2_leg_context_d
+
 end Zanzibar

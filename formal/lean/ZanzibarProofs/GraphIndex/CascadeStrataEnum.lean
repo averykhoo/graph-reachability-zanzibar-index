@@ -362,6 +362,45 @@ theorem checkFnR_star_declared {S : Schema} {T : Store} {σ σ0 : GraphState}
       obtain ⟨hstars_iff, _, _⟩ := hset'.1 res hrow
       exact ((hstars_iff sh).mp hleaf).1
 
+/-- **Routed no-ghost-star-coverage, Direct-arm-widened (`checkFnR_star_declared_d`).** The
+    `StoreValidRulesD` + `ComputedOrDirect`/`DirectArmsBare` analog of `checkFnR_star_declared`.
+    A true routed star read of shape `sh` at a Direct-arm derived def certifies `sh` declared:
+    a true COMPUTED leaf rides the shadow (`graphRec_star_declared_d`, untainted) or the settled
+    `stars` row (derived); a true `Direct` arm rides `directArm_star_declared` (a stored bare-STAR
+    grant of shape `sh` is a wildcard-flagged restriction of the def). -/
+theorem checkFnR_star_declared_d {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRulesD S T) (hTS : TtuStarFree S T)
+    (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
+    (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hqo : on ≠ STAR)
+    (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') → (u, objNode ⟨dt, on⟩ r') ∈ σ.edges))
+    {sh : Shape} (hchk : σ.checkFnR T (starSubj sh) dt on R e = true) :
+    sh ∈ wildcardShapes S := by
+  unfold GraphState.checkFnR at hchk
+  rcases evalE_computedOrDirect_true_leaf e hcd hchk with ⟨r', hr', hleaf⟩ | ⟨rs, hrs, hdl⟩
+  · unfold GraphModel.graphRecR at hleaf
+    cases hd' : isDerived S (dt, r') with
+    | false =>
+      rw [GraphModel.check_untainted _ _ (by rw [hschema]; exact hd')] at hleaf
+      have hleaf0 : GraphModel.graphRec σ0 (starSubj sh) dt on r' = true := by
+        rw [← shadow_graphRec_agree hsh (starSubj sh) on hd']
+        exact hleaf
+      exact graphRec_star_declared_d hTT hSV hTS h0 hleaf0
+    | true =>
+      rw [GraphModel.check_derived _ _ (by rw [hschema]; exact hd')] at hleaf
+      rw [probeDerived_eq _ hqo, if_pos (show (starSubj sh).name = STAR from rfl)] at hleaf
+      obtain ⟨hset', _, _⟩ := hops r' hr' hd'
+      cases hrow : σ.residue (objNode ⟨dt, on⟩ r') r' with
+      | none => rw [hrow, Option.getD_none] at hleaf; exact absurd hleaf Bool.false_ne_true
+      | some res =>
+        rw [hrow, Option.getD_some] at hleaf
+        obtain ⟨hstars_iff, _, _⟩ := hset'.1 res hrow
+        exact ((hstars_iff sh).mp hleaf).1
+  · exact directArm_star_declared hlk hba hrs hdl
+
 /-- **The routed leg context** — both helpers `w3dJobCoverage_enumJob2` consumes, at a
     shadowed W3d-2 state with settled derived operand keys. `hbridge` is
     `checkFnR_eq_sem_settled`, `hcovDecl` is `checkFnR_star_declared`. -/
@@ -431,5 +470,267 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
   obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS hMatch
     hStrat hterm hCO hWSbare h0 hsh hschema hlk hder hco hqo hLU2 hops
   exact w3dJobCoverage_enumJob2 hco hcl hqo hbridge hcovDecl hWSbare
+
+/-! ## The Direct-arm-widened enumerated job (`enumJob2D`) and its coverage — leg 5 sub-step 2
+
+`enum2Base` (leaf concretes ∪ residue-named) MISSES the subjects that read a `Direct` arm
+differently from their shape-star — exactly the `NoConcDirect`-FAILING subjects, i.e. the
+subjects of the stored BARE Direct-arm grants (`grantsOf T rs dt on R` over `exprDirectsAll e`).
+Those live in the FIXED store `T`, NOT in any mutating operand residue, so — unlike the 12h
+kill (a fresh grant appearing only in a dirty operand's future residue) — a stored Direct-arm
+tuple is enumerable at EVERY state directly from `T`. `enum2BaseD` adds them; the coverage
+discharge `w3dJobCoverage_enumJob2D` then contraposes `checkFnR_eq_star_of_not_baseD` (a subject
+off the widened base reads as its star) for the `NoConcDirect` subjects and covers the
+concrete-grant subjects directly. -/
+
+/-- The userset (`predicate ≠ BARE`) analog of `directLeaf_star_of_noConc`: on a BARE arm, a
+    userset subject and its (userset) shape-star BOTH read the arm as `false` — bare grants
+    never match a userset subject or a userset star. NO `NoConcDirect` gate needed. -/
+theorem directLeaf_star_userset_bare {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query}
+    {s : SubjectRef} {rs : List Restriction} {ot on rel : String}
+    (hb : ∀ r ∈ rs, r.2.1 = BARE) (hsn : s.name ≠ STAR) (hsp : s.predicate ≠ BARE) :
+    directLeaf rec1 s T q1 rs ot on rel
+      = directLeaf rec2 (starSubj s.shape) T q2 rs ot on rel := by
+  have hbareG : ∀ g ∈ grantsOf T rs ot on rel, g.subject.predicate = BARE :=
+    grantsOf_bare_subjects T rs ot on rel hb
+  have hmog : ∀ (rec : Rec) (q : Query),
+      memberOfGranted rec T q (grantsOf T rs ot on rel) = false :=
+    fun rec q => memberOfGranted_of_bareGrants rec T q _ hbareG
+  have hlhs : directLeaf rec1 s T q1 rs ot on rel = false := by
+    unfold directLeaf
+    have hsnL : (s.name == STAR) = false := beq_eq_false_iff_ne.mpr hsn
+    have hspL : (s.predicate == BARE) = false := beq_eq_false_iff_ne.mpr hsp
+    simp only [hsnL, hspL, hmog, Bool.or_false]
+    rw [if_neg Bool.false_ne_true, if_neg Bool.false_ne_true, List.any_eq_false]
+    intro g hg
+    have hgb : g.subject.predicate = BARE := hbareG g hg
+    rw [Bool.not_eq_true]
+    simp only [hgb, bne_self_eq_false, Bool.and_false, Bool.false_and, Bool.or_false]
+  have hrhs : directLeaf rec2 (starSubj s.shape) T q2 rs ot on rel = false := by
+    unfold directLeaf
+    have hstarN : ((starSubj s.shape).name == STAR) = true := by show (STAR == STAR) = true; simp
+    simp only [hstarN, if_true, hmog, Bool.or_false]
+    rw [List.any_eq_false]
+    intro g hg
+    have hgb : g.subject.predicate = BARE := hbareG g hg
+    have hpne : (g.subject.predicate == (starSubj s.shape).predicate) = false := by
+      rw [hgb]; exact beq_eq_false_iff_ne.mpr (fun h => hsp h.symm)
+    rw [Bool.not_eq_true]
+    simp only [starSubj, SubjectRef.shape] at hpne ⊢
+    simp only [hpne, Bool.and_false]
+  rw [hlhs, hrhs]
+
+/-- **The star transport over a `ComputedOrDirect`/`DirectArmsBare` tree, both subject kinds.**
+    A star-free subject `s` reads `e` exactly as its shape-star, given operand agreement on the
+    `computed` leaves and — ONLY in the bare-subject case — `NoConcDirect` (conditional on
+    `s.predicate = BARE`). Bare `Direct` arms ride `directLeaf_star_of_noConc` (bare) or
+    `directLeaf_star_userset_bare` (userset); generic in `rec1`/`rec2` (serves routed + unrouted).-/
+theorem evalE_star_bareArms {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query} {s : SubjectRef}
+    {dt on rel : String} (hsn : s.name ≠ STAR) :
+    ∀ e : Expr, ComputedOrDirect e → DirectArmsBare e →
+      (s.predicate = BARE → NoConcDirect T s dt on rel e) →
+      (∀ r' ∈ computedRefs e, rec1 dt on r' = rec2 dt on r') →
+      evalE rec1 s T q1 dt on rel e = evalE rec2 (starSubj s.shape) T q2 dt on rel e := by
+  intro e
+  induction e with
+  | computed r' => intro _ _ _ hag; simp only [evalE]; exact hag r' (List.mem_singleton.mpr rfl)
+  | direct rs =>
+    intro _ hb hnc _; simp only [evalE]
+    by_cases hsp : s.predicate = BARE
+    · exact directLeaf_star_of_noConc hb hsn hsp (hnc hsp)
+    · exact directLeaf_star_userset_bare hb hsn hsp
+  | union a b iha ihb =>
+    intro hcd hba hnc hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun hp => (hnc hp).1) (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 (fun hp => (hnc hp).2) (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | inter a b iha ihb =>
+    intro hcd hba hnc hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun hp => (hnc hp).1) (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 (fun hp => (hnc hp).2) (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | excl a b iha ihb =>
+    intro hcd hba hnc hag; simp only [evalE]
+    rw [iha hcd.1 hba.1 (fun hp => (hnc hp).1) (fun r' hr' => hag r' (List.mem_append_left _ hr')),
+        ihb hcd.2 hba.2 (fun hp => (hnc hp).2) (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
+  | ttu tr ts => intro hcd _ _ _; exact hcd.elim
+
+/-- The stored BARE Direct-arm subjects at key `(dt,R)` object `on`: the subjects of the grants
+    of every `Direct` arm reachable via `exprDirectsAll e`, read from the FIXED store `T`. These
+    are exactly the `NoConcDirect`-failing candidates the coverage enumeration must add. -/
+def storedDirectSubjects (T : Store) (dt on R : String) (e : Expr) : List SubjectRef :=
+  (exprDirectsAll e).flatMap (fun rs => (grantsOf T rs dt on R).map (·.subject))
+
+/-- A subject NOT among the stored Direct-arm subjects (and `s.predicate = BARE`) has
+    `NoConcDirect`: a concrete grant would put `s` (= the grant's own subject) in the set. -/
+theorem noConcDirect_of_not_mem {T : Store} {dt on R : String} {s : SubjectRef}
+    (hsp : s.predicate = BARE) :
+    ∀ e : Expr, s ∉ storedDirectSubjects T dt on R e → NoConcDirect T s dt on R e := by
+  intro e
+  induction e with
+  | computed _ => intro _; trivial
+  | ttu _ _ => intro _; trivial
+  | direct rs =>
+    intro hns
+    show (grantsOf T rs dt on R).any (concMatch s) = false
+    rw [List.any_eq_false]
+    intro g hg hcm
+    apply hns
+    simp only [concMatch, Bool.and_eq_true, bne_iff_ne, beq_iff_eq] at hcm
+    obtain ⟨⟨⟨_, hgp⟩, hgt⟩, hgn⟩ := hcm
+    have hseq : g.subject = s := by
+      obtain ⟨st, sn, sp⟩ := s
+      simp only at hgt hgn hsp
+      show g.subject = ⟨st, sn, sp⟩
+      have hη : g.subject = ⟨g.subject.type, g.subject.name, g.subject.predicate⟩ := rfl
+      rw [hη, hgt, hgn, hgp, hsp]
+    show s ∈ storedDirectSubjects T dt on R (.direct rs)
+    unfold storedDirectSubjects
+    simp only [exprDirectsAll, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    exact hseq ▸ List.mem_map.mpr ⟨g, hg, rfl⟩
+  | union a b iha ihb =>
+    intro hns
+    have hsplit : storedDirectSubjects T dt on R (.union a b)
+        = storedDirectSubjects T dt on R a ++ storedDirectSubjects T dt on R b := by
+      unfold storedDirectSubjects; simp only [exprDirectsAll, List.flatMap_append]
+    rw [hsplit] at hns
+    exact ⟨iha (fun h => hns (List.mem_append_left _ h)),
+           ihb (fun h => hns (List.mem_append_right _ h))⟩
+  | inter a b iha ihb =>
+    intro hns
+    have hsplit : storedDirectSubjects T dt on R (.inter a b)
+        = storedDirectSubjects T dt on R a ++ storedDirectSubjects T dt on R b := by
+      unfold storedDirectSubjects; simp only [exprDirectsAll, List.flatMap_append]
+    rw [hsplit] at hns
+    exact ⟨iha (fun h => hns (List.mem_append_left _ h)),
+           ihb (fun h => hns (List.mem_append_right _ h))⟩
+  | excl a b iha ihb =>
+    intro hns
+    have hsplit : storedDirectSubjects T dt on R (.excl a b)
+        = storedDirectSubjects T dt on R a ++ storedDirectSubjects T dt on R b := by
+      unfold storedDirectSubjects; simp only [exprDirectsAll, List.flatMap_append]
+    rw [hsplit] at hns
+    exact ⟨iha (fun h => hns (List.mem_append_left _ h)),
+           ihb (fun h => hns (List.mem_append_right _ h))⟩
+
+/-- The Direct-arm-widened per-key base list: `enum2Base` ∪ the stored Direct-arm subjects. -/
+def enum2BaseD (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : List SubjectRef :=
+  enum2Base σ dt on e ++ storedDirectSubjects T dt on R e
+
+/-- The Direct-arm-widened state-derived W3d-2 enumerated job for one derived key `(dt,R)`. -/
+def enumJob2D (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : W3cJob :=
+  { dt := dt, on := on, R := R, e := e,
+    cands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate == BARE)
+             ++ edgeHolders σ dt on R,
+    negCands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate == BARE),
+    uposCands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate != BARE) }
+
+/-- Off the widened base list, `checkFnR` reads a star-free subject as its shape-star. `∉
+    enum2BaseD` splits into `∉ enum2Base` (leaf concretes + residue-named, via
+    `graphRecR_leaf_agree`) and `∉ storedDirectSubjects` (⇒ `NoConcDirect`, for the Direct
+    arm), transported by `evalE_star_bareArms` over BOTH subject kinds. -/
+theorem checkFnR_eq_star_of_not_baseD {σ : GraphState} {T : Store} {s : SubjectRef}
+    {dt on R : String} {e : Expr} (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes)
+    (hsn : s.name ≠ STAR) (hon : on ≠ STAR) (hnb : s ∉ enum2BaseD σ T dt on R e) :
+    σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e := by
+  have hnbBase : s ∉ enum2Base σ dt on e := fun h => hnb (List.mem_append_left _ h)
+  have hnbSD : s ∉ storedDirectSubjects T dt on R e := fun h => hnb (List.mem_append_right _ h)
+  unfold GraphState.checkFnR
+  refine evalE_star_bareArms hsn e hcd hba (fun hp => noConcDirect_of_not_mem hp e hnbSD) ?_
+  intro r' hr'
+  exact graphRecR_leaf_agree hcl hsn hon hr'
+    (fun h => hnbBase (List.mem_append_left _ h))
+    (fun _ h => hnbBase (List.mem_append_right _ (List.mem_flatMap.mpr ⟨r', hr', h⟩)))
+
+/-- **`W3dJobCoverage` for `enumJob2D` from the ROUTED leg context (Direct-arm-widened).** Same
+    contrapositive skeleton as `w3dJobCoverage_enumJob2`, with `enum2BaseD` (adding the stored
+    Direct-arm subjects) as the base and `checkFnR_eq_star_of_not_baseD` in place of
+    `checkFnR_eq_star_of_not_base`. -/
+theorem w3dJobCoverage_enumJob2D {S : Schema} {T : Store} {σ : GraphState}
+    {dt on R : String} {e : Expr} (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes) (hon : on ≠ STAR)
+    (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
+      σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
+    (hcovDecl : ∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true →
+      sh ∈ wildcardShapes S)
+    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE) :
+    W3dJobCoverage S T σ (enumJob2D σ T dt on R e) := by
+  have hbareSub : ∀ u ∈ enum2BaseD σ T dt on R e, u.predicate = BARE →
+      u ∈ (enum2BaseD σ T dt on R e).filter (fun u => u.predicate == BARE) :=
+    fun u hu hub => List.mem_filter.mpr ⟨hu, by simp [hub]⟩
+  refine ⟨fun s hs => ?_, fun s hsb hsn hsem hunc => ?_,
+    fun s hsn hcov hstar hsemF => ?_, fun s hsu hsn hsem => ?_⟩
+  · exact List.mem_append_right _ (mem_edgeHolders hs)
+  · refine List.mem_append_left _ ?_
+    by_contra hnm
+    have hnb : s ∉ enum2BaseD σ T dt on R e := fun h => hnm (hbareSub s h hsb)
+    have hkey : σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e :=
+      checkFnR_eq_star_of_not_baseD hcd hba hcl hsn hon hnb
+    have hbs : σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+      hbridge s (fun h => absurd h hsn)
+    have hbstar : σ.checkFnR T (starSubj s.shape) dt on R e
+        = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) (fun _ => hsb)
+    have hchkStar : σ.checkFnR T (starSubj s.shape) dt on R e = true := by
+      rw [← hkey, hbs]; exact hsem
+    have hstarTrue : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true := by
+      rw [← hbstar]; exact hchkStar
+    exact hunc ⟨hcovDecl s.shape hchkStar, hstarTrue⟩
+  · have hsb : s.predicate = BARE := hWSb s.shape hcov
+    by_contra hnm
+    have hnb : s ∉ enum2BaseD σ T dt on R e := fun h => hnm (hbareSub s h hsb)
+    have hkey : σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e :=
+      checkFnR_eq_star_of_not_baseD hcd hba hcl hsn hon hnb
+    have hbs : σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+      hbridge s (fun h => absurd h hsn)
+    have hbstar : σ.checkFnR T (starSubj s.shape) dt on R e
+        = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := hbridge (starSubj s.shape) (fun _ => hsb)
+    have e1 : sem S T ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ := by
+      rw [← hbs, hkey, hbstar]
+    have hsemF' : sem S T ⟨s, R, ⟨dt, on⟩⟩ = false := hsemF
+    have hstar' : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true := hstar
+    rw [hsemF', hstar'] at e1
+    exact absurd e1 (by decide)
+  · refine List.mem_filter.mpr ⟨?_, by simp [hsu]⟩
+    by_contra hnm
+    have hnb : s ∉ enum2BaseD σ T dt on R e := fun h => hnm h
+    have hkey : σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e :=
+      checkFnR_eq_star_of_not_baseD hcd hba hcl hsn hon hnb
+    have hbs : σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
+      hbridge s (fun h => absurd h hsn)
+    have hcovF : σ.checkFnR T (starSubj s.shape) dt on R e = false := by
+      by_contra hc
+      rw [Bool.not_eq_false] at hc
+      exact hsu (hWSb s.shape (hcovDecl s.shape hc))
+    have hstarT : σ.checkFnR T (starSubj s.shape) dt on R e = true := by
+      rw [← hkey, hbs]; exact hsem
+    rw [hstarT] at hcovF
+    exact absurd hcovF (by decide)
+
+/-- **The routed leg context, Direct-arm-widened (`w3d2_leg_context_d`)** — both helpers
+    `w3dJobCoverage_enumJob2D` consumes, at a shadowed W3d-2 state with settled derived operand
+    keys. `hbridge` is `checkFnR_eq_sem_settled_d`, `hcovDecl` is `checkFnR_star_declared_d`. -/
+theorem w3d2_leg_context_d {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
+    (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) (hqo : on ≠ STAR)
+    (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') → (u, objNode ⟨dt, on⟩ r') ∈ σ.edges)) :
+    (∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
+      σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
+    (∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) :=
+  ⟨fun s' hs' => checkFnR_eq_sem_settled_d hWF hTT hNK hR hSV hBS hTS hMatch hStrat
+      hterm hCO hWSbare h0 hsh hschema hlk hder hcd hba hLU2 hops hs' hqo,
+   fun _ hchk => checkFnR_star_declared_d hTT hSV hTS h0 hsh hschema hlk hcd hba hqo hops hchk⟩
 
 end Zanzibar

@@ -178,32 +178,68 @@ consumers migrate onto):
   new lemma — its `_cd` (cross-state, subject-shared) already landed in **leg 2**
   (`ReconcileDiff.lean:834` `checkFn_agree_of_graphRec_cd`).
 
-### Direct-arm — RESUME (sub-step 2's ENUM half + sub-step 3; leg 4 + sub-steps 1-cont./2 CLOSED above)
-The read spine + the coverage SPLIT-STATEMENTs are landed. What remains before the fragment:
-1. **★ Sub-step 2's SECOND half — the ENUMERATION widening (the real gating content).** The
-   split lemmas say a `NoConcDirect` subject reads as its star; the concrete-grant subjects
-   (`NoConcDirect`-failing) must be ENUMERATED so coverage stays complete. `enumJob2`/`enum2Base`
-   (`CascadeStrataEnum.lean`) currently gathers `leafConcretes ∪ residueNamed`; it must also gather
-   the **stored-on-R BARE Direct-arm subjects** (`grantsOf T rs dt on R` over each Direct arm).
-   Then the W3d2 coverage discharge (`w3dJobCoverage_enumJob2*`) contraposes
-   `checkFnR_eq_star_of_not_enum_cd` for `NoConcDirect` subjects + covers the enumerated
-   concrete-grant subjects directly. **This is what BLOCKS the sub-step-1 W3d2 settled consumers**
-   (`checkFnR_eq_sem_settled` at `CascadeStrataSettle.lean:884`, W3c row char at
-   `ReconcileStarsComplete.lean:1058`, `CascadeStrataResettle.lean:1540`): a full `_d` clone of
-   those correspondence theorems routes through `coveredFn_declared` (the no-ghost-coverage
-   linchpin) + the enumeration, so it needs the enum widening + a `coveredFn_declared_d`. The
-   pure read-bridge `_d`/`_cd` lemmas (this leg) are the SPINE those clones consume; the clones
-   themselves are the meat of finishing sub-steps 1+2 and should be one focused leg.
-2. **Widen `W4Fragment.computedOnly`** to `ComputedOrDirect ∧ DirectArmsBare`; re-prove
-   `w4_within_scope` (`FullScope.lean:165-174`; `directsOnly_of_computedOnly` needs a
-   `directsOnly (excl …) = false` variant); add witness `W4WitnessDirect`
-   (`approver := excl (direct [user]) (computed banned)` + a store granting `user:alice`)
-   to `Audit.lean`; conformance: move a Direct-arm corpus INTO `GRAPH_FRAGMENT`
-   (`corpus.py`) + a state pin. Keep derived-TTU-userset shapes OUT of the graph leg. **This is
-   sub-step 3 — do NOT start until the enum half + settled-consumer clones (item 1) land.**
-Note: the sub-step-1 read-half consumers at untainted-only sites (`checkFn_eq_sem_bs_d` etc.)
-are landed as reusable bridges; the CHAIN consumers that also read a DERIVED operand
-(`checkFnR_eq_sem_settled`) cannot be `_d`-cloned until item 1 (the enum + `coveredFn_declared_d`).
+### Direct-arm — leg 5 FINAL SLICE — the ENUM HALF + read-bridge `_d` clones LANDED (2026-07-19, this session — UNCOMMITTED; verify.sh lean PASSED, audit 441 → 446, sorries=0, standard axioms only)
+Additive, no fragment/conformance change (lean-only gate). ATTACK-FIRST (`#eval`, house rule 2 —
+**NO KILL**): a stored BARE Direct-arm subject lives in the FIXED store `T` (`grantsOf T rs dt on R`),
+NOT in any mutating operand residue, so — unlike the 12h kill (a fresh grant appearing only in a
+dirty operand's FUTURE residue) — it is enumerable at EVERY cascade state directly from `T`; the
+`NoConcDirect`-failing subject IS its own grant's subject, hence in `storedDirectSubjects`. (Also
+confirmed the ghost direction: a wildcard arm with NO bare-STAR grant reads `false` at the star.)
+
+**Landed this slice (all additive):**
+- **Foundational (`ReconcileStarsComplete.lean`):** `mem_exprRestrictions_of_directsAll`,
+  `directArmsBare_mem`, **`graphRec_star_declared_d`** (the star-reach no-ghost core over
+  `StoreValidRulesD`, seed classification via the `exprDirects`∨`exprDirectsAll` disjunction),
+  `evalE_computedOrDirect_true_leaf` (a true `ComputedOrDirect` tree has a true computed leaf OR a
+  true `Direct` arm), `directArm_star_declared` (a true `Direct` arm at the star ⇒ a bare-STAR grant
+  ⇒ a wildcard-flagged restriction ⇒ declared), **`coveredFn_declared_d`** (the linchpin, widened).
+  `computedOnly_directArmsBare` already existed (`ReconcileCorrect.lean`).
+- **Read bridges:** **`checkFnR_eq_sem_settled_d`** (`CascadeStrataSettle.lean`, after the ComputedOnly
+  original) — routed stratum-staged bridge over a Direct-arm def (arm via `checkFnR_eq_semStep_cd`,
+  operands still ComputedOnly via `graphRec_base_eq_bs_d`/`coveredFn_declared_d`/`checkFn_eq_sem_bs_d`);
+  **`checkFnR_star_declared_d`** (`CascadeStrataEnum.lean`) — routed no-ghost-coverage (untainted leaf
+  via `graphRec_star_declared_d`, derived leaf via the settled `stars` row, `Direct` arm via
+  `directArm_star_declared`).
+- **Enum half (`CascadeStrataEnum.lean`):** `directLeaf_star_userset_bare` + **`evalE_star_bareArms`**
+  (star transport over `ComputedOrDirect`/`DirectArmsBare`, BOTH subject kinds — bare via
+  `directLeaf_star_of_noConc` gated on `NoConcDirect`, userset via `directLeaf_star_userset_bare`,
+  no gate), `storedDirectSubjects` (= `exprDirectsAll e` grants' subjects, read from `T`),
+  `noConcDirect_of_not_mem`, `enum2BaseD`/`enumJob2D` (= `enum2Base ∪ storedDirectSubjects`),
+  `checkFnR_eq_star_of_not_baseD`, **`w3dJobCoverage_enumJob2D`** (the coverage discharge), and
+  **`w3d2_leg_context_d`** (packages the routed bridge + declaredness). Audit: the 5 correspondence
+  ones (`coveredFn_declared_d`, `checkFnR_eq_sem_settled_d`, `checkFnR_star_declared_d`,
+  `w3dJobCoverage_enumJob2D`, `w3d2_leg_context_d`) added to `Audit.lean`.
+
+### Direct-arm — RESUME (the state-level `_d` clones need the `_d` CHAIN; then sub-step 3)
+**★ WALL / DESIGN REFINEMENT (this session).** The read-bridge + coverage-discharge `_d` clones are
+DONE and are exactly the hypothesis-factored cores the design promised — they take the shadow (`h0 :
+ReachedByRulesAdmitted σ0 S T`, `hsh : UntaintedShadow`) as INPUTS, so they need NO `_d` chain. BUT the
+design's expectation that the settled-consumer clones "just need `coveredFn_declared_d` + enum" was
+INCOMPLETE: the STATE-LEVEL correspondence theorems — `w3c_row_char` (`ReconcileStarsComplete.lean:291`),
+`graph_correct_w3d2` (`CascadeStrataResettle.lean:1436`, DERIVES the shadow at `:1456` via
+`reachedByW3d2_shadow hW3d2 hNK hCO hSV hterm`), and `w3dJobCoverage_enumJob2_state`
+(`CascadeStrataEnum.lean`) — DERIVE their base/shadow/master from the CHAIN via
+`reachedByW3c_master` / `reachedByW3d2_shadow` / `reachedByW3d2C_settled`, each **gated on `hCO : ∀
+ComputedOnly` + `hSV : StoreValidRules`** (`CascadeStrataSettle.lean:577-582` for the shadow). So a full
+`_d` clone of those needs a **`_d` CHAIN**: `reachedByW3d2_shadow_d` / `reachedByW3c_master_d` /
+`reachedByW3d2C_settled_d` (+ the underlying W3c/W3d2 write-model reconcile passes) re-proven admitting
+`StoreValidRulesD` + a `ComputedOrDirect ∧ DirectArmsBare` derived def. That is genuine chain-level
+proof effort — the SAME machinery sub-step 3's fragment widening needs — NOT an additive
+hypothesis-factored clone. **NEXT LEG (call it 5c / sub-step-3 groundwork):**
+1. **The `_d` chain.** Re-prove the W3d2 chain plumbing under `StoreValidRulesD` + a Direct-arm def:
+   `reachedByW3d2_shadow_d` (the shadow admits Direct-arm derived keys — the reconcile write pass
+   materialises the stored BARE Direct-arm seed edges via leg-2's `reachedByW3a_*_d`, then the W3d
+   diffing pass `reconcileKeyD_retracts_excluded` retracts the excluded seeds; correspondence lives at
+   the W3d2 DRAINED state per leg-5a's KILL), `reachedByW3d2C_settled_d` (the settledness invariant),
+   and `reachedByW3c_master_d` (the canonical-row master). These consume the enum half + read bridges
+   THIS slice landed (`w3d2_leg_context_d` / `w3dJobCoverage_enumJob2D` / `checkFnR_eq_sem_settled_d`).
+   Then the state-level `_d` clones (`graph_correct_w3d2_d`, `w3c_row_char_d`) fall out.
+2. **Then sub-step 3:** widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare`; re-prove
+   `w4_within_scope` (`FullScope.lean:165-174`; `directsOnly_of_computedOnly` needs a `directsOnly (excl
+   …) = false` variant); add witness `W4WitnessDirect` (`approver := excl (direct [user]) (computed
+   banned)` + a store granting `user:alice`) to `Audit.lean`; conformance: move a Direct-arm corpus INTO
+   `GRAPH_FRAGMENT` (`corpus.py`) + a state pin (conf phases required). Keep derived-TTU-userset shapes
+   OUT of the graph leg.
 
 ### TTU/userset half — NOT STARTED (deeper; after Direct arm)
 `PDerivedTTU` (TTU arm, store-state dependent, +1 stratum) and `PDerivedUserset`

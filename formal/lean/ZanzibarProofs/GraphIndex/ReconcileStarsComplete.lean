@@ -275,6 +275,225 @@ theorem coveredFn_declared {S : Schema} {T : Store} {σ0 : GraphState}
   refine List.mem_filterMap.mpr ⟨r, mem_exprRestrictions_of_directs hdirs hrmem, ?_⟩
   rw [if_pos hr22, ← hsh1, ← hsh2]
 
+/-! ## Direct-arm no-ghost-coverage (`coveredFn_declared_d`) — leg 5 sub-step 2 enum half
+
+The linchpin `coveredFn_declared` widened to a `StoreValidRulesD` store carrying BARE
+Direct-arm tuples on derived keys and a `ComputedOrDirect`/`DirectArmsBare` def. A true
+star read of shape `sh` still certifies `sh ∈ wildcardShapes S`: a true COMPUTED leaf traces
+its materialised closure edge to a wildcard-flagged restriction exactly as before (the seed
+classification now takes the `StoreValidRulesD` DISJUNCTION — untainted `exprDirects` OR
+derived `exprDirectsAll`); a true DIRECT leaf at the star subject is a stored bare-STAR grant
+whose matching restriction (a STAR-name subject only matches a wildcard-flagged restriction)
+IS a declared wildcard shape of the def `(dt,R)`. No ghost coverage on the Direct arm. -/
+
+/-- A restriction of a `Direct` leaf reachable through ANY boolean nesting (`exprDirectsAll`,
+    incl. `inter`/`excl`) occurs in the expression's restriction set — the `exprDirectsAll`
+    analog of `mem_exprRestrictions_of_directs`. -/
+theorem mem_exprRestrictions_of_directsAll {e : Expr} {rs : List Restriction}
+    {r : Restriction} (hd : rs ∈ exprDirectsAll e) (hr : r ∈ rs) : r ∈ exprRestrictions e := by
+  induction e with
+  | direct rs' =>
+    simp only [exprDirectsAll, List.mem_singleton] at hd; subst hd; exact hr
+  | union a b iha ihb =>
+    simp only [exprDirectsAll, List.mem_append] at hd
+    rcases hd with h | h
+    · exact List.mem_append_left _ (iha h)
+    · exact List.mem_append_right _ (ihb h)
+  | inter a b iha ihb =>
+    simp only [exprDirectsAll, List.mem_append] at hd
+    rcases hd with h | h
+    · exact List.mem_append_left _ (iha h)
+    · exact List.mem_append_right _ (ihb h)
+  | excl a b iha ihb =>
+    simp only [exprDirectsAll, List.mem_append] at hd
+    rcases hd with h | h
+    · exact List.mem_append_left _ (iha h)
+    · exact List.mem_append_right _ (ihb h)
+  | computed _ => simp [exprDirectsAll] at hd
+  | ttu _ _ => simp [exprDirectsAll] at hd
+
+/-- `DirectArmsBare` propagates to every arm reachable via `exprDirectsAll`: each such arm's
+    restrictions are all BARE (`r.2.1 = BARE`). -/
+theorem directArmsBare_mem : ∀ {e : Expr}, DirectArmsBare e →
+    ∀ {rs : List Restriction}, rs ∈ exprDirectsAll e → ∀ r ∈ rs, r.2.1 = BARE := by
+  intro e
+  induction e with
+  | direct rs' =>
+    intro hb rs hrs; simp only [exprDirectsAll, List.mem_singleton] at hrs; subst hrs; exact hb
+  | computed _ => intro _ rs hrs; simp [exprDirectsAll] at hrs
+  | ttu _ _ => intro _ rs hrs; simp [exprDirectsAll] at hrs
+  | union a b iha ihb =>
+    intro hb rs hrs; simp only [exprDirectsAll, List.mem_append] at hrs
+    rcases hrs with h | h
+    · exact iha hb.1 h
+    · exact ihb hb.2 h
+  | inter a b iha ihb =>
+    intro hb rs hrs; simp only [exprDirectsAll, List.mem_append] at hrs
+    rcases hrs with h | h
+    · exact iha hb.1 h
+    · exact ihb hb.2 h
+  | excl a b iha ihb =>
+    intro hb rs hrs; simp only [exprDirectsAll, List.mem_append] at hrs
+    rcases hrs with h | h
+    · exact iha hb.1 h
+    · exact ihb hb.2 h
+
+/-- **The star-reach no-ghost-coverage core (`_d`).** A star subject whose graph read at an
+    (arbitrary) leaf `(dt', on', r')` is true means the leaf's shape `sh` is a declared
+    subject-wildcard shape — under the WIDENED store admission `StoreValidRulesD` (the seed
+    classification takes the disjunction). Steps 2–7 of `coveredFn_declared`, disjunction-
+    factored. The `StoreValidRulesD` analog of `graphRec_star_declared`. -/
+theorem graphRec_star_declared_d {S : Schema} {T : Store} {σ0 : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRulesD S T) (hTS : TtuStarFree S T)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    {sh : Shape} {dt' on' r' : String}
+    (hleaf : GraphModel.graphRec σ0 (starSubj sh) dt' on' r' = true) :
+    sh ∈ wildcardShapes S := by
+  have hstar : (starSubj sh).name = STAR := rfl
+  have hreach : ∃ v, σ0.reach (subjNode (starSubj sh)) v = true := by
+    unfold GraphModel.graphRec GraphModel.probeNonDerived at hleaf
+    simp only [starSubj, bne_self_eq_false, Bool.false_and, Bool.or_false, Bool.false_or,
+      Bool.or_eq_true, Bool.and_eq_true] at hleaf
+    rcases hleaf with h | ⟨_, h⟩
+    · exact ⟨_, h⟩
+    · exact ⟨_, h⟩
+  obtain ⟨v, hv⟩ := hreach
+  obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound hv)
+  obtain ⟨t, ht, u, hu, hsubj, _hobj⟩ :=
+    reachedByRules_edge_sound (reachedByRules_of_admitted h0) _ y hy
+  have hustar : u.subject.name = STAR := by
+    by_contra hne
+    have hvar := congrArg NodeKey.variant hsubj
+    rw [subjNode, if_pos hstar, subjNode, if_neg hne] at hvar
+    have hvar' : Variant.wAny = Variant.plain := hvar
+    cases hvar'
+  have husubj : u.subject = starSubj sh := by
+    have h1 : sh.1 = u.subject.type := by
+      have := congrArg NodeKey.type hsubj
+      rw [subjNode, if_pos hstar, subjNode, if_pos hustar] at this
+      exact this
+    have h2 : sh.2 = u.subject.predicate := by
+      have := congrArg NodeKey.pred hsubj
+      rw [subjNode, if_pos hstar, subjNode, if_pos hustar] at this
+      exact this
+    show u.subject = (⟨sh.1, STAR, sh.2⟩ : SubjectRef)
+    have heta : u.subject = ⟨u.subject.type, u.subject.name, u.subject.predicate⟩ := rfl
+    rw [heta, ← h1, ← h2, hustar]
+  have hts : t.subject = starSubj sh :=
+    (rewriteClosure_star_subject hTT hTS ht hu hustar).symm.trans husubj
+  -- the seed matched a wildcard-flagged restriction of its declared def (disjunction-factored)
+  obtain ⟨e', rs, hlk', hRinRestr, hrm⟩ :
+      ∃ e' rs, S.lookup (t.object.type, t.relation) = some e' ∧
+        (∀ r ∈ rs, r ∈ exprRestrictions e') ∧ restrictionMatches rs t = true := by
+    rcases hSV t ht with ⟨_, e', rs, hlk', hdirs, hrm⟩ | ⟨_, _, e', rs, hlk', hdirs, hrm, _⟩
+    · exact ⟨e', rs, hlk', fun r hr => mem_exprRestrictions_of_directs hdirs hr, hrm⟩
+    · exact ⟨e', rs, hlk', fun r hr => mem_exprRestrictions_of_directsAll hdirs hr, hrm⟩
+  unfold restrictionMatches at hrm
+  obtain ⟨r, hrmem, hrb⟩ := List.any_eq_true.mp hrm
+  simp only [Bool.and_eq_true, beq_iff_eq] at hrb
+  obtain ⟨⟨hty, hpred⟩, hwc⟩ := hrb
+  have htstar : t.subject.name = STAR := by rw [hts]; rfl
+  have hr22 : r.2.2 = true := by rw [htstar] at hwc; simpa using hwc
+  have hsh1 : sh.1 = r.1 := by rw [← hty, hts]; rfl
+  have hsh2 : sh.2 = r.2.1 := by rw [← hpred, hts]; rfl
+  unfold wildcardShapes
+  refine List.mem_flatMap.mpr ⟨((t.object.type, t.relation), e'), mem_defs_of_lookup hlk', ?_⟩
+  refine List.mem_filterMap.mpr ⟨r, hRinRestr r hrmem, ?_⟩
+  rw [if_pos hr22, ← hsh1, ← hsh2]
+
+/-- A `ComputedOrDirect` boolean tree is true only if some `computed` leaf's `rec` is true OR
+    some `Direct` arm (reachable via `exprDirectsAll`) reads true — the `_cd` analog of
+    `evalE_computedOnly_true_leaf`. -/
+theorem evalE_computedOrDirect_true_leaf {rec : Rec} {sub : SubjectRef} {T : Store} {q : Query}
+    {dt on rel : String} :
+    ∀ e : Expr, ComputedOrDirect e → evalE rec sub T q dt on rel e = true →
+      (∃ r' ∈ computedRefs e, rec dt on r' = true) ∨
+      (∃ rs ∈ exprDirectsAll e, directLeaf rec sub T q rs dt on rel = true) := by
+  intro e
+  induction e with
+  | computed r' =>
+    intro _ h; exact Or.inl ⟨r', List.mem_singleton.mpr rfl, h⟩
+  | direct rs =>
+    intro _ h
+    exact Or.inr ⟨rs, List.mem_singleton.mpr rfl, h⟩
+  | union a b iha ihb =>
+    intro hcd h
+    simp only [evalE, Bool.or_eq_true] at h
+    rcases h with h | h
+    · rcases iha hcd.1 h with ⟨r', hr', hrec⟩ | ⟨rs, hrs, hdl⟩
+      · exact Or.inl ⟨r', List.mem_append_left _ hr', hrec⟩
+      · exact Or.inr ⟨rs, List.mem_append_left _ hrs, hdl⟩
+    · rcases ihb hcd.2 h with ⟨r', hr', hrec⟩ | ⟨rs, hrs, hdl⟩
+      · exact Or.inl ⟨r', List.mem_append_right _ hr', hrec⟩
+      · exact Or.inr ⟨rs, List.mem_append_right _ hrs, hdl⟩
+  | inter a b iha ihb =>
+    intro hcd h
+    simp only [evalE, Bool.and_eq_true] at h
+    rcases iha hcd.1 h.1 with ⟨r', hr', hrec⟩ | ⟨rs, hrs, hdl⟩
+    · exact Or.inl ⟨r', List.mem_append_left _ hr', hrec⟩
+    · exact Or.inr ⟨rs, List.mem_append_left _ hrs, hdl⟩
+  | excl a b iha ihb =>
+    intro hcd h
+    simp only [evalE, Bool.and_eq_true] at h
+    rcases iha hcd.1 h.1 with ⟨r', hr', hrec⟩ | ⟨rs, hrs, hdl⟩
+    · exact Or.inl ⟨r', List.mem_append_left _ hr', hrec⟩
+    · exact Or.inr ⟨rs, List.mem_append_left _ hrs, hdl⟩
+  | ttu tr ts => intro hcd _; exact hcd.elim
+
+/-- **The Direct-arm no-ghost-coverage certification.** A true `Direct` leaf at the star
+    subject `starSubj sh` on a BARE arm `rs` (reachable via `exprDirectsAll` of the def `e` of
+    `(dt,R)`) means `sh` is a declared wildcard shape: `memberOfGranted` is dead on bare grants,
+    so the star-match disjunct fires — a bare-STAR grant of shape `sh` — and a STAR-name subject
+    only matches a WILDCARD-FLAGGED restriction, which lives in `exprRestrictions e`. -/
+theorem directArm_star_declared {S : Schema} {T : Store} {rec : Rec} {q : Query}
+    {dt on R : String} {e : Expr} {rs : List Restriction} {sh : Shape}
+    (hlk : S.lookup (dt, R) = some e) (hba : DirectArmsBare e)
+    (hrs : rs ∈ exprDirectsAll e)
+    (hdl : directLeaf rec (starSubj sh) T q rs dt on R = true) :
+    sh ∈ wildcardShapes S := by
+  have hbr : ∀ r ∈ rs, r.2.1 = BARE := directArmsBare_mem hba hrs
+  have hbareG : ∀ g ∈ grantsOf T rs dt on R, g.subject.predicate = BARE :=
+    grantsOf_bare_subjects T rs dt on R hbr
+  -- the star-match disjunct fires (memberOfGranted dead)
+  unfold directLeaf at hdl
+  simp only [starSubj, beq_self_eq_true, if_true,
+    memberOfGranted_of_bareGrants rec T q _ hbareG, Bool.or_false] at hdl
+  obtain ⟨g, hg, hgb⟩ := List.any_eq_true.mp hdl
+  simp only [Bool.and_eq_true, beq_iff_eq] at hgb
+  obtain ⟨⟨hgstar, hgty⟩, hgpred⟩ := hgb
+  -- g matches rs (g ∈ grantsOf), and g's STAR name forces a wildcard-flagged restriction
+  have hgmatch : restrictionMatches rs g = true := by
+    unfold grantsOf at hg; rw [List.mem_filter] at hg
+    simp only [Bool.and_eq_true] at hg
+    exact hg.2.2
+  unfold restrictionMatches at hgmatch
+  obtain ⟨r, hrmem, hrb⟩ := List.any_eq_true.mp hgmatch
+  simp only [Bool.and_eq_true, beq_iff_eq] at hrb
+  obtain ⟨⟨hty, hpred⟩, hwc⟩ := hrb
+  have hr22 : r.2.2 = true := by rw [hgstar] at hwc; simpa using hwc
+  have hsh1 : sh.1 = r.1 := by rw [← hty, hgty]
+  have hsh2 : sh.2 = r.2.1 := by rw [← hpred, hgpred]
+  unfold wildcardShapes
+  refine List.mem_flatMap.mpr ⟨((dt, R), e), mem_defs_of_lookup hlk, ?_⟩
+  refine List.mem_filterMap.mpr ⟨r, mem_exprRestrictions_of_directsAll hrs hrmem, ?_⟩
+  rw [if_pos hr22, ← hsh1, ← hsh2]
+
+/-- **The linchpin `coveredFn_declared`, widened to Direct arms (`coveredFn_declared_d`).** On a
+    `StoreValidRulesD` store with a `ComputedOrDirect`/`DirectArmsBare` def `e` of `(dt,R)`, star
+    coverage of a shape `sh` implies `sh ∈ wildcardShapes S`. A true COMPUTED leaf rides
+    `graphRec_star_declared_d`; a true DIRECT arm rides `directArm_star_declared`. -/
+theorem coveredFn_declared_d {S : Schema} {T : Store} {σ0 : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRulesD S T) (hTS : TtuStarFree S T)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    {dt on R : String} {e : Expr} (hlk : S.lookup (dt, R) = some e)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) {sh : Shape}
+    (hcov : σ0.coveredFn T dt on R e sh = true) :
+    sh ∈ wildcardShapes S := by
+  unfold GraphState.coveredFn GraphState.checkFn at hcov
+  rcases evalE_computedOrDirect_true_leaf e hcd hcov with ⟨r', _hr', hleaf⟩ | ⟨rs, hrs, hdl⟩
+  · exact graphRec_star_declared_d hTT hSV hTS h0 hleaf
+  · exact directArm_star_declared hlk hba hrs hdl
+
 /-! ## Row characterisation — every persisted W3c row reads at `sem` level
 
 Master (`reachedByW3c_master`) pins each row to the canonical base filters; the

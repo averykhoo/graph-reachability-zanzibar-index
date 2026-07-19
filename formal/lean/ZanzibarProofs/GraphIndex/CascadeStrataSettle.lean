@@ -929,6 +929,74 @@ theorem checkFnR_eq_sem_settled {S : Schema} {T : Store} {σ σ0 : GraphState}
   exact sem_fuel_stable S T ⟨s, R, ⟨dt, on⟩⟩ hStrat hDecl (fuelBound S T + 1)
     (Nat.le_succ _)
 
+/-- **The stratum-staged read bridge, Direct-arm-widened (`checkFnR_eq_sem_settled_d`).** The
+    `StoreValidRulesD` + `ComputedOrDirect`/`DirectArmsBare` analog of `checkFnR_eq_sem_settled`:
+    the CURRENT derived def `e` may carry BARE `Direct` arms (its operands stay `ComputedOnly`,
+    lower stratum). The untainted operand read routes through the widened base equation
+    (`graphRec_base_eq_bs_d`), the derived operand read reuses the settled `stars`-row read with
+    the widened linchpin (`coveredFn_declared_d`/`checkFn_eq_sem_bs_d` at the `ComputedOnly`
+    operand def), and the `Direct` arm of `e` rides `checkFnR_eq_semStep_cd`. -/
+theorem checkFnR_eq_sem_settled_d {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOnly e)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
+    (hσS : σ.schema = S)
+    {s : SubjectRef} {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
+    (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') →
+        (u, objNode ⟨dt, on⟩ r') ∈ σ.edges))
+    (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
+    σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
+  have hDecl : StoreDeclared S T := storeDeclared_of_validRulesD hSV
+  have hag : ∀ r' ∈ computedRefs e,
+      GraphModel.graphRecR σ s dt on r'
+        = semAux S s T ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r' := by
+    intro r' hr'
+    have hstep : GraphModel.graphRecR σ s dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩ := by
+      cases hd' : isDerived S (dt, r') with
+      | false =>
+        rw [GraphModel.graphRecR_eq_graphRec s on (by rw [hσS]; exact hd'),
+          shadow_graphRec_agree hsh s on hd']
+        exact graphRec_base_eq_bs_d hWF hTT hNK hR hSV hBS hTS hMatch hterm h0 hs hon r' hd'
+      | true =>
+        obtain ⟨hset', hcomp', hcollapse'⟩ := hops r' hr' hd'
+        obtain ⟨e', hlk'⟩ := isDerived_declared hd'
+        have hleafUnt' : ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false :=
+          hLU2 r' hr' hd' e' hlk'
+        have hco' : ComputedOnly e' := hCO dt r' e' hlk' hd'
+        have hsem_ws' : ∀ sh : Shape, sh.2 = BARE →
+            sem S T ⟨starSubj sh, r', ⟨dt, on⟩⟩ = true → sh ∈ wildcardShapes S := by
+          intro sh hshb hsm
+          refine coveredFn_declared_d hTT hSV hTS h0 hlk'
+            (computedOnly_computedOrDirect hco') (computedOnly_directArmsBare hco')
+            (dt := dt) (on := on) (R := r') ?_
+          show σ0.checkFn T (starSubj sh) dt on r' e' = true
+          rw [checkFn_eq_sem_bs_d hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+            (ReachedByW3aAdmitted.base h0) hlk' (computedOnly_computedOrDirect hco')
+            (computedOnly_directArmsBare hco') hleafUnt' (fun _ => hshb) hon]
+          exact hsm
+        show GraphModel.check σ ⟨s, r', ⟨dt, on⟩⟩ = sem S T ⟨s, r', ⟨dt, on⟩⟩
+        rw [GraphModel.check_derived σ ⟨s, r', ⟨dt, on⟩⟩ (by rw [hσS]; exact hd')]
+        exact probeDerived_eq_sem_settled hWSbare hsh.closed hcollapse' hsem_ws'
+          hset' hcomp' hs hon
+    rw [hstep]
+    exact semAux_qirrel S s T ⟨s, r', ⟨dt, on⟩⟩ ⟨s, R, ⟨dt, on⟩⟩ (fuelBound S T) dt on r'
+  rw [checkFnR_eq_semStep_cd hlk hcd hba hag]
+  exact sem_fuel_stable S T ⟨s, R, ⟨dt, on⟩⟩ hStrat hDecl (fuelBound S T + 1)
+    (Nat.le_succ _)
+
 /-! ## The routed transport layer — untargeted keys keep their representation
 
 Mirrors of the W3d-1 `applyD_other_key_fixed` / `reconcileJobsD_other_key_fixed`
