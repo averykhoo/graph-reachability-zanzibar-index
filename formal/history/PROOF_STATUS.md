@@ -8,6 +8,77 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-20d (#1 leg 5d steps 2-3 — the `_d` SETTLEDNESS CHAIN CLOSED: `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d` LANDED, audit 448 → **450**; attack-first CONFIRMED the model fix retracts the excluded seed at the drained state; the `remove` leg honestly scoped by a new `hNoUD` fragment hypothesis)
+
+Picked up THE NEXT TASK (steps 2-3): the settledness-transport `_d` clones + the Direct-arm T2b,
+consuming the landed filtered-σ0 substrate (`reachedByW3d2_shadow_d` / `checkFnR_eq_sem_settled_d_filt` /
+the `untaintedShadow_*_d` transports) under the 2026-07-20c `affectedKeys` model fix. THREE green
+commits (`c41829b` groundwork, `36926dd` write/remove-leg transports, `d5f6071` the chain + T2b + audit),
+each `verify.sh lean` PASSED; final audit **450/450**, sorries=0, standard axioms only.
+
+- **★ ATTACK-FIRST (house rule 2), before proving:** a scratch `#eval` (deleted) drove the 2026-07-20b
+  KILL schema (`banned := direct[user]`, `approver := excl(direct[user], computed banned)`; ops
+  ban+approve alice) through the REAL model driver (`graphRun`): the drained state now has
+  `check(alice, approver, d1) = false = sem` — the excluded Direct-arm seed IS retracted (final edges =
+  the alice→banned edge only; `cascadeKeys = []`). Order-reversed ops give (false, false) too; a
+  non-banned subject keeps his grant (true, true). The model fix is COMPLETE for the kill shape — proof
+  effort justified, no paper-over.
+- **Groundwork (`c41829b`).** `sem_nil_false` (hypothesis-free: `sem` over the empty store is false —
+  the `_d` induction's empty case needs none of `sem_nil_derived_false2`'s machinery);
+  `writeLeg_own_key_dirty` / `removeLeg_own_key_dirty` (the model fix's LeafFamily own-key branch made
+  chain-usable — THE load-bearing new fact: an UNMAPPED key's leg tuple provably sits at a different
+  derived node); node-inequality in-edge preservation (`writeLeg/removeLeg_derived_inedges_eq_d`,
+  `*_inedges_eq_of_unmapped` — the `ComputedOnly` `exprDirects`-emptiness argument is dead under
+  `StoreValidRulesD`); the W3d2-chain structural `_d` facts (`reachedByW3d2_edge_target_ne_bare_d`,
+  `_Rnode_source_bare_d` — seed subjects BARE by the widened admission — `_reach_collapse_root_d`);
+  the CD store congruence (`evalE_cd_grants_agree`, `checkFnR_cons_irrel_cd`/`_erase_irrel_cd` —
+  `checkFnR_store_irrel` is FALSE for CD defs, the honest condition is the changed tuple missing the
+  key's grant window `grantsOf_cons_of_ne`/`_erase_of_ne`). **Hypothesis REPAIR of the (unaudited)
+  landed `_filt` bridge:** `checkFnR_eq_sem_settled_d_filt`/`w3d2_leg_context_d_filt` carried a
+  schema-wide `hCO : ∀ … ComputedOnly` that covered the ROOT def too — unsatisfiable on any genuine
+  Direct-arm schema; weakened to the per-key operand-scoped `hCOop` the bodies actually use.
+- **The write/remove-leg transport stack (`36926dd`).** `writeLeg/removeLeg_checkFnR_stable_d` (guard
+  stability via `evalE_computedOrDirect`; derived leaves via `_probeDerived_stable_d` on own-key
+  dirtiness); `checkFn_eq_sem_w3d_filt` (the stratum-1 W3d bridge over the filtered shadow:
+  agreement → store-irrelevance → `checkFn_eq_sem_bs_d` at `T↾U` → `sem_untaintedFilter_co`);
+  `writeLeg/removeLeg_sem_stable_sh_d`; the per-key `settledKey/completeKey_{write,remove}Leg_sem_d`;
+  and the stratum-2 assemblies **`writeLeg_sem_stable2_d`** / **`removeLeg_sem_stable2_d`** (shadows
+  derived from the chain states via `reachedByW3d2_shadow_d`; the store step through the grant-window
+  congruence, keyed off own-key dirtiness).
+- **The chain + T2b (`d5f6071`).** `wantEdgeR_reconcileKeyDR_inert_d` → `reconcileKeyDR_edge_char_d` →
+  `reconcileStarsKeyDR_edge_char_d` (pass exactness, CD guard fold-invariance) →
+  `reconcileJobsLR_key_edge_sem_d` → `settledComplete_jobsLR_targeted_d` (batch level, filtered
+  shadow) → `settledComplete_cascade2_targeted_d` (two-round leg; fence/no-abort/emission-dirtying
+  reused fragment-free) → **`reachedByW3d2C_settled_d`** (the three-disjunct invariant at EVERY
+  `ReachedByW3d2C` state on the Direct-arm fragment) → **`graph_correct_w3d2_d`** (T2b: `check = sem`
+  at every fully-drained state; no-ghost-star-coverage inlined via `evalE_computedOrDirect_true_leaf`
+  → `graphRec_star_declared_d`/`directArm_star_declared`; untainted queries via
+  `graphRec_base_eq_bs_unt` + `sem_untaintedFilter`). Both audited (448 → **450**).
+- **FRAGMENT of the `_d` chain (honest scope):** schema-wide `ComputedOrDirect ∧ DirectArmsBare` on
+  derived defs; derived OPERAND defs `ComputedOnly` (`hCOop` — exactly the landed `_filt` machinery's
+  scope; a Direct-arm OPERAND would break `sem_untaintedFilter_co`, its seeds being sem-visible);
+  `StoreValidRulesD` admission; plus **`hNoUD`: `exprDirects e = []` on derived defs** (Direct arms
+  only under `inter`/`excl` — the canonical `but not` shape, satisfied by the motivating fragment and
+  `W4WitnessDirect`-to-be). **Why `hNoUD`:** the `remove` constructor guards its PRE store with PLAIN
+  `StoreValidRules`, under which a derived-key tuple is storable exactly through a union-reachable
+  Direct arm; erasing such a tuple at a state where its seed edge was RETRACTED (a covered subject —
+  reachable: the reconcile materialises edges only for uncovered subjects) changes the key's grants
+  with NO own-key delta, and `sem` stability there needs a star→concrete `sem` coverage monotonicity
+  lemma (`sem⟨T:*⟩ → sem⟨T,name⟩` over the fenced fragment) that this session did not build. `hNoUD`
+  closes that door honestly; the LIFT (prove the monotonicity lemma, drop `hNoUD`) is recorded
+  follow-up.
+- **Gate:** `verify.sh lean` 450/450 every commit; `pytest tests/` + `conf-heavy` + `conf-rest` run for
+  the push (lean-only additive changes).
+- **NEXT (task step 4, sub-step 3 of the widening):** widen `W4Fragment.computedOnly` →
+  `ComputedOrDirect ∧ DirectArmsBare` (+ the operand-`ComputedOnly` and `hNoUD` clauses as honest
+  fragment conditions), re-prove `w4_within_scope`, add the `W4WitnessDirect` non-vacuity witness to
+  `Audit.lean`, move `direct_arm_exclusion` into `GRAPH_FRAGMENT` + a state pin (conf phases
+  REQUIRED). Note the E-chain (`ReachedByW3d2E` / `graph_correct_w3d2E`) is still ComputedOnly-scoped —
+  widening the OPERATIONAL chain (enumJobs2D consumption, `w3d2_leg_context_d_filt` into the E-chain
+  coverage discharge) is part of that step. Optional strengthenings: lift `hNoUD` (the star→concrete
+  monotonicity lemma); Direct-arm OPERANDS (needs a Direct-arm-aware filter bridge). Then the
+  TTU/userset half, #2 strata.
+
 ## Session 2026-07-20c (#1 leg 5d — the MODEL FIX LANDED: `affectedKeys` gains the LeafFamily own-key branch via a `Delta.leaf` provenance tag; the previous session's proposed NAIVE fix was ATTACK-KILLED as unfaithful first. `verify.sh lean`+`conf-heavy` green, cascade/fence stack repaired)
 
 Picked up the 2026-07-20b KILL blocker: `affectedKeys` (`Cascade.lean:433`) lacked Python's LeafFamily

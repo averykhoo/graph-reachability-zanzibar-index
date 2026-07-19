@@ -275,7 +275,46 @@ This is genuine multi-session chain content (a NEW filtered-shadow substrate + a
 family), NOT the additive hypothesis-factored clone the design assumed. `reachedByW3c_master_d` +
 `w3c_row_char_d` are the tractable slice; they are DONE and independent of the shadow.
 
-### Direct-arm — RESUME (2026-07-20c: the MODEL FIX LANDED; steps 2-4 now UNBLOCKED)
+### Direct-arm — RESUME (2026-07-20d: steps 2-3 DONE — the `_d` settledness chain + T2b LANDED; step 4 = fragment widening remains)
+
+**★ 2026-07-20d — `reachedByW3d2C_settled_d` + `graph_correct_w3d2_d` LANDED (audit 448 → 450; three
+green commits `c41829b`/`36926dd`/`d5f6071`).** Attack-first confirmed the model fix first (the 20b kill
+schema drains to `check = false = sem` via `graphRun`). The chain fragment: schema-wide
+`ComputedOrDirect ∧ DirectArmsBare` derived defs, derived OPERAND defs `ComputedOnly` (`hCOop`),
+`StoreValidRulesD`, + **`hNoUD`** (`exprDirects e = []` on derived defs) scoping the REMOVE leg. Key new
+substrate (all in `CascadeStrataSettle.lean` tail + `CascadeStrataResettle.lean` tail):
+`sem_nil_false` (hypothesis-free); `writeLeg/removeLeg_own_key_dirty` (the `Delta.leaf` own-key branch
+made chain-usable — THE load-bearing replacement for the dead `ComputedOnly` "no stored derived-key
+tuples" argument); `*_derived_inedges_eq_d` / `*_inedges_eq_of_unmapped`; `evalE_cd_grants_agree` +
+`checkFnR_cons/erase_irrel_cd` (the CD replacement for the FALSE `checkFnR_store_irrel`);
+`checkFn_eq_sem_w3d_filt`; `writeLeg/removeLeg_sem_stable2_d`; the `edge_char_d` pass family;
+`settledComplete_jobsLR_targeted_d` / `settledComplete_cascade2_targeted_d`. Also REPAIRED (unaudited):
+the landed `_filt` bridge's schema-wide `hCO` → per-key `hCOop` (was unsatisfiable on genuine
+Direct-arm schemas).
+
+**Open strengthenings (recorded, not blocking step 4):**
+1. **Lift `hNoUD`.** The remove constructor's PLAIN pre-store validity admits a derived-key tuple
+   through a union-reachable Direct arm; erasing it at a covered retracted-edge state (reachable —
+   the reconcile materialises edges only for UNCOVERED subjects) changes the key's grants with no
+   own-key delta. `sem` stability there needs: `sem⟨T:*,BARE⟩ = true → sem⟨T,name,BARE⟩ = true` over
+   the fenced fragment (BareStarStore + hWSbare kill the userset-star routes; untainted defs are
+   monotone) — a fuel-induction `sem` lemma. With it, drop `hNoUD` from the remove case (sub-case:
+   seed edge present ⇒ own-key dirty; absent + off-key ⇒ inert; absent + on-key ⇒ the monotonicity
+   argument closes the only failing CompleteKey clause `hnegC` at the erased subject).
+2. **Direct-arm OPERANDS.** `hCOop` (operand defs ComputedOnly) is load-bearing in
+   `sem_untaintedFilter_co` (a Direct-arm operand's stored seeds are `sem`-visible, so the T↾U filter
+   bridge fails). Needs a Direct-arm-aware filter bridge before operands can carry arms.
+
+**STEP 4 (= sub-step 3, NEXT):** widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare`
+(+ operand-`ComputedOnly` + `hNoUD` clauses), `w4_within_scope`, witness `W4WitnessDirect`, move
+`direct_arm_exclusion` into `GRAPH_FRAGMENT` + a state pin (conf phases required). The E-chain
+(`ReachedByW3d2E`) is still ComputedOnly-scoped — either widen its coverage discharge (via
+`w3d2_leg_context_d_filt` + `enumJob2D`) or scope the witness to the C-chain `graph_correct_w3d2_d`
+and record the gap.
+
+---
+
+### [historical] Direct-arm — RESUME (2026-07-20c: the MODEL FIX LANDED; steps 2-4 now UNBLOCKED)
 
 **★ 2026-07-20c — the `affectedKeys` MODEL FIX is DONE (task step 1).** The 2026-07-20b KILL blocker is
 cleared. `affectedKeys` (`Cascade.lean`) now carries the LeafFamily own-key branch, discriminated by a new

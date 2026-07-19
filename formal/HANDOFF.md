@@ -169,18 +169,33 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `reconcileJobsL(R)_outbox_sound` → the no-abort/fence proofs). `verify.sh lean` 448/448 + `conf-heavy` green;
 > `CORRESPONDENCE.md` §5/§7 updated (divergence RESOLVED). See `history/PROOF_STATUS.md` 2026-07-20c.
 >
-> **THE NEXT TASK — #1 Direct arm is now UNBLOCKED (task steps 2-4 remain; genuine chain-level proof).**
-> (2/3) **Re-attempt `reachedByW3d2C_settled_d`** (now TRUE) **+ `graph_correct_w3d2_d`**, consuming the
-> landed `reachedByW3d2_shadow_d` (`CascadeStrataSettle.lean:1173`) + `checkFnR_eq_sem_settled_d_filt` (`:1750`)
-> + `w3d2_leg_context_d_filt` (`CascadeStrataEnum.lean:796`). This is the design-flagged genuine effort:
-> `_d`/filtered-σ0 clones of the settledness-transport family (`writeLeg_sem_stable2` / `settledKey_*` /
-> `settledComplete_cascade2_targeted` and the `reachedByW3d2C_settled` induction, `CascadeStrataResettle.lean:1162`)
-> under `StoreValidRulesD` + `ComputedOrDirect ∧ DirectArmsBare`. The KILL state now DRAINS: the Direct-arm
-> seed write's `leaf=true` delta dirties `approver`, the diffing pass (`reconcileKeyD_retracts_excluded`)
-> retracts the excluded seed. (4) **Sub-step 3 (gated on 2/3):** widen `W4Fragment.computedOnly` →
-> `ComputedOrDirect ∧ DirectArmsBare`, `w4_within_scope`, witness `W4WitnessDirect`, move
-> `direct_arm_exclusion` into `GRAPH_FRAGMENT` + a state pin (conf phases required). After #1's Direct arm:
-> the TTU/userset half, #2 strata (>2). Exact resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
+> **★ 2026-07-20d — THE `_d` SETTLEDNESS CHAIN CLOSED (task steps 2-3 DONE): `reachedByW3d2C_settled_d`
+> + `graph_correct_w3d2_d` LANDED, audit 448 → 450.** Attack-first CONFIRMED the model fix before proving
+> (`#eval` drove the 20b kill schema through `graphRun`: the drained state retracts the excluded seed,
+> `check = false = sem`; scratch deleted). Three green commits: `c41829b` groundwork (`sem_nil_false`;
+> `writeLeg/removeLeg_own_key_dirty` — the model-fix branch made chain-usable and LOAD-BEARING; node-ineq
+> in-edge preservation; CD store congruence `checkFnR_cons/erase_irrel_cd`; the unaudited `_filt` bridge's
+> schema-wide `hCO` REPAIRED to per-key operand `hCOop` — it was unsatisfiable on genuine Direct-arm
+> schemas), `36926dd` the write/remove-leg transports (`checkFn_eq_sem_w3d_filt`,
+> `writeLeg/removeLeg_sem_stable2_d` + per-key transports), `d5f6071` the chain (`edge_char_d` family →
+> `settledComplete_jobsLR_targeted_d` → `settledComplete_cascade2_targeted_d` → the induction → T2b).
+> **FRAGMENT (honest):** schema-wide `ComputedOrDirect ∧ DirectArmsBare` derived defs; derived OPERAND
+> defs `ComputedOnly`; `StoreValidRulesD`; + **`hNoUD`** (`exprDirects e = []` on derived defs — Direct
+> arms only under `inter`/`excl`, the canonical `but not`; scopes the REMOVE leg, whose plain-valid pre
+> store otherwise admits union-reachable Direct-arm seeds whose covered-state erase needs an unbuilt
+> star→concrete `sem` monotonicity lemma — recorded follow-up). See `history/PROOF_STATUS.md` 2026-07-20d.
+>
+> **THE NEXT TASK — #1 Direct arm task step 4 = widening sub-step 3 (conf phases REQUIRED).**
+> Widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare` (+ operand-`ComputedOnly` +
+> `hNoUD` as honest fragment clauses), re-prove `w4_within_scope` (`FullScope.lean:165-174`), add the
+> non-vacuity witness `W4WitnessDirect` (`approver := excl (direct [user]) (computed banned)` + a store
+> granting `user:alice`) to `Audit.lean`, move `direct_arm_exclusion` INTO `GRAPH_FRAGMENT` (`corpus.py`)
+> + a state pin. NOTE the operational E-chain (`ReachedByW3d2E`/`graph_correct_w3d2E`) is still
+> ComputedOnly-scoped — widening it (the `enumJob2D` coverage discharge via `w3d2_leg_context_d_filt`)
+> is part of this step, OR scope the witness to the C-chain `graph_correct_w3d2_d` and record. Optional
+> strengthenings after: lift `hNoUD` (prove `sem` star→concrete coverage monotonicity over the fenced
+> fragment); admit Direct-arm OPERANDS (needs a Direct-arm-aware `sem_untaintedFilter_co`). Then the
+> TTU/userset half, #2 strata (>2). Exact resume: `history/optional-widening-2026-07.md` Direct-arm RESUME.
 > ⚠ OPERATIONAL: `verify.sh conf-rest` observed 9–13 min (often over the 10-min cap) — background w/ 600s
 > timeout, retry if cap-killed; consider splitting the phase.
 
