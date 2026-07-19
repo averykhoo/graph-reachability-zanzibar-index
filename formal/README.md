@@ -57,7 +57,9 @@ graph index), **state-level equality under six documented projections**,
 **exhaustive small-scope enumeration** up to tiny documented bounds, a
 **remove-path answer gate** (the driven set engine AND the driven graph index vs
 `sem` × oracle on the final store, plus driven == a fresh build at state level;
-both Python remove paths pinned, only the Lean remove legs open),
+both Python remove paths pinned, and the Lean remove leg now CLOSED at the
+validly-stored + drained-prior scope (2026-07-19f) — leaving only the Exec-driver
+end-to-end exercise open),
 and a **generated-schema answer gate** (seeded generated schemas outside the
 curated corpora, spec-side only) — 248 tests, 20 of them gate-tooling unit tests
 rather than comparisons.
@@ -82,6 +84,7 @@ widening W1→W4 complete). Phase 6 hardening complete: the graph-state conforma
 mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**,
 **exhaustive small-scope enumeration**, the **remove-path answer gate**, and the
 **generated-schema answer gate** all landed. What remains is optional
-assurance-widening (fragment widening, Lean/graph-side remove legs, wider
-bounds — `FINAL_REVIEW.md` §4; the once-pinned lookup-gate divergence was fixed
+assurance-widening (fragment widening, the Exec-driver remove exercise — the Lean
+remove leg itself is DONE 2026-07-19f at the validly-stored + drained-prior scope —
+wider bounds — `FINAL_REVIEW.md` §4; the once-pinned lookup-gate divergence was fixed
 2026-07-13 Python-side, `FINAL_REVIEW.md` §3's resolved note).

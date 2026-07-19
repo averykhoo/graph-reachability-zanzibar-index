@@ -298,8 +298,14 @@ answer gate** (`test_conformance_remove.py`: seeded add/remove/re-add sequences 
 sequences/seeds driven through the real GRAPH index (`WildcardIndex`+`DeltaProcessor`,
 I5 leaf-routing): driven graph `check` == oracle, driven graph SQL state == a fresh
 add-only build's, full-churn drains to a fresh-EMPTY graph with I12 non-mutation on a
-rejected repeat remove; so BOTH Python remove paths are now pinned, only the Lean
-remove legs stay open), the **generated-schema answer gate**
+rejected repeat remove; so BOTH Python remove paths are now pinned, and the Lean
+remove leg is now CLOSED too (2026-07-19f) at the validly-stored + drained-prior
+scope — the `remove` constructor on `ReachedByW3d2`/`C`/`E` carries T2a/T2b +
+`Exec.graphRun_check_eq_sem` over retraction of a `t ∈ T` from a drained state
+under the pre-remove store's disciplines, faithful to `TupleSource.remove`; the
+only residual is the Exec driver / zcli graph mode, still add-only as of
+2026-07-19 — proved over the chain, not yet driven end-to-end), the
+**generated-schema answer gate**
 (`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
 corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
 level), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` are all landed and gated.
@@ -340,12 +346,20 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    landed (`98773d3`/`0dd8d7b`/`8a9bee1`); leg 4 (the base-equation wall) + leg 5
    + the TTU/userset half + strata all scoped in
    [`history/optional-widening-2026-07.md`](history/optional-widening-2026-07.md).
-2. **Remove legs** (the diffing pass models retraction but the Lean chain is
-   add-only; BOTH Python remove paths are now pinned at answer level by
-   `test_conformance_remove.py` — the set engine at rebuild-fingerprint level, the
-   graph index by fresh-build state convergence + full drain — so only the Lean
-   legs remain the open part). **[my recommendation #3, second half — biggest
-   lift, highest ceiling: makes the Lean model a post-remove reference.]**
+2. **Remove legs** — the Lean remove leg is **DONE (2026-07-19f)** at the
+   validly-stored + drained-prior scope: the `remove` constructor on
+   `ReachedByW3d2`/`C`/`E` carries T2a/T2b + `Exec.graphRun_check_eq_sem` over
+   retraction of a `t ∈ T` from a drained state (`cascadeKeys = []`) under the
+   pre-remove store's `StoreValidRules`/`BareStarStore`/`TtuStarFree`/`htermT`
+   disciplines (faithful to `TupleSource.remove`). BOTH Python remove paths were
+   already answer-pinned by `test_conformance_remove.py` (the set engine at
+   rebuild-fingerprint level, the graph index by fresh-build state convergence +
+   full drain). So the Lean model IS now a post-remove reference under that
+   precondition. **Remaining open part:** the Exec driver / zcli graph mode is
+   still add-only as of 2026-07-19 (constructs no remove-state), so remove-
+   correctness is PROVED but not yet DRIVEN end-to-end — wire a remove op into
+   `foldAdmits`/zcli to close "proved" vs "driven"; and the guard's validly-stored
+   scope decision is flagged for user review.
 3. **Widening the state/enumeration bounds** — graph backend inside the
    enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
    (The current bounds, their runtime rationale, and why the graph side was
@@ -397,7 +411,9 @@ Repo-side (outside the formal effort, smaller, Python-only):
   **State-level conformance + exhaustive small-scope enumeration ✅ CLOSED
   (2026-07-12m)** — the two formerly-unearned §7 clauses. Remaining extras
   (optional, FINAL_REVIEW §4): fragment widening (the ROOT-operator gap is DONE
-  2026-07-17; the LEAF/strata gaps remain), remove legs, wider bounds.
+  2026-07-17; the LEAF/strata gaps remain), remove legs (the Lean remove leg is
+  DONE 2026-07-19f at the validly-stored + drained-prior scope; only the
+  Exec-driver end-to-end exercise remains), wider bounds.
 
 Historical detail for every closed stage: `history/PROOF_STATUS.md` (ledger, newest
 first) and `history/ROADMAP.md` (designs + post-mortems); the topical synthesis is

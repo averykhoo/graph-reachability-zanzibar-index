@@ -99,8 +99,14 @@ reachable from empty by the **synchronous v1 Python write path**, modeled as a c
 > outbox → **drain** to quiescence,
 
 interleaved as Python interleaves them (`connectedstore.advance_index` →
-`DeltaProcessor.run_cascade`). The chain is **add-only** by construction: it has no
-remove legs (a property of the chain, not a hypothesis). `CORRESPONDENCE.md` §4–6 maps
+`DeltaProcessor.run_cascade`). The chain was **add-only** by construction until
+2026-07-19f, when a `remove` constructor — gated on removing a validly-stored tuple
+(`t ∈ T`) from a drained prior state (`cascadeKeys = []`), with the pre-remove
+store's disciplines carried, faithful to `TupleSource.remove` — was added to
+`ReachedByW3d2`/`C`/`E`, so T2a/T2b now cover retraction at that scope. The Exec
+driver / zcli graph mode remains add-only as of 2026-07-19 (it constructs no
+remove-state), so remove-correctness is proved over the chain but not yet driven
+end-to-end. `CORRESPONDENCE.md` §4–6 maps
 every step (`reconcileStarsKeyD`, `graphRecR`/`checkFnR`, `affectedKeys`, `runCascade2`)
 to `processor.py` line ranges.
 
@@ -257,7 +263,9 @@ the sorry-scanner, `test_sorry_scan.py`; 7 for the zcli-runner transient-init re
   a fresh-EMPTY state (no `NodeV4`/`EdgeV4`/`ResidueV1` rows) with I12 non-mutation on a
   rejected repeat remove. Scope honesty: BOTH Python remove paths are now pinned to
   oracle/`sem` (the graph transitively, via `graph == oracle` on the corpora the set-engine
-  leg pins `sem == oracle`); only the Lean-side remove legs remain open (§6), and the state
+  leg pins `sem == oracle`); the Lean-side remove leg is now CLOSED too (2026-07-19f, §6)
+  at the validly-stored + drained-prior scope, with only the Exec-driver end-to-end
+  exercise remaining, and the state
   comparisons are driven-vs-fresh-build Python-internal, never vs Lean.
 - **Generated-schema conformance** (`test_conformance_generated.py`, 40 tests,
   2026-07-12): a seeded deterministic re-implementation of the hypothesis `schema_asts`
@@ -305,10 +313,13 @@ The residual unverified surface, in full:
    derived operand leaves (`Direct`/TTU arms under a boolean — `PDerivedTTU`/`PDerivedUserset`
    plan leaves; the derived-ROOT operator is NO LONGER a gap, widened 2026-07-17);
    declared wildcard-userset restrictions anywhere; stored object-wildcard tuples; stored
-   userset-star tuples; **removes** (the operational chain is add-only — BOTH Python remove
-   paths are now pinned at answer level: the SET-ENGINE by rebuild state-fingerprint and the
-   GRAPH-INDEX by fresh-build state convergence + full drain, `test_conformance_remove.py`;
-   only the Lean remove legs stay open); star-subject queries with non-bare predicates;
+   userset-star tuples; **removes** (now CLOSED for a VALIDLY-STORED tuple from a drained
+   prior state, 2026-07-19f — the `remove` constructor on `ReachedByW3d2`/`C`/`E` carries
+   T2a/T2b under `t ∈ T` + `cascadeKeys = []` + the pre-remove store's disciplines, faithful
+   to `TupleSource.remove`; BOTH Python remove paths were already answer-pinned via
+   `test_conformance_remove.py`; residual open slice: the Exec driver / zcli graph mode is
+   still add-only as of 2026-07-19, so remove-correctness is proved not yet driven end-to-end);
+   star-subject queries with non-bare predicates;
    star-object queries on the graph side. *(Empirical note: the derived-ROOT gap was CLOSED 2026-07-17 — union- and
    computed-rooted derived defs are now in scope and in `GRAPH_FRAGMENT` (check + state); only the object-wildcard
    corpus stays probe-confirmed-but-excluded — zero check-level divergence observed, the exclusion is proof-scope, not a
@@ -347,10 +358,13 @@ The residual unverified surface, in full:
 **Where the next marginal assurance is** (`FINAL_REVIEW.md` §4; state-level + enumeration
 + the remove-path and generated-schema answer gates are DONE): (c) widening `W4Fragment`
 (union roots first — the probe suggests the model is already faithful there and only the
-proof is missing); (d) remove legs on the Lean side (the diffing pass models retraction
-but the operational chain is add-only, so the Lean model is not yet a post-remove
-reference; BOTH Python remove paths — set engine and graph index — are now pinned to
-oracle/`sem`, 2026-07-13); (e) widening the state/enumeration bounds (graph backend in
+proof is missing); (d) remove legs on the Lean side — **DONE 2026-07-19f** at the
+validly-stored + drained-prior scope: the `remove` constructor on `ReachedByW3d2`/`C`/`E`
+makes T2a/T2b + `Exec.graphRun_check_eq_sem` cover retraction of a `t ∈ T` from a drained
+state under the pre-remove store's disciplines (faithful to `TupleSource.remove`), so the
+Lean model IS now a post-remove reference at that scope; only the Exec-driver end-to-end
+exercise (still add-only as of 2026-07-19) and the guard's validly-stored scope review
+remain; (e) widening the state/enumeration bounds (graph backend in
 the enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores). Item
 (f) — fixing the derived-TTU userset-subject divergence and flipping its strict xfails —
 is **DONE** (2026-07-13, Python-side; `FINAL_REVIEW.md` §3's resolved note).
