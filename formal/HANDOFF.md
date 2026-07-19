@@ -35,7 +35,7 @@ never rounds up to "the code is formally verified" (plan §7).
    stratum-1"). A session that kills a false statement is a GOOD session; record the
    finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (425 `#print axioms` reports, one per audited
+   + **0 sorries** + zcli + axiom audit (441 `#print axioms` reports, one per audited
    theorem, only `[propext, Classical.choice, Quot.sound]`) + 315 Python conformance
    tests, 0 skips
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
@@ -81,46 +81,48 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
-> **★ #4's LEAN REMOVE LEG IS COMPLETE (2026-07-19f).** The `remove` constructor now lives on all three
-> inductives `ReachedByW3d2`/`C`/`E`, so T2a (full `Inv`) + T2b (`check = sem`) hold over remove-states, and
-> the audited `graph_correct` / `graph_reached_inv` / `Exec.graphRun_check_eq_sem` cover retraction — SCOPE:
-> removing a **validly-stored** tuple. Landed across R5b-i…iii-b (`d7d6f7d`/`2b7456f`/`a16c927`/`09eb272`/
-> `7a594bb`; all additive, `verify.sh lean` green, audit 415/415, standard axioms): substrate relocation →
-> the crux (`reachedByW3d2_untOccCount` + `untaintedShadow_removeLeg`) → the 9-lemma settledness-dual stack
-> → the source-occurrence invariant (`reachedByW3d2_srcOccCount`) → the constructor + guard
-> (`hdrain` + `StoreValidRules/BareStarStore/TtuStarFree/htermT` about the pre-remove store, faithful to
-> `TupleSource.remove` + W4Fragment) + the 21-site discharge. Full detail: `history/PROOF_STATUS.md`
-> 2026-07-19f.
+> **★ #4 IS FULLY CLOSED — proved AND driven AND documented (2026-07-19f/g).** The `remove`
+> constructor lives on `ReachedByW3d2`/`C`/`E` (2026-07-19f, `7a594bb`; guard: `t ∈ T` + `hdrain` +
+> the pre-remove store's `StoreValidRules`/`BareStarStore`/`TtuStarFree`/`htermT`, faithful to
+> `TupleSource.remove`), so the audited `graph_correct`/`graph_reached_inv`/`Exec.graphRun_check_eq_sem`
+> cover retraction — SCOPE: a **validly-stored** tuple from a **drained** prior state. Session
+> 2026-07-19g closed the follow-ups: **Exec-driver remove hardening** (`5a35ec3` — `GraphOp` streams,
+> `graphRunOps` folding the chain's own legs, `removeGateB` deciding the full guard at runtime
+> fail-closed, honesty trio `graphRunOps_reached`/`_store`/`_check_eq_sem`, zcli `"ops"` field w/
+> rc 5 spec-mode rejection, new answer-level differential gate `test_conformance_remove_graph.py`)
+> and the **claim-doc sweeps** (`67f8c35`/`f1c9d14` — FINAL_REVIEW/HANDOFF/ARCHITECTURE/SEMANTICS/
+> README/CORRESPONDENCE §7 now state the scoped-removes claim + live counts). STILL FLAGGED FOR
+> AVERY: the guard design decision (validly-stored scope strengthens an audited inductive).
 >
-> **THE NEXT TASK — #4 follow-ups (non-blocking), then the other optional widenings.** (1) **`FINAL_REVIEW.md`
-> scope-wording sweep** — §4(d) + the ~3 "Lean remove legs stay open" references (≈lines 92/144–148/241–245)
-> now UNDER-claim (stale-conservative = SAFE, but update: the Lean model IS a post-remove reference for
-> validly-stored-tuple removes; state the precondition). (2) **Exec-driver remove hardening (optional)** —
-> the zcli graph mode / `Exec.lean` fold is still add-only (constructs no remove-state), so the chain PROVES
-> remove-correctness but the DRIVER doesn't EXERCISE it end-to-end; wire a remove op into `foldAdmits`/zcli
-> to close "proved" vs "driven". (3) **User review of the guard design decision** (validly-stored scope —
-> faithful, strengthens an audited inductive; flagged for Avery). Then the remaining optional widenings:
-> #1 Direct-arm leg 4 (the base-equation wall) / TTU-userset half, #2 strata (>2). Prior R5b context
-> (guard-fix rationale, site map) below + `history/PROOF_STATUS.md` 2026-07-19f.
-> R5b-iii-b (add the `remove` constructor + discharge 20+1 sites) hit a **NEW, root-caused design
-> blocker** and was reverted to green baseline (no red/sorry partial): the **erase store-hypothesis
-> DIRECTION.** Discipline/settledness theorems carry store hyps indexed by the reached store `T`
-> (`StoreValidRules S T`, `NoStoreSubjectR T R`, `BareStarStore T`, `TtuStarFree S T`); `induction`
-> gives the remove case its hyp at `T.erase t` but the IH + substrate need it at FULL `T`
-> (subset→superset), which requires the **removed tuple `t`'s own validity** — unrecoverable from
-> `RemoveAdmits = t ∈ T`. Not cosmetic: `removeLeg_derived_inedges_eq → rewriteClosure_notarget_derived`
-> literally uses `hSV t ht`, and NO `ReachedBy… → StoreValidRules` invariant exists (grep-confirmed).
-> **THE FIX (faithful):** strengthen the 3 `remove` constructors' guard to carry the **pre-remove store
-> `T`'s disciplines** (`StoreValidRules S T` + the fragment carries) — Python's `TupleSource.remove` only
-> retracts validly-admitted tuples, and the fragment conds are `W4Fragment` carries `graph_correct`
-> already assumes; **scope becomes "…correct after removing a VALIDLY-STORED tuple"** (the honest,
-> correct scope; no existing add-only exec consumer constructs a remove-state, so nothing breaks; keep
-> audit 415/415, then reword `FINAL_REVIEW.md`). Residual sub-obstructions after the fix (from the
-> R5b-iii-b site trace): `reachedByW3d2_edge_target_ne_bare`/`_edges_target_plain` need ~15-line
-> target-discipline proofs (+ a possible node-encoding lemma for the derived `on ≠ STAR` sub-case);
-> `graph_correct_w3d2E` needs NO bespoke case (routes through `reachedByW3d2E_toC`). Full site map +
-> fix detail: `history/PROOF_STATUS.md` 2026-07-19f. R1–R5b-iii-a stay landed/green. After #4:
-> #1 Direct-arm leg 4 / TTU-userset half, #2 strata (>2).
+> **#1 Direct-arm widening ADVANCED (2026-07-19g): legs 4 + 5a + 5b landed** (`128d7e6`/`53c5d34`/
+> `4a01c2d`; all additive, audited statements byte-identical, audit 425 → **441**).
+> Leg 4 (Fable): the base-equation wall DISCHARGED — `graphRec_base_eq_d`/`_bs_d` (no `ComputedOnly`;
+> premise = the `hterm` bundle consumers already carry) via design lemmas A (`rewriteClosure_derived_
+> eq_seed`, simpler than designed), B (`probeNonDerived_untaintedFilter`), C (`sem_untaintedFilter`,
+> no `Stratifiable` premise); audited `graphRec_base_eq`/`_bs` are now thin wrappers over `_unt` cores.
+> Leg 5a (Opus): the `_cd` read spine (`checkFn_eq_semStep_cd`, `checkFn_eq_sem(_of_base)_d`) + **KILL:
+> `graph_correct_w3a_d` is FALSE** (a stored bare Direct-arm seed on an exclusion-rooted derived key
+> is never retracted at the raw W3a reconcile — `reachedByRules_derived_no_inedge` breaks under
+> `StoreValidRulesD`), so the Direct-arm WRITE half must thread the W3d diffing pass
+> (`reconcileKeyD_retracts_excluded`) — correspondence lives at the W3d2 drained state. Leg 5b (Opus):
+> star-relaxed/routed spine (`checkFn_eq_sem_bs_d`, `checkFnR_eq_semStep_cd`) + **KILL: the naive
+> coveredFn widening is FALSE** (a subject's own concrete Direct grant fires a disjunct absent from
+> its star read); corrected split landed gated on **`NoConcDirect`** (`evalE_star_of_noConc`,
+> `checkFn_eq_coveredFn_of_no_extra_cd`, `checkFnR_eq_star_of_not_enum_cd`).
+>
+> **THE NEXT TASK — #1 leg 5 final slice, then sub-step 3.** (1) **The enum half:** `enumJob2`/
+> `enum2Base` must additionally enumerate the stored-on-R BARE Direct-arm subjects (the
+> `NoConcDirect`-failing ones) + a `coveredFn_declared_d`; then the W3d2 settled-consumer `_d` clones
+> (`checkFnR_eq_sem_settled` CascadeStrataSettle:884, W3c row-char ReconcileStarsComplete:1058,
+> CascadeStrataResettle:1540) — they route through `coveredFn_declared` + the enumeration, NOT pure
+> read-bridge threading. (2) **Sub-step 3 (gated on 1):** widen `W4Fragment.computedOnly` →
+> `ComputedOrDirect ∧ DirectArmsBare`, re-prove `w4_within_scope`, witness `W4WitnessDirect`,
+> conformance corpus into `GRAPH_FRAGMENT` + pins (conf phases required). The durable plan + exact
+> resume state: `history/optional-widening-2026-07.md` Target #1 RESUME. After #1's Direct arm:
+> the TTU/userset half, #2 strata (>2). ⚠ OPERATIONAL: `verify.sh conf-rest` observed at 9–13 min
+> on 2026-07-19 (the new per-op zcli remove gate grew it; often OVER the 10-min tool cap) — run it
+> in background w/ 600s timeout and retry if cap-killed; consider splitting the phase (runbook
+> carries the timing note).
 
 > **Update 2026-07-18 — OPTIONAL assurance-widening arc OPENED (4 targets scoped;
 > `FINAL_REVIEW.md §4`).** All four remaining optional widenings were recon'd + (for #1)

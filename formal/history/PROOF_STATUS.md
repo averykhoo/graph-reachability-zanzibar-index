@@ -8,6 +8,79 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-19g (#4 FULLY CLOSED: docs sweep + Exec-driver remove hardening — removes now DRIVEN; #1 Direct-arm legs 4/5a/5b LANDED: the base-equation wall discharged, two attack kills, audit 425→441)
+
+Tenth session of the optional arc; orchestrated (Fable main, parallel where files were disjoint):
+one Opus docs agent + one Opus Lean agent concurrently, then Fable for the leg-4 proof wall, then
+two sequential Opus proof legs. Six commits, all gated; pushed incrementally.
+
+- **#4 follow-up 1 — the claim-doc scope sweep (`67f8c35` + consistency pass `f1c9d14`).** Every
+  "Lean remove legs stay open" / "the chain is add-only" claim across FINAL_REVIEW / HANDOFF /
+  ARCHITECTURE / SEMANTICS / formal-README updated to the honest closed-scope wording (validly-stored
+  + drained-prior precondition stated at every claim site); ARCHITECTURE:102 and SEMANTICS:626 had
+  become flatly FALSE ("the chain has no remove legs — a property of the chain") and were corrected.
+  CORRESPONDENCE §7's "Add-only" intentional divergence rewritten as **"Scoped removes (decision 6 —
+  resolved/scoped 2026-07-19)"** + a §6 driver-map row for `graphRunOps`; FINAL_REVIEW L55's pointer
+  updated in lockstep. Live counts refreshed where cited as current (audit 425 at the time, conf 315
+  collected / 295 differential = 315 − 20 gate-tooling; gate-runbook re-timed). Historical snapshots
+  with unreconstructable per-file breakdowns (FINAL_REVIEW preamble L13–20, ARCHITECTURE L205–213,
+  README L64/80) deliberately left stale-dated rather than guessed.
+- **#4 follow-up 2 — Exec-driver remove hardening (`5a35ec3`): "proved" → "driven".** `Exec.lean`
+  (+320/−0): `GraphOp` (add/remove) op streams; `graphRunOps` folds the chain's OWN legs (per op one
+  `write`/`remove` leg then a cascade leg); `removeGateB` decides the FULL remove-constructor guard at
+  runtime (six Bool discipline deciders, each pinned by an iff: `storeValidRulesB_iff` /
+  `bareStarStoreB_iff` / `ttuStarFreeB_iff` / `noStoreSubjectRB_iff` / `noTtuTargetB_iff` /
+  `htermB_iff`; `removeGateB_gate` supplies every hypothesis; fail-closed). Honesty trio
+  `graphRunOps_reached` / `_store` / `_check_eq_sem` (verdicts = `sem` over remove-carrying streams,
+  via `graph_correct` — no analogy). zcli: optional `"ops"` field on graph/graph-state modes (absent
+  ⇒ legacy add-only path byte-identical; spec mode rejects with new rc 5, pinned in
+  `test_cli_mode.py`). New conf gate `test_conformance_remove_graph.py`: seeded add/remove/re-add
+  streams through zcli `graphRunOps` == real Python graph index == oracle on the erased store
+  (ANSWER-level; anti-vacuous — net removal forced), 16 removable GRAPH_FRAGMENT corpora × 3 seeds,
+  wired into conf-rest. Empirical: per-op cascades made full-size streams blow the zcli spawn budget
+  ⇒ op-universe capped at 3 tuples (remove path size-independent; full builds pinned elsewhere).
+  Audit 415 → 425.
+- **#1 Direct-arm leg 4 — the base-equation wall DISCHARGED (`128d7e6`, Fable).**
+  `graphRec_base_eq_d`/`_bs_d` (RestrictBase.lean +670): the untainted operand read = `sem` over a
+  `StoreValidRulesD` store with NO `ComputedOnly` — the premise is exactly the `hterm` bundle chain
+  consumers already carry. Design lemma A `rewriteClosure_derived_eq_seed` (simpler than designed:
+  `RewriteMatchDeclared` kills firing rules — divergence recorded); B `probeNonDerived_untaintedFilter`
+  (extra derived seed edges are `hterm`-dead ends; the leg-3 kill reproduced at lemma level — `hterm`
+  load-bearing); C `sem_untaintedFilter` (store-filter invariance on untainted reads, proved over the
+  restricted schema at every fuel/key — avoids any `Stratifiable` premise; attack: derived queries
+  genuinely diverge, the untainted scope is load-bearing). Audited `graphRec_base_eq`/`_bs` refactored
+  to thin wrappers over hypothesis-factored `_unt` cores — statements verified byte-identical vs HEAD.
+  Audit 425 → 431.
+- **#1 leg 5a (`53c5d34`, Opus) — the `_cd` read spine + a KILL.** `checkFn_eq_semStep_cd` +
+  `checkFn_eq_sem(_of_base)_d`. **KILL: `graph_correct_w3a_d` is FALSE** — schema
+  `approver := excl (direct [user]) (computed banned)`, store `{(alice,approver,doc),(alice,banned,doc)}`:
+  the stored bare Direct-arm tuple materialises a base seed edge the raw W3a reconcile never retracts
+  (`reachedByRules_derived_no_inedge` breaks under `StoreValidRulesD`), so the Direct-arm WRITE half
+  must thread the W3d diffing pass (`reconcileKeyD_retracts_excluded`) — the widened correspondence
+  lives at the W3d2 drained state, not the W3a assembly. Audit 431 → 434.
+- **#1 leg 5b (Opus) — star-relaxed/routed spine + the coveredFn split.** `checkFn_eq_sem_bs_d` /
+  `checkFn_eq_sem_of_base_bs_d`, `checkFnR_eq_semStep_cd`. **KILL: the naive
+  `checkFn_eq_coveredFn_of_no_extra` widening is FALSE** (a subject's OWN concrete Direct grant fires
+  the bare-concrete match disjunct absent from its star read); the corrected split is gated on
+  **`NoConcDirect`**: `directLeaf_star_of_noConc`, generic `evalE_star_of_noConc`,
+  `checkFn_eq_coveredFn_of_no_extra_cd` (unrouted), `checkFnR_eq_star_of_not_enum_cd` (routed).
+  The third cited consumer site already had its `_cd` form from leg 2 (`ReconcileDiff.lean:834`).
+  **Finding refining the RESUME:** the W3d2 settled-consumer `_d` clones are NOT pure read-bridge
+  threading — they route through `coveredFn_declared` + the enumeration, so they are blocked on the
+  enum half: `enumJob2`/`enum2Base` must enumerate the stored-on-R BARE Direct-arm subjects (the
+  `NoConcDirect`-failing ones) + a `coveredFn_declared_d`. Audit 434 → 441.
+- **Gate state:** every Lean commit `verify.sh lean` PASSED (sorries=0, standard axioms; final audit
+  441/441); conf-heavy + conf-rest re-run green at `128d7e6` (76 / 239, 0 skips) and again at session
+  end; `pytest tests/` 593 passed. ⚠ conf-rest observed at 9–13 min today (often over the 10-min
+  tool cap; the per-op zcli remove gate grew it) — runbook carries the warning; consider splitting
+  the phase.
+- **STILL FLAGGED FOR AVERY:** the remove-guard design decision (validly-stored scope strengthens the
+  audited inductives `ReachedByW3d2`/`C`/`E`).
+- **NEXT:** #1 leg 5 final slice — the enum half + the settled-consumer `_d` clones, then sub-step 3
+  (widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare`, `w4_within_scope`,
+  `W4WitnessDirect`, conformance corpus + pins, conf phases). Then the TTU/userset half, #2 strata.
+  Exact resume state: `history/optional-widening-2026-07.md` Target #1 RESUME.
+
 ## Session 2026-07-19f (#4 remove legs — R5b-i/ii/iii-a LANDED+PUSHED; R5b-iii-b constructor hits a NEW design blocker: the erase store-hypothesis direction ⇒ the guard must carry the removed tuple's store-discipline)
 
 Ninth session of #4. Orchestrated via sequential Opus subagents (fresh context each), each
