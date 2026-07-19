@@ -89,8 +89,9 @@ two sequential Opus proof legs. Six commits, all gated; pushed incrementally.
   `62ab8f4` (76 / 239, 0 skips each); `pytest tests/` 593 passed. ⚠ conf-rest observed at 9–13 min today (often over the 10-min
   tool cap; the per-op zcli remove gate grew it) — runbook carries the warning; consider splitting
   the phase.
-- **STILL FLAGGED FOR AVERY:** the remove-guard design decision (validly-stored scope strengthens the
-  audited inductives `ReachedByW3d2`/`C`/`E`).
+- **GUARD DESIGN DECISION APPROVED BY AVERY (2026-07-19, this session):** the validly-stored +
+  drained-prior scope (it strengthens the audited inductives `ReachedByW3d2`/`C`/`E`) is accepted as
+  the honest, faithful framing — no longer an open flag.
 - **NEXT:** #1 leg 5d — the `_d` CHAIN (`reachedByW3d2_shadow_d`/`reachedByW3c_master_d`/
   `reachedByW3d2C_settled_d`; then `graph_correct_w3d2_d`/`w3c_row_char_d` fall out), then sub-step 3
   (widen `W4Fragment.computedOnly` → `ComputedOrDirect ∧ DirectArmsBare`, `w4_within_scope`,

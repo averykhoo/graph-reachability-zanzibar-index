@@ -60,7 +60,7 @@ graph index), **state-level equality under six documented projections**,
 both Python remove paths pinned, and the Lean remove leg now CLOSED at the
 validly-stored + drained-prior scope (2026-07-19f) and DRIVEN end-to-end by the Exec
 driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`),
-leaving only the guard's validly-stored scope decision flagged for review),
+its validly-stored scope decision approved by Avery 2026-07-19),
 and a **generated-schema answer gate** (seeded generated schemas outside the
 curated corpora, spec-side only) — 248 tests, 20 of them gate-tooling unit tests
 rather than comparisons.
@@ -88,6 +88,6 @@ mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**,
 assurance-widening (fragment widening — the Lean
 remove leg itself is DONE 2026-07-19f at the validly-stored + drained-prior scope and
 DRIVEN end-to-end by the Exec driver 2026-07-19 (`graphRunOps`/`test_conformance_remove_graph.py`),
-so only the guard's validly-stored scope review remains there —
+its validly-stored scope decision approved by Avery 2026-07-19 —
 wider bounds — `FINAL_REVIEW.md` §4; the once-pinned lookup-gate divergence was fixed
 2026-07-13 Python-side, `FINAL_REVIEW.md` §3's resolved note).

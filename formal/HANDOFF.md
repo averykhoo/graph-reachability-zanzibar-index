@@ -91,8 +91,9 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > fail-closed, honesty trio `graphRunOps_reached`/`_store`/`_check_eq_sem`, zcli `"ops"` field w/
 > rc 5 spec-mode rejection, new answer-level differential gate `test_conformance_remove_graph.py`)
 > and the **claim-doc sweeps** (`67f8c35`/`f1c9d14` — FINAL_REVIEW/HANDOFF/ARCHITECTURE/SEMANTICS/
-> README/CORRESPONDENCE §7 now state the scoped-removes claim + live counts). STILL FLAGGED FOR
-> AVERY: the guard design decision (validly-stored scope strengthens an audited inductive).
+> README/CORRESPONDENCE §7 now state the scoped-removes claim + live counts). ★ GUARD DESIGN
+> DECISION APPROVED BY AVERY (2026-07-19): the validly-stored + drained-prior scope is accepted as
+> the honest, faithful framing — no longer an open flag.
 >
 > **#1 Direct-arm widening ADVANCED (2026-07-19g): legs 4 + 5a + 5b + 5c landed** (`128d7e6`/
 > `53c5d34`/`4a01c2d`/`62ab8f4`; all additive, audited statements byte-identical, audit 425 → **446**).
@@ -317,8 +318,8 @@ scope — the `remove` constructor on `ReachedByW3d2`/`C`/`E` carries T2a/T2b +
 under the pre-remove store's disciplines, faithful to `TupleSource.remove`; and the
 Exec driver / zcli graph mode now DRIVES removes end-to-end too (2026-07-19,
 `graphRunOps` / `removeGateB` / `test_conformance_remove_graph.py`), so
-remove-correctness is now both proved over the chain AND driven end-to-end — leaving
-only the guard's validly-stored scope decision flagged for user review), the
+remove-correctness is now both proved over the chain AND driven end-to-end — and the
+guard's validly-stored scope decision is APPROVED by Avery 2026-07-19), the
 **generated-schema answer gate**
 (`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
 corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
@@ -376,8 +377,8 @@ What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md
    `test_conformance_remove_graph.py` differential-gates seeded add/remove/re-add
    streams (zcli `graphRunOps`) against the real Python graph index and the oracle
    on the erased store (ANSWER-level), so remove-correctness is now both PROVED and
-   DRIVEN end-to-end. **Remaining open part:** only the guard's validly-stored scope
-   decision is flagged for user review.
+   DRIVEN end-to-end. The guard's validly-stored scope decision was **APPROVED by
+   Avery (2026-07-19)** — #4 has no remaining open part.
 3. **Widening the state/enumeration bounds** — graph backend inside the
    enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores.
    (The current bounds, their runtime rationale, and why the graph side was

@@ -325,8 +325,8 @@ The residual unverified surface, in full:
    to `TupleSource.remove`; BOTH Python remove paths were already answer-pinned via
    `test_conformance_remove.py`; the Exec driver / zcli graph mode now DRIVES removes
    end-to-end too (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`), so
-   remove-correctness is both proved AND driven end-to-end — only the guard's
-   validly-stored scope decision stays flagged for review);
+   remove-correctness is both proved AND driven end-to-end — and the guard's
+   validly-stored scope decision was APPROVED by Avery 2026-07-19);
    star-subject queries with non-bare predicates;
    star-object queries on the graph side. *(Empirical note: the derived-ROOT gap was CLOSED 2026-07-17 — union- and
    computed-rooted derived defs are now in scope and in `GRAPH_FRAGMENT` (check + state); only the object-wildcard
@@ -371,8 +371,8 @@ validly-stored + drained-prior scope: the `remove` constructor on `ReachedByW3d2
 makes T2a/T2b + `Exec.graphRun_check_eq_sem` cover retraction of a `t ∈ T` from a drained
 state under the pre-remove store's disciplines (faithful to `TupleSource.remove`), so the
 Lean model IS now a post-remove reference at that scope; the Exec driver DRIVES removes
-end-to-end too (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`), leaving
-only the guard's validly-stored scope review; (e) widening the state/enumeration bounds (graph backend in
+end-to-end too (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`); the guard's
+validly-stored scope decision was APPROVED by Avery 2026-07-19; (e) widening the state/enumeration bounds (graph backend in
 the enumeration, k = 4, a userset/TTU shape, state gate over enumerated stores). Item
 (f) — fixing the derived-TTU userset-subject divergence and flipping its strict xfails —
 is **DONE** (2026-07-13, Python-side; `FINAL_REVIEW.md` §3's resolved note).

@@ -150,8 +150,8 @@ Everything §7 lists, plus the fragment carries:
    `test_conformance_remove.py`; the Exec driver / zcli graph mode now DRIVES
    removes end-to-end too (2026-07-19, `graphRunOps` / `removeGateB` /
    `test_conformance_remove_graph.py`), so remove-correctness is now both PROVED
-   and end-to-end DRIVEN — what remains flagged is only the guard's validly-stored
-   precondition, for user review); star-subject queries with non-bare
+   and end-to-end DRIVEN — and the guard's validly-stored precondition was
+   APPROVED by Avery 2026-07-19); star-subject queries with non-bare
    predicates; star-object queries on the graph side.
    *Empirical note (2026-07-12k / 2026-07-17): the derived-ROOT operator is no
    longer a fragment gap — union- and computed-rooted derived defs entered the
@@ -261,9 +261,10 @@ never more. The Exec driver / zcli graph mode now DRIVES removes end-to-end too
 `"ops"` add/remove stream, and `test_conformance_remove_graph.py` differential-gates
 seeded add/remove/re-add streams (zcli `graphRunOps`) against the real Python graph
 index and the oracle on the erased store (ANSWER-level) — so remove-correctness is
-now both PROVED over the operational chain AND DRIVEN end-to-end. What remains
-flagged is only the guard's validly-stored scope decision (it strengthens an
-audited inductive), for user review;
+now both PROVED over the operational chain AND DRIVEN end-to-end. The guard's
+validly-stored scope decision (it strengthens an audited inductive) was reviewed
+and **APPROVED by Avery (2026-07-19)** as the honest, faithful framing — no longer
+an open flag;
 (e) widening the enumeration/state bounds (graph backend in the enumeration;
 k = 4; a userset/TTU shape; state gate over the enumerated stores). Item (f)
 — fixing the derived-TTU userset-subject check divergence and flipping its

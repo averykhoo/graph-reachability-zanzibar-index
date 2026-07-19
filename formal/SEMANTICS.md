@@ -769,8 +769,8 @@ comparisons + 20 gate-tooling unit tests [sorry-scanner + zcli-runner retry]; 31
   faithful to `TupleSource.remove`), and the Exec driver DRIVES it end-to-end
   (2026-07-19, `graphRunOps` / zcli `"ops"`; `test_conformance_remove_graph.py`
   differential-gates seeded add/remove/re-add streams == the real Python graph
-  index == oracle on the erased store, at ANSWER level), leaving only the guard's
-  validly-stored scope review.
+  index == oracle on the erased store, at ANSWER level). The guard's validly-stored
+  scope decision was **APPROVED by Avery (2026-07-19)** — no open flag remains.
 - **Generated-schema answer conformance** (2026-07-12):
   `test_conformance_generated.py` — 40 seeded generated schemas + stores
   (a deterministic re-implementation of the hypothesis `schema_asts`
