@@ -704,6 +704,592 @@ theorem reachedByW3d2_shadow {σ : GraphState} {S : Schema} {T : Store}
       untaintedShadow_cascade2 hsh (reachedByRules_of_admitted h0) hSV hNK hCO
         hjv1 hjv2⟩
 
+/-! ## The FILTERED-σ0 shadow — the Direct-arm (W3d-2 `_d`) untainted-core rebuild
+
+The naive full-store σ0 (`ReachedByRulesAdmitted σ0 S T`) is FALSE on the widened
+`StoreValidRulesD` fragment (attack-refuted 2026-07-19: a stored Direct-arm subject that
+is ALSO excluded — `approver := direct[user] ∖ computed banned`, store
+`{(alice,approver,doc), (alice,banned,doc)}` — seeds the base edge
+`subjNode alice → objNode(doc,approver)` into the full-store σ0, which the DRAINED σ
+retracts, killing `UntaintedShadow.sub`). The faithful target rebuilds over the
+UNTAINTED-FILTER store `T↾U := T.filter (!isDerived ∘ key)`: no derived-key seeds, so σ0
+stays inside σ, and its edges are untainted-targeted WITHOUT any `ComputedOnly`
+hypothesis (`reachedByRulesAdmitted_untStore_edge_untainted`).
+
+The derived-key write/remove legs ride on the dead-end-seed collapse
+(`rewriteClosure_derived_eq_seed_nk` below): under `NodupKeys` a derived-key tuple fires
+NO rewrite rule — a firing rule's match key would BE the derived key, every match key of
+a def the `schemaRewrites` taint filter kept is one of that def's `exprRefs`, and taint
+fixpoint closedness (`taintedKeys_fixed`) would then taint the def.
+
+**Attack-first (2026-07-20, `#eval` against the real `rewriteClosure` / `schemaRewrites`
+/ `isDerived`; scratch deleted).**
+* The seed collapse and all-derived-targets CONFIRMED on
+  `approver := direct[user] ∖ computed banned` (+ the chained `super := computed
+  approver`, + a `ttu` over a derived tupleset — taint propagates through the `exprRefs`
+  ttu head `(t, ts)`, so the would-be fanout def is itself derived and filtered).
+* **`NodupKeys` is load-bearing — the hNK-free claim is REFUTED**: on a duplicate key
+  `(doc,x)` (first def `direct[user]`, second `computed approver`) the taint fixpoint
+  reads only the FIRST def (`refsOf` goes through `lookup`), leaving `x` untainted,
+  while `schemaRewrites` compiles arms of BOTH defs — emitting an `approver ↦ x` rule
+  that fans a derived-key seed out to an untainted key
+  (`(rewriteClosure S t).all (isDerived ∘ key) = false` observed). -/
+
+/-- Every rewrite arm's match key is among its expression's references (`exprArms` and
+    `exprRefs` walk the same union spine; `computed r ↦ (ot, r)`, `ttu tr ts ↦ (ot, ts)`). -/
+theorem exprArms_matchKey_mem_exprRefs (S : Schema) (ot outRel : String) :
+    ∀ (e : Expr), ∀ r ∈ exprArms ot outRel e,
+      (r.objectType, r.matchRel) ∈ exprRefs S ot e := by
+  intro e
+  induction e with
+  | direct rs => intro r hr; simp [exprArms] at hr
+  | computed r' =>
+      intro r hr
+      simp only [exprArms, List.mem_singleton] at hr
+      subst hr
+      simp [exprRefs]
+  | ttu tr ts =>
+      intro r hr
+      simp only [exprArms, List.mem_singleton] at hr
+      subst hr
+      simp [exprRefs]
+  | union a b iha ihb =>
+      intro r hr
+      simp only [exprArms, List.mem_append] at hr
+      simp only [exprRefs, List.mem_append]
+      exact hr.imp (iha r) (ihb r)
+  | inter a b iha ihb => intro r hr; simp [exprArms] at hr
+  | excl a b iha ihb => intro r hr; simp [exprArms] at hr
+
+/-- **No schema rewrite matches a DERIVED key** (under `NodupKeys`). A rule comes from a
+    def the taint filter kept (`isDerived = false`); its match key is one of that def's
+    references (`exprArms_matchKey_mem_exprRefs` through `lookup_of_mem`), so a tainted
+    match key would taint the def by fixpoint closedness (`taintedKeys_fixed`).
+    `NodupKeys` is load-bearing — attack-refuted without it (header). -/
+theorem rewriteMatch_not_derived {S : Schema} (hNK : NodupKeys S) :
+    ∀ r ∈ schemaRewrites S, isDerived S (r.objectType, r.matchRel) = false := by
+  intro r hr
+  by_contra hcon
+  rw [Bool.not_eq_false] at hcon
+  unfold schemaRewrites at hr
+  rw [List.mem_flatMap] at hr
+  obtain ⟨d, hd, hrarm⟩ := hr
+  obtain ⟨hdmem, hfilt⟩ := List.mem_filter.mp hd
+  have href : (r.objectType, r.matchRel) ∈ refsOf S d.1 := by
+    unfold refsOf
+    rw [lookup_of_mem hNK hdmem]
+    exact exprArms_matchKey_mem_exprRefs S d.1.1 d.1.2 d.2 r hrarm
+  have hkeys : d.1 ∈ S.keys := List.mem_map.mpr ⟨d, hdmem, rfl⟩
+  have hstep : d.1 ∈ taintStep S (taintedKeys S) := by
+    unfold taintStep
+    refine List.mem_filter.mpr ⟨hkeys, ?_⟩
+    have hany : ((refsOf S d.1).any fun k => (taintedKeys S).contains k) = true := by
+      refine List.any_eq_true.mpr ⟨(r.objectType, r.matchRel), href, ?_⟩
+      unfold isDerived at hcon
+      exact hcon
+    show (baseTaint S d.1 || (refsOf S d.1).any fun k => (taintedKeys S).contains k) = true
+    rw [hany, Bool.or_true]
+  have hder : d.1 ∈ taintedKeys S := (taintedKeys_fixed S d.1).mp hstep
+  have hdT : isDerived S d.1 = true := by
+    unfold isDerived
+    rw [List.contains_eq_mem]
+    exact decide_eq_true hder
+  rw [hdT] at hfilt
+  simp at hfilt
+
+/-- **The dead-end-seed collapse, `NodupKeys` form** — a derived-key tuple's rewrite
+    closure is the seed alone. `rewriteClosure_derived_eq_seed` (`RestrictBase.lean`)
+    re-based off `rewriteMatch_not_derived` instead of `RewriteMatchDeclared`: here the
+    would-be match key IS the derived key, which is declared, so no declaredness side
+    condition is needed. -/
+theorem rewriteClosure_derived_eq_seed_nk {S : Schema} (hNK : NodupKeys S)
+    {t : Tuple} (hd : isDerived S (t.object.type, t.relation) = true) :
+    rewriteClosure S t = [t] := by
+  have hstep : rewriteStep S t = [] := by
+    unfold rewriteStep
+    rw [List.filterMap_eq_nil_iff]
+    intro r hr
+    unfold applyRRule
+    rw [if_neg]
+    rintro ⟨hrel, htype⟩
+    have hu := rewriteMatch_not_derived hNK r hr
+    rw [htype, hrel] at hd
+    rw [hu] at hd
+    exact Bool.noConfusion hd
+  unfold rewriteClosure
+  show rewriteClosureAux S (S.keys.length + 1) [t] = [t]
+  rw [rewriteClosureAux]
+  have hfm : List.flatMap (rewriteStep S) [t] = [] := by simp [hstep]
+  rw [hfm, rewriteClosureAux_nil]
+  rfl
+
+/-- Splitting the store-closure occurrence count at a cons head. -/
+theorem untOccCount_cons (S : Schema) (t : Tuple) (T : Store) (a b : NodeKey) :
+    untOccCount S (t :: T) a b
+      = ((rewriteClosure S t).map edgeOfTuple).count (a, b) + untOccCount S T a b := by
+  unfold untOccCount
+  rw [List.flatMap_cons, List.map_append, List.count_append]
+
+/-- **Filter-invariance of the untainted occurrence count.** For an UNTAINTED target
+    `b`, dropping the derived-key tuples changes no `(a,b)` occurrence: a derived-key
+    tuple's closure is its seed alone (`rewriteClosure_derived_eq_seed_nk`), whose
+    materialized edge targets the derived R-node — never the untainted `b`. -/
+theorem untOccCount_untaintedFilter {S : Schema} (hNK : NodupKeys S) {b : NodeKey}
+    (hb : isDerived S (b.type, b.pred) = false) (a : NodeKey) :
+    ∀ T : Store,
+      untOccCount S (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))) a b
+        = untOccCount S T a b := by
+  intro T
+  induction T with
+  | nil => rfl
+  | cons t' T' ih =>
+    rw [List.filter_cons]
+    by_cases hd : isDerived S (t'.object.type, t'.relation) = true
+    · have hzero : ((rewriteClosure S t').map edgeOfTuple).count (a, b) = 0 := by
+        rw [rewriteClosure_derived_eq_seed_nk hNK hd]
+        refine List.count_eq_zero.mpr ?_
+        intro hmem
+        rw [List.map_cons, List.map_nil, List.mem_singleton] at hmem
+        have hbeq : b = objNode t'.object t'.relation := congrArg Prod.snd hmem
+        rw [hbeq, objNode_type, objNode_pred, hd] at hb
+        exact Bool.noConfusion hb
+      rw [if_neg (by simp [hd]), untOccCount_cons, ih, hzero]
+      omega
+    · rw [Bool.not_eq_true] at hd
+      rw [if_pos (by simp [hd]), untOccCount_cons, untOccCount_cons, ih]
+
+/-- Filtering commutes with erasing a KEPT element (first-occurrence `erase` only ever
+    meets copies the filter also keeps). -/
+theorem filter_erase_pos {α : Type _} [DecidableEq α] {p : α → Bool} {t : α}
+    (hp : p t = true) : ∀ l : List α, (l.erase t).filter p = (l.filter p).erase t := by
+  intro l
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    by_cases hx : x = t
+    · subst hx
+      rw [List.erase_cons_head, List.filter_cons, if_pos hp, List.erase_cons_head]
+    · have hbx : ((x == t) = true) → False := by
+        intro hc; exact hx (by simpa using hc)
+      rw [List.erase_cons, if_neg hbx, List.filter_cons]
+      by_cases hpx : p x = true
+      · rw [if_pos hpx, List.filter_cons, if_pos hpx, List.erase_cons, if_neg hbx, ih]
+      · rw [if_neg hpx, List.filter_cons, if_neg hpx, ih]
+
+/-- Erasing a DROPPED element is invisible to the filter. -/
+theorem filter_erase_neg {α : Type _} [DecidableEq α] {p : α → Bool} {t : α}
+    (hp : p t = false) : ∀ l : List α, (l.erase t).filter p = l.filter p := by
+  intro l
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    by_cases hx : x = t
+    · subst hx
+      rw [List.erase_cons_head, List.filter_cons, if_neg (by simp [hp])]
+    · have hbx : ((x == t) = true) → False := by
+        intro hc; exact hx (by simpa using hc)
+      rw [List.erase_cons, if_neg hbx, List.filter_cons, List.filter_cons]
+      by_cases hpx : p x = true
+      · rw [if_pos hpx, if_pos hpx, ih]
+      · rw [if_neg hpx, if_neg hpx, ih]
+
+/-- **The derived-key logged write step keeps the shadow with σ0 FIXED**: the one added
+    edge targets a `DerNode` (`classify`'s right branch) and is sourced at a
+    non-`DerNode` subject node (so `term` is safe); every other field is monotone.
+    Mirror of `untaintedShadow_writeLoggedOne` (`CascadeStable.lean`) without the
+    parallel σ0 step. -/
+theorem untaintedShadow_writeLoggedOne_derived {S : Schema} {σ σ0 : GraphState}
+    (hsh : UntaintedShadow S σ σ0) {u : Tuple}
+    (hDer : DerNode S (objNode u.object u.relation))
+    (hsubj : ¬ DerNode S (subjNode u.subject)) :
+    UntaintedShadow S (σ.writeLoggedOne u) σ0 := by
+  unfold GraphState.writeLoggedOne
+  by_cases hb : σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true
+  · rw [if_pos hb]
+    have hcl : ∀ ab ∈ (σ.writeDirect u).edges,
+        ab.1 ∈ (σ.writeDirect u).nodes ∧ ab.2 ∈ (σ.writeDirect u).nodes :=
+      edgesClosed_writeDirect hsh.closed u
+    refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
+    · -- classify
+      intro ab hab
+      rw [pushDelta_edges, writeDirect_edges, if_pos hb] at hab
+      rcases List.mem_cons.mp hab with heq | hmem
+      · refine Or.inr ?_
+        rw [heq]
+        exact hDer
+      · exact hsh.classify ab hmem
+    · -- sub
+      intro ab hab
+      rw [pushDelta_edges, writeDirect_edges, if_pos hb]
+      exact List.mem_cons_of_mem _ (hsh.sub ab hab)
+    · -- nodesSub
+      intro k hk
+      rw [pushDelta_nodes, writeDirect_nodes, if_pos hb]
+      exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hsh.nodesSub k hk))
+    · -- closed
+      intro ab hab
+      rw [pushDelta_edges] at hab
+      rw [pushDelta_nodes]
+      exact hcl ab hab
+    · -- term
+      intro k hk y hy
+      rw [pushDelta_edges, writeDirect_edges, if_pos hb] at hy
+      rcases List.mem_cons.mp hy with heq | hmem
+      · have h1 : k = subjNode u.subject := (Prod.ext_iff.mp heq).1
+        rw [h1] at hk
+        exact hsubj hk
+      · exact hsh.term k hk y hmem
+  · rw [if_neg hb]
+    exact hsh
+
+/-- **The derived-key write LEG keeps the shadow with σ0 FIXED** — the fold form
+    (consumed at the singleton closure `[t]` of a derived-key write; stated over any
+    all-`DerNode`-targeted batch). -/
+theorem untaintedShadow_writeLeg_derived {S : Schema} :
+    ∀ (us : List Tuple) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
+      (∀ u ∈ us, DerNode S (objNode u.object u.relation)) →
+      (∀ u ∈ us, ¬ DerNode S (subjNode u.subject)) →
+      UntaintedShadow S (us.foldl (fun acc u => acc.writeLoggedOne u) σ) σ0 := by
+  intro us
+  induction us with
+  | nil => intro σ σ0 hsh _ _; exact hsh
+  | cons u rest ih =>
+    intro σ σ0 hsh hD hs
+    simp only [List.foldl_cons]
+    exact ih _ _
+      (untaintedShadow_writeLoggedOne_derived hsh (hD u List.mem_cons_self)
+        (hs u List.mem_cons_self))
+      (fun x hx => hD x (List.mem_cons_of_mem _ hx))
+      (fun x hx => hs x (List.mem_cons_of_mem _ hx))
+
+/-- One routed LOGGED pass preserves the shadow, `_d` form: instead of the full-store
+    `hSV`/`hCO` route to "no σ0 edge targets the job's R-node"
+    (`reachedByRules_derived_no_inedge`), take σ0's edge-target UNTAINTEDNESS directly —
+    the filtered-σ0 rebuild supplies it via
+    `reachedByRulesAdmitted_untStore_edge_untainted`, no `ComputedOnly` needed. -/
+theorem untaintedShadow_applyLoggedR_d {S : Schema} {T : Store} {σ σ0 : GraphState}
+    {j : W3cJob}
+    (hsh : UntaintedShadow S σ σ0)
+    (hunt : ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false)
+    (hjv : W3cJobValid S j) :
+    UntaintedShadow S (j.applyLoggedR S T σ) σ0 := by
+  obtain ⟨hRne, hcb, _, _, _, _, hder, _hlke, hon⟩ := hjv
+  have hnojob : ∀ ab ∈ σ0.edges, ab.2 ≠ objNode ⟨j.dt, j.on⟩ j.R := by
+    intro ab hab heq
+    obtain ⟨a, b⟩ := ab
+    have hbu := hunt a b hab
+    have heq' : b = objNode ⟨j.dt, j.on⟩ j.R := heq
+    rw [heq', objNode_type, objNode_pred, hder] at hbu
+    exact Bool.noConfusion hbu
+  have hsound : ∀ a b, (a, b) ∈ (j.applyLoggedR S T σ).edges →
+      (a, b) ∈ σ.edges ∨ ∃ c ∈ j.cands, a = subjNode c ∧ b = objNode ⟨j.dt, j.on⟩ j.R := by
+    intro a b hab
+    unfold W3cJob.applyLoggedR at hab
+    rw [pushDelta_edges] at hab
+    unfold W3cJob.applyDR at hab
+    exact reconcileStarsKeyDR_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
+      j.cands j.negCands j.uposCands σ a b hab
+  have hEfix : (j.applyLoggedR S T σ).edges
+      = ((σ.reconcileResidueKeyR T j.dt j.on j.R j.e (wildcardShapes S) j.negCands
+          j.uposCands).reconcileKeyDR T j.dt j.on j.R j.e j.cands).edges := by
+    unfold W3cJob.applyLoggedR
+    rw [pushDelta_edges]
+    rfl
+  have hNfix : (j.applyLoggedR S T σ).nodes
+      = ((σ.reconcileResidueKeyR T j.dt j.on j.R j.e (wildcardShapes S) j.negCands
+          j.uposCands).reconcileKeyDR T j.dt j.on j.R j.e j.cands).nodes := by
+    unfold W3cJob.applyLoggedR
+    rw [pushDelta_nodes]
+    rfl
+  refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
+  · -- classify
+    intro ab hab
+    obtain ⟨a, b⟩ := ab
+    rcases hsound a b hab with hold | ⟨c, _, _, h2⟩
+    · exact hsh.classify (a, b) hold
+    · exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
+  · -- sub
+    intro ab hab
+    rw [hEfix]
+    refine reconcileKeyDR_edge_pres_target T j.dt j.on j.R j.e j.cands _ ab
+      (hnojob ab hab) ?_
+    rw [reconcileResidueKeyR_edges]
+    exact hsh.sub ab hab
+  · -- nodesSub
+    intro k hk
+    rw [hNfix]
+    refine reconcileKeyDR_nodes_mono T j.dt j.on j.R j.e j.cands _ k ?_
+    show k ∈ (σ.reconcileResidueKeyR T j.dt j.on j.R j.e (wildcardShapes S) j.negCands
+      j.uposCands).nodes
+    rw [reconcileResidueKeyR_nodes]
+    exact hsh.nodesSub k hk
+  · -- closed
+    intro ab hab
+    rw [hEfix] at hab
+    rw [hNfix]
+    refine edgesClosed_reconcileKeyDR T j.dt j.on j.R j.e j.cands _ ?_ ab hab
+    intro ab' hab'
+    rw [reconcileResidueKeyR_edges] at hab'
+    rw [reconcileResidueKeyR_nodes]
+    exact hsh.closed ab' hab'
+  · -- term
+    intro k hk y hy
+    rcases hsound k y hy with hold | ⟨c, hc, h1, _⟩
+    · exact hsh.term k hk y hold
+    · obtain ⟨dt, on, R, _, hRne', _, hkey⟩ := hk
+      have hcp : R = c.predicate := by
+        have hp := congrArg NodeKey.pred (hkey.symm.trans h1)
+        simpa [subjNode_pred, objNode_pred] using hp
+      rw [hcb c hc] at hcp
+      exact hRne' hcp
+
+/-- The routed logged batch preserves the shadow, `_d` form. -/
+theorem untaintedShadow_reconcileJobsLR_d {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
+      (∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false) →
+      (∀ j ∈ jobs, W3cJobValid S j) →
+      UntaintedShadow S (reconcileJobsLR S T σ jobs) σ0 := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ σ0 hsh _ _; exact hsh
+  | cons j rest ih =>
+    intro σ σ0 hsh hunt hjv
+    have hfold : reconcileJobsLR S T σ (j :: rest)
+        = reconcileJobsLR S T (j.applyLoggedR S T σ) rest := by
+      unfold reconcileJobsLR
+      rw [List.foldl_cons]
+    rw [hfold]
+    exact ih _ _ (untaintedShadow_applyLoggedR_d hsh hunt (hjv j List.mem_cons_self))
+      hunt (fun j' hj' => hjv j' (List.mem_cons_of_mem _ hj'))
+
+/-- **A two-round cascade leg preserves the shadow, `_d` form** (σ0 fixed; edge-target
+    untaintedness in place of `hSV`/`hCO`). -/
+theorem untaintedShadow_cascade2_d {S : Schema} {T : Store} {σ σ0 : GraphState}
+    {jobs1 jobs2 : List W3cJob}
+    (hsh : UntaintedShadow S σ σ0)
+    (hunt : ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false)
+    (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j) (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j) :
+    UntaintedShadow S (runCascade2 S T σ jobs1 jobs2) σ0 := by
+  unfold runCascade2
+  split
+  · have hD := untaintedShadow_reconcileJobsLR_d (T := T) jobs2 _ σ0
+      (untaintedShadow_reconcileJobsLR_d (T := T) jobs1 σ σ0 hsh hunt hjv1)
+      hunt hjv2
+    exact ⟨hD.classify, hD.sub, hD.nodesSub, hD.closed, hD.closed0, hD.term⟩
+  · exact hsh
+
+/-- **`untaintedShadow_removeLeg`, filtered-σ0 form.** The count argument runs over the
+    FULL store (`count_removeLoggedRules` + R3 `reachedByW3d2_untOccCount` +
+    `untOccCount_erase`), then lands on the filtered store by count filter-invariance
+    (`untOccCount_untaintedFilter` — derived-key closures contribute no untainted-target
+    occurrences). Edge-target untaintedness of both rebuilds comes for free from the
+    filtered store, so no `StoreValidRules`/`ComputedOnly` hypotheses survive. -/
+theorem untaintedShadow_removeLeg_d {σp σ0 σ0' : GraphState} {S : Schema} {T : Store}
+    {t : Tuple}
+    (hNK : NodupKeys S)
+    (hrb : ReachedByW3d2 σp S T)
+    (hsh : UntaintedShadow S σp σ0)
+    (h0 : ReachedByRulesAdmitted σ0 S
+      (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (ht : t ∈ T)
+    (h0' : ReachedByRulesAdmitted σ0' S
+      ((T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
+    (hsub : ∀ e ∈ σ0'.edges, e ∈ σ0.edges) :
+    UntaintedShadow S (σp.removeLoggedRules S t) σ0' := by
+  have hND : ∀ t' ∈ T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)),
+      isDerived S (t'.object.type, t'.relation) = false := by
+    intro t' ht'
+    simpa using (List.mem_filter.mp ht').2
+  have hND' : ∀ t' ∈ (T.erase t).filter
+        (fun tp => !isDerived S (tp.object.type, tp.relation)),
+      isDerived S (t'.object.type, t'.relation) = false := by
+    intro t' ht'
+    simpa using (List.mem_filter.mp ht').2
+  have hnodes : (σp.removeLoggedRules S t).nodes = σp.nodes := removeLoggedRules_nodes σp S t
+  have hmem0' : ∀ a b, (a, b) ∈ σ0'.edges ↔
+      0 < untOccCount S
+        ((T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))) a b :=
+    mem_edges_iff_untOccCount_pos h0'
+  have hσ0unt : ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false :=
+    reachedByRulesAdmitted_untStore_edge_untainted hND h0
+  have hσ0'unt : ∀ a b, (a, b) ∈ σ0'.edges → isDerived S (b.type, b.pred) = false :=
+    reachedByRulesAdmitted_untStore_edge_untainted hND' h0'
+  have hmemrem : ∀ a b, isDerived S (b.type, b.pred) = false →
+      ((a, b) ∈ (σp.removeLoggedRules S t).edges ↔
+        0 < untOccCount S
+          ((T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))) a b) := by
+    intro a b hb
+    have hcount : (σp.removeLoggedRules S t).edges.count (a, b)
+        = untOccCount S (T.erase t) a b := by
+      rw [count_removeLoggedRules (a, b) S t σp, reachedByW3d2_untOccCount hrb a b hb,
+        untOccCount_erase S T t a b ht]
+      omega
+    rw [untOccCount_untaintedFilter hNK hb a (T.erase t), ← hcount, List.count_pos_iff]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · -- classify
+    intro ab hab
+    obtain ⟨a, b⟩ := ab
+    have habp : (a, b) ∈ σp.edges := mem_removeLoggedRules_edges hab
+    rcases hsh.classify (a, b) habp with h0e | hD
+    · have hbunt : isDerived S (b.type, b.pred) = false := hσ0unt a b h0e
+      exact Or.inl ((hmem0' a b).mpr ((hmemrem a b hbunt).mp hab))
+    · exact Or.inr hD
+  · -- sub
+    intro ab hab
+    obtain ⟨a, b⟩ := ab
+    have hbunt : isDerived S (b.type, b.pred) = false := hσ0'unt a b hab
+    exact (hmemrem a b hbunt).mpr ((hmem0' a b).mp hab)
+  · -- nodesSub
+    intro k hk
+    rw [hnodes]
+    obtain ⟨ab, hab, hor⟩ := reachedByRulesAdmitted_nodesFromEdges h0' k hk
+    have habp : ab ∈ σp.edges := hsh.sub ab (hsub ab hab)
+    obtain ⟨h1, h2⟩ := hsh.closed ab habp
+    rcases hor with rfl | rfl
+    · exact h1
+    · exact h2
+  · -- closed
+    intro ab hab
+    rw [hnodes]
+    exact hsh.closed ab (mem_removeLoggedRules_edges hab)
+  · -- closed0
+    exact (reachedByRules_inv (reachedByRules_of_admitted h0')).1.edgesClosed
+  · -- term
+    intro k hk y hy
+    exact hsh.term k hk y (mem_removeLoggedRules_edges hy)
+
+/-- **`reachedByW3d2_shadow_d`** — the FILTERED-σ0 shadow on the Direct-arm fragment:
+    every W3d-2 state over a `StoreValidRulesD` store is shadowed by a rules-admitted
+    rebuild of the UNTAINTED-FILTER store `T↾U`. The naive full-store σ0 is FALSE here
+    (header: a stored Direct-arm subject that is also excluded breaks `sub`) — dropping
+    the derived-key seeds is exactly what keeps σ0 inside the drained σ.
+
+    ADDED HYPOTHESES vs `reachedByW3d2_shadow`: `WF S` (a declared — hence derived —
+    relation is never `BARE`: `lookup_rel_ne_bare`, since `BARE = "..."` violates
+    `relNameOK`) and `BareStarStore T` (stored objects are concrete). Together they pin
+    the derived-key seed's target as a `DerNode` (`isDerived ∧ R ≠ BARE ∧ on ≠ STAR`).
+    Both are established fragment disciplines: the `remove` constructor already carries
+    `BareStarStore` for its pre-store, and every settled-chain consumer carries `WF`. -/
+theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2 σ S T) :
+    NodupKeys S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOrDirect e) →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → DirectArmsBare e) →
+    StoreValidRulesD S T →
+    (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    WF S →
+    BareStarStore T →
+    ∃ σ0, ReachedByRulesAdmitted σ0 S
+            (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ∧ UntaintedShadow S σ σ0 := by
+  induction h with
+  | empty S =>
+    intro _ _ _ _ _ _ _
+    refine ⟨emptyState S, ReachedByRulesAdmitted.empty S, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · intro ab hab; simp [emptyState] at hab
+    · intro ab hab; simp [emptyState] at hab
+    · intro k hk; simp [emptyState] at hk
+    · intro ab hab; simp [emptyState] at hab
+    · intro ab hab; simp [emptyState] at hab
+    · intro k _ y hy; simp [emptyState] at hy
+  | @write σp S T t hadm _ ih =>
+    intro hNK hCO hDAB hSV hterm hWF hBS
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB
+      (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht'))
+      (fun dt R hder => ⟨(hterm dt R hder).1,
+        fun t' ht' => (hterm dt R hder).2 t' (List.mem_cons_of_mem _ ht')⟩)
+      hWF
+      (fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht'))
+    by_cases hd : isDerived S (t.object.type, t.relation) = true
+    · -- derived-key write: the filter drops `t`, σ0 is UNCHANGED; the one logged edge
+      -- (seed-only closure) targets a `DerNode`
+      have hfe : (t :: T).filter (fun tp => !isDerived S (tp.object.type, tp.relation))
+          = T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)) := by
+        rw [List.filter_cons, if_neg (by simp [hd])]
+      rw [hfe]
+      have hcl : rewriteClosure S t = [t] := rewriteClosure_derived_eq_seed_nk hNK hd
+      have hbare : t.subject.predicate = BARE := by
+        rcases hSV t List.mem_cons_self with ⟨hfalse, _⟩ | ⟨_, hbare, _⟩
+        · rw [hd] at hfalse
+          exact Bool.noConfusion hfalse
+        · exact hbare
+      have hRne : t.relation ≠ BARE := by
+        obtain ⟨e, hlk⟩ := isDerived_declared hd
+        exact lookup_rel_ne_bare hWF hlk
+      have honS : t.object.name ≠ STAR := (hBS t List.mem_cons_self).2
+      have hDer : DerNode S (objNode t.object t.relation) :=
+        ⟨t.object.type, t.object.name, t.relation, hd, hRne, honS, rfl⟩
+      have hnsubj : ¬ DerNode S (subjNode t.subject) := by
+        rintro ⟨dt, on, R, _, hRne', _, heq⟩
+        have hp := congrArg NodeKey.pred heq
+        rw [subjNode_pred, objNode_pred, hbare] at hp
+        exact hRne' hp.symm
+      refine ⟨σ0, h0, ?_⟩
+      have hone : σp.writeLoggedRules S t = σp.writeLoggedOne t := by
+        unfold GraphState.writeLoggedRules
+        rw [hcl]
+        simp only [List.foldl_cons, List.foldl_nil]
+      rw [hone]
+      exact untaintedShadow_writeLoggedOne_derived hsh hDer hnsubj
+    · -- untainted write: the filter keeps `t`; fold it into σ0 (the original route)
+      rw [Bool.not_eq_true] at hd
+      have hfe : (t :: T).filter (fun tp => !isDerived S (tp.object.type, tp.relation))
+          = t :: T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)) := by
+        rw [List.filter_cons, if_pos (by simp [hd])]
+      rw [hfe]
+      have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) := by
+        rintro u hu ⟨dt, on, R, hder, _hRne, _hon, heq⟩
+        obtain ⟨hnt, hns⟩ := hterm dt R hder
+        have hpne : u.subject.predicate ≠ R :=
+          rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+        apply hpne
+        have hp := congrArg NodeKey.pred heq
+        simpa [subjNode_pred, objNode_pred] using hp
+      exact ⟨σ0.writeRules S t,
+        ReachedByRulesAdmitted.step t h0
+          (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
+        untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
+  | @remove σp S T t hadm _ hSVT hBST _ htermT hprev ih =>
+    intro hNK hCO hDAB _ _ hWF _
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB
+      (storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB)
+      htermT hWF hBST
+    by_cases hd : isDerived S (t.object.type, t.relation) = true
+    · -- derived-key erase: the filter never kept `t` — σ0 carries over unchanged
+      have hfe : (T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))
+          = T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)) :=
+        filter_erase_neg (by simp [hd]) T
+      rw [hfe]
+      refine ⟨σ0, h0, ?_⟩
+      have h0e : ReachedByRulesAdmitted σ0 S
+          ((T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))) := by
+        rw [hfe]
+        exact h0
+      exact untaintedShadow_removeLeg_d hNK hprev hsh h0 hadm h0e (fun e he => he)
+    · -- untainted erase: erase commutes with the filter; rebuild via `exists_admitted_erase`
+      rw [Bool.not_eq_true] at hd
+      have hfe : (T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))
+          = (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))).erase t :=
+        filter_erase_pos (by simp [hd]) T
+      obtain ⟨σ0', h0', hsub⟩ := exists_admitted_erase h0 t
+      rw [hfe]
+      refine ⟨σ0', h0', ?_⟩
+      have h0e : ReachedByRulesAdmitted σ0' S
+          ((T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))) := by
+        rw [hfe]
+        exact h0'
+      exact untaintedShadow_removeLeg_d hNK hprev hsh h0 hadm h0e hsub
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
+    intro hNK hCO hDAB hSV hterm hWF hBS
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB hSV hterm hWF hBS
+    have hND : ∀ t' ∈ T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)),
+        isDerived S (t'.object.type, t'.relation) = false := by
+      intro t' ht'
+      simpa using (List.mem_filter.mp ht').2
+    exact ⟨σ0, h0,
+      untaintedShadow_cascade2_d hsh
+        (reachedByRulesAdmitted_untStore_edge_untainted hND h0) hjv1 hjv2⟩
+
 /-! ## The settled-key derived read — `probeDerived = sem` at a settled+complete key
 
 The `sem`-level content of `graph_correct_w3d`'s derived branch, factored into a
