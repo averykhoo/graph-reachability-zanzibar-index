@@ -64,13 +64,34 @@ Tokens are **store-local**: the domain is the store's own `TupleLogV1` id sequen
 means nothing to another; cross-store consistency needs an external ordering.
 
 The fallback is **watermark-aware**: the set engine's in-memory state is only as
-fresh as its last rebuild plus the instance's own writes
+fresh as its last rebuild plus whatever it has since tailed
 (`TupleSource.evaluator_watermark` tracks exactly that), so a tokened read whose
-token exceeds the watermark triggers a rebuild-on-demand — the honest per-read cost
-of demanding freshness from a lagging index. If the token is *still* not visible,
-the session's read snapshot predates the write: the read raises `StaleRead` (call
-`refresh()` and retry) rather than silently serving stale under an explicit
-freshness demand.
+token exceeds the watermark catches up on demand — tailing the committed log delta
+into the evaluator (`catch_up_evaluator` → `SetEngine.apply_logged` per row,
+**O(delta)** not O(store)) — the honest per-read cost of demanding freshness from a
+lagging index. This is honored on `TupleSource.check(at_least=…)` too, not only on
+`ConnectedStore.check`. If the token is *still* not visible, the session's read
+snapshot predates the write: the read raises `StaleRead` (call `refresh()` and
+retry) rather than silently serving stale under an explicit freshness demand.
+
+**Multi-instance (HA).** Several `TupleSource`/`ConnectedStore` instances (one
+`Session` each) may share a store; each set engine is instance-local in-memory,
+synced from `TupleLogV1`. Every instance's state is the fold of an exact *prefix* of
+the store's log — **prefix consistency**: instances differ only in recency, never
+sideways. Un-tokened replica reads are **bounded-stale** (only by the reader's tail
+cadence via `refresh()`/`catch_up_evaluator`); read-your-writes / causal reads use
+the existing log-id tokens (`at_least`). Multi-writer admission is correct because
+each write runs a per-store **critical section**: `_lock_source` (a `FOR UPDATE`
+lock on the store's `SchemaV4` row) → `catch_up_evaluator` → validate → append,
+inside one transaction. Under the lock no new commit can appear, so duplicate
+detection / remove-existence / cycle parity validate against current committed
+state, and the log append lands inside the section — so **log ids commit in id
+order per store** and `id > watermark` tailing (this tailer and `advance_index`'s
+cursor alike) can never skip a row. **Lock ordering**: the source lock (`SchemaV4`
+row) is always taken *before* the graph store lock (`StoreV4` row, taken inside
+`advance_index`) — one global order, deadlock-free. A single-writer deployment
+degrades to one no-op-rendered `FOR UPDATE` (SQLite) plus one empty indexed SELECT
+per write: correctness-over-perf, deliberately.
 
 ## Bootstrap and schema changes
 

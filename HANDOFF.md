@@ -16,8 +16,37 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## Current status — 2026-07-18
+## Current status — 2026-07-23
 
+- **2026-07-23 — multi-instance set-engine (HA) support LANDED; full gate GREEN
+  (first end-to-end gate on the secondary machine).** The set engine now runs as
+  several instances (one `Session` each) over one store with bounded inconsistency:
+  `SetEngine.apply_logged` (trusted log replay) + `TupleSource.catch_up_evaluator`
+  (O(delta) log tailing) replace full rebuilds; every write runs a per-store
+  critical section (`_lock_source` `FOR UPDATE` on the `SchemaV4` row → catch-up →
+  validate → append) so multi-writer admission (duplicates / remove-existence /
+  cycle parity) validates against CURRENT committed state, and log ids commit in id
+  order — closing a latent out-of-order log-commit hazard that could make tailers
+  (and `advance_index`'s cursor) permanently skip a row. Tokened reads (`at_least`,
+  now also on `TupleSource.check`) catch up by tailing; `StaleRead` (relocated to
+  `connectedstore/source.py`, re-exported) fires only for snapshot-invisible
+  tokens. `SetEngine.result_keys` is the instance-portable lookup surface.
+  Consistency model: per-instance prefix consistency + bounded staleness +
+  read-your-writes via the existing zookie-lite log-id tokens. +13 tests
+  (`tests/test_connectedstore_multi_instance.py`, incl. the cross-instance cycle
+  rejection headline + write-ordering pin). **No Lean change** — multi-instance
+  scheduling is out-of-model (`formal/CORRESPONDENCE.md` §7 entry: T1 applies
+  pointwise per admission-validated log prefix; the lock discipline preserves the
+  serial-log premise). Docs: architecture system/decision-log/correctness,
+  spec-deviations (dated entry), README zookies rewrite, CLAUDE.md concurrency
+  gotcha, gate-runbook slow-machine section. **Gate (secondary machine,
+  `ZANZIBAR_PY` override): `pytest tests/` 606/606 in 10 cap-safe tiles
+  (Σ == collect-only total); `verify.sh` lean PASSED (sorry-free, audit 455/455) /
+  conf-heavy 80 PASSED / conf-rest as 2 guard-preserving tiles (233+17=250 passed,
+  0 skips; union ≡ the phased conf-rest); 6-seed fuzz sweep on
+  `tests/test_hypothesis.py` (7/19/31/53/71/97) all 20 passed.** Secondary-machine
+  setup this session: pyroaring+hypothesis pip-installed; elan + Lean v4.31.0 +
+  mathlib cache installed (see gate-runbook "secondary / slow machine").
 - **2026-07-18 — OPTIONAL assurance-widening arc OPENED; #1 Leaf/Direct-arm legs 1–3 pushed
   (`98773d3`/`0dd8d7b`/`8a9bee1`); gate GREEN; no Python change.** All four `FINAL_REVIEW.md
   §4` optional widenings scoped (recon + attack-first); durable design/resume state in
@@ -104,6 +133,12 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 ## Open-TODO board
 
 ### Active work
+- [x] **DONE 2026-07-23 (Claude): multi-instance set-engine (HA) support — landed, gated, pushed.**
+      See the 2026-07-23 Current-status bullet for the full record (mechanisms, the
+      closed log-ordering hazard, consistency model, gate numbers). Follow-ups
+      deliberately NOT taken (out of scope, revisit on need): `at_least` on
+      lookup/expand surfaces; snapshot ("at exactly") reads; cross-store tokens (X6);
+      set-engine state snapshots for O(delta) cold start.
 - [ ] **IN PROGRESS 2026-07-18 (Claude): OPTIONAL assurance-widening arc (`FINAL_REVIEW.md §4`).**
       Four targets scoped (recon + attack-first probes); durable design + resume state for
       ALL of them in [`formal/history/optional-widening-2026-07.md`](formal/history/optional-widening-2026-07.md).

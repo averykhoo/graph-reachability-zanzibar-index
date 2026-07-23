@@ -1471,3 +1471,93 @@ separately by the orchestrator and is NOT claimed green here** — only the `pyt
 above were executed in this session. *(Follow-up: the orchestrator subsequently ran the full gate
 green — `verify.sh` lean sorry-free 412/412 / conf-heavy 68 / conf-rest 195 all PASSED plus the
 6-seed fuzz sweep — recorded in `HANDOFF.md` 2026-07-17 and landed as commit `d517fb5`.)*
+
+---
+
+## 2026-07-23 — multi-instance set-engine support (HA); connected-store spec §2.4/§2.5
+
+The connected-store spec (§2.4 admission, §2.5 freshness tokens) was written
+**single-instance**: one `TupleSource` per store, one online evaluator, tokens
+consumed only on `ConnectedStore.check`. The code now adds the multi-instance
+discipline — several `TupleSource`/`ConnectedStore` instances (one `Session` each)
+sharing a store, each set engine instance-local in-memory and synced from
+`TupleLogV1`. Additive; no single-instance behavior changes.
+
+The new / relocated mechanisms:
+
+1. **`SetEngine.apply_logged`** (`setengine/engine.py`) — trusted replay of one
+   *committed* log row into in-memory state only (no validation, no DB writes). It
+   performs exactly the `_apply_add`/`_apply_remove` sequence `rebuild()` would, so
+   the state after tailing a log prefix equals a rebuild at that prefix
+   (rebuild-prefix equivalence). Presence mismatches (ADD of a present tuple, REMOVE
+   of an absent one) are HARD `RuntimeError`s, never op rejections — the log is
+   admission-validated and applied exactly-once, so a mismatch means the caller's
+   watermark is corrupt (mirrors the apply step's corruption guard).
+
+2. **`TupleSource.catch_up_evaluator`** — tails committed log rows past
+   `evaluator_watermark` (`apply_logged` per row, watermark advanced to each applied
+   id) until the read comes back empty. **O(delta)** where `refresh_evaluator` is
+   O(store). Two caveats carried in the docstring: (X2) the rows tailed are *this
+   session's* read snapshot — a long-lived read session must `rollback()` first to
+   advance its snapshot; and after a rollback of the instance's OWN uncommitted write
+   the watermark may claim an id that never committed, so callers must
+   `refresh_evaluator()` after rolling back their own writes (the pre-existing
+   contract, unchanged). **Gap-freedom** rests on the writer lock discipline below.
+
+3. **`_lock_source` + the write critical section** — `add`/`remove` now run
+   `_lock_source()` → `catch_up_evaluator()` → validate → `_append`, one transaction.
+   `_lock_source` takes a `FOR UPDATE` lock on the store's `SchemaV4` row
+   (transaction-memoed on `Session.get_transaction()` identity, mirroring
+   `ReachabilityIndex._lock_store`). Under the lock no new commit can appear, so
+   duplicate detection / remove-existence / cycle parity validate against **current
+   committed state**, not a stale local cache. **LOCK ORDERING**: source lock
+   (`SchemaV4`) is taken before the graph store lock (`StoreV4`, inside
+   `advance_index`) — one global order, deadlock-free.
+
+   **This closes a latent, pre-existing real bug — not merely a new-feature
+   invariant.** `_append` flushes the log row's autoincrement id, and that flush used
+   to happen *before any lock*, so two concurrent writers on PostgreSQL could
+   interleave such that log ids **committed out of id order**. A tailer (or
+   `advance_index`'s cursor) advancing on `id > watermark` could then step past the
+   lower id before it committed and **permanently skip that row**. With the append
+   inside the critical section, ids commit in id order per store and `id > watermark`
+   tailing can never skip a row. This hazard existed in the single-instance code path
+   too whenever two sessions wrote concurrently on a real ordering-sensitive engine.
+
+4. **`TupleSource.check(at_least=…)`** — the freshness token (§2.5) is now honored on
+   the source's own check, not only `ConnectedStore.check`: if
+   `evaluator_watermark < at_least` it catches up O(delta), then raises `StaleRead`
+   if the token is still not visible in this session's snapshot.
+
+5. **`StaleRead` relocated** from `store.py` to `source.py` (it is raised first by
+   `TupleSource.check`); **still re-exported** from `connectedstore.store` for
+   backward compatibility.
+
+6. **`ConnectedStore.check` fallback tails instead of rebuilding** — when the index
+   lags the token and the fallback set engine also predates it, the fallback now
+   `catch_up_evaluator()`s (O(delta)) rather than a full O(store) rebuild.
+
+7. **`SetEngine.result_keys` + `LookupResult` instance-locality warning**
+   (`setengine/engine.py`) — `LookupResult.node_ids` are recycled instance-local
+   interner ids, meaningless to another instance/process over the same store;
+   `result_keys` translates them to the stable `(type, name, predicate)` surrogate
+   keys — the portable form for any service boundary (`markers` are already
+   portable). Made explicit now that multiple instances share a store.
+
+**Consistency model.** Every instance's state is the fold of an exact *prefix* of the
+store's log (prefix consistency — instances differ only in recency, never sideways);
+un-tokened replica reads are bounded-stale by tail cadence; read-your-writes / causal
+via the log-id `at_least` token. **Cost trade (single-writer):** the lock never
+contends and catch-up is one empty indexed SELECT, so a degenerate single-writer
+deployment pays one `FOR UPDATE` SELECT (no-op-rendered on SQLite) + one empty log
+SELECT per write — correctness-over-perf, deliberate.
+
+**Out of scope** (unchanged): snapshot / "at exactly" reads; cross-store tokens (X6);
+`at_least` on `lookup`/`expand`; instance gossip (the DB log is the only channel);
+schema-version skew (write-once schemas).
+
+**Formal scope:** unaffected — see `formal/CORRESPONDENCE.md` §7 (multi-instance
+scheduling is out-of-model; a lagging replica's state is the fold of an
+admission-validated log prefix, and every prefix is a valid store, so T1 applies
+pointwise per prefix; `apply_logged` replays the exact `rebuild()` sequence, so no
+modeled algorithm changed).

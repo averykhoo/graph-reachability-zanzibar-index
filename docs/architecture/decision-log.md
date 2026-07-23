@@ -109,11 +109,52 @@ Do not re-walk these without new evidence — the alternatives were considered.
   (lost-update prevention).
 * **Freshness tokens are log ids** (zookie-lite): index serves iff cursor ≥ token,
   else the set engine answers fresh — Leopard's timestamp merge simplified to a
-  fallback.
+  fallback. (Round 3 makes the fallback O(delta) and honors `at_least` on
+  `TupleSource.check` too.)
+
+## The connected store (round 3 — multi-instance / HA)
+
+* **Multi-instance set engines via log tailing, not gossip.** Several
+  `TupleSource`/`ConnectedStore` instances (one `Session` each) share a store; each
+  set engine is instance-local in-memory, resynced by tailing `TupleLogV1`
+  (`SetEngine.apply_logged` per committed row — the O(delta) analog of `rebuild()`,
+  which is O(store)). The DB log is the *only* inter-instance channel — instance
+  gossip was rejected as a second, redundant consistency surface. Consequence:
+  every instance's state is the fold of an exact log *prefix* (prefix consistency —
+  instances differ only in recency, never sideways); un-tokened replica reads are
+  bounded-stale by tail cadence; read-your-writes/causal reads reuse the existing
+  log-id token on `at_least` (now honored on `TupleSource.check`, not only
+  `ConnectedStore.check`).
+* **Log ids REMAIN the token** — no snowflake/ULID/lamport clock. Store-local
+  autoincrement log ids already totally-order a store's history and are the cursor
+  domain; a global clock buys nothing until *cross-store* tokens are in scope (they
+  are not — X6). The round-1 brainstorm's timestamp menu is closed.
+* **Source-lock write discipline** (`_lock_source`: `FOR UPDATE` on the `SchemaV4`
+  row) over lock-free admission: a write is a check-then-act against instance-local
+  memory (duplicate / remove-existence / cycle parity), sound only if no other
+  instance can commit between the catch-up and this write's commit. Taking the lock
+  → `catch_up_evaluator` → validate → append in one transaction serializes writers
+  at store granularity. **This also closes a latent pre-existing hazard**: the log
+  append used to flush its autoincrement id *before* any lock, so concurrent writers
+  on PostgreSQL could commit log ids out of order and a tailer (or `advance_index`'s
+  cursor) could permanently skip a row. Ids now commit in id order per store.
+  Lock-ordering invariant: source lock (`SchemaV4`) before graph store lock
+  (`StoreV4`) — one global order, deadlock-free.
+* **Correctness over per-write cost** in the degenerate single-writer case: the lock
+  never contends and catch-up is one empty indexed SELECT, so the cost is one
+  `FOR UPDATE` SELECT (no-op-rendered on SQLite) + one empty log SELECT per write —
+  accepted deliberately rather than branching the write path on a deployment
+  assumption.
+* **Out of scope** (this round): snapshot / "at exactly" reads (only `at_least`
+  lower-bounding); cross-store tokens (X6 — store-local); `at_least` on
+  `lookup`/`expand` (check-only); instance gossip (the DB log is the channel);
+  schema-version skew (schemas are write-once — a new schema is a new store).
 
 ## Non-goals (documented hooks only)
 
 Async outbox workers; exposing derived-relation deltas to external consumers;
-cross-query caching / zookies; automatic outbox pruning; residue GC beyond empty-row
-deletion; lenient ∀⇒∃; a `family` metadata column; Rete-style general incremental
-matching; 64-bit id space; query-time node interning.
+cross-query caching; snapshot ("at exactly") reads and cross-store zookies (the
+zookie-lite log-id token and multi-instance catch-up ARE built — see round 3);
+automatic outbox pruning; residue GC beyond empty-row deletion; lenient ∀⇒∃; a
+`family` metadata column; Rete-style general incremental matching; 64-bit id space;
+query-time node interning.

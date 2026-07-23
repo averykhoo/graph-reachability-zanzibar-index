@@ -221,6 +221,23 @@ independent corners.
   (§6) already assumes; `GraphAccepts`/`GraphAdmission` are untouched, so no §3 row
   change — see the reg13 entry in `docs/spec-deviations.md`.)
 
+* **Multi-instance scheduling is OUT-OF-MODEL (2026-07-23).** HA support added
+  instance-local set engines synced by tailing the log — locks (`_lock_source`),
+  per-`Session` state, and catch-up cadence (`catch_up_evaluator` /
+  `SetEngine.apply_logged`). **No Lean change needed**, for three reasons. (a) The
+  set-engine Lean layer (§2) models the evaluator as a **pure function of a store**,
+  and a lagging replica's state is the fold of an admission-validated log **PREFIX**;
+  every such prefix is itself a valid store, so T1 (`setEngine_correct`) applies
+  pointwise per prefix — "correct as of log id W". (b) `apply_logged` replays the
+  exact `_apply_add`/`_apply_remove` sequence `rebuild()` performs (rebuild-prefix
+  equivalence), so **no modeled algorithm changed** — it is the incremental analog of
+  a modeled fold, not a new one. (c) The source-lock write discipline is precisely
+  what **PRESERVES the formal layer's standing premise** that a store's log is a
+  single serial admitted-op sequence: without it, out-of-order commits could make a
+  replica fold a non-prefix subsequence, violating the premise (not any proof). So
+  the discipline defends the model's boundary condition rather than changing the
+  model.
+
 ## 8. Keeping the model in sync when optimizing the Python (READ THIS before perf work)
 
 The theorems are about the **Lean models**, which are *algorithm-twins* of the

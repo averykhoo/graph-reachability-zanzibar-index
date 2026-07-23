@@ -114,6 +114,49 @@ anti-vacuous guards, so three green phases satisfy the gate on their own — no
 uncapped `verify.sh all` and no user hand-off is required (except to pre-warm a
 cold Lean build; see §2).
 
+## Running the gate on a secondary / slow machine (lessons 2026-07-23)
+
+All timings above are the primary dev box's. The gate was first run end-to-end on a
+second machine (laptop, intermittently in power-saver on battery — **2-3×+ slower**,
+and the throttle comes and goes mid-gate). What breaks and what to do:
+
+- **Environment first.** `verify.sh` and `CLAUDE.md` pin the dev box's interpreter
+  path; on another machine set `ZANZIBAR_PY=<local env python>` (verify.sh honors
+  it) and use the local conda env directly for pytest. Check the declared deps
+  before anything long: a missing `hypothesis` fails collection outright, and a
+  missing `pyroaring` silently drops the set engine to the `PySets` fallback —
+  the "both SetOps" legs of the matrix then under-test. `pip install pyroaring
+  hypothesis` into the env and only then start the gate.
+- **The §1 two-way pytest split can blow the cap.** Tile finer: get per-file counts
+  with `pytest tests/ -q --collect-only`, group files into tiles of roughly ≤130
+  tests (alphabetical ranges work; keep the known-slow files —
+  `test_connectedstore_concurrency`, `test_processor`+`test_reads`,
+  `test_parity_engine` — in small tiles), and **assert Σ(tile passed) == the
+  collect-only total** so the tiling provably has no gap. 2026-07-23 ran 10 tiles,
+  606/606, worst tile 546 s (throttled).
+- **Capture exit codes without pipes.** `out=$(pytest ... 2>&1); code=$?` — both
+  `tee` and `tail` mask the pytest exit code (same trap as the tee gotcha below).
+- **Cold Lean on a fresh machine.** Install elan from the GitHub release zip
+  (`elan-x86_64-pc-windows-msvc.zip` → `elan-init.exe -y --default-toolchain
+  leanprover/lean4:v4.31.0`; the winget id doesn't exist and `elan-init.ps1` fights
+  PowerShell parameter quoting). Then **`lake exe cache get` BEFORE `lake build`** —
+  mathlib is a dependency and building it from source wastes ~2 chunks before you
+  notice (the lakefile says this; read it). With the cache (~8.5 k files, fits one
+  chunk on a normal connection) the library build is ~1084 jobs and **`lake build`
+  is resumable**: repeated capped runs make monotone progress to completion. After
+  that `verify.sh lean` fits the cap.
+- **`conf-rest` can blow the cap throttled.** Tile it while preserving `run_conf`'s
+  anti-vacuous guards (zcli-binary preflight, pytest rc 0, **zero skipped**,
+  passed > 0 — replicate them per tile, e.g. a small wrapper script): tile A = the
+  conformance dir minus `test_conformance_remove.py` (conf-heavy's file) minus
+  `test_conformance_remove_graph.py` (the per-op zcli driver — subprocess spawn
+  cost dominates and Windows makes it worse); tile B = `remove_graph` alone. The
+  two tiles + conf-heavy tile the whole dir, so guards + tiling-completeness ≡ the
+  phased pass.
+- **A timed-out foreground command may be moved to the background** by the current
+  harness instead of killed — check the task's output file for a late verdict
+  before assuming "no verdict" and rerunning.
+
 ## Gotchas (hit 2026-07-14/15)
 
 - `tee` masks pytest's exit code → capture `$?`.

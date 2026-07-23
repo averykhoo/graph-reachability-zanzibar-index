@@ -93,12 +93,13 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   same-transaction recreate reusing the max rowid), now handled by the version-1
   lineage-restart rule — the residual blind spot is an in-place regression to
   exactly version 1. Real databases with non-recycling sequences have neither.
-* **Tokened reads against a stale evaluator cost a rebuild.** The `at_least`
-  fallback is now watermark-aware (rebuild-on-demand, `StaleRead` when the session
-  snapshot itself predates the write), which makes it *correct* across sessions —
-  but each stale tokened read pays an O(live tuples) evaluator rebuild. Fine at
-  human scale; a hot multi-reader deployment would want a shared invalidation
-  signal instead.
+* **Tokened reads against a stale evaluator catch up O(delta).** The `at_least`
+  fallback is watermark-aware (`StaleRead` when the session snapshot itself predates
+  the write), which makes it *correct* across sessions; a stale tokened read now
+  tails only the committed log delta into the evaluator (`catch_up_evaluator` →
+  `apply_logged`, O(delta)), not a full O(live tuples) rebuild. Fine at human scale;
+  a hot multi-reader deployment would still want a shared invalidation signal to
+  avoid per-reader tailing.
 * **Concurrency coverage is SQLite-shaped.** `_lock_store`/`FOR UPDATE` semantics
   on PostgreSQL/MySQL are reasoned about, not tested here; the pysqlite
   transaction quirks are worked around in tests, which means production engines
@@ -110,9 +111,19 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   least this fresh"; nothing bounds staleness of un-tokened replica reads except
   the worker's cadence. That is the intended zookie semantics, but it is a
   guarantee *shape*, and callers must not read it as recency.
-* **Single-writer-per-store is assumed** for the cascade (serialized by
-  `_lock_store`); multi-writer throughput was never a goal and is untested beyond
-  the retry-on-busy convergence tests.
+* **Multi-writer admission is serialized, but concurrency coverage stays
+  SQLite-shaped.** Multiple `TupleSource`/`ConnectedStore` writer instances on one
+  store are now correct by construction: each write runs a per-store critical
+  section (`_lock_source`, a `FOR UPDATE` lock on the `SchemaV4` row → catch the
+  evaluator up → validate → append, one transaction), so duplicate / remove-existence
+  / cycle-parity admission validates against caught-up committed state, and the
+  in-section append makes log ids commit in order per store (closing the out-of-order
+  log-id skip hazard). **Caveat, kept prominent**: as with `_lock_store`, the
+  `FOR UPDATE` semantics that make this hold on PostgreSQL/MySQL are *reasoned about,
+  not CI-tested* — SQLite renders the lock to a no-op and serializes writers itself,
+  so production engines exercise a different (stricter) isolation path than CI does.
+  Throughput under contention is likewise untested beyond the retry-on-busy
+  convergence tests.
 
 ## 5. How to extend without breaking the argument
 

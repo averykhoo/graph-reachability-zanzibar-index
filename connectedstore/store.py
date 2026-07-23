@@ -26,13 +26,9 @@ from setengine.setops import SetOps, DEFAULT_SETOPS
 
 from .apply import advance_index, ensure_cursor
 from .schema_io import ensure_schema, open_graph_index
-from .source import TupleSource
-
-
-class StaleRead(RuntimeError):
-    """A read carrying an ``at_least`` token could not be satisfied: the index lags
-    the token AND the write is not visible in this session's read snapshot. Start a
-    fresh snapshot (``refresh()``) and retry."""
+# StaleRead lives with the evaluator that raises it first (TupleSource.check);
+# re-exported here for backward compatibility.
+from .source import StaleRead, TupleSource
 
 
 class ConnectedStore:
@@ -219,13 +215,14 @@ class ConnectedStore:
                                    relation, o_type, o_name)
 
         # Index lags the token: fall back to the set engine -- but its state is an
-        # in-memory cache, only as fresh as its own watermark. Rebuild on demand if
+        # in-memory cache, only as fresh as its own watermark. Catch up on demand if
         # it predates the token (the honest cost of a tokened read against a lagging
-        # index: one evaluator rebuild). If the token is STILL not visible, this
-        # session's read snapshot predates the write -- refuse loudly rather than
-        # serve a stale answer under an explicit freshness demand.
+        # index: tailing the log delta, O(delta) not O(store)). If the token is
+        # STILL not visible, this session's read snapshot predates the write --
+        # refuse loudly rather than serve a stale answer under an explicit
+        # freshness demand.
         if self.source.evaluator_watermark < at_least:
-            self.source.refresh_evaluator()
+            self.source.catch_up_evaluator()
             if self.source.evaluator_watermark < at_least:
                 raise StaleRead(
                     f'token {at_least} is not visible in this session snapshot '

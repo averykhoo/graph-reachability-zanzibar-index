@@ -244,10 +244,25 @@ expression AST from the parser (`Direct`/`Computed`/`TTU`/`Union`/`Intersection`
 enable_boolean=False)` keeps the historical refusal (`UnsupportedByGraphIndex`)
 reachable for callers that want the guard.
 
-### zookies
+### zookies (zookie-lite freshness tokens)
 
-* some kind of transaction timestamp, maybe snowflake or ULID or uuid7 or lamport clock thingamajig
-* the cache just needs to store the last updated timestamp
+Implemented as **per-store `TupleLogV1` log ids** — no snowflake/ULID/lamport clock
+needed. A write returns its log id; a read passes it back as `at_least=` to demand
+"at least this fresh":
+
+* Honored on both `ConnectedStore.check(..., at_least=token)` and
+  `TupleSource.check(..., at_least=token)`. The index serves the read iff its cursor
+  ≥ token; otherwise it falls back to the set engine, which catches up on demand by
+  tailing the committed log delta (O(delta)), or raises `StaleRead` if the session
+  snapshot itself predates the write.
+* **Multi-instance (HA):** several instances share a store, each set engine
+  in-memory and synced from the log; every instance's state is the fold of an exact
+  log *prefix* (instances differ only in recency), so tokens give read-your-writes
+  while un-tokened replica reads stay bounded-stale by tail cadence.
+
+Tokens are **store-local** (a per-DB autoincrement, not a global clock). A full
+Zanzibar zookie would add snapshot ("read at exactly T") reads, an opaque encoding,
+and cross-store ordering — deliberately out of scope here.
 
 ### `*` wildcard entities (materialized)
 

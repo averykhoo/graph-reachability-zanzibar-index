@@ -44,7 +44,13 @@ NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
 
 
 class LookupResult:
-    """Concrete result ids + symbolic wildcard markers (mirrors index_v4 LookupResult)."""
+    """Concrete result ids + symbolic wildcard markers (mirrors index_v4 LookupResult).
+
+    ``node_ids`` are INSTANCE-LOCAL interner ids: the interner recycles int32 handles,
+    so an id means nothing to another engine instance (or process) over the same
+    store. ``SetEngine.result_keys`` translates them to the stable
+    ``(type, name, predicate)`` surrogate keys -- the portable form for any service
+    boundary. ``markers`` are already portable ``(type, predicate)`` shapes."""
 
     def __init__(self):
         self.node_ids: set[int] = set()               # concrete result ids
@@ -433,6 +439,42 @@ class SetEngine:
         # Flushing here restores the delete-before-reinsert ordering.
         self.session.flush()
         self._apply_remove(s_pred, s_type, s_name, relation, o_type, o_name)
+
+    def apply_logged(self, op: str, subject_predicate, s_type: str, s_name: str,
+                     relation: str, o_type: str, o_name: str) -> None:
+        """Trusted replay of one COMMITTED log row into in-memory state only -- no
+        validation, no DB writes (the row's ``TupleV1`` mutation was committed by the
+        writing instance; validity was enforced at its admission).
+
+        The incremental analog of ``rebuild()``: it performs exactly the
+        ``_apply_add`` / ``_apply_remove`` sequence ``rebuild()`` would, so the
+        in-memory state after tailing a log prefix equals a rebuild at that prefix.
+        Flow-graph maintenance comes free (those methods already maintain it when the
+        graph is built).
+
+        Presence mismatches are HARD failures, never op rejections: the log is
+        admission-validated and applied exactly-once, so an ADD of a present tuple or
+        a REMOVE of an absent one means the caller's watermark is corrupt (mirrors
+        the apply step's corruption guard in ``connectedstore.apply``)."""
+        s_pred = _norm_pred(subject_predicate)
+        if op == 'ADD':
+            if self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
+                raise RuntimeError(
+                    f'log ADD of an already-present tuple -- the log is admission-'
+                    f'validated and applied exactly-once, so this is watermark '
+                    f'corruption: {(s_pred, s_type, s_name, relation, o_type, o_name)}')
+            self._apply_add(s_pred, s_type, s_name, relation, o_type, o_name)
+        elif op == 'REMOVE':
+            if not self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
+                raise RuntimeError(
+                    f'log REMOVE of an absent tuple -- the log is admission-'
+                    f'validated and applied exactly-once, so this is watermark '
+                    f'corruption: {(s_pred, s_type, s_name, relation, o_type, o_name)}')
+            self._apply_remove(s_pred, s_type, s_name, relation, o_type, o_name)
+        else:
+            raise RuntimeError(
+                f'unknown log op {op!r} -- the log carries only ADD/REMOVE, so this '
+                f'is corruption')
 
     def _tuple_present(self, s_pred, s_type, s_name, relation, o_type, o_name) -> bool:
         """Authoritative in-memory existence test for one raw septuple, replacing the
@@ -1153,6 +1195,14 @@ class SetEngine:
         result.node_ids = set(m.pos)
         result.markers = set(m.stars)
         return result
+
+    def result_keys(self, res: LookupResult) -> set[NodeKey]:
+        """Translate ``res.node_ids`` to their stable ``(type, name, predicate)``
+        surrogate keys. Interner ids are recycled instance-local handles -- only
+        valid against THIS instance, and only until the next write -- so this is
+        the portable form of a lookup result for any service boundary
+        (``res.markers`` need no translation)."""
+        return {self.interner.key(i) for i in res.node_ids}
 
     def _reverse_neighbors(self, oid: int) -> list[int]:
         """Candidate object nodes one reverse membership hop from a node the subject

@@ -123,6 +123,11 @@ IVM delta processor.
   serializes writers per store on PostgreSQL/MySQL; it's a no-op on SQLite, which
   serializes writers itself (concurrent SQLite writers need retry on `SQLITE_BUSY` /
   node-creation `IntegrityError`). Use one `Session` per thread — never share one.
+  **Multi-instance (HA):** writers take the source lock (`TupleSource._lock_source`,
+  the `SchemaV4` row) BEFORE the graph store lock (lock ordering), and
+  `TupleSource.add/remove` catch the evaluator up under the lock (validate against
+  current committed state; log ids commit in id order per store); replica readers
+  tail via `catch_up_evaluator` (O(delta)).
 - **Derived-relation exclusivity (I5)**: only the delta processor writes incoming direct
   edges on derived-public families (`WildcardIndex.processor_writes` flag); users write
   public names, `RuleSet.apply` routes them onto leaf families. A graph write on a
