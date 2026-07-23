@@ -137,8 +137,11 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
       See the 2026-07-23 Current-status bullet for the full record (mechanisms, the
       closed log-ordering hazard, consistency model, gate numbers). Follow-ups
       deliberately NOT taken (out of scope, revisit on need): `at_least` on
-      lookup/expand surfaces; snapshot ("at exactly") reads; cross-store tokens (X6);
-      set-engine state snapshots for O(delta) cold start.
+      lookup/expand surfaces (rationale + implementation sketch in
+      `docs/architecture/decision-log.md` round 3 — the blocker is unifying the
+      lookup result contract on portable keys, not the token mechanics); snapshot
+      ("at exactly") reads; cross-store tokens (X6); set-engine state snapshots
+      for O(delta) cold start.
 - [ ] **IN PROGRESS 2026-07-18 (Claude): OPTIONAL assurance-widening arc (`FINAL_REVIEW.md §4`).**
       Four targets scoped (recon + attack-first probes); durable design + resume state for
       ALL of them in [`formal/history/optional-widening-2026-07.md`](formal/history/optional-widening-2026-07.md).

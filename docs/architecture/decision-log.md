@@ -145,10 +145,37 @@ Do not re-walk these without new evidence — the alternatives were considered.
   `FOR UPDATE` SELECT (no-op-rendered on SQLite) + one empty log SELECT per write —
   accepted deliberately rather than branching the write path on a deployment
   assumption.
+* **`at_least` is check-only — lookup/reverse-lookup/expand deliberately excluded**
+  (not "can't", "didn't": the token mechanics are the same five lines). Three costs
+  `check` doesn't have, plus a structural point:
+  1. *Result domain.* `check` returns a bool, so the freshness fallback (graph when
+     fresh, set engine when lagging) is invisible. The lookup surfaces return ids —
+     graph node ids (DB rows) vs set-engine interner ids (instance-local, recycled)
+     — so a fallback silently switches the id domain of the same call depending on
+     index lag. Prerequisite: redefine the public lookup contract in the portable
+     `(type, name, predicate)` key + marker domain for BOTH backends
+     (`SetEngine.result_keys` is that form; the graph side needs the twin), a
+     breaking/versioned API change in its own right.
+  2. *Perf cliff.* Graph lookup is probes over the materialized closure — the point
+     of that backend; the set engine's is a check-verified reverse walk (correct,
+     oracle-pinned, expensive). A tokened `check` fallback costs one pointwise
+     evaluation; a tokened lookup fallback silently turns a hot enumeration into a
+     full reverse walk whenever the worker lags. That degradation should be a
+     visible, chosen behavior, not an implicit one.
+  3. *Test surface.* `tests/test_lookup_oracle.py` is the strictest gate in the
+     repo (the X1–X4 history); a lagging-index fallback leg doubles its matrix
+     (fresh vs lagging × backends × token boundaries) — a deliberate follow-up
+     arc, not a rider.
+  Structurally: a lagging reader cannot make the index fresh itself
+  (`advance_index` is the writer/worker's job — store lock, closure mutation), so
+  the set-engine fallback is the only non-blocking option, which is exactly where
+  costs 1–2 bite. **Shape of the future work**: unify the lookup result contract on
+  keys/markers → add the same `at_least` plumbing as `check` → extend the lookup
+  oracle gate with a lagging-index leg (mostly test-writing).
 * **Out of scope** (this round): snapshot / "at exactly" reads (only `at_least`
-  lower-bounding); cross-store tokens (X6 — store-local); `at_least` on
-  `lookup`/`expand` (check-only); instance gossip (the DB log is the channel);
-  schema-version skew (schemas are write-once — a new schema is a new store).
+  lower-bounding); cross-store tokens (X6 — store-local); instance gossip (the DB
+  log is the channel); schema-version skew (schemas are write-once — a new schema
+  is a new store).
 
 ## Non-goals (documented hooks only)
 
