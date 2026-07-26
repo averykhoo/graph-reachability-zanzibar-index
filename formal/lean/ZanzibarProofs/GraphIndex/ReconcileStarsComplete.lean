@@ -16,7 +16,8 @@ This file assembles the **read half**:
   pass evaluates equals `sem` at every W3c-reachable state — through the W3a-admitted shadow
   (`checkFn` reads only the core; `checkFn_eq_sem_bs` on the shadow).
 * **The `W3cComplete` batch layer**: an admitted rule-routed base plus a batch of full-object
-  `reconcileStarsKey` jobs (`processor.py:382-459` — one `reconcile` per derived key/object,
+  `reconcileStarsKey` jobs (one `index_v4/processor.py::DeltaProcessor._reconcile` per
+  derived key/object,
   audit-enumerating bare edge candidates, `neg` concretes, `upos` usersets). Coverage clauses
   are properties of the *enumeration*.
 * **The assembly `graph_correct_w3c`**: `check = sem` through `probeDerived` on star-CARRYING
@@ -72,7 +73,8 @@ theorem reconcileStarsKey_edges_mono {σ : GraphState} (T : Store) (dt on R : St
 
 /-- A W3c reconcile job: settle one derived key/object with a full `reconcileStarsKey` pass
     (residue recompute over `wildcardShapes S`/`negCands`/`uposCands`, then the covered-guarded
-    edge audit over `cands`). Faithful to `reconcile` (`processor.py:382-459`). -/
+    edge audit over `cands`). Faithful to
+    `index_v4/processor.py::DeltaProcessor._reconcile`. -/
 structure W3cJob where
   dt : String
   on : String
@@ -597,12 +599,15 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
 
 /-! ## Per-key job coverage — row existence and `neg`/`upos` completeness
 
-The residue is a WHOLESALE per-pass recompute (`reconcile` steps 1–3 replace the whole
+The residue is a WHOLESALE per-pass recompute
+(`index_v4/processor.py::DeltaProcessor._reconcile` steps (1)–(3) replace the whole
 row), so a `neg`/`upos` member survives the batch only if **every** job targeting its key
 enumerates it — an attack-first `#eval` this session confirmed a second same-key pass
 with an incomplete `negCands` DROPS the exclusion and breaks `check = sem` (necessity of
-the ∀-jobs form; scratch deleted). Faithful to Python: every `reconcile` call re-derives
-the full audit enumeration (`_leaf_concretes` ∪ persisted ids, `processor.py:394-441`),
+the ∀-jobs form; scratch deleted). Faithful to Python: every
+`index_v4/processor.py::DeltaProcessor._reconcile` call re-derives
+the full audit enumeration (steps (2)/(2b): `::DeltaProcessor._leaf_concretes` ∪
+persisted `neg`/`upos` ids ∪ `::DeltaProcessor._incoming_concretes`),
 so any store-supported subject is in every call's enumeration. -/
 
 /-- Does a job target the derived key `(dt, R)` at object `on`? -/
@@ -828,7 +833,8 @@ theorem reconcileJobsC_upos_complete {S : Schema} {T : Store}
 
 /-! ## The W3c-complete state and the assembly `graph_correct_w3c` -/
 
-/-- The full derived read (`probeDerived`, `wildcard.py:398-432`), unfolded on explicit
+/-- The full derived read (`probeDerived`,
+    `index_v4/wildcard.py::WildcardIndex._check_derived`), unfolded on explicit
     components at a concrete object: star ⇒ `stars`; bare ⇒ edge ∨ (`stars` ∖ `neg`);
     userset ⇒ `upos` ∨ (`stars` ∖ `neg`) (with the `stars` gate). -/
 theorem probeDerived_eq (σ : GraphState) {st sn sp R dt on : String} (hon : on ≠ STAR) :
@@ -852,8 +858,10 @@ theorem probeDerived_eq (σ : GraphState) {st sn sp R dt on : String} (hon : on 
   · by_cases h2 : sp = BARE <;> simp [hon, h1, h2, SubjectRef.shape]
 
 /-- **`W3cComplete S T σ`** — an admitted rule-routed base plus a coverage-complete batch
-    of full-object star reconcile jobs. Faithful to `build_index`/`reconcile`
-    (`processor.py:382-459`): the processor reconciles every derived key over every
+    of full-object star reconcile jobs. Faithful to
+    `connectedstore/build.py::build_index` /
+    `index_v4/processor.py::DeltaProcessor._reconcile` (bootstrap sweep:
+    `::DeltaProcessor.backfill`): the processor reconciles every derived key over every
     object, re-deriving the full audit enumeration each pass. Coverage clauses are
     properties of the *enumeration*:
 

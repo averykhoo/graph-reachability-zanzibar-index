@@ -3,7 +3,8 @@ import ZanzibarProofs.Core.Refs
 /-!
 # Schema AST, lookup, well-formedness
 
-`SEMANTICS.md` §4. The AST mirrors `tests/oracle.py:78-109`.
+`SEMANTICS.md` §4. The AST mirrors `tests/oracle.py::ODirect` / `::OComputed` /
+`::OTTU` / `::OUnion` / `::OIntersection` / `::OExclusion`.
 
 **Modeling choice (logged in PROOF_STATUS variations):** the production/oracle
 AST has *n-ary* `Union`/`Intersection`; we model them as **binary**. This is
@@ -16,7 +17,7 @@ of the binary node.
 namespace Zanzibar
 
 /-- A `Direct` restriction `[t]`, `[t#p]`, `[t:*]`, `[t:*#p]` as
-    `(type, predicate, wildcard)` (`tests/oracle.py:144-166`). -/
+    `(type, predicate, wildcard)` (parsed by `tests/oracle.py::_parse_restrictions`). -/
 abbrev Restriction := String × String × Bool
 
 /-- The rewrite/expression AST (binary boolean nodes; see modeling note). -/
@@ -38,8 +39,8 @@ structure Schema where
 deriving Repr, Inhabited
 
 /-- Definition lookup: `(type, relation) ↦ Expr?`. An undefined reference is
-    `none` and evaluates to "constantly empty" in `sem` (`oracle.py:360-363`;
-    `SEMANTICS.md` §11-A3). -/
+    `none` and evaluates to "constantly empty" in `sem` (the `self.ast.get(...)`
+    miss in `tests/oracle.py::Oracle.check.sat`; `SEMANTICS.md` §11-A3). -/
 def Schema.lookup (S : Schema) (key : String × String) : Option Expr :=
   (S.defs.find? (fun p => p.1 = key)).map (·.2)
 

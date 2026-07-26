@@ -3,7 +3,8 @@ import ZanzibarProofs.GraphIndex.Cascade
 /-!
 # Fan-out completeness — write-leg operand stability off the mapped keys (ROADMAP W3d-1b)
 
-`index_v4/processor.py:585-652` (`_map_deltas_to_keys`) + `core.py:_emit`: a write
+`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` +
+`index_v4/core.py::ReachabilityIndex._emit`: a write
 transaction's outbox rows must dirty EVERY derived key whose reconciled representation
 its edges can have changed — the cross-key re-reconcile hazard as a theorem, in
 contrapositive form: **if a derived key `(dt, R, on)` is NOT in `cascadeKeys` after a
@@ -27,8 +28,11 @@ irrelevant), ghost writes onto fresh nodes (fuel growth is read-inert at closed
 states), and cross-key `excl`-operand writes. **OUT-of-fragment REFUTATION confirmed
 live**: an object-star write `member@doc:*` flips probe 3 (`reach (subjNode s)
 (wAllNode doc member)`) at EVERY object of the type while mapping NO keys — the routed
-edge's head is the `wAll` node, whose name is `STAR`, which `_map_deltas_to_keys`
-skips (`processor.py:604-605`). The Python system is immune because its closure
+edge's head is the `wAll` node, whose name is `STAR`, which
+`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` maps to no derived own-key
+(an UNTAINTED head matches no compiled family at all; a DERIVED head with `o_name ==
+'*'` is not skipped but `raise InvariantViolation` — the leaked decision-15 shape,
+hardened from a bare `assert` by `ZT-P1-2`, 2026-07-26). The Python system is immune because its closure
 materializes out-bridges whose per-flip rows land at CONCRETE object ends; the model's
 decision-1 row reconstruction has no out-bridges, so the fragment must keep edge
 targets plain — exactly `BareStarStore`'s object-star-freeness, threaded here as
@@ -107,7 +111,8 @@ theorem writeLoggedRules_edges_mono (σ : GraphState) (S : Schema) (t : Tuple) :
 /-- **New edges carry frontier rows.** Every edge of a logged write leg is an old
     edge, or has an emitted outbox row with an id strictly above the (unchanged)
     watermark, denormalized at the edge's own head — the model-level content of
-    `_emit` (`core.py:31-44`): a flip inserts its row inside the same transaction. -/
+    `index_v4/core.py::ReachabilityIndex._emit`: a flip stages its row (perf N16) and
+    `::ReachabilityIndex._flush_outbox` inserts it inside the same transaction. -/
 theorem writeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) :
     ∀ ab ∈ (σ.writeLoggedRules S t).edges,
       ab ∈ σ.edges ∨ ∃ d ∈ (σ.writeLoggedRules S t).outbox,
@@ -253,7 +258,9 @@ theorem reachedByW3d_edgesClosed {σ : GraphState} {S : Schema} {T : Store}
     object is the raw write's object (star-free by `BareStarStore`), a cascade edge's
     object is the job's concrete `on`. This is the fence the attack found load-bearing:
     a `wAll`-targeted edge would flip probe 3 at every object of the type while
-    `affectedKeys` skips the star-named head (`processor.py:604-605`). The store
+    `affectedKeys` skips the star-named head (Python's
+    `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` never dirties a derived
+    own-key from one, and rejects the derived-head case outright). The store
     hypothesis is taken at the chain's own store and weakens along the prefix. -/
 theorem reachedByW3d_edges_target_plain {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d σ S T) :

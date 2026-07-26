@@ -10,9 +10,11 @@ state whose DERIVED operand keys are `SettledKey ∧ CompleteKey` — untainted 
 leaves read through the shadow (W2, as in `checkFn_eq_sem_w3d`), derived operand
 leaves read `probeDerived` at a settled+complete key, which is exactly the `sem`
 verdict (`probeDerived_eq_sem_settled`, factored out of `graph_correct_w3d`'s
-derived branch). This is the guard form `reconcile` actually evaluates at a
+derived branch). This is the guard form
+`index_v4/processor.py::DeltaProcessor._reconcile` actually evaluates at a
 stratum-2 key once round 1 has re-settled its stratum-1 operands
-(`processor.py:43-70` routing; `:714-719` the per-round key loop).
+(`index_v4/processor.py::_EvalContext` routing;
+`::DeltaProcessor._run_cascade`'s per-round key loop).
 
 **Attack-first (2026-07-12e, `#eval` against the real `writeLoggedRules` /
 `runCascade2` / `check` / `checkFnR` / `sem`; scratch deleted).** On the 2-stratum
@@ -1486,8 +1488,9 @@ rules base (`graphRec_base_eq_bs`, the W2 leg — exactly as `checkFn_eq_sem_w3d
 a DERIVED operand reads `probeDerived` at its own key, which is the `sem` verdict
 once that key is settled+complete (`probeDerived_eq_sem_settled`). `evalE` then
 computes one `sem` step, and fuel stability closes the loop. This is the guard
-`reconcile` evaluates at a stratum-2 key in round 2, after round 1 re-settled the
-stratum-1 operands (`processor.py:43-70`, `:714-719`). -/
+`index_v4/processor.py::DeltaProcessor._reconcile` evaluates at a stratum-2 key in
+round 2, after round 1 re-settled the stratum-1 operands
+(`::_EvalContext` routing; `::DeltaProcessor._run_cascade`'s per-round key loop). -/
 
 /-- The routed mirror of `checkFn_eq_semStep`: leaf agreement transports `evalE`. -/
 theorem checkFnR_eq_semStep {S : Schema} {σ : GraphState} {T : Store} {q : Query}
@@ -2554,7 +2557,8 @@ theorem reconcileJobsLR_reach_collapse {S : Schema} {T : Store}
 `ReachedByW3d2` plus per-round audit-enumeration coverage: round-1 jobs coverage-
 complete relative to the LEG-START state, round-2 jobs relative to the MID state
 (their passes re-enumerate against the graph as round 1 left it —
-`processor.py:394-441` runs inside the round). Chain-side hypotheses as in W3d-1c;
+`index_v4/processor.py::DeltaProcessor._reconcile`'s step-(2)/(2b) enumeration runs
+inside the round). Chain-side hypotheses as in W3d-1c;
 the state-derived discharge is the W3d-2 E-chain tail (with the residue-named
 candidates, 12c finding (c)).
 
@@ -3129,7 +3133,9 @@ theorem sem_nil_false (S : Schema) (q : Query) : sem S ([] : Store) q = false :=
     q.object.name q.relation
 
 /-- **A raw admitted write on a derived key dirties its OWN key** — the chain-level
-    form of the `affectedKeys` LeafFamily own-key branch (`processor.py:991-1011`;
+    form of the `affectedKeys` LeafFamily own-key branch (the
+    `isinstance(fam, LeafFamily)` arm of
+    `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`;
     the 2026-07-20c model fix): the seed delta carries `leaf = true` at the concrete
     object node of the derived relation, and its id lands above the watermark. -/
 theorem writeLeg_own_key_dirty {σ : GraphState} {S : Schema} {t : Tuple}

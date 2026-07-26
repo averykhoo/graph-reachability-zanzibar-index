@@ -4,8 +4,8 @@ import ZanzibarProofs.Spec.Stratify
 /-!
 # The concrete write model — untainted RULE ROUTING (ROADMAP W2, write half)
 
-`SEMANTICS.md` §4, §7.5; `zanzibar_utils_v1.py` `RuleSet.apply` / `_rewrite_rule` /
-`_emit_expr`. W1 widened the *direct* write model to wildcard bridges. **W2 widens
+`SEMANTICS.md` §4, §7.5; `zanzibar_utils_v1.py::RuleSet.apply` / `::_rewrite_rule` /
+`::_emit_expr`. W1 widened the *direct* write model to wildcard bridges. **W2 widens
 it to untainted rule structure** — `computed`, `union` of untainted operands, and
 `ttu` defs — by transcribing the Python graph index's rewrite-fanout:
 
@@ -14,7 +14,7 @@ it to untainted rule structure** — `computed`, `union` of untainted operands, 
 > unions, iterated to a fixpoint), and *each* resulting triple is materialized as a
 > direct closure edge. The reachability read is unchanged.
 
-The two rewrite kinds (`_rewrite_rule`, `zanzibar_utils_v1.py:834-852`):
+The two rewrite kinds (`zanzibar_utils_v1.py::_rewrite_rule`):
 * **Computed** `R := computed R'` on object type `ot`: a tuple `(s, R', o)` with
   `o.type = ot` also produces `(s, R, o)` — same subject/object, relation `R'↦R`.
 * **TTU** `R := ttu tr ts` on object type `ot`: a tuple `(s, ts, o)` with
@@ -68,8 +68,9 @@ def exprArms (ot outRel : String) : Expr → List RRule
 
 /-- All rewrite rules of a schema (`RuleSet`'s Computed/TTU Rules).
 
-    **Taint filter — faithful mirror of the Python** (`zanzibar_utils_v1.py`
-    `compile_ruleset` :1027-1044): the compiler routes every DERIVED (tainted / boolean)
+    **Taint filter — faithful mirror of the Python**
+    (`zanzibar_utils_v1.py::compile_ruleset`'s `if (object_type, relation_name) not in
+    tainted: _emit_expr(...)` loop): the compiler routes every DERIVED (tainted / boolean)
     key OFF the rewrite fanout entirely (`if key not in tainted: fan out; else: derived
     plan`), so it NEVER emits a rewrite rule whose output is a tainted relation. The
     earlier unfiltered model (`S.defs.flatMap …`) materialized a transient fanout edge at

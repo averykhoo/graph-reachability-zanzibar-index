@@ -107,7 +107,8 @@ theorem reachedByW3d2_Rnode_source_name_ne_star {σ : GraphState} {S : Schema}
 star-freeness clauses need: every persisted `neg`/`upos` member is star-free. True
 structurally — the only residue writer is the routed wholesale recompute, whose
 `neg`/`upos` are filters of the job's `negCands`/`uposCands`, star-free by
-`W3cJobValid` (`processor.py:441-446` filters the audit-enumerated candidates, and
+`W3cJobValid` (`index_v4/processor.py::DeltaProcessor._reconcile` steps (2)/(2c) filter
+the audit-enumerated candidates into `neg`/`upos`, and
 enumeration sources — leaf reach, persisted residue ids, R-node edges — are
 star-free by I6/write admission). -/
 
@@ -311,8 +312,9 @@ theorem enumJobs2At_valid {S : Schema} {σe : GraphState}
   exact w3cJobValid_enumJob2 hWF hlk hder hon hsb hsns hres
 
 /-- The ROUND-1 enumerated jobs: the frontier keys above the stored watermark,
-    enumerated at the leg-start state (`run_cascade` round 1,
-    `processor.py:701-727`). -/
+    enumerated at the leg-start state (round 1 of
+    `index_v4/processor.py::DeltaProcessor._run_cascade`'s `for _ in range(rounds)`
+    loop). -/
 def enumJobs2R1 (S : Schema) (σ : GraphState) : List W3cJob :=
   enumJobs2At S σ (cascadeKeysAbove S σ σ.watermark)
 

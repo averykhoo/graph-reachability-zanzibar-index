@@ -12,9 +12,10 @@ state where the first cascade's derived edge `alice → (doc,1,viewer)` is STALE
 `check = true ≠ sem = false`. The second cascade DID re-reconcile the key (the cross-key
 fan-out worked), but an add-only fold cannot retract an edge whose guard has flipped down.
 
-**Python retracts it.** `reconcile_subject` (`processor.py:321-380`) diffs the desired
-representation against the materialized one: `want_edge = should ∧ ¬covered` (`:359`), and
-`elif not want_edge and has_edge: self._write_derived(s, ..., add=False)` (`:365-367`) —
+**Python retracts it.** `index_v4/processor.py::DeltaProcessor._reconcile_subject` diffs
+the desired representation against the materialized one: its bare-entity tail computes
+`want_edge = should and not covered`, and
+`elif not want_edge and has_edge: self._write_derived(s, ..., add=False)` —
 `remove_tuple` on the derived pair, driven through the ref-counted closure. W3a–W3c never
 saw this branch fire because their chains hold the store FIXED: `checkFn = sem` at every
 pass start (the bridge), so a guard true at edge-write time stays true at every later pass
@@ -46,7 +47,8 @@ namespace Zanzibar
 /-! ## Edge removal -/
 
 /-- Remove every copy of the direct edge `(a, b)` — `remove_tuple` on the derived pair
-    (`_write_derived(..., add=False)`, `processor.py:290-314`): the processor's diff
+    (`index_v4/processor.py::DeltaProcessor._write_derived` with `add=False`, which
+    calls `index_v4/wildcard.py::WildcardIndex.remove_tuple`): the processor's diff
     drives the ref-count to zero and the closure pair disappears. Nodes/residue/outbox
     are untouched (node GC is a modeled-away optimization, see header). -/
 def GraphState.removeEdgePair (σ : GraphState) (a b : NodeKey) : GraphState :=
@@ -101,14 +103,17 @@ rc ≥ 2 — `viewer := editor or manager`, alice granted both ⇒ removing `(al
 must leave the surviving `manager`-derived copy; see `history/optional-widening-2026-07.md`
 §Target #4 KILL.) The faithful op is `List.erase` (remove the FIRST matching copy) — the
 exact mirror of Python's ref-counted `-1` update `_add_direct_edge_unsafe(subject_id,
-object_id, -1)` (`index_v4/core.py:704`, driven from `_remove_edge_locked`,
-`core.py:686-704`). `GraphState.edges : List (NodeKey × NodeKey)` is ALREADY a multiset
-(list multiplicity == `direct_edge_count`; `addEdge` prepends unconditionally,
-`State.lean:742`), so erase-one is the exact faithful mirror with NO new field; reads
+object_id, -1)` — the tail call of
+`index_v4/core.py::ReachabilityIndex._remove_edge_locked` into
+`::ReachabilityIndex._add_direct_edge_unsafe`.
+`GraphState.edges : List (NodeKey × NodeKey)` is ALREADY a multiset
+(list multiplicity == `direct_edge_count`; `GraphIndex/State.lean::GraphState.addEdge`
+prepends unconditionally), so erase-one is the exact faithful mirror with NO new field; reads
 (`reachB`/`NReaches`) test only membership, so removing one of several copies is read-inert. -/
 
 /-- Remove ONE copy of the direct edge `(a, b)` — the ref-counted `-1` update
-    (`_add_direct_edge_unsafe(subject_id, object_id, -1)`, `index_v4/core.py:704`).
+    (`_add_direct_edge_unsafe(subject_id, object_id, -1)`, issued by
+    `index_v4/core.py::ReachabilityIndex._remove_edge_locked`).
     Nodes/residue/outbox/watermark are untouched (node GC is a modeled-away optimization,
     cf. `removeEdgePair`). Uses `List.erase`, which drops the FIRST matching copy. -/
 def GraphState.removeEdgeOne (σ : GraphState) (a b : NodeKey) : GraphState :=
@@ -205,8 +210,10 @@ theorem nreaches_remove_terminal {edges : List (NodeKey × NodeKey)} {a r u v : 
 
 /-! ## The diffing edge audit -/
 
-/-- **The diffing edge audit** (`reconcile` step 4 → `reconcile_subject`,
-    `processor.py:359-367`): per candidate, `want = should ∧ ¬covered`; materialize the
+/-- **The diffing edge audit** (`index_v4/processor.py::DeltaProcessor._reconcile`
+    step (4) → `::DeltaProcessor._reconcile_subject`'s bare-entity tail, whose
+    add/remove arms call `::DeltaProcessor._write_derived`):
+    per candidate, `want = should ∧ ¬covered`; materialize the
     derived edge when `want`, REMOVE the pair when `¬want` (the stale-edge retraction —
     see header). `covered` reads the persisted row, which the fold never writes. -/
 def GraphState.reconcileKeyD (σ : GraphState) (T : Store) (dt on R : String) (e : Expr)
@@ -216,9 +223,10 @@ def GraphState.reconcileKeyD (σ : GraphState) (T : Store) (dt on R : String) (e
     then acc.writeDirect ⟨c, R, ⟨dt, on⟩⟩
     else acc.removeEdgePair (subjNode c) (objNode ⟨dt, on⟩ R)) σ
 
-/-- **One full-object W3d reconcile**: the wholesale residue recompute (steps 1–3),
-    then the DIFFING edge audit (step 4). Python stores the residue at `:446` before
-    auditing edges at `:450-455`. -/
+/-- **One full-object W3d reconcile**: the wholesale residue recompute (steps (1)–(3)),
+    then the DIFFING edge audit (step (4)). Python's
+    `index_v4/processor.py::DeltaProcessor._reconcile` stores the residue in step (3)
+    before auditing edges in step (4). -/
 def GraphState.reconcileStarsKeyD (σ : GraphState) (T : Store) (dt on R : String)
     (e : Expr) (shapes : List Shape) (cands negCands uposCands : List SubjectRef) :
     GraphState :=
@@ -632,7 +640,7 @@ presence for candidates no longer depends on history. This is the cascade-leg he
 of the W3d settledness invariant: a re-reconcile genuinely RE-SETTLES its key. -/
 
 /-- The per-candidate edge guard `want = should ∧ ¬covered`
-    (`reconcile_subject`, `processor.py:359`). -/
+    (`index_v4/processor.py::DeltaProcessor._reconcile_subject`, bare-entity tail). -/
 def GraphState.wantEdge (σ : GraphState) (T : Store) (dt on R : String) (e : Expr)
     (c : SubjectRef) : Bool :=
   σ.checkFn T c dt on R e && !(σ.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)

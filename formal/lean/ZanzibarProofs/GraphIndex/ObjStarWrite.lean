@@ -4,7 +4,9 @@ import ZanzibarProofs.GraphIndex.Write
 # The bridge-materializing write model — object-wildcard fragment (T2b, stage W1b)
 
 `SEMANTICS.md` §7.3–7.5; `wildcard-materialization-spec.md` §1.4, §3.4, §5, §7;
-ROADMAP "The staged T2 plan", sub-stage **W1b**; `index_v4/wildcard.py:120-259`.
+ROADMAP "The staged T2 plan", sub-stage **W1b**;
+`index_v4/wildcard.py::WildcardIndex._ensure_bridges` /
+`::WildcardIndex.add_tuple` → `::WildcardIndex._add_tuple_trusted`.
 
 ## Why W1b needs bridges (attack-first finding, machine-checked)
 
@@ -35,13 +37,14 @@ So W1b materializes the §3.4 composition `subject → w_all(S) → concrete →
 `w_all → concrete` out-bridge for every concrete node of a declared object-wildcard
 shape. This file is the faithful write model.
 
-## The model (`wildcard.py:222-259`)
+## The model (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`)
 
 `add_tuple` is **bridge-before-grant**: `_ensure_bridges(subject)` and
 `_ensure_bridges(obj)` first (creating `w_all` lazily and the out-bridge for a
 concrete endpoint of a bridged shape), then the grant edge under cycle-rejection.
 A wildcard tuple whose object participates in its own shape would close a cycle and
-is **rejected** at the grant edge (`wildcard.py:250-256`), so acyclicity is
+is **rejected** at the grant edge (the `'cycle' in str(e)` re-raise in
+`::WildcardIndex._add_tuple_trusted`), so acyclicity is
 preserved. A rejected write rolls the whole transaction back (bridges included).
 
 Per-endpoint `ensureBridges` suffices to keep **bridge-completeness** (every
@@ -56,13 +59,15 @@ namespace Zanzibar
 
 /-- `c` is a concrete node whose object-shape `(type, pred)` is a declared
     object-wildcard shape — the nodes that need a `w_all → c` out-bridge
-    (`wildcard.py:120-134`; bridged-out shapes = the declared object wildcards,
-    §5). Only concretes are bridged. -/
+    (the `bridged_out_shapes` arm of `index_v4/wildcard.py::WildcardIndex._ensure_bridges`;
+    `zanzibar_utils_v1.py::SchemaInfo.bridged_out_shapes` = the declared object
+    wildcards, §5). Only concretes are bridged. -/
 def GraphState.bridgedConcrete (σ : GraphState) (c : NodeKey) : Bool :=
   c.variant == Variant.plain && c.name != STAR && σ.schema.isObjectWildcard c.type c.pred
 
-/-- **Ensure the out-bridge for a concrete endpoint** (`_ensure_bridges`,
-    `wildcard.py:120-134`): if `c` is a concrete node of a bridged shape, create the
+/-- **Ensure the out-bridge for a concrete endpoint**
+    (`index_v4/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_out_shapes` arm):
+    if `c` is a concrete node of a bridged shape, create the
     `w_all(c.type, c.pred)` node (lazily) and add the bridge edge `w_all → c`, under
     the same cycle-rejection guard the core edge-add uses. Idempotence at the
     reachability level is automatic (`NReaches` is membership, not multiplicity);
@@ -75,8 +80,10 @@ def GraphState.ensureBridges (σ : GraphState) (c : NodeKey) : GraphState :=
     else σ.addNode (wAllNode c.type c.pred)
   else σ
 
-/-- **The bridge-materializing single-tuple write** (`add_tuple`,
-    `wildcard.py:222-259`): add both endpoint nodes, ensure the out-bridges of each
+/-- **The bridge-materializing single-tuple write**
+    (`index_v4/wildcard.py::WildcardIndex.add_tuple` →
+    `::WildcardIndex._add_tuple_trusted`): add both endpoint nodes, ensure the
+    out-bridges of each
     concrete endpoint (bridge-before-grant), then add the grant edge
     `subjNode s → objNode o R` under cycle-rejection. A rejected grant rolls back
     the whole write (bridges included), leaving the state unchanged. -/

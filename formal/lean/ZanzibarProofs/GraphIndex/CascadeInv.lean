@@ -22,7 +22,8 @@ materialised) → write member(user:*) → write banned(alice) → cascade with 
 STALE edge survives the diff audit (a non-candidate is never audited) — `negEdgeFree`
 violated. With the edge-holder coverage clause satisfied (`cands = [alice]`,
 `W3dJobCoverage` clause 1 = Python's audit re-enumerating persisted incoming R-node
-concretes, `processor.py:394-441`) the same chain retracts the edge. Hence the full
+concretes, `index_v4/processor.py::DeltaProcessor._reconcile` step (2b) via
+`::DeltaProcessor._incoming_concretes`) the same chain retracts the edge. Hence the full
 invariant is stated over the coverage chain: **`reachedByW3dC_inv`**.
 
 The key observation is that acyclicity is *free* on the W3d chain: every edge added by
@@ -35,7 +36,9 @@ terminality the residue clauses lean on is a separate concern.
 Faithfulness: this mirrors the graph index's structural invariants I1–I3 (node/edge
 well-formedness) and the acyclicity the closure maintains by construction
 (`ReachabilityIndex` refuses a self-reaching edge). The diffing audit's removals are
-`processor.py:359-367` (`_write_derived(add=False)`); the model's `removeEdgePair`.
+the retract arm of `index_v4/processor.py::DeltaProcessor._reconcile_subject`'s
+bare-entity tail (`::DeltaProcessor._write_derived` with `add=False`); the model's
+`removeEdgePair`.
 -/
 
 namespace Zanzibar
@@ -235,7 +238,8 @@ theorem reachedByW3dC_structInv {σ : GraphState} {S : Schema} {T : Store}
 the two `Inv` clauses that read ONLY the residue row, not the edges — so they hold over
 the whole interleaved chain with NO fragment hypotheses, exactly because
 `reconcileResidueKey` writes `neg = negCands.filter (stars.contains ∧ ¬checkFn)` and
-`upos = uposCands.filter (¬stars.contains ∧ checkFn)` (`processor.py:406-441`): every
+`upos = uposCands.filter (¬stars.contains ∧ checkFn)`
+(`index_v4/processor.py::DeltaProcessor._reconcile` steps (2) and (2c)): every
 `neg` member's shape is star-covered by construction, and no member is in both sets
 (one demands coverage, the other its negation). The two EDGE-referencing clauses
 (`negEdgeFree`/`uposEdgeFree`) need the R-node terminality fragment and remain open. -/
@@ -362,8 +366,10 @@ theorem reachedByW3d_residueHygienic {σ : GraphState} {S : Schema} {T : Store}
 
 Every residue row is written by some pass's `reconcileResidueKey` at ITS key
 `(objNode ⟨dt, on⟩ R, R)`, and the chain only runs `W3cJobValid` jobs — so a persisted
-row always names a DECLARED derived key at a concrete object (`processor.py` only
-reconciles keys produced by the schema-driven fan-out). This is what lets the edge
+row always names a DECLARED derived key at a concrete object
+(`index_v4/processor.py::DeltaProcessor._run_cascade` only
+reconciles keys produced by `::DeltaProcessor._map_deltas_to_keys` /
+`::DeltaProcessor._fan_out`, i.e. the schema-driven fan-out). This is what lets the edge
 clauses fetch the key's `Expr` and `ComputedOnly`ness. -/
 
 /-- Every residue row sits at `(objNode ⟨dt, on⟩ R, R)` for a declared derived

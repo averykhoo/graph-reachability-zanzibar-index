@@ -1402,6 +1402,15 @@ with an incoming direct edge). Two symmetric halves:
   DELETE decision (refcount keeps the node alive regardless) but **wrong for the DEMOTE decision**,
   which must not miss a same-object reference. Hence the separate complete-scan `_any_residue_reference`
   used only on the demote path.
+  > **SUPERSEDED 2026-07-26 — and the parenthetical above is exactly the false premise.**
+  > "Safe for the DELETE decision (refcount keeps the node alive regardless)" is **wrong**:
+  > `closure` leaves resolve candidates through the transitive closure, so they record
+  > subjects that hold NO edge on the recording object, and refcount does *not* keep those
+  > alive. That is a reproduced authorization escalation (ZT-P0-1) — see the 2026-07-26 entry
+  > at the end of this file. `_cross_object_recordings_possible` and
+  > `_RESIDUE_LOCAL_LEAF_KINDS` no longer exist; `_keys_referencing` always scans, so it and
+  > `_any_residue_reference` are now identical in extension and survive as separate names only
+  > because one gates deletion and the other demotion.
 - **I6 extended** (`invariants.py`): userset-shaped `neg` subjects (`predicate != '...'`) and **all**
   `upos` subjects must be `implicit == False`. Tamper pin: `tests/test_invariants_derived.py::test_i6_upos_userset_implicit_bites`.
 - **Bulk mirror**: `bulk_backfill.py` mirrors promote-on-record (no demote leg — a from-scratch
@@ -1561,3 +1570,478 @@ scheduling is out-of-model; a lagging replica's state is the fold of an
 admission-validated log prefix, and every prefix is a valid store, so T1 applies
 pointwise per prefix; `apply_logged` replays the exact `rebuild()` sequence, so no
 modeled algorithm changed).
+
+---
+
+## 2026-07-26 — ZT-P0-1: the N3 `_keys_referencing` elision WITHDRAWN (it was unsound)
+
+Found by the zero-trust review (`HANDOFF.md` "Zero-trust review 2026-07-26", item
+ZT-P0-1). **This was a real authorization escalation, not a canonicalization wart:**
+`check` returned ALLOW where the oracle returned DENY. Reproduced, then fixed, then
+pinned by `tests/test_reg14_residue_gc_elision.py`.
+
+**What was wrong.** `DeltaProcessor` used to skip the `ResidueV1` scan in
+`_keys_referencing` on any schema whose every leaf kind fell in a whitelist
+`_RESIDUE_LOCAL_LEAF_KINDS = {'closure', 'derived-computed'}` (the N3 perf item,
+2026-07-14). With the scan elided, `_residue_references` returned False
+unconditionally, so `_gc_subject_node`'s guard stopped protecting nodes.
+
+The whitelist's stated justification was that these kinds' recordings are "always
+LOCAL … not cross-object". **That is the wrong property.** What GC actually needs is:
+
+> (P) the recorded subject id's node holds a DIRECT-EDGE-justified position on the
+> recording object, so that object's `reference_count` accounting keeps the node alive
+> independently of the recording.
+
+`closure` violates (P): `_leaf_concretes(kind='closure')` resolves candidates through
+`_incoming_concretes` → `idx.lookup_reverse` — the **full transitive closure**, not the
+raw stored tuples the old comment claimed. So a userset node reachable only
+transitively (`group:g1#member → group:g2#member → doc:y#a.0`) is recorded on `doc:y`
+while holding no edge there. `derived-computed` violates (P) too, since the 2026-07-17
+Fix A lift added `_ttu_target_upos_nodes` to its branch (edge-free lifted memberships);
+`reference_count` happens to still protect those nodes, but only by accident of the
+current leaf set, so it cannot carry the safety argument.
+
+**The failure sequence.** Removing the chain edge drops the userset node to
+`reference_count == 0`. Both affected keys take the cheap path; the first un-records and
+DELETES the node (the elision reports nothing referencing it); the second then finds
+`s_node is None` and skipped its whole update block, so the stale id was never pruned.
+SQLite then recycles the freed rowid onto an unrelated principal and the surviving
+`upos` entry vouches for it at an object it was never granted on.
+
+**Fix: the elision is removed entirely** — `_keys_referencing` now always scans. Option
+(b), narrowing the whitelist, was rejected because the safe residual set is **empty**
+(every remaining kind records from-chain (X4a) or lifted (X4b) usersets that are
+edge-free by construction), and because (P) is a property of *candidate-resolution*
+code, which widened twice without the whitelist noticing. The rationale comment is
+replaced by an `N3 WITHDRAWN … DO NOT RE-INTRODUCE` block stating (P) formally. If this
+scan must ever get cheaper, the answer is a subject-id → residue **index** maintained in
+`_store_residue`, never a leaf-kind whitelist.
+
+**Cost.** Negligible, and much less than it looks: `_any_residue_reference` already ran
+the identical full scan with per-row JSON decode on every node-release path on every
+schema. Measured (interleaved A/B, min-of-3): **+4.3%** on a synthetic all-`closure`
+worst case, **below noise** on the real suite.
+
+**Second barrier (ZT-P0-2).** The comment claiming `_reconcile_subject`'s `sp != '...'`
+branch is "UNREACHABLE from the cascade today" was **wrong** — closure leaves do store
+untainted-userset subjects, so that branch is reached in exactly this sequence. It is
+corrected, and the `s_node is None` early-skip now **escalates to the full-object
+reconcile** instead of no-opping: the fix above prevents the processor from deleting a
+recorded node, but `ReachabilityIndex.remove_node` deletes its subject node
+unconditionally and is not owned by the processor, so a missing node remains reachable
+from outside. Escalation drops dead ids by construction (the same policy
+`_map_deltas_to_keys` already applies when the node is missing at map time).
+
+**`bulk_backfill.py`: no mirror needed.** It has no GC, is add-only from empty, and its
+`_Residue.neg/upos` hold `NodeKey` tuples rather than int ids — so the dangling-id /
+rowid-recycle class cannot arise there at all. `tests/test_bulk_build.py` (the
+byte-identity differential gate) passes unchanged.
+
+**Why no corpus caught it.** The trigger needs all three at once: an all-whitelist
+schema, a *transitive* userset chain into a tainted relation's closure leaf on **≥2
+objects**, and the chain edge removed in one op so both objects flip in one cascade
+round. No corpus or generator built that conjunction; two earlier fuzz sweeps missed it
+for specific structural reasons (no userset chain in one, a wildcard bridge keeping
+`reference_count > 0` in the other).
+
+**Formal scope: no Lean change owed, and the divergence NARROWED.** There is no Lean
+counterpart to `_keys_referencing`, node GC, or residue-reference scanning (grep: zero
+hits), so no modeled definition described the elided code. The Lean model never had an
+elision, so removing it moves Python *toward* the model. See `formal/CORRESPONDENCE.md`
+§8.1. The escalation branch lands inside the already-recorded unmodeled
+`_reconcile_subject` cheap-path gap (`formal/ARCHITECTURE.md`), not a new one.
+
+**Gate.** `pytest tests/` 610 passed; `HYPOTHESIS_PROFILE=deep tests/test_hypothesis.py`
+20 passed; a 75-seed post-fix sweep (3 boolean schemas × 25 seeds × 45 random
+add/remove ops, checking dangling ids + I1–I6/I10 + full-grid `check` == oracle after
+every op) clean — and confirmed to be a real net: restoring the elision makes the same
+sweep fail at `ttu-mix seed=0 step=14`.
+
+---
+
+## 2026-07-26 — ZT-P1: security + operational-envelope hardening (zero-trust review)
+
+Companion to the ZT-P0-1 entry above. All items found by the zero-trust review recorded
+in `HANDOFF.md` "Zero-trust review 2026-07-26"; every one was confirmed by execution
+before being fixed. **Scope decisions on the last three were made by the repo owner**
+(caps vs no caps, auto-configure vs warn, raise vs log) and are recorded as chosen.
+
+**ZT-P1-1 — identifier validation accepted a trailing newline (and 257 chars).**
+`_IDENTIFIER_RE` was anchored `^...$`; Python's `$` also matches immediately BEFORE a
+trailing newline, so `alice\n` validated end-to-end through `SetEngine.add_tuple`, and
+because the newline is not consumed by the `{1,256}` repeat, so did 257-character names
+ending in one — a control character reaching persisted identity strings, and an
+off-by-one against the bound documented in the module header. Now `\Z` + `re.fullmatch`.
+Pin: `tests/test_reg15_security_hardening.py`.
+*En route:* the review's claim that `*` and `...` are "outside the charset" is **wrong** —
+`.` IS in the charset, so `...` is charset-valid. Re-probed: relations named `...` or
+containing `.` are separately rejected (the `.` reservation for compiled leaf
+predicates), and a mere object/subject NAME of `...` cannot collide with a
+predicate-position sentinel. No principal confusion — but for a stronger reason than the
+one originally given.
+
+**ZT-P1-2 — 16 load-bearing safety checks vanished under `python -O`.**
+`index_v4/core.py` (plus one in `processor.py`) expressed store invariants as bare
+`assert`s. Three were the only guard on their path: the batch/bridge expansion **cycle
+detector** (bypassed ⇒ unbounded path counts ⇒ permanent phantom reachability ⇒ **stale
+ALLOW**), the two **refcount-underflow** guards (⇒ GC stops, silent divergence from the
+set engine), and the `remove_node` **dangling-edge post-condition** (on a table with no
+enforced FKs, where SQLite rowid reuse can later repoint the row at an unrelated
+principal). All converted to `raise InvariantViolation(...)`, following the existing
+`blind-audit C3` precedent that had already converted exactly one such assert and not
+generalized it. `InvariantViolation` subclasses `AssertionError`, so this is
+backward-compatible with callers/tests catching `AssertionError` — no test was weakened.
+**The durable pin is structural**: an AST test asserts these two modules contain NO
+`assert` statement at all, so a future invariant written as an assert fails immediately;
+plus `-O` subprocess tests, and a control proving `-O` really strips asserts (otherwise a
+green result could be a false negative).
+
+**ZT-P1-3 — the I1–I13 invariant layer was never reachable from production.**
+`install_paranoia` had exactly two callers, both tests; `ConnectedStore` never called it
+and exposed no flag, so every runtime detector for the corruption classes in this review
+was dark in production — **including the I6 dead-node-id check that catches ZT-P0-1**.
+Now `ConnectedStore(paranoia=...)` + `ZANZIBAR_PARANOIA`, with three tiers: `off`,
+`residue` (the I6 residue-hygiene family; O(residue rows), pre-commit only) and `full`
+(`check_invariants` + the delta-scoped BFS verifier, what tests get). Clause code is
+SHARED with the full checker, not duplicated, so the tiers cannot drift.
+**Default is `off`, on measured evidence** — interleaved A/B, min-of-3: `residue` costs
+**+4.3%** at 162 writes and **+5.7%** at 478, i.e. it grows with store size (the scan is
+O(objects carrying derived state)); `full` is +124%/+303%. Shipping a silent ~5%-and-
+rising write regression was judged worse than an accurate docstring, which now carries
+these numbers and recommends operators set `ZANZIBAR_PARANOIA=residue`. **I5 was
+deliberately kept OUT of the cheap tier** — as written it is a full `EdgeV4` scan, which
+would have quietly made "cheap" O(store); that boundary is itself pinned by a test.
+
+**ZT-P1-7 — a caller `begin_nested()` silently disabled BOTH locks.** `_lock_store` /
+`_lock_source` memoized on `session.get_transaction()`, which returns the ROOT
+transaction even inside a savepoint. Take the lock in a savepoint, roll it back
+(PostgreSQL RELEASES locks acquired inside it), and the next call matched the memo and
+took no lock. The `Session` is caller-supplied and speculative-write-in-a-savepoint is an
+ordinary pattern. Memo keys are now the `(root, nested)` pair. The P12a short-circuit
+within one transaction is preserved (pinned).
+
+**ZT-P1-4 — both documented locks were silent no-ops on SQLite. DECISION: auto-configure
++ fail loud.** `with_for_update()` compiles to a plain SELECT on pysqlite (no dialect
+branch existed anywhere), and pysqlite's default empty-string `isolation_level` runs
+SELECTs in autocommit — so a write's check-then-act admission was not atomic, and two
+default-configured writers could both pass admission (duplicate / remove-existence /
+cycle parity) against a state their combined result invalidates. The working recipe
+existed ONLY in the test harness. Now: off SQLite, `SELECT ... FOR UPDATE` unchanged; on
+SQLite, a **no-op UPDATE of the same lock row**, which takes the RESERVED write lock for
+the rest of the transaction and promotes the connection into a real transaction
+(verified: a second connection's write blocks, and it locks even when it matches zero
+rows). `SQLITE_BUSY` is now handled at all (there was no retry anywhere): the
+connection's `busy_timeout` is floored to 10 s — SQLite's busy handler IS the correct
+backoff — plus a bounded statement-level retry for the residual WAL write-after-read
+case.
+**Now raises `WriteLockUnsafe` at construction** (SQLite binds only, by empirical probe
+rather than config guesswork) for: SQLAlchemy `AUTOCOMMIT`; pysqlite `isolation_level=None`
+with no `BEGIN` listener (half the recipe); sqlite3 `autocommit=True`. Explicitly NOT
+raising: pysqlite's default (the whole existing suite) and the full recipe.
+**Caller-visible:** opening a ConnectedStore on SQLite now performs one write, so a
+read-only SQLite file can no longer be opened.
+
+**ZT-P1-5 — watermark advances could skip log rows permanently, and `at_least` then
+certified the stale answer. DECISION: contiguity-check and raise.** `advance_index` did
+`cursor.applied_log_id = rows[-1].id` and `TupleSource.add/remove` did
+`max(watermark, token)`, both assuming the preceding catch-up was complete. Under a
+pinned read snapshot it is not — **MySQL/InnoDB defaults to REPEATABLE READ** — so a
+concurrent commit stays invisible, the catch-up tails nothing, the watermark jumps past
+those rows, and they are never applied again. `check` then returns ALLOW forever
+*including under `at_least`*, because `_fresh_enough` compares against the bogus
+watermark. (`source.py` already used the correct pattern elsewhere: "Assignment, not
+max".) Both advances are now contiguity-checked, raising the new retryable
+`WatermarkGap` (distinct from `StaleRead` — nothing is corrupt; a fresh snapshot fixes
+it). `log_gap` is free in the contiguous case (an interval of N ids with N applied has no
+room for a skipped one) and otherwise uses a LOCKING read, because the row it hunts is
+exactly the one a pinned snapshot hides. `assert_read_isolation` at construction rejects
+`REPEATABLE READ` / `READ UNCOMMITTED`; skipped on SQLite (pysqlite reports
+`SERIALIZABLE` regardless, and SQLite fails a stale-snapshot write loudly rather than
+hiding rows). **Caller-visible: MySQL/InnoDB at its default isolation level now refuses
+to open** — pass `isolation_level="READ COMMITTED"`.
+
+**ZT-P1-6 — no resource bounds. DECISION: fix the crash only, no admission caps.**
+Nothing that is accepted today became rejected. The fixed half: `SetEngine.check`'s
+`sat`/`member_via_usersets` recursion was depth-linear, so a ~1,500-long `group#member`
+chain — accepted without complaint, because the write path is iterative — made every
+subsequent read raise `RecursionError` permanently, `lookup` worst of all (it sweeps
+every declared `(type, relation)`). `check`/`expand` are now generator/trampoline-driven
+on an explicit heap stack, so evaluation is depth-independent. **The Tarjan-lowlink
+memoization and provisional-False cycle guard are preserved exactly** — verified by
+differential, not by inspection: 68,400 `check` comparisons against the old code lifted
+verbatim (4 schemas × both `SetOps` × 25 mutation states), plus a cycle-focused pass over
+object-level `parent` rings where the guard genuinely fires (10/24 states) — **0
+divergences vs the old code and 0 vs the oracle**. Not slower on real workloads
+(explicit short-circuit loops offset the driver); a synthetic chain-heavy microbenchmark
+shows `check` +~55%. Pins in `tests/test_zt_p1_hardening.py`, including a test that
+crushes `sys.setrecursionlimit(60)` and shows a control recursion dying while a 300-link
+chain still evaluates.
+**Left unbounded by decision:** the N² closure amplification (240 tuples → 14,640 closure
+rows in 5.1 s), which runs inside `advance_index` holding both locks, and outbox
+retention (the outbox is still append-only with no DELETE anywhere).
+
+**Formal scope: no Lean change owed for any ZT-P1 item.** ZT-P1-1/-2/-7 are
+admission/guard hardening below the model's abstraction. ZT-P1-6 is below it too:
+`formal/CORRESPONDENCE.md` §2 already records that `SetEngineModel.check` is NOT an
+algorithm twin of `SetEngine.check` (the model is a pure fuel recursion; the shipped
+evaluator is a memoized DFS), and the row that IS a twin claim — the `expand` family —
+keeps the same modeled algorithm, only relocating its frames from the C stack to the
+heap. ZT-P1-4/-5 are the concurrency/persistence layer, explicitly out-of-model
+(`CORRESPONDENCE.md` §7, multi-instance scheduling).
+
+**Gate at time of writing:** `pytest tests/` **685 passed**; `verify.sh lean` PASSED
+(455/455 audits, floor 455, 0 holes); conformance 4×89 = 356 across `conf-tile:I/4`.
+
+---
+
+## 2026-07-26 — ZT-P5: stale dismissals re-adjudicated by PROOF or REPRO (+ one NEW divergence)
+
+Re-adjudication of `HANDOFF.md` "Zero-trust review 2026-07-26" §P5 under the
+owner's "ignore the ignore" standing instruction: every past dismissal is an
+unproven assumption until re-tested, and a constructed counterexample or a
+structural derivation beats prose. INVESTIGATION ONLY — no product code was
+changed here; the new pins live in `tests/test_zt_p5_readjudication.py`.
+
+### ★ NEW DIVERGENCE (accept/reject parity) — `folder:* parent folder:*`
+
+**Found while disproving reg11.** On **reg11's own schema**, with **one write**:
+
+```
+model
+  schema 1.1
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define viewer: [user] or viewer from parent
+```
+`object_wildcard_shapes = {('folder','parent')}`; write
+`folder:*  parent  folder:*` (star SUBJECT **and** star OBJECT).
+
+* **graph index: ACCEPTED.** `RuleSet.apply` routes it to
+  `folder:*#viewer @ folder:*#viewer`, which is NOT a self-loop in the graph
+  because the wildcard node is position-split (spec §1.2/§1.3): the edge is
+  `w_any(folder,viewer) -> w_all(folder,viewer)` between two distinct `node_v4`
+  rows (`wildcard='any'` / `'all'`). The cycle check does not fire.
+* **set engine: REJECTED** on both `SetOps` ("would create a cycle in the userset
+  membership topology"). `ConnectedStore` is therefore NOT exposed — `TupleSource`
+  delegates admission to the `SetEngine`. The exposure is `WildcardIndex` used
+  directly (a public API, and the validation matrix's `GraphBackend`).
+* **DETONATION, verified.** After the graph accepts it, `(folder,viewer)` is in
+  BOTH `bridged_in_shapes` and `bridged_out_shapes`, so every present-or-future
+  concrete `folder:x#viewer` carries the in-bridge **and** the out-bridge and the
+  `w_any -> w_all` edge closes a data cycle. An innocent later
+  `user:v viewer folder:q` is then **permanently graph-REJECTED** while set engine
+  and oracle accept it. I1–I13 stay **GREEN** on the state, so no invariant
+  catches it.
+* **Why the 2026-07-17 gate misses it.** `_reject_doubly_bridged_shapes` uses the
+  NARROW left factor `wildcard_userset_restriction_shapes(ast)` (literal `T:*#p`
+  restrictions) rather than `bridged_in_shapes`. That narrowing (the "Precision of
+  the criterion" paragraph of the 2026-07-17 F1/F2 entry) was justified by:
+  *"star-tupleset through-shapes … are NOT writable usersets and cannot mint a
+  persistent `w_any` node — reg11's dangerous writes self-cycle and are rejected on
+  both backends, so nothing detonates."* **That sentence is false.** Here the
+  through-shape `(folder,viewer)` (derived from `[folder:*]` on the tupleset
+  `parent`) is exactly what mints the persistent `w_any -> w_all` path, and it does
+  detonate. Under the COARSE criterion (`bridged_in ∩ bridged_out ≠ ∅`) this schema
+  IS doubly bridged and would have been rejected.
+* **Pins:** `tests/test_zt_p5_readjudication.py::test_zt_p5_star_subject_star_object_tupleset_write_parity`
+  (**strict xfail** — it pins a genuine divergence; flip it when fixed, never relax
+  it), `…_current_behaviour_documented` (pins today's asymmetry so a silent change
+  in either direction is caught) and `…_connectedstore_is_not_exposed_…`.
+* **Preconditions, delimited empirically** (3 schemas × 2 OWC sets × 3 write
+  shapes): the divergence needs (i) the star-SUBJECT **and** star-OBJECT tupleset
+  write — `folder:x parent folder:*` (reg11's own case) and `folder:* parent
+  folder:x` (reg9's) are both rejected by BOTH backends; (ii) a TTU whose head and
+  target are the SAME relation (with `admin from parent` the routed edge is
+  `w_any(folder,admin) -> w_all(folder,viewer)`, different shapes, no latent cycle
+  — all backends accept); (iii) any TTU at all (with no TTU all backends accept).
+* **Why the gate missed it — the exact blind spot.** The star-bridge fuzzer DOES
+  draw this tuple: `_star_bridge_pool` emits `('...', T, '*', 'parent', T, '*')`
+  whenever `(T,'parent')` is in the drawn object-wildcard set. What it cannot draw
+  is a **self-referential TTU**: `_star_bridge_schema` is always
+  `B: [user] or A from parent` with `A != B` drawn distinct, so precondition (ii)
+  never holds and the write is unanimously ACCEPTED there (verified: on the
+  fuzzer's own schema with `(T,'parent')` object-wildcarded, all three backends
+  accept). Conversely the self-referential TTU DOES appear — it is reg11's schema
+  and `owc_star_ttu.fga` — but reg11 is a hand-written pin that only writes
+  `folder:a parent folder:*` (concrete subject), and `OWC_STAR_TTU_SHAPES` omits
+  `(folder,parent)` so `_owc_star_ttu_pool` never emits a star-OBJECT `parent`
+  tuple at all. The two halves of the precondition are each covered; their
+  CONJUNCTION is generated by nothing in `tests/` or `formal/conformance/`.
+  **Cheapest generator fix:** let `star_bridge_configs` sometimes draw `A == B`
+  (a self-referential TTU).
+* **NOT FIXED here** (investigation scope). A fix is a compile-gate or cycle-check
+  change and needs the full gate + its own review. Candidate directions: restore
+  the coarse `bridged_in ∩ bridged_out` criterion (it over-rejects the legal reg11
+  class, so it needs a carve-out that is not the current one), or make the graph's
+  cycle check see the `w_any -> w_all` edge as the latent cycle it is.
+
+### Target 1 — reg11's "the multi-hop out-bridge generalization is unreachable": **DISPROVED**
+
+reg11 argued: *"Any derived edge INTO `w_all(T,p)` is minted by a
+`T:x <tupleset> T:*` write whose own subject is a same-shape concrete `T:x#p`,
+which the out-bridge immediately reaches back — so such a write always self-cycles
+at admission and can never persist for a later write to build a longer loop on."*
+
+That is true only of reg11's own schema, where the TTU reads the SAME relation it
+defines (`viewer: … or viewer from parent`). With a TTU whose TARGET differs from
+its HEAD (`viewer: [user] or admin from parent` — the reg10 shape), the edge into
+`w_all(folder,viewer)` is minted from `folder:a#admin`, a **different** shape that
+the out-bridge does not reach back. Verified: `folder:a parent folder:*` is
+**ACCEPTED and PERSISTS** on both backends; a later `folder:a#viewer admin
+folder:a` closes the genuine **multi-hop** loop
+`folder:a#admin -> w_all(folder,viewer) ->[out-bridge] folder:a#viewer ->
+folder:a#admin` and is rejected by both. Parity holds in this instance — what is
+disproved is the reachability argument, which is what licensed leaving the class
+unfuzzed. Pinned: `…::test_zt_p5_reg11_multihop_out_bridge_IS_reachable`.
+
+**Bounded negative result** (evidence, NOT a proof — stated bounds):
+* Family A — one object type `folder`; relations `{parent:[folder,folder:*], a, b}`;
+  restriction subsets of `{user, folder#a, folder#b, folder:*#a, folder:*#b}` of
+  size 1–2; optional `{a|b} from parent` arm; `object_wildcard_shapes` any
+  non-empty subset of `{(folder,parent),(folder,a),(folder,b)}`; write sequences of
+  2–4 tuples from a 33-tuple pool always containing a `folder:*`-OBJECT write.
+* Family B — two object types (`folder`, `doc`) with cross-type tuplesets and
+  `remove` ops; write sequences of 2–4.
+* ≈1,720 admissible randomized trials in total: family A ≈265 (seeds 1, 7) plus a
+  344-trial family-A sweep with the star-subject/star-object class excluded from
+  the pool; family B ≈1,112 (seeds 3–6, 8). **Every** admission divergence found
+  was the single class filed above (7 hits); **zero** answer-level divergences were
+  found anywhere, and the 344-trial exclusion sweep found **zero** divergences of
+  any kind.
+* A deterministic ≈72-state slice is pinned as
+  `…::test_zt_p5_bounded_search_object_wildcard_out_bridge_no_further_divergence`
+  so the negative result is executable rather than asserted.
+
+### Target 2 — the from-chain TARGET note's *reachability* half (2026-07-13 X4 §1): **DISPROVED**
+
+The note said: *"if a from-chain TARGET were an untainted subject-wildcard-bridged
+shape with grants already sitting in its `w_any` … No currently-compilable schema
+class reaches this shape."* It is reachable. **Structural route:**
+`_from_chain_keys` fires for leaf kind `derived-ttu`, which `_build_plan_tree`
+produces when `_is_pure` is false — i.e. when **some** parent type of the tupleset
+has a TAINTED `target_rel`. But `_from_chain_keys` enumerates **all** stored
+parents, so a parent of a DIFFERENT type whose `target_rel` is UNTAINTED yields
+exactly the excluded shape. (A second route: `derived-tupleset-ttu`, where the
+TUPLESET is tainted, leaves the target unconstrained outright.)
+
+Minimal repro (`tests/…::test_zt_p5_from_chain_target_shape_IS_reachable`):
+`doc.fparent: [folder, team]`, `doc.viewer: member from fparent`, with
+`team.member` tainted (`[user] but not tblk`) and `folder.member` UNTAINTED and
+bridged-in via `folder.shared: [user, folder:*#member]`. Writing the grant
+`folder:*#member shared folder:g` FIRST puts it in the `w_any` before the
+from-chain intern; then `folder:f1 fparent doc:d1` makes reconcile step 2a intern
+`folder:f1#member` FRESH mid-cascade and `_ensure_bridges` mints
+`folder:f1#member -> w_any(folder,member)`, whose closure reaches the pre-existing
+grant `folder:g#shared` — the note's "new bridge-fed truth".
+
+**The note's OTHER half is not contradicted.** No misbehaviour was observed: 400
+randomized trials over a family varying the grant relation's operators
+(`but not` / `and` / `or` / nested), the TTU's operators and the write order —
+88 of which reached a FRESH untainted+bridged from-chain intern — produced 0
+admission divergences, 0 answer divergences vs the oracle, 0 invariant violations
+and 0 `audit_fixpoint` failures (re-run clean on 3 seeds). A plausible structural
+reason: the grant that puts edges in the `w_any` is itself a wildcard-userset
+grant, which puts the shape in the granting relation's residue `stars`, so a later
+concrete of that shape is already covered and needs no new recording. **That is a
+hypothesis, not a proof** — it is not established for intersection-rooted grant
+relations, and no bounded search was run over `>2` strata.
+
+### Target 3 — the object-wildcard corpus at STATE level: Python side CLEAN, **Lean side STILL UNVERIFIED**
+
+`FINAL_REVIEW.md` §3 / `ARCHITECTURE.md` §6 infer "the fragment exclusions are
+proof-scope, not observed divergence" from a 2026-07-12 CHECK-level probe — the
+same inference that failed at STATE level on 2026-07-17. The Lean half cannot be
+settled from here (`formal/` was out of scope for this session). What was
+established Python-side:
+
+* **Live == rebuild.** Exhaustively to K=2 over the formal `object_wildcard`
+  corpus's 6-tuple space and an object-wildcard TTU corpus's 7-tuple space, the
+  LIVE `ConnectedStore` state equals `build_index(bulk=False)` and
+  `build_index(bulk=True)` on all four canonical projections (nodes / edges /
+  residues / outbox, natural keys), with I1–I13 green on all three states.
+  Exhaustive K=3 was also run clean in-session (42 + 64 stores).
+* **Order independence.** The live state is a function of the tuple SET, not the
+  write order (the property the 2026-07-17 stale-fanout bug broke) — pinned over
+  the K=3 stores of the TTU corpus.
+* **The RICH corpus.** 160 randomized trials (4 seeds) over
+  `tests/fga_schemas/owc_star_ttu.fga` (object wildcards + star tupleset parents +
+  group usersets + a boolean `restricted`), stores of 3–10 tuples, each checked
+  for live-vs-rebuild, live-vs-bulk, order independence over 3 shuffles, and
+  add-then-remove state restoration: **0 problems**.
+
+**What would settle the remaining half:** a `formal/` state-level conformance run
+(the exact edge+residue equality extractor used by `test_conformance_state.py`)
+over the `object_wildcard` corpus. It is currently EXCLUDED from `GRAPH_FRAGMENT`
+for a stated proof-scope reason (`BareStarStore` requires concrete stored
+objects), so the state extractor has never been pointed at it. Until that runs,
+the §3/§6 sentence should be read as *"no Python-side state divergence observed
+(bounded)"*, not as *"no state divergence"*.
+
+### Target 4 — the `group_userset` enum exclusion: **CONFIRMED CORRECT** (the backends agree)
+
+The review flagged the exclusion as an unadjudicated ADMISSION-DOMAIN difference —
+the reg9/reg10/reg13 bug class. It is not one. Enumerating **all 299 stores** of
+the shape's 12-tuple declared space at the enum module's own K=3 and feeding each
+store to both backends:
+
+* set engine rejects at least one write on **132** stores; graph rejects on
+  **132**; **per-write admission disagreements: 0**;
+* over **all permutations** of every store: **0** mismatches and **0**
+  order-dependent stores (a store admissible in some order but not another);
+* on the 167 fully-admitted stores, graph == both `SetOps` == oracle over a
+  16-query grid: **0** answer divergences.
+
+So the rejections are a property of the SHAPE (self-referential nested groups are
+cyclic, and this repo's write/compile-time acyclicity strictness is the standing
+documented deviation), not a backend disagreement. Pinned exhaustively as
+`…::test_zt_p5_group_userset_admission_domains_are_identical` (the 132/299 figure
+is asserted, so it cannot drift silently).
+
+### Target 5 — orphaned `formal/history/` findings: current Python-side truth
+
+* **`w3cJobValid_enumJob2D` star-freeness hole** ("a WILDCARD restriction on a
+  derived Direct arm puts `user:*` in `storedDirectSubjects`"). Python **admits**
+  the shape (`viewer: [user, user:*] but not blocked`); it compiles to two closure
+  leaves and is exhaustively correct at K=2 over its 10-tuple space (graph == both
+  `SetOps` == oracle; 176 stores to K=3 in-session). **Proof-side only** — no
+  Python behaviour change implied. Pinned.
+* **`PDerivedUserset` never modelled in Lean.** Python: a Direct restriction over a
+  DERIVED relation compiles to a `derived-userset` leaf and is exhaustively correct
+  at K=2 (also inside an exclusion — the 2026-07-17 extension); its WILDCARD form
+  `[group:*#member]` remains a compile-time scope rejection on both backends. The
+  gap is Lean-side modelling only. Pinned.
+* **Phase-ledger row 0.5 — "verify compiler undefined-reference behavior (A3)"
+  (`todo` since Phase 0): ANSWERED.** `compile_ruleset` performs **no**
+  undefined-reference validation whatsoever. All seven forms tested compile
+  **silently**: undefined computed target, undefined TTU target, undefined tupleset
+  relation, undefined restriction type, undefined userset relation, undefined
+  boolean arm, and a self-referential `define viewer: viewer`. All three backends
+  then build, and every undefined reference reads as the **empty** relation —
+  **fail-CLOSED and unanimous** (graph == both `SetOps` == oracle). So this is a
+  well-formedness/diagnostics gap, not a soundness one. Pinned (7 parametrised
+  cases) so a future "reject undefined references" change is a deliberate, visible
+  decision rather than a silent behaviour flip.
+
+### Also re-derived while working (not separately filed)
+
+* The compiler PROPAGATES object-wildcard shapes through TTU heads: declaring only
+  `(folder,parent)` puts `(folder,viewer)` in `bridged_out_shapes`. Both the new
+  divergence and the reg11 multi-hop repro depend on this, and neither declares
+  `(folder,viewer)`.
+* `ConnectedStore`'s admission is the **set engine's**, not the graph's
+  (`TupleSource.add` -> `SetEngine.add_tuple`). Any accept/reject divergence in the
+  graph-accepts direction is therefore invisible to the composed system and visible
+  only to direct `WildcardIndex` users and to the validation matrix.
+
+### Gate at time of writing
+
+`pytest tests/` **703 passed, 1 xfailed** in 8m16s -- the 685 baseline plus this
+session's 18 new passes and 1 strict xfail. One further pin
+(`test_zt_p5_starstar_divergence_generator_blind_spot`) landed after that run;
+the module alone is **19 passed, 1 xfailed**, so the expected full-suite figure is
+**704 passed, 1 xfailed**. `formal/` was NOT touched and `verify.sh` was NOT run by
+this session (other agents held it) -- the new module lives entirely under
+`tests/` and imports nothing from `formal/`.

@@ -52,7 +52,7 @@ Modes (Phase 6 — graph-state conformance):
       stars, neg, upos]` with `stars` a sorted list of `[type,pred]` shapes and
       `neg`/`upos` sorted lists of `[type,name,pred]` subjects. Rows are
       emitted RAW, including all-empty rows the model stores where Python
-      deletes them (`_store_residue`, `processor.py` — "empty residues are
+      deletes them (`index_v4/processor.py::DeltaProcessor._store_residue` — "empty residues are
       deleted, never stored"); the Python-side comparison applies that
       documented drop-empty projection, so the divergence stays observable
       here.
@@ -195,7 +195,8 @@ def printAnswers (answers : List Bool) : IO UInt32 := do
 /-! ## Graph-state dump (mode `"graph-state"`) — driver-level, like the modes
 above; the projections it applies are enumerated in the file header. -/
 
-/-- The Python `NodeV4.wildcard` encoding of a node variant (`models.py:46`). -/
+/-- The Python `NodeV4.wildcard` encoding of a node variant
+    (the `wildcard` column of `index_v4/models.py::NodeV4`). -/
 def variantStr : Variant → String
   | Variant.plain => ""
   | Variant.wAny => "any"

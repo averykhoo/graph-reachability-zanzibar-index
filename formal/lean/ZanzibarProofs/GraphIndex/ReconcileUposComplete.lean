@@ -104,10 +104,11 @@ theorem reconcileUposKey_coreEq {σ' σ : GraphState} (h : CoreEq σ' σ)
 /-! ## The W3b write-closure -/
 
 /-- **`ReachedByW3b σ S T`** — an admitted rule-routed base plus interleaved
-    bare-edge reconcile passes (`reconcile`, exactly W3a's leg) and userset-`upos`
+    bare-edge reconcile passes (`_reconcile`, exactly W3a's leg) and userset-`upos`
     reconcile passes (`reconcileU`). The `reconcileU` side conditions are faithful to
-    the processor's userset branch (`reconcile_subject`, `processor.py:345-357`;
-    `reconcile` step 2c, `:431-441`): candidates are **userset-shaped** concrete
+    the processor's userset branch
+    (`index_v4/processor.py::DeltaProcessor._reconcile_subject`;
+    `::DeltaProcessor._reconcile` step (2c)): candidates are **userset-shaped** concrete
     subjects (`hcands : predicate ≠ BARE` — the branch guard `sp != '...'`;
     `hcStar : name ≠ STAR` — candidates are concrete nodes, and wildcard usersets
     over derived relations are rejected at compile, decision-15), the key is a
@@ -355,9 +356,11 @@ theorem reachedByW3b_upos_sound {S : Schema} {T : Store} {σ : GraphState}
 
 /-! ## The W3b-complete state — a coverage-complete batch of edge + upos jobs
 
-Faithful to `build_index`/`reconcile` (`processor.py:382-446`): the processor
+Faithful to `connectedstore/build.py::build_index` /
+`index_v4/processor.py::DeltaProcessor._reconcile` (bootstrap sweep:
+`::DeltaProcessor.backfill`): the processor
 reconciles every derived key over every object, settling **bare** candidates as
-edges (step 4) and **userset** candidates as `upos` entries (step 2c) from the same
+edges (step (4)) and **userset** candidates as `upos` entries (step (2c)) from the same
 audit enumeration (incoming concretes ∪ leaf concretes ∪ old `upos` members). The
 completeness clauses are properties of the *enumeration* — every `sem`-true subject
 of the matching kind is fed to some job — not of the edge/`upos` conclusion. -/
@@ -514,7 +517,8 @@ theorem reconcileJobsB_upos_persist {S : Schema} {T : Store}
     batch of W3b jobs: every `sem`-true **bare** star-free subject at a derived key
     is enumerated by some *edge* job, and every `sem`-true **userset** star-free
     subject by some *upos* job. Faithful to the processor's audit enumeration
-    (`processor.py:413-441`); the coverage clauses are enumeration properties. -/
+    (`index_v4/processor.py::DeltaProcessor._reconcile` steps (2b)/(2c)); the coverage
+    clauses are enumeration properties. -/
 def W3bComplete (S : Schema) (T : Store) (σ : GraphState) : Prop :=
   ∃ (σ0 : GraphState) (jobs : List W3bJob),
     ReachedByRulesAdmitted σ0 S T ∧ σ = reconcileJobsB T σ0 jobs ∧

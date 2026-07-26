@@ -7,7 +7,22 @@ Python implementations to the proven models.
 
 ## Orientation (which doc for what)
 
-The effort is **complete**. The four durable docs point:
+The staged proof arc W1→W4 is **complete and green** — but "complete" here means *the
+planned proof stages all landed*, not *the assurance question is closed*. Two things a
+reader should know before trusting the word:
+
+* **The final graph theorems are VACUOUS on the canonical boolean idiom**
+  (`can_view: [user] but not blocked`). Not narrower coverage — no theorem there at all.
+  `FullScope.lean:564` machine-checks that such a store fails
+  `GraphAdmission.storeValid`. Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0
+  before quoting anything graph-side.
+* **A genuine model-vs-Python infidelity was found in the audited chain AFTER this
+  directory was first described as "complete"** (2026-07-20b: Lean's `affectedKeys`
+  lacked Python's LeafFamily own-key branch, yielding a modeled *drained* state with
+  `check = true` and `sem = false`; fixed 2026-07-20c). Correspondence review is a
+  sampling process, not a proof. `FINAL_REVIEW.md` §3 item 1 has the full account.
+
+The four durable docs point:
 
 1. **`ARCHITECTURE.md` — the topical map.** The durable, timeline-free architecture
    of the formal development: the trust root, the two backend models, the theorem
@@ -49,8 +64,11 @@ formal/
 clause against the tree; **see `ARCHITECTURE.md`** for the topical breakdown. Short
 form: the set-engine and graph-index **algorithms**, as modeled in Lean at the level
 of `CORRESPONDENCE.md`, are proven to compute the stratified perfect model and hence
-to be equivalent (machine-checked, axiom-audited; set engine at full scope, graph
-index at the documented `GraphAdmission ∧ W4Fragment` scope). The **Python
+to be equivalent (machine-checked, axiom-audited; set engine at **full scope** — the
+equality is literally unconditional, all three hypotheses of `setEngine_correct` are
+underscored and unused — graph index at the documented
+`GraphAdmission ∧ W4Fragment` scope, **which is vacuous on `Direct`-arm derived
+stores, `FINAL_REVIEW.md` §3.0**). The **Python
 implementations** are pinned to those models by the correspondence map, five-corner
 differential conformance (including the Lean operational graph model vs the real
 graph index), **state-level equality under six documented projections**,
@@ -59,35 +77,51 @@ graph index), **state-level equality under six documented projections**,
 `sem` × oracle on the final store, plus driven == a fresh build at state level;
 both Python remove paths pinned, and the Lean remove leg now CLOSED at the
 validly-stored + drained-prior scope (2026-07-19f) and DRIVEN end-to-end by the Exec
-driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`),
+driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_graph.py`)
+— driven over every in-fragment corpus **except `direct_arm_exclusion`**, which
+`_REMOVE_EXCLUDED` skips because the remove guard fail-closes on Direct-arm stores —
 its validly-stored scope decision approved by Avery 2026-07-19),
 and a **generated-schema answer gate** (seeded generated schemas outside the
-curated corpora, spec-side only) — 248 tests, 20 of them gate-tooling unit tests
-rather than comparisons.
+curated corpora, spec-side only). Gate size as last measured (2026-07-26, `f2b403c`):
+330 conformance tests, 20 of them gate-tooling unit tests rather than comparisons.
 Residual unverified surface: the fragment carries, the compiler artifacts, the
-interner/bitmap representation layer, the SQL/transaction/concurrency layer,
+interner/bitmap representation layer, the SQL/transaction/concurrency layer
+(including the HA/multi-instance replica tailing), the **bulk build/backfill
+constructor — the default `build_index` path, with no Lean model at all**,
 non-stratifiable schemas, `expand`/`lookup`, and the fidelity of the model-to-code
-correspondence itself.
+correspondence itself. `FINAL_REVIEW.md` §3 is the full list and governs.
 
 **This never rounds up to "the code is formally verified."**
 
 ## Status
 
-See `HANDOFF.md` (kept current every session). The arc is **complete**: the tree is
+See `HANDOFF.md` (kept current every session). The arc is **complete** in the sense set
+out under "Orientation" above: the tree is
 **sorry-free and axiom-clean**, and `bash formal/verify.sh` (the fail-closed gate;
 agents run it **phased** per [`docs/gate-runbook.md`](../docs/gate-runbook.md) —
-the one-shot exceeds the ~10-min command cap) is green — `lake build` + 0 sorries + zcli preflight + axiom audit
-(412 `#print axioms` reports, one per audited theorem, only
-`[propext, Classical.choice, Quot.sound]`) + **248
-conformance tests, 0 skips**. T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over
+the one-shot exceeds the ~10-min command cap) was green when last measured
+(**2026-07-26, commit `f2b403c`**) — `lake build` + 0 sorries + zcli preflight + axiom
+audit (**455** `#print axioms` reports, one per audited theorem, only
+`[propext, Classical.choice, Quot.sound]`) + **330
+conformance tests (`conf-heavy` 80 + `conf-rest` 250), 0 skips, 0 xfails**; `pytest
+tests/` 606 passed, whole suite 936. **These counts are measurements, not gate-enforced
+invariants** — `verify.sh` derives the expected axiom count from `Audit.lean` itself and
+asserts only `skipped == 0 && passed > 0` on conformance, so re-measure rather than
+trusting the numbers here, and never read a count as coverage
+(`FINAL_REVIEW.md` header). T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over
 the operational closure `ReachedBy` at `GraphAdmission ∧ W4Fragment` scope (staged
 widening W1→W4 complete). Phase 6 hardening complete: the graph-state conformance
 mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**,
 **exhaustive small-scope enumeration**, the **remove-path answer gate**, and the
-**generated-schema answer gate** all landed. What remains is optional
-assurance-widening (fragment widening — the Lean
+**generated-schema answer gate** all landed. What remains is assurance-widening —
+**"optional" is the plan's word, and for the `Direct`-arm fragment widening it is the
+wrong word**: until that lands on the E chain the final theorems say nothing about
+`can_view: [user] but not blocked` stores (`FINAL_REVIEW.md` §3.0, §4(c)). (Fragment
+widening — the Lean
 remove leg itself is DONE 2026-07-19f at the validly-stored + drained-prior scope and
-DRIVEN end-to-end by the Exec driver 2026-07-19 (`graphRunOps`/`test_conformance_remove_graph.py`),
+DRIVEN end-to-end by the Exec driver 2026-07-19 (`graphRunOps`/`test_conformance_remove_graph.py`,
+minus the `direct_arm_exclusion` exclusion),
 its validly-stored scope decision approved by Avery 2026-07-19 —
-wider bounds — `FINAL_REVIEW.md` §4; the once-pinned lookup-gate divergence was fixed
-2026-07-13 Python-side, `FINAL_REVIEW.md` §3's resolved note).
+wider bounds, and the two never-modeled surfaces: the bulk build/backfill constructor and
+the multi-instance/HA layer — `FINAL_REVIEW.md` §3/§4; the once-pinned lookup-gate
+divergence was fixed 2026-07-13 Python-side, `FINAL_REVIEW.md` §3's resolved note).

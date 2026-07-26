@@ -458,7 +458,8 @@ enumerates `s`; its guard (`checkFn` at every prefix mid-state) is `sem = true` 
 so the edge is admitted (the derived R-node is terminal, so no cycle rejects it) and persists.
 
 Coverage is modelled by an explicit list of reconcile *jobs* over an admitted base — faithful to
-`reconcile`/`_leaf_concretes` (`processor.py:382-423,497-507`): the processor enumerates, per
+`index_v4/processor.py::DeltaProcessor._reconcile` /
+`::DeltaProcessor._leaf_concretes`: the processor enumerates, per
 derived key/object, all concrete candidate subjects. The completeness hypothesis is that this
 enumeration is *complete* (covers every `sem`-member) — a property of the construction, not the
 edge conclusion. -/
@@ -538,9 +539,13 @@ theorem reconcileKey_edge_present {T : Store} {dt on R : String} {e : Expr} (hRn
 
 A W3a-complete state is an admitted rule-routed base with a batch of reconcile jobs (one per derived
 key/object), whose candidate enumeration is *complete*: every `sem`-true bare subject for a derived
-key is enumerated. Faithful to `build_index`/`reconcile` (`processor.py`): the processor reconciles
-every derived key over every object, enumerating all concrete candidates (`_leaf_concretes`). The
-completeness clause is a property of the *enumeration* (which subjects were fed to `reconcile`), not
+key is enumerated. Faithful to `connectedstore/build.py::build_index` /
+`index_v4/processor.py::DeltaProcessor._reconcile` (the bootstrap sweep is
+`::DeltaProcessor.backfill` over `::DeltaProcessor._live_keys_of`): the processor
+reconciles every derived key over every object, enumerating all concrete candidates
+(`::DeltaProcessor._leaf_concretes`). The
+completeness clause is a property of the *enumeration* (which subjects were fed to
+`_reconcile`), not
 of the edge conclusion. -/
 
 /-- A reconcile job: reconcile derived key `(dt, R)` at object name `on` (def `e`) over `cands`. -/

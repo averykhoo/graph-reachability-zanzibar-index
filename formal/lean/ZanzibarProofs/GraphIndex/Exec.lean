@@ -18,8 +18,11 @@ model, it is a fold of the CHAIN'S OWN constructors, and that is a theorem —
 * `cascadeLeg` — one fully-operational cascade leg, verbatim the `cascade`
   constructor's target (`runCascade2` over the state-derived `enumJobs2R1`/`R2`).
 * `graphRun` — write leg + cascade leg per input tuple (the synchronous v1
-  Python write path: `advance_index` → `DeltaProcessor.run_cascade` in the same
-  transaction, `tests/test_matrix.py` `GraphBackend.apply`).
+  Python write path: `connectedstore/apply.py::advance_index` →
+  `index_v4/processor.py::DeltaProcessor.run_cascade` → `::DeltaProcessor._run_cascade`
+  in the same transaction, `tests/test_matrix.py` `GraphBackend.apply`). **Only the
+  INTERLEAVED schedule** — under `ConnectedStore(sync=False)` / `build_index`,
+  `advance_index` applies the whole batch before one cascade (`ZT-P4-2c`).
 * **`graphRun_reached`** — anything the driver outputs IS an operationally
   reached state: `graphRun S ts = some (σ, T) → ReachedBy σ S T`.
 * `drainedB` / `drainedB_iff` — the executable fully-drained check the CLI

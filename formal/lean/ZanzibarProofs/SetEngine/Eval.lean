@@ -7,8 +7,10 @@ import ZanzibarProofs.SetEngine.MemberSet
 `SEMANTICS.md` §6.3. The set engine evaluates the AST *set-at-a-time*: it expands a
 node `(otype, oname, rel)` into the full `MemberSet` of subjects holding that
 relation, then answers `check` by probing that set with `containsShape` at the query
-subject. This mirrors `setengine/engine.py:expand` (`do`/`do_expr`/`direct_expand`/
-`ttu_expand`) — the boolean folds are `union`/`intersect`/`subtract`, the leaves are
+subject. This mirrors `setengine/engine.py::SetEngine.expand` and the closures nested
+inside it (`::SetEngine.expand.do` / `::SetEngine.expand.do_expr` /
+`::SetEngine.expand.direct_expand` / `::SetEngine.expand.ttu_expand`) — the boolean
+folds are `union`/`intersect`/`subtract`, the leaves are
 `singletonEntity`/`star`/flow-through recursion.
 
 **Modeling choices (logged in PROOF_STATUS / ROADMAP T1).**
@@ -24,7 +26,21 @@ subject. This mirrors `setengine/engine.py:expand` (`do`/`do_expr`/`direct_expan
   `wfp_*`), discharging the confinement obligation the ROADMAP flagged.
 * Like `sem` (and unlike the real engine's Tarjan-lowlink memo), the model is **pure
   fuel recursion** — agreement with the memoized engine is asserted by conformance,
-  not by matching control flow (PROOF_STATUS variations).
+  not by matching control flow (PROOF_STATUS variations). **As of the ZT-P1-6
+  rewrite (2026-07-26) the control-flow gap is wider still:** Python's `check` and
+  `expand` are no longer language-level recursion at all — every evaluator closure is
+  a GENERATOR whose recursive calls are `x = yield f(...)`, driven on an explicit heap
+  stack by `setengine/engine.py::_drive`, so depth is bounded by memory rather than
+  `sys.getrecursionlimit()`. The rewrite is documented as mechanical and
+  semantics-preserving (same statements, same order, same memo/cycle handling), but
+  nothing in this model witnesses that — it is netted only by the conformance and
+  differential suites.
+* **`check` is not the algorithm twin of this definition** (`ZT-P4-2a`;
+  `CORRESPONDENCE.md` §2). `setengine/engine.py::SetEngine.check` is a
+  short-circuiting boolean DFS that never materializes a `MemberSet`; the shape twin
+  of the Lean `check` below is `setengine/engine.py::SetEngine.expand`, which no
+  conformance gate drives directly. The pin to `SetEngine.check` is
+  answer-for-answer, across an algorithm boundary.
 -/
 
 namespace Zanzibar
@@ -43,7 +59,8 @@ def unionFold (s : SubjectRef) (l : List (MemberSet SubjectRef)) : MemberSet Sub
   l.foldr (MemberSet.union (popOf s)) MemberSet.empty
 
 /-- The `MemberSet` contributed by one `Direct`-leaf grant tuple `g`, under the
-    recursive expander `rc` (`direct_expand`, `engine.py:675-705`). A concrete/bare
+    recursive expander `rc` (`setengine/engine.py::SetEngine.expand.direct_expand`).
+    A concrete/bare
     grant contributes its entity; a bare wildcard a `star` shape; a userset grant
     the token itself PLUS its flow-through expansion; a wildcard userset the shape
     `star` PLUS the union of flow-throughs over `instances`. -/
@@ -85,8 +102,9 @@ def ttuParents (T : Store) (tuplesetRel otype oname : String) : List Tuple :=
     tup.relation == tuplesetRel && tup.object.type == otype &&
     (matchingObjects oname).contains tup.object.name)
 
-/-- The `MemberSet` contributed by one TTU parent tuple (`ttu_expand`,
-    `engine.py:707-724`): the target-relation members of the parent, plus the
+/-- The `MemberSet` contributed by one TTU parent tuple
+    (`setengine/engine.py::SetEngine.expand.ttu_expand`):
+    the target-relation members of the parent, plus the
     from-chain userset token; a wildcard parent contributes the shape `star` plus
     the flow-throughs over `instances`. -/
 def parentMS (s : SubjectRef) (T : Store) (q : Query)

@@ -5,7 +5,8 @@ import ZanzibarProofs.Core.Schema
 
 `SEMANTICS.md` §2.2, §5.2. A `Store` is a list of write-valid tuples (dedup is a
 model-boundary concern — §11-A4). The `universe`/`instances` helpers implement the
-oracle's per-query name sets (`tests/oracle.py:314-351`).
+oracle's per-query name sets (`tests/oracle.py::Oracle._universe` and the closures
+`::Oracle.check.universe` / `::Oracle.check.instances`).
 -/
 
 namespace Zanzibar
@@ -23,7 +24,8 @@ deriving DecidableEq, Repr, Inhabited
 
 /-- Concrete `type`-`t` names appearing in any tuple position of `T`, together
     with the query-endpoint names of type `t` when `includeEndpoints`. Mirrors
-    `_universe` (endpoints in) / `instances` (endpoints out) — `oracle.py:314-351`.
+    `tests/oracle.py::Oracle.check.universe` (endpoints in) /
+    `::Oracle.check.instances` (endpoints out), both over `::Oracle._universe`.
     The `STAR` sentinel is never a universe member. -/
 def universeOf (T : Store) (q : Query) (t : String) (includeEndpoints : Bool) : List String :=
   let fromTuples := T.foldr (fun tup acc =>
@@ -42,7 +44,7 @@ def universeNames (T : Store) (q : Query) (t : String) : List String :=
   universeOf T q t true
 
 /-- `instances(t)` — endpoints excluded; the ∃-witness population for strict
-    ∀⇒∃ (`oracle.py:346-351`, blind-audit O3). -/
+    ∀⇒∃ (`tests/oracle.py::Oracle.check.instances`, blind-audit O3). -/
 def instances (T : Store) (q : Query) (t : String) : List String :=
   universeOf T q t false
 

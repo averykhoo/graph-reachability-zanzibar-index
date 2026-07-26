@@ -10,8 +10,13 @@ chain (`ReachedByW3d2E`, `CascadeStrataAssemble.lean`). This file is the W4 asse
 
 * **`ReachedBy`** — THE operational write-closure, by name. `:= ReachedByW3d2E`
   (logged writes + the state-derived two-round cascade). This is the model of the
-  Python write path: `TupleSource` admission → `advance_index` → `DeltaProcessor.
-  run_cascade` (`processor.py`, synchronous v1).
+  Python write path: `connectedstore/source.py::TupleSource` admission →
+  `connectedstore/apply.py::advance_index` →
+  `index_v4/processor.py::DeltaProcessor.run_cascade` (a thin node-cache-scope wrapper
+  over `::DeltaProcessor._run_cascade`, which is the modeled body). **Scope note
+  (`ZT-P4-2c`):** only the SYNCHRONOUS/interleaved schedule is modeled — under
+  `ConnectedStore(sync=False)` / `build_index`, `advance_index` applies the WHOLE batch
+  and then runs ONE cascade, which `removeGateB`'s drained-prior-state gate excludes.
 * **`GraphAdmission`** — the model-level admission bundle: hypotheses the Python
   compiler/write admission guarantees for EVERY accepted schema and store. Each
   field cites the enforcing mechanism.
@@ -20,7 +25,8 @@ chain (`ReachedByW3d2E`, `CascadeStrataAssemble.lean`). This file is the W4 asse
   "W4 — honest gaps"). The final theorems take BOTH bundles; the claim is never
   rounded up to "everything the Python accepts" (plan §7).
 * **`w4_within_scope`** — the bundles imply the spec's decision-15 scope predicate
-  `GraphAccepts S` (`State.lean:625`, `SEMANTICS.md` §8): the proved fragment sits
+  `GraphAccepts S` (`GraphIndex/State.lean::GraphAccepts`, `SEMANTICS.md` §8): the
+  proved fragment sits
   INSIDE the accepted class (the converse is false — acceptance admits more than
   the fragment; that surplus is exactly the honest-gaps list).
 * The final **`graph_correct`** (T2b) / **`backend_equivalence`** (T3) /
@@ -52,7 +58,9 @@ namespace Zanzibar
     (`writeLoggedRules`) interleaved with cascade legs that run the state-derived
     enumerated rounds (`runCascade2` over `enumJobs2R1`/`enumJobs2R2` — no
     chain-side hypotheses). Mirrors the Python synchronous write path
-    (`connectedstore.advance_index` → `DeltaProcessor.run_cascade`). -/
+    (`connectedstore/apply.py::advance_index` →
+    `index_v4/processor.py::DeltaProcessor.run_cascade` →
+    `::DeltaProcessor._run_cascade`), in its INTERLEAVED (sync) schedule only. -/
 abbrev ReachedBy : GraphState → Schema → Store → Prop := ReachedByW3d2E
 
 /-- **Fully drained**: no dirty derived key above the watermark. The Python
@@ -73,7 +81,7 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     * `nodup` — the AST is dict-keyed: one def per `(type, relation)`.
     * `strat` — derived-dependency cycles raise `ValueError`
       (`compile_boolean_schema`; CLAUDE.md "derived-dependency cycles").
-    * `ttuDirect` — `_validate_ttu_tuplesets` (`zanzibar_utils_v1.py:898-935`):
+    * `ttuDirect` — `zanzibar_utils_v1.py::_validate_ttu_tuplesets`:
       an untainted TTU tupleset relation must be direct-only.
     * `matchDecl` — compiled `Rule`s route onto declared, untainted families
       (leaf routing splits derived storage onto leaf predicates; `RewriteFilter`
@@ -81,7 +89,7 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     * `ranked` — the untainted rewrite graph is acyclic/ranked (the compiler's
       rank assignment; `RulesSaturate.lean`).
     * `objWild` — object-wildcard shapes never target a derived relation
-      (`_reject_object_wildcard_scope`, `zanzibar_utils_v1.py:1029-1034`).
+      (`zanzibar_utils_v1.py::_reject_object_wildcard_scope`, first loop).
     * `storeValid` — write admission: every stored tuple matches a declared
       `Direct` restriction of its `(object.type, relation)` def
       (`TupleSource`/`RuleSet.apply` filter admission). -/
@@ -107,7 +115,9 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
       `CascadeStrata.lean`). Python handles arbitrary strata.
     * `wsBare` — every declared wildcard restriction is bare (`[T:*]`). Python
       rejects wildcard USERSETS (`[T:*#p]`) only over derived relations
-      (`zanzibar_utils_v1.py:1446-1451`); over untainted ones they are admitted
+      (the `r.wildcard` raise in `zanzibar_utils_v1.py::_build_plan_tree.build`'s
+      `Direct` arm, plus the derived-through-shape form in
+      `::_reject_object_wildcard_scope`); over untainted ones they are admitted
       (W1c covered their tuples on the pure-direct fragment only).
     * `bareStar` — stored star subjects are bare and objects concrete: no
       object-wildcard (`w_all`) tuples beyond W1b, no userset-star tuples beyond

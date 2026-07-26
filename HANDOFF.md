@@ -127,12 +127,530 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
   [`docs/perf-next-round.md`](docs/perf-next-round.md).
 - **Clean on `master`.** Last change: the formal `rootB` fragment widening above
   (commits `397f975` / `c3d3113` / `265995d`).
+- **2026-07-26 — ZERO-TRUST REVIEW RUN (algorithm · code · security · formal).
+  Gate re-verified GREEN from scratch; ONE confirmed live authorization bug found
+  (`ZT-P0-1`), plus a large assurance-scope/doc-integrity backlog.** Ten parallel
+  adversarial audits: Lean proof hygiene, CORRESPONDENCE drift, conformance
+  coverage, gate integrity, Python security, resurfaced dismissals, model-vs-code
+  semantic drift, claim-document overclaim, and an empirical gate re-run. **Measured
+  ground truth (this machine, `ZANZIBAR_PY` override): `pytest tests/` 606 passed
+  in 372 s; `verify.sh lean` PASSED (0 sorries, audit 455 observed / 455 expected,
+  only `[propext, Classical.choice, Quot.sound]`); `conf-heavy` 80 passed;
+  `conf-rest` 250 passed in 579 s; 0 skips, 0 xfails, 936 tests total.** Nothing is
+  red. Every finding below is about the DELTA between what the gate proves and what
+  the docs claim it proves — except `ZT-P0-1`, which is a reproduced false ALLOW.
+  Full plan: the "Zero-trust review 2026-07-26" section below.
+
+---
+
+## Zero-trust review 2026-07-26 — findings + remediation plan
+
+Read this section with the Open-TODO board; the board items `ZT-*` point here.
+**Framing:** the gate is green and the proof tree is genuinely sorry-free and
+axiom-clean (independently re-verified, not taken from docs). The Lean side has
+**no soundness holes** — no `sorry`, no custom axioms, no `native_decide`, no
+`unsafe`/`@[implemented_by]`, and the executed zcli calls the *proved* definitions
+directly (`Cli.lean:293` → `GraphModel.check`), so there is no shadow
+implementation. What this review found instead is (a) one real code bug, (b) a
+security-hardening backlog in the operational envelope, (c) a gate that cannot
+detect its own erosion, and (d) claim documents that have drifted away from the
+tree they describe.
+
+### P0 — confirmed live bug (fix first, it is an authorization escalation)
+
+- **`ZT-P0-1` — the N3 `_keys_referencing` elision is UNSOUND: dangling residue
+  `upos` id → false ALLOW after rowid recycling. REPRODUCED.**
+  `index_v4/processor.py:48` `_RESIDUE_LOCAL_LEAF_KINDS = {'closure',
+  'derived-computed'}` sets `_cross_object_recordings_possible = False`, which
+  short-circuits `_keys_referencing()` (`processor.py:316`) to `[]`, so
+  `_residue_references()` returns False unconditionally and `_gc_subject_node`'s
+  guard (`processor.py:684`) stops protecting the node.
+  **The rationale comment (`processor.py:39-47`) is false for `closure`:** it
+  claims closure leaves are safe because they "store raw tuples", but
+  `_leaf_concretes(kind='closure')` (`processor.py:790-794`) goes through
+  `_incoming_concretes` → `idx.lookup_reverse` → the **full transitive closure**.
+  A userset node reachable only transitively is therefore recorded on an object
+  where it holds no edge.
+  **Failure sequence** (traced): with `group:g1#member → group:g2#member →
+  doc:y#a.0`, removing the chain edge drops the node to `reference_count == 0`;
+  both affected keys take the cheap path `reconcile_subject`; the first key
+  un-records and DELETES the node (elision says nothing references it); the second
+  key then finds `s_node is None`, skips the whole `if s_node is not None:` block
+  (`processor.py:484-501`), and **never prunes the stale id**. SQLite then recycles
+  the freed rowid onto an unrelated principal, and the stale `upos` entry vouches
+  for it.
+  **Observed** (`n3_FINAL.py`, schema with `closure` leaves ONLY, elision on vs off
+  as the control): dangling `('doc','a','y','upos',6)`; I6 flags `residue upos
+  holds a dead node id`; `check(group:g9#member, a, doc:y)` returns **True** where
+  the oracle says **False**. With the elision disabled: no dangling id, I6 green,
+  `check` correct.
+  **Attribution note:** this is NOT the 2026-07-17 Fix A lift (that lift *is*
+  reachable under the elision, but `reference_count` still protects those nodes).
+  The root cause is the `'closure'` entry, and it reproduces on a schema with no
+  `derived-computed` leaf at all.
+  **Why the gate missed it:** needs an all-whitelist schema + a *transitive*
+  userset chain into a tainted relation's closure leaf on **≥2 objects** + the
+  chain edge removed in one op so both objects flip in one cascade round. No
+  corpus or generator builds that conjunction.
+  **Fix options:** drop the elision (cheapest correct), or replace the full
+  `ResidueV1` scan with a real index rather than eliding it. The whitelist premise
+  must be **"edge-justified ON THE RECORDING OBJECT"**, not "cross-object" — those
+  are different properties and only the second is what GC needs. `closure` does not
+  satisfy the first; with the Fix A lift, neither does `derived-computed`. **The
+  safe residual set is arguably empty.**
+  **Gates for the fix:** a regression pin reproducing the above; the hypothesis
+  campaign extended to emit transitive userset chains + multi-object recordings;
+  re-run the full gate + a multi-seed fuzz sweep (this is an algorithm change).
+  Repro scripts are in the session scratchpad (`n3_FINAL.py` repro+control,
+  `n3_repro2.py` A/B/C isolation, `n3_who.py` delete-site trace, `n3_amplify2.py`
+  rowid-recycle) — **port `n3_FINAL.py` into `tests/` before they are lost.**
+- **`ZT-P0-2` — secondary, found by the same trace: the "UNREACHABLE" comment at
+  `processor.py:474-483` is WRONG.** It claims the `sp != '...'` branch of
+  `_reconcile_subject` is unreachable from the cascade; it is reached exactly in
+  the `ZT-P0-1` sequence, because closure leaves DO store untainted-userset
+  subjects (`fam.kind == 'closure'` with `s_pred != '...'`). That branch's
+  `s_node is None` no-op is the proximate leak. Fix the comment and the branch
+  together.
+
+### P1 — security hardening (no confirmed exploit in-tree, but fail-open direction)
+
+Evaluation logic is sound: no fail-open found in ANY `check` path; negation and
+stratification are airtight (`_stratify` rejects all derived SCCs, strictly
+stronger than needed); no SQL injection (one `insert()` with bound params, zero
+`text()`/f-string SQL); interner refcounting verified safe by argument AND by a
+4,000-op randomized incremental-vs-rebuild differential with 0 divergences. The
+findings are in the operational envelope:
+
+- **`ZT-P1-1` — identifier validation accepts a trailing newline and 257 chars.**
+  `zanzibar_utils_v1.py:23` uses `$`, which in Python matches before a trailing
+  `\n`. Verified end-to-end through `SetEngine.add_tuple`: `'alice\n'` ACCEPTED,
+  `'a'*256 + '\n'` (len 257) ACCEPTED, `'alice\r'` correctly rejected. Violates the
+  stated contract (`:14-20`) of keeping control characters out of identity strings,
+  and makes the documented 1–256 bound off-by-one for any downstream fixed-width
+  consumer. No internal principal confusion (all composite keys are tuples or
+  separate columns — verified). **Fix: `re.fullmatch`, or anchor with `\Z`.**
+- **`ZT-P1-2` — 16 load-bearing safety `assert`s in `index_v4/core.py` vanish under
+  `python -O`** (lines 219-221, 238-239, 284-285, 350, 378-379, 410, 458-459, 512,
+  528, 774; plus `processor.py:993`). The three that matter: `:458-459` is the ONLY
+  cycle guard on the batch/bridge expansion path (admitting a cycle ⇒ unbounded
+  path counts ⇒ permanent phantom reachability ⇒ **stale ALLOW**); `:512/:528` are
+  the ONLY refcount-underflow guards; `:774` is the last barrier against a dangling
+  edge row on a table with no enforced FKs. The project already converted exactly
+  this hazard once (`core.py:651-655`, blind-audit C3) and did not generalize it.
+  **Fix: convert to explicit raises.**
+- **`ZT-P1-3` — the I1–I13 invariant layer is never wired in production.**
+  `install_paranoia` is defined at `invariants.py:383` and called ONLY from
+  `tests/wildcard_helpers.py:34` and `tests/test_connectedstore.py:36`.
+  `ConnectedStore.__init__` never calls it and exposes no flag. CLAUDE.md's
+  "paranoia default ON via `make_wildcard_index`" is true of the TEST HELPER only.
+  Every runtime detector for the corruption classes in this review is dark in
+  production — **including I6's dead-node-id check, which is precisely what catches
+  `ZT-P0-1`.** Combined with `ZT-P1-2`, a `-O` deployment has neither asserts nor
+  invariants. **Fix: wire it into `ConnectedStore` behind an env flag, default ON.**
+- **`ZT-P1-4` — both documented locks are silent no-ops on SQLite and the library
+  ships no engine configuration.** `source.py:142-144` / `core.py:204-206` are
+  `with_for_update()` with no dialect branch; the compiled SQLite statement carries
+  no `FOR UPDATE` (verified). The delegation to "the database write lock" only
+  holds if the validating SELECTs and the INSERT share one transaction, but
+  pysqlite's default `isolation_level=''` runs SELECTs in autocommit. The fix
+  exists ONLY in the test harness (`tests/test_connectedstore_multi_instance.py:75-79`
+  sets `isolation_level = None` + a `BEGIN` listener). So two default-configured
+  writers can both pass admission — including cycle-parity and exclusion checks —
+  against a state their combined result invalidates. There is also no
+  `SQLITE_BUSY` retry anywhere in the library. **Fix: real write lock
+  (`BEGIN IMMEDIATE`) on a SQLite bind; reject `isolation_level != None` at
+  construction.**
+- **`ZT-P1-5` — watermark advances are unguarded, and the freshness token then
+  CERTIFIES the stale answer.** `apply.py:133` `cursor.applied_log_id = rows[-1].id`
+  and `source.py:171/:184` `max(self.evaluator_watermark, token)` both assume a
+  complete catch-up. Under MySQL/InnoDB REPEATABLE READ (the default), an early
+  `lag()`/`watermark()`/`check()` pins the read view; a concurrent commit of
+  `ADD 5` + `REMOVE 6` stays invisible; the write returns id 7; both watermarks
+  jump to 7 and rows 5–6 are **permanently unapplied**. `check` then returns ALLOW
+  forever — including under `at_least=7`, because `_fresh_enough(7)` passes. The
+  mechanism designed to guarantee freshness vouches for a state that never existed.
+  Note `source.py:279` uses the correct pattern ("Assignment, not max") elsewhere.
+  **Fix: advance to the CONTIGUOUS head and raise on a gap; pin/assert READ
+  COMMITTED on connect.**
+- **`ZT-P1-6` — no resource bounds anywhere; two DoS paths measured.** No depth
+  limit, tuple quota, fan-out cap, or fuel counter exists in any in-scope module.
+  (a) 240 raw tuples in a hub topology → **14,640 closure rows in 5.1 s** (~N²),
+  and this runs INSIDE `advance_index` holding both locks, so one write stalls
+  every writer on the store. (b) A 1,500-long `group#member` chain is accepted
+  without complaint and then makes every read raise `RecursionError`
+  (`engine.py:1017` `sat`/`member_via_usersets` recursion) — writes still succeed,
+  so the store stays writable while reads on that subgraph are permanently dead;
+  `lookup` is worst since it sweeps every declared `(type, relation)`.
+  **Fix: admission-time max chain depth; per-write closure fan-out cap; convert
+  `sat` to an explicit stack.** Related: `delta_outbox_v1` is append-only with no
+  retention (no `DELETE` anywhere).
+- **`ZT-P1-7` — a caller `begin_nested()` silently disables BOTH locks.** The memo
+  at `core.py:201-209` / `source.py:139-147` keys on `get_transaction()`, which
+  returns the ROOT transaction, not the nested one. Take locks inside a savepoint,
+  roll the savepoint back (PostgreSQL releases those locks), and the next call
+  matches the memo and takes NO lock. The `Session` is caller-supplied
+  (`store.py:39`), and speculative-write-in-a-savepoint is an ordinary pattern.
+  **Fix: key the memo on `(get_transaction(), get_nested_transaction())`.**
+- **`ZT-P1-8` — smaller, still fail-open-direction:** `at_least` is check-only and
+  `lookup`/`lookup_reverse` have NO freshness path at all (`store.py:234-238`), so
+  a revoked principal stays enumerable with no API to demand freshness (revocation
+  UIs are exactly list-objects/list-users); `_fresh_enough(None) → True` is a
+  fail-open default. `SetEngine.add_tuple` writes `TupleV1` with no `TupleLogV1`
+  append and `source.engine` is public, so a caller can create permanent silent
+  index/source divergence while `lag()` reads 0. `wildcard.py:534-550` full-scans
+  `residue_v1` with per-row JSON decode driven by untrusted query args.
+  `processor_writes` (`wildcard.py:59`) is a plain bool, not thread-scoped — the
+  entire I5 bypass window.
+
+### P2 — the gate cannot detect its own erosion
+
+All four verified directly against `verify.sh` and by execution:
+
+- **`ZT-P2-1` — the axiom-audit "expected" count is derived from the audited file.**
+  `verify.sh:113` `EXPECTED_AUDITS=$(grep -cE '^#print axioms ' "$AUDIT_LEAN")`,
+  checked against `OBSERVED` with the only floor being `-gt 0`. **Deleting
+  `#print axioms graph_correct` from `Audit.lean` keeps the gate green.** Reducing
+  `Audit.lean` to one trivial line still prints PASSED. The `455` figure lives only
+  in prose. (The equality check IS meaningful — it catches a vacuous cache-hit
+  rebuild — but it is not a coverage guard, and `gate-runbook.md:67-70` sells it as
+  one.) **Fix: `EXPECTED_MIN_AUDITS=455` asserted with `-ge`.**
+- **`ZT-P2-2` — no minimum conformance count; `xfail` is invisible.**
+  `verify.sh:171-174` asserts only `skipped == 0` and `passed > 0`. Shrinking
+  `GRAPH_FRAGMENT` to one corpus, or deleting `test_conformance_graph.py` outright,
+  keeps the gate green. And `verify.sh:166` greps only for `N skipped` — pytest
+  reports `xfailed` as a distinct word, so marking a newly-failing comparison
+  `@pytest.mark.xfail` yields `329 passed, 1 xfailed` → **PASSED**. There are zero
+  xfails in `formal/conformance/` today, but CLAUDE.md endorses xfail as a workflow
+  in `tests/`. **Fix: per-phase `-ge` floors (80 / 250 / 330) + parse
+  `xfailed`/`xpassed`/`deselected` into the zero-tolerance check.**
+- **`ZT-P2-3` — `sorry_scan.py:57` is blind to the exact constant the gate exists
+  to exclude.** The regex is `\b(?:sorry|admit)\b`; `\bsorry\b` cannot match
+  `sorryAx` because `A` is a word character. Verified by execution: `sorry` → hit;
+  **`sorryAx` → MISS; `native_decide` → MISS; `axiom cheat : ∀ p, p` → MISS.** Also
+  one stray unterminated string literal makes the remainder of that file invisible,
+  silently. Backstops are partial (the build-log warning check covers only modules
+  built in step 1; the axiom whitelist covers only the ~35% of declarations inside
+  an audited dependency cone). **Fix: extend to `sorry|admit|sorryAx` +
+  `native_decide` + a separate `^\s*axiom\s` scan.**
+- **`ZT-P2-4` — two files sit where BOTH nets are blind.** `verify.sh:77` passes
+  `$LEAN_DIR/ZanzibarProofs` (the directory), so the sibling library root
+  `ZanzibarProofs.lean` is **not scanned**. And `Cli.lean` — the zcli that IS the
+  conformance ground truth — is not reachable from the default lake target, so
+  step 1 never builds it and its warnings never reach `$BUILD_LOG`; step 3's
+  `lake build zcli` output is not captured at all (`verify.sh:91`, no `tee`). A
+  `sorryAx` in the conformance oracle is invisible to every check. **Fix: scan
+  `$LEAN_DIR` with an explicit `.lake` exclusion; `tee` step 3 into the same grep.**
+- **`ZT-P2-5` — vacuous restatement is unguarded.** `verify.sh:127-128` builds
+  `BAD` only from lines containing `depends on axioms`; a theorem restated as
+  `: True := trivial` emits "does not depend on any axioms", counts toward
+  `OBSERVED`, and passes. This is not hypothetical — see `ZT-P3-2`.
+- **`ZT-P2-6` — operational:** `verify.sh:44` hardcodes the dead
+  `C:/Users/avery/...` interpreter, so `bash formal/verify.sh` as written in
+  CLAUDE.md **cannot run on this machine** without `ZANZIBAR_PY` (fails loudly, so
+  safe — but both CLAUDE.md and `gate-runbook.md:28` repeat the dead path).
+  `conf-rest` now takes **579 s against a 600 s cap**; `formal/history/` filed
+  "consider splitting the phase" on 2026-07-19g and it was never actioned. Also
+  unguarded: a missing `pyroaring` silently downgrades the set engine to `PySets`,
+  under-testing the "both SetOps" legs with no gate check.
+  Note the phase split itself is **gap-free** (verified: `conf-rest` is the
+  directory minus `$HEAVY_CONF` via `--ignore`, 80 + 250 = 330 = the one-shot),
+  and `runner.py`'s retry logic is genuinely non-masking (verified) — those two
+  worries are unfounded.
+
+### P3 — claim-document integrity (what is claimed vs what is proved)
+
+- **`ZT-P3-1` — the headline theorems are VACUOUS on the canonical boolean idiom,
+  and only `formal/history/` says so.** `PROOF_STATUS.md:36`: *"the CURRENT
+  admission bundle is UNSATISFIABLE"*, and `FullScope.lean:564` machine-checks
+  `outside_old_admission : ¬ StoreValidRules Sd Td`. So on a store holding a tuple
+  written through the `Direct` arm of a derived def — i.e. `can_view: [user] but
+  not blocked`, the most common Zanzibar boolean shape — `graph_correct`,
+  `graph_reached_inv` and `Exec.graphRun_check_eq_sem` hold **vacuously**.
+  `FINAL_REVIEW.md` §3 records this only as a scope gap ("non-`ComputedOnly` leaves
+  not covered"), which reads as *narrower coverage* rather than *no theorem*.
+  **That distinction is the whole difference between a narrow theorem and none.**
+  Fix: state it plainly in `FINAL_REVIEW.md` §3 and `ARCHITECTURE.md` §6.
+- **`ZT-P3-2` — at least 2 of the 455 audited reports are known-vacuous.**
+  `Audit.lean:1332` `#print axioms checkFnR_eq_sem_settled_d` and `:1335`
+  `#print axioms w3d2_leg_context_d`. `PROOF_STATUS.md:308` calls that exact pair
+  *"an UNSATISFIABLE pair … green but un-dischargeable by a real `_d` chain"*; the
+  `_filt` variants that superseded them are what the live proof uses
+  (`CascadeStrataResettle.lean:1886`). A third such bundle (`hCO` schema-wide) was
+  found and repaired 2026-07-20d. So **455/455 is a policy count, not a coverage
+  count.** Fix: drop or annotate the superseded pair; audit the `_filt` variants.
+- **`ZT-P3-3` — `direct_arm_exclusion` is gated as in-fragment but is provably
+  outside it.** `corpus.py:388` puts it in `GRAPH_FRAGMENT`;
+  `test_conformance_graph.py:22-23` says that set is "inside GraphAdmission +
+  W4Fragment" and that answers "are covered by `graph_correct` verbatim"; the Lean
+  tree proves the opposite (`outside_old_admission`), and `FullScope.lean:527-528`
+  records the covering theorem as *"recorded follow-up, NOT done"*. The docstring's
+  safety net — *"zcli refuses (nonzero rc) on admission failure … so an
+  out-of-scope run FAILS loudly"* — does not hold: the CLI gates only on
+  run-success (rc 2) and drained-ness (rc 3), never on `GraphAdmission`/
+  `W4Fragment`. Those 11 tests are a differential test, not theorem-backed
+  coverage. **Fix: correct the docstring now; ideally add a runtime
+  admission/fragment gate to the CLI (the tree already shows how — `removeGateB`
+  decides six `Prop`s at runtime).** Related: `test_conformance_remove_graph.py:102`
+  excludes this same corpus from remove-driving, so "removes are driven end-to-end"
+  is true for every in-fragment corpus EXCEPT the newest one.
+- **`ZT-P3-4` — `FINAL_REVIEW.md:52` and `SEMANTICS.md:615` still list `rootB` as a
+  `W4Fragment` field.** It was deleted 2026-07-17; `FullScope.lean:122-132` has six
+  fields (`computedOnly, twoStrata, wsBare, bareStar, ttuStarFree, term`). The
+  authoritative claim doc misstates the proved fragment.
+- **`ZT-P3-5` — every doc number is stale, and NOTHING gate-enforces any of them.**
+  Measured: axioms **455**, conformance **330**, `tests/` **606**, corpora **20**
+  (19 in-fragment), enum **6 shapes / 1021 stores**.
+  Claimed: `formal/README.md` 412 axioms / 248 tests; `CLAUDE.md` 531 + 288 = ~819;
+  `docs/gate-runbook.md` 531 and 315; `formal/HANDOFF.md` 326;
+  `docs/architecture/overview.md` 263; `ARCHITECTURE.md` 17 corpora / 4 shapes /
+  527 stores. **`FINAL_REVIEW.md` states BOTH 263 and 326 in one file, and BOTH 19
+  and 15 corpora** — so the house rule "nothing may claim more than FINAL_REVIEW"
+  currently binds every other doc to a self-contradictory target, and the
+  subordinate `HANDOFF.md` is the most accurate doc in the tree.
+- **`ZT-P3-6` — the two residual-surface lists omit two whole unverified
+  surfaces.** `FINAL_REVIEW.md` §3 and `ARCHITECTURE.md` §6 carry identical
+  seven-item lists — and identical blind spots. Missing: **bulk build/backfill**
+  (`bulk_build.py` + `bulk_backfill.py`, the DEFAULT `build_index` path, an entirely
+  separate constructor of index state with no Lean model, pinned only by a
+  Python↔Python differential gate) and **multi-instance HA** (`_lock_source`, lock
+  ordering, `catch_up_evaluator`, `apply_logged` — item 5 names only `_lock_store`).
+  Both ARE documented in `CORRESPONDENCE.md`; the honesty ledgers are the two docs
+  that stopped being updated.
+- **`ZT-P3-7` — top-level `README.md:58-62` correctly says the Python is "not
+  itself verified"** (the single most important thing to get right, and it is
+  right) **but drops the graph-side scope caveat**, presenting backend equivalence
+  as unqualified. `docs/architecture/verification.md:94-101` states it correctly and
+  should be the model.
+- **GOOD NEWS, verified: `SEMANTICS.md` still matches `tests/oracle.py`** rule for
+  rule (all 12 key rules checked individually: direct leaf star/userset branches,
+  TTU stored-parent, `memberOfGranted` ∀⇒∃, fuel bound, exclusion/intersection,
+  undefined-relation → False, grammar). Only the line citations drifted, and that
+  drift is self-disclosed at `SEMANTICS.md:15-19`. **The trust root is sound.**
+  Likewise `setEngine_correct` is genuinely unconditional (all three hypotheses
+  underscored/unused) — "set engine at full scope" is honest, if anything an
+  under-claim.
+
+### P4 — the correspondence map, and what the harness actually covers
+
+- **`ZT-P4-1` — `CORRESPONDENCE.md` is broken as a navigational map.** Every Lean
+  definition it cites still exists (~60 checked, zero missing) — the Lean side is
+  clean. But of ~45 Python `file:line` citations, **4 are accurate and ~35 point at
+  unrelated code**; **§5 (the cascade — the most intricate subsystem and the one an
+  auditor can least re-derive unaided) is 100% wrong.** An auditor following §5
+  lands in `_write_derived`, `_gc_subject_node` and `_keys_referencing`. Worse, the
+  same stale citations were **copied into the Lean docstrings**
+  (`ReconcileStars.lean:227-229`, `ReconcileDiff.lean:209,220`, `Cascade.lean:448`,
+  `FullScope.lean:76,84,110`, `UsStarWrite.lean:35`), so the drift is undetectable
+  by cross-checking the two artifacts. Drift rate is ~3,000 lines per two weeks —
+  **no manually-maintained line number survives that.**
+  **Fix: re-derive all citations, then move to SYMBOL anchors (function name +
+  a grep-checkable assertion in `verify.sh`) instead of line numbers.**
+  *Important:* the agent found no evidence any theorem verifies dead code — the
+  algorithms drifted POSITION, not SHAPE. The pin is likely still real; it is the
+  auditability that failed, which is exactly what this file exists to provide.
+- **`ZT-P4-2` — three CORRESPONDENCE rows are semantically wrong, not just stale.**
+  (a) **§2 `SetEngineModel.check` ↔ `SetEngine.check` is a false algorithm-twin
+  claim.** Lean's `check` (`Eval.lean:144-147`) is pure fuel-bounded `MemberSet`
+  expansion; Python's `check` (`engine.py:910-1058`) is a Tarjan-lowlink-memoized
+  short-circuiting boolean DFS that never builds a `MemberSet`. The real twin of
+  the Lean def is Python's **`expand`** — which no conformance gate drives.
+  Declared honestly in `Eval.lean:25-27`, but the CORRESPONDENCE row and
+  `FINAL_REVIEW`'s "full scope" say nothing. (b) **§3 `Inv` overclaims** — it is 8
+  clauses, and only I2 is fully modeled; I1 appears as endpoint-existence only, I3
+  not at all, and I4/I5/I7/I10/I13 plus eight I6 sub-clauses are omitted with no
+  acknowledgement. The label "structural I1–I3 + four I6" should read "I1
+  (endpoints only) + I2 + four I6". (c) **§6 `ReachedByW3d2E` "interleaved" is
+  false for the batched path** — `apply.py:128-132` applies the WHOLE batch then
+  runs ONE cascade, so a `remove` at batch position 2 executes against a provably
+  not-drained state, exactly what `removeGateB`'s `cascadeKeys = []` excludes.
+  §7 asserts the remove scope is "exactly Python's behavior" citing tuple
+  presence — a different property. **The proved execution schedule is not the one
+  production runs.**
+- **`ZT-P4-3` — two undeclared cascade-model gaps.** (a) The **`_bumped`
+  residue-version channel**: Python has a SECOND source of dirty keys
+  (`processor.py:930` populate, `:1117-1120` fan out, `:1143-1146` quiescence
+  check) that emits no outbox rows; Lean derives all cascade keys from
+  `σ.frontierRows` and `Residue` has no version field at all. So **T5's
+  "the abort is dead code" is a claim about a weaker abort condition than the one
+  Python ships.** (b) `affectedKeys` models 2 of ~6 Python delta→key channels
+  (missing: subject-GC scan, tupleset-ttu dependents, `tupleset_feeders`,
+  `target_feeders`, and `_fan_out via ∈ {ttu, userset, tupleset-ttu}`). All
+  out-of-fragment, so scope-honest in substance — but §7's wording says
+  `affectedKeys` "now carries **BOTH** Python branches", which an auditor would
+  take at face value. Also unmodeled: the whole subject-level cheap path.
+- **`ZT-P4-4` — coverage is narrower than "five/six-corner differential" implies.**
+  Measured across all corpora: **max 2 strata anywhere** (so Python's ≥3-stratum
+  cascade path — which `demorgan1` exercises — is tested by NOTHING in this
+  harness); **every union and intersection is binary** (so `encode.py`'s n-ary
+  left-fold, the documented modeling bridge to Lean's binary ops, never runs at the
+  arity it exists for); exclusion nested exactly once; wildcard usersets and
+  ≥3-arity operators at **zero**; object wildcards at one 1-tuple corpus worth six
+  queries; largest store in the entire Lean differential is **8 tuples**; median
+  **64 queries per corpus**. **No conformance test asserts a nonzero comparison
+  count**, and there is a live zero-query configuration one corpus-list edit away
+  (`_graph_queries_for` filters `on != "*"`, which yields 0 queries for
+  `object_wildcard` — a corpus whose exclusion note invites exactly that move).
+- **`ZT-P4-5` — the state gate is far thinner than "state-level equality" implies.**
+  Measured over the 19 in-fragment corpora: of 422 raw edge rows, **231 dropped by
+  P1, 55 by P6, 136 actually compared**; **all 217 `NodeV4` rows dropped by P5**
+  (nodes are not compared at all); and **only 5 of 19 corpora produce ANY residue
+  row — 11 rows across the entire curated state gate**, so 14 corpora compare two
+  empty dicts. `CORRESPONDENCE.md:214-215` already concedes the current node-flag
+  behavior is "invisible to the gate by construction". Also: `ResidueV1.version` is
+  dropped by the extractor WITHOUT being one of the documented P1–P6 projections,
+  so I7 is gated by nothing formal.
+- **`ZT-P4-6` — the "three genuinely independent corners" claim
+  (`CORRESPONDENCE.md:47-49`) is 2-of-3 at the schema-reading layer.**
+  `encode.py:18-28` and `grid.py:31,59` both import `parse_schema_ast` from
+  `tests/oracle.py`, so the Lean corner is fed by the oracle's parser AND the query
+  grid's targets come from that same parse — a misparse propagates to two corners
+  and simultaneously deletes the query that would expose it. Demonstrated parser
+  divergence: on a duplicate `define`, `oracle.py` silently keeps the last while
+  `zanzibar_utils_v1.py` raises. `encode.py`'s own docstring is honest about this;
+  the CORRESPONDENCE claim is not.
+- **`ZT-P4-7` — `GraphDriver.apply` swallows every `ValueError` into "rejected"**
+  (`backends.py:162-164`), and `test_conformance_remove.py:406` then builds the
+  oracle from the graph's OWN accepted set. An `index_v4` bug that spuriously
+  raises on a legitimate add removes the tuple from BOTH sides; both corners agree
+  on a smaller store; test green. **This gate is structurally incapable of
+  detecting an admission regression.**
+
+### P5 — resurfaced dismissals now INVALID or UNVERIFIED ("ignore the ignore")
+
+Full inventory (~60 items across 7 categories) was produced; these are the
+dismissals whose stated justification no longer holds:
+
+- **The "OpenFGA doesn't support these either" argument is invalid as a
+  PRIORITY argument** for the two scope rejections. The repo already ships object
+  wildcards as a deliberate extension BEYOND OpenFGA (no DSL syntax; passed via
+  `object_wildcard_shapes=`, 52 production refs). The argument proves the DSL lacks
+  syntax, not that no user wants the construct — and the repo invented the
+  construct. The rejections themselves are sound and fail loud; only the
+  deprioritization reasoning is circular.
+- **"Fragment exclusions are proof-scope, not behavioral" already failed once and
+  the sentence is still live.** The 2026-07-12k probe concluded this from
+  CHECK-level evidence; on 2026-07-17 the repo found a real model-vs-Python
+  divergence at **STATE** level in exactly that situation. The identical inference,
+  applied to the object-wildcard corpus, is still asserted in `FINAL_REVIEW.md` §3
+  and `ARCHITECTURE.md` §6 — and that corpus was never probed at state level.
+- **"The multi-hop out-bridge generalization is unreachable" (reg11) repeats an
+  argument this repo already disproved.** Its predecessor (reg10) was filed as "no
+  current corpus/pool can build it" and turned out to be "true only of the existing
+  fuzz pool, not of reachability: a 3-relation schema + 2 writes builds it."
+  reg11's unreachability rests on a single two-write probe over an unbounded schema
+  space, and no generator emits the class.
+- **The HA correctness story is validated only where its bug cannot occur.** The
+  2026-07-23 fix closes an explicitly **PostgreSQL-only** hazard (out-of-order log
+  commits ⇒ a tailer permanently skipping a row). CI runs SQLite. Every mechanism
+  it relies on is, in the repo's own words, "reasoned about, not CI-tested", and
+  Phase 7 (TLA+ for concurrency) is "not started". Now the single largest untested
+  assumption in the system, and answer-affecting. Ties to `ZT-P1-4`/`ZT-P1-5`.
+- **The from-chain TARGET note's *reachability* half is stale** — asserted
+  2026-07-13, never re-derived across three later widenings (Fix A's `upos` lift,
+  the `rootB` widening, the Direct-arm corpora). Its "fails LOUD" half is
+  unaffected and is the real safety property.
+- **N14 was declined for "zero harness coverage", then a heavier version of the
+  same scan shipped the next day** — Fix B's `_any_residue_reference`
+  (`processor.py:710-723`) is a COMPLETE `ResidueV1` scan with per-row JSON decode
+  on every node-release path on ALL schemas, landed after the perf arc closed and
+  never benchmarked. (Note: `ZT-P0-1`'s fix will likely make this hotter still —
+  bench them together.)
+- **Orphaned findings that never reached any board** (they live only in
+  `formal/history/`): the `w3cJobValid_enumJob2D` star-freeness hole (an OPEN
+  attack surface naming a Python-ADMITTED schema shape); `PDerivedUserset` — the X4
+  shape fixed Python-side 2026-07-13 and extended 2026-07-17, **never modeled in
+  Lean**, in the exact area where five real divergences were found; the
+  `reconcile_subject` cheap path not modeled (and it has since gained real logic);
+  phase-ledger row 0.5 (`todo`, never closed); the `conf-rest` cap warning.
+- **Three documents give three different lists of which invariants run per commit,
+  and none matches `index_v4/invariants.py`** (`verification.md` vs
+  `correctness.md` vs the `check_invariants` docstring vs the actual body, which
+  runs I1–I7 + I10 + I13).
+
+### Suggested sequencing
+
+1. **`ZT-P0-1` + `ZT-P0-2`** — fix, pin, fuzz, gate. Port the scratchpad repro into
+   `tests/` FIRST so it is not lost.
+2. **`ZT-P1-1`, `ZT-P1-2`, `ZT-P1-3`, `ZT-P1-7`** — small, high-leverage, mostly
+   one-liners; `ZT-P1-3` is what would have caught `ZT-P0-1` in production.
+3. **`ZT-P2-1` … `ZT-P2-4`** — make the gate defend itself before adding coverage,
+   otherwise later erosion is again undetectable.
+4. **`ZT-P3-1` … `ZT-P3-5`** — correct the claim docs. Cheap, and `ZT-P3-1` is the
+   one an outside reader would most object to.
+5. **`ZT-P1-4`, `ZT-P1-5`, `ZT-P1-6`** — the operational envelope; needs a design
+   decision on how much the library owns vs delegates to the operator.
+6. **`ZT-P4-*`** — the correspondence rebuild (move to symbol anchors) and the
+   coverage widenings (≥3 strata, n-ary operators, nonzero-comparison asserts).
+7. **`ZT-P5`** — re-adjudicate the stale dismissals; prefer PROOF or a REPRO over
+   "no corpus exercises it", which this review showed fails repeatedly.
 
 ---
 
 ## Open-TODO board
 
 ### Active work
+- [ ] **★ NEW 2026-07-26 — `ZT-P0-1`: the N3 `_keys_referencing` elision is UNSOUND
+      (confirmed false ALLOW, reproduced).** `index_v4/processor.py:48` — the
+      `'closure'` entry in `_RESIDUE_LOCAL_LEAF_KINDS` is unjustified: closure
+      leaves resolve candidates through the FULL TRANSITIVE CLOSURE
+      (`_leaf_concretes` → `_incoming_concretes` → `lookup_reverse`), so a userset
+      node is recorded on an object where it holds no edge. The elision then lets
+      `_gc_subject_node` delete a node a live residue still references, the second
+      key of the same cascade round no-ops on `s_node is None`, and the stale
+      `upos` id survives to vouch for whatever principal SQLite recycles the rowid
+      onto. **NOT the 2026-07-17 Fix A lift** (reproduces with no `derived-computed`
+      leaf at all). I6 catches it — but only under paranoia, which production never
+      enables (`ZT-P1-3`). **FIRST ACTION: port the scratchpad repro (`n3_FINAL.py`,
+      repro + elision-disabled control) into `tests/` before the session scratchpad
+      is lost.** Then fix, extend the hypothesis generator to emit transitive
+      userset chains recorded on ≥2 objects, and run the full gate + multi-seed
+      fuzz (this is an algorithm change → Lean/CORRESPONDENCE review too).
+      Detail: the "Zero-trust review 2026-07-26" section above.
+- [ ] **★ NEW 2026-07-26 — `ZT-P5-NEW`: a FRESH accept/reject divergence + detonation,
+      found by re-adjudicating reg11. FILED STRICT-XFAIL, NOT FIXED.**
+      Schema is reg11's own (`parent: [folder, folder:*]`, `viewer: [user] or viewer
+      from parent`, `object_wildcard_shapes={('folder','parent')}`); the write is a
+      single `folder:* parent folder:*`. **Independently reproduced:**
+      `GRAPH accepted=True | SET accepted=False`; then an innocent later
+      `user:v viewer folder:q` is `GRAPH accepted=False | SET accepted=True`, while the
+      **oracle says that grant should hold**. So one write permanently locks the graph
+      index out of a legitimate grant, and **I1–I13 stay GREEN** — no invariant catches
+      it. Fail-CLOSED direction (denial, not escalation), but wrong and unrecoverable
+      for that store.
+      **Mechanism:** the routed edge is `w_any(folder,viewer) → w_all(folder,viewer)` —
+      two DISTINCT `node_v4` rows under the position-split wildcard encoding — so it is
+      not a self-loop and the cycle check never fires. `(folder,viewer)` then sits in
+      BOTH `bridged_in_shapes` and `bridged_out_shapes`, so every present-or-future
+      concrete viewer node carries both bridges and closes the cycle.
+      **Why the 2026-07-17 F1/F2 gate misses it:** `_reject_doubly_bridged_shapes`
+      narrowed its left factor from `bridged_in_shapes` to literal `T:*#p` restriction
+      shapes, justified by "star-tupleset through-shapes … cannot mint a persistent
+      `w_any` node — reg11's dangerous writes self-cycle … so nothing detonates."
+      **That justification sentence is FALSE**; the coarse criterion would have caught
+      this. Revisit the narrowing rather than assuming it was safe.
+      **Why no fuzzer built it:** `_star_bridge_schema` always emits `B: [user] or A
+      from parent` with `A != B`, so it can never build a SELF-REFERENTIAL TTU
+      (precondition ii); reg11/`owc_star_ttu` have the self-referential TTU but never
+      write a star-OBJECT `parent` tuple. **Cheapest generator fix: let
+      `star_bridge_configs` sometimes draw `A == B`.**
+      **Exposure:** `ConnectedStore` is NOT exposed (`TupleSource` delegates admission
+      to the `SetEngine`) — it bites `WildcardIndex` used directly, which is public API
+      and is what the matrix's `GraphBackend` drives.
+      Pins: `tests/test_zt_p5_readjudication.py` (strict xfail + a companion pinning
+      TODAY's behavior so drift in EITHER direction is caught — flip and delete them
+      together). Detail: `docs/spec-deviations.md` 2026-07-26 ZT-P5.
+- [ ] **NEW 2026-07-26 — the rest of the zero-trust backlog (`ZT-P1` … `ZT-P5`).**
+      Security hardening (identifier `$`-vs-`\Z` bypass, 16 `-O`-stripped asserts,
+      paranoia never wired in production, SQLite lock no-op, non-contiguous
+      watermark advances, no resource bounds, the savepoint lock-memo hole); gate
+      self-defence (audit/conformance count floors, `xfail` unparsed, `sorry_scan`
+      blind to `sorryAx`/`native_decide`, unscanned root + `Cli.lean`); claim
+      corrections (**the headline theorems are VACUOUS on `[user] but not blocked`**;
+      2 known-vacuous lemmas inside the 455; `direct_arm_exclusion` gated as
+      in-fragment but proved outside it; stale `rootB`; every doc count wrong);
+      and the `CORRESPONDENCE.md` rebuild (~35 of ~45 Python citations wrong, §5
+      100% wrong, drift mirrored into the Lean docstrings → move to symbol anchors).
+      Sequencing is at the end of that section.
 - [x] **DONE 2026-07-23 (Claude): multi-instance set-engine (HA) support — landed, gated, pushed.**
       See the 2026-07-23 Current-status bullet for the full record (mechanisms, the
       closed log-ordering hazard, consistency model, gate numbers). Follow-ups

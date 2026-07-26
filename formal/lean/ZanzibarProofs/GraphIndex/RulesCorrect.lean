@@ -152,7 +152,7 @@ then fires the TTU rule on the *rewrite-produced* `(g, parent, d)`, materialisin
 **stored** `parent` tuples (there are none — `parent` is computed), so `sem = false`.
 **Divergence.** With a directs-only `parent` (a raw stored tupleset) the two agree.
 
-This is exactly what `zanzibar_utils_v1.py:_validate_ttu_tuplesets` rejects at
+This is exactly what `zanzibar_utils_v1.py::_validate_ttu_tuplesets` rejects at
 compile: an *untainted* tupleset relation with computed/rewritten arms. Note
 `GraphAccepts` clause (3) does NOT catch it — a `computed`-armed tupleset is
 untainted (`isDerived = false`), so it passes `GraphAccepts` yet must be excluded
@@ -162,7 +162,7 @@ seed on a tupleset relation, so the deferred ttu correspondence reads raw tuples
 exactly as `ttuLeaf` does. -/
 
 /-- **`directsOnly e`** — every arm of `e` is a `Direct` leaf (a `Direct` or a
-    `union` of directs-only). Faithful to `zanzibar_utils_v1.py:_directs_only`. A
+    `union` of directs-only). Faithful to `zanzibar_utils_v1.py::_directs_only`. A
     directs-only relation has no `computed`/`ttu` arm, so it is never a rewrite
     *output* (`exprArms_directsOnly`). -/
 def directsOnly : Expr → Bool
@@ -174,7 +174,7 @@ def directsOnly : Expr → Bool
   | .excl _ _  => false
 
 /-- **`TtuTuplesetsDirect S`** — the untainted-fragment analog of
-    `_validate_ttu_tuplesets` (`zanzibar_utils_v1.py:898`): every TTU's tupleset
+    `zanzibar_utils_v1.py::_validate_ttu_tuplesets`: every TTU's tupleset
     relation, *for every declared def carrying that key*, is directs-only. (Python
     keys a dict, so "every def with the key" = "the def"; stating it over all
     matching defs makes `no_rewrite_outputs_tupleset` need no separate key-uniqueness

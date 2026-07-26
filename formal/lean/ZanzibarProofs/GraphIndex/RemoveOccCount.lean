@@ -12,9 +12,12 @@ materialized across the rewrite closures of the stored writes:
       ReachedByW3d2E σ S T → ∀ a b, isDerived S (b.type, b.pred) = false →
         σ.edges.count (a, b) = ((T.flatMap (rewriteClosure S)).map edgeOfTuple).count (a, b)
 
-`GraphState.edges : List (NodeKey × NodeKey)` is a MULTISET (`addEdge` prepends
-unconditionally, `State.lean:742`), so `List.count (a,b)` IS the model's `direct_edge_count`
-(the ref-count — `index_v4/core.py:686-704`). This theorem is the ref-count decision made
+`GraphState.edges : List (NodeKey × NodeKey)` is a MULTISET
+(`GraphIndex/State.lean::GraphState.addEdge` prepends
+unconditionally), so `List.count (a,b)` IS the model's `direct_edge_count`
+(the ref-count maintained by `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe`
+and decremented by `::ReachabilityIndex._remove_edge_locked`). This theorem is the
+ref-count decision made
 concrete: an untainted edge's ref-count is a pure occurrence count over the store's
 rewrite closures — exactly the quantity R4's confluence lemma will decrement with
 `removeEdgeOne` (erase-one). It seeds the shared-derivation `rc ≥ 2` case (the R1 KILL:
@@ -35,10 +38,14 @@ and touches no existing def/theorem/inductive. Not in `Audit.lean` (R3 is infras
   model as written.** `#eval` on `viewer := a but not b` (write `alice@a`, cascade, write
   `bob@a`, cascade) gives `count (alice → viewer:doc:1) = 1` after the first cascade but
   **`= 4`** after the second. The model DELIBERATELY does NOT maintain `rc ≡ 1` on derived
-  edges: its diffing pass `reconcileKeyD` (`ReconcileDiff.lean:212`) writes on the guard
+  edges: its diffing pass `GraphIndex/ReconcileDiff.lean::GraphState.reconcileKeyD` writes
+  on the guard
   `checkFn ∧ ¬covered` — it does NOT probe edge presence (`¬has_edge`) the way Python does
-  (`processor.py:359-367`), so it STACKS duplicate derived copies across passes/rounds,
-  compensated by making retraction a filter-ALL (`removeEdgePair`, `ReconcileDiff.lean:52`).
+  (`index_v4/processor.py::DeltaProcessor._reconcile_subject`'s bare-entity tail, whose
+  `has_edge` probe is `index_v4/core.py::ReachabilityIndex.direct_edge_exists_by_id`),
+  so it STACKS duplicate derived copies across passes/rounds,
+  compensated by making retraction a filter-ALL
+  (`GraphIndex/ReconcileDiff.lean::GraphState.removeEdgePair`).
   This is the pre-existing, documented modeling decision (`ReconcileDiff.lean` header:
   "the model's `writeDirect` may stack duplicate copies across passes, so removal filters
   ALL copies"). So the faithful derived-side statement is NOT a count bound but a

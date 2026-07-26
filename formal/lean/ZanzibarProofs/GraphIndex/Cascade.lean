@@ -3,16 +3,19 @@ import ZanzibarProofs.GraphIndex.ReconcileDiff
 /-!
 # The cascade scheduling layer — logged writes, delta→key mapping, the drain loop (ROADMAP W3d-1a)
 
-`index_v4/processor.py` `run_cascade` (`:694-740`), `_map_deltas_to_keys` (`:585-652`),
-`_fan_out` (`:654-692`); `core.py:_emit` (`:31-44`); `outbox.py`;
-`connectedstore/apply.py:79-87`; boolean spec §5.1–5.2. Design + faithfulness notes:
-ROADMAP "W3d — the multi-stratum cascade".
+`index_v4/processor.py::DeltaProcessor.run_cascade` (a thin `_node_cache_scope()`
+wrapper) → `::DeltaProcessor._run_cascade` (the modeled body),
+`::DeltaProcessor._map_deltas_to_keys`, `::DeltaProcessor._fan_out`;
+`index_v4/core.py::ReachabilityIndex._emit` (buffered) + `::ReachabilityIndex._flush_outbox`;
+`index_v4/outbox.py`; `connectedstore/apply.py::advance_index`; boolean spec §5.1–5.2.
+Design + faithfulness notes: ROADMAP "W3d — the multi-stratum cascade".
 
 W3a–W3c treated a reconcile pass as an externally-scheduled batch job. **W3d models the
-scheduler**: writes emit outbox deltas inside the transaction, `run_cascade` maps the
+scheduler**: writes emit outbox deltas inside the transaction, `_run_cascade` maps the
 frontier's deltas to affected derived keys, reconciles each, and advances the watermark
-— with Python's final leftover check (`InvariantViolation` on non-quiescence,
-`processor.py:729-739`) modeled as a REJECT branch, and T5 = the reject provably never
+— with Python's final leftover check (the `raise InvariantViolation` on non-quiescence
+at the tail of `index_v4/processor.py::DeltaProcessor._run_cascade`) modeled as a
+REJECT branch, and T5 = the reject provably never
 fires on the fragment (`runCascade_no_abort`) so the watermark advance is justified,
 never asserted (`cascade_drains`).
 
@@ -29,8 +32,10 @@ Modeling decisions (ROADMAP W3d, decisions 1–6):
    coalescing of the pass's per-flip rows, which all share that object end by R-node
    terminality (re-proved over the interleaved closure:
    `reconcileJobsL_Rnode_not_source`).
-4. **The key mapping** `affectedKeys` = `_map_deltas_to_keys`'s LeafFamily branch +
-   `_fan_out`'s `via='computed'` branch, restricted to the fragment (`hLU`: operands
+4. **The key mapping** `affectedKeys` =
+   `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`'s LeafFamily own-key
+   branch + `::DeltaProcessor._fan_out`'s `via='computed'` arm, restricted to the
+   fragment (`hLU`: operands
    are same-object untainted computed refs; the ttu/userset/tupleset-ttu dependent
    branches are out of fragment by `hterm`/`hCO`). The subject-level cheap path is
    NOT modeled (the model always full-object reconciles — Python's general path; the
@@ -42,8 +47,9 @@ Modeling decisions (ROADMAP W3d, decisions 1–6):
    W3d-1.
 7. **The pass is the DIFFING audit** (`reconcileStarsKeyD`, 2026-07-11f): W3d's store
    grows between cascades, so a derived guard can flip DOWN (`excl` operand add) and
-   the pass must RETRACT the stale derived edge — exactly Python's
-   `reconcile_subject` removal branch (`processor.py:365-367`). The add-only pass
+   the pass must RETRACT the stale derived edge — exactly the removal arm of
+   `index_v4/processor.py::DeltaProcessor._reconcile_subject`'s bare-entity tail
+   (`_write_derived(..., add=False)`). The add-only pass
    model was refuted by `#eval` at a cascaded state (see `ReconcileDiff.lean` header);
    W3a–W3c keep the add-only pass, where fixed-store guard stability makes the
    removal branch provably dead.
@@ -63,7 +69,7 @@ subjects). **The cross-key hazard**: a post-cascade `banned` write re-mapped the
 EXISTING viewer key through the `banned` operand cone — and until that second cascade
 ran, the derived read was STALE (`check = true ≠ sem = false` for the newly-banned
 subject), confirming the model claim scope: reads are correct at CASCADED states
-(Python: `run_cascade` runs inside every writing transaction). The second cascade's
+(Python: `DeltaProcessor.run_cascade` runs inside every writing transaction). The second cascade's
 own pass row mapped to `[]` (the no-abort content) while the write's row mapped to
 the key; an empty-frontier cascade was a no-op accept. No refutation. -/
 
@@ -71,7 +77,7 @@ namespace Zanzibar
 
 /-! ## Outbox primitives -/
 
-/-- The highest outbox id (0 if empty) — `outbox_watermark` (`outbox.py:13-21`). -/
+/-- The highest outbox id (0 if empty) — `index_v4/outbox.py::outbox_watermark`. -/
 def GraphState.maxOutboxId (σ : GraphState) : Nat :=
   σ.outbox.foldl (fun m d => max m d.id) 0
 
@@ -117,7 +123,10 @@ theorem foldl_max_comm (l : List Delta) :
 def GraphState.nextDeltaId (σ : GraphState) : Nat :=
   max σ.maxOutboxId σ.watermark + 1
 
-/-- Append one delta row (`core.py:_emit` — a row inserted inside the writing
+/-- Append one delta row (`index_v4/core.py::ReachabilityIndex._emit` — since perf N16
+    the row is STAGED in `self._outbox_buffer` and bulk-inserted by
+    `::ReachabilityIndex._flush_outbox` at the end of the driving
+    `::ReachabilityIndex._add_direct_edge_unsafe`, still inside the writing
     transaction; the autoincrement id is the cursor). `leaf` records the row's
     provenance (Python LeafFamily vs DerivedFamily, see `Delta`): reconcile emissions
     default to `false`; raw leaf-routed writes/removes pass `true`. Only `affectedKeys`
@@ -247,8 +256,8 @@ theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
 /-! ## Logged retractions (W3d remove-leg R2 substrate — the retract mirror of the
     logged writes above)
 
-`_apply_row` (`connectedstore/apply.py:48-68`) routes BOTH an ADD and a REMOVE log row
-through the IDENTICAL `ruleset.apply(triple)` rewrite fan-out (`apply.py:61`), then applies
+`connectedstore/apply.py::_apply_row` routes BOTH an ADD and a REMOVE log row
+through the IDENTICAL `ruleset.apply(triple)` rewrite fan-out, then applies
 `_add_tuple_trusted` (ADD) or `_remove_tuple_trusted` (REMOVE) per rewrite-closure member.
 So the retraction of a raw tuple is the fold of a per-member edge decrement over the SAME
 `rewriteClosure S t` the write path folds `writeLoggedOne` over — modelled below as
@@ -265,14 +274,16 @@ armed with the R4 confluence — added last so every increment stays green. -/
     (the direct-edge multiset GREW), the retraction emits iff the edge was PRESENT (the
     multiset SHRANK) — same "emit on an actual flip of the direct-edge multiset" rule, one
     delta at the object node with the tuple's relation. Mirror of Python
-    `_remove_tuple_trusted` → `remove_edge_by_id` → `_remove_edge_locked`
-    (`index_v4/core.py:686-704`): the ref-counted `-1` update
-    (`_add_direct_edge_unsafe(subject_id, object_id, -1)`, `core.py:704`) is the sole
+    `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` →
+    `index_v4/core.py::ReachabilityIndex.remove_edge_by_id` →
+    `::ReachabilityIndex._remove_edge_locked`: the ref-counted `-1` update
+    (`_add_direct_edge_unsafe(subject_id, object_id, -1)`) is the sole
     driver of `_emit(subject_id, object_id, "REMOVED")` on the reachability flip
-    (`core.py:278`, denormalised over the closure; the model reconstructs that cone at
-    cascade time via `affectedObjects`, decision 1). The presence guard mirrors the
-    `direct_edge_count == 0 ⇒ ValueError` reject (`core.py:700-702`) / the
-    non-existent-endpoint `ValueError` (`index_v4/wildcard.py:320-323`); store consistency
+    (`::ReachabilityIndex._emit`, denormalised over the closure; the model reconstructs
+    that cone at cascade time via `affectedObjects`, decision 1). The presence guard
+    mirrors the `direct_edge_count == 0 ⇒ ValueError` reject in
+    `::ReachabilityIndex._remove_edge_locked` / the non-existent-endpoint `ValueError`
+    in `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted`; store consistency
     makes the else-branch dead at every admitted removal (an R3 fact), so it is present
     only for totality. -/
 def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
@@ -283,16 +294,21 @@ def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
 
 /-- **The logged rule-routed retraction**: the retract mirror of `writeLoggedRules` — fold
     `removeLoggedOne` over the SAME `rewriteClosure S t` the write path folds
-    `writeLoggedOne` over (`RuleSet.apply t` as a list, `RulesWrite.lean:106`). Mirrors
-    `_apply_row`'s REMOVE branch: `ruleset.apply(triple)` fan-out
-    (`connectedstore/apply.py:61`) with `_remove_tuple_trusted` per member. -/
+    `writeLoggedOne` over (`zanzibar_utils_v1.py::RuleSet.apply` as a list —
+    `GraphIndex/RulesWrite.lean::rewriteClosure`). Mirrors
+    `connectedstore/apply.py::_apply_row`'s REMOVE branch: the `ruleset.apply(triple)`
+    fan-out with `WildcardIndex._remove_tuple_trusted` per member. -/
 def GraphState.removeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
   (rewriteClosure S t).foldl (fun acc u => acc.removeLoggedOne u) σ
 
 /-- **The chain-level retraction admission guard** — the retract mirror of the write leg's
     `FoldAdmits`. A raw tuple may be retracted only if it is IN the store: `t ∈ T`. Mirror
-    of `TupleSource.remove` (`connectedstore/source.py:104-112`), whose `engine.remove_tuple`
-    raises `ValueError` and logs nothing on an absent tuple. `σ` is carried for constructor
+    of `connectedstore/source.py::TupleSource.remove`, whose `engine.remove_tuple`
+    raises `ValueError` and logs nothing on an absent tuple. **Scope caveat
+    (`ZT-P4-2c`):** presence is only ONE conjunct of the chain's remove gate —
+    `GraphIndex/Exec.lean::removeGateB` additionally demands a DRAINED prior state,
+    which `TupleSource.remove` does not impose and the batched apply schedule
+    routinely violates. `σ` is carried for constructor
     symmetry with the write leg's `hadm : FoldAdmits σ …` (the guard itself is store-only). -/
 def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
 
@@ -430,22 +446,32 @@ theorem reconcileStarsKeyD_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (T :
 def GraphState.affectedObjects (σ : GraphState) (d : Delta) : List NodeKey :=
   d.node :: σ.nodes.filter (fun v => σ.reach d.node v)
 
-/-- **The delta → derived-key mapping** (`_map_deltas_to_keys`, `processor.py:989-1027`).
+/-- **The delta → derived-key mapping**
+    (`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`).
 
-    Two branches, matching Python's LeafFamily/DerivedFamily split on the delta row:
+    Two branches, matching Python's LeafFamily/DerivedFamily split on the delta row.
+    **Scope note (`ZT-P4-1`/§7.1, 2026-07-26):** Python's mapper has grown further
+    channels this model does NOT carry (the subject-GC residue rescan over
+    `::DeltaProcessor._keys_referencing`, the leaf `tupleset-ttu` dependents, and the
+    `tupleset_feeders` / `target_feeders` arms); see `CORRESPONDENCE.md` §7.
 
-    * **LeafFamily own-key branch** (`processor.py:991-1011`): a RAW leaf-routed
+    * **LeafFamily own-key branch** (the `isinstance(fam, LeafFamily)` arm of
+      `::DeltaProcessor._map_deltas_to_keys`): a RAW leaf-routed
       write/remove (`d.leaf = true`) on a DERIVED relation dirties its OWN derived key
       `(d.node.type, d.node.pred, d.node.name)` (Python routes the write onto the
       storage leaf `<R>.<i>` and dirties `key = (o_type, fam.owner_relation, o_name)`).
-      Guarded `d.node.name ≠ STAR` (`processor.py:993`: a wildcard-object delta on a
-      derived key is a leaked decision-15 shape) and `isDerived` (untainted leaves have
+      Guarded `d.node.name ≠ STAR` — Python's `if o_name == '*': raise
+      InvariantViolation` in that same arm (a wildcard-object delta on a derived key is
+      a leaked decision-15 shape; a bare `assert` since `ZT-P1-2` is a `raise`, so it
+      survives `python -O`) — and `isDerived` (untainted leaves have
       no derived own-key; and reconcile emissions carry `leaf = false`, so this branch is
       empty for them — the fence that lets the cascade quiesce, since `_fan_out` never
       re-dirties its own key).
-    * **DerivedFamily fan-out** (`_fan_out via='computed'`, fragment-restricted): a
-      candidate object node `v` (concrete — derived keys are never star-named,
-      `processor.py:604-605`) dirties every declared derived key `(v.type, R)` whose def
+    * **DerivedFamily fan-out** (`::DeltaProcessor._fan_out`'s `edge.via == 'computed'`
+      arm, fragment-restricted): a candidate object node `v` (concrete — derived keys
+      are never star-named, which is what the wildcard-object `raise InvariantViolation`
+      above and the compile-time `zanzibar_utils_v1.py::_reject_object_wildcard_scope`
+      jointly enforce) dirties every declared derived key `(v.type, R)` whose def
       reads `v.pred` as a computed operand, at object `v.name`.
 
     Keys are `(dt, R, on)` triples. -/
@@ -493,7 +519,8 @@ def W3cJob.applyLogged (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
     GraphState :=
   (j.applyD S T σ).pushDelta (objNode ⟨j.dt, j.on⟩ j.R) j.R
 
-/-- Run a batch of logged reconcile jobs left-to-right (`run_cascade`'s per-round
+/-- Run a batch of logged reconcile jobs left-to-right
+    (`index_v4/processor.py::DeltaProcessor._run_cascade`'s per-round
     key loop; one-stratum, so ordering is irrelevant — operand reads are
     pass-inert). -/
 def reconcileJobsL (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
@@ -599,12 +626,14 @@ theorem reconcileJobsL_outbox_sound (S : Schema) (T : Store) :
 
 /-! ## The drain loop (decision 5) -/
 
-/-- **`runCascade`** (`run_cascade`, `processor.py:694-740`, one-stratum): reconcile
+/-- **`runCascade`** (`index_v4/processor.py::DeltaProcessor._run_cascade`, at
+    one stratum): reconcile
     the batch, then Python's final quiescence check — the rows above the round
     frontier must map to NO keys, else `InvariantViolation` aborts the transaction.
     The abort is modeled as the reject branch (state unchanged); on accept the
     watermark advances past everything, which the next transaction's frontier read
-    (`advance_index` re-reads `outbox_watermark`) makes faithful. -/
+    (`connectedstore/apply.py::advance_index` re-reads
+    `index_v4/outbox.py::outbox_watermark`) makes faithful. -/
 def runCascade (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
     GraphState :=
   if ((reconcileJobsL S T σ jobs).outbox.filter
@@ -730,7 +759,8 @@ theorem reconcileJobsL_Rnode_not_source {σ : GraphState} {S : Schema} {T : Stor
     passes: every row above the round frontier is a pass-emitted row at a derived
     R-node, whose reach cone is empty (terminality) and whose own predicate is
     derived — hence not a computed operand of any derived def (`hLU`) — so it maps
-    to no keys. Python's `InvariantViolation` (`processor.py:736-739`) is dead code
+    to no keys. Python's leftover `raise InvariantViolation` (the tail of
+    `index_v4/processor.py::DeltaProcessor._run_cascade`) is dead code
     at one stratum. -/
 theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
     {jobs : List W3cJob}

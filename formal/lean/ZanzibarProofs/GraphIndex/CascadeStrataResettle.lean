@@ -3,8 +3,8 @@ import ZanzibarProofs.GraphIndex.CascadeStrataSettle
 /-!
 # W3d-2 endgame — the two-round targeted re-settlement (ROADMAP W3d-2)
 
-`index_v4/processor.py:382-459` (`reconcile`, now with ROUTED guards at stratum-2
-keys), `:694-740` (`run_cascade` at two rounds). This file supplies the ROUTED
+`index_v4/processor.py::DeltaProcessor._reconcile` (now with ROUTED guards at stratum-2
+keys) and `::DeltaProcessor._run_cascade` (at two rounds). This file supplies the ROUTED
 mirrors of the W3d-1b re-settle layer that the stratum-staged settledness induction
 consumes:
 
@@ -194,7 +194,8 @@ theorem check_reconcileKeyDR_other {σ : GraphState} {S : Schema} (T : Store)
 /-! ## The routed per-candidate guard and its fold-invariance -/
 
 /-- The routed per-candidate edge guard `want = should ∧ ¬covered`
-    (`reconcile_subject`, `processor.py:359`, with the ROUTED `should`). -/
+    (`index_v4/processor.py::DeltaProcessor._reconcile_subject`'s bare-entity tail,
+    with the ROUTED `should`). -/
 def GraphState.wantEdgeR (σ : GraphState) (T : Store) (dt on R : String) (e : Expr)
     (c : SubjectRef) : Bool :=
   σ.checkFnR T c dt on R e && !(σ.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)

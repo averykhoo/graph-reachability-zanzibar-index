@@ -65,6 +65,17 @@ landing.
 > the key set is provably identical; full differential + hypothesis + paranoia
 > gate. Niche; needs a workload that shows it first.
 
+> **PROVENANCE NOTE — superseded 2026-07-26.** The N3 elision described below was
+> **WITHDRAWN as unsound** (zero-trust review ZT-P0-1: it caused a reproduced
+> authorization escalation). `_cross_object_recordings_possible` and
+> `_RESIDUE_LOCAL_LEAF_KINDS` no longer exist and `_keys_referencing` now always scans,
+> so N14's premise ("the scan is already skipped on the only schemas a benchmark
+> builds") no longer holds — the scan now runs everywhere. The measured cost of that is
+> +4.3% on a synthetic all-`closure` worst case and below noise on the real suite, so
+> N14's *decline* stands on its own merits; only its stated reasoning is stale. The
+> record below is left as written, per the history-file convention. See
+> `docs/spec-deviations.md` 2026-07-26.
+
 **Why declined (2026-07-16):** **zero harness coverage.** `_keys_referencing`
 (the full `ResidueV1` scan N14 targets) is guarded by the N3 elision
 (`_cross_object_recordings_possible`) and returns `[]` immediately unless a

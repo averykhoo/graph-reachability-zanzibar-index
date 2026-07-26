@@ -3,30 +3,40 @@ import ZanzibarProofs.GraphIndex.ReconcileUposComplete
 /-!
 # The derived reconcile — star coverage and the `stars`/`neg` residue (ROADMAP W3c, write half)
 
-`SEMANTICS.md` §7.6; `boolean spec §5.3-5.4`; `index_v4/processor.py` (`reconcile`,
-`:382-459`: step 1 the star fold, step 2 the `neg` recompute, step 2c `upos`, step 3
-the residue upsert, step 4 the edge audit; `reconcile_subject` `:321-380`:
-`want_edge = should ∧ ¬covered` at `:359`); `index_v4/wildcard.py:398-432` (the full
-residue read: bare ⇒ edge ∨ (shape ∈ stars ∧ ∉ neg), star ⇒ shape ∈ stars, userset ⇒
-upos ∨ (shape ∈ stars ∧ ∉ neg)).
+`SEMANTICS.md` §7.6; `boolean spec §5.3-5.4`;
+`index_v4/processor.py::DeltaProcessor._reconcile` (step (1) the star fold, step (2)
+the `neg` recompute, step (2c) `upos`, step (3) the residue upsert, step (4) the edge
+audit — the in-code step markers travel with the code) and
+`::DeltaProcessor._reconcile_subject` (whose bare-entity tail computes
+`want_edge = should and not covered`); `index_v4/wildcard.py::WildcardIndex._check_derived`
+(the full residue read: bare ⇒ edge ∨ (shape ∈ stars ∧ ∉ neg), star ⇒ shape ∈ stars,
+userset ⇒ upos ∨ (shape ∈ stars ∧ ∉ neg)).
+
+*Rename note (`ZT-P4-1`, 2026-07-26):* the public `DeltaProcessor.reconcile` /
+`::reconcile_subject` / `::run_cascade` are now thin wrappers; the modeled bodies are
+the underscored `_reconcile` / `_reconcile_subject` / `_run_cascade`.
 
 W3b lifted the bare-subject restriction; the store stayed **star-free**, so residues
 carried only `upos`. **W3c makes the star-coverage content go live**: with `user:*`
 grants on operand relations the processor persists
 
-* `stars` — the star×boolean fold `plan.stars_fn` (`zanzibar_utils_v1.py:1533-1561`):
-  per closure leaf, `leaf_stars` holds a declared wildcard shape `sh` iff the graph's
-  *star-subject* read `widx.check(sh.pred, sh.type, '*', leaf, o)` is true
-  (`processor.py:58-62`); `Union → ∪`, `Intersection → ∩`, `Exclusion → −` over those
+* `stars` — the star×boolean fold `plan.stars_fn`
+  (`zanzibar_utils_v1.py::_compile_stars_fn`): per closure leaf, `leaf_stars` holds a
+  declared wildcard shape `sh` iff the graph's *star-subject* read
+  `widx.check(sh.pred, sh.type, '*', leaf, o)` is true
+  (`index_v4/processor.py::_EvalContext.leaf_stars`);
+  `Union → ∪`, `Intersection → ∩`, `Exclusion → −` over those
   sets. **Pointwise this fold is exactly the boolean evaluation on the star subject**:
   `sh ∈ stars_fn(ctx) ⟺ check_fn(ctx, (sh.pred, sh.type, '*'))` — each set constructor
   matches the corresponding connective (`∪/∨`, `∩/∧`, `−/∧¬`). The model uses the
   pointwise form: `stars = shapes.filter (coveredFn := checkFn on the star subject)`.
-* `neg` — star-covered ∧ expr-false concrete subjects (`processor.py:406-411`), and
-* `upos` — with its `¬covered` guard now contentful (`:438-439`),
+* `neg` — star-covered ∧ expr-false concrete subjects
+  (`::DeltaProcessor._reconcile` step (2)), and
+* `upos` — with its `¬covered` guard now contentful (step (2c)),
 
 and the edge audit materialises an edge only for **uncovered** expr-true bare
-subjects (`want_edge = should ∧ ¬covered`, `:359`) — a covered subject holds NO edge
+subjects (`want_edge = should and not covered`, in
+`::DeltaProcessor._reconcile_subject`'s bare-entity tail) — a covered subject holds NO edge
 (the space rule; the read answers it wholesale from `stars ∖ neg`).
 
 **Attack-first (2026-07-11, machine-checked `#eval` vs `sem`, scratch deleted).** On
@@ -48,7 +58,7 @@ defeat the star query (stars true while bob ∈ neg). No refutation.
 
 The **write model + T2a**: the wholesale residue recompute (`reconcileResidueKey`),
 the covered-guarded edge fold (`reconcileKeyC`), the combined per-key reconcile
-(`reconcileStarsKey`, faithful to `reconcile`'s residue-THEN-edge-audit order), the
+(`reconcileStarsKey`, faithful to `_reconcile`'s residue-THEN-edge-audit order), the
 W3c closure, its W3a shadow, and the full invariant `reachedByW3c_inv` — with
 **every I6 clause contentful for the first time** (`negStarCovered`, `negEdgeFree`,
 `uposEdgeFree`, `uposNegDisjoint`) and **no `StarFreeStore` hypothesis anywhere**:
@@ -79,16 +89,18 @@ namespace Zanzibar
 
 /-! ## Declared subject-wildcard shapes
 
-`SchemaInfo.subject_wildcard_shapes` (`zanzibar_utils_v1.py`): the shapes `(type,
-pred)` declared with a wildcard restriction anywhere in the schema. The processor
-enumerates its star fold over exactly this (schema-fixed) list
-(`DeltaProcessor.__init__`, `processor.py:135`; `leaf_stars`, `:60-62`). -/
+`zanzibar_utils_v1.py::SchemaInfo.subject_wildcard_shapes`: the shapes `(type, pred)`
+declared with a wildcard restriction anywhere in the schema. The processor enumerates
+its star fold over exactly this (schema-fixed) list — `self.subject_shapes`, set in
+`index_v4/processor.py::DeltaProcessor.__init__` and consumed by
+`::_EvalContext.leaf_stars`. -/
 def wildcardShapes (S : Schema) : List Shape :=
   S.defs.flatMap (fun d => (exprRestrictions d.2).filterMap
     (fun r => if r.2.2 then some (r.1, r.2.1) else none))
 
 /-- The star subject of a shape — the intensional `(type, '*', pred)` probe subject
-    (`leaf_stars` passes `'*'` as the subject name, `processor.py:62`). -/
+    (`index_v4/processor.py::_EvalContext.leaf_stars` passes `'*'` as the subject
+    name). -/
 def starSubj (sh : Shape) : SubjectRef := ⟨sh.1, STAR, sh.2⟩
 
 @[simp] theorem starSubj_shape (sh : Shape) : (starSubj sh).shape = sh := rfl
@@ -223,11 +235,12 @@ theorem evalE_star_of_noConc {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query} {s : 
         ihb hcd.2 hba.2 hnc.2 (fun r' hr' => hag r' (List.mem_append_right _ hr'))]
   | ttu tr ts => intro hcd _ _ _; exact hcd.elim
 
-/-- **The wholesale residue recompute** for one derived key (`reconcile` steps 1–3,
-    `processor.py:388-446`): `stars` = the covered shapes; `neg` = the candidate
-    subjects that are star-covered ∧ expr-false (`:406-411`); `upos` = the userset
-    candidates that are uncovered ∧ expr-true (`:434-441`). One `putResidue` upsert
-    (`_store_residue`); the model stores a possibly-empty row where Python deletes an
+/-- **The wholesale residue recompute** for one derived key
+    (`index_v4/processor.py::DeltaProcessor._reconcile` steps (1)–(3)): `stars` = the
+    covered shapes; `neg` = the candidate subjects that are star-covered ∧ expr-false
+    (step (2)); `upos` = the userset candidates that are uncovered ∧ expr-true
+    (step (2c)). One `putResidue` upsert
+    (`::DeltaProcessor._store_residue`); the model stores a possibly-empty row where Python deletes an
     all-empty one — read-equivalent via the `getD Residue.empty` default. -/
 def GraphState.reconcileResidueKey (σ : GraphState) (T : Store) (dt on R : String)
     (e : Expr) (shapes : List Shape) (negCands uposCands : List SubjectRef) : GraphState :=
@@ -237,12 +250,15 @@ def GraphState.reconcileResidueKey (σ : GraphState) (T : Store) (dt on R : Stri
   σ.putResidue (objNode ⟨dt, on⟩ R) R ⟨stars, neg, upos⟩
 
 /-- Coverage as persisted: is the shape in the stored `stars` row?
-    (`reconcile_subject` re-reads `_residue_state` per subject, `processor.py:341-342`.) -/
+    (`index_v4/processor.py::DeltaProcessor._reconcile_subject` re-reads
+    `::DeltaProcessor._residue_state` per subject.) -/
 def GraphState.coveredAt (σ : GraphState) (k : NodeKey) (R : String) (sh : Shape) : Bool :=
   ((σ.residue k R).getD Residue.empty).stars.contains sh
 
-/-- **The covered-guarded edge fold** (`reconcile` step 4 → `reconcile_subject`,
-    `want_edge = should ∧ ¬covered`, `processor.py:359`): materialise the derived
+/-- **The covered-guarded edge fold**
+    (`index_v4/processor.py::DeltaProcessor._reconcile` step (4) →
+    `::DeltaProcessor._reconcile_subject`, `want_edge = should and not covered`):
+    materialise the derived
     edge iff expr-true AND the subject's shape is not star-covered. `covered` reads
     the *persisted* row — which the fold never writes, so it is fold-constant. -/
 def GraphState.reconcileKeyC (σ : GraphState) (T : Store) (dt on R : String) (e : Expr)
@@ -251,10 +267,10 @@ def GraphState.reconcileKeyC (σ : GraphState) (T : Store) (dt on R : String) (e
     if acc.checkFn T c dt on R e && !(acc.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)
     then acc.writeDirect ⟨c, R, ⟨dt, on⟩⟩ else acc) σ
 
-/-- **One full-object reconcile** (`reconcile`, `processor.py:382-459`): the residue
-    recompute (steps 1–3) **then** the edge audit (step 4). The order is
-    load-bearing: the edge fold's covered guard reads the row this pass just wrote
-    (Python stores the residue at `:446` before auditing edges at `:450-455`). -/
+/-- **One full-object reconcile** (`index_v4/processor.py::DeltaProcessor._reconcile`):
+    the residue recompute (steps (1)–(3)) **then** the edge audit (step (4)). The order
+    is load-bearing: the edge fold's covered guard reads the row this pass just wrote
+    (Python's step (3) `_store_residue` upsert precedes the step-(4) edge audit). -/
 def GraphState.reconcileStarsKey (σ : GraphState) (T : Store) (dt on R : String)
     (e : Expr) (shapes : List Shape) (cands negCands uposCands : List SubjectRef) :
     GraphState :=
@@ -430,16 +446,20 @@ theorem reconcileStarsKey_residue_self (σ : GraphState) (T : Store) (dt on R : 
 /-! ## The W3c write-closure -/
 
 /-- **`ReachedByW3c σ S T`** — an admitted rule-routed base plus full-object star
-    reconcile passes (`reconcileStarsKey` — the faithful atomic unit: `reconcile`
-    always writes the residue *before* auditing edges, `processor.py:443-455`; a
+    reconcile passes (`reconcileStarsKey` — the faithful atomic unit:
+    `index_v4/processor.py::DeltaProcessor._reconcile` always writes the residue
+    (step (3)) *before* auditing edges (step (4)); a
     free-floating covered-guard edge pass without its residue write is NOT a Python
     behaviour and would break the space rule). Side conditions mirror the audit
-    enumeration: edge candidates are concrete bare subjects (`reconcile` step 4 runs
-    `reconcile_subject` only for `predicate == '...'` rows, `:452-453`; enumerated
-    nodes are concrete, `wildcard == ''`); `neg` candidates are concrete
-    (`_leaf_concretes` + persisted ids, `:394-404`); `upos` candidates are concrete
-    userset-shaped (`:434-437`); the shapes list is the schema-fixed
-    `subject_wildcard_shapes` (`:135`). -/
+    enumeration: edge candidates are concrete bare subjects (step (4) fans into
+    `::DeltaProcessor._reconcile_subject` only for `predicate != '...'`-skipped rows,
+    i.e. bare entities; enumerated nodes are concrete, `wildcard == ''`); `neg`
+    candidates are concrete (step (2): `::DeltaProcessor._leaf_concretes` +
+    `::DeltaProcessor._derived_leaf_neg_ids` + the step-(2a) from-chain keys);
+    `upos` candidates are concrete userset-shaped (step (2c) over the step-(2b) audit
+    set); the shapes list is the schema-fixed
+    `zanzibar_utils_v1.py::SchemaInfo.subject_wildcard_shapes`, snapshotted in
+    `::DeltaProcessor.__init__`. -/
 inductive ReachedByW3c : GraphState → Schema → Store → Prop where
   | base {σ : GraphState} {S : Schema} {T : Store} :
       ReachedByRulesAdmitted σ S T → ReachedByW3c σ S T

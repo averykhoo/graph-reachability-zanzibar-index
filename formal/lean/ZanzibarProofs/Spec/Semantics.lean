@@ -5,7 +5,7 @@ import ZanzibarProofs.Core.Store
 
 `SEMANTICS.md` §5. This is the normative reference the two backends are proven to
 compute. It is a faithful transcription of the reference oracle
-(`tests/oracle.py:309-487`).
+(`tests/oracle.py::Oracle.check` and the closures nested inside it).
 
 **Design (logged in PROOF_STATUS variations, refines §11-A2).** The evaluator is
 *primitive-recursive on a fuel bound*: `semAux (fuel+1)` is defined purely in
@@ -27,25 +27,28 @@ namespace Zanzibar
 abbrev Rec := String → String → String → Bool
 
 /-- Objects a query object-name matches: a concrete name also absorbs `T:*`
-    object-wildcard grants; a `'*'` object is intensional (`oracle.py:393-396`). -/
+    object-wildcard grants; a `'*'` object is intensional
+    (`tests/oracle.py::Oracle.check._matching_objects`). -/
 def matchingObjects (oname : String) : List String :=
   if oname = STAR then [STAR] else [oname, STAR]
 
 /-- Does a stored tuple's subject match one of a `Direct` leaf's restrictions?
-    (`oracle.py:402-407`). -/
+    (`tests/oracle.py::Oracle.check.direct_leaf.restriction_matches`). -/
 def restrictionMatches (rs : List Restriction) (tup : Tuple) : Bool :=
   rs.any (fun r =>
     tup.subject.type == r.1 && tup.subject.predicate == r.2.1 &&
     ((tup.subject.name == STAR) == r.2.2))
 
 /-- The grants of a `Direct` leaf on `(otype, oname, rel)`: stored tuples on this
-    relation/object whose subject matches a restriction (`oracle.py:409-411`). -/
+    relation/object whose subject matches a restriction (the `grants` comprehension
+    inside `tests/oracle.py::Oracle.check.direct_leaf`). -/
 def grantsOf (T : Store) (rs : List Restriction) (otype oname rel : String) : List Tuple :=
   T.filter (fun tup =>
     tup.relation == rel && tup.object.type == otype &&
     (matchingObjects oname).contains tup.object.name && restrictionMatches rs tup)
 
-/-- `_member_of_granted` (`oracle.py:450-462`): is the fixed `subject` a transitive
+/-- `_member_of_granted` (`tests/oracle.py::Oracle.check._member_of_granted`): is the
+    fixed `subject` a transitive
     member of any granted *userset* in `grants`? Star usersets expand over the
     ∃-witness population `instances`. -/
 def memberOfGranted (rec : Rec) (T : Store) (q : Query) (grants : List Tuple) : Bool :=
@@ -56,7 +59,8 @@ def memberOfGranted (rec : Rec) (T : Store) (q : Query) (grants : List Tuple) : 
     else
       (instances T q g.subject.type).any (fun inst => rec g.subject.type inst g.subject.predicate))
 
-/-- `direct_leaf` (`oracle.py:398-448`): membership of the fixed `subject` in a
+/-- `direct_leaf` (`tests/oracle.py::Oracle.check.direct_leaf`): membership of the
+    fixed `subject` in a
     `Direct` leaf, by query-subject kind (star / bare-concrete / userset). -/
 def directLeaf (rec : Rec) (subject : SubjectRef) (T : Store) (q : Query)
     (rs : List Restriction) (otype oname : String) (rel : String) : Bool :=
@@ -83,7 +87,8 @@ def directLeaf (rec : Rec) (subject : SubjectRef) (T : Store) (q : Query)
         && g.subject.type == s.type && g.subject.predicate == s.predicate))
     || memberOfGranted rec T q grants
 
-/-- `ttu_leaf` (`oracle.py:464-485`): the stored-parent tupleset-to-userset rule.
+/-- `ttu_leaf` (`tests/oracle.py::Oracle.check.ttu_leaf`): the stored-parent
+    tupleset-to-userset rule.
     Parents come only from STORED tupleset tuples (`SEMANTICS.md` §5.5). -/
 def ttuLeaf (rec : Rec) (subject : SubjectRef) (T : Store) (q : Query)
     (targetRel tuplesetRel : String) (otype oname : String) : Bool :=
@@ -103,7 +108,8 @@ def ttuLeaf (rec : Rec) (subject : SubjectRef) (T : Store) (q : Query)
 
 /-- Structural evaluation of one `Expr` on the fixed object `(otype, oname)` under
     enclosing relation `rel`, using `rec` for node-changing steps
-    (`oracle.py:377-391`). A `Direct` leaf's grants are keyed on the enclosing
+    (`tests/oracle.py::Oracle.check.sat_expr`). A `Direct` leaf's grants are keyed on
+    the enclosing
     relation `rel`, threaded here. -/
 def evalE (rec : Rec) (subject : SubjectRef) (T : Store) (q : Query)
     (otype oname rel : String) : Expr → Bool
@@ -115,7 +121,8 @@ def evalE (rec : Rec) (subject : SubjectRef) (T : Store) (q : Query)
   | .ttu tr ts => ttuLeaf rec subject T q tr ts otype oname
 
 /-- One immediate-consequence step: answer node `(otype, oname, rel)` given the
-    sub-node answers `rec` (`sat`/`sat_expr`, `oracle.py:353-391`). An undefined
+    sub-node answers `rec` (`tests/oracle.py::Oracle.check.sat` /
+    `::Oracle.check.sat_expr`). An undefined
     relation is `false` (§11-A3). -/
 def step (S : Schema) (subject : SubjectRef) (T : Store) (q : Query)
     (rec : Rec) (otype oname rel : String) : Bool :=

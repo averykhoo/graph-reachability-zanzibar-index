@@ -21,8 +21,12 @@ def BARE : String := "..."
 
 theorem star_ne_bare : STAR ≠ BARE := by decide
 
-/-- Charset+length validity of an identifier (`validate_write_identifiers`,
-    `zanzibar_utils_v1.py:22-57`). Deliberately OPAQUE: no proof unfolds it and no
+/-- Charset+length validity of an identifier
+    (`zanzibar_utils_v1.py::validate_write_identifiers` → `::_require` →
+    `::is_valid_identifier`, matching the module-level `_IDENTIFIER_RE`; since
+    `ZT-P1-1`, 2026-07-26, that regex is `\Z`-anchored and applied with
+    `re.fullmatch`, so a trailing newline no longer sneaks past the 1–256 bound).
+    Deliberately OPAQUE: no proof unfolds it and no
     structural lemmas are derived from it. It enters the theorems only through the
     carried hypothesis `AllValid` (`SetEngine/Correct.lean`) — retained in the
     T1/T3 statements but unused by their proofs, and (being opaque) NOT

@@ -4,7 +4,8 @@ import ZanzibarProofs.Core.Ident
 # References, tuples, shapes
 
 The domain of `SEMANTICS.md` §2.2, transcribed from the oracle's tuple layout
-(`tests/oracle.py:54-67`). A subject's `predicate = BARE` marks a bare entity;
+(`tests/oracle.py::OracleTuple`, built by `::t`). A subject's `predicate = BARE`
+marks a bare entity;
 any other value is a userset relation. A `name = STAR` marks a wildcard.
 -/
 
@@ -32,7 +33,8 @@ structure Tuple where
 deriving DecidableEq, Repr, Inhabited
 
 /-- A shape `(type, predicate)`: bare `(T, BARE)` or userset `(T, P)`.
-    See `memberset.py:42`, `wildcard-materialization-spec.md §1.1`. -/
+    See the `Shape` alias in `setengine/memberset.py`,
+    `wildcard-materialization-spec.md §1.1`. -/
 abbrev Shape := String × String
 
 /-- The shape of a subject reference. -/

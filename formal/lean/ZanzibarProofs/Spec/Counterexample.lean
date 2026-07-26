@@ -19,7 +19,8 @@ statement (stratifiable schema, **arbitrary** store) is refutable inside Lean:
 The schema here is stratifiable (`(A,p)` is the only tainted key; `depEdges = []`
 — the cycle runs through tuples the schema never declared), and the store violates
 exactly the `StoreDeclared` clause the real admission gate enforces
-(`engine.py:_validate` (2)): tuple `C:c#... ts A:o` matches no declared restriction
+(`setengine/engine.py::SetEngine._validate` step (2)): tuple `C:c#... ts A:o`
+matches no declared restriction
 — `(A, ts)` is not even a declared relation.
 
 Consequently `semAux_fuel_stable_step` / `sem_fuel_stable` (`Spec/WellDef.lean`)

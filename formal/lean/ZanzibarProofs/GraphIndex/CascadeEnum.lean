@@ -3,9 +3,12 @@ import ZanzibarProofs.GraphIndex.CascadeInv
 /-!
 # W3d-1c piece B — the audit enumeration + discharging `W3dJobCoverage` (ROADMAP W3d-1c)
 
-`index_v4/processor.py:394-441` (`reconcile`'s per-pass audit enumeration): every pass
-re-derives the store-supported concretes of every operand leaf (`_leaf_concretes`), the
-persisted incoming R-node concretes (the edge holders), and the persisted `neg`/`upos`
+`index_v4/processor.py::DeltaProcessor._reconcile` steps (2)/(2b) — the per-pass audit
+enumeration: every pass
+re-derives the store-supported concretes of every operand leaf
+(`::DeltaProcessor._leaf_concretes`), the
+persisted incoming R-node concretes (the edge holders, via
+`::DeltaProcessor._incoming_concretes`), and the persisted `neg`/`upos`
 members, then wholesale-rewrites the row + diff-audits the edges. `W3dJobCoverage`
 (`CascadeSettle.lean`) is the `sem`-level content of that enumeration; here it was
 carried as a chain-side hypothesis on each cascade leg. This file discharges it as a
@@ -107,7 +110,8 @@ theorem checkFn_eq_coveredFn_of_no_extra_cd {σ : GraphState} {T : Store} {s : S
 
 /-! ## The state-derived leaf enumeration `leafConcretes`
 
-`processor.py:394-441` (`_leaf_concretes`): the pass enumerates the store-supported
+`index_v4/processor.py::DeltaProcessor._leaf_concretes` (driven from
+`::DeltaProcessor._reconcile` steps (2)/(2b)): the pass enumerates the store-supported
 concrete subjects of every operand leaf — those reaching the leaf's object node or its
 `w_all` node. The model reads them straight off the state: every plain star-free node
 that reaches a `computed`-leaf target. `nodeSubj` decodes a node back to a subject
@@ -310,7 +314,8 @@ theorem uposCands_complete {S : Schema} {T : Store} {σ : GraphState}
 
 /-! ## The edge-holder enumeration (clause (1), by construction)
 
-`processor.py:394-441` also re-enumerates the persisted incoming R-node concretes — the
+`index_v4/processor.py::DeltaProcessor._reconcile` step (2b) also re-enumerates the
+persisted incoming R-node concretes (`::DeltaProcessor._incoming_concretes`) — the
 attack-confirmed stale-holder clause. The model reads them straight off the edges: every
 source of an edge into the R-node, decoded. Clause (1) is then immediate — `nodeSubj`
 recovers the subject from its (variant-only-altered) source node. -/

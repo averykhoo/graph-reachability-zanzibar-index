@@ -19,6 +19,17 @@ the stratified-Datalog¬ perfect model `sem` — hence are equivalent — with t
 implementations pinned to the Lean models by the conformance harness. The honest claim
 never rounds up to "the code is formally verified" (plan §7).
 
+**One caveat every session must carry** (`FINAL_REVIEW.md` §3.0, `ARCHITECTURE.md` §6.0):
+the final graph theorems (`graph_correct`, `graph_reached_inv`,
+`Exec.graphRun_check_eq_sem`, and everything routed through them) are **VACUOUS — not
+merely narrow — on any store written through the `Direct` arm of a derived def**, i.e. on
+`can_view: [user] but not blocked`, the canonical Zanzibar boolean shape.
+`FullScope.lean:564` machine-checks `¬ StoreValidRules Sd Td` at exactly such a store, and
+`GraphAdmission.storeValid` IS `StoreValidRules`. What is proved there is the C-chain
+`graph_correct_w3d2_d`; the E-chain widening (`enumJob2 → enumJob2D`, a `_d` projection of
+`reachedByW3d2E_toC`, `storeValid → StoreValidRulesD`) is recorded at
+`FullScope.lean:527-528` as **NOT done** and is the highest-value open item.
+
 ---
 
 ## House rules (non-negotiable, user-adjudicated)
@@ -29,15 +40,22 @@ never rounds up to "the code is formally verified" (plan §7).
    golden/oracle/snapshot to make something pass.
 2. **Attack first.** Before proving any NEW theorem statement, try to REFUTE it —
    concrete scenarios via `#eval` against the real `check`/`sem` (delete the scratch
-   after recording the finding). This has killed six false statements so far
-   (additive fuelBound, abstract WriteStep closure, T0a-sans-StoreDeclared, naive-W2
-   TTU fragment, W3a single-edge collapse sans NoRuleOutputs, W3d-2 "round-1 keys are
-   stratum-1"). A session that kills a false statement is a GOOD session; record the
-   finding.
+   after recording the finding). Six false statements were killed this way in the
+   original W1→W4 arc (additive fuelBound, abstract WriteStep closure,
+   T0a-sans-StoreDeclared, naive-W2 TTU fragment, W3a single-edge collapse sans
+   NoRuleOutputs, W3d-2 "round-1 keys are stratum-1"), and **at least seven more since**
+   during the 2026-07-18…20 remove and Direct-arm legs (`graph_correct_w3a_d`, the
+   chain-level `removeLoggedRules` fold, filter-all `removeEdgePair`, the derived-arm
+   `count ∈ {0,1}` invariant, the naive `reachedByW3d2_shadow_d`, the paired
+   `reachedByW3d2C_settled_d`/`graph_correct_w3d2_d`, and the first proposed
+   `affectedKeys` fix) — see `history/PROOF_STATUS.md` for the full ledger. A session
+   that kills a false statement is a GOOD session; record the finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
    + **0 sorries** + zcli + axiom audit (455 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + 326 Python conformance
-   tests, 0 skips
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + **330** Python conformance
+   tests (`conf-heavy` 80 + `conf-rest` 250), 0 skips, 0 xfails
+   (measured 2026-07-26 at `f2b403c`; the gate does NOT enforce either count — see
+   `FINAL_REVIEW.md`'s header — so re-measure, don't quote)
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
    gates, the TTU userset-subject and self-referential-tuple spec corpora, and the
@@ -186,7 +204,8 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > star→concrete `sem` monotonicity lemma — recorded follow-up). See `history/PROOF_STATUS.md` 2026-07-20d.
 >
 > **★ 2026-07-20e — task step 4 CLOSED on the HONEST CONSERVATIVE fork: `W4WitnessDirect` LANDED
-> (audit 450 → 455) + `direct_arm_exclusion` moved INTO `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → 326,
+> (audit 450 → 455) + `direct_arm_exclusion` moved INTO `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → 326
+> as counted that session; the collected total measured 2026-07-26 is **330**,
 > the graph-STATE pin ran CLEAN); `W4Fragment`/the final theorems deliberately NOT widened.** The
 > witness (`FullScope.lean`) inhabits the C-chain `graph_correct_w3d2_d` bundle at the corpus pair:
 > `accepts` (admission with `StoreValidRulesD`), `fragment` (all `_d` carries incl. `hNoUD`),
@@ -384,12 +403,14 @@ the graph conformance mode (zcli `"graph"` + `test_conformance_graph.py`),
 **state-level graph conformance** (zcli mode `"graph-state"` emitting the model's
 canonical final state; `formal/conformance/extractor.py` reading the Python
 `EdgeV4`/`ResidueV1` rows back to the same form under six DOCUMENTED projections
-P1–P6; `test_conformance_state.py`, 15 corpora — its first run FOUND the P6
+P1–P6; `test_conformance_state.py`, **19** corpora — its first run FOUND the P6
 leaf-family divergence, recorded in `CORRESPONDENCE.md` §7), **exhaustive small-scope
-enumeration** (`test_conformance_enum.py`: ALL stores ≤ 3 tuples, 2 names/type, four
-shapes, 527 stores, spec × oracle × set engine, counts asserted), the **remove-path
-answer gate** (`test_conformance_remove.py`: seeded add/remove/re-add sequences ×
-17 corpora × 5 seeds, driven `SetEngine` == `sem` × oracle on the final store, driven
+enumeration** (`test_conformance_enum.py`: ALL stores ≤ K tuples, 2 names/type, **six
+shapes, 1021 stores** at a per-shape K of 3 or 4, spec × oracle × set engine, counts
+asserted — plus `test_conformance_enum_state.py`, a state-level leg over a stride-4
+sample of 257 of those 1021), the **remove-path
+answer gate** (`test_conformance_remove.py`, 80 tests: seeded add/remove/re-add sequences
+× the spec-scope corpora × 5 seeds, driven `SetEngine` == `sem` × oracle on the final store, driven
 == `rebuild()` at grid + state-fingerprint level — and, added 2026-07-13, the SAME
 sequences/seeds driven through the real GRAPH index (`WildcardIndex`+`DeltaProcessor`,
 I5 leaf-routing): driven graph `check` == oracle, driven graph SQL state == a fresh
@@ -407,7 +428,13 @@ guard's validly-stored scope decision is APPROVED by Avery 2026-07-19), the
 (`test_conformance_generated.py`: 40 seeded generated schemas outside the curated
 corpora, spec == oracle == set engine — closes the disjoint-pools risk at answer
 level), `CORRESPONDENCE.md`, and `FINAL_REVIEW.md` are all landed and gated.
-verify.sh: 326 conformance tests, 0 skips. **No open blocker for the claim as written in `FINAL_REVIEW.md`.** The topical
+verify.sh: **330** conformance tests, 0 skips, 0 xfails (measured 2026-07-26 at
+`f2b403c`). Removes are driven end-to-end over every in-fragment corpus **except
+`direct_arm_exclusion`** (`test_conformance_remove_graph.py:102` `_REMOVE_EXCLUDED` — the
+remove guard's plain-`StoreValidRules` precondition fail-closes on Direct-arm stores).
+**No open blocker for the claim as written in `FINAL_REVIEW.md`** — but note that claim
+now carries `FINAL_REVIEW.md` §3.0: the final graph theorems are VACUOUS on `Direct`-arm
+derived stores (`FullScope.lean:564`), which is the highest-value open widening. The topical
 map is `ARCHITECTURE.md`; the exact claim is `FINAL_REVIEW.md`; provenance is
 `history/`. The one known check-level graph-vs-set divergence (derived-TTU
 userset subjects — outside `W4Fragment` and the conformance grids) was FIXED

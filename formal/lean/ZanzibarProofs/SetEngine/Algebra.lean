@@ -6,7 +6,8 @@ import ZanzibarProofs.SetEngine.MemberSet
 `SEMANTICS.md` §6, `theory.md:143-159`. Each operation's extension equals the
 set-theoretic operation on the operands' extensions, and its star set folds by the
 matching boolean on shape sets. These are exactly the properties
-`setengine/memberset.py`'s brute-force property suite checks; here they are proved
+`tests/test_memberset.py`'s brute-force property suite checks over
+`setengine/memberset.py` (both `SetOps` backends); here they are proved
 once and reused by T1.
 
 All three extensional laws are immediate from `ext_normalize` (already proved),
@@ -30,13 +31,14 @@ variable {Id : Type} [DecidableEq Id] (pop : Shape → Finset Id) (a b : MemberS
 @[simp] theorem ext_subtract : ext pop (subtract pop a b) = ext pop a \ ext pop b := by
   unfold subtract; rw [ext_normalize]
 
-/-- **Union star law** (`memberset.py:26`). -/
+/-- **Union star law** (`setengine/memberset.py::union`; the star × boolean table in
+    that module's docstring). -/
 @[simp] theorem stars_union : (union pop a b).stars = a.stars ∪ b.stars := rfl
 
-/-- **Intersection star law** (`memberset.py:27`). -/
+/-- **Intersection star law** (`setengine/memberset.py::intersect`; same table). -/
 @[simp] theorem stars_intersect : (intersect pop a b).stars = a.stars ∩ b.stars := rfl
 
-/-- **Subtraction star law** (`memberset.py:28`). -/
+/-- **Subtraction star law** (`setengine/memberset.py::subtract`; same table). -/
 @[simp] theorem stars_subtract : (subtract pop a b).stars = a.stars \ b.stars := rfl
 
 /-- Intensional `'*'`-query law for union: covered iff covered in either
@@ -94,7 +96,8 @@ theorem mem_ext_subtract (uid : Id) :
 
 /-! ### The normal-form invariant, and ghost membership -/
 
-/-- Renormalized sets satisfy `neg ⊆ starpop` (`memberset.py` normal form). -/
+/-- Renormalized sets satisfy `neg ⊆ starpop`
+    (`setengine/memberset.py::_normalize`'s normal form). -/
 theorem neg_subset_starpop (E : Finset Id) (S : Finset Shape) :
     (normalize pop E S).neg ⊆ starpop pop S := by
   intro x hx; simp only [normalize, Finset.mem_sdiff] at hx; exact hx.1

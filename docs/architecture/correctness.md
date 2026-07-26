@@ -59,9 +59,17 @@ the backfill enumeration gap — all after the example-based suites were green.
 ## 3. Paranoia mode: making violations loud at the moment of writing
 
 Every commit in the test suite runs, inside the transaction, the invariant checker
-(I1–I7, I10) and the delta-scoped verifier (each outbox flip re-derived by BFS over
+(`check_invariants`: **I1–I7 + I10 + I13** — read off the function body 2026-07-26; its
+own docstring says "I1–I6 + I10" and is wrong, and the schema-dependent half, I3/I4/I5/I6
++ I13, only runs when `schema_info` is supplied. I8 is compile-time, I9 is the
+matrix/parity per-op fixpoint audit, and I11/I12 are test-level — none of those three
+groups runs here; `verification.md` has the per-invariant table) and the delta-scoped
+verifier (each outbox flip re-derived by BFS over
 direct edges and compared to the closure row) — a violation aborts the commit — and
-runs the checker again post-commit in a fresh session. This converts "eventually a
+runs the checker again post-commit in a fresh session. **"Every commit in the test suite"
+is literal:** paranoia is wired only by `tests/wildcard_helpers.make_wildcard_index` and
+`tests/test_connectedstore.py`; `ConnectedStore` never installs it, so in production this
+layer is dark (see §4's "Paranoia off" gap). This converts "eventually a
 grid comparison fails somewhere downstream" into "the writing transaction itself
 refuses", which is the difference between a reproducible bug and an archaeology
 project. The seeded-corruption tests prove each invariant class actually fires.

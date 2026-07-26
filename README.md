@@ -58,7 +58,14 @@ connectedstore/        the composed system: source-of-truth tuples + permanent
 formal/                Lean 4 machine-checked proofs that the two backend
                        algorithms (as modeled) compute the same
                        stratified-Datalog¬ semantics; the Python is pinned to
-                       the models by a conformance harness, not itself verified
+                       the models by a conformance harness, not itself verified.
+                       Scope is asymmetric: the SET ENGINE is proved at full
+                       scope, the GRAPH INDEX only at a documented fragment of
+                       what the Python accepts - so "the backends are equivalent"
+                       holds unconditionally on the set-engine side and only
+                       inside that fragment on the graph side (and vacuously on
+                       Direct-arm boolean stores - formal/FINAL_REVIEW.md 3.0).
+                       Never rounds up to "the code is formally verified"
                        (start at formal/HANDOFF.md)
 legacy/                v1-v3, superseded but runnable documentation
 tests/                 incl. the independent oracle + the validation matrix

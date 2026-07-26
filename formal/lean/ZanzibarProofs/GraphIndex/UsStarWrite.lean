@@ -4,8 +4,10 @@ import ZanzibarProofs.GraphIndex.ObjStarWrite
 # The bridge-materializing write model — userset-wildcard fragment (T2b, stage W1c)
 
 `SEMANTICS.md` §7.2–7.5; `wildcard-materialization-spec.md` §1.1, §7;
-ROADMAP "The staged T2 plan", sub-stage **W1c**; `index_v4/wildcard.py:120-259`,
-`zanzibar_utils_v1.py:264-270`.
+ROADMAP "The staged T2 plan", sub-stage **W1c**;
+`index_v4/wildcard.py::WildcardIndex._ensure_bridges` /
+`::WildcardIndex.add_tuple` → `::WildcardIndex._add_tuple_trusted`;
+`zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`.
 
 ## What W1c adds vs W1a/W1b
 
@@ -25,14 +27,16 @@ ROADMAP "The staged T2 plan", sub-stage **W1c**; `index_v4/wildcard.py:120-259`,
 
 ## Why bridged-IN shapes are the userset stars only (`bridged_in_shapes`)
 
-`zanzibar_utils_v1.py:264-270`: `bridged_in_shapes = {s ∈ subject_wildcard_shapes |
-s.predicate ≠ '...'}`. Bare shapes `(T,'...')` never need in-bridges (nothing in this
+`zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`:
+`bridged_in_shapes = {s ∈ subject_wildcard_shapes | s.predicate ≠ '...'}`.
+Bare shapes `(T,'...')` never need in-bridges (nothing in this
 graph points into a `'...'`-predicate node, so a bare-shape hop can only be the
 *leading* hop, which probe 2 covers virtually — this is exactly W1a). A subject-
 wildcard shape `(T,P)` with `P ≠ BARE` comes from any `[T:*#P]` restriction in the
-schema (`zanzibar_utils_v1.py:784-789`).
+schema (the first loop of `zanzibar_utils_v1.py::derive_schema_info`).
 
-## The model (`wildcard.py:222-259`, `_ensure_bridges:120-134`)
+## The model (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` and
+`::WildcardIndex._ensure_bridges`)
 
 `add_tuple` is **bridge-before-grant**: `_ensure_bridges` on each endpoint creates the
 configured bridges (in-bridge for a bridged-in shape, out-bridge for a bridged-out
@@ -58,10 +62,12 @@ namespace Zanzibar
 
 /-- Is `(t, p)` a declared subject-wildcard *userset* shape — `p ≠ BARE` and some
     `[t:*#p]` restriction (`(t, p, true)`) occurs in the schema? These are exactly
-    the `bridged_in_shapes` (`zanzibar_utils_v1.py:264-270, 784-789`); the graph
+    the `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`, fed by
+    `::derive_schema_info`'s restriction sweep; the graph
     materializes a `concrete → w_any(t,p)` in-bridge for every concrete node of such a
-    shape. (The TTU-through-shape extension of `subject_wildcard_shapes`,
-    `:795-803`, is out of scope for this TTU-free fragment.) -/
+    shape. (The star-tupleset TTU-through-shape extension of
+    `subject_wildcard_shapes` — `::derive_schema_info`'s second loop — is out of scope
+    for this TTU-free fragment.) -/
 def Schema.isSubjectWildcardUserset (S : Schema) (t p : String) : Bool :=
   p != BARE && S.defs.any (fun d => (exprRestrictions d.2).contains (t, p, true))
 
@@ -69,13 +75,15 @@ def Schema.isSubjectWildcardUserset (S : Schema) (t p : String) : Bool :=
 
 /-- `c` is a concrete *userset* node whose shape `(type, pred)` is a declared
     subject-wildcard userset shape — the nodes that need a `c → w_any` in-bridge
-    (`wildcard.py:120-129`; bridged-in shapes, §5). Only concretes are bridged; the
+    (the `bridged_in_shapes` arm of `index_v4/wildcard.py::WildcardIndex._ensure_bridges`;
+    §5). Only concretes are bridged; the
     `pred ≠ BARE` guard is subsumed by `isSubjectWildcardUserset`. -/
 def GraphState.bridgedInConcrete (σ : GraphState) (c : NodeKey) : Bool :=
   c.variant == Variant.plain && c.name != STAR && σ.schema.isSubjectWildcardUserset c.type c.pred
 
-/-- **Ensure the in-bridge for a concrete userset endpoint** (`_ensure_bridges`,
-    `wildcard.py:120-129`): if `c` is a concrete node of a bridged-in shape, create the
+/-- **Ensure the in-bridge for a concrete userset endpoint**
+    (`index_v4/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_in_shapes` arm):
+    if `c` is a concrete node of a bridged-in shape, create the
     `w_any(c.type, c.pred)` node (lazily) and add the bridge edge `c → w_any`, under the
     same cycle-rejection guard the core edge-add uses. Idempotence at the reachability
     level is automatic (`NReaches` is membership, not multiplicity); a non-bridged node
@@ -87,8 +95,10 @@ def GraphState.ensureInBridges (σ : GraphState) (c : NodeKey) : GraphState :=
     else σ.addNode (wAnyNode (c.type, c.pred))
   else σ
 
-/-- **The userset-star bridge-materializing single-tuple write** (`add_tuple`,
-    `wildcard.py:222-259`): add both endpoint nodes, ensure the out-bridges (W1b —
+/-- **The userset-star bridge-materializing single-tuple write**
+    (`index_v4/wildcard.py::WildcardIndex.add_tuple` →
+    `::WildcardIndex._add_tuple_trusted`): add both endpoint nodes, ensure the
+    out-bridges (W1b —
     inert on this object-wildcard-free fragment) and then the in-bridges of each
     concrete endpoint (bridge-before-grant), then the grant edge
     `subjNode s → objNode o R` under cycle-rejection. A rejected grant rolls back the

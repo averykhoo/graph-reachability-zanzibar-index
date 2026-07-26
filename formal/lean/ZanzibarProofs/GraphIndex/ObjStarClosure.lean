@@ -145,7 +145,9 @@ theorem wildReachedAdmitted_edge_complete {σ : GraphState} {S : Schema} {T : St
 /-! ## Lemma A — a reachable `w_all` node has a declared object-wildcard shape -/
 
 /-- Admission-validity of object wildcards: a `T:*` tuple is on a declared
-    object-wildcard shape (`wildcard.py` admission; the shape must be declared for a
+    object-wildcard shape (`setengine/engine.py::SetEngine._validate` step (1) and
+    `index_v4/wildcard.py::WildcardIndex._resolve`'s object-wildcard gating; the shape
+    must be declared for a
     wildcard grant to be written). -/
 def ObjStarValid (S : Schema) (T : Store) : Prop :=
   ∀ t ∈ T, t.object.name = STAR → S.isObjectWildcard t.object.type t.relation = true

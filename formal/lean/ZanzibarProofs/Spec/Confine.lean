@@ -12,7 +12,8 @@ see — and such an edge can close an exclusion cycle that stratification misses
 making `semAux` oscillate forever.
 
 The fix is the *documented* precondition (`SEMANTICS.md` §8: stores hold write-valid
-tuples): the real system's admission gate (`setengine/engine.py:_validate` step (2),
+tuples): the real system's admission gate (`setengine/engine.py::SetEngine._validate`
+step (2),
 shared with the graph backend) rejects any tuple that matches no declared type
 restriction of its `(object.type, relation)`. `StoreDeclared` below is the piece of
 that gate the confinement argument needs: every stored tuple's subject type is among
@@ -42,7 +43,8 @@ def relevantNames (T : Store) (q : Query) : List String :=
     `(object.type, relation)` is a declared relation whose definition names the
     tuple's subject type in one of its `Direct` restrictions.
 
-    This is implied by the Python admission gate (`engine.py:_validate` (2): a write
+    This is implied by the Python admission gate
+    (`setengine/engine.py::SetEngine._validate` step (2): a write
     matching no declared type restriction raises), so every store the composed
     system can hold satisfies it. It is exactly what confines `ttuLeaf`'s parent
     consultations to `exprRefs`: without it the consultation graph can leave the

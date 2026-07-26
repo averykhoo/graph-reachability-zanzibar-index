@@ -3,11 +3,12 @@ import ZanzibarProofs.GraphIndex.CascadeStrataResettle
 /-!
 # W3d-2 E-chain tail — piece 1: the derived-leaf concrete decomposition (ROADMAP W3d-2)
 
-`index_v4/processor.py:394-441` (`reconcile`'s per-pass audit enumeration) at a
+`index_v4/processor.py::DeltaProcessor._reconcile`'s per-pass audit enumeration
+(steps (2)/(2b)) at a
 STRATUM-2 key reads DERIVED operand leaves — so, beyond the store-supported reach
-concretes (`_leaf_concretes`, W3d-1's `leafConcretes`), it must also pull the operand
-RESIDUES' `neg` ids (`_derived_leaf_neg_ids`, `processor.py:461-495`) and the persisted
-`upos` ids (`:425-429`): a lower-stratum `neg`/`upos` member is EDGE-FREE (I6) so it is
+concretes (`::DeltaProcessor._leaf_concretes`, W3d-1's `leafConcretes`), it must also
+pull the operand RESIDUES' `neg` ids (`::DeltaProcessor._derived_leaf_neg_ids`) and the
+persisted `upos` ids (step (2b)): a lower-stratum `neg`/`upos` member is EDGE-FREE (I6) so it is
 invisible to the reach-probe enumeration, yet it reads differently from its shape-star
 at the derived leaf. This file is the routed analog of `CascadeEnum.lean`'s
 `probeNonDerived_concrete_decomp` spine — the DERIVED-leaf decomposition.
@@ -32,7 +33,8 @@ namespace Zanzibar
 open GraphModel
 
 /-- `graphRecR` at a DERIVED operand leaf is `probeDerived` (the routed recursion
-    routes a derived key to the residue read; `processor.py:43-70, 182-188`). -/
+    routes a derived key to the residue read; `index_v4/processor.py::_EvalContext`
+    and `::DeltaProcessor.member_check`). -/
 theorem graphRecR_derived (σ : GraphState) (s : SubjectRef) {dt on r' : String}
     (h : isDerived σ.schema (dt, r') = true) :
     GraphModel.graphRecR σ s dt on r' = GraphModel.probeDerived σ ⟨s, r', ⟨dt, on⟩⟩ :=
