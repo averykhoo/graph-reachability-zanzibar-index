@@ -1,10 +1,13 @@
+import time
 from contextlib import contextmanager
 from types import EllipsisType
-from sqlalchemy import insert, tuple_
+from sqlalchemy import insert, tuple_, update
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
 from legacy.index_v1 import MultiSet
 from zanzibar_utils_v1 import validate_write_identifiers, validate_node_identifiers
+from .invariants import InvariantViolation
 from .models import DeltaOutboxV1, EdgeV4, NodeV4, Edge, Node, StoreV4
 
 # Per-batch node-resolution cache sentinels (perf N15). ``_UNCACHED`` distinguishes
@@ -12,6 +15,167 @@ from .models import DeltaOutboxV1, EdgeV4, NodeV4, Edge, Node, StoreV4
 # batch" -- a negative cache entry). Both are private module singletons.
 _UNCACHED = object()
 _MISSING = object()
+
+# --------------------------------------------------------------------------- #
+# Writer serialization primitives (zero-trust review ZT-P1-4)
+# --------------------------------------------------------------------------- #
+
+#: Minimum SQLite ``busy_timeout`` (ms) this library installs on a connection before
+#: taking a write lock. SQLite's own busy handler IS the correct backoff for write-lock
+#: contention -- it retries internally instead of failing the statement -- and its
+#: default is 0 (fail immediately). A caller that already configured a HIGHER timeout
+#: keeps it; nothing is ever lowered.
+SQLITE_BUSY_TIMEOUT_MS = 10_000
+
+#: Bounded statement-level retry for the residual ``SQLITE_BUSY`` that the busy handler
+#: cannot absorb (e.g. a WAL write-after-read snapshot conflict, which fails instantly
+#: by design). Exponential backoff; after the last attempt the error propagates so the
+#: caller can retry the whole transaction on a fresh snapshot.
+SQLITE_BUSY_RETRIES = 4
+SQLITE_BUSY_BACKOFF = 0.01
+
+
+class WriteLockUnsafe(RuntimeError):
+    """The documented per-store write lock cannot actually be taken on this session's
+    bind, so a write's check-then-act admission is not atomic against other writers
+    (zero-trust review ZT-P1-4). The message names the configuration fix."""
+
+
+def is_sqlite(session: Session) -> bool:
+    """True when this session's bind is SQLite (pysqlite renders ``FOR UPDATE`` to
+    NOTHING, so the lock path has to differ -- see ``take_row_write_lock``)."""
+    try:
+        return session.get_bind().dialect.name == 'sqlite'
+    except Exception:                                   # pragma: no cover - no bind
+        return False
+
+
+def _sqlite_raw_connection(session: Session):
+    """The raw ``sqlite3.Connection`` behind this session (for ``in_transaction``)."""
+    return session.connection().connection.dbapi_connection
+
+
+def _sqlite_busy(exc: BaseException) -> bool:
+    msg = str(getattr(exc, 'orig', exc)).lower()
+    return 'locked' in msg or 'busy' in msg
+
+
+def _ensure_sqlite_busy_timeout(session: Session) -> None:
+    """Raise this connection's ``busy_timeout`` to ``SQLITE_BUSY_TIMEOUT_MS`` if it is
+    lower. SQLite's busy handler is the in-engine retry-with-backoff for write-lock
+    contention; with the default 0 a second writer fails instantly instead of waiting
+    (there was no ``SQLITE_BUSY`` handling anywhere in the library -- ZT-P1-4).
+
+    Memoized in ``Connection.info``, whose lifetime is exactly the DBAPI connection's --
+    the same scope the PRAGMA itself has -- so this costs one extra round trip per
+    connection, not one per lock."""
+    conn = session.connection()
+    if conn.info.get('_zanzibar_busy_timeout_ms', 0) >= SQLITE_BUSY_TIMEOUT_MS:
+        return
+    current = conn.exec_driver_sql('PRAGMA busy_timeout').scalar()
+    conn.info['_zanzibar_busy_timeout_ms'] = max(int(current or 0), SQLITE_BUSY_TIMEOUT_MS)
+    if current is None or int(current) < SQLITE_BUSY_TIMEOUT_MS:
+        # PRAGMA takes no bound parameters; the value is a module constant int, so
+        # this stays inside the project's "no user data in raw SQL" property.
+        conn.exec_driver_sql(f'PRAGMA busy_timeout={int(SQLITE_BUSY_TIMEOUT_MS)}')
+
+
+def take_row_write_lock(session: Session, lock_select, lock_update) -> None:
+    """Take the per-store write lock for the rest of the transaction (ZT-P1-4).
+
+    Two arms, one contract ("no other writer can commit against this store until this
+    transaction ends"):
+
+    * **PostgreSQL/MySQL** -- ``lock_select`` (a ``SELECT ... FOR UPDATE`` on the
+      store's lock row). Unchanged from before this fix.
+    * **SQLite** -- ``with_for_update()`` compiles to a PLAIN SELECT on pysqlite (no
+      ``FOR UPDATE`` in the emitted statement; verified), so the documented lock was a
+      silent NO-OP and, worse, pysqlite's default ``isolation_level=''`` runs SELECTs
+      in autocommit, so the validating reads of a write were not even in the same
+      transaction as its INSERT. We therefore issue ``lock_update`` -- a no-op UPDATE
+      of the same lock row -- which takes SQLite's RESERVED (database write) lock for
+      the rest of the transaction: a genuine writer serialization, and it promotes the
+      connection into a real transaction so every subsequent SELECT of the check-then-
+      act sequence reads inside it. Verified empirically: a second connection's write
+      blocks while the lock is held, and the UPDATE takes the lock even when it
+      matches zero rows (a store row that does not exist yet).
+
+    SQLITE_BUSY: the busy timeout is floored first (SQLite's own backoff), then a
+    bounded statement-level retry covers the residual; after that the error propagates
+    for the caller to retry the transaction (the existing concurrency tests already
+    retry ``OperationalError``)."""
+    if not is_sqlite(session):
+        session.exec(lock_select).first()
+        return
+    _ensure_sqlite_busy_timeout(session)
+    stmt = lock_update.execution_options(synchronize_session=False)
+    for attempt in range(SQLITE_BUSY_RETRIES):
+        try:
+            session.execute(stmt)
+            return
+        except OperationalError as exc:
+            last = attempt == SQLITE_BUSY_RETRIES - 1
+            if last or not _sqlite_busy(exc) or not session.is_active:
+                raise
+            time.sleep(SQLITE_BUSY_BACKOFF * (2 ** attempt))
+
+
+def store_lock_statements(store_id: str):
+    """The (SELECT ... FOR UPDATE, no-op UPDATE) pair that locks one store's row."""
+    return (
+        select(StoreV4).where(StoreV4.id == store_id).with_for_update(),
+        # no-op UPDATE (SQLite arm): same row, unchanged value -- it exists to take the
+        # write lock, not to change data.
+        update(StoreV4).where(StoreV4.id == store_id)
+        .values(description=StoreV4.description),
+    )
+
+
+def probe_store_write_lock(session: Session, store_id: str) -> None:
+    """Open-time ZT-P1-4 check: take the store write lock for real and verify it held.
+
+    SQLite only (off it ``FOR UPDATE`` is genuine, and issuing a lock at open would
+    break a legitimate read-only open against a hot standby). Call this as the FIRST
+    statement of the transaction: before any read has pinned a WAL snapshot, so lock
+    contention WAITS on the busy timeout (an effective ``BEGIN IMMEDIATE``) instead of
+    failing instantly with SQLite's write-after-read ``SQLITE_BUSY``."""
+    if not is_sqlite(session):
+        return
+    take_row_write_lock(session, *store_lock_statements(store_id))
+    assert_write_lock_effective(session)
+
+
+def assert_write_lock_effective(session: Session) -> None:
+    """Fail loudly, at open time, when this session cannot hold the write lock at all
+    (ZT-P1-4). Dialect-aware: a no-op off SQLite (``FOR UPDATE`` is real there).
+
+    The check is EMPIRICAL rather than a guess at the config: the caller has just
+    taken the lock, so the raw connection must now be inside a transaction. It is not
+    when the connection runs in autocommit -- SQLAlchemy ``isolation_level='AUTOCOMMIT'``,
+    or pysqlite ``isolation_level=None`` / ``autocommit=True`` with nothing emitting
+    ``BEGIN`` -- in which case the lock was released the instant it was taken and two
+    writers can both pass admission against a state their combined result invalidates.
+
+    Both SAFE configurations pass: pysqlite's DEFAULT (``isolation_level=''``, which
+    auto-begins on our lock UPDATE) and the recommended recipe
+    (``isolation_level=None`` + a ``begin`` listener emitting ``BEGIN``)."""
+    if not is_sqlite(session):
+        return
+    raw = _sqlite_raw_connection(session)
+    if getattr(raw, 'in_transaction', False):
+        return
+    raise WriteLockUnsafe(
+        "SQLite bind: the per-store write lock did NOT hold -- this connection is in "
+        "autocommit mode, so it was released the moment it was taken and a write's "
+        "check-then-act admission (duplicate detection, remove-existence, cycle "
+        "parity) is not atomic against another writer (zero-trust review ZT-P1-4). "
+        "Fix the engine configuration: either leave pysqlite's DEFAULT "
+        "isolation_level ('') in place, or use the documented SQLAlchemy recipe -- a "
+        "'connect' listener setting dbapi.isolation_level = None PLUS a 'begin' "
+        "listener running conn.exec_driver_sql('BEGIN') (see "
+        "tests/test_connectedstore_multi_instance.py). Do NOT open the engine or "
+        "session with isolation_level='AUTOCOMMIT', and do not set the sqlite3 "
+        "connection's autocommit=True.")
 
 
 class ReachabilityIndex:
@@ -183,9 +347,16 @@ class ReachabilityIndex:
         logical write already touches many rows.
 
         On PostgreSQL/MySQL this blocks other writers to the store until this transaction
-        commits/rolls back. On SQLite ``with_for_update()`` renders to nothing (the engine
-        already takes a database-level write lock), so tests are unaffected. A missing
-        store row simply yields no lock (harmless).
+        commits/rolls back. A missing store row simply yields no lock (harmless).
+
+        SQLITE (ZT-P1-4, 2026-07-26): ``with_for_update()`` compiles to a plain SELECT
+        on pysqlite, so this lock used to be a silent NO-OP -- the old docstring's
+        "the engine already takes a database-level write lock" is only true from the
+        first WRITE statement onward, which is *after* the check-then-act cycle test
+        and (with pysqlite's default ``isolation_level=''``) not even in the same
+        transaction as the validating SELECTs. ``take_row_write_lock`` therefore issues
+        a no-op UPDATE of the store row on a SQLite bind, which takes SQLite's RESERVED
+        write lock here, at lock time, and holds it until the transaction ends.
 
         Transaction-scoped memo (perf P12a): the lock is held for the whole transaction,
         so re-issuing the ``SELECT ... FOR UPDATE`` on a row this transaction already
@@ -195,18 +366,29 @@ class ReachabilityIndex:
         ``Session.get_transaction()`` returns a fresh ``SessionTransaction`` after every
         commit/rollback and ``None`` before autobegin, so the memo can never match into a
         retried transaction -- a retry re-takes the real lock, which is exactly the
-        lost-update guard this method exists to provide. (No savepoints/``begin_nested``
-        in the repo, so root-transaction identity is the whole story.)
+        lost-update guard this method exists to provide.
+
+        SAVEPOINTS (ZT-P1-7, 2026-07-26): the memo key is the ``(root, nested)`` pair,
+        NOT the root alone. ``get_transaction()`` returns the ROOT ``SessionTransaction``
+        even inside ``begin_nested()``, so keying on it alone was unsound: a caller could
+        take the lock inside a savepoint, roll that savepoint back -- PostgreSQL RELEASES
+        locks acquired inside a rolled-back savepoint -- and the next call would match the
+        memo and take NO lock at all. The repo itself uses no ``begin_nested``, but the
+        ``Session`` is caller-supplied, and wrapping a speculative write in a savepoint and
+        rolling back on rejection is an ordinary caller pattern. Including the nested
+        transaction's identity makes entering or leaving any savepoint invalidate the memo,
+        so the real lock is re-taken.
         """
         txn = self.session.get_transaction()
-        if txn is not None and txn is self._locked_txn:
+        key = (txn, self.session.get_nested_transaction())
+        if txn is not None and key == self._locked_txn:
             return
-        self.session.exec(
-            select(StoreV4).where(StoreV4.id == self.store_id).with_for_update()
-        ).first()
+        take_row_write_lock(self.session, *store_lock_statements(self.store_id))
         # Capture AFTER the select: the lock SELECT itself may have autobegun the
-        # transaction, so ``get_transaction()`` was potentially None above.
-        self._locked_txn = self.session.get_transaction()
+        # transaction, so ``get_transaction()`` was potentially None above. Store the
+        # ``(root, nested)`` pair -- see the savepoint note in the docstring.
+        self._locked_txn = (self.session.get_transaction(),
+                            self.session.get_nested_transaction())
 
     def _add_db_edges_unsafe(
             self,
@@ -216,9 +398,12 @@ class ReachabilityIndex:
             indirect_count: int | None
     ) -> None:
 
-        assert subject_id is not None or object_id is not None
-        assert subject_id != object_id
-        assert direct_count != 0 or indirect_count != 0
+        if not (subject_id is not None or object_id is not None):
+            raise InvariantViolation('edge write needs at least one live endpoint id')
+        if not (subject_id != object_id):
+            raise InvariantViolation('edge write endpoints coincide (trivial cycle); admission must reject this before here')
+        if not (direct_count != 0 or indirect_count != 0):
+            raise InvariantViolation('edge write with both counts zero is a no-op that must not reach the row writer')
 
         _select = select(EdgeV4).where(EdgeV4.store_id == self.store_id)
         if subject_id is not None:
@@ -235,8 +420,10 @@ class ReachabilityIndex:
             if subject_id is None or object_id is None:
                 return
 
-            assert (indirect_count or 0) >= (direct_count or 0)
-            assert (indirect_count or 0) > 0
+            if not ((indirect_count or 0) >= (direct_count or 0)):
+                raise InvariantViolation('I1 violated: indirect_edge_count < direct_edge_count')
+            if not ((indirect_count or 0) > 0):
+                raise InvariantViolation('I1 violated: zero-reachability row would be persisted (indirect_edge_count == 0)')
 
             edge = EdgeV4(
                 store_id=self.store_id,
@@ -281,8 +468,10 @@ class ReachabilityIndex:
             triple.direct_edge_count = new_direct
             triple.indirect_edge_count = new_indirect
 
-            assert triple.indirect_edge_count >= triple.direct_edge_count
-            assert triple.indirect_edge_count > 0
+            if not (triple.indirect_edge_count >= triple.direct_edge_count):
+                raise InvariantViolation('I1 violated: indirect_edge_count < direct_edge_count')
+            if not (triple.indirect_edge_count > 0):
+                raise InvariantViolation('I1 violated: zero-reachability row would be persisted (indirect_edge_count == 0)')
 
             # Derived flag follows the direct edge (boolean spec I5): set when the
             # processor writes the direct edge, cleared when the direct count retires
@@ -347,7 +536,8 @@ class ReachabilityIndex:
             if triple is None:
                 if not indirect_delta:
                     continue
-                assert indirect_delta > 0
+                if not (indirect_delta > 0):
+                    raise InvariantViolation('pure-indirect delta for a brand-new edge must be positive')
                 edge = EdgeV4(
                     store_id=self.store_id,
                     subject_id=from_id,
@@ -375,8 +565,10 @@ class ReachabilityIndex:
 
             triple.indirect_edge_count = new_indirect
 
-            assert triple.indirect_edge_count >= triple.direct_edge_count
-            assert triple.indirect_edge_count > 0
+            if not (triple.indirect_edge_count >= triple.direct_edge_count):
+                raise InvariantViolation('I1 violated: indirect_edge_count < direct_edge_count')
+            if not (triple.indirect_edge_count > 0):
+                raise InvariantViolation('I1 violated: zero-reachability row would be persisted (indirect_edge_count == 0)')
 
             # Derived flag follows the direct edge (boolean spec I5): a surviving
             # indirect-only row is closure state, not a derived grant. With
@@ -407,7 +599,8 @@ class ReachabilityIndex:
             self._outbox_buffer = []
 
     def _add_direct_edge_unsafe_impl(self, subject_id: int, object_id: int, count: int) -> None:
-        assert count in {-1, 1}
+        if not (count in {-1, 1}):
+            raise InvariantViolation('direct-edge delta must be exactly -1 or +1')
 
         # Remove direct edge first to preserve invariant on subtraction
         if subject_id != object_id and count < 0:
@@ -455,8 +648,16 @@ class ReachabilityIndex:
         for triple in triples_to:
             reachable_after_object[triple.object_id] = triple.indirect_edge_count
 
-        assert reachable_before_subject[object_id] == 0, "Cycle detected in backward path"
-        assert reachable_after_object[subject_id] == 0, "Cycle detected in forward path"
+        # SECURITY-CRITICAL: the only cycle guard on this (batch/bridge expansion)
+        # path. As `raise`, not `assert` -- under `python -O` an assert here vanishes
+        # and the expansion loops below proceed on a cyclic graph, producing unbounded
+        # path counts, hence permanent phantom reachability, hence a stale ALLOW.
+        # Same reasoning as the self-edge rejection in `_add_edge_locked`
+        # (blind-audit C3); hardened by the zero-trust review 2026-07-26 (ZT-P1-2).
+        if reachable_before_subject[object_id] != 0:
+            raise InvariantViolation("Cycle detected in backward path")
+        if reachable_after_object[subject_id] != 0:
+            raise InvariantViolation("Cycle detected in forward path")
 
         # Expand transitive paths. The three loops enumerate DISTINCT concrete
         # pairs (subject is never an ancestor, object never a descendant, no
@@ -509,7 +710,8 @@ class ReachabilityIndex:
                 _n = nodes.get(other_id)
                 if _n is None:
                     continue
-                assert _n.reference_count - debit >= 0
+                if not (_n.reference_count - debit >= 0):
+                    raise InvariantViolation('reference_count would go negative (neighbour debit exceeds count)')
                 if _n.reference_count - debit == 0 and _n.implicit:
                     self._evict_node(_n)            # N15: evict before delete
                     self.session.delete(_n)
@@ -525,7 +727,8 @@ class ReachabilityIndex:
                 _node = self.session.exec(
                     select(NodeV4).where(NodeV4.store_id == self.store_id).where(NodeV4.id == node_id)).first()
                 if _node:
-                    assert _node.reference_count + count >= 0
+                    if not (_node.reference_count + count >= 0):
+                        raise InvariantViolation('reference_count would go negative')
                     if _node.reference_count + count == 0 and _node.implicit:
                         self._evict_node(_node)     # N15: evict before delete
                         self.session.delete(_node)
@@ -771,9 +974,14 @@ class ReachabilityIndex:
             .where((EdgeV4.subject_id == node_id) | (EdgeV4.object_id == node_id))
             .limit(1)
         ).first()
-        assert leftover is None, (
-            f'remove_node left a dangling edge row {leftover} referencing deleted '
-            f'node {node_id} -- path-count corruption')
+        # As `raise`, not `assert`: this is the last barrier between `remove_node` and a
+        # dangling edge row, on a table with no enforced foreign keys -- and SQLite
+        # rowid reuse can later repoint that row at an unrelated principal
+        # (zero-trust review 2026-07-26, ZT-P1-2).
+        if leftover is not None:
+            raise InvariantViolation(
+                f'remove_node left a dangling edge row {leftover} referencing deleted '
+                f'node {node_id} -- path-count corruption')
 
     def check_reachable(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
                         relation: str, object_type: str, object_name: str) -> bool:

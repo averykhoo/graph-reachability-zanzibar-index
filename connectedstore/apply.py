@@ -24,7 +24,7 @@ from index_v4.processor import DeltaProcessor
 from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet, norm_pred as _norm
 
 from .models import IndexCursorV1, TupleLogV1
-from .source import log_rows
+from .source import WatermarkGap, log_gap, log_rows
 
 
 def ensure_cursor(session: Session, index_store_id: str,
@@ -90,6 +90,13 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
     batch size. Batch size thus affects only latency/granularity, not the final
     materialized state or any semantic guarantee.
 
+    That whole argument rests on ``rows`` being a contiguous prefix of the LOG, not just
+    of what this snapshot can see, so the advance is contiguity-CHECKED (ZT-P1-5,
+    2026-07-26): a committed row hidden by a pinned read snapshot would otherwise be
+    jumped over and never applied again, with ``_fresh_enough`` certifying the stale
+    answers that follow. A detected gap raises ``WatermarkGap`` and the batch commits
+    nothing.
+
     ``rows_hint`` (perf P12b) is the sync fast path: the just-flushed ``TupleLogV1``
     rows this transaction appended, handed straight through so ⑤ (re-SELECTing rows
     this transaction wrote) is skipped. It is USED only when it is provably equal to
@@ -130,7 +137,25 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
             _apply_row(row, widx, ruleset)
         if proc is not None:
             proc.run_cascade(wm)
-    cursor.applied_log_id = rows[-1].id
+    # ZT-P1-5: advance to the CONTIGUOUS head, never blindly to ``rows[-1].id``. The
+    # rows above are a contiguous prefix of what THIS SNAPSHOT can see -- which is not
+    # the same as a contiguous prefix of the log when the snapshot is pinned (MySQL/
+    # InnoDB REPEATABLE READ is the default): a concurrently committed row below
+    # ``rows[-1].id`` stays invisible, the cursor jumps over it, and it is never applied
+    # again -- while ``_fresh_enough(token)`` happily certifies the resulting stale
+    # ALLOW. ``log_gap`` re-reads the interval with a LOCKING read (current committed
+    # truth, not the snapshot) and costs nothing at all in the contiguous case,
+    # including the sync one-row fast path.
+    head = rows[-1].id
+    gap = log_gap(session, cursor.source_store_id, cursor.applied_log_id, head,
+                  [r.id for r in rows])
+    if gap is not None:
+        raise WatermarkGap(
+            f'index cursor {cursor.applied_log_id} -> {head} would skip committed log '
+            f'row {gap} of source store {cursor.source_store_id!r}: this session\'s '
+            f'read snapshot predates it, so the apply step could not see it. Roll back '
+            f'to start a fresh snapshot and retry the batch (nothing was committed).')
+    cursor.applied_log_id = head
     session.add(cursor)
     session.flush()
     return len(rows)

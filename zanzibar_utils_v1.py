@@ -20,7 +20,15 @@ from legacy.index_v2 import Node
 # Internal ids remain strictly numeric (allocated int32s), decoupled from these strings.
 
 IDENTIFIER_CHARSET = r'A-Za-z0-9_./@+=-'
-_IDENTIFIER_RE = re.compile(rf'^[{IDENTIFIER_CHARSET}]{{1,256}}$')
+# NOTE the anchoring: `\Z`, never `$`. Python's `$` also matches immediately BEFORE a
+# trailing newline, so `^[...]{1,256}$` accepted `'alice\n'` and (since the newline is
+# not counted by the {1,256} repeat) 257-character names ending in a newline -- a
+# control character reaching persisted identity strings, and an off-by-one against the
+# documented 1-256 bound, in direct contradiction of this module's header contract.
+# Found by the zero-trust review 2026-07-26 (ZT-P1-1); pinned by
+# tests/test_reg15_identifier_anchoring.py. `re.fullmatch` below is belt-and-braces
+# with `\Z` -- either alone is sufficient; both together make the intent unmissable.
+_IDENTIFIER_RE = re.compile(rf'[{IDENTIFIER_CHARSET}]{{1,256}}\Z')
 
 
 def is_valid_identifier(value) -> bool:
@@ -29,7 +37,7 @@ def is_valid_identifier(value) -> bool:
     admitted positionally by ``_require``'s ``allow_star``/``allow_ellipsis`` flags,
     never by this predicate. External callers wanting "is this writable as a name"
     should go through ``validate_write_identifiers``."""
-    return isinstance(value, str) and _IDENTIFIER_RE.match(value) is not None
+    return isinstance(value, str) and _IDENTIFIER_RE.fullmatch(value) is not None
 
 
 def _require(value, label: str, *, allow_star: bool = False, allow_ellipsis: bool = False) -> None:

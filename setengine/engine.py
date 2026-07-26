@@ -43,6 +43,44 @@ from .memberset import MemberSet
 NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
 
 
+def _drive(gen):
+    """Run a generator-structured recursive evaluation on an explicit HEAP stack
+    (zero-trust review ZT-P1-6).
+
+    ``check``/``expand`` are depth-linear in the userset chain: a 1,500-long
+    ``group#member`` chain is accepted by the (iterative) write path and then made
+    EVERY read on that subgraph raise ``RecursionError`` -- permanently, and
+    ``lookup`` worst of all since it sweeps every declared ``(type, relation)``.
+    The recursion is now heap-allocated instead of bounded: each evaluator function
+    is a generator whose recursive calls are ``x = yield f(...)``; this driver pushes
+    the yielded sub-generator, runs it, and sends its return value back to the
+    caller. Depth is limited by memory, not by ``sys.getrecursionlimit()``.
+
+    The rewrite is MECHANICAL and semantics-preserving by construction: control flow,
+    evaluation order, short-circuiting, the Tarjan-lowlink memo guard and the
+    provisional-False/empty cycle answer are the same statements in the same order --
+    only the frames moved from the C/interpreter stack to this list. ``yield from``
+    is deliberately NOT used: delegation chains are walked per ``send``, which would
+    reintroduce a depth-linear cost (and, in CPython, C-stack recursion).
+
+    An exception raised inside a frame propagates out of ``send`` and therefore out
+    of ``_drive`` -- same observable behavior as the recursive form, which likewise
+    abandoned the whole evaluation."""
+    stack = [gen]
+    value = None
+    while True:
+        try:
+            sub = stack[-1].send(value)
+        except StopIteration as done:
+            stack.pop()
+            value = done.value
+            if not stack:
+                return value
+            continue
+        stack.append(sub)
+        value = None
+
+
 class LookupResult:
     """Concrete result ids + symbolic wildcard markers (mirrors index_v4 LookupResult).
 
@@ -920,6 +958,12 @@ class SetEngine:
         # and make answers depend on bitmap/interner iteration order.
         _INF = float('inf')
         low = [_INF]
+        # ZT-P1-6: every mutually-recursive frame below is a GENERATOR driven by
+        # ``_drive`` on a heap stack -- ``x = yield f(...)`` is the recursive call.
+        # The statements, their order and the short-circuiting are unchanged from the
+        # recursive form (see ``_drive``); only the frames moved off the interpreter
+        # stack, so a 2,000-long userset chain evaluates instead of raising
+        # RecursionError.
 
         def sat(ot: str, on: str, rel: str) -> bool:
             key = (ot, on, rel)
@@ -936,7 +980,7 @@ class SetEngine:
             depth = len(stack)
             stack[key] = depth
             outer_low, low[0] = low[0], _INF
-            result = sat_expr(expr, ot, on, rel)
+            result = yield sat_expr(expr, ot, on, rel)
             my_low = low[0]
             del stack[key]
             if my_low >= depth:
@@ -948,17 +992,27 @@ class SetEngine:
 
         def sat_expr(expr, ot: str, on: str, rel: str) -> bool:
             if isinstance(expr, Union):
-                return any(sat_expr(c, ot, on, rel) for c in expr.children)
+                # any(...) over the children, in order, short-circuiting on True
+                for c in expr.children:
+                    if (yield sat_expr(c, ot, on, rel)):
+                        return True
+                return False
             if isinstance(expr, Intersection):
-                return all(sat_expr(c, ot, on, rel) for c in expr.children)
+                # all(...) over the children, in order, short-circuiting on False
+                for c in expr.children:
+                    if not (yield sat_expr(c, ot, on, rel)):
+                        return False
+                return True
             if isinstance(expr, Exclusion):
-                return sat_expr(expr.base, ot, on, rel) and not sat_expr(expr.subtract, ot, on, rel)
+                if not (yield sat_expr(expr.base, ot, on, rel)):
+                    return False                      # `and`: subtract not evaluated
+                return not (yield sat_expr(expr.subtract, ot, on, rel))
             if isinstance(expr, Direct):
-                return direct_leaf(expr, ot, on, rel)
+                return (yield direct_leaf(expr, ot, on, rel))
             if isinstance(expr, Computed):
-                return sat(ot, on, expr.relation)
+                return (yield sat(ot, on, expr.relation))
             if isinstance(expr, TTU):
-                return ttu_leaf(expr.target_rel, expr.tupleset_rel, ot, on)
+                return (yield ttu_leaf(expr.target_rel, expr.tupleset_rel, ot, on))
             raise TypeError(f'unknown AST node {expr!r}')
 
         def direct_leaf(direct, ot: str, on: str, rel: str) -> bool:
@@ -987,7 +1041,7 @@ class SetEngine:
                 # subject (blind-audit D1 -- the OpenFGA literal-subject reading; the
                 # graph closure and this engine's own expand already behave this way,
                 # and per-branch-only is structurally unimplementable in the graph)
-                return member_via_usersets(nodes, restr)
+                return (yield member_via_usersets(nodes, restr))
 
             if s_pred == '...':
                 # concrete bare entity
@@ -997,7 +1051,7 @@ class SetEngine:
                 if (s_type, '...', True) in restr and in_entities(
                         self.interner.get(s_type, '*', '...')):
                     return True
-                return member_via_usersets(nodes, restr)
+                return (yield member_via_usersets(nodes, restr))
 
             # userset query subject
             if (s_type, s_pred, False) in restr and in_usersets(
@@ -1006,7 +1060,7 @@ class SetEngine:
             if (s_type, s_pred, True) in restr and in_usersets(
                     self.interner.get(s_type, '*', s_pred)):
                 return True
-            return member_via_usersets(nodes, restr)
+            return (yield member_via_usersets(nodes, restr))
 
         def member_via_usersets(nodes, restr) -> bool:
             # iterate only usersets (small, topology-shaped -- the §5 performance invariant)
@@ -1014,7 +1068,7 @@ class SetEngine:
                 for uid in ns.usersets:
                     t, n, p = self.interner.key(uid)
                     if n != '*':
-                        if (t, p, False) in restr and sat(t, n, p):
+                        if (t, p, False) in restr and (yield sat(t, n, p)):
                             return True
                     elif (t, p, True) in restr:
                         # ∀-shaped grant (T:*#P): ∃ an INSTANCE of T whose P contains
@@ -1023,7 +1077,7 @@ class SetEngine:
                         # via Computed/TTU; and never from query endpoints, which
                         # would let a ghost witness its own existence -- strict ∀⇒∃)
                         for inst in self._instances_of_type(t, inst_memo):
-                            if sat(t, inst, p):
+                            if (yield sat(t, inst, p)):
                                 return True
             return False
 
@@ -1039,7 +1093,7 @@ class SetEngine:
                     if pn != '*':
                         if (s_type, s_name, s_pred) == (pt, pn, target_rel):
                             return True                       # the from-chain userset itself
-                        if sat(pt, pn, target_rel):
+                        if (yield sat(pt, pn, target_rel)):
                             return True
                     else:
                         if (s_type, s_pred) == (pt, target_rel):
@@ -1047,11 +1101,11 @@ class SetEngine:
                         # tuple-mentioned instances only: query endpoints must not
                         # act as ∃-witnesses (strict ∀⇒∃; blind-audit O3)
                         for inst in self._instances_of_type(pt, inst_memo):
-                            if sat(pt, inst, target_rel):
+                            if (yield sat(pt, inst, target_rel)):
                                 return True
             return False
 
-        return sat(o_type, o_name, relation)
+        return _drive(sat(o_type, o_name, relation))
 
     # ------------------------------------------------------------------ #
     # expand -- bulk, memoized MemberSets (§6.3)
@@ -1073,6 +1127,9 @@ class SetEngine:
         # MemberSet and must not be memoized.
         _INF = float('inf')
         low = [_INF]
+        # ZT-P1-6: generator frames driven by ``_drive`` on a heap stack, exactly as
+        # in ``check`` (same statements, same order, same memo/cycle handling) --
+        # ``lookup_reverse`` over a deep userset chain no longer raises RecursionError.
 
         def do(ot: str, on: str, rel: str) -> MemberSet:
             key = (ot, on, rel)
@@ -1089,7 +1146,7 @@ class SetEngine:
             depth = len(stack)
             stack[key] = depth
             outer_low, low[0] = low[0], _INF
-            r = do_expr(expr, ot, on, rel)
+            r = yield do_expr(expr, ot, on, rel)
             my_low = low[0]
             del stack[key]
             if my_low >= depth:
@@ -1103,23 +1160,24 @@ class SetEngine:
             if isinstance(expr, Union):
                 acc = ms.empty(ops)
                 for c in expr.children:
-                    acc = ms.union(acc, do_expr(c, ot, on, rel), ops, pop)
+                    acc = ms.union(acc, (yield do_expr(c, ot, on, rel)), ops, pop)
                 return acc
             if isinstance(expr, Intersection):
                 acc = None
                 for c in expr.children:
-                    m = do_expr(c, ot, on, rel)
+                    m = yield do_expr(c, ot, on, rel)
                     acc = m if acc is None else ms.intersect(acc, m, ops, pop)
                 return acc if acc is not None else ms.empty(ops)
             if isinstance(expr, Exclusion):
-                return ms.subtract(do_expr(expr.base, ot, on, rel),
-                                   do_expr(expr.subtract, ot, on, rel), ops, pop)
+                base = yield do_expr(expr.base, ot, on, rel)      # base before subtract,
+                sub = yield do_expr(expr.subtract, ot, on, rel)   # as in the call args
+                return ms.subtract(base, sub, ops, pop)
             if isinstance(expr, Direct):
-                return direct_expand(expr, ot, on, rel)
+                return (yield direct_expand(expr, ot, on, rel))
             if isinstance(expr, Computed):
-                return do(ot, on, expr.relation)
+                return (yield do(ot, on, expr.relation))
             if isinstance(expr, TTU):
-                return ttu_expand(expr.target_rel, expr.tupleset_rel, ot, on)
+                return (yield ttu_expand(expr.target_rel, expr.tupleset_rel, ot, on))
             raise TypeError(f'unknown AST node {expr!r}')
 
         def direct_expand(direct, ot, on, rel) -> MemberSet:
@@ -1148,14 +1206,14 @@ class SetEngine:
                     if n != '*':
                         if (t, p, False) in restr:
                             pos.add(uid)                              # the userset node itself
-                            acc = ms.union(acc, do(t, n, p), ops, pop)
+                            acc = ms.union(acc, (yield do(t, n, p)), ops, pop)
                     elif (t, p, True) in restr:
                         stars.add((t, p))                             # covers all usersets of shape
                         # tuple-mentioned instances, not ids_of_shape: an instance
                         # whose P-membership exists only via Computed/TTU never
                         # interns (T, n, P) and would be missed (blind-audit E2)
                         for inst in self._instances_of_type(t, inst_memo):
-                            acc = ms.union(acc, do(t, inst, p), ops, pop)
+                            acc = ms.union(acc, (yield do(t, inst, p)), ops, pop)
             local = MemberSet(ops.freeze(pos), frozenset(stars), ops.freeze())
             return ms.union(local, acc, ops, pop)
 
@@ -1168,7 +1226,7 @@ class SetEngine:
                 for pid in chain(ns.entities, ns.usersets):
                     pt, pn, _pp = self.interner.key(pid)
                     if pn != '*':
-                        acc = ms.union(acc, do(pt, pn, target), ops, pop)
+                        acc = ms.union(acc, (yield do(pt, pn, target)), ops, pop)
                         fid = self.interner.get(pt, pn, target)       # from-chain userset itself
                         if fid is not None:
                             acc = ms.union(acc, ms.singleton_entity(fid, ops), ops, pop)
@@ -1176,10 +1234,10 @@ class SetEngine:
                         acc = ms.union(acc, ms.star((pt, target), ops), ops, pop)
                         # tuple-mentioned instances only (no endpoint witnesses; O3)
                         for inst in self._instances_of_type(pt, inst_memo):
-                            acc = ms.union(acc, do(pt, inst, target), ops, pop)
+                            acc = ms.union(acc, (yield do(pt, inst, target)), ops, pop)
             return acc
 
-        return do(o_type, o_name, relation)
+        return _drive(do(o_type, o_name, relation))
 
     # ------------------------------------------------------------------ #
     # Lookups (§6.4)

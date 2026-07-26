@@ -21,12 +21,41 @@ to run pre-commit *inside* the transaction (a violation raises ``InvariantViolat
 and aborts the commit) and post-commit in a *fresh* session on the same bind (catching
 commit-boundary/session-state bugs). Default ON while prerelease; pass
 ``paranoia=False`` at the wiring site for benchmarks.
+
+**Tiers (ZT-P1-3, 2026-07-26).** Paranoia now has three levels, because the full
+checker is an O(store) per-commit cost (measured 4.8x-10x on the write path,
+`benchmarks/results/BASELINE_2026-07-13.md`) and was therefore never wired into
+production at all -- leaving every runtime corruption detector dark:
+
+  ``'off'``      no listeners (the historical production behaviour).
+  ``'residue'``  the CHEAP, security-relevant tier: residue hygiene only (the I6
+                 family, minus its two edge-overlap clauses), scoped to the store's
+                 ``ResidueV1`` rows and the node ids those rows reference --
+                 O(residue rows + referenced ids), no full node or edge scan, no
+                 BFS. This is the tier that owns the dangling
+                 ``upos``/``neg`` id class, i.e. the ZT-P0-1 authorization
+                 escalation (pin: ``tests/test_reg14_residue_gc_elision.py``).
+                 Pre-commit only, so a violation ABORTS the writing transaction.
+  ``'full'``     everything: ``check_invariants`` (I1/I2/I3/I13 + I4-I7 + I10) plus
+                 the delta-scoped BFS verifier, pre-commit AND post-commit in a
+                 fresh session. O(store) per commit, plus O(pairs x edges) for the
+                 verifier (`docs/perf-next-round.md`). Prerelease/test tier.
+
+``resolve_paranoia_level`` is the shared precedence rule for wiring sites: an
+explicit argument beats the ``ZANZIBAR_PARANOIA`` environment variable, which beats
+the caller's default. ``ConnectedStore`` defaults to ``'off'`` because ``'residue'``
+measured at +4.3%/+5.7% of the sync write path (162/478 per-write commits,
+interleaved A/B, min-of-3) -- cheap next to ``'full'``'s +124%/+303%, but too much
+to impose silently; see ``ConnectedStore.DEFAULT_PARANOIA``. ``'residue'`` is
+nonetheless the RECOMMENDED production setting: it is the only runtime detector for
+the ZT-P0-1 escalation class.
 """
 
 from __future__ import annotations
 
+import os
 from collections import Counter
-from typing import TYPE_CHECKING
+from typing import NamedTuple, TYPE_CHECKING
 
 import json
 
@@ -54,6 +83,64 @@ class InvariantViolation(AssertionError):
 #   ('', 'all')    grant concrete -> w_all         (wildcard-object tuple)
 #   ('any', 'all') grant w_any -> w_all            (both-wildcard tuple)
 _ALLOWED_DIRECT = {('', ''), ('', 'any'), ('all', ''), ('any', ''), ('', 'all'), ('any', 'all')}
+
+
+# --------------------------------------------------------------------------- #
+# Paranoia levels (ZT-P1-3)
+# --------------------------------------------------------------------------- #
+
+PARANOIA_OFF = 'off'
+PARANOIA_RESIDUE = 'residue'
+PARANOIA_FULL = 'full'
+PARANOIA_LEVELS = (PARANOIA_OFF, PARANOIA_RESIDUE, PARANOIA_FULL)
+_LEVEL_RANK = {name: i for i, name in enumerate(PARANOIA_LEVELS)}
+
+#: The environment variable an operator sets to turn the layer on (or off) without
+#: a code change. Accepts a level name, or a boolean-ish word (``1``/``true``/``on``
+#: => ``'full'``, ``0``/``false``/``off`` => ``'off'``).
+PARANOIA_ENV_VAR = 'ZANZIBAR_PARANOIA'
+
+_BOOLISH = {'1': PARANOIA_FULL, 'true': PARANOIA_FULL, 'yes': PARANOIA_FULL,
+            'on': PARANOIA_FULL,
+            '0': PARANOIA_OFF, 'false': PARANOIA_OFF, 'no': PARANOIA_OFF}
+
+
+def normalize_paranoia_level(value: 'bool | str | None') -> str:
+    """Coerce a user-supplied paranoia setting to one of ``PARANOIA_LEVELS``.
+
+    ``True``/``False`` map to ``'full'``/``'off'`` so the historical boolean flag
+    keeps working. Anything unrecognized is a loud ``ValueError`` -- a typo'd
+    security switch must never silently mean "off"."""
+    if value is True:
+        return PARANOIA_FULL
+    if value is False:
+        return PARANOIA_OFF
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in _LEVEL_RANK:
+            return v
+        if v in _BOOLISH:
+            return _BOOLISH[v]
+    raise ValueError(
+        f'bad paranoia level {value!r}; expected one of {PARANOIA_LEVELS} '
+        f'(or a bool / {sorted(_BOOLISH)})')
+
+
+def resolve_paranoia_level(explicit: 'bool | str | None' = None, *,
+                           default: str = PARANOIA_OFF,
+                           env: 'dict[str, str] | None' = None) -> str:
+    """Precedence: explicit argument > ``ZANZIBAR_PARANOIA`` > ``default``.
+
+    An explicit constructor argument always wins, so a caller that has made a
+    deliberate choice cannot be overridden by the deployment environment. An empty
+    env var is treated as unset."""
+    if explicit is not None:
+        return normalize_paranoia_level(explicit)
+    environ = os.environ if env is None else env
+    raw = environ.get(PARANOIA_ENV_VAR)
+    if raw is not None and raw.strip() != '':
+        return normalize_paranoia_level(raw)
+    return normalize_paranoia_level(default)
 
 
 def _load(session: Session, store_id: str) -> tuple[list[NodeV4], list[EdgeV4]]:
@@ -218,7 +305,6 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
             _fail(f'I5: derived flag on a non-derived-direct edge row: {e}')
 
     # I6 / I7: residue placement + version monotonicity.
-    subject_shapes = schema_info.subject_wildcard_shapes
     rows = session.exec(
         select(ResidueV1).where(ResidueV1.store_id == store_id)).all()
     derived_edge_subjects: dict[int, set[int]] = {}
@@ -226,11 +312,33 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
         if e.direct_edge_count > 0 and e.derived:
             derived_edge_subjects.setdefault(e.object_id, set()).add(e.subject_id)
 
+    _check_residue_rows(rows, by_id.get,
+                        derived_families=derived_families,
+                        subject_shapes=schema_info.subject_wildcard_shapes,
+                        derived_edge_subjects=derived_edge_subjects,
+                        residue_versions=residue_versions)
+
+
+def _check_residue_rows(rows, node_of, *,
+                        derived_families=None, subject_shapes=None,
+                        derived_edge_subjects: 'dict[int, set[int]] | None' = None,
+                        residue_versions: 'dict | None' = None) -> None:
+    """I6 residue placement (+ I7 monotonicity when ``residue_versions`` is given).
+
+    Shared by the full checker and by the cheap ``residue`` paranoia tier, so the two
+    can never drift. ``node_of`` resolves a node id to its ``NodeV4`` (or None -- a
+    dangling reference, which is the ZT-P0-1 corruption class).
+    ``derived_edge_subjects`` is the per-object set of subjects holding a derived
+    direct edge; ``None`` means "not computed" and SKIPS the two edge-overlap clauses
+    (they need a full edge scan, which is exactly what the cheap tier refuses to pay).
+    ``derived_families``/``subject_shapes`` of ``None`` skip the schema-dependent
+    clauses.
+    """
     for r in rows:
-        node = by_id.get(r.object_node_id)
+        node = node_of(r.object_node_id)
         if node is None:
             _fail(f'I6: residue row {r.id} references a missing node {r.object_node_id}')
-        if (node.type, node.predicate) not in derived_families:
+        if derived_families is not None and (node.type, node.predicate) not in derived_families:
             _fail(f'I6: residue on a non-derived relation: {node}')
         if r.relation != node.predicate:
             _fail(f'I6: residue.relation {r.relation!r} disagrees with its node {node}')
@@ -239,10 +347,12 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
         upos = set(json.loads(r.upos))
         if not stars and not neg and not upos:
             _fail(f'I6: empty residue row persisted for {node}')
-        if not stars <= subject_shapes:
+        if subject_shapes is not None and not stars <= subject_shapes:
             _fail(f'I6: residue stars {stars} outside declared subject shapes on {node}')
+        edge_holders = (set() if derived_edge_subjects is None
+                        else derived_edge_subjects.get(r.object_node_id, set()))
         for nid in neg:
-            s = by_id.get(nid)
+            s = node_of(nid)
             if s is None:
                 _fail(f'I6: residue neg holds a dead node id {nid} on {node}')
             if s.wildcard != '':
@@ -256,7 +366,7 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
             if s.predicate != '...' and s.implicit:
                 _fail(f'I6: userset neg subject {s} is implicit on {node} '
                       f'(recorded subjects must be explicit -- state-functional form)')
-        if neg & derived_edge_subjects.get(r.object_node_id, set()):
+        if neg & edge_holders:
             _fail(f'I6: neg overlaps derived-edge holders on {node} '
                   f'(an edge means expr-true; neg means expr-false)')
         # upos (blind-audit P4): edge-free TRUE memberships of userset-shaped
@@ -265,11 +375,11 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
         # and never edge-holders (upos exists precisely so usersets get no edges).
         if upos & neg:
             _fail(f'I6: upos overlaps neg on {node}')
-        if upos & derived_edge_subjects.get(r.object_node_id, set()):
+        if upos & edge_holders:
             _fail(f'I6: upos overlaps derived-edge holders on {node} '
                   f'(userset memberships must be edge-free)')
         for nid in upos:
-            s = by_id.get(nid)
+            s = node_of(nid)
             if s is None:
                 _fail(f'I6: residue upos holds a dead node id {nid} on {node}')
             if s.wildcard != '' or s.predicate == '...':
@@ -303,6 +413,87 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
         for k in list(residue_versions):
             if k not in seen:
                 del residue_versions[k]
+
+
+class _NodeFacts(NamedTuple):
+    """The node columns the residue clauses read, without the ORM instance."""
+    id: int
+    type: str
+    name: str
+    predicate: str
+    wildcard: str
+    implicit: bool
+
+    def __str__(self) -> str:                            # for violation messages
+        w = f' wildcard={self.wildcard!r}' if self.wildcard else ''
+        return (f'node id={self.id} {self.type}:{self.name}#{self.predicate}'
+                f'{w} implicit={self.implicit}')
+
+
+class _ResidueFacts(NamedTuple):
+    """Ditto for ``ResidueV1``. ``version`` is absent: I7 is a full-tier clause."""
+    id: int
+    object_node_id: int
+    relation: str
+    stars: str
+    neg: str
+    upos: str
+
+
+def check_residue_hygiene(session: Session, store_id: str,
+                          schema_info: 'SchemaInfo | None' = None) -> None:
+    """The CHEAP paranoia tier (ZT-P1-3): the I6 residue-hygiene family alone.
+
+    Every clause of I6 except the two that need a full edge scan
+    (``neg``/``upos`` overlapping derived-edge holders) -- in particular the
+    **dead node id** clauses, which are the runtime detector for the ZT-P0-1
+    residue-GC escalation (a residue vouching for a recycled rowid).
+
+    Cost: one indexed ``ResidueV1`` scan for the store, plus one batched
+    ``NodeV4 WHERE id IN (...)`` fetch of exactly the ids those rows name --
+    O(residue rows + referenced ids). No node scan, no edge scan, no BFS, so it
+    does NOT grow with store size the way ``check_invariants`` does.
+
+    I7 (version monotonicity) is deliberately excluded: it needs a baseline carried
+    across commits, it is not security-relevant, and the cheap tier runs pre-commit
+    only (where a rolled-back bump would poison that baseline).
+    """
+    # COLUMN selects, not entity selects, on both queries: this runs inside every
+    # commit, and materializing ORM instances (identity-map bookkeeping, instance
+    # state) measured as the bulk of the tier's cost. The lightweight records below
+    # duck-type the attributes the shared clause code reads.
+    rows = [_ResidueFacts(*t) for t in session.exec(
+        select(ResidueV1.id, ResidueV1.object_node_id, ResidueV1.relation,
+               ResidueV1.stars, ResidueV1.neg, ResidueV1.upos)
+        .where(ResidueV1.store_id == store_id)).all()]
+    if not rows:
+        return
+
+    wanted: set[int] = set()
+    for r in rows:
+        wanted.add(r.object_node_id)
+        wanted.update(json.loads(r.neg))
+        wanted.update(json.loads(r.upos))
+
+    by_id: dict[int, _NodeFacts] = {}
+    ids = sorted(wanted)
+    # Chunked: SQLite's default bound-parameter limit is 999.
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        for t in session.exec(
+                select(NodeV4.id, NodeV4.type, NodeV4.name, NodeV4.predicate,
+                       NodeV4.wildcard, NodeV4.implicit)
+                .where(NodeV4.store_id == store_id)
+                .where(NodeV4.id.in_(chunk))).all():
+            by_id[t[0]] = _NodeFacts(*t)
+
+    _check_residue_rows(
+        rows, by_id.get,
+        derived_families=None if schema_info is None else schema_info.derived_families,
+        subject_shapes=(None if schema_info is None
+                        else schema_info.subject_wildcard_shapes),
+        derived_edge_subjects=None,       # skipped: needs a full edge scan
+        residue_versions=None)
 
 
 def _check_outbox_sanity(session: Session, store_id: str) -> None:
@@ -380,9 +571,88 @@ def verify_outbox_deltas(session: Session, store_id: str, after_id: int = 0) -> 
                   f'reachability is {reachable}')
 
 
+class ParanoiaGuard:
+    """The installed paranoia state for one (session, store) pair.
+
+    The commit listeners read their level off this object, so a *re-install* (say a
+    test that wants ``'full'`` on a store its ``ConnectedStore`` already opened at
+    ``'residue'``) UPGRADES in place instead of stacking a second pair of listeners
+    and double-checking every commit.
+    """
+
+    def __init__(self, session: Session, store_id: str,
+                 schema_info: 'SchemaInfo | None', level: str):
+        self.store_id = store_id
+        self.schema_info = schema_info
+        self.level = level
+        # Watermark of the last COMMITTED outbox id: rows above it in before_commit
+        # are exactly this transaction's flips. Only ever set from committed state,
+        # so a rollback (which discards its own rows) can never leave it stale.
+        self.wm = outbox_watermark(session, store_id)
+        # I7: last-seen residue versions, monotone across the run. Only advanced by
+        # the post-commit pass so rolled-back bumps don't poison the baseline.
+        self.committed_versions: dict[int, int] = {}
+
+    def raise_to(self, level: str, schema_info: 'SchemaInfo | None') -> 'ParanoiaGuard':
+        if _LEVEL_RANK[level] > _LEVEL_RANK[self.level]:
+            self.level = level
+        if schema_info is not None and self.schema_info is None:
+            self.schema_info = schema_info
+        return self
+
+    # -- the listeners ---------------------------------------------------- #
+
+    def before_commit(self, sess: Session) -> None:
+        if self.level == PARANOIA_OFF:
+            return
+        sess.flush()   # before_commit fires before the commit's flush; check real state
+        with _violations_tagged(self.store_id, 'pre-commit'):
+            if self.level == PARANOIA_FULL:
+                check_invariants(sess, self.store_id, self.schema_info,
+                                 residue_versions=dict(self.committed_versions))
+                verify_outbox_deltas(sess, self.store_id, self.wm)
+            else:                                   # PARANOIA_RESIDUE
+                check_residue_hygiene(sess, self.store_id, self.schema_info)
+
+    def after_commit(self, sess: Session) -> None:
+        # Post-commit re-checking is a FULL-tier facility only: it cannot abort
+        # anything (the commit already landed), so the cheap tier -- whose whole job
+        # is to fail closed on the write path -- does not pay for it.
+        if self.level != PARANOIA_FULL:
+            return
+        with Session(sess.get_bind()) as fresh:
+            with _violations_tagged(self.store_id, 'post-commit'):
+                check_invariants(fresh, self.store_id, self.schema_info,
+                                 residue_versions=self.committed_versions)
+            self.wm = outbox_watermark(fresh, self.store_id)
+
+
+class _violations_tagged:
+    """Re-raise an ``InvariantViolation`` with the store id and commit phase attached,
+    so an operator reading a production traceback learns WHICH store and WHICH clause
+    without re-deriving it. The original clause text (``I6: ...``) is preserved
+    verbatim inside the new message."""
+
+    def __init__(self, store_id: str, phase: str):
+        self.store_id, self.phase = store_id, phase
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None and issubclass(exc_type, InvariantViolation):
+            raise InvariantViolation(
+                f'store={self.store_id!r} [{self.phase}] {exc}') from exc
+        return False
+
+
 def install_paranoia(session: Session, store_id: str,
-                     schema_info: 'SchemaInfo | None' = None) -> None:
-    """Wire paranoia mode onto a session (boolean spec §8.1).
+                     schema_info: 'SchemaInfo | None' = None, *,
+                     level: 'bool | str' = PARANOIA_FULL) -> 'ParanoiaGuard | None':
+    """Wire paranoia mode onto a session (boolean spec §8.1). Returns the guard (or
+    ``None`` for ``level='off'``).
+
+    ``level='full'`` (the default, and what every existing caller gets):
 
     - pre-commit (inside the transaction): flush pending state, run the invariant
       checker AND the delta-scoped verifier over this transaction's outbox range; a
@@ -390,25 +660,31 @@ def install_paranoia(session: Session, store_id: str,
       last consistent state.
     - post-commit (fresh session, same bind): re-run the checker against what was
       actually committed, catching commit-boundary and session-state bugs.
+
+    ``level='residue'`` is the cheap production tier: ``check_residue_hygiene``
+    pre-commit only (see this module's docstring for the tier table).
+
+    Installing twice for the same (session, store) never stacks listeners -- the
+    second call raises the existing guard's level if the new one is stronger and
+    returns it.
     """
-    # Watermark of the last COMMITTED outbox id: rows above it in before_commit are
-    # exactly this transaction's flips. Only ever set from committed state, so a
-    # rollback (which discards its own rows) can never leave it stale.
-    state = {'wm': outbox_watermark(session, store_id)}
-    # I7: last-seen residue versions, monotone across the run. Only advanced by the
-    # post-commit pass so rolled-back bumps don't poison the baseline.
-    committed_versions: dict[int, int] = {}
+    level = normalize_paranoia_level(level)
+    registry: dict[str, ParanoiaGuard] = session.info.setdefault('paranoia_guards', {})
+    existing = registry.get(store_id)
+    if existing is not None:
+        return existing.raise_to(level, schema_info)
+    if level == PARANOIA_OFF:
+        return None
+
+    guard = ParanoiaGuard(session, store_id, schema_info, level)
+    registry[store_id] = guard
 
     @event.listens_for(session, 'before_commit')
     def _pre_commit_check(sess: Session) -> None:
-        sess.flush()   # before_commit fires before the commit's flush; check real state
-        check_invariants(sess, store_id, schema_info,
-                         residue_versions=dict(committed_versions))
-        verify_outbox_deltas(sess, store_id, state['wm'])
+        guard.before_commit(sess)
 
     @event.listens_for(session, 'after_commit')
     def _post_commit_check(sess: Session) -> None:
-        with Session(sess.get_bind()) as fresh:
-            check_invariants(fresh, store_id, schema_info,
-                             residue_versions=committed_versions)
-            state['wm'] = outbox_watermark(fresh, store_id)
+        guard.after_commit(sess)
+
+    return guard

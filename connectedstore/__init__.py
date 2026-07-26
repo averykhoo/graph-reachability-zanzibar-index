@@ -9,14 +9,20 @@ inlined into the write transaction (spec §1/§4).
 from .models import IndexCursorV1, SchemaV4, TupleLogV1
 from .schema_io import (SchemaMismatch, ensure_schema, load_schema,
                         open_graph_index, open_set_engine, save_schema)
-from .source import StaleRead, TupleSource, log_rows, log_watermark
+from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
+                     assert_read_isolation, log_gap, log_rows, log_watermark)
 from .apply import advance_index, ensure_cursor
 from .build import build_index
-from .store import ConnectedStore
+from .store import ConnectedStore, PARANOIA_ENV_VAR
 
 __all__ = [
     "ConnectedStore",
+    "PARANOIA_ENV_VAR",
     "StaleRead",
+    "WatermarkGap",
+    "UnsafeIsolationLevel",
+    "assert_read_isolation",
+    "log_gap",
     "advance_index",
     "ensure_cursor",
     "build_index",

@@ -21,6 +21,9 @@ from __future__ import annotations
 
 from sqlmodel import Session, select
 
+from index_v4.core import probe_store_write_lock
+from index_v4.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
+                                 install_paranoia, resolve_paranoia_level)
 from index_v4.processor import DeltaProcessor
 from setengine.setops import SetOps, DEFAULT_SETOPS
 
@@ -28,7 +31,7 @@ from .apply import advance_index, ensure_cursor
 from .schema_io import ensure_schema, open_graph_index
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
-from .source import StaleRead, TupleSource
+from .source import StaleRead, TupleSource, assert_read_isolation
 
 
 class ConnectedStore:
@@ -36,11 +39,36 @@ class ConnectedStore:
     synchronously-maintained graph index; index-served reads with freshness
     fallback."""
 
+    #: Paranoia level when neither the constructor argument nor ``ZANZIBAR_PARANOIA``
+    #: says otherwise.
+    #:
+    #: **OFF, and that is a measured decision, not an oversight.** Interleaved A/B
+    #: (alternating arms, min-of-3, boolean fixture, per-write commits through this
+    #: class's sync path, 2026-07-26):
+    #:
+    #:   162 writes:  off 3.896s | residue 4.063s (**+4.3%**) | full  8.743s (+124%)
+    #:   478 writes:  off 14.641s | residue 15.480s (**+5.7%**) | full 58.928s (+303%)
+    #:
+    #: The cheap tier is genuinely cheap *relative to* the full checker (~50x less
+    #: overhead), but it is still ~5% of the write path and it GROWS with the store
+    #: (its scan is O(residue rows), i.e. O(objects carrying derived state)). A
+    #: silent 5%-and-rising write regression is not something to switch on under
+    #: everybody without their consent -- so the default preserves today's behaviour
+    #: exactly and the switch is one argument (or one env var) away.
+    #:
+    #: **Operators: turn it on.** ``ZANZIBAR_PARANOIA=residue`` buys the runtime
+    #: detector for the ZT-P0-1 authorization-escalation class (a residue vouching
+    #: for a recycled node rowid) for that ~5%. It is the recommended production
+    #: setting for anything security-sensitive; only the number, not the value, kept
+    #: it out of the default.
+    DEFAULT_PARANOIA = PARANOIA_OFF
+
     def __init__(self, session: Session, store_id: str, *,
                  schema: str | None = None,
                  object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
                  ops: SetOps = DEFAULT_SETOPS,
-                 sync: bool = True):
+                 sync: bool = True,
+                 paranoia: bool | str | None = None):
         """Open (or bootstrap, when ``schema`` is given) a connected store.
 
         A passed schema is persisted write-once via ``ensure_schema``; passing one
@@ -50,10 +78,56 @@ class ConnectedStore:
         the log head). ``sync=False`` is the async schedule: writes land in the
         source of truth only; the index advances when ``catch_up`` runs (the worker
         loop), and token-carrying reads fall back to the set engine while it lags.
+
+        ``paranoia`` wires the runtime invariant layer (``index_v4.invariants``,
+        boolean spec §8.1) into this store's commits. Before this parameter existed
+        the layer had two callers, both tests, so every runtime corruption detector
+        was dark in production (zero-trust review ZT-P1-3). Levels:
+
+        * ``'off'`` / ``False`` -- no checking. **The default** -- see
+          ``DEFAULT_PARANOIA`` for the measurement behind that choice.
+        * ``'residue'`` -- **the recommended production setting.** The I6
+          residue-hygiene family, checked pre-commit over the store's residue rows
+          and the node ids they name: the runtime detector for the
+          dangling-``upos``/``neg`` corruption class (the ZT-P0-1 authorization
+          escalation -- a residue vouching for a recycled rowid). O(residue rows),
+          no full node/edge scan, no BFS. Measured +4.3%/+5.7% on the sync write
+          path at 162/478 per-write commits; reads are untouched.
+        * ``'full'`` / ``True`` -- everything: I1-I7/I10/I13 plus the delta-scoped
+          BFS verifier, pre- and post-commit. O(store) per commit -- measured
+          +124%/+303% on the same two workloads (and 4.8-10x in
+          ``benchmarks/results/BASELINE_2026-07-13.md``). A prerelease/test tier;
+          do not run it under production write load.
+
+        **Fail-closed:** a violation raises ``InvariantViolation`` inside
+        ``before_commit``, so the write's commit never happens and ``_write``'s
+        handler rolls back both halves and rebuilds the evaluator. The message
+        carries the store id, the commit phase, and the violated clause.
+
+        Precedence: this argument (when not ``None``) > the ``ZANZIBAR_PARANOIA``
+        environment variable (``off``/``residue``/``full``, or ``0``/``1``) >
+        ``ConnectedStore.DEFAULT_PARANOIA``. So an operator can turn the layer up or
+        off in a deployment without a code change, and a caller that has made an
+        explicit choice is never overridden by the environment.
         """
         self.session = session
         self.store_id = store_id
         self.sync = sync
+        self.paranoia = resolve_paranoia_level(paranoia, default=self.DEFAULT_PARANOIA)
+        # ZT-P1-5: refuse a bind whose read snapshot can hide a committed log row
+        # (MySQL/InnoDB REPEATABLE READ) before anything else touches the database --
+        # every freshness guarantee in this class rests on the catch-up reaching the
+        # real head. Dialect-aware: a no-op on SQLite, where it does not apply.
+        assert_read_isolation(session)
+        # ZT-P1-4: on a SQLite bind, take the real per-store write lock once, right
+        # here, and verify it actually HELD -- an autocommit-configured connection
+        # releases it instantly, which silently un-atomizes every write's check-then-act
+        # admission (two writers both pass, against a state their combined result
+        # invalidates). Fail at open, with the configuration fix in the message, rather
+        # than corrupting state under concurrency later. FIRST statement of the
+        # transaction on purpose (see ``probe_store_write_lock``); released by this
+        # constructor's own bootstrap commit below.
+        probe_store_write_lock(session, store_id)
         boot_ruleset = None
         if schema is not None:
             # On first bootstrap ensure_schema compiles the schema; reuse that
@@ -74,6 +148,12 @@ class ConnectedStore:
         # and bricked the instance; a read-only open also held the write lock for
         # its lifetime. The class owns commits everywhere else; it owns this one too.
         self.session.commit()
+        # ZT-P1-3: the invariant layer is wired here (AFTER the bootstrap commit, so
+        # the checker only ever sees a fully-open store). ``install_paranoia`` is
+        # idempotent per (session, store), so a test that installs `full` on top of
+        # this upgrades the same guard instead of stacking a second set of listeners.
+        self.paranoia_guard = install_paranoia(
+            session, store_id, self.widx.schema_info, level=self.paranoia)
 
     # ------------------------------------------------------------------ #
     # Writes: one transaction across both halves (sync schedule)

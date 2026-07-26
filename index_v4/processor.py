@@ -36,17 +36,52 @@ from .wildcard import WildcardIndex
 SubjectKey = tuple[str, str, str]      # (predicate, type, name); predicate '...' for bare
 Key = tuple[str, str, str]             # (object_type, relation, object_name)
 
-# N3: leaf kinds whose recordings are always LOCAL -- a subject id they put in a
-# residue's neg/upos is edge-justified on the recording object (closure leaves store
-# raw tuples; derived-computed reads only the SAME object's referenced residue). The
-# other kinds (derived-ttu / derived-tupleset-ttu / derived-userset) can record a
-# CROSS-OBJECT subject id -- a from-chain userset (X4a) or lifted userset membership
-# (X4) that holds no edge on the recording object -- which is the only case the full
-# ``ResidueV1`` scan in ``_keys_referencing`` exists to find. A schema all of whose
-# leaves are in this set therefore has provably-empty ``_keys_referencing`` and can
-# skip the scan. WHITELIST, not blocklist: any unrecognized/future leaf kind disables
-# the elision, so GC correctness never rests on enumerating the dangerous kinds.
-_RESIDUE_LOCAL_LEAF_KINDS = frozenset({'closure', 'derived-computed'})
+# N3 WITHDRAWN 2026-07-26 (zero-trust review ZT-P0-1) -- DO NOT RE-INTRODUCE.
+#
+# ``_keys_referencing`` used to be elided on schemas whose every leaf kind was in a
+# ``_RESIDUE_LOCAL_LEAF_KINDS = {'closure', 'derived-computed'}`` whitelist. The
+# elision was UNSOUND and produced an authorization escalation (regression pin:
+# ``tests/test_reg14_residue_gc_elision.py``).
+#
+# The property the GC guard needs, stated precisely -- for every leaf kind L, every
+# object O, and every subject id i that reconciling a plan containing L can write into
+# ``residue(O).neg`` / ``residue(O).upos``:
+#
+#     (P)  i's node holds a DIRECT-EDGE-justified position on O -- i.e. O's own
+#          ``reference_count`` accounting keeps i's node alive independently of the
+#          recording, so deleting i on ``reference_count == 0`` cannot dangle it.
+#
+# Only under (P) may GC skip looking for recorders, because only under (P) does
+# refcount alone dominate the residue reference. The withdrawn comment justified the
+# whitelist with a DIFFERENT property -- "the recording is not cross-object" -- and
+# treated the two as interchangeable. They are not, and (P) is the strictly stronger
+# one:
+#
+#   * ``closure`` VIOLATES (P). ``_leaf_concretes(kind='closure')`` resolves its
+#     candidates through ``_incoming_concretes`` -> ``idx.lookup_reverse`` -- the FULL
+#     TRANSITIVE CLOSURE, not the raw stored tuples the old comment claimed. A userset
+#     node reachable only transitively (``group:g1#member -> group:g2#member ->
+#     doc:y#a.0``) is therefore recorded on ``doc:y`` while holding no edge on it, and
+#     is deleted the moment its one real edge goes.
+#   * ``derived-computed`` VIOLATES (P) too, since the 2026-07-17 Fix A lift added
+#     ``_ttu_target_upos_nodes`` to its branch: it now records edge-FREE userset
+#     memberships lifted out of another residue. (There ``reference_count`` happens to
+#     still protect the node, but that is an accident of the current leaf set, not the
+#     stated reason -- so it cannot carry a GC-safety argument.)
+#
+# Every remaining kind (``derived-ttu`` / ``derived-tupleset-ttu`` /
+# ``derived-userset``) records from-chain (X4a) or lifted (X4b) usersets that are
+# edge-free by construction. So NO leaf kind satisfies (P): the safe residual whitelist
+# is EMPTY and the mechanism had nothing left to gate. ``_keys_referencing`` now always
+# scans. It was never the saving it looked like anyway -- ``_any_residue_reference``
+# already runs the identical full ``ResidueV1`` scan, with the same per-row JSON decode,
+# on every node-release path on every schema (see ``_demote_released_node``).
+#
+# If this scan ever has to get cheaper, the answer is an INDEX from subject id to
+# recording residue (maintained in ``_store_residue``), never a leaf-kind whitelist:
+# a correct whitelist would have to re-establish (P) for each kind, and (P) is a
+# property of the *candidate-resolution* code, which is free to widen at any time
+# (as ``closure`` and Fix A both did) without anyone noticing the whitelist went stale.
 
 
 def _shape(pred: str, s_type: str) -> tuple[str, str]:
@@ -164,14 +199,6 @@ class DeltaProcessor:
             for plan in compiled.plans.values()
             for spec, node in zip(plan.leaves, plan.leaf_nodes)
         }
-        # N3: does any leaf kind admit a cross-object subject recording? If not, the
-        # full ResidueV1 scan in _keys_referencing is provably empty and is skipped
-        # (see _RESIDUE_LOCAL_LEAF_KINDS). Computed once; the schema is static.
-        self._cross_object_recordings_possible = any(
-            spec.kind not in _RESIDUE_LOCAL_LEAF_KINDS
-            for plan in compiled.plans.values()
-            for spec in plan.leaves
-        )
         # residue bumps of the current round, consumed by the cascade as extra
         # invalidations for the next round (spec §5.2: version bumps enqueue the same
         # dependent keys; they emit no outbox rows).
@@ -315,12 +342,16 @@ class DeltaProcessor:
 
     def _keys_referencing(self, node_id: int) -> list[Key]:
         """Reconcile keys of every residue whose ``neg``/``upos`` records this subject
-        node id. Cross-object memberships (TTU from-chain usersets and lifted userset
-        memberships, lookup-gate X4) are NOT justified by an edge on the recording
-        object, so the recorder must be findable from the id alone -- both for GC
-        anchoring and for pruning when the node dies."""
-        if not self._cross_object_recordings_possible:
-            return []           # N3: no leaf kind records a foreign id (see __init__)
+        node id -- an UNCONDITIONAL scan, on every schema.
+
+        A recorded id is in general NOT justified by a direct edge on the recording
+        object (TTU from-chain usersets and lifted userset memberships are edge-free by
+        construction, lookup-gate X4/X4a/X4b; and closure leaves resolve candidates
+        through the transitive closure, so they record transitively-reached subjects
+        too). The recorder must therefore be findable from the id alone -- both for GC
+        anchoring and for pruning when the node dies. Never gate this on the schema's
+        leaf kinds; see the N3-WITHDRAWN note at the top of this module for why no
+        such gate is sound."""
         out: list[Key] = []
         rows = self.session.exec(
             select(ResidueV1).where(ResidueV1.store_id == self.store_id)).all()
@@ -472,33 +503,51 @@ class DeltaProcessor:
         s_node = self._node(sp, st, sn)
 
         if sp != '...':
-            # userset subject: upos, never edges. UNREACHABLE from the cascade today
-            # (the sole caller): _map_deltas_to_keys forces userset-subject deltas on
-            # 'userset-storage' leaves to a full reconcile, and 'closure' leaves can
-            # never receive a userset-subject flip -- their stored subjects are bare,
-            # bare ('...') nodes have no incoming edges (objects always carry a
-            # relation predicate; bridges target relation-predicated nodes), so no
-            # transitive userset path into them exists. Kept correct-if-reached as
-            # belt-and-braces against future routing changes; see
-            # docs/spec-deviations.md 2026-07-17 Fix B code-health note.
-            if s_node is not None:
-                want_upos = should and not covered
-                want_neg = covered and not should
-                if want_upos != (s_node.id in upos) or want_neg != (s_node.id in neg):
-                    (upos.add if want_upos else upos.discard)(s_node.id)
-                    (neg.add if want_neg else neg.discard)(s_node.id)
-                    self._store_residue(object_type, rel, obj_name, stars, neg, upos)
-                    changed = True
-                    if want_upos or want_neg:
-                        # promote-on-record (state-functional form; mirrors _reconcile
-                        # step 2d): a recorded userset subject must be explicit, or
-                        # core's implicit-GC drops it at rc-0 and dangles the residue
-                        # reference. The cheap path records here too, so it must promote.
-                        if s_node.wildcard == '' and s_node.implicit:
-                            self.idx.node(s_node.predicate, s_node.type, s_node.name,
-                                          create_if_missing=False, implicit=False)
-                    else:
-                        self._gc_subject_node(s_node.id)
+            # userset subject: recorded in upos, never as an edge (P4).
+            #
+            # REACHABLE from the cascade -- corrected 2026-07-26 (zero-trust review
+            # ZT-P0-2). The previous comment here claimed this branch was unreachable,
+            # reasoning that _map_deltas_to_keys forces userset-subject deltas on
+            # 'userset-storage' leaves to a full reconcile and that 'closure' leaves can
+            # never see a userset-subject flip because "their stored subjects are bare".
+            # That last step is FALSE: a closure leaf's stored subjects include stored
+            # USERSETS ([T#P] restrictions), so a closure-leaf delta with
+            # ``s_pred != '...'`` routes straight here via the ``subject(key, ...)``
+            # branch. It is exactly the path the ZT-P0-1 escalation ran down: removing
+            # ``group:g1#member -> group:g2#member`` produces closure-leaf deltas whose
+            # subject is the userset ``group:g1#member`` on BOTH doc:x#a.0 and
+            # doc:y#a.0, and both keys take this cheap path in one cascade round.
+            #
+            # ``s_node is None`` (below) was the proximate leak in that bug: with the
+            # node already deleted by an earlier key of the same round, the recording
+            # block was skipped wholesale and the earlier key's stale id was never
+            # pruned. The primary fix is upstream -- _gc_subject_node's guard now really
+            # scans (N3 withdrawn), so the node cannot be deleted while this residue
+            # still records it. The escalation below is the SECOND barrier: reconciling
+            # by name cannot prune an id whose node is gone, so hand the key to the
+            # full-object path, which recomputes neg/upos wholesale from live candidates
+            # and drops dead ids by construction. Same policy _map_deltas_to_keys
+            # already applies when the subject node is missing at MAP time; this covers
+            # the node disappearing mid-round, after the map was built.
+            if s_node is None:
+                return self._reconcile(object_type, rel, obj_name)
+            want_upos = should and not covered
+            want_neg = covered and not should
+            if want_upos != (s_node.id in upos) or want_neg != (s_node.id in neg):
+                (upos.add if want_upos else upos.discard)(s_node.id)
+                (neg.add if want_neg else neg.discard)(s_node.id)
+                self._store_residue(object_type, rel, obj_name, stars, neg, upos)
+                changed = True
+                if want_upos or want_neg:
+                    # promote-on-record (state-functional form; mirrors _reconcile
+                    # step 2d): a recorded userset subject must be explicit, or
+                    # core's implicit-GC drops it at rc-0 and dangles the residue
+                    # reference. The cheap path records here too, so it must promote.
+                    if s_node.wildcard == '' and s_node.implicit:
+                        self.idx.node(s_node.predicate, s_node.type, s_node.name,
+                                      create_if_missing=False, implicit=False)
+                else:
+                    self._gc_subject_node(s_node.id)
             if changed:
                 self._gc_public_node(object_type, rel, obj_name)
             return changed
@@ -709,12 +758,12 @@ class DeltaProcessor:
 
     def _any_residue_reference(self, node_id: int) -> bool:
         """Whether ANY residue's neg/upos references this node id -- a COMPLETE scan.
-        Unlike ``_residue_references`` (which honours the N3 cross-object elision and so
-        finds only cross-object recordings), this also finds LOCAL edge-justified
-        recordings. GC's *deletion* decision can elide locals (a local recording implies
-        an edge, so refcount > 0 keeps the node alive anyway), but the *demote* decision
-        cannot: a locally-recorded userset subject must stay EXPLICIT even though its own
-        edge, not the residue, keeps it alive."""
+        Now exactly ``_residue_references`` in extension (the N3 leaf-kind elision that
+        made the two differ was withdrawn 2026-07-26 as unsound -- see the module-head
+        note); kept as a separate name because the two callers ask different QUESTIONS:
+        ``_residue_references`` gates *deletion*, this one gates *demotion* (a recorded
+        userset subject must stay EXPLICIT even when its own edge, not the residue, is
+        what keeps it alive)."""
         rows = self.session.exec(
             select(ResidueV1).where(ResidueV1.store_id == self.store_id)).all()
         for row in rows:
@@ -972,9 +1021,10 @@ class DeltaProcessor:
             return node_by_key[k]
 
         # (A) subject-GC residue scan, deduped by subject_node_id: the subject node
-        # was GC'd in this transaction, so its cross-object recordings (from-chain /
-        # lifted userset memberships, X4) are not edge-justified anywhere and no other
-        # delta reaches them -- reconcile every residue still holding the id.
+        # was GC'd in this transaction, so its recordings (from-chain / lifted userset
+        # memberships, X4; transitively-reached closure-leaf concretes) are not
+        # edge-justified anywhere and no other delta reaches them -- reconcile every
+        # residue still holding the id, which prunes it wholesale.
         for nid in {r.subject_node_id for r in rows}:
             if get_by_id(nid) is None:
                 for ref_key in self._keys_referencing(nid):
@@ -990,8 +1040,11 @@ class DeltaProcessor:
 
             # -- subject-shaped: the leaf's own-key full/subject decision (per row) --
             if isinstance(fam, LeafFamily):
-                assert not (o_name == '*'), \
-                    'wildcard-object delta mapped to a derived key (decision-15 shape leaked)'
+                # `raise`, not `assert`: survives `python -O` (ZT-P1-2, 2026-07-26).
+                if o_name == '*':
+                    raise InvariantViolation(
+                        'wildcard-object delta mapped to a derived key '
+                        '(decision-15 shape leaked)')
                 key = (o_type, fam.owner_relation, o_name)
                 if s_name == '*':
                     full(key)              # symbolic delta: §5.4 full-object rule
