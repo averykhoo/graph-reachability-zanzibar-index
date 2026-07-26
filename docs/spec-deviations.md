@@ -820,6 +820,21 @@ X4 exception.
    fails LOUD — the cascade-quiescence check raises `InvariantViolation` —
    never silently wrong.
 
+   > **SUPERSEDED 2026-07-26 — the *reachability* half is DISPROVED by a structural
+   > route; the *loud-failure* half is NOT contradicted.** A `derived-ttu` leaf
+   > needs only SOME parent type tainted (`_is_pure` false), but `_from_chain_keys`
+   > enumerates **all** stored parents — so a parent of a DIFFERENT type whose
+   > `target_rel` is UNTAINTED and wildcard-bridged reaches exactly the excluded
+   > shape; "no currently-compilable schema class reaches this shape" is false.
+   > (A second route: `derived-tupleset-ttu`, where the TUPLESET itself is tainted,
+   > leaves the target unconstrained outright.) The "fails LOUD" half stands as the
+   > actual safety property: 400 randomized trials (88 reaching a fresh
+   > untainted+bridged from-chain intern) produced 0 admission/answer/invariant
+   > problems across 3 seeds — a hypothesis, not a proof (not established for
+   > intersection-rooted grant relations, no bounded search over >2 strata). See
+   > `## 2026-07-26 — ZT-P5 …` (Target 2) at the end of this file and
+   > `tests/test_zt_p5_readjudication.py::test_zt_p5_from_chain_target_shape_IS_reachable`.
+
 2. **X2**: `lookup_reverse` on a derived relation with `o_name='*'` now
    short-circuits to the empty result before node resolution (decision 15: no
    object-star state can exist), matching `check`'s False (P7 #3) and the set
@@ -1015,6 +1030,22 @@ reg10 bug hide. Two additions:
   The multi-hop generalization of reg10 is therefore **unreachable** in the out-bridge
   direction (verified: `folder:b parent folder:a` then `folder:a parent folder:*` is still
   rejected on the second write, both backends).
+
+  > **SUPERSEDED 2026-07-26 — DISPROVED by repro; the "unreachable" argument was an
+  > artefact of this test's own self-referential TTU.** With a TTU whose TARGET
+  > differs from its HEAD (`viewer: [user] or admin from parent`, the reg10 shape —
+  > not reg11's own `viewer: … or viewer from parent`), `folder:a parent folder:*`
+  > is **ACCEPTED and PERSISTS** on both backends, and a later
+  > `folder:a#viewer admin folder:a` closes the genuine multi-hop out-bridge loop,
+  > rejected by both — parity holds, but the reachability claim above does not: it
+  > was true only of reg11's own self-referential schema, not of the out-bridge
+  > direction in general. See `## 2026-07-26 — ZT-P5 …` (Target 1) at the end of
+  > this file and
+  > `tests/test_zt_p5_readjudication.py::test_zt_p5_reg11_multihop_out_bridge_IS_reachable`.
+  > The same re-adjudication also found a NEW accept/reject divergence on this
+  > schema family (a `folder:* parent folder:*` write: graph-accepted / set-rejected,
+  > then detonating on a later innocent write) — filed strict-xfail there, not fixed;
+  > see the ZT-P5 entry's "★ NEW DIVERGENCE" section rather than duplicating it here.
 - `tests/test_hypothesis.py` — a dedicated **star-bridge schema generator** (`star_bridge_configs`
   + `_star_bridge_pool`) emitting the `parent:[T,T:*]` / `A:[user,T:*#A,T#B]` /
   `B:[user] or A from parent` class the stock `schema_asts` cannot build, plus a deterministic
@@ -1092,7 +1123,33 @@ precondition was first framed as `bridged_in_shapes ∩ bridged_out_shapes ≠ �
 **star-tupleset through-shapes** (reg11's `(folder,viewer)`, derived from `[folder:*]` on
 the TTU tupleset `parent`), which are NOT writable usersets and cannot mint a persistent
 `w_any` node — reg11's dangerous writes self-cycle and are rejected on both backends, so
-nothing detonates. The implemented left factor is therefore the set of **literal `T:*#p`
+nothing detonates.
+
+> ⚠ **PARTLY FALSE — corrected 2026-07-26 (ZT-P5-NEW).** The clause "cannot mint a
+> persistent `w_any` node … so nothing detonates" is **wrong**. On reg11's OWN schema a
+> single `folder:* parent folder:*` write mints exactly such a node: the routed edge is
+> `w_any(folder,viewer) → w_all(folder,viewer)`, two DISTINCT `node_v4` rows under the
+> position-split encoding, so it is not a self-loop and the cycle check never fires. It
+> was graph-ACCEPTED / set-REJECTED, and it **did** detonate — every later innocent
+> concrete `viewer` grant was permanently graph-rejected while the oracle said it should
+> hold, with I1–I13 green throughout.
+>
+> What survives is the NARROWER reading, which is the part that actually justifies the
+> narrowing: a through-shape cannot make the danger a property of the **schema**, so it
+> does not belong in a **compile-time** criterion — nothing more. That distinction is
+> load-bearing: the dangerous schema IS reg11's schema (character-identical to
+> `REG11_SCHEMA`, same OWC set after expansion), so any compile-time rejection would
+> reject the legal reg11 / `owc_star_ttu` class wholesale.
+>
+> The fix is therefore a **write-time** rejection, not a schema rejection:
+> `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge` refuses a routed
+> `w_any(T,p) → w_all(T,p)` edge when the shape is in `bridged_in ∩ bridged_out` — a
+> cycle by construction, since bridges are schematic, so every present and future
+> concrete `T:x#p` closes `w_any → w_all → concrete → w_any`. This is the position-split
+> restatement of a rule the set engine already had (`_would_cycle`'s raw-level
+> `u == v` on the UNSPLIT node key), so the two backends now implement one rule in two
+> representations rather than two rules that happened to agree. See the 2026-07-26 ZT-P5
+> entry. The implemented left factor is therefore the set of **literal `T:*#p`
 restriction shapes** (`wildcard_userset_restriction_shapes(ast)`), a strict subset of
 `bridged_in_shapes`. Verified empirically: reg11's coarse intersection is non-empty but its
 literal-restriction intersection is empty (legal); the shared `CANON_SCHEMA` used by
@@ -2035,6 +2092,23 @@ is asserted, so it cannot drift silently).
   (`TupleSource.add` -> `SetEngine.add_tuple`). Any accept/reject divergence in the
   graph-accepts direction is therefore invisible to the composed system and visible
   only to direct `WildcardIndex` users and to the validation matrix.
+
+### META-lesson (recurring; state it plainly)
+
+Both Target 1 and Target 2 above were dismissed on the same flawed reasoning:
+**absence of a corpus** — reg11's "no currently-compilable schema class reaches
+this shape" and the from-chain note's identical phrasing — read as a reachability
+claim when each was actually only a claim about what the *existing fuzz pool or
+hand-written pins* happened to build. This is the third time this exact reasoning
+has failed: reg10's own "Known residual" (2026-07-13, closed 2026-07-16) already
+recorded that its "no current corpus" claim was "true only of the existing fuzz
+pool, not of reachability." Three strikes is a pattern, not a coincidence. The
+norm going forward: **absence of a corpus is evidence about the corpus, not about
+reachability.** A dismissal on those grounds needs either a structural argument
+(why no schema/write-sequence CAN reach the shape — not why none currently does)
+or a bounded search with STATED bounds (corpus, K, trial count — as Target 1's
+"Bounded negative result" and Target 2's 400-trial sweep do above), never a bare
+"nothing exercises it."
 
 ### Gate at time of writing
 

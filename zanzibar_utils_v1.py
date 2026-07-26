@@ -31,6 +31,51 @@ IDENTIFIER_CHARSET = r'A-Za-z0-9_./@+=-'
 _IDENTIFIER_RE = re.compile(rf'[{IDENTIFIER_CHARSET}]{{1,256}}\Z')
 
 
+class AdmissionRejected(ValueError):
+    """A write was CORRECTLY REFUSED at admission -- never a sign of corruption.
+
+    The exact mirror of ``index_v4.invariants.InvariantViolation`` ("a rejection is a
+    *correct* refusal; a violation is corruption"). This class is the *rejection* half
+    said out loud, as a TYPE rather than as message text: the store is intact, the
+    write was inadmissible. The refusal families are
+
+      * a cycle (a self-referential edge, a back-path, a star self-edge),
+      * an identifier outside the declared charset/length,
+      * a tuple no declared type restriction admits (incl. a raw write naming a
+        compiler-generated leaf predicate),
+      * an undeclared subject-/object-wildcard shape,
+      * a remove of an edge/node/tuple that is not there.
+
+    It is NOT for internal-contract failures -- a stale node id, a malformed wildcard
+    encoding, an I5 routing breach, a "shortcut only supports count == -1". Those stay
+    plain ``ValueError`` deliberately: they mean a CALLER (or this library) is broken,
+    and a consumer that classifies exceptions must be able to tell them apart. When in
+    doubt a site stays unclassified, because the fail-closed direction is for the
+    classifier to propagate it.
+
+    **Subclassing ``ValueError`` is deliberate and load-bearing**, not an accident of
+    convenience: every existing caller and test catches ``ValueError`` around a write
+    (``connectedstore.store._write``'s narrow rejection path, ``tests/parity.py``,
+    ``tests/test_matrix.py``'s backends, ``index_v4.processor``'s cycle guard,
+    ``connectedstore.apply._apply_row``'s ValueError->InvariantViolation promotion).
+    All of those keep working unchanged. Narrowing to ``AdmissionRejected`` is strictly
+    OPT-IN, and the only thing it buys is the ability to tell a correct refusal from an
+    internal-contract ``ValueError``, which is a bug.
+
+    WHY IT LIVES HERE. This is the shared schema layer: it imports neither backend, and
+    both backends plus the composition layer import it. So both ``index_v4`` and
+    ``setengine`` can raise the same rejection type without either importing the other,
+    and ``validate_write_identifiers`` (called by both) raises it directly.
+    ``index_v4.core`` re-exports it for convenience.
+
+    NOTE the caller-relativity: the same raise can be a refusal at ADMISSION and
+    corruption further downstream. ``connectedstore.apply._apply_row`` replays an
+    already-admission-validated log row, so it promotes ANY ``ValueError`` (this class
+    included) to ``InvariantViolation``. That promotion is the caller's judgement, and
+    this class does not weaken it.
+    """
+
+
 def is_valid_identifier(value) -> bool:
     """Strict charset membership ONLY: the reserved sentinels ``'*'`` (wildcard name)
     and ``'...'`` (bare subject predicate) are NOT valid identifiers -- they are
@@ -47,7 +92,9 @@ def _require(value, label: str, *, allow_star: bool = False, allow_ellipsis: boo
         return
     if not is_valid_identifier(value):
         extra = ''.join([" or '*'" if allow_star else '', " or '...'" if allow_ellipsis else ''])
-        raise ValueError(
+        # AdmissionRejected: an out-of-charset identifier is a correct refusal of the
+        # WRITE, not evidence of a broken store (message text unchanged).
+        raise AdmissionRejected(
             f"invalid {label} {value!r}: must match [{IDENTIFIER_CHARSET}] (1-256 chars){extra}")
 
 
@@ -352,7 +399,10 @@ class RuleSet:
         # Leaf families are processor/rewrite-internal: a *raw* write naming one is
         # invalid, matching the set engine's no-restriction rejection (boolean spec §3.3).
         if compiled is not None and (o_type, rel) in compiled.leaf_families:
-            raise ValueError(
+            # AdmissionRejected: same type-restriction admission gate as the set engine
+            # (`SetEngine._validate` step 2 rejects `<rel>.<idx>` for want of a declared
+            # restriction). A correct refusal of the tuple, not a broken index.
+            raise AdmissionRejected(
                 f"relation {rel!r} is a compiled leaf predicate of a derived relation; "
                 f"tuples must be written against the public relation name")
 
@@ -367,7 +417,11 @@ class RuleSet:
                 if f.apply(relational_triple)
             }
             if not seeds:
-                raise ValueError(
+                # AdmissionRejected (reg13, derived arm): no RewriteFilter admits this
+                # raw tuple, i.e. no declared type restriction does. The set engine
+                # refuses the identical tuple in `_validate`; this is the graph side of
+                # ONE admission rule, so it carries the rejection type.
+                raise AdmissionRejected(
                     f"tuple {relational_triple} matches no declared type restriction "
                     f"for derived relation {o_type}#{rel}")
         else:
@@ -396,7 +450,19 @@ class RuleSet:
                 # set engine before they ever reach here, so this only fires on genuine
                 # corruption -- exactly what advance_index treats it as
                 # (InvariantViolation).
-                raise ValueError(
+                #
+                # It is nonetheless raised as `AdmissionRejected` (reg13, pure-union
+                # arm): the RAISE SITE is an admission gate -- it is answering "does a
+                # declared type restriction admit this tuple?", exactly as the set
+                # engine's `_validate` does, and every harness that calls `apply` with
+                # RAW user tuples (tests/test_matrix.py, formal/conformance) is using it
+                # as one. Whether reaching it means "the user wrote nonsense" or "the
+                # log is corrupt" is a property of the CALLER's provenance guarantee,
+                # not of this check -- and the caller that has such a guarantee already
+                # says so: `connectedstore.apply._apply_row` promotes any ValueError
+                # from this path to `InvariantViolation`. `AdmissionRejected` subclasses
+                # ValueError, so that promotion is untouched.
+                raise AdmissionRejected(
                     f"tuple {relational_triple} matches no declared type restriction "
                     f"for {o_type}#{rel}")
 
@@ -1091,12 +1157,31 @@ def wildcard_userset_restriction_shapes(ast: SchemaAST) -> frozenset[tuple[str, 
     through-shapes ``derive_schema_info`` also folds into ``subject_wildcard_shapes``
     (a ``[S:*]`` bare tupleset used by a TTU derives the through-shape ``(S, target)``).
     That distinction is the whole difference between F1/F2 and reg11: only a literal
-    ``T:*#p`` restriction lets a ``T:*#p ... o`` tuple be WRITTEN, minting a persistent
-    ``w_any(T,p)`` userset node -- the thing that detonates against a matching object
-    wildcard. A through-shape is never a writable userset subject (reg11's dangerous
-    writes self-cycle and are rejected on both backends, so nothing persists), so
-    counting it would over-reject the legal reg11 class. This is the precise left factor
-    of the doubly-bridged precondition (see ``_reject_doubly_bridged_shapes``)."""
+    ``T:*#p`` restriction lets a ``T:*#p ... o`` tuple be written DIRECTLY by the user,
+    which makes the danger a property of the SCHEMA and so compile-rejectable. Counting
+    through-shapes here would over-reject the legal reg11 / ``owc_star_ttu`` class
+    (verified by construction: their coarse ``bridged_in ∩ bridged_out`` is non-empty
+    yet their whole write space is oracle-correct and unanimous on both backends).
+
+    ⚠ CORRECTION (ZT-P5-NEW, 2026-07-26). The original justification for this narrowing
+    also claimed that a through-shape *"is never a writable userset subject -- reg11's
+    dangerous writes self-cycle and are rejected on both backends, so nothing
+    persists"*. **That second clause is FALSE.** A through-shape ``(T, target)`` CAN be
+    minted in subject position -- not by a direct write, but by the TTU REWRITE: on a
+    SELF-REFERENTIAL TTU (``viewer: … or viewer from parent``) over a star-restricted
+    tupleset whose shape carries an object wildcard, the raw write ``T:* parent T:*``
+    routes to ``T:*#viewer viewer T:*`` = ``w_any(T,viewer) -> w_all(T,viewer)``, which
+    the position-split encoding hides from the graph's cycle check. That is a genuine
+    latent cycle and it DID detonate. It is NOT fixed by widening this function --
+    the schema it needs is precisely the legal reg11 class, so widening here would
+    over-reject it. It is fixed at WRITE time instead, in
+    ``index_v4.wildcard.WildcardIndex._reject_star_self_edge`` (the graph-side mirror of
+    ``SetEngine._would_cycle``'s raw-level ``u == v`` rule). Do not re-derive "therefore
+    through-shapes are harmless" from this docstring: they are harmless *to the compile
+    gate*, nothing more. See docs/spec-deviations.md 2026-07-17 + 2026-07-26.
+
+    This is the precise left factor of the doubly-bridged precondition (see
+    ``_reject_doubly_bridged_shapes``)."""
     shapes: set[tuple[str, str]] = set()
     for expr in ast.values():
         for direct in _iter_directs(expr):
@@ -1120,9 +1205,21 @@ def _reject_doubly_bridged_shapes(ast: SchemaAST, schema_info: SchemaInfo) -> No
     NOTE on the left factor: we intersect against the LITERAL ``T:*#p`` restriction
     shapes, NOT the full ``bridged_in_shapes``. ``bridged_in_shapes`` also carries
     star-tupleset through-shapes (reg11's ``(folder, viewer)`` from ``[folder:*]`` on a
-    TTU tupleset), which are NOT writable usersets and cannot mint a persistent w_any --
-    reg11 is legal (both backends agree, dangerous writes self-cycle). Using the full
-    ``bridged_in_shapes`` here over-rejects that legal class.
+    TTU tupleset). Using the full ``bridged_in_shapes`` here over-rejects the legal
+    reg11 / ``owc_star_ttu`` class, whose coarse ``bridged_in ∩ bridged_out`` IS
+    non-empty while every one of their writes is oracle-correct and unanimous across
+    backends -- so the coarse criterion would delete working, pinned functionality.
+
+    ⚠ CORRECTION (ZT-P5-NEW, 2026-07-26). This NOTE used to add "…which are NOT writable
+    usersets and cannot mint a persistent w_any -- dangerous writes self-cycle". **The
+    second half is false.** A self-referential TTU over a star-restricted tupleset with
+    an object wildcard on the tupleset shape lets the TTU REWRITE mint exactly such a
+    persistent ``w_any(T,p) -> w_all(T,p)`` edge, and it detonated. The correct reading
+    is narrower: a through-shape cannot make the danger a property of the SCHEMA (the
+    same schema also has an entirely legal write space), so it does not belong in a
+    COMPILE-time criterion. The residual write-level case is rejected at write time by
+    ``index_v4.wildcard.WildcardIndex._reject_star_self_edge``. See
+    docs/spec-deviations.md 2026-07-26.
 
     Such a shape admits wildcard writes whose materialized bridges form a latent cycle
     ``w_any(T,p) -> w_all(T,p)`` in the graph closure (closed by any present-or-future

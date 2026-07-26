@@ -16,6 +16,7 @@ from types import EllipsisType
 from sqlmodel import Session, select
 
 from zanzibar_utils_v1 import (
+    AdmissionRejected,
     CyclicDerivedDependency,
     DoublyBridgedShapeError,
     wildcard_userset_restriction_shapes,
@@ -354,7 +355,13 @@ class SetEngine:
         # in _flow_reaches. Uses ``wildcard_userset_restriction_shapes`` (the literal
         # restrictions), NOT the full ``bridged_in_shapes``, so it matches the compile
         # gate exactly and stays EMPTY for the legal reg11 class (whose (T, viewer) is a
-        # star-tupleset through-shape in bridged_in, not a writable userset). ALWAYS
+        # star-tupleset through-shape in bridged_in). NB (ZT-P5-NEW, 2026-07-26): a
+        # through-shape is NOT harmless in general -- a self-referential TTU can have the
+        # rewrite mint the same latent w_any->w_all edge. That case is a property of the
+        # WRITE, not the schema, and this engine already rejects it via _would_cycle's
+        # raw-level ``u == v`` rule (the graph mirrors it in
+        # ``WildcardIndex._reject_star_self_edge``); it is deliberately NOT folded into
+        # this compile-scoped set, which would over-reject the legal class. ALWAYS
         # EMPTY for any constructible engine -- compile rejects such schemas up front
         # (DoublyBridgedShapeError, re-raised above), so no SetEngine can be built with a
         # nonempty set. Kept as a defense-in-depth belt: if that compile gate is ever
@@ -465,7 +472,9 @@ class SetEngine:
         # session.delete) when the tuple is actually present -- an absent tuple is
         # rejected without a DB round-trip.
         if not self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
-            raise ValueError('non-existent tuple cannot be removed')
+            # AdmissionRejected: validity parity with the graph index's 'Non-existent
+            # edge cannot be removed' -- a correct refusal, state untouched.
+            raise AdmissionRejected('non-existent tuple cannot be removed')
         row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
         self.session.delete(row)
         # Flush the delete now. The old per-add ``_row`` SELECT (dropped in P0)
@@ -827,9 +836,14 @@ class SetEngine:
 
     def _validate(self, s_pred, s_type, s_name, relation, o_type, o_name,
                   pairs) -> None:
+        # Every raise in this method is an `AdmissionRejected` (a `ValueError` subclass,
+        # so every existing `except ValueError` is unaffected): this method IS the set
+        # engine's admission gate, it runs BEFORE any mutation, and each of its three
+        # refusals has a same-family counterpart in the graph index. Typing them keeps
+        # the two backends' rejections one class, not two that happen to agree.
         # (1) object-wildcard gating: a T:* object is valid only for a declared shape.
         if o_name == '*' and (o_type, relation) not in self.schema_info.object_wildcard_shapes:
-            raise ValueError(
+            raise AdmissionRejected(
                 f"object wildcard {o_type}:* (relation {relation!r}) is not a declared "
                 f"object-wildcard shape")
 
@@ -840,14 +854,14 @@ class SetEngine:
             subject=Entity(s_type, s_name), relation=relation,
             object=Entity(o_type, o_name), subject_predicate=_denorm_pred(s_pred))
         if not any(f.apply(triple) for f in self.filters):
-            raise ValueError(
+            raise AdmissionRejected(
                 f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} matches no "
                 f"declared type restriction for {o_type}#{relation}")
 
         # (3) cycle rejection (§6.2): reject usersets whose membership would loop, matching
         #     the graph backend's cycle detection. Side-effect free -- uses existing ids only.
         if self._would_cycle(s_pred, s_type, s_name, relation, o_type, pairs):
-            raise ValueError(
+            raise AdmissionRejected(
                 f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} would create a "
                 f"cycle in the userset membership topology")
 
@@ -884,6 +898,15 @@ class SetEngine:
         # A derived pair whose endpoints coincide is the trivial cycle (e.g.
         # doc:x#viewer viewer doc:x) -- blind-audit E3: the graph backend rejects
         # the same tuple.
+        #
+        # ⚠ PARITY PARTNER (ZT-P5-NEW, 2026-07-26). This rule is stated on the UNSPLIT
+        # node key, so it also covers the STAR case ``u == v == (T,'*',p)`` -- the routed
+        # edge the graph stores as ``w_any(T,p) -> w_all(T,p)`` across two distinct
+        # node rows. The graph's core cycle check cannot see that as a self-loop, so it
+        # used to ACCEPT while this rejected (accept/reject break + graph detonation on
+        # the next innocent concrete write). ``WildcardIndex._reject_star_self_edge``
+        # now restates exactly this rule for the position-split encoding. Keep the two
+        # in step: they are ONE rule with two representations.
         if any(u == v for u, v in pairs):
             return True
 

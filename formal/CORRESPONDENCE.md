@@ -685,6 +685,51 @@ still describes the algorithm the Python actually runs. So, when optimizing:
     silently disable both locks. Locking/concurrency is **explicitly unmodeled**
     (see the P12a entry below and the multi-instance bullet in §7.4): the chain
     models *what* is applied and *that* it is one transaction.
+  * **`ZT-P5-NEW`** — `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge`
+    refuses a routed `w_any(T,p) → w_all(T,p)` edge when the shape lies in
+    `bridged_in_shapes ∩ bridged_out_shapes`. That is a cycle **by construction**:
+    bridges are schematic, not data-dependent, so every present *and future*
+    concrete `T:x#p` closes `w_any → w_all → concrete → w_any`. This **narrows**
+    graph WRITE admission into parity with the set engine's
+    `setengine/engine.py::SetEngine._would_cycle` raw-level `u == v` rule — the
+    same rule on the UNSPLIT node key. The divergence existed only because the
+    graph's position-split wildcard encoding turns that self-loop into two
+    distinct `node_v4` rows, so the core cycle check never fired; one
+    `folder:* parent folder:*` write was graph-accepted / set-rejected and then
+    detonated (every later innocent concrete grant permanently graph-rejected,
+    oracle disagreeing, I1–I13 green). Pin:
+    `tests/test_zt_p5_readjudication.py`.
+    **Deliberately NOT a §3 `GraphAccepts` scope rejection.** A compile-time
+    criterion cannot express it: the dangerous schema IS reg11's schema, so
+    rejecting it would delete the legal reg11 / `owc_star_ttu` class. `GraphState
+    .admitEdge` is untouched and the §3 row's claim stands as written.
+    **Inert on every modeled fragment**, so no Lean definition describes dead
+    code: `GraphIndex/UsStarWrite.lean::writeUsStar` states in its own header that
+    on its (object-wildcard-free) fragment the out-bridges are inert, so no shape
+    there is in `bridged_out`; `GraphIndex/ObjStarWrite.lean::writeWild` has no
+    in-bridge step at all, so no shape there is in `bridged_in`; and
+    `Core/Schema.lean::Schema.isSubjectWildcardUserset` explicitly scopes out the
+    star-tupleset TTU through-shape this bug rides. The guard's precondition
+    `bridged_in ∩ bridged_out ≠ ∅` is therefore unsatisfiable in both fragments.
+  * **`ZT-P4-7`** — `zanzibar_utils_v1.py::AdmissionRejected` (a `ValueError`
+    subclass, re-exported from `index_v4/core.py` and the `index_v4` package)
+    now types the ~20 genuine write-admission REFUSAL sites across
+    `index_v4/core.py`, `index_v4/wildcard.py`, `zanzibar_utils_v1.py` and
+    `setengine/engine.py`, so a refusal is distinguishable from an internal
+    `ValueError`. Same disposition as `ZT-P1-2` and for the same stated reason:
+    `GraphIndex/Write.lean::GraphState.admitEdge` is a **decision procedure** —
+    it says which writes are accepted, not by which Python statement form a
+    rejection is raised. **No admission decision changed**, proved rather than
+    asserted: an 854-entry probe (5 schemas × 29 writes × 5 drivers plus the raw
+    `ReachabilityIndex` path) recording per-write accept/reject and the EXACT
+    message but deliberately NOT the exception class was re-run against a tree
+    with the rename mechanically inverted — 0 differences over 608 rejections /
+    246 accepts / 58 distinct messages. The gate value is downstream:
+    `formal/conformance/backends.py::GraphDriver.apply` no longer allow-lists
+    exception MESSAGE SUBSTRINGS (`_ADMISSION_REJECTION_MARKERS` deleted); an
+    unclassified `ValueError` now propagates and fails the comparison instead of
+    being absorbed as "rejected", which had let a spurious raise silently shrink
+    BOTH the driven store and the oracle built from it.
   None of these touches a row above. They are logged here so the "every change
   gets a disposition" discipline is visibly unbroken.
 

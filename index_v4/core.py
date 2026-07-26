@@ -6,9 +6,21 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
 from legacy.index_v1 import MultiSet
-from zanzibar_utils_v1 import validate_write_identifiers, validate_node_identifiers
+from zanzibar_utils_v1 import (AdmissionRejected, validate_write_identifiers,
+                               validate_node_identifiers)
 from .invariants import InvariantViolation
 from .models import DeltaOutboxV1, EdgeV4, NodeV4, Edge, Node, StoreV4
+
+# ``AdmissionRejected`` is DEFINED in ``zanzibar_utils_v1`` (the shared schema layer,
+# which imports no backend) so that both backends can raise one rejection type; it is
+# re-exported here because ``index_v4`` is where its raise sites mostly live, and
+# because the import direction forbids the reverse (``core`` already imports
+# ``zanzibar_utils_v1``; ``zanzibar_utils_v1`` importing ``index_v4`` would cycle).
+# It is the mirror of ``InvariantViolation``: rejection = correct refusal (a
+# ``ValueError`` subclass, for backward compatibility with every existing
+# ``except ValueError`` around a write); violation = corruption (an ``AssertionError``
+# subclass, which therefore never enters a ``ValueError`` handler at all).
+__all_exceptions__ = ('AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe')
 
 # Per-batch node-resolution cache sentinels (perf N15). ``_UNCACHED`` distinguishes
 # "key absent from the cache" (do the DB lookup) from ``_MISSING`` ("known-absent this
@@ -609,6 +621,8 @@ class ReachabilityIndex:
         # Node removal shortcut: unsets direct edge counts globally
         if subject_id == object_id:
             if count != -1:
+                # DELIBERATELY NOT AdmissionRejected: an internal-contract failure (no
+                # user write can reach it), so it must stay a bug signal.
                 raise ValueError('node-removal shortcut only supports count == -1')
             # Blind-audit C1: the shortcut retires every incident direct edge by
             # count math, so the neighbours' reference_counts (incremented per direct
@@ -744,6 +758,10 @@ class ReachabilityIndex:
         # A wildcard node stores name='*' with wildcard in {'any','all'}; a concrete
         # node stores wildcard=''. The two facts are equivalent -- reject any attempt
         # to smuggle in an ambiguous node (spec §1.3).
+        # Both raises below stay plain ValueError DELIBERATELY: they police the node
+        # ENCODING contract, whose only reachable caller is this library (the façade's
+        # `_resolve` routes every '*' through the wildcard branch before it gets here).
+        # A hit means a caller is broken, so it must not be classified as a refusal.
         if wildcard not in {'', 'any', 'all'}:
             raise ValueError(f"wildcard must be '', 'any', or 'all', got {wildcard!r}")
         if (entity_name == '*') != (wildcard != ''):
@@ -843,6 +861,8 @@ class ReachabilityIndex:
         ).all())
         for nid in node_ids:
             if nid not in live:
+                # DELIBERATELY NOT AdmissionRejected: a stale id reaching the row writer
+                # is a liveness/locking failure, not a refusal of the user's write.
                 raise ValueError(f'node id {nid} no longer exists (concurrent removal?)')
 
     def _add_edge_locked(self, subject_id: int, object_id: int) -> None:
@@ -852,8 +872,9 @@ class ReachabilityIndex:
         if subject_id == object_id:
             # a tuple whose subject node IS its object node is the trivial cycle;
             # a real rejection, not an assert (under -O the assert would fall into
-            # the node-DELETION shortcut and corrupt the store -- blind-audit C3)
-            raise ValueError(
+            # the node-DELETION shortcut and corrupt the store -- blind-audit C3).
+            # AdmissionRejected states "a real rejection" as a TYPE (ZT-P4-7).
+            raise AdmissionRejected(
                 f'{subject_id=} equals {object_id=}: self-referential edge would '
                 f'create a cycle')
 
@@ -865,7 +886,9 @@ class ReachabilityIndex:
         ).first()
 
         if triple is not None and triple.indirect_edge_count > 0:
-            raise ValueError(
+            # AdmissionRejected: the reverse-reachability pre-check -- admitting this
+            # edge would close a cycle. A correct refusal of the write.
+            raise AdmissionRejected(
                 f'{subject_id=} is reachable from {object_id=}, adding this edge would create a cycle')
 
         self._add_direct_edge_unsafe(subject_id, object_id, 1)
@@ -890,7 +913,11 @@ class ReachabilityIndex:
         """Direct-edge existence check + ref-counted -1 update. Caller holds the
         store lock (same contract as ``_add_edge_locked``)."""
         if subject_id == object_id:
-            raise ValueError(
+            # AdmissionRejected: the remove-side mirror of the self-edge cycle refusal.
+            # Reachable from a user write (`remove_tuple('p','T','x','p','T','x')`
+            # resolves both endpoints to the SAME node), and no such edge can ever have
+            # existed -- so this is "removing what is not there", a correct refusal.
+            raise AdmissionRejected(
                 f'{subject_id=} equals {object_id=}: no self-referential edge can exist')
 
         triple = self.session.exec(
@@ -901,7 +928,11 @@ class ReachabilityIndex:
         ).first()
 
         if triple is None or triple.direct_edge_count == 0:
-            raise ValueError(
+            # AdmissionRejected: same family as 'Non-existent edge cannot be removed'
+            # (that one is the node-resolution miss; this one is the edge-row miss).
+            # Validity parity with the set engine's 'non-existent tuple cannot be
+            # removed'.
+            raise AdmissionRejected(
                 f'{subject_id=} has no direct edge to {object_id=}, cannot remove nonexistent edge')
 
         self._add_direct_edge_unsafe(subject_id, object_id, -1)
@@ -954,7 +985,9 @@ class ReachabilityIndex:
             _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=False)
             _object = self.node(relation, object_type, object_name, create_if_missing=False)
         except KeyError as e:
-            raise ValueError('Non-existent edge cannot be removed') from e
+            # AdmissionRejected: an endpoint the store never saw -- removing what is
+            # not there is a correct refusal (validity parity with the set engine).
+            raise AdmissionRejected('Non-existent edge cannot be removed') from e
 
         self._remove_edge_locked(_subject.id, _object.id)
 

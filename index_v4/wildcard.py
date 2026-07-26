@@ -22,7 +22,8 @@ from sqlmodel import select
 
 from .core import ReachabilityIndex
 from .models import EdgeV4, NodeV4, ResidueV1
-from zanzibar_utils_v1 import (SchemaInfo, norm_pred as _norm_pred,
+from zanzibar_utils_v1 import (AdmissionRejected, SchemaInfo,
+                               norm_pred as _norm_pred,
                                validate_node_identifiers,
                                validate_write_identifiers)
 
@@ -45,14 +46,21 @@ class WildcardIndex:
         # wildcard-userset restriction (T:*#p) that is also an object-wildcard shape --
         # admits wildcard writes whose materialized bridges form a latent w_any->w_all
         # cycle (set/graph divergence + innocent-write lockout). ``compile_ruleset``
-        # rejects such schemas up front (``DoublyBridgedShapeError``), so no
+        # rejects such SCHEMAS up front (``DoublyBridgedShapeError``), so no
         # WildcardIndex is ever built with one. We deliberately DON'T assert here: the
         # PRECISE check needs the AST to tell a literal T:*#p restriction from a
-        # star-tupleset through-shape (the legal reg11 class has (T, viewer) in
-        # ``bridged_in_shapes`` but no writable userset, so a ``bridged_in ∩
-        # bridged_out`` assert would false-positive on it), and the AST is not available
-        # here. The compile-time gate (both backends) is the real guard; see
-        # docs/spec-deviations.md 2026-07-17.
+        # star-tupleset through-shape, and the AST is not available here.
+        #
+        # ⚠ 2026-07-26 (ZT-P5-NEW): the compile gate is NOT sufficient on its own, and
+        # the old justification for that ("a through-shape is never a writable userset,
+        # so it cannot mint a persistent w_any node") is FALSE. A star-tupleset
+        # through-shape reaches the SAME latent cycle through the TTU REWRITE when the
+        # TTU is self-referential -- but that is a property of the WRITE, not of the
+        # schema: the schema it needs is exactly the legal reg11 / ``owc_star_ttu``
+        # class, whose other writes are oracle-correct on both backends, so a compile
+        # rejection would over-reject. The residual write-level case is caught by
+        # ``_reject_star_self_edge`` below (parity mirror of ``SetEngine._would_cycle``'s
+        # raw-level ``u == v`` rule). See docs/spec-deviations.md 2026-07-17 + 2026-07-26.
         # Derived-family write exclusivity (boolean spec §3.3/I5): only the delta
         # processor may write incoming direct edges on a derived-public family. The
         # processor sets this flag around its own writes.
@@ -75,6 +83,10 @@ class WildcardIndex:
         if self.processor_writes:
             return
         if (o_type, relation) in self.schema_info.derived_families:
+            # DELIBERATELY NOT AdmissionRejected (I5 exclusivity, boolean spec §3.3):
+            # a hit means the CALLER bypassed `RuleSet.apply`'s leaf routing -- a wiring
+            # bug in the write path, not an inadmissible tuple. Every harness routes, so
+            # a classifier must let this one propagate and fail loudly.
             raise ValueError(
                 f"relation {relation!r} on {o_type} is a derived (boolean) relation; "
                 f"its edges are processor-maintained -- tuples must be routed through "
@@ -96,14 +108,18 @@ class WildcardIndex:
             if position == 'subject':
                 shape = (entity_type, pred)
                 if shape not in self.schema_info.subject_wildcard_shapes:
-                    raise ValueError(
+                    # AdmissionRejected: the write names a `*` shape the schema never
+                    # declared -- a correct refusal of the tuple.
+                    raise AdmissionRejected(
                         f"subject wildcard {entity_type}:* (predicate {pred!r}) is not a declared "
                         f"subject-wildcard shape {shape}")
                 variant = 'any'
             else:
                 shape = (entity_type, pred)  # pred is the relation in object position
                 if shape not in self.schema_info.object_wildcard_shapes:
-                    raise ValueError(
+                    # AdmissionRejected: ditto, object position (the set engine refuses
+                    # the identical write in `_validate` step 1).
+                    raise AdmissionRejected(
                         f"object wildcard {entity_type}:* (relation {pred!r}) is not a declared "
                         f"object-wildcard shape {shape}")
                 variant = 'all'
@@ -137,6 +153,63 @@ class WildcardIndex:
     def _bridge_degree(self, shape: tuple[str, str]) -> int:
         return ((1 if shape in self.schema_info.bridged_in_shapes else 0)
                 + (1 if shape in self.schema_info.bridged_out_shapes else 0))
+
+    def _reject_star_self_edge(self, subject: NodeV4, obj: NodeV4) -> None:
+        """Reject a routed edge ``w_any(T,p) -> w_all(T,p)`` on the SAME shape
+        (ZT-P5-NEW, 2026-07-26).
+
+        WHY IT IS A CYCLE. The position rule (§1.2/§1.3) splits one wildcard shape into
+        two ``node_v4`` rows -- ``w_any`` (subject position) and ``w_all`` (object
+        position) -- so such an edge is not a self-loop *in the edge table* and the
+        core's cycle check cannot see it. It is nevertheless a cycle by CONSTRUCTION,
+        because the bridges of that shape are SCHEMATIC, not data: every present **and
+        future** concrete ``T:x#p`` gets ``T:x#p -> w_any(T,p)`` (in-bridge) and
+        ``w_all(T,p) -> T:x#p`` (out-bridge) from ``_ensure_bridges``. So
+        ``w_any(T,p) -> w_all(T,p) ->[out] T:x#p ->[in] w_any(T,p)`` closes the moment
+        ANY concrete of the shape exists. Admitting the edge while the shape happens to
+        have no concretes yet therefore does not avoid the cycle -- it defers it onto
+        the next innocent write, which is then permanently rejected (the "detonation":
+        the graph locks itself out of a grant the set engine and the oracle both allow).
+
+        WHY HERE AND NOT AT COMPILE TIME. This is a property of the WRITE, not of the
+        schema. The only schema class that can express such a write through a TTU
+        rewrite is a self-referential TTU (``viewer: ... or viewer from parent``) over a
+        star-restricted tupleset whose shape carries an object wildcard -- i.e. exactly
+        reg11 / ``owc_star_ttu``, a LEGAL and oracle-pinned class whose every other
+        write must keep working. Rejecting the schema would over-reject it (verified by
+        construction, docs/spec-deviations.md 2026-07-26). The set engine agrees: it
+        BUILDS this schema and rejects only the offending write, via the raw-level
+        ``any(u == v for u, v in pairs)`` rule in ``_would_cycle`` -- the very same rule,
+        stated on the UNSPLIT node key. This method is that rule restated for the
+        position-split encoding, so the two backends implement one rule, not two rules
+        that happen to agree.
+
+        MINIMALITY. Both bridge memberships are required explicitly: without the
+        in-bridge (a bare ``'...'`` predicate is never in ``bridged_in_shapes``) or
+        without the out-bridge there is no schematic return path and the edge is
+        harmless. Only a same-shape ``any -> all`` pair is rejected; a cross-shape
+        ``w_any(A) -> w_all(B)`` needs stored data to close its loop and is left to the
+        core's ordinary cycle check, which both backends already run (the reg11
+        MULTI-HOP class -- pinned accepted/rejected in lockstep by
+        tests/test_zt_p5_readjudication.py)."""
+        if subject.wildcard != 'any' or obj.wildcard != 'all':
+            return
+        shape = (subject.type, subject.predicate)
+        if shape != (obj.type, obj.predicate):
+            return
+        if (shape not in self.schema_info.bridged_in_shapes
+                or shape not in self.schema_info.bridged_out_shapes):
+            return
+        # AdmissionRejected: a cycle refusal (the ZT-P5 star self-edge). Same rule the
+        # set engine states on the unsplit node key, so both backends reject the same
+        # write with the same class.
+        raise AdmissionRejected(
+            f"wildcard tuple rejected: the routed edge w_any{shape} -> w_all{shape} is a "
+            f"cycle by construction -- the shape {shape} is both subject-wildcard bridged "
+            f"(concrete -> w_any) and object-wildcard bridged (w_all -> concrete), so every "
+            f"present-or-future concrete of that shape closes the loop "
+            f"w_any -> w_all -> concrete -> w_any (ZT-P5, docs/spec-deviations.md "
+            f"2026-07-26; the set engine rejects the same write as a userset-topology cycle)")
 
     # ------------------------------------------------------------------ #
     # Bridge lifecycle (§7)
@@ -282,6 +355,11 @@ class WildcardIndex:
         subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=True)
         obj = self._resolve(relation, o_type, o_name, 'object', create=True)
 
+        # ZT-P5 (2026-07-26): the position-split w_any/w_all encoding hides a same-shape
+        # star self-edge from the core's cycle check. Reject it here, BEFORE any bridge
+        # or grant edge is written, so the offending write never mutates closure state.
+        self._reject_star_self_edge(subject, obj)
+
         # Bridge-before-grant: cycle errors then attach to the grant (the offending write).
         self._ensure_bridges(subject)
         self._ensure_bridges(obj)
@@ -289,9 +367,15 @@ class WildcardIndex:
         self.idx._writing_derived = self._derived_write_ctx(relation, o_type)
         try:
             self.idx.add_edge_by_id(subject.id, obj.id)
-        except ValueError as e:
+        except AdmissionRejected as e:
+            # Narrowed from `except ValueError` (ZT-P4-7): the only thing this handler
+            # ever meant to re-dress is the core's CYCLE REFUSAL, which is now typed.
+            # Behaviour is identical -- the other ValueErrors `add_edge_by_id` can raise
+            # (`node id ... no longer exists`) never contained 'cycle', so they fell
+            # through the bare `raise` below and propagated unchanged; now they simply
+            # never enter the handler. The re-dressed error keeps the rejection type.
             if 'cycle' in str(e) and (subject.wildcard != '' or obj.wildcard != ''):
-                raise ValueError(
+                raise AdmissionRejected(
                     "wildcard tuple rejected: a wildcard tuple whose object participates in the "
                     "wildcard's own shape forms a cycle and is unsupported by construction "
                     f"({s_type}:{s_name}#{_norm_pred(subject_predicate)} {relation} {o_type}:{o_name})"
@@ -319,8 +403,8 @@ class WildcardIndex:
             obj = self._resolve(relation, o_type, o_name, 'object', create=False)
         except KeyError as e:
             # Same rejection family as core.remove_edge and the set engine (validity
-            # parity): a remove of a never-seen endpoint is a ValueError rejection.
-            raise ValueError('Non-existent edge cannot be removed') from e
+            # parity): a remove of a never-seen endpoint is an admission rejection.
+            raise AdmissionRejected('Non-existent edge cannot be removed') from e
 
         self.idx.remove_edge_by_id(subject.id, obj.id)
 
@@ -341,7 +425,9 @@ class WildcardIndex:
         lingering with a stale count."""
         validate_node_identifiers(predicate, entity_type, name)
         if name == '*':
-            raise ValueError(
+            # AdmissionRejected: a user-facing refusal on the public remove_node API
+            # (the message names the supported alternative), not a broken store.
+            raise AdmissionRejected(
                 'wildcard nodes are bridge/GC-managed and cannot be removed directly '
                 '(remove the grants and bridged concretes that keep them alive)')
         pred = _norm_pred(predicate)
@@ -351,7 +437,8 @@ class WildcardIndex:
         try:
             node = self.idx.node(pred, entity_type, name, create_if_missing=False)
         except KeyError as e:
-            raise ValueError('Non-existent node cannot be removed') from e
+            # AdmissionRejected: removing a node the store never saw is a refusal.
+            raise AdmissionRejected('Non-existent node cannot be removed') from e
 
         if node.wildcard == '':
             node_id = node.id

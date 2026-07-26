@@ -10,7 +10,10 @@ What is pinned, per target:
 
   1. reg11's "the multi-hop out-bridge generalization is unreachable"
      (`docs/spec-deviations.md` 2026-07-16) — **DISPROVED**. Also: a NEW
-     accept/reject divergence found while disproving it, pinned strict-xfail.
+     accept/reject divergence found while disproving it — filed strict-xfail on
+     2026-07-26 and **FIXED the same day** (`WildcardIndex._reject_star_self_edge`);
+     the xfail and its behaviour-of-today companion were flipped together into
+     plain regression pins.
   2. the 2026-07-13 X4 from-chain TARGET note's *reachability* half — **DISPROVED**.
   3. the object-wildcard corpus at STATE level (`FINAL_REVIEW.md` §3 /
      `ARCHITECTURE.md` §6 assert "proof-scope, not observed divergence" from a
@@ -127,26 +130,37 @@ def test_zt_p5_reg11_multihop_out_bridge_IS_reachable():
             b.close()
 
 
-# --- the NEW divergence found while disproving reg11 -----------------------
+# --- the NEW divergence found while disproving reg11 -- FIXED 2026-07-26 ---
 #
-# On reg11's OWN schema, a star-SUBJECT + star-OBJECT tupleset write
-# (`folder:* parent folder:*`) is ACCEPTED by the graph and REJECTED by the set
+# WAS: on reg11's OWN schema, a star-SUBJECT + star-OBJECT tupleset write
+# (`folder:* parent folder:*`) was ACCEPTED by the graph and REJECTED by the set
 # engine. The graph's routed edge is w_any(folder,viewer) -> w_all(folder,viewer)
-# (the wildcard node is position-split, so this is not a self-loop and the graph's
+# (the wildcard node is position-split, so this is not a self-loop and the core's
 # cycle check does not fire). Every present-or-future concrete of shape
-# (folder,viewer) carries BOTH bridges, so the graph state then contains a latent
-# cycle and DETONATES: every later innocent concrete `viewer` write is permanently
-# graph-rejected while the set engine and the oracle accept it.
+# (folder,viewer) carries BOTH bridges, so the graph state then contained a latent
+# cycle and DETONATED: every later innocent concrete `viewer` write was permanently
+# graph-rejected while the set engine and the oracle accepted it.
 #
 # This is the F1/F2 mechanism (docs/spec-deviations.md 2026-07-16 / 2026-07-17),
 # but the 2026-07-17 compile gate does not catch it: `_reject_doubly_bridged_shapes`
 # narrowed its left factor from `bridged_in_shapes` to the LITERAL `T:*#p`
 # restriction shapes, justified by "star-tupleset through-shapes ... cannot mint a
 # persistent w_any node -- reg11's dangerous writes self-cycle and are rejected on
-# both backends, so nothing detonates". This repro falsifies that sentence.
+# both backends, so nothing detonates". This repro falsified that sentence.
 #
-# ConnectedStore is NOT affected: TupleSource delegates admission to the SetEngine,
-# which rejects. The exposure is the graph index used directly (WildcardIndex --
+# FIX (2026-07-26): NOT a compile-time scope rejection -- the offending schema IS
+# reg11's, and reg11's other writes are legal and oracle-pinned, so no compile
+# criterion can reject the dangerous write without deleting a working class (proved
+# by construction in `test_zt_p5_starstar_fix_does_not_over_reject_the_legal_class`
+# below). It is a WRITE-time rejection in
+# `index_v4.wildcard.WildcardIndex._reject_star_self_edge`: a routed edge
+# `w_any(T,p) -> w_all(T,p)` on a shape that is both bridged-in and bridged-out is a
+# cycle by construction. That is the position-split restatement of the rule the set
+# engine already had (`SetEngine._would_cycle`'s raw-level `any(u == v ...)`), so the
+# backends now implement ONE rule.
+#
+# ConnectedStore was never affected: TupleSource delegates admission to the SetEngine,
+# which rejects. The exposure was the graph index used directly (WildcardIndex --
 # a public API and the matrix's GraphBackend).
 
 ZT_P5_STARSTAR_SCHEMA = """model
@@ -162,19 +176,13 @@ _W_STARSTAR = ('...', 'folder', '*', 'parent', 'folder', '*')
 _W_INNOCENT = ('...', 'user', 'v', 'viewer', 'folder', 'q')
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'ZT-P5 NEW divergence 2026-07-26: the graph ACCEPTS `folder:* parent folder:*` '
-    '(routing w_any(folder,viewer) -> w_all(folder,viewer)) while the set engine '
-    'rejects it, and the resulting graph state permanently locks out every later '
-    'concrete viewer write. The 2026-07-17 doubly-bridged compile gate misses it '
-    'because its left factor is the LITERAL `T:*#p` restriction shapes, not '
-    'bridged_in_shapes. See docs/spec-deviations.md 2026-07-26 (ZT-P5).'))
 def test_zt_p5_star_subject_star_object_tupleset_write_parity():
     """Accept/reject parity + no detonation on `folder:* parent folder:*`.
 
-    STRICT xfail: it pins a GENUINE divergence (CLAUDE.md testing conventions).
-    Flip it to a plain pin when the compile gate (or the graph's cycle check) is
-    widened -- do not relax the assertions.
+    Was a STRICT xfail (it pinned a GENUINE divergence, CLAUDE.md testing
+    conventions); FLIPPED to a plain regression pin on 2026-07-26 when
+    `WildcardIndex._reject_star_self_edge` landed. The assertions were never
+    relaxed -- this is byte-for-byte the body that used to fail.
     """
     backends = _backends(ZT_P5_STARSTAR_SCHEMA, ZT_P5_STARSTAR_OWC)
     try:
@@ -186,52 +194,147 @@ def test_zt_p5_star_subject_star_object_tupleset_write_parity():
             b.close()
 
 
-def test_zt_p5_star_subject_star_object_current_behaviour_documented():
-    """Pins the CURRENTLY OBSERVED behaviour of the divergence above, so a silent
-    change in EITHER direction is caught (the xfail above only catches the fix).
+def test_zt_p5_star_subject_star_object_fixed_behaviour_pinned():
+    """The companion of the test above, flipped with it: it pinned TODAY's broken
+    behaviour so drift in EITHER direction was caught. Now it pins the FIXED
+    behaviour, elementwise, for the same reason -- the parity test alone would still
+    pass if BOTH backends silently started accepting the write.
 
-    Delete this test together with flipping that xfail.
+    Concretely: both backends must REJECT the star/star tupleset write, both must
+    then still accept the innocent concrete grant, the oracle must agree that grant
+    holds, and the graph's state must answer it correctly (no residual detonation).
     """
     from tests.test_matrix import GraphBackend, SetBackend
     g = GraphBackend(ZT_P5_STARSTAR_SCHEMA, ZT_P5_STARSTAR_OWC)
     sets = [SetBackend(ZT_P5_STARSTAR_SCHEMA, ZT_P5_STARSTAR_OWC, o) for o in ALL_SETOPS]
     try:
-        assert g.apply(_W_STARSTAR, 'add') is True, 'graph over-accepts today'
+        assert g.apply(_W_STARSTAR, 'add') is False, (
+            'the graph must reject the latent-cycle write (w_any -> w_all same shape)')
         for s in sets:
-            assert s.apply(_W_STARSTAR, 'add') is False, 'set engine rejects today'
-        # detonation: the graph is now permanently closed to concrete viewer writes
-        assert g.apply(_W_INNOCENT, 'add') is False, 'graph detonates today'
+            assert s.apply(_W_STARSTAR, 'add') is False, 'set engine rejects'
+        # no detonation: the graph stays open to concrete viewer writes
+        assert g.apply(_W_INNOCENT, 'add') is True, 'graph must stay writable'
         for s in sets:
             assert s.apply(_W_INNOCENT, 'add') is True
-        # the oracle sides with the set engine on the innocent write
+        # ... and every backend answers it the way the oracle does
         orc = Oracle(ZT_P5_STARSTAR_SCHEMA, [OracleTuple(*_W_INNOCENT)])
         assert orc.check(*_W_INNOCENT) is True
+        assert g.check(_W_INNOCENT) is True
+        for s in sets:
+            assert s.check(_W_INNOCENT) is True
+        g.post_op()                      # I1-I13 + I9 fixpoint on the surviving state
     finally:
         g.close()
         for s in sets:
             s.close()
 
 
-def test_zt_p5_starstar_divergence_generator_blind_spot():
-    """WHY the star-bridge fuzzer never found the divergence above -- pinned so the
-    generator fix is checkable.
+def test_zt_p5_starstar_fix_does_not_over_reject_the_legal_class():
+    """WHY the fix is a WRITE-time rejection and not a compile-time one.
 
-    `tests/test_hypothesis.py::_star_bridge_pool` DOES emit
-    `T:* parent T:*` whenever `(T,'parent')` is in the drawn object-wildcard set.
-    What `_star_bridge_schema` cannot produce is a SELF-REFERENTIAL TTU: it is
-    always `B: [user] or A from parent` with `A != B`. On that shape the write is
-    unanimously ACCEPTED, so the class stays invisible. The divergence needs the
-    TTU head and target to be the SAME relation.
-
-    Cheapest generator fix: let `star_bridge_configs` sometimes draw `A == B`.
+    The offending schema is reg11's own, and `owc_star_ttu.fga` is the same shape.
+    Both have a NON-EMPTY coarse `bridged_in & bridged_out` -- so the coarse F1/F2
+    criterion, and any compile criterion able to see the dangerous write, rejects
+    them wholesale. Yet every one of their other writes is legal, unanimous and
+    oracle-correct. This test pins that: the schema still COMPILES on both backends,
+    reg11's two pinned writes keep their verdicts, and the (i)-without-(ii) class
+    (a TTU whose target differs from its head) is entirely unaffected.
     """
-    from tests.test_hypothesis import _star_bridge_pool, _star_bridge_schema
+    si = parse_openfga_schema(ZT_P5_STARSTAR_SCHEMA,
+                              object_wildcard_shapes=ZT_P5_STARSTAR_OWC).schema_info
+    assert (frozenset(si.bridged_in_shapes) & frozenset(si.bridged_out_shapes)), (
+        'the coarse criterion IS non-empty here -- that is exactly why restoring it '
+        'would over-reject this legal schema')
+
+    # reg11's own pinned verdicts, unchanged by the fix.
+    reg11_writes = [(('...', 'folder', 'a', 'parent', 'folder', '*'), False),
+                    (('...', 'folder', 'a', 'parent', 'folder', 'b'), True)]
+    for w, expect in reg11_writes:
+        backends = _backends(ZT_P5_STARSTAR_SCHEMA, ZT_P5_STARSTAR_OWC)
+        try:
+            assert _unanimous(backends, w) is expect, (w, expect)
+        finally:
+            for b in backends:
+                b.close()
+
+    # (i) object-wildcard tupleset shape WITHOUT (ii) a self-referential TTU: the
+    # whole sequence stays unanimously ACCEPTED (the reg10-shaped TTU head != target).
+    non_self_ref = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define admin: [user, folder#viewer]
+    define viewer: [user] or admin from parent
+"""
+    backends = _backends(non_self_ref, ZT_P5_STARSTAR_OWC)
+    try:
+        assert _unanimous(backends, _W_STARSTAR) is True, (
+            'precondition (i) alone is LEGAL and must keep working')
+        assert _unanimous(backends, _W_INNOCENT) is True
+    finally:
+        for b in backends:
+            b.close()
+
+
+def test_zt_p5_starstar_generator_blind_spot_is_closed():
+    """WHY the star-bridge fuzzer never found the divergence, and that the hole is
+    now closed.
+
+    `tests/test_hypothesis.py::_star_bridge_pool` DOES emit `T:* parent T:*`
+    whenever `(T,'parent')` is in the drawn object-wildcard set. What
+    `_star_bridge_schema` could not produce was a SELF-REFERENTIAL TTU: it was
+    always `B: [user] or A from parent` with `A != B` drawn distinct. On that shape
+    the write is unanimously ACCEPTED, so the class stayed invisible. The divergence
+    needs the TTU head and target to be the SAME relation.
+
+    Fix applied 2026-07-26: `star_bridge_configs` now sometimes draws `A == B`.
+    This test pins that the generator's schema builder CAN produce the
+    self-referential form and that the strategy actually reaches it.
+    """
+    from hypothesis import find
+    from tests.test_hypothesis import (_star_bridge_pool, _star_bridge_schema,
+                                       star_bridge_configs)
     T, A, B = 'folder', 'admin', 'viewer'
     owc = frozenset({(T, 'parent')})
     assert ('...', T, '*', 'parent', T, '*') in _star_bridge_pool(T, A, B, owc), \
         'the fuzzer pool no longer emits the star-subject/star-object parent write'
 
-    # non-self-referential TTU (what the generator builds): unanimous ACCEPT
+    # the builder can now emit the self-referential TTU ...
+    self_ref = _star_bridge_schema(T, B, B)
+    assert f'define {B}: [user' in self_ref and f'or {B} from parent' in self_ref, self_ref
+    # ... and it is EXACTLY the dangerous class (same doubly-bridged intersection)
+    si = parse_openfga_schema(self_ref, object_wildcard_shapes=owc).schema_info
+    assert (T, B) in (frozenset(si.bridged_in_shapes)
+                      & frozenset(si.bridged_out_shapes))
+
+    # ... and the strategy REACHES a self-referential config that ALSO draws the
+    # object wildcard on the tupleset shape -- i.e. preconditions (i) AND (ii).
+    # ``star_bridge_configs`` yields (schema, owc, pool); the self-referential
+    # template is the two-relation one (parent + the single self-referential rel).
+    def _is_dangerous(cfg):
+        schema, owc, pool = cfg
+        return (schema.count('    define ') == 2
+                and any(s[1] == 'parent' for s in owc))
+
+    found = find(star_bridge_configs(), _is_dangerous)
+    gen_schema, gen_owc, gen_pool = found
+    assert _is_dangerous(found), found
+    T2 = next(s[0] for s in gen_owc if s[1] == 'parent')
+    dangerous = ('...', T2, '*', 'parent', T2, '*')
+    assert dangerous in gen_pool, (
+        'the generated pool must contain the star-subject/star-object write')
+
+    # and on that generated config the dangerous write is now unanimously REJECTED
+    backends = _backends(gen_schema, gen_owc)
+    try:
+        assert _unanimous(backends, dangerous) is False
+    finally:
+        for b in backends:
+            b.close()
+
+    # non-self-referential TTU (what the generator used to build): unanimous ACCEPT
     backends = _backends(_star_bridge_schema(T, A, B), owc)
     try:
         assert _unanimous(backends, _W_STARSTAR) is True

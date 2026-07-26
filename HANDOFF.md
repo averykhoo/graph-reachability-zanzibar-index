@@ -606,8 +606,45 @@ dismissals whose stated justification no longer holds:
       userset chains recorded on ≥2 objects, and run the full gate + multi-seed
       fuzz (this is an algorithm change → Lean/CORRESPONDENCE review too).
       Detail: the "Zero-trust review 2026-07-26" section above.
-- [ ] **★ NEW 2026-07-26 — `ZT-P5-NEW`: a FRESH accept/reject divergence + detonation,
-      found by re-adjudicating reg11. FILED STRICT-XFAIL, NOT FIXED.**
+- [x] **DONE 2026-07-26 — `ZT-P5-NEW` FIXED (write-time, not compile-time) + the
+      fuzzer blind spot closed + `AdmissionRejected` landed.**
+      **The fix is a WRITE-time rejection, deliberately not a schema rejection.**
+      Attempting the compile-time route (the established decision-15 pattern) found
+      that **the dangerous schema IS reg11's schema** — character-identical to
+      `REG11_SCHEMA`, same OWC set after expansion — so any compile-time criterion
+      would reject the legal reg11 / `owc_star_ttu` class wholesale and delete four
+      existing tests plus a corpus. `WildcardIndex._reject_star_self_edge` instead
+      refuses a routed `w_any(T,p) → w_all(T,p)` edge on a shape in
+      `bridged_in ∩ bridged_out` — a cycle BY CONSTRUCTION, since bridges are
+      schematic, so every present and future concrete `T:x#p` closes
+      `w_any → w_all → concrete → w_any`. This is the position-split restatement of a
+      rule the set engine already had (`_would_cycle`'s raw-level `u == v` on the
+      UNSPLIT key): the two backends now implement ONE rule in two representations
+      rather than two that happened to agree. Verified: star-star write now
+      `GRAPH=False SET=False`, innocent grant `GRAPH=True SET=True`.
+      **The false justification sentence** behind the 2026-07-17 narrowing is annotated
+      at all five sites it appeared (`docs/spec-deviations.md`, `zanzibar_utils_v1.py`
+      ×2, `index_v4/wildcard.py`, `setengine/engine.py`, `tests/test_lookup_oracle.py`)
+      with the surviving NARROWER reading: a through-shape cannot make the danger a
+      property of the SCHEMA, so it does not belong in a COMPILE-TIME criterion —
+      nothing more.
+      **Fuzzer blind spot closed:** `star_bridge_configs` now sometimes draws `A == B`
+      (self-referential TTU), with the literal `T:*#A` restriction deliberately omitted
+      in that variant — keeping it would make the shape doubly-bridged and
+      `DoublyBridgedShapeError` would skip every self-referential config, reopening the
+      blind spot under a new name. Validated by reverting the fix: the hardened
+      `StarBridgeParityMachine` **rediscovers the bug on its own**, drawing the
+      self-referential schema and the object wildcard independently of the
+      deterministic pin. Both xfails flipped to plain pins.
+      **`ZT-P4-7` also closed:** `AdmissionRejected(ValueError)` now types ~20 genuine
+      refusal sites, so `GraphDriver.apply` stops allow-listing exception MESSAGE
+      SUBSTRINGS and an unclassified `ValueError` propagates instead of silently
+      shrinking both sides of the comparison. No admission decision changed — proved by
+      an 854-entry differential against a mechanically-inverted tree, 0 differences.
+      Three refusal sites the review's list had MISSED were found and classified.
+      No Lean change owed (`CORRESPONDENCE.md` §8.1: `admitEdge` is a decision
+      procedure; the guard's precondition is unsatisfiable in every modeled fragment).
+- [ ] **NEW 2026-07-26 — the rest of the zero-trust backlog (`ZT-P1` … `ZT-P5`).**
       Schema is reg11's own (`parent: [folder, folder:*]`, `viewer: [user] or viewer
       from parent`, `object_wildcard_shapes={('folder','parent')}`); the write is a
       single `folder:* parent folder:*`. **Independently reproduced:**

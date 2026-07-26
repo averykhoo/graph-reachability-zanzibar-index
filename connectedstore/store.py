@@ -26,6 +26,7 @@ from index_v4.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
                                  install_paranoia, resolve_paranoia_level)
 from index_v4.processor import DeltaProcessor
 from setengine.setops import SetOps, DEFAULT_SETOPS
+from zanzibar_utils_v1 import AdmissionRejected
 
 from .apply import advance_index, ensure_cursor
 from .schema_io import ensure_schema, open_graph_index
@@ -186,11 +187,20 @@ class ConnectedStore:
         fn = self.source.add if op == 'add' else self.source.remove
         try:
             token = fn(*raw)
-        except ValueError:
+        except AdmissionRejected:
             # ordinary admission rejection: the set engine validates before mutating
             # its in-memory state (SetEngine.add_tuple/remove_tuple contract), so
             # the rollback alone restores truth -- no O(N) evaluator rebuild on the
-            # hot rejection path
+            # hot rejection path.
+            #
+            # NARROWED from `except ValueError` (ZT-P4-7): the "no rebuild needed"
+            # shortcut is licensed by that pre-mutation contract, which holds for a
+            # REFUSAL and for nothing else. An unclassified `ValueError` escaping the
+            # write is by construction an internal-contract failure, i.e. a bug that
+            # may well have fired mid-mutation -- it now falls through to the
+            # `except Exception` arm below, which rebuilds the evaluator before
+            # re-raising. Strictly safer, and the exception still propagates
+            # unchanged either way.
             self.source.pop_pending_rows()  # discard: nothing must span the rollback
             self.session.rollback()
             raise

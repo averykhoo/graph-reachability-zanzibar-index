@@ -1522,10 +1522,19 @@ def test_reg12_negative_controls_reg10_reg11_not_doubly_bridged():
         no object wildcard (OWC empty) -> intersection empty.
       * reg11 has NO literal wildcard-userset restriction at all -- its (folder, viewer)
         lands in bridged_in only as a STAR-TUPLESET THROUGH-SHAPE (from [folder:*] on the
-        TTU tupleset `parent`), which is not a writable userset and cannot mint a
-        persistent w_any node, so it does not detonate. Using the full bridged_in_shapes
-        here would over-reject reg11 (verified: bridged_in ∩ bridged_out is NON-empty for
-        reg11, but the narrow literal-restriction ∩ bridged_out is empty)."""
+        TTU tupleset `parent`), which the USER cannot write directly, so the danger is
+        not a property of the SCHEMA. Using the full bridged_in_shapes here would
+        over-reject reg11 (verified: bridged_in ∩ bridged_out is NON-empty for reg11,
+        but the narrow literal-restriction ∩ bridged_out is empty).
+
+    ⚠ CORRECTION (ZT-P5-NEW, 2026-07-26). This docstring used to add "...and cannot mint
+    a persistent w_any node, so it does not detonate". FALSE: on reg11's SELF-REFERENTIAL
+    TTU the rewrite mints exactly that node from `folder:* parent folder:*`, and it did
+    detonate. That is a WRITE-level cycle, rejected at write time by
+    `WildcardIndex._reject_star_self_edge`; the compile gate's left factor is still
+    correct as-is, because widening it would delete this legal class (whose other writes
+    are pinned right here). See docs/spec-deviations.md 2026-07-26 and
+    tests/test_zt_p5_readjudication.py."""
     # reg10: literal wildcard-userset (folder, admin), but no OWC -> empty intersection.
     rs10 = parse_openfga_schema(REG10_SCHEMA, object_wildcard_shapes=frozenset())
     si10 = rs10.schema_info
