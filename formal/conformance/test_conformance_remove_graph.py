@@ -24,7 +24,12 @@ We compare, per corpus x seed, on the driven final state:
     and by the sibling `test_conformance_remove.py`).
 
 Scope discipline (apples-to-apples with `graph_correct`):
-  * corpora: `GRAPH_FRAGMENT` only (inside GraphAdmission + W4Fragment);
+  * corpora: `GRAPH_FRAGMENT` MINUS `_REMOVE_EXCLUDED` — and, since 2026-07-26
+    (ZT-P3-3), that residue is machine-checked to be a subset of
+    `test_conformance_graph._THEOREM_BACKED`, i.e. every corpus driven here
+    really is inside GraphAdmission + W4Fragment. Do NOT weaken that to "all of
+    GRAPH_FRAGMENT": `direct_arm_exclusion` is in GRAPH_FRAGMENT and is provably
+    OUTSIDE the admission bundle (`W4WitnessDirect.outside_old_admission`);
   * universe: the corpus tuples THEMSELVES (no recombined extras), so every
     intermediate store is a SUBSET of a fragment store. The remove gate's store
     disciplines (`BareStarStore` / `TtuStarFree` / `StoreValidRules` / `htermT`)
@@ -52,7 +57,8 @@ from formal.conformance import runner
 from formal.conformance.backends import graphindex_drive_ops
 from formal.conformance.corpus import SCHEMAS, GRAPH_FRAGMENT
 from formal.conformance.encode import build_request
-from formal.conformance.grid import grid as _grid, fmt_mismatches as _fmt
+from formal.conformance.grid import (
+    assert_grid_nonvacuous, grid as _grid, fmt_mismatches as _fmt)
 # Reuse the exact interleaved add/remove/re-add generator the set-engine and
 # graph remove gates already drive (same shapes, deterministic per seed).
 from formal.conformance.test_conformance_remove import _sequence
@@ -123,6 +129,16 @@ def test_leangraph_remove_vs_pythongraph_and_oracle(name):
     """Interleaved add/remove/re-add streams driven through zcli `graphRunOps`:
     Lean graph model == real Python graph index (driven identically) == oracle on
     the accepted final store."""
+    # Scope guard (ZT-P3-3): this gate compares the Lean remove-driver against
+    # Python, so it must only carry corpora the theorems actually cover.
+    from formal.conformance.test_conformance_graph import _THEOREM_BACKED
+    assert name in _THEOREM_BACKED, (
+        f"[{name}] is driven by the Lean remove gate but is NOT classified as "
+        f"theorem-backed in test_conformance_graph._THEOREM_BACKED — either it "
+        f"belongs in `_REMOVE_EXCLUDED` (with the machine-checked reason) or the "
+        f"classification is wrong. zcli will not catch this: it gates on runtime "
+        f"write admission (rc 2) and drained-ness (rc 3), never on W4Fragment.")
+
     schema_text, corpus_tuples, obj_wild = SCHEMAS[name]
     try:
         runner.zcli_path()
@@ -131,7 +147,15 @@ def test_leangraph_remove_vs_pythongraph_and_oracle(name):
 
     universe = list(corpus_tuples)[:_UNIVERSE_CAP]
     queries = _graph_queries_for(schema_text, universe)
+    # ANTI-VACUITY (ZT-P4-4): `assert not mism` over an empty query list passes.
+    # `_graph_queries_for` drops every star-object target (`hqo`), so a corpus
+    # whose objects are all `*` would yield ZERO queries here and every
+    # comparison below would be silently empty.
+    assert_grid_nonvacuous(name, queries, hint=(
+        "the `hqo` filter (`on != '*'`) removes every target of a star-object "
+        "corpus; such a corpus does not belong in this gate."))
     total_removes = 0
+    n_compared = 0
 
     for seed in SEEDS:
         rng = random.Random(seed)
@@ -160,6 +184,11 @@ def test_leangraph_remove_vs_pythongraph_and_oracle(name):
         finally:
             session.close()
 
+        assert len(lean_graph) == len(queries) == len(py_graph), (
+            f"[{name} seed={seed}] answer-vector length mismatch "
+            f"(lean={len(lean_graph)}, python={len(py_graph)}, "
+            f"queries={len(queries)})")
+        n_compared += len(queries)
         mism = [(queries[i], lean_graph[i], py_graph[i])
                 for i in range(len(queries)) if lean_graph[i] != py_graph[i]]
         assert not mism, (
@@ -180,3 +209,9 @@ def test_leangraph_remove_vs_pythongraph_and_oracle(name):
             f"gate):\n{_fmt(mism, 'lean-graph', 'oracle')}")
 
     assert total_removes > 0, f"[{name}] anti-vacuous: no remove ops were exercised"
+    # ANTI-VACUITY (ZT-P4-4): the seed sweep really compared answers, not just
+    # ops. `total_removes` above proves removes HAPPENED; this proves the
+    # verdicts were COMPARED.
+    assert n_compared >= len(SEEDS) * len(queries) and n_compared > 0, (
+        f"[{name}] ANTI-VACUITY: only {n_compared} (query x seed) verdict "
+        f"comparisons over {len(SEEDS)} seeds x {len(queries)} queries")

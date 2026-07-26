@@ -49,11 +49,20 @@ from zanzibar_utils_v1 import (Computed, Direct, Exclusion, Intersection,
 from tests.oracle import Oracle, t as mk_tuple
 
 from formal.conformance.encode import build_request
-from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
+from formal.conformance.grid import (
+    assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 from formal.conformance import runner
 from formal.conformance.backends import _fresh_session
 
 _N_CASES = 40
+
+# Anti-vacuity (ZT-P4-4): the generated case must actually produce a store and a
+# grid. `_case` already forces a non-empty `store_ops`, but every add can still
+# be REJECTED by the engine's graph-parity validation, leaving `accepted == []`
+# and the whole differential comparing the empty store against itself; and the
+# grid is derived from the generated pool, which is derived from the generated
+# AST. Both are floored here.
+_MIN_ACCEPTED = 1
 SEEDS = list(range(_N_CASES))
 
 USERS = ['u1', 'u2']
@@ -160,11 +169,21 @@ def test_generated_schema_zcli_parity(seed):
     # Grid from the FULL pool: names u1,u2,d1,d2 (+ ghosts, *) are always
     # probed, including subjects/objects the store never mentions.
     queries = queries_for(schema_text, [mk_tuple(*op) for op in pool])
+    # ANTI-VACUITY (ZT-P4-4). Measured over the 40 seeds 2026-07-26: the thinnest
+    # case is seed 32 with 2 accepted tuples and 102 queries.
+    assert_grid_nonvacuous(f"generated seed={seed}", queries)
+    assert len(accepted) >= _MIN_ACCEPTED, (
+        f"[generated seed={seed}] ANTI-VACUITY: every generated add was REJECTED "
+        f"({len(store_ops)} ops offered, {len(accepted)} accepted) — the "
+        f"differential below would compare the empty store against itself.\n"
+        f"schema:\n{schema_text}")
     orc = Oracle(schema_text, accepted)
     oracle = [orc.check(*q) for q in queries]
     se = [bool(eng.check(*q)) for q in queries]
     session.close()
 
+    assert len(oracle) == len(queries) == len(se), (
+        f"[generated seed={seed}] answer-vector length mismatch")
     mism = [(queries[i], oracle[i], se[i]) for i in range(len(queries))
             if oracle[i] != se[i]]
     assert not mism, (
@@ -173,6 +192,8 @@ def test_generated_schema_zcli_parity(seed):
 
     if have_zcli:
         spec = runner.run_spec(build_request(schema_text, accepted, queries))
+        assert len(spec) == len(queries), (
+            f"[generated seed={seed}] spec answer-vector length mismatch")
         mism = [(queries[i], spec[i], oracle[i]) for i in range(len(queries))
                 if spec[i] != oracle[i]]
         assert not mism, (

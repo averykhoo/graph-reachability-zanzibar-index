@@ -552,7 +552,7 @@ namespace Zanzibar
 
 -- **ROADMAP W3b — the userset `upos` residue (GraphIndex/ReconcileUpos.lean, 2026-07-11).**
 -- The write model `reconcileUposKey` (per-candidate insert/remove on the `upos` list, faithful to
--- `reconcile_subject`'s userset branch — edge-free, blind-audit P4), the congruence spine (`checkFn`
+-- `DeltaProcessor._reconcile_subject`'s userset branch — edge-free, blind-audit P4), the congruence spine (`checkFn`
 -- reads only the edge/node core, hence is constant across the upos fold), the whole-fold membership
 -- characterization, and the W3b read collapse (`probeDerived` on a `upos`-only residue table:
 -- star ⇒ false, userset ⇒ `upos` membership, bare ⇒ the W3a edge probe). Standard axioms only:
@@ -693,8 +693,10 @@ namespace Zanzibar
 -- row per accepted routed edge (`writeLoggedRules`), `affectedKeys` maps a frontier
 -- row to the derived keys reading its reach cone (`_map_deltas_to_keys` + `_fan_out`
 -- `via='computed'`, fragment-restricted), and `runCascade` reconciles the mapped keys
--- then models Python's final quiescence check (`InvariantViolation`,
--- `processor.py:729-739`) as a reject branch. The interleaved closure `ReachedByW3d`
+-- then models Python's final quiescence check (the leftover `raise
+-- InvariantViolation` at the tail of
+-- `index_v4/processor.py::DeltaProcessor._run_cascade`) as a reject branch. The
+-- interleaved closure `ReachedByW3d`
 -- admits writes AFTER cascades (the W3a–W3c chains could not). **T5, contentful and
 -- justified**: `runCascade_no_abort` — the reject branch never fires at one stratum
 -- (every pass-emitted row sits at a terminal derived R-node whose predicate no
@@ -716,7 +718,8 @@ namespace Zanzibar
 -- the add-only pass: on `viewer := member ∖ banned` (no star grants), a post-cascade
 -- `banned` add flips the derived guard down and the second cascade cannot retract the
 -- stale derived edge — `check = true ≠ sem = false` at a fully-drained state. Python
--- retracts it (`reconcile_subject`, `processor.py:365-367`). The W3d pass is now the
+-- retracts it (the `_write_derived(..., add=False)` arm of
+-- `index_v4/processor.py::DeltaProcessor._reconcile_subject`). The W3d pass is now the
 -- diffing audit `reconcileStarsKeyD` (add when `want`, remove ALL copies of the pair
 -- when `¬want`); T5 above is re-earned over it. Removal is path-inert off the pass's
 -- terminal R-node (`nreaches_remove_terminal`), giving BOTH inertness directions —
@@ -746,7 +749,9 @@ namespace Zanzibar
 -- cone, putting the key in `affectedKeys` (`mem_affectedKeys`). Probes 3–4 stay dead
 -- on plain edge targets (`reachedByW3d_edges_target_plain` — the fence the attack
 -- found load-bearing: an OUT-of-fragment object-star write flips probe 3 at every
--- object while mapping no keys, `processor.py:604-605`). Plus `cascadeKeys` write-leg
+-- object while mapping no keys —
+-- `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` dirties no derived
+-- own-key from a star-named object end). Plus `cascadeKeys` write-leg
 -- monotonicity (dirty keys stay dirty until a cascade) and endpoint closure over the
 -- whole interleaved chain. Standard axioms only:
 #print axioms nreaches_factor
@@ -804,7 +809,8 @@ namespace Zanzibar
 -- **W3d-1b CLOSED — TARGETED RE-SETTLEMENT, THE INVARIANT, `graph_correct_w3d`
 -- (GraphIndex/CascadeSettle.lean, 2026-07-11h).** The coverage chain `ReachedByW3dC`
 -- carries, per cascade job, the audit-enumeration coverage clauses (`W3dJobCoverage`
--- — `processor.py:394-441`; the edge-holder clause is attack-confirmed load-bearing:
+-- — `index_v4/processor.py::DeltaProcessor._reconcile` steps (2)/(2b); the
+-- edge-holder clause is attack-confirmed load-bearing:
 -- a pre-leg STALE edge holder missing from `cands` survives the diff audit and
 -- breaks `check = sem` at a fully-drained state). `settledComplete_cascade_targeted`:
 -- a cascade leg RE-SETTLES every targeted key — the last targeting job wholesale-
@@ -851,7 +857,8 @@ namespace Zanzibar
 -- `upos ∩ neg = ∅` (`uposNegDisjoint`) — the two `Inv` clauses that read only the row,
 -- not the edges — with NO fragment hypotheses. `reconcileResidueKey` writes
 -- `neg = negCands.filter (stars.contains ∧ ¬checkFn)` and `upos = uposCands.filter
--- (¬stars.contains ∧ checkFn)` (`processor.py:406-441`), so both clauses hold of every
+-- (¬stars.contains ∧ checkFn)` (`index_v4/processor.py::DeltaProcessor._reconcile`
+-- steps (2) and (2c)), so both clauses hold of every
 -- written row by construction; writes/pushes are residue-inert. This leaves only the
 -- two EDGE-referencing I6 clauses (`negEdgeFree`/`uposEdgeFree`, which need R-node
 -- terminality) open for the full `reachedByW3d_inv`. Standard axioms only:
@@ -916,13 +923,15 @@ namespace Zanzibar
 -- every operand leaf through the graph's own `check`, routing an untainted key to
 -- `probeNonDerived` (`leaf_check` -> `widx.check`) and a derived key to `probeDerived`
 -- (`derived_check` -> `widx._check_derived`; `derived_stars` = residue stars pointwise)
--- -- `processor.py:43-70, 182-188`. Conservativity: on computed-only defs with
+-- -- `index_v4/processor.py::_EvalContext` and `::DeltaProcessor.member_check`.
+-- Conservativity: on computed-only defs with
 -- untainted operands (the W3d-1 `hLU` fragment) the routed read IS the W3d read
 -- (`checkFnR_eq_checkFn`), and the routed diffing pass / logged batch collapse to
 -- their W3d counterparts (`reconcileStarsKeyDR_eq`, `reconcileJobsLR_eq`) -- W3d-1 is
 -- the single-stratum image of the routed scheduler. `checkFnR_evalEq`: the routed
 -- read consults exactly the `EvalEq` core (schema/edges/nodes/residue). `runCascade2`
--- models `run_cascade` at `rounds = len(strata) = 2` (per-round frontier cursor,
+-- models `index_v4/processor.py::DeltaProcessor._run_cascade` at
+-- `rounds = len(self.compiled.strata) = 2` (per-round frontier cursor,
 -- round 2 on round 1's emissions, final leftover reject); `ReachedByW3d2` is the
 -- two-stratum interleaved closure (C-style job batches, two-sided per-round
 -- coverage); `reachedByW3d2_schema` anchors the routed dispatch. Attack-first
@@ -1329,10 +1338,57 @@ namespace Zanzibar
 -- DERIVE the shadow from `reachedByW3c_master`/`reachedByW3d2_shadow`, both gated on `ComputedOnly`
 -- + `StoreValidRules`) await the `_d` chain/master/shadow (sub-step 3). Standard axioms only:
 #print axioms coveredFn_declared_d
-#print axioms checkFnR_eq_sem_settled_d
 #print axioms checkFnR_star_declared_d
 #print axioms w3dJobCoverage_enumJob2D
+
+-- ============================================================================
+-- ★ HONESTY ANNOTATION (zero-trust review ZT-P3-2, 2026-07-26) — the TWO audit
+-- lines immediately below are RETAINED BUT VACUOUS AS WRITTEN. They are green,
+-- they carry standard axioms only, and they count toward the headline audit
+-- total — but nothing in the live proof can discharge them, so they are a
+-- POLICY count, not a COVERAGE count. Read the total accordingly.
+--
+-- WHY. Both `checkFnR_eq_sem_settled_d` (CascadeStrataSettle.lean) and
+-- `w3d2_leg_context_d` (CascadeStrataEnum.lean) are hypothesis-factored over the
+-- PAIR
+--     h0  : ReachedByRulesAdmitted σ0 S T        -- σ0 rebuilt over the FULL store
+--     hsh : UntaintedShadow S σ σ0               -- and σ0 ⊆ the drained σ
+-- and that pair is UNSATISFIABLE at exactly the states the Direct-arm leg
+-- targets. The 2026-07-20b attack-first `#eval` (PROOF_STATUS.md:308, house rule
+-- 2 — the kill is recorded, not the success): with
+-- `approver := excl (direct [user]) (computed banned)` and the store
+-- `{(alice, approver, doc), (alice, banned, doc)}`, the full-store admitted σ0
+-- CONTAINS the base seed edge `subjNode alice → objNode (doc, approver)`
+-- (`rewriteClosure = [t]`), while the W3d diffing pass RETRACTS that edge from
+-- the drained σ (`reconcileKeyD_retracts_excluded`; drained `σ.edges` was
+-- `#eval`-confirmed to be `[(alice → banned)]` only). So `UntaintedShadow.sub`
+-- (σ0 ⊆ σ) fails, and no real `_d` chain can ever supply both hypotheses at an
+-- excluded-Direct-arm drained state. The theorems are TRUE — they are just true
+-- with an inhabitable-nowhere antecedent on the fragment they were written for.
+--
+-- The lines are kept deliberately, NOT deleted: the statements are still the
+-- honest historical record of how leg 5c was staged, deleting them would lower
+-- the audited count (and `verify.sh`'s `EXPECTED_MIN_AUDITS` floor exists
+-- precisely to make a silent shrink impossible), and a superseded-but-green
+-- theorem is worth keeping visible next to its replacement.
+-- ============================================================================
+#print axioms checkFnR_eq_sem_settled_d
 #print axioms w3d2_leg_context_d
+
+-- ★ THE SUPERSEDING `_filt` VARIANTS — what the LIVE proof actually uses, and
+-- what the audit above was silently NOT covering (ZT-P3-2 fix, 2026-07-26).
+-- `checkFnR_eq_sem_settled_d_filt` (CascadeStrataSettle.lean) and
+-- `w3d2_leg_context_d_filt` (CascadeStrataEnum.lean) restate the two theorems
+-- above with the base witness σ0 admitted over the UNTAINTED FILTER `T↾U` —
+-- the pair `reachedByW3d2_shadow_d` actually produces — instead of over the full
+-- store. Same conclusions over the full store `T`; a SATISFIABLE antecedent.
+-- These are the versions the Direct-arm C-chain T2b consumes: see
+-- `CascadeStrataResettle.lean:1886` (inside `graph_correct_w3d2_d`'s derived-query
+-- branch), plus :1990 and :2625. Auditing them means the standard-axioms claim
+-- now covers the theorems that are load-bearing, not only their vacuous
+-- predecessors. Standard axioms only:
+#print axioms checkFnR_eq_sem_settled_d_filt
+#print axioms w3d2_leg_context_d_filt
 
 -- #1 Leaf widening (Direct arm) leg 5d — the `_d` CHAIN, PARTIAL (GraphIndex/ReconcileStars.lean
 -- + ReconcileStarsComplete.lean, 2026-07-19). The W3c-branch `_d` clones (they DERIVE their base

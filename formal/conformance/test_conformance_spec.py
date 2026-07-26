@@ -20,9 +20,11 @@ import pytest
 from tests.oracle import Oracle
 
 from formal.conformance.corpus import (
-    SCHEMAS, TTU_USERSET_SCHEMAS, SELF_REFERENTIAL_SCHEMAS)
+    SCHEMAS, TTU_USERSET_SCHEMAS, SELF_REFERENTIAL_SCHEMAS,
+    MULTI_STRATUM_SCHEMAS)
 from formal.conformance.encode import build_request
-from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
+from formal.conformance.grid import (
+    assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 from formal.conformance import runner
 from formal.conformance.backends import setengine_answers
 
@@ -30,11 +32,19 @@ from formal.conformance.backends import setengine_answers
 # The spec comparisons (spec `sem` / oracle / set engine) are FULL-SCOPE — T1
 # places no fragment restriction on the set engine, and `sem`/oracle are the
 # reference for every stratifiable schema — so they additionally carry the TTU
-# userset-subject corpora (the 2026-07-13 X4 shapes) and the self-referential-tuple
+# userset-subject corpora (the 2026-07-13 X4 shapes), the self-referential-tuple
 # corpora (the 2026-07-13 self-referential fix; both docs/spec-deviations.md /
-# FINAL_REVIEW §3). Those are kept OUT of the base SCHEMAS so the graph-side
-# suites (graph / state / remove) don't carry out-of-W4Fragment shapes.
-_SPEC_SCHEMAS = {**SCHEMAS, **TTU_USERSET_SCHEMAS, **SELF_REFERENTIAL_SCHEMAS}
+# FINAL_REVIEW §3) and the >= 3-stratum corpora (ZT-P4-4, 2026-07-26). Those are
+# kept OUT of the base SCHEMAS so the graph-side suites (graph / state / remove)
+# don't carry out-of-W4Fragment shapes.
+#
+# `MULTI_STRATUM_SCHEMAS` in particular is spec-side ONLY BY CONSTRUCTION: `sem`
+# is a pure function of the final store with no cascade and no round bound, so it
+# is scope-clean at any stratum count, whereas `W4Fragment.twoStrata` and the
+# fixed two-round `runCascade2` make >= 3 strata genuinely outside the Lean
+# OPERATIONAL model. See the `MULTI_STRATUM_SCHEMAS` block in corpus.py.
+_SPEC_SCHEMAS = {**SCHEMAS, **TTU_USERSET_SCHEMAS, **SELF_REFERENTIAL_SCHEMAS,
+                 **MULTI_STRATUM_SCHEMAS}
 
 
 def _oracle_answers(schema_text, tuples, queries):
@@ -52,9 +62,13 @@ def test_spec_vs_oracle(name):
         pytest.skip("zcli not built (run `lake build zcli` in formal/lean)")
 
     queries = queries_for(schema_text, tuples)
+    assert_grid_nonvacuous(name, queries)
     spec = runner.run_spec(build_request(schema_text, tuples, queries, obj_wild))
     oracle = _oracle_answers(schema_text, tuples, queries)
 
+    assert len(spec) == len(queries) == len(oracle), (
+        f"[{name}] answer-vector length mismatch (spec={len(spec)}, "
+        f"oracle={len(oracle)}, queries={len(queries)})")
     mism = [(queries[i], spec[i], oracle[i]) for i in range(len(queries))
             if spec[i] != oracle[i]]
     assert not mism, (f"[{name}] spec/oracle disagreement "
@@ -70,9 +84,13 @@ def test_spec_vs_setengine(name):
         pytest.skip("zcli not built")
 
     queries = queries_for(schema_text, tuples)
+    assert_grid_nonvacuous(name, queries)
     spec = runner.run_spec(build_request(schema_text, tuples, queries, obj_wild))
     se = setengine_answers(schema_text, tuples, queries, obj_wild)
 
+    assert len(spec) == len(queries) == len(se), (
+        f"[{name}] answer-vector length mismatch (spec={len(spec)}, "
+        f"setengine={len(se)}, queries={len(queries)})")
     mism = [(queries[i], spec[i], se[i]) for i in range(len(queries))
             if spec[i] != se[i]]
     assert not mism, (f"[{name}] spec/set-engine disagreement "
@@ -84,9 +102,13 @@ def test_oracle_vs_setengine(name):
     """Independent of the Lean toolchain — always runs."""
     schema_text, tuples, obj_wild = _SPEC_SCHEMAS[name]
     queries = queries_for(schema_text, tuples)
+    assert_grid_nonvacuous(name, queries)
     oracle = _oracle_answers(schema_text, tuples, queries)
     se = setengine_answers(schema_text, tuples, queries, obj_wild)
 
+    assert len(oracle) == len(queries) == len(se), (
+        f"[{name}] answer-vector length mismatch (oracle={len(oracle)}, "
+        f"setengine={len(se)}, queries={len(queries)})")
     mism = [(queries[i], oracle[i], se[i]) for i in range(len(queries))
             if oracle[i] != se[i]]
     assert not mism, (f"[{name}] oracle/set-engine disagreement:\n"

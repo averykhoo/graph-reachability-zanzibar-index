@@ -51,12 +51,22 @@ from setengine.models import TupleV1
 
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
-from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
+from formal.conformance.grid import (
+    assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 from formal.conformance import runner
 from formal.conformance.backends import (
     _fresh_session, GraphDriver, graphindex_drive_ops)
 
 SEEDS = list(range(5))
+
+# Anti-vacuity (ZT-P4-4, 2026-07-26). Every differential in this file is
+# `mism = [...]; assert not mism`, which is TRUE over an empty query list — and
+# both the grid and the op streams are derived (from the corpus tuples, then from
+# `_extras`, then from a seeded shuffle), so none of them is constant. Each test
+# below therefore floors what it actually compared: the per-store grid (via the
+# shared `assert_grid_nonvacuous`) and the running total of (query x store)
+# comparisons across the seed sweep.
+_MIN_SEQ_COMPARISONS = 6 * len(SEEDS)      # grid floor x seeds
 
 # Sequence-shape knobs (all rng-driven, deterministic per seed).
 _P_REMOVE_AFTER_ADD = 0.45   # chance to remove a present tuple after each add
@@ -221,12 +231,15 @@ def test_remove_sequences(name):
     except runner.ZcliUnavailable:
         have_zcli = False
 
+    n_compared = 0
     for seed in SEEDS:
         rng = random.Random(seed)
         universe = list(corpus_tuples) + _extras(rng, corpus_tuples)
         ops = _sequence(rng, universe)
         # grid over the FULL universe: removed/never-present names stay probed
         queries = queries_for(schema_text, universe)
+        assert_grid_nonvacuous(f'{name} seed={seed}', queries)
+        n_compared += len(queries)
 
         session, eng = _build_engine(schema_text, obj_wild)
         final = _drive(eng, ops)
@@ -274,6 +287,11 @@ def test_remove_sequences(name):
                 f'{_fmt(mism, "spec", "oracle")}')
         session.close()
 
+    # ANTI-VACUITY (ZT-P4-4): the seed sweep really compared something.
+    assert n_compared >= _MIN_SEQ_COMPARISONS, (
+        f'[{name}] ANTI-VACUITY: only {n_compared} (query x store) comparisons '
+        f'across {len(SEEDS)} seeds, floor {_MIN_SEQ_COMPARISONS}')
+
 
 @pytest.mark.parametrize('name', sorted(SCHEMAS))
 def test_full_churn_restores(name):
@@ -290,6 +308,7 @@ def test_full_churn_restores(name):
 
     rng = random.Random(0xC0FFEE)
     queries = queries_for(schema_text, corpus_tuples)
+    assert_grid_nonvacuous(name, queries)
 
     session, eng = _build_engine(schema_text, obj_wild)
     for tup in corpus_tuples:
@@ -396,12 +415,15 @@ def test_graph_remove_sequences(name):
     (Scope: sem/Lean deferred — see the module-level note above.)"""
     schema_text, corpus_tuples, obj_wild = SCHEMAS[name]
 
+    n_compared = 0
     for seed in SEEDS:
         rng = random.Random(seed)
         universe = list(corpus_tuples) + _extras(rng, corpus_tuples)
         ops = _sequence(rng, universe)
         # grid over the FULL universe: removed/never-present names stay probed
         queries = queries_for(schema_text, universe)
+        assert_grid_nonvacuous(f'{name} seed={seed}', queries)
+        n_compared += len(queries)
 
         session, widx, proc, _store_id, final = graphindex_drive_ops(
             schema_text, ops, obj_wild)
@@ -448,6 +470,11 @@ def test_graph_remove_sequences(name):
         fsession.close()
         session.close()
 
+    # ANTI-VACUITY (ZT-P4-4): the seed sweep really compared something.
+    assert n_compared >= _MIN_SEQ_COMPARISONS, (
+        f'[{name}] ANTI-VACUITY: only {n_compared} (query x store) comparisons '
+        f'across {len(SEEDS)} seeds, floor {_MIN_SEQ_COMPARISONS}')
+
 
 @pytest.mark.parametrize('name', sorted(SCHEMAS))
 def test_graph_full_churn_restores(name):
@@ -464,6 +491,7 @@ def test_graph_full_churn_restores(name):
     schema_text, corpus_tuples, obj_wild = SCHEMAS[name]
     rng = random.Random(0xC0FFEE)
     queries = queries_for(schema_text, corpus_tuples)
+    assert_grid_nonvacuous(name, queries)
 
     # Fresh-empty reference: what "fully drained" must equal.
     empty = GraphDriver(schema_text, obj_wild)

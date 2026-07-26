@@ -336,6 +336,119 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "carol", "banned", "doc", "d1")],
         (),
     ),
+    # ---------------------------------------------------------------------
+    # n-ARY (>= 3 arm) OPERATORS — ZT-P4-4, added 2026-07-26.
+    #
+    # BEFORE these two corpora every `or`/`and` in the entire conformance harness
+    # was BINARY, so `encode.py::_fold_binary` — the documented modeling bridge
+    # from the n-ary `Union`/`Intersection` BOTH parsers build to Lean's strictly
+    # binary `Expr.union`/`Expr.inter` — never once produced a NESTED tree: its
+    # loop body ran exactly once per node and the fold was an identity in
+    # practice. At arity 3 it runs twice, so the left-association it commits to is
+    # genuinely on trial:
+    #     any_of -> union (union (computed a) (computed b)) (computed c)
+    #     all_of -> inter (inter (computed a) (computed b)) (computed c)
+    # `_fold_binary` runs inside `schema_to_json`, i.e. for EVERY zcli mode (spec
+    # as well as graph), so the bridge is exercised on every leg these corpora
+    # reach — not only the graph ones.
+    #
+    # SCOPE — both are inside GraphAdmission + W4Fragment, hence in GRAPH_FRAGMENT
+    # (unlike `direct_arm_exclusion`; see that entry and
+    # test_conformance_graph.py's classification guard). Field by field
+    # (FullScope.lean):
+    #   * computedOnly — `all_of` is the only DERIVED def in either schema
+    #     (`any_of` is a plain union of untainted relations, hence untainted) and
+    #     its leaves are all COMPUTED. `ComputedOnly` recurses through
+    #     union/inter/excl, so the left-folded nest is `ComputedOnly` exactly when
+    #     its leaves are. No `direct`/`ttu` leaf under a derived def anywhere.
+    #   * twoStrata — measured 0 strata (`nary_union`, untainted) and 1 stratum
+    #     (`nary_intersection`). n-ary arity does NOT raise the stratum count:
+    #     arity widens a def's FAN-IN, depth deepens the dependency CHAIN, and
+    #     only depth feeds `twoStrata`. That is exactly why n-ary can be gated
+    #     graph-side while >= 3 strata (MULTI_STRATUM_SCHEMAS below) cannot.
+    #   * wsBare / bareStar / ttuStarFree — no wildcard restriction, no stored
+    #     star subject, no TTU: all three hold vacuously.
+    #   * term — no TTU (NoTtuTarget vacuous) and no stored tuple uses a derived
+    #     relation as its subject predicate (NoStoreSubjectR).
+    #   * storeValid — every stored tuple lands on a/b/c, each a plain `[user]`
+    #     Direct def, so `exprDirects` is non-empty and matches. (This is the
+    #     field `direct_arm_exclusion` provably FAILS.)
+    #
+    # WHY TWO SMALL CORPORA INSTEAD OF ONE (a measured runtime wall in the LEAN
+    # MODEL, recorded rather than papered over). The first version was a single
+    # corpus carrying `any_of`, `all_of` and a DERIVED 3-arm union
+    # `gated: all_of or a or b`. All of it is scope-clean and every Python backend
+    # handles it, but the Lean OPERATIONAL model does not finish on it. Measured
+    # 2026-07-26, zcli `graph`/`graph-state`, per-spawn timeout 120 s:
+    #     6 relations, 2 strata (with `gated`):  3 tuples 0.2 s -> 4 tuples TIMEOUT
+    #     5 relations, 1 stratum (no `gated`), by DISTINCT SUBJECT count:
+    #         2 subj 0.1 s · 3 subj 0.3 s · 4 subj 5.5 s · 5 subj 115 s
+    #     4 relations, derived inter only:  3 subj 0.6 s · 4 subj TIMEOUT
+    # A cliff, not a slope, driven by the round-2 job enumeration over distinct
+    # subjects. Two corpora at 3-4 subjects each stay at ~0.1-0.6 s and together
+    # carry MORE arm-witness coverage than the single 8-tuple version could.
+    # Consequences recorded honestly: the DERIVED n-ary union arm is not gated
+    # anywhere Lean-side. `_fold_binary` is a pure AST->JSON transform that does
+    # not care whether a relation is derived, so the arity hole is closed; what is
+    # NOT covered is the Lean operational model on a derived-reads-derived n-ary
+    # union, and that is a model-runtime limit, not a scope decision.
+    # ---------------------------------------------------------------------
+    "nary_union": (
+        # UNTAINTED 3-arm union. Store: ua/ub/uc are each in EXACTLY ONE arm, so
+        # all three arms are load-bearing (drop any arm and that member flips);
+        # `alice` is in all three so the union is not just a disjoint relabeling.
+        #   alice — a,b,c  -> any_of T
+        #   ua    — a      -> any_of T   (arm 1 bites)
+        #   ub    — b      -> any_of T   (arm 2 bites)
+        #   uc    — c      -> any_of T   (arm 3 bites — the arm that only exists
+        #                                 at arity >= 3)
+        """
+        type user
+        type doc
+          define a: [user]
+          define b: [user]
+          define c: [user]
+          define any_of: a or b or c
+        """,
+        [mk_tuple("...", "user", "alice", "a", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "b", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "c", "doc", "d1"),
+         mk_tuple("...", "user", "ua", "a", "doc", "d1"),
+         mk_tuple("...", "user", "ub", "b", "doc", "d1"),
+         mk_tuple("...", "user", "uc", "c", "doc", "d1")],
+        (),
+    ),
+    "nary_intersection": (
+        # DERIVED 3-arm intersection (1 stratum). Store held to THREE distinct
+        # subjects — the measured Lean-model cliff is at four (see the block
+        # above). Witnesses:
+        #   alice — a,b,c  -> all_of T   (non-empty: not vacuously false)
+        #   bob   — a,b    -> all_of F   (fails ONLY arm 3 — the arm that only
+        #                                 exists at arity >= 3; at `a and b` bob
+        #                                 would be a member, so the fold's extra
+        #                                 arm demonstrably bites)
+        #   carol — b,c    -> all_of F   (fails ONLY arm 1)
+        # Arm 2 sits at the fold's depth-1 position, which every pre-existing
+        # binary intersection corpus (`boolean_intersection`, `nested_boolean`)
+        # already covers; adding its witness would cost a 4th subject and the
+        # corpus would stop running under the zcli timeout.
+        """
+        type user
+        type doc
+          define a: [user]
+          define b: [user]
+          define c: [user]
+          define all_of: a and b and c
+        """,
+        [mk_tuple("...", "user", "alice", "a", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "b", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "c", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "a", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "b", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "b", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "c", "doc", "d1")],
+        (),
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -349,6 +462,10 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 #     inter/excl/union/computed root all qualify (the rootB gap CLOSED 2026-07-17,
 #     `W4Fragment.rootB`/`RootBoolean` deleted; taint routing on `schemaRewrites`
 #     now mirrors compile_ruleset).
+#   * nary_union / nary_intersection (added 2026-07-26) are in-fragment on every
+#     W4Fragment field — the per-field argument is in the n-ary block in SCHEMAS.
+#     n-ary arity widens fan-in, not dependency depth, so `twoStrata` is
+#     untouched (measured: 0 and 1 strata).
 #   * direct_arm_exclusion (added 2026-07-20e) rides the C-CHAIN Direct-arm T2b
 #     `graph_correct_w3d2_d` instead of the E-chain `graph_correct` (its Direct
 #     storage arm is outside `W4Fragment.computedOnly`); the witness
@@ -386,7 +503,79 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
     "cross_stratum_resettle",
     "star_two_strata_churn",
     "direct_arm_exclusion",
+    "nary_union",
+    "nary_intersection",
 )
+
+# ---------------------------------------------------------------------------
+# >= 3 STRATA corpora — SPEC-SIDE ONLY (spec `sem` × oracle × set engine), plus a
+# PYTHON-ONLY graph differential (test_conformance_nary_strata.py). NEVER
+# GRAPH_FRAGMENT.
+#
+# Added 2026-07-26 for ZT-P4-4: measured across every corpus in this file, the
+# maximum stratum count anywhere was TWO, so Python's >= 3-stratum cascade path —
+# `DeltaProcessor.run_cascade`'s per-stratum loop past round 2 — was reached by
+# nothing in the formal harness at all (tests/ reaches it only via
+# `tests/test_bulk_build.py`'s `demorgan1`).
+#
+# WHY NOT GRAPH_FRAGMENT (the scope discipline — this is the mistake ZT-P3-3
+# caught, and repeating it would be worse the second time):
+#   * `W4Fragment.twoStrata` (FullScope.lean) is literally "at most TWO derived
+#     strata dependency-wise", and its docstring records the restriction as
+#     ATTACK-CONFIRMED load-bearing: "a 3-stratum schema fires the round-2
+#     reject, CascadeStrata.lean".
+#   * the Lean operational model's cascade is `runCascade2` — a FIXED two rounds.
+#     A 3-stratum schema's third stratum has no round to settle in, so the model
+#     would answer from a state Python has already advanced past.
+#   * zcli's graph mode does NOT gate on `GraphAdmission`/`W4Fragment` (it exits
+#     nonzero only on run failure (rc 2) and non-drained-ness (rc 3)), so an
+#     out-of-fragment corpus placed in `GRAPH_FRAGMENT` does NOT fail loudly — it
+#     silently compares two models that no theorem relates. That is exactly how
+#     `direct_arm_exclusion` came to be described as theorem-backed when it is
+#     not.
+# So the Lean-side comparison here is `sem` ONLY (the spec is a pure function of
+# the final store — no cascade, no rounds, no stratum bound), and the graph index
+# is compared against the ORACLE and the SET ENGINE only, python-to-python.
+# ---------------------------------------------------------------------------
+
+MULTI_STRATUM_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
+    # A 4-relation exclusion CHAIN: each derived relation subtracts from the
+    # previous one, so the dependency depth (not the fan-in) forces the stratum
+    # count. Measured: `len(compile_ruleset(...).compiled.strata) == 3`
+    # (stratum 1 `s1`, stratum 2 `s2`, stratum 3 `s3`) — pinned by
+    # `test_conformance_nary_strata.py::test_three_strata_corpus_features`.
+    #
+    # Store makes every stratum load-bearing (each removes exactly one principal,
+    # and each principal is removed by exactly one stratum):
+    #     e  = {alice, bob, carol, dave}
+    #     s1 = e  \ b1({bob})   = {alice, carol, dave}
+    #     s2 = s1 \ b2({carol}) = {alice, dave}
+    #     s3 = s2 \ b3({dave})  = {alice}
+    # so `check(bob, s1)`, `check(carol, s2)` and `check(dave, s3)` are each False
+    # for a DIFFERENT stratum's reason — collapse the cascade to two rounds and
+    # `dave in s3` flips.
+    "three_strata_chain": (
+        """
+        type user
+        type doc
+          define e: [user]
+          define b1: [user]
+          define b2: [user]
+          define b3: [user]
+          define s1: e but not b1
+          define s2: s1 but not b2
+          define s3: s2 but not b3
+        """,
+        [mk_tuple("...", "user", "alice", "e", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "e", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "e", "doc", "d1"),
+         mk_tuple("...", "user", "dave", "e", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "b1", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "b2", "doc", "d1"),
+         mk_tuple("...", "user", "dave", "b3", "doc", "d1")],
+        (),
+    ),
+}
 
 # ---------------------------------------------------------------------------
 # TTU userset-subject corpora — SPEC-SIDE ONLY (spec `sem` × oracle × set engine).

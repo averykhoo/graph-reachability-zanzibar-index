@@ -105,6 +105,85 @@ def graphindex_answers(schema_text: str, tuples, queries,
     return answers
 
 
+# --------------------------------------------------------------------------- #
+# Admission-rejection classification (ZT-P4-7, 2026-07-26)
+# --------------------------------------------------------------------------- #
+# `GraphDriver.apply` used to catch BARE `ValueError` and report "rejected".
+# `graphindex_drive_ops` then drops a rejected add from `present`, and
+# `test_conformance_remove.py` builds the ORACLE from that same graph-derived
+# final set. So an `index_v4` bug that spuriously raised `ValueError` on a
+# LEGITIMATE add removed the tuple from BOTH sides, both corners agreed on a
+# smaller store, and the test stayed green: the gate was structurally incapable
+# of detecting an admission regression.
+#
+# Two exception CLASSES already separate cleanly and need no help here:
+#   * `index_v4.invariants.InvariantViolation` subclasses `AssertionError`, NOT
+#     `ValueError` (`invariants.py:67` — "a rejection is a *correct* refusal; a
+#     violation is corruption"). `core.py`/`processor.py` now raise it where they
+#     used to `assert`, so every corruption signal already propagates through a
+#     `except ValueError` and fails the test loudly. Nothing below weakens that.
+#   * everything that is not an exception at all.
+#
+# What does NOT separate structurally is `ValueError` itself: `index_v4` uses it
+# both for genuine write-admission refusals (cycle, undeclared wildcard shape,
+# bad identifier, removing what is not there) and for internal-contract failures
+# that are BUGS (a stale node id, a malformed wildcard encoding, an I5 routing
+# breach). There is no `AdmissionRejected(ValueError)` class to key on.
+#
+# SMALLEST CHANGE THAT WOULD MAKE THIS STRUCTURAL (reported, not taken here —
+# this file may not edit `index_v4/`): introduce
+# `class AdmissionRejected(ValueError)` in `index_v4` and raise it at the four
+# refusal sites (`core._add_edge_locked`'s two cycle raises,
+# `core.remove_edge`/`wildcard._remove_tuple_trusted`'s "Non-existent edge",
+# `wildcard._resolve`'s undeclared-wildcard-shape raises, plus
+# `zanzibar_utils_v1._require`). Every other `ValueError` in the write path is
+# then a bug by construction and this allow-list collapses to one `except`.
+#
+# Until then the classification is an explicit, documented allow-list matched on
+# the message, and it FAILS CLOSED: an unrecognized `ValueError` propagates.
+# Grounding: instrumented over every corpus x seed of the remove gate on
+# 2026-07-26, the ONLY rejections that actually fire are the two cycle families.
+# The rest are listed because they are reachable refusals for some corpus shape,
+# each with its raise site.
+_ADMISSION_REJECTION_MARKERS: tuple[str, ...] = (
+    # core.py `_add_edge_locked`: the trivial cycle (subject node IS object node)
+    # and the reverse-reachability cycle pre-check. These are the two that fire
+    # on the conformance corpora (recombined `_extras` build userset cycles).
+    "self-referential edge would create a cycle",
+    "adding this edge would create a cycle",
+    # wildcard.py `add_tuple`: the same cycle refusal re-raised with wildcard
+    # context ("a wildcard tuple whose object participates in the wildcard's own
+    # shape forms a cycle and is unsupported by construction").
+    "wildcard tuple rejected:",
+    # core.remove_edge / wildcard._remove_tuple_trusted: validity parity with the
+    # set engine — removing an edge/node that was never there is a refusal.
+    "Non-existent edge cannot be removed",
+    "Non-existent node cannot be removed",
+    # wildcard._resolve: the write names a `*` shape the schema never declared.
+    "is not a declared subject-wildcard shape",
+    "is not a declared object-wildcard shape",
+    # zanzibar_utils_v1.validate_write_identifiers: out-of-charset identifier.
+    "must match [",
+)
+
+
+def is_admission_rejection(exc: ValueError) -> bool:
+    """True iff `exc` is a GENUINE write-admission refusal (see the block above).
+
+    Deliberately excludes, so they propagate and FAIL the test:
+      * `relation ... is a derived (boolean) relation` — the I5 exclusivity
+        breach. In this harness every write goes through `RuleSet.apply`, so if
+        that fires the DRIVER is wrong, not the tuple.
+      * `node id ... no longer exists` — a stale id reaching the row writer.
+      * `wildcard must be ''/'any'/'all'`, `name=='*' and a non-empty wildcard
+        must go together`, `node-removal shortcut only supports count == -1` —
+        internal encoding/contract failures.
+      * anything unlisted (fail closed).
+    """
+    msg = str(exc)
+    return any(m in msg for m in _ADMISSION_REJECTION_MARKERS)
+
+
 class GraphDriver:
     """A remove-capable, poison-safe graph driver: build once, apply ops
     incrementally through the synchronous v1 write path (routing + same-txn
@@ -150,7 +229,17 @@ class GraphDriver:
 
     def apply(self, tup, op: str) -> bool:
         """One op through the synchronous v1 path. Returns True if committed,
-        False if the op was rejected (`ValueError`) and rolled back."""
+        False if the op was a GENUINE admission rejection (rolled back).
+
+        ZT-P4-7: this used to absorb every `ValueError`, which made the remove
+        gate structurally unable to see an admission regression — a spurious
+        raise on a legitimate add dropped the tuple from the driven store AND
+        from the oracle built off that store, so both corners agreed and the test
+        passed. Now only the classified refusals (`is_admission_rejection`) are
+        absorbed; any other `ValueError` is rolled back and then re-raised as an
+        `AssertionError` (chained to the original), so it fails the caller
+        loudly instead of shrinking the store. `InvariantViolation` is an
+        `AssertionError` and never entered this handler in the first place."""
         from index_v4.outbox import outbox_watermark
         try:
             wm = outbox_watermark(self.session, self.store_id)
@@ -159,7 +248,17 @@ class GraphDriver:
                 self.proc.run_cascade(wm)               # synchronous v1: same txn
             self.session.commit()
             return True
-        except ValueError:
+        except ValueError as e:
+            if not is_admission_rejection(e):
+                self.session.rollback()
+                raise AssertionError(
+                    f"GraphDriver.apply: {op} of {tup} raised a ValueError that is "
+                    f"NOT a classified write-admission rejection — treating it as "
+                    f"'rejected' would silently shrink BOTH the driven store and "
+                    f"the oracle built from it (ZT-P4-7). Either index_v4 has a "
+                    f"regression, or this is a new legitimate refusal that must be "
+                    f"added to `_ADMISSION_REJECTION_MARKERS` deliberately.\n"
+                    f"  {type(e).__name__}: {e}") from e
             self.session.rollback()
             return False
 
@@ -173,10 +272,14 @@ def graphindex_drive_ops(schema_text: str, ops, object_wildcards=()):
 
     Poison semantics mirror the set-engine `_drive` in
     `test_conformance_remove.py` exactly, so both backends traverse identical
-    effective sequences: a rejected add (`ValueError` from graph-parity
-    validation / cascade) poisons that tuple — all its later ops are skipped and
-    it is excluded from the accepted-final set. Removes are always of present
-    (accepted) tuples and must commit.
+    effective sequences: a rejected add poisons that tuple — all its later ops
+    are skipped and it is excluded from the accepted-final set. Removes are
+    always of present (accepted) tuples and must commit.
+
+    "Rejected" means a CLASSIFIED write-admission refusal (`GraphDriver.apply` /
+    `is_admission_rejection`, ZT-P4-7). Any other `ValueError` — and every
+    `InvariantViolation` — propagates out of here and fails the caller, instead
+    of quietly shrinking the accepted set that the test's oracle is built from.
 
     `ops` is a list of `(kind, tuple)` with `kind in {'add', 'remove'}`. Returns
     `(session, widx, proc, store_id, accepted_final)`; the caller owns closing

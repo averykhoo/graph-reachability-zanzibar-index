@@ -9,6 +9,11 @@ the real set engine over the full query grid. This is the fuzzing that caught th
 
 Deterministic (seeded `random.Random`), no hypothesis dependency. Skips the `sem`
 comparisons if `zcli` is unbuilt; oracle-vs-set-engine always runs.
+
+Anti-vacuity (ZT-P4-4, 2026-07-26): the grid floor plus an explicit count of the
+(query x store) comparisons actually performed — `assert not mism` over an empty
+list is green, and both the query grid and the seeded store list are computed,
+not constant.
 """
 
 from __future__ import annotations
@@ -23,11 +28,16 @@ from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
 # F7: ONE shared grid for all three suites (was a copy-paste of the spec
 # suite's `_grid`/`_queries`).
-from formal.conformance.grid import queries_for
+from formal.conformance.grid import assert_grid_nonvacuous, queries_for
 from formal.conformance import runner
 from formal.conformance.backends import setengine_answers
 
 SEEDS = list(range(25))
+
+# Anti-vacuity: total (query x store) comparisons this suite must perform per
+# corpus. 25 seeds x the grid floor of 6 = 150; asserted as a floor so a corpus
+# whose grid or seed list collapsed cannot pass silently.
+_MIN_TOTAL_COMPARISONS = 6 * len(SEEDS)
 
 
 def _random_subset(rng, tuples):
@@ -47,6 +57,8 @@ def test_random_stores(name):
 
     # grid uses the FULL tuple set's names so ghosts/queries stay stable across subsets
     queries = queries_for(schema_text, all_tuples)
+    assert_grid_nonvacuous(name, queries)
+    n_compared = 0
 
     for seed in SEEDS:
         rng = random.Random(seed)
@@ -55,6 +67,9 @@ def test_random_stores(name):
         orc = Oracle(schema_text, tuples)   # parse once per store, not per query
         oracle = [orc.check(*q) for q in queries]
         se = setengine_answers(schema_text, tuples, queries, obj_wild)
+        assert len(oracle) == len(queries) == len(se), (
+            f"[{name} seed={seed}] answer-vector length mismatch")
+        n_compared += len(queries)
         mism_os = [(queries[i], oracle[i], se[i]) for i in range(len(queries))
                    if oracle[i] != se[i]]
         assert not mism_os, (f"[{name} seed={seed}] oracle/set-engine disagreement:\n"
@@ -69,3 +84,10 @@ def test_random_stores(name):
                 f"[{name} seed={seed}] spec/oracle disagreement "
                 f"(ADJUDICATION EVENT — plan §8.2):\n"
                 + "\n".join(f"  {q} spec={s} oracle={o}" for q, s, o in mism_so[:10]))
+
+    # ANTI-VACUITY (ZT-P4-4): the fuzz actually swept the seeds AND the grid.
+    assert n_compared >= _MIN_TOTAL_COMPARISONS, (
+        f"[{name}] ANTI-VACUITY: only {n_compared} (query x store) comparisons "
+        f"were performed, floor {_MIN_TOTAL_COMPARISONS} "
+        f"({len(SEEDS)} seeds x {len(queries)} queries expected). An empty grid "
+        f"or an empty seed list makes every `assert not mism` vacuously true.")

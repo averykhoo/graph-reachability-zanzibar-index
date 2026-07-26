@@ -39,7 +39,8 @@ from tests.oracle import Oracle, t as mk_tuple
 
 from formal.conformance.backends import graphindex_answers
 from formal.conformance.corpus import DIRECT_ARM_NAMES, SCHEMAS
-from formal.conformance.grid import queries_for, fmt_mismatches as _fmt
+from formal.conformance.grid import (
+    assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 
 
 def _setengine_answers(schema_text, tuples, queries, ops, object_wildcards=()):
@@ -76,6 +77,9 @@ def test_direct_arm_three_way(name, ops):
     """oracle == set engine == graph index over the full grid, both SetOps."""
     schema_text, tuples, obj_wild = SCHEMAS[name]
     _q, se_mism, gr_mism = _three_way(schema_text, tuples, obj_wild, ops)
+    # ANTI-VACUITY (ZT-P4-4): `assert not mism` over an empty grid is green.
+    # `direct_arm_exclusion` measured 24 queries on 2026-07-26.
+    assert_grid_nonvacuous(f"{name}/{ops.name}", _q)
     assert not se_mism, (
         f"[{name}/{ops.name}] oracle/set-engine disagreement:\n"
         f"{_fmt(se_mism, 'oracle', 'setengine')}")
@@ -101,16 +105,41 @@ def _atk_stores():
         yield from itertools.combinations(_ATK_SPACE, size)
 
 
+# Documented bounds for the attack enumeration, ASSERTED below so neither the
+# space nor the store count can silently drift (the idiom of
+# `test_conformance_enum._SHAPES`): 4 admission-valid writes => sum of C(4,k)
+# for k in 0..4 = 16 stores.
+_ATK_EXPECTED_SPACE = 4
+_ATK_EXPECTED_STORES = 16
+
+
 @pytest.mark.parametrize("ops", ALL_SETOPS, ids=lambda o: o.name)
 def test_direct_arm_attack_stores(ops):
     """Try to break agreement: every store of <=4 admission-valid tuples must
     keep oracle == set engine == graph index on the Direct-arm shape."""
+    assert len(_ATK_SPACE) == _ATK_EXPECTED_SPACE, (
+        f"[attack/{ops.name}] the attack tuple space drifted to "
+        f"{len(_ATK_SPACE)} (documented bound {_ATK_EXPECTED_SPACE})")
+    n_stores = 0
+    n_compared = 0
     for store in _atk_stores():
         store = list(store)
+        n_stores += 1
         _q, se_mism, gr_mism = _three_way(_ATK_SCHEMA, store, (), ops)
+        n_compared += len(_q)
         assert not se_mism, (
             f"[attack/{ops.name}] oracle/set-engine disagreement at store "
             f"{store}:\n{_fmt(se_mism, 'oracle', 'setengine')}")
         assert not gr_mism, (
             f"[attack/{ops.name}] oracle/graph-index disagreement at store "
             f"{store} (GENUINE FINDING):\n{_fmt(gr_mism, 'oracle', 'graph')}")
+
+    # ANTI-VACUITY (ZT-P4-4): the enumeration really enumerated, and every store
+    # really got a non-empty grid. Note the EMPTY store (size 0) legitimately
+    # yields a small grid, so the per-store floor is the total, not each.
+    assert n_stores == _ATK_EXPECTED_STORES, (
+        f"[attack/{ops.name}] enumerated {n_stores} stores but the documented "
+        f"bound says {_ATK_EXPECTED_STORES} — the enumeration drifted")
+    assert n_compared >= _ATK_EXPECTED_STORES, (
+        f"[attack/{ops.name}] ANTI-VACUITY: only {n_compared} three-way "
+        f"comparisons over {n_stores} stores")

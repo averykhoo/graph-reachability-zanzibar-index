@@ -94,3 +94,42 @@ def queries_for(schema_text, tuples):
 def fmt_mismatches(mismatches, a_name, b_name):
     return "\n".join(
         f"  query={q} {a_name}={a} {b_name}={b}" for q, a, b in mismatches[:20])
+
+
+# --------------------------------------------------------------------------- #
+# Anti-vacuity (ZT-P4-4, 2026-07-26)
+# --------------------------------------------------------------------------- #
+# Every differential in this package has the shape `mism = [...]; assert not
+# mism`, which passes SILENTLY when the query list is empty — nothing was
+# compared, and the test reports green. That is not hypothetical: the graph
+# suites' `hqo` filter (`on != "*"`) yields exactly ZERO queries for a corpus
+# whose objects are all `*`, and the `object_wildcard` corpus's own notes invite
+# moving it into `GRAPH_FRAGMENT`.
+#
+# So each differential asserts a COMPARISON-COUNT FLOOR, in the spirit of the
+# hard-coded `len(space)` / `len(stores)` / `len(sample)` pins already in
+# `test_conformance_enum.py` / `test_conformance_enum_state.py`.
+#
+# The floor is a single shared number rather than a per-corpus table on purpose:
+# the failure mode being defended against is COLLAPSE (a grid that went to zero
+# or near-zero because a filter, a schema or a store stopped producing targets),
+# not a corpus shrinking by a few queries. Measured 2026-07-26 over every corpus
+# in `corpus.py`, the smallest full grid is `object_wildcard` at 6 queries and
+# the next smallest `wildcard_public` at 7 (largest: `deep_grid`, 2880).
+MIN_GRID_QUERIES = 6
+
+
+def assert_grid_nonvacuous(label, queries, floor: int = MIN_GRID_QUERIES,
+                           hint: str = "") -> int:
+    """Assert this differential actually compares something; return the count.
+
+    `label` identifies the case (corpus name, `name seed=N`, ...). Raises with a
+    message that names the collapse, because a zero-length query list is
+    indistinguishable from a passing comparison at the `assert not mism` line."""
+    n = len(queries)
+    assert n >= floor, (
+        f"[{label}] ANTI-VACUITY: the comparison grid collapsed to {n} quer(ies) "
+        f"(floor {floor}). A differential over an empty/degenerate query list "
+        f"passes while comparing NOTHING — `assert not mism` over `[]` is True."
+        + (f"\n{hint}" if hint else ""))
+    return n
