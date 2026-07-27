@@ -1818,6 +1818,31 @@ exactly the one a pinned snapshot hides. `assert_read_isolation` at construction
 hiding rows). **Caller-visible: MySQL/InnoDB at its default isolation level now refuses
 to open** — pass `isolation_level="READ COMMITTED"`.
 
+> ⚠ **EVIDENCE CAVEAT (2026-07-26) — none of this was exercised against a real MySQL or
+> PostgreSQL server.** `requirements.txt` is `pytest / sqlmodel / pyroaring /
+> hypothesis`; there is no MySQL or PostgreSQL driver in the tree and every test runs on
+> in-memory SQLite. Concretely:
+> * the **hazard** (an InnoDB REPEATABLE READ read view pinned at the first read, so a
+>   concurrently-committed log row stays invisible for the rest of the transaction) is
+>   **reasoned from documented InnoDB semantics**, not observed here;
+> * `assert_read_isolation` is unit-tested against a **fake session** that merely reports
+>   a dialect name and level (`tests/test_zt_p1_hardening.py`'s `_FakeSession('mysql',
+>   …)`) — it has never rejected a real server;
+> * the **gap detection itself IS genuinely tested**, but by SYNTHESIZING an invisible
+>   commit (hiding a row from `log_rows`) on SQLite to imitate what InnoDB would do. That
+>   proves `log_gap`/`WatermarkGap` fire on the state; it does not prove real InnoDB
+>   produces that state.
+>
+> This is the SAME class as the standing CS-1 caveat the zero-trust review itself filed
+> ("the `FOR UPDATE` semantics that make this hold on PostgreSQL/MySQL are *reasoned
+> about, not CI-tested*") — the fix adds a second layer of reasoned-but-untested
+> behaviour on top of the first, and the same is true of ZT-P1-4's `FOR UPDATE` arm
+> (only the SQLite arm was empirically verified: a second connection's write blocking,
+> and the lock being taken on a zero-row UPDATE). **Do not read "now refuses to open" as
+> "verified to refuse to open."** Settling it needs a real MySQL and PostgreSQL in CI —
+> which would also finally close CS-1 and the Phase-7 concurrency gap, and is the single
+> highest-value untested surface in the system.
+
 **ZT-P1-6 — no resource bounds. DECISION: fix the crash only, no admission caps.**
 Nothing that is accepted today became rejected. The fixed half: `SetEngine.check`'s
 `sat`/`member_via_usersets` recursion was depth-linear, so a ~1,500-long `group#member`

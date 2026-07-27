@@ -859,6 +859,27 @@ Migrated from the `README.md` "TODO" list (its struck-through items already ship
 
 ### Standing / latent (non-blocking — no action needed unless a motivating case appears)
 
+- [ ] **★ HIGHEST-VALUE UNTESTED SURFACE — no MySQL or PostgreSQL has EVER been run
+      against this repo (recorded 2026-07-26).** `requirements.txt` carries no driver;
+      every test runs on in-memory SQLite. That means the 2026-07-23 HA work, the
+      2026-07-26 `ZT-P1-4` write-lock fix, and the `ZT-P1-5` isolation guard are ALL
+      reasoned-but-unexercised on the engines they exist for:
+      * `_lock_store`/`_lock_source`'s `FOR UPDATE` arm — only the SQLite arm was
+        empirically verified (second connection's write blocks; the lock is taken on a
+        zero-row UPDATE);
+      * `assert_read_isolation` — unit-tested against a **fake session** reporting a
+        dialect string, never against a real server;
+      * `WatermarkGap`/`log_gap` — the detection fires correctly, but on a SYNTHESIZED
+        invisible commit on SQLite imitating InnoDB, not on real InnoDB;
+      * the whole out-of-order-log-commit hazard the HA work closed is
+        **PostgreSQL-only**, so CI runs where the bug cannot manifest.
+      This is the long-standing CS-1 caveat ("reasoned about, not CI-tested") now
+      carrying three more layers. Standing up a real MySQL + PostgreSQL in CI would
+      close CS-1, validate the HA lock discipline, and cover the Phase-7 concurrency gap
+      that has been "not started" since the original plan. **Nothing here is known to be
+      wrong — it is unverified, which is a different and more honest claim.**
+      See the EVIDENCE CAVEAT under `docs/spec-deviations.md` 2026-07-26 ZT-P1-5.
+
 - [x] ~~**Set-engine flow graph omits bridge edges**~~ — RESOLVED 2026-07-16 (was a
       real, constructible divergence, not merely latent). Fixed; see the Current
       status note above and `docs/spec-deviations.md`.

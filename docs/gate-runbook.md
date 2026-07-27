@@ -193,6 +193,32 @@ surface, run a deeper campaign. Two cap-safe options:
   and only if it fits the cap; otherwise split by test node. Full-repo deep is a
   nightly/offline job, not a single command.
 
+> ### ⚠ FOOTGUN — `HYPOTHESIS_SEED` does NOTHING (recorded 2026-07-26)
+>
+> The multi-seed sweep above works **only** via the `--hypothesis-seed=$s` **command-line
+> flag**. There is no `conftest.py` in this repo that reads a `HYPOTHESIS_SEED`
+> environment variable — `grep -rn HYPOTHESIS_SEED` over the whole tree returns **zero
+> hits**. So this, which looks right and is easy to reach for by analogy with
+> `HYPOTHESIS_PROFILE` (which *is* read, by hypothesis itself):
+>
+> ```bash
+> for s in 7 19 31 53 71 97; do HYPOTHESIS_SEED=$s "$PY" -m pytest tests/test_hypothesis.py -q; done   # ← WRONG
+> ```
+>
+> silently runs **six identical default-seeded runs** and reports six greens. It fails by
+> PASSING, which is the worst failure mode a gate step can have: you get the reassurance
+> without the coverage. Use the flag form in the recipe above.
+>
+> This bit a real session on 2026-07-26 (the zero-trust review): a "6-seed fuzz sweep
+> clean" claim was made — and written into a pushed commit message — on the strength of
+> six identical runs. Re-running with the flag produced genuinely varied seeds and was
+> also clean, so nothing was missed that time. If you assert a multi-seed sweep, paste
+> the per-seed output; identical durations across seeds are the tell.
+>
+> (If you would rather make the env-var form work than remember this, adding a
+> `conftest.py` that reads `HYPOTHESIS_SEED` and calls `hypothesis.seed()` would close
+> it permanently — not done, deliberately, to avoid a second way to do the same thing.)
+
 ### Push gate
 Push only after ALL of: step 1 (`pytest tests/`) green; the five `verify.sh` phases
 (`lean` → `conf-tile:1/5` → `2/5` → `3/5` → `4/5` → `5/5`) each green; and — for an algorithm
