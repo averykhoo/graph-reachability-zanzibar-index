@@ -54,17 +54,25 @@ merely narrow — on any store written through the `Direct` arm of a derived def
    + **0 sorries** + zcli + axiom audit (**457** `#print axioms` reports, one per audited
    theorem, only `[propext, Classical.choice, Quot.sound]`) + the audit IDENTITY pin
    (`formal/audited_theorems.txt`) + the headline STATEMENT pin
-   (`formal/headline_statements.txt`, 26 theorems) + the `CORRESPONDENCE.md` anchor pin
+   (`formal/headline_statements.txt`, 26 theorems) + the headline DEFINITION pin
+   (`formal/headline_definitions.txt`, 139 rows / 132 declarations — what those
+   statements' words MEAN, transitively) + the `CORRESPONDENCE.md` anchor pin
    + **450** Python conformance tests, 0 skips, 0 xfails, + **`tests/`** (744 collected)
    (conformance count re-measured 2026-07-27 after the ZT-P4-5/6 work below —
    `pytest formal/conformance/ -q --collect-only` = **450**, up from 395; the gate
    enforces `-ge` FLOORS, not the exact numbers — see `FINAL_REVIEW.md`'s header — so
-   re-measure, don't quote. ⚠ `verify.sh`'s `MIN_CONF_ALL` still reads **391**: it is a
-   floor, so the gate is GREEN, but it can be raised to 450 deliberately by whoever
-   owns `verify.sh`).
+   re-measure, don't quote. `MIN_CONF_ALL` was raised to 450 and `MIN_TESTS_ALL` to
+   762 on 2026-07-27, so the floors now sit AT measured reality rather than below it).
    **Adding an audited theorem now also means regenerating the identity pin**
-   (`bash formal/regen_audit_pin.sh`); changing a headline theorem's STATEMENT means
-   regenerating `formal/headline_statements.txt` deliberately and saying why.
+   (`bash formal/regen_audit_pin.sh`); changing a headline theorem's STATEMENT, or the
+   DEFINITION of anything it depends on, means regenerating both goldens deliberately
+   and saying why (`"$PY" formal/conformance/statement_pin.py --generate` rewrites
+   `headline_statements.txt` and `headline_definitions.txt` together).
+   **Note what the definition pin is for.** Moving `twoStrata` from `W4Fragment` into
+   `GraphAdmission` BUILDS, keeps all 26 pinned statements byte-identical, changes no
+   declaration name -- and converts a declared honest scope-carry into a claimed
+   guarantee about Python's admission that is false (Python reaches 12 strata). That
+   was invisible to every other check in the gate; it is the attack 4c exists for.
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
    gates, the TTU userset-subject and self-referential-tuple spec corpora, and the

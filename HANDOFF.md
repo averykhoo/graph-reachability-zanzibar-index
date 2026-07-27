@@ -849,16 +849,36 @@ dismissals whose stated justification no longer holds:
          14,640 rows, but its peak PER-WRITE fan-out is only 120. It is 240 cheap
          writes, not one expensive one. The cap bounds a single write's lock-hold;
          the N² accumulation needs a **store-level quota**, which was not added.
-      2. **≥3-strata Lean coverage cannot be closed without widening the fragment.**
-         `runCascade2` is two literal nested applications — the round count is
-         structural, not a parameter — and `W4Fragment.twoStrata` is a hypothesis of
-         `graph_correct`. Widening needs a `runCascadeN` plus re-proof of the whole
-         W3d-2 layer. Multi-session, inside `formal/lean/**`.
+      2. **≥3-strata Lean coverage — SCOPED 2026-07-27, and the recommendation is
+         DON'T.** Full plan:
+         [`formal/history/strata-widening-plan-2026-07-27.md`](formal/history/strata-widening-plan-2026-07-27.md).
+         Measured, not argued: **the Lean model FAILS CLOSED at ≥3 strata** (zcli on
+         `three_strata_chain`: `mode=graph` rc 3 "final state not drained"; 2-stratum
+         control rc 0) — which **corrects the predecessor doc's claim that it would not
+         fail loudly**. So the arc buys COVERAGE, not safety. Python's cascade runs
+         `len(strata)` rounds (not to quiescence), so `runCascade2` is the N=2 SLICE of
+         the real algorithm — no shape mismatch, and that also rules out a fuel/fixpoint
+         formulation as the faithful one. `runCascade3` is the WORST option: the stratum
+         count is unbounded (a 12-deep derived chain compiles to 12 strata), so it pays
+         nearly the full re-proof to move the wall from 3 to 4. Cost of the real thing:
+         7 legs, ~8 sessions, ~3,000+ Lean lines, ~24% genuine re-proof / ~76%
+         re-statement, with the risk concentrated in the read-bridge leg (Leg 3) whose
+         shape was already attack-refuted once. It unblocks nothing else on the board.
+         **If a session is spent on Lean, spend it on the E-chain Direct-arm widening
+         instead** — there the headline theorems are VACUOUS on `[user] but not blocked`
+         (`ZT-P3-1`), and vacuous beats narrow as a thing to fix.
       3. **Still at zero coverage anywhere:** wildcard usersets `[T:*#p]`, and the
          `derived-tupleset-ttu` plan leaf — deliberately left OUT of the new
          plan-leaf-coverage floor rather than faked.
       Also unbenchmarked (unchanged): `_any_residue_reference`'s complete `ResidueV1`
       scan on every node-release path, now unconditional after the `ZT-P0-1` fix.
+      **Next actions, in the order I would take them** (all independent of each other):
+      * **The store-level quota** — residual 1 above is the only one with real
+        production value; the fan-out cap does not close it. Python-side, bounded.
+      * **The E-chain Direct-arm widening** (`ZT-P3-1` vacuity) if a session goes to
+        Lean — NOT the strata arc, per residual 2.
+      * **Wildcard-userset / `derived-tupleset-ttu` corpora** — cheap corpus work, and
+        a good warm-up for whoever picks up the formal side.
 - [x] **DONE 2026-07-23 (Claude): multi-instance set-engine (HA) support — landed, gated, pushed.**
       See the 2026-07-23 Current-status bullet for the full record (mechanisms, the
       closed log-ordering hazard, consistency model, gate numbers). Follow-ups

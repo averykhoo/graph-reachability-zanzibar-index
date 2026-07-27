@@ -114,7 +114,7 @@ dev box (`lean` re-measured 2026-07-27):
 
 ```bash
 bash formal/verify.sh lean           # steps 1-4: lake build + hole scan + zcli + axiom audit
-                                     #            + audit identity pin + headline statement pin
+                                     #            + audit identity + statement + DEFINITION pins
                                      #            + CORRESPONDENCE.md anchor pin      (29 s warm)
 bash formal/verify.sh conf-tile:1/5  # step 5, tile 1 of 5 of formal/conformance/
 bash formal/verify.sh conf-tile:2/5  # step 5, tile 2 of 5
@@ -179,6 +179,7 @@ so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 |---|---|---|
 | `EXPECTED_MIN_AUDITS` | 457 | `#print axioms` reports observed from `Audit.lean` |
 | `MIN_PINNED_AUDITS` | 457 | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
+| `MIN_PINNED_DEFS` | 139 | rows in `formal/headline_definitions.txt` — likewise, so emptying the golden can't make the definition pin compare nothing |
 | `MIN_CONF_ALL` | 450 | tests collected from `formal/conformance/` |
 | `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 354 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
 | `MIN_TESTS_ALL` | 762 | tests collected from `tests/` |
@@ -216,7 +217,7 @@ works the same way and is documented in §1 above. Both budgeted outcomes count
 toward the tile's pass floor, so budgeting one never quietly shrinks what had to
 pass — otherwise the budget would just move the red one line down.
 
-#### Step 4 is no longer a COUNT: the identity + statement pins (2026-07-27, ZT-P2-5)
+#### Step 4 is no longer a COUNT: the identity, statement + definition pins (2026-07-27, ZT-P2-5)
 An audit count proves nothing about *which* theorems are audited or *what they say*.
 Two erosions used to keep the gate fully green:
 
@@ -244,14 +245,32 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   `W4Witness*` non-vacuity witnesses). The **proof** is not pinned — refactoring a
   proof is normal work; changing what is CLAIMED is not. Regenerate deliberately:
   `"$PY" formal/conformance/statement_pin.py --generate`.
-  *Honest scope:* this pins surface syntax. It catches restatement, weakening and
-  dropped hypotheses; it does **not** catch a statement hollowed out from underneath
-  (redefining `W4Fragment := True` leaves the text intact). Neither would a
-  `#check`-based pin. The independent defences against that shape are the
-  `W4Witness*` witnesses and the conformance suite.
-- **4c ANCHORS** — `formal/conformance/anchor_check.py` resolves every
-  `` `file::symbol` `` anchor in `formal/CORRESPONDENCE.md` (349 today: 243 Python by
-  `ast` parse, 106 Lean by declaration scan; no imports, no Lean toolchain, ~1 s) and
+  *Honest scope:* this pins surface syntax **of the statement only**. On its own it
+  could not see a statement hollowed out from underneath — which is what 4c exists
+  for.
+- **4c DEFINITIONS** — the hole 4b could not see, closed 2026-07-27. 4b records
+  `graph_correct`'s hypothesis as `(hF : W4Fragment S T)` **by name**, so weakening
+  that structure changes what the theorem claims while its pinned line stays
+  byte-identical *and* no declaration name changes, so 4a is blind too. `statement_pin.py`
+  now also diffs `formal/headline_definitions.txt`: the full text of every project
+  declaration the 26 statements depend on, **transitively**, plus the ambient
+  `variable` / `open` context of the files hosting them (a dropped `[Fintype V]` is
+  the same attack). 139 rows / 132 declarations, floor `MIN_PINNED_DEFS`.
+  *Why unbounded depth:* resolution stops at the project boundary by construction, so
+  the closure converges on its own — measured 58/36/17/5/7/3/3/2/1, settling at depth
+  9. Replayed over the tree's busiest fortnight (34 commits), levels 3–9 contributed
+  **zero** firings beyond levels 1–2, so unbounded costs the same maintenance as
+  depth-2 and covers 38 more definitions. Every would-be firing was a real meaning
+  change. Regenerate both goldens together:
+  `"$PY" formal/conformance/statement_pin.py --generate`.
+  *Still invisible:* the project boundary (a Mathlib/toolchain change to what
+  `List.erase` means — that is `lean-toolchain`'s job); definitional-vs-textual
+  equality in both directions; and anything requiring ELABORATION, so a definition
+  vacuous on its own terms passes with its text intact. That last one stays the job
+  of the `W4Witness*` non-vacuity theorems and the conformance suite.
+- **4d ANCHORS** — `formal/conformance/anchor_check.py` resolves every
+  `` `file::symbol` `` anchor in `formal/CORRESPONDENCE.md` (367 today: 260 Python by
+  `ast` parse, 107 Lean by declaration scan; no imports, no Lean toolchain, ~1 s) and
   asserts the anchor COUNT against floors, so deleting rows fails too. This is the
   §9 design in that file, landed. It keeps the map **navigable, not true** — it
   cannot tell you a row's correspondence claim is wrong.

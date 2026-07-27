@@ -83,7 +83,7 @@ driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_gr
 its validly-stored scope decision approved by Avery 2026-07-19),
 and a **generated-schema answer gate** (seeded generated schemas outside the
 curated corpora, spec-side only). Gate size as last measured (**2026-07-27**, by
-`pytest formal/conformance/ -q --collect-only`): **391** conformance tests collected,
+`pytest formal/conformance/ -q --collect-only`): **450** conformance tests collected,
 46 of them gate-tooling unit tests (`test_sorry_scan.py`, `test_runner_retry.py`)
 rather than comparisons. Re-measure; nothing pins these numbers except the `-ge`
 floors in `verify.sh`.
@@ -105,19 +105,23 @@ agents run it **phased** per [`docs/gate-runbook.md`](../docs/gate-runbook.md) �
 the one-shot exceeds the ~10-min command cap) is green — `lake build` + 0 sorries +
 zcli preflight + axiom audit (**457** `#print axioms` reports, one per audited
 theorem, only `[propext, Classical.choice, Quot.sound]`, measured 2026-07-27) +
-**391** conformance tests collected (`conf-heavy` 80 + `conf-rest` the rest; floors
-88 / 303), 0 skips, 0 xfails; `tests/` **728** collected (2026-07-27) — 744 with a
-PostgreSQL DSN configured, since `tests/test_postgres_ha.py` is dropped at collection
-without one. **Most of
+**450** conformance tests collected (floors: `MIN_CONF_ALL` 450 = `MIN_CONF_HEAVY` 96
++ `MIN_CONF_REST` 354), 0 skips, 0 xfails; `tests/` **762** collected (2026-07-27),
+more with a PostgreSQL DSN configured, since `tests/test_postgres_ha.py` is dropped at
+collection without one. **Most of
 these counts are measurements, not gate-enforced invariants** — re-measure rather
 than trusting the numbers here, and never read a count as coverage
 (`FINAL_REVIEW.md` header). What IS enforced, since the 2026-07-26/27 gate
-hardening: `-ge` floors on the audit count (457), the conformance collection (391),
-the `tests/` collection (728) and the scanned-`.lean`-file count (64); an **identity
+hardening: `-ge` floors on the audit count (457), the conformance collection (450),
+the `tests/` collection (762) and the scanned-`.lean`-file count (64); an **identity
 pin** (`formal/audited_theorems.txt` — WHICH theorems are audited, not just how
 many); a **statement pin** (`formal/headline_statements.txt` — what the 26 headline
 theorems SAY, so `theorem graph_correct : True := trivial` fails instead of
-building green); a suspicion check on an axiom-free headline theorem; a
+building green); a **definition pin** (`formal/headline_definitions.txt` — what those
+statements' WORDS MEAN: the full text of all 132 project declarations they depend on
+transitively, plus the hosting files' ambient `variable`/`open` context, because the
+statement pin records `(hF : W4Fragment S T)` by NAME and so cannot see the structure
+being weakened underneath it); a suspicion check on an axiom-free headline theorem; a
 `CORRESPONDENCE.md` anchor-resolution pin; and zero-tolerance
 `skipped`/`xpassed`/`deselected` parsing with a declared xfail budget for `tests/`
 only. See `docs/gate-runbook.md` §2. T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over

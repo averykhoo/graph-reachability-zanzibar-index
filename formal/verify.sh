@@ -61,7 +61,13 @@
 #           theorem's statement text against formal/headline_statements.txt, so
 #           `theorem graph_correct : True := trivial` -- which BUILDS, carries no
 #           `sorry` TOKEN, and audits clean -- now FAILS
-#        4c ANCHORS   -- formal/conformance/anchor_check.py resolves every
+#        4c DEFINITION (2026-07-27, ZT-P5-LEG0) -- the same script also diffs the
+#           full text of every project declaration those statements DEPEND ON
+#           against formal/headline_definitions.txt, so deleting the `twoStrata`
+#           FIELD of `structure W4Fragment` -- which weakens `graph_correct` while
+#           leaving its pinned statement byte-identical and changing no
+#           declaration name, defeating both 4a and 4b -- now FAILS
+#        4d ANCHORS   -- formal/conformance/anchor_check.py resolves every
 #           `file::symbol` anchor in formal/CORRESPONDENCE.md (the model<->code
 #           map, which had NO drift detector at all)
 #      plus: a headline theorem reporting "does not depend on any axioms" is
@@ -295,6 +301,23 @@ AUDIT_PIN="$REPO_ROOT/formal/audited_theorems.txt"
 # 2026-07-27: 457 names.
 MIN_PINNED_AUDITS=457
 
+# (c) DEFINITION pin (ZT-P5-LEG0, 2026-07-27). The statement pin (4b) closed
+# `theorem graph_correct : True := trivial`. It does NOT close the strictly-weaker
+# restatement made from UNDERNEATH: `graph_correct`'s entire proved scope is
+# carried by `(hA : GraphAdmission S T) (hF : W4Fragment S T)`, recorded in
+# headline_statements.txt BY NAME. Both are `structure`s. Delete
+# `W4Fragment.twoStrata` -- one line in FullScope.lean -- and the theorem claims
+# something strictly weaker over a strictly larger class of schemas, while its
+# pinned statement line stays BYTE-IDENTICAL and no declaration name changes, so
+# 4a is blind too. The same hole existed for `sem` and `GraphModel.check`, i.e.
+# for the `check := sem` model the project's own honesty norm forbids.
+# formal/headline_definitions.txt pins the text of every project declaration the
+# 26 statements transitively depend on (132 today, closure measured to converge at
+# depth 9 inside the project), plus the `variable`/`open` ambient context of the
+# files hosting them (7). Floor measured 2026-07-27: 139 rows.
+DEF_PIN="$REPO_ROOT/formal/headline_definitions.txt"
+MIN_PINNED_DEFS=139
+
 # The HEADLINE theorems -- the ones FINAL_REVIEW.md §2 states in English. Two
 # extra rules apply to exactly these:
 #   * each MUST appear in the audit output at all (also covered by the identity
@@ -505,19 +528,46 @@ run_lean() {
 
   # -------------------------------------------------------------------------- #
   # 4b. STATEMENT pin (ZT-P2-5 (ii)). WHAT the headline theorems say.
+  # 4c. DEFINITION pin (ZT-P5-LEG0). What those words MEAN. Same script, two
+  #     goldens -- the second closes the hole the first one's docstring used to
+  #     concede: `graph_correct`'s scope is carried by `(hF : W4Fragment S T)`,
+  #     recorded BY NAME, so deleting the `twoStrata` FIELD of that structure
+  #     weakens the theorem while leaving the pinned statement byte-identical and
+  #     changing no declaration name (so 4a is blind too). See
+  #     formal/conformance/statement_pin.py's docstring for the recursion depth,
+  #     the churn measurement behind it, and -- read this part -- what it still
+  #     cannot see.
   # -------------------------------------------------------------------------- #
   echo "--- [4b/5] headline STATEMENT pin (formal/headline_statements.txt) ---"
+  echo "--- [4c/5] headline DEFINITION pin (formal/headline_definitions.txt) ---"
+  # The golden's own floor, asserted here as well as inside the script, exactly as
+  # MIN_PINNED_AUDITS is for the identity pin: a truncated or emptied golden makes
+  # the comparison pass over nothing, which is the ZT-P2-1 shape one level down.
+  [ -f "$DEF_PIN" ] \
+    || { echo "FAIL: definition pin missing: $DEF_PIN"; \
+         echo "      regenerate with: \"\$PY\" formal/conformance/statement_pin.py --generate"; \
+         exit 1; }
+  PINNED_DEFS=$(grep -cvE '^#|^[[:space:]]*$' "$DEF_PIN")
+  [ "$PINNED_DEFS" -ge "$MIN_PINNED_DEFS" ] \
+    || { echo "FAIL: $DEF_PIN lists only $PINNED_DEFS row(s); floor is $MIN_PINNED_DEFS."; \
+         echo "      The definition pin was gutted -- a comparison over a truncated"; \
+         echo "      golden passes vacuously. If definitions genuinely left the"; \
+         echo "      headline statements' dependency closure, lower MIN_PINNED_DEFS"; \
+         echo "      here (and in statement_pin.py) deliberately and say why in"; \
+         echo "      formal/history/."; \
+         exit 1; }
   "$PY" "$REPO_ROOT/formal/conformance/statement_pin.py" \
-    || { echo "FAIL: headline statement pin (see above)"; exit 1; }
+    || { echo "FAIL: headline statement/definition pin (see above)"; exit 1; }
+  echo "  definition pin rows: $PINNED_DEFS (floor $MIN_PINNED_DEFS)"
 
   # -------------------------------------------------------------------------- #
-  # 4c. CORRESPONDENCE.md anchor pin. The model<->code map had NO drift detector:
+  # 4d. CORRESPONDENCE.md anchor pin. The model<->code map had NO drift detector:
   # it was rebuilt onto ~349 file::symbol anchors on 2026-07-26, hand-verified
   # once, and nothing checked it afterwards -- against an unchanged ~3,000
   # lines/2-weeks drift rate that had already destroyed its predecessor's line
   # numbers. Cheap (~1 s, no Lean toolchain), so it rides the `lean` phase.
   # -------------------------------------------------------------------------- #
-  echo "--- [4c/5] CORRESPONDENCE.md anchor pin ---"
+  echo "--- [4d/5] CORRESPONDENCE.md anchor pin ---"
   "$PY" "$REPO_ROOT/formal/conformance/anchor_check.py" \
     || { echo "FAIL: CORRESPONDENCE.md anchors (see above)"; exit 1; }
 
