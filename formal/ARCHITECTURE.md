@@ -466,13 +466,32 @@ fragment. The same corpus is also excluded from the remove-driving gate (§5).
    §3's resolved note and `docs/spec-deviations.md` 2026-07-13.
 4. **The state-gate projections** — state-level conformance IS implemented, but a
    divergence strictly inside a projected class (P6 leaf-family edge content, P3 edge
-   multiplicity, P2 bridge edges — inert, re-verified over all 19 in-fragment corpora
-   2026-07-26 — P5 node GC, under which **no `NodeV4` row is compared at all**) would not
-   fail it; each is pinned elsewhere
+   multiplicity, P2 bridge edges — inert — P5 node GC, under which **no `NodeV4` row is
+   compared at all**, and **P7** `ResidueV1.version`, declared as a projection
+   2026-07-27 after being dropped silently) would not fail it; each is pinned elsewhere
    and documented in `extractor.py`. Two artifacts sit outside the canonical form
    entirely: the `EdgeV4.derived` flag and the outbox rows/watermark (drained-ness is
    gated as a boolean, not row equality) — pinned only by Python-internal I5/I10 + the
    §8.3 verifier, never against Lean.
+
+   **How thin the gate actually is, measured 2026-07-27 (ZT-P4-5).** Over the 21
+   then-current in-fragment corpora: 447 raw `EdgeV4` rows → **231 dropped by P1, 0 by
+   P2, 62 by P6, 154 compared**; **all 235 `NodeV4` rows dropped by P5** (194 of them
+   implicitly pinned as endpoints/references of the compared state, **41 invisible to
+   the gate entirely**); only **5 of 21** corpora produced ANY residue row (11 rows),
+   and all 11 had `|stars| == 1` and `|neg| == 1`. **P5 cannot be closed by comparing
+   harder:** the Lean `GraphState` has a `nodes` field, but zcli's `"graph-state"` dump
+   emits only edges and residues, the model never GCs while Python does (so set equality
+   is false by design), and `NodeV4.implicit` / `reference_count` have no Lean
+   counterpart — there is no node property to compare. What is gated instead is
+   Python-side: `test_conformance_state.py::test_python_nodes_are_all_justified` (no
+   orphan node rows; 0 measured). This is §6's "invisible to the gate by construction"
+   concession, made precise. **P7's consequence is separate and sharper:** Lean's
+   `Residue` has no version field, so invariant **I7 (residue-version monotonicity) is
+   gated by nothing formal** — it is a modelling gap, and its only pins are `tests/`
+   paranoia runs. The residue half was near-vacuous and is now partly closed by
+   `corpus.py::residue_rich` (multi-shape `stars`, multi-subject `neg`, a `upos`
+   member), pinned non-vacuously; most corpora still contribute edges only.
 5. **The representation layers, and the whole concurrency layer** — interner/bitmap
    (`setengine`), SQL rows / ref-counted closure storage (`index_v4`), `rebuild()` / crash
    recovery, and sessions/transactions/concurrency, which is **wider than the

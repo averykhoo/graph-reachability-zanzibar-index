@@ -1,0 +1,44 @@
+# formal/headline_statements.txt -- the STATEMENT pin for the headline theorems.
+#
+# One `<fully-qualified name>\t<normalized statement>` line per theorem, extracted
+# from the Lean sources by formal/conformance/statement_pin.py and enforced by
+# formal/verify.sh (the `lean` phase).  The statement is everything between the
+# theorem's name and the top-level `:=`, with comments stripped and whitespace
+# collapsed.  The PROOF is not pinned -- only what is claimed.
+#
+# WHY: before this file the gate could not distinguish `theorem graph_correct ... :
+# GraphModel.check s q = sem S T q` from `theorem graph_correct : True := trivial`.
+# The latter builds, carries no `sorry` token, and audits clean (ZT-P2-5).
+#
+# REGENERATE DELIBERATELY (a diff here is a change to what the development
+# CLAIMS -- it belongs in a commit message and in formal/history/):
+#
+#     ZANZIBAR_PY=/path/to/python
+#     "$ZANZIBAR_PY" formal/conformance/statement_pin.py --generate
+#
+Zanzibar.sem_fuel_stable	(S : Schema) (T : Store) (q : Query) (hStrat : Stratifiable S) (hDecl : StoreDeclared S T) : ∀ f, fuelBound S T ≤ f → semAux S q.subject T q f q.object.type q.object.name q.relation = sem S T q
+Zanzibar.stratify_none_iff_cycle	(S : Schema) : stratify S = none ↔ HasDerivedCycle S
+Zanzibar.stratify_topological	(S : Schema) (L : List (List Key)) (h : stratify S = some L) : (∀ e ∈ depEdges S, ∀ i j, e.1 ∈ L.getD i [] → e.2 ∈ L.getD j [] → j ≤ i)
+Zanzibar.setEngine_correct	(S : Schema) (T : Store) (q : Query) (_hWF : WF S) (_hStrat : Stratifiable S) (_hValid : AllValid T) : SetEngineModel.check S T q = sem S T q
+Zanzibar.pathCount_addEdge	(g : DirectGraph V) (u v : V) (hdag : Acyclic (g.addEdge u v)) (a b : V) : pathCount (g.addEdge u v) a b = pathCount g a b + phat g a u * phat g v b
+Zanzibar.pathCount_removeEdge	(g : DirectGraph V) (u v : V) (hdag : Acyclic g) (hpos : 0 < g.dcount u v) (a b : V) : pathCount g a b = pathCount (g.removeEdge u v) a b + phat (g.removeEdge u v) a u * phat (g.removeEdge u v) v b
+Zanzibar.runCascade2_no_abort	{σ : GraphState} {S : Schema} {T : Store} {jobs1 jobs2 : List W3cJob} (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true → ∀ e', S.lookup (dt, r') = some e' → ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false) (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j) (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j) (hscope2 : ∀ j ∈ jobs2, j.key ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1) (σ.frontierMax σ.watermark)) (h : ReachedByW3d2 σ S T) : runCascade2 S T σ jobs1 jobs2 = { reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2 with watermark := (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).maxOutboxId }
+Zanzibar.cascade2_drains	{σ : GraphState} {S : Schema} {T : Store} {jobs1 jobs2 : List W3cJob} (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true → ∀ e', S.lookup (dt, r') = some e' → ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false) (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j) (hjv2 : ∀ j ∈ jobs2, W3cJobValid S j) (hscope2 : ∀ j ∈ jobs2, j.key ∈ cascadeKeysAbove S (reconcileJobsLR S T σ jobs1) (σ.frontierMax σ.watermark)) (h : ReachedByW3d2 σ S T) : Quiescent (runCascade2 S T σ jobs1 jobs2)
+Zanzibar.graph_correct	{S : Schema} {T : Store} {σ : GraphState} (q : Query) (hA : GraphAdmission S T) (hF : W4Fragment S T) (h : ReachedBy σ S T) (hq : Drained S σ) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.check σ q = sem S T q
+Zanzibar.graph_reached_inv	{S : Schema} {T : Store} {σ : GraphState} (hA : GraphAdmission S T) (hF : W4Fragment S T) (h : ReachedBy σ S T) : Inv S σ
+Zanzibar.backend_equivalence	{S : Schema} {T : Store} {σ : GraphState} (q : Query) (hA : GraphAdmission S T) (hF : W4Fragment S T) (h : ReachedBy σ S T) (hq : Drained S σ) (hValid : AllValid T) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : SetEngineModel.check S T q = GraphModel.check σ q
+Zanzibar.exclusion_effective	{S : Schema} {T : Store} {σ : GraphState} (q : Query) (hA : GraphAdmission S T) (hF : W4Fragment S T) (h : ReachedBy σ S T) (hq : Drained S σ) (hValid : AllValid T) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) (hDeny : sem S T q = false) : SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false
+Zanzibar.no_ghost_grant	{S : Schema} {T' : Store} {σ' : GraphState} (q : Query) (hA : GraphAdmission S T') (hF : W4Fragment S T') (h : ReachedBy σ' S T') (hq : Drained S σ') (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) (hDeny : sem S T' q = false) : GraphModel.check σ' q = false
+Zanzibar.graphRun_reached	{S : Schema} {ts : List Tuple} {σ : GraphState} {T : Store} (h : graphRun S ts = some (σ, T)) : ReachedBy σ S T
+Zanzibar.graphRun_check_eq_sem	{S : Schema} {ts : List Tuple} {σ : GraphState} {T : Store} (hrun : graphRun S ts = some (σ, T)) (hdr : drainedB S σ = true) (hA : GraphAdmission S T) (hF : W4Fragment S T) (q : Query) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.check σ q = sem S T q
+Zanzibar.W4Witness.accepts	: GraphAdmission Sx Tx
+Zanzibar.W4Witness.fragment	: W4Fragment Sx Tx
+Zanzibar.W4Witness.within_scope	: GraphAccepts Sx
+Zanzibar.W4WitnessUnion.accepts	: GraphAdmission Sy Ty
+Zanzibar.W4WitnessUnion.fragment	: W4Fragment Sy Ty
+Zanzibar.W4WitnessUnion.within_scope	: GraphAccepts Sy
+Zanzibar.W4WitnessDirect.accepts	: WF Sd ∧ NodupKeys Sd ∧ Stratifiable Sd ∧ TtuTuplesetsDirect Sd ∧ RewriteMatchDeclared Sd ∧ RewriteRanked Sd ∧ StoreValidRulesD Sd Td
+Zanzibar.W4WitnessDirect.fragment	: (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → ComputedOrDirect e) ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → DirectArmsBare e) ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived Sd (dt, r') = true → ∀ e', Sd.lookup (dt, r') = some e' → ComputedOnly e') ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived Sd (dt, r') = true → ∀ e', Sd.lookup (dt, r') = some e' → ∀ r'' ∈ computedRefs e', isDerived Sd (dt, r'') = false) ∧ (∀ sh ∈ wildcardShapes Sd, sh.2 = BARE) ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → exprDirects e = []) ∧ BareStarStore Td ∧ TtuStarFree Sd Td ∧ (∀ dt R, isDerived Sd (dt, R) = true → NoTtuTarget Sd R ∧ NoStoreSubjectR Td R)
+Zanzibar.W4WitnessDirect.within_scope	: GraphAccepts Sd
+Zanzibar.W4WitnessDirect.correct_applies	{σ : GraphState} (q : Query) (h : ReachedByW3d2C σ Sd Td) (hq : cascadeKeys Sd σ = []) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.check σ q = sem Sd Td q
+Zanzibar.W4WitnessDirect.outside_old_admission	: ¬ StoreValidRules Sd Td

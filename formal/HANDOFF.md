@@ -51,11 +51,20 @@ merely narrow — on any store written through the `Direct` arm of a derived def
    `affectedKeys` fix) — see `history/PROOF_STATUS.md` for the full ledger. A session
    that kills a false statement is a GOOD session; record the finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (455 `#print axioms` reports, one per audited
-   theorem, only `[propext, Classical.choice, Quot.sound]`) + **330** Python conformance
-   tests (`conf-heavy` 80 + `conf-rest` 250), 0 skips, 0 xfails
-   (measured 2026-07-26 at `f2b403c`; the gate does NOT enforce either count — see
-   `FINAL_REVIEW.md`'s header — so re-measure, don't quote)
+   + **0 sorries** + zcli + axiom audit (**457** `#print axioms` reports, one per audited
+   theorem, only `[propext, Classical.choice, Quot.sound]`) + the audit IDENTITY pin
+   (`formal/audited_theorems.txt`) + the headline STATEMENT pin
+   (`formal/headline_statements.txt`, 26 theorems) + the `CORRESPONDENCE.md` anchor pin
+   + **450** Python conformance tests, 0 skips, 0 xfails, + **`tests/`** (744 collected)
+   (conformance count re-measured 2026-07-27 after the ZT-P4-5/6 work below —
+   `pytest formal/conformance/ -q --collect-only` = **450**, up from 395; the gate
+   enforces `-ge` FLOORS, not the exact numbers — see `FINAL_REVIEW.md`'s header — so
+   re-measure, don't quote. ⚠ `verify.sh`'s `MIN_CONF_ALL` still reads **391**: it is a
+   floor, so the gate is GREEN, but it can be raised to 450 deliberately by whoever
+   owns `verify.sh`).
+   **Adding an audited theorem now also means regenerating the identity pin**
+   (`bash formal/regen_audit_pin.sh`); changing a headline theorem's STATEMENT means
+   regenerating `formal/headline_statements.txt` deliberately and saying why.
    (incl. the Phase-6 graph mode, the state-level gate over zcli mode `"graph-state"`,
    the exhaustive small-scope enumeration, the remove-path and generated-schema answer
    gates, the TTU userset-subject and self-referential-tuple spec corpora, and the
@@ -81,14 +90,17 @@ lake build ZanzibarProofs.GraphIndex.ReconcileCorrect   # one module (~20 s)
 bash formal/verify.sh                                   # THE gate (from repo root)
 ```
 
-⚠ The one-shot `verify.sh` is now ~13–16 min and **blows the agent harness's
-~10-min command cap** — agents run it PHASED: `verify.sh lean` → `conf-heavy` →
-`conf-rest` (each cap-fitting, same anti-vacuous guards; three green phases ≡ a
-green one-shot). Full recipe + suite-split + fuzz gate:
+⚠ The one-shot `verify.sh` **blows the agent harness's ~10-min command cap** —
+agents run it PHASED: `verify.sh lean` → `conf-tile:1/5 … 5/5` → `tests-tile:1/4 …
+4/4` (each cap-fitting, same anti-vacuous guards; the green phases ≡ a green
+one-shot). `conf-heavy`/`conf-rest` still work but `conf-rest` measured 579 s
+against the 600 s cap. Full recipe + floors table + fuzz gate:
 [`docs/gate-runbook.md`](../docs/gate-runbook.md).
 
-Python side runs under the repo conda env
-(`C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`).
+Python side runs under the repo conda env — on this machine
+`C:/Users/user/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`
+(the `C:/Users/avery/...` path this file used to name does not exist here; `verify.sh`
+resolves the interpreter itself, and `ZANZIBAR_PY` overrides).
 
 **Lean/Mathlib gotchas (hard-won):** unfold plain defs with `unfold f` / `simp only [f]`,
 not `rw [f]`. `omega` treats `∑`-atoms as opaque — good for combining sum `have`s.
@@ -393,6 +405,65 @@ entries and the `history/ROADMAP.md` W3c paragraphs. The pieces a W3d session wi
   carries (`hterm`/`hCO`/`hLU`/`hRootB`); query scope `hqs : name = STAR → predicate = BARE`,
   concrete object. T3/T6 `*_w3c` incl. `exclusion_effective_w3c` (a concrete subject excluded
   from UNDER a `T:*` grant — the space rule's `neg` actually excludes).
+
+---
+
+## Board — the two ORPHANED findings, adjudicated 2026-07-27 (ZT-P4 item 4)
+
+Both lived only in `history/` and had reached no board. Each was re-verified
+against the working tree (commands quoted). **Paste-ready paragraphs for the root
+board are the two blocks below, verbatim.**
+
+### B1 — `w3cJobValid_enumJob2D` star-freeness hole · verdict: **STILL OPEN, but RECLASSIFIED**
+
+> **`w3cJobValid_enumJob2D` star-freeness hole — open, but it is a DESIGN BLOCKER,
+> not a live attack surface.** Recorded in `formal/history/optional-widening-2026-07.md`
+> (E-chain widening step 2) and PROOF_STATUS 2026-07-20e as an "OPEN attack surface"
+> naming a schema shape Python admits: under `W4Fragment.wsBare` a WILDCARD-flagged
+> restriction may sit on a **derived Direct arm**, so leg-5c's `storedDirectSubjects`
+> can contain a `user:*` subject and `W3cJobValid`'s star-free-candidates clause FAILS
+> for `enumJob2D`. Re-verified 2026-07-27: (i) Python really does admit the shape —
+> `define approver: [user, user:*] but not banned` compiles (1 stratum,
+> `subject_wildcard_shapes={('user','...')}`) and oracle == set engine == real graph
+> index over the full 20-query grid, alice True / mallory False; (ii) `grep -rn
+> "w3cJobValid_enumJob2D" formal/lean/` returns **nothing** — the lemma does not exist,
+> so **no landed theorem depends on it**; (iii) the shape is outside `W4Fragment`
+> (`computedOnly`) *and* outside the C-chain `_d` fragment (`DirectArmsBare`), so
+> no proved claim is being over-stated. **Verdict: the finding is real and unclosed,
+> but its disposition is "a lemma the not-yet-started E-chain widening cannot prove
+> as stated", not "an unsound claim in the tree". Fixing it means choosing, before
+> the widening starts, between a star-filter inside `storedDirectSubjects` (touches
+> landed leg-5c defs + consumers) and a new fragment clause banning wildcard
+> restrictions on derived Direct arms.** Needs a decision, not a proof session.
+
+### B2 — `PDerivedUserset` never modelled in Lean · verdict: **OVERTAKEN Python-side; a DECLARED Lean scope gap; the CONFORMANCE half was a real hole and is now closed**
+
+> **`PDerivedUserset` — Python-side overtaken, Lean-side a declared scope gap, and
+> it had ZERO conformance coverage until 2026-07-27.** The X4 shape (a userset
+> restriction `[group#member]` whose predicate is itself derived) was fixed
+> Python-side 2026-07-13 and extended 2026-07-17, and never modelled in Lean — in
+> the exact plan-leaf area where five real divergences were found. Re-verified
+> 2026-07-27: Python-side it is **overtaken** — `define member: base but not kicked`
+> + `define viewer: [group#member]` compiles to a real `PDerivedUserset` leaf
+> (`LeafSpec('viewer.0','derived-userset', storage=True)`, 2 strata) and oracle ==
+> set engine == real graph index over the full 126-query grid (alice True, kicked
+> bob False); `tests/test_lookup_oracle.py`'s former strict xfails are plain
+> regression pins. Lean-side it is a **declared** scope gap, not a silent one:
+> `FullScope.lean::W4Fragment`'s doc says `PDerivedTTU`/`PDerivedUserset` leaves are
+> "out of scope (W3a decision)", and `term`/`NoStoreSubjectR` forbids the stored
+> userset tuple the shape needs. **The genuinely new finding is the conformance
+> half:** walking every `RuleSet.compiled.plans[..].leaves` over all 69 schemas the
+> harness reads gave the leaf-kind histogram `closure 211 · derived-computed 42 ·
+> derived-ttu 50 · derived-userset 0 · derived-tupleset-ttu 0` — i.e. **no corpus
+> compiled a `PDerivedUserset` leaf at all**, so no differential ever exercised that
+> compiler branch. Closed for `derived-userset` by
+> `corpus.py::TTU_USERSET_SCHEMAS['derived_userset']` (spec-side; scope argument in
+> situ) and floored by
+> `test_conformance_nary_strata.py::test_every_plan_leaf_kind_is_reached_by_some_corpus`.
+> **`derived-tupleset-ttu` (`PDerivedTuplesetTTU`) is still at ZERO and is the
+> remaining plan-leaf hole — deliberately not faked into the floor.** Verdict:
+> Python OVERTAKEN · Lean DECLARED-OUT-OF-SCOPE (no action) · conformance CLOSED for
+> `derived-userset`, OPEN for `derived-tupleset-ttu`.
 
 ---
 

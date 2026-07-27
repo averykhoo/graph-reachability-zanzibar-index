@@ -210,6 +210,27 @@ flowchart TB
 * nested transactions to support adding multiple edges together?
 * optimization: single transaction, but will need multiple reads and a local cache before writing
 
+### If you actually deploy this: the database contract
+
+Everything above is dialect-agnostic SQLModel/SQLAlchemy, but three things are not
+negotiable, and each of them is a lesson rather than a preference:
+
+* **SQLite (dev/test) and PostgreSQL (server) are the supported backends. MySQL is
+  not** — it was never run, and its prose in the comments was actively harmful: an
+  InnoDB claim about a database nobody used was half the justification for accepting
+  an isolation level that reproduced a live authorization fail-open.
+* **Open the engine at `READ COMMITTED` and nothing else.** `TupleSource` and
+  `ConnectedStore` raise `UnsafeIsolationLevel` at construction otherwise —
+  SERIALIZABLE included. Log tailing rests on per-statement freshness; every other
+  level pins a snapshot somewhere, and a pinned snapshot lets a committed revocation
+  stay invisible while the freshness token certifies the stale ALLOW.
+* **One `Session` per thread.** Never share one.
+
+The `FOR UPDATE` locks and the watermark-gap detection are exercised against a real
+server by `tests/test_postgres_ha.py` — `bash scripts/pg_local.sh start` stands one up
+without installing anything. Run it for any change touching locking, watermarks,
+isolation, or multi-instance state.
+
 ## Zanzibar
 
 See the paper at https://zanzibar.tech
@@ -563,9 +584,21 @@ read; symbolic (`'*'`) queries read the residue intensionally; ghosts ride the s
 * **TTU parents are stored tuples**, never computed membership (the oracle's — and
   Zanzibar's — semantics). A TTU over a derived relation with no direct restrictions is
   constantly empty, exactly as the oracle answers.
-* **Paranoia mode** (default ON while prerelease) runs the invariant checker (I1–I7,
-  I10–I12) pre- and post-commit plus delta-scoped verification per transaction — roughly
-  2× suite time; pass `paranoia=False` for benchmarks.
+* **Paranoia mode** runs the invariant checker (I1–I7, I10, I13) pre- and post-commit
+  plus delta-scoped verification per transaction. It is **ON by default in the TEST
+  helper** (`tests/wildcard_helpers.make_wildcard_index`; pass `paranoia=False` for
+  benchmarks or when a test corrupts state deliberately) and **OFF by default in
+  `ConnectedStore`**, which is the deployment-facing class.
+
+  **If you are deploying this, turn it on: `ZANZIBAR_PARANOIA=residue`.** That tier is
+  the runtime detector for the one authorization-escalation class this project has
+  actually shipped and caught (`ZT-P0-1`: a residue entry vouching for a recycled node
+  rowid — I6 catches it, and nothing else does). It costs **+4.3% / +5.7%** of the write
+  path in the measured A/B (162 / 478 writes) versus **+124% / +303%** for the full
+  checker, and its scan grows with the number of objects carrying derived state. The
+  default is OFF because a silent 5%-and-rising write regression should not be imposed
+  on everyone without consent — not because the checking is optional for
+  security-sensitive use. See `ConnectedStore.DEFAULT_PARANOIA` for the numbers.
 
 Scope hooks (loud compile errors, `UnsupportedByGraphIndex`): object wildcards on
 derived relations, and wildcard userset restrictions over derived relations (both need
@@ -579,7 +612,9 @@ Cross-query caching / version-counter invalidation; bitmap snapshot persistence
 from the set engine; wiring the graph backend through `TupleV1` (harness-level fan-out
 only — `WildcardIndex` is finished code); async outbox workers (the replay property keeps
 the seam viable; SAVEPOINT-per-delta noted in the spec); exposing derived-relation deltas
-to external consumers; automatic outbox pruning; residue GC beyond empty-row deletion;
+to external consumers; automatic outbox pruning (a MANUAL `index_v4.outbox.prune_outbox`
+now exists — retention is the operator's call, and it deliberately keeps the head row so
+SQLite cannot recycle ids out from under a held cursor); residue GC beyond empty-row deletion;
 lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
@@ -588,7 +623,7 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 > record of what shipped (struck = done) plus a few deliberately-deferred items.
 
 * ~~re-introduce invariant checks for the index v3, and think of more checks~~
-  v4 has I1–I12 + paranoia mode now (`index_v4/invariants.py`); v3 is `legacy/`
+  v4 has I1–I13 + paranoia mode now (`index_v4/invariants.py`); v3 is `legacy/`
 * ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
   the ParityEngine walks, and the hypothesis campaign (`tests/test_hypothesis.py`)
 * ~~support tracking user-triples and rule-triples in the index~~ resolved by

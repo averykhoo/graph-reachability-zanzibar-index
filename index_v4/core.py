@@ -1,3 +1,5 @@
+import os
+import threading
 import time
 from contextlib import contextmanager
 from types import EllipsisType
@@ -27,6 +29,74 @@ __all_exceptions__ = ('AdmissionRejected', 'InvariantViolation', 'WriteLockUnsaf
 # batch" -- a negative cache entry). Both are private module singletons.
 _UNCACHED = object()
 _MISSING = object()
+
+
+class _ThreadFlag(threading.local):
+    """A boolean whose value is private to the thread that set it, default False.
+
+    Backs the delta processor's derived-write window (ZT-P1-8e), whose whole job is
+    to say "the WRITE I am doing right now is the processor's". A plain attribute
+    answered that question for every thread at once, so a window opened by the
+    cascade on one thread also opened it for an unrelated user write on another --
+    and that window is the ONLY thing standing between a user tuple and a derived
+    (processor-owned) family, i.e. the failure is an authorization-state corruption
+    that commits cleanly, not an error anyone sees.
+
+    Subclassing ``threading.local`` rather than holding one is what supplies the
+    DEFAULT: an attribute never set in the current thread falls back to the class
+    attribute, so a thread that never opened the window reads a CLOSED one -- which
+    is the fail-closed direction at every read site."""
+    on = False
+
+# --------------------------------------------------------------------------- #
+# Per-write closure fan-out cap (zero-trust review ZT-P1-6a)
+# --------------------------------------------------------------------------- #
+
+#: Ceiling on the number of closure rows ONE direct-edge addition may materialise.
+#: There was no fuel counter, fan-out cap, depth limit or tuple quota anywhere in
+#: this library; a single write expands |ancestors(subject)| x |descendants(object)|
+#: rows (240 raw tuples in a hub topology measured 14,640 closure rows in 5.1 s) and
+#: does it INSIDE ``advance_index`` while holding both the source lock and the graph
+#: store lock -- so one write stalls every other writer on the store for its whole
+#: duration. This is a BLAST-RADIUS bound, not an authorization policy.
+#:
+#: The default is chosen so it cannot refuse anything this repo has ever written:
+#: instrumented over the whole suite on 2026-07-27, the largest single-write
+#: expansion is 44 rows in ``tests/`` and 124 rows in ``formal/conformance/``, so
+#: this leaves ~800x headroom and still admits e.g. granting one 90,000-member
+#: group. An operator who wants a bound that actually bites should MEASURE their own
+#: topology and lower it (``max_closure_fanout=`` or the env var below); the point of
+#: the default is to turn "unbounded" into "bounded and visible", not to guess a
+#: workload. ``0`` disables the check entirely.
+DEFAULT_MAX_CLOSURE_FANOUT = 100_000
+
+#: Process-wide override for ``DEFAULT_MAX_CLOSURE_FANOUT``, so an operator can retune
+#: the bound without touching every ``ReachabilityIndex`` construction site (the
+#: constructor argument still wins, and is what a per-store policy should use).
+MAX_CLOSURE_FANOUT_ENV = 'ZANZIBAR_MAX_CLOSURE_FANOUT'
+
+
+def resolve_max_closure_fanout(value: int | None) -> int:
+    """Constructor argument > environment > module default; ``0`` means unbounded.
+
+    Fails LOUD on a malformed setting rather than falling back to the default: a
+    typo'd env var silently restoring the unbounded behaviour is precisely the class
+    of "safe by default" that is not."""
+    if value is None:
+        raw = os.environ.get(MAX_CLOSURE_FANOUT_ENV)
+        if raw is None or raw.strip() == '':
+            return DEFAULT_MAX_CLOSURE_FANOUT
+        try:
+            value = int(raw)
+        except ValueError as e:
+            raise ValueError(
+                f'{MAX_CLOSURE_FANOUT_ENV}={raw!r} is not an integer (use a positive '
+                f'row count, or 0 to disable the cap)') from e
+    if value < 0:
+        raise ValueError(
+            f'max_closure_fanout must be >= 0 (0 disables the cap), got {value}')
+    return value
+
 
 # --------------------------------------------------------------------------- #
 # Writer serialization primitives (zero-trust review ZT-P1-4)
@@ -98,8 +168,11 @@ def take_row_write_lock(session: Session, lock_select, lock_update) -> None:
     Two arms, one contract ("no other writer can commit against this store until this
     transaction ends"):
 
-    * **PostgreSQL/MySQL** -- ``lock_select`` (a ``SELECT ... FOR UPDATE`` on the
-      store's lock row). Unchanged from before this fix.
+    * **PostgreSQL** (the supported server; this arm is what any non-SQLite dialect
+      gets) -- ``lock_select``, a ``SELECT ... FOR UPDATE`` on the store's lock row.
+      Unchanged from before this fix, and first exercised for real on 2026-07-27:
+      it blocks a second writer, at ROW granularity, and releases on commit
+      (``tests/test_postgres_ha.py``).
     * **SQLite** -- ``with_for_update()`` compiles to a PLAIN SELECT on pysqlite (no
       ``FOR UPDATE`` in the emitted statement; verified), so the documented lock was a
       silent NO-OP and, worse, pysqlite's default ``isolation_level=''`` runs SELECTs
@@ -199,18 +272,27 @@ class ReachabilityIndex:
     the store row) so that a whole logical write -- the check-then-act cycle test *and* the
     read-modify-write ref-count updates across the affected closure region -- is atomic
     with respect to other writers to the same store. Without it, two concurrent writers on
-    an MVCC backend (PostgreSQL/MySQL, READ COMMITTED) would (a) lose ref-count increments
-    on any shared edge and (b) be able to each pass the cycle check yet jointly create a
-    cycle. See ``_lock_store`` for why the lock is at store rather than per-edge granularity.
+    a real MVCC backend (PostgreSQL at READ COMMITTED, the only supported server/level
+    combination) would (a) lose ref-count increments on any shared edge and (b) be able to
+    each pass the cycle check yet jointly create a cycle. See ``_lock_store`` for why the
+    lock is at store rather than per-edge granularity.
     """
 
-    def __init__(self, session: Session, store_id: str):
+    def __init__(self, session: Session, store_id: str, *,
+                 max_closure_fanout: int | None = None):
         self.session = session
         self.store_id = store_id
+        # Per-write closure fan-out cap (ZT-P1-6a). Resolved once, here, so the value
+        # an index enforces is fixed at construction and cannot be moved under a
+        # running transaction by an env change; see ``resolve_max_closure_fanout``.
+        self.max_closure_fanout = resolve_max_closure_fanout(max_closure_fanout)
         # When True, direct-edge writes flag their rows EdgeV4.derived (boolean spec
         # §4/I5). Only the delta processor's façade path sets this, around its own
-        # writes into derived-public families.
-        self._writing_derived = False
+        # writes into derived-public families. THREAD-SCOPED (ZT-P1-8e): this is the
+        # downstream half of ``WildcardIndex.processor_writes`` -- see the property
+        # below and that attribute's comment for why the window must belong to the
+        # thread that opened it.
+        self._writing_derived_flag = _ThreadFlag()
         # Identity of the SessionTransaction under which this store's FOR UPDATE lock
         # is already held (perf P12a). ``None`` = no lock taken in the current
         # transaction. See ``_lock_store``.
@@ -240,6 +322,22 @@ class ReachabilityIndex:
         # (blind-audit W2 -- that hazard was cross-session; this cache never survives a
         # commit/rollback, see ``_node_cache_scope``).
         self._node_cache: dict[tuple[str, str, str, str], NodeV4] | None = None
+
+    @property
+    def _writing_derived(self) -> bool:
+        """Whether THIS thread is inside the delta processor's derived-write window.
+
+        A plain instance bool made the window shared state: with two threads on one
+        index, thread A's processor write decided whether thread B's row got stamped
+        ``derived``, which is an I5 (derived-exclusivity) violation that survives
+        commit rather than a DB error. Reading per-thread makes an un-opened window
+        read closed, which is the fail-CLOSED direction on both sites that consult it
+        (a missing stamp trips I5's checker loudly; a spurious one is a grant)."""
+        return self._writing_derived_flag.on
+
+    @_writing_derived.setter
+    def _writing_derived(self, value: bool) -> None:
+        self._writing_derived_flag.on = bool(value)
 
     @contextmanager
     def _node_cache_scope(self):
@@ -358,8 +456,10 @@ class ReachabilityIndex:
         serializing at store granularity is deadlock-free and matches the reality that one
         logical write already touches many rows.
 
-        On PostgreSQL/MySQL this blocks other writers to the store until this transaction
-        commits/rolls back. A missing store row simply yields no lock (harmless).
+        On PostgreSQL this blocks other writers to the store until this transaction
+        commits/rolls back; that the block is real and row-granular is now observed, not
+        assumed (``tests/test_postgres_ha.py`` holds this very ``StoreV4`` row and watches
+        a writer queue on it). A missing store row simply yields no lock (harmless).
 
         SQLITE (ZT-P1-4, 2026-07-26): ``with_for_update()`` compiles to a plain SELECT
         on pysqlite, so this lock used to be a silent NO-OP -- the old docstring's
@@ -672,6 +772,47 @@ class ReachabilityIndex:
             raise InvariantViolation("Cycle detected in backward path")
         if reachable_after_object[subject_id] != 0:
             raise InvariantViolation("Cycle detected in forward path")
+
+        # BLAST-RADIUS BOUND (ZT-P1-6a): refuse an addition whose closure region is
+        # larger than this index's cap, BEFORE materialising any of it.
+        #
+        # Counted, not built: the three loops below emit exactly |A|x|D| + |D| + |A|
+        # distinct pairs (subject is never an ancestor, object never a descendant, no
+        # self-edges -- the same fact the batch writer's correctness rests on), so the
+        # arithmetic is exact and costs nothing.
+        #
+        # WHERE it sits is the whole no-partial-state argument: on the addition path
+        # (`count > 0`) every statement above this point is a read -- the direct-edge
+        # decrement at the top runs only for `count < 0`, and the node-removal shortcut
+        # only for `subject_id == object_id`. So this raise leaves the transaction
+        # exactly as it found it, the same contract as the two cycle rejections just
+        # above, and the caller's rollback (this layer never commits) discards the
+        # node rows an `add_edge` may have created during resolution.
+        #
+        # REMOVALS ARE DELIBERATELY EXEMPT. A cap that refused removes would make an
+        # over-large region permanently unshrinkable -- a strictly worse denial of
+        # service than the one this guard exists to bound, and the only way back would
+        # be raising the cap. It would also fire AFTER the direct-edge decrement above,
+        # i.e. on partial state. The bound is on GROWTH.
+        #
+        # NOT capped either: `bulk_build.py`, which constructs the closure in memory and
+        # never reaches this method. That is an offline, single-writer bootstrap holding
+        # nobody up, so bounding it would only add a way to fail an import.
+        n_anc = len(reachable_before_subject)
+        n_desc = len(reachable_after_object)
+        fanout = n_anc * n_desc + n_anc + n_desc
+        if count > 0 and self.max_closure_fanout and fanout > self.max_closure_fanout:
+            # AdmissionRejected, like the cycle refusals: a correct refusal of THIS
+            # write, classifiable by every harness that already handles rejection --
+            # not an InvariantViolation, because nothing is corrupt.
+            raise AdmissionRejected(
+                f'closure fan-out cap exceeded: this edge would materialise {fanout} '
+                f'closure rows ({n_anc} ancestors x {n_desc} descendants + fringes), '
+                f'over the limit of {self.max_closure_fanout} for store '
+                f'{self.store_id!r}. Raise it with '
+                f'ReachabilityIndex(max_closure_fanout=...) or {MAX_CLOSURE_FANOUT_ENV} '
+                f'(0 disables the cap), or split the grant -- this write would hold the '
+                f'store write lock for its whole expansion')
 
         # Expand transitive paths. The three loops enumerate DISTINCT concrete
         # pairs (subject is never an ancestor, object never a descendant, no

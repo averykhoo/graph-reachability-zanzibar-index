@@ -8,6 +8,14 @@ SQLite in WAL mode (snapshot-isolated readers that never block the writer) -- th
 same fixture pattern as tests/test_connectedstore_concurrency.py. One Session per
 instance, never shared.
 
+Set ``ZANZIBAR_TEST_DSN`` and this whole module re-runs against a real server
+(``tests/dbengine.shared_engine``), which is where the FOR-UPDATE arm of
+``_lock_source`` and the real-MVCC log hazards actually exist. One test here
+(``test_stale_read_pinned_snapshot``) is a SQLite-MECHANISM test and carries
+``sqlite_only_pinned_snapshot`` -- it pins a pinned-read-snapshot behaviour that
+PostgreSQL READ COMMITTED cannot have. The scenarios that only a real server can
+express live in ``tests/test_postgres_ha.py``.
+
 Covers the just-landed APIs:
   * SetEngine.apply_logged / result_keys
   * TupleSource.catch_up_evaluator / evaluator_lag / check(at_least=)
@@ -23,13 +31,13 @@ import threading
 import time
 
 import pytest
-from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from connectedstore import (ConnectedStore, StaleRead, TupleSource,
                             log_rows, log_watermark)
 from setengine import SetEngine, TupleV1
+from tests.dbengine import rdbms_dsn, shared_engine
 from tests.oracle import Oracle, OracleTuple
 
 # One schema for the whole file: a recursive-userset `group` (for the cross-instance
@@ -55,37 +63,28 @@ GRID = [('...', 'user', sn, rel, 'doc', on)
 
 
 # --------------------------------------------------------------------------- #
-# WAL file-backed engine (copied from tests/test_connectedstore_concurrency.py:45)
+# The shared engine. WAL file-backed SQLite by default (the recipe that used to be
+# inlined here, now in tests/dbengine so the Postgres leg can swap it out); a real
+# server when ZANZIBAR_TEST_DSN is set.
 # --------------------------------------------------------------------------- #
 
-def _file_engine(path):
-    engine = create_engine(f'sqlite:///{path}',
-                           connect_args={'check_same_thread': False, 'timeout': 60})
-
-    @event.listens_for(engine, 'connect')
-    def _busy_timeout(dbapi, _rec):
-        cur = dbapi.cursor()
-        cur.execute('PRAGMA busy_timeout=60000')
-        # WAL: snapshot-isolated readers that never block the writer -- the honest
-        # local simulation of a replica reading a store the primary writes.
-        cur.execute('PRAGMA journal_mode=WAL')
-        cur.close()
-        # real transaction semantics (SQLAlchemy pysqlite workaround): let SQLAlchemy
-        # emit BEGIN itself so a snapshot doesn't tear between statements.
-        dbapi.isolation_level = None
-
-    @event.listens_for(engine, 'begin')
-    def _begin(conn):
-        conn.exec_driver_sql('BEGIN')
-
-    SQLModel.metadata.create_all(engine)
-    return engine
+#: A test whose SUBJECT is a pinned read snapshot. SQLite (WAL, one BEGIN per
+#: transaction) pins a reader's snapshot for the whole transaction, so a row
+#: committed afterwards is invisible until rollback -- that is what makes StaleRead
+#: observable. PostgreSQL READ COMMITTED (the level ``assert_read_isolation``
+#: REQUIRES) re-snapshots per statement, so the catch-up always reaches the head and
+#: the refusal these tests pin can never fire. Not a divergence to fix: the property
+#: under test does not exist on that bind.
+sqlite_only_pinned_snapshot = pytest.mark.skipif(
+    rdbms_dsn() is not None,
+    reason='pins SQLite-WAL pinned-snapshot semantics; PostgreSQL READ COMMITTED '
+           're-snapshots per statement so the StaleRead path is unreachable there')
 
 
-def _bootstrap(path):
+def _bootstrap(tmp_path, name):
     """Bootstrap the store (schema + store + cursor rows) once via ConnectedStore,
-    then return the shared WAL engine for per-instance sessions to open against."""
-    engine = _file_engine(path)
+    then return the shared engine for per-instance sessions to open against."""
+    engine = shared_engine(tmp_path, name)
     with Session(engine) as boot:
         ConnectedStore(boot, 's', schema=SCHEMA)   # commits its own bootstrap rows
         boot.commit()
@@ -109,7 +108,7 @@ def _assert_grid(instance, oracle, other=None):
 # --------------------------------------------------------------------------- #
 
 def test_tail_parity(tmp_path):
-    engine = _bootstrap(tmp_path / 'tail.db')
+    engine = _bootstrap(tmp_path, 'tail.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         b = TupleSource(sb, 's')            # opened BEFORE A's writes: watermark 0
@@ -136,7 +135,7 @@ def test_tail_parity(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_cross_instance_token_read(tmp_path):
-    engine = _bootstrap(tmp_path / 'token.db')
+    engine = _bootstrap(tmp_path, 'token.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         b = TupleSource(sb, 's')            # opened before the write
@@ -158,8 +157,9 @@ def test_cross_instance_token_read(tmp_path):
 #    future token refuses without hanging.
 # --------------------------------------------------------------------------- #
 
+@sqlite_only_pinned_snapshot
 def test_stale_read_pinned_snapshot(tmp_path):
-    engine = _bootstrap(tmp_path / 'pinned.db')
+    engine = _bootstrap(tmp_path, 'pinned.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         b = TupleSource(sb, 's')
@@ -179,7 +179,7 @@ def test_stale_read_pinned_snapshot(tmp_path):
 
 
 def test_stale_read_bogus_future_token(tmp_path):
-    engine = _bootstrap(tmp_path / 'bogus.db')
+    engine = _bootstrap(tmp_path, 'bogus.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         a.add('...', 'user', 'u1', 'editor', 'doc', 'd1')
@@ -199,7 +199,7 @@ def test_stale_read_bogus_future_token(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_cross_instance_cycle_rejection(tmp_path):
-    engine = _bootstrap(tmp_path / 'cycle.db')
+    engine = _bootstrap(tmp_path, 'cycle.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         b = TupleSource(sb, 's')            # in-memory evaluator predates A's write
@@ -227,7 +227,7 @@ def test_cross_instance_cycle_rejection(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_cross_instance_duplicate_add(tmp_path):
-    engine = _bootstrap(tmp_path / 'dup.db')
+    engine = _bootstrap(tmp_path, 'dup.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         b = TupleSource(sb, 's')
@@ -251,7 +251,7 @@ def test_cross_instance_duplicate_add(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_cross_instance_remove_unseen(tmp_path):
-    engine = _bootstrap(tmp_path / 'rmunseen.db')
+    engine = _bootstrap(tmp_path, 'rmunseen.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         b = TupleSource(sb, 's')
@@ -283,7 +283,7 @@ def test_cross_instance_remove_unseen(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_rejection_leaves_evaluator_truthful(tmp_path):
-    engine = _bootstrap(tmp_path / 'reject.db')
+    engine = _bootstrap(tmp_path, 'reject.db')
     with Session(engine) as sa, Session(engine) as sb:
         a = TupleSource(sa, 's')
         b = TupleSource(sb, 's')
@@ -311,7 +311,7 @@ def test_rejection_leaves_evaluator_truthful(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_crash_recovery_rebuild(tmp_path):
-    engine = _bootstrap(tmp_path / 'crash.db')
+    engine = _bootstrap(tmp_path, 'crash.db')
     live = set()
     with Session(engine) as sa:
         a = TupleSource(sa, 's')
@@ -396,7 +396,7 @@ def test_result_keys_portability():
 # --------------------------------------------------------------------------- #
 
 def test_write_path_ordering(tmp_path, monkeypatch):
-    engine = _bootstrap(tmp_path / 'order.db')
+    engine = _bootstrap(tmp_path, 'order.db')
     with Session(engine) as sa:
         src = TupleSource(sa, 's')
         calls: list[str] = []
@@ -449,7 +449,7 @@ def _write_retry(cs, op, raw, attempts=300):
 
 
 def test_concurrent_multi_instance_writers_converge(tmp_path):
-    engine = _bootstrap(tmp_path / 'converge.db')
+    engine = _bootstrap(tmp_path, 'converge.db')
 
     ops_a = [('add', ('...', 'user', '*', 'public', 'doc', 'd1')),
              ('add', ('...', 'user', 'u1', 'blocked', 'doc', 'd1')),
@@ -458,22 +458,31 @@ def test_concurrent_multi_instance_writers_converge(tmp_path):
              ('add', ('...', 'user', 'u3', 'blocked', 'doc', 'd1')),
              ('add', ('...', 'user', '*', 'public', 'doc', 'd2'))]
 
-    def worker(ops, errors):
+    # Opened before the first write, not inside the workers -- see the identical note
+    # in tests/test_connectedstore_concurrency.py::test_concurrent_writers_converge:
+    # a concurrent OPEN is a real PostgreSQL defect of its own (pinned by
+    # tests/test_postgres_ha.py::test_open_instance_races_a_concurrent_commit) and
+    # would make this test intermittently red for an unrelated reason. Identical
+    # behaviour on SQLite.
+    sessions = [Session(engine) for _ in range(2)]
+    stores = [ConnectedStore(s, 's') for s in sessions]
+
+    def worker(cs, ops, errors):
         try:
-            with Session(engine) as session:
-                cs = ConnectedStore(session, 's')
-                for op, raw in ops:
-                    assert _write_retry(cs, op, raw)
+            for op, raw in ops:
+                assert _write_retry(cs, op, raw)
         except Exception as e:                       # pragma: no cover
             errors.append(e)
 
     errors: list = []
-    threads = [threading.Thread(target=worker, args=(ops, errors))
-               for ops in (ops_a, ops_b)]
+    threads = [threading.Thread(target=worker, args=(cs, ops, errors))
+               for cs, ops in zip(stores, (ops_a, ops_b))]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+    for s in sessions:
+        s.close()
     assert not errors
 
     present = [raw for _, raw in ops_a + ops_b]

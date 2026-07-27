@@ -44,6 +44,40 @@ from .memberset import MemberSet
 NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
 
 
+class UnloggedWriteRefused(RuntimeError):
+    """A direct ``SetEngine.add_tuple``/``remove_tuple`` was refused because this
+    engine is the evaluator of a LOGGED store (zero-trust review ZT-P1-8a).
+
+    ``add_tuple`` mutates ``TupleV1`` -- the source of truth -- and appends NOTHING to
+    ``TupleLogV1``. Standalone that is the whole contract (see ``log_governed``). But
+    once a ``TupleSource`` owns the store, the log is what every other component reads:
+    the graph index advances off it (``advance_index``), replica evaluators tail it
+    (``catch_up_evaluator``), and the freshness tokens ARE log ids. A tuple that lands
+    in ``TupleV1`` without a log row is therefore invisible to all of them **for good**
+    -- the index never learns of it, ``lag()`` reports 0 because there is no unapplied
+    row to count, and no invariant or gate looks for source/index divergence. It is
+    silent, permanent, and in the fail-OPEN direction when the bypassed write is a
+    ``remove`` (the grant stays materialized in the index and keeps answering ALLOW).
+
+    ``TupleSource.add``/``remove`` are the only sanctioned write path: they take the
+    per-store lock, catch the evaluator up, validate against CURRENT committed state,
+    and land the tuple and its log row in ONE transaction. This exception exists so the
+    bypass fails LOUDLY at the call instead of corrupting the store quietly."""
+
+
+def _refuse_unlogged_write(engine: 'SetEngine', op: str) -> None:
+    """Raise ``UnloggedWriteRefused`` naming the op and the sanctioned replacement."""
+    raise UnloggedWriteRefused(
+        f'SetEngine.{op} is refused on store {engine.store_id!r}: this engine is the '
+        f'evaluator of a tuple-LOGGED store, and a direct write mutates TupleV1 without '
+        f'appending to TupleLogV1 -- so the graph index, replica evaluators and every '
+        f'at_least freshness token would silently miss it, permanently, while lag() '
+        f'reports 0 (zero-trust review ZT-P1-8a). Write through '
+        f'TupleSource.{"add" if op == "add_tuple" else "remove"}() '
+        f'(or ConnectedStore.{op}()), which locks, catches up, validates and appends '
+        f'the log row in the same transaction.')
+
+
 def _drive(gen):
     """Run a generator-structured recursive evaluation on an explicit HEAP stack
     (zero-trust review ZT-P1-6).
@@ -282,6 +316,20 @@ class SetEngine:
         self.session = session
         self.store_id = store_id
         self.ops = ops
+        # ZT-P1-8a. False = STANDALONE: this engine owns TupleV1 outright and
+        # ``add_tuple``/``remove_tuple`` are its public write API (the validation
+        # matrix's SetBackend, formal/conformance's SetDriver, the benchmarks and the
+        # unit tests all drive it that way, over stores that have no TupleLogV1 at
+        # all). True = LOG-GOVERNED: a ``TupleSource`` has claimed this store, so the
+        # log -- not this engine -- is the channel every other component reads, and a
+        # direct write here would be an unlogged mutation of the source of truth. The
+        # flag is set by ``TupleSource.__init__`` (nothing else may set it) and the two
+        # public write methods refuse while it is on; the ``_*_direct`` bodies stay
+        # reachable for ``TupleSource``, which appends the log row itself.
+        # A FLAG rather than "does a TupleLogV1 row exist for this store?": the log is
+        # empty on a freshly-bootstrapped store, so an existence probe would wave
+        # through exactly the first bypass -- and it would cost a SELECT per write.
+        self.log_governed = False
         self.ast = parse_schema_ast(schema)
         # P9: the per-Direct-node restriction key set is fully determined by the
         # (frozen, lifetime-stable) AST node -- cache it once instead of rebuilding
@@ -447,7 +495,23 @@ class SetEngine:
         """Add one raw tuple; True if added, False for the idempotent duplicate
         no-op. Raises ``ValueError`` only from validation, BEFORE any in-memory
         mutation (ConnectedStore's rejection path relies on this to skip the
-        evaluator rebuild). This backend computes no deltas (§6.1)."""
+        evaluator rebuild). This backend computes no deltas (§6.1).
+
+        Refused with ``UnloggedWriteRefused`` on a log-governed store (ZT-P1-8a) --
+        the guard is HERE rather than on the caller's side because the attribute
+        holding this engine is reachable from anywhere the ``TupleSource`` is."""
+        if self.log_governed:
+            _refuse_unlogged_write(self, 'add_tuple')
+        return self._add_tuple_direct(subject_predicate, s_type, s_name,
+                                      relation, o_type, o_name)
+
+    def _add_tuple_direct(self, subject_predicate, s_type: str, s_name: str,
+                          relation: str, o_type: str, o_name: str) -> bool:
+        """``add_tuple`` past the log-governance guard -- the actual mutation.
+
+        ``TupleSource.add`` calls THIS: it is the sanctioned writer, and it appends
+        the ``TupleLogV1`` row itself in the same transaction, so the property the
+        guard protects (no ``TupleV1`` change without a log row) still holds."""
         s_pred = _norm_pred(subject_predicate)
         validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         if self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
@@ -465,7 +529,19 @@ class SetEngine:
                      relation: str, o_type: str, o_name: str) -> None:
         """Remove one raw tuple. Raises ``ValueError`` only from validation /
         the missing-tuple rejection, BEFORE any in-memory mutation (same contract
-        as ``add_tuple``)."""
+        as ``add_tuple``).
+
+        Refused with ``UnloggedWriteRefused`` on a log-governed store (ZT-P1-8a).
+        This is the fail-OPEN half of that finding: an unlogged REMOVE leaves the
+        grant materialized in the graph index, which keeps answering ALLOW."""
+        if self.log_governed:
+            _refuse_unlogged_write(self, 'remove_tuple')
+        self._remove_tuple_direct(subject_predicate, s_type, s_name,
+                                  relation, o_type, o_name)
+
+    def _remove_tuple_direct(self, subject_predicate, s_type: str, s_name: str,
+                             relation: str, o_type: str, o_name: str) -> None:
+        """``remove_tuple`` past the log-governance guard -- see ``_add_tuple_direct``."""
         s_pred = _norm_pred(subject_predicate)
         validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         # Cheap in-memory existence test first; only fetch the ORM row (needed for

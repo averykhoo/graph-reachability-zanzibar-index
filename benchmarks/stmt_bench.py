@@ -12,7 +12,8 @@ The honest primary metric is **SQL statements per operation** (deterministic,
 contention-immune), counted via an SQLAlchemy ``before_cursor_execute`` event
 listener on the engine. In-memory SQLite makes wall-time a weak secondary signal
 (a round-trip is ~microseconds and ``FOR UPDATE`` renders to nothing), but the
-statement COUNT is exactly what the production PostgreSQL/MySQL targets pay per op.
+statement COUNT is exactly what the production target -- PostgreSQL, the supported
+server -- pays per op, one network round trip each.
 
 Paranoia note: ``ConnectedStore`` opens the graph index via
 ``schema_io.open_graph_index`` -> ``ReachabilityIndex(session, store_id)`` directly;

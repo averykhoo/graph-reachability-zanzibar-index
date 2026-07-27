@@ -288,6 +288,99 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "alice", "member", "group", "eng")],
         (),
     ),
+    "nary_union_derived4": (
+        # ZT-P4-4 follow-up (2026-07-27). Re-measuring the arity histogram over
+        # all 69 schemas the harness reads (28 curated + 40 generated + this
+        # file's dicts) found the MAXIMUM operator arity anywhere was 3, reached
+        # by exactly TWO nodes — `nary_union` and `nary_intersection` — and both
+        # of them are UNTAINTED. So `encode.py::_fold_binary`'s loop had still
+        # never run more than twice, and the residue the n-ary block below names
+        # in as many words ("a DERIVED n-ary union is not gated Lean-side
+        # anywhere") was still open.
+        #
+        # This corpus closes both at once: `any_of4` is a FOUR-arm union (the
+        # first >= 4-arity operator in the harness — `_fold_binary` folds it to a
+        # depth-3 left spine) whose last arm is the boolean `safe`, so `any_of4`
+        # is itself DERIVED (measured strata: [[('doc','safe')],
+        # [('doc','any_of4')]] — two, hence in-fragment).
+        #
+        # IN-FRAGMENT per field: `safe`/`any_of4` are ComputedOnly; twoStrata
+        # holds (2); no wildcard restriction at all (wsBare, bareStar vacuous);
+        # no TTU (ttuStarFree). MEASURED runtime 2026-07-27 against the round-2
+        # subject cliff documented in the n-ary block: zcli spec 0.1 s,
+        # graph-state 0.5 s, Python graph index 0.5 s — it stays cheap because
+        # only ONE relation (`safe`) is boolean-side, so the model's round-2 job
+        # enumeration sees two subjects, not five.
+        #
+        # Every arm is load-bearing (pinned in test_conformance_nary_strata.py):
+        #   ua -> arm 1 only, ub -> arm 2 only, uc -> arm 3 only,
+        #   us -> arm 4 (`safe`) only; ux holds `x` but is `blocked`, so it fails
+        #   arm 4 and is NOT a member — the witness that the derived arm really
+        #   evaluates its exclusion inside the fold.
+        """
+        type user
+        type doc
+          define a: [user]
+          define b: [user]
+          define c: [user]
+          define x: [user]
+          define blocked: [user]
+          define safe: x but not blocked
+          define any_of4: a or b or c or safe
+        """,
+        [mk_tuple("...", "user", "ua", "a", "doc", "d1"),
+         mk_tuple("...", "user", "ub", "b", "doc", "d1"),
+         mk_tuple("...", "user", "uc", "c", "doc", "d1"),
+         mk_tuple("...", "user", "us", "x", "doc", "d1"),
+         mk_tuple("...", "user", "ux", "x", "doc", "d1"),
+         mk_tuple("...", "user", "ux", "blocked", "doc", "d1")],
+        (),
+    ),
+    "residue_rich": (
+        # ZT-P4-5(d) — the RESIDUE half of the state gate was near-vacuous.
+        # Measured 2026-07-27 over the (then) 21 in-fragment corpora: only 5
+        # produced ANY residue row (11 rows total, so 16 corpora compared two
+        # EMPTY residue dicts), and EVERY one of those 11 rows had
+        # |stars| == 1 and |neg| == 1 — i.e. `extractor.diff_states`' set
+        # comparison on `stars`/`neg` had never been asked to distinguish two
+        # elements from one. A singleton-vs-singleton compare cannot catch an
+        # ordering, dedup or partial-recompute bug in the residue path.
+        #
+        # This corpus is the first with a MULTI-SHAPE `stars` and a MULTI-SUBJECT
+        # `neg`, plus a `upos` member, on TWO derived keys at once:
+        #   residue(doc:d1, viewer)   stars {(user,...),(svc,...)}  neg {mallory,eve}  upos {}
+        #   residue(doc:d1, approver) stars {(user,...),(svc,...)}  neg {mallory,eve}  upos {group:eng#member}
+        # (measured; pinned non-vacuously by test_conformance_state.py::
+        # test_residue_rich_corpus_is_really_rich, so it cannot silently degrade).
+        #
+        # IN-FRAGMENT per field: derived defs `viewer`/`approver` are ComputedOnly
+        # (no Direct arm on a derived def); two strata (viewer -> approver); all
+        # star grants are BARE-predicate (`user:*`, `svc:*` — BareStarStore +
+        # decision-15 hWSbare); no TTU at all (TtuStarFree); every stored subject
+        # is concrete-or-star-bare-or-userset, all admitted. zcli `graph-state`
+        # measured at 0.1 s (the model's round-2 subject cliff documented in the
+        # n-ary block below bites at ~5 DISTINCT SUBJECTS on wide schemas; this
+        # corpus has 5 and stays flat because only two of them are boolean-side).
+        """
+        type user
+        type svc
+        type group
+          define member: [user]
+        type doc
+          define base: [user:*, svc:*]
+          define blocked: [user]
+          define admin: [user, group#member]
+          define viewer: base but not blocked
+          define approver: viewer or admin
+        """,
+        [mk_tuple("...", "user", "*", "base", "doc", "d1"),
+         mk_tuple("...", "svc", "*", "base", "doc", "d1"),
+         mk_tuple("...", "user", "mallory", "blocked", "doc", "d1"),
+         mk_tuple("...", "user", "eve", "blocked", "doc", "d1"),
+         mk_tuple("...", "user", "alice", "member", "group", "eng"),
+         mk_tuple("member", "group", "eng", "admin", "doc", "d1")],
+        (),
+    ),
     "taint_computed_root_over_boolean": (
         # Computed roots taint too (compile_ruleset): `approver = viewer` is a bare
         # computed reference to a boolean relation, so `approver` is derived. In
@@ -505,6 +598,8 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
     "direct_arm_exclusion",
     "nary_union",
     "nary_intersection",
+    "nary_union_derived4",
+    "residue_rich",
 )
 
 # ---------------------------------------------------------------------------
@@ -633,6 +728,49 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
         [mk_tuple("...", "user", "alice", "member", "group", "g1"),
          mk_tuple("member", "group", "g1", "editor", "doc", "d2"),
          mk_tuple("...", "doc", "d2", "parent", "doc", "d1")],
+        (),
+    ),
+    # (d) **`PDerivedUserset`** — a userset restriction `[group#member]` whose
+    # PREDICATE is derived (`member: base but not kicked`). Added 2026-07-27
+    # (Item-4(b) board finding). Measured that day over all 69 schemas the
+    # conformance harness reads (28 curated + 40 generated + three_strata_chain),
+    # by walking every `RuleSet.compiled.plans` leaf: the leaf-kind histogram was
+    #   closure 211 · derived-computed 42 · derived-ttu 50 · derived-userset 0
+    # — i.e. `zanzibar_utils_v1.py::PDerivedUserset` (and
+    # `::PDerivedTuplesetTTU`) were compiled by NO corpus at all, in exactly the
+    # plan-leaf area where the X4 adjudication found five real divergences and
+    # where `tests/test_lookup_oracle.py` still carries regression pins. This
+    # corpus closes the `derived-userset` half.
+    #
+    # SCOPE: spec-side only (Lean `sem` x oracle x set engine, via
+    # `test_conformance_spec.py`) — never `GRAPH_FRAGMENT`.
+    # `FullScope.lean::W4Fragment`'s `computedOnly` explicitly excludes
+    # `PDerivedTTU`/`PDerivedUserset` plan leaves ("out of scope (W3a decision)",
+    # `FullScope.lean` W4Fragment doc), and `term`/`NoStoreSubjectR` forbids the
+    # stored `group:g1#member` tuple this corpus needs, so a Lean OPERATIONAL
+    # comparison would sit outside every theorem that covers it (the ZT-P3-3
+    # mistake). `sem` is a pure function of the store with no fragment
+    # hypotheses, so the spec leg is scope-clean.
+    #
+    # Verified 2026-07-27 before landing: the compile really produces a
+    # `derived-userset` leaf (`Plan(('doc','viewer'), tree=PDerivedUserset(...),
+    # leaves=(LeafSpec('viewer.0','derived-userset',...),))`, 2 strata), and
+    # oracle == set engine == real graph index over the full 126-query grid —
+    # alice (member) True, bob (kicked out of `member`) False.
+    "derived_userset": (
+        """
+        type user
+        type group
+          define base: [user]
+          define kicked: [user]
+          define member: base but not kicked
+        type doc
+          define viewer: [group#member]
+        """,
+        [mk_tuple("...", "user", "alice", "base", "group", "g1"),
+         mk_tuple("...", "user", "bob", "base", "group", "g1"),
+         mk_tuple("...", "user", "bob", "kicked", "group", "g1"),
+         mk_tuple("member", "group", "g1", "viewer", "doc", "d1")],
         (),
     ),
     # (c) from-chain userset through a TTU over a DERIVED (boolean) target

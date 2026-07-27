@@ -35,11 +35,21 @@ number of DISTINCT SUBJECTS (measured 2026-07-26 at the 120 s per-spawn timeout:
 2 subj 0.1 s, 3 subj 0.3 s, 4 subj 5.5 s, 5 subj 115 s on a 5-relation
 1-stratum schema; a derived-reads-derived 3-arm union timed out at FOUR TUPLES).
 Splitting keeps each corpus at 0.1-0.6 s AND buys more arm-witness coverage than
-one 8-tuple corpus could. The honest residue: a DERIVED n-ary union is not gated
-Lean-side anywhere. `_fold_binary` is a pure AST->JSON transform that does not
-care whether a relation is derived, so the ARITY hole is closed; what is missing
-is the Lean operational model on that one shape, and that is a model-runtime
-limit, not a scope decision. Numbers are in `corpus.py`.
+one 8-tuple corpus could. Numbers are in `corpus.py`.
+
+**RE-MEASURED 2026-07-27 — the arity ceiling had stopped at 3, and the derived
+residue was still open.** Over all 69 schemas the harness reads (28 curated + 40
+generated + `three_strata_chain`) the operator-arity histogram was
+`{2: 120 nodes, 3: 2 nodes}`: the only >= 3-arity nodes in existence were
+`nary_union`'s and `nary_intersection`'s, and BOTH are untainted. So
+`_fold_binary`'s loop had still never run more than twice, and the residue this
+docstring used to record — "a DERIVED n-ary union is not gated Lean-side
+anywhere" — was live. `nary_union_derived4` closes both: a FOUR-arm union whose
+last arm is boolean, so the union itself is derived, at two strata and therefore
+IN `GRAPH_FRAGMENT` (measured: zcli spec 0.1 s, graph-state 0.5 s, Python graph
+index 0.5 s — it stays under the subject cliff because only one relation is
+boolean-side). `test_harness_wide_arity_ceiling` floors the ceiling at 4 and
+pins that the high-arity node is really derived.
 
 **`three_strata_chain` -> `MULTI_STRATUM_SCHEMAS`, spec-side ONLY, and the
 python-to-python differential below. NEVER `GRAPH_FRAGMENT`.**
@@ -58,6 +68,26 @@ So Python's >= 3-stratum cascade is exercised here against the ORACLE and the SE
 ENGINE only. That is a real gate on the real `DeltaProcessor` (it is the same
 three-backend differential `test_conformance_direct_arm.py` runs), and it makes
 NO claim about any Lean model. No zcli process is spawned by this module.
+
+**Re-verified in the Lean sources 2026-07-27 (ZT-P4-4 follow-up), because the
+disposition above is load-bearing and was second-hand.** Both halves hold:
+`GraphIndex/CascadeStrata.lean::runCascade2` is literally two nested
+`reconcileJobsLR` applications plus one quiescence check — the round count is
+structural, not a parameter, so no third stratum has a round to settle in; and
+`FullScope.lean::W4Fragment`'s `twoStrata` field is a hypothesis of the final
+`FullScope.lean::graph_correct` (threaded through
+`CascadeStrata.lean::runCascade2_no_abort` as `hLU2`), whose own comment records
+the attack that confirmed it load-bearing (`a := b or y, b := c or x, c := x but
+not y` makes `hLU2` FALSE and the round-2 reject FIRE). Widening is therefore not
+a matter of relaxing a hypothesis: it needs a `runCascadeN`/fuel-indexed
+scheduler and a re-proof of the whole W3d-2 chain that is stated over exactly two
+rounds. **Consequently: what is ungated at >= 3 strata is the LEAN OPERATIONAL
+MODEL, not the Python cascade.** The Python cascade IS driven and checked at 3
+strata, here, against the oracle and the set engine, under both `SetOps` — and
+also at spec level against Lean `sem` (`test_conformance_spec.py`, which is
+round-bound-free), including on 12 of the 40 generated schemas that reach 3
+strata (measured 2026-07-27). Full write-up:
+`formal/history/nary-strata-coverage-2026-07-27.md`.
 """
 
 from __future__ import annotations
@@ -83,6 +113,7 @@ from formal.conformance.grid import (
 
 _NARY_UNION = "nary_union"
 _NARY_INTER = "nary_intersection"
+_NARY_D4 = "nary_union_derived4"
 _TRI = "three_strata_chain"
 
 # The documented feature bounds, ASSERTED so they cannot silently drift (the
@@ -91,8 +122,16 @@ _TRI = "three_strata_chain"
 _NARY_BOUNDS: dict[str, tuple[dict[str, int], int]] = {
     _NARY_UNION: ({"any_of": 3}, 0),      # untainted: no boolean plans at all
     _NARY_INTER: ({"all_of": 3}, 1),
+    _NARY_D4: ({"any_of4": 4}, 2),        # DERIVED 4-arm union (2026-07-27)
 }
 _TRI_EXPECTED_STRATA = 3
+
+# ZT-P4-4 follow-up (2026-07-27): the harness-wide arity ceiling, asserted so it
+# cannot silently regress. Measured that day over all 69 schemas the harness
+# reads (28 curated corpora + 40 generated + `three_strata_chain`): before
+# `nary_union_derived4` the histogram was {arity 2: 120 nodes, arity 3: 2 nodes},
+# i.e. `encode._fold_binary`'s loop had never run more than twice anywhere.
+_MIN_MAX_ARITY = 4
 
 
 def _json_nest_depth(node, tags=("union", "inter")) -> int:
@@ -166,6 +205,140 @@ def test_nary_corpus_encoding(name):
     assert n_strata <= 2, f"[{name}] {n_strata} strata is outside twoStrata"
     assert name in GRAPH_FRAGMENT, (
         f"[{name}] is in-fragment and should be gated graph-side")
+
+
+def test_harness_wide_arity_ceiling():
+    """SOMEWHERE in the corpora an operator reaches arity >= 4, so
+    `encode._fold_binary` runs its loop body three times and the left spine it
+    builds is observed at depth 3.
+
+    ZT-P4-4 closed the "every operator is BINARY" hole with two 3-arm corpora;
+    re-measuring 2026-07-27 showed the ceiling had stopped at 3 (histogram over
+    all 69 schemas the harness reads: 120 binary nodes, 2 ternary, 0 higher).
+    `nary_union_derived4` raises it to 4 AND makes the high-arity node DERIVED —
+    the residue this module's docstring names ("a DERIVED n-ary union is not
+    gated Lean-side anywhere")."""
+    def _arities(ast):
+        out = []
+
+        def walk(e):
+            if isinstance(e, (Union, Intersection)):
+                out.append(len(e.children))
+                for c in e.children:
+                    walk(c)
+            else:
+                for field in ("base", "subtract"):
+                    if hasattr(e, field):
+                        walk(getattr(e, field))
+        for e in ast.values():
+            walk(e)
+        return out
+
+    per_corpus = {name: _arities(prod_parse_schema_ast(SCHEMAS[name][0]))
+                  for name in SCHEMAS}
+    all_arities = [a for v in per_corpus.values() for a in v]
+    assert all_arities, (
+        "ANTI-VACUITY: no union/intersection node found in ANY corpus — the "
+        "ceiling assertion below would be about an empty list")
+    ceiling = max(all_arities)
+    assert ceiling >= _MIN_MAX_ARITY, (
+        f"harness-wide maximum operator arity is {ceiling}, floor "
+        f"{_MIN_MAX_ARITY}: `encode._fold_binary`'s loop no longer runs past "
+        f"two iterations anywhere. Per-corpus arities: "
+        f"{ {k: v for k, v in per_corpus.items() if v} }")
+
+    # and the >= 4-arity node must really be a DERIVED relation's root
+    prod = parse_openfga_schema(SCHEMAS[_NARY_D4][0])
+    assert prod.compiled is not None and any(
+        ("doc", "any_of4") in stratum for stratum in prod.compiled.strata), (
+        f"[{_NARY_D4}] `any_of4` is no longer a DERIVED relation — the 4-arm "
+        f"fold is back to an untainted shape and the derived-n-ary residue "
+        f"reopens: strata={None if prod.compiled is None else prod.compiled.strata}")
+
+
+def test_nary_union_derived4_arms_load_bearing():
+    """All FOUR arms of `any_of4` are load-bearing, and the fourth (the DERIVED
+    `safe = x but not blocked`) really evaluates its exclusion inside the fold:
+    `ux` holds `x` yet is `blocked`, so it must NOT be a member."""
+    schema_text, tuples, _ow = SCHEMAS[_NARY_D4]
+    orc = Oracle(schema_text, list(tuples))
+
+    def chk(user, rel):
+        return orc.check("...", "user", user, rel, "doc", "d1")
+
+    for witness, own_arm, others in (("ua", "a", ("b", "c", "safe")),
+                                     ("ub", "b", ("a", "c", "safe")),
+                                     ("uc", "c", ("a", "b", "safe")),
+                                     ("us", "safe", ("a", "b", "c"))):
+        assert chk(witness, own_arm), (
+            f"[{_NARY_D4}] witness `{witness}` lost its own arm `{own_arm}`")
+        assert not any(chk(witness, o) for o in others), (
+            f"[{_NARY_D4}] witness `{witness}` is no longer isolated to arm "
+            f"`{own_arm}` — the arm is not independently load-bearing")
+        assert chk(witness, "any_of4"), (
+            f"[{_NARY_D4}] arm `{own_arm}` of the 4-arm union does not carry "
+            f"its own witness into the union")
+
+    assert chk("ux", "x") and chk("ux", "blocked"), \
+        f"[{_NARY_D4}] the `ux` exclusion witness no longer holds x AND blocked"
+    assert not chk("ux", "safe") and not chk("ux", "any_of4"), (
+        f"[{_NARY_D4}] `ux` is a member of the 4-arm union despite being blocked "
+        f"— the DERIVED arm's exclusion is not being evaluated inside the fold, "
+        f"which is the whole point of a derived n-ary arm")
+
+
+# --------------------------------------------------------------------------- #
+# (c) PLAN-LEAF KIND coverage (2026-07-27, the Item-4(b) `PDerivedUserset` board
+#     finding). Same idiom as the arity ceiling: a compiler branch that no corpus
+#     reaches is a differential that never runs.
+# --------------------------------------------------------------------------- #
+
+# Measured 2026-07-27 by walking `RuleSet.compiled.plans[..].leaves` over all 69
+# schemas the harness reads (28 curated + 40 generated + three_strata_chain):
+#   closure 211 · derived-computed 42 · derived-ttu 50 · derived-userset 0
+# `derived-userset` (`zanzibar_utils_v1.py::PDerivedUserset`) was compiled by NO
+# corpus, in exactly the plan-leaf area where the X4 adjudication found five real
+# divergences. `corpus.py::TTU_USERSET_SCHEMAS['derived_userset']` closes it.
+_REQUIRED_LEAF_KINDS = ("closure", "derived-computed", "derived-ttu",
+                        "derived-userset")
+
+# STILL ZERO after 2026-07-27, recorded rather than asserted: `derived-tupleset-ttu`
+# (`::PDerivedTuplesetTTU` — `target from tupleset` where the TUPLESET relation is
+# itself derived). Not added here because it needs its own scope argument; it is
+# the remaining plan-leaf hole and is listed on the board.
+
+
+def test_every_plan_leaf_kind_is_reached_by_some_corpus():
+    """Every compiled plan-leaf KIND in `_REQUIRED_LEAF_KINDS` is produced by at
+    least one corpus the harness actually runs. A `compile_ruleset` branch that
+    no corpus reaches is a branch no differential ever exercises."""
+    from formal.conformance.corpus import (
+        MULTI_STRATUM_SCHEMAS, SELF_REFERENTIAL_SCHEMAS, TTU_USERSET_SCHEMAS)
+
+    where: dict[str, set[str]] = {}
+    n_leaves = 0
+    for dname, d in (("SCHEMAS", SCHEMAS),
+                     ("MULTI_STRATUM_SCHEMAS", MULTI_STRATUM_SCHEMAS),
+                     ("TTU_USERSET_SCHEMAS", TTU_USERSET_SCHEMAS),
+                     ("SELF_REFERENTIAL_SCHEMAS", SELF_REFERENTIAL_SCHEMAS)):
+        for name, (schema_text, _tuples, ow) in d.items():
+            compiled = parse_openfga_schema(schema_text, frozenset(ow)).compiled
+            if compiled is None:
+                continue
+            for plan in compiled.plans.values():
+                for leaf in plan.leaves:
+                    n_leaves += 1
+                    where.setdefault(leaf.kind, set()).add(f"{dname}:{name}")
+
+    assert n_leaves > 0, (
+        "ANTI-VACUITY: no compiled plan leaves found in ANY corpus — the "
+        "coverage assertion below would be about an empty histogram")
+    missing = [k for k in _REQUIRED_LEAF_KINDS if not where.get(k)]
+    assert not missing, (
+        f"plan-leaf kind(s) {missing} are produced by NO corpus — the "
+        f"corresponding `compile_ruleset` branch is unexercised by every "
+        f"conformance differential. Observed histogram: "
+        f"{ {k: len(v) for k, v in sorted(where.items())} }")
 
 
 def test_nary_union_arms_load_bearing():

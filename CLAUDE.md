@@ -11,11 +11,15 @@ IVM delta processor.
   status + the open-TODO board. This file (`CLAUDE.md`) is the durable contract;
   `HANDOFF.md` is what changes session-to-session. Keep its TODO board current as
   you pick up / finish work.
-- **Always run the gate before pushing.** Never push red or unverified: `pytest
-  tests/` green + the phased `verify.sh` (`lean` → `conf-heavy` → `conf-rest`) all
-  `PASSED` (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in
+- **Always run the gate before pushing.** Never push red or unverified: the phased
+  `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`
+  (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in
   [`docs/gate-runbook.md`](docs/gate-runbook.md); details under "Running things"
   below. Commit and push **only when asked**.
+  **As of 2026-07-27 `tests/` runs THROUGH `verify.sh`, not beside it.** It used to
+  be "type `pytest tests/` and read the tail" — no count floor, no
+  skipped/xfailed/xpassed parse, no exit-code assertion, no proof a tile collected
+  anything. Bare `pytest tests/` is fine while iterating; it is not the gate.
 
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
@@ -23,20 +27,33 @@ IVM delta processor.
   — **note (verified 2026-07-26): that path does not exist on this machine**; the env
   lives under `C:/Users/user/anaconda3/envs/...`. `formal/verify.sh` hardcodes the
   `avery` path too, so override it with `ZANZIBAR_PY` (it fails loudly, not silently).
-- The full suite is the gate (**936 tests** as measured 2026-07-26 at `f2b403c`:
-  `tests/` 606 + `formal/conformance/` 330; nothing enforces these counts, so
-  re-measure rather than trusting them — see `formal/FINAL_REVIEW.md`'s header):
-  `"$PY" -m pytest -q` from the repo root before claiming a change is done. It
-  exceeds the harness's ~10-min command cap — run it **cap-safe** per
-  [`docs/gate-runbook.md`](docs/gate-runbook.md): `pytest tests/` (§1) + the phased
-  Lean gate below (§2).
-- **Formal gate** = `bash formal/verify.sh` (Lean build + `sorry`=0 + axiom audit +
-  conformance). The one-shot blows the cap; it takes a **phase arg** so an agent can
-  run it unattended, in order: `verify.sh lean` → `conf-heavy` → `conf-rest` (each
-  fits the cap; same anti-vacuous guards as the one-shot). **Push only after**
-  `pytest tests/` + all three phases green (+ a fuzz sweep for an algorithm change).
+- The full suite is the gate (**1119 tests** as measured 2026-07-27: `tests/` 728 +
+  `formal/conformance/` 391; 744 in `tests/` with a PostgreSQL DSN configured). Unlike
+  before, these counts ARE now enforced — `verify.sh` carries `-ge` floors on both, so
+  adding tests is always free and losing coverage is loud. Re-measure anyway before
+  quoting a number in prose.
+- **The gate = `bash formal/verify.sh`**, and it now covers `tests/` too. The one-shot
+  blows the harness's ~10-min command cap, so it takes a **phase arg** and each phase
+  fits: `lean` → `conf-tile:1/5`…`conf-tile:5/5` → `tests-tile:1/4`…`tests-tile:4/4`.
+  The tiles are a structural partition (collected fresh at run time, index mod K), so
+  a new test file lands in exactly one tile with no list to update. Every phase
+  asserts a count floor, a nonzero pass count, the pytest exit code, and zero
+  `skipped`/`xpassed`/`deselected`; `xfailed` is zero for conformance and carries a
+  declared budget for `tests/` (`MAX_TESTS_XFAILED`). `lean` additionally pins the
+  audited theorem NAMES, the headline theorem STATEMENTS, and every
+  `CORRESPONDENCE.md` symbol anchor. **Push only after all ten phases are green**
+  (+ a fuzz sweep for an algorithm change). Legacy `conf-heavy`/`conf-rest` still work.
+- **The PostgreSQL leg is opt-in and therefore easy to think you ran.**
+  `bash scripts/pg_local.sh start` prints a DSN; export it as `ZANZIBAR_TEST_DSN` to
+  re-run the HA/concurrency modules against a real server plus
+  `tests/test_postgres_ha.py`. Without a DSN that module is dropped at COLLECTION (not
+  skipped — a tolerated skip is how coverage leaks out of a gate). `ZANZIBAR_PG_REQUIRED=1`
+  turns a missing DSN into a hard error. Worth running for anything touching locking,
+  watermarks, isolation or multi-instance state: it found three real bugs the first day.
 - Deps: `sqlmodel`, `pytest`, `pyroaring` (set-engine default bitmap backend),
-  `hypothesis` (property/stateful fuzzing).
+  `hypothesis` (property/stateful fuzzing); `psycopg2-binary` for the server leg only.
+  A missing `pyroaring` used to silently halve the validation matrix — collection now
+  refuses to start (`tests/conftest.py`), and so does `verify.sh`'s preflight.
 
 ## Layout / mental model
 - **`index_v4/`** — the graph index. `ReachabilityIndex` (core.py) materializes the full
@@ -114,7 +131,20 @@ IVM delta processor.
   divergence** — fix the surface and then flip the xfail; never relax the properties
   (how X1–X4 were closed; see `docs/spec-deviations.md` 2026-07-12/13).
 - **Never edit a golden or oracle result just to make a refactor pass** — the oracle and
-  goldens ARE the behavioral spec.
+  goldens ARE the behavioral spec. A missing golden is now a hard FAIL, not a silent
+  regeneration; regenerate deliberately with `ZANZIBAR_UPDATE_SNAPSHOTS=1`.
+- **An assurance step that fails by PASSING is this project's house failure mode.** It
+  has now recurred often enough to be a rule rather than an anecdote: a `HYPOTHESIS_SEED`
+  sweep that ran the same seed six times; an axiom audit that counted reports without
+  checking which theorems; a matrix that silently halved when `pyroaring` was missing; a
+  property test that could `continue` past all twelve of its steps; a whole test suite
+  outside the gate; a `SERIALIZABLE` isolation level accepted on the strength of a
+  comment about a database this project does not support. **When you add a check,
+  sabotage the thing it guards and watch it go red before you believe it.** When you
+  find one of these, prefer a mechanical refusal over a doc warning — the next person
+  will not read the doc. And prefer converting an `xfail` into a positive pin: an xfail
+  is itself a failure that passes, which is why `verify.sh` budgets them explicitly
+  (`MAX_TESTS_XFAILED`) instead of tolerating them silently.
 
 ## Gotchas / invariants
 - **Identifiers** are validated on writes to `[A-Za-z0-9_./@+=-]` (1–256 chars). Reserved:
@@ -124,8 +154,31 @@ IVM delta processor.
   `parse_openfga_schema` / `SetEngine`.
 - **Set-engine ids** are recycled int32 (roaring is uint32); the `(type, name, predicate)`
   key is the stable surrogate. State is in-memory — `rebuild()` replays from `TupleV1`.
+- **Operational knobs added 2026-07-27** (all default to today's behaviour):
+  `ZANZIBAR_PARANOIA=residue` — recommended in production, the runtime detector for the
+  `ZT-P0-1` escalation class, ~+5% on writes. `ZANZIBAR_MAX_CLOSURE_FANOUT` (default
+  100,000, `0` disables) — per-write closure fan-out cap; **adds and node-adds only,
+  removals are exempt** because a cap that can refuse a revocation is a fail-open, and
+  an over-large region must stay shrinkable. `index_v4.outbox.prune_outbox` — manual
+  retention, never auto-called, and it keeps the head row so SQLite cannot recycle
+  outbox ids under a held cursor. `SetEngine.log_governed` — set by `TupleSource`, makes
+  a direct `add_tuple` on a logged store raise `UnloggedWriteRefused` instead of
+  silently diverging the source from the index.
+- **Supported backends: SQLite (dev/test) and PostgreSQL (the server). MySQL is NOT
+  supported** — don't reason about it, and don't leave InnoDB facts in comments; one
+  such fact was half the justification for a live authorization fail-open (see
+  `docs/spec-deviations.md` 2026-07-27). PostgreSQL is the only server the gate
+  exercises: `bash scripts/pg_local.sh start` then `ZANZIBAR_TEST_DSN=<dsn> pytest
+  tests/test_postgres_ha.py` (skips without a DSN; `ZANZIBAR_PG_REQUIRED=1` makes a
+  missing one a hard error instead of a silent green). **`READ COMMITTED` is the only
+  accepted isolation level** — `TupleSource`/`ConnectedStore` raise
+  `UnsafeIsolationLevel` at construction for anything else, SERIALIZABLE included.
+  The dialect-specific surface is deliberately tiny and must stay that way:
+  `index_v4/core.py::is_sqlite` + `take_row_write_lock`, and
+  `connectedstore/source.py::assert_read_isolation`. New dialect branching goes
+  *there*, not sprinkled through call sites or prose.
 - **Concurrency**: `ReachabilityIndex._lock_store` (a `FOR UPDATE` store-row lock)
-  serializes writers per store on PostgreSQL/MySQL; it's a no-op on SQLite, which
+  serializes writers per store on PostgreSQL; it's a no-op on SQLite, which
   serializes writers itself (concurrent SQLite writers need retry on `SQLITE_BUSY` /
   node-creation `IntegrityError`). Use one `Session` per thread — never share one.
   **Multi-instance (HA):** writers take the source lock (`TupleSource._lock_source`,
@@ -150,6 +203,9 @@ IVM delta processor.
   conformance are the net). But an optimization that **changes the modeled algorithm**
   (candidate pruning, cascade order, closure/residue update, a new fast path) makes the
   corresponding Lean definition describe dead code — update that Lean model and re-run
-  `formal/verify.sh` (phased: `lean` → `conf-heavy` → `conf-rest`, per gate-runbook §2),
-  or log the gap in `CORRESPONDENCE.md` §7. Don't let code and model drift unrecorded
-  (`CORRESPONDENCE.md` §8).
+  `formal/verify.sh` (phased, per gate-runbook §2), or log the gap in
+  `CORRESPONDENCE.md` §7. Don't let code and model drift unrecorded
+  (`CORRESPONDENCE.md` §8). Since 2026-07-27 `verify.sh lean` also resolves every
+  `file::symbol` anchor in `CORRESPONDENCE.md`, so RENAMING a modelled function now
+  fails the gate until the map is updated — the map can no longer rot silently, but
+  it still only guarantees the pointers resolve, not that the claims are true.

@@ -215,6 +215,15 @@ def test_matrix_4way_union_wildcard(load_fga_schema, seed):
                 pytest.fail(f'check disagreement seed={seed} q={q}: {answers}\n'
                             + '\n'.join(f'  {o} {r}' for o, r in history))
 
+    # ANTI-VACUITY: the pool is legal tuples against an initially empty store, so
+    # near-everything should land. If a regression rejected them ALL, the grid
+    # above would still run -- but only ever over the EMPTY store, which every
+    # backend agrees on trivially, and the differential would report unanimity
+    # while comparing nothing of substance.
+    assert len(history) >= 7, (
+        f'only {len(history)}/14 ops were accepted (seed={seed}) -- the '
+        f'differential largely compared the empty store')
+
     for b in [graph, connected] + set_backends:
         b.close()
 
@@ -302,6 +311,14 @@ def test_matrix_4way_boolean(load_fga_schema, seed):
             if len(set(answers.values())) != 1:
                 pytest.fail(f'boolean check disagreement seed={seed} q={q}: {answers}\n'
                             + '\n'.join(f'  {o} {r}' for o, r in history))
+
+    # ANTI-VACUITY -- see the note on the union/wildcard matrix above. This one
+    # matters more: the boolean legs are the feature's acceptance event, so a
+    # wholesale write rejection here would retire the acceptance criterion while
+    # printing green.
+    assert len(history) >= 8, (
+        f'only {len(history)}/16 ops were accepted (seed={seed}) -- the boolean '
+        f'differential largely compared the empty store')
 
     for b in [graph, connected] + set_backends:
         b.close()

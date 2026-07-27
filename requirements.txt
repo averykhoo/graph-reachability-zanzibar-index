@@ -2,3 +2,16 @@ pytest
 sqlmodel
 pyroaring
 hypothesis
+
+# PostgreSQL driver -- needed ONLY for the opt-in server leg of the gate
+# (tests/test_postgres_ha.py, plus the DSN re-runs of tests/test_concurrency.py and the
+# connected-store concurrency/multi-instance modules). Everything else runs on stdlib
+# sqlite3, so a checkout without this installed is still fully green -- with no DSN set,
+# tests/conftest.py drops that module at COLLECTION rather than skipping it (verify.sh
+# tolerates zero skips, deliberately).
+# Bring the server up with `bash scripts/pg_local.sh start` and export ZANZIBAR_TEST_DSN.
+# The DSN scripts/pg_local.sh prints is `postgresql+psycopg2://...`, hence psycopg2 and
+# not psycopg (v3); psycopg works too, but only if you also change the DSN's driver
+# suffix to `postgresql+psycopg://`. SQLite and PostgreSQL are the only supported
+# backends -- see docs/architecture/overview.md, "Supported database backends".
+psycopg2-binary

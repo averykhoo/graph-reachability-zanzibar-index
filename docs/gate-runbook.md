@@ -13,9 +13,10 @@ cold Lean build.
 - One shell command is killed at ~10 min (600 s), foreground **or** background.
 - `pytest -q` (whole repo) ≈ 700 s+ — over the edge; it *has* been killed at ~64%.
 - `verify.sh all` (one shot) = Lean build (warm ≈ 90 s / 1082 jobs, cold ≈ 20-40 min)
-  + conformance (≈ 17-18 min today) ≈ 18-20 min — blows the cap. Run it **phased**
-  instead (§2): `verify.sh lean | conf-tile:1/5 … conf-tile:5/5`, each of which fits
-  the cap with room to spare (worst tile ≈ 235 s of the 600 s cap).
+  + `tests/` + conformance ≈ 20+ min — blows the cap. Run it **phased**
+  instead (§2): `verify.sh lean | conf-tile:1/5 … conf-tile:5/5 | tests-tile:1/4 …
+  tests-tile:4/4`, each of which fits the cap with room to spare (worst conf tile
+  ≈ 235 s, worst tests tile ≈ 120 s, of the 600 s cap).
 - `HYPOTHESIS_PROFILE=deep` (max_examples=120, stateful_step_count=25) is ~30× the
   `ci` profile — a single deep test file blows the cap.
 
@@ -41,30 +42,80 @@ preflight now **FAILS** on that (it asserts `RoaringSets is not None`, `len(ALL_
 >= 2` and `DEFAULT_SETOPS.name == 'roaring'`) — but `pytest` on its own still will
 not, so `pip install pyroaring hypothesis` into the env first.
 
-### 1. Backend + differential suite — run it SPLIT (~7 + 4 min)
+### 1. Backend + differential suite — `verify.sh tests-tile:I/K` (4 × ~2 min)
 `pytest tests/ -q` in one shot is **over the cap** (~10:30 on 2026-07-14/15 at 531
-tests; it is 610 tests now). Run the tiled split instead — together the two halves
-are exactly the whole `tests/` suite:
+tests; it is several hundred more now — re-measure, never quote). Since 2026-07-27
+`tests/` is a **phase of `verify.sh`** rather than a hand-typed `pytest` command:
 
 ```bash
-"$PY" -m pytest tests/ -q --ignore=tests/test_hypothesis.py --ignore=tests/test_matrix.py; echo "EXIT=$?"   # 578 tests
-"$PY" -m pytest tests/test_hypothesis.py tests/test_matrix.py -q; echo "EXIT=$?"                            # 32 tests
+bash formal/verify.sh tests-tile:1/4; echo "EXIT=$?"
+bash formal/verify.sh tests-tile:2/4; echo "EXIT=$?"
+bash formal/verify.sh tests-tile:3/4; echo "EXIT=$?"
+bash formal/verify.sh tests-tile:4/4; echo "EXIT=$?"
 ```
 
-Tiling check: 578 + 32 = 610 collected (measured 2026-07-26 — re-measure with
-`pytest tests/ -q --collect-only`; `tests/` is under active development and the
-number moves). A newly added test file automatically lands in the first half (the
-split only ever names the two heavy files). **Capture `$?` directly** — piping
-through `tee` returns tee's exit code (0) and masks a failure. If the first half
-blows the cap, tile it finer per the slow-machine section below.
+**95–165 s per tile at K=4**, measured warm on the dev box 2026-07-27 (190–191 of
+762 node ids each, including a fresh `--collect-only` of the whole directory; the
+full four-tile pass was 96 + 145 + 100 + 164 s) — well under a third of the cap, so
+K=4 has real headroom; raise K on a throttled box. With a PostgreSQL DSN exported the
+collection grows and the tiles resize themselves — the tiling is derived from the
+live collection, so nothing here needs editing when the count moves.
+
+Why this and not the old two-way `--ignore` split: the `--ignore` recipe had **no
+count floor, no skipped/xfailed parse, and no proof that a tile collected
+anything** — it was an agent reading a summary line. `tests-tile:I/K` reuses the
+conformance machinery verbatim, so `tests/` now gets: a fresh collection asserted
+`>= MIN_TESTS_ALL`, the partition-arithmetic tile-size check, `passed >= the tile's
+exact size`, a hard zero on `skipped`/`xpassed`/`deselected`, a **declared** xfail
+budget (`MAX_TESTS_XFAILED`, see the floors table), and a real exit-code assertion.
+Deliberately **do not** hard-code per-tile counts here: the tiling is structural, so
+the numbers move with every added test and a stale number in this file is worse than
+no number.
+
+**If a tests tile fails on `N skipped`, find the skip and remove its CAUSE** — do
+not reach for a budget. The intended pattern for an environment-gated leg (the
+Postgres HA suite) is to **drop it at COLLECTION** when `ZANZIBAR_TEST_DSN` is
+unset, not to collect it and skip at run time; a tolerated skip is how coverage
+leaks, and it is the reason the parse is zero-tolerance.
+
+**The one exception, and it only exists WITH a DSN.** Three tests in the shared HA
+modules are SQLite-only *by nature* — two pin the `StaleRead` pinned-snapshot path,
+one pins "a replica never sees torn state" — and PostgreSQL at READ COMMITTED gives
+a reader no stable snapshot at all, so those properties do not exist there to test.
+They `skipif` on `ZANZIBAR_TEST_DSN`, so `MAX_TESTS_SKIPPED_ON_RDBMS=3` applies only
+when a DSN is exported; the default SQLite gate keeps its hard zero. A budgeted
+outcome also counts toward the tile's floor, so budgeting something never quietly
+shrinks what had to pass.
+
+### 1b. The PostgreSQL leg (opt-in, and worth running)
+
+```bash
+bash scripts/pg_local.sh start                 # prints ZANZIBAR_PG_DSN=...
+export ZANZIBAR_TEST_DSN=postgresql+psycopg2://postgres@127.0.0.1:55432/zanzibar_test
+"$PY" -m pytest tests/test_postgres_ha.py -q; echo "EXIT=$?"
+bash scripts/pg_local.sh stop                  # or `destroy` to remove the cluster
+```
+
+A throwaway user-space cluster (conda-forge binaries; no system install, no service,
+loopback-only, non-default port). `ZANZIBAR_PG_REQUIRED=1` turns a missing or
+unreachable DSN into a hard ERROR rather than a skip — use it whenever you intend the
+server leg to have actually run. Worth running for anything touching locking,
+watermarks, isolation, or multi-instance state: it found three real bugs the first
+day it existed, one of them a live authorization fail-open, on code that had been
+reviewed and gated for months.
+
+**Capture `$?` directly** — piping through `tee` returns tee's exit code (0) and
+masks a failure.
 
 ### 2. Lean + conformance — the split `verify.sh` gate
 `verify.sh` takes a **phase argument** so the whole formal gate (its 5 steps) runs
-as five cap-fitting commands an agent can execute unattended. Warm timings on the
-dev box (measured 2026-07-26):
+as cap-fitting commands an agent can execute unattended. Warm timings on the
+dev box (`lean` re-measured 2026-07-27):
 
 ```bash
-bash formal/verify.sh lean           # steps 1-4: lake build + hole scan + zcli + axiom audit  (32 s warm)
+bash formal/verify.sh lean           # steps 1-4: lake build + hole scan + zcli + axiom audit
+                                     #            + audit identity pin + headline statement pin
+                                     #            + CORRESPONDENCE.md anchor pin      (29 s warm)
 bash formal/verify.sh conf-tile:1/5  # step 5, tile 1 of 5 of formal/conformance/
 bash formal/verify.sh conf-tile:2/5  # step 5, tile 2 of 5
 bash formal/verify.sh conf-tile:3/5  # step 5, tile 3 of 5
@@ -77,32 +128,34 @@ bash formal/verify.sh conf-tile:5/5  # step 5, tile 5 of 5
 ```
 
 Run `lean` **first** — it builds the `zcli` binary the conf phases preflight on (a
-conf phase run without it FAILs loudly rather than skipping vacuously). The four
-tiles are order-independent. All five must print `PASSED`. Together they ==
-`pytest tests/` (step 1) + a full `verify.sh all`.
+conf phase run without it FAILs loudly rather than skipping vacuously). The tiles
+are order-independent. Every phase must print `PASSED`. Together, `lean` + the five
+`conf-tile` phases + the four `tests-tile` phases (§1) == a full `verify.sh all`.
 
 - **Coverage is complete, by construction — and now also asserted.** A
   `conf-tile:I/K` phase collects `formal/conformance/` fresh, asserts the collected
-  total is `>= MIN_CONF_ALL` (356 today), then runs the node ids whose 0-based
+  total is `>= MIN_CONF_ALL` (450 today), then runs the node ids whose 0-based
   collection index is `≡ I-1 (mod K)`. Every collected node lands in **exactly one**
   tile, so the K tiles partition the directory: a newly added file, corpus or
   parametrization is automatically in exactly one tile, nothing is named by hand, and
   the tile's size is cross-checked against the partition arithmetic
   (`floor((total-I)/K)+1`) so a tiling that is not a partition FAILs. Each tile's own
   pass floor is its exact size — every selected test must pass.
-- **The global floor is per-phase.** Because *every* tile re-asserts the 356-test
+- **The global floor is per-phase.** Because *every* tile re-asserts the 450-test
   collection floor, you cannot lose conformance coverage and still get a green tile —
   even if you only ever run one.
 - **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
   guards as the one-shot — olean layout-drift guard, `#print axioms`
-  observed==expected **plus a hard-coded 455 floor** (Lean), zcli-binary preflight,
+  observed==expected **plus a hard-coded 457 floor, an IDENTITY pin and a headline
+  STATEMENT pin** (Lean), zcli-binary preflight,
   the collection floor, zero `skipped`/`xfailed`/`xpassed`/`deselected`, and
   `passed >= floor` (conformance). So the green phases ≡ a green `verify.sh all`;
   there is no reconstructed-pass hole to manage.
-- **Legacy phases still work.** `conf-heavy` (`test_conformance_remove.py`, 80 tests,
-  **175 s** measured 2026-07-26) and `conf-rest` (the dir MINUS that file via
-  `--ignore`, 276 tests) also tile the directory — 80 + 276 = 356, and `verify.sh`
-  checks that identity on its own floors at startup. `conf-heavy` is a handy quick
+- **Legacy phases still work.** `conf-heavy` (`test_conformance_remove.py`, **175 s**
+  measured 2026-07-26, floor `MIN_CONF_HEAVY` = 96) and `conf-rest` (the dir MINUS that
+  file via `--ignore`, floor `MIN_CONF_REST` = 354) also tile the directory — 96 + 354
+  = 450 = `MIN_CONF_ALL`, and `verify.sh` checks that identity on its own floors at
+  startup. `conf-heavy` is a handy quick
   single-file rerun. **`conf-rest` is AT OR OVER the cap** (579 s measured
   2026-07-19g/07-26 at 250-276 tests, and the whole dir is ~800 s of work) — that is
   why the `conf-tile` phases exist. Do not use `conf-rest` unattended; use the tiles.
@@ -114,25 +167,94 @@ tiles are order-independent. All five must print `PASSED`. Together they ==
 - **`bash formal/verify.sh` with no arg** still runs all 5 steps in one shot
   (~18-20 min) — for an uncapped shell or CI only; it does NOT fit the cap.
 
-#### The hard-coded floors in `verify.sh` (gate self-defence, 2026-07-26)
-Before this, the gate could stay green while the assurance surface eroded: deleting
+#### The hard-coded floors in `verify.sh` (gate self-defence, 2026-07-26/27)
+Before these, the gate could stay green while the assurance surface eroded: deleting
 `#print axioms graph_correct` from `Audit.lean` was invisible (the "expected" count
 was grepped out of the very file being audited), and deleting `test_conformance_graph.py`
 outright was invisible (the only conformance assertions were `skipped == 0` and
-`passed > 0`). Four numbers now live in `formal/verify.sh`, all asserted with `-ge`
-so **adding** theorems/tests never fails the gate:
+`passed > 0`). These numbers now live in `formal/verify.sh`, all asserted with `-ge`
+so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 
 | constant | value | what it guards |
 |---|---|---|
-| `EXPECTED_MIN_AUDITS` | 455 | `#print axioms` reports observed from `Audit.lean` |
-| `MIN_CONF_ALL` | 356 | tests collected from `formal/conformance/` |
-| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 80 / 276 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
-| `MIN_SCANNED_LEAN_FILES` | 60 | project `.lean` files the hole scan must cover (65 today) |
+| `EXPECTED_MIN_AUDITS` | 457 | `#print axioms` reports observed from `Audit.lean` |
+| `MIN_PINNED_AUDITS` | 457 | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
+| `MIN_CONF_ALL` | 450 | tests collected from `formal/conformance/` |
+| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 354 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
+| `MIN_TESTS_ALL` | 762 | tests collected from `tests/` |
+| `MAX_TESTS_XFAILED` | 0 (**`-le`**) | declared xfail budget for `tests/` only — see below |
+| `MAX_TESTS_SKIPPED_ON_RDBMS` | 3 (**`-le`**) | dialect-only skips, and ONLY when `ZANZIBAR_TEST_DSN` is set; the default SQLite gate keeps a hard zero |
+| `MIN_SCANNED_LEAN_FILES` | 64 | project `.lean` files the hole scan must cover (65 today) |
+| `MIN_PY_ANCHORS` / `MIN_LEAN_ANCHORS` | 250 / 100 | `CORRESPONDENCE.md` anchors found (in `anchor_check.py`) |
 
 **Lowering any of them must be a deliberate, reviewed edit to `verify.sh`** — and
 should be justified in `formal/history/`. Raising them is free and encouraged when
 counts grow. The conformance floors are cross-checked arithmetically against each
 other, so you cannot bump one and leave a hole in another.
+
+**The budgets, and why they are not hard zeros.** `MAX_TESTS_XFAILED` applies to
+`tests/` and nothing else; `formal/conformance/` keeps a hard zero because a
+divergence there is a bug to fix, not a marker to add. `CLAUDE.md` *does* endorse a
+strict xfail as the legitimate way to PIN a genuine divergence in `tests/` while it
+is being fixed (that is how X1–X4 were tracked). A blanket zero would hand the first
+person who follows that convention a red gate and tempt them to delete the pin — a
+self-inflicted version of the erosion this whole mechanism exists to stop. Raising
+the budget is a deliberate act: point the commit at the filed divergence
+(`docs/spec-deviations.md`) and **lower it again when the pin is flipped**. A
+budgeted xfail counts toward the tile's pass floor (it ran and it asserted);
+`xpassed` stays a hard zero for both suites, because an xpass means the pin is
+stale — and the repo-root `pytest.ini` sets `xfail_strict = true`, so a stale pin
+also fails locally.
+
+It is **1**, not 0, today, and the one pin it covers only exists on the PostgreSQL
+leg: `tests/test_postgres_ha.py::test_open_instance_races_a_concurrent_commit`
+(`TupleSource.__init__` reads the watermark and *then* rebuilds — atomic under a
+pinned SQLite-WAL snapshot, not at READ COMMITTED). It fails loud rather than
+answering wrongly, and there is no one-line fix: reading the watermark *after* the
+rebuild turns the loud failure into a silent skip. `MAX_TESTS_SKIPPED_ON_RDBMS`
+works the same way and is documented in §1 above. Both budgeted outcomes count
+toward the tile's pass floor, so budgeting one never quietly shrinks what had to
+pass — otherwise the budget would just move the red one line down.
+
+#### Step 4 is no longer a COUNT: the identity + statement pins (2026-07-27, ZT-P2-5)
+An audit count proves nothing about *which* theorems are audited or *what they say*.
+Two erosions used to keep the gate fully green:
+
+1. delete `#print axioms graph_correct`, add `#print axioms Nat.add_comm` — count
+   unchanged, so nothing noticed;
+2. restate `theorem graph_correct : True := trivial` — it **builds**, the hole scan
+   scans TOKENS not statements so it finds nothing, and the audit prints a clean
+   report.
+
+Three checks now run inside the `lean` phase (all cheap; total ~2 s):
+
+- **4a IDENTITY** — the live `#print axioms <name>` extraction must be a **superset**
+  of `formal/audited_theorems.txt`. Adding audits is free; swapping a headline
+  theorem out for a filler one FAILs with the missing name. Regenerate deliberately:
+  `bash formal/regen_audit_pin.sh`.
+  Additionally, a **headline** theorem reporting *"does not depend on any axioms"* is
+  treated as suspicious and FAILs — a real theorem over this development is routed
+  through `propext` / `Classical.choice` / `Quot.sound`, so axiom-freedom is the
+  signature of a vacuous restatement. (12 non-headline lemmas legitimately report no
+  axioms, which is why the rule is scoped to the headline set.)
+- **4b STATEMENT** — `formal/conformance/statement_pin.py` extracts each headline
+  theorem's statement text (binders + `:` + conclusion, up to the top-level `:=`)
+  from the Lean source and diffs it against `formal/headline_statements.txt` (26
+  statements: T0a/T0b, T1, T4, T5, T2a/T2b/T3/T6, the Phase-6 driver theorems and the
+  `W4Witness*` non-vacuity witnesses). The **proof** is not pinned — refactoring a
+  proof is normal work; changing what is CLAIMED is not. Regenerate deliberately:
+  `"$PY" formal/conformance/statement_pin.py --generate`.
+  *Honest scope:* this pins surface syntax. It catches restatement, weakening and
+  dropped hypotheses; it does **not** catch a statement hollowed out from underneath
+  (redefining `W4Fragment := True` leaves the text intact). Neither would a
+  `#check`-based pin. The independent defences against that shape are the
+  `W4Witness*` witnesses and the conformance suite.
+- **4c ANCHORS** — `formal/conformance/anchor_check.py` resolves every
+  `` `file::symbol` `` anchor in `formal/CORRESPONDENCE.md` (349 today: 243 Python by
+  `ast` parse, 106 Lean by declaration scan; no imports, no Lean toolchain, ~1 s) and
+  asserts the anchor COUNT against floors, so deleting rows fails too. This is the
+  §9 design in that file, landed. It keeps the map **navigable, not true** — it
+  cannot tell you a row's correspondence claim is wrong.
 
 #### What step 2 scans now (`formal/conformance/sorry_scan.py`)
 The hole scan is no longer just `\b(?:sorry|admit)\b` over `formal/lean/ZanzibarProofs`:
@@ -141,15 +263,15 @@ The hole scan is no longer just `\b(?:sorry|admit)\b` over `formal/lean/Zanzibar
   `\bsorry\b` *cannot* match it, `A` is a word character) and **`native_decide`**
   (closes goals by running compiled code, pulling the `Lean.ofReduceBool` axiom).
 - **Custom `axiom` declarations** (`^\s*axiom\s`, modulo modifiers/attributes) —
-  `axiom cheat : ∀ p, p` typechecks and produces no `sorry`. Anchored so the 455
+  `axiom cheat : ∀ p, p` typechecks and produces no `sorry`. Anchored so the 457
   `#print axioms` commands and every prose mention of the word do not trip it.
 - **Unterminated string literals** are themselves a violation: one stray `"` used to
   make the rest of that file invisible to the scanner *in silence*.
 - **Root is `formal/lean`**, not `formal/lean/ZanzibarProofs` — the latter missed the
   sibling library root `ZanzibarProofs.lean`. The scanner skips every dot-directory,
   which is what keeps the ~9.3k vendored `.lean` files under `formal/lean/.lake/**`
-  (mathlib/aesop/batteries) out of the scan: **65 project files scanned, 9341
-  vendored files skipped** (was 64 / 0).
+  (mathlib/aesop/batteries) out of the scan: **65 project files scanned, ~9.3k
+  vendored files skipped** (was 64 / 0); the floor `MIN_SCANNED_LEAN_FILES` is 64.
 - `--min-files N` is a coverage floor: a clean `0` from a scan that stopped finding
   files is not evidence.
 - Step 3's `lake build zcli` output is now `tee`'d into the same
@@ -220,9 +342,11 @@ surface, run a deeper campaign. Two cap-safe options:
 > it permanently — not done, deliberately, to avoid a second way to do the same thing.)
 
 ### Push gate
-Push only after ALL of: step 1 (`pytest tests/`) green; the five `verify.sh` phases
-(`lean` → `conf-tile:1/5` → `2/5` → `3/5` → `4/5` → `5/5`) each green; and — for an algorithm
-change — a fuzz sweep (step 3) green. The phased gate is fully **agent-runnable
+Push only after ALL of: the ten `verify.sh` phases — `lean` → `conf-tile:1/5` →
+`2/5` → `3/5` → `4/5` → `5/5` → `tests-tile:1/4` → `2/4` → `3/4` → `4/4` — each
+green; and — for an algorithm change — a fuzz sweep (step 3) green. (`tests-tile`
+replaced the hand-typed `pytest tests/` split on 2026-07-27; see §1.) The phased
+gate is fully **agent-runnable
 within the cap** (worst phase ≈ 235 s of the 600 s cap since the 2026-07-26 retiling),
 and each phase carries the one-shot's anti-vacuous guards *plus* the count floors, so
 the green phases satisfy the gate on their own — no uncapped `verify.sh all` and no
@@ -243,13 +367,13 @@ and the throttle comes and goes mid-gate). What breaks and what to do:
   "both SetOps" legs of the matrix then under-test. `verify.sh`'s preflight FAILs on
   that since 2026-07-26, but plain `pytest` does not: `pip install pyroaring
   hypothesis` into the env and only then start the gate.
-- **The §1 two-way pytest split can blow the cap.** Tile finer: get per-file counts
-  with `pytest tests/ -q --collect-only`, group files into tiles of roughly ≤130
-  tests (alphabetical ranges work; keep the known-slow files —
-  `test_connectedstore_concurrency`, `test_processor`+`test_reads`,
-  `test_parity_engine` — in small tiles), and **assert Σ(tile passed) == the
-  collect-only total** so the tiling provably has no gap. 2026-07-23 ran 10 tiles,
-  606/606, worst tile 546 s (throttled).
+- **`tests/` on a throttled box: just raise K.** The hand-rolled tiling this bullet
+  used to describe (group files alphabetically into ≤130-test tiles and assert
+  Σ(tile passed) == the collect-only total) is obsolete since 2026-07-27:
+  `verify.sh tests-tile:I/K` takes any `K`, partitions by collection index, and does
+  the Σ-check for you as partition arithmetic. On a 2-3× slower box run
+  `tests-tile:1/8 … 8/8`. (Historical calibration: 2026-07-23 ran 10 hand-made tiles,
+  606/606, worst tile 546 s throttled.)
 - **Capture exit codes without pipes.** `out=$(pytest ... 2>&1); code=$?` — both
   `tee` and `tail` mask the pytest exit code (same trap as the tee gotcha below).
 - **Cold Lean on a fresh machine.** Install elan from the GitHub release zip
@@ -264,7 +388,7 @@ and the throttle comes and goes mid-gate). What breaks and what to do:
 - **Conformance can blow the cap throttled — just use more tiles.** This no longer
   needs a hand-rolled wrapper: `verify.sh conf-tile:I/K` takes any `K`, so on a
   throttled box run `conf-tile:1/8 … conf-tile:8/8` (or `1/12 … 12/12`). Every tile
-  re-collects the directory, re-asserts the 356-test global floor, checks its own size
+  re-collects the directory, re-asserts the 450-test global floor, checks its own size
   against the partition arithmetic and carries all of `run_conf`'s anti-vacuous guards
   — so the union is provably the whole dir for any `K` and there is nothing to
   replicate by hand. (The 2026-07-23 advice here — tile A = dir minus
@@ -314,7 +438,7 @@ optimization this session.
 controlled than test runtime): time a **deterministic, rarely-changing,
 hot-path-heavy subset**. Best candidates, because they change by design only when
 behavior changes:
-- the conformance corpora (`formal/conformance/`, 356 deterministic tests),
+- the conformance corpora (`formal/conformance/`, ~450 deterministic tests),
 - the validation matrix (`tests/test_matrix.py`),
 - the compiled-RuleSet snapshots (`tests/snapshots/`).
 Track these via `pytest --durations=20` across commits and eyeball for a step

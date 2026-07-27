@@ -35,14 +35,25 @@ Anti-vacuity (ZT-P4-4, 2026-07-26): `diff_states` returns `None` for two EMPTY
 states just as readily as for two equal non-empty ones, so `assert diff is None`
 alone cannot distinguish "the states match" from "there were no states". Every
 comparison below now asserts a floor on the number of state ROWS actually
-compared (edges + residues), on BOTH sides. Measured 2026-07-26 over
-`GRAPH_FRAGMENT`: the thinnest state is `wildcard_public` at 1 compared row
-(1 edge, 0 residues), the richest `deep_grid` at 64; only 5 of the 20 corpora
-produce ANY residue row (11 rows in total). Hence the floor is 1, and it is a
+compared (edges + residues), on BOTH sides. Hence the floor is 1, and it is a
 guard against a COLLAPSED extraction (both sides empty ⇒ `diff is None` ⇒ green),
-not a coverage claim. The honest shape of this gate is ZT-P4-5: most corpora
-contribute edges only, so this pins that extraction ran and produced state — it
-does not pin that residues were exercised.
+not a coverage claim.
+
+**What this gate actually compares — measured 2026-07-27 (ZT-P4-5(a)), command:
+`python -c` driving `graphindex_drive` over `sorted(GRAPH_FRAGMENT)` and applying
+`extractor.extract_sql_state`'s own filters, per corpus.** Over the 21 (now 22)
+in-fragment corpora: **447 raw `EdgeV4` rows → 231 dropped by P1 (closure-only),
+0 by P2 (bridges: never fires, as P2's own honesty note says), 62 by P6
+(leaf-family copies), 154 actually compared**; **all 235 `NodeV4` rows dropped by
+P5** (nodes are not compared at all — see `test_python_nodes_are_all_justified`
+below for the one node-level property that IS gated, and `extractor.py`'s P5
+paragraph for what that costs); and **only 5 of 21 corpora produced ANY residue
+row (11 rows total)**, so 16 corpora compared two empty residue dicts. Every one
+of those 11 rows had `|stars| == 1` and `|neg| == 1`. The `residue_rich` corpus
+(added 2026-07-27, pinned by `test_residue_rich_corpus_is_really_rich`) is the
+first with a multi-shape `stars`, a multi-subject `neg` and a `upos` member, so
+the residue half of the comparison is no longer singleton-only. It remains true
+that most corpora contribute edges only.
 
 Skips cleanly if the Lean binary is not built (verify.sh preflights the
 binary, so the hard gate never runs skipped).
@@ -98,3 +109,132 @@ def test_state_leangraph_vs_pythongraph(name):
     assert diff is None, (
         f"[{name}] Lean graph model / Python graph index STATE disagreement "
         f"(ADJUDICATION EVENT — plan §8.2; symmetric difference):\n{diff}")
+
+
+# --------------------------------------------------------------------------- #
+# ZT-P4-5(d) — the RESIDUE half of the gate must not be singleton-only
+# --------------------------------------------------------------------------- #
+
+_RESIDUE_RICH = "residue_rich"
+
+# Measured 2026-07-27 on the corpus as committed (see `corpus.py::residue_rich`).
+# Exact expectations, not floors: this corpus exists ONLY to make the residue
+# comparison non-trivial, so silent degradation to a singleton must fail loudly.
+_RESIDUE_RICH_EXPECTED = {
+    ("doc", "d1", "viewer"): (
+        frozenset({("svc", "..."), ("user", "...")}),
+        frozenset({("user", "eve", "..."), ("user", "mallory", "...")}),
+        frozenset()),
+    ("doc", "d1", "approver"): (
+        frozenset({("svc", "..."), ("user", "...")}),
+        frozenset({("user", "eve", "..."), ("user", "mallory", "...")}),
+        frozenset({("group", "eng", "member")})),
+}
+
+
+def test_residue_rich_corpus_is_really_rich():
+    """The `residue_rich` corpus really produces the multi-element residue state
+    it was added for — on BOTH sides, and equal.
+
+    ZT-P4-5(d): before this corpus, all 11 residue rows in the whole curated
+    state gate had `|stars| == 1` and `|neg| == 1`, so `diff_states`' set
+    comparison of those fields had never had to distinguish two elements from
+    one, and 16 of 21 corpora compared two EMPTY residue dicts. A corpus added
+    for a feature must be pinned to actually reach it (the
+    `tests/test_bulk_build.py::_assert_r4bf_features` idiom) or it degrades into
+    testing nothing while still reporting green."""
+    assert _RESIDUE_RICH in GRAPH_FRAGMENT, (
+        f"[{_RESIDUE_RICH}] left GRAPH_FRAGMENT — the residue half of the state "
+        f"gate is singleton-only again")
+    schema_text, tuples, obj_wild = SCHEMAS[_RESIDUE_RICH]
+    try:
+        runner.zcli_path()
+    except runner.ZcliUnavailable:
+        pytest.skip("zcli not built (run `lake build zcli` in formal/lean)")
+
+    lean = lean_graph_state(schema_text, tuples, obj_wild)
+    py = python_graph_state(schema_text, tuples, obj_wild)
+
+    for side, state in (("PYTHON", py), ("LEAN", lean)):
+        assert state["residues"] == _RESIDUE_RICH_EXPECTED, (
+            f"[{_RESIDUE_RICH}/{side}] residue state drifted from the shape this "
+            f"corpus exists for.\n  expected {_RESIDUE_RICH_EXPECTED}\n  got      "
+            f"{state['residues']}")
+        # The specific non-vacuity this corpus buys, asserted as such.
+        stars, neg, upos = state["residues"][("doc", "d1", "approver")]
+        assert len(stars) >= 2, (
+            f"[{_RESIDUE_RICH}/{side}] |stars| = {len(stars)}: the multi-SHAPE "
+            f"star comparison is back to a singleton")
+        assert len(neg) >= 2, (
+            f"[{_RESIDUE_RICH}/{side}] |neg| = {len(neg)}: the multi-SUBJECT "
+            f"exclusion comparison is back to a singleton")
+        assert upos, (
+            f"[{_RESIDUE_RICH}/{side}] `upos` is empty — the edge-free userset "
+            f"membership arm is not exercised here")
+
+    diff = diff_states(lean, py)
+    assert diff is None, (
+        f"[{_RESIDUE_RICH}] Lean/Python STATE disagreement on the residue-rich "
+        f"corpus (ADJUDICATION EVENT):\n{diff}")
+
+
+# --------------------------------------------------------------------------- #
+# ZT-P4-5(c) — P5 says "nodes are not compared". This is what IS gated.
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize("name", sorted(GRAPH_FRAGMENT))
+def test_python_nodes_are_all_justified(name):
+    """No orphan `NodeV4` rows: every node is an endpoint of some `EdgeV4` row or
+    is referenced by a residue (as the row's object node, or inside `neg`/`upos`).
+
+    HONESTY (read this before citing it): this is **not** a Lean comparison and
+    cannot be one. The Lean `GraphState` does have a `nodes : List NodeKey`
+    field, but (i) zcli's `"graph-state"` dump emits only `edges` and `residues`
+    (`Cli.lean::stateJson`), and (ii) the model NEVER removes a node while Python
+    GCs implicit nodes at refcount 0 and the processor GCs derived-public
+    anchors — so raw node-set equality is FALSE BY DESIGN, which is why P5
+    exists. Nor is there any comparable node PROPERTY: `NodeV4.implicit` and
+    `NodeV4.reference_count` have no counterpart in Lean's `NodeKey` at all.
+    Measured 2026-07-27: of 235 `NodeV4` rows across the in-fragment corpora,
+    194 are edge/residue endpoints of the COMPARED state and thus pinned
+    implicitly by the edge+residue equality above; the other **41 are invisible
+    to the gate entirely** — they exist only to carry P1-dropped closure rows or
+    P6-dropped leaf-family edges.
+
+    So this test gates the one node-level property that is checkable Python-side
+    and is a real failure mode the state comparison cannot see: a leaked node
+    (GC that failed to fire) is invisible to an edge/residue diff. Measured
+    2026-07-27 across every in-fragment corpus: 0 orphans."""
+    from sqlmodel import select
+    import json as _json
+    from index_v4.models import EdgeV4, NodeV4, ResidueV1
+    from formal.conformance.backends import graphindex_drive
+
+    schema_text, tuples, obj_wild = SCHEMAS[name]
+    session, _widx, store_id = graphindex_drive(schema_text, tuples, obj_wild)
+    try:
+        nodes = {n.id: (n.type, n.name, n.predicate, n.wildcard)
+                 for n in session.exec(
+                     select(NodeV4).where(NodeV4.store_id == store_id)).all()}
+        justified = set()
+        for e in session.exec(
+                select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
+            justified.add(e.subject_id)
+            justified.add(e.object_id)
+        for r in session.exec(
+                select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+            justified.add(r.object_node_id)
+            justified |= set(_json.loads(r.neg)) | set(_json.loads(r.upos))
+    finally:
+        session.close()
+
+    # ANTI-VACUITY: a store with no nodes would pass the orphan check trivially.
+    assert nodes, (
+        f"[{name}] ANTI-VACUITY: the index produced ZERO NodeV4 rows — the "
+        f"orphan check below would pass having examined nothing")
+    orphans = sorted(nodes[i] for i in nodes if i not in justified)
+    assert not orphans, (
+        f"[{name}] {len(orphans)} orphan NodeV4 row(s) — nodes with no edge and "
+        f"no residue reference. P5 drops nodes from the Lean/Python state "
+        f"comparison, so a GC leak here is invisible to that gate:\n"
+        + "\n".join(f"    {o}" for o in orphans))

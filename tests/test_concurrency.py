@@ -12,10 +12,13 @@ What this proves and what it does not:
     ref-counted read-modify-write is atomic per transaction -- concurrent writers, with a
     busy-timeout and retry on SQLITE_BUSY / node-creation IntegrityError, produce the
     correct closure. This is the "SQLite serializes writers" half of the cost model.
-  * it does NOT exercise the MVCC lost-update race (PostgreSQL/MySQL, READ COMMITTED)
-    that ReachabilityIndex._lock_store's FOR UPDATE lock guards against -- FOR UPDATE is a
-    no-op on SQLite. A Postgres-backed run (point DATABASE_URL at one) would cover that;
-    here we validate the concurrent-session mechanics on the default backend.
+  * it does NOT exercise the MVCC lost-update race (PostgreSQL at READ COMMITTED, the
+    only supported server/level combination) that ReachabilityIndex._lock_store's FOR
+    UPDATE lock guards against -- FOR UPDATE is a no-op on SQLite. That gap is now
+    closable: set ``ZANZIBAR_TEST_DSN`` and this module re-runs against a real server
+    (``tests/dbengine.shared_engine``), where the same two tests DO drive the
+    ``FOR UPDATE`` arm and the MVCC lost-update window is real. Unset, everything below
+    is byte-for-byte what it always was.
 """
 
 import time
@@ -27,9 +30,14 @@ from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlmodel import Session, SQLModel, create_engine
 
 from index_v4 import ReachabilityIndex, Store
+from tests.dbengine import shared_engine
 
 
-def _file_engine(path):
+def _sqlite_engine(path):
+    """This module's HISTORICAL SQLite engine -- deliberately NOT the WAL recipe used
+    by the connected-store concurrency modules. Rollback-journal + a busy timeout is
+    the configuration whose "SQLite serializes writers" cost model the tests below
+    assert, so it is passed through explicitly rather than silently upgraded."""
     engine = create_engine(f'sqlite:///{path}',
                            connect_args={'check_same_thread': False, 'timeout': 60})
 
@@ -41,6 +49,10 @@ def _file_engine(path):
 
     SQLModel.metadata.create_all(engine)
     return engine
+
+
+def _file_engine(tmp_path, name):
+    return shared_engine(tmp_path, name, sqlite_factory=_sqlite_engine)
 
 
 def _add_retry(idx, sess, *args, attempts=300):
@@ -58,7 +70,7 @@ def _add_retry(idx, sess, *args, attempts=300):
 
 
 def test_concurrent_overlapping_writes(tmp_path):
-    engine = _file_engine(tmp_path / 'conc.db')
+    engine = _file_engine(tmp_path, 'conc.db')
     with Session(engine) as s:
         s.add(Store(id='c'))
         s.commit()
@@ -92,7 +104,7 @@ def test_concurrent_overlapping_writes(tmp_path):
 
 def test_concurrent_reads_are_consistent(tmp_path):
     """Many concurrent readers over a fixed graph all agree (reads take no locks)."""
-    engine = _file_engine(tmp_path / 'reads.db')
+    engine = _file_engine(tmp_path, 'reads.db')
     with Session(engine) as s:
         s.add(Store(id='r'))
         s.commit()

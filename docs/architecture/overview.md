@@ -47,7 +47,7 @@ index_v4/
                          derived read path (edge + residue), lookups
   processor.py           DeltaProcessor: stratified IVM cascade for boolean relations
   outbox.py              DeltaOutboxV1 helpers: watermark / rows / drain_deltas
-  invariants.py          I1-I12 checker, paranoia mode, delta-scoped verifier
+  invariants.py          I1-I13 checker, paranoia mode, delta-scoped verifier
   models.py              StoreV4 / NodeV4 / EdgeV4(.derived) / ResidueV1 / DeltaOutboxV1
   bulk_build.py          P13/N18 bulk closure builder for build_index (offline
                          bootstrap fast path): direct in-memory closure construction
@@ -108,18 +108,53 @@ from the boolean spec are recorded in `docs/spec-deviations.md`.
 
 ## Running things
 
-Conda env named after the repo folder. Full suite is the gate — **936 tests as measured
-2026-07-26** (`tests/` 606 + `formal/conformance/` 330). Nothing enforces those counts
-(`formal/FINAL_REVIEW.md`'s header explains why), so re-measure rather than quoting them.
-The suite exceeds the ~10-min agent command cap; run it cap-safe per
-[`../gate-runbook.md`](../gate-runbook.md).
+Conda env named after the repo folder. The gate is `bash formal/verify.sh`, run in
+phases — and since 2026-07-27 that includes `tests/`, which used to sit outside it
+(running the backend suite was an agent typing `pytest tests/` and reading the tail).
+Counts ARE now enforced: every phase carries a `-ge` floor, so growth is free and
+losing coverage is loud. Still re-measure rather than quoting a number from prose —
+`formal/FINAL_REVIEW.md`'s header explains why a count is never coverage. The suite
+exceeds the ~10-min agent command cap; run it cap-safe per
+[`../gate-runbook.md`](../gate-runbook.md), which lists every floor and budget.
 
 ```
 "C:/Users/user/anaconda3/envs/graph-reachability-zanzibar-index/python.exe" -m pytest -q
 ```
 
-Deps: `sqlmodel`, `pytest`, `pyroaring`, `hypothesis`. Paranoia mode (invariants inside
-every commit) is ON **in tests only** — it is wired via
-`tests/wildcard_helpers.make_wildcard_index`, not by `ConnectedStore`, so production
-currently runs with the I1–I13 layer dark. It costs ~2x runtime; `HYPOTHESIS_PROFILE=deep`
+### Supported database backends
+
+**SQLite** for dev/test and **PostgreSQL** for the real server. **MySQL is not
+supported** and never was exercised; stale InnoDB prose is treated as a bug here, not
+as harmless colour (a wrong InnoDB claim was half the justification for accepting
+`SERIALIZABLE`, which turned out to reproduce a live authorization fail-open —
+`../spec-deviations.md` 2026-07-27).
+
+* **`READ COMMITTED` is the only accepted isolation level.** `TupleSource` and
+  `ConnectedStore` raise `UnsafeIsolationLevel` at construction for anything else,
+  SERIALIZABLE included; the check is a no-op on SQLite, which has no server-side
+  level to pin.
+* **The PostgreSQL leg of the gate** is `tests/test_postgres_ha.py`, opt-in:
+  `bash scripts/pg_local.sh start` (a throwaway user-space cluster), then
+  `ZANZIBAR_TEST_DSN=<dsn> pytest tests/test_postgres_ha.py`. Without a DSN the module
+  is dropped at COLLECTION (`tests/conftest.py`), not skipped at run time — `verify.sh`
+  tolerates zero `skipped`, and a tolerated skip is how coverage leaks out of a gate
+  while it keeps printing green. `ZANZIBAR_PG_REQUIRED=1` keeps it collected and turns a
+  missing DSN into a hard error. `tests/test_concurrency.py` and the multi-instance
+  modules also re-run against the DSN when one is set.
+* **The dialect-specific surface is deliberately tiny** — everything else is
+  flavour-agnostic SQLModel/SQLAlchemy. It is exactly `index_v4/core.py::is_sqlite`,
+  `index_v4/core.py::take_row_write_lock`, and
+  `connectedstore/source.py::assert_read_isolation`. Put new dialect branching in those
+  three places; do not spread it through call sites or documentation.
+
+Deps: `sqlmodel`, `pytest`, `pyroaring`, `hypothesis` (+ `psycopg2-binary` for the
+PostgreSQL leg only). Paranoia mode (invariants inside
+every commit) is ON by default **in tests only** (`tests/wildcard_helpers.make_wildcard_index`).
+`ConnectedStore` does now wire it — `ZANZIBAR_PARANOIA` or a constructor argument, tiered —
+but `DEFAULT_PARANOIA` is OFF, so a stock production deployment still runs with the I1–I13
+layer dark. That default is a measured decision (the cheap `residue` tier costs ~4–6% of the
+write path and grows with the store), not an oversight, and `ZANZIBAR_PARANOIA=residue` is
+the recommended setting for anything security-sensitive: it is the runtime detector for the
+ZT-P0-1 authorization-escalation class. The full checker costs ~2x runtime;
+`HYPOTHESIS_PROFILE=deep`
 enables the heavy fuzzing profile locally.

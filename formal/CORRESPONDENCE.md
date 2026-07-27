@@ -36,9 +36,13 @@ survives that.** So:
   (2c)), which travels with the code.
 * Renames are recorded explicitly rather than silently repaired — a rename tells
   an auditor more than a corrected offset. See the rename ledger at the end of §5.
-* §9 is a **design proposal, not yet wired**, for a script that mechanically
-  asserts every anchor in this file resolves. Until it lands, this file is
-  human-maintained and can rot again; treat its freshness date as its warranty.
+* §9's mechanical anchor check **LANDED 2026-07-27** as
+  `formal/conformance/anchor_check.py`, run by `formal/verify.sh` in the `lean`
+  phase (step 4c). Every `file::symbol` anchor below is asserted to resolve on
+  every gate run, and the anchor COUNT is floored so deleting rows fails too. It
+  keeps this file *navigable*, not *true* — a resolvable anchor can still head a
+  wrong claim (see §2's `check` row), so the freshness date still governs the
+  CLAIMS; it no longer governs the pointers.
 
 **Anchors below were re-derived against the working tree on 2026-07-26** — after
 the same day's `ZT-P0-1` (N3-elision withdrawal), `ZT-P1-1`/`ZT-P1-2`/`ZT-P1-7`
@@ -97,16 +101,37 @@ the concrete-named userset queries sit inside the proved graph query scope
 The spec is transcribed from the repository's INDEPENDENT oracle (which shares
 no code with either backend).
 
-**Independence caveat (ZT-P4-6, recorded here, fix owned elsewhere):** the
-"three genuinely independent corners" phrasing this section used to carry is
-**2-of-3 at the schema-reading layer**. `formal/conformance/encode.py` and
-`formal/conformance/grid.py` both import `parse_schema_ast` from
-`tests/oracle.py`, so the Lean corner is fed by the oracle's parser *and* the
-query grid's targets come from that same parse — a misparse propagates to two
-corners and simultaneously deletes the query that would expose it. (Demonstrated
-divergence: on a duplicate `define`, `oracle.py` silently keeps the last while
-`zanzibar_utils_v1.py` raises.) `encode.py`'s own docstring is honest about
-this. What remains genuinely independent is the *evaluation* code on each side.
+**Independence — exactly what is and is not independent (ZT-P4-6; the grid half
+FIXED 2026-07-27).** The blanket "three genuinely independent corners" phrasing
+this section used to carry was **false at the schema-READING layer**. State it
+per layer instead:
+
+| layer | independent? | why |
+|---|---|---|
+| **evaluation** — Lean `sem` / `tests/oracle.py` / `SetEngine` / `WildcardIndex` | **YES** | four separately written evaluators sharing no code; this is the property the differentials actually rest on |
+| **query grid** — which queries get asked | **YES, since 2026-07-27** | `formal/conformance/grid.py` now derives declared targets from `zanzibar_utils_v1.py::parse_schema_ast` (the PRODUCTION parser), not the oracle's. Pinned by `formal/conformance/test_grid_independence.py` (incl. a sabotage test: patching the oracle's parser must not move a grid) |
+| **schema reading into Lean** — `formal/conformance/encode.py` | **NO** | `formal/conformance/encode.py::schema_to_json` still parses via `tests/oracle.py::parse_schema_ast`, so the Lean corner is fed by the ORACLE's parse. `encode.py`'s own docstring is honest about it; this is the residual |
+
+Why the grid half mattered more than it looks: with a shared parse, a misparse
+propagated into the Lean corner **and simultaneously deleted the query that
+would expose it** (a relation the oracle fails to see is a relation nobody
+queries). With the grid on the production parser, an oracle misparse now yields
+a query that *can* expose it. The two parsers really are different code — on a
+duplicate `define`, `tests/oracle.py` silently keeps the last while
+`zanzibar_utils_v1.py` raises
+(`formal/conformance/test_grid_independence.py::test_the_two_parsers_are_really_different_code`
+pins that divergence live). Measured 2026-07-27 over all 28 curated corpora +
+40 generated schemas: the two parsers' declared-key sets are identical, so the
+swap changed **zero** grids (byte-identical `(subjects, targets)` on all 68
+cases) — that agreement is itself now gated
+(`::test_declared_keys_agree_on_every_corpus` /
+`::test_declared_keys_agree_on_every_generated_schema`), so a future divergence
+surfaces as a named finding instead of a silently shrunken grid.
+**Residual, unclosed:** `encode.py`. Closing it means re-encoding from the
+production AST (a different `Expr` type: `zanzibar_utils_v1.py::Direct` /
+`::Computed` / `::TTU` / `::Union` / `::Intersection` / `::Exclusion`), which is
+a real port, not a swap — the Lean corner would then be fed by the production
+parser and the ORACLE would become the only reader of its own parse.
 
 | Lean (`lean/ZanzibarProofs/`) | models | Python |
 |---|---|---|
@@ -399,24 +424,51 @@ The bullet is corrected in place below.
 
 ### 7.2 Residue/state gaps
 
-* **★ NEW — `ResidueV1.version` is gated by nothing formal.**
+* **`ResidueV1.version` is gated by nothing formal — now DECLARED as projection
+  P7 (`ZT-P4-5(b)`, 2026-07-27).**
   `index_v4/models.py::ResidueV1` carries a `version` column, incremented in
   `index_v4/processor.py::DeltaProcessor._store_residue` and checked by I7 (monotonicity per residue
   row) in `index_v4/invariants.py::_check_residue_rows`.
   `formal/conformance/extractor.py::lean_graph_state` and `::python_graph_state`
-  compare only `(stars, neg, upos)` — **`version` is dropped, and that drop is
-  NOT one of the documented P1–P6 projections.** So the state-level conformance
-  gate is silent about it, `Inv` has no clause for it, and Lean's `Residue`
-  structure has no such field. I7 is pinned only by `tests/` paranoia runs, and
-  `install_paranoia` is not wired into `ConnectedStore` (`ZT-P1-3`). Either
-  document it as P7 or model it; today it is an undeclared projection.
-* **State-gate thinness (`ZT-P4-5`, recorded for completeness).** Of 422 raw edge
-  rows across the 19 in-fragment corpora, 231 are dropped by P1, 55 by P6, 136
-  actually compared; **all `NodeV4` rows are dropped by P5** (nodes are not
-  compared at all); only 5 of 19 corpora produce ANY residue row (11 rows total),
-  so 14 corpora compare two empty dicts. The 2026-07-17 note below already
-  conceded node-flag behavior is "invisible to the gate by construction"; this is
-  the quantified version.
+  compare only `(stars, neg, upos)`. Until 2026-07-27 `version` was dropped
+  **silently** — not one of the documented projections; it is now **P7**, stated
+  with its reason in `formal/conformance/extractor.py`'s module docstring and at
+  the drop site in `::extract_sql_state`.
+  **The disposition is a MODELLING GAP, not a representation difference.**
+  `GraphIndex/State.lean::Residue` is `⟨stars, neg, upos⟩` and has no version
+  field (its own doc comment says so); `grep -rn 'version'
+  lean/ZanzibarProofs/GraphIndex/` returns only that comment. So unlike P1–P6,
+  where an argument recovers the dropped information from what remains, there is
+  simply nothing on the Lean side to compare against. Consequence, stated
+  plainly: **I7 is pinned only by `tests/` paranoia runs**, `Inv` has no clause
+  for it, and `install_paranoia` is not wired into `ConnectedStore`
+  (`ZT-P1-3`). Modelling it (a monotone counter on `Residue` plus an `Inv`
+  clause) remains open and is a real, if small, widening.
+* **State-gate thinness (`ZT-P4-5(a)`, RE-MEASURED 2026-07-27; the numbers below
+  replace the stale 2026-07-26 ones — 422/231/55/136 over 19 corpora).** The
+  in-fragment corpus set had grown to **21** (`nary_union`, `nary_intersection`
+  landed 2026-07-26). Driving `formal/conformance/backends.py::graphindex_drive`
+  over `sorted(GRAPH_FRAGMENT)` and applying
+  `formal/conformance/extractor.py::extract_sql_state`'s own filters:
+  of **447** raw `EdgeV4` rows, **231** are dropped by P1 (closure-only), **0** by
+  P2 (which still never fires), **62** by P6 (leaf-family copies), and **154** are
+  actually compared. **All 235 `NodeV4` rows are dropped by P5** — nodes are not
+  compared at all; of those 235, 194 are endpoints/references of the compared
+  state (hence implicitly pinned) and **41 are invisible to the gate entirely**.
+  Only **5 of 21** corpora produced ANY residue row (**11** rows total), so 16
+  corpora compared two empty residue dicts — and every one of those 11 rows had
+  `|stars| == 1` and `|neg| == 1`. **Partly closed 2026-07-27:** the
+  `residue_rich` corpus (in `GRAPH_FRAGMENT`, pinned by
+  `formal/conformance/test_conformance_state.py::test_residue_rich_corpus_is_really_rich`)
+  is the first with a multi-shape `stars`, a multi-subject `neg` and a `upos`
+  member on two derived keys, so the residue comparison is no longer
+  singleton-only; and
+  `::test_python_nodes_are_all_justified` adds the one node-level property that
+  is checkable at all (no orphan node rows, Python-side — 0 measured). The
+  2026-07-17 note below conceded node-flag behavior is "invisible to the gate by
+  construction"; that concession is now quantified here, in
+  `formal/conformance/extractor.py`'s P5 paragraph, in `FINAL_REVIEW.md` §3 and
+  in `ARCHITECTURE.md` §6.
 
 ### 7.3 Load-bearing Python surfaces with NO Lean model (added 2026-07-26)
 
@@ -708,7 +760,7 @@ still describes the algorithm the Python actually runs. So, when optimizing:
     on its (object-wildcard-free) fragment the out-bridges are inert, so no shape
     there is in `bridged_out`; `GraphIndex/ObjStarWrite.lean::writeWild` has no
     in-bridge step at all, so no shape there is in `bridged_in`; and
-    `Core/Schema.lean::Schema.isSubjectWildcardUserset` explicitly scopes out the
+    `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` explicitly scopes out the
     star-tupleset TTU through-shape this bug rides. The guard's precondition
     `bridged_in ∩ bridged_out ≠ ∅` is therefore unsatisfiable in both fragments.
   * **`ZT-P4-7`** — `zanzibar_utils_v1.py::AdmissionRejected` (a `ValueError`
@@ -844,10 +896,24 @@ no-Lean-impact change, not perf only.)*
 
 ---
 
-## 9. PROPOSAL (design only — NOT implemented): a mechanical anchor check
+## 9. The mechanical anchor check (LANDED 2026-07-27 — this section is now its spec)
 
-**Status: a concrete proposal. Nothing below is wired. Someone else owns landing
-it.** This section exists because §0's premise — "no manually-maintained line
+**Status: IMPLEMENTED** as `formal/conformance/anchor_check.py`, wired into
+`formal/verify.sh`'s `lean` phase as step 4c (~1 s, no Lean toolchain, no imports).
+On 2026-07-27 it parses **349 anchors (243 Python + 106 Lean), 0 unresolved**, with
+floors `MIN_PY_ANCHORS = 230` / `MIN_LEAN_ANCHORS = 95`. It found two live defects
+when first run: `Schema.isSubjectWildcardUserset` was anchored to `Core/Schema.lean`
+when it is declared in `GraphIndex/UsStarWrite.lean` (fixed), and the `_fan_out` /
+`reconcileResidueKey` rows were verified to fail loudly under a simulated rename.
+The subsections below are the spec it was built to; two deltas from the design as
+written: (a) the bare <code>&#58;&#58;Symbol</code> continuation also inherits a **plain** backticked
+file mention (`` `index_v4/processor.py` ``), which §8's prose bullets rely on, and
+the inheritance scope resets at each list item, not only at blank lines; (b) Lean
+names are matched on any dotted SUFFIX of the namespace-qualified declaration, since
+`def GraphState.foo` inside `namespace Zanzibar` and `def foo` inside `namespace
+Zanzibar.GraphState` are both legitimately anchored `GraphState.foo`.
+
+**Original proposal text follows.** This section exists because §0's premise — "no manually-maintained line
 number survives" — applies equally to manually-maintained *symbol* names. The
 anchors above are correct on 2026-07-26 and will rot without a machine check.
 

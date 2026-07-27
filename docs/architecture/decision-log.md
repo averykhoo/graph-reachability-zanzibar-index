@@ -148,6 +148,21 @@ Do not re-walk these without new evidence — the alternatives were considered.
 * **`at_least` is check-only — lookup/reverse-lookup/expand deliberately excluded**
   (not "can't", "didn't": the token mechanics are the same five lines). Three costs
   `check` doesn't have, plus a structural point:
+
+  > **REVISED 2026-07-27 (`ZT-P1-8b`).** "Excluded" was the wrong shape of answer.
+  > Taking no token at all meant a revoked principal stayed ENUMERABLE with no API to
+  > demand otherwise — and list-objects / list-users is precisely what a revocation UI
+  > reads, so the surface that most needs freshness was the one that could not ask for
+  > it. `lookup` / `lookup_reverse` now ACCEPT `at_least`, run the same first two rungs
+  > as `check` (in-memory cursor, then a cursor refresh), and raise `LookupNotFresh`
+  > when the index still lags. What stays excluded is the third rung, the set-engine
+  > FALLBACK, and reason 1 below is why — with one addition the original entry missed:
+  > in the stale-index case the graph `NodeV4` rows for the un-applied tuples do not
+  > exist yet, so even a key-translation bridge is impossible in principle, not merely
+  > expensive. `excluded_node_ids` (the derived `neg` channel) has no set-engine
+  > counterpart either. The prerequisite in reason 1 is unchanged and still unbuilt.
+  > Untokened calls are byte-identical to before. **Refusing a demand you cannot meet
+  > is not the same as not offering one.**
   1. *Result domain.* `check` returns a bool, so the freshness fallback (graph when
      fresh, set engine when lagging) is invisible. The lookup surfaces return ids —
      graph node ids (DB rows) vs set-engine interner ids (instance-local, recycled)

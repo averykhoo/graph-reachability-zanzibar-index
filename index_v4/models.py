@@ -73,10 +73,8 @@ class EdgeV4(SQLModel, table=True):
     # `store_id` and `subject_id` single-column indexes dropped (N5 audit 2026-07-14):
     # every subject-keyed scan filters `store_id` too, served by the
     # `(store_id, subject_id, ...)` unique-constraint prefix; object-keyed scans use
-    # the composite above. MySQL/InnoDB caveat: InnoDB auto-creates an index whose
-    # leftmost column is an FK column if none exists, so dropping `subject_id`'s index
-    # is a no-op there (a hidden one returns) but a real per-insert win on
-    # SQLite/PostgreSQL.
+    # the composite above -- a real per-insert win on both supported backends
+    # (SQLite, PostgreSQL), neither of which conjures an index back for an FK column.
     store_id: str = Field(foreign_key="store_v4.id")
     subject_id: int = Field(foreign_key="node_v4.id")
     object_id: int = Field(foreign_key="node_v4.id")

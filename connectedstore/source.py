@@ -61,11 +61,20 @@ class WatermarkGap(RuntimeError):
 
     Both watermarks ("the evaluator reflects the log through here" and the index
     cursor's "reflects the source through N") used to advance straight to the newest
-    id they had seen, ASSUMING the catch-up that preceded them was complete. Under a
-    PINNED READ SNAPSHOT it is not: MySQL/InnoDB defaults to REPEATABLE READ, so an
-    earlier read in the same transaction fixes the view and a concurrent commit stays
-    invisible -- the catch-up tails nothing, the watermark jumps past those rows, and
-    they are never applied AGAIN, permanently. The freshness token then certifies the
+    id they had seen, ASSUMING the catch-up that preceded them was complete. Against a
+    real MVCC server it need not be, in two distinct ways:
+
+    * **Out-of-order commit, at the SUPPORTED level.** PostgreSQL assigns a log id at
+      INSERT and publishes it at COMMIT, so a LOWER id can become visible after a
+      higher one; a catch-up that ran in between saw a hole (reproduced in
+      ``tests/test_postgres_ha.py::test_log_gap_finds_a_row_committed_out_of_id_order``).
+    * **A pinned read snapshot**, under any level above READ COMMITTED: an earlier read
+      in the transaction fixes the view and a concurrent commit stays invisible for good.
+      That one is fenced off at construction instead (``assert_read_isolation``), because
+      the contiguity check itself reads through the same blind snapshot.
+
+    Either way the catch-up tails nothing, the watermark jumps past those rows, and they
+    are never applied AGAIN, permanently. The freshness token then certifies the
     resulting stale answer, because it compares >= against the bogus watermark. So the
     advance is now contiguity-checked and this is raised on a detected gap.
 
@@ -75,25 +84,43 @@ class WatermarkGap(RuntimeError):
     operation; a fresh snapshot sees the missing rows and applies them normally."""
 
 
+#: Optimistic attempts at a self-consistent (watermark, rebuild) pair before
+#: ``_consistent_rebuild`` stops guessing and takes the shared source lock. Three,
+#: because each attempt is one indexed LIMIT-1 SELECT plus a full rebuild: retrying is
+#: cheap enough to be the common path and expensive enough that spinning on a hot store
+#: is worse than blocking for one write. See ``_consistent_rebuild``.
+SNAPSHOT_ATTEMPTS = 3
+
+
 class UnsafeIsolationLevel(RuntimeError):
     """This session's bind runs at an isolation level under which a committed log row
     can stay invisible for the lifetime of a transaction, so log tailing / the cursor
     advance cannot be trusted (zero-trust review ZT-P1-5). The message names the fix."""
 
 
-#: Isolation levels the log-tailing design is safe under.
+#: Isolation levels the log-tailing design is safe under. Exactly one.
 #:
-#: ``READ COMMITTED`` -- the intended one: each statement sees the newest commit, so a
-#: catch-up inside a long transaction really does reach the head.
-#: ``SERIALIZABLE`` -- also safe, by a different route: PostgreSQL aborts the
-#: transaction with a serialization failure rather than letting it act on a stale view,
-#: and MySQL promotes every plain SELECT to a locking read (current committed truth).
+#: ``READ COMMITTED`` -- each STATEMENT sees the newest commit, so a catch-up inside a
+#: long transaction really does reach the head. That per-statement freshness is the
+#: whole premise of log tailing; every other level pins a snapshot somewhere.
 #:
-#: ``REPEATABLE READ`` is the dangerous one and, on MySQL/InnoDB, the DEFAULT: the read
-#: view is pinned at the first read, so a concurrent commit is invisible for the rest of
-#: the transaction -- exactly the ZT-P1-5 skip. ``READ UNCOMMITTED`` is rejected too (it
-#: makes admission validate against uncommitted state).
-SAFE_ISOLATION_LEVELS = frozenset({'READ COMMITTED', 'SERIALIZABLE'})
+#: ``SERIALIZABLE`` WAS accepted here and was REMOVED on 2026-07-27, the first day this
+#: code met a real PostgreSQL server. The justification it carried -- "PostgreSQL aborts
+#: with a serialization failure rather than letting it act on a stale view, and MySQL
+#: promotes every plain SELECT to a locking read" -- was half about a database this
+#: project does not support, and false about the one it does. Measured: PostgreSQL SSI
+#: does NOT abort on this pattern (a plain log read is not a dangerous SSI structure,
+#: and ``SELECT ... FOR UPDATE`` against a row another transaction only LOCK-modified
+#: raises no conflict), so a SERIALIZABLE bind reproduces the entire ZT-P1-5 scenario
+#: this guard exists to prevent: a committed REMOVE stays invisible, the watermark jumps
+#: past it, and ``check(..., at_least=token)`` then certifies the revoked grant as
+#: ALLOWED, permanently. Reproduction:
+#: ``tests/test_postgres_ha.py::test_serializable_bind_is_refused``.
+#:
+#: ``REPEATABLE READ`` is rejected for the same reason, one step more obviously: the
+#: read view is pinned at the first read. ``READ UNCOMMITTED`` is rejected because it
+#: makes admission validate against uncommitted state.
+SAFE_ISOLATION_LEVELS = frozenset({'READ COMMITTED'})
 
 
 def assert_read_isolation(session: Session) -> None:
@@ -119,10 +146,12 @@ def assert_read_isolation(session: Session) -> None:
         f'row can stay invisible for the whole transaction, so a catch-up silently '
         f'stops short and the watermark advance would skip it permanently -- while '
         f'at_least tokens keep certifying the stale answers (zero-trust review '
-        f'ZT-P1-5). Open the engine with READ COMMITTED, e.g. '
-        f'create_engine(url, isolation_level="READ COMMITTED") (MySQL/InnoDB defaults '
-        f'to REPEATABLE READ, which is exactly this hazard). SERIALIZABLE is also '
-        f'accepted.')
+        f'ZT-P1-5). Open the engine with READ COMMITTED -- '
+        f'create_engine(url, isolation_level="READ COMMITTED") -- which is the only '
+        f'level this design is safe under. SERIALIZABLE is NOT an alternative: on '
+        f'PostgreSQL it pins a snapshot without aborting on this access pattern, and '
+        f'reproduces exactly the hazard named above '
+        f'(tests/test_postgres_ha.py::test_serializable_bind_is_refused).')
 
 
 def log_gap(session: Session, store_id: str, after_id: int, head_id: int,
@@ -137,13 +166,26 @@ def log_gap(session: Session, store_id: str, after_id: int, head_id: int,
       ``head_id - after_id`` ids; if the caller applied that many, there is no room for
       an unapplied one and no query is issued. That is the single-store steady state
       (log ids are contiguous), including the sync write path's one-row batch.
-    * **A LOCKING read, not a snapshot read.** The row this guards against is exactly
-      the one a pinned snapshot HIDES, so a plain ``SELECT`` would consult that same
-      snapshot and see nothing. InnoDB serves locking reads from the LATEST committed
-      version, so ``FOR SHARE`` surfaces the hidden row. (Shared, not exclusive: we
-      only need to read current truth. On SQLite it renders to a plain SELECT, which is
-      fine -- SQLite cannot silently hide a committed row from a writer, it fails the
-      write loudly with SQLITE_BUSY instead.)"""
+    * **A LOCKING read** (``FOR SHARE``; shared, not exclusive -- we only need to read,
+      not reserve). On SQLite it renders to a plain SELECT, which is fine: SQLite cannot
+      silently hide a committed row from a writer, it fails the write loudly with
+      SQLITE_BUSY instead.
+
+    WHAT THE LOCKING READ DOES **NOT** BUY YOU (corrected 2026-07-27, measured against a
+    real PostgreSQL). This comment used to argue that ``FOR SHARE`` is what makes the
+    check sound, because "InnoDB serves locking reads from the LATEST committed
+    version". That is an InnoDB property, and this project does not support MySQL. On
+    PostgreSQL a locking read under a PINNED snapshot (REPEATABLE READ / SERIALIZABLE)
+    is served from the TRANSACTION SNAPSHOT like any other read: measured, ``FOR SHARE``
+    returned ``[]`` for a row committed after the snapshot, and ``log_gap`` returned
+    ``None`` -- blind to exactly the row it exists to find
+    (``tests/test_postgres_ha.py::test_log_gap_locking_read_surfaces_a_snapshot_hidden_row``).
+
+    So the real guarantee is upstream: ``assert_read_isolation`` admits READ COMMITTED
+    and nothing else, and under READ COMMITTED every statement -- locking or not -- sees
+    the newest commit. The gap check is sound BECAUSE of that gate, not because of the
+    lock hint. Weakening ``SAFE_ISOLATION_LEVELS`` therefore silently disarms this
+    function too; the two must be read together."""
     if head_id - after_id == len(applied_ids):
         return None
     stmt = (select(TupleLogV1.id)
@@ -187,6 +229,16 @@ class TupleSource:
 
     def __init__(self, session: Session, store_id: str, *, ops: SetOps = DEFAULT_SETOPS,
                  ruleset=None):
+        # The isolation gate belongs HERE, not only in ConnectedStore (added
+        # 2026-07-27). ``TupleSource`` is exported from ``connectedstore/__init__``
+        # and is a complete write path -- lock, catch up, validate, append -- so a
+        # caller using it directly used to get no isolation check at all, and every
+        # mechanism ZT-P1-5 added (contiguous watermark advance, ``log_gap``, the
+        # freshness tokens) silently ran on a pinned snapshot. The reproduced
+        # SERIALIZABLE escalation ran entirely through this constructor, never
+        # touching ``ConnectedStore``. Cheap and idempotent: a no-op on SQLite, and
+        # ``ConnectedStore`` calling it too costs one extra dialect check.
+        assert_read_isolation(session)
         self.session = session
         self.store_id = store_id
         # the set engine is the online evaluator AND the admission validator
@@ -197,9 +249,34 @@ class TupleSource:
         # freshness-token fallbacks can catch up O(delta) on demand
         # (``catch_up_evaluator``) instead of trusting a stale cache.
         # ``ruleset`` skips recompiling a schema the caller already compiled.
-        self.evaluator_watermark = log_watermark(session, store_id)
-        self.engine: SetEngine = open_set_engine(session, store_id, ops=ops,
-                                                 ruleset=ruleset)
+        #
+        # The watermark read and the rebuild must be ATOMIC with respect to other
+        # instances' commits -- see ``_consistent_rebuild``. Attempt 1 constructs the
+        # engine (``SetEngine.__init__`` rebuilds); any retry re-runs ``rebuild()`` on
+        # the engine we already have, which is the same replay for a fraction of the
+        # setup cost (no reparse, no recompile).
+        self._engine: SetEngine | None = None
+        #: Attempts the last ``_consistent_rebuild`` needed (1 = uncontended;
+        #: SNAPSHOT_ATTEMPTS + 1 = it had to take the lock). Observable so a test can
+        #: assert the race was really constructed, and so an operator can see
+        #: open-time contention rather than infer it.
+        self.snapshot_attempts = 0
+
+        def _open_or_rebuild() -> None:
+            if self._engine is None:
+                self._engine = open_set_engine(session, store_id, ops=ops,
+                                               ruleset=ruleset)
+            else:
+                self._engine.rebuild()
+
+        self.evaluator_watermark = self._consistent_rebuild(_open_or_rebuild)
+        # ZT-P1-8a: from here on this engine is LOG-GOVERNED -- direct
+        # ``add_tuple``/``remove_tuple`` on it are refused, because they would mutate
+        # the source of truth with no ``TupleLogV1`` row and nothing downstream (index
+        # cursor, replica tailers, ``at_least`` tokens, ``lag()``) would ever notice.
+        # ``add``/``remove`` below go through the ``_*_direct`` bodies instead, and
+        # append the log row themselves.
+        self._engine.log_governed = True
         # The row flushed by the most recent ``_append``, until ``pop_pending_rows``
         # drains it (perf P12b). Under the sync schedule the caller drains this
         # immediately after each write and hands it to ``advance_index`` as a
@@ -211,8 +288,116 @@ class TupleSource:
         # Transaction-scoped lock memo (mirrors ReachabilityIndex._lock_store, P12a):
         # the SessionTransaction under which _lock_source last took the SchemaV4 row
         # lock. Object identity, not a boolean, so the memo can never match into a
-        # retried transaction.
+        # retried transaction. Deliberately NOT set by ``_lock_source_shared``: a
+        # FOR SHARE lock does not satisfy a later ``_lock_source``, which needs
+        # FOR UPDATE.
         self._locked_txn = None
+
+    @property
+    def engine(self) -> SetEngine:
+        """The online evaluator, READ-ONLY (ZT-P1-8a).
+
+        Kept as a public attribute because reads through it are legitimate and used
+        (``check``/``expand``/``lookup`` against always-fresh in-memory state), but a
+        property so it cannot be swapped for a different engine behind this instance's
+        watermark bookkeeping. The write half of the hazard is closed on the engine
+        itself: it is marked ``log_governed``, so ``engine.add_tuple(...)`` raises
+        ``UnloggedWriteRefused`` rather than silently writing ``TupleV1`` with no log
+        row. Both halves are needed -- privacy alone would not have helped, since a
+        rename cannot stop a caller that already holds the object."""
+        assert self._engine is not None
+        return self._engine
+
+    # ------------------------------------------------------------------ #
+    # Opening / refreshing: (watermark, rebuild) has to be ONE atomic pair
+    # ------------------------------------------------------------------ #
+
+    def _lock_source_shared(self) -> None:
+        """Block writers on this store for the rest of the transaction WITHOUT
+        becoming one -- the terminating fallback of ``_consistent_rebuild``.
+
+        A SHARED (``FOR SHARE``) lock on the same ``SchemaV4`` row ``_lock_source``
+        takes exclusively. That is exactly the mutual exclusion an OPENER needs and no
+        more: writers acquire ``FOR UPDATE`` and so block on us, while other openers
+        (also shared) proceed concurrently. Taking the writers' exclusive lock here
+        would be wrong twice over -- a read-only replica opening an instance is not a
+        writer, and it would serialize every concurrent open on a busy store behind
+        one another for no benefit.
+
+        On SQLite ``take_row_write_lock`` ignores the SELECT arm and issues the no-op
+        UPDATE instead, i.e. the SQLite fallback IS exclusive. That asymmetry is
+        accepted rather than papered over: SQLite has one database-level write lock and
+        no shared-row concept, the fallback is only reached after
+        ``SNAPSHOT_ATTEMPTS`` failures, and SQLite's single-writer model makes reaching
+        it very unlikely in the first place.
+
+        DEADLOCK NOTE: this instance may later upgrade to ``FOR UPDATE`` on its first
+        write, and two instances that both fell back and then both wrote could
+        deadlock on the upgrade. PostgreSQL detects that and aborts one with a
+        retryable error; the alternative (take the exclusive lock up front) trades a
+        rare, detected, retryable abort for guaranteed serialization of every
+        contended open, which is the worse deal."""
+        take_row_write_lock(
+            self.session,
+            select(SchemaV4).where(SchemaV4.store_id == self.store_id)
+            .with_for_update(read=True),
+            # SQLite arm: same no-op UPDATE ``_lock_source`` uses (the store's schema
+            # row is write-once, so re-writing ``created_at`` with its own value
+            # changes nothing; the point is the RESERVED lock).
+            update(SchemaV4).where(SchemaV4.store_id == self.store_id)
+            .values(created_at=SchemaV4.created_at),
+        )
+
+    def _consistent_rebuild(self, rebuild) -> int:
+        """Rebuild the in-memory evaluator and return a watermark that is TRUE of the
+        state it just built. Returns the watermark; does not assign it.
+
+        THE WINDOW (2026-07-27, found by the PostgreSQL leg). "Read the watermark, then
+        rebuild from ``TupleV1``" is two statements. Under SQLite-WAL both run in one
+        pinned read snapshot, so the pair is atomic by accident. At PostgreSQL READ
+        COMMITTED -- the ONLY level ``assert_read_isolation`` admits, precisely because
+        every statement must re-snapshot -- a write committed BETWEEN them lands in the
+        rebuild but not in the watermark. The instance is then born with its evaluator
+        AHEAD of its own watermark, and the next ``catch_up_evaluator()`` replays that
+        row into ``apply_logged``, whose strict-replay guard raises ``RuntimeError``
+        ("log ADD of an already-present tuple ... watermark corruption") -- permanently,
+        for every later write on that instance, since ``add``/``remove`` catch up first.
+
+        WHY NOT JUST READ THE WATERMARK AFTER THE REBUILD. Because that swaps a loud
+        failure for a silent one: rows committed in the gap would be counted as applied
+        while the rebuild never saw them, and the ``at_least`` machinery would then
+        certify stale answers off a watermark that is a lie. The ordering is not the
+        bug; the non-atomicity is.
+
+        THE FIX -- optimistic, then pessimistic. Read ``wm1``, rebuild, read ``wm2``.
+        ``log_watermark`` is the store's max log id, and a commit changes it iff it
+        appended a log row (a duplicate add appends nothing AND changes no tuple), so
+        ``wm2 == wm1`` proves no commit landed across the rebuild and the pair is
+        consistent. Otherwise retry: a retry is one more rebuild, and it starts from a
+        watermark that already covers everything the previous rebuild could have seen.
+        After ``SNAPSHOT_ATTEMPTS`` losses -- possible under a sustained write stream,
+        which is exactly when spinning is worst -- take the shared source lock so
+        writers stop, and do the pair once under it. That terminates.
+
+        NOTE the retry can fire spuriously (a commit landing between the rebuild and
+        ``wm2`` is harmless -- the rebuild simply predates it). Costing a rebuild to
+        avoid distinguishing them is the right trade: false retries are cheap and the
+        alternative is another window to reason about.
+
+        Both openers use this: ``__init__`` and ``refresh_evaluator`` had the identical
+        shape, and ``refresh_evaluator`` sits on ``ConnectedStore._write``'s error
+        path -- so the constructor race could also be entered by any failed write."""
+        for attempt in range(1, SNAPSHOT_ATTEMPTS + 1):
+            wm = log_watermark(self.session, self.store_id)
+            rebuild()
+            self.snapshot_attempts = attempt
+            if log_watermark(self.session, self.store_id) == wm:
+                return wm
+        self._lock_source_shared()
+        wm = log_watermark(self.session, self.store_id)
+        rebuild()
+        self.snapshot_attempts = SNAPSHOT_ATTEMPTS + 1
+        return wm
 
     # ------------------------------------------------------------------ #
     # Writes (lock -> catch up -> validate -> TupleV1 -> log append; one txn)
@@ -235,8 +420,13 @@ class TupleSource:
         ``advance_index`` via ``ReachabilityIndex._lock_store``). One global order
         across both locks -- deadlock-free.
 
-        On PostgreSQL/MySQL this blocks other writer instances until this
-        transaction commits/rolls back. On SQLite ``with_for_update()`` renders to
+        On PostgreSQL this blocks other writer instances until this transaction
+        commits/rolls back -- verified against a live server, including that the
+        block is row-granular (a second writer on a DIFFERENT store's ``SchemaV4``
+        row proceeds) and that the ordering above holds: ``tests/test_postgres_ha.py``
+        ``::test_for_update_source_lock_really_blocks_a_second_writer`` and
+        ``::test_lock_ordering_source_lock_is_held_before_the_store_lock``.
+        On SQLite ``with_for_update()`` renders to
         NOTHING, so this lock was a silent no-op (ZT-P1-4) and two default-configured
         writers could both pass admission; ``take_row_write_lock`` now issues a no-op
         UPDATE of this same ``SchemaV4`` row on a SQLite bind, taking SQLite's RESERVED
@@ -292,7 +482,12 @@ class TupleSource:
         self._lock_source()
         self.catch_up_evaluator()
         s_pred = '...' if subject_predicate is Ellipsis else subject_predicate
-        if not self.engine.add_tuple(s_pred, s_type, s_name, relation, o_type, o_name):
+        # ``_add_tuple_direct``, not ``add_tuple``: this instance marked the engine
+        # log-governed, so the public method now refuses (ZT-P1-8a). WE are the
+        # sanctioned writer -- the ``_append`` two lines down is the log row that
+        # earns the bypass, in this same transaction.
+        if not self._engine._add_tuple_direct(s_pred, s_type, s_name,
+                                              relation, o_type, o_name):
             # duplicate: idempotent no-op, no log row; the current watermark
             # trivially satisfies the token contract
             return log_watermark(self.session, self.store_id)
@@ -308,7 +503,9 @@ class TupleSource:
         self._lock_source()
         self.catch_up_evaluator()
         s_pred = '...' if subject_predicate is Ellipsis else subject_predicate
-        self.engine.remove_tuple(s_pred, s_type, s_name, relation, o_type, o_name)
+        # ``_remove_tuple_direct``: see the note in ``add`` (ZT-P1-8a).
+        self._engine._remove_tuple_direct(s_pred, s_type, s_name,
+                                          relation, o_type, o_name)
         token = self._append('REMOVE', s_pred, s_type, s_name, relation, o_type, o_name)
         self._advance_watermark(token)
         return token
@@ -427,13 +624,18 @@ class TupleSource:
 
     def refresh_evaluator(self) -> None:
         """Rebuild the in-memory evaluator from the current TupleV1 snapshot and
-        RESET the evaluator watermark to it. The watermark is read BEFORE the rebuild
-        (conservative: rows committed in between are included in the rebuild but not
-        claimed). Assignment, not max: after a rollback the old watermark may claim
-        a token that never committed."""
-        wm = log_watermark(self.session, self.store_id)
-        self.engine.rebuild()
-        self.evaluator_watermark = wm
+        RESET the evaluator watermark to it. Assignment, not max: after a rollback the
+        old watermark may claim a token that never committed.
+
+        The watermark/rebuild pair goes through ``_consistent_rebuild`` (2026-07-27).
+        It used to be a bare read-then-rebuild, whose comment called reading the
+        watermark first "conservative: rows committed in between are included in the
+        rebuild but not claimed" -- that is precisely BACKWARDS. A row in the rebuild
+        but not in the watermark leaves the evaluator AHEAD of its watermark, and the
+        next catch-up replays it into ``apply_logged``'s strict guard and bricks the
+        instance. Live on PostgreSQL READ COMMITTED, and this method sits on
+        ``ConnectedStore._write``'s error path, so any failed write could enter it."""
+        self.evaluator_watermark = self._consistent_rebuild(self.engine.rebuild)
 
     def watermark(self) -> int:
         return log_watermark(self.session, self.store_id)

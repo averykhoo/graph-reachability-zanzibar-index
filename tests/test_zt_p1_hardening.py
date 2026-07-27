@@ -447,9 +447,12 @@ def test_in_memory_default_session_still_opens():
 # =========================================================================== #
 
 def test_evaluator_watermark_gap_raises(tmp_path, monkeypatch):
-    """A commit that this instance's read snapshot cannot see (simulated by hiding it
-    from ``log_rows``, exactly what MySQL/InnoDB REPEATABLE READ does for real) used to
-    be jumped over by ``max(watermark, token)`` and lost forever. Now it raises."""
+    """A commit that this instance's read snapshot cannot see (SYNTHESIZED here by
+    hiding it from ``log_rows``, because SQLite's single-writer model cannot produce the
+    state) used to be jumped over by ``max(watermark, token)`` and lost forever. Now it
+    raises. The same property against genuine PostgreSQL MVCC -- where a lower log id
+    really can commit after a higher one -- is
+    ``tests/test_postgres_ha.py::test_advance_index_raises_watermark_gap_on_a_real_out_of_order_commit``."""
     engine = _file_engine(tmp_path / 'gap.db')
     with Session(engine) as boot:
         ConnectedStore(boot, 's', schema=BOOL_SCHEMA)
@@ -598,8 +601,14 @@ class _FakeConn:
 
 
 class _FakeSession:
-    """Minimal stand-in for a non-SQLite bind (the check is dialect-aware, and MySQL --
-    where REPEATABLE READ is the DEFAULT -- is the dialect that matters)."""
+    """Minimal stand-in for a non-SQLite bind.
+
+    A fake is enough to unit-test the DECISION; it is not evidence about a server.
+    That distinction cost this project a fail-open: these tests were the only
+    coverage `assert_read_isolation` had, they were green, and the level they
+    green-lit (SERIALIZABLE) turned out to reproduce the exact hazard the function
+    exists to prevent -- discovered the first day the code met a real PostgreSQL.
+    The real-server counterpart is `tests/test_postgres_ha.py`."""
 
     def __init__(self, dialect, level):
         self._dialect, self._level = dialect, level
@@ -613,16 +622,27 @@ class _FakeSession:
         return _FakeConn(self._level)
 
 
-@pytest.mark.parametrize('level', ['REPEATABLE READ', 'READ UNCOMMITTED'])
+@pytest.mark.parametrize('level', ['REPEATABLE READ', 'READ UNCOMMITTED', 'SERIALIZABLE'])
 def test_unsafe_isolation_level_rejected(level):
+    """SERIALIZABLE joined this list on 2026-07-27.
+
+    It was previously ACCEPTED, on the reasoning that PostgreSQL would abort a
+    transaction rather than let it act on a stale view. Measured against a real
+    server, it does not abort on this access pattern, and a SERIALIZABLE bind
+    reproduces the full ZT-P1-5 fail-open: a committed revocation goes permanently
+    unapplied and `check(at_least=<its token>)` certifies the revoked grant as
+    ALLOWED. Repro + the escalation replay:
+    `tests/test_postgres_ha.py::test_serializable_bind_is_refused`."""
     with pytest.raises(UnsafeIsolationLevel) as exc:
-        source_mod.assert_read_isolation(_FakeSession('mysql', level))
+        source_mod.assert_read_isolation(_FakeSession('postgresql', level))
     assert 'READ COMMITTED' in str(exc.value)
 
 
-@pytest.mark.parametrize('level', ['READ COMMITTED', 'SERIALIZABLE'])
-def test_safe_isolation_levels_accepted(level):
-    source_mod.assert_read_isolation(_FakeSession('postgresql', level))
+def test_safe_isolation_level_accepted():
+    """READ COMMITTED is the only level this design is safe under -- per-statement
+    snapshots are the premise log tailing rests on."""
+    source_mod.assert_read_isolation(_FakeSession('postgresql', 'READ COMMITTED'))
+    assert source_mod.SAFE_ISOLATION_LEVELS == frozenset({'READ COMMITTED'})
 
 
 def test_sqlite_isolation_check_is_not_a_false_alarm():

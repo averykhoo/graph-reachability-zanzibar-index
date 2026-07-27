@@ -11,11 +11,34 @@ ttuLeaf predicate arms) unpinned (F3). This module fixes all three:
   every concrete name per type seen in the tuples + one ghost + `*`, and the
   stored relations are still crossed with EVERY stored object type-obliviously
   (that cross product is the deliberate out-of-schema "ghost relation" probe).
-* **Schema-declared targets (F2)**: the schema text is parsed with the oracle's
-  INDEPENDENT parser (same parse `encode.py` uses) and every declared
-  `(type, relation)` is paired with the stored objects OF THAT TYPE — type-aware
-  on purpose, so the addition doesn't explode into querying every relation on
-  every type.
+* **Schema-declared targets (F2)**: the schema text is parsed with the
+  PRODUCTION parser (`zanzibar_utils_v1`) and every declared `(type, relation)`
+  is paired with the stored objects OF THAT TYPE — type-aware on purpose, so the
+  addition doesn't explode into querying every relation on every type.
+
+  **Why the production parser and not the oracle's (ZT-P4-6, changed
+  2026-07-27).** This module used to import `tests.oracle.parse_schema_ast` —
+  "the same parse `encode.py` uses". `encode.py` feeds the LEAN corner; so with a
+  shared parse a single misparse propagated into the Lean corner AND silently
+  deleted the very query that would have exposed it (a relation the oracle fails
+  to see is a relation nobody queries). The "three genuinely independent corners"
+  claim was 2-of-3 at the schema-reading layer. Driving the grid off
+  `zanzibar_utils_v1` restores the property that MATTERS for a differential: the
+  query set is derived independently of the encoder's parse, so an
+  oracle-parser misparse now yields a query that CAN expose it.
+
+  The declared-key set comes from `zanzibar_utils_v1.parse_schema_ast`, which is
+  literally step 1 of `zanzibar_utils_v1.parse_openfga_schema` (`ast =
+  parse_schema_ast(schema)`). The full `parse_openfga_schema` is NOT used here on
+  purpose: its `RuleSet`/`SchemaInfo` result exposes no declared-relation set,
+  only compiled artifacts — and those name compiler-generated LEAF families
+  (`viewer.0`), which are not declared relations and must never be queried
+  (`RuleSet.apply` rejects raw writes against them). Verified 2026-07-27 over all
+  28 curated corpora + the 40 generated schemas: the two parsers' declared-key
+  sets are identical and `parse_openfga_schema` raises on none of them, so the
+  swap changed ZERO grids (`test_grid_independence.py` keeps that pinned, and
+  pins the ONE known parser divergence — duplicate `define` — as a live
+  demonstration that the two really are different code).
 * **Userset subjects (F3)**: for each declared `(type, relation)` whose type
   appears in the tuples, subjects `(relation, type, name)` over a BOUNDED name
   pool (first `_USERSET_NAME_BOUND` concrete names + the ghost). The bound keeps
@@ -28,7 +51,7 @@ from __future__ import annotations
 
 import itertools
 
-from tests.oracle import parse_schema_ast
+from zanzibar_utils_v1 import parse_schema_ast
 
 # F3 bound: userset-subject names per type = first N concrete names + the ghost.
 # The naive full-name-pool product pushed the suite past its runtime budget on
@@ -56,7 +79,9 @@ def grid(schema_text, tuples):
         stored_relations.add(tup.relation)
         objects.add((tup.object_type, tup.object_name))
 
-    declared = sorted(parse_schema_ast(schema_text))  # [(type, relation), ...]
+    # [(type, relation), ...] — from the PRODUCTION parser, deliberately NOT the
+    # oracle's (ZT-P4-6; see the module docstring).
+    declared = sorted(parse_schema_ast(schema_text))
 
     # Bare subjects: unchanged stored-tuple-derived behavior (names + ghost + *).
     subjects = []

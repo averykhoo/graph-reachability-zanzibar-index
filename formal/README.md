@@ -82,8 +82,11 @@ driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_gr
 `_REMOVE_EXCLUDED` skips because the remove guard fail-closes on Direct-arm stores —
 its validly-stored scope decision approved by Avery 2026-07-19),
 and a **generated-schema answer gate** (seeded generated schemas outside the
-curated corpora, spec-side only). Gate size as last measured (2026-07-26, `f2b403c`):
-330 conformance tests, 20 of them gate-tooling unit tests rather than comparisons.
+curated corpora, spec-side only). Gate size as last measured (**2026-07-27**, by
+`pytest formal/conformance/ -q --collect-only`): **391** conformance tests collected,
+46 of them gate-tooling unit tests (`test_sorry_scan.py`, `test_runner_retry.py`)
+rather than comparisons. Re-measure; nothing pins these numbers except the `-ge`
+floors in `verify.sh`.
 Residual unverified surface: the fragment carries, the compiler artifacts, the
 interner/bitmap representation layer, the SQL/transaction/concurrency layer
 (including the HA/multi-instance replica tailing), the **bulk build/backfill
@@ -99,16 +102,25 @@ See `HANDOFF.md` (kept current every session). The arc is **complete** in the se
 out under "Orientation" above: the tree is
 **sorry-free and axiom-clean**, and `bash formal/verify.sh` (the fail-closed gate;
 agents run it **phased** per [`docs/gate-runbook.md`](../docs/gate-runbook.md) —
-the one-shot exceeds the ~10-min command cap) was green when last measured
-(**2026-07-26, commit `f2b403c`**) — `lake build` + 0 sorries + zcli preflight + axiom
-audit (**455** `#print axioms` reports, one per audited theorem, only
-`[propext, Classical.choice, Quot.sound]`) + **330
-conformance tests (`conf-heavy` 80 + `conf-rest` 250), 0 skips, 0 xfails**; `pytest
-tests/` 606 passed, whole suite 936. **These counts are measurements, not gate-enforced
-invariants** — `verify.sh` derives the expected axiom count from `Audit.lean` itself and
-asserts only `skipped == 0 && passed > 0` on conformance, so re-measure rather than
-trusting the numbers here, and never read a count as coverage
-(`FINAL_REVIEW.md` header). T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over
+the one-shot exceeds the ~10-min command cap) is green — `lake build` + 0 sorries +
+zcli preflight + axiom audit (**457** `#print axioms` reports, one per audited
+theorem, only `[propext, Classical.choice, Quot.sound]`, measured 2026-07-27) +
+**391** conformance tests collected (`conf-heavy` 80 + `conf-rest` the rest; floors
+88 / 303), 0 skips, 0 xfails; `tests/` **728** collected (2026-07-27) — 744 with a
+PostgreSQL DSN configured, since `tests/test_postgres_ha.py` is dropped at collection
+without one. **Most of
+these counts are measurements, not gate-enforced invariants** — re-measure rather
+than trusting the numbers here, and never read a count as coverage
+(`FINAL_REVIEW.md` header). What IS enforced, since the 2026-07-26/27 gate
+hardening: `-ge` floors on the audit count (457), the conformance collection (391),
+the `tests/` collection (728) and the scanned-`.lean`-file count (64); an **identity
+pin** (`formal/audited_theorems.txt` — WHICH theorems are audited, not just how
+many); a **statement pin** (`formal/headline_statements.txt` — what the 26 headline
+theorems SAY, so `theorem graph_correct : True := trivial` fails instead of
+building green); a suspicion check on an axiom-free headline theorem; a
+`CORRESPONDENCE.md` anchor-resolution pin; and zero-tolerance
+`skipped`/`xpassed`/`deselected` parsing with a declared xfail budget for `tests/`
+only. See `docs/gate-runbook.md` §2. T0a/T0b/T1/T4 fully closed; T2a/T2b/T3/T5/T6 closed over
 the operational closure `ReachedBy` at `GraphAdmission ∧ W4Fragment` scope (staged
 widening W1→W4 complete). Phase 6 hardening complete: the graph-state conformance
 mode, `CORRESPONDENCE.md`, `FINAL_REVIEW.md`, **state-level conformance**,

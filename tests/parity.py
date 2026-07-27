@@ -265,6 +265,19 @@ class ParityEngine:
             for name in names + [GHOST_NAME, '*']:
                 subjects.append((s_pred, s_type, name))
 
+        if not subjects:
+            # ANTI-VACUITY. A schema whose relations are all Computed/TTU declares
+            # no Direct restriction, so `subject_shapes` is empty, so the grid is
+            # empty -- and `_assert_grid_parity` would then loop zero times and
+            # report parity for every backend after every op. That is the exact
+            # failure `formal/conformance/grid.py::assert_grid_nonvacuous` was
+            # written to close on the Lean side, and it had never crossed into
+            # `tests/`. Ghost subjects over every declared type keep the grid
+            # populated: the expected answer is False everywhere, so a backend
+            # that invents a membership out of nothing is still caught.
+            subjects = [('...', t, GHOST_NAME)
+                        for t in sorted({o_type for (o_type, _) in self.ast})]
+
         queries: list[tuple] = []
         for (o_type, rel) in sorted(self.ast):
             o_names = sorted(self._names_by_type.get(o_type, set()))
@@ -278,7 +291,13 @@ class ParityEngine:
 
     def _assert_grid_parity(self, context: str) -> None:
         oracle = self._oracle()
-        for q in self._grid():
+        grid = self._grid()
+        # A zero-length grid makes every assertion below unreachable and this
+        # method a no-op that reports success -- see the anti-vacuity note in
+        # `_grid`. Fail instead of passing silently.
+        assert grid, (f'parity grid is EMPTY after {context}: nothing was '
+                      f'compared, so this check passed vacuously')
+        for q in grid:
             expected = oracle.check(*q)
             for b in self.stateful:
                 got = b.check(q)

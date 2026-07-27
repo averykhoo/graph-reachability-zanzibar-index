@@ -31,9 +31,9 @@ test files, not the 6 that earlier revisions of this table listed:
 |---|---|---|
 | `test_conformance_spec.py` | 75 | `sem` (zcli) × oracle × real `SetEngine`, all 25 spec-scope corpora |
 | `test_conformance_random.py` | 20 | the same, over seeded randomized substores |
-| `test_conformance_graph.py` | 38 | Lean operational graph model (zcli `"graph"`) × real `WildcardIndex`+`DeltaProcessor` × `sem`, 19 in-fragment corpora |
+| `test_conformance_graph.py` | 47 | Lean operational graph model (zcli `"graph"`) × real `WildcardIndex`+`DeltaProcessor` × `sem`, **23** in-fragment corpora (measured 2026-07-27) |
 | `test_conformance_direct_arm.py` | 4 | the Direct-arm corpus at C-chain scope only — see §3.0 |
-| `test_conformance_state.py` | 19 | state-level equality, 19 in-fragment corpora, six projections |
+| `test_conformance_state.py` | 47 | state-level equality, **23** in-fragment corpora, **seven** projections (P7 declared 2026-07-27) + the residue-richness pin + the per-corpus orphan-node pin. **Read §3 item 4 before quoting this row** — it quantifies how much of the state is projected away |
 | `test_conformance_enum.py` | 6 | exhaustive enumeration: **6 shapes / 1021 stores** (per-shape K = 3 or 4) |
 | `test_conformance_enum_state.py` | 6 | state level over a deterministic stride-4 sample: **257 of those 1021** stores |
 | `test_conformance_remove.py` | 80 | both Python remove paths (set engine + graph index); this file IS the `conf-heavy` phase |
@@ -314,10 +314,42 @@ Everything §7 lists, plus the fragment carries:
    (§1), but a divergence strictly inside a projected class would not fail it:
    leaf-family edge content (P6 — pinned instead by the plans' evaluation
    output, check conformance, and the RuleSet snapshots), edge multiplicity
-   (P3 — refcounts vs list repeats), bridge edges (P2 — inert, re-verified over
-   all 19 in-fragment corpora 2026-07-26), and node GC (P5 — **`NodeV4` rows are
-   not compared at all**). Each is documented with its justification in
+   (P3 — refcounts vs list repeats), bridge edges (P2 — inert), node GC
+   (P5 — **`NodeV4` rows are not compared at all**), and residue versioning
+   (**P7** — `ResidueV1.version`, declared as a projection 2026-07-27; it was
+   silently dropped before). Each is documented with its justification in
    `formal/conformance/extractor.py`.
+
+   **QUANTIFIED 2026-07-27 (ZT-P4-5), because "state-level equality" implies far
+   more than this gate compares.** Driving `backends.graphindex_drive` over
+   `sorted(GRAPH_FRAGMENT)` (21 corpora at the time of measurement) and applying
+   `extractor.extract_sql_state`'s own filters: of **447** raw `EdgeV4` rows,
+   **231** were dropped by P1 (closure-only rows), **0** by P2 (which still never
+   fires), **62** by P6, and **154** were actually compared. **All 235 `NodeV4`
+   rows were dropped by P5** — of those, 194 are endpoints/references of the
+   compared state and so are pinned implicitly, and **41 are invisible to the
+   gate entirely**. Only **5 of 21** corpora produced ANY residue row (**11**
+   rows), so 16 corpora compared two empty residue dicts, and every one of the 11
+   had `|stars| == 1` and `|neg| == 1`.
+
+   **Three things follow, and they are the honest reading of §1's "state-level
+   equality" row.** (i) **P5 is not a formality.** The Lean `GraphState` *does*
+   have a `nodes` field, but zcli's `"graph-state"` dump emits only edges and
+   residues, the model never GCs while Python does (so set equality is false by
+   design), and Python's `NodeV4.implicit` / `reference_count` have no Lean
+   counterpart at all — there is no node property to compare. What is gated
+   instead is Python-side only:
+   `test_conformance_state.py::test_python_nodes_are_all_justified` (no orphan
+   node rows; 0 measured). `CORRESPONDENCE.md` §7's 2026-07-17 concession that
+   node-flag behaviour is "invisible to the gate by construction" is exactly
+   this, now with numbers. (ii) **P7 means invariant I7 (residue-version
+   monotonicity) is gated by nothing formal** — Lean's `Residue` has no version
+   field, so this is a modelling gap, not a representation difference; I7's only
+   pins are `tests/` paranoia runs. (iii) **The residue half was near-vacuous**
+   and is now partly closed: `corpus.py::residue_rich` (in `GRAPH_FRAGMENT`,
+   pinned by `::test_residue_rich_corpus_is_really_rich`) is the first corpus
+   with a multi-shape `stars`, a multi-subject `neg` and a `upos` member on two
+   derived keys. Most corpora still contribute edges only.
 5. **The representation layers** — interner/bitmap (`setengine`), SQL rows /
    ref-counted closure storage (`index_v4`), `rebuild()`/crash recovery, and the
    whole **sessions/transactions/concurrency** layer. That last one is wider than

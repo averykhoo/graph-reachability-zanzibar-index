@@ -2144,3 +2144,183 @@ the module alone is **19 passed, 1 xfailed**, so the expected full-suite figure 
 **704 passed, 1 xfailed**. `formal/` was NOT touched and `verify.sh` was NOT run by
 this session (other agents held it) -- the new module lives entirely under
 `tests/` and imports nothing from `formal/`.
+
+---
+
+## 2026-07-27 — the RDBMS evidence gap CLOSED against a real PostgreSQL (and what it falsified)
+
+Scope note: this entry does **not** revise the 2026-07-26 ZT-P1-5 EVIDENCE CAVEAT above.
+That caveat was an accurate statement of what was known on the day it was written, and it
+did exactly its job — it named the untested surface precisely enough that testing it was a
+one-session task. It stands as written; this entry supersedes it in fact.
+
+**What now exists.** A real server leg: `scripts/pg_local.sh` stands up a throwaway
+user-space **PostgreSQL 17.10** cluster (conda-forge binaries, scratch data directory,
+127.0.0.1 on a non-default port, `destroy` removes it without a trace), and
+`tests/test_postgres_ha.py` runs the HA/concurrency scenarios SQLite provably cannot
+express. `tests/dbengine.py` routes `ZANZIBAR_TEST_DSN` to the same server for
+`tests/test_concurrency.py` and the connected-store concurrency/multi-instance modules.
+`psycopg2-binary` is now in `requirements.txt`, marked as needed only for this leg —
+without a DSN everything skips, and `ZANZIBAR_PG_REQUIRED=1` turns a missing DSN into a
+hard error rather than a silent green. Also settled by the same decision: **MySQL is not
+a supported backend.** Supported = SQLite (dev/test) + PostgreSQL (server). Every
+load-bearing InnoDB claim in live code and living docs has been rewritten or deleted;
+`docs/history/**`, `benchmarks/results/**`, `formal/history/**`, `legacy/**` and the dated
+entries above keep theirs, because they record what was believed at the time.
+
+### VERIFIED (previously reasoned-only)
+
+* **`FOR UPDATE` is real, blocking, and row-granular.** `TupleSource._lock_source` on the
+  store's `SchemaV4` row makes a second writer sit in the lock queue until the server
+  cancels it (`QueryCanceled` after the statement timeout, not an instant pass-through),
+  while a *different* store's row stays free — so it is a row lock, not a table lock — and
+  it releases on commit. This arm had never executed in the repo's history.
+* **The documented LOCK ORDERING invariant holds**, observed rather than argued: with the
+  graph `StoreV4` row held by a third party, a writer queues on *that* lock while already
+  holding the `SchemaV4` one — source lock before store lock, exactly as the docstring
+  claims.
+* **Multi-writer admission is sound under real contention.** 4 concurrent `TupleSource`
+  instances on one store produce log rows that are contiguous and exactly-once, and the
+  resulting index is identical to a single-writer replay of the same tuples. A racing
+  observer thread never sees a hole (and the test fails if it never actually raced).
+* **`log_gap` / `WatermarkGap` fire on a genuinely out-of-order commit.** PostgreSQL
+  assigns a log id at INSERT and publishes visibility at COMMIT, so a lower id really can
+  land after a higher one; `advance_index` refuses the advance, commits nothing, and a
+  fresh pass applies both rows. Until now this was only ever demonstrated by *synthesizing*
+  the invisible commit on SQLite.
+
+### FALSIFIED (the valuable half)
+
+1. **`SERIALIZABLE` was NOT safe, and accepting it reproduced a live authorization
+   fail-open.** `SAFE_ISOLATION_LEVELS` admitted it on the stated grounds that
+   "PostgreSQL aborts the transaction with a serialization failure rather than letting it
+   act on a stale view." Measured: it does not. A plain log read is not a dangerous SSI
+   structure on its own, and `SELECT ... FOR UPDATE` against a row another transaction only
+   LOCK-modified raises no conflict. So a SERIALIZABLE `TupleSource` pinned its snapshot at
+   open, missed a concurrently committed **revocation**, jumped its watermark past it, and
+   then answered `check(..., at_least=<revocation token>)` with **True** — the freshness
+   mechanism certifying a state that never existed. Fixed: `SAFE_ISOLATION_LEVELS` is now
+   `frozenset({'READ COMMITTED'})`. Repro: `test_serializable_bind_is_refused`.
+2. **`log_gap`'s `FOR SHARE` was not what made it sound.** The docstring argued "InnoDB
+   serves locking reads from the LATEST committed version, so `FOR SHARE` surfaces the
+   hidden row." That is an InnoDB property — about a database this project does not
+   support — and it is false of PostgreSQL, where a locking read under a pinned snapshot is
+   served from the transaction snapshot like any other read. Measured: `FOR SHARE` returned
+   `[]` for a row committed after the snapshot and `log_gap` returned `None`, blind to
+   exactly the row it exists to find. The real guarantee is upstream — the isolation gate
+   admits only READ COMMITTED, under which every statement sees the newest commit. Pinned
+   in the direction that matters by `test_log_gap_is_snapshot_served_under_a_pinned_snapshot`,
+   which asserts the *blindness*: weaken `SAFE_ISOLATION_LEVELS` and the gap check is
+   silently disarmed. **This is the entry's headline lesson: an unsupported-database fact,
+   sitting in a comment, was half the justification for a real bug.**
+3. **`assert_read_isolation` was not on the public write path.** It ran only in
+   `ConnectedStore.__init__`, while `TupleSource` — exported from `connectedstore/__init__`
+   and a complete write path in its own right — got no check at all. The reproduced
+   SERIALIZABLE escalation ran entirely through `TupleSource`, never touching
+   `ConnectedStore`. It is now called from `TupleSource.__init__` too (cheap, idempotent, a
+   no-op on SQLite).
+4. **"A replica reader never sees torn state" is a SQLite-WAL inheritance, not a property
+   of the target dialect.** PostgreSQL READ COMMITTED — the level this design *requires* —
+   re-snapshots per **statement**, so a multi-statement read straddles concurrent commits
+   and two identical `SELECT`s in one transaction return different answers. Demonstrated
+   deterministically (`test_read_committed_gives_a_reader_no_stable_snapshot`) rather than
+   left to surface as a flake. Nothing here is a wrong *answer* today, but any reasoning
+   that assumed a stable read snapshot on the server is void.
+
+Three strict xfails carry live PostgreSQL-only findings forward, each with an explicit
+`raises=` (a bare strict xfail also "passes" when the database is unreachable — the exact
+silent-green this module exists to eliminate). The sharpest: `TupleSource.__init__` reads
+`log_watermark` and *then* rebuilds the set engine — two statements, atomic under a pinned
+SQLite-WAL snapshot, not atomic at READ COMMITTED — so a write committed between them lands
+in the rebuild but not the watermark, and the next `catch_up_evaluator()` raises
+`RuntimeError("log ADD of an already-present tuple")` permanently. Fails loud, so no wrong
+answer, but a routine concurrent open bricks the instance. There is no one-line fix:
+reading the watermark *after* the rebuild converts the loud failure into a silent skip, so
+the pair has to become genuinely atomic.
+
+**META-lesson, matching the 2026-07-26 one in kind:** "reasoned from documented semantics"
+is evidence about the documentation, not about the system — and it is worth *less* than
+"no corpus", because it carries the confident shape of a proof. Two of the four
+falsifications above were confidently-worded comments citing a database the project does
+not run. Prose about a dialect is executable-adjacent: it decides what future changes are
+considered safe. If a claim about server behaviour is load-bearing, either a test asserts
+it against that server or the comment says out loud that it is unverified.
+
+---
+
+## 2026-07-27b — the remaining zero-trust backlog cleared, and what was deliberately NOT closed
+
+Same day, after the PostgreSQL entry above. `ZT-P1-8` (a–e), `ZT-P1-6a`, outbox
+retention, `ZT-P4-4/4-5/4-6`, the `check_invariants` docstring, and both orphaned
+`formal/history/` findings. The per-fix record is on the HANDOFF board; this entry
+exists for the parts a future reader would otherwise have to re-derive — the places
+where the fix is deliberately NARROWER than the finding, and the residuals.
+
+### Two fixes are narrower than their findings, on purpose
+
+**`lookup(at_least=)` REFUSES; it does not fall back.** `check`'s third rung answers
+from the set engine when the index lags. The enumeration surfaces cannot: graph
+`node_ids` are `NodeV4` row ids, set-engine ones are recycled instance-local interner
+ids; markers are `(type, predicate, variant)` triples vs `(type, predicate)` pairs; and
+`excluded_node_ids` — the derived `neg` channel — has no set-engine counterpart at all.
+A fallback would silently change *what the return value means* as a function of worker
+lag. And in the case that actually matters, a stale index, the graph node rows for the
+un-applied tuples **do not exist**, so even a translation bridge is impossible in
+principle rather than merely expensive. So the surfaces now ACCEPT a token and raise
+`LookupNotFresh` when they cannot honour it. The distinction being asserted:
+*refusing a demand you cannot meet is not the same as not offering one.* Before this,
+a revoked principal stayed enumerable with no API to object — and list-objects /
+list-users is exactly what a revocation UI reads. `docs/architecture/decision-log.md`'s
+"at_least is check-only" entry is revised in place rather than deleted; the
+prerequisite it names (a portable lookup key contract for both backends) is unchanged
+and still unbuilt.
+
+**The closure fan-out cap EXEMPTS removals.** `ZANZIBAR_MAX_CLOSURE_FANOUT` bounds what
+a single ADD may materialise while holding both per-store locks. Applying it to removes
+would be actively harmful twice over: an over-capped region would become permanently
+unshrinkable (a worse denial of service than the one being fixed), and in an
+authorization system a cap that can refuse a REVOCATION is a fail-open. The cap is
+counted before anything is materialised, so a rejection leaves no partial state.
+
+### Residuals — the honest part
+
+1. **The cap does not stop the DoS that motivated it.** The review's scenario was
+   re-reproduced (240 tuples → 14,640 closure rows, 2.2 s here) and its peak
+   *per-write* fan-out is **120**. It is 240 cheap writes, not one expensive one. The
+   cap bounds a single write's lock-hold; the N² accumulation needs a **store-level
+   quota**, which was not built. Do not read "resource bounds added" as "the measured
+   DoS is closed".
+2. **≥3-strata coverage of the LEAN model cannot be closed without widening the
+   fragment.** `runCascade2` is two literal nested applications — the round count is
+   structural, not a parameter — and `W4Fragment.twoStrata` is a hypothesis of
+   `graph_correct`. Widening needs a `runCascadeN` and a re-proof of the whole W3d-2
+   layer. What is NOT ungated is Python: `test_multi_stratum_three_way` already drives
+   the real cascade at 3 strata. The review's framing ("the ≥3-stratum cascade path is
+   tested by NOTHING") was outdated; the correct statement is narrower and about Lean.
+3. **Still at zero coverage anywhere:** wildcard usersets `[T:*#p]`, and the
+   `derived-tupleset-ttu` plan leaf. Both were left OUT of the new plan-leaf coverage
+   floor rather than papered over. The floor exists to make the next gap nameable.
+4. **`_any_residue_reference`'s complete `ResidueV1` scan is still unbenchmarked**, and
+   it is now unconditional on every node-release path after the `ZT-P0-1` fix.
+
+### Two findings that only appeared because a fix forced an audit
+
+* `processor_writes` had a **downstream mirror** — `ReachabilityIndex._writing_derived`,
+  the bool the row writer actually consults to stamp `EdgeV4.derived`, with the same
+  shared-object defect. Fixing one flag without auditing every site would have left the
+  half that touches the stored row.
+* `prune_outbox` must **keep the head row**. `id` is the SQLite rowid, so emptying the
+  table restarts ids at 1 and a consumer holding cursor 500 never sees the next 500
+  deltas — silent, permanent delta loss, on the one dialect CI runs. A retention helper
+  written without that guard would have been a data-loss bug shipped as housekeeping.
+* No corpus anywhere compiled a **`derived-userset` plan leaf** (histogram over all 69
+  schemas the harness reads: `closure 211 · derived-computed 42 · derived-ttu 50 ·
+  derived-userset 0`) — in the exact area where five real divergences were found. The
+  `PDerivedUserset` orphan turned out to name a real hole, not a stale worry.
+
+**META-lesson, matching the one above.** Every item here was filed by a review that
+read the code carefully. Three of them were *wrong in detail* — the strata claim was
+outdated, the DoS was misattributed to a single write, and the "no node identity in
+Lean" premise was false (`GraphState` does have `nodes`). A finding is a hypothesis
+with a citation, not a verdict; re-measure before fixing, and report the correction as
+loudly as the fix.

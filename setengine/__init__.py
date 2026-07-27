@@ -9,10 +9,12 @@ boolean operators (`and`, `but not`) the closure index cannot represent.
 from .setops import SetOps, PySets, RoaringSets, DEFAULT_SETOPS, ALL_SETOPS
 from .memberset import MemberSet
 from .models import TupleV1
-from .engine import SetEngine, SetEngineBackend, Interner, NodeSets, LookupResult
+from .engine import (SetEngine, SetEngineBackend, Interner, NodeSets, LookupResult,
+                     UnloggedWriteRefused)
 
 __all__ = [
     'SetOps', 'PySets', 'RoaringSets', 'DEFAULT_SETOPS', 'ALL_SETOPS',
     'MemberSet',
     'TupleV1', 'SetEngine', 'SetEngineBackend', 'Interner', 'NodeSets', 'LookupResult',
+    'UnloggedWriteRefused',
 ]

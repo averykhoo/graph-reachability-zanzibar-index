@@ -31,8 +31,11 @@ when their `reference_count` (direct-edge endpoints) hits zero.
 
 **Concurrency**: `_lock_store` takes `FOR UPDATE` on the store row — serializes the
 whole logical write (cycle check + ref-count updates + cascade) per store on
-PostgreSQL/MySQL; renders to nothing on SQLite (which serializes writers itself).
-One `Session` per thread, never shared.
+PostgreSQL (observed blocking + row-granular, `tests/test_postgres_ha.py`); on SQLite
+`FOR UPDATE` renders to nothing, so `take_row_write_lock` substitutes a no-op UPDATE
+of the same row to take the RESERVED write lock. One `Session` per thread, never
+shared. Supported backends are SQLite and PostgreSQL only — see
+[`correctness.md`](./correctness.md) §4.
 
 ## Wildcards (`wildcard.py`)
 

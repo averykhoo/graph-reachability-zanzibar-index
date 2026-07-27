@@ -21,7 +21,7 @@ This file used to claim, flatly, that `GRAPH_FRAGMENT` is "inside GraphAdmission
 verbatim". That was FALSE for one corpus, and the Lean tree itself proves it
 false. Corrected 2026-07-26 (ZT-P3-3). The honest statement is:
 
-**(A) THEOREM-BACKED — `_THEOREM_BACKED`, 20 of the 21 corpora.** These satisfy
+**(A) THEOREM-BACKED — `_THEOREM_BACKED`, 22 of the 23 corpora.** These satisfy
 `GraphAdmission` + `W4Fragment`, so the honesty theorems `graphRun_reached` /
 `graphRun_check_eq_sem` (`GraphIndex/Exec.lean`) compose with the final T2b
 `graph_correct` (`FullScope.lean`): whatever this driver prints for such a
@@ -140,6 +140,29 @@ _THEOREM_BACKED: frozenset[str] = frozenset({
     "star_two_strata_churn",
     "nary_union",
     "nary_intersection",
+    # Added 2026-07-27 (ZT-P4-4 / ZT-P4-5(d)). Fields checked against
+    # FullScope.lean::W4Fragment + GraphAdmission, argument written down in the
+    # corpus.py entries:
+    #   `nary_union_derived4` — computedOnly (both derived defs read only
+    #     computed operands; the 4-arm union's arms are a/b/c/safe, all computed
+    #     refs), twoStrata (measured 2), wsBare + bareStar vacuous (no wildcard
+    #     restriction and no star tuple anywhere), ttuStarFree + term's
+    #     NoTtuTarget vacuous (no TTU), term's NoStoreSubjectR holds (every
+    #     stored subject predicate is `...`), storeValid holds (no Direct arm on
+    #     a derived def).
+    #   `residue_rich` — structurally `taint_union_userset_arm` (already
+    #     theorem-backed here) plus a second bare star shape `svc:*` and a second
+    #     excluded subject: computedOnly (viewer = base but not blocked, approver
+    #     = viewer or admin — all operands are computed refs to untainted or
+    #     derived relations, no Direct arm on a derived def), twoStrata (viewer
+    #     then approver), wsBare (both wildcard shapes are BARE: (user,'...'),
+    #     (svc,'...')), bareStar (both star subjects bare-predicate, every object
+    #     concrete), ttuStarFree + NoTtuTarget vacuous (no TTU),
+    #     NoStoreSubjectR (the one userset-subject tuple is `group:eng#member`,
+    #     and `member` is UNTAINTED — no stored subject predicate names a derived
+    #     relation), storeValid holds.
+    "nary_union_derived4",
+    "residue_rich",
 })
 
 #: Corpora KNOWN to be outside the final theorems' scope, kept in the gate as an
@@ -152,7 +175,7 @@ _DIFFERENTIAL_ONLY: frozenset[str] = frozenset({
 })
 
 #: The split this module's docstring claims, asserted so the prose cannot rot.
-_EXPECTED_SPLIT = (20, 1)
+_EXPECTED_SPLIT = (22, 1)
 
 # Anti-vacuity floor for the graph query grid (ZT-P4-4). Measured 2026-07-26
 # over `GRAPH_FRAGMENT`: the smallest grid is `wildcard_public` at 7 queries

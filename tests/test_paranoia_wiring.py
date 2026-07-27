@@ -117,6 +117,14 @@ def test_paranoia_off_is_the_pre_existing_write_behaviour(session, load_fga_sche
 # (b) enabled detects injected corruption and FAILS CLOSED
 # --------------------------------------------------------------------------- #
 
+# This test injects corruption on purpose and then keeps writing through the SAME
+# Session, so SQLAlchemy re-flushes ids it already has in its identity map and emits
+# `SAWarning: Identity map already had an identity for ...`. Benign, and a direct
+# consequence of the deliberate corruption -- but it was the ONLY warning source in
+# the whole 728-test suite, contributing all 9 warnings in the gate's tile output.
+# Silenced HERE, narrowly, rather than globally: 9 permanently-unexplained warnings
+# in gate output are exactly the noise a 10th, real one would hide in.
+@pytest.mark.filterwarnings('ignore:Identity map already had an identity:Warning')
 @pytest.mark.parametrize('level', ['residue', 'full', True])
 def test_paranoia_aborts_the_write_on_a_dangling_residue_id(session, load_fga_schema, level):
     """The ZT-P0-1 corruption class (a residue vouching for a node id that no longer

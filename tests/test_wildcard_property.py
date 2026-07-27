@@ -165,4 +165,16 @@ def test_wildcard_property_vs_oracle(load_fga_schema, seed):
             if got != exp:
                 fail(f'check mismatch: index={got} oracle={exp}', query=q)
 
+    # ANTI-VACUITY. Every `except ValueError: ... continue` above skips the rest
+    # of the loop body -- which is where BOTH the invariant check and the entire
+    # oracle grid comparison live. A regression that makes every write raise
+    # (an over-eager admission check, a cycle detector false-positive) would
+    # `continue` all STEPS times, leave `history` empty, compare nothing, and
+    # PASS. Rejections are legitimate and expected here, so the bar is a
+    # majority, not all of them.
+    assert len(history) >= STEPS // 2, (
+        f'only {len(history)}/{STEPS} ops were accepted (seed={seed}) -- the '
+        f'invariant and oracle-grid checks ran that few times, so this property '
+        f'test verified almost nothing. Suspect a write path rejecting wholesale.')
+
     session.close()

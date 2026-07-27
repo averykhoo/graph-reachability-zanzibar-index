@@ -108,9 +108,11 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
     back to ``log_rows`` exactly as today."""
     # Serialize concurrent appliers on the index store BEFORE reading the cursor:
     # two workers reading the same cursor value would double-apply log rows (a
-    # lost-update on ref-counted state). FOR UPDATE on PostgreSQL/MySQL; on SQLite
-    # the database write lock + the caller's retry-on-busy provide the same
-    # serialization (the cursor is re-read fresh on retry).
+    # lost-update on ref-counted state). A real ``SELECT ... FOR UPDATE`` on the
+    # supported server (PostgreSQL -- verified row-granular and genuinely blocking in
+    # tests/test_postgres_ha.py); on SQLite the database write lock + the caller's
+    # retry-on-busy provide the same serialization (the cursor is re-read fresh on
+    # retry).
     widx.idx._lock_store()
     session.refresh(cursor)
 
@@ -138,14 +140,19 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
         if proc is not None:
             proc.run_cascade(wm)
     # ZT-P1-5: advance to the CONTIGUOUS head, never blindly to ``rows[-1].id``. The
-    # rows above are a contiguous prefix of what THIS SNAPSHOT can see -- which is not
-    # the same as a contiguous prefix of the log when the snapshot is pinned (MySQL/
-    # InnoDB REPEATABLE READ is the default): a concurrently committed row below
-    # ``rows[-1].id`` stays invisible, the cursor jumps over it, and it is never applied
-    # again -- while ``_fresh_enough(token)`` happily certifies the resulting stale
-    # ALLOW. ``log_gap`` re-reads the interval with a LOCKING read (current committed
-    # truth, not the snapshot) and costs nothing at all in the contiguous case,
-    # including the sync one-row fast path.
+    # rows above are a contiguous prefix of what this session could SEE, which is not
+    # the same as a contiguous prefix of the LOG. On a real MVCC server the two come
+    # apart even at READ COMMITTED, the only level ``assert_read_isolation`` admits:
+    # PostgreSQL assigns the log id at INSERT time but publishes visibility at COMMIT
+    # time, so a LOWER id can land after a higher one and a read taken in between has a
+    # genuine hole in it (measured -- test_postgres_ha.py::
+    # test_log_gap_finds_a_row_committed_out_of_id_order). Advance blindly and that row
+    # is jumped over and never applied again, while ``_fresh_enough(token)`` happily
+    # certifies the resulting stale ALLOW. ``log_gap`` re-reads the interval and costs
+    # nothing at all in the contiguous case, including the sync one-row fast path.
+    # (It does NOT rescue a snapshot-PINNED session: under REPEATABLE READ/SERIALIZABLE
+    # the re-read is served from the same blind snapshot -- which is why those levels
+    # are refused at construction rather than compensated for here.)
     head = rows[-1].id
     gap = log_gap(session, cursor.source_store_id, cursor.applied_log_id, head,
                   [r.id for r in rows])

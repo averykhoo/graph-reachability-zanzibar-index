@@ -108,10 +108,13 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   `apply_logged`, O(delta)), not a full O(live tuples) rebuild. Fine at human scale;
   a hot multi-reader deployment would still want a shared invalidation signal to
   avoid per-reader tailing.
-* **Concurrency coverage is SQLite-shaped.** `_lock_store`/`FOR UPDATE` semantics
-  on PostgreSQL/MySQL are reasoned about, not tested here; the pysqlite
-  transaction quirks are worked around in tests, which means production engines
-  exercise a *different* (stricter) isolation path than CI does.
+* **Concurrency coverage is SQLite-shaped by default, with a real-server leg on
+  demand.** `_lock_store`'s `FOR UPDATE` arm no longer runs only in the imagination:
+  `tests/test_postgres_ha.py` drives it against a live PostgreSQL and observes the
+  block, its row granularity, and its release. But that leg is **opt-in**
+  (`ZANZIBAR_TEST_DSN`), so a default `pytest tests/` still proves nothing about the
+  server path; the pysqlite transaction quirks worked around in the other tests mean
+  the two legs exercise genuinely different isolation paths.
 * **Paranoia off = most runtime checking off.** Production would run on the
   by-construction arguments plus whatever sampling is wired then; the 2× suite
   cost is paid only while prerelease.
@@ -126,12 +129,28 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   evaluator up → validate → append, one transaction), so duplicate / remove-existence
   / cycle-parity admission validates against caught-up committed state, and the
   in-section append makes log ids commit in order per store (closing the out-of-order
-  log-id skip hazard). **Caveat, kept prominent**: as with `_lock_store`, the
-  `FOR UPDATE` semantics that make this hold on PostgreSQL/MySQL are *reasoned about,
-  not CI-tested* — SQLite renders the lock to a no-op and serializes writers itself,
-  so production engines exercise a different (stricter) isolation path than CI does.
-  Throughput under contention is likewise untested beyond the retry-on-busy
-  convergence tests.
+  log-id skip hazard). **Caveat, kept prominent but narrowed (2026-07-27)**: the
+  `FOR UPDATE` semantics that make this hold are now *observed* on PostgreSQL —
+  lock ordering, contiguous exactly-once log rows under 4 concurrent writers, and an
+  index identical to a single-writer replay — but only on the opt-in server leg, and
+  that leg also *falsified* three things this document used to assume (see
+  `docs/spec-deviations.md` 2026-07-27). SQLite still renders the lock to a no-op and
+  serializes writers itself, so the default CI run exercises a different path.
+  Throughput under contention remains untested beyond the retry-on-busy convergence
+  tests.
+* **Supported backends, and where the dialect knowledge lives.** SQLite is the
+  dev/test backend; **PostgreSQL is the supported server and the only one the gate
+  ever exercises** (`tests/test_postgres_ha.py`, via `bash scripts/pg_local.sh start`
+  + `ZANZIBAR_TEST_DSN=<dsn>`). **MySQL is not supported** — treat any InnoDB claim in
+  this tree outside `docs/history/` as a bug, not as background: one such claim was
+  half the justification for accepting `SERIALIZABLE`, which reproduced a live
+  authorization fail-open. `READ COMMITTED` is the only accepted isolation level and
+  `TupleSource`/`ConnectedStore` refuse anything else at construction
+  (`UnsafeIsolationLevel`). All access is otherwise flavour-agnostic through
+  SQLModel/SQLAlchemy; the entire dialect-specific surface is three places —
+  `index_v4/core.py::is_sqlite`, `index_v4/core.py::take_row_write_lock`, and
+  `connectedstore/source.py::assert_read_isolation` — and new branching belongs there
+  rather than spread across call sites.
 
 ## 5. How to extend without breaking the argument
 

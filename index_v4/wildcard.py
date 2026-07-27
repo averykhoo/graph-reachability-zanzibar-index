@@ -20,7 +20,7 @@ from types import EllipsisType
 from sqlalchemy import tuple_
 from sqlmodel import select
 
-from .core import ReachabilityIndex
+from .core import ReachabilityIndex, _ThreadFlag
 from .models import EdgeV4, NodeV4, ResidueV1
 from zanzibar_utils_v1 import (AdmissionRejected, SchemaInfo,
                                norm_pred as _norm_pred,
@@ -64,7 +64,18 @@ class WildcardIndex:
         # Derived-family write exclusivity (boolean spec §3.3/I5): only the delta
         # processor may write incoming direct edges on a derived-public family. The
         # processor sets this flag around its own writes.
-        self.processor_writes = False
+        #
+        # THREAD-SCOPED (zero-trust review ZT-P1-8e). This flag is the ENTIRE I5
+        # bypass window, and as a plain instance attribute the window belonged to the
+        # OBJECT, not to the thread that opened it: two threads sharing one
+        # WildcardIndex meant the processor's cascade on thread A silently authorised
+        # a USER write on thread B to land directly on a derived-public family. The
+        # repo documents "one Session per thread" but nothing enforces it, and this is
+        # the one flag whose violation costs authorization state (a derived grant
+        # nobody derived, committed and invisible) rather than a DB error. Per-thread
+        # storage makes the window belong to its opener; every other thread reads the
+        # closed default and gets the ordinary loud I5 refusal below.
+        self._processor_writes_flag = _ThreadFlag()
         # Per-reconcile residue read cache (perf P3). None outside a reconcile: the
         # read path then behaves exactly as before (no memoization). The delta
         # processor installs a fresh dict for the duration of one full-object /
@@ -78,6 +89,21 @@ class WildcardIndex:
         # mutable neg/upos sets, preserving the callers that mutate them in place.
         self._residue_cache: dict[tuple[str, str, str],
                                   tuple[frozenset, tuple[int, ...], tuple[int, ...]]] | None = None
+
+    @property
+    def processor_writes(self) -> bool:
+        """Is the CALLING thread inside the delta processor's write window? (I5)
+
+        Read by ``_assert_derived_exclusivity`` (may this write touch a derived-public
+        family at all) and ``_derived_write_ctx`` (is the resulting direct edge row a
+        derived grant). Both fail CLOSED for a thread that never opened the window --
+        the write is refused, and no row is stamped ``derived`` -- so a mis-threaded
+        caller is told, loudly, instead of quietly writing authorization state."""
+        return self._processor_writes_flag.on
+
+    @processor_writes.setter
+    def processor_writes(self, value: bool) -> None:
+        self._processor_writes_flag.on = bool(value)
 
     def _assert_derived_exclusivity(self, relation: str, o_type: str) -> None:
         if self.processor_writes:

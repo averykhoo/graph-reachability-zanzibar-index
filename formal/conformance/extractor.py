@@ -41,12 +41,13 @@ outside these classes fails the gate:
      `w_any → object` and `subject → w_all`), so the bridge classes are
      exactly identifiable: drop Python direct edges whose TARGET is a `w_any`
      node or whose SOURCE is a `w_all` node.
-     Honesty note (probed 2026-07-12): on ALL 15 `GRAPH_FRAGMENT` corpora the
-     compiled `bridged_in_shapes`/`bridged_out_shapes` are EMPTY — bridges
-     arise only for wildcard-userset / object-wildcard shapes, both outside
-     `W4Fragment` — so P2 currently never fires; it is kept (and documented)
-     for robustness if the corpus set ever widens, not because it is
-     load-bearing today.
+     Honesty note (probed 2026-07-12; RE-MEASURED 2026-07-27 over all 21
+     then-current `GRAPH_FRAGMENT` corpora — 447 raw edge rows, P2 dropped
+     **0** of them): the compiled `bridged_in_shapes`/`bridged_out_shapes` are
+     EMPTY — bridges arise only for wildcard-userset / object-wildcard shapes,
+     both outside `W4Fragment` — so P2 still never fires; it is kept (and
+     documented) for robustness if the corpus set ever widens, not because it
+     is load-bearing today.
   P3 **Multiplicity.** Python ref-counts a repeated direct edge in one row
      (`direct_edge_count = 2`); the model's edge list repeats the pair. Both
      sides compare as SETS (the Lean dump already deduplicates).
@@ -60,6 +61,28 @@ outside these classes fails the gate:
      the processor GCs derived-public anchors; the model never removes a node
      (and never creates bridge endpoints' `w` nodes). Node sets differ by
      design; the state gate compares what nodes MEAN — edges and residues.
+     **Precisely what P5 costs (ZT-P4-5(c), measured 2026-07-27).** It is not
+     "the Lean model has no nodes": `GraphIndex/State.lean::GraphState` HAS a
+     `nodes : List NodeKey` field. Three separate facts make it uncomparable:
+     (i) zcli's `"graph-state"` dump emits only `edges` and `residues`
+     (`Cli.lean::stateJson` has no node key), so no node data crosses the seam
+     at all; (ii) even if it did, the model never GCs while Python does, so
+     node-SET equality is false by design — the gate would have to compare a
+     projection, and any projection weak enough to hold is implied by the edge
+     and residue equality already asserted; (iii) there is no comparable node
+     PROPERTY — Python's `NodeV4.implicit` and `NodeV4.reference_count` have no
+     counterpart in Lean's `NodeKey` (which is just `(type, name, pred,
+     variant)`). Quantified: of **235** `NodeV4` rows across the in-fragment
+     corpora, **194** are endpoints/references of the COMPARED state and so are
+     pinned implicitly by the edge+residue equality; the remaining **41** are
+     invisible to this gate entirely — they exist only to carry P1-dropped
+     closure rows or P6-dropped leaf-family edges. What IS gated instead, and
+     Python-side only:
+     `test_conformance_state.py::test_python_nodes_are_all_justified` (no orphan
+     node rows; 0 orphans measured across every in-fragment corpus). Node FLAG
+     behaviour remains, in `CORRESPONDENCE.md` §7's words, "invisible to the
+     gate by construction" — the concession is now quantified, and repeated in
+     `FINAL_REVIEW.md` §3 / `ARCHITECTURE.md` §6.
   P6 **Leaf-family storage split.** Python's compiler routes a boolean def's
      untainted operand relations onto `<relation>.<index>` closure-leaf
      families (`RuleSet.apply` emits e.g. `editor` -> `viewer.0` copies —
@@ -75,6 +98,29 @@ outside these classes fails the gate:
      the residues and processor-written derived edges — is compared EXACTLY
      here, on top of check-verdict conformance and the compiled-RuleSet
      snapshot tests.
+
+  P7 **`ResidueV1.version` is dropped** (declared 2026-07-27, ZT-P4-5(b); it
+     was being dropped SILENTLY before, which is the thing this projection
+     fixes — an undeclared exclusion is indistinguishable from an oversight).
+     `index_v4/models.py::ResidueV1` carries a `version` column, incremented by
+     `index_v4/processor.py::DeltaProcessor._store_residue` on every changing
+     reconcile and checked for monotonicity by invariant **I7**
+     (`index_v4/invariants.py::_check_residue_rows`).
+     **Reason it cannot be compared: the Lean model has no such field.**
+     `GraphIndex/State.lean::Residue` is `⟨stars, neg, upos⟩` — its doc comment
+     says so in as many words ("whose `version` column has NO Lean
+     counterpart") — and `grep -rn 'version' lean/ZanzibarProofs/GraphIndex/`
+     finds only that comment. There is no monotone counter anywhere in the
+     model to compare against, so this is a MODELLING GAP, not a
+     representation difference like P1–P6: unlike those, no argument recovers
+     the dropped information from what remains. It is recorded as such in
+     `CORRESPONDENCE.md` §7.2, and the consequence is stated there and here:
+     **I7 is gated by nothing formal.** Its only pins are Python-side —
+     `index_v4/invariants.py` under paranoia mode in `tests/`. Concretely, the
+     `version` values this gate throws away are real data: measured 2026-07-27,
+     the 11 residue rows across the curated state gate carry versions 2 and 3
+     (and the `residue_rich` corpus's rows 4 and 5), i.e. the counter is
+     genuinely advancing and genuinely unobserved here.
 
 Anything NOT projected — the direct grant/rewrite edge set (including
 rule-routed fan-out and processor-written derived edges) and every non-empty
@@ -102,7 +148,7 @@ SubjKey = tuple  # (type, name, predicate)
 # --------------------------------------------------------------------------- #
 
 def extract_sql_state(session, store_id: str) -> dict:
-    """Read the canonical state off the SQL tables (projections P1–P3, P5)."""
+    """Read the canonical state off the SQL tables (projections P1–P3, P5–P7)."""
     from index_v4.models import EdgeV4, NodeV4, ResidueV1
 
     nodes: dict[int, NodeKey] = {
@@ -145,6 +191,9 @@ def extract_sql_state(session, store_id: str) -> dict:
             return frozenset(out)
 
         key = (obj[0], obj[1], r.relation)
+        # P7: `r.version` is deliberately NOT part of the canonical form — Lean's
+        # `Residue` has no such field, so there is nothing to compare it to. See
+        # the P7 paragraph in the module docstring; I7 is gated Python-side only.
         residues[key] = (stars, _subjects(r.neg, "neg"),
                          _subjects(r.upos, "upos"))
 

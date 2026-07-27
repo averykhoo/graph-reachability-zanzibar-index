@@ -156,12 +156,29 @@ def _fail(msg: str) -> None:
 def check_invariants(session: Session, store_id: str,
                      schema_info: 'SchemaInfo | None' = None,
                      residue_versions: dict[int, int] | None = None) -> None:
-    """Assert I1-I6 + I10 (+ node encoding) over the store's committed-or-pending rows.
+    """Assert I1-I7 + I10 + I13 (+ node encoding) over the store's committed-or-pending
+    rows.
 
-    ``schema_info`` gates the schema-dependent invariants (I3 bridge hygiene, I4
-    namespace classification, I5 derived-flag exclusivity, I6 residue placement);
-    without it only the schema-independent ones run. ``residue_versions`` (a mutable
-    dict the caller keeps across checks) enables I7 version monotonicity.
+    Read that list against the BODY below, not against prose elsewhere: three
+    documents gave three different accounts of which invariants run per commit and
+    none of them matched this function (zero-trust review 2026-07-26, P5). This
+    headline was one of them -- it stopped at I6 + I10, silently dropping I7 and the
+    I13 refcount/degree clause, which is the one that makes the corruption defeating
+    bridge and derived-node GC visible at all. An UNDERstated checker docstring is not
+    cosmetic: it is what an operator reads to decide what paranoia mode buys them.
+
+    Unconditional: node encoding, I1 (count algebra), I2 (acyclicity of the direct-edge
+    graph), I3's direct-edge variant + same-shape bridge rules, I13 (reference_count ==
+    direct-edge degree), and I10 (outbox row sanity).
+
+    ``schema_info`` gates the schema-dependent invariants: the rest of I3 (bridge
+    completeness/exclusivity), I4 namespace classification, I5 derived-flag
+    exclusivity, I6 residue placement; without it only the schema-independent ones
+    run. ``residue_versions`` (a mutable dict the caller keeps across checks) enables
+    I7 version monotonicity.
+
+    Not here, by design: I9 is the processor's fixpoint audit (``audit_fixpoint``) and
+    I11/I12 are cross-store snapshot comparisons the test harness makes.
     """
     nodes, edges = _load(session, store_id)
     by_id = {n.id: n for n in nodes}

@@ -5,6 +5,7 @@
 #   bash formal/verify.sh                 # all gates, one shot (uncapped / CI)
 #   bash formal/verify.sh lean            # steps 1-4 only  (Lean build + audit)
 #   bash formal/verify.sh conf-tile:1/5   # step 5, tile 1 of 5 of the conformance dir
+#   bash formal/verify.sh tests-tile:1/4  # step 5, tile 1 of 4 of tests/
 #   bash formal/verify.sh conf-heavy      # step 5, the one heavy file      (legacy split)
 #   bash formal/verify.sh conf-rest       # step 5, the dir minus that file (legacy split)
 #
@@ -13,7 +14,14 @@
 # work -- same anti-vacuous guards, no coverage gaps -- into cap-fitting pieces an
 # unattended runner can execute in sequence. RECOMMENDED SEQUENCE (2026-07-26):
 #
-#     lean → conf-tile:1/5 → conf-tile:2/5 → conf-tile:3/5 → conf-tile:4/5 → conf-tile:5/5
+#     lean → conf-tile:1/5 … conf-tile:5/5 → tests-tile:1/4 … tests-tile:4/4
+#
+# The `tests-tile:I/K` phases are new on 2026-07-27 and are the reason the whole
+# gate is now mechanical. `tests/` (728 tests: the 4-way validation matrix, the
+# lookup-surface oracle gate, the hypothesis campaign, the snapshot gate) had NO
+# branch in this script -- running it was an agent typing `pytest tests/` and
+# reading the tail, with no floor, no skipped/xfailed parse and no exit-code
+# assertion. It now goes through exactly the same guards as conformance.
 #
 # Warm timings on the dev box (2026-07-26): lean ~0.5-3 min, each conf tile 170-235 s
 # (<= 40% of the 600 s cap). Phase order matters only in that `lean` builds the zcli
@@ -43,12 +51,30 @@
 #      'declaration uses sorry' grep as step 1
 #   4. axiom audit (ZanzibarProofs.Audit, HARD)  -- no sorryAx / ofReduceBool / custom
 #      axioms may appear; only propext, Classical.choice, Quot.sound; PLUS a
-#      hard-coded floor on the number of audited theorems
+#      hard-coded floor on the number of audited theorems; PLUS (2026-07-27,
+#      ZT-P2-5) three checks that make the audit an IDENTITY and a STATEMENT
+#      check rather than a bare COUNT:
+#        4a IDENTITY  -- the live `#print axioms` name set must be a SUPERSET of
+#           formal/audited_theorems.txt, so deleting `#print axioms graph_correct`
+#           and adding `#print axioms Nat.add_comm` (count unchanged!) now FAILS
+#        4b STATEMENT -- formal/conformance/statement_pin.py diffs each headline
+#           theorem's statement text against formal/headline_statements.txt, so
+#           `theorem graph_correct : True := trivial` -- which BUILDS, carries no
+#           `sorry` TOKEN, and audits clean -- now FAILS
+#        4c ANCHORS   -- formal/conformance/anchor_check.py resolves every
+#           `file::symbol` anchor in formal/CORRESPONDENCE.md (the model<->code
+#           map, which had NO drift detector at all)
+#      plus: a headline theorem reporting "does not depend on any axioms" is
+#      treated as SUSPICIOUS -- a real theorem over this development depends on
+#      at least propext.
 #   5. Python conformance suite passes           -- sem vs oracle vs set engine,
 #      plus (Phase 6) the Lean OPERATIONAL graph model (zcli mode "graph",
 #      GraphIndex/Exec.lean) vs the real Python graph index over the
 #      W4Fragment corpora; with count floors and zero tolerance for
-#      skipped/xfailed/xpassed/deselected
+#      skipped/xpassed/deselected. `xfailed` is zero for conformance and carries a
+#      DECLARED budget for tests/ ($MAX_TESTS_XFAILED, 0 today) -- CLAUDE.md
+#      endorses a strict xfail there as a PIN on a filed divergence, and a blanket
+#      zero would push the next author to delete the pin instead of the divergence.
 #
 # GATE SELF-DEFENCE (zero-trust review 2026-07-26, ZT-P2-1..6). Every hard-coded
 # number below is a FLOOR asserted with -ge, so ADDING theorems/tests never fails the
@@ -58,17 +84,23 @@
 
 set -uo pipefail
 
-USAGE="usage: verify.sh [all|lean|conf-tile:I/K|conf-heavy|conf-rest]
-       conf-tile:I/K  1 <= I <= K; the K tiles partition formal/conformance/
-                      (recommended: conf-tile:1/5 .. conf-tile:5/5; K is free --
-                       raise it when a tile approaches the ~600 s command cap)"
+USAGE="usage: verify.sh [all|lean|conf-tile:I/K|tests-tile:I/K|conf-heavy|conf-rest]
+       conf-tile:I/K   1 <= I <= K; the K tiles partition formal/conformance/
+                       (recommended: conf-tile:1/5 .. conf-tile:5/5; K is free --
+                        raise it when a tile approaches the ~600 s command cap)
+       tests-tile:I/K  the same tiling over tests/ (recommended K=4). Until
+                       2026-07-27 tests/ was outside the mechanical gate entirely:
+                       an agent typed 'pytest tests/' and read the tail, with no
+                       count floor, no skipped/xfailed check, and no proof that a
+                       tile collected anything (ZT gate audit C1/M9)."
 
 PHASE="${1:-all}"
-TILE_I=""; TILE_K=""
+TILE_I=""; TILE_K=""; SUITE_KIND="conf"
 case "$PHASE" in
   all|lean|conf-heavy|conf-rest) ;;
-  conf-tile:*/*)
-    _spec="${PHASE#conf-tile:}"
+  conf-tile:*/*|tests-tile:*/*)
+    case "$PHASE" in tests-tile:*) SUITE_KIND="tests" ;; esac
+    _spec="${PHASE#*-tile:}"
     TILE_I="${_spec%%/*}"; TILE_K="${_spec##*/}"
     case "$TILE_I" in ''|*[!0-9]*) echo "$USAGE"; exit 2;; esac
     case "$TILE_K" in ''|*[!0-9]*) echo "$USAGE"; exit 2;; esac
@@ -81,6 +113,7 @@ esac
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LEAN_DIR="$REPO_ROOT/formal/lean"
 CONF_DIR="formal/conformance/"          # relative to REPO_ROOT (pytest is run there)
+TESTS_DIR="tests/"                      # the backend suite -- see MIN_TESTS_ALL
 export PATH="$HOME/.elan/bin:$PATH"
 
 # ---------------------------------------------------------------------------- #
@@ -140,15 +173,79 @@ fi
 # ADDING tests never trips this. LOWERING it must be a deliberate, reviewed edit
 # here -- without a floor, shrinking GRAPH_FRAGMENT to a single corpus or deleting
 # test_conformance_graph.py outright kept the gate green (ZT-P2-2).
-MIN_CONF_ALL=391
+MIN_CONF_ALL=450
+
+# Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
+# `pytest tests/ -q --collect-only`: 728.
+#
+# WHY THIS EXISTS AT ALL. Until 2026-07-27 the 728-test backend suite -- the 4-way
+# validation matrix, the lookup-surface oracle gate, the hypothesis campaign, the
+# compiled-RuleSet snapshot gate -- was OUTSIDE this script. `verify.sh` had no
+# branch that ran it; the gate was an agent typing `pytest tests/` and eyeballing
+# the tail. So none of the self-defence the conformance side gained on 2026-07-26
+# applied to it: no count floor, no zero-tolerance skipped/xfailed/xpassed parse,
+# no exit-code assertion, no proof a tile collected anything. `tests-tile:I/K`
+# reuses the conformance machinery verbatim, so all of it now does.
+#
+# Note the Postgres leg (`tests/test_postgres_ha.py`) is dropped at COLLECTION
+# when no ZANZIBAR_TEST_DSN is set, not skipped at run time -- otherwise its skips
+# would have to be tolerated here, and a tolerated skip is how coverage leaks.
+MIN_TESTS_ALL=762
+
+# XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
+#
+# `formal/conformance/` carries a hard zero: a divergence there is a bug to fix,
+# not a marker to add. `tests/` is different, and the difference is DOCUMENTED --
+# CLAUDE.md endorses a STRICT xfail as the legitimate way to PIN a genuine
+# divergence while it is being fixed (that is how X1-X4 were tracked; see
+# docs/spec-deviations.md and tests/test_lookup_oracle.py). A blanket zero here
+# would silently override a project convention, and the first person to follow
+# CLAUDE.md correctly would meet a red gate and be tempted to DELETE the pin
+# instead of bumping a number -- a self-inflicted version of the exact erosion
+# this script exists to stop.
+#
+# So: a DECLARED budget, asserted with -le. Raising it is a deliberate act and the
+# commit should point at the filed divergence (docs/spec-deviations.md); it MUST
+# come back down when the pin is flipped -- that is what closes the divergence out.
+# `xpassed` / `skipped` / `deselected` stay at a hard zero for BOTH suites: an
+# xpass means the pin is stale, which must be loud (the repo-root pytest.ini sets
+# xfail_strict = true, so a stale pin also fails locally).
+#
+# BACK TO ZERO (2026-07-27, later the same day). It was briefly 1, for
+# `tests/test_postgres_ha.py::test_open_instance_races_a_concurrent_commit` --
+# `TupleSource.__init__` read the log watermark and THEN rebuilt the set engine,
+# two statements that are atomic under a pinned SQLite-WAL snapshot and are not at
+# PostgreSQL READ COMMITTED. `_consistent_rebuild` (optimistic wm1/rebuild/wm2 with
+# a bounded retry, falling back to a SHARED lock on the SchemaV4 row) closed it, and
+# the pin became a plain test. There are now ZERO live xfail markers in tests/.
+#
+# Keep it at 0 unless you are genuinely pinning a filed divergence. The budget
+# exists so that pinning one is a VISIBLE, deliberate act -- not so that xfails are
+# routine. Raise it with a commit that names the divergence; lower it the moment
+# the pin flips.
+MAX_TESTS_XFAILED=0
+
+# Skip budget for `tests/`, and ONLY when ZANZIBAR_TEST_DSN is set (the default
+# SQLite gate keeps a hard zero -- see the loop in run_conf). Measured 2026-07-27
+# against PostgreSQL 17.10: exactly 3, all SQLite-only by nature --
+#   test_connectedstore_multi_instance.py::test_stale_read_pinned_snapshot
+#   test_connectedstore_multi_instance.py::test_token_not_visible_in_pinned_snapshot_raises
+#   test_connectedstore_concurrency.py::test_reader_session_sees_consistent_snapshots
+# The first two exercise the StaleRead pinned-snapshot path; the third asserts a
+# replica never sees torn state. PostgreSQL at READ COMMITTED gives a reader no
+# stable snapshot at all, so neither property EXISTS on the server -- they are
+# SQLite-WAL inheritances, which is itself one of the 2026-07-27 findings. Tests
+# that are meaningless on a dialect are skipped rather than made to lie; anything
+# ABOVE 3 means a test that should have run did not.
+MAX_TESTS_SKIPPED_ON_RDBMS=3
 
 # Legacy file-carve split. Measured 2026-07-26 (per-file wall clock):
 #   test_conformance_remove.py   80 tests, ~170 s   -> conf-heavy
 #   test_conformance_enum.py      6 tests, ~380-475 s (the real hog inside conf-rest;
 #     the 2026-07-19g note blamed test_conformance_remove_graph.py, which is ~27 s)
 HEAVY_CONF="formal/conformance/test_conformance_remove.py"
-MIN_CONF_HEAVY=88
-MIN_CONF_REST=303
+MIN_CONF_HEAVY=96
+MIN_CONF_REST=354
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in
@@ -176,7 +273,42 @@ EXPECTED_MIN_AUDITS=457
 # the scan pointed at formal/lean/ZanzibarProofs and so missed the library root
 # ZanzibarProofs.lean). A little slack for renames/merges; a collapse to a handful of
 # files means the scan lost the tree and its clean 0 is not evidence.
-MIN_SCANNED_LEAN_FILES=60
+MIN_SCANNED_LEAN_FILES=64
+
+# ---------------------------------------------------------------------------- #
+# ZT-P2-5 (2026-07-27): the audit was a COUNT, not an identity or a statement pin.
+# Two erosions kept the gate fully green:
+#   (i)  delete `#print axioms graph_correct`, add `#print axioms Nat.add_comm`
+#        -- OBSERVED == EXPECTED == 457 still, so nothing noticed;
+#   (ii) restate `theorem graph_correct : True := trivial` -- it BUILDS, the
+#        token-level sorry_scan finds nothing (it scans TOKENS, not STATEMENTS),
+#        and the audit prints a perfectly clean report.
+# ZT-P3-2 already proved that vacuous audited lemmas are not hypothetical: this
+# very Audit.lean knowingly carries a superseded UNSATISFIABLE pair.
+# ---------------------------------------------------------------------------- #
+# (a) IDENTITY. The checked-in name list every audit run must still cover. The
+# live `#print axioms` extraction must be a SUPERSET of it, so ADDING audits is
+# free and swapping a headline theorem out for a filler one FAILS.
+AUDIT_PIN="$REPO_ROOT/formal/audited_theorems.txt"
+# ...and a floor on the PIN itself, or emptying the pin file would make the
+# superset test vacuously true (the ZT-P2-1 shape, one level up). Measured
+# 2026-07-27: 457 names.
+MIN_PINNED_AUDITS=457
+
+# The HEADLINE theorems -- the ones FINAL_REVIEW.md §2 states in English. Two
+# extra rules apply to exactly these:
+#   * each MUST appear in the audit output at all (also covered by the identity
+#     pin, deliberately belt-and-suspenders), and
+#   * "does not depend on any axioms" is SUSPICIOUS for them. A genuine theorem
+#     over this development goes through Classical.choice / propext / Quot.sound;
+#     a `: True := trivial` restatement depends on nothing, which is precisely
+#     the tell the old gate ignored. (12 lemmas elsewhere in Audit.lean legitimately
+#     report no axioms -- structural facts proved by `rfl`/`cases` -- which is why
+#     this rule is scoped to the headline set rather than applied globally.)
+HEADLINE_AUDITS="setEngine_correct sem_fuel_stable stratify_none_iff_cycle
+stratify_topological pathCount_addEdge pathCount_removeEdge runCascade2_no_abort
+cascade2_drains graph_correct graph_reached_inv backend_equivalence
+exclusion_effective no_ghost_grant graphRun_reached graphRun_check_eq_sem"
 
 BUILD_LOG="$(mktemp)"
 trap 'rm -f "$BUILD_LOG"' EXIT
@@ -320,7 +452,76 @@ run_lean() {
     echo "$BAD"
     exit 1
   fi
-  echo "=== lean phase (steps 1-4) PASSED (holes=$SORRIES, audits=$OBSERVED_AUDITS) ==="
+
+  # -------------------------------------------------------------------------- #
+  # 4a. IDENTITY pin (ZT-P2-5). WHICH theorems are audited, not just how many.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4a/5] audit IDENTITY pin (formal/audited_theorems.txt) ---"
+  [ -f "$AUDIT_PIN" ] \
+    || { echo "FAIL: audit identity pin missing: $AUDIT_PIN"; \
+         echo "      regenerate with: bash formal/regen_audit_pin.sh"; exit 1; }
+  PINNED_AUDITS=$(grep -cvE '^#|^[[:space:]]*$' "$AUDIT_PIN")
+  [ "$PINNED_AUDITS" -ge "$MIN_PINNED_AUDITS" ] \
+    || { echo "FAIL: $AUDIT_PIN lists only $PINNED_AUDITS name(s); floor is $MIN_PINNED_AUDITS."; \
+         echo "      The pin itself was gutted -- a SUPERSET test against an empty pin"; \
+         echo "      passes vacuously, which is the very failure mode this closes."; \
+         exit 1; }
+  LIVE_AUDIT_NAMES=$(grep -oE '^#print axioms [^[:space:]]+' "$AUDIT_LEAN" \
+                     | awk '{print $3}' | LC_ALL=C sort -u)
+  MISSING_AUDITS=$(LC_ALL=C comm -23 \
+    <(grep -vE '^#|^[[:space:]]*$' "$AUDIT_PIN" | LC_ALL=C sort -u) \
+    <(printf '%s\n' "$LIVE_AUDIT_NAMES"))
+  echo "  audited-name identity: $PINNED_AUDITS pinned, $(printf '%s\n' "$LIVE_AUDIT_NAMES" | grep -c . ) live (live must be a SUPERSET)"
+  if [ -n "$MISSING_AUDITS" ]; then
+    echo "FAIL: pinned audited theorem(s) are NO LONGER audited by Audit.lean:"
+    printf '%s\n' "$MISSING_AUDITS" | sed 's/^/        /' | head -30
+    echo "      The audit COUNT can be held constant by adding filler lines"
+    echo "      (\`#print axioms Nat.add_comm\`), which is why the count alone was"
+    echo "      never evidence. If a removal is intended, regenerate the pin"
+    echo "      deliberately (bash formal/regen_audit_pin.sh) and say why in"
+    echo "      formal/history/."
+    exit 1
+  fi
+
+  # Headline theorems: present, and NOT axiom-free (a `: True := trivial`
+  # restatement depends on nothing at all).
+  for _t in $HEADLINE_AUDITS; do
+    _line=$(printf '%s\n' "$AUDIT_OUT" | grep -E "'(Zanzibar\.)?${_t}' (depends on axioms|does not depend)" || true)
+    [ -n "$_line" ] \
+      || { echo "FAIL: headline theorem '$_t' produced NO audit report."; \
+           echo "      Either its '#print axioms' line is gone or the theorem is."; exit 1; }
+    case "$_line" in
+      *"does not depend on any axioms"*)
+        echo "FAIL: headline theorem '$_t' depends on NO axioms:"
+        echo "        $_line"
+        echo "      Every real theorem over this development is routed through"
+        echo "      propext / Classical.choice / Quot.sound. An axiom-free headline"
+        echo "      theorem is the signature of a VACUOUS restatement (e.g."
+        echo "      ': True := trivial'), which builds and audits clean."
+        exit 1;;
+    esac
+  done
+  echo "  headline theorems: $(printf '%s\n' $HEADLINE_AUDITS | grep -c .) audited, all axiom-dependent"
+
+  # -------------------------------------------------------------------------- #
+  # 4b. STATEMENT pin (ZT-P2-5 (ii)). WHAT the headline theorems say.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4b/5] headline STATEMENT pin (formal/headline_statements.txt) ---"
+  "$PY" "$REPO_ROOT/formal/conformance/statement_pin.py" \
+    || { echo "FAIL: headline statement pin (see above)"; exit 1; }
+
+  # -------------------------------------------------------------------------- #
+  # 4c. CORRESPONDENCE.md anchor pin. The model<->code map had NO drift detector:
+  # it was rebuilt onto ~349 file::symbol anchors on 2026-07-26, hand-verified
+  # once, and nothing checked it afterwards -- against an unchanged ~3,000
+  # lines/2-weeks drift rate that had already destroyed its predecessor's line
+  # numbers. Cheap (~1 s, no Lean toolchain), so it rides the `lean` phase.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4c/5] CORRESPONDENCE.md anchor pin ---"
+  "$PY" "$REPO_ROOT/formal/conformance/anchor_check.py" \
+    || { echo "FAIL: CORRESPONDENCE.md anchors (see above)"; exit 1; }
+
+  echo "=== lean phase (steps 1-4) PASSED (holes=$SORRIES, audits=$OBSERVED_AUDITS, pinned=$PINNED_AUDITS) ==="
 }
 
 # ---------------------------------------------------------------------------- #
@@ -329,56 +530,101 @@ run_lean() {
 # ---------------------------------------------------------------------------- #
 run_conf() {
   local min_passed="$1" label="$2"; shift 2
-  echo "=== [5/5] Python conformance (sem vs oracle vs set engine vs graph model) ==="
+  case "${SUITE_KIND:-conf}" in
+    tests) echo "=== [5/5] Python backend suite (matrix / parity / lookup oracle / hypothesis) ===" ;;
+    *)     echo "=== [5/5] Python conformance (sem vs oracle vs set engine vs graph model) ===" ;;
+  esac
   echo "  target: $label   (minimum passed: $min_passed)"
   # Preflight: the zcli binary MUST exist. Without it every Lean-comparison test calls
   # pytest.skip (runner.ZcliUnavailable), so the "hard gate" can pass having compared
   # NOTHING. Assert the binary is present before running pytest. (Built by the `lean`
-  # phase / step 3 -- run that first.)
+  # phase / step 3 -- run that first.) `tests/` never shells out to zcli, so the
+  # preflight is conformance-only.
   local cand ZCLI_BIN=""
-  for cand in "$LEAN_DIR/.lake/build/bin/zcli" "$LEAN_DIR/.lake/build/bin/zcli.exe"; do
-    [ -f "$cand" ] && ZCLI_BIN="$cand"
-  done
-  [ -n "$ZCLI_BIN" ] \
-    || { echo "FAIL: zcli binary not found under $LEAN_DIR/.lake/build/bin (expected zcli or zcli.exe)"; \
-         echo "      -- conformance would skip every Lean comparison and pass vacuously"; \
-         echo "      -- run 'bash formal/verify.sh lean' first (it builds zcli)"; \
-         exit 1; }
-  echo "  zcli binary: $ZCLI_BIN"
+  if [ "${SUITE_KIND:-conf}" = "conf" ]; then
+    for cand in "$LEAN_DIR/.lake/build/bin/zcli" "$LEAN_DIR/.lake/build/bin/zcli.exe"; do
+      [ -f "$cand" ] && ZCLI_BIN="$cand"
+    done
+    [ -n "$ZCLI_BIN" ] \
+      || { echo "FAIL: zcli binary not found under $LEAN_DIR/.lake/build/bin (expected zcli or zcli.exe)"; \
+           echo "      -- conformance would skip every Lean comparison and pass vacuously"; \
+           echo "      -- run 'bash formal/verify.sh lean' first (it builds zcli)"; \
+           exit 1; }
+    echo "  zcli binary: $ZCLI_BIN"
+  fi
   # Capture pytest output, echo it through, then gate on the summary line.
-  local CONF_OUT CONF_RC CONF_SUMMARY CONF_PASSED word n
+  local CONF_OUT CONF_RC CONF_SUMMARY CONF_PASSED CONF_ACCOUNTED word n
   CONF_OUT=$( cd "$REPO_ROOT" && "$PY" -m pytest "$@" -q 2>&1 )
   CONF_RC=$?
   echo "$CONF_OUT"
-  [ "$CONF_RC" = "0" ] || { echo "FAIL: conformance (pytest rc=$CONF_RC)"; exit 1; }
+  [ "$CONF_RC" = "0" ] || { echo "FAIL: ${SUITE_KIND:-conf} (pytest rc=$CONF_RC)"; exit 1; }
   # Parse the final pytest summary line (last non-blank line, e.g.
   # "98 passed in 111.00s" or "2 passed, 3 skipped in 1.2s").
   CONF_SUMMARY=$(printf '%s\n' "$CONF_OUT" | grep -vE '^[[:space:]]*$' | tail -1)
-  echo "  conformance summary: $CONF_SUMMARY"
+  echo "  ${SUITE_KIND:-conf} summary: $CONF_SUMMARY"
   # ZERO TOLERANCE for any outcome that means "this comparison did not happen".
   # ZT-P2-2: the old parse looked only for `N skipped`, and pytest reports xfail as a
   # DISTINCT word -- so slapping @pytest.mark.xfail on a newly-failing comparison
   # yielded "329 passed, 1 xfailed" and the gate printed PASSED. `xpassed` means an
   # xfail marker is stale (the comparison passes but is marked expected-to-fail), and
   # `deselected` means a -k/-m filter silently dropped tests.
+  # `xfailed` is the ONE outcome with a declared budget, and only for `tests/`
+  # (MAX_TESTS_XFAILED, 0 today) -- see the comment on that variable. Everything
+  # else, and everything in formal/conformance/, is a hard zero.
+  local budget budget_knob XFAILED_N=0 SKIPPED_N=0
   for word in skipped xfailed xpassed deselected; do
+    budget=0; budget_knob="(none -- $word is never acceptable)"
+    if [ "$word" = "xfailed" ] && [ "${SUITE_KIND:-conf}" = "tests" ]; then
+      budget="$MAX_TESTS_XFAILED"; budget_knob=MAX_TESTS_XFAILED
+    fi
+    # The ONE legitimate skip budget, and it exists only in the PostgreSQL
+    # configuration. Three tests in the shared HA modules are SQLite-only BY
+    # NATURE, not by omission: two pin the `StaleRead` pinned-snapshot path and one
+    # pins the "a replica never sees torn state" property -- and PostgreSQL at READ
+    # COMMITTED (the only level admitted) gives a reader NO stable snapshot, so
+    # those properties do not exist there to be tested. They are `skipif`-ed on
+    # `ZANZIBAR_TEST_DSN`, so the DEFAULT SQLite gate still sees a hard zero.
+    # Declared here rather than tolerated silently: without it, running the gate
+    # against a real server -- the thing we most want people to do -- goes red for
+    # a non-reason, and the obvious "fix" is to delete the skipped/xfailed check.
+    if [ "$word" = "skipped" ] && [ "${SUITE_KIND:-conf}" = "tests" ] \
+       && [ -n "${ZANZIBAR_TEST_DSN:-}" ]; then
+      budget="$MAX_TESTS_SKIPPED_ON_RDBMS"; budget_knob=MAX_TESTS_SKIPPED_ON_RDBMS
+    fi
     n=$(printf '%s\n' "$CONF_SUMMARY" | grep -oE "[0-9]+ $word" | grep -oE '^[0-9]+' || true)
     n=${n:-0}
-    [ "$n" = "0" ] \
-      || { echo "FAIL: conformance reported $n $word test(s) -- the gate must COMPARE, not"; \
-           echo "      skip / expect-to-fail / filter out. formal/conformance/ carries zero"; \
-           echo "      xfails by design: a divergence there is a bug to fix, not a marker"; \
-           echo "      to add (CLAUDE.md endorses xfail only as a PIN in tests/)."; \
+    [ "$n" -le "$budget" ] \
+      || { echo "FAIL: ${SUITE_KIND:-conf} reported $n $word test(s) (budget $budget) -- the gate must"; \
+           echo "      COMPARE, not skip / expect-to-fail / filter out. formal/conformance/"; \
+           echo "      carries zero xfails by design: a divergence there is a bug to fix,"; \
+           echo "      not a marker to add. In tests/, CLAUDE.md DOES endorse a strict xfail"; \
+           echo "      as a PIN on a genuine divergence, and a dialect-only skip is"; \
+           echo "      legitimate on the PostgreSQL leg -- but each needs a DECLARED"; \
+           echo "      budget, not silence. The knob for '$word' is $budget_knob."; \
+           echo "      Raise it in formal/verify.sh deliberately, point the commit at the"; \
+           echo "      filed divergence (docs/spec-deviations.md), and lower it again when"; \
+           echo "      the pin is flipped. Do NOT delete the pin to get green."; \
            exit 1; }
+    if [ "$word" = "xfailed" ]; then XFAILED_N="$n"; fi
+    if [ "$word" = "skipped" ]; then SKIPPED_N="$n"; fi
   done
   CONF_PASSED=$(printf '%s\n' "$CONF_SUMMARY" | grep -oE '[0-9]+ passed' | grep -oE '^[0-9]+' || true)
   CONF_PASSED=${CONF_PASSED:-0}
   [ "$CONF_PASSED" -gt 0 ] \
-    || { echo "FAIL: conformance passed ZERO tests (nothing was actually compared)"; exit 1; }
+    || { echo "FAIL: ${SUITE_KIND:-conf} passed ZERO tests (nothing was actually run)"; exit 1; }
   # ZT-P2-2: the count FLOOR. Without it, shrinking GRAPH_FRAGMENT to a single corpus
   # -- or deleting test_conformance_graph.py outright -- kept the gate green.
-  [ "$CONF_PASSED" -ge "$min_passed" ] \
-    || { echo "FAIL: conformance passed $CONF_PASSED test(s), below this phase's floor of $min_passed."; \
+  # A budgeted xfail (tests/ only, see MAX_TESTS_XFAILED) is COUNTED here: the test
+  # still ran and still asserted, it just asserted a pinned divergence. Without this
+  # the budget would be dead letter -- the tile floor (= the tile's exact size) would
+  # fail on the very xfail the budget just allowed.
+  # The floor is the tile's exact size, so every outcome that was BUDGETED above has
+  # to count toward it -- otherwise the budget is a dead letter: allowing an xfail or
+  # a dialect-only skip past the zero-tolerance loop and then failing the floor for
+  # that same test would just move the red one line down.
+  CONF_ACCOUNTED=$(( CONF_PASSED + XFAILED_N + SKIPPED_N ))
+  [ "$CONF_ACCOUNTED" -ge "$min_passed" ] \
+    || { echo "FAIL: ${SUITE_KIND:-conf} passed $CONF_PASSED test(s) (+$XFAILED_N budgeted xfail, +$SKIPPED_N budgeted skip), below this phase's floor of $min_passed."; \
          echo "      Comparison coverage SHRANK: a corpus, a parametrization or a whole file"; \
          echo "      went away."; \
          echo "      * If the count GREW you would never see this -- the floors are -ge, so"; \
@@ -387,7 +633,7 @@ run_conf() {
          echo "        MIN_CONF_HEAVY/MIN_CONF_REST, which are cross-checked to sum to it)"; \
          echo "        in formal/verify.sh deliberately, and record why."; \
          exit 1; }
-  echo "=== conformance phase PASSED ($CONF_SUMMARY; floor $min_passed) ==="
+  echo "=== ${SUITE_KIND:-conf} phase PASSED ($CONF_SUMMARY; floor $min_passed) ==="
 }
 
 # Tile I of K over the WHOLE conformance directory (1-based I).
@@ -398,24 +644,25 @@ run_conf() {
 # hand, so nothing can be dropped by forgetting to update a list.
 run_conf_tile() {
   local i="$1" k="$2"
+  local dir="${3:-$CONF_DIR}" floor="${4:-$MIN_CONF_ALL}"
   local COL_OUT COL_RC nodes total expected tilen
-  echo "=== [5/5] conformance tile $i/$k of $CONF_DIR ==="
-  COL_OUT=$( cd "$REPO_ROOT" && "$PY" -m pytest "$CONF_DIR" -q --collect-only 2>&1 )
+  echo "=== [5/5] ${SUITE_KIND:-conf} tile $i/$k of $dir ==="
+  COL_OUT=$( cd "$REPO_ROOT" && "$PY" -m pytest "$dir" -q --collect-only 2>&1 )
   COL_RC=$?
   [ "$COL_RC" = "0" ] \
-    || { echo "FAIL: pytest --collect-only failed (rc=$COL_RC) on $CONF_DIR"; \
+    || { echo "FAIL: pytest --collect-only failed (rc=$COL_RC) on $dir"; \
          printf '%s\n' "$COL_OUT" | tail -20; exit 1; }
   nodes=$(printf '%s\n' "$COL_OUT" | grep -E '^[^[:space:]]+\.py::')
   total=$(printf '%s\n' "$nodes" | grep -c '::' || true)
-  echo "  collected: $total node id(s) (global floor $MIN_CONF_ALL)"
+  echo "  collected: $total node id(s) (global floor $floor)"
   # The GLOBAL coverage floor, asserted by EVERY tile phase -- so you cannot lose
-  # conformance coverage by only ever running one tile.
-  [ "$total" -ge "$MIN_CONF_ALL" ] \
-    || { echo "FAIL: $CONF_DIR collects only $total test(s); the gate floor is $MIN_CONF_ALL."; \
-         echo "      Conformance coverage SHRANK (a corpus, a parametrization or a whole"; \
-         echo "      file went away). If intended, lower MIN_CONF_ALL in formal/verify.sh"; \
-         echo "      deliberately (keep MIN_CONF_HEAVY + MIN_CONF_REST == MIN_CONF_ALL) and"; \
-         echo "      record why. Adding tests never trips this (the check is -ge)."; \
+  # coverage by only ever running one tile.
+  [ "$total" -ge "$floor" ] \
+    || { echo "FAIL: $dir collects only $total test(s); the gate floor is $floor."; \
+         echo "      Coverage SHRANK (a corpus, a parametrization or a whole file went"; \
+         echo "      away). If intended, lower the floor in formal/verify.sh deliberately"; \
+         echo "      (for conformance, keep MIN_CONF_HEAVY + MIN_CONF_REST == MIN_CONF_ALL)"; \
+         echo "      and record why. Adding tests never trips this (the check is -ge)."; \
          exit 1; }
   # Partition arithmetic: tile i (1-based) takes collection indices i-1, i-1+k, ...
   # so its size is floor((total - i) / k) + 1. Assert the awk selection agrees --
@@ -427,11 +674,11 @@ run_conf_tile() {
   echo "  tile $i/$k: $tilen node id(s) (partition arithmetic expects $expected)"
   [ "$tilen" = "$expected" ] \
     || { echo "FAIL: tile $i/$k selected $tilen node(s) but the partition arithmetic says"; \
-         echo "      $expected -- the K tiles would NOT partition $CONF_DIR (coverage hole)."; \
+         echo "      $expected -- the K tiles would NOT partition $dir (coverage hole)."; \
          exit 1; }
   [ "$tilen" -gt 0 ] || { echo "FAIL: tile $i/$k is empty (K larger than the test count?)"; exit 1; }
   # Every selected node must PASS: the tile's own floor is its exact size.
-  run_conf "$tilen" "conf-tile:$i/$k ($tilen of $total node ids)" "${NODES[@]}"
+  run_conf "$tilen" "${SUITE_KIND:-conf}-tile:$i/$k ($tilen of $total node ids)" "${NODES[@]}"
 }
 
 preflight_py
@@ -440,8 +687,11 @@ case "$PHASE" in
   conf-heavy) run_conf "$MIN_CONF_HEAVY" "$HEAVY_CONF" "$HEAVY_CONF" ;;
   conf-rest)  run_conf "$MIN_CONF_REST" "$CONF_DIR minus $HEAVY_CONF" \
                 "$CONF_DIR" --ignore="$HEAVY_CONF" ;;
-  conf-tile:*) run_conf_tile "$TILE_I" "$TILE_K" ;;
-  all)        run_lean; run_conf "$MIN_CONF_ALL" "$CONF_DIR" "$CONF_DIR" ;;
+  conf-tile:*)  run_conf_tile "$TILE_I" "$TILE_K" "$CONF_DIR" "$MIN_CONF_ALL" ;;
+  tests-tile:*) run_conf_tile "$TILE_I" "$TILE_K" "$TESTS_DIR" "$MIN_TESTS_ALL" ;;
+  all)        run_lean
+              SUITE_KIND=tests run_conf "$MIN_TESTS_ALL" "$TESTS_DIR" "$TESTS_DIR"
+              run_conf "$MIN_CONF_ALL" "$CONF_DIR" "$CONF_DIR" ;;
 esac
 
 echo ""

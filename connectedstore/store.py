@@ -10,8 +10,11 @@ open question this class deliberately does not answer.
 
 Reads are served by the graph index (O(1) probes). ``at_least`` freshness tokens
 (spec §2.5) are honored structurally: if the index cursor lags the token -- possible
-only under the async schedule -- the read falls back to the set engine, which is
-fresh by construction.
+only under the async schedule -- ``check`` falls back to the set engine, which is
+fresh by construction. The ENUMERATION surfaces (``lookup``/``lookup_reverse``) take
+the same token but cannot fall back, because the two backends' lookup results are not
+the same shape; an unsatisfiable demand raises ``LookupNotFresh`` rather than quietly
+serving the stale list (zero-trust review ZT-P1-8b -- see that class).
 
 Transaction semantics: ``write`` commits on success and rolls back on rejection
 (one logical write = one transaction across BOTH halves; I12 holds across both).
@@ -33,6 +36,36 @@ from .schema_io import ensure_schema, open_graph_index
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
 from .source import StaleRead, TupleSource, assert_read_isolation
+
+
+class LookupNotFresh(StaleRead):
+    """A ``lookup`` / ``lookup_reverse`` carrying an ``at_least`` token could not be
+    served, because the index lags the token and the lookup surface has NO fallback
+    (zero-trust review ZT-P1-8b).
+
+    ``check`` can fall back to the set engine when the index lags: it returns a bool,
+    so which backend answered is invisible. The lookup surfaces cannot, because the two
+    backends do not return the same thing:
+
+    * ``node_ids`` are graph ``NodeV4`` row ids on one side and instance-local,
+      RECYCLED interner ids on the other (``SetEngine.result_keys`` is the portable
+      form; the graph has no twin) -- so a fallback would silently change the id
+      DOMAIN of a result depending on how far behind the worker happened to be;
+    * markers are ``(type, predicate, variant)`` on the graph and ``(type, predicate)``
+      on the set engine, and ``excluded_node_ids`` ("everyone of this shape except
+      these", the derived-relation ``neg`` channel) exists only on the graph side --
+      it cannot be reconstructed from a set-engine result at all.
+
+    Unifying that contract is a real, breaking API change with its own oracle-gate
+    arc (``docs/architecture/decision-log.md``, round 3). Until it lands, the honest
+    behaviour under an explicit freshness demand is to REFUSE: silently serving the
+    stale enumeration is how a revoked principal stays listed in a revocation UI, and
+    silently swapping id domains is a different bug in a nicer costume.
+
+    RECOVERABLE: run the apply step (``ConnectedStore.catch_up()`` -- an instance may
+    run it; it IS the async worker's body) or wait for the worker, then retry. For a
+    single yes/no decision, ``check(..., at_least=...)`` has the fallback and needs no
+    catch-up."""
 
 
 class ConnectedStore:
@@ -78,7 +111,8 @@ class ConnectedStore:
         ``sync=True`` (default) inlines the apply step into every write (cursor at
         the log head). ``sync=False`` is the async schedule: writes land in the
         source of truth only; the index advances when ``catch_up`` runs (the worker
-        loop), and token-carrying reads fall back to the set engine while it lags.
+        loop), and token-carrying ``check``s fall back to the set engine while it
+        lags (token-carrying LOOKUPs raise ``LookupNotFresh`` instead -- see there).
 
         ``paranoia`` wires the runtime invariant layer (``index_v4.invariants``,
         boolean spec §8.1) into this store's commits. Before this parameter existed
@@ -115,10 +149,13 @@ class ConnectedStore:
         self.store_id = store_id
         self.sync = sync
         self.paranoia = resolve_paranoia_level(paranoia, default=self.DEFAULT_PARANOIA)
-        # ZT-P1-5: refuse a bind whose read snapshot can hide a committed log row
-        # (MySQL/InnoDB REPEATABLE READ) before anything else touches the database --
-        # every freshness guarantee in this class rests on the catch-up reaching the
-        # real head. Dialect-aware: a no-op on SQLite, where it does not apply.
+        # ZT-P1-5: refuse a bind whose read snapshot can hide a committed log row --
+        # anything but READ COMMITTED on a real MVCC server -- before anything else
+        # touches the database, because every freshness guarantee in this class rests on
+        # the catch-up reaching the real head. Not theoretical on the supported server: a
+        # SERIALIZABLE bind was shown to certify a revoked grant as ALLOWED
+        # (tests/test_postgres_ha.py::test_serializable_bind_is_refused). Dialect-aware:
+        # a no-op on SQLite, where there is no server-side level to pin.
         assert_read_isolation(session)
         # ZT-P1-4: on a SQLite bind, take the real per-store write lock once, right
         # here, and verify it actually HELD -- an autocommit-configured connection
@@ -289,7 +326,37 @@ class ConnectedStore:
     # ------------------------------------------------------------------ #
 
     def _fresh_enough(self, at_least: int | None) -> bool:
+        # ``at_least is None`` -> True is the DESIGN, not a fail-open default (called
+        # out because it reads like one): no token means the caller made no freshness
+        # demand, and an untokened read is documented as bounded-stale (spec §2.5 --
+        # the index cursor may lag under the async schedule). A caller that needs
+        # read-your-writes passes the token the write returned; there is nothing to
+        # fall back to when it did not, and defaulting to "stale is unacceptable"
+        # would make every ordinary read pay for a demand nobody made.
         return at_least is None or self.cursor.applied_log_id >= at_least
+
+    def _require_index_freshness(self, at_least: int | None, surface: str) -> None:
+        """Enforce an ``at_least`` demand on an index-only read surface (ZT-P1-8b).
+
+        Same first two rungs as ``check``'s ladder -- test the in-memory cursor, then
+        re-read the cursor row once, because it is routinely just behind another
+        session's committed catch-up and that alone satisfies most tokened reads
+        without paying for anything. Where ``check`` then falls back to the set engine,
+        this raises: see ``LookupNotFresh`` for why there is no third rung here."""
+        if self._fresh_enough(at_least):
+            return
+        self.session.refresh(self.cursor)
+        if self._fresh_enough(at_least):
+            return
+        raise LookupNotFresh(
+            f'{surface}(at_least={at_least}) cannot be served: the index for store '
+            f'{self.store_id!r} has applied through {self.cursor.applied_log_id} '
+            f'(lag {self.lag()}). Unlike check(), the lookup surfaces have no '
+            f'set-engine fallback -- the two backends return different id domains and '
+            f'different marker/exclusion shapes, so serving one in place of the other '
+            f'would change the meaning of the result (zero-trust review ZT-P1-8b). '
+            f'Run catch_up() (or wait for the async worker) and retry; for a single '
+            f'decision use check(..., at_least={at_least}), which does fall back.')
 
     def check(self, subject_predicate, s_type: str, s_name: str,
               relation: str, o_type: str, o_name: str, *,
@@ -321,10 +388,24 @@ class ConnectedStore:
         return self.source.check(subject_predicate, s_type, s_name,
                                  relation, o_type, o_name)
 
-    def lookup(self, subject_predicate, s_type: str, s_name: str):
+    def lookup(self, subject_predicate, s_type: str, s_name: str, *,
+               at_least: int | None = None):
+        """List-objects: everything the subject can reach, served by the index.
+
+        ``at_least`` demands the index reflect the log through that token. It is
+        ENFORCED, not fulfilled by fallback: satisfied demands are served normally,
+        unsatisfiable ones raise ``LookupNotFresh`` (see there -- and note this is the
+        revocation surface, where quietly returning the pre-revocation enumeration is
+        the failure that matters). Omitting the token keeps the previous behaviour
+        exactly: an untokened, bounded-stale index read."""
+        self._require_index_freshness(at_least, 'lookup')
         return self.widx.lookup(subject_predicate, s_type, s_name)
 
-    def lookup_reverse(self, relation: str, o_type: str, o_name: str):
+    def lookup_reverse(self, relation: str, o_type: str, o_name: str, *,
+                       at_least: int | None = None):
+        """List-users: everything that can reach the object. ``at_least`` behaves
+        exactly as in ``lookup`` -- enforced, never silently downgraded."""
+        self._require_index_freshness(at_least, 'lookup_reverse')
         return self.widx.lookup_reverse(relation, o_type, o_name)
 
     def watermark(self) -> int:

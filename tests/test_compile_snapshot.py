@@ -14,6 +14,7 @@ on first run (P0). A drift is a P2 regression until proven an intentional, docum
 change -- in which case delete the golden and regenerate with a deviations-log entry.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,19 @@ SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "compiled_ruleset"
 FGA_DIR = Path(__file__).parent / "fga_schemas"
 
 ALL_FIXTURES = sorted(p.name for p in FGA_DIR.glob("*.fga"))
+
+# ANTI-VACUITY FLOOR. `ALL_FIXTURES` is a glob, and an empty parametrize list is
+# reported by pytest as `1 skipped`, rc 0 -- so renaming or moving `fga_schemas/`
+# would silently retire this entire byte-identity gate while the suite stayed
+# green. Raise this number when fixtures are added; never lower it to fix a red.
+MIN_FIXTURES = 11
+assert len(ALL_FIXTURES) >= MIN_FIXTURES, (
+    f"only {len(ALL_FIXTURES)} .fga fixtures found in {FGA_DIR} (expected at "
+    f"least {MIN_FIXTURES}) -- the compiled-RuleSet snapshot gate would run on "
+    f"almost nothing")
+
+#: Regenerating a golden must be a DELIBERATE act. See the note in the test.
+_UPDATE = os.environ.get("ZANZIBAR_UPDATE_SNAPSHOTS") == "1"
 
 
 def _canonical_ruleset(rs) -> str:
@@ -49,18 +63,36 @@ def _canonical_ruleset(rs) -> str:
 @pytest.mark.parametrize("fixture", ALL_FIXTURES)
 def test_compiled_ruleset_matches_snapshot(fixture, load_fga_schema):
     schema = load_fga_schema(fixture)
+    golden_path = SNAPSHOT_DIR / f"{fixture}.txt"
+
     try:
         rs = parse_openfga_schema(schema)
     except UnsupportedByGraphIndex:
+        # A golden on disk is proof this fixture compiled at snapshot time, so a
+        # refusal NOW is a scope regression, not a pre-flip skip. Skipping here
+        # would retire the golden silently -- exactly the direction this gate
+        # exists to catch.
+        if golden_path.exists():
+            raise
         pytest.skip(f"{fixture} contains boolean operators; graph index refuses it (pre-flip)")
 
     canonical = _canonical_ruleset(rs)
-    golden_path = SNAPSHOT_DIR / f"{fixture}.txt"
 
     if not golden_path.exists():
+        # A missing golden used to be silently WRITTEN and the test skipped, so
+        # `rm -rf tests/snapshots/compiled_ruleset/` re-baselined the frozen P2
+        # invariant against whatever the code happened to do that day -- 11 skips,
+        # rc 0, no signal. Regeneration is now an explicit opt-in.
+        if not _UPDATE:
+            pytest.fail(
+                f"no golden snapshot for {fixture}. This gate freezes untainted "
+                f"compilation byte-for-byte, so a missing golden means the "
+                f"baseline was deleted, not that there is nothing to check. "
+                f"Regenerate deliberately with ZANZIBAR_UPDATE_SNAPSHOTS=1 and "
+                f"document the change in docs/spec-deviations.md.")
         SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
         golden_path.write_text(canonical, encoding="utf-8")
-        pytest.skip(f"generated baseline snapshot for {fixture}")
+        pytest.skip(f"generated baseline snapshot for {fixture} (opt-in regeneration)")
 
     expected = golden_path.read_text(encoding="utf-8")
     assert canonical == expected, (

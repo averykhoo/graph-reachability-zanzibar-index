@@ -59,6 +59,15 @@ A write returns its log id. `check(..., at_least=token)` is served by the index 
 `timestamp <= query_timestamp` merge simplified to a fallback. Sync mode satisfies
 every token trivially; async mode is where it earns its keep.
 
+`lookup` / `lookup_reverse` also take `at_least` (since 2026-07-27, `ZT-P1-8b`) but
+**refuse rather than fall back**: they run the same cursor rungs and raise
+`LookupNotFresh` if the index still lags. The fallback is not merely expensive there,
+it is impossible — the two backends' result key spaces are not translatable, and in
+the stale case the graph node rows for the un-applied tuples do not exist yet. The
+point is that an enumeration surface must be *able to be asked* for freshness: without
+a token, a revoked principal stayed listable with no API to object, and list-users is
+exactly what a revocation UI reads. See `decision-log.md` for the full revision.
+
 Tokens are **store-local**: the domain is the store's own `TupleLogV1` id sequence
 (a per-database autoincrement, not a global clock). A token minted against one store
 means nothing to another; cross-store consistency needs an external ordering.

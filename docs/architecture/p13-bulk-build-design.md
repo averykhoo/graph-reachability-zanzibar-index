@@ -130,7 +130,7 @@ available as `build_index(..., bulk=False)`), (b) the bulk builder. Compare
   backfill and must also match — same backfill code runs on both sides.)
 - outbox: multiset of `(subject identity, object identity, action)` — equal.
 
-Plus: the I1–I12 invariant checker runs green on the bulk-built store, and a
+Plus: the I1–I13 invariant checker runs green on the bulk-built store, and a
 read-parity spot check (grid of checks vs the oracle) on top. Any inequality
 fails loudly with the differing keys.
 

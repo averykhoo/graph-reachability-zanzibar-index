@@ -10,6 +10,18 @@ SQLITE_BUSY / IntegrityError; one Session per thread, never shared).
     rebuild), never torn state;
   * async schedule under a lagging index: the reader's un-tokened answers are stale
     but internally consistent; after the worker catches up, they converge.
+
+Set ``ZANZIBAR_TEST_DSN`` and the multi-writer tests re-run against a real server
+(``tests/dbengine.shared_engine``) -- the only place ``_lock_source`` /
+``_lock_store`` actually emit ``FOR UPDATE``. Two tests stay SQLite-only, for two
+DIFFERENT reasons, and the distinction matters:
+
+  * ``test_token_not_visible_in_pinned_snapshot_raises`` -- MECHANISM. A pinned read
+    snapshot is what makes StaleRead observable; PostgreSQL READ COMMITTED (which
+    ``assert_read_isolation`` requires) has none, so the path is unreachable there.
+  * ``test_reader_session_sees_consistent_snapshots`` -- GUARANTEE. The property is
+    genuinely FALSE on PostgreSQL, verified. Read its docstring; it is the more
+    interesting of the two.
 """
 
 import random
@@ -23,6 +35,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from connectedstore import ConnectedStore
 from index_v4.invariants import snapshot_rows
+from tests.dbengine import rdbms_dsn, shared_engine
 from tests.oracle import Oracle, OracleTuple
 from tests.wildcard_helpers import assert_wildcard_invariants
 
@@ -42,30 +55,21 @@ _GRID = [('...', 'user', sn, rel, 'doc', on)
          for on in ('d1', 'd2')]
 
 
-def _file_engine(path):
-    engine = create_engine(f'sqlite:///{path}',
-                           connect_args={'check_same_thread': False, 'timeout': 60})
+#: The WAL file-backed engine this module used to build inline now lives in
+#: ``tests/dbengine`` (byte-identical), so ``ZANZIBAR_TEST_DSN`` can swap in a real
+#: server without changing SQLite behaviour at all.
+_file_engine = shared_engine
 
-    @event.listens_for(engine, 'connect')
-    def _busy_timeout(dbapi, _rec):
-        cur = dbapi.cursor()
-        cur.execute('PRAGMA busy_timeout=60000')
-        # WAL: snapshot-isolated readers that never block the writer -- the honest
-        # local simulation of "consistent reads from a secondary while the primary
-        # writes" (rollback-journal readers would block writers instead).
-        cur.execute('PRAGMA journal_mode=WAL')
-        cur.close()
-        # real transaction semantics (the SQLAlchemy-documented pysqlite workaround):
-        # by default pysqlite runs SELECTs in autocommit, so a "snapshot" would tear
-        # between statements. Let SQLAlchemy emit BEGIN itself instead.
-        dbapi.isolation_level = None
-
-    @event.listens_for(engine, 'begin')
-    def _begin(conn):
-        conn.exec_driver_sql('BEGIN')
-
-    SQLModel.metadata.create_all(engine)
-    return engine
+#: Tests whose SUBJECT is a pinned read snapshot -- see the identical note in
+#: tests/test_connectedstore_multi_instance.py. SQLite WAL pins a reader's snapshot
+#: for the whole transaction; PostgreSQL READ COMMITTED (which
+#: ``assert_read_isolation`` REQUIRES) re-snapshots per statement, so a committed row
+#: is never hidden from a catch-up and the StaleRead refusal cannot fire. The
+#: property under test does not exist on that bind -- this is not a divergence.
+sqlite_only_pinned_snapshot = pytest.mark.skipif(
+    rdbms_dsn() is not None,
+    reason='pins SQLite-WAL pinned-snapshot semantics; PostgreSQL READ COMMITTED '
+           're-snapshots per statement so the StaleRead path is unreachable there')
 
 
 def _write_retry(cs, op, raw, attempts=300):
@@ -85,7 +89,7 @@ def _write_retry(cs, op, raw, attempts=300):
 
 
 def test_concurrent_writers_converge(tmp_path):
-    engine = _file_engine(tmp_path / 'cs.db')
+    engine = _file_engine(tmp_path, 'cs.db')
     with Session(engine) as boot:
         ConnectedStore(boot, 's', schema=_SCHEMA)      # bootstrap schema + store rows
         boot.commit()
@@ -97,22 +101,36 @@ def test_concurrent_writers_converge(tmp_path):
              ('add', ('...', 'user', 'u3', 'blocked', 'doc', 'd1')),
              ('add', ('...', 'user', '*', 'public', 'doc', 'd2'))]
 
-    def worker(ops, errors):
+    # Instances are opened HERE, before the first write, rather than inside each
+    # worker. Opening one CONCURRENTLY with another writer's commit is a genuine
+    # PostgreSQL defect -- ``TupleSource.__init__`` reads its watermark and then
+    # rebuilds its evaluator in two statements, which READ COMMITTED does not make
+    # atomic, so the instance is born with an evaluator ahead of its watermark and the
+    # next catch-up raises. That is pinned on its own by
+    # ``tests/test_postgres_ha.py::test_open_instance_races_a_concurrent_commit``;
+    # leaving the open inside the thread only made THIS test intermittently red for a
+    # reason unrelated to what it asserts (observed ~1 run in 20 on the server leg).
+    # No behaviour change on SQLite, where the constructor's two reads share one
+    # pinned snapshot and the race cannot occur.
+    sessions = [Session(engine) for _ in range(2)]
+    stores = [ConnectedStore(s, 's') for s in sessions]
+
+    def worker(cs, ops, errors):
         try:
-            with Session(engine) as session:
-                cs = ConnectedStore(session, 's')
-                for op, raw in ops:
-                    assert _write_retry(cs, op, raw)
+            for op, raw in ops:
+                assert _write_retry(cs, op, raw)
         except Exception as e:                          # pragma: no cover
             errors.append(e)
 
     errors: list = []
-    threads = [threading.Thread(target=worker, args=(ops, errors))
-               for ops in (ops_a, ops_b)]
+    threads = [threading.Thread(target=worker, args=(cs, ops, errors))
+               for cs, ops in zip(stores, (ops_a, ops_b))]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+    for s in sessions:
+        s.close()
     assert not errors
 
     # a single-writer twin over the same accepted writes reaches the same state
@@ -133,10 +151,32 @@ def test_concurrent_writers_converge(tmp_path):
             assert cs.check(*q) == oracle.check(*q), q
 
 
+@pytest.mark.skipif(
+    rdbms_dsn() is not None,
+    reason='the guarantee under test is SQLite-WAL-specific and is FALSE on '
+           'PostgreSQL READ COMMITTED (verified: this test fails there). It is not '
+           'a mechanism difference like sqlite_only_pinned_snapshot -- it is a '
+           'GUARANTEE the repo silently inherits from SQLite. See '
+           'tests/test_postgres_ha.py::test_read_committed_gives_a_reader_no_stable_'
+           'snapshot for the deterministic demonstration, and the note in this '
+           'test\'s docstring.')
 def test_reader_session_sees_consistent_snapshots(tmp_path):
     """The replica pattern: a reader session polling a store another session writes
-    to must see internally-consistent committed states, never torn ones."""
-    engine = _file_engine(tmp_path / 'replica.db')
+    to must see internally-consistent committed states, never torn ones.
+
+    HOW this holds, and where it stops holding. ``cs.refresh()`` rebuilds the
+    in-memory evaluator from ``TupleV1`` and then the loop compares it against the
+    graph index, which is read by SEPARATE statements. The two agree only if both
+    observe the same committed state -- which is true on SQLite-WAL, where a
+    transaction pins one snapshot from its first statement, and FALSE on PostgreSQL
+    READ COMMITTED, where every statement re-snapshots. Run against a real server
+    this test fails within a few polls (observed: a ``viewer`` query where the
+    evaluator predates a commit the index has already applied). The system does not
+    lose an invariant -- a concurrent structural sweep of the index found no
+    violation in 42 passes -- but "a replica reader never observes torn state" is
+    a guarantee this repo has been getting for free from SQLite, and does not have
+    on its target dialect."""
+    engine = _file_engine(tmp_path, 'replica.db')
     with Session(engine) as boot:
         ConnectedStore(boot, 's', schema=_SCHEMA)
         boot.commit()
@@ -184,7 +224,7 @@ def test_reader_session_sees_consistent_snapshots(tmp_path):
 def test_replica_reads_under_async_lag(tmp_path):
     """Async schedule: a reader mid-lag serves stale-but-consistent answers from the
     index; token-carrying reads fall back fresh; after catch-up everything agrees."""
-    engine = _file_engine(tmp_path / 'lag.db')
+    engine = _file_engine(tmp_path, 'lag.db')
     with Session(engine) as boot:
         ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
         boot.commit()
@@ -211,7 +251,7 @@ def test_token_fallback_rebuilds_stale_evaluator(tmp_path):
     evaluator rebuilds on demand instead of serving its stale cache."""
     from connectedstore import StaleRead
 
-    engine = _file_engine(tmp_path / 'token.db')
+    engine = _file_engine(tmp_path, 'token.db')
     with Session(engine) as boot:
         ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
         boot.commit()
@@ -235,13 +275,14 @@ def test_token_fallback_rebuilds_stale_evaluator(tmp_path):
         assert reader.check(*q) is False
 
 
+@sqlite_only_pinned_snapshot
 def test_token_not_visible_in_pinned_snapshot_raises(tmp_path):
     """If the reader is pinned in a snapshot that predates the write, a tokened read
     must refuse loudly (StaleRead), never silently serve stale under an explicit
     freshness demand; refresh() + retry succeeds."""
     from connectedstore import StaleRead
 
-    engine = _file_engine(tmp_path / 'pinned.db')
+    engine = _file_engine(tmp_path, 'pinned.db')
     with Session(engine) as boot:
         ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
         boot.commit()
