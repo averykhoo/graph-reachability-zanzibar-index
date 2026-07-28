@@ -2297,9 +2297,13 @@ counted before anything is materialised, so a rejection leaves no partial state.
    layer. What is NOT ungated is Python: `test_multi_stratum_three_way` already drives
    the real cascade at 3 strata. The review's framing ("the ≥3-stratum cascade path is
    tested by NOTHING") was outdated; the correct statement is narrower and about Lean.
-3. **Still at zero coverage anywhere:** wildcard usersets `[T:*#p]`, and the
+3. ~~**Still at zero coverage anywhere:** wildcard usersets `[T:*#p]`, and the
    `derived-tupleset-ttu` plan leaf. Both were left OUT of the new plan-leaf coverage
-   floor rather than papered over. The floor exists to make the next gap nameable.
+   floor rather than papered over. The floor exists to make the next gap nameable.~~
+   **CLOSED 2026-07-28 — see the 2026-07-28 entry below.** The floor did its job: both
+   holes were named, and both turned out to be reachable (the wildcard-userset one only
+   over UNTAINTED relations — over derived relations it is a compile-time scope
+   rejection, so the surface is narrower than the finding read).
 4. **`_any_residue_reference`'s complete `ResidueV1` scan is still unbenchmarked**, and
    it is now unconditional on every node-release path after the `ZT-P0-1` fix.
 
@@ -2324,3 +2328,74 @@ outdated, the DoS was misattributed to a single write, and the "no node identity
 Lean" premise was false (`GraphState` does have `nodes`). A finding is a hypothesis
 with a citation, not a verdict; re-measure before fixing, and report the correction as
 loudly as the fix.
+
+---
+
+## 2026-07-28 — the last two ZERO-coverage conformance holes closed (board item C)
+
+Both holes were named by the 2026-07-27 plan-leaf floor rather than papered over,
+and both had to be **measured before being believed** — the finding text read
+wider than the reachable surface in one case, and narrower in the other.
+
+1. **Wildcard usersets `[T:*#p]` are reachable ONLY over UNTAINTED relations.**
+   Over a **derived** relation the shape is a deliberate compile-time scope
+   rejection — `zanzibar_utils_v1.py::_build_plan_tree`'s `Direct` arm raises
+   `UnsupportedByGraphIndex` ("needs symbolic composition through residues"), and
+   it raises out of `parse_openfga_schema` itself, so such a schema cannot be a
+   conformance corpus at all (the plan-leaf coverage floor and
+   `test_grid_independence` both call `parse_openfga_schema` on every entry of
+   every corpus dict). The **set engine** does answer it — verified, oracle ==
+   set engine on all 102 grid queries of `[group:*#member]` over
+   `member: base but not kicked` — but a corpus entry would crash the harness
+   rather than extend it, so this is recorded, not corpus'd.
+   Over an **untainted** relation the shape is fully live: new corpus
+   `formal/conformance/corpus.py::TTU_USERSET_SCHEMAS['wildcard_userset']`
+   (`viewer: [user, group:*#member]`, `can_view: viewer but not banned`), and
+   Lean `sem` == oracle == set engine == real graph index over the full 210-query
+   grid. Load-bearing witnesses: a user in NO group is not a viewer (the star is
+   not "everyone"); a ghost group's `#member` userset IS covered (probe-2
+   parity); the `banned` exclusion bites STAR-derived membership.
+
+2. **`derived-tupleset-ttu` is reachable, and the reason it was never covered is
+   worth keeping.** The leaf is emitted whenever a TTU's tupleset relation is
+   tainted, and `tests/test_boolean_compile.py` has pinned three of them on
+   `demorgans_law_1.fga` since P2 — so it is **not** unreachable-by-construction.
+   What is hard is *driving* it: per the 2026-07-07 P5 #1 correction, TTU parents
+   are the **STORED** tupleset tuples, never computed membership, so a derived
+   tupleset with no `Direct` restriction holds no stored tuples and its dependent
+   TTU is constantly EMPTY. That is exactly `demorgans_law_1.fga`'s shape
+   (`unmatchable_conds`/`matched_roles`/`matched_users` are ∅ by construction), so
+   a corpus copied from it would have raised the histogram and tested nothing.
+   New corpus `TTU_USERSET_SCHEMAS['derived_tupleset_ttu']` gives the tupleset a
+   storage leaf (`parent: [folder] but not detached`), and its load-bearing
+   witness is the asymmetry the kind exists for: `parent(f2,d1)` is **False** (the
+   exclusion bites on the tupleset relation) while `inherited(bob,d1)` is **True**
+   (f2 is still a STORED `parent` tuple). Lean `sem` == oracle == set engine ==
+   real graph index over the full 200-query grid.
+
+**Scope discipline (the ZT-P3-3 forcing function).** Neither corpus may enter
+`SCHEMAS` or `GRAPH_FRAGMENT`, and both scope assertions are tested:
+`wildcard_userset` makes `FullScope.lean::W4Fragment.wsBare`
+(`∀ sh ∈ wildcardShapes S, sh.2 = BARE`) FALSE; `derived_tupleset_ttu` is outside
+`W4Fragment.computedOnly` **and** outside the ADMISSION bundle's
+`GraphAdmission.ttuDirect` (`TtuTuplesetsDirect` forces a declared tupleset def to
+be directs-only). Both DO run a **python-only** three-backend differential
+(oracle == set engine == real `WildcardIndex`+`DeltaProcessor`, both `SetOps`),
+which makes no Lean claim — the same footing as `test_multi_stratum_three_way`.
+
+**Two checks that were designed against a fail-by-passing shape**, per the house
+rule, and both were sabotaged red before being believed:
+* the harness-wide wildcard floor counts **non-bare** shapes specifically.
+  Swapping `[group:*#member]` for the bare `[user:*]` leaves "a wildcard" in the
+  corpus and would have kept a naive floor green; the real floor goes to 0.
+* `test_derived_tupleset_ttu_corpus_features` asserts the derived tupleset keeps
+  a **storage leaf**. Removing it still COMPILES the `derived-tupleset-ttu` leaf,
+  so `test_every_plan_leaf_kind_is_reached_by_some_corpus` stays green while the
+  TTU is empty and the differential compares nothing.
+Also added: `test_required_leaf_kinds_are_exactly_the_compilers_kinds`, which
+reads the kind literals out of `zanzibar_utils_v1._plan_leaves`' own source — a
+hand-maintained "required kinds" list is itself a check that fails by passing
+once the compiler grows a branch.
+
+Conformance count 450 → 464. Full write-up incl. every sabotage and its observed
+output: `formal/history/nary-strata-coverage-2026-07-27.md` (2026-07-28 addendum).

@@ -1,4 +1,6 @@
-"""Language-feature coverage: n-ARY operators and >= 3 STRATA (ZT-P4-4).
+"""Language-feature coverage: n-ARY operators, >= 3 STRATA (ZT-P4-4), PLAN-LEAF
+kinds, and the two 2026-07-28 zero-coverage shapes (wildcard usersets `[T:*#p]`
+and the `derived-tupleset-ttu` leaf; see section (d) for their scope arguments).
 
 Two holes were measured across the whole conformance harness on 2026-07-26:
 
@@ -296,16 +298,27 @@ def test_nary_union_derived4_arms_load_bearing():
 # Measured 2026-07-27 by walking `RuleSet.compiled.plans[..].leaves` over all 69
 # schemas the harness reads (28 curated + 40 generated + three_strata_chain):
 #   closure 211 · derived-computed 42 · derived-ttu 50 · derived-userset 0
+#   · derived-tupleset-ttu 0
 # `derived-userset` (`zanzibar_utils_v1.py::PDerivedUserset`) was compiled by NO
 # corpus, in exactly the plan-leaf area where the X4 adjudication found five real
 # divergences. `corpus.py::TTU_USERSET_SCHEMAS['derived_userset']` closes it.
+#
+# **2026-07-28 (board item C): `derived-tupleset-ttu` closed too, so the list is
+# now EVERY kind `_plan_leaves` can emit.** It was recorded-not-asserted for a
+# day because it needed its own scope argument AND because reachability had to be
+# established first: the leaf is emitted whenever a TTU's tupleset relation is
+# tainted, but TTU parents are the STORED tupleset tuples, so a derived tupleset
+# with no Direct restriction yields a constantly-EMPTY TTU (that is why
+# `demorgans_law_1.fga`, the one in-tree schema compiling this leaf, has all three
+# of its dependent relations ∅ by construction and never served as a
+# differential). `corpus.py::TTU_USERSET_SCHEMAS['derived_tupleset_ttu']` gives
+# the tupleset a storage leaf, so the kind is DRIVEN, not merely compiled.
+#
+# The tuple is checked against the compiler below (`test_required_leaf_kinds_are_
+# exactly_the_compilers_kinds`) so a NEW plan-leaf kind cannot be added to
+# `zanzibar_utils_v1` and silently stay uncovered.
 _REQUIRED_LEAF_KINDS = ("closure", "derived-computed", "derived-ttu",
-                        "derived-userset")
-
-# STILL ZERO after 2026-07-27, recorded rather than asserted: `derived-tupleset-ttu`
-# (`::PDerivedTuplesetTTU` — `target from tupleset` where the TUPLESET relation is
-# itself derived). Not added here because it needs its own scope argument; it is
-# the remaining plan-leaf hole and is listed on the board.
+                        "derived-userset", "derived-tupleset-ttu")
 
 
 def test_every_plan_leaf_kind_is_reached_by_some_corpus():
@@ -339,6 +352,319 @@ def test_every_plan_leaf_kind_is_reached_by_some_corpus():
         f"corresponding `compile_ruleset` branch is unexercised by every "
         f"conformance differential. Observed histogram: "
         f"{ {k: len(v) for k, v in sorted(where.items())} }")
+
+
+def test_required_leaf_kinds_are_exactly_the_compilers_kinds():
+    """`_REQUIRED_LEAF_KINDS` names EVERY kind `zanzibar_utils_v1._plan_leaves`
+    can emit — so adding a new plan-leaf kind to the compiler cannot leave the
+    coverage floor quietly one kind short.
+
+    A hand-maintained "required" list is itself a check that can fail by passing:
+    the list was correct on the day it was written and would stay green forever
+    while the compiler grew a branch nobody covered. The kinds are read out of the
+    compiler's own source (the `LeafSpec(..., '<kind>', ...)` literals in
+    `_plan_leaves`, which is the single function that mints them), so the two
+    cannot drift."""
+    import inspect
+    import re
+
+    import zanzibar_utils_v1
+
+    src = inspect.getsource(zanzibar_utils_v1._plan_leaves)
+    emitted = set(re.findall(r"LeafSpec\([^,]+,\s*'([a-z][a-z-]*)'", src))
+    assert emitted, (
+        "ANTI-VACUITY: no `LeafSpec(..., '<kind>')` literal found in "
+        "`zanzibar_utils_v1._plan_leaves` — the regex has rotted and this "
+        "comparison would be against an empty set")
+    assert emitted == set(_REQUIRED_LEAF_KINDS), (
+        f"the plan-leaf coverage floor and the compiler disagree about which "
+        f"leaf kinds exist.\n"
+        f"  emitted by `_plan_leaves` but NOT in the floor: "
+        f"{sorted(emitted - set(_REQUIRED_LEAF_KINDS))}\n"
+        f"  in the floor but NOT emitted by `_plan_leaves`: "
+        f"{sorted(set(_REQUIRED_LEAF_KINDS) - emitted)}\n"
+        f"A new kind must get a corpus (and its own scope argument), not a "
+        f"silent omission; a removed kind must leave the floor.")
+
+
+# --------------------------------------------------------------------------- #
+# (d) WILDCARD USERSETS `[T:*#p]` and the `derived-tupleset-ttu` leaf
+#     (2026-07-28, board item C — the last two ZERO-coverage holes).
+#
+# SCOPE — where these two corpora are gated, and WHY (the ZT-P3-3 discipline;
+# the full per-field argument is in situ on each `corpus.py` entry):
+#
+# **Both -> `TTU_USERSET_SCHEMAS`, i.e. spec-side (`test_conformance_spec.py`:
+# Lean `sem` x oracle x set engine) PLUS the python-only three-backend leg below.
+# NEITHER may enter `SCHEMAS` or `GRAPH_FRAGMENT`.**
+#   * `wildcard_userset` is outside `FullScope.lean::W4Fragment.wsBare`
+#     (`∀ sh ∈ wildcardShapes S, sh.2 = BARE`; this schema's shape set contains
+#     the non-bare `(group, member)`). `wsBare`'s own doc comment already records
+#     the asymmetry — Python admits wildcard usersets over UNTAINTED relations and
+#     rejects them only over derived ones — so this is a declared Lean gap.
+#   * `derived_tupleset_ttu` is outside `W4Fragment.computedOnly` (a `ttu` node is
+#     never `ComputedOnly`) AND outside the ADMISSION bundle
+#     `GraphAdmission.ttuDirect` (`TtuTuplesetsDirect`: a declared tupleset def
+#     must be directs-only; `parent` is an `excl`). `w4_within_scope`'s third
+#     clause is literally "a TTU tupleset relation is never derived".
+# zcli gates on runtime write admission (rc 2) and drained-ness (rc 3), NEVER on
+# `GraphAdmission`/`W4Fragment`, so either corpus placed in `GRAPH_FRAGMENT`
+# would run GREEN while comparing two models no theorem relates.
+#
+# The python-only leg IS in scope and is the point: `sem` is a pure function of
+# the store (no fragment hypotheses), the set engine is covered unconditionally by
+# T1, and the real graph index ADMITS both shapes and answers them correctly
+# (measured 2026-07-28). Driving it against the oracle is a genuine gate on real
+# `WildcardIndex` + `DeltaProcessor` behaviour that makes NO Lean claim — the same
+# footing as `test_multi_stratum_three_way` above.
+#
+# REACHABILITY (established empirically FIRST, because the finding as filed reads
+# wider than the reachable surface):
+#   * wildcard usersets over a DERIVED relation are a deliberate scope rejection
+#     (`UnsupportedByGraphIndex`, `_build_plan_tree`'s `Direct` arm) — verified;
+#     the reachable surface is the UNTAINTED one, and it is fully live.
+#   * `derived-tupleset-ttu` IS reachable, but only non-vacuously when the derived
+#     tupleset carries a Direct restriction (TTU parents are STORED tuples), which
+#     is why the one pre-existing schema compiling this leaf could not test it.
+# --------------------------------------------------------------------------- #
+
+_WILDCARD_USERSET = "wildcard_userset"
+_DERIVED_TS_TTU = "derived_tupleset_ttu"
+
+# Harness-wide floor, same idiom as `_MIN_MAX_ARITY`: at least this many DISTINCT
+# non-bare wildcard shapes `(T, p)` must exist across the corpora. Measured
+# 2026-07-26/27 at ZERO across every curated corpus and every generated schema —
+# the whole `[T:*#p]` half of `derive_schema_info`'s `subject_wildcard_shapes` /
+# `bridged_in_shapes` machinery was uncompared. `wildcard_userset` makes it 1.
+_MIN_WILDCARD_USERSET_SHAPES = 1
+
+
+def _all_corpora():
+    """Every (label, schema, tuples, object_wildcards) the harness gates on."""
+    from formal.conformance.corpus import (
+        MULTI_STRATUM_SCHEMAS, SELF_REFERENTIAL_SCHEMAS, TTU_USERSET_SCHEMAS)
+    out = []
+    for dname, d in (("SCHEMAS", SCHEMAS),
+                     ("MULTI_STRATUM_SCHEMAS", MULTI_STRATUM_SCHEMAS),
+                     ("TTU_USERSET_SCHEMAS", TTU_USERSET_SCHEMAS),
+                     ("SELF_REFERENTIAL_SCHEMAS", SELF_REFERENTIAL_SCHEMAS)):
+        for name, (schema_text, tuples, ow) in d.items():
+            out.append((f"{dname}:{name}", schema_text, tuples, ow))
+    return out
+
+
+def test_harness_wide_wildcard_userset_floor():
+    """SOMEWHERE in the corpora a NON-BARE wildcard shape `(T, p)` is declared, so
+    the `[T:*#p]` compile/eval path is differentially compared at all.
+
+    `SchemaInfo.subject_wildcard_shapes` mixes bare `[T:*]` shapes (predicate
+    `'...'`, covered by many corpora) with userset shapes; only the latter reach
+    `bridged_in_shapes` and the set engine's star-userset arm. The floor counts
+    the userset ones specifically, because the bare ones would otherwise keep this
+    assertion green while the feature stayed at zero — which is exactly the state
+    the harness was in until 2026-07-28."""
+    from zanzibar_utils_v1 import wildcard_userset_restriction_shapes
+
+    shapes: dict[str, set] = {}
+    for label, schema_text, _tuples, _ow in _all_corpora():
+        ast = prod_parse_schema_ast(schema_text)
+        for sh in wildcard_userset_restriction_shapes(ast):
+            shapes.setdefault(label, set()).add(sh)
+    distinct = {sh for v in shapes.values() for sh in v}
+    assert len(distinct) >= _MIN_WILDCARD_USERSET_SHAPES, (
+        f"harness-wide DISTINCT wildcard-userset shapes = {len(distinct)}, floor "
+        f"{_MIN_WILDCARD_USERSET_SHAPES}: no corpus declares a `[T:*#p]` "
+        f"restriction, so the wildcard-userset compile/eval path is compared by "
+        f"NOTHING (the pre-2026-07-28 state). Per-corpus: { {k: sorted(v) for k, v in shapes.items()} }")
+
+
+def test_wildcard_userset_corpus_features():
+    """`wildcard_userset` really declares a NON-BARE wildcard shape, really
+    stores a `group:*#member` subject, and every witness in its store is
+    load-bearing — including the ghost-group userset (probe-2 parity) and the
+    exclusion applied to star-derived membership."""
+    from formal.conformance.corpus import TTU_USERSET_SCHEMAS
+    from zanzibar_utils_v1 import (
+        derive_schema_info, wildcard_userset_restriction_shapes)
+
+    schema_text, tuples, _ow = TTU_USERSET_SCHEMAS[_WILDCARD_USERSET]
+
+    ast = prod_parse_schema_ast(schema_text)
+    assert wildcard_userset_restriction_shapes(ast) == frozenset({("group", "member")}), (
+        f"[{_WILDCARD_USERSET}] no longer carries the literal `group:*#member` "
+        f"restriction: {sorted(wildcard_userset_restriction_shapes(ast))}")
+    info = derive_schema_info(ast)
+    assert ("group", "member") in info.bridged_in_shapes, (
+        f"[{_WILDCARD_USERSET}] the wildcard-userset shape no longer reaches "
+        f"`bridged_in_shapes` — the concrete->w_any bridge machinery this corpus "
+        f"exists to exercise is not engaged: {sorted(info.bridged_in_shapes)}")
+    assert any(t.subject_name == "*" and t.subject_predicate == "member"
+               for t in tuples), (
+        f"[{_WILDCARD_USERSET}] the store no longer holds a `group:*#member` "
+        f"subject — the shape would be declared but never written")
+
+    # SCOPE: outside W4Fragment.wsBare, so it must stay out of the Lean graph gates.
+    assert _WILDCARD_USERSET not in SCHEMAS, (
+        f"[{_WILDCARD_USERSET}] leaked into SCHEMAS — a non-bare wildcard shape "
+        f"makes `FullScope.lean::W4Fragment.wsBare` FALSE, and zcli would NOT "
+        f"refuse it (it gates on admission rc 2 / drainedness rc 3, never on the "
+        f"fragment)")
+    assert _WILDCARD_USERSET not in GRAPH_FRAGMENT, \
+        f"[{_WILDCARD_USERSET}] leaked into GRAPH_FRAGMENT"
+
+    orc = Oracle(schema_text, list(tuples))
+
+    def chk(sp, st, sn, rel):
+        return orc.check(sp, st, sn, rel, "doc", "d1")
+
+    # alice: viewer ONLY via the star userset (no concrete `viewer` grant).
+    assert chk("...", "user", "alice", "viewer") and \
+        chk("...", "user", "alice", "can_view"), \
+        f"[{_WILDCARD_USERSET}] the star userset grants nothing — vacuous corpus"
+    # dave: in no group => strict forall=>exists means the star does NOT cover him.
+    assert not chk("...", "user", "dave", "viewer"), (
+        f"[{_WILDCARD_USERSET}] a user who is a member of NO group is a viewer — "
+        f"the `[group:*#member]` star has collapsed into 'everyone', so it would "
+        f"pass every differential without testing membership at all")
+    # bob: covered by the star AND banned => the exclusion bites star-derived
+    # membership, not just stored grants.
+    assert chk("...", "user", "bob", "viewer") and \
+        not chk("...", "user", "bob", "can_view"), (
+        f"[{_WILDCARD_USERSET}] the `banned` exclusion no longer applies to a "
+        f"subject whose `viewer` membership comes from the wildcard userset")
+    # carol: the non-star arm of the same Direct still works.
+    assert chk("...", "user", "carol", "viewer") and \
+        chk("...", "user", "carol", "can_view"), \
+        f"[{_WILDCARD_USERSET}] the concrete `[user]` arm stopped granting"
+    # ghost group's userset: covered by the star (probe-2 ghost-subject parity).
+    assert chk("member", "group", "ghost_group", "viewer"), (
+        f"[{_WILDCARD_USERSET}] a never-stored group's `#member` userset is not "
+        f"covered by the `group:*#member` grant — the ghost-subject probe this "
+        f"shape is defined by is not being exercised")
+
+
+def test_derived_tupleset_ttu_corpus_features():
+    """`derived_tupleset_ttu` really compiles a `derived-tupleset-ttu` leaf, and
+    that leaf is really DRIVEN: the derived tupleset's exclusion changes
+    `parent`'s own answer while the STORED tupleset tuple keeps feeding the TTU.
+
+    That asymmetry is the whole semantic content of the kind (parents are STORED
+    tupleset tuples, never computed membership — docs/spec-deviations.md
+    2026-07-07 P5 #1). Without it the corpus would compile the branch and compare
+    nothing distinctive, which is the state `demorgans_law_1.fga` was in: its
+    derived tuplesets have no Direct restriction, so every dependent TTU is empty
+    by construction."""
+    from formal.conformance.corpus import TTU_USERSET_SCHEMAS
+
+    schema_text, tuples, _ow = TTU_USERSET_SCHEMAS[_DERIVED_TS_TTU]
+    prod = parse_openfga_schema(schema_text)
+    assert prod.compiled is not None, f"[{_DERIVED_TS_TTU}] compiled no plans"
+
+    kinds = {leaf.kind for plan in prod.compiled.plans.values()
+             for leaf in plan.leaves}
+    assert "derived-tupleset-ttu" in kinds, (
+        f"[{_DERIVED_TS_TTU}] no longer compiles a `derived-tupleset-ttu` leaf — "
+        f"the tupleset relation `parent` is presumably no longer derived. Kinds: "
+        f"{sorted(kinds)}")
+    # and the tupleset relation must keep a STORAGE leaf, or the TTU is empty.
+    parent_leaves = prod.compiled.plans[("doc", "parent")].leaves
+    assert any(l.storage for l in parent_leaves), (
+        f"[{_DERIVED_TS_TTU}] the derived tupleset `parent` has no storage leaf, "
+        f"so it can hold no stored tuples and `inherited` is constantly EMPTY — "
+        f"the leaf would be compiled but never driven: {parent_leaves}")
+
+    # SCOPE: outside W4Fragment.computedOnly AND outside GraphAdmission.ttuDirect.
+    assert _DERIVED_TS_TTU not in SCHEMAS, (
+        f"[{_DERIVED_TS_TTU}] leaked into SCHEMAS — a derived TTU tupleset fails "
+        f"`GraphAdmission.ttuDirect` (TtuTuplesetsDirect) as well as "
+        f"`W4Fragment.computedOnly`, and zcli would NOT refuse it")
+    assert _DERIVED_TS_TTU not in GRAPH_FRAGMENT, \
+        f"[{_DERIVED_TS_TTU}] leaked into GRAPH_FRAGMENT"
+
+    orc = Oracle(schema_text, list(tuples))
+
+    def chk(sp, st, sn, rel):
+        return orc.check(sp, st, sn, rel, "doc", "d1")
+
+    # The exclusion is load-bearing ON THE TUPLESET RELATION ITSELF.
+    assert chk("...", "folder", "f1", "parent"), \
+        f"[{_DERIVED_TS_TTU}] f1 is not a parent — the corpus is vacuous"
+    assert not chk("...", "folder", "f2", "parent"), (
+        f"[{_DERIVED_TS_TTU}] `detached` no longer excludes f2 from `parent`, so "
+        f"the tupleset relation is effectively untainted and the leaf under test "
+        f"is a plain `derived-ttu`")
+    # ...and it is NOT load-bearing on the dependent TTU, because parents are the
+    # STORED tuples. This is the pinned divergence; if it ever flips, the fix that
+    # flipped it changed adjudicated semantics.
+    assert chk("...", "user", "alice", "inherited"), \
+        f"[{_DERIVED_TS_TTU}] the TTU grants nothing — vacuous corpus"
+    assert chk("...", "user", "bob", "inherited"), (
+        f"[{_DERIVED_TS_TTU}] bob lost `inherited` even though he views f2 and "
+        f"`folder:f2 parent doc:d1` is STORED. TTU parents are the stored "
+        f"tupleset tuples, never computed membership (spec-deviations 2026-07-07 "
+        f"P5 #1) — a change here is a semantics change, not a refactor")
+    assert not chk("...", "user", "carol", "inherited"), (
+        f"[{_DERIVED_TS_TTU}] carol inherits without viewing any parent folder — "
+        f"the TTU has collapsed into 'everyone'")
+
+
+@pytest.mark.parametrize("ops", ALL_SETOPS, ids=lambda o: o.name)
+@pytest.mark.parametrize("name", [_WILDCARD_USERSET, _DERIVED_TS_TTU])
+def test_zero_coverage_shapes_three_way(name, ops):
+    """PYTHON-ONLY three-backend differential on the two 2026-07-28 corpora:
+    independent oracle == real `SetEngine` == real graph index (`WildcardIndex` +
+    `DeltaProcessor` cascade), over the full shared grid, under BOTH SetOps.
+
+    No Lean artifact is involved and none may be: both shapes are outside
+    `W4Fragment` (see the block comment above), so their Lean side is `sem` only
+    and lives in `test_conformance_spec.py`. This leg exists because the graph
+    index genuinely ADMITS both shapes — a scope rejection would make it
+    impossible, and a rejection is exactly what the wildcard-userset finding
+    looked like until it was measured."""
+    from formal.conformance.corpus import TTU_USERSET_SCHEMAS
+
+    schema_text, tuples, obj_wild = TTU_USERSET_SCHEMAS[name]
+    queries = queries_for(schema_text, tuples)
+    assert_grid_nonvacuous(f"{name}/{ops.name}", queries)
+
+    orc = Oracle(schema_text, list(tuples))
+    oracle = [orc.check(*q) for q in queries]
+    assert any(oracle), (
+        f"[{name}/{ops.name}] ANTI-VACUITY: the oracle answers False on EVERY "
+        f"query — three backends agreeing on 'no' everywhere compares nothing "
+        f"about the feature under test")
+
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    try:
+        eng = SetEngine(session, "s1", schema_text, ops=ops,
+                        object_wildcard_shapes=frozenset(obj_wild))
+        for tup in tuples:
+            eng.add_tuple(tup.subject_predicate, tup.subject_type,
+                          tup.subject_name, tup.relation, tup.object_type,
+                          tup.object_name)
+        se = [bool(eng.check(*q)) for q in queries]
+    finally:
+        session.close()
+
+    graph = graphindex_answers(schema_text, tuples, queries, obj_wild)
+
+    assert len(oracle) == len(se) == len(graph) == len(queries), (
+        f"[{name}/{ops.name}] answer-vector length mismatch")
+
+    mism = [(queries[i], oracle[i], se[i]) for i in range(len(queries))
+            if oracle[i] != se[i]]
+    assert not mism, (
+        f"[{name}/{ops.name}] oracle/set-engine disagreement:\n"
+        f"{_fmt(mism, 'oracle', 'setengine')}")
+
+    mism = [(queries[i], oracle[i], graph[i]) for i in range(len(queries))
+            if oracle[i] != graph[i]]
+    assert not mism, (
+        f"[{name}/{ops.name}] oracle/graph-index disagreement on a shape that "
+        f"had ZERO coverage until 2026-07-28 — this is a GENUINE FINDING:\n"
+        f"{_fmt(mism, 'oracle', 'graph')}")
 
 
 def test_nary_union_arms_load_bearing():

@@ -171,15 +171,18 @@ fi
 # ---------------------------------------------------------------------------- #
 # The hard-coded assurance floors.
 # ---------------------------------------------------------------------------- #
-# Minimum tests the conformance directory must COLLECT. Measured 2026-07-26 with
-# `pytest formal/conformance/ -q --collect-only`: 356. Every `conf-tile:I/K` phase
+# Minimum tests the conformance directory must COLLECT. Re-measured 2026-07-28 with
+# `pytest formal/conformance/ -q --collect-only`: 464 (was 450 on 2026-07-27; +14
+# from the two zero-coverage corpora `wildcard_userset` / `derived_tupleset_ttu`
+# and their pins -- 6 spec-side + 8 in test_conformance_nary_strata.py).
+# Every `conf-tile:I/K` phase
 # asserts this against the live collection BEFORE tiling, so the global coverage
 # floor is checked by each tile independently -- and each tile's own pass floor is
 # then its exact tile size (all selected tests must pass).
 # ADDING tests never trips this. LOWERING it must be a deliberate, reviewed edit
 # here -- without a floor, shrinking GRAPH_FRAGMENT to a single corpus or deleting
 # test_conformance_graph.py outright kept the gate green (ZT-P2-2).
-MIN_CONF_ALL=450
+MIN_CONF_ALL=464
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -251,7 +254,7 @@ MAX_TESTS_SKIPPED_ON_RDBMS=3
 #     the 2026-07-19g note blamed test_conformance_remove_graph.py, which is ~27 s)
 HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 MIN_CONF_HEAVY=96
-MIN_CONF_REST=354
+MIN_CONF_REST=368
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

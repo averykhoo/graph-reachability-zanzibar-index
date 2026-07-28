@@ -692,6 +692,16 @@ MULTI_STRATUM_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # test_conformance_spec's comparisons consume them — those are full-scope (T1
 # places no fragment restriction on the set engine; `sem`/oracle are the
 # reference for every stratifiable schema).
+#
+# The dict has since grown two more OUT-OF-W4Fragment families that are equally
+# spec-clean and equally graph-ungated Lean-side (`derived_userset` 2026-07-27,
+# and `wildcard_userset` + `derived_tupleset_ttu` 2026-07-28). Each entry carries
+# its OWN per-field scope argument in situ — read the entry, not this header. The
+# two 2026-07-28 additions additionally carry a PYTHON-ONLY three-backend
+# differential (oracle == set engine == real graph index, both SetOps) in
+# `test_conformance_nary_strata.py`, because the graph index ADMITS both shapes
+# and answers them correctly; that leg makes no Lean claim whatsoever, which is
+# exactly why it is allowed where `GRAPH_FRAGMENT` is not.
 # ---------------------------------------------------------------------------
 
 TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
@@ -790,6 +800,134 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
         """,
         [mk_tuple("...", "user", "alice", "editor", "folder", "f1"),
          mk_tuple("...", "folder", "f1", "parent", "doc", "d1")],
+        (),
+    ),
+    # (e) **WILDCARD USERSET `[T:*#p]`** — "any instance of T's `p`". Added
+    # 2026-07-28 (board item C). Measured 2026-07-26 (ZT-P4-4) and re-measured
+    # 2026-07-27: wildcard usersets were at ZERO coverage across the whole
+    # conformance harness — no curated corpus and no generated schema emitted a
+    # single `T:*#p` restriction, so the entire non-bare half of
+    # `derive_schema_info`'s `subject_wildcard_shapes` / `bridged_in_shapes`
+    # machinery (and the set engine's star-userset `MemberSet` arm) was never
+    # differentially compared against `sem`.
+    #
+    # REACHABILITY, established empirically before writing this (the finding as
+    # filed reads wider than the reachable surface): a wildcard userset over a
+    # DERIVED relation is a deliberate scope rejection —
+    # `zanzibar_utils_v1.py::_build_plan_tree`'s `Direct` arm raises
+    # `UnsupportedByGraphIndex` ("needs symbolic composition through residues"),
+    # so `[group:*#member]` with `member: base but not kicked` cannot be compiled
+    # at all and cannot be a corpus here (the plan-leaf coverage floor calls
+    # `parse_openfga_schema` on every entry of this dict and would raise). Over an
+    # UNTAINTED relation, however, the shape compiles and runs on BOTH backends:
+    # measured 2026-07-28, oracle == set engine == real graph index == Lean `sem`
+    # over the full 210-query grid (14 True). That untainted surface IS the
+    # reachable one, and it is what this corpus covers.
+    #
+    # SCOPE: spec-side (Lean `sem` × oracle × set engine, `test_conformance_spec`)
+    # + a PYTHON-ONLY three-backend differential
+    # (`test_conformance_nary_strata.py::test_wildcard_userset_three_way`).
+    # NEVER `GRAPH_FRAGMENT`: `FullScope.lean::W4Fragment.wsBare` is literally
+    # `∀ sh ∈ wildcardShapes S, sh.2 = BARE`, and this schema's shape set contains
+    # `(group, member)` — non-bare by construction — so `wsBare` is FALSE here and
+    # every theorem routed through `graph_correct` says nothing about this corpus.
+    # `wsBare`'s own doc comment records the asymmetry deliberately ("Python
+    # rejects wildcard USERSETS only over derived relations; over untainted ones
+    # they are admitted"), i.e. this is a KNOWN Lean-side gap, not a discovery.
+    # zcli would NOT refuse it (it gates on runtime admission rc 2 and drainedness
+    # rc 3, never on the fragment), so placing it in `GRAPH_FRAGMENT` would
+    # silently compare two models no theorem relates — the ZT-P3-3 mistake.
+    #
+    # Load-bearing store (pinned by `test_wildcard_userset_corpus_features`):
+    #   alice  — member of g1 only        -> viewer via the STAR userset, can_view
+    #   bob    — member of g2, banned     -> viewer via the star, NOT can_view
+    #                                        (the exclusion bites on star-derived
+    #                                         membership, not just on stored ones)
+    #   carol  — concrete `viewer` grant  -> the non-star arm of the same Direct,
+    #                                        so the star is not the only path
+    #   dave   — in no group              -> NOT viewer (strict ∀⇒∃: the star
+    #                                        needs SOME group he is a member of)
+    #   group:ghost#member                -> viewer (a never-stored group's
+    #                                        userset is covered by the star —
+    #                                        spec §probe-2 ghost-subject parity)
+    "wildcard_userset": (
+        """
+        type user
+        type group
+          define member: [user]
+        type doc
+          define viewer: [user, group:*#member]
+          define banned: [user]
+          define can_view: viewer but not banned
+        """,
+        [mk_tuple("...", "user", "alice", "member", "group", "g1"),
+         mk_tuple("...", "user", "bob", "member", "group", "g2"),
+         mk_tuple("member", "group", "*", "viewer", "doc", "d1"),
+         mk_tuple("...", "user", "carol", "viewer", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "banned", "doc", "d1")],
+        (),
+    ),
+    # (f) **`PDerivedTuplesetTTU`** — `target from tupleset` where the TUPLESET
+    # relation is itself DERIVED. Added 2026-07-28 (board item C); this was the
+    # last plan-leaf kind produced by NO corpus (histogram 2026-07-27 over all 69
+    # schemas the harness reads: closure 211 · derived-computed 42 ·
+    # derived-ttu 50 · derived-userset 0 · derived-tupleset-ttu 0), and it was
+    # deliberately left OUT of the coverage floor rather than faked.
+    #
+    # REACHABILITY: it is reachable, and non-vacuously so — but ONLY when the
+    # derived tupleset relation carries a Direct restriction. `compile_ruleset`
+    # emits the leaf whenever `(object_type, ttu.tupleset_rel)` is tainted
+    # (`_build_plan_tree`'s `TTU` arm), yet the pinned Zanzibar semantics are that
+    # **TTU parents are the STORED tupleset tuples, never computed membership**
+    # (docs/spec-deviations.md 2026-07-07 P5 #1), so a derived tupleset with no
+    # Direct restrictions holds no stored tuples and its dependent TTU is
+    # constantly EMPTY — which is exactly why `demorgans_law_1.fga`, the only
+    # in-tree schema that compiled this leaf, has `unmatchable_conds` /
+    # `matched_roles` / `matched_users` all ∅ by construction and could not have
+    # served as a differential. `parent: [folder] but not detached` gives the
+    # tupleset a storage leaf (`parent.0`), so the leaf is DRIVEN, not just
+    # compiled.
+    #
+    # SCOPE: spec-side + the python-only three-backend differential; NEVER
+    # `GRAPH_FRAGMENT`, and here the Lean exclusion is doubled:
+    #   * `W4Fragment.computedOnly` — a derived def's expr must be `ComputedOnly`,
+    #     which is `False` on a `ttu` node outright (`FullScope.lean`'s
+    #     `directsOnly_of_computedOnly` induction), and `inherited` IS a `ttu`;
+    #   * `GraphAdmission.ttuDirect` (`TtuTuplesetsDirect`) — a declared TTU
+    #     tupleset def must be directs-only, and `parent` is an `excl`. So this
+    #     shape fails the ADMISSION bundle too, not merely the fragment carries;
+    #     `w4_within_scope`'s third clause is precisely "a TTU tupleset relation
+    #     is never derived".
+    # Measured 2026-07-28: oracle == set engine == real graph index == Lean `sem`
+    # over the full 200-query grid (8 True), zcli 0.08 s.
+    #
+    # Load-bearing store (pinned by `test_derived_tupleset_ttu_corpus_features`):
+    #   parent(f1, d1)      True   — plain stored parent
+    #   parent(f2, d1)      False  — the DERIVED tupleset's exclusion bites HERE
+    #   inherited(alice,d1) True   — alice views f1, f1 is a parent
+    #   inherited(bob, d1)  True   — ★ bob views f2, and f2 is STILL a stored
+    #                                `parent` tuple even though `parent(f2,d1)` is
+    #                                False. This asymmetry IS the semantics the
+    #                                leaf kind exists to implement, and it is what
+    #                                distinguishes `derived-tupleset-ttu` from
+    #                                `derived-ttu`; a corpus where the two agreed
+    #                                would compile the leaf without testing it.
+    #   inherited(carol,d1) False  — anti-vacuity: not everyone inherits
+    "derived_tupleset_ttu": (
+        """
+        type user
+        type folder
+          define viewer: [user]
+        type doc
+          define detached: [folder]
+          define parent: [folder] but not detached
+          define inherited: viewer from parent
+        """,
+        [mk_tuple("...", "user", "alice", "viewer", "folder", "f1"),
+         mk_tuple("...", "folder", "f1", "parent", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "viewer", "folder", "f2"),
+         mk_tuple("...", "folder", "f2", "parent", "doc", "d1"),
+         mk_tuple("...", "folder", "f2", "detached", "doc", "d1")],
         (),
     ),
 }

@@ -134,14 +134,14 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
 
 - **Coverage is complete, by construction — and now also asserted.** A
   `conf-tile:I/K` phase collects `formal/conformance/` fresh, asserts the collected
-  total is `>= MIN_CONF_ALL` (450 today), then runs the node ids whose 0-based
+  total is `>= MIN_CONF_ALL` (464 today), then runs the node ids whose 0-based
   collection index is `≡ I-1 (mod K)`. Every collected node lands in **exactly one**
   tile, so the K tiles partition the directory: a newly added file, corpus or
   parametrization is automatically in exactly one tile, nothing is named by hand, and
   the tile's size is cross-checked against the partition arithmetic
   (`floor((total-I)/K)+1`) so a tiling that is not a partition FAILs. Each tile's own
   pass floor is its exact size — every selected test must pass.
-- **The global floor is per-phase.** Because *every* tile re-asserts the 450-test
+- **The global floor is per-phase.** Because *every* tile re-asserts the 464-test
   collection floor, you cannot lose conformance coverage and still get a green tile —
   even if you only ever run one.
 - **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
@@ -153,8 +153,8 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
   there is no reconstructed-pass hole to manage.
 - **Legacy phases still work.** `conf-heavy` (`test_conformance_remove.py`, **175 s**
   measured 2026-07-26, floor `MIN_CONF_HEAVY` = 96) and `conf-rest` (the dir MINUS that
-  file via `--ignore`, floor `MIN_CONF_REST` = 354) also tile the directory — 96 + 354
-  = 450 = `MIN_CONF_ALL`, and `verify.sh` checks that identity on its own floors at
+  file via `--ignore`, floor `MIN_CONF_REST` = 368) also tile the directory — 96 + 368
+  = 464 = `MIN_CONF_ALL`, and `verify.sh` checks that identity on its own floors at
   startup. `conf-heavy` is a handy quick
   single-file rerun. **`conf-rest` is AT OR OVER the cap** (579 s measured
   2026-07-19g/07-26 at 250-276 tests, and the whole dir is ~800 s of work) — that is
@@ -180,8 +180,8 @@ so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 | `EXPECTED_MIN_AUDITS` | 457 | `#print axioms` reports observed from `Audit.lean` |
 | `MIN_PINNED_AUDITS` | 457 | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
 | `MIN_PINNED_DEFS` | 139 | rows in `formal/headline_definitions.txt` — likewise, so emptying the golden can't make the definition pin compare nothing |
-| `MIN_CONF_ALL` | 450 | tests collected from `formal/conformance/` |
-| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 354 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
+| `MIN_CONF_ALL` | 464 | tests collected from `formal/conformance/` |
+| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 368 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
 | `MIN_TESTS_ALL` | 762 | tests collected from `tests/` |
 | `MAX_TESTS_XFAILED` | 0 (**`-le`**) | declared xfail budget for `tests/` only — see below |
 | `MAX_TESTS_SKIPPED_ON_RDBMS` | 3 (**`-le`**) | dialect-only skips, and ONLY when `ZANZIBAR_TEST_DSN` is set; the default SQLite gate keeps a hard zero |
@@ -407,7 +407,7 @@ and the throttle comes and goes mid-gate). What breaks and what to do:
 - **Conformance can blow the cap throttled — just use more tiles.** This no longer
   needs a hand-rolled wrapper: `verify.sh conf-tile:I/K` takes any `K`, so on a
   throttled box run `conf-tile:1/8 … conf-tile:8/8` (or `1/12 … 12/12`). Every tile
-  re-collects the directory, re-asserts the 450-test global floor, checks its own size
+  re-collects the directory, re-asserts the 464-test global floor, checks its own size
   against the partition arithmetic and carries all of `run_conf`'s anti-vacuous guards
   — so the union is provably the whole dir for any `K` and there is nothing to
   replicate by hand. (The 2026-07-23 advice here — tile A = dir minus
@@ -457,7 +457,7 @@ optimization this session.
 controlled than test runtime): time a **deterministic, rarely-changing,
 hot-path-heavy subset**. Best candidates, because they change by design only when
 behavior changes:
-- the conformance corpora (`formal/conformance/`, ~450 deterministic tests),
+- the conformance corpora (`formal/conformance/`, ~464 deterministic tests),
 - the validation matrix (`tests/test_matrix.py`),
 - the compiled-RuleSet snapshots (`tests/snapshots/`).
 Track these via `pytest --durations=20` across commits and eyeball for a step
