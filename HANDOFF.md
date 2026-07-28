@@ -87,7 +87,26 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
     backends' key spaces are not translatable, and in the stale case the graph rows do
     not exist), and the fan-out cap **exempts removals** (a cap that can refuse a
     revocation is a fail-open).
-  * Detail: `docs/spec-deviations.md` 2026-07-27.
+  * **Then one more gate hole, found by scoping the strata arc and closed the same
+    day (`ac3e26e`).** The headline STATEMENT pin added that morning records
+    `graph_correct`'s hypothesis as `(hF : W4Fragment S T)` — **by name**. Weaken that
+    structure and the theorem claims strictly less over a strictly larger class, while
+    the pinned line stays byte-identical and no declaration name changes, so the
+    identity pin is blind too. 58 definitions in the 26 pinned statements had that
+    shape. New step **4c**, `formal/headline_definitions.txt`: the full text of all
+    **132** project declarations the statements depend on TRANSITIVELY, plus the
+    hosting files' ambient `variable`/`open` context. Verified by a sabotage that
+    *builds*: MOVING `twoStrata` from `W4Fragment` into `GraphAdmission` keeps
+    `26/26 statements match` and changes no name, while converting a declared honest
+    scope-carry into a claimed guarantee about Python's admission that is false
+    (Python reaches 12 strata). Depth is unbounded within the project because the
+    closure terminates at the project boundary on its own (converges at depth 9);
+    replayed over 34 commits, levels 3–9 added zero firings beyond levels 1–2.
+  * **Local PostgreSQL: STOPPED, cluster retained.** `bash scripts/pg_local.sh start`
+    brings it back in seconds; `destroy` removes it entirely. Nothing in the default
+    gate needs it — `tests/test_postgres_ha.py` is dropped at collection without
+    `ZANZIBAR_TEST_DSN`.
+  * Detail: `docs/spec-deviations.md` 2026-07-27 and 2026-07-27b.
 
 ## Current status — 2026-07-23
 
@@ -667,6 +686,55 @@ dismissals whose stated justification no longer holds:
 ## Open-TODO board
 
 ### Active work
+
+- [ ] **★ START HERE (next session, opened 2026-07-27) — three independent options.**
+      The zero-trust backlog is CLEARED and the gate is green end-to-end; nothing below
+      is blocking or urgent, and they do not depend on each other. Pick one and finish
+      it rather than sampling all three. Full context for each is linked.
+
+      **(A) The store-level write quota — the only one with real production value.**
+      `ZT-P1-6a` is only half closed. `ZANZIBAR_MAX_CLOSURE_FANOUT` (landed 2026-07-27,
+      `index_v4/core.py`) bounds what ONE add may materialise while holding both
+      per-store locks. It does **not** stop the DoS that motivated it: re-measured, the
+      240-tuple hub topology produces 14,640 closure rows but its peak *per-write*
+      fan-out is only **120** — it is 240 cheap writes, not one expensive one. What is
+      missing is a quota over a STORE (rows, or tuples, or closure size), which is a
+      different mechanism with genuinely different design questions: what is the unit,
+      who resets it, and — the hard one — **what happens to an already-over-quota
+      store**, since a quota that blocks removes is a fail-open (the fan-out cap
+      exempts removals for exactly this reason; read that comment first). Python-side,
+      bounded, no Lean impact. **Start:** the residuals block on the 2026-07-27 board
+      item below, then `index_v4/core.py`'s `DEFAULT_MAX_CLOSURE_FANOUT` comment.
+
+      **(B) The E-chain Direct-arm widening — the highest-value Lean work.**
+      NOT the ≥3-strata arc (scoped 2026-07-27 and explicitly declined — see residual 2
+      below and `formal/history/strata-widening-plan-2026-07-27.md`; it is ~8 sessions
+      for coverage, not safety, and the model already fails CLOSED there). This one
+      instead: `ZT-P3-1` — the headline graph theorems are **VACUOUS** on
+      `can_view: [user] but not blocked`, the most common Zanzibar boolean shape.
+      `FullScope.lean:564` machine-checks that such a store fails
+      `GraphAdmission.storeValid`, so `graph_correct` / `graph_reached_inv` /
+      `Exec.graphRun_check_eq_sem` hold trivially there — **no theorem, not a narrow
+      one**. Vacuous beats narrow as a thing to fix, and unlike the strata arc it
+      widens the claim rather than the coverage. **Start:** `formal/FINAL_REVIEW.md`
+      §3.0, `formal/HANDOFF.md` "THE NEXT TASK", and
+      `formal/history/optional-widening-2026-07.md` (#1 Direct-arm, legs 1–3 landed,
+      leg 4 is "the wall" and is characterised there).
+
+      **(C) Wildcard-userset and `derived-tupleset-ttu` corpora — cheap, and a good
+      warm-up.** These are the last two things at **zero** coverage anywhere: no corpus
+      or generator emits a wildcard userset `[T:*#p]`, and no schema in the tree
+      compiles a `derived-tupleset-ttu` plan leaf. Both were deliberately left OUT of
+      the new plan-leaf coverage floor rather than faked, so the floor names the gap
+      instead of hiding it. Precedent to copy: the same audit found `derived-userset`
+      at zero and closing it was a single corpus. Note wildcard usersets over derived
+      relations are a *scope rejection* (`UnsupportedByGraphIndex`), so check what is
+      actually reachable before writing the corpus — the finding may be narrower than
+      it reads. **Start:** `formal/conformance/corpus.py` and the plan-leaf histogram
+      in `formal/history/nary-strata-coverage-2026-07-27.md`.
+
+      **Before starting any of them:** `bash formal/verify.sh lean` should be green in
+      ~30 s warm. If it is not, fix that first — it is the fastest signal in the repo.
 - [x] **DONE 2026-07-26 — `ZT-P0-1` FIXED (verified in code 2026-07-27).** The
       whitelist is gone, not narrowed: `index_v4/processor.py` now carries an
       "N3 WITHDRAWN — DO NOT RE-INTRODUCE" block stating the property GC actually
@@ -872,13 +940,7 @@ dismissals whose stated justification no longer holds:
          plan-leaf-coverage floor rather than faked.
       Also unbenchmarked (unchanged): `_any_residue_reference`'s complete `ResidueV1`
       scan on every node-release path, now unconditional after the `ZT-P0-1` fix.
-      **Next actions, in the order I would take them** (all independent of each other):
-      * **The store-level quota** — residual 1 above is the only one with real
-        production value; the fan-out cap does not close it. Python-side, bounded.
-      * **The E-chain Direct-arm widening** (`ZT-P3-1` vacuity) if a session goes to
-        Lean — NOT the strata arc, per residual 2.
-      * **Wildcard-userset / `derived-tupleset-ttu` corpora** — cheap corpus work, and
-        a good warm-up for whoever picks up the formal side.
+      **Next actions:** promoted to the ★ START HERE item at the top of Active work.
 - [x] **DONE 2026-07-23 (Claude): multi-instance set-engine (HA) support — landed, gated, pushed.**
       See the 2026-07-23 Current-status bullet for the full record (mechanisms, the
       closed log-ordering hazard, consistency model, gate numbers). Follow-ups
