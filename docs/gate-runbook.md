@@ -146,7 +146,7 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
   even if you only ever run one.
 - **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
   guards as the one-shot — olean layout-drift guard, `#print axioms`
-  observed==expected **plus a hard-coded 457 floor, an IDENTITY pin and a headline
+  observed==expected **plus a hard-coded 460 floor, an IDENTITY pin and a headline
   STATEMENT pin** (Lean), zcli-binary preflight,
   the collection floor, zero `skipped`/`xfailed`/`xpassed`/`deselected`, and
   `passed >= floor` (conformance). So the green phases ≡ a green `verify.sh all`;
@@ -177,8 +177,8 @@ so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 
 | constant | value | what it guards |
 |---|---|---|
-| `EXPECTED_MIN_AUDITS` | 457 | `#print axioms` reports observed from `Audit.lean` |
-| `MIN_PINNED_AUDITS` | 457 | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
+| `EXPECTED_MIN_AUDITS` | 460 | `#print axioms` reports observed from `Audit.lean` |
+| `MIN_PINNED_AUDITS` | 460 | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
 | `MIN_PINNED_DEFS` | 139 | rows in `formal/headline_definitions.txt` — likewise, so emptying the golden can't make the definition pin compare nothing |
 | `MIN_CONF_ALL` | 464 | tests collected from `formal/conformance/` |
 | `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 368 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
@@ -282,7 +282,7 @@ The hole scan is no longer just `\b(?:sorry|admit)\b` over `formal/lean/Zanzibar
   `\bsorry\b` *cannot* match it, `A` is a word character) and **`native_decide`**
   (closes goals by running compiled code, pulling the `Lean.ofReduceBool` axiom).
 - **Custom `axiom` declarations** (`^\s*axiom\s`, modulo modifiers/attributes) —
-  `axiom cheat : ∀ p, p` typechecks and produces no `sorry`. Anchored so the 457
+  `axiom cheat : ∀ p, p` typechecks and produces no `sorry`. Anchored so the 460
   `#print axioms` commands and every prose mention of the word do not trip it.
 - **Unterminated string literals** are themselves a violation: one stray `"` used to
   make the rest of that file invisible to the scanner *in silence*.

@@ -16,6 +16,56 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
+## Current status — 2026-07-28
+
+- **2026-07-28 — the last two ZERO-coverage holes closed, and the E-chain Direct-arm
+  widening opened properly: scoped, attacked (2 KILLS), Leg 1 landed. Full gate green;
+  pushed as `75f952d` / `16c02d4` / `c35dba4`.**
+  * **Board item (C) DONE — conformance 450 → 464.** Wildcard usersets and
+    `derived-tupleset-ttu` both closed for real. **Reachability was established BEFORE
+    writing anything, and the finding as filed read wider than the reachable surface:**
+    a wildcard userset over a DERIVED relation is a hard scope rejection raised out of
+    `parse_openfga_schema`, so it cannot be a corpus at all (the floor calls the parser
+    on every entry); over an UNTAINTED relation it is fully live and that is what is now
+    covered. `derived-tupleset-ttu` had been COMPILED in-tree for a year by
+    `demorgans_law_1.fga` while driving a constantly-EMPTY TTU — so the durable lesson is
+    **"compiled ≠ driven"**: a plan-leaf histogram is a necessary floor, never a
+    sufficient one, and every kind-coverage corpus needs a paired non-vacuity pin.
+  * **Board item (B) — `ZT-P3-1` — SCOPED + Leg 0 + Leg 1.** Plan:
+    `formal/history/echain-widening-plan-2026-07-28.md` (7 legs; supersedes the old
+    4-step fork list in five places). **The attack sweep earned its keep:**
+    **T2a `graph_reached_inv` does NOT widen with T2b** — `Inv.negEdgeFree` is
+    machine-checked FALSE on the widened fragment, and it is a **MODELLING limit of the
+    P6 leaf-family collapse, not a Python bug** (verified on the real backends: Python
+    routes the write onto the leaf family, so its `neg` row and the edge sit on different
+    nodes). A design decision is owed before any T2a work. Leg 1 landed additively
+    (audit 457 → **460**, definition pin UNMOVED at 139/139); its new fragment clause
+    `DirectArmsConcrete` is **machine-confirmed load-bearing**, not defensive — 262 runs
+    over every chain state, 824 derived-R-node in-edges, 0 STAR-sourced; drop the clause
+    and 122 stores produce one.
+  * **★ ONE FINDING LEFT DELIBERATELY OPEN — read this before picking up (B).** A
+    **pre-existing, previously undocumented model↔Python divergence**: the baseline
+    cascade enumeration doubles derived-edge multiplicity per leg (`1 → 2 → 4 → 8`,
+    because `edgeHolders` re-enumerates every existing copy and `admitEdge` never rejects
+    a present edge) while Python dedupes by node id. **The state gate is STRUCTURALLY
+    blind to it — projection P3 compares edges as a SET.** Filed UNADJUDICATED at
+    `formal/CORRESPONDENCE.md` §7.2. It is answer-benign as far as anything measured
+    goes, but that is exactly the class of claim this repo retracted on 2026-07-17.
+  * **The sabotage habit is now a STANDARD PROCEDURE:**
+    [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md), linked from `CLAUDE.md`
+    and `formal/HANDOFF.md` house rule 7. It carries the protocol (break the narrowest
+    *plausible* weakening, not an obvious catastrophe), the requirement to control your
+    *instrument* as well as your subject, and the durability ranking. Two of this
+    session's floors would have passed a naive version, and one probe instrument was
+    itself wrong (73 false failures) and was caught only by its control run.
+  * **Gate (this machine, `ZANZIBAR_PY` override), re-run after every change:**
+    `verify.sh lean` PASSED (holes=0, audits **460**/460, identity pin 460, statements
+    26/26, definitions **139/139 UNMOVED**, anchors **380**/380); `conf-tile:1..5/5`
+    93+93+93+93+92 = **464**; `tests-tile:1..4/4` 191+191+190+190 = **762**. Counts
+    re-measured 2026-07-28: `tests/` 762, `formal/conformance/` 464 (**1226** total).
+    `MIN_PINNED_AUDITS` was found still at 457 during the doc pass and raised to 460 —
+    sabotage-verified (red at 461, green at 460).
+
 ## Current status — 2026-07-27
 
 - **2026-07-27 — a REAL PostgreSQL now runs against this repo for the first time, and

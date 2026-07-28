@@ -27,8 +27,9 @@ IVM delta processor.
   — **note (verified 2026-07-26): that path does not exist on this machine**; the env
   lives under `C:/Users/user/anaconda3/envs/...`. `formal/verify.sh` hardcodes the
   `avery` path too, so override it with `ZANZIBAR_PY` (it fails loudly, not silently).
-- The full suite is the gate (**1119 tests** as measured 2026-07-27: `tests/` 728 +
-  `formal/conformance/` 391; 744 in `tests/` with a PostgreSQL DSN configured). Unlike
+- The full suite is the gate (**1226 tests** as re-measured 2026-07-28 with
+  `pytest <dir> -q --collect-only`: `tests/` **762** + `formal/conformance/` **464**;
+  more in `tests/` with a PostgreSQL DSN configured). Unlike
   before, these counts ARE now enforced — `verify.sh` carries `-ge` floors on both, so
   adding tests is always free and losing coverage is loud. Re-measure anyway before
   quoting a number in prose.
@@ -133,7 +134,15 @@ IVM delta processor.
 - **Never edit a golden or oracle result just to make a refactor pass** — the oracle and
   goldens ARE the behavioral spec. A missing golden is now a hard FAIL, not a silent
   regeneration; regenerate deliberately with `ZANZIBAR_UPDATE_SNAPSHOTS=1`.
-- **An assurance step that fails by PASSING is this project's house failure mode.** It
+- **An assurance step that fails by PASSING is this project's house failure mode, and
+  the response is a STANDARD PROCEDURE: [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md).**
+  Read it before adding any test, floor, assertion, pin, or gate phase. It carries the
+  protocol (break the narrowest *plausible* weakening, not an obvious catastrophe),
+  the requirement to control your *instrument* as well as your subject, the durability
+  ranking (make the sabotage a permanent test > derive the expectation > a floor with
+  provenance > a docstring), and what counts as evidence (the literal observed output,
+  in the test's docstring and the commit message). The rest of this bullet is the
+  historical case for why it is mandatory. It
   has now recurred often enough to be a rule rather than an anecdote: a `HYPOTHESIS_SEED`
   sweep that ran the same seed six times; an axiom audit that counted reports without
   checking which theorems; a matrix that silently halved when `pyroaring` was missing; a

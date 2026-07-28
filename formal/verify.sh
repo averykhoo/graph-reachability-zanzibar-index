@@ -302,7 +302,7 @@ AUDIT_PIN="$REPO_ROOT/formal/audited_theorems.txt"
 # ...and a floor on the PIN itself, or emptying the pin file would make the
 # superset test vacuously true (the ZT-P2-1 shape, one level up). Measured
 # 2026-07-27: 457 names.
-MIN_PINNED_AUDITS=457
+MIN_PINNED_AUDITS=460
 
 # (c) DEFINITION pin (ZT-P5-LEG0, 2026-07-27). The statement pin (4b) closed
 # `theorem graph_correct : True := trivial`. It does NOT close the strictly-weaker

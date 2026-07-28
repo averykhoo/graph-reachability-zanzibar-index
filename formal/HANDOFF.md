@@ -89,6 +89,17 @@ merely narrow — on any store written through the `Direct` arm of a derived def
    they mirror. Where a spec and the code disagree on a name, the code wins.
 6. **Subagents** don't parallelize proof-closing (compiler-in-loop, deep coupling);
    use them only for read-only exploration/design.
+7. **Sabotage every check you add** — the standard procedure is
+   [`docs/sabotage-procedure.md`](../docs/sabotage-procedure.md). Rule 2 (attack first)
+   and this rule are the same instinct pointed at different objects: **attack-first
+   guards against proving something FALSE; sabotage guards against trusting a check
+   that verifies NOTHING.** On the formal side this binds `verify.sh` floors, pins,
+   `Audit.lean` entries, and conformance corpora — and it binds your *instrument* as
+   well as your subject: an `#eval` probe needs a **positive control** (a defect it
+   must catch) and a **non-vacuity count** (proof the comparison ran on something).
+   A probe that compared nothing reports success. This is not hypothetical here — the
+   2026-07-28 Leg-0 sweep's first coverage instrument was wrong (73 false failures from
+   omitting a star exemption) and was caught only by its control.
 
 ## Build & verify
 
