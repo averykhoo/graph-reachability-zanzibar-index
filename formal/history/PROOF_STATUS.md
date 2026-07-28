@@ -8,6 +8,146 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-28 (E-chain Direct-arm widening — **Leg 0, the attack sweep**: 5 probes, **2 KILLS**, one of them machine-checked. No Lean declaration changed; the arc re-scoped to 7 legs and written up in [`echain-widening-plan-2026-07-28.md`](echain-widening-plan-2026-07-28.md))
+
+Took board item **(B)** / `ZT-P3-1`. Per house rule 2 the session opened with an attack sweep
+BEFORE any proof work, and it earned its keep: the two highest-suspicion probes both fired, and
+one of them **removes a headline theorem from the arc's scope**. No existing declaration was
+modified; both scratch files were deleted and `lake build` re-verified green (1084 jobs).
+`verify.sh lean` green at session start (holes=0, audits 457/457, statements 26/26,
+definitions 139/139, anchors 367/367).
+
+- **★ KILL 1 — `enumJob2D` is NOT a conservative widening: duplicate candidates inflate edge
+  multiplicity.** `enum2BaseD = enum2Base ++ storedDirectSubjects` is not deduped,
+  `reconcileKeyDR` folds `writeDirect` once per candidate, `admitEdge` (`Write.lean:69`) is
+  `(a != b) && !reach b a` and never rejects an already-present `a→b`, and `addEdge`
+  (`State.lean:769`) is a cons onto a `List`. Measured on
+  `approver := excl (direct [user]) (computed banned)`, one write:
+  `graphRun → ([e,e], 2)` vs `graphRunD → ([e,e,e], 3)`; at the post-write state
+  `enumJob2.cands = [alice]` but `enumJob2D.cands = [alice, alice]`. Three writes: 8/14 vs 15/25.
+  **Model artifact, NOT a Python bug** — `processor.py:594/648` dedupe by node id.
+  **Fix owed by the coverage leg: `enum2BaseD` must dedupe.**
+  `RemoveOccCount.lean::reachedByW3d2E_untOccCount` **survives** — confirmed, not assumed:
+  `count_reconcileKeyDR_of_ne` is universally quantified over `cands`, and the D analogue of
+  `enumJobs2At_Rnode_ne` was machine-checked with the identical proof script.
+- **★★ SECOND FINDING, unrequested and previously unrecorded — the BASELINE enumeration already
+  doubles a derived edge's multiplicity per cascade leg.** `edgeHolders` re-enumerates every
+  existing copy, so `enumJob2` gives `1 → 2 → 4 → 8` and `enumJob2D` gives `n ↦ 2n+1`
+  (`1 → 3 → 7 → 15`). This appears **nowhere** in `CascadeEnum.lean`, `CascadeStrataEnum.lean`,
+  `CORRESPONDENCE.md` or this ledger; the existing duplicate notes (`RulesWrite.lean:100`,
+  `RemoveOccCount.lean` header) are about reconvergent `rewriteClosure`, a different mechanism.
+  **The state gate cannot see it: `extractor.py` projection P3 compares edges as a SET.** It is
+  also operationally real — it is what blew the 10-minute cap on the probe-2 sweep. Recorded here
+  as a genuine model↔Python divergence pending adjudication; see `CORRESPONDENCE.md` §7.
+- **★ KILL 2 — `Inv.negEdgeFree` is FALSE on the `_d` fragment, so T2a `graph_reached_inv` does
+  NOT widen together with T2b `graph_correct`.** Machine-checked (sorry-free):
+  `p3_negEdgeFree_false : ∃ σ res, σ.residue k3 "approver" = some res ∧ bob ∈ res.neg ∧
+  NReaches σ.edges (subjNode bob) k3`, with `p3_svD : StoreValidRulesD S3 T3` and
+  `p3_not_sv : ¬ StoreValidRules S3 T3` alongside — i.e. **the widening is exactly what admits the
+  bad state** — plus all nine `_d` fragment clauses and `p3_accepts`. Schema
+  `approver := excl (union (direct [user]) (computed viewer)) (computed banned)` with a
+  wildcard-carrying untainted `viewer`; store `[(bob,approver,d1), (bob,banned,d1), (user:*,viewer,d1)]`.
+  At the post-write pre-cascade state the raw derived-key write lands its edge on the **same node the
+  `neg` residue row is keyed at**.
+  **T2b is unaffected** — the drained state repairs it (`check = false = sem`, drained).
+  **Python is fine, verified against the real backends:** `RuleSet.apply` routes the write onto the
+  leaf family (`user:bob # approver.0 @ doc:d1`; edges land on `#approver.0`/`#approver.2`/`#banned`,
+  **never** `#approver`) while the `neg` row sits on `doc:d1#approver` — different nodes, I6
+  disjointness intact at every moment; oracle == graph == set engine, 0 mismatches over the grid and
+  over a 6-way write-order sweep.
+  **This is a MODELLING LIMIT of the P6 leaf-family collapse, not a code bug**, and no gate in the
+  project can currently see it. Corrected T2a options: (a) restate at **drained** states only — the
+  honest minimum; (b) weaken `negEdgeFree`/`uposEdgeFree` to exempt the current un-cascaded write
+  leg; (c) introduce the leaf-family split into the Lean model — faithful, but a large model change.
+  **Settle this before any T2a work is scheduled.**
+- **NO-KILL — `w4_within_scope` clause 3, and a free strengthening.** Exhaustive enumeration over
+  19,280 depth-3 `Expr`s: **0 countermodels** to
+  `ComputedOrDirect e ∧ exprDirects e = [] → directsOnly e = false`, and **0 without the
+  `ComputedOrDirect` side condition** either (non-vacuity: cod 8164, `exprDirects` empty 15992,
+  `directsOnly` 156). **Prove the stronger, hypothesis-free
+  `directsOnly e = true → exprDirects e ≠ []`** — one induction.
+- **NO-KILL — the `hND` shadow premise; DROP it from the risk list.** `hND` is not a hypothesis
+  anywhere: at all four sites (`CascadeStrataResettle.lean:1799/:1931/:2196`,
+  `CascadeStrataSettle.lean:1285`) it is proved inline in three lines as a `List.mem_filter`
+  tautology of σ0's store being filtered on exactly that predicate. Stronger: the shadow layer is
+  **already `_d`-widened** (`reachedByW3d2_shadow_d` takes `StoreValidRulesD` directly, and
+  `settledComplete_cascade2_targeted_d` already discharges `hunt` through it). No later leg stalls here.
+- **NO-KILL (WEAK — read the caveat) — `enumJob2D` coverage-completeness at every chain state.**
+  Two-stratum schema with r2's Direct-arm grant on the OPERAND, 10 write orders, 4×3 grid: all 10
+  drained, 0 `check ≠ sem` under both `graphRun` and `graphRunD`, 57 true grid points.
+  **Both instruments were sabotage-verified** (cands := [] → 3 mismatches; negCands := [] → 12/12
+  detected) rather than trusted — and the first coverage instrument was WRONG (73 false "failures"
+  from omitting `W3dJobCoverage`'s star exemption), which is why the sabotage step mattered.
+  **But the sweep is narrow:** one schema shape, two strata, ≤4 tuples, one object; the corrected
+  clause-2 check examined only 4 pairs. **The hunted shape — a subject visible only in a dirty
+  operand's FUTURE residue whose Direct-arm grant is on the operand — was NOT constructed.** The
+  leg-5c "enumerable at every state" note is **neither refuted nor confirmed**; treat it as still
+  open at ≥3 strata or with more objects.
+
+### Leg 1 — LANDED the same session (additive; audit 457 → **460**; definition pin UNMOVED)
+
+Five new declarations + one sanctioned definition edit. `verify.sh lean` PASSED
+(holes=0, audits 460/460, identity pin 460, statements **26/26**, definitions **139/139**,
+anchors 374/374).
+
+- **`DirectArmsConcrete`** (`ReconcileCorrect.lean:1001`) — the §B decision, as a standalone
+  `Prop` (NOT yet a `W4Fragment` field; that is leg 5). Placed beside `StoreValidRulesD`
+  rather than `DirectArmsBare` because it is phrased over `exprDirectsAll`, introduced ~800
+  lines later; the docstring says so. **The honest scope-carry paragraph is in that docstring,
+  in the same change that introduced the clause** — it records that Python ADMITS the shape
+  this excludes (`define approver: [user, user:*] but not banned` compiles, all three backends
+  agree), so it is a proof-side carry and a **vacuity** boundary, not an unsoundness one.
+- **`storeValidRulesD_derived_subject_ne_star`** (`:1052`) — via `restrictionMatches`'
+  `((tup.subject.name == STAR) == r.2.2)` conjunct.
+- **The faithfulness star-filter** — `storedDirectSubjects` now ends
+  `.filter (fun s => s.name != STAR)` (`CascadeStrataEnum.lean:626`), the exact mirror of
+  **`index_v4/processor.py:268`** (`_incoming_concretes` →
+  `return [n for n in nodes if n.wildcard == '']`) and **`:670`** (the upos loop's
+  `n.wildcard != ''` skip). Lean already mirrored this in `leafConcretes`;
+  `storedDirectSubjects` was the outlier. `noConcDirect_of_not_mem` repaired at `:640` (the
+  leading `concMatch` binder IS the `name != STAR` conjunct, so the new obligation was already
+  in hand). **All four consumers compiled UNCHANGED** — the plan's polarity reading
+  (`s ∉ enum2BaseD` is negative, so a smaller list only weakens the hypothesis) is correct.
+- **`storedDirectSubjects_name_ne_star`** (`:631`).
+- **`reachedByW3d2_Rnode_source_name_ne_star_d`** (`CascadeStrataSettle.lean:3504`) — the real
+  content, and the one genuinely missing prerequisite the old design file never named.
+  **Correction to the plan:** no write-case split is needed and `writeLeg_derived_inedges_eq_d`
+  is not involved; it is a structural clone of `reachedByW3d2_Rnode_source_bare_d`.
+- **`exprDirects_ne_nil_of_directsOnly`** (`FullScope.lean:169`) — probe D.5's free win, in the
+  STRONGER hypothesis-free form (no `ComputedOrDirect` premise), ready for leg 5's
+  `w4_within_scope` clause 3.
+
+**Attack-first (rule 2), both NO-KILL, scratch deleted, controls run:**
+- Probe A: `(∀ r ∈ rs, r.2.2 = false) ∧ restrictionMatches rs t → t.subject.name ≠ STAR` over
+  every restriction-list of size ≤2 from 8 restrictions × 18 subjects — **0 counterexamples**;
+  control allowing wildcard-flagged restrictions — **64 hits**, so the check can fire.
+- Probe A2: full statement, 6 derived exprs × 108 candidate tuples — **0 counterexamples**,
+  **8 admitted derived-key tuples** (non-vacuous); control without the clause — **3
+  counterexamples**.
+- Probe B: the `Exec` driver over 3 concrete-armed schemas × 2 objects, **262 (schema, store)
+  runs**, sampling **every** state the chain passes through (each prefix's drained state AND
+  its post-write pre-cascade state), **824 in-edges at derived R-nodes: 0 STAR-sourced.**
+  **Control with the clause dropped: 122 stores produce a STAR source.** So
+  `DirectArmsConcrete` is machine-confirmed **load-bearing**, not defensive.
+
+3 audits added, `regen_audit_pin.sh` run, `EXPECTED_MIN_AUDITS` 457 → 460. **No golden regen**
+— correct for this leg, and the unmoved definition pin CONFIRMS the assessed risk profile
+(`storedDirectSubjects` is genuinely unreachable from the 26 pinned statements).
+
+**NEXT: Leg 2** — the enumeration model change. Do `enum2BaseD`'s `.dedup` FIRST (Leg-0 §D.1),
+then `exprDirectsAll_computedOnly` / `enumJob2D_eq_enumJob2` / `w3cJobValid_enumJob2D`, then the
+~20 mechanical signature edits. This leg DOES move the definition pin (6 rows changed, 3 added)
+and needs the conf tiles; run §D.6's state-diff `#eval` inside it.
+
+**Consequences for the arc** (full plan in `echain-widening-plan-2026-07-28.md`): T2a is out of
+scope pending the (a)/(b)/(c) decision; `enum2BaseD` must dedupe before the coverage leg; the
+step-2 star-freeness question is **decided** in favour of a new `W4Fragment` clause
+(`directArmsConcrete`) plus the faithfulness star-filter, because a star-filter alone leaves the
+`edgeHolders` half of the hole open; the `hND` risk is dropped; and probe 5's lemma gets a stronger
+statement than planned. Expected honest end state of the arc: **T2b widened, T2a explicitly not.**
+
+---
+
 ## Session 2026-07-20e (#1 leg 5d step 4 — the Direct-arm correctness made USER-FACING on the honest conservative fork: `W4WitnessDirect` LANDED (audit 450 → **455**) + `direct_arm_exclusion` moved INTO `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → **326**, state pin CLEAN); the E-chain/`W4Fragment` widening ASSESSED and deliberately NOT taken — the gap is recorded, with two fresh attack findings)
 
 Picked up THE NEXT TASK (task step 4 = widening sub-step 3). The step's ★ HONESTY FORK was assessed

@@ -286,6 +286,8 @@ since the citations were stamped and was rewritten again on 2026-07-26.
 | `GraphIndex/CascadeStrata.lean::runCascade2` (two rounds + quiescence check; reject branch) | the in-transaction cascade | `index_v4/processor.py::DeltaProcessor.run_cascade` (a thin `idx._node_cache_scope()` wrapper) → `::DeltaProcessor._run_cascade` (`rounds = len(self.compiled.strata)`; leftover ⇒ `raise InvariantViolation`) |
 | **T5** `GraphIndex/CascadeStrata.lean::runCascade2_no_abort` / `::cascade2_drains` | — the abort is dead code at ≤2 strata | `index_v4/processor.py::DeltaProcessor._run_cascade`'s leftover raise. **The Lean abort condition is STRICTLY WEAKER than Python's — see the `_bumped` entry in §7** |
 | `GraphIndex/CascadeStrataAssemble.lean::enumJobs2R1` / `::enumJobs2R2` | per-round key enumeration off the state | `index_v4/processor.py::DeltaProcessor._run_cascade`'s per-round `::DeltaProcessor._map_deltas_to_keys` + the `stratum_of` sort |
+| `GraphIndex/CascadeStrataEnum.lean::storedDirectSubjects` (**star-filtered 2026-07-28**) | the Direct-arm audit candidates read from the FIXED store, wildcard subjects excluded | `index_v4/processor.py::DeltaProcessor._incoming_concretes` (`return [n for n in nodes if n.wildcard == '']`) and the `n.wildcard != ''` skip in `::DeltaProcessor._reconcile`'s `upos` loop. Lean already mirrored this in `GraphIndex/CascadeEnum.lean::leafConcretes` (`u.name != STAR`); `storedDirectSubjects` was the outlier until leg 1 of the E-chain arc. **NOT yet consumed by the operational E-chain** — `enumJobs2At` still runs `enumJob2`; see `history/echain-widening-plan-2026-07-28.md` |
+| `GraphIndex/ReconcileCorrect.lean::DirectArmsConcrete` | **no Python counterpart — a declared PROOF-SIDE scope carry** | Python ADMITS what this excludes: `define approver: [user, user:*] but not banned` compiles (`zanzibar_utils_v1.py::derive_schema_info` collects the wildcard shape regardless of the enclosing boolean), and oracle == set engine == real graph index over the full grid. It is a **vacuity** boundary for the widened fragment, not a restriction on the implementation — the full argument is in the declaration's own docstring |
 
 ### Rename ledger for §5 (what an auditor should grep for)
 
@@ -469,6 +471,44 @@ The bullet is corrected in place below.
   construction"; that concession is now quantified here, in
   `formal/conformance/extractor.py`'s P5 paragraph, in `FINAL_REVIEW.md` §3 and
   in `ARCHITECTURE.md` §6.
+
+* **★ NEW 2026-07-28 — derived-edge MULTIPLICITY diverges: the model's cascade
+  enumeration re-adds an edge it already holds, Python dedupes by node id, and
+  projection P3 is structurally blind to the difference.**
+  Found by the E-chain Leg-0 attack sweep (`history/PROOF_STATUS.md` 2026-07-28,
+  probe D.1) while probing something else; it is **independent of that arc** and
+  is recorded here on its own footing.
+  **Mechanism (model side).** `GraphIndex/CascadeEnum.lean::edgeHolders` decodes
+  the candidate set from the *existing* in-edges at the key, so every already-present
+  copy is re-enumerated; `GraphIndex/CascadeStrata.lean::reconcileKeyDR` then folds
+  `writeDirect` once per candidate; `GraphIndex/Write.lean::admitEdge` is
+  `(a != b) && !reach b a` and does **not** reject an already-present `a→b`; and
+  `GraphIndex/State.lean::addEdge` conses onto a `List`. Net: a derived edge's
+  multiplicity **doubles per cascade leg** — measured `1 → 2 → 4 → 8` under the
+  landed `enumJob2`. (Under the not-yet-landed `enumJob2D` it is `n ↦ 2n+1`,
+  `1 → 3 → 7 → 15`, because `enum2BaseD` appends `storedDirectSubjects` without
+  deduping — that half is an arc-local obligation, not a live divergence.)
+  **Python side.** `index_v4/processor.py::DeltaProcessor._reconcile` builds both
+  `candidates` and `audit` as `dict[int, NodeV4]`, keyed by node id — deduplicated
+  by construction. So the counts genuinely differ.
+  **Why no gate sees it.** `formal/conformance/extractor.py::lean_graph_state` and
+  `::python_graph_state` accumulate edges into a `set` (projection **P3**), so the
+  state gate compares edge *presence*, never *multiplicity*. This is the one
+  projection where the usual "an argument recovers the dropped information"
+  justification does **not** apply to a quantity the model actually varies.
+  **Disposition: UNADJUDICATED, and deliberately not closed in the same pass that
+  found it.** It is answer-benign as far as anything measured goes — `check` reads
+  membership, not count, and every `check = sem` comparison run over this shape
+  agreed — but "answer-benign" is exactly the class of claim this repo has had to
+  retract before (the 2026-07-17 STATE-level divergence found in a situation
+  previously dismissed as CHECK-level-safe). The two things it touches are
+  `GraphIndex/RemoveOccCount.lean`'s occurrence-count invariant (verified to
+  SURVIVE — `count_reconcileKeyDR_of_ne` is universally quantified over `cands`,
+  and the D analogue of `enumJobs2At_Rnode_ne` was machine-checked) and the
+  ref-counted edge representation the removal path depends on. **Open questions
+  for whoever takes it:** does the model's multiplicity affect any *removal*
+  sequence's drained state, and should P3 be upgraded to a multiset compare (which
+  would make this fail loudly rather than be discovered by probe)?
 
 ### 7.3 Load-bearing Python surfaces with NO Lean model (added 2026-07-26)
 

@@ -610,13 +610,33 @@ theorem evalE_star_bareArms {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query} {s : S
   | ttu tr ts => intro hcd _ _ _; exact hcd.elim
 
 /-- The stored BARE Direct-arm subjects at key `(dt,R)` object `on`: the subjects of the grants
-    of every `Direct` arm reachable via `exprDirectsAll e`, read from the FIXED store `T`. These
-    are exactly the `NoConcDirect`-failing candidates the coverage enumeration must add. -/
+    of every `Direct` arm reachable via `exprDirectsAll e`, read from the FIXED store `T`,
+    **wildcard-filtered**. These are exactly the `NoConcDirect`-failing candidates the coverage
+    enumeration must add.
+
+    The `s.name != STAR` filter is the exact mirror of Python's own audit-enumeration
+    wildcard filtering: `index_v4/processor.py:268` (`_incoming_concretes` ends
+    `return [n for n in nodes if n.wildcard == '']`) and the `upos` loop's
+    `n.wildcard != ''` skip at `index_v4/processor.py:670` — every candidate/audit source
+    Python builds is wildcard-free by construction. Lean already mirrored this at
+    `CascadeEnum.lean::leafConcretes` (`u.name != STAR`); `storedDirectSubjects` was the
+    outlier. Under `DirectArmsConcrete` the filter is provably a no-op (no wildcard-flagged
+    restriction on a derived `Direct` arm ⇒ no STAR-named grant subject,
+    `storeValidRulesD_derived_subject_ne_star`); it is here for faithfulness, not as the fix. -/
 def storedDirectSubjects (T : Store) (dt on R : String) (e : Expr) : List SubjectRef :=
-  (exprDirectsAll e).flatMap (fun rs => (grantsOf T rs dt on R).map (·.subject))
+  ((exprDirectsAll e).flatMap (fun rs => (grantsOf T rs dt on R).map (·.subject))).filter
+    (fun s => s.name != STAR)
+
+/-- Every stored Direct-arm candidate is star-free — immediate from the faithfulness filter. -/
+theorem storedDirectSubjects_name_ne_star {T : Store} {dt on R : String} {e : Expr}
+    {s : SubjectRef} (hs : s ∈ storedDirectSubjects T dt on R e) : s.name ≠ STAR := by
+  unfold storedDirectSubjects at hs
+  simpa using (List.mem_filter.mp hs).2
 
 /-- A subject NOT among the stored Direct-arm subjects (and `s.predicate = BARE`) has
-    `NoConcDirect`: a concrete grant would put `s` (= the grant's own subject) in the set. -/
+    `NoConcDirect`: a concrete grant would put `s` (= the grant's own subject) in the set.
+    The wildcard filter costs nothing here — `concMatch`'s LEADING conjunct is
+    `g.subject.name != STAR`, so the membership obligation the filter adds is already in hand. -/
 theorem noConcDirect_of_not_mem {T : Store} {dt on R : String} {s : SubjectRef}
     (hsp : s.predicate = BARE) :
     ∀ e : Expr, s ∉ storedDirectSubjects T dt on R e → NoConcDirect T s dt on R e := by
@@ -631,7 +651,7 @@ theorem noConcDirect_of_not_mem {T : Store} {dt on R : String} {s : SubjectRef}
     intro g hg hcm
     apply hns
     simp only [concMatch, Bool.and_eq_true, bne_iff_ne, beq_iff_eq] at hcm
-    obtain ⟨⟨⟨_, hgp⟩, hgt⟩, hgn⟩ := hcm
+    obtain ⟨⟨⟨hgstar, hgp⟩, hgt⟩, hgn⟩ := hcm
     have hseq : g.subject = s := by
       obtain ⟨st, sn, sp⟩ := s
       simp only at hgt hgn hsp
@@ -640,13 +660,15 @@ theorem noConcDirect_of_not_mem {T : Store} {dt on R : String} {s : SubjectRef}
       rw [hη, hgt, hgn, hgp, hsp]
     show s ∈ storedDirectSubjects T dt on R (.direct rs)
     unfold storedDirectSubjects
+    refine List.mem_filter.mpr ⟨?_, by simpa using (hseq ▸ hgstar : s.name ≠ STAR)⟩
     simp only [exprDirectsAll, List.flatMap_cons, List.flatMap_nil, List.append_nil]
     exact hseq ▸ List.mem_map.mpr ⟨g, hg, rfl⟩
   | union a b iha ihb =>
     intro hns
     have hsplit : storedDirectSubjects T dt on R (.union a b)
         = storedDirectSubjects T dt on R a ++ storedDirectSubjects T dt on R b := by
-      unfold storedDirectSubjects; simp only [exprDirectsAll, List.flatMap_append]
+      unfold storedDirectSubjects
+      simp only [exprDirectsAll, List.flatMap_append, List.filter_append]
     rw [hsplit] at hns
     exact ⟨iha (fun h => hns (List.mem_append_left _ h)),
            ihb (fun h => hns (List.mem_append_right _ h))⟩
@@ -654,7 +676,8 @@ theorem noConcDirect_of_not_mem {T : Store} {dt on R : String} {s : SubjectRef}
     intro hns
     have hsplit : storedDirectSubjects T dt on R (.inter a b)
         = storedDirectSubjects T dt on R a ++ storedDirectSubjects T dt on R b := by
-      unfold storedDirectSubjects; simp only [exprDirectsAll, List.flatMap_append]
+      unfold storedDirectSubjects
+      simp only [exprDirectsAll, List.flatMap_append, List.filter_append]
     rw [hsplit] at hns
     exact ⟨iha (fun h => hns (List.mem_append_left _ h)),
            ihb (fun h => hns (List.mem_append_right _ h))⟩
@@ -662,7 +685,8 @@ theorem noConcDirect_of_not_mem {T : Store} {dt on R : String} {s : SubjectRef}
     intro hns
     have hsplit : storedDirectSubjects T dt on R (.excl a b)
         = storedDirectSubjects T dt on R a ++ storedDirectSubjects T dt on R b := by
-      unfold storedDirectSubjects; simp only [exprDirectsAll, List.flatMap_append]
+      unfold storedDirectSubjects
+      simp only [exprDirectsAll, List.flatMap_append, List.filter_append]
     rw [hsplit] at hns
     exact ⟨iha (fun h => hns (List.mem_append_left _ h)),
            ihb (fun h => hns (List.mem_append_right _ h))⟩

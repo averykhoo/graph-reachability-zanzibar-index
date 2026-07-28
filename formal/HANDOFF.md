@@ -57,11 +57,12 @@ merely narrow — on any store written through the `Direct` arm of a derived def
    (`formal/headline_statements.txt`, 26 theorems) + the headline DEFINITION pin
    (`formal/headline_definitions.txt`, 139 rows / 132 declarations — what those
    statements' words MEAN, transitively) + the `CORRESPONDENCE.md` anchor pin
-   + **450** Python conformance tests, 0 skips, 0 xfails, + **`tests/`** (744 collected)
+   + **464** Python conformance tests, 0 skips, 0 xfails, + **`tests/`** (744 collected)
    (conformance count re-measured 2026-07-27 after the ZT-P4-5/6 work below —
-   `pytest formal/conformance/ -q --collect-only` = **450**, up from 395; the gate
+   `pytest formal/conformance/ -q --collect-only` = **464** as re-measured 2026-07-28
+   (450 on 2026-07-27, 395 before that); the gate
    enforces `-ge` FLOORS, not the exact numbers — see `FINAL_REVIEW.md`'s header — so
-   re-measure, don't quote. `MIN_CONF_ALL` was raised to 450 and `MIN_TESTS_ALL` to
+   re-measure, don't quote. `MIN_CONF_ALL` was raised to 464 (2026-07-28) and `MIN_TESTS_ALL` to
    762 on 2026-07-27, so the floors now sit AT measured reality rather than below it).
    **Adding an audited theorem now also means regenerating the identity pin**
    (`bash formal/regen_audit_pin.sh`); changing a headline theorem's STATEMENT, or the
@@ -245,7 +246,52 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > needs a full `_d` clone; and `GraphAdmission.storeValid` must widen to `StoreValidRulesD` (at a
 > Direct-arm store the CURRENT admission bundle is unsatisfiable). See PROOF_STATUS 2026-07-20e.
 >
-> **THE NEXT TASK — #1 Direct arm: the E-CHAIN widening (the recorded gap), OR pivot.** Options in
+> **★ 2026-07-28 — the E-chain arc is now SCOPED and its Leg 0 (attack sweep) is DONE: 5 probes,
+> 2 KILLS, no Lean declaration changed.** The durable plan is
+> [`history/echain-widening-plan-2026-07-28.md`](history/echain-widening-plan-2026-07-28.md)
+> — **read that, not the 20e fork list below, which it supersedes in five places.** Results:
+> **(1) T2a `graph_reached_inv` does NOT widen with T2b.** `Inv.negEdgeFree` is machine-checked
+> FALSE on the `_d` fragment (`p3_negEdgeFree_false`, proved alongside
+> `p3_svD : StoreValidRulesD` and `p3_not_sv : ¬ StoreValidRules` — the widening is exactly what
+> admits the bad state). At the post-write pre-cascade state the raw derived-key write lands its
+> edge on the SAME node the `neg` residue row is keyed at. **This is a MODELLING limit of the P6
+> leaf-family collapse, NOT a Python bug** — verified on the real backends: `RuleSet.apply` routes
+> the write onto the leaf family (`#approver.0`, never `#approver`), I6 disjointness intact, 0
+> mismatches. T2b is unaffected (the drained state repairs it). A DESIGN DECISION is owed before
+> any T2a work: (a) restate T2a at drained states only, (b) weaken `negEdgeFree`/`uposEdgeFree`,
+> or (c) model the leaf-family split.
+> **(2) `enum2BaseD` must dedupe** — `enumJob2D` is not a conservative widening; edge multiplicity
+> goes `n ↦ 2n+1` per leg. En route this surfaced a **pre-existing, previously undocumented
+> model↔Python divergence**: the BASELINE enumeration already doubles derived-edge multiplicity per
+> cascade leg (`1 → 2 → 4 → 8`), and the state gate is structurally blind to it because projection
+> P3 compares edges as a SET. Filed at `CORRESPONDENCE.md` §7.2, UNADJUDICATED, independent of this arc.
+> **(3) The step-2 star-freeness question is DECIDED**: a new `W4Fragment` clause
+> `directArmsConcrete` **plus** the faithfulness star-filter — a star-filter alone leaves the
+> `edgeHolders` half of the hole open. It excludes a shape Python admits, so it goes in as a
+> declared scope carry with the paragraph written in the same commit.
+> **(4) Dropped from the risk list:** the `hND` shadow premise (a `List.mem_filter` tautology; the
+> shadow layer is already `_d`-widened). **(5) Free win:** `w4_within_scope` clause 3 is true
+> WITHOUT the `ComputedOrDirect` premise — prove `directsOnly e = true → exprDirects e ≠ []`.
+> **★ LEG 1 LANDED the same session (audit 457 → 460, definition pin UNMOVED at 139/139).**
+> `DirectArmsConcrete` (`ReconcileCorrect.lean:1001`, carrying the honest scope-carry paragraph
+> in its docstring), `storeValidRulesD_derived_subject_ne_star` (`:1052`), the faithfulness
+> star-filter on `storedDirectSubjects` (`CascadeStrataEnum.lean:626`, mirroring
+> `index_v4/processor.py:268`/`:670`) + the `noConcDirect_of_not_mem` repair,
+> `storedDirectSubjects_name_ne_star`, **`reachedByW3d2_Rnode_source_name_ne_star_d`**
+> (`CascadeStrataSettle.lean:3504`), and probe D.5's free win `exprDirects_ne_nil_of_directsOnly`
+> (`FullScope.lean:169`) in its STRONGER hypothesis-free form. All four `enum2BaseD` consumers
+> compiled unchanged. **`DirectArmsConcrete` is machine-confirmed load-bearing:** 262-run sweep
+> over every chain state gave 824 derived-R-node in-edges, 0 STAR-sourced; with the clause
+> dropped, 122 stores produce one.
+>
+> **NEXT: Leg 2** — the enumeration model change, per the plan's §C table. **Do `enum2BaseD`'s
+> `.dedup` FIRST** (Leg-0 §D.1) or the rest of the leg is unrunnable; then
+> `exprDirectsAll_computedOnly` / `enumJob2D_eq_enumJob2` / `w3cJobValid_enumJob2D`, then ~20
+> mechanical signature edits across 8 files. **This leg DOES move the definition pin** (6 rows
+> changed, 3 added) and needs the conf tiles — and run §D.6's state-diff `#eval` inside it
+> rather than trusting a conf phase to notice.
+>
+> **[superseded 2026-07-28 — kept for provenance] THE NEXT TASK — #1 Direct arm: the E-CHAIN widening (the recorded gap), OR pivot.** Options in
 > rank order: (a) the E-chain widening per the 20e fork list above — payoff: `W4Fragment` widened to
 > the `_d` fragment, the final unsuffixed `graph_correct`/`graph_reached_inv`/
 > `Exec.graphRun_check_eq_sem` cover Direct arms, and the remove-stream conformance exclusion can be
@@ -468,10 +514,27 @@ board are the two blocks below, verbatim.**
 > `corpus.py::TTU_USERSET_SCHEMAS['derived_userset']` (spec-side; scope argument in
 > situ) and floored by
 > `test_conformance_nary_strata.py::test_every_plan_leaf_kind_is_reached_by_some_corpus`.
-> **`derived-tupleset-ttu` (`PDerivedTuplesetTTU`) is still at ZERO and is the
-> remaining plan-leaf hole — deliberately not faked into the floor.** Verdict:
-> Python OVERTAKEN · Lean DECLARED-OUT-OF-SCOPE (no action) · conformance CLOSED for
-> `derived-userset`, OPEN for `derived-tupleset-ttu`.
+> ~~**`derived-tupleset-ttu` (`PDerivedTuplesetTTU`) is still at ZERO and is the
+> remaining plan-leaf hole — deliberately not faked into the floor.**~~
+> **CLOSED 2026-07-28** by `TTU_USERSET_SCHEMAS['derived_tupleset_ttu']`, together
+> with the other zero-coverage hole (wildcard usersets `[T:*#p]`,
+> `TTU_USERSET_SCHEMAS['wildcard_userset']`). The floor now names EVERY kind
+> `zanzibar_utils_v1._plan_leaves` can emit, and
+> `test_required_leaf_kinds_are_exactly_the_compilers_kinds` reads those kinds out
+> of the compiler's own source so the list cannot go stale. Conformance 450 → 464.
+> Two reachability corrections worth carrying: a wildcard userset over a DERIVED
+> relation is a compile-time scope rejection raised out of `parse_openfga_schema`,
+> so it can never be a corpus (only the UNTAINTED surface is reachable); and
+> `derived-tupleset-ttu` was always reachable — the obstacle was that TTU parents
+> are STORED tupleset tuples, so a derived tupleset without a `Direct` restriction
+> compiles the leaf and drives it EMPTY (which is why `demorgans_law_1.fga` could
+> not serve). Both corpora are spec-side + a python-only 3-backend leg and are
+> asserted OUT of `SCHEMAS`/`GRAPH_FRAGMENT`: `wildcard_userset` falsifies
+> `W4Fragment.wsBare`; `derived_tupleset_ttu` falsifies `W4Fragment.computedOnly`
+> AND `GraphAdmission.ttuDirect`. Detail + all seven sabotage runs:
+> `formal/history/nary-strata-coverage-2026-07-27.md` (2026-07-28 addendum).
+> Verdict: Python OVERTAKEN · Lean DECLARED-OUT-OF-SCOPE (no action) · conformance
+> CLOSED for both.
 
 ---
 

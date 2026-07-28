@@ -155,6 +155,33 @@ theorem directsOnly_of_computedOnly : ∀ {e : Expr}, ComputedOnly e → directs
   | inter _ _ _ _ => intro _; rfl
   | excl _ _ _ _ => intro _; rfl
 
+/-- **A `directs-only` expr always HAS a union-reachable `Direct` arm.** `directsOnly` is
+    true only at `.direct _` (where `exprDirects = [rs] ≠ []`) and at a `union` of
+    directs-only exprs, whose left operand already supplies one.
+
+    Hypothesis-free by design: Leg-0 probe D.5 (2026-07-28) enumerated all 19,280 depth-3
+    `Expr`s and found **0** countermodels **with or without** a `ComputedOrDirect` side
+    condition, so the premised form the E-chain plan sketched
+    (`ComputedOrDirect e → exprDirects e = [] → directsOnly e = false`) is a strictly weaker
+    contrapositive of this. It is the replacement `w4_within_scope`'s TTU clause will consume
+    once `W4Fragment.computedOnly` widens to `ComputedOrDirect` + `hNoUD`, where
+    `directsOnly_of_computedOnly` above stops applying (`directsOnly (.direct rs) = true`). -/
+theorem exprDirects_ne_nil_of_directsOnly :
+    ∀ {e : Expr}, directsOnly e = true → exprDirects e ≠ [] := by
+  intro e
+  induction e with
+  | direct rs => intro _; simp [exprDirects]
+  | computed _ => intro h; simp [directsOnly] at h
+  | ttu _ _ => intro h; simp [directsOnly] at h
+  | inter _ _ _ _ => intro h; simp [directsOnly] at h
+  | excl _ _ _ _ => intro h; simp [directsOnly] at h
+  | union a b iha ihb =>
+    intro h
+    simp only [directsOnly, Bool.and_eq_true] at h
+    simp only [exprDirects]
+    intro hnil
+    exact iha h.1 (List.append_eq_nil_iff.mp hnil).1
+
 /-- **The W4 hypotheses imply the decision-15 scope predicate `GraphAccepts S`**
     (`SEMANTICS.md` §8): (1) object wildcards land on untainted relations —
     admission field `objWild`; (2) a wildcard USERSET restriction cannot reference

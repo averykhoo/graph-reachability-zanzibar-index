@@ -1475,4 +1475,47 @@ namespace Zanzibar
 #print axioms W4WitnessDirect.within_scope
 #print axioms W4WitnessDirect.correct_applies
 
+-- E-chain Direct-arm widening, LEG 1 (2026-07-28) — the star-freeness prerequisites the
+-- E-chain's `w3cJobValid_enumJob2D` needs, landed FULLY ADDITIVELY (no existing declaration's
+-- meaning changed; headline statement pin 26/26 and definition pin 139/139 unmoved).
+-- The design decision behind them is `history/echain-widening-plan-2026-07-28.md` §B: the
+-- star-freeness hole has TWO independent instances (`storedDirectSubjects` AND `edgeHolders`),
+-- so a filter alone cannot close it — the fix is a new fragment clause `DirectArmsConcrete`
+-- (a derived def's `Direct` arms carry no wildcard-flagged restriction) PLUS the faithfulness
+-- star-filter on `storedDirectSubjects` (Python's `index_v4/processor.py:268`
+-- `_incoming_concretes` `n.wildcard == ''`, and the `:670` upos `n.wildcard != ''` skip).
+-- ★ HONEST SCOPE CARRY: **Python ADMITS the shape `DirectArmsConcrete` excludes** —
+-- `define approver: [user, user:*] but not banned` compiles (1 stratum,
+-- `subject_wildcard_shapes={('user','...')}`) and oracle == set engine == real graph index
+-- over the full query grid. It is a PROOF-SIDE carry and a VACUITY boundary (on such schemas
+-- `W3cJobValid` fails for every enumerated job at the key, so the operational chain has no
+-- cascade constructor there at all), NOT an unsoundness one.
+-- **`storeValidRulesD_derived_subject_ne_star`** — under the clause, a `StoreValidRulesD`-
+-- admitted DERIVED-key tuple has a non-STAR subject (the `isDerived` fields partition the
+-- admission disjuncts; `restrictionMatches`' third conjunct `((subject.name == STAR) == r.2.2)`
+-- turns `r.2.2 = false` into star-freeness). **`reachedByW3d2_Rnode_source_name_ne_star_d`** —
+-- the `_d` induction: every in-edge source at a derived R-node is star-free on the widened
+-- admission. This is the one genuinely missing prerequisite of the E-chain widening (the old
+-- design file never named it): the existing `…_name_ne_star` is `ComputedOnly`-powered through
+-- `writeLeg_derived_inedges_eq` ("a write leg never changes a derived key's in-edges"), which
+-- is exactly what `StoreValidRulesD` makes FALSE. The `_d` write case instead admits the seed
+-- edge at the R-node and pins it star-free from the store.
+-- ★ Attack-first (house rule 2, both probes NO-KILL, scratch deleted): (i) the step-2 core —
+-- 0 counterexamples over all ≤2-restriction lists × 12 subjects (control: 64 hits with a
+-- wildcard-flagged restriction), and 0 over generated (S,T) with 8 admitted derived-key tuples
+-- (control: 3); (ii) the `_d` induction — 262 (schema, store) runs of the `Exec` driver over
+-- both objects and EVERY intermediate state (each prefix's drained state AND its post-write
+-- pre-cascade state), 824 observed in-edges at derived R-nodes, **0** STAR-sourced. Control
+-- with the clause DROPPED: 122 stores DO produce a STAR source — e.g.
+-- `approver := excl (direct [("user", BARE, true)]) (computed banned)` with
+-- `user:* ∈ approver@doc:d1` lands the edge `(user,*,...,wAny) → (doc,d1,approver,plain)`.
+-- So the clause is machine-confirmed LOAD-BEARING, not decorative.
+-- **`exprDirects_ne_nil_of_directsOnly`** — the Leg-0 probe-D.5 free win: the HYPOTHESIS-FREE
+-- form (19,280 depth-3 `Expr`s enumerated, 0 countermodels with OR without the
+-- `ComputedOrDirect` premise), the replacement `w4_within_scope` clause 3 will consume once
+-- `W4Fragment.computedOnly` widens. Standard axioms only:
+#print axioms storeValidRulesD_derived_subject_ne_star
+#print axioms reachedByW3d2_Rnode_source_name_ne_star_d
+#print axioms exprDirects_ne_nil_of_directsOnly
+
 end Zanzibar

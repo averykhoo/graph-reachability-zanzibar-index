@@ -3487,6 +3487,79 @@ theorem reachedByW3d2_Rnode_source_bare_d {σ : GraphState} {S : Schema} {T : St
         exact hcb c hc
     · exact ih hder hDAB hSV x hx
 
+/-- **Every in-edge source at a derived R-node is STAR-free, widened admission** (`_d`
+    mirror of `CascadeStrataAssemble.lean::reachedByW3d2_Rnode_source_name_ne_star`, whose
+    write case is `ComputedOnly`-powered — it rewrites with `writeLeg_derived_inedges_eq`,
+    i.e. "a write leg never changes a derived key's in-edges", which is exactly what
+    `StoreValidRulesD` makes false). Here the write leg's seed edge MAY land on the R-node;
+    what pins it star-free is `DirectArmsConcrete` + the widened admission
+    (`storeValidRulesD_derived_subject_ne_star`). Rule outputs never land on a derived key
+    (`noRuleOutputs_of_derived`), and cascade edges are sourced at `W3cJobValid`'s star-free
+    candidates. Structurally the true `pred = BARE` analogue of
+    `reachedByW3d2_Rnode_source_bare_d` above.
+
+    This is the prerequisite the E-chain Direct-arm widening needs for
+    `w3cJobValid_enumJob2D`'s star-free-candidate clauses (`edgeHolders` half); the
+    `storedDirectSubjects` half is `storedDirectSubjects_name_ne_star`. -/
+theorem reachedByW3d2_Rnode_source_name_ne_star_d {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String}
+    (h : ReachedByW3d2 σ S T) :
+    isDerived S (dt, R) = true →
+    (∀ dt' R' e', S.lookup (dt', R') = some e' → isDerived S (dt', R') = true →
+      DirectArmsBare e') →
+    DirectArmsConcrete S →
+    StoreValidRulesD S T →
+    ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.name ≠ STAR := by
+  induction h with
+  | empty S =>
+    intro _ _ _ _ x hx
+    simp [emptyState] at hx
+  | @write σp S T t hadm hprev ih =>
+    intro hder hDAB hDAC hSV x hx
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hx
+    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) hx with hold | ⟨w, hw, h1, h2⟩
+    · exact ih hder hDAB hDAC (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')) x hold
+    · -- a fresh closure edge into the R-node: it is the SEED (rule outputs never land on a
+      -- derived key), and the seed's stored subject is star-free by the widened admission
+      have htype : dt = w.object.type := by
+        simpa [objNode_type] using congrArg NodeKey.type h2
+      have hrel : R = w.relation := by
+        simpa [objNode_pred] using congrArg NodeKey.pred h2
+      rcases rewriteClosure_produced hw with heq | ⟨r, hr', hro, hrout⟩
+      · have hderT : isDerived S (t.object.type, t.relation) = true := by
+          rw [← heq, ← htype, ← hrel]; exact hder
+        have hne : t.subject.name ≠ STAR :=
+          storeValidRulesD_derived_subject_ne_star hDAC hSV List.mem_cons_self hderT
+        have hnm : (subjNode t.subject).name = t.subject.name := by
+          unfold subjNode; split
+          · next hs => exact hs.symm
+          · rfl
+        rw [h1, heq, hnm]
+        exact hne
+      · exact absurd ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
+          (noRuleOutputs_of_derived hder r hr')
+  | @remove σp S T t _ _ hSVT _ _ _ _ ih =>
+    intro hder hDAB hDAC _ x hx
+    exact ih hder hDAB hDAC (storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB)
+      x (mem_removeLoggedRules_edges hx)
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
+    intro hder hDAB hDAC hSV x hx
+    unfold runCascade2 at hx
+    split at hx
+    · have hx' : (x, objNode ⟨dt, on⟩ R) ∈ (reconcileJobsLR S T
+          (reconcileJobsLR S T σp jobs1) jobs2).edges := hx
+      rcases reconcileJobsLR_edge_sound jobs2 _ x _ hx' with hmid | ⟨j, hj, c, hc, h1, _⟩
+      · rcases reconcileJobsLR_edge_sound jobs1 σp x _ hmid
+          with hold | ⟨j, hj, c, hc, h1, _⟩
+        · exact ih hder hDAB hDAC hSV x hold
+        · obtain ⟨_, _, hcS, _⟩ := hjv1 j hj
+          rw [h1, subjNode_plain (hcS c hc)]
+          exact hcS c hc
+      · obtain ⟨_, _, hcS, _⟩ := hjv2 j hj
+        rw [h1, subjNode_plain (hcS c hc)]
+        exact hcS c hc
+    · exact ih hder hDAB hDAC hSV x hx
+
 /-- **The W3d-2 reach collapse at a derived R-node, widened admission**: any path
     into the R-node is a single edge (sources bare, bare nodes have no in-edges). -/
 theorem reachedByW3d2_reach_collapse_root_d {σ : GraphState} {S : Schema} {T : Store}

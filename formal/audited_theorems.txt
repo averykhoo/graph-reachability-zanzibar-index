@@ -127,6 +127,7 @@ exclusion_effective_w3d
 exclusion_effective_w3d2
 exists_admitted_restrict
 exprArms_directsOnly
+exprDirects_ne_nil_of_directsOnly
 foldAdmitsB_iff
 foldAdmits_of_acyclic
 foldl_writeDirect_edge_complete
@@ -268,6 +269,7 @@ reachedByW3d2E_residueHygienic
 reachedByW3d2E_structInv
 reachedByW3d2E_toC
 reachedByW3d2_Rnode_not_source
+reachedByW3d2_Rnode_source_name_ne_star_d
 reachedByW3d2_edge_target_ne_bare
 reachedByW3d2_edgesClosed
 reachedByW3d2_reach_collapse_root
@@ -395,6 +397,7 @@ storeDeclared_of_storeValid
 storeDeclared_of_validRules
 storeDeclared_of_validRulesD
 storeValidRulesB_iff
+storeValidRulesD_derived_subject_ne_star
 stratifiable_pureDirect
 stratify_covers
 stratify_none_iff_cycle

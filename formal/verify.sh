@@ -275,7 +275,7 @@ fi
 # so ANOTHER agent adding audited theorems does not fail the gate; LOWERING this
 # number must be a deliberate, reviewed edit to this file (and should be justified
 # in formal/history/, e.g. if a known-vacuous audit line is retired).
-EXPECTED_MIN_AUDITS=457
+EXPECTED_MIN_AUDITS=460
 
 # Minimum number of project .lean files the soundness scan must cover (ZT-P2-4).
 # Measured 2026-07-26: 65 files under formal/lean excluding .lake/** (it was 64 when

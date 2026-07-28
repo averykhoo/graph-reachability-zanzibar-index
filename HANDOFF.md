@@ -706,32 +706,64 @@ dismissals whose stated justification no longer holds:
       bounded, no Lean impact. **Start:** the residuals block on the 2026-07-27 board
       item below, then `index_v4/core.py`'s `DEFAULT_MAX_CLOSURE_FANOUT` comment.
 
-      **(B) The E-chain Direct-arm widening — the highest-value Lean work.**
-      NOT the ≥3-strata arc (scoped 2026-07-27 and explicitly declined — see residual 2
-      below and `formal/history/strata-widening-plan-2026-07-27.md`; it is ~8 sessions
-      for coverage, not safety, and the model already fails CLOSED there). This one
-      instead: `ZT-P3-1` — the headline graph theorems are **VACUOUS** on
-      `can_view: [user] but not blocked`, the most common Zanzibar boolean shape.
-      `FullScope.lean:564` machine-checks that such a store fails
-      `GraphAdmission.storeValid`, so `graph_correct` / `graph_reached_inv` /
-      `Exec.graphRun_check_eq_sem` hold trivially there — **no theorem, not a narrow
-      one**. Vacuous beats narrow as a thing to fix, and unlike the strata arc it
-      widens the claim rather than the coverage. **Start:** `formal/FINAL_REVIEW.md`
-      §3.0, `formal/HANDOFF.md` "THE NEXT TASK", and
-      `formal/history/optional-widening-2026-07.md` (#1 Direct-arm, legs 1–3 landed,
-      leg 4 is "the wall" and is characterised there).
+      **(B) The E-chain Direct-arm widening — SCOPED + Leg 0 DONE 2026-07-28; legs 1–6
+      remain.** The claim is unchanged: `ZT-P3-1` — the headline graph theorems are
+      **VACUOUS** on `can_view: [user] but not blocked`, the most common Zanzibar boolean
+      shape (`FullScope.lean:564` machine-checks that such a store fails
+      `GraphAdmission.storeValid`), so `graph_correct` / `graph_reached_inv` /
+      `Exec.graphRun_check_eq_sem` hold trivially there — **no theorem, not a narrow one**.
+      Still NOT the ≥3-strata arc (declined 2026-07-27; coverage, not safety, and the model
+      already fails CLOSED there).
+      **★ START HERE NOW: `formal/history/echain-widening-plan-2026-07-28.md`** — the
+      durable 7-leg plan. It **supersedes** the 4-step fork list in
+      `optional-widening-2026-07.md` in five places, and the attack sweep (Leg 0) is
+      already done: 5 probes, **2 KILLS**, no Lean declaration changed. What that bought:
+      * **T2a `graph_reached_inv` is OUT of the arc.** `Inv.negEdgeFree` is
+        machine-checked FALSE on the `_d` fragment. **A modelling limit of the P6
+        leaf-family collapse, not a Python bug** (verified on the real backends — Python
+        routes the write onto the leaf family, so its `neg` row and the edge live on
+        different nodes). T2b is unaffected. A **design decision** is owed before any T2a
+        work — do not schedule proof effort for it. Expected honest end state of the arc:
+        **T2b widened, T2a explicitly not.**
+      * **`enum2BaseD` must dedupe** or the widened model's edge multiset grows `n ↦ 2n+1`
+        per cascade leg.
+      * **The step-2 star-freeness question is DECIDED** (new `W4Fragment` clause
+        `directArmsConcrete` + a faithfulness star-filter; a star-filter alone leaves half
+        the hole open). It excludes a shape Python admits ⇒ declared scope carry.
+      * **Leg 1 LANDED 2026-07-28** (audit 457 → 460; definition pin UNMOVED at 139/139, which
+        confirms the assessed risk profile). `DirectArmsConcrete` + the faithfulness
+        star-filter + `reachedByW3d2_Rnode_source_name_ne_star_d` + the D.5 free win. The new
+        fragment clause is **machine-confirmed load-bearing**, not defensive: a 262-run sweep
+        over every chain state found 0 STAR-sourced in-edges at derived R-nodes out of 824;
+        drop the clause and 122 stores produce one.
+      * **Next concrete step: Leg 2** — the enumeration model change. **`enum2BaseD`'s `.dedup`
+        goes first** or the leg is unrunnable. This is the first leg that moves the definition
+        pin (6 rows changed, 3 added), so its golden regen gets its own commit.
+      **Carried out of this arc as an independent finding:** a pre-existing, undocumented
+      model↔Python divergence — the baseline cascade enumeration doubles derived-edge
+      multiplicity per leg (`1 → 2 → 4 → 8`) while Python dedupes by node id, and the
+      state gate cannot see it because projection **P3 compares edges as a SET**. Filed
+      UNADJUDICATED at `formal/CORRESPONDENCE.md` §7.2. It is answer-benign as far as
+      anything measured goes — but that is precisely the class of claim this repo has had
+      to retract before (2026-07-17), so it is written down rather than waved through.
 
-      **(C) Wildcard-userset and `derived-tupleset-ttu` corpora — cheap, and a good
-      warm-up.** These are the last two things at **zero** coverage anywhere: no corpus
-      or generator emits a wildcard userset `[T:*#p]`, and no schema in the tree
-      compiles a `derived-tupleset-ttu` plan leaf. Both were deliberately left OUT of
-      the new plan-leaf coverage floor rather than faked, so the floor names the gap
-      instead of hiding it. Precedent to copy: the same audit found `derived-userset`
-      at zero and closing it was a single corpus. Note wildcard usersets over derived
-      relations are a *scope rejection* (`UnsupportedByGraphIndex`), so check what is
-      actually reachable before writing the corpus — the finding may be narrower than
-      it reads. **Start:** `formal/conformance/corpus.py` and the plan-leaf histogram
-      in `formal/history/nary-strata-coverage-2026-07-27.md`.
+      **~~(C) Wildcard-userset and `derived-tupleset-ttu` corpora~~ — DONE 2026-07-28.**
+      Both closed; conformance 450 → 464. The caveat in the old text was HALF right:
+      wildcard usersets over a **derived** relation really are a compile-time scope
+      rejection (`UnsupportedByGraphIndex`, raised out of `parse_openfga_schema`, so
+      such a schema cannot be a corpus at all — the plan-leaf floor and
+      `test_grid_independence` both parse every entry of every corpus dict); over an
+      **untainted** relation they compile and run on BOTH backends, and that is the
+      reachable surface that got the corpus. `derived-tupleset-ttu` was reachable all
+      along (`tests/test_boolean_compile.py` has pinned three of them on
+      `demorgans_law_1.fga` since P2) — the real obstacle was that the leaf is easy to
+      COMPILE and hard to DRIVE: TTU parents are the STORED tupleset tuples, so a
+      derived tupleset with no `Direct` restriction gives a constantly-EMPTY TTU, which
+      is exactly why the one in-tree schema compiling the leaf could not serve as a
+      differential. Both corpora are spec-side + a python-only 3-backend leg, NEVER
+      `GRAPH_FRAGMENT` (per-field scope arguments in situ). Detail, incl. the seven
+      sabotage runs: `docs/spec-deviations.md` 2026-07-28 and the 2026-07-28 addendum
+      to `formal/history/nary-strata-coverage-2026-07-27.md`.
 
       **Before starting any of them:** `bash formal/verify.sh lean` should be green in
       ~30 s warm. If it is not, fix that first — it is the fastest signal in the repo.
@@ -935,9 +967,13 @@ dismissals whose stated justification no longer holds:
          **If a session is spent on Lean, spend it on the E-chain Direct-arm widening
          instead** — there the headline theorems are VACUOUS on `[user] but not blocked`
          (`ZT-P3-1`), and vacuous beats narrow as a thing to fix.
-      3. **Still at zero coverage anywhere:** wildcard usersets `[T:*#p]`, and the
+      3. ~~**Still at zero coverage anywhere:** wildcard usersets `[T:*#p]`, and the
          `derived-tupleset-ttu` plan leaf — deliberately left OUT of the new
-         plan-leaf-coverage floor rather than faked.
+         plan-leaf-coverage floor rather than faked.~~ **CLOSED 2026-07-28** (board
+         item (C) above): both reachable, both corpus'd spec-side + python-only
+         3-backend, floor raised to every kind `_plan_leaves` emits. The
+         wildcard-userset surface is narrower than the finding read — over a DERIVED
+         relation it is a compile-time scope rejection and cannot be a corpus.
       Also unbenchmarked (unchanged): `_any_residue_reference`'s complete `ResidueV1`
       scan on every node-release path, now unconditional after the `ZT-P0-1` fix.
       **Next actions:** promoted to the ★ START HERE item at the top of Active work.

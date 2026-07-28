@@ -975,6 +975,33 @@ def exprDirectsAll : Expr → List (List Restriction)
   | .inter a b => exprDirectsAll a ++ exprDirectsAll b
   | .excl a b => exprDirectsAll a ++ exprDirectsAll b
 
+/-- **`DirectArmsConcrete S`** — a **derived** def's `Direct` arms carry no wildcard-flagged
+    restriction (`r.2.2 = false` on every arm reachable through any boolean nesting).
+
+    *(Stated here rather than beside `DirectArmsBare` — its sibling shape condition — because
+    it is phrased over `exprDirectsAll`, which this section introduces.)*
+
+    **Python admits the shape this excludes**: `define approver: [user, user:*] but not banned`
+    compiles (1 stratum, `subject_wildcard_shapes={('user','...')}`, no rejection), and
+    oracle == set engine == real graph index over the full query grid (re-verified 2026-07-27,
+    root `HANDOFF.md` Board B1; compile re-confirmed 2026-07-28). This is a **proof-side carry,
+    not a Python restriction.** Why it is needed: a stored `T:*` grant on a derived Direct arm
+    puts a STAR-named subject in *both* `storedDirectSubjects` and `edgeHolders`, and
+    `W3cJobValid`'s star-free-candidate clauses then fail for **every** enumerated job at that
+    key — so the operational chain has no cascade constructor there. It is a **vacuity**
+    boundary, not an unsoundness one. Untainted defs' wildcard arms are untouched (that is
+    where `graph_correct_w3c`'s star content lives).
+
+    Faithfulness note: the enumeration-side mirror is Python's own wildcard filtering —
+    `index_v4/processor.py:268` (`_incoming_concretes` ends `return [n for n in nodes if
+    n.wildcard == '']`) and the `upos` loop's `n.wildcard != ''` skip at
+    `index_v4/processor.py:670` — which
+    `storedDirectSubjects` now applies too. Under this clause that filter is provably a
+    no-op; the clause is what closes the `edgeHolders` half, which no filter can. -/
+def DirectArmsConcrete (S : Schema) : Prop :=
+  ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+    ∀ rs ∈ exprDirectsAll e, ∀ r ∈ rs, r.2.2 = false
+
 /-- **`StoreValidRulesD S T`** — the widened store admission (leg 2, write half). Each stored
     tuple is EITHER
     * on an **untainted** key, matching a union-reachable `Direct` arm (the W2 route,
@@ -1013,6 +1040,28 @@ theorem storeValidRulesD_of_storeValidRules {S : Schema} {T : Store}
   rw [Bool.not_eq_false] at hcon
   rw [exprDirects_computedOnly (hCO _ _ _ hlk hcon)] at hrs
   simp at hrs
+
+/-- **Under `DirectArmsConcrete`, a `StoreValidRulesD`-admitted derived-key tuple has a
+    star-free subject.** The `isDerived` fields partition the admission disjuncts, so a tuple
+    on a derived key takes the derived-direct disjunct: it matches some `rs ∈ exprDirectsAll e`
+    via `restrictionMatches`, whose third conjunct is `((tup.subject.name == STAR) == r.2.2)`
+    — a NON-wildcard restriction (`r.2.2 = false`, which is exactly what `DirectArmsConcrete`
+    supplies at a derived key) therefore matches only non-STAR subjects. This is the
+    upstream star-freeness fact the Direct-arm enumeration and the `_d` R-node source lemmas
+    consume. -/
+theorem storeValidRulesD_derived_subject_ne_star {S : Schema} {T : Store} {t : Tuple}
+    (hDAC : DirectArmsConcrete S) (hSV : StoreValidRulesD S T) (ht : t ∈ T)
+    (hder : isDerived S (t.object.type, t.relation) = true) : t.subject.name ≠ STAR := by
+  rcases hSV t ht with ⟨hf, _⟩ | ⟨_, _, e, rs, hlk, hrs, hrm, _⟩
+  · rw [hder] at hf; exact Bool.noConfusion hf
+  · intro hstar
+    unfold restrictionMatches at hrm
+    rw [List.any_eq_true] at hrm
+    obtain ⟨r, hr, hm⟩ := hrm
+    rw [Bool.and_eq_true, Bool.and_eq_true] at hm
+    obtain ⟨⟨-, -⟩, hw⟩ := hm
+    rw [hstar, hDAC _ _ _ hlk hder rs hrs r hr] at hw
+    simp at hw
 
 /-- **The untainted-key sub-store of a `StoreValidRulesD` store is `StoreValidRules`-valid
     (leg 3, restrict-`T` entry).** Dropping every derived-key (over-grant) tuple leaves a store
