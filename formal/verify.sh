@@ -182,7 +182,7 @@ fi
 # ADDING tests never trips this. LOWERING it must be a deliberate, reviewed edit
 # here -- without a floor, shrinking GRAPH_FRAGMENT to a single corpus or deleting
 # test_conformance_graph.py outright kept the gate green (ZT-P2-2).
-MIN_CONF_ALL=464
+MIN_CONF_ALL=465
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -254,7 +254,7 @@ MAX_TESTS_SKIPPED_ON_RDBMS=3
 #     the 2026-07-19g note blamed test_conformance_remove_graph.py, which is ~27 s)
 HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 MIN_CONF_HEAVY=96
-MIN_CONF_REST=368
+MIN_CONF_REST=369
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in
@@ -573,6 +573,24 @@ run_lean() {
   echo "--- [4d/5] CORRESPONDENCE.md anchor pin ---"
   "$PY" "$REPO_ROOT/formal/conformance/anchor_check.py" \
     || { echo "FAIL: CORRESPONDENCE.md anchors (see above)"; exit 1; }
+
+  # -------------------------------------------------------------------------- #
+  # 4e. FINAL_REVIEW.md COUNTS pin. `ZT-P3-5` found every number in every claim
+  # doc stale with NOTHING enforcing any of them. It was hand-fixed 2026-07-26,
+  # hand-fixed again 2026-07-28 (`7fce0f1`), and was stale AGAIN on 2026-07-29 --
+  # including FINAL_REVIEW's own header stating two different values for the same
+  # quantity, the exact defect its text diagnoses. Three hand-fixes of one defect
+  # is this repo's signal to build a refusal instead. The governing doc's counts
+  # are now GENERATED and checked here. Cheap (~4 s: two --collect-only runs plus
+  # per-file collection), so it rides the `lean` phase with the other pins.
+  # Scope, stated honestly: this pins ONE block in ONE file. Prose counts
+  # elsewhere are still hand-maintained -- but there is now an authoritative
+  # machine-checked place to check them against, and extending the block is one
+  # row in doc_counts.py::measure.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4e/5] FINAL_REVIEW.md counts pin ---"
+  ( cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" "$PY" -m formal.conformance.doc_counts --check ) \
+    || { echo "FAIL: FINAL_REVIEW.md counts pin (see above)"; exit 1; }
 
   echo "=== lean phase (steps 1-4) PASSED (holes=$SORRIES, audits=$OBSERVED_AUDITS, pinned=$PINNED_AUDITS) ==="
 }

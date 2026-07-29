@@ -6,55 +6,80 @@ own words, a clause-by-clause cross-check against what actually stands in the
 tree, the theorem inventory in English, and the residual risk. Nothing here
 rounds up.
 
-**Verification state — MEASURED 2026-07-26 at commit `f2b403c`.** (Re-run from
-scratch by the zero-trust review, not carried over from a previous revision of this
-file; every earlier count in this document was stale and two of them contradicted
-each other.) `bash formal/verify.sh` green in all three phases — `lake build` +
-**0 sorries** + `zcli` + axiom audit (**455** observed reports = 455 `#print axioms`
-commands in `Audit.lean`, each depending only on `[propext, Classical.choice,
-Quot.sound]`) + **330** tests under `formal/conformance/` (`conf-heavy` 80 +
-`conf-rest` 250), **0 skips, 0 xfails**; `pytest tests/` **606** passed. Whole-repo
-suite **936**. Interpreter overridable via `ZANZIBAR_PY`.
+**Verification state.** `bash formal/verify.sh` green in all ten phases —
+`lake build` + **0 sorries** + `zcli` + the axiom audit (each audited theorem
+depending only on `[propext, Classical.choice, Quot.sound]`) + the audit identity,
+headline-statement and headline-definition pins + the `CORRESPONDENCE.md` anchor
+pin + this document's counts pin (step 4e) + `formal/conformance/` + `tests/`,
+**0 skips, 0 xfails** throughout. Interpreter overridable via `ZANZIBAR_PY`.
 
-Corpora (`formal/conformance/corpus.py`): `SCHEMAS` = **20**, of which
-`GRAPH_FRAGMENT` = **19** are driven through the graph-side gates
-(`object_wildcard` is the one exclusion). Three `TTU_USERSET_SCHEMAS` + two
-`SELF_REFERENTIAL_SCHEMAS` corpora sit OUTSIDE `SCHEMAS` — spec/oracle/set-engine
-only (full scope), so the graph-side suites stay `W4Fragment`-scoped.
+<!-- BEGIN GENERATED COUNTS (formal/conformance/doc_counts.py) -->
+<!-- Do not hand-edit. Regenerate:
+     python -m formal.conformance.doc_counts --generate
+     `verify.sh lean` step 4e fails if this block disagrees with the tree. -->
 
-The 330 = **310 differential-conformance tests** + **20 gate-tooling unit tests**
-(not Lean-vs-Python comparisons: 13 sorry-scanner `test_sorry_scan.py` + 7
-zcli-runner transient-retry `test_runner_retry.py`). There are **11** differential
-test files, not the 6 that earlier revisions of this table listed:
+**Counts — MEASURED, not asserted.** Every number in this block is generated from
+the tree and re-checked by `formal/verify.sh` (step 4e). If one is wrong, the gate
+is red, not the document. Numbers elsewhere in this file, and in every other doc,
+are hand-maintained prose — check them against this block, and prefer moving a
+number INTO it over restating it.
 
-| file | tests | what it compares |
+| quantity | value |
+|---|---|
+| `formal/conformance/` collected | **465** |
+| `tests/` collected | **762** |
+| whole-repo suite | **1227** |
+| differential conformance tests | **419** across **13** files |
+| gate-tooling conformance tests | **46** across **2** files |
+| audited theorems (`#print axioms` in `Audit.lean`) | **460** |
+| audit identity pin (`audited_theorems.txt`) | **460** |
+| headline definition pin | **139** rows (**132** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **397** (**272** Python + **125** Lean) |
+| `corpus.SCHEMAS` | **24** |
+| `corpus.GRAPH_FRAGMENT` (graph-side gates) | **23** |
+| spec-scope corpora (four dicts) | **33** = 24 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=465 (=96+369), `MIN_TESTS_ALL`=762, `EXPECTED_MIN_AUDITS`=460 |
+
+Per conformance file:
+
+| file | tests | kind |
 |---|---|---|
-| `test_conformance_spec.py` | 75 | `sem` (zcli) × oracle × real `SetEngine`, all 25 spec-scope corpora |
-| `test_conformance_random.py` | 20 | the same, over seeded randomized substores |
-| `test_conformance_graph.py` | 47 | Lean operational graph model (zcli `"graph"`) × real `WildcardIndex`+`DeltaProcessor` × `sem`, **23** in-fragment corpora (measured 2026-07-27) |
-| `test_conformance_direct_arm.py` | 4 | the Direct-arm corpus at C-chain scope only — see §3.0 |
-| `test_conformance_state.py` | 47 | state-level equality, **23** in-fragment corpora, **seven** projections (P7 declared 2026-07-27) + the residue-richness pin + the per-corpus orphan-node pin. **Read §3 item 4 before quoting this row** — it quantifies how much of the state is projected away |
-| `test_conformance_enum.py` | 6 | exhaustive enumeration: **6 shapes / 1021 stores** (per-shape K = 3 or 4) |
-| `test_conformance_enum_state.py` | 6 | state level over a deterministic stride-4 sample: **257 of those 1021** stores |
-| `test_conformance_remove.py` | 80 | both Python remove paths (set engine + graph index); this file IS the `conf-heavy` phase |
-| `test_conformance_remove_graph.py` | 17 | Lean `graphRunOps` remove streams × real Python graph × oracle |
-| `test_conformance_generated.py` | 40 | generated schemas outside the curated corpora, spec-side |
-| `test_cli_mode.py` | 5 | zcli mode/ops dispatch fail-closure (rc 4 unknown mode, rc 5 `"ops"` in spec mode) |
+| `test_conformance_spec.py` | 99 | differential |
+| `test_conformance_remove.py` | 96 | differential |
+| `test_conformance_state.py` | 48 | differential |
+| `test_conformance_graph.py` | 47 | differential |
+| `test_conformance_generated.py` | 40 | differential |
+| `test_sorry_scan.py` | 39 | tooling |
+| `test_conformance_random.py` | 24 | differential |
+| `test_conformance_remove_graph.py` | 21 | differential |
+| `test_conformance_nary_strata.py` | 19 | differential |
+| `test_runner_retry.py` | 7 | tooling |
+| `test_conformance_enum.py` | 6 | differential |
+| `test_conformance_enum_state.py` | 6 | differential |
+| `test_cli_mode.py` | 5 | differential |
+| `test_conformance_direct_arm.py` | 4 | differential |
+| `test_grid_independence.py` | 4 | differential |
 
-**None of these counts is gate-enforced.** Zero-trust review 2026-07-26
-(`ZT-P2-1`/`ZT-P2-2`): `verify.sh` checks the axiom-report count for *equality*
-against a figure it derives from `Audit.lean` itself, with no floor, and the
-conformance step asserts only `skipped == 0 && passed > 0` — so deleting audited
-theorems, or a whole conformance suite, keeps the gate green, and an `xfail` is
-invisible to it. Treat every number above as a dated MEASUREMENT: re-measure before
-quoting it, and never read a count as evidence of coverage.
+<!-- END GENERATED COUNTS -->
 
-**House rule, and how to keep it meaningful.** Nothing anywhere in the repo may claim
-more than this document. That rule was empty for a while, because this file itself stated
-BOTH 263 and 326 conformance tests and BOTH 19 and 15 corpora — a self-contradictory
-target binds nothing. **This block is now the single source of every count in this
-document; §1–§4 below cite it and must not restate a different figure.** If you change a
-number, change it here and re-check §1's rows in the same edit.
+Corpora composition: `GRAPH_FRAGMENT` is the subset of `SCHEMAS` driven through the
+graph-side gates (`object_wildcard` is the one exclusion). The `TTU_USERSET_SCHEMAS`,
+`SELF_REFERENTIAL_SCHEMAS` and `MULTI_STRATUM_SCHEMAS` dicts sit OUTSIDE `SCHEMAS` —
+spec/oracle/set-engine only (full scope), so the graph-side suites stay
+`W4Fragment`-scoped. The `MULTI_STRATUM` entry (`three_strata_chain`) is the
+>2-strata spec-side leg; there is no graph-side ≥3-strata coverage, by decision
+(HANDOFF residual 2, 2026-07-27).
+
+**House rule, and what now makes it meaningful.** Nothing anywhere in the repo may
+claim more than this document. That rule was empty twice: this file once stated BOTH
+263 and 326 conformance tests and BOTH 19 and 15 corpora (`ZT-P3-5`, 2026-07-26), and
+after a hand-fix it drifted back into stating two different values for the same
+quantity by 2026-07-29. A self-contradictory target binds nothing. **The block above
+is now GENERATED from the tree and re-checked by `verify.sh` step 4e**, so the
+governing numbers cannot rot silently again; §1–§4 below cite it and must not restate
+a different figure. Hand-written counts elsewhere in this file and in other docs are
+still prose — check them against the block, and prefer moving a number INTO it over
+restating it.
 
 ---
 
@@ -83,7 +108,7 @@ Clause-by-clause, what is actually true today:
 | machine-checked, axiom-audited | ✅ 0 sorries; the Audit module `#print axioms` every key theorem; `verify.sh` hard-fails on any axiom beyond `propext`, `Classical.choice`, `Quot.sound`. |
 | pinned by structural correspondence review | ✅ `CORRESPONDENCE.md` — the Lean-def ↔ Python-file:line map, with the known intentional divergences listed (scoped removes (validly-stored, drained-prior), fixed two rounds, fragment surplus, no leaf-family split). |
 | pinned by differential conformance | ✅ **check-verdict level, five corners** (`verify.sh` step 5; 310 differential-conformance tests of the 330 collected — see the per-file table above): Lean `sem` (zcli) × independent oracle × real `SetEngine` over the 25 spec-scope corpora + seeded randomized substores, **plus (Phase 6)** the Lean *operational graph model* (zcli mode `"graph"`, whose runtime output is covered by the theorem via `graphRun_reached` / `graphRun_check_eq_sem` — the driver is the chain's own constructors, by proof, not analogy) × the real Python `WildcardIndex`+`DeltaProcessor` × `sem`, over the **19** in-fragment corpora, including two designed attack corpora (stale-edge cross-stratum re-settle; star churn over two strata). **Scope caveat on one of those 19:** `direct_arm_exclusion` (added 2026-07-20e) is listed in `GRAPH_FRAGMENT` but is machine-checked to be OUTSIDE the final theorems' bundle (`FullScope.lean:564` `outside_old_admission`) — its comparisons are a differential test between two implementations, NOT coverage by `graph_correct`. See §3.0. All answer suites share one query grid (`formal/conformance/grid.py`) that unions schema-DECLARED relations type-aware into the target set — so derived/boolean roots are queried on every corpus (previously targets came only from stored tuples and derived-only boolean roots went unqueried — the boolean-root conformance evidence was vacuous exactly there) — and emits concrete-named userset-shaped subjects over a bounded pool (inside the proved graph scope: `hqs` constrains only star-NAMED subjects). zcli's dispatch is itself conformance-tested (`test_cli_mode.py`; rc enumeration 0 answers-or-state / 1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode / **5 `"ops"` supplied in spec mode**), so spec answers can never masquerade as graph answers and an op stream can never be silently ignored. **The remove gates:** `test_conformance_remove.py` (80 tests, the `conf-heavy` phase) pins BOTH Python backends' REMOVE paths at answer level — the real `SetEngine` and the real `WildcardIndex`+`DeltaProcessor` driven through seeded interleaved add/remove/re-add sequences over the spec-scope corpora × 5 seeds, equal to `sem` (zcli) × oracle on the FINAL store — plus Python-internal convergence pins: driven == fresh `rebuild()` / fresh add-only build over the grid AND at id-free state-fingerprint granularity (interner keys/refcounts, population masks, node_sets/member_of, flow edges; graph side: `snapshot_rows` + symbolic residues), and full-churn tests asserting complete state emptiness mid-cycle (graph: no `NodeV4`/`EdgeV4`/`ResidueV1` rows) with I12 non-mutation on a rejected repeat remove. Scope honesty: the graph-side **Python** remove path is pinned to oracle/`sem` transitively (via `graph == oracle` on the same corpora the set-engine leg pins `sem == oracle`); the graph-side **Lean** remove leg is CLOSED at the validly-stored + drained-prior scope (2026-07-19f, §4(d)) — `graph_correct` / `graph_reached_inv` / `Exec.graphRun_check_eq_sem` cover retraction of a tuple that is in the store (`t ∈ T`), from a drained prior state (`cascadeKeys = []`), whose PRE-remove store satisfies the W4 disciplines (`StoreValidRules` / `BareStarStore` / `TtuStarFree` / `htermT`, faithful to `TupleSource.remove`); and the Exec driver / zcli graph mode DRIVES removes end-to-end (2026-07-19, `5a35ec3`) — `graphRunOps` runs one runtime-gated `remove` chain leg (`removeGateB`, fail-closed) per op, zcli graph/graph-state modes take an optional `"ops"` add/remove stream (absent ⇒ the legacy add-only `graphRun`, byte-identical), and `test_conformance_remove_graph.py` differential-gates seeded streams against the real Python graph index and the oracle on the erased store. **"Driven end-to-end" carries one live exclusion:** `test_conformance_remove_graph.py:102` sets `_REMOVE_EXCLUDED = {"direct_arm_exclusion"}`, because the chain's `remove` guard is stated over plain `StoreValidRules`, under which a Direct-arm-under-exclusion tuple is inadmissible, so `removeGateB` fail-closes on essentially every seeded stream over that corpus. Removes are therefore driven end-to-end over every in-fragment corpus EXCEPT that one (the newest). That gate compares at ANSWER level only; the Lean-vs-Python STATE comparisons for removes remain driven-vs-fresh-build Python-internal, never vs Lean. `test_conformance_generated.py` (40 tests) closes the disjoint-pools gap (§3 item 1, previously the #1 residual risk): a seeded deterministic re-implementation of the hypothesis `schema_asts` generator (NO hypothesis dependency — the formal/ convention; placed inside `formal/conformance/` so `verify.sh` gates it fail-closed) feeds GENERATED schemas + stores — shapes outside the curated corpora — asserting zcli `sem` == oracle == real `SetEngine` over the shared grid. Answer-level, spec-side only; the graph backend stays pinned by the curated corpora. The repository-wide validation matrix separately pins Python-graph × Python-set × oracle on every push. |
-| … "including state-level equality" | ✅ **At a documented representation-neutral projection, per corpus.** `test_conformance_state.py` (**19** in-fragment corpora): the Lean operational graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — the same `graphRun` fold, same admission/drain gates, emitting canonical edges + residues) equals the real Python graph index's final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4` to symbolic keys). Compared: the DIRECT edge set over `(type, name, predicate, wildcard)` node keys, and per derived key the full residue triple (`stars` shapes, `neg`/`upos` subject sets). Six projections, each documented and justified in `formal/conformance/extractor.py` (P1 closure rows are a function of the direct set; P2 wildcard bridges — inert, **re-verified 2026-07-26 over the widened 19-corpus set**: `bridged_in_shapes`/`bridged_out_shapes` compile EMPTY on all 19, the only non-empty pair in `SCHEMAS` being the excluded `object_wildcard` corpus, so P2 still never fires; P3 edge multiplicity, sets both sides; P4 all-empty residue rows the model stores and Python deletes; P5 node sets, GC'd vs never-GC'd — **no `NodeV4` row is compared at all**; P6 leaf-family closure-leaf copies, whose evaluation OUTPUT — residues + derived edges — is compared exactly). `test_conformance_enum_state.py` extends the state comparison to a deterministic stride-4 sample of the enumerated stores (257 of 1021). Attack-first: the state gate's first run FOUND P6 (state divergence under full check-parity); a deliberately corrupted extraction fails with the symmetric-difference message. |
+| … "including state-level equality" | ✅ **At a documented representation-neutral projection, per corpus.** `test_conformance_state.py` (**19** in-fragment corpora): the Lean operational graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — the same `graphRun` fold, same admission/drain gates, emitting canonical edges + residues) equals the real Python graph index's final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4` to symbolic keys). Compared: the DIRECT edge set over `(type, name, predicate, wildcard)` node keys, and per derived key the full residue triple (`stars` shapes, `neg`/`upos` subject sets). Six projections, each documented and justified in `formal/conformance/extractor.py` (P1 closure rows are a function of the direct set; P2 wildcard bridges — inert, **re-verified 2026-07-26 over the widened 19-corpus set**: `bridged_in_shapes`/`bridged_out_shapes` compile EMPTY on all 19, the only non-empty pair in `SCHEMAS` being the excluded `object_wildcard` corpus, so P2 still never fires; P3 edge multiplicity — **NARROWED 2026-07-29**: compared EXACTLY on the untainted arm (153 of 171 compared edges, `nary_union`'s non-unit fan-in included), dropped only on the derived arm where Python's presence diff caps the count at 1 while the model compounds, and there golden-pinned per corpus by `test_conformance_state.py::test_derived_arm_multiplicity_ledger` — see `CORRESPONDENCE.md` §7.2; P4 all-empty residue rows the model stores and Python deletes; P5 node sets, GC'd vs never-GC'd — **no `NodeV4` row is compared at all**; P6 leaf-family closure-leaf copies, whose evaluation OUTPUT — residues + derived edges — is compared exactly). `test_conformance_enum_state.py` extends the state comparison to a deterministic stride-4 sample of the enumerated stores (257 of 1021). Attack-first: the state gate's first run FOUND P6 (state divergence under full check-parity); a deliberately corrupted extraction fails with the symmetric-difference message. |
 | … "exhaustive small-scope enumeration up to the documented bounds" | ✅ **At the documented (tiny) bounds.** `test_conformance_enum.py`: ALL stores of ≤ K tuples from the declared tuple space over a 2-names-per-type pool, for **six** representative fragment shapes at a per-shape K of 3 or 4 — boolean_exclusion (K=4, 163 stores), boolean_intersection (K=4, 163), two_stratum_cascade (K=3, 299), boolean_star_exclusion (K=4, 57), wildcard_group_member (K=3, 176), ttu (K=4, 163); **1021 stores total**, spec × oracle × set engine over the shared grid, per-shape tuple-space size / K / store count all ASSERTED so the bounds cannot silently drift. Zero disagreements. `test_conformance_enum_state.py` adds a state-level leg over a **stride-4 sample, 257 of the 1021** (sample size likewise asserted). Scope honesty: the graph backend is not part of the ANSWER enumeration (runtime; it stays pinned by the curated-corpora graph + state gates), and the bounds are deliberately tiny — this earns "exhaustive up to the documented bounds", nothing more. |
 | residual unverified surface | ✅ Acknowledged in full, and LARGER than §7's list — see §3. |
 
@@ -314,7 +339,8 @@ Everything §7 lists, plus the fragment carries:
    (§1), but a divergence strictly inside a projected class would not fail it:
    leaf-family edge content (P6 — pinned instead by the plans' evaluation
    output, check conformance, and the RuleSet snapshots), edge multiplicity
-   (P3 — refcounts vs list repeats), bridge edges (P2 — inert), node GC
+   (P3 — **derived arm only since 2026-07-29; the untainted arm is compared
+   exactly and the derived arm is golden-pinned**), bridge edges (P2 — inert), node GC
    (P5 — **`NodeV4` rows are not compared at all**), and residue versioning
    (**P7** — `ResidueV1.version`, declared as a projection 2026-07-27; it was
    silently dropped before). Each is documented with its justification in
