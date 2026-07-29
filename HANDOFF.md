@@ -58,17 +58,32 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
-- [ ] **★ START HERE (next session, refreshed 2026-07-29) — two live options; the third
-      is done.** The zero-trust backlog is CLEARED, the gate is green end-to-end, and as
-      of 2026-07-29 there is **no longer an open item where the gate is blind to a class
-      of divergence** — the P3 edge-multiplicity hole was the last one and it is closed
-      (top status section). So the remaining choice is a genuine priority call, not a
-      "fix the blind spot first":
-      * **(A) the store-level write quota** — the only item with real production value.
-      * **(B) E-chain Leg 2** — the enumeration model change. **Read the plan's §D.6 row
-        before starting:** it is now mechanical, and the leg is *expected* to break
-        `test_derived_arm_multiplicity_ledger`.
-      Pick one and finish it rather than sampling both. Full context for each is linked.
+- [ ] **★ START HERE (next session, refreshed 2026-07-29) — ONE live option left.**
+      The zero-trust backlog is CLEARED, the gate is green end-to-end, and as of
+      2026-07-29 there is **no longer an open item where the gate is blind to a class of
+      divergence** — the P3 edge-multiplicity hole was the last one and it is closed.
+      * **~~(A) the store-level write quota~~ — DECLINED by the user 2026-07-29**, and
+        the alternative was measured rather than assumed. *"I don't want to limit what
+        can be added to a permission store — it might be slow but it should not be
+        limited by perf."* The proposed substitute (detect a DoS fan-out, bulk-rebuild
+        instead of adding normally) was **measured and does not work**: bulk is 7–15×
+        faster to BUILD but produces byte-identical closure rows (so it fixes nothing
+        about size), makes the worst single lock stall 25–43× WORSE (105 ms → 2.7 s at
+        N=480; 237 ms → 10.1 s at N=960), cannot be triggered (the only fan-out signal
+        is the per-write region, measured at 120 — the signal already known not to
+        fire), is structurally refused mid-stream by `build_index`, and **loses every
+        REMOVED outbox row** (measured 143 ADDED/42 REMOVED incrementally vs 101/0 on a
+        rebuild) — which §8.3's verifier is blind to. **The answer that already exists
+        is `ConnectedStore(sync=False)`:** measured 14.5× lower write latency
+        (2.7 ms/write vs 105 ms max), closure work off the write path, writers and
+        catch-up on different lock rows, and a consistency contract that is already
+        built and pinned. It bounds *whose latency pays*, not what can be stored.
+        Full measurement + the two further options (rebuild-vs-K-deltas amortisation,
+        crossover K* ≈ 30–40; and routing hub workloads to the set engine, 0.03 s vs
+        74 s at N=960): `docs/spec-deviations.md` 2026-07-29c.
+      * **(B) E-chain Leg 2** — the enumeration model change, now the main open arc.
+        **Read the plan's §D.6 row before starting:** it is now mechanical, and the leg
+        is *expected* to break `test_derived_arm_multiplicity_ledger`.
 
       **(A) The store-level write quota — the only one with real production value.**
       `ZT-P1-6a` is only half closed. `ZANZIBAR_MAX_CLOSURE_FANOUT` (landed 2026-07-27,

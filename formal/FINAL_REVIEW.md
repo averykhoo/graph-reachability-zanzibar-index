@@ -27,8 +27,8 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **465** |
-| `tests/` collected | **762** |
-| whole-repo suite | **1227** |
+| `tests/` collected | **763** |
+| whole-repo suite | **1228** |
 | differential conformance tests | **419** across **13** files |
 | gate-tooling conformance tests | **46** across **2** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **460** |
@@ -38,7 +38,7 @@ number INTO it over restating it.
 | `corpus.SCHEMAS` | **24** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **23** |
 | spec-scope corpora (four dicts) | **33** = 24 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=465 (=96+369), `MIN_TESTS_ALL`=762, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=465 (=96+369), `MIN_TESTS_ALL`=763, `EXPECTED_MIN_AUDITS`=460 |
 
 Per conformance file:
 

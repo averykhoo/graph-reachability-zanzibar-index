@@ -46,6 +46,9 @@ class AdmissionRejected(ValueError):
       * an undeclared subject-/object-wildcard shape,
       * a remove of an edge/node/tuple that is not there.
 
+    ``ClosureFanoutExceeded`` (below) is a SUBCLASS and a deliberate outlier: it is
+    the one refusal family that admission cannot predict, so it needs its own type.
+
     It is NOT for internal-contract failures -- a stale node id, a malformed wildcard
     encoding, an I5 routing breach, a "shortcut only supports count == -1". Those stay
     plain ``ValueError`` deliberately: they mean a CALLER (or this library) is broken,
@@ -72,7 +75,36 @@ class AdmissionRejected(ValueError):
     corruption further downstream. ``connectedstore.apply._apply_row`` replays an
     already-admission-validated log row, so it promotes ANY ``ValueError`` (this class
     included) to ``InvariantViolation``. That promotion is the caller's judgement, and
-    this class does not weaken it.
+    this class does not weaken it -- EXCEPT for ``ClosureFanoutExceeded``, whose whole
+    point is that admission provably could not have predicted it.
+    """
+
+
+class ClosureFanoutExceeded(AdmissionRejected):
+    """The per-write closure fan-out cap refused a write (``ZT-P1-6a``).
+
+    A subclass, and the ONE refusal family that must not be promoted to
+    ``InvariantViolation`` by ``connectedstore.apply._apply_row``.
+
+    WHY IT NEEDS ITS OWN TYPE. Every other ``AdmissionRejected`` family is a property
+    of the tuple and the schema, so ``TupleSource`` admission decides it BEFORE the row
+    reaches the log; if one of those fires during replay the log really does contain an
+    inadmissible row, and "corruption or a validity-parity bug" is the right verdict.
+    The fan-out cap is different in kind: it is an INDEX-side resource limit over the
+    materialised closure, ``TupleSource`` has no knowledge of ``max_closure_fanout``,
+    and the same tuple is admissible or not depending on how large the closure has
+    since grown. So a cap refusal during replay is neither corruption nor a parity bug
+    -- it is a correctly-admitted row that the index now declines to materialise, and
+    the store cannot advance past it until the cap is raised.
+
+    Found 2026-07-29 while measuring the hub-topology DoS: because
+    ``AdmissionRejected`` subclasses ``ValueError`` and ``_apply_row`` promotes every
+    ``ValueError``, a tuned-down cap surfaced through ``ConnectedStore`` as
+    ``InvariantViolation('... this is corruption or a validity-parity bug ...')`` --
+    the exact opposite of what ``index_v4/core.py``'s raise site says in its own
+    comment ("not an InvariantViolation, because nothing is corrupt"). It does not bite
+    at the 100,000 default, which is why no test caught it; it bites the moment anyone
+    follows the cap's own error message and tunes it down.
     """
 
 

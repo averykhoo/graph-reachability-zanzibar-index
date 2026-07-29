@@ -8,6 +8,107 @@ to the user instead.
 
 ---
 
+## 2026-07-29c — the hub-topology DoS: store-level quota DECLINED by the user; "bulk rebuild instead" MEASURED and rejected; the async schedule is the answer
+
+**Decision (user, 2026-07-29): no store-level write quota.** *"I don't want to limit
+what can be added to a permission store — it might be slow but it should not be
+limited by perf."* Board item (A) is closed as DECLINED, not deferred. The decision is
+coherent with the codebase's own reasoning: `index_v4/core.py` already exempts removals
+from the fan-out cap because "a cap that can refuse a REVOCATION is a fail-open".
+
+**Proposal evaluated instead:** *"if we detect a DoS-causing fan-out, do a bulk rebuild
+instead of adding the thing the usual way."*
+
+**Measured** (hub topology, `N/2` users into `group:hub#member` + `N/2` inheriting
+groups, SQLite in-memory):
+
+| N tuples | closure rows | sync per-write | async write phase | bulk `build_index` | `SetEngine.rebuild` |
+|---:|---:|---:|---:|---:|---:|
+| 60 | 960 | 0.53 s | 0.08 s | 0.036 s | 0.0015 s |
+| 240 | 14,640 | 7.35 s | 0.65 s | 0.824 s | 0.0084 s |
+| 480 | 58,080 | 22.1 s | 1.43 s | 2.65 s | 0.0104 s |
+| 960 | 231,360 | 74.0 s | 2.90 s | 10.1 s | 0.0298 s |
+
+Rows are exactly `(N/2)² + N` at every size — **N² confirmed**, and the original
+240 → 14,640 finding reproduces verbatim. Peak per-write fan-out at N=240 is **exactly
+120**, so `ZANZIBAR_MAX_CLOSURE_FANOUT` is confirmed useless here.
+
+**Verdict: the proposal does not work as stated.** Separating three costs it conflates:
+
+| cost | does a bulk rebuild help? |
+|---|---|
+| TIME to build | **Yes, 7–15×** — and bulk wins at every size; there is no crossover. |
+| closure SIZE | **No.** Row counts are byte-identical in every arm. It is a property of the topology. |
+| LOCK HOLD / tail latency | **Worse, decisively.** Total lock-seconds fall 18.0 → 2.7 s, but the worst single stall goes 105 ms → 2,685 ms at N=480 and 237 ms → 10.1 s at N=960. It trades a bounded per-write hold for an O(store) one that grows forever. |
+
+Four independent blockers on top:
+1. **The trigger cannot fire.** The only fan-out signal that exists is the per-write
+   region size, measured at 120 — the same signal already known not to fire. Detecting
+   this needs a *store-level* signal, i.e. the quota that was declined.
+2. **`build_index` structurally refuses mid-stream** (verified live: `ValueError:
+   index 'inc' already exists (cursor at 14); build_index is for fresh builds`), and
+   there is no teardown API anywhere.
+3. **It requires quiescence** (`RuntimeError: concurrent writes ... retry when the
+   store is quiescent`) — precisely the condition a write burst violates. It also takes
+   no store lock at all, so making it safe mid-stream reintroduces the lock problem.
+4. **★ The delta outbox loses every REMOVED.** Measured: incremental produced 185
+   outbox rows (143 ADDED / 42 REMOVED) on a boolean schema; the rebuild produced 101,
+   **100% ADDED, zero REMOVED**. Downstream consumers would never learn a revocation
+   happened. **And §8.3 `verify_outbox_deltas` is blind to it** — it checks each pair's
+   final action against BFS reachability, so a missing `REMOVED` is never examined.
+   In an authorization system this is the fail-open direction.
+
+**The answer that already exists: `ConnectedStore(sync=False)`.** `advance_index` is
+NOT unconditionally inline — `store.py::_write` calls it only when `self.sync`.
+Measured at N=480: the async write phase is **1.31 s for 480 writes (2.7 ms/write, max
+6.6 ms)** against 19.1 s / 105 ms max in sync — a **14.5× drop in write-path latency**,
+with the closure work off the write path entirely. Lock-wise strictly better: writers
+hold the source lock (`SchemaV4` row), catch-up holds the graph store lock (`StoreV4`
+row) — different rows, so on PostgreSQL a catching-up worker does not block writers.
+`catch_up(batch=k)` is a direct lock-hold knob (batch=8 → max 733 ms). The consistency
+contract already exists and is pinned (`check(at_least=)` falls back to the always-fresh
+set engine; `lookup` raises `LookupNotFresh` rather than serve stale enumerations;
+`test_connectedstore_async.py::test_async_equals_sync_after_catch_up`). **This bounds
+whose latency pays, not total work — which is exactly what "don't limit what can be
+stored" asks for.**
+
+Two further options, recorded not adopted: **rebuild-instead-of-applying-K-pending-
+deltas** is a sound IVM amortisation with a measured crossover at **K\* ≈ 30–40** for
+this store — a better idea than the per-write version and composable with async — but
+it inherits blockers 2–4. And **routing hub-like workloads to the set engine** is the
+strongest number of all (`rebuild` at N=960: **0.03 s vs 74 s**, zero closure rows),
+consistent with `benchmarks/results/M2_FOLLOWUP_2026-07-15.md`. The honest framing:
+*the hub topology is not expensive to STORE, it is expensive to materialise the CLOSURE
+of — so don't materialise it.*
+
+### Fixed here: the cap misreported itself as corruption through `ConnectedStore`
+
+Found while measuring the above. `AdmissionRejected` subclasses `ValueError`, and
+`connectedstore/apply.py::_apply_row` promotes every `ValueError` to
+`InvariantViolation('... the log is admission-validated, so this is corruption or a
+validity-parity bug ...')`. So a tuned-down cap surfaced as a corruption report — **the
+exact opposite of what `index_v4/core.py`'s own raise-site comment says** ("not an
+InvariantViolation, because nothing is corrupt"). The two comments contradicted each
+other and neither was tested through the composed system (`tests/test_reg17_*` drove
+only the raw `ReachabilityIndex`).
+
+Fix: new `ClosureFanoutExceeded(AdmissionRejected)`, raised at the cap site and allowed
+to escape `_apply_row`'s promotion. It is the one refusal family admission provably
+cannot predict — every other family is a property of the tuple and schema, decided
+before the row reaches the log, so promoting *those* is right. The real consequence is
+now stated rather than disguised: **the cursor cannot advance past such a row until the
+cap is raised.** Does not bite at the 100,000 default; bites the moment anyone follows
+the cap's own error message and tunes it down.
+
+Sabotage (remove the escape, re-run `test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report`):
+```
+E  index_v4.invariants.InvariantViolation: log row 13 (ADD) was rejected by the index --
+   the log is admission-validated, so this is corruption or a validity-parity bug:
+   closure fan-out cap exceeded: this edge would materialise 12 closure rows ...
+```
+
+---
+
 ## 2026-07-29b — `_any_residue_reference` / `_keys_referencing` MEASURED (`ZT-P5` bullet 6)
 
 Both are complete `ResidueV1` scans (select every residue row for the store, then

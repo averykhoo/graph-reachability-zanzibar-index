@@ -199,7 +199,7 @@ MIN_CONF_ALL=465
 # Note the Postgres leg (`tests/test_postgres_ha.py`) is dropped at COLLECTION
 # when no ZANZIBAR_TEST_DSN is set, not skipped at run time -- otherwise its skips
 # would have to be tolerated here, and a tolerated skip is how coverage leaks.
-MIN_TESTS_ALL=762
+MIN_TESTS_ALL=763
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

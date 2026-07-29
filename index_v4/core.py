@@ -8,7 +8,8 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
 from legacy.index_v1 import MultiSet
-from zanzibar_utils_v1 import (AdmissionRejected, validate_write_identifiers,
+from zanzibar_utils_v1 import (AdmissionRejected, ClosureFanoutExceeded,
+                               validate_write_identifiers,
                                validate_node_identifiers)
 from .invariants import InvariantViolation
 from .models import DeltaOutboxV1, EdgeV4, NodeV4, Edge, Node, StoreV4
@@ -802,10 +803,14 @@ class ReachabilityIndex:
         n_desc = len(reachable_after_object)
         fanout = n_anc * n_desc + n_anc + n_desc
         if count > 0 and self.max_closure_fanout and fanout > self.max_closure_fanout:
-            # AdmissionRejected, like the cycle refusals: a correct refusal of THIS
-            # write, classifiable by every harness that already handles rejection --
-            # not an InvariantViolation, because nothing is corrupt.
-            raise AdmissionRejected(
+            # ClosureFanoutExceeded (an AdmissionRejected subclass), like the cycle
+            # refusals: a correct refusal of THIS write, classifiable by every harness
+            # that already handles rejection -- not an InvariantViolation, because
+            # nothing is corrupt. The SUBCLASS matters: `connectedstore.apply` promotes
+            # every other ValueError to InvariantViolation("corruption") on the replay
+            # path, and must not do that here -- admission cannot predict this cap, so
+            # a refusal during replay is a resource limit, not a parity bug.
+            raise ClosureFanoutExceeded(
                 f'closure fan-out cap exceeded: this edge would materialise {fanout} '
                 f'closure rows ({n_anc} ancestors x {n_desc} descendants + fringes), '
                 f'over the limit of {self.max_closure_fanout} for store '

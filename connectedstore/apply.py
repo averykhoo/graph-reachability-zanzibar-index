@@ -10,7 +10,9 @@ and a retry re-reads the same rows.
 
 Validity was enforced at admission (spec §2.4), so the log contains only appliable
 ops -- a rejection here is a HARD failure (corruption signal), mirroring the delta
-processor's cycle guard.
+processor's cycle guard. **One documented exception:** ``ClosureFanoutExceeded`` is a
+resource limit the index applies and admission cannot predict, so it escapes that
+promotion and propagates as itself (see ``_apply_row``).
 """
 
 from __future__ import annotations
@@ -21,7 +23,8 @@ from index_v4 import WildcardIndex
 from index_v4.invariants import InvariantViolation
 from index_v4.outbox import outbox_watermark
 from index_v4.processor import DeltaProcessor
-from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet, norm_pred as _norm
+from zanzibar_utils_v1 import (ClosureFanoutExceeded, Entity, RelationalTriple,
+                               RuleSet, norm_pred as _norm)
 
 from .models import IndexCursorV1, TupleLogV1
 from .source import WatermarkGap, log_gap, log_rows
@@ -61,6 +64,17 @@ def _apply_row(row: TupleLogV1, widx: WildcardIndex, ruleset: RuleSet) -> None:
         for d in ruleset.apply(triple):
             fn(_norm(d.subject_predicate), d.subject.type, d.subject.name,
                d.relation, d.object.type, d.object.name)
+    except ClosureFanoutExceeded:
+        # NOT corruption, and the one refusal that must escape the promotion below.
+        # `TupleSource` admission has no knowledge of `max_closure_fanout`, so it
+        # provably could NOT have refused this row at write time -- the row is validly
+        # logged and the INDEX is declining to materialise it. Promoting it would
+        # report a resource limit as "corruption or a validity-parity bug", which is
+        # exactly what `index_v4/core.py`'s raise site says it must not be. Re-raised
+        # unchanged so the caller sees the cap's own actionable message; note the
+        # consequence, which is real: the cursor cannot advance past this row until
+        # the cap is raised (or disabled with 0). See ZT-P1-6a.
+        raise
     except ValueError as e:
         raise InvariantViolation(
             f'log row {row.id} ({row.op}) was rejected by the index -- the log is '

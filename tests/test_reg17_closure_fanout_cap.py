@@ -30,7 +30,9 @@ from index_v4.core import (DEFAULT_MAX_CLOSURE_FANOUT, MAX_CLOSURE_FANOUT_ENV,
                            resolve_max_closure_fanout)
 from index_v4.invariants import check_invariants, snapshot_rows
 from index_v4.models import DeltaOutboxV1, EdgeV4, NodeV4
-from zanzibar_utils_v1 import AdmissionRejected
+from connectedstore import ConnectedStore
+from index_v4.invariants import InvariantViolation
+from zanzibar_utils_v1 import AdmissionRejected, ClosureFanoutExceeded
 
 # Largest single-write closure expansion the existing suite produces, measured
 # 2026-07-27 by instrumenting the expansion path and running both suites to
@@ -230,4 +232,58 @@ def test_default_admits_a_region_far_larger_than_any_test_writes():
     idx.add_edge('p', 't', 's', 'p', 't', 'o')
     session.commit()
     assert _counts(session)[0] == edges_before + 441, '20*20 + 20 + 20 closure rows + the direct edge'
+    session.close()
+
+
+# --------------------------------------------------------------------------- #
+# 2026-07-29 — the cap through the COMPOSED system (ConnectedStore).
+# Everything above drives the raw `ReachabilityIndex`, which is why this went
+# unnoticed: the composed path had no coverage at all.
+# --------------------------------------------------------------------------- #
+
+def test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report():
+    """A cap refusal on the REPLAY path must not be reported as corruption.
+
+    `AdmissionRejected` subclasses `ValueError`, and `connectedstore.apply._apply_row`
+    promotes every `ValueError` to `InvariantViolation('... the log is
+    admission-validated, so this is corruption or a validity-parity bug ...')`. That
+    promotion is right for every other refusal family — those are properties of the
+    tuple and the schema, so `TupleSource` decides them before the row reaches the log,
+    and one firing during replay really would mean the log is inadmissible.
+
+    The fan-out cap is different in kind: it is an INDEX-side resource limit over the
+    materialised closure, admission has no knowledge of `max_closure_fanout`, and the
+    same tuple is admissible or not depending on how big the closure has since grown.
+    So a cap refusal during replay is neither corruption nor a parity bug.
+
+    Observed BEFORE the fix (cap tuned to 119 on the 240-tuple hub, via ConnectedStore):
+        index_v4.invariants.InvariantViolation: log row 121 (ADD) was rejected by the
+        index -- the log is admission-validated, so this is corruption or a
+        validity-parity bug: closure fan-out cap exceeded: this edge would materialise
+        120 closure rows ...
+    i.e. the exact opposite of what `index_v4/core.py`'s own raise-site comment says
+    ("not an InvariantViolation, because nothing is corrupt"). It did not bite at the
+    100,000 default, which is why nothing caught it; it bites the moment anyone follows
+    the cap's own error message and tunes it down.
+    """
+    engine = create_engine('sqlite:///:memory:')
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    schema = ('model\n  schema 1.1\ntype user\ntype group\n'
+              '  relations\n    define member: [user, group#member]\n')
+    cs = ConnectedStore(session, 'cs', schema=schema)
+
+    # Build a region, then tighten the cap under the live index so the NEXT write
+    # exceeds it. This mirrors an operator lowering the cap on a running store.
+    for i in range(12):
+        cs.add_tuple('...', 'user', f'u{i}', 'member', 'group', 'hub')
+    cs.widx.idx.max_closure_fanout = 1
+
+    with pytest.raises(ClosureFanoutExceeded) as ei:
+        cs.add_tuple('member', 'group', 'hub', 'member', 'group', 'top')
+    assert 'closure fan-out cap exceeded' in str(ei.value)
+    # The whole point: a refusal, not a corruption report.
+    assert not isinstance(ei.value, InvariantViolation)
+    # ...and still classifiable by every harness that already handles rejection.
+    assert isinstance(ei.value, AdmissionRejected) and isinstance(ei.value, ValueError)
     session.close()
