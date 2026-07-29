@@ -8,6 +8,56 @@ to the user instead.
 
 ---
 
+## 2026-07-29b — `_any_residue_reference` / `_keys_referencing` MEASURED (`ZT-P5` bullet 6)
+
+Both are complete `ResidueV1` scans (select every residue row for the store, then
+JSON-decode `neg` and `upos` per row) on every node-release path.
+`_keys_referencing` became **unconditional** when the N3 leaf-kind elision was
+withdrawn as unsound (`ZT-P0-1`, 2026-07-26). It had never been measured; the board
+carried it as "unbenchmarked" and it was reachable only from inside a closed item's
+residual list.
+
+**Measured** (SQLite in-memory, paranoia off, `base: [user:*] / viewer: base but not
+blocked`; residue rows scale with objects):
+
+| residue rows | one scan | µs/row | per-remove (2 blocks/obj) | scan share |
+|---|---|---|---|---|
+| 25 | 0.35 ms | 14 | 13.1 ms | ~3% |
+| 100 | 1.6 ms | 16 | 25.5 ms | ~6% |
+| 400 | 6.8 ms | 17 | 26.7 ms | ~25% |
+| 800 | 10.1 ms | 13 | — | — |
+| 1600 | 22.2 ms | 14 | — | — |
+
+**Verdict: the scan is cleanly O(R) at ~15 µs per residue row** (x1.98 per doubling
+at the top end — linear, not worse). It is a *minority* term below ~1–2k residue
+rows and becomes the *dominant* term above that; a full churn over R objects turns
+quadratic past the crossover. Extrapolating the measured slope, a store with 100k
+residue-bearing keys costs **~1.4 s per node release**.
+
+**Scoping, so this is not over-read:** a `ResidueV1` row exists only for a DERIVED
+key carrying symbolic star coverage. R is the number of `(object, derived relation)`
+pairs with a wildcard grant, not the number of tuples. Stores with no boolean
+relations, or with only concrete grants, have R = 0 and pay nothing.
+
+**Not fixed here.** The fix is the one `ZT-P0-1`'s own note named — *"replace the
+full `ResidueV1` scan with a real index rather than eliding it"* — i.e. a
+node-id-keyed reference table maintained alongside `neg`/`upos`. That is an
+algorithm change (gate + multi-seed fuzz + a Lean/CORRESPONDENCE look), not a
+measurement, so it is recorded rather than smuggled in.
+
+**Instrument note, recorded because it is the house failure mode.** The first
+*two* versions of this benchmark measured **nothing** and printed a perfectly
+plausible table — 0 residue rows, timing only SQLite `SELECT` overhead on an empty
+table, with a churn column that looked superlinear and meant nothing. The cause is
+a real fact about the system worth writing down: **`neg` records subjects excluded
+from a WILDCARD-covered population**, so a schema whose grants are all concrete
+produces no residue rows at all (an excluded concrete subject is handled by simply
+not writing the edge). It was caught only by adding a non-vacuity assert on the row
+count — which is exactly what `docs/sabotage-procedure.md` demands of an
+instrument, and which I added only after the first table looked believable.
+
+---
+
 ## 2026-07-29 — the P3 edge-multiplicity blind spot, ADJUDICATED and closed
 
 `CORRESPONDENCE.md` §7.2's finding of 2026-07-28 (filed UNADJUDICATED) is resolved.

@@ -152,11 +152,19 @@ open). This file is now only what a future session must ACT on.
          `formal/HANDOFF.md` is not read as a pending item.
       Resume detail: `formal/history/optional-widening-2026-07.md`,
       `formal/history/PROOF_STATUS.md` 2026-07-19f.
-- [ ] **`_any_residue_reference` is unbenchmarked** (`ZT-P5` bullet 6) — its complete
-      `ResidueV1` scan runs on every node-release path and became UNCONDITIONAL when
-      the `ZT-P0-1` whitelist was withdrawn. No measurement exists. Carried here
-      because it was previously reachable only from inside a `[x]` item's residual
-      list, which is how an open item disappears.
+- [ ] **`_any_residue_reference` / `_keys_referencing` — MEASURED 2026-07-29; the fix
+      is not done.** The complete `ResidueV1` scan on every node-release path is
+      cleanly **O(R) at ~15 µs per residue row** (0.35 ms at 25 rows → 22 ms at 1600;
+      x1.98 per doubling). It is a minority term below ~1–2k residue rows and the
+      DOMINANT term above; extrapolated, 100k residue-bearing keys cost **~1.4 s per
+      node release**, and a churn past the crossover goes quadratic. **Scope:** R is
+      the number of `(object, derived relation)` pairs with a WILDCARD grant, not
+      tuples — stores with no boolean relations pay nothing.
+      **Remaining work** is the fix `ZT-P0-1`'s own note named: replace the scan with
+      a node-id-keyed reference index maintained alongside `neg`/`upos`. That is an
+      algorithm change (full gate + multi-seed fuzz + a Lean/CORRESPONDENCE look), so
+      it was deliberately not smuggled into a measurement pass.
+      Numbers + the instrument trap: `docs/spec-deviations.md` 2026-07-29b.
 ### Someday / out of scope (low priority — revisit only on a concrete need)
 
 - [ ] **Lift the two scope rejections** — object wildcards on derived relations, and
@@ -222,11 +230,22 @@ open). This file is now only what a future session must ACT on.
       made a reader believe a live authorization-adjacent bug was open.
 - [ ] **Other documented latent/theoretical notes** — "documented, no corpus exercises
       it, not urgent" corners. **Inventory refreshed 2026-07-29:**
-      * the **from-chain TARGET** note — was asserted 2026-07-13 to be "unreachable by
-        any compilable schema, and fails LOUD via cascade quiescence if reached".
-        `ZT-P5` bullet 5 flagged that this was **never re-derived** across three later
-        fragment widenings, and it still has not been. Treat the reachability half as
-        UNVERIFIED; the fails-loud half is the reason it is not urgent.
+      * the **from-chain TARGET** note — **RE-DERIVED 2026-07-27, and its reachability
+        half is DISPROVED.** (`ZT-P5` bullet 5 said it had "never been re-derived", and
+        the 2026-07-29 board refresh repeated that; both were stale — the work was done
+        on 2026-07-27 and is executable, not asserted.) The 2026-07-13 claim "no
+        currently-compilable schema class reaches this shape" is FALSE: `_from_chain_keys`
+        enumerates ALL stored parents, so a parent of a different type with an UNTAINTED
+        `target_rel` yields exactly the excluded shape. Pinned by
+        `tests/test_zt_p5_readjudication.py::test_zt_p5_from_chain_target_shape_IS_reachable`.
+        **The other half survived:** 400 randomized trials (88 of which reached a fresh
+        untainted+bridged from-chain intern) gave 0 admission divergences, 0 answer
+        divergences, 0 invariant violations, 0 `audit_fixpoint` failures, on 3 seeds.
+        **What is genuinely still open is narrower than "the note":** the structural
+        reason offered for the clean result is explicitly *a hypothesis, not a proof*,
+        it is **not established for intersection-rooted grant relations**, and **no
+        bounded search was run over >2 strata**. Those two are the live residue.
+        Detail: `docs/spec-deviations.md` "Target 2".
       * the **I7 checker corner** — an in-place residue-version regression to exactly 1
         is undetectable. Note this is now known to be worse than "checker sensitivity":
         `ZT-P4-5` established that **I7 is gated by nothing formal at all** (Lean's
@@ -235,10 +254,15 @@ open). This file is now only what a future session must ACT on.
       * **`_any_residue_reference`'s full `ResidueV1` scan** (`ZT-P5` bullet 6) is
         unbenchmarked and became UNCONDITIONAL after the `ZT-P0-1` fix. The only
         item here with a measurable cost.
-      * **Object wildcards have never been probed at STATE level** (`ZT-P5` bullet 2).
-        The "exclusions are proof-scope, not behavioral" inference rests on
-        check-level evidence — the exact inference class that failed at state level on
-        2026-07-17.
+      * **Object wildcards at STATE level** (`ZT-P5` bullet 2) — **half done.** The
+        PYTHON side was probed clean on 2026-07-27 (a deterministic ~72-state slice is
+        pinned by
+        `tests/test_zt_p5_readjudication.py::test_zt_p5_bounded_search_object_wildcard_out_bridge_no_further_divergence`,
+        plus a 344-trial exclusion sweep with zero divergences). **The LEAN side is
+        still UNVERIFIED** — `docs/spec-deviations.md` "Target 3" says so in as many
+        words. So the "fragment exclusions are proof-scope, not observed divergence"
+        inference still rests on check-level evidence for the model corner, which is
+        the exact inference class that failed at state level on 2026-07-17.
       The tupleset-of-derived gap formerly listed here was RESOLVED 2026-07-13.
       Full log: [`docs/spec-deviations.md`](docs/spec-deviations.md).
       Do not chase speculatively; act if a real schema or corpus surfaces one.
