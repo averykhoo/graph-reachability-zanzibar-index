@@ -41,16 +41,62 @@ outside these classes fails the gate:
      `w_any → object` and `subject → w_all`), so the bridge classes are
      exactly identifiable: drop Python direct edges whose TARGET is a `w_any`
      node or whose SOURCE is a `w_all` node.
-     Honesty note (probed 2026-07-12; RE-MEASURED 2026-07-27 over all 21
-     then-current `GRAPH_FRAGMENT` corpora — 447 raw edge rows, P2 dropped
-     **0** of them): the compiled `bridged_in_shapes`/`bridged_out_shapes` are
-     EMPTY — bridges arise only for wildcard-userset / object-wildcard shapes,
-     both outside `W4Fragment` — so P2 still never fires; it is kept (and
+     Honesty note (probed 2026-07-12; RE-MEASURED 2026-07-27 over the 21
+     then-current corpora — 447 raw edge rows, 0 dropped; **RE-MEASURED AGAIN
+     2026-07-29 over all 23 current `GRAPH_FRAGMENT` corpora — 477 raw edge
+     rows, P2 dropped 0 of them**, and the compiled
+     `bridged_in_shapes`/`bridged_out_shapes` are EMPTY on every one of the 23):
+     bridges arise only for wildcard-userset / object-wildcard shapes,
+     both outside `W4Fragment`, so P2 still never fires; it is kept (and
      documented) for robustness if the corpus set ever widens, not because it
-     is load-bearing today.
-  P3 **Multiplicity.** Python ref-counts a repeated direct edge in one row
+     is load-bearing today. Re-measure this when `GRAPH_FRAGMENT` grows — the
+     claim is only as current as the corpus set it was measured over, which is
+     how it went stale at 19 and again at 21.
+  P3 **Multiplicity — NARROWED 2026-07-29 to the DERIVED arm only; the
+     untainted arm is now compared EXACTLY.** This projection used to read
+     "Python ref-counts a repeated direct edge in one row
      (`direct_edge_count = 2`); the model's edge list repeats the pair. Both
-     sides compare as SETS (the Lean dump already deduplicates).
+     sides compare as SETS (the Lean dump already deduplicates)" — i.e. it
+     asserted the two multiplicities CORRESPOND and only the representation
+     differs, and dropped both. That was wrong in two ways, and it is the
+     adjudication of `CORRESPONDENCE.md` §7.2.
+
+     **(a) The claim is false on the derived arm.** Python writes a
+     processor-derived edge by a presence DIFF —
+     `index_v4/processor.py::DeltaProcessor._reconcile_subject` computes
+     `want_edge and not has_edge` — so a re-derived edge changes NOTHING and
+     `direct_edge_count` on such a row is always 0 or 1. The Lean model has no
+     presence test (`GraphIndex/Write.lean::admitEdge` is `(a != b) && !reach b a`;
+     `GraphIndex/State.lean::addEdge` conses unconditionally) and its cascade
+     re-enumerates every existing copy (`GraphIndex/CascadeEnum.lean::edgeHolders`),
+     so multiplicity compounds per cascade leg.
+
+     **(b) The drop was hiding a correspondence that HOLDS.** On edges whose
+     target relation is NOT derived, the model's list multiplicity and Python's
+     `direct_edge_count` agree exactly — including the genuinely non-unit case
+     (`nary_union` routes `alice` onto the untainted `any_of` from all three
+     arms: both sides say 3). Dropping that was pure lost assurance.
+
+     Projection as it now stands: compare `direct_edge_count`-weighted
+     multiplicity EXACTLY on every edge whose target relation is untainted, and
+     drop it only on edges into a derived (boolean-tainted) relation, where it
+     is a declared model artifact. The dropped quantity is not un-gated — it is
+     pinned per corpus against a golden by
+     `test_conformance_state.py::test_derived_arm_multiplicity_ledger`, so the
+     artifact's SHAPE is now a checked quantity rather than an invisible one.
+
+     **Measured 2026-07-29** over all 23 `GRAPH_FRAGMENT` corpora: of 171
+     compared edges, **153 are untainted-arm and agree exactly** (152 at
+     multiplicity 1, one at 3) and **18 are derived-arm and all diverge** —
+     Python uniformly 1, Lean 4 … **1013** (`two_stratum_cascade`). Note the
+     Lean growth is worse than the `1 → 2 → 4 → 8` recorded in
+     `CORRESPONDENCE.md` §7.2 when the finding was filed: with several
+     candidates at a key it compounds superlinearly.
+
+     The exemption is decided from the SCHEMA (`zanzibar_utils_v1.compute_taint`),
+     not from `EdgeV4.derived`, so a mis-set flag cannot silently move the
+     boundary — and the two classifications are cross-checked against each other
+     (`_classify_edges`), which is itself a new I5-adjacent pin.
   P4 **Empty residues.** Python deletes an all-empty residue row
      (`processor._store_residue`: "empty residues are deleted, never
      stored"); the Lean model stores possibly-empty rows
@@ -112,7 +158,7 @@ outside these classes fails the gate:
      counterpart") — and `grep -rn 'version' lean/ZanzibarProofs/GraphIndex/`
      finds only that comment. There is no monotone counter anywhere in the
      model to compare against, so this is a MODELLING GAP, not a
-     representation difference like P1–P6: unlike those, no argument recovers
+     representation difference like P1–P6 (the other six): unlike those, no argument recovers
      the dropped information from what remains. It is recorded as such in
      `CORRESPONDENCE.md` §7.2, and the consequence is stated there and here:
      **I7 is gated by nothing formal.** Its only pins are Python-side —
@@ -143,12 +189,31 @@ NodeKey = tuple  # (type, name, predicate, wildcard)
 SubjKey = tuple  # (type, name, predicate)
 
 
+def derived_relations(schema_text: str) -> frozenset:
+    """The `(type, relation)` pairs that compile to DERIVED (boolean-tainted)
+    predicates — the P3 multiplicity exemption boundary.
+
+    Read from the SCHEMA via `zanzibar_utils_v1.compute_taint`, deliberately not
+    from `EdgeV4.derived`: the exemption must not be movable by the very flag a
+    divergence would corrupt. `_classify_edges` cross-checks the two.
+    """
+    from zanzibar_utils_v1 import compute_taint, parse_schema_ast
+
+    return compute_taint(parse_schema_ast(schema_text))
+
+
 # --------------------------------------------------------------------------- #
 # Python side
 # --------------------------------------------------------------------------- #
 
 def extract_sql_state(session, store_id: str) -> dict:
-    """Read the canonical state off the SQL tables (projections P1–P3, P5–P7)."""
+    """Read the canonical state off the SQL tables (projections P1–P2, P5–P7;
+    P3 is applied by `diff_states`, which needs the schema's taint set).
+
+    `edge_counts` carries `direct_edge_count`-weighted multiplicity for the same
+    keys as `edges`; `derived_flag` records `EdgeV4.derived` per key so the
+    schema-driven P3 exemption can be cross-checked against it.
+    """
     from index_v4.models import EdgeV4, NodeV4, ResidueV1
 
     nodes: dict[int, NodeKey] = {
@@ -158,6 +223,8 @@ def extract_sql_state(session, store_id: str) -> dict:
     }
 
     edges = set()
+    edge_counts: dict[tuple, int] = {}
+    derived_flag: dict[tuple, bool] = {}
     for e in session.exec(
             select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
         if e.direct_edge_count <= 0:
@@ -167,7 +234,12 @@ def extract_sql_state(session, store_id: str) -> dict:
             continue                                    # P2: bridge edge
         if "." in obj[2] and obj[2] != "...":
             continue                                    # P6: leaf-family copy
-        edges.add((subj, obj))                          # P3: set, not multiset
+        edges.add((subj, obj))
+        # P3: multiplicity is KEPT here and compared exactly on the untainted
+        # arm; `diff_states` applies the derived-arm drop.
+        edge_counts[(subj, obj)] = (edge_counts.get((subj, obj), 0)
+                                    + e.direct_edge_count)
+        derived_flag[(subj, obj)] = derived_flag.get((subj, obj), False) or e.derived
 
     residues: dict[tuple, tuple] = {}
     for r in session.exec(
@@ -197,7 +269,8 @@ def extract_sql_state(session, store_id: str) -> dict:
         residues[key] = (stars, _subjects(r.neg, "neg"),
                          _subjects(r.upos, "upos"))
 
-    return {"edges": frozenset(edges), "residues": residues}
+    return {"edges": frozenset(edges), "edge_counts": edge_counts,
+            "derived_flag": derived_flag, "residues": residues}
 
 
 def python_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
@@ -225,6 +298,15 @@ def lean_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
                                          object_wildcards, mode="graph-state"))
     edges = frozenset(
         (tuple(subj), tuple(obj)) for subj, obj in raw["edges"])
+    edge_counts: dict[tuple, int] = {}
+    for (subj, obj), n in raw["edgeCounts"]:
+        edge_counts[(tuple(subj), tuple(obj))] = n
+    if set(edge_counts) != set(edges):
+        raise AssertionError(
+            "zcli edgeCounts / edges disagree on the key set — the multiplicity "
+            "channel is not describing the same edges as the set channel "
+            f"(only-counts={sorted(set(edge_counts) - set(edges))}, "
+            f"only-edges={sorted(set(edges) - set(edge_counts))})")
     residues: dict[tuple, tuple] = {}
     for (ot, on, rel), stars, neg, upos in raw["residues"]:
         stars_s = frozenset((t, p) for (t, p) in stars)
@@ -236,15 +318,57 @@ def lean_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
         if key in residues:
             raise AssertionError(f"duplicate residue key in zcli dump: {key}")
         residues[key] = (stars_s, neg_s, upos_s)
-    return {"edges": edges, "residues": residues}
+    return {"edges": edges, "edge_counts": edge_counts, "residues": residues}
 
 
 # --------------------------------------------------------------------------- #
 # The diff
 # --------------------------------------------------------------------------- #
 
-def diff_states(lean: dict, py: dict) -> str | None:
-    """Symmetric-difference diff of two canonical states; None iff equal."""
+def _classify_edges(py: dict, tainted: frozenset) -> dict:
+    """Split compared edge keys into derived-arm / untainted-arm by SCHEMA taint,
+    cross-checking the classification against Python's own `EdgeV4.derived` flag.
+
+    The two must agree: I5 makes the delta processor the only writer of incoming
+    direct edges on derived-public families, and users' raw writes are routed onto
+    `<rel>.<n>` leaf families which P6 already dropped. A disagreement means either
+    the taint computation or the `derived` flag is wrong, and either way the P3
+    exemption boundary is not where this module claims it is — so it raises rather
+    than silently exempting the wrong set.
+    """
+    derived, untainted, bad = set(), set(), []
+    for key in py["edge_counts"]:
+        obj = key[1]
+        by_schema = (obj[0], obj[2]) in tainted
+        by_flag = py["derived_flag"].get(key, False)
+        if by_schema != by_flag:
+            bad.append((key, by_schema, by_flag))
+        (derived if by_schema else untainted).add(key)
+    if bad:
+        raise AssertionError(
+            "P3 edge classification disagreement (schema taint vs "
+            "EdgeV4.derived) — the multiplicity exemption boundary is not "
+            "where extractor.py claims:\n" + "\n".join(
+                f"  {k[0]} -> {k[1]}: by_schema={s} by_flag={f}"
+                for k, s, f in sorted(bad)))
+    return {"derived": derived, "untainted": untainted}
+
+
+def diff_states(lean: dict, py: dict, tainted: frozenset) -> str | None:
+    """Symmetric-difference diff of two canonical states; None iff equal.
+
+    `tainted` is the schema's derived `(type, relation)` pairs, from
+    `derived_relations`; it drives projection P3 as narrowed 2026-07-29 — edge
+    MULTIPLICITY is compared exactly on the untainted arm and dropped only on the
+    derived arm.
+
+    **It is REQUIRED, deliberately.** Defaulting it to `None` would mean a new
+    caller that forgot it silently got the pre-2026-07-29 set-only comparison
+    back — i.e. this gate quietly reopening the exact blind spot it was narrowed
+    to close, at full green. That is this repo's house failure mode
+    (`docs/sabotage-procedure.md`), so the signature refuses rather than the
+    docstring warning.
+    """
     lines: list[str] = []
 
     only_lean = sorted(lean["edges"] - py["edges"])
@@ -253,6 +377,14 @@ def diff_states(lean: dict, py: dict) -> str | None:
         lines.append(f"  edge only in LEAN model : {e[0]} -> {e[1]}")
     for e in only_py:
         lines.append(f"  edge only in PYTHON     : {e[0]} -> {e[1]}")
+
+    arms = _classify_edges(py, tainted)
+    for key in sorted(arms["untainted"] & set(lean["edge_counts"])):
+        lv, pv = lean["edge_counts"][key], py["edge_counts"][key]
+        if lv != pv:
+            lines.append(
+                f"  edge MULTIPLICITY (untainted arm, P3) {key[0]} -> "
+                f"{key[1]}: lean={lv} python={pv}")
 
     lkeys, pkeys = set(lean["residues"]), set(py["residues"])
     for k in sorted(lkeys - pkeys):

@@ -179,9 +179,15 @@ def run_spec(request_json: str) -> list[bool]:
 
 def run_state(request_json: str) -> dict:
     """Feed a `mode="graph-state"` request to `zcli` and parse the canonical
-    state object `{"edges": [...], "residues": [...]}` it prints (Cli.lean
-    header). No per-query answer-count assertion applies — this mode ignores
-    queries. On any failure the request file is kept for debugging."""
+    state object `{"edges": [...], "edgeCounts": [...], "residues": [...]}` it
+    prints (Cli.lean header). No per-query answer-count assertion applies — this
+    mode ignores queries. On any failure the request file is kept for debugging.
+
+    The key set is asserted EXACTLY, not as a superset: `edgeCounts` is the only
+    channel carrying the model's edge multiplicity across the seam (P3), and a
+    zcli that silently stopped emitting it would make the multiplicity ledger in
+    `test_conformance_state.py` compare nothing.
+    """
     cached = _STATE_CACHE.get(request_json)
     if cached is not None:
         return cached
@@ -191,7 +197,8 @@ def run_state(request_json: str) -> dict:
             f"zcli graph-state failed (rc={proc.returncode}): "
             f"{proc.stderr.strip()} (request kept at {req_path})")
     state = json.loads(proc.stdout.strip())
-    if not isinstance(state, dict) or set(state) != {"edges", "residues"}:
+    if not isinstance(state, dict) or set(state) != {"edges", "edgeCounts",
+                                                     "residues"}:
         raise AssertionError(
             f"graph-state output shape unexpected: keys="
             f"{sorted(state) if isinstance(state, dict) else type(state)} "

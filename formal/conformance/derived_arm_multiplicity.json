@@ -1,0 +1,107 @@
+{
+  "boolean_exclusion": {
+    "user:alice#.../ -> doc:d1#viewer/": [
+      13,
+      1
+    ]
+  },
+  "boolean_intersection": {
+    "user:alice#.../ -> doc:d1#viewer/": [
+      8,
+      1
+    ]
+  },
+  "boolean_star_exclusion": {},
+  "cross_stratum_resettle": {
+    "user:dave#.../ -> doc:d1#v/": [
+      7,
+      1
+    ]
+  },
+  "deep_grid": {},
+  "demorgans": {
+    "user:alice#.../ -> doc:d1#lhs/": [
+      85,
+      1
+    ],
+    "user:alice#.../ -> doc:d1#rhs/": [
+      85,
+      1
+    ]
+  },
+  "direct_arm_exclusion": {
+    "user:alice#.../ -> doc:d1#approver/": [
+      16,
+      1
+    ]
+  },
+  "double_exclusion": {
+    "user:alice#.../ -> doc:d1#viewer/": [
+      364,
+      1
+    ],
+    "user:carol#.../ -> doc:d1#viewer/": [
+      4,
+      1
+    ]
+  },
+  "group_userset": {},
+  "nary_intersection": {
+    "user:alice#.../ -> doc:d1#all_of/": [
+      363,
+      1
+    ]
+  },
+  "nary_union": {},
+  "nary_union_derived4": {
+    "user:ua#.../ -> doc:d1#any_of4/": [
+      364,
+      1
+    ],
+    "user:ub#.../ -> doc:d1#any_of4/": [
+      121,
+      1
+    ],
+    "user:uc#.../ -> doc:d1#any_of4/": [
+      40,
+      1
+    ],
+    "user:us#.../ -> doc:d1#any_of4/": [
+      72,
+      1
+    ],
+    "user:us#.../ -> doc:d1#safe/": [
+      32,
+      1
+    ]
+  },
+  "nested_boolean": {
+    "user:alice#.../ -> doc:d1#viewer/": [
+      80,
+      1
+    ]
+  },
+  "residue_rich": {},
+  "star_two_strata_churn": {},
+  "taint_computed_root_over_boolean": {},
+  "taint_union_over_boolean": {},
+  "taint_union_userset_arm": {},
+  "ttu": {},
+  "two_stratum_cascade": {
+    "user:alice#.../ -> doc:d1#approver/": [
+      1013,
+      1
+    ],
+    "user:alice#.../ -> doc:d1#viewer/": [
+      400,
+      1
+    ],
+    "user:bob#.../ -> doc:d1#viewer/": [
+      25,
+      1
+    ]
+  },
+  "union_computed": {},
+  "wildcard_group_member": {},
+  "wildcard_public": {}
+}

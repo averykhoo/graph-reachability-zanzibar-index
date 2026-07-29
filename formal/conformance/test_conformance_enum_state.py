@@ -9,20 +9,22 @@ DETERMINISTIC SAMPLE of the enumerated stores it compares the Lean operational
 graph model's canonical final materialized state (zcli mode `"graph-state"` —
 the `graphRun` fold of the `ReachedBy` chain's own constructors) against the
 real Python graph index's extracted `EdgeV4`/`ResidueV1` state, under the SAME
-documented projections P1–P6 as `test_conformance_state.py`.
+documented projections P1–P7 as `test_conformance_state.py` — including P3 as
+narrowed 2026-07-29, so untainted-arm edge MULTIPLICITY is compared exactly across
+every sampled store here too.
 
 It reuses `extractor.py`'s `lean_graph_state` / `python_graph_state` /
-`diff_states` UNCHANGED — same canonical form, same P1–P6, same
+`diff_states` UNCHANGED — same canonical form, same P1–P7, same
 symmetric-difference diff. Nothing here re-implements or widens a projection.
 
 Why this exists (house rule 2 — attack first): a state-level comparison over
-ENUMERATED stores exercises write-order / partial-store interleavings the 18
+ENUMERATED stores exercises write-order / partial-store interleavings the 23
 curated `GRAPH_FRAGMENT` corpora never reach — and state-level enumeration is
 EXACTLY the class of run that originally FOUND the P6 leaf-family divergence
 (`CORRESPONDENCE.md` §7) and the 2026-07-17 stale-fanout state divergence. The
 answer-level enum leg (increment (a)) cannot see representation drift that keeps
 every check verdict equal (P6 was invisible to the verdict gate); this leg can.
-A sampled store whose Lean-model state ≠ extracted Python state under P1–P6,
+A sampled store whose Lean-model state ≠ extracted Python state under P1–P7,
 outside those documented projection classes, is an ADJUDICATION EVENT to record
 (plan §8.2) — never a golden/oracle/projection to edit.
 
@@ -97,6 +99,7 @@ import pytest
 from formal.conformance import runner
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance.extractor import (
+    derived_relations,
     diff_states,
     lean_graph_state,
     python_graph_state,
@@ -128,7 +131,7 @@ _STATE_SAMPLE: dict[str, int] = {
 def test_enum_state_leangraph_vs_pythongraph(name):
     """Final materialized STATE, Lean graph model == Python graph index, over a
     deterministic stride-4 SAMPLE of the enumerated stores, under the documented
-    P1–P6 projections (extractor.py)."""
+    P1–P7 projections (extractor.py)."""
     schema_text, _corpus_tuples, obj_wild = SCHEMAS[name]
     try:
         runner.zcli_path()
@@ -154,11 +157,15 @@ def test_enum_state_leangraph_vs_pythongraph(name):
         f"but the documented sample size is {exp_sample} — the sampled "
         f"fraction drifted; update `_STATE_SAMPLE` + the docstring deliberately")
 
+    tainted = derived_relations(schema_text)
     for i, store in enumerate(sample):
         store = list(store)
         lean = lean_graph_state(schema_text, store, obj_wild)
         py = python_graph_state(schema_text, store, obj_wild)
-        diff = diff_states(lean, py)
+        # P3 as narrowed 2026-07-29: untainted-arm multiplicity compared exactly
+        # here too, across every sampled store — 257 stores' worth of edge
+        # ref-counts that were previously projected away.
+        diff = diff_states(lean, py, tainted)
         assert diff is None, (
             f"[{name}] Lean graph model / Python graph index STATE "
             f"disagreement (ADJUDICATION EVENT — plan §8.2; symmetric "

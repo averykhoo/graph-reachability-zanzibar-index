@@ -25,7 +25,9 @@ results (2 KILLS), also recorded in [`PROOF_STATUS.md`](PROOF_STATUS.md).
 3. **A pre-existing, undocumented model↔Python divergence surfaced en route:** the BASELINE
    enumeration already doubles derived-edge multiplicity per cascade leg, and the state gate is
    structurally blind to it (P3 compares edges as a set). **Independent of this arc; needs its
-   own adjudication.**
+   own adjudication.** — **ADJUDICATED 2026-07-29** (`CORRESPONDENCE.md` §7.2): real,
+   model-side, confined to the derived arm, removal-inert. The gate hole is closed and
+   **§D.6 is now automatic** — see the D.6 row below before running Leg 2.
 
 ---
 
@@ -334,11 +336,24 @@ Full detail in `PROOF_STATUS.md` (Session 2026-07-28). Verdicts:
 - **D.5 — NO-KILL, with a free win.** 19,280 depth-3 `Expr`s enumerated: 0 countermodels **with
   or without** the `ComputedOrDirect` premise. **State the stronger
   `directsOnly e = true → exprDirects e ≠ []`** — one induction, no fragment hypothesis.
-- **D.6 — NOT YET RUN** (it needs leg 2's enumeration in place). `direct_arm_exclusion` is
-  *inside* `GRAPH_FRAGMENT` and inside the state gate, so its candidate set genuinely grows
-  under `enumJob2D`. Given D.1, the edge-multiplicity change is now **known** to be real and
-  **known** to be hidden by P3 — so `#eval` the emitted state before and after leg 2 rather
-  than trusting the conf phase to notice.
+- **D.6 — SUPERSEDED 2026-07-29; do NOT hand-run it.** The probe existed because the
+  state gate could not see a multiplicity change. It now can: `Cli.lean` emits an
+  `edgeCounts` field, `extractor.py`'s P3 compares untainted-arm multiplicity EXACTLY,
+  and the derived arm is golden-pinned per corpus by
+  `test_conformance_state.py::test_derived_arm_multiplicity_ledger`
+  (`formal/conformance/derived_arm_multiplicity.json`). **Leg 2 will therefore fail that
+  golden by construction, and that is the intended signal** — read the printed
+  `golden=[lean, python] observed=[lean, python]` table, confirm the movement is the
+  `enum2BaseD` dedup you meant, and regenerate with `ZANZIBAR_UPDATE_SNAPSHOTS=1` **in its
+  own commit**, alongside the definition-pin regen the leg already owes.
+  Baseline recorded 2026-07-29 (pre-Leg-2): 18 derived-arm edges over 23 corpora, Python
+  uniformly 1, Lean 4 … 1013. Full adjudication: `CORRESPONDENCE.md` §7.2.
+  ⚠ **One trap the new check now guards.** The tempting way to make the model's
+  multiplicity match Python is to have `admitEdge` reject an already-present `a → b`.
+  **Do not** — untainted-arm multiplicity is load-bearing (`untOccCount`, erase-one
+  removal) and is now compared exactly, so that edit breaks `nary_union` (3 → 1). The
+  faithful fix is narrower: mirror Python's presence diff inside `reconcileKeyDR`'s fold
+  guard only.
 
 ---
 

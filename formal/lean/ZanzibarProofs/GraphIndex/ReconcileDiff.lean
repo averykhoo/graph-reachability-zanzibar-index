@@ -107,9 +107,21 @@ object_id, -1)` — the tail call of
 `index_v4/core.py::ReachabilityIndex._remove_edge_locked` into
 `::ReachabilityIndex._add_direct_edge_unsafe`.
 `GraphState.edges : List (NodeKey × NodeKey)` is ALREADY a multiset
-(list multiplicity == `direct_edge_count`; `GraphIndex/State.lean::GraphState.addEdge`
-prepends unconditionally), so erase-one is the exact faithful mirror with NO new field; reads
-(`reachB`/`NReaches`) test only membership, so removing one of several copies is read-inert. -/
+(`GraphIndex/State.lean::GraphState.addEdge` prepends unconditionally), so erase-one is the
+exact faithful mirror with NO new field; reads (`reachB`/`NReaches`) test only membership, so
+removing one of several copies is read-inert.
+**SCOPE CORRECTION (2026-07-29).** This paragraph used to read "list multiplicity ==
+`direct_edge_count`" without qualification. That equation holds on the UNTAINTED arm — which
+is exactly the arm `removeEdgeOne` serves, and which is now compared exactly by the state gate
+(`formal/conformance/extractor.py` projection P3) — but it is FALSE on the DERIVED arm:
+`index_v4/processor.py::DeltaProcessor._reconcile_subject` writes a derived edge by a presence
+diff (`want_edge and not has_edge`), capping Python at 0/1, while this model has no presence
+test and `GraphIndex/CascadeEnum.lean::edgeHolders` re-enumerates every existing copy, so the
+model's derived multiplicity compounds per cascade leg (measured 4 … 1013 across the
+conformance corpora). Nothing here breaks — derived edges are retracted by filter-ALL
+(`removeEdgePair`), never by this erase-one, and `GraphIndex/CascadeStrataSettle.lean::reachedByRulesAdmitted_edge_target_untainted`
+keeps `removeLoggedOne`'s targets untainted — but the unqualified claim was the reason the
+divergence went unnoticed. Full adjudication: `formal/CORRESPONDENCE.md` §7.2. -/
 
 /-- Remove ONE copy of the direct edge `(a, b)` — the ref-counted `-1` update
     (`_add_direct_edge_unsafe(subject_id, object_id, -1)`, issued by

@@ -44,10 +44,19 @@ Modes (Phase 6 — graph-state conformance):
   the documented projections:
     - `edges`: the direct-edge SET (each `[[type,name,pred,variant],
       [type,name,pred,variant]]`, variant in `""`/`"any"`/`"all"` — the Python
-      `NodeV4.wildcard` encoding), sorted + deduplicated. Deduplication is a
-      documented projection: the model's edge LIST carries multiplicity where
-      Python ref-counts one `EdgeV4` row (`direct_edge_count`), so the
-      comparison is at set level on both sides.
+      `NodeV4.wildcard` encoding), sorted + deduplicated.
+    - `edgeCounts`: the same edges with their MULTIPLICITY, `[[subj,obj],n]`,
+      sorted. Added 2026-07-29 when `CORRESPONDENCE.md` §7.2 was adjudicated.
+      The old wording here justified the `edges` dedup by saying "the model's
+      edge LIST carries multiplicity where Python ref-counts one `EdgeV4` row
+      (`direct_edge_count`)" — i.e. that the two multiplicities CORRESPOND and
+      only the representation differs. **That is false on the derived arm**:
+      Python writes a processor-derived edge by a presence DIFF
+      (`index_v4/processor.py::DeltaProcessor._reconcile_subject`, `want_edge and not has_edge`),
+      so its `direct_edge_count` is always 0 or 1, while the model's list
+      multiplicity doubles per cascade leg. `edges` stays deduplicated (it is
+      what the equality gate compares); `edgeCounts` exists so the divergence is
+      MEASURED rather than hidden — see `extractor.py` projection P3.
     - `residues`: every persisted residue row as `[[type,objName,relation],
       stars, neg, upos]` with `stars` a sorted list of `[type,pred]` shapes and
       `neg`/`upos` sorted lists of `[type,name,pred]` subjects. Rows are
@@ -252,10 +261,40 @@ def stateResidues (S : Schema) (σ : GraphState) (T : Store) : List Json :=
         | none => none
     else []
 
+/-- Run-length the SORTED tagged list into `(json, occurrences)` runs.
+
+    A plain `foldl` (not structural recursion over a `dropWhile` suffix), so it
+    needs no termination argument. Input must already be sorted by the tag. -/
+def jsonRuns (l : List (String × Json)) : List (Json × Nat) :=
+  (l.foldl (fun acc p =>
+      match acc with
+      | (s, j, n) :: rest =>
+          if s == p.1 then (s, j, n + 1) :: rest
+          else (p.1, p.2, 1) :: (s, j, n) :: rest
+      | [] => [(p.1, p.2, 1)])
+    ([] : List (String × Json × Nat))).reverse.map (fun t => (t.2.1, t.2.2))
+
+/-- Edge MULTIPLICITIES as `[[subj, obj], count]`, canonically sorted.
+
+    This is the only channel by which the model's edge multiplicity crosses the
+    conformance seam. `GraphState.edges` is a genuine multiset — `State.lean`'s
+    `addEdge` conses unconditionally and `Write.lean`'s `admitEdge` does not
+    reject an already-present `a → b` — but `stateJson`'s `edges` array is
+    de-duplicated by `canonJsonArr`, so before this field existed a multiplicity
+    divergence was invisible to the Python state gate at TWO independent points
+    (here, and `formal/conformance/extractor.py`'s set accumulation).
+    See `formal/CORRESPONDENCE.md` §7.2 and `extractor.py` projection **P3**. -/
+def edgeCountsJson (σ : GraphState) : Json :=
+  let tagged := (σ.edges.map (fun e => ((edgeJson e).compress, edgeJson e))).mergeSort
+    (fun a b => (compare a.1 b.1).isLE)
+  Json.arr ((jsonRuns tagged).map
+    (fun p => Json.arr #[p.1, Lean.toJson p.2])).toArray
+
 /-- The canonical final-state object (mode `"graph-state"`). -/
 def stateJson (S : Schema) (σ : GraphState) (T : Store) : Json :=
   Json.mkObj [
     ("edges", canonJsonArr (σ.edges.map edgeJson)),
+    ("edgeCounts", edgeCountsJson σ),
     ("residues", canonJsonArr (stateResidues S σ T))]
 
 def main (args : List String) : IO UInt32 := do
