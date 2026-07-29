@@ -33,8 +33,9 @@ ttuLeaf predicate arms) unpinned (F3). This module fixes all three:
   purpose: its `RuleSet`/`SchemaInfo` result exposes no declared-relation set,
   only compiled artifacts — and those name compiler-generated LEAF families
   (`viewer.0`), which are not declared relations and must never be queried
-  (`RuleSet.apply` rejects raw writes against them). Verified 2026-07-27 over all
-  28 curated corpora + the 40 generated schemas: the two parsers' declared-key
+  (`RuleSet.apply` rejects raw writes against them). Verified 2026-07-27 and
+  RE-VERIFIED 2026-07-29 over all **33** curated corpora (the count was 28 when
+  first measured) + the 40 generated schemas: the two parsers' declared-key
   sets are identical and `parse_openfga_schema` raises on none of them, so the
   swap changed ZERO grids (`test_grid_independence.py` keeps that pinned, and
   pins the ONE known parser divergence — duplicate `define` — as a live

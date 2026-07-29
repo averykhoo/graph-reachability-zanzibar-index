@@ -1,5 +1,5 @@
 """Generated-schema conformance: zcli `sem` vs oracle vs the real set engine
-over schema shapes OUTSIDE the 17 curated corpora.
+over schema shapes OUTSIDE the 33 curated corpora (17 when this file landed).
 
 Gap this closes: the hypothesis campaign (tests/test_hypothesis.py) fuzzes
 GENERATED schemas against the Python backends + oracle, and the Lean

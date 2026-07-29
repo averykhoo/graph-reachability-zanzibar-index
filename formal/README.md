@@ -13,7 +13,7 @@ reader should know before trusting the word:
 
 * **The final graph theorems are VACUOUS on the canonical boolean idiom**
   (`can_view: [user] but not blocked`). Not narrower coverage — no theorem there at all.
-  `FullScope.lean:564` machine-checks that such a store fails
+  `FullScope.lean:601` machine-checks that such a store fails
   `GraphAdmission.storeValid`. Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0
   before quoting anything graph-side.
 * **A genuine model-vs-Python infidelity was found in the audited chain AFTER this
@@ -71,7 +71,7 @@ underscored and unused — graph index at the documented
 stores, `FINAL_REVIEW.md` §3.0**). The **Python
 implementations** are pinned to those models by the correspondence map, five-corner
 differential conformance (including the Lean operational graph model vs the real
-graph index), **state-level equality under six documented projections**,
+graph index), **state-level equality under seven documented projections**,
 **exhaustive small-scope enumeration** up to tiny documented bounds, a
 **remove-path answer gate** (the driven set engine AND the driven graph index vs
 `sem` × oracle on the final store, plus driven == a fresh build at state level;
@@ -82,10 +82,11 @@ driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_gr
 `_REMOVE_EXCLUDED` skips because the remove guard fail-closes on Direct-arm stores —
 its validly-stored scope decision approved by Avery 2026-07-19),
 and a **generated-schema answer gate** (seeded generated schemas outside the
-curated corpora, spec-side only). Gate size as last measured (**2026-07-27**, by
-`pytest formal/conformance/ -q --collect-only`): **450** conformance tests collected,
-46 of them gate-tooling unit tests (`test_sorry_scan.py`, `test_runner_retry.py`)
-rather than comparisons. Re-measure; nothing pins these numbers except the `-ge`
+curated corpora, spec-side only). Gate size as last measured (**2026-07-29**, by
+`pytest formal/conformance/ -q --collect-only`): **465** conformance tests collected
+across 15 files, 46 of them gate-tooling unit tests (`test_sorry_scan.py` 39,
+`test_runner_retry.py` 7) rather than comparisons — so 419 differential tests over
+13 files. Re-measure; nothing pins these numbers except the `-ge`
 floors in `verify.sh`.
 Residual unverified surface: the fragment carries, the compiler artifacts, the
 interner/bitmap representation layer, the SQL/transaction/concurrency layer
@@ -103,16 +104,16 @@ out under "Orientation" above: the tree is
 **sorry-free and axiom-clean**, and `bash formal/verify.sh` (the fail-closed gate;
 agents run it **phased** per [`docs/gate-runbook.md`](../docs/gate-runbook.md) —
 the one-shot exceeds the ~10-min command cap) is green — `lake build` + 0 sorries +
-zcli preflight + axiom audit (**457** `#print axioms` reports, one per audited
-theorem, only `[propext, Classical.choice, Quot.sound]`, measured 2026-07-27) +
-**450** conformance tests collected (floors: `MIN_CONF_ALL` 450 = `MIN_CONF_HEAVY` 96
-+ `MIN_CONF_REST` 354), 0 skips, 0 xfails; `tests/` **762** collected (2026-07-27),
+zcli preflight + axiom audit (**460** `#print axioms` reports, one per audited
+theorem, only `[propext, Classical.choice, Quot.sound]`, measured 2026-07-29) +
+**465** conformance tests collected (floors: `MIN_CONF_ALL` 465 = `MIN_CONF_HEAVY` 96
++ `MIN_CONF_REST` 369), 0 skips, 0 xfails; `tests/` **762** collected (2026-07-29),
 more with a PostgreSQL DSN configured, since `tests/test_postgres_ha.py` is dropped at
 collection without one. **Most of
 these counts are measurements, not gate-enforced invariants** — re-measure rather
 than trusting the numbers here, and never read a count as coverage
 (`FINAL_REVIEW.md` header). What IS enforced, since the 2026-07-26/27 gate
-hardening: `-ge` floors on the audit count (457), the conformance collection (450),
+hardening: `-ge` floors on the audit count (460), the conformance collection (465),
 the `tests/` collection (762) and the scanned-`.lean`-file count (64); an **identity
 pin** (`formal/audited_theorems.txt` — WHICH theorems are audited, not just how
 many); a **statement pin** (`formal/headline_statements.txt` — what the 26 headline

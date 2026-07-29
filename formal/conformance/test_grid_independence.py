@@ -51,8 +51,10 @@ def _all_corpora():
     return out
 
 
-# Measured 2026-07-27: 28 curated corpora across the four dicts. A floor, not an
-# equality — new corpora are welcome, a collapse is not.
+# Measured 2026-07-27: 28 curated corpora across the four dicts; RE-MEASURED
+# 2026-07-29: **33** (SCHEMAS 24 + TTU_USERSET 6 + SELF_REFERENTIAL 2 +
+# MULTI_STRATUM 1). A floor, not an equality — new corpora are welcome, a
+# collapse is not — so the constant deliberately lags the measurement.
 _MIN_CORPORA = 28
 
 

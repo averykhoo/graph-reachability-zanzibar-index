@@ -290,8 +290,9 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     ),
     "nary_union_derived4": (
         # ZT-P4-4 follow-up (2026-07-27). Re-measuring the arity histogram over
-        # all 69 schemas the harness reads (28 curated + 40 generated + this
-        # file's dicts) found the MAXIMUM operator arity anywhere was 3, reached
+        # all 69 schemas the harness then read (28 curated + 40 generated + this
+        # file's dicts; **73** as of 2026-07-29 — 33 curated + 40 generated)
+        # found the MAXIMUM operator arity anywhere was 3, reached
         # by exactly TWO nodes — `nary_union` and `nary_intersection` — and both
         # of them are UNTAINTED. So `encode.py::_fold_binary`'s loop had still
         # never run more than twice, and the residue the n-ary block below names
@@ -743,7 +744,8 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # (d) **`PDerivedUserset`** — a userset restriction `[group#member]` whose
     # PREDICATE is derived (`member: base but not kicked`). Added 2026-07-27
     # (Item-4(b) board finding). Measured that day over all 69 schemas the
-    # conformance harness reads (28 curated + 40 generated + three_strata_chain),
+    # conformance harness then read (28 curated + 40 generated +
+    # three_strata_chain; **73** as of 2026-07-29 — 33 curated + 40 generated),
     # by walking every `RuleSet.compiled.plans` leaf: the leaf-kind histogram was
     #   closure 211 · derived-computed 42 · derived-ttu 50 · derived-userset 0
     # — i.e. `zanzibar_utils_v1.py::PDerivedUserset` (and

@@ -57,7 +57,7 @@ merely narrow — on any store written through the `Direct` arm of a derived def
    (`formal/headline_statements.txt`, 26 theorems) + the headline DEFINITION pin
    (`formal/headline_definitions.txt`, 139 rows / 132 declarations — what those
    statements' words MEAN, transitively) + the `CORRESPONDENCE.md` anchor pin
-   + **464** Python conformance tests, 0 skips, 0 xfails, + **`tests/`** (744 collected)
+   + **465** Python conformance tests, 0 skips, 0 xfails, + **`tests/`** (744 collected)
    (conformance count re-measured 2026-07-27 after the ZT-P4-5/6 work below —
    `pytest formal/conformance/ -q --collect-only` = **464** as re-measured 2026-07-28
    (450 on 2026-07-27, 395 before that); the gate
@@ -275,7 +275,18 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > goes `n ↦ 2n+1` per leg. En route this surfaced a **pre-existing, previously undocumented
 > model↔Python divergence**: the BASELINE enumeration already doubles derived-edge multiplicity per
 > cascade leg (`1 → 2 → 4 → 8`), and the state gate is structurally blind to it because projection
-> P3 compares edges as a SET. Filed at `CORRESPONDENCE.md` §7.2, UNADJUDICATED, independent of this arc.
+> P3 compares edges as a SET. ~~Filed at `CORRESPONDENCE.md` §7.2, UNADJUDICATED~~ —
+> **ADJUDICATED + CLOSED 2026-07-29** (`CORRESPONDENCE.md` §7.2): real, model-side, confined
+> EXACTLY to the derived arm (Python's presence diff caps `direct_edge_count` at 1 there),
+> removal-inert by assembly, and the growth is worse than filed — measured Lean 4 … **1013**.
+> P3 is narrowed: untainted-arm multiplicity is now compared EXACTLY (153 edges, net-new
+> assurance, `nary_union`'s non-unit 3 == 3 included) and the derived arm is golden-pinned
+> per corpus. **Consequence for this arc: §D.6 is now MECHANICAL — Leg 2 will break
+> `test_derived_arm_multiplicity_ledger` by construction, and that is the intended signal.**
+> ⚠ Do **not** discharge the dedup obligation by making `admitEdge` reject an already-present
+> edge: untainted multiplicity is load-bearing (`untOccCount`, erase-one removal) and is now
+> checked, so that global edit goes red on `nary_union` (3 → 1). Mirror Python's presence diff
+> inside `reconcileKeyDR`'s fold guard instead.
 > **(3) The step-2 star-freeness question is DECIDED**: a new `W4Fragment` clause
 > `directArmsConcrete` **plus** the faithfulness star-filter — a star-filter alone leaves the
 > `edgeHolders` half of the hole open. It excludes a shape Python admits, so it goes in as a

@@ -40,8 +40,9 @@ Splitting keeps each corpus at 0.1-0.6 s AND buys more arm-witness coverage than
 one 8-tuple corpus could. Numbers are in `corpus.py`.
 
 **RE-MEASURED 2026-07-27 — the arity ceiling had stopped at 3, and the derived
-residue was still open.** Over all 69 schemas the harness reads (28 curated + 40
-generated + `three_strata_chain`) the operator-arity histogram was
+residue was still open.** Over all 69 schemas the harness read that day (28
+curated + 40 generated + `three_strata_chain`; as of 2026-07-29 the curated set
+is **33** and the total **73**) the operator-arity histogram was
 `{2: 120 nodes, 3: 2 nodes}`: the only >= 3-arity nodes in existence were
 `nary_union`'s and `nary_intersection`'s, and BOTH are untainted. So
 `_fold_binary`'s loop had still never run more than twice, and the residue this
@@ -130,7 +131,8 @@ _TRI_EXPECTED_STRATA = 3
 
 # ZT-P4-4 follow-up (2026-07-27): the harness-wide arity ceiling, asserted so it
 # cannot silently regress. Measured that day over all 69 schemas the harness
-# reads (28 curated corpora + 40 generated + `three_strata_chain`): before
+# then read (28 curated corpora + 40 generated + `three_strata_chain`; the
+# harness reads **73** as of 2026-07-29 — 33 curated + 40 generated): before
 # `nary_union_derived4` the histogram was {arity 2: 120 nodes, arity 3: 2 nodes},
 # i.e. `encode._fold_binary`'s loop had never run more than twice anywhere.
 _MIN_MAX_ARITY = 4
@@ -296,7 +298,8 @@ def test_nary_union_derived4_arms_load_bearing():
 # --------------------------------------------------------------------------- #
 
 # Measured 2026-07-27 by walking `RuleSet.compiled.plans[..].leaves` over all 69
-# schemas the harness reads (28 curated + 40 generated + three_strata_chain):
+# schemas the harness then read (28 curated + 40 generated + three_strata_chain;
+# **73** as of 2026-07-29 — 33 curated + 40 generated, NOT re-walked here):
 #   closure 211 · derived-computed 42 · derived-ttu 50 · derived-userset 0
 #   · derived-tupleset-ttu 0
 # `derived-userset` (`zanzibar_utils_v1.py::PDerivedUserset`) was compiled by NO

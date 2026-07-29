@@ -116,6 +116,7 @@ dev box (`lean` re-measured 2026-07-27):
 bash formal/verify.sh lean           # steps 1-4: lake build + hole scan + zcli + axiom audit
                                      #            + audit identity + statement + DEFINITION pins
                                      #            + CORRESPONDENCE.md anchor pin      (29 s warm)
+                                     #            + FINAL_REVIEW.md counts pin      (+4 s)
 bash formal/verify.sh conf-tile:1/5  # step 5, tile 1 of 5 of formal/conformance/
 bash formal/verify.sh conf-tile:2/5  # step 5, tile 2 of 5
 bash formal/verify.sh conf-tile:3/5  # step 5, tile 3 of 5
@@ -134,14 +135,14 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
 
 - **Coverage is complete, by construction — and now also asserted.** A
   `conf-tile:I/K` phase collects `formal/conformance/` fresh, asserts the collected
-  total is `>= MIN_CONF_ALL` (464 today), then runs the node ids whose 0-based
+  total is `>= MIN_CONF_ALL` (465 today), then runs the node ids whose 0-based
   collection index is `≡ I-1 (mod K)`. Every collected node lands in **exactly one**
   tile, so the K tiles partition the directory: a newly added file, corpus or
   parametrization is automatically in exactly one tile, nothing is named by hand, and
   the tile's size is cross-checked against the partition arithmetic
   (`floor((total-I)/K)+1`) so a tiling that is not a partition FAILs. Each tile's own
   pass floor is its exact size — every selected test must pass.
-- **The global floor is per-phase.** Because *every* tile re-asserts the 464-test
+- **The global floor is per-phase.** Because *every* tile re-asserts the 465-test
   collection floor, you cannot lose conformance coverage and still get a green tile —
   even if you only ever run one.
 - **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
@@ -153,17 +154,19 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
   there is no reconstructed-pass hole to manage.
 - **Legacy phases still work.** `conf-heavy` (`test_conformance_remove.py`, **175 s**
   measured 2026-07-26, floor `MIN_CONF_HEAVY` = 96) and `conf-rest` (the dir MINUS that
-  file via `--ignore`, floor `MIN_CONF_REST` = 368) also tile the directory — 96 + 368
-  = 464 = `MIN_CONF_ALL`, and `verify.sh` checks that identity on its own floors at
+  file via `--ignore`, floor `MIN_CONF_REST` = 369) also tile the directory — 96 + 369
+  = 465 = `MIN_CONF_ALL`, and `verify.sh` checks that identity on its own floors at
   startup. `conf-heavy` is a handy quick
   single-file rerun. **`conf-rest` is AT OR OVER the cap** (579 s measured
   2026-07-19g/07-26 at 250-276 tests, and the whole dir is ~800 s of work) — that is
   why the `conf-tile` phases exist. Do not use `conf-rest` unattended; use the tiles.
 - **Where `conf-rest`'s time actually goes.** `test_conformance_enum.py` — 6 tests,
   **~380-475 s** (exhaustive small-scope enumeration) — is the hog, not
-  `test_conformance_remove_graph.py` (17 tests, ~27 s) as the 2026-07-19g note
+  `test_conformance_remove_graph.py` (21 tests, ~27 s) as the 2026-07-19g note
   guessed. Everything else in `conf-rest` is ~165 s combined. The `conf-tile` split
-  interleaves those 6 tests across the four tiles, which is what balances them.
+  interleaves those 6 tests across the **five** tiles (K=5 is the recommended default
+  above; the "four" this sentence used to say was left over from an earlier K and
+  contradicted the recommendation 40 lines up), which is what balances them.
 - **`bash formal/verify.sh` with no arg** still runs all 5 steps in one shot
   (~18-20 min) — for an uncapped shell or CI only; it does NOT fit the cap.
 
@@ -180,13 +183,14 @@ so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 | `EXPECTED_MIN_AUDITS` | 460 | `#print axioms` reports observed from `Audit.lean` |
 | `MIN_PINNED_AUDITS` | 460 | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
 | `MIN_PINNED_DEFS` | 139 | rows in `formal/headline_definitions.txt` — likewise, so emptying the golden can't make the definition pin compare nothing |
-| `MIN_CONF_ALL` | 464 | tests collected from `formal/conformance/` |
-| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 368 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
+| `MIN_CONF_ALL` | 465 | tests collected from `formal/conformance/` |
+| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 369 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
 | `MIN_TESTS_ALL` | 762 | tests collected from `tests/` |
 | `MAX_TESTS_XFAILED` | 0 (**`-le`**) | declared xfail budget for `tests/` only — see below |
 | `MAX_TESTS_SKIPPED_ON_RDBMS` | 3 (**`-le`**) | dialect-only skips, and ONLY when `ZANZIBAR_TEST_DSN` is set; the default SQLite gate keeps a hard zero |
 | `MIN_SCANNED_LEAN_FILES` | 64 | project `.lean` files the hole scan must cover (65 today) |
 | `MIN_PY_ANCHORS` / `MIN_LEAN_ANCHORS` | 250 / 100 | `CORRESPONDENCE.md` anchors found (in `anchor_check.py`) |
+| *(no constant)* | — | step **4e** compares `FINAL_REVIEW.md`'s generated counts block against the tree exactly; there is no floor to lower, only a regeneration to perform |
 
 **Lowering any of them must be a deliberate, reviewed edit to `verify.sh`** — and
 should be justified in `formal/history/`. Raising them is free and encouraged when
@@ -269,11 +273,25 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   vacuous on its own terms passes with its text intact. That last one stays the job
   of the `W4Witness*` non-vacuity theorems and the conformance suite.
 - **4d ANCHORS** — `formal/conformance/anchor_check.py` resolves every
-  `` `file::symbol` `` anchor in `formal/CORRESPONDENCE.md` (367 today: 260 Python by
-  `ast` parse, 107 Lean by declaration scan; no imports, no Lean toolchain, ~1 s) and
+  `` `file::symbol` `` anchor in `formal/CORRESPONDENCE.md` (397 today: 272 Python by
+  `ast` parse, 125 Lean by declaration scan; no imports, no Lean toolchain, ~1 s) and
   asserts the anchor COUNT against floors, so deleting rows fails too. This is the
   §9 design in that file, landed. It keeps the map **navigable, not true** — it
   cannot tell you a row's correspondence claim is wrong.
+- **4e COUNTS** — `python -m formal.conformance.doc_counts --check` regenerates
+  `formal/FINAL_REVIEW.md`'s delimited counts block from the tree (two
+  `--collect-only` runs, per-file collection, `Audit.lean`, the pin files,
+  `anchor_check`, `corpus.py`, and `verify.sh`'s own floors) and fails if the
+  document disagrees. ~4 s. **Why it exists:** `ZT-P3-5` — "every doc number is
+  stale and NOTHING gate-enforces any of them" — was hand-fixed on 2026-07-26,
+  hand-fixed again on 2026-07-28, and was stale AGAIN on 2026-07-29, including
+  `FINAL_REVIEW.md`'s own header stating two different values for the same
+  quantity. Three hand-fixes of one defect is the signal to build a refusal.
+  Regenerate deliberately with `--generate`.
+  **Scope, honestly:** it pins ONE block in ONE file. Prose counts elsewhere are
+  still hand-maintained — what changed is that there is now an authoritative
+  machine-checked place to check them against, and widening the block is one row
+  in `doc_counts.py::measure`.
 
 #### What step 2 scans now (`formal/conformance/sorry_scan.py`)
 The hole scan is no longer just `\b(?:sorry|admit)\b` over `formal/lean/ZanzibarProofs`:
@@ -407,7 +425,7 @@ and the throttle comes and goes mid-gate). What breaks and what to do:
 - **Conformance can blow the cap throttled — just use more tiles.** This no longer
   needs a hand-rolled wrapper: `verify.sh conf-tile:I/K` takes any `K`, so on a
   throttled box run `conf-tile:1/8 … conf-tile:8/8` (or `1/12 … 12/12`). Every tile
-  re-collects the directory, re-asserts the 464-test global floor, checks its own size
+  re-collects the directory, re-asserts the 465-test global floor, checks its own size
   against the partition arithmetic and carries all of `run_conf`'s anti-vacuous guards
   — so the union is provably the whole dir for any `K` and there is nothing to
   replicate by hand. (The 2026-07-23 advice here — tile A = dir minus
@@ -457,7 +475,7 @@ optimization this session.
 controlled than test runtime): time a **deterministic, rarely-changing,
 hot-path-heavy subset**. Best candidates, because they change by design only when
 behavior changes:
-- the conformance corpora (`formal/conformance/`, ~464 deterministic tests),
+- the conformance corpora (`formal/conformance/`, ~465 deterministic tests),
 - the validation matrix (`tests/test_matrix.py`),
 - the compiled-RuleSet snapshots (`tests/snapshots/`).
 Track these via `pytest --durations=20` across commits and eyeball for a step

@@ -8,6 +8,102 @@ to the user instead.
 
 ---
 
+## 2026-07-29 — the P3 edge-multiplicity blind spot, ADJUDICATED and closed
+
+`CORRESPONDENCE.md` §7.2's finding of 2026-07-28 (filed UNADJUDICATED) is resolved.
+No backend behaviour changed; the change is to the conformance seam and to two
+docstrings that stated a correspondence which does not hold.
+
+**The finding.** The Lean graph model's cascade re-enumerates edges it already holds
+(`edgeHolders` reads the edge LIST; `admitEdge` has no presence test; `addEdge` conses),
+so a derived edge's multiplicity compounds per cascade leg. Python does not. State-gate
+projection **P3 compared edges as a SET**, so the difference was structurally invisible.
+
+**What the investigation actually established** (each measured, not argued):
+
+1. **Python's derived arm is capped at 1 by construction, not by luck.**
+   `DeltaProcessor._reconcile_subject` writes a derived edge by a presence DIFF
+   (`want_edge and not has_edge`), so re-deriving is a total no-op. Measured: all 18
+   processor-written derived rows across `GRAPH_FRAGMENT` are `direct_edge_count == 1`.
+   The filed text's "Python dedupes by node id" is true but is not the operative
+   mechanism.
+2. **The divergence is exactly co-extensive with the derived arm.** Of 171 compared
+   edges: 153 untainted-arm agreeing EXACTLY (including `nary_union`'s genuinely
+   non-unit 3-arm fan-in, 3 == 3), 18 derived-arm all diverging (Python 1, Lean 4 …
+   **1013**). Zero set-level asymmetry — the pre-existing gate was honestly green.
+   **The filed `1 → 2 → 4 → 8` understates it**: that is the single-candidate shape.
+3. **It is removal-inert**, so there is no modelled fail-open — but by ASSEMBLY, not
+   by a theorem: derived edges are retracted only by filter-ALL (`removeEdgePair`),
+   and the erase-ONE primitive's targets are untainted under a hypothesis
+   `removeGateB` decides at runtime. Recorded as a caveat rather than glossed.
+4. **A whole-set multiset compare was assessed and REJECTED.** It fails on 18 of 171
+   edges for a declared model artifact and nothing honest makes it green short of a
+   multi-session model change. Worse, **it would have reported green if done naively**:
+   multiplicity died TWICE, first inside the Lean binary (`Cli.lean::canonJsonArr`
+   de-duplicates) and again in the extractor's `set`, so a Python-side `Counter` alone
+   would have read all-ones from Lean and compared nothing. That is the sabotage
+   procedure's "instrument as broken as the subject" case, found before it bit.
+
+**What landed.** P3 is NARROWED, not dropped:
+
+* `Cli.lean` emits a new `edgeCounts` field (`edgeCountsJson`); `edges` is unchanged.
+* `extractor.py::diff_states` compares `direct_edge_count`-weighted multiplicity
+  EXACTLY on the untainted arm — in the 23-corpus state gate AND the ~257-store
+  enumerated state gate. **This is net-new assurance**: 153 edges' multiplicity had
+  never been compared by anything.
+* the derived arm is golden-pinned per corpus
+  (`formal/conformance/derived_arm_multiplicity.json`,
+  `test_derived_arm_multiplicity_ledger`), so the artifact's shape is a checked
+  quantity. This **supersedes the E-chain plan's §D.6 hand-probe**.
+* the exemption boundary comes from the SCHEMA (`compute_taint`) and is cross-checked
+  against `EdgeV4.derived` (`_classify_edges`), so a corrupted flag cannot move it.
+* two docstrings corrected: `ReconcileDiff.lean`'s "list multiplicity ==
+  `direct_edge_count`" and `Cli.lean`'s dedup justification both asserted a
+  correspondence that fails on the derived arm.
+
+**Sabotage evidence** (procedure per `docs/sabotage-procedure.md`; literal output):
+
+| # | sabotaged | observed |
+|---|---|---|
+| 1a | `Cli.lean` `edgeCountsJson` emits count `1` (i.e. someone reuses the de-duplicating `canonJsonArr`) | `edge MULTIPLICITY (untainted arm, P3) ('user','alice','...','') -> ('doc','d1','any_of',''): lean=1 python=3` + `ANTI-VACUITY: … 18 row(s) (0 with lean multiplicity > 1)` |
+| 1b | `extract_sql_state` weights by `1` instead of `direct_edge_count` | same untainted-arm line, `lean=3 python=1`; **exactly one** test fails, `nary_union` |
+| 2 | `derived_relations` returns `frozenset()` | `AssertionError: P3 edge classification disagreement (schema taint vs EdgeV4.derived)` |
+| 3 | one golden value `13 → 12` | `[boolean_exclusion] user:alice#.../ -> doc:d1#viewer/: golden=[12, 1] observed=[13, 1]` |
+| 4 | **subject-side:** drop `_reconcile_subject`'s presence guard (`if want_edge:`) | `PYTHON derived-arm direct_edge_count is no longer uniformly 1: {'nary_union_derived4:…': 4, …, 'two_stratum_cascade:…': 4}` |
+| 5 | ledger floor `18 → 19` | `ANTI-VACUITY: … observed 18 row(s) (18 with lean multiplicity > 1); floors are 19/18` |
+| 6 | remove `edgeCounts` from `stateJson` | `graph-state output shape unexpected: keys=['edges', 'residues']` |
+| 7 | `MIN_CONF_ALL/REST` `465/369 → 466/370` | `FAIL: formal/conformance/ collects only 465 test(s); the gate floor is 466` |
+
+Note sabotage 1b's shape: it fails on **exactly one** corpus, the only one with a
+non-unit untainted multiplicity. That is the check having precise content rather than
+being a blanket assertion — and it is why `nary_union` must not lose its three-arm
+fan-in.
+
+**A near-miss worth recording, because it is the house failure mode pointed at me.**
+`diff_states` gained a `tainted` parameter. I first gave it a `None` default with a
+docstring saying "used by nothing in the gate" — i.e. a doc warning where the repo's own
+procedure demands a mechanical refusal — then made it REQUIRED. That change immediately
+exposed a SECOND call site I had missed,
+`test_conformance_state.py::test_residue_rich_corpus_is_really_rich`, which had been
+silently getting the pre-2026-07-29 set-only comparison. Two lessons, both already in the
+house rules and both re-learned the hard way: (1) **the mechanical refusal earned its
+keep within minutes** — with the default left in place that call site would have kept
+comparing blind, at full green, which is precisely the blind spot this entry closes;
+(2) **I did not re-run the suite after the signature change**, so my earlier "all ten
+phases green" was true of the tree as it stood when measured and NOT of the tree after
+the next edit. Re-run after the last edit, not after the last interesting edit.
+
+**Left open, deliberately.** The faithful model fix is to mirror the presence diff in
+`reconcileKeyDR`'s fold guard; it ripples through the edge-characterisation and
+settledness stacks and was not attempted. **Do not instead make `admitEdge` reject a
+present edge** — that global version breaks the untainted arm, which is load-bearing for
+`untOccCount`/erase-one removal and is now checked. A second, opposite untainted-arm
+divergence (model `rewriteClosure` does not dedupe where `RuleSet.apply` does) is
+recorded in `RemoveOccCount.lean`'s header; **no corpus exercises it today** — all 153
+untainted comparisons agree — and the new compare is what would catch it if one did.
+
+---
+
 ## 2026-07-07 — P0 recon findings (spec-fact vs repo-fact)
 
 Baseline: **309 passed in 42.12s** (full suite, green, commit `32ebcf4`).
@@ -1632,7 +1728,7 @@ modeled algorithm changed).
 
 ## 2026-07-26 — ZT-P0-1: the N3 `_keys_referencing` elision WITHDRAWN (it was unsound)
 
-Found by the zero-trust review (`HANDOFF.md` "Zero-trust review 2026-07-26", item
+Found by the zero-trust review (`docs/history/handoff-status-2026-07.md` "Zero-trust review 2026-07-26" (archived from `HANDOFF.md` 2026-07-29), item
 ZT-P0-1). **This was a real authorization escalation, not a canonicalization wart:**
 `check` returned ALLOW where the oracle returned DENY. Reproduced, then fixed, then
 pinned by `tests/test_reg14_residue_gc_elision.py`.
@@ -1720,7 +1816,7 @@ sweep fail at `ttu-mix seed=0 step=14`.
 ## 2026-07-26 — ZT-P1: security + operational-envelope hardening (zero-trust review)
 
 Companion to the ZT-P0-1 entry above. All items found by the zero-trust review recorded
-in `HANDOFF.md` "Zero-trust review 2026-07-26"; every one was confirmed by execution
+in `docs/history/handoff-status-2026-07.md` "Zero-trust review 2026-07-26" (archived from `HANDOFF.md` 2026-07-29); every one was confirmed by execution
 before being fixed. **Scope decisions on the last three were made by the repo owner**
 (caps vs no caps, auto-configure vs warn, raise vs log) and are recorded as chosen.
 
@@ -1879,7 +1975,7 @@ heap. ZT-P1-4/-5 are the concurrency/persistence layer, explicitly out-of-model
 
 ## 2026-07-26 — ZT-P5: stale dismissals re-adjudicated by PROOF or REPRO (+ one NEW divergence)
 
-Re-adjudication of `HANDOFF.md` "Zero-trust review 2026-07-26" §P5 under the
+Re-adjudication of `docs/history/handoff-status-2026-07.md` "Zero-trust review 2026-07-26" (archived from `HANDOFF.md` 2026-07-29) §P5 under the
 owner's "ignore the ignore" standing instruction: every past dismissal is an
 unproven assumption until re-tested, and a constructed counterexample or a
 structural derivation beats prose. INVESTIGATION ONLY — no product code was

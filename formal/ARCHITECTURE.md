@@ -29,7 +29,7 @@ a derived def (`can_view: [user] but not blocked`, the canonical Zanzibar boolea
 shape) it holds VACUOUSLY: there is no theorem there at all. Read §6.0 before quoting
 any graph-side claim from this document.** The **Python implementations** are pinned to those models empirically: by the
 `CORRESPONDENCE.md` structural review, by five-corner differential conformance including
-state-level equality under six documented projections, and by exhaustive small-scope
+state-level equality under seven documented projections, and by exhaustive small-scope
 enumeration up to tiny documented bounds. `FINAL_REVIEW.md` is the exact clause-by-clause
 statement and governs; nothing in this document may claim more than it does.
 
@@ -182,7 +182,7 @@ restriction comes from (`FullScope.lean`):
   does not already impose**.
 - **`W4Fragment S T`** — the **honest carries**: scope restrictions the current proof
   needs that Python admission does **not** imply. `structure W4Fragment`
-  (`FullScope.lean:122-132`) has exactly **six** fields: `computedOnly`
+  (`FullScope.lean:132-142`) has exactly **six** fields: `computedOnly`
   (derived defs read only computed operands — the sole SHAPE condition since the
   2026-07-17 widening **deleted `rootB`/`RootBoolean`**; the derived-def ROOT operator is
   unrestricted, so union-/computed-rooted derived defs are in scope), `twoStrata` (≤ 2 derived strata —
@@ -216,28 +216,31 @@ versions survive under `*_direct` names *(historical staging — the W1→W4 wid
 The theorems are about the Lean models. The tie to Python is the `CORRESPONDENCE.md`
 review plus the **conformance harness** (`formal/conformance/`), gated by the
 one-command `formal/verify.sh`. The gate is **fail-closed**, and was green when last
-measured (2026-07-26, commit `f2b403c` — `FINAL_REVIEW.md`'s header carries the
+measured (2026-07-29 — `FINAL_REVIEW.md`'s header carries the
 authoritative measurement and this file must not disagree with it):
 
 > `lake build` + **0 sorries** (`formal/conformance/sorry_scan.py`) + `zcli` preflight +
-> **axiom audit** (**455** observed reports = 455 `#print axioms` commands, exactly one
-> per command, only `[propext, Classical.choice, Quot.sound]`) + **330 conformance
+> **axiom audit** (**460** observed reports = 460 `#print axioms` commands, exactly one
+> per command, only `[propext, Classical.choice, Quot.sound]`) + **465 conformance
 > tests, 0 skips, 0 xfails** (the conformance step fails on any skipped test or zero
 > passes).
 
-**What the gate does NOT do** (zero-trust review 2026-07-26, `ZT-P2-1`/`ZT-P2-2`): it
-derives the "expected" axiom-report count from `Audit.lean` itself and compares for
-equality with no floor, and it asserts only `skipped == 0 && passed > 0` on
-conformance. Deleting audited theorems, or a whole conformance suite, keeps it green;
-an `xfail` is invisible to it. The counts above are dated measurements, not enforced
-invariants — re-measure, and never read a count as coverage.
+**What the gate did NOT do** (zero-trust review 2026-07-26, `ZT-P2-1`/`ZT-P2-2`): it
+derived the "expected" axiom-report count from `Audit.lean` itself and compared for
+equality with no floor, and it asserted only `skipped == 0 && passed > 0` on
+conformance. Deleting audited theorems, or a whole conformance suite, kept it green;
+an `xfail` was invisible to it. That hole was closed by the 2026-07-26/27 floor
+hardening (`EXPECTED_MIN_AUDITS`/`MIN_CONF_ALL`/`MIN_TESTS_ALL` + the identity,
+statement and definition pins + zero-tolerance skip/xfail parsing — `docs/gate-runbook.md`
+§2). The counts above remain dated measurements rather than the enforced floors —
+re-measure, and never read a count as coverage.
 
 Because the Lean spec is executable, the same artifact is both proof subject and the CLI
-oracle `zcli`. The 330 tests are **310 differential-conformance comparisons** across
-**11 test files** plus **20 gate-tooling unit tests** (not Lean-vs-Python comparisons:
-13 for the sorry-scanner, `test_sorry_scan.py`; 7 for the zcli-runner transient-init
+oracle `zcli`. The 465 tests are **419 differential-conformance comparisons** across
+**13 test files** plus **46 gate-tooling unit tests** (not Lean-vs-Python comparisons:
+39 for the sorry-scanner, `test_sorry_scan.py`; 7 for the zcli-runner transient-init
 retry, `test_runner_retry.py`). The per-file table lives in `FINAL_REVIEW.md`'s header;
-by subject the 310 break down as:
+by subject the 419 break down as:
 
 - **Answer conformance — the five corners.** Over a shared query grid, `check` verdicts
   are compared five ways: Lean `sem` (zcli) × the independent oracle × the real
@@ -246,14 +249,15 @@ by subject the 310 break down as:
   T2b *by proof, not analogy*: `Exec.lean`'s driver folds the `ReachedBy` constructors
   (`graphRun_reached`), its runtime gates decide the theorem's side conditions
   (`foldAdmitsB_iff`, `drainedB_iff`), and under the W4 bundles every printed verdict is
-  `sem` (`graphRun_check_eq_sem`). Suites: `test_conformance_spec.py` (all **25**
-  spec-scope corpora — `SCHEMAS` = 20 plus the 3 `TTU_USERSET_SCHEMAS` and 2
-  `SELF_REFERENTIAL_SCHEMAS` that are deliberately kept out of the graph-side gates),
+  `sem` (`graphRun_check_eq_sem`). Suites: `test_conformance_spec.py` (all **33**
+  spec-scope corpora — `SCHEMAS` = 24 plus the 6 `TTU_USERSET_SCHEMAS`, 2
+  `SELF_REFERENTIAL_SCHEMAS` and 1 `MULTI_STRATUM_SCHEMAS` (`three_strata_chain`) that
+  are deliberately kept out of the graph-side gates),
   `test_conformance_random.py` (seeded randomized substores), `test_conformance_graph.py`
-  (the **19** in-fragment corpora, incl. two designed attack corpora — stale-edge
+  (the **23** in-fragment corpora, incl. two designed attack corpora — stale-edge
   cross-stratum re-settle, star churn over two strata), `test_conformance_direct_arm.py`
   (the Direct-arm corpus, at C-chain scope only — §6.0). **Scope caveat:** one of those
-  19, `direct_arm_exclusion`, is listed in `GRAPH_FRAGMENT` but is machine-checked to be
+  23, `direct_arm_exclusion`, is listed in `GRAPH_FRAGMENT` but is machine-checked to be
   OUTSIDE the final theorems' hypotheses, so its comparisons are a differential test
   between two implementations, not coverage by T2b. The CLI does not gate on
   `GraphAdmission`/`W4Fragment` at all — its rc 2/3 gates test run-success and
@@ -270,19 +274,26 @@ by subject the 310 break down as:
   1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode / 5 `"ops"` in spec mode),
   so spec answers can never masquerade as graph answers and an op stream can never be
   dropped on the floor.
-- **State-level graph conformance** (`test_conformance_state.py`, **19 corpora**): the
+- **State-level graph conformance** (`test_conformance_state.py`, **23 corpora**): the
   Lean graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — same
   `graphRun` fold, same admission/drain gates, emitting canonical direct edges + residue
   triples) is diffed against the real Python graph index's final SQL state
-  (`EdgeV4`/`ResidueV1` decoded through `NodeV4`). Compared under **six documented
-  projections** P1–P6, each justified in `formal/conformance/extractor.py`: P1 closure
-  rows (a function of the direct set), P2 wildcard bridges (inert — re-verified
-  2026-07-26 over the widened 19-corpus set: `bridged_in_shapes`/`bridged_out_shapes`
-  compile EMPTY on all 19, the only non-empty pair in `SCHEMAS` being the excluded
-  `object_wildcard` corpus, so P2 still never fires), P3 edge
-  multiplicity, P4 all-empty residue rows, P5 node GC (**no `NodeV4` row is compared at
+  (`EdgeV4`/`ResidueV1` decoded through `NodeV4`). Compared under **seven documented
+  projections** P1–P7, each justified in `formal/conformance/extractor.py`: P1 closure
+  rows (a function of the direct set), P2 wildcard bridges (inert — RE-MEASURED
+  2026-07-29 over the full 23-corpus set: 477 raw `EdgeV4` rows, **P2 dropped 0 of
+  them**, and `bridged_in_shapes`/`bridged_out_shapes` compile EMPTY on all 23, the only
+  non-empty pairs in the corpus file being shapes excluded from `GRAPH_FRAGMENT`, so P2
+  still never fires), **P3 edge multiplicity —
+  NARROWED 2026-07-29 to the DERIVED arm only** (the untainted arm is now compared
+  EXACTLY, and the derived arm is golden-pinned by
+  `test_conformance_state.py::test_derived_arm_multiplicity_ledger`; see
+  `CORRESPONDENCE.md` §7.2 for the adjudication), P4 all-empty residue rows, P5 node GC (**no `NodeV4` row is compared at
   all**), P6 leaf-family closure-leaf copies
-  (evaluation output compared exactly). Attack-first: the gate's first run FOUND the P6
+  (evaluation output compared exactly), **P7 `ResidueV1.version`** — declared
+  2026-07-27, and unlike P1–P6 a **MODELLING GAP, not a representation difference**:
+  Lean's `Residue` has no version field at all, so invariant **I7 is gated by nothing
+  formal** (§6.1 item 4). Attack-first: the gate's first run FOUND the P6
   divergence under full check-parity; a deliberately corrupted extraction fails with the
   symmetric-difference message.
 - **Exhaustive small-scope enumeration** (`test_conformance_enum.py`): ALL stores of ≤ K
@@ -296,7 +307,7 @@ by subject the 310 break down as:
   sample — **257 of those 1021 stores** (~25 %), sample size asserted. The
   graph backend is deliberately not in the ANSWER enumeration (it stays pinned by the
   curated-corpora graph + state gates), and the bounds are deliberately tiny.
-- **Remove-path conformance** (`test_conformance_remove.py`, **80 tests**, and it is
+- **Remove-path conformance** (`test_conformance_remove.py`, **96 tests**, and it is
   exactly the `conf-heavy` gate phase): the REAL `SetEngine` driven through seeded
   interleaved add/remove/re-add sequences (all spec-scope corpora × 5 seeds) equals
   `sem` (zcli) × the oracle on the FINAL store — the first ANSWER-LEVEL pin on Python's
@@ -353,7 +364,7 @@ Mirroring `FINAL_REVIEW.md` §3/§4 (which governs — if the two ever disagree,
 wins and this one is stale). The current honest claim is §1's, with **one explicit
 subtraction and three scope qualifiers**: the graph-side theorems hold at `W4Fragment`
 scope (not everything Python admits) **and are vacuous on the canonical boolean idiom,
-§6.0**; state-level equality holds under the six documented
+§6.0**; state-level equality holds under the seven documented
 projections (a divergence *inside* a projected class is pinned elsewhere, not here;
 nodes are not compared at all);
 enumeration is exhaustive only up to its tiny documented bounds. Never round these up.
@@ -370,7 +381,7 @@ can_view: [user] but not blocked
 
 — the commonest Zanzibar boolean shape there is, falls outside the bundle. And it does so
 in the strongest available sense: `GraphAdmission.storeValid` **is** `StoreValidRules`,
-and `FullScope.lean:564` machine-checks
+and `FullScope.lean:601` machine-checks
 
 ```lean
 theorem outside_old_admission : ¬ StoreValidRules Sd Td
@@ -393,7 +404,7 @@ C-chain `graph_correct_w3d2_d` (`CascadeStrataResettle.lean`, audited; non-vacui
 witnessed by `W4WitnessDirect` at exactly the `Sd`/`Td` pair) gives `check = sem` at
 every fully-drained `ReachedByW3d2C` state over a widened
 `ComputedOrDirect ∧ DirectArmsBare` fragment under `StoreValidRulesD` admission. Closing
-the gap needs the E-chain widening recorded at `FullScope.lean:527-528` as a "recorded
+the gap needs the E-chain widening recorded at `FullScope.lean:561-565` as a "recorded
 follow-up, **NOT done**": the `enumJob2 → enumJob2D` enumeration swap, a `_d` projection
 of `reachedByW3d2E_toC`, and `GraphAdmission.storeValid → StoreValidRulesD`.
 
@@ -466,7 +477,8 @@ fragment. The same corpus is also excluded from the remove-driving gate (§5).
    §3's resolved note and `docs/spec-deviations.md` 2026-07-13.
 4. **The state-gate projections** — state-level conformance IS implemented, but a
    divergence strictly inside a projected class (P6 leaf-family edge content, P3 edge
-   multiplicity, P2 bridge edges — inert — P5 node GC, under which **no `NodeV4` row is
+   multiplicity **on the derived arm only since 2026-07-29 — the untainted arm is now
+   compared exactly and the derived arm is golden-pinned**, P2 bridge edges — inert — P5 node GC, under which **no `NodeV4` row is
    compared at all**, and **P7** `ResidueV1.version`, declared as a projection
    2026-07-27 after being dropped silently) would not fail it; each is pinned elsewhere
    and documented in `extractor.py`. Two artifacts sit outside the canonical form
@@ -540,7 +552,7 @@ commonest boolean schema in the language (§6.0). Its `Direct`-arm half is alrea
 at C-chain level (`graph_correct_w3d2_d`), but the final unsuffixed theorems stay
 `ComputedOnly`-scoped pending the E-chain widening — `enumJob2 → enumJob2D`, a `_d`
 projection of `reachedByW3d2E_toC`, and `GraphAdmission.storeValid → StoreValidRulesD` —
-recorded at `FullScope.lean:527-528` as "NOT done"; (d) remove legs on the Lean side — **DONE 2026-07-19f** at the
+recorded at `FullScope.lean:561-565` as "NOT done"; (d) remove legs on the Lean side — **DONE 2026-07-19f** at the
 validly-stored + drained-prior scope: the `remove` constructor on `ReachedByW3d2`/`C`/`E`
 makes T2a/T2b + `Exec.graphRun_check_eq_sem` cover retraction of a `t ∈ T` from a drained
 state under the pre-remove store's disciplines (faithful to `TupleSource.remove`), so the

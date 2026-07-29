@@ -158,7 +158,8 @@ def test_indented_and_modified_axiom_declarations_trip(tmp_path):
 
 
 def test_print_axioms_command_does_not_trip(tmp_path):
-    # The whole point of the anchoring: Audit.lean is 455 of these lines.
+    # The whole point of the anchoring: Audit.lean is 460 of these lines
+    # (measured 2026-07-29; `verify.sh`'s EXPECTED_MIN_AUDITS floor).
     root = _write(tmp_path, "#print axioms graph_correct\n"
                             "#print axioms graph_reached_inv\n")
     assert sorry_scan.scan(root) == 0

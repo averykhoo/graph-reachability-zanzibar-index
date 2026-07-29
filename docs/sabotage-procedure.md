@@ -26,7 +26,7 @@ below is drawn entirely from checks that were *already in this repo, green, and 
 | a plan-leaf coverage floor | "the kind is compiled" | a corpus can compile a leaf and drive it **constantly empty** (2026-07-28) |
 | a wildcard-coverage floor | "a wildcard exists" | bare `[user:*]` satisfies it while `[T:*#p]` stays at **zero** (2026-07-28) |
 | `_REQUIRED_LEAF_KINDS` | a hand-maintained list | correct the day it was written; **green forever** once the compiler grows a branch |
-| state-gate projection P3 | "state-level equality" | compares edges as a **set**, so edge **multiplicity** divergence is structurally invisible |
+| state-gate projection P3 | "state-level equality" | compares edges as a **set**, so edge **multiplicity** divergence is structurally invisible — and the multiplicity died *twice*, first inside the Lean binary (`Cli.lean::canonJsonArr`) and again in the extractor's `set`, so "make the Python side a multiset" would have compared all-ones and reported green (closed 2026-07-29, `CORRESPONDENCE.md` §7.2) |
 
 Note the pattern: **none of these were wrong when written.** They decayed, or they were
 subtly narrower than their name. That is why the procedure is mandatory rather than

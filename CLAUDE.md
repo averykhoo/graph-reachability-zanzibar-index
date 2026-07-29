@@ -27,8 +27,8 @@ IVM delta processor.
   — **note (verified 2026-07-26): that path does not exist on this machine**; the env
   lives under `C:/Users/user/anaconda3/envs/...`. `formal/verify.sh` hardcodes the
   `avery` path too, so override it with `ZANZIBAR_PY` (it fails loudly, not silently).
-- The full suite is the gate (**1226 tests** as re-measured 2026-07-28 with
-  `pytest <dir> -q --collect-only`: `tests/` **762** + `formal/conformance/` **464**;
+- The full suite is the gate (**1227 tests** as re-measured 2026-07-29 with
+  `pytest <dir> -q --collect-only`: `tests/` **762** + `formal/conformance/` **465**;
   more in `tests/` with a PostgreSQL DSN configured). Unlike
   before, these counts ARE now enforced — `verify.sh` carries `-ge` floors on both, so
   adding tests is always free and losing coverage is loud. Re-measure anyway before

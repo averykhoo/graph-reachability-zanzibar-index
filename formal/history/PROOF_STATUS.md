@@ -8,6 +8,102 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-07-29 (**the P3 edge-multiplicity blind spot — ADJUDICATED and CLOSED.** No Lean declaration changed; one Lean docstring corrected, one new zcli output field, and a state-gate projection narrowed so that 153 previously-uncompared edge multiplicities are now compared exactly)
+
+**Task taken:** the one open item where the gate was blind to a whole class of
+divergence — `CORRESPONDENCE.md` §7.2, filed UNADJUDICATED 2026-07-28 by the Leg-0
+probe D.1. Not Leg 2.
+
+### Verdict
+
+**REAL, model-side, confined EXACTLY to the derived arm, removal-inert.**
+
+* **Python's derived arm is capped at 1 structurally.**
+  `index_v4/processor.py::DeltaProcessor._reconcile_subject` writes a derived edge by a
+  presence DIFF (`want_edge and not has_edge` over `direct_edge_exists_by_id`), so
+  re-deriving is a total no-op — no row touched, `changed` stays False. The filed text's
+  "Python dedupes by node id" is true of `candidates`/`audit` but is **not the operative
+  mechanism**; the presence diff is.
+* **Measured, all 23 `GRAPH_FRAGMENT` corpora:** of 171 compared edges, **153
+  untainted-arm agree EXACTLY** (152 at 1, and `nary_union`'s three-arm fan-in at 3 == 3)
+  and **18 derived-arm all diverge** — Python uniformly 1, Lean 4 … **1013**
+  (`two_stratum_cascade`). Zero set-level asymmetry.
+* **The filed `1 → 2 → 4 → 8` UNDERSTATES the growth** — that is the single-candidate
+  shape; with several candidates at a key it compounds superlinearly.
+* **Removal:** inert. Derived edges are retracted only by filter-ALL
+  (`GraphState.removeEdgePair`, the else-branch of `reconcileKeyDR`) — `ReconcileDiff`'s
+  own header says filter-all was chosen *as the compensation* for the stacking — and the
+  erase-ONE primitive `removeEdgeOne` is reached only via `removeLoggedOne`, whose targets
+  are untainted under a hypothesis `removeGateB` decides at runtime
+  (`reachedByRulesAdmitted_edge_target_untainted`). **Recorded caveat: this is an
+  ASSEMBLED property, not a stated theorem.**
+* **Reads:** inert by construction — `reachB` is an `any` over the list, and `reach`'s
+  fuel is `nodes.length + 1`, which duplicate edges do not move.
+
+### The claim that was false
+
+`ReconcileDiff.lean`'s header stated *"list multiplicity == `direct_edge_count`"*
+unqualified, and `Cli.lean`'s header justified the dump's edge de-duplication the same
+way. The equation holds on the untainted arm and fails on the derived arm. **Both
+corrected** (the `ReconcileDiff` correction notes that nothing breaks — erase-one never
+meets a stacked edge — but that the unqualified claim is why this went unnoticed).
+
+### ★ The naive fix would have reported GREEN
+
+Multiplicity died **twice**: once inside the Lean binary (`Cli.lean::canonJsonArr`
+de-duplicates the edges array) and again in `extractor.py`'s `set`. So the obvious
+reading of the filed question — "upgrade P3 to a multiset compare" — implemented
+Python-side only would have read all-ones from Lean and compared nothing, at full green.
+House rule 7 / the sabotage procedure's *"control your instrument as well as your
+subject"* case, caught before it bit. Recorded in the procedure's catalogue.
+
+### What landed
+
+* `Cli.lean`: new `edgeCountsJson` + an `edgeCounts` field on `stateJson` (`edges`
+  unchanged); `jsonRuns` is a plain `foldl` run-length encoder, so no termination
+  argument. `runner.run_state` asserts the key set EXACTLY, so a zcli that stopped
+  emitting the field fails loudly rather than making the ledger compare nothing.
+* `extractor.py`: P3 **narrowed**. `diff_states` compares `direct_edge_count`-weighted
+  multiplicity exactly on the untainted arm, in `test_conformance_state.py` (23 corpora)
+  AND `test_conformance_enum_state.py` (~257 sampled enumerated stores). The exemption
+  boundary comes from `compute_taint` (the schema), cross-checked against `EdgeV4.derived`
+  by `_classify_edges`.
+* `test_derived_arm_multiplicity_ledger` + `derived_arm_multiplicity.json`: the derived
+  arm golden-pinned per corpus, plus a direct assertion that Python's derived-arm count is
+  uniformly 1, plus an anti-vacuity floor (18 rows / 18 stacked).
+* Floors: `MIN_CONF_ALL` 464 → 465, `MIN_CONF_REST` 368 → 369.
+
+### Consequence for the E-chain arc
+
+**Plan §D.6 is SUPERSEDED and now mechanical.** Leg 2 will break the golden by
+construction; read the printed `golden`/`observed` table, confirm the movement is the
+intended `enum2BaseD` dedup, regenerate in its own commit. ⚠ And a trap the new check now
+guards: **do not discharge the dedup obligation by making `admitEdge` reject an
+already-present edge** — untainted multiplicity is load-bearing (`untOccCount`, erase-one
+removal) and is now compared, so that global edit goes red on `nary_union` (3 → 1). The
+faithful fix is narrower: mirror the presence diff inside `reconcileKeyDR`'s fold guard.
+
+### Sabotage (house rule 7) — 7 runs, all red, literal output in `docs/spec-deviations.md`
+
+Instrument-side (`edgeCountsJson` constant 1; extractor weight 1; `derived_relations`
+emptied; golden value 13 → 12; floor 18 → 19; `edgeCounts` field removed; conf floor
+465 → 466) **and subject-side** (drop `_reconcile_subject`'s presence guard ⇒
+`PYTHON derived-arm direct_edge_count is no longer uniformly 1: {…: 4, …}`). Note the
+extractor-weight sabotage fails on **exactly one** corpus — the only one with a non-unit
+untainted multiplicity — which is the check having precise content rather than being a
+blanket assertion.
+
+**Also: the anchor pin earned its keep again** — the new §7.2 text introduced two bare
+`test_conformance_state.py::…` anchors and one wrong symbol (`GraphState.reachB`, actually
+top-level `reachB`); `verify.sh lean` refused all three.
+
+### Gate
+
+`verify.sh lean` PASSED (holes=0, audits 460/460, identity 460, statements 26/26,
+definitions 139/139, anchors **397**/397 — up from 380). Conformance **465**.
+
+---
+
 ## Session 2026-07-28 (E-chain Direct-arm widening — **Leg 0, the attack sweep**: 5 probes, **2 KILLS**, one of them machine-checked. No Lean declaration changed; the arc re-scoped to 7 legs and written up in [`echain-widening-plan-2026-07-28.md`](echain-widening-plan-2026-07-28.md))
 
 Took board item **(B)** / `ZT-P3-1`. Per house rule 2 the session opened with an attack sweep

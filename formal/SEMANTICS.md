@@ -627,7 +627,7 @@ name, the code wins):
   direct-only, `_validate_ttu_tuplesets`), `matchDecl`, `ranked`, `objWild`
   (object-wildcard shapes never on derived relations), `storeValid`. Graph
   theorems only.
-- `hF : W4Fragment S T` (`FullScope.lean:122-132`) — the **honest fragment carries**:
+- `hF : W4Fragment S T` (`FullScope.lean:132-142`) — the **honest fragment carries**:
   scope restrictions the current proof needs that Python admission does NOT
   imply (each a documented gap — `history/ROADMAP.md` "W4 — honest gaps").
   `structure W4Fragment` has exactly **six** fields:
@@ -644,7 +644,7 @@ name, the code wins):
   2026-07-19f the chain carries a scoped `remove` constructor (see `h : ReachedBy` below,
   which states both facts correctly; only this field list had gone stale).
   **Vacuity warning:** `computedOnly` is what makes the final graph theorems VACUOUS on
-  `Direct`-arm derived stores (`can_view: [user] but not blocked`) — `FullScope.lean:564`
+  `Direct`-arm derived stores (`can_view: [user] but not blocked`) — `FullScope.lean:601`
   machine-checks that such a store also fails `GraphAdmission.storeValid`. See
   `FINAL_REVIEW.md` §3.0.
 - `h : ReachedBy σ S T` (`FullScope.lean`; `ReachedBy := ReachedByW3d2E`) —
@@ -726,28 +726,29 @@ section originally recapped the PLAN (C0–C4 — six-way answer conformance
 including rejection outcomes, state-level structural comparison, exhaustive
 small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
 clause-by-clause check. What exists (`formal/verify.sh` step 5;
-`formal/conformance/`; **330 tests, 0 skips, 0 xfails** as measured 2026-07-26 at
-`f2b403c` — 310 differential-conformance comparisons across 11 test files + 20
-gate-tooling unit tests [sorry-scanner + zcli-runner retry]. `FINAL_REVIEW.md`'s header
-carries the authoritative per-file breakdown and governs; note the gate enforces NEITHER
-count, so re-measure rather than quoting):*
+`formal/conformance/`; **465 tests, 0 skips, 0 xfails** as measured 2026-07-29
+— 419 differential-conformance comparisons across 13 test files + 46
+gate-tooling unit tests [sorry-scanner 39 + zcli-runner retry 7]. `FINAL_REVIEW.md`'s header
+carries the authoritative per-file breakdown and governs; the gate now carries `-ge`
+floors on these counts (`MIN_CONF_ALL` 465 = `MIN_CONF_HEAVY` 96 + `MIN_CONF_REST` 369),
+but a floor is not a measurement — re-measure rather than quoting):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
   Python-`file:line` map, with the known intentional divergences listed.
 - **Answer conformance — check-verdict level, five corners**:
   - `test_conformance_spec.py` — Lean `sem` (zcli) × independent oracle × real
-    `SetEngine`, all **25** spec-scope corpora (`SCHEMAS` = 20 plus the 3
-    `TTU_USERSET_SCHEMAS` and 2 `SELF_REFERENTIAL_SCHEMAS` kept out of the graph-side
-    gates);
+    `SetEngine`, all **33** spec-scope corpora (`SCHEMAS` = 24 plus the 6
+    `TTU_USERSET_SCHEMAS`, 2 `SELF_REFERENTIAL_SCHEMAS` and 1 `MULTI_STRATUM_SCHEMAS`
+    (`three_strata_chain`) kept out of the graph-side gates);
   - `test_conformance_random.py` — the same comparison over seeded randomized
     substores per corpus;
   - `test_conformance_graph.py` — the Lean OPERATIONAL graph model (zcli mode
     `"graph"`, whose verdicts are covered by `graph_correct` via the driver
     honesty theorems `graphRun_reached`/`graphRun_check_eq_sem`) × the real
-    Python `WildcardIndex`+`DeltaProcessor` × `sem`, over the **19** in-fragment
-    corpora (incl. two designed attack corpora). **Scope caveat:** one of those 19,
+    Python `WildcardIndex`+`DeltaProcessor` × `sem`, over the **23** in-fragment
+    corpora (incl. two designed attack corpora). **Scope caveat:** one of those 23,
     `direct_arm_exclusion`, is listed in `GRAPH_FRAGMENT` but machine-checked to be
-    OUTSIDE the final theorems' hypotheses (`FullScope.lean:564`), so its comparisons
+    OUTSIDE the final theorems' hypotheses (`FullScope.lean:601`), so its comparisons
     are a differential test between implementations, not coverage by `graph_correct` —
     and the CLI never gates on `GraphAdmission`/`W4Fragment`. See `FINAL_REVIEW.md` §3.0;
   - `test_conformance_direct_arm.py` — the same corpus at the C-chain
@@ -773,24 +774,32 @@ count, so re-measure rather than quoting):*
   tokens AND 0 build-log sorry warnings; zcli builds and the binary's presence
   is preflighted (a missing binary would make every Lean comparison skip);
   axiom audit with report-count equality (exactly one observed report per
-  `#print axioms` command in `Audit.lean` — **455** of them as measured 2026-07-26; only
+  `#print axioms` command in `Audit.lean` — **460** of them as measured 2026-07-29; only
   `propext`/`Classical.choice`/`Quot.sound`); the conformance step fails on
   ANY skipped test or zero passes. Interpreter overridable via `ZANZIBAR_PY`.
-  **What the gate does NOT do** (zero-trust review 2026-07-26): the "expected" audit
-  count is derived from `Audit.lean` itself and compared for equality with no floor, and
-  the conformance step asserts only `skipped == 0 && passed > 0` — so deleting audited
-  theorems or a whole conformance suite keeps it green, and `xfailed` is not parsed at
-  all. The counts in this document are dated measurements, not enforced invariants.
+  **What the gate did NOT do** (zero-trust review 2026-07-26): the "expected" audit
+  count was derived from `Audit.lean` itself and compared for equality with no floor, and
+  the conformance step asserted only `skipped == 0 && passed > 0` — so deleting audited
+  theorems or a whole conformance suite kept it green, and `xfailed` was not parsed at
+  all. Closed by the 2026-07-26/27 hardening: hard floors (`EXPECTED_MIN_AUDITS` 460,
+  `MIN_CONF_ALL` 465, `MIN_TESTS_ALL` 762), the audit IDENTITY pin, the headline
+  STATEMENT and DEFINITION pins, the `CORRESPONDENCE.md` anchor pin, and zero-tolerance
+  `skipped`/`xpassed`/`deselected` parsing. The counts in this document are still dated
+  measurements, not the floors — re-measure.
 
 - **C2 state-level conformance** (2026-07-12m): `test_conformance_state.py` —
   the Lean graph model's FINAL STATE (zcli mode `"graph-state"`: the same
   `graphRun` fold and rc 2/3 gates as graph mode, emitting the canonical
   direct-edge set + residue rows) diffed against the Python graph index's
-  final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4`), **19**
-  in-fragment corpora, under the SIX documented projections of
-  `formal/conformance/extractor.py` (closure rows / bridges — inert, re-verified over all
-  19 on 2026-07-26 / multiplicity / empty residues / node GC, under which no `NodeV4` row
-  is compared at all / leaf-family split).
+  final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4`), **23**
+  in-fragment corpora, under the SEVEN documented projections P1–P7 of
+  `formal/conformance/extractor.py` (P1 closure rows / P2 bridges — inert, RE-MEASURED
+  over all 23 on 2026-07-29: 477 raw `EdgeV4` rows, 0 dropped by P2 / P3 multiplicity,
+  narrowed 2026-07-29 to the DERIVED arm only, the untainted arm now compared exactly /
+  P4 empty residues / P5 node GC, under which no `NodeV4` row is compared at all / P6
+  leaf-family split / P7 `ResidueV1.version`, declared 2026-07-27 — a MODELLING gap, not
+  a representation difference: Lean's `Residue` has no version field, so I7 is gated by
+  nothing formal).
 - **C3 exhaustive small-scope enumeration** (2026-07-12m):
   `test_conformance_enum.py` — ALL stores of ≤ K tuples from the declared
   tuple space over 2 names/type, **six** fragment shapes at a per-shape K of 3 or 4
