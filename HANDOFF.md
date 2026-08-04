@@ -16,12 +16,18 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## Current status — 2026-07-29
+## Current status — 2026-08-04
 
 **Everything is green and nothing is blocking.** The gate passes all ten phases; there
 is no known live correctness bug, no `sorry`, and no `xfail` anywhere in the tree.
 
-- **Last landed: the P3 edge-multiplicity blind spot, ADJUDICATED and closed** — the
+- **Last landed: E-chain Direct-arm widening, LEG 2 — the enumeration model change**
+  (`e76b66c`, **committed and fully gated but NOT PUSHED**). `enumJobs2At` takes the
+  `Store` and enumerates `enumJob2D`; the headline theorem STATEMENTS are byte-identical
+  while the definition pin moved 139 → 142. Lean-model + docs only — **no Python file
+  changed.** Two of the plan's own instructions were refuted by measuring them; detail in
+  the board item below and `formal/history/PROOF_STATUS.md` 2026-08-04. **Next: leg 3.**
+- **Previously landed: the P3 edge-multiplicity blind spot, ADJUDICATED and closed** — the
   last open item where the gate was blind to a whole class of divergence. Verdict:
   real, model-side, confined exactly to the DERIVED arm (Python's presence diff caps
   `direct_edge_count` at 1 there; the model compounds to 1013), removal-inert. P3 is
@@ -58,10 +64,12 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
-- [ ] **★ START HERE (next session, refreshed 2026-07-29) — ONE live option left.**
-      The zero-trust backlog is CLEARED, the gate is green end-to-end, and as of
-      2026-07-29 there is **no longer an open item where the gate is blind to a class of
-      divergence** — the P3 edge-multiplicity hole was the last one and it is closed.
+- [ ] **★ START HERE (next session, refreshed 2026-08-04) — ONE live option left: (B),
+      now at E-chain leg 3.** The zero-trust backlog is CLEARED, the gate is green
+      end-to-end, and as of 2026-07-29 there is **no longer an open item where the gate is
+      blind to a class of divergence** — the P3 edge-multiplicity hole was the last one and
+      it is closed. **Leg 2 landed 2026-08-04 (`e76b66c`), gated on all ten phases but NOT
+      YET PUSHED.**
       * **~~(A) the store-level write quota~~ — DECLINED by the user 2026-07-29**, and
         the alternative was measured rather than assumed. *"I don't want to limit what
         can be added to a permission store — it might be slow but it should not be
@@ -100,8 +108,9 @@ open). This file is now only what a future session must ACT on.
       bounded, no Lean impact. **Start:** the residuals block on the 2026-07-27 board
       item below, then `index_v4/core.py`'s `DEFAULT_MAX_CLOSURE_FANOUT` comment.
 
-      **(B) The E-chain Direct-arm widening — SCOPED + Leg 0 DONE 2026-07-28; legs 1–6
-      remain.** The claim is unchanged: `ZT-P3-1` — the headline graph theorems are
+      **(B) The E-chain Direct-arm widening — legs 0/1/2 DONE; LEGS 3–6 REMAIN, and
+      leg 7 (T2a) is blocked on a design decision, not on proof effort.** The claim is
+      unchanged: `ZT-P3-1` — the headline graph theorems are
       **VACUOUS** on `can_view: [user] but not blocked`, the most common Zanzibar boolean
       shape (`FullScope.lean:564` machine-checks that such a store fails
       `GraphAdmission.storeValid`), so `graph_correct` / `graph_reached_inv` /
@@ -119,8 +128,9 @@ open). This file is now only what a future session must ACT on.
         different nodes). T2b is unaffected. A **design decision** is owed before any T2a
         work — do not schedule proof effort for it. Expected honest end state of the arc:
         **T2b widened, T2a explicitly not.**
-      * **`enum2BaseD` must dedupe** or the widened model's edge multiset grows `n ↦ 2n+1`
-        per cascade leg.
+      * ~~**`enum2BaseD` must dedupe** or the widened model's edge multiset grows `n ↦ 2n+1`
+        per cascade leg.~~ **The GROWTH claim was right; the REMEDY was wrong** — see the
+        leg-2 bullet below. Closed by a presence diff, not by `.dedup`.
       * **The step-2 star-freeness question is DECIDED** (new `W4Fragment` clause
         `directArmsConcrete` + a faithfulness star-filter; a star-filter alone leaves half
         the hole open). It excludes a shape Python admits ⇒ declared scope carry.
