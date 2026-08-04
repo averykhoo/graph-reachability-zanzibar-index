@@ -216,15 +216,15 @@ theorem edgeHyg1_runCascade2 {S : Schema} {T : Store} {σ : GraphState}
 
 /-- Every enumerated job satisfies the candidate-discipline premise
     (`negCands ⊆ cands`) — the E-chain discharge of the pass-local `hnc`. -/
-theorem enumJobs2At_negCands_subset {S : Schema} {σe : GraphState}
+theorem enumJobs2At_negCands_subset {S : Schema} {T : Store} {σe : GraphState}
     {keys : List (String × String × String)} :
-    ∀ j ∈ enumJobs2At S σe keys, ∀ c ∈ j.negCands, c ∈ j.cands := by
+    ∀ j ∈ enumJobs2At S T σe keys, ∀ c ∈ j.negCands, c ∈ j.cands := by
   intro j hj
   rw [enumJobs2At, List.mem_filterMap] at hj
   obtain ⟨k, _, hfk⟩ := hj
   obtain ⟨e, _, hje⟩ := Option.map_eq_some_iff.mp hfk
   rw [← hje]
-  exact enumJob2_negCands_subset σe k.1 k.2.2 k.2.1 e
+  exact enumJob2D_negCands_subset σe T k.1 k.2.2 k.2.1 e
 
 /-! ## `EdgeHyg1` over the operational chain -/
 
@@ -309,7 +309,7 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
       exact reachedByW3d2_Rnode_source_bare hW3d2 hlk' hder hco' hSV x hx
     have hres_p : ResidueSubjectsStarFree σp := reachedByW3d2_residueStarFree hW3d2
     -- round-1 validity (copy of `reachedByW3d2E_toC`)
-    have hjv1 : ∀ j ∈ enumJobs2R1 S σp, W3cJobValid S j := by
+    have hjv1 : ∀ j ∈ enumJobs2R1 S T σp, W3cJobValid S j := by
       refine enumJobs2At_valid hWF ?_ ?_ hres_p
       · intro k hk
         obtain ⟨hd, _, hon⟩ := mem_cascadeKeysAbove_props hk
@@ -320,7 +320,7 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
         exact ⟨reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd hco' hSV,
           reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV⟩
     -- MID-state facts transported through round 1
-    have hres_mid : ResidueSubjectsStarFree (reconcileJobsLR S T σp (enumJobs2R1 S σp)) :=
+    have hres_mid : ResidueSubjectsStarFree (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) :=
       residueSubjectsStarFree_reconcileJobsLR _ σp hjv1 hres_p
     -- round-2 validity
     have hjv2 : ∀ j ∈ enumJobs2R2 S T σp, W3cJobValid S j := by

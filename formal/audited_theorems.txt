@@ -110,6 +110,8 @@ edgeHyg1_reconcileJobsLR
 edgeHyg1_runCascade2
 ensureBridges_plainCount
 ensureInBridges_edges_mem
+enumJob2D_eq_enumJob2
+enumJob2D_negCands_subset
 enumJob2_negCands_subset
 evalE_computedOnly
 evalE_congr
@@ -127,6 +129,7 @@ exclusion_effective_w3d
 exclusion_effective_w3d2
 exists_admitted_restrict
 exprArms_directsOnly
+exprDirectsAll_computedOnly
 exprDirects_ne_nil_of_directsOnly
 foldAdmitsB_iff
 foldAdmits_of_acyclic
@@ -182,6 +185,7 @@ kahn_topo_strict
 layer_stable
 lookup_of_mem
 mem_affectedKeys
+mem_enumJob2D_cands
 mog_elim_us
 mog_intro_star
 noRuleOutputs_of_derived
@@ -438,6 +442,7 @@ w3bComplete_derived_upos
 w3cComplete_derived_edge
 w3cJobValid_enumJob
 w3cJobValid_enumJob2
+w3cJobValid_enumJob2D
 w3c_row_char
 w3c_row_char_d
 w3d2_leg_context

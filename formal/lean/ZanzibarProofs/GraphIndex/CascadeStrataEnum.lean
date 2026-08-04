@@ -695,13 +695,118 @@ theorem noConcDirect_of_not_mem {T : Store} {dt on R : String} {s : SubjectRef}
 def enum2BaseD (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : List SubjectRef :=
   enum2Base σ dt on e ++ storedDirectSubjects T dt on R e
 
+/-- **The PRESENCE DIFF on the Direct-arm contribution to `cands`** (Leg-2 §D.1). The stored
+    Direct-arm subjects that are not ALREADY candidates at this key — neither in `enum2Base`
+    (leaf concretes ∪ residue-named) nor among the `edgeHolders` (the existing in-edges at the
+    R-node, which `enumJob2` already enumerates).
+
+    **Why this is here.** Without it the widened enumeration is NOT a conservative widening:
+    a stored Direct-arm grant lands its seed edge at the derived R-node, so its subject is an
+    `edgeHolder` from the first write onward, and appending `storedDirectSubjects` blind makes
+    `reconcileKeyDR` fold `writeDirect` for it a SECOND time in the same leg. `admitEdge`
+    (`Write.lean`) does not reject an already-present `a → b` and `addEdge` (`State.lean`)
+    conses onto a `List`, so the derived edge's multiplicity goes `n ↦ 2n + 1` per cascade leg
+    instead of the baseline `n ↦ 2n`. Measured on the `W4WitnessDirect` pair before this filter
+    landed: one write gave `enumJob2D.cands = [alice, alice]` and 3 edges at the R-node against
+    the baseline's `[alice]` and 2 (Leg-0 probe D.1, `history/PROOF_STATUS.md` 2026-07-28).
+
+    **Faithful to Python**: `index_v4/processor.py::DeltaProcessor._reconcile` builds its
+    `candidates` as a `dict[int, NodeV4]` keyed on node id, so contributing a node that is
+    already a candidate is a no-op. This mirrors THAT, at the candidate level.
+
+    **Not** the fix for the baseline `n ↦ 2n` derived-arm stacking, which is a separate,
+    adjudicated model↔Python divergence (`CORRESPONDENCE.md` §7.2, item 6: mirror
+    `_reconcile_subject`'s `want_edge and not has_edge` presence diff inside `reconcileKeyDR`'s
+    fold guard). This filter only keeps the WIDENING from making that artifact worse, which is
+    what lets `enumJob2D_eq_enumJob2` below be an equality.
+
+    It touches `cands` ONLY. `negCands`/`uposCands` keep the UNFILTERED `enum2BaseD`, because
+    they have no `edgeHolders` fallback: `W3dJobCoverage`'s clause-3 (`neg`) obligation is
+    `s ∈ negCands` outright, so dropping an edge-holding subject there would open a real
+    coverage hole. `cands` can absorb the filter precisely because `edgeHolders` is appended
+    to it anyway.
+
+    SABOTAGE EVIDENCE (`docs/sabotage-procedure.md`) — the instrument that says "the
+    widening is state-inert" was itself controlled, by replacing the two `∉` conjuncts with
+    `True` and re-running the driver on `W4WitnessDirect.Sd`. Literal observed output, one
+    Direct-arm write then two:
+
+        with the filter (= the pre-leg baseline, byte-identical):
+          edges@R=2 total=2 ... cands2D=[alice, alice]
+          edges@R=4 total=5 ... cands2D=[bob, alice, alice, alice, alice]
+        with the filter DEFEATED:
+          edges@R=3 total=3 ... cands2D=[alice, alice, alice, alice]
+          edges@R=7 total=8 ... cands2D=[bob, alice, alice, alice, alice, alice, alice, alice, alice]
+
+    i.e. `2 ↦ 3` and `4 ↦ 7` — exactly D.1's `n ↦ 2n + 1`. Note what the control also shows:
+    `w3cJobValid_enumJob2D` still COMPILES with the filter defeated (its star-freeness comes
+    from `storedDirectSubjects`'s own wildcard filter, not from this one), so no proof in the
+    tree would have gone red. This filter is pinned by measurement, not by the type checker —
+    but NOT only by the `#eval` above: the same control run through the conformance harness
+    fails the derived-arm multiplicity ledger, and on exactly one corpus, which is the
+    end-to-end evidence that this leg is observable at all:
+
+        [direct_arm_exclusion] user:alice#.../ -> doc:d1#approver/:
+          golden=[16, 1] observed=[31, 1]  (as [lean, python])
+
+    (`formal/conformance/test_conformance_state.py::test_derived_arm_multiplicity_ledger`;
+    16 ↦ 31 is `n ↦ 2n+1` over the corpus's four cascade legs. With the filter in place the
+    ledger is UNMOVED at 16 — the widening is state-inert on every in-fragment corpus, so no
+    golden regen is owed by this leg. `direct_arm_exclusion` is the only mover because it is
+    the only `GRAPH_FRAGMENT` corpus that is not `ComputedOnly`, and on the rest
+    `enumJob2D_eq_enumJob2` makes the change an identity.) -/
+def freshDirectCands (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) :
+    List SubjectRef :=
+  (storedDirectSubjects T dt on R e).filter (fun u =>
+    decide (u.predicate = BARE ∧ u ∉ enum2Base σ dt on e ∧ u ∉ edgeHolders σ dt on R))
+
 /-- The Direct-arm-widened state-derived W3d-2 enumerated job for one derived key `(dt,R)`. -/
 def enumJob2D (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : W3cJob :=
   { dt := dt, on := on, R := R, e := e,
-    cands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate == BARE)
+    cands := (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+             ++ freshDirectCands σ T dt on R e
              ++ edgeHolders σ dt on R,
     negCands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate == BARE),
     uposCands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate != BARE) }
+
+/-- **The presence diff loses nothing**: every BARE member of the (unfiltered) widened base is
+    still a candidate — via `enum2Base` (left), via the fresh-Direct filter (middle), or via
+    `edgeHolders` (right), which is exactly what the filter tested for. Used in BOTH directions:
+    forwards for `enumJobs2At_negCands_subset`, contrapositively for `W3dJobCoverage` clause 2. -/
+theorem mem_enumJob2D_cands {σ : GraphState} {T : Store} {s : SubjectRef}
+    {dt on R : String} {e : Expr} (hs : s ∈ enum2BaseD σ T dt on R e)
+    (hsb : s.predicate = BARE) : s ∈ (enumJob2D σ T dt on R e).cands := by
+  show s ∈ ((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+             ++ freshDirectCands σ T dt on R e) ++ edgeHolders σ dt on R
+  by_cases hbase : s ∈ enum2Base σ dt on e
+  · exact List.mem_append_left _
+      (List.mem_append_left _ (List.mem_filter.mpr ⟨hbase, by simp [hsb]⟩))
+  by_cases hedge : s ∈ edgeHolders σ dt on R
+  · exact List.mem_append_right _ hedge
+  have hsd : s ∈ storedDirectSubjects T dt on R e := by
+    rcases List.mem_append.mp hs with h | h
+    · exact absurd h hbase
+    · exact h
+  exact List.mem_append_left _ (List.mem_append_right _
+    (List.mem_filter.mpr ⟨hsd, by simp [hsb, hbase, hedge]⟩))
+
+/-- On the `ComputedOnly` scope there is no `Direct` arm, so nothing is stored on a derived
+    key through one and the widened contribution is empty. -/
+theorem storedDirectSubjects_computedOnly {T : Store} {dt on R : String} {e : Expr}
+    (hco : ComputedOnly e) : storedDirectSubjects T dt on R e = [] := by
+  simp [storedDirectSubjects, exprDirectsAll_computedOnly hco]
+
+/-- **The widening is behaviourally IDENTICAL on the `ComputedOnly` scope** — the claim that
+    keeps the graph-state conformance goldens honest across the enumeration model change, as a
+    theorem rather than a comment. Note it is NOT `rfl`: `enum2Base ++ []` is not definitionally
+    `enum2Base` for a variable list. -/
+theorem enumJob2D_eq_enumJob2 {σ : GraphState} {T : Store} {dt on R : String} {e : Expr}
+    (hco : ComputedOnly e) : enumJob2D σ T dt on R e = enumJob2 σ dt on R e := by
+  have hsd : storedDirectSubjects T dt on R e = [] := storedDirectSubjects_computedOnly hco
+  have hbd : enum2BaseD σ T dt on R e = enum2Base σ dt on e := by
+    simp [enum2BaseD, hsd]
+  have hfr : freshDirectCands σ T dt on R e = [] := by simp [freshDirectCands, hsd]
+  simp [enumJob2D, enumJob2, hbd, hfr]
 
 /-- Off the widened base list, `checkFnR` reads a star-free subject as its shape-star. `∉
     enum2BaseD` splits into `∉ enum2Base` (leaf concretes + residue-named, via
@@ -740,9 +845,11 @@ theorem w3dJobCoverage_enumJob2D {S : Schema} {T : Store} {σ : GraphState}
   refine ⟨fun s hs => ?_, fun s hsb hsn hsem hunc => ?_,
     fun s hsn hcov hstar hsemF => ?_, fun s hsu hsn hsem => ?_⟩
   · exact List.mem_append_right _ (mem_edgeHolders hs)
-  · refine List.mem_append_left _ ?_
-    by_contra hnm
-    have hnb : s ∉ enum2BaseD σ T dt on R e := fun h => hnm (hbareSub s h hsb)
+  · by_contra hnm
+    -- `cands` carries the presence diff, so the contrapositive goes through
+    -- `mem_enumJob2D_cands` (which covers all three of its segments) rather than
+    -- through the bare filter alone.
+    have hnb : s ∉ enum2BaseD σ T dt on R e := fun h => hnm (mem_enumJob2D_cands h hsb)
     have hkey : σ.checkFnR T s dt on R e = σ.checkFnR T (starSubj s.shape) dt on R e :=
       checkFnR_eq_star_of_not_baseD hcd hba hcl hsn hon hnb
     have hbs : σ.checkFnR T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=

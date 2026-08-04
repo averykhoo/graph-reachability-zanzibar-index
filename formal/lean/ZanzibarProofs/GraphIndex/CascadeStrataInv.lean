@@ -352,10 +352,10 @@ theorem reachedByW3d2C_residueDeclared {σ : GraphState} {S : Schema} {T : Store
 /-- The enumerated jobs carry their key facts BY CONSTRUCTION: the key list is
     `cascadeKeysAbove` (derived + declared + concrete, `mem_cascadeKeysAbove_props`)
     and the enumeration looks the def up itself. -/
-theorem enumJobs2At_keyFacts {S : Schema} {σe : GraphState}
+theorem enumJobs2At_keyFacts {S : Schema} {T : Store} {σe : GraphState}
     {keys : List (String × String × String)}
     (hk : ∀ k ∈ keys, isDerived S (k.1, k.2.1) = true ∧ k.2.2 ≠ STAR) :
-    ∀ j ∈ enumJobs2At S σe keys, W3cJobKeyFacts S j := by
+    ∀ j ∈ enumJobs2At S T σe keys, W3cJobKeyFacts S j := by
   intro j hj
   unfold enumJobs2At at hj
   obtain ⟨k, hkmem, hjk⟩ := List.mem_filterMap.mp hj
@@ -481,5 +481,17 @@ theorem enumJob2_negCands_subset (σ : GraphState) (dt on R : String) (e : Expr)
   show c ∈ (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
     ++ edgeHolders σ dt on R
   exact List.mem_append_left _ hc
+
+/-- The Direct-arm-widened job's candidate discipline. NOT the one-line
+    `List.mem_append_left` its `enumJob2` sibling is: `cands` carries the leg-2 presence
+    diff (`freshDirectCands`), so a `negCands` member reaches `cands` through whichever of
+    the three segments already holds it — exactly what `mem_enumJob2D_cands` decides. -/
+theorem enumJob2D_negCands_subset (σ : GraphState) (T : Store) (dt on R : String)
+    (e : Expr) :
+    ∀ c ∈ (enumJob2D σ T dt on R e).negCands, c ∈ (enumJob2D σ T dt on R e).cands := by
+  intro c hc
+  have hc' : c ∈ (enum2BaseD σ T dt on R e).filter (fun u => u.predicate == BARE) := hc
+  obtain ⟨hmem, hb⟩ := List.mem_filter.mp hc'
+  exact mem_enumJob2D_cands hmem (eq_of_beq hb)
 
 end Zanzibar

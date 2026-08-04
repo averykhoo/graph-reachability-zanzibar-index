@@ -261,30 +261,119 @@ theorem w3cJobValid_enumJob2 {S : Schema} {σ : GraphState}
     simp only [enumJob2] at hc
     exact enum2Base_name_ne_star hres (List.mem_filter.mp hc).1
 
+/-! ## `enumJob2D` is `W3cJobValid` — the Direct-arm-widened job (E-chain leg 2) -/
+
+/-- Every `enum2BaseD` member is star-free. The `enum2Base` half is
+    `enum2Base_name_ne_star` (residue star-freeness); the Direct-arm half is
+    `storedDirectSubjects_name_ne_star`, which is UNCONDITIONAL — leg 1 put the
+    faithfulness wildcard filter (Python's `_incoming_concretes` / upos-loop
+    `n.wildcard != ''` skips) inside `storedDirectSubjects` itself. So the widened
+    enumeration needs NO new hypothesis here. -/
+theorem enum2BaseD_name_ne_star {σ : GraphState} {T : Store} {dt on R : String}
+    {e : Expr} {c : SubjectRef} (hres : ResidueSubjectsStarFree σ)
+    (h : c ∈ enum2BaseD σ T dt on R e) : c.name ≠ STAR := by
+  rw [enum2BaseD, List.mem_append] at h
+  rcases h with hl | hr
+  · exact enum2Base_name_ne_star hres hl
+  · exact storedDirectSubjects_name_ne_star hr
+
+/-- **`enumJob2D` is a valid W3c job — under EXACTLY the hypotheses `w3cJobValid_enumJob2`
+    takes.** This is the leg-2 payoff, and it is why the plan's step-2 decision
+    (`ReconcileCorrect.lean::DirectArmsConcrete` *plus* the `storedDirectSubjects` star-filter)
+    was the right one: the `storedDirectSubjects` half of the star-freeness hole
+    (`HANDOFF.md` Board B1) is closed by the filter alone, with no fragment carry, so this
+    lemma needs no `StoreValidRulesD`/`DirectArmsConcrete` premise at all.
+
+    The `edgeHolders` half of the hole is NOT closed here — it is discharged at the call
+    sites by `hsns`, which is where `DirectArmsConcrete` earns its keep
+    (`CascadeStrataSettle.lean::reachedByW3d2_Rnode_source_name_ne_star_d`). -/
+theorem w3cJobValid_enumJob2D {S : Schema} {σ : GraphState} {T : Store}
+    (hWF : WF S) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hon : on ≠ STAR)
+    (hsb : ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.pred = BARE)
+    (hsns : ∀ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges → x.name ≠ STAR)
+    (hres : ResidueSubjectsStarFree σ) :
+    W3cJobValid S (enumJob2D σ T dt on R e) := by
+  -- the `edgeHolders` segment, shared by the bare and star-free cands clauses
+  have hedge : ∀ c ∈ edgeHolders σ dt on R,
+      ∃ x, (x, objNode ⟨dt, on⟩ R) ∈ σ.edges ∧ c = nodeSubj x := by
+    intro c hc
+    rw [edgeHolders, List.mem_map] at hc
+    obtain ⟨ed, hed, hce⟩ := hc
+    rw [List.mem_filter] at hed
+    obtain ⟨hedm, hedeq⟩ := hed
+    have hb : ed.2 = objNode ⟨dt, on⟩ R := eq_of_beq hedeq
+    exact ⟨ed.1, by rw [← hb]; exact hedm, hce.symm⟩
+  -- the fresh-Direct segment sits inside `storedDirectSubjects`
+  have hfresh : ∀ c ∈ freshDirectCands σ T dt on R e,
+      c.predicate = BARE ∧ c ∈ storedDirectSubjects T dt on R e := by
+    intro c hc
+    rw [freshDirectCands, List.mem_filter] at hc
+    exact ⟨(of_decide_eq_true hc.2).1, hc.1⟩
+  unfold W3cJobValid
+  refine ⟨lookup_rel_ne_bare hWF hlk, ?_, ?_, ?_, ?_, ?_, hder, hlk, hon⟩
+  · -- cands are bare
+    intro c hc
+    simp only [enumJob2D, List.mem_append] at hc
+    rcases hc with (hcl | hcm) | hcr
+    · rw [List.mem_filter] at hcl; exact eq_of_beq hcl.2
+    · exact (hfresh c hcm).1
+    · obtain ⟨x, hx, hce⟩ := hedge c hcr
+      rw [hce]; exact hsb x hx
+  · -- cands are star-free
+    intro c hc
+    simp only [enumJob2D, List.mem_append] at hc
+    rcases hc with (hcl | hcm) | hcr
+    · exact enum2Base_name_ne_star hres (List.mem_filter.mp hcl).1
+    · exact storedDirectSubjects_name_ne_star (hfresh c hcm).2
+    · obtain ⟨x, hx, hce⟩ := hedge c hcr
+      rw [hce]; exact hsns x hx
+  · -- negCands are star-free
+    intro c hc
+    simp only [enumJob2D] at hc
+    exact enum2BaseD_name_ne_star hres (List.mem_filter.mp hc).1
+  · -- uposCands are non-bare
+    intro c hc
+    simp only [enumJob2D] at hc
+    have hb := (List.mem_filter.mp hc).2
+    intro heq; rw [heq] at hb; simp at hb
+  · -- uposCands are star-free
+    intro c hc
+    simp only [enumJob2D] at hc
+    exact enum2BaseD_name_ne_star hres (List.mem_filter.mp hc).1
+
 /-! ## The per-round enumerated job lists -/
 
 /-- The enumerated job list for a key set (jobs enumerated at `σe` — round 1 the
-    leg start, round 2 the MID state). -/
-def enumJobs2At (S : Schema) (σe : GraphState)
+    leg start, round 2 the MID state).
+
+    **E-chain leg 2 (2026-08-04): this now enumerates `enumJob2D`, and therefore takes the
+    `Store`.** The Direct-arm-widened job needs `T` because a stored Direct-arm grant on a
+    derived key is a candidate that lives in the FIXED store, not in any mutating operand
+    residue (`CascadeStrataEnum.lean`'s leg-5c note). The change is **behaviourally
+    identical on the `ComputedOnly` scope** — `enumJob2D_eq_enumJob2`, a theorem, not a
+    comment — which is what keeps the graph-state conformance goldens honest across it. -/
+def enumJobs2At (S : Schema) (T : Store) (σe : GraphState)
     (keys : List (String × String × String)) : List W3cJob :=
   keys.filterMap (fun k =>
-    (S.lookup (k.1, k.2.1)).map (fun e => enumJob2 σe k.1 k.2.2 k.2.1 e))
+    (S.lookup (k.1, k.2.1)).map (fun e => enumJob2D σe T k.1 k.2.2 k.2.1 e))
 
 /-- Every declared key has an enumerated job (coverage by construction). -/
-theorem enumJobs2At_cover {S : Schema} {σe : GraphState}
+theorem enumJobs2At_cover {S : Schema} {T : Store} {σe : GraphState}
     {keys : List (String × String × String)}
     (hk : ∀ k ∈ keys, ∃ e, S.lookup (k.1, k.2.1) = some e) :
-    ∀ k ∈ keys, ∃ j ∈ enumJobs2At S σe keys, j.key = k := by
+    ∀ k ∈ keys, ∃ j ∈ enumJobs2At S T σe keys, j.key = k := by
   intro k hkm
   obtain ⟨e, hlk⟩ := hk k hkm
-  refine ⟨enumJob2 σe k.1 k.2.2 k.2.1 e, ?_, rfl⟩
+  refine ⟨enumJob2D σe T k.1 k.2.2 k.2.1 e, ?_, rfl⟩
   refine List.mem_filterMap.mpr ⟨k, hkm, ?_⟩
   rw [hlk]; rfl
 
 /-- Every enumerated job's key is in the key set (scope by construction). -/
-theorem enumJobs2At_scope {S : Schema} {σe : GraphState}
+theorem enumJobs2At_scope {S : Schema} {T : Store} {σe : GraphState}
     {keys : List (String × String × String)} :
-    ∀ j ∈ enumJobs2At S σe keys, j.key ∈ keys := by
+    ∀ j ∈ enumJobs2At S T σe keys, j.key ∈ keys := by
   intro j hj
   rw [enumJobs2At, List.mem_filterMap] at hj
   obtain ⟨k, hk, hfk⟩ := hj
@@ -293,15 +382,18 @@ theorem enumJobs2At_scope {S : Schema} {σe : GraphState}
   exact hk
 
 /-- Every enumerated job is `W3cJobValid`, from per-key edge-source facts at the
-    enumeration state. -/
-theorem enumJobs2At_valid {S : Schema} {σe : GraphState}
+    enumeration state. **Hypotheses UNCHANGED by the widening** — the widened
+    candidate list's star-freeness is unconditional (leg 1's faithfulness filter inside
+    `storedDirectSubjects`), so this needs no `StoreValidRulesD`/`DirectArmsConcrete`
+    carry. -/
+theorem enumJobs2At_valid {S : Schema} {T : Store} {σe : GraphState}
     {keys : List (String × String × String)} (hWF : WF S)
     (hprops : ∀ k ∈ keys, isDerived S (k.1, k.2.1) = true ∧ k.2.2 ≠ STAR)
     (hedge : ∀ k ∈ keys,
       (∀ x, (x, objNode ⟨k.1, k.2.2⟩ k.2.1) ∈ σe.edges → x.pred = BARE) ∧
       (∀ x, (x, objNode ⟨k.1, k.2.2⟩ k.2.1) ∈ σe.edges → x.name ≠ STAR))
     (hres : ResidueSubjectsStarFree σe) :
-    ∀ j ∈ enumJobs2At S σe keys, W3cJobValid S j := by
+    ∀ j ∈ enumJobs2At S T σe keys, W3cJobValid S j := by
   intro j hj
   rw [enumJobs2At, List.mem_filterMap] at hj
   obtain ⟨k, hk, hfk⟩ := hj
@@ -309,20 +401,20 @@ theorem enumJobs2At_valid {S : Schema} {σe : GraphState}
   obtain ⟨hder, hon⟩ := hprops k hk
   obtain ⟨hsb, hsns⟩ := hedge k hk
   rw [← hje]
-  exact w3cJobValid_enumJob2 hWF hlk hder hon hsb hsns hres
+  exact w3cJobValid_enumJob2D hWF hlk hder hon hsb hsns hres
 
 /-- The ROUND-1 enumerated jobs: the frontier keys above the stored watermark,
     enumerated at the leg-start state (round 1 of
     `index_v4/processor.py::DeltaProcessor._run_cascade`'s `for _ in range(rounds)`
     loop). -/
-def enumJobs2R1 (S : Schema) (σ : GraphState) : List W3cJob :=
-  enumJobs2At S σ (cascadeKeysAbove S σ σ.watermark)
+def enumJobs2R1 (S : Schema) (T : Store) (σ : GraphState) : List W3cJob :=
+  enumJobs2At S T σ (cascadeKeysAbove S σ σ.watermark)
 
 /-- The ROUND-2 enumerated jobs: the keys of the rows round 1 emitted, enumerated
     at the MID state (round 2 reads the graph as round 1 left it). -/
 def enumJobs2R2 (S : Schema) (T : Store) (σ : GraphState) : List W3cJob :=
-  enumJobs2At S (reconcileJobsLR S T σ (enumJobs2R1 S σ))
-    (cascadeKeysAbove S (reconcileJobsLR S T σ (enumJobs2R1 S σ))
+  enumJobs2At S T (reconcileJobsLR S T σ (enumJobs2R1 S T σ))
+    (cascadeKeysAbove S (reconcileJobsLR S T σ (enumJobs2R1 S T σ))
       (σ.frontierMax σ.watermark))
 
 /-! ## The fully-operational two-round scheduler closure -/
@@ -351,7 +443,7 @@ inductive ReachedByW3d2E : GraphState → Schema → Store → Prop where
   -- retraction, so remove-from-undrained is unfaithful and would break reachedByW3d2C_settled).
   | cascade {σ : GraphState} {S : Schema} {T : Store}
       (hprev : ReachedByW3d2E σ S T) :
-      ReachedByW3d2E (runCascade2 S T σ (enumJobs2R1 S σ) (enumJobs2R2 S T σ)) S T
+      ReachedByW3d2E (runCascade2 S T σ (enumJobs2R1 S T σ) (enumJobs2R2 S T σ)) S T
 
 /-- **The projection `ReachedByW3d2E ⇒ ReachedByW3d2C`.** Per cascade leg:
     validity/cover/scope structurally; round-1 CONDITIONAL coverage via
@@ -400,7 +492,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hC
     have hres_p : ResidueSubjectsStarFree σp := reachedByW3d2_residueStarFree hW3d2
     -- round-1 validity: per-key edge facts at the leg start
-    have hjv1 : ∀ j ∈ enumJobs2R1 S σp, W3cJobValid S j := by
+    have hjv1 : ∀ j ∈ enumJobs2R1 S T σp, W3cJobValid S j := by
       refine enumJobs2At_valid hWF ?_ ?_ hres_p
       · intro k hk
         obtain ⟨hd, _, hon⟩ := mem_cascadeKeysAbove_props hk
@@ -412,18 +504,18 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
           reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV⟩
     -- MID-state facts, transported through the round-1 batch
     have hσS : σp.schema = S := reachedByW3d2_schema hW3d2
-    have hσmidS : (reconcileJobsLR S T σp (enumJobs2R1 S σp)).schema = S := by
+    have hσmidS : (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).schema = S := by
       rw [reconcileJobsLR_schema]; exact hσS
-    have hres_mid : ResidueSubjectsStarFree (reconcileJobsLR S T σp (enumJobs2R1 S σp)) :=
+    have hres_mid : ResidueSubjectsStarFree (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) :=
       residueSubjectsStarFree_reconcileJobsLR _ σp hjv1 hres_p
-    have hclmid : ∀ ab ∈ (reconcileJobsLR S T σp (enumJobs2R1 S σp)).edges,
-        ab.1 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S σp)).nodes ∧
-        ab.2 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S σp)).nodes :=
+    have hclmid : ∀ ab ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges,
+        ab.1 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).nodes ∧
+        ab.2 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).nodes :=
       edgesClosed_reconcileJobsLR _ σp (reachedByW3d2_edgesClosed hW3d2)
     have htb : ∀ a b, (a, b) ∈ σp.edges → b.pred ≠ BARE :=
       reachedByW3d2_edge_target_ne_bare hW3d2 hWF hSV
     obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow hW3d2 hNK hCO hSV hterm
-    have hshmid : UntaintedShadow S (reconcileJobsLR S T σp (enumJobs2R1 S σp)) σ0 :=
+    have hshmid : UntaintedShadow S (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) σ0 :=
       untaintedShadow_reconcileJobsLR _ σp σ0 hsh (reachedByRules_of_admitted h0)
         hSV hNK hCO hjv1
     -- round-2 validity: per-key edge facts transported to MID
@@ -440,7 +532,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
           reconcileJobsLR_source_name_ne_star hjv1
             (reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV)⟩
     -- round-1 CONDITIONAL coverage: `w3dJobCoverage_enumJob2_state` at the leg start
-    have hcovg1 : ∀ j ∈ enumJobs2R1 S σp, W3dJobOpsSettled S T σp j →
+    have hcovg1 : ∀ j ∈ enumJobs2R1 S T σp, W3dJobOpsSettled S T σp j →
         W3dJobCoverage S T σp j := by
       intro j hj hops
       rw [enumJobs2R1, enumJobs2At, List.mem_filterMap] at hj
@@ -448,13 +540,18 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
       obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
       obtain ⟨hder, _, hon⟩ := mem_cascadeKeysAbove_props hk
       rw [← hje] at hops ⊢
+      -- THIS chain is `ComputedOnly`-scoped (`hCO`), so the widened enumeration IS the
+      -- old one here (`enumJob2D_eq_enumJob2`) and the landed coverage discharge applies
+      -- unchanged. The `_d` chain (leg 4) is where `enumJob2D`'s extra candidates are
+      -- covered on their own terms.
+      rw [enumJob2D_eq_enumJob2 (hCO _ _ _ hlk hder)] at hops ⊢
       exact w3dJobCoverage_enumJob2_state hWF hTT hNK hR hSV hBS hTS hMatch
         hStrat hterm hCO hWSbare hW3d2 hlk hder (hCO _ _ _ hlk hder) hon
         (hLU2 _ _ _ hlk hder) (fun r' hr' hd' => hops r' hr' hd')
     -- round-2 CONDITIONAL coverage: the routed leg context at the MID state
     have hcovg2 : ∀ j ∈ enumJobs2R2 S T σp,
-        W3dJobOpsSettled S T (reconcileJobsLR S T σp (enumJobs2R1 S σp)) j →
-        W3dJobCoverage S T (reconcileJobsLR S T σp (enumJobs2R1 S σp)) j := by
+        W3dJobOpsSettled S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) j →
+        W3dJobCoverage S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) j := by
       intro j hj hops
       rw [enumJobs2R2, enumJobs2At, List.mem_filterMap] at hj
       obtain ⟨k, hk, hfk⟩ := hj
@@ -463,14 +560,15 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
       rw [← hje] at hops ⊢
       have hco := hCO _ _ _ hlk hder
       have hLU2e := hLU2 _ _ _ hlk hder
+      rw [enumJob2D_eq_enumJob2 hco] at hops ⊢
       -- the operand baseline with the reach collapse at MID
       have hopsC : ∀ r' ∈ computedRefs e, isDerived S (k.1, r') = true →
-          SettledKey S T (reconcileJobsLR S T σp (enumJobs2R1 S σp)) k.1 k.2.2 r' ∧
-          CompleteKey S T (reconcileJobsLR S T σp (enumJobs2R1 S σp)) k.1 k.2.2 r' ∧
-          (∀ u, NReaches (reconcileJobsLR S T σp (enumJobs2R1 S σp)).edges u
+          SettledKey S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) k.1 k.2.2 r' ∧
+          CompleteKey S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) k.1 k.2.2 r' ∧
+          (∀ u, NReaches (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges u
               (objNode ⟨k.1, k.2.2⟩ r') →
             (u, objNode ⟨k.1, k.2.2⟩ r')
-              ∈ (reconcileJobsLR S T σp (enumJobs2R1 S σp)).edges) := by
+              ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges) := by
         intro r' hr' hd'
         obtain ⟨hset, hcomp⟩ := hops r' hr' hd'
         obtain ⟨e', hlk'⟩ := isDerived_declared hd'
@@ -482,7 +580,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
       obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS
         hMatch hStrat hterm hCO hWSbare h0 hshmid hσmidS hlk hder hco hon hLU2e hopsC
       exact w3dJobCoverage_enumJob2 hco hclmid hon hbridge hcovDecl hWSbare
-    exact ReachedByW3d2C.cascade (enumJobs2R1 S σp) (enumJobs2R2 S T σp)
+    exact ReachedByW3d2C.cascade (enumJobs2R1 S T σp) (enumJobs2R2 S T σp)
       hjv1 hjv2
       (enumJobs2At_cover (fun k hk => (mem_cascadeKeysAbove_props hk).2.1))
       enumJobs2At_scope

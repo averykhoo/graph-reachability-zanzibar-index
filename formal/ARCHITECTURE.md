@@ -405,8 +405,11 @@ witnessed by `W4WitnessDirect` at exactly the `Sd`/`Td` pair) gives `check = sem
 every fully-drained `ReachedByW3d2C` state over a widened
 `ComputedOrDirect ∧ DirectArmsBare` fragment under `StoreValidRulesD` admission. Closing
 the gap needs the E-chain widening recorded at `FullScope.lean:561-565` as a "recorded
-follow-up, **NOT done**": the `enumJob2 → enumJob2D` enumeration swap, a `_d` projection
-of `reachedByW3d2E_toC`, and `GraphAdmission.storeValid → StoreValidRulesD`.
+follow-up, **NOT done**": the `enumJob2 → enumJob2D` enumeration swap (**DONE 2026-08-04,
+arc leg 2** — `enumJobs2At` runs `enumJob2D`), a `_d` projection of `reachedByW3d2E_toC`
+(legs 3–4, open), and `GraphAdmission.storeValid → StoreValidRulesD` (leg 5, open). **The
+vacuity below is unchanged until leg 5** — leg 2 widened the enumeration, not the
+admission bundle.
 
 **And the conformance evidence on that shape is differential, not theorem-backed.**
 `direct_arm_exclusion` is in `GRAPH_FRAGMENT` and IS driven through the graph and state
@@ -550,8 +553,9 @@ operator is unrestricted)**, so what remains under (c) is the **LEAF** fragment
 left, because until the `Direct`-arm half lands the final theorems are vacuous on the
 commonest boolean schema in the language (§6.0). Its `Direct`-arm half is already proved
 at C-chain level (`graph_correct_w3d2_d`), but the final unsuffixed theorems stay
-`ComputedOnly`-scoped pending the E-chain widening — `enumJob2 → enumJob2D`, a `_d`
-projection of `reachedByW3d2E_toC`, and `GraphAdmission.storeValid → StoreValidRulesD` —
+`ComputedOnly`-scoped pending the E-chain widening — `enumJob2 → enumJob2D` (**DONE
+2026-08-04, leg 2**), a `_d` projection of `reachedByW3d2E_toC` (legs 3–4) and
+`GraphAdmission.storeValid → StoreValidRulesD` (leg 5), both still open —
 recorded at `FullScope.lean:561-565` as "NOT done"; (d) remove legs on the Lean side — **DONE 2026-07-19f** at the
 validly-stored + drained-prior scope: the `remove` constructor on `ReachedByW3d2`/`C`/`E`
 makes T2a/T2b + `Exec.graphRun_check_eq_sem` cover retraction of a `t ∈ T` from a drained

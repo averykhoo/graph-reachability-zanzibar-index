@@ -63,13 +63,13 @@ theorem drain_removeLoggedRules_untOccCount {σ : GraphState} {S : Schema} {T : 
     (h : ReachedByW3d2E σ S T) (t : Tuple) (ht : t ∈ T) (a b : NodeKey)
     (hb : isDerived S (b.type, b.pred) = false) :
     (runCascade2 S (T.erase t) (σ.removeLoggedRules S t)
-        (enumJobs2R1 S (σ.removeLoggedRules S t))
+        (enumJobs2R1 S (T.erase t) (σ.removeLoggedRules S t))
         (enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t))).edges.count (a, b)
       = untOccCount S (T.erase t) a b := by
   have hkfacts : ∀ (σe : GraphState) (n : Nat),
       ∀ k ∈ cascadeKeysAbove S σe n, isDerived S (k.1, k.2.1) = true ∧ k.2.2 ≠ STAR :=
     fun σe n k hk => ⟨(mem_cascadeKeysAbove_props hk).1, (mem_cascadeKeysAbove_props hk).2.2⟩
-  have h1 : ∀ j ∈ enumJobs2R1 S (σ.removeLoggedRules S t),
+  have h1 : ∀ j ∈ enumJobs2R1 S (T.erase t) (σ.removeLoggedRules S t),
       b ≠ objNode ⟨j.dt, j.on⟩ j.R := enumJobs2At_Rnode_ne (hkfacts _ _) hb
   have h2 : ∀ j ∈ enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t),
       b ≠ objNode ⟨j.dt, j.on⟩ j.R := enumJobs2At_Rnode_ne (hkfacts _ _) hb
@@ -86,7 +86,7 @@ theorem mem_drain_removeLoggedRules_untainted {σ : GraphState} {S : Schema} {T 
     (h : ReachedByW3d2E σ S T) (t : Tuple) (ht : t ∈ T) (a b : NodeKey)
     (hb : isDerived S (b.type, b.pred) = false) :
     (a, b) ∈ (runCascade2 S (T.erase t) (σ.removeLoggedRules S t)
-        (enumJobs2R1 S (σ.removeLoggedRules S t))
+        (enumJobs2R1 S (T.erase t) (σ.removeLoggedRules S t))
         (enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t))).edges
       ↔ 0 < untOccCount S (T.erase t) a b := by
   rw [← drain_removeLoggedRules_untOccCount h t ht a b hb, Nat.pos_iff_ne_zero, ne_eq,
@@ -236,7 +236,7 @@ theorem untEdgeMem_drain_removeLoggedRules_rebuild {σ σr : GraphState} {S : Sc
     (hr : ReachedByW3d2E σr S (T.erase t)) (a b : NodeKey)
     (hb : isDerived S (b.type, b.pred) = false) :
     (a, b) ∈ (runCascade2 S (T.erase t) (σ.removeLoggedRules S t)
-        (enumJobs2R1 S (σ.removeLoggedRules S t))
+        (enumJobs2R1 S (T.erase t) (σ.removeLoggedRules S t))
         (enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t))).edges
       ↔ (a, b) ∈ σr.edges := by
   rw [mem_drain_removeLoggedRules_untainted h t ht a b hb,

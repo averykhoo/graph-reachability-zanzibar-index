@@ -1518,4 +1518,42 @@ namespace Zanzibar
 #print axioms reachedByW3d2_Rnode_source_name_ne_star_d
 #print axioms exprDirects_ne_nil_of_directsOnly
 
+-- E-chain Direct-arm widening, LEG 2 (2026-08-04) — THE ENUMERATION MODEL CHANGE.
+-- `enumJobs2At` (hence `enumJobs2R1`/`enumJobs2R2`, `ReachedByW3d2E.cascade` and the Exec
+-- driver's `cascadeLeg`) now enumerates the Direct-arm-widened **`enumJob2D`** and therefore
+-- takes the `Store` — a stored Direct-arm grant on a derived key is a candidate that lives in
+-- the FIXED store, not in a mutating operand residue. **This leg moves the DEFINITION pin
+-- while every headline STATEMENT stays byte-identical** — precisely the attack that pin
+-- exists for (`history/echain-widening-plan-2026-07-28.md` §A.5).
+-- **`enumJob2D_eq_enumJob2`** is what makes the change safe to land ahead of the `_d` chain:
+-- on the `ComputedOnly` scope the two jobs are EQUAL (via `exprDirectsAll_computedOnly`, the
+-- `exprDirectsAll` analogue of `exprDirects_computedOnly` and strictly stronger than it), so
+-- `reachedByW3d2E_toC` — which is `hCO`-scoped — rewrites back to the landed coverage
+-- discharges unchanged, and the graph-state conformance goldens cannot move on any
+-- in-fragment corpus. "Behaviourally identical on the CO scope" is now a theorem, not a
+-- comment.
+-- **`w3cJobValid_enumJob2D`** takes EXACTLY the hypotheses `w3cJobValid_enumJob2` takes —
+-- no `StoreValidRulesD`, no `DirectArmsConcrete`. That is leg 1's star-filter paying off: the
+-- `storedDirectSubjects` half of the Board-B1 star-freeness hole is closed unconditionally,
+-- and the `edgeHolders` half stays where it belongs, at the call sites' `hsns`.
+-- ★ THE DE-DUP OBLIGATION (Leg-0 probe D.1) is discharged by **`freshDirectCands`**, a
+-- presence diff on the Direct-arm contribution to `cands` (mirroring Python's id-keyed
+-- `candidates` dict), NOT by making `admitEdge` reject a present edge — that global version
+-- would break the untainted arm, whose multiplicity is load-bearing (`untOccCount`,
+-- erase-one removal) and is now compared exactly (`CORRESPONDENCE.md` §7.2). Reproduced
+-- before fixing (`graphRun` on the `W4WitnessDirect` pair): `cands = [alice, alice]`, 3 edges
+-- at the R-node against the baseline's 2; after, byte-identical to baseline; with the filter
+-- defeated as a control, `n ↦ 2n+1` returns (2↦3, 4↦7). Full evidence in
+-- `freshDirectCands`'s docstring — and note it is pinned by MEASUREMENT, not by the type
+-- checker: the tree still compiles with the filter defeated.
+-- **`mem_enumJob2D_cands`** is the presence diff's soundness core (nothing is lost: a BARE
+-- member of the unfiltered widened base reaches `cands` through whichever segment already
+-- holds it), used forwards for `enumJob2D_negCands_subset` and contrapositively for
+-- `W3dJobCoverage` clause 2. Standard axioms only:
+#print axioms exprDirectsAll_computedOnly
+#print axioms enumJob2D_eq_enumJob2
+#print axioms w3cJobValid_enumJob2D
+#print axioms mem_enumJob2D_cands
+#print axioms enumJob2D_negCands_subset
+
 end Zanzibar

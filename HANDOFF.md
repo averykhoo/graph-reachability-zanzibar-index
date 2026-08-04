@@ -81,9 +81,10 @@ open). This file is now only what a future session must ACT on.
         Full measurement + the two further options (rebuild-vs-K-deltas amortisation,
         crossover K* ≈ 30–40; and routing hub workloads to the set engine, 0.03 s vs
         74 s at N=960): `docs/spec-deviations.md` 2026-07-29c.
-      * **(B) E-chain Leg 2** — the enumeration model change, now the main open arc.
-        **Read the plan's §D.6 row before starting:** it is now mechanical, and the leg
-        is *expected* to break `test_derived_arm_multiplicity_ledger`.
+      * **(B) E-chain Leg 3** — the arc's next step. **Leg 2 LANDED 2026-08-04**; see the
+        Leg-2 block below, and note that §D.6's expectation ("Leg 2 breaks
+        `test_derived_arm_multiplicity_ledger` by construction") was **refuted by
+        measurement** — it did not, and no golden was regenerated.
 
       **(A) The store-level write quota — the only one with real production value.**
       `ZT-P1-6a` is only half closed. `ZANZIBAR_MAX_CLOSURE_FANOUT` (landed 2026-07-27,
@@ -129,21 +130,31 @@ open). This file is now only what a future session must ACT on.
         fragment clause is **machine-confirmed load-bearing**, not defensive: a 262-run sweep
         over every chain state found 0 STAR-sourced in-edges at derived R-nodes out of 824;
         drop the clause and 122 stores produce one.
-      * **Next concrete step: Leg 2** — the enumeration model change. **`enum2BaseD`'s `.dedup`
-        goes first** or the leg is unrunnable. This is the first leg that moves the definition
-        pin (6 rows changed, 3 added), so its golden regen gets its own commit.
-      * **The P3 multiplicity finding this arc surfaced is ADJUDICATED + CLOSED**
-        (2026-07-29). Consequence for Leg 2, and the reason it is mentioned here at
-        all: **the plan's §D.6 hand-probe is now MECHANICAL.** Leg 2 will fail
-        `test_derived_arm_multiplicity_ledger` by construction — read the printed
-        `golden=[lean, python] observed=[…]` table, confirm the movement is the
-        `enum2BaseD` dedup you intended, then regenerate with
-        `ZANZIBAR_UPDATE_SNAPSHOTS=1` in its own commit alongside the definition-pin
-        regen. ⚠ Do **not** discharge the dedup obligation by making `admitEdge` reject
-        an already-present edge — that breaks the untainted arm, which is load-bearing
-        (`untOccCount`, erase-one removal) and is now compared exactly, so it goes red
-        on `nary_union` (3 → 1). Mirror Python's presence diff inside `reconcileKeyDR`'s
-        fold guard instead. Detail: `formal/CORRESPONDENCE.md` §7.2.
+      * **Leg 2 LANDED 2026-08-04 — the enumeration model change.** `enumJobs2At` takes the
+        `Store` and enumerates `enumJob2D`; audits 460 → **465**; **headline STATEMENTS
+        26/26 byte-identical while the DEFINITION pin moved 139 → 142** — the
+        statement-stable/meaning-changed asymmetry gate 4c exists for. The leg lands with
+        none of the `_d` chain because `enumJob2D_eq_enumJob2` makes the change an identity
+        on the `ComputedOnly` scope, which is all `reachedByW3d2E_toC` is stated over.
+      * **★ Two of the plan's instructions were WRONG, and both were caught by measuring
+        rather than following them** (`formal/history/echain-widening-plan-2026-07-28.md`
+        §C.2 records both):
+        1. **"`enum2BaseD`'s `.dedup` goes first or the leg is unrunnable"** — the `.dedup`
+           does not fix D.1. Reproducing D.1 first showed the duplicate is between
+           `storedDirectSubjects` and `edgeHolders`, with `enum2BaseD` a one-element list
+           on which `.dedup` is a no-op. What landed is `freshDirectCands`, a presence diff
+           on the Direct-arm contribution to `cands` only.
+        2. **"Leg 2 is expected to break `test_derived_arm_multiplicity_ledger`"** — it does
+           not. All 48 state-conformance tests pass and **no golden was regenerated.** That
+           green was controlled, not trusted: defeating the presence diff moves exactly one
+           corpus, `[direct_arm_exclusion] golden=[16, 1] observed=[31, 1]`, so the gate
+           does see the leg. ⚠ But the tree still COMPILES with the filter defeated — the
+           presence diff is pinned by the ledger, not the type checker.
+      * The standing warning still holds for the SEPARATE, still-open item it was about
+        (`formal/CORRESPONDENCE.md` §7.2 item 6 — the baseline `n ↦ 2n` derived-arm
+        stacking): do **not** discharge it by making `admitEdge` reject an already-present
+        edge, which breaks the untainted arm (`nary_union` 3 → 1); the faithful fix is a
+        `¬ hasEdge` conjunct in `reconcileKeyDR`'s fold guard. Leg 2 did not touch it.
 
       **Before starting any of them:** `bash formal/verify.sh lean` should be green in
       ~30 s warm. If it is not, fix that first — it is the fastest signal in the repo.
