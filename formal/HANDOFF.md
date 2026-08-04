@@ -51,19 +51,21 @@ merely narrow — on any store written through the `Direct` arm of a derived def
    `affectedKeys` fix) — see `history/PROOF_STATUS.md` for the full ledger. A session
    that kills a false statement is a GOOD session; record the finding.
 3. **Green gate.** Every increment must keep `bash formal/verify.sh` green: lake build
-   + **0 sorries** + zcli + axiom audit (**457** `#print axioms` reports, one per audited
+   + **0 sorries** + zcli + the axiom audit (one `#print axioms` report per audited
    theorem, only `[propext, Classical.choice, Quot.sound]`) + the audit IDENTITY pin
    (`formal/audited_theorems.txt`) + the headline STATEMENT pin
-   (`formal/headline_statements.txt`, 26 theorems) + the headline DEFINITION pin
-   (`formal/headline_definitions.txt`, 139 rows / 132 declarations — what those
-   statements' words MEAN, transitively) + the `CORRESPONDENCE.md` anchor pin
-   + **465** Python conformance tests, 0 skips, 0 xfails, + **`tests/`** (744 collected)
-   (conformance count re-measured 2026-07-27 after the ZT-P4-5/6 work below —
-   `pytest formal/conformance/ -q --collect-only` = **464** as re-measured 2026-07-28
-   (450 on 2026-07-27, 395 before that); the gate
-   enforces `-ge` FLOORS, not the exact numbers — see `FINAL_REVIEW.md`'s header — so
-   re-measure, don't quote. `MIN_CONF_ALL` was raised to 464 (2026-07-28) and `MIN_TESTS_ALL` to
-   762 on 2026-07-27, so the floors now sit AT measured reality rather than below it).
+   (`formal/headline_statements.txt`) + the headline DEFINITION pin
+   (`formal/headline_definitions.txt` — what those statements' words MEAN, transitively)
+   + the `CORRESPONDENCE.md` anchor pin + the Python conformance suite, 0 skips,
+   0 xfails, + **`tests/`**.
+   **★ No counts here, deliberately.** This bullet carried four of them (457 audits, 139
+   definition rows, 465 conformance, 744 collected) and by 2026-08-05 **every one was
+   stale** — the same `ZT-P3-5` rot that has now been hand-fixed three times elsewhere.
+   Live figures live in ONE machine-checked place, `FINAL_REVIEW.md`'s generated counts
+   block (`verify.sh` step 4e; regenerate with
+   `python -m formal.conformance.doc_counts --generate`). Read them there. The gate
+   enforces `-ge` FLOORS rather than exact numbers, so a quoted count in prose is not
+   just stale, it is *unenforced* — which is why it rots.
    **Adding an audited theorem now also means regenerating the identity pin**
    (`bash formal/regen_audit_pin.sh`); changing a headline theorem's STATEMENT, or the
    DEFINITION of anything it depends on, means regenerating both goldens deliberately
@@ -330,10 +332,41 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 >   this caveat: with the filter defeated the tree still COMPILES, so `freshDirectCands` is
 >   pinned by the ledger, not by the type checker.
 >
-> **NEXT: Leg 3** — `w3dJobCoverage_enumJob2D_state`, a ~35-line packaging clone of
-> `w3dJobCoverage_enumJob2_state` swapping in the `_d`/`_filt` forms and carrying `hCOop`
-> (per-key operand-`ComputedOnly`, which `w3d2_leg_context_d_filt` already demands). Leg 2
-> changed none of legs 3–4's premises.
+> **★ LEG 3 LANDED 2026-08-05 — the coverage packaging, plus the instrument the plan forgot.**
+> **`w3dJobCoverage_enumJob2D_state`** (`CascadeStrataEnum.lean:981`) is the `_d` twin of
+> `w3dJobCoverage_enumJob2_state`: over any `ReachedByW3d2` state on the Direct-arm fragment,
+> `enumJob2D`'s coverage holds given only settled+complete derived operands. Audits 465 →
+> **467**; **definition pin UNMOVED at 142/142, statements 26/26** — additive, exactly the
+> profile predicted. It compiled first try; the plan's leg-3 cell was, for once, accurate
+> about the clone.
+> Three substitutions carry the widening, and the middle one is the content: the shadow is
+> `reachedByW3d2_shadow_d`, whose σ0 is over the FILTERED store `T↾U`, so the leg context must
+> be `w3d2_leg_context_d_filt` and NOT `w3d2_leg_context_d` (the full-store pair is jointly
+> unsatisfiable here — the 2026-07-20b kill); schema-wide `ComputedOnly` gives way to
+> `ComputedOrDirect` + `DirectArmsBare` **plus per-key `hCOop`**, the asymmetry that lets the
+> queried expression carry a Direct arm while its operands stay untainted; and
+> `reachedByW3d2_reach_collapse_root_d` needs neither `hlk'` nor `ComputedOnly e'`, so this
+> proof never looks the operand declaration up and `hCOop` has exactly one consumer.
+>
+> **★ THE PLAN CORRECTION, AND IT GENERALISES TO LEGS 4–6**
+> (`history/echain-widening-plan-2026-07-28.md` §C.3): the cell specified leg 3's gate as
+> "`lean` + audit pin" — a clone and no instrument — and **a packaging clone is precisely the
+> shape a green build cannot vet.** Unsatisfiable premises compile, audit clean, and pass
+> every pin. So the leg also lands **`W4WitnessDirect.coverage_applies`** (`FullScope.lean:785`),
+> the `correct_applies`-style instantiation at the real Direct-arm pair `(Sd, Td)`. It assumes
+> LESS than `correct_applies` (`hsettledOps` is discharged, vacuously — `banned` is untainted),
+> and it is contentful rather than decorative because `outside_old_admission` machine-checks
+> `StoreValidRules Sd Td` FALSE: the untainted twin cannot be instantiated at this pair and
+> the `_d` twin can.
+> **Controlled** — sabotage = one extra unused premise `(_hSABOTAGE : StoreValidRules S T)`,
+> false at every store the theorem is about. `CascadeStrataEnum` stays GREEN ("Build completed
+> successfully (1061 jobs)"); `FullScope` goes RED with an application type mismatch at
+> `coverage_applies`. ⚠ **Carry this into legs 4 and 5, which are much bigger `_d` packagings:
+> budget a witness for each, not just a clone.**
+>
+> **NEXT: Leg 4** — `reachedByW3d2E_toC_d` (~140 lines) + refactor the original into a
+> byte-identical wrapper (verify against HEAD, cf. `reachedByW3c_master_d`); same for
+> `graph_correct_w3d2E`. Wants its own session. Legs 2 and 3 changed none of its premises.
 >
 > **[superseded 2026-07-28 — kept for provenance] THE NEXT TASK — #1 Direct arm: the E-CHAIN widening (the recorded gap), OR pivot.** Options in
 > rank order: (a) the E-chain widening per the 20e fork list above — payoff: `W4Fragment` widened to

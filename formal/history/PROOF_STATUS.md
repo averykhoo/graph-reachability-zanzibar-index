@@ -8,6 +8,99 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-05 (**E-chain Direct-arm widening, LEG 3 — the coverage packaging LANDED, plus the non-vacuity instrument the plan did not ask for.** Audits 465 → **467**; definition pin UNMOVED at 142/142, statements 26/26 — additive, as predicted)
+
+**Task taken:** leg 3 of `history/echain-widening-plan-2026-07-28.md` §C — billed as a
+~35-line packaging clone, the smallest remaining leg.
+
+### What landed (one commit)
+
+* **`w3dJobCoverage_enumJob2D_state`** (`CascadeStrataEnum.lean:981`) — the `_d` twin of
+  `w3dJobCoverage_enumJob2_state`. Over any `ReachedByW3d2` state on the Direct-arm
+  fragment, `enumJob2D`'s coverage holds given only that the derived operand keys are
+  settled+complete. **Compiled first try**; for once the plan's prescription was exactly
+  right about the clone.
+* **`W4WitnessDirect.coverage_applies`** (`FullScope.lean:785`) — the non-vacuity
+  instrument. See below; this is the part the plan omitted.
+
+### The three substitutions that carry the widening
+
+1. The shadow is **`reachedByW3d2_shadow_d`**, whose σ0 is admitted over the FILTERED
+   store `T↾U` — so the leg context must be **`w3d2_leg_context_d_filt`**, not
+   `w3d2_leg_context_d`. The full-store `_d` pair is jointly unsatisfiable on this
+   fragment; that was the 2026-07-20b kill, and §A.3 flags it.
+2. Schema-wide `ComputedOnly` (`hCO`) is GONE, replaced by `ComputedOrDirect` +
+   `DirectArmsBare` **plus the per-key operand-only `hCOop`**. That asymmetry — the
+   queried expression may carry a Direct arm while its operands must stay untainted — is
+   the leg's actual content, and `hCOop` is what §A.3 warned must not be quietly dropped.
+3. **`reachedByW3d2_reach_collapse_root_d` is not a straight clone** of its untainted
+   sibling: it takes neither the operand's `hlk'` nor `ComputedOnly e'` (just
+   `hWF hDAB hSV hder h hr`). So the `hops` block is *shorter* than the baseline's, the
+   operand declaration is never looked up, and `hCOop` ends up with exactly one consumer.
+   This is why "~35 lines" held despite the wider hypothesis pack.
+
+### ★ The plan correction: a packaging clone is the one shape a green build cannot vet
+
+The leg-3 cell specified the gate as "`lean` + audit pin" — a clone and no instrument.
+But this theorem is *nothing but* a chain of `_d`/`_filt` forms, and if such a chain's
+hypotheses are jointly unsatisfiable it compiles, audits with standard axioms only, and
+passes every pin in the gate. `statement_pin.py` says this about itself in as many words
+("a definition that is vacuous on its own terms … passes this pin with its text intact.
+That remains the job of the non-vacuity witnesses"). The plan warns about the exact
+failure mode in §A.3 and then, two paragraphs later, specifies a gate that cannot see it.
+
+So `coverage_applies` landed too, mirroring the tree's existing discipline
+(`correct_applies`): instantiate the new theorem at the real compiled Direct-arm pair
+`(Sd, Td)` with every schema/store hypothesis closed by `accepts` + `fragment`. Two
+things make it stronger than a decoration:
+
+* **It assumes less than `correct_applies` does.** `hsettledOps` is *discharged*, not
+  hypothesised — vacuously, since `approver`'s only computed ref is the untainted
+  `banned`. Only `h : ReachedByW3d2 σ Sd Td` remains, the identical residual
+  `correct_applies` carries (chain non-vacuity is operational, via the Exec driver).
+* **The widening is contentful, machine-checked.** `outside_old_admission` proves
+  `StoreValidRules Sd Td` FALSE, so the untainted twin `w3dJobCoverage_enumJob2_state`
+  **cannot be instantiated at this pair at all** while the `_d` twin can.
+
+**Controlled, not believed** (house rule 2). Sabotage = one extra unused premise
+`(_hSABOTAGE : StoreValidRules S T)` on `w3dJobCoverage_enumJob2D_state` — false at every
+store the theorem is about, added in a form the proof never touches:
+
+    A. lake build ZanzibarProofs.GraphIndex.CascadeStrataEnum
+       → Build completed successfully (1061 jobs).
+    B. lake build ZanzibarProofs.FullScope
+       → error: … Application type mismatch (at `coverage_applies`'s `exact`):
+         The argument h has type ReachedByW3d2 σ Sd Td
+         but is expected to have type StoreValidRules Sd Td
+
+(A) is the finding: **the sabotaged theorem is green**, and would have shipped green.
+(B) is `coverage_applies` doing the only work in the repo that catches it. Delete the
+witness and the vacuity is invisible tree-wide. ⚠ **Legs 4 and 5 are far larger `_d`
+packagings than this one — budget a witness for each, not just a clone.**
+
+### Pins
+
+* audits 465 → **467** (2 added: the theorem and its witness); identity pin regenerated,
+  +2 rows, nothing dropped.
+* headline **STATEMENT** pin 26/26 and **DEFINITION** pin **142/142 UNMOVED** — the
+  additive profile the plan predicted, and the signal it told us to check: leg 3 adds a
+  theorem, not a definition, so neither pin should move. Neither did.
+* `FINAL_REVIEW.md` counts block regenerated (audits 465 → 467).
+* Also fixed, not bumped: `formal/HANDOFF.md` house rule 3 carried **four** stale counts
+  (457 audits / 139 definition rows / 465 conformance / 744 collected) — every one wrong
+  by 2026-08-05. Rather than hand-fix a fourth time (`ZT-P3-5`), the counts were REMOVED
+  and the bullet now points at `FINAL_REVIEW.md`'s generated, machine-checked block. A
+  count in prose is not merely stale, it is *unenforced*, which is why it rots.
+
+### Next
+
+**Leg 4** — `reachedByW3d2E_toC_d` (~140 lines) plus refactoring the original into a
+byte-identical wrapper (verify against HEAD, cf. `reachedByW3c_master_d`), and the same
+for `graph_correct_w3d2E`. Wants its own session. Legs 2 and 3 changed none of its
+premises.
+
+---
+
 ## Session 2026-08-04 (**E-chain Direct-arm widening, LEG 2 — the enumeration model change LANDED.** `enumJobs2At` now enumerates `enumJob2D` and takes the `Store`; audits 460 → **465**; definition pin **139 → 142** with all 26 headline STATEMENTS byte-identical; conformance goldens UNMOVED)
 
 **Task taken:** leg 2 of `history/echain-widening-plan-2026-07-28.md` §C — the noisy

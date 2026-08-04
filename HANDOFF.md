@@ -16,17 +16,25 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## Current status — 2026-08-04
+## Current status — 2026-08-05
 
 **Everything is green and nothing is blocking.** The gate passes all ten phases; there
 is no known live correctness bug, no `sorry`, and no `xfail` anywhere in the tree.
 
-- **Last landed: E-chain Direct-arm widening, LEG 2 — the enumeration model change**
-  (`e76b66c`, **committed and fully gated but NOT PUSHED**). `enumJobs2At` takes the
-  `Store` and enumerates `enumJob2D`; the headline theorem STATEMENTS are byte-identical
-  while the definition pin moved 139 → 142. Lean-model + docs only — **no Python file
-  changed.** Two of the plan's own instructions were refuted by measuring them; detail in
-  the board item below and `formal/history/PROOF_STATUS.md` 2026-08-04. **Next: leg 3.**
+- **Last landed: E-chain Direct-arm widening, LEG 3 — the coverage packaging**
+  (2026-08-05). `w3dJobCoverage_enumJob2D_state` is the `_d` twin of
+  `w3dJobCoverage_enumJob2_state`; it compiled first try and is **purely additive** —
+  audits 465 → 467, definition pin UNMOVED at 142/142, statements 26/26, exactly the
+  profile the plan predicted. Lean-model + docs only — **no Python file changed.**
+  **The leg's real finding is about the plan's gate, not the proof:** a packaging clone
+  is the one shape a green build cannot vet (unsatisfiable premises compile, audit clean
+  and pass every pin), so the leg also lands **`W4WitnessDirect.coverage_applies`**, a
+  non-vacuity instantiation at the real Direct-arm pair. Sabotage-controlled: an extra
+  premise that is false at every store the theorem is about leaves the theorem's own
+  module GREEN and turns only the witness RED. Detail in the board item below and
+  `formal/history/PROOF_STATUS.md` 2026-08-05. **Next: leg 4** (its own session).
+- **Leg 2 (`e76b66c`) is now PUSHED**, together with its board refresh — it had been
+  sitting committed-but-unpushed since 2026-08-04.
 - **Previously landed: the P3 edge-multiplicity blind spot, ADJUDICATED and closed** — the
   last open item where the gate was blind to a whole class of divergence. Verdict:
   real, model-side, confined exactly to the DERIVED arm (Python's presence diff caps
@@ -64,12 +72,11 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
-- [ ] **★ START HERE (next session, refreshed 2026-08-04) — ONE live option left: (B),
-      now at E-chain leg 3.** The zero-trust backlog is CLEARED, the gate is green
+- [ ] **★ START HERE (next session, refreshed 2026-08-05) — ONE live option left: (B),
+      now at E-chain leg 4.** The zero-trust backlog is CLEARED, the gate is green
       end-to-end, and as of 2026-07-29 there is **no longer an open item where the gate is
       blind to a class of divergence** — the P3 edge-multiplicity hole was the last one and
-      it is closed. **Leg 2 landed 2026-08-04 (`e76b66c`), gated on all ten phases but NOT
-      YET PUSHED.**
+      it is closed. **Legs 2 and 3 both landed and are pushed; leg 4 wants its own session.**
       * **~~(A) the store-level write quota~~ — DECLINED by the user 2026-07-29**, and
         the alternative was measured rather than assumed. *"I don't want to limit what
         can be added to a permission store — it might be slow but it should not be
@@ -89,10 +96,11 @@ open). This file is now only what a future session must ACT on.
         Full measurement + the two further options (rebuild-vs-K-deltas amortisation,
         crossover K* ≈ 30–40; and routing hub workloads to the set engine, 0.03 s vs
         74 s at N=960): `docs/spec-deviations.md` 2026-07-29c.
-      * **(B) E-chain Leg 3** — the arc's next step. **Leg 2 LANDED 2026-08-04**; see the
-        Leg-2 block below, and note that §D.6's expectation ("Leg 2 breaks
-        `test_derived_arm_multiplicity_ledger` by construction") was **refuted by
-        measurement** — it did not, and no golden was regenerated.
+      * **(B) E-chain Leg 4** — the arc's next step, and the first that wants a whole
+        session to itself. **Legs 2 and 3 LANDED** (2026-08-04 / 2026-08-05); see the
+        Leg-2 and Leg-3 blocks below. Two of the plan's predictions have now been refuted
+        by measurement and one gate specification was found insufficient — read §C.1/§C.2/
+        §C.3 before following any cell of it.
 
       **(A) The store-level write quota — the only one with real production value.**
       `ZT-P1-6a` is only half closed. `ZANZIBAR_MAX_CLOSURE_FANOUT` (landed 2026-07-27,
@@ -108,7 +116,7 @@ open). This file is now only what a future session must ACT on.
       bounded, no Lean impact. **Start:** the residuals block on the 2026-07-27 board
       item below, then `index_v4/core.py`'s `DEFAULT_MAX_CLOSURE_FANOUT` comment.
 
-      **(B) The E-chain Direct-arm widening — legs 0/1/2 DONE; LEGS 3–6 REMAIN, and
+      **(B) The E-chain Direct-arm widening — legs 0/1/2/3 DONE; LEGS 4–6 REMAIN, and
       leg 7 (T2a) is blocked on a design decision, not on proof effort.** The claim is
       unchanged: `ZT-P3-1` — the headline graph theorems are
       **VACUOUS** on `can_view: [user] but not blocked`, the most common Zanzibar boolean
@@ -160,6 +168,30 @@ open). This file is now only what a future session must ACT on.
            corpus, `[direct_arm_exclusion] golden=[16, 1] observed=[31, 1]`, so the gate
            does see the leg. ⚠ But the tree still COMPILES with the filter defeated — the
            presence diff is pinned by the ledger, not the type checker.
+      * **Leg 3 LANDED 2026-08-05 — the coverage packaging, and a gate-design finding.**
+        `w3dJobCoverage_enumJob2D_state` (`CascadeStrataEnum.lean:981`) is the `_d` twin of
+        `w3dJobCoverage_enumJob2_state`: over any `ReachedByW3d2` state on the Direct-arm
+        fragment, `enumJob2D`'s coverage holds. It compiled first try; audits 465 → **467**;
+        **definition pin UNMOVED at 142/142, statements 26/26** — the additive profile the
+        plan predicted, which is the signal to check on an additive leg. The `_filt`
+        distinction held exactly as §A.3 warned: `reachedByW3d2_shadow_d`'s σ0 is over the
+        FILTERED store, so the consumer must be `w3d2_leg_context_d_filt`; the extra
+        `hCOop` rode along as instructed.
+      * **★ The plan's leg-3 GATE was insufficient, and this generalises to legs 4–6**
+        (§C.3). The cell said "`lean` + audit pin" — a clone and no instrument. But a
+        packaging clone is *nothing but* a chain of `_d`/`_filt` forms, and if that chain's
+        hypotheses are jointly unsatisfiable it compiles, audits with standard axioms only,
+        and passes every pin in the gate. That is not hypothetical: it is the 2026-07-20b
+        kill, which §A.3 warns about two paragraphs above the sentence specifying the gate.
+        So the leg also lands **`W4WitnessDirect.coverage_applies`** (`FullScope.lean:785`),
+        instantiating the theorem at the real compiled Direct-arm pair `(Sd, Td)` — and it
+        assumes *less* than the existing `correct_applies` does (`hsettledOps` is discharged
+        vacuously). It is contentful, not decorative: `outside_old_admission` machine-checks
+        `StoreValidRules Sd Td` FALSE, so the untainted twin cannot be instantiated there
+        and the `_d` twin can. **Controlled:** adding one unused premise
+        `(_hSABOTAGE : StoreValidRules S T)` leaves `CascadeStrataEnum` GREEN ("Build
+        completed successfully (1061 jobs)") and turns only `FullScope` RED. ⚠ **Legs 4 and
+        5 are much bigger `_d` packagings — budget a witness for each, not just a clone.**
       * The standing warning still holds for the SEPARATE, still-open item it was about
         (`formal/CORRESPONDENCE.md` §7.2 item 6 — the baseline `n ↦ 2n` derived-arm
         stacking): do **not** discharge it by making `admitEdge` reject an already-present
