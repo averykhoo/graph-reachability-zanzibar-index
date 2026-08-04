@@ -975,6 +975,27 @@ def exprDirectsAll : Expr → List (List Restriction)
   | .inter a b => exprDirectsAll a ++ exprDirectsAll b
   | .excl a b => exprDirectsAll a ++ exprDirectsAll b
 
+/-- **A `ComputedOnly` tree has no `Direct` arm at all** — the `exprDirectsAll` analogue of
+    `exprDirects_computedOnly`, and STRONGER than it (`exprDirectsAll` also recurses into
+    `inter`/`excl`, where `exprDirects` returns `[]` unconditionally).
+
+    This is what makes "the Direct-arm-widened enumeration is behaviourally identical on the
+    `ComputedOnly` scope" a machine-checked claim rather than a comment: it collapses
+    `storedDirectSubjects` to `[]` (`storedDirectSubjects_computedOnly`) and hence
+    `enumJob2D` to `enumJob2` (`enumJob2D_eq_enumJob2`, `CascadeStrataEnum.lean`). -/
+theorem exprDirectsAll_computedOnly : ∀ {e : Expr}, ComputedOnly e → exprDirectsAll e = [] := by
+  intro e
+  induction e with
+  | computed _ => intro _; rfl
+  | direct _ => intro h; exact h.elim
+  | ttu _ _ => intro h; exact h.elim
+  | union a b iha ihb =>
+    intro h; simp only [exprDirectsAll, iha h.1, ihb h.2, List.append_nil]
+  | inter a b iha ihb =>
+    intro h; simp only [exprDirectsAll, iha h.1, ihb h.2, List.append_nil]
+  | excl a b iha ihb =>
+    intro h; simp only [exprDirectsAll, iha h.1, ihb h.2, List.append_nil]
+
 /-- **`DirectArmsConcrete S`** — a **derived** def's `Direct` arms carry no wildcard-flagged
     restriction (`r.2.2 = false` on every arm reachable through any boolean nesting).
 

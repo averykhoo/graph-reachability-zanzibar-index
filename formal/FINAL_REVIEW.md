@@ -31,10 +31,10 @@ number INTO it over restating it.
 | whole-repo suite | **1228** |
 | differential conformance tests | **419** across **13** files |
 | gate-tooling conformance tests | **46** across **2** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **460** |
-| audit identity pin (`audited_theorems.txt`) | **460** |
-| headline definition pin | **139** rows (**132** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **397** (**272** Python + **125** Lean) |
+| audited theorems (`#print axioms` in `Audit.lean`) | **465** |
+| audit identity pin (`audited_theorems.txt`) | **465** |
+| headline definition pin | **142** rows (**135** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **409** (**275** Python + **134** Lean) |
 | `corpus.SCHEMAS` | **24** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **23** |
 | spec-scope corpora (four dicts) | **33** = 24 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
@@ -236,8 +236,14 @@ witnessed by `W4WitnessDirect` at exactly the `Sd`/`Td` pair above) gives
 is **not** the final unsuffixed theorem, and it is not the operational E-chain the
 zcli driver folds. Closing the gap needs the E-chain widening recorded at
 `FullScope.lean:527-528` as a "recorded follow-up, **NOT done**": the
-`enumJob2 → enumJob2D` enumeration swap, a `_d` projection of
-`reachedByW3d2E_toC`, and `GraphAdmission.storeValid → StoreValidRulesD`.
+`enumJob2 → enumJob2D` enumeration swap — **DONE 2026-08-04 (arc leg 2):
+`enumJobs2At` runs `enumJob2D`, behaviourally identical on the `ComputedOnly`
+scope by `enumJob2D_eq_enumJob2`** — plus a `_d` projection of
+`reachedByW3d2E_toC` (legs 3–4) and `GraphAdmission.storeValid →
+StoreValidRulesD` (leg 5), **both still open. The vacuity claim in §3.0 is
+therefore UNCHANGED**: it is the admission bundle, not the enumeration, that
+makes the headline theorems vacuous on Direct-arm stores, and leg 2 did not
+touch admission.
 
 **What this does to the conformance evidence.** `direct_arm_exclusion` is listed in
 `GRAPH_FRAGMENT` and is driven through the graph and state gates, so the Python and

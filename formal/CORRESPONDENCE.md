@@ -295,7 +295,9 @@ since the citations were stamped and was rewritten again on 2026-07-26.
 | `GraphIndex/CascadeStrata.lean::runCascade2` (two rounds + quiescence check; reject branch) | the in-transaction cascade | `index_v4/processor.py::DeltaProcessor.run_cascade` (a thin `idx._node_cache_scope()` wrapper) → `::DeltaProcessor._run_cascade` (`rounds = len(self.compiled.strata)`; leftover ⇒ `raise InvariantViolation`) |
 | **T5** `GraphIndex/CascadeStrata.lean::runCascade2_no_abort` / `::cascade2_drains` | — the abort is dead code at ≤2 strata | `index_v4/processor.py::DeltaProcessor._run_cascade`'s leftover raise. **The Lean abort condition is STRICTLY WEAKER than Python's — see the `_bumped` entry in §7** |
 | `GraphIndex/CascadeStrataAssemble.lean::enumJobs2R1` / `::enumJobs2R2` | per-round key enumeration off the state | `index_v4/processor.py::DeltaProcessor._run_cascade`'s per-round `::DeltaProcessor._map_deltas_to_keys` + the `stratum_of` sort |
-| `GraphIndex/CascadeStrataEnum.lean::storedDirectSubjects` (**star-filtered 2026-07-28**) | the Direct-arm audit candidates read from the FIXED store, wildcard subjects excluded | `index_v4/processor.py::DeltaProcessor._incoming_concretes` (`return [n for n in nodes if n.wildcard == '']`) and the `n.wildcard != ''` skip in `::DeltaProcessor._reconcile`'s `upos` loop. Lean already mirrored this in `GraphIndex/CascadeEnum.lean::leafConcretes` (`u.name != STAR`); `storedDirectSubjects` was the outlier until leg 1 of the E-chain arc. **NOT yet consumed by the operational E-chain** — `enumJobs2At` still runs `enumJob2`; see `history/echain-widening-plan-2026-07-28.md` |
+| `GraphIndex/CascadeStrataEnum.lean::storedDirectSubjects` (**star-filtered 2026-07-28**) | the Direct-arm audit candidates read from the FIXED store, wildcard subjects excluded | `index_v4/processor.py::DeltaProcessor._incoming_concretes` (`return [n for n in nodes if n.wildcard == '']`) and the `n.wildcard != ''` skip in `::DeltaProcessor._reconcile`'s `upos` loop. Lean already mirrored this in `GraphIndex/CascadeEnum.lean::leafConcretes` (`u.name != STAR`); `storedDirectSubjects` was the outlier until leg 1 of the E-chain arc. **Consumed by the operational E-chain since leg 2 (2026-08-04)** — `enumJobs2At` runs `enumJob2D`; see `history/echain-widening-plan-2026-07-28.md` |
+| `GraphIndex/CascadeStrataEnum.lean::freshDirectCands` | the CANDIDATE-level presence diff: a stored Direct-arm subject enters `cands` only if it is not already one (∉ `enum2Base`, ∉ `GraphIndex/CascadeEnum.lean::edgeHolders`) | `index_v4/processor.py::DeltaProcessor._reconcile` builds `candidates` as a `dict[int, NodeV4]` keyed on node id, so re-contributing a present node is a no-op. **Distinct from the EDGE-level presence diff** (`::DeltaProcessor._reconcile_subject`'s `want_edge and not has_edge`), which the model still does not mirror — §7.2 item 6 |
+| `GraphIndex/CascadeStrataEnum.lean::enumJob2D` (run by `GraphIndex/CascadeStrataAssemble.lean::enumJobs2At` since leg 2) | the Direct-arm-widened per-key audit enumeration, and the per-round job list that now runs it | `index_v4/processor.py::DeltaProcessor._reconcile`'s candidate/audit assembly. **Behaviourally identical to the pre-leg-2 `enumJob2` on the `ComputedOnly` scope** — `GraphIndex/CascadeStrataEnum.lean::enumJob2D_eq_enumJob2`, a theorem, which is why no graph-state golden moved when it landed |
 | `GraphIndex/ReconcileCorrect.lean::DirectArmsConcrete` | **no Python counterpart — a declared PROOF-SIDE scope carry** | Python ADMITS what this excludes: `define approver: [user, user:*] but not banned` compiles (`zanzibar_utils_v1.py::derive_schema_info` collects the wildcard shape regardless of the enclosing boolean), and oracle == set engine == real graph index over the full grid. It is a **vacuity** boundary for the widened fragment, not a restriction on the implementation — the full argument is in the declaration's own docstring |
 
 ### Rename ledger for §5 (what an auditor should grep for)
@@ -563,6 +565,24 @@ The bullet is corrected in place below.
     against `EdgeV4.derived`
     (`formal/conformance/extractor.py::_classify_edges`), so a corrupted flag
     cannot move it silently.
+
+  **5b. Update 2026-08-04 (E-chain Leg 2) — the ARC-LOCAL half is discharged, and the
+  ledger did not move.** The `n ↦ 2n+1` growth the filed text below attributes to
+  `enumJob2D` is closed by
+  `GraphIndex/CascadeStrataEnum.lean::freshDirectCands`, a presence diff on the
+  Direct-arm contribution to `cands` — NOT by the `.dedup` the E-chain plan prescribed,
+  which sits in the wrong place (the duplicate is between `storedDirectSubjects` and
+  `GraphIndex/CascadeEnum.lean::edgeHolders`, not inside
+  `GraphIndex/CascadeStrataEnum.lean::enum2BaseD`). It mirrors Python's id-keyed
+  `candidates` dict at the CANDIDATE level, and leaves the edge-level question in item 6
+  exactly where it was. Consequence for the ledger: **unmoved.** With the filter defeated
+  as a control, one corpus moves — `direct_arm_exclusion`, `golden=[16, 1]
+  observed=[31, 1]` — so the ledger does observe the leg; the widening is simply
+  state-inert with the filter in place, on every in-fragment corpus. (It is the only
+  corpus that could move: the other 22 are `ComputedOnly`, where
+  `GraphIndex/CascadeStrataEnum.lean::enumJob2D_eq_enumJob2` makes the change an
+  identity.) This also supersedes the E-chain plan's §D.6 expectation that Leg 2 would
+  break the golden "by construction" — see that file's §C.2.
 
   **6. Still open, deliberately.** The faithful model fix is to mirror Python's
   presence diff — add a `¬ hasEdge` conjunct to `reconcileKeyDR`'s fold guard.

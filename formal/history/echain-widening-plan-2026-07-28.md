@@ -275,7 +275,7 @@ the chain is empty there. Cleaner, and checkable.
 |---|---|---|---|
 | **0** | Attack sweep (§D). Nothing lands but a ledger entry. **Success = a probe kills something.** | ½ session | n/a |
 | **1** | ✅ **DONE 2026-07-28.** `DirectArmsConcrete` (`ReconcileCorrect.lean:1001`, carrying the §B scope-carry paragraph); `storeValidRulesD_derived_subject_ne_star` (`:1052`); the star-filter on `storedDirectSubjects` (`CascadeStrataEnum.lean:626`) + `noConcDirect_of_not_mem` repair (`:640`); `storedDirectSubjects_name_ne_star` (`:631`); **`reachedByW3d2_Rnode_source_name_ne_star_d`** (`CascadeStrataSettle.lean:3504`); plus the D.5 free win `exprDirects_ne_nil_of_directsOnly` (`FullScope.lean:169`). | 5 decls + 1 def edit | ✅ `lean` PASSED, audits 457 → **460**, identity pin regenerated, **definition pin unmoved (139/139)**, statements 26/26. **All four consumers compiled unchanged** — the polarity reading was right. |
-| **2** | The enumeration model change: **`enum2BaseD` gains `.dedup` (Leg-0 §D.1 — do this FIRST, the rest of the leg is unrunnable without it)**, `exprDirectsAll_computedOnly`, `enumJob2D_eq_enumJob2`, `w3cJobValid_enumJob2D`, then ~20 mechanical signature edits across 8 files. Noisiest leg. Run §D.6 (state-diff `#eval`) inside this leg, not after. | 3 lemmas + 20 edits | `lean` + **definition-pin regen (6 changed, 3 added)** + **conf tiles** |
+| **2** | ✅ **DONE 2026-08-04.** The enumeration model change. `exprDirectsAll_computedOnly` (`ReconcileCorrect.lean`); the de-dup obligation as **`freshDirectCands`**, a presence diff on the Direct-arm contribution to `cands` — **NOT the `.dedup` this cell used to prescribe, which is a no-op on the actual duplicate; see §C.2**; `mem_enumJob2D_cands`; `storedDirectSubjects_computedOnly`; **`enumJob2D_eq_enumJob2`**; `enum2BaseD_name_ne_star`; **`w3cJobValid_enumJob2D`** (same hypotheses as `w3cJobValid_enumJob2` — no fragment carry); `enumJob2D_negCands_subset`; then the signature change (`enumJobs2At` gains `T`) across 7 files. | 7 decls + 1 def edit + ripple | ✅ `lean` PASSED, audits 460 → **465**, **statements 26/26 byte-identical**, **definition pin 139 → 142** (5 changed, 1 dropped, 4 added), conf + tests tiles green. **No conformance golden moved** — §D.6's prediction is REFUTED, see §C.2. |
 | **3** | `w3dJobCoverage_enumJob2D_state` — direct clone swapping in the `_d`/`_filt` forms. Carries `hCOop`. | 1 thm / ~35 lines | `lean` + audit pin |
 | **4** | **`reachedByW3d2E_toC_d`** (~140 lines) + refactor the original into a **byte-identical wrapper** (verify against HEAD — the tree's established discipline, cf. `reachedByW3c_master_d`); same for `graph_correct_w3d2E`. | 1 big thm | `lean` + audit pin |
 | **5** | `GraphAdmission.storeValid → StoreValidRulesD`; `W4Fragment` 6 → 9 fields; `directsOnly_of_computedOrDirect_of_noUD`; `w4_within_scope` clause 3; `w4Fragment_of_untainted` + both existing witnesses gain vacuous fields; **`graph_reached_inv` rebased onto a NEW narrow bundle**; finals rebased. | claim-changing | `lean` + **statement pin regen** + **definition pin regen** + audit pin |
@@ -336,7 +336,9 @@ Full detail in `PROOF_STATUS.md` (Session 2026-07-28). Verdicts:
 - **D.5 — NO-KILL, with a free win.** 19,280 depth-3 `Expr`s enumerated: 0 countermodels **with
   or without** the `ComputedOrDirect` premise. **State the stronger
   `directsOnly e = true → exprDirects e ≠ []`** — one induction, no fragment hypothesis.
-- **D.6 — SUPERSEDED 2026-07-29; do NOT hand-run it.** The probe existed because the
+- **D.6 — SUPERSEDED 2026-07-29, and its central prediction was then REFUTED by executing
+  Leg 2 on 2026-08-04: the ledger did NOT move and no regen was owed.** Read §C.2 before
+  the paragraph below, which is retained as filed. The probe existed because the
   state gate could not see a multiplicity change. It now can: `Cli.lean` emits an
   `edgeCounts` field, `extractor.py`'s P3 compares untainted-arm multiplicity EXACTLY,
   and the derived arm is golden-pinned per corpus by
@@ -375,6 +377,54 @@ The plan is a *reading* of the tree, not gospel. Two things it got wrong:
    structural clone of `reachedByW3d2_Rnode_source_bare_d`
    (`foldl_writeDirect_edges_sound` → `rewriteClosure_produced` → `noRuleOutputs_of_derived`
    kills rule outputs → the seed is pinned by `storeValidRulesD_derived_subject_ne_star`).
+
+### C.2 Corrections to this plan, found by executing Leg 2 (2026-08-04)
+
+Two more, and the first is the plan's only prescription that was actually *wrong* rather
+than merely incomplete.
+
+1. **§C's "`enum2BaseD` gains `.dedup`" does not fix what D.1 measured.** Reproducing D.1
+   before changing anything gave, on `W4WitnessDirect.Sd` after one Direct-arm write:
+
+       enum2Base=[]  SDS=[alice]  enum2BaseD=[alice]
+       cands2=[alice, alice]      cands2D=[alice, alice, alice]
+
+   The duplicate is **between `storedDirectSubjects` and `edgeHolders`**, not inside
+   `enum2BaseD`, which is a ONE-ELEMENT list here — `.dedup` on it changes nothing, and
+   `cands2D` would still be `[alice, alice]` against the baseline's `[alice]`. (§D.1's own
+   text names `admitEdge`/`addEdge` as co-causes, so the mechanism was understood; the
+   prescribed remedy just does not sit where the duplicate is.) The reason is structural:
+   a stored Direct-arm grant lands its seed edge at the derived R-node, so its subject is
+   an `edgeHolder` from the first write on, and `enumJob2` already enumerates it.
+
+   **What works: a presence diff (`freshDirectCands`)** — the stored Direct-arm subjects
+   not already candidates (∉ `enum2Base` ∧ ∉ `edgeHolders`), applied to **`cands` only**.
+   `negCands`/`uposCands` must keep the unfiltered `enum2BaseD`: `W3dJobCoverage` clause 3
+   demands `s ∈ negCands` outright with no `edgeHolders` fallback, so filtering there opens
+   a real coverage hole — and keeping `enum2BaseD` unfiltered is also what leaves
+   `checkFnR_eq_star_of_not_baseD` and all four of its consumers untouched.
+
+   Note this is a *different* mechanism from `CORRESPONDENCE.md` §7.2 item 6's still-open
+   faithful fix (a `¬ hasEdge` conjunct in `reconcileKeyDR`'s fold guard, which would
+   address the BASELINE `n ↦ 2n` stacking). This one only keeps the widening from making
+   that artifact worse.
+
+2. **§D.6's "Leg 2 will fail the ledger by construction" is REFUTED.** With the presence
+   diff the widening is state-inert on every in-fragment corpus: all 48 state-conformance
+   tests pass and **no golden regen is owed by this leg.** Controlled rather than believed
+   — defeating the filter moves exactly one corpus,
+
+       [direct_arm_exclusion] user:alice#.../ -> doc:d1#approver/:
+         golden=[16, 1] observed=[31, 1]  (as [lean, python])
+
+   (16 ↦ 31 = `n ↦ 2n+1` over its four cascade legs). So the ledger DOES observe this leg;
+   it simply has nothing to report. `direct_arm_exclusion` is the only corpus that could
+   move, being the only `GRAPH_FRAGMENT` member that is not `ComputedOnly` — a fact §D.6
+   could have derived from `enumJob2D_eq_enumJob2` but did not.
+
+   Also: §A.5's definition-pin estimate ("6 changed, 3 added") measured as **5 changed, 1
+   dropped, 4 added** (139 → 142). The dropped row is `enumJob2`, correctly — it is no
+   longer reachable from any headline statement.
 
 **`DirectArmsConcrete` is machine-confirmed load-bearing**, not a defensive carry. Leg 1's
 attack probe B swept 262 (schema, store) runs across *every* state the chain passes through

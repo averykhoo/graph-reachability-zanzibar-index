@@ -8,6 +8,113 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-04 (**E-chain Direct-arm widening, LEG 2 — the enumeration model change LANDED.** `enumJobs2At` now enumerates `enumJob2D` and takes the `Store`; audits 460 → **465**; definition pin **139 → 142** with all 26 headline STATEMENTS byte-identical; conformance goldens UNMOVED)
+
+**Task taken:** leg 2 of `history/echain-widening-plan-2026-07-28.md` §C — the noisy
+one, and the first that moves the definition pin.
+
+### What landed (one commit)
+
+* **`exprDirectsAll_computedOnly`** (`ReconcileCorrect.lean`) — the `exprDirectsAll`
+  analogue of `exprDirects_computedOnly`, strictly stronger (it also recurses into
+  `inter`/`excl`).
+* **`freshDirectCands`** + **`mem_enumJob2D_cands`** (`CascadeStrataEnum.lean`) — the
+  de-dup obligation, discharged as a **presence diff** on the Direct-arm contribution to
+  `cands`. See "the plan was wrong about this" below.
+* **`storedDirectSubjects_computedOnly`**, **`enumJob2D_eq_enumJob2`** — the CO-scope
+  behavioural identity, as a theorem. This is the load-bearing one: `reachedByW3d2E_toC`
+  is `hCO`-scoped, so it rewrites back to the landed coverage discharges unchanged, and
+  the leg lands without needing any part of the `_d` chain (legs 3–4).
+* **`enum2BaseD_name_ne_star`**, **`w3cJobValid_enumJob2D`**,
+  **`enumJob2D_negCands_subset`** (`CascadeStrataAssemble.lean` / `CascadeStrataInv.lean`).
+* The signature change: `enumJobs2At` gains `(T : Store)` and enumerates `enumJob2D`,
+  rippling to `enumJobs2R1`/`R2`, `ReachedByW3d2E.cascade`, `Exec.cascadeLeg`,
+  `enumJobs2At_cover`/`_scope`/`_valid`/`_keyFacts`/`_negCands_subset`/`_Rnode_ne`, and
+  six sites in `RemoveConfluence.lean`.
+
+**`w3cJobValid_enumJob2D` takes EXACTLY the hypotheses `w3cJobValid_enumJob2` takes** —
+no `StoreValidRulesD`, no `DirectArmsConcrete`. That is leg 1's faithfulness star-filter
+paying off, and it confirms §B's decomposition of the Board-B1 hole: the
+`storedDirectSubjects` half is closed unconditionally inside the definition, and only
+the `edgeHolders` half needs the fragment clause, at the call sites' `hsns`.
+
+### ★ The plan's prescribed remedy for D.1 does not work — measured, not argued
+
+§C's leg-2 cell says "**`enum2BaseD` gains `.dedup`**". Reproducing D.1 first (house
+rule 2) showed why that is the wrong instrument. Literal observed output of the probe on
+`W4WitnessDirect.Sd`, one Direct-arm write, BEFORE any change:
+
+    enum2Base=[]  SDS=[alice]  enum2BaseD=[alice]
+    cands2=[alice, alice]      cands2D=[alice, alice, alice]
+
+The duplicate is **between `storedDirectSubjects` and `edgeHolders`**, not inside
+`enum2BaseD` — `enum2BaseD` is already `[alice]`, a one-element list, and `.dedup` on it
+is a no-op. A stored Direct-arm grant lands its seed edge at the derived R-node, so its
+subject is an `edgeHolder` from the first write onward and `enumJob2` already enumerates
+it.
+
+**What landed instead: a presence diff, `freshDirectCands`** — the stored Direct-arm
+subjects that are not already candidates (∉ `enum2Base` ∧ ∉ `edgeHolders`), applied to
+`cands` ONLY. It mirrors Python's id-keyed `candidates` dict at the candidate level.
+
+`negCands`/`uposCands` deliberately keep the UNFILTERED `enum2BaseD`: they have no
+`edgeHolders` fallback, and `W3dJobCoverage` clause 3's obligation is `s ∈ negCands`
+outright, so filtering there would open a real coverage hole. `cands` can absorb the
+filter precisely because `edgeHolders` is appended to it anyway. This is also what keeps
+`checkFnR_eq_star_of_not_baseD` and all four `enum2BaseD` consumers untouched.
+
+### ★ §D.6's expectation is REFUTED: the ledger does NOT move, and that is now measured
+
+The plan, `formal/HANDOFF.md` and the root board all say leg 2 will break
+`test_conformance_state.py::test_derived_arm_multiplicity_ledger` "by construction".
+**It does not.** All 48 state-conformance tests pass, ledger unmoved, **no golden regen
+is owed by this leg.** The presence diff makes the widening state-inert on every
+in-fragment corpus.
+
+That is a green result on a leg that was predicted to go red, i.e. exactly the shape this
+project treats as suspect, so it was **controlled rather than believed** — the filter's
+two `∉` conjuncts were replaced by `True` and everything re-run:
+
+    #eval probe (W4WitnessDirect.Sd, one write / two writes):
+      with the filter:    edges@R=2 total=2   /  edges@R=4 total=5   (== the pre-leg baseline)
+      filter DEFEATED:    edges@R=3 total=3   /  edges@R=7 total=8
+
+    conformance ledger, filter DEFEATED:
+      [direct_arm_exclusion] user:alice#.../ -> doc:d1#approver/:
+        golden=[16, 1] observed=[31, 1]  (as [lean, python])
+
+So the gate **does** observe this leg (16 ↦ 31 = `n ↦ 2n+1` over the corpus's four
+cascade legs, D.1's predicted shape), and the presence diff is what holds it at baseline.
+`direct_arm_exclusion` is the only mover because it is the only `GRAPH_FRAGMENT` corpus
+that is not `ComputedOnly`; on the other 22, `enumJob2D_eq_enumJob2` makes the change an
+identity.
+
+**One honest caveat, recorded in `freshDirectCands`'s docstring:** with the filter
+defeated the tree still COMPILES — `w3cJobValid_enumJob2D`'s star-freeness comes from
+`storedDirectSubjects`'s own wildcard filter, not from this one. The presence diff is
+pinned by measurement (the ledger), not by the type checker.
+
+### Pins
+
+* audits 460 → **465** (5 added); identity pin regenerated.
+* headline **STATEMENT** pin **26/26 byte-identical** — and the definition pin moved
+  10 rows. That asymmetry is the whole point of 4c: `graph_correct`'s words did not
+  change while what they MEAN did, from `enumJob2` to `enumJob2D`.
+* headline **DEFINITION** pin **139 → 142**: 5 changed (`ReachedByW3d2E`, `cascadeLeg`,
+  `enumJobs2At`, `enumJobs2R1`, `enumJobs2R2`), 1 dropped (`enumJob2` — no longer
+  reachable from any headline statement, which is correct), 4 added (`enum2BaseD`,
+  `enumJob2D`, `freshDirectCands`, `storedDirectSubjects`). The plan's §A.5 estimate was
+  "6 changed, 3 added"; it did not anticipate `freshDirectCands` and counted `enumJob2`'s
+  removal as a change.
+* `FINAL_REVIEW.md` counts block regenerated (audits 460 → 465, definition pin 139 → 142).
+
+### Next
+
+**Leg 3** — `w3dJobCoverage_enumJob2D_state`, a ~35-line packaging clone carrying
+`hCOop`. Nothing in leg 2 changed leg 3's or leg 4's premises.
+
+---
+
 ## Session 2026-07-29 (**the P3 edge-multiplicity blind spot — ADJUDICATED and CLOSED.** No Lean declaration changed; one Lean docstring corrected, one new zcli output field, and a state-gate projection narrowed so that 153 previously-uncompared edge multiplicities are now compared exactly)
 
 **Task taken:** the one open item where the gate was blind to a whole class of

@@ -306,12 +306,34 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > over every chain state gave 824 derived-R-node in-edges, 0 STAR-sourced; with the clause
 > dropped, 122 stores produce one.
 >
-> **NEXT: Leg 2** — the enumeration model change, per the plan's §C table. **Do `enum2BaseD`'s
-> `.dedup` FIRST** (Leg-0 §D.1) or the rest of the leg is unrunnable; then
-> `exprDirectsAll_computedOnly` / `enumJob2D_eq_enumJob2` / `w3cJobValid_enumJob2D`, then ~20
-> mechanical signature edits across 8 files. **This leg DOES move the definition pin** (6 rows
-> changed, 3 added) and needs the conf tiles — and run §D.6's state-diff `#eval` inside it
-> rather than trusting a conf phase to notice.
+> **★ LEG 2 LANDED 2026-08-04 — the enumeration model change.** `enumJobs2At` now takes the
+> `Store` and enumerates **`enumJob2D`**, rippling to `enumJobs2R1`/`R2`,
+> `ReachedByW3d2E.cascade`, `Exec.cascadeLeg` and six sites in `RemoveConfluence.lean`.
+> Audits 460 → **465**; **headline STATEMENTS 26/26 byte-identical while the DEFINITION pin
+> moved 139 → 142** (5 changed, `enumJob2` dropped, 4 added) — the exact
+> statement-stable/meaning-changed asymmetry check 4c exists for.
+> **`enumJob2D_eq_enumJob2`** is the linchpin: on the `ComputedOnly` scope the two jobs are
+> EQUAL, so `reachedByW3d2E_toC` (which is `hCO`-scoped) rewrites back to the landed coverage
+> discharges unchanged and the leg lands with none of the `_d` chain. **`w3cJobValid_enumJob2D`
+> needs no fragment carry at all** — same hypotheses as its sibling, because leg 1's
+> star-filter closed the `storedDirectSubjects` half of the Board-B1 hole inside the
+> definition.
+> **Two plan corrections, both measured** (`history/echain-widening-plan-2026-07-28.md` §C.2):
+> * **The prescribed `.dedup` on `enum2BaseD` does not fix D.1.** The duplicate is between
+>   `storedDirectSubjects` and `edgeHolders`; `enum2BaseD` is a one-element list at the probe
+>   shape and `.dedup` is a no-op on it. What landed is **`freshDirectCands`**, a presence
+>   diff on the Direct-arm contribution to `cands` ONLY (`negCands`/`uposCands` must stay
+>   unfiltered — clause 3 of `W3dJobCoverage` has no `edgeHolders` fallback).
+> * **§D.6's "Leg 2 breaks the multiplicity ledger by construction" is REFUTED** — it does
+>   not, and no golden regen was owed. Controlled, not assumed: defeating the filter moves
+>   exactly one corpus, `[direct_arm_exclusion] golden=[16, 1] observed=[31, 1]`. ⚠ Carry
+>   this caveat: with the filter defeated the tree still COMPILES, so `freshDirectCands` is
+>   pinned by the ledger, not by the type checker.
+>
+> **NEXT: Leg 3** — `w3dJobCoverage_enumJob2D_state`, a ~35-line packaging clone of
+> `w3dJobCoverage_enumJob2_state` swapping in the `_d`/`_filt` forms and carrying `hCOop`
+> (per-key operand-`ComputedOnly`, which `w3d2_leg_context_d_filt` already demands). Leg 2
+> changed none of legs 3–4's premises.
 >
 > **[superseded 2026-07-28 — kept for provenance] THE NEXT TASK — #1 Direct arm: the E-CHAIN widening (the recorded gap), OR pivot.** Options in
 > rank order: (a) the E-chain widening per the 20e fork list above — payoff: `W4Fragment` widened to

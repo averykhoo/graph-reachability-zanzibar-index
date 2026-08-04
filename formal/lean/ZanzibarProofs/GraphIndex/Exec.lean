@@ -58,7 +58,7 @@ theorem foldAdmitsB_iff (us : List Tuple) :
 /-- One fully-operational cascade leg — verbatim the `ReachedByW3d2E.cascade`
     constructor's target state. -/
 def cascadeLeg (S : Schema) (T : Store) (σ : GraphState) : GraphState :=
-  runCascade2 S T σ (enumJobs2R1 S σ) (enumJobs2R2 S T σ)
+  runCascade2 S T σ (enumJobs2R1 S T σ) (enumJobs2R2 S T σ)
 
 /-- Fold the chain's own legs over the input writes: per tuple, one admitted
     logged write then one cascade leg (synchronous v1). `none` iff some write

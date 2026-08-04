@@ -90,11 +90,11 @@ cites `enumJobs2At_keyFacts` from `CascadeStrataInv`, ABOVE `CascadeStrata`) sta
 
 /-- Every enumerated cascade job is at a DERIVED R-node, so an untainted edge's object
     endpoint differs from every job's R-node (`enumJobs2At_keyFacts` + `objNode` fields). -/
-theorem enumJobs2At_Rnode_ne {S : Schema} {σe : GraphState}
+theorem enumJobs2At_Rnode_ne {S : Schema} {T : Store} {σe : GraphState}
     {keys : List (String × String × String)} {b : NodeKey}
     (hk : ∀ k ∈ keys, isDerived S (k.1, k.2.1) = true ∧ k.2.2 ≠ STAR)
     (hb : isDerived S (b.type, b.pred) = false) :
-    ∀ j ∈ enumJobs2At S σe keys, b ≠ objNode ⟨j.dt, j.on⟩ j.R := by
+    ∀ j ∈ enumJobs2At S T σe keys, b ≠ objNode ⟨j.dt, j.on⟩ j.R := by
   intro j hj heq
   obtain ⟨_, hder, _⟩ := enumJobs2At_keyFacts hk j hj
   have ht : (objNode ⟨j.dt, j.on⟩ j.R).type = j.dt := objNode_type _ _
@@ -138,11 +138,11 @@ theorem reachedByW3d2E_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     have hkfacts : ∀ (σe : GraphState) (n : Nat),
         ∀ k ∈ cascadeKeysAbove S σe n, isDerived S (k.1, k.2.1) = true ∧ k.2.2 ≠ STAR :=
       fun σe n k hk => ⟨(mem_cascadeKeysAbove_props hk).1, (mem_cascadeKeysAbove_props hk).2.2⟩
-    have h1 : ∀ j ∈ enumJobs2R1 S σp, b ≠ objNode ⟨j.dt, j.on⟩ j.R :=
+    have h1 : ∀ j ∈ enumJobs2R1 S T σp, b ≠ objNode ⟨j.dt, j.on⟩ j.R :=
       enumJobs2At_Rnode_ne (hkfacts _ _) hb
     have h2 : ∀ j ∈ enumJobs2R2 S T σp, b ≠ objNode ⟨j.dt, j.on⟩ j.R :=
       enumJobs2At_Rnode_ne (hkfacts _ _) hb
-    rw [count_runCascade2_of_ne S T σp (enumJobs2R1 S σp) (enumJobs2R2 S T σp) h1 h2]
+    rw [count_runCascade2_of_ne S T σp (enumJobs2R1 S T σp) (enumJobs2R2 S T σp) h1 h2]
     exact ih a b hb
 
 end Zanzibar
