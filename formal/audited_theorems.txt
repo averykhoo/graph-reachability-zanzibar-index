@@ -36,6 +36,7 @@ W4Witness.fragment
 W4Witness.within_scope
 W4WitnessDirect.accepts
 W4WitnessDirect.correct_applies
+W4WitnessDirect.coverage_applies
 W4WitnessDirect.fragment
 W4WitnessDirect.outside_old_admission
 W4WitnessDirect.within_scope
@@ -451,6 +452,7 @@ w3d2_leg_context_d_filt
 w3dJobCoverage_enumJob
 w3dJobCoverage_enumJob2
 w3dJobCoverage_enumJob2D
+w3dJobCoverage_enumJob2D_state
 w3dJobCoverage_enumJob2_state
 w3d_leg_context
 w4Fragment_of_untainted

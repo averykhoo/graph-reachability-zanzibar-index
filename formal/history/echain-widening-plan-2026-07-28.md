@@ -276,7 +276,7 @@ the chain is empty there. Cleaner, and checkable.
 | **0** | Attack sweep (§D). Nothing lands but a ledger entry. **Success = a probe kills something.** | ½ session | n/a |
 | **1** | ✅ **DONE 2026-07-28.** `DirectArmsConcrete` (`ReconcileCorrect.lean:1001`, carrying the §B scope-carry paragraph); `storeValidRulesD_derived_subject_ne_star` (`:1052`); the star-filter on `storedDirectSubjects` (`CascadeStrataEnum.lean:626`) + `noConcDirect_of_not_mem` repair (`:640`); `storedDirectSubjects_name_ne_star` (`:631`); **`reachedByW3d2_Rnode_source_name_ne_star_d`** (`CascadeStrataSettle.lean:3504`); plus the D.5 free win `exprDirects_ne_nil_of_directsOnly` (`FullScope.lean:169`). | 5 decls + 1 def edit | ✅ `lean` PASSED, audits 457 → **460**, identity pin regenerated, **definition pin unmoved (139/139)**, statements 26/26. **All four consumers compiled unchanged** — the polarity reading was right. |
 | **2** | ✅ **DONE 2026-08-04.** The enumeration model change. `exprDirectsAll_computedOnly` (`ReconcileCorrect.lean`); the de-dup obligation as **`freshDirectCands`**, a presence diff on the Direct-arm contribution to `cands` — **NOT the `.dedup` this cell used to prescribe, which is a no-op on the actual duplicate; see §C.2**; `mem_enumJob2D_cands`; `storedDirectSubjects_computedOnly`; **`enumJob2D_eq_enumJob2`**; `enum2BaseD_name_ne_star`; **`w3cJobValid_enumJob2D`** (same hypotheses as `w3cJobValid_enumJob2` — no fragment carry); `enumJob2D_negCands_subset`; then the signature change (`enumJobs2At` gains `T`) across 7 files. | 7 decls + 1 def edit + ripple | ✅ `lean` PASSED, audits 460 → **465**, **statements 26/26 byte-identical**, **definition pin 139 → 142** (5 changed, 1 dropped, 4 added), conf + tests tiles green. **No conformance golden moved** — §D.6's prediction is REFUTED, see §C.2. |
-| **3** | `w3dJobCoverage_enumJob2D_state` — direct clone swapping in the `_d`/`_filt` forms. Carries `hCOop`. | 1 thm / ~35 lines | `lean` + audit pin |
+| **3** | ✅ **DONE 2026-08-05.** `w3dJobCoverage_enumJob2D_state` (`CascadeStrataEnum.lean:981`) — the clone, swapping in the `_d`/`_filt` forms and carrying `hCOop`; compiled first try. **Plus `W4WitnessDirect.coverage_applies` (`FullScope.lean:785`), which this cell did not ask for and should have — see §C.3.** | 2 thms / ~110 lines | ✅ `lean` PASSED, audits 465 → **467**, identity pin regenerated, **definition pin unmoved (142/142)**, statements 26/26 — the additive profile this cell predicted. Conf + tests tiles run anyway, green. |
 | **4** | **`reachedByW3d2E_toC_d`** (~140 lines) + refactor the original into a **byte-identical wrapper** (verify against HEAD — the tree's established discipline, cf. `reachedByW3c_master_d`); same for `graph_correct_w3d2E`. | 1 big thm | `lean` + audit pin |
 | **5** | `GraphAdmission.storeValid → StoreValidRulesD`; `W4Fragment` 6 → 9 fields; `directsOnly_of_computedOrDirect_of_noUD`; `w4_within_scope` clause 3; `w4Fragment_of_untainted` + both existing witnesses gain vacuous fields; **`graph_reached_inv` rebased onto a NEW narrow bundle**; finals rebased. | claim-changing | `lean` + **statement pin regen** + **definition pin regen** + audit pin |
 | **6** | `W4WitnessDirect` restated as `GraphAdmission`/`W4Fragment` proper + `.final_applies`; **keep `outside_old_admission`** (it is now the proof the widening was contentful); conformance reclassification; **the vacuity caveat comes OUT of the docs.** | payoff | `lean` + **all conf + tests tiles** |
@@ -432,6 +432,52 @@ attack probe B swept 262 (schema, store) runs across *every* state the chain pas
 at derived R-nodes: **0 STAR-sourced** with the clause. **With the clause dropped, 122 stores
 produce a STAR source** — e.g. `approver := excl (direct [("user", BARE, true)]) (computed banned)`
 lands `(user,*,...,wAny) → (doc,d1,approver,plain)`, exactly the shape §B predicted.
+
+### C.3 Corrections to this plan, found by executing Leg 3 (2026-08-05)
+
+Leg 3 is the first leg where the plan's *prescription* was accurate — the clone is a clone,
+it compiled first try, and the predicted pin profile (definition pin unmoved at 142,
+statements 26/26) held exactly. The correction is about what the cell **omitted**.
+
+1. **★ The cell asked for a packaging clone and no instrument, and a packaging clone is
+   precisely the shape whose failure mode a green build cannot see.** The whole theorem is a
+   chain of `_d`/`_filt` forms; if that chain's hypotheses are jointly unsatisfiable it still
+   compiles, still audits with standard axioms only, and still passes every pin in the gate.
+   That is not hypothetical here — it is **the 2026-07-20b kill**, the full-store `_d` shadow
+   pair, and §A.3 warns about it two paragraphs above the sentence that specifies leg 3's
+   gate as "`lean` + audit pin". The two do not fit together, and the plan never noticed.
+   `formal/conformance/statement_pin.py` states the same limit about itself in as many words
+   ("a definition that is vacuous on its own terms … passes this pin with its text intact.
+   That remains the job of the non-vacuity witnesses").
+
+   What landed is **`W4WitnessDirect.coverage_applies`**, mirroring the tree's existing
+   discipline (`correct_applies`): instantiate the new theorem at the real compiled
+   Direct-arm pair `(Sd, Td)` with every schema/store hypothesis closed by `accepts` +
+   `fragment`. It assumes *less* than `correct_applies` does — `hsettledOps` is discharged
+   outright, vacuously, because `approver`'s only computed ref is the untainted `banned`.
+   And it is contentful rather than decorative for a reason already machine-checked in the
+   tree: `outside_old_admission` proves `StoreValidRules Sd Td` is FALSE, so the untainted
+   twin `w3dJobCoverage_enumJob2_state` **cannot be instantiated at this pair at all** while
+   the `_d` twin can.
+
+   **Controlled, not assumed** (house rule 2). Sabotage = one extra unused premise
+   `(_hSABOTAGE : StoreValidRules S T)` on `w3dJobCoverage_enumJob2D_state`, false at every
+   store the theorem is about:
+
+       A. lake build …CascadeStrataEnum → Build completed successfully (1061 jobs).
+       B. lake build …FullScope         → error: … type mismatch at `coverage_applies`:
+            Application type mismatch: … h has type ReachedByW3d2 σ Sd Td
+            but is expected to have type StoreValidRules Sd Td
+
+   (A) is the finding worth carrying into legs 4–6: **the sabotaged theorem is green.** The
+   witness is the only thing in the repo that sees it. Legs 4 and 5 are far bigger `_d`
+   packagings than this one — budget a witness for each, not just a clone.
+2. **`reachedByW3d2_reach_collapse_root_d` is not a straight clone of its untainted
+   sibling** — it takes neither the operand's `hlk'` nor `ComputedOnly e'` (only
+   `hWF hDAB hSV hder h hr`). So leg 3's `hops` block is *shorter* than
+   `w3dJobCoverage_enumJob2_state`'s, the operand declaration is never looked up, and
+   `hCOop` ends up consumed by exactly one caller (`w3d2_leg_context_d_filt`). Minor, but it
+   is why the "~35 lines" estimate held despite the wider hypothesis pack.
 
 ---
 

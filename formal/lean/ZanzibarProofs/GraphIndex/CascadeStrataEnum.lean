@@ -955,4 +955,63 @@ theorem w3d2_leg_context_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
    fun _ hchk => checkFnR_star_declared_d_filt hTT hSV hTS h0 hsh hschema hlk hcd hba hqo
       hops hchk⟩
 
+/-! ## `W3dJobCoverage` for `enumJob2D` at a W3d-2 state
+
+The Direct-arm-widened twin of `w3dJobCoverage_enumJob2_state`: the same packaging, with
+every input swapped for its `_d`/`_filt` form. Three substitutions carry the widening.
+
+* The shadow is **`reachedByW3d2_shadow_d`**, whose σ0 is admitted over the FILTERED store
+  `T↾U` — so the leg context must be `w3d2_leg_context_d_filt`, NOT `w3d2_leg_context_d`.
+  The full-store `_d` pair is jointly unsatisfiable on the Direct-arm fragment (a stored
+  Direct-arm subject that is also excluded breaks `sub`; see `reachedByW3d2_shadow_d`'s
+  header), so the `_filt` route is the only one that composes here.
+* The schema-wide `ComputedOnly` premise (`hCO`) is GONE, replaced by the `hCD`/`hDAB`
+  pair (`ComputedOrDirect` + `DirectArmsBare`) the `_d` chain runs on, plus the per-key
+  operand-only **`hCOop`** that `w3d2_leg_context_d_filt` demands and its untainted twin
+  does not. `hCOop` is what keeps the OPERANDS inside the untainted fragment while the
+  queried expression `e` itself may carry a Direct arm — that asymmetry is the widening.
+* The per-operand reach collapse is `reachedByW3d2_reach_collapse_root_d`, which needs
+  neither the operand's `hlk'` nor `ComputedOnly e'`. So unlike the untainted twin this
+  proof never looks the operand declaration up, and `hCOop` is consumed only by the leg
+  context.
+
+Otherwise identical: edges-closedness (`reachedByW3d2_edgesClosed`) and the schema anchor
+(`reachedByW3d2_schema`) are read off the state, and `hsettledOps` remains the single
+per-round obligation the closure assembly discharges. -/
+theorem w3dJobCoverage_enumJob2D_state {S : Schema} {T : Store} {σ : GraphState}
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOrDirect e)
+    (hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3d2 σ S T) {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) (hqo : on ≠ STAR)
+    (hCOop : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e')
+    (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      ∀ e', S.lookup (dt, r') = some e' →
+        ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hsettledOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
+    W3dJobCoverage S T σ (enumJob2D σ T dt on R e) := by
+  have hcl := reachedByW3d2_edgesClosed h
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSV hterm hWF hBS
+  have hschema : σ.schema = S := reachedByW3d2_schema h
+  have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+      SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
+      (∀ u, NReaches σ.edges u (objNode ⟨dt, on⟩ r') → (u, objNode ⟨dt, on⟩ r') ∈ σ.edges) := by
+    intro r' hr' hd'
+    obtain ⟨hset', hcomp'⟩ := hsettledOps r' hr' hd'
+    exact ⟨hset', hcomp',
+      fun u hu => reachedByW3d2_reach_collapse_root_d hWF hDAB hSV hd' h hu⟩
+  obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context_d_filt hWF hTT hNK hR hSV hBS hTS hMatch
+    hStrat hterm hWSbare h0 hsh hschema hlk hder hcd hba hqo hCOop hLU2 hops
+  exact w3dJobCoverage_enumJob2D hcd hba hcl hqo hbridge hcovDecl hWSbare
+
 end Zanzibar

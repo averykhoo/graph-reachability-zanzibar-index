@@ -1556,4 +1556,38 @@ namespace Zanzibar
 #print axioms mem_enumJob2D_cands
 #print axioms enumJob2D_negCands_subset
 
+-- E-chain Direct-arm widening, LEG 3 (2026-08-05) — the coverage PACKAGING at a chain state.
+-- **`w3dJobCoverage_enumJob2D_state`** is the `_d` twin of `w3dJobCoverage_enumJob2_state`:
+-- over any `ReachedByW3d2` state on the Direct-arm fragment, `enumJob2D`'s coverage holds
+-- given only that the derived operand keys are settled+complete. Additive — a theorem, not a
+-- definition edit, so the definition pin stays at 142 and the headline statements at 26/26.
+-- Three substitutions carry the widening, and the middle one is the leg's whole content:
+-- the shadow is `reachedByW3d2_shadow_d`, whose σ0 is admitted over the FILTERED store `T↾U`,
+-- so the leg context must be `w3d2_leg_context_d_filt` and NOT `w3d2_leg_context_d` (the
+-- full-store `_d` pair is jointly unsatisfiable on this fragment — the 2026-07-20b kill);
+-- schema-wide `ComputedOnly` is replaced by `ComputedOrDirect` + `DirectArmsBare` PLUS the
+-- per-key operand-only `hCOop`, the asymmetry that lets the queried expression carry a Direct
+-- arm while its operands stay untainted; and the per-operand reach collapse is
+-- `reachedByW3d2_reach_collapse_root_d`, which needs neither the operand's `hlk'` nor
+-- `ComputedOnly e'` — so unlike the untainted twin this proof never looks the operand
+-- declaration up at all.
+-- ★ NON-VACUITY IS THE GATE HERE, AND IT IS NOT THE TYPE CHECKER. A packaging clone is a
+-- chain of `_d`/`_filt` forms; the failure mode of record is a hypothesis pair no store can
+-- satisfy, which compiles green and audits clean (`formal/conformance/statement_pin.py` says
+-- so outright: "a definition that is vacuous on its own terms … passes this pin with its text
+-- intact"). So the leg lands with **`W4WitnessDirect.coverage_applies`**, the `correct_applies`-
+-- style instantiation at the real compiled Direct-arm pair `(Sd, Td)` — and it assumes LESS
+-- than `correct_applies` does, since `hsettledOps` is discharged (vacuously: `approver`'s only
+-- computed ref is `banned`, untainted). The widening is contentful, not a relabeling: the
+-- untainted twin demands `StoreValidRules Sd Td`, machine-checked FALSE by
+-- `outside_old_admission`, so the base theorem cannot be instantiated here and this one can.
+-- ★ CONTROLLED (house rule 2; full observed output in `coverage_applies`'s docstring): adding
+-- one unused premise `(_hSABOTAGE : StoreValidRules S T)` to `w3dJobCoverage_enumJob2D_state`
+-- — false at every store the theorem is about — leaves `CascadeStrataEnum` GREEN ("Build
+-- completed successfully (1061 jobs)") and turns `FullScope` RED with an application type
+-- mismatch at `coverage_applies`. The witness is the only thing in the repo that sees it.
+-- Standard axioms only:
+#print axioms w3dJobCoverage_enumJob2D_state
+#print axioms W4WitnessDirect.coverage_applies
+
 end Zanzibar

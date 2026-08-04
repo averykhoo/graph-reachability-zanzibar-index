@@ -734,5 +734,81 @@ theorem correct_applies {σ : GraphState} (q : Query)
   exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
     hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo
 
+/-- **The `_d`/`_filt` COVERAGE packaging is jointly dischargeable too** — the leg-3
+    non-vacuity attack (2026-08-05). `w3dJobCoverage_enumJob2D_state` instantiates at the
+    witness pair, at the real derived key `doc#approver` whose expression carries the
+    Direct arm, with every schema/store hypothesis closed by `accepts` + `fragment`.
+
+    This is the check a packaging clone actually needs. The theorem is nothing but a
+    chain of `_d`/`_filt` forms, and the failure mode of record for such a chain is a
+    hypothesis pair no store can satisfy — the 2026-07-20b kill was exactly that (the
+    FULL-store `_d` shadow pair is jointly unsatisfiable on this fragment, which is why
+    the packaging must route through `reachedByW3d2_shadow_d` / `w3d2_leg_context_d_filt`
+    and not their unfiltered siblings). Typechecking alone cannot see that: a lemma with
+    unsatisfiable premises compiles, audits clean, and passes every pin in the gate
+    (`formal/conformance/statement_pin.py` says so in as many words).
+
+    **The widening is contentful, not a relabeling**: the untainted twin
+    `w3dJobCoverage_enumJob2_state` demands `StoreValidRules Sd Td`, which
+    `outside_old_admission` machine-checks is FALSE. So the base theorem cannot be
+    instantiated here at all and this one can — and that is what makes this witness an
+    instrument rather than a decoration.
+
+    **Controlled 2026-08-05, and the control is the whole point.** Sabotage: give
+    `w3dJobCoverage_enumJob2D_state` one extra premise `(_hSABOTAGE : StoreValidRules S T)`
+    — the narrowest plausible weakening, a premise that is FALSE at every store this
+    theorem is supposed to be about, added in a form the proof never uses. Observed:
+
+        A. lake build ZanzibarProofs.GraphIndex.CascadeStrataEnum
+           → Build completed successfully (1061 jobs).
+        B. lake build ZanzibarProofs.FullScope
+           → error: … Application type mismatch: The argument
+               h
+             has type
+               ReachedByW3d2 σ Sd Td
+             but is expected to have type
+               StoreValidRules Sd Td
+             in the application
+               w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch
+                 hStrat hterm hCD hDAB hWSbare h
+
+    (the error lands on the `exact` below; its line number is deliberately not quoted —
+    it moves every time this docstring is edited)
+
+    (A) is the finding: **the sabotaged theorem compiles, and would have audited clean
+    and passed every pin in the gate.** Lean is happy to prove things about nothing.
+    (B) is this declaration doing the only work that catches it. Delete `coverage_applies`
+    and the vacuity is invisible to the entire repo.
+
+    Scope, stated rather than implied: `hsettledOps` is DISCHARGED here (vacuously —
+    `approver`'s only computed ref is `banned`, which is untainted), so this witness
+    exercises the packaging, not the operand-settled path; the same vacuity is already
+    recorded for `fragment`'s operand-`ComputedOnly` clause. `h` stays a hypothesis, the
+    identical residual `correct_applies` carries: non-vacuity of the CHAIN is
+    operational (the Exec driver reaches these states over exactly this schema), not
+    proof-side. -/
+theorem coverage_applies {σ : GraphState} {on : String} (hqo : on ≠ STAR)
+    (h : ReachedByW3d2 σ Sd Td) :
+    W3dJobCoverage Sd Td σ
+      (enumJob2D σ Td "doc" on "approver"
+        (.excl (.direct [("user", BARE, false)]) (.computed "banned"))) := by
+  obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
+  obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, _, hBS, hTS, hterm⟩ := fragment
+  have hlk : Sd.lookup ("doc", "approver")
+      = some (Expr.excl (.direct [("user", BARE, false)]) (.computed "banned")) := rfl
+  have hder : isDerived Sd ("doc", "approver") = true := by decide
+  have hsettledOps : ∀ r' ∈ computedRefs
+      (Expr.excl (.direct [("user", BARE, false)]) (.computed "banned")),
+      isDerived Sd ("doc", r') = true →
+        SettledKey Sd Td σ "doc" on r' ∧ CompleteKey Sd Td σ "doc" on r' := by
+    intro r' hr' hd'
+    simp only [computedRefs, List.nil_append,
+      List.mem_cons, List.not_mem_nil, or_false] at hr'
+    subst hr'
+    exact absurd hd' (by decide)
+  exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+    hCD hDAB hWSbare h hlk hder (hCD _ _ _ hlk hder) (hDAB _ _ _ hlk hder) hqo
+    (hCOop _ _ _ hlk hder) (hLU2 _ _ _ hlk hder) hsettledOps
+
 end W4WitnessDirect
 end Zanzibar
