@@ -780,13 +780,15 @@ theorem correct_applies {σ : GraphState} (q : Query)
     (B) is this declaration doing the only work that catches it. Delete `coverage_applies`
     and the vacuity is invisible to the entire repo.
 
-    Scope, stated rather than implied: `hsettledOps` is DISCHARGED here (vacuously —
+    Scope, stated rather than implied. `hsettledOps` is DISCHARGED here (vacuously —
     `approver`'s only computed ref is `banned`, which is untainted), so this witness
     exercises the packaging, not the operand-settled path; the same vacuity is already
     recorded for `fragment`'s operand-`ComputedOnly` clause. `h` stays a hypothesis, the
-    identical residual `correct_applies` carries: non-vacuity of the CHAIN is
-    operational (the Exec driver reaches these states over exactly this schema), not
-    proof-side. -/
+    same KIND of residual `correct_applies` carries — though a strictly weaker one:
+    `correct_applies` assumes the DRAINED `ReachedByW3d2C`, this assumes plain
+    `ReachedByW3d2`, and `reachedByW3d2C_toW3d2` goes that way and not the other. Either
+    way, non-vacuity of the CHAIN itself is operational (the Exec driver reaches these
+    states over exactly this schema), not proof-side. -/
 theorem coverage_applies {σ : GraphState} {on : String} (hqo : on ≠ STAR)
     (h : ReachedByW3d2 σ Sd Td) :
     W3dJobCoverage Sd Td σ
