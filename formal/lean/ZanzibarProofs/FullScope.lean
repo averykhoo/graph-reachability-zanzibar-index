@@ -560,9 +560,16 @@ theorems' current scope on TWO counts (the honest record, 2026-07-20e):
 
 * `W4Fragment.computedOnly` rejects the `direct` leaf in the derived def; the
   final `graph_correct`/`graph_reached_inv` are E-chain theorems
-  (`graph_correct_w3d2E`), still `ComputedOnly`-scoped — widening them needs the
-  operational enumeration model change (`enumJob2` → `enumJob2D`) plus a `_d`
-  projection of `reachedByW3d2E_toC` (recorded follow-up, NOT done).
+  (`graph_correct_w3d2E`), still `ComputedOnly`-scoped. Widening them needed
+  three things, and **two of the three have now landed**: the operational
+  enumeration model change (`enumJob2` → `enumJob2D`, arc leg 2, 2026-08-04) and
+  a `_d` projection of `reachedByW3d2E_toC` (arc legs 3–4, 2026-08-05 —
+  `reachedByW3d2E_toC_d` / `graph_correct_w3d2E_d`, instantiated at THIS pair by
+  `w3d2E_correct_applies` below). What remains is the third, and it is the one
+  that moves the headline claim: `W4Fragment`/`GraphAdmission` themselves must be
+  rebased (leg 5). Until then the `_d` chain stands BESIDE the final theorems, so
+  this store is still outside their scope — which is exactly what the second
+  bullet says, and why it is the load-bearing one now.
 * `GraphAdmission.storeValid` (plain `StoreValidRules`) is FALSE at `Td`: the
   Direct arm sits under `excl`, so `exprDirects = []` on the derived def and a
   stored Direct-arm grant is only admissible under the WIDENED
@@ -811,6 +818,101 @@ theorem coverage_applies {σ : GraphState} {on : String} (hqo : on ≠ STAR)
   exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
     hCD hDAB hWSbare h hlk hder (hCD _ _ _ hlk hder) (hDAB _ _ _ hlk hder) hqo
     (hCOop _ _ _ hlk hder) (hLU2 _ _ _ hlk hder) hsettledOps
+
+/-- `DirectArmsConcrete` at the witness schema — leg 1's fragment clause, which the
+    `fragment` bundle above does not carry because nothing before leg 4 consumed it.
+    `approver`'s single Direct arm is `[("user", BARE, false)]`: the restriction's
+    wildcard flag is `false`, so no `T:*` grant can reach the derived key. -/
+theorem directArmsConcrete : DirectArmsConcrete Sd := by
+  intro dt R e hlk hder
+  have hmem := mem_defs_of_lookup hlk
+  simp only [Sd, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+  rcases hmem with ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩
+  · exact absurd hder (by decide)
+  · decide
+
+/-- **The leg-4 `_d` PROJECTION is jointly dischargeable** — the non-vacuity attack for
+    `reachedByW3d2E_toC_d` (2026-08-05). Leg 3 established the discipline and §C.3 of the
+    plan generalises it forward: a `_d` packaging is nothing but a chain of `_d`/`_filt`
+    forms, so if its hypotheses are jointly unsatisfiable it compiles, audits with
+    standard axioms only, and passes every pin in the gate. Leg 4 is a much bigger
+    packaging than leg 3, so it gets its own instrument rather than riding leg 3's.
+
+    Every schema/store hypothesis is CLOSED here by `accepts` + `fragment` +
+    `directArmsConcrete`; only `h`, the chain membership itself, stays a hypothesis —
+    the same residual `correct_applies` and `coverage_applies` carry, and non-vacuity of
+    the chain is operational (the Exec driver reaches these states over exactly this
+    schema), not proof-side.
+
+    **Contentful, not a relabeling**: the untainted twin `reachedByW3d2E_toC` demands
+    `StoreValidRules Sd Td`, which `outside_old_admission` machine-checks is FALSE. The
+    old theorem cannot be instantiated at this pair at all; this one can.
+
+    **Controlled 2026-08-05.** Sabotage: one extra unused premise
+    `(_hSABOTAGE : StoreValidRules S T)` on BOTH `reachedByW3d2E_toC_d` and
+    `graph_correct_w3d2E_d` — false at every store those theorems are about, threaded
+    between them and supplied from `hSV` by the two `ComputedOnly` wrappers, so the
+    defining module keeps compiling. Observed:
+
+        A. lake build ZanzibarProofs.GraphIndex.CascadeStrataAssemble
+           → ✔ [1062/1062] Built … Build completed successfully (1062 jobs).
+        B. lake build ZanzibarProofs.FullScope
+           → error: … Application type mismatch: The argument
+                h
+              has type
+                ReachedByW3d2E σ Sd Td
+              but is expected to have type
+                StoreValidRules ?m ?m
+              in the application
+                reachedByW3d2E_toC_d h
+           → error: … Application type mismatch: The argument
+                hWF
+              has type
+                WF Sd
+              but is expected to have type
+                StoreValidRules ?m ?m
+              in the application
+                graph_correct_w3d2E_d q hWF
+
+    (A) is the finding, and it is leg 3's finding again one leg further on: **the
+    sabotaged theorems are green in their own module**, and would have audited clean and
+    passed the identity, statement and definition pins. (B) is these two declarations
+    doing the only work in the repo that catches it. One incidental confirmation the
+    control also produced: placing the premise BEFORE `h` and leaving it in scope makes
+    `induction h` generalise it into the motive, which reddens the module — the honest
+    sabotage needed `clear _hSABOTAGE` so the premise really is unused. -/
+theorem toC_applies {σ : GraphState} (h : ReachedByW3d2E σ Sd Td) :
+    ReachedByW3d2C σ Sd Td := by
+  obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
+  obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, _, hBS, hTS, hterm⟩ := fragment
+  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat hCD hDAB directArmsConcrete
+    hCOop hLU2 hWSbare hSV hBS hTS hterm
+
+/-- **The leg-4 E-chain FINAL is jointly dischargeable at the Direct-arm pair**:
+    `check = sem` at every drained state of the fully-operational two-round scheduler
+    chain over `can_view: [user] but not blocked`.
+
+    **Weaker as a STATEMENT, stronger as an INSTRUMENT — say it that way round.** As a
+    theorem this is weaker than `correct_applies`: `ReachedByW3d2E` states project INTO
+    `ReachedByW3d2C` (that projection is exactly what `toC_applies` says), so assuming
+    the operational chain assumes MORE, and this follows from `correct_applies` composed
+    with `toC_applies`. What it checks is nonetheless strictly more, which is the point
+    of a witness: it discharges the whole leg-4 bundle — including `DirectArmsConcrete`,
+    which no earlier witness touches — and it runs the projection rather than starting
+    after it.
+
+    ⚠ It does NOT mean the headline `graph_correct` covers this store: `GraphAdmission
+    .storeValid` is still plain `StoreValidRules`, which `outside_old_admission` refutes
+    at `Td`. That rebase is leg 5. What this pins is that leg 4's bundle has a model. -/
+theorem w3d2E_correct_applies {σ : GraphState} (q : Query)
+    (h : ReachedByW3d2E σ Sd Td) (hq : cascadeKeys Sd σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem Sd Td q := by
+  obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
+  obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, hNoUD, hBS, hTS, hterm⟩ := fragment
+  exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCD hDAB
+    directArmsConcrete hCOop hLU2 hWSbare hNoUD h hq hqs hqo
 
 end W4WitnessDirect
 end Zanzibar

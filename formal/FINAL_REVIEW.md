@@ -31,8 +31,8 @@ number INTO it over restating it.
 | whole-repo suite | **1228** |
 | differential conformance tests | **419** across **13** files |
 | gate-tooling conformance tests | **46** across **2** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **467** |
-| audit identity pin (`audited_theorems.txt`) | **467** |
+| audited theorems (`#print axioms` in `Audit.lean`) | **471** |
+| audit identity pin (`audited_theorems.txt`) | **471** |
 | headline definition pin | **142** rows (**135** declarations + ambient) |
 | `CORRESPONDENCE.md` anchors | **409** (**275** Python + **134** Lean) |
 | `corpus.SCHEMAS` | **24** |
@@ -235,15 +235,21 @@ witnessed by `W4WitnessDirect` at exactly the `Sd`/`Td` pair above) gives
 `ComputedOrDirect ∧ DirectArmsBare` fragment with `StoreValidRulesD` admission. It
 is **not** the final unsuffixed theorem, and it is not the operational E-chain the
 zcli driver folds. Closing the gap needs the E-chain widening recorded at
-`FullScope.lean:527-528` as a "recorded follow-up, **NOT done**": the
+`FullScope.lean`'s `W4WitnessDirect` header (the `:527-528` this line used to cite
+had already rotted; anchor on the symbol): the
 `enumJob2 → enumJob2D` enumeration swap — **DONE 2026-08-04 (arc leg 2):
 `enumJobs2At` runs `enumJob2D`, behaviourally identical on the `ComputedOnly`
 scope by `enumJob2D_eq_enumJob2`** — plus a `_d` projection of
-`reachedByW3d2E_toC` (legs 3–4) and `GraphAdmission.storeValid →
-StoreValidRulesD` (leg 5), **both still open. The vacuity claim in §3.0 is
-therefore UNCHANGED**: it is the admission bundle, not the enumeration, that
-makes the headline theorems vacuous on Direct-arm stores, and leg 2 did not
-touch admission.
+`reachedByW3d2E_toC`, **DONE 2026-08-05 (arc legs 3–4): `reachedByW3d2E_toC_d`
+and `graph_correct_w3d2E_d`, with the audited originals refactored into
+byte-identical wrappers over them** — plus `GraphAdmission.storeValid →
+StoreValidRulesD` (leg 5), **still open. The vacuity claim in §3.0 is therefore
+UNCHANGED**: it is the admission bundle, not the enumeration and not the
+projection, that makes the headline theorems vacuous on Direct-arm stores, and
+neither leg 2 nor leg 4 touched admission. What legs 3–4 add is a `_d` twin
+standing BESIDE the headline theorems (non-vacuity witnessed at the real
+Direct-arm pair by `W4WitnessDirect.w3d2E_correct_applies`), not a widening of
+them.
 
 **What this does to the conformance evidence.** `direct_arm_exclusion` is listed in
 `GRAPH_FRAGMENT` and is driven through the graph and state gates, so the Python and
@@ -503,8 +509,9 @@ operands, `StoreValidRulesD` admission, `hNoUD`; non-vacuity witnessed by
 `W4WitnessDirect` at the `direct_arm_exclusion` corpus pair, which the
 graph/state conformance gates now carry) — but the FINAL unsuffixed theorems
 and `W4Fragment` remain `ComputedOnly`-scoped: the operational E-chain widening
-(the `enumJob2D` enumeration swap + the `reachedByW3d2E_toC` `_d` projection +
-`GraphAdmission.storeValid` → `StoreValidRulesD`) is the recorded gap
+(the `enumJob2D` enumeration swap — done, leg 2; the `reachedByW3d2E_toC` `_d`
+projection — done, legs 3–4; and `GraphAdmission.storeValid` →
+`StoreValidRulesD`, **the one that is still open**) is the recorded gap
 (HANDOFF/PROOF_STATUS 2026-07-20e); (d) remove
 legs on the LEAN side — **DONE 2026-07-19f** at the validly-stored + drained-prior
 scope: the `remove` constructor now lives on `ReachedByW3d2`/`C`/`E`, so T2a

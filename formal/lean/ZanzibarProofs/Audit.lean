@@ -1590,4 +1590,45 @@ namespace Zanzibar
 #print axioms w3dJobCoverage_enumJob2D_state
 #print axioms W4WitnessDirect.coverage_applies
 
+-- E-chain Direct-arm widening, LEG 4 (2026-08-05) — the CHAIN PROJECTION and the E-chain
+-- final, both `_d`. **`reachedByW3d2E_toC_d`** projects the fully-operational two-round
+-- scheduler closure `ReachedByW3d2E` onto the coverage chain `ReachedByW3d2C` on the
+-- Direct-arm fragment; **`graph_correct_w3d2E_d`** composes it with `graph_correct_w3d2_d`
+-- for `check = sem` at every drained state of that chain. Four substitutions carry the
+-- widening: schema-wide `ComputedOnly` → `ComputedOrDirect` + `DirectArmsBare` + the per-key
+-- operand-only `hCOop`; `StoreValidRules` → `StoreValidRulesD`; the new fragment carry
+-- `DirectArmsConcrete` (leg 1), needed here — and ONLY here — by
+-- `reachedByW3d2_Rnode_source_name_ne_star_d`, which is what keeps `enumJob2D`'s extra
+-- candidates star-free; and the round-1 coverage discharge becomes leg 3's
+-- `w3dJobCoverage_enumJob2D_state` with the `enumJob2D_eq_enumJob2` rewrite DELETED — this is
+-- the chain where the widened enumeration's extra candidates are covered on their own terms
+-- rather than collapsed back onto `enumJob2`. Round 2 routes through `w3d2_leg_context_d_filt`
+-- (filtered σ0; the full-store `_d` pair is the 2026-07-20b kill). The `remove` case is
+-- unchanged in strength: `ReachedByW3d2E.remove` carries PLAIN `StoreValidRules` for its
+-- pre-store, converted by `storeValidRulesD_of_storeValidRules_directArmsBare`.
+-- The audited `reachedByW3d2E_toC` and `graph_correct_w3d2E` are now BYTE-IDENTICAL wrappers
+-- over these cores (verified against HEAD), deriving every widened carry from `hCO`/`hSV`.
+-- ★ NON-VACUITY, AGAIN NOT THE TYPE CHECKER, and leg 4 is a far bigger packaging than leg 3 —
+-- so it gets its own instruments rather than riding leg 3's: **`W4WitnessDirect.toC_applies`**
+-- and **`W4WitnessDirect.w3d2E_correct_applies`** instantiate both cores at the real compiled
+-- Direct-arm pair `(Sd, Td)`, with every schema/store hypothesis closed by `accepts` +
+-- `fragment` + the new `W4WitnessDirect.directArmsConcrete`. Stated precisely, because the
+-- tempting summary is backwards: `w3d2E_correct_applies` is a WEAKER STATEMENT than the
+-- existing `correct_applies` (`ReachedByW3d2E` projects INTO `ReachedByW3d2C`, so assuming
+-- the operational chain assumes more, and it follows from `correct_applies` ∘ `toC_applies`)
+-- but a STRICTLY STRONGER INSTRUMENT — it discharges the whole leg-4 bundle, `DirectArmsConcrete`
+-- included, which no earlier witness touches. Contentful: the untainted twins demand
+-- `StoreValidRules Sd Td`, machine-checked FALSE by `outside_old_admission`.
+-- ★ CONTROLLED (house rule 2; full observed output in `toC_applies`'s docstring): one unused
+-- premise `(_hSABOTAGE : StoreValidRules S T)` on BOTH cores, threaded between them and
+-- supplied from `hSV` by the wrappers, leaves `CascadeStrataAssemble` GREEN ("Build completed
+-- successfully (1062 jobs)") and turns only `FullScope` RED, at both new witnesses.
+-- ⚠ This does NOT widen the headline `graph_correct`: `GraphAdmission.storeValid` is still
+-- plain `StoreValidRules`. That rebase is leg 5.
+-- Standard axioms only:
+#print axioms reachedByW3d2E_toC_d
+#print axioms graph_correct_w3d2E_d
+#print axioms W4WitnessDirect.toC_applies
+#print axioms W4WitnessDirect.w3d2E_correct_applies
+
 end Zanzibar

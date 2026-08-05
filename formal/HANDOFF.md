@@ -26,9 +26,14 @@ merely narrow — on any store written through the `Direct` arm of a derived def
 `can_view: [user] but not blocked`, the canonical Zanzibar boolean shape.
 `FullScope.lean:564` machine-checks `¬ StoreValidRules Sd Td` at exactly such a store, and
 `GraphAdmission.storeValid` IS `StoreValidRules`. What is proved there is the C-chain
-`graph_correct_w3d2_d`; the E-chain widening (`enumJob2 → enumJob2D`, a `_d` projection of
-`reachedByW3d2E_toC`, `storeValid → StoreValidRulesD`) is recorded at
-`FullScope.lean:527-528` as **NOT done** and is the highest-value open item.
+`graph_correct_w3d2_d`, and now also the E-chain `graph_correct_w3d2E_d`
+(`W4WitnessDirect.w3d2E_correct_applies` instantiates it at that very store). **The
+caveat still holds in full** because the widening's last step is not done: of the three
+parts of the E-chain widening, `enumJob2 → enumJob2D` LANDED (leg 2), the `_d` projection
+of `reachedByW3d2E_toC` LANDED (leg 4), and **`storeValid → StoreValidRulesD` — the one
+that actually moves the headline theorems — has NOT** (leg 5). Until it does, the
+unsuffixed `graph_correct`/`graph_reached_inv`/`Exec.graphRun_check_eq_sem` remain
+vacuous there; what exists is a `_d` twin standing beside them, not a widening of them.
 
 ---
 
@@ -364,9 +369,45 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `coverage_applies`. ⚠ **Carry this into legs 4 and 5, which are much bigger `_d` packagings:
 > budget a witness for each, not just a clone.**
 >
-> **NEXT: Leg 4** — `reachedByW3d2E_toC_d` (~140 lines) + refactor the original into a
-> byte-identical wrapper (verify against HEAD, cf. `reachedByW3c_master_d`); same for
-> `graph_correct_w3d2E`. Wants its own session. Legs 2 and 3 changed none of its premises.
+> **★ LEG 4 LANDED 2026-08-05 — the chain PROJECTION and the E-chain final, both `_d`.**
+> **`reachedByW3d2E_toC_d`** projects `ReachedByW3d2E` onto `ReachedByW3d2C` on the
+> Direct-arm fragment; **`graph_correct_w3d2E_d`** composes it with `graph_correct_w3d2_d`.
+> Both compiled first try. The audited `reachedByW3d2E_toC` / `graph_correct_w3d2E` are now
+> **byte-identical wrappers** over them (verified against HEAD). Audits 467 → **471**;
+> **definition pin UNMOVED at 142/142, statements 26/26**; all conf + tests tiles green.
+> The leg's content in one line: the two `enumJob2D_eq_enumJob2` rewrites leg 2 installed
+> come OUT, so the widened enumeration's extra candidates are covered on their own terms
+> instead of being collapsed back onto `enumJob2`.
+> **Two things smaller than expected, one thing the plan's inventory missed**
+> (`history/echain-widening-plan-2026-07-28.md` §C.4): the `remove` case needs no widening
+> (plain `StoreValidRules` converts in one line) and the cascade case is *shorter* than the
+> original (the `_d` source lemmas take `isDerived` alone, so three declaration-lookup
+> blocks vanish) — but the bundle needs **`DirectArmsConcrete`**, which §A.3's inventory
+> does not predict because it arrives through `enumJobs2At_valid`, the VALIDITY half, not
+> through the coverage lemma the inventory is organised around.
+> **★ The instrument, per §C.3, and it is stronger than the one it joins.**
+> `W4WitnessDirect.toC_applies` + **`w3d2E_correct_applies`** instantiate both cores at
+> `(Sd, Td)`. Say the comparison the right way round: `w3d2E_correct_applies` is a WEAKER
+> STATEMENT than the existing `correct_applies` (`ReachedByW3d2E` projects INTO
+> `ReachedByW3d2C`, so it assumes more, and it follows from `correct_applies` ∘
+> `toC_applies`) but a STRICTLY STRONGER INSTRUMENT — it discharges the whole leg-4
+> bundle, `DirectArmsConcrete` included, which no earlier witness touches. **Controlled:** one false
+> unused premise on both cores leaves `CascadeStrataAssemble` GREEN ("Build completed
+> successfully (1062 jobs)") and turns only `FullScope` RED, at both witnesses.
+> ⚠ **And the instrument itself needed controlling:** the first sabotage put the premise
+> before `h` and left it in scope, so `induction h` generalised it into the motive and the
+> module reddened for a reason unrelated to the premise being false — a control that passes
+> for the wrong reason. `clear _hSABOTAGE` is what makes it honest.
+>
+> **NEXT: Leg 5** — the claim-changing one. `GraphAdmission.storeValid → StoreValidRulesD`,
+> `W4Fragment` 6 → 9 fields, `directsOnly_of_computedOrDirect_of_noUD`, `w4_within_scope`
+> clause 3, `w4Fragment_of_untainted` + both existing witnesses gain vacuous fields,
+> `graph_reached_inv` rebased onto a NEW narrow bundle (T2a does NOT widen — §D.3's kill),
+> finals rebased. Owes a **statement pin regen AND a definition pin regen** — the first leg
+> in this arc to move the headline statements — plus the `CORRESPONDENCE.md` prose about
+> `GraphAdmission`'s field list and `W4Fragment`'s "six fields", which is mechanically
+> ungated. ⚠ **Its plan cell lists both pin regens but no witness; budget one** (§C.4).
+> Wants its own session. **The vacuity caveat stays in the docs until leg 6.**
 >
 > **[superseded 2026-07-28 — kept for provenance] THE NEXT TASK — #1 Direct arm: the E-CHAIN widening (the recorded gap), OR pivot.** Options in
 > rank order: (a) the E-chain widening per the 20e fork list above — payoff: `W4Fragment` widened to

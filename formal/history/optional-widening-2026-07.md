@@ -286,7 +286,17 @@ into `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → 326): zcli graph answers + the gra
 first Direct-arm state-level Lean-vs-Python gate) + spec/random + the PYTHON-side remove churn;
 `test_conformance_remove_graph.py` excludes it via `_REMOVE_EXCLUDED` (documented in situ).
 
-**The E-CHAIN widening (NOT done — the assessed fork cost, multi-session):**
+**The E-CHAIN widening — ⚠ SUPERSEDED 2026-07-28 by
+[`echain-widening-plan-2026-07-28.md`](echain-widening-plan-2026-07-28.md), and three of
+the four items below have since LANDED. Read the plan, not this list.** Status as of
+2026-08-05: item 1 (enumeration model change) DONE, leg 2; item 2 (star-freeness hole)
+DECIDED and DONE, leg 1 — the answer was *both* a fragment clause and the star-filter,
+not "OR" as written below; item 3 (the toC `_d` projection) DONE, legs 3–4; item 4
+(`storeValid → StoreValidRulesD`) **still open, leg 5**. The list is kept for provenance —
+its cost assessment was broadly right, but the plan supersedes it in five places (§E
+there), and the size/shape predictions below have been corrected by execution in §C.1–C.4.
+
+**(as filed) The E-CHAIN widening (NOT done — the assessed fork cost, multi-session):**
 1. **Enumeration model change**: `enumJobs2At` must run `enumJob2D` (Direct-arm subjects live in the
    fixed store; `enumJob2` is not coverage-complete on Direct-arm defs — leg 5c's raison d'être).
    `Delta.leaf`-scale ripple: `CascadeStrataAssemble` (chain def + toC + validity), `CascadeStrataEdge`/
