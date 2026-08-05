@@ -54,10 +54,12 @@ So `coverage_applies` landed too, mirroring the tree's existing discipline
 `(Sd, Td)` with every schema/store hypothesis closed by `accepts` + `fragment`. Two
 things make it stronger than a decoration:
 
-* **It assumes less than `correct_applies` does.** `hsettledOps` is *discharged*, not
-  hypothesised — vacuously, since `approver`'s only computed ref is the untainted
-  `banned`. Only `h : ReachedByW3d2 σ Sd Td` remains, the identical residual
-  `correct_applies` carries (chain non-vacuity is operational, via the Exec driver).
+* **It assumes less than `correct_applies` does, on both counts.** `hsettledOps` is
+  *discharged*, not hypothesised — vacuously, since `approver`'s only computed ref is the
+  untainted `banned`. And the surviving chain hypothesis is strictly weaker: plain
+  `ReachedByW3d2` here versus the DRAINED `ReachedByW3d2C` there, with
+  `reachedByW3d2C_toW3d2` running that direction and not the reverse. The residual is the
+  same in KIND — chain non-vacuity stays operational, via the Exec driver — not identical.
 * **The widening is contentful, machine-checked.** `outside_old_admission` proves
   `StoreValidRules Sd Td` FALSE, so the untainted twin `w3dJobCoverage_enumJob2_state`
   **cannot be instantiated at this pair at all** while the `_d` twin can.
