@@ -150,6 +150,11 @@ HEADLINE = [
     # Phase 6 -- the CLI's graph mode IS the chain
     "Zanzibar.graphRun_reached",
     "Zanzibar.graphRun_check_eq_sem",
+    # ...and the op-driver (removes) sibling.  Added 2026-08-05 (leg 5): it takes the
+    # same two bundles and was axiom-printed but NOT statement-pinned, so restating it
+    # to `True` was invisible here.  Nothing to do with leg 5's content; a gap the leg
+    # tripped over while inventorying the bundle consumers.
+    "Zanzibar.graphRunOps_check_eq_sem",
     # Non-vacuity: the hypothesis bundles are inhabited by real compiled schemas
     "Zanzibar.W4Witness.accepts",
     "Zanzibar.W4Witness.fragment",
@@ -162,6 +167,33 @@ HEADLINE = [
     "Zanzibar.W4WitnessDirect.within_scope",
     "Zanzibar.W4WitnessDirect.correct_applies",
     "Zanzibar.W4WitnessDirect.outside_old_admission",
+    # The E-chain widening's per-leg instruments.  Legs 3/4 landed these (they are
+    # what catches a `_d` packaging whose hypotheses are jointly unsatisfiable) but
+    # never pinned their statements -- same "quietest possible way" hole the comment
+    # above describes.  Added 2026-08-05 with leg 5.
+    "Zanzibar.W4WitnessDirect.coverage_applies",
+    "Zanzibar.W4WitnessDirect.toC_applies",
+    "Zanzibar.W4WitnessDirect.w3d2E_correct_applies",
+    # Leg 5 -- the HEADLINE bundles inhabited at `can_view: [user] but not blocked`.
+    # `final_applies` is the unsuffixed `graph_correct` at that store; it is the ONLY
+    # declaration in the tree that distinguishes the real widening from a half-done
+    # one that compiles, audits clean and regenerates both goldens (see its docstring
+    # for the observed sabotage output).  `outside_narrow_t2a` is the machine-checked
+    # counterexample keeping the T2a asymmetry declared rather than silent.
+    "Zanzibar.W4WitnessDirect.admission",
+    "Zanzibar.W4WitnessDirect.w4fragment",
+    "Zanzibar.W4WitnessDirect.final_applies",
+    "Zanzibar.W4WitnessDirect.outside_narrow_t2a",
+    # Leg 6 -- the same two bundles at `Td4`, the `direct_arm_exclusion` corpus store
+    # VERBATIM rather than the one-tuple minimal store.  `final_applies4` is what
+    # licenses `test_conformance_graph._THEOREM_BACKED` to carry that corpus: the
+    # bundles are store-indexed, so a witness at a subset store would not establish
+    # what that classification asserts.  Restating any of these to `True` would
+    # silently un-earn the reclassification.
+    "Zanzibar.W4WitnessDirect.outside_old_admission4",
+    "Zanzibar.W4WitnessDirect.admission4",
+    "Zanzibar.W4WitnessDirect.w4fragment4",
+    "Zanzibar.W4WitnessDirect.final_applies4",
 ]
 
 DECL_RE = re.compile(

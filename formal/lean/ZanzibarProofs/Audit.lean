@@ -1150,7 +1150,9 @@ namespace Zanzibar
 #print axioms exclusion_effective
 #print axioms no_ghost_grant
 #print axioms drained_of_untainted
+#print axioms w4Fragment_of_computedOnly
 #print axioms w4Fragment_of_untainted
+#print axioms w4NarrowT2a_of_untainted
 #print axioms W4Witness.accepts
 #print axioms W4Witness.fragment
 #print axioms W4Witness.within_scope
@@ -1630,5 +1632,47 @@ namespace Zanzibar
 #print axioms graph_correct_w3d2E_d
 #print axioms W4WitnessDirect.toC_applies
 #print axioms W4WitnessDirect.w3d2E_correct_applies
+
+-- E-chain Direct-arm widening, LEG 5 (2026-08-05) — THE CLAIM-CHANGING ONE. The headline
+-- bundles are rebased: `GraphAdmission.storeValid` widens `StoreValidRules` →
+-- `StoreValidRulesD`, `W4Fragment`'s single `computedOnly` field becomes five derived-def
+-- clauses (`computedOrDirect` / `directArmsBare` / `directArmsConcrete` /
+-- `computedOnlyOperands` / `noUnionDirects`), and `graph_correct` routes through
+-- `graph_correct_w3d2E_d`. So T2b/T3/T6a/T6b and `Exec.graphRun{,Ops}_check_eq_sem` are
+-- **no longer VACUOUS on `can_view: [user] but not blocked`** — `W4WitnessDirect
+-- .final_applies` instantiates the unsuffixed `graph_correct` at exactly that store.
+-- `w4Fragment_of_computedOnly` is the machine-checked "nothing that held before stopped
+-- holding" (the pre-leg-5 six fields imply all ten).
+-- ⚠ T2a is NOT widened and now says so in its own type: `graph_reached_inv` gained a third
+-- bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + narrow `StoreValidRules`), and
+-- `outside_narrow_t2a` machine-checks `Td` fails it. Probe D.3 (2026-07-28) proved
+-- `Inv.negEdgeFree` FALSE on the `_d` fragment; that is a P6 leaf-family MODELLING limit,
+-- not a Python bug, and a design decision is owed before leg 7.
+-- ★ CONTROLLED (house rule 2; full observed output in `final_applies`'s docstring): the
+-- sabotage is the plausible HALF-DONE leg — widen `W4Fragment` but leave
+-- `GraphAdmission.storeValid` narrow and convert with
+-- `storeValidRulesD_of_storeValidRules_directArmsBare`, which typechecks. Result: ONE error
+-- in the whole tree, at `admission.storeValid`; delete the four witness declarations and it
+-- is "Build completed successfully (1084 jobs)" — every pinned subject green, both goldens
+-- regenerable to a self-consistent pair. The witnesses are the only thing that sees it.
+-- Standard axioms only:
+#print axioms W4WitnessDirect.admission
+#print axioms W4WitnessDirect.w4fragment
+#print axioms W4WitnessDirect.final_applies
+#print axioms W4WitnessDirect.outside_narrow_t2a
+
+-- E-chain Direct-arm widening, LEG 6 (2026-08-05) — the conformance payoff. `Td4` is the
+-- `direct_arm_exclusion` corpus store VERBATIM (four tuples, the full truth table), not the
+-- one-tuple minimal store `Td` that `outside_old_admission` uses. Both bundles are
+-- store-indexed, so `test_conformance_graph._THEOREM_BACKED` — which asserts the corpus
+-- satisfies them AT THE STORE THE DRIVER RUNS — is licensed by `final_applies4` and by
+-- nothing weaker. `outside_old_admission4` is kept so the reclassification cannot be
+-- misread as "it was always in scope": the corpus store was genuinely outside the
+-- pre-leg-5 bundle, and leg 5 moved it.
+-- Standard axioms only:
+#print axioms W4WitnessDirect.outside_old_admission4
+#print axioms W4WitnessDirect.admission4
+#print axioms W4WitnessDirect.w4fragment4
+#print axioms W4WitnessDirect.final_applies4
 
 end Zanzibar

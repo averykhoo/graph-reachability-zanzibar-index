@@ -627,11 +627,18 @@ name, the code wins):
   direct-only, `_validate_ttu_tuplesets`), `matchDecl`, `ranked`, `objWild`
   (object-wildcard shapes never on derived relations), `storeValid`. Graph
   theorems only.
-- `hF : W4Fragment S T` (`FullScope.lean:132-142`) — the **honest fragment carries**:
+- `hF : W4Fragment S T` (`FullScope.lean`) — the **honest fragment carries**:
   scope restrictions the current proof needs that Python admission does NOT
   imply (each a documented gap — `history/ROADMAP.md` "W4 — honest gaps").
-  `structure W4Fragment` has exactly **six** fields:
-  `computedOnly` (derived defs read only computed operands),
+  `structure W4Fragment` has exactly **TEN** fields since E-chain leg 5 (2026-08-05)
+  split the single `computedOnly` into five SHAPE conditions on a derived def:
+  `computedOrDirect` (a boolean tree over `computed` refs AND `direct` grant arms —
+  `.ttu` leaves still banned), `directArmsBare` (its `Direct` arms carry only BARE
+  restrictions), `directArmsConcrete` (…and no wildcard-flagged ones),
+  `computedOnlyOperands` (its DERIVED operands are themselves `ComputedOnly` — only the
+  top def may carry a `Direct` arm), `noUnionDirects` (its `Direct` arms sit under
+  `inter`/`excl` only, never union-reachable — the canonical `but not`). Then the five
+  carried over verbatim:
   `twoStrata` (≤ 2 derived strata; attack-confirmed load-bearing), `wsBare`
   (every declared wildcard restriction is bare `[T:*]`), `bareStar` (stored
   star subjects bare, objects concrete), `ttuStarFree` (no stored star subject
@@ -639,14 +646,19 @@ name, the code wins):
   stored userset-subject predicates). Graph theorems only.
   **There is NO `rootB` field:** it (and `RootBoolean`) were DELETED 2026-07-17, so the
   derived-def ROOT operator is unrestricted and union-/computed-rooted derived defs are
-  in scope; `computedOnly` is the sole remaining SHAPE condition. The ADD-ONLY store
+  in scope. **There is NO `computedOnly` field either, since leg 5** — see the five
+  clauses above. The ADD-ONLY store
   restriction is likewise not a field — it was a property of the chain, and since
   2026-07-19f the chain carries a scoped `remove` constructor (see `h : ReachedBy` below,
   which states both facts correctly; only this field list had gone stale).
-  **Vacuity warning:** `computedOnly` is what makes the final graph theorems VACUOUS on
-  `Direct`-arm derived stores (`can_view: [user] but not blocked`) — `FullScope.lean:601`
-  machine-checks that such a store also fails `GraphAdmission.storeValid`. See
-  `FINAL_REVIEW.md` §3.0.
+  **Vacuity warning — HALF RETIRED 2026-08-05.** `computedOnly` (with the then-narrow
+  `GraphAdmission.storeValid = StoreValidRules`) is what USED to make the final graph
+  theorems VACUOUS on `Direct`-arm derived stores (`can_view: [user] but not blocked`).
+  E-chain leg 5 widened both, so T2b/T3/T6 and the Exec finals now COVER that shape
+  (`W4WitnessDirect.final_applies`). ⚠ **T2a `graph_reached_inv` did not widen**: it takes
+  a third bundle `W4NarrowT2a` re-imposing schema-wide `ComputedOnly` + the narrow
+  `StoreValidRules`, and `W4WitnessDirect.outside_narrow_t2a` machine-checks that such a
+  store fails it. See `FINAL_REVIEW.md` §3.0.
 - `h : ReachedBy σ S T` (`FullScope.lean`; `ReachedBy := ReachedByW3d2E`) —
   `σ` is reached from empty by the OPERATIONAL chain: admitted logged
   rule-routed writes interleaved with state-derived two-round cascade legs —

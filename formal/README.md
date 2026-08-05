@@ -11,11 +11,14 @@ The staged proof arc W1→W4 is **complete and green** — but "complete" here m
 planned proof stages all landed*, not *the assurance question is closed*. Two things a
 reader should know before trusting the word:
 
-* **The final graph theorems are VACUOUS on the canonical boolean idiom**
-  (`can_view: [user] but not blocked`). Not narrower coverage — no theorem there at all.
-  `FullScope.lean:601` machine-checks that such a store fails
-  `GraphAdmission.storeValid`. Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0
-  before quoting anything graph-side.
+* **The final graph theorems USED to be VACUOUS on the canonical boolean idiom**
+  (`can_view: [user] but not blocked`) — not narrower coverage, no theorem there at all.
+  E-chain legs 5+6 (2026-08-05) closed that for T2b/T3/T6 and the Exec finals;
+  `W4WitnessDirect.final_applies4` instantiates the headline `graph_correct` at exactly
+  that shape. ⚠ **T2a `graph_reached_inv` alone is still vacuous there**
+  (`outside_narrow_t2a`), and a design decision — not proof effort — is what is owed.
+  Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0 before quoting anything
+  graph-side.
 * **A genuine model-vs-Python infidelity was found in the audited chain AFTER this
   directory was first described as "complete"** (2026-07-20b: Lean's `affectedKeys`
   lacked Python's LeafFamily own-key branch, yielding a modeled *drained* state with
@@ -67,8 +70,8 @@ of `CORRESPONDENCE.md`, are proven to compute the stratified perfect model and h
 to be equivalent (machine-checked, axiom-audited; set engine at **full scope** — the
 equality is literally unconditional, all three hypotheses of `setEngine_correct` are
 underscored and unused — graph index at the documented
-`GraphAdmission ∧ W4Fragment` scope, **which is vacuous on `Direct`-arm derived
-stores, `FINAL_REVIEW.md` §3.0**). The **Python
+`GraphAdmission ∧ W4Fragment` scope, **which since 2026-08-05 covers `Direct`-arm
+derived stores for every graph theorem except T2a, `FINAL_REVIEW.md` §3.0**). The **Python
 implementations** are pinned to those models by the correspondence map, five-corner
 differential conformance (including the Lean operational graph model vs the real
 graph index), **state-level equality under seven documented projections**,

@@ -1,21 +1,32 @@
 # E-chain Direct-arm widening — the landable leg plan (scoped 2026-07-28)
 
 **What this is.** The durable scoping document for board item **(B)** / `ZT-P3-1`: the
-E-chain Direct-arm widening, which is the fix for the fact that `graph_correct`,
-`graph_reached_inv` and `Exec.graphRun_check_eq_sem` are **VACUOUS** on
+E-chain Direct-arm widening, which was the fix for the fact that `graph_correct`,
+`graph_reached_inv` and `Exec.graphRun_check_eq_sem` were **VACUOUS** on
 `can_view: [user] but not blocked` — the canonical Zanzibar boolean shape.
 `FullScope.lean::W4WitnessDirect.outside_old_admission` machine-checks that such a store
-fails `GraphAdmission.storeValid` (= `StoreValidRules`), so the headline theorems hold
-there trivially. **That is no theorem, not a narrow one.**
+failed `GraphAdmission.storeValid` (which WAS `StoreValidRules`), so the headline theorems
+held there trivially. **That was no theorem, not a narrow one.**
+
+**Outcome (2026-08-05): fixed for T2b, and NOT for T2a — the end state §F predicted.**
+`graph_correct` and everything routed through it now cover the shape; `graph_reached_inv`
+takes an extra `W4NarrowT2a` bundle that the shape provably fails. Read §C.1–§C.6 for
+where executing this plan contradicted it.
 
 This file supersedes the 4-step "assessed fork cost" in
 [`optional-widening-2026-07.md`](optional-widening-2026-07.md) §"Direct-arm — RESUME
 (2026-07-20e)". That list is not wrong so much as **materially incomplete** — see §E.
 Read this file to resume; read the older one for the provenance of the landed `_d` chain.
 
-**Status: SCOPED + Leg 0 (attack sweep) DONE. No Lean declaration changed.** §A–§C below are
-read-only analysis of the working tree at `e753a65`; §D carries the **executed** Leg-0 probe
-results (2 KILLS), also recorded in [`PROOF_STATUS.md`](PROOF_STATUS.md).
+**Status (2026-08-05): LEGS 0–6 DONE. Only leg 7 (T2a) remains, and it is blocked on a
+DESIGN DECISION, not on proof effort.** As of leg 5 the headline `graph_correct` / `backend_equivalence` /
+`exclusion_effective` / `no_ghost_grant` / `Exec.graphRun{,Ops}_check_eq_sem` are **no longer
+vacuous** on `can_view: [user] but not blocked` — `W4WitnessDirect.final_applies` instantiates
+the unsuffixed T2b at exactly that store. `graph_reached_inv` (T2a) is NOT widened and now
+carries a third bundle `W4NarrowT2a` saying so, with `outside_narrow_t2a` as the attached
+counterexample. §A–§C below were read-only analysis of the tree at `e753a65` and are **not
+updated in place**; every place execution contradicted them is recorded in §C.1–§C.6, which
+take precedence over any cell above. §D carries the executed Leg-0 probe results (2 KILLS).
 
 **The three Leg-0 outcomes that change this plan:**
 1. **T2a (`graph_reached_inv`) is OUT of the arc** — `Inv.negEdgeFree` is machine-checked FALSE
@@ -278,8 +289,8 @@ the chain is empty there. Cleaner, and checkable.
 | **2** | ✅ **DONE 2026-08-04.** The enumeration model change. `exprDirectsAll_computedOnly` (`ReconcileCorrect.lean`); the de-dup obligation as **`freshDirectCands`**, a presence diff on the Direct-arm contribution to `cands` — **NOT the `.dedup` this cell used to prescribe, which is a no-op on the actual duplicate; see §C.2**; `mem_enumJob2D_cands`; `storedDirectSubjects_computedOnly`; **`enumJob2D_eq_enumJob2`**; `enum2BaseD_name_ne_star`; **`w3cJobValid_enumJob2D`** (same hypotheses as `w3cJobValid_enumJob2` — no fragment carry); `enumJob2D_negCands_subset`; then the signature change (`enumJobs2At` gains `T`) across 7 files. | 7 decls + 1 def edit + ripple | ✅ `lean` PASSED, audits 460 → **465**, **statements 26/26 byte-identical**, **definition pin 139 → 142** (5 changed, 1 dropped, 4 added), conf + tests tiles green. **No conformance golden moved** — §D.6's prediction is REFUTED, see §C.2. |
 | **3** | ✅ **DONE 2026-08-05.** `w3dJobCoverage_enumJob2D_state` (`CascadeStrataEnum.lean:981`) — the clone, swapping in the `_d`/`_filt` forms and carrying `hCOop`; compiled first try. **Plus `W4WitnessDirect.coverage_applies` (`FullScope.lean:785`), which this cell did not ask for and should have — see §C.3.** | 2 thms / ~110 lines | ✅ `lean` PASSED, audits 465 → **467**, identity pin regenerated, **definition pin unmoved (142/142)**, statements 26/26 — the additive profile this cell predicted. Conf + tests tiles run anyway, green. |
 | **4** | ✅ **DONE 2026-08-05.** `reachedByW3d2E_toC_d` + `graph_correct_w3d2E_d` (`CascadeStrataAssemble.lean`); both originals refactored into **byte-identical wrappers** (verified against HEAD by extraction-and-diff). **Plus `W4WitnessDirect.directArmsConcrete` / `toC_applies` / `w3d2E_correct_applies`, which this cell did not ask for and should have — the gate below is §C.3's insufficient one, repeated; see §C.4.** | 2 thms + 3 witness decls | ✅ `lean` PASSED, audits 467 → **471**, identity pin regenerated, **definition pin unmoved (142/142)**, statements 26/26. All conf + tests tiles green. |
-| **5** | `GraphAdmission.storeValid → StoreValidRulesD`; `W4Fragment` 6 → 9 fields; `directsOnly_of_computedOrDirect_of_noUD`; `w4_within_scope` clause 3; `w4Fragment_of_untainted` + both existing witnesses gain vacuous fields; **`graph_reached_inv` rebased onto a NEW narrow bundle**; finals rebased. | claim-changing | `lean` + **statement pin regen** + **definition pin regen** + audit pin |
-| **6** | `W4WitnessDirect` restated as `GraphAdmission`/`W4Fragment` proper + `.final_applies`; **keep `outside_old_admission`** (it is now the proof the widening was contentful); conformance reclassification; **the vacuity caveat comes OUT of the docs.** | payoff | `lean` + **all conf + tests tiles** |
+| **5** | ✅ **DONE 2026-08-05.** `GraphAdmission.storeValid → StoreValidRulesD`; `W4Fragment` 6 → **10** fields (not 9 — see §C.5); `w4_within_scope` clause 3 via leg 1's `exprDirects_ne_nil_of_directsOnly` (**`directsOnly_of_computedOrDirect_of_noUD` was never needed**); `w4Fragment_of_computedOnly` (new — the subsumption, which the cell did not ask for); `w4Fragment_of_untainted` + `w4NarrowT2a_of_untainted`; both existing witnesses rebased through it; **`graph_reached_inv` rebased onto the new `W4NarrowT2a` bundle**; `graph_correct` → `graph_correct_w3d2E_d`. **Plus the four witness decls `W4WitnessDirect.{admission, w4fragment, final_applies, outside_narrow_t2a}` the cell did not ask for and §C.4 said to budget — see §C.5.** | claim-changing | ✅ `lean` PASSED, audits 471 → **477**, **statements 26 → 34** (1 changed + 8 added), **definitions 142 → 154**, all conf + tests tiles green |
+| **6** | ✅ **DONE 2026-08-05.** `Td4` + `outside_old_admission4` / `admission4` / `w4fragment4` / **`final_applies4`** — the bundles at the CORPUS store, not the minimal one (this cell did not distinguish them; see §C.6); `outside_old_admission` KEPT as planned; `_EXPECTED_SPLIT` `(22,1)` → `(23,0)` with `_DIFFERENTIAL_ONLY` kept-but-empty; the vacuity caveat rewritten (not deleted) across ~25 sites. | payoff | ✅ `lean` PASSED, audits 477 → **481**, statements 34 → **38**, definitions unmoved at 154, anchors 409 → **410**; all conf + tests tiles green |
 | **7** | T2a — **BLOCKED. §D.3's probe KILLED it** (machine-checked, 2026-07-28). Do not schedule proof work; what is owed first is the **design decision** (a) drained-only restatement / (b) weakened `negEdgeFree` / (c) model the leaf-family split. Until then `graph_reached_inv` keeps the narrow bundle and the asymmetry is a **declared** carry. | decision, not proof | — |
 
 **Multi-session:** legs 4 and 5 each want a full session. 0+1 fit one; 2+3 fit one.
@@ -521,6 +532,121 @@ first is a gap in §A.3's *method*, not just its content.
    before `h` and left it in scope, so `induction h` generalised it into the motive and
    the module went red for a reason unrelated to the premise being false — a control that
    "passes" for the wrong reason. `clear _hSABOTAGE` is what makes it honest.
+
+### C.5 Corrections to this plan, found by executing Leg 5 (2026-08-05)
+
+The claim-changing leg. The rebase itself was mechanical and compiled first try; every
+correction below is about the plan's *accounting*, and the last one is the finding.
+
+1. **`W4Fragment` goes 6 → 10 fields, not 6 → 9 — and the missing one is
+   `DirectArmsConcrete` again.** This is §C.4 finding (i) recurring exactly as predicted:
+   §A.5's field estimate was derived by walking the coverage half, and `DirectArmsConcrete`
+   arrives through the validity half. The ten are `computedOrDirect`, `directArmsBare`,
+   `directArmsConcrete`, `computedOnlyOperands`, `noUnionDirects`, then the five survivors
+   `twoStrata`/`wsBare`/`bareStar`/`ttuStarFree`/`term`. `graph_correct_w3d2E_d`'s
+   hypothesis list is the ground truth; read it, do not re-derive the count.
+2. **`directsOnly_of_computedOrDirect_of_noUD` was never needed and should be struck from
+   the cell.** Leg 1 already landed the stronger hypothesis-free
+   `exprDirects_ne_nil_of_directsOnly` (`FullScope.lean:169`), on the strength of probe
+   D.5's 19,280-`Expr` sweep, and its own docstring names `w4_within_scope`'s TTU clause as
+   its future consumer. Clause 3's repair is two lines and one lemma application. §D.5 got
+   this right in 2026-07-28 and §C's leg-5 cell was simply never updated to match.
+3. **The cell omits the subsumption lemma, which is what keeps the leg honest about the
+   OLD scope.** `w4Fragment_of_computedOnly` proves the pre-leg-5 six fields imply all ten
+   (`computedOnly_computedOrDirect`, `computedOnly_directArmsBare`,
+   `exprDirectsAll_computedOnly` ⇒ vacuous `DirectArmsConcrete`, `exprDirects_computedOnly`
+   ⇒ `noUnionDirects`, operands by the same schema-wide hypothesis). Without it the leg
+   *looks* like it might have traded scope rather than widened it, and both existing
+   witnesses would each need five new decide-proofs. With it they are one `refine` and
+   their six original proof bodies, unchanged.
+4. **★ The leg-5 gate cell had §C.3/§C.4's defect for the THIRD time, and the sabotage that
+   controls it is not the obvious one.** The cell listed "`lean` + statement pin regen +
+   definition pin regen + audit pin" and no witness, one leg after §C.4 wrote "⚠ Leg 5's
+   cell has the same defect … Budget one" into this same document. What lands is
+   `W4WitnessDirect.{admission, w4fragment, final_applies, outside_narrow_t2a}`.
+
+   The instructive part is *which* sabotage controls a bundle REBASE. Legs 3/4 used "one
+   unused false premise", which works for a packaging clone. For a rebase the plausible
+   failure is the **half-done leg**: widen `W4Fragment` fully but leave
+   `GraphAdmission.storeValid` at plain `StoreValidRules`, and route `graph_correct`
+   through `storeValidRulesD_of_storeValidRules_directArmsBare` — **which typechecks.**
+   That state is indistinguishable from success by every mechanism in the gate:
+   `graph_correct`'s statement is byte-identical, the definition pin MOVES (so the gate
+   even reports "meaning changed"), audits are standard-axioms-only, and the theorem is
+   still worth nothing on Direct-arm stores because `outside_old_admission` refutes
+   `StoreValidRules Sd Td`. Observed:
+
+       A. whole library, witness block present → ONE error, at `admission.storeValid`:
+            Type mismatch: accepts.right.…right has type StoreValidRulesD Sd Td
+            but is expected to have type StoreValidRules Sd Td
+       B. same sabotage, four witness declarations deleted
+            → Build completed successfully (1084 jobs).
+
+   (B) is the finding: **the sabotaged tree is entirely green**, and since both goldens are
+   GENERATED from the tree the leg would have regenerated them to a self-consistent pair
+   and passed the whole gate. Note the asymmetry with legs 3/4 — there the sabotage
+   reddened `FullScope` and left the core module green; here it would have left
+   *everything* green. A rebase is a strictly worse case than a clone, and the plan
+   assigned it a strictly weaker gate.
+5. **Three statement-pin gaps found while inventorying the bundle consumers, unrelated to
+   leg 5's content and fixed with it.** `graphRunOps_check_eq_sem` takes both bundles and
+   was axiom-printed but NOT statement-pinned; nor were legs 3/4's own instruments
+   (`coverage_applies`, `toC_applies`, `w3d2E_correct_applies`). `statement_pin.py`'s
+   HEADLINE comment says a witness restated to `True` "would be the quietest possible way
+   to make the theorems vacuous again" — which was true of five names it did not list.
+   Adding a name is free; the pin is now 34.
+6. **§A.6's conformance payoff is only HALF available at leg 6.** `_EXPECTED_SPLIT`
+   `(22,1)` → `(23,0)` is earned. `_REMOVE_EXCLUDED = {"direct_arm_exclusion"}` is **not**:
+   `removeGateB` decides plain `storeValidRulesB`, and `ReachedByW3d2E.remove` genuinely
+   carries plain `StoreValidRules` (§C.4 (ii) — leg 4 converted it *inward* with
+   `storeValidRulesD_of_storeValidRules_directArmsBare`, which does not run backwards).
+   Lifting the exclusion is a `storeValidRulesDB` decision procedure + soundness lemma +
+   a widened `remove` constructor: its own leg, not a test-flag edit.
+
+### C.6 Corrections to this plan, found by executing Leg 6 (2026-08-05)
+
+The payoff leg. §A.6's two-line prescription was accurate about WHAT to change and silent
+about the only part that was hard.
+
+1. **★ §A.6 does not say which STORE the reclassification needs a witness at, and the
+   obvious choice is wrong.** `_THEOREM_BACKED` asserts a corpus satisfies
+   `GraphAdmission ∧ W4Fragment` **at the store the driver runs**, and both bundles are
+   STORE-indexed (`storeValid`, `bareStar`, `ttuStarFree`, `term`'s `NoStoreSubjectR`).
+   Leg 5's `Td` is the ONE-TUPLE minimal store, picked to sharpen
+   `outside_old_admission`; the corpus is FOUR tuples. A witness at `Td` does not license
+   the move. So leg 6 lands `Td4` (the corpus store verbatim) and
+   `admission4`/`w4fragment4`/`final_applies4` beside it.
+
+   This is the same class of error the corpus itself is on record for — ZT-P3-3, where it
+   *"sat in `GRAPH_FRAGMENT` for six days under a docstring asserting the exact opposite
+   of what `FullScope.lean` machine-checks about it"*. A subset-store witness would have
+   been a smaller version of it, and would have looked completely fine.
+2. **§A.6's `_REMOVE_EXCLUDED` half is not available, and the trap is that the exclusion
+   SURVIVES WITH A DIFFERENT REASON.** Nothing in the diff moves, so nothing prompts you
+   to re-read the comment — which asserted the corpus was *"provably OUTSIDE the admission
+   bundle"*, false the moment leg 5 landed. The live reason is now narrower: `removeGateB`
+   decides plain `storeValidRulesB`. Same for
+   `test_conformance_remove_graph`'s module docstring and the root `HANDOFF.md` line that
+   predicted this would "ride E-chain Leg 5" — it did not, and could not.
+3. **A justification elsewhere in the tree EXPIRED silently.** `corpus.py` kept `self_flag`
+   spec-side-only because it *"has Direct arms under a boolean — genuine storage leaves,
+   not `computedOnly`"* — precisely the shape leg 5 admitted. Leg 6 marks the reason
+   expired and deliberately does NOT replace it: whether `self_flag` satisfies the widened
+   `W4Fragment` needs its ten fields checked at its own schema and store, and per ZT-P3-3
+   a corpus enters `GRAPH_FRAGMENT` on a written argument or a witness, never on a
+   plausible-sounding one. **Generalisation for the next widening leg: grep for prose
+   that justifies an EXCLUSION by the clause you just widened.** A widening does not only
+   change what your theorems cover; it silently invalidates every argument in the tree
+   that leaned on the old restriction, and those arguments live in files the leg does not
+   touch.
+4. **§A.6 says "the vacuity caveat comes OUT of the docs". Half of it does.** T2a is still
+   vacuous on Direct-arm stores (leg 5's `W4NarrowT2a`), so §3.0 / §6.0 were REWRITTEN,
+   not deleted: retired claim, then what changed, then what did not. Deleting them would
+   have removed the reader's only warning about the half that is still live.
+5. **The counts pin (`verify.sh` step 4e) fired on this leg** — the new `W4NarrowT2a`
+   `CORRESPONDENCE.md` row moved the anchor count 409 → 410. First live catch rather than
+   a retrospective one, and a reminder that a doc-only leg still needs the full `lean`
+   phase, not just a build.
 
 ---
 
