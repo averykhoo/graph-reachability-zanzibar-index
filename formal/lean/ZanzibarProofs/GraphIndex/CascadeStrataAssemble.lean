@@ -445,13 +445,202 @@ inductive ReachedByW3d2E : GraphState → Schema → Store → Prop where
       (hprev : ReachedByW3d2E σ S T) :
       ReachedByW3d2E (runCascade2 S T σ (enumJobs2R1 S T σ) (enumJobs2R2 S T σ)) S T
 
+/-- **The projection `ReachedByW3d2E ⇒ ReachedByW3d2C`, Direct-arm form** — the `_d`
+    core of `reachedByW3d2E_toC` (E-chain widening leg 4). Same packaging as the
+    untainted original, with every input swapped for the `_d`/`_filt` form legs 1–3
+    landed. Four substitutions carry the widening:
+
+    * schema-wide `ComputedOnly` (`hCO`) gives way to `hCD`/`hDAB`
+      (`ComputedOrDirect` + `DirectArmsBare`) plus the per-key operand-only `hCOop`.
+      That asymmetry IS the widening: a derived def's own expression may carry a
+      `Direct` arm while its operands stay untainted.
+    * `StoreValidRules` gives way to `StoreValidRulesD` — the admission that actually
+      admits a Direct-arm write (`W4WitnessDirect.outside_old_admission` machine-checks
+      that the plain form REJECTS such a store).
+    * `DirectArmsConcrete S` (`hDAC`, leg 1) is the new fragment carry, needed only by
+      `reachedByW3d2_Rnode_source_name_ne_star_d` — it is what keeps `enumJob2D`'s
+      extra candidates star-free. The scope-carry paragraph lives on
+      `DirectArmsConcrete`'s docstring.
+    * the round-1 coverage discharge is `w3dJobCoverage_enumJob2D_state` (leg 3) with
+      NO `enumJob2D_eq_enumJob2` rewrite — `enumJob2D`'s extra candidates are now
+      covered on their own terms rather than collapsed away. Round 2 routes through
+      `w3d2_leg_context_d_filt`, whose σ0 is over the FILTERED store `T↾U` because
+      that is what `reachedByW3d2_shadow_d` produces; the full-store `_d` pair is
+      jointly unsatisfiable here (the 2026-07-20b kill).
+
+    The `remove` case is unchanged in strength: `ReachedByW3d2E.remove` carries plain
+    `StoreValidRules` for its pre-store, converted by
+    `storeValidRulesD_of_storeValidRules_directArmsBare`.
+
+    Non-vacuity is NOT established by this declaration compiling — a `_d` packaging
+    with jointly unsatisfiable premises compiles, audits clean and passes every pin.
+    `W4WitnessDirect.toC_applies` is the instrument. -/
+theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2E σ S T) :
+    WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
+    RewriteMatchDeclared S → Stratifiable S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOrDirect e) →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e) →
+    DirectArmsConcrete S →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e') →
+    (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false) →
+    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    StoreValidRulesD S T → BareStarStore T → TtuStarFree S T →
+    (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    ReachedByW3d2C σ S T := by
+  induction h with
+  | empty S =>
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    exact ReachedByW3d2C.empty S
+  | @write σp S T t hadm hprev ih =>
+    intro hWF hTT hNK hR hMatch hStrat hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
+    have hSVw : StoreValidRulesD S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
+    have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
+    have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
+    have htermw : ∀ dt R, isDerived S (dt, R) = true →
+        NoTtuTarget S R ∧ NoStoreSubjectR T R :=
+      fun dt R hd => ⟨(hterm dt R hd).1,
+        fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
+    exact ReachedByW3d2C.write t hadm
+      (ih hWF hTT hNK hR hMatch hStrat hCD hDAB hDAC hCOop hLU2 hWSbare hSVw hBSw hTSw
+        htermw)
+  | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
+    intro hWF hTT hNK hR hMatch hStrat hCD hDAB hDAC hCOop hLU2 hWSbare _hSV _hBS _hTS
+      _hterm
+    -- the pre-remove store's PLAIN validity is a `ReachedByW3d2E.remove` carry; the `_d`
+    -- induction hypothesis wants the widened form, which is strictly weaker
+    have hSVDT : StoreValidRulesD S T :=
+      storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB
+    exact ReachedByW3d2C.remove t hadm hdrain hSVT hBST hTST htermT
+      (ih hWF hTT hNK hR hMatch hStrat hCD hDAB hDAC hCOop hLU2 hWSbare hSVDT hBST hTST
+        htermT)
+  | @cascade σp S T hprev ih =>
+    intro hWF hTT hNK hR hMatch hStrat hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
+    have hC : ReachedByW3d2C σp S T :=
+      ih hWF hTT hNK hR hMatch hStrat hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
+    have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hC
+    have hres_p : ResidueSubjectsStarFree σp := reachedByW3d2_residueStarFree hW3d2
+    -- round-1 validity: per-key edge facts at the leg start. Unlike the untainted
+    -- proof this never looks the key's declaration up — the `_d` source lemmas take
+    -- `isDerived` alone (the widened admission pins the seed's stored subject).
+    have hjv1 : ∀ j ∈ enumJobs2R1 S T σp, W3cJobValid S j := by
+      refine enumJobs2At_valid hWF ?_ ?_ hres_p
+      · intro k hk
+        obtain ⟨hd, _, hon⟩ := mem_cascadeKeysAbove_props hk
+        exact ⟨hd, hon⟩
+      · intro k hk
+        obtain ⟨hd, _, _⟩ := mem_cascadeKeysAbove_props hk
+        exact ⟨reachedByW3d2_Rnode_source_bare_d hW3d2 hd hDAB hSV,
+          reachedByW3d2_Rnode_source_name_ne_star_d hW3d2 hd hDAB hDAC hSV⟩
+    -- MID-state facts, transported through the round-1 batch
+    have hσS : σp.schema = S := reachedByW3d2_schema hW3d2
+    have hσmidS : (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).schema = S := by
+      rw [reconcileJobsLR_schema]; exact hσS
+    have hres_mid : ResidueSubjectsStarFree (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) :=
+      residueSubjectsStarFree_reconcileJobsLR _ σp hjv1 hres_p
+    have hclmid : ∀ ab ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges,
+        ab.1 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).nodes ∧
+        ab.2 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).nodes :=
+      edgesClosed_reconcileJobsLR _ σp (reachedByW3d2_edgesClosed hW3d2)
+    have htb : ∀ a b, (a, b) ∈ σp.edges → b.pred ≠ BARE :=
+      reachedByW3d2_edge_target_ne_bare_d hW3d2 hWF hDAB hSV
+    -- the shadow's σ0 is admitted over the FILTERED store `T↾U`: on the Direct-arm
+    -- fragment a stored derived-key grant that is also excluded breaks `sub` at the
+    -- full store (the 2026-07-20b kill), so `_filt` is the only route that composes
+    obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d hW3d2 hNK hCD hDAB hSV hterm hWF hBS
+    have hunt : ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false :=
+      reachedByRulesAdmitted_untStore_edge_untainted
+        (fun t' ht' => by simpa using List.of_mem_filter ht') h0
+    have hshmid : UntaintedShadow S (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) σ0 :=
+      untaintedShadow_reconcileJobsLR_d (T := T) (enumJobs2R1 S T σp) σp σ0 hsh hunt hjv1
+    -- round-2 validity: per-key edge facts transported to MID
+    have hjv2 : ∀ j ∈ enumJobs2R2 S T σp, W3cJobValid S j := by
+      refine enumJobs2At_valid hWF ?_ ?_ hres_mid
+      · intro k hk
+        obtain ⟨hd, _, hon⟩ := mem_cascadeKeysAbove_props hk
+        exact ⟨hd, hon⟩
+      · intro k hk
+        obtain ⟨hd, _, _⟩ := mem_cascadeKeysAbove_props hk
+        exact ⟨reconcileJobsLR_source_bare hjv1
+            (reachedByW3d2_Rnode_source_bare_d hW3d2 hd hDAB hSV),
+          reconcileJobsLR_source_name_ne_star hjv1
+            (reachedByW3d2_Rnode_source_name_ne_star_d hW3d2 hd hDAB hDAC hSV)⟩
+    -- round-1 CONDITIONAL coverage: `w3dJobCoverage_enumJob2D_state` at the leg start.
+    -- NO `enumJob2D_eq_enumJob2` rewrite — this is the chain where the widened
+    -- enumeration's extra candidates are covered on their own terms.
+    have hcovg1 : ∀ j ∈ enumJobs2R1 S T σp, W3dJobOpsSettled S T σp j →
+        W3dJobCoverage S T σp j := by
+      intro j hj hops
+      rw [enumJobs2R1, enumJobs2At, List.mem_filterMap] at hj
+      obtain ⟨k, hk, hfk⟩ := hj
+      obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
+      obtain ⟨hder, _, hon⟩ := mem_cascadeKeysAbove_props hk
+      rw [← hje] at hops ⊢
+      exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch
+        hStrat hterm hCD hDAB hWSbare hW3d2 hlk hder (hCD _ _ _ hlk hder)
+        (hDAB _ _ _ hlk hder) hon (hCOop _ _ _ hlk hder) (hLU2 _ _ _ hlk hder)
+        (fun r' hr' hd' => hops r' hr' hd')
+    -- round-2 CONDITIONAL coverage: the routed `_filt` leg context at the MID state
+    have hcovg2 : ∀ j ∈ enumJobs2R2 S T σp,
+        W3dJobOpsSettled S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) j →
+        W3dJobCoverage S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) j := by
+      intro j hj hops
+      rw [enumJobs2R2, enumJobs2At, List.mem_filterMap] at hj
+      obtain ⟨k, hk, hfk⟩ := hj
+      obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
+      obtain ⟨hder, _, hon⟩ := mem_cascadeKeysAbove_props hk
+      rw [← hje] at hops ⊢
+      have hcd := hCD _ _ _ hlk hder
+      have hba := hDAB _ _ _ hlk hder
+      have hLU2e := hLU2 _ _ _ hlk hder
+      have hCOope := hCOop _ _ _ hlk hder
+      -- the operand baseline with the reach collapse at MID
+      have hopsC : ∀ r' ∈ computedRefs e, isDerived S (k.1, r') = true →
+          SettledKey S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) k.1 k.2.2 r' ∧
+          CompleteKey S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) k.1 k.2.2 r' ∧
+          (∀ u, NReaches (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges u
+              (objNode ⟨k.1, k.2.2⟩ r') →
+            (u, objNode ⟨k.1, k.2.2⟩ r')
+              ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges) := by
+        intro r' hr' hd'
+        obtain ⟨hset, hcomp⟩ := hops r' hr' hd'
+        refine ⟨hset, hcomp, ?_⟩
+        intro u hu
+        exact reconcileJobsLR_reach_collapse hjv1 htb
+          (reachedByW3d2_Rnode_source_bare_d hW3d2 hd' hDAB hSV) hu
+      obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context_d_filt hWF hTT hNK hR hSV hBS hTS
+        hMatch hStrat hterm hWSbare h0 hshmid hσmidS hlk hder hcd hba hon hCOope hLU2e
+        hopsC
+      exact w3dJobCoverage_enumJob2D hcd hba hclmid hon hbridge hcovDecl hWSbare
+    exact ReachedByW3d2C.cascade (enumJobs2R1 S T σp) (enumJobs2R2 S T σp)
+      hjv1 hjv2
+      (enumJobs2At_cover (fun k hk => (mem_cascadeKeysAbove_props hk).2.1))
+      enumJobs2At_scope
+      (enumJobs2At_cover (fun k hk => (mem_cascadeKeysAbove_props hk).2.1))
+      enumJobs2At_scope
+      hcovg1 hcovg2
+      hC
+
 /-- **The projection `ReachedByW3d2E ⇒ ReachedByW3d2C`.** Per cascade leg:
     validity/cover/scope structurally; round-1 CONDITIONAL coverage via
     `w3dJobCoverage_enumJob2_state` at the leg start (the `W3dJobOpsSettled`
     baseline is exactly its `hsettledOps`); round-2 conditional coverage via the
     routed leg context at the MID state (shadow, closedness, edge discipline, and
     the reach collapse all transported through the round-1 batch). Store
-    hypotheses weaken along write prefixes. -/
+    hypotheses weaken along write prefixes.
+
+    Since leg 4 this is the `ComputedOnly` WRAPPER over the `_d` core
+    `reachedByW3d2E_toC_d`. Statement byte-identical to HEAD; the four widened
+    carries are all derived from `hCO`/`hSV`
+    (`computedOnly_computedOrDirect` / `computedOnly_directArmsBare` /
+    `exprDirectsAll_computedOnly` / `storeValidRulesD_of_storeValidRules_directArmsBare`). -/
 theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) :
     WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
@@ -466,135 +655,71 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     StoreValidRules S T → BareStarStore T → TtuStarFree S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     ReachedByW3d2C σ S T := by
-  induction h with
-  | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _
-    exact ReachedByW3d2C.empty S
-  | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
-    have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
-    have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
-    have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
-    have htermw : ∀ dt R, isDerived S (dt, R) = true →
-        NoTtuTarget S R ∧ NoStoreSubjectR T R :=
-      fun dt R hd => ⟨(hterm dt R hd).1,
-        fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
-    exact ReachedByW3d2C.write t hadm
-      (ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVw hBSw hTSw htermw)
-  | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare _hSV _hBS _hTS _hterm
-    exact ReachedByW3d2C.remove t hadm hdrain hSVT hBST hTST htermT
-      (ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSVT hBST hTST htermT)
-  | @cascade σp S T hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
-    have hC : ReachedByW3d2C σp S T :=
-      ih hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
-    have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hC
-    have hres_p : ResidueSubjectsStarFree σp := reachedByW3d2_residueStarFree hW3d2
-    -- round-1 validity: per-key edge facts at the leg start
-    have hjv1 : ∀ j ∈ enumJobs2R1 S T σp, W3cJobValid S j := by
-      refine enumJobs2At_valid hWF ?_ ?_ hres_p
-      · intro k hk
-        obtain ⟨hd, _, hon⟩ := mem_cascadeKeysAbove_props hk
-        exact ⟨hd, hon⟩
-      · intro k hk
-        obtain ⟨hd, ⟨e', hlk'⟩, _⟩ := mem_cascadeKeysAbove_props hk
-        have hco' : ComputedOnly e' := hCO k.1 k.2.1 e' hlk' hd
-        exact ⟨reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd hco' hSV,
-          reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV⟩
-    -- MID-state facts, transported through the round-1 batch
-    have hσS : σp.schema = S := reachedByW3d2_schema hW3d2
-    have hσmidS : (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).schema = S := by
-      rw [reconcileJobsLR_schema]; exact hσS
-    have hres_mid : ResidueSubjectsStarFree (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) :=
-      residueSubjectsStarFree_reconcileJobsLR _ σp hjv1 hres_p
-    have hclmid : ∀ ab ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges,
-        ab.1 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).nodes ∧
-        ab.2 ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).nodes :=
-      edgesClosed_reconcileJobsLR _ σp (reachedByW3d2_edgesClosed hW3d2)
-    have htb : ∀ a b, (a, b) ∈ σp.edges → b.pred ≠ BARE :=
-      reachedByW3d2_edge_target_ne_bare hW3d2 hWF hSV
-    obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow hW3d2 hNK hCO hSV hterm
-    have hshmid : UntaintedShadow S (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) σ0 :=
-      untaintedShadow_reconcileJobsLR _ σp σ0 hsh (reachedByRules_of_admitted h0)
-        hSV hNK hCO hjv1
-    -- round-2 validity: per-key edge facts transported to MID
-    have hjv2 : ∀ j ∈ enumJobs2R2 S T σp, W3cJobValid S j := by
-      refine enumJobs2At_valid hWF ?_ ?_ hres_mid
-      · intro k hk
-        obtain ⟨hd, _, hon⟩ := mem_cascadeKeysAbove_props hk
-        exact ⟨hd, hon⟩
-      · intro k hk
-        obtain ⟨hd, ⟨e', hlk'⟩, _⟩ := mem_cascadeKeysAbove_props hk
-        have hco' : ComputedOnly e' := hCO k.1 k.2.1 e' hlk' hd
-        exact ⟨reconcileJobsLR_source_bare hjv1
-            (reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd hco' hSV),
-          reconcileJobsLR_source_name_ne_star hjv1
-            (reachedByW3d2_Rnode_source_name_ne_star hW3d2 hlk' hd hco' hSV)⟩
-    -- round-1 CONDITIONAL coverage: `w3dJobCoverage_enumJob2_state` at the leg start
-    have hcovg1 : ∀ j ∈ enumJobs2R1 S T σp, W3dJobOpsSettled S T σp j →
-        W3dJobCoverage S T σp j := by
-      intro j hj hops
-      rw [enumJobs2R1, enumJobs2At, List.mem_filterMap] at hj
-      obtain ⟨k, hk, hfk⟩ := hj
-      obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
-      obtain ⟨hder, _, hon⟩ := mem_cascadeKeysAbove_props hk
-      rw [← hje] at hops ⊢
-      -- THIS chain is `ComputedOnly`-scoped (`hCO`), so the widened enumeration IS the
-      -- old one here (`enumJob2D_eq_enumJob2`) and the landed coverage discharge applies
-      -- unchanged. The `_d` chain (leg 4) is where `enumJob2D`'s extra candidates are
-      -- covered on their own terms.
-      rw [enumJob2D_eq_enumJob2 (hCO _ _ _ hlk hder)] at hops ⊢
-      exact w3dJobCoverage_enumJob2_state hWF hTT hNK hR hSV hBS hTS hMatch
-        hStrat hterm hCO hWSbare hW3d2 hlk hder (hCO _ _ _ hlk hder) hon
-        (hLU2 _ _ _ hlk hder) (fun r' hr' hd' => hops r' hr' hd')
-    -- round-2 CONDITIONAL coverage: the routed leg context at the MID state
-    have hcovg2 : ∀ j ∈ enumJobs2R2 S T σp,
-        W3dJobOpsSettled S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) j →
-        W3dJobCoverage S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) j := by
-      intro j hj hops
-      rw [enumJobs2R2, enumJobs2At, List.mem_filterMap] at hj
-      obtain ⟨k, hk, hfk⟩ := hj
-      obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
-      obtain ⟨hder, _, hon⟩ := mem_cascadeKeysAbove_props hk
-      rw [← hje] at hops ⊢
-      have hco := hCO _ _ _ hlk hder
-      have hLU2e := hLU2 _ _ _ hlk hder
-      rw [enumJob2D_eq_enumJob2 hco] at hops ⊢
-      -- the operand baseline with the reach collapse at MID
-      have hopsC : ∀ r' ∈ computedRefs e, isDerived S (k.1, r') = true →
-          SettledKey S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) k.1 k.2.2 r' ∧
-          CompleteKey S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp)) k.1 k.2.2 r' ∧
-          (∀ u, NReaches (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges u
-              (objNode ⟨k.1, k.2.2⟩ r') →
-            (u, objNode ⟨k.1, k.2.2⟩ r')
-              ∈ (reconcileJobsLR S T σp (enumJobs2R1 S T σp)).edges) := by
-        intro r' hr' hd'
-        obtain ⟨hset, hcomp⟩ := hops r' hr' hd'
-        obtain ⟨e', hlk'⟩ := isDerived_declared hd'
-        have hco' : ComputedOnly e' := hCO k.1 r' e' hlk' hd'
-        refine ⟨hset, hcomp, ?_⟩
-        intro u hu
-        exact reconcileJobsLR_reach_collapse hjv1 htb
-          (reachedByW3d2_Rnode_source_bare hW3d2 hlk' hd' hco' hSV) hu
-      obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS
-        hMatch hStrat hterm hCO hWSbare h0 hshmid hσmidS hlk hder hco hon hLU2e hopsC
-      exact w3dJobCoverage_enumJob2 hco hclmid hon hbridge hcovDecl hWSbare
-    exact ReachedByW3d2C.cascade (enumJobs2R1 S T σp) (enumJobs2R2 S T σp)
-      hjv1 hjv2
-      (enumJobs2At_cover (fun k hk => (mem_cascadeKeysAbove_props hk).2.1))
-      enumJobs2At_scope
-      (enumJobs2At_cover (fun k hk => (mem_cascadeKeysAbove_props hk).2.1))
-      enumJobs2At_scope
-      hcovg1 hcovg2
-      hC
+  intro hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS hTS hterm
+  have hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e :=
+    fun dt R e hlk hder => computedOnly_directArmsBare (hCO dt R e hlk hder)
+  have hDAC : DirectArmsConcrete S := by
+    intro dt R e hlk hder rs hrs
+    rw [exprDirectsAll_computedOnly (hCO dt R e hlk hder)] at hrs
+    exact absurd hrs List.not_mem_nil
+  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat
+    (fun dt R e hlk hder => computedOnly_computedOrDirect (hCO dt R e hlk hder))
+    hDAB hDAC
+    (fun _ _ _ _ _ r' _ hd' e' hlk' => hCO _ r' e' hlk' hd')
+    hLU2 hWSbare (storeValidRulesD_of_storeValidRules_directArmsBare hSV hDAB) hBS hTS
+    hterm
+
+/-- **T2b, W3d-2 fragment, UNCONDITIONAL, Direct-arm form (`graph_correct_w3d2E_d`)** —
+    `check = sem` at every fully-drained state of the FULLY-OPERATIONAL two-round
+    scheduler chain, on the Direct-arm fragment. `graph_correct_w3d2_d` composed with
+    `reachedByW3d2E_toC_d`.
+
+    Beyond `reachedByW3d2E_toC_d`'s bundle this adds **`hNoUD`** (`exprDirects e = []`
+    on derived defs — Direct arms only under `inter`/`excl`, the canonical `but not`),
+    which is what `graph_correct_w3d2_d` needs to scope its `remove` leg. `hDAC` is
+    needed here only to reach the projection. -/
+theorem graph_correct_w3d2E_d {S : Schema} {T : Store} {σ : GraphState} (q : Query)
+    (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
+    (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
+    (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOrDirect e)
+    (hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e)
+    (hDAC : DirectArmsConcrete S)
+    (hCOop : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e')
+    (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
+        ∀ e', S.lookup (dt, r') = some e' →
+          ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
+    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hNoUD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      exprDirects e = [])
+    (h : ReachedByW3d2E σ S T) (hq : cascadeKeys S σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.check σ q = sem S T q :=
+  graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCD hDAB hCOop
+    hLU2 hWSbare hNoUD
+    (reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat hCD hDAB hDAC hCOop hLU2
+      hWSbare hSV hBS hTS hterm)
+    hq hqs hqo
 
 /-- **T2b, W3d-2 fragment, UNCONDITIONAL (`graph_correct_w3d2E`) — `check = sem`
     at every fully-drained state of the FULLY-OPERATIONAL two-round scheduler
     chain.** Identical to `graph_correct_w3d2` but over `ReachedByW3d2E`, whose
     cascade legs carry NO validity/cover/scope/coverage hypotheses — all are
     discharged from state (with the attack-mandated conditional round-1 coverage
-    discharged via the operand baseline). -/
+    discharged via the operand baseline).
+
+    Since leg 4 this is the `ComputedOnly` WRAPPER over `graph_correct_w3d2E_d`.
+    Statement byte-identical to HEAD; every widened carry is derived from `hCO`/`hSV`
+    (`hNoUD` via `exprDirects_computedOnly`). -/
 theorem graph_correct_w3d2E {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
@@ -611,11 +736,19 @@ theorem graph_correct_w3d2E {S : Schema} {T : Store} {σ : GraphState} (q : Quer
     (h : ReachedByW3d2E σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    GraphModel.check σ q = sem S T q :=
-  graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU2
-    hWSbare
-    (reachedByW3d2E_toC h hWF hTT hNK hR hMatch hStrat hCO hLU2 hWSbare hSV hBS
-      hTS hterm)
-    hq hqs hqo
+    GraphModel.check σ q = sem S T q := by
+  have hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      DirectArmsBare e :=
+    fun dt R e hlk hder => computedOnly_directArmsBare (hCO dt R e hlk hder)
+  have hDAC : DirectArmsConcrete S := by
+    intro dt R e hlk hder rs hrs
+    rw [exprDirectsAll_computedOnly (hCO dt R e hlk hder)] at hrs
+    exact absurd hrs List.not_mem_nil
+  exact graph_correct_w3d2E_d q hWF hTT hNK hR
+    (storeValidRulesD_of_storeValidRules_directArmsBare hSV hDAB) hBS hTS hMatch hStrat
+    hterm (fun dt R e hlk hder => computedOnly_computedOrDirect (hCO dt R e hlk hder))
+    hDAB hDAC (fun _ _ _ _ _ r' _ hd' e' hlk' => hCO _ r' e' hlk' hd') hLU2 hWSbare
+    (fun dt R e hlk hder => exprDirects_computedOnly (hCO dt R e hlk hder))
+    h hq hqs hqo
 
 end Zanzibar

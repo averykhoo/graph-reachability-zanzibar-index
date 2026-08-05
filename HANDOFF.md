@@ -21,18 +21,25 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 **Everything is green and nothing is blocking.** The gate passes all ten phases; there
 is no known live correctness bug, no `sorry`, and no `xfail` anywhere in the tree.
 
-- **Last landed: E-chain Direct-arm widening, LEG 3 — the coverage packaging**
-  (2026-08-05). `w3dJobCoverage_enumJob2D_state` is the `_d` twin of
-  `w3dJobCoverage_enumJob2_state`; it compiled first try and is **purely additive** —
-  audits 465 → 467, definition pin UNMOVED at 142/142, statements 26/26, exactly the
-  profile the plan predicted. Lean-model + docs only — **no Python file changed.**
-  **The leg's real finding is about the plan's gate, not the proof:** a packaging clone
-  is the one shape a green build cannot vet (unsatisfiable premises compile, audit clean
-  and pass every pin), so the leg also lands **`W4WitnessDirect.coverage_applies`**, a
-  non-vacuity instantiation at the real Direct-arm pair. Sabotage-controlled: an extra
-  premise that is false at every store the theorem is about leaves the theorem's own
-  module GREEN and turns only the witness RED. Detail in the board item below and
-  `formal/history/PROOF_STATUS.md` 2026-08-05. **Next: leg 4** (its own session).
+- **Last landed: E-chain Direct-arm widening, LEG 4 — the chain projection and the
+  E-chain final, both `_d`** (2026-08-05). `reachedByW3d2E_toC_d` projects the
+  fully-operational scheduler closure onto the coverage chain on the Direct-arm fragment;
+  `graph_correct_w3d2E_d` composes it for `check = sem`. Both compiled first try, and the
+  audited `reachedByW3d2E_toC` / `graph_correct_w3d2E` are now **byte-identical wrappers**
+  over them (verified against HEAD). Audits 467 → 471, **definition pin UNMOVED at
+  142/142**, statements 26/26. Lean-model + docs only — **no Python file changed**, so no
+  fuzz sweep was owed. Two non-vacuity instruments land with it
+  (`W4WitnessDirect.toC_applies` / `w3d2E_correct_applies`), the second a **weaker
+  statement but a stronger instrument** than the existing `correct_applies` (see the board
+  item — the obvious summary is backwards). Sabotage-controlled — and the *control
+  itself* needed a correction first, which is the leg's most transferable finding (see the
+  board item). Detail: `formal/history/PROOF_STATUS.md` 2026-08-05b. **Next: leg 5**, the
+  claim-changing one (its own session).
+- **Previously landed: LEG 3 — the coverage packaging** (2026-08-05).
+  `w3dJobCoverage_enumJob2D_state`, purely additive (audits 465 → 467, pins unmoved), plus
+  **`W4WitnessDirect.coverage_applies`** — the leg's real finding being about the plan's
+  *gate*, not the proof: a packaging clone is the one shape a green build cannot vet
+  (unsatisfiable premises compile, audit clean and pass every pin).
 - **Leg 2 (`e76b66c`) is now PUSHED**, together with its board refresh — it had been
   sitting committed-but-unpushed since 2026-08-04.
 - **Previously landed: the P3 edge-multiplicity blind spot, ADJUDICATED and closed** — the
@@ -72,11 +79,12 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
-- [ ] **★ START HERE (next session, refreshed 2026-08-05) — ONE live option left: (B),
-      now at E-chain leg 4.** The zero-trust backlog is CLEARED, the gate is green
+- [ ] **★ START HERE (next session, refreshed 2026-08-05b) — ONE live option left: (B),
+      now at E-chain leg 5.** The zero-trust backlog is CLEARED, the gate is green
       end-to-end, and as of 2026-07-29 there is **no longer an open item where the gate is
       blind to a class of divergence** — the P3 edge-multiplicity hole was the last one and
-      it is closed. **Legs 2 and 3 both landed and are pushed; leg 4 wants its own session.**
+      it is closed. **Legs 2, 3 and 4 have landed; leg 5 wants its own session, and it is
+      the first leg in this arc that CHANGES A HEADLINE CLAIM** (statement-pin regen).
       * **~~(A) the store-level write quota~~ — DECLINED by the user 2026-07-29**, and
         the alternative was measured rather than assumed. *"I don't want to limit what
         can be added to a permission store — it might be slow but it should not be
@@ -96,11 +104,12 @@ open). This file is now only what a future session must ACT on.
         Full measurement + the two further options (rebuild-vs-K-deltas amortisation,
         crossover K* ≈ 30–40; and routing hub workloads to the set engine, 0.03 s vs
         74 s at N=960): `docs/spec-deviations.md` 2026-07-29c.
-      * **(B) E-chain Leg 4** — the arc's next step, and the first that wants a whole
-        session to itself. **Legs 2 and 3 LANDED** (2026-08-04 / 2026-08-05); see the
-        Leg-2 and Leg-3 blocks below. Two of the plan's predictions have now been refuted
-        by measurement and one gate specification was found insufficient — read §C.1/§C.2/
-        §C.3 before following any cell of it.
+      * **(B) E-chain Leg 5** — the arc's next step, and the first that changes a headline
+        claim rather than adding beside it. **Legs 2, 3 and 4 LANDED** (2026-08-04 /
+        2026-08-05 / 2026-08-05); see the Leg-2/3/4 blocks below. Two of the plan's
+        predictions have been refuted by measurement, one gate specification was found
+        insufficient **twice**, and its obligation inventory was found to miss a
+        hypothesis — read §C.1/§C.2/§C.3/§C.4 before following any cell of it.
 
       **(A) The store-level write quota — the only one with real production value.**
       `ZT-P1-6a` is only half closed. `ZANZIBAR_MAX_CLOSURE_FANOUT` (landed 2026-07-27,
@@ -116,7 +125,7 @@ open). This file is now only what a future session must ACT on.
       bounded, no Lean impact. **Start:** the residuals block on the 2026-07-27 board
       item below, then `index_v4/core.py`'s `DEFAULT_MAX_CLOSURE_FANOUT` comment.
 
-      **(B) The E-chain Direct-arm widening — legs 0/1/2/3 DONE; LEGS 4–6 REMAIN, and
+      **(B) The E-chain Direct-arm widening — legs 0/1/2/3/4 DONE; LEGS 5–6 REMAIN, and
       leg 7 (T2a) is blocked on a design decision, not on proof effort.** The claim is
       unchanged: `ZT-P3-1` — the headline graph theorems are
       **VACUOUS** on `can_view: [user] but not blocked`, the most common Zanzibar boolean
@@ -192,6 +201,38 @@ open). This file is now only what a future session must ACT on.
         `(_hSABOTAGE : StoreValidRules S T)` leaves `CascadeStrataEnum` GREEN ("Build
         completed successfully (1061 jobs)") and turns only `FullScope` RED. ⚠ **Legs 4 and
         5 are much bigger `_d` packagings — budget a witness for each, not just a clone.**
+      * **Leg 4 LANDED 2026-08-05 — the chain projection and the E-chain final.**
+        `reachedByW3d2E_toC_d` + `graph_correct_w3d2E_d` (`CascadeStrataAssemble.lean`),
+        both compiled first try; the audited originals are now **byte-identical wrappers**
+        over them. Audits 467 → **471**, definition pin UNMOVED at 142/142, statements
+        26/26. The leg in one line: the two `enumJob2D_eq_enumJob2` rewrites leg 2
+        installed come OUT, so `enumJob2D`'s extra candidates are covered on their own
+        terms instead of collapsed back onto `enumJob2`.
+      * **★ Leg 4's three findings, all in the plan's §C.4.** (i) **The plan's obligation
+        inventory (§A.3) misses `DirectArmsConcrete`** — it walks the COVERAGE half, and
+        the clause arrives through the VALIDITY half (`enumJobs2At_valid` →
+        `reachedByW3d2_Rnode_source_name_ne_star_d`). When scoping legs 5–6, walk every
+        half, not the headline lemma. (ii) **The leg came out SMALLER, not bigger**: the
+        `remove` case needs no widening at all, and the `_d` source lemmas take
+        `isDerived` alone where their untainted twins take `hlk'` + `ComputedOnly e'`, so
+        three declaration-lookup blocks vanish. (iii) **The leg-4 gate cell repeated
+        §C.3's mistake verbatim** ("`lean` + audit pin"), one leg after §C.3 was written
+        into the same document telling it not to. **Leg 5's cell has the same defect.**
+      * **★ AND THE INSTRUMENT ITSELF NEEDED CONTROLLING — the most transferable finding
+        of the leg.** The first sabotage put the false premise before `h` and left it in
+        scope; `induction h` generalised it into the motive, `ih` acquired it, and the
+        module went red — for a reason that had **nothing to do with the premise being
+        false.** That is a sabotage that "works" for the wrong reason and would have been
+        written up as a successful control. `clear _hSABOTAGE` is what makes it honest.
+        This is `docs/sabotage-procedure.md`'s "control your instrument as well as your
+        subject" firing for the second time in this arc. The real control:
+        `CascadeStrataAssemble` GREEN (1062 jobs) with both cores sabotaged, `FullScope`
+        RED at both new witnesses. The stronger of the two,
+        **`w3d2E_correct_applies`, is a WEAKER STATEMENT but a STRONGER INSTRUMENT** —
+        stating it the other way round (as a first draft of this board entry did) is
+        simply wrong: `ReachedByW3d2E` projects INTO `ReachedByW3d2C`, so it assumes
+        more, and it follows from `correct_applies` ∘ `toC_applies`. What it adds is
+        coverage of the leg-4 bundle, `DirectArmsConcrete` included.
       * The standing warning still holds for the SEPARATE, still-open item it was about
         (`formal/CORRESPONDENCE.md` §7.2 item 6 — the baseline `n ↦ 2n` derived-arm
         stacking): do **not** discharge it by making `admitEdge` reject an already-present

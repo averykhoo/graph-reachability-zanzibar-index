@@ -39,6 +39,8 @@ W4WitnessDirect.correct_applies
 W4WitnessDirect.coverage_applies
 W4WitnessDirect.fragment
 W4WitnessDirect.outside_old_admission
+W4WitnessDirect.toC_applies
+W4WitnessDirect.w3d2E_correct_applies
 W4WitnessDirect.within_scope
 W4WitnessUnion.accepts
 W4WitnessUnion.fragment
@@ -168,6 +170,7 @@ graph_correct_w3c
 graph_correct_w3d
 graph_correct_w3d2
 graph_correct_w3d2E
+graph_correct_w3d2E_d
 graph_correct_w3d2_d
 graph_correct_w3dE
 graph_reached_inv
@@ -273,6 +276,7 @@ reachedByW3d2E_residueDeclared
 reachedByW3d2E_residueHygienic
 reachedByW3d2E_structInv
 reachedByW3d2E_toC
+reachedByW3d2E_toC_d
 reachedByW3d2_Rnode_not_source
 reachedByW3d2_Rnode_source_name_ne_star_d
 reachedByW3d2_edge_target_ne_bare

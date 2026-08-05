@@ -8,6 +8,131 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-05b (**E-chain Direct-arm widening, LEG 4 — the CHAIN PROJECTION and the E-chain final, both `_d`, LANDED.** Audits 467 → **471**; definition pin UNMOVED at 142/142, statements 26/26; both audited originals refactored to BYTE-IDENTICAL wrappers)
+
+**Task taken:** leg 4 of `history/echain-widening-plan-2026-07-28.md` §C — the plan's
+"1 big thm, ~140 lines", and the first leg it said wants a whole session to itself.
+
+### What landed
+
+* **`reachedByW3d2E_toC_d`** (`CascadeStrataAssemble.lean`) — the `_d` projection of the
+  fully-operational two-round scheduler closure `ReachedByW3d2E` onto the coverage chain
+  `ReachedByW3d2C`, on the Direct-arm fragment. **Compiled first try.**
+* **`graph_correct_w3d2E_d`** — `graph_correct_w3d2_d ∘ reachedByW3d2E_toC_d`: `check =
+  sem` at every drained state of that chain. Adds only `hNoUD` over the projection's
+  bundle.
+* **`reachedByW3d2E_toC` and `graph_correct_w3d2E` are now WRAPPERS** over those cores,
+  statements verified **byte-identical to HEAD** by extraction-and-diff (the tree's
+  established discipline, cf. `reachedByW3c_master_d`). Every widened carry is derived
+  from `hCO`/`hSV`: `computedOnly_computedOrDirect`, `computedOnly_directArmsBare`,
+  `exprDirectsAll_computedOnly` (for `DirectArmsConcrete`), `exprDirects_computedOnly`
+  (for `hNoUD`), `storeValidRulesD_of_storeValidRules_directArmsBare`.
+* **Three new `FullScope` declarations** — `W4WitnessDirect.directArmsConcrete`,
+  **`toC_applies`**, **`w3d2E_correct_applies`**. See "the instrument" below.
+
+### The four substitutions that carry the widening
+
+1. Schema-wide `ComputedOnly` → `ComputedOrDirect` + `DirectArmsBare` + the per-key
+   operand-only `hCOop` (leg 3's asymmetry, now threaded through the whole chain).
+2. `StoreValidRules` → `StoreValidRulesD`.
+3. **`DirectArmsConcrete S` (`hDAC`) is the new fragment carry, and leg 4 is where it
+   finally does work.** It is consumed at exactly one place —
+   `reachedByW3d2_Rnode_source_name_ne_star_d`, reached through `enumJobs2At_valid` in
+   BOTH rounds — and that is what keeps `enumJob2D`'s extra candidates star-free. Note
+   leg 3's `w3dJobCoverage_enumJob2D_state` does **not** take it, so the plan's §A.3
+   inventory (which is organised by that theorem's inputs) does not predict it; it comes
+   in through the validity half, not the coverage half.
+4. Round-1 coverage becomes `w3dJobCoverage_enumJob2D_state` **with the
+   `enumJob2D_eq_enumJob2` rewrite DELETED.** That deletion is the leg in one line: leg 2
+   shipped the widened enumeration but collapsed it straight back to `enumJob2` on the
+   `hCO` scope; this is the chain where the extra candidates are covered on their own
+   terms. Round 2 routes through `w3d2_leg_context_d_filt` (filtered σ0 — the full-store
+   `_d` pair is the 2026-07-20b kill).
+
+### Two things smaller than the plan expected
+
+* **The `remove` case needed no widening at all.** `ReachedByW3d2E.remove` carries PLAIN
+  `StoreValidRules` for its pre-store; the `_d` induction hypothesis wants the widened
+  form, and `storeValidRulesD_of_storeValidRules_directArmsBare` converts one to the
+  other in a line. No `hNoUD` scoping is needed at the projection (only at
+  `graph_correct_w3d2E_d`, which inherits it from `graph_correct_w3d2_d`).
+* **The cascade case got SHORTER, not longer.** The `_d` source lemmas
+  (`..._Rnode_source_bare_d`, `..._name_ne_star_d`, `reach_collapse_root_d`) take
+  `isDerived` alone where their untainted twins take `hlk'` + `ComputedOnly e'`, so three
+  `obtain ⟨e', hlk'⟩` / `isDerived_declared` blocks disappear. ~140 lines predicted; the
+  cascade case is about the same size as the one it replaces.
+
+### ★ The instrument — leg 3's §C.3 finding, applied one leg on
+
+The plan's leg-4 gate cell says "`lean` + audit pin". That is the same specification
+§C.3 already showed to be insufficient for a `_d` packaging, and leg 4 is a much bigger
+packaging than leg 3. So the leg lands its own witnesses rather than riding
+`coverage_applies`:
+
+* **`W4WitnessDirect.toC_applies`** — instantiates `reachedByW3d2E_toC_d` at the real
+  compiled Direct-arm pair `(Sd, Td)`, every schema/store hypothesis closed by `accepts`
+  + `fragment` + the new `directArmsConcrete`.
+* **`W4WitnessDirect.w3d2E_correct_applies`** — instantiates `graph_correct_w3d2E_d`
+  there. **Weaker as a statement, stronger as an instrument, and the summary is easy to
+  get backwards.** As a theorem it is WEAKER than `correct_applies`: `ReachedByW3d2E`
+  states project INTO `ReachedByW3d2C` — that is what `toC_applies` says — so assuming
+  the operational chain assumes more, and this follows from `correct_applies` composed
+  with `toC_applies`. As an instrument it checks strictly more: it discharges the whole
+  leg-4 bundle, `DirectArmsConcrete` included, which no earlier witness touches, and it
+  runs the projection instead of starting after it.
+
+Contentful, not decorative, for the reason already machine-checked in the tree:
+`outside_old_admission` proves `StoreValidRules Sd Td` FALSE, so the untainted twins
+cannot be instantiated at this pair at all and the `_d` twins can.
+
+**CONTROLLED (house rule 2 / `docs/sabotage-procedure.md`).** Sabotage = one unused
+premise `(_hSABOTAGE : StoreValidRules S T)` on BOTH cores, threaded between them and
+supplied from `hSV` by the two wrappers so the defining module keeps compiling:
+
+    A. lake build ZanzibarProofs.GraphIndex.CascadeStrataAssemble
+       → ✔ [1062/1062] Built … Build completed successfully (1062 jobs).
+    B. lake build ZanzibarProofs.FullScope
+       → error: … Application type mismatch: The argument h has type
+           ReachedByW3d2E σ Sd Td but is expected to have type StoreValidRules ?m ?m
+           in the application  reachedByW3d2E_toC_d h
+       → error: … Application type mismatch: The argument hWF has type WF Sd
+           but is expected to have type StoreValidRules ?m ?m
+           in the application  graph_correct_w3d2E_d q hWF
+
+(A) is the finding, again: **the sabotaged theorems are green in their own module** and
+would have audited clean and passed the identity, statement and definition pins. (B) is
+the two new witnesses doing the only work in the repo that catches it.
+
+**One incidental finding about the instrument itself.** The first attempt put the
+sabotage premise before `h` and left it in scope; `induction h` then generalised it into
+the motive, `ih` acquired it, and the module went red for a reason that had nothing to
+do with the premise being false. That is a sabotage that "works" for the wrong reason —
+it would have been reported as a successful control. The honest version needs
+`clear _hSABOTAGE` so the premise really is unused. Controlling the *instrument* as well
+as the subject is `formal/HANDOFF.md` house rule 7, and this is the second time in this
+arc it has paid.
+
+### Gate
+
+`verify.sh lean` PASSED — audits 467 → **471**, identity pin regenerated, **definition
+pin UNMOVED at 142/142**, statements **26/26**, anchors 409/409. `FINAL_REVIEW.md`'s
+generated counts block regenerated (step 4e caught it stale, as designed). All five
+`conf-tile` and all four `tests-tile` phases PASSED (93×5 conf, 191/191/191/190 tests, 0
+skipped/xfailed/xpassed). **No Python file changed and the definition pin did not move**,
+so no fuzz sweep is owed (nothing modeled was redefined; this leg is additive theorems
+plus two proof-body refactors).
+
+### Next
+
+**Leg 5** — the claim-changing one: `GraphAdmission.storeValid → StoreValidRulesD`,
+`W4Fragment` 6 → 9 fields, `directsOnly_of_computedOrDirect_of_noUD`, `w4_within_scope`
+clause 3, `graph_reached_inv` rebased onto its own narrow bundle, finals rebased. It
+owes a **statement pin regen AND a definition pin regen** (the first leg in this arc
+that moves the headline statements), and it is where the headline theorems stop being
+vacuous on Direct-arm stores. **The vacuity caveat stays in the docs until leg 6.**
+
+---
+
 ## Session 2026-08-05 (**E-chain Direct-arm widening, LEG 3 — the coverage packaging LANDED, plus the non-vacuity instrument the plan did not ask for.** Audits 465 → **467**; definition pin UNMOVED at 142/142, statements 26/26 — additive, as predicted)
 
 **Task taken:** leg 3 of `history/echain-widening-plan-2026-07-28.md` §C — billed as a

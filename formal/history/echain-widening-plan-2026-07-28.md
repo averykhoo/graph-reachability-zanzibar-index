@@ -277,7 +277,7 @@ the chain is empty there. Cleaner, and checkable.
 | **1** | ✅ **DONE 2026-07-28.** `DirectArmsConcrete` (`ReconcileCorrect.lean:1001`, carrying the §B scope-carry paragraph); `storeValidRulesD_derived_subject_ne_star` (`:1052`); the star-filter on `storedDirectSubjects` (`CascadeStrataEnum.lean:626`) + `noConcDirect_of_not_mem` repair (`:640`); `storedDirectSubjects_name_ne_star` (`:631`); **`reachedByW3d2_Rnode_source_name_ne_star_d`** (`CascadeStrataSettle.lean:3504`); plus the D.5 free win `exprDirects_ne_nil_of_directsOnly` (`FullScope.lean:169`). | 5 decls + 1 def edit | ✅ `lean` PASSED, audits 457 → **460**, identity pin regenerated, **definition pin unmoved (139/139)**, statements 26/26. **All four consumers compiled unchanged** — the polarity reading was right. |
 | **2** | ✅ **DONE 2026-08-04.** The enumeration model change. `exprDirectsAll_computedOnly` (`ReconcileCorrect.lean`); the de-dup obligation as **`freshDirectCands`**, a presence diff on the Direct-arm contribution to `cands` — **NOT the `.dedup` this cell used to prescribe, which is a no-op on the actual duplicate; see §C.2**; `mem_enumJob2D_cands`; `storedDirectSubjects_computedOnly`; **`enumJob2D_eq_enumJob2`**; `enum2BaseD_name_ne_star`; **`w3cJobValid_enumJob2D`** (same hypotheses as `w3cJobValid_enumJob2` — no fragment carry); `enumJob2D_negCands_subset`; then the signature change (`enumJobs2At` gains `T`) across 7 files. | 7 decls + 1 def edit + ripple | ✅ `lean` PASSED, audits 460 → **465**, **statements 26/26 byte-identical**, **definition pin 139 → 142** (5 changed, 1 dropped, 4 added), conf + tests tiles green. **No conformance golden moved** — §D.6's prediction is REFUTED, see §C.2. |
 | **3** | ✅ **DONE 2026-08-05.** `w3dJobCoverage_enumJob2D_state` (`CascadeStrataEnum.lean:981`) — the clone, swapping in the `_d`/`_filt` forms and carrying `hCOop`; compiled first try. **Plus `W4WitnessDirect.coverage_applies` (`FullScope.lean:785`), which this cell did not ask for and should have — see §C.3.** | 2 thms / ~110 lines | ✅ `lean` PASSED, audits 465 → **467**, identity pin regenerated, **definition pin unmoved (142/142)**, statements 26/26 — the additive profile this cell predicted. Conf + tests tiles run anyway, green. |
-| **4** | **`reachedByW3d2E_toC_d`** (~140 lines) + refactor the original into a **byte-identical wrapper** (verify against HEAD — the tree's established discipline, cf. `reachedByW3c_master_d`); same for `graph_correct_w3d2E`. | 1 big thm | `lean` + audit pin |
+| **4** | ✅ **DONE 2026-08-05.** `reachedByW3d2E_toC_d` + `graph_correct_w3d2E_d` (`CascadeStrataAssemble.lean`); both originals refactored into **byte-identical wrappers** (verified against HEAD by extraction-and-diff). **Plus `W4WitnessDirect.directArmsConcrete` / `toC_applies` / `w3d2E_correct_applies`, which this cell did not ask for and should have — the gate below is §C.3's insufficient one, repeated; see §C.4.** | 2 thms + 3 witness decls | ✅ `lean` PASSED, audits 467 → **471**, identity pin regenerated, **definition pin unmoved (142/142)**, statements 26/26. All conf + tests tiles green. |
 | **5** | `GraphAdmission.storeValid → StoreValidRulesD`; `W4Fragment` 6 → 9 fields; `directsOnly_of_computedOrDirect_of_noUD`; `w4_within_scope` clause 3; `w4Fragment_of_untainted` + both existing witnesses gain vacuous fields; **`graph_reached_inv` rebased onto a NEW narrow bundle**; finals rebased. | claim-changing | `lean` + **statement pin regen** + **definition pin regen** + audit pin |
 | **6** | `W4WitnessDirect` restated as `GraphAdmission`/`W4Fragment` proper + `.final_applies`; **keep `outside_old_admission`** (it is now the proof the widening was contentful); conformance reclassification; **the vacuity caveat comes OUT of the docs.** | payoff | `lean` + **all conf + tests tiles** |
 | **7** | T2a — **BLOCKED. §D.3's probe KILLED it** (machine-checked, 2026-07-28). Do not schedule proof work; what is owed first is the **design decision** (a) drained-only restatement / (b) weakened `negEdgeFree` / (c) model the leaf-family split. Until then `graph_reached_inv` keeps the narrow bundle and the asymmetry is a **declared** carry. | decision, not proof | — |
@@ -478,6 +478,49 @@ statements 26/26) held exactly. The correction is about what the cell **omitted*
    `w3dJobCoverage_enumJob2_state`'s, the operand declaration is never looked up, and
    `hCOop` ends up consumed by exactly one caller (`w3d2_leg_context_d_filt`). Minor, but it
    is why the "~35 lines" estimate held despite the wider hypothesis pack.
+
+### C.4 Corrections to this plan, found by executing Leg 4 (2026-08-05)
+
+The size estimate was right and the clone compiled first try. Three corrections, and the
+first is a gap in §A.3's *method*, not just its content.
+
+1. **§A.3's obligation inventory misses `DirectArmsConcrete`, because it is organised
+   around the wrong theorem.** §A.3 lists what `reachedByW3d2E_toC`'s cascade case needs
+   by walking the COVERAGE half, and concludes the only genuinely missing pieces are
+   `w3dJobCoverage_enumJob2D_state` (leg 3) and Hole B. But leg 4 also needs `hDAC :
+   DirectArmsConcrete S`, which `w3dJobCoverage_enumJob2D_state` does **not** take — it
+   arrives through the *validity* half (`enumJobs2At_valid` →
+   `reachedByW3d2_Rnode_source_name_ne_star_d`), in both rounds. So the `_d` bundle for
+   leg 4 is 16 hypotheses, not the 15 an §A.3-driven reading predicts. Leg 1 landed the
+   clause and §B argued for it at length; the *inventory* simply never routed it to a
+   consumer. When scoping legs 5–6, walk every half of the proof, not the headline lemma.
+2. **The `remove` case and the cascade case are both SMALLER than the untainted
+   originals**, which is the opposite of the usual `_d` cost. `ReachedByW3d2E.remove`
+   carries plain `StoreValidRules`, converted in one line by
+   `storeValidRulesD_of_storeValidRules_directArmsBare`; and the `_d` source lemmas take
+   `isDerived` alone where their untainted twins take `hlk'` + `ComputedOnly e'`, so
+   three declaration-lookup blocks disappear outright. The leg's real content is a
+   *deletion*: the two `enumJob2D_eq_enumJob2` rewrites leg 2 installed come out, and
+   that is what makes the widened candidates covered on their own terms.
+3. **★ The leg-4 gate cell repeated §C.3's mistake verbatim** ("`lean` + audit pin"),
+   even though §C.3 was written into this same document one leg earlier and says in
+   as many words to *budget a witness for each* of legs 4 and 5. It was written before
+   §C.3 existed and was never revisited. Leg 4 lands `W4WitnessDirect.toC_applies` and
+   `w3d2E_correct_applies`. State that second one carefully: it is a **weaker
+   statement** than the existing `correct_applies` (`ReachedByW3d2E` projects INTO
+   `ReachedByW3d2C`, so it assumes more, and it follows from `correct_applies` ∘
+   `toC_applies`) but a **stronger instrument**, since it discharges the whole leg-4
+   bundle including `DirectArmsConcrete`. The "assumes less" phrasing that fits leg 3's
+   `coverage_applies` does NOT transfer here, and a first draft of this section had it
+   backwards. Sabotage-controlled (both cores given one false unused premise:
+   `CascadeStrataAssemble` GREEN at 1062 jobs, `FullScope` RED at both witnesses).
+   **⚠ Leg 5's cell has the same defect** — it lists the two pin regens but no witness,
+   and leg 5 is the leg that rebases the headline bundle. Budget one.
+
+   Sub-finding, on controlling the instrument: the first sabotage attempt put the premise
+   before `h` and left it in scope, so `induction h` generalised it into the motive and
+   the module went red for a reason unrelated to the premise being false — a control that
+   "passes" for the wrong reason. `clear _hSABOTAGE` is what makes it honest.
 
 ---
 
