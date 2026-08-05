@@ -52,7 +52,7 @@ consolidated ledger, reconciled against the code on 2026-07-29.
 | `ZT-P1-6a` | CLOSED, self-declared **half** | the per-write fan-out cap landed; the **store-level quota did not**. Live owner: board item (A). |
 | `ZT-P1-8` | CLOSED | filed as five points, four itemised. The fifth, `_fresh_enough(None) -> True`, is answered in `connectedstore/store.py` as the DESIGN (an untokened read asks for no freshness), not a fail-open default. **Id correction:** the board called the thread-scoping fix `ZT-P1-8c`; the code calls it **`ZT-P1-8e`** (`index_v4/core.py`, `index_v4/wildcard.py`, `tests/test_reg16_processor_writes_thread_scope.py`). The code's id is authoritative. |
 | `ZT-P2-1` … `ZT-P2-6` | CLOSED | `ZT-P2-5` closed by the statement pin; `ZT-P2-6`'s "split conf-rest" worry is de-facto actioned — the gate runs five conf tiles. |
-| **`ZT-P3-1`** | **CLOSED as FILED; substance OPEN** | the filed *fix* was doc-only ("state it plainly in `FINAL_REVIEW.md` §3 and `ARCHITECTURE.md` §6") and that landed. **The underlying vacuity on `[user] but not blocked` is open and is the entire rationale for board item (B).** Listing it as flatly CLOSED was misleading. |
+| **`ZT-P3-1`** | **CLOSED as FILED (doc fix, 2026-07-26); SUBSTANCE CLOSED for T2b, OPEN for T2a (2026-08-05)** | the filed *fix* was doc-only ("state it plainly in `FINAL_REVIEW.md` §3 and `ARCHITECTURE.md` §6") and that landed; listing it as flatly CLOSED at that point was misleading, which is why this row said so. **The underlying vacuity on `[user] but not blocked` was then actually fixed** by the E-chain Direct-arm widening arc, legs 0–6 (2026-07-28 → 2026-08-05): `graph_correct`, `backend_equivalence`, `exclusion_effective`, `no_ghost_grant` and `Exec.graphRun{,Ops}_check_eq_sem` now cover the shape, witnessed by `W4WitnessDirect.final_applies` / `final_applies4`. **⚠ `graph_reached_inv` (T2a) is NOT covered and is not going to be by more proof effort** — probe D.3 machine-checked `Inv.negEdgeFree` FALSE on the `_d` fragment (a P6 leaf-family MODELLING limit; Python is fine), so T2a carries an explicit `W4NarrowT2a` bundle with `outside_narrow_t2a` as its counterexample. What is owed is a design decision — live board item (B1) in the root `HANDOFF.md`. |
 | `ZT-P3-2` … `ZT-P3-7` | CLOSED | `ZT-P3-5`'s own figures are stale — and **`ZT-P3-5` recurred twice more** (2026-07-28, 2026-07-29) before being closed mechanically by the counts pin (`formal/conformance/doc_counts.py`, `verify.sh` step 4e). |
 | **`ZT-P4-1`** | **CLOSED (both halves)** | the board only ever asserted the anchor-checker half. The re-derivation half is done: `CORRESPONDENCE.md` was rebuilt onto `file::symbol` anchors, **397** of which resolve on every `lean` run. |
 | `ZT-P4-2`, `ZT-P4-3`, `ZT-P4-7` | CLOSED | — |
@@ -644,6 +644,12 @@ All four verified directly against `verify.sh` and by execution:
   not covered"), which reads as *narrower coverage* rather than *no theorem*.
   **That distinction is the whole difference between a narrow theorem and none.**
   Fix: state it plainly in `FINAL_REVIEW.md` §3 and `ARCHITECTURE.md` §6.
+  > **Disposition (added 2026-08-05; this file is an archive, so the finding above is
+  > left as filed).** The doc fix landed 2026-07-26. The SUBSTANCE was then fixed by
+  > the E-chain Direct-arm widening, legs 0–6 — but only for **T2b and the theorems
+  > routed through it**. `graph_reached_inv` (T2a) is still vacuous on that shape and
+  > now carries an explicit `W4NarrowT2a` bundle saying so. See this file's `ZT-*`
+  > ledger row for `ZT-P3-1`, and the live board item (B1) in the root `HANDOFF.md`.
 - **`ZT-P3-2` — at least 2 of the 455 audited reports are known-vacuous.**
   `Audit.lean:1332` `#print axioms checkFnR_eq_sem_settled_d` and `:1335`
   `#print axioms w3d2_leg_context_d`. `PROOF_STATUS.md:308` calls that exact pair
@@ -667,6 +673,14 @@ All four verified directly against `verify.sh` and by execution:
   decides six `Prop`s at runtime).** Related: `test_conformance_remove_graph.py:102`
   excludes this same corpus from remove-driving, so "removes are driven end-to-end"
   is true for every in-fragment corpus EXCEPT the newest one.
+  > **Disposition (added 2026-08-05).** The docstring was corrected 2026-07-26 (the
+  > corpus was moved to `_DIFFERENTIAL_ONLY`), and on 2026-08-05 E-chain leg 6 moved
+  > it back to `_THEOREM_BACKED` — this time **earned**, by
+  > `W4WitnessDirect.final_applies4`, the headline `graph_correct` at the corpus's own
+  > four-tuple store. The remove exclusion SURVIVES with a changed reason (the guard,
+  > not admission). **The CLI still does not gate on `GraphAdmission`/`W4Fragment`**,
+  > so the runtime-gate half of the proposed fix remains undone and this finding's
+  > central hazard is unchanged.
 - **`ZT-P3-4` — `FINAL_REVIEW.md:52` and `SEMANTICS.md:615` still list `rootB` as a
   `W4Fragment` field.** It was deleted 2026-07-17; `FullScope.lean:122-132` has six
   fields (`computedOnly, twoStrata, wsBare, bareStar, ttuStarFree, term`). The

@@ -28,8 +28,10 @@ Scope discipline (apples-to-apples with `graph_correct`):
     (ZT-P3-3), that residue is machine-checked to be a subset of
     `test_conformance_graph._THEOREM_BACKED`, i.e. every corpus driven here
     really is inside GraphAdmission + W4Fragment. Do NOT weaken that to "all of
-    GRAPH_FRAGMENT": `direct_arm_exclusion` is in GRAPH_FRAGMENT and is provably
-    OUTSIDE the admission bundle (`W4WitnessDirect.outside_old_admission`);
+    GRAPH_FRAGMENT": `direct_arm_exclusion` is in GRAPH_FRAGMENT and, while it is
+    theorem-backed for ANSWERS since 2026-08-05 (E-chain leg 6), the model's
+    REMOVE guard still fails closed on it — see `_REMOVE_EXCLUDED` below, whose
+    REASON changed even though the exclusion did not;
   * universe: the corpus tuples THEMSELVES (no recombined extras), so every
     intermediate store is a SUBSET of a fragment store. The remove gate's store
     disciplines (`BareStarStore` / `TtuStarFree` / `StoreValidRules` / `htermT`)
@@ -92,19 +94,34 @@ def _graph_queries_for(schema_text, tuples):
 # `wildcard_public`) out of the parametrization rather than skipping them —
 # net-removal needs at least two tuples in the op universe.
 #
-# `direct_arm_exclusion` is excluded on PROOF-SCOPE grounds (2026-07-20e,
-# attack-probed via `#eval` first): the Lean chain's `remove` constructor
-# guards its PRE store with PLAIN `StoreValidRules`, under which a stored
-# Direct-arm-under-exclusion tuple is inadmissible (`exprDirects = []` on the
-# derived def — the `hNoUD` fragment scoping, PROOF_STATUS 2026-07-20d), so
-# `removeGateB` REJECTS every remove while such a tuple is in store and
-# `graphRunOps` fails closed (rc != 0) on essentially every seeded stream.
+# `direct_arm_exclusion` is excluded on REMOVE-GUARD grounds — and ONLY those,
+# since 2026-08-05. Read the change of reason carefully, because the exclusion
+# looks the same and now means something narrower.
+#
+# It used to be excluded on ADMISSION grounds: the corpus failed plain
+# `StoreValidRules`, which WAS `GraphAdmission.storeValid`, so it was outside the
+# headline theorems entirely. E-chain leg 5 widened that field to
+# `StoreValidRulesD` and leg 6 reclassified the corpus as theorem-backed
+# (`W4WitnessDirect.final_applies4` — the headline `graph_correct` at this
+# corpus's own four-tuple store). That reason is GONE.
+#
+# What survives is a MODEL-SIDE gate those legs did not touch: `Exec.lean`'s
+# `removeGateB` decides plain `storeValidRulesB`, and the chain's `remove`
+# constructor guards its PRE store with plain `StoreValidRules`, under which a
+# stored Direct-arm-under-exclusion tuple is inadmissible (`exprDirects = []` on
+# the derived def — the `hNoUD` fragment scoping, PROOF_STATUS 2026-07-20d). So
+# `removeGateB` still REJECTS every remove while such a tuple is in store and
+# `graphRunOps` still fails closed (rc != 0) on essentially every seeded stream.
 # That is the model's honest fail-closed signal, not a divergence: the real
 # Python remove path over this corpus IS differentially gated (python-side) by
-# `test_conformance_remove.py`, and the add-only Lean gates (graph/state)
-# carry the corpus. Lifting this exclusion needs the remove-leg guard widened
-# to `StoreValidRulesD` (with the star->concrete `sem` monotonicity lemma the
-# `hNoUD` lift requires) — recorded follow-up in HANDOFF.
+# `test_conformance_remove.py`, and the add-only Lean gates (graph/state) carry
+# the corpus.
+#
+# Lifting it needs a `storeValidRulesDB` decision procedure + its soundness lemma
+# + a widened `remove` constructor. Note leg 4 converted the constructor's
+# admission INWARD with `storeValidRulesD_of_storeValidRules_directArmsBare`, and
+# that does not run backwards — this is its own leg, not a flag edit. Recorded
+# follow-up in HANDOFF and in the E-chain plan's C.5 item 6.
 _REMOVE_EXCLUDED = frozenset({"direct_arm_exclusion"})
 _REMOVABLE = sorted(n for n in GRAPH_FRAGMENT
                     if len(SCHEMAS[n][1]) >= 2 and n not in _REMOVE_EXCLUDED)

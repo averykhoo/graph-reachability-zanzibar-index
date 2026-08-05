@@ -400,19 +400,37 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
         (),
     ),
     "direct_arm_exclusion": (
-        # Direct-arm boolean shape (moved INTO SCHEMAS/GRAPH_FRAGMENT 2026-07-20e,
-        # the #1 leg-5d widening): `approver = [user] but not banned` — the
-        # exclusion's BASE is a **Direct storage arm ON the derived relation**
-        # (AST `excl (direct[user]) (computed banned)`), not a separately-named
-        # computed relation like `boolean_exclusion`'s `editor`. Lean coverage is
-        # the C-chain T2b `graph_correct_w3d2_d` (CascadeStrataResettle.lean,
-        # audited; witness `W4WitnessDirect` = exactly this corpus in compiled
-        # form). NOTE the shape is still outside `W4Fragment`/the E-chain final
-        # theorems (`computedOnly`) — the add-only graph/state gates carry it on
-        # the C-chain theorem's scope; the REMOVE-stream Lean gate cannot (see
-        # test_conformance_remove_graph._REMOVE_EXCLUDED: the model's remove
-        # guard is plain StoreValidRules, which provably rejects any store
-        # holding a Direct-arm-under-exclusion tuple — `hNoUD`, 2026-07-20d/e).
+        # Direct-arm boolean shape (moved INTO SCHEMAS/GRAPH_FRAGMENT 2026-07-20e):
+        # `approver = [user] but not banned` — the exclusion's BASE is a **Direct
+        # storage arm ON the derived relation** (AST `excl (direct[user]) (computed
+        # banned)`), not a separately-named computed relation like
+        # `boolean_exclusion`'s `editor`. This is the canonical Zanzibar boolean
+        # shape, and the whole E-chain Direct-arm widening arc exists for it.
+        #
+        # THEOREM-BACKED since 2026-08-05 (E-chain legs 5+6), and by a machine-checked
+        # witness rather than a prose fragment argument. `FullScope.lean`'s
+        # `W4WitnessDirect` is exactly this corpus in compiled form — `Sd` is the schema,
+        # `Td4` is all four tuples below — and it carries `admission4 : GraphAdmission Sd
+        # Td4`, `w4fragment4 : W4Fragment Sd Td4`, and `final_applies4`, the HEADLINE
+        # `graph_correct` at that pair. All audited and statement-pinned.
+        #
+        # It was genuinely outside before, not mislabelled: `outside_old_admission4`
+        # machine-checks `¬ StoreValidRules Sd Td4`, and `StoreValidRules` WAS
+        # `GraphAdmission.storeValid`, so the headline theorems were VACUOUS here. Leg 5
+        # rebased the bundles (`storeValid → StoreValidRulesD`; `computedOnly` → five
+        # derived-def clauses). Both `outside_old_admission*` theorems are KEPT as the
+        # proof that this was a widening and not a relabeling.
+        #
+        # TWO carve-outs remain, and neither is a divergence:
+        #   * T2a `graph_reached_inv` takes a third bundle `W4NarrowT2a` that this store
+        #     provably fails (`outside_narrow_t2a`). Probe D.3 machine-checked
+        #     `Inv.negEdgeFree` FALSE on the `_d` fragment — a P6 leaf-family MODELLING
+        #     limit; Python routes the write onto the leaf family, so the edge and the
+        #     `neg` row live on different nodes (0 mismatches on the real backends).
+        #   * the REMOVE-stream Lean gate still excludes it (see
+        #     test_conformance_remove_graph._REMOVE_EXCLUDED): `removeGateB` decides
+        #     plain `storeValidRulesB`. That is now the SOLE reason for the exclusion —
+        #     the admission reason it used to carry is gone.
         # Store exercises the full truth table:
         #   alice — approver only            -> True  (Direct arm, not excluded)
         #   bob   — approver AND banned      -> False (excluded by the subtrahend)
@@ -446,11 +464,14 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # as well as graph), so the bridge is exercised on every leg these corpora
     # reach — not only the graph ones.
     #
-    # SCOPE — both are inside GraphAdmission + W4Fragment, hence in GRAPH_FRAGMENT
-    # (unlike `direct_arm_exclusion`; see that entry and
-    # test_conformance_graph.py's classification guard). Field by field
-    # (FullScope.lean):
-    #   * computedOnly — `all_of` is the only DERIVED def in either schema
+    # SCOPE — both are inside GraphAdmission + W4Fragment, hence in GRAPH_FRAGMENT.
+    # (Until 2026-08-05 this line read "unlike `direct_arm_exclusion`"; E-chain leg 6
+    # brought that corpus in too, so every GRAPH_FRAGMENT member is now inside. See
+    # test_conformance_graph.py's classification guard.) Field by field
+    # (FullScope.lean; the field was named `computedOnly` until leg 5 widened it to
+    # `computedOrDirect` — the argument below is unchanged and holds a fortiori,
+    # since `ComputedOrDirect` admits strictly more than `ComputedOnly`):
+    #   * computedOrDirect — `all_of` is the only DERIVED def in either schema
     #     (`any_of` is a plain union of untainted relations, hence untainted) and
     #     its leaves are all COMPUTED. `ComputedOnly` recurses through
     #     union/inter/excl, so the left-folded nest is `ComputedOnly` exactly when
@@ -465,8 +486,11 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     #   * term — no TTU (NoTtuTarget vacuous) and no stored tuple uses a derived
     #     relation as its subject predicate (NoStoreSubjectR).
     #   * storeValid — every stored tuple lands on a/b/c, each a plain `[user]`
-    #     Direct def, so `exprDirects` is non-empty and matches. (This is the
-    #     field `direct_arm_exclusion` provably FAILS.)
+    #     Direct def, so `exprDirects` is non-empty and matches. (This is the field
+    #     `direct_arm_exclusion` provably failed under the pre-leg-5 `StoreValidRules`
+    #     — `outside_old_admission4`. It satisfies the widened `StoreValidRulesD`
+    #     through the DERIVED disjunct instead; these corpora take the untainted one,
+    #     which is the old clause verbatim.)
     #
     # WHY TWO SMALL CORPORA INSTEAD OF ONE (a measured runtime wall in the LEAN
     # MODEL, recorded rather than papered over). The first version was a single
@@ -560,12 +584,12 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 #     W4Fragment field — the per-field argument is in the n-ary block in SCHEMAS.
 #     n-ary arity widens fan-in, not dependency depth, so `twoStrata` is
 #     untouched (measured: 0 and 1 strata).
-#   * direct_arm_exclusion (added 2026-07-20e) rides the C-CHAIN Direct-arm T2b
-#     `graph_correct_w3d2_d` instead of the E-chain `graph_correct` (its Direct
-#     storage arm is outside `W4Fragment.computedOnly`); the witness
-#     `W4WitnessDirect` pins the corpus-to-theorem tie. Its add-only zcli runs
-#     were attack-probed first (full truth table `check = sem`, drained); the
-#     remove-stream Lean gate excludes it (see its entry above).
+#   * direct_arm_exclusion (added 2026-07-20e) rode the C-CHAIN Direct-arm T2b
+#     `graph_correct_w3d2_d` until 2026-08-05; since E-chain legs 5+6 it rides the
+#     HEADLINE `graph_correct` like every other entry, witnessed at its own four-tuple
+#     store by `W4WitnessDirect.final_applies4`. Its add-only zcli runs were
+#     attack-probed first (full truth table `check = sem`, drained). The remove-stream
+#     Lean gate still excludes it, now on remove-guard grounds only (see its entry).
 # Excluded, with the honest reason (ROADMAP "W4 — honest gaps"):
 #   * object_wildcard — the stored tuple has object name '*'; `BareStarStore`
 #     requires stored objects concrete (gap: bareStar / W1b object-star tuples
@@ -627,8 +651,10 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
 #     nonzero only on run failure (rc 2) and non-drained-ness (rc 3)), so an
 #     out-of-fragment corpus placed in `GRAPH_FRAGMENT` does NOT fail loudly — it
 #     silently compares two models that no theorem relates. That is exactly how
-#     `direct_arm_exclusion` came to be described as theorem-backed when it is
-#     not.
+#     `direct_arm_exclusion` came to be described as theorem-backed in 2026-07-20e
+#     when it was not (corrected 2026-07-26, ZT-P3-3). It IS theorem-backed as of
+#     2026-08-05 — but by `W4WitnessDirect.final_applies4`, not by having been put
+#     in the list. The hazard this bullet describes is unchanged.
 # So the Lean-side comparison here is `sem` ONLY (the spec is a pure function of
 # the final store — no cascade, no rounds, no stratum bound), and the graph index
 # is compared against the ORACLE and the SET ENGINE only, python-to-python.
@@ -687,7 +713,8 @@ MULTI_STRATUM_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # on all three, matching the oracle the graph was fixed toward).
 #
 # DELIBERATELY separate from SCHEMAS (and thus from GRAPH_FRAGMENT): the shapes
-# are OUTSIDE `W4Fragment` (`computedOnly` bans `ttu` leaves in derived defs;
+# are OUTSIDE `W4Fragment` (`computedOrDirect` — `computedOnly` before leg 5 — still
+# maps `.ttu` to `False`, so `ttu` leaves in derived defs remain banned;
 # `PDerivedTTU` plan leaves are a documented proof gap — FINAL_REVIEW §3 item 3),
 # so the graph conformance / state / remove gates must NOT carry them. Only
 # test_conformance_spec's comparisons consume them — those are full-scope (T1
@@ -756,7 +783,8 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     #
     # SCOPE: spec-side only (Lean `sem` x oracle x set engine, via
     # `test_conformance_spec.py`) — never `GRAPH_FRAGMENT`.
-    # `FullScope.lean::W4Fragment`'s `computedOnly` explicitly excludes
+    # `FullScope.lean::W4Fragment`'s derived-def clause (`computedOrDirect` since
+    # leg 5, `computedOnly` before it — both map `.ttu` to `False`) explicitly excludes
     # `PDerivedTTU`/`PDerivedUserset` plan leaves ("out of scope (W3a decision)",
     # `FullScope.lean` W4Fragment doc), and `term`/`NoStoreSubjectR` forbids the
     # stored `group:g1#member` tuple this corpus needs, so a Lean OPERATIONAL
@@ -892,9 +920,10 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     #
     # SCOPE: spec-side + the python-only three-backend differential; NEVER
     # `GRAPH_FRAGMENT`, and here the Lean exclusion is doubled:
-    #   * `W4Fragment.computedOnly` — a derived def's expr must be `ComputedOnly`,
-    #     which is `False` on a `ttu` node outright (`FullScope.lean`'s
-    #     `directsOnly_of_computedOnly` induction), and `inherited` IS a `ttu`;
+    #   * `W4Fragment.computedOrDirect` (`computedOnly` before leg 5) — a derived
+    #     def's expr must be `ComputedOrDirect`, which is `False` on a `ttu` node
+    #     outright, and `inherited` IS a `ttu`. Leg 5 widened this field to admit
+    #     `Direct` arms; it did NOT admit `ttu` ones, which is a separate later leg;
     #   * `GraphAdmission.ttuDirect` (`TtuTuplesetsDirect`) — a declared TTU
     #     tupleset def must be directs-only, and `parent` is an `excl`. So this
     #     shape fails the ADMISSION bundle too, not merely the fragment carries;
@@ -944,20 +973,32 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # followed the oracle, and `sem` agrees. Probed 2026-07-13: sem == oracle == set
 # engine on every grid query, including the self-referential rows.
 #
-# Separate from SCHEMAS (and GRAPH_FRAGMENT): both shapes are outside `W4Fragment`
-# (`self_flag` has Direct arms under a boolean — genuine storage leaves, not
-# `computedOnly`; `self_ttu_parent` is a TTU over a derived relation), so the
-# graph-side gates must not carry them. Only test_conformance_spec's full-scope
-# comparisons consume them (T1 places no fragment restriction on the set engine).
+# Separate from SCHEMAS (and GRAPH_FRAGMENT). `self_ttu_parent` is a TTU over a
+# derived relation, which `W4Fragment.computedOrDirect` still maps to `False` — out,
+# unchanged.
+#
+# ⚠ `self_flag`'s stated reason has EXPIRED and is deliberately not being replaced by
+# a guess. It read "Direct arms under a boolean — genuine storage leaves, not
+# `computedOnly`", and that is exactly the shape E-chain leg 5 brought INTO scope
+# (`direct_arm_exclusion` is now theorem-backed on it). Whether `self_flag` is in
+# `W4Fragment` now is an OPEN question this leg did not answer: it would need the
+# ten fields checked at its own schema and store — in particular `term`'s
+# `NoStoreSubjectR` and `bareStar` against its self-referential tuples — and, per the
+# ZT-P3-3 lesson two blocks below, a corpus goes into GRAPH_FRAGMENT on a written
+# per-field argument, never on a plausible-sounding one. Until someone does that
+# work it stays spec-side-only, which is the conservative direction. Only
+# test_conformance_spec's full-scope comparisons consume these (T1 places no fragment
+# restriction on the set engine).
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Direct-arm boolean corpora — the names of the SCHEMAS entries whose derived
 # defs carry a **Direct arm under an exclusion** (`approver := (direct[user])
 # but not banned`, AST `excl (direct[user]) (computed banned)`). The entries
-# LIVE in SCHEMAS/GRAPH_FRAGMENT since 2026-07-20e (the #1 leg-5d widening —
-# Lean coverage via the C-chain `graph_correct_w3d2_d` + `W4WitnessDirect`,
-# see the `direct_arm_exclusion` entry's comment); this name list survives so
+# LIVE in SCHEMAS/GRAPH_FRAGMENT since 2026-07-20e (Lean coverage was the C-chain
+# `graph_correct_w3d2_d` + `W4WitnessDirect`; since 2026-08-05 it is the HEADLINE
+# `graph_correct` via `W4WitnessDirect.final_applies4` — see the
+# `direct_arm_exclusion` entry's comment); this name list survives so
 # the dedicated python-only 3-backend differential
 # (`test_conformance_direct_arm.py`: oracle == set engine == real graph index
 # under BOTH SetOps + the exhaustive small-store attack) keeps its focused

@@ -19,21 +19,33 @@ the stratified-Datalog¬ perfect model `sem` — hence are equivalent — with t
 implementations pinned to the Lean models by the conformance harness. The honest claim
 never rounds up to "the code is formally verified" (plan §7).
 
-**One caveat every session must carry** (`FINAL_REVIEW.md` §3.0, `ARCHITECTURE.md` §6.0):
-the final graph theorems (`graph_correct`, `graph_reached_inv`,
-`Exec.graphRun_check_eq_sem`, and everything routed through them) are **VACUOUS — not
-merely narrow — on any store written through the `Direct` arm of a derived def**, i.e. on
-`can_view: [user] but not blocked`, the canonical Zanzibar boolean shape.
-`FullScope.lean:564` machine-checks `¬ StoreValidRules Sd Td` at exactly such a store, and
-`GraphAdmission.storeValid` IS `StoreValidRules`. What is proved there is the C-chain
-`graph_correct_w3d2_d`, and now also the E-chain `graph_correct_w3d2E_d`
-(`W4WitnessDirect.w3d2E_correct_applies` instantiates it at that very store). **The
-caveat still holds in full** because the widening's last step is not done: of the three
-parts of the E-chain widening, `enumJob2 → enumJob2D` LANDED (leg 2), the `_d` projection
-of `reachedByW3d2E_toC` LANDED (leg 4), and **`storeValid → StoreValidRulesD` — the one
-that actually moves the headline theorems — has NOT** (leg 5). Until it does, the
-unsuffixed `graph_correct`/`graph_reached_inv`/`Exec.graphRun_check_eq_sem` remain
-vacuous there; what exists is a `_d` twin standing beside them, not a widening of them.
+**The caveat every session used to carry is now HALF RETIRED — carry the correct half**
+(`FINAL_REVIEW.md` §3.0, `ARCHITECTURE.md` §6.0). It read: *the final graph theorems
+(`graph_correct`, `graph_reached_inv`, `Exec.graphRun_check_eq_sem`, and everything routed
+through them) are **VACUOUS — not merely narrow — on any store written through the
+`Direct` arm of a derived def**, i.e. on `can_view: [user] but not blocked`, the canonical
+Zanzibar boolean shape.*
+
+**E-chain leg 5 (2026-08-05) closed that for T2b and everything routed through it.**
+`GraphAdmission.storeValid` is now `StoreValidRulesD` and `W4Fragment` carries five
+derived-def clauses in place of `computedOnly`, so `graph_correct` /
+`backend_equivalence` / `exclusion_effective` / `no_ghost_grant` /
+`Exec.graphRun{,Ops}_check_eq_sem` **apply at that store** —
+`W4WitnessDirect.final_applies` instantiates the unsuffixed `graph_correct` there.
+`W4WitnessDirect.outside_old_admission` (`¬ StoreValidRules Sd Td`) is KEPT, because it is
+now the proof that the widening was contentful rather than a relabeling, and
+`w4Fragment_of_computedOnly` proves the pre-leg-5 six fields imply all ten — nothing that
+held before stopped holding.
+
+**⚠ T2a (`graph_reached_inv`) did NOT widen, and this is the half to keep carrying.** It
+now takes a third bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + the narrow
+`StoreValidRules`), and `W4WitnessDirect.outside_narrow_t2a` machine-checks that the
+Direct-arm store fails it — so T2a **remains vacuous exactly where T2b no longer is.**
+That is not a proof gap: Leg-0 probe D.3 machine-checked `Inv.negEdgeFree` FALSE on the
+`_d` fragment. **Python is fine** (`RuleSet.apply` routes the write onto the leaf family,
+so the edge and the `neg` row live on different nodes — 0 mismatches on the real backends);
+it is a modelling limit of the P6 leaf-family collapse. A **design decision** is owed
+before any leg-7 work — see `W4NarrowT2a`'s docstring for the three options.
 
 ---
 

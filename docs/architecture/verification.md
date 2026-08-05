@@ -118,9 +118,11 @@ implementations are pinned to those models by a conformance harness (the Lean sp
 executable, so the same artifact is both proof subject and CLI oracle) that reuses this
 oracle's parser for independence, plus state-level equality and small-scope enumeration.
 Set engine is proved at full scope; the graph index at a documented fragment of what the
-Python accepts — **and on stores written through the `Direct` arm of a derived def
-(`can_view: [user] but not blocked`) the graph-side theorems hold VACUOUSLY, meaning
-there is no theorem there at all** (`formal/FINAL_REVIEW.md` §3.0). It never
+Python accepts. **On stores written through the `Direct` arm of a derived def
+(`can_view: [user] but not blocked`) the graph-side theorems used to hold VACUOUSLY —
+no theorem there at all — until E-chain legs 5+6 (2026-08-05) rebased the
+admission/fragment bundles; T2a `graph_reached_inv` alone is still vacuous there**
+(`formal/FINAL_REVIEW.md` §3.0). It never
 rounds up to "the code is formally verified". Two whole subsystems have no Lean model:
 the **bulk build/backfill** constructor (the default `build_index` path, netted only by a
 Python-vs-Python differential identity gate) and the **multi-instance/HA** layer (locks,

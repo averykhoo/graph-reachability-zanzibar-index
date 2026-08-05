@@ -63,8 +63,11 @@ formal/                Lean 4 machine-checked proofs that the two backend
                        scope, the GRAPH INDEX only at a documented fragment of
                        what the Python accepts - so "the backends are equivalent"
                        holds unconditionally on the set-engine side and only
-                       inside that fragment on the graph side (and vacuously on
-                       Direct-arm boolean stores - formal/FINAL_REVIEW.md 3.0).
+                       inside that fragment on the graph side. Since 2026-08-05
+                       that fragment covers Direct-arm boolean stores
+                       ("[user] but not blocked") for every graph theorem
+                       EXCEPT T2a graph_reached_inv, still vacuous there
+                       (formal/FINAL_REVIEW.md 3.0).
                        Never rounds up to "the code is formally verified"
                        (start at formal/HANDOFF.md)
 legacy/                v1-v3, superseded but runnable documentation

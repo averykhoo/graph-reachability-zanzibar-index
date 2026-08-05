@@ -24,10 +24,11 @@ semantics `sem`, and hence to be equivalent — machine-checked and axiom-audite
 set-engine result holds at **full scope** (`setEngine_correct`'s three hypotheses are
 all underscored and unused — the equality is literally unconditional). The graph-index
 result holds at a **documented fragment** (`GraphAdmission ∧ W4Fragment`), not
-everything the Python code admits — **and on stores written through the `Direct` arm of
-a derived def (`can_view: [user] but not blocked`, the canonical Zanzibar boolean
-shape) it holds VACUOUSLY: there is no theorem there at all. Read §6.0 before quoting
-any graph-side claim from this document.** The **Python implementations** are pinned to those models empirically: by the
+everything the Python code admits. **Since 2026-08-05 that fragment DOES include stores
+written through the `Direct` arm of a derived def (`can_view: [user] but not blocked`,
+the canonical Zanzibar boolean shape) — it used to hold VACUOUSLY there, and for T2a
+(`graph_reached_inv`) it still does. Read §6.0 before quoting any graph-side claim from
+this document.** The **Python implementations** are pinned to those models empirically: by the
 `CORRESPONDENCE.md` structural review, by five-corner differential conformance including
 state-level equality under seven documented projections, and by exhaustive small-scope
 enumeration up to tiny documented bounds. `FINAL_REVIEW.md` is the exact clause-by-clause
@@ -182,10 +183,16 @@ restriction comes from (`FullScope.lean`):
   does not already impose**.
 - **`W4Fragment S T`** — the **honest carries**: scope restrictions the current proof
   needs that Python admission does **not** imply. `structure W4Fragment`
-  (`FullScope.lean:132-142`) has exactly **six** fields: `computedOnly`
-  (derived defs read only computed operands — the sole SHAPE condition since the
-  2026-07-17 widening **deleted `rootB`/`RootBoolean`**; the derived-def ROOT operator is
-  unrestricted, so union-/computed-rooted derived defs are in scope), `twoStrata` (≤ 2 derived strata —
+  (`FullScope.lean`) has exactly **TEN** fields since E-chain leg 5 (2026-08-05) split
+  the single `computedOnly` into five. The five SHAPE conditions on a derived def:
+  `computedOrDirect` (a boolean tree over `computed` refs AND `direct` grant arms —
+  `.ttu` leaves still banned), `directArmsBare` (its `Direct` arms carry only BARE
+  restrictions), `directArmsConcrete` (…and no wildcard-flagged ones), `computedOnlyOperands`
+  (its DERIVED operands are themselves `ComputedOnly` — only the top def may carry a
+  `Direct` arm), `noUnionDirects` (its `Direct` arms sit under `inter`/`excl` only, never
+  union-reachable — the canonical `but not`). The derived-def ROOT operator has been
+  unrestricted since the 2026-07-17 widening **deleted `rootB`/`RootBoolean`**. Then the
+  five carried over verbatim: `twoStrata` (≤ 2 derived strata —
   attack-confirmed load-bearing), `wsBare` (declared wildcard restrictions all bare
   `[T:*]`), `bareStar` (stored star subjects bare, objects concrete), `ttuStarFree` (no
   stored star subject feeds a TTU tupleset), `term` (derived relations never TTU targets
@@ -363,61 +370,79 @@ cover (§6.1 item 2). The **lookup-surface oracle gate** (`tests/test_lookup_ora
 Mirroring `FINAL_REVIEW.md` §3/§4 (which governs — if the two ever disagree, that file
 wins and this one is stale). The current honest claim is §1's, with **one explicit
 subtraction and three scope qualifiers**: the graph-side theorems hold at `W4Fragment`
-scope (not everything Python admits) **and are vacuous on the canonical boolean idiom,
-§6.0**; state-level equality holds under the seven documented
+scope (not everything Python admits) — which since 2026-08-05 includes the canonical
+boolean idiom, **except for T2a `graph_reached_inv`, still vacuous there, §6.0**;
+state-level equality holds under the seven documented
 projections (a divergence *inside* a projected class is pinned elsewhere, not here;
 nodes are not compared at all);
 enumeration is exhaustive only up to its tiny documented bounds. Never round these up.
 
-### 6.0 The headline graph theorems are VACUOUS on the canonical boolean idiom
+### 6.0 The Direct-arm vacuity: RETIRED for T2b (2026-08-05), STILL LIVE for T2a
 
-Not "narrower coverage" — **no theorem**. `W4Fragment.computedOnly` requires every
-derived def to read only `computed` operand leaves, so a store holding a tuple written
-through the **`Direct` arm of a derived def** —
+Until 2026-08-05 this section read *"The headline graph theorems are VACUOUS on the
+canonical boolean idiom"* and meant it literally: not "narrower coverage" but **no
+theorem**. `W4Fragment.computedOnly` required every derived def to read only `computed`
+operand leaves, so a store holding a tuple written through the **`Direct` arm of a
+derived def** —
 
 ```
 can_view: [user] but not blocked
 ```
 
-— the commonest Zanzibar boolean shape there is, falls outside the bundle. And it does so
-in the strongest available sense: `GraphAdmission.storeValid` **is** `StoreValidRules`,
-and `FullScope.lean:601` machine-checks
-
-```lean
-theorem outside_old_admission : ¬ StoreValidRules Sd Td
-```
-
-at exactly such a store (`Sd` = `banned := [user]`, `approver := [user] but not banned`;
+— the commonest Zanzibar boolean shape there is, fell outside the bundle, in the
+strongest available sense: `GraphAdmission.storeValid` **was** `StoreValidRules`, and
+`FullScope.lean::W4WitnessDirect.outside_old_admission` machine-checks its negation at
+exactly such a store (`Sd` = `banned := [user]`, `approver := [user] but not banned`;
 `Td` = one write of `user:alice` through the derived def's `Direct` arm). The reason is
 structural: the Direct arm sits under `excl`, so `exprDirects` on the derived def is
-empty and no rule can justify the stored tuple. `history/PROOF_STATUS.md:36` says it in
-one line — *"the CURRENT admission bundle is UNSATISFIABLE"* on that shape.
+empty and no rule can justify the stored tuple. `history/PROOF_STATUS.md` said it in one
+line - *"the CURRENT admission bundle is UNSATISFIABLE"* on that shape.
 
-**Consequence, unsoftened:** on any such store, `graph_correct` (T2b),
-`graph_reached_inv` (T2a), `backend_equivalence` (T3), the T6 security corollaries, and
-`Exec.graphRun_check_eq_sem` are all **vacuously true**. Their hypotheses are false; they
-say nothing whatsoever about the graph index there. Reading §6.1 item 3's
-"non-`ComputedOnly` leaves not covered" as *narrower coverage* is the wrong reading.
+**The E-chain Direct-arm widening arc closed this for T2b on 2026-08-05.** Leg 2 swapped
+the operational enumeration (`enumJob2` -> `enumJob2D`); legs 3-4 built the `_d`
+projection (`reachedByW3d2E_toC_d` / `graph_correct_w3d2E_d`, the audited originals now
+byte-identical wrappers); **leg 5 rebased the bundles** - `GraphAdmission.storeValid` is
+`StoreValidRulesD`, and `W4Fragment`'s single `computedOnly` field became five
+derived-def clauses (`computedOrDirect`, `directArmsBare`, `directArmsConcrete`,
+`computedOnlyOperands`, `noUnionDirects`); leg 6 carried it into the conformance
+classification.
 
-**What IS proved on that shape** — real, but weaker and not the shipped theorem: the
-C-chain `graph_correct_w3d2_d` (`CascadeStrataResettle.lean`, audited; non-vacuity
-witnessed by `W4WitnessDirect` at exactly the `Sd`/`Td` pair) gives `check = sem` at
-every fully-drained `ReachedByW3d2C` state over a widened
-`ComputedOrDirect ∧ DirectArmsBare` fragment under `StoreValidRulesD` admission. Closing
-the gap needs the E-chain widening recorded in `FullScope.lean`'s `W4WitnessDirect`
-header (line numbers rot; anchor on the symbol): the `enumJob2 → enumJob2D` enumeration swap (**DONE 2026-08-04,
-arc leg 2** — `enumJobs2At` runs `enumJob2D`), a `_d` projection of `reachedByW3d2E_toC`
-(**DONE 2026-08-05, legs 3–4** — `reachedByW3d2E_toC_d` / `graph_correct_w3d2E_d`, with
-the audited originals now byte-identical wrappers), and `GraphAdmission.storeValid →
-StoreValidRulesD` (leg 5, **open**). **The vacuity below is unchanged until leg 5** —
-legs 2–4 widened the enumeration and the chain, not the admission bundle.
+So `graph_correct` (T2b), `backend_equivalence` (T3), the T6 security corollaries and
+`Exec.graphRun{,Ops}_check_eq_sem` now **cover** that shape.
+`W4WitnessDirect.final_applies` instantiates the unsuffixed `graph_correct` at the
+minimal Direct-arm store and `final_applies4` at the four-tuple `direct_arm_exclusion`
+corpus store verbatim. `outside_old_admission`/`outside_old_admission4` are kept and
+still audited - they are now the proof that this was a **widening** and not a
+relabeling - and `w4Fragment_of_computedOnly` proves the pre-leg-5 six fields imply all
+ten, so nothing that held before stopped holding.
 
-**And the conformance evidence on that shape is differential, not theorem-backed.**
-`direct_arm_exclusion` is in `GRAPH_FRAGMENT` and IS driven through the graph and state
-gates, where Python and the Lean model agree — that is two implementations agreeing, and
-the CLI never gates on `GraphAdmission`/`W4Fragment` (rc 2/3 test run-success and
-drained-ness only). Membership in `GRAPH_FRAGMENT` is not membership in the proved
-fragment. The same corpus is also excluded from the remove-driving gate (§5).
+**The one exception, and it is a real one: T2a.** `graph_reached_inv` now takes a THIRD
+bundle, `W4NarrowT2a` (schema-wide `ComputedOnly` + the narrow `StoreValidRules`), and
+`W4WitnessDirect.outside_narrow_t2a` machine-checks that the Direct-arm store fails it.
+**T2a is still vacuous exactly where T2b no longer is.** That is a declared carry with a
+counterexample attached, not a proof gap: Leg-0 probe D.3 machine-checked
+`Inv.negEdgeFree` FALSE on the `_d` fragment (under `StoreValidRulesD` a Direct-arm write
+lands an edge at the very derived R-node whose residue carries the `neg` row). **Python
+is fine** - `RuleSet.apply` routes the write onto the leaf family, so the edge and the
+`neg` row live on different nodes; 0 mismatches over the grid and a 6-way order sweep on
+the real backends. It is a modelling limit of projection **P6** (the leaf-family
+collapse), and a **design decision** is owed before further work: (a) restate T2a at
+drained states only, (b) weaken `negEdgeFree`/`uposEdgeFree` to exempt the current
+un-cascaded write leg, or (c) model the leaf-family split.
+
+**The conformance evidence on that shape is now theorem-backed for answers.**
+`direct_arm_exclusion` moved into `test_conformance_graph._THEOREM_BACKED` (the split is
+`(23, 0)`), licensed by `final_applies4` and by nothing weaker - both bundles are
+STORE-indexed, so the witness had to be taken at the corpus's own four tuples, not at a
+one-tuple subset. Two carve-outs remain: the T2a asymmetry above, and the Lean REMOVE
+gate (`removeGateB` decides plain `storeValidRulesB`, so the corpus stays in
+`_REMOVE_EXCLUDED` - now for THAT reason alone, no longer for the admission reason it
+carried before leg 5; §5).
+
+The standing hazard that made this section necessary is unchanged: **the CLI never gates
+on `GraphAdmission`/`W4Fragment`** (rc 2/3 test run-success and drained-ness only), so
+membership in `GRAPH_FRAGMENT` is not membership in the proved fragment. Only a written
+per-field argument or a Lean witness makes it so.
 
 ### 6.1 The residual unverified surface, in full
 
@@ -549,15 +574,16 @@ fragment. The same corpus is also excluded from the remove-driving gate (§5).
 **Where the next marginal assurance is** (`FINAL_REVIEW.md` §4; state-level + enumeration
 + the remove-path and generated-schema answer gates are DONE): (c) widening `W4Fragment`
 — **union roots are DONE (2026-07-17: `rootB`/`RootBoolean` deleted, the derived-def ROOT
-operator is unrestricted)**, so what remains under (c) is the **LEAF** fragment
-(`Direct`/TTU arms under a boolean) and **> 2 strata**. This is the highest-value item
-left, because until the `Direct`-arm half lands the final theorems are vacuous on the
-commonest boolean schema in the language (§6.0). Its `Direct`-arm half is already proved
-at C-chain level (`graph_correct_w3d2_d`), but the final unsuffixed theorems stay
-`ComputedOnly`-scoped pending the E-chain widening — `enumJob2 → enumJob2D` (**DONE
-2026-08-04, leg 2**), a `_d` projection of `reachedByW3d2E_toC` (**DONE 2026-08-05,
-legs 3–4**) and `GraphAdmission.storeValid → StoreValidRulesD` (leg 5, **still open**) —
-recorded in `FullScope.lean`'s `W4WitnessDirect` header; (d) remove legs on the Lean side — **DONE 2026-07-19f** at the
+operator is unrestricted)**, and the **`Direct`-arm half of the LEAF fragment is DONE
+2026-08-05** — the E-chain arc carried it onto the FINAL unsuffixed theorems (leg 2
+`enumJob2 → enumJob2D`; legs 3–4 the `_d` projection; **leg 5 the bundle rebase**; leg 6
+the conformance reclassification), so those theorems are no longer vacuous on the
+commonest boolean schema in the language (§6.0). What remains under (c), and these are
+now the highest-value items: **T2a alone did not widen** (`graph_reached_inv` carries an
+extra `W4NarrowT2a` bundle the Direct-arm store provably fails — a DESIGN DECISION is
+owed, not proof effort), the TTU/userset leaf arms (`PDerivedTTU`/`PDerivedUserset`,
+still `False` under `ComputedOrDirect`), **> 2 strata**, and the Lean REMOVE guard, which
+still decides plain `storeValidRulesB`; (d) remove legs on the Lean side — **DONE 2026-07-19f** at the
 validly-stored + drained-prior scope: the `remove` constructor on `ReachedByW3d2`/`C`/`E`
 makes T2a/T2b + `Exec.graphRun_check_eq_sem` cover retraction of a `t ∈ T` from a drained
 state under the pre-remove store's disciplines (faithful to `TupleSource.remove`), so the

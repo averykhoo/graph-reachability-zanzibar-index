@@ -21,43 +21,57 @@ This file used to claim, flatly, that `GRAPH_FRAGMENT` is "inside GraphAdmission
 verbatim". That was FALSE for one corpus, and the Lean tree itself proves it
 false. Corrected 2026-07-26 (ZT-P3-3). The honest statement is:
 
-**(A) THEOREM-BACKED — `_THEOREM_BACKED`, 22 of the 23 corpora.** These satisfy
-`GraphAdmission` + `W4Fragment`, so the honesty theorems `graphRun_reached` /
-`graphRun_check_eq_sem` (`GraphIndex/Exec.lean`) compose with the final T2b
-`graph_correct` (`FullScope.lean`): whatever this driver prints for such a
-corpus is a value `graph_correct` covers, and a `lean-graph != spec`
-disagreement would CONTRADICT a machine-checked theorem — instant adjudication.
-The per-corpus fragment argument lives in `corpus.py` next to each entry.
+**(A) THEOREM-BACKED — `_THEOREM_BACKED`, all 23 corpora as of 2026-08-05.**
+These satisfy `GraphAdmission` + `W4Fragment`, so the honesty theorems
+`graphRun_reached` / `graphRun_check_eq_sem` (`GraphIndex/Exec.lean`) compose
+with the final T2b `graph_correct` (`FullScope.lean`): whatever this driver
+prints for such a corpus is a value `graph_correct` covers, and a
+`lean-graph != spec` disagreement would CONTRADICT a machine-checked theorem —
+instant adjudication. The per-corpus fragment argument lives in `corpus.py`
+next to each entry.
 
-**(B) DIFFERENTIAL-ONLY — `_DIFFERENTIAL_ONLY`, currently `direct_arm_exclusion`
-alone.** This corpus is provably OUTSIDE the final theorems' scope, on two
-independently machine-checked counts:
+**(B) DIFFERENTIAL-ONLY — `_DIFFERENTIAL_ONLY`, now EMPTY.** The category is
+kept, deliberately: it is the shape this module needs the moment a corpus is
+added that the theorems do not reach, and deleting it would remove the forcing
+function rather than satisfy it.
 
-  * `FullScope.lean` `W4WitnessDirect.outside_old_admission` proves
-    `¬ StoreValidRules Sd Td` — and `StoreValidRules` IS `GraphAdmission.
-    storeValid`, while `Sd`/`Td` IS this corpus in compiled form. The store is
-    admissible only under the WIDENED `StoreValidRulesD` (leg 5a). So the
-    `graph_correct` hypothesis bundle is not merely unproved here, it is
-    *refuted*.
-  * `W4Fragment.computedOnly` rejects the `direct` leaf under the derived def,
-    and `FullScope.lean` records the widening of the final E-chain theorems
-    (`enumJob2 -> enumJob2D` + a `_d` projection of `reachedByW3d2E_toC`) as a
-    "recorded follow-up, NOT done".
+`direct_arm_exclusion` was its only member from 2026-07-26 (ZT-P3-3) until
+2026-08-05, and it was there for a real, machine-checked reason:
+`W4WitnessDirect.outside_old_admission` proves `¬ StoreValidRules Sd Td`, and
+`StoreValidRules` WAS `GraphAdmission.storeValid`. The bundle was not merely
+unproved at that shape, it was *refuted*, so `graph_correct` and everything
+routed through it were VACUOUS there — no theorem, not a narrow one.
 
-What DOES exist at this shape is the NARROWER C-chain T2b `graph_correct_w3d2_d`
-(`CascadeStrataResettle.lean`, audited), with `W4WitnessDirect` pinning that the
-corpus inhabits its hypothesis bundle. But this driver folds the **E-chain**
-constructors (`graphRun` builds `ReachedByW3d2E` states), and the `_d` projection
-that would carry an E-chain state into the C-chain theorem is exactly the piece
-recorded as not done. **There is therefore NO proved bridge from what this file
-runs to the theorem that covers the shape.** For this corpus the two assertions
-below are a DIFFERENTIAL TEST between two independent implementations — valuable
-(it is a real Lean-model-vs-Python comparison over a real boolean shape, and it
-has adjudication value if it ever fires), but it is not theorem-backed coverage,
-and nothing here may be reported as such.
+**E-chain leg 5 (2026-08-05) rebased the bundles and leg 6 reclassified the
+corpus.** `GraphAdmission.storeValid` is now `StoreValidRulesD` and
+`W4Fragment` carries five derived-def clauses in place of `computedOnly`. The
+licence for the move is `W4WitnessDirect.final_applies4`, and the `4` matters:
+both bundles are STORE-indexed (`storeValid`, `bareStar`, `ttuStarFree`,
+`term`'s `NoStoreSubjectR`), so the witness is taken at `Td4` — this corpus's
+four-tuple store VERBATIM — and not at the one-tuple minimal store `Td` that
+`outside_old_admission` uses. A witness at a subset store would not establish
+what `_THEOREM_BACKED` asserts, and getting exactly that distinction wrong is
+this corpus's own history (see `test_graph_fragment_scope_classified`).
 
-The corpus stays in the gate deliberately: the comparison has value; only the
-claim about it was wrong.
+`outside_old_admission` / `outside_old_admission4` are KEPT and still audited.
+They are now the proof that the widening was contentful rather than a
+relabeling: the corpus really was outside the bundle, and a rebase moved it.
+
+**Two things this reclassification does NOT cover, so do not over-read it:**
+
+  * **T2a.** `graph_reached_inv` takes a third bundle `W4NarrowT2a` (schema-wide
+    `ComputedOnly` + the narrow `StoreValidRules`), and
+    `W4WitnessDirect.outside_narrow_t2a` machine-checks that this corpus fails
+    it. T2a remains vacuous exactly where T2b no longer is. That is a declared
+    asymmetry with a design decision owed, not a proof gap: probe D.3 proved
+    `Inv.negEdgeFree` FALSE on the `_d` fragment (a P6 leaf-family MODELLING
+    limit — Python is fine, `RuleSet.apply` puts the edge and the `neg` row on
+    different nodes). This module compares `check` answers, which is T2b's
+    business, so the classification here is unaffected.
+  * **The Lean REMOVE gate.** `removeGateB` decides plain `storeValidRulesB`,
+    so `direct_arm_exclusion` stays in
+    `test_conformance_remove_graph._REMOVE_EXCLUDED` — now for THAT reason
+    alone, no longer for the admission reason recorded there before leg 5.
 
 --------------------------------------------------------------------------- #
 SCOPE DISCIPLINE — and what does NOT enforce it.
@@ -163,19 +177,39 @@ _THEOREM_BACKED: frozenset[str] = frozenset({
     #     relation), storeValid holds.
     "nary_union_derived4",
     "residue_rich",
+    # Moved here from `_DIFFERENTIAL_ONLY` 2026-08-05 by E-chain leg 6, and it is the
+    # ONE entry in this set whose fragment argument is not prose but a machine-checked
+    # Lean witness AT THIS CORPUS'S OWN STORE:
+    #   `FullScope.lean::W4WitnessDirect.admission4`     : GraphAdmission Sd Td4
+    #   `FullScope.lean::W4WitnessDirect.w4fragment4`    : W4Fragment    Sd Td4
+    #   `FullScope.lean::W4WitnessDirect.final_applies4` : the headline `graph_correct`
+    #                                                      at (Sd, Td4)
+    # `Sd`/`Td4` ARE this corpus in compiled form -- schema and all four tuples.  All
+    # four declarations are axiom-audited and statement-pinned.  Before leg 5 the
+    # opposite was machine-checked (`outside_old_admission4` : ¬ StoreValidRules Sd Td4,
+    # still audited); the bundle was REFUTED here, not merely unproved.
+    "direct_arm_exclusion",
 })
 
 #: Corpora KNOWN to be outside the final theorems' scope, kept in the gate as an
 #: implementation-vs-implementation differential. Every entry needs a machine-
 #: checked citation for WHY it is outside (not an opinion) — see the module
 #: docstring section (B).
-_DIFFERENTIAL_ONLY: frozenset[str] = frozenset({
-    # `W4WitnessDirect.outside_old_admission` : ¬ StoreValidRules Sd Td.
-    "direct_arm_exclusion",
-})
+#:
+#: EMPTY since 2026-08-05 (E-chain leg 6 moved its sole member,
+#: `direct_arm_exclusion`, into `_THEOREM_BACKED`). Kept rather than deleted: the
+#: category is the forcing function, and it is needed the moment a corpus lands
+#: that the theorems do not reach. An empty set here means "every corpus in the
+#: gate is theorem-backed", which is a claim `test_graph_fragment_scope_classified`
+#: re-checks against `_THEOREM_BACKED` on every run — not a claim that the class of
+#: out-of-scope shapes has ceased to exist. It has not: object wildcards on derived
+#: relations, wildcard usersets over derived relations, TTU/userset leaves under a
+#: derived def and >2 derived strata are all still outside, and are simply not
+#: corpora here.
+_DIFFERENTIAL_ONLY: frozenset[str] = frozenset()
 
 #: The split this module's docstring claims, asserted so the prose cannot rot.
-_EXPECTED_SPLIT = (22, 1)
+_EXPECTED_SPLIT = (23, 0)
 
 # Anti-vacuity floor for the graph query grid (ZT-P4-4). Measured 2026-07-26
 # over `GRAPH_FRAGMENT`: the smallest grid is `wildcard_public` at 7 queries
