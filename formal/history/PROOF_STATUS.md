@@ -132,7 +132,11 @@ counts block. The new test moved that block (conf 467 → 468, repo 1230 → 123
 regenerated deliberately — **the pin fired first and named the exact rows**, which is the
 step-4e behaviour that had never previously caught a live drift twice running.
 No fuzz sweep was owed: no algorithm changed (one docstring, one new test, docs).
-**Nothing is committed.**
+~~**Nothing is committed.**~~ **Committed 2026-08-08 as `e0375da`** ("formal: leg-7
+pre-work — the P6 ledger is GENERATED, and three documents were refuted by measurement"),
+one commit for the whole tree state, because the ten-phase result above attests to the
+COMBINED state and splitting it would produce commits no gate run covers. Local only, not
+pushed. The gate was NOT re-run at commit time — the green above is this state's warrant.
 
 ---
 
