@@ -220,10 +220,38 @@ structure W4Fragment (S : Schema) (T : Store) : Prop where
 
     So `graph_reached_inv` takes this bundle IN ADDITION to `GraphAdmission` +
     `W4Fragment`, and `W4WitnessDirect.outside_narrow_t2a` machine-checks that the
-    canonical Direct-arm store does not satisfy it. Widening T2a needs a **design
-    decision** first — (a) restate at drained states only, (b) weaken
-    `negEdgeFree`/`uposEdgeFree` to exempt the current un-cascaded write leg, or
-    (c) model the leaf-family split — not more proof effort. -/
+    canonical Direct-arm store does not satisfy it.
+
+    **★ DECIDED 2026-08-05 — option (c), and the work is DEFERRED.** Widening T2a was a
+    design decision, not proof effort: (a) restate at drained states only, (b) weaken
+    `negEdgeFree` to exempt the current un-cascaded write leg, or
+    (c) **model the leaf-family split and retire P6 — CHOSEN.** (a) and (b) both shrink
+    the claim; (c) makes `negEdgeFree` TRUE here with nothing weakened, and **this
+    structure disappears** rather than being carried.
+
+    **⚠ Corrected 2026-08-08 — option (b) used to read "weaken
+    `negEdgeFree`/`uposEdgeFree`", and pairing the two clauses was WRONG.** Only
+    `negEdgeFree` is implicated. `uposEdgeFree` is **structurally immune on the `_d`
+    fragment**, independent of leaf routing, because two filters compose:
+    `StoreValidRulesD` (`ReconcileCorrect.lean`) requires `t.subject.predicate = BARE`
+    on any tuple written to a DERIVED key, while `uposCands`
+    (`CascadeStrataEnum.lean`) is filtered to `predicate ≠ BARE` — so `res.upos` only
+    ever holds USERSET subjects, and a raw derived write can never land an edge from
+    one. Measured 2026-08-08 by attack-first `#eval`: `uposTested = 0` in every
+    in-fragment scenario and `uposFree := true` throughout, while the same probe
+    reproduced D.3's `negFree := false` as its positive control. The mechanism was
+    confirmed by deliberately leaving the fragment — putting the userset restriction
+    on an untainted operand gives `uposTested = 1..2` with `uposFree := false` at a
+    store `StoreValidRulesD` rejects. **Consequence: leg 7's `Inv`-side obligation is
+    ONE clause, not two** — half what the scope doc's §1/§7 imply.
+    Why not (b), which is the tempting one: **nothing consumes `Inv`.** It is a hypothesis
+    in exactly four places (`State.lean::Inv.toStruct`, `::inv_putResidue`,
+    `Write.lean::inv_writeDirect`, `RulesWrite.lean::inv_writeRules`), all `Inv → Inv`
+    preservation steps, and `CascadeInv.lean::EdgeHygienic` is consumed as a hypothesis
+    nowhere. So weakening this clause could not turn any proof red — the gate would stay
+    green while the theorem said less, which is the failure mode house rule 7 exists for.
+    Scope + blast radius + ordering:
+    `formal/history/leaf-family-split-scope-2026-08-05.md`. -/
 structure W4NarrowT2a (S : Schema) (T : Store) : Prop where
   computedOnly : ∀ dt R e, S.lookup (dt, R) = some e →
     isDerived S (dt, R) = true → ComputedOnly e

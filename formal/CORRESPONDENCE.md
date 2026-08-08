@@ -470,7 +470,25 @@ The bullet is corrected in place below.
   state (hence implicitly pinned) and **41 are invisible to the gate entirely**.
   Only **5 of 21** corpora produced ANY residue row (**11** rows total), so 16
   corpora compared two empty residue dicts — and every one of those 11 rows had
-  `|stars| == 1` and `|neg| == 1`. **Partly closed 2026-07-27:** the
+  `|stars| == 1` and `|neg| == 1`.
+  > **★ SUPERSEDED 2026-08-05 — every figure in the paragraph above is STALE, and
+  > the whole class is now GENERATED instead of narrated.** The live numbers are in
+  > `FINAL_REVIEW.md`'s generated counts block ("State-gate projection ledger"),
+  > produced by `formal/conformance/extractor.py::graph_fragment_ledger` and checked
+  > by `verify.sh` step 4e. **Read them there; do not restate them here.** For the
+  > record, the drift: 21 → **23** corpora, 447 → **477** raw rows, 231 → **233**
+  > P1, 62 → **73** P6, 154 → **171** compared, 235 → **266** `NodeV4`, 11-over-5 →
+  > **13-over-6** residue rows. Only the P2 zero survived. The residue claim above
+  > is now false in the right direction — `residue_rich` contributes `(2,2,1)` and
+  > `(2,2,0)` and `taint_union_userset_arm` a `(1,1,1)`, so 11 of 13 rows are
+  > `|stars|=|neg|=1`, not all of them.
+  > The **194/41** `NodeV4` endpoint split re-derives as **217/49**, but it is
+  > deliberately NOT under the pin: unlike the edge ledger it has no in-repo
+  > implementation to reuse, so "referenced" had to be reconstructed (edge endpoints
+  > ∪ residue object nodes ∪ residue `neg`/`upos` subject nodes) and the number is
+  > method-sensitive. Treat **266** as solid and 217/49 as provisional; pinning it
+  > needs the definition written down first.
+  **Partly closed 2026-07-27:** the
   `residue_rich` corpus (in `GRAPH_FRAGMENT`, pinned by
   `formal/conformance/test_conformance_state.py::test_residue_rich_corpus_is_really_rich`)
   is the first with a multi-shape `stars`, a multi-subject `neg` and a `upos`
@@ -487,8 +505,12 @@ The bullet is corrected in place below.
   still **0** dropped by P2, and the compiled `bridged_in_shapes` /
   `bridged_out_shapes` sets are EMPTY on every one of the 23 — so the "P2 never
   fires" claim is now measured against the corpus set that actually exists, not an
-  older and smaller one. The P1/P6/P5/residue figures above remain the 2026-07-27
-  measurement over 21 corpora and are NOT re-measured here.
+  older and smaller one. ~~The P1/P6/P5/residue figures above remain the 2026-07-27
+  measurement over 21 corpora and are NOT re-measured here.~~ **All legs were
+  re-measured 2026-08-05 and put under the pin — see the superseded-notice above.
+  This sentence is why the pin exists: it correctly flagged the other legs as
+  un-re-measured, and they then stayed that way for a week because flagging is not
+  enforcing.**
 
 * **★ ADJUDICATED 2026-07-29 — derived-edge MULTIPLICITY diverges: the model's
   cascade enumeration re-adds an edge it already holds, Python dedupes by node
@@ -595,9 +617,42 @@ The bullet is corrected in place below.
   second, opposite untainted-arm divergence is recorded in
   `GraphIndex/RemoveOccCount.lean`'s header (the model's `rewriteClosure` does
   not dedupe where `RuleSet.apply` does, so on a reconvergent schema the model
-  over-counts); **no corpus exercises it today** — measured, all 153 untainted
+  over-counts); ~~**no corpus exercises it today**~~ — measured, all 153 untainted
   comparisons agree — and the new untainted compare is exactly the check that
   would catch it if one ever did.
+
+  **★ ADJUDICATED 2026-08-08 — that second divergence is MODEL-side, and the
+  disposition is to FIX THE MODEL (add a dedup to `rewriteClosure`), not to
+  narrow a projection again.** Measured end-to-end through the real `zcli` for the
+  first time: on `a := b or c ; b := d ; c := d ; d := [user]` with one write,
+  `alice -> doc:d1#a` is `lean=2 python=1`, and `diff_states` emits the
+  untainted-arm multiplicity line. **It is a UNIT divergence, not a retirement
+  bug** — both sides retire correctly in a five-sequence add/remove battery, and
+  answer parity is clean. Python counts LIVE RAW TUPLES; the model counts
+  DERIVATION PATHS, which grows with schema shape (measured `1 → 2 → 4` for
+  zero/one/two chained diamonds, fuel-stable).
+  **Why model-side, decisively:** `GraphIndex/RemoveOccCount.lean`'s header
+  *asserts Python's unit* — "`List.count (a,b)` IS the model's
+  `direct_edge_count`" — and that sentence is FALSE on any reconvergent schema,
+  while the same file's attack bullet already says so. The file contradicts
+  itself and R3/R4's faithfulness claim rests on the wrong half (house rule 5).
+  Fixing Python is not an option: its `processed` worklist dedup is the
+  TERMINATION mechanism (`a: [user] or b ; b: a` compiles — only *derived* cycles
+  raise — and would loop forever without it).
+  **Why not the 2026-07-29 narrow-the-projection move that worked for the derived
+  arm:** that was right *because* no honest edit made the derived arm green. Here
+  `.dedup` matches Python element-for-element (verified on three schemas), and the
+  count stack is **list-generic** (`count_removeLoggedRules` opens with
+  `generalize rewriteClosure S t = us`), so `untOccCount`/R3/R4 need no proof
+  rework. Narrowing again would also force the extractor to compute a
+  path-weighted expectation — i.e. re-implement `rewriteClosure` in Python,
+  destroying the harness's independence.
+  **Sizing:** ~17 declarations — 15 mechanical `unfold rewriteClosure` sites via
+  one `mem_rewriteClosure_iff` bridge, 2 list-equality sites; one session.
+  ⚠ `List.dedup` keeps the LAST occurrence, so write order shifts; measured
+  topological on the probes but not proved — first-occurrence dedup is the
+  fallback. Full adjudication + corpus design + predicted red:
+  `history/leaf-family-split-scope-2026-08-05.md` §10.5.
 
   *[Filed 2026-07-28, retained verbatim below.]*
   Found by the E-chain Leg-0 attack sweep (`history/PROOF_STATUS.md` 2026-07-28,

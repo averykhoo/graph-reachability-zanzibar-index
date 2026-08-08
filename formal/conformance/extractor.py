@@ -206,6 +206,104 @@ def derived_relations(schema_text: str) -> frozenset:
 # Python side
 # --------------------------------------------------------------------------- #
 
+def _edge_projection(nodes: dict, e) -> str | None:
+    """Which projection drops this raw `EdgeV4` row — `"P1"`/`"P2"`/`"P6"` — or
+    `None` if the row survives to be compared.
+
+    **THE single implementation of the edge-side projection cascade.** Both
+    `extract_sql_state` (which keeps the survivors) and `projection_ledger`
+    (which counts the drops) route through it, so a published drop count cannot
+    describe a different filter than the gate actually applies. That is not a
+    stylistic preference: the count is only worth publishing if breaking the
+    filter breaks the count, and two implementations would drift into exactly
+    the "reports a number nobody checks" shape this pin exists to kill.
+
+    Order is load-bearing and matches the historical cascade: P1 is decided
+    before the node lookup, so a closure-only row is dropped without touching
+    `nodes` (preserved from the pre-2026-08-05 inline form, which never looked
+    up endpoints for a P1 row).
+    """
+    if e.direct_edge_count <= 0:
+        return "P1"                                     # closure-only row
+    subj, obj = nodes[e.subject_id], nodes[e.object_id]
+    if obj[3] == "any" or subj[3] == "all":
+        return "P2"                                     # bridge edge
+    if "." in obj[2] and obj[2] != "...":
+        return "P6"                                     # leaf-family copy
+    return None
+
+
+def projection_ledger(session, store_id: str) -> dict[str, int]:
+    """Count, for ONE store, how many raw rows each projection drops.
+
+    Returns `raw` / `P1` / `P2` / `P6` / `compared` (edges, and `P1+P2+P6+
+    compared == raw` by construction) plus `nodes` (raw `NodeV4` rows, all of
+    which P5 drops) and `residues` (rows kept — residues are keyed on the public
+    relation, so no edge projection touches them).
+
+    WHY THIS IS A FUNCTION AND NOT A COMMENT. These figures were prose for two
+    years, restated in three places, and every copy went stale: the 2026-07-27
+    measurement (21 corpora, 447 raw, 62 by P6, 154 compared) was still being
+    quoted on 2026-08-05 against a 23-corpus set whose real figures are 477 raw,
+    73 by P6, 171 compared. The recipe to re-derive them lived only in a
+    docstring as an English description of a `python -c` invocation. It is now
+    executable, aggregated by `graph_fragment_ledger`, and pinned by
+    `doc_counts.py` — `ZT-P3-5`'s "a quoted count is not just stale, it is
+    unenforced" applied to the one number that measures the gate's own blindness.
+    """
+    from index_v4.models import EdgeV4, NodeV4, ResidueV1
+
+    nodes: dict[int, NodeKey] = {
+        n.id: (n.type, n.name, n.predicate, n.wildcard)
+        for n in session.exec(
+            select(NodeV4).where(NodeV4.store_id == store_id)).all()
+    }
+    out = {"raw": 0, "P1": 0, "P2": 0, "P6": 0, "compared": 0,
+           "nodes": len(nodes), "residues": 0}
+    for e in session.exec(
+            select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
+        out["raw"] += 1
+        reason = _edge_projection(nodes, e)
+        out[reason if reason is not None else "compared"] += 1
+    out["residues"] = len(session.exec(
+        select(ResidueV1).where(ResidueV1.store_id == store_id)).all())
+
+    if out["P1"] + out["P2"] + out["P6"] + out["compared"] != out["raw"]:
+        raise AssertionError(                           # cannot happen; pinned anyway
+            f"projection_ledger: drops+compared != raw for {store_id}: {out}")
+    return out
+
+
+def graph_fragment_ledger() -> dict[str, int]:
+    """`projection_ledger` summed over every in-fragment corpus, freshly driven.
+
+    This is the executable form of the recipe `test_conformance_state.py` used to
+    describe in English ("drive `graphindex_drive` over `sorted(GRAPH_FRAGMENT)`
+    and apply `extract_sql_state`'s own filters"). Deterministic — the corpora are
+    fixed and the drive is add-only — which is what lets `doc_counts --check`
+    compare it by exact string equality.
+
+    Costs ~4-5 s (23 corpora, real graph-index writes with paranoia mode ON).
+    """
+    from formal.conformance.backends import graphindex_drive
+    from formal.conformance.corpus import GRAPH_FRAGMENT, SCHEMAS
+
+    total = {"corpora": 0, "raw": 0, "P1": 0, "P2": 0, "P6": 0,
+             "compared": 0, "nodes": 0, "residues": 0}
+    for name in sorted(GRAPH_FRAGMENT):
+        schema_text, tuples, object_wildcards = SCHEMAS[name]
+        session, _widx, store_id = graphindex_drive(
+            schema_text, tuples, object_wildcards)
+        try:
+            one = projection_ledger(session, store_id)
+        finally:
+            session.close()
+        total["corpora"] += 1
+        for k, v in one.items():
+            total[k] += v
+    return total
+
+
 def extract_sql_state(session, store_id: str) -> dict:
     """Read the canonical state off the SQL tables (projections P1–P2, P5–P7;
     P3 is applied by `diff_states`, which needs the schema's taint set).
@@ -227,13 +325,12 @@ def extract_sql_state(session, store_id: str) -> dict:
     derived_flag: dict[tuple, bool] = {}
     for e in session.exec(
             select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
-        if e.direct_edge_count <= 0:
-            continue                                    # P1: closure-only row
+        # P1 (closure-only) / P2 (bridge) / P6 (leaf-family copy). The cascade
+        # lives in `_edge_projection` so `projection_ledger` counts exactly the
+        # rows this drops — see that function's docstring.
+        if _edge_projection(nodes, e) is not None:
+            continue
         subj, obj = nodes[e.subject_id], nodes[e.object_id]
-        if obj[3] == "any" or subj[3] == "all":
-            continue                                    # P2: bridge edge
-        if "." in obj[2] and obj[2] != "...":
-            continue                                    # P6: leaf-family copy
         edges.add((subj, obj))
         # P3: multiplicity is KEPT here and compared exactly on the untainted
         # arm; `diff_states` applies the derived-arm drop.
@@ -331,10 +428,36 @@ def _classify_edges(py: dict, tainted: frozenset) -> dict:
 
     The two must agree: I5 makes the delta processor the only writer of incoming
     direct edges on derived-public families, and users' raw writes are routed onto
-    `<rel>.<n>` leaf families which P6 already dropped. A disagreement means either
-    the taint computation or the `derived` flag is wrong, and either way the P3
-    exemption boundary is not where this module claims it is — so it raises rather
-    than silently exempting the wrong set.
+    `<rel>.<n>` leaf families. A disagreement means either the taint computation
+    or the `derived` flag is wrong, and either way the P3 exemption boundary is
+    not where this module claims it is — so it raises rather than silently
+    exempting the wrong set.
+
+    **⚠ Corrected 2026-08-08.** This paragraph used to end the leaf-family clause
+    with "**which P6 already dropped**", i.e. it justified the agreement by saying
+    leaf rows never reach this function. That was load-bearing-sounding and FALSE
+    as an explanation, and it would have become actively misleading the moment P6
+    retires (`formal/history/leaf-family-split-scope-2026-08-05.md` §6/§7 step 2).
+    The agreement does not depend on P6 at all; it is STRUCTURAL, on both sides:
+
+      * a leaf family is registered in `RuleSet.compiled.leaf_families`, NOT in
+        `schema_info.derived_families`, and `WildcardIndex._derived_write_ctx`
+        (`index_v4/wildcard.py`) gates the `derived` stamp on `derived_families`
+        membership under `processor_writes` — so a leaf row is `derived=False`
+        structurally, and would be even if the processor wrote it; and
+      * `derived_relations` -> `compute_taint(parse_schema_ast(...))` ranges over
+        DECLARED relations, where `.` is reserved
+        (`zanzibar_utils_v1.py::validate_write_identifiers` and the parser's
+        relation-name check) — so a dotted pair can never enter the taint set.
+
+    Both predicates are therefore False on every leaf row, and cannot disagree.
+    Measured 2026-08-08 with the P6 branch removed: 23/23 corpora classify with
+    **0 raises**, all 73 newly-surviving leaf keys landing in the untainted arm.
+    That measurement also refuted the scope doc's "it raises on disagreement —
+    settle this before deleting the filter" as a hazard for THIS class of row.
+    Per the house preference for a mechanical refusal over a doc paragraph, the
+    structural claim is pinned by
+    `test_conformance_state.py::test_leaf_rows_are_structurally_untainted`.
     """
     derived, untainted, bad = set(), set(), []
     for key in py["edge_counts"]:

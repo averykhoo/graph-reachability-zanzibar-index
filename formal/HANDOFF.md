@@ -44,8 +44,23 @@ Direct-arm store fails it — so T2a **remains vacuous exactly where T2b no long
 That is not a proof gap: Leg-0 probe D.3 machine-checked `Inv.negEdgeFree` FALSE on the
 `_d` fragment. **Python is fine** (`RuleSet.apply` routes the write onto the leaf family,
 so the edge and the `neg` row live on different nodes — 0 mismatches on the real backends);
-it is a modelling limit of the P6 leaf-family collapse. A **design decision** is owed
-before any leg-7 work — see `W4NarrowT2a`'s docstring for the three options.
+it is a modelling limit of the P6 leaf-family collapse.
+
+**★ The design decision that was owed here is now MADE (2026-08-05): option (c) — model
+the leaf-family split and retire P6 — and the work is DEFERRED, not scheduled.** (a)
+"restate at drained states only" and (b) "weaken `negEdgeFree`" both shrink
+the claim; (c) is the only one that raises assurance. The decisive finding: **nothing
+consumes `Inv`** — it is a hypothesis in exactly four places (`State.lean:813`, `:854`,
+`Write.lean:150`, `RulesWrite.lean:181`), all `Inv → Inv` preservation steps, and
+`EdgeHygienic` is consumed nowhere — so weakening `negEdgeFree` could not turn anything
+red, which is precisely the house failure mode (rule 7). There is also precedent pointing
+away from (b): when `negEdgeFree` was found FALSE over plain `ReachedByW3d` on 2026-07-11j
+(`CascadeInv.lean:14-27`), the answer was to scope the theorem to the coverage chain, not
+to weaken the invariant.
+**Scope, blast radius (55–65% of the tree; `Spec/`/`SetEngine/` entirely spared) and a
+step ordering:**
+[`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
+**Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
 ---
 
@@ -288,8 +303,10 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > leaf-family collapse, NOT a Python bug** — verified on the real backends: `RuleSet.apply` routes
 > the write onto the leaf family (`#approver.0`, never `#approver`), I6 disjointness intact, 0
 > mismatches. T2b is unaffected (the drained state repairs it). A DESIGN DECISION is owed before
-> any T2a work: (a) restate T2a at drained states only, (b) weaken `negEdgeFree`/`uposEdgeFree`,
-> or (c) model the leaf-family split.
+> any T2a work: (a) restate T2a at drained states only, (b) weaken `negEdgeFree`,
+> or (c) model the leaf-family split. [⚠ (b) as WRITTEN in 2026-07-28 said
+> `negEdgeFree`/`uposEdgeFree`; the pairing was refuted by measurement 2026-08-08 —
+> `uposEdgeFree` is structurally immune on the `_d` fragment.]
 > **(2) `enum2BaseD` must dedupe** — `enumJob2D` is not a conservative widening; edge multiplicity
 > goes `n ↦ 2n+1` per leg. En route this surfaced a **pre-existing, previously undocumented
 > model↔Python divergence**: the BASELINE enumeration already doubles derived-edge multiplicity per

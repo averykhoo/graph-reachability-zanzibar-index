@@ -8,6 +8,255 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-08 (**LEG 7 PRE-WORK: the attack-first probe is DONE (NO-KILL), step 2 is DISCHARGED, and THREE documents were refuted by measurement. No Lean declaration changed — one docstring, one new conformance pin.**)
+
+**Task taken:** leg 7 (`leaf-family-split-scope-2026-08-05.md`) is decided-but-deferred, so
+this session did the parts its §7 orders BEFORE any restructuring — the house-rule-2 attack
+probe, and step 2's paper adjudication — plus the open `self_flag` question from the root
+board's item (B2). Everything landed is additive or corrective; the 55–65% leg itself is
+**still not started**, and §5's sizing survives.
+
+**1. The attack-first probe: NO-KILL.** `Inv.negEdgeFree` HOLDS on the `_d` fragment once
+writes are leaf-routed, so the leg is not dead cheap. The probe carried its positive control
+in the same run — the bare-routed leg reproduced D.3's `negFree := false` while the leaf leg
+gave `true`, with `negTested := 1` on BOTH, so the comparison provably ran. ★ **The
+instrument's first version was wrong and vacuously green**: it enumerated the residue key
+domain from `σ.nodes`, and under leaf routing the bare R-node is never a live node, so the
+row fell out of the domain and the leaf leg reported `rows = 0` — the routing change itself
+emptied the domain. Caught only by the non-vacuity counts, exactly as in the 2026-07-28 leg-0
+sweep. Fixed with a routing-INDEPENDENT domain; a second control (adding a hypothetical
+`approver.0 → approver` bridge) turns it red, proving reachability- rather than
+key-equality-sensitivity. Scratch deleted, `lake build` green (1084 jobs). §9.1 of the scope doc.
+
+**2. ★★ THE WITNESS TRAP — the most consequential finding.** Every pointer in the tree aims
+leg 7's non-vacuity witness at `Sd`/`Td`. **`negEdgeFree` is already VACUOUSLY TRUE there**:
+at that pair exactly there is no residue row at all (`some none`), `negTested := 0` on every
+leg. Structural, not incidental — `Inv.negStarCovered` forces `neg ⊆ star-covered` and `Sd`
+carries no wildcard, so `stars = [] ⇒ neg = []`. That is why D.3 used its own 3-relation
+schema. **A leg-7 step proving `negEdgeFree` and instantiating it at `Sd`/`Td` would be green,
+audit-clean, statement-pin-clean, definition-pin-clean and prove NOTHING** — the §C.5
+half-done-leg failure mode with a new face, invisible to every mechanical check. The witness
+must use D.3's wildcard-carrying schema; §9.3 records the exact pair.
+
+**3. `uposEdgeFree` was never at risk — four documents refuted.** Option (b) has read
+"weaken `negEdgeFree`/`uposEdgeFree`" since 2026-07-28 and the pairing is WRONG.
+`uposEdgeFree` is structurally immune on the `_d` fragment: `StoreValidRulesD` forces
+`t.subject.predicate = BARE` on a derived write while `uposCands` keeps only non-bare
+subjects, so `res.upos` can never hold a subject a raw derived write gives an edge from.
+Measured `uposTested = 0` in every in-fragment scenario; mechanism confirmed by deliberately
+leaving the fragment (`uposTested = 1..2`, `uposFree := false` at a store `StoreValidRulesD`
+rejects). **Leg 7's `Inv`-side obligation is ONE clause, not two.** Corrected in
+`FullScope.lean`'s `W4NarrowT2a` docstring, `ARCHITECTURE.md`, `FINAL_REVIEW.md`, both
+HANDOFFs; flagged in place (not rewritten) in the plan, which is provenance — its **fourth**
+refuted cell.
+
+**4. Step 2 (`_classify_edges`) DISCHARGED, and §6 row 1 partly refuted.** Measured over 23
+corpora with P6 removed in a throwaway copy: **0 raises**, all 73 leaf keys landing in the
+untainted arm (untainted 153 → 226, derived unchanged at 18, total 244 as predicted). The
+cell's stated blocker — "it also raises on disagreement, settle this before deleting the
+filter" — is refuted as a hazard; both predicates are structurally False on leaf rows and
+cannot disagree. The one genuine defect was the docstring's "*leaf families which P6 already
+dropped*", which justified the agreement by a mechanism that has nothing to do with it.
+Replaced by the structural argument and converted into a refusal:
+**`test_conformance_state.py::test_leaf_rows_are_structurally_untainted`**, stated over RAW
+`EdgeV4` rows upstream of `_edge_projection` so it keeps testing the same property after P6
+retires. Also corrected: the class is **75** leaf-target rows, not 73 (2 are P1-dropped).
+★ **Sabotage, and the first one FAILED to discriminate** — the obvious edit (merge
+`leaf_families` into `_derived_write_ctx`) leaves the test GREEN, because the
+`processor_writes` conjunct short-circuits and leaf rows are written by USER-routed writes.
+What does discriminate is the taint side (`derived_relations` emitting leaf families →
+`75 leaf pair(s) entered the schema taint set`). And forcing the derived stamp on leaf writes
+never reaches this file's assertions at all — paranoia mode kills the drive first with
+`[pre-commit] I5: derived flag on a non-derived-direct edge row`, so assertion 1 is defended
+in DEPTH by I5 and this test is a second line, not the only one. All recorded in the
+docstring as measured, including the dead sabotage. Instrument controlled: inverting the
+selector leaves both properties passing vacuously and only the floor red.
+
+**5. ★ A NEW OBLIGATION ordered before step 3, and §8.3 settled YES.** The largest ripple of
+retiring P6 is not either hazard §6 row 1 names. The 73 leaf edges come from the
+**rule-rewrite** path — exactly where `CORRESPONDENCE.md` §7.2 item 6 records the model's
+`rewriteClosure` failing to dedupe where `RuleSet.apply` does, filed as "*no corpus exercises
+it today*". Measured end-to-end through the real `zcli` for the first time:
+`a := b or c ; b := d ; c := d` gives `alice -> d1#a  lean=2 python=1`, a live untainted-arm
+divergence. Today the boolean case is masked by the derived-arm exemption; **after the fork
+it lands on `viewer.0`, untainted arm, compared exactly.** No in-fragment corpus is
+reconvergent today (the only non-unit untainted multiplicity is `nary_union`'s 3, where Lean
+agrees), so nothing is red — but a reconvergent corpus must be added, and §7.2 item 6
+settled, BEFORE step 3, so that any later red is attributable to the leg rather than to this.
+
+**6. `self_flag` (root board item B2) — adjudicated HOLDS, and the board's premise was
+wrong.** All ten `W4Fragment` fields, all eight `GraphAdmission` fields, and both
+`W4NarrowT2a` fields hold at its schema/store. The expired justification ("Direct arms under
+a boolean — genuine storage leaves") was not merely stale but **factually wrong when
+written**: `usable: activated but not deprecated` has NO Direct arm inside the derived def —
+machine-extracted, the AST is `.excl (.computed …) (.computed …)`, i.e. `ComputedOnly`, and
+Python gives it two `PClosureLeaf(storage=False)`. So it was inside `W4Fragment` before leg 5
+too and leg 5 was never load-bearing for it. The two fields the board flagged are orthogonal
+to self-referentiality: `BareStarStore` constrains subject NAME vs `STAR`, `NoStoreSubjectR`
+constrains subject PREDICATE, while self-referentiality is a subject-ENTITY↔object-entity
+property. Corroborated: 0 answer mismatches on a 78-query grid, `zcli` graph mode rc 0 and
+landed drained, `diff_states` → `None`. **Not yet machine-checked** — the witness
+(`W4WitnessSelfRef`) is designed but unwritten, and per ZT-P3-3 the argument is prose until
+it exists, so the corpus stays spec-side. ⚠ Recorded caveat: promotion buys less than it
+looks — the node-level GC behaviour the corpus exists for is dropped entirely by P5
+(9 node rows, 0 crossing the seam).
+
+**7. ★★ §7.2 item 6 ADJUDICATED — and it produced the next session's task.** The §10.3
+obligation was worked the same day. **Verdict: MODEL-side; disposition (a), add a dedup to
+`rewriteClosure`; sized at ONE session.** It is a **unit** divergence, not a retirement bug —
+both sides retire correctly across a five-sequence battery and answer parity is clean (0
+mismatches over 56 and 108 queries). Python counts LIVE RAW TUPLES; the model counts
+DERIVATION PATHS, measured `1 → 2 → 4` for zero/one/two chained diamonds and fuel-stable, so
+the model's ref count grows with SCHEMA SHAPE. The decisive argument is house rule 5:
+`RemoveOccCount.lean`'s header **asserts Python's unit** ("`List.count (a,b)` IS the model's
+`direct_edge_count`") and that sentence is FALSE on any reconvergent schema, while the same
+file's attack bullet already says so — **the file contradicts itself and R3/R4's faithfulness
+claim rests on the wrong half.** Fixing Python is unavailable: its `processed` dedup is the
+TERMINATION mechanism (`a: [user] or b ; b: a` compiles, only *derived* cycles raise, and it
+loops forever without it). Narrowing the projection a second time was rejected because
+`.dedup` matches Python element-for-element and would also force the extractor to
+re-implement `rewriteClosure` in Python, destroying harness independence.
+**Cheap because the count stack is LIST-GENERIC** (`count_removeLoggedRules` opens
+`generalize rewriteClosure S t = us`; `count_foldl_writeDirect` is `∀ us`), so
+`untOccCount`/R3/R4 need zero proof rework — 15 mechanical `unfold` sites via one
+`mem_rewriteClosure_iff`, plus 2 list-equality sites. ⚠ Unverified risk: `List.dedup` keeps
+the LAST occurrence so write order shifts (topological on the probes by luck, not theorem).
+⚠ Order: corpus FIRST (red, attributable), then the fix. Detail: scope doc §10.5,
+`CORRESPONDENCE.md` §7.2.
+
+**Gate: ALL TEN PHASES GREEN.** `lean` PASSED (481 audits, 38/38 statements, 154/154
+definitions, 411/411 `CORRESPONDENCE.md` anchors — re-run AFTER the §7.2 adjudication was
+written, so the anchor pin covers it); `conf-tile:1..5/5` PASSED (94/94/94/93/93 = **468**);
+`tests-tile:1..4/4` PASSED (191/191/191/190 = **763**). Both totals match the regenerated
+counts block. The new test moved that block (conf 467 → 468, repo 1230 → 1231) and it was
+regenerated deliberately — **the pin fired first and named the exact rows**, which is the
+step-4e behaviour that had never previously caught a live drift twice running.
+No fuzz sweep was owed: no algorithm changed (one docstring, one new test, docs).
+**Nothing is committed.**
+
+---
+
+## Session 2026-08-05e (**LEG 7 DECIDED, NOT STARTED — T2a takes option (c): model the leaf-family split, retire P6. Deferred. No Lean declaration changed; docstrings and docs only.**)
+
+**Task taken:** the design decision `W4NarrowT2a`'s docstring and both HANDOFF files said
+was owed before any leg-7 work could be scheduled. **Outcome: decision made by the user —
+option (c) — and the work explicitly DEFERRED** (budget, not doubt). Deliverable is a
+scoping document, not a proof increment:
+[`leaf-family-split-scope-2026-08-05.md`](leaf-family-split-scope-2026-08-05.md).
+
+**Why (c), stated as the finding rather than the preference.** The tempting option was (b),
+weaken `negEdgeFree`/`uposEdgeFree`. Two things killed it:
+* **★ Nothing consumes `Inv`.** It is a hypothesis in exactly four places — `State.lean:813`
+  (`Inv.toStruct`), `:854` (`inv_putResidue`), `Write.lean:150` (`inv_writeDirect`),
+  `RulesWrite.lean:181` (`inv_writeRules`) — every one an `Inv → Inv` preservation step;
+  `EdgeHygienic` (`CascadeInv.lean:445`) is produced at four sites and consumed as a
+  hypothesis at none. T2b and the read path do not lean on either. So weakening the clause
+  **could not turn any proof red**: the gate stays green while the theorem says less, and
+  only the definition pin moves — which the leg would be moving deliberately anyway. That
+  is house rule 7's failure mode exactly, arrived at from the consumer graph rather than
+  from taste.
+* **Precedent, and it points at (a) not (b).** 2026-07-11j found `negEdgeFree` FALSE over
+  plain `ReachedByW3d` (`CascadeInv.lean:14-27`). The answer then was to scope the theorem
+  to the coverage chain — `reachedByW3dC_inv` — not to weaken the invariant.
+
+**Two scoping findings that make (c) cheaper than the raw line count suggests:**
+* **The distinctness linchpin already exists.** `Core/Schema.lean:64` `relNameOK :=
+  ¬ name.contains '.'` (lifted by `WF.relNames` `:71`) makes a leaf node `⟨t,n,"R.i",plain⟩`
+  provably distinct from every bare R-node — no new sentinel axiom alongside `STAR`/`BARE`,
+  mirroring Python's own reservation (`zanzibar_utils_v1.py:869-875`). **The rule it imposes:
+  leaf preds must stay OUT of `S.defs`**, else `relNameOK`/`WF` must be restated and
+  `DirectCorrect.lean:73-86`, `ReconcileCorrect.lean:1165`, `RulesChain.lean:224` break.
+  Corollary: encode the index in `NodeKey.pred`, do **not** add a 5th `NodeKey` field
+  (~825 `objNode ⟨…⟩` literals would need rewriting).
+* **The routing signal is already threaded.** `Delta.leaf` landed 2026-07-20c for exactly
+  this distinction and its docstring already names the collapse (`State.lean:80-90`). The
+  leg turns an existing bookkeeping tag into an addressing one; `GraphState.writeDirect`
+  (`Write.lean:77-82`) is the single fork point.
+
+**Blast radius:** 55–65% of the tree touched, 15–20% of declarations needing real proof
+rework; deepest change is the reach-collapse family under `CascadeStrataSettle`/
+`Resettle.lean` (7,185 lines, 142 decls). **`Spec/`, `SetEngine/`, `Equiv.lean`,
+`Closure.lean` are entirely spared** — the leaf split is a storage decision `sem` is
+invariant under, so the leg cannot perturb the trust root.
+
+**★ One defect found and recorded, independent of whether the leg ever runs.** The P6
+figure quoted everywhere ("62 of 447 raw `EdgeV4` rows") is the **2026-07-27 measurement
+over 21 corpora**; the in-fragment set is now **23**, only P2 was re-measured on 2026-07-29
+(477 raw, 171 compared), so **P6's current drop count is unmeasured and +13 raw rows are
+unattributed between P1 and P6**. There is no re-measure script — the recipe is prose only
+(`test_conformance_state.py:43-45`). Suggested step 0: add it to `doc_counts.py::measure()`,
+whose docstring already calls that "the intended way to bring another number under the pin".
+
+**One question left open, and it gates further sizing** (scope doc §8.1): whether
+`probeDerived` keeps reading at the bare R-node with leaf probes under `checkFn` (what
+Python does) or the derived read is restructured — because `evalE`'s `direct`/`ttu` leaves
+are currently *outside* the modeled fragment (`ReconcileWrite.lean:56-59`), so storage
+leaves may need `evalE` widened first, as a prerequisite leg.
+
+**★ SAME SESSION, SECOND HALF — the two follow-ups were then EXECUTED (not deferred).**
+
+**(1) The P6 ledger is now generated and pinned.** `extractor.py::projection_ledger` +
+`::graph_fragment_ledger` drive all 23 in-fragment corpora and count drops per projection;
+`doc_counts.py::measure()` publishes them into `FINAL_REVIEW.md`'s block; `verify.sh` step
+4e checks them (+~5 s). **`extract_sql_state` and the ledger share ONE predicate**
+(`extractor._edge_projection`) — deliberately, because a count is only worth publishing if
+breaking the filter breaks the count, and two implementations would drift into the exact
+"reports a number nobody checks" shape the pin exists to kill.
+**Live baseline (23 corpora): 477 raw → 233 P1 / 0 P2 / 73 P6 / 171 compared; 266 `NodeV4`;
+13 residue rows over 6 corpora.** Two independent implementations (a subagent's throwaway
+replication and the landed function) agreed exactly. Drift from the figures quoted since
+2026-07-27: 447→477, 231→233, **62→73**, 154→171, 235→266, 11-over-5→13-over-6 — only the
+P2 zero survived. The old `CORRESPONDENCE.md` sentence "the P1/P6/P5/residue figures above
+… are NOT re-measured here" was *correct* and they still rotted for a week: **flagging is
+not enforcing**, which is the whole `ZT-P3-5` lesson restated.
+
+**★ SABOTAGE, per `docs/sabotage-procedure.md` — two levels, and the narrow one found
+something.** Literal observed output, both recorded in
+`test_projection_ledger_is_not_vacuous`'s docstring:
+* **BROAD (delete the P6 branch — i.e. what "retire P6" will look like): RED.**
+  `doc_counts --check` exit 1 with `doc: **73** / tree: **0**` and
+  `doc: **171** / tree: **244**`; the new test fails its `P6 > 0` assertion. Verified
+  literally, not predicted.
+* **NARROW (drop P6's `and obj[2] != "..."` guard): GREEN, ledger byte-identical.** Cause
+  measured rather than assumed: of the 244 rows surviving P1, 73 have a dotted object
+  predicate and **ZERO** have object predicate `"..."` — `"..."` is the bare SUBJECT
+  sentinel, object nodes carry relation names. **The guard is dead code on this corpus
+  set.** That is a corpus coverage gap, not a hole in the pin, and it is now permanently
+  recorded by `test_p6_bare_sentinel_guard_is_unexercised`, which fails if a future corpus
+  ever makes the clause load-bearing. Controlling the instrument is what surfaced it.
+
+**(2) The "widen `evalE`'s arms first" prerequisite DOES NOT EXIST.** It was filed off
+`ReconcileWrite.lean`'s `checkFn` docstring ("the store `T`/query are threaded only for
+`evalE`'s `direct`/`ttu` leaves, **which do not occur on the fragment**") — a sentence
+**leg 5 made false the same day it was filed**. `ComputedOrDirect` admits `.direct`, the
+read-half lemmas exist, and `CascadeStrataSettle.lean`'s `checkFnR_cons_irrel_cd` exists
+*precisely because* `checkFnR_store_irrel` is FALSE for CD defs. `ttu` is not implicated at
+all (Python-verified: `PDerivedTTU`/`PDerivedComputed` consume no leaf index). Decisive
+structural fact: `Rec` does not require a *declared* relation, so
+`evalE … (.computed "approver.0")` is already well-formed and already means "probe the leaf
+node" — no new `Expr` constructor, no arm widening; and nothing in the derived READ path
+(`check` → `probeDerived`/`probeNonDerived`) touches `evalE` at all. The docstring is
+corrected in place.
+**What the concern was really pointing at, kept as step 4b:** the **leaf-probe ↔
+`directLeaf` bridge**. The spec still evaluates the raw def, so once `checkFn` reads a leaf
+node the two sides need reconnecting — W1's pure-direct correspondence transplanted onto a
+synthetic, undeclared key. ⚠ Inference, not a built result: `checkFn_eq_semStep{,_cd}`
+cannot be reused, because their `hag` premise is false whenever a leaf holds an edge
+(`S.lookup (dt,"R.0") = none ⇒ false`).
+
+**Also corrected, having been measured:** `verify.sh` step 4e's comment and
+`gate-runbook.md` (two sites) claimed **"~4 s"**; measured warm it was **24-28 s** before
+this change (17 pytest `--collect-only` subprocesses) and is **~30 s** after. A stale
+hand-maintained number inside the gate documentation of the step whose entire purpose is
+killing stale hand-maintained numbers — noted in situ rather than quietly fixed.
+
+**Gate:** `verify.sh lean` re-run after the `W4NarrowT2a` docstring edit. Docstrings are
+**not** pinned — `statement_pin.py:219 strip_comments` removes `/- -/` blocks and `/-- -/`
+is one — so no golden regen was owed, and none was done. `Audit.lean:1649-1650`'s prose
+still describes the P6 limit and is still true; it becomes false only when the leg lands.
+
+---
+
 ## Session 2026-08-05d (**E-chain Direct-arm widening, LEG 6 — THE PAYOFF. `direct_arm_exclusion` is THEOREM-BACKED; the vacuity caveat comes out of the docs.** Audits 477 → **481**; statements 34 → **38**; `_EXPECTED_SPLIT` (22,1) → **(23,0)**)
 
 **Task taken:** leg 6 of `history/echain-widening-plan-2026-07-28.md` §C, landed in the

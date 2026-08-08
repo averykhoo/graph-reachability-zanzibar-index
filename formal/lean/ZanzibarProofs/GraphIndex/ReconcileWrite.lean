@@ -55,8 +55,18 @@ end GraphModel
     `index_v4/processor.py::DeltaProcessor._reconcile`'s per-subject boolean
     evaluation on the W3a fragment (its step-(2) `plan.check_fn(ctx, (n.predicate,
     n.type, n.name))` calls). The store `T`/query are threaded only for `evalE`'s
-    `direct`/`ttu`
-    leaves, which do not occur on the fragment. -/
+    `direct`/`ttu` leaves.
+
+    **⚠ Corrected 2026-08-05 — this used to end "which do not occur on the fragment",
+    and E-chain leg 5 made that FALSE.** It is still true on the `ComputedOnly` chains
+    (the `_e` family, `W4NarrowT2a`); it is false on the `_d`/E-chain fragment, where
+    `ComputedOrDirect` (`ReconcileCorrect.lean::ComputedOrDirect`) admits `.direct` and
+    the store is genuinely read — see `CascadeStrataSettle.lean`'s
+    `checkFnR_cons_irrel_cd`, which exists precisely because `checkFnR_store_irrel` is
+    FALSE for CD defs. (`.ttu` leaves remain out of scope on derived defs under BOTH
+    predicates.) The stale sentence caused a spurious "widen `evalE` first" prerequisite
+    to be filed against the deferred leaf-family leg; it is not one — see
+    `formal/history/leaf-family-split-scope-2026-08-05.md` §8.1. -/
 def GraphState.checkFn (σ : GraphState) (T : Store) (s : SubjectRef)
     (dt on R : String) (e : Expr) : Bool :=
   evalE (GraphModel.graphRec σ s) s T ⟨s, R, ⟨dt, on⟩⟩ dt on R e

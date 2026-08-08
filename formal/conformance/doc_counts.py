@@ -118,7 +118,16 @@ def measure() -> dict:
     tooling = {k: v for k, v in per_file.items() if k in TOOLING_FILES}
     differential = {k: v for k, v in per_file.items() if k not in TOOLING_FILES}
 
+    # The state gate's own blindness, measured rather than asserted (~4-5 s: 23
+    # corpora driven through the real graph index). Added 2026-08-05 because this
+    # was the ONE number in the tree that quantifies what the differential gate
+    # does NOT compare, and it had rotted through two corpus additions while
+    # being quoted in three places. See `extractor.projection_ledger`.
+    from formal.conformance.extractor import graph_fragment_ledger
+    proj = graph_fragment_ledger()
+
     return {
+        "proj": proj,
         "conf_total": conf_total,
         "tests_total": tests_total,
         "repo_total": conf_total + tests_total,
@@ -179,6 +188,23 @@ number INTO it over restating it.
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **{m['graph_fragment']}** |
 | spec-scope corpora (four dicts) | **{m['spec_scope']}** = {m['schemas']} + {m['ttu_userset']} `TTU_USERSET` + {m['self_referential']} `SELF_REFERENTIAL` + {m['multi_stratum']} `MULTI_STRATUM` |
 | gate floors (`verify.sh`) | `MIN_CONF_ALL`={m['min_conf_all']} (={m['min_conf_heavy']}+{m['min_conf_rest']}), `MIN_TESTS_ALL`={m['min_tests_all']}, `EXPECTED_MIN_AUDITS`={m['expected_min_audits']} |
+
+**State-gate projection ledger — what the differential gate does NOT compare.**
+Driven fresh over all **{m['proj']['corpora']}** `GRAPH_FRAGMENT` corpora through the real graph
+index (`extractor.projection_ledger`). Read this as the honest width of the
+state-level claim: of the raw `EdgeV4` rows Python writes, only the `compared`
+row is checked against Lean. **Do not restate these numbers elsewhere** — three
+prose copies rotted through two corpus additions before this became generated.
+
+| edge projection | rows |
+|---|---|
+| raw `EdgeV4` rows | **{m['proj']['raw']}** |
+| dropped by P1 (closure-only) | **{m['proj']['P1']}** |
+| dropped by P2 (bridge) | **{m['proj']['P2']}** |
+| dropped by P6 (leaf-family copy) | **{m['proj']['P6']}** |
+| **compared against Lean** | **{m['proj']['compared']}** |
+| raw `NodeV4` rows (all dropped by P5) | **{m['proj']['nodes']}** |
+| residue rows kept | **{m['proj']['residues']}** |
 
 Per conformance file:
 

@@ -116,7 +116,7 @@ dev box (`lean` re-measured 2026-07-27):
 bash formal/verify.sh lean           # steps 1-4: lake build + hole scan + zcli + axiom audit
                                      #            + audit identity + statement + DEFINITION pins
                                      #            + CORRESPONDENCE.md anchor pin      (29 s warm)
-                                     #            + FINAL_REVIEW.md counts pin      (+4 s)
+                                     #            + FINAL_REVIEW.md counts pin     (+30 s)
 bash formal/verify.sh conf-tile:1/5  # step 5, tile 1 of 5 of formal/conformance/
 bash formal/verify.sh conf-tile:2/5  # step 5, tile 2 of 5
 bash formal/verify.sh conf-tile:3/5  # step 5, tile 3 of 5
@@ -281,8 +281,13 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
 - **4e COUNTS** — `python -m formal.conformance.doc_counts --check` regenerates
   `formal/FINAL_REVIEW.md`'s delimited counts block from the tree (two
   `--collect-only` runs, per-file collection, `Audit.lean`, the pin files,
-  `anchor_check`, `corpus.py`, and `verify.sh`'s own floors) and fails if the
-  document disagrees. ~4 s. **Why it exists:** `ZT-P3-5` — "every doc number is
+  `anchor_check`, `corpus.py`, `verify.sh`'s own floors, and — since 2026-08-05 —
+  the **state-gate projection ledger**, 23 in-fragment corpora driven through the
+  real graph index to count what each projection drops) and fails if the
+  document disagrees. **~30 s** measured warm (this line said "~4 s" until
+  2026-08-05 and had never been re-measured after the per-file table landed; ~24-28 s
+  of it is 17 pytest `--collect-only` subprocesses, ~5 s the ledger).
+  **Why it exists:** `ZT-P3-5` — "every doc number is
   stale and NOTHING gate-enforces any of them" — was hand-fixed on 2026-07-26,
   hand-fixed again on 2026-07-28, and was stale AGAIN on 2026-07-29, including
   `FINAL_REVIEW.md`'s own header stating two different values for the same
