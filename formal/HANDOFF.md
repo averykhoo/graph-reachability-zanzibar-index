@@ -62,6 +62,23 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**★ LANDED 2026-08-08 — THE `rewriteClosure` DEDUP LEG (`CORRESPONDENCE.md` §7.2 item 6,
+CLOSED).** The model's `rewriteClosure` did not deduplicate where `RuleSet.apply` does, so
+on a *reconvergent* schema it counted DERIVATION PATHS where Python counts LIVE RAW TUPLES
+(`lean=2 python=1`, growing `1 → 2 → 4` with the number of chained diamonds — with SCHEMA
+SHAPE, not store content). It is now `(rewriteClosureRaw S t).dedup`, per stored tuple,
+bridged by `mem_rewriteClosure_iff`. Two corpora (`reconvergent_diamond`,
+`reconvergent_derived`) landed FIRST in a deliberately-red commit so the divergence was
+attributable. The decisive argument was **house rule 5**: `RemoveOccCount.lean`'s header
+*asserted Python's unit* and was false on any reconvergent schema, while the same file's
+attack bullet said so — the file contradicted itself and R3/R4's faithfulness claim rested
+on the wrong half. Sizing held: the count stack is list-generic, so `untOccCount`/R3/R4
+needed **zero** proof rework. **★ Two things nobody predicted:** the over-count cost
+RUNTIME (a zcli remove-stream timeout that the fix resolves), and the sabotage exposed a
+LIMITATION rather than a confirmation — the new corpora do *not* catch the wrong (global)
+dedup, `nary_union` does; they guard opposite errors. Detail:
+`history/PROOF_STATUS.md` 2026-08-08b.
+
 ---
 
 ## House rules (non-negotiable, user-adjudicated)
