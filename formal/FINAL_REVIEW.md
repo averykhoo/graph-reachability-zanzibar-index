@@ -26,19 +26,36 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **465** |
+| `formal/conformance/` collected | **468** |
 | `tests/` collected | **763** |
-| whole-repo suite | **1228** |
-| differential conformance tests | **419** across **13** files |
+| whole-repo suite | **1231** |
+| differential conformance tests | **422** across **13** files |
 | gate-tooling conformance tests | **46** across **2** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **481** |
 | audit identity pin (`audited_theorems.txt`) | **481** |
 | headline definition pin | **154** rows (**147** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **410** (**275** Python + **135** Lean) |
+| `CORRESPONDENCE.md` anchors | **411** (**276** Python + **135** Lean) |
 | `corpus.SCHEMAS` | **24** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **23** |
 | spec-scope corpora (four dicts) | **33** = 24 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
 | gate floors (`verify.sh`) | `MIN_CONF_ALL`=465 (=96+369), `MIN_TESTS_ALL`=763, `EXPECTED_MIN_AUDITS`=460 |
+
+**State-gate projection ledger — what the differential gate does NOT compare.**
+Driven fresh over all **23** `GRAPH_FRAGMENT` corpora through the real graph
+index (`extractor.projection_ledger`). Read this as the honest width of the
+state-level claim: of the raw `EdgeV4` rows Python writes, only the `compared`
+row is checked against Lean. **Do not restate these numbers elsewhere** — three
+prose copies rotted through two corpus additions before this became generated.
+
+| edge projection | rows |
+|---|---|
+| raw `EdgeV4` rows | **477** |
+| dropped by P1 (closure-only) | **233** |
+| dropped by P2 (bridge) | **0** |
+| dropped by P6 (leaf-family copy) | **73** |
+| **compared against Lean** | **171** |
+| raw `NodeV4` rows (all dropped by P5) | **266** |
+| residue rows kept | **13** |
 
 Per conformance file:
 
@@ -46,7 +63,7 @@ Per conformance file:
 |---|---|---|
 | `test_conformance_spec.py` | 99 | differential |
 | `test_conformance_remove.py` | 96 | differential |
-| `test_conformance_state.py` | 48 | differential |
+| `test_conformance_state.py` | 51 | differential |
 | `test_conformance_graph.py` | 47 | differential |
 | `test_conformance_generated.py` | 40 | differential |
 | `test_sorry_scan.py` | 39 | tooling |
@@ -264,8 +281,12 @@ onto the leaf family, so the edge lands on `#approver.0`/`#approver.2` and never
 mismatches over the grid and a 6-way order sweep. It is a modelling limit of
 projection **P6** (the leaf-family collapse), and a **design decision** is owed
 before any further work - (a) restate T2a at drained states only, (b) weaken
-`negEdgeFree`/`uposEdgeFree` to exempt the current un-cascaded write leg, or (c)
-model the leaf-family split. The plan (SS F) predicted this asymmetry as the arc's
+`negEdgeFree` to exempt the current un-cascaded write leg, or (c)
+model the leaf-family split. ((b) used to name `uposEdgeFree` too; that pairing was
+refuted by measurement 2026-08-08 - `uposEdgeFree` is structurally immune on the
+`_d` fragment, so the Inv-side obligation is ONE clause. See
+`history/leaf-family-split-scope-2026-08-05.md` SS 9.2.)
+The plan (SS F) predicted this asymmetry as the arc's
 expected honest end state and called it the most valuable output rather than a
 failure.
 
@@ -391,17 +412,23 @@ Everything §7 lists, plus the fragment carries:
    silently dropped before). Each is documented with its justification in
    `formal/conformance/extractor.py`.
 
-   **QUANTIFIED 2026-07-27 (ZT-P4-5), because "state-level equality" implies far
-   more than this gate compares.** Driving `backends.graphindex_drive` over
-   `sorted(GRAPH_FRAGMENT)` (21 corpora at the time of measurement) and applying
-   `extractor.extract_sql_state`'s own filters: of **447** raw `EdgeV4` rows,
-   **231** were dropped by P1 (closure-only rows), **0** by P2 (which still never
-   fires), **62** by P6, and **154** were actually compared. **All 235 `NodeV4`
-   rows were dropped by P5** — of those, 194 are endpoints/references of the
-   compared state and so are pinned implicitly, and **41 are invisible to the
-   gate entirely**. Only **5 of 21** corpora produced ANY residue row (**11**
-   rows), so 16 corpora compared two empty residue dicts, and every one of the 11
-   had `|stars| == 1` and `|neg| == 1`.
+   **QUANTIFIED, because "state-level equality" implies far more than this gate
+   compares — and since 2026-08-05 the quantification is GENERATED, not narrated.**
+   The live figures are in the **"State-gate projection ledger"** table of this
+   file's generated counts block above (`extractor.py::graph_fragment_ledger`,
+   checked by `verify.sh` step 4e). **Read them there.** This paragraph used to
+   restate them and had drifted to the point where this document stated two
+   different values for the same quantity — the exact defect the counts pin was
+   built to stop, recurring inside the pin's own file because the pin covers one
+   delimited block and prose outside it is still hand-maintained (`doc_counts.py`
+   says so in as many words).
+   For the record, the 2026-07-27 figures this paragraph carried — 21 corpora,
+   447 raw rows, 231 P1, 0 P2, 62 P6, 154 compared, 235 `NodeV4` (194 referenced /
+   41 invisible), 11 residue rows over 5 corpora, all `|stars|=|neg|=1` — are
+   **superseded in every leg but the P2 zero**. The `NodeV4` referenced/invisible
+   split re-derives as 217/49 but is deliberately NOT pinned: it has no in-repo
+   implementation to reuse and the reconstruction is method-sensitive
+   (`CORRESPONDENCE.md` records the caveat).
 
    **Three things follow, and they are the honest reading of §1's "state-level
    equality" row.** (i) **P5 is not a formality.** The Lean `GraphState` *does*

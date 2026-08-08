@@ -427,8 +427,11 @@ is fine** - `RuleSet.apply` routes the write onto the leaf family, so the edge a
 `neg` row live on different nodes; 0 mismatches over the grid and a 6-way order sweep on
 the real backends. It is a modelling limit of projection **P6** (the leaf-family
 collapse), and a **design decision** is owed before further work: (a) restate T2a at
-drained states only, (b) weaken `negEdgeFree`/`uposEdgeFree` to exempt the current
+drained states only, (b) weaken `negEdgeFree` to exempt the current
 un-cascaded write leg, or (c) model the leaf-family split.
+(⚠ (b) used to read `negEdgeFree`/`uposEdgeFree`; the pairing was refuted by
+measurement 2026-08-08 — `uposEdgeFree` is structurally immune on the `_d`
+fragment. See `history/leaf-family-split-scope-2026-08-05.md` §9.2.)
 
 **The conformance evidence on that shape is now theorem-backed for answers.**
 `direct_arm_exclusion` moved into `test_conformance_graph._THEOREM_BACKED` (the split is

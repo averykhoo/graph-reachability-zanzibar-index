@@ -581,8 +581,14 @@ run_lean() {
   # including FINAL_REVIEW's own header stating two different values for the same
   # quantity, the exact defect its text diagnoses. Three hand-fixes of one defect
   # is this repo's signal to build a refusal instead. The governing doc's counts
-  # are now GENERATED and checked here. Cheap (~4 s: two --collect-only runs plus
-  # per-file collection), so it rides the `lean` phase with the other pins.
+  # are now GENERATED and checked here. ~30 s, so it rides the `lean` phase with
+  # the other pins. COST BREAKDOWN (measured 2026-08-05, warm, this machine):
+  # ~24-28 s of that is 17 pytest --collect-only SUBPROCESSES (Windows spawn
+  # overhead, not collection work), plus ~5 s for the state-gate projection ledger
+  # (23 corpora driven through the real graph index). This comment said "~4 s"
+  # until 2026-08-05; it was never re-measured after the per-file table landed,
+  # which is the same hand-maintained-number defect the step itself exists to fix
+  # -- noted here rather than quietly corrected.
   # Scope, stated honestly: this pins ONE block in ONE file. Prose counts
   # elsewhere are still hand-maintained -- but there is now an authoritative
   # machine-checked place to check them against, and extending the block is one

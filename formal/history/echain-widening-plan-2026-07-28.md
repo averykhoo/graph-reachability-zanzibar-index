@@ -291,7 +291,7 @@ the chain is empty there. Cleaner, and checkable.
 | **4** | ✅ **DONE 2026-08-05.** `reachedByW3d2E_toC_d` + `graph_correct_w3d2E_d` (`CascadeStrataAssemble.lean`); both originals refactored into **byte-identical wrappers** (verified against HEAD by extraction-and-diff). **Plus `W4WitnessDirect.directArmsConcrete` / `toC_applies` / `w3d2E_correct_applies`, which this cell did not ask for and should have — the gate below is §C.3's insufficient one, repeated; see §C.4.** | 2 thms + 3 witness decls | ✅ `lean` PASSED, audits 467 → **471**, identity pin regenerated, **definition pin unmoved (142/142)**, statements 26/26. All conf + tests tiles green. |
 | **5** | ✅ **DONE 2026-08-05.** `GraphAdmission.storeValid → StoreValidRulesD`; `W4Fragment` 6 → **10** fields (not 9 — see §C.5); `w4_within_scope` clause 3 via leg 1's `exprDirects_ne_nil_of_directsOnly` (**`directsOnly_of_computedOrDirect_of_noUD` was never needed**); `w4Fragment_of_computedOnly` (new — the subsumption, which the cell did not ask for); `w4Fragment_of_untainted` + `w4NarrowT2a_of_untainted`; both existing witnesses rebased through it; **`graph_reached_inv` rebased onto the new `W4NarrowT2a` bundle**; `graph_correct` → `graph_correct_w3d2E_d`. **Plus the four witness decls `W4WitnessDirect.{admission, w4fragment, final_applies, outside_narrow_t2a}` the cell did not ask for and §C.4 said to budget — see §C.5.** | claim-changing | ✅ `lean` PASSED, audits 471 → **477**, **statements 26 → 34** (1 changed + 8 added), **definitions 142 → 154**, all conf + tests tiles green |
 | **6** | ✅ **DONE 2026-08-05.** `Td4` + `outside_old_admission4` / `admission4` / `w4fragment4` / **`final_applies4`** — the bundles at the CORPUS store, not the minimal one (this cell did not distinguish them; see §C.6); `outside_old_admission` KEPT as planned; `_EXPECTED_SPLIT` `(22,1)` → `(23,0)` with `_DIFFERENTIAL_ONLY` kept-but-empty; the vacuity caveat rewritten (not deleted) across ~25 sites. | payoff | ✅ `lean` PASSED, audits 477 → **481**, statements 34 → **38**, definitions unmoved at 154, anchors 409 → **410**; all conf + tests tiles green |
-| **7** | T2a — **BLOCKED. §D.3's probe KILLED it** (machine-checked, 2026-07-28). Do not schedule proof work; what is owed first is the **design decision** (a) drained-only restatement / (b) weakened `negEdgeFree` / (c) model the leaf-family split. Until then `graph_reached_inv` keeps the narrow bundle and the asymmetry is a **declared** carry. | decision, not proof | — |
+| **7** | T2a — **DECIDED 2026-08-05: option (c), model the leaf-family split and retire P6. DEFERRED, not scheduled.** (§D.3's probe KILLED the naive widening, machine-checked 2026-07-28; the decision that was owed is now made.) Until it runs, `graph_reached_inv` keeps the narrow bundle and the asymmetry is a **declared** carry — nothing is blocked or broken. Scope/blast radius/ordering: [`leaf-family-split-scope-2026-08-05.md`](leaf-family-split-scope-2026-08-05.md). | large model change | — |
 
 **Multi-session:** legs 4 and 5 each want a full session. 0+1 fit one; 2+3 fit one.
 
@@ -341,6 +341,18 @@ Full detail in `PROOF_STATUS.md` (Session 2026-07-28). Verdicts:
   states only — the honest minimum; (b) weaken `negEdgeFree`/`uposEdgeFree` to exempt edges
   written by the current un-cascaded write leg; (c) model the leaf-family split — faithful, but
   a large model change.
+  **⚠ (b) AS WRITTEN HERE IS WRONG, refuted by measurement 2026-08-08.** Only `negEdgeFree` is
+  implicated; `uposEdgeFree` is structurally immune on the `_d` fragment (`StoreValidRulesD`
+  forces a bare subject on a derived write, `uposCands` keeps only non-bare subjects, so
+  `res.upos` can never hold a subject that a raw derived write gives an edge from — measured
+  `uposTested = 0` in every in-fragment scenario). Left in place rather than silently rewritten,
+  since this document is provenance: see `leaf-family-split-scope-2026-08-05.md` §9.2. This is
+  the FOURTH cell of this plan refuted by measuring instead of following it.
+  **★ RESOLVED 2026-08-05 — the decision is (c), and the work is DEFERRED.** (a) and (b) both
+  shrink the claim; (c) is the only one that raises assurance. Decisive finding: **nothing
+  consumes `Inv`** (four hypothesis sites, all `Inv → Inv` preservation; `EdgeHygienic`
+  consumed nowhere), so (b) could not turn anything red — the house failure mode. Scope,
+  blast radius and ordering: [`leaf-family-split-scope-2026-08-05.md`](leaf-family-split-scope-2026-08-05.md).
 - **D.4 — NO-KILL, drop it.** `hND` is not a hypothesis anywhere; at all four sites it is a
   three-line `List.mem_filter` tautology. The shadow layer is **already `_d`-widened**
   (`reachedByW3d2_shadow_d` takes `StoreValidRulesD` directly). No leg stalls here.

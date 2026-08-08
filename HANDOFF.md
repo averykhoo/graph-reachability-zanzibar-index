@@ -93,6 +93,73 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
+- [ ] **★★ START HERE (2026-08-08) — THE `rewriteClosure` DEDUP LEG. Scoped, adjudicated,
+      sized at ONE SESSION, and it is the prerequisite for leg 7.** This is the first
+      concrete Lean task the board has offered since leg 6; everything else below is either
+      deferred (leg 7 proper) or a design decision already made.
+
+      **What it is.** `CORRESPONDENCE.md` §7.2 item 6: the Lean model's `rewriteClosure`
+      does not dedupe where Python's `RuleSet.apply` does, so on a **reconvergent** schema
+      the model over-counts edge multiplicity. Filed 2026-07-28 as "no corpus exercises it
+      today"; **measured live 2026-08-08 and adjudicated MODEL-side.**
+
+      ```
+      a := b or c ; b := d ; c := d ; d := [user]   (one write: alice@d)
+        alice -> doc:d1#a    lean=2  python=1   <== untainted arm, P3 compares EXACTLY
+      ```
+
+      **It is a UNIT divergence, not a retirement bug.** Both sides retire correctly
+      (five-sequence add/remove battery agrees on presence; answer parity 0 mismatches over
+      56 and 108 queries). Python counts **live raw tuples**; the model counts **derivation
+      paths** — measured `1 → 2 → 4` for zero/one/two chained diamonds, fuel-stable, i.e.
+      the model's ref count grows with SCHEMA SHAPE.
+
+      **Why the model is the wrong side (house rule 5, and it is sharp):**
+      `RemoveOccCount.lean`'s header *asserts Python's unit* — "`List.count (a,b)` IS the
+      model's `direct_edge_count`" — which is FALSE on any reconvergent schema, while the
+      same file's attack bullet already says so. **The file contradicts itself and R3/R4's
+      faithfulness claim rests on the wrong half.** Fixing Python is not available: its
+      `processed` worklist dedup is the TERMINATION mechanism (`a: [user] or b ; b: a`
+      compiles — only *derived* cycles raise — and loops forever without it).
+
+      **Why it is cheap — the key finding.** The count machinery is **list-generic**:
+      `count_removeLoggedRules` opens with `generalize rewriteClosure S t = us`, and
+      `count_foldl_writeDirect` is `∀ (us : List Tuple)`. So `untOccCount`, R3
+      (`reachedByW3d2E_untOccCount`) and R4 (`RemoveConfluence`) need **zero proof rework** —
+      values change, meaning improves. Only **15 `unfold rewriteClosure` sites** (mechanical,
+      via one new `mem_rewriteClosure_iff`) and **2 list-equality sites**
+      (`rewriteClosure_derived_eq_seed`, `…_nk`) need redoing.
+      **Minimal-diff shape:** rename the current def `rewriteClosureRaw`, define
+      `rewriteClosure S t := (rewriteClosureRaw S t).dedup`, add the one membership lemma.
+      `DecidableEq Tuple` exists (`Core/Refs.lean`) and `List.dedup` is already used once
+      (`Core/Store.lean`), so no new idiom.
+
+      **⚠ ORDER WITHIN THE LEG: corpus FIRST (red, attributable, recorded), then the fix
+      (green).** Corpus alone leaves a red gate; fix alone leaves the fix unexercised.
+      Two corpora, both `SCHEMAS` + `GRAPH_FRAGMENT` + `_THEOREM_BACKED`,
+      `_EXPECTED_SPLIT (23,0) → (25,0)`: `reconvergent_diamond` (taint set empty) and
+      `reconvergent_derived` (`viewer := e but not banned` over a reconvergent base — this
+      is the one that carries the leg-7 payload, since after the `writeDirect` fork its
+      currently-masked `lean=10 python=1` moves onto a leaf node in the exactly-compared
+      untainted arm).
+
+      **⚠ The leg's one real risk, unverified:** Mathlib's `List.dedup` keeps the **LAST**
+      occurrence, so write order shifts. Measured topological on both probe diamonds, but
+      that is luck rather than a theorem. If a proof turns out order-sensitive, a
+      first-occurrence dedup is the fallback.
+
+      **Owed regenerations** (deliberate, each with the reason written): the definition pin
+      (`rewriteClosure`'s row moves; the rows that merely NAME it stay byte-identical),
+      `derived_arm_multiplicity.json`, `FINAL_REVIEW.md`'s counts block, and `zcli`.
+      **Prose corrections owed:** `RulesWrite.lean`'s "duplicates are harmless (reachability,
+      not counts)" — the sentence being retired — plus `RemoveOccCount.lean`'s header and
+      attack bullet, `ReconcileDiff.lean`'s multiset claim, `Audit.lean`, and
+      `CORRESPONDENCE.md` §7.2 item 6 (which now carries the adjudication).
+
+      **Full adjudication, corpus design, and the exact predicted red:**
+      [`formal/history/leaf-family-split-scope-2026-08-05.md`](formal/history/leaf-family-split-scope-2026-08-05.md)
+      §10.5 (+ §10.3 for why it blocks leg 7), `formal/history/PROOF_STATUS.md` 2026-08-08.
+
 - [ ] **★ START HERE (next session, refreshed 2026-08-05d) — the E-chain arc has reached
       its predicted end state, and what is left is a DESIGN DECISION, not proof effort.**
       The zero-trust backlog is CLEARED, the gate is green end-to-end, and as of 2026-08-05
@@ -100,8 +167,55 @@ open). This file is now only what a future session must ACT on.
       landed, so the headline graph theorems are no longer vacuous on
       `can_view: [user] but not blocked`. See the status block above for what that means.
 
-      **(B1) THE OPEN ITEM — T2a (`graph_reached_inv`), leg 7. A decision is owed BEFORE
-      any proof work is scheduled.**
+      **(B1) T2a (`graph_reached_inv`), leg 7 — ★ THE DECISION IS MADE (2026-08-05):
+      option (c), model the leaf-family split and retire P6. DEFERRED, not scheduled.**
+      Scope + blast radius + suggested ordering:
+      [`formal/history/leaf-family-split-scope-2026-08-05.md`](formal/history/leaf-family-split-scope-2026-08-05.md).
+      **Nothing is blocking and nothing is broken** — the asymmetry is honestly declared in
+      the type, so leaving it costs only reach, not correctness. Headline numbers: **55–65%
+      of the Lean tree touched**, 15–20% of declarations needing real proof rework; the spec
+      side (`Spec/`, `SetEngine/`, `Equiv.lean`) is entirely spared, so the leg cannot
+      perturb the trust root. Two findings that make it cheaper than it looks: the
+      distinctness linchpin **already exists** (`Core/Schema.lean:64` `relNameOK` forbids
+      `.` in declared names, so leaf nodes are provably distinct for free — no new axiom,
+      provided leaf preds stay OUT of `S.defs`), and the routing signal **is already
+      threaded** (the `Delta.leaf` tag landed 2026-07-20c; the leg turns it from a
+      bookkeeping discriminator into an addressing one).
+      **★ Steps 0, 1 and 2 are DONE, the attack probe is DONE, and the leg now starts at a
+      NEW step 2b (2026-08-08).** Read `formal/history/PROOF_STATUS.md` 2026-08-08 and the
+      scope doc's §9/§10 before anything else; four things changed:
+      * **The attack-first probe returned NO-KILL** — `negEdgeFree` holds under leaf
+        routing, positive control reproduced D.3's kill in the same run. The leg is still
+        on at full price (§9.1).
+      * **★★ `Sd`/`Td` CANNOT be leg 7's witness.** `negEdgeFree` is already vacuously
+        true there (no residue row at all; `negStarCovered` + no wildcard ⇒ `neg = []`).
+        A step proving it and instantiating at `Sd`/`Td` would pass every mechanical check
+        in the project and prove nothing. Use D.3's wildcard-carrying schema (§9.3).
+      * **`uposEdgeFree` was never implicated** — structurally immune on the `_d`
+        fragment. The `Inv`-side obligation is ONE clause, not two (§9.2).
+      * **★ NEW step 2b, ordered BEFORE step 3:** add a reconvergent corpus and settle
+        `CORRESPONDENCE.md` §7.2 item 6 (`rewriteClosure` doesn't dedupe where
+        `RuleSet.apply` does — measured live at `lean=2 python=1`). After the fork that
+        divergence moves into the EXACTLY-compared untainted arm. Doing it first is what
+        makes any later red attributable to the leg (§10.3).
+      **Steps 0 and 1 were done 2026-08-05.**
+      (0) The P6 figure everyone quoted ("62 of 447 rows") was the 2026-07-27 measurement
+      over **21** corpora and every leg but the P2 zero had drifted. It is now GENERATED
+      (`extractor.py::graph_fragment_ledger` → `FINAL_REVIEW.md`'s counts block, checked by
+      `verify.sh` step 4e, +~5 s) and sabotage-verified. Live baseline: 23 corpora, **477**
+      raw rows → 233 P1, 0 P2, **73** P6, **171** compared. When the leg lands these must
+      move to P6=0 / compared=244 — loudly, by design.
+      (1) The filed "widen `evalE`'s modeled arms first" prerequisite **does not exist** —
+      leg 5 already widened `direct`, `ttu` is not implicated, and a leaf probe goes through
+      `probeNonDerived`, not `evalE`. The stale docstring that caused it
+      (`ReconcileWrite.lean`) is corrected. What the concern was really pointing at is a
+      **leaf-probe ↔ `directLeaf` bridge** *inside* the leg, now step 4b.
+      Why (a) and (b) were rejected, and why (c) is not merely the expensive option, is §1
+      of the scope doc — the short version is that **nothing consumes `Inv`** (four
+      hypothesis sites, all `Inv → Inv` preservation), so weakening it could not go red,
+      which is exactly the house failure mode.
+
+      Background — what the decision is *about*:
       `graph_reached_inv` now takes a third bundle `W4NarrowT2a` (schema-wide
       `ComputedOnly` + the narrow `StoreValidRules`), and
       `W4WitnessDirect.outside_narrow_t2a` machine-checks that the canonical Direct-arm
@@ -117,16 +231,14 @@ open). This file is now only what a future session must ACT on.
       intact, 0 mismatches over the grid and a 6-way order sweep. It is a modelling limit of
       projection **P6** (the leaf-family collapse), and no gate in the project can see it.
 
-      The three options, to settle before scheduling anything:
-      * **(a) restate T2a at DRAINED states only** — the honest minimum, and much the
-        cheapest. Costs the "dirty and mid-drain states included" clause, which is most of
-        what makes T2a interesting.
-      * **(b) weaken `negEdgeFree`/`uposEdgeFree`** to exempt edges written by the current
-        un-cascaded write leg. Keeps the every-state scope; needs care that the weakened
-        invariant still implies what its consumers use it for.
-      * **(c) model the leaf-family split** — faithful (it is what Python actually does and
-        would retire P6), but a large model change touching the whole `Inv` stack.
-      **Start:** `W4NarrowT2a`'s docstring in `FullScope.lean`, then plan §D.3.
+      The three options were (a) restate T2a at DRAINED states only, (b) weaken
+      `negEdgeFree` to exempt the current un-cascaded write leg, and
+      **(c) model the leaf-family split — CHOSEN.** (⚠ (b) used to name
+      `uposEdgeFree` as well; **refuted by measurement 2026-08-08** — it is
+      structurally immune on the `_d` fragment, so leg 7's `Inv`-side obligation is
+      ONE clause, not two.)
+      **Start:** the scope doc above, then `W4NarrowT2a`'s docstring in `FullScope.lean`,
+      then plan §D.3.
 
       **(B2) Two smaller pieces of the arc's payoff that legs 5–6 did NOT deliver**, both
       recorded rather than quietly dropped:
@@ -138,14 +250,27 @@ open). This file is now only what a future session must ACT on.
         constructor. Note leg 4 converted the constructor's admission INWARD with
         `storeValidRulesD_of_storeValidRules_directArmsBare`, and that does not run
         backwards — **its own leg, not a flag edit** (plan §C.5 item 6).
-      * **`self_flag`'s spec-side-only justification has EXPIRED** and was deliberately not
-        replaced with a guess (`corpus.py`). It read "Direct arms under a boolean — genuine
-        storage leaves, not `computedOnly`", which is exactly the shape leg 5 brought into
-        scope. Whether it now satisfies `W4Fragment` is OPEN: it needs the ten fields checked
-        at its own schema and store (`term`'s `NoStoreSubjectR` and `bareStar` against its
-        self-referential tuples in particular). Per the ZT-P3-3 lesson a corpus enters
-        `GRAPH_FRAGMENT` on a written per-field argument or a Lean witness, never on a
-        plausible-sounding one, so it stays spec-side until someone does that work.
+      * **`self_flag` — ADJUDICATED 2026-08-08: it HOLDS, and the premise of this item was
+        wrong.** All ten `W4Fragment` fields hold, plus all eight `GraphAdmission` fields
+        and **both `W4NarrowT2a` fields** (so unlike `direct_arm_exclusion` it is inside
+        T2a too). The expired justification — "Direct arms under a boolean — genuine
+        storage leaves, not `computedOnly`" — was **factually wrong when written**, not
+        merely stale: `usable: activated but not deprecated` has NO Direct arm inside the
+        derived def (machine-extracted AST is `.excl (.computed …) (.computed …)`, i.e.
+        `ComputedOnly`; Python gives it two `PClosureLeaf(storage=False)`). It was in the
+        fragment before leg 5; leg 5 was never load-bearing for it. The two flagged fields
+        are orthogonal to self-referentiality — `bareStar` constrains subject NAME vs
+        `STAR`, `NoStoreSubjectR` constrains subject PREDICATE, self-referentiality is a
+        subject-ENTITY↔object-entity property. Corroborated live: 0 mismatches on a
+        78-query grid, `zcli` graph mode rc 0 and landed drained, `diff_states` → `None`.
+        **Still spec-side, deliberately** — per ZT-P3-3 the argument is prose until the
+        witness exists. **Remaining work: write `W4WitnessSelfRef`** (designed in
+        PROOF_STATUS 2026-08-08 §6; model on `W4Witness`, not `W4WitnessDirect` — it needs
+        no `_d` layer), with two non-vacuity instruments, because the plausible failure
+        here is not an uninhabitable bundle but a **tautological clone** of `W4Witness.Sx`
+        under renaming. ⚠ And decide promotion separately: it buys less than it looks —
+        the node-level GC behaviour the corpus exists for is dropped entirely by P5
+        (9 node rows, 0 crossing the seam).
 
       **(A) ~~the store-level write quota~~ — DECLINED by the user 2026-07-29**, and the
       alternative was measured rather than assumed. *"I don't want to limit what can be
@@ -342,6 +467,7 @@ open). This file is now only what a future session must ACT on.
 | [`docs/specs/`](docs/specs/) | the full original design specs (cited by code comments as "spec §N") |
 | [`formal/HANDOFF.md`](formal/HANDOFF.md) | entry point for the Lean formal layer (read before touching `formal/`) |
 | [`formal/CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) | the model↔Python code map (§7/§8 record any algorithm drift) |
+| [`formal/history/leaf-family-split-scope-2026-08-05.md`](formal/history/leaf-family-split-scope-2026-08-05.md) | leg 7 (T2a / retire P6): the DECIDED-but-DEFERRED design, its blast radius, and the step ordering |
 | [`benchmarks/results/PERF_ANALYSIS.md`](benchmarks/results/PERF_ANALYSIS.md) | measured perf numbers per landed item ("Applied") |
 | [`docs/history/`](docs/history/) | retired records — perf rounds 3–5 and the HANDOFF status archive; provenance, not living docs |
 | [`docs/history/handoff-status-2026-07.md`](docs/history/handoff-status-2026-07.md) | this file's retired dated status run, the full zero-trust review, every completed board item, and the reconciled **`ZT-*` disposition ledger** |
