@@ -95,17 +95,36 @@ def applyRRule (r : RRule) (t : Tuple) : Option Tuple :=
 def rewriteStep (S : Schema) (t : Tuple) : List Tuple :=
   (schemaRewrites S).filterMap (applyRRule · t)
 
-/-- The bounded rewrite closure: accumulate the seed and every tuple reachable by
-    ≤ fuel rewrite steps. `RuleSet.apply`'s worklist iterates to a fixpoint; the
-    rewrite graph on relations is a DAG (stratification), so `|keys|+1` levels
-    suffice. Duplicates are harmless (reachability, not counts — §11-A4). -/
+/-- The bounded rewrite closure kernel: accumulate the current frontier and every
+    tuple reachable by ≤ fuel rewrite steps. May emit duplicates on reconvergent
+    schemas — deduplication is the caller's job (`rewriteClosure`). -/
 def rewriteClosureAux (S : Schema) : Nat → List Tuple → List Tuple
   | 0, cur => cur
   | n + 1, cur => cur ++ rewriteClosureAux S n (cur.flatMap (rewriteStep S))
 
-/-- The rewrite-closure of a single raw write `t` (`RuleSet.apply t` as a list). -/
-def rewriteClosure (S : Schema) (t : Tuple) : List Tuple :=
+/-- The RAW (un-deduplicated) bounded rewrite closure of a single seed `t`.
+    `RuleSet.apply`'s worklist iterates to a fixpoint; the rewrite graph on
+    relations is a DAG (stratification), so `|keys|+1` levels suffice. On a
+    reconvergent schema (two rewrite paths from one tuple to the same derived
+    key) the same tuple can appear more than once — see `rewriteClosure`. -/
+def rewriteClosureRaw (S : Schema) (t : Tuple) : List Tuple :=
   rewriteClosureAux S (S.keys.length + 1) [t]
+
+/-- The rewrite-closure of a single raw write `t` (`RuleSet.apply t` as a list).
+
+    Mirrors `zanzibar_utils_v1.py::RuleSet.apply`'s worklist dedup (its `processed`
+    set): each derived key is materialized at most once per stored tuple, so a
+    reconvergent schema does not over-count edge multiplicity. The dedup is
+    **per-closure (per stored tuple)**, never over the assembled edge list —
+    cross-tuple multiplicity is load-bearing and P3-compared (`nary_union` routes
+    `alice -> any_of` from three separate tuples and must stay at 3). -/
+def rewriteClosure (S : Schema) (t : Tuple) : List Tuple :=
+  (rewriteClosureRaw S t).dedup
+
+/-- The bridge lemma: dedup preserves MEMBERSHIP, which is all every
+    reachability-level consumer needs. -/
+@[simp] theorem mem_rewriteClosure_iff {S : Schema} {t u : Tuple} :
+    u ∈ rewriteClosure S t ↔ u ∈ rewriteClosureRaw S t := List.mem_dedup
 
 /-! ## The rule-routed write -/
 

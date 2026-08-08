@@ -81,6 +81,13 @@
       1
     ]
   },
+  "reconvergent_derived": {
+    "user:alice#.../ -> doc:d1#viewer/": [
+      52,
+      1
+    ]
+  },
+  "reconvergent_diamond": {},
   "residue_rich": {},
   "star_two_strata_churn": {},
   "taint_computed_root_over_boolean": {},

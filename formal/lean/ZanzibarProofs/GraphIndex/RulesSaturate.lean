@@ -162,7 +162,8 @@ theorem rewriteClosure_saturated {S : Schema} (hR : RewriteRanked S) {t w u : Tu
     (hw : w ∈ rewriteClosure S t) (hu : u ∈ rewriteStep S w) :
     u ∈ rewriteClosure S t := by
   obtain ⟨rrank, hinc, hbound⟩ := hR
-  unfold rewriteClosure at hw ⊢
+  rw [mem_rewriteClosure_iff] at hw ⊢
+  unfold rewriteClosureRaw at hw ⊢
   obtain ⟨k, hk, hmem⟩ := stepN_of_mem_aux S (S.keys.length + 1) [t] hw
   -- rank ≥ k (depth) and ≤ |keys| force k ≤ |keys|
   have hrank_ge : 0 + k ≤ rrank (rwKey w) :=

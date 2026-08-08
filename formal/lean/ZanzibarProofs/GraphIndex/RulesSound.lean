@@ -386,7 +386,8 @@ theorem semAux_of_rewriteClosure {S : Schema} {T : Store} {q : Query} (hNK : Nod
     (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
     {t u : Tuple} (ht : t ∈ T) (hu : u ∈ rewriteClosure S t) :
     ∃ f, semAux S u.subject T q f u.object.type u.object.name u.relation = true := by
-  unfold rewriteClosure at hu
+  rw [mem_rewriteClosure_iff] at hu
+  unfold rewriteClosureRaw at hu
   refine (semAux_of_closureAux hNK hTT hSF ht (S.keys.length + 1) [t] ?_ u hu).1
   intro w hw
   rw [List.mem_singleton] at hw; subst hw

@@ -157,7 +157,8 @@ theorem rewriteClosure_star_subject {S : Schema} {T : Store}
         intro w hw
         obtain ⟨x, hx, hwx⟩ := List.mem_flatMap.mp hw
         exact starSeed_step hTT hTS ht (hcur x hx) hwx
-  unfold rewriteClosure at hu
+  rw [mem_rewriteClosure_iff] at hu
+  unfold rewriteClosureRaw at hu
   refine (haux (S.keys.length + 1) [t] ?_ u hu).1 hstar
   intro w hw
   rw [List.mem_singleton.mp hw]
@@ -287,7 +288,8 @@ theorem semAux_of_rewriteClosure_bs {S : Schema} {T : Store} {q : Query} (hNK : 
         obtain ⟨x, hx, hwx⟩ := List.mem_flatMap.mp hw
         exact ⟨semAux_step_bs hNK hTT hBS ht (hcur x hx) hwx,
           Or.inr (rewriteStep_outRel hwx)⟩
-  unfold rewriteClosure at hu
+  rw [mem_rewriteClosure_iff] at hu
+  unfold rewriteClosureRaw at hu
   refine (haux (S.keys.length + 1) [t] ?_ u hu).1
   intro w hw
   rw [List.mem_singleton.mp hw]

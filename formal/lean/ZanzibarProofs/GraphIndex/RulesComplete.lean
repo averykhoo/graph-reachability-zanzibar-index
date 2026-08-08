@@ -221,7 +221,8 @@ theorem lookup_exprArms_sub {S : Schema} (hUT : UntaintedSchema S) {ot r : Strin
     the stored seed, at depth 1 — no saturation needed). -/
 theorem rewriteStep_mem_closure {S : Schema} {t u : Tuple} (h : u ∈ rewriteStep S t) :
     u ∈ rewriteClosure S t := by
-  unfold rewriteClosure
+  rw [mem_rewriteClosure_iff]
+  unfold rewriteClosureRaw
   refine mem_aux_of_stepN S (S.keys.length + 1) 1 [t] (Nat.succ_le_succ (Nat.zero_le _)) ?_
   show u ∈ ([t].flatMap (rewriteStep S))
   exact List.mem_flatMap.mpr ⟨t, List.mem_singleton.mpr rfl, h⟩

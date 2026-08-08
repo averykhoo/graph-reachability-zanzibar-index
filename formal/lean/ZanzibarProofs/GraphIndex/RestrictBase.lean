@@ -257,7 +257,8 @@ theorem restrictUntainted_keys_length_le {S : Schema} :
 theorem rewriteClosure_restrict_subset {S : Schema} (hNK : NodupKeys S)
     {t w : Tuple} (hw : w ∈ rewriteClosure (restrictUntainted S) t) :
     w ∈ rewriteClosure S t := by
-  unfold rewriteClosure at hw ⊢
+  rw [mem_rewriteClosure_iff] at hw ⊢
+  unfold rewriteClosureRaw at hw ⊢
   rw [rewriteClosureAux_restrict hNK] at hw
   exact rewriteClosureAux_mono
     (Nat.succ_le_succ restrictUntainted_keys_length_le) hw
@@ -352,6 +353,8 @@ theorem rewriteClosure_subset_restrict {S : Schema} (hNK : NodupKeys S)
       have hvw' : w' ∈ rewriteStep (restrictUntainted S) v := by
         rw [rewriteStep_restrict hNK]; exact hvw
       exact rewriteClosure_saturated hRU (ih v hv) hvw'
+  rw [mem_rewriteClosure_iff] at hw
+  unfold rewriteClosureRaw at hw
   obtain ⟨k, _, hmem⟩ := stepN_of_mem_aux S (S.keys.length + 1) [t] hw
   exact hlayer k w hmem
 
@@ -632,12 +635,16 @@ theorem rewriteClosure_derived_eq_seed {S : Schema} (hMatch : RewriteMatchDeclar
     rw [htype, hrel] at hd
     rw [hu] at hd
     exact Bool.false_ne_true hd
+  have hraw : rewriteClosureRaw S t = [t] := by
+    unfold rewriteClosureRaw
+    show rewriteClosureAux S (S.keys.length + 1) [t] = [t]
+    rw [rewriteClosureAux]
+    have : List.flatMap (rewriteStep S) [t] = [] := by simp [hstep]
+    rw [this, rewriteClosureAux_nil]
+    rfl
   unfold rewriteClosure
-  show rewriteClosureAux S (S.keys.length + 1) [t] = [t]
-  rw [rewriteClosureAux]
-  have : List.flatMap (rewriteStep S) [t] = [] := by simp [hstep]
-  rw [this, rewriteClosureAux_nil]
-  rfl
+  rw [hraw]
+  simp
 
 /-- **Extra-edge classification.** An edge of the full-store admitted base absent from the
     untainted-filter rebuild is exactly a derived-key SEED edge: sound provenance names a

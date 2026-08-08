@@ -121,7 +121,19 @@ model's derived multiplicity compounds per cascade leg (measured 4 … 1013 acro
 conformance corpora). Nothing here breaks — derived edges are retracted by filter-ALL
 (`removeEdgePair`), never by this erase-one, and `GraphIndex/CascadeStrataSettle.lean::reachedByRulesAdmitted_edge_target_untainted`
 keeps `removeLoggedOne`'s targets untainted — but the unqualified claim was the reason the
-divergence went unnoticed. Full adjudication: `formal/CORRESPONDENCE.md` §7.2. -/
+divergence went unnoticed. Full adjudication: `formal/CORRESPONDENCE.md` §7.2.
+**SECOND SCOPE CORRECTION (2026-08-08) — the 2026-07-29 correction above was itself
+one qualification short.** It says the equation "holds on the UNTAINTED arm", full stop.
+That was FALSE on any *reconvergent* schema (two rewrite paths from one stored tuple to
+the same key), where the model's `rewriteClosure` listed the same tuple twice and Python's
+`RuleSet.apply` worklist deduped it — `lean=2 python=1`. It read as safe because no corpus
+was reconvergent, so all 153 untainted comparisons agreed and the gate was silent. Two
+corpora (`reconvergent_diamond`, `reconvergent_derived`) now cover the shape, and
+`GraphIndex/RulesWrite.lean::rewriteClosure` dedupes per stored tuple, so the untainted-arm
+equation is now unconditional rather than conditional-and-unstated. Note the two halves
+compose cleanly despite picking opposite copies: `.dedup` keeps the LAST occurrence and
+`List.erase` drops the FIRST, but the copies are literally equal elements, so which one is
+kept is not observable. -/
 
 /-- Remove ONE copy of the direct edge `(a, b)` — the ref-counted `-1` update
     (`_add_direct_edge_unsafe(subject_id, object_id, -1)`, issued by
