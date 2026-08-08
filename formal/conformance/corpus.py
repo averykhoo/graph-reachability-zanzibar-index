@@ -567,6 +567,88 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "carol", "c", "doc", "d1")],
         (),
     ),
+    # ---------------------------------------------------------------------
+    # RECONVERGENT corpora (added 2026-08-08) — the two shapes on which the
+    # model's `rewriteClosure` used to over-count edge multiplicity relative to
+    # Python's `RuleSet.apply` (`CORRESPONDENCE.md` §7.2 item 6, filed
+    # 2026-07-28 as "no corpus exercises it today", adjudicated MODEL-side
+    # 2026-08-08). "Reconvergent" = a schema whose rewrite DAG has two distinct
+    # paths from one stored tuple to the same derived key, so a single write
+    # materializes the same edge twice.
+    #
+    # They were added BEFORE the model fix, deliberately and in their own
+    # commit, so the divergence went red under its own name rather than
+    # arriving mixed into the fix's diff. The literal observed red is in the
+    # commit message and `history/PROOF_STATUS.md` 2026-08-08b.
+    #
+    # ★ The control for the fix lives in `nary_union`, not here: its
+    # `alice -> any_of` multiplicity of 3 comes from THREE stored tuples, one
+    # occurrence in each one's rewrite closure. A dedup applied per-closure
+    # must leave it at 3; a dedup applied to the assembled edge list would
+    # collapse it to 1 and `nary_union` goes red. That is the difference
+    # between mirroring Python's worklist dedup and mirroring nothing.
+    # ---------------------------------------------------------------------
+    "reconvergent_diamond": (
+        # UNTAINTED diamond — `a` is reachable from a single `d` grant along two
+        # distinct rewrite paths (via `b` and via `c`). Taint set is EMPTY, so
+        # every edge here is compared on the untainted arm, where P3 compares
+        # multiplicity EXACTLY. In-fragment via `w4Fragment_of_untainted`
+        # (no wildcard restriction, no star tuple, no TTU).
+        #
+        # Two grants rather than one so the corpus also carries the rc>=2
+        # survival shape the remove gate cares about: removing `alice@d` must
+        # retract alice's four edges and leave bob's standing.
+        """
+        type user
+        type doc
+          define d: [user]
+          define b: d
+          define c: d
+          define a: b or c
+        """,
+        [mk_tuple("...", "user", "alice", "d", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "d", "doc", "d1")],
+        (),
+    ),
+    "reconvergent_derived": (
+        # The same diamond with a BOOLEAN root on top — `viewer: e but not
+        # banned` over the reconvergent `e`. Two divergence sites at once:
+        #   * `alice -> d1#e`      untainted arm, compared EXACTLY (the red)
+        #   * `alice -> d1#viewer` derived arm, exempted by P3 and pinned
+        #                          instead by the derived-arm ledger golden
+        # The second one is the reason this corpus exists rather than the
+        # diamond alone: leg 7 forks `writeDirect` onto the leaf family, and
+        # that contribution then lands on `viewer.0` — a leaf node, untainted
+        # arm, compared exactly (scope doc §10.3).
+        #
+        # In-fragment, field by field against `FullScope.lean`:
+        #   computedOnly — `viewer`'s def is `.excl (.computed e) (.computed
+        #     banned)`; no Direct arm inside a derived def, so `storeValid`
+        #     holds too. `e`/`b`/`c`/`d`/`banned` are all UNTAINTED (taint
+        #     flows to relations that DEPEND on a boolean, not to the ones a
+        #     boolean reads).
+        #   twoStrata — one derived relation, one stratum.
+        #   wsBare / bareStar / ttuStarFree / NoTtuTarget — vacuous (no
+        #     wildcard restriction anywhere, no star tuple, no TTU).
+        #   NoStoreSubjectR — every stored subject predicate is `...`.
+        # `bob` is granted and then banned, so the exclusion arm is
+        # load-bearing rather than decorative: drop `banned` from the store and
+        # bob flips to a member.
+        """
+        type user
+        type doc
+          define d: [user]
+          define banned: [user]
+          define b: d
+          define c: d
+          define e: b or c
+          define viewer: e but not banned
+        """,
+        [mk_tuple("...", "user", "alice", "d", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "d", "doc", "d1"),
+         mk_tuple("...", "user", "bob", "banned", "doc", "d1")],
+        (),
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -625,6 +707,12 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
     "nary_intersection",
     "nary_union_derived4",
     "residue_rich",
+    #   * reconvergent_diamond / reconvergent_derived (added 2026-08-08) — the
+    #     per-field arguments are in their SCHEMAS entries. Both are here on
+    #     purpose: the divergence they exercise is a GRAPH-STATE one (edge
+    #     multiplicity), so a spec-side-only placement would compare nothing.
+    "reconvergent_diamond",
+    "reconvergent_derived",
 )
 
 # ---------------------------------------------------------------------------
