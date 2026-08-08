@@ -21,7 +21,7 @@ This file used to claim, flatly, that `GRAPH_FRAGMENT` is "inside GraphAdmission
 verbatim". That was FALSE for one corpus, and the Lean tree itself proves it
 false. Corrected 2026-07-26 (ZT-P3-3). The honest statement is:
 
-**(A) THEOREM-BACKED — `_THEOREM_BACKED`, all 23 corpora as of 2026-08-05.**
+**(A) THEOREM-BACKED — `_THEOREM_BACKED`, all 25 corpora as of 2026-08-08.**
 These satisfy `GraphAdmission` + `W4Fragment`, so the honesty theorems
 `graphRun_reached` / `graphRun_check_eq_sem` (`GraphIndex/Exec.lean`) compose
 with the final T2b `graph_correct` (`FullScope.lean`): whatever this driver
@@ -189,6 +189,19 @@ _THEOREM_BACKED: frozenset[str] = frozenset({
     # opposite was machine-checked (`outside_old_admission4` : ¬ StoreValidRules Sd Td4,
     # still audited); the bundle was REFUTED here, not merely unproved.
     "direct_arm_exclusion",
+    # Added 2026-08-08 with the `rewriteClosure` dedup leg. Fields checked
+    # against FullScope.lean::W4Fragment + GraphAdmission; the per-field
+    # argument is written down in each corpus.py entry:
+    #   `reconvergent_diamond` — UNTAINTED, so it subsumes via
+    #     `w4Fragment_of_untainted` (wsBare/bareStar/ttuStarFree only, all
+    #     vacuous: no wildcard restriction, no star tuple, no TTU).
+    #   `reconvergent_derived` — computedOnly (`viewer` = `.excl (.computed e)
+    #     (.computed banned)`, no Direct arm on a derived def, so storeValid
+    #     holds), twoStrata (one derived relation), wsBare/bareStar/
+    #     ttuStarFree/NoTtuTarget vacuous, NoStoreSubjectR holds (every stored
+    #     subject predicate is `...`).
+    "reconvergent_diamond",
+    "reconvergent_derived",
 })
 
 #: Corpora KNOWN to be outside the final theorems' scope, kept in the gate as an
@@ -209,7 +222,7 @@ _THEOREM_BACKED: frozenset[str] = frozenset({
 _DIFFERENTIAL_ONLY: frozenset[str] = frozenset()
 
 #: The split this module's docstring claims, asserted so the prose cannot rot.
-_EXPECTED_SPLIT = (23, 0)
+_EXPECTED_SPLIT = (25, 0)
 
 # Anti-vacuity floor for the graph query grid (ZT-P4-4). Measured 2026-07-26
 # over `GRAPH_FRAGMENT`: the smallest grid is `wildcard_public` at 7 queries
