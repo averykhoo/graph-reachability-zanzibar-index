@@ -1548,6 +1548,18 @@ namespace Zanzibar
 -- defeated as a control, `n ↦ 2n+1` returns (2↦3, 4↦7). Full evidence in
 -- `freshDirectCands`'s docstring — and note it is pinned by MEASUREMENT, not by the type
 -- checker: the tree still compiles with the filter defeated.
+-- ⚠ **Do not read the sentence above as forbidding the 2026-08-08 `rewriteClosure` dedup.**
+-- There are two different dedups here and only one of them is destructive:
+--   * **PER-CLOSURE** (`RulesWrite.lean::rewriteClosure = (rewriteClosureRaw …).dedup`) —
+--     mirrors `RuleSet.apply`'s `processed` worklist, one stored tuple at a time. Genuine
+--     cross-tuple multiplicity is untouched: `nary_union` routes `alice -> any_of` from
+--     three separate tuples and stays at 3 (measured, before and after).
+--   * **GLOBAL** (an `admitEdge` presence test, or a dedup over the assembled edge list) —
+--     the version this paragraph rejects. It cannot tell the two cases apart and collapses
+--     `nary_union` 3 -> 1 (measured, `#eval`).
+-- `untOccCount` is load-bearing against the SECOND, not the first. The per-closure dedup
+-- needed no proof rework at all, because the count stack is list-generic
+-- (`count_removeLoggedRules` opens `generalize rewriteClosure S t = us`).
 -- **`mem_enumJob2D_cands`** is the presence diff's soundness core (nothing is lost: a BARE
 -- member of the unfiltered widened base reaches `cands` through whichever segment already
 -- holds it), used forwards for `enumJob2D_negCands_subset` and contrapositively for

@@ -203,7 +203,8 @@ theorem rewriteClosureAux_subjectName {S : Schema} {nm : String} :
 /-- **Every rewrite-closure tuple keeps the raw write's subject name.** -/
 theorem rewriteClosure_subjectName {S : Schema} {t u : Tuple}
     (h : u ∈ rewriteClosure S t) : u.subject.name = t.subject.name := by
-  unfold rewriteClosure at h
+  rw [mem_rewriteClosure_iff] at h
+  unfold rewriteClosureRaw at h
   exact rewriteClosureAux_subjectName _ _ (fun w hw => by rw [List.mem_singleton.mp hw]) _ h
 
 /-- **A rewrite-closure tuple's relation is never `BARE`**: it is either the raw seed's

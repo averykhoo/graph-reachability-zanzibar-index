@@ -661,7 +661,8 @@ theorem rewriteClosureAux_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtu
 theorem rewriteClosure_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R)
     {t u : Tuple} (ht : t.subject.predicate ≠ R) (hu : u ∈ rewriteClosure S t) :
     u.subject.predicate ≠ R := by
-  unfold rewriteClosure at hu
+  rw [mem_rewriteClosure_iff] at hu
+  unfold rewriteClosureRaw at hu
   exact rewriteClosureAux_subject_pred_ne hnt _ _
     (fun w hw => by rw [List.mem_singleton.mp hw]; exact ht) _ hu
 

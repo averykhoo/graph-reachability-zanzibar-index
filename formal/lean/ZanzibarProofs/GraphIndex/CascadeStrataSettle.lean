@@ -818,12 +818,16 @@ theorem rewriteClosure_derived_eq_seed_nk {S : Schema} (hNK : NodupKeys S)
     rw [htype, hrel] at hd
     rw [hu] at hd
     exact Bool.noConfusion hd
+  have hraw : rewriteClosureRaw S t = [t] := by
+    unfold rewriteClosureRaw
+    show rewriteClosureAux S (S.keys.length + 1) [t] = [t]
+    rw [rewriteClosureAux]
+    have hfm : List.flatMap (rewriteStep S) [t] = [] := by simp [hstep]
+    rw [hfm, rewriteClosureAux_nil]
+    rfl
   unfold rewriteClosure
-  show rewriteClosureAux S (S.keys.length + 1) [t] = [t]
-  rw [rewriteClosureAux]
-  have hfm : List.flatMap (rewriteStep S) [t] = [] := by simp [hstep]
-  rw [hfm, rewriteClosureAux_nil]
-  rfl
+  rw [hraw]
+  simp
 
 /-- Splitting the store-closure occurrence count at a cons head. -/
 theorem untOccCount_cons (S : Schema) (t : Tuple) (T : Store) (a b : NodeKey) :

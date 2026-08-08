@@ -314,12 +314,14 @@ theorem rewriteClosureAux_object {S : Schema} {O : ObjectRef} :
     rewrites only ever change `(subject, relation)`. -/
 theorem rewriteClosure_object {S : Schema} {t u : Tuple} (h : u ∈ rewriteClosure S t) :
     u.object = t.object := by
-  unfold rewriteClosure at h
+  rw [mem_rewriteClosure_iff] at h
+  unfold rewriteClosureRaw at h
   exact rewriteClosureAux_object _ _ (fun w hw => by rw [List.mem_singleton.mp hw]) _ h
 
 /-- **The raw write is in its own rewrite-closure** (the closure seeds with `[t]`). -/
 theorem rewriteClosure_seed (S : Schema) (t : Tuple) : t ∈ rewriteClosure S t := by
-  unfold rewriteClosure
+  rw [mem_rewriteClosure_iff]
+  unfold rewriteClosureRaw
   rw [rewriteClosureAux]
   exact List.mem_append_left _ (List.mem_singleton.mpr rfl)
 
@@ -347,7 +349,8 @@ theorem rewriteClosureAux_produced {S : Schema} :
 theorem rewriteClosure_produced {S : Schema} {t u : Tuple}
     (h : u ∈ rewriteClosure S t) :
     u = t ∨ ∃ r ∈ schemaRewrites S, r.objectType = u.object.type ∧ r.outRel = u.relation := by
-  unfold rewriteClosure at h
+  rw [mem_rewriteClosure_iff] at h
+  unfold rewriteClosureRaw at h
   rcases rewriteClosureAux_produced _ _ h with hin | hout
   · exact Or.inl (List.mem_singleton.mp hin)
   · exact Or.inr hout

@@ -16,8 +16,24 @@ materialized across the rewrite closures of the stored writes:
 (`GraphIndex/State.lean::GraphState.addEdge` prepends
 unconditionally), so `List.count (a,b)` IS the model's `direct_edge_count`
 (the ref-count maintained by `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe`
-and decremented by `::ReachabilityIndex._remove_edge_locked`). This theorem is the
-ref-count decision made
+and decremented by `::ReachabilityIndex._remove_edge_locked`).
+
+**★ That sentence was FALSE when it was written, and is TRUE as of 2026-08-08.** It
+asserts Python's UNIT for a quantity the model did not compute: until the
+`rewriteClosure` dedup landed, the model counted DERIVATION PATHS while Python counted
+LIVE RAW TUPLES, so on any *reconvergent* schema the two disagreed (measured
+`lean=2 python=1` on `a := b or c ; b := d ; c := d`, growing `1 → 2 → 4` with the
+number of chained diamonds — i.e. with SCHEMA SHAPE, not store content). The
+attack-first bullet below said so in as many words, so **this file contradicted itself
+and R3/R4's faithfulness claim rested on the wrong half** (house rule 5). That is what
+made the dedup a model-side fix rather than a projection narrowing: it is what makes
+the sentence above true. `GraphIndex/RulesWrite.lean::rewriteClosure` now mirrors
+`RuleSet.apply`'s `processed` worklist dedup, per stored tuple. Two corpora
+(`reconvergent_diamond`, `reconvergent_derived`) pin it; nothing in this file's proofs
+changed, because the count stack is list-generic
+(`count_removeLoggedRules` opens `generalize rewriteClosure S t = us`).
+
+This theorem is the ref-count decision made
 concrete: an untainted edge's ref-count is a pure occurrence count over the store's
 rewrite closures — exactly the quantity R4's confluence lemma will decrement with
 `removeEdgeOne` (erase-one). It seeds the shared-derivation `rc ≥ 2` case (the R1 KILL:
@@ -53,22 +69,31 @@ and touches no existing def/theorem/inductive. Not in `Audit.lean` (R3 is infras
   `removeEdgePair`'s design — there is nothing here to prove as `∈ {0,1}`, and asserting it
   would be a false statement. Only the UNTAINTED arm is landed.
 
-* **Faithfulness nuance on the UNTAINTED arm (Python-vs-model ref-count VALUE).** The
-  model's `rewriteClosure` does NOT deduplicate (`RulesWrite.lean:97-107`), while Python's
+* **[RESOLVED 2026-08-08 — kept because it is the finding that got the model fixed.]
+  Faithfulness nuance on the UNTAINTED arm (Python-vs-model ref-count VALUE).** As
+  originally recorded: the model's `rewriteClosure` did NOT deduplicate, while Python's
   `RuleSet.apply` DOES (worklist dedup). `#eval`-confirmed on a reconvergent (diamond)
-  schema `a := b or c`, `b := d`, `c := d`, `d := [user]`, write `alice@d`: the model gives
-  `count (alice → a:doc:1) = 2` (the closure lists the `a` edge twice), while Python's
-  `ruleset.apply` fans out `(alice, a, doc:1)` exactly ONCE (`direct_edge_count = 1`). So
-  this theorem faithfully characterizes the MODEL's ref-count in terms of the MODEL's
-  `rewriteClosure` occurrences (the design's phrasing, "occurrences among rewriteClosure S t",
-  names exactly this), but the model's ref-count VALUE exceeds Python's deduped
-  `direct_edge_count` in reconvergent schemas. This over-count is READ-INVISIBLE (reads test
-  membership, not multiplicity — `reachB`/`NReaches`) and REMOVE-CONSISTENT (`removeLoggedRules`
-  folds the SAME `rewriteClosure`, so add-N/remove-N both zero the pair together), so it does
-  not affect the membership-level confluence R4/R5 target. It DOES mean the exact ref-count
-  value is not claimed Python-faithful where `rewriteClosure` is reconvergent — the exact
-  scope of the pre-existing "duplicates are harmless — reachability, not counts" note
-  (`RulesWrite.lean:100`), which R3 now confirms extends soundly to the remove path.
+  schema `a := b or c`, `b := d`, `c := d`, `d := [user]`, write `alice@d`: the model gave
+  `count (alice → a:doc:1) = 2` (the closure listed the `a` edge twice), while Python's
+  `ruleset.apply` fans out `(alice, a, doc:1)` exactly ONCE (`direct_edge_count = 1`).
+  The note then argued the gap was tolerable because it is READ-INVISIBLE (reads test
+  membership, not multiplicity — `reachB`/`NReaches`) and REMOVE-CONSISTENT
+  (`removeLoggedRules` folds the SAME `rewriteClosure`, so add-N/remove-N both zero the
+  pair together).
+  **Both halves of that argument were correct and the conclusion was still wrong**, which
+  is the transferable part. "It does not affect the R4/R5 membership target" is a reason
+  the divergence is not URGENT; it is not a reason it is not a DEFECT. What settled it was
+  house rule 5: the header above asserts Python's unit, so tolerating the gap meant
+  shipping a file that contradicted itself. `rewriteClosure` now dedupes per stored tuple
+  and this bullet's `count = 2` is `count = 1`.
+  **Why not fix Python instead:** its `processed` worklist dedup is the TERMINATION
+  mechanism, not an optimisation — `a: [user] or b ; b: a` compiles (only *derived* cycles
+  raise) and loops forever without it.
+  **Why not narrow projection P3 a second time** (the move that was right for the derived
+  arm on 2026-07-29): that was right *because* no honest model edit made the derived arm
+  agree. Here `.dedup` matches Python element-for-element, and narrowing would force
+  `formal/conformance/extractor.py` to compute a path-weighted expectation — i.e.
+  re-implement `rewriteClosure` in Python, destroying the harness's independence.
 -/
 
 namespace Zanzibar

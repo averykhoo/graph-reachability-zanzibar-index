@@ -587,6 +587,44 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # must leave it at 3; a dedup applied to the assembled edge list would
     # collapse it to 1 and `nary_union` goes red. That is the difference
     # between mirroring Python's worklist dedup and mirroring nothing.
+    #
+    # ---- SABOTAGE RECORD (docs/sabotage-procedure.md), all RUN, not reasoned --
+    # Property guarded: "the Lean model materializes each derived key at most
+    # ONCE per stored tuple, matching `RuleSet.apply`'s `processed` worklist."
+    #
+    # (A) THE REGRESSION THESE CORPORA EXIST FOR — remove the dedup and repair
+    #     the proofs (i.e. the tree exactly as of commit 911c887, before the fix
+    #     landed). Observed: FOUR failures, all attributable, and NO pre-existing
+    #     corpus among them —
+    #       state[reconvergent_diamond]  alice/bob -> d1#a  lean=2 python=1
+    #       state[reconvergent_derived]  alice/bob -> d1#e  lean=2 python=1
+    #       test_derived_arm_multiplicity_ledger  (unpinned corpora)
+    #       remove_graph[reconvergent_derived]    zcli timed out after 120s
+    #     with `1 failed, 282 passed` across the answer-level suites. So these two
+    #     corpora are load-bearing: before them, the whole gate was green on a
+    #     divergence `CORRESPONDENCE.md` had had on file since 2026-07-28.
+    #
+    # (A') The NAIVE version of the same regression — drop `.dedup` and leave the
+    #     proofs alone — does not even build:
+    #       error: RestrictBase.lean:647:2: No goals to be solved
+    #     Defence in depth, but it is NOT what defends the property: a contributor
+    #     removing the dedup would repair that line, landing in case (A).
+    #
+    # (B) THE WRONG FIX, and this is where the discrimination question gets an
+    #     honest answer. `CORRESPONDENCE.md` §7.2 warns against "fixing" this
+    #     globally by making `GraphIndex/Write.lean::admitEdge` reject an
+    #     already-present edge. Run: that edit breaks the build first —
+    #       error: Write.lean:133:10: Tactic `rewrite` failed: Did not find an occurrence
+    #       error: Write.lean:137:45: Application type mismatch
+    #     — because `admitEdge`'s conjunction is destructured positionally. That
+    #     is a SPEED BUMP, not a guarantee: both sites are mechanically repairable.
+    #     The real catch is `nary_union`, and it is measured rather than assumed:
+    #     an `#eval` over the assembled edge list gives `alice -> any_of = 1`
+    #     against the per-closure dedup's 3 and Python's 3.
+    #     ⚠ **These two corpora do NOT catch (B)** — every multiplicity in both is
+    #     1, so a global dedup leaves them green. They and `nary_union` guard
+    #     opposite errors and neither substitutes for the other. Do not delete
+    #     `nary_union` on the grounds that reconvergence is now covered.
     # ---------------------------------------------------------------------
     "reconvergent_diamond": (
         # UNTAINTED diamond — `a` is reachable from a single `d` grant along two

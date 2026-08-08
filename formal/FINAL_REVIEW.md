@@ -26,22 +26,22 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **468** |
+| `formal/conformance/` collected | **494** |
 | `tests/` collected | **763** |
-| whole-repo suite | **1231** |
-| differential conformance tests | **422** across **13** files |
+| whole-repo suite | **1257** |
+| differential conformance tests | **448** across **13** files |
 | gate-tooling conformance tests | **46** across **2** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **481** |
 | audit identity pin (`audited_theorems.txt`) | **481** |
-| headline definition pin | **154** rows (**147** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **411** (**276** Python + **135** Lean) |
-| `corpus.SCHEMAS` | **24** |
-| `corpus.GRAPH_FRAGMENT` (graph-side gates) | **23** |
-| spec-scope corpora (four dicts) | **33** = 24 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
+| headline definition pin | **155** rows (**148** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **414** (**277** Python + **137** Lean) |
+| `corpus.SCHEMAS` | **26** |
+| `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
+| spec-scope corpora (four dicts) | **35** = 26 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
 | gate floors (`verify.sh`) | `MIN_CONF_ALL`=465 (=96+369), `MIN_TESTS_ALL`=763, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
-Driven fresh over all **23** `GRAPH_FRAGMENT` corpora through the real graph
+Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
 index (`extractor.projection_ledger`). Read this as the honest width of the
 state-level claim: of the raw `EdgeV4` rows Python writes, only the `compared`
 row is checked against Lean. **Do not restate these numbers elsewhere** — three
@@ -49,26 +49,26 @@ prose copies rotted through two corpus additions before this became generated.
 
 | edge projection | rows |
 |---|---|
-| raw `EdgeV4` rows | **477** |
+| raw `EdgeV4` rows | **498** |
 | dropped by P1 (closure-only) | **233** |
 | dropped by P2 (bridge) | **0** |
-| dropped by P6 (leaf-family copy) | **73** |
-| **compared against Lean** | **171** |
-| raw `NodeV4` rows (all dropped by P5) | **266** |
+| dropped by P6 (leaf-family copy) | **76** |
+| **compared against Lean** | **189** |
+| raw `NodeV4` rows (all dropped by P5) | **282** |
 | residue rows kept | **13** |
 
 Per conformance file:
 
 | file | tests | kind |
 |---|---|---|
-| `test_conformance_spec.py` | 99 | differential |
-| `test_conformance_remove.py` | 96 | differential |
-| `test_conformance_state.py` | 51 | differential |
-| `test_conformance_graph.py` | 47 | differential |
+| `test_conformance_spec.py` | 105 | differential |
+| `test_conformance_remove.py` | 104 | differential |
+| `test_conformance_state.py` | 55 | differential |
+| `test_conformance_graph.py` | 51 | differential |
 | `test_conformance_generated.py` | 40 | differential |
 | `test_sorry_scan.py` | 39 | tooling |
-| `test_conformance_random.py` | 24 | differential |
-| `test_conformance_remove_graph.py` | 21 | differential |
+| `test_conformance_random.py` | 26 | differential |
+| `test_conformance_remove_graph.py` | 23 | differential |
 | `test_conformance_nary_strata.py` | 19 | differential |
 | `test_runner_retry.py` | 7 | tooling |
 | `test_conformance_enum.py` | 6 | differential |

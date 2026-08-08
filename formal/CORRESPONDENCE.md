@@ -265,7 +265,9 @@ Python runs. The omissions are now listed in §7 rather than left implicit.
 | **`GraphIndex/ObjStarWrite.lean::GraphState.bridgedConcrete` / `::GraphState.ensureBridges` / `::GraphState.writeWild`** | **object-wildcard (out-)bridge materialization — an EXISTING Lean model that this file never listed** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (out-bridge half), `::WildcardIndex._bridge_degree`, `::WildcardIndex._concrete_nodes_of_shape`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_out_shapes` |
 | **`GraphIndex/UsStarWrite.lean::GraphState.bridgedInConcrete` / `::GraphState.ensureInBridges` / `::GraphState.writeUsStar`, `::Schema.isSubjectWildcardUserset`** | **wildcard-userset (in-)bridge materialization — likewise previously unlisted** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (in-bridge half), teardown via `::WildcardIndex._strip_bridges` / `::WildcardIndex._maybe_remove_bridges`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes` and `::SchemaInfo.subject_wildcard_shapes` |
 | `GraphIndex/RulesWrite.lean::RRule` / `::exprArms` / `::schemaRewrites` (**taint-filtered** — derived keys emit no arms) | compiled Computed/TTU rewrite rules, fanned out ONLY for untainted keys | `zanzibar_utils_v1.py::_rewrite_rule`, `::_emit_expr`; the taint routing is the `if (object_type, relation_name) not in tainted: _emit_expr(...)` loop in `::compile_ruleset`, mirrored by `S.defs.filter (!isDerived …)` in `schemaRewrites` (added 2026-07-17 — see §7) |
-| `GraphIndex/RulesWrite.lean::rewriteClosure` | the write fan-out worklist | `zanzibar_utils_v1.py::RuleSet.apply` (dispatch built by `::RuleSet._build_dispatch`, candidates by `::RuleSet._candidates`) |
+| `GraphIndex/RulesWrite.lean::rewriteClosureRaw` | the write fan-out worklist, before dedup | `zanzibar_utils_v1.py::RuleSet.apply`'s expansion (dispatch built by `::RuleSet._build_dispatch`, candidates by `::RuleSet._candidates`) |
+| `GraphIndex/RulesWrite.lean::rewriteClosure` | the write fan-out worklist **incl. the dedup** (2026-08-08, §7.2 item 6) | `zanzibar_utils_v1.py::RuleSet.apply` in full — its `processed` set is the dedup AND the termination mechanism, so this is not an optional mirror |
+| `GraphIndex/RulesWrite.lean::mem_rewriteClosure_iff` | dedup is membership-transparent | — (model-internal bridge; no Python counterpart) |
 | `GraphIndex/Cascade.lean::GraphState.writeLoggedOne` / `::GraphState.removeLoggedOne` / `::GraphState.writeLoggedRules` | routed write + delta row per accepted flip | `zanzibar_utils_v1.py::RuleSet.apply` + per-triple `index_v4/wildcard.py::WildcardIndex.add_tuple` / `::WildcardIndex.remove_tuple`; delta rows emitted by `index_v4/core.py::ReachabilityIndex._emit` (buffered) and `::ReachabilityIndex._flush_outbox` |
 | `GraphIndex/Cascade.lean::GraphState.nextDeltaId` / `::GraphState.pushDelta` / `::GraphState.maxOutboxId` | outbox append / autoincrement cursor | `index_v4/models.py::DeltaOutboxV1` + `index_v4/outbox.py::outbox_watermark` / `::outbox_rows` / `::drain_deltas` |
 
@@ -621,6 +623,36 @@ The bullet is corrected in place below.
   comparisons agree — and the new untainted compare is exactly the check that
   would catch it if one ever did.
 
+  **★★ CLOSED 2026-08-08 — the dedup LANDED and the divergence is gone.**
+  `GraphIndex\RulesWrite.lean::rewriteClosure` is now
+  `(rewriteClosureRaw S t).dedup`, mirroring `RuleSet.apply`'s `processed`
+  worklist per stored tuple; `GraphIndex\RulesWrite.lean::rewriteClosureRaw`
+  is the old body under its old name and
+  `GraphIndex\RulesWrite.lean::mem_rewriteClosure_iff` is the bridge every
+  membership-level consumer routes through. **Two corpora now exercise the
+  shape** (`reconvergent_diamond`, `reconvergent_derived`), added in their own
+  commit BEFORE the fix so the red was attributable; both now report
+  `diff_states -> None`.
+  Measured outcomes worth keeping:
+  * The count stack needed **zero** proof rework, exactly as sized — 16 sites
+    repaired (the pre-measured 15, plus `rewriteClosure_subset_restrict`, which
+    consumed the definition through term-level defeq and so was invisible to a
+    grep for the *tactic*; grep the identifier, not `unfold`).
+  * **All 18 pre-existing derived-arm ledger rows are byte-identical**, because
+    `.dedup` is the identity on a duplicate-free list. The change is surgical,
+    and that was verified rather than assumed.
+  * `nary_union`'s cross-tuple multiplicity **survives at 3** — the dedup is
+    per-closure, never over the assembled edge list.
+  * ★ Not predicted anywhere: the over-count was a real RUNTIME cost, not just a
+    ledger inaccuracy. `reconvergent_derived` exceeded zcli's 120 s remove-stream
+    budget before the fix and passes after it (derived-arm multiplicity
+    `185 -> 52` at that corpus).
+  * The self-contradiction that decided the adjudication is repaired in place:
+    `GraphIndex/RemoveOccCount.lean`'s header now says the unit sentence was
+    false when written and is true as of this leg, and its attack bullet is
+    marked RESOLVED rather than deleted.
+
+  *[The adjudication that produced the fix, retained.]*
   **★ ADJUDICATED 2026-08-08 — that second divergence is MODEL-side, and the
   disposition is to FIX THE MODEL (add a dedup to `rewriteClosure`), not to
   narrow a projection again.** Measured end-to-end through the real `zcli` for the
