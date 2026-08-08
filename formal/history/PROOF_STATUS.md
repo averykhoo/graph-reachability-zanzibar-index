@@ -8,6 +8,89 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-08b (**THE `rewriteClosure` DEDUP LEG — LANDED. `CORRESPONDENCE.md` §7.2 item 6 is CLOSED, the count stack needed zero rework as sized, and the over-count turned out to cost RUNTIME as well as accuracy.**)
+
+**Task taken:** the board's top item — settle §7.2 item 6 before leg 7's step 3, so any
+later red is attributable to the leg rather than to this. Landed in the prescribed order:
+corpus first (red, recorded), then the fix. Two commits, `911c887` then `c488a2f`.
+
+**1. The corpora, deliberately red first.** `reconvergent_diamond` (untainted,
+`a := b or c ; b := d ; c := d`) and `reconvergent_derived` (`viewer := e but not banned`
+over that diamond), both `SCHEMAS` + `GRAPH_FRAGMENT` + `_THEOREM_BACKED`,
+`_EXPECTED_SPLIT` (23,0) → (25,0). The literal red is in `911c887`'s message: two
+`lean=2 python=1` multiplicity lines per corpus, the ledger key-set failure, and a zcli
+timeout. **`1 failed, 282 passed` across the answer-level suites — a UNIT divergence, not
+a semantics one.** ★ The masked derived-arm contribution measured **`lean=185 python=1`**,
+not the `lean=10` the scope doc predicted; that figure was for a ONE-write probe and two
+grants compound superlinearly.
+
+**2. Attack-first, before proving (house rule 2): NO-KILL, and the flagged risk is
+retired empirically.** `List.dedup` keeps the LAST occurrence, so the worry was order.
+Measured on three schemas: `[d,b,c,a,a] → [d,b,c,a]`, `13 → 7` elements on two chained
+diamonds, `seedFirst`/`topo` both `true` everywhere. **Instrument controlled**: a
+positive control (a reversed list) correctly reports non-topological, and a non-vacuity
+count proves the dedup actually removed something. No proof turned out order-sensitive;
+the first-occurrence fallback was not needed. Scratch deleted.
+
+**3. The fix, and the sizing held.** `rewriteClosureRaw` (old body, old name) +
+`rewriteClosure := (rewriteClosureRaw S t).dedup` + `mem_rewriteClosure_iff`. The count
+stack (`untOccCount`, R3, R4) needed **zero** proof rework, exactly as the list-generic
+argument predicted. **16 sites repaired, not 15** — the extra one,
+`rewriteClosure_subset_restrict`, consumed the definition through term-level defeq and was
+invisible to a grep for the TACTIC `unfold rewriteClosure`. *Transferable: when
+re-defining, grep the identifier, not the tactic.*
+
+**4. ★ Two findings nobody predicted.**
+* **The over-count cost RUNTIME, not just ledger accuracy.** `reconvergent_derived`
+  exceeded zcli's 120 s remove-stream budget before the fix and passes after it
+  (derived-arm multiplicity `185 → 52`). Every prior write-up treated this divergence as
+  read-invisible bookkeeping.
+* **All 18 pre-existing derived-arm ledger rows are BYTE-IDENTICAL** — `.dedup` is the
+  identity on a duplicate-free list, so the change is surgical. Verified rather than
+  assumed; the golden gained 7 lines and deleted none.
+
+**5. Sabotage (all RUN, and the honest result is a limitation).**
+
+| sabotage | observed |
+|---|---|
+| (A) remove dedup + repair proofs (= `911c887`) | 4 failures, all attributable, **no pre-existing corpus among them** |
+| (A') remove `.dedup`, leave proofs | `RestrictBase.lean:647:2: No goals to be solved` |
+| (B) the WRONG fix — `admitEdge` rejects a present edge | `Write.lean:133:10 rewrite failed`; `:137:45 application type mismatch` |
+
+⚠ **(B) is where the discrimination question gets an uncomfortable answer.** The build
+break is a SPEED BUMP, not a guarantee — both sites are mechanically repairable — and
+**these two corpora do NOT catch (B)**: every multiplicity in them is 1, so a global dedup
+leaves them green. `nary_union` catches it, measured at `#eval` as `3 → 1` under an
+assembled-list dedup. The two corpora guard OPPOSITE errors and neither substitutes for
+the other. Recorded in `corpus.py` so nobody deletes `nary_union` on the grounds that
+reconvergence is now covered.
+
+**6. Prose corrected, not just annotated.** `RemoveOccCount.lean`'s header asserted
+Python's unit and was FALSE when written; it now says so and says why the leg makes it
+true, and its attack bullet is marked RESOLVED rather than deleted (it is the finding that
+got the model fixed). Also: `RulesWrite.lean`'s "duplicates are harmless"; **`ReconcileDiff.lean`'s
+untainted-arm claim, whose 2026-07-29 "SCOPE CORRECTION" was itself one qualification
+short** — it said the equation "holds on the UNTAINTED arm" full stop, which was false on
+any reconvergent schema; `Audit.lean`'s anti-dedup warning, which now distinguishes the
+per-closure dedup from the global one it rejects.
+
+**Gate: ALL TEN PHASES GREEN.** `lean` PASSED (holes=0, 481 audits, 38/38 statements,
+**155/155** definitions, 414/414 anchors); `conf-tile:1..5/5` PASSED (99/99/99/99/98 =
+**494**); `tests-tile:1..4/4` PASSED (191/191/191/190 = **763**). **The DEFINITION pin
+fired first and named the exact rows** — `rewriteClosure`'s meaning moved and
+`rewriteClosureRaw` appeared while all 38 headline STATEMENTS stayed byte-identical, which
+is precisely the statement-stable/meaning-changed asymmetry check 4c exists for.
+Regenerated deliberately, together with `derived_arm_multiplicity.json` and the
+`FINAL_REVIEW.md` counts block (conf 468 → 494, repo 1231 → 1257, compared edges
+171 → 189). **No fuzz sweep owed** — no Python algorithm changed (confirmed by
+`git diff --name-only` over the session: nothing under `index_v4/`, `setengine/`,
+`connectedstore/` or `zanzibar_utils_v1.py`).
+
+**Leg 7's step 2b is DISCHARGED.** Its step 3 can now start with any red attributable to
+the leg itself.
+
+---
+
 ## Session 2026-08-08 (**LEG 7 PRE-WORK: the attack-first probe is DONE (NO-KILL), step 2 is DISCHARGED, and THREE documents were refuted by measurement. No Lean declaration changed — one docstring, one new conformance pin.**)
 
 **Task taken:** leg 7 (`leaf-family-split-scope-2026-08-05.md`) is decided-but-deferred, so

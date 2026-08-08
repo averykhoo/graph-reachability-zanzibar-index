@@ -16,12 +16,22 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## Current status — 2026-08-05
+## Current status — 2026-08-08
 
 **Everything is green and nothing is blocking.** The gate passes all ten phases; there
 is no known live correctness bug, no `sorry`, and no `xfail` anywhere in the tree.
 
-- **★ Last landed: E-chain Direct-arm widening, LEGS 5 AND 6 — `ZT-P3-1` IS CLOSED for
+- **★ Last landed: THE `rewriteClosure` DEDUP LEG — `CORRESPONDENCE.md` §7.2 item 6 is
+  CLOSED** (2026-08-08, `911c887` + `c488a2f`). The Lean model counted DERIVATION PATHS
+  where Python counts LIVE RAW TUPLES, so on a *reconvergent* schema it over-counted edge
+  multiplicity; `rewriteClosure` now mirrors `RuleSet.apply`'s worklist dedup, per stored
+  tuple. Two corpora (`reconvergent_diamond`, `reconvergent_derived`) were added FIRST, in
+  their own deliberately-red commit, so the divergence was attributable rather than
+  arriving mixed into the fix. The count stack needed zero proof rework; the definition
+  pin moved (154 → 155) while all 38 headline statements stayed byte-identical. **Leg 7's
+  step 2b is discharged.** Three findings that correct live documents are in the board item
+  below; full detail in `formal/history/PROOF_STATUS.md` 2026-08-08b.
+- **Previously landed: E-chain Direct-arm widening, LEGS 5 AND 6 — `ZT-P3-1` IS CLOSED for
   T2b** (2026-08-05). The headline `graph_correct` / `backend_equivalence` /
   `exclusion_effective` / `no_ghost_grant` / `Exec.graphRun{,Ops}_check_eq_sem` are **no
   longer VACUOUS on `can_view: [user] but not blocked`**, the canonical Zanzibar boolean
@@ -93,9 +103,30 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
-- [ ] **★★ START HERE (2026-08-08) — THE `rewriteClosure` DEDUP LEG. Scoped, adjudicated,
-      sized at ONE SESSION, and it is the prerequisite for leg 7.** This is the first
-      concrete Lean task the board has offered since leg 6; everything else below is either
+- [x] ~~**★★ START HERE (2026-08-08) — THE `rewriteClosure` DEDUP LEG.**~~ **LANDED
+      2026-08-08 (`911c887` corpora-red, `c488a2f` fix). `CORRESPONDENCE.md` §7.2 item 6
+      is CLOSED; leg 7's step 2b is DISCHARGED.** All ten gate phases green. Kept visible
+      for one cycle because three of its outcomes correct documents that are still live:
+      * **The sizing held exactly** — the count stack is list-generic, so `untOccCount`/R3/R4
+        needed ZERO proof rework. **16 sites repaired, not the pre-measured 15**: the extra
+        one consumed the definition through term-level defeq, so it was invisible to a grep
+        for the TACTIC `unfold rewriteClosure`. *Grep the identifier, not the tactic.*
+      * **★ The over-count cost RUNTIME, which nothing predicted.** Every prior write-up
+        treated it as read-invisible bookkeeping; in fact `reconvergent_derived` blew
+        zcli's 120 s remove-stream budget before the fix and passes after it (derived-arm
+        multiplicity `185 → 52`). The masked value was also `lean=185`, not the scope doc's
+        predicted `lean=10` — that figure was for a ONE-write probe.
+      * **★ The sabotage found a real limitation, not a confirmation.** The two new corpora
+        do **NOT** catch the WRONG fix (a global `admitEdge` presence dedup): every
+        multiplicity in them is 1, so it leaves them green. `nary_union` catches that one,
+        at `3 → 1`. They guard OPPOSITE errors and neither substitutes for the other —
+        recorded in `corpus.py` so nobody deletes `nary_union` believing reconvergence is
+        now covered. The `List.dedup` last-occurrence risk was probed and retired
+        (topological on all three probe schemas, with a positive control).
+      Detail: `formal/history/PROOF_STATUS.md` 2026-08-08b.
+
+- [ ] **~~START HERE~~ (superseded — kept for the scope pointers below)** This is the
+      original filing of the leg that landed above; everything else on this board is either
       deferred (leg 7 proper) or a design decision already made.
 
       **What it is.** `CORRESPONDENCE.md` §7.2 item 6: the Lean model's `rewriteClosure`
@@ -193,11 +224,14 @@ open). This file is now only what a future session must ACT on.
         in the project and prove nothing. Use D.3's wildcard-carrying schema (§9.3).
       * **`uposEdgeFree` was never implicated** — structurally immune on the `_d`
         fragment. The `Inv`-side obligation is ONE clause, not two (§9.2).
-      * **★ NEW step 2b, ordered BEFORE step 3:** add a reconvergent corpus and settle
-        `CORRESPONDENCE.md` §7.2 item 6 (`rewriteClosure` doesn't dedupe where
-        `RuleSet.apply` does — measured live at `lean=2 python=1`). After the fork that
-        divergence moves into the EXACTLY-compared untainted arm. Doing it first is what
-        makes any later red attributable to the leg (§10.3).
+      * **~~★ NEW step 2b, ordered BEFORE step 3~~ — DONE 2026-08-08.** The two
+        reconvergent corpora are in, and `CORRESPONDENCE.md` §7.2 item 6 is CLOSED:
+        `rewriteClosure` now dedupes per stored tuple. **Step 3 may start; any red it
+        produces is now attributable to the leg.** ⚠ Two carries for the leg proper:
+        the post-fork leaf multiplicity is still UNMEASURED (scope doc §10.4), and
+        `reconvergent_derived`'s derived arm is `lean=52 python=1` — after the
+        `writeDirect` fork that contribution lands on `viewer.0`, untainted arm, compared
+        EXACTLY, so expect it to move and budget for it.
       **Steps 0 and 1 were done 2026-08-05.**
       (0) The P6 figure everyone quoted ("62 of 447 rows") was the 2026-07-27 measurement
       over **21** corpora and every leg but the P2 zero had drifted. It is now GENERATED
