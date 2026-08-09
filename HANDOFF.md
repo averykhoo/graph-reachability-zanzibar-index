@@ -18,8 +18,11 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ## Current status — 2026-08-09
 
-**Everything is green and nothing is blocking.** The gate passes all ten phases; there
-is no known live correctness bug, no `sorry`, and no `xfail` anywhere in the tree.
+**⛔ THE GATE IS RED, and there IS a known live correctness bug. Do not push until it is
+dispositioned.** Nine of ten phases pass; `tests-tile:2/4` fails on a **new, pre-existing,
+previously-undocumented answer-level divergence** in the graph index — see the board item
+"★★ START HERE" below and `docs/spec-deviations.md` 2026-08-09. No `sorry` and no `xfail`
+anywhere in the tree; the Lean layer is green.
 
 - **★ Last landed: LEG 7 IS UNDER WAY — steps 3 and 4a are IN** (2026-08-09, `8291c3a` +
   `41b7029`). `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,
@@ -118,7 +121,47 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
-- [x] ~~**★★ START HERE (2026-08-08) — THE `rewriteClosure` DEDUP LEG.**~~ **LANDED
+- [ ] **★★ START HERE (2026-08-09) — A LIVE ANSWER-LEVEL DIVERGENCE, AND THE GATE IS RED
+      ON IT.** The graph index under-reports the **OWC × star-parent × TTU cross**. Three
+      tuples on `tests/fga_schemas/owc_star_ttu.fga`:
+
+      ```
+      (user:u1, editor,  folder:f1)   # any tuple that makes folder:f1 exist
+      (user:u1, viewer,  folder:*)    # OBJECT-wildcard grant
+      (folder:*, parent, doc:d1)      # SUBJECT-wildcard tupleset
+      check(user:u1, viewer, doc:d1): oracle=True set:py=True set:roaring=True GRAPH=False
+      ```
+
+      **A false negative** — it fails closed, so it is not a security fail-open, but it
+      breaks the repo's central contract (two backends, identical semantics). **Pre-existing:**
+      reproduces at `6d3c540` with byte-identical Python; the session that found it changed
+      no `.py` file. **Found by** the hypothesis lookup campaign on a generated walk.
+
+      **Root cause, measured:** `index_v4/wildcard.py::_ensure_bridges` bridges
+      `w_all(T,p) → concrete → w_any(T,p)` only through an interned node of **shape `(T,p)`**,
+      while `tests/oracle.py::instances` witnesses ∃ with any **entity of type `T`**. Vary
+      only the witness relation and the graph flips: `folder:f1#editor` → False,
+      `folder:f1#blocked` → False, `folder:f1#viewer` → True. The two sides read
+      `wildcard-materialization-spec.md` §3.4 differently and **that asymmetry is written
+      down nowhere** — adjudicate which reading is intended BEFORE assuming the graph is
+      the side to change.
+
+      **Pointer for the fix:** the set engine already has the analogue the graph lacks —
+      `setengine/engine.py:1476-1480`, "the star-parent cross for the triple combo owc x
+      star-parent x TTU where NO concrete `(T, X, r')` is interned".
+
+      **Pinned deterministically** by `tests/test_owc_star_parent_cross.py` — 2 red pins +
+      1 green positive control, a positive pin and NOT an xfail, per `CLAUDE.md`.
+      ⚠ **Second finding, arguably the more important one:** before that file existed the
+      shape was reachable but essentially never drawn (`max_examples=12`,
+      `stateful_step_count=8`, ~50-tuple pool) — **the gate was green by seed luck**, the
+      house failure mode by name. *The hypothesis campaign's green is a sample, not a
+      proof, and nothing in the gate says so.* Consider whether that deserves its own fix.
+
+      Full filing, including the five prior-art items checked and why none covers this:
+      [`docs/spec-deviations.md`](docs/spec-deviations.md) 2026-08-09.
+
+- [x] ~~**★★ (2026-08-08) — THE `rewriteClosure` DEDUP LEG.**~~ **LANDED
       2026-08-08 (`911c887` corpora-red, `c488a2f` fix). `CORRESPONDENCE.md` §7.2 item 6
       is CLOSED; leg 7's step 2b is DISCHARGED.** All ten gate phases green. Kept visible
       for one cycle because three of its outcomes correct documents that are still live:

@@ -8,6 +8,77 @@ to the user instead.
 
 ---
 
+## 2026-08-09 — ★ NEW LIVE DIVERGENCE: the graph index under-reports the OWC x star-parent x TTU cross (answer level). GATE IS RED.
+
+**Found by** `tests/test_lookup_hypothesis.py::TestLookupSurfaceMachine` on a generated
+walk. **Pre-existing** — it reproduces at `6d3c540` with byte-identical Python; the
+session that found it changed no `.py` file. **Not previously documented anywhere** (see
+"prior art" below). **The gate is RED on `tests-tile:2/4` until it is fixed**; the other
+nine phases pass.
+
+**The divergence.** Schema `tests/fga_schemas/owc_star_ttu.fga`, object-wildcard shapes
+`{('folder','viewer'), ('doc','viewer')}`, three tuples:
+
+```
+(user:u1, editor, folder:f1)    # any tuple that makes folder:f1 exist
+(user:u1, viewer, folder:*)     # OBJECT-wildcard grant     -> w_all(folder, viewer)
+(folder:*, parent, doc:d1)      # SUBJECT-wildcard tupleset -> w_any(folder, '...')
+
+check(user:u1, viewer, doc:d1):
+    oracle = True   set:py = True   set:roaring = True   GRAPH = False
+```
+
+Three backends to one, and the oracle is the spec — so the **graph** is wrong. It is a
+**false negative** (under-grant): it fails closed, so it is not a security fail-open, but
+it breaks the repo's central contract that the two backends have identical semantics.
+
+**Root cause — measured, not inferred.** `index_v4/wildcard.py::_ensure_bridges` only ever
+links `w_all(T,p) -> concrete -> w_any(T,p)` through an **interned node of shape `(T,p)`**;
+`backfill`'s own docstring says so ("Does not create a w node for a shape that has no
+concrete instances"). `tests/oracle.py::instances` witnesses the existential with any
+**tuple-mentioned entity of type `T`**, whatever relation mentioned it. Holding everything
+else fixed and varying only which relation mentions `folder:f1`:
+
+| witness tuple | interns | oracle | graph |
+|---|---|---|---|
+| `u9 editor folder:f1` | `folder:f1#editor` | True | **False** |
+| `u9 blocked folder:f1` | `folder:f1#blocked` | True | **False** |
+| `u9 viewer folder:f1` | `folder:f1#viewer` | True | True |
+
+So the two sides disagree about what satisfies
+`wildcard-materialization-spec.md` §3.4's pinned rule — *"'granted on all S' implies
+'reaches some S' only if at least one concrete instance of S exists ... which requires a
+real concrete in the middle"*. The spec says "instance of S"; **the graph reads that as
+"node of shape `(T,p)`", the oracle and the set engine read it as "entity of type `T`",
+and that asymmetry is written down nowhere.** Adjudicating which reading is intended is
+the first step of any fix — this entry does not presume the graph is the side to change,
+only that three of four backends currently disagree with it.
+
+**The pointer for the fix.** The set engine has an explicit, named mechanism for exactly
+this composition and the graph has no analogue — `setengine/engine.py:1476-1480`, *"the
+star-parent cross for the triple combo owc x star-parent x TTU where NO concrete
+`(T, X, r')` is interned"*. `index_v4/core.py` contains zero occurrences of `ttu`.
+
+**Pinned deterministically** by `tests/test_owc_star_parent_cross.py` (2 red + 1 green
+positive control). It is a positive pin, NOT an xfail, per `CLAUDE.md`. Before that file
+existed the shape was reachable by the hypothesis campaign but essentially never drawn
+(`max_examples=12`, `stateful_step_count=8`, ~50-tuple pool) — **the gate was green by
+seed luck**, which is this repo's named house failure mode (an assurance step that fails
+by PASSING). That is a second finding in its own right: *the hypothesis campaign's green
+is a sample, not a proof, and nothing in the gate says so.*
+
+**Prior art checked, and none of it covers this** (2026-08-09 sweep):
+
+| item | where | why it does not cover this |
+|---|---|---|
+| **F1** (graph-incomplete OWC check divergence) | `:1320`, CLOSED `:1336` | a *doubly-bridged* topology, rejected at compile time by `DoublyBridgedShapeError`; this schema compiles fine |
+| "all -> any is NOT read semantics, no completeness fix warranted" | `:1360-1367` | decided on an **oracle-False** probe (no concrete in the universe). Here the oracle is **True** because `folder:f1` is in the universe, so it adjudicates the vacuous variant only |
+| `ZT-P5` bullet 2 / "Target 3", object wildcards at state level | `:2292`, `HANDOFF.md` | ran this exact fixture, but only for live-vs-rebuild / order / restoration — **never against oracle answers**, so a check-level under-report was invisible to it |
+| "zero check-level divergence observed on the object-wildcard corpus" | `formal/FINAL_REVIEW.md:396-403`, `formal/CORRESPONDENCE.md:848-854` | that corpus (`formal/conformance/corpus.py:90-98`) is one type, `define viewer: [user]`, one tuple — no TTU, no star tupleset. The sentence is flagged in situ as a hypothesis; this is the first evidence against it |
+| `test_reg5_triple_combo_star_parent_cross_no_concrete` | `tests/test_lookup_oracle.py:1181-1194` | pins the **set engine** on the structural case; the graph is never constructed there |
+
+---
+
 ## 2026-07-29c — the hub-topology DoS: store-level quota DECLINED by the user; "bulk rebuild instead" MEASURED and rejected; the async schedule is the answer
 
 **Decision (user, 2026-07-29): no store-level write quota.** *"I don't want to limit
