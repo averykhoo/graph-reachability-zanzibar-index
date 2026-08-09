@@ -282,7 +282,7 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   `formal/FINAL_REVIEW.md`'s delimited counts block from the tree (two
   `--collect-only` runs, per-file collection, `Audit.lean`, the pin files,
   `anchor_check`, `corpus.py`, `verify.sh`'s own floors, and — since 2026-08-05 —
-  the **state-gate projection ledger**, 23 in-fragment corpora driven through the
+  the **state-gate projection ledger**, every in-fragment corpus driven through the
   real graph index to count what each projection drops) and fails if the
   document disagrees. **~30 s** measured warm (this line said "~4 s" until
   2026-08-05 and had never been re-measured after the per-file table landed; ~24-28 s

@@ -222,9 +222,10 @@ versions survive under `*_direct` names *(historical staging — the W1→W4 wid
 
 The theorems are about the Lean models. The tie to Python is the `CORRESPONDENCE.md`
 review plus the **conformance harness** (`formal/conformance/`), gated by the
-one-command `formal/verify.sh`. The gate is **fail-closed**, and was green when last
-measured (2026-07-29 — `FINAL_REVIEW.md`'s header carries the
-authoritative measurement and this file must not disagree with it):
+one-command `formal/verify.sh`. The gate is **fail-closed**; the live counts are
+GENERATED into `FINAL_REVIEW.md`'s counts block and re-checked by `verify.sh` step 4e,
+and this file must not disagree with it. When measured for this revision (2026-07-29)
+it was green:
 
 > `lake build` + **0 sorries** (`formal/conformance/sorry_scan.py`) + `zcli` preflight +
 > **axiom audit** (**460** observed reports = 460 `#print axioms` commands, exactly one
@@ -243,11 +244,12 @@ statement and definition pins + zero-tolerance skip/xfail parsing — `docs/gate
 re-measure, and never read a count as coverage.
 
 Because the Lean spec is executable, the same artifact is both proof subject and the CLI
-oracle `zcli`. The 465 tests are **419 differential-conformance comparisons** across
-**13 test files** plus **46 gate-tooling unit tests** (not Lean-vs-Python comparisons:
-39 for the sorry-scanner, `test_sorry_scan.py`; 7 for the zcli-runner transient-init
-retry, `test_runner_retry.py`). The per-file table lives in `FINAL_REVIEW.md`'s header;
-by subject the 419 break down as:
+oracle `zcli`. The collected tests are **differential-conformance comparisons** plus a
+small set of **gate-tooling unit tests** (not Lean-vs-Python comparisons: the
+sorry-scanner, `test_sorry_scan.py`, and the zcli-runner transient-init retry,
+`test_runner_retry.py`). The totals and the per-file table are GENERATED into
+`FINAL_REVIEW.md`'s counts block — do not restate them here; by subject the
+differential comparisons break down as:
 
 - **Answer conformance — the five corners.** Over a shared query grid, `check` verdicts
   are compared five ways: Lean `sem` (zcli) × the independent oracle × the real
@@ -256,15 +258,16 @@ by subject the 419 break down as:
   T2b *by proof, not analogy*: `Exec.lean`'s driver folds the `ReachedBy` constructors
   (`graphRun_reached`), its runtime gates decide the theorem's side conditions
   (`foldAdmitsB_iff`, `drainedB_iff`), and under the W4 bundles every printed verdict is
-  `sem` (`graphRun_check_eq_sem`). Suites: `test_conformance_spec.py` (all **33**
-  spec-scope corpora — `SCHEMAS` = 24 plus the 6 `TTU_USERSET_SCHEMAS`, 2
-  `SELF_REFERENTIAL_SCHEMAS` and 1 `MULTI_STRATUM_SCHEMAS` (`three_strata_chain`) that
-  are deliberately kept out of the graph-side gates),
+  `sem` (`graphRun_check_eq_sem`). Suites: `test_conformance_spec.py` (every
+  spec-scope corpus — `SCHEMAS` plus the `TTU_USERSET_SCHEMAS`,
+  `SELF_REFERENTIAL_SCHEMAS` and `MULTI_STRATUM_SCHEMAS` (`three_strata_chain`) corpora
+  that are deliberately kept out of the graph-side gates; the four-dict total is in the
+  generated counts block),
   `test_conformance_random.py` (seeded randomized substores), `test_conformance_graph.py`
-  (the **23** in-fragment corpora, incl. two designed attack corpora — stale-edge
+  (every in-fragment corpus, incl. two designed attack corpora — stale-edge
   cross-stratum re-settle, star churn over two strata), `test_conformance_direct_arm.py`
-  (the Direct-arm corpus, at C-chain scope only — §6.0). **Scope caveat:** one of those
-  23, `direct_arm_exclusion`, is listed in `GRAPH_FRAGMENT` but is machine-checked to be
+  (the Direct-arm corpus, at C-chain scope only — §6.0). **Scope caveat:** one of
+  them, `direct_arm_exclusion`, is listed in `GRAPH_FRAGMENT` but is machine-checked to be
   OUTSIDE the final theorems' hypotheses, so its comparisons are a differential test
   between two implementations, not coverage by T2b. The CLI does not gate on
   `GraphAdmission`/`W4Fragment` at all — its rc 2/3 gates test run-success and
@@ -281,17 +284,19 @@ by subject the 419 break down as:
   1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode / 5 `"ops"` in spec mode),
   so spec answers can never masquerade as graph answers and an op stream can never be
   dropped on the floor.
-- **State-level graph conformance** (`test_conformance_state.py`, **23 corpora**): the
+- **State-level graph conformance** (`test_conformance_state.py`, every
+  `GRAPH_FRAGMENT` corpus): the
   Lean graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — same
   `graphRun` fold, same admission/drain gates, emitting canonical direct edges + residue
   triples) is diffed against the real Python graph index's final SQL state
   (`EdgeV4`/`ResidueV1` decoded through `NodeV4`). Compared under **seven documented
   projections** P1–P7, each justified in `formal/conformance/extractor.py`: P1 closure
   rows (a function of the direct set), P2 wildcard bridges (inert — RE-MEASURED
-  2026-07-29 over the full 23-corpus set: 477 raw `EdgeV4` rows, **P2 dropped 0 of
-  them**, and `bridged_in_shapes`/`bridged_out_shapes` compile EMPTY on all 23, the only
-  non-empty pairs in the corpus file being shapes excluded from `GRAPH_FRAGMENT`, so P2
-  still never fires), **P3 edge multiplicity —
+  2026-07-29 over the 23 corpora then in the fragment: 477 raw `EdgeV4` rows, **P2
+  dropped 0 of them**, and `bridged_in_shapes`/`bridged_out_shapes` compiled EMPTY on
+  all 23, the only non-empty pairs in the corpus file being shapes excluded from
+  `GRAPH_FRAGMENT`; the generated projection ledger keeps the live P2 row, still
+  0), **P3 edge multiplicity —
   NARROWED 2026-07-29 to the DERIVED arm only** (the untainted arm is now compared
   EXACTLY, and the derived arm is golden-pinned by
   `test_conformance_state.py::test_derived_arm_multiplicity_ledger`; see
@@ -314,8 +319,9 @@ by subject the 419 break down as:
   sample — **257 of those 1021 stores** (~25 %), sample size asserted. The
   graph backend is deliberately not in the ANSWER enumeration (it stays pinned by the
   curated-corpora graph + state gates), and the bounds are deliberately tiny.
-- **Remove-path conformance** (`test_conformance_remove.py`, **96 tests**, and it is
-  exactly the `conf-heavy` gate phase): the REAL `SetEngine` driven through seeded
+- **Remove-path conformance** (`test_conformance_remove.py` — exactly the `conf-heavy`
+  gate phase; its test count is in the generated per-file table): the REAL `SetEngine`
+  driven through seeded
   interleaved add/remove/re-add sequences (all spec-scope corpora × 5 seeds) equals
   `sem` (zcli) × the oracle on the FINAL store — the first ANSWER-LEVEL pin on Python's
   remove path — plus two Python-internal convergence pins: the driven engine equals a
@@ -518,11 +524,20 @@ per-field argument or a Lean witness makes it so.
    gated as a boolean, not row equality) — pinned only by Python-internal I5/I10 + the
    §8.3 verifier, never against Lean.
 
-   **How thin the gate actually is, measured 2026-07-27 (ZT-P4-5).** Over the 21
-   then-current in-fragment corpora: 447 raw `EdgeV4` rows → **231 dropped by P1, 0 by
-   P2, 62 by P6, 154 compared**; **all 235 `NodeV4` rows dropped by P5** (194 of them
-   implicitly pinned as endpoints/references of the compared state, **41 invisible to
-   the gate entirely**); only **5 of 21** corpora produced ANY residue row (11 rows),
+   **How thin the gate actually is (ZT-P4-5) — the quantification is GENERATED, not
+   restated here.** The projection ledger — of the raw `EdgeV4` rows Python writes,
+   how many each projection drops and how many survive to be compared against Lean,
+   plus the `NodeV4` rows P5 drops wholesale — lives in `FINAL_REVIEW.md`'s generated
+   counts block ("State-gate projection ledger", re-checked by `verify.sh` step 4e).
+   Read it as the honest width of the state-level claim: only the `compared` row is
+   ever checked against Lean, and a portion of the dropped nodes are not even
+   endpoints/references of compared state, i.e. invisible to the gate entirely (that
+   endpoint split is method-sensitive and deliberately NOT under the pin —
+   `CORRESPONDENCE.md` §7.2). This paragraph carried its own copies of the ledger
+   figures (measured 2026-07-27 over the 21 corpora then in the fragment) and they
+   went stale through two corpus additions before the ledger became generated. One
+   dated observation from that 2026-07-27 measurement is still worth keeping: only
+   **5 of the 21** then-current corpora produced ANY residue row (11 rows),
    and all 11 had `|stars| == 1` and `|neg| == 1`. **P5 cannot be closed by comparing
    harder:** the Lean `GraphState` has a `nodes` field, but zcli's `"graph-state"` dump
    emits only edges and residues, the model never GCs while Python does (so set equality

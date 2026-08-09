@@ -222,6 +222,131 @@ def _extract(text: str) -> str | None:
     return text[i:j + len(END)]
 
 
+# --------------------------------------------------------------------------- #
+# The prose refusal (added 2026-08-09)
+# --------------------------------------------------------------------------- #
+# The generated block above fixed `ZT-P3-5` for the numbers INSIDE it. It did
+# nothing for the hand-written copies scattered through prose, and on 2026-08-08
+# the `rewriteClosure` dedup leg grew `GRAPH_FRAGMENT` 23 -> 25 and left NINE
+# stale "23 corpora" claims across five files -- including, in `HANDOFF.md`,
+# leg 7's own success criterion. That is the fourth recurrence of the same rot.
+#
+# The repo's standing rule (HANDOFF.md working-rhythm 3b) is "do not restate
+# gate counts in prose". This turns that rule from a request into a refusal.
+#
+# THE CONTRACT, and it is deliberately permissive about history:
+#   * A corpus count that equals a LIVE registry size is fine (it is true).
+#   * A corpus count that does NOT is fine ONLY if the line is explicitly marked
+#     as a past measurement -- a date plus a pastness word. Dated provenance is
+#     valuable and must stay writable; what rots is an undated number that reads
+#     as current coverage.
+#   * Anything else fails, and the message says which of the two fixes to apply.
+# Deleting the number is always available and is the durable fix.
+
+#: Pastness markers. A bare date is NOT enough -- "Measured 2026-07-29 over all
+#: 23 corpora" reads as a current claim with a provenance note attached, which is
+#: exactly the shape that rotted. The line must also say it is in the past.
+_PAST_WORDS = ("then", "was", "were", "had", "historical", "stale", "previously",
+               "used to", "at the time", "since moved", "no longer", "superseded")
+_DATE_RE = re.compile(r"20\d\d-\d\d-\d\d")
+
+#: `N corpora` / `all N ... corpora`. Only counts phrased about CORPORA -- other
+#: doc numbers are out of scope here and belong in the generated block.
+#: `(?<![-\d])` is load-bearing, and it is not speculative: the instrument's own
+#: first run produced two false positives without it -- "the two 2026-07-28
+#: corpora" matched as `28 corpora` (date digits) and `3 corpora x 3 comparisons`
+#: matched as a coverage claim when it is arithmetic. Controlling the instrument
+#: is as required as controlling the subject (docs/sabotage-procedure.md).
+_COUNT_RE = re.compile(
+    r"(?<![-\d])(\d+)[- ](?:in-fragment |current |curated |spec-side )?corpora\b",
+    re.I)
+
+# ---- SABOTAGE RECORD (docs/sabotage-procedure.md), both RUN 2026-08-09 --------
+# Property guarded: "a hand-written corpus count in prose is either LIVE or
+# explicitly marked as a past measurement."
+#
+#   (1) the actual rot class -- append a fresh unmarked live claim:
+#         + "The state gate drives all 23 corpora end to end."
+#       observed: FAIL: 1 hand-written corpus count(s) ... (ZT-P3-5)
+#                 formal/ARCHITECTURE.md:725: '23 corpora' | The state gate
+#                 drives all 23 corpora end to end.
+#
+#   (2) ★ the discriminating one -- the well-meaning copy-edit that deletes the
+#       pastness word from a correctly-dated line ("the 23 corpora THEN in the
+#       fragment" -> "the 23 corpora in the fragment"):
+#         observed: FAIL ... test_conformance_state.py:121: '23 corpora' |
+#                   (2026-07-29): across the 23 corpora in the fragment, ...
+#       Note the line STILL CARRIES ITS DATE and still fails. That is the whole
+#       point of requiring a date AND a pastness word: "measured <date> over all
+#       23 corpora" reads as a current claim with provenance attached, and that
+#       is the exact shape that rotted four times.
+#
+# WHAT THIS DOES NOT CATCH, stated rather than left to be discovered:
+#   * A stale count that COINCIDES with some live registry size passes. The live
+#     set is currently {1, 2, 6, 25, 26, 35}, so e.g. a stale "6 corpora" is
+#     invisible. Accepting that keeps the check free of false positives on the
+#     several legitimate non-fragment corpus counts in the tree (`test_bulk_build`
+#     has its own 6). Narrow it only if a real miss appears.
+#   * Counts of anything other than CORPORA. Edge/node/row/test counts belong in
+#     the generated block above; this only polices the word "corpora".
+
+#: Files whose corpus counts this refuses to let rot. `history/` is append-only
+#: provenance and `FINAL_REVIEW.md` is generated, so both are exempt by design.
+_PROSE_GLOBS = ("formal/*.md", "formal/conformance/*.py", "docs/*.md",
+                "docs/architecture/*.md", "HANDOFF.md", "CLAUDE.md")
+
+
+def _live_corpus_counts() -> set[int]:
+    """Every count a corpus claim could legitimately be stating, read from the
+    registries themselves rather than hand-listed (sabotage-procedure ranking 2)."""
+    from formal.conformance.corpus import (
+        SCHEMAS, GRAPH_FRAGMENT, MULTI_STRATUM_SCHEMAS, TTU_USERSET_SCHEMAS,
+        SELF_REFERENTIAL_SCHEMAS)
+    spec_scope = (len(SCHEMAS) + len(TTU_USERSET_SCHEMAS)
+                  + len(SELF_REFERENTIAL_SCHEMAS) + len(MULTI_STRATUM_SCHEMAS))
+    return {len(SCHEMAS), len(GRAPH_FRAGMENT), len(MULTI_STRATUM_SCHEMAS),
+            len(TTU_USERSET_SCHEMAS), len(SELF_REFERENTIAL_SCHEMAS), spec_scope}
+
+
+def _ascii(t: str) -> str:
+    """Console-safe: verify.sh runs under a cp1252 console on this box, and a
+    check that CRASHES while reporting is worse than one that stays silent."""
+    return t.encode("ascii", "replace").decode("ascii")
+
+
+def check_corpus_count_prose() -> list[str]:
+    """Return one complaint per unmarked, non-live corpus count. Empty == clean."""
+    live = _live_corpus_counts()
+    bad: list[str] = []
+    for glob in _PROSE_GLOBS:
+        for path in sorted(REPO.glob(glob)):
+            # Exempt: `history/` is append-only provenance, `FINAL_REVIEW.md` is
+            # generated, and THIS file necessarily quotes stale numbers while
+            # explaining what it refuses. (The first run flagged its own error
+            # message — a check that fails on its own documentation.)
+            if ("history" in path.parts or path.name == TARGET.name
+                    or path.samefile(pathlib.Path(__file__))):
+                continue
+            rel = path.relative_to(REPO).as_posix()
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            for i, line in enumerate(lines, 1):
+                for m in _COUNT_RE.finditer(line):
+                    n = int(m.group(1))
+                    if n in live:
+                        continue
+                    # Look at the two previous lines too: prose wraps, and the
+                    # date or the pastness word routinely lands a line or two
+                    # above the number. Measured on the first run — a genuinely
+                    # well-marked paragraph in `test_conformance_nary_strata.py`
+                    # was flagged because its date sat two lines up.
+                    ctx = " ".join(lines[max(0, i - 3):i])
+                    low = ctx.lower()
+                    if _DATE_RE.search(ctx) and any(w in low for w in _PAST_WORDS):
+                        continue
+                    bad.append(f"{rel}:{i}: '{m.group(0)}' | {_ascii(line.strip()[:90])}")
+    return bad
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     g = ap.add_mutually_exclusive_group(required=True)
@@ -269,8 +394,26 @@ def main() -> int:
                 print(f"      doc:  {a}")
                 print(f"      tree: {b}")
         return 1
+    stale = check_corpus_count_prose()
+    if stale:
+        print(f"FAIL: {len(stale)} hand-written corpus count(s) in prose that are "
+              f"neither live nor marked as past measurements (ZT-P3-5).")
+        print(f"      Live registry sizes are {sorted(_live_corpus_counts())}.")
+        print("      Fix EITHER way — both are accepted, the first is durable:")
+        print("        (a) delete the number: 'every `GRAPH_FRAGMENT` corpus', and")
+        print("            point at FINAL_REVIEW.md's generated block for figures;")
+        print("        (b) if it is a PAST measurement, say so on the line - a date")
+        print("            AND a pastness word ('measured 2026-07-29, over the 23")
+        print("            corpora THEN in the fragment'). A bare date is not enough:")
+        print("            'measured <date> over all 23 corpora' still reads as a")
+        print("            current coverage claim, which is the shape that rots.")
+        for s in stale:
+            print(f"      {s}")
+        return 1
     print(f"  FINAL_REVIEW.md counts: {m['conf_total']} conf / {m['tests_total']} "
           f"tests / {m['audits']} audits / {m['anchors']} anchors — all match the tree")
+    print(f"  corpus-count prose: 0 stale claim(s) across {len(_PROSE_GLOBS)} "
+          f"path globs (live sizes {sorted(_live_corpus_counts())})")
     return 0
 
 

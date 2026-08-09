@@ -761,7 +761,7 @@ engine on every grid query (the from-chain userset answers True on all three,
 matching the oracle the graph was fixed toward) — the adjudication is anchored,
 not merely asserted. Kept OUT of `SCHEMAS`/`GRAPH_FRAGMENT` on purpose: the
 shapes are outside `W4Fragment`, so the graph/state/remove gates must not carry
-them. Conformance 248 → 257 (+9 = 3 corpora × 3 comparisons).
+them. Conformance 248 → 257 (+9 = three corpora × 3 comparisons).
 
 What remains is entirely OPTIONAL assurance-widening, ranked in `FINAL_REVIEW.md` §4:
 
