@@ -20,6 +20,9 @@ GraphModel.probeDerived_ResidueEmpty
 GraphModel.probeDerived_residueEmpty
 GraphModel.probeDerived_uposOnly
 GraphModel.probeNonDerived_iff
+LeafWitness.approver_isDerived
+LeafWitness.routes_away
+LeafWitness.untainted_unmoved
 MemberSet.containsShape_intersect_focus
 MemberSet.containsShape_subtract_focus
 MemberSet.containsShape_union_focus
@@ -195,6 +198,8 @@ isDerived_pureDirect
 isSWU_of_storeValid
 kahn_topo_strict
 layer_stable
+leafNode_ne_objNode
+leafPred_ne_relName
 lookup_of_mem
 mem_affectedKeys
 mem_enumJob2D_cands
@@ -237,6 +242,7 @@ probeDerived_reconcileStarsKeyDR_other
 probeNonDerived_plainEdges
 probeNonDerived_untaintedFilter
 quiescent_empty
+rawWriteNode_ne_objNode
 reachB_sound
 reach_complete
 reach_empty
