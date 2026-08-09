@@ -51,10 +51,14 @@ def _all_corpora():
     return out
 
 
-# Measured 2026-07-27: 28 curated corpora across the four dicts; RE-MEASURED
-# 2026-07-29: **33** (SCHEMAS 24 + TTU_USERSET 6 + SELF_REFERENTIAL 2 +
-# MULTI_STRATUM 1). A floor, not an equality — new corpora are welcome, a
-# collapse is not — so the constant deliberately lags the measurement.
+# Measured 2026-07-27: there were then 28 curated corpora across the four dicts;
+# RE-MEASURED 2026-07-29, **33** as of that date (SCHEMAS 24 + TTU_USERSET 6 +
+# SELF_REFERENTIAL 2 + MULTI_STRATUM 1); RE-MEASURED 2026-08-09 after the
+# `rewriteClosure` dedup leg added two reconvergent corpora, **35** as of that
+# date (SCHEMAS 26 + 6 + 2 + 1). A floor, not an equality — new corpora are
+# welcome, a collapse is not — so the constant deliberately lags the
+# measurement, and the live figure belongs in `FINAL_REVIEW.md`'s generated
+# block rather than here.
 _MIN_CORPORA = 28
 
 

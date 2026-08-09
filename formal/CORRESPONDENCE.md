@@ -48,44 +48,47 @@ survives that.** So:
 the same day's `ZT-P0-1` (N3-elision withdrawal), `ZT-P1-1`/`ZT-P1-2`/`ZT-P1-7`
 guard hardening, and `verify.sh` gate-floor changes — and are now **verified
 mechanically on every gate run** by the §9 checker (`anchor_check.py`, landed
-2026-07-27): **272 Python anchors + 125 Lean anchors = 397, 0 unresolved**
-(re-measured 2026-07-29). That is a claim about
+2026-07-27): every anchor parsed and resolved, with floored counts — the live tally
+is printed by each `lean`-phase gate run and echoed in `FINAL_REVIEW.md`'s generated
+counts block (when measured 2026-07-29: 397 anchors, 0 unresolved). That is a claim about
 *navigability only* (every named symbol exists, in the named file); it says
 nothing about whether a row's correspondence claim is true. §2's `check` row is
 the standing proof that a resolvable anchor can still head a wrong claim.
 
 ### Conformance gates (`formal/verify.sh` step 5, `formal/conformance/`)
 
-**Re-measured 2026-07-29** (was "2026-07-26: 20 / 19 / 13 files / 356 tests", and
-before that a "6 files / 17 corpora / 15 in-fragment / 330 tests" set that was stale
-in every figure): `corpus.SCHEMAS` = **24** corpora, `corpus.GRAPH_FRAGMENT`
-= **23** of them (`object_wildcard` is still the one excluded); the spec-scope set is
-**33** across FOUR dicts (`SCHEMAS` 24 + `TTU_USERSET_SCHEMAS` 6 +
-`SELF_REFERENTIAL_SCHEMAS` 2 + `MULTI_STRATUM_SCHEMAS` 1, the last being
+**The inventory counts are GENERATED, not restated here** — `corpus.SCHEMAS`,
+`corpus.GRAPH_FRAGMENT` (`object_wildcard` is still the one excluded), the
+spec-scope total across the FOUR dicts (`SCHEMAS` + `TTU_USERSET_SCHEMAS` +
+`SELF_REFERENTIAL_SCHEMAS` + `MULTI_STRATUM_SCHEMAS`, the last being
 `three_strata_chain`, spec-side ONLY — the Lean operational model's cascade is a fixed
-two rounds, so a 3-stratum corpus can never enter `GRAPH_FRAGMENT`); `formal/conformance/`
-holds **15 test files** collecting **465 tests** — 419 differential across 13 files plus
-46 gate-tooling. The three
-files marked ✚ below were entirely undeclared here, and one of them
+two rounds, so a 3-stratum corpus can never enter `GRAPH_FRAGMENT`), and the
+per-file test counts all live in `FINAL_REVIEW.md`'s generated counts block,
+re-checked by `verify.sh` step 4e. This paragraph kept its own copies, and by
+2026-08-09 they had gone stale three times (a "6 files / 17 corpora / 15
+in-fragment / 330 tests" set, then "2026-07-26: 20 / 19 / 13 files / 356 tests",
+then the 2026-07-29 re-measurement — 24 / 23 / 33 / 15 files / 465 tests — which
+later corpus additions falsified as well). The three
+files marked ✚ below were entirely undeclared here before 2026-07-29, and one of them
 (`test_conformance_remove.py`) *is* the whole legacy `conf-heavy` phase.
 
-| gate | compares | corpora | n |
-|---|---|---|--:|
-| `test_conformance_spec.py` | Lean `sem` (zcli) vs `tests/oracle.py` vs real `SetEngine` | all 33 spec-scope | 99 |
-| `test_conformance_random.py` | same, randomized stores | random | 24 |
-| ✚ `test_conformance_generated.py` | same, over GENERATED schema shapes outside the curated corpora (seeded re-implementation of the hypothesis generator) | generated | 40 |
-| `test_conformance_graph.py` | Lean **operational graph model** (zcli mode `"graph"`) vs real `WildcardIndex`+`DeltaProcessor`, and vs `sem` | the 23 `GRAPH_FRAGMENT` | 47 |
-| `test_conformance_state.py` | Lean graph model **FINAL STATE** (zcli mode `"graph-state"`) vs the Python index's final SQL rows (`EdgeV4`/`ResidueV1` via `NodeV4`), projections per `extractor.py` | the 23 `GRAPH_FRAGMENT` | 48 |
-| ✚ `test_conformance_remove.py` | **the entire legacy `conf-heavy` phase.** Interleaved add/remove streams DRIVEN through the real `SetEngine` (not a rebuild) vs `sem` on the final store vs oracle | remove streams | 96 |
-| `test_conformance_remove_graph.py` | zcli `"ops"` streams (`graphRunOps`) vs the real graph index vs oracle, ANSWER level | `GRAPH_FRAGMENT` minus `direct_arm_exclusion` | 21 |
-| ✚ `test_conformance_direct_arm.py` | Python-only (no zcli) both-`SetOps` 3-backend differential + exhaustive small-store attack on the Direct-arm-under-exclusion corpus | `direct_arm_exclusion` | 4 |
-| `test_conformance_nary_strata.py` | Python-only (no zcli) `>= 3`-stratum graph differential + the `wildcard_userset` bridge pins — the shapes the Lean operational model cannot reach | `MULTI_STRATUM_SCHEMAS` / `TTU_USERSET_SCHEMAS` | 19 |
-| `test_grid_independence.py` | the shared grid is read off the PRODUCTION parser, not the encoder's oracle parse (incl. a sabotage test) | all 33 curated + 40 generated | 4 |
-| `test_conformance_enum.py` | **exhaustive small-scope enumeration**: spec vs oracle vs set engine vs real graph index on ALL stores ≤ K tuples | **6** fragment shapes, **1021** stores, per-shape **K = 3 or 4** (counts + tuple-space sizes asserted) | 6 |
-| ✚ `test_conformance_enum_state.py` | STATE-level analog of the enumeration, on a deterministic sample, same P1–P7 projections | same 6 shapes | 6 |
-| `test_cli_mode.py` | zcli mode dispatch fails closed | minimal | 5 |
-| `test_runner_retry.py` (gate tooling) | `runner.invoke_zcli`'s pre-`main` retry never masks a real fault | — | 7 |
-| `test_sorry_scan.py` (gate tooling) | `sorry_scan.py` catches `sorry`/`admit`/`sorryAx`/`native_decide`/`axiom` (post-`ZT-P2-3`) | — | 39 |
+| gate | compares | corpora |
+|---|---|---|
+| `test_conformance_spec.py` | Lean `sem` (zcli) vs `tests/oracle.py` vs real `SetEngine` | all spec-scope (four dicts) |
+| `test_conformance_random.py` | same, randomized stores | random |
+| ✚ `test_conformance_generated.py` | same, over GENERATED schema shapes outside the curated corpora (seeded re-implementation of the hypothesis generator) | generated |
+| `test_conformance_graph.py` | Lean **operational graph model** (zcli mode `"graph"`) vs real `WildcardIndex`+`DeltaProcessor`, and vs `sem` | every `GRAPH_FRAGMENT` corpus |
+| `test_conformance_state.py` | Lean graph model **FINAL STATE** (zcli mode `"graph-state"`) vs the Python index's final SQL rows (`EdgeV4`/`ResidueV1` via `NodeV4`), projections per `extractor.py` | every `GRAPH_FRAGMENT` corpus |
+| ✚ `test_conformance_remove.py` | **the entire legacy `conf-heavy` phase.** Interleaved add/remove streams DRIVEN through the real `SetEngine` (not a rebuild) vs `sem` on the final store vs oracle | remove streams |
+| `test_conformance_remove_graph.py` | zcli `"ops"` streams (`graphRunOps`) vs the real graph index vs oracle, ANSWER level | `GRAPH_FRAGMENT` minus `direct_arm_exclusion` |
+| ✚ `test_conformance_direct_arm.py` | Python-only (no zcli) both-`SetOps` 3-backend differential + exhaustive small-store attack on the Direct-arm-under-exclusion corpus | `direct_arm_exclusion` |
+| `test_conformance_nary_strata.py` | Python-only (no zcli) `>= 3`-stratum graph differential + the `wildcard_userset` bridge pins — the shapes the Lean operational model cannot reach | `MULTI_STRATUM_SCHEMAS` / `TTU_USERSET_SCHEMAS` |
+| `test_grid_independence.py` | the shared grid is read off the PRODUCTION parser, not the encoder's oracle parse (incl. a sabotage test) | every curated corpus + every generated schema |
+| `test_conformance_enum.py` | **exhaustive small-scope enumeration**: spec vs oracle vs set engine vs real graph index on ALL stores ≤ K tuples | **6** fragment shapes, **1021** stores, per-shape **K = 3 or 4** (counts + tuple-space sizes asserted) |
+| ✚ `test_conformance_enum_state.py` | STATE-level analog of the enumeration, on a deterministic sample, same P1–P7 projections | same 6 shapes |
+| `test_cli_mode.py` | zcli mode dispatch fails closed | minimal |
+| `test_runner_retry.py` (gate tooling) | `runner.invoke_zcli`'s pre-`main` retry never masks a real fault | — |
+| `test_sorry_scan.py` (gate tooling) | `sorry_scan.py` catches `sorry`/`admit`/`sorryAx`/`native_decide`/`axiom` (post-`ZT-P2-3`) | — |
 
 **zcli exit codes (measured from `Cli.lean`'s header + dispatch):** `0` answers or
 state printed · `1` usage / JSON parse / decode error · `2` a graph op failed its
@@ -129,8 +132,8 @@ a query that *can* expose it. The two parsers really are different code — on a
 duplicate `define`, `tests/oracle.py` silently keeps the last while
 `zanzibar_utils_v1.py` raises
 (`formal/conformance/test_grid_independence.py::test_the_two_parsers_are_really_different_code`
-pins that divergence live). Re-measured 2026-07-29 over all **33** curated corpora +
-40 generated schemas: the two parsers' declared-key sets are identical, so the
+pins that divergence live). Re-measured 2026-07-29 over the **33** curated corpora
+then present + 40 generated schemas: the two parsers' declared-key sets were identical, so the
 swap changed **zero** grids (byte-identical `(subjects, targets)` on all **73**
 cases) — that agreement is itself now gated
 (`::test_declared_keys_agree_on_every_corpus` /
@@ -502,12 +505,12 @@ The bullet is corrected in place below.
   construction"; that concession is now quantified here, in
   `formal/conformance/extractor.py`'s P5 paragraph, in `FINAL_REVIEW.md` §3 and
   in `ARCHITECTURE.md` §6.
-  **P2 alone RE-MEASURED 2026-07-29** over the now-**23**-corpus in-fragment set
-  (`nary_union_derived4`, `residue_rich` landed since): **477** raw `EdgeV4` rows,
-  still **0** dropped by P2, and the compiled `bridged_in_shapes` /
-  `bridged_out_shapes` sets are EMPTY on every one of the 23 — so the "P2 never
-  fires" claim is now measured against the corpus set that actually exists, not an
-  older and smaller one. ~~The P1/P6/P5/residue figures above remain the 2026-07-27
+  **P2 alone RE-MEASURED 2026-07-29** over the then-current **23**-corpus in-fragment
+  set (`nary_union_derived4`, `residue_rich` landed since 2026-07-27): **477** raw
+  `EdgeV4` rows, still **0** dropped by P2, and the compiled `bridged_in_shapes` /
+  `bridged_out_shapes` sets were EMPTY on every one of the 23 — so the "P2 never
+  fires" claim was measured against the corpus set as it stood then, not an
+  older and smaller one (the generated ledger's P2 row now keeps the zero current). ~~The P1/P6/P5/residue figures above remain the 2026-07-27
   measurement over 21 corpora and are NOT re-measured here.~~ **All legs were
   re-measured 2026-08-05 and put under the pin — see the superseded-notice above.
   This sentence is why the pin exists: it correctly flagged the other legs as
@@ -532,7 +535,9 @@ The bullet is corrected in place below.
   already-present derived edge is a total no-op — no row touched, no count
   bumped, `changed` stays False. Python's `EdgeV4.direct_edge_count` on a
   processor-written derived row is therefore **always 0 or 1**, structurally.
-  Measured: all 18 such rows across `GRAPH_FRAGMENT` are exactly 1.
+  Measured 2026-07-29, over the 23 corpora then in `GRAPH_FRAGMENT`: all 18 such
+  rows were exactly 1 (the live per-corpus figures are golden-pinned by the
+  derived-arm multiplicity ledger, item 5 below).
 
   **2. The correspondence claim that is FALSE.** `GraphIndex/ReconcileDiff.lean`'s
   header states *"`GraphState.edges : List (NodeKey × NodeKey)` is ALREADY a
@@ -542,7 +547,7 @@ The bullet is corrected in place below.
   capped at 1 by (1) and the model compounds. It was stated without the split.
   Both docstrings are corrected.
 
-  **3. Measured shape (2026-07-29, all 23 `GRAPH_FRAGMENT` corpora).** Of 171
+  **3. Measured shape (2026-07-29, over the 23 corpora then in `GRAPH_FRAGMENT`).** Of 171
   compared edges: **153 untainted-arm, agreeing EXACTLY** — including the one
   genuinely non-unit case, `nary_union`'s three-arm fan-in onto the untainted
   `any_of`, where both sides say 3 — and **18 derived-arm, all diverging**,
@@ -575,7 +580,7 @@ The bullet is corrected in place below.
     multiset. The `edges` array is unchanged.
   * `formal/conformance/extractor.py::diff_states` now compares
     `direct_edge_count`-weighted multiplicity **exactly on the untainted arm**,
-    in both `test_conformance_state.py` (23 corpora) and
+    in both `test_conformance_state.py` (every `GRAPH_FRAGMENT` corpus) and
     `test_conformance_enum_state.py` (~257 sampled enumerated stores). This is
     net-new assurance: those 153 edges' multiplicity had never been compared.
   * the derived arm is pinned per corpus against a golden
@@ -1159,8 +1164,10 @@ no-Lean-impact change, not perf only.)*
 
 **Status: IMPLEMENTED** as `formal/conformance/anchor_check.py`, wired into
 `formal/verify.sh`'s `lean` phase as step 4c (~1 s, no Lean toolchain, no imports).
-On 2026-07-29 it parses **397 anchors (272 Python + 125 Lean), 0 unresolved**, with
-floors `MIN_PY_ANCHORS = 250` / `MIN_LEAN_ANCHORS = 100`. It found two live defects
+When measured on 2026-07-29 it parsed **397 anchors (272 Python + 125 Lean), 0
+unresolved**, with floors `MIN_PY_ANCHORS = 250` / `MIN_LEAN_ANCHORS = 100` (the live
+tally is printed by every gate run and echoed in `FINAL_REVIEW.md`'s generated counts
+block). It found two live defects
 when first run: `Schema.isSubjectWildcardUserset` was anchored to `Core/Schema.lean`
 when it is declared in `GraphIndex/UsStarWrite.lean` (fixed), and the `_fan_out` /
 `reconcileResidueKey` rows were verified to fail loudly under a simulated rename.

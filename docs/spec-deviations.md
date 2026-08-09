@@ -183,6 +183,17 @@ projection **P3 compared edges as a SET**, so the difference was structurally in
    non-unit 3-arm fan-in, 3 == 3), 18 derived-arm all diverging (Python 1, Lean 4 …
    **1013**). Zero set-level asymmetry — the pre-existing gate was honestly green.
    **The filed `1 → 2 → 4 → 8` understates it**: that is the single-candidate shape.
+   > ⚠ **QUALIFIED 2026-08-08 by the `rewriteClosure` dedup leg.** "153 untainted-arm
+   > agreeing EXACTLY" was true, and it was true *conditionally on no corpus being
+   > reconvergent* — a condition nobody stated, because nothing measured it. The
+   > untainted arm ALSO diverged on any schema with two rewrite paths from one tuple
+   > to the same key (`lean=2 python=1`); the fragment simply contained no such
+   > schema, so "the pre-existing gate was honestly green" meant green-on-the-shapes-
+   > it-had rather than green-on-the-property. Two corpora now cover the shape and
+   > the model dedupes. Counts in this item are the 2026-07-29 measurement over the
+   > then-23-corpus fragment; the live figures are in `FINAL_REVIEW.md`'s generated
+   > block. Detail: `formal/CORRESPONDENCE.md` §7.2 item 6,
+   > `formal/history/PROOF_STATUS.md` 2026-08-08b.
 3. **It is removal-inert**, so there is no modelled fail-open — but by ASSEMBLY, not
    by a theorem: derived edges are retracted only by filter-ALL (`removeEdgePair`),
    and the erase-ONE primitive's targets are untainted under a hypothesis

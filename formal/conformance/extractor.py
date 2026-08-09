@@ -42,10 +42,13 @@ outside these classes fails the gate:
      exactly identifiable: drop Python direct edges whose TARGET is a `w_any`
      node or whose SOURCE is a `w_all` node.
      Honesty note (probed 2026-07-12; RE-MEASURED 2026-07-27 over the 21
-     then-current corpora — 447 raw edge rows, 0 dropped; **RE-MEASURED AGAIN
-     2026-07-29 over all 23 current `GRAPH_FRAGMENT` corpora — 477 raw edge
-     rows, P2 dropped 0 of them**, and the compiled
-     `bridged_in_shapes`/`bridged_out_shapes` are EMPTY on every one of the 23):
+     then-current corpora — 447 raw edge rows, 0 dropped; RE-MEASURED
+     2026-07-29 over the 23 corpora then in `GRAPH_FRAGMENT` — 477 raw edge
+     rows, P2 dropped 0; **RE-MEASURED AGAIN 2026-08-09 over the 25 corpora
+     then in the fragment, after `reconvergent_diamond`/`reconvergent_derived`
+     landed — `graph_fragment_ledger()` reports 498 raw edge rows, P2 dropped
+     0 of them**, and the compiled `bridged_in_shapes`/`bridged_out_shapes`
+     are EMPTY on every one of those 25):
      bridges arise only for wildcard-userset / object-wildcard shapes,
      both outside `W4Fragment`, so P2 still never fires; it is kept (and
      documented) for robustness if the corpus set ever widens, not because it
@@ -85,9 +88,10 @@ outside these classes fails the gate:
      `test_conformance_state.py::test_derived_arm_multiplicity_ledger`, so the
      artifact's SHAPE is now a checked quantity rather than an invisible one.
 
-     **Measured 2026-07-29** over all 23 `GRAPH_FRAGMENT` corpora: of 171
-     compared edges, **153 are untainted-arm and agree exactly** (152 at
-     multiplicity 1, one at 3) and **18 are derived-arm and all diverge** —
+     **Measured 2026-07-29**, over the 23 corpora then in `GRAPH_FRAGMENT`: of
+     the 171 edges then compared, **153 were untainted-arm and agreed exactly**
+     (152 at multiplicity 1, one at 3) and **18 were derived-arm and all
+     diverged** —
      Python uniformly 1, Lean 4 … **1013** (`two_stratum_cascade`). Note the
      Lean growth is worse than the `1 → 2 → 4 → 8` recorded in
      `CORRESPONDENCE.md` §7.2 when the finding was filed: with several
@@ -118,8 +122,9 @@ outside these classes fails the gate:
      and residue equality already asserted; (iii) there is no comparable node
      PROPERTY — Python's `NodeV4.implicit` and `NodeV4.reference_count` have no
      counterpart in Lean's `NodeKey` (which is just `(type, name, pred,
-     variant)`). Quantified: of **235** `NodeV4` rows across the in-fragment
-     corpora, **194** are endpoints/references of the COMPARED state and so are
+     variant)`). Quantified (2026-07-27, over the corpora then in the
+     fragment): of **235** `NodeV4` rows, **194** were
+     endpoints/references of the COMPARED state and so
      pinned implicitly by the edge+residue equality; the remaining **41** are
      invisible to this gate entirely — they exist only to carry P1-dropped
      closure rows or P6-dropped leaf-family edges. What IS gated instead, and
@@ -164,7 +169,7 @@ outside these classes fails the gate:
      **I7 is gated by nothing formal.** Its only pins are Python-side —
      `index_v4/invariants.py` under paranoia mode in `tests/`. Concretely, the
      `version` values this gate throws away are real data: measured 2026-07-27,
-     the 11 residue rows across the curated state gate carry versions 2 and 3
+     the 11 residue rows then in the curated state gate carried versions 2 and 3
      (and the `residue_rich` corpus's rows 4 and 5), i.e. the counter is
      genuinely advancing and genuinely unobserved here.
 
@@ -244,8 +249,8 @@ def projection_ledger(session, store_id: str) -> dict[str, int]:
     WHY THIS IS A FUNCTION AND NOT A COMMENT. These figures were prose for two
     years, restated in three places, and every copy went stale: the 2026-07-27
     measurement (21 corpora, 447 raw, 62 by P6, 154 compared) was still being
-    quoted on 2026-08-05 against a 23-corpus set whose real figures are 477 raw,
-    73 by P6, 171 compared. The recipe to re-derive them lived only in a
+    quoted on 2026-08-05 against a 23-corpus set whose real figures were then
+    477 raw, 73 by P6, 171 compared. The recipe to re-derive them lived only in a
     docstring as an English description of a `python -c` invocation. It is now
     executable, aggregated by `graph_fragment_ledger`, and pinned by
     `doc_counts.py` — `ZT-P3-5`'s "a quoted count is not just stale, it is
@@ -283,7 +288,11 @@ def graph_fragment_ledger() -> dict[str, int]:
     fixed and the drive is add-only — which is what lets `doc_counts --check`
     compare it by exact string equality.
 
-    Costs ~4-5 s (23 corpora, real graph-index writes with paranoia mode ON).
+    Costs a few seconds — it drives every `GRAPH_FRAGMENT` corpus with real
+    graph-index writes, paranoia mode ON. No corpus count here on purpose
+    (`ZT-P3-5` / HANDOFF working-rhythm 3b): the current per-projection totals
+    live in `FINAL_REVIEW.md`'s generated counts block, machine-checked by
+    `verify.sh` step 4e via `doc_counts --check`.
     """
     from formal.conformance.backends import graphindex_drive
     from formal.conformance.corpus import GRAPH_FRAGMENT, SCHEMAS
@@ -451,8 +460,9 @@ def _classify_edges(py: dict, tainted: frozenset) -> dict:
         relation-name check) — so a dotted pair can never enter the taint set.
 
     Both predicates are therefore False on every leaf row, and cannot disagree.
-    Measured 2026-08-08 with the P6 branch removed: 23/23 corpora classify with
-    **0 raises**, all 73 newly-surviving leaf keys landing in the untainted arm.
+    Measured 2026-08-08 with the P6 branch removed, over the 23 corpora then in
+    the fragment: all 23 classified with
+    **0 raises**, all 73 then-newly-surviving leaf keys landing in the untainted arm.
     That measurement also refuted the scope doc's "it raises on disagreement —
     settle this before deleting the filter" as a hazard for THIS class of row.
     Per the house preference for a mechanical refusal over a doc paragraph, the

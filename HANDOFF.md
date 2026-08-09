@@ -236,9 +236,16 @@ open). This file is now only what a future session must ACT on.
       (0) The P6 figure everyone quoted ("62 of 447 rows") was the 2026-07-27 measurement
       over **21** corpora and every leg but the P2 zero had drifted. It is now GENERATED
       (`extractor.py::graph_fragment_ledger` → `FINAL_REVIEW.md`'s counts block, checked by
-      `verify.sh` step 4e, +~5 s) and sabotage-verified. Live baseline: 23 corpora, **477**
-      raw rows → 233 P1, 0 P2, **73** P6, **171** compared. When the leg lands these must
-      move to P6=0 / compared=244 — loudly, by design.
+      `verify.sh` step 4e, +~5 s) and sabotage-verified. **Read the live baseline out of
+      `FINAL_REVIEW.md`'s generated block, not from here** — until 2026-08-09 this line
+      used to carry its own copy (`23 corpora, 477 raw rows → 233 P1, 0 P2, 73 P6, 171
+      compared, target compared=244`, all of it as of 2026-08-05 and all of it since
+      superseded) and the dedup leg's two new corpora made every one of those figures
+      wrong within three days, including **the leg's own success criterion**. The criterion
+      is now stated in the form that cannot rot: **when the leg lands, `dropped by P6` must
+      be 0 and `compared against Lean` must equal today's `compared + dropped by P6`** —
+      loudly, by design. Re-derive both from the generated table immediately before
+      starting, because adding any corpus moves them.
       (1) The filed "widen `evalE`'s modeled arms first" prerequisite **does not exist** —
       leg 5 already widened `direct`, `ttu` is not implicated, and a leaf probe goes through
       `probeNonDerived`, not `evalE`. The stale docstring that caused it

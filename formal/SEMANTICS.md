@@ -738,27 +738,29 @@ section originally recapped the PLAN (C0–C4 — six-way answer conformance
 including rejection outcomes, state-level structural comparison, exhaustive
 small-scope enumeration). `FINAL_REVIEW.md` §1 is the authoritative
 clause-by-clause check. What exists (`formal/verify.sh` step 5;
-`formal/conformance/`; **465 tests, 0 skips, 0 xfails** as measured 2026-07-29
-— 419 differential-conformance comparisons across 13 test files + 46
-gate-tooling unit tests [sorry-scanner 39 + zcli-runner retry 7]. `FINAL_REVIEW.md`'s header
-carries the authoritative per-file breakdown and governs; the gate now carries `-ge`
-floors on these counts (`MIN_CONF_ALL` 465 = `MIN_CONF_HEAVY` 96 + `MIN_CONF_REST` 369),
-but a floor is not a measurement — re-measure rather than quoting):*
+`formal/conformance/`; **0 skips, 0 xfails** enforced —
+differential-conformance comparisons plus gate-tooling unit tests [the
+sorry-scanner + the zcli-runner retry]. The totals and the per-file breakdown are
+GENERATED into `FINAL_REVIEW.md`'s counts block, re-checked by `verify.sh` step 4e,
+and govern; the gate also carries `-ge` floors (`MIN_CONF_ALL` = `MIN_CONF_HEAVY` +
+`MIN_CONF_REST`), but a floor is not a measurement — read the generated block
+rather than quoting):*
 
 - **C0 — correspondence table**: `CORRESPONDENCE.md`, the auditable Lean-def ↔
   Python-`file:line` map, with the known intentional divergences listed.
 - **Answer conformance — check-verdict level, five corners**:
   - `test_conformance_spec.py` — Lean `sem` (zcli) × independent oracle × real
-    `SetEngine`, all **33** spec-scope corpora (`SCHEMAS` = 24 plus the 6
-    `TTU_USERSET_SCHEMAS`, 2 `SELF_REFERENTIAL_SCHEMAS` and 1 `MULTI_STRATUM_SCHEMAS`
-    (`three_strata_chain`) kept out of the graph-side gates);
+    `SetEngine`, every spec-scope corpus (`SCHEMAS` plus the
+    `TTU_USERSET_SCHEMAS`, `SELF_REFERENTIAL_SCHEMAS` and `MULTI_STRATUM_SCHEMAS`
+    (`three_strata_chain`) corpora kept out of the graph-side gates; the four-dict
+    total is in `FINAL_REVIEW.md`'s generated counts block);
   - `test_conformance_random.py` — the same comparison over seeded randomized
     substores per corpus;
   - `test_conformance_graph.py` — the Lean OPERATIONAL graph model (zcli mode
     `"graph"`, whose verdicts are covered by `graph_correct` via the driver
     honesty theorems `graphRun_reached`/`graphRun_check_eq_sem`) × the real
-    Python `WildcardIndex`+`DeltaProcessor` × `sem`, over the **23** in-fragment
-    corpora (incl. two designed attack corpora). **Scope caveat:** one of those 23,
+    Python `WildcardIndex`+`DeltaProcessor` × `sem`, over every in-fragment
+    corpus (incl. two designed attack corpora). **Scope caveat:** one of them,
     `direct_arm_exclusion`, is listed in `GRAPH_FRAGMENT` but machine-checked to be
     OUTSIDE the final theorems' hypotheses (`FullScope.lean:601`), so its comparisons
     are a differential test between implementations, not coverage by `graph_correct` —
@@ -793,8 +795,10 @@ but a floor is not a measurement — re-measure rather than quoting):*
   count was derived from `Audit.lean` itself and compared for equality with no floor, and
   the conformance step asserted only `skipped == 0 && passed > 0` — so deleting audited
   theorems or a whole conformance suite kept it green, and `xfailed` was not parsed at
-  all. Closed by the 2026-07-26/27 hardening: hard floors (`EXPECTED_MIN_AUDITS` 460,
-  `MIN_CONF_ALL` 465, `MIN_TESTS_ALL` 762), the audit IDENTITY pin, the headline
+  all. Closed by the 2026-07-26/27 hardening: hard floors (`EXPECTED_MIN_AUDITS` /
+  `MIN_CONF_ALL` / `MIN_TESTS_ALL` — the values live in `verify.sh`, are echoed in
+  `FINAL_REVIEW.md`'s generated counts block, and ratchet upward; one has been raised
+  since), the audit IDENTITY pin, the headline
   STATEMENT and DEFINITION pins, the `CORRESPONDENCE.md` anchor pin, and zero-tolerance
   `skipped`/`xpassed`/`deselected` parsing. The counts in this document are still dated
   measurements, not the floors — re-measure.
@@ -803,10 +807,11 @@ but a floor is not a measurement — re-measure rather than quoting):*
   the Lean graph model's FINAL STATE (zcli mode `"graph-state"`: the same
   `graphRun` fold and rc 2/3 gates as graph mode, emitting the canonical
   direct-edge set + residue rows) diffed against the Python graph index's
-  final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4`), **23**
-  in-fragment corpora, under the SEVEN documented projections P1–P7 of
+  final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4`), every
+  in-fragment corpus, under the SEVEN documented projections P1–P7 of
   `formal/conformance/extractor.py` (P1 closure rows / P2 bridges — inert, RE-MEASURED
-  over all 23 on 2026-07-29: 477 raw `EdgeV4` rows, 0 dropped by P2 / P3 multiplicity,
+  on 2026-07-29 over the 23 corpora then in the fragment: 477 raw `EdgeV4` rows, 0
+  dropped by P2 / P3 multiplicity,
   narrowed 2026-07-29 to the DERIVED arm only, the untainted arm now compared exactly /
   P4 empty residues / P5 node GC, under which no `NodeV4` row is compared at all / P6
   leaf-family split / P7 `ResidueV1.version`, declared 2026-07-27 — a MODELLING gap, not
@@ -820,7 +825,9 @@ but a floor is not a measurement — re-measure rather than quoting):*
   grid; plus `test_conformance_enum_state.py`, a state-level leg over a deterministic
   stride-4 sample of **257 of those 1021**.
 - **Remove-path answer conformance** (2026-07-12):
-  `test_conformance_remove.py` (80 tests) — the REAL `SetEngine` driven through seeded
+  `test_conformance_remove.py` (80 tests at this 2026-07-12 revision; since extended —
+  the live per-file count is in `FINAL_REVIEW.md`'s generated counts block) — the
+  REAL `SetEngine` driven through seeded
   interleaved add/remove/re-add sequences (all spec-scope corpora ×
   5 seeds) == `sem` (zcli) × oracle on the FINAL store; plus Python-internal
   convergence pins: driven == fresh `rebuild()` over the grid AND at id-free
