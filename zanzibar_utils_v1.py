@@ -1211,9 +1211,19 @@ def wildcard_userset_restriction_shapes(ast: SchemaAST) -> frozenset[tuple[str, 
     That distinction is the whole difference between F1/F2 and reg11: only a literal
     ``T:*#p`` restriction lets a ``T:*#p ... o`` tuple be written DIRECTLY by the user,
     which makes the danger a property of the SCHEMA and so compile-rejectable. Counting
-    through-shapes here would over-reject the legal reg11 / ``owc_star_ttu`` class
-    (verified by construction: their coarse ``bridged_in ∩ bridged_out`` is non-empty
-    yet their whole write space is oracle-correct and unanimous on both backends).
+    through-shapes here would over-reject the legal reg11 / ``owc_star_ttu`` class,
+    whose coarse ``bridged_in ∩ bridged_out`` is non-empty.
+
+    ⚠ CORRECTION (2026-08-09). This sentence used to end "-- yet their whole write
+    space is oracle-correct and unanimous on both backends", offered as the evidence
+    that the class is safe to admit. **That clause was REFUTED by measurement.** The
+    graph index under-reported on exactly this class -- an object-wildcard grant
+    crossing a star-tupleset TTU with no interned node of the shape -- disagreeing with
+    the oracle AND with both set engines (docs/spec-deviations.md 2026-08-09; fixed by
+    the entity-wise crossing middle, invariant I14). The NARROWING itself still stands
+    on its own argument: the F1/F2 danger is a writable userset SUBJECT creating a
+    latent cycle and innocent-write lockout, which a through-shape does not enable.
+    Admitting the class was right; the unanimity cited for it was not true.
 
     ⚠ CORRECTION (ZT-P5-NEW, 2026-07-26). The original justification for this narrowing
     also claimed that a through-shape *"is never a writable userset subject -- reg11's
