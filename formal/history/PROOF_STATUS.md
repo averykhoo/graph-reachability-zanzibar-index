@@ -8,6 +8,88 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-09 (**LEG 7 STARTED — steps 3 and 4a LANDED. The scope doc's §3 bet held, its §4 prescription is REFUTED, and a design fork it does not contain is what stopped step 4c.**)
+
+**Task taken:** "finish the leg" — leg 7, the leaf-family split that retires projection
+P6. Steps 0/1/2/2b were already discharged, so this session started at step 3. Two green
+commits, `8291c3a` then `41b7029`, plus this bookkeeping. **The leg is NOT finished** —
+step 4c onward remains, and §11.3 of the scope doc is why.
+
+**1. Step 3 — leaf addressing (`GraphIndex/Leaf.lean`).** `leafPred` / `isLeafPred` /
+`leafNode`, the raw-write routing `rawWriteRel` / `rawWriteNode`, and the distinctness
+linchpin `leafPred_ne_relName`. **Scope doc §3's central bet held: no new sentinel axiom
+alongside `STAR`/`BARE`.** `relNameOK` already forbids `'.'` in a declared name, so a leaf
+node is provably distinct from every bare R-node for free. `relNameOK_of_isDerived` closes
+the last gap by deriving declaredness FROM `isDerived` (`taintStep` filters `S.keys`, via
+the existing `taintChain_subset_keys`), so `rawWriteNode_ne_objNode` needs only `WF S` and
+no store hypothesis. Audits 481 → 487; statements 38/38 and definition pin 155/155 unmoved,
+the exact additive profile predicted.
+
+**2. ★ Step 4a — and scope doc §4 is REFUTED. Do not fork `writeDirect`; fork the TUPLE.**
+§4 prescribes giving `writeDirect` a target-node argument and warns this "duplicates or
+re-parameterizes every `writeDirect_*` projection lemma … and every fold lemma". That cost
+is avoidable, and avoiding it is *more* faithful, not a shortcut: **Python does not fork
+its write path at all** — `RuleSet.apply` re-addresses the TUPLE
+(`replace_relation(triple, f.rewrite_relation)`, `zanzibar_utils_v1.py:447`) and then the
+ordinary `add_tuple` path runs. So `rawWriteTuple` + `writeDirectRaw σ S t :=
+σ.writeDirect (rawWriteTuple S t)`. Measured consequences: `writeDirect` stays
+BYTE-IDENTICAL (definition pin unmoved across both commits), `structInv_writeDirectRaw` /
+`inv_writeDirectRaw` are one-line term proofs over the originals, and the untainted
+subsumption is on the TUPLE (`rawWriteTuple S t = t`), which is stronger than the
+node-level version §4 implies. Audits 487 → 492 → 493.
+
+**3. ★★ The sabotage that mattered, and the first control PASSED FOR THE WRONG REASON.**
+Three sabotage runs, all recorded literally in `Leaf.lean`'s docstrings.
+* Step 3, run A — routing collapsed to the identity: caught by the general section
+  (`rawWriteRel_derived`), so the witness earned nothing there.
+* Step 3, run B — routing guard made UNSATISFIABLE (`&& isLeafPred t.relation`, a
+  *plausible* misreading of `RuleSet.apply`'s refusal of leaf-named raw writes). **Every
+  general lemma still compiles over a dead branch, `rawWriteNode_ne_objNode` included.**
+  Exactly two errors, both at the witness. This is the §C.5 half-done-leg failure mode
+  with a new face.
+* Step 4a — a `writeDirectRaw` that ignores the routing. Run 1 reddened three general
+  lemmas and left the witness GREEN: **shielded, not satisfied**, because the witness
+  consumes one of the already-red lemmas. Only one of the three was a false STATEMENT; the
+  other two were proof-style artifacts. Run 2 applied exactly the repairs a careless author
+  would make, and then the ONLY error in the tree was `writeDirectRaw_edges_ne`.
+  *Transferable: when a sabotage reddens both the subject and the instrument, re-run it
+  with the subject repaired, or you have not tested the instrument at all* — plan §C.4's
+  trap, recurring.
+* Per scope doc §9.3 the witness deliberately does NOT use `W4WitnessDirect`'s `Sd`/`Td`
+  (no wildcard there ⇒ `negStarCovered` forces `neg = []` ⇒ vacuous) but D.3's schema.
+
+**4. The step-4c walk (§8.4's "cheap sharpening"), and why it stopped.** Re-pointed
+`writeRules` only — it already takes `S`. Frontier per module: `RulesWrite.lean` **5**
+errors, all discharged by ONE new lemma `foldl_writeDirectRaw_eq` (the fold family is
+`∀ (ts : List Tuple)` — **list-generic, exactly like the count stack the dedup leg found**);
+`RulesCorrect.lean` **1**, the leg's first genuine statement change
+(`reachedByRules_edge_sound`: `b = objNode u.object u.relation` → `b = rawWriteNode S u`);
+`RulesChain.lean` **1**, discharged by `rawWriteNode_untaintedSchema` — on an untainted
+schema no key is derived, so **the whole W2 soundness development is insulated by
+construction**; `RulesComplete.lean` **4**, not walked. ⚠ `lake build` does not build the
+dependents of a failing module, so these are FRONTIERS, not totals — §5's 55–65% is
+neither confirmed nor refuted. `foldl_writeDirectRaw_eq` is landed and audited; the rest
+of the walk was reverted.
+
+**5. ★★ THE STOP POINT — a design fork the scope doc does not contain
+(`leaf-family-split-scope-2026-08-05.md` §11.3).** `writeLoggedOne` writes the edge AND
+pushes `pushDelta (objNode t.object t.relation) t.relation true`. Once the edge moves to
+the leaf node, the DELTA ROW's addressing is a separate unforced choice: (α) the row moves
+too — what Python's outbox literally records — but then `affectedKeys`'s `leaf = true`
+own-key branch must map leaf → public, which Python does through a compiled table
+(`_map_deltas_to_keys`) the model has no analogue of, and in Lean would be string surgery;
+or (β) the row stays public, `affectedKeys` untouched, less faithful, defensible only as a
+written-down carry. **§4's claim that the `Delta.leaf` tag is "the single biggest cost
+reducer" is true for DISCRIMINATING the two write legs — which is why 4a is cheap — but
+the tag does not answer this, because it says which leg wrote the row, not which node the
+row is keyed at.** This needs attack-first (rule 2) before either branch is coded, and it
+should not be smuggled into a mechanical caller re-point. `writeLoggedOne` must gain an `S`
+parameter under either branch (~58 references), so decide first and pay the churn once.
+
+**Gate:** `verify.sh lean` PASSED after each commit; full phased gate run before pushing.
+
+---
+
 ## Session 2026-08-08b (**THE `rewriteClosure` DEDUP LEG — LANDED. `CORRESPONDENCE.md` §7.2 item 6 is CLOSED, the count stack needed zero rework as sized, and the over-count turned out to cost RUNTIME as well as accuracy.**)
 
 **Task taken:** the board's top item — settle §7.2 item 6 before leg 7's step 3, so any

@@ -149,6 +149,7 @@ exprDirectsAll_computedOnly
 exprDirects_ne_nil_of_directsOnly
 foldAdmitsB_iff
 foldAdmits_of_acyclic
+foldl_writeDirectRaw_eq
 foldl_writeDirect_edge_complete
 grantReach_of_trail
 graphRec_base_eq

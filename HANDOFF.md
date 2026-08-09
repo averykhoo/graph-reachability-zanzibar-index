@@ -16,12 +16,27 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## Current status — 2026-08-08
+## Current status — 2026-08-09
 
 **Everything is green and nothing is blocking.** The gate passes all ten phases; there
 is no known live correctness bug, no `sorry`, and no `xfail` anywhere in the tree.
 
-- **★ Last landed: THE `rewriteClosure` DEDUP LEG — `CORRESPONDENCE.md` §7.2 item 6 is
+- **★ Last landed: LEG 7 IS UNDER WAY — steps 3 and 4a are IN** (2026-08-09, `8291c3a` +
+  `41b7029`). `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,
+  the raw-write routing, the forked write `writeDirectRaw`, and the distinctness linchpin.
+  Additive — headline statements 38/38 and the definition pin 155/155 **unmoved**.
+  **The leg is NOT finished**; steps 4c, 4b, 5, 6, 7 remain. Three things a next session
+  must read before touching it (all in `formal/history/leaf-family-split-scope-2026-08-05.md`
+  §11 and `formal/history/PROOF_STATUS.md` 2026-08-09):
+  * **The scope doc's §3 bet HELD** — the leaf-vs-bare distinctness linchpin needs no new
+    axiom, `relNameOK` already gives it.
+  * **★ Its §4 prescription is REFUTED.** Do not fork `writeDirect`; fork the TUPLE, as
+    `RuleSet.apply` does. `writeDirect` then stays byte-identical and the duplication §4
+    predicted for every projection and fold lemma is not owed.
+  * **★★ Step 4c is blocked on a design fork the scope doc does not contain** (§11.3):
+    once the edge moves to the leaf node, where is the `Delta` row addressed? The
+    `Delta.leaf` tag does not answer it. Attack-first that before coding either branch.
+- **Previously landed: THE `rewriteClosure` DEDUP LEG — `CORRESPONDENCE.md` §7.2 item 6 is
   CLOSED** (2026-08-08, `911c887` + `c488a2f`). The Lean model counted DERIVATION PATHS
   where Python counts LIVE RAW TUPLES, so on a *reconvergent* schema it over-counted edge
   multiplicity; `rewriteClosure` now mirrors `RuleSet.apply`'s worklist dedup, per stored
@@ -212,9 +227,12 @@ open). This file is now only what a future session must ACT on.
       provided leaf preds stay OUT of `S.defs`), and the routing signal **is already
       threaded** (the `Delta.leaf` tag landed 2026-07-20c; the leg turns it from a
       bookkeeping discriminator into an addressing one).
-      **★ Steps 0, 1 and 2 are DONE, the attack probe is DONE, and the leg now starts at a
-      NEW step 2b (2026-08-08).** Read `formal/history/PROOF_STATUS.md` 2026-08-08 and the
-      scope doc's §9/§10 before anything else; four things changed:
+      **★ RESUME POINT (2026-08-09): steps 0, 1, 2, 2b, 3 and 4a are DONE. The leg resumes
+      at the §11.3 DESIGN FORK, then step 4c.** Read `formal/history/PROOF_STATUS.md`
+      2026-08-09 and scope doc §11 FIRST — §4 of that document is refuted (fork the TUPLE,
+      not `writeDirect`) and §11.3 is a decision the document does not contain (where the
+      `Delta` row is addressed once the edge moves; the `Delta.leaf` tag does NOT settle
+      it). The four older notes below still stand:
       * **The attack-first probe returned NO-KILL** — `negEdgeFree` holds under leaf
         routing, positive control reproduced D.3's kill in the same run. The leg is still
         on at full price (§9.1).

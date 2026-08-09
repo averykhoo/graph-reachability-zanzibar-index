@@ -280,6 +280,18 @@ theorem writeDirectRaw_edges_of_admit {σ : GraphState} {S : Schema} {t : Tuple}
     σ.writeDirectRaw S t = σ.writeDirect t := by
   simp [GraphState.writeDirectRaw, rawWriteTuple_untainted h]
 
+/-- **The fold bridge, and the reason step 4c is cheap.** A fold of raw writes is a fold of
+    ordinary writes over the re-addressed list. `RulesWrite.lean`'s fold family
+    (`structInv_foldl_writeDirect` and its four siblings) is stated `∀ (ts : List Tuple)`,
+    exactly like the count stack the 2026-08-08 dedup leg found list-generic — so this one
+    lemma discharges all of them at the raw fold with no clone. -/
+theorem foldl_writeDirectRaw_eq (S : Schema) (ts : List Tuple) (σ : GraphState) :
+    ts.foldl (fun acc u => acc.writeDirectRaw S u) σ
+      = (ts.map (rawWriteTuple S)).foldl (fun acc u => acc.writeDirect u) σ := by
+  induction ts generalizing σ with
+  | nil => rfl
+  | cons a as ih => simpa [GraphState.writeDirectRaw] using ih (σ.writeDirect (rawWriteTuple S a))
+
 /-- The invariant survives the forked write for free — no clone of
     `structInv_writeDirect`, because the target moved by re-addressing the tuple. -/
 theorem structInv_writeDirectRaw {S S' : Schema} {σ : GraphState} (h : StructInv S' σ)

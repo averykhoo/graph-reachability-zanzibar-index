@@ -1732,5 +1732,9 @@ namespace Zanzibar
 #print axioms writeDirectRaw_untainted
 #print axioms inv_writeDirectRaw
 #print axioms LeafWitness.writeDirectRaw_edges_ne
+-- The lemma that makes step 4c cheap, measured: `RulesWrite.lean`'s fold family is stated
+-- `∀ (ts : List Tuple)` — list-generic, exactly like the count stack the dedup leg found —
+-- so ONE bridge discharges all five raw-fold obligations with no clone.
+#print axioms foldl_writeDirectRaw_eq
 
 end Zanzibar

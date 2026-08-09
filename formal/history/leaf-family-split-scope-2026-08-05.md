@@ -308,11 +308,17 @@ relation names). Pinned by `test_p6_bare_sentinel_guard_is_unexercised`.
    filter, since it silently converts leaf edges into exactly-compared untainted-arm rows.~~
    **DONE 2026-08-08 — see §10. The cell's stated blocker is DISCHARGED and one of its two
    named hazards was refuted; but §10.3 adds a NEW obligation that lands before step 3.**
-3. **Additive leaf addressing:** `isLeafPred`, the leaf-name assignment function, and the
-   distinctness lemma off `relNameOK` (§3). No behavior change; nothing rebased.
+3. ~~**Additive leaf addressing:** `isLeafPred`, the leaf-name assignment function, and the
+   distinctness lemma off `relNameOK` (§3). No behavior change; nothing rebased.~~
+   **DONE 2026-08-09** (`GraphIndex/Leaf.lean`, commit `8291c3a`). §3's central bet held:
+   no new sentinel axiom. Audits 481 → 487, statements 38/38 and definition pin 155/155
+   unmoved.
 4. **Fork `writeDirect`** (§4) driving the target off the existing `Delta.leaf` tag.
    Behaviorally identical on `ComputedOnly` by construction — prove that as the leg's
    subsumption lemma, mirroring `w4Fragment_of_computedOnly`.
+   **4a DONE 2026-08-09** (commit `41b7029`) — and **§4's prescription is refuted: do NOT
+   fork `writeDirect`.** Fork the TUPLE. See §11.1. **4c (re-point the callers) is NOT
+   done**, and §11.3 is a design fork this document does not contain.
 4b. **The leaf-probe ↔ `directLeaf` bridge** (§8.1) — the spec still evaluates the raw
    def, so once `checkFn` reads a leaf node the two sides need reconnecting. Easiest
    instance of W1's correspondence, but restated over the leaf-name artifact rather than
@@ -653,6 +659,98 @@ derived-arm golden values; whether a forked `schemaRewrites` double-emits on a
 reconvergent schema; and §8.2, untouched.
 
 ---
+
+---
+
+## 11. Steps 3 and 4a executed (2026-08-09) — §4 is refuted, §5's sizing is unverified in
+## the one direction that matters, and there is a design fork this document does not contain
+
+Steps 3 and 4a landed green (`8291c3a`, `41b7029`); step 4c did not. What follows is what
+executing them measured, including the parts that contradict the cells above.
+
+### 11.1 ★ §4 prescribes the wrong fork — fork the TUPLE, not the write path
+
+§4 says `writeDirect` "must **fork** (take a target-node argument, or split into
+`writeDirectLeaf` / `writeDirectDerived`), which duplicates or re-parameterizes every
+`writeDirect_*` projection lemma … and every fold lemma". That cost is avoidable and the
+avoidance is the *more* faithful modelling, not a shortcut:
+
+> **Python does not fork its write path at all.** `RuleSet.apply` re-addresses the TUPLE —
+> `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py:447`) — and then
+> the ordinary `add_tuple`/`_add_edge_locked` path runs unchanged.
+
+So `rawWriteTuple S t := { t with relation := rawWriteRel S t }` and
+`writeDirectRaw σ S t := σ.writeDirect (rawWriteTuple S t)`. Consequences, all observed:
+
+* `GraphState.writeDirect` is **byte-identical** — the headline definition pin does not
+  move for a change that changes no meaning (155/155 across both commits).
+* Every `writeDirect_*` projection and fold lemma applies to the re-addressed tuple
+  verbatim. `structInv_writeDirectRaw` / `inv_writeDirectRaw` are one-line term proofs
+  over the originals; §4's predicted duplication of `Write.lean:85,92,171,176,181,186,237`
+  and `RulesWrite.lean:122-193` **did not happen and is not owed**.
+* The untainted subsumption is stronger than the node-level one §4 implies: on an
+  untainted key `rawWriteTuple S t = t` — identity on the TUPLE — so downstream lemmas
+  transport by rewriting rather than by a clone (`rawWriteTuple_untainted`).
+
+The same shape should be tried on the removal path (`removeEdgePair`/`removeEdgeOne`,
+§4's last paragraph) before cloning anything there.
+
+### 11.2 The step-4c walk — much cheaper than §5 predicts, but the number is a FRONTIER
+
+§8.4 asks for "a cheap sharpening: fork `writeDirect` locally, `lake build`, and count the
+errors". Done, and then walked four modules deep, re-pointing `writeRules`
+(`RulesWrite.lean:136`) only — it already takes `S`, so no signature change:
+
+| module | errors | what discharged them |
+|---|---|---|
+| `RulesWrite.lean` | **5** | ONE new lemma, `foldl_writeDirectRaw_eq`. The fold family is stated `∀ (ts : List Tuple)` — **list-generic, exactly like the count stack the dedup leg found** — so a raw fold is an ordinary fold over the re-addressed list and all five corollaries follow with no clone |
+| `RulesCorrect.lean` | **1** | `reachedByRules_edge_sound` — the first genuine STATEMENT change of the leg: `b = objNode u.object u.relation` becomes `b = rawWriteNode S u` |
+| `RulesChain.lean` | **1** | `rawWriteNode_untaintedSchema` — on `UntaintedSchema` no key is derived, so the routing is the identity and **the entire W2 soundness development is insulated by construction** |
+| `RulesComplete.lean` | **4** | not walked |
+
+**⚠ Read those counts correctly. `lake build` does not build the dependents of a failing
+module, so each row is the frontier at that moment, not a total.** The 55–65% figure in §5
+is neither confirmed nor refuted by this; what IS established is that the first four
+modules cost one new lemma, one statement change and one insulation lemma between them,
+and that §5's two named cost drivers (duplicating the projection lemmas, duplicating the
+fold family) are **not** owed at all under §11.1's shape.
+
+`foldl_writeDirectRaw_eq` is landed and audited; the rest of the walk was reverted.
+
+### 11.3 ★★ THE DESIGN FORK THIS DOCUMENT DOES NOT CONTAIN — where the `Delta` row is addressed
+
+Step 4c cannot be finished without deciding it, and it is why the walk stopped.
+
+`writeLoggedOne` (`Cascade.lean:167-170`) does two things at once: it writes the edge **and**
+pushes `pushDelta (objNode t.object t.relation) t.relation true`. Once the EDGE moves to the
+leaf node, the delta row's addressing is a separate, unforced choice:
+
+* **(α) the row moves too** — `pushDelta` at the leaf node with the leaf relation. This is
+  what Python's outbox literally records, since `_add_edge_locked` emits on the edge it
+  wrote. But then `affectedKeys` (`Cascade.lean:433`) must map leaf → public in its
+  `leaf = true` own-key branch, and Python does that through a compiled table
+  (`_map_deltas_to_keys`'s `isinstance(fam, LeafFamily)` → its derived key), which the
+  model has no analogue of. In Lean it would be string surgery on the `.i` suffix.
+* **(β) the row stays public** — only the edge moves. `affectedKeys` is untouched, the
+  whole cascade/fence stack is untouched. Less faithful to the outbox row; defensible as
+  a declared carry only if written down as one.
+
+§4 asserts the `Delta.leaf` tag is "the single biggest cost reducer found in this pass"
+because it is "already threaded". That is true for *discriminating* the two write legs and
+it is why 4a is cheap — but the tag does not answer this question, because the tag says
+*which leg wrote the row*, not *which node the row is keyed at*.
+
+**This needs the house's attack-first treatment before either branch is coded** (rule 2),
+and neither branch should be smuggled in as part of a mechanical caller re-point. Note
+`writeLoggedOne` also has to gain an `S` parameter under either branch (~58 references,
+mechanical), so the branch should be decided first and the churn paid once.
+
+### 11.4 Unchanged and still owed
+
+§8.2 (`storage=True`/`storage=False`, and more than one storage leaf per relation) is
+still untouched — `rawWriteRel` deliberately models ONE undifferentiated leaf, index `0`,
+and says so in its docstring. §10.4's post-fork multiplicity numbers are still unmeasured
+because the fork is not wired to a caller.
 
 ## Provenance
 
