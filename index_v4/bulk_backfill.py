@@ -293,10 +293,19 @@ class _BulkBackfill:
 
     def _ensure_bridges(self, key: NodeKey) -> None:
         """Mirror WildcardIndex._ensure_bridges: a concrete of a bridged shape gets
-        concrete->w_any and/or w_all->concrete (w nodes created implicit)."""
+        concrete->w_any and/or w_all->concrete (w nodes created implicit), and its
+        ENTITY gets the crossing middle of every crossable shape of its type
+        (I14 -- see WildcardIndex._ensure_entity_middles)."""
         pred, typ, name, wild = key
         if wild != '':
             return
+        self._ensure_own_bridges(key)
+        self._ensure_entity_middles(typ, name)
+
+    def _ensure_own_bridges(self, key: NodeKey) -> None:
+        """The per-node half of ``_ensure_bridges`` (mirror of the incremental
+        ``WildcardIndex._ensure_own_bridges``)."""
+        pred, typ, name, wild = key
         shape = (typ, pred)
         if shape in self.schema_info.bridged_in_shapes:
             w_any = (pred, typ, '*', 'any')
@@ -306,6 +315,22 @@ class _BulkBackfill:
             w_all = (pred, typ, '*', 'all')
             self._intern(w_all, implicit=True)
             self._add_bridge_edge(w_all, key)
+
+    def _ensure_entity_middles(self, entity_type: str, name: str) -> None:
+        """Mirror WildcardIndex._ensure_entity_middles (I14): intern the crossing
+        middle ``(T, x, p)`` -- implicit, with both bridges -- for every crossable
+        shape of the entity's type. Idempotent; never for a wildcard name."""
+        if name == '*':
+            return
+        crossable = self.schema_info.crossable_shapes
+        if not crossable:
+            return
+        for (t, p) in sorted(crossable):
+            if t != entity_type:
+                continue
+            mid = (p, entity_type, name, '')
+            self._intern(mid, implicit=True)
+            self._ensure_own_bridges(mid)
 
     # ------------------------------------------------------------------ #
     # State access (mirrors WildcardIndex / DeltaProcessor read paths)

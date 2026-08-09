@@ -10,6 +10,10 @@ invariants that can be asserted from a session snapshot:
   I3  bridge hygiene: every bridge edge is justified by a declared bridged shape and a
       live concrete node; every concrete of a bridged shape has its bridges; no bridges
       for undeclared shapes (materialization completeness + GC completeness).
+  I14 crossing-middle completeness: on every crossable shape (bridged in AND out) the
+      concrete middle of the w_all -> concrete -> w_any crossing exists -- with both
+      bridges -- for every live ENTITY of the shape's type, not merely for entities
+      that happen to intern a node of that shape (2026-08-09).
   (I4-I10 arrive with the derived-predicate state in later phases.)
 
 I11 (read purity) and I12 (rejection cleanliness) are *differential* invariants -- they
@@ -36,7 +40,7 @@ production at all -- leaving every runtime corruption detector dark:
                  ``upos``/``neg`` id class, i.e. the ZT-P0-1 authorization
                  escalation (pin: ``tests/test_reg14_residue_gc_elision.py``).
                  Pre-commit only, so a violation ABORTS the writing transaction.
-  ``'full'``     everything: ``check_invariants`` (I1/I2/I3/I13 + I4-I7 + I10) plus
+  ``'full'``     everything: ``check_invariants`` (I1/I2/I3/I13/I14 + I4-I7 + I10) plus
                  the delta-scoped BFS verifier, pre-commit AND post-commit in a
                  fresh session. O(store) per commit, plus O(pairs x edges) for the
                  verifier (`docs/perf-next-round.md`). Prerelease/test tier.
@@ -156,8 +160,8 @@ def _fail(msg: str) -> None:
 def check_invariants(session: Session, store_id: str,
                      schema_info: 'SchemaInfo | None' = None,
                      residue_versions: dict[int, int] | None = None) -> None:
-    """Assert I1-I7 + I10 + I13 (+ node encoding) over the store's committed-or-pending
-    rows.
+    """Assert I1-I7 + I10 + I13 + I14 (+ node encoding) over the store's
+    committed-or-pending rows.
 
     Read that list against the BODY below, not against prose elsewhere: three
     documents gave three different accounts of which invariants run per commit and
@@ -172,9 +176,9 @@ def check_invariants(session: Session, store_id: str,
     direct-edge degree), and I10 (outbox row sanity).
 
     ``schema_info`` gates the schema-dependent invariants: the rest of I3 (bridge
-    completeness/exclusivity), I4 namespace classification, I5 derived-flag
-    exclusivity, I6 residue placement; without it only the schema-independent ones
-    run. ``residue_versions`` (a mutable dict the caller keeps across checks) enables
+    completeness/exclusivity), I14 crossing-middle completeness, I4 namespace
+    classification, I5 derived-flag exclusivity, I6 residue placement; without it
+    only the schema-independent ones run. ``residue_versions`` (a mutable dict the caller keeps across checks) enables
     I7 version monotonicity.
 
     Not here, by design: I9 is the processor's fixpoint audit (``audit_fixpoint``) and
@@ -269,6 +273,56 @@ def check_invariants(session: Session, store_id: str,
                     _fail(f'I3: concrete {n} of bridged-out shape missing its w_all->concrete bridge')
             elif has_out:
                 _fail(f'I3: concrete {n} of non-bridged-out shape has a w_all->concrete bridge')
+
+    # I14 (2026-08-09): crossing-middle completeness. On a CROSSABLE shape (T, p)
+    # (bridged in AND out -- SchemaInfo.crossable_shapes) the wildcard nodes compose
+    # through any concrete: w_all(T,p) -> (T,x,p) -> w_any(T,p). The spec's
+    # existential ("'granted on all S' implies 'reaches some S' only if at least one
+    # concrete instance of S exists", wildcard spec §3.4) is ENTITY-wise --
+    # tests/oracle.py::instances witnesses it with any tuple-mentioned entity of
+    # type T -- so the middle must track ENTITY existence, not node existence
+    # (docs/spec-deviations.md 2026-08-09):
+    #
+    #   for every crossable shape (T, p) and every entity name x such that the store
+    #   holds at least one node (T, x, *) that is not itself a bridge-only middle,
+    #   the store holds the node (T, x, p) with BOTH of its bridges.
+    #
+    # I3 above says a concrete of a bridged shape must HAVE its bridges; I14 says the
+    # middle must EXIST while the entity does. A "bridge-only middle" is implicit, of
+    # a crossable shape, and carries nothing but its two bridges (under I3, degree 2
+    # == exactly the bridges); such nodes witness nothing, or the middles would keep
+    # each other alive forever. Maintained by WildcardIndex._ensure_entity_middles /
+    # _sync_entity_middles; sabotage-verified (tests/test_i14_crossing_middles.py).
+    if schema_info is not None:
+        crossable = schema_info.crossable_shapes
+        if crossable:
+            concrete_by_key = {(n.type, n.name, n.predicate): n
+                               for n in nodes if n.wildcard == ''}
+            wildcard_by_variant = {(n.type, n.predicate, n.wildcard): n
+                                   for n in nodes if n.wildcard != ''}
+
+            def _is_bridge_middle(n: NodeV4) -> bool:
+                return (n.implicit and (n.type, n.predicate) in crossable
+                        and n.reference_count == 2)
+
+            witnessed = {(n.type, n.name) for n in concrete_by_key.values()
+                         if not _is_bridge_middle(n)}
+            for (t, x) in sorted(witnessed):
+                for (ct, p) in sorted(crossable):
+                    if ct != t:
+                        continue
+                    mid = concrete_by_key.get((t, x, p))
+                    if mid is None:
+                        _fail(f'I14: entity {t}:{x} exists but its crossing middle '
+                              f'{t}:{x}#{p} for crossable shape {(t, p)} is missing')
+                    w_any = wildcard_by_variant.get((t, p, 'any'))
+                    w_all = wildcard_by_variant.get((t, p, 'all'))
+                    if w_any is None or (mid.id, w_any.id) not in direct_edge_set:
+                        _fail(f'I14: crossing middle {mid} is missing its '
+                              f'concrete->w_any bridge')
+                    if w_all is None or (w_all.id, mid.id) not in direct_edge_set:
+                        _fail(f'I14: crossing middle {mid} is missing its '
+                              f'w_all->concrete bridge')
 
     # I13 (blind-audit C5): reference_count is exactly the node's direct-edge degree
     # (each direct edge increments both endpoints on add and decrements on remove).

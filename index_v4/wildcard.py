@@ -242,9 +242,28 @@ class WildcardIndex:
     # ------------------------------------------------------------------ #
 
     def _ensure_bridges(self, node: NodeV4) -> None:
-        """Lazily create the configured bridges for a concrete node (idempotent)."""
+        """Lazily create the configured bridges for a concrete node, plus its
+        entity's crossing middles (idempotent).
+
+        The middle half maintains the I14 property (``index_v4/invariants.py``):
+
+          for every crossable shape ``(T, p)`` (``SchemaInfo.crossable_shapes`` --
+          bridged in AND out) and every entity name ``x`` such that the store holds
+          at least one node ``(T, x, *)`` that is not itself a bridge-only middle,
+          the store holds the node ``(T, x, p)`` with BOTH of its bridges.
+
+        so the ``w_all(T,p) -> concrete -> w_any(T,p)`` crossing tracks ENTITY
+        existence -- the spec's reading of §3.4's existential
+        (``tests/oracle.py::instances`` witnesses it with any tuple-mentioned entity
+        of type ``T``; docs/spec-deviations.md 2026-08-09). The remove-side dual is
+        ``_sync_entity_middles``."""
         if node.wildcard != '':          # only concretes are bridged
             return
+        self._ensure_own_bridges(node)
+        self._ensure_entity_middles(node.type, node.name)
+
+    def _ensure_own_bridges(self, node: NodeV4) -> None:
+        """The per-node half of ``_ensure_bridges``: this node's own bridge edges."""
         shape = (node.type, node.predicate)
         if shape in self.schema_info.bridged_in_shapes:
             w_any = self.idx.node(node.predicate, node.type, '*', create_if_missing=True,
@@ -256,6 +275,72 @@ class WildcardIndex:
                                   implicit=True, wildcard='all')
             if not self.idx.direct_edge_exists_by_id(w_all.id, node.id):
                 self.idx.add_edge_by_id(w_all.id, node.id)          # w_all -> concrete (bridge)
+
+    def _ensure_entity_middles(self, entity_type: str, name: str) -> None:
+        """Intern the crossing middle ``(T, x, p)`` -- with both bridges -- for every
+        crossable shape ``(T, p)`` of this entity's type (I14; idempotent).
+
+        Middles are created IMPLICIT so they are exactly bridge-only state
+        (``_is_bridge_middle``), collected by ``_sync_entity_middles`` when the
+        entity's last real node goes. Never called for a wildcard endpoint: every
+        caller guards on ``wildcard == ''``, and the ``name == '*'`` return below is
+        the defensive restatement (a middle for ``'*'`` would be a concrete node
+        named ``'*'``, which the encoding reserves)."""
+        if name == '*':
+            return
+        crossable = self.schema_info.crossable_shapes
+        if not crossable:
+            return
+        for (t, p) in sorted(crossable):
+            if t != entity_type:
+                continue
+            mid = self.idx.node(p, entity_type, name, create_if_missing=True)
+            self._ensure_own_bridges(mid)
+
+    def _is_bridge_middle(self, node: NodeV4) -> bool:
+        """Is this node currently BRIDGE-ONLY crossing-middle state? Implicit, of a
+        crossable shape, and carrying nothing but its own two bridges (I3 guarantees
+        a live concrete of a crossable shape has both bridges, so
+        ``reference_count == bridge degree`` means exactly "bridges only"). Such a
+        node witnesses nothing for I14: it exists BECAUSE the entity does, so letting
+        it witness the entity would make the middles self-sustaining garbage."""
+        if node.wildcard != '' or not node.implicit:
+            return False
+        shape = (node.type, node.predicate)
+        return (shape in self.schema_info.crossable_shapes
+                and node.reference_count == self._bridge_degree(shape))
+
+    def _entity_nodes(self, entity_type: str, name: str) -> list[NodeV4]:
+        return list(self.idx.session.exec(
+            select(NodeV4)
+            .where(NodeV4.store_id == self.idx.store_id)
+            .where(NodeV4.type == entity_type)
+            .where(NodeV4.name == name)
+            .where(NodeV4.wildcard == '')
+        ).all())
+
+    def _entity_has_witness(self, entity_type: str, name: str) -> bool:
+        """Does the entity ``(T, x)`` still EXIST for I14 -- i.e. does the store hold
+        at least one ``(T, x, *)`` node that is not itself a bridge-only middle?"""
+        return any(not self._is_bridge_middle(n)
+                   for n in self._entity_nodes(entity_type, name))
+
+    def _sync_entity_middles(self, entity_type: str, name: str) -> None:
+        """Re-normalize one entity's crossing middles after a removal (I14): while a
+        witness remains the middles must (still) exist -- re-ensured here, which makes
+        the property self-healing -- and when the entity's last real node is gone
+        every remaining bridge-only middle is stripped, so implicit GC collects it
+        (and any w node it alone kept alive)."""
+        if name == '*':
+            return
+        if not any(t == entity_type for (t, _p) in self.schema_info.crossable_shapes):
+            return
+        if self._entity_has_witness(entity_type, name):
+            self._ensure_entity_middles(entity_type, name)
+            return
+        for n in self._entity_nodes(entity_type, name):
+            if self._is_bridge_middle(n):
+                self._strip_bridges(n.id, (n.type, n.predicate))
 
     def _strip_bridges(self, node_id: int, shape: tuple[str, str]) -> None:
         """Remove a concrete node's bridge edges (in, then out), tolerating the
@@ -287,6 +372,15 @@ class WildcardIndex:
             return                                                  # already collected
         if not (fresh.implicit and fresh.reference_count == degree):
             return
+        if (shape in self.schema_info.crossable_shapes
+                and self._entity_has_witness(fresh.type, fresh.name)):
+            # The node has become exactly the entity's crossing middle (bridge-only,
+            # implicit, crossable shape). I14 requires the middle to EXIST while the
+            # entity does, so it is deliberately NOT collected here; it goes when
+            # ``_sync_entity_middles`` sees the entity's last real node go.
+            # (``_entity_has_witness`` ignores bridge-only middles, ``fresh``
+            # included, so a witness here means some OTHER real node of the entity.)
+            return
         self._strip_bridges(fresh.id, shape)
 
     def _node_by_id(self, node_id: int) -> NodeV4 | None:
@@ -305,11 +399,31 @@ class WildcardIndex:
             .where(NodeV4.wildcard == '')
         ).all())
 
-    def backfill(self) -> None:
-        """Ensure every existing concrete of a bridged shape has its bridges (§7.2).
+    def _neighbour_entities(self, node_id: int) -> set[tuple[str, str]]:
+        """(type, name) of every CONCRETE direct neighbour of a node (I14: the
+        entities a ``remove_node`` can orphan). Empty when no shape is crossable, so
+        plain schemas pay nothing."""
+        if not self.schema_info.crossable_shapes:
+            return set()
+        pairs = self.idx.session.exec(
+            select(EdgeV4.subject_id, EdgeV4.object_id)
+            .where(EdgeV4.store_id == self.idx.store_id)
+            .where((EdgeV4.subject_id == node_id) | (EdgeV4.object_id == node_id))
+            .where(EdgeV4.direct_edge_count > 0)  # type: ignore[arg-type]
+        ).all()
+        other_ids = {s if o == node_id else o for (s, o) in pairs} - {node_id}
+        nodes = self.idx._load_nodes(other_ids)
+        return {(n.type, n.name) for n in nodes.values() if n.wildcard == ''}
 
-        Idempotent; safe to call always. Does not create a w node for a shape that has
-        no concrete instances (avoids orphan wildcard nodes)."""
+    def backfill(self) -> None:
+        """Ensure every existing concrete of a bridged shape has its bridges, and
+        every existing entity of a crossable shape's type has its crossing middles
+        (§7.2 + I14).
+
+        Idempotent; safe to call always. Does not create a w node for a NON-crossable
+        shape that has no concrete instances (avoids orphan wildcard nodes); a
+        CROSSABLE shape's w nodes arrive with its middles, i.e. exactly when an
+        entity of the shape's type exists."""
         # Serialize against live writers: the existence probes below are
         # check-then-act on ref-counted bridge edges (blind-audit C2).
         self.idx._lock_store()
@@ -333,6 +447,21 @@ class WildcardIndex:
             for c in concretes:
                 if not self.idx.direct_edge_exists_by_id(w_all.id, c.id):
                     self.idx.add_edge_by_id(w_all.id, c.id)
+        # I14: the crossing middles track ENTITY existence -- after the bridge loops
+        # above (so ``reference_count == bridge degree`` again means "bridges only"
+        # and ``_is_bridge_middle`` classifies correctly on a half-migrated store),
+        # intern the middle for every entity of a crossable shape's type that has at
+        # least one real (non-bridge-only-middle) node.
+        crossable_types = {t for (t, _p) in self.schema_info.crossable_shapes}
+        for entity_type in sorted(crossable_types):
+            names = {n.name for n in self.idx.session.exec(
+                select(NodeV4)
+                .where(NodeV4.store_id == self.idx.store_id)
+                .where(NodeV4.type == entity_type)
+                .where(NodeV4.wildcard == '')
+            ).all() if not self._is_bridge_middle(n)}
+            for x in sorted(names):
+                self._ensure_entity_middles(entity_type, x)
 
     # ------------------------------------------------------------------ #
     # Writes (§6)
@@ -437,6 +566,10 @@ class WildcardIndex:
         # GC bridges for concrete endpoints whose only remaining edges are their bridges.
         self._maybe_remove_bridges(subject)
         self._maybe_remove_bridges(obj)
+        # I14: this removal may have retired an endpoint entity's last real node --
+        # collect its crossing middles (or re-ensure them while a witness remains).
+        self._sync_entity_middles(s_type, s_name)
+        self._sync_entity_middles(o_type, o_name)
 
     def remove_node(self, predicate: str | EllipsisType, entity_type: str,
                     name: str) -> None:
@@ -466,14 +599,26 @@ class WildcardIndex:
             # AdmissionRejected: removing a node the store never saw is a refusal.
             raise AdmissionRejected('Non-existent node cannot be removed') from e
 
+        neighbour_entities: set[tuple[str, str]] = set()
         if node.wildcard == '':
             node_id = node.id
+            # I14: capture the CONCRETE neighbour entities BEFORE the core removal
+            # retires their edges -- removing this node may leave a neighbour entity
+            # witness-less (its node implicit-GC'd by the neighbour-debit machinery,
+            # or reduced to bridge-only middle state), orphaning its crossing middles.
+            neighbour_entities = self._neighbour_entities(node_id)
             self._strip_bridges(node_id, (node.type, node.predicate))
             # stripping a bridge may already have implicit-GC'd the node
             if self._node_by_id(node_id) is None:
+                self._sync_entity_middles(entity_type, name)
                 return
 
         self.idx.remove_node(pred, entity_type, name)
+        # I14: the removed node may have been its entity's last real node, and the
+        # removal may have orphaned a neighbour entity too.
+        self._sync_entity_middles(entity_type, name)
+        for (t, x) in sorted(neighbour_entities):
+            self._sync_entity_middles(t, x)
 
     # ------------------------------------------------------------------ #
     # Reads (§3.1)

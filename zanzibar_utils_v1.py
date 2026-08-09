@@ -376,6 +376,26 @@ class SchemaInfo:
         # (Sink-shape elision is a future optimization; be conservative now.)
         return self.object_wildcard_shapes
 
+    @property
+    def crossable_shapes(self) -> frozenset[tuple[str, str]]:
+        """Shapes where a path can CROSS ``w_all -> concrete -> w_any``: bridged in
+        AND out.
+
+        On such a shape ``(T, p)`` the two wildcard nodes compose through any
+        concrete ``(T, x, p)`` -- "granted on all T#p" reaches "some T#p reaches ..."
+        the moment one instance exists (wildcard-materialization-spec §3.4). That
+        existential is ENTITY-wise (``tests/oracle.py::instances`` witnesses it with
+        any tuple-mentioned entity of type ``T``, whatever relation mentioned it), so
+        the concrete middle must track ENTITY existence rather than node existence:
+        the graph index interns ``(T, x, p)`` -- with both bridges -- for every live
+        entity ``x`` of type ``T`` (``WildcardIndex._ensure_entity_middles``,
+        invariant I14; docs/spec-deviations.md 2026-08-09).
+
+        Because ``bridged_in_shapes`` excludes bare ``(T, '...')`` shapes, plain
+        OpenFGA ``[user:*]`` usage is never crossable and keeps costing zero bridges
+        and zero middles."""
+        return self.bridged_in_shapes & self.bridged_out_shapes
+
 
 @dataclass
 class RuleSet:

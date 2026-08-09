@@ -732,19 +732,24 @@ class DeltaProcessor:
             return
         if self._residue_row(n.id) is not None or self._residue_references(n.id):
             return
+        entity = (n.type, n.name)
         # strip pure-bridge scaffolding first (implicit GC then collects the node)
         self.widx._maybe_remove_bridges(n)
         n = self.session.get(NodeV4, node_id)
-        if n is None:
-            return
-        if n.reference_count == 0:
-            self.idx._evict_node(n)             # N15: evict before delete
-            self.session.delete(n)
-        else:
-            # survives on an unrelated reference (e.g. a raw grant tuple): its recording
-            # was just dropped, so demote it back to implicit -- a fresh build interns it
-            # implicit, and leaving it explicit would drift the canonical form (Edit 2).
-            self._demote_released_node(n)
+        if n is not None:
+            if n.reference_count == 0:
+                self.idx._evict_node(n)         # N15: evict before delete
+                self.session.delete(n)
+            else:
+                # survives on an unrelated reference (e.g. a raw grant tuple): its
+                # recording was just dropped, so demote it back to implicit -- a fresh
+                # build interns it implicit, and leaving it explicit would drift the
+                # canonical form (Edit 2).
+                self._demote_released_node(n)
+        # I14: whichever branch ran may have removed -- or demoted into bridge-only
+        # crossing-middle state -- the entity's last real node; re-normalize its
+        # crossing middles (collect them when no witness remains).
+        self.widx._sync_entity_middles(*entity)
 
     def _has_incoming_direct_edge(self, node_id: int) -> bool:
         """Whether any DIRECT edge terminates on this node (limit-1 probe). On a
@@ -936,8 +941,14 @@ class DeltaProcessor:
         if (node.reference_count == 0
                 and self._residue_row(node.id) is None
                 and not self._residue_references(node.id)):
+            entity = (node.type, node.name)
             self.idx._evict_node(node)          # N15: evict before delete
             self.session.delete(node)
+            # I14: the public node may have been its entity's last real node --
+            # collect the entity's crossing middles if no witness remains. (The
+            # demote branch below cannot orphan the entity: the surviving public
+            # node is itself a witness -- derived families are never crossable.)
+            self.widx._sync_entity_middles(*entity)
             return
         # survives -> demote back to implicit unless a canonical explicit-reason still
         # holds (own residue row / residue reference / active derived-public with an

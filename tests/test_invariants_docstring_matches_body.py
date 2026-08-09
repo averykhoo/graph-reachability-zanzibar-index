@@ -51,11 +51,13 @@ def test_docstring_states_the_set_the_body_actually_runs():
     # The exact understated claim that was live until this fix.
     assert 'I1-I6' not in headline
     # Everything the body enforces must be named or covered by a stated range.
+    # (I14, crossing-middle completeness, joined 2026-08-09; its body-enforcement
+    # proof lives in tests/test_i14_crossing_middles.py.)
     named = 0
-    for clause in ('I1-I7', 'I10', 'I13'):
+    for clause in ('I1-I7', 'I10', 'I13', 'I14'):
         assert clause in headline, f'{clause} runs in the body but is unnamed'
         named += 1
-    assert named == 3
+    assert named == 4
     # ...and nothing that runs somewhere else may be claimed here.
     for absent in ('I9', 'I11', 'I12'):
         assert absent not in headline, f'{absent} does not run here but is claimed'

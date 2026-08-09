@@ -18,7 +18,9 @@ Phases (design "Bulk algorithm"):
      accumulate the direct-multigraph multiplicity ``m(s, o)`` (rewrite fan-in adds the
      same pair more than once -- deliberate multigraph semantics).
   B  bridge edges from the declared bridged shapes (concrete->w_any / w_all->concrete),
-     multiplicity 1, existence-checked (mirrors ``_ensure_bridges``).
+     multiplicity 1, existence-checked (mirrors ``_ensure_bridges``), plus -- for every
+     CROSSABLE shape (bridged in AND out) -- the entity-tracking crossing middles with
+     their bridges (I14; mirrors ``_ensure_entity_middles``).
   C  topological sort of the direct graph; a cycle is a corruption signal.
   P  sparse integer DP in reverse topo order: ``P(a, b) = m(a, b) + sum_v m(a, v)*P(v, b)``
      -- the total weighted path count (== incremental ``indirect_edge_count``).
@@ -195,6 +197,28 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
             bridge = ((pred, typ, '*', 'all'), key)
             if bridge not in m:
                 m[bridge] = 1
+    # I14 mirror (WildcardIndex._ensure_entity_middles): on a CROSSABLE shape (T, p)
+    # -- bridged in AND out -- the w_all -> concrete -> w_any crossing must have its
+    # concrete middle for every ENTITY of type T, not merely for entities that happen
+    # to intern a node of shape (T, p). The incremental path interns the middle (with
+    # both bridges, multiplicity 1, existence-checked) for both endpoints of every
+    # add; the load-phase equivalent is every concrete routed endpoint's entity.
+    crossable = schema_info.crossable_shapes
+    if crossable:
+        entity_names: dict[str, set[str]] = defaultdict(set)
+        for (_pred, typ, name, _wild) in concretes:
+            entity_names[typ].add(name)
+        for (typ, p) in sorted(crossable):
+            w_any_key = (p, typ, '*', 'any')
+            w_all_key = (p, typ, '*', 'all')
+            for name in sorted(entity_names.get(typ, ())):
+                mid = (p, typ, name, '')
+                bridge = (mid, w_any_key)
+                if bridge not in m:
+                    m[bridge] = 1
+                bridge = (w_all_key, mid)
+                if bridge not in m:
+                    m[bridge] = 1
 
     # -- Seed node set (routed-triple + bridge endpoints). -------------------------
     nodes: set[NodeKey] = set()
