@@ -6,6 +6,7 @@ import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
 import ZanzibarProofs.Spec.Counterexample
+import ZanzibarProofs.GraphIndex.Leaf
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
@@ -1686,5 +1687,28 @@ namespace Zanzibar
 #print axioms W4WitnessDirect.admission4
 #print axioms W4WitnessDirect.w4fragment4
 #print axioms W4WitnessDirect.final_applies4
+
+-- LEG 7 (leaf-family split / retire projection P6), STEP 3 (2026-08-09) — ADDITIVE leaf
+-- ADDRESSING. `GraphIndex/Leaf.lean` introduces `leafPred`/`isLeafPred`/`leafNode` and the
+-- raw-write routing function `rawWriteRel`/`rawWriteNode`, plus the distinctness linchpin
+-- `leafPred_ne_relName` — which needs NO new sentinel axiom alongside `STAR`/`BARE`:
+-- `Core/Schema.lean:64`'s `relNameOK` already forbids `'.'` in a declared relation name, so
+-- a leaf node is provably distinct from every bare R-node for free. Nothing is wired into
+-- the write path yet (that is step 4's `writeDirect` fork), so no existing definition,
+-- statement or proof changed and both goldens stay byte-identical.
+-- ★ CONTROLLED, and the control is the point (scope doc §7, plan §C.3/§C.5; literal output
+-- in the `LeafWitness` section docstring). The plausible failure is not a wrong routing but
+-- an UNREACHABLE one: add `&& isLeafPred t.relation` to the guard — a plausible misreading
+-- of `RuleSet.apply`'s refusal of leaf-named raw writes — and every general lemma in the
+-- file still compiles, `rawWriteNode_ne_objNode` included, while the derived branch is dead.
+-- Exactly two errors, both at the witness. Per scope doc §9.3 the witness deliberately does
+-- NOT use `W4WitnessDirect`'s `Sd`/`Td` (no wildcard there ⇒ vacuous), but D.3's schema.
+-- Standard axioms only:
+#print axioms leafPred_ne_relName
+#print axioms leafNode_ne_objNode
+#print axioms rawWriteNode_ne_objNode
+#print axioms LeafWitness.approver_isDerived
+#print axioms LeafWitness.routes_away
+#print axioms LeafWitness.untainted_unmoved
 
 end Zanzibar
