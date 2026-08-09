@@ -1,8 +1,8 @@
-import ZanzibarProofs.GraphIndex.State
+import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.Spec.Stabilize
 
 /-!
-# Leaf-family addressing — leg 7 step 3 (ADDITIVE: no behavior change)
+# Leaf-family addressing — leg 7 steps 3 and 4a (ADDITIVE: no behavior change)
 
 Python's compiler splits every **tainted (derived)** relation `R` into a family of
 **leaf predicates** `R.0`, `R.1`, … minted by `alloc` inside `_build_plan_tree`
@@ -20,9 +20,10 @@ declared leaf family (`index_v4/invariants.py:303-310`).
 Until now the conformance extractor hid the difference: projection **P6** drops every
 Python edge row whose target predicate carries a `'.'`
 (`formal/conformance/extractor.py:235-236`), because the model has no leaf nodes to
-compare them against. Retiring P6 is leg 7; **this file is its step 3 — addressing only.**
-Nothing here is wired into the write path yet (that is step 4, the `writeDirect` fork), so
-no existing definition, statement or proof changes.
+compare them against. Retiring P6 is leg 7; **this file is its steps 3 and 4a — the
+addressing, and the forked write built out of it.** Nothing here is wired into a CALLER
+yet (that is step 4c), so no existing definition, statement or proof changes and both
+goldens stay byte-identical.
 
 ## The design rule this file encodes (scope doc §3)
 
@@ -144,7 +145,7 @@ theorem leafNode_ne_objNode {R' : String} (h : relNameOK R') (o o' : ObjectRef)
 
 /-! ## Raw-write routing
 
-The function step 4 will drive `writeDirect`'s target off. Faithful shape per scope doc
+The function the forked write drives its target off. Faithful shape per scope doc
 §9.4: a raw write on a **derived** key is rewritten onto the leaf family, a raw write on an
 untainted key is not rewritten at all and keeps landing on its bare R-node exactly as
 today.
@@ -197,6 +198,98 @@ theorem rawWriteNode_ne_objNode {S : Schema} (hWF : WF S) {t : Tuple}
     rawWriteNode S t ≠ objNode t.object t.relation := by
   rw [rawWriteNode_derived h]
   exact leafNode_ne_objNode (relNameOK_of_isDerived hWF h) _ _ _ _
+
+/-! ## The forked write — and why `writeDirect` itself does NOT fork
+
+Scope doc §4 prescribes forking `GraphState.writeDirect` itself: "take a target-node
+argument, or split into `writeDirectLeaf`/`writeDirectDerived`", which "duplicates or
+re-parameterizes every `writeDirect_*` projection lemma … and every fold lemma".
+
+**It is cheaper than that, and more faithful.** Python does not fork its write path at
+all: `RuleSet.apply` re-addresses the **tuple** — `replace_relation(triple,
+f.rewrite_relation)` (`zanzibar_utils_v1.py:447`) — and then the ordinary
+`add_tuple`/`_add_edge_locked` path runs unchanged. Modelling the fork the same way
+(`rawWriteTuple` below, then today's `writeDirect`) means:
+
+* `GraphState.writeDirect` is **byte-identical**, so the headline definition pin does not
+  move for a change that changes no meaning, and
+* every existing `writeDirect_*` projection and fold lemma — `writeDirect_reject`,
+  `_outbox`, `_watermark`, `_schema`, `_monoNodes`, `structInv_writeDirect`,
+  `inv_writeDirect`, `quiescent_writeDirect`, `residueEmpty_writeDirect`, and the
+  `foldl` family in `RulesWrite.lean:143-193` — applies to the re-addressed tuple
+  **verbatim, with no clone and no re-parameterization**.
+
+What the leg still owes is the *caller* re-pointing (`writeLoggedOne` `Cascade.lean:167`,
+`writeRules` `RulesWrite.lean:136`) and everything downstream that assumes the written
+tuple's relation is the DECLARED one. That is step 4c and it is where the cost lives;
+this section is only the addressing half. -/
+
+/-- **The raw write, re-addressed onto its leaf family.** Python's
+    `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py:447`), the fan-in
+    expansion `RuleSet.apply` performs on a write that names a derived PUBLIC relation.
+    On an untainted relation there is no family and this is the identity. -/
+def rawWriteTuple (S : Schema) (t : Tuple) : Tuple :=
+  { t with relation := rawWriteRel S t }
+
+@[simp] theorem rawWriteTuple_subject (S : Schema) (t : Tuple) :
+    (rawWriteTuple S t).subject = t.subject := rfl
+
+@[simp] theorem rawWriteTuple_object (S : Schema) (t : Tuple) :
+    (rawWriteTuple S t).object = t.object := rfl
+
+/-- The re-addressed tuple targets exactly `rawWriteNode`. -/
+@[simp] theorem objNode_rawWriteTuple (S : Schema) (t : Tuple) :
+    objNode (rawWriteTuple S t).object (rawWriteTuple S t).relation = rawWriteNode S t := rfl
+
+/-- **The subsumption fact, in the form step 4c consumes.** On an untainted key the
+    re-addressing is the IDENTITY ON THE TUPLE — not merely on the target node — so every
+    downstream lemma about the untainted fragment transports by `rfl`-level rewriting
+    rather than by a clone. This is the analogue of `w4Fragment_of_computedOnly`. -/
+@[simp] theorem rawWriteTuple_untainted {S : Schema} {t : Tuple}
+    (h : isDerived S (t.object.type, t.relation) = false) : rawWriteTuple S t = t := by
+  simp [rawWriteTuple, rawWriteRel_untainted h]
+
+/-- **The RAW (leaf-routed) write.** `writeDirect` on the re-addressed tuple — the
+    `writeLoggedOne` / `writeRules` leg of scope doc §4's table. The reconcile-emission leg
+    (`reconcileKey` / `reconcileKeyD` / `reconcileKeyDR`) keeps calling `writeDirect`
+    directly, which is what makes `Delta.leaf`-style caller provenance genuinely required
+    (§9.4: the schema alone is not a sufficient discriminator). -/
+def GraphState.writeDirectRaw (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
+  σ.writeDirect (rawWriteTuple S t)
+
+/-- The accepted-write edge list, factored out of the projection lemmas because it is what
+    every state-level instrument below needs. -/
+theorem writeDirect_edges_of_admit {σ : GraphState} {t : Tuple}
+    (h : σ.admitEdge (subjNode t.subject) (objNode t.object t.relation) = true) :
+    (σ.writeDirect t).edges = (subjNode t.subject, objNode t.object t.relation) :: σ.edges := by
+  unfold GraphState.writeDirect
+  simp only [h, if_true]
+  rfl
+
+/-- …and its raw-write instance, which needs no separate proof: the target moved by
+    re-addressing the tuple, so the projections are the same `rfl`s. -/
+theorem writeDirectRaw_edges_of_admit {σ : GraphState} {S : Schema} {t : Tuple}
+    (h : σ.admitEdge (subjNode t.subject) (rawWriteNode S t) = true) :
+    (σ.writeDirectRaw S t).edges = (subjNode t.subject, rawWriteNode S t) :: σ.edges :=
+  writeDirect_edges_of_admit (t := rawWriteTuple S t) h
+
+/-- On the untainted fragment the forked write IS today's write — the whole existing
+    development is untouched by construction. -/
+@[simp] theorem writeDirectRaw_untainted {σ : GraphState} {S : Schema} {t : Tuple}
+    (h : isDerived S (t.object.type, t.relation) = false) :
+    σ.writeDirectRaw S t = σ.writeDirect t := by
+  simp [GraphState.writeDirectRaw, rawWriteTuple_untainted h]
+
+/-- The invariant survives the forked write for free — no clone of
+    `structInv_writeDirect`, because the target moved by re-addressing the tuple. -/
+theorem structInv_writeDirectRaw {S S' : Schema} {σ : GraphState} (h : StructInv S' σ)
+    (t : Tuple) : StructInv S' (σ.writeDirectRaw S t) :=
+  structInv_writeDirect h (rawWriteTuple S t)
+
+/-- Likewise the full invariant on the residue-free fragment. -/
+theorem inv_writeDirectRaw {S S' : Schema} {σ : GraphState} (h : Inv S' σ)
+    (hre : ResidueEmpty σ) (t : Tuple) : Inv S' (σ.writeDirectRaw S t) :=
+  inv_writeDirect h hre (rawWriteTuple S t)
 
 /-! ## The non-vacuity witness
 
@@ -294,6 +387,51 @@ theorem routes_to_leaf : rawWriteNode Sw tw = leafNode ⟨"doc", "d1"⟩ "approv
     subsumption claim step 4 must preserve, checked at a store rather than assumed. -/
 theorem untainted_unmoved : rawWriteNode Sw tb = objNode tb.object tb.relation :=
   rawWriteNode_untainted banned_not_isDerived
+
+/-- **The fork is real at STATE level, not just at node level.** From the empty state the
+    raw write and today's write produce different edge lists.
+
+    ★ **CONTROLLED, in two runs, because the first control passed for the wrong reason**
+    (the §C.4 trap). The sabotage is the plausible step-4a failure: not a wrong routing but
+    a `writeDirectRaw` that quietly ignores it — `σ.writeDirect t`, dropping `rawWriteTuple`.
+
+    * **Run 1 (naive).** Three errors, all in the general section:
+      `writeDirectRaw_edges_of_admit`, `structInv_writeDirectRaw`, `inv_writeDirectRaw`.
+      This witness stayed GREEN — it consumes `writeDirectRaw_edges_of_admit`, which was
+      already red, so it was *shielded* rather than satisfied. Run 1 establishes nothing
+      about this witness. Only the first of those three is a genuinely false STATEMENT
+      under the sabotage; the other two are proof-style artifacts (term-mode proofs naming
+      `rawWriteTuple`) that a careless author repairs in one keystroke.
+    * **Run 2 (the informative one): sabotage plus exactly those repairs** — restate
+      `writeDirectRaw_edges_of_admit` over the bare node, drop `rawWriteTuple` from the two
+      `Inv` terms. The whole general section then compiles, and the ONLY error in the tree
+      is here, with the residual goal printed verbatim:
+
+      ```
+      ⊢ ((emptyState Sw).writeDirectRaw Sw tw).edges ≠ ((emptyState Sw).writeDirect tw).edges
+      ```
+
+      — unprovable, because under the sabotage the two edge lists are equal. -/
+theorem writeDirectRaw_edges_ne :
+    ((emptyState Sw).writeDirectRaw Sw tw).edges ≠ ((emptyState Sw).writeDirect tw).edges := by
+  -- the subject and both candidate targets differ already in their `type` field
+  have hty : ∀ b : NodeKey, b.type = tw.object.type → subjNode tw.subject ≠ b := by
+    intro b hb heq
+    have := (congrArg NodeKey.type heq).trans hb
+    simp only [subjNode_type] at this
+    exact absurd this (by decide)
+  have hraw : subjNode tw.subject ≠ rawWriteNode Sw tw :=
+    hty _ (by simp [rawWriteNode])
+  have hbare : subjNode tw.subject ≠ objNode tw.object tw.relation :=
+    hty _ (by simp)
+  -- from the empty state every non-self edge is admitted (no edges ⇒ no back-path)
+  have ha : ∀ b : NodeKey, subjNode tw.subject ≠ b →
+      (emptyState Sw).admitEdge (subjNode tw.subject) b = true := by
+    intro b hb
+    simp [GraphState.admitEdge, GraphState.reach, emptyState, reachB, hb]
+  rw [writeDirectRaw_edges_of_admit (ha _ hraw), writeDirect_edges_of_admit (ha _ hbare)]
+  intro h
+  exact routes_away (congrArg Prod.snd (List.head_eq_of_cons_eq h))
 
 end LeafWitness
 
