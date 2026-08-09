@@ -1711,4 +1711,26 @@ namespace Zanzibar
 #print axioms LeafWitness.routes_away
 #print axioms LeafWitness.untainted_unmoved
 
+-- LEG 7 STEP 4a (2026-08-09) — the FORK, addressing half. Scope doc §4 prescribes forking
+-- `GraphState.writeDirect` itself ("take a target-node argument"), which it warns duplicates
+-- every `writeDirect_*` projection and fold lemma. It is CHEAPER and MORE FAITHFUL to fork
+-- the TUPLE instead: Python does not fork its write path at all — `RuleSet.apply` does
+-- `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py:447`) and then the
+-- ordinary `add_tuple` path runs. So `rawWriteTuple` re-addresses and `writeDirect` is
+-- BYTE-IDENTICAL: definition pin unmoved, and every existing projection/fold lemma applies
+-- to the re-addressed tuple verbatim (`structInv_writeDirectRaw` / `inv_writeDirectRaw` are
+-- one-liners over the originals, no clones). The caller re-pointing is step 4c.
+-- ★ CONTROLLED IN TWO RUNS, because the first control passed for the wrong reason (plan
+-- §C.4's trap). Sabotage = `writeDirectRaw` ignores the routing. Run 1 reddens three
+-- general lemmas and leaves the witness green — SHIELDED, not satisfied. Run 2 applies the
+-- one-keystroke repairs a careless author would make; the whole general section compiles and
+-- the only error in the tree is `writeDirectRaw_edges_ne`. Literal residual goal in its
+-- docstring.
+-- Standard axioms only:
+#print axioms rawWriteTuple_untainted
+#print axioms GraphState.writeDirectRaw
+#print axioms writeDirectRaw_untainted
+#print axioms inv_writeDirectRaw
+#print axioms LeafWitness.writeDirectRaw_edges_ne
+
 end Zanzibar
