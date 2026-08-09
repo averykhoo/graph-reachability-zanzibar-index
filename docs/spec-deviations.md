@@ -8,7 +8,7 @@ to the user instead.
 
 ---
 
-## 2026-08-09 — ★ NEW LIVE DIVERGENCE: the graph index under-reports the OWC x star-parent x TTU cross (answer level). GATE IS RED.
+## 2026-08-09 — ★ the graph index under-reported the OWC x star-parent x TTU cross (answer level). FOUND, ADJUDICATED, FIXED same day.
 
 **Found by** `tests/test_lookup_hypothesis.py::TestLookupSurfaceMachine` on a generated
 walk. **Pre-existing** — it reproduces at `6d3c540` with byte-identical Python; the
@@ -58,6 +58,77 @@ only that three of four backends currently disagree with it.
 this composition and the graph has no analogue — `setengine/engine.py:1476-1480`, *"the
 star-parent cross for the triple combo owc x star-parent x TTU where NO concrete
 `(T, X, r')` is interned"*. `index_v4/core.py` contains zero occurrences of `ttu`.
+
+### ✅ FIXED the same day — the middle tracks the ENTITY (invariant I14)
+
+**Adjudication: the graph is the side to fix**, on three independent readings, none of
+which needed a judgement call. (1) §4.1 defines `universe(T)` — the domain of §3.4's
+existential — as *entity names appearing in any input tuple*, not "nodes of shape (T,p)".
+(2) §3.6 pins "a wildcard grant … is the same row count as granting each instance
+explicitly", and granting explicitly answered True while the wildcard answered False, so
+the graph violated the spec's own stated equivalence. (3) The graph was
+**self-inconsistent under irrelevant data** — an unrelated grant to another principal
+flipped the answer. The oracle and both set engines stay untouched.
+
+**The fix**, `index_v4/wildcard.py::WildcardIndex._ensure_entity_middles` /
+`::WildcardIndex._sync_entity_middles`, with the property lifted into
+`index_v4/invariants.py` as **I14**:
+
+> for every crossable shape `(T, p)` (`SchemaInfo.crossable_shapes` — bridged in AND out)
+> and every entity name `x` such that the store holds at least one node `(T, x, *)` that
+> is not itself a bridge-only middle, the store holds the node `(T, x, p)` with BOTH
+> bridges.
+
+I3 says a concrete of a bridged shape must HAVE its bridges; I14 says the middle must
+EXIST while the entity does. Paranoia runs `check_invariants` inside every commit, so a
+write path that stops maintaining middles now aborts the first innocent write instead of
+silently under-reporting again. **∀⇒∃ stays strict structurally** — a middle can only
+exist while its entity does, so there is no counter to drift.
+
+**`_ALLOWED_DIRECT` was NOT relaxed.** The cheap alternative — permit the forbidden
+`('all','any')` edge and gate it on an entity count — was considered and rejected: it
+converts a structural guarantee into maintained state. (For the record, that direction is
+*not* the instance leak; the leak is `w_any → w_all`, and the same-shape cycle it enables
+is already compile-rejected. The `('all','any')` prohibition is the ∀⇒∃ collapse plus a
+"cannot arise from any tuple" guard, since the position rule makes subject wildcards
+`w_any` and object wildcards `w_all`.)
+
+Two subtleties that would have bitten a naive implementation: a middle must **not**
+witness its own entity, or the middles keep each other alive as self-sustaining garbage;
+and `remove_node` can orphan a **neighbour** entity, so concrete neighbours are captured
+before the core removal and re-synced after. Mirrored into `bulk_backfill.py`/`bulk_build.py`
+because `tests/test_bulk_build.py` is a byte-identity differential gate.
+
+Cost is confined: `bridged_in_shapes` excludes bare `(T,'...')` shapes, so plain OpenFGA
+`[user:*]` usage is never crossable and pays zero middles.
+
+**Sabotage (`docs/sabotage-procedure.md`), the narrowest plausible weakening** —
+`_ensure_entity_middles` made a no-op, exactly what a refactor that "simplifies the bridge
+code" would do. The degraded store keeps every old bridge so **I3 stays green and only I14
+fires**:
+
+```
+InvariantViolation: I14: entity folder:f1 exists but its crossing middle
+folder:f1#viewer for crossable shape ('folder', 'viewer') is missing
+```
+
+Re-run independently on the committed tree: 7 of 10 pinned tests fail under the sabotage,
+10/10 pass restored. Gates: `tests/` 773 passed, `formal/conformance` 494 passed.
+
+**★ A third finding: the formal layer could not have caught this, by construction.**
+Lean's in-bridge test (`UsStarWrite.lean::Schema.isSubjectWildcardUserset`) keys on a
+*literal* `T:*#p` restriction, while Python's `bridged_in_shapes` also folds in
+star-tupleset through-shapes. So Lean's crossable set is exactly the set
+`_reject_doubly_bridged_shapes` refuses — empty among admissible schemas — and the arm
+where the bug lived has no Lean counterpart at all. Filed as a fragment boundary in
+`formal/CORRESPONDENCE.md` §7.3.
+
+**★ A fourth: a live comment was refuted.** `zanzibar_utils_v1.py::wildcard_userset_restriction_shapes`
+justified its narrowing partly with "…the legal reg11 / `owc_star_ttu` class … whose whole
+write space is oracle-correct and unanimous on both backends". That clause was false —
+`owc_star_ttu` is exactly where the graph disagreed. The narrowing itself still stands on
+its own argument (the F1/F2 danger is a writable userset *subject*, which a through-shape
+does not enable); the comment is corrected in situ.
 
 **Pinned deterministically** by `tests/test_owc_star_parent_cross.py` (2 red + 1 green
 positive control). It is a positive pin, NOT an xfail, per `CLAUDE.md`. Before that file

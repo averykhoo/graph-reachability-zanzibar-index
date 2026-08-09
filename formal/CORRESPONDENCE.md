@@ -739,6 +739,32 @@ The bullet is corrected in place below.
 These were neither mapped nor declared. None is a bug; each is a place where an
 auditor must know the pin is a Python↔Python differential, not a Lean twin.
 
+* **★ The CROSSABLE-SHAPE class, and the Lean wildcard leg could not have caught the
+  2026-08-09 bug (added 2026-08-09).** Python's bridged-in set is WIDER than Lean's.
+  `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes` folds in **star-tupleset
+  through-shapes** — a `[S:*]` bare tupleset used by a TTU derives the through-shape
+  `(S, target)` (`::wildcard_userset_restriction_shapes`'s docstring is where that
+  distinction is drawn). Lean's in-bridge test
+  `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` keys on a **literal**
+  `T:*#p` restriction only. Consequence:
+
+  > Lean's crossable set (`bridgedInConcrete ∩ bridgedConcrete`) is exactly
+  > wildcard-userset ∩ object-wildcard — precisely the set
+  > `zanzibar_utils_v1.py::_reject_doubly_bridged_shapes` refuses at compile time. So
+  > among admissible schemas Lean's crossable set is EMPTY, and the star-tupleset arm
+  > where the divergence lived has **no Lean counterpart at all**.
+
+  This is a fragment boundary, not model drift: nothing in `ObjStarWrite`/`UsStarWrite`
+  became unfaithful when `index_v4/wildcard.py::WildcardIndex._ensure_bridges` grew its
+  entity-middle half (`::WildcardIndex._ensure_entity_middles` / `::WildcardIndex._sync_entity_middles`, invariant
+  **I14**), because the model never reached the shapes that half is about. Recorded
+  because the *inference* an auditor would otherwise draw — "the wildcard write path has
+  a Lean twin, so it is covered" — is false exactly where it mattered: the live
+  under-report of 2026-08-09 (`docs/spec-deviations.md`) was invisible to the formal
+  layer by construction, and was found by the Python hypothesis campaign instead.
+  Closing it would mean modelling star-tupleset through-shapes in `UsStarWrite` — not
+  scheduled, and no other claim depends on it.
+
 * **Set-engine WRITE ADMISSION — and it decides which stores the gates can
   enumerate.** `setengine/engine.py::SetEngine._validate` step (1)
   (object-wildcard gating) and step (3) (cycle rejection) →

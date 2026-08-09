@@ -18,11 +18,10 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ## Current status — 2026-08-09
 
-**⛔ THE GATE IS RED, and there IS a known live correctness bug. Do not push until it is
-dispositioned.** Nine of ten phases pass; `tests-tile:2/4` fails on a **new, pre-existing,
-previously-undocumented answer-level divergence** in the graph index — see the board item
-"★★ START HERE" below and `docs/spec-deviations.md` 2026-08-09. No `sorry` and no `xfail`
-anywhere in the tree; the Lean layer is green.
+**Everything is green and nothing is blocking.** No `sorry`, no `xfail`, no known live
+correctness bug. A real one was found, adjudicated and fixed on 2026-08-09 — see the
+board item below; it is kept visible for one cycle because three of its findings correct
+live documents.
 
 - **★ Last landed: LEG 7 IS UNDER WAY — steps 3 and 4a are IN** (2026-08-09, `8291c3a` +
   `41b7029`). `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,
@@ -121,8 +120,9 @@ open). This file is now only what a future session must ACT on.
 
 ### Active work
 
-- [ ] **★★ START HERE (2026-08-09) — A LIVE ANSWER-LEVEL DIVERGENCE, AND THE GATE IS RED
-      ON IT.** The graph index under-reports the **OWC × star-parent × TTU cross**. Three
+- [x] ~~**★★ (2026-08-09) — A LIVE ANSWER-LEVEL DIVERGENCE.**~~ **FOUND, ADJUDICATED AND
+      FIXED the same day** (`58b51a8` pin-red, `310fbcb` IIA-red, `c042056` fix). The graph
+      index under-reported the **OWC × star-parent × TTU cross**. Three
       tuples on `tests/fga_schemas/owc_star_ttu.fga`:
 
       ```
@@ -157,6 +157,26 @@ open). This file is now only what a future session must ACT on.
       `stateful_step_count=8`, ~50-tuple pool) — **the gate was green by seed luck**, the
       house failure mode by name. *The hypothesis campaign's green is a sample, not a
       proof, and nothing in the gate says so.* Consider whether that deserves its own fix.
+
+      **The fix:** the crossing middle now tracks the **entity**, not the node —
+      `WildcardIndex._ensure_entity_middles` / `::_sync_entity_middles`, with the property
+      lifted into `index_v4/invariants.py` as **I14** so paranoia aborts the first innocent
+      write if a path stops maintaining it. `_ALLOWED_DIRECT` was NOT relaxed; ∀⇒∃ stays
+      strict *structurally* rather than by a counter. Sabotage: making
+      `_ensure_entity_middles` a no-op leaves **I3 green and only I14 red**.
+
+      **Two more findings that correct live documents:**
+      * **The formal layer could not have caught this, by construction.** Lean's in-bridge
+        test keys on a *literal* `T:*#p` restriction; Python's `bridged_in_shapes` also
+        folds in star-tupleset through-shapes. So Lean's crossable set is exactly the
+        compile-rejected set — empty among admissible schemas — and the arm where the bug
+        lived has no Lean counterpart. Filed as a fragment boundary,
+        `formal/CORRESPONDENCE.md` §7.3. **Do not read "the wildcard write path has a Lean
+        twin" as "it is covered".**
+      * **A live comment was refuted.** `zanzibar_utils_v1.py::wildcard_userset_restriction_shapes`
+        claimed the `owc_star_ttu` class is "oracle-correct and unanimous on both
+        backends". It was not. Corrected in situ; the narrowing it justifies still stands
+        on its own argument.
 
       Full filing, including the five prior-art items checked and why none covers this:
       [`docs/spec-deviations.md`](docs/spec-deviations.md) 2026-08-09.
