@@ -28,11 +28,9 @@ Everything below is either VERIFIED (reproduced by hand) or explicitly marked UN
 > broken by accident. **The expected-red inventory is exactly this, and nothing else:**
 >
 > ```
-> pytest tests/ -q   ->  7 failed, 812 passed in 559.35s (0:09:19)   [exit 1]
+> pytest tests/ -q   ->  5 failed, 815 passed in 557.10s (0:09:17)   [exit 1]   820 collected
 >
 >   tests/test_ttu_tupleset_parent_types.py   (the hand-minimised pins)
->     FAILED ::test_rc1_negative_arm_type_is_still_a_stored_ttu_parent
->     FAILED ::test_rc1_negative_arm_type_dropped_is_an_authorization_fail_open
 >     FAILED ::test_rc2_star_stored_parent_on_derived_tupleset_is_a_ttu_parent
 >     FAILED ::test_rc2_star_stored_parent_dropped_is_an_authorization_fail_open
 >   tests/test_hypothesis.py                  (the generated-grammar detection)
@@ -40,18 +38,26 @@ Everything below is either VERIFIED (reproduced by hand) or explicitly marked UN
 >   tests/test_generator_coverage.py          (the two driving regimes)
 >     FAILED ::test_sparse_regime_finds_no_fail_closed_divergence
 >     FAILED ::test_dense_regime_finds_no_fail_open_divergence
+>
+> formal/conformance/ -q  ->  494 passed          verify.sh lean  ->  PASSED
 > ```
 >
-> **All seven are the SAME TWO BUGS (RC1 + RC2), found by three independent instruments.**
-> That convergence is the point: the hand-written pins, the generated tupleset grammar, and
-> both driving regimes each detect them without sharing a derivation. **All seven go green on
-> the same fix, with no test edit.** If you fix RC1 and RC2 and any of the seven stays red,
-> the fix is incomplete — do not adjust the test.
+> **RC1 is FIXED. All five remaining failures are RC2 and ONLY RC2**, detected by three
+> instruments that share no derivation: the hand-written pins, the generated tupleset
+> grammar, and both driving regimes. **All five go green on the RC2 fix with no test edit.**
+> If you fix RC2 and any of the five stays red, the fix is incomplete — do not adjust the
+> test. (Before the RC1 fix this list was 7; RC1 cleared exactly its own 2.)
 >
-> **Measured, not assumed** — run 2026-08-10 at the commit that added this block, 819
-> collected. **Every other phase must be green**, including `lean`: the counts block was
-> regenerated for 784 → 819 (step 4e is an exact compare), so if `lean` is red that is YOURS.
-> If you see red outside this list, it is yours, not ours — `git stash` and re-check.
+> **Measured, not assumed** — runs executed 2026-08-10 at the commit that added this block.
+> `formal/conformance/` and `lean` are both GREEN, so the ONLY red in the repo is the five
+> above. The counts block was regenerated 784 → 820 (step 4e is an exact compare), so if
+> `lean` is red that is YOURS. If you see red outside this list, it is yours, not ours —
+> `git stash` and re-check.
+>
+> ⚠ **Owed but NOT run: the 6-seed fuzz sweep and the conf/tests tiles.** RC1 is an
+> algorithm change, so `--hypothesis-seed=` 7 19 31 53 71 97 over `test_hypothesis.py` and
+> `test_lookup_hypothesis.py` is owed before any push. The full suites were run directly
+> instead of through the tiles, which is strictly more informative but is not the gate.
 >
 > ⚠ **Two seed-dependent extras, so the fuzz sweep red is 7 or 8, not always 7.**
 > `TestParityMachine` additionally detonates at `--hypothesis-seed=53` and `=97` (2 of the 6
@@ -88,14 +94,19 @@ requires the TTU to walk. A bounded exhaustive sweep (2,302,854 queries over 346
 schemas) found **26 distinct minimized divergences and exactly these 2 causes** — so the
 family is mapped and closed at two.
 
-* **RC1 — CHEAP, ~1 line.** `zanzibar_utils_v1.py::_member_types` returns `walk(e.base)` for
-  an `Exclusion`, so on `define parent: [folder] but not [doc]` the type `doc` never enters
-  the compiled `parent_types` and `processor.py::tupleset_parents` drops the stored parent.
-  Fix: union `walk(e.subtract)`; update its docstring, which encodes the same mistake.
+* **RC1 — ✅ FIXED 2026-08-10.** `zanzibar_utils_v1.py::_member_types` returned
+  `walk(e.base)` for an `Exclusion`, so on `define parent: [folder] but not [doc]` the type
+  `doc` never entered the compiled `parent_types` and `processor.py::tupleset_parents`
+  dropped the stored parent. Now `walk(e.base) | walk(e.subtract)`, with the docstring —
+  which encoded the same mistake in prose — rewritten to say why both arms count.
+  **All five callers pass a `tupleset_rel`**, so the function only ever answers "what types
+  can a TTU parent have" and the widening is scoped exactly to that question.
   **`parent_types` is compiled once (`zanzibar_utils_v1.py:1761`) and frozen onto the plan
-  node, which `processor.py` and `bulk_backfill.py` merely READ — so this one fix repairs
-  the incremental AND bulk paths together.** Measured: `tests/test_bulk_build.py` 6 passed,
-  byte-identity snapshots survive, 773+494 green with it applied.
+  node, which `processor.py` and `bulk_backfill.py` merely READ — so this one fix repaired
+  the incremental AND bulk paths together**, no `bulk_backfill.py` edit needed.
+  Verified: `formal/conformance/` **494 passed**, `tests/test_bulk_build.py` green,
+  byte-identity snapshots survive, and both RC1 pins plus their controls now pass.
+  ⚠ Still owes the 6-seed fuzz sweep — it is an algorithm change (item 5 below).
 * **RC2 — NOT CHEAP. Budget a design decision, not a filter tweak.** The `n.wildcard == ''`
   clause of the same filter drops a stored `T:*` parent when the tupleset relation is
   derived (no exclusion, no object wildcard needed). Deleting the clause **breaks admission
@@ -132,6 +143,73 @@ struck-through, deliberately, so the bad reasoning is visible rather than delete
 **When you fix it:** full phased gate (all ten) + the 6-seed fuzz sweep
 (`--hypothesis-seed=` 7 19 31 53 71 97 over `test_hypothesis.py` and
 `test_lookup_hypothesis.py`) — it is an algorithm change. Then push.
+
+### 1a. ★ THE FIX LIST — START HERE. Ordered, with the cheap/expensive split called out.
+
+RC1 is **FIXED and committed**. What follows is everything still owed, in the order to do it.
+
+**(0) ⚠ READ THIS FIRST — a latent intermittent failure was found and fixed 2026-08-10, and
+the lesson generalises.** When plan item 1b (c) made `schema_asts` DRAW the TTU tupleset, it
+broke a documented assumption in a *different* file: `tests/test_lookup_oracle.py:126` imports
+`schema_asts`, and its block comment asserted *"Object wildcards are not used (schema_asts
+never emits them), so the graph always joins"*. Drawn star tuplesets made that false, and
+`test_lookup_oracle_gate_generated_schemas` died on gate construction with
+`UnsupportedByGraphIndex`. **No profile here sets `derandomize`, so this only fires on some
+draws — the first full-suite run after (c) landed passed by luck and the commit shipped
+red-capable.** Now fixed: the refusal is caught and asserted to be a RECORDED family
+(`genswarm.match_rejection`), never swallowed, with `test_..._graph_join_rate` flooring how
+often the gate actually runs. **Generalisation for anyone changing a generator: grep for its
+importers.** A generator is a shared interface, and its consumers encode assumptions about
+what it can emit — in prose that no test checks.
+
+**(1) RC2 — the real work. A semantics decision, not a filter tweak. Budget accordingly.**
+A stored `T:*` tupleset parent is dropped when the tupleset relation is derived.
+* Sites: `index_v4/processor.py:320` (`n.wildcard == ''`) **and its verbatim duplicate**
+  `index_v4/bulk_backfill.py:454`. Unlike RC1 — whose `parent_types` is compiled once and
+  shared — **RC2 genuinely needs both**, or the offline `build_index` path stays wrong.
+* ⚠ **Two dead ends already measured, do not repeat them.** Deleting the clause breaks
+  admission parity before any query runs (`accept/reject divergence on add
+  ('...','doc','*','parent','doc','d1'): graph=False set:py=True`). Widening it naively
+  crashes at `index_v4/core.py:914` (`name=='*' and a non-empty wildcard must go together,
+  got entity_name='*', wildcard=''`).
+* **The decision you actually have to make:** what a wildcard TTU parent *means* — presumably
+  a union over all objects of the parent type. The star parent must be **represented**, not
+  merely admitted. **The set engine already has the analogue: port `MemberSet.stars`**
+  (`setengine/memberset.py`), which is why the set engine gets this right today.
+* Clears: `test_rc2_*` (2 pins) and whatever RC2 cells the generators light up.
+
+**(2) Pin the corpus gap that hid RC2 from the bulk gate.** The bulk-vs-incremental identity
+gate is **blind** to this direction — measured, with a control: one-sided edits S1 (RC2) and
+S3 (RC1) both leave `tests/test_bulk_build.py` **6 passed GREEN**, while control S2
+(`return []`) reddens it 2/6. So the gate reaches the function and the gap is the **corpus**:
+nothing has a `T:*` subject holding a stored tupleset tuple on a derived tupleset relation.
+**The RC2 schema is a ready-made minimal corpus** — add it, and confirm S1 turns red.
+
+**(3) Land the new compile-time invariant.** Prototyped and validated RED-before/GREEN-after:
+each TTU node's `parent_types` must cover every bare-entity type that **admission** accepts
+onto that tupleset's storage leaves. ★ **Read it from the emitted `RewriteFilter`s, NOT from
+`_member_types`** — that independence is the whole point. `_member_types` is what was wrong,
+and an invariant reading it would be a *mirror* (`docs/sabotage-procedure.md`, "the mirror
+instrument"), exactly like I9, which re-runs `reconcile`, reads the same wrong metadata,
+agrees with itself, and stayed green through both fail-opens with paranoia ON.
+
+**(4) The compiler rough edge found 2026-08-10, reported not fixed.** A TTU whose tupleset is
+undeclared *and* whose target is derived (`define r7: [user] or r1 from nodecl`) escapes the
+decision-15 scope checks and dies in `compile_boolean_schema` with a bare
+`ValueError: Rule then-pattern carries a derived subject predicate` — the class
+`tests/parity.py` says "must surface". With an untainted target it compiles cleanly. Already
+captured as a rejection family in `tests/genswarm.py` so it cannot rot.
+
+**(5) Then the gate, which is what this session deferred.** All ten phases + the 6-seed fuzz
+sweep (`--hypothesis-seed=` 7 19 31 53 71 97 over `test_hypothesis.py` and
+`test_lookup_hypothesis.py`) — RC1 and RC2 are algorithm changes. Then push.
+
+**(6) Optional, open question — NOT a finding.** The 2026-08-09 sibling
+(`spec-deviations.md`) carries the same "it fails closed, so it is not a security fail-open"
+wording, and this session's rule (a dropped TTU parent inverts sign under a negated TTU)
+predicts it inverts too. It was never re-tested, because it is fixed and testing means
+reverting. If you want it settled, revert `c042056` in a scratch worktree and add a negated
+TTU consumer. Do not propagate the prediction as measured fact.
 
 ### 1b. Close the generator gap that let this through. STARTED 2026-08-10, incomplete.
 
@@ -327,8 +405,8 @@ reverses the 2026-08-09 status below. See the red banner at the top of this file
 exact expected-red inventory and why nothing else should be red. No `sorry` and no `xfail`
 — the pins are positive assertions, so the red is a real failing test by design.
 
-* **Known live correctness bugs: 2** (RC1, RC2 — plan item 1). Both pinned (`d0010e2`),
-  neither fixed. Both have an authorization fail-open direction.
+* **Known live correctness bugs: 1** (RC2 — plan item 1). **RC1 is FIXED**; RC2 is pinned
+  and open. Both had an authorization fail-open direction.
 * **What changed vs. the 2026-08-09 "everything is green" line:** nothing regressed. These
   bugs are PRE-EXISTING — RC1 reproduces on a hand-written schema at `e136c8c` with no `.py`
   file touched. What changed is that they are now *known and pinned* rather than unnoticed.
