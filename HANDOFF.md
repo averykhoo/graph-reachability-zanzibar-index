@@ -21,39 +21,125 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 Written so a fresh session can act without reading the rest of this file first. Ordered.
 Everything below is either VERIFIED (reproduced by hand) or explicitly marked UNVERIFIED.
 
-### 1. Fix the TTU-over-derived-tupleset under-report. VERIFIED, live, do this first.
+> # 🔴 THE GATE IS RED ON PURPOSE. READ THIS BEFORE YOU DEBUG ANYTHING.
+>
+> The 2026-08-10 session pinned two live divergences and **deliberately did not fix them**
+> (the user scoped that session to test-prep and deferred the fix + gate run). Nothing is
+> broken by accident. **The expected-red inventory is exactly this, and nothing else:**
+>
+> ```
+> pytest tests/test_ttu_tupleset_parent_types.py -q   ->  4 failed, 7 passed
+>     FAILED ::test_rc1_negative_arm_type_is_still_a_stored_ttu_parent
+>     FAILED ::test_rc1_negative_arm_type_dropped_is_an_authorization_fail_open
+>     FAILED ::test_rc2_star_stored_parent_on_derived_tupleset_is_a_ttu_parent
+>     FAILED ::test_rc2_star_stored_parent_dropped_is_an_authorization_fail_open
+> ```
+>
+> Those 4 land in ONE `verify.sh tests-tile:I/4` phase (structural partition, so which tile
+> depends on collection order — find it, don't guess). **Every other phase must be green.**
+> If you see red outside that list, it is YOURS, not ours — `git stash` and re-check.
+>
+> **Do NOT "fix" these by weakening them, and do NOT convert them to xfail**
+> (`MAX_TESTS_XFAILED=0`, and `CLAUDE.md` prefers a positive pin). The 7 passing tests in
+> that file are controls and must stay green through any fix.
+>
+> Baseline before this session, for diffing: `tests/` 773 collected, `formal/conformance/`
+> 494, doc-counts block current, all ten phases green at `e136c8c`.
 
-Second bug of the same family as the 2026-08-09 one: the graph index under-reports while
-the oracle **and both set engines** agree against it. Reproduced by hand, not just claimed:
+### 1. Fix the two TTU-tupleset divergences. PINNED RED (`d0010e2`), fix NOT done.
 
-```
-type doc
-  relations
-    define parent:    [folder] but not [doc]
-    define viewer:    [user]
-    define inherited: viewer from parent
+**★★ These are AUTHORIZATION FAIL-OPENS, not under-reports.** Read through a negated TTU
+(`define access: [user] but not viewer from parent`) the graph **GRANTS what the oracle and
+both set engines DENY** — `oracle=False graph=True sets=[False, False]`, verified by hand
+for both causes. The general rule worth carrying: **a dropped TTU parent is a false NEGATIVE
+under a positive TTU and a false POSITIVE under a negated one**, so probing only the
+positive direction mis-classifies severity by one sign. That is exactly what the original
+filing did. *(No deployment exists — the store is a plain callable API — so this is a
+library correctness defect, not an exposed system.)*
 
-tuples (both ADMITTED by graph and both set engines):
-    (doc:d2,     parent, doc:d1)
-    (user:alice, viewer, doc:d2)
+**There are TWO independent root causes**, both dropping a STORED tupleset tuple that
+`CLAUDE.md`'s rule ("TTU parents are STORED tupleset tuples, never computed membership")
+requires the TTU to walk. A bounded exhaustive sweep (2,302,854 queries over 346 compiled
+schemas) found **26 distinct minimized divergences and exactly these 2 causes** — so the
+family is mapped and closed at two.
 
-check(alice, inherited, doc:d1):  oracle=True   graph=False  sets=[True, True]   <== DIVERGES
-check(doc:d2, parent,   doc:d1):  oracle=False  graph=False  sets=[False, False] (all agree)
-```
+* **RC1 — CHEAP, ~1 line.** `zanzibar_utils_v1.py::_member_types` returns `walk(e.base)` for
+  an `Exclusion`, so on `define parent: [folder] but not [doc]` the type `doc` never enters
+  the compiled `parent_types` and `processor.py::tupleset_parents` drops the stored parent.
+  Fix: union `walk(e.subtract)`; update its docstring, which encodes the same mistake.
+  **`parent_types` is compiled once (`zanzibar_utils_v1.py:1761`) and frozen onto the plan
+  node, which `processor.py` and `bulk_backfill.py` merely READ — so this one fix repairs
+  the incremental AND bulk paths together.** Measured: `tests/test_bulk_build.py` 6 passed,
+  byte-identity snapshots survive, 773+494 green with it applied.
+* **RC2 — NOT CHEAP. Budget a design decision, not a filter tweak.** The `n.wildcard == ''`
+  clause of the same filter drops a stored `T:*` parent when the tupleset relation is
+  derived (no exclusion, no object wildcard needed). Deleting the clause **breaks admission
+  parity** (`accept/reject divergence on add ('...','doc','*','parent','doc','d1'):
+  graph=False set:py=True`) and widening it naively **crashes** at `index_v4/core.py:914`
+  (`name=='*' and a non-empty wildcard must go together`). The star parent has to be
+  **represented** — the set engine's `MemberSet.stars` algebra is the analogue to port — not
+  merely admitted. RC2 **does** need the duplicated fix at `bulk_backfill.py:454` alongside
+  `processor.py:320`.
 
-**The diagnosis is in the second line.** `d2` really is excluded from `parent` by the
-`but not` — everyone agrees. But `CLAUDE.md` pins **"TTU parents are STORED tupleset
-tuples, never computed membership (oracle-pinned Zanzibar semantics)"**, so the TTU must
-still walk the stored `(d2, parent, d1)` tuple. The oracle and both set engines do. The
-graph index instead respects the boolean evaluation of the tupleset relation. Fail-closed
-(under-grant), three backends to one, on a rule this repo states as an explicit invariant —
-and `CLAUDE.md` even says "storage leaves are split from rule-routed leaves for exactly
-this", so the split exists and is not being honoured on a DERIVED tupleset relation.
+**⚠ The mechanism recorded before this session was FALSE** and would have sent you rewriting
+correct code. It said the graph "respects the boolean evaluation of the tupleset relation"
+and the storage-leaf split "is not being honoured". Measured otherwise: the split IS applied
+(`plan(doc,parent).leaves` = `parent.0` + `parent.1`, both `storage=True`), the write DOES
+land on a storage leaf (`doc:d2#... -> doc:d1#parent.1`), `derived_stored_parents` DOES reach
+it, and the read path never evaluates `parent`'s plan. The loss is **compile-time metadata
+only**. Corrected in `docs/spec-deviations.md` 2026-08-10 (which keeps the wrong version
+struck-through, deliberately, so the bad reasoning is visible rather than deleted).
 
-**Order (the house pattern, used twice already this week):** pin it RED in its own commit
-first so the fix's green is attributable, then fix, then the full phased gate + fuzz.
-⚠ This will turn the gate red until fixed — that is intended, but it is why it was not
-done unilaterally at the end of the 2026-08-09 session.
+**Why nothing caught it, all three measured:**
+* **No invariant I1–I14 catches either, and I9 structurally CANNOT** — it re-runs
+  `reconcile`, which reads the same wrong `parent_types` and agrees with itself. *The
+  instrument shares its subject's defect.* Paranoia was ON and stayed green. A new
+  compile-time invariant (checking `parent_types` covers every type admission accepts onto
+  the tupleset's storage leaves, read from the emitted `RewriteFilter`s rather than from
+  `_member_types`) was prototyped and validated RED-before/GREEN-after — worth landing.
+* **The hypothesis campaign cannot reach the shape at ANY budget** — see item 1b.
+* **The bulk-vs-incremental identity gate is BLIND to the RC2 direction**, proven with an
+  instrument control: one-sided edits S1 (RC2 direction) and S3 (RC1 direction) both leave
+  `tests/test_bulk_build.py` **6 passed — GREEN**, while control S2 (`return []`) reddens it
+  2/6. So the gate reaches the function and the blindness is a CORPUS gap. The RC2 schema is
+  a ready-made minimal corpus — pin it as part of the fix.
+
+**When you fix it:** full phased gate (all ten) + the 6-seed fuzz sweep
+(`--hypothesis-seed=` 7 19 31 53 71 97 over `test_hypothesis.py` and
+`test_lookup_hypothesis.py`) — it is an algorithm change. Then push.
+
+### 1b. Close the generator gap that let this through. STARTED 2026-08-10, incomplete.
+
+`tests/test_hypothesis.py::schema_asts` hardcodes the TTU tupleset:
+`ast = {('doc','parent'): Direct((Restriction('doc','...',False),))}`. **Every TTU in every
+generated schema reads a plain single-type non-boolean `parent: [doc]`**, so the entire
+"TTU over a structured tupleset" space is unreachable **by construction — not by seed luck,
+and not fixable by raising `max_examples`.** `ci` runs `max_examples=12,
+stateful_step_count=8`, and there is **no coverage assertion anywhere in the campaign**, so
+"we fuzz broadly" is an unchecked claim. Yesterday's IIA instrument can't see it either —
+its hypothesis leg samples tuples over four FIXED corpora, so a novel schema shape is
+invisible to it too.
+
+Scoped with the user 2026-08-10 as three pieces, all three approved:
+* **(a) coverage cells, asserted** — enumerate the feature-cross cells, DERIVE the cell list
+  from the compiler's own leaf kinds / AST node types rather than hand-writing it (a
+  hand-written list is a future silent pass), record which cell each draw hits, assert every
+  cell is hit, and distinguish "unreachable by design (compile-rejected)" from "unreachable
+  by generator gap" — the second kind is what let these bugs through;
+* **(b) swarm testing** — per run draw a random subset of features to ENABLE and generate
+  deeply within it. Rationale: at a 12-example budget, uniform sampling over a rich grammar
+  touches many features shallowly, the worst configuration for interaction bugs — and every
+  bug this repo has found is an interaction bug;
+* **(c) un-hardcode the TTU tupleset** so it is drawn from the same expression grammar.
+
+⚠ **Constraint that will bite:** the candidate tuple pool must co-vary with the generated
+schema. The existing generators guarantee schema-VALID candidates by construction, because
+the graph admits a restriction-invalid tuple as a silent no-op while the set engine does
+not. Widen the grammar without co-generating a valid pool and most draws are refused at
+admission, so the sweep measures the REJECTION path **and reports green** — the house
+failure mode. ★ **There is an unusually strong control available right now: the two bugs are
+UNFIXED in the tree, so a correct new generator should go RED on them today and GREEN after
+the fix. Use that as the sabotage evidence — it is a real defect, not a synthetic one.**
 
 ### 2. Verify or discard two UNVERIFIED claims from the failed audit.
 
@@ -116,12 +202,22 @@ branch.
 
 ---
 
-## Current status — 2026-08-09
+## Current status — 2026-08-10
 
-**Everything is green and nothing is blocking.** No `sorry`, no `xfail`, no known live
-correctness bug. A real one was found, adjudicated and fixed on 2026-08-09 — see the
-board item below; it is kept visible for one cycle because three of its findings correct
-live documents.
+**🔴 The gate is RED, deliberately, and there are TWO KNOWN LIVE FAIL-OPENS.** This
+reverses the 2026-08-09 status below. See the red banner at the top of this file for the
+exact expected-red inventory and why nothing else should be red. No `sorry` and no `xfail`
+— the pins are positive assertions, so the red is a real failing test by design.
+
+* **Known live correctness bugs: 2** (RC1, RC2 — plan item 1). Both pinned (`d0010e2`),
+  neither fixed. Both have an authorization fail-open direction.
+* **What changed vs. the 2026-08-09 "everything is green" line:** nothing regressed. These
+  bugs are PRE-EXISTING — RC1 reproduces on a hand-written schema at `e136c8c` with no `.py`
+  file touched. What changed is that they are now *known and pinned* rather than unnoticed.
+* **The 2026-08-09 session's "everything is green" was true of the gate and false of the
+  code**, which is the whole lesson of plan item 1b: the gate's generators could not reach
+  these shapes at any budget, so green meant "we did not look here", not "there is nothing
+  here". Do not read a green gate in this repo as an absence of divergence until 1b lands.
 
 - **★ Last landed: LEG 7 IS UNDER WAY — steps 3 and 4a are IN** (2026-08-09, `8291c3a` +
   `41b7029`). `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,
@@ -575,6 +671,27 @@ open). This file is now only what a future session must ACT on.
       Numbers + the instrument trap: `docs/spec-deviations.md` 2026-07-29b.
 ### Someday / out of scope (low priority — revisit only on a concrete need)
 
+- [ ] **Vendor a corpus of REAL OpenFGA schemas, crawled from the wild** (requested
+      2026-08-10; the user will pick this up later — do not start it unasked).
+      **What it is for, and it is NOT bug-finding.** Real-world schemas are union/TTU
+      heavy and essentially never touch the wildcard x boolean x TTU crosses where every
+      divergence this repo has found actually lived, so expect them to pass. The value is
+      that they are the **empirical instrument for the scope-rejection item directly
+      below**: that item defers on "revisit on a concrete need", and its *previous*
+      priority argument was already found INVALID once (see its own note). A corpus of
+      schemas people actually wrote is how you decide whether a concrete need exists —
+      if 3 of 40 hit `UnsupportedByGraphIndex` the item's priority changes overnight; if
+      0 of 40 do, the deferral becomes evidence-backed instead of assumed. Second use:
+      a plausibility anchor for the generated-schema campaign, which is otherwise tied
+      to nothing real.
+      **Precedent already exists** — `tests/fga_schemas/gdrive.fga` and `github.fga` are
+      OpenFGA's canonical sample stores, already vendored. This extends an accepted
+      pattern.
+      **Sources:** `openfga/sample-stores`, the OpenFGA docs modeling guides, the
+      playground examples, GitHub code search for `.fga` / `model\n  schema 1.1`.
+      **Two constraints:** record provenance + license per schema in a manifest (OpenFGA
+      is Apache-2.0), and remember a crawl supplies **inputs only** — `tests/oracle.py`
+      stays the spec, so a real schema is a query-grid subject, never an expected answer.
 - [ ] **Lift the two scope rejections** — object wildcards on derived relations, and
       wildcard usersets over derived relations, currently raise
       `UnsupportedByGraphIndex` (loud compile-error hooks); the documented fix is a
