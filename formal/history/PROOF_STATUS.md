@@ -8,6 +8,80 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-10 (**ATTACK-FIRST KILL: `ttuStarFree` CANNOT be dropped — `graph_correct` is machine-checkably FALSE without it. The predicted MECHANISM was refuted; the conclusion stands.**)
+
+**Task taken:** the user asked to undo the `W4Fragment.ttuStarFree` scope reduction, on the
+reasoning that it was a scope cut made to keep the proof achievable rather than a genuine
+semantic boundary. House rule 2 says attack the statement before proving it. **KILL.**
+
+**1. The refutation is machine-checked, not `#eval`-ed.** Scratch module lived OUTSIDE the
+repo (`%TEMP%\zprobe`, run via `lake env lean`, never added to the lake package) and was
+deleted; `git status --porcelain` clean afterwards. With `W4FragmentNoTS` = `W4Fragment`
+verbatim minus the one clause:
+
+```lean
+theorem graph_correct_without_ttuStarFree_is_FALSE :
+    ¬ (∀ S T σ q, GraphAdmission S T → W4FragmentNoTS S T → ReachedBy σ S T → Drained S σ →
+        (q.subject.name = STAR → q.subject.predicate = BARE) → q.object.name ≠ STAR →
+        GraphModel.check σ q = sem S T q)
+```
+
+axioms `[propext, Classical.choice, Quot.sound]` — no `sorryAx`, no `native_decide`. T3 dies
+directly too. `ReachedBy` comes from the tree's own `graphRun_reached` and `Drained` from
+`drainedB_iff`, so the state is **never hand-assembled**.
+
+Counterexample store (`ttuStarFreeB = false`, every other W4 hypothesis PROVED at it):
+`doc#parent: [folder, folder:*]`, `doc#viewer: [user] or viewer from parent`;
+`(u1, viewer, folder:f1)`, `(folder:*, parent, doc:d1)`; `check(u1, viewer, doc:d1)` gives
+`graph=false set=true sem=true`.
+
+**2. Instrument controlled, and the first control was wrong.** Non-vacuity `compared := 40`
+per run × 3 runs = 120 comparisons, `semTrueRows` 4/3/1 so the grid is not uniformly false.
+CONTROL-A is a **one-character delta** (`folder:*` → `folder:f1`): 40/40 agreements, and the
+LANDED unmodified `graph_correct` is instantiable there. Two sabotages both went red for the
+right reason. ⚠ **The first sabotage attempt reddened for the WRONG reason** — lines landed
+after `end TtuStarProbe`, so `σC`/`S` auto-bound as implicits and it failed with "Expected
+type must not contain free variables". Same failure mode as the 2026-08-05 leg-4 control that
+"passed for the wrong reason"; caught only by reading the error text rather than the colour.
+
+**3. ★ The prediction's MECHANISM was refuted; the conclusion was not.** The prediction was
+that Lean still carries the 2026-08-09 I14 entity-middle bug. It does not turn on that —
+**the counterexample uses no object wildcard at all**, and could not, because `bareStar`
+(which stays) forbids object-wildcard tuples, so the I14 shape remains out of scope even
+with `ttuStarFree` gone. The Lean gap is **strictly larger and one layer earlier**: the
+plain W1c **in-bridge** for the star-tupleset **through-shape**. Measured, same schema:
+`isSubjectWildcardUserset "folder" "viewer" = false`, and `ensureInBridges` on
+`folder:f1#viewer` is a literal no-op (`edges 3 → 3, nodes 6 → 6`). Python handles the shape
+correctly (`oracle=graph=sets=True`).
+
+**4. What lifting it actually costs — four parts, not one.**
+* Fold star-tupleset through-shapes into `UsStarWrite.lean:71 Schema.isSubjectWildcardUserset`
+  (mirroring `zanzibar_utils_v1.py::derive_schema_info`'s second loop, `:985-995`): a bare
+  `[S:*]` on a TTU tupleset derives the shape `(S, target_rel)`. Lean's own docstring
+  declares this out of scope — that declaration IS the hole.
+* Compose bridges into the rule-routed write path: `RulesWrite.lean:135 writeRules` and
+  `Cascade.lean:175 writeLoggedRules` are plain folds that materialise **no bridges at all**.
+  `RulesBareStar.lean`'s header already says the W1c machinery "is not yet composed with
+  rule routing".
+* Re-prove what exists BECAUSE of the clause: `RulesBareStar.lean:54 ttuLeaf_elim_nss`
+  (kills `ttuLeaf`'s `instances` branch) and `StarSeed`/`starSeed_step` (`:94-121`), which
+  assume no `ttu` arm fires on a star subject — the probe measured that it does
+  (`rewriteClosure` turns `{folder,*,...} parent doc:d1` into `{folder,*,viewer} viewer doc:d1`).
+* The remove leg: `TtuStarFree` is a `ReachedByW3d2E.remove` guard, decided at runtime by
+  `Exec.lean:342 removeGateB`, plus `RestrictBase.lean:1210 ttuStarFree_restrict`.
+
+Sizing: **162 occurrences across 18 modules** (`CascadeStrataSettle` 26, `RulesBareStar` 19,
+`RestrictBase` 18, …). Not blocking anything; schedule deliberately or leave declared.
+
+**5. Context — the run this came from mostly failed.** The probe was one track of a
+278-agent scope-reduction audit that died on the session limit at 32 completed, with the
+verify and synthesis phases never running. Lesson written up in
+`docs/subagent-fanout-runbook.md`. Nothing else from that run is trusted without independent
+reproduction; the one audit claim that WAS reproduced by hand is a live Python bug filed at
+`docs/spec-deviations.md` 2026-08-10.
+
+---
+
 ## Session 2026-08-09 (**LEG 7 STARTED — steps 3 and 4a LANDED. The scope doc's §3 bet held, its §4 prescription is REFUTED, and a design fork it does not contain is what stopped step 4c.**)
 
 **Task taken:** "finish the leg" — leg 7, the leaf-family split that retires projection

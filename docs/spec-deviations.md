@@ -8,6 +8,57 @@ to the user instead.
 
 ---
 
+## 2026-08-10 — ★ LIVE: the graph index under-reports a TTU over a DERIVED tupleset relation. VERIFIED, NOT YET FIXED.
+
+**Second bug of the same family as 2026-08-09** — graph under-reports while the oracle and
+BOTH set engines agree against it. Found by a scope-reduction audit agent while auditing
+`GraphAdmission.strat`; the agent's own attribution control says `strat` does **not** cause
+it. **Reproduced by hand before filing** (the audit's adversarial verify phase never ran, so
+nothing from that run is trusted without independent reproduction).
+
+```
+type user
+type folder
+type doc
+  relations
+    define parent:    [folder] but not [doc]
+    define viewer:    [user]
+    define inherited: viewer from parent
+
+admit (doc:d2,     parent, doc:d1) -> True        # accepted by graph AND both set engines
+admit (user:alice, viewer, doc:d2) -> True
+
+check(alice, inherited, doc:d1):  oracle=True   graph=False  sets=[True, True]   <== DIVERGES
+check(doc:d2, parent,   doc:d1):  oracle=False  graph=False  sets=[False, False] (all agree)
+```
+
+**The second line is the diagnosis.** `d2` genuinely is excluded from `parent` by the
+`but not` — all four backends agree on that. But `CLAUDE.md` pins the Zanzibar semantics:
+
+> **TTU parents are STORED tupleset tuples**, never computed membership (oracle-pinned
+> Zanzibar semantics) … Storage leaves are split from rule-routed leaves for exactly this.
+
+So the TTU must still walk the stored `(d2, parent, d1)` tuple regardless of how `parent`
+*evaluates* for `d2`. The oracle and both set engines do. The graph index does not — it
+respects the boolean evaluation of the tupleset relation instead of its stored tuples.
+Fail-closed (under-grant), so not a security fail-open, but it is a divergence on a rule
+this repo states as an explicit invariant, and the storage-leaf split that exists precisely
+to honour it is evidently not being applied when the tupleset relation is DERIVED.
+
+**Not yet pinned or fixed** — pinning it turns the gate red, which was left as a deliberate
+decision for the next session rather than taken unilaterally. The house order applies when
+it is taken up: pin RED in its own commit first so the fix's green is attributable, then
+fix, then the full phased gate plus a multi-seed fuzz sweep (it is an algorithm change).
+
+**Relation to 2026-08-09:** different mechanism (that one was a missing crossing middle in
+the wildcard bridge; this one is TTU tupleset routing on a derived relation), same shape of
+failure — the graph index alone, under-reporting, on a shape no differential corpus
+exercised. Two in two days from the same blind spot class is the signal worth acting on:
+**shapes that the Lean fragment excludes are exactly where the differential corpora are
+thin**, because the corpora were built to feed the model.
+
+---
+
 ## 2026-08-09 — ★ the graph index under-reported the OWC x star-parent x TTU cross (answer level). FOUND, ADJUDICATED, FIXED same day.
 
 **Found by** `tests/test_lookup_hypothesis.py::TestLookupSurfaceMachine` on a generated
