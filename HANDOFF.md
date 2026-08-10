@@ -29,15 +29,24 @@ Everything below is either VERIFIED (reproduced by hand) or explicitly marked UN
 >
 > ```
 > pytest tests/test_ttu_tupleset_parent_types.py -q   ->  4 failed, 7 passed
+> pytest tests/ -q                                    ->  4 failed, 780 passed  (7:36)
 >     FAILED ::test_rc1_negative_arm_type_is_still_a_stored_ttu_parent
 >     FAILED ::test_rc1_negative_arm_type_dropped_is_an_authorization_fail_open
 >     FAILED ::test_rc2_star_stored_parent_on_derived_tupleset_is_a_ttu_parent
 >     FAILED ::test_rc2_star_stored_parent_dropped_is_an_authorization_fail_open
 > ```
 >
-> Those 4 land in ONE `verify.sh tests-tile:I/4` phase (structural partition, so which tile
-> depends on collection order — find it, don't guess). **Every other phase must be green.**
-> If you see red outside that list, it is YOURS, not ours — `git stash` and re-check.
+> **Measured, not assumed** — the whole-suite run above was executed 2026-08-10 at `8d78e40`
+> and those four are the ONLY failures in 784 collected. Those 4 land in ONE
+> `verify.sh tests-tile:I/4` phase (structural partition, so which tile depends on collection
+> order — find it, don't guess). **Every other phase must be green**, including `lean`: the
+> counts block was regenerated for 773 → 784 (`8d78e40`) because step 4e is an exact compare,
+> so if `lean` is red that is YOURS. If you see red outside that list at all, it is yours,
+> not ours — `git stash` and re-check.
+>
+> ⚠ **Do not read a pytest exit code that was piped through `tail`/`tee`** — it reports the
+> pipe's status, not pytest's. This bit the 2026-08-10 session: a run that was genuinely
+> `4 failed` was reported as exit 0. `docs/gate-runbook.md` warns about it; heed it.
 >
 > **Do NOT "fix" these by weakening them, and do NOT convert them to xfail**
 > (`MAX_TESTS_XFAILED=0`, and `CLAUDE.md` prefers a positive pin). The 7 passing tests in
