@@ -141,6 +141,59 @@ failure mode. ★ **There is an unusually strong control available right now: th
 UNFIXED in the tree, so a correct new generator should go RED on them today and GREEN after
 the fix. Use that as the sabotage evidence — it is a real defect, not a synthetic one.**
 
+**★ STATUS: DESIGNED AND PROTOTYPED, NOT IMPLEMENTED.** Everything below is measured, and
+the design + runnable prototypes + all raw evidence are in
+[`docs/design/generator-coverage/`](docs/design/generator-coverage/). **Start there; do not
+redesign it.** `prototypes/zz_cells.py` runs from the repo today
+(`PYTHONPATH=. python docs/design/generator-coverage/prototypes/zz_cells.py`).
+
+* **The premise is confirmed and quantified: it is grammar, not budget.** Cell space is
+  **51 features → 1275 pairwise cells**, with the alphabet DERIVED from six compiler sites
+  (the `Expr` union, the `LeafSpec` kind literals, the `_plan_leaves` dispatch, the
+  `DependentEdge` via-literals, `LeafFamily.kind`, `Restriction`'s fields) rather than
+  hand-written. Current generators reach **514/1275 = 40.3 %** at their ceiling — and the
+  `ci` budget already reaches **91–100 % of that ceiling**, so raising `max_examples` buys
+  almost nothing. **15 features are unreachable at any budget, and 13 of them are the one
+  hardcoded tupleset** (ten `ttu.ts:*` plus its three compiled consequences
+  `leaf:derived-tupleset-ttu`, `plan:PDerivedTuplesetTTU`, `via:tupleset-ttu`).
+  Pairs are used instead of a cartesian grid deliberately: the grid is 2^51, and a
+  hand-picked sub-grid would be exactly the silent-pass list this work exists to kill.
+* **★★ A SECOND instrument that fails by passing, found in passing.**
+  `BoolStarBridgeParityMachine` — the generator the source itself calls the "headline blind
+  spot" closer — **runs the graph index on only 12 % of its draws.** 59 % raise
+  `UnsupportedByGraphIndex`, whereupon `ParityEngine` sets `graph=None` and the machine
+  fuzzes **3-way and reports green**; 29 % are skipped. At `ci` that is ~1.4 four-way draws
+  per run. Its sibling `StarBridgeParityMachine` asserts `graph is not None`; this one does
+  not. **Fixing that assertion is cheap and independent of everything else here — do it
+  first.**
+* **★ Cell coverage is NECESSARY BUT NOT SUFFICIENT — the driving discipline is what makes
+  a divergence observable.** The prototype's instrument control caught this in its own first
+  draft: driving each config with the WHOLE candidate pool found **0 divergences** across
+  the same 97 configs that small-subset driving detonates, because a fail-closed divergence
+  is masked by any extra granting tuple (this repo's own IIA property). Without that control
+  the design would have shipped a 35 s green phase over an unfixed live bug. **The full-pool
+  variant must land as a permanent negative control.** Related trap: a neg-only arm whose
+  subtrahend type also appears in the base compiles, reads correctly in review, and yields
+  `parent ≡ ∅` — a "compiled but never driven" cell.
+* **Reachability is decided by REJECTION WITNESSES, not an exemption list.** A cell counts
+  as "unreachable by design" only if it carries an executable `(schema, owc)` the compiler
+  is asserted to refuse, with the message recorded. Relax a scope check and the exemption is
+  revoked automatically — so a scope relaxation cannot silently mint a new blind spot.
+* **Costs, measured.** `ci` **+~32 s** (the tile goes 165 s → ~197 s against a 600 s cap):
+  deterministic witness enumeration over switch singletons + pairs (119 configs), a
+  compile-only cell assertion (`UNKNOWN == ∅`, 454 cells, exhaustive over its own closed
+  config space), the rejection-witness checks, a driven pass of 2 small subsets per config,
+  the existing swarm campaign at unchanged `max_examples=12`, plus the negative control.
+  `deep`/nightly: triples (469 configs, 157 s measured), `max_examples=120`, committed
+  histogram.
+* **Honest limits, from the design's own §6.** Prototype swarm + (c) reaches 721–771 cells
+  alone; unioned with the existing generators, **876–891/1275 (68.7–69.9 %)**. **~30 % stays
+  unreached** and the doc says so. And the sweep found **only fail-closed divergences** — it
+  could not independently reproduce a fail-open one; §6.7 attributes that to subset driving
+  being tuned for under-grants and estimates a sparse+dense two-regime drive at ~+30 s.
+  **So this design, as prototyped, would NOT have found the fail-open direction** that turned
+  out to be the severity story of item 1. Treat that as an open gap, not a solved one.
+
 ### 2. Verify or discard two UNVERIFIED claims from the failed audit.
 
 Both come from single agents whose adversarial verifiers never ran. Treat as leads only.
