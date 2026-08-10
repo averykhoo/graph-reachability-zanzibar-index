@@ -16,6 +16,106 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
+## ★★ START HERE — THE PLAN (2026-08-10)
+
+Written so a fresh session can act without reading the rest of this file first. Ordered.
+Everything below is either VERIFIED (reproduced by hand) or explicitly marked UNVERIFIED.
+
+### 1. Fix the TTU-over-derived-tupleset under-report. VERIFIED, live, do this first.
+
+Second bug of the same family as the 2026-08-09 one: the graph index under-reports while
+the oracle **and both set engines** agree against it. Reproduced by hand, not just claimed:
+
+```
+type doc
+  relations
+    define parent:    [folder] but not [doc]
+    define viewer:    [user]
+    define inherited: viewer from parent
+
+tuples (both ADMITTED by graph and both set engines):
+    (doc:d2,     parent, doc:d1)
+    (user:alice, viewer, doc:d2)
+
+check(alice, inherited, doc:d1):  oracle=True   graph=False  sets=[True, True]   <== DIVERGES
+check(doc:d2, parent,   doc:d1):  oracle=False  graph=False  sets=[False, False] (all agree)
+```
+
+**The diagnosis is in the second line.** `d2` really is excluded from `parent` by the
+`but not` — everyone agrees. But `CLAUDE.md` pins **"TTU parents are STORED tupleset
+tuples, never computed membership (oracle-pinned Zanzibar semantics)"**, so the TTU must
+still walk the stored `(d2, parent, d1)` tuple. The oracle and both set engines do. The
+graph index instead respects the boolean evaluation of the tupleset relation. Fail-closed
+(under-grant), three backends to one, on a rule this repo states as an explicit invariant —
+and `CLAUDE.md` even says "storage leaves are split from rule-routed leaves for exactly
+this", so the split exists and is not being honoured on a DERIVED tupleset relation.
+
+**Order (the house pattern, used twice already this week):** pin it RED in its own commit
+first so the fix's green is attributable, then fix, then the full phased gate + fuzz.
+⚠ This will turn the gate red until fixed — that is intended, but it is why it was not
+done unilaterally at the end of the 2026-08-09 session.
+
+### 2. Verify or discard two UNVERIFIED claims from the failed audit.
+
+Both come from single agents whose adversarial verifiers never ran. Treat as leads only.
+
+* **`W4Fragment.computedOrDirect` — a LEAN-side under-report, and the driver fails OPEN.**
+  Claim: on `access: viewer from parent but not banned`, `zcli mode=graph` answers
+  `[false]` with **rc=0** while `mode=spec`, the Python graph, both set engines and the
+  oracle all answer `[true]`. If it holds, the executable driver gives a wrong answer
+  rather than refusing an out-of-fragment schema — worse than a refusal.
+* **`GraphAdmission.ttuDirect` (`TtuTuplesetsDirect`)** — flagged `risk=HIGH`,
+  `divergenceFound=YES`. Unread in detail.
+
+⚠ Of the 26 audits that completed, one reported `divergenceFound: YES` on a schema **both
+backends refuse**. That is exactly the false positive the verify phase existed to kill, so
+do not promote any of these to a finding without reproducing it yourself.
+
+### 3. `ttuStarFree` — DO NOT DROP IT. Machine-checked FALSE without it.
+
+The user asked to undo this scope reduction. **It cannot simply be dropped**: dropping it
+makes `graph_correct` and `backend_equivalence` FALSE, not merely unproven. The probe
+machine-checked the refutation (sorry-free, axiom-clean, `ReachedBy` from the tree's own
+`graphRun_reached`, 120 comparisons across 3 runs, control a one-character delta
+`folder:*` → `folder:f1`):
+
+```lean
+theorem graph_correct_without_ttuStarFree_is_FALSE :
+    ¬ (∀ S T σ q, GraphAdmission S T → W4FragmentNoTS S T → ... → GraphModel.check σ q = sem S T q)
+```
+
+★ **The counterexample needs no object wildcard**, so this is NOT the I14 bug — the
+predicted mechanism was wrong and the conclusion still holds. The real gap is one layer
+earlier: Lean's W1c in-bridge has no star-tupleset **through-shape** notion, and
+`writeRules`/`writeLoggedRules` materialise **no bridges at all**. Python handles the shape
+correctly; Lean's `ensureInBridges` on it is a literal no-op (`edges 3 → 3, nodes 6 → 6`).
+
+**Lifting it is a four-part leg, not a flag edit:** (i) fold star-tupleset through-shapes
+into `UsStarWrite.lean::Schema.isSubjectWildcardUserset` (mirroring
+`derive_schema_info`'s second loop); (ii) compose `ensureInBridges`/`ensureBridges` into
+the rule-routed write path; (iii) re-prove `ttuLeaf_elim_nss` and `StarSeed`, which exist
+*because* of the clause; (iv) the remove leg (`removeGateB`, `ttuStarFree_restrict`).
+`TtuStarFree` occurs **162 times across 18 modules**. Decide whether to schedule it; it is
+not blocking anything.
+
+### 4. Re-run the scope audit properly — hand-curated, ~15 items.
+
+The 2026-08-10 fan-out died at 32 of 278 agents with **verify and synthesis never running**.
+Read [`docs/subagent-fanout-runbook.md`](docs/subagent-fanout-runbook.md) BEFORE launching
+another one — it is written from this failure. The two rules that would have saved it: a
+machine sweep DISCOVERS candidates but must never DEFINE the fan-out (96 of its items were
+parser error messages, which exclude nothing admissible), and every agent must persist its
+result to its own file so a dead run still leaves its findings on disk.
+
+### 5. Leg 7 (leaf-family split) stays parked.
+
+Steps 3 and 4a landed 2026-08-09. Step 4c is blocked on the design fork in
+`formal/history/leaf-family-split-scope-2026-08-05.md` §11.3 — where the `Delta` row is
+addressed once the edge moves to the leaf node. Attack-first that before coding either
+branch.
+
+---
+
 ## Current status — 2026-08-09
 
 **Everything is green and nothing is blocking.** No `sorry`, no `xfail`, no known live

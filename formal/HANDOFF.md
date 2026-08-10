@@ -62,6 +62,23 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**★★ 2026-08-10 — ATTACK-FIRST KILL: `W4Fragment.ttuStarFree` CANNOT BE DROPPED.**
+The user asked to undo it as a mere scope cut. It is not one: dropping it makes
+`graph_correct` and `backend_equivalence` **FALSE**, machine-checked sorry-free and
+axiom-clean (`W4FragmentNoTS` = `W4Fragment` minus the one clause; `ReachedBy` from the
+tree's own `graphRun_reached`, never hand-assembled; 120 comparisons, control a
+one-character delta `folder:*` → `folder:f1`).
+★ **The predicted mechanism was REFUTED and the conclusion still holds** — the
+counterexample uses **no object wildcard**, so this is not the I14 bug; `bareStar` keeps
+that shape out of scope anyway. The real gap is one layer earlier: Lean's W1c **in-bridge**
+has no star-tupleset **through-shape** notion (`UsStarWrite.lean:71`), and
+`writeRules`/`writeLoggedRules` materialise **no bridges at all**. Python handles the shape
+correctly; Lean's `ensureInBridges` on it is a literal no-op (`edges 3 → 3`).
+Lifting it is a **four-part leg** (through-shape derivation; bridges on the rule-routed
+write path; re-proving `ttuLeaf_elim_nss` + `StarSeed`, which exist BECAUSE of the clause;
+the remove leg) across **162 occurrences in 18 modules**. Not blocking. Detail:
+`history/PROOF_STATUS.md` 2026-08-10.
+
 **★ LANDED 2026-08-09 — LEG 7 IS UNDER WAY: steps 3 and 4a are in
 (`8291c3a`, `41b7029`), and the scope doc is now right in one place and wrong in another.**
 `GraphIndex/Leaf.lean` carries leaf addressing (`leafPred`/`isLeafPred`/`leafNode`), the
