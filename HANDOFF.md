@@ -28,21 +28,37 @@ Everything below is either VERIFIED (reproduced by hand) or explicitly marked UN
 > broken by accident. **The expected-red inventory is exactly this, and nothing else:**
 >
 > ```
-> pytest tests/test_ttu_tupleset_parent_types.py -q   ->  4 failed, 7 passed
-> pytest tests/ -q                                    ->  4 failed, 780 passed  (7:36)
+> pytest tests/ -q   ->  7 failed, 812 passed in 559.35s (0:09:19)   [exit 1]
+>
+>   tests/test_ttu_tupleset_parent_types.py   (the hand-minimised pins)
 >     FAILED ::test_rc1_negative_arm_type_is_still_a_stored_ttu_parent
 >     FAILED ::test_rc1_negative_arm_type_dropped_is_an_authorization_fail_open
 >     FAILED ::test_rc2_star_stored_parent_on_derived_tupleset_is_a_ttu_parent
 >     FAILED ::test_rc2_star_stored_parent_dropped_is_an_authorization_fail_open
+>   tests/test_hypothesis.py                  (the generated-grammar detection)
+>     FAILED ::test_every_tupleset_kind_is_driven_against_the_oracle
+>   tests/test_generator_coverage.py          (the two driving regimes)
+>     FAILED ::test_sparse_regime_finds_no_fail_closed_divergence
+>     FAILED ::test_dense_regime_finds_no_fail_open_divergence
 > ```
 >
-> **Measured, not assumed** — the whole-suite run above was executed 2026-08-10 at `8d78e40`
-> and those four are the ONLY failures in 784 collected. Those 4 land in ONE
-> `verify.sh tests-tile:I/4` phase (structural partition, so which tile depends on collection
-> order — find it, don't guess). **Every other phase must be green**, including `lean`: the
-> counts block was regenerated for 773 → 784 (`8d78e40`) because step 4e is an exact compare,
-> so if `lean` is red that is YOURS. If you see red outside that list at all, it is yours,
-> not ours — `git stash` and re-check.
+> **All seven are the SAME TWO BUGS (RC1 + RC2), found by three independent instruments.**
+> That convergence is the point: the hand-written pins, the generated tupleset grammar, and
+> both driving regimes each detect them without sharing a derivation. **All seven go green on
+> the same fix, with no test edit.** If you fix RC1 and RC2 and any of the seven stays red,
+> the fix is incomplete — do not adjust the test.
+>
+> **Measured, not assumed** — run 2026-08-10 at the commit that added this block, 819
+> collected. **Every other phase must be green**, including `lean`: the counts block was
+> regenerated for 784 → 819 (step 4e is an exact compare), so if `lean` is red that is YOURS.
+> If you see red outside this list, it is yours, not ours — `git stash` and re-check.
+>
+> ⚠ **Two seed-dependent extras, so the fuzz sweep red is 7 or 8, not always 7.**
+> `TestParityMachine` additionally detonates at `--hypothesis-seed=53` and `=97` (2 of the 6
+> house seeds), on a one-write walk, with the RC1 schema assembled by the generator rather
+> than transcribed. That is a FEATURE — it is the campaign independently finding the bug —
+> but it means "1 failed" vs "2 failed" across seeds in `tests/test_hypothesis.py` is expected
+> and not a flake. Same fix clears both.
 >
 > ⚠ **Do not read a pytest exit code that was piped through `tail`/`tee`** — it reports the
 > pipe's status, not pytest's. This bit the 2026-08-10 session: a run that was genuinely
@@ -150,11 +166,51 @@ failure mode. ★ **There is an unusually strong control available right now: th
 UNFIXED in the tree, so a correct new generator should go RED on them today and GREEN after
 the fix. Use that as the sabotage evidence — it is a real defect, not a synthetic one.**
 
-**★ STATUS: DESIGNED AND PROTOTYPED, NOT IMPLEMENTED.** Everything below is measured, and
-the design + runnable prototypes + all raw evidence are in
-[`docs/design/generator-coverage/`](docs/design/generator-coverage/). **Start there; do not
-redesign it.** `prototypes/zz_cells.py` runs from the repo today
-(`PYTHONPATH=. python docs/design/generator-coverage/prototypes/zz_cells.py`).
+**★★ STATUS: (a), (b) AND (c) ARE ALL IMPLEMENTED AND GATED (2026-08-10).** Design + raw
+evidence remain in [`docs/design/generator-coverage/`](docs/design/generator-coverage/); the
+shipped code is `tests/genswarm.py` (library: derived alphabet, swarm, witness builder,
+rejection witnesses, two-regime driving) + `tests/test_generator_coverage.py` (26 gated
+tests) + the `test_hypothesis.py` changes. **Measured outcomes:**
+
+| | cells | % |
+|---|---|---|
+| baseline at HEAD (the old generators) | 514 | 40.3 |
+| union, `ci` | **967** | **75.8** |
+| union, `deep` | 1034 | 81.1 |
+
+`UNACCOUNTED == set()` **exactly**, with no hand-written exemption list — the design's "15
+features unreachable at any budget" is now **0 unreachable + 3 carrying executable rejection
+witnesses**. Runtime `ci` +130 s (design targeted +32 s; the entire overrun is the dense
+driving regime, which is what closes the fail-open gap) and `test_hypothesis.py` +23.5 s. The
+worst tile goes ~165 s → ~295 s of a 600 s cap.
+
+**★ Three corrections the implementation made to the design — trust these over the design doc:**
+* **The fail-open gap needed a GRAMMAR fix, not just a driving fix.** §6.7 blamed subset
+  driving alone. In fact **no generator in the tree, including the design's own prototype,
+  ever emitted a negated TTU**, so a fail-open was not *expressible* at any budget or
+  discipline. It took `body_negttu` **plus** two-regime driving. Measured over one config
+  space: sparse 62,691 comparisons → 0 fail-open / 10 fail-closed; dense (deterministic
+  knockout) 61,659 → **1 fail-open** / 13 fail-closed; full pool 41,562 → 0 / 3. The design's
+  suggested random co-subsets were seed-dependent and found 0 — replaced.
+* **The design's own predicted sabotage #8 is REFUTED** (independently, by both implementing
+  agents). It claims the acceptance-rate floor fires when the typed pool table is reverted.
+  It does not — `folder:d1` is a legal `folder` name, so every backend admits it. The real
+  damage is silent **inertness**, and the guard now asserts the pool's universe ⊆ the grid's
+  universe instead.
+* **Full-pool driving is not blind to everything** (it still catches 3 of 10 fail-closed
+  families). The README's "0 divergences" is too strong; the direction it is genuinely blind
+  to is **fail-open**.
+
+**Two limitations recorded rather than smoothed over:** the swarm test does **not** in fact
+guard the focus mechanism (min per-switch count 27/120 with focus, 27/120 without — the claim
+was removed, not kept), and folding the wildcard bit out of the knockout shape key leaves the
+negative control green (a known, stated limit).
+
+**Incidental finding, reported not fixed:** a TTU whose tupleset is undeclared *and* whose
+target is derived (`define r7: [user] or r1 from nodecl`) escapes the decision-15 scope checks
+and dies in `compile_boolean_schema` with a bare `ValueError: Rule then-pattern carries a
+derived subject predicate` — the class `tests/parity.py` says "must surface". With an
+untainted target it compiles cleanly. Captured as a rejection family so it cannot rot.
 
 * **The premise is confirmed and quantified: it is grammar, not budget.** Cell space is
   **51 features → 1275 pairwise cells**, with the alphabet DERIVED from six compiler sites
