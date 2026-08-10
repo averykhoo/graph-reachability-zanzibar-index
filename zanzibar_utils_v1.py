@@ -1097,6 +1097,38 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
     exactly as OpenFGA validates its models. Tainted (derived) tuplesets are exempt:
     their stored tuples live on dedicated storage leaves, which the boolean path
     already reads exclusively."""
+    # A TTU inside an UNTAINTED relation compiles to a rewrite Rule whose then-pattern
+    # carries `target_rel` as its subject predicate (`_emit_expr` -> `_rewrite_rule`).
+    # If that NAME is also a derived relation, the rule would route derived state
+    # through a plain rewrite, which `compile_boolean_schema`'s I5 exclusivity check
+    # refuses -- with a bare `ValueError`, a class `tests/parity.py` declares "must
+    # surface", so `ParityEngine` was UNCONSTRUCTIBLE rather than degrading to 3-way.
+    #
+    # Reaching it needs the containing relation to stay untainted while the target is
+    # tainted, which `compute_taint` normally prevents: `_mentions` taints the caller
+    # via `_member_types(tupleset)`. The hole is any TTU whose tupleset contributes no
+    # member type carrying the tainted target -- an UNDECLARED tupleset (`_member_types`
+    # early-outs on `key not in ast`) being the reachable case, and a member type whose
+    # own `target_rel` is untainted while another type's is tainted being the second
+    # (the exclusivity check compares NAMES, type-agnostically, so it fires there too).
+    # Both are scope holes, not compiler bugs, so they are refused here as
+    # `UnsupportedByGraphIndex` in the decision-15 family. The `ValueError` at the
+    # `compile_boolean_schema` site stays as the unreachable last line of defence.
+    derived_predicate_names = {r for (_t, r) in tainted}
+    for (object_type, relation), expr in ast.items():
+        if (object_type, relation) in tainted:
+            continue                      # boolean path: no rewrite Rule is emitted
+        for e in _iter_ttus(expr):
+            if e.target_rel in derived_predicate_names:
+                raise UnsupportedByGraphIndex(
+                    f"relation {object_type}#{relation}: TTU "
+                    f"{e.target_rel!r} from {e.tupleset_rel!r} targets the derived "
+                    f"relation {e.target_rel!r}, but the containing relation is not "
+                    f"itself boolean-tainted, so it compiles to a plain rewrite rule "
+                    f"that would carry derived state on its subject predicate "
+                    f"(I5 exclusivity). Reached when the tupleset contributes no "
+                    f"member type bearing the tainted target -- an undeclared tupleset "
+                    f"relation being the usual cause (decision-15 family)")
     for (object_type, relation), expr in ast.items():
         for e in _iter_ttus(expr):
             ts_key = (object_type, e.tupleset_rel)
@@ -1125,6 +1157,75 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
                                 f"{e.tupleset_rel!r} declares a userset "
                                 f"restriction; tupleset relations must be "
                                 f"directly assignable types (OpenFGA model rule)")
+
+
+def _assert_ttu_parent_types_cover_admission(compiled, rules_and_filters: list) -> None:
+    """★ COMPILE-TIME INVARIANT, landed 2026-08-11 with the RC2 fix.
+
+    Property guarded: for every TTU plan node, the frozen ``parent_types`` covers every
+    bare-entity subject type that ADMISSION accepts onto that tupleset relation. A type
+    admission accepts but ``parent_types`` omits is a stored tupleset tuple the TTU will
+    silently refuse to walk -- which is a false NEGATIVE under a positive TTU and an
+    authorization FAIL-OPEN under a negated one. That is exactly RC1, and this invariant
+    is red on it.
+
+    ★★ IT READS THE EMITTED FILTERS, NOT ``_member_types``, AND THAT IS THE WHOLE POINT.
+    ``_member_types`` is the function RC1 got wrong. An invariant deriving its
+    expectation from that same function would be a MIRROR
+    (``docs/sabotage-procedure.md``, "the mirror instrument"): a defect there would move
+    the check and its subject together and it would agree with itself. That is precisely
+    how invariant **I9** stayed green through two live authorization fail-opens with
+    paranoia ON -- it re-runs ``reconcile``, which reads the same wrong ``parent_types``.
+    Filters are built from the ``Restriction``s directly (``_restriction_pattern``), so
+    the two derivations are genuinely independent.
+
+    Direction is deliberate: ``admitted ⊆ parent_types``, not equality. ``_member_types``
+    legitimately over-approximates -- it recurses through ``Computed``/``TTU`` arms that
+    admit no raw tuple of their own -- and an over-broad ``parent_types`` costs a wasted
+    lookup, never a wrong answer.
+
+    HONEST LIMIT: it can only see types that some Filter accepts. A tupleset relation fed
+    ONLY by rewrite Rules (a ``Computed`` arm) contributes nothing here, so the invariant
+    is vacuous on that shape rather than wrong about it. Untainted computed tuplesets are
+    separately refused by ``_validate_ttu_tuplesets``.
+    """
+    # What admission ACCEPTS, per (object_type, public relation), from the emitted
+    # filters alone. Only bare-entity subjects can be TTU parents -- a userset node is
+    # not a parent -- and only STORAGE leaves hold raw stored tuples (rule-routed leaves
+    # carry computed state, which stored-tuple TTU semantics never count).
+    admitted: dict[tuple[str, str], set[str]] = {}
+    for rf in rules_and_filters:
+        if not isinstance(rf, Filter):
+            continue                                  # a Rule admits nothing
+        pat = rf.if_pattern
+        if pat.subject_predicate is not Ellipsis:
+            continue                                  # userset restriction
+        if isinstance(rf, RewriteFilter):
+            fam = compiled.namespace.get((pat.object_type, rf.rewrite_relation))
+            if not isinstance(fam, LeafFamily) or not fam.storage:
+                continue
+            key = (pat.object_type, fam.owner_relation)
+        else:
+            key = (pat.object_type, pat.relation)
+        if pat.subject_type is not None:
+            admitted.setdefault(key, set()).add(pat.subject_type)
+
+    for plan in compiled.plans.values():
+        o_type = plan.key[0]
+        for node in plan.leaf_nodes:
+            if not isinstance(node, (PDerivedTTU, PDerivedTuplesetTTU)):
+                continue
+            accepts = admitted.get((o_type, node.tupleset_rel), set())
+            missing = sorted(accepts - set(node.parent_types))
+            if missing:
+                raise ValueError(
+                    f'TTU {node.target_rel!r} from {node.tupleset_rel!r} in '
+                    f'{o_type}#{plan.key[1]}: compiled parent_types '
+                    f'{tuple(node.parent_types)!r} omits type(s) {missing!r} that '
+                    f'ADMISSION accepts onto {o_type}#{node.tupleset_rel}. A stored '
+                    f'tupleset tuple of that type would be silently dropped as a TTU '
+                    f'parent (fail-open under a negated TTU). This is the RC1 class -- '
+                    f'suspect _member_types, not this check.')
 
 
 def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
@@ -2047,6 +2148,8 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
             if isinstance(sp, str) and sp in derived_predicates:
                 raise ValueError(
                     f'Rule then-pattern carries a derived subject predicate: {rf}')
+
+    _assert_ttu_parent_types_cover_admission(compiled, rules_and_filters)
 
     if not derived and not compiled.leaf_families:
         return compiled, schema_info      # pure schema: nothing to enrich

@@ -16,68 +16,120 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## ★★ START HERE — THE PLAN (2026-08-10)
+## ★★ START HERE (2026-08-11)
 
-Written so a fresh session can act without reading the rest of this file first. Ordered.
-Everything below is either VERIFIED (reproduced by hand) or explicitly marked UNVERIFIED.
-
-> # 🔴 THE GATE IS RED ON PURPOSE. READ THIS BEFORE YOU DEBUG ANYTHING.
+> # 🟢 THE GATE IS GREEN. The 2026-08-10 fail-open family is CLOSED.
 >
-> The 2026-08-10 session pinned two live divergences and **deliberately did not fix them**
-> (the user scoped that session to test-prep and deferred the fix + gate run). Nothing is
-> broken by accident. **The expected-red inventory is exactly this, and nothing else:**
+> **RC2 is FIXED (2026-08-11); RC1 was fixed 2026-08-10 (`ed46e54`).** All ten gate phases
+> plus the 6-seed fuzz sweep are green. The red banner that stood here is gone because the
+> five tests it inventoried are green **with no test edit** — the stated completeness
+> criterion. Measured at the commit that replaced this block:
 >
 > ```
-> pytest tests/ -q   ->  5 failed, 815 passed in 557.10s (0:09:17)   [exit 1]   820 collected
->
->   tests/test_ttu_tupleset_parent_types.py   (the hand-minimised pins)
->     FAILED ::test_rc2_star_stored_parent_on_derived_tupleset_is_a_ttu_parent
->     FAILED ::test_rc2_star_stored_parent_dropped_is_an_authorization_fail_open
->   tests/test_hypothesis.py                  (the generated-grammar detection)
->     FAILED ::test_every_tupleset_kind_is_driven_against_the_oracle
->   tests/test_generator_coverage.py          (the two driving regimes)
->     FAILED ::test_sparse_regime_finds_no_fail_closed_divergence
->     FAILED ::test_dense_regime_finds_no_fail_open_divergence
->
-> formal/conformance/ -q  ->  494 passed          verify.sh lean  ->  PASSED
+> verify.sh lean            PASSED     493 audits, 38/38 statements, 155/155 defs,
+>                                      432 anchors resolved, counts block exact
+> verify.sh conf-tile:1..5  PASSED     99+99+99+99+98 = 494
+> verify.sh tests-tile:1..4 PASSED     206+206+206+205 = 823
+> fuzz --hypothesis-seed=   7 19 31 53 71 97   clean on test_hypothesis.py
+>                                              and test_lookup_hypothesis.py
 > ```
 >
-> **RC1 is FIXED. All five remaining failures are RC2 and ONLY RC2**, detected by three
-> instruments that share no derivation: the hand-written pins, the generated tupleset
-> grammar, and both driving regimes. **All five go green on the RC2 fix with no test edit.**
-> If you fix RC2 and any of the five stays red, the fix is incomplete — do not adjust the
-> test. (Before the RC1 fix this list was 7; RC1 cleared exactly its own 2.)
+> The two seeds this file previously flagged as *extra* detonations — 53 and 97, where
+> `TestParityMachine` independently found RC1 on a generator-assembled schema — are green.
 >
-> **Measured, not assumed** — runs executed 2026-08-10 at the commit that added this block.
-> `formal/conformance/` and `lean` are both GREEN, so the ONLY red in the repo is the five
-> above. The counts block was regenerated 784 → 820 (step 4e is an exact compare), so if
-> `lean` is red that is YOURS. If you see red outside this list, it is yours, not ours —
-> `git stash` and re-check.
->
-> ⚠ **Owed but NOT run: the 6-seed fuzz sweep and the conf/tests tiles.** RC1 is an
-> algorithm change, so `--hypothesis-seed=` 7 19 31 53 71 97 over `test_hypothesis.py` and
-> `test_lookup_hypothesis.py` is owed before any push. The full suites were run directly
-> instead of through the tiles, which is strictly more informative but is not the gate.
->
-> ⚠ **Two seed-dependent extras, so the fuzz sweep red is 7 or 8, not always 7.**
-> `TestParityMachine` additionally detonates at `--hypothesis-seed=53` and `=97` (2 of the 6
-> house seeds), on a one-write walk, with the RC1 schema assembled by the generator rather
-> than transcribed. That is a FEATURE — it is the campaign independently finding the bug —
-> but it means "1 failed" vs "2 failed" across seeds in `tests/test_hypothesis.py` is expected
-> and not a flake. Same fix clears both.
->
-> ⚠ **Do not read a pytest exit code that was piped through `tail`/`tee`** — it reports the
-> pipe's status, not pytest's. This bit the 2026-08-10 session: a run that was genuinely
-> `4 failed` was reported as exit 0. `docs/gate-runbook.md` warns about it; heed it.
->
-> **Do NOT "fix" these by weakening them, and do NOT convert them to xfail**
-> (`MAX_TESTS_XFAILED=0`, and `CLAUDE.md` prefers a positive pin). The 7 passing tests in
-> that file are controls and must stay green through any fix.
->
-> Baseline before this session, for diffing: `tests/` 773 collected, `formal/conformance/`
-> 494, doc-counts block current, all ten phases green at `e136c8c`.
+> **Known live correctness bugs: 0.** If you see red, it is yours — `git stash` and
+> re-check. Three standing footguns still apply and are still worth reading: a pytest exit
+> code piped through `tail`/`tee` reports the PIPE's status (this bit the 2026-08-10
+> session — a genuinely `4 failed` run was reported exit 0); `HYPOTHESIS_SEED=N` does
+> nothing, only `--hypothesis-seed=N` works; and `MAX_TESTS_XFAILED=0`, so a divergence
+> gets a positive pin, never an xfail.
 
-### 1. Fix the two TTU-tupleset divergences. PINNED RED (`d0010e2`), fix NOT done.
+### What landed 2026-08-11 (this session)
+
+**(1) RC2 — the last root cause of the 2026-08-10 fail-open family.** A stored `T:*`
+tupleset parent was dropped on the derived read path. The `n.wildcard == ''` clause was
+**not** deleted — both recorded dead ends were re-confirmed first. Instead the two subject
+shapes are split (`_stored_tupleset_subjects`) and the star one gets the semantics the
+oracle and both set engines have always implemented: the shape `(T, target_rel)`
+unconditionally (into the residue's `stars`), **plus** an ∃-expansion over tuple-mentioned
+instances of `T`, folded into `tupleset_parents` so every downstream consumer
+(`_from_chain_keys`, `_leaf_concretes`, `_derived_leaf_neg_ids`) became correct with no
+edit. Fixed at BOTH sites — `processor.py` and `bulk_backfill.py` — which RC2 genuinely
+needed, unlike RC1.
+
+★ **The part no design note predicted, and the transferable finding: the CASCADE FAN-OUT
+had to change too.** A star tupleset tuple hangs off the `w_any(T,'...')` node, not off any
+entity, so `_stored_parent_objects_of_entity` — which answers "what does a delta on this
+entity invalidate?" by walking the entity's own edges — saw nothing, and a later write to
+some `T:x` would have invalidated no dependent at all. **The read fix alone passes every
+pin in the file**, because the pins write in one batch and reconcile once; it would have
+failed only under incremental maintenance. *A correctness fix to a read path in an IVM
+system is not done until the invalidation path has been asked the same question.*
+
+**(2) The bulk corpus gap is CLOSED.** `rc2_star_tupleset` in `tests/test_bulk_build.py`,
+carrying both TTU directions (positive fails closed, negated fails open — probing only one
+mis-classifies severity by a sign). **Sabotage, literal output:** reverting the bulk half
+alone — the S1 edit that used to leave the suite **6 passed GREEN** — now gives
+`1 failed, 6 passed`, `AssertionError: [rc2_star_tupleset] snapshot_rows differ`, with the
+other six corpora green so the red is attributable.
+
+**(3) The compile-time invariant landed, and deliberately is NOT a mirror.**
+`zanzibar_utils_v1.py::_assert_ttu_parent_types_cover_admission` — every TTU's frozen
+`parent_types` must cover every bare-entity type ADMISSION accepts onto that tupleset
+relation, read from the emitted `RewriteFilter`/`Filter` patterns and **never** from
+`_member_types` (the function RC1 got wrong; an invariant reading it would reproduce I9's
+mirror defect exactly). Validated RED-before/GREEN-after and made permanent as
+`test_compile_refuses_parent_types_narrower_than_admission`. It catches the RC1 class **at
+compile time, before any tuple is written**. Honest limit, stated in its docstring: it only
+sees types some Filter accepts, so a tupleset fed only by rewrite Rules is vacuous there.
+
+**(4) The compiler rough edge is FIXED** (was item 1a(4), "reported not fixed"). A TTU
+whose tupleset is undeclared and whose target is derived died in `compile_boolean_schema`
+with a bare `ValueError` — a class `tests/parity.py` says "must surface", so `ParityEngine`
+was *unconstructible* (a hard crash) rather than degrading to 3-way. `_validate_ttu_tuplesets`
+now refuses it up front as a scoped `UnsupportedByGraphIndex` and the `ValueError` is back
+to being an unreachable backstop. The `genswarm` rejection witness was flipped to match,
+and `test_undeclared_tupleset_with_untainted_target_still_compiles` is its **negative
+control** — the witness alone is satisfied by an over-broad refusal, and "reject every
+undeclared tupleset" is precisely the one-line over-fix a future reader would reach for.
+
+**(5) Gate floors re-measured and raised** (`-ge`, so raising is free): `MIN_CONF_ALL`
+465 → **494** (= 104 + 390), `MIN_TESTS_ALL` 763 → **823**. They had drifted ~90 tests below
+live, i.e. that much coverage could have vanished silently.
+
+**(6) No Lean change owed — and the reason is worth reading.** RC2's region is excluded
+from the graph fragment by **two** standing hypotheses: `RulesBareStar.lean::TtuStarFree`
+(star-subject tuples matching a TTU arm) and `RulesCorrect.lean::TtuTuplesetsDirect` (every
+TTU tupleset must be `directsOnly`, so a *derived* tupleset is not expressible at all).
+Nothing became dead code. Recorded in `CORRESPONDENCE.md` §7.3 — including the near-miss:
+`TtuStarFree`'s own header records an attack-first `#eval` from 2026-07-11 on exactly this
+shape, finding `sem=true` against a rule-routed graph `false`. ⚠ That was a property of the
+LEAN write model and is **not** evidence anyone had observed the Python defect — Python's
+UNTAINTED star-tupleset path was and is correct, and is pinned green by a control in the
+same file. The general lesson still stands: **a shape fenced out of the model as "not
+covered here" is a standing hint about where the implementation is least watched.**
+Python moved TOWARD the models here: the new split is structurally
+`SetEngine/Eval.lean::parentMS`.
+
+⚠ **Correction to the previous board.** The item "`BoolStarBridgeParityMachine` runs the
+graph on 12% of draws — cheap and independent, do it FIRST" was **already done** on
+2026-08-10 in `d0dbefa` (the assertion is at `tests/test_hypothesis.py:1886`, 13% → 76–82%
+4-way, floored with provenance). `docs/sabotage-procedure.md:31` was the accurate record;
+this file and `docs/design/generator-coverage/README.md` were stale. Nothing to do.
+
+### Still open (unchanged by this session)
+
+Items 2–5 below are untouched and none is blocking: the two UNVERIFIED audit leads,
+`ttuStarFree` as a four-part Lean leg, the scope-audit re-run, and leg 7. The historical
+RC1/RC2 analysis that follows is kept because its *method* — three instruments sharing no
+derivation, and the severity-sign rule — is the reusable part.
+
+### 1. The two TTU-tupleset divergences — BOTH FIXED (RC1 `ed46e54`, RC2 2026-08-11).
+
+*Kept for the method, not the status.* The reusable parts are the severity-sign rule
+below, the three-independent-instruments structure, and the record of which mechanisms
+were measured FALSE — a reader who acted on the original filing would have rewritten
+correct leaf-routing code.
 
 **★★ These are AUTHORIZATION FAIL-OPENS, not under-reports.** Read through a negated TTU
 (`define access: [user] but not viewer from parent`) the graph **GRANTS what the oracle and
@@ -144,7 +196,11 @@ struck-through, deliberately, so the bad reasoning is visible rather than delete
 (`--hypothesis-seed=` 7 19 31 53 71 97 over `test_hypothesis.py` and
 `test_lookup_hypothesis.py`) — it is an algorithm change. Then push.
 
-### 1a. ★ THE FIX LIST — START HERE. Ordered, with the cheap/expensive split called out.
+### 1a. ~~THE FIX LIST~~ — ALL ITEMS DONE (2026-08-11). Kept for provenance.
+
+Every numbered item below is now closed: (0) was already done in `d0dbefa`, (1) RC2,
+(2) the bulk corpus, (3) the compile-time invariant, (4) the compiler rough edge, and
+(5) the gate + fuzz sweep. See "What landed 2026-08-11" at the top for what each became.
 
 RC1 is **FIXED and committed**. What follows is everything still owed, in the order to do it.
 
@@ -301,14 +357,20 @@ untainted target it compiles cleanly. Captured as a rejection family so it canno
   `leaf:derived-tupleset-ttu`, `plan:PDerivedTuplesetTTU`, `via:tupleset-ttu`).
   Pairs are used instead of a cartesian grid deliberately: the grid is 2^51, and a
   hand-picked sub-grid would be exactly the silent-pass list this work exists to kill.
-* **★★ A SECOND instrument that fails by passing, found in passing.**
+* **★★ A SECOND instrument that fails by passing, found in passing — ✅ FIXED 2026-08-10
+  (`d0dbefa`). Nothing to do; this bullet is the record.**
   `BoolStarBridgeParityMachine` — the generator the source itself calls the "headline blind
-  spot" closer — **runs the graph index on only 12 % of its draws.** 59 % raise
-  `UnsupportedByGraphIndex`, whereupon `ParityEngine` sets `graph=None` and the machine
-  fuzzes **3-way and reports green**; 29 % are skipped. At `ci` that is ~1.4 four-way draws
-  per run. Its sibling `StarBridgeParityMachine` asserts `graph is not None`; this one does
-  not. **Fixing that assertion is cheap and independent of everything else here — do it
-  first.**
+  spot" closer — **ran the graph index on only 12 % of its draws.** 59 % raised
+  `UnsupportedByGraphIndex`, whereupon `ParityEngine` set `graph=None` and the machine
+  fuzzed **3-way and reported green**; 29 % were skipped. Its sibling
+  `StarBridgeParityMachine` has always asserted `graph is not None`; this one did not.
+  ⚠ **The sharp form is worse than the 12 % suggests** and is recorded in
+  `docs/sabotage-procedure.md:31`: all 768 `and`/`but not` configs were rejected for every
+  OWC subset, so the draws that DID run 4-way were exactly the `or` ones — **it had tested
+  booleans against the graph index zero times, ever.** Now asserted at
+  `tests/test_hypothesis.py:1886` with the rate floored; 13 % → 76–82 % 4-way, 0 % → 49–55 %
+  boolean-4-way. It was **not** the predicted one-line fix: the boolean arm's placement had
+  to become a drawn choice.
 * **★ Cell coverage is NECESSARY BUT NOT SUFFICIENT — the driving discipline is what makes
   a divergence observable.** The prototype's instrument control caught this in its own first
   draft: driving each config with the WHOLE candidate pool found **0 divergences** across
@@ -398,22 +460,25 @@ branch.
 
 ---
 
-## Current status — 2026-08-10
+## Current status — 2026-08-11
 
-**🔴 The gate is RED, deliberately, and there are TWO KNOWN LIVE FAIL-OPENS.** This
-reverses the 2026-08-09 status below. See the red banner at the top of this file for the
-exact expected-red inventory and why nothing else should be red. No `sorry` and no `xfail`
-— the pins are positive assertions, so the red is a real failing test by design.
+**🟢 The gate is GREEN end to end, and the 2026-08-10 fail-open family is CLOSED.** All
+ten phases plus the 6-seed fuzz sweep; no `sorry`, no `xfail`, no skip. See the banner at
+the top of this file for the measured figures.
 
-* **Known live correctness bugs: 1** (RC2 — plan item 1). **RC1 is FIXED**; RC2 is pinned
-  and open. Both had an authorization fail-open direction.
-* **What changed vs. the 2026-08-09 "everything is green" line:** nothing regressed. These
-  bugs are PRE-EXISTING — RC1 reproduces on a hand-written schema at `e136c8c` with no `.py`
-  file touched. What changed is that they are now *known and pinned* rather than unnoticed.
-* **The 2026-08-09 session's "everything is green" was true of the gate and false of the
-  code**, which is the whole lesson of plan item 1b: the gate's generators could not reach
-  these shapes at any budget, so green meant "we did not look here", not "there is nothing
-  here". Do not read a green gate in this repo as an absence of divergence until 1b lands.
+* **Known live correctness bugs: 0.** RC1 (`ed46e54`, 2026-08-10) and RC2 (2026-08-11) are
+  both fixed, both at every site, and both pinned by positive assertions rather than
+  xfails. The bounded exhaustive sweep that mapped the family found exactly two root
+  causes, so it is closed at two.
+* **Nothing regressed to get here.** Both bugs were PRE-EXISTING — RC1 reproduces on a
+  hand-written schema at `e136c8c` with no `.py` file touched. The 2026-08-10 session made
+  them *known and pinned*; this one fixed them.
+* **★ The 2026-08-09 "everything is green" was true of the gate and false of the code**,
+  and that caveat is now DISCHARGED rather than merely repeated: item 1b landed (cell
+  coverage, swarm, a drawn TTU tupleset, two driving regimes), and it is what made RC2
+  visible to a generator at all. A green gate here now means meaningfully more than it did
+  — but the honest limit from 1b still stands, ~28% of the pair space is unreached even at
+  `deep`, so read green as "the instruments we have found nothing", not as a proof.
 
 - **★ Last landed: LEG 7 IS UNDER WAY — steps 3 and 4a are IN** (2026-08-09, `8291c3a` +
   `41b7029`). `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,

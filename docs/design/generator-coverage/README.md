@@ -42,6 +42,17 @@ week's bugs came through.
 
 ### A second finding, measured while instrumenting (`zz_drop.py`)
 
+> ✅ **FIXED 2026-08-10 in `d0dbefa`; the figures below are the PRE-FIX diagnosis, kept
+> because they are the evidence.** `BoolStarBridgeParityMachine.setup` now asserts
+> `self.pe.graph is not None` on the `in_fragment` stratum
+> (`tests/test_hypothesis.py:1886`) and routes boundary draws through a recorded scope
+> rejection; the rate went **13 % → 76–82 % 4-way** and **0 % → 49–55 %** boolean-4-way,
+> with the rate itself now floored (`_BSB_FOUR_WAY_FLOOR`). ⚠ The sharp form of the
+> finding — worse than this section states — is in `docs/sabotage-procedure.md:31`: **all
+> 768 `and`/`but not` configs were rejected for every OWC subset, so the 13 % that DID run
+> 4-way were exactly the `or` draws. It had tested booleans against the graph index ZERO
+> times, ever.**
+
 The G1 generator — described in the source as "the audit's headline blind spot" closer —
 runs the graph index on **12 %** of its draws:
 
@@ -60,6 +71,10 @@ happily runs oracle + two set engines and reports green. At `ci`'s `max_examples
 **~1.4 draws per run** in which the boolean × star-bridge cross actually touches the graph
 index. This is a house-failure-mode instance in its own right (`docs/sabotage-procedure.md`
 row "the validation matrix — silently halved") and it is a one-line fix; see §4 sabotage 7.
+(It was **not** in the end a one-line fix: asserting the invariant required *drawing* the
+boolean arm's placement, so that `downstream` is in-fragment for every op while `target`
+only appears in an explicit scope-boundary stratum where the rejection is the asserted
+contract.)
 
 ---
 

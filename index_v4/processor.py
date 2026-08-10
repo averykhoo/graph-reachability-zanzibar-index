@@ -142,6 +142,15 @@ class _EvalContext:
 
     def ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
         sp, st, sn = s
+        # STAR-parent shape rule (RC2; oracle ttu_leaf's `pn == '*'` arm, and
+        # setengine/engine.py::ttu_leaf): a stored `T:*` tupleset tuple makes EVERY
+        # userset of shape (T, target) a member, whatever its name -- the ∃-expansion
+        # over instances cannot express that, and folding it in is what the
+        # star-expansion inside `tupleset_parents` deliberately leaves to this arm.
+        for pt in self.proc.tupleset_star_types(self.object_type, self.obj_name,
+                                                ts, parent_types):
+            if (st, sp) == (pt, target):
+                return True
         for (pt, pn) in self.proc.tupleset_parents(self.object_type, self.obj_name, ts, parent_types):
             # from-chain identity rule (oracle ttu_leaf; lookup-gate X4a): a stored
             # tupleset parent p makes the userset p#target itself a member,
@@ -154,7 +163,11 @@ class _EvalContext:
         return False
 
     def ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
-        out: frozenset = frozenset()
+        # the star-parent shape itself (RC2), mirroring `ms.star((pt, target))` at
+        # setengine/engine.py::ttu_expand
+        out: frozenset = frozenset(
+            (pt, target) for pt in self.proc.tupleset_star_types(
+                self.object_type, self.obj_name, ts, parent_types))
         for (pt, pn) in self.proc.tupleset_parents(self.object_type, self.obj_name, ts, parent_types):
             out |= self.proc.member_stars(pt, target, pn)
         return out
@@ -165,6 +178,10 @@ class _EvalContext:
 
     def tupleset_ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
         sp, st, sn = s
+        for pt in self.proc.derived_stored_star_types(self.object_type, self.obj_name,
+                                                      ts, parent_types):
+            if (st, sp) == (pt, target):
+                return True             # star-parent shape rule (RC2); see ttu_check
         for (pt, pn) in self.proc.derived_stored_parents(self.object_type, self.obj_name,
                                                          ts, parent_types):
             if (sp, st, sn) == (target, pt, pn):
@@ -174,7 +191,9 @@ class _EvalContext:
         return False
 
     def tupleset_ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
-        out: frozenset = frozenset()
+        out: frozenset = frozenset(
+            (pt, target) for pt in self.proc.derived_stored_star_types(
+                self.object_type, self.obj_name, ts, parent_types))   # RC2
         for (pt, pn) in self.proc.derived_stored_parents(self.object_type, self.obj_name,
                                                          ts, parent_types):
             out |= self.proc.member_stars(pt, target, pn)
@@ -304,23 +323,78 @@ class DeltaProcessor:
                 out.append(n.name)
         return out
 
+    def _instances_of_type(self, t: str) -> list[str]:
+        """Concrete instance names of a type, for the strict ∀⇒∃ expansion of a STAR
+        tupleset parent (RC2). The graph twin of ``SetEngine._instances_of_type``
+        (setengine/engine.py) and of the oracle's ``instances`` (tests/oracle.py):
+        TUPLE-MENTIONED names only.
+
+        The graph interns a concrete node only on a write path -- reads resolve through
+        ``cached_concrete_node`` and never create -- so the interned concrete nodes of a
+        type ARE its tuple-mentioned names. That is what makes this the right source and
+        a query endpoint an illegal one: a ghost would "exist" because somebody asked
+        about it (blind-audit O3), which is the ∀⇒∃ strictness both other backends keep.
+
+        Rare path: only reached when a stored ``T:*`` tupleset tuple exists."""
+        rows = self.session.exec(
+            select(NodeV4.name).where(NodeV4.store_id == self.store_id)   # type: ignore[arg-type]
+            .where(NodeV4.type == t).where(NodeV4.wildcard == '')
+        ).all()
+        return sorted({n for n in rows if n != '*'})
+
+    def _stored_tupleset_subjects(self, object_type: str, obj_name: str, ts: str,
+                                  parent_types: tuple) -> tuple[list, list]:
+        """The stored tupleset tuples on ``(obj, ts)``, split by subject shape:
+        ``(concrete parents, star parent types)``.
+
+        The split exists because the two carry DIFFERENT semantics (oracle ``ttu_leaf``,
+        tests/oracle.py): a concrete parent ``p`` contributes ``p`` alone, while a star
+        parent ``T:*`` contributes (a) the SHAPE ``(T, target_rel)`` unconditionally and
+        (b) an ∃-expansion over every instance of ``T``. Collapsing them -- returning
+        ``(T, '*')`` as if it were a parent name -- is the naive fix that crashes:
+        ``('T','*')`` is not expressible as a concrete node (core.py:913 rejects
+        ``name=='*'`` with an empty ``wildcard``), so ``_from_chain_keys`` detonates in
+        ``_reconcile`` and the write is reported as an admission REJECTION."""
+        ts_node = self._node(ts, object_type, obj_name)
+        if ts_node is None:
+            return [], []
+        edges = self._direct_incoming(ts_node.id)
+        nodes = self._nodes_by_ids(e.subject_id for e in edges)
+        concretes: list[tuple[str, str]] = []
+        star_types: list[str] = []
+        for e in edges:
+            n = nodes.get(e.subject_id)
+            if n is None or n.predicate != '...' or n.type not in parent_types:
+                continue
+            if n.wildcard == '':
+                concretes.append((n.type, n.name))
+            elif n.wildcard == 'any':      # 'all' is object-position; never a subject
+                star_types.append(n.type)
+        return concretes, star_types
+
     def tupleset_parents(self, object_type: str, obj_name: str, ts: str,
                          parent_types: tuple) -> list[tuple[str, str]]:
         """Entity parents p with a stored tupleset tuple (p, ts, obj): DIRECT incoming
         entity subjects on the (obj, ts) node. Stored tuples only -- the pinned TTU
-        semantics (oracle ttu_leaf); computed members of the tupleset never count."""
-        ts_node = self._node(ts, object_type, obj_name)
-        if ts_node is None:
-            return []
-        edges = self._direct_incoming(ts_node.id)
-        nodes = self._nodes_by_ids(e.subject_id for e in edges)
-        out = []
-        for e in edges:
-            n = nodes.get(e.subject_id)
-            if (n is not None and n.wildcard == '' and n.predicate == '...'
-                    and n.type in parent_types):
-                out.append((n.type, n.name))
-        return out
+        semantics (oracle ttu_leaf); computed members of the tupleset never count.
+
+        A stored ``T:*`` parent is EXPANDED here into the concrete instances of ``T``
+        (RC2), which is what makes every downstream consumer -- ``_from_chain_keys``,
+        ``_leaf_concretes``, ``_derived_leaf_neg_ids`` -- correct without edits: each
+        instance really is a parent. The half the expansion cannot express, "the shape
+        ``(T, target_rel)`` is a member whatever its name", is carried separately by
+        ``tupleset_star_types`` and consumed by the ``_EvalContext`` TTU methods."""
+        concretes, star_types = self._stored_tupleset_subjects(
+            object_type, obj_name, ts, parent_types)
+        out = list(concretes)
+        for pt in star_types:
+            out.extend((pt, inst) for inst in self._instances_of_type(pt))
+        return list(dict.fromkeys(out))
+
+    def tupleset_star_types(self, object_type: str, obj_name: str, ts: str,
+                            parent_types: tuple) -> list[str]:
+        """Types T with a stored ``T:*`` tupleset tuple on ``(obj, ts)``."""
+        return self._stored_tupleset_subjects(object_type, obj_name, ts, parent_types)[1]
 
     def _ts_leaf_predicates(self, object_type: str, ts: str) -> list[str]:
         """The STORAGE-leaf predicates of a derived tupleset relation: only
@@ -338,6 +412,17 @@ class DeltaProcessor:
         for leaf in self._ts_leaf_predicates(object_type, ts):
             for (pt, pn) in self.tupleset_parents(object_type, obj_name, leaf, parent_types):
                 seen[(pt, pn)] = None
+        return list(seen)
+
+    def derived_stored_star_types(self, object_type: str, obj_name: str, ts: str,
+                                  parent_types: tuple) -> list[str]:
+        """Types T with a stored ``T:*`` tupleset tuple of a DERIVED tupleset relation
+        (RC2) -- the star half of ``derived_stored_parents``, across its storage
+        leaves."""
+        seen: dict[str, None] = {}
+        for leaf in self._ts_leaf_predicates(object_type, ts):
+            for pt in self.tupleset_star_types(object_type, obj_name, leaf, parent_types):
+                seen[pt] = None
         return list(seen)
 
     def _keys_referencing(self, node_id: int) -> list[Key]:
@@ -404,15 +489,29 @@ class DeltaProcessor:
     def _stored_parent_objects_of_entity(self, e_type: str, e_name: str,
                                          object_type: str, ts: str) -> set[str]:
         """Objects obj with a stored tuple (entity, ts, obj) where ts is a derived
-        tupleset: the entity's direct outgoing edges into ts's leaf families."""
-        ent = self._node('...', e_type, e_name)
-        if ent is None:
-            return set()
+        tupleset: the entity's direct outgoing edges into ts's leaf families.
+
+        ⚠ RC2 -- the STAR source is load-bearing, and omitting it is a silent staleness
+        bug rather than a missing feature. A stored ``T:*`` tupleset tuple makes every
+        entity of type T a parent of that object, but it hangs off the ``w_any(T,'...')``
+        node, NOT off the entity. Reading only the entity's own edges, a later delta on
+        some ``T:x`` would invalidate nothing and the dependent's derived state would
+        stay stale until an unrelated write happened to reconcile it -- the fix would
+        then pass the pins (which write in one batch) and fail incremental maintenance."""
         leaf_preds = set(self._ts_leaf_predicates(object_type, ts))
+        src_ids: list[int] = []
+        ent = self._node('...', e_type, e_name)
+        if ent is not None:
+            src_ids.append(ent.id)
+        star = self.widx._w_node(e_type, '...', 'any', create=False)
+        if star is not None:
+            src_ids.append(star.id)
+        if not src_ids:
+            return set()
         out: set[str] = set()
         edges = self.session.exec(
             select(EdgeV4).where(EdgeV4.store_id == self.store_id)
-            .where(EdgeV4.subject_id == ent.id)
+            .where(EdgeV4.subject_id.in_(src_ids))  # type: ignore[attr-defined]
             .where(EdgeV4.direct_edge_count > 0)  # type: ignore[arg-type]
         ).all()
         nodes = self._nodes_by_ids(e.object_id for e in edges)
@@ -1102,14 +1201,20 @@ class DeltaProcessor:
                             o_type, o_name, dep_t, edge.tupleset_rel):
                         full((dep_t, dep_r, obj_name))
                 else:   # 'ttu' (mixed-type untainted target of a PDerivedTTU)
-                    # dependents = objects holding a tupleset tuple from this entity
-                    ent = self._node('...', o_type, o_name)
-                    if ent is None:
-                        continue
-                    for oid in self.idx.lookup_reachable(ent.id):
-                        o2 = self.session.get(NodeV4, oid)
-                        if o2 is not None and (o2.type, o2.predicate) == (dep_t, edge.tupleset_rel):
-                            full((dep_t, dep_r, o2.name))
+                    # dependents = objects holding a tupleset tuple from this entity --
+                    # or a STAR one of this entity's type, which hangs off w_any and so
+                    # is invisible from the entity alone (RC2; see
+                    # _stored_parent_objects_of_entity for why that is staleness, not a
+                    # missing feature)
+                    srcs = [n for n in (self._node('...', o_type, o_name),
+                                        self.widx._w_node(o_type, '...', 'any',
+                                                          create=False))
+                            if n is not None]
+                    for src in srcs:
+                        for oid in self.idx.lookup_reachable(src.id):
+                            o2 = self.session.get(NodeV4, oid)
+                            if o2 is not None and (o2.type, o2.predicate) == (dep_t, edge.tupleset_rel):
+                                full((dep_t, dep_r, o2.name))
         return keys
 
     def _fan_out(self, source: tuple[str, str], obj_name: str,

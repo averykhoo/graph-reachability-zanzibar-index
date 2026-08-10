@@ -111,6 +111,11 @@ class _BulkEvalContext:
     # -- derived-target TTU (untainted tupleset) --
     def ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
         sp, st, sn = s
+        # star-parent shape rule (RC2) -- see DeltaProcessor's twin
+        for pt in self.bf._tupleset_star_types(self.object_type, self.obj_name,
+                                               ts, parent_types):
+            if (st, sp) == (pt, target):
+                return True
         for (pt, pn) in self.bf._tupleset_parents(self.object_type, self.obj_name,
                                                   ts, parent_types):
             if (sp, st, sn) == (target, pt, pn):
@@ -120,7 +125,9 @@ class _BulkEvalContext:
         return False
 
     def ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
-        out: frozenset = frozenset()
+        out: frozenset = frozenset(
+            (pt, target) for pt in self.bf._tupleset_star_types(
+                self.object_type, self.obj_name, ts, parent_types))       # RC2
         for (pt, pn) in self.bf._tupleset_parents(self.object_type, self.obj_name,
                                                   ts, parent_types):
             out |= self.bf._member_stars(pt, target, pn)
@@ -130,6 +137,10 @@ class _BulkEvalContext:
     def tupleset_ttu_check(self, target: str, ts: str, parent_types: tuple,
                            s: SubjectKey) -> bool:
         sp, st, sn = s
+        for pt in self.bf._derived_stored_star_types(self.object_type, self.obj_name,
+                                                     ts, parent_types):
+            if (st, sp) == (pt, target):
+                return True                  # star-parent shape rule (RC2)
         for (pt, pn) in self.bf._derived_stored_parents(self.object_type, self.obj_name,
                                                         ts, parent_types):
             if (sp, st, sn) == (target, pt, pn):
@@ -139,7 +150,9 @@ class _BulkEvalContext:
         return False
 
     def tupleset_ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
-        out: frozenset = frozenset()
+        out: frozenset = frozenset(
+            (pt, target) for pt in self.bf._derived_stored_star_types(
+                self.object_type, self.obj_name, ts, parent_types))       # RC2
         for (pt, pn) in self.bf._derived_stored_parents(self.object_type, self.obj_name,
                                                         ts, parent_types):
             out |= self.bf._member_stars(pt, target, pn)
@@ -442,18 +455,53 @@ class _BulkBackfill:
                 out.append(sn2)
         return out
 
+    def _instances_of_type(self, t: str) -> list[str]:
+        """In-memory twin of ``DeltaProcessor._instances_of_type`` (RC2): the
+        tuple-mentioned concrete names of a type, for the strict ∀⇒∃ expansion of a
+        stored ``T:*`` tupleset parent. ``self.nodes`` is the bulk builder's interner,
+        so its concrete keys are exactly the interned entities."""
+        return sorted({name for (_p, typ, name, w) in self.nodes
+                       if typ == t and w == '' and name != '*'})
+
+    def _stored_tupleset_subjects(self, o_type: str, o_name: str, ts: str,
+                                  parent_types: tuple) -> tuple[list, list]:
+        """``(concrete parents, star parent types)`` on (obj, ts) -- the in-memory twin
+        of ``DeltaProcessor._stored_tupleset_subjects``; see that docstring for why the
+        two shapes must not be collapsed."""
+        ts_key = self._concrete_key(ts, o_type, o_name)
+        if ts_key is None:
+            return [], []
+        concretes: list[tuple[str, str]] = []
+        star_types: list[str] = []
+        for (sp2, st2, sn2, w2) in sorted(self.in_adj.get(ts_key, ())):
+            if sp2 != '...' or st2 not in parent_types:
+                continue
+            if w2 == '':
+                concretes.append((st2, sn2))
+            elif w2 == 'any':
+                star_types.append(st2)
+        return concretes, star_types
+
     def _tupleset_parents(self, o_type: str, o_name: str, ts: str,
                           parent_types: tuple) -> list[tuple[str, str]]:
         """Stored tupleset parents: DIRECT incoming bare-entity subjects on (obj, ts)
-        (stored-tuple TTU semantics -- computed members never count)."""
-        ts_key = self._concrete_key(ts, o_type, o_name)
-        if ts_key is None:
-            return []
-        out = []
-        for (sp2, st2, sn2, w2) in sorted(self.in_adj.get(ts_key, ())):
-            if w2 == '' and sp2 == '...' and st2 in parent_types:
-                out.append((st2, sn2))
-        return out
+        (stored-tuple TTU semantics -- computed members never count), with a stored
+        ``T:*`` parent EXPANDED into the instances of ``T`` (RC2).
+
+        ⚠ This duplication of ``DeltaProcessor.tupleset_parents`` is deliberate (the
+        bulk path has no session) and is exactly why RC2 needed a fix at BOTH sites,
+        unlike RC1, whose ``parent_types`` is compiled once and merely read here."""
+        concretes, star_types = self._stored_tupleset_subjects(
+            o_type, o_name, ts, parent_types)
+        out = list(concretes)
+        for pt in star_types:
+            out.extend((pt, inst) for inst in self._instances_of_type(pt))
+        return list(dict.fromkeys(out))
+
+    def _tupleset_star_types(self, o_type: str, o_name: str, ts: str,
+                             parent_types: tuple) -> list[str]:
+        """Types T with a stored ``T:*`` tupleset tuple on (obj, ts)."""
+        return self._stored_tupleset_subjects(o_type, o_name, ts, parent_types)[1]
 
     def _ts_leaf_predicates(self, o_type: str, ts: str) -> list[str]:
         plan = self.compiled.plans[(o_type, ts)]
@@ -465,6 +513,15 @@ class _BulkBackfill:
         for leaf in self._ts_leaf_predicates(o_type, ts):
             for pp in self._tupleset_parents(o_type, o_name, leaf, parent_types):
                 seen[pp] = None
+        return list(seen)
+
+    def _derived_stored_star_types(self, o_type: str, o_name: str, ts: str,
+                                   parent_types: tuple) -> list[str]:
+        """The star half of ``_derived_stored_parents`` (RC2), across storage leaves."""
+        seen: dict[str, None] = {}
+        for leaf in self._ts_leaf_predicates(o_type, ts):
+            for pt in self._tupleset_star_types(o_type, o_name, leaf, parent_types):
+                seen[pt] = None
         return list(seen)
 
     def _ttu_target_upos_nodes(self, parents: list[tuple[str, str]],

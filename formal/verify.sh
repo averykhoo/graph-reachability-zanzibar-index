@@ -182,7 +182,8 @@ fi
 # ADDING tests never trips this. LOWERING it must be a deliberate, reviewed edit
 # here -- without a floor, shrinking GRAPH_FRAGMENT to a single corpus or deleting
 # test_conformance_graph.py outright kept the gate green (ZT-P2-2).
-MIN_CONF_ALL=465
+# Re-measured 2026-08-11 with `pytest formal/conformance/ -q --collect-only`: 494.
+MIN_CONF_ALL=494
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -199,7 +200,10 @@ MIN_CONF_ALL=465
 # Note the Postgres leg (`tests/test_postgres_ha.py`) is dropped at COLLECTION
 # when no ZANZIBAR_TEST_DSN is set, not skipped at run time -- otherwise its skips
 # would have to be tolerated here, and a tolerated skip is how coverage leaks.
-MIN_TESTS_ALL=763
+# Re-measured 2026-08-11 with `pytest tests/ -q --collect-only`: 823 (was 763; the
+# RC2 fix added the compile-time-invariant pin, its over-rejection control, and the
+# rc2_star_tupleset bulk corpus).
+MIN_TESTS_ALL=823
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -253,8 +257,9 @@ MAX_TESTS_SKIPPED_ON_RDBMS=3
 #   test_conformance_enum.py      6 tests, ~380-475 s (the real hog inside conf-rest;
 #     the 2026-07-19g note blamed test_conformance_remove_graph.py, which is ~27 s)
 HEAVY_CONF="formal/conformance/test_conformance_remove.py"
-MIN_CONF_HEAVY=96
-MIN_CONF_REST=369
+# Re-measured 2026-08-11: test_conformance_remove.py collects 104; 494 - 104 = 390.
+MIN_CONF_HEAVY=104
+MIN_CONF_REST=390
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

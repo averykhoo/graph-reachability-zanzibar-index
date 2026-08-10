@@ -765,6 +765,47 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   Closing it would mean modelling star-tupleset through-shapes in `UsStarWrite` — not
   scheduled, and no other claim depends on it.
 
+* **★ The STAR TUPLESET PARENT on the derived read path (RC2, fixed 2026-08-11) — the
+  graph chain excludes it by TWO standing hypotheses, so no Lean change is owed.**
+  `index_v4/processor.py::DeltaProcessor.tupleset_parents` used to drop a stored `T:*`
+  tupleset parent (`n.wildcard == ''`); it now splits the two subject shapes
+  (`::DeltaProcessor._stored_tupleset_subjects`) and gives the star one the shape rule
+  (`::DeltaProcessor.tupleset_star_types`, `::DeltaProcessor.derived_stored_star_types`)
+  plus an ∃-expansion over instances, with the bulk twin in
+  `index_v4/bulk_backfill.py::_BulkBackfill._stored_tupleset_subjects`. Neither half has a
+  graph-side Lean counterpart, and the exclusions are explicit rather than accidental:
+
+  > `GraphIndex/RulesBareStar.lean::TtuStarFree` fences out **every stored star-subject
+  > tuple matching a TTU rewrite arm**, and `GraphIndex/RulesCorrect.lean::TtuTuplesetsDirect`
+  > additionally requires every TTU's tupleset relation to be `directsOnly` — so a
+  > *derived* tupleset relation, which is the whole of RC2's `tupleset-ttu` half, is not
+  > expressible in the fragment at all. Both are carried as hypotheses on every
+  > equivalence theorem in `Equiv.lean`.
+
+  So nothing became dead code: `GraphIndex/RulesWrite.lean::applyRRule`'s `.ttu` case has
+  no star arm and never claimed one.
+  **★ The near-miss worth recording, stated carefully.** `TtuStarFree`'s own header
+  records an attack-first `#eval` from 2026-07-11 on exactly this shape
+  (`folder:* → doc:d6#parent`) finding `sem = true` against a rule-routed graph answer of
+  `false` — the same *sign* as RC2's positive-TTU direction. That was a property of the
+  LEAN write model (`writeRules` materialises no bridges at all) and is **not** evidence
+  anyone had observed the Python defect: Python's UNTAINTED star-tupleset path was and is
+  correct, via `index_v4/wildcard.py`'s materialised bridges, and is pinned green by
+  `tests/test_ttu_tupleset_parent_types.py::test_rc2_positive_control_star_parent_on_untainted_tupleset`.
+  What went unnoticed for four months is that the *derived* path reaches the same shape
+  through the delta processor, which likewise materialises no bridge for it. **The
+  transferable point: a shape fenced out of the model as "not covered here" is a standing
+  hint about where the implementation is least watched** — the fence records where the
+  easy argument fails, on both sides.
+
+  **Direction of the fix: Python moved TOWARD the models, not away.**
+  `_stored_tupleset_subjects`'s split is structurally
+  `SetEngine/Eval.lean::parentMS` — star parent ⇒ `MemberSet.star (pt, targetRel)` unioned
+  with the expansion over `instances` — and `Spec/Semantics.lean::ttuLeaf`'s `else` branch
+  is the same rule. The `n.wildcard == ''` filter that was removed had no Lean counterpart
+  on any side. This is the §8 "a correctness fix can also move Python toward the model"
+  case, discharged here rather than in §8.1 because the region is fragment-excluded.
+
 * **Set-engine WRITE ADMISSION — and it decides which stores the gates can
   enumerate.** `setengine/engine.py::SetEngine._validate` step (1)
   (object-wildcard gating) and step (3) (cycle rejection) →
