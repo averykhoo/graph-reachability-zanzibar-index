@@ -27,6 +27,8 @@ below is drawn entirely from checks that were *already in this repo, green, and 
 | a wildcard-coverage floor | "a wildcard exists" | bare `[user:*]` satisfies it while `[T:*#p]` stays at **zero** (2026-07-28) |
 | `_REQUIRED_LEAF_KINDS` | a hand-maintained list | correct the day it was written; **green forever** once the compiler grows a branch |
 | state-gate projection P3 | "state-level equality" | compares edges as a **set**, so edge **multiplicity** divergence is structurally invisible — and the multiplicity died *twice*, first inside the Lean binary (`Cli.lean::canonJsonArr`) and again in the extractor's `set`, so "make the Python side a multiset" would have compared all-ones and reported green (closed 2026-07-29, `CORRESPONDENCE.md` §7.2) |
+| invariant **I9** (cascade audit) | re-runs `reconcile` and compares | reads the **same** compile-time `parent_types` its subject reads, so it **agrees with itself**; paranoia was ON through two live authorization fail-opens (2026-08-10) — see "the mirror instrument" below |
+| `BoolStarBridgeParityMachine` | the "headline blind spot" closer, booleans × star-bridge, 4-way | ran the graph index on 13% of draws — and on **ZERO boolean draws, ever** (all 768 `and`/`but not` configs of 1536 were rejected for every OWC subset, so its 4-way draws were exactly the `or` ones): it fuzzed **3-way and reported green** for its whole life. **FIXED 2026-08-10** → 76–82% 4-way, 49–55% boolean-4-way, rate now floored with provenance (2026-08-10) |
 
 Note the pattern: **none of these were wrong when written.** They decayed, or they were
 subtly narrower than their name. That is why the procedure is mandatory rather than
@@ -78,6 +80,51 @@ So for any probe, sweep, or differential:
 * **Negative control / non-vacuity** — confirm the comparison actually ran on something
   (count the comparisons; assert the count is nonzero). **A sweep that compared nothing
   reports success.**
+* **Assert the SCOPE it claims, not just that it ran.** A differential that quietly drops a
+  backend keeps comparing — just not at the arity in its name.
+  `BoolStarBridgeParityMachine` — the machine whose own header calls it *"the audit's headline
+  blind spot"* closer for **booleans × star-bridge** — ran the graph index on 13% of its draws
+  (the rest raise `UnsupportedByGraphIndex`, `ParityEngine` sets `graph=None`, it fuzzes
+  3-way) and reported green for its entire life. ★ **The sharp version, found by exhaustively
+  enumerating its config space (1536 configs): all 768 `and`/`but not` configs were rejected,
+  for every OWC subset including the empty one, so the 13% that DID run 4-way were exactly the
+  `or` draws. It had tested booleans against the graph index ZERO times, ever** — the one
+  cross it was built for was the one cross it never ran. Its sibling
+  `StarBridgeParityMachine` asserts `graph is not None` and never had the problem.
+  **FIXED 2026-08-10** (the boolean arm's placement is now drawn: `downstream` is in-fragment
+  for every op, `target` only in an explicit scope-boundary stratum where the rejection is the
+  asserted contract) — 13% → 76–82% 4-way, 0% → 49–55% boolean-and-4-way, with an exhaustive
+  in-fragment completeness test and a floored rate test carrying provenance.
+  This is **silent scope degradation** — distinct from the mirror below: sabotage *can* find
+  it, but only if the scope is asserted rather than assumed. Note what made it invisible:
+  every individual draw behaved correctly and the suite was green; only the *rate* was wrong,
+  and nothing measured the rate.
+
+### The mirror instrument — a check that reads its subject's source
+
+Every sabotage above works by breaking something **downstream** of the check. One class is
+structurally out of their reach: a check whose expectation is derived from the **same
+source** as its subject. Break the subject and it reddens on cue; it is blind only to that
+source being wrong, because a defect there moves check and subject together.
+
+**The five-second test, before you sabotage anything:**
+
+> **If the SOURCE this check reads were itself wrong, would this check still pass?**
+> If yes, it is a *mirror* — whatever else it certifies, it cannot certify that source.
+
+**Worked example — invariant I9, which cost two live authorization fail-opens (2026-08-10).**
+I9 audits the delta cascade by re-running `reconcile` and comparing. But `reconcile` reads
+the same compile-time `parent_types` metadata that was wrong, so it **agrees with itself**
+and reports green; paranoia mode was ON throughout both bugs and never fired. Note what this
+does to the procedure: **I9 passes every sabotage in this document.** Break the cascade and
+it goes red exactly as step 3 asks. The defect was upstream of both the instrument and its
+subject, and no downstream sabotage can reach it.
+
+**Remedy: derive the instrument from a *different* source than the subject.** The prototyped
+fix for those bugs is a compile-time invariant that checks `parent_types` against the emitted
+`RewriteFilter`s — what admission actually *accepts* onto the tupleset's storage leaves —
+rather than against `_member_types`, the thing that was wrong. Different derivation, so a
+`_member_types` defect moves one side and not the other; validated RED-before / GREEN-after.
 
 ### Prefer a mechanical refusal to a doc warning
 
@@ -90,7 +137,10 @@ will not read the comment. Ranked by durability:
    pattern: it reads the kind literals out of the compiler's own source, so the floor
    and the compiler cannot drift.)
 2. **Good — derive the expectation instead of hand-maintaining it.** Any hand-written
-   list of "what should exist" is a future silent pass. Read it from the source of truth.
+   list of "what should exist" is a future silent pass. Read it from the source of truth —
+   and from one **independent of the subject**. Derived from the subject's *own* source,
+   this rank degrades into a mirror (above): it stays green precisely when that source is
+   the thing that is wrong.
 3. **Acceptable — a hard floor with a stated provenance** (`-ge` with a measured number,
    a comment saying when it was measured and by what command).
 4. **Weak — a docstring.** Use only when 1–3 are genuinely impossible, and say why.
