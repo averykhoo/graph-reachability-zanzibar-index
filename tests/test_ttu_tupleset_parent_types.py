@@ -1,13 +1,21 @@
 """
 TTU tupleset parents that COMPILE-TIME metadata throws away: two live divergences.
 
-**This module is currently RED, deliberately, and it pins two independent live
-divergences of the graph index against the oracle and both set engines.** Baseline for
-every number below: commit ``e136c8c`` (``git show HEAD:<file>``), measured 2026-08-10
-with the conda env under ``C:/Users/user/anaconda3/envs/graph-reachability-zanzibar-index``.
+**★ BOTH CAUSES ARE NOW FIXED — RC1 on 2026-08-10 (``ed46e54``), RC2 on 2026-08-11 — and
+this module is GREEN. It stays as the regression pin for both.** Baseline for every
+"measured" number below: commit ``e136c8c`` (``git show e136c8c:<file>``), 2026-08-10, with
+the conda env under ``C:/Users/user/anaconda3/envs/graph-reachability-zanzibar-index``;
+those numbers describe the BUGS, not the tree.
+
 Per ``CLAUDE.md`` these are **positive pins, not xfails** (``verify.sh`` carries
-``MAX_TESTS_XFAILED=0``): they assert the CORRECT behaviour and stay red until the graph
-is fixed. Do NOT weaken them, do NOT convert them to xfail, and do NOT edit the oracle.
+``MAX_TESTS_XFAILED=0``): they assert the CORRECT behaviour, and they were red until the
+graph was fixed. Do NOT weaken them, do NOT convert them to xfail, and do NOT edit the
+oracle. If one goes red again, the divergence is live again.
+
+**Read the "Fix locations" section below as a record of where the bugs WERE**, and see
+``test_compile_refuses_parent_types_narrower_than_admission`` at the foot of this file:
+RC1's class is now additionally refused at COMPILE time by an invariant that reads the
+emitted filters rather than ``_member_types``, so it cannot recur silently.
 
 ## The invariant they guard (one sentence)
 
@@ -101,18 +109,38 @@ split is honoured there too::
       user:alice#...    (wildcard='')    -> doc:d2#viewer
       doc:d2#viewer     (wildcard='')    -> doc:*#viewer
 
-## Fix locations
+## Fix locations — WHAT WAS DONE
 
-* **RC1** — ``zanzibar_utils_v1.py::_member_types``: ``if isinstance(e, Exclusion): return
-  walk(e.base)`` should union the subtrahend's member types (a subtrahend restriction is
-  still a *storable* subject type on the public relation, and stored-tuple TTU semantics
-  do not care which arm admitted it). Its docstring encodes the same mistake and must
-  change with it.
-* **RC2** — ``index_v4/processor.py::tupleset_parents``: the ``n.wildcard == ''`` clause.
-* **Both filters are duplicated** in ``index_v4/bulk_backfill.py:453-455``
-  (``_tupleset_parents``: ``if w2 == '' and sp2 == '...' and st2 in parent_types``), so the
-  offline bulk bootstrap will keep the divergence alive if only the online path is fixed.
-  ``bulk_backfill.py:441`` carries the same ``w2 == ''`` clause for stored usersets.
+* **RC1 (fixed 2026-08-10, ``ed46e54``)** — ``zanzibar_utils_v1.py::_member_types``:
+  ``if isinstance(e, Exclusion): return walk(e.base)`` now unions the subtrahend's member
+  types (a subtrahend restriction is still a *storable* subject type on the public
+  relation, and stored-tuple TTU semantics do not care which arm admitted it). Its
+  docstring encoded the same mistake and was rewritten with it. ``parent_types`` is
+  compiled once and frozen onto the plan node, which ``processor.py`` and
+  ``bulk_backfill.py`` merely READ, so this one edit repaired both paths.
+* **RC2 (fixed 2026-08-11)** — the ``n.wildcard == ''`` clause was NOT simply deleted;
+  see the sabotage note below for why that cannot work. Instead the two subject shapes are
+  now split (``_stored_tupleset_subjects``) and given the two semantics the oracle and the
+  set engine already implement:
+  a stored ``T:*`` parent contributes **(a)** the shape ``(T, target_rel)``
+  unconditionally -- carried by ``tupleset_star_types`` / ``derived_stored_star_types``
+  into the ``_EvalContext`` TTU methods and thence the residue's ``stars`` -- and
+  **(b)** an ∃-expansion over the tuple-mentioned instances of ``T``, folded into
+  ``tupleset_parents`` so every downstream consumer (``_from_chain_keys``,
+  ``_leaf_concretes``, ``_derived_leaf_neg_ids``) is correct with no edit.
+  The cascade fan-out needed widening too (``_stored_parent_objects_of_entity`` and the
+  ``'ttu'`` arm of ``_apply_deltas``): a star parent hangs off ``w_any``, not off the
+  entity, so a later delta on some ``T:x`` would otherwise invalidate nothing and leave
+  the dependent stale.
+* **RC2 genuinely needed BOTH sites** — unlike RC1, whose ``parent_types`` is shared. The
+  clause is duplicated verbatim in ``index_v4/bulk_backfill.py::_tupleset_parents``, so
+  the offline bulk bootstrap would otherwise have kept the divergence alive. The
+  ``rc2_star_tupleset`` corpus in ``tests/test_bulk_build.py`` now pins that: reverting
+  the bulk half alone takes it from ``7 passed`` to
+  ``1 failed, 6 passed`` (``[rc2_star_tupleset] snapshot_rows differ``), where before the
+  corpus existed the same one-sided edit left the suite green.
+  ``bulk_backfill.py``'s ``_stored_userset_subjects`` still carries a ``w2 == ''`` clause
+  for stored USERSETS -- deliberately untouched, and not part of either root cause.
 
 ## Sabotage evidence (docs/sabotage-procedure.md — literal observed output)
 
@@ -152,14 +180,17 @@ split is honoured there too::
   that the hypothesis campaign or any conformance corpus reaches these shapes — the
   evidence is that they were green while these divergences were live, which is the
   "green by seed luck" failure mode ``CLAUDE.md`` already names.
-* RC1 and RC2 are **independent**: fixing ``_member_types`` leaves RC2 red (verified in
+* RC1 and RC2 are **independent**: fixing ``_member_types`` left RC2 red (verified in
   process — RC2 still reported ``oracle=True graph=False sets=[True, True]`` with the RC1
-  patch applied), and vice versa.
-* Nothing here exercises the ``bulk_backfill.py`` copies of the two filters. That gap is
-  named above but NOT pinned; a fix should add a bulk-path pin of its own.
-* Nothing here is claimed about the Lean model. ``formal/CORRESPONDENCE.md`` was not
-  consulted; if the fix changes the modelled algorithm, that is a separate obligation.
+  patch applied), and vice versa. That is why they were fixed and pinned separately.
+* Nothing in THIS file exercises the ``bulk_backfill.py`` copies — that gap is now closed
+  elsewhere, by the ``rc2_star_tupleset`` corpus in ``tests/test_bulk_build.py``, which
+  was added with the fix precisely because that gate was measured BLIND to this direction.
+* Nothing here is claimed about the Lean model beyond what ``formal/CORRESPONDENCE.md``
+  §7 records for this change.
 """
+
+import pytest
 
 from tests.oracle import Oracle, OracleTuple
 from tests.test_lookup_oracle import _Gate
@@ -568,3 +599,72 @@ def test_rc2_star_stored_parent_dropped_is_an_authorization_fail_open():
         oracle, graph, sets, False,
         'RC2 FAIL-OPEN: the graph grants `access` because it dropped the stored `doc:*` '
         'TTU parent that the `but not viewer from parent` subtrahend needed')
+
+
+# =========================================================================== #
+# The compile-time invariant landed with the RC2 fix (2026-08-11)
+# =========================================================================== #
+
+def test_compile_refuses_parent_types_narrower_than_admission():
+    """★ The RC1/RC2 class caught at COMPILE time, by an instrument that is NOT a mirror.
+
+    Property guarded: a TTU's compiled ``parent_types`` covers every bare-entity type
+    ADMISSION accepts onto that tupleset relation. If it does not, a stored tupleset
+    tuple of the missing type is silently not a TTU parent -- a false negative under a
+    positive TTU and an authorization FAIL-OPEN under a negated one.
+
+    ★★ WHY THIS TEST EXISTS RATHER THAN TRUSTING I9. Invariant I9 audits the cascade by
+    re-running ``reconcile``, which reads the same compile-time ``parent_types`` its
+    subject reads -- so it agrees with itself and stayed GREEN through both live
+    authorization fail-opens with paranoia ON. It is a MIRROR
+    (``docs/sabotage-procedure.md``). ``_assert_ttu_parent_types_cover_admission``
+    derives its expectation from the emitted ``RewriteFilter``/``Filter`` patterns
+    instead, which are built from the ``Restriction``s directly, so a ``_member_types``
+    defect moves the subject and not the check.
+
+    SABOTAGE (literal output). This test IS the sabotage, made permanent: it narrows
+    ``parent_types`` exactly the way RC1 did (the subtrahend's type never arrives) and
+    asserts compilation refuses. Verified by hand 2026-08-11 against the REAL defect --
+    reverting ``_member_types``' Exclusion arm to ``return walk(e.base)`` in the source
+    and compiling ``parent: [folder] but not [doc]`` produced::
+
+        ValueError: TTU 'viewer' from 'parent' in doc#inherited: compiled parent_types
+        ('folder',) omits type(s) ['doc'] that ADMISSION accepts onto doc#parent. A
+        stored tupleset tuple of that type would be silently dropped as a TTU parent
+        (fail-open under a negated TTU). This is the RC1 class -- suspect _member_types,
+        not this check.
+
+    and restoring the arm compiled clean again.
+    """
+    import zanzibar_utils_v1 as zu
+
+    schema = ('model\n  schema 1.1\n\ntype user\n\ntype folder\n\ntype doc\n'
+              '  relations\n'
+              '    define parent: [folder] but not [doc]\n'
+              '    define viewer: [user]\n'
+              '    define inherited: viewer from parent\n')
+
+    # control: the tree as it stands compiles, so the red below is the sabotage's doing
+    zu.parse_openfga_schema(schema)
+
+    real = zu._member_types
+
+    def rc1_narrowed(object_type, relation, ast, seen):
+        """RC1 in its essential form: the subtrahend's type never reaches parent_types."""
+        out = real(object_type, relation, ast, seen)
+        if (object_type, relation) == ('doc', 'parent'):
+            out = out - {'doc'}
+        return out
+
+    zu._member_types = rc1_narrowed
+    try:
+        with pytest.raises(ValueError) as ei:
+            zu.parse_openfga_schema(schema)
+    finally:
+        zu._member_types = real
+
+    msg = str(ei.value)
+    assert 'omits type(s)' in msg and "'doc'" in msg, msg
+    assert 'ADMISSION accepts' in msg, msg
+    # and the tree is genuinely restored -- otherwise this test would poison the module
+    zu.parse_openfga_schema(schema)

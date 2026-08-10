@@ -712,24 +712,29 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
         UnsupportedByGraphIndex,
         'wildcard userset restriction'),
     Rejection(
-        # ⚠ FOUND BY THIS WORK, 2026-08-10, and NOT a scoped refusal: a TTU whose
-        # tupleset relation is UNDECLARED and whose target relation is DERIVED escapes
-        # the decision-15 scope checks and dies inside `compile_boolean_schema` on an
-        # internal invariant, as a bare `ValueError`. `tests/parity.py` says out loud
-        # that "a bare ValueError from compile is a regression that must surface"; this
-        # one is recorded here rather than swallowed, so the family is visible and the
-        # exemption is revoked the moment the compiler's behaviour changes. Compare
-        # `... define r7: [user] or r0 from nodecl` (UNTAINTED target), which compiles
-        # cleanly -- so it is the taint of the TARGET, not the undeclared tupleset, that
-        # trips it. Reported, not fixed: fixing the compiler is out of this task's scope.
+        # FOUND 2026-08-10, FIXED 2026-08-11. A TTU whose tupleset relation is
+        # UNDECLARED and whose target relation is DERIVED used to escape the decision-15
+        # scope checks and die inside `compile_boolean_schema` on an internal invariant,
+        # as a bare `ValueError` -- a class `tests/parity.py` says out loud "must
+        # surface", so `ParityEngine` was UNCONSTRUCTIBLE on it (a hard crash) rather
+        # than degrading to 3-way. `_validate_ttu_tuplesets` now refuses the shape up
+        # front as a scoped `UnsupportedByGraphIndex`, and the `ValueError` at the
+        # `compile_boolean_schema` site is back to being an unreachable backstop.
+        #
+        # Compare `... define r7: [user] or r0 from nodecl` (UNTAINTED target), which
+        # compiles cleanly -- so it is the taint of the TARGET, not the undeclared
+        # tupleset, that trips it. That control is asserted by
+        # `test_undeclared_tupleset_with_untainted_target_still_compiles`, because a
+        # refusal widened to every undeclared tupleset would satisfy this witness while
+        # silently rejecting a schema that works.
         'undeclared-tupleset-with-derived-target',
         _REJ_HEAD + ('type doc\n  relations\n'
                      '    define blk: [user]\n'
                      '    define r1: [user] but not blk\n'
                      '    define r7: [user] or r1 from nodecl\n'),
         frozenset(),
-        ValueError,
-        'Rule then-pattern carries a derived subject predicate'),
+        UnsupportedByGraphIndex,
+        'targets the derived relation'),
     Rejection(
         'cyclic-derived-dependency',
         _REJ_HEAD + ('type doc\n  relations\n'

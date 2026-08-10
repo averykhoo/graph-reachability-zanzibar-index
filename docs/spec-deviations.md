@@ -8,7 +8,99 @@ to the user instead.
 
 ---
 
-## 2026-08-10 — ★★ LIVE AUTHORIZATION FAIL-OPEN: two root causes drop STORED TTU tupleset parents. PINNED (`d0010e2`), NOT YET FIXED.
+## 2026-08-11 — ★★ RC2 FIXED: a stored `T:*` tupleset parent is represented, not dropped. The 2026-08-10 fail-open family is CLOSED.
+
+RC1 was fixed 2026-08-10 (`ed46e54`); this closes **RC2**, the second and last root cause of
+the entry below. Both had an authorization fail-open direction. The bounded exhaustive
+sweep that mapped the family (2,302,854 queries over 346 compiled schemas, 26 minimized
+divergences) found **exactly these two causes**, so the family is closed at two.
+
+### What the fix is, and why it is not the one-liner
+
+The `n.wildcard == ''` clause was **not** deleted — the entry below records both dead ends,
+and both were re-confirmed before starting. The star parent is now *represented*, mirroring
+the semantics the oracle (`tests/oracle.py::ttu_leaf`, the `pn == '*'` arm) and the set
+engine (`setengine/engine.py::ttu_leaf` / `ttu_expand`) already implement and have always
+agreed on. A stored `T:*` tupleset tuple contributes **two things, not one**:
+
+1. **the SHAPE `(T, target_rel)`, unconditionally** — every userset of that shape is a
+   member whatever its name. New `DeltaProcessor.tupleset_star_types` /
+   `derived_stored_star_types`, consumed by all four `_EvalContext` TTU methods and folded
+   into the residue's `stars`. This is the direct analogue of `ms.star((pt, target))` at
+   `setengine/engine.py::ttu_expand`.
+2. **an ∃-expansion over the tuple-mentioned instances of `T`** — folded into
+   `tupleset_parents` itself, so every downstream consumer (`_from_chain_keys`,
+   `_leaf_concretes`, `_derived_leaf_neg_ids`) became correct with **no edit**. The
+   instance source is the interned concrete nodes, which are exactly the tuple-mentioned
+   names because the graph interns only on write paths — query endpoints must never
+   witness existence (strict ∀⇒∃, blind-audit O3), the same rule both other backends keep.
+
+The split (`_stored_tupleset_subjects`) is what makes this expressible: returning
+`('T', '*')` as if it were a parent name is precisely the naive fix that detonates, because
+`('T','*')` is **not representable as a concrete node** (`core.py:913`).
+
+### ★ The part no design document predicted: the CASCADE FAN-OUT
+
+Getting the read path right is not enough, and this is the transferable finding. A star
+tupleset tuple hangs off the `w_any(T,'...')` node, **not** off any entity. So
+`_stored_parent_objects_of_entity` — which finds "objects invalidated by a delta on this
+entity" by walking the entity's own outgoing edges — saw nothing, and a later write to some
+`T:x` would have invalidated no dependent at all. The read fix alone therefore **passes
+every pin in `tests/test_ttu_tupleset_parent_types.py`**, because those write in one batch
+and reconcile once; it would have failed only under incremental maintenance. Both that
+helper and the `'ttu'` arm of the delta fan-out now read the `w_any` node as a second
+source. *A correctness fix to a read path in an IVM system is not done until the
+invalidation path has been asked the same question.*
+
+### Assurance added with the fix — and what each one is worth
+
+* **The bulk corpus gap is CLOSED.** `tests/test_bulk_build.py` was *measured* blind to this
+  direction (see the 2026-08-10 entry: one-sided edit S1 left it 6-passed-GREEN while
+  control S2 reddened it 2/6, so the gate reached the function and the gap was the corpus).
+  New corpus `rc2_star_tupleset` — a `T:*` subject holding a stored tupleset tuple on a
+  derived tupleset relation, carrying BOTH TTU directions. **Sabotage, literal output:**
+  reverting the bulk half alone (S1, leaving `processor.py` fixed) now gives
+  `1 failed, 6 passed` with `AssertionError: [rc2_star_tupleset] snapshot_rows differ`,
+  and the other six corpora stay green so the red is attributable. Its anti-vacuity branch
+  asserts three separate things, because each is a way the corpus could quietly stop
+  testing what it exists for: the leaf kind is reached, a `doc:*` subject really lands on a
+  **storage** leaf of `parent`, and some residue really carries the star shape.
+* **A compile-time invariant, and deliberately NOT a mirror.**
+  `zanzibar_utils_v1.py::_assert_ttu_parent_types_cover_admission`: every TTU's frozen
+  `parent_types` must cover every bare-entity type **admission** accepts onto that tupleset
+  relation. ★ It reads the emitted `RewriteFilter`/`Filter` patterns, **never
+  `_member_types`** — the function RC1 got wrong. An invariant reading `_member_types`
+  would be a mirror (`docs/sabotage-procedure.md`), exactly like **I9**, which re-runs
+  `reconcile`, reads the same wrong `parent_types`, agrees with itself, and stayed green
+  through both fail-opens with paranoia ON. **Validated RED-before/GREEN-after:** reverting
+  `_member_types`' `Exclusion` arm to `walk(e.base)` and compiling
+  `parent: [folder] but not [doc]` gives
+
+  ```
+  ValueError: TTU 'viewer' from 'parent' in doc#inherited: compiled parent_types
+  ('folder',) omits type(s) ['doc'] that ADMISSION accepts onto doc#parent. A stored
+  tupleset tuple of that type would be silently dropped as a TTU parent (fail-open under
+  a negated TTU). This is the RC1 class -- suspect _member_types, not this check.
+  ```
+
+  It catches RC1 **at compile time, before any tuple is written**. Made permanent as
+  `test_compile_refuses_parent_types_narrower_than_admission`.
+  *Honest limit:* it only sees types some Filter accepts, so a tupleset fed only by rewrite
+  Rules is vacuous here rather than wrong — stated in the docstring.
+
+### The gate
+
+All five previously-red tests went green **with no test edit**, which was the stated
+completeness criterion (`HANDOFF.md`): the two hand-minimised pins, the generated tupleset
+grammar (`test_every_tupleset_kind_is_driven_against_the_oracle`), and both driving regimes
+— three instruments sharing no derivation. `tests/` 823/823 across the four tiles; 6-seed
+fuzz sweep (`--hypothesis-seed=` 7 19 31 53 71 97, the flag form) clean on
+`test_hypothesis.py` and `test_lookup_hypothesis.py`, including seeds 53 and 97 where
+`TestParityMachine` detonated pre-fix.
+
+---
+
+## 2026-08-10 — ★★ LIVE AUTHORIZATION FAIL-OPEN: two root causes drop STORED TTU tupleset parents. RC1 FIXED `ed46e54`; RC2 FIXED 2026-08-11 (see entry above).
 
 > ⚠ **This entry was substantially REWRITTEN on 2026-08-10 (later the same day).** The
 > original filing — preserved verbatim in the "superseded original" block at the end of this

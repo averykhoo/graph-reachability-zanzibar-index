@@ -283,6 +283,44 @@ def test_rejection_witness_is_still_refused(w):
     assert G.ast_features(w.schema, w.owc), f'{w.name} carries no features'
 
 
+def test_undeclared_tupleset_with_untainted_target_still_compiles():
+    """Property guarded: the 2026-08-11 scope refusal keys on the TAINT OF THE TARGET,
+    not on the tupleset merely being undeclared.
+
+    This is the negative control for `undeclared-tupleset-with-derived-target`. That
+    witness only asserts a refusal, so it is satisfied just as well by a refusal that is
+    far too broad — and "reject every TTU over an undeclared tupleset" is exactly the
+    one-line over-fix a future reader would reach for. An undeclared tupleset over an
+    UNTAINTED target compiles today and must keep compiling: the rewrite rule it emits
+    carries no derived subject predicate, so I5 exclusivity is not in play.
+
+    Note the pair is a genuine one-token delta — `r1` (derived) vs `r0` (untainted) —
+    so nothing but the property under test separates them.
+
+    SABOTAGE (literal output). Narrowest plausible weakening: in
+    `zanzibar_utils_v1._validate_ttu_tuplesets`, drop the `derived_predicate_names`
+    test and refuse on the undeclared tupleset alone::
+
+        if (object_type, e.tupleset_rel) not in ast:
+
+    Observed::
+
+        FAILED tests/test_generator_coverage.py::
+            test_undeclared_tupleset_with_untainted_target_still_compiles
+        E   zanzibar_utils_v1.UnsupportedByGraphIndex: relation doc#r7: TTU 'r0' from
+            'nodecl' targets the derived relation 'r0' ...
+
+    while `test_rejection_witness_is_still_refused[undeclared-tupleset-with-derived-target]`
+    stays GREEN — which is the point: the witness alone cannot see this.
+    """
+    schema = G._REJ_HEAD + ('type doc\n  relations\n'
+                            '    define blk: [user]\n'
+                            '    define r0: [user]\n'
+                            '    define r1: [user] but not blk\n'
+                            '    define r7: [user] or r0 from nodecl\n')
+    G.features(schema, frozenset())      # must not raise
+
+
 def test_every_rejection_witness_family_is_actually_exercised_by_the_enumerator():
     """Property guarded: the recorded refusal families are the LIVE ones.
 
@@ -345,10 +383,16 @@ def test_no_enumerated_config_is_silently_dropped():
     about its own space, not a sample.
 
     ⚠ This test is how the `undeclared-tupleset-with-derived-target` family was found:
-    `define r7: [user] or r1 from nodecl` with a DERIVED `r1` escapes the decision-15
-    scope checks and dies inside `compile_boolean_schema` on an internal invariant, as a
+    `define r7: [user] or r1 from nodecl` with a DERIVED `r1` escaped the decision-15
+    scope checks and died inside `compile_boolean_schema` on an internal invariant, as a
     bare `ValueError` — the exact class `tests/parity.py` says "must surface, not
-    silently shrink the matrix to 3-way". It is recorded, not fixed (out of scope here).
+    silently shrink the matrix to 3-way", so `ParityEngine` was UNCONSTRUCTIBLE on it.
+    **FIXED 2026-08-11**: `_validate_ttu_tuplesets` now refuses the shape up front as a
+    scoped `UnsupportedByGraphIndex`, the witness in `genswarm.REJECTION_WITNESSES` was
+    flipped to match, and `test_undeclared_tupleset_with_untainted_target_still_compiles`
+    guards against the refusal being widened to every undeclared tupleset. The sabotage
+    output quoted below is therefore the PRE-FIX observation — kept because it is the
+    evidence that this test can see an unrecorded refusal at all.
 
     SABOTAGE (literal output). Narrowest plausible weakening: delete the single
     `undeclared-tupleset-with-derived-target` entry from `REJECTION_WITNESSES` — the

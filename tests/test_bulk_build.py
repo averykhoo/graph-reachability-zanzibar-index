@@ -259,6 +259,68 @@ def _demorgan1_tuples(nusers=3, nroles=2, nconds=2, nattrs=3, ndocs=2) -> list[t
     return list(dict.fromkeys(out))
 
 
+#  (f) STAR TUPLESET PARENT ON A DERIVED TUPLESET RELATION -- the RC2 corpus, added
+#      2026-08-11 with the fix. `parent` is DERIVED (`and gate`) and carries a stored
+#      `doc:*` subject, so the TTUs over it must walk a STAR parent: the shape
+#      (doc, viewer) unconditionally, plus the ∃-expansion over instances of `doc`.
+#
+#      ⚠ WHY IT HAD TO BE ADDED. This gate was MEASURED BLIND to exactly this direction
+#      before the corpus existed. One-sided sabotage S1 (restore `w2 == ''` in
+#      `bulk_backfill._stored_tupleset_subjects` and drop the star arms, i.e. fix only
+#      `processor.py`) left the suite 6 passed GREEN, while control S2 (`return []`)
+#      reddened it 2/6 -- so the gate REACHED the function and the gap was the corpus:
+#      nothing had a `T:*` subject holding a stored tupleset tuple on a derived tupleset
+#      relation. `docs/spec-deviations.md` 2026-08-10 carries the measurement.
+#
+#      Both TTU directions are present deliberately: `inherited` (positive) fails CLOSED
+#      on the bug and `access` (negated) fails OPEN, and probing only the positive one
+#      mis-classifies the severity by one sign -- the general rule RC1/RC2 established.
+_RC2_STAR_TUPLESET = """
+model
+  schema 1.1
+
+type user
+
+type doc
+  relations
+    define gate: [doc, doc:*]
+    define parent: [doc, doc:*] and gate
+    define viewer: [user]
+    define inherited: viewer from parent
+    define access: [user] but not viewer from parent
+"""
+
+
+def _rc2_star_tupleset_tuples(nusers=3, ndocs=4) -> list[tuple]:
+    users = [f'u{i}' for i in range(1, nusers + 1)]
+    docs = [f'd{i}' for i in range(1, ndocs + 1)]
+    out: list[tuple] = []
+    # the star tupleset parent, on both arms of the derived `parent` so it survives the
+    # `and gate` intersection and actually lands on a storage leaf
+    out.append(('...', 'doc', '*', 'parent', 'doc', 'd1'))
+    out.append(('...', 'doc', '*', 'gate', 'doc', 'd1'))
+    # a CONCRETE parent on another object, so the corpus drives both shapes and a
+    # star-only regression cannot hide behind the concrete path
+    out.append(('...', 'doc', 'd3', 'parent', 'doc', 'd2'))
+    out.append(('...', 'doc', 'd3', 'gate', 'doc', 'd2'))
+    for i, u in enumerate(users):
+        for j, d in enumerate(docs):
+            if (i + j) % 2 == 0:
+                out.append(('...', 'user', u, 'viewer', 'doc', d))
+            if (i + j) % 3 == 0:
+                out.append(('...', 'user', u, 'access', 'doc', d))
+    return list(dict.fromkeys(out))
+
+
+def _rc2_star_tupleset_grid() -> list[tuple]:
+    subjects = ([('...', 'user', f'u{i}') for i in range(1, 4)]
+                + [('viewer', 'doc', f'd{i}') for i in range(1, 5)])
+    return [(sp, st, sn, rel, 'doc', on)
+            for (sp, st, sn) in subjects
+            for rel in ('inherited', 'access', 'parent', 'viewer')
+            for on in [f'd{i}' for i in range(1, 5)]]
+
+
 # (name, schema_text, object_wildcard_shapes, tuples, read-parity grid or None)
 _CORPORA = [
     ('wildcards', _WILDCARDS, OBJECT_WC, _wildcards_tuples(), _query_grid()),
@@ -268,6 +330,8 @@ _CORPORA = [
     ('derived_member', _DERIVED_MEMBER, frozenset(), _derived_member_tuples(),
      _derived_member_grid()),
     ('demorgan1', _DEMORGAN1, frozenset(), _demorgan1_tuples(), None),
+    ('rc2_star_tupleset', _RC2_STAR_TUPLESET, frozenset(),
+     _rc2_star_tupleset_tuples(), _rc2_star_tupleset_grid()),
 ]
 
 
@@ -401,6 +465,34 @@ def _assert_r4bf_features(name: str, compiled, nodes: dict, edges: dict,
             f'[demorgan1] expected >= 3 boolean strata; got {len(compiled.strata)}'
         assert edge_free_explicit, \
             '[demorgan1] expected an edge-free explicit rc=0 node (residue-anchored)'
+
+    if name == 'rc2_star_tupleset':
+        # (f) RC2. Three separate things must hold, because each is a way this corpus
+        #     could silently stop testing what it was added for:
+        #       1. the leaf kind is reached at all (the tupleset really is derived);
+        #       2. a `doc:*` subject really holds an edge into a STORAGE leaf of
+        #          `parent` -- not merely into `gate` or a rule-routed leaf, which is
+        #          what makes it a stored TTU parent rather than decoration;
+        #       3. some residue carries the star SHAPE (doc, viewer), which is the half
+        #          of the star rule the ∃-expansion over instances cannot express.
+        #     Without 2 and 3 a regression could drop the star arm and still pass 1.
+        assert 'derived-tupleset-ttu' in _leaf_kinds(compiled), \
+            '[rc2_star_tupleset] expected a derived-tupleset-ttu leaf kind'
+        storage_leaves = {spec.predicate
+                          for spec in compiled.plans[('doc', 'parent')].leaves
+                          if spec.storage}
+        assert storage_leaves, '[rc2_star_tupleset] `parent` has no storage leaf'
+        star_on_storage = [(a, b) for (a, b) in edges
+                           if a[2] == '*' and a[3] == 'any' and a[1] == 'doc'
+                           and b[1] == 'doc' and b[0] in storage_leaves]
+        assert star_on_storage, (
+            '[rc2_star_tupleset] no `doc:*` subject edge lands on a STORAGE leaf of '
+            f'`parent` ({sorted(storage_leaves)}) -- the corpus is not driving the '
+            'star tupleset parent it exists for')
+        assert any(('doc', 'viewer') in {tuple(s) for s in stars}
+                   for (stars, _neg, _upos, _v) in residues.values()), \
+            '[rc2_star_tupleset] no residue carries the star shape (doc, viewer); the ' \
+            'star-parent SHAPE rule is not being exercised'
 
     if name == 'demorgan':
         # (b) X4b upos lift + (e) a from-chain node recorded in upos/neg that is itself
