@@ -8,13 +8,120 @@ to the user instead.
 
 ---
 
-## 2026-08-10 — ★ LIVE: the graph index under-reports a TTU over a DERIVED tupleset relation. VERIFIED, NOT YET FIXED.
+## 2026-08-10 — ★★ LIVE AUTHORIZATION FAIL-OPEN: two root causes drop STORED TTU tupleset parents. PINNED (`d0010e2`), NOT YET FIXED.
 
-**Second bug of the same family as 2026-08-09** — graph under-reports while the oracle and
-BOTH set engines agree against it. Found by a scope-reduction audit agent while auditing
-`GraphAdmission.strat`; the agent's own attribution control says `strat` does **not** cause
-it. **Reproduced by hand before filing** (the audit's adversarial verify phase never ran, so
-nothing from that run is trusted without independent reproduction).
+> ⚠ **This entry was substantially REWRITTEN on 2026-08-10 (later the same day).** The
+> original filing — preserved verbatim in the "superseded original" block at the end of this
+> entry — was wrong in three ways that each mattered: it described **one** bug where there
+> are **two independent** ones, it classified the severity as **fail-closed** when both
+> causes have a **fail-open** direction, and its **mechanism was false** in a way that would
+> have sent the next reader rewriting correct leaf-routing code. All three corrections are
+> measured, not argued. The original is kept because a reader who acted on it would have
+> done damage, and that is worth being able to see.
+
+**Second and third bugs of the same family as 2026-08-09** — the graph index alone diverges
+while the oracle and BOTH set engines agree against it. Reproduced by hand before filing.
+
+### Severity: FAIL-OPEN, correcting the original filing
+
+Read through a **negated** TTU (`define access: [user] but not viewer from parent`) the
+graph **GRANTS what the oracle and both set engines DENY**:
+
+```
+RC1  check(alice, access, doc:d1):  oracle=False  graph=True   sets=[False, False]
+RC2  check(alice, access, doc:d1):  oracle=False  graph=True   sets=[False, False]
+```
+
+**The general rule, which is the transferable part:** a dropped TTU parent is a false
+NEGATIVE under a positive TTU and a false POSITIVE under a negated one. Probing only the
+positive direction mis-classifies severity by exactly one sign — which is what happened
+here, and what the original entry below recorded.
+
+⚠ **NOT claimed:** the 2026-08-09 sibling (below, `:83`) carries identical "it fails closed,
+so it is not a security fail-open" wording and the rule predicts it inverts too. It was
+**not re-tested** — that bug is fixed (`c042056`) and testing would mean reverting. Open
+question, not a finding. Do not propagate the prediction into that entry as measured fact.
+
+*(Context for triage: this repo ships no service wrapper — the store is a plain callable
+API with no deployment — so this is a library correctness defect, not an exposed system.)*
+
+### The two root causes
+
+Both drop a stored tupleset tuple that `CLAUDE.md`'s pinned rule requires the TTU to walk.
+
+**RC1 — a type reaching the tupleset relation only through the exclusion's subtrahend.**
+`zanzibar_utils_v1.py::_member_types` returns `walk(e.base)` for an `Exclusion`, so on
+`define parent: [folder] but not [doc]` the type `doc` never enters the compiled
+`parent_types`, and `index_v4/processor.py::tupleset_parents` filters the stored parent out
+with `n.type in parent_types`. Fix: union `walk(e.subtract)`. Its docstring encodes the same
+mistake and must change with it.
+
+**RC2 — a stored `T:*` parent when the tupleset relation is DERIVED.** The `n.wildcard == ''`
+clause of the same filter drops it. Needs no exclusion and no object wildcard; the tupleset
+relation only has to be tainted. ⚠ **Not a one-liner** — deleting the clause breaks admission
+parity first (`accept/reject divergence on add ('...','doc','*','parent','doc','d1'):
+graph=False set:py=True`) and a naive widening crashes at `index_v4/core.py:914`
+(`name=='*' and a non-empty wildcard must go together`). The star parent must be
+**represented** (the set engine's `MemberSet.stars` algebra is the analogue), not merely
+admitted. This is a semantics decision, not a filter tweak.
+
+### The mechanism the original entry got wrong
+
+The original said the graph "respects the boolean evaluation of the tupleset relation
+instead of its stored tuples" and that the storage-leaf split "is evidently not being
+applied". **Both clauses are false**, measured on the RC1 fixture at `e136c8c`:
+
+* the split **is** applied — `plan(doc,parent).leaves` carries `parent.0` *and* `parent.1`,
+  both `storage=True`;
+* the write **does** land on a storage leaf — `doc:d2#... -> doc:d1#parent.1`;
+* `derived_stored_parents` **does** scan every storage leaf and reach that edge;
+* the read path **never evaluates** `parent`'s boolean plan — it consults the plan only for
+  its storage-leaf name list (`_ts_leaf_predicates`).
+
+The parent is lost one step later, purely to compile-time metadata. Anyone fixing the bug as
+originally described would have gone rewriting correct code.
+
+### Scope, measured
+
+A bounded exhaustive sweep (443 schemas generated → 346 compiled → 13,042 tuple states →
+**2,302,854 queries** compared 4-way) found **26 distinct minimized divergences from exactly
+these 2 root causes**, direction-symmetric, under every TTU consumer shape tried. Zero
+admission divergences; both set engines matched the oracle on all 2.3M queries; 110
+plain-relation schemas over the full `or`/`and`/`but not` arm cross were clean. So the
+hand-found bug is one cell of a family, not a one-off — and the family is closed at two.
+
+### Why nothing caught it
+
+* **No invariant I1–I14 catches either**, and **I9 structurally cannot**: it re-runs
+  `reconcile`, which reads the same wrong `parent_types` and agrees with itself. The
+  instrument shares its subject's defect. Paranoia was ON throughout and stayed green.
+* **The hypothesis campaign could not reach the shape at any budget.** `schema_asts`
+  hardcodes `ast = {('doc','parent'): Direct((Restriction('doc','...',False),))}` — every
+  TTU in every generated schema reads a plain single-type non-boolean tupleset. This is a
+  grammar gap, not seed luck, and it is what the 2026-08-10 generator work addresses.
+* **The bulk-vs-incremental identity gate is BLIND to the RC2 direction**, with an
+  instrument control proving the blindness is real rather than an unreachable path.
+  One-sided edits to `processor.py::tupleset_parents`, `pytest tests/test_bulk_build.py -q`:
+
+  | edit | result |
+  |---|---|
+  | S1 `n.wildcard == ''` → `in ('', 'any')` (RC2 direction) | **6 passed — GREEN** |
+  | S3 drop the `n.type in parent_types` clause (RC1 direction) | **6 passed — GREEN** |
+  | S2 control — body → `return []` | 2 failed (`snapshot_rows differ`) |
+
+  S2 proves the gate reaches the function and can see a one-sided change. The gap is the
+  **corpus**, not the comparison: no corpus has a `T:*` subject holding a stored tupleset
+  tuple on a derived tupleset relation. The RC2 schema is a ready-made minimal corpus.
+
+### Fix-site note that saves a wasted step
+
+`parent_types` is **not** computed in `processor.py` or `bulk_backfill.py` — it is compiled
+once at `zanzibar_utils_v1.py:1761` from `_member_types` and frozen onto the plan node, which
+both files merely read. So **RC1's single fix repairs the incremental AND bulk paths
+together** (measured: `tests/test_bulk_build.py` 6 passed, byte-identity snapshots survive).
+**RC2 does need the duplicated fix** at `bulk_backfill.py:454` alongside `processor.py:320`.
+
+### Superseded original (2026-08-10, earlier the same day) — kept as a record of the error
 
 ```
 type user
@@ -39,16 +146,23 @@ check(doc:d2, parent,   doc:d1):  oracle=False  graph=False  sets=[False, False]
 > Zanzibar semantics) … Storage leaves are split from rule-routed leaves for exactly this.
 
 So the TTU must still walk the stored `(d2, parent, d1)` tuple regardless of how `parent`
-*evaluates* for `d2`. The oracle and both set engines do. The graph index does not — it
+*evaluates* for `d2`. The oracle and both set engines do. The graph index does not — ~~it
 respects the boolean evaluation of the tupleset relation instead of its stored tuples.
 Fail-closed (under-grant), so not a security fail-open, but it is a divergence on a rule
 this repo states as an explicit invariant, and the storage-leaf split that exists precisely
-to honour it is evidently not being applied when the tupleset relation is DERIVED.
+to honour it is evidently not being applied when the tupleset relation is DERIVED.~~
 
-**Not yet pinned or fixed** — pinning it turns the gate red, which was left as a deliberate
-decision for the next session rather than taken unilaterally. The house order applies when
-it is taken up: pin RED in its own commit first so the fix's green is attributable, then
-fix, then the full phased gate plus a multi-seed fuzz sweep (it is an algorithm change).
+> ⚠ **EVERY CLAUSE STRUCK ABOVE IS FALSE — see the corrected entry at the top of this
+> section.** The graph does NOT evaluate the tupleset's boolean; the storage-leaf split IS
+> applied and the write DOES land on a storage leaf; and it is NOT fail-closed — both root
+> causes have a fail-open direction. Left in place, struck, because this is the reasoning a
+> reader would otherwise have repeated.
+
+~~**Not yet pinned or fixed**~~ — **PINNED 2026-08-10 as `d0010e2`**
+(`tests/test_ttu_tupleset_parent_types.py`, 4 red pins + 7 controls); still **not fixed**,
+deliberately, so the gate is knowingly RED. The house order was followed: pin RED in its own
+commit first so the fix's green is attributable, then fix, then the full phased gate plus a
+multi-seed fuzz sweep (it is an algorithm change).
 
 **Relation to 2026-08-09:** different mechanism (that one was a missing crossing middle in
 the wildcard bridge; this one is TTU tupleset routing on a derived relation), same shape of
