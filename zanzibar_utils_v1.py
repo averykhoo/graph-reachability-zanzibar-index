@@ -1593,8 +1593,23 @@ def _member_types(object_type: str, relation: str, ast: SchemaAST,
                   seen: frozenset) -> frozenset[str]:
     """Entity types that can be *members* of (object_type, relation) -- used to resolve
     which (type, target_rel) keys a TTU's parents can carry. Userset restrictions
-    contribute nothing (a userset node is not a TTU parent); Exclusion members come
-    from its base only."""
+    contribute nothing (a userset node is not a TTU parent).
+
+    **Exclusion contributes BOTH arms, deliberately** (fixed 2026-08-10; every caller
+    passes a ``tupleset_rel``, so this function only ever answers "what types can a TTU
+    parent have"). The subtrahend's restrictions are still *storable* subject types on
+    the public relation -- ``(doc:d2, parent, doc:d1)`` is admitted against
+    ``define parent: [folder] but not [doc]`` -- and ``CLAUDE.md`` pins stored-tuple TTU
+    semantics: *"TTU parents are STORED tupleset tuples, never computed membership"*.
+    A TTU must therefore walk that tuple whatever the exclusion decides about ``d2``'s
+    membership, so which ARM admitted the type is irrelevant here.
+
+    This docstring previously read *"Exclusion members come from its base only"* and the
+    code matched it. That was RC1: it silently narrowed ``parent_types``, dropping every
+    stored parent whose type reached the tupleset relation only through the subtrahend --
+    a false NEGATIVE under a positive TTU and an authorization FAIL-OPEN under a negated
+    one. Pinned by ``tests/test_ttu_tupleset_parent_types.py``; do not narrow this again
+    without turning those pins red first."""
     key = (object_type, relation)
     if key in seen or key not in ast:
         return frozenset()
@@ -1613,7 +1628,10 @@ def _member_types(object_type: str, relation: str, ast: SchemaAST,
         if isinstance(e, (Union, Intersection)):
             return frozenset().union(*(walk(c) for c in e.children)) if e.children else frozenset()
         if isinstance(e, Exclusion):
-            return walk(e.base)
+            # BOTH arms -- see the docstring. A subtrahend restriction is still a storable
+            # subject type, and stored-tuple TTU semantics do not care which arm admitted
+            # it. `walk(e.base)` alone was RC1 (2026-08-10).
+            return walk(e.base) | walk(e.subtract)
         raise TypeError(f"unknown Expr node {e!r}")
 
     return walk(ast[key])

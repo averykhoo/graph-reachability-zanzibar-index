@@ -123,7 +123,9 @@ from zanzibar_utils_v1 import (Direct, TTU, Union, Intersection, Exclusion,
                                wildcard_userset_restriction_shapes)
 from tests.oracle import Oracle, OracleTuple
 from tests.parity import _GraphSide, _SetSide, GHOST_NAME
-from tests.test_hypothesis import schema_asts, _op_pool
+from tests.test_hypothesis import (schema_asts, _op_pool, _schema_ast, _RandomChoices,
+                                   _TUPLESET_KINDS)
+from tests.genswarm import match_rejection
 from tests.test_matrix import _boolean_pool, _demorgan_pool
 from tests.test_wildcard_property import OBJECT_WC, _candidate_raw_tuples
 
@@ -475,8 +477,18 @@ def test_lookup_oracle_gate_demorgans_reverse(load_fga_schema):
 # fixtures with fixed seeds. A drawn op sequence is applied through the gate's graph +
 # both set backends, and the full two-sided surface battery runs after every accepted op.
 # Low example count: the brute-force oracle reference is expensive, so this is a safety
-# net, not a load test. Object wildcards are not used (schema_asts never emits them), so
-# the graph always joins (stratifiable-by-construction => compiles).
+# net, not a load test.
+#
+# ⚠ CORRECTED 2026-08-10. This block used to read "Object wildcards are not used
+# (schema_asts never emits them), so the graph always joins". That stopped being true the
+# moment ``schema_asts`` began DRAWING the TTU tupleset (plan item 1b (c)): the tupleset can
+# now carry ``[doc:*]``, and a star tupleset over a derived TTU target is a decision-15 scope
+# refusal (``UnsupportedByGraphIndex``). This test then died on gate construction. It is an
+# INTERMITTENT failure -- no profile here sets ``derandomize``, so whether a run hits it
+# depends on the draw, and the first full-suite run after (c) landed passed by luck.
+# The refusal is now caught and asserted to be a RECORDED rejection family (genswarm's
+# ``match_rejection``), never swallowed, and ``test_..._graph_join_rate`` below floors how
+# often the gate actually runs -- because a test that skips every draw reports success.
 #
 # Fuzzes the FULL generated schema space (usersets ON, TTU-in-boolean-arm ON). Until
 # 2026-07-17 this gate excluded userset leaves + TTU boolean arms (`allow_usersets=False`,
@@ -501,7 +513,18 @@ def test_lookup_oracle_gate_generated_schemas(ast, data):
     assume(pool)
     schema = unparse_schema_ast(ast)
     ops = data.draw(st.lists(st.sampled_from(pool), min_size=1, max_size=4, unique=True))
-    gate = _Gate(schema, frozenset(), pool)
+    try:
+        gate = _Gate(schema, frozenset(), pool)
+    except UnsupportedByGraphIndex as exc:
+        # A drawn star tupleset can put the graph out of fragment (see the block comment).
+        # Assert the refusal is one of the RECORDED families rather than swallowing it: an
+        # unrecognised rejection is a real finding and must fail here, not vanish into an
+        # `assume`. The join rate is floored by the test below.
+        assert match_rejection(exc) is not None, (
+            f'UNRECORDED graph scope rejection on a generated schema -- this is either a '
+            f'new rejection family that belongs in genswarm.REJECTION_WITNESSES, or a '
+            f'genuine compile bug. Do not silence it.\nschema:\n{schema}\nexc: {exc}')
+        return
     try:
         gate.assert_surfaces(context='generated: initial')
         for raw in ops:
@@ -512,6 +535,68 @@ def test_lookup_oracle_gate_generated_schemas(ast, data):
                 gate.assert_surfaces(context=f'generated: after remove {raw}')
     finally:
         gate.close()
+
+
+def test_lookup_oracle_gate_generated_schemas_graph_join_rate():
+    """★ The non-vacuity floor for the gate above: it must actually RUN, not just skip.
+
+    The gate now returns early when a drawn schema is out of the graph's fragment. That is
+    correct -- but a test that returns early on EVERY draw passes while asserting nothing,
+    which is this repo's named house failure mode. So measure the rate directly, driving
+    ``_schema_ast`` through the seeded ``_RandomChoices`` seam (the SAME body
+    ``schema_asts`` uses, not a copy of it -- a copy would drift and the floor would then
+    be measuring the wrong generator).
+
+    Provenance, measured 2026-08-10 over these exact 240 seeds: **join 195/240 = 81%**.
+    The sweep is fully deterministic (seeded ``random.Random(seed)`` for seed in range(240)),
+    so there is NO draw noise and the floor can sit close to the observed value instead of
+    being padded down into uselessness.
+
+    ⚠ **The floor was first written at 40% and that was wrong** -- worth recording, because
+    the error is instructive rather than embarrassing. 40% is unreachable by any plausible
+    weakening: pinning every draw to the WORST tupleset kind still joins 46%, so the floor
+    could not have failed and would have been a check with no content. Per-kind join rates,
+    120 seeds each: ``plain``/``union``/``intersection``/``multitype``/``negonly-multitype``
+    100%, ``wildcard``/``multitype-wildcard`` 50%, ``negonly-star`` 49%.
+
+    Sabotage (docs/sabotage-procedure.md) -- narrowest plausible weakening is pinning the
+    tupleset to its most-rejected kind, which is what an over-eager (c) change would do.
+    Literal observed output at the 60% floor:
+
+        AssertionError: only 112/240 = 46% of generated schemas join the graph index
+        (floor 60%); test_lookup_oracle_gate_generated_schemas is skipping most draws
+        and asserting nothing
+
+    Do not lower this floor to make a change pass; find out why the fragment shrank.
+    """
+    joined = rejected = 0
+    for seed in range(240):
+        ast = _schema_ast(_RandomChoices(random.Random(seed)))
+        pool = _op_pool(ast)
+        if not pool:
+            continue
+        schema = unparse_schema_ast(ast)
+        try:
+            gate = _Gate(schema, frozenset(), pool)
+        except UnsupportedByGraphIndex as exc:
+            assert match_rejection(exc) is not None, (
+                f'UNRECORDED graph scope rejection: {exc}\nschema:\n{schema}')
+            rejected += 1
+            continue
+        gate.close()
+        joined += 1
+
+    total = joined + rejected
+    assert total > 0, 'vacuous: no generated schema produced a non-empty op pool'
+    pct = 100 * joined // total
+    assert pct >= 60, (
+        f'only {joined}/{total} = {pct}% of generated schemas join the graph index '
+        f'(floor 60%); test_lookup_oracle_gate_generated_schemas is skipping most '
+        f'draws and asserting nothing')
+    assert rejected > 0, (
+        f'all {total} draws joined, so the rejection branch above is never exercised and '
+        f'its match_rejection assertion is dead code -- the tupleset draw should be '
+        f'producing out-of-fragment star tuplesets. Did {_TUPLESET_KINDS} shrink?')
 
 
 # ---------------------------------------------------------------------------
