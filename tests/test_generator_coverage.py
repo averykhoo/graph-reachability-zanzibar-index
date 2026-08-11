@@ -1,8 +1,10 @@
 """The generator-coverage gate: a DERIVED cell alphabet, a swarm generator, and a
 two-regime driven sweep — with the two controls that make them worth believing.
 
-Implements `HANDOFF.md` plan item 1b (a) + (b) from the design in
+Implements plan item 1b (a) + (b) from the design in
 `docs/design/generator-coverage/README.md`. The library is `tests/genswarm.py`.
+(That item was retired from `HANDOFF.md` on 2026-08-11 once it landed; it now lives in
+`docs/history/handoff-status-2026-08.md` §1b.)
 
 WHY THIS EXISTS. `tests/test_hypothesis.py::schema_asts` pinned the TTU tupleset to
 `parent: [doc]`, so the whole "TTU over a structured tupleset" space was unreachable BY

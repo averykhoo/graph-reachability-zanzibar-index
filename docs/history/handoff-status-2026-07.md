@@ -179,7 +179,7 @@ tree rather than about a moment:
     arm is golden-pinned. **If you are picking up Leg 2, read the §D.6 row in the plan
     first** — the ledger will break by construction and that is the signal.
   * **The sabotage habit is now a STANDARD PROCEDURE:**
-    [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md), linked from `CLAUDE.md`
+    [`docs/sabotage-procedure.md`](../../docs/sabotage-procedure.md), linked from `CLAUDE.md`
     and `formal/HANDOFF.md` house rule 7. It carries the protocol (break the narrowest
     *plausible* weakening, not an obvious catastrophe), the requirement to control your
     *instrument* as well as your subject, and the durability ranking. Two of this
@@ -319,7 +319,7 @@ tree rather than about a moment:
 - **2026-07-18 — OPTIONAL assurance-widening arc OPENED; #1 Leaf/Direct-arm legs 1–3 pushed
   (`98773d3`/`0dd8d7b`/`8a9bee1`); gate GREEN; no Python change.** All four `FINAL_REVIEW.md
   §4` optional widenings scoped (recon + attack-first); durable design/resume state in
-  [`formal/history/optional-widening-2026-07.md`](formal/history/optional-widening-2026-07.md).
+  [`formal/history/optional-widening-2026-07.md`](../../formal/history/optional-widening-2026-07.md).
   Direct-arm read-half + write-half admission + the diffing retraction crux are proven; the
   base-equation wall is characterized (`NoStoreSubjectR`-gated, leg 4 = 3 lemmas). Each leg
   Lean-only additive (`verify.sh lean` 415/415). See the Active-work board item + the design
@@ -391,9 +391,9 @@ tree rather than about a moment:
   change; no backend/Lean change.
 - **Perf optimization arc is CLOSED at round 5** — the measured worklist is
   exhausted (the last candidates N13/N14 were assessed and declined on a fresh
-  profile). Record: [`docs/history/perf-round5-2026-07.md`](docs/history/perf-round5-2026-07.md).
+  profile). Record: [`docs/history/perf-round5-2026-07.md`](../../docs/history/perf-round5-2026-07.md).
   Standing perf guardrails (fence, dead-ends, hygiene) live in
-  [`docs/perf-next-round.md`](docs/perf-next-round.md).
+  [`docs/perf-next-round.md`](../../docs/perf-next-round.md).
 - **Clean on `master`.** Last change: the formal `rootB` fragment widening above
   (commits `397f975` / `c3d3113` / `265995d`).
 - **2026-07-26 — ZERO-TRUST REVIEW RUN (algorithm · code · security · formal).
@@ -1061,7 +1061,7 @@ dismissals whose stated justification no longer holds:
          the N² accumulation needs a **store-level quota**, which was not added.
       2. **≥3-strata Lean coverage — SCOPED 2026-07-27, and the recommendation is
          DON'T.** Full plan:
-         [`formal/history/strata-widening-plan-2026-07-27.md`](formal/history/strata-widening-plan-2026-07-27.md).
+         [`formal/history/strata-widening-plan-2026-07-27.md`](../../formal/history/strata-widening-plan-2026-07-27.md).
          Measured, not argued: **the Lean model FAILS CLOSED at ≥3 strata** (zcli on
          `three_strata_chain`: `mode=graph` rc 3 "final state not drained"; 2-stratum
          control rc 0) — which **corrects the predecessor doc's claim that it would not
@@ -1098,7 +1098,7 @@ dismissals whose stated justification no longer holds:
       for O(delta) cold start.
 - [ ] **IN PROGRESS 2026-07-18 (Claude): OPTIONAL assurance-widening arc (`FINAL_REVIEW.md §4`).**
       Four targets scoped (recon + attack-first probes); durable design + resume state for
-      ALL of them in [`formal/history/optional-widening-2026-07.md`](formal/history/optional-widening-2026-07.md).
+      ALL of them in [`formal/history/optional-widening-2026-07.md`](../../formal/history/optional-widening-2026-07.md).
       **#1 Leaf widening (Direct arm)** legs 1–3 landed + pushed (`98773d3` read-half
       `evalE_computedOrDirect`; `0dd8d7b` write-half admission + diffing retraction crux
       `reconcileKeyD_retracts_excluded`; `8a9bee1` base-equation wall characterized —
