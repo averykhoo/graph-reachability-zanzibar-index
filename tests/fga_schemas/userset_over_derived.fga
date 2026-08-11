@@ -1,0 +1,21 @@
+model
+  schema 1.1
+
+type user
+
+type team
+  relations
+    define member: [user]
+    define suspended: [user]
+    define active_member: member but not suspended
+
+type folder
+  relations
+    define editor: [team#active_member]
+
+type doc
+  relations
+    define parent: [folder]
+    define editor: [user, team#active_member]
+    define inherited: editor from parent
+    define locked: [user] but not editor from parent

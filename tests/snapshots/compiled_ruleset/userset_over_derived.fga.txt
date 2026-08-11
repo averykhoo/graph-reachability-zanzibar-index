@@ -1,0 +1,13 @@
+# rules_and_filters (in compile order)
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='member', object_type='team', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='suspended', object_type='team', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='folder', subject_name=None, relation='parent', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True))
+RewriteFilter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='editor', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True), rewrite_relation='editor.0')
+RewriteFilter(if_pattern=RelationalTriplePattern(subject_predicate='active_member', subject_type='team', subject_name=None, relation='editor', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True), rewrite_relation='editor.1')
+RewriteFilter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='locked', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True), rewrite_relation='locked.0')
+RewriteFilter(if_pattern=RelationalTriplePattern(subject_predicate='active_member', subject_type='team', subject_name=None, relation='editor', object_type='folder', object_name=None, match_wildcards=False, object_match_wildcards=True), rewrite_relation='editor.0')
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='member', object_type='team', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='active_member.0', object_type='team', object_name=None, match_wildcards=True, object_match_wildcards=None))
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='suspended', object_type='team', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='active_member.1', object_type='team', object_name=None, match_wildcards=True, object_match_wildcards=None))
+# schema_info
+subject_wildcard_shapes=[]
+object_wildcard_shapes=[]

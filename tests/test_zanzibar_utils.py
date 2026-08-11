@@ -11,6 +11,10 @@ from zanzibar_utils_v1 import (
     Rule,
     RuleSet,
     parse_openfga_schema,
+    parse_schema_ast,
+    Union,
+    Intersection,
+    Exclusion,
     UnsupportedByGraphIndex,
 )
 
@@ -166,12 +170,46 @@ def test_parse_openfga_schema():
 
 
 
-# The demorgans fixtures use boolean operators (`and` / `but not`); the graph index
-# refuses them loudly (spec §2.3). Every other fixture is pure-union and must compile.
-BOOLEAN_FGA_FILES = {'demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga',
-                     'boolean_wildcards.fga'}
-FGA_FILES = [f.name for f in (Path(__file__).parent / "fga_schemas").glob("*.fga")]
+# Some fixtures use boolean operators (`and` / `but not`) and compile into derived
+# predicates; the rest are pure-union. The two are asserted DIFFERENTLY below, so the
+# split has to be right.
+#
+# ★ THIS SET IS DERIVED, NOT HAND-WRITTEN, AND THAT IS THE POINT. It used to be a
+# literal `{'demorgans_law_1.fga', ...}`. `FGA_FILES` is a glob, so adding a boolean
+# fixture without remembering to extend that literal routed it into
+# `test_parse_fga_schemas`, whose only assertion is `len(rules_and_filters) > 0` --
+# which a boolean schema satisfies. The new fixture would then be "covered" while
+# every boolean-specific assertion (compiled plans, derived families, the
+# `enable_boolean=False` refusal) silently never ran on it. That is the house failure
+# mode (`docs/sabotage-procedure.md`): a hand-maintained list beside a glob.
+# Sabotage evidence is in `test_boolean_fga_files_is_derived_not_hardcoded` below.
+def _is_boolean_fixture(path: Path) -> bool:
+    def walk(e):
+        yield e
+        if isinstance(e, (Union, Intersection)):
+            for c in e.children:
+                yield from walk(c)
+        elif isinstance(e, Exclusion):
+            yield from walk(e.base)
+            yield from walk(e.subtract)
+
+    ast = parse_schema_ast(path.read_text(encoding='utf-8'))
+    return any(isinstance(n, (Intersection, Exclusion))
+               for expr in ast.values() for n in walk(expr))
+
+
+_FGA_DIR = Path(__file__).parent / "fga_schemas"
+FGA_FILES = [f.name for f in _FGA_DIR.glob("*.fga")]
+BOOLEAN_FGA_FILES = {f for f in FGA_FILES if _is_boolean_fixture(_FGA_DIR / f)}
 UNION_FGA_FILES = [f for f in FGA_FILES if f not in BOOLEAN_FGA_FILES]
+
+# Anti-vacuity: both parametrize lists must be non-empty, and the boolean set must
+# still contain the fixtures it was seeded from. A derivation that silently returns
+# `set()` would make every boolean assertion below vanish into `0 collected`.
+assert UNION_FGA_FILES, "no pure-union fixtures found -- the union leg is vacuous"
+assert {'demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga',
+        'boolean_wildcards.fga'} <= BOOLEAN_FGA_FILES, (
+    f"the derivation lost a known-boolean fixture; got {sorted(BOOLEAN_FGA_FILES)}")
 
 @pytest.mark.parametrize("fga_file", UNION_FGA_FILES)
 def test_parse_fga_schemas(load_fga_schema, fga_file):
@@ -191,3 +229,51 @@ def test_parse_boolean_fga_schemas_compile_for_graph(load_fga_schema, fga_file):
     assert ruleset.schema_info.derived_families
     with pytest.raises(UnsupportedByGraphIndex):
         parse_openfga_schema(schema, enable_boolean=False)
+
+
+def test_boolean_fga_files_is_derived_not_hardcoded():
+    """The routing above must come from the SCHEMA, not from a maintained literal.
+
+    Sabotage (`docs/sabotage-procedure.md` -- break the narrowest plausible weakening,
+    not an obvious catastrophe). The plausible failure is not "the list is deleted"; it
+    is "someone adds a boolean fixture and forgets the list". Simulated by restoring the
+    exact pre-2026-08-11 literal. Literal observed output::
+
+        BOOLEAN_FGA_FILES = {'demorgans_law_1.fga', 'demorgans_law_2.fga',
+                             'demorgans_reverse.fga', 'boolean_wildcards.fga'}
+
+        E         'owc_star_ttu.fga'
+        E         'userset_over_derived.fga'
+        FAILED tests/test_zanzibar_utils.py::test_boolean_fga_files_is_derived_not_hardcoded
+        1 failed, 19 passed
+
+    ★ Note WHICH files that names. ``owc_star_ttu.fga`` is not new -- it carries
+    ``define restricted: editor but not blocked`` and has been in the tree since the
+    2026-08-09 I14 work, routed by that literal into ``test_parse_fga_schemas``, whose
+    only assertion is ``len(rules_and_filters) > 0``. A boolean schema passes that. So
+    for the whole of its life the fixture's boolean-specific assertions -- compiled
+    plans, derived families, the ``enable_boolean=False`` refusal -- never ran on it,
+    and the suite was green throughout. The hand-maintained list beside a glob had
+    already failed silently once before anyone added a fixture to it.
+
+    This test pins the property that makes that impossible: EVERY fixture containing a
+    boolean operator is in the boolean set, checked against an independent scan of the
+    raw source text rather than against the AST walk the derivation itself uses.
+    """
+    # Independent instrument: crude textual scan, NOT the AST walk `_is_boolean_fixture`
+    # uses. A bug in the walk cannot hide from this, because they share no derivation.
+    textual = set()
+    for name in FGA_FILES:
+        body = (_FGA_DIR / name).read_text(encoding='utf-8')
+        # strip comments, then look for the operator tokens in relation bodies
+        src = '\n'.join(l.split('#')[0] for l in body.splitlines())
+        if ' but not ' in src or ' and ' in src:
+            textual.add(name)
+
+    assert textual == BOOLEAN_FGA_FILES, (
+        f"the derived boolean set disagrees with an independent textual scan.\n"
+        f"  only in textual scan : {sorted(textual - BOOLEAN_FGA_FILES)}\n"
+        f"  only in derived set  : {sorted(BOOLEAN_FGA_FILES - textual)}\n"
+        f"A fixture in the first list would be asserted as if it were pure-union.")
+    assert not (BOOLEAN_FGA_FILES & set(UNION_FGA_FILES)), \
+        "a fixture is in BOTH legs -- the split is not a partition"
