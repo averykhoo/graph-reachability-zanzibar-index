@@ -599,11 +599,16 @@ this file. **The rule this file keeps re-learning: archive the STATUS, keep the 
       algorithm change (full gate + multi-seed fuzz + a Lean/CORRESPONDENCE look), so
       it was deliberately not smuggled into a measurement pass.
       Numbers + the instrument trap: `docs/spec-deviations.md` 2026-07-29b.
-- [ ] **Five `.fga` fixtures are fully subsumed at the pairwise level — a decision is
-      owed, and it is NOT obviously "delete".** Measured 2026-08-11 against
-      `genswarm`'s derived alphabet: `confluence`, `custom_roles`, `gdrive`, `github`
-      and `master_store` contribute **0 unique features AND 0 new feature pairs** —
-      every pair they cover, some other fixture already covers.
+- [ ] **Five `.fga` fixtures are fully subsumed at the pairwise level — TRACKED IN CODE,
+      no action owed, no rush.** Measured 2026-08-11 against `genswarm`'s derived
+      alphabet: `confluence`, `custom_roles`, `gdrive`, `github` and `master_store`
+      contribute **0 unique features AND 0 new feature pairs**. They are listed in
+      `tests/test_schema_shapes.py::KNOWN_SUBSUMED`, which is a **retirement register,
+      not a failure list** — being on it carries no obligation to delete, and
+      `test_subsumption_register_is_current` keeps it honest in both directions (a
+      fixture newly becoming subsumed is flagged; one that stops being subsumed must be
+      de-listed). This entry exists only to record the reasoning; the register is the
+      live artifact.
       * **Why not just delete them.** Pairwise coverage is not the only axis. These are
         the LARGE, realistic schemas (`github.fga` alone has far more relations than any
         synthetic fixture), so they may exercise 3-way+ interactions, compile-order

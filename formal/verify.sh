@@ -200,12 +200,22 @@ MIN_CONF_ALL=494
 # Note the Postgres leg (`tests/test_postgres_ha.py`) is dropped at COLLECTION
 # when no ZANZIBAR_TEST_DSN is set, not skipped at run time -- otherwise its skips
 # would have to be tolerated here, and a tolerated skip is how coverage leaks.
-# Re-measured 2026-08-11 with `pytest tests/ -q --collect-only`: 869 (was 857, 846, 823, and
-# 763 before that). The schema-shape corpus (tests/test_schema_shapes.py) accounts for
-# the last two steps: three fixtures covering shapes the .fga corpus could not express,
-# their answer grids, the corpus-wide feature-coverage floor, and the derived
+# Re-measured 2026-08-11 with `pytest tests/ -q --collect-only`: 867 (was 869, 857, 846,
+# 823, and 763 before that). The schema-shape corpus (tests/test_schema_shapes.py)
+# accounts for the recent steps: four fixtures covering shapes the .fga corpus could not
+# express, their answer grids, the corpus feature+pair floors, and the derived
 # boolean-routing pin in test_zanzibar_utils.py.
-MIN_TESTS_ALL=869
+#
+# ⚠ 869 -> 867 is a LOWERING, which this file says must be deliberate and reviewed --
+# so here is the review. `test_fixture_earns_its_place` was a per-fixture parametrized
+# assertion (4 node ids) that per-fixture UNIQUENESS must hold. It was replaced by two
+# corpus-level tests (2 node ids): `test_subsumption_register_is_current` and
+# `test_corpus_pair_coverage_does_not_regress`. Net -2 collected, and the coverage is
+# STRONGER, not weaker: uniqueness reddened when a new fixture legitimately re-covered
+# an old fixture's features (punishing corpus growth) and it masks itself under
+# leave-one-out, whereas the pair floor protects all 839 co-occurrences at once. This
+# is the only lowering in this file's history; treat a future one with more suspicion.
+MIN_TESTS_ALL=867
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

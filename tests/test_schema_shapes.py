@@ -17,8 +17,10 @@ differential gate (``test_bulk_build.py``), and the lookup oracle. A feature abs
 ``tests/fga_schemas/`` is absent from all three, however well ``genswarm`` fuzzes it.
 
 **What each contributes, measured against the derived alphabet** (see ``REQUIRED``
-below; ``test_fixture_earns_its_place`` re-checks on every run that each still brings
-something no other fixture does, rather than trusting this comment):
+below, which ``test_fixture_carries_its_features`` re-checks on every run rather than
+trusting this comment). Note the claim is "this fixture COVERS these", not "only this
+fixture covers these" -- see ``test_subsumption_register_is_current`` for why per-fixture
+uniqueness is the wrong bar:
 
   * ``userset_over_derived``   -- a userset restriction whose TARGET relation is derived
     (``[team#active_member]`` where ``active_member`` is an Exclusion). 4 features.
@@ -106,10 +108,20 @@ guard here was broken and watched go red before it was believed:
     why ``driven`` asserts each ``add_tuple`` rather than calling it for effect: a pool
     whose writes are silently refused drives nothing and would otherwise pass.
 
-  * *the "earns its place" property* -- see ``test_fixture_earns_its_place``, which
-    reddened for real when the fourth fixture landed and was re-derived rather than
-    deleted. The eight features of the first three were measured at ZERO occurrences
-    over the 11 pre-existing ``.fga`` files before they landed.
+  * *the bar itself* -- the two corpus floors (`test_corpus_pair_coverage_does_not_regress`
+    and `test_fga_corpus_feature_coverage_does_not_regress`) are what actually protect
+    coverage, and both were sabotaged by deleting a fixture: the feature floor named the
+    exact three lost features, and the pair floor drops below 839.
+
+    ⚠ **An earlier version of this file asserted per-fixture UNIQUENESS instead, and it
+    was wrong twice over.** It reddened when ``wildcard_userset_cross`` legitimately
+    re-covered features two earlier fixtures had introduced -- punishing exactly the
+    corpus growth this file exists to encourage -- and leave-one-out uniqueness masks
+    itself, since two fixtures jointly holding the only copy of a feature each see the
+    other in their "others" set and BOTH score zero. Replaced with corpus-level
+    bar-raising floors plus a retirement register. The eight features of the first three
+    fixtures were measured at ZERO occurrences over the 11 pre-existing ``.fga`` files
+    before they landed; that was true, it was just never the right thing to ASSERT.
 """
 from itertools import combinations
 from pathlib import Path
@@ -238,59 +250,108 @@ def test_fixture_carries_its_features(case):
 
 
 def _pairs(fs):
-    """Feature co-occurrences, the unit genswarm's cell space is built from."""
+    """Feature co-occurrences -- the unit genswarm's cell space is built from."""
     return {(a, b) for a, b in combinations(sorted(fs), 2)}
 
 
-def test_fixture_earns_its_place(case):
-    """Every fixture here must contribute something no OTHER `.fga` file does --
-    either a feature nothing else carries, or a feature PAIR nothing else co-locates.
+def _corpus():
+    """{fixture stem -> features} for every .fga in the corpus."""
+    return {p.stem: genswarm.features(p.read_text(encoding='utf-8'))
+            for p in sorted(_FGA_DIR.glob('*.fga'))}
 
-    ★ This started life as a stricter test asserting feature-uniqueness alone, and
-    adding ``wildcard_userset_cross.fga`` correctly reddened it::
 
-        E  AssertionError: wildcard_userset_cross.fga now also carries
-           ['ttu.ts:multitype'], so heterogeneous_tupleset.fga is no longer the
-           corpus's only source of it.
-        E  AssertionError: wildcard_userset_cross.fga now also carries
-           ['family:userset-storage', 'leaf:derived-userset', 'plan:PDerivedUserset',
-           'via:userset'], so userset_over_derived.fga is no longer the corpus's only
-           source of it.
+#: Fixtures whose features AND pairs are all covered by other fixtures. Being listed
+#: here is NOT a failure and carries no obligation to delete -- these are the large,
+#: realistic schemas, and pairwise scoring cannot see a unique TRIPLE, compile-order
+#: effect, or sheer scale. It is a RETIREMENT REGISTER: when a fixture lands here it
+#: has become a candidate to retire someday, and the list makes that visible instead of
+#: leaving it to be rediscovered by an audit nobody runs.
+#:
+#: Measured 2026-08-11, and robust two ways: leave-one-out says each is subsumed, and
+#: dropping ALL FIVE AT ONCE also loses 0 features and 0 pairs -- so this is not the
+#: leave-one-out masking artifact where two fixtures jointly hold something unique and
+#: hide it from each other. (Checked: 0 features and 0 pairs are held by exactly two
+#: fixtures both on this list.)
+KNOWN_SUBSUMED = {'confluence', 'custom_roles', 'gdrive', 'github', 'master_store'}
 
-    That was the test working, not failing: its own message says *re-derive the
-    justification or retire the claim*. Re-derived here rather than deleted, because
-    feature-uniqueness was only ever a PROXY for "earns its place", and it is the
-    weaker one. genswarm's cell space is PAIRWISE, and this project's position is that
-    every bug it has found is an interaction bug -- so co-occurrence is the thing
-    worth protecting. Both affected fixtures still contribute 4 new pairs each.
 
-    Measured 2026-08-11 (unique features / new pairs vs all other fixtures):
-    ``userset_over_derived`` 0/4, ``heterogeneous_tupleset`` 0/4,
-    ``tupleset_shapes`` 3/115, ``wildcard_userset_cross`` 0/61.
+def test_subsumption_register_is_current():
+    """Track which fixtures have become fully covered by others. Informational, but
+    asserted so it cannot rot -- a register nothing checks is a register nobody trusts.
 
-    The floor is 1, not those numbers, deliberately. Flooring at the measured values
-    would redden on every future fixture that overlaps one of these -- punishing exactly
-    the corpus growth this file exists to encourage. A floor of 1 still catches the real
-    failure: a fixture that has become pure dead weight.
+    ★ THIS IS DELIBERATELY NOT "every fixture must be unique". An earlier version of
+    this file asserted per-fixture uniqueness and it was wrong twice over:
+
+      * it reddened when ``wildcard_userset_cross`` legitimately re-covered features
+        that two earlier fixtures had introduced -- punishing the corpus growth this
+        file exists to encourage; and
+      * leave-one-out uniqueness masks itself: two fixtures that jointly hold the only
+        copy of a feature each see the other in their "others" set, so BOTH score zero
+        and both look like dead weight.
+
+    The bar that matters is corpus-level and is enforced by the two floors below --
+    coverage must not go DOWN. Whether any individual fixture is redundant is a
+    retirement question, and retirement is a judgement call with no urgency.
     """
-    others = [p for p in sorted(_FGA_DIR.glob('*.fga')) if p.stem != case]
-    assert others, 'no other fixtures to compare against -- the check is vacuous'
+    per = _corpus()
+    all_pairs = {k: _pairs(v) for k, v in per.items()}
 
-    mine = genswarm.features(_load(case))
-    other_features = set()
-    other_pairs = set()
-    for p in others:
-        f = genswarm.features(p.read_text(encoding='utf-8'))
-        other_features |= f
-        other_pairs |= _pairs(f)
+    subsumed = set()
+    for name in per:
+        other_f = set().union(*(v for k, v in per.items() if k != name))
+        other_p = set().union(*(v for k, v in all_pairs.items() if k != name))
+        if not (per[name] - other_f) and not (all_pairs[name] - other_p):
+            subsumed.add(name)
 
-    new_features = mine - other_features
-    new_pairs = _pairs(mine) - other_pairs
-    assert new_features or new_pairs, (
-        f'{case}.fga contributes no feature and no feature PAIR that another fixture '
-        f'does not already cover -- it is dead weight in every fixture-driven gate '
-        f'(snapshot, bulk, lookup) and should be removed or rebuilt around a shape '
-        f'the corpus actually lacks.')
+    newly = subsumed - KNOWN_SUBSUMED
+    assert not newly, (
+        f'{sorted(newly)} became fully covered by other fixtures. Nothing is broken '
+        f'and nothing must be deleted -- add them to KNOWN_SUBSUMED. They are now '
+        f'retirement candidates, and if you DO retire one the corpus floors below will '
+        f'tell you immediately whether it was really redundant.')
+
+    resurrected = KNOWN_SUBSUMED - subsumed
+    assert not resurrected, (
+        f'{sorted(resurrected)} is listed as subsumed but now contributes something no '
+        f'other fixture does -- probably because a fixture that covered it was removed '
+        f'or narrowed. Drop it from KNOWN_SUBSUMED so the register keeps meaning what '
+        f'it says.')
+
+    # Sabotage, literal observed output -- BOTH arms, because a two-sided assertion
+    # where only one side has ever fired is half-tested:
+    #   copy confluence.fga to zz_dupe.fga ->
+    #     E AssertionError: ['zz_dupe'] became fully covered by other fixtures. ...
+    #   add 'wildcards' to KNOWN_SUBSUMED ->
+    #     E AssertionError: ['wildcards'] is listed as subsumed but now contributes
+    #       something no other fixture does ...
+
+
+# --------------------------------------------------------------------------- #
+# The bar. Both floors use >=, so ADDING coverage is always free and only LOSING
+# it is loud -- the same discipline as verify.sh's counts.
+# --------------------------------------------------------------------------- #
+
+#: Co-occurring feature pairs across the corpus, measured 2026-08-11. This is the
+#: INTERACTION bar: pairs that appear together in at least one fixture. Raising it is
+#: free; a drop means a fixture was removed or narrowed.
+#: History: 778 before wildcard_userset_cross.fga, 839 after.
+MIN_COOCCURRING_PAIRS = 839
+
+
+def test_corpus_pair_coverage_does_not_regress():
+    """Bar-raising floor on INTERACTIONS, not features.
+
+    Feature coverage alone is the weaker measure -- this project's position is that
+    every bug it has found is an interaction bug, and genswarm's cell space is pairwise
+    for that reason. A corpus can reach every feature and still never cross any two.
+    """
+    per = _corpus()
+    assert per, 'no .fga fixtures found -- this floor would pass vacuously'
+    co = set().union(*(_pairs(v) for v in per.values()))
+    assert len(co) >= MIN_COOCCURRING_PAIRS, (
+        f'corpus co-occurring pairs fell to {len(co)}, below the {MIN_COOCCURRING_PAIRS} '
+        f'floor measured 2026-08-11. A fixture was removed or narrowed. Never lower this '
+        f'to go green -- re-derive why the interaction is no longer worth covering.')
 
 
 # Driving a ParityEngine is expensive -- paranoia runs the invariant checker and the
