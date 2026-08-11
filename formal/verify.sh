@@ -200,10 +200,11 @@ MIN_CONF_ALL=494
 # Note the Postgres leg (`tests/test_postgres_ha.py`) is dropped at COLLECTION
 # when no ZANZIBAR_TEST_DSN is set, not skipped at run time -- otherwise its skips
 # would have to be tolerated here, and a tolerated skip is how coverage leaks.
-# Re-measured 2026-08-11 with `pytest tests/ -q --collect-only`: 823 (was 763; the
-# RC2 fix added the compile-time-invariant pin, its over-rejection control, and the
-# rc2_star_tupleset bulk corpus).
-MIN_TESTS_ALL=823
+# Re-measured 2026-08-11 with `pytest tests/ -q --collect-only`: 846 (was 823, and
+# 763 before that). +23 from the real-world shape corpus: test_real_world_shapes.py
+# (18), the derived-boolean-routing pin in test_zanzibar_utils.py (1), and the two new
+# .fga fixtures flowing through the snapshot + parse parametrizations (4).
+MIN_TESTS_ALL=846
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

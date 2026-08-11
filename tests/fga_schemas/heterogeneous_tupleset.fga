@@ -1,0 +1,26 @@
+model
+  schema 1.1
+
+type user
+
+type service-account
+
+type custom_group
+  relations
+    define banned: [user]
+    define member: [user, service-account] but not banned
+
+type basic_group
+  relations
+    define member: [user, user:*]
+
+type group
+  relations
+    define subgroup: [basic_group, custom_group]
+    define member: [user] or member from subgroup
+
+type doc
+  relations
+    define parent: [group, custom_group]
+    define viewer: member from parent
+    define quarantined: [user] but not member from parent
