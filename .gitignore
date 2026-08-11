@@ -318,3 +318,6 @@ database.db
 
 # generated repo-snapshot prompt (build_system_prompt.py output)
 system-prompt.txt
+
+# temp working dir
+.scratch/
