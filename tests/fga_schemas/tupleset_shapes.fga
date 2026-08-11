@@ -1,0 +1,21 @@
+model
+  schema 1.1
+
+type user
+
+type folder
+  relations
+    define viewer: [user]
+
+type doc
+  relations
+    define viewer: [user]
+
+    define vetted: [folder]
+    define approved_parent: [folder] and vetted
+    define via_intersection: viewer from approved_parent
+
+    define mixed_parent: [folder] but not [doc]
+    define via_negonly: viewer from mixed_parent
+
+    define via_undeclared: viewer from ghost_parent

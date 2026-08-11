@@ -30,7 +30,7 @@ ALL_FIXTURES = sorted(p.name for p in FGA_DIR.glob("*.fga"))
 # reported by pytest as `1 skipped`, rc 0 -- so renaming or moving `fga_schemas/`
 # would silently retire this entire byte-identity gate while the suite stayed
 # green. Raise this number when fixtures are added; never lower it to fix a red.
-MIN_FIXTURES = 13
+MIN_FIXTURES = 14
 assert len(ALL_FIXTURES) >= MIN_FIXTURES, (
     f"only {len(ALL_FIXTURES)} .fga fixtures found in {FGA_DIR} (expected at "
     f"least {MIN_FIXTURES}) -- the compiled-RuleSet snapshot gate would run on "

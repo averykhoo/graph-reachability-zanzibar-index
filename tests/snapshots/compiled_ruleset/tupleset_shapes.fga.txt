@@ -1,0 +1,12 @@
+# rules_and_filters (in compile order)
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='viewer', object_type='folder', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='user', subject_name=None, relation='viewer', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Filter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='folder', subject_name=None, relation='vetted', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True))
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='ghost_parent', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate='viewer', subject_type=None, subject_name=None, relation='via_undeclared', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None))
+RewriteFilter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='folder', subject_name=None, relation='approved_parent', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True), rewrite_relation='approved_parent.0')
+Rule(if_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='vetted', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None), then_pattern=RelationalTriplePattern(subject_predicate=None, subject_type=None, subject_name=None, relation='approved_parent.1', object_type='doc', object_name=None, match_wildcards=True, object_match_wildcards=None))
+RewriteFilter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='folder', subject_name=None, relation='mixed_parent', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True), rewrite_relation='mixed_parent.0')
+RewriteFilter(if_pattern=RelationalTriplePattern(subject_predicate=Ellipsis, subject_type='doc', subject_name=None, relation='mixed_parent', object_type='doc', object_name=None, match_wildcards=False, object_match_wildcards=True), rewrite_relation='mixed_parent.1')
+# schema_info
+subject_wildcard_shapes=[]
+object_wildcard_shapes=[]

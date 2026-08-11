@@ -621,21 +621,46 @@ this file. **The rule this file keeps re-learning: archive the STATUS, keep the 
         the *reason* to expect passing is not the reason recorded here.
       * **Nothing was vendored, and copying would have been near-worthless anyway:**
         `demorgans_law_2.fga` is structurally the same schema as the interesting
-        internal one, plus an `and` and an extra TTU hop. Instead two shapes measured
-        at **zero occurrences across all 11 pre-existing fixtures** were adapted into
-        new fixtures — `tests/fga_schemas/userset_over_derived.fga` and
-        `heterogeneous_tupleset.fga`, driven by `tests/test_real_world_shapes.py`.
-        ★ The sharper of the two: **every TTU tupleset in the old corpus was
-        single-type**, so `parent_types` was never exercised with breadth > 1 — and
-        `parent_types` breadth is exactly what RC1 got wrong.
+        internal one, plus an `and` and an extra TTU hop. **Three** shapes measured at
+        **zero occurrences across all 11 pre-existing fixtures** were adapted instead —
+        `userset_over_derived.fga`, `heterogeneous_tupleset.fga` and
+        `tupleset_shapes.fga`, driven by `tests/test_schema_shapes.py`.
+        ★ Two findings worth carrying:
+        **(i)** every TTU tupleset in the old corpus was **single-type**, so
+        `parent_types` was never exercised with breadth > 1 — and `parent_types`
+        breadth is exactly what RC1 got wrong; a single-type corpus cannot distinguish
+        "computes the set correctly" from "returns the only candidate".
+        **(ii)** scoring every fixture against `genswarm`'s DERIVED alphabet showed
+        **every reachable uncovered feature sat on the TTU-tupleset axis** — the axis
+        RC1/RC2 lived on. `tupleset_shapes.fga` closes it and is the only one of the
+        three that **catches RC1**: under the sabotage it does not answer wrong, it
+        refuses to COMPILE (the 2026-08-11 invariant). It is the tree's first RC1
+        regression pin in `.fga` form.
+        Corpus coverage went **43 → 46 of 51 features / 903 → 1035 of 1275 pairwise
+        cells**, floored by `test_fga_corpus_feature_coverage_does_not_regress` with the
+        residual gaps pinned as an EXACT set (all five are measurement artifacts or
+        carry executable rejection witnesses).
+      * **8 of the 14 fixtures contribute no unique feature at all** —
+        `boolean_wildcards`, `confluence`, `custom_roles`, `demorgans_law_2`,
+        `demorgans_reverse`, `gdrive`, `github`, `master_store`. Not a reason to delete
+        them (they are cheap realism anchors and feed the snapshot/bulk gates), but it
+        is where the corpus was spending coverage without buying any.
       * **Licensing sidestepped, not solved.** Adapting rather than copying means no
         internal schema text entered the tree and no per-schema manifest was needed.
         If anyone later wants the literal schemas, that decision is still open and is
         the user's. `.scratch/` is now gitignored (`0e6ef33`) — it was untracked but
         NOT ignored, in a repo that mirrors.
-      * **Still open from the original framing:** the "plausibility anchor for the
-        generated-schema campaign" use. `tests/genswarm.py` remains tied to nothing
-        real; the two new fixtures are a start, not that anchor.
+      * **The "plausibility anchor" use is RETIRED, not deferred** (user, 2026-08-11).
+        The original filing wanted real schemas as a realism weighting for the
+        generated-schema campaign. **That only pays off if you are prioritising WHICH
+        divergences to fix first — and this project's goal is that everything is
+        correct**, so a realism prior buys nothing and would actively mislead: every
+        bug this repo has found lived in a cross that real schemas rarely reach.
+        Feature coverage against the derived alphabet is the right instrument, and it
+        is the one now floored. Also, practically, there is no downloadable corpus of
+        real models — production authorization schemas are mostly not public, and
+        arguably should not be. Do not re-open this on "we should ground the fuzzer in
+        reality"; ground it in the compiler's own feature space instead.
 
       *Original filing kept below for the reasoning it recorded.*
       **What it is for, and it is NOT bug-finding.** Real-world schemas are union/TTU
