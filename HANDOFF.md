@@ -599,6 +599,28 @@ this file. **The rule this file keeps re-learning: archive the STATUS, keep the 
       algorithm change (full gate + multi-seed fuzz + a Lean/CORRESPONDENCE look), so
       it was deliberately not smuggled into a measurement pass.
       Numbers + the instrument trap: `docs/spec-deviations.md` 2026-07-29b.
+- [ ] **Five `.fga` fixtures are fully subsumed at the pairwise level — a decision is
+      owed, and it is NOT obviously "delete".** Measured 2026-08-11 against
+      `genswarm`'s derived alphabet: `confluence`, `custom_roles`, `gdrive`, `github`
+      and `master_store` contribute **0 unique features AND 0 new feature pairs** —
+      every pair they cover, some other fixture already covers.
+      * **Why not just delete them.** Pairwise coverage is not the only axis. These are
+        the LARGE, realistic schemas (`github.fga` alone has far more relations than any
+        synthetic fixture), so they may exercise 3-way+ interactions, compile-order
+        effects, or sheer scale that a pairwise score cannot see. They are also cheap,
+        and they feed the byte-identity snapshot gate and the bulk differential gate
+        with realistic structure. **Nobody has measured whether they contribute a unique
+        TRIPLE** — that is the missing evidence, and `genswarm.universe_cells()` is
+        pairwise by deliberate design (the cartesian grid is 2^51).
+      * **What would settle it:** score triples over just these five vs the rest. If
+        they add none either, they are genuinely redundant and the argument shifts to
+        "keep as realism anchors or not". If they do, the question is closed.
+      * ⚠ **Do not extend `test_fixture_earns_its_place` corpus-wide to force the
+        issue** — it would redden on exactly these five, and the tempting fix (adding
+        them to an exemption list) is the hand-maintained-list-beside-a-glob pattern
+        that has already failed twice in this tree. The test deliberately covers only
+        the fixtures in `REQUIRED`.
+
 ### Someday / out of scope (low priority — revisit only on a concrete need)
 
 - [x] ~~**Vendor a corpus of REAL OpenFGA schemas, crawled from the wild**~~ —
