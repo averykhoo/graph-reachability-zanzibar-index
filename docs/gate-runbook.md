@@ -105,7 +105,25 @@ day it existed, one of them a live authorization fail-open, on code that had bee
 reviewed and gated for months.
 
 **Capture `$?` directly** — piping through `tee` returns tee's exit code (0) and
-masks a failure.
+masks a failure. ⚠ **`tail` does this too, and it is the one that keeps biting.**
+`bash formal/verify.sh lean 2>&1 | tail -12` reports `tail`'s status, so a FAILED
+phase looks like exit 0 — and if it is followed by `&& <next phase>`, the chain
+happily continues past the failure. This bit the 2026-08-10 session (a genuinely
+`4 failed` run reported exit 0) and bit again on 2026-08-11 (a FAILED `lean` phase
+reported exit 0, caught only by reading the output rather than the status). Use
+`bash formal/verify.sh <phase> > /tmp/p.log 2>&1; rc=$?` and branch on `$rc`.
+**This is already written down twice below and was hit anyway — if you are reading
+it now, that is the whole warning.**
+
+★ **A tests-ONLY change still requires re-running `lean`.** This is not obvious and
+was reasoned wrong on 2026-08-11: "I touched no Lean, no production code, and
+nothing under `formal/conformance/`, so `lean` cannot be affected." It can. Step
+**4e** compares `FINAL_REVIEW.md`'s generated counts block against the tree, and
+that block contains the live `tests/` collection count and `MIN_TESTS_ALL`. So
+adding or removing a single test in `tests/` makes the `lean` phase FAIL until you
+run `python -m formal.conformance.doc_counts --generate`. The coupling runs
+tests → lean, which is the opposite direction from the one you would guess.
+Conformance genuinely is independent of `tests/`; `lean` is not.
 
 ### 2. Lean + conformance — the split `verify.sh` gate
 `verify.sh` takes a **phase argument** so the whole formal gate (its 5 steps) runs
@@ -178,19 +196,29 @@ outright was invisible (the only conformance assertions were `skipped == 0` and
 `passed > 0`). These numbers now live in `formal/verify.sh`, all asserted with `-ge`
 so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 
-| constant | value | what it guards |
-|---|---|---|
-| `EXPECTED_MIN_AUDITS` | 460 | `#print axioms` reports observed from `Audit.lean` |
-| `MIN_PINNED_AUDITS` | 460 | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
-| `MIN_PINNED_DEFS` | 139 | rows in `formal/headline_definitions.txt` — likewise, so emptying the golden can't make the definition pin compare nothing |
-| `MIN_CONF_ALL` | 465 | tests collected from `formal/conformance/` |
-| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | 96 / 369 | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
-| `MIN_TESTS_ALL` | 762 | tests collected from `tests/` |
-| `MAX_TESTS_XFAILED` | 0 (**`-le`**) | declared xfail budget for `tests/` only — see below |
-| `MAX_TESTS_SKIPPED_ON_RDBMS` | 3 (**`-le`**) | dialect-only skips, and ONLY when `ZANZIBAR_TEST_DSN` is set; the default SQLite gate keeps a hard zero |
-| `MIN_SCANNED_LEAN_FILES` | 64 | project `.lean` files the hole scan must cover (65 today) |
-| `MIN_PY_ANCHORS` / `MIN_LEAN_ANCHORS` | 250 / 100 | `CORRESPONDENCE.md` anchors found (in `anchor_check.py`) |
-| *(no constant)* | — | step **4e** compares `FINAL_REVIEW.md`'s generated counts block against the tree exactly; there is no floor to lower, only a regeneration to perform |
+> ⚠ **This table deliberately carries NO values.** It used to, and they rotted: on
+> 2026-08-11 it still said `MIN_CONF_ALL` 465 and `MIN_TESTS_ALL` 762 while the tree
+> was at 494 and 857. That is `ZT-P3-5` ("every doc number is stale and nothing
+> enforces any of them") recurring in a doc that, unlike `FINAL_REVIEW.md`'s counts
+> block, has no generator and no step-4e check behind it — and it is this project's
+> own rule being broken (`CLAUDE.md`: *do not restate gate counts in prose*).
+> **Read the live values out of `formal/verify.sh`**, which is the only place they
+> are asserted. What each one MEANS does not rot, so that is all this table keeps.
+
+| constant | what it guards |
+|---|---|
+| `EXPECTED_MIN_AUDITS` | `#print axioms` reports observed from `Audit.lean` |
+| `MIN_PINNED_AUDITS` | names in `formal/audited_theorems.txt` — the identity pin can't be gutted |
+| `MIN_PINNED_DEFS` | rows in `formal/headline_definitions.txt` — likewise, so emptying the golden can't make the definition pin compare nothing |
+| `MIN_CONF_ALL` | tests collected from `formal/conformance/` |
+| `MIN_CONF_HEAVY` / `MIN_CONF_REST` | the legacy split's floors (checked to sum to `MIN_CONF_ALL`) |
+| `MIN_TESTS_ALL` | tests collected from `tests/` |
+| `MAX_TESTS_XFAILED` | (**`-le`**) declared xfail budget for `tests/` only — see below |
+| `MAX_TESTS_SKIPPED_ON_RDBMS` | (**`-le`**) dialect-only skips, and ONLY when `ZANZIBAR_TEST_DSN` is set; the default SQLite gate keeps a hard zero |
+| `MIN_SCANNED_LEAN_FILES` | project `.lean` files the hole scan must cover |
+| `MIN_FIXTURES` (`tests/test_compile_snapshot.py`) | `.fga` fixtures the byte-identity snapshot gate runs on |
+| `MIN_PY_ANCHORS` / `MIN_LEAN_ANCHORS` | `CORRESPONDENCE.md` anchors found (in `anchor_check.py`) |
+| *(no constant)* | step **4e** compares `FINAL_REVIEW.md`'s generated counts block against the tree exactly; there is no floor to lower, only a regeneration to perform |
 
 **Lowering any of them must be a deliberate, reviewed edit to `verify.sh`** — and
 should be justified in `formal/history/`. Raising them is free and encouraged when

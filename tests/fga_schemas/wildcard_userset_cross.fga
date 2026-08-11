@@ -1,0 +1,25 @@
+model
+  schema 1.1
+
+type user
+
+type group
+  relations
+    define member: [user, user:*, group#member]
+
+type team
+  relations
+    define lead: [user]
+    define blocked: [user]
+    define active_lead: lead but not blocked
+
+type folder
+  relations
+    define owner: [team#active_lead]
+    define viewer: [user, group#member, group:*#member] or owner
+
+type doc
+  relations
+    define parent: [folder, group]
+    define reader: viewer from parent
+    define sealed: [user] but not viewer from parent

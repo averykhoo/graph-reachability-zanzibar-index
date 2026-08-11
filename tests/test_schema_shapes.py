@@ -1,6 +1,6 @@
 """Schema SHAPES the `.fga` fixture corpus could not express before 2026-08-11.
 
-Three fixtures, added from two different lines of evidence, sharing one harness.
+Four fixtures, added from two different lines of evidence, sharing one harness.
 
 **Where they came from.** ``userset_over_derived`` and ``heterogeneous_tupleset`` were
 adapted (never copied) from a corpus of real OpenFGA models reviewed 2026-08-11 --
@@ -17,9 +17,8 @@ differential gate (``test_bulk_build.py``), and the lookup oracle. A feature abs
 ``tests/fga_schemas/`` is absent from all three, however well ``genswarm`` fuzzes it.
 
 **What each contributes, measured against the derived alphabet** (see ``REQUIRED``
-below; every one of these was at ZERO occurrences across the pre-existing fixtures, and
-``test_features_are_unique_to_this_fixture`` re-checks that on every run rather than
-trusting this comment):
+below; ``test_fixture_earns_its_place`` re-checks on every run that each still brings
+something no other fixture does, rather than trusting this comment):
 
   * ``userset_over_derived``   -- a userset restriction whose TARGET relation is derived
     (``[team#active_member]`` where ``active_member`` is an Exclusion). 4 features.
@@ -32,6 +31,14 @@ trusting this comment):
   * ``tupleset_shapes``        -- three tupleset-axis features at once: a tupleset defined
     by an Intersection, an UNDECLARED tupleset, and a type reaching the tupleset ONLY
     through an Exclusion's negative arm.
+  * ``wildcard_userset_cross``  -- contributes no NEW feature; its value is entirely
+    CO-OCCURRENCE, and that is the point. ``restr:wildcard-userset`` (``group:*#member``)
+    lived only in ``wildcards.fga``, a schema with no boolean operator anywhere, so the
+    wildcard userset had **never met an ``and``/``but not`` in the fixture corpus** -- 35
+    of its pairs were unrealised and 21 close here. genswarm's cell space is pairwise and
+    this project's position is that every bug it has found is an interaction bug, so a
+    fixture that only crosses existing features still earns its place. It also chains a
+    subject wildcard (``user:*`` member of a group) INTO the wildcard userset INTO a TTU.
 
 ★ **``tupleset_shapes`` is a genuine RC1 regression pin, and the only one of the three
 that is.** Its ``via_negonly`` arm is RC1's exact shape. Under the RC1 sabotage
@@ -99,10 +106,12 @@ guard here was broken and watched go red before it was believed:
     why ``driven`` asserts each ``add_tuple`` rather than calling it for effect: a pool
     whose writes are silently refused drives nothing and would otherwise pass.
 
-  * *the feature-uniqueness claim* -- verified by construction rather than by sabotage:
-    all eight features across the three fixtures were measured at ZERO occurrences over
-    the 11 pre-existing ``.fga`` files before these landed.
+  * *the "earns its place" property* -- see ``test_fixture_earns_its_place``, which
+    reddened for real when the fourth fixture landed and was re-derived rather than
+    deleted. The eight features of the first three were measured at ZERO occurrences
+    over the 11 pre-existing ``.fga`` files before they landed.
 """
+from itertools import combinations
 from pathlib import Path
 
 import pytest
@@ -163,6 +172,24 @@ _TUPLESET_SHAPES_POOL = [
     ('...', 'doc', 'd2', 'mixed_parent', 'doc', 'd1'),
 ]
 
+_WILDCARD_USERSET_CROSS_POOL = [
+    ('...', 'user', 'alice', 'member', 'group', 'g1'),
+    ('...', 'user', '*', 'member', 'group', 'g2'),
+    ('member', 'group', 'g1', 'member', 'group', 'g3'),
+    ('...', 'user', 'bob', 'lead', 'team', 't1'),
+    ('...', 'user', 'carol', 'lead', 'team', 't1'),
+    ('...', 'user', 'carol', 'blocked', 'team', 't1'),
+    ('active_lead', 'team', 't1', 'owner', 'folder', 'f1'),
+    ('member', 'group', 'g1', 'viewer', 'folder', 'f1'),
+    # ★ the wildcard userset: "member of ANY group"
+    ('member', 'group', '*', 'viewer', 'folder', 'f2'),
+    ('...', 'folder', 'f1', 'parent', 'doc', 'd1'),
+    ('...', 'folder', 'f2', 'parent', 'doc', 'd2'),
+    ('...', 'group', 'g1', 'parent', 'doc', 'd3'),
+    ('...', 'user', 'dave', 'sealed', 'doc', 'd1'),
+    ('...', 'user', 'alice', 'sealed', 'doc', 'd1'),
+]
+
 #: fixture -> the alphabet features it exists to contribute. Names come from
 #: ``genswarm.alphabet()``, which is DERIVED from six compiler sites, so this is not a
 #: hand-invented taxonomy -- and a compiler change that renames a feature breaks these
@@ -173,12 +200,18 @@ REQUIRED = {
     'heterogeneous_tupleset': {'ttu.ts:multitype'},
     'tupleset_shapes': {'ttu.ts:Intersection', 'ttu.ts:neg-only-type',
                         'ttu.ts:undeclared'},
+    # Contributes no NEW feature -- its value is co-occurrence. `restr:wildcard-userset`
+    # lived only in the non-boolean wildcards.fga and had never met a boolean operator;
+    # 21 of its 35 unpaired combinations close here.
+    'wildcard_userset_cross': {'restr:wildcard-userset', 'ttu.ts:multitype',
+                               'family:userset-storage', 'plan:PDerivedComputed'},
 }
 
 POOLS = {
     'userset_over_derived': _USERSET_OVER_DERIVED_POOL,
     'heterogeneous_tupleset': _HETEROGENEOUS_POOL,
     'tupleset_shapes': _TUPLESET_SHAPES_POOL,
+    'wildcard_userset_cross': _WILDCARD_USERSET_CROSS_POOL,
 }
 
 assert set(REQUIRED) == set(POOLS), 'every fixture needs both a feature set and a pool'
@@ -204,21 +237,60 @@ def test_fixture_carries_its_features(case):
         f'update REQUIRED and say why in the commit message.')
 
 
-def test_features_are_unique_to_this_fixture(case):
-    """The claim "no other fixture reaches these" is CHECKED, not asserted in prose.
+def _pairs(fs):
+    """Feature co-occurrences, the unit genswarm's cell space is built from."""
+    return {(a, b) for a, b in combinations(sorted(fs), 2)}
 
-    If a future fixture happens to introduce one of these features, this file's reason
-    for existing has partly evaporated -- and without this test it would stay green
-    while that happened.
+
+def test_fixture_earns_its_place(case):
+    """Every fixture here must contribute something no OTHER `.fga` file does --
+    either a feature nothing else carries, or a feature PAIR nothing else co-locates.
+
+    ★ This started life as a stricter test asserting feature-uniqueness alone, and
+    adding ``wildcard_userset_cross.fga`` correctly reddened it::
+
+        E  AssertionError: wildcard_userset_cross.fga now also carries
+           ['ttu.ts:multitype'], so heterogeneous_tupleset.fga is no longer the
+           corpus's only source of it.
+        E  AssertionError: wildcard_userset_cross.fga now also carries
+           ['family:userset-storage', 'leaf:derived-userset', 'plan:PDerivedUserset',
+           'via:userset'], so userset_over_derived.fga is no longer the corpus's only
+           source of it.
+
+    That was the test working, not failing: its own message says *re-derive the
+    justification or retire the claim*. Re-derived here rather than deleted, because
+    feature-uniqueness was only ever a PROXY for "earns its place", and it is the
+    weaker one. genswarm's cell space is PAIRWISE, and this project's position is that
+    every bug it has found is an interaction bug -- so co-occurrence is the thing
+    worth protecting. Both affected fixtures still contribute 4 new pairs each.
+
+    Measured 2026-08-11 (unique features / new pairs vs all other fixtures):
+    ``userset_over_derived`` 0/4, ``heterogeneous_tupleset`` 0/4,
+    ``tupleset_shapes`` 3/115, ``wildcard_userset_cross`` 0/61.
+
+    The floor is 1, not those numbers, deliberately. Flooring at the measured values
+    would redden on every future fixture that overlaps one of these -- punishing exactly
+    the corpus growth this file exists to encourage. A floor of 1 still catches the real
+    failure: a fixture that has become pure dead weight.
     """
-    others = [p for p in sorted(_FGA_DIR.glob('*.fga')) if p.stem not in REQUIRED]
-    assert others, 'no older fixtures to compare against -- the check is vacuous'
+    others = [p for p in sorted(_FGA_DIR.glob('*.fga')) if p.stem != case]
+    assert others, 'no other fixtures to compare against -- the check is vacuous'
+
+    mine = genswarm.features(_load(case))
+    other_features = set()
+    other_pairs = set()
     for p in others:
-        overlap = REQUIRED[case] & genswarm.features(p.read_text(encoding='utf-8'))
-        assert not overlap, (
-            f'{p.name} now also carries {sorted(overlap)}, so {case}.fga is no longer '
-            f'the corpus\'s only source of it. Not a code failure -- re-derive this '
-            f'fixture\'s justification or retire the claim.')
+        f = genswarm.features(p.read_text(encoding='utf-8'))
+        other_features |= f
+        other_pairs |= _pairs(f)
+
+    new_features = mine - other_features
+    new_pairs = _pairs(mine) - other_pairs
+    assert new_features or new_pairs, (
+        f'{case}.fga contributes no feature and no feature PAIR that another fixture '
+        f'does not already cover -- it is dead weight in every fixture-driven gate '
+        f'(snapshot, bulk, lookup) and should be removed or rebuilt around a shape '
+        f'the corpus actually lacks.')
 
 
 # Driving a ParityEngine is expensive -- paranoia runs the invariant checker and the
@@ -374,3 +446,26 @@ def test_fga_corpus_feature_coverage_does_not_regress():
         f'{sorted(closed)} is now reached by a fixture but still listed as '
         f'unreachable-by-design. Good news -- remove it from EXPECTED_UNREACHED so the '
         f'list keeps meaning what it says.')
+
+
+@pytest.mark.parametrize('query,expected', [
+    # a plain group userset reaching a folder that is a TTU parent
+    (('...', 'user', 'alice', 'reader', 'doc', 'd1'), True),
+    # ★ userset over a DERIVED relation (team#active_lead), consumed through `or owner`
+    # and then through the TTU -- bob is a lead and not blocked
+    (('...', 'user', 'bob', 'reader', 'doc', 'd1'), True),
+    # ... and the exclusion still bites two hops away: carol is a blocked lead
+    (('...', 'user', 'carol', 'reader', 'doc', 'd1'), False),
+    # ★ THE WILDCARD USERSET: `group:*#member` grants to anyone who is a member of ANY
+    # group. alice is a member of g1.
+    (('...', 'user', 'alice', 'reader', 'doc', 'd2'), True),
+    # zoe belongs to no group EXPLICITLY, but g2 carries (user:*, member, group:g2), so
+    # she is a member of a group and the wildcard userset reaches her. This is the cell
+    # the corpus never had: a subject wildcard feeding a wildcard userset feeding a TTU.
+    (('...', 'user', 'zoe', 'reader', 'doc', 'd2'), True),
+    # NEGATED TTU over the same chain -- the fail-open direction
+    (('...', 'user', 'alice', 'sealed', 'doc', 'd1'), False),
+    (('...', 'user', 'dave', 'sealed', 'doc', 'd1'), True),
+])
+def test_wildcard_userset_cross_answers(driven, query, expected):
+    assert driven['wildcard_userset_cross'].check(*query) is expected

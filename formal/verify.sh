@@ -200,12 +200,12 @@ MIN_CONF_ALL=494
 # Note the Postgres leg (`tests/test_postgres_ha.py`) is dropped at COLLECTION
 # when no ZANZIBAR_TEST_DSN is set, not skipped at run time -- otherwise its skips
 # would have to be tolerated here, and a tolerated skip is how coverage leaks.
-# Re-measured 2026-08-11 with `pytest tests/ -q --collect-only`: 857 (was 846, 823, and
+# Re-measured 2026-08-11 with `pytest tests/ -q --collect-only`: 869 (was 857, 846, 823, and
 # 763 before that). The schema-shape corpus (tests/test_schema_shapes.py) accounts for
 # the last two steps: three fixtures covering shapes the .fga corpus could not express,
 # their answer grids, the corpus-wide feature-coverage floor, and the derived
 # boolean-routing pin in test_zanzibar_utils.py.
-MIN_TESTS_ALL=857
+MIN_TESTS_ALL=869
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
