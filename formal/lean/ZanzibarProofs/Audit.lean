@@ -1715,7 +1715,7 @@ namespace Zanzibar
 -- `GraphState.writeDirect` itself ("take a target-node argument"), which it warns duplicates
 -- every `writeDirect_*` projection and fold lemma. It is CHEAPER and MORE FAITHFUL to fork
 -- the TUPLE instead: Python does not fork its write path at all — `RuleSet.apply` does
--- `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py:447`) and then the
+-- `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`) and then the
 -- ordinary `add_tuple` path runs. So `rawWriteTuple` re-addresses and `writeDirect` is
 -- BYTE-IDENTICAL: definition pin unmoved, and every existing projection/fold lemma applies
 -- to the re-addressed tuple verbatim (`structInv_writeDirectRaw` / `inv_writeDirectRaw` are

@@ -6,7 +6,7 @@ import ZanzibarProofs.Spec.Stabilize
 
 Python's compiler splits every **tainted (derived)** relation `R` into a family of
 **leaf predicates** `R.0`, `R.1`, … minted by `alloc` inside `_build_plan_tree`
-(`zanzibar_utils_v1.py:1658-1659`, the only creator, called once per tainted key from
+(`zanzibar_utils_v1.py::_build_plan_tree`, the only creator, called once per tainted key from
 `compile_ruleset` `:1954-1956`). `RuleSet.apply` (`:423`) refuses a raw write that names a
 leaf (`:433-439`) and fan-in-expands a write on the derived **public** name onto the leaf
 family via `replace_relation(triple, f.rewrite_relation)` (`:447`).
@@ -15,11 +15,11 @@ The consequence the model has never carried: **edges land on the LEAF node while
 residue stays keyed at the PUBLIC node** (`index_v4/processor.py::_store_residue`
 `:949-978`, and `_write_derived` `:429-440` pins the public node non-implicit because it
 "anchors the residue row"). Invariant I4 requires every `'.'`-predicate node to be a
-declared leaf family (`index_v4/invariants.py:303-310`).
+declared leaf family (`index_v4/invariants.py::_check_derived_invariants`).
 
 Until now the conformance extractor hid the difference: projection **P6** drops every
 Python edge row whose target predicate carries a `'.'`
-(`formal/conformance/extractor.py:235-236`), because the model has no leaf nodes to
+(`formal/conformance/extractor.py::_edge_projection`), because the model has no leaf nodes to
 compare them against. Retiring P6 is leg 7; **this file is its steps 3 and 4a — the
 addressing, and the forked write built out of it.** Nothing here is wired into a CALLER
 yet (that is step 4c), so no existing definition, statement or proof changes and both
@@ -30,7 +30,7 @@ goldens stay byte-identical.
 > **Leaf predicates must NOT enter `S.defs`.**
 
 `Core/Schema.lean:64`'s `relNameOK` already forbids `'.'` in a *declared* relation name —
-mirroring Python's own reservation (`zanzibar_utils_v1.py:869-875`,
+mirroring Python's own reservation (`zanzibar_utils_v1.py::_validate_ast_references`,
 `_validate_ast_references` `:890-899`) — so a leaf node is **provably** distinct from every
 bare R-node for free. `leafPred_ne_relName` below is that lemma and it is the linchpin the
 whole leg rests on; no new sentinel axiom alongside `STAR`/`BARE` is needed. If leaf names
@@ -50,20 +50,20 @@ namespace Zanzibar
 /-! ## Leaf predicate names -/
 
 /-- The leaf predicate of family index `i` under public relation `R` — Python's
-    `f'{relation}.{counter[0]}'` (`zanzibar_utils_v1.py:1658-1659`). -/
+    `f'{relation}.{counter[0]}'` (`zanzibar_utils_v1.py::_build_plan_tree`). -/
 def leafPred (R : String) (i : Nat) : String := R ++ "." ++ toString i
 
 /-- Is a node predicate a leaf-family predicate? Leaf names are the only dot-carrying
     predicates that can reach an object node (`'.'` is reserved in declared relation names
     by `relNameOK`), so dot-carrying is the whole test — the mirror of Python's I4 scan
-    (`index_v4/invariants.py:303-310`).
+    (`index_v4/invariants.py::_check_derived_invariants`).
 
     ⚠ **Deliberately WIDER than I4 in exactly one place**, recorded as a theorem rather
     than a comment: see `isLeafPred_bare`. -/
 def isLeafPred (p : String) : Bool := p.contains '.'
 
 /-- ⚠ **The one point where `isLeafPred` is wider than Python's I4 test.** I4 carries an
-    `and n.predicate != '...'` guard (`index_v4/invariants.py:307`) because it scans
+    `and n.predicate != '...'` guard (`index_v4/invariants.py::_check_derived_invariants`) because it scans
     *subject* nodes too, and the bare-subject sentinel `BARE = "..."` is dot-carrying.
     This predicate omits the guard, so it must only ever be applied to **object**-node
     predicates, which carry relation names.
@@ -152,7 +152,7 @@ today.
 
 ⚠ **Modelling scope, declared here rather than discovered later.** This models **one
 undifferentiated storage leaf per derived relation** (index `0`). Python allocates an index
-per *persisted-leaf position* (pre-order, left-to-right, `zanzibar_utils_v1.py:1650-1652`)
+per *persisted-leaf position* (pre-order, left-to-right, `zanzibar_utils_v1.py::_build_plan_tree`)
 and a derived def with two Direct arms therefore has two storage leaves. Whether that
 distinction — and the `storage=True`/`storage=False` split (`:1693-1699`) that exists for
 TTU stored-parent enumeration — needs modelling is scope doc §8.2, still **open and
@@ -207,7 +207,7 @@ re-parameterizes every `writeDirect_*` projection lemma … and every fold lemma
 
 **It is cheaper than that, and more faithful.** Python does not fork its write path at
 all: `RuleSet.apply` re-addresses the **tuple** — `replace_relation(triple,
-f.rewrite_relation)` (`zanzibar_utils_v1.py:447`) — and then the ordinary
+f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`) — and then the ordinary
 `add_tuple`/`_add_edge_locked` path runs unchanged. Modelling the fork the same way
 (`rawWriteTuple` below, then today's `writeDirect`) means:
 
@@ -225,7 +225,7 @@ tuple's relation is the DECLARED one. That is step 4c and it is where the cost l
 this section is only the addressing half. -/
 
 /-- **The raw write, re-addressed onto its leaf family.** Python's
-    `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py:447`), the fan-in
+    `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`), the fan-in
     expansion `RuleSet.apply` performs on a write that names a derived PUBLIC relation.
     On an untainted relation there is no family and this is the identity. -/
 def rawWriteTuple (S : Schema) (t : Tuple) : Tuple :=
@@ -334,7 +334,7 @@ error: ZanzibarProofs/GraphIndex/Leaf.lean:183:47: unsolved goals   -- rawWriteR
 **(B) The routing guard is made UNSATISFIABLE** — `&& isLeafPred t.relation` added to the
 `if`, with the three derived-branch lemmas' hypotheses tightened to match. This is a
 *plausible* misreading, not a strawman: `RuleSet.apply` really does refuse a raw write that
-names a leaf (`zanzibar_utils_v1.py:433-439`), so "never re-route an already-routed write"
+names a leaf (`zanzibar_utils_v1.py::RuleSet._candidates`), so "never re-route an already-routed write"
 reads like a faithfulness fix. It is not — no raw write ever names a leaf, so the derived
 branch becomes dead and every leaf lemma becomes vacuously true about nothing.
 
