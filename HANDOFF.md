@@ -145,9 +145,11 @@ this file and `docs/design/generator-coverage/README.md` were stale. Nothing to 
 
 ### Still open (unchanged by this session)
 
-Items 2–5 below are untouched and none is blocking: the two UNVERIFIED audit leads,
-`ttuStarFree` as a four-part Lean leg, the scope-audit re-run, and leg 7. Item 6 is a
-one-question optional loose end from the closed arc.
+Items 3–5 below are untouched and none is blocking: `ttuStarFree` as a four-part Lean
+leg, the scope-audit re-run, and leg 7. Item 6 is a one-question optional loose end from
+the closed arc. **Item 2 (the two UNVERIFIED audit leads) was CLOSED 2026-08-14** — both
+reproduced, neither leaves a live bug; read its residue before touching the zcli driver
+or `ttuDirect`.
 
 ### 1. The RC1/RC2 arc — CLOSED. Archived 2026-08-11; three things kept here.
 
@@ -190,21 +192,69 @@ Three things are kept HERE because they are live, not historical:
   a proof. Design + raw evidence: [`docs/design/generator-coverage/`](docs/design/generator-coverage/),
   but ⚠ **trust the archive's three implementation corrections over that design doc.**
 
-### 2. Verify or discard two UNVERIFIED claims from the failed audit.
+### 2. ~~Verify or discard two UNVERIFIED claims from the failed audit.~~ BOTH ADJUDICATED 2026-08-14.
 
-Both come from single agents whose adversarial verifiers never ran. Treat as leads only.
+Both were reproduced from scratch, with attribution controls and positive controls.
+Neither was the known false positive. **Neither leaves a live correctness bug.**
 
-* **`W4Fragment.computedOrDirect` — a LEAN-side under-report, and the driver fails OPEN.**
-  Claim: on `access: viewer from parent but not banned`, `zcli mode=graph` answers
-  `[false]` with **rc=0** while `mode=spec`, the Python graph, both set engines and the
-  oracle all answer `[true]`. If it holds, the executable driver gives a wrong answer
-  rather than refusing an out-of-fragment schema — worse than a refusal.
-* **`GraphAdmission.ttuDirect` (`TtuTuplesetsDirect`)** — flagged `risk=HIGH`,
-  `divergenceFound=YES`. Unread in detail.
+* **`W4Fragment.computedOrDirect` — CONFIRMED as an empirical fact, MIS-FRAMED as a
+  fail-open.** On `access: viewer from parent but not banned` with
+  `viewer(alice, folder:f1)` + `parent(f1, doc:d1)`, `zcli mode=graph` really does answer
+  `[false]` at **rc 0** while `mode=spec`, the oracle, both set engines and the real
+  `WildcardIndex`+`DeltaProcessor` all answer `[true]`. Controls attribute it exactly to
+  the `.ttu` leaf **inside a derived def** (`ComputedOrDirect` maps `.ttu` to `False`):
+  hoisting the TTU out, or dropping the exclusion, restores agreement.
+  * ★ **The direction is the opposite of the filing.** The Lean model *under*-reports —
+    denies access that exists — so for authorization it is fail-**CLOSED**. The only
+    "open" is that the driver emits an answer instead of refusing. Do not carry the
+    original wording forward.
+  * ★ **And it is less novel than it reads.** That mode=graph does not gate on
+    `W4Fragment` was already documented in `formal/conformance/corpus.py`'s
+    `GRAPH_FRAGMENT` header ("silently compares two models that no theorem relates").
+    The new artifact is a *measured wrong answer*, not the non-gating property.
+  * **Blast radius today: none.** A controls-validated scan of all 25 `GRAPH_FRAGMENT`
+    corpora finds zero with a TTU inside a derived def, and mode=graph is driven only
+    from that set. Recorded in `CORRESPONDENCE.md` §2 (the zcli exit-code block).
+  * **What is actually left, and it is not small:** a driver-side fragment pre-check
+    needs a DECIDABLE `W4Fragment`, and none exists (no `admissionB`-style boolean).
+    Its own leg if anyone wants it; nothing is blocked meanwhile.
+
+* **`GraphAdmission.ttuDirect` (`TtuTuplesetsDirect`) — TRUE WHEN FILED, ALREADY FIXED.
+  It was RC2.** The audit's divergence (a `folder:*` stored tupleset parent on
+  `parent: [folder, folder:*] but not detached`; oracle + both set engines True, graph
+  False) is verbatim RC2, and it even nominated the fix that landed in `7e3294e`.
+  Re-measured on the current tree: the audit's own exhaustive experiment (2^6 = 64
+  stores × 9 queries = 576 comparisons) now gives **0 divergences** where it measured
+  104, with a positive control confirming the instrument still fires; four further
+  flavours of the excluded class (640 comparisons) are likewise clean.
+  **Nothing actionable remains** — do not re-open it.
+  * ⚠ **Its recommendation #3 stands: do NOT lift `ttuDirect` in Lean.** Consistent with
+    item 3 below and `CORRESPONDENCE.md` §7.
+  * **Two false docstrings it found were the only live residue, and are FIXED
+    2026-08-14** (documentation, not defects): `State.lean::GraphAccepts` claimed
+    "outside this scope the graph rejects the schema at compile", false for its clause
+    (3) — a derived TTU tupleset compiles and gets a `derived-tupleset-ttu` leaf; and
+    `FullScope.lean`'s `ttuDirect` field doc described Python's weaker check (which has
+    a `ts_key not in tainted` guard) rather than the predicate it annotates (which has
+    none). Both now state the gap the way `wsBare` / `directArmsConcrete` do. ★ This is
+    precisely the rot class `verify.sh` step 4d **cannot** catch: the anchor check
+    resolves pointers, not claims.
+
+★ **Where the primary record was, since the board said it was lost.** Nothing was
+persisted to the repo — `docs/subagent-fanout-runbook.md`'s "every agent writes its own
+file" rule was written *from* this failure and so was not yet in force. But the audit
+survives in full in the session journal under
+`~/.claude/projects/<this-project>/…/subagents/workflows/wf_f8c85180-b74/`, which holds
+279 agent transcripts including ~9 KB of structured output for `ttuDirect` (verbatim
+command transcripts, a positive control, and a self-caught instrument bug). **The three
+adversarial verifiers dispatched for that claim are each 4 lines: prompt in, nothing
+out** — the death of the fan-out, visible on disk. Worth knowing before re-running
+anything: a dead fan-out is recoverable from the journal, so item 4 below need not start
+from zero.
 
 ⚠ Of the 26 audits that completed, one reported `divergenceFound: YES` on a schema **both
-backends refuse**. That is exactly the false positive the verify phase existed to kill, so
-do not promote any of these to a finding without reproducing it yourself.
+backends refuse** — the false positive the verify phase existed to kill. Neither claim
+above was that one, but the rule stands: reproduce before promoting.
 
 ### 3. `ttuStarFree` — DO NOT DROP IT. Machine-checked FALSE without it.
 
@@ -237,7 +287,15 @@ not blocking anything.
 
 The 2026-08-10 fan-out died at 32 of 278 agents with **verify and synthesis never running**.
 Read [`docs/subagent-fanout-runbook.md`](docs/subagent-fanout-runbook.md) BEFORE launching
-another one — it is written from this failure. The two rules that would have saved it: a
+another one — it is written from this failure.
+
+★ **It does NOT have to start from zero** (found 2026-08-14, while closing item 2): all
+279 agent transcripts survive in the session journal under
+`~/.claude/projects/<this-project>/…/subagents/workflows/wf_f8c85180-b74/`, including the
+completed structured output of agents whose findings never reached any document. Mine
+that before re-dispatching — two of the transcripts settled item 2 without re-running the
+audit at all. It also shows the failure mode directly: the dispatched verifiers are 4
+lines each, prompt in and nothing out. The two rules that would have saved it: a
 machine sweep DISCOVERS candidates but must never DEFINE the fan-out (96 of its items were
 parser error messages, which exclude nothing admissible), and every agent must persist its
 result to its own file so a dead run still leaves its findings on disk.

@@ -638,8 +638,20 @@ def exprTtus : Expr → List (String × String)
 /-- **`GraphAccepts S`** — the decision-15 scope predicate (`SEMANTICS.md` §8,
     `boolean-ivm-spec §1.15`): (1) no object-wildcard shape on a derived relation;
     (2) no wildcard *userset* restriction referencing a derived relation; (3) no TTU
-    whose tupleset relation is derived. Outside this scope the graph rejects the
-    schema at compile. -/
+    whose tupleset relation is derived.
+
+    ⚠ **Only (1) and (2) are backed by a compile-time rejection.** Those two raise
+    `UnsupportedByGraphIndex` (CLAUDE.md, "the two scope rejections"). **(3) is not:**
+    `zanzibar_utils_v1.py::_validate_ttu_tuplesets` exempts *tainted* tuplesets
+    deliberately, so a TTU over a derived tupleset COMPILES and gets its own
+    `derived-tupleset-ttu` plan leaf. Measured 2026-08-14: `parse_openfga_schema`
+    accepts `parent: [folder] but not detached` under a TTU and reports leaf kinds
+    `['closure', 'derived-tupleset-ttu']`.
+
+    So this predicate is strictly stronger than what the implementation refuses, and
+    clause (3) is a **proof-scope restriction, not a mirrored mechanism**. The
+    sentence carried here until 2026-08-14 — *"Outside this scope the graph rejects
+    the schema at compile"* — was false for (3). -/
 def GraphAccepts (S : Schema) : Prop :=
   (∀ tr ∈ S.objectWildcards, isDerived S tr = false)
   ∧ (∀ d ∈ S.defs, ∀ r ∈ exprRestrictions d.2,

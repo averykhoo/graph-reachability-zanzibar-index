@@ -97,6 +97,34 @@ unrecognized mode · **`5` an `"ops"` stream passed in spec mode**. The previous
 revision listed only 0–4 in this section while §6 described rc 5 — the file
 contradicted itself; both places now say 0–5.
 
+> ⚠ **There is no rc for "out of the proved fragment", and mode=graph answers anyway
+> (adjudicated 2026-08-14).** `Cli.lean`'s mode=graph refuses only on rc 2 (an op
+> failed admission or its remove gate) and rc 3 (not drained). It does **not** gate on
+> `GraphAdmission` / `W4Fragment`, so an out-of-fragment schema gets a confident answer
+> with **rc 0**. The property was already recorded at `formal/conformance/corpus.py`
+> (the `GRAPH_FRAGMENT` header) as "silently compares two models that no theorem
+> relates"; what was added on 2026-08-14 is a **measured wrong answer** rather than a
+> warning about unrelatedness. On `access: viewer from parent but not banned`
+> (a `.ttu` leaf inside a derived def, which
+> `GraphIndex/ReconcileCorrect.lean::ComputedOrDirect` maps to `False`), with
+> `viewer(alice, folder:f1)` and `parent(f1, doc:d1)`:
+>
+> ```
+> zcli mode=spec   -> [true]   rc=0
+> zcli mode=graph  -> [false]  rc=0     <- the Lean operational model under-reports
+> oracle / both SetOps / real WildcardIndex+DeltaProcessor -> true
+> ```
+>
+> Attribution controls: hoisting the TTU out of the derived def, and dropping the
+> exclusion, both restore agreement — so it is the `.ttu`-inside-a-derived-def clause
+> and not the TTU or the exclusion alone. **Direction:** the model *under*-reports, so
+> for authorization this is fail-CLOSED; the "open" is only that the driver emits an
+> answer instead of refusing. **Blast radius today: none** — a controls-validated scan
+> of all 25 `GRAPH_FRAGMENT` corpora finds zero with a TTU inside a derived def, and
+> mode=graph is driven only from that set, so no green test is silently comparing this
+> shape. Closing it properly needs a decidable fragment pre-check, which does not
+> exist: `W4Fragment` has no `admissionB`-style boolean form. Real work, not a flag.
+
 All answer-comparing suites share ONE query grid
 (`formal/conformance/grid.py::grid`): targets are the stored-tuple cross product
 PLUS every schema-DECLARED `(type, relation)` paired type-aware with that type's
