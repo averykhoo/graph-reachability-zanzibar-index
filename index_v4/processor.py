@@ -29,7 +29,7 @@ from sqlmodel import select
 from zanzibar_utils_v1 import (CompiledBooleans, DerivedFamily, LeafFamily)
 
 from .invariants import InvariantViolation
-from .models import EdgeV4, NodeV4, ResidueV1
+from .models import EdgeV4, NodeV4, ResidueRefV1, ResidueV1
 from .outbox import outbox_rows
 from .wildcard import WildcardIndex
 
@@ -77,11 +77,16 @@ Key = tuple[str, str, str]             # (object_type, relation, object_name)
 # already runs the identical full ``ResidueV1`` scan, with the same per-row JSON decode,
 # on every node-release path on every schema (see ``_demote_released_node``).
 #
-# If this scan ever has to get cheaper, the answer is an INDEX from subject id to
-# recording residue (maintained in ``_store_residue``), never a leaf-kind whitelist:
-# a correct whitelist would have to re-establish (P) for each kind, and (P) is a
-# property of the *candidate-resolution* code, which is free to widen at any time
-# (as ``closure`` and Fix A both did) without anyone noticing the whitelist went stale.
+# The scan DID have to get cheaper, and it got the answer this note named: an INDEX
+# from subject id to recording residue (``ResidueRefV1``, maintained in
+# ``_store_residue`` via ``_sync_residue_refs``), never a leaf-kind whitelist. Both
+# lookups below are now indexed seeks and neither consults a leaf kind, so the
+# whitelist mechanism stays retired. The reasoning above is kept because it is what
+# forbids re-introducing it: a correct whitelist would have to re-establish (P) for
+# each kind, and (P) is a property of the *candidate-resolution* code, which is free
+# to widen at any time (as ``closure`` and Fix A both did) without anyone noticing
+# the whitelist went stale. An index has no such coupling -- it is keyed on the ids
+# actually recorded, so widening candidate resolution maintains it automatically.
 
 
 def _shape(pred: str, s_type: str) -> tuple[str, str]:
@@ -436,15 +441,24 @@ class DeltaProcessor:
         too). The recorder must therefore be findable from the id alone -- both for GC
         anchoring and for pruning when the node dies. Never gate this on the schema's
         leaf kinds; see the N3-WITHDRAWN note at the top of this module for why no
-        such gate is sound."""
+        such gate is sound.
+
+        Served by the ``ResidueRefV1`` reverse index (an indexed seek on
+        ``(store_id, subject_node_id)``), not by decoding every residue in the store.
+        The liveness filter is retained deliberately: a reference whose recording
+        object node row is gone yields no key, exactly as the scan it replaced did,
+        so ``_residue_references`` keeps its meaning."""
         out: list[Key] = []
         rows = self.session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == self.store_id)).all()
+            select(ResidueRefV1)
+            .where(ResidueRefV1.store_id == self.store_id)
+            .where(ResidueRefV1.subject_node_id == node_id)
+            .order_by(ResidueRefV1.object_node_id)      # type: ignore[arg-type]
+        ).all()
         for row in rows:
-            if node_id in json.loads(row.neg) or node_id in json.loads(row.upos):
-                obj = self.session.get(NodeV4, row.object_node_id)
-                if obj is not None:
-                    out.append((obj.type, obj.predicate, obj.name))
+            obj = self.session.get(NodeV4, row.object_node_id)
+            if obj is not None:
+                out.append((obj.type, obj.predicate, obj.name))
         return out
 
     def _residue_references(self, node_id: int) -> bool:
@@ -861,19 +875,23 @@ class DeltaProcessor:
         ).first() is not None
 
     def _any_residue_reference(self, node_id: int) -> bool:
-        """Whether ANY residue's neg/upos references this node id -- a COMPLETE scan.
-        Now exactly ``_residue_references`` in extension (the N3 leaf-kind elision that
-        made the two differ was withdrawn 2026-07-26 as unsound -- see the module-head
-        note); kept as a separate name because the two callers ask different QUESTIONS:
-        ``_residue_references`` gates *deletion*, this one gates *demotion* (a recorded
-        userset subject must stay EXPLICIT even when its own edge, not the residue, is
-        what keeps it alive)."""
-        rows = self.session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == self.store_id)).all()
-        for row in rows:
-            if node_id in json.loads(row.neg) or node_id in json.loads(row.upos):
-                return True
-        return False
+        """Whether ANY residue's neg/upos references this node id -- an indexed
+        existence probe against ``ResidueRefV1`` (it was a complete residue scan until
+        the reverse index landed).
+
+        Kept as a separate name from ``_residue_references`` because the two callers
+        ask different QUESTIONS: ``_residue_references`` gates *deletion*, this one
+        gates *demotion* (a recorded userset subject must stay EXPLICIT even when its
+        own edge, not the residue, is what keeps it alive). They also differ in
+        extension, and always have: this one ignores whether the RECORDING object's
+        node row is still live, which is the conservative direction for a demotion
+        guard. (The N3 leaf-kind elision that used to be the difference was withdrawn
+        2026-07-26 as unsound -- see the module-head note.)"""
+        return self.session.exec(
+            select(ResidueRefV1)
+            .where(ResidueRefV1.store_id == self.store_id)
+            .where(ResidueRefV1.subject_node_id == node_id)
+        ).first() is not None
 
     def _demote_released_node(self, n: NodeV4) -> None:
         """Demote a surviving node back to ``implicit=True`` once its recording is
@@ -1086,7 +1104,34 @@ class DeltaProcessor:
             row.upos = json.dumps(sorted(upos))
             row.version += 1
             self.session.add(row)
+        # Maintain the reverse index in the same statement block as the row it
+        # indexes: this is the ONLY live-path writer of ResidueV1, so it is the only
+        # place the index can go stale. (The early return above is safe -- no row
+        # existed and none was written, so there is nothing to index.)
+        self._sync_residue_refs(node.id, set() if empty else (neg | upos))
         self._bumped.append((object_type, rel, obj_name))
+
+    def _sync_residue_refs(self, object_node_id: int, subjects: set[int]) -> None:
+        """Bring one residue's ``ResidueRefV1`` rows to exactly ``subjects``.
+
+        Diffed against the rows that exist rather than delete-all-then-reinsert, so a
+        reconcile that rewrites a residue without changing its recorded set costs no
+        writes. Cost is O(rows for this object), never O(store).
+        """
+        existing = {
+            r.subject_node_id: r
+            for r in self.session.exec(
+                select(ResidueRefV1)
+                .where(ResidueRefV1.store_id == self.store_id)
+                .where(ResidueRefV1.object_node_id == object_node_id)).all()
+        }
+        for sid, row in existing.items():
+            if sid not in subjects:
+                self.session.delete(row)
+        for sid in sorted(subjects - set(existing)):
+            self.session.add(ResidueRefV1(store_id=self.store_id,
+                                          subject_node_id=sid,
+                                          object_node_id=object_node_id))
 
     # ------------------------------------------------------------------ #
     # Delta → key mapping (§5.2) + cascade loop (§5.1)

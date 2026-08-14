@@ -121,6 +121,49 @@ class ResidueV1(SQLModel, table=True):
     version: int = Field(default=0)      # bumped on every changing reconcile (I7)
 
 
+class ResidueRefV1(SQLModel, table=True):
+    """Reverse index: recorded subject node id -> the residues recording it.
+
+    One row per ``(residue object, subject id)`` pair in ``ResidueV1.neg | upos``.
+    Exists so the node-release paths can ask "does ANY residue reference this node?"
+    with an indexed seek instead of decoding every residue row in the store: the scan
+    it replaces was measured at ~15 us/residue row and went quadratic under churn
+    (docs/spec-deviations.md 2026-07-29b). It is the index ``ZT-P0-1``'s own note
+    named -- "a subject-id -> residue index maintained in ``_store_residue``, never a
+    leaf-kind whitelist" -- see the N3-WITHDRAWN block at the head of ``processor.py``.
+
+    DERIVED, not authoritative. ``ResidueV1.neg``/``upos`` remain the source of truth
+    and ``invariants.py`` I6 keeps decoding that JSON directly; a new I6 clause asserts
+    the two AGREE in both directions. That split is deliberate: an invariant that read
+    this table instead of the JSON would be a mirror of the thing it checks, which is
+    the failure mode ``docs/sabotage-procedure.md`` calls "the mirror instrument".
+
+    No foreign keys, deliberately. ``subject_node_id`` may legitimately be observed
+    dangling mid-transaction, and a dangling id is precisely the ZT-P0-1 corruption
+    class I6 exists to DETECT -- an FK would let the database silently prevent (on
+    PostgreSQL) or silently ignore (on SQLite, where FK enforcement is off by default)
+    the very state the checker must be able to see.
+    """
+    __tablename__ = "residue_ref_v1"
+    __table_args__ = (
+        # Serves the subject-keyed lookup (`store_id AND subject_node_id`) as a
+        # leftmost prefix, which is the whole point of the table; no separate
+        # single-column index is added, per the N5 audit 2026-07-14 house rule.
+        UniqueConstraint('store_id', 'subject_node_id', 'object_node_id',
+                         name='residue_ref_v1_unique'),
+        # Object-keyed maintenance (`_sync_residue_refs` rewrites one residue's rows)
+        # filters `(store_id, object_node_id)`, which the unique constraint's prefix
+        # cannot serve -- same shape as `ix_edge_v4_store_object` above.
+        Index('ix_residue_ref_v1_store_object', 'store_id', 'object_node_id'),
+        {'extend_existing': True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    store_id: str
+    subject_node_id: int
+    object_node_id: int
+
+
 class DeltaOutboxV1(SQLModel, table=True):
     """The delta stream (boolean spec §4/§5.1): every reachability flip inserts a row
     inside the writing transaction. The autoincrement id is the cursor; the cascade

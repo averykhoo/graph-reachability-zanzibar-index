@@ -66,7 +66,7 @@ import json
 from sqlalchemy import event
 from sqlmodel import Session, select
 
-from .models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueV1
+from .models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueRefV1, ResidueV1
 from .outbox import outbox_rows, outbox_watermark
 
 if TYPE_CHECKING:
@@ -387,12 +387,28 @@ def _check_derived_invariants(session: Session, store_id: str, schema_info,
                         derived_families=derived_families,
                         subject_shapes=schema_info.subject_wildcard_shapes,
                         derived_edge_subjects=derived_edge_subjects,
+                        residue_refs=_load_residue_refs(session, store_id),
                         residue_versions=residue_versions)
+
+
+def _load_residue_refs(session: Session, store_id: str) -> dict[int, set[int]]:
+    """The ``ResidueRefV1`` reverse index as ``object_node_id -> {subject_node_id}``.
+
+    A COLUMN select, not an entity select: this runs inside every commit under the
+    cheap ``residue`` tier, where ORM instance bookkeeping is the bulk of the cost.
+    """
+    out: dict[int, set[int]] = {}
+    for object_node_id, subject_node_id in session.exec(
+            select(ResidueRefV1.object_node_id, ResidueRefV1.subject_node_id)
+            .where(ResidueRefV1.store_id == store_id)).all():
+        out.setdefault(object_node_id, set()).add(subject_node_id)
+    return out
 
 
 def _check_residue_rows(rows, node_of, *,
                         derived_families=None, subject_shapes=None,
                         derived_edge_subjects: 'dict[int, set[int]] | None' = None,
+                        residue_refs: 'dict[int, set[int]] | None' = None,
                         residue_versions: 'dict | None' = None) -> None:
     """I6 residue placement (+ I7 monotonicity when ``residue_versions`` is given).
 
@@ -404,7 +420,17 @@ def _check_residue_rows(rows, node_of, *,
     (they need a full edge scan, which is exactly what the cheap tier refuses to pay).
     ``derived_families``/``subject_shapes`` of ``None`` skip the schema-dependent
     clauses.
+
+    ``residue_refs`` is the ``ResidueRefV1`` reverse index as
+    ``object_node_id -> {subject_node_id}``; ``None`` skips the agreement clause.
+    That clause is what keeps the index from becoming an unchecked second source of
+    truth: this function decodes ``neg``/``upos`` STRAIGHT FROM THE JSON and never
+    consults ``processor.py``, so comparing the two here is an independent check
+    rather than the index agreeing with itself (docs/sabotage-procedure.md, "the
+    mirror instrument"). A stale index is not a cosmetic drift -- it is read by the
+    node-release guards, so a missing row re-opens the ZT-P0-1 escalation class.
     """
+    seen_ref_objects: set[int] = set()
     for r in rows:
         node = node_of(r.object_node_id)
         if node is None:
@@ -463,6 +489,26 @@ def _check_residue_rows(rows, node_of, *,
             if s.implicit:
                 _fail(f'I6: upos subject {s} is implicit on {node} '
                       f'(recorded subjects must be explicit -- state-functional form)')
+        # I6: the ResidueRefV1 reverse index agrees with this row, exactly and in both
+        # directions. Under-coverage is the dangerous side (a node-release guard then
+        # believes nothing references the node and deletes/demotes it -- ZT-P0-1), but
+        # over-coverage is checked too: a stale row pins a node alive forever and
+        # silently drifts the state-functional canonical form.
+        if residue_refs is not None:
+            seen_ref_objects.add(r.object_node_id)
+            indexed = residue_refs.get(r.object_node_id, set())
+            if indexed != (neg | upos):
+                _fail(f'I6: residue_ref index disagrees with neg|upos on {node}: '
+                      f'indexed={sorted(indexed)} recorded={sorted(neg | upos)}')
+
+    # I6: no reverse-index row survives its residue. `_store_residue` deletes an
+    # emptied residue row, so its index rows must go with it; an orphan here means the
+    # index outlived the only thing that justifies it.
+    if residue_refs is not None:
+        for object_node_id in sorted(set(residue_refs) - seen_ref_objects):
+            _fail(f'I6: residue_ref rows for object {object_node_id} '
+                  f'(subjects {sorted(residue_refs[object_node_id])}) '
+                  f'have no residue row')
 
     # I7: version monotonicity per residue ROW (empty rows are deleted, so a
     # recreated residue legitimately restarts its lineage at version 1 -- lineage is
@@ -537,7 +583,13 @@ def check_residue_hygiene(session: Session, store_id: str,
         select(ResidueV1.id, ResidueV1.object_node_id, ResidueV1.relation,
                ResidueV1.stars, ResidueV1.neg, ResidueV1.upos)
         .where(ResidueV1.store_id == store_id)).all()]
+    refs = _load_residue_refs(session, store_id)
     if not rows:
+        # The orphan clause is still owed here, and this is exactly where it matters:
+        # "residue rows all gone, index rows left behind" is the state a broken delete
+        # produces, and returning early on `not rows` would make the tier blind to the
+        # one case it is most likely to be the only witness for.
+        _check_residue_rows((), {}.get, residue_refs=refs)
         return
 
     wanted: set[int] = set()
@@ -564,6 +616,7 @@ def check_residue_hygiene(session: Session, store_id: str,
         subject_shapes=(None if schema_info is None
                         else schema_info.subject_wildcard_shapes),
         derived_edge_subjects=None,       # skipped: needs a full edge scan
+        residue_refs=refs,                # cheap (one indexed select) and ZT-P0-1-relevant
         residue_versions=None)
 
 
