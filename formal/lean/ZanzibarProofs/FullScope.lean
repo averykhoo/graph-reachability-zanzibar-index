@@ -94,8 +94,15 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     * `nodup` — the AST is dict-keyed: one def per `(type, relation)`.
     * `strat` — derived-dependency cycles raise `ValueError`
       (`compile_boolean_schema`; CLAUDE.md "derived-dependency cycles").
-    * `ttuDirect` — `zanzibar_utils_v1.py::_validate_ttu_tuplesets`:
-      an untainted TTU tupleset relation must be direct-only.
+    * `ttuDirect` — ⚠ **stronger than the mechanism it cites** (corrected 2026-08-14;
+      this line used to read "an untainted TTU tupleset relation must be direct-only",
+      which describes the Python check and NOT the predicate it annotates).
+      `zanzibar_utils_v1.py::_validate_ttu_tuplesets` carries a `ts_key not in tainted`
+      guard, so it constrains only UNTAINTED tuplesets and deliberately exempts derived
+      ones (their stored tuples live on dedicated storage leaves). `TtuTuplesetsDirect`
+      has no such guard, so it additionally excludes derived tuplesets — a shape Python
+      ACCEPTS and compiles. Proof scope, not a mirrored refusal; stated the way
+      `wsBare` and `directArmsConcrete` state theirs.
     * `matchDecl` — compiled `Rule`s route onto declared, untainted families
       (leaf routing splits derived storage onto leaf predicates; `RewriteFilter`
       targets are declared relations).
