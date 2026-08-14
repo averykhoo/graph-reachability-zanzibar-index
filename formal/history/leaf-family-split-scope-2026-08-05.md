@@ -752,6 +752,64 @@ still untouched — `rawWriteRel` deliberately models ONE undifferentiated leaf,
 and says so in its docstring. §10.4's post-fork multiplicity numbers are still unmeasured
 because the fork is not wired to a caller.
 
+### 11.5 ★★ THE FORK IS DECIDED — branch (α), 2026-08-14. Appended, not edited.
+
+`history/` is append-only, so §11.3 above is left as written. **Read this section as its
+resolution, and note that §11.3 is wrong in two places.**
+
+**DECISION: (α) — the `Delta` row moves to the leaf node.** Settled by measurement on both
+sides; full evidence in `history/PROOF_STATUS.md` 2026-08-14 §1.
+
+* **Python is unambiguous.** `index_v4/models.py::DeltaOutboxV1` has **no relation column
+  at all** — the relation IS the object node's `object_predicate`, and
+  `index_v4/core.py::ReachabilityIndex._emit` reads it off the edge it just wrote. Measured:
+  a raw write emits `id=1 ADDED object=(doc,d1,approver.0)` (LEAF) and the reconcile
+  emission is a *separate* row `id=2 object=(doc,d1,approver)` (PUBLIC).
+* **The Lean attack-first probe did not refute (α)**, and its control fired: the *half-done*
+  (α) — row moved, `affectedKeys` untouched — produces the **empty** cascade key set.
+
+**★ §11.3 IS WRONG IN TWO PLACES, both measured:**
+
+1. *"`affectedKeys` must map leaf → public … which the model has no analogue of. In Lean it
+   would be string surgery on the `.i` suffix."* **Both halves false.** `S.keys` +
+   `isDerived` IS the analogue (Python's own `LeafFamily` table *carries* the public name
+   and parses `.i` only to record the index). And string surgery is **measurably wrong**: a
+   `".0"`-stripper returns `none` on `approver.2`, and Python really does route the Direct
+   arm of `(viewer but not banned) or [user]` to `approver.2`. **`publicOfLeaf` must be
+   INDEX-AGNOSTIC** — match the `"R."` prefix, never a literal `".0"`.
+2. *"`writeLoggedOne` also has to gain an `S` parameter under either branch (~58
+   references, mechanical), so the branch should be decided first and the churn paid once."*
+   **The churn is avoidable entirely.** `GraphState` already carries `schema : Schema`, and
+   a `σ.schema`-reading variant is **definitionally equal** to the `S`-parameter one under
+   `σ.schema = S` (`subst h; rfl`). Real scale, re-measured: **61 `writeLoggedOne` + 84
+   `removeLoggedOne`** mention-lines, not 58. ⚠ It is a trade — signature churn becomes a
+   per-site `σ.schema = S` hypothesis, which `writeRules_schema`/`reachedByW3d2_schema`
+   already supply.
+
+**★ AND A SCHEDULING CONSTRAINT THIS DOCUMENT DOES NOT CONTAIN, which refutes §7's "each
+step green and pushable" AT STEP 4c.** Projection **P6 is a Python-side-only filter**
+(`formal/conformance/extractor.py::_edge_projection`). The instant 4c re-points `Exec.lean`'s
+driver, Lean emits leaf edges with no Python counterpart and `diff_states` reports every one
+of them. **So 4c must co-land with step 7 (delete P6) in a single commit**, paying the
+pin/golden regeneration before the `Inv` and reach-collapse work — or 4c lands without
+re-pointing the driver and proves nothing end-to-end. Decide this WITH the fork, not at 4c.
+
+**§8.2/§11.4's "open and unmeasured" is now MEASURED, and the answer is negative.**
+`rawWriteRel` hardcodes `leafPred t.relation 0`; index 0 is the wrong model, because Python
+demonstrably mints indices > 0 for Direct arms. §10.4's post-fork multiplicity numbers
+remain unmeasured.
+
+**Also stale in this document, found while resolving the fork** (re-measured against the
+live tree, so trust these over the cells above): §6's success figures `P6 73 → 0`,
+`compared 171 → 244` are the 2026-08-05 23-corpus era — **live is `P6 76 → 0`,
+`compared 189 → 265`**, the THIRD expiry of these numbers in this file, so re-derive them
+from `FINAL_REVIEW.md`'s generated block immediately before starting rather than reading
+them here. §10.3's "no `GRAPH_FRAGMENT` corpus is reconvergent" is **false** since
+2026-08-08b (`reconvergent_diamond`/`reconvergent_derived`), and its `lean=10 python=1`
+figure is now `52`. §11.2 credits `rawWriteNode_untaintedSchema` with insulating the W2
+development, but **that lemma does not exist in the tree** — the walk was reverted, and 4c
+must re-derive it.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

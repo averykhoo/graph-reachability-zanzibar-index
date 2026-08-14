@@ -143,13 +143,25 @@ graph on 12% of draws — cheap and independent, do it FIRST" was **already done
 4-way, floored with provenance). `docs/sabotage-procedure.md:31` was the accurate record;
 this file and `docs/design/generator-coverage/README.md` were stale. Nothing to do.
 
-### Still open (unchanged by this session)
+### Still open — updated 2026-08-14b
 
-Items 3–5 below are untouched and none is blocking: `ttuStarFree` as a four-part Lean
-leg, the scope-audit re-run, and leg 7. Item 6 is a one-question optional loose end from
-the closed arc. **Item 2 (the two UNVERIFIED audit leads) was CLOSED 2026-08-14** — both
-reproduced, neither leaves a live bug; read its residue before touching the zcli driver
-or `ttuDirect`.
+**What moved this session (the two big Lean legs were taken up; neither is finished):**
+* **Leg 7's §11.3 design fork is DECIDED — branch (α)**, by measurement on both the Python
+  and Lean sides. The leg is no longer blocked on a decision, only on effort. Two cells of
+  the scope doc were refuted and a **scheduling constraint it does not contain** was found:
+  **step 4c must co-land with step 7**, because P6 is a Python-side-only filter. See item 1
+  (B1)'s resume point and scope-doc §11.5.
+* **`ttuStarFree` part (i) LANDED** — but it is **inert** and does not close the
+  counterexample. Parts (ii)/(iii)/(iv) remain; (iv) has a possibly-blocking decidability
+  question. See item 3.
+* Both legs are **multi-session**; leg 7 step 4c alone is a 36-module recompile cone. Do not
+  read part (i) or the fork decision as substantial progress on the proofs themselves — the
+  honest value delivered is that the next session starts unblocked.
+
+Items 4–5 are untouched and neither is blocking: the scope-audit re-run, and leg 7's parked
+step 4c fork. Item 6 is a one-question optional loose end from the closed arc. **Item 2 (the
+two UNVERIFIED audit leads) was CLOSED 2026-08-14** — both reproduced, neither leaves a live
+bug; read its residue before touching the zcli driver or `ttuDirect`.
 
 ### 1. The RC1/RC2 arc — CLOSED. Archived 2026-08-11; three things kept here.
 
@@ -280,8 +292,33 @@ into `UsStarWrite.lean::Schema.isSubjectWildcardUserset` (mirroring
 `derive_schema_info`'s second loop); (ii) compose `ensureInBridges`/`ensureBridges` into
 the rule-routed write path; (iii) re-prove `ttuLeaf_elim_nss` and `StarSeed`, which exist
 *because* of the clause; (iv) the remove leg (`removeGateB`, `ttuStarFree_restrict`).
-`TtuStarFree` occurs **162 times across 18 modules**. Decide whether to schedule it; it is
-not blocking anything.
+
+**★ PART (i) LANDED 2026-08-14.** `UsStarWrite.lean::Schema.isStarTuplesetThrough` is the
+twin of `derive_schema_info`'s SECOND loop, and `Schema.isSubjectWildcardUserset` is now
+the disjunction of both loops, as Python has always been. The predicate's own docstring
+used to declare the through-shape out of scope — **that declaration WAS the hole.**
+* ⚠ **It is INERT and does NOT close the counterexample.** `writeRules`/`writeLoggedRules`
+  are bridge-free folds that never call `ensureInBridges`; **part (ii) materializes the
+  edge**. Read part (i) as "the definition-level gap is closed, the machinery-level gap is
+  not".
+* ★ **Being inert is exactly why it carries six `decide` pins.** The narrowest plausible
+  sabotage — short-circuiting `isStarTuplesetThrough` to `false` — reddens *nothing else in
+  the tree*. It reddens two of the pins while the four controls stay green, so the red is
+  attributable. Literal output is in the section docstring.
+* It also converted a **live correctness claim** from prose to a theorem: `CORRESPONDENCE
+  .md`'s `ZT-P5-NEW` rested partly on "the definition scopes the through-shape out", which
+  part (i) falsified; `isStarTuplesetThrough_of_pureDirect` now carries it, **for W1c only**.
+
+**Remaining: (ii), (iii), (iv).** ⚠ **(iv) has an unanswered question that could block it
+outright:** `removeGateB` is a runtime decision procedure that must decide the guard
+fail-closed, so the widened predicate has to stay **decidable by a boolean function**. If it
+is not, the remove leg cannot widen at all. Answer that before scheduling (iv).
+**The real cost is not the occurrence count.** Re-measured 2026-08-14: **163 occurrences in
+18 modules** (this file said 162; `RestrictBase` is 19), split **124 hypothesis-carry / 5
+genuinely CONSUMED / 5 bundle-or-decider / 29 prose** — 97% mechanical. The 5 consumed sites
+live in just two modules (`RulesBareStar`, `RestrictBase`) and need **two structures that do
+not exist yet** (a through-shape carrier weakening `StarSeed`, and a bridge-completeness
+clause on `ReachedByRulesAdmitted`). That is where the time goes; it is not blocking.
 
 ### 4. Re-run the scope audit properly — hand-curated, ~15 items.
 
@@ -474,12 +511,31 @@ this file. **The rule this file keeps re-learning: archive the STATUS, keep the 
       provided leaf preds stay OUT of `S.defs`), and the routing signal **is already
       threaded** (the `Delta.leaf` tag landed 2026-07-20c; the leg turns it from a
       bookkeeping discriminator into an addressing one).
-      **★ RESUME POINT (2026-08-09): steps 0, 1, 2, 2b, 3 and 4a are DONE. The leg resumes
-      at the §11.3 DESIGN FORK, then step 4c.** Read `formal/history/PROOF_STATUS.md`
-      2026-08-09 and scope doc §11 FIRST — §4 of that document is refuted (fork the TUPLE,
-      not `writeDirect`) and §11.3 is a decision the document does not contain (where the
-      `Delta` row is addressed once the edge moves; the `Delta.leaf` tag does NOT settle
-      it). The four older notes below still stand:
+      **★★ RESUME POINT (2026-08-14): steps 0, 1, 2, 2b, 3, 4a are DONE and THE §11.3 FORK
+      IS NOW DECIDED — branch (α), the `Delta` row moves to the leaf node. The leg resumes
+      at step 4c.** Read `formal/history/PROOF_STATUS.md` 2026-08-14 and scope-doc **§11.5**
+      (appended 2026-08-14) FIRST. Four things settled since the 2026-08-09 note:
+      * **(α) by measurement on both sides.** Python's outbox row is keyed at the LEAF
+        (`DeltaOutboxV1` has no relation column at all; the relation IS the object node's
+        predicate) and `DeltaProcessor._map_deltas_to_keys` recovers the public name from
+        the compiled `LeafFamily` table. The Lean probe's control fired: a half-done (α) —
+        row moved, `affectedKeys` untouched — yields the **empty** cascade key set.
+      * **⚠ §11.3 is WRONG in two places.** Its "the model has no analogue … string surgery
+        on the `.i` suffix" is false on both halves (`S.keys` + `isDerived` IS the analogue,
+        and a `.0`-stripper is measurably wrong — Python routes a Direct arm to
+        `approver.2`). **`publicOfLeaf` must be INDEX-AGNOSTIC**, and `Leaf.lean::
+        rawWriteRel`'s hardcoded index `0` is now a *known-wrong* model, not an unmeasured
+        one. Its "`writeLoggedOne` must gain an `S` parameter" is also avoidable —
+        `GraphState.schema` exists and the two forms are definitionally equal under
+        `σ.schema = S`, saving ~145 mention-lines.
+      * **★★ 4c CANNOT LAND ALONE — it must co-land with step 7.** P6 is a Python-side-only
+        filter, so the moment 4c re-points `Exec.lean` the state gate reports ~76 leaf edges
+        "only in LEAN model". Scope doc §7's "each step green and pushable" is refuted at
+        4c. Budget one commit for 4c+7, not two.
+      * **Live landing criterion:** `dropped by P6` → **0** and `compared against Lean` →
+        **265** (today 76 and 189). Scope doc §6's `73 → 0 / 171 → 244` is stale for the
+        third time — re-derive from `FINAL_REVIEW.md`'s generated block, not from prose.
+      The four older notes below still stand:
       * **The attack-first probe returned NO-KILL** — `negEdgeFree` holds under leaf
         routing, positive control reproduced D.3's kill in the same run. The leg is still
         on at full price (§9.1).

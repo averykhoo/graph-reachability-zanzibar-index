@@ -669,7 +669,14 @@ and re-proves/widens the same named theorems. Every stage must keep
   `graph_correct_rulesBS` (`GraphIndex/RulesBareStar.lean`): W2's untainted `check = sem`
   re-proved over `BareStarStore` + `TtuStarFree` (no wildcard TTU parents — attack-
   CONFIRMED necessary: a star tupleset tuple needs W1c in-bridges the rule-routed write
-  model does not materialise), with the query scope widened to star-BARE subjects (probe 1
+  model does not materialise **[STAGE MARKER, 2026-08-14: still true, and now HALF
+  addressed. The `ttuStarFree` LIFT's part (i) landed — `UsStarWrite.lean::Schema.
+  isStarTuplesetThrough` makes the in-bridge PREDICATE fire on the through-shape, so
+  Lean's bridged-in set finally matches Python's two-loop `derive_schema_info`. But the
+  clause is still REQUIRED, because "the rule-routed write model does not materialise
+  them" is unchanged: `writeRules`/`writeLoggedRules` remain bridge-free folds. Part (ii)
+  is what closes this sentence. See PROOF_STATUS 2026-08-14 §3.]**), with the query scope
+  widened to star-BARE subjects (probe 1
   at the `wAny` source; probe-2 hits transfer to the concrete subject via
   `semAux_star_to_bare`). On top: `graphRec_base_eq_bs` (RestrictBase — `TtuStarFree`
   transfers to `S↾U` since the restriction preserves `schemaRewrites`),
