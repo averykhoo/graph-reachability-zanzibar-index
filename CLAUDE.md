@@ -27,12 +27,19 @@ IVM delta processor.
   — **note (verified 2026-07-26): that path does not exist on this machine**; the env
   lives under `C:/Users/user/anaconda3/envs/...`. `formal/verify.sh` hardcodes the
   `avery` path too, so override it with `ZANZIBAR_PY` (it fails loudly, not silently).
-- The full suite is the gate (**1227 tests** as re-measured 2026-07-29 with
-  `pytest <dir> -q --collect-only`: `tests/` **762** + `formal/conformance/` **465**;
-  more in `tests/` with a PostgreSQL DSN configured). Unlike
-  before, these counts ARE now enforced — `verify.sh` carries `-ge` floors on both, so
-  adding tests is always free and losing coverage is loud. Re-measure anyway before
-  quoting a number in prose.
+- The full suite is the gate (`tests/` + `formal/conformance/`; more in `tests/` with a
+  PostgreSQL DSN configured). These counts ARE enforced — `verify.sh` carries `-ge` floors
+  on both (`MIN_TESTS_ALL` / `MIN_CONF_ALL`), so adding tests is always free and losing
+  coverage is loud.
+  **★ No figures here, deliberately (2026-08-14).** This bullet used to read "**1227
+  tests** … `tests/` **762** + `formal/conformance/` **465**" as re-measured 2026-07-29.
+  By 2026-08-14 the live floors were **879** and **494** — i.e. the durable contract
+  understated the suite by ~400 tests, and anyone sizing a coverage change off it would
+  have mis-planned. That is `ZT-P3-5` recurring in the one file that is supposed to be
+  stable. **Live figures live in ONE machine-checked place**, `formal/FINAL_REVIEW.md`'s
+  generated counts block (gated by `verify.sh` step 4e; regenerate with
+  `python -m formal.conformance.doc_counts --generate`). Read them there, and re-measure
+  with `pytest <dir> -q --collect-only` before quoting one anywhere.
 - **The gate = `bash formal/verify.sh`**, and it now covers `tests/` too. The one-shot
   blows the harness's ~10-min command cap, so it takes a **phase arg** and each phase
   fits: `lean` → `conf-tile:1/5`…`conf-tile:5/5` → `tests-tile:1/4`…`tests-tile:4/4`.

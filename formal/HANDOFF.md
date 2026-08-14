@@ -62,6 +62,42 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**★★ 2026-08-14 — THE §11.3 FORK IS DECIDED: branch (α). `ttuStarFree` PART (i) IS IN.**
+Read `history/PROOF_STATUS.md` 2026-08-14 and scope-doc **§11.5** (appended; §11.3 is left
+as written and is wrong in two places).
+
+* **(α) — the `Delta` row moves to the leaf node.** Python's outbox row IS keyed at the leaf
+  (`index_v4/models.py::DeltaOutboxV1` has no relation column; the relation is the object
+  node's predicate), and `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`
+  recovers the public name from the compiled `LeafFamily` table. The Lean probe did not
+  refute (α); its control — the half-done (α), row moved with `affectedKeys` untouched —
+  produced the **empty** cascade key set, so the instrument is real.
+* **⚠ `publicOfLeaf` MUST BE INDEX-AGNOSTIC.** §11.3's prescribed "string surgery on the
+  `.i` suffix" is measurably wrong: Python routes `(viewer but not banned) or [user]` to
+  `approver.2`, where a `".0"`-stripper returns `none`. `Leaf.lean::rawWriteRel`'s
+  hardcoded index `0` is therefore a known-wrong model, not merely unmeasured.
+* **★ `writeLoggedOne` does NOT need an `S` parameter** — `GraphState.schema` already
+  exists and a `σ.schema`-reading variant is definitionally equal under `σ.schema = S`.
+  That removes ~145 mention-lines from the budget (61 + 84 re-measured, not §11.3's 58),
+  at the price of a per-site schema hypothesis.
+* **★★ 4c CANNOT LAND ALONE — it must co-land with step 7.** P6 is a Python-side-only
+  filter (`formal/conformance/extractor.py::_edge_projection`), so the moment 4c re-points
+  `Exec.lean` the state gate reports ~76 leaf edges "only in LEAN model". Scope doc §7's
+  "each step green and pushable" is refuted at 4c.
+* **Live landing criterion** (re-derive from `FINAL_REVIEW.md`'s generated block, never from
+  prose): **`dropped by P6` → 0 and `compared against Lean` → 265** (today 76 and 189).
+* **`ttuStarFree` part (i) LANDED**: `Schema.isStarTuplesetThrough` + the widened
+  `Schema.isSubjectWildcardUserset` = both loops of `derive_schema_info`, as Python.
+  ⚠ **INERT on every live chain** — `writeRules`/`writeLoggedRules` never call
+  `ensureInBridges`, so part (ii) is what materializes the edge. Do NOT read part (i) as
+  closing the 2026-08-10 counterexample. Six `decide` pins carry it because, being inert,
+  the obvious sabotage reddens nothing else in the tree.
+* **Still owed:** leg 7 steps 4c/4b/5/6/7; `ttuStarFree` parts (ii)/(iii)/(iv). Part (iv)
+  has an unanswered blocking question — is the widened predicate still **decidable** by a
+  boolean function? `removeGateB` must decide the guard fail-closed, so if not, the remove
+  leg cannot widen at all. Occurrence split re-measured: **163 in 18 modules**, only **5
+  genuinely CONSUMED**.
+
 **★★ 2026-08-10 — ATTACK-FIRST KILL: `W4Fragment.ttuStarFree` CANNOT BE DROPPED.**
 The user asked to undo it as a mere scope cut. It is not one: dropping it makes
 `graph_correct` and `backend_equivalence` **FALSE**, machine-checked sorry-free and

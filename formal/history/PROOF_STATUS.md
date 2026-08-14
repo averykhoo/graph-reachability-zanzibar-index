@@ -8,6 +8,161 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-14 (**The §11.3 fork is DECIDED — branch (α), by measurement on both sides. `ttuStarFree` part (i) LANDED. Probe P4 removes ~145 mention-lines from leg 7's budget. Neither leg is close to done, and this entry says so.**)
+
+**Task taken:** the user asked for BOTH big open legs — leg 7 (leaf-family split / retire
+P6) and the `ttuStarFree` lift — gate-green and pushed. **They are not one-session work**,
+and the scope call was made up front rather than discovered at the end: leg 7's step 4c
+alone has a 36-module / ~33k-line recompile cone, and the user's own constraint (*full gate
+green before pushing*) forbids the obvious partial, because P6 is a **Python-side-only**
+filter (`formal/conformance/extractor.py::_edge_projection`) — the instant 4c re-points
+`Exec.lean`, Lean emits leaf edges Python has no counterpart for and `diff_states` prints
+~76 `edge only in LEAN model` lines. **4c cannot land green on its own; it must co-land
+with step 7.** That is a scheduling fact the scope doc does not contain, and it is why this
+session landed the adjudication and part (i) instead of a red half-leg.
+
+### 1. ★★ THE §11.3 DESIGN FORK IS DECIDED: branch (α) — the `Delta` row moves to the leaf node
+
+Measured on both sides, not argued.
+
+**PYTHON.** `index_v4/models.py::DeltaOutboxV1` has **no relation column at all** — "which
+relation is this row about" IS the object node's `object_predicate`. `index_v4/core.py::
+ReachabilityIndex._emit` reads that off the edge it just wrote, and the caller chain
+(`connectedstore/apply.py::_apply_row` → `zanzibar_utils_v1.py::RuleSet.apply`) has already
+re-addressed the triple onto the leaf. Measured end-to-end on
+`approver := ([user] or viewer) but not banned`, one raw write `doc:d1#approver@user:bob`:
+
+```
+id=1 action=ADDED object=(doc,d1,approver.0)   <- the raw write, keyed at the LEAF
+id=2 action=ADDED object=(doc,d1,approver)     <- the reconcile emission, keyed PUBLIC
+```
+
+The consumer recovers the public name from a compiled table —
+`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`: `key = (o_type,
+fam.owner_relation, o_name)`. Note Python parses the `.i` suffix **only to record `index`**;
+the public name is *carried*, never re-derived by string surgery.
+
+**LEAN** (attack-first, house rule 2; scratch module outside the lake package, deleted
+after). Literal output:
+
+```
+NV3 sA.outbox.length = 1
+NV4 (pred,rel,leaf)  = [("approver.0","approver.0",true)]     <- the row really moved
+NV5 frontierRows     = 1        NV6 nodes = 2
+NV7 publicOfLeaf doc approver.0 = some "approver"
+NV8 publicOfLeaf doc approver   = none                        <- map is not the identity
+SUBJECT  cascadeKeysA Sw sA = [("doc","approver","d1")]   contains = true
+CONTROL1 cascadeKeys  Sw sA = []
+SUBSUMPTION cascadeKeysA on untainted = today's cascadeKeys = true
+BETA     cascadeKeys Sw sB = [("doc","approver","d1")]
+CONE alpha = 1        CONE beta = 1
+```
+
+* **(α) is NOT refuted** — the leaf write dirties its own public key.
+* **CONTROL1 is the one that matters.** The *half-done* (α) — row moved to the leaf,
+  `affectedKeys` left alone — yields the **empty** key set: a cascade that would claim to
+  quiesce while never reconciling the key that changed. It fires, so the instrument is real.
+* **SUBSUMPTION** — (α) leaves the untainted fragment byte-identical.
+
+**★ TWO CORRECTIONS TO §11.3, both measured.**
+
+1. §11.3 says *"the model has no analogue of the compiled table … in Lean it would be
+   string surgery on the `.i` suffix"*. **Both halves are wrong.** `S.keys` + `isDerived`
+   IS the analogue, and string surgery is measurably incorrect: control C2 shows a
+   `".0"`-stripper returns `none` on `approver.2` where the index-agnostic map returns
+   `some "approver"` — and Python really does route `(viewer but not banned) or [user]` to
+   `approver.2`. **`publicOfLeaf` must be INDEX-AGNOSTIC.** ⚠ `Leaf.lean::rawWriteRel`
+   still hardcodes `leafPred t.relation 0`, so scope doc §8.2/§11.4's "open and unmeasured"
+   is now **measured**: index 0 is the wrong model.
+2. **The strongest argument AGAINST (α) is refuted.** It was that the (α) cone is a
+   singleton (leaf nodes are sinks), so a fan-out would move from cascade round 1 into
+   round 2 — an unmeasured risk to the headline-pinned `runCascade2_no_abort` /
+   `cascade2_drains`. Measured: **`CONE alpha = 1` and `CONE beta = 1`.** No round-structure
+   delta at this witness. No document contained these two numbers.
+
+**BINDING CONDITION for 4c:** `d.leaf = true` must stay the LEADING conjunct of the own-key
+guard, or three one-line `rw [hleaf]; simp` discharges become real proof work.
+
+### 2. ★ PROBE P4 — `writeLoggedOne` does NOT need an `S` parameter (~145 mention-lines saved)
+
+Two scouts disagreed; the probe settles it. `GraphState` already carries `schema : Schema`,
+and
+
+```lean
+theorem lever (σ : GraphState) (S : Schema) (t : Tuple) (h : σ.schema = S) :
+    writeLoggedOneSelf σ t = writeLoggedOneS σ S t := by subst h; rfl
+```
+
+compiles — the two forms are **definitionally** equal under the schema equation. Control
+(so the equation is load-bearing, not decorative): with `σ.schema = Sw` but a mismatched
+`S = Sflat`, the outbox relations are `["approver.0"]` vs `["approver"]`, `decide … = false`.
+Measured scale of what this avoids: **61 `writeLoggedOne` + 84 `removeLoggedOne`
+mention-lines**, of which only 15 already name an `S` on the same line.
+⚠ **It is a trade, not a free win:** signature churn becomes a per-site `σ.schema = S`
+hypothesis. That is exactly what `writeRules_schema` / `reachedByW3d2_schema` exist to
+supply, so the trade is favourable — but budget the hypothesis, not zero.
+
+### 3. `ttuStarFree` LIFT — PART (i) LANDED
+
+`Schema.isSubjectWildcardUserset` is now the disjunction of BOTH loops of
+`zanzibar_utils_v1.py::derive_schema_info`, via the new `Schema.isStarTuplesetThrough`.
+Before this it keyed on a LITERAL `[t:*#p]` restriction only and its own docstring declared
+the through-shape out of scope — **that declaration WAS the hole.**
+
+* **★ HONEST LIMIT: part (i) is INERT on every live chain.** `writeRules`/`writeLoggedRules`
+  are bridge-free folds that never call `ensureInBridges`. The predicate is right; nothing
+  consumes it. **This does not close the 2026-08-10 counterexample** — part (ii) does.
+* **★ Which is exactly why the pins exist.** Because it is inert, the narrowest plausible
+  sabotage (short-circuit `isStarTuplesetThrough` to `false`) reddens NOTHING else in the
+  tree. Six `decide` witnesses were added; the sabotage reddens exactly two, and the four
+  controls stay GREEN, so the red is **attributable**. Literal output in the section
+  docstring in `UsStarWrite.lean`.
+* **A live correctness claim was converted from prose into a theorem.**
+  `CORRESPONDENCE.md`'s `ZT-P5-NEW` argued Python's `_reject_star_self_edge` guard is inert
+  on every modeled fragment because `bridged_in ∩ bridged_out` is unsatisfiable; one of its
+  three legs was *"`isSubjectWildcardUserset` explicitly scopes out the through-shape"*,
+  which part (i) made FALSE. The conclusion survives on
+  `isStarTuplesetThrough_of_pureDirect` — `PureDirect` leaves no `.ttu` arm for `exprTtus`,
+  so on W1c the disjunct cannot fire. ⚠ **W1c ONLY. W4 admits TTUs and must be re-derived
+  when part (ii) lands.** This is precisely the rot class step 4d CANNOT catch: every anchor
+  in the false sentence still resolved.
+* Downstream cost was the predicted one line: `isSWU_of_storeValid` supplies `Or.inl`.
+  `UsStarCorrect` built verbatim, **including the audited `bridgedInConcrete_elim`** —
+  confirming the outer `p != BARE` had to stay OUTERMOST. **No producer of
+  `UsStarReachedAdmitted` exists anywhere in the tree** (checked before editing; it was the
+  pre-declared bail-out), so the anti-monotone narrowing of that family broke nothing.
+
+### 4. Leaf.lean citation de-rot + leg-7 addressing MAPPED
+
+Every `file:line` in `Leaf.lean`'s docstrings had rotted — it landed 2026-08-09, two days
+BEFORE the rule "cite `file::function`" was derived. `zanzibar_utils_v1.py:1658` now lands
+on `out: set[...]`; `index_v4/invariants.py:303` and `:307` are **blank lines**; and
+`zanzibar_utils_v1.py:447` — the citation the file's CENTRAL argument rests on ("fork the
+TUPLE, not `writeDirect`") — now lands on `rel = relational_triple.relation`. All 12
+converted. **But a Lean docstring is not gated**, so the durable half is that
+`leafPred`/`leafNode`/`rawWriteTuple`/`writeDirectRaw` had **zero** `CORRESPONDENCE.md`
+occurrences — leg 7 steps 3/4a landed unmapped. Three rows added; those anchors are now
+checked by step 4d. The P6 row records the landing criterion where it cannot rot.
+
+### 5. Numbers, and what is left
+
+`verify.sh lean` PASSED throughout. Audits 493 → **501** (pin regenerated deliberately),
+anchors 436 → **464**, headline statements **38/38** and definitions **155/155** UNMOVED.
+Live P6 baseline, re-derived from `FINAL_REVIEW.md`'s generated block (the scope doc's §6
+figures `73 → 0 / 171 → 244` are the 2026-08-05 era and are **stale — the third expiry in
+that document**): raw 498, P1 233, P2 0, **P6 76, compared 189**. So leg 7's criterion is
+**P6 → 0 and compared → 265**.
+
+**Still owed — do not read this session as progress on the hard part.** Leg 7: 4c, 4b, 5,
+6, 7, with 4c and 7 forced to co-land. `ttuStarFree`: parts (ii), (iii), (iv) — and (iv)
+carries an unanswered question that could block it outright, namely whether the widened
+predicate is still **decidable** by a boolean function, since `removeGateB` must decide the
+guard fail-closed. Re-measured occurrence split for (iii)/(iv): **163 in 18 modules**
+(handoff said 162), of which only **5 are genuinely CONSUMED** — the raw count was never
+the cost.
+
+---
+
 ## Session 2026-08-10 (**ATTACK-FIRST KILL: `ttuStarFree` CANNOT be dropped — `graph_correct` is machine-checkably FALSE without it. The predicted MECHANISM was refuted; the conclusion stands.**)
 
 **Task taken:** the user asked to undo the `W4Fragment.ttuStarFree` scope reduction, on the
