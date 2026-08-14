@@ -8,6 +8,96 @@ to the user instead.
 
 ---
 
+## 2026-08-14 — the `_any_residue_reference` / `_keys_referencing` scan is FIXED: `ResidueRefV1`, the index `ZT-P0-1` prescribed
+
+Closes the board item opened by the 2026-07-29b **measurement** entry below, which
+deliberately measured and did not fix. Both node-release lookups were complete
+`ResidueV1` scans with a per-row JSON decode; they are now indexed seeks on a new
+reverse-index table `index_v4/models.py::ResidueRefV1`
+(`object_node_id`, `subject_node_id`, one row per id in `neg | upos`).
+
+This is exactly the fix `ZT-P0-1`'s own note named — *"a subject-id → residue **index**
+maintained in `_store_residue`, never a leaf-kind whitelist"* — and the N3-WITHDRAWN
+block at the head of `processor.py` is updated to say it landed. The whitelist mechanism
+stays retired: an index is keyed on the ids actually recorded, so widening
+candidate-resolution maintains it automatically, which is precisely the coupling that
+made a leaf-kind gate rot into an escalation.
+
+**Measured** (SQLite in-memory, paranoia off, both implementations timed in the same
+process on the same store; schema `viewer: [user:*] but not blocked`, R residue-bearing
+objects). The old scan is linear in R; the new lookup does not move:
+
+| R | scan (old) | index (new) | speedup |
+|---|---|---|---|
+| 25 | 0.30 ms | 0.114 ms | 3x |
+| 100 | 1.05 ms | 0.222 ms | 5x |
+| 400 | 3.40 ms | 0.140 ms | 24x |
+| 800 | 6.17 ms | 0.126 ms | 49x |
+| 1600 | 13.03 ms | 0.146 ms | 89x |
+
+The headline is the **flatness**, not the 89x: the extrapolated ~1.4 s per node release
+at 100k residue rows, and the quadratic churn past the crossover, are both gone by
+construction rather than reduced. The 2026-07-29b instrument note is honoured — the
+harness asserts its own residue-row and `neg`-id counts, because a run that built none
+would have timed an empty table and printed a believable result.
+
+**Maintenance and its checker.** `DeltaProcessor._sync_residue_refs` is called from
+`_store_residue` (the only live-path `ResidueV1` writer) and diffs against the rows that
+exist, so cost is O(rows for this object). `bulk_build.py` populates the index itself in
+a new `(2c)` block — it bypasses `_store_residue` entirely, and that omission is the
+single most plausible way to ship this broken. `ResidueV1.neg`/`upos` stay
+**authoritative**; a new I6 clause asserts the index agrees with them exactly and in both
+directions, plus an orphan clause for index rows outliving their residue. That clause
+decodes the JSON directly and never consults `processor.py`, so it is an independent
+check and not a mirror of its own subject.
+
+**Not in the state gate, deliberately.** `formal/conformance/extractor.py` names the
+tables it reads, so `ResidueRefV1` is not swept in. That loses nothing: its contents are
+a pure function of `ResidueV1.neg`/`upos`, which the gate already compares, and the I6
+clause pins the function. It is therefore not a new projection — there is no independent
+state here to drop.
+
+**No Lean obligation, verified rather than assumed.** The whole region is already
+declared unmodeled in `CORRESPONDENCE.md` §7.3 ("Node GC + flag lifecycle AS AN
+ALGORITHM"), and `ReconcileDiff.lean` / `Cascade.lean` both state that node GC is a
+modeled-away optimization. Nothing became dead code. The three function names in §7.3's
+anchor list (`_any_residue_reference`, `_keys_referencing`, `_residue_references`) were
+kept **for that reason** — renaming any of them would fail `verify.sh` step 4d.
+
+### ★ The sabotage findings, which are the transferable part
+
+Three source-level sabotages, all restored; full literal output in
+`tests/test_residue_ref_index.py`'s module docstring. **Two of the three predictions
+were wrong**, and the second correction is the one worth carrying:
+
+* **(S1) the offline path forgets the index.** Predicted: the bulk differential gate
+  stays green (it compares `snapshot_rows`, i.e. nodes and edges only) and the new file
+  is the only witness. Observed: it goes `5 failed, 2 passed` — `test_bulk_build.py`
+  calls `check_invariants`, so the new I6 clause fires inside the existing gate. Better
+  coverage than designed for.
+* **(S3) skip the sync on the residue-DELETE branch only** — the narrowest of the three.
+  Predicted: caught by the teardown test. **Observed: the entire new test file was GREEN
+  (`11 passed`)**; only `tests/test_matrix.py` caught it, via paranoia. **The reason
+  generalises to any index maintained beside a deletable row:** an orphan is observable
+  only when the indexed row goes from ref-bearing straight to deleted in ONE step, and
+  every natural teardown ordering empties `neg`/`upos` while `stars` is still present —
+  which clears the index through the *update* branch and leaves nothing to orphan. A
+  teardown test is not a delete test.
+  `test_residue_emptied_in_one_step_takes_its_index_rows_with_it` constructs that
+  ordering explicitly (drop the wildcard grant first, then the userset grant) and is the
+  file's only pin on the delete branch.
+
+**Migration note, stated because there is no migration framework.** Tables are created by
+`SQLModel.metadata.create_all`, so an index built before this change gets an empty
+`residue_ref_v1` and its node-release guards would believe nothing is referenced — the
+ZT-P0-1 direction. There is no in-tree upgrade path and none is offered (schemas are
+static; a new schema means a new store/index). What exists is detection: the cheap
+`ZANZIBAR_PARANOIA=residue` tier fires on the first commit against such a store, with
+`I6: residue_ref index disagrees with neg|upos on ...`. Rebuild with `build_index` to
+recover.
+
+---
+
 ## 2026-08-11 — ★★ RC2 FIXED: a stored `T:*` tupleset parent is represented, not dropped. The 2026-08-10 fail-open family is CLOSED.
 
 RC1 was fixed 2026-08-10 (`ed46e54`); this closes **RC2**, the second and last root cause of
@@ -544,6 +634,10 @@ full `ResidueV1` scan with a real index rather than eliding it"* — i.e. a
 node-id-keyed reference table maintained alongside `neg`/`upos`. That is an
 algorithm change (gate + multi-seed fuzz + a Lean/CORRESPONDENCE look), not a
 measurement, so it is recorded rather than smuggled in.
+
+> **FIXED 2026-08-14** — `ResidueRefV1` landed; see the entry at the top of this file
+> for the design, the re-measurement (the new lookup is FLAT in R), and the sabotage
+> findings. The numbers in this entry are the *pre-fix* baseline and are kept as such.
 
 **Instrument note, recorded because it is the house failure mode.** The first
 *two* versions of this benchmark measured **nothing** and printed a perfectly

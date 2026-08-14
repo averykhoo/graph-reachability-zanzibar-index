@@ -586,19 +586,31 @@ this file. **The rule this file keeps re-learning: archive the STATUS, keep the 
          `formal/HANDOFF.md` is not read as a pending item.
       Resume detail: `formal/history/optional-widening-2026-07.md`,
       `formal/history/PROOF_STATUS.md` 2026-07-19f.
-- [ ] **`_any_residue_reference` / `_keys_referencing` — MEASURED 2026-07-29; the fix
-      is not done.** The complete `ResidueV1` scan on every node-release path is
-      cleanly **O(R) at ~15 µs per residue row** (0.35 ms at 25 rows → 22 ms at 1600;
-      x1.98 per doubling). It is a minority term below ~1–2k residue rows and the
-      DOMINANT term above; extrapolated, 100k residue-bearing keys cost **~1.4 s per
-      node release**, and a churn past the crossover goes quadratic. **Scope:** R is
-      the number of `(object, derived relation)` pairs with a WILDCARD grant, not
-      tuples — stores with no boolean relations pay nothing.
-      **Remaining work** is the fix `ZT-P0-1`'s own note named: replace the scan with
-      a node-id-keyed reference index maintained alongside `neg`/`upos`. That is an
-      algorithm change (full gate + multi-seed fuzz + a Lean/CORRESPONDENCE look), so
-      it was deliberately not smuggled into a measurement pass.
-      Numbers + the instrument trap: `docs/spec-deviations.md` 2026-07-29b.
+- [x] ~~**`_any_residue_reference` / `_keys_referencing` — MEASURED 2026-07-29; the fix
+      is not done.**~~ **DONE 2026-08-14.** The scan is now an indexed seek on a new
+      `ResidueRefV1` reverse-index table — the fix `ZT-P0-1`'s own note named, maintained
+      in `_store_residue` (via `_sync_residue_refs`) and in `bulk_build`'s offline path.
+      Re-measured: the lookup is **FLAT in R** where it was linear (0.30 → 13.03 ms
+      across R=25→1600 before; 0.11–0.22 ms throughout after). The extrapolated ~1.4 s
+      per node release at 100k residue rows and the quadratic churn are gone by
+      construction, not reduced. Nothing owed to Lean (the node-GC region has no model
+      at all, §7.3) — verified, and the three function NAMES were kept deliberately
+      because `verify.sh` step 4d resolves them as `CORRESPONDENCE.md` anchors.
+      Design, measurement, migration note: `docs/spec-deviations.md` 2026-08-14.
+      * ★ **The transferable finding, from the sabotage that did NOT fire.** Skipping
+        index maintenance on the residue-DELETE branch alone left the whole new test
+        file **green** (`11 passed`); only the paranoia-driven matrix caught it. An
+        orphan is observable only when the indexed row goes from ref-bearing straight
+        to deleted in ONE step, and every natural teardown ordering empties
+        `neg`/`upos` while `stars` is still present — clearing the index through the
+        *update* branch, so there is nothing left to orphan. **A teardown test is not
+        a delete test.** Generalises to any index maintained beside a deletable row;
+        `test_residue_emptied_in_one_step_takes_its_index_rows_with_it` is the pin.
+      * ⚠ **No migration path exists and none is offered.** An index built before this
+        change gets an empty `residue_ref_v1` from `create_all`, and its node-release
+        guards would then believe nothing is referenced (the ZT-P0-1 direction). The
+        cheap `ZANZIBAR_PARANOIA=residue` tier fires on the first commit against such
+        a store; rebuild with `build_index`.
 - [ ] **Five `.fga` fixtures are fully subsumed at the pairwise level — TRACKED IN CODE,
       no action owed, no rush.** Measured 2026-08-11 against `genswarm`'s derived
       alphabet: `confluence`, `custom_roles`, `gdrive`, `github` and `master_store`

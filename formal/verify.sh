@@ -215,7 +215,10 @@ MIN_CONF_ALL=494
 # an old fixture's features (punishing corpus growth) and it masks itself under
 # leave-one-out, whereas the pair floor protects all 839 co-occurrences at once. This
 # is the only lowering in this file's history; treat a future one with more suspicion.
-MIN_TESTS_ALL=867
+#
+# Raised 867 -> 879 on 2026-08-14 (`pytest tests/ -q --collect-only`): +12 for
+# `tests/test_residue_ref_index.py`, the ResidueRefV1 reverse-index pins.
+MIN_TESTS_ALL=879
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

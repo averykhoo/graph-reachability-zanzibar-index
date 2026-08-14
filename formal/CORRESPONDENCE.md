@@ -1025,7 +1025,10 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   `::DeltaProcessor._gc_subject_node`'s guard stopped protecting recorded nodes. That was an
   **authorization escalation** (a dangling residue `upos` id surviving rowid
   recycling ⇒ a false ALLOW). **Both the flag and the constant are gone;
-  `_keys_referencing` now always scans**, and a "N3 WITHDRAWN — DO NOT
+  `_keys_referencing` became UNCONDITIONAL** — it answers on every schema, with no
+  leaf-kind gate (it scanned every residue row to do so until the 2026-08-14 entry
+  below replaced the scan with an index; the *unconditional* part is the load-bearing
+  half and is unchanged) — and a "N3 WITHDRAWN — DO NOT
   RE-INTRODUCE" block at the top of `processor.py` records the precise property
   (P) a future whitelist would have to re-establish, and why the safe residual
   set is empty.
@@ -1046,6 +1049,30 @@ still describes the algorithm the Python actually runs. So, when optimizing:
   branch and gave that branch an
   escalation to the full reconcile — see the cheap-path entry in §7.1, which is
   where that change is recorded as a model gap.
+* **★ `ResidueRefV1` — the residue-reference scan replaced by a maintained reverse
+  index (`index_v4/`, 2026-08-14). A perf fix inside the same unmodeled region.**
+  The entry above left `_keys_referencing` scanning every `ResidueV1` row of the
+  store; that scan was measured at ~15 µs/row and quadratic under churn
+  (`docs/spec-deviations.md` 2026-07-29b), and is now an indexed seek on a new
+  `index_v4/models.py::ResidueRefV1` table maintained by
+  `index_v4/processor.py::DeltaProcessor._sync_residue_refs` from
+  `index_v4/processor.py::DeltaProcessor._store_residue` (plus the offline
+  `bulk_build.py` path). Re-measured: the lookup is FLAT in the residue count where
+  it was linear.
+  **Formal disposition (verified, not assumed): nothing is owed to the Lean side**,
+  for the same reason and by the same grep as the entry above — the node-GC region
+  has no Lean counterpart at all (§7.3), so no definition described the scan and
+  none became dead code. Two things were checked rather than assumed:
+  (i) the §7.3 anchor list names `_any_residue_reference`, `_keys_referencing` and
+  `_residue_references`, so all three names were **deliberately kept** — renaming
+  one would fail `verify.sh` step 4d; (ii) `ResidueRefV1` is not added to the state
+  gate, because `formal/conformance/extractor.py` names its tables explicitly and
+  the new table's contents are a pure function of `ResidueV1.neg`/`upos`, which the
+  gate already compares. It is therefore **not** a new projection: there is no
+  independent state being dropped. The function is pinned by a new I6 clause that
+  decodes the JSON directly (deliberately not a mirror of the index).
+  **Pins: `tests/test_residue_ref_index.py`** (12 tests, incl. the offline path and
+  the delete-branch orphan case, with the sabotage evidence in its docstring).
 * **★ Same-day guard hardening — admission/guard level, below the model's
   abstraction (2026-07-26).** Three fixes from the same review changed no modeled
   algorithm and need no Lean change:

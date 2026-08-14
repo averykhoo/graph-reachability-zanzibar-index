@@ -50,7 +50,7 @@ from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet, norm_pred
 
 from .bulk_backfill import _BulkBackfill
 from .invariants import InvariantViolation
-from .models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueV1
+from .models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueRefV1, ResidueV1
 
 if TYPE_CHECKING:
     from zanzibar_utils_v1 import SchemaInfo
@@ -343,6 +343,25 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
             for (o_type, rel, o_name), res in residue_items[start:start + _WRITE_CHUNK]
         ]
         session.execute(insert(ResidueV1), chunk)
+
+    # (2c) residue reverse index: one row per (residue object, recorded subject id),
+    #      i.e. exactly the union `neg | upos` written above, chunked the same way.
+    #      This path bypasses ``DeltaProcessor._store_residue``, so it must populate
+    #      the index itself -- a bulk build that skipped it would produce a store whose
+    #      node-release paths believe NOTHING is referenced, which is the ZT-P0-1
+    #      escalation class. Pinned by the I6 agreement clause (invariants.py), which
+    #      the bulk differential gate runs over every built store.
+    ref_rows = [
+        {
+            'store_id': store_id,
+            'subject_node_id': node_id[k],
+            'object_node_id': node_id[(rel, o_type, o_name, '')],
+        }
+        for (o_type, rel, o_name), res in residue_items
+        for k in sorted(set(res.neg) | set(res.upos))
+    ]
+    for start in range(0, len(ref_rows), _WRITE_CHUNK):
+        session.execute(insert(ResidueRefV1), ref_rows[start:start + _WRITE_CHUNK])
 
     # (3) outbox: one ADDED row per final pair, chunked (N18), endpoint identities
     #     denormalized from the node keys (== what ``_emit`` captures from the live node
