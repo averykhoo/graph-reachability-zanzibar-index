@@ -150,6 +150,48 @@ guess, and it is the only way the next reader can tell the two apart.
 
 ---
 
+## ★ The first fan-out that worked (2026-08-14) — what the rules bought
+
+The rules above were followed for a 6-scout + 1-reducer run scoping leg 7 and the
+`ttuStarFree` lift. **8 of 8 agents completed, 7 deliverables persisted, the reducer read
+7 of 7.** Contrast the 2026-08-10 run: 32 of 278, verify and synthesis never ran.
+
+What actually made the difference, in rough order of value:
+
+1. **The work list was seeded BY HAND, not swept.** Six questions, each one a thing a
+   human already knew needed answering (the fork, the remaining steps, the three
+   `ttuStarFree` parts, the gate blast radius, the Python ground truth). Rule 6. No
+   discovery phase existed, so there was nothing to be over-inclusive about — the failure
+   mode that produced 96 parser-error "items" last time was structurally absent.
+2. **Depth over breadth, deliberately.** ~7 agents, not ~280. Every one completed, so the
+   phase that turns claims into findings actually ran. Rule 4.
+3. **One contended resource, one owner.** Every scout prompt carried an explicit *"do NOT
+   run `lake build` / `verify.sh`; another agent owns the build lock"*. Zero corruption,
+   and the orchestrator could hold the lock and run the baseline gate concurrently with
+   the whole scouting phase. Rule 5.
+4. **A READ-ONLY fan-out is the safe shape, and it matches the house rule.**
+   `formal/HANDOFF.md` rule 6 already says subagents don't parallelize proof-closing.
+   Scoping, measuring and design ARE parallelizable; the compiler-in-loop work is not.
+   Splitting on exactly that line meant no agent could damage the tree.
+5. **The reducer was controlled.** It was required to state its file count, and it
+   reported "7 of 7" plus five facts it re-verified against the tree independently. A
+   reducer that silently reads zero files reports a clean bill of health.
+
+**★ The finding that justifies the whole exercise: scouts disagreed, and the disagreement
+was the most valuable output.** Two scouts split on whether `writeLoggedOne` must gain an
+`S` parameter (~145 mention-lines). The reducer was told **not to average them** — "say
+which one has better evidence" — so it surfaced the conflict instead of smoothing it, and
+a 20-line probe settled it in the cheaper direction. **A synthesis that reconciles its
+sources destroys exactly the signal you paid for.** Instruct against it explicitly.
+
+**⚠ What still needs a human.** Every scout produced a confident, well-cited report, and
+several load-bearing claims were still wrong or over-reached — the predicted cascade
+round-structure shift (measured away: both cones are 1), the `_RelationParser.check_name`
+symbol that does not exist, the "far cheaper than §5 suggests" sizing inherited from a
+document. **Scout output is a set of hypotheses with citations attached, not findings.**
+The probes are what turned them into findings, and the probes were run by the
+orchestrator, serially, holding the build lock.
+
 ## The one thing that did work
 
 The single-agent attack-first probe with **its own exclusive resource, a positive control,

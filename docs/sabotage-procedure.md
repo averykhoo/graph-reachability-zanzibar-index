@@ -66,6 +66,44 @@ pair is the model:
 Ask: **"what is the most innocent-looking edit that would make this feature stop being
 tested?"** Sabotage *that*.
 
+### The INERT change — when the sabotage reddens nothing, and that is the finding
+
+Added 2026-08-14, from `ttuStarFree` part (i).
+
+Sometimes you land a correct change that **nothing consumes yet**. Part (i) widened
+`Schema.isSubjectWildcardUserset` to cover star-tupleset through-shapes — genuinely
+closing a modelling hole — but the only function that reads it, `ensureInBridges`, is
+not called by any live chain (`writeRules`/`writeLoggedRules` are bridge-free folds).
+So the sabotage produced this:
+
+> **Short-circuit `isStarTuplesetThrough` to `false` — the entire tree still builds.**
+
+That result is easy to misread two ways, and both are wrong:
+
+* ❌ *"the sabotage didn't fire, so my change must be inert/pointless"* — no, the change
+  is correct and necessary; it is a **prerequisite** whose consumer lands later.
+* ❌ *"nothing went red, so the tree already covered this"* — no, the tree covered
+  **nothing** here. A green build under the sabotage is the *proof* that no existing
+  check guards the new behaviour.
+
+**The rule: when a change is inert, the sabotage's job flips.** It is no longer asking
+*"does the existing gate catch this?"* — you already know it doesn't. It is telling you
+**exactly how much new pinning you owe**, which is *all of it*. Part (i) therefore ships
+with six `decide` witnesses that exist for no other reason, and the commit says so.
+
+Two corollaries worth carrying:
+
+1. **Make the red attributable.** Under the sabotage, exactly two of the six pins went
+   red and the other four — the literal-disjunct attribution, the one-character control,
+   the BARE-guard, and the control node — stayed **green**. A sabotage that reddens
+   *everything* cannot distinguish "the new property is load-bearing" from "the file is
+   broken". Build the controls so the red points at one thing.
+2. **Say it in the commit and the docstring, not just in your head.** The dangerous
+   future reader is the one who sees a definition with a disjunct nothing calls and
+   "simplifies" it away. The pins are the only thing standing between them and silently
+   reopening the hole — so the docstring must state that the pins are the *sole*
+   evidence, and why.
+
 ### Sabotage your instrument too, not just your subject
 
 A measuring instrument can be as broken as the thing it measures — and it fails

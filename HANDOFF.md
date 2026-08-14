@@ -16,39 +16,53 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## ★★ START HERE (2026-08-11)
+## ★★ START HERE (2026-08-14)
 
-> # 🟢 THE GATE IS GREEN. The 2026-08-10 fail-open family is CLOSED.
+> # 🟢 THE GATE IS GREEN. Known live correctness bugs: 0.
 >
-> **RC2 is FIXED (2026-08-11); RC1 was fixed 2026-08-10 (`ed46e54`).** All ten gate phases
-> plus the 6-seed fuzz sweep are green. The red banner that stood here is gone because the
-> five tests it inventoried are green **with no test edit** — the stated completeness
-> criterion. Measured at the commit that replaced this block:
+> All ten phases (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) PASSED at
+> `8f09e24`, plus a 3-seed fuzz sweep. The 2026-08-10 fail-open family (RC1 `ed46e54`,
+> RC2 2026-08-11) stays closed.
 >
-> ```
-> verify.sh lean            PASSED     493 audits, 38/38 statements, 155/155 defs,
->                                      432 anchors resolved, counts block exact
-> verify.sh conf-tile:1..5  PASSED     99+99+99+99+98 = 494
-> verify.sh tests-tile:1..4 PASSED     212+212+211+211 = 846
-> fuzz --hypothesis-seed=   7 19 31 53 71 97   clean on test_hypothesis.py
->                                              and test_lookup_hypothesis.py
-> ```
+> **★ NO FIGURES IN THIS BANNER, deliberately — read them from
+> [`formal/FINAL_REVIEW.md`](formal/FINAL_REVIEW.md)'s generated counts block.** This block
+> used to carry its own copy, and on 2026-08-14 all three of its numbers were stale
+> (anchors 432 → 464, tests 846 → 879, audits 493 → 501). That is `ZT-P3-5` recurring in
+> the *first thing every session reads*. The gate enforces `-ge` FLOORS, so a count quoted
+> in prose is not merely stale, it is **unenforced**. Rule 3b at the bottom of this file
+> has said so since 2026-07-29; this banner was violating it.
 >
-> *(tests figures re-measured 2026-08-11 after the real-world shape corpus landed:
-> 823 → 846. The fuzz line is from the RC2 run and was NOT re-run — nothing since has
-> changed an algorithm.)*
->
-> The two seeds this file previously flagged as *extra* detonations — 53 and 97, where
-> `TestParityMachine` independently found RC1 on a generator-assembled schema — are green.
->
-> **Known live correctness bugs: 0.** If you see red, it is yours — `git stash` and
-> re-check. Three standing footguns still apply and are still worth reading: a pytest exit
-> code piped through `tail`/`tee` reports the PIPE's status (this bit the 2026-08-10
-> session — a genuinely `4 failed` run was reported exit 0); `HYPOTHESIS_SEED=N` does
-> nothing, only `--hypothesis-seed=N` works; and `MAX_TESTS_XFAILED=0`, so a divergence
-> gets a positive pin, never an xfail.
+> **If you see red, it is yours** — `git stash` and re-check. Four standing footguns:
+> * A pytest/verify exit code piped through `tail`/`tee` reports the **PIPE's** status.
+>   This bit the 2026-08-10 session (a genuinely `4 failed` run reported exit 0) and it
+>   bit again on 2026-08-14. Use `cmd > file 2>&1; echo $?` and **read the `PASSED` line**.
+> * `HYPOTHESIS_SEED=N` does nothing; only `--hypothesis-seed=N` works.
+> * `MAX_TESTS_XFAILED=0` — a divergence gets a positive pin, never an xfail.
+> * `MIN_CONF_ALL` / `MIN_TESTS_ALL` have **zero headroom**; deleting one test is red.
 
-### What landed 2026-08-11 (this session)
+### What landed 2026-08-14 (most recent session)
+
+**Both big Lean legs were taken up. NEITHER is finished, and that was called up front
+rather than discovered at the end** — leg 7's step 4c alone is a 36-module recompile cone.
+What this session actually bought is that the next one starts **unblocked**:
+
+* **★★ Leg 7's §11.3 design fork is DECIDED — branch (α)**, the `Delta` row moves to the
+  leaf node, measured on both the Python and Lean sides. The leg is no longer blocked on a
+  decision, only on effort. **Four cells of the scope doc were refuted**, including a
+  scheduling constraint it does not contain: **step 4c must co-land with step 7**, because
+  P6 is a Python-side-only filter. Resume detail in board item 1 (B1) and scope-doc §11.5.
+* **`ttuStarFree` part (i) LANDED** (`2cf76bb`) — but it is **INERT** and does **not**
+  close the 2026-08-10 counterexample. Parts (ii)/(iii)/(iv) remain; **(iv) carries a
+  possibly-blocking decidability question.** Board item 3.
+* **`Leaf.lean`'s citations de-rotted and leg-7 addressing MAPPED** (`b47d9ed`) — it had
+  landed entirely unmapped in `CORRESPONDENCE.md`, so those anchors are now gated.
+* **Two method lessons were written up** rather than left in a commit message: the
+  **INERT-change sabotage** (when nothing reddens, that *is* the finding, and it tells you
+  you owe all the pinning) in [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md),
+  and **the first fan-out that worked** (8/8 agents, and why) in
+  [`docs/subagent-fanout-runbook.md`](docs/subagent-fanout-runbook.md).
+
+### What landed 2026-08-11
 
 **(1) RC2 — the last root cause of the 2026-08-10 fail-open family.** A stored `T:*`
 tupleset parent was dropped on the derived read path. The `n.wildcard == ''` clause was
