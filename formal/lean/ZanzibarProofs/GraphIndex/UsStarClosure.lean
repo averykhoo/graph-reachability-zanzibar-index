@@ -254,11 +254,51 @@ theorem isSWU_of_storeValid {S : Schema} {T : Store} (hSV : StoreValid S T) {g :
     unfold Schema.isSubjectWildcardUserset
     rw [Bool.and_eq_true]
     refine ⟨by simpa [bne_iff_ne] using hpb, ?_⟩
+    -- part (i), 2026-08-14: the body is now `p != BARE && (literal || through-shape)`.
+    -- A store-valid userset-star grant is witnessed by the LITERAL disjunct, so this
+    -- proof supplies `Or.inl` and is otherwise unchanged.
+    rw [Bool.or_eq_true]
+    refine Or.inl ?_
     refine List.any_eq_true.mpr ⟨p, hpmem, ?_⟩
     rw [hlk]
     have hER : exprRestrictions (Expr.direct rs) = rs := rfl
     rw [hER, List.contains_eq_mem, decide_eq_true_eq, hreq]
     exact hr
+
+/-! ### Why part (i) did not perturb this fragment (2026-08-14) -/
+
+/-- **The through-shape disjunct is VACUOUS on the W1c fragment**, because `PureDirect S`
+    says every definition body is an `Expr.direct`, so no `.ttu` arm exists for `exprTtus`
+    to find.
+
+    ★ **This is a live correctness claim being converted from prose into a theorem.**
+    `formal/CORRESPONDENCE.md`'s `ZT-P5-NEW` entry argues that Python's
+    `::WildcardIndex._reject_star_self_edge` guard is inert on every modeled fragment
+    because `bridged_in ∩ bridged_out` is unsatisfiable, and one of its three legs was
+    *"`Schema.isSubjectWildcardUserset` explicitly scopes out the star-tupleset TTU
+    through-shape this bug rides"*. Part (i) made that leg FALSE. The conclusion survives,
+    but on this lemma rather than on that sentence: on the W1c fragment the widened
+    disjunct cannot fire at all, so `isSubjectWildcardUserset` still reduces to the literal
+    `[t:*#p]` test exactly as the entry assumed.
+
+    ⚠ **It says nothing about W4.** W4 admits TTUs, so there the disjunct is live — which
+    is the entire point of part (i) — and the `ZT-P5-NEW` argument must be re-derived for
+    that fragment when part (ii) composes in-bridges into the rule-routed write path. -/
+theorem isStarTuplesetThrough_of_pureDirect {S : Schema} (hPD : PureDirect S) (t p : String) :
+    S.isStarTuplesetThrough t p = false := by
+  unfold Schema.isStarTuplesetThrough
+  rw [Bool.eq_false_iff, ne_eq, List.any_eq_true]
+  rintro ⟨d, hd, hany⟩
+  obtain ⟨rs, hrs⟩ := hPD d hd
+  rw [hrs] at hany
+  simp [exprTtus] at hany
+
+/-- Corollary: on the W1c fragment the in-bridge test is exactly its pre-2026-08-14 body. -/
+theorem isSubjectWildcardUserset_of_pureDirect {S : Schema} (hPD : PureDirect S) (t p : String) :
+    S.isSubjectWildcardUserset t p
+      = (p != BARE && S.defs.any (fun d => (exprRestrictions d.2).contains (t, p, true))) := by
+  unfold Schema.isSubjectWildcardUserset
+  rw [isStarTuplesetThrough_of_pureDirect hPD, Bool.or_false]
 
 /-! ## The admitted, bridge-complete userset-star write-closure -/
 

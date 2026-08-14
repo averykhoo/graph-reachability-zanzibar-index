@@ -1737,4 +1737,35 @@ namespace Zanzibar
 -- so ONE bridge discharges all five raw-fold obligations with no clone.
 #print axioms foldl_writeDirectRaw_eq
 
+-- ttuStarFree LIFT, PART (i) (2026-08-14) — the star-tupleset TTU through-shape folded into
+-- `Schema.isSubjectWildcardUserset`, so it is now the disjunction of BOTH loops of
+-- `zanzibar_utils_v1.py::derive_schema_info`, as Python has always been. Before this, Lean's
+-- in-bridge test keyed on a LITERAL `[t:*#p]` restriction only, and its own docstring declared
+-- the through-shape out of scope — that declaration WAS the hole that makes `graph_correct`
+-- machine-checked FALSE without `W4Fragment.ttuStarFree`.
+-- ★ THE HONEST LIMIT: part (i) is INERT on every live chain. `writeRules`/`writeLoggedRules`
+-- are bridge-free folds that never call `ensureInBridges`, so no edge is materialized until
+-- part (ii). The predicate is right; nothing consumes it yet. Do not read these as closing
+-- the counterexample.
+-- ★ SABOTAGE-VERIFIED, and the sabotage is the reason the witnesses exist at all: because
+-- part (i) is inert, short-circuiting `isStarTuplesetThrough` to `false` reddens NOTHING
+-- else in the tree. It reddens exactly `through_shape_is_bridged_in` and
+-- `concrete_node_is_bridged` (literal `decide` output in the section docstring), while all
+-- four controls stay GREEN — so the red is attributable to disjunct (b), not to breakage.
+#print axioms Schema.isStarTuplesetThrough
+#print axioms ThroughShapeWitness.through_shape_is_bridged_in
+#print axioms ThroughShapeWitness.literal_disjunct_is_false
+#print axioms ThroughShapeWitness.control_one_char_delta_is_not_bridged_in
+#print axioms ThroughShapeWitness.concrete_node_is_bridged
+#print axioms ThroughShapeWitness.concrete_node_control
+-- The two lemmas that carry a LIVE `CORRESPONDENCE.md` claim rather than a scope note. The
+-- `ZT-P5-NEW` entry argues Python's `_reject_star_self_edge` guard is inert on every modeled
+-- fragment because `bridged_in ∩ bridged_out` is unsatisfiable; one of its three legs was
+-- "`isSubjectWildcardUserset` explicitly scopes out the through-shape", which part (i) made
+-- FALSE. These replace that prose with a machine-checked fragment property: on W1c,
+-- `PureDirect` leaves no `.ttu` arm for `exprTtus`, so the new disjunct cannot fire.
+-- ⚠ W1c ONLY — W4 admits TTUs and must be re-derived when part (ii) lands.
+#print axioms isStarTuplesetThrough_of_pureDirect
+#print axioms isSubjectWildcardUserset_of_pureDirect
+
 end Zanzibar

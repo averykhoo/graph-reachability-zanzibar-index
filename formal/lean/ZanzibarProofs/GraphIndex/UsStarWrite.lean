@@ -32,8 +32,20 @@ ROADMAP "The staged T2 plan", sub-stage **W1c**;
 Bare shapes `(T,'...')` never need in-bridges (nothing in this
 graph points into a `'...'`-predicate node, so a bare-shape hop can only be the
 *leading* hop, which probe 2 covers virtually — this is exactly W1a). A subject-
-wildcard shape `(T,P)` with `P ≠ BARE` comes from any `[T:*#P]` restriction in the
-schema (the first loop of `zanzibar_utils_v1.py::derive_schema_info`).
+wildcard shape `(T,P)` with `P ≠ BARE` comes from **either** loop of
+`zanzibar_utils_v1.py::derive_schema_info`: the FIRST, any literal `[T:*#P]` restriction
+in the schema; **or the SECOND, a star-tupleset TTU through-shape** — a TTU `P from ts`
+whose tupleset relation carries a bare wildcard `[T:*]`, which the TTU rule rewrites into
+a tuple of subject shape `(T,P)`. See `Schema.isStarTuplesetThrough` below.
+
+⚠ **The second loop landed 2026-08-14** (part (i) of the `ttuStarFree` lift). Before that
+this header said "the first loop" and meant it: the through-shape was declared out of
+scope, and that declaration WAS the hole that made `graph_correct` machine-checked FALSE
+without `W4Fragment.ttuStarFree`. Note the consequence for the W4 fragment specifically —
+`W4Fragment.wsBare` forces every shape in `wildcardShapes S` to be `BARE`, and
+`wildcardShapes` sweeps only LITERAL restrictions, so on W4 the first disjunct is
+identically `false` and the in-bridge machinery was dead code. The through-shape disjunct
+is *not* filtered by `wsBare`, and that asymmetry is the whole content of part (i).
 
 ## The model (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` and
 `::WildcardIndex._ensure_bridges`)
@@ -60,16 +72,50 @@ namespace Zanzibar
 
 /-! ## Subject-wildcard userset shapes -/
 
-/-- Is `(t, p)` a declared subject-wildcard *userset* shape — `p ≠ BARE` and some
-    `[t:*#p]` restriction (`(t, p, true)`) occurs in the schema? These are exactly
-    the `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`, fed by
-    `::derive_schema_info`'s restriction sweep; the graph
-    materializes a `concrete → w_any(t,p)` in-bridge for every concrete node of such a
-    shape. (The star-tupleset TTU-through-shape extension of
-    `subject_wildcard_shapes` — `::derive_schema_info`'s second loop — is out of scope
-    for this TTU-free fragment.) -/
+/-- **Star-tupleset TTU through-shape** — the twin of `zanzibar_utils_v1.py::
+    derive_schema_info`'s SECOND loop. `(t, p)` is a through-shape when some definition
+    `(dt, R) ↦ e` contains a TTU `p from ts` (`exprTtus`, the twin of `::_iter_ttus`) and
+    the SAME object type's tupleset relation `(dt, ts)` carries a **bare** wildcard
+    restriction `[t:*]`, i.e. `(t, BARE, true) ∈ exprRestrictions` of its body
+    (`::_iter_directs` + `r.wildcard and r.predicate == '...'`).
+
+    Python's own rationale, verbatim: *"a wildcard restriction [S:*] on a relation used as
+    a TTU tupleset means the TTU rule will rewrite `S:* ts o` into a tuple whose subject
+    shape is (S, target_rel) -- that through-shape must be declared or the graph rejects a
+    schema-legal write the set engine accepts."*
+
+    Deliberately **one pass, no fixpoint**: Python does not feed derived through-shapes
+    back into this loop, and a fixpoint here would be model drift, not fidelity. -/
+def Schema.isStarTuplesetThrough (S : Schema) (t p : String) : Bool :=
+  S.defs.any (fun d =>
+    (exprTtus d.2).any (fun tt =>
+      tt.1 == p &&
+        (match S.lookup (d.1.1, tt.2) with
+         | some ts => (exprRestrictions ts).contains (t, BARE, true)
+         | none    => false)))
+
+/-- Is `(t, p)` a subject-wildcard *userset* shape — `p ≠ BARE` and either **(a)** some
+    literal `[t:*#p]` restriction (`(t, p, true)`) occurs in the schema
+    (`::derive_schema_info`'s FIRST loop), or **(b)** `(t, p)` is a star-tupleset TTU
+    through-shape (`::derive_schema_info`'s SECOND loop, `isStarTuplesetThrough`)?
+    Together with the outer `p != BARE` — which is `::SchemaInfo.bridged_in_shapes`'s
+    final `s[1] != '...'` filter, applied to BOTH disjuncts as in Python — these are
+    exactly `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`. The graph materializes a
+    `concrete → w_any(t,p)` in-bridge for every concrete node of such a shape.
+
+    ⚠ **The outer `p != BARE` must stay OUTERMOST.** `UsStarCorrect.lean::
+    bridgedInConcrete_elim` (audited) recovers its `c.pred ≠ BARE` conjunct by
+    `Bool.and_eq_true` on this `&&`; pushing the guard inside the disjunction breaks it and,
+    through it, the `UsStarReach.inbridge` constructor's `hcp` field.
+
+    **Disjunct (b) landed 2026-08-14** as part (i) of the `ttuStarFree` lift. It is inert
+    on its own — no live chain calls `ensureInBridges` yet (`writeRules`/`writeLoggedRules`
+    are bridge-free folds), so part (ii) is what materializes the edge. The `#guard`s below
+    are therefore this change's ONLY red-to-green evidence; do not delete them. -/
 def Schema.isSubjectWildcardUserset (S : Schema) (t p : String) : Bool :=
-  p != BARE && S.defs.any (fun d => (exprRestrictions d.2).contains (t, p, true))
+  p != BARE &&
+    (S.defs.any (fun d => (exprRestrictions d.2).contains (t, p, true))
+     || S.isStarTuplesetThrough t p)
 
 /-! ## The bridged-in-concrete test and `ensureInBridges` -/
 
@@ -80,6 +126,82 @@ def Schema.isSubjectWildcardUserset (S : Schema) (t p : String) : Bool :=
     `pred ≠ BARE` guard is subsumed by `isSubjectWildcardUserset`. -/
 def GraphState.bridgedInConcrete (σ : GraphState) (c : NodeKey) : Bool :=
   c.variant == Variant.plain && c.name != STAR && σ.schema.isSubjectWildcardUserset c.type c.pred
+
+/-! ### Non-vacuity pins for the through-shape disjunct (part (i), 2026-08-14)
+
+★ **These are the ONLY red-to-green evidence that disjunct (b) does anything.** Part (i) is
+inert on a live chain until part (ii) composes `ensureInBridges` into `writeRules` /
+`writeLoggedRules`, so the narrowest plausible sabotage — *"`isStarTuplesetThrough` returns
+`false`"*, the one-line "simplification" a future reader would reach for — reddens NOTHING
+else in the tree. It reddens these pins, by `decide`.
+
+**SABOTAGE-VERIFIED 2026-08-14, literal observed output.** Short-circuiting the definition
+to `false && S.defs.any …` (the whole rest of the body kept, so the edit stays plausible):
+
+```
+error: ZanzibarProofs/GraphIndex/UsStarWrite.lean:146:66: Tactic `decide` proved that the proposition
+  Sthru.isSubjectWildcardUserset "folder" "viewer" = true
+is false
+error: ZanzibarProofs/GraphIndex/UsStarWrite.lean:166:2: Tactic `decide` proved that the proposition
+  (emptyState Sthru).bridgedInConcrete { type := "folder", name := "f1", pred := "viewer", variant := Variant.plain } =
+    true
+is false
+```
+
+★ **The red is ATTRIBUTABLE**: under that sabotage the four controls below
+(`literal_disjunct_is_false`, `control_one_char_delta_is_not_bridged_in`,
+`bare_pred_still_excluded`, `concrete_node_control`) all stay GREEN. A sabotage that
+reddened everything would not distinguish "disjunct (b) is load-bearing" from "the file is
+broken" — which is the instrument-control half of `docs/sabotage-procedure.md`.
+
+The schema is the 2026-08-10 attack-first counterexample that machine-checked
+`graph_correct` FALSE without `W4Fragment.ttuStarFree` (`history/PROOF_STATUS.md`
+2026-08-10). ⚠ It carries **no object wildcard** — this is not the I14 bug. -/
+namespace ThroughShapeWitness
+
+/-- `viewer: [user]` · `parent: [folder, folder:*]` · `viewer: [user] or viewer from parent`. -/
+def Sthru : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"),    .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "viewer"),    .union (.direct [("user", BARE, false)]) (.ttu "viewer" "parent"))], []⟩
+
+/-- **CONTROL — a one-character delta**: `folder:*` → `folder:f1` on `doc#parent`, i.e. the
+    wildcard restriction is dropped. Same control the 2026-08-10 probe used. -/
+def Sctrl : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"),    .direct [("folder", BARE, false)]),
+    (("doc", "viewer"),    .union (.direct [("user", BARE, false)]) (.ttu "viewer" "parent"))], []⟩
+
+/-- **THE SUBJECT.** Was `false` before part (i); the through-shape is now bridged-in. -/
+theorem through_shape_is_bridged_in :
+    Sthru.isSubjectWildcardUserset "folder" "viewer" = true := by decide
+
+/-- **ATTRIBUTION.** The LITERAL-`[t:*#p]` disjunct (a) is false here, so the subject above
+    is carried by disjunct (b) alone and cannot pass for the pre-existing reason. -/
+theorem literal_disjunct_is_false :
+    Sthru.defs.any (fun d => (exprRestrictions d.2).contains ("folder", "viewer", true)) = false := by
+  decide
+
+/-- **THE CONTROL fires**: without the wildcard restriction there is no through-shape. -/
+theorem control_one_char_delta_is_not_bridged_in :
+    Sctrl.isSubjectWildcardUserset "folder" "viewer" = false := by decide
+
+/-- **SUBSUMPTION.** `BARE` predicates stay out under the outer guard, on both disjuncts —
+    the `bridged_in_shapes` filter Python applies after the union. -/
+theorem bare_pred_still_excluded :
+    Sthru.isSubjectWildcardUserset "folder" BARE = false := by decide
+
+/-- The pin one layer down: the concrete node really does become bridge-eligible. -/
+theorem concrete_node_is_bridged :
+    (emptyState Sthru).bridgedInConcrete ⟨"folder", "f1", "viewer", Variant.plain⟩ = true := by
+  decide
+
+/-- …and under the control it is not. -/
+theorem concrete_node_control :
+    (emptyState Sctrl).bridgedInConcrete ⟨"folder", "f1", "viewer", Variant.plain⟩ = false := by
+  decide
+
+end ThroughShapeWitness
 
 /-- **Ensure the in-bridge for a concrete userset endpoint**
     (`index_v4/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_in_shapes` arm):
