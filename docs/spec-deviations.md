@@ -470,6 +470,18 @@ star-tupleset through-shapes. So Lean's crossable set is exactly the set
 where the bug lived has no Lean counterpart at all. Filed as a fragment boundary in
 `formal/CORRESPONDENCE.md` §7.3.
 
+> **UPDATE 2026-08-14 — the "no Lean counterpart at all" half is no longer true.**
+> Part (i) of the `ttuStarFree` lift added `UsStarWrite.lean::Schema.isStarTuplesetThrough`
+> (the twin of `derive_schema_info`'s SECOND loop) and made
+> `Schema.isSubjectWildcardUserset` the disjunction of both loops, as Python has always
+> been. The arm now HAS a Lean counterpart.
+> **What has NOT changed, and is the honest reading:** the finding's headline — *the formal
+> layer could not have caught this* — still stands for the 2026-08-09 bug, and part (i)
+> does not retroactively make it catchable. The new predicate is still **inert on every
+> live chain**: `writeRules`/`writeLoggedRules` never call `ensureInBridges`, so nothing
+> materializes the edge until part (ii) lands. Read this as "the definition-level gap is
+> closed, the machinery-level gap is not".
+
 **★ A fourth: a live comment was refuted.** `zanzibar_utils_v1.py::wildcard_userset_restriction_shapes`
 justified its narrowing partly with "…the legal reg11 / `owc_star_ttu` class … whose whole
 write space is oracle-correct and unanimous on both backends". That clause was false —

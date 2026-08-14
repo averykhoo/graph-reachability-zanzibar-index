@@ -33,9 +33,15 @@ MemberSet.ext_normalize
 MemberSet.ext_union
 MemberSet.mem_ext_union
 NReaches.mono_subset
+Schema.isStarTuplesetThrough
 T0aCounter.fuel_stable_step_false
 T0aCounter.not_storeDeclared
 T0aCounter.oscillates
+ThroughShapeWitness.concrete_node_control
+ThroughShapeWitness.concrete_node_is_bridged
+ThroughShapeWitness.control_one_char_delta_is_not_bridged_in
+ThroughShapeWitness.literal_disjunct_is_false
+ThroughShapeWitness.through_shape_is_bridged_in
 W4Witness.accepts
 W4Witness.fragment
 W4Witness.within_scope
@@ -200,6 +206,8 @@ inv_writeDirectRaw
 inv_writeRules
 isDerived_pureDirect
 isSWU_of_storeValid
+isStarTuplesetThrough_of_pureDirect
+isSubjectWildcardUserset_of_pureDirect
 kahn_topo_strict
 layer_stable
 leafNode_ne_objNode

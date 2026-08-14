@@ -295,6 +295,7 @@ Python runs. The omissions are now listed in §7 rather than left implicit.
 | `GraphIndex/Write.lean::GraphState.writeDirect` | one guarded closure-edge insert | `index_v4/wildcard.py::WildcardIndex.add_tuple` → `::WildcardIndex._add_tuple_trusted` → `index_v4/core.py::ReachabilityIndex.add_edge` / `::ReachabilityIndex.add_edge_by_id` |
 | **`GraphIndex/ObjStarWrite.lean::GraphState.bridgedConcrete` / `::GraphState.ensureBridges` / `::GraphState.writeWild`** | **object-wildcard (out-)bridge materialization — an EXISTING Lean model that this file never listed** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (out-bridge half), `::WildcardIndex._bridge_degree`, `::WildcardIndex._concrete_nodes_of_shape`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_out_shapes` |
 | **`GraphIndex/UsStarWrite.lean::GraphState.bridgedInConcrete` / `::GraphState.ensureInBridges` / `::GraphState.writeUsStar`, `::Schema.isSubjectWildcardUserset`** | **wildcard-userset (in-)bridge materialization — likewise previously unlisted** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (in-bridge half), teardown via `::WildcardIndex._strip_bridges` / `::WildcardIndex._maybe_remove_bridges`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes` and `::SchemaInfo.subject_wildcard_shapes` |
+| **`GraphIndex/UsStarWrite.lean::Schema.isStarTuplesetThrough`** (added 2026-08-14, part (i) of the `ttuStarFree` lift) | the star-tupleset TTU **through-shape** half of the bridged-in set: a TTU `p from ts` whose tupleset relation carries a bare wildcard `[t:*]` derives the subject shape `(t, p)`. Previously declared out of scope, and that declaration WAS the hole that made `graph_correct` FALSE without `W4Fragment.ttuStarFree` | `zanzibar_utils_v1.py::derive_schema_info`'s SECOND loop (`::_iter_ttus` + `::_iter_directs`, `r.wildcard and r.predicate == '...'`), feeding `::SchemaInfo.subject_wildcard_shapes` |
 | `GraphIndex/RulesWrite.lean::RRule` / `::exprArms` / `::schemaRewrites` (**taint-filtered** — derived keys emit no arms) | compiled Computed/TTU rewrite rules, fanned out ONLY for untainted keys | `zanzibar_utils_v1.py::_rewrite_rule`, `::_emit_expr`; the taint routing is the `if (object_type, relation_name) not in tainted: _emit_expr(...)` loop in `::compile_ruleset`, mirrored by `S.defs.filter (!isDerived …)` in `schemaRewrites` (added 2026-07-17 — see §7) |
 | `GraphIndex/RulesWrite.lean::rewriteClosureRaw` | the write fan-out worklist, before dedup | `zanzibar_utils_v1.py::RuleSet.apply`'s expansion (dispatch built by `::RuleSet._build_dispatch`, candidates by `::RuleSet._candidates`) |
 | `GraphIndex/RulesWrite.lean::rewriteClosure` | the write fan-out worklist **incl. the dedup** (2026-08-08, §7.2 item 6) | `zanzibar_utils_v1.py::RuleSet.apply` in full — its `processed` set is the dedup AND the termination mechanism, so this is not an optional mirror |
@@ -782,6 +783,24 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   > among admissible schemas Lean's crossable set is EMPTY, and the star-tupleset arm
   > where the divergence lived has **no Lean counterpart at all**.
 
+  **★ SUPERSEDED IN PART, 2026-08-14 — the gap this bullet names is now HALF CLOSED.**
+  "Python's bridged-in set is WIDER than Lean's" and "keys on a **literal** `T:*#p`
+  restriction only" were true when written and are **no longer true of the definition**:
+  part (i) of the `ttuStarFree` lift folded `zanzibar_utils_v1.py::derive_schema_info`'s
+  SECOND loop into `GraphIndex/UsStarWrite.lean::Schema.isStarTuplesetThrough`, and
+  `Schema.isSubjectWildcardUserset` is now the disjunction of both loops — the same two
+  loops Python has. The star-tupleset arm therefore **does** have a Lean counterpart now.
+  Two things the closure does NOT yet buy, stated so nobody over-reads it:
+  * **It is inert on a live chain.** `GraphIndex/RulesWrite.lean::GraphState.writeRules`
+    and `GraphIndex/Cascade.lean::GraphState.writeLoggedRules` are bridge-free folds that
+    never call `GraphIndex/UsStarWrite.lean::GraphState.ensureInBridges`, so no edge is
+    materialized until part (ii).
+    The predicate is right; nothing consumes it yet.
+  * **The blockquote's "crossable set is EMPTY" conclusion still holds on W1c**, but via
+    `GraphIndex/UsStarClosure.lean::isStarTuplesetThrough_of_pureDirect` (the fragment has
+    no TTU arms) rather than via the definition scoping the shape out. See the `ZT-P5-NEW`
+    entry in §8 for the full restatement, and the ⚠ there that W4 is NOT covered.
+
   This is a fragment boundary, not model drift: nothing in `ObjStarWrite`/`UsStarWrite`
   became unfaithful when `index_v4/wildcard.py::WildcardIndex._ensure_bridges` grew its
   entity-middle half (`::WildcardIndex._ensure_entity_middles` / `::WildcardIndex._sync_entity_middles`, invariant
@@ -1146,9 +1165,24 @@ still describes the algorithm the Python actually runs. So, when optimizing:
     on its (object-wildcard-free) fragment the out-bridges are inert, so no shape
     there is in `bridged_out`; `GraphIndex/ObjStarWrite.lean::writeWild` has no
     in-bridge step at all, so no shape there is in `bridged_in`; and
-    `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` explicitly scopes out the
+    `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` does not reach the
     star-tupleset TTU through-shape this bug rides. The guard's precondition
     `bridged_in ∩ bridged_out ≠ ∅` is therefore unsatisfiable in both fragments.
+    **⚠ THE THIRD LEG'S REASON CHANGED 2026-08-14 — the conclusion did not.** That leg
+    used to read *"`isSubjectWildcardUserset` explicitly **scopes out** the star-tupleset
+    TTU through-shape"*, which was a property of the DEFINITION. Part (i) of the
+    `ttuStarFree` lift folded the through-shape IN, so that sentence is now false as
+    written. What carries the leg instead is a property of the FRAGMENT, and it is
+    machine-checked rather than prose:
+    `GraphIndex/UsStarClosure.lean::isStarTuplesetThrough_of_pureDirect` — `PureDirect S`
+    makes every definition body an `Expr.direct`, so `exprTtus` finds no `.ttu` arm and the
+    new disjunct cannot fire on W1c at all;
+    `GraphIndex/UsStarClosure.lean::isSubjectWildcardUserset_of_pureDirect` then shows the
+    test reduces to its pre-2026-08-14 body there. **This is exactly the rot class step 4d
+    cannot catch** — every anchor in the old sentence still resolved; only the claim was
+    false. ⚠ **It is asserted for W1c ONLY.** W4 admits TTUs, so the disjunct is live
+    there by design, and this argument must be RE-DERIVED for W4 when part (ii) composes
+    in-bridges into the rule-routed write path. Do not read the W1c result as covering it.
   * **`ZT-P4-7`** — `zanzibar_utils_v1.py::AdmissionRejected` (a `ValueError`
     subclass, re-exported from `index_v4/core.py` and the `index_v4` package)
     now types the ~20 genuine write-admission REFUSAL sites across
