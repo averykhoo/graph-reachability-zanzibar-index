@@ -27,6 +27,7 @@ import ZanzibarProofs.GraphIndex.Closure
 import ZanzibarProofs.GraphIndex.State
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.Leaf
+import ZanzibarProofs.GraphIndex.LeafRules
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
 import ZanzibarProofs.GraphIndex.ObjStarWrite
@@ -76,3 +77,6 @@ import ZanzibarProofs.GraphIndex.RemoveConfluence
 
 -- Phase 6: the executable graph-model driver + honesty theorems (zcli graph mode)
 import ZanzibarProofs.GraphIndex.Exec
+
+-- ttuStarFree lift, part (iv) groundwork: the WIDENED predicate + its decision procedure
+import ZanzibarProofs.GraphIndex.TtuStarWide

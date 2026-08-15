@@ -471,3 +471,330 @@ untainted target it compiles cleanly. Captured as a rejection family so it canno
       the two sites the finding named. Nothing in the tree is xfailed. Kept visible
       rather than deleted because for two days this was the one entry that would have
       made a reader believe a live authorization-adjacent bug was open.
+
+---
+
+## Retired 2026-08-16 (leg 7 4c-i session)
+
+Five completed blocks moved out of [`HANDOFF.md`](../../HANDOFF.md) when board items 1
+and 2 advanced and the file passed 1150 lines. **Provenance, not open actions.** The
+METHOD from each was kept in the live docs rather than archived with the status:
+
+* the **severity-sign rule** and the **mirror instrument** stay in `HANDOFF.md` §1;
+* *"a teardown test is not a delete test"* (from the `_any_residue_reference` item) moved
+  to [`docs/sabotage-procedure.md`](../sabotage-procedure.md), where it is now a named
+  subsection rather than a bullet in a completed checkbox;
+* the two `.fga`-corpus findings (single-type tuplesets never exercise `parent_types`
+  breadth; every reachable uncovered feature sat on the TTU-tupleset axis) survive as the
+  floored `test_fga_corpus_feature_coverage_does_not_regress` and the
+  `tupleset_shapes.fga` fixture.
+
+⚠ **Status lines below are frozen as-of-then.** In particular the `ttuStarFree` "(iv)
+carries a possibly-blocking decidability question" framing that appears in the 2026-08-14
+block is **DEAD** — answered NO-BLOCK on 2026-08-16 (`GraphIndex/TtuStarWide.lean`).
+
+### CUT landed-0811
+### What landed 2026-08-11
+
+**(1) RC2 — the last root cause of the 2026-08-10 fail-open family.** A stored `T:*`
+tupleset parent was dropped on the derived read path. The `n.wildcard == ''` clause was
+**not** deleted — both recorded dead ends were re-confirmed first. Instead the two subject
+shapes are split (`_stored_tupleset_subjects`) and the star one gets the semantics the
+oracle and both set engines have always implemented: the shape `(T, target_rel)`
+unconditionally (into the residue's `stars`), **plus** an ∃-expansion over tuple-mentioned
+instances of `T`, folded into `tupleset_parents` so every downstream consumer
+(`_from_chain_keys`, `_leaf_concretes`, `_derived_leaf_neg_ids`) became correct with no
+edit. Fixed at BOTH sites — `processor.py` and `bulk_backfill.py` — which RC2 genuinely
+needed, unlike RC1.
+
+⚠ **Scope note — one clause was left alone DELIBERATELY, and it is a near neighbour of the
+one that was fixed.** `index_v4/bulk_backfill.py::_stored_userset_subjects` still carries its
+own `w2 == ''` test, for stored **usersets**. Different code path from the RC2 site, not part
+of either root cause, and not widened because **no divergence justified it** — widening a
+star-admitting filter without a failing case is precisely how RC2's two measured dead ends
+happened. Recorded here because the board is what gets read: it otherwise lives only in
+`tests/test_ttu_tupleset_parent_types.py`'s module docstring. **Bring a divergence before you
+touch it** — the exhaustive sweep that mapped this family (2,302,854 queries, 346 schemas)
+found exactly two root causes and neither was here.
+
+★ **And a rot hazard this note exposed, worth more than the note.** The old board cited the
+RC2 site as `bulk_backfill.py:454`. **That citation is now WRONG in the worst possible way:**
+the fix inserted `_stored_tupleset_subjects`, and post-fix `:454` lands inside
+`_stored_userset_subjects` — i.e. the line number that used to mean "fix this" now points at
+the one clause that must be left alone. Current layout, as of this commit:
+`_stored_userset_subjects` **447** (the untouched `w2 == ''` at 454) ·
+`_stored_tupleset_subjects` **466** (the RC2 fix; its own `w2 == ''` at 479 is *fixed* code) ·
+`_tupleset_parents` **485**. **Cite `file::function`, never `file:line`, for anything a
+future session is meant to act on** — `verify.sh lean` already enforces exactly that for
+`CORRESPONDENCE.md` anchors, and this file has no such gate.
+
+★ **The part no design note predicted, and the transferable finding: the CASCADE FAN-OUT
+had to change too.** A star tupleset tuple hangs off the `w_any(T,'...')` node, not off any
+entity, so `_stored_parent_objects_of_entity` — which answers "what does a delta on this
+entity invalidate?" by walking the entity's own edges — saw nothing, and a later write to
+some `T:x` would have invalidated no dependent at all. **The read fix alone passes every
+pin in the file**, because the pins write in one batch and reconcile once; it would have
+failed only under incremental maintenance. *A correctness fix to a read path in an IVM
+system is not done until the invalidation path has been asked the same question.*
+
+**(2) The bulk corpus gap is CLOSED.** `rc2_star_tupleset` in `tests/test_bulk_build.py`,
+carrying both TTU directions (positive fails closed, negated fails open — probing only one
+mis-classifies severity by a sign). **Sabotage, literal output:** reverting the bulk half
+alone — the S1 edit that used to leave the suite **6 passed GREEN** — now gives
+`1 failed, 6 passed`, `AssertionError: [rc2_star_tupleset] snapshot_rows differ`, with the
+other six corpora green so the red is attributable.
+
+**(3) The compile-time invariant landed, and deliberately is NOT a mirror.**
+`zanzibar_utils_v1.py::_assert_ttu_parent_types_cover_admission` — every TTU's frozen
+`parent_types` must cover every bare-entity type ADMISSION accepts onto that tupleset
+relation, read from the emitted `RewriteFilter`/`Filter` patterns and **never** from
+`_member_types` (the function RC1 got wrong; an invariant reading it would reproduce I9's
+mirror defect exactly). Validated RED-before/GREEN-after and made permanent as
+`test_compile_refuses_parent_types_narrower_than_admission`. It catches the RC1 class **at
+compile time, before any tuple is written**. Honest limit, stated in its docstring: it only
+sees types some Filter accepts, so a tupleset fed only by rewrite Rules is vacuous there.
+
+**(4) The compiler rough edge is FIXED** (was fix-list item 1a(4), "reported not fixed" —
+now in the 2026-08 archive, where that stale wording is still visible). A TTU
+whose tupleset is undeclared and whose target is derived died in `compile_boolean_schema`
+with a bare `ValueError` — a class `tests/parity.py` says "must surface", so `ParityEngine`
+was *unconstructible* (a hard crash) rather than degrading to 3-way. `_validate_ttu_tuplesets`
+now refuses it up front as a scoped `UnsupportedByGraphIndex` and the `ValueError` is back
+to being an unreachable backstop. The `genswarm` rejection witness was flipped to match,
+and `test_undeclared_tupleset_with_untainted_target_still_compiles` is its **negative
+control** — the witness alone is satisfied by an over-broad refusal, and "reject every
+undeclared tupleset" is precisely the one-line over-fix a future reader would reach for.
+
+**(5) Gate floors re-measured and raised** (`-ge`, so raising is free): `MIN_CONF_ALL`
+465 → **494** (= 104 + 390), `MIN_TESTS_ALL` 763 → **823**. They had drifted ~90 tests below
+live, i.e. that much coverage could have vanished silently.
+
+**(6) No Lean change owed — and the reason is worth reading.** RC2's region is excluded
+from the graph fragment by **two** standing hypotheses: `RulesBareStar.lean::TtuStarFree`
+(star-subject tuples matching a TTU arm) and `RulesCorrect.lean::TtuTuplesetsDirect` (every
+TTU tupleset must be `directsOnly`, so a *derived* tupleset is not expressible at all).
+Nothing became dead code. Recorded in `CORRESPONDENCE.md` §7.3 — including the near-miss:
+`TtuStarFree`'s own header records an attack-first `#eval` from 2026-07-11 on exactly this
+shape, finding `sem=true` against a rule-routed graph `false`. ⚠ That was a property of the
+LEAN write model and is **not** evidence anyone had observed the Python defect — Python's
+UNTAINTED star-tupleset path was and is correct, and is pinned green by a control in the
+same file. The general lesson still stands: **a shape fenced out of the model as "not
+covered here" is a standing hint about where the implementation is least watched.**
+Python moved TOWARD the models here: the new split is structurally
+`SetEngine/Eval.lean::parentMS`.
+
+⚠ **Correction to the previous board.** The item "`BoolStarBridgeParityMachine` runs the
+graph on 12% of draws — cheap and independent, do it FIRST" was **already done** on
+2026-08-10 in `d0dbefa` (the assertion is at `tests/test_hypothesis.py:1886`, 13% → 76–82%
+4-way, floored with provenance). `docs/sabotage-procedure.md:31` was the accurate record;
+this file and `docs/design/generator-coverage/README.md` were stale. Nothing to do.
+
+
+@@@
+
+### CUT landed-0814
+### What landed 2026-08-14
+
+**Both big Lean legs were taken up. NEITHER is finished, and that was called up front
+rather than discovered at the end** — leg 7's step 4c alone is a 36-module recompile cone.
+What this session actually bought is that the next one starts **unblocked**:
+
+* **★★ Leg 7's §11.3 design fork is DECIDED — branch (α)**, the `Delta` row moves to the
+  leaf node, measured on both the Python and Lean sides. The leg is no longer blocked on a
+  decision, only on effort. **Four cells of the scope doc were refuted**, including a
+  scheduling constraint it does not contain: **step 4c must co-land with step 7**, because
+  P6 is a Python-side-only filter. Resume detail in board item 1 (B1) and scope-doc §11.5.
+* **`ttuStarFree` part (i) LANDED** (`2cf76bb`) — but it is **INERT** and does **not**
+  close the 2026-08-10 counterexample. Parts (ii)/(iii)/(iv) remain. ⚠ **The "(iv) carries
+  a possibly-blocking decidability question" half of this line is DEAD as of 2026-08-16 —
+  answered NO-BLOCK.** Board item 3.
+* **`Leaf.lean`'s citations de-rotted and leg-7 addressing MAPPED** (`b47d9ed`) — it had
+  landed entirely unmapped in `CORRESPONDENCE.md`, so those anchors are now gated.
+* **Two method lessons were written up** rather than left in a commit message: the
+  **INERT-change sabotage** (when nothing reddens, that *is* the finding, and it tells you
+  you owe all the pinning) in [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md),
+  and **the first fan-out that worked** (8/8 agents, and why) in
+  [`docs/subagent-fanout-runbook.md`](docs/subagent-fanout-runbook.md).
+
+
+@@@
+
+### CUT item2
+### 2. ~~Verify or discard two UNVERIFIED claims from the failed audit.~~ BOTH ADJUDICATED 2026-08-14.
+
+Both were reproduced from scratch, with attribution controls and positive controls.
+Neither was the known false positive. **Neither leaves a live correctness bug.**
+
+* **`W4Fragment.computedOrDirect` — CONFIRMED as an empirical fact, MIS-FRAMED as a
+  fail-open.** On `access: viewer from parent but not banned` with
+  `viewer(alice, folder:f1)` + `parent(f1, doc:d1)`, `zcli mode=graph` really does answer
+  `[false]` at **rc 0** while `mode=spec`, the oracle, both set engines and the real
+  `WildcardIndex`+`DeltaProcessor` all answer `[true]`. Controls attribute it exactly to
+  the `.ttu` leaf **inside a derived def** (`ComputedOrDirect` maps `.ttu` to `False`):
+  hoisting the TTU out, or dropping the exclusion, restores agreement.
+  * ★ **The direction is the opposite of the filing.** The Lean model *under*-reports —
+    denies access that exists — so for authorization it is fail-**CLOSED**. The only
+    "open" is that the driver emits an answer instead of refusing. Do not carry the
+    original wording forward.
+  * ★ **And it is less novel than it reads.** That mode=graph does not gate on
+    `W4Fragment` was already documented in `formal/conformance/corpus.py`'s
+    `GRAPH_FRAGMENT` header ("silently compares two models that no theorem relates").
+    The new artifact is a *measured wrong answer*, not the non-gating property.
+  * **Blast radius today: none.** A controls-validated scan of all 25 `GRAPH_FRAGMENT`
+    corpora finds zero with a TTU inside a derived def, and mode=graph is driven only
+    from that set. Recorded in `CORRESPONDENCE.md` §2 (the zcli exit-code block).
+  * **What is actually left, and it is not small:** a driver-side fragment pre-check
+    needs a DECIDABLE `W4Fragment`, and none exists (no `admissionB`-style boolean).
+    Its own leg if anyone wants it; nothing is blocked meanwhile.
+
+* **`GraphAdmission.ttuDirect` (`TtuTuplesetsDirect`) — TRUE WHEN FILED, ALREADY FIXED.
+  It was RC2.** The audit's divergence (a `folder:*` stored tupleset parent on
+  `parent: [folder, folder:*] but not detached`; oracle + both set engines True, graph
+  False) is verbatim RC2, and it even nominated the fix that landed in `7e3294e`.
+  Re-measured on the current tree: the audit's own exhaustive experiment (2^6 = 64
+  stores × 9 queries = 576 comparisons) now gives **0 divergences** where it measured
+  104, with a positive control confirming the instrument still fires; four further
+  flavours of the excluded class (640 comparisons) are likewise clean.
+  **Nothing actionable remains** — do not re-open it.
+  * ⚠ **Its recommendation #3 stands: do NOT lift `ttuDirect` in Lean.** Consistent with
+    item 3 below and `CORRESPONDENCE.md` §7.
+  * **Two false docstrings it found were the only live residue, and are FIXED
+    2026-08-14** (documentation, not defects): `State.lean::GraphAccepts` claimed
+    "outside this scope the graph rejects the schema at compile", false for its clause
+    (3) — a derived TTU tupleset compiles and gets a `derived-tupleset-ttu` leaf; and
+    `FullScope.lean`'s `ttuDirect` field doc described Python's weaker check (which has
+    a `ts_key not in tainted` guard) rather than the predicate it annotates (which has
+    none). Both now state the gap the way `wsBare` / `directArmsConcrete` do. ★ This is
+    precisely the rot class `verify.sh` step 4d **cannot** catch: the anchor check
+    resolves pointers, not claims.
+
+★ **Where the primary record was, since the board said it was lost.** Nothing was
+persisted to the repo — `docs/subagent-fanout-runbook.md`'s "every agent writes its own
+file" rule was written *from* this failure and so was not yet in force. But the audit
+survives in full in the session journal under
+`~/.claude/projects/<this-project>/…/subagents/workflows/wf_f8c85180-b74/`, which holds
+279 agent transcripts including ~9 KB of structured output for `ttuDirect` (verbatim
+command transcripts, a positive control, and a self-caught instrument bug). **The three
+adversarial verifiers dispatched for that claim are each 4 lines: prompt in, nothing
+out** — the death of the fan-out, visible on disk. Worth knowing before re-running
+anything: a dead fan-out is recoverable from the journal, so item 4 below need not start
+from zero.
+
+⚠ Of the 26 audits that completed, one reported `divergenceFound: YES` on a schema **both
+backends refuse** — the false positive the verify phase existed to kill. Neither claim
+above was that one, but the rule stands: reproduce before promoting.
+
+
+@@@
+
+### CUT residue
+- [x] ~~**`_any_residue_reference` / `_keys_referencing` — MEASURED 2026-07-29; the fix
+      is not done.**~~ **DONE 2026-08-14.** The scan is now an indexed seek on a new
+      `ResidueRefV1` reverse-index table — the fix `ZT-P0-1`'s own note named, maintained
+      in `_store_residue` (via `_sync_residue_refs`) and in `bulk_build`'s offline path.
+      Re-measured: the lookup is **FLAT in R** where it was linear (0.30 → 13.03 ms
+      across R=25→1600 before; 0.11–0.22 ms throughout after). The extrapolated ~1.4 s
+      per node release at 100k residue rows and the quadratic churn are gone by
+      construction, not reduced. Nothing owed to Lean (the node-GC region has no model
+      at all, §7.3) — verified, and the three function NAMES were kept deliberately
+      because `verify.sh` step 4d resolves them as `CORRESPONDENCE.md` anchors.
+      Design, measurement, migration note: `docs/spec-deviations.md` 2026-08-14.
+      * ★ **The transferable finding, from the sabotage that did NOT fire.** Skipping
+        index maintenance on the residue-DELETE branch alone left the whole new test
+        file **green** (`11 passed`); only the paranoia-driven matrix caught it. An
+        orphan is observable only when the indexed row goes from ref-bearing straight
+        to deleted in ONE step, and every natural teardown ordering empties
+        `neg`/`upos` while `stars` is still present — clearing the index through the
+        *update* branch, so there is nothing left to orphan. **A teardown test is not
+        a delete test.** Generalises to any index maintained beside a deletable row;
+        `test_residue_emptied_in_one_step_takes_its_index_rows_with_it` is the pin.
+      * ⚠ **No migration path exists and none is offered.** An index built before this
+        change gets an empty `residue_ref_v1` from `create_all`, and its node-release
+        guards would then believe nothing is referenced (the ZT-P0-1 direction). The
+        cheap `ZANZIBAR_PARANOIA=residue` tier fires on the first commit against such
+        a store; rebuild with `build_index`.
+
+@@@
+
+### CUT openfga
+- [x] ~~**Vendor a corpus of REAL OpenFGA schemas, crawled from the wild**~~ —
+      **DONE DIFFERENTLY, 2026-08-11: reviewed, measured, and ADAPTED rather than
+      vendored.** The user supplied a corpus (canonical `openfga/sample-stores` +
+      internal models). Outcome, all measured:
+      * **48 schema files, 22 compile, and `UnsupportedByGraphIndex` rejections = 0.**
+        That is the evidence this item was built to produce → see the scope-rejection
+        item directly below, whose deferral is now **evidence-backed rather than
+        assumed**. (The 26 non-compiling are out of scope by construction, not
+        rejections: 11 use CEL conditions, 4 use modular `module` models, 11 are
+        `model_file:` indirections or test-only files.)
+      * ⚠ **This item's own premise was WRONG, and the correction is the useful part.**
+        It said real schemas "essentially never touch the wildcard × boolean × TTU
+        crosses". One internal schema hits that cross dead-on — a De Morgan
+        "holds ALL required roles" model with `[user:*]`, an exclusion over it, a TTU
+        whose TARGET is derived, and that TTU under a negation. **The prediction still
+        held** (0 divergences; an RC1 sabotage leaves it green, instrument controlled
+        against the known RC1 repro) — but "they never touch the crosses" is false, and
+        the *reason* to expect passing is not the reason recorded here.
+      * **Nothing was vendored, and copying would have been near-worthless anyway:**
+        `demorgans_law_2.fga` is structurally the same schema as the interesting
+        internal one, plus an `and` and an extra TTU hop. **Three** shapes measured at
+        **zero occurrences across all 11 pre-existing fixtures** were adapted instead —
+        `userset_over_derived.fga`, `heterogeneous_tupleset.fga` and
+        `tupleset_shapes.fga`, driven by `tests/test_schema_shapes.py`.
+        ★ Two findings worth carrying:
+        **(i)** every TTU tupleset in the old corpus was **single-type**, so
+        `parent_types` was never exercised with breadth > 1 — and `parent_types`
+        breadth is exactly what RC1 got wrong; a single-type corpus cannot distinguish
+        "computes the set correctly" from "returns the only candidate".
+        **(ii)** scoring every fixture against `genswarm`'s DERIVED alphabet showed
+        **every reachable uncovered feature sat on the TTU-tupleset axis** — the axis
+        RC1/RC2 lived on. `tupleset_shapes.fga` closes it and is the only one of the
+        three that **catches RC1**: under the sabotage it does not answer wrong, it
+        refuses to COMPILE (the 2026-08-11 invariant). It is the tree's first RC1
+        regression pin in `.fga` form.
+        Corpus coverage went **43 → 46 of 51 features / 903 → 1035 of 1275 pairwise
+        cells**, floored by `test_fga_corpus_feature_coverage_does_not_regress` with the
+        residual gaps pinned as an EXACT set (all five are measurement artifacts or
+        carry executable rejection witnesses).
+      * **8 of the 14 fixtures contribute no unique feature at all** —
+        `boolean_wildcards`, `confluence`, `custom_roles`, `demorgans_law_2`,
+        `demorgans_reverse`, `gdrive`, `github`, `master_store`. Not a reason to delete
+        them (they are cheap realism anchors and feed the snapshot/bulk gates), but it
+        is where the corpus was spending coverage without buying any.
+      * **Licensing sidestepped, not solved.** Adapting rather than copying means no
+        internal schema text entered the tree and no per-schema manifest was needed.
+        If anyone later wants the literal schemas, that decision is still open and is
+        the user's. `.scratch/` is now gitignored (`0e6ef33`) — it was untracked but
+        NOT ignored, in a repo that mirrors.
+      * **The "plausibility anchor" use is RETIRED, not deferred** (user, 2026-08-11).
+        The original filing wanted real schemas as a realism weighting for the
+        generated-schema campaign. **That only pays off if you are prioritising WHICH
+        divergences to fix first — and this project's goal is that everything is
+        correct**, so a realism prior buys nothing and would actively mislead: every
+        bug this repo has found lived in a cross that real schemas rarely reach.
+        Feature coverage against the derived alphabet is the right instrument, and it
+        is the one now floored. Also, practically, there is no downloadable corpus of
+        real models — production authorization schemas are mostly not public, and
+        arguably should not be. Do not re-open this on "we should ground the fuzzer in
+        reality"; ground it in the compiler's own feature space instead.
+
+      *Original filing kept below for the reasoning it recorded.*
+      **What it is for, and it is NOT bug-finding.** Real-world schemas are union/TTU
+      heavy and essentially never touch the wildcard x boolean x TTU crosses where every
+      divergence this repo has found actually lived, so expect them to pass. The value is
+      that they are the **empirical instrument for the scope-rejection item directly
+      below**: that item defers on "revisit on a concrete need", and its *previous*
+      priority argument was already found INVALID once (see its own note). A corpus of
+      schemas people actually wrote is how you decide whether a concrete need exists —
+      if 3 of 40 hit `UnsupportedByGraphIndex` the item's priority changes overnight; if
+      0 of 40 do, the deferral becomes evidence-backed instead of assumed. Second use:
+      a plausibility anchor for the generated-schema campaign, which is otherwise tied
+      to nothing real.
+      **Precedent already exists** — `tests/fga_schemas/gdrive.fga` and `github.fga` are
+      OpenFGA's canonical sample stores, already vendored. This extends an accepted
+      pattern.
+      **Sources:** `openfga/sample-stores`, the OpenFGA docs modeling guides, the
+      playground examples, GitHub code search for `.fga` / `model\n  schema 1.1`.
+      **Two constraints:** record provenance + license per schema in a manifest (OpenFGA
+      is Apache-2.0), and remember a crawl supplies **inputs only** — `tests/oracle.py`
+      stays the spec, so a real schema is a query-grid subject, never an expected answer.

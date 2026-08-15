@@ -183,7 +183,9 @@ fi
 # here -- without a floor, shrinking GRAPH_FRAGMENT to a single corpus or deleting
 # test_conformance_graph.py outright kept the gate green (ZT-P2-2).
 # Re-measured 2026-08-11 with `pytest formal/conformance/ -q --collect-only`: 494.
-MIN_CONF_ALL=494
+# Re-measured 2026-08-16 after adding
+# test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one: 495.
+MIN_CONF_ALL=495
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -274,7 +276,7 @@ MAX_TESTS_SKIPPED_ON_RDBMS=3
 HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 # Re-measured 2026-08-11: test_conformance_remove.py collects 104; 494 - 104 = 390.
 MIN_CONF_HEAVY=104
-MIN_CONF_REST=390
+MIN_CONF_REST=391
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in
