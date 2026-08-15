@@ -1689,20 +1689,14 @@ namespace Zanzibar
 #print axioms W4WitnessDirect.final_applies4
 
 -- LEG 7 (leaf-family split / retire projection P6), STEP 3 (2026-08-09) — ADDITIVE leaf
--- ADDRESSING. `GraphIndex/Leaf.lean` introduces `leafPred`/`isLeafPred`/`leafNode` and the
--- raw-write routing function `rawWriteRel`/`rawWriteNode`, plus the distinctness linchpin
--- `leafPred_ne_relName` — which needs NO new sentinel axiom alongside `STAR`/`BARE`:
--- `Core/Schema.lean:64`'s `relNameOK` already forbids `'.'` in a declared relation name, so
--- a leaf node is provably distinct from every bare R-node for free. Nothing is wired into
--- the write path yet (that is step 4's `writeDirect` fork), so no existing definition,
--- statement or proof changed and both goldens stay byte-identical.
--- ★ CONTROLLED, and the control is the point (scope doc §7, plan §C.3/§C.5; literal output
--- in the `LeafWitness` section docstring). The plausible failure is not a wrong routing but
--- an UNREACHABLE one: add `&& isLeafPred t.relation` to the guard — a plausible misreading
--- of `RuleSet.apply`'s refusal of leaf-named raw writes — and every general lemma in the
--- file still compiles, `rawWriteNode_ne_objNode` included, while the derived branch is dead.
--- Exactly two errors, both at the witness. Per scope doc §9.3 the witness deliberately does
--- NOT use `W4WitnessDirect`'s `Sd`/`Td` (no wildcard there ⇒ vacuous), but D.3's schema.
+-- ADDRESSING. `GraphIndex/Leaf.lean` introduces `leafPred`/`isLeafPred`/`leafNode` plus the
+-- distinctness linchpin `leafPred_ne_relName` — which needs NO new sentinel axiom alongside
+-- `STAR`/`BARE`: `Core/Schema.lean`'s `relNameOK` already forbids `'.'` in a declared
+-- relation name, so a leaf node is provably distinct from every bare R-node for free.
+-- Nothing is wired into the write path yet (that is step 4c), so no caller-level
+-- definition, statement or proof changed and both goldens stay byte-identical.
+-- Per scope doc §9.3 the witness deliberately does NOT use `W4WitnessDirect`'s `Sd`/`Td`
+-- (no wildcard there ⇒ vacuous), but D.3's schema.
 -- Standard axioms only:
 #print axioms leafPred_ne_relName
 #print axioms leafNode_ne_objNode
@@ -1711,31 +1705,62 @@ namespace Zanzibar
 #print axioms LeafWitness.routes_away
 #print axioms LeafWitness.untainted_unmoved
 
--- LEG 7 STEP 4a (2026-08-09) — the FORK, addressing half. Scope doc §4 prescribes forking
--- `GraphState.writeDirect` itself ("take a target-node argument"), which it warns duplicates
--- every `writeDirect_*` projection and fold lemma. It is CHEAPER and MORE FAITHFUL to fork
--- the TUPLE instead: Python does not fork its write path at all — `RuleSet.apply` does
--- `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`) and then the
--- ordinary `add_tuple` path runs. So `rawWriteTuple` re-addresses and `writeDirect` is
--- BYTE-IDENTICAL: definition pin unmoved, and every existing projection/fold lemma applies
--- to the re-addressed tuple verbatim (`structInv_writeDirectRaw` / `inv_writeDirectRaw` are
--- one-liners over the originals, no clones). The caller re-pointing is step 4c.
--- ★ CONTROLLED IN TWO RUNS, because the first control passed for the wrong reason (plan
--- §C.4's trap). Sabotage = `writeDirectRaw` ignores the routing. Run 1 reddens three
--- general lemmas and leaves the witness green — SHIELDED, not satisfied. Run 2 applies the
--- one-keystroke repairs a careless author would make; the whole general section compiles and
--- the only error in the tree is `writeDirectRaw_edges_ne`. Literal residual goal in its
--- docstring.
+-- LEG 7 STEP 4a (2026-08-09, REWORKED 2026-08-15) — the FORK, addressing half. Python does
+-- not fork its write path at all — `RuleSet.apply` does
+-- `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`)
+-- once per matching storage filter and the ordinary `add_tuple` path runs per expanded
+-- triple. So `rawWriteTuples` re-addresses (a LIST since 2026-08-15 — the fan-out is
+-- measured, see the 4c-pre block below) and `writeDirect` is BYTE-IDENTICAL: definition pin
+-- unmoved, and `RulesWrite.lean`'s `∀ (ts : List Tuple)` fold family applies to the
+-- re-addressed list verbatim (`structInv_writeDirectRaw` / `inv_writeDirectRaw` are
+-- one-liners, no clones). The caller re-pointing is step 4c.
 -- Standard axioms only:
-#print axioms rawWriteTuple_untainted
+#print axioms rawWriteTuples_untainted
 #print axioms GraphState.writeDirectRaw
 #print axioms writeDirectRaw_untainted
 #print axioms inv_writeDirectRaw
 #print axioms LeafWitness.writeDirectRaw_edges_ne
--- The lemma that makes step 4c cheap, measured: `RulesWrite.lean`'s fold family is stated
--- `∀ (ts : List Tuple)` — list-generic, exactly like the count stack the dedup leg found —
--- so ONE bridge discharges all five raw-fold obligations with no clone.
+-- The lemma that makes step 4c's fold half cheap: ONE bridge discharges all five raw-fold
+-- obligations of the list-generic fold family with no clone.
 #print axioms foldl_writeDirectRaw_eq
+
+-- LEG 7 STEP 4c-PRE (2026-08-15) — the MEASURED allocation model, the INDEX-AGNOSTIC
+-- `publicOfLeaf`, and the fan-out routing. Three measurements re-founded this layer
+-- (PROOF_STATUS 2026-08-15; scope doc §11.6): (1) enumerating the 76 P6-dropped edge rows
+-- across all 25 GRAPH_FRAGMENT corpora shows leaf indices 1 and 2 IN THE GATE (17/25
+-- corpora), so the previous hardcoded index 0 could never meet leg 7's landing criterion;
+-- (2) `_build_plan_tree` allocates pre-order over persisted-leaf positions, where derived
+-- computed references and non-pure TTU arms consume NO index (`persistedLeaves`);
+-- (3) `RuleSet.apply` fans a raw write out onto EVERY matching storage leaf
+-- (`rawWriteRels`), so the single-target model was wrong in arity too. `publicOfLeaf` is
+-- the (α)-fork leaf→public map (scope doc §11.5): index-agnostic by construction
+-- (`leafPublic` takes the dot-free prefix; §11.5's control C2 measured the `".0"`-stripper
+-- returning `none` on `approver.2`, a name Python really mints). `publicOfLeaf_rawWriteRels`
+-- is the round trip `affectedKeys`' own-key branch will consume at 4c.
+-- ★ FIVE SABOTAGES, each reddening exactly its own pin with named controls green — literal
+-- outputs in the `LeafWitness` section docstring (S1 derived-skip dropped → `swX_skip`;
+-- S2 TTU purity dropped → `stD_leaves`; S3 `".0"`-stripper → `pol_idx2`; S4 match guard
+-- dropped → `swF_second_only`; S5 first-match-only → `swF_fanout`).
+-- Standard axioms only:
+#print axioms leafPublic_leafPred
+#print axioms publicOfLeaf_leafPred
+#print axioms publicOfLeaf_not_leaf
+#print axioms publicOfLeaf_untainted
+#print axioms mem_rawWriteRels_derived
+#print axioms publicOfLeaf_rawWriteRels
+#print axioms rawWriteRels_untainted
+#print axioms LeafWitness.sw_leaves
+#print axioms LeafWitness.routes_to_leaf
+#print axioms LeafWitness.swU_routes
+#print axioms LeafWitness.pol_idx2
+#print axioms LeafWitness.pol_nv7
+#print axioms LeafWitness.pol_nv8
+#print axioms LeafWitness.pol_untainted
+#print axioms LeafWitness.swF_fanout
+#print axioms LeafWitness.swF_second_only
+#print axioms LeafWitness.stP_leaves
+#print axioms LeafWitness.stD_leaves
+#print axioms LeafWitness.swX_skip
 
 -- ttuStarFree LIFT, PART (i) (2026-08-14) — the star-tupleset TTU through-shape folded into
 -- `Schema.isSubjectWildcardUserset`, so it is now the disjunction of BOTH loops of
