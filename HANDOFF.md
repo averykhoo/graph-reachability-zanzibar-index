@@ -184,24 +184,23 @@ graph on 12% of draws — cheap and independent, do it FIRST" was **already done
 4-way, floored with provenance). `docs/sabotage-procedure.md:31` was the accurate record;
 this file and `docs/design/generator-coverage/README.md` were stale. Nothing to do.
 
-### Still open — updated 2026-08-14b
+### Still open — updated 2026-08-15
 
-**What moved this session (the two big Lean legs were taken up; neither is finished):**
-* **Leg 7's §11.3 design fork is DECIDED — branch (α)**, by measurement on both the Python
-  and Lean sides. The leg is no longer blocked on a decision, only on effort. Two cells of
-  the scope doc were refuted and a **scheduling constraint it does not contain** was found:
-  **step 4c must co-land with step 7**, because P6 is a Python-side-only filter. See item 1
-  (B1)'s resume point and scope-doc §11.5.
-* **`ttuStarFree` part (i) LANDED** — but it is **inert** and does not close the
-  counterexample. Parts (ii)/(iii)/(iv) remain; (iv) has a possibly-blocking decidability
-  question. See item 3.
-* Both legs are **multi-session**; leg 7 step 4c alone is a 36-module recompile cone. Do not
-  read part (i) or the fork decision as substantial progress on the proofs themselves — the
-  honest value delivered is that the next session starts unblocked.
+**What moved this session (leg 7 only; the plan changed more than the tree did):**
+* **Leg 7's step 4c was REFUTED as scoped, and 4c-pre landed in its place.** The 36-module
+  cone was NOT paid: measuring the 76 P6-dropped rows first showed the landed index-0
+  single-target routing could never meet the criterion, and that the RULE layer — not the
+  callers — is what must carry leaf provenance. `Leaf.lean`'s addressing layer is now
+  measured-correct and pinned (audits 501 → **520**). See item 5 and scope-doc **§11.6**.
+* **The leg is still multi-session and the remaining cost went UP, not down**: 4c-i is a
+  rules-model change under `RulesWrite.lean`, i.e. roughly double the Cascade cone. Read
+  4c-pre as "the wrong cone was avoided and the foundation is right", not as progress on
+  the proofs themselves.
 
-Items 4–5 are untouched and neither is blocking: the scope-audit re-run, and leg 7's parked
-step 4c fork. Item 6 is a one-question optional loose end from the closed arc. **Item 2 (the
-two UNVERIFIED audit leads) was CLOSED 2026-08-14** — both reproduced, neither leaves a live
+Items 3 (`ttuStarFree` parts (ii)/(iii)/(iv)) and 4 (the scope-audit re-run) are untouched
+and neither is blocking; (iv) still carries its possibly-blocking decidability question.
+Item 6 is a one-question optional loose end from the closed arc. **Item 2 (the two
+UNVERIFIED audit leads) was CLOSED 2026-08-14** — both reproduced, neither leaves a live
 bug; read its residue before touching the zcli driver or `ttuDirect`.
 
 ### 1. The RC1/RC2 arc — CLOSED. Archived 2026-08-11; three things kept here.
@@ -418,11 +417,14 @@ the top of this file for the measured figures.
   `deep`, so read green as "the instruments we have found nothing", not as a proof.
   Numbers in §1 above; full leg in the 2026-08 archive §1b.
 
-- **★ Last landed: LEG 7 IS UNDER WAY — steps 3 and 4a are IN** (2026-08-09, `8291c3a` +
-  `41b7029`). `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,
+- **LEG 7 STARTED HERE — steps 3 and 4a went IN** (2026-08-09, `8291c3a` + `41b7029`).
+  `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,
   the raw-write routing, the forked write `writeDirectRaw`, and the distinctness linchpin.
   Additive — headline statements 38/38 and the definition pin 155/155 **unmoved**.
-  **The leg is NOT finished**; steps 4c, 4b, 5, 6, 7 remain. Three things a next session
+  ⚠ **The raw-write half of this bullet was SUPERSEDED 2026-08-15** — `rawWriteRel`'s
+  single index-0 target was measured wrong and is now `rawWriteRels` (a fan-out); see the
+  banner. The addressing and linchpin halves stand.
+  **The leg is NOT finished**; steps 4c-i, 4c-ii, 4b, 5, 6, 7 remain. Three things a next session
   must read before touching it (all in `formal/history/leaf-family-split-scope-2026-08-05.md`
   §11 and `formal/history/PROOF_STATUS.md` 2026-08-09):
   * **The scope doc's §3 bet HELD** — the leaf-vs-bare distinctness linchpin needs no new

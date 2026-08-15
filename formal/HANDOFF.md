@@ -119,7 +119,9 @@ as written and is wrong in two places).
   `ensureInBridges`, so part (ii) is what materializes the edge. Do NOT read part (i) as
   closing the 2026-08-10 counterexample. Six `decide` pins carry it because, being inert,
   the obvious sabotage reddens nothing else in the tree.
-* **Still owed:** leg 7 steps 4c/4b/5/6/7; `ttuStarFree` parts (ii)/(iii)/(iv). Part (iv)
+* **Still owed** ⚠ **— the leg-7 half of this line is SUPERSEDED by the 2026-08-15 block
+  above; "step 4c" as named here does not exist any more (it is 4c-i + 4c-ii).** Leg 7
+  steps 4c/4b/5/6/7; `ttuStarFree` parts (ii)/(iii)/(iv). Part (iv)
   has an unanswered blocking question — is the widened predicate still **decidable** by a
   boolean function? `removeGateB` must decide the guard fail-closed, so if not, the remove
   leg cannot widen at all. Occurrence split re-measured: **163 in 18 modules**, only **5
