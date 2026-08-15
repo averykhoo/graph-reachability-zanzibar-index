@@ -810,6 +810,69 @@ figure is now `52`. §11.2 credits `rawWriteNode_untaintedSchema` with insulatin
 development, but **that lemma does not exist in the tree** — the walk was reverted, and 4c
 must re-derive it.
 
+### 11.6 ★★ 4c-AS-SCOPED IS REFUTED BY CORPUS MEASUREMENT — the allocation must be modeled
+### first, and the RULE copies need provenance the model does not carry. 2026-08-15.
+
+Attack-first, before any caller was re-pointed. The question asked: **can the landed
+routing (`rawWriteRel … := leafPred t.relation 0`) meet the landing criterion
+(`dropped by P6 → 0`, `compared → 265`)?** The answer is NO, twice over, and coding 4c
+first would have discovered it only after paying the full recompile cone.
+
+**Measurement 1 — the 76 P6-dropped rows, enumerated per corpus** (via
+`extractor.py::graph_fragment_ledger`'s own drive loop; total reconciles to the generated
+block's 76 exactly): **17 of 25 `GRAPH_FRAGMENT` corpora mint leaf indices 1 and 2.**
+Every non-first boolean arm gets its own leaf (`viewer.1 = banned` in `boolean_exclusion`,
+`rhs.2` in `demorgans`, `all_of.2` in `nary_intersection`, `viewer.2` in
+`double_exclusion`/`nested_boolean`, `any_of4.2` in `nary_union_derived4`); in
+`direct_arm_exclusion` the subtract arm is `approver.1`. Zero subject-side dots. An
+index-0-only model diffs on most of the fragment the moment P6 is retired.
+
+**Measurement 2 — the allocation rule and the raw-write fan-out** (live compiles +
+`RuleSet.apply` driven directly):
+* `_build_plan_tree` allocates **pre-order over persisted-leaf positions**: a `Direct`
+  block mints one storage leaf; a computed ref mints one closure leaf **iff untainted**
+  (derived refs consume NO index); a TTU arm mints **iff pure** — a
+  `derived-ttu`/`derived-tupleset-ttu` node consumes no index, so under a tainted TTU
+  target the *next* arm inherits index 0.
+* A raw write **fans out to EVERY matching storage leaf** (deduped):
+  `approver: [user] or ([user, employee] but not banned)` routes `user:alice` to BOTH
+  `approver.0` and `approver.1`. So `rawWriteRel : … → String` was wrong in ARITY as
+  well as index.
+
+**What landed (4c-pre, 2026-08-15, additive + a rework of the still-unwired 4a layer):**
+`Leaf.lean::persistedLeaves` (the allocation, with a declared TTU-target deviation —
+`derivedAnywhere` vs Python's frozen `parent_types`), `::leafPublic`/`::publicOfLeaf`
+(the (α) map, index-agnostic by construction; `publicOfLeaf_rawWriteRels` is the round
+trip `affectedKeys` will consume), and `::rawWriteRels`/`::rawWriteTuples`/
+`::GraphState.writeDirectRaw` (the measured fan-out; `RulesWrite`'s list-generic fold
+family still discharges everything with no clone). Five sabotages, each reddening its
+own pin with controls green — literal outputs in the `LeafWitness` section docstring.
+Audits 501 → 520. `String.contains` does not kernel-reduce, so `isLeafPred` moved to
+`toList.contains` — keep new leaf-layer defs `toList`-based or `decide` pins stall.
+
+**★ THE CONSEQUENCE FOR 4c's REMAINING SHAPE, and it is structural.** The 76 dropped
+rows are mostly **rule-copied closure-leaf edges** (`viewer.0 = the editor arm's copy`),
+and the correct index is a function of **which arm produced the copy** — provenance
+`rewriteClosure` does not carry (its members are bare tuples; for
+`viewer: editor but not banned` the `editor`-arm and `banned`-arm members are
+shape-identical, yet Python routes them to `viewer.0` vs `viewer.1`). **No re-addressing
+function of the tuple alone can produce Python's leaf edges.** Python bakes the leaf
+target into the compiled rule (`RewriteFilter.rewrite_relation`); the faithful model
+does the same: **the rule layer (`schemaRewrites`/`exprArms`/`rewriteClosure`) must mint
+leaf-indexed target relations for tainted keys**, positioned by `persistedLeaves`. That
+is a rules-model change UNDER `RulesWrite.lean`, i.e. the recompile cone is the full
+GraphIndex tree, roughly double the 19-module Cascade cone. Steps for a next session:
+* **4c-i:** leaf-indexed rule targets for tainted keys (today `schemaRewrites` emits no
+  arms for derived keys at all — the taint filter — so this is an EXTENSION, not an
+  edit of the untainted path; the untainted fragment must stay byte-identical).
+* **4c-ii:** re-point `writeLoggedOne`/`removeLoggedOne`/`writeRules` through the raw
+  layer; move the `Delta` row to the leaf per (α); `affectedKeys` own-key branch via
+  `publicOfLeaf` with **`d.leaf = true` kept the LEADING conjunct** (PROOF_STATUS
+  2026-08-14's binding condition) — `publicOfLeaf_rawWriteRels` is the feeder lemma.
+  `foldAdmitsB`/`FoldAdmits` must move their admission probe in lockstep or `graphRunAux`
+  admit-checks a different edge from the one it writes.
+* Then 4b / 5 / 6 / 7 as ordered in §7, with 4c-ii + 7 still forced to co-land.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

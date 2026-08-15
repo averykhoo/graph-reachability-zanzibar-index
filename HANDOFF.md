@@ -16,13 +16,14 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 
 ---
 
-## ★★ START HERE (2026-08-14)
+## ★★ START HERE (2026-08-15)
 
 > # 🟢 THE GATE IS GREEN. Known live correctness bugs: 0.
 >
-> All ten phases (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) PASSED at
-> `8f09e24`, plus a 3-seed fuzz sweep. The 2026-08-10 fail-open family (RC1 `ed46e54`,
-> RC2 2026-08-11) stays closed.
+> All ten phases (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) PASSED
+> 2026-08-15 on the leg-7 4c-pre tree (Lean model + docs only — no Python behavior
+> changed, so the 2026-08-14 3-seed fuzz sweep still stands). The 2026-08-10 fail-open
+> family (RC1 `ed46e54`, RC2 2026-08-11) stays closed.
 >
 > **★ NO FIGURES IN THIS BANNER, deliberately — read them from
 > [`formal/FINAL_REVIEW.md`](formal/FINAL_REVIEW.md)'s generated counts block.** This block
@@ -40,7 +41,33 @@ this **first**, then [`CLAUDE.md`](CLAUDE.md), then whatever the task points int
 > * `MAX_TESTS_XFAILED=0` — a divergence gets a positive pin, never an xfail.
 > * `MIN_CONF_ALL` / `MIN_TESTS_ALL` have **zero headroom**; deleting one test is red.
 
-### What landed 2026-08-14 (most recent session)
+### What landed 2026-08-15 (most recent session)
+
+**Leg 7 4c-pre: the briefed step 4c was REFUTED by measurement before its 36-module cone
+was paid, and the addressing layer under it landed measured-correct instead.**
+
+* **★★ The kill (attack-first, before coding):** enumerating the 76 P6-dropped edge rows
+  per corpus shows **leaf indices 1 and 2 in 17 of 25 `GRAPH_FRAGMENT` corpora** — every
+  non-first boolean arm gets its own leaf — and a raw write **fans out to every matching
+  storage leaf**. So the landed `rawWriteRel` (single target, hardcoded index 0) could
+  never meet the landing criterion, in index OR arity. Worse structurally: the dropped
+  rows are mostly RULE-copied closure leaves whose index depends on **which arm produced
+  the copy** — provenance `rewriteClosure` does not carry — so **4c is not a caller
+  re-point at all**; the rule layer must mint leaf-indexed targets first. Revised plan:
+  scope-doc **§11.6** (4c-i rules-with-provenance → 4c-ii caller re-point + (α) row move,
+  4c-ii + 7 still co-landing).
+* **What landed in Lean (`GraphIndex/Leaf.lean`, reworked while still unwired — the cheap
+  moment):** `persistedLeaves` (the measured pre-order allocation; derived refs and
+  non-pure TTU arms consume no index), `leafPublic`/`publicOfLeaf` (the (α) leaf→public
+  map, **index-agnostic by construction**; `publicOfLeaf_rawWriteRels` is the feeder
+  `affectedKeys` will consume), `rawWriteRels`/`rawWriteTuples`/`writeDirectRaw` (the
+  filtered fan-out). Every measured Python fact is a `decide` pin (`swU_routes` =
+  §11.5's `approver.2`; `swF_fanout`; `stP_leaves`/`stD_leaves`; `swX_skip`), **five
+  sabotages run with attributable reds and green controls** — including the `".0"`-
+  stripper run where the index-0 pin stayed green, proving an index-0-only pin would
+  have been vacuous. Audits 501 → **520**; headline statements/definitions UNMOVED.
+
+### What landed 2026-08-14
 
 **Both big Lean legs were taken up. NEITHER is finished, and that was called up front
 rather than discovered at the end** — leg 7's step 4c alone is a 36-module recompile cone.
@@ -351,12 +378,13 @@ machine sweep DISCOVERS candidates but must never DEFINE the fan-out (96 of its 
 parser error messages, which exclude nothing admissible), and every agent must persist its
 result to its own file so a dead run still leaves its findings on disk.
 
-### 5. Leg 7 (leaf-family split) stays parked.
+### 5. Leg 7 — steps 3/4a/4c-pre are in; next is 4c-i (rules with leaf provenance).
 
-Steps 3 and 4a landed 2026-08-09. Step 4c is blocked on the design fork in
-`formal/history/leaf-family-split-scope-2026-08-05.md` §11.3 — where the `Delta` row is
-addressed once the edge moves to the leaf node. Attack-first that before coding either
-branch.
+Steps 3 and 4a landed 2026-08-09; the §11.3 fork was decided (α) 2026-08-14; **4c-pre
+landed 2026-08-15** (the measured allocation model, `publicOfLeaf`, the fan-out routing —
+see "What landed 2026-08-15"). The old "step 4c re-points the callers" framing is
+**refuted**: the rule layer must mint leaf-indexed targets first (scope-doc §11.6 is the
+revised plan, PROOF_STATUS 2026-08-15 the evidence). 4c-ii + 7 still must co-land.
 
 ### 6. Optional, open question — NOT a finding. (Promoted from the closed fix list.)
 
@@ -525,10 +553,12 @@ this file. **The rule this file keeps re-learning: archive the STATUS, keep the 
       provided leaf preds stay OUT of `S.defs`), and the routing signal **is already
       threaded** (the `Delta.leaf` tag landed 2026-07-20c; the leg turns it from a
       bookkeeping discriminator into an addressing one).
-      **★★ RESUME POINT (2026-08-14): steps 0, 1, 2, 2b, 3, 4a are DONE and THE §11.3 FORK
-      IS NOW DECIDED — branch (α), the `Delta` row moves to the leaf node. The leg resumes
-      at step 4c.** Read `formal/history/PROOF_STATUS.md` 2026-08-14 and scope-doc **§11.5**
-      (appended 2026-08-14) FIRST. Four things settled since the 2026-08-09 note:
+      **★★ RESUME POINT (updated 2026-08-15): steps 0, 1, 2, 2b, 3, 4a AND 4c-pre are
+      DONE; the §11.3 fork is decided (α). The leg resumes at step 4c-i — the rule layer
+      must mint leaf-indexed targets BEFORE any caller is re-pointed; "4c re-points the
+      callers" is REFUTED.** Read `formal/history/PROOF_STATUS.md` 2026-08-15 and
+      scope-doc **§11.6** FIRST (then §11.5 for the fork evidence). The 2026-08-14
+      context below still stands:
       * **(α) by measurement on both sides.** Python's outbox row is keyed at the LEAF
         (`DeltaOutboxV1` has no relation column at all; the relation IS the object node's
         predicate) and `DeltaProcessor._map_deltas_to_keys` recovers the public name from

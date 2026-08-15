@@ -1,37 +1,73 @@
 import ZanzibarProofs.GraphIndex.Write
+import ZanzibarProofs.GraphIndex.RulesWrite
 import ZanzibarProofs.Spec.Stabilize
 
 /-!
-# Leaf-family addressing — leg 7 steps 3 and 4a (ADDITIVE: no behavior change)
+# Leaf-family addressing — leg 7 steps 3, 4a and the 4c-pre allocation model
 
 Python's compiler splits every **tainted (derived)** relation `R` into a family of
 **leaf predicates** `R.0`, `R.1`, … minted by `alloc` inside `_build_plan_tree`
 (`zanzibar_utils_v1.py::_build_plan_tree`, the only creator, called once per tainted key from
-`compile_ruleset` `:1954-1956`). `RuleSet.apply` (`:423`) refuses a raw write that names a
-leaf (`:433-439`) and fan-in-expands a write on the derived **public** name onto the leaf
-family via `replace_relation(triple, f.rewrite_relation)` (`:447`).
+`compile_ruleset`). `RuleSet.apply` refuses a raw write that names a
+leaf and fan-in-expands a write on the derived **public** name onto the leaf
+family via `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`).
 
 The consequence the model has never carried: **edges land on the LEAF node while the
-residue stays keyed at the PUBLIC node** (`index_v4/processor.py::_store_residue`
-`:949-978`, and `_write_derived` `:429-440` pins the public node non-implicit because it
+residue stays keyed at the PUBLIC node** (`index_v4/processor.py::_store_residue`,
+and `_write_derived` pins the public node non-implicit because it
 "anchors the residue row"). Invariant I4 requires every `'.'`-predicate node to be a
 declared leaf family (`index_v4/invariants.py::_check_derived_invariants`).
 
 Until now the conformance extractor hid the difference: projection **P6** drops every
 Python edge row whose target predicate carries a `'.'`
 (`formal/conformance/extractor.py::_edge_projection`), because the model has no leaf nodes to
-compare them against. Retiring P6 is leg 7; **this file is its steps 3 and 4a — the
-addressing, and the forked write built out of it.** Nothing here is wired into a CALLER
-yet (that is step 4c), so no existing definition, statement or proof changes and both
-goldens stay byte-identical.
+compare them against. Retiring P6 is leg 7; this file is its steps 3 and 4a — the
+addressing and the forked write — **plus, since 2026-08-15, the measured allocation
+model those steps turned out to need** (see the next block). Nothing here is wired into
+a CALLER yet (that is step 4c), so no existing caller-level definition changes.
+
+## ★ 2026-08-15 — the index model was re-founded on MEASUREMENT, refuting two shapes
+
+The first cut of this file (2026-08-09 … 2026-08-14) modeled **one undifferentiated
+storage leaf, index `0`** (`rawWriteRel … := leafPred t.relation 0`) and declared the
+index structure "open and unmeasured" (scope doc §8.2). Both halves of that model are
+now **measured wrong**, and this file carries the corrected model:
+
+* **Indices > 0 are IN THE GATE, not exotic.** Enumerating the 76 edge rows projection
+  P6 drops across all 25 `GRAPH_FRAGMENT` corpora (2026-08-15, via
+  `extractor.py::graph_fragment_ledger`'s own drive loop): **17 of 25 corpora mint leaf
+  indices 1 and 2** — every non-first boolean arm gets its own leaf (`viewer.1 = banned`
+  in `boolean_exclusion`, `rhs.2` in `demorgans`, `all_of.2` in `nary_intersection`, …),
+  and in `direct_arm_exclusion` the subtract arm is `approver.1`. An index-`0`-only
+  routing would fail `diff_states` on most of the fragment the moment P6 is retired.
+* **The allocation rule** (`zanzibar_utils_v1.py::_build_plan_tree`, `alloc`):
+  pre-order, left-to-right over **persisted-leaf positions** — a `Direct` block mints
+  one storage leaf; a computed reference mints one closure leaf **iff its target is
+  untainted** (a derived reference consumes NO index); a TTU arm mints one closure leaf
+  **iff it is pure** (untainted target AND tupleset — a `derived-ttu` /
+  `derived-tupleset-ttu` node consumes no index). Measured on live compiles 2026-08-15,
+  including: `access: viewer from parent but not banned` gives the TTU arm index 0 and
+  `banned` index 1 when `viewer` is untainted, but `banned` index **0** when `viewer`
+  is derived.
+* **A raw write FANS OUT.** `RuleSet.apply` expands a public-name write onto **every**
+  storage leaf whose `RewriteFilter` admits the subject, deduped
+  (`zanzibar_utils_v1.py::RuleSet.apply`, the fan-in expansion). Measured:
+  `approver: [user] or ([user, employee] but not banned)` routes `user:alice` to BOTH
+  `approver.0` and `approver.1`, and `employee:bob` to `approver.1` alone. So the
+  faithful routing is `rawWriteRels : … → List String`, not a single relation —
+  the 2026-08-14 model was wrong in arity as well as index.
+* `Leaf.lean`'s previous `rawWriteRel`-hardcodes-0 was already called a known-wrong
+  model by scope-doc §11.5 (Python routes the Direct arm of
+  `(viewer but not banned) or [user]` to `approver.2` — pinned below as
+  `LeafWitness.swU_routes`); this rework discharges that finding.
 
 ## The design rule this file encodes (scope doc §3)
 
 > **Leaf predicates must NOT enter `S.defs`.**
 
-`Core/Schema.lean:64`'s `relNameOK` already forbids `'.'` in a *declared* relation name —
-mirroring Python's own reservation (`zanzibar_utils_v1.py::_validate_ast_references`,
-`_validate_ast_references` `:890-899`) — so a leaf node is **provably** distinct from every
+`Core/Schema.lean`'s `relNameOK` already forbids `'.'` in a *declared* relation name —
+mirroring Python's own reservation (`zanzibar_utils_v1.py::_validate_ast_references`)
+— so a leaf node is **provably** distinct from every
 bare R-node for free. `leafPred_ne_relName` below is that lemma and it is the linchpin the
 whole leg rests on; no new sentinel axiom alongside `STAR`/`BARE` is needed. If leaf names
 were ever added to `S.defs`, `relNameOK`/`WF` would have to be restated and three consumers
@@ -42,7 +78,7 @@ flat 4-field structure compared by `==`/`decide` in hundreds of places (`State.l
 and a fifth field would force every one of them through a rewrite while also wanting a
 companion clause on `Inv.nodeEnc`.
 
-Reference: `formal/history/leaf-family-split-scope-2026-08-05.md` §2–§4, §9.4.
+Reference: `formal/history/leaf-family-split-scope-2026-08-05.md` §2–§4, §9.4, §11.5–§11.6.
 -/
 
 namespace Zanzibar
@@ -59,8 +95,12 @@ def leafPred (R : String) (i : Nat) : String := R ++ "." ++ toString i
     (`index_v4/invariants.py::_check_derived_invariants`).
 
     ⚠ **Deliberately WIDER than I4 in exactly one place**, recorded as a theorem rather
-    than a comment: see `isLeafPred_bare`. -/
-def isLeafPred (p : String) : Bool := p.contains '.'
+    than a comment: see `isLeafPred_bare`.
+
+    Stated over `toList` rather than `String.contains` so the whole leaf layer stays
+    kernel-reducible (`String.contains` does not reduce under `decide`;
+    `String.contains_char_eq` bridges the two forms where a consumer holds the other). -/
+def isLeafPred (p : String) : Bool := p.toList.contains '.'
 
 /-- ⚠ **The one point where `isLeafPred` is wider than Python's I4 test.** I4 carries an
     `and n.predicate != '...'` guard (`index_v4/invariants.py::_check_derived_invariants`) because it scans
@@ -69,19 +109,18 @@ def isLeafPred (p : String) : Bool := p.contains '.'
     predicates, which carry relation names.
 
     Stated as a positive theorem so the divergence cannot be silently forgotten by a
-    later consumer. Python-side the guard is measured-*unexercised* — of the 244 rows
-    surviving projection P1, 73 have a dotted object predicate and **zero** have object
-    predicate `"..."` — pinned by
+    later consumer. Python-side the guard is measured-*unexercised* — of the rows
+    surviving projection P1, the dotted-object rows have **zero** object predicate
+    `"..."` occurrences — pinned by
     `formal/conformance/test_conformance_state.py::test_p6_bare_sentinel_guard_is_unexercised`
     (scope doc §6, last block). -/
-theorem isLeafPred_bare : isLeafPred BARE = true := by
-  simp [isLeafPred, BARE, String.contains_char_eq]
+theorem isLeafPred_bare : isLeafPred BARE = true := by decide
 
 /-- A minted leaf name is a leaf predicate. Unconditional: the `'.'` separator is part of
     the construction. -/
 @[simp] theorem isLeafPred_leafPred (R : String) (i : Nat) :
     isLeafPred (leafPred R i) = true := by
-  simp [isLeafPred, leafPred, String.contains_char_eq]
+  simp [isLeafPred, leafPred, String.toList_append, List.contains_eq_mem]
 
 /-! ## The linchpin — leaf names are disjoint from declared relation names -/
 
@@ -93,7 +132,9 @@ theorem leafPred_ne_relName {R' : String} (h : relNameOK R') (R : String) (i : N
   refine h ?_
   have := isLeafPred_leafPred R i
   rw [heq] at this
-  simpa [isLeafPred] using this
+  have hmem : '.' ∈ R'.toList := by
+    simpa [isLeafPred, List.contains_eq_mem] using this
+  simpa [String.contains_char_eq] using hmem
 
 /-- The same, packaged against a well-formed schema's declaration list. -/
 theorem leafPred_ne_declared {S : Schema} (hWF : WF S)
@@ -143,122 +184,281 @@ theorem leafNode_ne_objNode {R' : String} (h : relNameOK R') (o o' : ObjectRef)
     have := congrArg NodeKey.pred heq
     simpa using this)
 
-/-! ## Raw-write routing
+/-! ## The leaf-family allocation — Python's `_build_plan_tree`, measured
 
-The function the forked write drives its target off. Faithful shape per scope doc
-§9.4: a raw write on a **derived** key is rewritten onto the leaf family, a raw write on an
-untainted key is not rewritten at all and keeps landing on its bare R-node exactly as
-today.
+The index a leaf gets is its **position in the pre-order list of persisted-leaf
+positions** of the derived def's expression (`zanzibar_utils_v1.py::_build_plan_tree`,
+whose `alloc()` is the only minting site). What counts as a persisted position was
+MEASURED on live compiles (2026-08-15, three probes; see the module header):
 
-⚠ **Modelling scope, declared here rather than discovered later.** This models **one
-undifferentiated storage leaf per derived relation** (index `0`). Python allocates an index
-per *persisted-leaf position* (pre-order, left-to-right, `zanzibar_utils_v1.py::_build_plan_tree`)
-and a derived def with two Direct arms therefore has two storage leaves. Whether that
-distinction — and the `storage=True`/`storage=False` split (`:1693-1699`) that exists for
-TTU stored-parent enumeration — needs modelling is scope doc §8.2, still **open and
-unmeasured**. Nothing below depends on the index being `0`; the lemmas are stated for
-arbitrary `i` and only `rawWriteRel` picks one. -/
+* a `Direct` restriction block → **one storage leaf** (Python `LeafSpec.storage=True`);
+* a computed reference → **one closure leaf iff the target is untainted**; a reference
+  to a derived relation becomes a `derived-computed` plan node and consumes NO index;
+* a TTU arm → **one closure leaf iff pure** (target and tupleset both untainted);
+  a `derived-ttu` / `derived-tupleset-ttu` node consumes NO index;
+* boolean nodes (`union`/`inter`/`excl`) recurse left-to-right and mint nothing
+  themselves. Lean's binary `union`/`inter` model n-ary chains as left folds
+  (`Core/Schema.lean` header), which preserves the left-to-right leaf order, so the
+  allocation is order-faithful.
 
-/-- The relation a RAW (leaf-routed) write of `t` materializes under. -/
-def rawWriteRel (S : Schema) (t : Tuple) : String :=
-  if isDerived S (t.object.type, t.relation) then leafPred t.relation 0 else t.relation
+⚠ **One declared modeling deviation, in the TTU target-taint test.** Python decides "is
+the TTU target derived" over the TTU's frozen `parent_types`; this model has no
+parent-types table, so `derivedAnywhere` asks "does ANY declared type carry this
+relation name derived". The two agree whenever a relation name has one taint status
+across types — true of every conformance corpus and every measured probe. TTU-inside-
+a-derived-def is outside the W4 fragment anyway (`W4Fragment.computedOrDirect` maps
+`.ttu` to `False`); the arm is modeled so the allocation is total, not because any
+in-fragment chain reaches it. -/
 
-/-- The node a RAW write of `t` lands its edge on. -/
-def rawWriteNode (S : Schema) (t : Tuple) : NodeKey := objNode t.object (rawWriteRel S t)
+/-- One persisted (index-consuming) leaf position of a derived def's plan tree.
+    Python: `LeafSpec` rows that reach `alloc()` — `storage` is the `Direct`-block
+    storage leaf (`storage=True`), `closure` the pure computed-reference copy leaf,
+    `ttuPure` the pure-TTU arm folded to a closure leaf. -/
+inductive PLeaf where
+  | storage (rs : List Restriction)
+  | closure (src : String)
+  | ttuPure (target tupleset : String)
+deriving Repr, DecidableEq, Inhabited
 
-/-- **The subsumption fact step 4 needs.** On an untainted key the routing is the identity,
-    so the forked write path is definitionally today's write path on the whole untainted
-    fragment — the analogue of `w4Fragment_of_computedOnly`. -/
-@[simp] theorem rawWriteRel_untainted {S : Schema} {t : Tuple}
-    (h : isDerived S (t.object.type, t.relation) = false) : rawWriteRel S t = t.relation := by
-  simp [rawWriteRel, h]
+/-- Does ANY declared type carry `R` as a derived relation? The model's stand-in for
+    Python's frozen TTU `parent_types` taint test (see the section header's declared
+    deviation). -/
+def derivedAnywhere (S : Schema) (R : String) : Bool :=
+  S.keys.any (fun k => k.2 == R && isDerived S k)
 
-/-- …and at node level. -/
-@[simp] theorem rawWriteNode_untainted {S : Schema} {t : Tuple}
+/-- **The allocation.** The pre-order list of persisted-leaf positions of `e` compiled
+    under object type `ty`; a leaf's family index IS its position in this list.
+    Mirrors `zanzibar_utils_v1.py::_build_plan_tree` per the measured rules in the
+    section header. -/
+def persistedLeaves (S : Schema) (ty : String) : Expr → List PLeaf
+  | .direct rs => [.storage rs]
+  | .computed R => if isDerived S (ty, R) then [] else [.closure R]
+  | .ttu tgt ts =>
+      if derivedAnywhere S tgt || isDerived S (ty, ts) then [] else [.ttuPure tgt ts]
+  | .union a b => persistedLeaves S ty a ++ persistedLeaves S ty b
+  | .inter a b => persistedLeaves S ty a ++ persistedLeaves S ty b
+  | .excl a b => persistedLeaves S ty a ++ persistedLeaves S ty b
+
+/-! ## `publicOfLeaf` — the INDEX-AGNOSTIC leaf → public map
+
+The (α) fork decision (scope doc §11.5, PROOF_STATUS 2026-08-14 §1) moves the `Delta`
+row to the leaf node, so `affectedKeys`' own-key branch must recover the PUBLIC relation
+from a leaf predicate. Python carries the public name in the compiled `LeafFamily` table
+and parses the `.i` suffix only to record the index
+(`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`); the model's analogue is
+`S.keys` + `isDerived`, exactly as §11.5 records.
+
+**INDEX-AGNOSTIC by construction**: `leafPublic` takes everything before the FIRST
+`'.'` and never inspects what follows. §11.5's control C2 measured the plausible
+alternative — a literal `".0"`-stripper — returning `none` on `approver.2`, a name
+Python really mints (`LeafWitness.pol_idx2` below pins the index-2 case). -/
+
+/-- Everything before the first `'.'` — on a minted leaf name, the public relation. -/
+def leafPublic (p : String) : String := String.ofList (p.toList.takeWhile (· ≠ '.'))
+
+/-- The public derived relation a leaf predicate belongs to, if any: `p` must be
+    dot-carrying and its dot-free prefix must be a derived relation of `ty`. On a public
+    (declared) name this is `none` — the map is not the identity (§11.3's NV8) — and on
+    an UNTAINTED family's leaf it is `none` too, which is exactly the guard
+    `affectedKeys`' own-key branch needs (untainted leaves have no derived own-key). -/
+def publicOfLeaf (S : Schema) (ty p : String) : Option String :=
+  if isLeafPred p && isDerived S (ty, leafPublic p) then some (leafPublic p) else none
+
+/-- `takeWhile (≠ '.')` recovers exactly the dot-free prefix. -/
+private theorem takeWhile_append_dot (l : List Char) (h : ∀ c ∈ l, c ≠ '.')
+    (rest : List Char) : (l ++ '.' :: rest).takeWhile (fun c => c ≠ '.') = l := by
+  induction l with
+  | nil => simp
+  | cons a as ih =>
+      have ha : a ≠ '.' := h a (List.mem_cons_self ..)
+      have ihr := ih (fun c hc => h c (List.mem_cons_of_mem _ hc))
+      simp only [List.cons_append, List.takeWhile_cons]
+      simp only [decide_not] at ihr ⊢
+      simp [ha, ihr]
+
+/-- On a minted leaf name of a dot-free relation, `leafPublic` recovers the relation —
+    for EVERY index `i`. This is the index-agnosticity fact, as a theorem. -/
+theorem leafPublic_leafPred (R : String) (i : Nat) (h : ¬ R.contains '.') :
+    leafPublic (leafPred R i) = R := by
+  have hchars : ∀ c ∈ R.toList, c ≠ '.' := by
+    intro c hc heq
+    apply h
+    rw [String.contains_char_eq]
+    subst heq
+    simpa using hc
+  have hdata : (leafPred R i).toList = R.toList ++ '.' :: (toString i).toList := by
+    simp [leafPred, String.toList_append]
+  unfold leafPublic
+  rw [hdata, takeWhile_append_dot R.toList hchars]
+  exact String.ofList_toList
+
+/-- **The (α) round trip, at every index.** A derived relation's minted leaf names map
+    back to it. `WF` supplies dot-freeness of the declared name; `isDerived` supplies
+    the guard. -/
+theorem publicOfLeaf_leafPred {S : Schema} {ty R : String} (hWF : WF S)
+    (hd : isDerived S (ty, R) = true) (i : Nat) :
+    publicOfLeaf S ty (leafPred R i) = some R := by
+  have hR : leafPublic (leafPred R i) = R :=
+    leafPublic_leafPred R i (relNameOK_of_isDerived hWF (k := (ty, R)) hd)
+  unfold publicOfLeaf
+  rw [hR]
+  simp [hd]
+
+/-- A dot-free (declared/public) name maps to `none` — the map is not the identity. -/
+theorem publicOfLeaf_not_leaf {S : Schema} {ty p : String} (h : isLeafPred p = false) :
+    publicOfLeaf S ty p = none := by
+  simp [publicOfLeaf, h]
+
+/-- An untainted family's leaf maps to `none` — the guard `affectedKeys`' own-key
+    branch relies on (untainted leaves have no derived own-key). -/
+theorem publicOfLeaf_untainted {S : Schema} {ty p : String}
+    (h : isDerived S (ty, leafPublic p) = false) : publicOfLeaf S ty p = none := by
+  simp [publicOfLeaf, h]
+
+/-! ## Raw-write routing — the measured fan-out
+
+Faithful shape per the 2026-08-15 measurement (module header): a raw write on a
+**derived** public relation is fan-in-expanded onto EVERY storage leaf whose
+restrictions admit the subject (`zanzibar_utils_v1.py::RuleSet.apply`, matching via the
+compiled `RewriteFilter`s — modeled by `restrictionMatches`, the same test
+`StoreValidRules` uses); a raw write on an untainted key is not rewritten at all and
+keeps landing on its bare R-node exactly as today. -/
+
+/-- The relations a RAW (leaf-routed) write of `t` materializes under: the minted leaf
+    names of the storage leaves whose restriction block admits `t`'s subject, at their
+    allocation indices; `[t.relation]` on an untainted key. The `none` lookup branch is
+    unreachable for a derived key (derived ⇒ declared, `taintedKeys_subset_keys`) and
+    is a fail-closed backstop. -/
+def rawWriteRels (S : Schema) (t : Tuple) : List String :=
+  if isDerived S (t.object.type, t.relation) then
+    match S.lookup (t.object.type, t.relation) with
+    | some e =>
+        (persistedLeaves S t.object.type e).zipIdx.filterMap fun pi =>
+          match pi.1 with
+          | .storage rs =>
+              if restrictionMatches rs t then some (leafPred t.relation pi.2) else none
+          | _ => none
+    | none => []
+  else [t.relation]
+
+/-- **The subsumption fact.** On an untainted key the routing is the identity, so the
+    forked write path is today's write path on the whole untainted fragment — the
+    analogue of `w4Fragment_of_computedOnly`. -/
+@[simp] theorem rawWriteRels_untainted {S : Schema} {t : Tuple}
     (h : isDerived S (t.object.type, t.relation) = false) :
-    rawWriteNode S t = objNode t.object t.relation := by
-  simp [rawWriteNode, rawWriteRel_untainted h]
+    rawWriteRels S t = [t.relation] := by
+  simp [rawWriteRels, h]
 
-/-- On a derived key the write is rewritten onto the leaf family. -/
-theorem rawWriteRel_derived {S : Schema} {t : Tuple}
-    (h : isDerived S (t.object.type, t.relation) = true) :
-    rawWriteRel S t = leafPred t.relation 0 := by
-  simp [rawWriteRel, h]
+/-- Every relation a derived-key raw write routes to is a minted leaf name of the
+    public relation. -/
+theorem mem_rawWriteRels_derived {S : Schema} {t : Tuple} {r : String}
+    (hd : isDerived S (t.object.type, t.relation) = true) (hr : r ∈ rawWriteRels S t) :
+    ∃ i, r = leafPred t.relation i := by
+  unfold rawWriteRels at hr
+  rw [if_pos hd] at hr
+  cases hlk : S.lookup (t.object.type, t.relation) with
+  | none => rw [hlk] at hr; simp at hr
+  | some e =>
+      rw [hlk] at hr
+      obtain ⟨pi, _, hout⟩ := List.mem_filterMap.mp hr
+      split at hout
+      · split at hout
+        · exact ⟨pi.2, ((Option.some.injEq ..).mp hout).symm⟩
+        · cases hout
+      · cases hout
 
-theorem rawWriteNode_derived {S : Schema} {t : Tuple}
-    (h : isDerived S (t.object.type, t.relation) = true) :
-    rawWriteNode S t = leafNode t.object t.relation 0 := by
-  simp [rawWriteNode, leafNode, rawWriteRel_derived h]
+/-- **The routing is contentful, not a relabeling**: on a derived key every raw-write
+    target is a *different node* from the bare R-node the model writes today. Needs no
+    store hypothesis, only `WF`. -/
+theorem rawWriteNode_ne_objNode {S : Schema} (hWF : WF S) {t : Tuple} {r : String}
+    (hd : isDerived S (t.object.type, t.relation) = true) (hr : r ∈ rawWriteRels S t) :
+    objNode t.object r ≠ objNode t.object t.relation := by
+  obtain ⟨i, rfl⟩ := mem_rawWriteRels_derived hd hr
+  exact leafNode_ne_objNode (relNameOK_of_isDerived hWF (k := (t.object.type, t.relation)) hd)
+    t.object t.object t.relation i
 
-/-- **The routing is contentful, not a relabeling**: on a derived key the raw-write target
-    is a *different node* from the bare R-node the model writes today. This is the fact
-    that makes step 4 a real fork — and note it needs no store hypothesis, only `WF`. -/
-theorem rawWriteNode_ne_objNode {S : Schema} (hWF : WF S) {t : Tuple}
-    (h : isDerived S (t.object.type, t.relation) = true) :
-    rawWriteNode S t ≠ objNode t.object t.relation := by
-  rw [rawWriteNode_derived h]
-  exact leafNode_ne_objNode (relNameOK_of_isDerived hWF h) _ _ _ _
+/-- **The (α) feeder.** Every relation a derived-key raw write routes to maps back to
+    the public relation under `publicOfLeaf` — whatever index the allocation gave it.
+    This is the lemma the `affectedKeys` own-key branch will consume at step 4c. -/
+theorem publicOfLeaf_rawWriteRels {S : Schema} (hWF : WF S) {t : Tuple} {r : String}
+    (hd : isDerived S (t.object.type, t.relation) = true) (hr : r ∈ rawWriteRels S t) :
+    publicOfLeaf S t.object.type r = some t.relation := by
+  obtain ⟨i, rfl⟩ := mem_rawWriteRels_derived hd hr
+  exact publicOfLeaf_leafPred hWF hd i
 
 /-! ## The forked write — and why `writeDirect` itself does NOT fork
 
-Scope doc §4 prescribes forking `GraphState.writeDirect` itself: "take a target-node
-argument, or split into `writeDirectLeaf`/`writeDirectDerived`", which "duplicates or
-re-parameterizes every `writeDirect_*` projection lemma … and every fold lemma".
+Scope doc §4 prescribed forking `GraphState.writeDirect` itself. **It is cheaper than
+that, and more faithful.** Python does not fork its write path at all: `RuleSet.apply`
+re-addresses the **tuples** — `replace_relation(triple, f.rewrite_relation)`
+(`zanzibar_utils_v1.py::RuleSet.apply`) — and then the ordinary
+`add_tuple`/`_add_edge_locked` path runs unchanged, once per expanded triple. Modelling
+the fork the same way (`rawWriteTuples` below, then a fold of today's `writeDirect`)
+means `GraphState.writeDirect` is **byte-identical**, and the `∀ (ts : List Tuple)`
+fold family in `RulesWrite.lean` (`structInv_foldl_writeDirect` and siblings) applies
+to the re-addressed list **verbatim, with no clone**.
 
-**It is cheaper than that, and more faithful.** Python does not fork its write path at
-all: `RuleSet.apply` re-addresses the **tuple** — `replace_relation(triple,
-f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`) — and then the ordinary
-`add_tuple`/`_add_edge_locked` path runs unchanged. Modelling the fork the same way
-(`rawWriteTuple` below, then today's `writeDirect`) means:
-
-* `GraphState.writeDirect` is **byte-identical**, so the headline definition pin does not
-  move for a change that changes no meaning, and
-* every existing `writeDirect_*` projection and fold lemma — `writeDirect_reject`,
-  `_outbox`, `_watermark`, `_schema`, `_monoNodes`, `structInv_writeDirect`,
-  `inv_writeDirect`, `quiescent_writeDirect`, `residueEmpty_writeDirect`, and the
-  `foldl` family in `RulesWrite.lean:143-193` — applies to the re-addressed tuple
-  **verbatim, with no clone and no re-parameterization**.
-
-What the leg still owes is the *caller* re-pointing (`writeLoggedOne` `Cascade.lean:167`,
-`writeRules` `RulesWrite.lean:136`) and everything downstream that assumes the written
-tuple's relation is the DECLARED one. That is step 4c and it is where the cost lives;
+What the leg still owes is the *caller* re-pointing (`writeLoggedOne`
+`GraphIndex/Cascade.lean::GraphState.writeLoggedOne`, `writeRules`
+`GraphIndex/RulesWrite.lean::GraphState.writeRules`) and everything downstream that
+assumes the written tuple's relation is the DECLARED one — **including the rule-routed
+closure copies, whose per-arm leaf indices need rule provenance that `rewriteClosure`
+does not yet carry** (scope doc §11.6). That is step 4c and it is where the cost lives;
 this section is only the addressing half. -/
 
-/-- **The raw write, re-addressed onto its leaf family.** Python's
-    `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`), the fan-in
-    expansion `RuleSet.apply` performs on a write that names a derived PUBLIC relation.
-    On an untainted relation there is no family and this is the identity. -/
-def rawWriteTuple (S : Schema) (t : Tuple) : Tuple :=
-  { t with relation := rawWriteRel S t }
+/-- **The raw write, fan-in-expanded onto its leaf family.** Python's
+    `replace_relation(triple, f.rewrite_relation)` over every matching storage filter
+    (`zanzibar_utils_v1.py::RuleSet.apply`). On an untainted relation there is no
+    family and this is `[t]`. -/
+def rawWriteTuples (S : Schema) (t : Tuple) : List Tuple :=
+  (rawWriteRels S t).map fun r => { t with relation := r }
 
-@[simp] theorem rawWriteTuple_subject (S : Schema) (t : Tuple) :
-    (rawWriteTuple S t).subject = t.subject := rfl
+@[simp] theorem rawWriteTuples_untainted {S : Schema} {t : Tuple}
+    (h : isDerived S (t.object.type, t.relation) = false) : rawWriteTuples S t = [t] := by
+  simp [rawWriteTuples, rawWriteRels_untainted h]
 
-@[simp] theorem rawWriteTuple_object (S : Schema) (t : Tuple) :
-    (rawWriteTuple S t).object = t.object := rfl
-
-/-- The re-addressed tuple targets exactly `rawWriteNode`. -/
-@[simp] theorem objNode_rawWriteTuple (S : Schema) (t : Tuple) :
-    objNode (rawWriteTuple S t).object (rawWriteTuple S t).relation = rawWriteNode S t := rfl
-
-/-- **The subsumption fact, in the form step 4c consumes.** On an untainted key the
-    re-addressing is the IDENTITY ON THE TUPLE — not merely on the target node — so every
-    downstream lemma about the untainted fragment transports by `rfl`-level rewriting
-    rather than by a clone. This is the analogue of `w4Fragment_of_computedOnly`. -/
-@[simp] theorem rawWriteTuple_untainted {S : Schema} {t : Tuple}
-    (h : isDerived S (t.object.type, t.relation) = false) : rawWriteTuple S t = t := by
-  simp [rawWriteTuple, rawWriteRel_untainted h]
-
-/-- **The RAW (leaf-routed) write.** `writeDirect` on the re-addressed tuple — the
-    `writeLoggedOne` / `writeRules` leg of scope doc §4's table. The reconcile-emission leg
-    (`reconcileKey` / `reconcileKeyD` / `reconcileKeyDR`) keeps calling `writeDirect`
-    directly, which is what makes `Delta.leaf`-style caller provenance genuinely required
-    (§9.4: the schema alone is not a sufficient discriminator). -/
+/-- **The RAW (leaf-routed) write.** Today's `writeDirect`, folded over the re-addressed
+    expansion — the `writeLoggedOne` / `writeRules` leg of scope doc §4's table. The
+    reconcile-emission leg (`reconcileKey` / `reconcileKeyD` / `reconcileKeyDR`) keeps
+    calling `writeDirect` directly, which is what makes `Delta.leaf`-style caller
+    provenance genuinely required (§9.4: the schema alone is not a sufficient
+    discriminator). -/
 def GraphState.writeDirectRaw (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
-  σ.writeDirect (rawWriteTuple S t)
+  (rawWriteTuples S t).foldl (fun acc u => acc.writeDirect u) σ
 
-/-- The accepted-write edge list, factored out of the projection lemmas because it is what
-    every state-level instrument below needs. -/
+/-- On the untainted fragment the forked write IS today's write — the whole existing
+    development is untouched by construction. -/
+@[simp] theorem writeDirectRaw_untainted {σ : GraphState} {S : Schema} {t : Tuple}
+    (h : isDerived S (t.object.type, t.relation) = false) :
+    σ.writeDirectRaw S t = σ.writeDirect t := by
+  simp [GraphState.writeDirectRaw, rawWriteTuples_untainted h]
+
+/-- **The fold bridge, and the reason step 4c's fold half is cheap.** A fold of raw
+    writes is a fold of ordinary writes over the flattened re-addressed list, so
+    `RulesWrite.lean`'s `∀ (ts : List Tuple)` fold family discharges every projection
+    at the raw fold with no clone. -/
+theorem foldl_writeDirectRaw_eq (S : Schema) (ts : List Tuple) (σ : GraphState) :
+    ts.foldl (fun acc u => acc.writeDirectRaw S u) σ
+      = (ts.flatMap (rawWriteTuples S)).foldl (fun acc u => acc.writeDirect u) σ := by
+  induction ts generalizing σ with
+  | nil => rfl
+  | cons a as ih =>
+      simp only [List.foldl_cons, List.flatMap_cons, List.foldl_append]
+      exact ih _
+
+/-- The invariant survives the forked write for free — no clone of
+    `structInv_writeDirect`, because the targets moved by re-addressing the tuples. -/
+theorem structInv_writeDirectRaw {S S' : Schema} {σ : GraphState} (h : StructInv S' σ)
+    (t : Tuple) : StructInv S' (σ.writeDirectRaw S t) :=
+  structInv_foldl_writeDirect (rawWriteTuples S t) h
+
+/-- Likewise the full invariant on the residue-free fragment. -/
+theorem inv_writeDirectRaw {S S' : Schema} {σ : GraphState} (h : Inv S' σ)
+    (hre : ResidueEmpty σ) (t : Tuple) : Inv S' (σ.writeDirectRaw S t) :=
+  inv_foldl_writeDirect (rawWriteTuples S t) h hre
+
+/-- The accepted-write edge list, factored out because it is what state-level
+    instruments need. (General; unchanged by the fan-out rework.) -/
 theorem writeDirect_edges_of_admit {σ : GraphState} {t : Tuple}
     (h : σ.admitEdge (subjNode t.subject) (objNode t.object t.relation) = true) :
     (σ.writeDirect t).edges = (subjNode t.subject, objNode t.object t.relation) :: σ.edges := by
@@ -266,93 +466,59 @@ theorem writeDirect_edges_of_admit {σ : GraphState} {t : Tuple}
   simp only [h, if_true]
   rfl
 
-/-- …and its raw-write instance, which needs no separate proof: the target moved by
-    re-addressing the tuple, so the projections are the same `rfl`s. -/
-theorem writeDirectRaw_edges_of_admit {σ : GraphState} {S : Schema} {t : Tuple}
-    (h : σ.admitEdge (subjNode t.subject) (rawWriteNode S t) = true) :
-    (σ.writeDirectRaw S t).edges = (subjNode t.subject, rawWriteNode S t) :: σ.edges :=
-  writeDirect_edges_of_admit (t := rawWriteTuple S t) h
+/-! ## The non-vacuity witnesses
 
-/-- On the untainted fragment the forked write IS today's write — the whole existing
-    development is untouched by construction. -/
-@[simp] theorem writeDirectRaw_untainted {σ : GraphState} {S : Schema} {t : Tuple}
-    (h : isDerived S (t.object.type, t.relation) = false) :
-    σ.writeDirectRaw S t = σ.writeDirect t := by
-  simp [GraphState.writeDirectRaw, rawWriteTuple_untainted h]
+Scope doc §7: *"budget a non-vacuity WITNESS for every step, not just a green build"* —
+the lesson that recurred three legs running. Everything above is additive, so a green
+build vets nothing: an allocation whose derived-skip branch is unreachable, a
+`publicOfLeaf` that happens to work only at index 0, or a routing that never fans out,
+would compile and audit exactly as cleanly.
 
-/-- **The fold bridge, and the reason step 4c is cheap.** A fold of raw writes is a fold of
-    ordinary writes over the re-addressed list. `RulesWrite.lean`'s fold family
-    (`structInv_foldl_writeDirect` and its four siblings) is stated `∀ (ts : List Tuple)`,
-    exactly like the count stack the 2026-08-08 dedup leg found list-generic — so this one
-    lemma discharges all of them at the raw fold with no clone. -/
-theorem foldl_writeDirectRaw_eq (S : Schema) (ts : List Tuple) (σ : GraphState) :
-    ts.foldl (fun acc u => acc.writeDirectRaw S u) σ
-      = (ts.map (rawWriteTuple S)).foldl (fun acc u => acc.writeDirect u) σ := by
-  induction ts generalizing σ with
-  | nil => rfl
-  | cons a as ih => simpa [GraphState.writeDirectRaw] using ih (σ.writeDirect (rawWriteTuple S a))
+**And per §9.3 the obvious witness is a TRAP.** `W4WitnessDirect`'s `Sd`/`Td` carries no
+wildcard, so `Inv.negStarCovered` forces `neg = []` and a leg-7 fact instantiated there
+is vacuously true. `Sw` below is D.3's **wildcard-carrying** schema, verbatim from scope
+doc §9.3, which is the pair the leg-0 attack probe actually reddened. The 2026-08-15
+witnesses (`SwU`, `SwF`, `StP`/`StD`, `SwX`) each pin one MEASURED Python behavior; the
+provenance of each is its docstring.
 
-/-- The invariant survives the forked write for free — no clone of
-    `structInv_writeDirect`, because the target moved by re-addressing the tuple. -/
-theorem structInv_writeDirectRaw {S S' : Schema} {σ : GraphState} (h : StructInv S' σ)
-    (t : Tuple) : StructInv S' (σ.writeDirectRaw S t) :=
-  structInv_writeDirect h (rawWriteTuple S t)
+## ★ CONTROLLED — five sabotages, run 2026-08-15 (`docs/sabotage-procedure.md`)
 
-/-- Likewise the full invariant on the residue-free fragment. -/
-theorem inv_writeDirectRaw {S S' : Schema} {σ : GraphState} (h : Inv S' σ)
-    (hre : ResidueEmpty σ) (t : Tuple) : Inv S' (σ.writeDirectRaw S t) :=
-  inv_writeDirect h hre (rawWriteTuple S t)
+Each is the narrowest *plausible* weakening of one measured rule; each reddens the pin
+that carries that rule while the named controls stay green, so every red is
+attributable. Literal outputs, `lake build ZanzibarProofs.GraphIndex.Leaf`:
 
-/-! ## The non-vacuity witness
+**(S1) The derived-skip guard is dropped** — `persistedLeaves`' `.computed` arm mints
+unconditionally (`[.closure R]`). The plausible misreading: "every reference is a leaf".
+ONE error in the tree:
+`Tactic 'decide' proved that the proposition Option.map (persistedLeaves SwX "doc")
+(SwX.lookup ("doc", "a")) = some [PLeaf.closure "m"] is false` — `swX_skip` REDDENS;
+`sw_leaves`, `stP_leaves`, `stD_leaves` stay GREEN.
 
-Scope doc §7: *"budget a non-vacuity WITNESS for every step, not just a green build"* — the
-lesson that recurred three legs running (`echain-widening-plan-2026-07-28.md` §C.3/§C.4/§C.5).
-Everything above is additive, so a green build vets nothing: a `rawWriteRel` whose derived
-branch is unreachable, or a `rawWriteNode_ne_objNode` whose `isDerived … = true` premise no
-real schema satisfies, would compile and audit exactly as cleanly.
+**(S2) The TTU purity guard is dropped** — the `.ttu` arm mints unconditionally.
+ONE error: `... Option.map (persistedLeaves StD "doc") (StD.lookup ("doc", "access"))
+= some [PLeaf.closure "banned"] is false` — `stD_leaves` REDDENS (`banned` displaced
+from index 0); `stP_leaves` stays GREEN.
 
-**And per §9.3 the obvious witness is a TRAP.** `W4WitnessDirect`'s `Sd`/`Td` — the pair
-every pointer in the tree aims at as "the canonical Direct-arm counterexample" — carries no
-wildcard, so `Inv.negStarCovered` forces `neg = []` and a leg-7 fact instantiated there is
-vacuously true. The schema below is D.3's **wildcard-carrying** one, verbatim from scope
-doc §9.3, which is the pair the leg-0 attack probe actually reddened.
+**(S3) `publicOfLeaf` as the `".0"`-stripper** — §11.5's control C2, the exact wrong
+model the scope doc measured: strip a literal `".0"` suffix off `leafPublic`. TWO
+errors: `leafPublic_leafPred`'s proof breaks (the theorem is now FALSE at every index
+except 0 — the general lemma guards too), and
+`Tactic 'decide' proved that the proposition publicOfLeaf SwU "doc"
+(leafPred "approver" 2) = some "approver" is false` — `pol_idx2` REDDENS. **`pol_nv7`
+(index 0) stays GREEN** — an index-0-only pin would have been VACUOUSLY satisfied by
+the wrong model; the index-2 pin is the one that earns its keep.
 
-## ★ CONTROLLED — two sabotages, and only the second one needs this section
+**(S4) The subject-match guard is dropped** — `rawWriteRels` routes to every storage
+leaf regardless of `restrictionMatches`. `swF_second_only` REDDENS
+(`... rawWriteRels SwF {employee bob …} = [leafPred "approver" 1] is false` —
+`employee:bob` lands on `approver.0` too); `swF_fanout` stays GREEN. (Plus one proof
+artifact in `mem_rawWriteRels_derived`, whose `split` finds no `if` left.)
 
-Both run 2026-08-09 against this file (`docs/sabotage-procedure.md`); literal output, with
-line numbers as observed — i.e. before this docstring was added, so they no longer point at
-the named declarations.
-
-**(A) The routing collapses to the identity** — `rawWriteRel S t := t.relation`, i.e. the
-derived branch is dropped. Caught by the GENERAL section, so the witness is not what earns
-its keep here:
-
-```
-error: ZanzibarProofs/GraphIndex/Leaf.lean:183:47: unsolved goals   -- rawWriteRel_derived
-```
-
-**(B) The routing guard is made UNSATISFIABLE** — `&& isLeafPred t.relation` added to the
-`if`, with the three derived-branch lemmas' hypotheses tightened to match. This is a
-*plausible* misreading, not a strawman: `RuleSet.apply` really does refuse a raw write that
-names a leaf (`zanzibar_utils_v1.py::RuleSet._candidates`), so "never re-route an already-routed write"
-reads like a faithfulness fix. It is not — no raw write ever names a leaf, so the derived
-branch becomes dead and every leaf lemma becomes vacuously true about nothing.
-
-**Every general lemma above still compiles, `rawWriteNode_ne_objNode` included.** Exactly
-two errors in the whole tree, both in this section:
-
-```
-error: ZanzibarProofs/GraphIndex/Leaf.lean:250:29: Application type mismatch: The argument
-  approver_isDerived
-has type
-  isDerived Sw ("doc", "approver") = true
-but is expected to have type
-  (isDerived Sw (tw.object.type, tw.relation) && isLeafPred tw.relation) = true
-error: ZanzibarProofs/GraphIndex/Leaf.lean:254:23: Application type mismatch: ...
-```
-
-Delete these five declarations and sabotage (B) is "Build completed successfully
-(971 jobs)" — green build, clean audit, both pins byte-identical. -/
+**(S5) First-match-only routing** — `.take 1` on the fan-out (the natural "one write,
+one edge" misreading; refuted by measurement 2). `swF_fanout` REDDENS
+(`... = [leafPred "approver" 0, leafPred "approver" 1] is false` — `user:alice` loses
+`approver.1`); `swF_second_only` stays GREEN.
+-/
 
 namespace LeafWitness
 
@@ -371,7 +537,7 @@ def tw : Tuple := ⟨⟨"user", "bob", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
 /-- A raw write on an **untainted** relation, same object. -/
 def tb : Tuple := ⟨⟨"user", "bob", BARE⟩, "banned", ⟨"doc", "d1"⟩⟩
 
-/-- `WF` is satisfiable here, so `rawWriteNode_ne_objNode`'s schema premise is not empty. -/
+/-- `WF` is satisfiable here, so the schema premises are not empty. -/
 theorem wf : WF Sw := ⟨by
   intro p hp
   simp only [Sw, List.mem_cons, List.not_mem_nil, or_false] at hp
@@ -385,65 +551,135 @@ theorem approver_isDerived : isDerived Sw ("doc", "approver") = true := by decid
     not a blanket rewrite. -/
 theorem banned_not_isDerived : isDerived Sw ("doc", "banned") = false := by decide
 
-/-- **The routing MOVES the node.** The step's whole content, at a concrete pair: a raw
-    write on `approver` no longer targets `doc:d1#approver`. Instantiates the general
-    theorem, so a sabotage of *either* goes red here. -/
-theorem routes_away : rawWriteNode Sw tw ≠ objNode tw.object tw.relation :=
-  rawWriteNode_ne_objNode wf approver_isDerived
+/-- The allocation at `Sw`'s derived def: storage `[user]` at 0, `viewer` copy at 1,
+    `banned` copy at 2 — the pre-order rule at a shape carrying all three leaf kinds
+    Python storage-compiles here. -/
+theorem sw_leaves :
+    (Sw.lookup ("doc", "approver")).map (persistedLeaves Sw "doc")
+      = some [.storage [("user", BARE, false)], .closure "viewer", .closure "banned"] := by
+  decide
 
-/-- …onto exactly `doc:d1#approver.0`. -/
-theorem routes_to_leaf : rawWriteNode Sw tw = leafNode ⟨"doc", "d1"⟩ "approver" 0 :=
-  rawWriteNode_derived approver_isDerived
+/-- **The routing MOVES the write, onto exactly `doc:d1#approver.0`** — the storage
+    leaf's allocation index at this shape. -/
+theorem routes_to_leaf : rawWriteRels Sw tw = [leafPred "approver" 0] := by decide
 
-/-- **The untainted write is untouched** — byte-for-byte today's target. This is the
-    subsumption claim step 4 must preserve, checked at a store rather than assumed. -/
-theorem untainted_unmoved : rawWriteNode Sw tb = objNode tb.object tb.relation :=
-  rawWriteNode_untainted banned_not_isDerived
+/-- **…and every routed target is a different node from the public one.** Instantiates
+    the general theorem, so a sabotage of *either* goes red here. -/
+theorem routes_away : ∀ r ∈ rawWriteRels Sw tw,
+    objNode tw.object r ≠ objNode tw.object tw.relation :=
+  fun _ hr => rawWriteNode_ne_objNode wf approver_isDerived hr
 
-/-- **The fork is real at STATE level, not just at node level.** From the empty state the
-    raw write and today's write produce different edge lists.
+/-- **The untainted write is untouched** — byte-for-byte today's target list. This is
+    the subsumption claim step 4 must preserve, checked at a store rather than assumed. -/
+theorem untainted_unmoved : rawWriteRels Sw tb = [tb.relation] :=
+  rawWriteRels_untainted banned_not_isDerived
 
-    ★ **CONTROLLED, in two runs, because the first control passed for the wrong reason**
-    (the §C.4 trap). The sabotage is the plausible step-4a failure: not a wrong routing but
-    a `writeDirectRaw` that quietly ignores it — `σ.writeDirect t`, dropping `rawWriteTuple`.
-
-    * **Run 1 (naive).** Three errors, all in the general section:
-      `writeDirectRaw_edges_of_admit`, `structInv_writeDirectRaw`, `inv_writeDirectRaw`.
-      This witness stayed GREEN — it consumes `writeDirectRaw_edges_of_admit`, which was
-      already red, so it was *shielded* rather than satisfied. Run 1 establishes nothing
-      about this witness. Only the first of those three is a genuinely false STATEMENT
-      under the sabotage; the other two are proof-style artifacts (term-mode proofs naming
-      `rawWriteTuple`) that a careless author repairs in one keystroke.
-    * **Run 2 (the informative one): sabotage plus exactly those repairs** — restate
-      `writeDirectRaw_edges_of_admit` over the bare node, drop `rawWriteTuple` from the two
-      `Inv` terms. The whole general section then compiles, and the ONLY error in the tree
-      is here, with the residual goal printed verbatim:
-
-      ```
-      ⊢ ((emptyState Sw).writeDirectRaw Sw tw).edges ≠ ((emptyState Sw).writeDirect tw).edges
-      ```
-
-      — unprovable, because under the sabotage the two edge lists are equal. -/
+/-- **The fork is real at STATE level, not just at node level.** From the empty state
+    the raw write and today's write produce different edge lists. (Kernel-checked by
+    `decide` — the whole write path is computable.) -/
 theorem writeDirectRaw_edges_ne :
     ((emptyState Sw).writeDirectRaw Sw tw).edges ≠ ((emptyState Sw).writeDirect tw).edges := by
-  -- the subject and both candidate targets differ already in their `type` field
-  have hty : ∀ b : NodeKey, b.type = tw.object.type → subjNode tw.subject ≠ b := by
-    intro b hb heq
-    have := (congrArg NodeKey.type heq).trans hb
-    simp only [subjNode_type] at this
-    exact absurd this (by decide)
-  have hraw : subjNode tw.subject ≠ rawWriteNode Sw tw :=
-    hty _ (by simp [rawWriteNode])
-  have hbare : subjNode tw.subject ≠ objNode tw.object tw.relation :=
-    hty _ (by simp)
-  -- from the empty state every non-self edge is admitted (no edges ⇒ no back-path)
-  have ha : ∀ b : NodeKey, subjNode tw.subject ≠ b →
-      (emptyState Sw).admitEdge (subjNode tw.subject) b = true := by
-    intro b hb
-    simp [GraphState.admitEdge, GraphState.reach, emptyState, reachB, hb]
-  rw [writeDirectRaw_edges_of_admit (ha _ hraw), writeDirect_edges_of_admit (ha _ hbare)]
-  intro h
-  exact routes_away (congrArg Prod.snd (List.head_eq_of_cons_eq h))
+  decide
+
+/-! ### The 2026-08-15 measured witnesses -/
+
+/-- **Scope-doc §11.5's measured shape**: `approver := (viewer but not banned) or [user]`.
+    Python routes the Direct arm to `approver.2` — the fact that killed both the
+    `".0"`-stripper and the hardcoded index 0. -/
+def SwU : Schema :=
+  ⟨[(("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "viewer"), .direct [("user", BARE, true)]),
+    (("doc", "approver"),
+      .union (.excl (.computed "viewer") (.computed "banned"))
+             (.direct [("user", BARE, false)]))], []⟩
+
+/-- **The index-2 routing pin** — Python's measured `approver.2` (scope doc §11.5,
+    control C2). Under sabotage S3 (`".0"`-stripper) or the pre-2026-08-15 hardcoded
+    index 0, this is FALSE. -/
+theorem swU_routes :
+    rawWriteRels SwU ⟨⟨"user", "bob", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
+      = [leafPred "approver" 2] := by decide
+
+/-- **`publicOfLeaf` at the index Python actually mints** (NV7's shape, at index 2 —
+    see sabotage S3 for why index 0 alone would be a vacuous pin). -/
+theorem pol_idx2 : publicOfLeaf SwU "doc" (leafPred "approver" 2) = some "approver" := by
+  decide
+
+/-- NV7 (PROOF_STATUS 2026-08-14 §1): the index-0 case. -/
+theorem pol_nv7 : publicOfLeaf Sw "doc" (leafPred "approver" 0) = some "approver" := by
+  decide
+
+/-- NV8: the map is NOT the identity — a public name maps to `none`. -/
+theorem pol_nv8 : publicOfLeaf Sw "doc" "approver" = none := by decide
+
+/-- An untainted family's leaf maps to `none` — the own-key guard for untainted
+    `leaf = true` rows keeps holding under (α). -/
+theorem pol_untainted : publicOfLeaf Sw "doc" (leafPred "viewer" 0) = none := by decide
+
+/-- **The fan-out shape** (measurement 2, 2026-08-15):
+    `approver := [user] or ([user, employee] but not banned)` — two storage leaves with
+    overlapping restrictions. -/
+def SwF : Schema :=
+  ⟨[(("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "approver"),
+      .union (.direct [("user", BARE, false)])
+             (.excl (.direct [("user", BARE, false), ("employee", BARE, false)])
+                    (.computed "banned")))], []⟩
+
+/-- **A raw write FANS OUT** — `user:alice` lands on BOTH storage leaves, exactly as
+    Python's measured 2-triple expansion. Under sabotage S5 (first-match-only) this is
+    FALSE. -/
+theorem swF_fanout :
+    rawWriteRels SwF ⟨⟨"user", "alice", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
+      = [leafPred "approver" 0, leafPred "approver" 1] := by decide
+
+/-- **…and the fan-out is FILTERED** — `employee:bob` matches only the second arm's
+    restrictions, so it lands on `approver.1` alone. Under sabotage S4 (match guard
+    dropped) this is FALSE. -/
+theorem swF_second_only :
+    rawWriteRels SwF ⟨⟨"employee", "bob", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
+      = [leafPred "approver" 1] := by decide
+
+/-- **The pure-TTU shape** (measurement 1a):
+    `access := viewer from parent but not banned`, `viewer` untainted on `folder`.
+    The TTU arm consumes index 0; `banned` gets 1. -/
+def StP : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "access"), .excl (.ttu "viewer" "parent") (.computed "banned"))], []⟩
+
+theorem stP_leaves :
+    (StP.lookup ("doc", "access")).map (persistedLeaves StP "doc")
+      = some [.ttuPure "viewer" "parent", .closure "banned"] := by decide
+
+/-- **The tainted-target TTU shape** (measurement 1b): same `access`, but `viewer` is
+    derived on `folder` — the TTU arm consumes NO index and `banned` inherits 0. -/
+def StD : Schema :=
+  ⟨[(("folder", "e"), .direct [("user", BARE, false)]),
+    (("folder", "b"), .direct [("user", BARE, false)]),
+    (("folder", "viewer"), .excl (.computed "e") (.computed "b")),
+    (("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "access"), .excl (.ttu "viewer" "parent") (.computed "banned"))], []⟩
+
+theorem stD_leaves :
+    (StD.lookup ("doc", "access")).map (persistedLeaves StD "doc")
+      = some [.closure "banned"] := by decide
+
+/-- **The derived-reference skip** (the `cross_stratum_resettle` corpus fact,
+    2026-08-15 ledger enumeration): `a := v but not m` with `v` derived — `v` consumes
+    no index, so `m` mints `a.0`. -/
+def SwX : Schema :=
+  ⟨[(("doc", "e"), .direct [("user", BARE, false)]),
+    (("doc", "b"), .direct [("user", BARE, false)]),
+    (("doc", "m"), .direct [("user", BARE, false)]),
+    (("doc", "v"), .excl (.computed "e") (.computed "b")),
+    (("doc", "a"), .excl (.computed "v") (.computed "m"))], []⟩
+
+theorem swX_skip :
+    (SwX.lookup ("doc", "a")).map (persistedLeaves SwX "doc")
+      = some [.closure "m"] := by decide
 
 end LeafWitness
 

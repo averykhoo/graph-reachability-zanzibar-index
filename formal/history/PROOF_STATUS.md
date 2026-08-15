@@ -8,6 +8,77 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-15 (**LEG 7 4c-PRE: 4c-as-scoped is REFUTED by corpus measurement before any caller was re-pointed — the leaf ALLOCATION is now modeled, `publicOfLeaf` is in index-agnostic, and the raw write is a measured FAN-OUT. The rule layer needs leaf provenance before 4c can run; scope doc §11.6 is the revised step plan.**)
+
+**Task taken:** resume leg 7 at step 4c (briefed: co-land with step 7, criterion
+`P6 76 → 0` / `compared 189 → 265`, re-derived from the generated block — it matches).
+**Attack-first (house rule 2) killed the plan before the cone was paid**: the question
+"can `rawWriteRel`'s index-0 routing meet the criterion?" was answered by enumerating the
+76 P6-dropped rows per corpus, and the answer refutes both the index model and, more
+structurally, the idea that 4c is a *caller re-point* at all.
+
+### 1. ★★ THE MEASUREMENTS (three, all Python-side, read-only)
+
+* **The 76 dropped rows span leaf indices 0–2, in 17 of 25 corpora.** Every non-first
+  boolean arm gets its own leaf (`viewer.1 = banned`, `rhs.2`, `all_of.2`,
+  `any_of4.2`, …); `direct_arm_exclusion`'s subtract arm is `approver.1`. Zero
+  subject-side dots. Totals reconcile exactly (76 dropped / 189 compared).
+* **The allocation rule** (`_build_plan_tree`, live compiles): pre-order over
+  persisted-leaf positions; derived computed refs consume NO index; a TTU arm mints
+  **iff pure** — under a tainted target the next arm inherits index 0
+  (`access.0 = banned` when `viewer` is derived).
+* **A raw write FANS OUT to every matching storage leaf** (`RuleSet.apply` driven
+  directly): overlapping restrictions land `user:alice` on BOTH `approver.0` and
+  `approver.1`. The 2026-08-14 single-target model was wrong in ARITY as well as index.
+
+### 2. What landed (`Leaf.lean` reworked while still UNWIRED — the cheap moment to do it)
+
+`persistedLeaves` (the allocation; declared TTU-target deviation: `derivedAnywhere` vs
+Python's frozen `parent_types`), `leafPublic`/`publicOfLeaf` (the (α) leaf→public map,
+index-agnostic BY CONSTRUCTION — dot-free prefix, never a literal `".0"`), and
+`rawWriteRels`/`rawWriteTuples`/`writeDirectRaw` (the fan-out; `RulesWrite`'s
+list-generic fold family discharges all raw-fold obligations with no clone —
+`foldl_writeDirectRaw_eq` is now the `flatMap` form). The (α) feeder lemma
+`publicOfLeaf_rawWriteRels` — every routed leaf maps back to its public relation, at
+whatever index — is what `affectedKeys`' own-key branch consumes at 4c-ii.
+**Witness pins carry each measured fact**: `swU_routes` (§11.5's `approver.2`),
+`swF_fanout`/`swF_second_only` (filtered fan-out), `stP_leaves`/`stD_leaves` (TTU
+purity), `swX_skip` (derived-ref skip), `pol_idx2`/`pol_nv7`/`pol_nv8`/`pol_untainted`
+(the map at the indices that matter). **Five sabotages run, each reddening exactly its
+own pin, controls green — literal outputs in the `LeafWitness` section docstring.** The
+S3 run is the §11.5 C2 story mechanized: under the `".0"`-stripper, `pol_idx2` reds
+while `pol_nv7` (index 0) stays GREEN — an index-0-only pin would have been vacuous.
+
+**Numbers:** audits 493+8→501 (2026-08-14) → **520**; anchors 464 → **471**; headline
+statements 38/38 and definitions 155/155 **UNMOVED**; `verify.sh lean` PASSED.
+**Toolchain fact worth keeping:** `String.contains` does not kernel-reduce, so
+`isLeafPred` moved to `toList.contains` (bridged by `String.contains_char_eq`); keep
+leaf-layer defs `toList`-based or `decide` pins stall. `String.ofList`/`toList` round
+trips and `List.takeWhile` lemmas are what `leafPublic_leafPred` rests on.
+
+### 3. ★★ WHY 4c IS NOT A CALLER RE-POINT, and the revised plan (scope doc §11.6)
+
+The dropped rows are mostly **rule-copied closure-leaf edges**, and the correct index is
+a function of **which arm produced the copy** — provenance `rewriteClosure` does not
+carry (for `viewer: editor but not banned`, the `editor`-arm and `banned`-arm members
+are shape-identical tuples; Python routes them to `viewer.0` vs `viewer.1`). **No
+re-addressing function of the tuple alone can produce Python's leaf edges.** Python
+bakes the leaf target into the compiled rule (`RewriteFilter.rewrite_relation`); the
+faithful model must have the RULE layer mint leaf-indexed targets for tainted keys
+(today `schemaRewrites` emits no arms for derived keys at all, so this is an extension
+of the taint-filtered layer, untainted path byte-identical). That sits UNDER
+`RulesWrite.lean` — the recompile cone is the full GraphIndex tree, ~double the
+19-module Cascade cone. Revised steps: **4c-i** (leaf-provenance rules) → **4c-ii**
+(caller re-point + (α) row move + `affectedKeys` via `publicOfLeaf`, `d.leaf = true`
+LEADING; `foldAdmitsB`/`FoldAdmits` move in lockstep) → 4b/5/6/7, with 4c-ii + 7 still
+forced to co-land.
+
+**Still owed:** leg 7 4c-i, 4c-ii, 4b, 5, 6, 7; `ttuStarFree` parts (ii)/(iii)/(iv)
+((iv)'s decidability question unanswered). This session's value: the wrong 36-module
+cone was NOT paid, and the addressing layer under it is now measured-correct and pinned.
+
+---
+
 ## Session 2026-08-14 (**The §11.3 fork is DECIDED — branch (α), by measurement on both sides. `ttuStarFree` part (i) LANDED. Probe P4 removes ~145 mention-lines from leg 7's budget. Neither leg is close to done, and this entry says so.**)
 
 **Task taken:** the user asked for BOTH big open legs — leg 7 (leaf-family split / retire

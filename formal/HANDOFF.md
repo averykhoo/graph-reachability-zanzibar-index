@@ -62,6 +62,33 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**★★ 2026-08-15 — LEG 7 4c-PRE: 4c-as-scoped REFUTED by corpus measurement; the leaf
+ALLOCATION is modeled, `publicOfLeaf` is in (index-agnostic), the raw write is a measured
+FAN-OUT. Read `history/PROOF_STATUS.md` 2026-08-15 and scope-doc §11.6 (the revised step
+plan) BEFORE attempting 4c.**
+
+* **The kill, made before the cone was paid:** the 76 P6-dropped rows span leaf indices
+  0–2 in **17 of 25** corpora (every non-first boolean arm gets its own leaf), so the
+  2026-08-14 `rawWriteRel`-index-0 model could never meet `P6 → 0 / compared → 265` —
+  and a raw write **fans out** to every matching storage leaf, so it was wrong in arity
+  too. Both facts are now Lean pins (`LeafWitness.swU_routes`, `swF_fanout`).
+* **`Leaf.lean` is reworked while still unwired**: `persistedLeaves` (the pre-order
+  allocation — derived refs and non-pure TTU arms consume NO index),
+  `leafPublic`/`publicOfLeaf` (dot-free prefix, never `".0"`; `publicOfLeaf_rawWriteRels`
+  is the (α) feeder for `affectedKeys`), `rawWriteRels`/`rawWriteTuples`/`writeDirectRaw`
+  (the filtered fan-out). Five sabotages, each red attributable, controls green. Audits
+  501 → **520**; headline statements/definitions UNMOVED.
+* **★★ 4c is NOT a caller re-point.** The dropped rows are mostly RULE-copied closure
+  leaves and the index depends on WHICH ARM produced the copy — provenance
+  `rewriteClosure` does not carry (shape-identical members route to `viewer.0` vs
+  `viewer.1`). The rule layer must mint leaf-indexed targets for tainted keys (Python
+  bakes them into `RewriteFilter.rewrite_relation`). Revised order: **4c-i** rules with
+  leaf provenance (under `RulesWrite`, cone ≈ the whole GraphIndex tree) → **4c-ii**
+  caller re-point + (α) row move (`d.leaf = true` stays the LEADING conjunct;
+  `foldAdmitsB`/`FoldAdmits` move in lockstep) → 4b/5/6/7; 4c-ii + 7 still co-land.
+* Toolchain: `String.contains` does not kernel-reduce — leaf-layer defs stay
+  `toList`-based or `decide` pins stall.
+
 **★★ 2026-08-14 — THE §11.3 FORK IS DECIDED: branch (α). `ttuStarFree` PART (i) IS IN.**
 Read `history/PROOF_STATUS.md` 2026-08-14 and scope-doc **§11.5** (appended; §11.3 is left
 as written and is wrong in two places).
