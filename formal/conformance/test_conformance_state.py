@@ -698,3 +698,118 @@ def test_python_nodes_are_all_justified(name):
         f"no residue reference. P5 drops nodes from the Lean/Python state "
         f"comparison, so a GC leak here is invisible to that gate:\n"
         + "\n".join(f"    {o}" for o in orphans))
+
+
+def test_no_corpus_nests_a_pure_union_inside_an_impure_one():
+    """The binary `Expr` cannot represent Python's leaf allocation for a NESTED union.
+
+    `Core/Schema.lean`'s header models n-ary `or`/`and` as left folds of the binary
+    node, justified by associativity+commutativity. That is true of `sem` and **false
+    of the leaf ALLOCATION** `GraphIndex/Leaf.lean::persistedLeaves` models, because
+    `zanzibar_utils_v1.py::_build_plan_tree` merges a union only when the WHOLE n-ary
+    node is `_is_pure`. Measured 2026-08-16 on live compiles:
+
+        r: a or b or safe      ->  2 leaves   (a@0, b@1; `safe` derived, no index)
+        r: (a or b) or safe    ->  1 leaf     (the inner pure union MERGES)
+        r: a or (b or safe)    ->  2 leaves
+
+    and `formal/conformance/encode.py::_fold_binary` maps the first two to the SAME
+    Lean `Expr`. So the model is necessarily faithful to only one of them; it models
+    the FLAT form (`LeafWitness.smN_models_the_flat_form` states that as a theorem).
+
+    This test refuses the shape that would make the choice observable: an `Intersection`
+    or `Union` child that is itself a `Union` **and** is pure while its parent is not.
+    A doc warning would not survive; a mechanical refusal does.
+
+    ANTI-VACUITY: the scan is asserted to have visited a non-trivial number of union
+    nodes, so a corpus that stopped containing unions could not pass this silently.
+
+    SABOTAGE-VERIFIED (S15, 2026-08-16). Rewriting `nary_union_derived4`'s
+    `define any_of4: a or b or c or safe` as `(a or b) or c or safe` -- semantically
+    identical, and green on every other gate in the project -- makes this fail with the
+    literal output::
+
+        AssertionError: A corpus schema nests a PURE union directly inside an IMPURE one:
+              SCHEMAS:nary_union_derived4: doc#any_of4
+
+    The anti-vacuity floor was ALSO sabotage-tested, by accident and usefully: its first
+    draft carried an estimated `>= 18` and went red at the live 8.
+    """
+    from zanzibar_utils_v1 import (Union, Intersection, Exclusion, Direct, Computed,
+                                   TTU, compute_taint, parse_schema_ast, _member_types)
+
+    def is_pure(e, ot, tainted, ast):
+        if isinstance(e, Direct):
+            return all(not (r.predicate != '...' and (r.type, r.predicate) in tainted)
+                       for r in e.restrictions)
+        if isinstance(e, Computed):
+            return (ot, e.relation) not in tainted
+        if isinstance(e, TTU):
+            if (ot, e.tupleset_rel) in tainted:
+                return False
+            return all((t, e.target_rel) not in tainted
+                       for t in _member_types(ot, e.tupleset_rel, ast, frozenset()))
+        if isinstance(e, Union):
+            return all(is_pure(c, ot, tainted, ast) for c in e.children)
+        return False
+
+    import glob
+    import os
+
+    from formal.conformance import corpus as _corpus
+
+    sources: list[tuple[str, str]] = []
+    for _dname in ('SCHEMAS', 'MULTI_STRATUM_SCHEMAS', 'TTU_USERSET_SCHEMAS',
+                   'SELF_REFERENTIAL_SCHEMAS'):
+        _d = getattr(_corpus, _dname, None)
+        if isinstance(_d, dict):
+            sources += [(f"{_dname}:{k}", v[0]) for k, v in _d.items()]
+    sources += [(f"fga:{os.path.basename(f)}", open(f).read())
+                for f in sorted(glob.glob('tests/fga_schemas/*.fga'))]
+
+    offenders = []
+    unions_seen = 0
+    for name, schema_text in sources:
+        try:
+            ast = parse_schema_ast(schema_text)
+            tainted = compute_taint(ast)
+        except Exception:                                   # not our concern here
+            continue
+        for (ot, rel), expr in ast.items():
+            if (ot, rel) not in tainted:
+                continue                                    # allocation only runs on derived keys
+            stack = [expr]
+            while stack:
+                e = stack.pop()
+                if isinstance(e, Union):
+                    unions_seen += 1
+                    if not is_pure(e, ot, tainted, ast):
+                        for c in e.children:
+                            if isinstance(c, Union) and is_pure(c, ot, tainted, ast):
+                                offenders.append((name, ot, rel))
+                    stack.extend(e.children)
+                elif isinstance(e, Intersection):
+                    stack.extend(e.children)
+                elif isinstance(e, Exclusion):
+                    stack.extend([e.base, e.subtract])
+
+    # FLOOR PROVENANCE: **8** union nodes under derived keys, MEASURED 2026-08-16
+    # across all four corpus dicts in corpus.py plus every tests/fga_schemas/*.fga.
+    # Floored just below live so adding a corpus is free and losing union coverage is
+    # loud. (The first draft of this floor was written as 18 from an ESTIMATE and went
+    # red on its first run -- which is the floor doing its job: the number is measured,
+    # not guessed.)
+    assert unions_seen >= 6, (
+        f"ANTI-VACUITY: only {unions_seen} union node(s) scanned across derived keys — "
+        f"the refusal below would pass having examined essentially nothing")
+    assert not offenders, (
+        "A corpus schema nests a PURE union directly inside an IMPURE one:\n"
+        + "\n".join(f"    {n}: {t}#{r}" for n, t, r in sorted(set(offenders)))
+        + "\n\nPython's `_build_plan_tree` merges that inner union into ONE leaf, but "
+          "`encode.py::_fold_binary` left-folds it into a shape indistinguishable from "
+          "the FLAT n-ary form, which `GraphIndex/Leaf.lean::persistedLeaves` allocates "
+          "as one leaf PER member. The Lean model would therefore mis-index this key's "
+          "leaf family, invisibly today (projection P6 drops leaf edges) and as a "
+          "`diff_states` divergence the moment leg 7 step 7 retires P6.\n"
+          "Either rewrite the schema in flat n-ary form (same semantics, same "
+          "allocation) or make `Expr` n-ary — see Leaf.lean's 2026-08-16b block.")

@@ -873,6 +873,66 @@ GraphIndex tree, roughly double the 19-module Cascade cone. Steps for a next ses
   admit-checks a different edge from the one it writes.
 * Then 4b / 5 / 6 / 7 as ordered in §7, with 4c-ii + 7 still forced to co-land.
 
+### 11.7 ★★ STEP 4c-i LANDED (2026-08-16) — the cone estimate is REFUTED, and the
+### allocation was wrong three more times, once invisibly to its own instrument
+
+`history/` is append-only, so §11.6 stands as written. Read this as its resolution.
+
+**§11.6's cost cell is REFUTED.** It sized 4c-i as *"a rules-model change UNDER
+`RulesWrite.lean`, i.e. the recompile cone is the full GraphIndex tree, roughly double the
+19-module Cascade cone."* That is true only of an **edit** to `schemaRewrites`. 4c-i is an
+**extension**, so it landed as `GraphIndex/LeafRules.lean` DOWNSTREAM of `RulesWrite` and
+the cone is **one file**. Verified cycle-free for 4c-ii: `Cascade.lean` imports
+`ReconcileDiff` (far downstream of `RulesWrite`) and `Leaf.lean` imports only
+`Write`/`RulesWrite`/`Spec.Stabilize`, so the `Cascade → LeafRules` import 4c-ii needs
+introduces no cycle. **The cone is paid once, at 4c-ii — do not budget it twice.**
+
+**What landed:** `keyLeafRewrites`/`leafRewrites`/`schemaRewritesL` (each derived key's
+CLOSURE leaves compile to rewrite rules targeting the minted leaf name — Python's
+`_emit_leaf_expr` → `_rewrite_rule(expr, object_type, leaf)`), the seed-list
+generalisation `rewriteClosureL` (mirroring `RuleSet.apply`'s two stages: the
+`RewriteFilter` fan-in builds `seeds`, then the `processed`-deduped worklist fires every
+`Rule`), and `GraphState.writeRulesRaw` — the shape 4c-ii re-points callers at. Additivity
+is **proved**, not observed: `schemaRewrites_leafRewrites_disjoint` (untainted rules target
+declared dot-free names, leaf rules target minted dot-carrying ones) and
+`writeRulesRaw_untaintedSchema`. Model diffed against the `Rule`s `compile_ruleset` emits:
+**50/50 schemas, 0 mismatches, 32 with a non-empty leaf rule set.**
+
+**★★ THE ALLOCATION §11.6 LANDED WAS WRONG THREE MORE TIMES**, all found before 4c-i was
+built on it:
+1. **Python MERGES a maximal pure subtree** (`_split_pure`): at most TWO leaves, storage
+   first. `(a or b) but not banned` → `r.0={a,b}` / `r.1=banned`, not three leaves.
+2. **A tainted userset restriction gets its OWN storage leaf** — reachable from the LIVE
+   fixture `tests/fga_schemas/userset_over_derived.fga::doc#editor`.
+3. **★ The one the instrument could not see.** (1)+(2) were validated by transcribing
+   `persistedLeaves` into Python — *"82/82, 0 disagreements"* — but that transcription
+   consumed Python's **n-ary** AST. `formal/conformance/encode.py::_fold_binary`
+   **left-folds**, so Lean receives a tree whose left spine is pure by accident of the
+   folding. Re-run binarized: **1 disagreement, on `nary_union_derived4`, which is IN
+   `GRAPH_FRAGMENT`** — Python allocates three leaves, the model merged them into one.
+   Fixed by `unionSpineLeaves`; re-diffed binarized, 0 disagreements.
+
+**★★ A LIMIT OF THE BINARY `Expr` THAT NO FIX IN `Leaf.lean` CAN CLOSE, and leg 7 must
+carry it.** `Core/Schema.lean` justifies left-folding n-ary unions by associativity and
+commutativity — **true of `sem`, FALSE of the leaf allocation.** Measured: `a or b or safe`
+→ 2 leaves, `(a or b) or safe` → **1**, and `_fold_binary` maps both to the same `Expr`.
+The model is faithful to the FLAT form (the only form any corpus writes); the other shape
+is refused mechanically at
+`formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`,
+sabotage-verified. If leg 7 ever needs the parenthesized form, `Expr` must go n-ary — a
+trust-root change, out of this leg's scope.
+
+**Also stale in this document, re-measured 2026-08-16:** §11.6's *"17 of 25 `GRAPH_FRAGMENT`
+corpora mint leaf indices 1 and 2"* **overstates the index-2 breadth 3.4×**. Live: index
+≥ 1 in 17 of 25; index 2 in **5** (`demorgans`, `double_exclusion`, `nary_intersection`,
+`nary_union_derived4`, `nested_boolean`); histogram 0 ×43, 1 ×28, 2 ×7. The load-bearing
+half survives.
+
+**Next:** 4c-ii (caller re-point + (α) row move + `affectedKeys` via `publicOfLeaf`,
+`d.leaf = true` LEADING) **co-landing with step 7**, then 4b/5/6. Criterion re-derived from
+`FINAL_REVIEW.md`'s generated block and unchanged: `dropped by P6` **76 → 0**, `compared
+against Lean` **189 → 265**.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

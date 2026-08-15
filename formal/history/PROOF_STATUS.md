@@ -8,6 +8,153 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-16 (**LEG 7 STEP 4c-i LANDED — the leaf-provenance rule layer, with a ZERO recompile cone. The 4c-pre ALLOCATION was refuted THREE more times before it was built on, once by an instrument that was itself blind. `ttuStarFree` part (iv)'s blocking decidability question is ANSWERED: NO-BLOCK, machine-checked.**)
+
+**Task taken:** the user asked for a sequential phase plan for the whole board, then for
+board items 1 (leg 7) and 2 (`ttuStarFree`) taken as far as possible, gate green.
+
+### 1. ★★ ATTACK-FIRST, BEFORE BUILDING ON IT: `persistedLeaves` was wrong THREE ways
+
+Step 4c-i indexes its rule minting by `persistedLeaves`, so the allocation had to be
+right first. It was not. Each defect was found by measurement, not reading.
+
+* **(a) Python MERGES a maximal pure subtree.** `_build_plan_tree`'s `build` stops at the
+  first `_is_pure` node and calls `_split_pure`, yielding at most TWO leaves: all `Direct`
+  restrictions merged into one storage leaf **allocated first**, then all other members
+  merged into one closure leaf. Measured: `(a or b) but not banned` → `r.0 = {a,b}` /
+  `r.1 = banned` (the pre-order model predicted three leaves, `banned` at 2);
+  `(a or [user]) but not banned` puts the storage leaf at index **0**, ahead of `a`;
+  `([user] or [employee]) but not banned` merges BOTH blocks into `r.0`.
+* **(b) A tainted USERSET restriction gets its own storage leaf** (`PDerivedUserset`,
+  `LeafFamily.kind = 'userset-storage'`), where the model gave one leaf per `Direct`
+  block. ⚠ **Reachable from a LIVE fixture** —
+  `tests/fga_schemas/userset_over_derived.fga::doc#editor`, where the pre-fix model routed
+  a `team#active_member` subject to the wrong leaf.
+* **(c) ★★ THE ONE THE FIRST INSTRUMENT COULD NOT SEE.** (a)+(b) were validated by
+  transcribing `persistedLeaves` into Python and diffing against the compiled
+  `LeafFamily` table — *"82/82 derived keys, 0 disagreements"*. **That transcription
+  consumed Python's N-ARY `Union` AST.** Lean never sees it:
+  `formal/conformance/encode.py::_fold_binary` **LEFT-FOLDS**, so the model receives
+  `((m₁ ∪ m₂) ∪ …) ∪ mₖ`, whose left spine contains sub-unions that are pure *by accident
+  of the folding*. Re-run over the BINARIZED AST:
+
+  ```text
+  AS LANDED  (binary recursion, no spine flatten)      DISAGREEMENTS 1
+      SCHEMAS:nary_union_derived4 ('doc', 'any_of4')
+        python=[(0,'closure',False), (1,'closure',False), (2,'closure',False)]
+        lean  =[(0,'closure',False)]
+  WITH FIX   (flatten the union spine when impure)     DISAGREEMENTS 0
+  ```
+
+  ⚠ **`nary_union_derived4` is IN `GRAPH_FRAGMENT`.** This was a wrong model of a live
+  in-fragment corpus that `diff_states` would have surfaced only after step 4c-ii's whole
+  recompile cone had been paid.
+
+**★ THE TRANSFERABLE FINDING (c) yields, and it is the house failure mode wearing a new
+hat.** Transcribing a rule into the other language is only HALF an instrument — *what you
+feed it* is the other half. A transcription that consumes the SOURCE representation rather
+than the one the model actually receives shares its subject's blind spot exactly as a
+mirror instrument does, and reports a confident `82/82`. The companion instrument was
+blind too, for a structural reason worth keeping: `rawWriteRels` maps
+`.closure _ => none` and `any_of4` has no storage leaf, so **no closure-leaf allocation
+error can ever move the 744/744 number.** Two green instruments, one shared blind spot.
+Written up in [`docs/sabotage-procedure.md`](../../docs/sabotage-procedure.md).
+
+**★★ AND A LIMIT OF THE BINARY `Expr` THAT NO FIX IN `Leaf.lean` CAN CLOSE.**
+`Core/Schema.lean`'s header justifies modelling n-ary unions as left folds because union
+is associative and commutative. **True of `sem`, FALSE of the leaf allocation.** Measured
+on live compiles:
+
+```text
+flat      r: a or b or safe      ->  leaves [(0,'closure'), (1,'closure')]
+parens    r: (a or b) or safe    ->  leaves [(0,'closure')]
+parensR   r: a or (b or safe)    ->  leaves [(0,'closure'), (1,'closure')]
+```
+
+The parser does **not** flatten, yet `_fold_binary` maps the first two to the same `Expr`.
+A model over this AST can be faithful to only one; `Leaf.lean` models the **FLAT** form
+(the only one any corpus writes, the only one the encoder round-trips) and
+`LeafWitness.smN_models_the_flat_form` states that choice as a theorem. Per house rule
+"prefer a mechanical refusal over a doc warning", the other shape is refused by
+`formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`
+(sabotage S15: rewriting the corpus schema as `(a or b) or c or safe` makes it fail with
+the offender named).
+
+### 2. What landed — leg 7 step 4c-i (`GraphIndex/LeafRules.lean`, NEW)
+
+`keyLeafRewrites` / `leafRewrites` / `schemaRewritesL` supply the half `schemaRewrites`
+deliberately omits: each derived key's CLOSURE leaves compile to ordinary rewrite rules
+targeting the **minted leaf name**, exactly as `_emit_leaf_expr` →
+`_rewrite_rule(expr, object_type, leaf)` does. Plus the seed-list generalisation of the
+closure (`rewriteClosureL`, mirroring `RuleSet.apply`'s two stages) and
+`GraphState.writeRulesRaw`, the shape 4c-ii will re-point callers at.
+
+* **★ §11.6's COST ESTIMATE IS REFUTED.** It sized 4c-i as *"a rules-model change under
+  `RulesWrite.lean`, i.e. the full GraphIndex tree, roughly double the 19-module Cascade
+  cone."* That holds only if `schemaRewrites` is **edited**. As an EXTENSION in a module
+  downstream of `RulesWrite` the cone is **one file**, and the `Cascade → LeafRules`
+  import 4c-ii needs is cycle-free (`Cascade` imports `ReconcileDiff`, far downstream of
+  `RulesWrite`; `Leaf` imports only `Write`/`RulesWrite`/`Spec.Stabilize`). The cone is
+  paid once, at 4c-ii.
+* **★ Additivity is PROVED, not observed.** `schemaRewrites_leafRewrites_disjoint`: every
+  untainted rule targets a DECLARED (dot-free, by `WF`) name, every leaf rule targets a
+  minted (dot-carrying) one. `writeRulesRaw_untaintedSchema` closes the same claim at the
+  write level — on a schema with no derived key the forked write **is** `writeRules`.
+* **Measured before written:** the rule model diffed against the `Rule`s
+  `compile_ruleset` emits — **50/50 schemas, 0 mismatches, 32 with a NON-EMPTY leaf rule
+  set** (the non-vacuity count).
+* **The payoff, at a store:** `lrV_closure_reaches_leaf` (the closure of a raw `editor`
+  write now contains `doc:d1#viewer.0@user:alice`) paired with
+  `lrV_closure_today_misses_leaf` (today's `rewriteClosure` does not), so the red is
+  attributable to the extension rather than to a change in the base.
+
+### 3. `ttuStarFree` — part (iv)'s BLOCKING QUESTION IS ANSWERED: **NO-BLOCK**
+
+`GraphIndex/TtuStarWide.lean` (NEW, additive, no caller). `TtuStarFree` is a bounded
+quantification over two FINITE lists (the store and `schemaRewrites S`) — which is why
+`Exec.lean::ttuStarFreeB` exists at all. The widening only weakens the BODY, from
+`¬(match)` to `match → bridged`, and the new conjunct
+`Schema.isSubjectWildcardUserset` is **already `Bool`-valued and kernel-computable**
+(part (i), 2026-08-14). So `ttuStarFreeWB` decides `TtuStarFreeW` (`ttuStarFreeWB_iff`),
+and `removeGateB` widens by the same textual edit (`removeGateBW_gate` still supplies
+every hypothesis). **Part (iv) can be scheduled on effort alone.**
+
+* Proved a genuine **weakening** (`ttuStarFreeW_of_ttuStarFree`,
+  `removeGateBW_of_removeGateB` — nothing driven today stops being driven) and
+  **strictly** wider at a store (`narrow_rejects` false / `wide_admits` true on the same
+  pair), so it is not a relabeling.
+* ⚠ **`W4Fragment.ttuStarFree` is NOT changed and must not be until part (ii).** The
+  2026-08-10 refutation stands: `writeRules`/`writeLoggedRules` never call
+  `ensureInBridges`, so the in-bridge the widened predicate assumes exists is not
+  materialized. This is the **specification** and the decidability answer, not the lift.
+* Two sabotages with **disjoint** attributable reds: S12 (exemption dropped) →
+  `wide_admits` alone, proving strictness; S13 (exemption made UNCONDITIONAL) →
+  `unbridged_still_rejected` alone, proving **soundness** — an unconditional exemption
+  satisfies `wide_admits` perfectly and would admit stores whose bridge Python never
+  builds.
+
+### 4. A doc claim corrected by re-measurement
+
+*"17 of 25 corpora mint leaf indices 1 **and** 2"* (carried in `Leaf.lean`, `Audit.lean`,
+`formal/HANDOFF.md`, `HANDOFF.md` and scope doc §11.6) **overstates the index-2 breadth
+3.4×**. Live: index ≥ 1 in **17** of 25; index 2 in **5** (`demorgans`,
+`double_exclusion`, `nary_intersection`, `nary_union_derived4`, `nested_boolean`).
+Histogram over the dotted-object rows: 0 ×43, 1 ×28, 2 ×7. The load-bearing half — an
+index-0-only routing fails most of the fragment — survives.
+
+### 5. Numbers and what is still owed
+
+Audits 520 → **573**; anchors 471 → **497**; **headline statements 38/38 and definitions
+155/155 UNMOVED** (the additive profile). `verify.sh lean` PASSED. No Python behaviour
+changed — the only Python edit is a new refusal test — so no fuzz sweep is owed.
+
+**Still owed:** leg 7 steps **4c-ii + 7 (must co-land)**, 4b, 5, 6; `ttuStarFree` parts
+(ii) and (iii), and part (iv)'s remaining effort now that it is unblocked. Landing
+criterion unchanged and re-derived from the generated block: `dropped by P6` **76 → 0**,
+`compared against Lean` **189 → 265**.
+
+---
+
 ## Session 2026-08-15 (**LEG 7 4c-PRE: 4c-as-scoped is REFUTED by corpus measurement before any caller was re-pointed — the leaf ALLOCATION is now modeled, `publicOfLeaf` is in index-agnostic, and the raw write is a measured FAN-OUT. The rule layer needs leaf provenance before 4c can run; scope doc §11.6 is the revised step plan.**)
 
 **Task taken:** resume leg 7 at step 4c (briefed: co-land with step 7, criterion

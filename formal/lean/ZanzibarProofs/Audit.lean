@@ -7,6 +7,8 @@ import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
 import ZanzibarProofs.Spec.Counterexample
 import ZanzibarProofs.GraphIndex.Leaf
+import ZanzibarProofs.GraphIndex.LeafRules
+import ZanzibarProofs.GraphIndex.TtuStarWide
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
@@ -1727,8 +1729,10 @@ namespace Zanzibar
 -- LEG 7 STEP 4c-PRE (2026-08-15) — the MEASURED allocation model, the INDEX-AGNOSTIC
 -- `publicOfLeaf`, and the fan-out routing. Three measurements re-founded this layer
 -- (PROOF_STATUS 2026-08-15; scope doc §11.6): (1) enumerating the 76 P6-dropped edge rows
--- across all 25 GRAPH_FRAGMENT corpora shows leaf indices 1 and 2 IN THE GATE (17/25
--- corpora), so the previous hardcoded index 0 could never meet leg 7's landing criterion;
+-- across all 25 GRAPH_FRAGMENT corpora shows leaf indices > 0 IN THE GATE (index >= 1 in 17/25
+-- corpora, index 2 in 5 of them -- re-measured 2026-08-16; the earlier "1 and 2 in 17/25"
+-- overstated the index-2 breadth 3.4x), so the previous hardcoded index 0 could never meet
+-- leg 7's landing criterion;
 -- (2) `_build_plan_tree` allocates pre-order over persisted-leaf positions, where derived
 -- computed references and non-pure TTU arms consume NO index (`persistedLeaves`);
 -- (3) `RuleSet.apply` fans a raw write out onto EVERY matching storage leaf
@@ -1762,6 +1766,132 @@ namespace Zanzibar
 #print axioms LeafWitness.stD_leaves
 #print axioms LeafWitness.swX_skip
 
+-- LEG 7 4c-PRE, CORRECTED (2026-08-16) — the ALLOCATION ORDER was measured wrong twice.
+-- Attack-first before building 4c-i on it (house rule 2): `persistedLeaves` was transcribed
+-- into Python and diffed against the compiled `LeafFamily` table over every corpus dict in
+-- `formal/conformance/corpus.py` and every `tests/fga_schemas/*.fga`. Two structural defects:
+-- (1) Python MERGES a maximal PURE subtree — `_build_plan_tree`'s `build` stops at the first
+--     `_is_pure` node and `_split_pure` yields at most TWO leaves (all Direct restrictions
+--     merged into one storage leaf, allocated FIRST, then all other members merged into one
+--     closure leaf). Measured: `(a or b) but not banned` compiles to `r.0 = {a,b}` / `r.1 =
+--     banned`, where the pre-order model predicted three leaves with `banned` at index 2;
+--     `(a or [user]) but not banned` puts the storage leaf at index 0 AHEAD of `a`.
+-- (2) A tainted USERSET restriction gets its OWN storage leaf (`PDerivedUserset`), where the
+--     model gave one leaf per Direct block. ⚠ REACHABLE FROM A LIVE FIXTURE —
+--     `tests/fga_schemas/userset_over_derived.fga::doc#editor`.
+-- Corrected model validated by MEASUREMENT: 82/82 derived keys agree on index → kind →
+-- storage; `rawWriteRels` matches `RuleSet.apply`'s real seed set on 744/744 subject ×
+-- derived-key comparisons, with three positive controls reddening it (4 / 1 / 4 mismatches).
+-- ★ THREE SABOTAGES, literal outputs in the `Leaf.lean` section docstring (S6 merge dropped →
+-- the six `smA`/`smB`/`smC` pins; S7 userset split dropped → the two `smU` pins; S8 storage
+-- allocated last → `sw_leaves`/`routes_to_leaf`/`smB_*`). ★ THE LESSON, and it is S3's
+-- recurring: under S6 EVERY pre-2026-08-16 witness stays GREEN — on `Sw`'s shape the merged
+-- and unmerged allocations coincide — so the whole prior witness set was VACUOUS for the
+-- merge. The A/B/C/U shapes are the ones that earn their keep.
+#print axioms isPure
+#print axioms splitPure
+#print axioms persistedLeaves
+#print axioms LeafWitness.smA_merges
+#print axioms LeafWitness.smA_banned_is_index_1
+#print axioms LeafWitness.smB_storage_first
+#print axioms LeafWitness.smB_routes_to_zero
+#print axioms LeafWitness.smC_one_storage_leaf
+#print axioms LeafWitness.smC_both_route_to_zero
+#print axioms LeafWitness.smU_userset_splits
+#print axioms LeafWitness.smU_routes_split
+#print axioms LeafWitness.smU_active_member_isDerived
+
+-- LEG 7 4c-PRE, CORRECTION 2026-08-16b — A THIRD ALLOCATION DEFECT, and the INSTRUMENT that
+-- missed it is the transferable finding. The 2026-08-16 fix was validated by transcribing
+-- `persistedLeaves` into Python and diffing it — "82/82 derived keys agree". That instrument
+-- consumed Python's N-ARY `Union` AST. Lean never sees that tree:
+-- `formal/conformance/encode.py::_fold_binary` LEFT-FOLDS, so the model receives
+-- `((m1 U m2) U ...) U mk`, whose left spine holds sub-unions that are pure BY ACCIDENT OF THE
+-- FOLDING. Re-run over the BINARIZED AST: 1 disagreement, on `nary_union_derived4` — which is
+-- IN `GRAPH_FRAGMENT`. Python allocates `a/b/c` to three leaves; the binary-recursing model
+-- merged them into ONE. Fixed by `unionSpineLeaves` (flatten the spine, never merge inside an
+-- impure union); re-diffed over the binarized AST: 0 disagreements.
+-- ★ THE METHOD LESSON: transcribing a rule into the other language is only HALF an instrument —
+-- what you FEED it is the other half. A transcription consuming the SOURCE representation
+-- rather than the one the model receives shares its subject's blind spot exactly as a mirror
+-- instrument does, and reports a confident 82/82. The companion instrument could not have
+-- caught it either, structurally: `rawWriteRels` maps `.closure _ => none` and `any_of4` has no
+-- storage leaf, so no closure-leaf allocation error can move the 744/744 number. Two green
+-- instruments, one shared blind spot.
+-- ★★ AND A LIMIT OF THE BINARY `Expr` NO FIX HERE CAN CLOSE. `Core/Schema.lean` justifies
+-- left-folding n-ary unions by associativity+commutativity — true of `sem`, FALSE of the leaf
+-- allocation. Measured: `a or b or safe` -> 2 leaves, `(a or b) or safe` -> 1 leaf, and
+-- `_fold_binary` maps both to the SAME `Expr`. This model is faithful to the FLAT form
+-- (`smN_models_the_flat_form` states the choice as a theorem); the other shape is refused
+-- MECHANICALLY, not by a doc warning, at
+-- `formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`
+-- (sabotage-verified S15: rewriting the corpus schema as `(a or b) or c or safe` makes it fail).
+-- ★ SABOTAGE S14 (binary recursion restored): the three `smN_*` pins redden and EVERY other
+-- witness in the file stays green — `SmN` is the only shape that distinguishes it, which is why
+-- it is drawn from an in-fragment corpus rather than constructed.
+#print axioms atomLeaves
+#print axioms unionSpineLeaves
+#print axioms LeafWitness.smN_safe_isDerived
+#print axioms LeafWitness.smN_left_spine_is_pure
+#print axioms LeafWitness.smN_nary_spine
+#print axioms LeafWitness.smN_three_leaves
+#print axioms LeafWitness.smN_models_the_flat_form
+
+-- LEG 7 STEP 4c-i (2026-08-16) — LEAF-PROVENANCE RULES. `GraphIndex/LeafRules.lean`.
+-- `schemaRewrites` routes every DERIVED key off the rewrite fanout (its taint filter), which
+-- is only HALF of what Python does with one: `_build_plan_tree` → `_emit_leaf_expr` compiles
+-- each closure leaf into ordinary `Rule`s whose target is the MINTED LEAF NAME. This module
+-- supplies exactly that missing half. It is why scope doc §11.6 refuted "4c re-points the
+-- callers": for `viewer: editor but not banned` the `editor`-arm and `banned`-arm members are
+-- SHAPE-IDENTICAL tuples, yet Python routes them to `viewer.0` vs `viewer.1`, so no
+-- re-addressing function of the tuple alone can produce Python's leaf edges — the provenance
+-- must live in the RULE, as it does in Python (`RewriteFilter.rewrite_relation`).
+-- ★ §11.6's COST ESTIMATE IS REFUTED: it sized 4c-i as "the full GraphIndex tree, roughly
+-- double the 19-module Cascade cone". That holds only if `schemaRewrites` is EDITED. As an
+-- EXTENSION in a module downstream of `RulesWrite` the cone is ONE FILE, and the
+-- `Cascade → LeafRules` import that 4c-ii needs is cycle-free (verified: `Cascade` imports
+-- `ReconcileDiff`, far downstream of `RulesWrite`). The cone is paid once, at 4c-ii.
+-- ★ ADDITIVITY IS PROVED, NOT OBSERVED: `schemaRewrites_leafRewrites_disjoint` — every
+-- untainted rule targets a DECLARED (dot-free, by `WF`) name and every leaf rule targets a
+-- minted (dot-carrying) one — so the two halves are a provably disjoint set rather than
+-- "we checked and nothing broke". `writeRulesRaw_untaintedSchema` closes the same claim at
+-- the write level: on a schema with no derived key the forked write IS `writeRules`.
+-- Measured before written: the model was transcribed into Python and diffed against the
+-- `Rule`s `compile_ruleset` actually emits — 50/50 schemas, 0 mismatches, 32 with a
+-- NON-EMPTY leaf rule set (the non-vacuity count).
+-- ★ THREE SABOTAGES (literal outputs in the module docstring): S9 leaf index dropped → four
+-- rule pins + the payoff pin + the disjointness theorem stops being true; S10 taint filter
+-- inverted → eight errors incl. BOTH untainted subsumption controls; S11 merged closure leaf
+-- half-walked → `lrA_rules` ALONE, because it is the only witness with a merged leaf.
+-- Standard axioms only:
+#print axioms keyLeafRewrites
+#print axioms leafRewrites
+#print axioms schemaRewritesL
+#print axioms isLeafPred_outRel_of_mem_leafRewrites
+#print axioms not_isLeafPred_outRel_of_mem_schemaRewrites
+#print axioms schemaRewrites_leafRewrites_disjoint
+#print axioms leafRewrites_eq_nil
+#print axioms schemaRewritesL_eq
+#print axioms rewriteClosureL
+#print axioms rewriteClosureRawL_singleton
+#print axioms GraphState.writeRulesRaw
+#print axioms writeRulesRaw_untaintedSchema
+#print axioms inv_writeRulesRaw
+#print axioms quiescent_writeRulesRaw
+#print axioms LeafRuleWitness.slV_derived
+#print axioms LeafRuleWitness.lrV_rules
+#print axioms LeafRuleWitness.lrV_untainted_layer_silent
+#print axioms LeafRuleWitness.lrSw_rules
+#print axioms LeafRuleWitness.lrStP_rules
+#print axioms LeafRuleWitness.lrA_rules
+#print axioms LeafRuleWitness.lrN_rules
+#print axioms LeafRuleWitness.lrUnt_no_leaf_rules
+#print axioms LeafRuleWitness.lrUnt_subsumed
+#print axioms LeafRuleWitness.lrUnt_nonempty
+#print axioms LeafRuleWitness.lrV_closure_reaches_leaf
+#print axioms LeafRuleWitness.lrV_closure_today_misses_leaf
+#print axioms LeafRuleWitness.lrV_writeRulesRaw_edges_ne
+
 -- ttuStarFree LIFT, PART (i) (2026-08-14) — the star-tupleset TTU through-shape folded into
 -- `Schema.isSubjectWildcardUserset`, so it is now the disjunction of BOTH loops of
 -- `zanzibar_utils_v1.py::derive_schema_info`, as Python has always been. Before this, Lean's
@@ -1792,5 +1922,47 @@ namespace Zanzibar
 -- ⚠ W1c ONLY — W4 admits TTUs and must be re-derived when part (ii) lands.
 #print axioms isStarTuplesetThrough_of_pureDirect
 #print axioms isSubjectWildcardUserset_of_pureDirect
+
+-- ttuStarFree LIFT, PART (iv)'s BLOCKING QUESTION — ANSWERED (2026-08-16).
+-- `GraphIndex/TtuStarWide.lean`. The board has carried since 2026-08-14: "(iv) has an
+-- unanswered question that could block it outright: `removeGateB` is a runtime decision
+-- procedure that must decide the guard fail-closed, so the widened predicate has to stay
+-- DECIDABLE BY A BOOLEAN FUNCTION. If it is not, the remove leg cannot widen at all."
+-- ★ THE ANSWER IS **NO-BLOCK**, and it is machine-checked rather than argued.
+-- `TtuStarFree` is a bounded quantification over two FINITE LISTS (the store and
+-- `schemaRewrites S`), which is why `Exec.lean::ttuStarFreeB` exists. The widening only
+-- weakens the BODY, from `¬(match)` to `match → bridged`, and the new conjunct
+-- `Schema.isSubjectWildcardUserset` is ALREADY `Bool`-valued and kernel-computable
+-- (`UsStarWrite.lean`; disjunct (b) is part (i)'s `isStarTuplesetThrough`). So
+-- `ttuStarFreeWB` decides `TtuStarFreeW` (`ttuStarFreeWB_iff`), and `removeGateB` widens
+-- by the same textual edit — `removeGateBW_gate` still supplies every hypothesis.
+-- ⚠ **`W4Fragment.ttuStarFree` IS NOT CHANGED HERE, AND MUST NOT BE UNTIL PART (ii).**
+-- The 2026-08-10 refutation stands: `writeRules`/`writeLoggedRules` are bridge-free folds
+-- that never call `ensureInBridges`, so the in-bridge the widened predicate ASSUMES EXISTS
+-- is not materialized. This file is the specification and the decidability answer, not the
+-- lift.
+-- ★ It is proved a genuine WEAKENING (`ttuStarFreeW_of_ttuStarFree`, `removeGateBW_of_
+-- removeGateB` — nothing driven today stops being driven) and STRICTLY wider at a store
+-- (`narrow_rejects` false / `wide_admits` true on the same pair).
+-- ★ TWO SABOTAGES with disjoint attributable reds (literal outputs in the module
+-- docstring): S12 exemption dropped → `wide_admits` alone (proves strictness);
+-- S13 exemption made UNCONDITIONAL → `unbridged_still_rejected` alone (proves SOUNDNESS —
+-- an unconditional exemption satisfies `wide_admits` perfectly and admits stores whose
+-- bridge Python never builds).
+#print axioms TtuStarFreeW
+#print axioms ttuStarFreeWB
+#print axioms ttuStarFreeWB_iff
+#print axioms ttuStarFreeW_of_ttuStarFree
+#print axioms ttuStarFreeWB_of_ttuStarFreeB
+#print axioms removeGateBW
+#print axioms removeGateBW_gate
+#print axioms removeGateBW_of_removeGateB
+#print axioms WideWitness.through_shape_declared
+#print axioms WideWitness.ttu_arm_present
+#print axioms WideWitness.narrow_rejects
+#print axioms WideWitness.wide_admits
+#print axioms WideWitness.control_no_through_shape
+#print axioms WideWitness.unbridged_still_rejected
+#print axioms WideWitness.gate_conjunct_widens
 
 end Zanzibar

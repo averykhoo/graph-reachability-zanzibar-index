@@ -104,6 +104,25 @@ Two corollaries worth carrying:
    reopening the hole — so the docstring must state that the pins are the *sole*
    evidence, and why.
 
+### A TEARDOWN test is not a DELETE test — when the natural ordering hides the branch
+
+A close cousin of the inert change: the sabotage fires on nothing because **no test ever
+reaches the branch you broke**, and the reason is an ordering nobody chose deliberately.
+
+**Worked example — the `ResidueRefV1` reverse index (2026-08-14).** The fix replaced a full
+`ResidueV1` scan with an indexed seek, maintained beside the residue row. Skipping index
+maintenance on the residue-**DELETE** branch alone left the whole new test file **green**
+(`11 passed`); only the paranoia-driven matrix caught it. The reason is structural: an orphan
+is observable only when the indexed row goes from ref-bearing straight to deleted in ONE
+step, and **every natural teardown ordering empties `neg`/`upos` while `stars` is still
+present** — so the index is cleared through the *update* branch and there is nothing left to
+orphan.
+
+**The rule:** if a row can be updated or deleted, a test that tears the state down
+gradually exercises only the update path. Write the one-step case explicitly. Generalises to
+any index maintained beside a deletable row; the permanent pin is
+`tests/test_residue_ref_index.py::test_residue_emptied_in_one_step_takes_its_index_rows_with_it`.
+
 ### Sabotage your instrument too, not just your subject
 
 A measuring instrument can be as broken as the thing it measures — and it fails
@@ -163,6 +182,40 @@ fix for those bugs is a compile-time invariant that checks `parent_types` agains
 `RewriteFilter`s — what admission actually *accepts* onto the tupleset's storage leaves —
 rather than against `_member_types`, the thing that was wrong. Different derivation, so a
 `_member_types` defect moves one side and not the other; validated RED-before / GREEN-after.
+
+### The mirror instrument's twin — a transcription fed the WRONG REPRESENTATION
+
+A mirror instrument reads its subject's *source*. There is a second, sneakier member of the
+family, and it looks like the textbook remedy: you **transcribe** the rule into the other
+language and diff the two implementations. Different derivation, independent code — it looks
+like exactly what the section above asks for. It is not, if you feed the transcription a
+different *representation* of the input than the model actually receives.
+
+**Worked example — leg 7's leaf allocation (2026-08-16).** `GraphIndex/Leaf.lean`'s
+`persistedLeaves` models Python's `_build_plan_tree`. To check it, it was transcribed into
+Python and diffed against the compiled `LeafFamily` table over every corpus and fixture:
+**"82/82 derived keys agree, 0 disagreements."** Green, independent, non-vacuous-looking.
+
+It was blind. The transcription consumed Python's **n-ary** `Union` AST. Lean never sees that
+tree — `formal/conformance/encode.py::_fold_binary` **left-folds** n-ary unions, so the model
+receives `((m₁ ∪ m₂) ∪ …) ∪ mₖ`, whose left spine contains sub-unions that are pure *by
+accident of the folding*. Re-run over the binarized AST, the same instrument found a
+disagreement immediately — on `nary_union_derived4`, which is **in `GRAPH_FRAGMENT`**:
+Python allocates three leaves, the model merged them into one.
+
+**The extra question this adds to the five-second test:**
+
+> **Is my instrument consuming the same REPRESENTATION the subject consumes?**
+> A transcription of the right rule over the wrong input shape is not an independent check —
+> it is the mirror instrument with extra steps.
+
+**And check whether your *other* instrument could have caught it, structurally.** Here a
+second, genuinely independent instrument was green too (`rawWriteRels` vs `RuleSet.apply`'s
+real seed set, 744/744, with three positive controls). It could never have fired: it maps
+`.closure _ => none`, and the offending key has no storage leaf, so **no closure-leaf
+allocation error can move that number at all.** Two green instruments, one shared blind
+spot — and the shared blind spot was not visible from either one's controls. When two checks
+agree, ask what each is structurally incapable of seeing before you count them as two.
 
 ### Prefer a mechanical refusal to a doc warning
 

@@ -62,10 +62,54 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**★★ 2026-08-16 — LEG 7 STEP 4c-i IS IN (`GraphIndex/LeafRules.lean`), the ALLOCATION was
+refuted THREE more times first, and `ttuStarFree` part (iv)'s BLOCKING QUESTION IS
+ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11.7 FIRST.**
+
+* **4c-i landed with a ZERO recompile cone, and §11.6's cost cell is REFUTED.** It sized
+  4c-i as "the full GraphIndex tree, ~double the Cascade cone" — true only of an *edit* to
+  `schemaRewrites`. As an EXTENSION downstream of `RulesWrite` the cone is **one file**,
+  and the `Cascade → LeafRules` import 4c-ii needs is cycle-free. **Budget the cone once,
+  at 4c-ii.** `leafRewrites` supplies the half `schemaRewrites`' taint filter omits: each
+  derived key's CLOSURE leaves compile to rules targeting the MINTED LEAF NAME. Additivity
+  is *proved* (`schemaRewrites_leafRewrites_disjoint`), not observed. Measured 50/50
+  schemas / 32 non-empty rule sets against `compile_ruleset`'s real output.
+* **⚠ THE ALLOCATION WAS WRONG THREE MORE TIMES**, all caught before 4c-i was built on it:
+  Python MERGES a maximal pure subtree (`(a or b) but not banned` → `r.0={a,b}`,
+  `r.1=banned`, not three leaves, storage always first); a tainted userset restriction gets
+  its OWN storage leaf (reachable from the live fixture `userset_over_derived.fga`); and —
+  **invisibly to the instrument that validated the first two** — the n-ary union SPINE.
+* **★ THE METHOD LESSON, now in [`docs/sabotage-procedure.md`](../docs/sabotage-procedure.md).**
+  The first two fixes were validated by transcribing `persistedLeaves` into Python: *"82/82,
+  0 disagreements"*. That transcription consumed Python's **n-ary** AST; Lean never sees it
+  (`encode.py::_fold_binary` LEFT-FOLDS). Re-run binarized: 1 disagreement, on
+  `nary_union_derived4`, **which is in `GRAPH_FRAGMENT`**. *A transcription of the right
+  rule over the wrong input REPRESENTATION is the mirror instrument with extra steps* — and
+  the second, genuinely independent instrument (744/744) was structurally incapable of
+  catching it.
+* **★★ A LIMIT OF THE BINARY `Expr` LEG 7 MUST CARRY.** `Core/Schema.lean` justifies
+  left-folding n-ary unions by associativity+commutativity — true of `sem`, **false of the
+  leaf ALLOCATION**. Measured: `a or b or safe` → 2 leaves, `(a or b) or safe` → **1**, and
+  `_fold_binary` maps both to the SAME `Expr`. The model is faithful to the FLAT form; the
+  other shape is refused mechanically at
+  `formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`.
+  Making it faithful to both means an n-ary `Expr` — a trust-root change, out of scope.
+* **★★ `ttuStarFree` PART (iv) IS UNBLOCKED.** `GraphIndex/TtuStarWide.lean` answers the
+  standing question with a theorem: `TtuStarFree` is a bounded quantification over finite
+  lists, the widening only weakens the BODY, and the new conjunct
+  `Schema.isSubjectWildcardUserset` is **already `Bool`-valued** — so `ttuStarFreeWB`
+  decides `TtuStarFreeW` and `removeGateB` widens by the same textual edit
+  (`removeGateBW_gate`). Proved a genuine weakening AND strictly wider at a store.
+  ⚠ `W4Fragment.ttuStarFree` is UNCHANGED and must stay so until part (ii).
+* Audits 520 → **573**, anchors 471 → **497**, statements 38/38 and definitions 155/155
+  UNMOVED. Re-measured: *"17 of 25 corpora mint indices 1 AND 2"* overstates the index-2
+  breadth 3.4× — index ≥1 in 17, index 2 in **5**.
+
 **★★ 2026-08-15 — LEG 7 4c-PRE: 4c-as-scoped REFUTED by corpus measurement; the leaf
 ALLOCATION is modeled, `publicOfLeaf` is in (index-agnostic), the raw write is a measured
 FAN-OUT. Read `history/PROOF_STATUS.md` 2026-08-15 and scope-doc §11.6 (the revised step
-plan) BEFORE attempting 4c.**
+plan) BEFORE attempting 4c.** ⚠ **Its allocation half is SUPERSEDED by the 2026-08-16 block
+above; §11.6's cone estimate is refuted and its index-breadth figure is stale.**
 
 * **The kill, made before the cone was paid:** the 76 P6-dropped rows span leaf indices
   0–2 in **17 of 25** corpora (every non-first boolean arm gets its own leaf), so the
@@ -119,13 +163,12 @@ as written and is wrong in two places).
   `ensureInBridges`, so part (ii) is what materializes the edge. Do NOT read part (i) as
   closing the 2026-08-10 counterexample. Six `decide` pins carry it because, being inert,
   the obvious sabotage reddens nothing else in the tree.
-* **Still owed** ⚠ **— the leg-7 half of this line is SUPERSEDED by the 2026-08-15 block
-  above; "step 4c" as named here does not exist any more (it is 4c-i + 4c-ii).** Leg 7
-  steps 4c/4b/5/6/7; `ttuStarFree` parts (ii)/(iii)/(iv). Part (iv)
-  has an unanswered blocking question — is the widened predicate still **decidable** by a
-  boolean function? `removeGateB` must decide the guard fail-closed, so if not, the remove
-  leg cannot widen at all. Occurrence split re-measured: **163 in 18 modules**, only **5
-  genuinely CONSUMED**.
+* **Still owed** ⚠ **— SUPERSEDED TWICE; read the 2026-08-16 block at the top.** "Step 4c"
+  as named here does not exist any more (it is 4c-i + 4c-ii), **4c-i is DONE**, and part
+  (iv)'s blocking question is **ANSWERED: NO-BLOCK** (`GraphIndex/TtuStarWide.lean`) — do
+  not defer (iv) on decidability again. Genuinely still owed: leg 7 **4c-ii + 7 (co-land)**,
+  4b, 5, 6; `ttuStarFree` parts (ii) and (iii), and (iv)'s remaining effort. Occurrence
+  split re-measured: **163 in 18 modules**, only **5 genuinely CONSUMED**.
 
 **★★ 2026-08-10 — ATTACK-FIRST KILL: `W4Fragment.ttuStarFree` CANNOT BE DROPPED.**
 The user asked to undo it as a mere scope cut. It is not one: dropping it makes
