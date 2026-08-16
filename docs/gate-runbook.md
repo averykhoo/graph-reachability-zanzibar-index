@@ -444,10 +444,81 @@ surface, run a deeper campaign. Two cap-safe options:
 > `conftest.py` that reads `HYPOTHESIS_SEED` and calls `hypothesis.seed()` would close
 > it permanently — not done, deliberately, to avoid a second way to do the same thing.)
 
+### 4. The run ledger — what ran, when, and against which tree (2026-08-16)
+
+Every `verify.sh` phase now leaves two artifacts behind, both under a **gitignored**
+`.gate-runs/`:
+
+| artifact | what it is |
+|---|---|
+| `.gate-runs/<stamp>-<phase>.log` | that phase's full output, verbatim |
+| `.gate-runs/ledger.tsv` | one appended row: started · duration · phase · `PASSED`/`FAILED`/`INCONSISTENT` · tree id · the counts it observed · the log filename |
+
+```bash
+python scripts/gate_status.py                  # the report (see below)
+python scripts/gate_status.py --require-green  # exit 1 unless THIS tree is covered
+ZANZIBAR_GATE_LOG=0 bash formal/verify.sh lean # opt out for one run
+ZANZIBAR_GATE_RUNS_DIR=/somewhere bash formal/verify.sh lean   # relocate
+```
+
+**Why it exists.** Before this, `verify.sh` printed to stdout and exited, leaving no
+trace at all — so "were the nine tile phases run, and do they apply to the code in
+front of me?" was answerable only across a session boundary by *memory*, which is
+why the board carried it as a hand-written `Still owed:` line. The archaeology that
+looks like it should work does not: `.pytest_cache/v/cache/lastfailed` is
+**cumulative** (it retains entries for tests that did not re-run), so its contents
+are not the last run's verdict — on 2026-08-16 all six of its entries named node ids
+that **no longer exist**, and its mtime was that same day. `nodeids` is one
+collection with no phase, no verdict and no tree attached.
+
+**A row is about a tree, not about the repo.** The `tree` column is
+`<short HEAD>+clean`, or `<short HEAD>+<sha1 of porcelain+diff>` when dirty
+(`scripts/gate_status.py::tree_id` — `verify.sh` shells out to that same function so
+the recorder and the reader cannot drift). It sees tracked edits, staged or not, and
+untracked file *names*. It does **not** see untracked file *contents*, anything
+gitignored (notably `formal/lean/.lake/**` — a matching tree id does **not** mean the
+same Lean build), or the environment (`ZANZIBAR_TEST_DSN`, installed deps). Read a
+green row as "this phase passed against this source", never as full provenance.
+
+⚠ **Do not un-ignore `.gate-runs/`.** The tree id hashes `git status --porcelain`, so
+a tracked ledger would change the tree id on every run and every row would be stale
+on arrival. `gate_status.py` prints a loud warning if it sees that happen.
+
+**Coverage is judged per-K, not against a hard-coded ten.** `--require-green` wants
+`lean` plus, for each suite, *some single K* with all K tiles green on the current
+tree — so the throttled-box recipe (`conf-tile:1/8 … 8/8`, §"secondary machine") is
+just as complete as `1/5 … 5/5`. Tiles at **mixed** K provably leave holes, so a mix
+is refused rather than summed.
+
+**A killed run leaves a log and no row** (the ~10-min cap kills the child before its
+EXIT trap). `gate_status.py` reports that as an *incomplete run* — never as a pass.
+The row is written by the trap precisely so that all ~30 `exit 1` paths are covered
+without touching any of them.
+
+**Sabotage evidence** (procedure: [`sabotage-procedure.md`](sabotage-procedure.md)).
+The property: *a row saying `PASSED` means the phase really passed, and a phase that
+fails still exits nonzero even though its output now goes through `tee`.*
+
+| sabotage | observed |
+|---|---|
+| control — clean `conf-tile:6/100` | `EXIT=0`, row `PASSED … rc=0 collected=495 selected=5 conf_passed=5 conf_xfailed=0 conf_skipped=0 conf_floor=5` |
+| `MIN_CONF_ALL=495` → `99999` (a real gate failure) | `EXIT=1` — **the tee did not eat it** — row `FAILED … rc=1` |
+| a genuinely red pytest inside a tile (temp failing test, `conf-tile:96/100`) | `1 failed, 4 passed in 0.95s` → `FAIL: conf (pytest rc=1)`, `EXIT=1`, row `FAILED … rc=1 collected=496 selected=5` |
+| delete `GATE_REACHED_END=1` (models a future exit path that skips the banner) | `EXIT=1`, row `INCONSISTENT`, and `FAIL: verify.sh is exiting 0 WITHOUT its final PASSED banner` |
+
+The **first** sabotage found a real defect rather than confirming a good check: the
+trap was originally installed beside `BUILD_LOG=$(mktemp)`, ~230 lines *below* the
+floor-consistency check, so that `EXIT=1` produced a log file and **no row** — a
+failure the reader could only call "incomplete". The trap now precedes the first
+`exit` in the script body, and the comment there says why.
+
 ### Push gate
 Push only after ALL of: the ten `verify.sh` phases — `lean` → `conf-tile:1/5` →
 `2/5` → `3/5` → `4/5` → `5/5` → `tests-tile:1/4` → `2/4` → `3/4` → `4/4` — each
-green; and — for an algorithm change — a fuzz sweep (step 3) green. (`tests-tile`
+green; and — for an algorithm change — a fuzz sweep (step 3) green.
+`python scripts/gate_status.py --require-green` answers "are they all green **on
+this tree**" mechanically (§4) — it is a convenience over the ledger, not a
+substitute for running the phases, and it knows nothing about the fuzz sweep. (`tests-tile`
 replaced the hand-typed `pytest tests/` split on 2026-07-27; see §1.) The phased
 gate is fully **agent-runnable
 within the cap** (worst phase ≈ 235 s of the 600 s cap since the 2026-07-26 retiling),
@@ -504,7 +575,11 @@ and the throttle comes and goes mid-gate). What breaks and what to do:
 
 ## Gotchas (hit 2026-07-14/15)
 
-- `tee` masks pytest's exit code → capture `$?`.
+- `tee` masks pytest's exit code → capture `$?`. (Since 2026-08-16 `verify.sh`
+  itself pipes its whole run through `tee` for the run log — it takes
+  `${PIPESTATUS[0]}`, so **callers still get the phase's real exit code**. That is
+  the one place in this repo where the footgun would be systemic, so it carries a
+  positive control: see §4's sabotage table.)
 - Background commands are capped the same ~10 min as foreground — and an
   explicit per-command timeout kills a background run at that timeout **with no
   verdict** (hit 2026-07-15: full suite killed at ~67%). A killed run tells you

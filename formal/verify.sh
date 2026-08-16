@@ -123,6 +123,135 @@ TESTS_DIR="tests/"                      # the backend suite -- see MIN_TESTS_ALL
 export PATH="$HOME/.elan/bin:$PATH"
 
 # ---------------------------------------------------------------------------- #
+# THE RUN LEDGER (2026-08-16). Until today this script left NO trace of having
+# run: every phase printed to stdout and exited, so "were the nine tile phases
+# run today, and against what tree?" was answerable only by archaeology on
+# .pytest_cache mtimes -- which cannot tell a tile phase from a bare `pytest -k`,
+# cannot say whether it PASSED, and cannot even be dated honestly (pytest's
+# cache/lastfailed is CUMULATIVE: it retains entries for tests that did not
+# re-run, so its contents are not the last run's verdict). The board therefore
+# carried "the nine tile phases are owed" as human memory. Two artifacts per run:
+#
+#   .gate-runs/<stamp>-<phase>.log   this phase's full output, verbatim
+#   .gate-runs/ledger.tsv            one appended row -- when, how long, phase,
+#                                    PASSED/FAILED, the tree, the counts observed
+#
+# Read them back with `python scripts/gate_status.py`.
+#
+# BOTH ARE GITIGNORED, and that is load-bearing twice over: a green row is
+# evidence about the machine that produced it and nobody else, AND the tree id in
+# each row is derived from `git status --porcelain` + `git diff HEAD` -- so a
+# tracked .gate-runs/ would change the tree id on every run and every row would
+# be born stale. Do not un-ignore it.
+#
+# THE LEDGER MUST NEVER CHANGE A VERDICT. Every write below is best-effort and
+# non-fatal: a full disk loses the record, not the gate. The one exception runs
+# in the opposite direction (see gate_on_exit): rc=0 WITHOUT the final PASSED
+# banner is recorded INCONSISTENT and forced nonzero, because a gate that exits 0
+# without finishing is this repo's house failure mode, not a logging concern.
+#
+# ⚠ THE TEE FOOTGUN, wired into the gate itself. This wrapper pipes the whole run
+# through `tee`, and a pipeline's $? is the LAST command's status -- tee's, which
+# is 0 essentially always. That is CLAUDE.md footgun #1, and getting it wrong
+# here would make every FAILED phase exit 0 for every caller in the repo. Hence
+# ${PIPESTATUS[0]}, and the positive control recorded in docs/gate-runbook.md
+# §"The run ledger": a deliberately-failed phase must still exit nonzero.
+# ---------------------------------------------------------------------------- #
+GATE_RUNS_DIR="${ZANZIBAR_GATE_RUNS_DIR:-$REPO_ROOT/.gate-runs}"
+GATE_PHASE_SLUG="$(printf '%s' "$PHASE" | sed 's#:#-#g; s#/#of#g')"
+
+if [ "${ZANZIBAR_GATE_LOG:-1}" != "0" ] && [ -z "${ZANZIBAR_GATE_LOG_CHILD:-}" ]; then
+  # Parent pass: re-exec self with output tee'd to a per-run file, then exit with
+  # the CHILD's status. The child (below) writes the ledger row, so exactly one
+  # row exists per run and it is written by the process that knows the counts.
+  # A run killed mid-phase (the ~10-min harness cap) therefore leaves a log file
+  # and NO row -- which reads as "did not complete", the safe direction, and is
+  # what gate_status.py reports as an incomplete run.
+  if mkdir -p "$GATE_RUNS_DIR" 2>/dev/null; then
+    ZANZIBAR_GATE_RUN_LOG="$GATE_RUNS_DIR/$(date +%Y%m%d-%H%M%S)-$GATE_PHASE_SLUG.log"
+    export ZANZIBAR_GATE_RUN_LOG ZANZIBAR_GATE_LOG_CHILD=1
+    bash "${BASH_SOURCE[0]}" "$@" 2>&1 | tee "$ZANZIBAR_GATE_RUN_LOG"
+    _pipes=("${PIPESTATUS[@]}")
+    [ "${_pipes[1]:-0}" = "0" ] \
+      || echo "WARN: tee exited ${_pipes[1]} -- $ZANZIBAR_GATE_RUN_LOG may be truncated" >&2
+    exit "${_pipes[0]}"
+  fi
+  echo "WARN: cannot create $GATE_RUNS_DIR -- running without a run log" >&2
+fi
+
+# ---------------------------------------------------------------------------- #
+# Ledger, child side. Phases call gate_fact to record a count as they observe it
+# -- incrementally, so a FAILED row still carries whatever the run got to before
+# it died. The row itself is written from the EXIT trap, the one hook that covers
+# all ~30 `exit 1` paths plus an unexpected death without touching any of them.
+#
+# ⚠ THIS BLOCK MUST STAY ABOVE THE FIRST `exit` IN THE SCRIPT BODY. It was first
+# written down beside `BUILD_LOG=$(mktemp)`, ~230 lines lower, and the sabotage
+# run caught what that costs: `MIN_CONF_ALL=99999` fails the floor-consistency
+# check at line ~290, which is ABOVE the trap, so the phase exited 1 with a full
+# output log and NO ledger row -- a real failure that gate_status.py could only
+# report as "incomplete", when it knew perfectly well the run had FAILED.
+# ---------------------------------------------------------------------------- #
+GATE_STARTED="$(date +%Y-%m-%dT%H:%M:%S%z)"
+GATE_FACTS=""
+GATE_TREE="unknown"                     # replaced once $PY is resolved, below
+GATE_REACHED_END=0                      # set to 1 only by the final banner
+gate_fact() { GATE_FACTS="${GATE_FACTS:+$GATE_FACTS }$1"; }
+
+# The tree the run STARTED against, so a green row can be matched to the working
+# copy it certifies. Delegated to scripts/gate_status.py --tree-id so the writer
+# and the reader cannot compute it two different ways: a status tool that derived
+# "same tree" differently from the recorder would report a freshness that never
+# existed. (Same reason doc_counts generates and checks with one function.)
+gate_tree_id() {
+  local out
+  out=$( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/gate_status.py" --tree-id 2>/dev/null ) \
+    || out=""
+  printf '%s' "${out:-unknown}"
+}
+
+gate_write_row() {
+  local status="$1" rc="$2" ledger="$GATE_RUNS_DIR/ledger.tsv"
+  [ -n "${ZANZIBAR_GATE_RUN_LOG:-}" ] || return 0   # logging disabled or unavailable
+  [ -f "$ledger" ] \
+    || printf '# started\tdur_s\tphase\tstatus\ttree\tfacts\tlog\n' >>"$ledger" 2>/dev/null
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$GATE_STARTED" "$SECONDS" "$PHASE" "$status" "$GATE_TREE" \
+    "rc=$rc${GATE_FACTS:+ $GATE_FACTS}" "$(basename "$ZANZIBAR_GATE_RUN_LOG")" \
+    >>"$ledger" 2>/dev/null || true
+}
+
+gate_on_exit() {
+  local rc="$1" status
+  [ -z "${BUILD_LOG:-}" ] || rm -f "$BUILD_LOG"   # may be unset: see the ⚠ above
+  if [ "$rc" = "0" ] && [ "$GATE_REACHED_END" = "1" ]; then
+    status=PASSED
+  elif [ "$rc" = "0" ]; then
+    status=INCONSISTENT
+  else
+    status=FAILED
+  fi
+  gate_write_row "$status" "$rc"
+  if [ "$status" = "INCONSISTENT" ]; then
+    # NOT a logging concern. The script reached `exit 0` without printing its
+    # final banner, i.e. it reported success without running to the end of the
+    # phase it was asked for. Every caller in this repo -- the runbook recipe,
+    # the push gate, an unattended agent -- reads exit 0 as "this phase passed".
+    echo "FAIL: verify.sh is exiting 0 WITHOUT its final PASSED banner: phase '$PHASE'"
+    echo "      did not run to completion, so exit 0 would be a green report for"
+    echo "      work that did not happen. Forcing a nonzero exit."
+    exit 1
+  fi
+}
+
+trap 'gate_on_exit $?' EXIT
+# Without these, a Ctrl-C / harness TERM kills the child before the EXIT trap
+# runs and the run leaves a log with no row. It still would under SIGKILL --
+# which is correct: no row means "no completed run", never a silent PASSED.
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# ---------------------------------------------------------------------------- #
 # Interpreter resolution (ZT-P2-6). This used to hard-code one dev box's conda
 # path, so `bash formal/verify.sh` as documented in CLAUDE.md could not run on any
 # other machine without ZANZIBAR_PY. ZANZIBAR_PY still wins outright when set;
@@ -167,6 +296,11 @@ if [ -n "${ZANZIBAR_PY:-}" ]; then
 else
   PY="$(resolve_py)"
 fi
+
+# Snapshot the tree as early as $PY allows, so even a floor-consistency or
+# preflight failure records WHICH tree it failed on. An unusable $PY leaves it
+# "unknown" rather than failing the run -- the ledger never changes a verdict.
+GATE_TREE="$(gate_tree_id)"
 
 # ---------------------------------------------------------------------------- #
 # The hard-coded assurance floors.
@@ -358,8 +492,9 @@ stratify_topological pathCount_addEdge pathCount_removeEdge runCascade2_no_abort
 cascade2_drains graph_correct graph_reached_inv backend_equivalence
 exclusion_effective no_ghost_grant graphRun_reached graphRun_check_eq_sem"
 
-BUILD_LOG="$(mktemp)"
-trap 'rm -f "$BUILD_LOG"' EXIT
+BUILD_LOG="$(mktemp)"   # removed by gate_on_exit, which was installed far above:
+                        # the trap has to precede the floor-consistency checks,
+                        # or a failure there leaves a log file and no row.
 
 # Fail EARLY (before any long build) if the resolved interpreter cannot run, or if
 # the environment would silently under-test.
@@ -428,6 +563,7 @@ run_lean() {
   # Belt and suspenders: the compiler's own verdict (Lake replays cached logs).
   WARNED=$(grep -c "declaration uses 'sorry'" "$BUILD_LOG" || true)
   echo "  tracked holes: $SORRIES (token scan), $WARNED (build-log warnings)"
+  gate_fact "holes=$SORRIES"
   [ "$SORRIES" = "0" ] || { echo "FAIL: soundness-hole count is $SORRIES (gate requires 0)"; exit 1; }
   [ "$WARNED" = "0" ] || { echo "FAIL: lake build reported $WARNED 'declaration uses sorry' warning(s)"; exit 1; }
   # The scanner's own exit status also covers the file-coverage floor (a clean 0 from a
@@ -483,6 +619,7 @@ run_lean() {
   # Audit.lean now fails instead of silently lowering "expected" along with it (ZT-P2-1).
   OBSERVED_AUDITS=$(echo "$AUDIT_OUT" | grep -icE "depends on axioms|does not depend on any axioms")
   echo "  audit reports: $OBSERVED_AUDITS observed, $EXPECTED_AUDITS expected (#print axioms commands), floor $EXPECTED_MIN_AUDITS"
+  gate_fact "audits=$OBSERVED_AUDITS"
   [ "$OBSERVED_AUDITS" -gt 0 ] \
     || { echo "FAIL: axiom audit produced ZERO report lines (vacuous -- rebuild was likely a cache hit)"; exit 1; }
   [ "$OBSERVED_AUDITS" = "$EXPECTED_AUDITS" ] \
@@ -519,6 +656,7 @@ run_lean() {
   MISSING_AUDITS=$(LC_ALL=C comm -23 \
     <(grep -vE '^#|^[[:space:]]*$' "$AUDIT_PIN" | LC_ALL=C sort -u) \
     <(printf '%s\n' "$LIVE_AUDIT_NAMES"))
+  gate_fact "pinned=$PINNED_AUDITS"
   echo "  audited-name identity: $PINNED_AUDITS pinned, $(printf '%s\n' "$LIVE_AUDIT_NAMES" | grep -c . ) live (live must be a SUPERSET)"
   if [ -n "$MISSING_AUDITS" ]; then
     echo "FAIL: pinned audited theorem(s) are NO LONGER audited by Audit.lean:"
@@ -584,6 +722,7 @@ run_lean() {
   "$PY" "$REPO_ROOT/formal/conformance/statement_pin.py" \
     || { echo "FAIL: headline statement/definition pin (see above)"; exit 1; }
   echo "  definition pin rows: $PINNED_DEFS (floor $MIN_PINNED_DEFS)"
+  gate_fact "defs=$PINNED_DEFS"
 
   # -------------------------------------------------------------------------- #
   # 4d. CORRESPONDENCE.md anchor pin. The model<->code map had NO drift detector:
@@ -723,6 +862,12 @@ run_conf() {
   done
   CONF_PASSED=$(printf '%s\n' "$CONF_SUMMARY" | grep -oE '[0-9]+ passed' | grep -oE '^[0-9]+' || true)
   CONF_PASSED=${CONF_PASSED:-0}
+  # Suite-prefixed, because `verify.sh all` runs run_conf twice (tests/ then
+  # conformance) into ONE row -- bare `passed=` twice would read as a typo or,
+  # worse, as one number.
+  local _k="${SUITE_KIND:-conf}"
+  gate_fact "${_k}_passed=$CONF_PASSED"; gate_fact "${_k}_xfailed=$XFAILED_N"
+  gate_fact "${_k}_skipped=$SKIPPED_N"; gate_fact "${_k}_floor=$min_passed"
   [ "$CONF_PASSED" -gt 0 ] \
     || { echo "FAIL: ${SUITE_KIND:-conf} passed ZERO tests (nothing was actually run)"; exit 1; }
   # ZT-P2-2: the count FLOOR. Without it, shrinking GRAPH_FRAGMENT to a single corpus
@@ -768,6 +913,7 @@ run_conf_tile() {
   nodes=$(printf '%s\n' "$COL_OUT" | grep -E '^[^[:space:]]+\.py::')
   total=$(printf '%s\n' "$nodes" | grep -c '::' || true)
   echo "  collected: $total node id(s) (global floor $floor)"
+  gate_fact "collected=$total"
   # The GLOBAL coverage floor, asserted by EVERY tile phase -- so you cannot lose
   # coverage by only ever running one tile.
   [ "$total" -ge "$floor" ] \
@@ -785,6 +931,7 @@ run_conf_tile() {
   mapfile -t NODES < <(printf '%s\n' "$nodes" | awk -v i="$((i - 1))" -v k="$k" '(NR - 1) % k == i')
   tilen=${#NODES[@]}
   echo "  tile $i/$k: $tilen node id(s) (partition arithmetic expects $expected)"
+  gate_fact "selected=$tilen"
   [ "$tilen" = "$expected" ] \
     || { echo "FAIL: tile $i/$k selected $tilen node(s) but the partition arithmetic says"; \
          echo "      $expected -- the K tiles would NOT partition $dir (coverage hole)."; \
@@ -808,4 +955,8 @@ case "$PHASE" in
 esac
 
 echo ""
+GATE_REACHED_END=1            # the ONLY assignment; gate_on_exit turns a missing
+                              # one into INCONSISTENT rather than PASSED.
 echo "=== verify.sh: phase '$PHASE' PASSED ==="
+[ -z "${ZANZIBAR_GATE_RUN_LOG:-}" ] \
+  || echo "    run log: ${ZANZIBAR_GATE_RUN_LOG#$REPO_ROOT/}   (ledger: .gate-runs/ledger.tsv)"

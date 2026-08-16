@@ -321,3 +321,10 @@ system-prompt.txt
 
 # temp working dir
 .scratch/
+
+# formal/verify.sh run ledger: one row per phase run + that phase's full output.
+# Local run state, not a repo claim -- a green row is evidence about the machine
+# that produced it. Keeping it ignored is also load-bearing: the tree id in each
+# row hashes `git status --porcelain`, so a TRACKED .gate-runs/ would change the
+# tree id on every run and make every row stale on arrival.
+.gate-runs/
