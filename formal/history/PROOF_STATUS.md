@@ -15,6 +15,135 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-16c (**LEG 7 4c-ii ATTACKED BEFORE IT WAS BUILT: ROUTE A IS REFUTED by an unprovable conversion, the singleton-collapse premise is backwards, and the board's completion criterion is reachable by a TWO-LINE PYTHON EDIT. No Lean file was modified.**)
+
+**Task taken:** the user asked to start leg 7 (board row `P3` — 4c-ii co-landing with step 7)
+using subagents to hold context down, then to run the full gate and push. Method: a
+read-only fan-out (four maps of the tree → one synthesized 17-step edit plan → two
+adversarial passes over that plan, formal house rule 2), then **every load-bearing claim
+re-verified by hand against the live tree** before believing it. Formal house rule 6 was
+respected: no subagent proved or edited anything; the refutations below are all confirmed
+first-hand, and the two that decide the leg were confirmed by running code.
+
+### 1. ★★ ROUTE A IS REFUTED — the shadow chain cannot simply re-point
+
+4c-ii must decide what happens to the `ReachedByRulesAdmitted` shadow chain once σ writes
+derived-key edges at leaf nodes while the shadow σ₀ keeps writing them at the public
+R-node. The cheap option (**Route A** — re-point `ReachedByRulesAdmitted.step`,
+`RulesComplete.lean:87-92`, onto the new list) is not merely expensive; it is **unprovable
+as stated**:
+
+* `ReconcileComplete.lean:164` is `| base hr => exact ReachedByW3a.base (reachedByRules_of_admitted hr)`
+  inside `reachedByW3aAdmitted_toW3a`. `ReachedByW3a.base` demands `ReachedByRules σ S T`.
+* For a `writeRulesRaw`-built σ **no such witness exists, and the tree already proves it**:
+  `GraphIndex/LeafRules.lean:461::LeafRuleWitness.lrV_writeRulesRaw_edges_ne` machine-checks
+  `((emptyState SlV).writeRulesRaw SlV tlEditor).edges ≠ ((emptyState SlV).writeRules SlV tlEditor).edges`.
+  The states are provably different, so the forgetful conversion cannot be re-proved.
+
+The cost model was wrong too, in the direction that matters. Of the 55
+`reachedByRules_of_admitted` occurrences, **only 22 compose with `reachedByRules_inv`**
+(the mechanical substitution the plan budgeted); **16 compose with
+`reachedByRules_edge_sound`** (`RulesCorrect.lean:125-129`), whose ∃-destructuring every
+consumer re-derives, and **7 feed `untaintedShadow_*` lemmas** whose signatures take
+`h0 : ReachedByRules σ₀ S T` (`CascadeStable.lean:757, 818, 838`;
+`CascadeStrataSettle.lean:295, 373, 394`) — not the two list-generic workhorses the plan
+named.
+
+**Consequence for the board, and it is a dependency the board cannot currently express.**
+With Route A dead, the remaining route weakens `UntaintedShadow` — which is a slice of row
+`P14` (re-partition `DerNode`/`UntaintedShadow`). `P14` is filed `deps: P4`, and `P4` is
+filed `deps: P3`. So `P3 → P14 → P4 → P3`. Either 4c-ii absorbs part of `P14`, or a third
+route exists that nobody has proposed. **This is the adjudication 4c-ii is blocked on**, and
+it is a proof-design question, not a coding one.
+
+### 2. ★ THE SINGLETON-COLLAPSE PREMISE IS BACKWARDS — the leaf list is EMPTY, not multi
+
+The plan assumed that after the (α) flip a derived-key raw write yields a possibly-MULTI
+element leaf list, so `writeLeg_own_key_dirty` / `removeLeg_own_key_dirty`
+(`CascadeStrataSettle.lean:3145-3149`) could be re-proved from "some member's push dirties
+the own key". On the fragment those theorems live on it is the opposite. Verified in situ:
+
+* `Leaf.lean:401` — `| .computed R => if isDerived S (ty, R) then [] else [.closure (.computed R)]`
+* `Leaf.lean:551` — `rawWriteRels`' `filterMap` maps `| .closure _ => none`
+
+Under the standing `ComputedOnly` scope hypothesis a derived def is built only from
+`.computed` arms, so it has **no `.storage`/`.userset` leaf at all** and
+`rawWriteRels S t = []` ⇒ `rawWriteTuples S t = []` ⇒ the fold writes nothing: no edge, no
+`pushDelta`, no frontier row. `writeLeg_own_key_dirty`'s conclusion is then **false**, not
+harder. The missing premise is non-emptiness (`StoreValidRules`), **not** the `WF S` the
+plan proposed — and whether `StoreValidRules` + `ComputedOnly` even admits a stored tuple on
+a derived key is the next thing to measure, because if it does not, the theorem is vacuous
+exactly where 4c-ii needs it.
+
+### 3. ★★ THE COMPLETION CRITERION IS WEAK — measured, with the gate as the control
+
+The board and this document have carried *"`dropped by P6` → 0 and `compared against Lean`
+→ 265"* as `P3`'s completion criterion since 2026-08-14. **Both numbers are a pure function
+of the Python side.** Probe: comment out the two-line P6 branch (`extractor.py:236-237`),
+change no Lean file, and `doc_counts.measure()` reports
+
+> `{'corpora': 25, 'raw': 498, 'P1': 233, 'P2': 0, 'P6': 0, 'compared': 265, ...}`
+
+— i.e. **exactly the target block, with zero Lean involvement**. `doc_counts` obtains them
+from `graph_fragment_ledger()`, which drives only the real Python graph index and reads no
+Lean artifact.
+
+**But the criterion is weak, not hollow, and the control is what shows the difference.**
+The same probe run against the state gate:
+
+> `19 failed, 37 passed in 22.42s` — `test_state_leangraph_vs_pythongraph` red on all 19
+> in-fragment corpora with e.g.
+> `edge only in PYTHON : ('user','mallory','...','') -> ('doc','d1','viewer.1','')`,
+> plus `test_projection_ledger_is_not_vacuous` and `test_residue_rich_corpus_is_really_rich`.
+
+So the numbers alone certify nothing, and **numbers ∧ `conf-tile` green** is a real
+criterion. Both boards now state it in that conjoined form; stating only the numbers
+invited a green report for a commit that did no Lean work, which is this repo's house
+failure mode wearing a board's clothes.
+
+⚠ **A direction correction while we are here.** §11.5 of the scope doc predicts that
+re-pointing `Exec.lean` makes the gate report leaf edges *"only in LEAN model"*. Deleting P6
+first produces the mirror image — *"only in PYTHON"* — as quoted above. Same divergence,
+opposite order of arrival; the doc's phrasing silently assumes Lean lands first.
+
+### 4. Four smaller corrections, each verified
+
+* **`FoldAdmits` lockstep is 24 sites, not 7.** The plan's own verify command,
+  `grep -rn 'FoldAdmits [^ ]* (rewriteClosure\|foldAdmitsB [^ ]* (rewriteClosure'`, returns
+  **24** live matches: the seven `write` constructors, thirteen theorem hypotheses carrying
+  the same spelled list, and the two executable arms `Exec.lean:72` and `:376`.
+* **Deleting `reachedByRules_of_admitted` reddens `lean` before the audit pin is consulted.**
+  `Audit.lean:314` is a literal `#print axioms reachedByRules_of_admitted` and
+  `audited_theorems.txt:338` pins the name, so the Audit module fails to elaborate on an
+  unknown constant. `regen_audit_pin.sh` mirrors Audit.lean; it cannot supply an edit to it.
+  Any 4c-ii plan must list `Audit.lean` as an edited file.
+* **Two anti-vacuity floors sit in the blast radius and no regeneration can repair them.**
+  `test_conformance_state.py:377-378` `_MIN_LEDGER_ROWS = 19` / `_MIN_LEDGER_STACKED = 19`,
+  asserted at `:516` — all 19 derived-arm rows must keep lean multiplicity > 1, and the
+  assert runs BEFORE the golden read at `:545`. 4c-ii removes one of the legs those counts
+  sum, so a row landing on 1 fires a floor, and `ZANZIBAR_UPDATE_SNAPSHOTS=1` does not touch
+  it.
+* **`derived_arm_multiplicity.json` must not be re-recorded from the changed model.** It is
+  the only witness of the quantity 4c-ii most directly perturbs (the derived arm is dropped
+  by P3, `extractor.py:517-522`). Per `docs/sabotage-procedure.md` rank 2 the new per-row
+  value is **derivable** — old lean count minus the write-leg contribution now routed to the
+  leaf node — so a derived expectation is owed, not a transcript.
+
+### 5. What is NOT owed, and what the next session should do first
+
+No Lean file, golden, pin or gate file was modified this session; the probe was restored and
+`graph_fragment_ledger()` re-reads `{'P6': 76, 'compared': 189}`. The 17-step plan itself is
+kept out of `formal/` deliberately — steps 4, 10 and 16 rest on the three refuted cells
+above, so filing it would file a plan that is wrong in the places that cost the most.
+
+**Next session, in this order:** (1) settle the Route A/B/third-route adjudication in §1 —
+it is the blocker, and it is cheap to attack with `#eval` before any cone is paid;
+(2) measure whether `StoreValidRules` + `ComputedOnly` admits a stored tuple on a derived
+key (§2), because the answer decides whether the own-key theorems are re-provable or
+vacuous; only then (3) budget the 39-module cone.
+
+---
+
 ## Session 2026-08-16 (**LEG 7 STEP 4c-i LANDED — the leaf-provenance rule layer, with a ZERO recompile cone. The 4c-pre ALLOCATION was refuted THREE more times before it was built on, once by an instrument that was itself blind. `ttuStarFree` part (iv)'s blocking decidability question is ANSWERED: NO-BLOCK, machine-checked.**)
 
 > **CORRECTION 2026-08-16b (handoff migration).** §3 below closes `ttuStarFree` part

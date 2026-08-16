@@ -955,6 +955,50 @@ half survives.
 `FINAL_REVIEW.md`'s generated block and unchanged: `dropped by P6` **76 → 0**, `compared
 against Lean` **189 → 265**.
 
+### 11.8 ★★ 4c-ii IS BLOCKED ON A PROOF-DESIGN ADJUDICATION, NOT ON CODING (2026-08-16c).
+### The shadow chain's cheap route is refuted, and §11.7's "Next" cell understates the step.
+
+`history/` is append-only, so §11.7 stands as written. Read this as the resolution of its
+**Next** cell. Full detail and every quoted line: `history/PROOF_STATUS.md` 2026-08-16c.
+
+**§11.7's "Next: 4c-ii (caller re-point + (α) row move + `affectedKeys` via `publicOfLeaf`)"
+is not a caller re-point either.** Re-pointing the callers forces a decision about the
+`ReachedByRulesAdmitted` shadow chain, and the cheap branch is **refuted**:
+`ReconcileComplete.lean:164` needs a `ReachedByRules σ S T` witness for a
+`writeRulesRaw`-built σ, and `LeafRules.lean:461::lrV_writeRulesRaw_edges_ne` already
+machine-checks that those two states' edge sets **differ**. The surviving branch weakens
+`UntaintedShadow`, which is a slice of board row `P14` — filed `deps: P4`, which is filed
+`deps: P3`, so the board's own dependency graph closes a cycle here. **Settle this before
+paying any cone.**
+
+**Two further cells of the step plan are refuted by measurement, both in the tree today:**
+
+* The own-key theorems cannot be re-proved from "some member of a multi-element leaf list
+  dirties the key". On the `ComputedOnly` fragment the list is **empty** — `Leaf.lean:401`
+  gives `[]` for a derived `.computed` arm and `Leaf.lean:551` maps `.closure _ => none` —
+  so `writeLeg_own_key_dirty` becomes FALSE there, and what it needs is a non-emptiness
+  premise (`StoreValidRules`), not `WF`.
+* The `FoldAdmits`/`foldAdmitsB` lockstep is **24 spelled-list sites**, not the seven
+  `write` constructors: thirteen theorem hypotheses carry the same list, plus
+  `Exec.lean:72` and `:376`.
+
+**★ AND THE LANDING CRITERION THIS DOCUMENT HAS CARRIED SINCE §11.5 IS WEAK.** *"`dropped by
+P6` 76 → 0, `compared against Lean` 189 → 265"* is a pure function of the **Python** side:
+commenting out the two-line P6 branch at `formal/conformance/extractor.py:236-237`, with no
+Lean file touched, makes `doc_counts.measure()` publish `{'P6': 0, 'compared': 265}` exactly.
+The control is what saves it — the same probe leaves the state gate at **19 failed, 37
+passed**, reporting the leaf edges as `only in PYTHON`. So the criterion is only a criterion
+**conjoined with `conf-tile` green**, and it must be written that way. (Note also that
+§11.5's predicted direction is the mirror of what a Python-first order produces: `only in
+LEAN model` vs `only in PYTHON`.)
+
+**Two gate facts the step plan must carry**, neither of which any regeneration can repair:
+`Audit.lean:314` `#print axioms reachedByRules_of_admitted` reddens `verify.sh lean` the
+moment that theorem is deleted (so `Audit.lean` is an EDITED FILE of this step, not just a
+build target); and `test_conformance_state.py:377-378`'s `_MIN_LEDGER_ROWS`/
+`_MIN_LEDGER_STACKED = 19/19` are asserted at `:516`, before the golden read, over exactly
+the multiplicity leg 4c-ii moves.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer
