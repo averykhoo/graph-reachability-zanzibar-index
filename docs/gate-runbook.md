@@ -97,7 +97,9 @@ bash scripts/pg_local.sh stop                  # or `destroy` to remove the clus
 ```
 
 A throwaway user-space cluster (conda-forge binaries; no system install, no service,
-loopback-only, non-default port). `ZANZIBAR_PG_REQUIRED=1` turns a missing or
+loopback-only, non-default port). **On this machine the cluster is STOPPED but
+RETAINED** (as of 2026-08-16): `start` brings it back in seconds rather than doing a
+cold `initdb`, `destroy` removes it entirely, and nothing in the default gate needs it. `ZANZIBAR_PG_REQUIRED=1` turns a missing or
 unreachable DSN into a hard ERROR rather than a skip — use it whenever you intend the
 server leg to have actually run. Worth running for anything touching locking,
 watermarks, isolation, or multi-instance state: it found three real bugs the first
@@ -239,12 +241,17 @@ budgeted xfail counts toward the tile's pass floor (it ran and it asserted);
 stale — and the repo-root `pytest.ini` sets `xfail_strict = true`, so a stale pin
 also fails locally.
 
-It is **1**, not 0, today, and the one pin it covers only exists on the PostgreSQL
-leg: `tests/test_postgres_ha.py::test_open_instance_races_a_concurrent_commit`
-(`TupleSource.__init__` reads the watermark and *then* rebuilds — atomic under a
-pinned SQLite-WAL snapshot, not at READ COMMITTED). It fails loud rather than
-answering wrongly, and there is no one-line fix: reading the watermark *after* the
-rebuild turns the loud failure into a silent skip. `MAX_TESTS_SKIPPED_ON_RDBMS`
+⚠ **Corrected 2026-08-16 — this paragraph used to open "It is `1`, not 0, today."**
+That was false from 2026-07-27, when the one pin it named
+(`tests/test_postgres_ha.py::test_open_instance_races_a_concurrent_commit`) became a
+plain test; that module has carried `NO XFAILS REMAIN (2026-07-27)` ever since and
+there is not one xfail marker left in `tests/`. **The value is deliberately not
+restated here** — it lives in `formal/verify.sh` and nowhere else, for exactly the
+reason the floors table above carries no values. The hazard that retired pin described
+is still real and still covered: `TupleSource.__init__` reads the watermark and *then*
+rebuilds — atomic under a pinned SQLite-WAL snapshot, not at READ COMMITTED. It fails
+loud rather than answering wrongly, and there is no one-line fix: reading the watermark
+*after* the rebuild turns the loud failure into a silent skip. `MAX_TESTS_SKIPPED_ON_RDBMS`
 works the same way and is documented in §1 above. Both budgeted outcomes count
 toward the tile's pass floor, so budgeting one never quietly shrinks what had to
 pass — otherwise the budget would just move the red one line down.

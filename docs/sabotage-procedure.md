@@ -47,6 +47,13 @@ with the outcome.
 5. **Restore**, confirm green again.
 6. **Write down what you sabotaged and what you saw** — see "Evidence" below.
 
+**When the check is a new corpus or fixture that exposes a divergence, land it RED first,
+in its own commit.** The `rewriteClosure` dedup leg (2026-08-08) added `reconvergent_diamond`
+and `reconvergent_derived` in a deliberately-red commit *before* the fix, so the divergence
+was attributable to the corpus rather than arriving mixed into the change that hides it. A
+corpus that arrives green in the same commit as its fix has never been observed to fail, and
+you cannot afterwards tell whether it would have.
+
 If step 3 does not produce red, you have not added a check. You have added a comment
 that costs CI time.
 
@@ -65,6 +72,26 @@ pair is the model:
 
 Ask: **"what is the most innocent-looking edit that would make this feature stop being
 tested?"** Sabotage *that*.
+
+### Probe BOTH signs — a one-directional probe mis-classifies severity
+
+From the RC1/RC2 arc (2026-08-10/11), the single most transferable output of it.
+
+The same defect can be a false negative or a false positive depending on the *polarity of
+the consumer*. A dropped TTU parent is a false **NEGATIVE** under a positive TTU
+(`define access: viewer from parent`) and a false **POSITIVE** — a live authorization
+**fail-open** — under a negated one (`define access: [user] but not viewer from parent`).
+
+**Probing only the positive direction mis-classifies severity by one sign**, which is
+exactly what the original divergence filing did: it reported an under-grant, and the real
+bug was an over-grant. A reader who acted on that filing would have rewritten correct
+leaf-routing code.
+
+**The rule: any new TTU corpus, probe or sabotage must carry both directions.** More
+generally, before you believe a severity, ask which consumer polarities exist for the
+defect and make sure your probe drives the one that inverts it. The permanent compile-time
+pin is `test_compile_refuses_parent_types_narrower_than_admission`; its error text names
+the sign (`docs/spec-deviations.md`, 2026-08-11).
 
 ### The INERT change — when the sabotage reddens nothing, and that is the finding
 
@@ -103,6 +130,11 @@ Two corollaries worth carrying:
    "simplifies" it away. The pins are the only thing standing between them and silently
    reopening the hole — so the docstring must state that the pins are the *sole*
    evidence, and why.
+3. **Use the sabotage to reject a NARROWER pin you were about to write.** In leg 7 4c-pre
+   the `".0"`-stripper run left the index-0 pin **green** — which proved that an
+   index-0-only pin would have been vacuous, and that the pin had to name the whole
+   fan-out. A green pin under a sabotage that should break it is not reassurance about the
+   code; it is a verdict on the pin.
 
 ### A TEARDOWN test is not a DELETE test — when the natural ordering hides the branch
 
@@ -122,6 +154,34 @@ orphan.
 gradually exercises only the update path. Write the one-step case explicitly. Generalises to
 any index maintained beside a deletable row; the permanent pin is
 `tests/test_residue_ref_index.py::test_residue_emptied_in_one_step_takes_its_index_rows_with_it`.
+
+### A REBASE needs a different control than a CLONE — and a GENERATED golden regenerates
+
+From E-chain leg 5 (2026-08-05). Legs 3/4 *packaged* existing content (a clone): the
+plausible sabotage is "drop a field", and it reddens `FullScope`. Leg 5 **rebased** a proof
+bundle — `GraphAdmission.storeValid` → `StoreValidRulesD`, `W4Fragment`'s single
+`computedOnly` field → five derived-def clauses — and the plausible failure there is not a
+dropped field, it is the **half-done leg**: widen `W4Fragment`, leave `GraphAdmission`
+narrow, and bridge them with a conversion lemma
+(`storeValidRulesD_of_storeValidRules_directArmsBare`) — **which typechecks**.
+
+Measured: with the four witness declarations present, ONE error in the whole tree; delete
+them and it is **"Build completed successfully (1084 jobs)"**.
+
+Two things this teaches:
+
+1. **Match the sabotage to the CHANGE SHAPE, not to the file.** For a rebase the narrowest
+   plausible weakening is a *type-correct half-migration*, not a deletion. Ask: "what is the
+   half of this leg someone could stop after, that still compiles?"
+2. **A GENERATED golden cannot witness a change to the tree that generates it.** Every
+   gate signal reads as success under the half-done leg: statements stay byte-identical, the
+   definition pin MOVES so the gate even reports "meaning changed", audits are clean — and
+   because both goldens are generated FROM the tree, the leg regenerates them into a
+   self-consistent pair and passes the entire gate. That is the mirror instrument (below) in
+   golden form. The only control that reaches it is a **witness theorem** that instantiates
+   the widened bundle at a concrete store (`W4WitnessDirect.final_applies`), because a
+   witness fails to elaborate when the bundle is not really wider. Legs 3/4's sabotages at
+   least reddened `FullScope`; this one **reddens nothing**.
 
 ### Sabotage your instrument too, not just your subject
 
@@ -209,6 +269,15 @@ Python allocates three leaves, the model merged them into one.
 > A transcription of the right rule over the wrong input shape is not an independent check —
 > it is the mirror instrument with extra steps.
 
+**Why the representations diverged is itself the lesson: the normalization was justified by
+the wrong invariant.** `Core/Schema.lean` justifies left-folding n-ary unions by
+associativity + commutativity — true of `sem`, and **false of the leaf ALLOCATION** read off
+the same tree. Measured: `a or b or safe` → 2 leaves, `(a or b) or safe` → **1**, and the
+encoder maps both to the same `Expr`. When a pre-processing step is defended by "property P
+is invariant under it", check that every property your model *derives from that tree* is P.
+The refusal is mechanical, not a doc warning:
+`formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`.
+
 **And check whether your *other* instrument could have caught it, structurally.** Here a
 second, genuinely independent instrument was green too (`rawWriteRels` vs `RuleSet.apply`'s
 real seed set, 744/744, with three positive controls). It could never have fired: it maps
@@ -263,6 +332,24 @@ It cannot be mechanically enforced — there is no way for the gate to know you 
 sabotage, and a check that claimed to verify that would itself be an instance of the
 failure mode it polices. **The mitigation is placement, not enforcement:** the evidence
 goes in the test's docstring and the commit message, where review sees it.
+
+It also cannot turn coverage into proof. The generator-coverage leg reaches a large
+majority of pairwise cells with `UNACCOUNTED == set()` and no hand-written exemption list —
+and **roughly a quarter of the pair space is still unreached even at `deep`**. So read a
+green gate as **"the instruments we have found nothing"**, never as "there is nothing".
+Publish the residue rather than rounding it away
+(`docs/design/generator-coverage/README.md` §6 is the model: a coverage design that claims
+completeness is the failure mode it was written to fix).
+
+And it says nothing about the **plan** you are executing. Treat a scope/design document the
+way you treat a check: E-chain legs 2/3/4 each landed a correction to their own plan — two
+instructions refuted by measurement, a gate specification found insufficient **three legs
+running**, an obligation inventory that missed a hypothesis — and leg 7's §4 prescription
+("fork `writeDirect`") was refuted outright by a 20-line probe. Measure a plan's load-bearing
+cells before paying its cone. Corollary from `ttuStarFree` part (iv) (2026-08-16): a step
+deferred because a question "might block it" is a *measurement you have not run* — the
+analogous decidability question was answered NO-BLOCK in one session after two sessions of
+assuming it.
 
 It also does not replace the formal side's **attack-first** rule
 (`formal/HANDOFF.md` house rule 2 — try to REFUTE a theorem statement with `#eval`

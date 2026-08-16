@@ -1,5 +1,12 @@
 # n-ary / ≥3-strata coverage — what `twoStrata` costs, re-verified 2026-07-27
 
+> **FROZEN 2026-07-28 — provenance, not a living document.** A completed re-measurement of
+> the `twoStrata` / n-ary coverage holes, plus its 2026-07-28 addendum closing the last
+> two. Every figure measures the tree AS IT WAS THEN and several are now false; read it
+> for the method and the quoted commands, never for state. Live state:
+> [`HANDOFF.md`](../../HANDOFF.md) + the session ledgers. Corrections are appended dated
+> at the top, never edited into the body.
+
 ZT-P4-4 follow-up. The 2026-07-26 review recorded three language-feature holes
 (max 2 strata anywhere, every operator binary, wildcard usersets at zero) and a
 partial fix (`test_conformance_nary_strata.py`). This session re-measured all of

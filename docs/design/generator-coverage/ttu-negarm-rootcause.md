@@ -1,5 +1,17 @@
 # TTU-over-derived-tupleset under-report: root cause
 
+> **FROZEN 2026-08-16 — provenance, not a living document.** Status lines below are
+> as-of-then and several are now false; live state: `HANDOFF.md` + the session ledger.
+> Corrections are appended dated at the top, never edited into the body.
+>
+> ⚠ **This leg LANDED on 2026-08-11, and where this document and the archive disagree,
+> trust the archive.** The one-line fix proposed below SHIPPED
+> (`docs/history/handoff-status-2026-08.md` §1: RC1 `ed46e54`, RC2 2026-08-11), so
+> “READ-ONLY: no repo file was modified” describes the investigation, not the repo today,
+> and §1b records the implementation corrections found while building the
+> generator-coverage work this fed. Every `file:line` citation is as of 2026-08-10 and
+> has since moved — read the code, not the line numbers.
+
 Investigation date: 2026-08-10. Repo: `C:\Users\user\PycharmProjects\graph-reachability-zanzibar-index`.
 READ-ONLY: no repo file was modified. All experiments ran via monkeypatch from
 `C:\Users\user\AppData\Local\Temp\ttu\`.

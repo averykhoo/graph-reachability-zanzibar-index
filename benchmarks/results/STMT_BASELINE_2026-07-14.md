@@ -1,5 +1,16 @@
 # Statements-per-operation baseline — 2026-07-14 (P12-M, wave 0)
 
+> **LIVING** — but only in one section. The maintained part of this file is the
+> **Addendum** log at the bottom: one entry per landed perf item that moves the
+> statements-per-operation counts, re-measured with `benchmarks.stmt_bench` and
+> appended as it lands. Those entries are claimed true today.
+>
+> ⚠ **Mixed liveness — everything above `## Addendum 2026-07-15 — N16 landed` is the
+> frozen wave-0 BEFORE baseline**, superseded addendum by addendum; it carries its own
+> scoped FROZEN declaration at `## (a) Pure-union schema`. The reproduce block below
+> names the `avery` interpreter path, which does not exist on this machine — see
+> `CLAUDE.md` (override with `ZANZIBAR_PY`).
+
 Before-numbers for P12a/P12b/N5/N6: **SQL statements per operation** on a real
 `connectedstore.ConnectedStore` (sync schedule), the composition path the
 `build_set`/`build_graph` bench harness bypasses entirely. Counted via an
@@ -35,6 +46,13 @@ literal-text `FOR UPDATE` counter is **0.0 everywhere**. The honest proxy for th
 ---
 
 ## (a) Pure-union schema (no boolean operators — `proc is None`, no cascade)
+
+> **FROZEN 2026-08-16 — provenance, not a living document.** Scope: the 2026-07-14
+> wave-0 baseline — this file’s preamble, this section, `## (b) Boolean schema` and
+> `## Interpretation`, i.e. everything above `## Addendum 2026-07-15 — N16 landed`.
+> These are the BEFORE counts for P12a/P12b/N5/N6; the addenda supersede the INSERT and
+> `node_v4` SELECT figures below, in order. Corrections are appended dated at the top,
+> never edited into the body.
 
 ```
 type user

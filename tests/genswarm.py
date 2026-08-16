@@ -461,7 +461,8 @@ def swarm_schema_asts(draw, sw=None):
     if 'body_negttu' in sw and n >= 2:
         # THE fail-open shape: `[user] but not <r> from parent`. A dropped TTU parent is
         # a false NEGATIVE under a positive TTU and a false POSITIVE under a negated one
-        # (HANDOFF.md), so a grammar with only positive TTUs cannot reach a fail-open at
+        # (`docs/history/handoff-status-2026-08.md` §1, archived from `HANDOFF.md`
+        # 2026-08-16), so a grammar with only positive TTUs cannot reach a fail-open at
         # any budget or any driving discipline.
         ast[('doc', names[-1])] = Exclusion(
             Direct(_BASE_DIRECTS_PLAIN), TTU(names[0], 'parent'))
@@ -483,8 +484,9 @@ def _tupleset_body(body, sw):
 
 
 def swarm_op_pool(ast) -> list[RawTuple]:
-    """Schema-VALID raw tuples, co-generated from the SAME ast (the constraint HANDOFF.md
-    warns will bite). Identical walk to ``test_hypothesis.py::_op_pool`` except the
+    """Schema-VALID raw tuples, co-generated from the SAME ast (the "constraint that will
+    bite" in ``docs/history/handoff-status-2026-08.md`` §1b, retired from ``HANDOFF.md`` on
+    2026-08-11). Identical walk to ``test_hypothesis.py::_op_pool`` except the
     subject-name table is TYPED and the OBJECT names come from the object's own type."""
     out = []
     for (otype, rel), e in ast.items():

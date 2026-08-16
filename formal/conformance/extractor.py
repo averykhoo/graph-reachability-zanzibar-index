@@ -290,7 +290,7 @@ def graph_fragment_ledger() -> dict[str, int]:
 
     Costs a few seconds — it drives every `GRAPH_FRAGMENT` corpus with real
     graph-index writes, paranoia mode ON. No corpus count here on purpose
-    (`ZT-P3-5` / HANDOFF working-rhythm 3b): the current per-projection totals
+    (`ZT-P3-5` / HANDOFF "Rhythm" 3b): the current per-projection totals
     live in `FINAL_REVIEW.md`'s generated counts block, machine-checked by
     `verify.sh` step 4e via `doc_counts --check`.
     """

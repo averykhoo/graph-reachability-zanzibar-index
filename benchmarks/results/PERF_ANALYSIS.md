@@ -1,5 +1,18 @@
 # Perf-curve analysis — 2026-07-14
 
+> **LIVING** — but only in one section. The maintained part of this file is the
+> `## Applied` log: one entry per landed perf item with the measurement that justified
+> it, appended as it lands. `HANDOFF.md`’s “Where things live” table points here for
+> exactly that, and every `## Applied` entry is claimed true today.
+>
+> ⚠ **Mixed liveness — do not read the rest of the file as current.** Everything ABOVE
+> `## Applied` is the point-in-time 2026-07-14 curve analysis, and `## Optimization
+> targets (ranked)` onward is its as-of-then tail; each block carries its own scoped
+> FROZEN declaration at its first heading. The live open perf worklist is
+> [`docs/perf-next-round.md`](../../docs/perf-next-round.md). Both reproduce blocks name
+> the `avery` interpreter path, which does not exist on this machine — see `CLAUDE.md`
+> (override with `ZANZIBAR_PY`).
+
 Fitted scaling laws and a **PySets vs RoaringSets** comparison over the pre-perf
 baseline (`scale_bench.jsonl`, 21 rows: `set:roaring` ×9, `set:py` ×9, `graph`
 ×3 — one session, `paranoia=False`, in-memory SQLite). Raw throughput/RSS tables
@@ -22,6 +35,14 @@ O(N). Colour = workload, solid = RoaringSets, dashed = PySets, triangles = the
 graph index (one scale each).
 
 ## Scaling laws (log-log least-squares fit)
+
+> **FROZEN 2026-08-16 — provenance, not a living document.** Scope: the 2026-07-14
+> curve analysis — this file’s preamble plus §§ Scaling laws · PySets vs RoaringSets ·
+> Graph index, i.e. everything above `## Applied`. These are pre-round-1 numbers from a
+> single session over `scale_bench.jsonl`; every optimization listed in `## Applied`
+> post-dates them, so the levels and several verdicts here are superseded — the re-runs
+> are `ROUND3_COMPARISON_2026-07-15.md` and `ROUND4_COMPARISON_2026-07-16.md`.
+> Corrections are appended dated at the top, never edited into the body.
 
 Per-op **cost** exponent = −(throughput slope); **write** is fit on build-time vs
 tuples (slope ≈ 1 ⇒ linear load). Fits are over 3 scale points/curve; R² shown.
@@ -560,6 +581,13 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
   paranoia + delta verifier) + conf-heavy (68) + conf-rest (195).
 
 ## Optimization targets (ranked)
+
+> **FROZEN 2026-08-16 — provenance, not a living document.** Scope: this section and
+> `## Notes` below it — everything after the `## Applied` log. This ranking is the
+> 2026-07-14 one; the live open worklist, the fence, the confirmed dead ends and the
+> reopening rule are [`docs/perf-next-round.md`](../../docs/perf-next-round.md), and the
+> current round is [`docs/perf-round6-audit-2026-08.md`](../../docs/perf-round6-audit-2026-08.md)
+> (board row `R6`). Corrections are appended dated at the top, never edited into the body.
 
 *(Rounds 1–3 landed — see Applied above; the retired round-3 worklist/execution
 record is `docs/history/perf-round3-2026-07.md`. The living **open** worklist

@@ -594,6 +594,17 @@ fail-closes there (§1's remove row, §3 item 3)**. The guard's
 validly-stored scope decision (it strengthens an audited inductive) was reviewed
 and **APPROVED by Avery (2026-07-19)** as the honest, faithful framing — no longer
 an open flag;
+
+⚠ **This item's scope wording is suspected to UNDER-claim (open, board row `AW-1`, small).**
+It was written 2026-07-19f and has not been re-read since the remove leg closed, so the
+"validly-stored + drained-prior" hedging may now be narrower than what is actually proved.
+**Plausibly subsumed by the `ZT-P3-4` / `ZT-P3-5` sweeps — never confirmed either way.**
+**Completion criterion:** re-derive the claim from the current `remove` constructor's
+hypotheses and either tighten this paragraph or record that it was already correct. Do
+**not** widen the wording without re-reading the guard, since §1's remove row and §3
+item 3 depend on it. Note `_REMOVE_EXCLUDED` (board row `P9`) is a *different*, still-live
+gap.
+
 (e) widening the enumeration/state bounds — **partly DONE**: the enumeration now
 runs six shapes (a userset/wildcard shape and a TTU shape added), K = 4 on four of
 them, and a state-level leg over a stride-4 sample (`test_conformance_enum_state.py`,
@@ -605,6 +616,34 @@ note). New under this heading since 2026-07-26: **(h) model or explicitly
 scope-exclude the bulk build/backfill constructor** (§3 item 6 — it is the default
 `build_index` path and has no Lean counterpart), and **(i) the concurrency /
 multi-instance layer** (§3 item 5 — the deferred TLA+ phase, never started).
+
+**(j) the two SCOPE REJECTIONS — object wildcards on derived relations, and wildcard
+usersets over derived relations.** Both raise `UnsupportedByGraphIndex` at compile time
+(`zanzibar_utils_v1.py`); they are the only constructs the repo rejects outright rather
+than models, and the sole items not modeled in Lean at all. The documented fix is a
+**symmetric subject-keyed residue** (symbolic composition through residues). Tracked as
+board row `SD-1` (SOMEDAY).
+**Priority argument CORRECTED 2026-07-29** — the old "low priority, the OpenFGA DSL does
+not support these either" is INVALID (`ZT-P5` bullet 1): this repo ships object wildcards
+as a deliberate extension BEYOND OpenFGA (no DSL syntax; passed via
+`object_wildcard_shapes`), so "OpenFGA lacks it" cannot deprioritise a construct the repo
+invented. The honest surviving argument is different: no concrete need has appeared, the
+rejection is LOUD (compile-time, never a silent wrong answer), and the one plausible
+pattern (broad grant + per-object boolean exception) is expressible via a supported
+TTU/hierarchy. **Revisit on a concrete need — not on the old reasoning.**
+**And that deferral is EVIDENCE-BACKED, not assumed (measured 2026-08-11):** a crawl of a
+real OpenFGA corpus (canonical `openfga/sample-stores` + internal models) measured **48
+schema files, 22 compile, and `UnsupportedByGraphIndex` rejections = 0** — no real schema
+hit either rejection — so do NOT re-file "go measure real schemas against these
+rejections"; that instrument was built, run, and retired on 2026-08-11
+(`docs/history/handoff-status-2026-08.md`, §"Retired 2026-08-16 (leg 7 4c-i session)",
+the retired "Vendor a corpus of REAL OpenFGA schemas, crawled from the wild" item).
+⚠ **Scope note (2026-07-28):** wildcard usersets over an UNTAINTED relation are fully
+supported and have corpus coverage; **only the DERIVED case is rejected.** Do not widen the
+rejection message or the tests to imply otherwise.
+**Completion criterion:** both rejections lifted, the validation matrix 4-way green on the
+two shapes, and the residue composition either modeled in Lean or logged in
+`formal/CORRESPONDENCE.md` §7.
 
 Lowest priority — **(g) model the read surfaces in Lean** (`lookup` /
 `lookup_reverse` / `expand` = list-objects / list-users): give them a Lean spec

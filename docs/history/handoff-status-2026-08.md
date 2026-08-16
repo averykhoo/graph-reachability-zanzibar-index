@@ -1,5 +1,9 @@
 # HANDOFF archive — 2026-08
 
+**FROZEN 2026-08-11 — provenance, not a living document.** Status lines below are
+as-of-then and several may now be false; live state: `HANDOFF.md` + the session
+ledger. Corrections are appended dated at the top, never edited into the body.
+
 Retired from [`HANDOFF.md`](../../HANDOFF.md) on **2026-08-11**, when the 2026-08-10
 TTU-tupleset fail-open family was closed and the gate went green end to end. This is
 **provenance, not a living document** — nothing here is an open action. It is the direct
@@ -13,8 +17,11 @@ What is here, and why it was kept rather than deleted:
   measured-FALSE mechanisms a reader would otherwise have acted on), not the status.
   ⚠ **Status lines in here are frozen as-of-then and several are now wrong** — e.g. §1's
   "Still owes the 6-seed fuzz sweep" and "When you fix it", §1a's whole premise, and
-  §1b's "Incidental finding, reported not fixed" (fixed 2026-08-11). Read `HANDOFF.md`'s
-  "What landed 2026-08-11" for the true end state.
+  §1b's "Incidental finding, reported not fixed" (fixed 2026-08-11). Read
+  §"What landed 2026-08-11" — which now lives **in this file**, under
+  §"Retired 2026-08-16 (leg 7 4c-i session)" — for the true end state. (Repointed
+  2026-08-16: it used to say "read `HANDOFF.md`'s", and that block has since been
+  archived here.)
 * ⚠⚠ **Every LINE NUMBER below is pre-fix, and one of them now inverts its own meaning.**
   `bulk_backfill.py:454` is cited repeatedly as the RC2 fix site. True then; **FALSE now** —
   the fix inserted `_stored_tupleset_subjects`, so post-fix `:454` lands inside
@@ -22,6 +29,12 @@ What is here, and why it was kept rather than deleted:
   here by `file::function`, never by line.
 * **Completed board items** — the 2026-08-08/09 legs, each carrying findings that
   corrected live documents at the time.
+* **§"Retired 2026-08-16 (leg 7 4c-i session)"** and **§"Retired 2026-08-16b — the
+  handoff-system migration (second batch)"** — two *different* batches retired on the same
+  date. The `b` batch is the narrative half of `HANDOFF.md`, moved out when that file was
+  rewritten into a priority board; it carries its own "Corrections applied on archiving"
+  list, and ⚠ its deictic references ("this file", "the banner above", "item 3") point at
+  the pre-rewrite `HANDOFF.md`. Cite these two by full title — a bare date is ambiguous.
 
 ---
 
@@ -798,3 +811,393 @@ above was that one, but the rule stands: reproduce before promoting.
       **Two constraints:** record provenance + license per schema in a manifest (OpenFGA
       is Apache-2.0), and remember a crawl supplies **inputs only** — `tests/oracle.py`
       stays the spec, so a real schema is a query-grid subject, never an expected answer.
+
+---
+
+## Retired 2026-08-16b — the handoff-system migration (second batch)
+
+The narrative half of `HANDOFF.md` was retired here on **2026-08-16** when that file was
+rewritten into a compact priority board (the design is
+[`docs/handoff-redesign-2026-08.md`](../handoff-redesign-2026-08.md); the survey evidence
+is [`handoff-migration-map-2026-08.md`](handoff-migration-map-2026-08.md)). **Provenance,
+not open actions.** Five blocks moved: the two "What landed" session blocks, the
+"Still open" recap, the closed §1/§2 sections, and the whole 2026-08-11 status run.
+
+⚠ **Status lines below are frozen as-of-then and several were already false when moved —
+see "Corrections applied on archiving" immediately below.** Live state is the board in
+[`HANDOFF.md`](../../HANDOFF.md) plus
+[`docs/history/session-log.md`](session-log.md).
+
+**This section is keyed `2026-08-16b`** because an earlier section in this same file is
+already `## Retired 2026-08-16 (leg 7 4c-i session)`. Cite them by their full titles; a
+bare date is ambiguous between the two.
+
+⚠ **Deictic references in the moved text point at the OLD `HANDOFF.md`.** The text is
+reproduced verbatim, so "this file", "the banner at the top", "§1 above", "the board item
+below" and "item 3" all refer to `HANDOFF.md` **as it stood on 2026-08-16, before the
+rewrite** — a file that no longer exists in that shape. The numbered sections §1–§6 it
+cites are gone; resolve them against the board ids instead (`P3`–`P13`), or against
+`git show ac3847b:HANDOFF.md`. Headings in the moved blocks were demoted one level so they
+nest under this section; nothing else in them was altered.
+
+### Corrections applied on archiving (2026-08-16b)
+
+Nine statements in the moved text were not merely dated — they were **actively false** by
+the time of archiving, or became false the moment the text left `HANDOFF.md`. They are
+retained for provenance with the correction recorded here rather than silently deleted.
+
+1. **"The leg is NOT finished; steps 4c-i, 4c-ii, 4b, 5, 6, 7 remain."** (2026-08-11 status
+   run, "LEG 7 STARTED HERE"). — **4c-i landed 2026-08-16** (`GraphIndex/LeafRules.lean`,
+   commit `ac3847b`). The remaining steps are **4c-ii, 4b, 5, 6, 7**, and 4c-ii must
+   co-land with 7.
+2. **"Step 4c is blocked on a design fork the scope doc does not contain (§11.3) … attack-first
+   that before coding either branch."** (same block). — False in both halves. The fork was
+   **decided as branch (α) on 2026-08-14**, and the scope doc does now contain it:
+   `formal/history/leaf-family-split-scope-2026-08-05.md` §11.5, which also records that
+   **§11.3 is wrong in two places, both measured**.
+3. **"Audits 520 → 573, anchors 471 → 497"** (in "What landed 2026-08-16", restated in the
+   "Still open" recap). — **Both end figures are wrong** against the machine-checked block
+   generated in the same commit: `formal/FINAL_REVIEW.md`'s generated counts block gives
+   **581** audited theorems and **524** anchors (re-verified 2026-08-16). This is `ZT-P3-5`
+   recurring *inside the session block that boasts of removing figures from the banner*.
+   **Do not carry 573/497 forward.**
+4. **"See the banner at the top of this file for the measured figures."** (2026-08-11 status
+   run). — The banner has deliberately carried **no** figures since 2026-08-14. Live
+   figures are `formal/FINAL_REVIEW.md`'s generated counts block, and nowhere else.
+5. **"Three things are kept HERE because they are live, not historical"** (§1) and **"Three
+   things survive as live constraints rather than history"** (§2). — False by construction:
+   "HERE" is now this archive. Their real homes as of 2026-08-16: the **mirror instrument**
+   and the **severity-sign rule** are both in
+   [`docs/sabotage-procedure.md`](../sabotage-procedure.md) (the severity-sign rule was
+   lifted there *by this migration* — it had no runbook home before); the
+   generator-coverage figures are in `docs/design/generator-coverage/`; the
+   **do-NOT-lift-`ttuDirect`** constraint is a standing trap on the board; and the
+   decidable-`W4Fragment` descendant is board row `DW-1`, recorded in
+   `formal/CORRESPONDENCE.md` §2.
+6. **"`tests/test_generator_coverage.py` (26 gated tests)"** — that is **this file's own**
+   §1b text at the "STATUS: (a), (b) AND (c) ARE ALL IMPLEMENTED AND GATED" paragraph, and
+   it is stale. Re-measured 2026-08-16 with `--collect-only`: **27 tests collected**. The
+   body is left unedited; this entry is the correction.
+7. **"(iv) carries a possibly-blocking decidability question"** (wherever it appears in the
+   2026-08-14 and earlier text). — **Answered NO-BLOCK on 2026-08-16**, machine-checked
+   (`GraphIndex/TtuStarWide.lean`). Already flagged dead in this file's `## Retired
+   2026-08-16 (leg 7 4c-i session)` header; repeated here because the claim also appears in
+   the newly moved blocks.
+8. **"### What landed 2026-08-16 (most recent session)"** — "most recent session" is a claim
+   about the present that an archive cannot make; it was false for the very next session.
+   Read it as "the session of 2026-08-16".
+9. **"the severity-sign rule and the mirror instrument stay in `HANDOFF.md` §1"** — that is
+   this file's own `## Retired 2026-08-16 (leg 7 4c-i session)` intro, and it went false the
+   moment §1 was archived by this batch. Both now live in
+   [`docs/sabotage-procedure.md`](../sabotage-procedure.md).
+
+**Verified as needing NO correction** (checked because they read like corrections to other
+documents): **"§4's prescription is REFUTED — do not fork `writeDirect`, fork the TUPLE"**
+is already carried by the document it corrects, at
+`formal/history/leaf-family-split-scope-2026-08-05.md` §11.1; and the index-2 breadth
+overstatement is carried at that same doc's §11 tail and in `PROOF_STATUS.md` 2026-08-16.
+Both are archived below without loss.
+
+#### CUT HANDOFF.md:44-95 (2026-08-16, pre-migration numbering)
+
+#### What landed 2026-08-16 (most recent session)
+
+**Leg 7 step 4c-i is IN with a ZERO recompile cone; the allocation it rests on was refuted
+THREE more times first — once by an instrument that was itself blind; and `ttuStarFree`
+part (iv)'s standing blocking question is ANSWERED.**
+
+* **★★ Step 4c-i — the leaf-provenance rule layer** (`GraphIndex/LeafRules.lean`, NEW).
+  `leafRewrites` supplies the half `schemaRewrites`' taint filter omits: each derived key's
+  CLOSURE leaves compile to rewrite rules targeting the **minted leaf name**, exactly as
+  Python's `_emit_leaf_expr` → `_rewrite_rule(expr, object_type, leaf)`. Additivity is
+  **proved**, not observed (`schemaRewrites_leafRewrites_disjoint`: untainted rules target
+  declared dot-free names, leaf rules target minted dot-carrying ones), and
+  `writeRulesRaw_untaintedSchema` says the same at the write level. Measured before it was
+  written: **50/50 schemas, 0 mismatches, 32 with a non-empty leaf rule set.**
+* **⚠ THE ALLOCATION WAS WRONG THREE MORE TIMES**, all caught before 4c-i was built on it:
+  Python **merges** a maximal pure subtree (`(a or b) but not banned` → `r.0={a,b}` /
+  `r.1=banned`, not three leaves, storage always allocated first); a tainted **userset**
+  restriction gets its own storage leaf (reachable from the LIVE fixture
+  `tests/fga_schemas/userset_over_derived.fga`); and the n-ary union **spine**.
+* **★★ THE TRANSFERABLE FINDING — a new member of the mirror-instrument family**, written
+  up in [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md). The first two fixes
+  were validated by transcribing the Lean model into Python and diffing: *"82/82 derived
+  keys, 0 disagreements"*. That transcription consumed Python's **n-ary** AST — but Lean
+  never sees it, because `formal/conformance/encode.py::_fold_binary` **LEFT-FOLDS**.
+  Re-run over the binarized tree: **1 disagreement, on `nary_union_derived4`, which is IN
+  `GRAPH_FRAGMENT`.** *A transcription of the right rule over the wrong input
+  REPRESENTATION is the mirror instrument with extra steps.* And the second, genuinely
+  independent instrument (744/744, three positive controls) was **structurally incapable**
+  of catching it — it maps closure leaves to `none`. Two green instruments, one shared
+  blind spot.
+* **★★ A LIMIT OF THE MODEL'S AST that leg 7 must now carry.** `Core/Schema.lean` justifies
+  left-folding n-ary unions by associativity+commutativity — true of `sem`, **false of the
+  leaf ALLOCATION**. Measured: `a or b or safe` → 2 leaves, `(a or b) or safe` → **1**, and
+  the encoder maps both to the same `Expr`. The model is faithful to the FLAT form (the only
+  one any corpus writes); the other shape is now **refused mechanically**, not by a doc
+  warning, at
+  `formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`
+  (sabotage-verified). Faithful-to-both needs an n-ary `Expr` — a trust-root change.
+* **★★ `ttuStarFree` part (iv) is UNBLOCKED** (`GraphIndex/TtuStarWide.lean`, NEW,
+  additive, no caller). The board has carried "(iv) has an unanswered question that could
+  block it outright — is the widened predicate still decidable by a boolean function?"
+  since 2026-08-14. **Answer: NO-BLOCK, machine-checked.** `TtuStarFree` is a bounded
+  quantification over finite lists; the widening only weakens the body; the new conjunct
+  `Schema.isSubjectWildcardUserset` is **already `Bool`-valued**. So `ttuStarFreeWB` decides
+  `TtuStarFreeW` and `removeGateB` widens by the same textual edit. Proved a genuine
+  weakening *and* strictly wider at a store, with two sabotages reddening **disjoint** pins
+  (strictness vs soundness). ⚠ `W4Fragment.ttuStarFree` is UNCHANGED — the 2026-08-10
+  refutation stands until part (ii) materializes the bridge.
+* Audits 520 → **573**, anchors 471 → **497**; headline statements 38/38 and definitions
+  155/155 **UNMOVED**. Also re-measured: *"17 of 25 corpora mint indices 1 AND 2"*
+  overstated the index-2 breadth 3.4× — index ≥1 in 17 of 25, index 2 in **5**.
+
+
+#### CUT HANDOFF.md:96-121 (2026-08-16, pre-migration numbering)
+
+#### What landed 2026-08-15
+
+**Leg 7 4c-pre: the briefed step 4c was REFUTED by measurement before its 36-module cone
+was paid, and the addressing layer under it landed measured-correct instead.**
+
+* **★★ The kill (attack-first, before coding):** enumerating the 76 P6-dropped edge rows
+  per corpus shows **leaf indices 1 and 2 in 17 of 25 `GRAPH_FRAGMENT` corpora** — every
+  non-first boolean arm gets its own leaf — and a raw write **fans out to every matching
+  storage leaf**. So the landed `rawWriteRel` (single target, hardcoded index 0) could
+  never meet the landing criterion, in index OR arity. Worse structurally: the dropped
+  rows are mostly RULE-copied closure leaves whose index depends on **which arm produced
+  the copy** — provenance `rewriteClosure` does not carry — so **4c is not a caller
+  re-point at all**; the rule layer must mint leaf-indexed targets first. Revised plan:
+  scope-doc **§11.6** (4c-i rules-with-provenance → 4c-ii caller re-point + (α) row move,
+  4c-ii + 7 still co-landing).
+* **What landed in Lean (`GraphIndex/Leaf.lean`, reworked while still unwired — the cheap
+  moment):** `persistedLeaves` (the measured pre-order allocation; derived refs and
+  non-pure TTU arms consume no index), `leafPublic`/`publicOfLeaf` (the (α) leaf→public
+  map, **index-agnostic by construction**; `publicOfLeaf_rawWriteRels` is the feeder
+  `affectedKeys` will consume), `rawWriteRels`/`rawWriteTuples`/`writeDirectRaw` (the
+  filtered fan-out). Every measured Python fact is a `decide` pin (`swU_routes` =
+  §11.5's `approver.2`; `swF_fanout`; `stP_leaves`/`stD_leaves`; `swX_skip`), **five
+  sabotages run with attributable reds and green controls** — including the `".0"`-
+  stripper run where the index-0 pin stayed green, proving an index-0-only pin would
+  have been vacuous. Audits 501 → **520**; headline statements/definitions UNMOVED.
+
+
+#### CUT HANDOFF.md:161-181 (2026-08-16, pre-migration numbering)
+
+#### Still open — updated 2026-08-16
+
+**What moved 2026-08-16:**
+* **Leg 7 step 4c-i LANDED** (`GraphIndex/LeafRules.lean`) — and the cost went DOWN, not up:
+  §11.6 sized it as ~double the Cascade cone, but as an extension downstream of
+  `RulesWrite` the recompile cone is **one file**. The remaining expense is concentrated in
+  **4c-ii + 7**, which must co-land. See item 5 and scope-doc **§11.7**.
+* **The allocation 4c-i rests on was refuted three more times first**, once by an instrument
+  that was itself blind — including a wrong model of the in-fragment corpus
+  `nary_union_derived4`. Audits 520 → **573**.
+* **`ttuStarFree` part (iv) is UNBLOCKED** — the decidability question is answered NO-BLOCK
+  and machine-checked. Item 3.
+
+Item 4 (the scope-audit re-run) is untouched and not blocking. **Item 3 moved on
+2026-08-16: part (iv)'s decidability question is ANSWERED (NO-BLOCK) and the predicate +
+its decider are machine-checked in `GraphIndex/TtuStarWide.lean`; parts (ii) and (iii)
+remain.**
+Item 6 is a one-question optional loose end from the closed arc. **Item 2 (the two
+UNVERIFIED audit leads) was CLOSED 2026-08-14** — both reproduced, neither leaves a live
+bug; read its residue before touching the zcli driver or `ttuDirect`.
+
+
+#### CUT HANDOFF.md:182-239 (2026-08-16, pre-migration numbering)
+
+#### 1. The RC1/RC2 arc — CLOSED. Archived 2026-08-11; three things kept here.
+
+Both root causes are fixed (RC1 `ed46e54`, RC2 2026-08-11), the fix list is fully
+discharged, and the generator gap that hid them is closed. The full text as it was briefed
+while open — the divergence filing, the fix list, the generator-coverage leg, and the
+measured-FALSE mechanisms — moved to
+[`docs/history/handoff-status-2026-08.md`](docs/history/handoff-status-2026-08.md) §§1–1b.
+**Read it before re-opening anything in this area**: it records which mechanisms were
+measured FALSE, and a reader who acted on the original filing would have rewritten correct
+leaf-routing code.
+
+Three things are kept HERE because they are live, not historical:
+
+* **★ The severity-sign rule — the single most transferable output of the arc.** A dropped
+  TTU parent is a false NEGATIVE under a positive TTU and a false POSITIVE (an authorization
+  **fail-open**) under a negated one (`define access: [user] but not viewer from parent`).
+  **Probing only the positive direction mis-classifies severity by one sign** — which is
+  exactly what the original filing did. Any new TTU corpus must carry both directions.
+* **★ An instrument that shares its subject's defect cannot see it.** Neither RC was caught
+  by I1–I14 with paranoia ON, and **I9 structurally CANNOT** catch this class: it re-runs
+  `reconcile`, reads the same wrong `parent_types`, and agrees with itself. That is why the
+  new compile-time invariant reads the emitted `RewriteFilter`s and **never** `_member_types`.
+  Generalised in [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) ("the mirror
+  instrument").
+* **Generator coverage — the current baseline, and its honest limit.** `tests/genswarm.py`
+  + `tests/test_generator_coverage.py` (**27** gated tests — re-measured 2026-08-11 with
+  `--collect-only`; the archived prose says 26 and was already stale) reach, against a 1275-cell pairwise
+  space **derived from six compiler sites** rather than hand-written:
+
+  | | cells | % |
+  |---|---|---|
+  | baseline before the leg (the old generators) | 514 | 40.3 |
+  | union, `ci` | **967** | **75.8** |
+  | union, `deep` | 1034 | 81.1 |
+
+  `UNACCOUNTED == set()` exactly, with no hand-written exemption list; 3 cells carry
+  executable rejection witnesses instead. **~24–28 % of the pair space is still unreached
+  even at `deep`** — so read a green gate as "the instruments we have found nothing", not as
+  a proof. Design + raw evidence: [`docs/design/generator-coverage/`](docs/design/generator-coverage/).
+
+#### 2. ~~Verify or discard two UNVERIFIED claims from the failed audit.~~ CLOSED — archived 2026-08-16.
+
+Both were reproduced from scratch on 2026-08-14 with attribution and positive controls.
+**Neither leaves a live correctness bug; do not re-open either.** Full text, including the
+`zcli` mode=graph fail-CLOSED finding and the `ttuDirect`-was-RC2 re-measurement, is in
+[`docs/history/handoff-status-2026-08.md`](docs/history/handoff-status-2026-08.md).
+
+Three things survive as live constraints rather than history:
+* ⚠ **Do NOT lift `ttuDirect` in Lean** (the audit's recommendation #3), consistent with
+  item 3 below and `CORRESPONDENCE.md` §7.
+* **The one genuinely open descendant, and it is its own leg:** a driver-side fragment
+  pre-check needs a **DECIDABLE `W4Fragment`**, and none exists (no `admissionB`-style
+  boolean). Nothing is blocked meanwhile. ★ Note the contrast with `ttuStarFree` part
+  (iv), whose analogous decidability question turned out to be answerable (2026-08-16) —
+  so this one is worth actually attempting rather than assuming.
+* **The audit's primary record survives in the session journal**, not the repo:
+  `~/.claude/projects/<this-project>/…/subagents/workflows/wf_f8c85180-b74/` (279 agent
+  transcripts). That is also item 4's head start.
+
+#### CUT HANDOFF.md:358-488 (2026-08-16, pre-migration numbering)
+
+### Status run — 2026-08-11 (historical; the live status is the banner at the top)
+
+**🟢 The gate is GREEN end to end, and the 2026-08-10 fail-open family is CLOSED.** All
+ten phases plus the 6-seed fuzz sweep; no `sorry`, no `xfail`, no skip. See the banner at
+the top of this file for the measured figures.
+
+* **Known live correctness bugs: 0.** RC1 (`ed46e54`, 2026-08-10) and RC2 (2026-08-11) are
+  both fixed, both at every site, and both pinned by positive assertions rather than
+  xfails. The bounded exhaustive sweep that mapped the family found exactly two root
+  causes, so it is closed at two.
+* **Nothing regressed to get here.** Both bugs were PRE-EXISTING — RC1 reproduces on a
+  hand-written schema at `e136c8c` with no `.py` file touched. The 2026-08-10 session made
+  them *known and pinned*; this one fixed them.
+* **★ The 2026-08-09 "everything is green" was true of the gate and false of the code**,
+  and that caveat is now DISCHARGED rather than merely repeated: the generator-coverage leg
+  landed (cell coverage, swarm, a drawn TTU tupleset, two driving regimes), and it is what
+  made RC2 visible to a generator at all. A green gate here now means meaningfully more than
+  it did — but its honest limit still stands, ~24–28% of the pair space is unreached even at
+  `deep`, so read green as "the instruments we have found nothing", not as a proof.
+  Numbers in §1 above; full leg in the 2026-08 archive §1b.
+
+- **LEG 7 STARTED HERE — steps 3 and 4a went IN** (2026-08-09, `8291c3a` + `41b7029`).
+  `formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean` is new: leaf addressing,
+  the raw-write routing, the forked write `writeDirectRaw`, and the distinctness linchpin.
+  Additive — headline statements 38/38 and the definition pin 155/155 **unmoved**.
+  ⚠ **The raw-write half of this bullet was SUPERSEDED 2026-08-15** — `rawWriteRel`'s
+  single index-0 target was measured wrong and is now `rawWriteRels` (a fan-out); see the
+  banner. The addressing and linchpin halves stand.
+  **The leg is NOT finished**; steps 4c-i, 4c-ii, 4b, 5, 6, 7 remain. Three things a next session
+  must read before touching it (all in `formal/history/leaf-family-split-scope-2026-08-05.md`
+  §11 and `formal/history/PROOF_STATUS.md` 2026-08-09):
+  * **The scope doc's §3 bet HELD** — the leaf-vs-bare distinctness linchpin needs no new
+    axiom, `relNameOK` already gives it.
+  * **★ Its §4 prescription is REFUTED.** Do not fork `writeDirect`; fork the TUPLE, as
+    `RuleSet.apply` does. `writeDirect` then stays byte-identical and the duplication §4
+    predicted for every projection and fold lemma is not owed.
+  * **★★ Step 4c is blocked on a design fork the scope doc does not contain** (§11.3):
+    once the edge moves to the leaf node, where is the `Delta` row addressed? The
+    `Delta.leaf` tag does not answer it. Attack-first that before coding either branch.
+- **Previously landed: THE `rewriteClosure` DEDUP LEG — `CORRESPONDENCE.md` §7.2 item 6 is
+  CLOSED** (2026-08-08, `911c887` + `c488a2f`). The Lean model counted DERIVATION PATHS
+  where Python counts LIVE RAW TUPLES, so on a *reconvergent* schema it over-counted edge
+  multiplicity; `rewriteClosure` now mirrors `RuleSet.apply`'s worklist dedup, per stored
+  tuple. Two corpora (`reconvergent_diamond`, `reconvergent_derived`) were added FIRST, in
+  their own deliberately-red commit, so the divergence was attributable rather than
+  arriving mixed into the fix. The count stack needed zero proof rework; the definition
+  pin moved (154 → 155) while all 38 headline statements stayed byte-identical. **Leg 7's
+  step 2b is discharged.** Three findings that correct live documents are in the board item
+  below; full detail in `formal/history/PROOF_STATUS.md` 2026-08-08b.
+- **Previously landed: E-chain Direct-arm widening, LEGS 5 AND 6 — `ZT-P3-1` IS CLOSED for
+  T2b** (2026-08-05). The headline `graph_correct` / `backend_equivalence` /
+  `exclusion_effective` / `no_ghost_grant` / `Exec.graphRun{,Ops}_check_eq_sem` are **no
+  longer VACUOUS on `can_view: [user] but not blocked`**, the canonical Zanzibar boolean
+  shape they had said nothing about since the claim was first written.
+  `W4WitnessDirect.final_applies` instantiates the unsuffixed T2b at that store, and
+  `final_applies4` does it at the four-tuple `direct_arm_exclusion` corpus store verbatim.
+  * **Leg 5** rebased the bundles: `GraphAdmission.storeValid` → `StoreValidRulesD`;
+    `W4Fragment`'s single `computedOnly` field → **five** derived-def clauses (so **ten**
+    fields, not the plan's nine — `DirectArmsConcrete` again, exactly as §C.4 warned).
+    `graph_correct` routes through `graph_correct_w3d2E_d`; the T3/T6 finals and both Exec
+    drivers inherited it with **zero edits**. `w4Fragment_of_computedOnly` machine-checks
+    that the old six fields imply all ten, so nothing that held before stopped holding.
+  * **Leg 6** moved `direct_arm_exclusion` from `_DIFFERENTIAL_ONLY` into
+    `_THEOREM_BACKED` (`_EXPECTED_SPLIT` `(22,1)` → `(23,0)`) and retired the vacuity
+    caveat from ~25 prose sites across `formal/` and `docs/`.
+  * **⚠ T2a did NOT widen, and now says so in its own type.** `graph_reached_inv` takes a
+    third bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + narrow `StoreValidRules`), and
+    `outside_narrow_t2a` machine-checks that the Direct-arm store fails it. **T2a is still
+    vacuous exactly where T2b no longer is.** Not a proof gap — probe D.3 machine-checked
+    `Inv.negEdgeFree` FALSE on the `_d` fragment; Python is fine (P6 leaf-family modelling
+    limit). A **design decision** is owed, not effort. This is the arc's predicted honest
+    end state (plan §F) and the board item below is now about that decision.
+  * Audits 471 → **481**; statements **26 → 38**; definitions **142 → 154**. No Python
+    behavior changed (only conformance CLASSIFICATION + prose), so no fuzz sweep was owed.
+  * **★ The leg-5 sabotage is the transferable finding, and it is worse than legs 3/4's.**
+    A bundle REBASE needs a different control than a packaging clone. The plausible failure
+    is the **half-done leg**: widen `W4Fragment` but leave `GraphAdmission.storeValid`
+    narrow and convert with `storeValidRulesD_of_storeValidRules_directArmsBare` — which
+    **typechecks**. Every gate signal then reads as success (statement byte-identical,
+    definition pin MOVES so the gate even reports "meaning changed", audits clean), and the
+    theorem is still worth nothing. Measured: with the witnesses present, ONE error in the
+    whole tree; delete the four witness declarations and it is **"Build completed
+    successfully (1084 jobs)"** — and since both goldens are GENERATED from the tree, the
+    leg would have regenerated them to a self-consistent pair and passed the entire gate.
+    Legs 3/4's sabotages at least reddened `FullScope`; this one reddens nothing.
+  * Detail: `formal/history/PROOF_STATUS.md` 2026-08-05c/d, plan §C.5/§C.6.
+- **Previously landed: legs 2/3/4** (2026-08-04 / 2026-08-05 / 2026-08-05) — the
+  enumeration model change, the coverage packaging, the chain projection + E-chain final.
+  Each carries a plan correction worth reading before trusting any cell of that document:
+  two of its instructions were refuted by measurement, its gate specification was found
+  insufficient **three legs running**, and its obligation inventory missed a hypothesis.
+- **Previously landed: the P3 edge-multiplicity blind spot, ADJUDICATED and closed** — the
+  last open item where the gate was blind to a whole class of divergence. Verdict:
+  real, model-side, confined exactly to the DERIVED arm (Python's presence diff caps
+  `direct_edge_count` at 1 there; the model compounds to 1013), removal-inert. P3 is
+  narrowed so untainted-arm multiplicity is now compared EXACTLY — 153 edges that
+  nothing had ever compared — and the derived arm is golden-pinned. Detail:
+  `formal/CORRESPONDENCE.md` §7.2, `docs/spec-deviations.md` 2026-07-29.
+- **Also landed 2026-07-29: the counts pin.** `ZT-P3-5` ("every doc number is stale and
+  nothing enforces any of them") had been hand-fixed twice and rotted a third time, so
+  `formal/FINAL_REVIEW.md`'s headline counts are now GENERATED
+  (`formal/conformance/doc_counts.py`) and checked by `verify.sh` step 4e. It **fired on
+  this session's leg-6 doc edits** (a new `CORRESPONDENCE.md` anchor), which is the first
+  time it has caught a live drift rather than a historical one.
+- **Live gate figures live in ONE place** — the generated counts block in
+  `formal/FINAL_REVIEW.md`. Do not restate them here; this file went stale three times
+  doing exactly that.
+
+**History moved out 2026-07-29:** the dated status run, the full zero-trust review, and
+every completed board item are now in
+[`docs/history/handoff-status-2026-07.md`](docs/history/handoff-status-2026-07.md),
+together with the reconciled **`ZT-*` disposition ledger** (which fixes three ids that
+had no disposition anywhere and one that was listed CLOSED while its substance was
+open). This file is now only what a future session must ACT on.
+
+**History moved out again 2026-08-16:** the "What landed" blocks for 2026-08-11 and
+2026-08-14, board item 2 (both audit claims adjudicated), the completed
+`_any_residue_reference` item, and the completed OpenFGA-corpus item — 288 lines — are in
+[`docs/history/handoff-status-2026-08.md`](docs/history/handoff-status-2026-08.md)
+§"Retired 2026-08-16". **The METHOD from each was kept in the live docs, not archived with
+the status** — notably *"a teardown test is not a delete test"*, which is now a named
+subsection of [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) rather than a
+bullet inside a ticked checkbox.
+
+**History moved out again 2026-08-11:** the whole RC1/RC2 arc as briefed while open (the
+divergence filing, the discharged fix list, the generator-coverage leg) plus four completed
+board items are now in
+[`docs/history/handoff-status-2026-08.md`](docs/history/handoff-status-2026-08.md).
+
+---
+
+

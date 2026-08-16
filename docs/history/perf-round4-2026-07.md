@@ -2,6 +2,12 @@
 
 # Perf optimization — round 4 record (archived 2026-07-16)
 
+**FROZEN 2026-07-16 — provenance, not a living document.** Round 4 landed and was
+pushed; the status lines below are as-of-then and several may now be false. Live
+state: `HANDOFF.md` + the session ledger; the open perf worklist is
+[`perf-next-round.md`](../perf-next-round.md). Corrections are appended dated at the
+top, never edited into the body.
+
 Round 4 was the **make-the-graph-index-testable/usable-at-scale** round plus the
 wave-3 conditional leftovers from round 3. Date range **2026-07-15 → 2026-07-16**.
 Two strategic threads:

@@ -46,8 +46,9 @@ Measured (schema in ``_RC1_SCHEMA`` / ``_RC1_SCHEMA_NEGATED_TTU``)::
 both set engines DENY it, because the dropped parent is the one that would have satisfied
 the *subtrahend* ``but not viewer from parent``.
 
-⚠ This **corrects the filing of THIS bug**: ``docs/spec-deviations.md`` (the 2026-08-10
-entry, ``:44``) and ``HANDOFF.md`` (``:48``) both classify it *"Fail-closed (under-grant),
+⚠ This **corrects the filing of THIS bug**: the original filing in
+``docs/spec-deviations.md``'s 2026-08-10 entry (kept struck through there, under
+"Superseded original") classified it *"Fail-closed (under-grant),
 so not a security fail-open"*. That was drawn from the ``inherited`` probe (1a) alone; the
 same dropped parent under a NEGATED TTU inverts the sign. The general rule, which is what
 makes this worth writing down: **a dropped TTU parent is a false NEGATIVE under a positive
@@ -76,9 +77,12 @@ Measured (schema in ``_RC2_SCHEMA`` / ``_RC2_SCHEMA_NEGATED_TTU``)::
 (2b) is the fail-open direction, and it **was** reproducible: the sweep that reported it
 was right. It is pinned below.
 
-## ⚠ Correcting the record: the mechanism in HANDOFF.md / spec-deviations.md is WRONG
+## ⚠ Correcting the record: the mechanism as ORIGINALLY FILED is WRONG
 
-Both documents say the graph *"respects the boolean evaluation of the tupleset relation
+Both original filings — ``docs/spec-deviations.md`` 2026-08-10 and the ``HANDOFF.md`` item
+since archived to ``docs/history/handoff-status-2026-08.md`` §1 "The two TTU-tupleset
+divergences" (archived from ``HANDOFF.md`` 2026-08-16); both now carry the correction —
+say the graph *"respects the boolean evaluation of the tupleset relation
 instead of its stored tuples"* and that the storage-leaf split *"exists and is not being
 honoured on a DERIVED tupleset relation"*. **Both clauses are false**, and acting on them
 would rewrite correct leaf-routing code. Measured on the RC1 fixture, HEAD:
@@ -419,8 +423,11 @@ def test_rc1_negative_arm_type_dropped_is_an_authorization_fail_open():
     **The graph GRANTS what the oracle and both set engines DENY.** This is an
     authorization fail-open, not an under-grant.
 
-    ⚠ This CORRECTS the record. ``HANDOFF.md`` and ``docs/spec-deviations.md`` (2026-08-10
-    entry) classify this bug as *"Fail-closed (under-grant), so not a security fail-open"*.
+    ⚠ This CORRECTS the record. ``docs/spec-deviations.md`` (2026-08-10 entry) and the
+    ``HANDOFF.md`` item since archived to ``docs/history/handoff-status-2026-08.md`` §1
+    "The two TTU-tupleset divergences" (archived from ``HANDOFF.md`` 2026-08-16)
+    originally classified this bug as *"Fail-closed (under-grant), so not a security
+    fail-open"*.
     That conclusion was reached from the ``inherited`` probe only; one extra relation in
     the SAME schema inverts the sign. The bug is a live authorization fail-open and should
     be triaged as one.

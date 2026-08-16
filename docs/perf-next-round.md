@@ -70,6 +70,15 @@ before reopening either.
   `ops.new()` in `_starpop` without the `update` primitive (Population
   contract); N1/N2 (measured cold); P11 (struck); N13 (no headroom, round 5);
   N14 (no workload exercises it, round 5).
+- **Store-level write quota — DECLINED 2026-07-29, do NOT re-propose.**
+  `ZANZIBAR_MAX_CLOSURE_FANOUT` bounds what ONE add may materialise; a *store-level*
+  quota is not wanted ("it might be slow but it should not be limited by perf"). The
+  "detect a DoS fan-out and bulk-rebuild instead" variant was **measured and refuted**:
+  bulk wins 7–15× on TIME, but closure SIZE is byte-identical (a property of the
+  topology), the worst single lock hold goes 105 ms → 2,685 ms at N=480, and the
+  rebuild's outbox emits **zero REMOVED** — the fail-open direction. `sync=False` is
+  the answer. Reopening means meeting that measurement, not re-arguing it:
+  `docs/spec-deviations.md` (2026-07-29c entry).
 
 ---
 

@@ -1,5 +1,11 @@
 # Overnight session review — formal verification
 
+> **FROZEN 2026-07-10 — provenance, not a living document.** A one-shot digest of the
+> 2026-07-09→10 overnight session; its headline counts, `sorry` ledger and "what to check"
+> list are as-of-then and several are now false (the effort later reached zero `sorry`s).
+> Live state: [`HANDOFF.md`](../../HANDOFF.md) + the session ledgers. Corrections are
+> appended dated at the top, never edited into the body.
+
 **For your one-shot morning review.** This summarizes everything done in the
 autonomous session of 2026-07-09→10. The living detail is in `PROOF_STATUS.md`; this
 is the "what happened and what to check" digest. Everything below is committed and

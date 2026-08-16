@@ -1,5 +1,16 @@
 # Bounded exhaustive divergence sweep — oracle vs graph index vs both set engines
 
+> **FROZEN 2026-08-16 — provenance, not a living document.** Status lines below are
+> as-of-then and several are now false; live state: `HANDOFF.md` + the session ledger.
+> Corrections are appended dated at the top, never edited into the body.
+>
+> ⚠ **This leg LANDED on 2026-08-11, and where this document and the archive disagree,
+> trust the archive.** “Status: COMPLETE” below reports the sweep, not the repo:
+> `docs/history/handoff-status-2026-08.md` §1 records both root causes it isolated as
+> FIXED (RC1 `ed46e54`, RC2 2026-08-11), and §1b records the generator-coverage
+> corrections found while building what this report motivated. §6's declared caps still
+> bound what the sweep could ever have seen; the prototype paths in §7 are gone.
+
 **Status: COMPLETE** (written incrementally as the sweep ran). 2026-08-10.
 
 Script: `C:\Users\user\AppData\Local\Temp\divsweep\sweep.py`

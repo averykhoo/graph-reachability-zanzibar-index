@@ -1,12 +1,30 @@
 # The handoff system redesign (2026-08-16) — DESIGN v2, not yet executed
 
-> **Status: DRAFT v2 for user review.** v1 was reviewed by three adversarial
-> critics (cold-start Sonnet simulation, rot audit, migration-risk grep of the
-> actual repo); their surviving findings are folded in and §10 records what
-> changed. Nothing in HANDOFF.md or the satellites has been migrated yet.
-> When the migration completes, retire this file verbatim to
-> `docs/history/handoff-redesign-2026-08.md`; `docs/README.md` (created by the
-> migration) carries the durable rules from then on.
+> **ACTIVE-PLAN (declared 2026-08-16) — approved, and §9 steps 1–11 are EXECUTED.**
+> v1 was reviewed by three adversarial critics (cold-start Sonnet simulation, rot
+> audit, migration-risk grep of the actual repo); their surviving findings are folded
+> in and §10 records what changed. The user approved it and §11 records the decisions.
+>
+> **What is done:** steps 1–11 landed 2026-08-16 — see
+> [`docs/history/session-log.md`](history/session-log.md) `2026-08-16c` for the
+> execution record, including the seven defects the migration found that this design
+> did not anticipate. **What remains:** **step 12**, the `formal/HANDOFF.md` deep half
+> (§7), which is board row `HS-3`; and wiring the lint into `verify.sh` (§8), board
+> row `HS-1`. Those two rows are why this file is ACTIVE-PLAN rather than retired —
+> they cite it as their plan, so moving it would break them.
+>
+> **Do not retire this file until `HS-1` and `HS-3` close.** Then retire it verbatim
+> to `docs/history/handoff-redesign-2026-08.md` with the standard frozen banner.
+> The durable rules already live in [`docs/README.md`](README.md), created by step 3;
+> where this design and that file disagree, `docs/README.md` wins — it is the living
+> contract and this is the plan that produced it.
+>
+> ⚠ **The body below is as-designed, not as-built.** Several steps were executed
+> differently because disk contradicted the design; each deviation is recorded in the
+> session-log entry, not here. Notably: §9 step 7's "the existing section is the
+> unlettered first batch" was false, and §8's "`FROZEN` within the first 5 lines" is
+> enforced at 10 lines with an anchored bold-keyword match, because a substring test
+> for `LIVING` silently exempted every frozen archive.
 
 The primary reader of this system is a Claude Code session (Fable, Opus, or
 Sonnet) starting cold. Every choice optimizes for that reader: minimal context

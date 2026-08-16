@@ -1,5 +1,11 @@
 # ROADMAP — the staged path to the verified model (0 `sorry`s left, was 9)
 
+> **FROZEN 2026-08-15 — provenance, not a living document.** The staged-widening designs
+> and post-mortems (W1→W4), written as the work was scoped and re-scoped; the stage
+> markers below are as-of-then and several may now be false. Live formal execution state:
+> [`formal/HANDOFF.md`](../HANDOFF.md); priorities: [`HANDOFF.md`](../../HANDOFF.md).
+> Corrections are appended dated at the top, never edited into the body.
+
 **A fresh session reads `formal/HANDOFF.md` FIRST** (compact entry point + the next
 task); this file holds the per-stage designs and post-mortems — read the section for
 the stage you're working. The plan of record toward the END GOAL: **a formally

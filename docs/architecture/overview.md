@@ -4,8 +4,9 @@ Zanzibar-style relationship/permission indexing: **two evaluation backends with
 identical semantics and opposite cost models**, pinned together by an independent
 reference oracle and a validation matrix.
 
-> For current project status and the open-TODO board, see the root
-> [`HANDOFF.md`](../../HANDOFF.md) (the session entry point). This file is the
+> For current project status and the ranked open items, see the root
+> [`HANDOFF.md`](../../HANDOFF.md) (the priority board; the session entry
+> point). This file is the
 > architecture index — start here for the code, go deeper per file:
 
 | doc | covers |
@@ -20,6 +21,7 @@ reference oracle and a validation matrix.
 | [`decision-log.md`](./decision-log.md) | load-bearing decisions + rejected alternatives, compressed from the specs |
 | [`p13-bulk-build-design.md`](./p13-bulk-build-design.md) | the P13/N18 bulk closure builder for `build_index` (offline bootstrap fast path) |
 | [`r4bf-bulk-backfill-design.md`](./r4bf-bulk-backfill-design.md) | the R4-BF in-memory Phase-D boolean backfill used by the bulk builder |
+| [`bulk-merge-design.md`](./bulk-merge-design.md) | ⚠ **SKETCH, unbuilt** — batch closure update seeded from EXISTING state; the crux is the coupled invariants the from-empty builders are exempt from |
 | [`../spec-deviations.md`](../spec-deviations.md) | dated implementation record: where the builds diverged from the specs and why |
 | [`../specs/`](../specs/) | the full original design specs (see "Citations" below) |
 

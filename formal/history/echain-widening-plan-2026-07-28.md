@@ -1,5 +1,13 @@
 # E-chain Direct-arm widening — the landable leg plan (scoped 2026-07-28)
 
+> **ACTIVE-PLAN (declared 2026-08-16).** Still being executed: board row `P5` reads §D.3
+> and row `P9` reads §C.5 item 6, so this file stays live until those rows close and then
+> gets the frozen banner (see [`docs/README.md`](../../docs/README.md) §2–§3). The body is
+> provenance — §A–§C were read-only analysis and are not updated in place. **Read
+> §C.1–§C.6 before any cell of the body**: they record where executing this plan
+> contradicted it, and they take precedence. Corrections are appended dated at the top,
+> never edited into the body.
+
 **What this is.** The durable scoping document for board item **(B)** / `ZT-P3-1`: the
 E-chain Direct-arm widening, which was the fix for the fact that `graph_correct`,
 `graph_reached_inv` and `Exec.graphRun_check_eq_sem` were **VACUOUS** on
