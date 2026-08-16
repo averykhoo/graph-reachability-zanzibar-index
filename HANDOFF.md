@@ -17,14 +17,15 @@ session: run the Rhythm protocol at the bottom.
 ## Banner
 
 > 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-16**: `lean` re-run and PASSED; the nine tile phases were last all-green
-> on the leg-7 4c-i tree and **are owed again before the next push**. No Python behaviour
-> changed since — docs, the `verify.sh` run-ledger wrapper, one lint script — so the
-> 2026-08-14 3-seed fuzz sweep still stands.
-> Last session: **`verify.sh` now records every run** — a gitignored `.gate-runs/` row plus
-> the phase's full output, read back by `python scripts/gate_status.py`, so "which phases
-> are green on *this* tree" stops being memory →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-16f`.
+> As of **2026-08-16**: **all ten phases ran green**, recorded in `.gate-runs/ledger.tsv`
+> against tree `b53bfc9+1eabb8af` — `lean` re-run after the doc edits that followed, and
+> nothing but docs and boards changed this session, so the 2026-08-14 3-seed fuzz sweep
+> still stands. `python scripts/gate_status.py` will call the nine tile rows stale for this
+> tree: committing changes the tree id even when content does not (row `GS-1`).
+> Last session: **leg 7's 4c-ii was attacked before it was built** — Route A is refuted, the
+> own-key premise is backwards, and `P3`'s completion criterion turned out to be satisfiable
+> by a two-line Python edit, so it is now stated conjoined with a green gate →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-16g`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
@@ -53,6 +54,7 @@ forward forever and are never reused.**
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
+| `GS-1` | content-address the gate ledger's tree id → [`scripts/gate_status.py`](scripts/gate_status.py)`::tree_id` | LATER | S | — | 2026-08-16 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
 | `P16` | widen the enumeration/state bounds → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(e); read `test_conformance_enum.py`'s module docstring, which is half the plan | LATER | M | — | 2026-08-16 |
 | `P17` | bulk build/backfill is an unmodeled **default** constructor — model it or scope-exclude it in writing → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(h) + §3.1 item 6 | LATER | M | — | 2026-08-16 |
@@ -80,22 +82,41 @@ target is self-sufficient by construction (verified row by row, 2026-08-16).
 ### `P3` — leg 7: step 4c-ii co-landing with step 7, in one commit
 
 Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6`
-in the same commit. This is the critical path and the only multi-session phase.
+in the same commit. Critical path, and the only multi-session phase. **It is blocked on a
+proof-design adjudication, not on coding — settle that before paying any cone** (2026-08-16c;
+the read-only fan-out that produced a 17-step plan had three of its cells refuted).
 
-⚠ **It CANNOT be split.** Projection `P6` is a Python-side-only filter, so re-pointing
-`Exec.lean` alone makes the state gate report roughly seventy leaf edges as "only in LEAN
-model". Scope doc §7's "each step green and pushable" is refuted at this step.
-⚠ Keep **`d.leaf = true` as the LEADING conjunct** of the own-key guard — three
-`rw [hleaf]; simp` discharges depend on that order. Expect a deliberate golden regen.
+⚠ **The shadow chain's cheap route is REFUTED.** Re-pointing `ReachedByRulesAdmitted.step`
+cannot work: `ReconcileComplete.lean:164` needs a `ReachedByRules σ S T` witness for a
+`writeRulesRaw`-built σ, and `LeafRules.lean:461::lrV_writeRulesRaw_edges_ne` proves those
+states' edges differ. The surviving branch weakens `UntaintedShadow` — a slice of `P14`,
+whose deps close a cycle `P3 → P14 → P4 → P3`. **This is the first thing to settle**, and
+`#eval` settles it far cheaper than the 39-module recompile cone.
+⚠ **The own-key premise is BACKWARDS.** On the `ComputedOnly` fragment the leaf list is
+EMPTY, not multi-element (`Leaf.lean:401`, `:551`), so `writeLeg_own_key_dirty` goes FALSE
+and needs a non-emptiness premise (`StoreValidRules`), not `WF`.
+⚠ **It CANNOT be split** — the un-buildable window is the whole cone, not a step — and
+keep **`d.leaf = true` as the LEADING conjunct** of the own-key guard: the
+`rw [hleaf]; simp` discharges depend on that order (there are **four**, not three). The
+`FoldAdmits` lockstep is **24** spelled-list sites, not the 7 `write` constructors, and
+`Audit.lean` is an EDITED file of this step (`:314` pins `reachedByRules_of_admitted`).
+Expect a deliberate golden regen — but `derived_arm_multiplicity.json` must get a DERIVED
+expectation, not a re-recording, and `_MIN_LEDGER_ROWS`/`_MIN_LEDGER_STACKED` (19/19,
+`test_conformance_state.py:377`) are asserted before the golden read, so no regeneration
+repairs them.
 
-**Completion criterion:** `dropped by P6` falls to **0**, and `compared against Lean` rises
-by exactly that many. **Re-derive both numbers from `formal/FINAL_REVIEW.md`'s generated
-projection ledger, never from prose** — this criterion has gone stale three times.
+**Completion criterion — the numbers count only when conjoined with a green gate.** `dropped by
+P6` → **0** and `compared against Lean` → **265** (today **76**/**189**), **and**
+`conf-tile:1/5 … 5/5` green. Measured 2026-08-16c: commenting out `extractor.py:236-237`
+publishes both numbers with no Lean change at all, and its control — the state gate at
+`19 failed, 37 passed`, `edge only in PYTHON` — is the half that makes the criterion real.
+**Re-derive the numbers from `formal/FINAL_REVIEW.md`'s generated ledger, never from
+prose** — they have gone stale three times.
 
-**Read first:** scope doc §11.7 (the current plan), then §11.5 (the decided fork) and
-§11.1; `formal/history/PROOF_STATUS.md` `## Session 2026-08-16`;
-`Cascade.lean::GraphState.writeLoggedOne`, `RulesWrite.lean::GraphState.writeRules`,
-`LeafRules.lean::GraphState.writeRulesRaw`, `Leaf.lean::publicOfLeaf`,
+**Read first:** `formal/history/PROOF_STATUS.md` `## Session 2026-08-16c` (the blocker) and
+scope doc §11.8, then §11.7 and §11.5; `ReconcileComplete.lean::reachedByW3aAdmitted_toW3a`,
+`RulesComplete.lean::ReachedByRulesAdmitted`, `LeafRules.lean::GraphState.writeRulesRaw`,
+`Cascade.lean::GraphState.writeLoggedOne`, `Leaf.lean::publicOfLeaf`,
 `Exec.lean::foldAdmitsB`, `extractor.py::_edge_projection`.
 
 ### `P6` — `ttuStarFree` part (ii): bridges on the rule-routed write path

@@ -69,6 +69,30 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**2026-08-16c — 4c-ii is BLOCKED on a proof-design adjudication, not on coding. The shadow
+chain's cheap route is refuted and the landing criterion is weak. No Lean file changed.
+Read `history/PROOF_STATUS.md` 2026-08-16c and scope-doc §11.8 BEFORE resuming leg 7.**
+
+* ⚠ **ROUTE A IS REFUTED.** Re-pointing `ReachedByRulesAdmitted.step` cannot work:
+  `ReconcileComplete.lean:164` needs a `ReachedByRules σ S T` witness for a
+  `writeRulesRaw`-built σ, and `LeafRules.lean:461::lrV_writeRulesRaw_edges_ne` already
+  proves those two states' edges DIFFER. The surviving branch weakens `UntaintedShadow` — a
+  slice of board row `P14`, whose deps close a cycle `P3 → P14 → P4 → P3`. Settle this
+  first; it is cheap to attack with `#eval` and it decides the cone.
+* ⚠ **The own-key premise is BACKWARDS.** On the `ComputedOnly` fragment the leaf list is
+  EMPTY, not multi-element (`Leaf.lean:401` `[]` for a derived `.computed` arm;
+  `Leaf.lean:551` `.closure _ => none`), so `writeLeg_own_key_dirty` goes FALSE and needs a
+  non-emptiness premise (`StoreValidRules`), not `WF`. Measure whether
+  `StoreValidRules` + `ComputedOnly` admits a stored tuple on a derived key at all.
+* ⚠ **The criterion only counts CONJOINED with a green gate.** `dropped by P6 → 0` /
+  `compared → 265` is a pure function of the Python side: commenting out
+  `extractor.py:236-237` publishes it with no Lean change. Its control is the state gate,
+  which then reports `19 failed, 37 passed` / `edge only in PYTHON`. Also: §11.5 predicts
+  `only in LEAN model`; a Python-first order gives the mirror.
+* Verified while attacking: the `FoldAdmits` lockstep is **24** spelled-list sites, not 7;
+  `Audit.lean` is an EDITED file of this step (`:314` pins `reachedByRules_of_admitted`);
+  and `_MIN_LEDGER_ROWS`/`_MIN_LEDGER_STACKED = 19/19` sit before the golden read.
+
 **2026-08-16 — LEG 7 STEP 4c-i IS IN (`GraphIndex/LeafRules.lean`), the ALLOCATION was
 refuted THREE more times first, and `ttuStarFree` part (iv)'s BLOCKING QUESTION IS
 ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11.7 FIRST.**

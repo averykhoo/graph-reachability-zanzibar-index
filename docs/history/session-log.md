@@ -25,6 +25,74 @@ from here.
 
 ---
 
+## 2026-08-16g — leg 7 4c-ii attacked before it was built: Route A refuted, and P3's criterion is weak
+
+rows: P3 (blocked on an adjudication, block rewritten); P14 (entanglement recorded).
+
+Asked to start leg 7 with subagents to hold context down, then run the full gate and push.
+Method: a read-only fan-out — four maps of the tree, one synthesized 17-step edit plan, two
+adversarial passes over that plan (formal house rule 2) — and then **every load-bearing
+claim re-verified by hand**, because a subagent's confident citation is exactly the kind of
+thing this repo has learned not to trust. Formal house rule 6 held: no subagent proved or
+edited anything. Full detail: [`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`2026-08-16c`; the scope doc's resolution is §11.8.
+
+**No Lean file was modified, and that is the finding, not a shortfall.** Three cells of the
+plan are refuted, two of them by running code:
+
+* **Route A is refuted.** `ReconcileComplete.lean:164` needs a `ReachedByRules σ S T`
+  witness for a `writeRulesRaw`-built σ, and `LeafRules.lean:461::lrV_writeRulesRaw_edges_ne`
+  already machine-checks that those states' edges differ. The surviving branch weakens
+  `UntaintedShadow`, a slice of `P14` — whose deps close a cycle `P3 → P14 → P4 → P3` that
+  the board cannot express. That adjudication, not coding, is what 4c-ii is blocked on.
+* **The own-key premise is backwards.** On the `ComputedOnly` fragment the leaf list is
+  EMPTY rather than multi-element (`Leaf.lean:401`, `:551`), so `writeLeg_own_key_dirty`
+  goes FALSE and wants a non-emptiness premise, not the `WF` the plan proposed.
+* **`P3`'s completion criterion was weak, and the control is what saved it.** Commenting
+  out the two-line P6 branch (`extractor.py:236-237`) — no Lean change whatsoever — makes
+  `doc_counts.measure()` publish exactly the target block
+  `{'P6': 0, 'compared': 265}`. The same probe leaves the state gate at **`19 failed, 37
+  passed`** with `edge only in PYTHON : ('user','mallory','...','') -> ('doc','d1','viewer.1','')`.
+  So the numbers alone certify nothing and **numbers ∧ `conf-tile` green** is the real
+  criterion; both boards now say so. A board criterion that a two-line Python edit satisfies
+  is the house failure mode wearing a board's clothes. (Bonus: §11.5 predicts the divergence
+  arrives as `only in LEAN model`; Python-first gives the mirror.)
+
+Four smaller corrections, each verified in the tree: the `FoldAdmits` lockstep is **24**
+spelled-list sites, not the 7 `write` constructors; `Audit.lean:314` pins
+`reachedByRules_of_admitted`, so `Audit.lean` is an edited file of this step and no pin
+regeneration substitutes; `_MIN_LEDGER_ROWS`/`_MIN_LEDGER_STACKED = 19/19` are asserted
+before the golden read, over exactly the multiplicity leg 4c-ii moves; and
+`derived_arm_multiplicity.json` is owed a *derived* expectation rather than a re-recording
+(sabotage-procedure rank 2 — a generated golden cannot witness a change to the tree that
+generates it).
+
+The 17-step plan is deliberately NOT filed: three of its cells are wrong in the places that
+cost the most, and filing it would file the wrong plan.
+
+**Method note worth carrying.** The fan-out was worth it, and the adversarial pass was worth
+more than the maps: the maps' citations were accurate (I spot-checked ~10 and found none
+wrong) but their synthesis was confidently wrong three times, and only the attack lenses
+caught it. Also, one attacker over-claimed — it called the criterion "hollow, produced in
+full by step 14 alone", and the gate control shows it is *weak*, not hollow. Both halves had
+to be run to know which.
+
+**A defect in yesterday's ledger, found by using it** (row `GS-1`): the tree id is
+`<short HEAD>+<sha1 of porcelain+diff>`, so **committing changes it even though the content
+does not**, and ten green rows earned on the pre-commit tree read as stale one second
+later. The fix is to content-address the id (hash tracked + untracked-non-ignored file
+contents, which is invariant under `git add`/`commit`); it is deliberately NOT done here,
+because changing the algorithm invalidates every existing row and would need all ten phases
+re-run to restore them — i.e. it must be its own commit, run its own gate, and not ride
+along at the end of an unrelated session.
+
+Still owed: the nine tile phases were run at the end of this session — see the banner.
+⚠ **`formal/HANDOFF.md` is at 517 lines against its 520 ceiling**, so the next session's
+dated block will trip `verify.sh lean` step 4f. It owes a retirement pass (move one landed
+block verbatim to `formal/history/`, per the `HS-3` precedent — never condense).
+
+---
+
 ## 2026-08-16f — verify.sh leaves a trace now: gitignored run ledger + gate_status.py; the tee footgun sabotaged
 
 rows: none (user-assigned tooling task; no board item was open for it).
