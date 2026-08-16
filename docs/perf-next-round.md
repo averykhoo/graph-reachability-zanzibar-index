@@ -1,11 +1,14 @@
-# Perf — standing notes & guardrails (worklist currently empty; arc closed at round 5)
+# Perf — standing notes & guardrails (round-6 CANDIDATE worklist open; rounds 1–5 closed)
 
-The living home for perf work. **The active worklist is currently empty.** The
-measured optimization arc ran rounds 1–5 and **round 5 concluded the worklist is
-exhausted** for everything the current harnesses can measure — the last two
-candidates (N13, N14) were assessed and declined on a fresh 2026-07-16 profile.
-What remains here is the **durable guidance** any future round must read first:
-the fence, the confirmed dead-ends, an open correctness note, and the
+The living home for perf work. **The active worklist is the round-6 CANDIDATE
+list**: [`perf-round6-audit-2026-08.md`](perf-round6-audit-2026-08.md) — 18
+code-verified but **UNMEASURED** findings plus 16 unverified leads from the
+2026-08-15 two-backend audit; nothing from it has landed. The measured
+optimization arc ran rounds 1–5 and **round 5 concluded that worklist was
+exhausted** for everything the then-current harnesses could measure — the last
+two candidates (N13, N14) were assessed and declined on a fresh 2026-07-16
+profile. The rest of this file is the **durable guidance** any round must read
+first: the fence, the confirmed dead-ends, an open correctness note, and the
 measurement/gate hygiene.
 
 - Round 3 (P12-M, P12a/b, N4–N9, the P1 follow-up, P13) landed and pushed; retired
@@ -17,6 +20,12 @@ measurement/gate hygiene.
   candidates (N13, N14) and declined both on a fresh profile; the assessment
   record (with both candidate write-ups verbatim) is retired in
   [`docs/history/perf-round5-2026-07.md`](history/perf-round5-2026-07.md).
+- Round 6 (opened 2026-08-15) is **audit-only so far**: a 24-agent,
+  adversarially-verified audit of both backends produced the candidate list in
+  [`perf-round6-audit-2026-08.md`](perf-round6-audit-2026-08.md). Per
+  "Reopening a round" below, each item still needs its motivating measurement —
+  the audit satisfies the design-call half, not the measurement half. The doc
+  retires to `docs/history/perf-round6-2026-08.md` when the round closes.
 
 - **Measured numbers** (all landed items, per-item mechanism/before-after):
   [`benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
@@ -53,7 +62,9 @@ before reopening either.
   parity, was never a perf item.
 - `invariants.py:322-368` paranoia delta verifier is O(pairs × edges) per
   commit — production-paranoia cost, out of scope for bench numbers; noted so
-  nobody profiles paranoia-on and panics.
+  nobody profiles paranoia-on and panics. Now also filed as **R6-8** in the
+  round-6 audit (a per-source BFS rewrite) — still gate/full-tier scope, not a
+  bench item.
 - Dead ends already confirmed, do NOT chase: rc pre-guard on `_gc_subject_node`
   (bridge-stripping drops rc post-scan — load-bearing scan); removing
   `ops.new()` in `_starpop` without the `update` primitive (Population

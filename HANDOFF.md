@@ -510,6 +510,27 @@ fixed") — its header says so. The live end state is the banner + "What landed 
 > CLOSED, leg 7 step 2b DISCHARGED); and that leg's superseded original filing, kept then
 > for its scope pointers. Their carries into leg 7 survive in the item below.
 
+- [ ] **Execute the handoff-system redesign migration (designed + user-approved
+      2026-08-16; THIS FILE gets rewritten by it).** The design and the ordered step
+      plan: [`docs/handoff-redesign-2026-08.md`](docs/handoff-redesign-2026-08.md)
+      (§9 steps 2–11; step 1 is done, step 12 is its own later session). The survey
+      evidence it consumes: [`docs/history/handoff-migration-map-2026-08.md`](docs/history/handoff-migration-map-2026-08.md).
+      User decisions are recorded in §11 of the design — do not re-open them.
+
+- [ ] **Perf round 6 — an 18-item CANDIDATE worklist exists (audited 2026-08-15; nothing
+      landed, nothing MEASURED).** A 24-agent audit of both backends, every finding
+      adversarially verified against the code: full record — verbatim evidence, fix
+      sketches, verdicts, corrections, Lean-impact notes, plus 16 unverified lower-ranked
+      leads — in [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)
+      (the worklist pointer in [`docs/perf-next-round.md`](docs/perf-next-round.md) is
+      updated). Per that file's reopening rule, every item needs a motivating measurement
+      before landing. Three items change MODELED algorithms (R6-2/4/16 → Lean model or
+      `CORRESPONDENCE.md` §7 + fuzz); two rewrite assurance checkers (R6-7/8 →
+      re-sabotage per `docs/sabotage-procedure.md`). ⚠ **Do not implement from titles
+      alone — read each entry's verifier corrections.** One finder's fix was REFUTED by
+      counterexample while its finding stood (R6-1: the naive shared memo is a
+      correctness bug; the two-tier design in its verdict is the fix).
+
 - [ ] **★ START HERE (next session, refreshed 2026-08-05d) — the E-chain arc has reached
       its predicted end state, and what is left is a DESIGN DECISION, not proof effort.**
       The zero-trust backlog is CLEARED, the gate is green end-to-end, and as of 2026-08-05
@@ -918,7 +939,7 @@ fixed") — its header says so. The live end state is the banner + "What landed 
 | [`docs/gate-runbook.md`](docs/gate-runbook.md) | how to run the full gate cap-safe (phased `verify.sh`, incl. `tests/`, + the Postgres leg + fuzz), and every floor/budget it enforces |
 | [`scripts/pg_local.sh`](scripts/pg_local.sh) | throwaway user-space PostgreSQL for the server leg (`start`/`stop`/`status`/`destroy`) — no system install |
 | [`tests/dbengine.py`](tests/dbengine.py) | the SQLite-vs-server engine seam (`ZANZIBAR_TEST_DSN` / `ZANZIBAR_PG_REQUIRED`) |
-| [`docs/perf-next-round.md`](docs/perf-next-round.md) | perf standing guardrails (arc closed; fence + dead-ends + hygiene) |
+| [`docs/perf-next-round.md`](docs/perf-next-round.md) | perf standing guardrails (fence + dead-ends + hygiene) + pointer to the round-6 candidate worklist ([`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)) |
 | [`docs/spec-deviations.md`](docs/spec-deviations.md) | dated log of where the code diverges from the specs, and the latent-gap inventory |
 | [`docs/specs/`](docs/specs/) | the full original design specs (cited by code comments as "spec §N") |
 | [`formal/HANDOFF.md`](formal/HANDOFF.md) | entry point for the Lean formal layer (read before touching `formal/`) |
