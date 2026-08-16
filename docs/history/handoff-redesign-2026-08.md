@@ -1,4 +1,22 @@
-# The handoff system redesign (2026-08-16) — DESIGN v2, not yet executed
+# The handoff system redesign (2026-08-16) — DESIGN v2, EXECUTED IN FULL
+
+> **FROZEN 2026-08-16 — provenance, not a living document.** Status lines below are
+> as-of-then and several are now false; live state: [`HANDOFF.md`](../../HANDOFF.md) + the
+> session ledger. Corrections are appended dated at the top, never edited into the body.
+>
+> **All twelve §9 steps are done, and both board rows this file was kept alive for are
+> closed.** Steps 1–11 landed 2026-08-16 (`5e4b770`); step 12, the `formal/HANDOFF.md`
+> deep half, landed the same day as row `HS-3` (1010 → 471 lines, retired zones verbatim in
+> [`handoff-status-2026-08-16.md`](../../formal/history/handoff-status-2026-08-16.md), the
+> staged theorem ladder moved to `formal/ARCHITECTURE.md`). §8's lint wiring landed as row
+> `HS-1` — `verify.sh` lean-phase step **4f**. So this file retired itself, per the
+> instruction it carried: *"Do not retire this file until `HS-1` and `HS-3` close."*
+>
+> ⚠ It moved from `docs/` to `docs/history/` on retirement, so the two
+> [`session-log.md`](session-log.md) entries that link it as `../handoff-redesign-2026-08.md`
+> now point at nothing. Those entries are append-only and are not retro-edited; the live
+> path is this file. The durable rules it produced live in [`docs/README.md`](../README.md),
+> which wins wherever it and this plan disagree.
 
 > **ACTIVE-PLAN (declared 2026-08-16) — approved, and §9 steps 1–11 are EXECUTED.**
 > v1 was reviewed by three adversarial critics (cold-start Sonnet simulation, rot
@@ -25,6 +43,18 @@
 > unlettered first batch" was false, and §8's "`FROZEN` within the first 5 lines" is
 > enforced at 10 lines with an anchored bold-keyword match, because a substring test
 > for `LIVING` silently exempted every frozen archive.
+>
+> **CORRECTION 2026-08-16 (post-migration audit) — §7's cheap half ran three-quarters, and
+> the missing quarter is now `HS-3` scope.** What landed: the `★`/`★★` retirement (and it is
+> lint-enforced), the deletion of the "~250 lines" self-claim, and the `docs/README.md`
+> pointer in the house rules with the numbering byte-stable. What did **not** run is the
+> other half of "convert priorities/**emphasis** to the §4 vocabulary": `formal/HANDOFF.md`
+> still carries bold ALL-CAPS outside ⚠ lines on well over a hundred lines, and `HANDOFF.md`
+> on a handful — against `docs/README.md` §4, the living contract. Deferring it is
+> defensible, since step 12 deletes or moves most of that text and de-inflating it first is
+> wasted work; it simply was not recorded anywhere until this note. Two consequences:
+> whoever runs step 12 owns the cleanup, and §8's planned bold-caps check (row `HS-1`) goes
+> red on both boards the day it lands unless it is scoped to the root board first.
 
 The primary reader of this system is a Claude Code session (Fable, Opus, or
 Sonnet) starting cold. Every choice optimizes for that reader: minimal context

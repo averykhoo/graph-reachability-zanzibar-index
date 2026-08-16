@@ -1,8 +1,4 @@
-# Leg 7 — the leaf-family split (retire projection P6). SCOPE, DEFERRED.
-
-**Status: the design decision is MADE — option (c). The work is DEFERRED, not scheduled.**
-Decided by the user 2026-08-05. This file is the scoping pass so the leg is resumable
-without re-deriving the blast radius; **no Lean declaration was changed to produce it.**
+# Leg 7 — the leaf-family split (retire projection P6). SCOPE — ACTIVE-PLAN.
 
 > **ACTIVE-PLAN (declared 2026-08-16).** This document is being executed right now — it is
 > live until its board rows close, then it gets the frozen banner. See
@@ -11,6 +7,19 @@ without re-deriving the blast radius; **no Lean declaration was changed to produ
 > **§4 and §11.3 are known-wrong in stated ways** — read §11.1 and §11.5 before acting on
 > either.
 >
+> **CORRECTION 2026-08-16 — this leg is NO LONGER DEFERRED, and the status line below this
+> banner is as-of-2026-08-05.** Leg 7 began landing 2026-08-09 (steps 3 and 4a) and now
+> carries 4c-pre and 4c-i as well. It is board row `P3` at priority `NOW` in
+> [`HANDOFF.md`](../../HANDOFF.md), and rows `P4`, `P5` and `P14` read this file too. The
+> board is the live state; no line in this file is. The title said "SCOPE, DEFERRED" until
+> today, so a cold reader following `P3`'s read-first list met a false status before this
+> banner.
+
+**Status as of 2026-08-05: the design decision is MADE — option (c). The work is DEFERRED,
+not scheduled.** Decided by the user 2026-08-05. This file is the scoping pass so the leg
+is resumable without re-deriving the blast radius; **no Lean declaration was changed to
+produce it.**
+
 > **NOTE 2026-08-16 (handoff migration) — board row `P5` reads §9.1–9.3 PLUS §7 step 6.**
 > §9 carries the verdict and the traps, but not the completion criterion: that is **§7
 > step 6** — re-point the readers, then the `Inv` stack, then **delete `W4NarrowT2a`**,

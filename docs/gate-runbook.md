@@ -127,6 +127,14 @@ run `python -m formal.conformance.doc_counts --generate`. The coupling runs
 tests → lean, which is the opposite direction from the one you would guess.
 Conformance genuinely is independent of `tests/`; `lean` is not.
 
+★ **A HANDOFF-ONLY change also requires re-running `lean`** (new 2026-08-16). Step
+**4f** runs `scripts/handoff_lint.py`, so editing `HANDOFF.md` or
+`formal/HANDOFF.md` — adding a board row, flipping a `pri`, appending a ledger
+entry — can turn the `lean` phase red without a line of code changing. Same
+surprising direction as the `tests/` coupling above: a docs-only edit reddens the
+Lean phase. Run `python scripts/handoff_lint.py` yourself first (it is Rhythm step
+0 and takes under a second) rather than discovering it after a Lean build.
+
 ### 2. Lean + conformance — the split `verify.sh` gate
 `verify.sh` takes a **phase argument** so the whole formal gate (its 5 steps) runs
 as cap-fitting commands an agent can execute unattended. Warm timings on the
@@ -221,6 +229,7 @@ so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 | `MIN_FIXTURES` (`tests/test_compile_snapshot.py`) | `.fga` fixtures the byte-identity snapshot gate runs on |
 | `MIN_PY_ANCHORS` / `MIN_LEAN_ANCHORS` | `CORRESPONDENCE.md` anchors found (in `anchor_check.py`) |
 | *(no constant)* | step **4e** compares `FINAL_REVIEW.md`'s generated counts block against the tree exactly; there is no floor to lower, only a regeneration to perform |
+| `MAX_LINES` / `NEXT_MAX` / `WARN_BUDGET` / `HEADLINE_MAX` / `MAX_BOLDCAPS` (in `scripts/handoff_lint.py`, step **4f**) | the board files' capacities: line ceilings, at most three `NEXT` rows, the trap budget, the ledger-headline cap, and the bold-caps ratchets. All are set at measured values with in-file provenance; `MAX_BOLDCAPS` is a ratchet — lower it when you clean a line, never raise it |
 
 **Lowering any of them must be a deliberate, reviewed edit to `verify.sh`** — and
 should be justified in `formal/history/`. Raising them is free and encouraged when
@@ -332,6 +341,23 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   still hand-maintained — what changed is that there is now an authoritative
   machine-checked place to check them against, and widening the block is one row
   in `doc_counts.py::measure`.
+- **4f BOARD LINT** (added 2026-08-16, board row `HS-1`) — `python
+  scripts/handoff_lint.py`. Nine checks over the two board files and the two
+  ledgers: line ceilings, exactly one `NOW` row and at most three `NEXT`, zero
+  retired `★` glyphs, the trap budget, a liveness declaration in the first ten
+  lines of every `docs/history/` and `formal/history/` file, the ledger-headline
+  cap, the bold-caps ratchets, root-ledger-not-behind-`PROOF_STATUS`, and
+  `rows:`-cited ids resolving to real board ids. **Sub-second**; it rides `lean`
+  for the same reason 4d/4e do rather than becoming an eleventh phase.
+  **Why it exists:** every capacity in the 2026-08-16 handoff redesign was prose,
+  and this repo's record is that a prose capacity rots — `HANDOFF.md` restated
+  gate counts three times after a rule forbade it, and `formal/HANDOFF.md`
+  claimed "~250 lines" at over a thousand.
+  **Scope, honestly:** it proves the board is well-FORMED, never that it is true,
+  current, or useful. It cannot tell you a `NOW` row is the right `NOW`, that a
+  pointer resolves to something actionable, or that a `moved` date is not a lie.
+  Full `moved`-vs-ledger cross-validation was attempted and rejected as
+  unsatisfiable — see `check_ledger_row_ids`' docstring.
 
 #### What step 2 scans now (`formal/conformance/sorry_scan.py`)
 The hole scan is no longer just `\b(?:sorry|admit)\b` over `formal/lean/ZanzibarProofs`:

@@ -3,7 +3,7 @@ import ZanzibarProofs.GraphIndex.CascadeSettle
 /-!
 # The W3d invariant over the interleaved chain (ROADMAP W3d-1c, part 3)
 
-The deferred T2a carry for W3d (`reachedByW3d_inv`, HANDOFF "The next task", point 3)
+The deferred T2a carry for W3d (`reachedByW3d_inv`, `formal/history/PROOF_STATUS.md`)
 asks for `Inv S σ` at every state of the interleaved scheduler chain. This file
 discharges the **structural half** — `StructInv` (schema fixity, node encoding, edge
 endpoint-closure, and ACYCLICITY) — unconditionally, i.e. with none of the fragment

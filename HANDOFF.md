@@ -7,7 +7,7 @@ starts there. Durable rules, the gate, the env and the standing footguns are in
 [`CLAUDE.md`](CLAUDE.md) (auto-loaded every session); doc conventions — liveness states,
 the signal legend, citation keys — are in [`docs/README.md`](docs/README.md).
 
-**A user-assigned task OVERRIDES this board.** Do not re-rank at session start: work the
+**A user-assigned task overrides this board.** Do not re-rank at session start: work the
 task, then re-rank once at write-back. `NOW` means "what I would recommend an unassigned
 session pick up", not "what I am doing".
 
@@ -17,12 +17,13 @@ session: run the Rhythm protocol at the bottom.
 ## Banner
 
 > 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-16**: all ten phases PASSED on the leg-7 4c-i tree, and everything since
-> has been documentation plus one new standalone script — no Python behaviour changed, so
-> the 2026-08-14 3-seed fuzz sweep still stands.
-> Last session: **the handoff-system migration — this board, the session ledger and
-> `scripts/handoff_lint.py` all landed** →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-16c`.
+> As of **2026-08-16**: `lean` re-run and PASSED with its new step 4f; the nine tile phases
+> were last all-green on the leg-7 4c-i tree and **are owed again before the next push**.
+> No Python behaviour changed since — docs, one shell step, one lint script — so the
+> 2026-08-14 3-seed fuzz sweep still stands.
+> Last session: **`B1` verified closed — both halves were proved 2026-07-28/08-04 and only
+> the record was open; the star-filter half is sabotage-confirmed type-checked** →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-16e`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
@@ -39,7 +40,7 @@ forward forever and are never reused.**
 | `P3` | leg 7 **4c-ii + step 7, one commit** → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.7 | **NOW** | L | — | 2026-08-16 |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path | **NEXT** | M | — | 2026-08-16 |
 | `R6` | perf round 6 — **measure before landing anything** → [audit](docs/perf-round6-audit-2026-08.md) | **NEXT** | L | — | 2026-08-16 |
-| `HS-1` | wire `scripts/handoff_lint.py` into `verify.sh` → [design](docs/handoff-redesign-2026-08.md) §8 | **NEXT** | S | — | 2026-08-16 |
+| `HS-2` | split [`docs/spec-deviations.md`](docs/spec-deviations.md) (user-scheduled 2026-08-16) | **NEXT** | M | — | 2026-08-16 |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
 | `P7` | `ttuStarFree` **(iii)+(iv)** — re-prove the 5 consumed sites, widen the gate → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16 | LATER | M | `P6` | 2026-08-16 |
@@ -50,18 +51,24 @@ forward forever and are never reused.**
 | `P11` | the fixture-TRIPLE question for 5 subsumed `.fga` fixtures → `tests/test_schema_shapes.py::KNOWN_SUBSUMED` | LATER | S | — | 2026-08-16 |
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
-| `HS-2` | split [`docs/spec-deviations.md`](docs/spec-deviations.md) (user-scheduled 2026-08-16) | LATER | M | — | 2026-08-16 |
-| `HS-3` | `formal/HANDOFF.md` **deep half** = redesign [§9 step 12](docs/handoff-redesign-2026-08.md), scoped in its §7 | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
+| `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
+| `P16` | widen the enumeration/state bounds → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(e); read `test_conformance_enum.py`'s module docstring, which is half the plan | LATER | M | — | 2026-08-16 |
+| `P17` | bulk build/backfill is an unmodeled **default** constructor — model it or scope-exclude it in writing → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(h) + §3.1 item 6 | LATER | M | — | 2026-08-16 |
 | `LT-1` | the two live latent residues → [`spec-deviations.md`](docs/spec-deviations.md) Target 2 / Target 3 | HOLD | ? | — | 2026-08-16 |
 | `DW-1` | decidable `W4Fragment` for a driver-side pre-check → [`CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) §"Conformance gates" | SOMEDAY | ? | — | 2026-08-16 |
+| `P18` | the concurrency / multi-instance layer — the never-started TLA+ phase → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(i) + §3.1 item 5 | SOMEDAY | L | — | 2026-08-16 |
+| `P19` | model the read surfaces (`lookup` / `lookup_reverse` / `expand`) in Lean → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(g) | SOMEDAY | L | — | 2026-08-16 |
 | `SD-1` | lift the two scope rejections → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(j) | SOMEDAY | L | — | 2026-08-16 |
 | `SD-2` | a real service wrapper — deliberately skipped; the store is a plain callable API | SOMEDAY | L | — | 2026-08-16 |
 | `SD-3` | tuple-log compaction — only if the log outgrows "humans wrote this" scale | SOMEDAY | S | — | 2026-08-16 |
 | `SD-4` | bulk-merge write path → [sketch](docs/architecture/bulk-merge-design.md) | SOMEDAY | L | — | 2026-08-16 |
 
-Closed ids stay retired: `P1`, `P2` (both done 2026-08-16), `B1`, and the whole `ZT-*`
-zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
+Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `B1`, and the
+whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
+`B1`'s underlying finding was verified closed on 2026-08-16 (both halves proved 2026-07-28
+and 2026-08-04; the record had simply never caught up) — evidence in `formal/HANDOFF.md`'s
+`B1` block. Retiring an id is not the same act as closing a finding: say which you mean.
 
 ## Item blocks — `NOW` and `NEXT` only
 
@@ -122,20 +129,21 @@ re-sabotaging.
 in full, then [`docs/perf-next-round.md`](docs/perf-next-round.md) for the fence, the
 confirmed dead ends and the reopening rule.
 
-### `HS-1` — wire `scripts/handoff_lint.py` into `verify.sh`
+### `HS-2` — split `docs/spec-deviations.md`
 
-The lint exists and runs standalone; it is **not** in the gate, so Rhythm step 0 is a
-manual habit today. This row wires it in and adds the fancier checks the design lists:
-bold-caps outside trap lines, `moved`-vs-ledger cross-validation, newest-session-log ≥
-newest-`PROOF_STATUS`.
+The divergence log is the repo's largest living doc and answers two unrelated questions at
+once: "what diverged, when and why" (a dated, append-only ledger) and "what is still
+latent" (an inventory that gets rewritten). Splitting them is user-scheduled.
 
-⚠ A new gate phase means the **full ten-phase re-run**, not just the phase it adds — and
-every check you add needs its own sabotage run per
-[`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) before you believe it.
+⚠ **It is cited by dated entry from code, tests and both boards** — `2026-07-13`,
+`2026-07-27`, `2026-08-10`, and Target 2 / Target 3 (row `LT-1`) are all live citation
+keys. Per [`docs/README.md`](docs/README.md) §5 they must survive the split: keep the date
+keys byte-stable and repoint every citer in the same commit, or the inbound links rot
+silently. Grep for citers before you cut.
 
-**Read first:** [`docs/handoff-redesign-2026-08.md`](docs/handoff-redesign-2026-08.md) §8;
-`scripts/handoff_lint.py`'s own header, which records why each ceiling has the value it
-has; [`docs/gate-runbook.md`](docs/gate-runbook.md) for how phases are structured.
+**Read first:** [`docs/README.md`](docs/README.md) §1 (decide which half owns "latent gaps"
+before moving a line) and §5 (citation keys); `docs/spec-deviations.md`'s own header for
+the entry format it has been keeping.
 
 ## Standing traps
 

@@ -25,6 +25,136 @@ from here.
 
 ---
 
+## 2026-08-16e — B1 was already closed and nobody noticed: both halves proved 2026-07-28/08-04, now verified
+
+rows: B1 (closed; id stays retired).
+
+Asked to look into `B1` — the `w3cJobValid_enumJob2D` star-freeness hole — and close it if
+it was not done. It was done. The proof landed three weeks ago and the record never caught
+up, so this session is verification and bookkeeping, not proof work.
+
+**What the old verdict said.** Written 2026-07-27: "STILL OPEN, but RECLASSIFIED … needs a
+decision, not a proof session", the decision being between a star-filter inside
+`storedDirectSubjects` and a new fragment clause banning wildcard restrictions on derived
+Direct arms. Its clause (ii) was `grep -rn "w3cJobValid_enumJob2D" formal/lean/` returns
+**nothing** — the lemma does not exist, so no landed theorem depends on it".
+
+**What is actually in the tree.** The E-chain plan §B took *both* options the next day, and
+both landed. `storedDirectSubjects` half: the faithfulness star-filter, giving
+`storedDirectSubjects_name_ne_star` with no fragment premise (leg 1, 2026-07-28).
+`edgeHolders` half: `reachedByW3d2_Rnode_source_name_ne_star_d` under the new `W4Fragment`
+clause `directArmsConcrete`, discharged at the call sites (leg 2, 2026-08-04). Both feed
+`w3cJobValid_enumJob2D`, which exists at `CascadeStrataAssemble.lean:290`, is audited and
+axiom-clean, and reaches the final theorems through `enumJobs2At_valid` (four call sites)
+and `FullScope.lean`'s `W4Fragment.directArmsConcrete`. So both parts of clause (ii) are
+false today.
+
+**Sabotage rather than trusting the docstrings.** The star-filter was defeated in place
+(`fun s => s.name != STAR` → `fun _ => true`) and `lake build` of
+`ZanzibarProofs.GraphIndex.CascadeStrataEnum` went red at `CascadeStrataEnum.lean:634`, the
+`simpa` closing `storedDirectSubjects_name_ne_star`. That half is held by the type checker.
+Restored and re-verified green. **The check was worth running because a comment forty lines
+away says a nearby filter "still COMPILES with the filter defeated"** — that is the
+`freshDirectCands` presence diff, which genuinely is measurement-pinned, and reading the two
+as one filter would have produced the opposite conclusion.
+
+**The carry is unchanged and stays declared:** `directArmsConcrete` excludes a shape Python
+admits (`define approver: [user, user:*] but not banned`). It is a vacuity boundary, not an
+unsoundness one — on such a schema `W3cJobValid` fails for every enumerated job at the key,
+so the operational chain has no cascade constructor there — and the clause is
+machine-confirmed load-bearing by the leg-1 sweep.
+
+**The transferable lesson, and it is the same one twice in two days.** A finding is closed
+where it is RECORDED, not where it is fixed. `Audit.lean` had said "the
+`storedDirectSubjects` half of the Board-B1 star-freeness hole is closed" since 2026-08-04
+while the board block said "STILL OPEN"; earlier today the same class of gap appeared as an
+id retired on one board and a finding left open on the other. Both are now closed, and both
+boards say the same thing. Recorded in `formal/HANDOFF.md`'s `B1` block and as a dated note
+on the E-chain plan, whose §B predicted this upgrade and was right.
+
+Still owed: unchanged from `2026-08-16d` — the nine tile phases before push. `lean` was
+re-run after the sabotage restore and is green. No Python behaviour changed.
+
+---
+
+## 2026-08-16d — the redesign closes: formal/HANDOFF.md 1010 to 471 (HS-3), the board lint is gate step 4f (HS-1)
+
+rows: HS-1, HS-3 (both closed and retired); HS-2 promoted to NEXT; P15–P19 added; P3, P6,
+R6 pointers untouched.
+
+Two sessions' worth of items in one. Started as an audit of whether the executed handoff
+system matches [`handoff-redesign-2026-08.md`](handoff-redesign-2026-08.md) — it mostly did
+— and the three deltas found are fixed, then both remaining design steps were executed.
+
+**The audit's findings, all repaired.** (1) The board charter claims to rank *every* open
+item and did not: `FINAL_REVIEW.md` §4 ranked five items with no row. Verified against the
+pre-migration file — they were never on the board, so this was inherited, not lost in the
+migration; but the new charter's completeness claim made it false. Now rows `P15`–`P19`,
+and §4 opens with the reverse map so the two cannot drift apart silently. `P17` is the one
+worth noticing: bulk build/backfill is the DEFAULT `build_index` path, has no Lean
+counterpart at all, and its only net is a Python-vs-Python identity gate. (2) The leg-7
+scope doc still opened "SCOPE, DEFERRED" above its own ACTIVE-PLAN banner, so a cold reader
+following `P3`'s read-first list met a false status first. (3) §7's cheap half had run
+three-quarters — the `★` retirement landed, the emphasis conversion never did — and nothing
+recorded the gap.
+
+**`HS-3`, the deep half.** `formal/HANDOFF.md` 1010 → 471. Retired zones went to
+[`formal/history/handoff-status-2026-08-16.md`](../../formal/history/handoff-status-2026-08-16.md)
+**verbatim, not condensed** — the previous session's own audit found that condensing is
+where content dies and a line-diff cannot see it, so this copied rather than summarised even
+where a duplicate was verified to exist. The staged theorem ladder (35 rows, ~15 filenames
+that appear in no other table) moved to `ARCHITECTURE.md`, its declared home. The retired
+"Status" section was the actively wrong one: it said "the formal-verification arc is
+finished" and "what remains is optional" while leg 7 was mid-flight at the top of the same
+file, and carried a conformance count in prose that the same file's house rule 3 forbids.
+
+**Eight dead inbound pointers, found by sweep and repointed.** Five live files cited a
+`HANDOFF "The next task"` section that has not existed for some time — including four Lean
+sources — and `RestrictBase.lean` cited a "HANDOFF Step A" that never survived at all. The
+file's own line 4 pointed at that same dead section. `formal/README.md` advertised a theorem
+table that was about to stop being there, which is the one case where the rot was two-sided.
+
+**`HS-1`, the lint in the gate.** `verify.sh` lean-phase step **4f**, not an eleventh phase:
+it is pure Python with no toolchain, exactly like 4d/4e, and a new phase would have meant
+propagating a phase count through `CLAUDE.md`, the runbook and both boards. Three checks
+added: bold-caps ratchets, root-ledger-not-behind-`PROOF_STATUS`, and `rows:`-cited ids
+resolving to real board ids. Consequence now documented in the runbook beside the
+`tests/`-reddens-`lean` footgun: **a HANDOFF-only edit reddens `lean`.**
+
+**The bold-caps sabotage failed, and that was the whole value of running it.** The budgets
+were set to 1 and 18; lowering one by a step left the check SILENT, because the true counts
+after a paragraph-scoped trap exemption were 1 and 9. A budget above the measured value
+guards nothing — the same defect as a floor with headroom. Both are now exact, the root
+board's single offender was cleaned to a hard zero, and `formal/HANDOFF.md` keeps 9 as
+declared debt in the `MAX_TESTS_XFAILED` idiom. Two exemptions were separately controlled:
+stripping every trap badge took offenders 9 → 28 (so the exemption exempts something real,
+not everything), and a real id in the bogus id's position kept `check_ledger_row_ids` silent
+(so it fires on the id, not the line shape).
+
+**Full `moved`-vs-ledger cross-validation was attempted and rejected**, not deferred. The
+`2026-08-16c` entry covers ~20 rows with the prose clause "every open item re-keyed onto the
+new board" rather than an id list, so the reverse direction false-fails most of the board on
+the very commit that created the ledger. The safe direction shipped instead; the reasoning
+is in the check's docstring so nobody re-files it.
+
+**Method note.** The survey ran as four read-only agent fan-outs. Two disagreed about
+whether the theorem table was still in `formal/HANDOFF.md`; I opened the file rather than
+believing either, and the confident negative was wrong — it had inferred from the routing
+table instead of reading. That is the second time in three sessions a fan-out's confident
+negative has been wrong, which is now the strongest argument for the runbook's rule that a
+fan-out discovers candidates and does not adjudicate them.
+
+**Left deliberately unresolved:** the two boards disagree about `B1`. The root board retired
+the id; `formal/HANDOFF.md` still verdicts the finding open, and `CascadeStrataAssemble.lean`
+says only the `storedDirectSubjects` half is closed. Recorded in both places as a question
+rather than adjudicated, because I could not verify the `edgeHolders` half either way.
+
+Still owed: the full ten-phase `verify.sh` run before push — `lean` was re-run because step
+4f is new, but the nine tile phases were not, and the gate contract is all ten before a push.
+No Python behaviour changed (docs, one shell step, one lint script), so no fuzz sweep.
+
+---
+
 ## 2026-08-16c — the handoff-system migration executed: HANDOFF.md is a board, the ledger and the lint ship
 
 rows: HS-1, HS-2, HS-3 (new); every open item re-keyed onto the new board.
