@@ -28,10 +28,16 @@ act on, or that a ``moved`` date is not a lie. It converts *silently violated* i
 *loudly must-look*, and nothing more. In particular ``check_frozen_banners`` proves a
 banner exists, never that the document under it is actually frozen.
 
-NOT WIRED INTO ``verify.sh`` YET -- that is board row ``HS-1``, which also adds the
-checks deliberately left out here (bold-caps outside trap lines, ``moved``-vs-ledger
-cross-validation, newest-session-log >= newest-PROOF_STATUS). Until then Rhythm step 0
-runs it by hand.
+WIRED INTO ``verify.sh`` as lean-phase step **4f** (board row ``HS-1``, 2026-08-16). It
+rides ``lean`` rather than being an eleventh phase, for the reason 4d/4e do: pure Python,
+no Lean toolchain, sub-second. Consequence, the same one 4e already carries -- **a
+HANDOFF-only edit now needs ``lean`` green before push.** Rhythm step 0 still runs it by
+hand while iterating; the gate is what makes it non-optional.
+
+Of the three checks the redesign deferred to ``HS-1``, two landed here
+(``check_bold_caps``, ``check_ledger_ordering``) plus ``check_ledger_row_ids``. The
+fourth, full ``moved``-vs-ledger cross-validation, was **attempted and rejected** -- see
+``check_ledger_row_ids``' docstring for the measurement that killed it.
 
 SABOTAGE RECORD (per docs/sabotage-procedure.md -- every check below was broken on
 purpose and watched go red before it was believed, 2026-08-16). The literal observed
@@ -43,6 +49,31 @@ output, one narrowest-plausible weakening per check::
     star glyph    FAIL: HANDOFF.md: 1 line(s) still use the retired star glyph ([139]).
     trap budget   FAIL: HANDOFF.md: 12 trap badges, budget 10.
     headline cap  FAIL: docs/history/session-log.md:28: entry headline is 238 chars, cap 120.
+
+The three checks added 2026-08-16 with ``HS-1``, same protocol, literal output::
+
+    bold caps     FAIL: formal/HANDOFF.md: 9 line(s) with bold ALL-CAPS outside a trap
+                        paragraph, budget 8 (lines [29, 132, 143, 203, 205, 210, 354, 376]).
+    bold caps     FAIL: HANDOFF.md: 1 line(s) ... budget 0 (lines [213]).   [one line appended]
+    ledger order  FAIL: formal/history/PROOF_STATUS.md newest entry is 2026-09-01, but
+                        docs/history/session-log.md only reaches 2026-08-16c.
+    rows: ids     FAIL: docs/history/session-log.md:2 cites board id 'P99', which is on
+                        neither the board nor its retired-ids line.
+
+**The bold-caps sabotage failed first, and that is the point of running it.** The budgets
+were initially set to 1 and 18, above the true post-restructure counts of 1 and 9. Lowering
+the budget by one left the check SILENT -- it was slack, and guarded nothing. A budget above
+the measured value is the same defect as a floor with headroom (cf. ``MIN_CONF_ALL`` /
+``MIN_TESTS_ALL``, which carry zero by design). Both are now exact.
+
+Two controls were run for the checks whose exemptions could have made them vacuous:
+
+* ``check_bold_caps``' trap-paragraph exemption was tested by stripping every badge from
+  ``formal/HANDOFF.md`` in memory: offenders went 9 -> 28. So the exemption exempts
+  something real rather than everything.
+* ``check_ledger_row_ids`` was re-run with a REAL id (``P15``) in the same position the
+  bogus ``P99`` occupied; it stayed silent. Without that control the check could have been
+  firing on the line's shape rather than on the id.
 
 Two things that make the above evidence rather than decoration:
 
@@ -74,13 +105,24 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Provenance: set at LANDED SIZE + ~10% on 2026-08-16, per the redesign's section 11
 # decision ("a max must exist, but its VALUE is not pre-committed"). Raising either is a
 # deliberate act: say why in the commit message, not in a drive-by edit.
-#   HANDOFF.md       landed at 200 lines (from 986) -> 220
-#   formal/HANDOFF.md was 1005 lines and is NOT restructured yet; its deep half is board
-#                    row HS-3. LOWER THIS to that file's new landed size + 10% when HS-3
-#                    closes -- a ceiling far above the file is not a guard.
+#   HANDOFF.md       landed at 200 lines (from 986) -> 220. RAISED to 260 on 2026-08-16
+#                    (user-approved) when the post-migration audit added five board rows
+#                    for the FINAL_REVIEW section-4 items the board's completeness charter
+#                    claimed to cover and did not: the file went to 211, leaving nine lines
+#                    of headroom, which is a tripwire on the next edit rather than on the
+#                    next accretion LAYER. 260 restores roughly a dozen rows or two item
+#                    blocks of room. It is deliberately not the ~2000 that was floated: at
+#                    ten times the file the check would not fire until the board had
+#                    re-accreted the entire 986-line disease and doubled it, i.e. it would
+#                    stop being a guard at all, and section 11's decision was explicitly
+#                    that the point is "firing on the first appended layer, not the
+#                    absolute number".
+#   formal/HANDOFF.md was 1005 lines with a 1105 ceiling that the script itself called
+#                    "not a guard". HS-3 (the deep half) landed 2026-08-16: 1010 -> 471,
+#                    so the ceiling drops to 520 as the same landed+10% rule prescribes.
 MAX_LINES = {
-    'HANDOFF.md': 220,
-    'formal/HANDOFF.md': 1105,
+    'HANDOFF.md': 260,
+    'formal/HANDOFF.md': 520,
 }
 
 BOARD_FILES = ('HANDOFF.md', 'formal/HANDOFF.md')
@@ -116,6 +158,32 @@ _FROZEN_DECL = re.compile(r'\*\*FROZEN\b')
 
 WARN = u'⚠'      # the trap badge
 STAR = u'★'      # retired from the board files
+
+# --- Bold ALL-CAPS budgets (docs/README.md section 4: bold caps live only in trap lines) --
+# These are RATCHETS, not allowances: set at the EXACT measured residue on 2026-08-16, so
+# any new offending line fails immediately. Lower them when you clean a line; never raise
+# one to fit a file. The root board is at a hard 0 -- its single offender was cleaned in
+# the same commit. formal/HANDOFF.md keeps 9 as declared debt, following the repo's
+# existing idiom for that (MAX_TESTS_XFAILED), which puts the debt in code that runs
+# rather than in a doc nobody reads.
+#
+# ⚠ These were first set to 1 and 18 -- ABOVE the true counts -- and the sabotage caught
+# it: lowering the budget by one left the check SILENT, i.e. it was slack and guarded
+# nothing. A budget above the measured value is the same defect as a floor with headroom.
+MAX_BOLDCAPS = {
+    'HANDOFF.md': 0,
+    'formal/HANDOFF.md': 9,
+}
+
+# The two ledgers, and the heading forms they use. Both keys are YYYY-MM-DD[letter], which
+# sorts correctly under PLAIN STRING comparison: the letterless form is a prefix of every
+# lettered same-day form, so "2026-08-16" < "2026-08-16b" < "2026-08-16c". No date parsing.
+ROOT_LEDGER = 'docs/history/session-log.md'
+FORMAL_LEDGER = 'formal/history/PROOF_STATUS.md'
+_ROOT_ENTRY = re.compile(r'^## (\d{4}-\d\d-\d\d[a-z]?) ')
+_FORMAL_ENTRY = re.compile(r'^## Session (\d{4}-\d\d-\d\d[a-z]?)\b')
+_ROWS_LINE = re.compile(r'^rows:\s*(.+)$')
+_ROW_ID = re.compile(r'\b([A-Z]{1,3}-?\d+|ZT-[A-Z0-9-]+)\b')
 
 
 def _read(rel):
@@ -257,6 +325,129 @@ def check_ledger_headlines(fail):
                      % (rel, i, len(ln), HEADLINE_MAX))
 
 
+_BOLD_SPAN = re.compile(r'\*\*(.+?)\*\*', re.S)
+_CODE_SPAN = re.compile(r'`[^`]*`')
+_CAPS_WORD = re.compile(r'\b[A-Z]{2,}\b')
+
+
+def _boldcaps_lines(lines, pri_linenos):
+    """Line numbers carrying bold ALL-CAPS that docs/README.md section 4 does not allow.
+
+    Three exemptions, each structural rather than a hand-kept list:
+
+    * **Paragraph-scoped trap exemption.** The rule is written "inside a ⚠ line", but a
+      trap is a PARAGRAPH and prose gets hard-wrapped, so a per-physical-line test would
+      flag the second line of a trap and effectively ban line-wrapping. A line is exempt
+      when any line in its blank-line-delimited block carries the badge.
+    * **The pri column.** ``**NOW**`` / ``**NEXT**`` in the board table IS the sanctioned
+      vocabulary of section 4, bolded exactly because it ranks. Located via the same
+      header-name lookup the capacity check uses, never by column index.
+    * **Code spans.** Caps inside backticks are identifiers (``ZT-*``, ``NO-BLOCK``),
+      not shouting. Stripped before matching.
+    """
+    # blank-line-delimited blocks -> exempt whole block if any line has the badge
+    exempt = set()
+    start = 0
+    for i in range(len(lines) + 1):
+        if i == len(lines) or not lines[i].strip():
+            if any(WARN in l for l in lines[start:i]):
+                exempt.update(range(start + 1, i + 1))
+            start = i + 1
+    out = []
+    for i, ln in enumerate(lines, 1):
+        if i in exempt or i in pri_linenos:
+            continue
+        stripped = _CODE_SPAN.sub('', ln)
+        if any(_CAPS_WORD.search(s) for s in _BOLD_SPAN.findall(stripped)):
+            out.append(i)
+    return out
+
+
+def check_bold_caps(fail):
+    for rel, budget in sorted(MAX_BOLDCAPS.items()):
+        lines = _read(rel)
+        if lines is None:
+            continue
+        pri_linenos = {ln for _, ln in _pri_values(lines)} if rel == ROOT_BOARD else set()
+        hits = _boldcaps_lines(lines, pri_linenos)
+        if len(hits) > budget:
+            fail('%s: %d line(s) with bold ALL-CAPS outside a trap paragraph, budget %d '
+                 '(lines %s). docs/README.md section 4 confines bold caps to ⚠ lines so '
+                 'that emphasis still ranks. The budget is a RATCHET: clean a line and '
+                 'lower it, never raise it to fit.'
+                 % (rel, len(hits), budget, hits[:8]))
+
+
+def _entry_keys(rel, pattern):
+    lines = _read(rel)
+    if lines is None:
+        return None
+    return [m.group(1) for m in (pattern.match(l) for l in lines) if m]
+
+
+def check_ledger_ordering(fail):
+    """The root ledger must not lag the formal one.
+
+    House rule: one ROOT entry every session, and a formal-heavy session writes its detail
+    to PROOF_STATUS and points at it from the root. So a PROOF_STATUS entry newer than
+    anything in the root ledger means a session wrote formal detail and skipped the root
+    entry -- which silently breaks the board's `moved` column, whose whole meaning is that
+    every session leaves a dated trace.
+    """
+    root = _entry_keys(ROOT_LEDGER, _ROOT_ENTRY)
+    formal = _entry_keys(FORMAL_LEDGER, _FORMAL_ENTRY)
+    for rel, keys in ((ROOT_LEDGER, root), (FORMAL_LEDGER, formal)):
+        if keys is None:
+            fail('MISSING: %s' % rel)
+            return
+        if not keys:
+            fail('%s: no entry headings matched. If the heading format changed, fix this '
+                 'check rather than deleting it -- it is the only thing asserting that a '
+                 'formal session also wrote a root ledger entry.' % rel)
+            return
+    if max(formal) > max(root):
+        fail('%s newest entry is %s, but %s only reaches %s. Every session writes ONE root '
+             'ledger entry, formal-heavy ones included (they put the detail in '
+             'PROOF_STATUS and point at it). Append the missing root entry.'
+             % (FORMAL_LEDGER, max(formal), ROOT_LEDGER, max(root)))
+
+
+def check_ledger_row_ids(fail):
+    """Every board id named in a ledger `rows:` line must be a real id.
+
+    Deliberately NOT the reverse check (every moved row must appear in some `rows:` line):
+    that was tried on 2026-08-16 and rejected. The `2026-08-16c` entry covers ~20 rows with
+    the prose clause "every open item re-keyed onto the new board" rather than an id list,
+    so the reverse direction false-fails most of the board on the very commit that created
+    the ledger. This direction catches typos and invented ids and cannot false-fail.
+    """
+    board = _read(ROOT_BOARD)
+    lines = _read(ROOT_LEDGER)
+    if board is None or lines is None:
+        return
+    known = set()
+    for cells, _ in _table_rows(board):
+        known.add(cells[0].replace('`', '').strip())
+    for ln in board:
+        if 'Closed ids stay retired' in ln or 'survives as the historical grouping' in ln:
+            known.update(m.group(1) for m in _ROW_ID.finditer(ln.replace('`', ' ')))
+    known.discard('')
+    if len(known) < 5:
+        fail('%s: parsed only %d board ids; the id parser is broken, so this check would '
+             'pass by comparing against nothing. Fix it.' % (ROOT_BOARD, len(known)))
+        return
+    for i, ln in enumerate(lines, 1):
+        m = _ROWS_LINE.match(ln.strip())
+        if not m:
+            continue
+        for cited in _ROW_ID.finditer(m.group(1)):
+            if cited.group(1) not in known:
+                fail('%s:%d cites board id %r, which is on neither the board nor its '
+                     'retired-ids line. Ids are never reused, so a citation that resolves '
+                     'to nothing is a typo or an invented id.'
+                     % (ROOT_LEDGER, i, cited.group(1)))
+
+
 CHECKS = (
     check_ceilings,
     check_priority_capacities,
@@ -264,6 +455,9 @@ CHECKS = (
     check_warn_budget,
     check_frozen_banners,
     check_ledger_headlines,
+    check_bold_caps,
+    check_ledger_ordering,
+    check_ledger_row_ids,
 )
 
 

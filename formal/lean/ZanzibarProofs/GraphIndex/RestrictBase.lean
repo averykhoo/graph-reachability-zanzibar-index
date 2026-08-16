@@ -11,7 +11,9 @@ to a pure W2 base-state fact: for an untainted operand relation `r'`, the graph 
 proves exactly `check = sem`, but only under **whole-schema** `UntaintedSchema S` — too strong
 for W3's *mixed* schema (one derived key + untainted operands).
 
-This file builds the **schema-restriction** route (HANDOFF Step A, recommended): restrict `S` to
+This file builds the **schema-restriction** route (`history/ROADMAP.md`'s "step A", the
+recommended one; `HANDOFF.md` carried that design when this was written and no longer
+does): restrict `S` to
 `S↾U := restrictUntainted S` (drop every tainted-key def), which IS untainted, then transfer
 `sem` between `S` and `S↾U` on untainted keys so `graph_correct_rules` applies to `S↾U` as a
 black box.

@@ -10,7 +10,7 @@ edge-consistent with its own audit, settled or STALE). This file assembles that
 core into the two EDGE-referencing I6 clauses (`negEdgeFree`/`uposEdgeFree`) over
 the operational closure, then the full 8-clause `Inv` (`reachedByW3d2E_inv`).
 
-**Design (HANDOFF "The next task", the W3d-1 route deliberately NOT reused).**
+**Design (`history/PROOF_STATUS.md`; the W3d-1 route deliberately NOT reused).**
 `reachedByW3dC_edgeHygienic` (W3d-1) went through the coverage chain's SETTLED
 verdicts. W3d-2 coverage is CONDITIONAL (12h): at a re-dirtied round-1 stratum-2
 key there is no `SettledKey`. So we work at the EDGE-DIRECT level with an

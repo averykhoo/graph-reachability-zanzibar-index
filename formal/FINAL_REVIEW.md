@@ -1,6 +1,7 @@
 # FINAL_REVIEW.md — what is proved, what is pinned, what is not
 
-Phase 6 item 3 (plan §7 / §8; HANDOFF "The next task"). This is the final
+Phase 6 item 3 (plan §7 / §8; `HANDOFF.md`'s dated resume blocks — the section
+once called "The next task" no longer exists). This is the final
 review document for the formal-verification effort: the claim in the plan's
 own words, a clause-by-clause cross-check against what actually stands in the
 tree, the theorem inventory in English, and the residual risk. Nothing here
@@ -85,7 +86,8 @@ graph-side gates (`object_wildcard` is the one exclusion). The `TTU_USERSET_SCHE
 spec/oracle/set-engine only (full scope), so the graph-side suites stay
 `W4Fragment`-scoped. The `MULTI_STRATUM` entry (`three_strata_chain`) is the
 >2-strata spec-side leg; there is no graph-side ≥3-strata coverage, by decision
-(HANDOFF residual 2, 2026-07-27).
+(`ARCHITECTURE.md` §6 residual surface, decided 2026-07-27 — `HANDOFF.md` carried
+that numbered residual list at the time and no longer does).
 
 **House rule, and what now makes it meaningful.** Nothing anywhere in the repo may
 claim more than this document. That rule was empty twice: this file once stated BOTH
@@ -542,6 +544,15 @@ corpora are kept OUT of `SCHEMAS`/`GRAPH_FRAGMENT` — the shapes are outside
 spec-side, where the set engine is proved to compute `sem` at full scope (T1).
 
 ## 4. Where the next marginal assurance is
+
+**Every item still open in this section now has a board row** (added 2026-08-16, after an
+audit found this section ranking work [`HANDOFF.md`](../HANDOFF.md) did not list at all —
+the board's charter claims to rank *every* open item, so the omission made that charter
+false): (c)(i) → `P5`, on the leg-7 chain `P3`/`P4`/`P14`; (c)(ii) → `P15`, its
+remove-guard half → `P9`; (d)'s suspected under-claim → `AW-1`; (e) → `P16`; (g) → `P19`;
+(h) → `P17`; (i) → `P18`; (j) → `SD-1`. The board's `pri` column is what *ranks* them; the
+descending value-per-effort argument below is the reasoning behind that ranking, and the
+two must not be allowed to disagree.
 
 Items (a) state-level graph conformance and (b) exhaustive small-scope
 enumeration are DONE (2026-07-12, §1 rows above). Two further answer-level

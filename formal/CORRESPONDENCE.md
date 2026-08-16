@@ -1,6 +1,7 @@
 # CORRESPONDENCE.md — the Lean-model ↔ Python-implementation map
 
-Phase 6 item 2 (plan C2/C3; HANDOFF "The next task"). This is the auditable
+Phase 6 item 2 (plan C2/C3; `HANDOFF.md`'s dated resume blocks — the section
+once called "The next task" no longer exists). This is the auditable
 backbone of the claim "the Python implementations are pinned to the Lean models
 by the conformance harness": every load-bearing Lean definition, the Python
 mechanism it models, and the harness gate that observes the two agreeing.

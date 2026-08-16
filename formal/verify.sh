@@ -504,7 +504,7 @@ run_lean() {
   # -------------------------------------------------------------------------- #
   # 4a. IDENTITY pin (ZT-P2-5). WHICH theorems are audited, not just how many.
   # -------------------------------------------------------------------------- #
-  echo "--- [4a/5] audit IDENTITY pin (formal/audited_theorems.txt) ---"
+  echo "--- [4a/6] audit IDENTITY pin (formal/audited_theorems.txt) ---"
   [ -f "$AUDIT_PIN" ] \
     || { echo "FAIL: audit identity pin missing: $AUDIT_PIN"; \
          echo "      regenerate with: bash formal/regen_audit_pin.sh"; exit 1; }
@@ -563,8 +563,8 @@ run_lean() {
   #     the churn measurement behind it, and -- read this part -- what it still
   #     cannot see.
   # -------------------------------------------------------------------------- #
-  echo "--- [4b/5] headline STATEMENT pin (formal/headline_statements.txt) ---"
-  echo "--- [4c/5] headline DEFINITION pin (formal/headline_definitions.txt) ---"
+  echo "--- [4b/6] headline STATEMENT pin (formal/headline_statements.txt) ---"
+  echo "--- [4c/6] headline DEFINITION pin (formal/headline_definitions.txt) ---"
   # The golden's own floor, asserted here as well as inside the script, exactly as
   # MIN_PINNED_AUDITS is for the identity pin: a truncated or emptied golden makes
   # the comparison pass over nothing, which is the ZT-P2-1 shape one level down.
@@ -592,7 +592,7 @@ run_lean() {
   # lines/2-weeks drift rate that had already destroyed its predecessor's line
   # numbers. Cheap (~1 s, no Lean toolchain), so it rides the `lean` phase.
   # -------------------------------------------------------------------------- #
-  echo "--- [4d/5] CORRESPONDENCE.md anchor pin ---"
+  echo "--- [4d/6] CORRESPONDENCE.md anchor pin ---"
   "$PY" "$REPO_ROOT/formal/conformance/anchor_check.py" \
     || { echo "FAIL: CORRESPONDENCE.md anchors (see above)"; exit 1; }
 
@@ -616,9 +616,23 @@ run_lean() {
   # machine-checked place to check them against, and extending the block is one
   # row in doc_counts.py::measure.
   # -------------------------------------------------------------------------- #
-  echo "--- [4e/5] FINAL_REVIEW.md counts pin ---"
+  echo "--- [4e/6] FINAL_REVIEW.md counts pin ---"
   ( cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" "$PY" -m formal.conformance.doc_counts --check ) \
     || { echo "FAIL: FINAL_REVIEW.md counts pin (see above)"; exit 1; }
+
+  # -------------------------------------------------------------------------- #
+  # 4f. THE HANDOFF LINT. The board files carry capacities that are prose until
+  # something checks them: exactly one NOW row, at most three NEXT rows, a trap
+  # budget, line ceilings, a liveness declaration on every history file, and the
+  # bold-caps ratchets. It rides the `lean` phase for the same reason 4d/4e do --
+  # pure Python, no Lean toolchain, well under a second -- and NOT as an eleventh
+  # phase, which would have meant propagating a new phase count through CLAUDE.md,
+  # the gate runbook and both boards for a check with no toolchain of its own.
+  # CONSEQUENCE, the same one 4e already has: a HANDOFF-only edit now needs `lean`
+  # green before push. See docs/gate-runbook.md.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4f/6] handoff board lint (scripts/handoff_lint.py) ---"
+  ( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/handoff_lint.py" )     || { echo "FAIL: handoff board lint (see above)"; exit 1; }
 
   echo "=== lean phase (steps 1-4) PASSED (holes=$SORRIES, audits=$OBSERVED_AUDITS, pinned=$PINNED_AUDITS) ==="
 }

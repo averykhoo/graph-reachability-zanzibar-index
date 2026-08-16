@@ -6,7 +6,9 @@ session start, unambiguous liveness of every statement, grep-able stable keys,
 bounded signals, pointers instead of copies.
 
 This file is the durable contract for *how* docs work. It does not carry status.
-Designed 2026-08-16 in [`handoff-redesign-2026-08.md`](handoff-redesign-2026-08.md).
+Designed 2026-08-16 in [`history/handoff-redesign-2026-08.md`](history/handoff-redesign-2026-08.md),
+which was executed in full and frozen the same day. Where that plan and this file disagree,
+this file wins: it is the living contract, that is the plan which produced it.
 
 ## 1. One home per statement
 

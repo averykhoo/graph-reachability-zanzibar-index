@@ -82,7 +82,7 @@ Three structural devices make it cheap:
 **Deferred (W3c read half):** `graph_correct_w3c` — the read ↔ `sem` correspondence
 on star-carrying stores. It needs `graphRec_base_eq`/`checkFn_eq_sem` re-proved
 without `StarFreeStore` (the W1 bare-star machinery composed with W2 rule routing:
-wildcard probes 2–4 go live on the base). See HANDOFF "The next task".
+wildcard probes 2–4 go live on the base). See `formal/history/PROOF_STATUS.md`.
 -/
 
 namespace Zanzibar

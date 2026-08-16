@@ -7,6 +7,14 @@
 > §C.1–§C.6 before any cell of the body**: they record where executing this plan
 > contradicted it, and they take precedence. Corrections are appended dated at the top,
 > never edited into the body.
+>
+> **NOTE 2026-08-16 — §B's prediction that this leg "also upgrades Board B1" came true, and
+> B1 is now closed.** Both halves of the star-freeness hole landed as §B designed: the
+> faithfulness star-filter closed the `storedDirectSubjects` half unconditionally (leg 1,
+> 2026-07-28) and `directArmsConcrete` + `reachedByW3d2_Rnode_source_name_ne_star_d` closed
+> the `edgeHolders` half at the call sites (leg 2, 2026-08-04). Nobody updated the finding's
+> record for three weeks; it was verified and closed on 2026-08-16, evidence in
+> `formal/HANDOFF.md`'s `B1` block. §B needs no correction — it was right.
 
 **What this is.** The durable scoping document for board item **(B)** / `ZT-P3-1`: the
 E-chain Direct-arm widening, which was the fix for the fact that `graph_correct`,
