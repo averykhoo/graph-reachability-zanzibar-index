@@ -75,6 +75,11 @@ IVM delta processor.
   audited theorem NAMES, the headline theorem STATEMENTS, and every
   `CORRESPONDENCE.md` symbol anchor. **Push only after all ten phases are green**
   (+ a fuzz sweep for an algorithm change). Legacy `conf-heavy`/`conf-rest` still work.
+  **Each run appends a row to the gitignored `.gate-runs/ledger.tsv`** (phase, verdict,
+  counts, and the tree it ran against) plus that phase's full output;
+  `python scripts/gate_status.py` reports which phases are green **on the current
+  tree**, so "did I already run the tiles?" is no longer a memory question. Details
+  and the sabotage evidence: [`docs/gate-runbook.md`](docs/gate-runbook.md) §4.
 - **The PostgreSQL leg is opt-in and therefore easy to think you ran.**
   `bash scripts/pg_local.sh start` prints a DSN; export it as `ZANZIBAR_TEST_DSN` to
   re-run the HA/concurrency modules against a real server plus

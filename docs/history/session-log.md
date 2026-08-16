@@ -25,6 +25,77 @@ from here.
 
 ---
 
+## 2026-08-16f — verify.sh leaves a trace now: gitignored run ledger + gate_status.py; the tee footgun sabotaged
+
+rows: none (user-assigned tooling task; no board item was open for it).
+
+Asked whether the gate produces logs, because the board's `Still owed:` line — "the nine
+tile phases before push" — is carried by human memory across sessions. It did not: every
+phase printed to stdout and exited, and `BUILD_LOG` is a `mktemp` deleted by the EXIT trap.
+
+**The archaeology that looks like it should work does not, and that is worth recording
+separately from the fix.** `.pytest_cache` was the only surviving artifact:
+`v/cache/nodeids` had today's mtime and 1449 ids (941 `tests/` + 508 `formal/`) — one
+collection, with no phase, no verdict and no tree attached — and `v/cache/lastfailed`
+carried six failing node ids, also written today. The second one reads like evidence of a
+red tree and is not: pytest only rewrites `lastfailed` when the failing SET changes and it
+**retains entries for tests that did not re-run**, so it is cumulative, not a verdict.
+Probed all six directly: **every one is `ERROR: not found`** — they name parametrizations
+and tests that no longer exist (`test_features_are_unique_to_this_fixture` is the one
+`verify.sh`'s own floor comment records as deleted on the 867→879 review). So: no evidence
+of red, and no evidence of green either. That is exactly the gap.
+
+**What landed.** Two artifacts per run under a gitignored `.gate-runs/`: the phase's full
+output verbatim, and one appended row in `ledger.tsv` (started · duration · phase ·
+`PASSED`/`FAILED`/`INCONSISTENT` · tree id · observed counts · log name). Phases call
+`gate_fact` as they observe a count, so a FAILED row still carries what the run got to.
+`scripts/gate_status.py` reads it back and answers the actual session-opening question —
+which phases are green **on the tree in front of me** — with `--require-green` as a
+mechanical push check. Runbook §4 documents it; `CLAUDE.md`'s gate bullet points at it.
+
+**The tree id is one function with two callers, deliberately.** `verify.sh` shells out to
+`gate_status.py --tree-id` rather than computing `<short HEAD>+<sha1 of porcelain+diff>`
+in shell. A recorder and a reader that derive "same tree" differently would report a
+freshness that never existed, and it would look right. Its limits are written down where
+they can be read: it does not see untracked file contents, anything gitignored (a matching
+tree id does **not** mean the same Lean build), or the environment.
+
+**The sabotage found a defect rather than confirming a good check** — the first one did,
+which is the whole argument for the procedure. Property: *a row saying PASSED means the
+phase really passed, and a phase that fails still exits nonzero even though its output now
+goes through `tee`.*
+
+| sabotage | observed |
+|---|---|
+| control, clean `conf-tile:6/100` | `EXIT=0`; row `PASSED … collected=495 selected=5 conf_passed=5 conf_xfailed=0 conf_skipped=0 conf_floor=5` |
+| `MIN_CONF_ALL=495` → `99999` | `EXIT=1` — the tee did not eat it — but **no ledger row at all** (before the fix; after it, `FAILED … rc=1`) |
+| genuinely red pytest in a tile (temp failing test, `conf-tile:96/100`) | `1 failed, 4 passed in 0.95s` → `FAIL: conf (pytest rc=1)`, `EXIT=1`, row `FAILED … rc=1 collected=496 selected=5` |
+| delete `GATE_REACHED_END=1` | `EXIT=1`, row `INCONSISTENT`, `FAIL: verify.sh is exiting 0 WITHOUT its final PASSED banner` |
+
+Row 2 is the finding. The trap was written beside `BUILD_LOG=$(mktemp)`, ~230 lines below
+the floor-consistency check it needed to cover, so a real gate failure produced a log file
+and no row — the reader could only call it "incomplete" while the script knew it had
+FAILED. The trap now precedes the first `exit` in the script body, `GATE_TREE` is snapshot
+as soon as `$PY` resolves, and the comment at the trap says what the sabotage cost.
+
+**Two things the design refuses on purpose.** The ledger never changes a verdict — every
+write is best-effort and non-fatal, because a full disk should lose the record, not the
+gate. The single exception runs the other way: `rc=0` without the final banner is recorded
+`INCONSISTENT` and **forced nonzero**, since a gate that exits 0 without finishing is the
+house failure mode, not a logging concern. And coverage is judged per-K (some single K
+with all K tiles green), not against a hard-coded ten — the throttled-box recipe
+`conf-tile:1/8 … 8/8` is just as complete, while tiles at mixed K provably leave holes.
+
+Also worth knowing: `.gate-runs/` **must** stay gitignored, because the tree id hashes
+`git status --porcelain` — a tracked ledger would change the tree id on every run and
+every row would be stale on arrival. `gate_status.py` warns loudly if it ever sees that.
+
+Still owed: unchanged from `2026-08-16d`/`e` — the nine tile phases before push. `lean`
+re-run green here (it lints the board edits in this session). No Python behaviour changed;
+the 2026-08-14 3-seed fuzz sweep still stands.
+
+---
+
 ## 2026-08-16e — B1 was already closed and nobody noticed: both halves proved 2026-07-28/08-04, now verified
 
 rows: B1 (closed; id stays retired).

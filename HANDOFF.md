@@ -17,13 +17,14 @@ session: run the Rhythm protocol at the bottom.
 ## Banner
 
 > 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-16**: `lean` re-run and PASSED with its new step 4f; the nine tile phases
-> were last all-green on the leg-7 4c-i tree and **are owed again before the next push**.
-> No Python behaviour changed since — docs, one shell step, one lint script — so the
+> As of **2026-08-16**: `lean` re-run and PASSED; the nine tile phases were last all-green
+> on the leg-7 4c-i tree and **are owed again before the next push**. No Python behaviour
+> changed since — docs, the `verify.sh` run-ledger wrapper, one lint script — so the
 > 2026-08-14 3-seed fuzz sweep still stands.
-> Last session: **`B1` verified closed — both halves were proved 2026-07-28/08-04 and only
-> the record was open; the star-filter half is sabotage-confirmed type-checked** →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-16e`.
+> Last session: **`verify.sh` now records every run** — a gitignored `.gate-runs/` row plus
+> the phase's full output, read back by `python scripts/gate_status.py`, so "which phases
+> are green on *this* tree" stops being memory →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-16f`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
