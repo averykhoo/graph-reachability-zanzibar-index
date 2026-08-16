@@ -653,7 +653,8 @@ def test_swarm_campaign_reaches_cells_and_never_starves_a_switch():
 
 def test_swarm_all_on_stratum_covers_the_legacy_shape():
     """Property guarded: the swarm does not wash out the existing generators'
-    distribution (HANDOFF item 1b, constraint 2).
+    distribution (`docs/history/handoff-status-2026-08.md` §1b, retired from `HANDOFF.md`
+    on 2026-08-11; constraint 2).
 
     The 'all switches on' stratum is drawn with probability 1/4 and is a SUPERSET of the
     legacy `schema_asts` shape (all `body_*` arms available, plus the tupleset axes), so
@@ -822,7 +823,8 @@ def test_dense_regime_finds_no_fail_open_divergence():
 
     1. **Grammar.** No fail-open is expressible without a NEGATED TTU. A dropped TTU
        parent is a false negative under a positive TTU and a false POSITIVE under a
-       negated one (`HANDOFF.md`), and every generator in the tree — including the
+       negated one (`docs/history/handoff-status-2026-08.md` §1, archived from
+       `HANDOFF.md` on 2026-08-16), and every generator in the tree — including the
        design's own prototype witness builder — emitted only positive TTUs. Hence the
        `body_negttu` switch: `define r3: [user] but not r1 from parent`.
     2. **Driving.** An over-grant is masked from BELOW (a near-empty store gives the
@@ -1096,7 +1098,9 @@ def test_admission_parity_is_asserted_not_assumed():
     """Property guarded: the sweep never quietly proceeds after the backends disagreed
     about whether a write was legal.
 
-    HANDOFF item 1b's stated constraint: the graph admits a restriction-invalid tuple as
+    The stated constraint of plan item 1b (retired from `HANDOFF.md` on 2026-08-11; now
+    `docs/history/handoff-status-2026-08.md` §1b): the graph admits a restriction-invalid
+    tuple as
     a silent no-op while the set engine refuses it. If `Diff.add` swallowed that, the
     store would differ per backend and the sweep would report divergences that are
     really admission asymmetries — or, worse, measure the rejection path and report

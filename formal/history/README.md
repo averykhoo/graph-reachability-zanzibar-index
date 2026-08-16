@@ -1,5 +1,11 @@
 # formal/history/ — the historical record of the (now-complete) proof effort
 
+> **FROZEN 2026-07-12 — provenance, not a living document.** An index of a finished effort,
+> written when this directory held only the three files it lists; `formal/history/` now
+> also carries dated scope docs (some of them ACTIVE-PLAN) that it does not mention, and
+> its status lines are as-of-then. Live state: [`HANDOFF.md`](../../HANDOFF.md) + the
+> session ledgers. Corrections are appended dated at the top, never edited into the body.
+
 These three documents are the **provenance archive** of the Lean formal-verification
 effort. The effort is complete; for day-to-day orientation they are **superseded by
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md)** (the durable topical map) and

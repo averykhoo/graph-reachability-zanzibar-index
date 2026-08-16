@@ -1,5 +1,16 @@
 # bulk_backfill duplication of RC1/RC2 — measurement log
 
+> **FROZEN 2026-08-16 — provenance, not a living document.** Status lines below are
+> as-of-then and several are now false; live state: `HANDOFF.md` + the session ledger.
+> Corrections are appended dated at the top, never edited into the body.
+>
+> ⚠ **This leg LANDED on 2026-08-11, and where this document and the archive disagree,
+> trust the archive.** `docs/history/handoff-status-2026-08.md` §1 records BOTH root
+> causes measured here as FIXED (RC1 `ed46e54`, RC2 2026-08-11), and §1b records the
+> implementation corrections found while building the generator-coverage work this fed.
+> The “READ-ONLY; tree restored” line below describes the investigation, not the repo
+> today; every excerpt and line number is against `e136c8c` and has since moved.
+
 Repo: C:\Users\user\PycharmProjects\graph-reachability-zanzibar-index (READ-ONLY; tree restored)
 Date: 2026-08-10
 Interpreter: C:/Users/user/anaconda3/envs/graph-reachability-zanzibar-index/python.exe

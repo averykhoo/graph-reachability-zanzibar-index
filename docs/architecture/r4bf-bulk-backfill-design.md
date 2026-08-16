@@ -1,5 +1,20 @@
 # R4-BF — bulk boolean `backfill()` for `build_index` (design, 2026-07-15)
 
+> **FROZEN 2026-08-16 — provenance, not a living document.** R4-BF LANDED on
+> 2026-07-15 and ships as `index_v4/bulk_backfill.py`; this is the design record it was
+> built from, not a maintained description of the code. Its “code-verified” claims are
+> as of 2026-07-15 — **where this document and the code disagree, the code wins**
+> (`CLAUDE.md`), and the live pin on the behaviour described here is the differential
+> state-identity gate `tests/test_bulk_build.py` (§5's corpus extension). Measured
+> results: `benchmarks/results/PERF_ANALYSIS.md` “Applied” → R4-BF, and
+> `docs/history/perf-round4-2026-07.md`.
+>
+> ⚠ The RC1/RC2 filter duplication between this path and `processor.py` — sized in
+> `docs/design/generator-coverage/bulk-backfill-duplication.md` — was a live
+> correctness bug found long after this design was written, and is FIXED
+> (`docs/history/handoff-status-2026-08.md` §1). Corrections are appended dated at the
+> top, never edited into the body.
+
 Goal: apply the P13 pattern one layer out. P13 (`docs/architecture/p13-bulk-build-design.md`,
 `index_v4/bulk_build.py`) bulk-builds the **pre-backfill** closure state; on boolean
 schemas the total build is then dominated by the unchanged per-object

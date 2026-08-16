@@ -2,6 +2,13 @@
 
 # Perf optimization — round 3 worklist + execution plan (rewritten 2026-07-14)
 
+**FROZEN 2026-07-15 — provenance, not a living document.** Round 3 landed and was
+pushed on that date, so the status lines below are as-of-then and several are now
+false — the STATUS block's closing "All work uncommitted pending review" is one of
+them. Live state: `HANDOFF.md` + the session ledger; the open perf worklist is
+[`perf-next-round.md`](../perf-next-round.md). Corrections are appended dated at the
+top, never edited into the body.
+
 > **STATUS 2026-07-15: waves 0–2 COMPLETE and integration-gated** (full suite
 > 531 + `verify.sh` all three phases, after each wave; the P1 follow-up
 > additionally 6-seed fuzz-swept). Landed this round: P12-M, P12a, P12b, N4,

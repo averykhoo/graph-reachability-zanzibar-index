@@ -231,7 +231,7 @@ def _extract(text: str) -> str | None:
 # stale "23 corpora" claims across five files -- including, in `HANDOFF.md`,
 # leg 7's own success criterion. That is the fourth recurrence of the same rot.
 #
-# The repo's standing rule (HANDOFF.md working-rhythm 3b) is "do not restate
+# The repo's standing rule (HANDOFF.md "Rhythm" 3b) is "do not restate
 # gate counts in prose". This turns that rule from a request into a refusal.
 #
 # THE CONTRACT, and it is deliberately permissive about history:

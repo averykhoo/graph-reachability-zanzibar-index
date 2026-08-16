@@ -1,5 +1,11 @@
 # Widening the Lean operational graph model beyond TWO cascade rounds — an executable plan
 
+> **FROZEN 2026-07-27 — provenance, not a living document.** A design-only plan for going
+> beyond two cascade rounds: nothing in `formal/lean/**` was ever touched for it, no open
+> board row schedules it, and its inventory, cost/value call and tree measurements are
+> as-of-then. Live state: [`HANDOFF.md`](../../HANDOFF.md) + the session ledgers.
+> Corrections are appended dated at the top, never edited into the body.
+
 **Status:** DESIGN ONLY. Nothing in `formal/lean/**` was touched producing this
 document. The tree was green throughout (`verify.sh lean PASSED`, audits 457,
 holes 0 — command in §5).

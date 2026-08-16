@@ -224,6 +224,14 @@ so it is not a security fail-open" wording and the rule predicts it inverts too.
 **not re-tested** — that bug is fixed (`c042056`) and testing would mean reverting. Open
 question, not a finding. Do not propagate the prediction into that entry as measured fact.
 
+**The probe, if anyone runs it (board row `P12`, ~½ session).** Revert `c042056` in a
+**scratch worktree** — never the working tree — add a **negated**-TTU consumer over the
+`owc_star_ttu.fga` shape, and re-measure the answer direction. **Completion criterion:**
+either this entry gains a measured severity for the 2026-08-09 sibling, or that sibling's
+"fails closed" wording is corrected in place. ⚠ Until then this remains a **prediction, not
+an observation** — do not propagate it as measured fact anywhere, including into the
+2026-08-09 entry itself.
+
 *(Context for triage: this repo ships no service wrapper — the store is a plain callable
 API with no deployment — so this is a library correctness defect, not an exposed system.)*
 
@@ -2824,6 +2832,16 @@ for a stated proof-scope reason (`BareStarStore` requires concrete stored
 objects), so the state extractor has never been pointed at it. Until that runs,
 the §3/§6 sentence should be read as *"no Python-side state divergence observed
 (bounded)"*, not as *"no state divergence"*.
+
+**Disposition (board row `LT-1`, HOLD).** Target 2 and Target 3 above are the only
+genuinely-live latent residues left in this inventory. **Do not chase them speculatively —
+act if a real schema or corpus surfaces one.** Completion criterion if reopened: Target 2
+needs a bounded search over more than two strata **and** intersection-rooted grant
+relations (the 400-trial sweep covered neither); Target 3 needs the LEAN half, which
+cannot be settled from the Python side at all. ⚠ Target 3's inference class — "fragment
+exclusions are proof-scope, not observed divergence", argued from check-level evidence — is
+**the exact inference that failed at state level on 2026-07-17**; do not re-derive comfort
+from it.
 
 ### Target 4 — the `group_userset` enum exclusion: **CONFIRMED CORRECT** (the backends agree)
 

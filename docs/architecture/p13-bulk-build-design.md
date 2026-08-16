@@ -1,5 +1,15 @@
 # P13 — bulk closure builder for `build_index` (design, 2026-07-15)
 
+> **FROZEN 2026-08-16 — provenance, not a living document.** P13/N18 LANDED on
+> 2026-07-15 and ships as `index_v4/bulk_build.py`; this is the design record it was
+> built from, not a maintained description of the code. Its “code-verified” claims are
+> as of 2026-07-15 — **where this document and the code disagree, the code wins**
+> (`CLAUDE.md`), and the live pin on the behaviour described here is the differential
+> state-identity gate `tests/test_bulk_build.py`. Measured results:
+> `benchmarks/results/PERF_ANALYSIS.md` “Applied” → P13, and
+> `docs/history/perf-round3-2026-07.md` §P13. Corrections are appended dated at the
+> top, never edited into the body.
+
 Goal: make `build_index` construct the graph index's final state directly —
 one in-memory pass + bulk writes — instead of replaying every tuple through
 the incremental `widx.add_tuple` machinery (which pays an O(ancestors×

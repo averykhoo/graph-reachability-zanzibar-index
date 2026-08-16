@@ -1,5 +1,9 @@
 # HANDOFF status archive — 2026-07
 
+**FROZEN 2026-07-29 — provenance, not a living document.** Status lines below are
+as-of-then and several may now be false; live state: `HANDOFF.md` + the session
+ledger. Corrections are appended dated at the top, never edited into the body.
+
 **Provenance, not a living document.** This is the retired dated-status run and the
 completed-work board from [`HANDOFF.md`](../../HANDOFF.md), moved here 2026-07-29 when
 that file had grown to ~1,400 lines of which roughly 43% was closed content restated in

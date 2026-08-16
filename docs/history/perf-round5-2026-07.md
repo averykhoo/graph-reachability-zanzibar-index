@@ -2,6 +2,12 @@
 
 # Perf round 5 — assessment record (2026-07-16): worklist exhausted, no landings
 
+**FROZEN 2026-07-16 — provenance, not a living document.** Round 5 closed with no
+landings (N13/N14 assessed and declined), so the status lines below are as-of-then
+and several may now be false. Live state: `HANDOFF.md` + the session ledger; the
+standing perf guardrails are in [`perf-next-round.md`](../perf-next-round.md).
+Corrections are appended dated at the top, never edited into the body.
+
 Round 5 opened on the slim post-round-4 worklist. It carried exactly two
 remaining candidates, both filed as **conditional** ("needs a motivating
 measurement or a design call first"): **N13** and **N14**. A fresh profile

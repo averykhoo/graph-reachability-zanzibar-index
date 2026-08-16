@@ -1,6 +1,14 @@
 <!-- RETIRED 2026-07-16: this is the ORIGINAL pre-build formal-verification plan (written 2026-07-09). The formal effort is now complete (sorry-free, axiom-clean); this file is archived here as a historical planning record. The living formal docs are formal/README.md, formal/HANDOFF.md, formal/CORRESPONDENCE.md. -->
 # Formal Verification Plan — Set Engine, Graph Index, and Their Equivalence
 
+> **FROZEN 2026-07-16 — provenance, not a living document.** The original pre-build plan
+> (written 2026-07-09), retired when the effort completed. Its phase definitions and §7
+> honesty clauses are still quoted verbatim elsewhere, but every status line is as-of-then
+> and most are now false. The retirement note above the title is an HTML comment, i.e.
+> invisible to a reader — this is the visible banner it needed. Live state:
+> [`HANDOFF.md`](../../HANDOFF.md) + the session ledgers. Corrections are appended dated
+> at the top, never edited into the body.
+
 **Status:** written 2026-07-09, before the build; the strategy/honesty contract of
 record. **The build is well underway — a fresh working session reads
 `formal/HANDOFF.md` FIRST** (the compact entry point: current state, next task,

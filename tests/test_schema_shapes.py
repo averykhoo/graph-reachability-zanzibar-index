@@ -273,6 +273,22 @@ def _corpus():
 #: hide it from each other. (Checked: 0 features and 0 pairs are held by exactly two
 #: fixtures both on this list.)
 KNOWN_SUBSUMED = {'confluence', 'custom_roles', 'gdrive', 'github', 'master_store'}
+#: OPEN QUESTION (board row P11, ~1/2 session) -- the fixture-TRIPLE question.
+#: Pairwise scoring is what put these five here; a TRIPLE score is what would settle
+#: keep-or-delete. Completion criterion: score feature TRIPLES over these five against
+#: the rest of the corpus; if a listed fixture holds a unique triple it is NOT subsumed
+#: and comes off this list, otherwise its retirement candidacy is confirmed and deletion
+#: becomes a real option.
+#: WARNING -- do NOT extend `test_corpus_pair_coverage_does_not_regress` or
+#: `test_fga_corpus_feature_coverage_does_not_regress` to TRIPLE coverage corpus-wide.
+#: The pair space is already this gate's cost centre and triples are cubic in features.
+#: And cost is NOT the only reason -- corpus-wide triple coverage would redden on
+#: exactly these five, and the tempting fix (adding them to an exemption list) is the
+#: hand-maintained-list-beside-a-glob pattern that has ALREADY FAILED TWICE in this
+#: tree. So scoping the triples to a subset to dodge the cost does not make this safe.
+#: Score the five OFFLINE and pin only what the scoring actually settles.
+#: (The board previously cited a `test_fixture_earns_its_place` for this trap; no such
+#: test has ever existed -- corrected 2026-08-16.)
 
 
 def test_subsumption_register_is_current():

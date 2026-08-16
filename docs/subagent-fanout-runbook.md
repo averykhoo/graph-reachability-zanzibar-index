@@ -129,6 +129,16 @@ Why this shape:
 reports a clean bill of health. Require it to state the file count, and treat 0 as failure —
 same rule as any other non-vacuity floor in this repo.
 
+**If a fan-out already died, it does NOT start from zero — mine the journal first.** The
+2026-08-10 run persisted nothing, but all **279 agent transcripts survive** in the session
+journal under `~/.claude/projects/<this-project>/…/subagents/workflows/wf_f8c85180-b74/`,
+including the completed structured output of agents whose findings never reached any
+document. Two of those transcripts settled a whole board item on 2026-08-14 without
+re-dispatching anything. Read the journal before you re-run: it is also the cheapest place
+to see the failure mode directly — the dispatched verifiers are 4 lines each, prompt in and
+nothing out. (This is a recovery path, not a substitute for the file-per-agent pattern
+above; the journal only holds *completed* agents.)
+
 **Write UTF-8 explicitly.** Reading the workflow journal back on this machine crashed with
 `UnicodeEncodeError: 'charmap' codec can't encode character 'σ'` — Lean output is full
 of `σ`, `∀`, `→`. Set `PYTHONIOENCODING=utf-8` and pass `encoding='utf-8'` on every open.
@@ -202,3 +212,24 @@ orchestrator's stated prediction about its own mechanism**.
 That is the shape to reach for when the question is sharp: one agent, one hard question,
 controlled instrument. The fan-out is for breadth over a *curated* list, and it is worth
 much less than it looks if the verification phase does not run.
+
+## The re-run this file is owed (board row `P10`, ~1 session)
+
+The 2026-08-10 scope audit is **not** done; it died at 32 of 278 items, with verification
+and synthesis never running. **Do NOT restart it from zero.** All **279 agent transcripts
+survive** in the session journal at
+`~/.claude/projects/<this-project>/…/subagents/workflows/wf_f8c85180-b74/` — mine those
+first. Then apply rule 2's cheap predicate ("does this exclude behaviour the system
+actually ADMITS?") **by hand** and re-dispatch roughly fifteen curated items, budgeting
+backwards from verification per rule 3.
+
+⚠ **A machine sweep DISCOVERS candidates but must never DEFINE the fan-out** — the failed
+run dispatched a raw grep result in which most items were parser error messages, not scope
+rejections.
+
+⚠ Read the journal with UTF-8 forced (`PYTHONIOENCODING=utf-8`); it crashed last time with
+`'charmap' codec can't encode character`.
+
+**Completion criterion:** roughly fifteen items each AUDITED **and** adversarially
+VERIFIED, with literal command output persisted per "What to persist" above. An unverified
+claim is not a finding in this repo.

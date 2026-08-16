@@ -1,5 +1,14 @@
 # Optional assurance-widening — design briefs & resume points (2026-07-18)
 
+> **FROZEN 2026-08-05 — provenance, not a living document.** The 2026-07-18 design briefs
+> and resume points for the optional assurance-widening targets. Two things a reader must
+> know before trusting any RESUME section here: the Direct-arm target is SUPERSEDED by
+> [`echain-widening-plan-2026-07-28.md`](echain-widening-plan-2026-07-28.md) §E (which is
+> the file to resume from), and dated corrections were appended INTO this body for weeks
+> while it carried no banner at all — so its resume points read as live and are not. Live
+> state: [`HANDOFF.md`](../../HANDOFF.md) + the session ledgers. Corrections are appended
+> dated at the top, never edited into the body.
+
 **Purpose.** The formal-verification arc is COMPLETE (T1 + T2a/T2b + T3/T6 over
 `ReachedBy`, Phase 6, conformance — all sorry-free, axiom-clean, gate green). What
 remains is the OPTIONAL assurance-widening ranked in `FINAL_REVIEW.md §4`. This file

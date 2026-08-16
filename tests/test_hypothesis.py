@@ -82,7 +82,9 @@ _BASE_DIRECTS = [
     (Restriction('user', '...', True),),
 ]
 
-# --- the TTU tupleset grammar (item (c), HANDOFF plan 1b) ------------------- #
+# --- the TTU tupleset grammar (item (c) of plan 1b; that plan was retired from ------ #
+# --- `HANDOFF.md` on 2026-08-11 and now lives in                               ------ #
+# --- `docs/history/handoff-status-2026-08.md` §1b)                             ------ #
 # Until 2026-08-10 ``schema_asts`` PINNED the tupleset to
 # ``{('doc','parent'): Direct((Restriction('doc','...',False),))}``, so every TTU in every
 # generated schema read a plain single-type non-boolean ``parent: [doc]``. The whole
@@ -369,7 +371,8 @@ def _grid(ast):
 
 # ---------------------------------------------------------------------------
 # Item (c) assurance: the tupleset grammar is admissible, driven, and NOT vacuous
-# (HANDOFF plan 1b; docs/design/generator-coverage/README.md §3, §4 sabotages 2/6/8)
+# (plan 1b, retired from HANDOFF.md 2026-08-11 -> docs/history/handoff-status-2026-08.md
+#  §1b; docs/design/generator-coverage/README.md §3, §4 sabotages 2/6/8)
 # ---------------------------------------------------------------------------
 
 def _ts_probe_schema(kind: str, negated: bool = False) -> str:
@@ -518,7 +521,10 @@ def test_every_tupleset_kind_is_reachable_and_the_grid_queries_it():
 
 
 def test_every_tupleset_kind_is_driven_against_the_oracle():
-    """★★ EXPECTED RED until the RC1/RC2 TTU-tupleset fix lands (HANDOFF plan item 1).
+    """★★ Was EXPECTED RED until the RC1/RC2 TTU-tupleset fix landed (RC1 2026-08-10,
+    RC2 2026-08-11); it is GREEN now and stays as the regression pin. That plan item was
+    retired from `HANDOFF.md` and now lives in
+    `docs/history/handoff-status-2026-08.md` §1.
     This is the positive control the whole of item (c) exists to produce, and it is a
     POSITIVE PIN, not an xfail (`CLAUDE.md`; `verify.sh` carries MAX_TESTS_XFAILED=0).
 

@@ -1,6 +1,17 @@
 # Coverage cells + swarm testing + an un-hardcoded TTU tupleset
 
-**Status:** design + validated prototype. Nothing in the repo was modified.
+> **FROZEN 2026-08-16 — provenance, not a living document.** Status lines below are
+> as-of-then and several are now false; live state: `HANDOFF.md` + the session ledger.
+> Corrections are appended dated at the top, never edited into the body.
+>
+> ⚠ **This leg LANDED on 2026-08-11, and where this document and the archive disagree,
+> trust the archive.** `docs/history/handoff-status-2026-08.md` §1b records three
+> implementation corrections found while actually building what is designed here; they
+> were never folded back into this file. The "Status" line immediately below was written
+> before the leg landed and is retained unedited as provenance.
+
+**Status (as of 2026-08-10, superseded — see the banner above):** design + validated
+prototype. Nothing in the repo was modified.
 Prototype code: `C:\Users\user\AppData\Local\Temp\zz_*.py` (see §7 for the file map).
 All numbers below were measured on this machine on 2026-08-10 against
 `graph-reachability-zanzibar-index@e136c8c` with

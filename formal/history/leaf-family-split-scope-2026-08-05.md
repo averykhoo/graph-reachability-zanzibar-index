@@ -4,6 +4,19 @@
 Decided by the user 2026-08-05. This file is the scoping pass so the leg is resumable
 without re-deriving the blast radius; **no Lean declaration was changed to produce it.**
 
+> **ACTIVE-PLAN (declared 2026-08-16).** This document is being executed right now — it is
+> live until its board rows close, then it gets the frozen banner. See
+> [`docs/README.md`](../../docs/README.md) §2 for the liveness states. Corrections are
+> appended dated at the top (§11 is the running record); the body below is provenance and
+> **§4 and §11.3 are known-wrong in stated ways** — read §11.1 and §11.5 before acting on
+> either.
+>
+> **NOTE 2026-08-16 (handoff migration) — board row `P5` reads §9.1–9.3 PLUS §7 step 6.**
+> §9 carries the verdict and the traps, but not the completion criterion: that is **§7
+> step 6** — re-point the readers, then the `Inv` stack, then **delete `W4NarrowT2a`**,
+> which is what closes `ZT-P3-1` for T2a. Sizing 1–2 sessions, gated on row `P4`. Per §9.1
+> this is **effort, not risk** — the attack probe returned NO-KILL.
+
 > **Why this document exists.** `W4NarrowT2a`'s docstring
 > (`lean/ZanzibarProofs/FullScope.lean`) offered three ways to correct T2a
 > (`graph_reached_inv`), and both HANDOFF files said "a design decision is owed".

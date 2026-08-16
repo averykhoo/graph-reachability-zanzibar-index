@@ -6,7 +6,8 @@
 #   that matter most for multi-instance (HA) correctness -- `FOR UPDATE` row locks,
 #   MVCC read snapshots, out-of-order log-id commits -- either render to nothing on
 #   SQLite or cannot manifest there at all.  That made the HA work "reasoned about,
-#   not tested" (HANDOFF.md, Standing/latent, 2026-07-26).  This script stands up a
+#   not tested" (`docs/history/handoff-status-2026-07.md` "Zero-trust review 2026-07-26"
+#   (archived from `HANDOFF.md` 2026-07-29) §P5).  This script stands up a
 #   real server so `tests/test_postgres_ha.py` can exercise them.
 #
 # WHAT IT IS *NOT*

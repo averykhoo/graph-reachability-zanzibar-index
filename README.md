@@ -622,7 +622,8 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
 
-> Live/open tracking now lives in [`HANDOFF.md`](HANDOFF.md); the list below is the
+> Live/open tracking now lives in the priority board [`HANDOFF.md`](HANDOFF.md) — ranked
+> rows, not a narrative status file; the list below is the
 > record of what shipped (struck = done) plus a few deliberately-deferred items.
 
 * ~~re-introduce invariant checks for the index v3, and think of more checks~~
@@ -633,7 +634,9 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
   decision (2026-07-17): raw tuples live exactly once in `TupleV1`/`TupleLogV1`;
   the index's direct edges are its own materialization, not a second tuple store,
   and `TupleSource.remove` already guards the remove hazard at the source layer
-  (full rationale in `HANDOFF.md`; the boolean storage-leaf vs routed-leaf split
+  (full rationale in `docs/history/handoff-status-2026-07.md` "Deferred / backlog"
+  (archived from `HANDOFF.md` 2026-07-29), item "Track user-triples vs rule-triples
+  in the index"; the boolean storage-leaf vs routed-leaf split
   is for TTU semantics, not provenance)
 * ~~parse the fga schema (json) into filters and rewrite rules~~
   `parse_openfga_json` (OpenFGA 1.1 authorization-model JSON → the same AST)

@@ -1,5 +1,12 @@
 # PROOF_STATUS.md — the append-only session ledger
 
+> **LIVING** — the append-only formal session ledger, still written every session; the TOP
+> entry is the live formal resume point. Entries are never retro-edited: a later entry
+> names what it refutes, and a correction is appended rather than merged into an old entry
+> ([`docs/README.md`](../../docs/README.md) §2, §6). Note the PRE-LEDGER TAIL — from
+> `## Current phase & resume point` to end of file — which is frozen July state and
+> carries its own banner.
+
 **A fresh session reads `formal/HANDOFF.md` FIRST** (the compact entry point: state of
 the world, the next task, house rules). This file is the append-only ledger backing it
 — newest entry first; read only the TOP entry for resume-point detail, deeper entries
@@ -9,6 +16,37 @@ HANDOFF.md's "The next task".
 ---
 
 ## Session 2026-08-16 (**LEG 7 STEP 4c-i LANDED — the leaf-provenance rule layer, with a ZERO recompile cone. The 4c-pre ALLOCATION was refuted THREE more times before it was built on, once by an instrument that was itself blind. `ttuStarFree` part (iv)'s blocking decidability question is ANSWERED: NO-BLOCK, machine-checked.**)
+
+> **CORRECTION 2026-08-16b (handoff migration).** §3 below closes `ttuStarFree` part
+> **(iv)**'s blocking question only. Part **(iii)** is where the leg's time goes, and its
+> cost was recorded on the `HANDOFF.md` board and in a gitignored `.scratch/` file that is
+> not in any clone; it is transcribed here so board row `P7` survives.
+> Re-measured 2026-08-14: **163 occurrences across 18 modules**, split 124
+> hypothesis-carry / **5 genuinely CONSUMED** / 5 bundle-or-decider / 29 prose — about 97%
+> mechanical. The 5 consumed sites live in **two** modules,
+> `GraphIndex/RulesBareStar.lean` and `GraphIndex/RestrictBase.lean`, and need **two
+> structures that do not exist yet**:
+> 1. a **through-shape carrier weakening `StarSeed`** — conjunct 1 must go from "subject =
+>    seed's subject" to "subject = seed's subject **OR** subject = `⟨seedType, STAR, tr⟩`
+>    for a through-shape `tr` declared by the widened `isSubjectWildcardUserset`", with the
+>    `ttu` case in `starSeed_step` discharged **positively** by exhibiting that shape (it
+>    can no longer be an `exfalso`). This is the leg's one genuinely new definition.
+> 2. a **bridge-completeness clause on `ReachedByRulesAdmitted`** — for
+>    `nreaches_of_semAux_rulesBS`'s `ttu` case, routing through the in-bridge that part (ii)
+>    materialises; today's `reachedByRulesAdmitted_edge_complete` says nothing about
+>    bridges. **The hardest of the five.**
+>
+> **Supersedes the per-module breakdown in the 2026-08-10 entry below** — that entry's
+> "Sizing: 162 occurrences across 18 modules (`CascadeStrataSettle` 26, `RulesBareStar` 19,
+> `RestrictBase` 18, …)" line predates the 2026-08-14 re-measurement, on which
+> `RestrictBase` is **19**, not the 18 recorded there, and it is one of the two modules
+> holding the 5 CONSUMED sites, so board row `P7` must size off 19.
+>
+> **Order: (iii) then (iv); both need (ii) first.** (iv) is then mostly the textual gate
+> edit `TtuStarWide.lean` already demonstrates. ⚠ **`W4Fragment.ttuStarFree` stays
+> UNCHANGED until (ii) lands** (§3's own warning; the 2026-08-10 refutation stands).
+> **Completion criterion:** `W4Fragment.ttuStarFree` widened to `TtuStarFreeW` with
+> `graph_correct` still sorry-free, and `removeGateB` → `removeGateBW`.
 
 **Task taken:** the user asked for a sequential phase plan for the whole board, then for
 board items 1 (leg 7) and 2 (`ttuStarFree`) taken as far as possible, gate green.
@@ -621,6 +659,19 @@ the leg itself.
 ---
 
 ## Session 2026-08-08 (**LEG 7 PRE-WORK: the attack-first probe is DONE (NO-KILL), step 2 is DISCHARGED, and THREE documents were refuted by measurement. No Lean declaration changed — one docstring, one new conformance pin.**)
+
+> **CORRECTION 2026-08-16 (handoff migration).** §6 below says `W4WitnessSelfRef` is
+> "designed but unwritten" but does not record the design; it lived on the `HANDOFF.md`
+> board and is transcribed here so board row `P8` is resumable from this entry alone.
+> **Model on `W4Witness`, NOT `W4WitnessDirect`** — `self_flag` needs no `_d` layer.
+> **Two non-vacuity instruments are required**, because the plausible failure here is not
+> an uninhabitable bundle but a **tautological CLONE of `W4Witness.Sx` under renaming**,
+> which typechecks, audits clean and moves no pin (`echain-widening-plan-2026-07-28.md`
+> §C.5 item 4 is the same failure shape). **Completion criterion:** the witness lands
+> sorry-free with both instruments, and `self_flag` moves from spec-side to theorem-backed
+> per `ZT-P3-3`. ⚠ **Decide promotion separately** — see §6's own caveat: it buys less than
+> it looks, since the node-level GC behaviour the corpus exists for is dropped entirely by
+> projection P5 (9 node rows, 0 crossing the seam). Sizing ½–1 session.
 
 **Task taken:** leg 7 (`leaf-family-split-scope-2026-08-05.md`) is decided-but-deferred, so
 this session did the parts its §7 orders BEFORE any restructuring — the house-rule-2 attack
@@ -7035,6 +7086,14 @@ remaining: T0b Kahn** (self-contained, no new model needed); then T1/T2 need the
 concrete models built first (see ROADMAP).
 
 ## Current phase & resume point
+
+> **FROZEN 2026-07-10 — provenance, not a living document.** Everything from this heading
+> to the END OF FILE is pre-ledger July state, kept because several stage decisions were
+> first written down here. It is what a grep for "resume point" hits, and it has been
+> superseded by every session entry above it — several of its status lines are now false.
+> The live resume point is the TOP entry of this ledger, plus the board in
+> [`HANDOFF.md`](../../HANDOFF.md). Corrections are appended dated at the top, never
+> edited into the body.
 
 - **SORRY COUNT = 0 (2026-07-10).** Every stated theorem is proved at its
   documented scope; the remaining work is SCOPE WIDENING (ROADMAP W1–W4: wildcard

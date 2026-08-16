@@ -125,6 +125,17 @@ contradicted itself; both places now say 0–5.
 > shape. Closing it properly needs a decidable fragment pre-check, which does not
 > exist: `W4Fragment` has no `admissionB`-style boolean form. Real work, not a flag.
 
+**Tracked as board row `DW-1` (SOMEDAY, its own leg; nothing is blocked meanwhile).**
+Worth actually attempting rather than assuming: the analogous decidability question for
+`ttuStarFree` part (iv) was assumed to be a possible hard blocker for two days and turned
+out to be **NO-BLOCK, machine-checked** (2026-08-16) — a bounded quantification over finite
+lists with an already-`Bool`-valued conjunct. Try that same shape here before concluding
+`W4Fragment` is undecidable. ⚠ The direction here is fail-CLOSED (the model under-reports),
+so this is a driver-honesty item, **not** a live authorization risk. **Completion
+criterion:** an `admissionB`-style boolean form for `W4Fragment` plus its soundness
+equivalence lemma, wired as a zcli `mode=graph` pre-check that REFUSES an out-of-fragment
+schema instead of answering.
+
 All answer-comparing suites share ONE query grid
 (`formal/conformance/grid.py::grid`): targets are the stored-tuple cross product
 PLUS every schema-DECLARED `(type, relation)` paired type-aware with that type's

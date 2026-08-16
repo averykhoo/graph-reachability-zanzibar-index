@@ -1,6 +1,7 @@
 """ZT-P5 re-adjudication pins (2026-07-26) — "ignore the ignore".
 
-`HANDOFF.md` "Zero-trust review 2026-07-26" §P5 lists dismissals whose stated
+`docs/history/handoff-status-2026-07.md` "Zero-trust review 2026-07-26" (archived from
+`HANDOFF.md` 2026-07-29) section P5 lists dismissals whose stated
 justification no longer holds. This module re-adjudicates them BY REPRO or BY
 BOUNDED SEARCH, never by argument, and pins each verdict so the next session does
 not redo the work. Every negative result here states its bounds explicitly — a

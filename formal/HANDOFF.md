@@ -1,6 +1,6 @@
 # HANDOFF.md — START HERE (the formal-verification entry point)
 
-**A fresh session reads THIS FILE FIRST, top to bottom (~250 lines), then goes straight
+**A fresh session reads THIS FILE FIRST, top to bottom, then goes straight
 to work on "The next task" below.** Pull in other docs only on demand:
 
 | doc | what it's for | when to read |
@@ -46,7 +46,7 @@ That is not a proof gap: Leg-0 probe D.3 machine-checked `Inv.negEdgeFree` FALSE
 so the edge and the `neg` row live on different nodes — 0 mismatches on the real backends);
 it is a modelling limit of the P6 leaf-family collapse.
 
-**★ The design decision that was owed here is now MADE (2026-08-05): option (c) — model
+**The design decision that was owed here is now MADE (2026-08-05): option (c) — model
 the leaf-family split and retire P6 — and the work is DEFERRED, not scheduled.** (a)
 "restate at drained states only" and (b) "weaken `negEdgeFree`" both shrink
 the claim; (c) is the only one that raises assurance. The decisive finding: **nothing
@@ -62,7 +62,7 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
-**★★ 2026-08-16 — LEG 7 STEP 4c-i IS IN (`GraphIndex/LeafRules.lean`), the ALLOCATION was
+**2026-08-16 — LEG 7 STEP 4c-i IS IN (`GraphIndex/LeafRules.lean`), the ALLOCATION was
 refuted THREE more times first, and `ttuStarFree` part (iv)'s BLOCKING QUESTION IS
 ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11.7 FIRST.**
 
@@ -79,7 +79,7 @@ ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11
   `r.1=banned`, not three leaves, storage always first); a tainted userset restriction gets
   its OWN storage leaf (reachable from the live fixture `userset_over_derived.fga`); and —
   **invisibly to the instrument that validated the first two** — the n-ary union SPINE.
-* **★ THE METHOD LESSON, now in [`docs/sabotage-procedure.md`](../docs/sabotage-procedure.md).**
+* **THE METHOD LESSON, now in [`docs/sabotage-procedure.md`](../docs/sabotage-procedure.md).**
   The first two fixes were validated by transcribing `persistedLeaves` into Python: *"82/82,
   0 disagreements"*. That transcription consumed Python's **n-ary** AST; Lean never sees it
   (`encode.py::_fold_binary` LEFT-FOLDS). Re-run binarized: 1 disagreement, on
@@ -87,14 +87,14 @@ ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11
   rule over the wrong input REPRESENTATION is the mirror instrument with extra steps* — and
   the second, genuinely independent instrument (744/744) was structurally incapable of
   catching it.
-* **★★ A LIMIT OF THE BINARY `Expr` LEG 7 MUST CARRY.** `Core/Schema.lean` justifies
+* **⚠ A LIMIT OF THE BINARY `Expr` LEG 7 MUST CARRY.** `Core/Schema.lean` justifies
   left-folding n-ary unions by associativity+commutativity — true of `sem`, **false of the
   leaf ALLOCATION**. Measured: `a or b or safe` → 2 leaves, `(a or b) or safe` → **1**, and
   `_fold_binary` maps both to the SAME `Expr`. The model is faithful to the FLAT form; the
   other shape is refused mechanically at
   `formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`.
   Making it faithful to both means an n-ary `Expr` — a trust-root change, out of scope.
-* **★★ `ttuStarFree` PART (iv) IS UNBLOCKED.** `GraphIndex/TtuStarWide.lean` answers the
+* **`ttuStarFree` PART (iv) IS UNBLOCKED.** `GraphIndex/TtuStarWide.lean` answers the
   standing question with a theorem: `TtuStarFree` is a bounded quantification over finite
   lists, the widening only weakens the BODY, and the new conjunct
   `Schema.isSubjectWildcardUserset` is **already `Bool`-valued** — so `ttuStarFreeWB`
@@ -105,7 +105,7 @@ ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11
   UNMOVED. Re-measured: *"17 of 25 corpora mint indices 1 AND 2"* overstates the index-2
   breadth 3.4× — index ≥1 in 17, index 2 in **5**.
 
-**★★ 2026-08-15 — LEG 7 4c-PRE: 4c-as-scoped REFUTED by corpus measurement; the leaf
+**2026-08-15 — LEG 7 4c-PRE: 4c-as-scoped REFUTED by corpus measurement; the leaf
 ALLOCATION is modeled, `publicOfLeaf` is in (index-agnostic), the raw write is a measured
 FAN-OUT. Read `history/PROOF_STATUS.md` 2026-08-15 and scope-doc §11.6 (the revised step
 plan) BEFORE attempting 4c.** ⚠ **Its allocation half is SUPERSEDED by the 2026-08-16 block
@@ -122,7 +122,7 @@ above; §11.6's cone estimate is refuted and its index-breadth figure is stale.*
   is the (α) feeder for `affectedKeys`), `rawWriteRels`/`rawWriteTuples`/`writeDirectRaw`
   (the filtered fan-out). Five sabotages, each red attributable, controls green. Audits
   501 → **520**; headline statements/definitions UNMOVED.
-* **★★ 4c is NOT a caller re-point.** The dropped rows are mostly RULE-copied closure
+* **4c is NOT a caller re-point.** The dropped rows are mostly RULE-copied closure
   leaves and the index depends on WHICH ARM produced the copy — provenance
   `rewriteClosure` does not carry (shape-identical members route to `viewer.0` vs
   `viewer.1`). The rule layer must mint leaf-indexed targets for tainted keys (Python
@@ -133,7 +133,7 @@ above; §11.6's cone estimate is refuted and its index-breadth figure is stale.*
 * Toolchain: `String.contains` does not kernel-reduce — leaf-layer defs stay
   `toList`-based or `decide` pins stall.
 
-**★★ 2026-08-14 — THE §11.3 FORK IS DECIDED: branch (α). `ttuStarFree` PART (i) IS IN.**
+**2026-08-14 — THE §11.3 FORK IS DECIDED: branch (α). `ttuStarFree` PART (i) IS IN.**
 Read `history/PROOF_STATUS.md` 2026-08-14 and scope-doc **§11.5** (appended; §11.3 is left
 as written and is wrong in two places).
 
@@ -147,11 +147,11 @@ as written and is wrong in two places).
   `.i` suffix" is measurably wrong: Python routes `(viewer but not banned) or [user]` to
   `approver.2`, where a `".0"`-stripper returns `none`. `Leaf.lean::rawWriteRel`'s
   hardcoded index `0` is therefore a known-wrong model, not merely unmeasured.
-* **★ `writeLoggedOne` does NOT need an `S` parameter** — `GraphState.schema` already
+* **`writeLoggedOne` does NOT need an `S` parameter** — `GraphState.schema` already
   exists and a `σ.schema`-reading variant is definitionally equal under `σ.schema = S`.
   That removes ~145 mention-lines from the budget (61 + 84 re-measured, not §11.3's 58),
   at the price of a per-site schema hypothesis.
-* **★★ 4c CANNOT LAND ALONE — it must co-land with step 7.** P6 is a Python-side-only
+* **⚠ 4c CANNOT LAND ALONE — it must co-land with step 7.** P6 is a Python-side-only
   filter (`formal/conformance/extractor.py::_edge_projection`), so the moment 4c re-points
   `Exec.lean` the state gate reports ~76 leaf edges "only in LEAN model". Scope doc §7's
   "each step green and pushable" is refuted at 4c.
@@ -170,13 +170,13 @@ as written and is wrong in two places).
   4b, 5, 6; `ttuStarFree` parts (ii) and (iii), and (iv)'s remaining effort. Occurrence
   split re-measured: **163 in 18 modules**, only **5 genuinely CONSUMED**.
 
-**★★ 2026-08-10 — ATTACK-FIRST KILL: `W4Fragment.ttuStarFree` CANNOT BE DROPPED.**
+**⚠ 2026-08-10 — ATTACK-FIRST KILL: `W4Fragment.ttuStarFree` CANNOT BE DROPPED.**
 The user asked to undo it as a mere scope cut. It is not one: dropping it makes
 `graph_correct` and `backend_equivalence` **FALSE**, machine-checked sorry-free and
 axiom-clean (`W4FragmentNoTS` = `W4Fragment` minus the one clause; `ReachedBy` from the
 tree's own `graphRun_reached`, never hand-assembled; 120 comparisons, control a
 one-character delta `folder:*` → `folder:f1`).
-★ **The predicted mechanism was REFUTED and the conclusion still holds** — the
+**The predicted mechanism was REFUTED and the conclusion still holds** — the
 counterexample uses **no object wildcard**, so this is not the I14 bug; `bareStar` keeps
 that shape out of scope anyway. The real gap is one layer earlier: Lean's W1c **in-bridge**
 has no star-tupleset **through-shape** notion (`UsStarWrite.lean:71`), and
@@ -187,7 +187,7 @@ write path; re-proving `ttuLeaf_elim_nss` + `StarSeed`, which exist BECAUSE of t
 the remove leg) across **162 occurrences in 18 modules**. Not blocking. Detail:
 `history/PROOF_STATUS.md` 2026-08-10.
 
-**★ LANDED 2026-08-09 — LEG 7 IS UNDER WAY: steps 3 and 4a are in
+**LANDED 2026-08-09 — LEG 7 IS UNDER WAY: steps 3 and 4a are in
 (`8291c3a`, `41b7029`), and the scope doc is now right in one place and wrong in another.**
 `GraphIndex/Leaf.lean` carries leaf addressing (`leafPred`/`isLeafPred`/`leafNode`), the
 raw-write routing (`rawWriteRel`/`rawWriteNode`/`rawWriteTuple`), the forked write
@@ -195,12 +195,12 @@ raw-write routing (`rawWriteRel`/`rawWriteNode`/`rawWriteTuple`), the forked wri
 481 → 493, headline statements 38/38 and definition pin 155/155 **unmoved**.
 * **§3's bet HELD** — no new sentinel axiom; `relNameOK` gives leaf-vs-bare distinctness
   for free, and `relNameOK_of_isDerived` derives declaredness from `isDerived`.
-* **★ §4's prescription is REFUTED. Do not fork `writeDirect`; fork the TUPLE.** Python
+* **§4's prescription is REFUTED. Do not fork `writeDirect`; fork the TUPLE.** Python
   does not fork its write path — `RuleSet.apply` re-addresses the triple
   (`zanzibar_utils_v1.py:447`) and the ordinary write runs. So `writeDirect` stays
   byte-identical and §4's predicted duplication of the projection and fold lemmas is not
   owed at all.
-* **★★ WHERE IT STOPPED, and it is a design fork the scope doc does not contain**
+* **WHERE IT STOPPED, and it is a design fork the scope doc does not contain**
   (`history/leaf-family-split-scope-2026-08-05.md` §11.3): once the EDGE moves to the leaf
   node, `writeLoggedOne`'s `pushDelta` is a separate unforced choice — move the row too
   (faithful to Python's outbox, but `affectedKeys` then needs a leaf → public map the model
@@ -212,7 +212,7 @@ raw-write routing (`rawWriteRel`/`rawWriteNode`/`rawWriteTuple`), the forked wri
   module), so §5 is neither confirmed nor refuted. Detail: `history/PROOF_STATUS.md`
   2026-08-09 and scope doc §11.
 
-**★ LANDED 2026-08-08 — THE `rewriteClosure` DEDUP LEG (`CORRESPONDENCE.md` §7.2 item 6,
+**LANDED 2026-08-08 — THE `rewriteClosure` DEDUP LEG (`CORRESPONDENCE.md` §7.2 item 6,
 CLOSED).** The model's `rewriteClosure` did not deduplicate where `RuleSet.apply` does, so
 on a *reconvergent* schema it counted DERIVATION PATHS where Python counts LIVE RAW TUPLES
 (`lean=2 python=1`, growing `1 → 2 → 4` with the number of chained diamonds — with SCHEMA
@@ -223,7 +223,7 @@ attributable. The decisive argument was **house rule 5**: `RemoveOccCount.lean`'
 *asserted Python's unit* and was false on any reconvergent schema, while the same file's
 attack bullet said so — the file contradicted itself and R3/R4's faithfulness claim rested
 on the wrong half. Sizing held: the count stack is list-generic, so `untOccCount`/R3/R4
-needed **zero** proof rework. **★ Two things nobody predicted:** the over-count cost
+needed **zero** proof rework. **Two things nobody predicted:** the over-count cost
 RUNTIME (a zcli remove-stream timeout that the fix resolves), and the sabotage exposed a
 LIMITATION rather than a confirmation — the new corpora do *not* catch the wrong (global)
 dedup, `nary_union` does; they guard opposite errors. Detail:
@@ -232,6 +232,11 @@ dedup, `nary_union` does; they guard opposite errors. Detail:
 ---
 
 ## House rules (non-negotiable, user-adjudicated)
+
+The SHARED doc conventions — liveness states, the frozen banner, citation keys, the
+priority vocabulary — live in [`docs/README.md`](../docs/README.md); the numbered rules
+below stay authoritative for the `formal/` subtree and are cited BY NUMBER, so the
+numbering is byte-stable and this pointer is deliberately unnumbered.
 
 1. **Honesty norm.** Never fake a proof, never postulate the thing being proven
    (no `check := sem` models, no invariant-as-postcondition). A documented `sorry`
@@ -257,7 +262,7 @@ dedup, `nary_union` does; they guard opposite errors. Detail:
    (`formal/headline_definitions.txt` — what those statements' words MEAN, transitively)
    + the `CORRESPONDENCE.md` anchor pin + the Python conformance suite, 0 skips,
    0 xfails, + **`tests/`**.
-   **★ No counts here, deliberately.** This bullet carried four of them (457 audits, 139
+   **No counts here, deliberately.** This bullet carried four of them (457 audits, 139
    definition rows, 465 conformance, 744 collected) and by 2026-08-05 **every one was
    stale** — the same `ZT-P3-5` rot that has now been hand-fixed three times elsewhere.
    Live figures live in ONE machine-checked place, `FINAL_REVIEW.md`'s generated counts
@@ -332,7 +337,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ## State of the world (2026-07-12m — the arc is COMPLETE; all sorry-free, axiom-clean, verify.sh green)
 
-> **★ #4 IS FULLY CLOSED — proved AND driven AND documented (2026-07-19f/g).** The `remove`
+> **#4 IS FULLY CLOSED — proved AND driven AND documented (2026-07-19f/g).** The `remove`
 > constructor lives on `ReachedByW3d2`/`C`/`E` (2026-07-19f, `7a594bb`; guard: `t ∈ T` + `hdrain` +
 > the pre-remove store's `StoreValidRules`/`BareStarStore`/`TtuStarFree`/`htermT`, faithful to
 > `TupleSource.remove`), so the audited `graph_correct`/`graph_reached_inv`/`Exec.graphRun_check_eq_sem`
@@ -342,7 +347,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > fail-closed, honesty trio `graphRunOps_reached`/`_store`/`_check_eq_sem`, zcli `"ops"` field w/
 > rc 5 spec-mode rejection, new answer-level differential gate `test_conformance_remove_graph.py`)
 > and the **claim-doc sweeps** (`67f8c35`/`f1c9d14` — FINAL_REVIEW/HANDOFF/ARCHITECTURE/SEMANTICS/
-> README/CORRESPONDENCE §7 now state the scoped-removes claim + live counts). ★ GUARD DESIGN
+> README/CORRESPONDENCE §7 now state the scoped-removes claim + live counts). GUARD DESIGN
 > DECISION APPROVED BY AVERY (2026-07-19): the validly-stored + drained-prior scope is accepted as
 > the honest, faithful framing — no longer an open flag.
 >
@@ -379,7 +384,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > (`ReconcileStars.lean`; only `hCO` use = the pass-start `checkFn` agreement → leg-2's
 > `checkFn_agree_of_graphRec_cd`, which was relocated UP `ReconcileDiff`→`ReconcileStars`) and
 > `w3c_row_char_d` (`ReconcileStarsComplete.lean`; master_d + `checkFn_eq_sem_bs_d`). Both audited
-> originals refactored to BYTE-IDENTICAL wrappers (verified vs HEAD). **★ ATTACK-FIRST KILL — the naive
+> originals refactored to BYTE-IDENTICAL wrappers (verified vs HEAD). **ATTACK-FIRST KILL — the naive
 > `reachedByW3d2_shadow_d` (full-store σ0) is FALSE:** `#eval` — a stored Direct-arm subject that is ALSO
 > excluded (`approver := excl (direct[user]) banned`, `{(alice,approver,doc),(alice,banned,doc)}`) puts the
 > base seed `subjNode(alice)→objNode(doc,approver)` in the full-`T` admitted σ0 (`rewriteClosure=[t]`), but
@@ -391,15 +396,15 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > construction) + additive `T↾U`-store variants of the leg-4/5c consumers composing with `sem_untaintedFilter`
 > (leg 4 lemma C). Full step plan: `history/optional-widening-2026-07.md` leg-5d section + RESUME.
 >
-> **★ 2026-07-20b — the FILTERED-σ0 chain LANDED (substrate + shadow_d + bridge, 4 pushed increments), then
+> **2026-07-20b — the FILTERED-σ0 chain LANDED (substrate + shadow_d + bridge, 4 pushed increments), then
 > the settledness/correctness clones ATTACK-KILLED on a REAL model gap.** LANDED+PUSHED: `49cec70` the 5
 > substrate helpers (incl. `reachedByRulesAdmitted_untStore_edge_untainted`) · `6fc42ce`
 > **`reachedByW3d2_shadow_d`** (the filtered σ0 = `ReachedByRulesAdmitted σ0 S (T↾U)` + `UntaintedShadow`;
 > write case splits untainted-fold vs derived-key-drop with a DerNode-classified seed edge; added `WF S` +
-> `BareStarStore T` DerNode carries; ★ NodupKeys attack-finding) · `011ac74` the **T↾U-σ0 bridge**
+> `BareStarStore T` DerNode carries; NodupKeys attack-finding) · `011ac74` the **T↾U-σ0 bridge**
 > (`checkFnR_eq_sem_settled_d_filt` + `sem_untaintedFilter_co` + `w3d2_leg_context_d_filt`) · `0ec31d2` a
 > Direct-arm Python conformance corpus (`direct_arm_exclusion`, 3-backend, held out of GRAPH_FRAGMENT). All
-> `verify.sh lean` 448/448, additive, audited originals untouched. **★★ ATTACK-FIRST KILL (house rule 2):
+> `verify.sh lean` 448/448, additive, audited originals untouched. **ATTACK-FIRST KILL (house rule 2):
 > `reachedByW3d2C_settled_d` AND `graph_correct_w3d2_d` are FALSE as specified** — Lean's `affectedKeys`
 > (`GraphIndex/Cascade.lean:433`) is READER-ONLY and LACKS Python's LeafFamily own-key branch
 > (`processor.py:991-1011`), so a Direct-arm seed write never dirties its own derived key ⇒ a drained
@@ -408,10 +413,10 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > landed substrate/shadow_d/bridge are SOUND + reusable (conditional on settledness the bad state fails —
 > nothing to revert).
 >
-> **★ 2026-07-20c — THE MODEL FIX LANDED (step 1 DONE); the naive fix was ATTACK-KILLED first.** `affectedKeys`
+> **2026-07-20c — THE MODEL FIX LANDED (step 1 DONE); the naive fix was ATTACK-KILLED first.** `affectedKeys`
 > now carries the LeafFamily own-key branch via a **`Delta.leaf : Bool`** provenance tag (the faithful
 > discriminator — the collapsed model lands both a raw Direct-arm seed write and a reconcile emission at the
-> SAME `objNode ⟨o⟩ R`, so the branch can't key on `isDerived` alone). ★ House-rule-2: the handoff's PROPOSED
+> SAME `objNode ⟨o⟩ R`, so the branch can't key on `isDerived` alone). House-rule-2: the handoff's PROPOSED
 > naive branch (`isDerived ⇒ dirty own key`, any delta) was REFUTED — it re-dirties reconcile emissions'
 > own keys (Python's `_fan_out` never does), breaking quiescence (`runCascade_no_abort` FAILS empirically).
 > `writeLoggedOne`/`removeLoggedOne` push `leaf=true`; reconcile emissions `false`; the own-key branch is
@@ -420,7 +425,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `reconcileJobsL(R)_outbox_sound` → the no-abort/fence proofs). `verify.sh lean` 448/448 + `conf-heavy` green;
 > `CORRESPONDENCE.md` §5/§7 updated (divergence RESOLVED). See `history/PROOF_STATUS.md` 2026-07-20c.
 >
-> **★ 2026-07-20d — THE `_d` SETTLEDNESS CHAIN CLOSED (task steps 2-3 DONE): `reachedByW3d2C_settled_d`
+> **2026-07-20d — THE `_d` SETTLEDNESS CHAIN CLOSED (task steps 2-3 DONE): `reachedByW3d2C_settled_d`
 > + `graph_correct_w3d2_d` LANDED, audit 448 → 450.** Attack-first CONFIRMED the model fix before proving
 > (`#eval` drove the 20b kill schema through `graphRun`: the drained state retracts the excluded seed,
 > `check = false = sem`; scratch deleted). Three green commits: `c41829b` groundwork (`sem_nil_false`;
@@ -436,7 +441,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > store otherwise admits union-reachable Direct-arm seeds whose covered-state erase needs an unbuilt
 > star→concrete `sem` monotonicity lemma — recorded follow-up). See `history/PROOF_STATUS.md` 2026-07-20d.
 >
-> **★ 2026-07-20e — task step 4 CLOSED on the HONEST CONSERVATIVE fork: `W4WitnessDirect` LANDED
+> **2026-07-20e — task step 4 CLOSED on the HONEST CONSERVATIVE fork: `W4WitnessDirect` LANDED
 > (audit 450 → 455) + `direct_arm_exclusion` moved INTO `SCHEMAS`/`GRAPH_FRAGMENT` (conf 315 → 326
 > as counted that session; the collected total measured 2026-07-26 is **330**,
 > the graph-STATE pin ran CLEAN); `W4Fragment`/the final theorems deliberately NOT widened.** The
@@ -444,7 +449,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `accepts` (admission with `StoreValidRulesD`), `fragment` (all `_d` carries incl. `hNoUD`),
 > `within_scope`, `correct_applies` (the bundle JOINTLY discharges the audited T2b), and
 > `outside_old_admission` (plain `StoreValidRules` PROVABLY rejects the store — the widening is
-> contentful). ★ Attack findings (scratch `#eval`s, deleted): (A) the chain REJECTS removes on
+> contentful). Attack findings (scratch `#eval`s, deleted): (A) the chain REJECTS removes on
 > Direct-arm stores fail-closed (`removeGateB`'s plain-`StoreValidRules` pre-store guard; the 20d
 > `hNoUD` scoping made operational) — so `test_conformance_remove_graph.py` EXCLUDES the corpus with
 > the reason documented in situ (`_REMOVE_EXCLUDED`), while the PYTHON-side remove churn
@@ -458,7 +463,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > needs a full `_d` clone; and `GraphAdmission.storeValid` must widen to `StoreValidRulesD` (at a
 > Direct-arm store the CURRENT admission bundle is unsatisfiable). See PROOF_STATUS 2026-07-20e.
 >
-> **★ 2026-07-28 — the E-chain arc is now SCOPED and its Leg 0 (attack sweep) is DONE: 5 probes,
+> **2026-07-28 — the E-chain arc is now SCOPED and its Leg 0 (attack sweep) is DONE: 5 probes,
 > 2 KILLS, no Lean declaration changed.** The durable plan is
 > [`history/echain-widening-plan-2026-07-28.md`](history/echain-widening-plan-2026-07-28.md)
 > — **read that, not the 20e fork list below, which it supersedes in five places.** Results:
@@ -497,7 +502,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > **(4) Dropped from the risk list:** the `hND` shadow premise (a `List.mem_filter` tautology; the
 > shadow layer is already `_d`-widened). **(5) Free win:** `w4_within_scope` clause 3 is true
 > WITHOUT the `ComputedOrDirect` premise — prove `directsOnly e = true → exprDirects e ≠ []`.
-> **★ LEG 1 LANDED the same session (audit 457 → 460, definition pin UNMOVED at 139/139).**
+> **LEG 1 LANDED the same session (audit 457 → 460, definition pin UNMOVED at 139/139).**
 > `DirectArmsConcrete` (`ReconcileCorrect.lean:1001`, carrying the honest scope-carry paragraph
 > in its docstring), `storeValidRulesD_derived_subject_ne_star` (`:1052`), the faithfulness
 > star-filter on `storedDirectSubjects` (`CascadeStrataEnum.lean:626`, mirroring
@@ -509,7 +514,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > over every chain state gave 824 derived-R-node in-edges, 0 STAR-sourced; with the clause
 > dropped, 122 stores produce one.
 >
-> **★ LEG 2 LANDED 2026-08-04 — the enumeration model change.** `enumJobs2At` now takes the
+> **LEG 2 LANDED 2026-08-04 — the enumeration model change.** `enumJobs2At` now takes the
 > `Store` and enumerates **`enumJob2D`**, rippling to `enumJobs2R1`/`R2`,
 > `ReachedByW3d2E.cascade`, `Exec.cascadeLeg` and six sites in `RemoveConfluence.lean`.
 > Audits 460 → **465**; **headline STATEMENTS 26/26 byte-identical while the DEFINITION pin
@@ -533,7 +538,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 >   this caveat: with the filter defeated the tree still COMPILES, so `freshDirectCands` is
 >   pinned by the ledger, not by the type checker.
 >
-> **★ LEG 3 LANDED 2026-08-05 — the coverage packaging, plus the instrument the plan forgot.**
+> **LEG 3 LANDED 2026-08-05 — the coverage packaging, plus the instrument the plan forgot.**
 > **`w3dJobCoverage_enumJob2D_state`** (`CascadeStrataEnum.lean:981`) is the `_d` twin of
 > `w3dJobCoverage_enumJob2_state`: over any `ReachedByW3d2` state on the Direct-arm fragment,
 > `enumJob2D`'s coverage holds given only settled+complete derived operands. Audits 465 →
@@ -549,7 +554,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `reachedByW3d2_reach_collapse_root_d` needs neither `hlk'` nor `ComputedOnly e'`, so this
 > proof never looks the operand declaration up and `hCOop` has exactly one consumer.
 >
-> **★ THE PLAN CORRECTION, AND IT GENERALISES TO LEGS 4–6**
+> **THE PLAN CORRECTION, AND IT GENERALISES TO LEGS 4–6**
 > (`history/echain-widening-plan-2026-07-28.md` §C.3): the cell specified leg 3's gate as
 > "`lean` + audit pin" — a clone and no instrument — and **a packaging clone is precisely the
 > shape a green build cannot vet.** Unsatisfiable premises compile, audit clean, and pass
@@ -565,7 +570,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > `coverage_applies`. ⚠ **Carry this into legs 4 and 5, which are much bigger `_d` packagings:
 > budget a witness for each, not just a clone.**
 >
-> **★ LEG 4 LANDED 2026-08-05 — the chain PROJECTION and the E-chain final, both `_d`.**
+> **LEG 4 LANDED 2026-08-05 — the chain PROJECTION and the E-chain final, both `_d`.**
 > **`reachedByW3d2E_toC_d`** projects `ReachedByW3d2E` onto `ReachedByW3d2C` on the
 > Direct-arm fragment; **`graph_correct_w3d2E_d`** composes it with `graph_correct_w3d2_d`.
 > Both compiled first try. The audited `reachedByW3d2E_toC` / `graph_correct_w3d2E` are now
@@ -581,7 +586,7 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 > blocks vanish) — but the bundle needs **`DirectArmsConcrete`**, which §A.3's inventory
 > does not predict because it arrives through `enumJobs2At_valid`, the VALIDITY half, not
 > through the coverage lemma the inventory is organised around.
-> **★ The instrument, per §C.3, and it is stronger than the one it joins.**
+> **The instrument, per §C.3, and it is stronger than the one it joins.**
 > `W4WitnessDirect.toC_applies` + **`w3d2E_correct_applies`** instantiate both cores at
 > `(Sd, Td)`. Say the comparison the right way round: `w3d2E_correct_applies` is a WEAKER
 > STATEMENT than the existing `correct_applies` (`ReachedByW3d2E` projects INTO

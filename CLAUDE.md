@@ -7,10 +7,10 @@ the set engine natively, the graph index via derived predicates maintained by a 
 IVM delta processor.
 
 ## Start here (every session)
-- **Read [`HANDOFF.md`](HANDOFF.md) first** — the mutable session state: current
-  status + the open-TODO board. This file (`CLAUDE.md`) is the durable contract;
-  `HANDOFF.md` is what changes session-to-session. Keep its TODO board current as
-  you pick up / finish work.
+- **Read [`HANDOFF.md`](HANDOFF.md) first** — the priority board: a ranked row per open
+  item, plus an item block for each `NOW`/`NEXT`. This file (`CLAUDE.md`) is the durable
+  contract; the board is what changes session-to-session. At end of session write back
+  via its "Rhythm" protocol (session-log entry, banner, board rows).
 - **Always run the gate before pushing.** Never push red or unverified: the phased
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`
   (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in
@@ -20,6 +20,30 @@ IVM delta processor.
   be "type `pytest tests/` and read the tail" — no count floor, no
   skipped/xfailed/xpassed parse, no exit-code assertion, no proof a tile collected
   anything. Bare `pytest tests/` is fine while iterating; it is not the gate.
+- **The four standing footguns.** Each of these has bitten a session in this repo, and
+  the first one has bitten three. They live here because `CLAUDE.md` is auto-loaded
+  every session, so carrying them costs the reader nothing; the full write-ups are in
+  [`docs/gate-runbook.md`](docs/gate-runbook.md).
+  * ⚠ **An exit code piped through `tail`/`tee` reports the PIPE's status.** A genuinely
+    FAILED phase then looks like exit 0 — and if it is followed by `&& <next phase>`,
+    the chain continues happily past the failure. Bit 2026-08-10 (a `4 failed` run
+    reported exit 0), and again on 2026-08-11 and 2026-08-14. Run
+    `cmd > /tmp/p.log 2>&1; rc=$?`, branch on `$rc`, and **read the `PASSED` line**.
+  * ⚠ **`HYPOTHESIS_SEED=N` does nothing** — hypothesis never reads that variable, so a
+    "multi-seed sweep" written with it runs the SAME seed every time. Only
+    `--hypothesis-seed=N` works; `tests/conftest.py` now refuses the env var outright.
+  * ⚠ **A divergence gets a positive pin, never an xfail** — an xfail is itself a
+    failure that passes. The declared budget knob is `MAX_TESTS_XFAILED`, and
+    `formal/verify.sh` is the only place its value belongs (do not restate it in prose;
+    `docs/gate-runbook.md` carried a wrong value for three weeks by doing so).
+  * ⚠ **`MIN_CONF_ALL` / `MIN_TESTS_ALL` have ZERO headroom** — they are set equal to
+    the live collected counts, so deleting a single test turns the gate red. Adding
+    tests is always free; lowering a floor must be a deliberate, reviewed edit.
+- **Shared doc conventions live in [`docs/README.md`](docs/README.md)** — the liveness
+  states (LIVING / FROZEN / ACTIVE-PLAN) and the frozen banner, the session-ledger entry
+  format, the citation-key rules (ids, `file::symbol`, archive-section form), the
+  priority vocabulary (`NOW`/`NEXT`/`LATER`/`HOLD`/`SOMEDAY`) and its capacity budgets,
+  and the one-home-per-statement routing table. Read it before restructuring any doc.
 
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
