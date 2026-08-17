@@ -25,6 +25,60 @@ from here.
 
 ---
 
+## 2026-08-18 — R6-19 filed, and filing it corrected the number: 25.4% cum, 2.0% self
+
+rows: R6.
+
+Executing the standing debt `2026-08-17e` left: the one measured number in round 6 that
+belonged to no candidate, `bulk_backfill._reconcile_subject_edge` at **25.3%** of a bulk
+build. It is now **`R6-19`** in
+[`docs/perf-round6-audit-2026-08.md`](../perf-round6-audit-2026-08.md), marked in its own
+header as **not a product of the 2026-08-15 audit** — no finder wrote it, no verifier
+adversarially reviewed it — because that doc's entries are otherwise verbatim audit output
+and a filing that borrows their authority would be the wrong kind of tidy.
+
+**Filing it under yesterday's own rule changed what it says.** §"A MEASUREMENT is an
+assurance step too" says ask what a number means before acting on it, so the share was
+re-run rather than copied: `profile_r6_write --target bulk --bool-scale 300`, box idle,
+nothing else running. It reproduces — and decomposes:
+
+```
+_reconcile_subject_edge : 145,560 calls   tottime 0.382 s ( 2.0%)   cum 4.80 s (25.4%)
+_reconcile              :   1,050 calls                             cum 6.94 s (36.9%)
+```
+
+**The 25.3% was cumulative; the function's own time is 2.0%.** So the honest item is not
+"a quarter of a bulk build sits here" — it is **this call site is the denominator**:
+145,560 / 1,050 = **~138.6 bare-entity audit members per object reconcile**, each paying a
+full `plan.check_fn` evaluation and a per-subject `_residue_state` read, with
+`_member_check` / `_derived_check` / `_stored_tupleset_subjects` all *underneath* it. Any
+in-function optimization has a **2.0% ceiling**. Had it been filed from the cum share alone
+it would have read as the round's third-biggest target; it is not one.
+
+Code-verified structure went in with it, each line labelled read-vs-measured: step (4)'s
+audit loop (`:797-802`) re-walks a superset of what step (2) already evaluated; for a
+star-covered bare entity `check_fn` provably runs twice on the same subject and `ctx`
+(`:751` and `:689`) though **that rate is unmeasured on this workload**; and
+`_residue_state` at `:691` is per-object state re-read per subject, plainly hoistable.
+
+⚠ Recorded against the obvious fix: a `(subject) → bool` memo spanning steps (2) and (4)
+is **not** obviously sound. `_BulkEvalContext` reads live `bf` state, and both `_reconcile`
+(`:794`) and `_reconcile_subject_edge` (`:707`) write residues between the two evaluation
+points — so the memo owes an argument that no interleaved write changes the answer, not
+just matching arguments. The item's stated order is therefore: measure the duplicate rate
+(may close it as declined), hoist the residue read (needs no soundness argument), then
+design the memo. Overlap flagged both ways — `R6-14` already measured this neighbourhood
+at a 5.0% ceiling and was **declined**, and `R6-10` is the incremental twin of the same
+memo idea.
+
+Citers updated in the same commit (`perf-next-round.md`, the board's `R6` block, the audit
+doc's measured section); the profile doc keeps its original "(context)" line as the
+provenance the correction is against. No code touched — the profile re-run is read-only.
+
+Still owed: nothing.
+
+---
+
 ## 2026-08-17e — the sabotage procedure now binds measurements, not just checks
 
 rows: none (method lesson only; `R6`'s and `P3`'s state is unchanged).

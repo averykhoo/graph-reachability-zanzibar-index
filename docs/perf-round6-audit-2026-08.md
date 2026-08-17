@@ -57,8 +57,10 @@ Write / cascade / bulk / space verdicts:
 | `R6-13` | **UNREACHED** | **0 calls** though the bulk path plainly ran — the bulk twin of `R6-3`, needs the same star/wildcard shapes |
 | `R6-17` | duplicate of `R6-3` | settled by `R6-3`: unreached |
 
-**Unfiled finding:** `bulk_backfill._reconcile_subject_edge` is **25.3%** of a bulk build
-and belongs to no candidate. It deserves its own id, not absorption into one of these.
+**Now filed as `R6-19`** (2026-08-18): `bulk_backfill._reconcile_subject_edge` at **25.3%**
+of a bulk build belonged to no candidate. On filing, the re-run decomposed that share —
+it is **cumulative**; the function's own time is **2.0%** — which changes what the item is.
+See the entry.
 
 ⚠ **THREE instrument corrections are recorded with this pass, and they matter more than the
 verdicts they changed.** (1) The first `R6-2` probe used the wide/star schema and reported a
@@ -187,6 +189,7 @@ R6-13) — the corrections in each entry are the honest rating.
 | R6-16 | `index_v4/core.py:550` | space-compile | write-speed | high | yes | CONFIRMED (high) | Every closure flip writes a denormalized outbox row even on schemas w... |
 | R6-17 | `setengine/engine.py:1039` | space-compile | lookup-speed | high | no | CONFIRMED (high) | SetEngine._instances_of_type rescans the entire interner per evaluati... *(dup of R6-3)* |
 | R6-18 | `index_v4/models.py:72` | space-compile | space | medium | no | CONFIRMED (high) | EdgeV4 closure rows carry a dead surrogate PK and the store_id string... |
+| R6-19 | `index_v4/bulk_backfill.py:684` | build | repeated-work | low (self) | no | filed 2026-08-18, NOT from the audit | The bulk edge audit drives ~139 plan evaluations per object reconcile; the function itself is 2.0% |
 
 ---
 
@@ -625,6 +628,71 @@ R6-13) — the corrections in each entry are the honest rating.
 **Lean impact (verifier, verbatim):**
 
 > Touches two CORRESPONDENCE.md-anchored symbols: index_v4/models.py::EdgeV4 (modeled by GraphIndex/State.lean::GraphState, CORRESPONDENCE.md line 250) and the probe inside index_v4/wildcard.py::WildcardIndex.check (modeled by GraphIndex/State.lean::GraphModel.probeNonDerived, lines 253/255, incl. the ::WildcardIndex.check.key anchor). Names survive so anchors still resolve, and the Lean model keys edges abstractly without a SQL surrogate id — a pure representation change, no Lean edit required, but run verify.sh lean since anchored symbols are edited.
+
+---
+
+### R6-19 — the bulk edge audit drives ~139 plan evaluations per object reconcile (filed 2026-08-18)
+
+**`index_v4/bulk_backfill.py:684`** · dimension: build · category: repeated-work · filed impact: **low as filed** · algorithm change: no · **NOT a product of the 2026-08-15 audit** — no finder wrote it, no verifier adversarially reviewed it. It exists because the 2026-08-17 measurement pass found 25.3% of a bulk build sitting in a function that belonged to no candidate, and an unowned number is how a finding gets lost.
+
+**Provenance and the correction that came with filing.** The pass reported
+`_reconcile_subject_edge: 145,560 calls, 4.55 s cum (25.3%)` and labelled it "(context)".
+Re-run on filing (`python -m benchmarks.profile_r6_write --target bulk --bool-scale 300`,
+32,550 tuples, box idle, nothing else running) reproduces it and decomposes it:
+
+```
+wall (profiled)          : 18.92 s
+_reconcile_subject_edge  : 145,560 calls   tottime 0.382 s ( 2.0%)   cum 4.80 s (25.4%)
+_reconcile               :   1,050 calls                             cum 6.94 s (36.9%)
+  _member_check          : 230,220 calls                             cum 1.80 s ( 9.6%)
+  _derived_check         : 246,120 calls                             cum 1.37 s ( 7.3%)
+  _stored_tupleset_subj  : 221,460 calls                             cum 0.92 s ( 4.9%)  = R6-14
+  _residue_state         : 362,430 calls                             cum 0.80 s ( 4.3%)
+  _concrete_key          : 1,341,030 calls                           tottime 0.368 s
+```
+
+**The 25.4% is cumulative and the self time is 2.0%**, so the honest statement of the item
+is *not* "this function is a quarter of a bulk build". It is: **this call site is the
+denominator.** 145,560 calls over 1,050 `_reconcile` calls = **~138.6 bare-entity audit
+members per object reconcile**, each paying a full `plan.check_fn` evaluation
+(`bulk_backfill.py:689`) plus a per-subject `_residue_state` (`:691`) — and that fan-out is
+what `_member_check` / `_derived_check` / `_stored_tupleset_subjects` are all *underneath*.
+Optimizing anything inside `_reconcile_subject_edge` has a **2.0% ceiling**; the only
+material win is evaluating the audit set fewer times, or over fewer members.
+
+**Code-verified structure** (read, not measured — the honest label on each):
+
+* `_reconcile` step (4) (`:797-802`) loops the bare-entity members of `audit`, which is
+  `candidates ∪ incoming derived concretes ∪ positive-leaf concretes ∪ old upos`
+  (`:754-768`) — a superset of the set step (2) already evaluated.
+* **A visible duplicate evaluation:** for a bare-entity key that is in `candidates` *and*
+  star-covered, `plan.check_fn` runs once at `:751` (the neg fold) and again at `:689`
+  (the edge audit) with the same `ctx` and the same subject. Code-visible; **its rate on
+  this workload is unmeasured**, and demorgans_law_2 may drive it near zero.
+* `_residue_state(o_type, rel, o_name)` at `:691` is per-*object* state re-read per
+  *subject* — plainly hoistable into `_reconcile`, and worth ~40% of that row's 4.3%.
+
+⚠ **The memo that looks obvious is not obviously sound.** `check_fn` closures dispatch into
+`_BulkEvalContext` (`:63-134`), which reads live `bf` state — residues (`_derived_check`,
+`_residue_stars`), the interner and edges (`_untainted_check`) — and both `_reconcile`
+(`:794`) and `_reconcile_subject_edge` (`:707`) *write* residues between the two evaluation
+points. So a `(subject) → bool` memo spanning step (2) and step (4) needs an argument that
+no interleaved write can change the answer, not just the observation that the arguments
+match. That argument has not been made here.
+
+**What this item owes before it is worth landing** (in order, and the first two are cheap):
+(1) instrument the duplicate-evaluation rate — if it is near zero on real corpora the item
+is finished, declined; (2) hoist the `_residue_state` read and measure, since it needs no
+soundness argument at all; (3) only then design the memo, with the interleaved-write
+argument written down. Note the overlap: **`R6-14` already measured this neighbourhood at a
+5.0% ceiling and was declined**, and `R6-10` is the incremental-path twin of the same
+memoization idea — read its verdict first. Filing this id is a claim that the number has an
+owner, not that the work is justified.
+
+**Lean impact:** none — the bulk build/backfill path has no Lean model
+(`CORRESPONDENCE.md`'s P13/R4-BF entries: an "alternative constructor of the same state",
+pinned by the Python↔Python differential identity gate). Row `P17` on the board is the open
+question about that exclusion; it is not this item.
 
 ---
 

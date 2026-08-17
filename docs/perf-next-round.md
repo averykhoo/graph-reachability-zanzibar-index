@@ -42,8 +42,11 @@ measurement/gate hygiene.
   `R6-12` (1.00× intra-run), `R6-14` (5.0%), `R6-2` (24% of a non-bottleneck at
   the price of a Lean model change). **Unreachable by any benchmarked workload:**
   `R6-3` = `R6-17`, and its bulk twin `R6-13` — 0 calls each.
-  **Unfiled, found while measuring:** `bulk_backfill._reconcile_subject_edge` is
-  25.3% of a bulk build and belongs to no candidate; file it as a new id.
+  **`R6-19`, filed 2026-08-18** from the pass itself:
+  `bulk_backfill._reconcile_subject_edge` at 25.3% of a bulk build belonged to no
+  candidate. Filing decomposed the share — **cumulative 25.4%, self 2.0%** — so the
+  item is a *call-site fan-out* (~139 plan evaluations per object reconcile), not a
+  slow function, and its in-function ceiling is 2%. Overlaps declined `R6-14`.
 
 - **Measured numbers** (all landed items, per-item mechanism/before-after):
   [`benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
