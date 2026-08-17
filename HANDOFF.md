@@ -17,7 +17,7 @@ session: run the Rhythm protocol at the bottom.
 ## Banner
 
 > 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-17e**: all ten phases were run green on this tree, after the last edit
+> As of **2026-08-18**: all ten phases were run green on this tree, after the last edit
 > to it — ask `python scripts/gate_status.py`, never this line. The tree id is
 > deliberately not quoted here: it is a content address, so a tracked file cannot cite
 > its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
@@ -28,12 +28,12 @@ session: run the Rhythm protocol at the bottom.
 > `lean` still is not — it reads markdown at steps 4d/4e/4f — so a docs edit costs one
 > ~50 s `lean` re-run, not 25 minutes of tiles.
 > Last session: [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) **now binds
-> measurements, not only checks** — four instrument corrections in one day each changed a
-> verdict, so the procedure carries the five-second test: *what would this number look
-> like if the probe ran on nothing?* Before it: **`HS-4` paid**, **`R6`'s measurement pass
-> settled all eighteen candidates** (10 to land, 5 declined, 3 unreachable, none
-> implemented), **`GS-2`** scoped the tree id per phase →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`…`e`.
+> measurements, not only checks** (four instrument corrections in one day, each changing a
+> verdict) — and applying it to the round's one unowned number filed `R6-19` *and corrected
+> it*: 25.3% was cumulative, self is **2.0%**. Before: **`HS-4` paid**, **`R6` settled all
+> eighteen candidates** (10 to land, 5 declined, 3 unreachable, none implemented), **`GS-2`**
+> scoped the tree id per phase →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`…`e`, `2026-08-18`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
@@ -49,7 +49,7 @@ forward forever and are never reused.**
 |---|---|---|---|---|---|
 | `P3` | leg 7 **4c-ii + step 7, one commit** → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.7 | **NOW** | L | — | 2026-08-16 |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path | **NEXT** | M | — | 2026-08-16 |
-| `R6` | perf round 6 — **all 18 measured 2026-08-17; 10 to land, 5 declined, 3 unreachable** → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-17 |
+| `R6` | perf round 6 — **all 18 measured 2026-08-17; 10 to land, 5 declined, 3 unreachable; `R6-19` filed** → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-18 |
 | `HS-2` | split [`docs/spec-deviations.md`](docs/spec-deviations.md) (user-scheduled 2026-08-16) | **NEXT** | M | — | 2026-08-16 |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
@@ -157,8 +157,8 @@ for persistent PG) → `R6-16` → `R6-7`+`R6-8` → `R6-1`.
 re-reconcile), `R6-14` (**5.0%**), `R6-2` (24% of a non-bottleneck at the price of a Lean
 model change). **Three are unreachable by any benchmarked workload** (`R6-3` = `R6-17`, and
 its bulk twin `R6-13` — 0 calls each): they need a `T:*#P` star/wildcard workload before
-they need a patch. **Unfiled:** `bulk_backfill._reconcile_subject_edge` is **25.3%** of a
-bulk build and belongs to no candidate — give it its own id.
+they need a patch. `R6-19` (filed 2026-08-18) owns the last unowned number: `_reconcile_subject_edge`'s
+25.3% is **cumulative, self 2.0%** — a call-site fan-out, not a slow function. Read its entry.
 
 ⚠ **Two traps the numbers do not carry.** `R6-1` has the biggest read ceiling (91.4% of
 lookup) and must NOT be landed from it: the profile proves `check` *dominates*, not that
