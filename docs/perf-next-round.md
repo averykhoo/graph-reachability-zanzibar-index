@@ -20,12 +20,30 @@ measurement/gate hygiene.
   candidates (N13, N14) and declined both on a fresh profile; the assessment
   record (with both candidate write-ups verbatim) is retired in
   [`docs/history/perf-round5-2026-07.md`](history/perf-round5-2026-07.md).
-- Round 6 (opened 2026-08-15) is **audit-only so far**: a 24-agent,
+- Round 6 (opened 2026-08-15) has **landed nothing**: a 24-agent,
   adversarially-verified audit of both backends produced the candidate list in
   [`perf-round6-audit-2026-08.md`](perf-round6-audit-2026-08.md). Per
-  "Reopening a round" below, each item still needs its motivating measurement —
+  "Reopening a round" below, each item needs its motivating measurement —
   the audit satisfies the design-call half, not the measurement half. The doc
   retires to `docs/history/perf-round6-2026-08.md` when the round closes.
+  **The measurement half is now done for ALL EIGHTEEN (2026-08-17)**:
+  [`benchmarks/results/R6_PROFILE_2026-08-17.md`](../benchmarks/results/R6_PROFILE_2026-08-17.md),
+  instruments `benchmarks/profile_r6.py` (reads) and `benchmarks/profile_r6_write.py`
+  (write / cascade / bulk / space). **Land in this order:** `R6-10` (59.8% of
+  incremental boolean write time — the headline) → `R6-6` (4.75 → 1.75 statements
+  per `check`) → `R6-11` (cache torn down 8× per reconcile; one-line fix) →
+  `R6-5` (32.7% ORM construction) → `R6-4` (30.1% and growing) → `R6-9` (4.51
+  point SELECTs per write) → `R6-18` (53.1% off the biggest table) → `R6-16`
+  (1.00 unconsumed outbox row per closure edge — co-design with `R6-7`/`R6-8`,
+  which read those rows as paranoia's worklist) → `R6-7`+`R6-8` (gate-only, but
+  per-commit cost grows **14×** over 336 commits) → `R6-1` (91.4% ceiling;
+  prototype the two-tier memo first — the naive one is a correctness bug).
+  **Declined on an upper bound:** `R6-15` (topo sort is 0.9% of a bulk build),
+  `R6-12` (1.00× intra-run), `R6-14` (5.0%), `R6-2` (24% of a non-bottleneck at
+  the price of a Lean model change). **Unreachable by any benchmarked workload:**
+  `R6-3` = `R6-17`, and its bulk twin `R6-13` — 0 calls each.
+  **Unfiled, found while measuring:** `bulk_backfill._reconcile_subject_edge` is
+  25.3% of a bulk build and belongs to no candidate; file it as a new id.
 
 - **Measured numbers** (all landed items, per-item mechanism/before-after):
   [`benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
