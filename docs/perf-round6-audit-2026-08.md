@@ -1,6 +1,8 @@
 # Perf round 6 — the 2026-08-15 two-backend audit (CANDIDATE worklist)
 
-> **Status: CANDIDATES. Nothing here is landed, and nothing here is MEASURED.**
+> **Status: CANDIDATES. Nothing here is landed. ALL EIGHTEEN are now MEASURED
+> (2026-08-17)** — ten recommended to land in a stated order, five declined on an upper
+> bound, three unreachable by any benchmarked workload.
 > This is the raw material for reopening the perf arc that closed at round 5.
 > Per the reopening rule in [`perf-next-round.md`](perf-next-round.md), **every
 > item still needs a motivating measurement** (`benchmarks/stmt_bench.py` /
@@ -11,6 +13,64 @@
 >
 > When this round closes, retire this file verbatim to
 > `docs/history/perf-round6-2026-08.md`, following rounds 3–5.
+
+## Measured — the 2026-08-17 motivating-measurement pass (all 18)
+
+Full numbers, method, box conditions and the two honest limits (in-memory SQLite;
+cProfile depression) are in
+[`benchmarks/results/R6_PROFILE_2026-08-17.md`](../benchmarks/results/R6_PROFILE_2026-08-17.md).
+Instruments: `benchmarks/profile_r6.py` (read paths) and `benchmarks/profile_r6_write.py`
+(write / cascade / bulk / space) — cProfile plus per-claim counters over the reviewed
+`scale_bench` datasets. **Nothing was implemented.**
+
+**Land in this order:** `R6-10` → `R6-6` → `R6-11` → `R6-5` → `R6-4` → `R6-9` → `R6-18` →
+`R6-16` (co-design with `R6-7`/`R6-8`) → `R6-7`+`R6-8` → `R6-1` (prototype first).
+**Declined on an upper bound:** `R6-15` (0.9%), `R6-12` (1.00×), `R6-14` (5.0%), `R6-2`
+(24% of a non-bottleneck). **Unreachable by any benchmarked workload:** `R6-3` = `R6-17`,
+and its bulk twin `R6-13` (0 calls each).
+
+Read-path verdicts:
+
+| id | verdict | the measurement that decided it |
+|---|---|---|
+| `R6-6` | **MOTIVATED — land first** | exactly **4.00** `node_v4` point SELECTs per `check` + 0.75 edge; the fix takes the op **4.75 → 1.75 statements (−63% round trips)**, no Lean change |
+| `R6-5` | **MOTIVATED — promoted** | **22,410 ORM rows built (32.7% of profiled time)** to read 3–4 columns; `lookup_reachable` + `_classify_ids` = **52%** of boolean lookup. Filed medium, measured as the largest single block |
+| `R6-4` | **MOTIVATED** | **30.1%** of every boolean lookup, **193 `json.loads` per lookup** over only **100** residue rows — and the scan is O(#derived objects), so the share grows with the store |
+| `R6-1` | **MOTIVATED — but prototype first** | **74.1 `check` calls per `lookup`, 91.4%** of lookup wall time; `lookup` degrades 2.5× from scale 400→1600 while `check` stays flat. ⚠ This proves `check` DOMINATES, not that sharing ELIMINATES — the redundant fraction is unmeasured, and the naive fix is a correctness bug (see the entry) |
+| `R6-2` | **NOT MOTIVATED — recommend decline** | algebra is **24.2%** of a surface already **13–30× faster per call than `lookup`**; the feared quadratic star-population re-materialization **did not appear** (roaring `_starpop` ~1 µs even at 20,000 population), and the fix costs a Lean model change + fuzz |
+| `R6-3` | **UNREACHED** | `_instances_of_type` called **0 times** across both set-engine profiles, gdrive's object-wildcard shapes included. Round-3 N7's "not exercised by profiled workloads" is now measured rather than assumed; it needs a `T:*#P` workload before it needs a patch |
+
+Write / cascade / bulk / space verdicts:
+
+| id | verdict | the measurement that decided it |
+|---|---|---|
+| `R6-10` | **MOTIVATED — the round's headline** | **59.8%** of incremental boolean write+cascade time in one function (16,690 calls). Largest measured cost anywhere in round 6 |
+| `R6-11` | **MOTIVATED — cheapest** | **240** residue-cache scopes for **30** reconciles: built and torn down **8× per reconcile**; the digest's one-line scoping change |
+| `R6-9` | **MOTIVATED** | **4.51** `_db_node` point SELECTs per raw write, **17.7%** of a non-boolean build (context: **34.62 SQL statements per raw write** overall) |
+| `R6-16` | **MOTIVATED — but co-design** | exactly **1.00 outbox row per closure edge** on a schema with **no derived relations** (14,868 rows, nothing consumes them, manual prune only). ⚠ paranoia FULL uses the outbox as its worklist on ALL schemas — gate emission and its consumer together |
+| `R6-18` | **MOTIVATED** | direct layout A/B on file-backed VACUUMed SQLite: **53.1% smaller** (57.7 → 27.0 bytes/row at 200k rows) — the closure table is 2.1× larger than it needs to be |
+| `R6-7` | **MOTIVATED — gate-only** | **20.7%** of a paranoid build, and the decisive one: per-commit cost **14.14×** from first to last quartile over 336 commits. `check_invariants` overall is **64.1%**. `PARANOIA_FULL` never runs in production, but it IS the `tests/` default |
+| `R6-8` | **MOTIVATED — gate-only** | **11.0%** of a paranoid build. Fix must test BFS *neighbours*, not the seen-set, or `(s,s)` reads reachable on corrupt state |
+| `R6-14` | **NOT MOTIVATED** | **5.0%** ceiling across 221,460 individually-cheap calls |
+| `R6-12` | **NOT MOTIVATED** | **1.00×** intra-run re-reconcile; worst single cascade = 1 call. Needs a fan-out write to exercise at all |
+| `R6-15` | **NOT MOTIVATED — refuted by ceiling** | the entire topo sort is **0.9%** of a bulk build; a perfect heapq frontier cannot beat that |
+| `R6-13` | **UNREACHED** | **0 calls** though the bulk path plainly ran — the bulk twin of `R6-3`, needs the same star/wildcard shapes |
+| `R6-17` | duplicate of `R6-3` | settled by `R6-3`: unreached |
+
+**Unfiled finding:** `bulk_backfill._reconcile_subject_edge` is **25.3%** of a bulk build
+and belongs to no candidate. It deserves its own id, not absorption into one of these.
+
+⚠ **THREE instrument corrections are recorded with this pass, and they matter more than the
+verdicts they changed.** (1) The first `R6-2` probe used the wide/star schema and reported a
+clean `NOT MOTIVATED` while returning **0 members** and running **2 unions per expand** — on
+a star-CLOSED relation the per-element fold the finding is about never executes. (2) The
+first cascade probe profiled `build_graph`, which bootstraps via `backfill()` — the OFFLINE
+path — so `reconcile_subject` ran **0 times** and `R6-11`/`R6-12` came back INCONCLUSIVE
+against code that never executed. (3) The `R6-12` counter then aggregated across cycles and
+printed **15.00× re-reconcile**, which was the same key touched by successive *writes*, not
+the intra-run duplication `_bumped` is about; per-cascade counting gives **1.00×**. A probe
+that exercises nothing still reports a verdict — the house failure mode, one level down from
+the assurance checks `docs/sabotage-procedure.md` covers.
 
 ## Provenance / method
 
