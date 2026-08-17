@@ -325,6 +325,11 @@ system-prompt.txt
 # formal/verify.sh run ledger: one row per phase run + that phase's full output.
 # Local run state, not a repo claim -- a green row is evidence about the machine
 # that produced it. Keeping it ignored is also load-bearing: the tree id in each
-# row hashes `git status --porcelain`, so a TRACKED .gate-runs/ would change the
-# tree id on every run and make every row stale on arrival.
+# row is a content address over every tracked AND untracked-non-ignored file, so
+# an un-ignored .gate-runs/ would sit inside its own hash -- writing a row would
+# change the tree id the next row records, and every row would be stale on
+# arrival. Un-ignoring it does not "start tracking the ledger", it breaks the
+# ledger. (Before 2026-08-17 the id hashed `git status --porcelain` instead, and
+# the same conclusion held for tracked ledgers only; it now holds for untracked
+# ones too.)
 .gate-runs/

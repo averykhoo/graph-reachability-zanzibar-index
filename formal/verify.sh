@@ -140,9 +140,13 @@ export PATH="$HOME/.elan/bin:$PATH"
 #
 # BOTH ARE GITIGNORED, and that is load-bearing twice over: a green row is
 # evidence about the machine that produced it and nobody else, AND the tree id in
-# each row is derived from `git status --porcelain` + `git diff HEAD` -- so a
-# tracked .gate-runs/ would change the tree id on every run and every row would
-# be born stale. Do not un-ignore it.
+# each row is a CONTENT ADDRESS over every tracked and untracked-non-ignored file
+# (2026-08-17, board row GS-1) -- so an un-ignored .gate-runs/ would sit inside
+# its own hash: writing a row would change the tree id the NEXT row records, and
+# every row would be born stale. Do not un-ignore it. (The pre-2026-08-17 id
+# hashed `git status --porcelain` + `git diff HEAD` and reached the same
+# conclusion by a different route; the requirement is unchanged, and it now bites
+# for a merely-untracked ledger as well as a tracked one.)
 #
 # THE LEDGER MUST NEVER CHANGE A VERDICT. Every write below is best-effort and
 # non-fatal: a full disk loses the record, not the gate. The one exception runs
@@ -203,10 +207,26 @@ gate_fact() { GATE_FACTS="${GATE_FACTS:+$GATE_FACTS }$1"; }
 # and the reader cannot compute it two different ways: a status tool that derived
 # "same tree" differently from the recorder would report a freshness that never
 # existed. (Same reason doc_counts generates and checks with one function.)
+#
+# ⚠ IT MUST NOT INVENT AN ID, AND IT MUST NOT FAIL SILENTLY. Since 2026-08-17
+# `--tree-id` exits nonzero rather than returning a plausible id when it cannot
+# read the tree (that was the third GS-1 fail-open: a failed `git status` used to
+# be coalesced into the CLEAN id). This wrapper still degrades to `unknown` --
+# the ledger never changes a verdict -- but `unknown` matches NOTHING in
+# gate_status.py, so the run silently earns no coverage. Hence the WARN: a phase
+# that passes but does not count is exactly the outcome an operator must be told
+# about rather than discover at push time.
 gate_tree_id() {
-  local out
-  out=$( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/gate_status.py" --tree-id 2>/dev/null ) \
-    || out=""
+  local out rc=0
+  out=$( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/gate_status.py" --tree-id 2>&1 ) || rc=$?
+  if [ "$rc" != "0" ] || [ -z "$out" ]; then
+    { echo "WARN: cannot identify the working tree, so this run's ledger row will record"
+      echo "      tree=unknown -- which matches NOTHING, so this run will NOT count as"
+      echo "      coverage on any tree, however green it is. Reason:"
+      printf '        %s\n' "${out:-(no output)}"
+    } >&2
+    out=""
+  fi
   printf '%s' "${out:-unknown}"
 }
 
@@ -298,8 +318,11 @@ else
 fi
 
 # Snapshot the tree as early as $PY allows, so even a floor-consistency or
-# preflight failure records WHICH tree it failed on. An unusable $PY leaves it
-# "unknown" rather than failing the run -- the ledger never changes a verdict.
+# preflight failure records WHICH tree it failed on. An unusable $PY -- or a git
+# or IO failure, which `--tree-id` now refuses to paper over -- leaves it
+# "unknown" rather than failing the run: the ledger never changes a verdict. It
+# is not silent, though; gate_tree_id WARNs, because an `unknown` row buys no
+# coverage at all (see its ⚠ above).
 GATE_TREE="$(gate_tree_id)"
 
 # ---------------------------------------------------------------------------- #
@@ -354,7 +377,12 @@ MIN_CONF_ALL=495
 #
 # Raised 867 -> 879 on 2026-08-14 (`pytest tests/ -q --collect-only`): +12 for
 # `tests/test_residue_ref_index.py`, the ResidueRefV1 reverse-index pins.
-MIN_TESTS_ALL=879
+#
+# Raised 879 -> 895 on 2026-08-17 (`pytest tests/ -q --collect-only`): +16 for
+# `tests/test_gate_status.py`, which pins the gate's own status tool -- until that
+# day the one assurance artifact in this repo with no tests at all, and it had
+# four defects to show for it (board row `GS-1`).
+MIN_TESTS_ALL=895
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
