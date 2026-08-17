@@ -25,6 +25,87 @@ from here.
 
 ---
 
+## 2026-08-17 — GS-1 closed: the tree id is a content address, and two fail-opens beside it
+
+rows: GS-1 (closed and retired).
+
+Asked whether `GS-1` is a correctness bug, and whether there are any correctness issues
+to fix. The answer to the first is **no** — and the honest answer to the second turned
+out to be *yes, in the same function, twice, in the dangerous direction*.
+
+`GS-1` as filed is fail-**safe**. Committing changed the id although the content did
+not, so a full green gate read stale one second later: it under-reports freshness, it
+never certifies ungated code, and it is correctly not counted against the banner's
+"live correctness bugs: 0" (which is about the two backends, not `scripts/`). But
+`tree_id` hashed `git status --porcelain` + `git diff HEAD`, and that has two
+fail-**open** consequences, both reproduced against the real repo at HEAD `0cddd4a`:
+
+* **Untracked file contents were never read** — porcelain *names* them. Creating
+  `tests/zz_probe.py` moved the id to `0cddd4a+0e72b085`; rewriting its contents left
+  it at `0cddd4a+0e72b085`. Wider still: an untracked directory collapses to one
+  `?? dir/` line, so `zz_probe_dir/two.py` left `0cddd4a+36649ed0` exactly where
+  `zz_probe_dir/one.py` had put it. Write a new test file, run the ten phases green,
+  edit it before `git add` — `--require-green` still said COVERED.
+* **A failed `git status` was coalesced to `""`.** Untracked-only dirt leaves
+  `git diff HEAD` empty as well, so *one* failed command sufficed: dirty tree, git
+  healthy → `0cddd4a+1a7b0c67`; same tree, `git status` down → `0cddd4a+clean`,
+  byte-identical to a genuinely clean tree's id and therefore a match against its
+  green rows.
+
+**And a third defect, in the reader, that the board had misattributed to `GS-1`.**
+`report` kept the last row per PHASE, so re-running one phase on another tree
+discarded the green row earned on yours. Against the real ledger: ten `PASSED` rows
+existed for `b53bfc9+1eabb8af`, `lean` had since been re-run twice elsewhere, and the
+report said `lean: missing` / `NOT covered` for a tree the ledger recorded as fully
+green. Keyed by `(phase, tree)` the same rows give `lean: PASSED` / `COVERED: True`.
+So yesterday's banner sentence — "committing changes the tree id even when content
+does not (row `GS-1`)" — named a real defect that was not the one biting it.
+
+**The fix.** `tree_id` is now `t1:<12 hex>`, a content address over
+`git ls-files --cached --others --exclude-standard` (45 ms over 329 files / 8 MB), it
+carries no commit id at all, and it **raises** rather than returning a plausible id
+when git or the filesystem cannot be read. `verify.sh` still degrades such a run to
+`tree=unknown` — the ledger never changes a verdict — but now WARNs, because `unknown`
+matches nothing and a green phase that buys no coverage is exactly the outcome an
+operator should not discover at push time. Verdicts are keyed by `(phase, tree)`. The
+`t1:` prefix versions the algorithm, so every pre-existing row is structurally
+incapable of matching a new id rather than accidentally capable of it.
+
+**The root cause was the absence of tests, not any one of the four defects.**
+`gate_status.py` is cited by `CLAUDE.md`, `verify.sh` and the runbook, and had no
+tests at all — the one artifact whose job is answering "is the gate green" was itself
+outside the gate. `tests/test_gate_status.py` (+16, floor raised 879 → 895) closes
+that. Suite-level sabotage, per [`docs/sabotage-procedure.md`](../sabotage-procedure.md):
+reinstalling the legacy `tree_id` and per-phase keying verbatim gives **`10 failed, 6
+passed in 3.57s`**, and the six survivors are exactly the controls — tracked-file
+edit, tracked-file deletion, the gitignored-scope assertion, the red-rerun negative
+control, legacy-id non-collision, and `coverage`'s mixed-K refusal. Attributable red,
+not blanket red; that distinction is what separates "these pin the four defects" from
+"this file no longer imports".
+
+**A consequence worth carrying: a tracked file can no longer quote its own tree id.**
+Under content addressing, writing the id into the banner changes the id. That is not a
+limitation to work around but rule 3b arriving mechanically — the ledger is the one
+home for the figure, and prose points at it. The banner now says which phases ran and
+tells you to ask `scripts/gate_status.py`, and it will be *right* after the commit
+rather than stale, which is the whole point of the change.
+
+**Method note.** Two read-only subagents ran the survey passes (which docs go false;
+which conventions bind), and both earned their cost by catching things a from-memory
+pass would not: `HANDOFF.md` sits at exactly its 10-`⚠` budget with a zero-tolerance
+bold-ALL-CAPS ratchet, `tests/` forbids `skipif` outright so the git-dependent tests
+had to be written as hard requirements, and `verify.sh` was silently swallowing the
+new loud failure. No subagent edited anything.
+
+Still owed: nothing from this session's own write-back. Carried forward from
+`2026-08-16g`, still true and still unexecuted: ⚠ **`formal/HANDOFF.md` is at 517
+lines against its 520 ceiling**, so the next session's dated block will trip
+`verify.sh lean` step 4f. It owes a retirement pass (move one landed block verbatim to
+`formal/history/`, per the `HS-3` precedent — never condense). This session did not
+add a block there, so the ceiling was not tripped and the debt is unpaid, not resolved.
+
+---
+
 ## 2026-08-16g — leg 7 4c-ii attacked before it was built: Route A refuted, and P3's criterion is weak
 
 rows: P3 (blocked on an adjudication, block rewritten); P14 (entanglement recorded).

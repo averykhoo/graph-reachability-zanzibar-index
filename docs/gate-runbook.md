@@ -471,18 +471,43 @@ are not the last run's verdict — on 2026-08-16 all six of its entries named no
 that **no longer exist**, and its mtime was that same day. `nodeids` is one
 collection with no phase, no verdict and no tree attached.
 
-**A row is about a tree, not about the repo.** The `tree` column is
-`<short HEAD>+clean`, or `<short HEAD>+<sha1 of porcelain+diff>` when dirty
-(`scripts/gate_status.py::tree_id` — `verify.sh` shells out to that same function so
-the recorder and the reader cannot drift). It sees tracked edits, staged or not, and
-untracked file *names*. It does **not** see untracked file *contents*, anything
-gitignored (notably `formal/lean/.lake/**` — a matching tree id does **not** mean the
-same Lean build), or the environment (`ZANZIBAR_TEST_DSN`, installed deps). Read a
-green row as "this phase passed against this source", never as full provenance.
+**A row is about a tree, not about the repo.** The `tree` column is a **content
+address** — `t1:<12 hex>` over the contents of every tracked and
+untracked-non-ignored file (`scripts/gate_status.py::tree_id`; `verify.sh` shells out
+to that same function so the recorder and the reader cannot drift). It carries no
+commit id at all, and that is the point: it is invariant under `git add` and
+`git commit`, so ten phases earned just before a commit still read green just after
+it. It does **not** see anything gitignored (notably `formal/lean/.lake/**` — a
+matching tree id does **not** mean the same Lean build) or the environment
+(`ZANZIBAR_TEST_DSN`, installed deps). Read a green row as "this phase passed against
+this source", never as full provenance.
 
-⚠ **Do not un-ignore `.gate-runs/`.** The tree id hashes `git status --porcelain`, so
-a tracked ledger would change the tree id on every run and every row would be stale
-on arrival. `gate_status.py` prints a loud warning if it sees that happen.
+⚠ **The scheme it replaced (2026-08-17, row `GS-1`) failed three ways — once safely,
+twice not.** That asymmetry is why this is written out rather than summarised. The id
+was `<short HEAD>+clean`, else `<short HEAD>+<sha1 of porcelain+diff>`:
+
+| failure | direction | effect |
+|---|---|---|
+| committing changed the id although the content did not | fail-**safe** | a full green gate went stale one second after `git commit` — this was the filed defect, and the only harmless one |
+| `--porcelain` *names* untracked files but never reads them, and collapses an untracked directory to a single `?? dir/` line | fail-**open** | editing an untracked file, or adding files inside an untracked directory, left the id — and its green rows — unchanged |
+| a failed `git status` was coalesced to `""`, and untracked-only dirt leaves `git diff HEAD` empty as well | fail-**open** | one failed command was enough to make a dirty tree report the **clean** id and match a clean tree's green rows |
+
+So `--tree-id` now **exits nonzero** rather than returning a plausible id when it
+cannot read the tree. `verify.sh` still records `tree=unknown` for such a run — the
+ledger never changes a verdict — but warns loudly, because `unknown` matches nothing
+and the run therefore buys no coverage however green it was.
+
+**A green verdict is keyed by (phase, tree), not by phase.** Re-running a single phase
+against a different tree — a doc edit, a stash, a scratch file — used to overwrite the
+reader's only entry for that phase and silently discard the green row earned on
+*your* tree. A phase re-run **red on the same tree** still reads red: that is the
+property the keying preserves.
+
+⚠ **Do not un-ignore `.gate-runs/`.** The id hashes every tracked *and*
+untracked-non-ignored file, so an un-ignored ledger sits inside its own hash: writing
+a row changes the tree id that the next row records, and every row is stale on
+arrival. Un-ignoring it does not start tracking the ledger, it breaks the ledger.
+`gate_status.py` prints a loud warning if it sees `.gate-runs/` in `git status`.
 
 **Coverage is judged per-K, not against a hard-coded ten.** `--require-green` wants
 `lean` plus, for each suite, *some single K* with all K tiles green on the current
@@ -511,6 +536,25 @@ trap was originally installed beside `BUILD_LOG=$(mktemp)`, ~230 lines *below* t
 floor-consistency check, so that `EXIT=1` produced a log file and **no row** — a
 failure the reader could only call "incomplete". The trap now precedes the first
 `exit` in the script body, and the comment there says why.
+
+**Sabotage evidence, the tree id (2026-08-17).** Property: *a row's tree id names the
+content the phase ran against — it survives a commit that changes nothing, it moves
+when any covered file's content moves, it is never invented when the tree cannot be
+read, and a green verdict is not erased by a later run of the same phase elsewhere.*
+Pinned by `tests/test_gate_status.py`; the per-defect observations are in that file's
+module docstring. The suite-level sabotage — reinstall the pre-2026-08-17 `tree_id`
+and per-phase keying verbatim, then run the suite against them:
+
+| sabotage | observed |
+|---|---|
+| control — the fixed implementation | `16 passed in 2.59s` |
+| the legacy `tree_id` + legacy per-phase keying restored | `10 failed, 6 passed in 3.57s` |
+
+The six survivors are exactly the controls (tracked-file edit, tracked-file deletion,
+the gitignored-scope assertion, the red-rerun negative control, the legacy-id
+non-collision, and `coverage`'s unchanged mixed-K refusal). That the red is
+**attributable** rather than blanket is the point: it distinguishes "these tests pin
+the four defects" from "this file no longer imports".
 
 ### Push gate
 Push only after ALL of: the ten `verify.sh` phases — `lean` → `conf-tile:1/5` →
