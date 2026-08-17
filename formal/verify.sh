@@ -216,9 +216,19 @@ gate_fact() { GATE_FACTS="${GATE_FACTS:+$GATE_FACTS }$1"; }
 # gate_status.py, so the run silently earns no coverage. Hence the WARN: a phase
 # that passes but does not count is exactly the outcome an operator must be told
 # about rather than discover at push time.
+#
+# ⚠ IT IS PHASE-SCOPED SINCE 2026-08-17 (board row `GS-2`). `--phase "$PHASE"` makes
+# gate_status compute the id over only the inputs THAT phase can read: the pytest
+# tiles get a `code`-scoped id (no *.md, no benchmarks/), `lean` keeps the full one
+# because steps 4d/4e/4f genuinely read markdown. Passing the phase is not optional
+# decoration -- omit it and the writer records an `all`-scoped id under a tile
+# phase, which the reader then compares against the `code`-scoped id and never
+# matches, so every tile row would be born stale. An UNRECOGNISED phase name falls
+# back to the widest scope, so a typo over-invalidates instead of under-invalidating.
 gate_tree_id() {
   local out rc=0
-  out=$( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/gate_status.py" --tree-id 2>&1 ) || rc=$?
+  out=$( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/gate_status.py" --tree-id \
+           --phase "$PHASE" 2>&1 ) || rc=$?
   if [ "$rc" != "0" ] || [ -z "$out" ]; then
     { echo "WARN: cannot identify the working tree, so this run's ledger row will record"
       echo "      tree=unknown -- which matches NOTHING, so this run will NOT count as"
@@ -382,7 +392,11 @@ MIN_CONF_ALL=495
 # `tests/test_gate_status.py`, which pins the gate's own status tool -- until that
 # day the one assurance artifact in this repo with no tests at all, and it had
 # four defects to show for it (board row `GS-1`).
-MIN_TESTS_ALL=895
+# Raised 895 -> 903 the same day: +8 in the same file for per-phase input scoping
+# (`GS-2`), which is a FAIL-OPEN surface -- every excluded input is one that can no
+# longer invalidate a cached green -- so each exclusion is pinned in a PAIR with a
+# control proving the scope still covers its neighbourhood.
+MIN_TESTS_ALL=903
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

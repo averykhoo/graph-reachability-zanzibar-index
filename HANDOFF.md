@@ -21,13 +21,19 @@ session: run the Rhythm protocol at the bottom.
 > to it — ask `python scripts/gate_status.py`, never this line. The tree id is
 > deliberately not quoted here: it is a content address, so a tracked file cannot cite
 > its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
-> Only docs and `scripts/handoff_lint.py` changed — no backend, no test, no modeled
-> algorithm — so the 2026-08-14 3-seed fuzz sweep still stands.
-> Last session: **`HS-4` paid.** `formal/HANDOFF.md` was three lines under the ceiling
-> that `verify.sh lean` step 4f enforces, so the next dated block would have reddened
-> the gate on a doc edit; two landed blocks retired verbatim to history (517 → 482), and
-> the bold-caps ratchet came down 9 → 6 with it →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`.
+> No backend and no modeled algorithm changed this session — docs, additive
+> `benchmarks/` tooling, and the gate's own status tool — so the 2026-08-14 3-seed fuzz
+> sweep still stands.
+> **A docs-only edit no longer invalidates the nine pytest tiles** (`GS-2`): tile
+> verdicts are keyed to a `code`-scoped tree id that excludes `*.md` and `benchmarks/`.
+> `lean` still is not — it reads markdown at steps 4d/4e/4f — so a docs edit costs one
+> ~50 s `lean` re-run, not 25 minutes of tiles.
+> Last session: **`HS-4` paid** (`formal/HANDOFF.md` 517 → 482, three lines under the
+> ceiling `verify.sh lean` step 4f enforces; bold-caps ratchet 9 → 6), then **`R6`'s
+> measurement pass settled ALL EIGHTEEN candidates** — 10 to land (`R6-10` first at 59.8%
+> of boolean write time), 5 declined on an upper bound, 3 unreachable, nothing implemented;
+> then `GS-2` scoped the gate's tree id per phase →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`/`c`/`d`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
@@ -43,7 +49,7 @@ forward forever and are never reused.**
 |---|---|---|---|---|---|
 | `P3` | leg 7 **4c-ii + step 7, one commit** → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.7 | **NOW** | L | — | 2026-08-16 |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path | **NEXT** | M | — | 2026-08-16 |
-| `R6` | perf round 6 — **measure before landing anything** → [audit](docs/perf-round6-audit-2026-08.md) | **NEXT** | L | — | 2026-08-16 |
+| `R6` | perf round 6 — **all 18 measured 2026-08-17; 10 to land, 5 declined, 3 unreachable** → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-17 |
 | `HS-2` | split [`docs/spec-deviations.md`](docs/spec-deviations.md) (user-scheduled 2026-08-16) | **NEXT** | M | — | 2026-08-16 |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
@@ -68,8 +74,8 @@ forward forever and are never reused.**
 | `SD-3` | tuple-log compaction — only if the log outgrows "humans wrote this" scale | SOMEDAY | S | — | 2026-08-16 |
 | `SD-4` | bulk-merge write path → [sketch](docs/architecture/bulk-merge-design.md) | SOMEDAY | L | — | 2026-08-16 |
 
-Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1` and
-`HS-4` (2026-08-17), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
+Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`,
+`HS-4` and `GS-2` (2026-08-17), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
 `B1`'s underlying finding was verified closed on 2026-08-16 (both halves proved 2026-07-28
 and 2026-08-04; the record had simply never caught up) — evidence in `formal/HANDOFF.md`'s
 `B1` block. Retiring an id is not the same act as closing a finding: say which you mean.
@@ -135,22 +141,41 @@ materialises the edge, and everything else in the leg is inert until it lands.
 `ensureInBridges` / `ensureBridges`; `writeRules` / `writeLoggedRules`; the second loop of
 `derive_schema_info`.
 
-### `R6` — perf round 6: the measurement pass
+### `R6` — perf round 6: all 18 measured, implementation is now the work
 
-Eighteen adversarially-verified findings and sixteen unverified leads exist. **Nothing has
-landed and nothing is measured.** The round's next act is measurement, not implementation.
+Nothing has landed, and the round is no longer blocked on measurement — the 2026-08-17 pass
+covered **all eighteen** candidates and turned the list into a ranked plan. **Land in this
+order:** `R6-10` (**59.8%** of incremental boolean write time in one function — the
+headline) → `R6-6` (4.75 → 1.75 statements per `check`) → `R6-11` (residue cache torn down
+**8× per reconcile**; one-line scoping change) → `R6-5` (**32.7%** ORM construction to read
+3–4 columns) → `R6-4` (**30.1%** of boolean lookup, grows with store size) → `R6-9` (4.51
+point SELECTs per write) → `R6-18` (**53.1%** off the biggest table; owes a hand migration
+for persistent PG) → `R6-16` → `R6-7`+`R6-8` → `R6-1`.
 
-⚠ **Do not implement from titles alone — read each entry's verifier corrections.** One
-finder's fix was REFUTED by counterexample while its finding stood (`R6-1`: the naive
-shared memo is a correctness bug; the two-tier design in its verdict is the fix). Per the
-reopening rule every item owes a motivating measurement first — round 5 declined two
-plausible candidates on a fresh profile. `R6-2/4/16` change modeled algorithms (Lean twin
-or `CORRESPONDENCE.md` §7, plus fuzz); `R6-7/8` rewrite assurance checkers, so they need
-re-sabotaging.
+**Five are declined on an upper bound and should not be reopened without new numbers:**
+`R6-15` (the whole topo sort is **0.9%** of a bulk build), `R6-12` (**1.00×** intra-run
+re-reconcile), `R6-14` (**5.0%**), `R6-2` (24% of a non-bottleneck at the price of a Lean
+model change). **Three are unreachable by any benchmarked workload** (`R6-3` = `R6-17`, and
+its bulk twin `R6-13` — 0 calls each): they need a `T:*#P` star/wildcard workload before
+they need a patch. **Unfiled:** `bulk_backfill._reconcile_subject_edge` is **25.3%** of a
+bulk build and belongs to no candidate — give it its own id.
 
-**Read first:** [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)
-in full, then [`docs/perf-next-round.md`](docs/perf-next-round.md) for the fence, the
-confirmed dead ends and the reopening rule.
+⚠ **Two traps the numbers do not carry.** `R6-1` has the biggest read ceiling (91.4% of
+lookup) and must NOT be landed from it: the profile proves `check` *dominates*, not that
+sharing *eliminates*, and the naive shared memo is a **correctness bug** by the audit's own
+counterexample — prototype the two-tier design behind a measurement. And `R6-16` must be
+co-designed with `R6-7`/`R6-8`, never separately: paranoia FULL uses the outbox as its
+worklist on ALL schemas, so gating emission without gating that consumer silently blinds
+the checker.
+
+**Read first:** [`benchmarks/results/R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md)
+(verdicts, method, the two limits — in-memory SQLite understates statement-count wins,
+cProfile depresses throughput — and the three instrument corrections, which are the
+transferable lesson), then the entry for whichever id you take in
+[`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) **including its
+verifier corrections**, then [`docs/perf-next-round.md`](docs/perf-next-round.md) for the
+fence and the reopening rule. Re-run any target with `python -m benchmarks.profile_r6
+[_write] --target <t>` — never beside another bench or pytest run.
 
 ### `HS-2` — split `docs/spec-deviations.md`
 

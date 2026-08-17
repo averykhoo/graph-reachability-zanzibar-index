@@ -21,11 +21,35 @@ tool reporting freshness that never existed. So there is one implementation --
 `tree_id` below -- and the shell shells out to it.
 
 WHAT THE TREE ID IS (since 2026-08-17, board row `GS-1`): a CONTENT ADDRESS,
-`t1:<12 hex>`, over the contents of every tracked and untracked-non-ignored file
-(`git ls-files --cached --others --exclude-standard`). It says nothing about
-HEAD, and that is the point -- the id is invariant under `git add` and
-`git commit`, so ten phases earned just before a commit still read green just
-after it.
+`t2<scope>:<12 hex>`, over the contents of the tracked and untracked-non-ignored
+files IN THAT PHASE'S INPUT SCOPE (`git ls-files --cached --others
+--exclude-standard`, filtered). It says nothing about HEAD, and that is the
+point -- the id is invariant under `git add` and `git commit`, so ten phases
+earned just before a commit still read green just after it.
+
+PER-PHASE SCOPES (added the same day, board row `GS-2`). One id over every file
+was correct but expensive in one specific way: editing a MARKDOWN paragraph
+invalidated nine green pytest tiles, which happened twice in a single session
+(~50 min of gate time re-earning verdicts that could not have changed). A rule
+whose cost is that visible is one sessions begin overriding from memory, which is
+the habit this ledger exists to retire. So:
+
+  * `t2a:` -- ALL inputs. `lean` uses it and must: step 4d resolves
+    CORRESPONDENCE.md anchors, 4e scans prose globs (docs/*.md, formal/*.md,
+    HANDOFF.md, CLAUDE.md), 4f lints both boards and the session ledger. A
+    docs-only edit really can turn `lean` red.
+  * `t2c:` -- CODE inputs: `all` minus `*.md` and `benchmarks/`. The pytest tiles
+    use it.
+
+  ⚠ AN EXCLUSION IS A FAIL-OPEN: an excluded input can no longer invalidate a
+  cached green. The two exclusions were verified, not assumed -- no collected test
+  reads markdown (only `doc_counts.py` does, from step 4e), no `.md` file exists
+  under `tests/` or `formal/conformance/` at all, and nothing there imports
+  `benchmarks`. Fixtures (*.fga), goldens (*.txt) and corpora (*.json) stay IN
+  scope by construction, since only two extensions are named. See `_in_scope`.
+  The scope tag is mixed into the digest AND the prefix, so a code-scoped id
+  cannot match an all-scoped row even by coincidence, and the `t1` -> `t2` bump
+  makes every pre-existing row structurally incapable of matching.
 
   ⚠ THE SCHEME IT REPLACED FAILED THREE WAYS -- ONCE SAFELY, TWICE NOT, and that
   asymmetry is why this is written down at length. Until 2026-08-17 the id was
@@ -94,7 +118,67 @@ RECOMMENDED = ["lean"] + [f"conf-tile:{i}/5" for i in range(1, 6)] + [
 TILE_RE = re.compile(r"^(conf|tests)-tile:(\d+)/(\d+)$")
 COLUMNS = ("started", "dur_s", "phase", "status", "tree", "facts", "log")
 
-TREE_ID_ALGO = "t1"
+TREE_ID_ALGO = "t2"
+
+# --- Per-phase input SCOPES (2026-08-17, board row `GS-2`) ------------------------
+# Until now one id covered every tracked file, so editing a MARKDOWN paragraph
+# invalidated nine green pytest tiles. That is safe but wasteful, and the waste is
+# not academic: it happened twice in one session (~50 min of gate time), and a rule
+# whose cost is that visible is a rule sessions start overriding from memory -- the
+# exact habit the ledger exists to retire.
+#
+# So a phase's id now covers only the inputs that phase can actually read:
+#
+#   all   -- every tracked/untracked-non-ignored file (the pre-existing behaviour).
+#            `lean` MUST use this: step 4d resolves CORRESPONDENCE.md anchors, 4e
+#            scans prose globs including docs/*.md, formal/*.md, HANDOFF.md and
+#            CLAUDE.md, and 4f lints both board files and the session ledger. A
+#            docs-only edit genuinely can turn `lean` red, and the gate-runbook
+#            already warns about exactly that.
+#   code  -- `all` minus *.md and benchmarks/. Used by the pytest tiles.
+#
+# ⚠ THE EXCLUSION IS A FAIL-OPEN SURFACE, so it was verified rather than assumed
+# (2026-08-17). Excluding an input a tile really reads would cache a stale green --
+# this repo's house failure mode. What was checked:
+#   * NO collected test reads markdown. Every `.md` in tests/ and
+#     formal/conformance/test_*.py is a docstring mention. The only real reader is
+#     formal/conformance/doc_counts.py, which runs from `verify.sh` step 4e (an
+#     `all`-scope phase), and no collected test imports it.
+#   * NO `.md` file exists under tests/ or formal/conformance/ at all, so no
+#     golden, fixture or corpus can be markdown. Goldens are .txt; conformance
+#     carries one .json.
+#   * NOTHING under tests/ or formal/conformance/ imports `benchmarks`; the
+#     dependency runs the other way (benchmarks imports tests.wildcard_helpers).
+# Re-verify all three before widening this list. Fixtures (*.fga), goldens (*.txt),
+# snapshots and every .py stay IN scope by construction -- only two extensions are
+# named, and the default for an unrecognised phase is `all`.
+SCOPE_ALL = "all"
+SCOPE_CODE = "code"
+
+# Tag baked into the id string, so a code-scoped id is structurally incapable of
+# matching an all-scoped one (`t2a:...` vs `t2c:...`). Same versioning discipline as
+# the t1 -> t2 bump: make a stale match impossible rather than unlikely.
+SCOPE_TAGS = {SCOPE_ALL: "a", SCOPE_CODE: "c"}
+
+_TILE_PHASE_RE = re.compile(r"^(conf|tests)-tile:\d+/\d+$")
+
+
+def phase_scope(phase: str) -> str:
+    """Which input scope a phase's verdict is keyed to.
+
+    Defaults to `all` for ANYTHING unrecognised. That direction is deliberate: an
+    unknown phase over-invalidates (safe, wasteful) rather than under-invalidates
+    (fast, wrong). A new phase must opt IN to a narrow scope, in this file, with
+    the verification above redone for it.
+    """
+    return SCOPE_CODE if _TILE_PHASE_RE.match(phase or "") else SCOPE_ALL
+
+
+def _in_scope(rel: bytes, scope: str) -> bool:
+    if scope == SCOPE_ALL:
+        return True
+    p = rel.replace(b"\\", b"/")
+    return not (p.endswith(b".md") or p.startswith(b"benchmarks/"))
 
 # A tree column carrying one of these identifies nothing: `verify.sh` writes
 # `unknown` when `--tree-id` fails, and `nogit` is a pre-2026-08-17 leftover.
@@ -170,22 +254,38 @@ def _file_fingerprint(repo: Path, rel: bytes) -> bytes:
     return b"f%d:%s" % (len(data), hashlib.sha256(data).hexdigest().encode())
 
 
-def tree_id(repo: Path = REPO_ROOT) -> str:
+def tree_id(repo: Path = REPO_ROOT, scope: str = SCOPE_ALL) -> str:
     """Identify the working tree by CONTENT, so a verdict survives a commit.
 
     Deliberately independent of HEAD: two checkouts whose files are identical are
     the same tree for gate purposes, whether that content is committed, staged or
     neither. See the module docstring for what this does not cover, and for the
     three failures of the HEAD-based scheme it replaced.
+
+    ``scope`` selects WHICH files the id covers (see SCOPE_* above). The scope tag
+    is mixed into both the digest and the printed prefix, so ids from different
+    scopes can never collide or be mistaken for one another.
     """
+    if scope not in SCOPE_TAGS:
+        raise TreeIdError(f"unknown tree-id scope {scope!r}")
     h = hashlib.sha256()
-    h.update(b"zanzibar-gate-tree-id/" + TREE_ID_ALGO.encode() + b"\0")
+    h.update(b"zanzibar-gate-tree-id/" + TREE_ID_ALGO.encode()
+             + b"/" + scope.encode() + b"\0")
+    covered = 0
     for rel in _tree_files(repo):
+        if not _in_scope(rel, scope):
+            continue
+        covered += 1
         h.update(rel)
         h.update(b"\0")
         h.update(_file_fingerprint(repo, rel))
         h.update(b"\0")
-    return f"{TREE_ID_ALGO}:{h.hexdigest()[:12]}"
+    if not covered:
+        # An id over nothing would match every other empty-scope id -- i.e. it
+        # would certify anything. Refuse, exactly as an unreadable file does.
+        raise TreeIdError(
+            f"scope {scope!r} covered 0 files; an id over nothing certifies nothing")
+    return f"{TREE_ID_ALGO}{SCOPE_TAGS[scope]}:{h.hexdigest()[:12]}"
 
 
 def head_description(repo: Path = REPO_ROOT) -> str:
@@ -243,12 +343,14 @@ def green_phases(rows: list[dict], here: str) -> set[str]:
     and was then re-run RED on this same tree has a FAILED last row for the pair,
     so it is not green.
     """
+    ids = here if isinstance(here, dict) else {SCOPE_ALL: here, SCOPE_CODE: here}
     last_by_pair: dict[tuple[str, str], dict] = {}
     for r in rows:                       # appended in order; last wins per pair
         last_by_pair[(r["phase"], r["tree"])] = r
     return {
         phase for (phase, tree), r in last_by_pair.items()
-        if tree == here and tree not in OPAQUE_TREES and r["status"] == "PASSED"
+        if tree not in OPAQUE_TREES and r["status"] == "PASSED"
+        and tree == ids.get(phase_scope(phase))
     }
 
 
@@ -309,14 +411,20 @@ def coverage(green: set[str]) -> tuple[bool, list[str]]:
 
 
 def report(require_green: bool) -> int:
-    try:
-        here, here_err = tree_id(), None
-    except TreeIdError as exc:
-        here, here_err = UNRESOLVED, str(exc)
+    ids: dict[str, str] = {}
+    here_err = None
+    for scope in SCOPE_TAGS:
+        try:
+            ids[scope] = tree_id(scope=scope)
+        except TreeIdError as exc:
+            ids[scope], here_err = UNRESOLVED, str(exc)
+    here = ids[SCOPE_ALL]
     d = runs_dir()
     rows = read_ledger(d / LEDGER_NAME)
 
-    print(f"tree:   {here}   ({head_description()})")
+    print(f"tree:   {ids[SCOPE_ALL]}   ({head_description()})")
+    print(f"        {ids[SCOPE_CODE]}   (code scope: excludes *.md and benchmarks/; "
+          f"used by the pytest tiles)")
     print(f"ledger: {d / LEDGER_NAME}  ({len(rows)} row(s))")
 
     if here_err is not None:
@@ -345,7 +453,7 @@ def report(require_green: bool) -> int:
     for r in rows:
         last_by_phase[r["phase"]] = r
         last_by_pair[(r["phase"], r["tree"])] = r
-    green_here = green_phases(rows, here)
+    green_here = green_phases(rows, ids)
 
     phases = RECOMMENDED + sorted(p for p in last_by_phase if p not in RECOMMENDED)
     width = max(len(p) for p in phases)
@@ -357,19 +465,22 @@ def report(require_green: bool) -> int:
         # with (phase, tree) keying the verdict can come from an earlier run, and
         # a table that showed a newer run on another tree would contradict the
         # VERDICT line below it.
-        r = last_by_pair.get((phase, here)) or last_by_phase.get(phase)
+        mine = ids.get(phase_scope(phase), here)
+        r = last_by_pair.get((phase, mine)) or last_by_phase.get(phase)
         if r is None:
             print(f"{phase.ljust(width)}  {'-':19}  {'-':9}  {'-':>6}  {'never run':12}  -")
             continue
         when = _parse_when(r["started"])
         stamp = when.strftime("%Y-%m-%d %H:%M:%S") if when else r["started"][:19]
-        same = "yes" if r["tree"] == here else "NO"
+        same = "yes" if r["tree"] == mine else "NO"
         took = f"{r['dur_s']}s" if r["dur_s"].isdigit() else "?"
         print(f"{phase.ljust(width)}  {stamp:19}  {_age(when):9}  {took:>6}  "
               f"{r['status']:12}  {same:9}  {r['facts']}")
 
     stale = sorted(p for p, r in last_by_phase.items()
-                   if r["status"] == "PASSED" and r["tree"] != here and p not in green_here)
+                   if r["status"] == "PASSED"
+                   and r["tree"] != ids.get(phase_scope(p), here)
+                   and p not in green_here)
     if stale:
         print(f"\n{len(stale)} phase(s) are green only on a DIFFERENT tree "
               f"(e.g. {last_by_phase[stale[0]]['tree']}) -- those verdicts do not apply here.")
@@ -378,7 +489,8 @@ def report(require_green: bool) -> int:
     if legacy:
         print(f"\n{len(legacy)} tree id(s) here use the pre-2026-08-17 HEAD-based scheme "
               f"(e.g. {legacy[0]}).")
-        print("  They can never match a content-addressed `t1:` id, so those rows are")
+        print("  They can never match a content-addressed `t2a:`/`t2c:` id, so those rows")
+        print("  are")
         print("  history, not coverage. Re-run the phases to earn green on this tree.")
 
     logged = {r["log"] for r in rows}
@@ -403,12 +515,15 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tree-id", action="store_true",
                     help="print the working-tree id and exit (used by verify.sh)")
+    ap.add_argument("--phase", default=None,
+                    help="with --tree-id: print the id for THIS phase's input scope "
+                         "(unrecognised phases get the widest scope, never a narrow one)")
     ap.add_argument("--require-green", action="store_true",
                     help="exit 1 unless every phase is PASSED on the current tree")
     args = ap.parse_args(argv)
     if args.tree_id:
         try:
-            print(tree_id())
+            print(tree_id(scope=phase_scope(args.phase) if args.phase else SCOPE_ALL))
         except TreeIdError as exc:
             # Nonzero and silent on stdout: verify.sh records `unknown`, which
             # matches nothing. Never print a fallback id here.

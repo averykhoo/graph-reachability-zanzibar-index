@@ -472,15 +472,46 @@ that **no longer exist**, and its mtime was that same day. `nodeids` is one
 collection with no phase, no verdict and no tree attached.
 
 **A row is about a tree, not about the repo.** The `tree` column is a **content
-address** — `t1:<12 hex>` over the contents of every tracked and
-untracked-non-ignored file (`scripts/gate_status.py::tree_id`; `verify.sh` shells out
-to that same function so the recorder and the reader cannot drift). It carries no
+address** — `t2<scope>:<12 hex>` over the contents of the tracked and
+untracked-non-ignored files **in that phase's input scope**
+(`scripts/gate_status.py::tree_id`; `verify.sh` shells out to that same function,
+passing `--phase`, so the recorder and the reader cannot drift). It carries no
 commit id at all, and that is the point: it is invariant under `git add` and
 `git commit`, so ten phases earned just before a commit still read green just after
 it. It does **not** see anything gitignored (notably `formal/lean/.lake/**` — a
 matching tree id does **not** mean the same Lean build) or the environment
 (`ZANZIBAR_TEST_DSN`, installed deps). Read a green row as "this phase passed against
 this source", never as full provenance.
+
+**Per-phase scopes (2026-08-17, row `GS-2`) — why a docs edit no longer costs you
+25 minutes.** There are two ids, and a phase is matched against its own:
+
+| id | covers | phases |
+|---|---|---|
+| `t2a:` | everything | `lean` |
+| `t2c:` | everything **minus `*.md` and `benchmarks/`** | `conf-tile:I/K`, `tests-tile:I/K` |
+
+`lean` must keep the full scope because it genuinely reads markdown — step 4d resolves
+`CORRESPONDENCE.md` anchors, 4e scans prose globs (`docs/*.md`, `formal/*.md`,
+`HANDOFF.md`, `CLAUDE.md`), 4f lints both boards and the session ledger. **So a
+docs-only edit still requires re-running `lean` — that coupling is unchanged and is
+the ★ warning further up this file.** What changed is that it no longer invalidates
+the nine pytest tiles. Motivating incident: on 2026-08-17 a single appended ledger
+paragraph invalidated nine green tiles, twice in one session, ~50 min of gate time
+re-earning verdicts that could not have changed.
+
+⚠ **An exclusion is a FAIL-OPEN surface** — an excluded input can no longer
+invalidate a cached green — so the two were verified rather than assumed, and the
+verification is what you must redo before widening the list: no collected test reads
+markdown (only `doc_counts.py` does, and it runs from step 4e); **no `.md` file exists
+under `tests/` or `formal/conformance/` at all**, so no golden, fixture or corpus can
+be markdown; and nothing under those directories imports `benchmarks` (the dependency
+runs the other way). Fixtures (`*.fga`), goldens (`*.txt`) and corpora (`*.json`) stay
+in scope by construction — only two extensions are named — and an **unrecognised phase
+falls back to the widest scope**, so a new or mistyped phase over-invalidates rather
+than under-invalidating. Pinned by the eight `GS-2` tests in
+`tests/test_gate_status.py`, each exclusion paired with a control proving the scope
+still covers its neighbourhood.
 
 ⚠ **The scheme it replaced (2026-08-17, row `GS-1`) failed three ways — once safely,
 twice not.** That asymmetry is why this is written out rather than summarised. The id
@@ -549,6 +580,33 @@ and per-phase keying verbatim, then run the suite against them:
 |---|---|
 | control — the fixed implementation | `16 passed in 2.59s` |
 | the legacy `tree_id` + legacy per-phase keying restored | `10 failed, 6 passed in 3.57s` |
+
+**Sabotage evidence, the per-phase scopes (`GS-2`, 2026-08-17).** Property: *the code
+scope still sees every input a pytest tile can read, and stops seeing only the two
+things verified unreadable by one.* Eight probes against the real repo, each mutating
+one file and restoring it:
+
+| probe | `t2a:` (all) | `t2c:` (code) |
+|---|---|---|
+| edit a backend `.py` | changed | **changed** |
+| edit a test `.py` | changed | **changed** |
+| edit an `.fga` fixture | changed | **changed** |
+| edit a `.txt` golden | changed | **changed** |
+| create a new untracked `.py` | changed | **changed** |
+| edit a `.md` | changed | **unchanged** ← the win |
+| create a new untracked `.md` | changed | **unchanged** |
+| edit `benchmarks/*.py` | changed | **unchanged** |
+
+⚠ **The first run of that sweep reported two false FAILURES, and the cause is the
+lesson.** The probe harness read and rewrote files in **text mode**, so on Windows an
+LF-only file came back CRLF; the baseline id drifted mid-sweep and the markdown and
+benchmarks probes looked broken. *The instrument mutated its own subject.* Re-run with
+`read_bytes`/`write_bytes` — what `tree_id`'s own `_file_fingerprint` uses — all eight
+behaved and the ids restored to baseline exactly. Use binary I/O in any future probe.
+
+End-to-end payoff, measured on the real ledger: append one line to
+`docs/history/session-log.md` → `lean` goes **STALE** (correct: it reads markdown) and
+`conf-tile:2/5` stays **green**. Restore → both green.
 
 The six survivors are exactly the controls (tracked-file edit, tracked-file deletion,
 the gitignored-scope assertion, the red-rerun negative control, the legacy-id

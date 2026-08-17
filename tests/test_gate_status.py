@@ -336,12 +336,21 @@ def test_tree_id_ignores_gitignored_files(repo: Path) -> None:
 
 
 def test_tree_id_is_shaped_as_the_ledger_and_docs_describe(repo: Path) -> None:
-    """`t1:<12 hex>` -- versioned, so a legacy row can never match a new id."""
-    got = _id(repo)
-    algo, _, digest = got.partition(":")
-    assert algo == gate_status.TREE_ID_ALGO
-    assert len(digest) == 12 and all(c in "0123456789abcdef" for c in digest)
-    assert not gate_status.LEGACY_TREE_RE.match(got)
+    """`t2<scope-tag>:<12 hex>` -- versioned TWICE over, so neither a legacy row
+    nor a differently-scoped one can match by accident.
+
+    Was `t1:<12 hex>` until 2026-08-17, when per-phase scoping (`GS-2`) split the
+    id into `t2a:` (all inputs) and `t2c:` (code inputs only). Bumping the algo
+    letter is the same discipline that retired the pre-2026-08-17 `<sha>+<hash>`
+    scheme: make every pre-existing row STRUCTURALLY incapable of matching, rather
+    than merely unlikely to.
+    """
+    for scope, tag in gate_status.SCOPE_TAGS.items():
+        got = gate_status.tree_id(repo, scope=scope)
+        algo, _, digest = got.partition(":")
+        assert algo == gate_status.TREE_ID_ALGO + tag
+        assert len(digest) == 12 and all(c in "0123456789abcdef" for c in digest)
+        assert not gate_status.LEGACY_TREE_RE.match(got)
 
 
 # --------------------------------------------------------------------------- #
@@ -422,3 +431,146 @@ def test_coverage_still_refuses_tiles_at_mixed_K() -> None:
 
     ok, notes = gate_status.coverage({"lean", "conf-tile:1/1", "tests-tile:1/1"})
     assert ok, notes
+
+
+# --------------------------------------------------------------------------- #
+# 6. GS-2 -- PER-PHASE INPUT SCOPING (2026-08-17)
+#
+# One id used to cover every tracked file, so editing a MARKDOWN paragraph
+# invalidated nine green pytest tiles. It happened twice in one session, ~50 min
+# of gate time, and a rule whose cost is that visible is one sessions start
+# overriding from memory -- the habit the ledger exists to retire. So a phase's
+# id now covers only the inputs that phase can read: `lean` keeps everything
+# (steps 4d/4e/4f really do read markdown), the pytest tiles drop *.md and
+# benchmarks/.
+#
+# ⚠ THIS IS A FAIL-OPEN SURFACE: every excluded input is one that can no longer
+# invalidate a cached green. So the tests below are written as a PAIR -- for each
+# exclusion, one test that it IS excluded, and one that a real input in the same
+# neighbourhood is NOT. An exclusion test alone would pass just as happily if the
+# code scope covered nothing at all.
+#
+# SABOTAGE (docs/sabotage-procedure.md), run 2026-08-17 before these were
+# believed. Eight probes against the real repo, mutating one file at a time and
+# restoring it; literal result::
+#
+#     edit a backend .py      -> BOTH change   PASS
+#     edit a test .py         -> BOTH change   PASS
+#     edit an .fga fixture    -> BOTH change   PASS
+#     edit a .txt golden      -> BOTH change   PASS
+#     edit a .md              -> all ONLY      PASS
+#     edit benchmarks/*.py    -> all ONLY      PASS
+#     new untracked .py       -> BOTH change   PASS
+#     new untracked .md       -> all ONLY      PASS
+#
+# ⚠ THE FIRST RUN OF THAT SWEEP REPORTED TWO FALSE FAILURES, and the cause is
+# worth carrying: the probe harness read and rewrote files in TEXT mode, so on
+# Windows an LF-only file came back CRLF. The baseline id drifted mid-sweep and
+# the two markdown/benchmarks probes looked broken. The instrument mutated its
+# own subject. Re-run with `read_bytes`/`write_bytes` -- what `_file_fingerprint`
+# itself uses -- all eight passed and the ids restored exactly. Use binary I/O in
+# any future probe here.
+# --------------------------------------------------------------------------- #
+def _code_id(repo: Path) -> str:
+    return gate_status.tree_id(repo, scope=gate_status.SCOPE_CODE)
+
+
+def test_markdown_edit_does_not_move_the_code_scoped_id(repo: Path) -> None:
+    """A docs edit must not invalidate a pytest tile's verdict."""
+    (repo / "notes.md").write_bytes(b"first\n")
+    before_all, before_code = _id(repo), _code_id(repo)
+    (repo / "notes.md").write_bytes(b"first\nsecond, rewritten\n")
+    assert _id(repo) != before_all, (
+        "the ALL scope must still see a markdown edit -- `lean` steps 4d/4e/4f "
+        "read markdown, so a docs-only edit can legitimately turn lean red")
+    assert _code_id(repo) == before_code
+
+
+def test_python_edit_does_move_the_code_scoped_id(repo: Path) -> None:
+    """The control for the test above: without it, a code scope covering NOTHING
+    would pass the exclusion test and silently certify every tree as unchanged."""
+    (repo / "mod.py").write_bytes(b"x = 1\n")
+    before = _code_id(repo)
+    (repo / "mod.py").write_bytes(b"x = 2\n")
+    assert _code_id(repo) != before
+
+
+def test_benchmarks_edit_does_not_move_the_code_scoped_id(repo: Path) -> None:
+    """benchmarks/ is leaf tooling: nothing under tests/ or formal/conformance/
+    imports it (verified 2026-08-17; the dependency runs the other way)."""
+    (repo / "benchmarks").mkdir()
+    (repo / "benchmarks" / "bench.py").write_bytes(b"x = 1\n")
+    before_all, before_code = _id(repo), _code_id(repo)
+    (repo / "benchmarks" / "bench.py").write_bytes(b"x = 2\n")
+    assert _id(repo) != before_all
+    assert _code_id(repo) == before_code
+
+
+def test_non_python_test_inputs_stay_in_the_code_scope(repo: Path) -> None:
+    """Fixtures and goldens are DATA, not code, and a coverage-based dependency
+    scheme would miss them. Only two extensions are excluded by name, so these
+    stay in scope by construction -- this pins that they really do."""
+    (repo / "schema.fga").write_bytes(b"type user\n")
+    (repo / "golden.txt").write_bytes(b"row\n")
+    (repo / "corpus.json").write_bytes(b"{}\n")
+    for name, new in (("schema.fga", b"type user\ntype doc\n"),
+                      ("golden.txt", b"row\nrow2\n"),
+                      ("corpus.json", b'{"a": 1}\n')):
+        before = _code_id(repo)
+        (repo / name).write_bytes(new)
+        assert _code_id(repo) != before, f"{name} must stay inside the code scope"
+
+
+def test_scope_tags_make_the_two_ids_structurally_distinct(repo: Path) -> None:
+    """`t2a:` vs `t2c:`. A code-scoped id must be incapable of matching an
+    all-scoped row even by coincidence -- the same versioning discipline that
+    made pre-2026-08-17 `<sha>+<hash>` ids unable to match `t1:`/`t2:` ones."""
+    assert _id(repo).startswith("t2a:")
+    assert _code_id(repo).startswith("t2c:")
+    assert _id(repo) != _code_id(repo)
+
+
+def test_unknown_phase_gets_the_widest_scope(repo: Path) -> None:
+    """A new or mistyped phase must OVER-invalidate (safe, wasteful), never
+    under-invalidate (fast, wrong)."""
+    assert gate_status.phase_scope("lean") == gate_status.SCOPE_ALL
+    assert gate_status.phase_scope("conf-tile:1/5") == gate_status.SCOPE_CODE
+    assert gate_status.phase_scope("tests-tile:3/4") == gate_status.SCOPE_CODE
+    assert gate_status.phase_scope("some-new-phase") == gate_status.SCOPE_ALL
+    assert gate_status.phase_scope("") == gate_status.SCOPE_ALL
+    assert gate_status.phase_scope(None) == gate_status.SCOPE_ALL
+
+
+def test_an_empty_scope_is_refused_rather_than_certifying_everything(
+    tmp_path: Path,
+) -> None:
+    """An id over zero files would equal every other empty-scope id, i.e. it
+    would certify any tree as matching. Refuse, exactly as an unreadable file
+    does."""
+    root = tmp_path / "mdonly"
+    root.mkdir()
+    _git(root, "init", "-q")
+    (root / "only.md").write_bytes(b"docs\n")
+    _git(root, "add", "only.md")
+    _git(root, "commit", "-q", "-m", "docs only")
+    assert gate_status.tree_id(root).startswith("t2a:")     # all scope still fine
+    with pytest.raises(gate_status.TreeIdError):
+        gate_status.tree_id(root, scope=gate_status.SCOPE_CODE)
+
+
+def test_green_phases_matches_each_row_against_its_own_scope(repo: Path) -> None:
+    """The reader must compare a tile row against the CODE id and a lean row
+    against the ALL id. Mixing them up green-lights nothing -- it silently makes
+    every tile row stale, which is how this would fail quietly."""
+    all_id, code_id = _id(repo), _code_id(repo)
+    rows = [
+        {"phase": "lean", "tree": all_id, "status": "PASSED"},
+        {"phase": "conf-tile:1/5", "tree": code_id, "status": "PASSED"},
+        {"phase": "tests-tile:1/4", "tree": all_id, "status": "PASSED"},
+    ]
+    green = gate_status.green_phases(
+        rows, {gate_status.SCOPE_ALL: all_id, gate_status.SCOPE_CODE: code_id})
+    assert "lean" in green
+    assert "conf-tile:1/5" in green
+    # recorded under the wrong scope -> must NOT count
+    assert "tests-tile:1/4" not in green
