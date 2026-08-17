@@ -25,6 +25,54 @@ from here.
 
 ---
 
+## 2026-08-17e — the sabotage procedure now binds measurements, not just checks
+
+rows: none (method lesson only; `R6`'s and `P3`'s state is unchanged).
+
+A read-back session: check what the previous three sessions left unrecorded, then do
+whatever small thing was owed. **The board was clean** — `R6`'s ten-to-land order, its five
+declines with the number behind each, the three unreachable ids and the unfiled
+`_reconcile_subject_edge` finding are all in the `R6` item block and
+[`docs/perf-next-round.md`](../perf-next-round.md); `P3` is still `NOW` and still blocked on
+the proof-design adjudication rather than on coding; `2026-08-17d` already carries the four
+instrument corrections. Nothing was missing from the *state* record.
+
+**What was missing was the rule.** `2026-08-17d` recorded the four corrections as session
+narrative — the star-closed `R6-2` schema, the cascade probe on the bootstrap path, the
+`R6-12` cross-cycle aggregation, and the `GS-2` harness that rewrote its own subject in text
+mode — and [`docs/sabotage-procedure.md`](../sabotage-procedure.md), the living home for
+exactly this class of lesson, scoped itself to *assurance steps*: tests, floors, pins, gate
+phases. A benchmark was not on that list. Four verdicts in one session turned on instruments
+that ran on nothing and reported cleanly, so per `docs/README.md` §"Archive the status, keep
+the method" the lesson belongs in the living doc, not only in a dated entry that is read for
+provenance.
+
+**The edit.** The procedure's opening scope now names measurement instruments alongside
+checks, and a new section — §"A MEASUREMENT is an assurance step too" — carries the
+five-second test (*what would this number look like if the probe ran on nothing?*), the
+four corrections as a table with what each reported versus what it was doing, and three
+generalisations: wrong-workload dominates wrong-arithmetic (three of four ran correct code
+over an input that never reached the studied function); **right answer by luck is still a
+failed instrument** (`R6-2` reached NOT MOTIVATED both times — only the second run had
+measured it); and an instrument can mutate its own subject, so anything that writes to the
+tree it measures owes a baseline re-read after restore. The mechanical form is the one
+`benchmarks/profile_r6.py` already uses and the reason two of the four were caught at all:
+print the denominator next to every share, because 0/0 renders as a clean small percentage.
+
+Pointers, not restatements, per the one-home rule: `docs/README.md`'s routing row widened to
+"checks **and measurements**", and `perf-next-round.md`'s measurement-hygiene bullet links
+the new section instead of copying it.
+
+No code, no backend, no modeled algorithm touched — markdown only, so under `GS-2` the nine
+pytest tiles keep their verdicts and this costs one `lean` run.
+
+Still owed: nothing. (Standing, from `2026-08-17`: the unfiled
+`bulk_backfill._reconcile_subject_edge` finding — 25.3% of a bulk build — still has no
+`R6-*` id of its own. It is recorded in three places and is not lost; filing it is the next
+`R6` session's first cheap act.)
+
+---
+
 ## 2026-08-17d — GS-2: the gate's tree id is per-phase now, so a docs edit costs 50s not 25min
 
 rows: GS-2 (new, closed and retired same session).

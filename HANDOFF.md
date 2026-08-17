@@ -17,23 +17,23 @@ session: run the Rhythm protocol at the bottom.
 ## Banner
 
 > 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-17b**: all ten phases were run green on this tree, after the last edit
+> As of **2026-08-17e**: all ten phases were run green on this tree, after the last edit
 > to it — ask `python scripts/gate_status.py`, never this line. The tree id is
 > deliberately not quoted here: it is a content address, so a tracked file cannot cite
 > its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
-> No backend and no modeled algorithm changed this session — docs, additive
-> `benchmarks/` tooling, and the gate's own status tool — so the 2026-08-14 3-seed fuzz
-> sweep still stands.
+> No backend and no modeled algorithm changed this session — markdown only — so the
+> 2026-08-14 3-seed fuzz sweep still stands.
 > **A docs-only edit no longer invalidates the nine pytest tiles** (`GS-2`): tile
 > verdicts are keyed to a `code`-scoped tree id that excludes `*.md` and `benchmarks/`.
 > `lean` still is not — it reads markdown at steps 4d/4e/4f — so a docs edit costs one
 > ~50 s `lean` re-run, not 25 minutes of tiles.
-> Last session: **`HS-4` paid** (`formal/HANDOFF.md` 517 → 482, three lines under the
-> ceiling `verify.sh lean` step 4f enforces; bold-caps ratchet 9 → 6), then **`R6`'s
-> measurement pass settled ALL EIGHTEEN candidates** — 10 to land (`R6-10` first at 59.8%
-> of boolean write time), 5 declined on an upper bound, 3 unreachable, nothing implemented;
-> then `GS-2` scoped the gate's tree id per phase →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`/`c`/`d`.
+> Last session: [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) **now binds
+> measurements, not only checks** — four instrument corrections in one day each changed a
+> verdict, so the procedure carries the five-second test: *what would this number look
+> like if the probe ran on nothing?* Before it: **`HS-4` paid**, **`R6`'s measurement pass
+> settled all eighteen candidates** (10 to land, 5 declined, 3 unreachable, none
+> implemented), **`GS-2`** scoped the tree id per phase →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`…`e`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
@@ -170,8 +170,10 @@ the checker.
 
 **Read first:** [`benchmarks/results/R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md)
 (verdicts, method, the two limits — in-memory SQLite understates statement-count wins,
-cProfile depresses throughput — and the three instrument corrections, which are the
-transferable lesson), then the entry for whichever id you take in
+cProfile depresses throughput — and its three instrument corrections; the transferable
+rule they produced, plus `GS-2`'s fourth, is
+[`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) §"A MEASUREMENT is an assurance
+step too", and it binds any re-run you do), then the entry for whichever id you take in
 [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) **including its
 verifier corrections**, then [`docs/perf-next-round.md`](docs/perf-next-round.md) for the
 fence and the reopening rule. Re-run any target with `python -m benchmarks.profile_r6
