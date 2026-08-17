@@ -25,6 +25,71 @@ from here.
 
 ---
 
+## 2026-08-17d — GS-2: the gate's tree id is per-phase now, so a docs edit costs 50s not 25min
+
+rows: GS-2 (new, closed and retired same session).
+
+Third task of the session, and it came straight out of the second one's friction. Twice in
+one session a **markdown-only edit** invalidated nine green pytest tiles: the tree id was a
+content address over *every* tracked file, so appending one ledger paragraph moved it and
+`gate_status --require-green` correctly said NOT COVERED. Correct, and ~50 minutes of gate
+time re-earning verdicts that could not have changed. The user pushed back on the second
+rerun — *"if you already ran the full 9 tiles and changed some docs I don't think that
+warrants a full rerun?"* — and they were right: that is the letter of the rule beating its
+intent, and **a rule whose cost is that visible is one sessions start overriding from
+memory**, which is the exact habit `GS-1`'s ledger was built to retire.
+
+**The fix is per-phase input scoping.** A phase's id now covers only the inputs that phase
+can read: `t2a:` (everything) for `lean`, `t2c:` (everything minus `*.md` and
+`benchmarks/`) for the nine pytest tiles. `verify.sh` passes `--phase`, so the recorder and
+the reader still cannot drift. **`lean` keeps the full scope and must** — steps 4d/4e/4f
+resolve `CORRESPONDENCE.md` anchors, scan prose globs, and lint both boards plus this
+ledger — so a docs-only edit still costs one ~50 s `lean` run. That coupling was already
+documented; what changed is that it no longer drags the tiles with it.
+
+**The exclusion is a fail-open surface, so it was verified rather than argued.** Every
+excluded input is one that can no longer invalidate a cached green — this repo's house
+failure mode wearing a performance costume. Checked before writing any code: no collected
+test reads markdown (every `.md` in `tests/` and `formal/conformance/test_*.py` is a
+docstring mention; the only real reader is `doc_counts.py`, which runs from step 4e, and no
+collected test imports it); **no `.md` file exists under `tests/` or `formal/conformance/`
+at all**, so no golden, fixture or corpus can be markdown; and nothing there imports
+`benchmarks` (the dependency runs the other way). Fixtures, goldens and corpora stay in
+scope by construction — only two extensions are named — and an unrecognised phase falls
+back to the **widest** scope, so a new or mistyped phase over-invalidates rather than
+under-invalidating.
+
+**Sabotage** (`docs/sabotage-procedure.md`), eight probes, each mutating one real file and
+restoring it: backend `.py`, test `.py`, `.fga` fixture, `.txt` golden and a new untracked
+`.py` all move BOTH ids; `.md` (edited and newly created) and `benchmarks/*.py` move the
+all-scope id ONLY. Eight for eight, ids restored to baseline exactly. End-to-end on the
+real ledger: append one line here → `lean` STALE, `conf-tile:2/5` still green; restore →
+both green. Now permanent as 8 tests in `tests/test_gate_status.py`, each exclusion paired
+with a control proving the scope still covers its neighbourhood — **an exclusion test alone
+would pass just as happily if the code scope covered nothing**, which is why
+`test_an_empty_scope_is_refused_rather_than_certifying_everything` exists too.
+
+⚠ **Instrument correction #4 of the session, and the most embarrassing: the probe harness
+mutated its own subject.** The first sweep reported two false FAILURES. Cause: it read and
+rewrote files in **text mode**, so on Windows an LF-only file came back CRLF, the baseline
+id drifted mid-sweep, and the markdown/benchmarks probes looked broken. It also left
+`formal/audited_theorems.txt` stat-dirty (content identical after normalisation — verified
+by `git diff --numstat`, then restored). Re-run with `read_bytes`/`write_bytes` — what
+`tree_id`'s own `_file_fingerprint` uses — all eight behaved. **Four instrument corrections
+in one session** (R6-2's star-closed schema, the cascade probe on the bootstrap path, the
+R6-12 cross-cycle aggregation, and this one). Every one changed a verdict; not one was
+caught by a test.
+
+Versioning: `t1` → `t2`, and the scope tag is mixed into both the digest and the prefix, so
+a code-scoped id cannot match an all-scoped row and no pre-existing row can match anything
+— the same discipline that retired the pre-2026-08-17 `<sha>+<hash>` scheme. Floor raised
+895 → 903; `FINAL_REVIEW.md`'s counts block regenerated (the documented tests → lean
+coupling). Gate: all ten phases green on this tree.
+
+Still owed: nothing.
+
+---
+
 ## 2026-08-17b — HS-4 paid: two landed blocks retired verbatim, formal/HANDOFF 517 → 482
 
 rows: HS-4 (closed and retired).
@@ -86,6 +151,114 @@ residue and has no slack. `python scripts/handoff_lint.py` → `handoff_lint: cl
 span is empty by construction, because the text was copied, not retyped. That is the whole
 reason `HS-3` wrote "never condense" as a rule: a condensed retirement is unreviewable, since
 a line diff cannot distinguish "shortened" from "lost".
+
+Still owed: nothing.
+
+---
+
+## 2026-08-17c — R6 measured: R6-6 lands first, R6-2 declined, R6-3 unreached, nothing built
+
+rows: R6 (measurement pass done, block rewritten).
+
+Same session as `2026-08-17b`, second task. The user asked whether a perf scan was on the
+board and authorised it **conditional on the box being quiet** — other agents had been
+running suites on other repos. Checked before starting: 12 logical cores at 1.8–11%, and
+per-process CPU-delta sampling showed the two stray `pytest -q` processes from
+`audio-workspace` consuming **0 CPU-seconds over a 6-second window**. The user then stopped
+them outright, so the wall-clock column is trustworthy and not just the counters. **No perf
+work would have been legitimate under load** — `perf-next-round.md`'s hygiene rule is
+explicit that contention has corrupted bench numbers before, and a noisy measurement is
+worse than none because it looks like evidence.
+
+**Nothing was implemented.** The round's declared next act was measurement, and the
+deliverable is verdicts, not patches:
+[`benchmarks/results/R6_PROFILE_2026-08-17.md`](../../benchmarks/results/R6_PROFILE_2026-08-17.md),
+instrument [`benchmarks/profile_r6.py`](../../benchmarks/profile_r6.py) — cProfile plus
+counters keyed to each candidate's own claim, over the reviewed `scale_bench` datasets.
+
+**Six of eighteen settled.** `R6-6` **MOTIVATED and cheapest**: exactly **4.00 `node_v4`
+point SELECTs per `check`** against 0.75 for the already-batched edge probe, so the fix
+takes the hottest read surface **4.75 → 1.75 statements, −63% round trips**, with no Lean
+change. `R6-5` **promoted from medium**: 22,410 ORM rows built (**32.7%** of profiled time)
+to read three or four columns; `lookup_reachable` + `_classify_ids` are **52%** of boolean
+lookup — the largest single measured block in the pass. `R6-4` **MOTIVATED**: **30.1%** of
+every boolean lookup and **193 `json.loads` per lookup** over only **100** residue rows,
+and being O(#derived objects) that share grows with the store. `R6-1` **MOTIVATED with a
+caveat that is the point of the entry**: 74.1 `check` calls per `lookup` and **91.4%** of
+lookup wall time, with `lookup` degrading 2.5× from scale 400→1600 while `check` stays
+flat — but that proves `check` DOMINATES, *not* that sharing ELIMINATES, and the naive
+shared memo is a correctness bug by the audit's own counterexample. Prototype before
+landing. `R6-2` **recommended DECLINE**: 24.2% of a surface already 13–30× faster per call
+than `lookup`, the feared quadratic star-population re-materialization absent (roaring
+`_starpop` ~1 µs even at 20,000 population), against the price of a Lean model change plus
+fuzz. `R6-3` **UNREACHED**: `_instances_of_type` called **0 times** across both set-engine
+profiles, gdrive's object-wildcard shapes included — round-3's N7 deferral now measured
+instead of assumed.
+
+**The method lesson, filed in the results doc: a probe that exercises nothing reports a
+verdict.** The first `R6-2` probe used `set_engine_bench`'s wide/star schema and printed a
+clean `NOT MOTIVATED, 18.8%` — while returning **0 members** and running **2 unions per
+expand**. On a star-CLOSED relation the answer lives in `stars`/`neg` and `direct_expand`
+folds a bitmap leaf in ONE union, so the per-element fold the finding is *about* never
+executed. The re-run on gdrive `lookup_reverse` (the surface the finding's own verifier
+named) reaches the same verdict for a reason it actually measured. Both are kept in the
+write-up: this is `docs/sabotage-procedure.md`'s "control your instrument as well as your
+subject" landing one level down, on a benchmark rather than an assurance check — and it
+would have been invisible had the wrong probe happened to say MOTIVATED.
+
+**Scope, second half.** The first write-up stopped at the read paths and said so. The user
+then asked whether `R6-7`…`R6-18` were measurable at all, whether the harness could be
+written, or whether some upper bound already showed the effort was not worth it — and the
+answer was that most of the plumbing existed (`build_graph(paranoia=, commit_every=)`,
+`build_index(bulk=True)`, `stmt_bench`'s statement listener). `benchmarks/profile_r6_write.py`
+followed, and **all eighteen are now measured**; `R6-17` needed no run, being a duplicate of
+`R6-3`. Verdicts, added to the same results doc as Part 2:
+
+* **`R6-10` is the round's headline — 59.8% of incremental boolean write+cascade time** in
+  one function (16,690 calls to `_stored_tupleset_subjects`). Larger than anything on the
+  read side.
+* **`R6-7` is confirmed by a GROWTH CURVE, not a share**: per-commit cost rose **14.14×**
+  from the first quartile to the last over 336 commits. A share could not have separated
+  "expensive constant" from "grows without bound"; the quartile split does, and it settles
+  the O(N²)-over-a-run claim. Gate-only (`PARANOIA_FULL` is the `tests/` default and never
+  production), with `check_invariants` overall at **64.1%** of a paranoid build.
+* **`R6-16` is the clearest waste in the round**: exactly **1.00 outbox row per closure
+  edge** on a schema with no derived relations — 14,868 rows nothing consumes, retained
+  permanently. Must be co-designed with `R6-7`/`R6-8`, which read those rows as paranoia's
+  worklist.
+* **`R6-18`: 53.1% smaller on disk** (57.7 → 27.0 bytes/row, VACUUMed file-backed A/B). The
+  claim is about physical layout, so it was measurable exactly without touching production
+  models.
+* **Five declined on an upper bound** — `R6-15` (the entire topo sort is **0.9%** of a bulk
+  build, so a perfect fix cannot beat that), `R6-12` (**1.00×** intra-run re-reconcile),
+  `R6-14` (**5.0%**), `R6-2` (24% of a non-bottleneck) — and **three are unreachable**:
+  `R6-3` = `R6-17` and its bulk twin `R6-13`, 0 calls each. **That is five items of
+  implementation effort the round will not spend, which is the reopening rule paying for
+  itself.**
+* **Unfiled finding:** `bulk_backfill._reconcile_subject_edge` is **25.3%** of a bulk build
+  and belongs to no candidate. Recorded as needing its own id rather than being folded into
+  a neighbour.
+
+**Three instrument corrections, all of which changed a verdict.** (1) The `R6-2` probe on a
+star-CLOSED relation, described above. (2) The first cascade probe profiled `build_graph`,
+which bootstraps through `backfill()` — the OFFLINE path — so `reconcile_subject` ran **0
+times** and `R6-11`/`R6-12` returned INCONCLUSIVE against code that never executed; the
+measured path had to be `GraphBackend.apply`'s write → `run_cascade(wm)` → commit. (3) The
+`R6-12` counter then aggregated across cycles and printed **15.00× re-reconcile**, which was
+the same key touched by successive *writes*, not the intra-run duplication `_bumped` is
+about — per-cascade counting gives **1.00×**. Same failure in three costumes: **a probe that
+exercises nothing, or counts the wrong scope, still reports a confident verdict.** None of
+them was caught by a test; all three were caught by asking what the number could mean.
+
+**Housekeeping — the carried "nine tile phases" debt is DISCHARGED, and this entry is where
+that is said.** `2026-08-16d`, `2026-08-16e` and `2026-08-16g` each closed with
+`Still owed: ... the nine tile phases before push`. Those entries are append-only and are
+never retro-edited, so the debt is retired forward rather than by editing them: the
+`2026-08-17` session ran all ten phases green, and this session ran all ten green twice more
+(once after `HS-4`, once after this measurement pass), each time verified on the current
+tree by `scripts/gate_status.py --require-green`. **Nothing about tile phases is
+outstanding.** Anyone grepping `Still owed:` will still hit those three lines — that is the
+cost of an append-only ledger, and the reason a later entry has to name what it discharges.
 
 Still owed: nothing.
 
