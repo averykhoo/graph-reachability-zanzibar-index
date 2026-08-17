@@ -170,9 +170,15 @@ STAR = u'★'      # retired from the board files
 # ⚠ These were first set to 1 and 18 -- ABOVE the true counts -- and the sabotage caught
 # it: lowering the budget by one left the check SILENT, i.e. it was slack and guarded
 # nothing. A budget above the measured value is the same defect as a floor with headroom.
+#
+# formal/HANDOFF.md: 9 -> 6 on 2026-08-17 (row ``HS-4``). The retirement pass moved the
+# 2026-08-09 and 2026-08-08 dated blocks to history, and three of the nine offenders went
+# with them (they were lines 227/229/234 of the 2026-08-09 block). Re-measured at 6, which
+# is the ratchet's rule -- leaving it at 9 would have bought three free offenders for the
+# next session, i.e. re-created exactly the slack the original sabotage caught.
 MAX_BOLDCAPS = {
     'HANDOFF.md': 0,
-    'formal/HANDOFF.md': 9,
+    'formal/HANDOFF.md': 6,
 }
 
 # The two ledgers, and the heading forms they use. Both keys are YYYY-MM-DD[letter], which

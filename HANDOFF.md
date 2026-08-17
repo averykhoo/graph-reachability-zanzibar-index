@@ -17,17 +17,17 @@ session: run the Rhythm protocol at the bottom.
 ## Banner
 
 > 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-17**: all ten phases were run green on this tree, after the last edit
-> to it — so `python scripts/gate_status.py` reports it covered, and will still do so
-> after the commit, which is precisely what row `GS-1` bought. The tree id is
-> deliberately no longer quoted here: it is a content address now, so a tracked file
-> cannot cite its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
-> Only `scripts/`, `tests/` and docs changed — no backend and no modeled algorithm — so
-> the 2026-08-14 3-seed fuzz sweep still stands.
-> Last session: **the gate's own status tool turned out to be the broken thing** —
-> `GS-1` was fail-safe, but two fail-opens sat beside it in `tree_id` and a third in the
-> reader, and none of it had a single test →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17`.
+> As of **2026-08-17b**: all ten phases were run green on this tree, after the last edit
+> to it — ask `python scripts/gate_status.py`, never this line. The tree id is
+> deliberately not quoted here: it is a content address, so a tracked file cannot cite
+> its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
+> Only docs and `scripts/handoff_lint.py` changed — no backend, no test, no modeled
+> algorithm — so the 2026-08-14 3-seed fuzz sweep still stands.
+> Last session: **`HS-4` paid.** `formal/HANDOFF.md` was three lines under the ceiling
+> that `verify.sh lean` step 4f enforces, so the next dated block would have reddened
+> the gate on a doc edit; two landed blocks retired verbatim to history (517 → 482), and
+> the bold-caps ratchet came down 9 → 6 with it →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
@@ -56,7 +56,6 @@ forward forever and are never reused.**
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
-| `HS-4` | `formal/HANDOFF.md` retirement pass — 517/520 lines, so the next dated block trips `verify.sh lean` step 4f | LATER | S | — | 2026-08-17 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
 | `P16` | widen the enumeration/state bounds → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(e); read `test_conformance_enum.py`'s module docstring, which is half the plan | LATER | M | — | 2026-08-16 |
 | `P17` | bulk build/backfill is an unmodeled **default** constructor — model it or scope-exclude it in writing → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(h) + §3.1 item 6 | LATER | M | — | 2026-08-16 |
@@ -69,8 +68,8 @@ forward forever and are never reused.**
 | `SD-3` | tuple-log compaction — only if the log outgrows "humans wrote this" scale | SOMEDAY | S | — | 2026-08-16 |
 | `SD-4` | bulk-merge write path → [sketch](docs/architecture/bulk-merge-design.md) | SOMEDAY | L | — | 2026-08-16 |
 
-Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`
-(2026-08-17), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
+Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1` and
+`HS-4` (2026-08-17), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
 `B1`'s underlying finding was verified closed on 2026-08-16 (both halves proved 2026-07-28
 and 2026-08-04; the record had simply never caught up) — evidence in `formal/HANDOFF.md`'s
 `B1` block. Retiring an id is not the same act as closing a finding: say which you mean.

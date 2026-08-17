@@ -25,6 +25,72 @@ from here.
 
 ---
 
+## 2026-08-17b — HS-4 paid: two landed blocks retired verbatim, formal/HANDOFF 517 → 482
+
+rows: HS-4 (closed and retired).
+
+Asked for the cheap items, then a handoff cleanup, a green gate and a push. Perf work
+(`R6`) was explicitly excluded — other agents were running test suites on other repos, and
+a measurement pass under that load would produce numbers worth nothing. That exclusion is
+the right call independent of scheduling: `R6`'s own entry condition is a motivating
+measurement, and a noisy one is worse than none because it *looks* like evidence.
+
+**`HS-4` was the only genuinely owed item, and it was owed twice.** `formal/HANDOFF.md`
+stood at **517 lines against the 520-line ceiling** (`scripts/handoff_lint.py::MAX_LINES`,
+enforced as `verify.sh lean` step 4f), so the next session to append a dated block — the
+normal way that file is written — would have turned the gate red on a doc edit. The debt
+was recorded under `Still owed:` in `2026-08-16g`, carried unexecuted through `2026-08-17`,
+and this session is the third to see it.
+
+**What moved, and why those two.** The two oldest dated blocks in the reverse-chronological
+run, both fully landed, went verbatim to
+[`formal/history/handoff-dated-blocks-2026-08-17.md`](../../formal/history/handoff-dated-blocks-2026-08-17.md)
+(FROZEN banner, `HS-3` precedent — copy, never condense):
+
+* **2026-08-09** — leg 7 steps 3 and 4a. Landed in `8291c3a` / `41b7029`. Its one open
+  question, the §11.3 `pushDelta` fork, was *answered* by the 2026-08-14 block (branch
+  (α)), which stays live in `formal/HANDOFF.md`. So the block carried no unanswered state.
+* **2026-08-08** — the `rewriteClosure` dedup leg, closed as `CORRESPONDENCE.md` §7.2
+  item 6.
+
+Checked before cutting, because the citation-key rule (`docs/README.md` §5) is what makes a
+move safe: **nothing outside `.scratch/` cites a dated block of `formal/HANDOFF.md`.** The
+tree cites `formal/history/PROOF_STATUS.md` by date key instead, and both retired blocks
+have fuller entries there under the same keys — this file was the fast path, not a unique
+home. A one-line pointer replaces them in place and the routing table gains a row.
+
+**A new archive rather than an append to the 2026-08-16 one.** That file is declared
+`FROZEN 2026-08-16` and its header enumerates *three* retired zones; appending would have
+falsified its own header and edited a frozen body, which `docs/README.md` §3 forbids
+outright. Retirements get their own dated archive.
+
+**Deliberately NOT done: raising the ceiling.** The lint's own comment says a ceiling is
+raised as a deliberate reviewed act, and the whole point of 520 is that it fires on the
+first appended layer. 517 → **482** buys ~38 lines, i.e. one more dated block, which is
+the intended cadence: the next session to fill it retires the next landed block. The
+2026-08-15 block is the obvious next candidate — it is already marked SUPERSEDED — but it
+is deliberately kept for now because it carries the revised 4c-i/4c-ii step order that
+`P3` is actively working from, and 4c-ii has not landed.
+
+**The ratchet had to move with it, and that is the part worth carrying.**
+`MAX_BOLDCAPS['formal/HANDOFF.md']` was **9**, set on 2026-08-16 at the exact measured
+residue. Three of those nine offenders lived inside the 2026-08-09 block and left with it.
+Leaving the budget at 9 would have handed the next session three free bold-caps lines — the
+identical defect the original sabotage caught when the budget was first set to 18 and
+lowering it by one left the check *silent*. Re-measured and lowered to **6**, with the
+provenance in the source. Sabotage, per [`docs/sabotage-procedure.md`](../sabotage-procedure.md):
+at budget **6 → 0 violations**, at **5 → 1 violation** — so the ratchet sits exactly on the
+residue and has no slack. `python scripts/handoff_lint.py` → `handoff_lint: clean (9 checks)`.
+
+**Method note.** The retirement is a pure move — the diff of the archive against the deleted
+span is empty by construction, because the text was copied, not retyped. That is the whole
+reason `HS-3` wrote "never condense" as a rule: a condensed retirement is unreviewable, since
+a line diff cannot distinguish "shortened" from "lost".
+
+Still owed: nothing.
+
+---
+
 ## 2026-08-17 — GS-1 closed: the tree id is a content address, and two fail-opens beside it
 
 rows: GS-1 (closed and retired).
