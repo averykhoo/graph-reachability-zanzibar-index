@@ -22,7 +22,7 @@ rot independently, and the reader cannot tell which one is live.
 | priority/status of open items | [`HANDOFF.md`](../HANDOFF.md) board, only |
 | session narrative | [`docs/history/session-log.md`](history/session-log.md) (root) / [`formal/history/PROOF_STATUS.md`](../formal/history/PROOF_STATUS.md) (formal detail) |
 | formal execution state ("what is proved, what is the next lemma") | [`formal/HANDOFF.md`](../formal/HANDOFF.md) — no priorities there |
-| method lessons | [`sabotage-procedure.md`](sabotage-procedure.md) (checks) / [`subagent-fanout-runbook.md`](subagent-fanout-runbook.md) (fan-outs) |
+| method lessons | [`sabotage-procedure.md`](sabotage-procedure.md) (checks **and measurements**) / [`subagent-fanout-runbook.md`](subagent-fanout-runbook.md) (fan-outs) |
 | durable rules, footguns, env | [`CLAUDE.md`](../CLAUDE.md) |
 | gate/operational/machine state | [`gate-runbook.md`](gate-runbook.md) |
 | design decisions, incl. post-spec user adjudications | [`architecture/decision-log.md`](architecture/decision-log.md) |

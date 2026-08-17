@@ -140,6 +140,10 @@ composition-write round-trips that would change the modeled algorithm; leave the
 - **Measurement hygiene:** never two bench/pytest processes at once. New
   statement-count results go in `STMT_BASELINE_2026-07-14.md` +
   `PERF_ANALYSIS.md` "Applied" entries; never overwrite `scale_bench.jsonl`.
+  **Before believing a profile, run the five-second test in
+  [`sabotage-procedure.md`](sabotage-procedure.md) §"A MEASUREMENT is an assurance
+  step too"** — a probe that ran on nothing reports a clean small share, and that
+  cost four corrected verdicts in one session (2026-08-17).
 - Model policy (the loop that landed rounds 1–4): Fable orchestrates and
   reviews (trust contracts, wave gates, any Lean touch); Opus subagents
   implement below-the-model items. Scope drift toward a modeled algorithm

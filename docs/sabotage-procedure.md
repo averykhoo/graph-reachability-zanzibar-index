@@ -2,7 +2,11 @@
 
 **This is a standard procedure, not advice.** It applies to every assurance step added
 to this repo: a test, a floor, an assertion, an invariant clause, a gate phase, a pin, a
-lint, a coverage histogram, a conformance corpus.
+lint, a coverage histogram, a conformance corpus — **and to every measurement instrument
+whose number you intend to act on**: a benchmark, a profile, a probe, a differential
+sweep. A number that decides whether to write code is a claim about the code exactly as
+much as a green test is, and it fails the same way. See "A measurement is an assurance
+step too" below.
 
 > **When you add a check, break the thing it guards and watch it go red before you
 > believe it.**
@@ -216,6 +220,58 @@ So for any probe, sweep, or differential:
   it, but only if the scope is asserted rather than assumed. Note what made it invisible:
   every individual draw behaved correctly and the suite was green; only the *rate* was wrong,
   and nothing measured the rate.
+
+### A MEASUREMENT is an assurance step too — ask what the number would look like on nothing
+
+Added 2026-08-17, from the `R6` measurement pass and `GS-2`. The section above says
+sabotage your instrument; this one says the rule binds even when the instrument produces a
+*number* rather than a verdict, and even when nothing is being "checked" at all. A profile
+that decides an item is NOT MOTIVATED retires that item from the round — it is a gate on
+implementation effort, and it goes green by default.
+
+> **The five-second test, before you believe any measured number:**
+> **what would this number look like if the probe ran on nothing?**
+> If the answer is "the same as it looks now", the number is not evidence yet.
+
+A share is the shape that fails hardest here, because **0/0 renders as a clean small
+percentage** and a small percentage reads as "not a bottleneck". So: **print the
+denominator next to every share** — the call count, the rows returned, the number of
+comparisons — and read it before you read the share. That is the whole mechanism that
+caught the first two of the four below.
+
+**Four instrument corrections in one session (2026-08-17), each of which changed a
+verdict, none of which was caught by any test:**
+
+| the instrument | what it reported | what it was doing |
+|---|---|---|
+| `R6-2` expand probe | `R6-2 NOT MOTIVATED, 18.8%` | ran on a star-CLOSED schema, so `.pos` was empty by construction and the per-element fold it measures **never ran** — `members returned: 0`, 240 unions for 120 expands |
+| the cascade probe | `R6-11`/`R6-12` **INCONCLUSIVE** | profiled `build_graph`, which bootstraps via `DeltaProcessor.backfill()` — the OFFLINE path. `reconcile_subject`: **0 calls** |
+| the `R6-12` counter | `15.00x re-reconcile` | summed calls across all 30 write cycles; the claim is about intra-cascade duplication. Per-cascade: **1.00x** |
+| the `GS-2` scope harness | 2 probes **FAILED** | read/wrote its subject files in **text mode**, so on Windows an LF file came back CRLF: the harness moved the very tree id it was measuring |
+
+Three things generalise out of them:
+
+1. **Wrong-workload is the dominant failure mode, not wrong-arithmetic.** Three of the
+   four ran correct code over an input that does not reach the thing under study — the
+   bootstrap path instead of the incremental one, a star-closed schema instead of a
+   `pos`-bearing one. Before reading a profile, name the function the finding is about and
+   confirm the run **called it a nonzero number of times**. `benchmarks/profile_r6.py`'s
+   design is the durable form of this: counters keyed to each candidate's own claim,
+   printed beside the timings, so a zero is impossible to miss.
+2. **Right answer by luck is still a failed instrument.** `R6-2`'s first and second runs
+   reached the *same* verdict, NOT MOTIVATED. That is why the correction is written down
+   rather than quietly fixed: only the second run reached it for a reason it had measured.
+   A verdict you would have published either way carries no information.
+3. **An instrument can mutate its own subject.** The `GS-2` harness is the pure case — its
+   I/O layer changed the bytes whose digest it was reading. Anything that writes to the
+   tree it measures (a probe that edits and restores, a bench that leaves a database
+   behind, a sweep that touches mtimes) owes a **baseline re-read after restore**: confirm
+   you are back where you started before trusting anything the run said.
+
+The remedy ranking from "Prefer a mechanical refusal to a doc warning" applies unchanged.
+For a measurement, rank 1 is the non-vacuity counter printed in the instrument's own
+output; rank 2 is deriving the workload from the code path under study rather than reaching
+for a convenient existing bench schema.
 
 ### The mirror instrument — a check that reads its subject's source
 
