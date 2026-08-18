@@ -21,19 +21,14 @@ session: run the Rhythm protocol at the bottom.
 > to it — ask `python scripts/gate_status.py`, never this line. The tree id is
 > deliberately not quoted here: it is a content address, so a tracked file cannot cite
 > its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
-> No backend and no modeled algorithm changed this session — markdown only — so the
-> 2026-08-14 3-seed fuzz sweep still stands.
-> **A docs-only edit no longer invalidates the nine pytest tiles** (`GS-2`): tile
-> verdicts are keyed to a `code`-scoped tree id that excludes `*.md` and `benchmarks/`.
-> `lean` still is not — it reads markdown at steps 4d/4e/4f — so a docs edit costs one
-> ~50 s `lean` re-run, not 25 minutes of tiles.
+> No backend and no modeled algorithm has changed since the 2026-08-14 3-seed fuzz
+> sweep, so it still stands. A docs-only edit costs one ~50 s `lean` re-run and not the
+> nine tiles (`GS-2`); the scoping rules are [`docs/gate-runbook.md`](docs/gate-runbook.md)
+> §4's, not this banner's.
 > Last session: [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) **now binds
-> measurements, not only checks** (four instrument corrections in one day, each changing a
-> verdict) — and applying it to the round's one unowned number filed `R6-19` *and corrected
-> it*: 25.3% was cumulative, self is **2.0%**. Before: **`HS-4` paid**, **`R6` settled all
-> eighteen candidates** (10 to land, 5 declined, 3 unreachable, none implemented), **`GS-2`**
-> scoped the tree id per phase →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-17b`…`e`, `2026-08-18`.
+> measurements, not only checks**, and applying it to `R6`'s one unowned number filed
+> `R6-19` *and corrected it* — 25.3% was cumulative, self is **2.0%** →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-18`, `2026-08-17b`…`e`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
