@@ -25,6 +25,108 @@ from here.
 
 ---
 
+## 2026-08-20 — every living-doc citation re-keyed onto `file::symbol`; 8 pointed at unrelated code
+
+rows: `HS-5` (new). **No item progressed** — see the `moved` note at the end.
+
+The session started as a question — is the "cite symbols and headings, not line numbers"
+convention actually applied in this repo's notes? The answer had two halves: it is
+**written** here already ([`docs/README.md`](../README.md) §5, arrived at independently)
+and **machine-checked for exactly one file**, and it had **slipped everywhere else** — 262
+citations across nine living docs.
+
+**Two things the local convention already had.** `verify.sh lean` step 4d resolves every
+anchor in [`CORRESPONDENCE.md`](../../formal/CORRESPONDENCE.md) by `ast` parse, so a rename
+fails the gate rather than rotting — the difference between a convention and a guarantee.
+And this repo carries *evidence against* the "stamp it `:441 as of <date>`" escape hatch
+that usually accompanies this rule: CORRESPONDENCE §0 records that the previous revision
+**did** stamp its citations "as of 2026-07-12", and by 2026-07-26 the zero-trust review
+measured **4 of ~45 accurate and ~35 pointing at unrelated code**, §5 100% wrong. A stamp
+tells the reader an anchor is OLD, not that it is WRONG, and auditors followed it anyway
+into `_write_derived` and `_gc_subject_node`. Ids and section titles are used instead of
+markdown `#anchor`s, which is strictly better: a heading reword breaks an anchor, `ZT-P3-5`
+survives.
+
+**Eight citations were not stale, they were WRONG.** The measured drift:
+
+```
+install_paranoia       cited invariants.py:383       actually :773 (inside _check_derived_invariants)
+"delta verifier"       cited invariants.py:322-368   actually ::verify_outbox_deltas (:649) — R6-8 had it right
+outside_old_admission  cited FullScope.lean:564      actually :833 (:564 is ::accepts)
+"explicit is sticky"   cited core.py:284-287         actually ::ReachabilityIndex.node (:936)
+T4 acyclicity          cited core.py:319-342         actually ::_add_edge_locked
+oracle ttu_leaf        cited tests/oracle.py:429      that is inside ::direct_leaf; ttu_leaf is :471
+test_reg5_...          cited test_lookup_oracle.py:1181-1194   actually :1266
+SEMANTICS §7.7         cites offsets 83-304          the I-series now lives at 160-393
+```
+
+The `core.py:319-342` one is the sharpest: **CORRESPONDENCE §4's rename ledger flagged that
+exact range in July**, and the copy in `spec-deviations.md` was never repointed. A
+correction filed in one doc does not propagate to its citers on its own.
+
+Plus **13 pre-existing `::symbol` anchors that never resolved** — the convention followed in
+form only: bare method names (`processor.py::_reconcile_subject` →
+`::DeltaProcessor._reconcile_subject`), function locals (`::WildcardIndex.check.row`, which
+`anchor_check` deliberately does not record), and `corpus.py::residue_rich`, which is a
+`SCHEMAS` dict key and was never a symbol. **Writing `::` does not make an anchor resolve** —
+that is the lesson worth carrying, and it is now in `docs/README.md` §5 with all three forms.
+
+**One substantive correction, not a re-pointing.** [`formal/HANDOFF.md`](../../formal/HANDOFF.md)
+claimed `Inv` is a hypothesis in "**exactly four places**", citing four line numbers — two of
+which (`State.lean:813`, `:854`) had drifted onto `putResidue_residue` and `structInv_addEdge`,
+neither of which mentions `Inv`. Re-measured with `grep -rn '(h : Inv S σ)\|Inv S σ →'`: it is
+**five** `Inv → Inv` preservation steps plus the forgetful `Inv.toStruct`. The finding it
+supports — nothing CONSUMES `Inv`, so weakening `negEdgeFree` could not turn anything red — is
+unchanged; the count was never load-bearing, but it was wrong, and the rot is now recorded in
+situ rather than silently repaired (CORRESPONDENCE §0's rule).
+
+Method: inverted `formal/conformance/anchor_check.py`'s AST walk (line → enclosing
+`__qualname__`), converted, then re-verified with **anchor_check's own resolver** — 262
+anchors, 0 unresolved. Using the gate's resolver rather than a second hand-rolled one is the
+point: the instrument that will judge these anchors later is the one that judged them now.
+
+Left alone deliberately: frozen archives, the append-only ledgers (this file included — its
+own entries cite line numbers and are never retro-edited), and CORRESPONDENCE's rename
+ledger, which exists *to* record the old citations. Their line numbers are provenance, not
+navigation.
+
+**No new gate phase — the user's call, and the right one.** The resolver is cheap and already
+exists, but extending it means every prose doc must stay parseable forever, and prose
+legitimately wants to quote a snippet without minting an anchor. Recorded here because the
+next session will be tempted: the reason is not cost, it is that `docs/` is not `CORRESPONDENCE.md`.
+Note `P13` (CORRESPONDENCE claim-rot gate) is the adjacent LATER row and is *not* this.
+
+Known and deliberately left: **12 bare parenthetical line numbers** in
+[`perf-round6-audit`](../perf-round6-audit-2026-08.md)'s verifier blockquotes
+(`ttu_expand (1328, 1331, ...)`). Those read as evidence-of-inspection on a stated date
+rather than navigation, and the doc retires to `docs/history/` when the round closes. They
+will still rot; `R6`'s owner may strip them when it lands.
+
+Filed `HS-5`: seven living docs declare **no liveness state** though `docs/README.md` §2 says
+every doc declares one in its first lines. Frozen archives all comply — the gap is
+specifically the always-living roots.
+
+`⚠` budget: this session added one trap to `formal/HANDOFF.md` (9 → 10).
+`scripts/handoff_lint.py` is **clean (9 checks)** — it budgets the root board, which sits at
+**10 with zero headroom**. The next trap on `HANDOFF.md` must take §4's demotion move, not
+add an eleventh line.
+
+Gate: ten phases COVERED on this tree. Only `lean` was re-run (rc=0, holes=0, audits=581,
+pinned=581); step 4d `524 parsed, 524 resolved`; step 4e all four counts match. The nine
+pytest tiles key on `t2c`, which excludes `*.md`, so they stayed green — **`GS-2` paying off
+exactly as designed**: 152 s instead of ~25 min. Docs-only, so no fuzz sweep.
+
+**On `moved`:** no row's `moved` was touched. This session changed citation formatting inside
+`P3`'s block and `R6`'s audit doc but progressed neither item, and `moved` exists so that an
+old date on a `NOW`/`NEXT` row reads as neglect. Touching it for an anchor edit would erase
+that signal — `P3` has been `NOW` since 2026-08-16 without proof progress, and the board
+should keep saying so. Flagged rather than done silently, per the Rhythm's own rule about
+skips that leave no trace.
+
+Still owed: nothing.
+
+---
+
 ## 2026-08-18 — R6-19 filed, and filing it corrected the number: 25.4% cum, 2.0% self
 
 rows: R6.
