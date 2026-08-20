@@ -38,7 +38,7 @@ rejection, full-grid check parity vs the oracle. Raw-tuple set semantics live he
 
 Default ON while prerelease **in the TEST harness only** — it is wired by
 `tests/wildcard_helpers.make_wildcard_index` and `tests/test_connectedstore.py`, and by
-nothing else: `install_paranoia` (`invariants.py:383`) has exactly those two callers, and
+nothing else: `index_v4/invariants.py::install_paranoia` has exactly those two callers, and
 `ConnectedStore.__init__` never calls it and exposes no flag. So a production deployment
 runs with this entire layer dark. (`paranoia=False` for benchmarks or
 deliberate-corruption tests.) Inside every `session.commit()`:

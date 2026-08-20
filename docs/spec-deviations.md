@@ -109,15 +109,16 @@ divergences) found **exactly these two causes**, so the family is closed at two.
 
 The `n.wildcard == ''` clause was **not** deleted — the entry below records both dead ends,
 and both were re-confirmed before starting. The star parent is now *represented*, mirroring
-the semantics the oracle (`tests/oracle.py::ttu_leaf`, the `pn == '*'` arm) and the set
-engine (`setengine/engine.py::ttu_leaf` / `ttu_expand`) already implement and have always
+the semantics the oracle (`tests/oracle.py::Oracle.check.ttu_leaf`, the `pn == '*'` arm) and
+the set engine (`setengine/engine.py::SetEngine.check.ttu_leaf` /
+`::SetEngine.expand.ttu_expand`) already implement and have always
 agreed on. A stored `T:*` tupleset tuple contributes **two things, not one**:
 
 1. **the SHAPE `(T, target_rel)`, unconditionally** — every userset of that shape is a
    member whatever its name. New `DeltaProcessor.tupleset_star_types` /
    `derived_stored_star_types`, consumed by all four `_EvalContext` TTU methods and folded
    into the residue's `stars`. This is the direct analogue of `ms.star((pt, target))` at
-   `setengine/engine.py::ttu_expand`.
+   `setengine/engine.py::SetEngine.expand.ttu_expand`.
 2. **an ∃-expansion over the tuple-mentioned instances of `T`** — folded into
    `tupleset_parents` itself, so every downstream consumer (`_from_chain_keys`,
    `_leaf_concretes`, `_derived_leaf_neg_ids`) became correct with **no edit**. The
@@ -127,7 +128,8 @@ agreed on. A stored `T:*` tupleset tuple contributes **two things, not one**:
 
 The split (`_stored_tupleset_subjects`) is what makes this expressible: returning
 `('T', '*')` as if it were a parent name is precisely the naive fix that detonates, because
-`('T','*')` is **not representable as a concrete node** (`core.py:913`).
+`('T','*')` is **not representable as a concrete node** (`core.py::ReachabilityIndex.node`
+rejects `name=='*'` with an empty `wildcard`).
 
 ### ★ The part no design document predicted: the CASCADE FAN-OUT
 
@@ -242,7 +244,7 @@ Both drop a stored tupleset tuple that `CLAUDE.md`'s pinned rule requires the TT
 **RC1 — a type reaching the tupleset relation only through the exclusion's subtrahend.**
 `zanzibar_utils_v1.py::_member_types` returns `walk(e.base)` for an `Exclusion`, so on
 `define parent: [folder] but not [doc]` the type `doc` never enters the compiled
-`parent_types`, and `index_v4/processor.py::tupleset_parents` filters the stored parent out
+`parent_types`, and `index_v4/processor.py::DeltaProcessor.tupleset_parents` filters the stored parent out
 with `n.type in parent_types`. Fix: union `walk(e.subtract)`. Its docstring encodes the same
 mistake and must change with it.
 
@@ -250,7 +252,7 @@ mistake and must change with it.
 clause of the same filter drops it. Needs no exclusion and no object wildcard; the tupleset
 relation only has to be tainted. ⚠ **Not a one-liner** — deleting the clause breaks admission
 parity first (`accept/reject divergence on add ('...','doc','*','parent','doc','d1'):
-graph=False set:py=True`) and a naive widening crashes at `index_v4/core.py:914`
+graph=False set:py=True`) and a naive widening crashes at `index_v4/core.py::ReachabilityIndex.node`
 (`name=='*' and a non-empty wildcard must go together`). The star parent must be
 **represented** (the set engine's `MemberSet.stars` algebra is the analogue), not merely
 admitted. This is a semantics decision, not a filter tweak.
@@ -291,7 +293,7 @@ hand-found bug is one cell of a family, not a one-off — and the family is clos
   grammar gap, not seed luck, and it is what the 2026-08-10 generator work addresses.
 * **The bulk-vs-incremental identity gate is BLIND to the RC2 direction**, with an
   instrument control proving the blindness is real rather than an unreachable path.
-  One-sided edits to `processor.py::tupleset_parents`, `pytest tests/test_bulk_build.py -q`:
+  One-sided edits to `processor.py::DeltaProcessor.tupleset_parents`, `pytest tests/test_bulk_build.py -q`:
 
   | edit | result |
   |---|---|
@@ -306,10 +308,12 @@ hand-found bug is one cell of a family, not a one-off — and the family is clos
 ### Fix-site note that saves a wasted step
 
 `parent_types` is **not** computed in `processor.py` or `bulk_backfill.py` — it is compiled
-once at `zanzibar_utils_v1.py:1761` from `_member_types` and frozen onto the plan node, which
-both files merely read. So **RC1's single fix repairs the incremental AND bulk paths
-together** (measured: `tests/test_bulk_build.py` 6 passed, byte-identity snapshots survive).
-**RC2 does need the duplicated fix** at `bulk_backfill.py:454` alongside `processor.py:320`.
+once in `zanzibar_utils_v1.py::_build_plan_tree.build` from `::_member_types` and frozen onto
+the plan node (`::PDerivedTTU.parent_types`), which both files merely read. So **RC1's single
+fix repairs the incremental AND bulk paths together** (measured: `tests/test_bulk_build.py`
+6 passed, byte-identity snapshots survive). **RC2 does need the duplicated fix** at
+`bulk_backfill.py::_BulkBackfill._stored_userset_subjects` alongside
+`processor.py::DeltaProcessor.stored_userset_subjects`.
 
 ### Superseded original (2026-08-10, earlier the same day) — kept as a record of the error
 
@@ -387,10 +391,10 @@ Three backends to one, and the oracle is the spec — so the **graph** is wrong.
 **false negative** (under-grant): it fails closed, so it is not a security fail-open, but
 it breaks the repo's central contract that the two backends have identical semantics.
 
-**Root cause — measured, not inferred.** `index_v4/wildcard.py::_ensure_bridges` only ever
+**Root cause — measured, not inferred.** `index_v4/wildcard.py::WildcardIndex._ensure_bridges` only ever
 links `w_all(T,p) -> concrete -> w_any(T,p)` through an **interned node of shape `(T,p)`**;
 `backfill`'s own docstring says so ("Does not create a w node for a shape that has no
-concrete instances"). `tests/oracle.py::instances` witnesses the existential with any
+concrete instances"). `tests/oracle.py::Oracle.check.instances` witnesses the existential with any
 **tuple-mentioned entity of type `T`**, whatever relation mentioned it. Holding everything
 else fixed and varying only which relation mentions `folder:f1`:
 
@@ -410,7 +414,7 @@ the first step of any fix — this entry does not presume the graph is the side 
 only that three of four backends currently disagree with it.
 
 **The pointer for the fix.** The set engine has an explicit, named mechanism for exactly
-this composition and the graph has no analogue — `setengine/engine.py:1476-1480`, *"the
+this composition and the graph has no analogue — `setengine/engine.py::SetEngine.lookup`, *"the
 star-parent cross for the triple combo owc x star-parent x TTU where NO concrete
 `(T, X, r')` is interned"*. `index_v4/core.py` contains zero occurrences of `ttu`.
 
@@ -512,8 +516,8 @@ is a sample, not a proof, and nothing in the gate says so.*
 | **F1** (graph-incomplete OWC check divergence) | `:1320`, CLOSED `:1336` | a *doubly-bridged* topology, rejected at compile time by `DoublyBridgedShapeError`; this schema compiles fine |
 | "all -> any is NOT read semantics, no completeness fix warranted" | `:1360-1367` | decided on an **oracle-False** probe (no concrete in the universe). Here the oracle is **True** because `folder:f1` is in the universe, so it adjudicates the vacuous variant only |
 | `ZT-P5` bullet 2 / "Target 3", object wildcards at state level | `:2292`, `HANDOFF.md` | ran this exact fixture, but only for live-vs-rebuild / order / restoration — **never against oracle answers**, so a check-level under-report was invisible to it |
-| "zero check-level divergence observed on the object-wildcard corpus" | `formal/FINAL_REVIEW.md:396-403`, `formal/CORRESPONDENCE.md:848-854` | that corpus (`formal/conformance/corpus.py:90-98`) is one type, `define viewer: [user]`, one tuple — no TTU, no star tupleset. The sentence is flagged in situ as a hypothesis; this is the first evidence against it |
-| `test_reg5_triple_combo_star_parent_cross_no_concrete` | `tests/test_lookup_oracle.py:1181-1194` | pins the **set engine** on the structural case; the graph is never constructed there |
+| "zero check-level divergence observed on the object-wildcard corpus" | `formal/FINAL_REVIEW.md` §3.1, `formal/CORRESPONDENCE.md` §7.3 | that corpus (`formal/conformance/corpus.py::SCHEMAS`) is one type, `define viewer: [user]`, one tuple — no TTU, no star tupleset. The sentence is flagged in situ as a hypothesis; this is the first evidence against it |
+| `test_reg5_triple_combo_star_parent_cross_no_concrete` | `tests/test_lookup_oracle.py::test_reg5_triple_combo_star_parent_cross_no_concrete` | pins the **set engine** on the structural case; the graph is never constructed there |
 
 ---
 
@@ -568,7 +572,7 @@ Four independent blockers on top:
    In an authorization system this is the fail-open direction.
 
 **The answer that already exists: `ConnectedStore(sync=False)`.** `advance_index` is
-NOT unconditionally inline — `store.py::_write` calls it only when `self.sync`.
+NOT unconditionally inline — `store.py::ConnectedStore._write` calls it only when `self.sync`.
 Measured at N=480: the async write phase is **1.31 s for 480 writes (2.7 ms/write, max
 6.6 ms)** against 19.1 s / 105 ms max in sync — a **14.5× drop in write-path latency**,
 with the closure work off the write path entirely. Lock-wise strictly better: writers
@@ -789,18 +793,20 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 1. **Count invariant exact form** (spec §2 "match the core's actual count asserts"):
    `indirect_edge_count >= direct_edge_count` and `indirect_edge_count > 0` per
-   persisted row (`index_v4/core.py:120-121`); zero-reachability rows are deleted,
+   persisted row (`index_v4/models.py::EdgeV4.indirect_edge_count`, checked by the I1 clause
+   of `index_v4/invariants.py::check_invariants`); zero-reachability rows are deleted,
    not persisted. I1 uses this form.
 
 2. **`LookupResult` field names** (spec §6 says "concretes"/"markers"): actual fields
    are `node_ids: set[int]` and `markers: set[tuple[str, str, str]]` — markers are
    **3-tuples** `(type, predicate, variant)` with variant ∈ {'any','all'}
-   (`index_v4/wildcard.py:26-29`), not 2-tuple shapes. Residue `stars` rendered as
+   (`index_v4/wildcard.py::LookupResult`), not 2-tuple shapes. Residue `stars` rendered as
    markers will use variant `'any'` (subject-side coverage). `excluded_node_ids` is
    added in P5 as specced (additive, default empty).
 
 3. **Oracle surface** (spec §8.4 implies parity over lookups): the oracle is
-   **check-only** (`tests/oracle.py:318`) — no lookup/lookup_reverse/add/remove; it is
+   **check-only** (`tests/oracle.py::Oracle.check` is its whole surface) — no
+   lookup/lookup_reverse/add/remove; it is
    stateless and rebuilt from the raw-tuple multiset per comparison. ParityEngine
    therefore asserts *check*-parity 3-ways (oracle + set engine + graph) and
    lookup-parity only between the two live engines. This matches the existing matrix
@@ -813,17 +819,17 @@ Facts verified against the repo, with deviations from the spec text noted:
    the constructor argument, not as a retrofit onto the backends.
 
 5. **`check` today is ≤4 *separate* SQL point reads**, not one round trip
-   (`index_v4/wildcard.py:235-286` → `core.check_reachable_by_id` per probe). The
+   (`index_v4/wildcard.py::WildcardIndex.check` → `core.check_reachable_by_id` per probe). The
    single-round-trip consolidation is P5 work as planned, not a present fact.
 
 6. **`backfill()` precedent is idempotent but NOT chunked** (spec §5.5 says "chunked,
-   idempotent, mirroring the wildcard backfill precedent"): `wildcard.py:164-189`
+   idempotent, mirroring the wildcard backfill precedent"): `wildcard.py::WildcardIndex.backfill`
    loads each shape's concrete list in one query. The new derived-relation backfill
    will chunk by object node; the *idempotency* pattern (presence-guarded writes) is
    the part actually mirrored.
 
 7. **Filters do not rewrite and are first-match today**
-   (`zanzibar_utils_v1.py:259-283`): Filters are pure admission gates (first match
+   (`zanzibar_utils_v1.py::RelationalTriplePattern`): Filters are pure admission gates (first match
    admits the raw triple, then `break`); all rewriting is Rule-driven and all-match.
    `Filter.rewrite_relation` (spec §3.3) is a new field with default `None`;
    `RuleSet.apply` keeps the existing first-match admission path for pure-union
@@ -831,7 +837,8 @@ Facts verified against the repo, with deviations from the spec text noted:
    expansion only for triples admitted by rewriting Filters.
 
 8. **`.` is currently a legal identifier char everywhere** (`IDENTIFIER_CHARSET`,
-   `zanzibar_utils_v1.py:21`), and the DSL parser never runs the write-validators, so
+   `zanzibar_utils_v1.py::IDENTIFIER_CHARSET`), and the DSL parser never runs the
+   write-validators, so
    relation *declarations* are entirely unvalidated today. The §3.2 lexical lock
    ("schema declarations reject `.` in relation names") is enforced at parse time in
    P2 — a new check in the schema parser, not a change to tuple-side validation
@@ -845,7 +852,8 @@ Facts verified against the repo, with deviations from the spec text noted:
 10. **MemberSet fold is module functions, not operators** (spec §5.3 "lift the fold
     rules/table, not the type"): the star fold to lift is exactly
     `a.stars | b.stars` (union), `a.stars & b.stars` (intersection),
-    `a.stars - b.stars` (exclusion) — `setengine/memberset.py:115,121,127` — over
+    `a.stars - b.stars` (exclusion) — `setengine/memberset.py::union` / `::intersect` /
+    `::subtract`, each handing the folded stars to `::_normalize` — over
     plain `frozenset[tuple[str, str]]`. `neg` is never folded there (it is
     renormalized against interner-backed populations); the processor computes `neg`
     per spec §5.3 step 2 instead. Nothing bitmap/interner-coupled is imported.
@@ -1034,7 +1042,7 @@ Facts verified against the repo, with deviations from the spec text noted:
 ## 2026-07-07 — P5 (reads)
 
 1. **⚠ TTU semantics correction (oracle-pinned): parents are STORED tupleset tuples,
-   never computed membership.** The oracle's `ttu_leaf` (tests/oracle.py:429) iterates
+   never computed membership.** The oracle's `tests/oracle.py::Oracle.check.ttu_leaf` iterates
    raw tuples with `tup.relation == tupleset_rel` — authentic Zanzibar semantics. My
    P4 derived-tupleset-TTU enumerated *computed* members of the derived tupleset,
    which disagreed with the oracle on demorgans_law_1 (caught by the P5 grid-parity
@@ -1452,7 +1460,7 @@ reverse) and asserts BOTH backends' lookup surfaces against it after every
 accepted op of seeded add/remove walks (drained to the empty store) plus
 dense scripted states — **exact (two-sided) where the API is exact, one-sided
 where the API drops information by design** (set `lookup_reverse` drops `neg`,
-`setengine/engine.py:738-740`). Coverage: `wildcards.fga` (+object wildcards),
+`setengine/engine.py::SetEngine._ensure_flow_graph`). Coverage: `wildcards.fga` (+object wildcards),
 `boolean_wildcards.fga`, `demorgans_reverse.fga`. Permanent tamper tests
 (leaked id, dropped id, cleared exclusions, dropped neg) prove the checkers
 bite. 15 tests: 10 pass + 5 **strict xfails** — the xfails pin GENUINE
@@ -1482,7 +1490,7 @@ then flip the xfail):
    (`formal/FINAL_REVIEW.md` §3 note) awaiting a fix.
 2. **X1 — set forward `lookup` drops TTU-only objects.** Objects reachable
    ONLY via TTU whose `(type, name, relation)` key was never interned are
-   silently missing (`engine.py:753`: the candidate universe is interned keys
+   silently missing (`engine.py::SetEngine._ensure_flow_graph`: the candidate universe is interned keys
    only) where set-engine spec §6.4 prescribes reverse propagation including
    TTU. The graph returns them.
 3. **X2 — graph `lookup_reverse` on a derived relation with `o_name='*'`
@@ -1657,11 +1665,13 @@ rule). That node therefore plays two roles: a derived-public node (pinned
 alive by the `upos` reference). Reconcile step 2a interned the from-chain subject
 node with the DEFAULT `implicit=True`, so a fresh build created it implicit; but on
 the add path it had first held r0's derived edge, which promoted it to explicit
-(`implicit=False`, and "explicit is sticky", `core.py:284-287`). Add-then-remove
+(`implicit=False`, and "explicit is sticky" — `core.py::ReachabilityIndex.node`, the
+`if implicit is False and found.implicit:` promotion). Add-then-remove
 thus ended explicit where a fresh build was implicit — a one-node canonical-form
 divergence. Answers were never affected (the read path resolves the from-chain
 identity directly; `audit_fixpoint` passed). Note the graph's closure-cycle
-rejection (`core.py:319-342`, T4 acyclicity) does not catch this: `parent` tuples
+rejection (`core.py::ReachabilityIndex._add_edge_locked`, T4 acyclicity) does not catch
+this: `parent` tuples
 are tupleset/entity edges consumed by the TTU rule, not closure self-loops.
 
 **Fix (allow, don't reject).** From-chain subject nodes are now interned
@@ -2260,7 +2270,7 @@ with an incoming direct edge). Two symmetric halves:
   always carry a relation predicate; bridges target relation-predicated nodes), so no
   transitive userset path into a closure leaf exists. Kept correct-if-reached (not converted
   to an assert) as belt-and-braces against future routing changes; the argument is now also
-  a comment at the branch itself (`processor.py::_reconcile_subject`).
+  a comment at the branch itself (`processor.py::DeltaProcessor._reconcile_subject`).
 
 ### reg13 — cross-reference (not duplicated)
 

@@ -45,7 +45,7 @@ and the parser/stratifier in `zanzibar_utils_v1.py`.
 
 ## 1. The correctness contract — what "correct" means
 
-Verbatim intent from `docs/architecture/correctness.md:8-18`:
+Verbatim intent from `docs/architecture/correctness.md` §0:
 
 > For every store: after any accepted op sequence, every backend answers every
 > `check` query identically to the reference semantics; every backend accepts and
@@ -54,9 +54,9 @@ Verbatim intent from `docs/architecture/correctness.md:8-18`:
 > is indistinguishable from a synchronously-maintained one.
 
 The reference semantics in the repo is operational — it *is* `tests/oracle.py`
-(`correctness.md:15-18`). **Our project replaces that role:** the Lean executable
+(`correctness.md` §0). **Our project replaces that role:** the Lean executable
 spec `sem` (§5) becomes the reference, and the oracle is demoted to a cross-check
-pinned by conformance testing (plan §2.3). `theory.md:192-198` states the unifying
+pinned by conformance testing (plan §2.3). `theory.md` §2.3 states the unifying
 fact we will make precise and prove:
 
 > Both engines compute the same function: **the perfect model of (schema, raw
@@ -94,7 +94,7 @@ backends' lookup surfaces are pinned empirically by the brute-force oracle gate
 - `is_valid_identifier` is **strict charset only**; the sentinels `'*'` and `'...'`
   are NOT valid identifiers — they are admitted *positionally*, never by the
   predicate (`zanzibar_utils_v1.py:26-32`).
-- **Write validity** (`validate_write_identifiers`, `:46-57`): on a stored tuple,
+- **Write validity** (`zanzibar_utils_v1.py::validate_write_identifiers`): on a stored tuple,
   `subject_type`, `relation`, `object_type` must be plain identifiers;
   `subject_name`, `object_name` may additionally be `'*'` (wildcard sentinel);
   `subject_predicate` may additionally be `'...'` / `Ellipsis` (bare sentinel).
@@ -122,18 +122,18 @@ Store      := Finset Tuple                            -- (see §7 for the graph'
 Query      := (subject : SubjectRef, relation : String, object : ObjectRef)
 ```
 
-The oracle's tuple is the ground truth for field layout (`tests/oracle.py:54-67`):
+The oracle's tuple is the ground truth for field layout (`tests/oracle.py::OracleTuple`):
 `(subject_predicate, subject_type, subject_name, relation, object_type,
-object_name)`, with `_norm_pred` mapping `Ellipsis`/`None → '...'` (`:70-71`).
+object_name)`, with `_norm_pred` mapping `Ellipsis`/`None → '...'` (`::_norm_pred`).
 
 A **shape** is `(type, predicate)`: bare entity shapes `(T, "...")`, userset shapes
-`(T, P)` where `P` is a relation (`memberset.py:42`, `wildcard-spec §1.1`).
+`(T, P)` where `P` is a relation (`memberset.py::Shape`, `wildcard-spec §1.1`).
 
 ---
 
 ## 3. The store as a Datalog¬ program (the semantic bridge)
 
-`theory.md:91-110` fixes the intended meaning: `and`/`but not` make the rule
+`theory.md` §1.4 fixes the intended meaning: `and`/`but not` make the rule
 system **nonmonotone**; the semantics is **stratified Datalog¬** with its unique
 **perfect model**, computed stratum by stratum, each stratum a plain least
 fixpoint over already-final lower strata.
@@ -164,7 +164,7 @@ succeeds) as a hypothesis (§8). On non-stratifiable schemas the spec is
 
 ### 4.1 The AST
 
-The oracle's independent AST is the cleanest reference (`tests/oracle.py:78-109`);
+The oracle's independent AST is the cleanest reference (`tests/oracle.py::ODirect` … `::OExclusion`);
 the production AST in `zanzibar_utils_v1.py` (`SchemaAST`) is
 structurally identical (`Direct`/`Computed`/`TTU`/`Union`/`Intersection`/`Exclusion`).
 
@@ -181,15 +181,15 @@ Schema := Map (type:String, relation:String) Expr
 
 A `Direct` restriction `(t, p, w)` reads: bare `[t]` → `(t, "...", false)`; userset
 `[t#p]` → `(t, p, false)`; subject-wildcard `[t:*]` → `(t, "...", true)`;
-`[t:*#p]` → `(t, p, true)` (`tests/oracle.py:144-166`).
+`[t:*#p]` → `(t, p, true)` (`tests/oracle.py::_parse_restrictions`).
 
 **Grammar** (both parsers implement it identically — this identity is load-bearing
 for T0/conformance): `expr := chain ('but not' chain)? ; chain := unit (OP unit)*
 (OP homogeneous: all 'or' or all 'and') ; unit := '(' expr ')' | leaf ; leaf :=
-[restrictions] | REL | REL 'from' REL`. Oracle parser: `tests/oracle.py:169-243`;
-`set-engine-spec.md:52-59`. Mixing `or`/`and` in one chain without parens is a
-schema error (`tests/oracle.py:205-206`). At most one `but not`, loosest binding
-(`:190-195`).
+[restrictions] | REL | REL 'from' REL`. Oracle parser: `tests/oracle.py::_Parser`;
+`set-engine-spec.md` §2.2. Mixing `or`/`and` in one chain without parens is a
+schema error (`tests/oracle.py::_Parser._chain`). At most one `but not`, loosest binding
+(`::_Parser._expr`).
 
 ### 4.2 Well-formedness `WF S` (with citations)
 
@@ -206,14 +206,14 @@ Enforced in `zanzibar_utils_v1.py` and mirrored by the oracle parser:
   boolean audit). A 1-child intersection cannot arise, so `all([]) → True`
   fail-open is unreachable (confirmed by the schema-parser audit).
 - **Referenced relations must be declared** on the referent type (the oracle
-  returns False for an undefined `(o_type, rel)` — `tests/oracle.py:360-363` — so an
+  returns False for an undefined `(o_type, rel)` — `tests/oracle.py::Oracle.check.sat` — so an
   undeclared reference is "constantly empty", not an error, in the spec; the
   production compiler is stricter and may reject at compile. Model the spec side as
   "undefined ⇒ empty" to match the oracle, and treat compile rejection as a
   `WF`-level precondition — see §11 ambiguity A3).
 - **TTU tupleset restriction rule** (`_validate_ttu_tuplesets:898`): a TTU's
   tupleset must resolve to **stored** (Direct) tuples; the graph rejects TTU
-  tuplesets with computed/rewritten arms (`correctness.md:76-79`). This is the
+  tuplesets with computed/rewritten arms (`correctness.md` §4). This is the
   stored-parent rule (§5.5).
 
 ### 4.3 Taint / derived vs untainted (affects the GRAPH model only)
@@ -231,10 +231,10 @@ engine and the spec ignore taint entirely.
 
 `stratify S` (`_stratify:1630-1664`, Kahn topological layering over tainted
 derived→derived dependency edges) raises `CyclicDerivedDependency` (a `ValueError`
-subclass, `:461-467`) when a derived-dependency cycle exists. The graph index
+subclass) when a derived-dependency cycle exists. The graph index
 **rejects** such schemas at compile; the set engine and oracle evaluate them with a
-provisional-False recursion guard (`tests/oracle.py:333-375`,
-`set-engine-spec.md`/`theory.md:182-184`). Because such schemas have no classical
+provisional-False recursion guard (`tests/oracle.py::Oracle.check.sat`,
+`set-engine-spec.md`/`theory.md` §2.2). Because such schemas have no classical
 perfect model, **all theorems carry `stratify S = some strata` as a hypothesis**
 and make no claim otherwise. (Audit recommendation: reject upstream.)
 
@@ -243,15 +243,15 @@ and make no claim otherwise. (Audit recommendation: reject upstream.)
 ## 5. The specification `sem` — pointwise stratified evaluation
 
 This section is the normative definition, transcribed from the oracle
-(`tests/oracle.py:309-487`), which the plan promotes to ground truth. The Lean
+(`tests/oracle.py::Oracle`), which the plan promotes to ground truth. The Lean
 `sem` mirrors it function-for-function.
 
 ### 5.1 Shape of the evaluation
 
 `sem` fixes the query **subject** for the whole recursion and recurses over the
-node `(o_type, o_name, relation)` (`tests/oracle.py:15-19, 327-331`). Memo keyed on
+node `(o_type, o_name, relation)` (the module docstring's node model; `tests/oracle.py::Oracle._universe`). Memo keyed on
 that triple; an in-progress revisit returns **False** (provisional), with a
-Tarjan-lowlink guard deciding which frames may be memoized (`:333-375`). For a
+Tarjan-lowlink guard deciding which frames may be memoized (`::Oracle.check.sat`). For a
 **stratifiable** schema this provisional-False recursion computes exactly the
 stratified perfect model (the recursion only ever descends into strictly-lower
 strata for negated/intersected references, and same-stratum recursion is monotone
@@ -266,13 +266,13 @@ empirically by the conformance suite (§10), not by proof.
 ### 5.2 Universe (for star existential witnesses)
 
 `_universe(T, query_names)` = concrete type-`T` names appearing in any tuple
-position, **∪ query endpoints** of type `T` (`tests/oracle.py:314-325`).
-`instances(T)` = the same **without** query endpoints (`:346-351`, blind-audit O3):
+position, **∪ query endpoints** of type `T` (`tests/oracle.py::Oracle._universe`).
+`instances(T)` = the same **without** query endpoints (`::Oracle.check.universe`, blind-audit O3):
 query endpoints must never *witness* existence (a ghost you asked about must not
 "exist"), but they do count for shape/marker matching. Model both as functions of
 `(Store, Query)`.
 
-### 5.3 Boolean composition (`tests/oracle.py:377-391`)
+### 5.3 Boolean composition (`tests/oracle.py::Oracle.check.sat_expr`)
 
 ```
 sem(Union cs)        = ∃ c ∈ cs, sem(c)
@@ -286,36 +286,36 @@ sem(TTU tr ts)       = ttu_leaf(tr, ts, o_type, o_name)
 (These are the clauses of the executable evaluator's step `evalE` —
 `Spec/Semantics.lean` — not a separate relational definition.)
 
-### 5.4 Direct leaf (`tests/oracle.py:398-462`) — the subtle core
+### 5.4 Direct leaf (`tests/oracle.py::Oracle.check.direct_leaf`) — the subtle core
 
 `matching_objects(o_name)` = `{o_name}` if `o_name == '*'` else `{o_name, '*'}`
-(`:393-396`): a concrete object also absorbs `T:*` object-wildcard grants; a `'*'`
+(`::Oracle.check._matching_objects`): a concrete object also absorbs `T:*` object-wildcard grants; a `'*'`
 object query is intensional (only star-object tuples).
 
 `grants` = stored tuples with `relation == rel`, `object_type == o_type`,
 `object_name ∈ matching_objects`, whose subject matches one of the leaf
 restrictions by `(type, predicate, is-name-'*') == (r_type, r_pred, r_wild)`
-(`restriction_matches`, `:402-411`). Then, by query-subject kind:
+(`restriction_matches`, in `::Oracle.check.direct_leaf`). Then, by query-subject kind:
 
-- **Star subject** (`s_name == '*'`, `:413-422`): true if a matching star tuple of
+- **Star subject** (`s_name == '*'` arm of `::Oracle.check.direct_leaf`): true if a matching star tuple of
   the exact shape `(s_type, s_pred, '*')` is in `grants` (intensional, per-branch);
   **or** flow-through `_member_of_granted(grants)` (blind-audit D1: `'*'` resolves
   through granted usersets like any other subject — the graph closure cannot
   express per-branch-only for userset flow, so the oracle matches it).
-- **Bare concrete** (`s_pred == '...'`, `:424-436`): a direct concrete grant
+- **Bare concrete** (`s_pred == '...'` arm of `::Oracle.check.direct_leaf`): a direct concrete grant
   `(s_type, s_name)` with bare predicate; **or** a bare-star grant `(s_type, '*',
   '...')` covering all of `s_type`; **or** `_member_of_granted(grants)`.
-- **Userset subject** (`s_name != '*'`, `s_pred != '...'`, `:438-448`): the exact
+- **Userset subject** (`s_name != '*'`, `s_pred != '...'` arm of `::Oracle.check.direct_leaf`): the exact
   userset `(s_type, s_name, s_pred)` is granted; **or** a userset-star of the same
   shape `(s_type, '*', s_pred)`; **or** `_member_of_granted(grants)`.
 
-`_member_of_granted(grants)` (`:450-462`): is the fixed subject a transitive member
+`_member_of_granted(grants)` (`::Oracle.check._member_of_granted`): is the fixed subject a transitive member
 of any granted *userset*? For each grant with non-bare predicate: concrete userset
 → `sat(g.subject_type, g.subject_name, g.subject_predicate)`; star userset `S:*#P`
 → `∃ inst ∈ instances(S), sat(S, inst, P)` (strict ∀⇒∃ over the *witness*
 population, ghosts excluded).
 
-### 5.5 TTU leaf — stored-parent semantics (`tests/oracle.py:464-485`)
+### 5.5 TTU leaf — stored-parent semantics (`tests/oracle.py::Oracle.check.ttu_leaf`)
 
 For each stored tuple `(_, p_type, p_name, tupleset_rel, o_type, o_name∈matching)`
 (the **tupleset** parents — STORED tuples only, never computed membership):
@@ -328,13 +328,13 @@ For each stored tuple `(_, p_type, p_name, tupleset_rel, o_type, o_name∈matchi
 
 **Stored-parent rule (pin):** TTU parents come only from stored tupleset tuples, so
 a TTU over a relation with no Direct restrictions is *constantly empty*
-(`theory.md:195`, `correctness.md:76-79`, CLAUDE.md gotcha). This is why the graph
+(`theory.md` §2.3, `correctness.md` §4, CLAUDE.md gotcha). This is why the graph
 splits storage leaves from rule-routed leaves (`processor.py` `_ts_leaf_predicates`
 filters `spec.storage`).
 
 ### 5.6 Star × boolean (intensional `'*'` queries) — the pinned table
 
-From `tests/oracle.py:29-39` and `theory.md:155-171`:
+From `tests/oracle.py`'s module docstring and `theory.md` §2.1:
 
 ```
 query subject   A and B (Intersection)      A but not B (Exclusion)
@@ -351,7 +351,7 @@ residue fold lifts the same three star rules (§7).
 
 ## 6. Set engine model — the `MemberSet` algebra
 
-Source: `setengine/memberset.py` (whole file, 132 lines) + `theory.md:137-189`.
+Source: `setengine/memberset.py` (whole file, 132 lines) + `theory.md` §2.
 
 ### 6.1 Representation and invariant
 
@@ -360,19 +360,19 @@ MemberSet := (pos : Finset Id, stars : Finset Shape, neg : Finset Id)
 ```
 
 Extensional meaning over a population `pop : Shape → Finset Id`
-(`memberset.py:13-24, 91-96`):
+(`memberset.py::MemberSet`, `::_starpop`):
 
 ```
 ext(M) = pos ∪ (starpop(stars) ∖ neg)      where starpop(S) = ⋃_{σ∈S} pop(σ)
                                             -- pos WINS over neg
 ```
 
-**Normal-form invariant** (established by `_normalize`, `memberset.py:99-105`):
+**Normal-form invariant** (established by `_normalize`, `memberset.py::_normalize`):
 `pos = E ∖ starpop`, `neg = starpop ∖ E`, hence `pos ∩ starpop = ∅` and
-`neg ⊆ starpop`. `theory.md:143-149` states the closure claim: every set built from
+`neg ⊆ starpop`. `theory.md` §2.1 states the closure claim: every set built from
 finite id-sets and `pop(σ)` under `∪∩∖` has this normal form.
 
-### 6.2 Operations (`memberset.py:112-127`) — one recipe
+### 6.2 Operations (`memberset.py::union` / `::intersect` / `::subtract`) — one recipe
 
 Each op computes the target extension `E` and target star set `S`, then
 `_normalize(E, S)`:
@@ -384,8 +384,8 @@ subtract(a,b):  E = ext(a) ∖ ext(b),  S = a.stars ∖ b.stars
 ```
 
 The star bookkeeping (`∪`, `∩`, `∖` on shape sets) is exactly the §5.6 table
-(`memberset.py:25-30`). Membership: `contains_entity(u, T) = u ∈ pos ∨ ((T,"...") ∈
-stars ∧ u ∉ neg)` (`:57-63`); `contains_star(shape) = shape ∈ stars` (`:54`).
+(`memberset.py::union` / `::intersect` / `::subtract`). Membership: `contains_entity(u, T) = u ∈ pos ∨ ((T,"...") ∈
+stars ∧ u ∉ neg)` (`::MemberSet.contains_entity`); `contains_star(shape) = shape ∈ stars` (`::MemberSet.contains_star`).
 
 ### 6.3 The set-engine `check`
 
@@ -396,7 +396,7 @@ match, `Computed` = recurse, `TTU` = stored-parent loop; recursion well-founded 
 `(stratum, AST-size)`. **T1** proves `SetEngineModel.check S T q = sem S T q`. The
 `MemberSet` algebra lemmas (each op's `ext` equals the set-theoretic op on `ext`s,
 incl. ghost/star members via `contains_*`) are the workhorses; they are exactly
-what `memberset.py`'s brute-force property suite checks (`memberset.py:31-32`), so
+what `memberset.py`'s brute-force property suite checks (stated in its module docstring), so
 Lean is proving what tests already sample. The interner/id-recycling layer
 (`engine.py` `Interner`) is **out of scope** (plan §1) — the model works over
 abstract `(type,name,predicate)` keys.
@@ -406,14 +406,14 @@ abstract `(type,name,predicate)` keys.
 ## 7. Graph index model — materialized closure + residues + cascade
 
 Sources: `index_v4/{core,wildcard,processor,invariants,models}.py`;
-`theory.md:9-133`; `wildcard-materialization-spec.md`; `graph-boolean-ivm-spec.md`.
+`theory.md` §1; `wildcard-materialization-spec.md`; `graph-boolean-ivm-spec.md`.
 This is the largest and hardest model (plan Phase 4, ~half the effort).
 
-### 7.1 The object: path-counted DAG closure (`theory.md:9-66`)
+### 7.1 The object: path-counted DAG closure (`theory.md` §1.1–1.2)
 
 A directed acyclic **multigraph** over typed nodes. The closure materializes, per
 ordered pair with ≥1 path, a row with two counters
-(`models.py:57-77`, `core.py`):
+(`index_v4/models.py::EdgeV4`, `index_v4/core.py`):
 
 ```
 d(u,v) = direct_edge_count   = # parallel direct edges u→v (multigraph multiplicity)
@@ -421,10 +421,10 @@ p(u,v) = indirect_edge_count = # distinct directed paths u→v (incl. direct)
 ```
 
 Reachability = `p(u,v) > 0`. Invariant: `p ≥ d`, `p > 0` on any live row, zero rows
-deleted (`core.py:93-94,139-140,131-134`; `theory.md:16-24`; I1). `check` is a point
+deleted (`core.py::ReachabilityIndex._remove_edge_locked` drops zero rows; `theory.md` §1.1; I1). `check` is a point
 read.
 
-### 7.2 The counting theorem (`theory.md:26-61`) — basis of T4
+### 7.2 The counting theorem (`theory.md` §1.2) — basis of T4
 
 In a DAG a path uses each edge at most once, so for a new direct edge `e=(u,v)`,
 paths using `e` biject with pairs (path a→u, path v→b), empty paths included. With
@@ -436,60 +436,60 @@ delete e:  p'(a,b) = p(a,b) − p̂'(a,u)·p̂'(v,b)     (products over graph WI
 ```
 
 Counts live in the group `(ℤ,+)`, so delete is the exact inverse of insert — no
-re-derivation (`theory.md:48-56`). **Acyclicity is a hard precondition**: with a
-cycle, counts diverge and the bijection fails (`theory.md:57-61`). This is
+re-derivation (`theory.md` §1.2). **Acyclicity is a hard precondition**: with a
+cycle, counts diverge and the bijection fails (`theory.md` §1.2). This is
 theorem **T4** and its precondition.
 
-**The load-bearing op ordering** (`core.py:155-256`, extraction confirmed): on
-**remove**, decrement the direct edge FIRST (`:158-160`) then snapshot neighbor
+**The load-bearing op ordering** (`core.py::ReachabilityIndex._add_edge_locked` / `::ReachabilityIndex._remove_edge_locked`, extraction confirmed): on
+**remove**, decrement the direct edge FIRST (in `::ReachabilityIndex._remove_edge_locked`) then snapshot neighbor
 path-counts and expand; on **add**, snapshot+expand then increment the direct edge
-LAST (`:218-220`). This keeps the mutating edge out of the
-`reachable_before_subject`/`reachable_after_object` snapshots (`:188-205`), so the
-products never count paths through `e` itself (`theory.md:44-47`). The three
-expansion updates (`:207-216`) are exactly the cross/left/right terms of the
+LAST (in `::ReachabilityIndex._add_edge_locked`). This keeps the mutating edge out of the
+`reachable_before_subject`/`reachable_after_object` snapshots (the `reachable_before_subject`/`reachable_after_object` snapshots), so the
+products never count paths through `e` itself (`theory.md` §1.2). The three
+expansion updates (the expansion updates) are exactly the cross/left/right terms of the
 theorem.
 
-### 7.3 Cycle rejection (`core.py:319-342`) — exact, fail-closed
+### 7.3 Cycle rejection (`core.py::ReachabilityIndex._add_edge_locked`) — exact, fail-closed
 
-`_add_edge_locked`: reject a self-loop (`ValueError`, `:323-329` — deliberately a
+`_add_edge_locked`: reject a self-loop (`ValueError` — deliberately a
 `ValueError` not an `assert`, because under `-O` an assert would fall into the
 node-deletion shortcut and corrupt the store, blind-audit C3); then a single
 reverse-edge point lookup — if `p(object→subject) > 0`, reject as cycle-forming
-(`:338-340`). Because the closure is complete, `p(object→subject)>0` iff subject is
+(the closure probe). Because the closure is complete, `p(object→subject)>0` iff subject is
 reachable from object, so the check is **exact — no false accept/reject** given the
 closure invariant. The model's `addTuple` returns a `Rejection` here; T4's
 acyclicity precondition is thereby *enforced*, not assumed.
 
-### 7.4 Wildcards: split w-nodes and bridges (`theory.md:69-90`, `wildcard-spec §1`)
+### 7.4 Wildcards: split w-nodes and bridges (`theory.md` §1.3, `wildcard-spec §1`)
 
 Each wildcard-capable shape `S` gets up to two nodes: `w_any(S)` (∃-node: concretes
 bridge **in** `c→w_any`, wildcard-*subject* grants leave from it) and `w_all(S)`
 (∀-node: wildcard-*object* grants arrive **in**, bridges **out** `w_all→c`). There
 is deliberately **no `w_any→w_all` edge** — being an instance must not grant what is
 distributed to instances, and its absence makes ∀⇒∃ *strict* (a path
-`x→w_all→c→w_any→y` needs a real concrete `c`) (`theory.md:79-83`,
+`x→w_all→c→w_any→y` needs a real concrete `c`) (`theory.md` §1.3,
 `wildcard-spec §1.2, §3.4`). Node identity is `(store, predicate, type, name,
 wildcard∈{'','any','all'})` with `name=='*' ⟺ wildcard!=''`
-(`models.py:32-36,43-46`; unique constraint verbatim there). This keying is why a
+(`index_v4/models.py::NodeV4` and `::NodeV4.__table_args__`; unique constraint verbatim there). This keying is why a
 `user:*` bridge for relation R cannot alias another type/relation (§ invariant I3).
 
-### 7.5 Read path — the ≤4 probes (`wildcard.py:318-375`, `wildcard-spec §3.1`)
+### 7.5 Read path — the ≤4 probes (`wildcard.py::WildcardIndex.check`, `wildcard-spec §3.1`)
 
 Non-derived `check` is **one SQL statement**: up to 4 candidate keys —
 `(s,o)`, `(w_any(shape s), o)`, `(s, w_all(o.type, R))`, `(w_any, w_all)` — gated by
 declared shapes, combined into one `IN (...) LIMIT 1` with `p>0`
-(`wildcard.py:354-374`). A literal `'*'` endpoint maps to its own variant node and
+(`wildcard.py::WildcardIndex.check`). A literal `'*'` endpoint maps to its own variant node and
 skips its own probe. A missing node drops its keys (ghost coverage). §3.2 of the
 wildcard spec gives the completeness argument (every semantic path decomposes as
 leading-hop · materialized-closure · trailing-hop; interior hops are bridges).
 This is **T2b** for non-derived relations.
 
-### 7.6 Derived relations: residues (`theory.md:111-133`, `boolean-ivm-spec §4-6`)
+### 7.6 Derived relations: residues (`theory.md` §1.5, `boolean-ivm-spec §4-6`)
 
 Persisted per `(object node, derived relation)` as `ResidueV1`
-(`models.py:80-107`): `stars` (JSON list of covered shapes), `neg` (concrete subject
+(`index_v4/models.py::ResidueV1`): `stars` (JSON list of covered shapes), `neg` (concrete subject
 ids star-covered-but-excluded), `upos` (userset-shaped members recorded edge-free).
-The canonical membership form (`theory.md:117-133`):
+The canonical membership form (`theory.md` §1.5):
 
 ```
 members = edges ∪ upos ∪ ( ⋃_{σ∈stars} population(σ) ∖ neg )
@@ -502,81 +502,81 @@ iff expr-true (never in `neg`); an uncovered *userset* subject is in `upos` iff
 expr-true, never an edge (a derived edge from a userset node would leak through the
 closure to every member and defeat pointwise exclusion — blind-audit P4).
 
-**Derived read path** (`wildcard.py:398-432`, extraction confirmed):
-- object wildcard on derived → `False` (decision-15 rejected the shapes, `:400-403`).
-- `s_name=='*'` → `(s_type,s_pred) ∈ stars` (intensional, 1 read, `:404-407`).
+**Derived read path** (`wildcard.py::WildcardIndex._check_derived`, extraction confirmed):
+- object wildcard on derived → `False` (decision-15 rejected the shapes).
+- `s_name=='*'` → `(s_type,s_pred) ∈ stars` (intensional, 1 read).
 - userset subject (`s_pred!='...'`) → `subj.id ∈ upos` ? True ; else shape ∉ stars ?
-  False ; else `subj.id ∉ neg` (`:411-419`) — edge-free.
+  False ; else `subj.id ∉ neg` — edge-free.
 - bare subject (`'...'`) → edge probe first (`check_reachable_by_id`); **an edge hit
-  returns True WITHOUT consulting `neg`** (`:421-425`); else `stars`∖`neg` (`:429-432`).
+  returns True WITHOUT consulting `neg`**; else `stars`∖`neg`.
 
 **Why the edge hit may ignore `neg` (cross-module obligation, must be a proven
 lemma):** the processor writes a derived edge for a subject *only when* that
 subject's full boolean evaluation (incl. `but not`) is true, and `neg` only ever
 subtracts from coarse star coverage — the two positive mechanisms (concrete edge vs
 star-shape) are disjoint by construction. Invariant I6 enforces `neg ∩
-edge-holders = ∅` (`invariants.py:252-254`). T2b must prove this disjointness from
+edge-holders = ∅` (`invariants.py::check_invariants`). T2b must prove this disjointness from
 the cascade's postcondition, not assume it.
 
-### 7.7 The I-series invariants (state well-formedness) — `invariants.py`
+### 7.7 The I-series invariants (state well-formedness) — `invariants.py::check_invariants` + `::_check_derived_invariants`
 
 `Inv σ` for the graph model formalizes these (numbers per code; note the module
 docstring says "I1–I12" but the code asserts **I13** and omits I8/I9 from this
 file). Extraction-confirmed list:
 
-- **node encoding** (`:83-87`): `wildcard ∈ {'','any','all'}`; `name=='*' ⟺
+- **node encoding**: `wildcard ∈ {'','any','all'}`; `name=='*' ⟺
   wildcard!=''`.
-- **I1 count algebra** (`:89-101`): per edge `p≥d`, `p>0`, `d≥0`, both endpoints exist.
-- **I2 acyclicity** (`:103-128`): direct-edge graph is a DAG.
-- **direct-edge variant rules** (`:130-145`): allowed `(subj.wildcard,obj.wildcard)`
+- **I1 count algebra**: per edge `p≥d`, `p>0`, `d≥0`, both endpoints exist.
+- **I2 acyclicity**: direct-edge graph is a DAG.
+- **direct-edge variant rules**: allowed `(subj.wildcard,obj.wildcard)`
   combos; into-`w_any` and out-of-`w_all` must be same-shape concrete bridges.
-- **I3 bridge completeness/exclusivity** (`:147-167`): every concrete of a bridged
+- **I3 bridge completeness/exclusivity**: every concrete of a bridged
   shape has its bridge; none for unbridged shapes.
-- **I13 refcount = direct-degree** (`:169-183`, blind-audit C5).
-- **I4 namespace classification** (`:201-206`): `.`-predicate families are declared
+- **I13 refcount = direct-degree** (blind-audit C5).
+- **I4 namespace classification**: `.`-predicate families are declared
   leaves; no `w_all` on leaf/derived families.
-- **I5 derived-flag exclusivity** (`:208-218`): `edge.derived ⟺` direct edge into a
+- **I5 derived-flag exclusivity**: `edge.derived ⟺` direct edge into a
   derived-public family, nowhere else.
-- **I6 residue hygiene** (`:220-273`): residue on a derived family; `relation ==
+- **I6 residue hygiene**: residue on a derived family; `relation ==
   node.predicate`; non-empty; `stars ⊆ declared subject-wildcard shapes`; for each
   `neg` id: live, concrete, `(type,pred) ∈ stars` (**`neg ⊆ star-covered`**), and
   `neg ∩ derived-edge-holders = ∅`; for `upos`: `upos ∩ neg = ∅`, `upos ∩
   edge-holders = ∅`, each userset-shaped and not star-covered.
-- **I7 residue-version monotonicity** (`:274-293`) — modulo the `version==1`
+- **I7 residue-version monotonicity** — modulo the `version==1`
   lineage-restart escape hatch (SQLite rowid reuse).
-- **I10 outbox sanity** (`:296-304`).
+- **I10 outbox sanity**.
 
 I8 (stratification acyclic, compile-time) and **I9 (fixpoint audit)** live
-elsewhere: I9 is `processor.audit_fixpoint` (`processor.py:806-816`) and is
-**test-suite-only — NOT wired into per-commit paranoia** (`invariants.py:390-403`
+elsewhere: I9 is `processor.audit_fixpoint` (`processor.py::DeltaProcessor._reconcile`) and is
+**test-suite-only — NOT wired into per-commit paranoia** (`invariants.py::install_paranoia`
 run only `check_invariants` + `verify_outbox_deltas`). I11/I12 (read purity,
 rejection cleanliness) are differential/harness-only. **This is the single most
 important cross-cutting fact for the proof (§9, §11-A1).**
 
 ### 7.8 IVM cascade — the perfect model, incrementally (`processor.py`)
 
-- **Stratification** (`_stratify:1630-1664`): Kahn topo-layering over tainted
+- **Stratification** (`zanzibar_utils_v1.py::_stratify`): Kahn topo-layering over tainted
   derived→derived dependency edges; `Plan.stratum` assigned per layer;
   `CyclicDerivedDependency` on any leftover. Polarity-blind: `Exclusion` base and
-  subtract both contribute ordinary dependency edges (`:1622-1624`).
-- **`reconcile_subject`** (`:321-380`): the canonical rule — `should =
+  subtract both contribute ordinary dependency edges.
+- **`reconcile_subject`** (`processor.py::DeltaProcessor._reconcile_subject`): the canonical rule — `should =
   check_fn(s)`, `covered = shape(s) ∈ stars`; userset ⇒ maintain `upos =
   should∧¬covered`, `neg = covered∧¬should`, no edges; bare-entity ⇒ `want_edge =
   should∧¬covered` (write/remove derived edge), `neg = covered∧¬should`.
-- **`reconcile`** (full-object, `:382-459`): recompute `stars` (pinned star fold),
+- **`reconcile`** (full-object, `processor.py::DeltaProcessor._reconcile`): recompute `stars` (pinned star fold),
   `neg`, `upos` wholesale from committed lower-stratum state and diff — invalidation,
-  not state transfer (`theory.md:103-106`). Returns True iff changed = the I9 signal.
-- **`run_cascade(watermark)`** (`:694-739`): drain the outbox from the passed
+  not state transfer (`theory.md` §1.4). Returns True iff changed = the I9 signal.
+- **`run_cascade(watermark)`** (`processor.py::DeltaProcessor._run_cascade`): drain the outbox from the passed
   watermark; frontier advances by `max(row.id)`; `rounds = len(strata)`; per round
   process keys `sorted by (stratum, key)` so lower strata settle first; cross-stratum
   residue bumps deferred to next round via `_bumped`; on non-quiescence after the
   rounds, **raise `InvariantViolation`** (abort) — never silently continue
-  (`:729-739`). Termination in ≤#strata rounds = **T5** (each round settles ≥1
-  further stratum; `theory.md:107-109`).
+  Termination in ≤#strata rounds = **T5** (each round settles ≥1
+  further stratum; `theory.md` §1.4).
 - **Cascade-in-same-transaction is an assumed precondition, not a checked
   invariant.** Nothing structural forces `run_cascade` to run on a write; the
-  commit hooks don't call it (`invariants.py:390-395`). Every production write path
-  *does* call it (`connectedstore/apply.py:85-86`; `GraphBackend.apply` in the test
+  commit hooks don't call it (`invariants.py::install_paranoia`). Every production write path
+  *does* call it (`connectedstore/apply.py::advance_index`; `GraphBackend.apply` in the test
   matrix), and `build_index` uses `backfill`. The graph model in Lean will bake the
   cascade into each write op (so the model is always consistent); the honesty note
   (§11-A1) records that the *Python* relies on convention here.
@@ -584,9 +584,9 @@ important cross-cutting fact for the proof (§9, §11-A1).**
 ### 7.9 Multigraph / dedup boundary (must model edges as counters, not sets)
 
 `add_tuple` at the wildcard layer is **multigraph** — the same triple twice counts
-to 2 and needs two removes (`wildcard.py:226-232`, extraction surprise #7). Zanzibar
+to 2 and needs two removes (`wildcard.py::WildcardIndex._reject_star_self_edge`, extraction surprise #7). Zanzibar
 set-idempotence lives one layer up in `connectedstore.TupleSource`
-(`source.py:88-91` + the `TupleV1` unique constraint). The graph model's edges are
+(`connectedstore/source.py::TupleSource.add` + the `TupleV1` unique constraint). The graph model's edges are
 **multisets (ℤ counters)**; `Store` at the spec level is a set, so the graph model's
 op sequence must apply the connectedstore dedup or model raw multiplicity explicitly.
 Resolve per §11-A4.
@@ -716,13 +716,13 @@ versions survive under `*_direct` names in `Equiv.lean`.
 
 ## 9. What the proof buys over the existing tests (targeting)
 
-`correctness.md:38-67` already gives four independent evaluators + paranoia + a
+`correctness.md` §2–3 already gives four independent evaluators + paranoia + a
 hypothesis campaign. The formal effort is aimed where sampling is weakest:
 
 1. **Unbounded generalization** — T1 quantifies over all `S,T,q` (T2 over all
    of them within the `GraphAdmission + W4Fragment` scope, §8); tests sample.
 2. **The counting-IVM-under-acyclicity crux (T4)** — the group-inverse argument
-   whose failure needs a rare diamond+remove+re-add; `theory.md:48-61` states it,
+   whose failure needs a rare diamond+remove+re-add; `theory.md` §1.2 states it,
    nothing proves it.
 3. **Cascade settling order (T5)** and the **edge-hit-ignores-`neg` disjointness**
    (§7.6) — cross-module obligations that no single per-commit invariant checks
@@ -762,7 +762,7 @@ rather than quoting):*
     Python `WildcardIndex`+`DeltaProcessor` × `sem`, over every in-fragment
     corpus (incl. two designed attack corpora). **Scope caveat:** one of them,
     `direct_arm_exclusion`, is listed in `GRAPH_FRAGMENT` but machine-checked to be
-    OUTSIDE the final theorems' hypotheses (`FullScope.lean:601`), so its comparisons
+    OUTSIDE the final theorems' hypotheses (`FullScope.lean::fragment`), so its comparisons
     are a differential test between implementations, not coverage by `graph_correct` —
     and the CLI never gates on `GraphAdmission`/`W4Fragment`. See `FINAL_REVIEW.md` §3.0;
   - `test_conformance_direct_arm.py` — the same corpus at the C-chain
@@ -846,7 +846,7 @@ rather than quoting):*
   (2026-07-19, `graphRunOps` / zcli `"ops"`; `test_conformance_remove_graph.py`
   differential-gates seeded add/remove/re-add streams == the real Python graph
   index == oracle on the erased store, at ANSWER level) — **over every in-fragment
-  corpus EXCEPT `direct_arm_exclusion`**, which `test_conformance_remove_graph.py:102`
+  corpus EXCEPT `direct_arm_exclusion`**, which `test_conformance_remove_graph.py::_REMOVE_EXCLUDED`
   excludes via `_REMOVE_EXCLUDED` because the chain's remove guard is stated over plain
   `StoreValidRules`, under which a Direct-arm-under-exclusion tuple is inadmissible, so
   `removeGateB` fail-closes on essentially every seeded stream there. The guard's
@@ -908,7 +908,7 @@ Each must be resolved or escalated before Phase 1 Lean. Proposed resolutions giv
   OTHER way — oracle-style fuel-bounded recursion, not stratum iteration; the
   `Spec/Semantics.lean` docstring logs the refinement of this item. See §3.)*
 - **A3 — Undefined reference = empty (spec) vs compile-reject (graph).** The oracle
-  treats an undeclared `(o_type, rel)` as constantly False (`oracle.py:360-363`); the
+  treats an undeclared `(o_type, rel)` as constantly False (`oracle.py::Oracle.check.sat`); the
   production compiler may reject. *Proposed:* `sem` follows the oracle (undefined ⇒
   empty); fold "compiler rejects" into `WF S` so graph theorems never see such a
   schema. Verify the compiler's actual behavior in Phase 0.5 and adjust `WF`.

@@ -58,13 +58,21 @@ it is a modelling limit of the P6 leaf-family collapse.
 the leaf-family split and retire P6 — and the work is DEFERRED, not scheduled.** (a)
 "restate at drained states only" and (b) "weaken `negEdgeFree`" both shrink
 the claim; (c) is the only one that raises assurance. The decisive finding: **nothing
-consumes `Inv`** — it is a hypothesis in exactly four places (`State.lean:813`, `:854`,
-`Write.lean:150`, `RulesWrite.lean:181`), all `Inv → Inv` preservation steps, and
-`EdgeHygienic` is consumed nowhere — so weakening `negEdgeFree` could not turn anything
-red, which is precisely the house failure mode (rule 7). There is also precedent pointing
-away from (b): when `negEdgeFree` was found FALSE over plain `ReachedByW3d` on 2026-07-11j
-(`CascadeInv.lean:14-27`), the answer was to scope the theorem to the coverage chain, not
-to weaken the invariant.
+consumes `Inv`** — it appears as a hypothesis only in `Inv → Inv` preservation steps:
+`State.lean::inv_putResidue`, `Write.lean::inv_writeDirect`,
+`RulesWrite.lean::inv_foldl_writeDirect`, `RulesWrite.lean::inv_writeRules`,
+`ReconcileWrite.lean::inv_reconcileKey`, plus the forgetful `State.lean::Inv.toStruct`
+(`Inv → StructInv`). `EdgeHygienic` is consumed nowhere — so weakening `negEdgeFree` could
+not turn anything red, which is precisely the house failure mode (rule 7).
+⚠ **The COUNT moved and the old anchors had rotted.** This read "exactly four places" with
+line-number anchors, two of which (`State.lean:813`, `:854`) had drifted onto
+`putResidue_residue` and `structInv_addEdge` — neither of which mentions `Inv`. Re-measured
+2026-08-19 by `grep -rn '(h : Inv S σ)\|Inv S σ →'`: **five** preservation steps, not four.
+The finding it supports (nothing CONSUMES `Inv`) is unchanged; the number was never the
+load-bearing part, but it was wrong. There is also precedent pointing away from (b): when
+`negEdgeFree` was found FALSE over plain `ReachedByW3d` on 2026-07-11j
+(`CascadeInv.lean`'s module header, the `CascadeInv.lean::reachedByW3dC_inv` rationale), the answer was to
+scope the theorem to the coverage chain, not to weaken the invariant.
 **Scope, blast radius (55–65% of the tree; `Spec/`/`SetEngine/` entirely spared) and a
 step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
@@ -75,19 +83,22 @@ chain's cheap route is refuted and the landing criterion is weak. No Lean file c
 Read `history/PROOF_STATUS.md` 2026-08-16c and scope-doc §11.8 BEFORE resuming leg 7.**
 
 * ⚠ **ROUTE A IS REFUTED.** Re-pointing `ReachedByRulesAdmitted.step` cannot work:
-  `ReconcileComplete.lean:164` needs a `ReachedByRules σ S T` witness for a
-  `writeRulesRaw`-built σ, and `LeafRules.lean:461::lrV_writeRulesRaw_edges_ne` already
+  `ReconcileComplete.lean::reachedByW3aAdmitted_toW3a` needs a `ReachedByRules σ S T` witness
+  for a `writeRulesRaw`-built σ (its `base` case), and
+  `LeafRules.lean::lrV_writeRulesRaw_edges_ne` already
   proves those two states' edges DIFFER. The surviving branch weakens `UntaintedShadow` — a
   slice of board row `P14`, whose deps close a cycle `P3 → P14 → P4 → P3`. Settle this
   first; it is cheap to attack with `#eval` and it decides the cone.
 * ⚠ **The own-key premise is BACKWARDS.** On the `ComputedOnly` fragment the leaf list is
-  EMPTY, not multi-element (`Leaf.lean:401` `[]` for a derived `.computed` arm;
-  `Leaf.lean:551` `.closure _ => none`), so `writeLeg_own_key_dirty` goes FALSE and needs a
+  EMPTY, not multi-element (`Leaf.lean::atomLeaves` returns `[]` for a derived `.computed`
+  arm; `Leaf.lean::rawWriteRels` has `| .closure _ => none`), so `writeLeg_own_key_dirty`
+  goes FALSE and needs a
   non-emptiness premise (`StoreValidRules`), not `WF`. Measure whether
   `StoreValidRules` + `ComputedOnly` admits a stored tuple on a derived key at all.
 * ⚠ **The criterion only counts CONJOINED with a green gate.** `dropped by P6 → 0` /
-  `compared → 265` is a pure function of the Python side: commenting out
-  `extractor.py:236-237` publishes it with no Lean change. Its control is the state gate,
+  `compared → 265` is a pure function of the Python side: commenting out the leaf-family-copy
+  branch of `extractor.py::_edge_projection` (`if "." in obj[2] and obj[2] != "...": return
+  "P6"`) publishes it with no Lean change. Its control is the state gate,
   which then reports `19 failed, 37 passed` / `edge only in PYTHON`. Also: §11.5 predicts
   `only in LEAN model`; a Python-first order gives the mirror.
 * Verified while attacking: the `FoldAdmits` lockstep is **24** spelled-list sites, not 7;
@@ -177,8 +188,9 @@ as written and is wrong in two places).
   produced the **empty** cascade key set, so the instrument is real.
 * **⚠ `publicOfLeaf` MUST BE INDEX-AGNOSTIC.** §11.3's prescribed "string surgery on the
   `.i` suffix" is measurably wrong: Python routes `(viewer but not banned) or [user]` to
-  `approver.2`, where a `".0"`-stripper returns `none`. `Leaf.lean::rawWriteRel`'s
-  hardcoded index `0` is therefore a known-wrong model, not merely unmeasured.
+  `approver.2`, where a `".0"`-stripper returns `none`. `Leaf.lean`'s former singular
+  `rawWriteRel` (since replaced by `Leaf.lean::rawWriteRels`) hardcoded index `0` and was
+  therefore a known-wrong model, not merely unmeasured.
 * **`writeLoggedOne` does NOT need an `S` parameter** — `GraphState.schema` already
   exists and a `σ.schema`-reading variant is definitionally equal under `σ.schema = S`.
   That removes ~145 mention-lines from the budget (61 + 84 re-measured, not §11.3's 58),
@@ -211,7 +223,8 @@ one-character delta `folder:*` → `folder:f1`).
 **The predicted mechanism was REFUTED and the conclusion still holds** — the
 counterexample uses **no object wildcard**, so this is not the I14 bug; `bareStar` keeps
 that shape out of scope anyway. The real gap is one layer earlier: Lean's W1c **in-bridge**
-has no star-tupleset **through-shape** notion (`UsStarWrite.lean:71`), and
+has no star-tupleset **through-shape** notion (`UsStarWrite.lean::Schema.isStarTuplesetThrough`
+models the shape; `::GraphState.ensureInBridges` is what ignores it), and
 `writeRules`/`writeLoggedRules` materialise **no bridges at all**. Python handles the shape
 correctly; Lean's `ensureInBridges` on it is a literal no-op (`edges 3 → 3`).
 Lifting it is a **four-part leg** (through-shape derivation; bridges on the rule-routed
@@ -363,8 +376,8 @@ board are the two blocks below, verbatim.**
 >
 > **Sabotage, 2026-08-16** (`docs/sabotage-procedure.md`): the star-filter was defeated in
 > place (`fun s => s.name != STAR` to `fun _ => true`) and `lake build` of
-> `ZanzibarProofs.GraphIndex.CascadeStrataEnum` went red at
-> `CascadeStrataEnum.lean:634` — the `simpa` closing `storedDirectSubjects_name_ne_star`.
+> `ZanzibarProofs.GraphIndex.CascadeStrataEnum` went red at the `simpa` closing
+> `CascadeStrataEnum.lean::storedDirectSubjects_name_ne_star`.
 > So this half is held by the type checker, not by measurement. Restored and re-verified.
 > ⚠ Do not confuse that filter with the `freshDirectCands` presence diff a few lines away:
 > **that one IS measurement-pinned** and the tree compiles with it defeated, which is why
