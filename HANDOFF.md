@@ -17,7 +17,7 @@ session: run the Rhythm protocol at the bottom.
 ## Banner
 
 > 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-18**: all ten phases were run green on this tree, after the last edit
+> As of **2026-08-20**: all ten phases were run green on this tree, after the last edit
 > to it — ask `python scripts/gate_status.py`, never this line. The tree id is
 > deliberately not quoted here: it is a content address, so a tracked file cannot cite
 > its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
@@ -25,10 +25,10 @@ session: run the Rhythm protocol at the bottom.
 > sweep, so it still stands. A docs-only edit costs one ~50 s `lean` re-run and not the
 > nine tiles (`GS-2`); the scoping rules are [`docs/gate-runbook.md`](docs/gate-runbook.md)
 > §4's, not this banner's.
-> Last session: [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) **now binds
-> measurements, not only checks**, and applying it to `R6`'s one unowned number filed
-> `R6-19` *and corrected it* — 25.3% was cumulative, self is **2.0%** →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-18`, `2026-08-17b`…`e`.
+> Last session: **every living-doc citation is re-keyed onto `file::symbol`** — and eight
+> of them turned out to be pointing at unrelated code, one of those a range CORRESPONDENCE
+> had already flagged in July whose citers were never repointed →
+> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-20`, `2026-08-18`.
 > If you see red, it is yours: `git stash` and re-check.
 
 ## Board
@@ -55,6 +55,7 @@ forward forever and are never reused.**
 | `P10` | re-run the scope audit, hand-curated → [fan-out runbook](docs/subagent-fanout-runbook.md), final § | LATER | M | — | 2026-08-16 |
 | `P11` | the fixture-TRIPLE question for 5 subsumed `.fga` fixtures → `tests/test_schema_shapes.py::KNOWN_SUBSUMED` | LATER | S | — | 2026-08-16 |
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
+| `HS-5` | seven always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines → ledger `2026-08-20` | LATER | S | — | 2026-08-20 |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
