@@ -118,6 +118,22 @@ docstrings. They must survive a rewrite of the file they came from.
 * **Code → `file::symbol`** (`Cascade.lean::GraphState.writeLoggedOne`), never a line
   number. `verify.sh lean` resolves every `file::symbol` anchor in
   `formal/CORRESPONDENCE.md`, so a rename fails the gate instead of rotting.
+  **Outside `CORRESPONDENCE.md` nothing checks this — it is a convention, held by
+  hand, and the 2026-08-19 sweep is what it costs to let it slip.** Three forms that
+  *look* right and do not resolve, all found in living docs that day:
+  * a bare method name (`processor.py::_reconcile_subject`) — anchors are
+    `__qualname__`, so it is `::DeltaProcessor._reconcile_subject`;
+  * a function LOCAL (`::WildcardIndex.check.row`) — `anchor_check.py` records only
+    defs/classes plus class- and module-level assignments, deliberately. Name the
+    enclosing function instead. Closures ARE valid (`::Oracle.check.ttu_leaf`);
+  * a bare filename (`models.py:121`) — there are three `models.py`. Write the
+    package (`index_v4/models.py`) whenever the file name is not unique.
+
+  When the target is a comment, a branch, or a `dict` key rather than a symbol,
+  **quote the code and name the symbol it sits in** — `extractor.py::_edge_projection`
+  (`if "." in obj[2] …: return "P6"`), `corpus.py::SCHEMAS`'s `"residue_rich"` entry.
+  A step with an in-code marker is cited by the marker (`_reconcile` step (2c)), and
+  a numbered invariant by its number (`I1`, `I6`) — both travel with the code.
 * **House rules → their number.** `formal/HANDOFF.md`'s house-rule numbering and this
   repo's working-rhythm numbering are cited from code; renumbering breaks those
   citations silently. Keep the numbers byte-stable.

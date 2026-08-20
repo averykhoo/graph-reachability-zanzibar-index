@@ -89,28 +89,32 @@ proof-design adjudication, not on coding — settle that before paying any cone*
 the read-only fan-out that produced a 17-step plan had three of its cells refuted).
 
 ⚠ **The shadow chain's cheap route is REFUTED.** Re-pointing `ReachedByRulesAdmitted.step`
-cannot work: `ReconcileComplete.lean:164` needs a `ReachedByRules σ S T` witness for a
-`writeRulesRaw`-built σ, and `LeafRules.lean:461::lrV_writeRulesRaw_edges_ne` proves those
+cannot work: `ReconcileComplete.lean::reachedByW3aAdmitted_toW3a` needs a `ReachedByRules σ S T`
+witness for a `writeRulesRaw`-built σ (its `base` case), and
+`LeafRules.lean::lrV_writeRulesRaw_edges_ne` proves those
 states' edges differ. The surviving branch weakens `UntaintedShadow` — a slice of `P14`,
 whose deps close a cycle `P3 → P14 → P4 → P3`. **This is the first thing to settle**, and
 `#eval` settles it far cheaper than the 39-module recompile cone.
 ⚠ **The own-key premise is BACKWARDS.** On the `ComputedOnly` fragment the leaf list is
-EMPTY, not multi-element (`Leaf.lean:401`, `:551`), so `writeLeg_own_key_dirty` goes FALSE
+EMPTY, not multi-element (`Leaf.lean::atomLeaves`, `::rawWriteRels`), so
+`writeLeg_own_key_dirty` goes FALSE
 and needs a non-emptiness premise (`StoreValidRules`), not `WF`.
 ⚠ **It CANNOT be split** — the un-buildable window is the whole cone, not a step — and
 keep **`d.leaf = true` as the LEADING conjunct** of the own-key guard: the
 `rw [hleaf]; simp` discharges depend on that order (there are **four**, not three). The
 `FoldAdmits` lockstep is **24** spelled-list sites, not the 7 `write` constructors, and
-`Audit.lean` is an EDITED file of this step (`:314` pins `reachedByRules_of_admitted`).
+`Audit.lean` is an EDITED file of this step (it carries the
+`#print axioms reachedByRules_of_admitted` pin).
 Expect a deliberate golden regen — but `derived_arm_multiplicity.json` must get a DERIVED
-expectation, not a re-recording, and `_MIN_LEDGER_ROWS`/`_MIN_LEDGER_STACKED` (19/19,
-`test_conformance_state.py:377`) are asserted before the golden read, so no regeneration
-repairs them.
+expectation, not a re-recording, and
+`test_conformance_state.py::_MIN_LEDGER_ROWS`/`::_MIN_LEDGER_STACKED` (19/19) are asserted
+before the golden read, so no regeneration repairs them.
 
 **Completion criterion — the numbers count only when conjoined with a green gate.** `dropped by
 P6` → **0** and `compared against Lean` → **265** (today **76**/**189**), **and**
-`conf-tile:1/5 … 5/5` green. Measured 2026-08-16c: commenting out `extractor.py:236-237`
-publishes both numbers with no Lean change at all, and its control — the state gate at
+`conf-tile:1/5 … 5/5` green. Measured 2026-08-16c: commenting out the leaf-family-copy
+branch of `extractor.py::_edge_projection` (`if "." in obj[2] and obj[2] != "...": return
+"P6"`) publishes both numbers with no Lean change at all, and its control — the state gate at
 `19 failed, 37 passed`, `edge only in PYTHON` — is the half that makes the criterion real.
 **Re-derive the numbers from `formal/FINAL_REVIEW.md`'s generated ledger, never from
 prose** — they have gone stale three times.

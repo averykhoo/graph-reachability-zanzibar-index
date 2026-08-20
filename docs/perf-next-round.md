@@ -81,7 +81,7 @@ before reopening either.
   flow graph is now bridge-aware; both backends reject it. See
   `docs/spec-deviations.md` (2026-07-16 entry) and `HANDOFF.md`. Correctness
   parity, was never a perf item.
-- `invariants.py:322-368` paranoia delta verifier is O(pairs × edges) per
+- `invariants.py::verify_outbox_deltas` paranoia delta verifier is O(pairs × edges) per
   commit — production-paranoia cost, out of scope for bench numbers; noted so
   nobody profiles paranoia-on and panics. Now also filed as **R6-8** in the
   round-6 audit (a per-source BFS rewrite) — still gate/full-tier scope, not a
@@ -119,12 +119,12 @@ composition-write round-trips that would change the modeled algorithm; leave the
   flush / COMMIT):** moving the cascade out of the write transaction, batching
   commits, async-first — genuine spec + Lean work (`ReachedByW3d2E` changes).
   Out of scope.
-- **`rebuild()` / incremental evaluator catch-up** (`source.py:124-132`,
+- **`rebuild()` / incremental evaluator catch-up** (`source.py::assert_read_isolation`,
   `setengine/engine.py rebuild`): the failure-path rebuild is what makes
   rollback correct — the in-memory engine holds phantom state that can't be
   incrementally undone without an undo journal, and *that* is a new algorithm
   on the evaluator-freshness watermark contract. Cold path anyway (ordinary
-  rejections take the cheap branch, `store.py:100-106`). Cost documented;
+  rejections take the cheap branch, `store.py::ConnectedStore.__init__`). Cost documented;
   not changing. (N10 deferred *write-only auxiliary* state off the rebuild —
   a different, narrower thing.)
 
