@@ -26,7 +26,8 @@ rot independently, and the reader cannot tell which one is live.
 | durable rules, footguns, env | [`CLAUDE.md`](../CLAUDE.md) |
 | gate/operational/machine state | [`gate-runbook.md`](gate-runbook.md) |
 | design decisions, incl. post-spec user adjudications | [`architecture/decision-log.md`](architecture/decision-log.md) |
-| divergences, latent gaps | [`spec-deviations.md`](spec-deviations.md) |
+| divergences — what diverged, when and why | [`spec-deviations.md`](spec-deviations.md), append-only |
+| latent gaps — what is still open **today** | [`latent-gaps.md`](latent-gaps.md), rewritten in place |
 | plans/scopes for active legs | their scope doc (ACTIVE-PLAN header; corrections appended dated) |
 | perf | [`perf-next-round.md`](perf-next-round.md) → the active round doc → `docs/history/` |
 | retired anything | `docs/history/` with the frozen banner from §3 |

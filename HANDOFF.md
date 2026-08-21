@@ -16,20 +16,21 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **The gate is green. Known live correctness bugs: 0.**
-> As of **2026-08-20**: all ten phases were run green on this tree, after the last edit
-> to it — ask `python scripts/gate_status.py`, never this line. The tree id is
-> deliberately not quoted here: it is a content address, so a tracked file cannot cite
-> its own without changing it, and `.gate-runs/ledger.tsv` is its one home.
-> No backend and no modeled algorithm has changed since the 2026-08-14 3-seed fuzz
-> sweep, so it still stands. A docs-only edit costs one ~50 s `lean` re-run and not the
-> nine tiles (`GS-2`); the scoping rules are [`docs/gate-runbook.md`](docs/gate-runbook.md)
-> §4's, not this banner's.
-> Last session: **every living-doc citation is re-keyed onto `file::symbol`** — and eight
-> of them turned out to be pointing at unrelated code, one of those a range CORRESPONDENCE
-> had already flagged in July whose citers were never repointed →
-> [`docs/history/session-log.md`](docs/history/session-log.md) `2026-08-20`, `2026-08-18`.
-> If you see red, it is yours: `git stash` and re-check.
+> 🟢 **The gate is green on this tree. Known live correctness bugs: 0.** As of
+> **2026-08-21**: all ten phases green (`lean` `holes=0, audits=581, pinned=581`; every
+> tile met its floor with zero `xfailed` and zero `skipped` — collected counts live in
+> `formal/FINAL_REVIEW.md`'s generated block, not here, per Rhythm 3b), plus a 3-seed fuzz
+> sweep on both hypothesis files. **`BL-1` is closed** — one reordering in
+> `processor.py::DeltaProcessor._gc_subject_node` (demote before strip); the two pins in
+> `tests/test_userset_bridge_release_leak.py` are green and now guard the ORDER, sabotage
+> record in their docstring. Ask `python scripts/gate_status.py`, never this line — and note
+> the verdict is tree-addressed, so **any edit invalidates it and the phases must be re-run**.
+> Also corrected: `R6-11`'s "8×" in all four places, with the halving moved INTO the
+> instrument (`profile_r6.py::_ctxmgr_entries`), and `R6-4(a)`'s unsound memo now flagged in
+> its own entry → [`session-log.md`](docs/history/session-log.md) `2026-08-21`.
+> Committed 2026-08-21 (this session's work **and** all of `2026-08-20b`'s, which had never
+> been committed); **not pushed** — push is still only when asked. If you see red, it is
+> yours: `git stash` and re-check.
 
 ## Board
 
@@ -42,26 +43,25 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7, one commit** → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.7 | **NOW** | L | — | 2026-08-16 |
-| `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path | **NEXT** | M | — | 2026-08-16 |
-| `R6` | perf round 6 — **all 18 measured 2026-08-17; 10 to land, 5 declined, 3 unreachable; `R6-19` filed** → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-18 |
-| `HS-2` | split [`docs/spec-deviations.md`](docs/spec-deviations.md) (user-scheduled 2026-08-16) | **NEXT** | M | — | 2026-08-16 |
+| `P3` | leg 7 **4c-ii + step 7, one commit** — **unblocked 2026-08-20b: Route B adjudicated**, absorbs `P14`'s classification half → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.9 | **NOW** | L | — | 2026-08-21 |
+| `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
+| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×)**; 9 to land, 5 declined, 3 unreachable → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-21 |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
 | `P7` | `ttuStarFree` **(iii)+(iv)** — re-prove the 5 consumed sites, widen the gate → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16 | LATER | M | `P6` | 2026-08-16 |
-| `P14` | leg 7 **step 5** — re-partition `DerNode`/`UntaintedShadow`, re-prove the reach-collapse family → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §5 + §7 step 5 | LATER | L | `P4` | 2026-08-16 |
+| `P14` | leg 7 **step 5, reach-collapse half ONLY** — the classification half (re-partition `DerNode`/`UntaintedShadow`) was **absorbed into `P3` on 2026-08-20b** under Route B, which is what breaks the old `P3 → P14 → P4 → P3` cycle → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §5 + §7 step 5, and §11.9 for the split | LATER | M | `P4` | 2026-08-20b |
 | `P8` | write `W4WitnessSelfRef` (board `B2`) → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-08 §6 | LATER | S | — | 2026-08-16 |
 | `P9` | lift the remove-gate exclusion (board `B2`) → `formal/conformance/test_conformance_remove_graph.py` | LATER | M | — | 2026-08-16 |
 | `P10` | re-run the scope audit, hand-curated → [fan-out runbook](docs/subagent-fanout-runbook.md), final § | LATER | M | — | 2026-08-16 |
 | `P11` | the fixture-TRIPLE question for 5 subsumed `.fga` fixtures → `tests/test_schema_shapes.py::KNOWN_SUBSUMED` | LATER | S | — | 2026-08-16 |
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
-| `HS-5` | seven always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines → ledger `2026-08-20` | LATER | S | — | 2026-08-20 |
+| `HS-5` | six always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines → ledger `2026-08-20` | LATER | S | — | 2026-08-20b |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
 | `P16` | widen the enumeration/state bounds → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(e); read `test_conformance_enum.py`'s module docstring, which is half the plan | LATER | M | — | 2026-08-16 |
 | `P17` | bulk build/backfill is an unmodeled **default** constructor — model it or scope-exclude it in writing → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(h) + §3.1 item 6 | LATER | M | — | 2026-08-16 |
-| `LT-1` | the two live latent residues → [`spec-deviations.md`](docs/spec-deviations.md) Target 2 / Target 3 | HOLD | ? | — | 2026-08-16 |
+| `LT-1` | the two live latent residues → [`latent-gaps.md`](docs/latent-gaps.md) "Target 2" / "Target 3" | HOLD | ? | — | 2026-08-20b |
 | `DW-1` | decidable `W4Fragment` for a driver-side pre-check → [`CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) §"Conformance gates" | SOMEDAY | ? | — | 2026-08-16 |
 | `P18` | the concurrency / multi-instance layer — the never-started TLA+ phase → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(i) + §3.1 item 5 | SOMEDAY | L | — | 2026-08-16 |
 | `P19` | model the read surfaces (`lookup` / `lookup_reverse` / `expand`) in Lean → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(g) | SOMEDAY | L | — | 2026-08-16 |
@@ -70,11 +70,18 @@ forward forever and are never reused.**
 | `SD-3` | tuple-log compaction — only if the log outgrows "humans wrote this" scale | SOMEDAY | S | — | 2026-08-16 |
 | `SD-4` | bulk-merge write path → [sketch](docs/architecture/bulk-merge-design.md) | SOMEDAY | L | — | 2026-08-16 |
 
-Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`,
-`HS-4` and `GS-2` (2026-08-17), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
+Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`, `BL-1` (2026-08-21),
+`HS-4` and `GS-2` (2026-08-17), `HS-2` (2026-08-20b), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
 `B1`'s underlying finding was verified closed on 2026-08-16 (both halves proved 2026-07-28
 and 2026-08-04; the record had simply never caught up) — evidence in `formal/HANDOFF.md`'s
-`B1` block. Retiring an id is not the same act as closing a finding: say which you mean.
+`B1` block. Retiring an id is not the same act as closing a finding: say which you mean —
+`BL-1` is both (fixed 2026-08-21, and its two pins stay green as regression guards).
+⚠ **Do not reflow those two `Closed ids` lines.** `handoff_lint.py::check_ledger_ids`
+harvests retired ids LINE BY LINE (only lines carrying `Closed ids stay retired` or
+`survives as the historical grouping` are read), so rewrapping moves ids out of scope —
+**and the FAILs then blame the LEDGER's citations, not this rewrap**. Observed 2026-08-21:
+one reflow produced six FAILs for ids that were retired the whole time. If this check fails
+on ids you never touched, `git diff HANDOFF.md` before believing the message.
 
 ## Item blocks — `NOW` and `NEXT` only
 
@@ -84,44 +91,30 @@ target is self-sufficient by construction (verified row by row, 2026-08-16).
 
 ### `P3` — leg 7: step 4c-ii co-landing with step 7, in one commit
 
-Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6`
-in the same commit. Critical path, and the only multi-session phase. **It is blocked on a
-proof-design adjudication, not on coding — settle that before paying any cone** (2026-08-16c;
-the read-only fan-out that produced a 17-step plan had three of its cells refuted).
+Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6` in
+the same commit. Critical path, the only multi-session phase, and **no longer blocked**:
+**Route B — weaken `UntaintedShadow` — was adjudicated 2026-08-20b** (user call). No-kill at
+all five `LeafRules.lean` witnesses on both chains; **~123 sites**, template lemmas exist,
+**zero cone beyond the 39 modules 4c-ii pays anyway**. It absorbs `P14`'s classification
+half, which breaks the old cycle. Evidence, polarity census, corrected per-chain proposition
+and both sabotage records: PROOF_STATUS `2026-08-20b` + scope doc §11.9.
 
-⚠ **The shadow chain's cheap route is REFUTED.** Re-pointing `ReachedByRulesAdmitted.step`
-cannot work: `ReconcileComplete.lean::reachedByW3aAdmitted_toW3a` needs a `ReachedByRules σ S T`
-witness for a `writeRulesRaw`-built σ (its `base` case), and
-`LeafRules.lean::lrV_writeRulesRaw_edges_ne` proves those
-states' edges differ. The surviving branch weakens `UntaintedShadow` — a slice of `P14`,
-whose deps close a cycle `P3 → P14 → P4 → P3`. **This is the first thing to settle**, and
-`#eval` settles it far cheaper than the 39-module recompile cone.
-⚠ **The own-key premise is BACKWARDS.** On the `ComputedOnly` fragment the leaf list is
-EMPTY, not multi-element (`Leaf.lean::atomLeaves`, `::rawWriteRels`), so
-`writeLeg_own_key_dirty` goes FALSE
-and needs a non-emptiness premise (`StoreValidRules`), not `WF`.
-⚠ **It CANNOT be split** — the un-buildable window is the whole cone, not a step — and
-keep **`d.leaf = true` as the LEADING conjunct** of the own-key guard: the
-`rw [hleaf]; simp` discharges depend on that order (there are **four**, not three). The
-`FoldAdmits` lockstep is **24** spelled-list sites, not the 7 `write` constructors, and
-`Audit.lean` is an EDITED file of this step (it carries the
-`#print axioms reachedByRules_of_admitted` pin).
-Expect a deliberate golden regen — but `derived_arm_multiplicity.json` must get a DERIVED
-expectation, not a re-recording, and
-`test_conformance_state.py::_MIN_LEDGER_ROWS`/`::_MIN_LEDGER_STACKED` (19/19) are asserted
-before the golden read, so no regeneration repairs them.
+⚠ **Seven traps live in scope doc §11.10**, demoted there 2026-08-20b at the trap budget —
+the backwards own-key premise, the leading-conjunct ordering, the 24 `FoldAdmits` sites, the
+derived (not re-recorded) golden expectation, and the two premises Route B's equivalence
+argument rests on. **Read §11.10 before touching the cone.**
 
-**Completion criterion — the numbers count only when conjoined with a green gate.** `dropped by
-P6` → **0** and `compared against Lean` → **265** (today **76**/**189**), **and**
-`conf-tile:1/5 … 5/5` green. Measured 2026-08-16c: commenting out the leaf-family-copy
-branch of `extractor.py::_edge_projection` (`if "." in obj[2] and obj[2] != "...": return
-"P6"`) publishes both numbers with no Lean change at all, and its control — the state gate at
-`19 failed, 37 passed`, `edge only in PYTHON` — is the half that makes the criterion real.
-**Re-derive the numbers from `formal/FINAL_REVIEW.md`'s generated ledger, never from
-prose** — they have gone stale three times.
+**Completion criterion — the numbers count only conjoined with a green gate.** `dropped by
+P6` → **0**, `compared against Lean` → **265** (today **76**/**189**), **and**
+`conf-tile:1/5 … 5/5` green. Both numbers are publishable with no Lean change at all, so the
+state-gate control is what makes the criterion real (PROOF_STATUS `2026-08-16c`).
+**Re-derive from `formal/FINAL_REVIEW.md`'s generated ledger, never prose** — thrice stale.
 
-**Read first:** `formal/history/PROOF_STATUS.md` `## Session 2026-08-16c` (the blocker) and
-scope doc §11.8, then §11.7 and §11.5; `ReconcileComplete.lean::reachedByW3aAdmitted_toW3a`,
+**Read first:** `PROOF_STATUS.md` `## Session 2026-08-20b` (adjudication, polarity census
+§7, both sabotage records), scope doc §11.9 then **§11.10 (the traps)**, then
+`GraphIndex/Scratch4cii.lean`, then §11.7 and §11.5. `2026-08-16c` and §11.8 are superseded
+on the shadow question but stand as written — method, not state. Then
+`ReconcileComplete.lean::reachedByW3aAdmitted_toW3a`,
 `RulesComplete.lean::ReachedByRulesAdmitted`, `LeafRules.lean::GraphState.writeRulesRaw`,
 `Cascade.lean::GraphState.writeLoggedOne`, `Leaf.lean::publicOfLeaf`,
 `Exec.lean::foldAdmitsB`, `extractor.py::_edge_projection`.
@@ -129,71 +122,67 @@ scope doc §11.8, then §11.7 and §11.5; `ReconcileComplete.lean::reachedByW3aA
 ### `P6` — `ttuStarFree` part (ii): bridges on the rule-routed write path
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
-predicate is actually inhabited. Independent of `P3`–`P5`; it can run in parallel.
+predicate is actually inhabited.
+
+⚠ **"It can run in parallel with `P3`" was WRONG, and this row carried it for weeks**
+(corrected 2026-08-20b). Logically independent, **textually colliding**: both re-point
+`RulesWrite.lean::writeRules` and `Cascade.lean::writeLoggedOne`, both move `FoldAdmits` +
+`Exec.lean::foldAdmitsB` in lockstep, and **both pay the same 38-module cone** — whichever
+lands second re-pays it. Land increment A (additive, zero-cone) and stop, or sequence B
+after `P3`; never concurrently. **Probe with `#eval` before paying the cone, exactly as
+`P3` did**: `CascadeStable.lean`'s `writeLeg_reach_stable` family says a write leg does not
+change reachability at these nodes, and **an in-bridge DOES change reachability — that is
+its purpose**, so those statements may go FALSE at a bridged state rather than merely
+needing a new case. The change is also **INERT on every corpus** (measured 2026-08-20:
+`bridged_in_shapes` empty on all 26 `corpus.SCHEMAS` and every extended set bar one,
+fragment-excluded), so the gate cannot see it and all evidence must be new Lean pins —
+[`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) §"The INERT change" governs, as
+for part (i). Increment B also **inverts
+`extractor.py::_edge_projection`'s `P2` projection** (it drops PYTHON `w_any` rows because
+"Lean never creates them"); its docstring is already false. Detail: ledger `2026-08-20b`.
 
 ⚠ **DO NOT DROP IT.** Without `ttuStarFree`, `graph_correct` and `backend_equivalence` are
-machine-checked **FALSE** — not merely unproven. Part (i) is **INERT**: part (ii) is what
-materialises the edge, and everything else in the leg is inert until it lands.
+machine-checked **FALSE** — not merely unproven. Part (i) is **INERT**: part (ii)
+materialises the edge, and the rest of the leg is inert until it lands.
 `W4Fragment.ttuStarFree` must stay **UNCHANGED** until (ii) is in.
 
 **Read first:** `formal/CORRESPONDENCE.md` §7 (`ZT-P5-NEW`);
-`UsStarWrite.lean::Schema.isStarTuplesetThrough` and `::Schema.isSubjectWildcardUserset`;
-`ensureInBridges` / `ensureBridges`; `writeRules` / `writeLoggedRules`; the second loop of
-`derive_schema_info`.
+`UsStarWrite.lean::Schema.isStarTuplesetThrough` / `::Schema.isSubjectWildcardUserset`;
+`ensureInBridges` / `ensureBridges`; `writeRules` / `writeLoggedRules`; `derive_schema_info`'s
+second loop.
 
-### `R6` — perf round 6: all 18 measured, implementation is now the work
+### `R6` — perf round 6: `R6-10` landed, nine remain
 
-Nothing has landed, and the round is no longer blocked on measurement — the 2026-08-17 pass
-covered **all eighteen** candidates and turned the list into a ranked plan. **Land in this
-order:** `R6-10` (**59.8%** of incremental boolean write time in one function — the
-headline) → `R6-6` (4.75 → 1.75 statements per `check`) → `R6-11` (residue cache torn down
-**8× per reconcile**; one-line scoping change) → `R6-5` (**32.7%** ORM construction to read
-3–4 columns) → `R6-4` (**30.1%** of boolean lookup, grows with store size) → `R6-9` (4.51
-point SELECTs per write) → `R6-18` (**53.1%** off the biggest table; owes a hand migration
-for persistent PG) → `R6-16` → `R6-7`+`R6-8` → `R6-1`.
+**`R6-10` landed 2026-08-20b** (both steps): `−60.7%` incremental boolean write wall,
+**2.54×**, SQL statements/cycle `1929 → 822`. Remaining order: `R6-6` (4.75 → 1.75
+statements per `check`) → `R6-11` → `R6-5` (**32.7%** ORM construction for 3–4 columns) →
+`R6-4` → `R6-9` → `R6-18` (**53.1%** off the biggest table; owes a hand PG migration) →
+`R6-16` → `R6-7`+`R6-8` → `R6-1`.
 
-**Five are declined on an upper bound and should not be reopened without new numbers:**
-`R6-15` (the whole topo sort is **0.9%** of a bulk build), `R6-12` (**1.00×** intra-run
-re-reconcile), `R6-14` (**5.0%**), `R6-2` (24% of a non-bottleneck at the price of a Lean
-model change). **Three are unreachable by any benchmarked workload** (`R6-3` = `R6-17`, and
-its bulk twin `R6-13` — 0 calls each): they need a `T:*#P` star/wildcard workload before
-they need a patch. `R6-19` (filed 2026-08-18) owns the last unowned number: `_reconcile_subject_edge`'s
-25.3% is **cumulative, self 2.0%** — a call-site fan-out, not a slow function. Read its entry.
+**Declined on an upper bound; do not reopen without new numbers:** `R6-15` (**0.9%**),
+`R6-12` (**1.00×**), `R6-14` (**5.0%**), `R6-2`. **Unreachable by any benchmarked workload**
+(`R6-3` = `R6-17`, bulk twin `R6-13` — 0 calls each): they need a `T:*#P` workload first.
+`R6-19` owns the last unowned number (25.3% cumulative, **self 2.0%** — a call-site fan-out).
 
-⚠ **Two traps the numbers do not carry.** `R6-1` has the biggest read ceiling (91.4% of
-lookup) and must NOT be landed from it: the profile proves `check` *dominates*, not that
-sharing *eliminates*, and the naive shared memo is a **correctness bug** by the audit's own
-counterexample — prototype the two-tier design behind a measurement. And `R6-16` must be
-co-designed with `R6-7`/`R6-8`, never separately: paranoia FULL uses the outbox as its
-worklist on ALL schemas, so gating emission without gating that consumer silently blinds
-the checker.
+⚠ **Five traps the numbers do not carry** live in
+[`perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do
+not carry", demoted there 2026-08-20b. **Read that section before taking an id.** Both
+2026-08-20b corrections were fully applied 2026-08-21: `R6-11`'s "8×" is **~4×** in all four
+places *and* the halving now lives in the instrument
+(`benchmarks/profile_r6.py::_ctxmgr_entries`, which refuses an odd ncalls), re-confirmed at
+`184 scopes / 40 reconciles = 4.6×` — verdict still `MOTIVATED`, only the size moved;
+`R6-4(a)`'s unsound `(id, version)` memo is now flagged **in its own entry**, because the
+fix sketch is a verbatim block that calls the key "sound".
 
-**Read first:** [`benchmarks/results/R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md)
+**Read first:** [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md)
 (verdicts, method, the two limits — in-memory SQLite understates statement-count wins,
-cProfile depresses throughput — and its three instrument corrections; the transferable
-rule they produced, plus `GS-2`'s fourth, is
-[`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) §"A MEASUREMENT is an assurance
-step too", and it binds any re-run you do), then the entry for whichever id you take in
+cProfile depresses throughput — and its three instrument corrections, whose transferable
+rule is [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) §"A MEASUREMENT is an
+assurance step too" and binds any re-run), then your id's entry in
 [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) **including its
 verifier corrections**, then [`docs/perf-next-round.md`](docs/perf-next-round.md) for the
-fence and the reopening rule. Re-run any target with `python -m benchmarks.profile_r6
-[_write] --target <t>` — never beside another bench or pytest run.
-
-### `HS-2` — split `docs/spec-deviations.md`
-
-The divergence log is the repo's largest living doc and answers two unrelated questions at
-once: "what diverged, when and why" (a dated, append-only ledger) and "what is still
-latent" (an inventory that gets rewritten). Splitting them is user-scheduled.
-
-⚠ **It is cited by dated entry from code, tests and both boards** — `2026-07-13`,
-`2026-07-27`, `2026-08-10`, and Target 2 / Target 3 (row `LT-1`) are all live citation
-keys. Per [`docs/README.md`](docs/README.md) §5 they must survive the split: keep the date
-keys byte-stable and repoint every citer in the same commit, or the inbound links rot
-silently. Grep for citers before you cut.
-
-**Read first:** [`docs/README.md`](docs/README.md) §1 (decide which half owns "latent gaps"
-before moving a line) and §5 (citation keys); `docs/spec-deviations.md`'s own header for
-the entry format it has been keeping.
+fence and the reopening rule. Re-run with `python -m benchmarks.profile_r6 [_write]
+--target <t>` — never beside another bench or pytest run.
 
 ## Standing traps
 
@@ -201,14 +190,10 @@ Cross-item only. Everything durable and repo-wide lives in `CLAUDE.md` instead.
 
 * ⚠ **Do NOT lift `ttuDirect` in Lean.** It is load-bearing for the current admission
   story; the open descendant is row `DW-1`, and nothing is blocked meanwhile.
-* ⚠ **`.scratch/` is gitignored — anything recorded only there is already lost.** Row
-  `P7`'s entire cost analysis survived only in `.scratch/` and had to be transcribed into
-  `PROOF_STATUS.md` on 2026-08-16 to keep the item resumable at all.
-* ⚠ **A trap must cite a symbol that exists.** This board carried "do not extend
-  `test_fixture_earns_its_place`" for weeks; no such test has ever existed, so the trap was
-  unenforceable. Cite `file::symbol`, and grep it before you write it down.
 * ⚠ **Status lines inside `docs/history/` and `formal/history/` are frozen as-of-then**,
   and several are known false. Read them for method, never for state.
+
+The `.scratch/`-is-lossy and cite-a-real-symbol traps moved to `CLAUDE.md` on 2026-08-20b.
 
 ## Where things live
 
@@ -220,7 +205,8 @@ Cross-item only. Everything durable and repo-wide lives in `CLAUDE.md` instead.
 | [`docs/gate-runbook.md`](docs/gate-runbook.md) | cap-safe phased `verify.sh`, the Postgres leg, fuzz, every floor and budget | before running the gate |
 | [`tests/dbengine.py`](tests/dbengine.py) | the SQLite-vs-server engine seam (`ZANZIBAR_TEST_DSN` / `ZANZIBAR_PG_REQUIRED`) | running the PostgreSQL leg |
 | [`docs/architecture/overview.md`](docs/architecture/overview.md) | architecture index — module map plus pointers to every deeper doc | orienting in unfamiliar code |
-| [`docs/spec-deviations.md`](docs/spec-deviations.md) | dated divergence log and the latent-gap inventory | when behaviour surprises you |
+| [`docs/spec-deviations.md`](docs/spec-deviations.md) | the dated divergence ledger — append-only, true as of each date key, never live status | when behaviour surprises you |
+| [`docs/latent-gaps.md`](docs/latent-gaps.md) | what is still latent **today**; rewritten in place | before chasing a gap you found in the ledger |
 | [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) | how to prove a check actually checks; the catalogue of checks that failed by passing | before adding any test, floor, pin or gate phase |
 | [`docs/subagent-fanout-runbook.md`](docs/subagent-fanout-runbook.md) | how to run a multi-agent sweep without wasting it | before launching a fan-out |
 | [`docs/perf-next-round.md`](docs/perf-next-round.md) | perf fence, dead ends, hygiene, the reopening rule | before any perf work |

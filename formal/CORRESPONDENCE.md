@@ -348,7 +348,7 @@ since the citations were stamped and was rewritten again on 2026-07-26.
 | `GraphIndex/Cascade.lean::affectedKeys` (**two branches**) | delta → dirty derived keys | `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` — the `isinstance(fam, LeafFamily)` own-key branch (with its `raise InvariantViolation` on a wildcard-object delta) — and `::DeltaProcessor._fan_out`'s `edge.via == 'computed'` arm. **Models 2 of ~6 Python channels — see §7** |
 | `GraphIndex/State.lean::Delta.leaf` | the outbox row's LeafFamily-vs-DerivedFamily provenance | in Python the family type `self.compiled.namespace.get((o_type, o_pred))` decides the branch inside `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` — there is no stored provenance column; the Lean tag is a modeling device for a collapsed state space |
 | `GraphIndex/Cascade.lean::GraphState.frontierRows`, `GraphIndex/CascadeStrata.lean::GraphState.frontierRowsAbove` / `::GraphState.frontierMax` | per-round outbox read + cursor | `index_v4/processor.py::DeltaProcessor._run_cascade` (`rows = outbox_rows(...)`, then `frontier_start = max((r.id for r in rows), default=frontier_start)`), reading `index_v4/outbox.py::outbox_rows` |
-| `GraphIndex/CascadeStrata.lean::runCascade2` (two rounds + quiescence check; reject branch) | the in-transaction cascade | `index_v4/processor.py::DeltaProcessor.run_cascade` (a thin `idx._node_cache_scope()` wrapper) → `::DeltaProcessor._run_cascade` (`rounds = len(self.compiled.strata)`; leftover ⇒ `raise InvariantViolation`) |
+| `GraphIndex/CascadeStrata.lean::runCascade2` (two rounds + quiescence check; reject branch) | the in-transaction cascade | `index_v4/processor.py::DeltaProcessor.run_cascade` (a thin wrapper installing TWO perf caches — `idx._node_cache_scope()` (N15) and `::DeltaProcessor._stored_cache_scope` (R6-10); neither is part of the modeled algorithm) → `::DeltaProcessor._run_cascade` (`rounds = len(self.compiled.strata)`; leftover ⇒ `raise InvariantViolation`) |
 | **T5** `GraphIndex/CascadeStrata.lean::runCascade2_no_abort` / `::cascade2_drains` | — the abort is dead code at ≤2 strata | `index_v4/processor.py::DeltaProcessor._run_cascade`'s leftover raise. **The Lean abort condition is STRICTLY WEAKER than Python's — see the `_bumped` entry in §7** |
 | `GraphIndex/CascadeStrataAssemble.lean::enumJobs2R1` / `::enumJobs2R2` | per-round key enumeration off the state | `index_v4/processor.py::DeltaProcessor._run_cascade`'s per-round `::DeltaProcessor._map_deltas_to_keys` + the `stratum_of` sort |
 | `GraphIndex/CascadeStrataEnum.lean::storedDirectSubjects` (**star-filtered 2026-07-28**) | the Direct-arm audit candidates read from the FIXED store, wildcard subjects excluded | `index_v4/processor.py::DeltaProcessor._incoming_concretes` (`return [n for n in nodes if n.wildcard == '']`) and the `n.wildcard != ''` skip in `::DeltaProcessor._reconcile`'s `upos` loop. Lean already mirrored this in `GraphIndex/CascadeEnum.lean::leafConcretes` (`u.name != STAR`); `storedDirectSubjects` was the outlier until leg 1 of the E-chain arc. **Consumed by the operational E-chain since leg 2 (2026-08-04)** — `enumJobs2At` runs `enumJob2D`; see `history/echain-widening-plan-2026-07-28.md` |
@@ -360,9 +360,9 @@ since the citations were stamped and was rewritten again on 2026-07-26.
 
 | previously cited | now |
 |---|---|
-| `processor.py` `reconcile` | `DeltaProcessor._reconcile` — the public `DeltaProcessor.reconcile` survives as a two-line `with self._residue_cache_scope():` wrapper |
-| `processor.py` `reconcile_subject` | `DeltaProcessor._reconcile_subject` — likewise, `index_v4/processor.py::DeltaProcessor.reconcile_subject` is now the cache-scope wrapper |
-| `processor.py` `run_cascade` | `DeltaProcessor._run_cascade` — `index_v4/processor.py::DeltaProcessor.run_cascade` is now the `_node_cache_scope()` wrapper (perf N15) |
+| `processor.py` `reconcile` | `DeltaProcessor._reconcile` — the public `DeltaProcessor.reconcile` survives as a two-line `with self._residue_cache_scope(), self._stored_cache_scope():` wrapper (perf P3 + R6-10) |
+| `processor.py` `reconcile_subject` | `DeltaProcessor._reconcile_subject` — likewise, `index_v4/processor.py::DeltaProcessor.reconcile_subject` is now the cache-scope wrapper (both scopes) |
+| `processor.py` `run_cascade` | `DeltaProcessor._run_cascade` — `index_v4/processor.py::DeltaProcessor.run_cascade` is now the cache-scope wrapper: `_node_cache_scope()` (perf N15) plus `::DeltaProcessor._stored_cache_scope` (perf R6-10, 2026-08-20) |
 | `processor.py:135` `__init__` `subject_shapes` | `DeltaProcessor.__init__` (the whole ctor moved) |
 | `processor.py:58-62` `leaf_stars` | `_EvalContext.leaf_stars` |
 | `processor.py:989-1027` `_map_deltas_to_keys` | `DeltaProcessor._map_deltas_to_keys` (still that name; the range now spans other code) |
@@ -963,7 +963,18 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `index_v4/core.py::ReachabilityIndex.remove_node` / `::ReachabilityIndex._evict_node`. Lean
   states the opposite explicitly — `ReconcileDiff.lean` and `Cascade.lean` both
   say *"node GC is a modeled-away optimization"*. `ZT-P0-1` was a bug **inside
-  this unmodeled region**.
+  this unmodeled region**, and so was `BL-1` (the released-userset bridge leak,
+  found by the hypothesis campaign 2026-08-20 and fixed 2026-08-21 — a call
+  ORDER between two of the functions listed above, `_gc_subject_node` stripping
+  bridges before `_demote_released_node` made the strip's guard satisfiable).
+  **Two named bugs have now landed inside this one unmodeled region** (no claim
+  is made about the repo-wide rate), and both turned on the same few lines:
+  `ZT-P0-1` made `_gc_subject_node`'s guard stop protecting recorded nodes (an
+  authorization escalation, found by review), `BL-1` made that function's bridge
+  strip unsatisfiable by calling it too early (a state leak, found by fuzzing —
+  `tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`, not by
+  any unit pin). Note the second was caught by the differential net and the first
+  was not; what neither had was a model.
 * **The `Interner` / int32 id-recycling layer.** `setengine/engine.py::Interner`
   (`::Interner.acquire`, `::Interner.release`, `::Interner.get`, `::Interner.key`) with `::NodeSets`. Ids are
   recycled int32; the stable surrogate is the `(type, name, predicate)` key. The

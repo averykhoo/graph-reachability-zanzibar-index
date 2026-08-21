@@ -144,6 +144,119 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Applied
 
+- ✅ **R6-10 — stop re-enumerating stored tupleset/userset tuples per candidate
+  (`index_v4/processor.py`), 2026-08-20, behavior-preserving.** The round-6 headline:
+  `benchmarks/results/R6_PROFILE_2026-08-17.md` §9 measured
+  `::DeltaProcessor._stored_tupleset_subjects` at **16,690 calls / 59.8% cumulative**
+  of incremental boolean write+cascade time. Landed as **two independently reviewable
+  steps**, measured separately so each step's share is attributable.
+  - **Step A — call-site dedup, no cache.** `::_EvalContext.ttu_check` called
+    `tupleset_star_types(...)` and then `tupleset_parents(...)` with IDENTICAL
+    arguments; each bottomed out in its own full `_stored_tupleset_subjects` pass, so
+    the pair issued **4 SQL statements where 2 suffice**. Same in `::ttu_stars`, and in
+    the `derived_stored_parents`/`derived_stored_star_types` pair behind
+    `::tupleset_ttu_check` / `::tupleset_ttu_stars`. Now one read, both halves derived
+    locally (`::DeltaProcessor._expand_tupleset_parents`,
+    `::DeltaProcessor._derived_stored_split` + `_split_parents`/`_split_star_types`).
+    The four public names are **kept as wrappers** — they are `CORRESPONDENCE.md`
+    anchors and `verify.sh lean` resolves them. Star expansion stays LAZY: the RC2 star
+    arm still short-circuits before `_instances_of_type`.
+  - **Step B — a cascade/reconcile-scoped memo.** Tri-state `_stored_cache` +
+    REENTRANT `::DeltaProcessor._stored_cache_scope`, modelled on
+    `::DeltaProcessor._residue_cache_scope` (P3) and `ReachabilityIndex._node_cache_scope`
+    (N15). Memoized **only** inside `_stored_tupleset_subjects` and
+    `stored_userset_subjects`; installed in `run_cascade` / `reconcile` /
+    `reconcile_subject`, and **deliberately NOT** in `connectedstore/apply.py::advance_index`
+    (whose scope spans the raw-write apply loop). The constancy premise is in the
+    scope's docstring; it is the correctness argument, not a comment.
+  - **Decomposition first, per `docs/perf-next-round.md` hygiene** — the 59.8% is a
+    CUMULATIVE share and quoting it as the win is the trap that took R6-19 from 25.4%
+    cum to 2.0% self. Baseline split of what sits UNDER it: `_direct_incoming` (EdgeV4
+    SELECT) **28.4%**, `_nodes_by_ids` (NodeV4 IN SELECT) **30.7%**, remainder `_node`,
+    already amortized by the N15 cache. So the eliminable part is the two SELECTs, and
+    only for the redundant calls.
+    ⚠ Do NOT read that as `28.4 + 30.7 = 59.1 ≈ 59.8`. The sum-to-59.1 is a
+    COINCIDENCE, not arithmetic: `_direct_incoming` is called only by the two memoized
+    readers, but `_nodes_by_ids` has four other call sites in `index_v4/processor.py`,
+    and its call count exceeds `_stored_tupleset_subjects`' by 450 at HEAD
+    (17,140 vs 16,690) and by 450 after (540 vs 90). Part of that 30.7% therefore lies
+    OUTSIDE the 59.8%, and the two shares do not decompose it exactly. The `28.4%` half
+    is sound; the headline (statement count and unprofiled wall) does not depend on
+    either.
+  - **Measured** (`python -m benchmarks.profile_r6_write --target cascade
+    --bool-scale 30 --incr 30`, run alone, demorgans_law_2, 615-tuple bootstrap then 30
+    incremental write + `run_cascade` + commit cycles):
+
+    | | HEAD | +A | +A+B |
+    |---|---|---|---|
+    | `_stored_tupleset_subjects` calls | 16,690 | 8,480 | 8,480 |
+    | ...cum share of the profiled cascade | 59.8% | 43.3% | **1.5%** |
+    | `_direct_incoming` calls (EdgeV4 SELECT) | 16,690 | 8,480 | **90** |
+    | `_nodes_by_ids` calls (NodeV4 IN SELECT) | 17,140 | 8,930 | **540** |
+    | **SQL statements / cycle** | 1,929.0 | 1,381.6 | **822.3** (−57.4%) |
+    |   ...`edge_v4` / `node_v4` per cycle | 1,258.7 / 643.3 | 985.0 / 369.6 | 705.4 / **89.9** (−86%) |
+    | **UNPROFILED wall** (30 cycles) | 27.166 s | 19.634 s | **10.685 s** |
+    |   ...ms/cycle | 905.5 | 654.5 | **356.2** (−60.7%, **2.54×**) |
+    | memo hits / misses | — | — | 8,390 / 90 (98.9%) |
+
+    The statement count is the metric that transfers: in-memory SQLite makes a round
+    trip microseconds, and on PostgreSQL each eliminated statement is one RTT. The memo
+    shape came out exactly as predicted — **misses (90) == distinct keys (3) × cascades
+    (30)**, i.e. O(subjects × leaves) → O(leaves).
+  - **Instrument corrections carried** (`docs/sabotage-procedure.md` §"A MEASUREMENT is
+    an assurance step too"). `benchmarks/profile_r6_write.py::target_cascade` now
+    **asserts** rather than prints: non-vacuity (`_stored_tupleset_subjects` calls > 0
+    and cascade reconciles > 0 — the probe locates rows by FUNCTION NAME, so an inlined
+    or renamed function would otherwise print a beautiful 0.0% win that is pure
+    artifact), that its monkeypatch of `DeltaProcessor.reconcile_subject` was restored,
+    and it adds a `StmtCounter`, memo hit/miss/distinct-key counters, and an UNPROFILED
+    wall-clock pass on a fresh store. It also **asserts the memo's own counters** —
+    `scopes > 0`, `hits > 0`, and `scopes == nwrites` (2026-08-20, after review found
+    them printed-but-unchecked). The last is the load-bearing one and it is DERIVED,
+    not tuned: one `run_cascade` per write, and `scopes` counts outermost installs.
+    Sabotage of the instrument, `--bool-scale 12 --incr 8`: scope no-op'd everywhere →
+    `INSTRUMENT BROKEN: _stored_cache_scope was entered 0 times` (RED); scope dropped
+    from `run_cascade` only → `hits > 0` does **not** fire (the nested reconcile scopes
+    still serve `1,152 hits / 30 misses`), `scopes == nwrites` does:
+    `INSTRUMENT BROKEN: 38 outermost stored-cache scopes for 8 cascades` (RED).
+    ⚠ Two scope notes on the numbers: `_instances_of_type: 0 calls` — demorgans stores
+    no `T:*` tupleset parent, so the RC2 star arm is **unmeasured here**; and
+    `stored_userset_subjects: 0 calls` — **half the change is invisible to this
+    workload entirely.** Neither can be defended by any benchmark (see the pins below).
+  - **Sabotage** (6 runs, literal output in
+    `tests/test_stored_cache_scope.py`'s module docstring; all applied by `-p` plugin
+    monkeypatch, baseline `36 passed in 4.24s` over `test_stored_cache_scope` +
+    `test_processor` + `test_ttu_tupleset_parent_types`): delete the scope teardown →
+    `10 failed, 26 passed`, including two pre-existing authorization reds in
+    `tests/test_processor.py`, one over-grant and one under-grant; memoize
+    `tupleset_parents` → `1 failed, 35 passed`; memoize `derived_stored_parents` →
+    `1 failed, 35 passed`; drop the scope's outer flag → `2 failed, 34 passed`;
+    share the cached list on the tupleset half → `1 failed, 35 passed`.
+    ★ **S4 — the same weakening on the USERSET half — came back GREEN (`36 passed`),**
+    a coverage verdict with its own control (the tupleset twin reddens). The pin
+    `test_memoized_results_are_not_shared_mutable_state` now drives both readers and
+    S4 re-runs `1 failed, 35 passed`.
+    ★ Under both star sabotages `tests/test_ttu_tupleset_parent_types.py` (**12** tests,
+    collected — an earlier draft said 26, which was a misread pytest summary line) and
+    `tests/test_matrix.py` (12) stayed **fully green** — `24 passed in 59.42s` with both
+    widenings active — so `test_star_expansion_is_not_frozen_by_the_memo` is the sole
+    evidence for that property.
+  - **Lean: none.** A result-identical memo; the probe-key set, candidate set, cascade
+    order and closure/residue update are all unchanged, and caching is outside the
+    modeled algorithm (same argument as P3 and N15). `CORRESPONDENCE.md` §5's
+    `runCascade2` row and its rename-ledger rows were updated — the "a thin
+    `idx._node_cache_scope()` wrapper" prose became false once a second scope landed.
+    Anchors: `anchor_check.py` → **`526 parsed, 526 resolved`** (up from 524 at HEAD).
+    ⚠ The +2 is the point. The first draft wrote the two new citations as
+    `` `::DeltaProcessor._stored_cache_scope()` `` — with parens — which
+    `anchor_check.py::BARE_RE` (`` `::(?P<sym>[A-Za-z_][A-Za-z0-9_.']*)` ``, closing
+    backtick immediately after the symbol) does not match. They parsed as prose, the
+    count stayed at HEAD's `524 parsed, 524 resolved`, and that unchanged number was
+    quoted here as evidence the anchors resolved. Verified after the fix by renaming
+    the anchored symbol in the doc: `FAIL: 2 CORRESPONDENCE.md anchor(s) no longer
+    resolve` (rc=1). **A citation count that does not go UP is evidence a citation was
+    not added.**
+
 - ✅ **N12 — cache the frozen sub-patterns in `RelationalTriplePattern`
   (`zanzibar_utils_v1.py`), 2026-07-16, behavior-preserving.** The `.subject` /
   `.object` `@property`s rebuilt a fresh frozen `EntityPattern` on every

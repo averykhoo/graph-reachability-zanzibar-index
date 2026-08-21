@@ -1,12 +1,175 @@
-# Spec deviations log — graph-boolean-ivm-spec.md
+# Spec deviations log — the dated divergence ledger
 
-Per spec §0: dated entries recording where implementation diverges from the spec's
-*adaptable* prescriptions (concrete names, signatures, layouts, mechanisms marked
-*(adapt)*), and P0 recon findings where the spec's repo-facts differ from repo reality.
-Frozen items (§0 list) are never logged here — a frozen conflict stops the work and goes
-to the user instead.
+**LIVING — append-only.** Every entry is true *as of its date key* and is never rewritten;
+a later entry, or a dated `>` blockquote appended inside the entry, names what it refutes
+(`docs/README.md` §6). The `## YYYY-MM-DD[letter]` keys are stable citation targets cited
+from code, tests, `formal/` and both boards — **keep them byte-stable.**
+
+Opened per `docs/specs/graph-boolean-ivm-spec.md` §0, whose charter — *"append a dated
+entry to `docs/spec-deviations.md` saying what changed and why"* — this file still keeps.
+It has since outgrown that scope: it also carries connected-store, wildcard-spec,
+zero-trust, incident and user-adjudication entries. What belongs here is a dated record of
+where an implementation diverged from a spec's *adaptable* prescriptions (concrete names,
+signatures, layouts, mechanisms marked *(adapt)*), plus P0 recon findings where a spec's
+repo-facts differ from repo reality. Frozen items (§0 list) are never logged here — a
+frozen conflict stops the work and goes to the user instead.
+
+⚠ **This file does not answer "is it still open."** A dated entry is written in the present
+tense of its own day and cannot be trusted for live status — several below say "NOT FIXED
+here" about things fixed hours later. **What is still latent today lives in
+[`latent-gaps.md`](latent-gaps.md)**, which has replace semantics; ranking lives on the
+[`HANDOFF.md`](../HANDOFF.md) board. Split out 2026-08-20 (row `HS-2`).
+
+**Ordering, so an append lands in the right place:** the first seven entries are
+newest-first (2026-08-14 … 2026-07-29); the file then restarts at `## 2026-07-07` and runs
+**oldest-first** to `## 2026-07-28` at EOF. New entries go at the TOP.
 
 ---
+
+## 2026-08-21 — the released-userset bridge leak is FIXED: the release path demotes before it strips
+
+Closes the divergence filed by `## 2026-08-20b` below, which characterized and pinned but
+deliberately did not fix. Board row `BL-1`; the gate is green again.
+
+**The fix, one reordering.** `index_v4/processor.py::DeltaProcessor._gc_subject_node` now
+calls `::DeltaProcessor._demote_released_node` **before**
+`index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges`, instead of after. The strip
+guard is `fresh.implicit and fresh.reference_count == degree`, and a released userset
+subject is still EXPLICIT at that point (the add-cascade's step-2d promotion; traced at the
+filing tree as `implicit=False, rc=1`) — so the strip-first order was a **guaranteed no-op
+on exactly the path that needed it**, and no path re-checked once the demote landed.
+
+**Why not the other fix.** Relaxing the `implicit` guard is what the shape of the bug
+suggests and it is wrong: that guard is how `index_v4/core.py::ReachabilityIndex.remove_node`'s
+policy — *"explicit nodes keep bridges for as long as they exist"* — is implemented. The
+2026-08-20b entry already called this out; it is repeated here because the wrong fix is the
+reachable one.
+
+**The two orders are otherwise identical**, which is what makes this the narrow fix rather
+than a behaviour change: when the node is already implicit the demote returns immediately
+(`if n.implicit: return`), and when a canonical explicit-reason still holds the node stays
+explicit and the strip no-ops exactly as before. The only divergent case is the one that
+leaked. The `reference_count == 0` branch is unchanged in effect (it now runs after the
+strip rather than in an `else`, and `_maybe_remove_bridges` no-ops at `rc == 0`).
+
+**Sabotage record** (`docs/sabotage-procedure.md`; the narrowest *plausible* weakening is a
+later reader tidying the two calls back into their original order, not a deleted teardown).
+With the order swapped and every other part of the fix intact:
+
+```
+FAILED tests/test_userset_bridge_release_leak.py::test_released_userset_subject_add_remove_restores_rows
+FAILED tests/test_userset_bridge_release_leak.py::test_released_userset_subject_lookup_is_empty_after_drain
+2 failed in 0.37s
+```
+
+and restored: `2 passed in 0.30s`. The pins therefore pin the ORDER, which is the property
+that was broken. Recorded in the test module's docstring as well as here.
+
+**Verified:** the ten-phase gate is green on the fixed tree (`python scripts/gate_status.py`
+→ `VERDICT: the ten-phase gate is COVERED on this tree`; `tests/` collected **915**, zero
+`xfailed`, zero `skipped`), plus a 3-seed fuzz sweep on both hypothesis files —
+`tests/test_hypothesis.py` `30 passed` at seeds 7/19/31 (81.6 / 84.7 / 87.7 s, i.e. the
+durations differ, which is the runbook's tell that the seeds actually varied) and
+`tests/test_lookup_hypothesis.py` `17 passed` at the same three.
+
+**No Lean change owed, and this is recorded rather than assumed.** `_gc_subject_node` /
+`_demote_released_node` have never had a Lean counterpart — `formal/CORRESPONDENCE.md`
+§8.1 lists them under *"Node GC + flag lifecycle AS AN ALGORITHM"*, and `ReconcileDiff.lean`
+and `Cascade.lean` both say node GC is a modeled-away optimization. `BL-1` is the **second**
+bug found inside that unmodeled region (`ZT-P0-1` was the first); that bullet now says so.
+
+## 2026-08-20b — released userset subjects leak their `w_any` bridge: add-then-remove does not restore the row multiset. FILED NOT FIXED here.
+
+**Found by** the hypothesis campaign,
+`tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`, reproducing at a
+clean HEAD (separate worktree, same `.hypothesis` example DB) — pre-existing, not
+session-local. The cached counterexample is gitignored evidence, so the durable pin is the
+new deterministic file below.
+
+**Counterexample verbatim** (generated schema AST; draw 1 = `[]`, draw 2 = the tuple):
+
+```
+('doc','parent'): Exclusion(base=Direct([Restriction(type='doc', predicate='...', wildcard=True)]),
+                            subtract=Direct([Restriction(type='folder', predicate='...', wildcard=False)]))
+('doc','r0'):     Direct([Restriction(type='user', predicate='...', wildcard=True)])
+('doc','r1'):     Union([TTU(target_rel='r0', tupleset_rel='parent'),
+                         Direct([Restriction(type='doc', predicate='r0', wildcard=False)])])
+('doc','r2'):     Computed(relation='r0')
+('doc','r3'):     Computed(relation='r0')
+('folder','r0'):  Direct([Restriction(type='user', predicate='...', wildcard=False)])
+```
+
+From an EMPTY store, add then remove `('r0','doc','d1','r1','doc','d1')`. The
+`snapshot_rows` delta that should be empty (node rows are
+`(predicate, type, name, wildcard, implicit, reference_count)`):
+
+```
+nodes leaked : [(('r0', 'doc', '*', 'any', True, 1), 1), (('r0', 'doc', 'd1', '', True, 1), 1)]
+edges leaked : [((('r0', 'doc', 'd1', ''), ('r0', 'doc', '*', 'any'), 1, 1), 1)]
+```
+
+**Severity: STATE-ONLY, probed not inferred (2026-08-20).** Store A (add-then-remove) vs
+store B (never added) vs `tests/oracle.py`, full candidate grid, both backends, all four
+read surfaces: the 255-query `check` grid reported **0 disagreements**; the full
+lookup-surface oracle battery (`test_lookup_oracle` checkers G1–G4/S1–S4) reported
+`ALL SURFACES AGREE WITH ORACLE` on both stores. **Not an authorization fail-open — no
+(subject, relation, object) is over- or under-granted.** The single observable trace is a
+raw-surface artifact: `graph.lookup('r0','doc','d1')` returns markers
+`[('doc', 'r0', 'any')]` on A where B returns `[]` — a forward variant-`any` marker,
+which `test_lookup_oracle.py` (G3 note) documents as a bridge-topology artifact carrying
+no pointwise claim. The real damage is the invariant violation itself: unbounded
+node/edge growth under add/remove churn of userset-subject tuples, and I11/I12-style
+state comparisons (rebuild parity, permutation invariance) poisoned on any store that
+ever churned one.
+
+**Minimal repro** (each listed feature measured load-bearing by dropping it singly;
+wildcard on the target relation, the self-reference, `Union`-vs-single-arm hosting, and
+the `r2`/`r3`/`folder` relations are all NOT load-bearing — and `Intersection` taint
+leaks identically, so it is "derived", not "Exclusion", that matters):
+
+```
+type doc
+  relations
+    define parent: [doc:*] but not [doc]     # derived tupleset WITH an object-star arm
+    define r0: [user]
+    define r1: r0 from parent or [doc#r0]    # TTU over it + the userset arm
+```
+
+add then remove `('r0','doc','d1','r1','doc','d1')` (non-self `…,'r1','doc','d2'` leaks
+the same rows).
+
+**Located: the teardown is order-broken, asymmetric with its setup.** Setup: the derived
+star tupleset puts the TTU target shape `(doc, r0)` in
+`SchemaInfo.bridged_in_shapes`, so the raw leaf write bridges its subject —
+`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` → `_ensure_bridges` →
+`_ensure_own_bridges` writes `doc:d1#r0 -> w_any(doc, r0)`; the add-cascade records the
+subject in the object's residue `upos` and step 2d promotes it EXPLICIT. Teardown, traced
+at the filing tree:
+
+* `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` calls
+  `_maybe_remove_bridges(subject)` after the leaf-edge removal, but the cascade has not
+  run yet, the node is still explicit (state at call: `implicit=False, rc=1`), and the
+  strip guard `fresh.implicit and fresh.reference_count == degree` refuses explicit
+  nodes → no-op.
+* **`index_v4/processor.py::DeltaProcessor._gc_subject_node`** then drops the recording
+  and calls `widx._maybe_remove_bridges(n)` — but **BEFORE**
+  `_demote_released_node(n)` flips the node back to implicit (still
+  `implicit=False, rc=1` at call time) → no-op again; the demote then lands and **no
+  path re-checks the bridges after it**. Result: an implicit bridge-only node whose
+  refcount equals its bridge degree — exactly the state `_maybe_remove_bridges` exists
+  to strip — plus the `w_any` node it alone keeps alive. (`remove_node`'s docstring rule
+  "explicit nodes keep bridges for as long as they exist" is honoured by both callers;
+  what is missing is the strip on the release path *after* the demote.) NOT FIXED here —
+  this entry characterizes and pins only.
+
+**Pinned deterministically:** `tests/test_userset_bridge_release_leak.py` —
+`test_released_userset_subject_add_remove_restores_rows` (row-multiset restoration) and
+`test_released_userset_subject_lookup_is_empty_after_drain` (the spurious marker). Both
+are POSITIVE pins per CLAUDE.md (no xfail — an xfail is a failure that passes; no skip —
+`verify.sh` counts a skip red anyway while hiding the signal), so **the gate is RED until
+the fix lands**, deliberately. Not entered in `latent-gaps.md`: the step-1 probe verdict
+is state-only (no live fail-open), and with a permanently red deterministic pin the bug
+is not *latent* — the failing test is the live tracker until the fix lands.
 
 ## 2026-08-14 — the `_any_residue_reference` / `_keys_referencing` scan is FIXED: `ResidueRefV1`, the index `ZT-P0-1` prescribed
 
@@ -221,7 +384,7 @@ NEGATIVE under a positive TTU and a false POSITIVE under a negated one. Probing 
 positive direction mis-classifies severity by exactly one sign — which is what happened
 here, and what the original entry below recorded.
 
-⚠ **NOT claimed:** the 2026-08-09 sibling (below, `:83`) carries identical "it fails closed,
+⚠ **NOT claimed:** the 2026-08-09 sibling (the `## 2026-08-09` entry below) carries identical "it fails closed,
 so it is not a security fail-open" wording and the rule predicts it inverts too. It was
 **not re-tested** — that bug is fixed (`c042056`) and testing would mean reverting. Open
 question, not a finding. Do not propagate the prediction into that entry as measured fact.
@@ -513,9 +676,9 @@ is a sample, not a proof, and nothing in the gate says so.*
 
 | item | where | why it does not cover this |
 |---|---|---|
-| **F1** (graph-incomplete OWC check divergence) | `:1320`, CLOSED `:1336` | a *doubly-bridged* topology, rejected at compile time by `DoublyBridgedShapeError`; this schema compiles fine |
-| "all -> any is NOT read semantics, no completeness fix warranted" | `:1360-1367` | decided on an **oracle-False** probe (no concrete in the universe). Here the oracle is **True** because `folder:f1` is in the universe, so it adjudicates the vacuous variant only |
-| `ZT-P5` bullet 2 / "Target 3", object wildcards at state level | `:2292`, `HANDOFF.md` | ran this exact fixture, but only for live-vs-rebuild / order / restoration — **never against oracle answers**, so a check-level under-report was invisible to it |
+| **F1** (graph-incomplete OWC check divergence) | filed in the `## 2026-07-16 — star-bridge fuzzer generator + out-bridge regression (reg11)` entry (there are two `2026-07-16` entries; not the bridge-aware-admission one), CLOSED by the `## 2026-07-17 — F1/F2 CLOSED` entry | a *doubly-bridged* topology, rejected at compile time by `DoublyBridgedShapeError`; this schema compiles fine |
+| "all -> any is NOT read semantics, no completeness fix warranted" | `## 2026-07-17 — F1/F2 CLOSED` §"(b)" | decided on an **oracle-False** probe (no concrete in the universe). Here the oracle is **True** because `folder:f1` is in the universe, so it adjudicates the vacuous variant only |
+| `ZT-P5` bullet 2 / "Target 3", object wildcards at state level | the `## 2026-07-26 — ZT-P5` entry §"Target 3" (live status: [`latent-gaps.md`](latent-gaps.md) "Target 3") | ran this exact fixture, but only for live-vs-rebuild / order / restoration — **never against oracle answers**, so a check-level under-report was invisible to it |
 | "zero check-level divergence observed on the object-wildcard corpus" | `formal/FINAL_REVIEW.md` §3.1, `formal/CORRESPONDENCE.md` §7.3 | that corpus (`formal/conformance/corpus.py::SCHEMAS`) is one type, `define viewer: [user]`, one tuple — no TTU, no star tupleset. The sentence is flagged in situ as a hypothesis; this is the first evidence against it |
 | `test_reg5_triple_combo_star_parent_cross_no_concrete` | `tests/test_lookup_oracle.py::test_reg5_triple_combo_star_parent_cross_no_concrete` | pins the **set engine** on the structural case; the graph is never constructed there |
 
@@ -2741,6 +2904,19 @@ type folder
   class, so it needs a carve-out that is not the current one), or make the graph's
   cycle check see the `w_any -> w_all` edge as the latent cycle it is.
 
+> **FIXED 2026-07-26, later the same day** — correction appended 2026-08-20 (row `HS-2`),
+> because for three weeks this bullet was the only thing a reader of this entry saw and it
+> says "NOT FIXED". The second candidate direction is what landed:
+> `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge` refuses the routed
+> `w_any(T,p) → w_all(T,p)` edge at WRITE time when the shape is in
+> `bridged_in ∩ bridged_out` — see the `## 2026-07-17 — F1/F2 CLOSED` entry, whose
+> "Precision of the criterion" paragraph carries the design and the reason it is not a
+> compile-time rejection. The strict xfail this bullet left behind, the over-rejection
+> worry and the generator blind spot named below are all pinned now; the pin names are
+> listed once, in [`latent-gaps.md`](latent-gaps.md)'s "Closed" section, which is also
+> this entry's live latent status. They are deliberately NOT copied here — a test rename
+> would rot a copy in an append-only file that cannot be edited to fix it.
+
 ### Target 1 — reg11's "the multi-hop out-bridge generalization is unreachable": **DISPROVED**
 
 reg11 argued: *"Any derived edge INTO `w_all(T,p)` is minted by a
@@ -2843,15 +3019,15 @@ objects), so the state extractor has never been pointed at it. Until that runs,
 the §3/§6 sentence should be read as *"no Python-side state divergence observed
 (bounded)"*, not as *"no state divergence"*.
 
-**Disposition (board row `LT-1`, HOLD).** Target 2 and Target 3 above are the only
-genuinely-live latent residues left in this inventory. **Do not chase them speculatively —
-act if a real schema or corpus surfaces one.** Completion criterion if reopened: Target 2
-needs a bounded search over more than two strata **and** intersection-rooted grant
-relations (the 400-trial sweep covered neither); Target 3 needs the LEAN half, which
-cannot be settled from the Python side at all. ⚠ Target 3's inference class — "fragment
-exclusions are proof-scope, not observed divergence", argued from check-level evidence — is
-**the exact inference that failed at state level on 2026-07-17**; do not re-derive comfort
-from it.
+**Disposition → [`latent-gaps.md`](latent-gaps.md) "Target 2" / "Target 3"** (moved there
+2026-08-20, row `HS-2`). The `Target 2` / `Target 3` citation keys are carried over
+verbatim as section titles there; the rest of each title is re-scoped to the still-open
+half, so the two files' headings are NOT byte-identical and only the key travels. The
+disposition — whether they are still open, what would close them, and the standing "do not
+chase speculatively" instruction — is *rewritable* status, and a dated ledger entry is the
+one place it must not live. What stays here is the 2026-07-26 evidence above. Everything
+else in this ZT-P5 entry is closed; the closures are listed in `latent-gaps.md`'s "Closed"
+section so nothing here has to be re-adjudicated from its tense.
 
 ### Target 4 — the `group_userset` enum exclusion: **CONFIRMED CORRECT** (the backends agree)
 
@@ -3097,6 +3273,12 @@ counted before anything is materialised, so a rejection leaves no partial state.
    rejection, so the surface is narrower than the finding read).
 4. **`_any_residue_reference`'s complete `ResidueV1` scan is still unbenchmarked**, and
    it is now unconditional on every node-release path after the `ZT-P0-1` fix.
+
+> **Live status of these four → [`latent-gaps.md`](latent-gaps.md)** (correction appended
+> 2026-08-20, row `HS-2`). As of that date only item **2** is still open, and it is
+> Lean-only — item 2 already carries its own scope correction in situ above, and
+> the adjudications that closed items 1, 3 and 4 are listed once in `latent-gaps.md`'s
+> "Closed" section rather than restated here.
 
 ### Two findings that only appeared because a fix forced an audit
 

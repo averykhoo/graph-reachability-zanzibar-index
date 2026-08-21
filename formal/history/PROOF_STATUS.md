@@ -15,6 +15,240 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-20b (**THE 4c-ii ADJUDICATION IS SETTLED: the `UntaintedShadow` weakening is SOUND (no-kill at all six witnesses, both chains), Route B is recommended over the newly-surfaced Route C on a cone argument, the scout's proposition (★) is REFUTED as stated on the `_d` chain and corrected to (★′), the P14 slice is Half-1-only, and the candidate set does NOT starve. One additive zero-cone Lean module; nothing existing changed meaning.**)
+
+**Task taken:** settle the proof-design adjudication `P3` has been blocked on since
+2026-08-16c — is weakening `CascadeStable.lean::UntaintedShadow` sound, and how big a
+slice of `P14` is it — WITHOUT starting the 4c-ii implementation. Method: the `#eval`
+battery scouted in `.scratch/scout-p3.md`, run per `docs/sabotage-procedure.md`
+(instrument proved AND controlled, all five tainted witnesses + the untainted control,
+BOTH admission chains), then pinned as `by decide` theorems in a new additive module
+`GraphIndex/Scratch4cii.lean` (imported by the root aggregator, so the gate re-checks
+the battery on every build). Baseline and final `verify.sh lean` both green.
+
+### 1. ★★ THE WEAKENING IS SOUND — no-kill at every witness, and the instrument was controlled first
+
+All three clauses of the adjudicating proposition held at `SlV`/`SlSw`/`SlStP`/`SlA`/
+`SlN` (untainted-arm writes, narrow chain), with the literal outputs in the module's
+`## Observed outputs` block:
+
+* **clause 1 (monotone)** `mono=true` everywhere — no edge today's `writeRules`
+  produces is lost by `writeRulesRaw`;
+* **clause 2 (extras leaf-targeted)** `extrasLeaf=true`, non-vacuous (`n=1` per write;
+  the 2-write chain probe at `SlV` gave `n=2`) — every σ-only extra targets a
+  `publicOfLeaf`-carrying node, NEVER a declared R-node;
+* **clause 3 (leaf terminality)** `noLeafSources=true` everywhere, and the schema-wide
+  twin `noLeafMatch=true` — no rule READS a leaf predicate, including at `SlStP`, the
+  only witness whose `.ttu` arm could have minted a leaf SUBJECT predicate (observed:
+  the minted subject predicate is the declared `"viewer"`).
+* **Instrument controls, run BEFORE the subject was believed:** the clause-2 probe
+  under `derNodeB` alone came back **`false`** at `SlV` (`CONTROL SlV: extrasDer=false`)
+  — the leaf disjunct is load-bearing, the probe is not always-true. `derNodeB` itself
+  is PROVED, not spot-checked (`Scratch4cii.lean::derNodeB_correct`,
+  `derNodeB S k = true ↔ DerNode S k`); the scout's draft mirror omitted the
+  `variant == .plain` conjunct, which the proof forced back in. Negative control:
+  `SlUnt` gave `n=0` with the battery green under BOTH instruments, explained
+  independently by `lrUnt_no_leaf_rules`/`lrUnt_subsumed`.
+* **Two in-place sabotages, both restored, reds attributable:** (Sa) carrier inverted
+  to `isLeafPred` → NINE reds, all on `noLeafSources`/`bare_subject_not_leafNode` —
+  the BARE sentinel biting, nothing else; (Sb) `leafRewrites` dropped from
+  `schemaRewritesL` → `LeafRules.lean:452/:463` red (`lrV_closure_reaches_leaf`,
+  `lrV_writeRulesRaw_edges_ne`) with `lrUnt_subsumed` green.
+
+**⚠ A green battery is NO-KILL, not a theorem.** (★′) is quantified over all
+`WF`/`StoreValid*` stores; six schemas with ≤2 writes each do not establish it. The
+general clauses are owed in the 4c-ii cone; the pins are regression floors, not the
+proof.
+
+### 2. ★ THE SCOUT'S (★) IS REFUTED AS STATED — the `_d` chain is non-monotone, and that kills neither route
+
+Pinned (`Scratch4cii.lean::slSwD_not_mono`): at the derived-key Direct-arm write
+`user:alice#approver@doc:d1` on `LeafWitness.Sw`, `mono=false` — today's `writeRules`
+keeps its closure seed and writes the PUBLIC R-node edge, which `writeRulesRaw` does
+not produce (it routes to `approver.0`). So "(σ.writeRules S t).edges ⊆
+(σ.writeRulesRaw S t).edges for every t on the chain" is FALSE on the
+`StoreValidRulesD` chain. A narrow-chain-only battery would have reported green and
+left exactly this unadjudicated — the trap 2026-08-16c warned about, sprung by probing
+both chains.
+
+**The corrected proposition (★′), per chain:** on the narrow chain
+(`StoreValidRules`+`ComputedOnly`) no derived-key tuple is admitted
+(`ReconcileCorrect.lean::storeValidRulesD_of_storeValidRules` — already in the tree,
+do NOT re-measure), stage 1 is the identity and clauses 1–3 hold as stated. On the
+`_d` chain the derived-key write is a σ-only extra with σ0 HELD FIXED
+(`CascadeStrataSettle.lean::untaintedShadow_writeLoggedOne_derived` is the landed
+template), and the obligation is only that the extra's TARGET is classifiable and
+terminal. Measured, edge for edge (`slSwD_classification_swap`): today's extra targets
+`{doc,d1,approver}` — `derNodeB=true, leafNodeB=false`; the raw write's extra targets
+`{doc,d1,approver.0}` — `leafNodeB=true, derNodeB=false`. **Route B's weakening is
+exactly this observed swap.** Confirmed at index 2 too (`SwU` → `approver.2`), so
+nothing rests on index-0 accidents.
+
+### 3. ★★ ROUTE B vs ROUTE C — both survive; Route B recommended; the fork is a HUMAN call
+
+**Route B** (weaken `UntaintedShadow`: `classify` gains an `∨ LeafNode S ab.2`
+disjunct, `term` extends to leaf nodes, `shadow_reach_agree`/`shadow_admitEdge_agree`
+hypotheses widen to `¬(DerNode ∨ LeafNode)`):
+* **Budget:** ~123 mention sites, re-verified 2026-08-20 — `DerNode` 39 (CascadeStable
+  21, CascadeStrataSettle 17, Audit 1), `UntaintedShadow` 84 in 7 files
+  (CascadeStrataSettle 40, CascadeStable 18, CascadeStrataResettle 10, CascadeStrataEnum
+  6, Audit 6, CascadeSettle 3, CascadeStrataAssemble 1). Template exists
+  (`untaintedShadow_writeLoggedOne_derived`/`_writeLeg_derived` → `_leaf` near-clones).
+  The consumers' `¬ DerNode` hypotheses widen mechanically: every probe target is a
+  declared-name object node or a subject node, and `publicOfLeaf = none` there by
+  dot-freeness (plus the E3 pins for BARE).
+* **Cone: ZERO additional.** `CascadeStable` is downstream of `Cascade`, so every
+  Route-B edit lives INSIDE the 39-module cone 4c-ii pays anyway.
+* **Carrier:** `publicOfLeaf`, NOT `isLeafPred` — pinned (`bare_publicOfLeaf_none`,
+  `bare_subject_not_leafNode`; sabotage (Sa) is the demonstration). ⚠ One residual:
+  `relNameOK` does not forbid the EMPTY relation name, and `leafPublic BARE = ""`, so a
+  pathological schema declaring a derived relation `""` would make bare-subject nodes
+  `LeafNode`. Carry `leafPublic p ≠ ""` in the `LeafNode` definition or a WF
+  nonempty-name clause.
+
+**Route C** (widen `RulesWrite.lean::ReachedByRules.step` — and
+`ReachedByRulesAdmitted.step` with it — onto `writeRulesRaw`, so the (ii)→(i)
+conversion `reachedByRules_of_admitted` survives by construction and `DerNode`/
+`UntaintedShadow` keep their statements):
+* **Budget:** the recompile cone grows from the 39-module Cascade cone to essentially
+  the whole GraphIndex tree — `RulesWrite` is far upstream, and the W2 workhorses
+  (`reachedByRules_edge_sound`, 16 sites; `reachedByRules_inv`, 22 sites) plus
+  `RulesSound`/`RulesChain`/`RulesSaturate`/`RulesComplete`/`RulesBareStar` and the
+  read-bridge stack all sit on the re-pointed step.
+* **And it does NOT actually dodge the mathematics.** With σ0 itself raw-built, σ0
+  carries leaf edges, and the W3c/W3d read bridges (`checkFn_eq_sem_bs` on the rules
+  base) then need "untainted probes never traverse leaf nodes" — which is clauses 2+3
+  again, relocated INTO the W2 chain. Route C trades a 7-file mechanical re-discharge
+  for a whole-tree re-point that still owes the same leaf-terminality lemmas.
+* **Its one structural win:** the `P3 → P14 → P4 → P3` cycle dissolves with no P14
+  split, and `Audit.lean`'s `reachedByRules_of_admitted` pin survives verbatim.
+
+**Recommendation: Route B** — cone containment beats blast-radius elegance while the
+un-buildable window is the board's stated top risk, and Route C pays the same
+leaf-terminality content anyway. **This is the fork flagged as a human call; the
+budgets above are the decision inputs, and nothing in the tree forecloses C.**
+
+### 4. THE P14 SLICE: Half 1 only — split the row
+
+Route B absorbs P14's **classification half only** (the ~123 sites above + two cloned
+lemmas ~70 lines + one disjunct + the carrier lemma). **Half 2 — the reach-collapse
+family (`reachedByW3d2_reach_collapse_root` et al., `RestrictBase`/`CascadeStrataSettle`/
+`CascadeStrataResettle` and 12 files of callers) — is NOT pulled in:** clause 2 keeps
+every leaf edge off declared R-nodes (measured at all witnesses; provable via
+`Leaf.lean::leafNode_ne_objNode`), so
+`ReconcileComplete.lean::reachedByRules_derived_no_inedge` and everything the collapse
+family feeds survive with their statements intact. **Board consequence:** split `P14`
+into `P14a` (classification re-partition — absorbed into `P3` under Route B) and
+`P14b` (reach-collapse re-prove — stays `deps: P4`). The dependency cycle breaks by
+the split, not by merging items. Scope-doc §11.9 carries the same conclusion.
+
+### 5. THE STARVATION RESIDUAL: the candidate set does NOT starve (one-witness, no-kill)
+
+Pinned (`slSwD_starvation`): after the raw derived-key write,
+`CascadeEnum.lean::edgeHolders` at the public R-node goes `[alice] → []` — the EDGE
+channel does starve — but `CascadeStrataEnum.lean::storedDirectSubjects` reads the
+STORE, not σ, and still returns `[alice]`. The Direct-arm candidate survives any σ
+re-pointing; `edgeHolders`' remaining post-4c-ii feed at the R-node is reconcile
+emissions, i.e. the stale-holder population it exists to enumerate. So "4c-ii + 7 in
+one commit" is NOT silently dependent on 4b — the leaf-probe bridge (P4) is owed for
+edge-side READS, not to rescue the reconcile candidate set. (One witness, one write:
+treat as no-kill, and re-check inside the cone.)
+
+### 6. What changed, and what the next session must do first
+
+Changed: `GraphIndex/Scratch4cii.lean` (new, additive, zero-cone — the battery as
+permanent `decide` pins + the proved instrument + the observed-output transcript and
+both sabotage records), one import line in `ZanzibarProofs.lean`, this entry, and
+scope-doc §11.9. NO existing definition, statement, pin, golden, or conformance file
+was touched; `extractor.py` was not run in mutating form; `LeafRules.lean` is
+byte-identical after sabotage (Sb) (`git diff` empty). `verify.sh lean` green before
+and after — both runs observed `rc=0`,
+`=== lean phase (steps 1-4) PASSED (holes=0, audits=581, pinned=581) ===` (the module
+adds no `#print axioms` line, so the audit count is unchanged and `regen_audit_pin.sh`
+is not owed).
+
+**Next session, in order:** (1) get the HUMAN adjudication of the B/C fork recorded on
+the board (the budgets are in §3 — do not re-measure them); (2) under Route B, rewrite
+`P3`'s item block to include the P14a absorption and split `P14` → `P14a`/`P14b`
+(sweep `deps`, `python scripts/handoff_lint.py`); (3) only then start the 4c-ii cone,
+with the `Scratch4cii` pins as the regression floor and the general (★′) clauses as
+lemmas of the cone (the module is expected to be absorbed or deleted by that commit).
+Do NOT split the cone; do NOT touch `W4Fragment.ttuStarFree`.
+
+### 7. Follow-up, same session: does the weakening affect the equivalence check? NO — polarity census + an uninhabitedness proof
+
+Asked by the user before the B/C pick. "The equivalence check" disambiguated four ways;
+the answer covers all four.
+
+**(a) Polarity — hypothesis-position everywhere it reaches the headline.** Census of all
+84 `UntaintedShadow` occurrences (grep 2026-08-20, tabulated here from the live tree):
+
+* **Hypothesis position** (consumers — weakening makes them DEMAND more, deliver the
+  same): `shadow_reach_agree`/`shadow_admitEdge_agree` (`CascadeStable.lean:540/:563`),
+  `checkFn_eq_sem_w3d` (`CascadeStable.lean:951` — its CONCLUSION
+  `σ.checkFn … = sem …` is shadow-free), the settle/collapse consumers
+  (`CascadeStrataSettle.lean:1555/:1624/:2197/:2805/:2933/:2960/:2995/:3915/:3969/:4011`),
+  the enum lemmas (`CascadeStrataEnum.lean:338/:375/:417/:471/:906/:938`), the resettle
+  legs (`CascadeStrataResettle.lean:621/:1906`).
+* **Conclusion position** (producers — weakening makes them PROMISE less): the
+  preservation lemmas (`untaintedShadow_writeLoggedOne`/`_writeLeg`/`_applyD`/
+  `_cascade`/`_reconcileJobs*`/`_writeLoggedOne_derived`/`_removeLoggedRules` family)
+  and the three existence lemmas `∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0`
+  (`CascadeStable.lean:876`, `CascadeStrataSettle.lean:668/:1190`).
+* The producers exist ONLY to discharge the consumers' hypotheses; the shadow cancels
+  in the middle and **no conclusion that leaves the shadow layer mentions it**. The
+  weakened producers still discharge the widened consumers because the probe/admission
+  targets are declared-name or subject nodes (`publicOfLeaf = none` by dot-freeness;
+  BARE pinned) — that re-discharge is exactly the P14a work.
+
+**(b) The pinned statements survive byte-identical.** `backend_equivalence` and
+`graph_correct` (`headline_statements.txt:27/:29`) quantify over `ReachedBy`/
+`GraphAdmission`/`W4Fragment`/`Drained`/`sem` only. `headline_definitions.txt` (the
+transitive definition closure): **zero** hits for `UntaintedShadow`/`DerNode`/
+`ReachedByRules` — under B *and* under C. (The closure DOES carry
+`ReachedByW3d2E`'s constructors — `writeLoggedRules`, `rewriteClosure`, `FoldAdmits` —
+so the **4c-ii re-point itself** forces a deliberate definition-golden regeneration
+under EITHER route. A 4c-ii cost, not a route differentiator.)
+
+**(c) Nothing proved becomes unprovable; the audit set keeps all 581 members.**
+Re-verified rather than restated: `reachedByRules_derived_no_inedge` is stated over
+`ReachedByRules`, which Route B does not touch — it survives VERBATIM, not merely
+re-provable. The reach-collapse family takes the shadow in hypothesis position, so
+under B its statements stand and the proofs re-discharge (P14a). 11 audited names
+mention the shadow (`reachedByW3{b,c,d,d2}_shadow`, `shadow_{reach,admitEdge,graphRec}_agree`,
+`untaintedShadow_{applyD,cascade,foldAdmits}`, `untaintedShadow_writeLeg`); B renames
+none, so the 581-name identity pin survives. ⚠ Honest limit, both routes: audited
+NON-headline theorems are pinned by NAME + axioms only, so B silently shifts the
+meaning of the 11 shadow-named audits exactly as C would silently shift the ~38
+`ReachedByRules`-quantified ones — the gate cannot see either; the CORRESPONDENCE/
+PROOF_STATUS note is the only cover. Symmetric, so not a differentiator.
+
+**(d) Route C, like-for-like.** Same pinned-statement survival (b), same 581 audit-name
+survival, same silent-meaning-shift class (see (c)). Difference: C REWRITES the
+statement of `reachedByRules_edge_sound` (its conclusion enumerates the closure form,
+which becomes `rewriteClosureL (rawWriteTuples …)`), a 16-site workhorse whose
+∃-destructuring every consumer re-derives — statement churn in the W2 layer instead of
+hypothesis-widening in the shadow layer, plus the whole-tree cone already recorded in
+§3.
+
+**(e) The plain answer, and its one honest exception.** The weakening is **invisible to
+the equivalence check** because X = *the shadow is a proof-internal device: absent from
+both headline pins and their definition closure, hypothesis-position at every lemma
+whose conclusion reaches `backend_equivalence`, and without any executable counterpart*
+— the Python surfaces (`tests/test_matrix.py` 4-way, `tests/parity.py` unanimity,
+`formal/conformance/` state gates) compare executables and change only at 4c-ii itself,
+identically under B or C. Moreover "keep the stronger shadow" is not on the table:
+`Scratch4cii.lean::strong_shadow_false_at_raw` machine-checks that the UNWEAKENED
+shadow is already **FALSE** at a leaf-routed state against its rules-built σ0 — post
+4c-ii the strong existence lemmas become unprovable and the W3d bridge dies vacuously.
+The one genuine narrowing: under B, σ/σ0 reach agreement is no longer supplied AT
+LEAF-NODE TARGETS (σ and σ0 genuinely differ there). No current consumer probes one;
+the post-4b derived read path WILL — and that surface is precisely `P4`'s leaf-probe ↔
+`directLeaf` bridge, already a separate board row. If P4 were ever cancelled, this
+narrowing is where the loss would surface.
+
+---
+
 ## Session 2026-08-16c (**LEG 7 4c-ii ATTACKED BEFORE IT WAS BUILT: ROUTE A IS REFUTED by an unprovable conversion, the singleton-collapse premise is backwards, and the board's completion criterion is reachable by a TWO-LINE PYTHON EDIT. No Lean file was modified.**)
 
 **Task taken:** the user asked to start leg 7 (board row `P3` — 4c-ii co-landing with step 7)

@@ -60,6 +60,17 @@ The three checks added 2026-08-16 with ``HS-1``, same protocol, literal output::
     rows: ids     FAIL: docs/history/session-log.md:2 cites board id 'P99', which is on
                         neither the board nor its retired-ids line.
 
+The tenth check, added 2026-08-20 with ``HS-2`` (the ``docs/spec-deviations.md`` split),
+same protocol, literal output::
+
+    doc links     FAIL: HANDOFF.md:63 links to 'docs/latent-gap.md', which does not exist
+                        (resolved to docs/latent-gap.md).
+
+Nothing in this repo resolved a doc-to-doc markdown link before it -- ``verify.sh`` step 4d
+resolves ``file::symbol`` anchors in ``formal/CORRESPONDENCE.md`` and nothing else -- so a
+rename or a split rotted every inbound pointer at full green. See ``check_doc_links``'
+docstring for the two controls and for the 32 false reds its first version produced.
+
 **The bold-caps sabotage failed first, and that is the point of running it.** The budgets
 were initially set to 1 and 18, above the true post-restructure counts of 1 and 9. Lowering
 the budget by one left the check SILENT -- it was slack, and guarded nothing. A budget above
@@ -186,6 +197,48 @@ MAX_BOLDCAPS = {
 # lettered same-day form, so "2026-08-16" < "2026-08-16b" < "2026-08-16c". No date parsing.
 ROOT_LEDGER = 'docs/history/session-log.md'
 FORMAL_LEDGER = 'formal/history/PROOF_STATUS.md'
+
+# --- Doc-to-doc links (check_doc_links, added 2026-08-20 with board row ``HS-2``) --------
+# The set of LIVING roots whose links a cold session actually follows. Deliberately a short
+# explicit list rather than a glob over docs/: a glob would sweep in frozen archives, whose
+# links are PROVENANCE and may legitimately point at a path that no longer exists (see
+# docs/README.md section 2), and a check that demands a fix its own convention forbids is a
+# check that gets commented out -- the same reasoning that scoped HEADLINE_LEDGERS.
+LINKED_DOCS = (
+    'HANDOFF.md',
+    'formal/HANDOFF.md',
+    'CLAUDE.md',
+    'README.md',
+    'docs/README.md',
+    'docs/spec-deviations.md',
+    'docs/latent-gaps.md',
+    'docs/architecture/overview.md',
+)
+
+# Floor on links PARSED, not on links broken. Without it a regex that stops matching -- a
+# link-syntax change, a rename of every file in LINKED_DOCS -- turns this check into a
+# green no-op forever. This is an INSTRUMENT control, not a coverage ratchet, so unlike
+# MAX_BOLDCAPS it is deliberately loose: it answers "is this check looking at anything at
+# all", and the same idiom with the same slack is check_ledger_row_ids' ``len(known) < 5``
+# against ~30 real ids. Measured 220 at landing (2026-08-20); 100 survives retiring a doc
+# from LINKED_DOCS and still catches a parser that has gone blind.
+MIN_DOC_LINKS = 100
+
+_MD_LINK = re.compile(r'\]\(([^)\s]+\.md)(?:#[^)\s]*)?\)')
+_MD_MENTION = re.compile(r'`([A-Za-z0-9_.\-/]+\.md)`')
+
+# An inline code-span mention is resolved against the REPO ROOT, so it is only checked when
+# it is unambiguously repo-root-anchored: it must start with one of these. Everything else
+# is skipped ON PURPOSE, and the exclusions are not laziness --
+#   * a bare `spec-deviations.md` inside docs/architecture/ could mean either directory;
+#   * a `../HANDOFF.md` is relative to the CITING file, and it is usually the label of a
+#     markdown link whose target _MD_LINK already resolved correctly. Resolving labels
+#     against the root produced 32 false reds on a clean tree the first time this check
+#     ran, which is the other way an unbelievable check dies: not silence, but noise.
+# Guessing a base directory would trade real coverage for false positives; this check is
+# aimed at renames of a PATH.
+MENTION_ROOTS = ('docs/', 'formal/', 'tests/', 'scripts/', 'benchmarks/',
+                 'index_v4/', 'setengine/', 'connectedstore/', 'legacy/')
 _ROOT_ENTRY = re.compile(r'^## (\d{4}-\d\d-\d\d[a-z]?) ')
 _FORMAL_ENTRY = re.compile(r'^## Session (\d{4}-\d\d-\d\d[a-z]?)\b')
 _ROWS_LINE = re.compile(r'^rows:\s*(.+)$')
@@ -454,6 +507,94 @@ def check_ledger_row_ids(fail):
                      % (ROOT_LEDGER, i, cited.group(1)))
 
 
+def check_doc_links(fail):
+    """Every doc-to-doc `.md` pointer in a LIVING root resolves to a file on disk.
+
+    THE HAZARD THIS CLOSES. ``verify.sh`` step 4d resolves ``file::symbol`` anchors in
+    ``formal/CORRESPONDENCE.md`` -- and nothing else in this repo resolves anything. It has
+    never looked at a markdown link, so until 2026-08-20 a doc could be renamed or split
+    and every inbound pointer would rot silently, at full green. Board row ``HS-2`` (the
+    ``docs/spec-deviations.md`` split) is exactly that commit shape, which is why the check
+    ships with it rather than after it.
+
+    Two pointer forms, deliberately different resolution rules:
+
+    * a markdown link ``](target.md)`` resolves relative to the CITING file's directory,
+      because that is how a reader's click resolves it;
+    * an inline code-span mention resolves against the repo root, and only when it carries
+      a ``/`` so it is unambiguously a path. A bare ``spec-deviations.md`` in
+      ``docs/architecture/`` could mean either directory; guessing would produce false
+      reds, and this check is aimed at RENAMES, not at prose style.
+
+    SABOTAGE (docs/sabotage-procedure.md), 2026-08-20. The weakening broken was the
+    narrowest PLAUSIBLE one -- the singular/plural typo a rename commit actually makes, not
+    a deleted file: ``HANDOFF.md``'s ``LT-1`` row was repointed at ``docs/latent-gap.md``
+    while the file on disk is ``docs/latent-gaps.md``. Literal observed output::
+
+        handoff_lint: 1 violation(s)
+
+          FAIL: HANDOFF.md:63 links to 'docs/latent-gap.md', which does not exist
+          (resolved to docs/latent-gap.md). A doc-to-doc pointer is checked by NOTHING
+          else in this repo -- verify.sh step 4d resolves file::symbol anchors in
+          CORRESPONDENCE.md only. Fix the link or restore the file.
+
+    Restored, and the clean run reports ``handoff_lint: clean (10 checks)``.
+
+    THE INSTRUMENT WAS CONTROLLED TOO, which is the step this repo's record says gets
+    skipped. Three controls:
+
+    * ``MIN_DOC_LINKS`` asserts the parser found links AT ALL. A link checker that matches
+      nothing passes forever -- the exact fail-by-passing shape ``check_frozen_banners``
+      was caught in. Verified by raising the floor to 500 against the real tree::
+
+          FAIL: check_doc_links parsed only 220 .md pointers across 8 file(s), floor 500.
+
+      Restored to 100. So the check is demonstrably reading 220 pointers, not zero.
+    * the baseline was checked BEFORE the sabotage: a clean tree yields zero violations
+      from this check, so the red above is attributable to the typo and not to pre-existing
+      rot. And the failure line names ``docs/latent-gap.md`` specifically -- a check that
+      merely re-reported some other broken link would have proved nothing.
+    * **the first version was too eager and its 32 false reds are why MENTION_ROOTS
+      exists.** ``_MD_MENTION`` matched the code-span LABEL of every link written
+      ``[`../HANDOFF.md`](../HANDOFF.md)`` and resolved it against the repo root, so a
+      clean tree reported 32 violations -- every one of them a link that resolves fine
+      when clicked. A check nobody can get green is as dead as a check that never fires;
+      that failure mode is recorded here because the eager regex is the obvious way to
+      write this and it looks right.
+    """
+    parsed = 0
+    seen_files = 0
+    for rel in LINKED_DOCS:
+        lines = _read(rel)
+        if lines is None:
+            fail('MISSING: %s is in LINKED_DOCS but does not exist. Remove it from the '
+                 'list deliberately -- a link check over a file that is gone guards '
+                 'nothing.' % rel)
+            continue
+        seen_files += 1
+        base = os.path.dirname(rel)
+        for i, ln in enumerate(lines, 1):
+            targets = [(m.group(1), base) for m in _MD_LINK.finditer(ln)]
+            targets += [(m.group(1), '') for m in _MD_MENTION.finditer(ln)
+                        if m.group(1).startswith(MENTION_ROOTS)]
+            for target, anchor_dir in targets:
+                if target.startswith(('http:', 'https:', 'mailto:', '/')):
+                    continue
+                parsed += 1
+                resolved = os.path.normpath(os.path.join(anchor_dir, target))
+                if not os.path.exists(os.path.join(REPO, resolved)):
+                    fail("%s:%d links to %r, which does not exist (resolved to %s). A "
+                         "doc-to-doc pointer is checked by NOTHING else in this repo -- "
+                         "verify.sh step 4d resolves file::symbol anchors in "
+                         "CORRESPONDENCE.md only. Fix the link or restore the file."
+                         % (rel, i, target, resolved.replace(os.sep, '/')))
+    if parsed < MIN_DOC_LINKS:
+        fail('check_doc_links parsed only %d .md pointers across %d file(s), floor %d. The '
+             'link parser is broken or LINKED_DOCS has been gutted, so this check would '
+             'pass by resolving nothing. Fix it rather than lowering the floor.'
+             % (parsed, seen_files, MIN_DOC_LINKS))
+
+
 CHECKS = (
     check_ceilings,
     check_priority_capacities,
@@ -464,6 +605,7 @@ CHECKS = (
     check_bold_caps,
     check_ledger_ordering,
     check_ledger_row_ids,
+    check_doc_links,
 )
 
 

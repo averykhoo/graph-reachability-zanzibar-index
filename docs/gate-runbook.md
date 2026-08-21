@@ -230,6 +230,7 @@ so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 | `MIN_PY_ANCHORS` / `MIN_LEAN_ANCHORS` | `CORRESPONDENCE.md` anchors found (in `anchor_check.py`) |
 | *(no constant)* | step **4e** compares `FINAL_REVIEW.md`'s generated counts block against the tree exactly; there is no floor to lower, only a regeneration to perform |
 | `MAX_LINES` / `NEXT_MAX` / `WARN_BUDGET` / `HEADLINE_MAX` / `MAX_BOLDCAPS` (in `scripts/handoff_lint.py`, step **4f**) | the board files' capacities: line ceilings, at most three `NEXT` rows, the trap budget, the ledger-headline cap, and the bold-caps ratchets. All are set at measured values with in-file provenance; `MAX_BOLDCAPS` is a ratchet — lower it when you clean a line, never raise it |
+| `MIN_DOC_LINKS` (same file, step **4f**) | an **instrument control**, not a coverage ratchet: it asserts `check_doc_links` parsed any pointers at all, because a link checker that matches nothing passes forever. Deliberately loose (100 against a measured 220), like `check_ledger_row_ids`' `len(known) < 5` |
 
 **Lowering any of them must be a deliberate, reviewed edit to `verify.sh`** — and
 should be justified in `formal/history/`. Raising them is free and encouraged when
@@ -342,12 +343,17 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   machine-checked place to check them against, and widening the block is one row
   in `doc_counts.py::measure`.
 - **4f BOARD LINT** (added 2026-08-16, board row `HS-1`) — `python
-  scripts/handoff_lint.py`. Nine checks over the two board files and the two
-  ledgers: line ceilings, exactly one `NOW` row and at most three `NEXT`, zero
-  retired `★` glyphs, the trap budget, a liveness declaration in the first ten
-  lines of every `docs/history/` and `formal/history/` file, the ledger-headline
-  cap, the bold-caps ratchets, root-ledger-not-behind-`PROOF_STATUS`, and
-  `rows:`-cited ids resolving to real board ids. **Sub-second**; it rides `lean`
+  scripts/handoff_lint.py`. Ten checks over the two board files, the two ledgers
+  and a short list of living doc roots: line ceilings, exactly one `NOW` row and at
+  most three `NEXT`, zero retired `★` glyphs, the trap budget, a liveness
+  declaration in the first ten lines of every `docs/history/` and `formal/history/`
+  file, the ledger-headline cap, the bold-caps ratchets,
+  root-ledger-not-behind-`PROOF_STATUS`, `rows:`-cited ids resolving to real board
+  ids, and — added 2026-08-20 with row `HS-2` — **`check_doc_links`, which resolves
+  every doc-to-doc `.md` pointer in `LINKED_DOCS` against the filesystem**. That
+  last one closes a real hole: step 4d resolves `file::symbol` anchors in
+  `CORRESPONDENCE.md` and *nothing anywhere resolves a markdown link*, so before it
+  a doc rename or split rotted every inbound pointer at full green. **Sub-second**; it rides `lean`
   for the same reason 4d/4e do rather than becoming an eleventh phase.
   **Why it exists:** every capacity in the 2026-08-16 handoff redesign was prose,
   and this repo's record is that a prose capacity rots — `HANDOFF.md` restated
@@ -618,6 +624,25 @@ the four defects" from "this file no longer imports".
 Push only after ALL of: the ten `verify.sh` phases — `lean` → `conf-tile:1/5` →
 `2/5` → `3/5` → `4/5` → `5/5` → `tests-tile:1/4` → `2/4` → `3/4` → `4/4` — each
 green; and — for an algorithm change — a fuzz sweep (step 3) green.
+
+⚠ **ORDER THE SESSION SO THE PHASES RUN LAST, AND RUN `lean` LAST OF ALL.** The
+verdicts are tree-addressed against **two different scopes** (§4): the nine pytest
+tiles hash the CODE scope (`all` minus `*.md` and `benchmarks/`), while `lean`
+hashes **everything**, because its steps 4d/4e/4f read `CORRESPONDENCE.md`, the
+prose globs and both boards. Two consequences that cost a session ~40 minutes on
+2026-08-21:
+* **A docstring-only edit to a test file invalidates all nine tiles.** Docstrings
+  are `.py`. Tidying a pin's prose *after* the tiles are green — exactly what the
+  "fix the stale present tense" write-back step asks for — silently un-greens them.
+  Finish every `.py` edit, docstrings included, before the first tile.
+* **Any write-back edit invalidates `lean`**: the session log, the banner, the
+  board, a `spec-deviations.md` entry. So do the write-back, *then* run `lean`.
+  Adding an anchor to `CORRESPONDENCE.md` also forces
+  `python -m formal.conformance.doc_counts --generate` (step 4e pins the anchor
+  count), which is another `.md` edit — do it before the final `lean`, not after.
+
+The cheap check is `python scripts/gate_status.py`, which prints coverage per scope;
+it is what caught both of the above rather than a memory of having run them.
 `python scripts/gate_status.py --require-green` answers "are they all green **on
 this tree**" mechanically (§4) — it is a convenience over the ledger, not a
 substitute for running the phases, and it knows nothing about the fuzz sweep. (`tests-tile`

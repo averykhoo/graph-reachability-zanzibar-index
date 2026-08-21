@@ -12,6 +12,19 @@ Per ``CLAUDE.md`` these are **positive pins, not xfails** (``verify.sh`` carries
 graph was fixed. Do NOT weaken them, do NOT convert them to xfail, and do NOT edit the
 oracle. If one goes red again, the divergence is live again.
 
+⚠⚠ **KNOWN LIMITATION — do NOT treat this module as the net for star-expansion LIVENESS.**
+Every test here writes its pool in ONE batch and then queries, so it pins that a star
+tupleset parent *is* expanded and pins nothing about the expansion staying *live* across a
+cascade that interns or GCs nodes. Measured 2026-08-20b: freezing the expansion (memoizing
+``processor.py::DeltaProcessor.tupleset_parents``, and separately ``::derived_stored_parents``
+and ``::_instances_of_type``) leaves **all 12 tests here green** — and so are
+``test_matrix.py`` (``24 passed``) and ``test_lookup_oracle.py``. The only pin for liveness
+is ``test_stored_cache_scope.py::test_star_expansion_is_not_frozen_by_the_memo``. The same
+limitation was recorded for a different fix in the ``## 2026-07-26`` entry of
+``docs/spec-deviations.md`` ("those write in one batch and reconcile once") and was not
+carried here, so it had to be re-discovered by sabotage; see ``docs/sabotage-procedure.md``
+§'"The only net" is a claim about a test'.
+
 **Read the "Fix locations" section below as a record of where the bugs WERE**, and see
 ``test_compile_refuses_parent_types_narrower_than_admission`` at the foot of this file:
 RC1's class is now additionally refused at COMPILE time by an invariant that reads the
@@ -55,8 +68,8 @@ makes this worth writing down: **a dropped TTU parent is a false NEGATIVE under 
 TTU and a false POSITIVE under a negated one**, so any triage that probes only the positive
 direction will mis-classify severity by exactly one sign.
 
-⚠⚠ **NOT claimed here:** the 2026-08-09 sibling (the OWC x star-parent x TTU cross,
-``spec-deviations.md:83``) carries the *same* "it fails closed, so it is not a security
+⚠⚠ **NOT claimed here:** the 2026-08-09 sibling (the OWC x star-parent x TTU cross, the
+``## 2026-08-09`` entry of ``docs/spec-deviations.md``) carries the *same* "it fails closed, so it is not a security
 fail-open" wording, and the rule above predicts it inverts too — but that was **not
 re-tested**, because that bug is FIXED (``c042056``) and testing it would mean reverting the
 fix. Treat it as an open question, not a correction. Do not propagate the prediction into
