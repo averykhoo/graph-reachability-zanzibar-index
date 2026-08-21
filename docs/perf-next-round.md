@@ -31,7 +31,8 @@ measurement/gate hygiene.
   instruments `benchmarks/profile_r6.py` (reads) and `benchmarks/profile_r6_write.py`
   (write / cascade / bulk / space). **Land in this order:** `R6-10` (59.8% of
   incremental boolean write time — the headline) → `R6-6` (4.75 → 1.75 statements
-  per `check`) → `R6-11` (cache torn down 8× per reconcile; one-line fix) →
+  per `check`) → `R6-11` (cache torn down ~4× per reconcile — **not the 8× filed**,
+  a cProfile `@contextmanager` artifact corrected 2026-08-21; one-line fix) →
   `R6-5` (32.7% ORM construction) → `R6-4` (30.1% and growing) → `R6-9` (4.51
   point SELECTs per write) → `R6-18` (53.1% off the biggest table) → `R6-16`
   (1.00 unconsumed outbox row per closure edge — co-design with `R6-7`/`R6-8`,
