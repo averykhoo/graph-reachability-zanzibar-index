@@ -147,16 +147,24 @@ class _EvalContext:
 
     def ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
         sp, st, sn = s
+        # ONE stored-tuple enumeration for BOTH halves (perf R6-10 step A). This used
+        # to call ``tupleset_star_types`` and then ``tupleset_parents`` with identical
+        # arguments; each bottoms out in its own full ``_stored_tupleset_subjects``
+        # pass (an EdgeV4 SELECT + a NodeV4 IN SELECT), so the pair issued 4 SQL
+        # statements where 2 suffice. The star expansion stays LAZY -- the star arm
+        # below returns before ``_expand_tupleset_parents`` (and therefore before
+        # ``_instances_of_type``) runs, exactly as the two-call form did.
+        concretes, star_types = self.proc._stored_tupleset_subjects(
+            self.object_type, self.obj_name, ts, parent_types)
         # STAR-parent shape rule (RC2; oracle ttu_leaf's `pn == '*'` arm, and
         # setengine/engine.py::ttu_leaf): a stored `T:*` tupleset tuple makes EVERY
         # userset of shape (T, target) a member, whatever its name -- the ∃-expansion
         # over instances cannot express that, and folding it in is what the
         # star-expansion inside `tupleset_parents` deliberately leaves to this arm.
-        for pt in self.proc.tupleset_star_types(self.object_type, self.obj_name,
-                                                ts, parent_types):
+        for pt in star_types:
             if (st, sp) == (pt, target):
                 return True
-        for (pt, pn) in self.proc.tupleset_parents(self.object_type, self.obj_name, ts, parent_types):
+        for (pt, pn) in self.proc._expand_tupleset_parents(concretes, star_types):
             # from-chain identity rule (oracle ttu_leaf; lookup-gate X4a): a stored
             # tupleset parent p makes the userset p#target itself a member,
             # regardless of the target relation's own content -- the exact analogue
@@ -168,12 +176,13 @@ class _EvalContext:
         return False
 
     def ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
+        # one enumeration for both halves -- see ttu_check (perf R6-10 step A)
+        concretes, star_types = self.proc._stored_tupleset_subjects(
+            self.object_type, self.obj_name, ts, parent_types)
         # the star-parent shape itself (RC2), mirroring `ms.star((pt, target))` at
         # setengine/engine.py::ttu_expand
-        out: frozenset = frozenset(
-            (pt, target) for pt in self.proc.tupleset_star_types(
-                self.object_type, self.obj_name, ts, parent_types))
-        for (pt, pn) in self.proc.tupleset_parents(self.object_type, self.obj_name, ts, parent_types):
+        out: frozenset = frozenset((pt, target) for pt in star_types)
+        for (pt, pn) in self.proc._expand_tupleset_parents(concretes, star_types):
             out |= self.proc.member_stars(pt, target, pn)
         return out
 
@@ -183,12 +192,15 @@ class _EvalContext:
 
     def tupleset_ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
         sp, st, sn = s
-        for pt in self.proc.derived_stored_star_types(self.object_type, self.obj_name,
-                                                      ts, parent_types):
+        # one pass over the derived tupleset's STORAGE leaves for both halves
+        # (perf R6-10 step A) -- the star arm still short-circuits before the
+        # RC2 instance expansion runs. See ttu_check.
+        split = self.proc._derived_stored_split(self.object_type, self.obj_name,
+                                                ts, parent_types)
+        for pt in self.proc._split_star_types(split):
             if (st, sp) == (pt, target):
                 return True             # star-parent shape rule (RC2); see ttu_check
-        for (pt, pn) in self.proc.derived_stored_parents(self.object_type, self.obj_name,
-                                                         ts, parent_types):
+        for (pt, pn) in self.proc._split_parents(split):
             if (sp, st, sn) == (target, pt, pn):
                 return True         # from-chain identity rule (oracle ttu_leaf; X4a)
             if self.proc.member_check(pt, target, pn, s):
@@ -196,11 +208,11 @@ class _EvalContext:
         return False
 
     def tupleset_ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
+        split = self.proc._derived_stored_split(self.object_type, self.obj_name,
+                                                ts, parent_types)   # R6-10 step A
         out: frozenset = frozenset(
-            (pt, target) for pt in self.proc.derived_stored_star_types(
-                self.object_type, self.obj_name, ts, parent_types))   # RC2
-        for (pt, pn) in self.proc.derived_stored_parents(self.object_type, self.obj_name,
-                                                         ts, parent_types):
+            (pt, target) for pt in self.proc._split_star_types(split))   # RC2
+        for (pt, pn) in self.proc._split_parents(split):
             out |= self.proc.member_stars(pt, target, pn)
         return out
 
@@ -227,6 +239,20 @@ class DeltaProcessor:
         # invalidations for the next round (spec §5.2: version bumps enqueue the same
         # dependent keys; they emit no outbox rows).
         self._bumped: list[tuple[str, str, str]] = []
+        # Stored-tuple enumeration memo (perf R6-10). Tri-state, exactly like
+        # ``ReachabilityIndex._node_cache`` (N15) and ``WildcardIndex._residue_cache``
+        # (P3): None = NO scope installed, so every read goes to SQL; a dict = a scope
+        # is open and the enumerations below are memoized within it. Installed by
+        # ``_stored_cache_scope``, whose docstring carries the correctness argument.
+        self._stored_cache: dict | None = None
+        # Non-vacuity counters for the memo, read by
+        # ``benchmarks/profile_r6_write.py::target_cascade``. They exist because a
+        # post-fix "0 calls" is ambiguous between "the memo worked" and "the probe
+        # stopped reaching the code" (instrument correction (ii),
+        # benchmarks/results/R6_PROFILE_2026-08-17.md); hits/misses disambiguate.
+        # Only touched while a scope is installed -- a dict increment beside a SQL
+        # round trip, and zero cost on the uncached path.
+        self._stored_cache_stats = {'hits': 0, 'misses': 0, 'scopes': 0, 'keys_max': 0}
 
     # ------------------------------------------------------------------ #
     # Node / state accessors (read-only; never intern on reads)
@@ -315,17 +341,31 @@ class DeltaProcessor:
     def stored_userset_subjects(self, object_type: str, obj_name: str, leaf: str,
                                 t: str, p: str) -> list[str]:
         """Names x of userset subjects (t, x, p) holding a stored tuple on the storage
-        leaf (obj, leaf)."""
+        leaf (obj, leaf).
+
+        Memoized inside an open ``_stored_cache_scope`` (perf R6-10) -- see that
+        method's docstring for why a cascade/reconcile-scoped memo is exact."""
+        cache = self._stored_cache
+        key = ('us', object_type, obj_name, leaf, t, p)
+        if cache is not None:
+            hit = cache.get(key)
+            if hit is not None:
+                self._stored_cache_stats['hits'] += 1
+                return list(hit)        # fresh list: callers must never see each other's
+            self._stored_cache_stats['misses'] += 1
         leaf_node = self._node(leaf, object_type, obj_name)
         if leaf_node is None:
-            return []
-        edges = self._direct_incoming(leaf_node.id)
-        nodes = self._nodes_by_ids(e.subject_id for e in edges)
-        out = []
-        for e in edges:
-            n = nodes.get(e.subject_id)
-            if n is not None and n.wildcard == '' and (n.type, n.predicate) == (t, p):
-                out.append(n.name)
+            out: list[str] = []
+        else:
+            edges = self._direct_incoming(leaf_node.id)
+            nodes = self._nodes_by_ids(e.subject_id for e in edges)
+            out = []
+            for e in edges:
+                n = nodes.get(e.subject_id)
+                if n is not None and n.wildcard == '' and (n.type, n.predicate) == (t, p):
+                    out.append(n.name)
+        if cache is not None:
+            cache[key] = tuple(out)     # immutable snapshot
         return out
 
     def _instances_of_type(self, t: str) -> list[str]:
@@ -359,22 +399,41 @@ class DeltaProcessor:
         ``(T, '*')`` as if it were a parent name -- is the naive fix that crashes:
         ``('T','*')`` is not expressible as a concrete node (core.py:913 rejects
         ``name=='*'`` with an empty ``wildcard``), so ``_from_chain_keys`` detonates in
-        ``_reconcile`` and the write is reported as an admission REJECTION."""
-        ts_node = self._node(ts, object_type, obj_name)
-        if ts_node is None:
-            return [], []
-        edges = self._direct_incoming(ts_node.id)
-        nodes = self._nodes_by_ids(e.subject_id for e in edges)
+        ``_reconcile`` and the write is reported as an admission REJECTION.
+
+        Memoized inside an open ``_stored_cache_scope`` (perf R6-10): this was 59.8% of
+        incremental boolean write time, two uncached SELECTs (``_direct_incoming`` +
+        ``_nodes_by_ids``) re-issued once per candidate per leaf for arguments that are
+        constant across a cascade. The memo stops at THIS level deliberately -- the
+        star expansion above it stays live; see ``_stored_cache_scope`` and
+        ``_expand_tupleset_parents``."""
+        cache = self._stored_cache
+        key = ('ts', object_type, obj_name, ts, parent_types)
+        if cache is not None:
+            hit = cache.get(key)
+            if hit is not None:
+                self._stored_cache_stats['hits'] += 1
+                # fresh mutable lists off an immutable snapshot: no caller can mutate
+                # another caller's result (``_expand_tupleset_parents`` copies today,
+                # but do not rely on that staying true)
+                return list(hit[0]), list(hit[1])
+            self._stored_cache_stats['misses'] += 1
         concretes: list[tuple[str, str]] = []
         star_types: list[str] = []
-        for e in edges:
-            n = nodes.get(e.subject_id)
-            if n is None or n.predicate != '...' or n.type not in parent_types:
-                continue
-            if n.wildcard == '':
-                concretes.append((n.type, n.name))
-            elif n.wildcard == 'any':      # 'all' is object-position; never a subject
-                star_types.append(n.type)
+        ts_node = self._node(ts, object_type, obj_name)
+        if ts_node is not None:
+            edges = self._direct_incoming(ts_node.id)
+            nodes = self._nodes_by_ids(e.subject_id for e in edges)
+            for e in edges:
+                n = nodes.get(e.subject_id)
+                if n is None or n.predicate != '...' or n.type not in parent_types:
+                    continue
+                if n.wildcard == '':
+                    concretes.append((n.type, n.name))
+                elif n.wildcard == 'any':  # 'all' is object-position; never a subject
+                    star_types.append(n.type)
+        if cache is not None:
+            cache[key] = (tuple(concretes), tuple(star_types))
         return concretes, star_types
 
     def tupleset_parents(self, object_type: str, obj_name: str, ts: str,
@@ -389,8 +448,30 @@ class DeltaProcessor:
         instance really is a parent. The half the expansion cannot express, "the shape
         ``(T, target_rel)`` is a member whatever its name", is carried separately by
         ``tupleset_star_types`` and consumed by the ``_EvalContext`` TTU methods."""
-        concretes, star_types = self._stored_tupleset_subjects(
-            object_type, obj_name, ts, parent_types)
+        return self._expand_tupleset_parents(
+            *self._stored_tupleset_subjects(object_type, obj_name, ts, parent_types))
+
+    def _expand_tupleset_parents(self, concretes: list, star_types: list
+                                 ) -> list[tuple[str, str]]:
+        """The RC2 star-expansion half of ``tupleset_parents``, split out so a caller
+        that already holds a ``_stored_tupleset_subjects`` result can derive the parent
+        list without re-issuing the two SELECTs (perf R6-10 step A).
+
+        ⚠ Deliberately NOT memoized, and neither is ``_instances_of_type``: the
+        expansion reads the GLOBAL NodeV4 table, which legitimately changes inside one
+        reconcile (``_reconcile`` step 2a interns from-chain subjects with
+        ``create_if_missing=True``; step 5 ``_gc_subject_node`` deletes). Freezing it
+        is a live correctness bug on RC2 star-tupleset schemas -- and no benchmark
+        workload stores a ``T:*`` tupleset parent, so no profile can catch that
+        mistake.
+
+        ⚠ The net is ``tests/test_stored_cache_scope.py::
+        test_star_expansion_is_not_frozen_by_the_memo`` -- and ONLY that test. It is
+        tempting to name ``tests/test_ttu_tupleset_parent_types.py`` here (an earlier
+        draft did), but that was falsified by sabotage: memoizing this expansion leaves
+        all 12 of its tests green, and all 12 of ``tests/test_matrix.py`` too. Those
+        modules pin that a star parent IS expanded, never that the expansion stays
+        LIVE across a mid-reconcile intern."""
         out = list(concretes)
         for pt in star_types:
             out.extend((pt, inst) for inst in self._instances_of_type(pt))
@@ -408,27 +489,53 @@ class DeltaProcessor:
         plan = self.compiled.plans[(object_type, ts)]
         return [spec.predicate for spec in plan.leaves if spec.storage]
 
+    def _derived_stored_split(self, object_type: str, obj_name: str, ts: str,
+                              parent_types: tuple) -> list[tuple[list, list]]:
+        """One ``_stored_tupleset_subjects`` result per STORAGE leaf of a derived
+        tupleset -- the shared read behind ``derived_stored_parents`` and
+        ``derived_stored_star_types`` (perf R6-10 step A).
+
+        The pair used to walk the same leaves twice, each walk issuing its own SELECT
+        pair per leaf. Splitting the read from the two projections lets a caller that
+        wants both (``_EvalContext.tupleset_ttu_check`` / ``::tupleset_ttu_stars``)
+        pay for one walk."""
+        return [self._stored_tupleset_subjects(object_type, obj_name, leaf, parent_types)
+                for leaf in self._ts_leaf_predicates(object_type, ts)]
+
+    @staticmethod
+    def _split_star_types(split: list[tuple[list, list]]) -> list[str]:
+        """Star-parent types of a ``_derived_stored_split`` (RC2), leaf order, deduped."""
+        seen: dict[str, None] = {}
+        for _concretes, star_types in split:
+            for pt in star_types:
+                seen[pt] = None
+        return list(seen)
+
+    def _split_parents(self, split: list[tuple[list, list]]) -> list[tuple[str, str]]:
+        """Concrete parents of a ``_derived_stored_split``, star-expanded (RC2), leaf
+        order, deduped. The expansion runs HERE and not in ``_derived_stored_split`` so
+        the star arm of the TTU leaves can still short-circuit before it."""
+        seen: dict[tuple[str, str], None] = {}
+        for concretes, star_types in split:
+            for (pt, pn) in self._expand_tupleset_parents(concretes, star_types):
+                seen[(pt, pn)] = None
+        return list(seen)
+
     def derived_stored_parents(self, object_type: str, obj_name: str, ts: str,
                                parent_types: tuple) -> list[tuple[str, str]]:
         """Stored tupleset tuples of a DERIVED tupleset relation: raw admitted writes
         live on its leaf families (rewrite routing), so parents are the direct
         incoming entity subjects across those leaf nodes."""
-        seen: dict[tuple[str, str], None] = {}
-        for leaf in self._ts_leaf_predicates(object_type, ts):
-            for (pt, pn) in self.tupleset_parents(object_type, obj_name, leaf, parent_types):
-                seen[(pt, pn)] = None
-        return list(seen)
+        return self._split_parents(
+            self._derived_stored_split(object_type, obj_name, ts, parent_types))
 
     def derived_stored_star_types(self, object_type: str, obj_name: str, ts: str,
                                   parent_types: tuple) -> list[str]:
         """Types T with a stored ``T:*`` tupleset tuple of a DERIVED tupleset relation
         (RC2) -- the star half of ``derived_stored_parents``, across its storage
         leaves."""
-        seen: dict[str, None] = {}
-        for leaf in self._ts_leaf_predicates(object_type, ts):
-            for pt in self.tupleset_star_types(object_type, obj_name, leaf, parent_types):
-                seen[pt] = None
-        return list(seen)
+        return self._split_star_types(
+            self._derived_stored_split(object_type, obj_name, ts, parent_types))
 
     def _keys_referencing(self, node_id: int) -> list[Key]:
         """Reconcile keys of every residue whose ``neg``/``upos`` records this subject
@@ -586,9 +693,103 @@ class DeltaProcessor:
             if outer:
                 self.widx._residue_cache = None
 
+    @contextmanager
+    def _stored_cache_scope(self):
+        """Install the stored-tuple enumeration memo for the duration of one
+        (outermost) cascade or reconcile (perf R6-10).
+
+        Reentrant, structurally identical to ``_residue_cache_scope``: outer-flag
+        install, only the outermost entry tears it down. It MUST be -- ``run_cascade``
+        wraps ``reconcile`` / ``reconcile_subject``, ``reconcile_subject`` escalates
+        into ``_reconcile`` (the ``s_node is None`` branch), and ``_reconcile`` step 4
+        nests ``_reconcile_subject`` inside itself, so a non-reentrant scope would tear
+        the cache down under its own caller.
+
+        THE CONSTANCY PREMISE (this IS the correctness argument -- read it before
+        widening what the memo covers or where it is installed):
+
+        The two memoized reads -- ``_stored_tupleset_subjects`` and
+        ``stored_userset_subjects`` -- enumerate DIRECT incoming edges on STORAGE-leaf
+        families, i.e. raw admitted user writes. Those cannot change inside one
+        cascade:
+
+          * raw writes PRECEDE the cascade. ``connectedstore/apply.py::advance_index``
+            runs its whole ``_apply_row`` loop before ``proc.run_cascade(wm)``, and
+            ``tests/test_matrix.py::GraphBackend.apply`` does the same (synchronous v1).
+          * the cascade's own writes go somewhere else. ``_write_derived`` writes only
+            the PUBLIC derived family (``WildcardIndex.processor_writes``), which is
+            invariant I5: incoming direct edges on a derived-public family are
+            processor-written exclusively, and no storage leaf is one. Derived-public
+            names are declared relation names; storage-leaf predicates are
+            ``<relation>.<index>`` (``.`` is reserved), and an untainted tupleset
+            relation is never a derived-public name either.
+          * ``_ts_leaf_predicates`` filters the derived-tupleset case to ``spec.storage``
+            leaves, which are RewriteFilter-fed only -- rule-routed leaves carry
+            computed state and are deliberately excluded.
+          * the bridge/GC machinery cannot move either answer. ``_ensure_own_bridges``
+            (the ONLY bridge-edge writer, reached from ``_ensure_bridges`` /
+            ``_ensure_entity_middles``) creates exactly two edge shapes:
+            ``w_all(T, p) -> concrete`` and ``concrete -> w_any(T, p)``. Neither can be
+            an incoming edge that either reader accepts: the ``w_all`` subject has a
+            relation name for its ``predicate``, so ``_stored_tupleset_subjects``'s
+            ``n.predicate != '...'`` skip drops it and ``stored_userset_subjects``'s
+            ``n.wildcard == ''`` test drops it; and the ``concrete -> w_any`` edge's
+            OBJECT is a wildcard node, never a ts/leaf node. The precise claim is
+            therefore: **the bridge machinery never creates an edge whose subject is a
+            ``w_any`` node or a bare (``'...'``) concrete** — the ``w_any``-subject case
+            because ``_ensure_own_bridges`` only ever puts a ``w_any`` in OBJECT
+            position, and the bare-concrete case because
+            ``SchemaInfo.bridged_in_shapes`` excludes ``(T, '...')`` outright, so a bare
+            concrete never receives an out-bridge at all.
+            ⚠ Do NOT weaken this to "nothing ever creates an edge out of a ``w_any``
+            node" (as an earlier draft of this docstring did). That is FALSE, and
+            refuted by the very function this premise justifies: the ``elif
+            n.wildcard == 'any'`` arm of ``_stored_tupleset_subjects`` exists precisely
+            to read edges whose subject is a ``w_any`` node — a raw ``T:*`` tupleset
+            write creates one (RC2). Those come from RAW writes, which precede the
+            cascade, which is why the premise still holds.
+            And a node holding stored tupleset/userset edges has
+            ``reference_count > 0``, so ``_gc_subject_node`` (which deletes only at 0)
+            cannot remove it mid-cascade.
+
+        ⚠ NEGATIVE results are cached too, and that needs its own argument.
+        ``_stored_tupleset_subjects`` returns ``([], [])`` when ``_node(ts, ...)`` is
+        None, and that node CAN be interned mid-cascade:
+        ``WildcardIndex._ensure_entity_middles`` (I14 crossing middles, reached from
+        ``add_tuple`` -> ``_ensure_bridges``) interns ``(p, T, x)`` for every crossable
+        shape. It is benign TODAY because a freshly interned middle carries nothing but
+        its own two bridges, and both bridge subjects are excluded by the filters named
+        above -- so the answer is still ``([], [])``. That argument is three hops deep
+        and is exactly the kind that rots: if the middle machinery ever grows an edge
+        whose subject is a bare (``'...'``) concrete or a ``w_any`` node, this memo
+        starts serving a stale empty answer. The pin is
+        ``tests/test_stored_cache_scope.py``.
+
+        ⚠ DO NOT install this in ``connectedstore/apply.py::advance_index``. That is
+        where the N15 node cache lives and its scope SPANS the raw-write apply loop --
+        a stored-tuple memo there would outlive writes that change the very edges it
+        caches, which is a silent wrong-answer authorization bug, not a crash.
+
+        ⚠ DO NOT extend the memo to ``tupleset_parents`` / ``tupleset_star_types`` /
+        ``derived_stored_parents`` / ``derived_stored_star_types``: they fan a star
+        parent through ``_instances_of_type``, which reads the global NodeV4 table, and
+        that table legitimately changes mid-reconcile. See
+        ``_expand_tupleset_parents``."""
+        outer = self._stored_cache is None
+        if outer:
+            self._stored_cache = {}
+            self._stored_cache_stats['scopes'] += 1
+        try:
+            yield
+        finally:
+            if outer:
+                stats = self._stored_cache_stats
+                stats['keys_max'] = max(stats['keys_max'], len(self._stored_cache))
+                self._stored_cache = None
+
     def reconcile_subject(self, object_type: str, rel: str, obj_name: str,
                           s: SubjectKey) -> bool:
-        with self._residue_cache_scope():
+        with self._residue_cache_scope(), self._stored_cache_scope():
             return self._reconcile_subject(object_type, rel, obj_name, s)
 
     def _reconcile_subject(self, object_type: str, rel: str, obj_name: str,
@@ -689,7 +890,7 @@ class DeltaProcessor:
         return changed
 
     def reconcile(self, object_type: str, rel: str, obj_name: str) -> bool:
-        with self._residue_cache_scope():
+        with self._residue_cache_scope(), self._stored_cache_scope():
             return self._reconcile(object_type, rel, obj_name)
 
     def _reconcile(self, object_type: str, rel: str, obj_name: str) -> bool:
@@ -846,19 +1047,29 @@ class DeltaProcessor:
         if self._residue_row(n.id) is not None or self._residue_references(n.id):
             return
         entity = (n.type, n.name)
-        # strip pure-bridge scaffolding first (implicit GC then collects the node)
+        # DEMOTE BEFORE STRIP (BL-1, docs/spec-deviations.md 2026-08-21). The node
+        # survives here on an unrelated reference (e.g. a raw grant tuple, or -- the
+        # leak -- its own in-bridge): its recording was just dropped, so demote it back
+        # to implicit, because a fresh build interns it implicit and leaving it explicit
+        # would drift the canonical form (Edit 2). This ORDER is load-bearing, not
+        # incidental: ``_maybe_remove_bridges``' guard is ``implicit and
+        # reference_count == degree``, and a released userset subject is still EXPLICIT
+        # from the add-cascade's step-2d promotion, so stripping first was a GUARANTEED
+        # no-op on exactly the path that needed it and nothing re-checked afterwards.
+        # ⚠ The strip guard is NOT the thing to relax -- ``remove_node``'s "explicit
+        # nodes keep bridges for as long as they exist" policy depends on it; what was
+        # missing is this demote landing first, so the node is no longer explicit when
+        # the strip asks. Both orders are otherwise identical: when the node is already
+        # implicit the demote returns immediately, and when it stays explicit (a
+        # canonical reason still holds) the strip no-ops exactly as it did before.
+        if n.reference_count > 0:
+            self._demote_released_node(n)
+        # strip pure-bridge scaffolding (implicit GC then collects the node)
         self.widx._maybe_remove_bridges(n)
         n = self.session.get(NodeV4, node_id)
-        if n is not None:
-            if n.reference_count == 0:
-                self.idx._evict_node(n)         # N15: evict before delete
-                self.session.delete(n)
-            else:
-                # survives on an unrelated reference (e.g. a raw grant tuple): its
-                # recording was just dropped, so demote it back to implicit -- a fresh
-                # build interns it implicit, and leaving it explicit would drift the
-                # canonical form (Edit 2).
-                self._demote_released_node(n)
+        if n is not None and n.reference_count == 0:
+            self.idx._evict_node(n)             # N15: evict before delete
+            self.session.delete(n)
         # I14: whichever branch ran may have removed -- or demoted into bridge-only
         # crossing-middle state -- the entity's last real node; re-normalize its
         # crossing middles (collect them when no witness remains).
@@ -1306,16 +1517,24 @@ class DeltaProcessor:
         """The in-transaction cascade (§5.1): per stratum round, map the frontier's
         deltas (plus pending residue bumps) to keys, reconcile each, advance.
 
-        Wrapped in the per-batch node-resolution cache (perf N15): the cascade
-        re-resolves the same concrete subject/object/leaf nodes across every reconcile,
-        leaf probe and residue read of a round, so one scope over the whole cascade
-        collapses the ``node_v4`` SELECTs (with negative caching for the many absent
-        probes). Reentrant, so under ``advance_index`` (which installs its own outer
-        scope) this is a no-op and under a standalone ``run_cascade`` (test-matrix
-        GraphBackend) it is the outermost -- exercised under paranoia either way. The
-        scope closes before the caller commits, so the paranoia checker reads true
-        state (see ``ReachabilityIndex._node_cache_scope``)."""
-        with self.idx._node_cache_scope():
+        A TWO-CACHE wrapper around ``_run_cascade``; both scopes are reentrant and both
+        close before the caller commits, so the paranoia checker reads true state.
+
+        (1) The per-batch node-resolution cache (perf N15): the cascade re-resolves the
+        same concrete subject/object/leaf nodes across every reconcile, leaf probe and
+        residue read of a round, so one scope over the whole cascade collapses the
+        ``node_v4`` SELECTs (with negative caching for the many absent probes). Being
+        reentrant, under ``advance_index`` (which installs its own outer scope) it is a
+        no-op, and under a standalone ``run_cascade`` (test-matrix GraphBackend) it is
+        the outermost -- exercised under paranoia either way. See
+        ``ReachabilityIndex._node_cache_scope``.
+
+        (2) The stored-tuple enumeration memo (perf R6-10), installed cascade-wide
+        because the raw stored tuples it reads cannot change inside a cascade -- the
+        full premise, and the two places it must NOT be installed or widened, are in
+        ``_stored_cache_scope``'s own docstring. Unlike (1) this one is NOT installed
+        by ``advance_index``, deliberately: that scope spans the raw-write apply loop."""
+        with self.idx._node_cache_scope(), self._stored_cache_scope():
             self._run_cascade(txn_start_watermark)
 
     def _run_cascade(self, txn_start_watermark: int) -> None:
