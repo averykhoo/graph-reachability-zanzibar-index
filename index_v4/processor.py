@@ -104,15 +104,23 @@ class _EvalContext:
 
     # -- closure leaves (wildcard-aware; star-under-boolean composes per §7) --
 
+    # BL-2: these two are the ONLY internal readers that probe the facade with a
+    # LEAF PREDICATE name and legitimately expect real grants -- every compiled
+    # boolean plan reads its operands through them. They must therefore enter
+    # BELOW the public entry's leaf-name fence (`WildcardIndex._check_internal`,
+    # not `.check`): the fenced entry answers False for every leaf family, which
+    # would zero ALL boolean evaluation. `member_check` / `member_stars` below
+    # only ever receive DECLARED relations and stay on the public `check`.
+
     def leaf_check(self, leaf_pred: str, s: SubjectKey) -> bool:
         sp, st, sn = s
-        return self.proc.widx.check(sp, st, sn, leaf_pred, self.object_type, self.obj_name)
+        return self.proc.widx._check_internal(sp, st, sn, leaf_pred, self.object_type, self.obj_name)
 
     def leaf_stars(self, leaf_pred: str) -> frozenset:
         widx = self.proc.widx
         return frozenset(
             (t, p) for (t, p) in self.proc.subject_shapes
-            if widx.check(p, t, '*', leaf_pred, self.object_type, self.obj_name))
+            if widx._check_internal(p, t, '*', leaf_pred, self.object_type, self.obj_name))
 
     # -- derived-computed leaves (same object) --
 

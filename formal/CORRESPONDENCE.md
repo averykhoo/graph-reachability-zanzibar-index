@@ -262,9 +262,9 @@ layer.
 | `GraphIndex/State.lean::GraphState` (nodes/edges/residue/outbox/watermark) | materialized closure + residue + delta stream | `index_v4/models.py::NodeV4` (identity/keying), `::EdgeV4`, `::ResidueV1` (symbolic `(stars, neg)` — plus a `version` column with **no Lean counterpart**, §7), `::DeltaOutboxV1`; helpers in `index_v4/outbox.py` |
 | `GraphIndex/State.lean::GraphState.reach` / `::reachB` (fuel = node count) | the O(1) closure probe | `index_v4/core.py::ReachabilityIndex.check_reachable_by_id` / `::ReachabilityIndex.check_reachable` (`indirect_edge_count > 0`) |
 | `GraphIndex/Closure.lean::DirectGraph`, `::pathCount`, **`::pathCount_addEdge` / `::pathCount_removeEdge` (T4)** | ref-counted path-count closure maintenance — **the hottest correctness surface, and it had NO row until 2026-07-26** | `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe` → `::ReachabilityIndex._add_direct_edge_unsafe_impl`, `::ReachabilityIndex._add_db_edges_unsafe`, `::ReachabilityIndex._add_indirect_edges_batch_unsafe`, `::ReachabilityIndex._remove_edge_locked`. **Honest caveat:** T4 is proved on `DirectGraph` — a bare `structure DirectGraph where dcount : V → V → Nat`. `DirectGraph` occurs in **exactly one file** (`Closure.lean`) and that file mentions `GraphState` **zero times**; there is **no theorem connecting `pathCount` to `GraphState.edges`**. So the ref-counted closure arithmetic is **inspection-pinned to the closed form, not chain-integrated**: the chain's own theorems never invoke T4 |
-| `GraphIndex/State.lean::GraphModel.probeNonDerived` (≤4 probes) | untainted read | `index_v4/wildcard.py::WildcardIndex.check` — the probe assembly (`::WildcardIndex.check.key`, probes 1–4 into one row-value `IN`) |
+| `GraphIndex/State.lean::GraphModel.probeNonDerived` (≤4 probes) | untainted read | `index_v4/wildcard.py::WildcardIndex._check_internal` — the probe assembly (`::WildcardIndex._check_internal.key`, probes 1–4 into one row-value `IN`). Split out of `::WildcardIndex.check` 2026-08-21 (BL-2): the public entry now carries a leaf-family deny fence the model's query space never exercises; the probe algorithm is byte-identical |
 | `GraphIndex/State.lean::GraphModel.probeDerived` (edge probe → `stars`∖`neg`, `upos`; edge hit skips `neg` — I6) | derived read path | `index_v4/wildcard.py::WildcardIndex._check_derived`, reading `::WildcardIndex._residue_state` |
-| `GraphIndex/State.lean::GraphModel.check` (route by `isDerived`) | `WildcardIndex.check` | `index_v4/wildcard.py::WildcardIndex.check` (routes `(o_type, relation) ∈ schema_info.derived_families` to `::WildcardIndex._check_derived`) |
+| `GraphIndex/State.lean::GraphModel.check` (route by `isDerived`) | `WildcardIndex._check_internal` | `index_v4/wildcard.py::WildcardIndex._check_internal` (routes `(o_type, relation) ∈ schema_info.derived_families` to `::WildcardIndex._check_derived`). The public `::WildcardIndex.check` wraps it with the BL-2 leaf-family deny fence (2026-08-21) — a domain restriction outside the modeled query space, not an algorithm change |
 | `GraphIndex/State.lean::GraphAccepts` | decision-15 compile-scope rejection | `zanzibar_utils_v1.py::_reject_object_wildcard_scope` (object wildcards on derived + wildcard usersets over derived) and `::_reject_doubly_bridged_shapes` (a literal `T:*#p` userset restriction that is also an object-wildcard shape), raising `::UnsupportedByGraphIndex` / `::DoublyBridgedShapeError` (F1/F2, spec-deviations 2026-07-17). Each only NARROWS the admissible schema space — no modeled algorithm change (`GraphState.admitEdge` untouched) |
 | `GraphIndex/State.lean::Quiescent` | outbox drained at the commit boundary (I10) | `index_v4/processor.py::DeltaProcessor.audit_fixpoint`; `index_v4/invariants.py::_check_outbox_sanity` |
 | **`GraphIndex/State.lean::Inv`** | **8 named clauses — relabeled below; the old "I1–I3 structural + I6 ×4" label overclaimed** | `index_v4/invariants.py::check_invariants` + `::_check_derived_invariants` + `::_check_residue_rows` |
@@ -344,7 +344,7 @@ since the citations were stamped and was rewritten again on 2026-07-26.
 | `GraphIndex/ReconcileStars.lean::GraphState.reconcileResidueKey` (wholesale `stars`/`neg`/`upos` recompute) | the full-object recompute | `index_v4/processor.py::DeltaProcessor._reconcile` steps (1) stars fold via `plan.stars_fn`, (2)/(2a) neg candidates incl. from-chain (`::DeltaProcessor._leaf_concretes`, `::DeltaProcessor._derived_leaf_neg_ids`, `::DeltaProcessor._from_chain_keys`), (2c) `upos` wholesale |
 | `GraphIndex/ReconcileStars.lean::GraphState.reconcileKeyC` / `::GraphState.reconcileStarsKey` (residue-THEN-edges) | the ORDER: residue written before the edge audit | `index_v4/processor.py::DeltaProcessor._reconcile` — step (3) `::DeltaProcessor._store_residue` upsert precedes the step-(4) edge audit |
 | **`GraphIndex/ReconcileDiff.lean::GraphState.reconcileStarsKeyD`** (and `::GraphState.reconcileKeyD`) — the DIFFING pass (stale-edge retraction) | want/have edge diff | `index_v4/processor.py::DeltaProcessor._reconcile` step (4) fans each bare-entity audit member into `::DeltaProcessor._reconcile_subject`, whose bare-entity tail computes `want_edge = should and not covered`, compares against `index_v4/core.py::ReachabilityIndex.direct_edge_exists_by_id`, and adds/removes via `index_v4/processor.py::DeltaProcessor._write_derived`. **The definition lives in `ReconcileDiff.lean`, which this file never named** |
-| `GraphIndex/CascadeStrata.lean::GraphModel.graphRecR` / `::GraphState.checkFnR` / `::GraphState.coveredFnR` — the ROUTED operand read | untainted → closure probe; derived → residue read | `index_v4/processor.py::_EvalContext` (`::_EvalContext.leaf_check` → `WildcardIndex.check`; `::_EvalContext.derived_check`/`::_EvalContext.derived_stars` → `::DeltaProcessor.derived_check` → `WildcardIndex._check_derived`; `::userset_*`, `::ttu_*`, `::tupleset_ttu_*` for the other leaf kinds), plus `::DeltaProcessor.member_check` |
+| `GraphIndex/CascadeStrata.lean::GraphModel.graphRecR` / `::GraphState.checkFnR` / `::GraphState.coveredFnR` — the ROUTED operand read | untainted → closure probe; derived → residue read | `index_v4/processor.py::_EvalContext` (`::_EvalContext.leaf_check` → `WildcardIndex._check_internal`, the unfenced probe entry — the public `check` denies leaf names since BL-2, 2026-08-21; `::_EvalContext.derived_check`/`::_EvalContext.derived_stars` → `::DeltaProcessor.derived_check` → `WildcardIndex._check_derived`; `::userset_*`, `::ttu_*`, `::tupleset_ttu_*` for the other leaf kinds), plus `::DeltaProcessor.member_check` |
 | `GraphIndex/Cascade.lean::affectedKeys` (**two branches**) | delta → dirty derived keys | `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` — the `isinstance(fam, LeafFamily)` own-key branch (with its `raise InvariantViolation` on a wildcard-object delta) — and `::DeltaProcessor._fan_out`'s `edge.via == 'computed'` arm. **Models 2 of ~6 Python channels — see §7** |
 | `GraphIndex/State.lean::Delta.leaf` | the outbox row's LeafFamily-vs-DerivedFamily provenance | in Python the family type `self.compiled.namespace.get((o_type, o_pred))` decides the branch inside `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` — there is no stored provenance column; the Lean tag is a modeling device for a collapsed state space |
 | `GraphIndex/Cascade.lean::GraphState.frontierRows`, `GraphIndex/CascadeStrata.lean::GraphState.frontierRowsAbove` / `::GraphState.frontierMax` | per-round outbox read + cursor | `index_v4/processor.py::DeltaProcessor._run_cascade` (`rows = outbox_rows(...)`, then `frontier_start = max((r.id for r in rows), default=frontier_start)`), reading `index_v4/outbox.py::outbox_rows` |
@@ -490,8 +490,27 @@ The bullet is corrected in place below.
     closure leaves DO store userset subjects.)
   A per-subject path that can escalate to a full reconcile and can mutate node
   flags is a real algorithm, and none of it is in the model.
-
-### 7.2 Residue/state gaps
+* **★ NEW 2026-08-21 (BL-2) — stale Lean COMMENTS name `leaf_check` →
+  `WildcardIndex.check`; the code now reads through
+  `WildcardIndex._check_internal`.** The BL-2 fix split the facade's read entry:
+  the public `index_v4/wildcard.py::WildcardIndex.check` gained a leaf-family
+  deny fence (a leaf-predicate query answers `False`/empty on every public
+  surface), and the pre-existing probe body moved verbatim to
+  `::WildcardIndex._check_internal`, which `index_v4/processor.py::_EvalContext.leaf_check` /
+  `::_EvalContext.leaf_stars` now call directly (they are the only internal
+  leaf-name readers, and fencing them would zero all boolean evaluation).
+  **No modeled algorithm changed** — `GraphModel.probeNonDerived` /
+  `GraphModel.check` describe `_check_internal` byte-for-byte, and the model's
+  query space never contains a leaf-predicate key, so the fence is a domain
+  restriction outside the fragment. But three Lean doc comments still assert
+  the OLD identity by name: `GraphIndex/CascadeStrata.lean` (module header and
+  the `graphRecR` doc comment, "`leaf_check` → `WildcardIndex.check`"),
+  `GraphIndex/ReconcileWrite.lean` (module header, "`_EvalContext.leaf_check` =
+  `widx.check`"), and `Audit.lean`'s W3d-2 narration ("`leaf_check` ->
+  `widx.check`"). Comments only — no definition, theorem, or proof mentions the
+  Python name. Logged here (this section is the declared home for model↔code
+  drift) rather than editing the Lean sources in the BL-2 change, which touches
+  `index_v4/` only; fold the comment fix into the next Lean-touching session.
 
 * **`ResidueV1.version` is gated by nothing formal — now DECLARED as projection
   P7 (`ZT-P4-5(b)`, 2026-07-27).**

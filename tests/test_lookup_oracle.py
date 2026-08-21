@@ -25,9 +25,14 @@ Graph index (``WildcardIndex``) -- exact (two-sided) surfaces:
       ``node_ids``  or  (o_type, rel, 'all') in ``markers``] == O; a '*' object is
       covered by the 'all' marker alone (intensional).
   G2  lookup soundness sweep: every returned node id whose (type, predicate) is a
-      declared relation is O-true for the subject. Internal '.'-leaf-family storage
-      nodes appear in forward results by design (callers filter by shape, cf.
-      test_reads.viewer_objects) and are skipped.
+      declared relation is O-true for the subject, and NO internal '.'-leaf-family
+      storage node ever appears in a forward result. ⚠ TIGHTENED 2026-08-21 (BL-2):
+      this used to be a tolerated skip ("appear by design; callers filter by
+      shape"), and that skip is part of how the leaf-name read leak stayed
+      invisible to this gate -- its grids hold only DECLARED relations, so the
+      skip was the one place a leaf node crossed the checkers. Forward results now
+      carry the same no-leaf assertion the G4 reverse sweep always had; the
+      deterministic minimal repro lives in tests/test_reg18_leaf_name_read_leak.py.
   G3  lookup_reverse exactness: for every candidate subject, [subject node in
       ``node_ids``  or  ((s_type, s_pred, 'any') in markers and subject node not in
       ``excluded_node_ids``)] == O; a '*' subject is covered by the 'any' marker
@@ -210,8 +215,13 @@ def _check_graph_forward(widx, ast, oc, subject, objects, res):
     for nid in res.node_ids:                                    # G2 soundness sweep
         node = widx._node_by_id(nid)
         assert node is not None, f'graph.lookup{subject}: dead node id {nid}'
-        if _is_leaf_pred(node.predicate) or (node.type, node.predicate) not in ast:
-            continue                     # internal leaf-family storage node (documented)
+        assert not _is_leaf_pred(node.predicate), (
+            f'graph.lookup{subject}: internal leaf-family storage node '
+            f'{node.type}:{node.name}#{node.predicate} leaked into a forward result '
+            f'(BL-2: leaf families are storage-internal; this was a tolerated skip '
+            f'until 2026-08-21 -- see tests/test_reg18_leaf_name_read_leak.py)')
+        if (node.type, node.predicate) not in ast:
+            continue                        # non-relation internal node (e.g. middles)
         assert oc(sp, st, sn, node.predicate, node.type, node.name), (
             f'graph.lookup{subject} leaked {node.type}:{node.name}#{node.predicate} '
             f'(oracle says no access)')

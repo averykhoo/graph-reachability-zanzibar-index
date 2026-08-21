@@ -261,16 +261,26 @@ def _boolean_pool():
     return out
 
 
-def _boolean_grid():
+def _boolean_grid(leaf_families: frozenset = frozenset()):
     # ('viewer','doc',...) are the TTU from-chain userset shapes of 'inherited'
     # (lookup-gate X4a): userset subjects whose truth flows through a stored
     # tupleset parent -- the P7 grids never queried them, which is how the
     # derived-TTU from-chain divergence survived the acceptance event.
+    #
+    # `leaf_families` (BL-2, 2026-08-21): minted leaf predicates (`viewer.0`) join
+    # the target rels -- DERIVED from the compiler's own leaf_families table, never
+    # hand-written. The grids used to iterate only declared relations, so a leaf
+    # name was by construction never queried; observed leak on `viewer: editor but
+    # not banned` after writing alice editor d1:
+    #   check(alice,'viewer.0',d1) = graph TRUE / sets False / oracle False.
     subjects = [('...', 'user', 'u1'), ('...', 'user', 'ghostU'), ('...', 'user', '*'),
                 ('member', 'group', 'g1'), ('member', 'group', 'ghostG'),
                 ('viewer', 'doc', 'd1'), ('viewer', 'doc', 'ghostD')]
     rels = ['viewer', 'restricted', 'inherited', 'editor', 'public', 'blocked']
     targets = [(r, 'doc', d) for r in rels for d in ['d1', 'd2', 'ghostD']]
+    _o_names = {'doc': ['d1', 'd2', 'ghostD'], 'group': ['g1', 'g2', 'ghostG']}
+    targets += [(leaf, ot, on) for (ot, leaf) in sorted(leaf_families)
+                for on in _o_names.get(ot, ['ghost'])]
     return [(sp, st, sn, r, ot, on) for (sp, st, sn) in subjects for (r, ot, on) in targets]
 
 
@@ -288,7 +298,12 @@ def test_matrix_4way_boolean(load_fga_schema, seed):
     mb = MultiBackend([graph, connected] + set_backends, decider=graph)
 
     pool = _boolean_pool()
-    grid = _boolean_grid()
+    # BL-2: leaf predicates enter target position, derived from the compile.
+    # ANTI-VACUITY: if the fixture stopped minting leaf families, the extension
+    # would silently query nothing new -- refuse instead of shrinking.
+    assert graph.ruleset.compiled is not None and graph.ruleset.compiled.leaf_families, \
+        'boolean fixture minted no leaf families -- the BL-2 grid extension is vacuous'
+    grid = _boolean_grid(graph.ruleset.compiled.leaf_families)
     rng = random.Random(seed)
     present, history = set(), []
 

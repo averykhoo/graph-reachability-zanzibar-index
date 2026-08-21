@@ -396,7 +396,7 @@ MIN_CONF_ALL=495
 # (`GS-2`), which is a FAIL-OPEN surface -- every excluded input is one that can no
 # longer invalidate a cached green -- so each exclusion is pinned in a PAIR with a
 # control proving the scope still covers its neighbourhood.
-MIN_TESTS_ALL=903
+MIN_TESTS_ALL=923
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

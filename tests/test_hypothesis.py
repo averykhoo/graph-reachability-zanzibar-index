@@ -346,6 +346,10 @@ def _op_pool(ast):
 def _grid(ast):
     """The check grid, DERIVED from the AST's own Direct restrictions (design §3 hunk 3).
 
+    Deliberately UNEXTENDED for BL-2: generated-schema leaf-name coverage arrives via
+    ParityEngine._grid (Layer A + the post-cap floor slice), which runs on every
+    accepted op of the stateful machine -- extending this grid too would be redundant.
+
     It used to hardcode ``('...', 'user', ...)`` subjects and ``DOCS`` objects, which is
     blind to any object type or subject shape the schema declares beyond those -- so a
     multi-type tupleset would be compiled and never queried. Values may be ``None`` (the

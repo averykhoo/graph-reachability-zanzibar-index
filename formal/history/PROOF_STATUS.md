@@ -15,6 +15,119 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-21b (**`P3` SCOUTED INTO AN EXECUTABLE DESIGN, NOT LANDED: the adjudication's census has a HOLE (`shadow_graphRec_agree`, 14 call sites, one file outside the budget), the `FoldAdmits` lockstep is 21-move/3-stay not 24, the keep-names/change-bodies decision is taken, an UNOWNED shadow-existence obligation surfaced — and MACHINE-CHECKED twice: after 4c-ii the headline theorems are FALSE AS WRITTEN at minted leaf-name queries. The narrowest repair is an `hql` guard and it is a HUMAN CALL. The probe's Python twin was live bug `BL-2`, fixed the same session.**)
+
+**Task taken:** `P3` (leg 7, step 4c-ii + step 7). NOT landed — the scout produced the
+budget corrections below and a falseness finding, and the falseness probe reproduced on
+the SHIPPED Python as board id `BL-2` (found, measured, fixed, pinned; the Python half is
+`docs/spec-deviations.md` `## 2026-08-21b`, this entry is the formal half). Branch
+`bl-2-leaf-name-read-leak`. No Lean declaration changed this session: both probes were
+standalone files run via `lake env lean`, both deleted, tree left clean. What DID change
+in `formal/`: `CORRESPONDENCE.md` rows for `GraphModel.probeNonDerived` /
+`GraphModel.check` / `graphRecR` re-anchored onto
+`index_v4/wildcard.py::WildcardIndex._check_internal` (anchor check 533/533 resolved),
+and a new §7.1 gap entry for three stale Lean doc comments
+(`GraphIndex/CascadeStrata.lean:9`/`:89`, `GraphIndex/ReconcileWrite.lean:13-22`,
+`Audit.lean:927`) that still assert the old `leaf_check` → `WildcardIndex.check`
+identity — comments only, owed to the next Lean-touching session.
+
+### 1. AFTER 4c-ii THE HEADLINE THEOREMS ARE FALSE AS WRITTEN — machine-checked by two independent constructions
+
+Not merely unproven: FALSE, at queries whose relation is a MINTED LEAF NAME. Both
+constructions are kernel `by decide`, run as standalone probes.
+
+* **Probe 1** (witness `SlV`, write `tlEditor`): built the leaf query `qLeaf` at the
+  minted name `viewer.0`, confirmed every existing hypothesis of `graph_correct` holds at
+  it, and evaluated both sides. Literal output:
+
+      ("minted leaf name", "viewer.0")
+      ("hd: isDerived at leaf name", false)
+      ("hqs holds", true, "hqo holds", true)
+      ("probeNonDerived sR qLeaf", true)
+      ("check sR qLeaf", true)
+      ("sem qLeaf", false)
+      ("drainedB sRLc", true, "check sRLc qLeaf", true, "sem qLeaf", false, "check sRLc qPub", true)
+
+* **Probe 2** (independent construction): TYPECHECKED
+  `graph_correct qLeaf admission w4fragment h hq b1 b2` verbatim at the leaf query —
+  every hypothesis is inhabited, so the statement genuinely governs the query — then
+  showed the re-pointed driver's drained state GRANTS it while `sem` denies. So the
+  falseness is of the statement as written, not of a vacuous instance.
+* ⚠ **A claim NOT to carry:** probe 2 separately suggested `hql` alone does not rescue
+  the PUBLIC query. That is an ARTIFACT of its unadapted cascade — probe 1, with an
+  adapted cascade, observed `check sRLc qPub = true` agreeing with `sem` (last field of
+  the output above). The stronger claim is refuted; do not restate it.
+
+**Scope of the damage:** ~10 pinned headline statements —
+`headline_statements.txt:27` `graph_correct`, `:29` `backend_equivalence`, `:30`
+`exclusion_effective`, `:31` `no_ghost_grant`, `:33` `graphRun_check_eq_sem`, `:34`
+`graphRunOps_check_eq_sem` (and their dependents) — each needs a NEW query guard after
+4c-ii lands. Today's tree is UNAFFECTED: 4c-ii has not landed, the statements are true
+unguarded, and the live latency record is `docs/latent-gaps.md`.
+
+**The guard analysis, decided as far as a session can decide it:**
+
+* ACCEPT (narrowest repairing guard):
+  `hql : publicOfLeaf S q.object.type q.relation = none`.
+* REFUSE `isLeafPred q.relation = false` — schema-independent and over-broad: it also
+  excludes undeclared junk names (`foo.bar`), where the claim HOLDS today.
+* REFUSE anything keyed on `isDerived`/taint — it guts every derived-query headline
+  claim while the pin regenerates GREEN, the house failure mode.
+* 🧭 **The acceptance itself is a HUMAN CALL, owed BEFORE 4c-ii lands.** It narrows the
+  governing claims of the whole formal effort, and Route B was adjudicated as a human
+  call for less.
+
+**The Python twin (`BL-2`):** the shipped `WildcardIndex.check` reproduced exactly this
+grant at leaf names — the model was not ahead of the code, the code already had the bug.
+Fixed and pinned this session; blast radius, fix and sabotage record in
+`docs/spec-deviations.md` `## 2026-08-21b`.
+
+### 2. THE ADJUDICATION'S CENSUS HAS A HOLE — `shadow_graphRec_agree` is outside the budget
+
+Route B's site budget was re-verified LIVE and is CORRECT as far as it reaches:
+`UntaintedShadow` 84 lines in 7 files (`CascadeStrataSettle` 40, `CascadeStable` 18,
+`CascadeStrataResettle` 10, `CascadeStrataEnum` 6, `Audit` 6, `CascadeSettle` 3,
+`CascadeStrataAssemble` 1); `DerNode` 39–40 in 3 files; sum ~123. But
+`CascadeStable.lean::shadow_graphRec_agree` is one of the 11 audited shadow names and has
+**14 call sites, including `CascadeEnum.lean:366` — a file with ZERO `UntaintedShadow`
+mentions**, hence entirely outside the 7-file/84-site budget. Its obligations are
+discharged from `hunt : isDerived S (dt',r') = false` ALONE, which does NOT imply
+`publicOfLeaf = none`. Under Route B this forces a NEW hypothesis on an audited
+signature plus 14 call-site repairs. **This is unbudgeted work** and the 2026-08-20b
+"~123 sites, zero cone beyond the 39 modules" sizing must be read with this correction.
+
+### 3. AN UNOWNED PROOF OBLIGATION — the shadow-existence write case on a mixed schema
+
+`CascadeStable.lean:893-904` (`reachedByW3d_shadow`) builds via
+`untaintedShadow_writeLeg`, which pairs the SAME list on both folds. Post-re-point, σ
+folds the LEAF closure while σ0 stays on `rewriteClosure`, and on a MIXED schema the
+leaf list is a STRICT SUPERSET even for untainted tuples. Two independent design slices
+each assumed the OTHER owned this case; neither did. It is not mechanical re-spelling —
+it needs its own lemma about the superset's extras, and it materially grows the Lean
+budget beyond the ~123-site count.
+
+### 4. The rest of the executable design
+
+* **`FoldAdmits` lockstep: 21 sites MOVE, 3 MUST STAY** on the σ0 side —
+  `RulesComplete.lean:91` (`ReachedByRulesAdmitted.step`), `RestrictBase.lean:470` and
+  `:531`. This CORRECTS the previously recorded "all 24 in lockstep" (scope doc §11.10's
+  trap keeps its warning; only the count is superseded).
+* **Dominant-cost decision, taken: KEEP the names and change the BODIES** of the live
+  write leg — `writeLoggedRules` / `removeLoggedRules` / `affectedKeys` / `graphRunAux` /
+  `graphRunOpsAux` and the six `ReachedByW3d*` write ctors. `rewriteClosure` must KEEP
+  its meaning: the σ0 chain is rules-built by design, so a global redefinition is NOT
+  available. `writeRules` keeps name and body — changing it would BE Route C, which was
+  rejected.
+* **`LeafNode` does not exist and must be written.** Carrier is
+  `(publicOfLeaf S k.type k.pred).isSome` (`Leaf.lean:465`), NEVER `isLeafPred` — the
+  prior sabotage on the bare sentinel produced NINE reds. Residual hole: `relNameOK`
+  permits the empty relation name, so `LeafNode` needs a `leafPublic p ≠ ""` conjunct.
+
+**Gate state at time of writing:** all nine pytest tiles PASSED on this tree (zero
+`xfailed`, zero `skipped`; counts in `formal/FINAL_REVIEW.md`'s generated block);
+`MIN_TESTS_ALL` 903 → 923 re-measured by `--collect-only`; the `lean` phase runs LAST,
+after `doc_counts --generate`, and had not yet run.
+
 ## Session 2026-08-20b (**THE 4c-ii ADJUDICATION IS SETTLED: the `UntaintedShadow` weakening is SOUND (no-kill at all six witnesses, both chains), Route B is recommended over the newly-surfaced Route C on a cone argument, the scout's proposition (★) is REFUTED as stated on the `_d` chain and corrected to (★′), the P14 slice is Half-1-only, and the candidate set does NOT starve. One additive zero-cone Lean module; nothing existing changed meaning.**)
 
 **Task taken:** settle the proof-design adjudication `P3` has been blocked on since
