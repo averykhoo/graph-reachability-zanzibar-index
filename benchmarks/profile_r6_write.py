@@ -12,7 +12,8 @@ repo's existing `scale_bench` / `bulk_scale_bench` division rather than growing 
                R6-16  outbox rows emitted on a schema with NO derived relations, and
                       their share of write statements
   cascade      R6-10  _stored_tupleset_subjects calls + cum time per boolean write
-               R6-11  _residue_cache_scope entries (cache torn down between reconciles)
+               R6-11  _residue_cache_scope SCOPES ENTERED (cache torn down between
+                      reconciles) — cProfile ncalls halved, see _ctxmgr_entries
                R6-12  reconcile_subject calls vs DISTINCT keys — the un-deduped _bumped
   bulk         R6-13  bulk_backfill._instances_of_type calls + cum
                R6-14  stored tupleset/userset re-enumeration in backfill
@@ -58,8 +59,8 @@ from sqlmodel import select
 
 from benchmarks import scale_bench as sb
 from benchmarks._harness import build_graph
-from benchmarks.profile_r6 import (StmtCounter, _banner, _find, _pct, _profile,
-                                   _rows, _verdict)
+from benchmarks.profile_r6 import (StmtCounter, _banner, _ctxmgr_entries, _find,
+                                   _pct, _profile, _rows, _verdict)
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +227,60 @@ def target_graph_write(scale):
 # Target: cascade  (R6-10, R6-11, R6-12)
 # ---------------------------------------------------------------------------
 
+def _cascade_fixture(spec, scale, incr):
+    """Bootstrap a demorgans graph and return everything an incremental cycle needs.
+
+    Split out so the PROFILED pass and the UNPROFILED wall-clock pass measure the
+    same workload on independent stores (a second pass over the first pass's store
+    would be measuring a different, larger graph).
+    """
+    from index_v4.processor import DeltaProcessor
+    from zanzibar_utils_v1 import parse_openfga_schema
+    tuples = list(spec['gen'](scale))
+    widx, _ntup = build_graph(spec['schema'], spec['shapes'], tuples)
+    ruleset = parse_openfga_schema(spec['schema'], object_wildcard_shapes=spec['shapes'])
+    proc = DeltaProcessor(widx, ruleset.compiled)
+    extra = [t for t in spec['gen'](scale + incr) if t not in set(tuples)][:incr]
+    return tuples, widx, ruleset, proc, extra
+
+
+def _cascade_cycles(widx, ruleset, proc, extra, on_cascade=None):
+    """`incr` write + run_cascade + commit cycles — the path
+    `tests/test_matrix.py::GraphBackend.apply` uses (synchronous v1)."""
+    from index_v4.outbox import outbox_watermark
+    from zanzibar_utils_v1 import Entity, RelationalTriple
+    session = widx.idx.session
+    n = 0
+    for raw in extra:
+        wm = outbox_watermark(session, widx.idx.store_id)
+        sp = Ellipsis if raw[0] == '...' else raw[0]
+        tr = RelationalTriple(Entity(raw[1], raw[2]), raw[3], Entity(raw[4], raw[5]), sp)
+        for d in ruleset.apply(tr):
+            widx.add_tuple('...' if d.subject_predicate is Ellipsis else d.subject_predicate,
+                           d.subject.type, d.subject.name, d.relation,
+                           d.object.type, d.object.name)
+        if on_cascade is not None:
+            on_cascade()
+        proc.run_cascade(wm)
+        if on_cascade is not None:
+            on_cascade()
+        session.commit()
+        n += 1
+    return n
+
+
+def _memo_stats(proc):
+    """The memo's own non-vacuity counters, or None when no memo is installed.
+
+    Instrument correction (ii) from `benchmarks/results/R6_PROFILE_2026-08-17.md`:
+    a post-fix "0 calls" could mean the memo worked OR that the probe stopped
+    reaching the code, and the two print identically. Hits/misses/distinct-keys
+    distinguish them — a working memo shows HITS>0 with misses ≈ distinct keys;
+    a probe that lost its workload shows hits=0 AND misses=0.
+    """
+    return getattr(proc, '_stored_cache_stats', None)
+
+
 def target_cascade(scale, incr):
     """R6-10/11/12 live on the INCREMENTAL cascade, not on the bootstrap.
 
@@ -236,24 +291,60 @@ def target_cascade(scale, incr):
     `tests/test_matrix.py::GraphBackend.apply` uses: write, then `run_cascade(wm)` in
     the same transaction (synchronous v1). So: bootstrap first (unprofiled), then
     profile `incr` incremental write+cascade cycles.
+
+    FIVE instrument properties this target now ASSERTS rather than merely prints
+    (`docs/sabotage-procedure.md` §"A MEASUREMENT is an assurance step too"):
+
+    1. **Non-vacuity.** `_stored_tupleset_subjects` calls > 0 and cascade reconciles
+       > 0. `_find` returns 0 for a function it cannot locate BY NAME, so an inlined,
+       renamed or wrapped-away function would otherwise print a beautiful `0.0%` win
+       that is pure artifact. A zero is now a hard failure of the probe.
+    1b. **Non-vacuity and PLACEMENT of the memo** — `_stored_cache_scope` entries > 0,
+       memo HITS > 0, and `scopes == nwrites`, whenever the tree carries R6-10 at all.
+       Added 2026-08-20 after adversarial review: the first two were printed with a
+       comment naming HITS>0 as the disambiguator, and then never checked. Sabotage
+       (`docs/sabotage-procedure.md`), `--bool-scale 12 --incr 8`, applied by
+       monkeypatch:
+
+         B. `_stored_cache_scope` made a no-op everywhere ->
+            `AssertionError: INSTRUMENT BROKEN: _stored_cache_stats exists but
+            _stored_cache_scope was entered 0 times`.  RED.
+         A. the scope dropped from `run_cascade` ONLY (kept in `reconcile` /
+            `reconcile_subject`) -> **the `hits > 0` check does NOT fire**: the nested
+            scopes still serve `1,152 hits / 30 misses`. That is why `scopes ==
+            nwrites` was added; it fires with
+            `AssertionError: INSTRUMENT BROKEN: 38 outermost stored-cache scopes for
+            8 cascades`.  RED.
+
+       `scopes == nwrites` is DERIVED, not tuned: `_cascade_cycles` runs exactly one
+       `run_cascade` per write and `scopes` counts outermost installs only. Baseline
+       for both: `8 scopes, largest 4 distinct keys`, rc=0.
+    2. **SQL statements, not seconds.** In-memory SQLite makes a round trip
+       microseconds, so seconds UNDERSTATE the win; the transferable metric is the
+       eliminated statement count (one PostgreSQL RTT each). `target_graph_write`
+       already counted them; this target did not.
+    3. **An unprofiled wall-clock pass**, on its own fresh store: under cProfile
+       absolute throughput is depressed several-fold, so the profiled seconds are
+       ratios-only.
+    4. **The instrument restores its own subject.** This target monkeypatches
+       `DeltaProcessor.reconcile_subject`; the restore is asserted, not assumed
+       (`GS-2`'s class of failure — an instrument that mutates what it measures).
+
+    ⚠ Scope note, so the number is not over-read: demorgans_law_2 stores NO `T:*`
+    tupleset parent, so the RC2 star arm (`_instances_of_type`) is not exercised at
+    all here — its call count is printed as evidence rather than assumed. For the same
+    reason `DeltaProcessor.stored_userset_subjects` — the memo's OTHER guarded reader —
+    is called **0 times** on this workload, so HALF the R6-10 change is invisible to
+    every number below. Its pin is `tests/test_stored_cache_scope.py`, not a profile.
     """
     _banner(f'cascade — demorgans_law_2/graph scale={scale}, {incr} incremental '
             f'write+cascade cycles (boolean)   [R6-10, R6-11, R6-12]')
     spec = sb.WORKLOADS['demorgans']
-    tuples = list(spec['gen'](scale))
-    print(f'  dataset: {len(tuples):,} raw tuples (bootstrap, unprofiled)')
-
-    widx, ntup = build_graph(spec['schema'], spec['shapes'], tuples)
 
     from index_v4.processor import DeltaProcessor
-    from index_v4.outbox import outbox_watermark
-    from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
-    ruleset = parse_openfga_schema(spec['schema'], object_wildcard_shapes=spec['shapes'])
-    proc = DeltaProcessor(widx, ruleset.compiled)
+    tuples, widx, ruleset, proc, extra = _cascade_fixture(spec, scale, incr)
     session = widx.idx.session
-
-    # Fresh tuples the bootstrap has not seen: extend the generator past `scale`.
-    extra = [t for t in spec['gen'](scale + incr) if t not in set(tuples)][:incr]
+    print(f'  dataset: {len(tuples):,} raw tuples (bootstrap, unprofiled)')
     print(f'  incremental writes    : {len(extra):,} fresh tuples through run_cascade')
 
     # Count reconcile_subject calls and their DISTINCT keys — R6-12's measurable
@@ -266,33 +357,47 @@ def target_cascade(scale, incr):
         calls.append((object_type, rel, obj_name))
         return orig(self, object_type, rel, obj_name, *a, **k)
 
+    ctr = StmtCounter(session)
+    stage = {'i': 0}
+
+    def on_cascade():
+        # called twice per cycle: before run_cascade (clear) and after (sample)
+        if stage['i'] % 2 == 0:
+            del calls[:]                      # R6-12 is INTRA-cascade duplication
+        else:
+            per_cycle.append((len(calls), len(set(calls))))
+        stage['i'] += 1
+
     DeltaProcessor.reconcile_subject = counting
+    ctr.start()
     try:
-        def work():
-            n = 0
-            for raw in extra:
-                wm = outbox_watermark(session, widx.idx.store_id)
-                sp = Ellipsis if raw[0] == '...' else raw[0]
-                tr = RelationalTriple(Entity(raw[1], raw[2]), raw[3], Entity(raw[4], raw[5]), sp)
-                for d in ruleset.apply(tr):
-                    widx.add_tuple('...' if d.subject_predicate is Ellipsis else d.subject_predicate,
-                                   d.subject.type, d.subject.name, d.relation,
-                                   d.object.type, d.object.name)
-                del calls[:]                      # R6-12 is INTRA-cascade duplication
-                proc.run_cascade(wm)
-                per_cycle.append((len(calls), len(set(calls))))
-                session.commit()
-                n += 1
-            return n
-        nwrites, stats, table = _profile(work)
+        nwrites, stats, table = _profile(
+            lambda: _cascade_cycles(widx, ruleset, proc, extra, on_cascade))
     finally:
+        ctr.stop()
         DeltaProcessor.reconcile_subject = orig
+    # (4) the instrument must have put its subject back
+    assert DeltaProcessor.reconcile_subject is orig, \
+        'INSTRUMENT BROKEN: reconcile_subject was not restored'
 
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
     sts_n, sts_t, sts_c = _find(rows, func='_stored_tupleset_subjects', file_frag='index_v4/processor.py')
-    rcs_n, rcs_t, rcs_c = _find(rows, func='_residue_cache_scope', file_frag='index_v4/processor.py')
+    rcs_raw, rcs_t, rcs_c = _find(rows, func='_residue_cache_scope', file_frag='index_v4/processor.py')
+    scs_raw, scs_t, scs_c = _find(rows, func='_stored_cache_scope', file_frag='index_v4/processor.py')
+    # ⚠ cProfile counts a @contextmanager TWICE per `with` (once entering, once
+    # resuming the generator to exhaustion on exit), so its ncalls is 2x the number
+    # of scopes actually entered. Reporting it raw is how `R6-11` acquired a "torn
+    # down 8x per reconcile" figure that was really 4x, and it propagated to four
+    # documents before anyone divided (found 2026-08-20b, corrected 2026-08-21).
+    # Halve HERE, in the instrument, so the number cannot be re-derived wrong.
+    rcs_n = _ctxmgr_entries(rcs_raw, '_residue_cache_scope')
+    scs_n = _ctxmgr_entries(scs_raw, '_stored_cache_scope')
+    di_n, di_t, di_c = _find(rows, func='_direct_incoming', file_frag='index_v4/processor.py')
+    nb_n, nb_t, nb_c = _find(rows, func='_nodes_by_ids', file_frag='index_v4/processor.py')
+    ins_n, ins_t, ins_c = _find(rows, func='_instances_of_type', file_frag='index_v4/processor.py')
+    tp_n, _tp_t, _tp_c = _find(rows, func='tupleset_parents', file_frag='index_v4/processor.py')
     # R6-12 is about ONE cascade re-reconciling ONE key several times. Aggregating
     # across cycles would report the same key touched by successive WRITES as
     # duplication, which it is not -- so sum the per-cycle figures instead.
@@ -300,13 +405,103 @@ def target_cascade(scale, incr):
     rec_d = sum(d for _c, d in per_cycle)
     worst = max((c for c, _d in per_cycle), default=0)
 
+    # (1) NON-VACUITY, asserted. A probe that ran on nothing reports a clean 0.0%.
+    assert nwrites == len(extra) and nwrites > 0, f'INSTRUMENT BROKEN: {nwrites} cycles ran'
+    assert sts_n > 0, ('INSTRUMENT BROKEN: 0 _stored_tupleset_subjects calls — the '
+                       'probe locates rows by FUNCTION NAME, so this means the workload '
+                       'stopped reaching the code, not that the code got free')
+    assert rec_n > 0, 'INSTRUMENT BROKEN: 0 cascade reconciles (bootstrap path profiled?)'
+
+    # (1b) NON-VACUITY OF THE MEMO ITSELF -- asserted, not merely printed.
+    # This was the hole: `hits`/`scs_n` were printed with a docstring explaining that
+    # HITS>0 is the disambiguator, and then nothing checked it. Delete
+    # `self._stored_cache_scope()` from `DeltaProcessor.run_cascade` and every other
+    # assertion here still passed while the probe printed `hits 0 / misses 8,480` and
+    # reported the item NOT MOTIVATED -- a silently-dropped scope read as a real
+    # negative result. `ms is None` means a genuine BASELINE tree (no R6-10 at all),
+    # which is a legitimate run; `ms` present with zero hits is a broken probe.
+    ms = _memo_stats(proc)
+    if ms is not None:
+        assert scs_n > 0, ('INSTRUMENT BROKEN: _stored_cache_stats exists but '
+                           '_stored_cache_scope was entered 0 times — the scope is not '
+                           'installed on the profiled path')
+        # Control on the halving itself (see _ctxmgr_entries): the processor keeps a
+        # TRUE counter, but it increments only on the OUTER scope, so the relation is
+        # `entries >= outer scopes`, never equality -- the reentrant inner `with`es are
+        # real entries that bump no counter. If the halving were wrong in the other
+        # direction (reporting raw ncalls), this would still hold, so it is a bound and
+        # not a proof; what it does catch is a halved figure that has fallen BELOW the
+        # independently-counted outer scopes, which is impossible.
+        assert scs_n >= ms['scopes'], (
+            f"INSTRUMENT BROKEN: {scs_n:,} _stored_cache_scope entries (cProfile, "
+            f"halved) is FEWER than the {ms['scopes']:,} outer scopes the processor "
+            f"counted itself — the @contextmanager halving is wrong for this run.")
+        assert ms['hits'] > 0, (
+            f"INSTRUMENT BROKEN: the memo served 0 hits ({ms['misses']:,} misses, "
+            f"{ms['scopes']:,} scopes). The memo exists but was never consulted, so "
+            f"the R6-10 numbers below are meaningless. A no-hits run must NOT be "
+            f"reported as 'not motivated'.")
+        # ...and the memo must be installed at the CASCADE level, which is a DERIVED
+        # expectation, not a tuned constant: `_cascade_cycles` runs exactly one
+        # `run_cascade` per write, and `scopes` counts OUTERMOST installs only (the
+        # nested reconcile scopes no-op under it). So `scopes == nwrites`, exactly.
+        #
+        # This is the assertion that catches a scope silently demoted to the
+        # `reconcile`/`reconcile_subject` level: `hits` stays high there (measured
+        # below), so `hits > 0` alone does NOT catch it.
+        assert ms['scopes'] == nwrites, (
+            f"INSTRUMENT BROKEN: {ms['scopes']:,} outermost stored-cache scopes for "
+            f"{nwrites:,} cascades. The memo is not scoped to the cascade — it was "
+            f"demoted to per-reconcile (more scopes) or hoisted above the write loop "
+            f"(fewer, which is also a CORRECTNESS bug: see "
+            f"DeltaProcessor._stored_cache_scope's placement rule).")
+
     print(f'\n  wall (profiled)       : {wall:.2f} s')
+    print(f'  SQL statements        : {ctr.total:,}  ({ctr.total / nwrites:,.1f} per '
+          f'write+cascade cycle)   <- the metric that transfers to PostgreSQL')
+    for k, v in sorted(ctr.counts.items(), key=lambda kv: -kv[1]):
+        print(f'      {k:<12} {v:>9,}  ({v / nwrites:,.1f} per cycle)')
     print(f'  _stored_tupleset_subj : {sts_n:,} calls, {sts_c:.2f} s cum  ({_pct(sts_c, wall)})  <- R6-10')
-    print(f'  _residue_cache_scope  : {rcs_n:,} entries  <- R6-11')
+    print(f'      _direct_incoming  : {di_n:,} calls, {di_c:.2f} s cum  ({_pct(di_c, wall)})   (the EdgeV4 SELECT)')
+    print(f'      _nodes_by_ids     : {nb_n:,} calls, {nb_c:.2f} s cum  ({_pct(nb_c, wall)})   (the NodeV4 IN SELECT)')
+    print(f'      tupleset_parents  : {tp_n:,} calls')
+    print(f'      _instances_of_type: {ins_n:,} calls   (RC2 star arm — demorgans stores no `T:*` '
+          f'tupleset parent, so 0 is EXPECTED and means this arm is unmeasured here)')
+    if ms is None:
+        print('  memo                  : NOT INSTALLED (baseline run)')
+    else:
+        tot = ms['hits'] + ms['misses']
+        print(f"  memo                  : {ms['hits']:,} hits / {ms['misses']:,} misses "
+              f"over {tot:,} guarded calls "
+              f"({100.0 * ms['hits'] / tot if tot else 0.0:.1f}% hit rate); "
+              f"{ms['scopes']:,} scopes, largest {ms['keys_max']:,} distinct keys "
+              f"(ASSERTED nonzero above)")
+        # ⚠ Read `hits` here, not `misses`. "misses == distinct keys summed over
+        # scopes" is a TAUTOLOGY -- every miss inserts exactly one key and nothing
+        # evicts -- so it cannot tell a working memo from a dropped scope. `hits` is
+        # the only load-bearing counter, and `keys_max` vs `misses / scopes` is what
+        # confirms the predicted O(subjects x leaves) -> O(leaves) shape.
+        print(f"      shape check: keys_max {ms['keys_max']:,} vs mean keys/scope "
+              f"{ms['misses'] / max(ms['scopes'], 1):,.1f} -- equal means every scope "
+              f"reached the same key set (the predicted O(leaves)); "
+              f"scopes == cycles ({nwrites:,}) ASSERTED above")
+    print(f'  _residue_cache_scope  : {rcs_n:,} scopes entered  <- R6-11 '
+          f'(cProfile ncalls {rcs_raw:,}, halved -- @contextmanager, see _ctxmgr_entries)')
+    print(f'  _stored_cache_scope   : {scs_n:,} scopes entered '
+          f'(cProfile ncalls {scs_raw:,}, halved)')
     print(f'  reconcile_subject     : {rec_n:,} calls over {rec_d:,} distinct keys '
           f'SUMMED PER CASCADE ({rec_n / max(rec_d, 1):,.2f}x intra-run re-reconcile; '
           f'worst single cascade {worst:,} calls)  <- R6-12')
     print('\n' + table)
+
+    # (3) unprofiled wall clock, fresh store — cProfile depresses throughput
+    # several-fold, so the profiled seconds above are ratios-only.
+    _t, widx2, ruleset2, proc2, extra2 = _cascade_fixture(spec, scale, incr)
+    t0 = time.perf_counter()
+    _cascade_cycles(widx2, ruleset2, proc2, extra2)
+    unprof = time.perf_counter() - t0
+    print(f'  UNPROFILED wall       : {unprof:.3f} s for {len(extra2)} cycles '
+          f'({unprof / max(len(extra2), 1) * 1000:.1f} ms/cycle)')
 
     _verdict('R6-10',
              'cascade check_fn re-enumerates stored tupleset/userset tuples via SQL '
@@ -322,7 +517,9 @@ def target_cascade(scale, incr):
              f'{rec_n:,} calls over {rec_d:,} distinct keys summed PER CASCADE '
              f'= {rec_n / max(rec_d, 1):,.2f}x intra-run (worst cascade: {worst:,} calls)',
              rec_n > rec_d * 1.2 if rec_d else None)
-    return {'reconciles': rec_n, 'distinct': rec_d, 'sts_share': sts_c / wall if wall else None}
+    return {'reconciles': rec_n, 'distinct': rec_d, 'sts_share': sts_c / wall if wall else None,
+            'sts_calls': sts_n, 'stmts': ctr.total, 'stmts_by_table': dict(ctr.counts),
+            'unprofiled_wall': unprof, 'memo': ms}
 
 
 # ---------------------------------------------------------------------------

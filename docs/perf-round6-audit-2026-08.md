@@ -45,7 +45,7 @@ Write / cascade / bulk / space verdicts:
 | id | verdict | the measurement that decided it |
 |---|---|---|
 | `R6-10` | **MOTIVATED — the round's headline** | **59.8%** of incremental boolean write+cascade time in one function (16,690 calls). Largest measured cost anywhere in round 6 |
-| `R6-11` | **MOTIVATED — cheapest** | **240** residue-cache scopes for **30** reconciles: built and torn down **8× per reconcile**; the digest's one-line scoping change |
+| `R6-11` | **MOTIVATED — cheapest** | **120** residue-cache scopes for **30** reconciles: built and torn down **~4× per reconcile** (the filed `240`/`8×` was a cProfile `@contextmanager` double-count, corrected 2026-08-21; the instrument halves it now); the digest's one-line scoping change |
 | `R6-9` | **MOTIVATED** | **4.51** `_db_node` point SELECTs per raw write, **17.7%** of a non-boolean build (context: **34.62 SQL statements per raw write** overall) |
 | `R6-16` | **MOTIVATED — but co-design** | exactly **1.00 outbox row per closure edge** on a schema with **no derived relations** (14,868 rows, nothing consumes them, manual prune only). ⚠ paranoia FULL uses the outbox as its worklist on ALL schemas — gate emission and its consumer together |
 | `R6-18` | **MOTIVATED** | direct layout A/B on file-backed VACUUMed SQLite: **53.1% smaller** (57.7 → 27.0 bytes/row at 200k rows) — the closure table is 2.1× larger than it needs to be |
@@ -119,6 +119,45 @@ Lean-impact notes). Only this header, the digest, and the R6-N ids are editorial
   sabotaged red before it is trusted. R6-4's and R6-16's fixes add/gate derived
   state that a checker consumes — same requirement.
 * **Never edit a golden/oracle/snapshot to make an opt pass.**
+
+## Traps the numbers do not carry — demoted from `HANDOFF.md` 2026-08-20b
+
+Carried on the board's `R6` block until it hit its trap budget; moved here per
+`docs/README.md` §4's defined overflow move, with a pointer left behind. **Read this section
+before taking any id below.** Each one is a way the ranked list misleads you if you read
+only the percentage.
+
+* ⚠ **`R6-1` has the biggest read ceiling (91.4% of lookup) and must NOT be landed from
+  it.** The profile proves `check` *dominates*; it does not prove sharing *eliminates*. The
+  naive shared memo is a **correctness bug** by this audit's own counterexample. Prototype
+  the two-tier design behind a measurement.
+* ⚠ **`R6-16` must be co-designed with `R6-7`/`R6-8`, never separately.** Paranoia FULL uses
+  the outbox as its worklist on ALL schemas, so gating emission without gating that consumer
+  silently blinds the checker — an assurance step that fails by passing.
+* ⚠ **`R6-4(a)` is UNSOUND as filed** (found 2026-08-20b; **its entry now carries a dated
+  `>` note too, 2026-08-21** — the sketch is a verbatim block and says the word "sound",
+  so the correction had to sit beside it, not only here). The `(row.id, row.version)`
+  decode memo breaks on SQLite: deleted residues restart at `version=1` and rowids
+  recycle, so the key is not unique over time. Do not implement it as written.
+  `R6-4(b)` remains open and is its own session.
+* ⚠ **`R6-11`'s "residue cache torn down 8× per reconcile" is 2× inflated** (found
+  2026-08-20b). It is a cProfile generator-resume artifact — a `@contextmanager` records two
+  counts per `with`. The real figure is 4, it is wrong in four places, and it measures the
+  *mechanism*, not a win. Re-measure before spending a ten-phase gate on it.
+  **CORRECTED 2026-08-21 in all four** (this table's row, `perf-next-round.md`, and the two
+  `R6_PROFILE_2026-08-17.md` sites via a dated header correction) — and, because a doc fix
+  does not stop the next probe re-deriving it, **the halving moved into the instrument**:
+  `benchmarks/profile_r6.py::_ctxmgr_entries`, which also asserts the ncalls is EVEN (an odd
+  count means a `with` never completed, and then halving is not the right correction).
+  Re-run on the cascade target 2026-08-21 to confirm: `_residue_cache_scope` printed
+  `184 scopes entered (cProfile ncalls 368, halved)` over 40 reconciles — **4.6×**, i.e. the
+  ~4 shape, not 8. `R6-11`'s verdict is unchanged (`MOTIVATED`); the predicate is "at least
+  one scope per reconcile", which both the raw and halved figures clear.
+* ⚠ **`R6-10`'s 59.8% was CUMULATIVE** (landed 2026-08-20b). Decomposed before landing:
+  `_direct_incoming` 28.4% + `_nodes_by_ids` 30.7%; the residual was already amortized by
+  the N15 node cache. The realised win came from the two SELECTs, not the headline share.
+  This is the `R6-19` decomposition trap in its general form — **decompose every cumulative
+  share before quoting it as a target.**
 
 ## Editorial digest — a suggested order (2026-08-16)
 
@@ -270,6 +309,22 @@ R6-13) — the corrections in each entry are the honest rating.
 ### R6-4 — lookup on boolean schemas full-scans every residue row in the store and JSON-decodes per row
 
 **`index_v4/wildcard.py::WildcardIndex._collect_residue_memberships`** · dimension: graph-read · category: lookup-speed · filed impact: high · algorithm change (finder): yes · verifier: **CONFIRMED** (high confidence)
+
+> ⚠ **`R6-4(a)` IS UNSOUND AS FILED — do not implement the fix sketch as written**
+> (found 2026-08-20b, noted here 2026-08-21). The sketch below calls
+> `(row.id, row.version)` *"a sound invalidation token"*. **It is not.** Empty residues are
+> DELETED by `index_v4/processor.py::DeltaProcessor._store_residue` and a recreated row
+> restarts at `version=1`, while SQLite recycles non-`AUTOINCREMENT` rowids — so a stale
+> entry keyed `(recycled_id, matching_version)` serves the wrong decode. PostgreSQL
+> sequences do not recycle, so the hole is SQLite-only, which is to say it is the dev and
+> test backend and the one the default gate runs on.
+>
+> This note exists because the sketch is a **verbatim** block and is left unedited: the
+> "Verifier corrections / refinements" block further down states the same finding, but a
+> reader who takes `R6-4(a)` off the land-order list and reads only the sketch would
+> implement an unsound memo, and the word "sound" is sitting right there. Full statement
+> in §"Traps the numbers do not carry" above. `R6-4(b)` — the stars reverse-index, which is
+> the real win — is unaffected and remains open as its own session.
 
 **Evidence (finder, verbatim):**
 

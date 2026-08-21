@@ -103,6 +103,30 @@ def _find(rows, *, func, file_frag=None):
     return n, t, c
 
 
+def _ctxmgr_entries(ncalls, what):
+    """Convert a cProfile ncalls for a ``@contextmanager`` into the number of
+    ``with`` blocks actually entered.
+
+    ⚠ cProfile counts a generator-based context manager TWICE per ``with``: once
+    when ``__enter__`` runs the generator to its ``yield``, and once when
+    ``__exit__`` resumes it to ``StopIteration``. Reporting the raw ncalls as a
+    scope count therefore doubles it. That is not hypothetical -- `R6-11` was
+    filed as "the residue cache is torn down **8x** per reconcile" when the real
+    figure is 4, and the inflated number reached four documents before anyone
+    divided (found 2026-08-20b, corrected 2026-08-21). Halving lives here rather
+    than at the call sites so no future probe can re-derive it wrong.
+
+    The evenness assert is the instrument's own control: an odd count means some
+    ``with`` did not complete (an exception escaped, or the profile was cut
+    mid-scope), in which case halving is not the right correction and the number
+    should not be reported at all."""
+    assert ncalls % 2 == 0, (
+        f'INSTRUMENT BROKEN: {what} has an ODD cProfile ncalls ({ncalls:,}). A '
+        f'@contextmanager is counted twice per completed `with`, so an odd count '
+        f'means a scope did not complete -- do not report a halved figure.')
+    return ncalls // 2
+
+
 def _pct(part, whole):
     return f'{100.0 * part / whole:5.1f}%' if whole else '  n/a'
 
