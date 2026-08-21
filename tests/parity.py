@@ -167,6 +167,18 @@ class ParityEngine:
         self.set_sides = [_SetSide(schema, object_wildcard_shapes, ops) for ops in ALL_SETOPS]
         self.stateful = ([self.graph] if self.graph else []) + self.set_sides
 
+        # BL-2: compiled leaf-predicate families ((object_type, '<rel>.<idx>')) and
+        # derived families join the query grid (see `_grid`). Read off the facade's
+        # `SchemaInfo` -- NOT `RuleSet.compiled.leaf_families`, a @property that
+        # rebuilds a frozenset per call (and the facade is what every construction
+        # route, including a store reopened from an existing DB, actually holds).
+        # Both are empty on the 3-way degrade (graph absent) and on untainted
+        # schemas, so the grid is byte-identical to the pre-BL-2 grid there.
+        self.leaf_families: frozenset[tuple[str, str]] = (
+            self.graph.widx.schema_info.leaf_families if self.graph else frozenset())
+        self.derived_families: frozenset[tuple[str, str]] = (
+            self.graph.widx.schema_info.derived_families if self.graph else frozenset())
+
         # The raw-tuple set IS the oracle's input (set semantics: TupleV1 is unique).
         self.present: set[RawTuple] = set()
         # Names seen per entity type, for universe-∪-ghosts-∪-'*' grid construction.
@@ -251,8 +263,22 @@ class ParityEngine:
 
     def _grid(self) -> list[tuple]:
         """Universe ∪ ghosts ∪ '*' (spec §8.4), derived from the schema's own shapes:
-        subjects from Direct restrictions, targets from declared (object_type, relation).
-        Deterministically sampled down to grid_cap if large."""
+        subjects from Direct restrictions, targets from declared (object_type, relation)
+        UNION the compiled leaf families (BL-2). Deterministically sampled down to
+        grid_cap if large, then a deterministic per-leaf-family floor slice is appended
+        AFTER the cap so sampling can never eat leaf coverage.
+
+        Why leaf names must be queried at all (BL-2, 2026-08-21): every grid used to be
+        built from DECLARED (object_type, relation) pairs, so a minted leaf predicate
+        (`viewer.0`) was by construction never queried -- and the gate was blind to the
+        leaf-name read leak. Observed on `viewer: editor but not banned` after writing
+        user:alice editor doc:d1:
+            check(alice,'viewer.0',doc:d1) = graph TRUE / sets False / oracle False
+        (the write-time fan-out materializes the leaf edge; the read fell through to
+        the ordinary edge probe). 1,728 target-position leaf-name comparisons over 9
+        tainted fixtures: 201 divergences, ALL oracle=False graph=True. Leaf names are
+        never hand-written here -- they come from the facade's SchemaInfo.leaf_families
+        (empty => this grid is byte-identical to the pre-BL-2 grid)."""
         subject_shapes: set[tuple[str, str]] = set()
         for expr in self.ast.values():
             for direct in _iter_directs(expr):
@@ -279,7 +305,10 @@ class ParityEngine:
                         for t in sorted({o_type for (o_type, _) in self.ast})]
 
         queries: list[tuple] = []
-        for (o_type, rel) in sorted(self.ast):
+        # Layer A (breadth, sampled): declared keys UNION leaf families, so leaf
+        # targets enter the pre-cap pool. leaf_families empty => identical to
+        # sorted(self.ast) and the pool (hence the sample) is unchanged.
+        for (o_type, rel) in sorted(set(self.ast) | self.leaf_families):
             o_names = sorted(self._names_by_type.get(o_type, set()))
             for on in o_names + [GHOST_NAME]:
                 for (sp, st, sn) in subjects:
@@ -287,6 +316,22 @@ class ParityEngine:
 
         if len(queries) > self.grid_cap:
             queries = self._rng.sample(queries, self.grid_cap)
+
+        # Layer B (the GUARANTEE): per leaf family, a known subject and a '*'
+        # subject × a known object name and a ghost; plus one junk dotted target
+        # per derived family (the `foo.bar` control: a dotted name that is NOT a
+        # compiled leaf must stay all-False everywhere). Appended after the cap,
+        # rng-free, so it survives any grid_cap.
+        if self.leaf_families:
+            sp, st, sn = subjects[0]                # deterministic: first sorted shape
+            for (o_type, leaf) in sorted(self.leaf_families):
+                o_names = sorted(self._names_by_type.get(o_type, set()))
+                for on in o_names[:1] + [GHOST_NAME]:
+                    queries.append((sp, st, sn, leaf, o_type, on))
+                    queries.append((sp, st, '*', leaf, o_type, on))
+            for (o_type, rel) in sorted(self.derived_families):
+                # '.zz-junk' can never collide with a real leaf: indices are numeric
+                queries.append((sp, st, sn, f'{rel}.zz-junk', o_type, GHOST_NAME))
         return queries
 
     def _assert_grid_parity(self, context: str) -> None:

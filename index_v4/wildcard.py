@@ -626,6 +626,28 @@ class WildcardIndex:
 
     def check(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
               relation: str, o_type: str, o_name: str) -> bool:
+        """Public read entry: the BL-2 leaf-name fence, then the ordinary probe.
+
+        Compiled leaf predicates (``<rel>.<idx>``, spec deviations 2026-08-21b)
+        are processor-internal storage names, not public read surface --
+        ``RuleSet.apply`` fans every public write onto the leaf families at
+        WRITE time, so a leaf-name query that fell through to the ordinary edge
+        probe would FIND the routed node and answer the positive operand of
+        e.g. ``viewer: editor but not banned`` with the owning relation's
+        boolean guard unapplied (BL-2). DENY, do not raise: the set engine and
+        the oracle treat an undeclared name as one that never matches (reads
+        are lenient by contract), and writes are already fenced by
+        ``RuleSet.apply`` / ``SetEngine.add_tuple`` (``AdmissionRejected``).
+        Internal readers that legitimately probe leaf names -- the delta
+        processor's plan evaluation (``_EvalContext.leaf_check`` /
+        ``leaf_stars``) -- enter via ``_check_internal`` below the fence."""
+        if (o_type, relation) in self.schema_info.leaf_families:
+            return False
+        return self._check_internal(subject_predicate, s_type, s_name,
+                                    relation, o_type, o_name)
+
+    def _check_internal(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
+                        relation: str, o_type: str, o_name: str) -> bool:
         s_pred = _norm_pred(subject_predicate)
 
         # Derived (boolean) relations: edge probe + residue, no wildcard probes --
@@ -773,6 +795,14 @@ class WildcardIndex:
         s_pred = _norm_pred(subject_predicate)
         result = LookupResult()
 
+        # BL-2 symmetric guard -- a CONTRACT, not a repair: no live leak exists
+        # on this side (a leaf node is never a closure SUBJECT today; the
+        # 2026-08-21 probe found 0 subject-position divergences in 4,833
+        # comparisons). It pins the fence's symmetry so a future write path
+        # cannot open a subject-side enumeration unnoticed.
+        if (s_type, s_pred) in self.schema_info.leaf_families:
+            return result
+
         if s_name == '*':
             self._collect_reachable(self._w_node(s_type, s_pred, 'any', create=False), result)
         else:
@@ -817,6 +847,13 @@ class WildcardIndex:
         "everyone of shape σ except these" is representable without enumeration."""
         result = LookupResult()
 
+        # BL-2 fence, mirroring check's False (and the X2 empty-not-raise
+        # precedent just below): a leaf family is storage-internal, and
+        # enumerating one hands out a whole operand set -- the negative leaf
+        # of `viewer: editor but not banned` enumerates everyone banned.
+        if (o_type, relation) in self.schema_info.leaf_families:
+            return result
+
         if (o_type, relation) in self.schema_info.derived_families:
             if o_name == '*':
                 # object wildcards on derived relations are compile-rejected
@@ -860,11 +897,24 @@ class WildcardIndex:
         map makes a batched row the same instance ``_node_by_id`` would return, and
         a map miss (defensive parity, P7's pattern) falls back to ``_node_by_id``."""
         node_map = self.idx._load_nodes(node_ids)
+        leaf_families = self.schema_info.leaf_families
         for nid in node_ids:
             n = node_map.get(nid)
             if n is None:
                 n = self._node_by_id(nid)
             if n is None:
+                continue
+            # BL-2: leaf-family nodes are storage-internal and never surface.
+            # Forward lookup is the live case (the routed write puts a real
+            # subject -> leaf edge in the closure, so the reachable set carried
+            # the positive operand's node id -- disclosed in list-objects form
+            # even for a subject the boolean guard rejects). This helper also
+            # serves lookup_reverse, where the filter is a no-op today: a leaf
+            # node is an edge SINK (routed writes point INTO it; the processor
+            # writes derived edges subject -> derived node directly), so it
+            # cannot appear in a reverse set -- kept unconditional as the same
+            # contract the lookup() subject-side guard pins.
+            if (n.type, n.predicate) in leaf_families:
                 continue
             if n.wildcard == '':
                 result.node_ids.add(nid)

@@ -26,6 +26,113 @@ newest-first (2026-08-14 … 2026-07-29); the file then restarts at `## 2026-07-
 
 ---
 
+## 2026-08-21b — the graph index GRANTS a query for a minted LEAF PREDICATE name, bypassing the boolean guard
+
+Board row `BL-2`, filed and fixed the same session. Found while scouting `P3` (leg 7), by a
+Lean probe that was asking a different question — see `formal/history/PROOF_STATUS.md`
+`## 2026-08-21b` for the formal half. **This entry is the Python half, and it is a live
+divergence in the shipped system, not a modelling artifact.**
+
+**The observed divergence.** Schema `viewer: editor but not banned`; one tuple written,
+`user:alice editor doc:d1`; the query grid is the same three names on every backend:
+
+```
+check(user:alice, 'viewer',   doc:d1):  graph=True   set:py=True   set:roaring=True   oracle=True
+check(user:alice, 'viewer.0', doc:d1):  graph=True   set:py=False  set:roaring=False  oracle=False
+check(user:alice, 'foo.bar',  doc:d1):  graph=False  set:py=False  set:roaring=False  oracle=False
+```
+
+`viewer.0` is the compiled positive leaf of `viewer` (minted at
+`zanzibar_utils_v1.py::_build_plan_tree`, `leaf = f'{relation}.{counter[0]}'`; this schema
+mints `viewer.0` for `editor` and `viewer.1` for the `banned` subtrahend). So a caller
+querying the leaf name reads the **positive operand with the `but not banned` subtraction
+never applied** — the boolean guard is bypassed by naming its own leaf.
+
+**Mechanism.** `index_v4/wildcard.py::WildcardIndex.check` routes derived reads by testing
+`(o_type, relation) in self.schema_info.derived_families`. A *leaf* family is not a *derived*
+family, so a leaf-name query falls through to the ordinary edge probe — and the delta
+processor has materialized a real node for it (`('doc', 'viewer.0', 'd1')` is present in the
+store). `foo.bar` returns False through the same code path purely because no node exists;
+nothing on the read path rejects a dotted relation name.
+
+**The write side already fenced this, which is what makes it a one-sided hole.** Both
+`zanzibar_utils_v1.py::RuleSet.apply` and `setengine/engine.py::SetEngine.add_tuple` raise
+`AdmissionRejected: relation 'viewer.0' is a compiled leaf predicate of a derived relation;
+tuples must be written against the public relation name`. `validate_write_identifiers`
+accepts the name (`.` is in the write charset `[A-Za-z0-9_./@+=-]`); the refusal is the
+explicit leaf-family guard, and it exists only on writes.
+
+**Why the differential net never caught it — the part worth carrying forward.** The
+validation matrix and `tests/parity.py::ParityEngine` build their query grids from
+**declared** `(object_type, relation)` pairs. A minted leaf name is by construction not
+declared, so no grid in this repo has ever contained one. This is the house failure mode in
+its purest form: four backends compared exhaustively, unanimously, on a grid that could not
+express the failing query. `CLAUDE.md`'s standing instruction applies — prefer a mechanical
+refusal over a doc warning — so the durable half of this fix is the grid, not the guard.
+
+**Adjudicated semantics (user call, 2026-08-21):** DENY — return `False`/empty, do **not**
+raise. Rationale: it agrees with the set engine, the oracle, and the `foo.bar` case, and
+keeps reads lenient per the documented contract (*"an out-of-charset name just never
+matches"*). Raising would be a caller-visible behaviour change and would itself diverge from
+the oracle, which returns `False`.
+
+**Blast radius, measured before the fix.** 1,728 target-position leaf-name comparisons over
+the 9 tainted `tests/fga_schemas/` fixtures plus the repro control → **201 divergences,
+100% of them with the single signature `oracle=False graph=True sets=[False,False]`**;
+residual under a simulated DENY = 0; the positive control fired 8/8. Subject position:
+4,833 comparisons, **0 divergences** — which is why the subject-side guard below is a
+CONTRACT, not a repair. The leak does not require the derived relation to be true:
+`RuleSet.apply` fans a public write onto the leaf family at WRITE time. Surfaces that
+leaked: `index_v4/wildcard.py::WildcardIndex.check` (both the positive AND the negative
+operand), `::WildcardIndex.lookup_reverse` (the enumeration form —
+`lookup_reverse('viewer.1', 'doc', 'd1')` returned the whole banned set
+`{user:bob, user:carol}`), `::WildcardIndex.lookup` (surfaced leaf-family node ids),
+`index_v4/core.py::ReachabilityIndex.check_reachable` (schema-blind, no production caller —
+deliberately NOT guarded), and `ConnectedStore.*` — which additionally FLIPPED with index
+freshness, because its third rung falls back to `SetEngine.check`, which denies.
+`SetEngine` (both `SetOps`) and the oracle were correct throughout.
+
+**The fix (`index_v4/`, adjudicated DENY per above).**
+`WildcardIndex.check` split into a fenced public entry — returns `False` for
+`(o_type, relation) in self.schema_info.leaf_families` — and
+`::WildcardIndex._check_internal`, carrying the old body verbatim.
+`index_v4/processor.py::_EvalContext.leaf_check` and `::_EvalContext.leaf_stars`
+retargeted onto `_check_internal`: they are the ONLY internal leaf-name readers and
+legitimately need grants — fencing them too would have zeroed ALL boolean evaluation.
+`lookup_reverse` returns the empty result for a leaf family; `lookup` gained the
+symmetric subject-side guard (the contract case above); `::WildcardIndex._classify_ids`
+skips leaf-family nodes. **The durable half is the grid**, per the "why the net missed
+it" paragraph: `tests/parity.py::ParityEngine._grid` now unions leaf families into the
+pre-cap pool (Layer A) and appends a deterministic post-cap floor slice so sampling can
+never eat leaf coverage (Layer B); `tests/test_matrix.py::_boolean_grid` takes
+`leaf_families`; `tests/test_parity_engine.py` gained two scope meta-pins;
+`tests/test_hypothesis.py::_grid` got an explanatory comment only; and
+`tests/test_lookup_oracle.py`'s tolerated leaf-pred skip (its G2 sweep) was TIGHTENED
+into a positive assertion. Pins: `tests/test_reg18_leaf_name_read_leak.py`, 6 positive
+pins (no xfails), every leaf name DERIVED from `compiled.leaf_families`.
+`formal/CORRESPONDENCE.md` rows re-anchored onto `_check_internal` (anchor check 533/533
+resolved) plus a new §7.1 entry for three stale Lean doc comments (owed to the next
+Lean-touching session).
+
+**Sabotage record — three legs, all restored byte-identically, verified by
+`git hash-object`:**
+
+* **S1** — fence set swapped `leaf_families` → `derived_families`: reg18
+  `3 failed, 3 passed in 0.63s`; `test_matrix` `7 failed, 5 passed in 13.90s` —
+  `boolean check disagreement seed=0 q=(...,'u1','viewer.1','doc','d1'): {'graph': True,
+  'connected': True, 'oracle': False, 'set:py': False, 'set:roaring': False}`;
+  `test_parity_engine` `6 failed, 13 passed in 2.68s`; the scope meta-pin ALONE stayed
+  GREEN (`1 passed in 0.22s`) — the contrast is the point: the red points at the fix,
+  not at the instrument. Noted: the swap also denies PUBLIC derived reads, because the
+  fence precedes derived routing.
+* **S2** — Layer-B floor slice deleted from `ParityEngine._grid`: the meta-pin red
+  ALONE — `AssertionError: grid (cap=20) has NO query targeting leaf family
+  ('doc', 'viewer.0')`; reg18 stayed green, which is Layer B's whole argument.
+* **S3** — the routed write replaced by a bare `add_tuple`: the anti-vacuity assertion
+  red ALONE. Note: the originally-specified sabotage "skip the cascade" would NOT have
+  de-materialized the leaf edge — a probe showed `RuleSet.apply` routing, not
+  `run_cascade`, is what materializes it.
+
 ## 2026-08-21 — the released-userset bridge leak is FIXED: the release path demotes before it strips
 
 Closes the divergence filed by `## 2026-08-20b` below, which characterized and pinned but

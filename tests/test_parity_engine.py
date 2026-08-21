@@ -152,6 +152,90 @@ def test_parity_engine_rejection_cleanliness_i12():
 
 
 # ---------------------------------------------------------------------------
+# BL-2 scope meta-pins: the grid extension COVERS what it claims (every compiled
+# leaf family, even under a tiny grid_cap) and NOTHING it must not (untainted
+# schemas and the 3-way degrade are byte-identical to the pre-BL-2 grid).
+# ---------------------------------------------------------------------------
+
+def test_parity_grid_covers_every_leaf_family_even_under_a_tiny_cap(load_fga_schema):
+    """SCOPE META-PIN for the BL-2 grid extension (sabotage-procedure: assert the
+    SCOPE a differential claims, not just that it ran -- the
+    BoolStarBridgeParityMachine lesson). The gate was blind to the leaf-name read
+    leak because every grid iterated DECLARED (object_type, relation) pairs and a
+    minted leaf name is by construction undeclared. This pins that
+    `ParityEngine._grid` now targets EVERY compiled leaf family at least once,
+    with `grid_cap=20` -- deliberately far below the pre-cap pool -- so the
+    guarantee is the post-cap floor slice, not sampling luck. Leaf names are
+    derived from `compiled.leaf_families`, never hand-written.
+
+    SABOTAGE EVIDENCE (2026-08-21, leg S2 -- instrument control; restore verified
+    byte-identical via git hash-object). With the post-cap floor slice DELETED from
+    `ParityEngine._grid` (the innocent "Layer A already unions leaf families into
+    the pool" cleanup), this test went red ALONE:
+        1 failed, 18 passed in 3.24s
+        AssertionError: grid (cap=20) has NO query targeting leaf family ('doc', 'viewer.0')
+    while the SAME sampled grid did contain ('doc', 'restricted.0') and
+    tests/test_reg18_leaf_name_read_leak.py stayed GREEN (`6 passed in 0.55s`) --
+    i.e. Layer A alone covers leaf families only by sampling luck, the red names
+    the instrument's grid scope and nothing else, and deleting the
+    "redundant-looking" post-cap slice is the plausible weakening this pin guards.
+    (An earlier `if False and self.leaf_families:` disable of the same slice
+    produced the same assertion line.)"""
+    schema = load_fga_schema('boolean_wildcards.fga')
+    compiled = parse_openfga_schema(schema).compiled
+    assert compiled is not None and compiled.leaf_families, \
+        'fixture must mint leaf families or this meta-pin is vacuous'
+
+    pe = ParityEngine(schema, grid_cap=20)
+    try:
+        assert pe.graph is not None
+        grid = pe._grid()
+        targeted = {(q[4], q[3]) for q in grid}          # (object_type, relation)
+        for fam in sorted(compiled.leaf_families):
+            assert fam in targeted, \
+                f'grid (cap=20) has NO query targeting leaf family {fam}'
+        # the junk-dotted control: per derived family, a dotted target that is NOT
+        # a compiled leaf (all-False everywhere; catches a read path that treats
+        # any dotted name as special instead of consulting leaf_families)
+        for (ot, rel) in sorted(compiled.derived_families):
+            assert any(q[4] == ot and q[3].startswith(rel + '.')
+                       and (q[4], q[3]) not in compiled.leaf_families for q in grid), \
+                f'grid has no junk dotted target under derived family {(ot, rel)}'
+    finally:
+        pe.close()
+
+
+def test_parity_grid_has_no_leaf_targets_when_leaf_families_is_empty(load_fga_schema):
+    """The other half of the scope: on an UNTAINTED schema, and on the 3-way
+    degrade (graph refused, here via a derived-dependency cycle), `leaf_families`
+    is empty so both BL-2 layers are no-ops and the grid stays byte-identical to
+    the pre-extension grid -- no dotted target can appear ('.' is reserved in
+    declared relation names, so any dotted relation in a grid IS a leak of the
+    extension's scope)."""
+    untainted = load_fga_schema('wildcards.fga')
+    pe = ParityEngine(untainted, object_wildcard_shapes=OBJECT_WC, grid_cap=20)
+    try:
+        assert pe.graph is not None and pe.leaf_families == frozenset()
+        assert all('.' not in q[3] for q in pe._grid())
+    finally:
+        pe.close()
+
+    cyclic = '''
+        type user
+        type doc
+          relations
+            define a: [user] but not b
+            define b: [user] but not a
+    '''
+    pe3 = ParityEngine(cyclic, grid_cap=20)              # graph degrades to 3-way
+    try:
+        assert pe3.graph is None and pe3.leaf_families == frozenset()
+        assert all('.' not in q[3] for q in pe3._grid())
+    finally:
+        pe3.close()
+
+
+# ---------------------------------------------------------------------------
 # Deliberately-broken mutations: the checker must catch each seeded corruption
 # (P1 accept criterion)
 # ---------------------------------------------------------------------------

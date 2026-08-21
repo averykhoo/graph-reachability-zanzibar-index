@@ -122,6 +122,32 @@ ungated — `formal/conformance/test_conformance_nary_strata.py::test_multi_stra
 drives the real cascade at 3 strata. The gap is
 Lean-only, and quoting the wider version is how it gets re-filed as a Python coverage hole.
 
+### The post-4c-ii headline statements need the `hql` leaf-name guard
+
+**Filed by:** `formal/history/PROOF_STATUS.md` `## Session 2026-08-21b` (the finding's
+Python twin — live bug `BL-2` — is FIXED; its record is
+[`spec-deviations.md`](spec-deviations.md) `## 2026-08-21b` and is not this gap).
+**Board row:** `P3`.
+
+**Today's tree is unaffected — 4c-ii has not landed, so nothing is currently false.**
+Machine-checked (two independent kernel `by decide` constructions): AFTER the 4c-ii
+re-point, the pinned headline theorems (`graph_correct`, `backend_equivalence`,
+`exclusion_effective`, `no_ghost_grant`, `graphRun_check_eq_sem`,
+`graphRunOps_check_eq_sem` — `formal/headline_statements.txt`) are **FALSE AS WRITTEN**,
+not merely unproven, at queries whose relation is a minted leaf name: the re-pointed
+driver's drained state grants where `sem` denies, with every existing hypothesis
+inhabited.
+
+**What would close it:** the human call adjudicating the guard, then the guard landing
+WITH 4c-ii in the same commit — never before (today the statements are true unguarded)
+and never after (the gate would meanwhile pin false statements). The accept/refuse
+analysis is in PROOF_STATUS `## Session 2026-08-21b`: accept the narrowest repairing
+guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
+`isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes
+undeclared junk names where the claim holds today) and anything keyed on
+`isDerived`/taint (it guts every derived-query headline claim while the pin regenerates
+GREEN — the house failure mode).
+
 ---
 
 ## Latent, but owned by another doc

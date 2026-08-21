@@ -25,6 +25,92 @@ from here.
 
 ---
 
+## 2026-08-21b — BL-2 leaf-name read leak found AND FIXED; machine-checked: post-4c-ii headlines FALSE at leaf queries
+
+rows: `BL-2` (filed **and** closed this session; retired), `P3` (scouted/designed, NOT
+landed, stays `NOW`).
+
+Assigned `P3` (leg 7, step 4c-ii + step 7). `P3` did NOT land: scouting and design
+produced plan-changing findings, and a probe built for one of them surfaced a live bug in
+the shipped Python, which took priority. Branch: `bl-2-leaf-name-read-leak`, uncommitted.
+The formal detail lives in `formal/history/PROOF_STATUS.md` `## Session 2026-08-21b`;
+this entry summarises and points.
+
+**`BL-2` — the graph index GRANTED queries at minted LEAF PREDICATE names, bypassing the
+boolean guard — found, measured, fixed and pinned in one session.** The divergence, the
+mechanism, the adjudicated DENY semantics (user call), the blast-radius numbers (201 of
+1,728 target-position comparisons diverged, all with one signature; 0 of 4,833
+subject-position), the fix and the three-leg sabotage record are all in
+[`spec-deviations.md`](../spec-deviations.md) `## 2026-08-21b` — one home, not restated
+here. Short form of the fix: `index_v4/wildcard.py::WildcardIndex.check` split into a
+fenced public entry (leaf-family queries answer `False`/empty) and
+`::WildcardIndex._check_internal` carrying the old body verbatim for the processor's two
+legitimate internal readers; `lookup` / `lookup_reverse` / `_classify_ids` guarded. The
+durable half is the GRID: `tests/parity.py::ParityEngine._grid` now unions leaf families
+into the pre-cap pool (Layer A) plus a deterministic post-cap floor slice (Layer B) —
+every differential grid in this repo was built from DECLARED `(object_type, relation)`
+pairs, so no grid could ever express the failing query. Pins:
+`tests/test_reg18_leaf_name_read_leak.py`, 6 positive pins, no xfails, every leaf name
+derived from `compiled.leaf_families`. `formal/CORRESPONDENCE.md` rows re-anchored onto
+`_check_internal` (anchor check 533/533 resolved) and a new §7.1 entry filed for three
+stale Lean doc comments (see `Still owed:`).
+
+**`P3` scouting — the resumable state (full formal detail in PROOF_STATUS
+`## 2026-08-21b`, and the `P3` board block carries the working summary):**
+
+* Route B's site budget re-verified live and CORRECT (~123: `UntaintedShadow` 84 lines in
+  7 files, `DerNode` 39–40 in 3) — **but the adjudication's census has a HOLE**:
+  `CascadeStable.lean::shadow_graphRec_agree` is one of the 11 audited shadow names, with
+  14 call sites including one in `CascadeEnum.lean` — a file with ZERO `UntaintedShadow`
+  mentions, hence outside the 7-file/84-site budget — and its
+  `hunt : isDerived S (dt',r') = false` hypothesis does NOT imply `publicOfLeaf = none`.
+  Route B forces a new hypothesis on an audited signature plus 14 call-site repairs.
+  Unbudgeted work.
+* The `FoldAdmits` lockstep is **21 sites that MOVE and 3 that MUST STAY** on the σ0 side
+  — correcting the previously recorded "all 24 in lockstep".
+* Dominant-cost decision taken: KEEP the names and change the BODIES of the live write
+  leg; `rewriteClosure` KEEPS its meaning (the σ0 chain is rules-built by design, so a
+  global redefinition is NOT available); `writeRules` keeps name AND body (changing it
+  would BE the rejected Route C).
+* An UNOWNED proof obligation surfaced: the shadow-existence write case
+  (`CascadeStable.lean::reachedByW3d_shadow`, via `untaintedShadow_writeLeg`) pairs the
+  SAME list on both folds, and post-re-point the leaf list is a STRICT SUPERSET on a
+  mixed schema even for untainted tuples. Two design slices each assumed the other owned
+  it. Not mechanical re-spelling; the Lean budget grows.
+* MACHINE-CHECKED, by two independent kernel `by decide` constructions (standalone
+  probes, deleted, tree left clean): AFTER 4c-ii the headline theorems are FALSE AS
+  WRITTEN — not merely unproven — at queries whose relation is a minted leaf name. ~10
+  pinned headline statements need a new query guard; the narrowest repairing one is
+  `hql : publicOfLeaf S q.object.type q.relation = none`, and two guard shapes to REFUSE
+  are recorded in PROOF_STATUS. ⚠ **This needs a HUMAN CALL before it lands** — it
+  narrows the governing claims, and Route B itself was adjudicated as a human call for
+  less. Latent today only (4c-ii has not landed): entered in
+  [`latent-gaps.md`](../latent-gaps.md). This probe is also what surfaced `BL-2` — the
+  shipped Python reproduced the model's grant.
+
+**Gate, as observed on this tree:** all TEN phases PASSED — the nine pytest tiles
+(`conf-tile:1/5`…`5/5`, `tests-tile:1/4`…`4/4`) with zero `xfailed`, zero `skipped` and
+every floor met, then `lean` LAST (`holes=0 audits=581 pinned=581 defs=155`), after
+`doc_counts --generate`, per the runbook ordering (ledger `2026-08-21`'s lesson).
+Collected counts live in `formal/FINAL_REVIEW.md`'s generated block, not here, per
+Rhythm 3b. `formal/verify.sh` `MIN_TESTS_ALL` raised 903 → 923, the count re-measured
+with `pytest tests/ -q --collect-only`, NOT off a run tail; `MIN_CONF_ALL` (495) and
+`MAX_TESTS_XFAILED` unmoved.
+
+Still owed:
+* The three Lean doc comments recorded in `formal/CORRESPONDENCE.md` §7.1 (NEW
+  2026-08-21 entry) still assert the OLD `leaf_check` → `WildcardIndex.check` identity —
+  `GraphIndex/CascadeStrata.lean:9` and `:89` (module header + the `graphRecR` doc
+  comment), `GraphIndex/ReconcileWrite.lean:13-22` (module header), `Audit.lean:927`
+  (the W3d-2 narration). Comments only, no proof touches them. Fold the fix into the
+  next Lean-touching session.
+* The HUMAN CALL on the `hql` headline guard: adjudicate
+  `hql : publicOfLeaf S q.object.type q.relation = none` onto the ~10 pinned headline
+  statements (`graph_correct`, `backend_equivalence`, `exclusion_effective`,
+  `no_ghost_grant`, `graphRun_check_eq_sem`, `graphRunOps_check_eq_sem` —
+  `formal/headline_statements.txt`) BEFORE 4c-ii lands; the accept/refuse analysis is in
+  PROOF_STATUS `## 2026-08-21b`.
+
 ## 2026-08-21 — `BL-1` fixed by one reordering; the gate is GREEN on this tree for the first time since 2026-08-17
 
 rows: `BL-1` (**closed**), `R6` (two filed figures corrected), `P3`/`P6` (untouched, still
