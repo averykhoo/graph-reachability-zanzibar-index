@@ -80,3 +80,7 @@ import ZanzibarProofs.GraphIndex.Exec
 
 -- ttuStarFree lift, part (iv) groundwork: the WIDENED predicate + its decision procedure
 import ZanzibarProofs.GraphIndex.TtuStarWide
+
+-- Leg 7 4c-ii adjudication battery (2026-08-20): the (★)/(★′) probe pins + controls.
+-- Additive and zero-cone; expected to be absorbed or deleted by the 4c-ii commit.
+import ZanzibarProofs.GraphIndex.Scratch4cii

@@ -22,7 +22,8 @@ reference oracle and a validation matrix.
 | [`p13-bulk-build-design.md`](./p13-bulk-build-design.md) | the P13/N18 bulk closure builder for `build_index` (offline bootstrap fast path) |
 | [`r4bf-bulk-backfill-design.md`](./r4bf-bulk-backfill-design.md) | the R4-BF in-memory Phase-D boolean backfill used by the bulk builder |
 | [`bulk-merge-design.md`](./bulk-merge-design.md) | ⚠ **SKETCH, unbuilt** — batch closure update seeded from EXISTING state; the crux is the coupled invariants the from-empty builders are exempt from |
-| [`../spec-deviations.md`](../spec-deviations.md) | dated implementation record: where the builds diverged from the specs and why |
+| [`../spec-deviations.md`](../spec-deviations.md) | dated implementation record: where the builds diverged from the specs and why. Append-only — an entry is true as of its date key, so it is not a status page |
+| [`../latent-gaps.md`](../latent-gaps.md) | the companion status page: which of those divergences is **still open today**, what would close it, and which are closed despite how the ledger reads |
 | [`../specs/`](../specs/) | the full original design specs (see "Citations" below) |
 
 ## The memoization spectrum

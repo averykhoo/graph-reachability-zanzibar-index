@@ -73,9 +73,12 @@ the same composition with a concrete-shape witness, which passes today and must 
 passing through any fix.
 
 Nearest prior art, and why neither covers this (checked 2026-08-09):
-``docs/spec-deviations.md`` F1 (``:1320``, CLOSED ``:1336``) is a doubly-bridged topology
+``docs/spec-deviations.md`` F1 (filed in the ``## 2026-07-16 -- star-bridge fuzzer
+generator + out-bridge regression (reg11)`` entry, CLOSED by the ``## 2026-07-17 --
+F1/F2 CLOSED`` entry) is a doubly-bridged topology
 rejected at compile time -- this schema compiles fine. The "all -> any is NOT read
-semantics" adjudication (``:1360-1367``) was decided on an **oracle-False** probe (no
+semantics" adjudication (the ``## 2026-07-17 -- F1/F2 CLOSED`` entry section "(b)")
+was decided on an **oracle-False** probe (no
 concrete in the universe), so it does not adjudicate an oracle-True case. ``ZT-P5``
 bullet 2 / "Target 3" probed this exact fixture but only at STATE level, never against
 oracle answers.

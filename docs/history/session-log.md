@@ -25,6 +25,328 @@ from here.
 
 ---
 
+## 2026-08-21 — `BL-1` fixed by one reordering; the gate is GREEN on this tree for the first time since 2026-08-17
+
+rows: `BL-1` (**closed**), `R6` (two filed figures corrected), `P3`/`P6` (untouched, still
+`NEXT`).
+
+An execute-the-owed-list session, not a design one. `2026-08-20b` closed with a `Still
+owed:` naming three things — fix `BL-1`, run the ten phases, run a 3-seed fuzz sweep — and
+this entry is those three plus the two smaller items that trailed them.
+
+**`BL-1` is fixed, and the fix is one reordering.**
+`index_v4/processor.py::DeltaProcessor._gc_subject_node` now calls
+`::DeltaProcessor._demote_released_node` **before**
+`index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges` instead of after. The strip
+guard is `fresh.implicit and fresh.reference_count == degree`, and a released userset
+subject is still EXPLICIT there (the add-cascade's step-2d promotion), so the strip-first
+order was a **guaranteed no-op on exactly the path that needed it** and nothing re-checked
+once the demote landed. The board's warning was right and worth having: relaxing the
+`implicit` guard is the fix the bug's shape suggests, and it would have broken
+`index_v4/core.py::ReachabilityIndex.remove_node`'s "explicit nodes keep bridges" policy.
+
+**The two orders are otherwise identical, which is the argument that this is the narrow
+fix rather than a behaviour change** — when the node is already implicit the demote returns
+immediately, and when a canonical explicit-reason still holds the node stays explicit and
+the strip no-ops exactly as before. The `reference_count == 0` branch keeps its effect (it
+now runs after the strip instead of in an `else`; `_maybe_remove_bridges` no-ops at
+`rc == 0`). Only the leaking case diverges.
+
+**Sabotage, and the reason it was not skipped as "already proven by the red pins".** The
+pins were observed red before the edit and green after, which is a real before/after
+control — but it controls the WHOLE edit, and the edit did two things (reorder + collapse
+the `else`). The weakening that actually threatens this fix is narrower and entirely
+plausible: a later reader tidying the two calls back into their original order. That exact
+edit was applied — order swapped, every other part intact — and **both pins went red**
+(`2 failed in 0.37s`), restoring gave `2 passed in 0.30s`. So the pins pin the ORDER. Filed
+in the test module's docstring and in `spec-deviations.md ## 2026-08-21`.
+
+**Gate: ten phases green ON THIS TREE**, `python scripts/gate_status.py` →
+`VERDICT: the ten-phase gate is COVERED on this tree`. `tests/` now collects **915** (up
+from 903 — this session's tree adds the `BL-1` and stored-cache-scope files), zero
+`xfailed`, zero `skipped`, every floor met. Fuzz: 3 seeds × both hypothesis files —
+`test_hypothesis.py` `30 passed` at 7/19/31 in 81.6 / 84.7 / 87.7 s and
+`test_lookup_hypothesis.py` `17 passed` at the same three. **The differing durations are
+the point**, per the runbook's `HYPOTHESIS_SEED` footgun: identical durations are the tell
+that a "multi-seed sweep" ran one seed N times.
+
+⚠ **A tests-tile pair blew the 10-min cap and the ledger is what saved the verdict.**
+`tests-tile:1/4` + `4/4` in one command = 350 s + 260 s > 600 s, so the command was killed —
+but `4/4` had already finished and written its `PASSED` row, and `gate_status.py` reported
+it green on this tree. The 3-day-old per-tile durations in `gate-runbook.md` §1 (95–165 s)
+are **well under** what these tiles now cost (187–350 s); that section already says not to
+hard-code per-tile counts, and the same caution now applies to its durations. One phase per
+command is the safe recipe.
+
+⚠ **The gate was earned twice, and the second time was self-inflicted — filed as a method
+lesson in [`gate-runbook.md`](../gate-runbook.md) §"Push gate".** The verdicts are
+tree-addressed against **two scopes**: the nine pytest tiles hash CODE (`all` minus `*.md`
+and `benchmarks/`), `lean` hashes EVERYTHING. So (a) tidying the `BL-1` pins' stale
+present-tense docstrings *after* the tiles were green invalidated all nine — a docstring is
+`.py` — and (b) every write-back edit invalidates `lean`. The correct order is: all `.py`
+edits (docstrings included) → tiles → write-back → `doc_counts --generate` → `lean` last.
+Both were caught by `gate_status.py` rather than by remembering, which is the argument for
+that script existing. Two smaller gate facts fell out of the same loop: adding one real
+anchor to `CORRESPONDENCE.md` fails step 4e until the counts block is regenerated
+(**526 → 527**), and the first draft of that anchor was written
+`` `test_hypothesis.py::…` `` — a bare filename, which **4d rejected** (`file does not
+exist`). Note the contrast with 2026-08-20b, whose anchors were malformed in a way the
+regex could not see at all and so passed: this one was a *real* anchor with a wrong path,
+and the gate caught it immediately.
+
+**No Lean change owed — checked, not assumed.** `_gc_subject_node` /
+`_demote_released_node` have never had a Lean counterpart: `CORRESPONDENCE.md` §8.1 lists
+them under *"Node GC + flag lifecycle AS AN ALGORITHM"* and `ReconcileDiff.lean` /
+`Cascade.lean` both say node GC is a modeled-away optimization. A `grep` over
+`formal/lean/` for the four function names returns nothing. That bullet already recorded
+`ZT-P0-1` as a bug inside the unmodeled region; it now records `BL-1` as the second, with
+the distinction that `ZT-P0-1` was found by review and `BL-1` by the differential net.
+⚠ **A first draft of that edit claimed "two of two: every bug found here so far has been in
+this region", which is simply false** (the three PostgreSQL bugs, X1–X4). It was caught and
+narrowed before commit, but it is worth recording that the governing claim doc nearly
+acquired a fresh overclaim *in the same edit that was tightening its accuracy* — the same
+shape as 2026-08-20b's "the split committed its own new file's cardinal sin".
+
+**The two smaller owed items, both done — and one became an instrument fix.** `R6-11`'s
+inflated "8× per reconcile" is corrected in all four places (`perf-next-round.md`, the
+audit's verdict table, and the two `R6_PROFILE_2026-08-17.md` sites via a dated header
+correction — the body is left as run, because rewriting a measurement record destroys the
+evidence trail that makes the artifact visible). **But a doc fix does not stop the next
+probe re-deriving it**, so the halving moved into the instrument:
+`benchmarks/profile_r6.py::_ctxmgr_entries`, which converts a `@contextmanager`'s cProfile
+ncalls into scopes entered and **asserts the count is EVEN** — an odd count means a `with`
+never completed, and then halving is the wrong correction, so the probe refuses rather than
+reporting. It carries a second control in `profile_r6_write.py`: the halved
+`_stored_cache_scope` figure must be `>=` the processor's own true `scopes` counter (a
+bound, not a proof — the counter only increments on OUTER scopes). Re-ran the cascade
+target to confirm: `184 scopes entered (cProfile ncalls 368, halved)` over 40 reconciles =
+**4.6×**, the ~4 shape rather than 8. `R6-11`'s verdict is unchanged (`MOTIVATED`) — its
+predicate is "at least one scope per reconcile", which both figures clear. What moved is
+the size you would have sized the work off.
+
+`R6-4(a)` now carries a dated `>` note **in its own entry**, not only in the Traps section.
+The reason is specific: the fix sketch is a verbatim block containing the words *"a sound
+invalidation token"*, and a reader taking `R6-4(a)` off the land-order list reads the
+sketch. The verifier block below it already stated the correction, which is exactly why
+this was easy to consider already-handled.
+
+Nothing is committed — this tree still carries all of `2026-08-20b`'s uncommitted work as
+well as this session's. `python scripts/handoff_lint.py` clean.
+
+Still owed: nothing from this session. The next session inherits a green tree and a clean
+`Still owed:` for the first time since 2026-08-16; `P3` (Route B adjudicated, unblocked) is
+the recommended pick.
+
+## 2026-08-20b — `R6-10` (2.54×), `HS-2`, `P3` Route B adjudicated — and a fake anchor gate
+
+rows: `BL-1` (new, **NOW**), `R6-10`/`R6`, `P3` (unblocked, → `NEXT`), `P14` (split),
+`P6` (corrected), `HS-2` (closed), `LT-1`, `HS-5`.
+
+A three-track session run through subagent fan-outs: `R6-10` (perf), `HS-2` (docs), and the
+`P3` proof-design adjudication. **Every track's headline finding came from its adversarial
+verifier, not its implementer** — which is the transferable result and the reason the
+`Verify` stage is not optional.
+
+**⚠ THE GATE IS RED, DELIBERATELY, AND `BL-1` IS THE NEW `NOW`.** The hypothesis campaign
+found a real correctness bug during this session's runs: from an empty store, add+remove of
+`('r0','doc','d1','r1','doc','d1')` leaves a `w_any(doc,r0)` node and the bridge edge
+`doc:d1#r0 → w_any(doc,r0)`. **It is PRE-EXISTING** — reproduced at `HEAD` in a clean
+worktree with the same example DB, so it is not this session's work. Severity was **probed,
+not inferred**: store A (add+remove) vs B (fresh) vs `tests/oracle.py`, both backends, all
+read surfaces → `255 queries, 0 disagreements`. So it is a **state-only leak, not a
+fail-open** — the damage is the row-multiset-restoration violation plus unbounded node/edge
+growth under churn. Cause is an ORDER bug, not a missing teardown:
+`processor.py::DeltaProcessor._gc_subject_node` calls `_maybe_remove_bridges` **before**
+`_demote_released_node`, and the strip guard requires `implicit`, still `False` there.
+⚠ Relaxing that guard would break the "explicit keeps bridges" policy — the strip belongs
+*after* the demote. Pinned positively (never xfail) by
+`tests/test_userset_bridge_release_leak.py`, currently RED; full record in the ledger's
+`## 2026-08-20b` entry. **Note the shape: a fuzz campaign found this, and it was only
+noticed because a reviewer ran the full suite rather than the touched modules.**
+
+**`R6-10` landed, and its verifier caught a check that could not have worked.** Both steps
+(call-site dedup + the reentrant stored-tupleset memo): SQL statements/cycle `1929 → 822`
+(−57.4%), `node_v4`/cycle −86%, unprofiled wall `905.5 → 356.2 ms` (**2.54×**), memo hit
+rate 98.9% with misses landing at exactly `3 distinct keys × 30 cascades`. The 59.8%
+headline was **decomposed before landing** (`_direct_incoming` 28.4% + `_nodes_by_ids`
+30.7%; the residual was already amortized by the N15 cache) rather than quoted as the
+expected win — the `R6-19` trap in general form.
+⚠ **The two new `CORRESPONDENCE.md` citations were NOT ANCHORS.** They were written
+`` `::DeltaProcessor._stored_cache_scope()` `` — trailing parens defeat
+`anchor_check.py::BARE_RE`, which requires the closing backtick to follow the symbol. The
+"524 parsed, 524 resolved" quoted in `PERF_ANALYSIS.md` as proof they resolved is **HEAD's
+own number**, i.e. the number you get when a change adds zero anchors. Renaming the symbol
+would have rotted §5 with a green gate — the exact rot the anchor gate exists to foreclose.
+Fixed → **526**, and sabotaged (rename → `FAIL: 2 anchor(s) no longer resolve`, rc=1).
+⚠ **A green sabotage had been run and left out of the record.** `S4` (userset half returns
+the shared cached list) came back `36 passed`; `S5`, the identical weakening on the tupleset
+half, went red — so it was a coverage verdict, not a broken harness. Both lived only as
+`.scratch/*.log`. The pin is now widened over both readers and `S4` reddens. This is why the
+`.scratch/` trap was promoted to `CLAUDE.md` today.
+⚠ **"The only net" was wrong twice over.** `tests/test_ttu_tupleset_parent_types.py` was
+named as the only guard for star-expansion liveness; under the sabotage **all 12 of its
+tests stayed green**, and so did `test_matrix.py` (`24 passed`) and `test_lookup_oracle.py`.
+The module writes its pool in one batch, so it pins that a star parent *is* expanded and
+nothing about the expansion staying *live*. **The repo already knew**: the `2026-07-26`
+ledger entry says of a different fix that it "passes every pin in
+`test_ttu_tupleset_parent_types.py`, because those write in one batch and reconcile once".
+Known a month earlier, in the right file, never carried to where anyone would rely on it.
+The limitation now lives in that module's own docstring. Method lesson filed in
+[`sabotage-procedure.md`](../sabotage-procedure.md) §'"The only net" is a claim about a
+test'. **Also corrected: the "26 tests" figure was a `26 passed` summary line from a
+three-module run misread as a module count (it collects 12), after it had propagated into
+four docstring sites.**
+
+**`P3` is unblocked: Route B adjudicated (user call).** The `#eval` battery
+(`GraphIndex/Scratch4cii.lean`, additive, zero-cone) returned no-kill at all five
+`LeafRules.lean` witnesses on both chains. Two things made it trustworthy rather than
+merely green: the instrument's draft Bool mirror of `DerNode` was **wrong** (missing
+`variant == .plain`) and was caught by a deliberately-failing control, then *proved* correct
+(`derNodeB_correct`); and probing the `_d` chain as well as the narrow one **refuted the
+adjudication's own opening proposition** (`mono=false` at `SlSw/tApp`), yielding the
+corrected per-chain form in scope doc §11.9. The weakening is invisible to
+`backend_equivalence` because `UntaintedShadow` is **hypothesis-position at every lemma
+whose conclusion leaves the shadow layer**; the pinned statement survives byte-identical and
+all 581 audits keep every member. And "keep the strong form" was never an option —
+`Scratch4cii.lean::strong_shadow_false_at_raw` machine-checks that the unweakened shadow is
+already FALSE at a leaf-routed state. `P14` splits: the classification half is absorbed into
+`P3`, the reach-collapse half stays `deps: P4`, and the `P3 → P14 → P4 → P3` cycle breaks.
+
+**Board corrections earned this session.** `P6`'s row claimed for weeks that it "can run in
+parallel with `P3`" — false: they are logically independent but textually collide on
+`writeRules`, `writeLoggedOne` and `FoldAdmits`, and **pay the same 38-module cone**.
+`R6-4(a)` is **unsound as filed** (its `(row.id, row.version)` memo breaks on SQLite —
+deleted residues restart at `version=1`, rowids recycle). `R6-11`'s "8× per reconcile" is
+**2× inflated**, a cProfile generator-resume artifact. The board hit both its line ceiling
+and its trap budget, so seven `P3` traps went to scope doc §11.10 and five `R6` traps to the
+perf audit doc — the defined overflow move, not a ceiling raise.
+
+**The board's premise overstated the file.** `HS-2` said `docs/spec-deviations.md` "answers
+two questions at once", which reads as *find the cut point*. There is no cut point: the
+latent half was ~250 lines scattered across `2026-07-26 — ZT-P5` §Target 1–5, `2026-07-27b`
+§"Residuals — the honest part", and three already-closed "filed not fixed" blocks. So this
+was an **authoring** job, not a move, and the next reader of a "split X" row should budget
+for that.
+
+**The split that landed.** The dated LEDGER keeps the filename (user decision) —
+[`spec-deviations.md`](../spec-deviations.md) — and the new
+[`docs/latent-gaps.md`](../latent-gaps.md) owns "what is still latent today". Keeping the
+name collapsed ~90 citer edits across 25 `.py` files to 10 doc edits and, more importantly,
+keeps `docs/specs/graph-boolean-ivm-spec.md`'s charter (*"append a dated entry to
+`docs/spec-deviations.md`"*) TRUE rather than falsifying a frozen spec.
+
+**The boundary, decided against `docs/README.md` §1 before a line moved.** The two halves
+have *opposite update rules*, and that — not size — is the whole reason to split: a ledger
+entry is append-only and true as of its date; a latent inventory is rewritten in place. So
+what moved is **status, not evidence**. The 2026-07-26 entry keeps every finding it
+recorded; what left it is the "Disposition (board row `LT-1`, HOLD)" paragraph, i.e. the
+one paragraph that had to be rewritten every time reality changed. `### Target 2` and
+`### Target 3` are **section titles in both files now**, deliberately: they are cited by
+name from `LT-1`, from `tests/test_owc_star_parent_cross.py` and from a frozen archive, and
+the ledger's copies now redirect in their first line. Every `##` and `###` heading in the
+ledger is byte-identical to HEAD — verified by diffing the heading lists, not by eye.
+
+**⚠ RULING, recorded so it reads as decided rather than missed: frozen archives are NOT
+repointed.** `docs/history/handoff-status-2026-07.md` cites "Target 2" and "Target 3" by
+name (lines 68, 70). `docs/README.md` §2 says a frozen body is never edited and corrections
+are appended dated at the top; that wins over "repoint every citer". **A frozen archive's
+pointer is provenance** — it records what the citation looked like on the day, and the
+names it cites still resolve because they were kept. The same ruling covers
+`handoff-migration-map-2026-08.md`, `handoff-status-2026-08.md` and the append-only
+ledgers. The one frozen doc that *did* get a correction is
+`docs/design/generator-coverage/ttu-negarm-rootcause.md`, and it got one **appended at the
+top**, never edited into the body, because its pointer is positional and does not resolve
+at all.
+
+**Three citations were ALREADY broken before this change** — fixed here so the split does
+not get blamed for them, per the sabotage-procedure habit of controlling the instrument:
+
+```
+spec-deviations.md  "the 2026-08-09 sibling (below, `:83`)"   :83 was inside the 2026-08-14 entry
+spec-deviations.md  F1 `:1320` / CLOSED `:1336` / `:1360-1367` / `:2292`  (2026-08-09 prior-art table)
+                                                              :1320 was inside `## 2026-07-08`
+ttu-negarm-rootcause.md  "top entry" x2                       positional into a newest-first log;
+                                                              2026-08-14 is top, it meant 2026-08-10
+```
+
+All four re-keyed onto dated entry keys and section titles per §5. The `:1320` family is
+mirrored verbatim in `tests/test_owc_star_parent_cross.py` and `:83` in
+`tests/test_ttu_tupleset_parent_types.py`; both files were owned by other agents this
+session and are listed under `Still owed:`.
+
+**One correction the split forced out of hiding.** `ZT-P5`'s star-subject/star-object
+divergence has said "**NOT FIXED here**" since 2026-07-26 — and
+`WildcardIndex._reject_star_self_edge` fixed it *later the same day*. Nothing pointed that
+out for three weeks, and `latent-gaps.md` would have inherited it as a live gap if the
+inventory had been transcribed rather than re-verified against the code. It now carries a
+dated `>` correction (the idiom this file already used twice) and appears in the new file's
+**"Closed — do not re-file from the ledger's tense"** section, which exists specifically to
+absorb that failure mode. Same for `Residuals` items 1 and 4, both long closed.
+
+**Lint: a tenth check, `check_doc_links`.** `scripts/handoff_lint.py` validated *nothing*
+about doc-to-doc links, and `verify.sh` step 4d resolves `file::symbol` anchors in
+`CORRESPONDENCE.md` **only** — it never sees a markdown link, which is exactly why this
+split was unguarded. The new check resolves every markdown `.md` link target and every inline
+`` `docs/*.md` `` mention in the board files, `CLAUDE.md`, `docs/README.md` and the two
+halves. Sabotaged per `docs/sabotage-procedure.md` with the **narrowest plausible**
+weakening — the singular/plural typo a rename commit actually produces, not a deleted file
+— and it carries an instrument control (a floor on links parsed), because a link checker
+that finds zero links passes forever. Literal output is in the check's docstring.
+
+`docs/spec-deviations.md` also finally declares **LIVING**, so `HS-5`'s count drops 7 → 6.
+The row's wording is a decrement only — the 2026-08-20 filing says "always-living roots"
+without scoping them to `docs/`, and the seven were never enumerated, so narrowing the row
+to "`docs/` roots" would have silently changed what `HS-5` means.
+
+**⚠ Adversarial review caught the split committing its own new file's cardinal sin, and
+that is the lesson worth carrying.** `latent-gaps.md`'s "Latent, but owned by another doc"
+listed the **untainted**-arm `rewriteClosure` dedupe divergence as still latent, quoting
+"no corpus exercises it" — transcribed from the `## 2026-07-29` §"Left open, deliberately"
+paragraph, whose present tense is 2026-07-29. It closed **2026-08-08**: the dedup landed
+and two corpora now exercise the shape (`formal/CORRESPONDENCE.md` §7.2 item 6's "CLOSED
+2026-08-08" note; `RemoveOccCount.lean`'s header says the sentence "was FALSE when it was
+written"). The genuinely-open item in that same §7.2 item 6 is the **derived**-arm presence
+diff on `reconcileKeyDR`'s fold guard — a different arm. So the entry-rule this file wrote
+("still true today, verified — not inferred from the ledger's tense") was violated in the
+same commit that wrote it, on a bullet that was **new prose rather than a moved citation**,
+which is precisely why the citation census could not see it. The bullet now names the
+derived arm, and the untainted one joined the "Closed" list. **A completeness census
+validates what MOVED; it says nothing about what you WROTE while moving it.**
+
+Three smaller review fixes, all applied: the re-key of F1 traded a wrong line number for
+an **ambiguous** one (there are two `## 2026-07-16` entries) and now quotes enough of the
+heading to resolve — this mattered because that exact string was queued to be pasted into
+a test docstring; the ledger's forward pointer claimed the Target 2/3 section titles were
+"unchanged" when only the *keys* were carried; and two newly-authored `>` blockquotes had
+copied pin names and the `MAX_TESTS_XFAILED` VALUE into the append-only ledger — a copy
+there can never be fixed in place when a test is renamed (`CLAUDE.md` footgun 3, and
+`docs/README.md` §1). Both now point at `latent-gaps.md` instead of restating it.
+
+Gate: not run by this session — the orchestrator runs it once. `python scripts/handoff_lint.py`
+is clean (10 checks).
+
+The 3 citations `HS-2` left owed in other agents' files were repointed before close:
+`tests/test_owc_star_parent_cross.py` (``F1 (:1320, CLOSED :1336)`` and ``(:1360-1367)`` →
+dated entry keys) and `tests/test_ttu_tupleset_parent_types.py` (``spec-deviations.md:83``
+→ the `## 2026-08-09` entry). **A fourth candidate was reviewed and REJECTED:** that
+docstring's ``ZT-P5 bullet 2 / "Target 3"`` citation stays on `docs/spec-deviations.md` —
+it is a claim about what the 2026-07-26 probe covered ("never against oracle answers"),
+i.e. evidence, which the ledger owns, not live status.
+
+Still owed: **the ten-phase gate has NOT been run to completion on this tree.** `lean` is
+green (`holes=0, audits=581, pinned=581`) and targeted suites pass, but `tests-tile:*` will
+fail on `BL-1`'s two pins until the fix lands, so a full green run is not achievable and was
+not attempted as a green run. The next session must (1) fix `BL-1`, (2) run all ten phases
+and confirm with `python scripts/gate_status.py` that they are green **on this tree**, and
+(3) run a 3-seed fuzz sweep — `R6-10` is a cascade cache, and a stale-cache defect is
+exactly what the stateful ParityEngine machine catches and the unit suite does not.
+**Nothing from this session has been committed.** Also owed, smaller: `R6-11`'s inflated
+figure should be corrected in all four places it appears before that item is worked, and
+`R6-4(a)`'s entry in the perf audit still describes the unsound memo in its body (the
+correction is currently only in the new Traps section).
+
+---
+
 ## 2026-08-20 — every living-doc citation re-keyed onto `file::symbol`; 8 pointed at unrelated code
 
 rows: `HS-5` (new). **No item progressed** — see the `moved` note at the end.

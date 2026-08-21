@@ -11,6 +11,18 @@
 > and §1b records the implementation corrections found while building the
 > generator-coverage work this fed. Every `file:line` citation is as of 2026-08-10 and
 > has since moved — read the code, not the line numbers.
+>
+> **Correction 2026-08-20 (row `HS-2`).** This document points at
+> `docs/spec-deviations.md`'s **"top entry"** twice (§0 "This corrects the diagnosis
+> currently recorded…" and §"Repo record."). That is a *positional* pointer into a
+> newest-first log and no longer resolves: the top entry is now `## 2026-08-14`. Both
+> occurrences mean the **`## 2026-08-10`** entry — specifically its
+> §"Superseded original (2026-08-10, earlier the same day)", which is where the two
+> sentences quoted below ("respects the boolean evaluation of the tupleset relation…" and
+> "different mechanism (that one was a missing crossing middle…") actually live. The
+> correction this document asked for was applied: that entry now carries its own
+> superseding text. Read the dated key, never the position — `docs/README.md` §5. Body left
+> untouched per the frozen rule above.
 
 Investigation date: 2026-08-10. Repo: `C:\Users\user\PycharmProjects\graph-reachability-zanzibar-index`.
 READ-ONLY: no repo file was modified. All experiments ran via monkeypatch from

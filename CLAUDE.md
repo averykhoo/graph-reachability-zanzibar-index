@@ -44,6 +44,22 @@ IVM delta processor.
   format, the citation-key rules (ids, `file::symbol`, archive-section form), the
   priority vocabulary (`NOW`/`NEXT`/`LATER`/`HOLD`/`SOMEDAY`) and its capacity budgets,
   and the one-home-per-statement routing table. Read it before restructuring any doc.
+- **Two record-keeping rules, promoted from the board 2026-08-20b because they are
+  repo-wide.**
+  * ⚠ **`.scratch/` is gitignored — anything recorded ONLY there is already lost.** Board
+    row `P7`'s entire cost analysis survived only in `.scratch/` and had to be transcribed
+    into `PROOF_STATUS.md` (2026-08-16) to keep the item resumable. It recurred on
+    2026-08-20b in a worse form: two sabotage runs (`sab_s4`/`sab_s5`), one of them a
+    **green sabotage** proving a shipped property was unpinned, existed only as
+    `.scratch/*.log` and appeared in no docstring, no `PERF_ANALYSIS.md` entry, and no
+    report — a reviewer found them by listing the directory. **If a run is evidence, it
+    goes in a tracked file the same hour.**
+  * ⚠ **A trap must cite a symbol that EXISTS.** The board carried "do not extend
+    `test_fixture_earns_its_place`" for weeks; no such test has ever existed, so the trap
+    was unenforceable. Cite `file::symbol` and grep it before writing it down. The same
+    applies to counts: on 2026-08-20b a `26 passed` summary line from a THREE-module run
+    was written into four docstring sites as one module's test count (it collects **12**).
+    Get a count from `pytest <target> -q --collect-only`, never from a run's tail.
 
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.

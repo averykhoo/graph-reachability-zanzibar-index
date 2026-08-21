@@ -267,6 +267,19 @@ Three things generalise out of them:
    tree it measures (a probe that edits and restores, a bench that leaves a database
    behind, a sweep that touches mtimes) owes a **baseline re-read after restore**: confirm
    you are back where you started before trusting anything the run said.
+4. **Run the check against a CLEAN tree before you sabotage it — a check nobody can get
+   green is as dead as one that never fires.** The whole protocol is about silence, so it
+   is easy to forget that the opposite failure also kills a check: it gets commented out,
+   or its floor gets loosened until it is slack. Two of this repo's checks were shaped by
+   it. `HEADLINE_MAX` was scoped to the root ledger only after a wider version fired 60
+   times on an **append-only** file whose entries may never be retro-edited — a check
+   demanding a fix its own convention forbids. And `check_doc_links`' first version
+   (2026-08-20) resolved the code-span *label* of `` [`../HANDOFF.md`](../HANDOFF.md) ``
+   against the repo root and reported **32 violations on a clean tree**, every one of them
+   a link that resolves fine when clicked. Both looked right when written. The baseline run
+   is also what makes the later red *attributable*: if a marker is already present before
+   the sabotage, that case proves nothing unless the new failure line names the sabotaged
+   subject specifically.
 
 The remedy ranking from "Prefer a mechanical refusal to a doc warning" applies unchanged.
 For a measurement, rank 1 is the non-vacuity counter printed in the instrument's own
@@ -341,6 +354,83 @@ real seed set, 744/744, with three positive controls). It could never have fired
 allocation error can move that number at all.** Two green instruments, one shared blind
 spot — and the shared blind spot was not visible from either one's controls. When two checks
 agree, ask what each is structurally incapable of seeing before you count them as two.
+
+### "The only net" is a claim about a test, and it is usually untested (2026-08-20b)
+
+The two sections above are about instruments that were blind. This one is about the *belief*
+that a named test guards a property — a belief carried into a change's design without anyone
+having watched the test fail, **while the repo's own ledger already said it wouldn't**.
+
+**Worked example — `R6-10`'s star-expansion premise.** The `R6-10` memo is unsound if it
+freezes `tupleset_parents`, because that fans a star parent through `_instances_of_type`,
+which reads the global `NodeV4` table — and `_reconcile` mutates that table mid-cascade
+(step 2a interns, step 5 GCs). **No benchmark can catch the mistake**: `R6-3`/`R6-13`
+measured 0 calls, so no benchmarked workload has an `RC2` star-tupleset shape at all. The
+item's recon therefore named `tests/test_ttu_tupleset_parent_types.py` as *the only net*.
+
+It is not a net. Sabotaging exactly the thing it supposedly guards — memoizing
+`tupleset_parents` (S2), and again `derived_stored_parents` (S2b) — left **all 12 of its
+tests green**. The module writes its pool in one batch and then queries, so it pins that a
+star parent *is* expanded and never that the expansion stays *live*. Nor is it the only
+blind one: under the same sabotage `tests/test_matrix.py` — the 4-way validation matrix
+`CLAUDE.md` names as what pins "same semantics" — also stayed green (`24 passed`), as did
+`test_lookup_oracle.py`. The sole evidence for that property is now
+`test_star_expansion_is_not_frozen_by_the_memo`, written because the sabotage came back
+green.
+
+⚠ **The "26" this paragraph first carried is itself a worked example.** It was `pytest`'s
+`26 passed` summary line from a **three-module** sabotage run (10 + 14 + 12 = 36, of which
+10 failed), misread as a count of one module's tests — which collects **12**. It was written
+into a permanent docstring in four places and propagated here as *literal observed output*
+before a reviewer re-collected the module and caught it. A summary line is a fact about the
+run, not about the module. **If you are recording a count as evidence, get it from
+`pytest <target> -q --collect-only`, not from the tail of a run that spanned other targets.**
+
+**The part that should sting: this was already written down.** The `2026-07-26` entry in
+[`spec-deviations.md`](spec-deviations.md) says of a different fix that it *"passes every
+pin in `tests/test_ttu_tupleset_parent_types.py`, because those write in one batch and
+reconcile once; it would have failed only under incremental maintenance"* — the exact
+limitation, in the right file, recorded a month earlier. It was not carried to the place
+where someone would rely on the module, so it was re-derived from scratch by sabotage.
+**A known limitation of a test belongs in that test's docstring**, where the person about to
+lean on it will read it; a dated ledger entry records that you learned it, not that the next
+reader will.
+
+> **If you are about to rely on a test as the only guard for a property, sabotage the
+> property and watch THAT test go red.** "Module X covers this" is a hypothesis. A module
+> can pin the existence of a behaviour while pinning nothing about its liveness,
+> freshness, or ordering — and the difference is invisible from the test names.
+
+Note the shape: a **green sabotage is a finding**, not a non-event. It says either your
+sabotage missed, or the guard you were counting on does not exist. Both are worth knowing
+before you ship the change that depends on it.
+
+**Two instrument failures from the same session, both caught by controlling the
+instrument.** The first `S2` run returned `36 passed` — a green sabotage that was the
+*probe's* fault: the test only drove `derived_stored_parents`, and step A had just rerouted
+that path around `tupleset_parents`, so the sabotage was unreachable from the test. Widened
+to drive all three routes, it went red. The first `S3` attempt (`outer = True`) produced
+`33 failed, 3 passed` via `TypeError: object of type 'NoneType' has no len()` — an obvious
+catastrophe, rejected under §"Choosing the sabotage" and replaced with the plausible
+no-outer-flag form, which gave a clean `2 failed, 34 passed`.
+
+### Never hand-write a Bool mirror of a `Prop` without PROVING it (2026-08-20b)
+
+`#eval` probes over a Lean `Prop` need a `Bool` mirror, and a wrong mirror does not error —
+it silently returns `true` for every clause, so the whole battery comes back green and reads
+as a no-kill result. This has now bitten twice (the 2026-07-28 Leg-0 sweep, the 2026-08-16
+`persistedLeaves` transcription), and a third time was caught in the act: the draft
+`derNodeB` mirror of `CascadeStable.lean::DerNode` handed to the `P3` adjudication was
+**wrong** — it omitted `variant == .plain`.
+
+Two things caught it, and the cheap one is not enough on its own:
+
+1. **A deliberately-failing control** — run the clause the mirror should *reject* and watch
+   it come back `false` before trusting any green. (`CONTROL SlV: extrasDer=false`.)
+2. **A proof, where the mirror is load-bearing**: `derNodeB_correct : derNodeB S k = true ↔
+   DerNode S k`. A control shows the mirror is not *constantly* true; only the iff shows it
+   is the *right* predicate. When a route decision rests on the probe — as `P3`'s did —
+   pay for the iff.
 
 ### Prefer a mechanical refusal to a doc warning
 

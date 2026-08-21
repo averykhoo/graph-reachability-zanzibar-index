@@ -999,6 +999,88 @@ build target); and `test_conformance_state.py:377-378`'s `_MIN_LEDGER_ROWS`/
 `_MIN_LEDGER_STACKED = 19/19` are asserted at `:516`, before the golden read, over exactly
 the multiplicity leg 4c-ii moves.
 
+### 11.9 ★★ THE §11.8 ADJUDICATION IS SETTLED (2026-08-20): the `UntaintedShadow`
+### weakening is SOUND, it is HALF of P14 (the classification half), and a third route
+### exists — full evidence `PROOF_STATUS.md` 2026-08-20b, pins `GraphIndex/Scratch4cii.lean`
+
+`history/` is append-only, so §11.8 stands as written. Read this as its resolution.
+
+**The weakening is sound — no-kill at all six `LeafRules.lean` witnesses, both chains,
+with the instrument proved (`Scratch4cii.lean::derNodeB_correct`) and controlled (the
+clause-2 probe under `derNodeB` alone observed `false` at `SlV`).** Every σ-only extra
+of `writeRulesRaw` over `writeRules` is leaf-targeted under the `publicOfLeaf` carrier;
+leaf nodes are never edge sources; no rule reads a leaf predicate (the `SlStP` TTU arm
+mints the DECLARED subject predicate, not a leaf name). The `by decide` pins re-run the
+battery on every build.
+
+**Three corrections to the framing §11.8 inherited:**
+
+1. **The adjudicating proposition is per-chain, not global.** On the `StoreValidRulesD`
+   chain a derived-key Direct-arm write makes `writeRules ⊆ writeRulesRaw` FALSE
+   (pinned, `slSwD_not_mono`): today's write keeps the closure seed at the PUBLIC
+   R-node, the raw write routes it to the storage leaf. That refutes the scout's (★) as
+   stated and kills nothing: on the shadow chain that write is a σ-only extra with σ0
+   held FIXED (`untaintedShadow_writeLoggedOne_derived` is the landed template), and
+   the measured fact is a clean classification SWAP — `(derNodeB, leafNodeB)` goes
+   `(true, false) → (false, true)` on the same edge, at index 0 and at `SwU`'s index 2.
+   The weakening is exactly that swap.
+2. **§11.8's "the surviving branch" undersells the option space: Route C exists** —
+   widen `RulesWrite.lean::ReachedByRules.step` itself onto `writeRulesRaw`, leaving
+   `DerNode`/`UntaintedShadow` untouched and `reachedByRules_of_admitted` true by
+   construction. It survives the battery too, but its recompile cone is the whole
+   GraphIndex tree (vs Route B's zero-additional — `CascadeStable` is inside the cone
+   4c-ii pays anyway), and with σ0 raw-built the read bridges need the SAME
+   leaf-terminality lemmas relocated into the W2 chain. **Recommended: Route B; the
+   fork is a human call and both budgets are in `PROOF_STATUS.md` 2026-08-20b §3.**
+3. **The `P3 → P14 → P4 → P3` cycle breaks by SPLITTING P14, not by merging items.**
+   Route B absorbs only P14's classification half (~123 mention sites re-verified
+   2026-08-20: `DerNode` 39/3 files, `UntaintedShadow` 84/7 files; template lemmas
+   exist). The reach-collapse half is untouched because clause 2 keeps leaf edges off
+   declared R-nodes, so `reachedByRules_derived_no_inedge` and the collapse family
+   survive verbatim. Split the board row into `P14a` (classification — into `P3` under
+   Route B) and `P14b` (reach-collapse — stays `deps: P4`).
+
+**The §(c) starvation residual is answered (one witness, no-kill):** `edgeHolders` at
+the public R-node starves (`[alice] → []` at the `Sw` derived write) but
+`storedDirectSubjects` reads the STORE and still yields the candidate — so 4c-ii + 7
+stays a closed cone and P4 owes the leaf-probe bridge for edge-side READS, not a
+candidate-set rescue (pinned, `slSwD_starvation`).
+
+**Two carrier facts the Route-B implementer must not lose:** the `LeafNode` carrier is
+`publicOfLeaf`, never `isLeafPred` (sabotage (Sa): nine reds, all on the BARE sentinel);
+and `relNameOK` permits the EMPTY relation name while `leafPublic BARE = ""`, so carry
+`leafPublic p ≠ ""` (or a WF nonempty-name clause) or prove `""` undeclarable.
+
+### 11.10 Traps for the 4c-ii cone — demoted from `HANDOFF.md` 2026-08-20b (board overflow)
+
+These were carried on the board's `P3` block. Moved here, per `docs/README.md` §4's defined
+overflow move, when the board hit its trap budget; the board keeps a pointer to this section.
+They are the mechanics that have each cost a session, and they are unchanged by Route B.
+
+* ⚠ **The own-key premise is BACKWARDS.** On the `ComputedOnly` fragment the leaf list is
+  EMPTY, not multi-element (`Leaf.lean::atomLeaves`, `::rawWriteRels`), so
+  `writeLeg_own_key_dirty` goes FALSE and needs a non-emptiness premise (`StoreValidRules`),
+  not `WF`.
+* ⚠ **Keep `d.leaf = true` as the LEADING conjunct** of the own-key guard: the
+  `rw [hleaf]; simp` discharges depend on that order, and there are **four**, not three.
+* ⚠ **It CANNOT be split** — the un-buildable window is the whole cone, not a step. A
+  half-started re-point leaves the tree red across a session boundary with no green phase to
+  resume from.
+* ⚠ **`FoldAdmits` lockstep is 24 spelled-list sites**, not the 7 `write` constructors, and
+  `Audit.lean` is an EDITED file of this step (it carries the
+  `#print axioms reachedByRules_of_admitted` pin).
+* ⚠ **Expect a deliberate golden regen — but `derived_arm_multiplicity.json` needs a DERIVED
+  expectation, not a re-recording**, and
+  `test_conformance_state.py::_MIN_LEDGER_ROWS`/`::_MIN_LEDGER_STACKED` (19/19) are asserted
+  *before* the golden read, so no regeneration repairs them.
+* ⚠ **Route B's equivalence argument is polarity-dependent.** It holds only because
+  `UntaintedShadow` sits in hypothesis position at every lemma whose conclusion leaves the
+  shadow layer. Putting a shadow-mentioning term in a headline-reaching conclusion kills it —
+  re-run the census in `PROOF_STATUS.md` `2026-08-20b` §7 before assuming it survives.
+* ⚠ **Route B stops supplying σ/σ0 agreement at leaf-node targets.** Nothing probes those
+  today; the post-4b derived read path will, and that surface is board row `P4`. Do not
+  cancel `P4` without revisiting this.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer
