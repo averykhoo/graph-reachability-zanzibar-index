@@ -170,6 +170,83 @@ ways, and the rubric is NOT retroactively widened. Any widening is a dated appen
 
 ---
 
+### 2026-08-24 — FULL RUN, 18 agents, session-shaped task per §7
+
+All 18 completed. Metrics are harness-reported; scoring against §7.4 is my judgement and
+is shown per-agent so it can be re-scored.
+
+#### Cost
+
+| | n | median tokens | range | median calls |
+|---|---|---|---|---|
+| BOARD:haiku | 6 | 30,805 | 30,756–30,841 | 1 |
+| TREE:haiku | 6 | **27,314** | 25,494–28,899 | 4.5 |
+| BOARD:sonnet | 3 | 40,370 | 40,351–40,446 | 1 |
+| TREE:sonnet | 3 | **35,853** | 35,804–41,052 | 3 |
+
+Haiku tokens, Mann–Whitney as pre-registered: **U=0, critical U=5, reject H₀ (p<0.05)** —
+the two arms do not overlap at all. Tool calls separate the other way, also U=0: the board
+arm answered in **one** call every single time, the tree arm needed 3–5.
+
+Sonnet is descriptive by design (n=3): **U=3, no test**, exactly as §7.5 said in advance.
+
+**The effect size is the same on both models — TREE is 88.7% of BOARD on Haiku and 88.8%
+on Sonnet.** Difference in medians is 3,491 and 4,517 tokens. Per §7.5's warning, do NOT
+read 11% as "11% less reading": a large fixed system-prompt floor sits inside both
+figures, so the saving on the part that actually varies is considerably larger than 11%
+and this design cannot say by how much.
+
+#### Quality (§7.4, six points)
+
+| arm:model | scores | median |
+|---|---|---|
+| BOARD:haiku | 5,5,5,6,5,6 | 5 |
+| TREE:haiku | 5,5,5,5,5,5 | 5 |
+| BOARD:sonnet | 6,6,6 | **6** |
+| TREE:sonnet | 5,4,6 | 5 |
+
+S1–S4 and S6 were earned by **17 of 18** agents. Every agent identified `P3`, the
+FALSE-AS-WRITTEN human call, the §11.10 traps and the census hole. **Parity on content is
+confirmed**, which was the hypothesis.
+
+#### F1 — S5 is the board-favouring item §5 said did not exist, and the board won it
+
+`P6 is NOT parallel-safe with P3` was earned by **5 of 9 BOARD** agents and **1 of 9
+TREE** agents.
+
+The cause is structural, not incidental. `P3`'s task file has `deps: []` and
+`related: []`, so `show P3` never mentions `P6` — whereas on the board, `P6`'s row sits
+four lines below `P3`'s in the same table and every reader scrolls past it. **The board
+buys cross-item awareness for free by being one file; the tree deletes that benefit along
+with the 260-line ceiling.** This is the real cost of decoupling and the trial found it
+without being designed to.
+
+It also repairs §5's declared bias: there is now a known fact the board conveys better.
+
+**The tree has the mechanism and is not using it.** `related: [P6]` on `P3` would restore
+the link, and `show` already computes and prints incoming `related` edges. Not applied
+during the trial — repairing a subject mid-measurement destroys the measurement.
+
+#### F2 — compliance was perfect; the tracer separated 17/18
+
+No BOARD agent answered `11`; no TREE agent answered `9`. Zero arm violations. One
+TREE:haiku answered **`4`** — a miss, not a crossover, and the only tracer failure in the
+run.
+
+#### F3 — one TREE:sonnet agent omitted `READ-FIRST` entirely
+
+Scored 4/6. A format failure that occurred only in the tree arm, n=1, cause unknown.
+
+#### F4 — the board arm is FAST and CONFIDENT and WRONG about R6
+
+Every BOARD agent answered in one tool call, in 16–40 s, and **all nine of them reported
+the stale `9`** with elaborate corroboration — one listed the nine ids, another added
+"5 declined, 3 unreachable". A single authoritative file produces uniform confident
+agreement, and when that file is stale the uniformity is worthless. **Nine independent
+readings of a wrong figure are not nine pieces of evidence.**
+
+---
+
 ## 7. Full run — design, pre-registered 2026-08-24 before any agent launched
 
 ### 7.1 The task is now SESSION-shaped
