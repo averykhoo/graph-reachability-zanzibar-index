@@ -1,6 +1,6 @@
 ---
 id: HS-5
-title: six always-living docs lack the liveness state docs/README.md sec 2 requires in their first lines
+title: always-living docs lack the liveness state docs/README.md sec 2 requires; count lives in TK49
 pri: LATER
 size: S
 deps: []
@@ -10,8 +10,8 @@ labels: [docs]
 source: board
 source_hash: a31abceae8e6
 created: 2026-08-20b
-moved: 2026-08-20b
-updated: 2026-08-20b
+moved: 2026-08-24
+updated: 2026-08-24
 closed:
 ---
 

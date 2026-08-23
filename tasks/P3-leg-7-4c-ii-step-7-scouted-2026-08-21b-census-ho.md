@@ -4,14 +4,14 @@ title: leg 7 4c-ii + step 7 -- scouted 2026-08-21b: census hole + headline-guard
 pri: NOW
 size: L
 deps: []
-related: []
+related: [P6]
 parent:
 labels: [formal]
 source: board
 source_hash: 90a1f8ce5f73
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24
+updated: 2026-08-24
 closed:
 ---
 

@@ -25,6 +25,73 @@ from here.
 
 ---
 
+## 2026-08-24 — file-per-task tracker on trial beside the board; 18-agent A/B; three stale board figures fixed
+
+rows: `HS-5` (retitled), `R6` (count corrected), `P3` / `P6` (a `related` edge, tree only).
+
+**No code changed. No gate phase was re-run beyond `lean`.** Branch `tasktool-trial`,
+five commits, additive: `tasks/` (150 files), `scripts/task.py`, `scripts/trial_metrics.py`,
+`scripts/trial_stats.py`, `docs/tasktool-spec.md`, `docs/tasktool-trial-protocol.md`,
+`docs/tasktool-trial-stub.md`, a narrow `.gitattributes`, and one `CLAUDE.md` bullet.
+
+**The trial, and the obligation it puts on you.** `tasks/` is a file-per-task tree whose
+`board` verb prints the session-start view as a QUERY (~19 lines) instead of a file. It
+runs BESIDE `HANDOFF.md` until **2026-08-30**; the board stays authoritative and nothing
+is gate-enforced. **Whoever edits either tree edits both, in the same session** — the two
+are a control and a treatment arm and a divergence at the end of the week IS the result,
+so a session that updates one destroys the evidence. Close with `python scripts/task.py
+lint`'s literal output and a `read:` line in your entry here. Full contract:
+[`docs/tasktool-spec.md`](../tasktool-spec.md); protocol and results:
+[`docs/tasktool-trial-protocol.md`](../tasktool-trial-protocol.md).
+
+**The instruction could not go on the board.** `HANDOFF.md` was at 260 lines against a
+260-line ceiling — there was no room to write "also update the task tool" into the file
+whose fullness is the thing being tested. It went in `CLAUDE.md`. The ceiling then caught
+a one-line overrun during this session's own board edits, which is the check working.
+
+**The A/B, pre-registered before any agent ran.** 18 agents, two arms (board vs tree),
+one session-shaped task: pick up the `NOW` item and say how you would start. Tree median
+tokens were **88.7%** of board on Haiku and **88.8%** on Sonnet — the same effect twice.
+Haiku separated completely (Mann–Whitney U=0, critical U=5, p<0.05); tool calls separated
+the other way, board answering in ONE call every time against the tree's 3–5. Sonnet was
+descriptive only at n=3, as declared in advance. **Do not read 11% as "11% less
+reading"** — a large fixed system-prompt floor sits inside both figures.
+
+Quality was at parity: 17 of 18 agents found `P3`, the FALSE-AS-WRITTEN human call, the
+scope-doc §11.10 traps and the census hole.
+
+**The finding that goes AGAINST the tree, and it is the one to carry forward.** "`P6` is
+not parallel-safe with `P3`" was reached by 5 of 9 board agents and 1 of 9 tree agents.
+Structural, not luck: `P3`'s file had `deps: []` and `related: []`, so `show P3` never
+mentioned `P6`, while on the board `P6`'s row sits four lines below `P3`'s and every
+reader scrolls past it. **A single file buys cross-item awareness for free, and the tree
+deletes that along with the ceiling.** Fixed for this pair (`related: [P6]` on `P3`;
+`show` computes the incoming half, so one edge serves both ends) — but the *class* is
+open, and every other collision in the corpus is still invisible.
+
+**Three stale board figures, all found by the parallel tree and all fixed here.** `R6`
+said `9 to land, 5 declined`; re-counted from the children it is **11 / 4 / 3**, and the
+board heading said "nine remain". `R6-19` said `25.3% cumulative` where the audit doc says
+**25.4%** — the old figure paired two different passes and no source states that pair.
+`HS-5` said "six always-living docs". **It is NOT retitled to eleven**, because `TK49`
+carries a trap saying exactly that: the count read six, then nine, then eleven across
+three days, so a title carrying a count rots again. Both the row and the task title now
+name the rule and point at `TK49` for the number.
+
+⚠ **Nine board agents answered `9` in one tool call, several with corroborating detail** —
+one listed the nine ids, another added "5 declined, 3 unreachable". A single authoritative
+file manufactures uniform confidence whether or not it is right, and nine independent
+readings of a wrong figure are not nine pieces of evidence.
+
+Still owed: `HS-5`'s real deliverable — adjudicating which of the measured docs are
+*deliberately* exempt from [`docs/README.md`](../README.md) §2 — is untouched; only the
+title was fixed. The `related`-edge sweep for collisions other than `P3`/`P6` is not done.
+`tasks/HS-5-six-always-living-docs-...md`'s FILENAME still carries the retracted "six"
+(the id is the address, so lint is clean and nothing is broken, but it misreads). The full
+gate has NOT been run on this tree — only `bash formal/verify.sh lean`, green; run the
+nine tiles before any push. `tasktool-trial` is UNMERGED, so until it is merged the
+`CLAUDE.md` trial bullet is invisible to sessions on other branches.
+
 ## 2026-08-21b — BL-2 leaf-name read leak found AND FIXED; machine-checked: post-4c-ii headlines FALSE at leaf queries
 
 rows: `BL-2` (filed **and** closed this session; retired), `P3` (scouted/designed, NOT
