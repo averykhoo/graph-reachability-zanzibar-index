@@ -11,6 +11,30 @@ IVM delta processor.
   item, plus an item block for each `NOW`/`NEXT`. This file (`CLAUDE.md`) is the durable
   contract; the board is what changes session-to-session. At end of session write back
   via its "Rhythm" protocol (session-log entry, banner, board rows).
+- **ON TRIAL 2026-08-23 → 2026-08-30: `tasks/` is maintained IN PARALLEL with the board.**
+  A file-per-task tree (150 files, one task per file) plus `scripts/task.py`, whose `board`
+  verb prints the ~19-line session-start view as a QUERY instead of a file. `HANDOFF.md`
+  stays authoritative; nothing about the gate changed. **Both are updated, every session,
+  by whoever edits either** — a board row promoted, demoted, added or closed gets the
+  matching `task.py promote` / `new` / `close -m` in the same session, with the same
+  session key (`--session`). That is the trial's whole design: the two trees are a control
+  and a treatment arm, and **a divergence between them at the end of the week is the
+  evidence** — which is why a session that updates only one of them destroys the result for
+  everyone, and why "I'll reconcile it next time" is the one move that cannot be allowed.
+  * Close the loop in your session-log entry with two literal lines: the output of
+    `python scripts/task.py lint`, and `read: board only` / `read: board + HANDOFF` /
+    `read: HANDOFF only` — an honest self-report of what you actually read to start work.
+    The lint line is the visible hole if the parallel update was skipped; the read line is
+    the only way to learn whether the query actually REPLACED the file read or merely got
+    added to it, which is the difference between the trial succeeding and looking like it.
+  * Start with `python scripts/task.py board`; `show <id>` is the per-item read, `ready`
+    lists unblocked work, `list` is capped at 20 rows and says so. Full schema and op
+    contract: [`docs/tasktool-spec.md`](docs/tasktool-spec.md). **Do not run
+    `.scratch/tasktool/migrate.py`** —
+    its `--rebuild` destroys 51 hand-filed tasks that no source document contains.
+  * The trial is a question about USEFULNESS, not correctness — correctness is already
+    pinned (41 tests, 22 sabotage cases). If it is not actually helping by 2026-08-30, the
+    answer is to delete `tasks/`, `scripts/task.py` and this bullet, which is one revert.
 - **Always run the gate before pushing.** Never push red or unverified: the phased
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`
   (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in

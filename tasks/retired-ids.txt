@@ -1,0 +1,23 @@
+# Ids that are spent. NEVER reused, NEVER re-minted -- `task.py new` scans this
+# file as well as open/ and closed/ before allocating.
+#
+# THIS FILE IS THE ONLY IRREVERSIBLE OUTPUT OF THE MIGRATION, so an id reaches it
+# only when a record POSITIVELY STATES the id is dead -- not finished (that is a
+# file under closed/), not undetermined (that is an open task on HOLD saying so),
+# and not merely absent from the board. No record in this repo makes that positive
+# statement today, so the list below is EMPTY, deliberately. Empty is not a hole:
+# every id the migration knows about is live under tasks/ or tasks/closed/ and is
+# therefore already unmintable.
+#
+# The earlier pass listed fifteen ids here, fourteen of them live: every R6-N perf
+# candidate still to land (R6-6, R6-11, R6-5, R6-4, R6-9, R6-18, R6-16, R6-7,
+# R6-8, R6-1), the three measured-unreachable ones (R6-3 = R6-17, and R6-13,
+# 0 calls each -- they need a T:*#P workload before they need a patch), and R6-19,
+# filed 2026-08-18. They are now open tasks with parent R6. ZT-P5, whose ledger
+# bullets are mixed, is open on HOLD with its ambiguity written down.
+#
+# Deliberately NOT listed: the `ZT-*` wildcard from HANDOFF.md's retired line (it is
+# a glob, not an id -- its members are enumerated individually), and the namespaces
+# `extract-ids.json` excluded (Lean stage labels T1/T2a/W1-W4, invariant numbers
+# I1-I13, audit-finding codes X1-X4/F1/F2/C1-C3, extractor projection names P1-P7).
+
