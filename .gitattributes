@@ -1,0 +1,14 @@
+# Deliberately NARROW. This repo has run without a .gitattributes under
+# core.autocrlf=true for its whole life, so a broad `* text=auto` rule here would
+# renormalize every tracked file at once -- a whole-tree diff that hides real changes and
+# that nobody asked for. Only the paths that actually need a pin are listed.
+#
+# WHY tasks/ AND scripts/task.py NEED ONE (added 2026-08-23 with the task-tool trial):
+# task.py's canonical frontmatter writer emits '\n' unconditionally (io.open(..., newline=''))
+# and its contract is that round-tripping an untouched task file is BYTE-IDENTICAL --
+# tested. Under autocrlf the working copy would hold '\r\n', so the first write op on a
+# fresh clone would rewrite every line of the file it touched, turning a one-field edit
+# into a whole-file diff and destroying the review property the byte-identity test exists
+# to give. Pin the bytes instead of teaching the writer about platforms.
+tasks/**            text eol=lf
+scripts/task.py     text eol=lf
