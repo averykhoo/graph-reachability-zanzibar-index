@@ -167,3 +167,64 @@ ways, and the rubric is NOT retroactively widened. Any widening is a dated appen
 3. **`CLAUDE.md` names both systems**, so neither arm is blind. Isolate arms in worktrees
    with variant contracts, or accept and report the contamination.
 4. **Still no board-favouring question.** §5's declared bias stands unrepaired.
+
+---
+
+## 7. Full run — design, pre-registered 2026-08-24 before any agent launched
+
+### 7.1 The task is now SESSION-shaped
+
+The pilot measured the board on its home turf (§P5). The tree's claim is *the same
+knowledge of one item, for less reading*, so the task becomes: **pick up the `NOW` item
+and decide how to start.** Verified before writing this — `show P3` and `HANDOFF.md`'s
+`### P3` block both carry `HUMAN CALL`, `FALSE AS WRITTEN`, `Seven traps`, `census hole`
+and the `viewer.0` probe output, so neither arm is starved of content. **What differs is
+the cost of reaching it**: the board arm reads a 260-line file; the tree arm reads a
+19-line `board` plus an 80-line `show P3`.
+
+Agents are told **not to open** the documents they list under `READ-FIRST`. Listing them is
+the deliverable. Without that bound both arms chase pointers into `PROOF_STATUS.md` and
+the scope doc, and the measurement becomes about those files instead.
+
+### 7.2 Arms are DIRECTED, not blind — and this is a limitation
+
+`CLAUDE.md` names both systems, so neither arm can be naive. Each arm is therefore told
+explicitly to use its own system and not the other. **This measures directed use, not
+natural preference**, and the difference matters: it cannot answer "which would a session
+reach for", only "given this system, how well does a session start". The tracer below is
+repurposed as the compliance check.
+
+### 7.3 The tracer
+
+`TRACER:` asks how many `R6` items remain to land. `9` is board-only, `11` is tree-only
+(§P2, 4/4 separation in the pilot). In the full run it detects **arm violation**: a TREE
+agent answering `9` read the board anyway, and a BOARD agent answering `11` used the tree.
+
+### 7.4 Scoring — six points, answers fixed here in advance
+
+| # | credit for | source |
+|---|---|---|
+| S1 | names `P3` | both |
+| S2 | the **human call**: after the re-point the headline theorems are FALSE AS WRITTEN at minted leaf-name queries — the thing that must be decided before 4c-ii lands | both |
+| S3 | the **seven traps in scope doc §11.10**, and that §11.10 is read before touching the cone | both |
+| S4 | the **census hole** — `CascadeStable.lean::shadow_graphRec_agree`, 14 repairs, unbudgeted | both |
+| S5 | **`P6` is not parallel-safe** — same 38-module cone | both |
+| S6 | read-first names `PROOF_STATUS` `2026-08-21b` and/or scope doc §11.9/§11.10 | both |
+
+Every point is available from **both** sources by construction — the §5 quiz bias does not
+apply to this scoring. Cost, not correctness, is the hypothesis under test here: **the
+tree's claim is parity on S1–S6 at lower cost.** A tree win on quality would be a bonus
+finding; a tree LOSS on quality at higher cost would sink it.
+
+### 7.5 n, and what will and will not be computed
+
+**6 per arm on Haiku, 3 per arm on Sonnet.** Reported per model, never pooled.
+
+Haiku (n=6/arm) gets a **Mann–Whitney U** on tokens and on tool calls: non-parametric, no
+normality assumption, appropriate at this n. Sonnet (n=3/arm) gets **medians and ranges
+only** — n=3 supports no test, and running one anyway would be decoration.
+
+⚠ **The token figures carry a large fixed floor** (~30 K of system prompt in the pilot),
+so a ratio of totals understates the effect on the part that varies. Report the
+DIFFERENCE in medians alongside the ratio, and do not quote a percentage of the total as
+if it were a percentage of the reading.
