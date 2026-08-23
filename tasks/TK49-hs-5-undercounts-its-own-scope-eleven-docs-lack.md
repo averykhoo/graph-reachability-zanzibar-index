@@ -10,8 +10,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24
+updated: 2026-08-24
 closed:
 ---
 
@@ -42,3 +42,7 @@ That is `ZT-P3-5` (a stale figure in a durable place) recurring inside a board r
 ### 2026-08-21b
 
 **Provenance.** Surfaced and MEASURED by this project's own work: COVERAGE.md §C5 read the first 8 lines of each candidate and found eleven with no LIVING/FROZEN/ACTIVE-PLAN state. Re-measured independently this pass over the same eleven paths: 11/11 still banner-less.
+
+### 2026-08-24
+
+Deliverable (2) DONE 2026-08-24: HS-5 retitled to 'always-living docs lack the liveness state docs/README.md sec 2 requires; count lives in TK49', and the HANDOFF.md row edited to match. The retitle followed this row's own trap -- the count was NOT copied into the new title, because six-then-nine-then-eleven across three readings is exactly what a title carrying a count does. Deliverable (1), the adjudication of which of the measured docs are deliberately exempt, is STILL OPEN and is the actual work here. Found during the task-tool trial: 9 of 9 BOARD-arm agents answered 'six' from the board row, and the tree agents answered 'six' too, because they stopped at HS-5's title rather than following 'children: TK49' one hop.

@@ -16,9 +16,9 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **All ten phases green on this tree** — `lean` last, after `doc_counts --generate`,
-> plus a 3-seed fuzz sweep on both hypothesis files. As of **2026-08-21**, branch
-> `bl-2-leaf-name-read-leak`, **uncommitted**: nine tiles PASSED, zero `xfailed`/`skipped`,
+> 🟢 **All ten phases were green on the tree they ran against** — `lean` last, after
+> `doc_counts --generate`, plus a 3-seed fuzz sweep. Measured **2026-08-21** on
+> `bl-2-leaf-name-read-leak`, **not this tree** (ledger `2026-08-24` added five commits; only `lean` re-run since): nine tiles PASSED, zero `xfailed`/`skipped`,
 > floors met (`MIN_TESTS_ALL` 903 → **923**, re-measured with `--collect-only`); every
 > figure lives in `formal/FINAL_REVIEW.md`'s generated block or the ledger, per Rhythm 3b.
 > **The old banner's "Known live correctness bugs: 0" was falsified by `BL-2`** — the
@@ -44,7 +44,7 @@ forward forever and are never reused.**
 |---|---|---|---|---|---|
 | `P3` | leg 7 **4c-ii + step 7, one commit** — Route B adjudicated 2026-08-20b, absorbs `P14`'s classification half; **scouted 2026-08-21b: census hole + headline-guard human call, see block** → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.9 | **NOW** | L | — | 2026-08-21b |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
-| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×)**; 9 to land, 5 declined, 3 unreachable → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-21 |
+| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×)**; 11 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24; the old `9 / 5` was wrong) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24 |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
 | `P7` | `ttuStarFree` **(iii)+(iv)** — re-prove the 5 consumed sites, widen the gate → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16 | LATER | M | `P6` | 2026-08-16 |
@@ -54,7 +54,7 @@ forward forever and are never reused.**
 | `P10` | re-run the scope audit, hand-curated → [fan-out runbook](docs/subagent-fanout-runbook.md), final § | LATER | M | — | 2026-08-16 |
 | `P11` | the fixture-TRIPLE question for 5 subsumed `.fga` fixtures → `tests/test_schema_shapes.py::KNOWN_SUBSUMED` | LATER | S | — | 2026-08-16 |
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
-| `HS-5` | six always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines → ledger `2026-08-20` | LATER | S | — | 2026-08-20b |
+| `HS-5` | always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines; **count is method-sensitive, it lives in `TK49`, not here** → ledger `2026-08-24` | LATER | S | — | 2026-08-24 |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
@@ -167,7 +167,7 @@ materialises the edge, and the rest of the leg is inert until it lands.
 `ensureInBridges` / `ensureBridges`; `writeRules` / `writeLoggedRules`; `derive_schema_info`'s
 second loop.
 
-### `R6` — perf round 6: `R6-10` landed, nine remain
+### `R6` — perf round 6: `R6-10` landed, eleven remain (re-counted 2026-08-24)
 
 **`R6-10` landed 2026-08-20b** (both steps): `−60.7%` incremental boolean write wall,
 **2.54×**, SQL statements/cycle `1929 → 822`. Remaining order: `R6-6` (4.75 → 1.75
@@ -178,7 +178,7 @@ statements per `check`) → `R6-11` → `R6-5` (**32.7%** ORM construction for 3
 **Declined on an upper bound; do not reopen without new numbers:** `R6-15` (**0.9%**),
 `R6-12` (**1.00×**), `R6-14` (**5.0%**), `R6-2`. **Unreachable by any benchmarked workload**
 (`R6-3` = `R6-17`, bulk twin `R6-13` — 0 calls each): they need a `T:*#P` workload first.
-`R6-19` owns the last unowned number (25.3% cumulative, **self 2.0%** — a call-site fan-out).
+`R6-19` owns the last unowned number (25.4% cum, **self 2.0%** — a call-site fan-out; the old `25.3%` paired two passes and no source states that pair).
 
 ⚠ **Five traps the numbers do not carry** live in
 [`perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do
