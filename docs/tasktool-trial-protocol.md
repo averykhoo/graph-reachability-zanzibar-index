@@ -85,4 +85,85 @@ week surfaces a board-right/corpus-wrong fact, add it as Q6 in a dated append.
 
 ## 6. Results
 
-Appended as runs complete. Nothing here yet.
+### 2026-08-23 — PILOT, n=1 per cell. Ran to validate the harness; it did not survive.
+
+Four agents, one per (arm × model). Metrics below are **harness-reported usage**, not
+transcript-derived and not self-reported — see the instrument failure directly after.
+
+| arm:model | tokens | tool calls | wall | Q1 | Q2 | Q3 | Q4 | Q5 |
+|---|---|---|---|---|---|---|---|---|
+| BOARD:haiku  | 30,899 | 1 | 13.1 s | ✓ | ✓ | **9** ✗ | **6** ✗ | ✓ |
+| BOARD:sonnet | 40,396 | 1 | 6.3 s | ✓ | ✓ | **9** ✗ | **6** ✗ | ✓ |
+| TREE:haiku   | 39,897 | 15 | 86.6 s | ✓ | ✓ | **11** ✓ | **6** ✗ | contested |
+| TREE:sonnet  | 41,099 | 6 | 28.9 s | ✓ | ✓ | **11** ✓ | **6** ✗ | ✓ |
+
+**No statistics are computed and none should be.** n=1 per cell, and the token figures are
+dominated by fixed system-prompt overhead rather than by reading, so the differences below
+are observations, not estimates.
+
+#### P1 — the instrument failed, and reported clean while doing it
+
+All four pilot transcripts were **0 bytes on disk** while a fifth in the same directory
+held 416 KB. `trial_metrics.py` printed `0 bytes, 0 calls, 0 board-opens` for every arm
+and exited 0 — a table of false numbers that read like a result. **M3 is therefore not
+obtainable this way**, and M1/M2 are not either.
+
+Fixed the same hour: the script now REFUSES an unobservable subject instead of scoring it
+zero, because a zero is indistinguishable from "read nothing", which is a real and
+interesting outcome it would otherwise forge. Both halves were then demonstrated — the
+refusal on the four empty transcripts, and a positive control on the 416 KB one
+(`164147 bytes, 53 calls, 1 board-open, 21 task.py calls`), because a check that only ever
+refuses is not evidence that it can measure.
+
+#### P2 — Q3 is a dye marker, and replaces M3
+
+`9` appears only in `HANDOFF.md`; `11` appears only in the task tree. The pilot separated
+**4/4** on it. This is a *behavioural* tracer for which system an agent actually used, it
+needs no transcript, and it cannot be produced by an agent's account of itself. It is the
+cheapest honest substitute for M3 and the design should lean on it.
+
+#### P3 — the TREE arm cost MORE, on both models
+
+Haiku **+29% tokens** (39,897 vs 30,899) and **6.6× wall-clock** (86.6 s vs 13.1 s).
+Sonnet **+2% tokens** (41,099 vs 40,396) and **4.6× wall-clock**. Both BOARD agents
+answered after **one** tool call; the TREE agents needed 6 and 15.
+
+This cuts against the tool's headline claim and is recorded before any explanation of it.
+The explanation that is nonetheless probably true is §P5: the task was the board's shape,
+not the tree's.
+
+#### P4 — Q4 was wrong in BOTH arms, and the tree's failure is the more damning one
+
+Every agent answered **six**. The tree *contains* eleven, in `TK49`, whose `parent` is
+`HS-5` — and `show HS-5` prints `children: TK49` and `open children: TK49`, so the correct
+figure was **one hop away and signposted**. The agents stopped at `HS-5`'s TITLE, which
+still reads *"six always-living docs lack the liveness state…"*.
+
+That is the board's disease inside the tree: a summary row carrying a figure its own child
+corrects. The `R6` parent title was REBUILT from its children during migration for exactly
+this reason; `HS-5`'s was not. Filed as trial finding, not fixed during the trial — fixing
+it mid-measurement would destroy the measurement.
+
+#### P5 — the task shape favours the board, structurally
+
+Five shallow facts spread across five items is what a 260-line file is *good* at: one read,
+everything in context, one tool call. The tree's claim is the opposite shape — deep
+knowledge of ONE item without paying for the other 90. **This pilot measured the board on
+its home turf** and the tree still won on the only discriminating question.
+
+#### P6 — a rubric defect, recorded rather than quietly widened
+
+`TREE:haiku` answered Q5 with *"An exit code piped through tail/tee reports the PIPE's
+status"* — a genuine repo-wide trap belonging to no item, from `CLAUDE.md`'s four standing
+footguns, but outside the two answers §5 pre-registered. It is scored **contested**, both
+ways, and the rubric is NOT retroactively widened. Any widening is a dated append here.
+
+### Revisions required before the full run
+
+1. **Drop M1/M2/M3.** Use harness usage plus the Q3 dye marker.
+2. **Change the task to a session shape** — "you are picking up the `NOW` item; list every
+   trap that applies and what you would read first" — which is what the tree claims to be
+   for. Keep a quiz arm so the two shapes can be compared rather than conflated.
+3. **`CLAUDE.md` names both systems**, so neither arm is blind. Isolate arms in worktrees
+   with variant contracts, or accept and report the contamination.
+4. **Still no board-favouring question.** §5's declared bias stands unrepaired.
