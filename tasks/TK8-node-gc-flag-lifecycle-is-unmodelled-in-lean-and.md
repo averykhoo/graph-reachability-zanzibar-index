@@ -4,14 +4,14 @@ title: node GC / flag lifecycle is unmodelled in Lean, and TWO named bugs landed
 pri: LATER
 size: L
 deps: []
-related: []
+related: [P19]
 parent:
 labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -37,3 +37,7 @@ Two bugs in one modeled-away region is an argument for filing it, not evidence i
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-8 (`CD-6`, tier 2, sweep-d only), distinguished from `P19` (read surfaces). STRENGTHENED 2026-08-21 per COVERAGE.md §C4: formal/CORRESPONDENCE.md:983-986 now names `BL-1` beside `ZT-P0-1`.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [P19]`. 'Distinct from P19 ... do not merge them' is stated here and nowhere on P19, so the blind end was the one at risk of merging them.

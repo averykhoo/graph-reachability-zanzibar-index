@@ -4,14 +4,14 @@ title: _instances_of_type scans the entire interner per type -- 0 calls in any p
 pri: HOLD
 size: ?
 deps: []
-related: []
+related: [R6-13, R6-17]
 parent: R6
 labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -43,3 +43,7 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`UNREACHED — HOLD`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [R6-13, R6-17]`. R6-17 is a literal duplicate and R6-13 the bulk twin; both name R6-3 in their own bodies, and R6-3 named neither -- so a session settling R6-3 (the end that gets worked) would never learn it also discharges R6-17. Edge written on the blind end; `show` computes the incoming half for the other two.

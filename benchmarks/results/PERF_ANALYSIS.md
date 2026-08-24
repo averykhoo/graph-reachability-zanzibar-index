@@ -144,6 +144,78 @@ materialized closure is the O(1) answer to the set engine's O(N) sweep.
 
 ## Applied
 
+- ✅ **R6-6 — batch `check()`'s node resolution into ONE statement
+  (`index_v4/core.py`, `index_v4/wildcard.py`), 2026-08-24d, behavior-preserving.**
+  The edge probe in front of which this sits was already one round trip ("ONE SQL
+  round trip for all probes"); the up-to-four identity resolutions feeding it were
+  one `_db_node` point SELECT each. Now one row-value `IN` over
+  `node_v4_unique_constraint`, via the new
+  `index_v4/core.py::ReachabilityIndex.resolve_node_ids`.
+  - **Measured** (`python -m benchmarks.profile_r6 --target graph-check`, run alone,
+    gdrive graph scale 200 = 3,360 raw tuples, 2,000 `check` calls). Note the command:
+    that target takes `--graph-scale`, and the audit's `--scale 400` was a no-op that
+    silently ran the default 200 — corrected in the module docstring, and no recorded
+    R6 figure depends on it because the statement counts are scale-invariant.
+
+    | | HEAD | +R6-6 |
+    |---|---|---|
+    | `node_v4` statements / check | 4.00 | **1.00** |
+    | `edge_v4` statements / check | 0.75 | 0.75 (unchanged) |
+    | **total SQL statements / check** | 4.75 | **1.75** (−63.2%) |
+    | checks / s (in-memory SQLite) | 333 | **767** (2.30×) |
+    | true answers (semantic control) | 1,080 / 2,000 | 1,080 / 2,000 |
+
+    The audit predicted exactly 4.75 → 1.75 and that is what landed. **The statement
+    count is the metric that transfers** — on PostgreSQL each eliminated statement is
+    one RTT; the throughput column is in-memory SQLite, where a round trip is
+    microseconds, so 2.30× is a floor for the ORM-instantiation saving (4 `NodeV4`
+    entities built per check became 1) and says little about the RTT saving.
+  - **Not a cache, and specifically not a *new* one.** `_w_id` is deliberately
+    uncached (blind-audit W2) and that is untouched: `resolve_node_ids` holds nothing
+    across calls. What it does do is read AND populate the existing per-batch N15
+    `_node_cache`, which is why the write path — `_check_internal` is also reached
+    from `processor.py::_EvalContext.leaf_check`, inside a cascade where that cache is
+    installed — does not regress. A "fresh per-call SELECT", which is what the audit's
+    fix sketch literally proposed, would have replaced warm cache hits with SQL there.
+  - **One deletion.** Folding the w-variant ids into the batch left
+    `::WildcardIndex._w_id` with no callers in the repo, and it is not a
+    `CORRESPONDENCE.md` anchor, so nothing in the gate would have reported it. Deleted;
+    its **W2** paragraph — why w-node resolution is uncached across calls — moved to
+    `::WildcardIndex._w_node`, which is still live and is what the rule now constrains.
+  - **Lean: none.** `CORRESPONDENCE.md` maps `GraphIndex/State.lean::GraphModel.
+    probeNonDerived` (≤4 probes) and `::GraphModel.check` to
+    `::WildcardIndex._check_internal`, with a nested `::WildcardIndex._check_internal.key`
+    anchor. The probe-key SET the model describes is unchanged and the `key` closure is
+    preserved by name, so `verify.sh lean`'s anchor resolution stays green; only *how*
+    the ids in front of it are fetched changed, which the model does not describe
+    (same argument as N15/P3).
+  - **Sabotage** (8 runs, literal output in the R6-6 block of `tests/test_reads.py`;
+    applied by `-p` plugin monkeypatch, baseline `25 passed in 42.50s`). The pins are
+    two, deliberately: a statement count cannot see a dropped key, and a dropped-key
+    test cannot see a regression to four statements.
+    ★ **The first version of the dropped-key pin was GREEN under the sabotage it
+    exists for**, and the fixture was rewritten rather than the sabotage: it asked
+    `check(alice, doc:d1)` in all four cases, and because the closure is materialized
+    the bridge `alice → w_all → d1` is a real edge that probe 1 answers on its own.
+    Probes 3 and 4 are only reachable with a GHOST endpoint. After the rewrite each of
+    the four keys reddens exactly the two cases whose probe mentions it — a 2×2 that
+    is verified, not asserted.
+    ★ **Dropping the `w_all` key is `2 failed, 23 passed`** — the only two reds in
+    `tests/test_reads.py` are the two new cases, while all **nine** of that module's
+    oracle grid-parity tests stay green under a live under-grant. Widened, it IS
+    caught (`4 failed, 56 passed` over matrix + lookup-oracle + wildcard-property,
+    baseline `60 passed`), so it is a module-local blind spot, not a project-wide one;
+    `tests/test_lookup_oracle.py` (45 collected) is fully green because the lookup
+    surface never assembles a `w_all` probe key.
+  - **Instrument corrected too** (`docs/sabotage-procedure.md` §"A MEASUREMENT is an
+    assurance step too"). `benchmarks/profile_r6.py::target_graph_check`'s verdict
+    predicate is `node_per >= 2.0`, so after this fix **0.00 reads NOT MOTIVATED
+    exactly like 1.00** — i.e. a probe that stopped reaching the code would report as
+    a better result than the real one. It now asserts non-vacuity first (`hits > 0`
+    and at least one node statement per check). Sabotage of the instrument: blind the
+    `node_v4` tally → `INSTRUMENT BROKEN: 0.00 node_v4 statements per check` instead
+    of a clean verdict.
+
 - ✅ **R6-10 — stop re-enumerating stored tupleset/userset tuples per candidate
   (`index_v4/processor.py`), 2026-08-20, behavior-preserving.** The round-6 headline:
   `benchmarks/results/R6_PROFILE_2026-08-17.md` §9 measured

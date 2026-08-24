@@ -156,25 +156,27 @@ class WildcardIndex:
         return self.idx.node(pred, entity_type, name, create_if_missing=create)
 
     def _w_node(self, entity_type: str, predicate: str, variant: str, *, create: bool) -> NodeV4 | None:
-        """Fetch (or create) the w_any/w_all node for a shape, or None if absent."""
+        """Fetch (or create) the w_any/w_all node for a shape, or None if absent.
+
+        ⚠ **W-node resolution is deliberately UNcached across calls (blind-audit W2),
+        and that rule binds every path that resolves one, not just this function.**
+        Every caching scheme tried here went stale across sessions: cached misses
+        pinned probes off after another session created the w node, and cached
+        positive ids turned into false POSITIVES under SQLite rowid reuse (a GC'd w
+        node's id claimed by an unrelated node) plus permanent false negatives after
+        w-node re-creation. Resolution is one point lookup on the unique node index --
+        the same cost class as the probe it feeds. The per-batch N15 `_node_cache`
+        underneath `idx.node` is NOT an exception: it never survives a commit.
+
+        This paragraph lived on a `_w_id` wrapper until 2026-08-24d, when R6-6 made
+        `_check_internal` resolve the w ids in its own batch and left that wrapper
+        with no callers. It moved here rather than being deleted with it -- the rule
+        outlived the function, which is the usual way one of these gets lost."""
         try:
             return self.idx.node(predicate, entity_type, '*', create_if_missing=create,
                                  implicit=True, wildcard=variant)
         except KeyError:
             return None
-
-    def _w_id(self, entity_type: str, predicate: str, variant: str) -> int | None:
-        """Id of a w_any/w_all node (read path), or None if it doesn't exist.
-
-        Deliberately UNcached (blind-audit W2): every caching scheme tried here went
-        stale across sessions -- cached misses pinned probes off after another
-        session created the w node, and cached positive ids turned into false
-        POSITIVES under SQLite rowid reuse (a GC'd w node's id claimed by an
-        unrelated node) and permanent false negatives after w-node re-creation.
-        Resolution is one point lookup on the unique node index -- the same cost
-        class as the probe it feeds."""
-        node = self._w_node(entity_type, predicate, variant, create=False)
-        return node.id if node is not None else None
 
     def _bridge_degree(self, shape: tuple[str, str]) -> int:
         return ((1 if shape in self.schema_info.bridged_in_shapes else 0)
@@ -662,19 +664,32 @@ class WildcardIndex:
         subject_shape_declared = (s_type, s_pred) in self.schema_info.subject_wildcard_shapes
         object_shape_declared = (o_type, relation) in self.schema_info.object_wildcard_shapes
 
-        # Resolve up to 4 node ids (w-ids cached). A literal '*' query endpoint maps
-        # to its own variant node in probe 1; a missing node simply drops its keys
-        # (ghosts thus retain their star-probe coverage).
-        if subj_is_star:
-            subj_id = self._w_id(s_type, s_pred, 'any')
-        else:
-            subj = self._get_concrete(s_pred, s_type, s_name)
-            subj_id = subj.id if subj is not None else None
-        if obj_is_star:
-            obj_id = self._w_id(o_type, relation, 'all')
-        else:
-            obj = self._get_concrete(relation, o_type, o_name)
-            obj_id = obj.id if obj is not None else None
+        # Resolve up to 4 node ids in ONE statement (perf R6-6): the identities are
+        # independent, so they go to ``ReachabilityIndex.resolve_node_ids`` together
+        # instead of paying a point SELECT each -- 4.00 node_v4 statements per check
+        # became 1.00, in front of an edge probe that was already batched. A literal
+        # '*' query endpoint maps to its own variant node in probe 1; a missing node
+        # is simply absent from ``ids`` and drops its keys (ghosts thus retain their
+        # star-probe coverage). The w-variant identities are resolved HERE, as two more
+        # keys in the same batch, rather than through ``_w_node`` -- same node, same
+        # per-batch cache, one fewer round trip. **W2's no-caching rule is untouched**
+        # and still binds this path: ``resolve_node_ids`` holds nothing across calls,
+        # reading only the N15 batch cache that ``node`` already consulted underneath
+        # ``_w_node`` (see that method's docstring, which is where W2 now lives).
+        subj_key = ((s_pred, s_type, '*', 'any') if subj_is_star
+                    else (s_pred, s_type, s_name, ''))
+        obj_key = ((relation, o_type, '*', 'all') if obj_is_star
+                   else (relation, o_type, o_name, ''))
+        w_any_key = ((s_pred, s_type, '*', 'any')
+                     if not subj_is_star and subject_shape_declared else None)
+        w_all_key = ((relation, o_type, '*', 'all')
+                     if not obj_is_star and object_shape_declared else None)
+
+        ids = self.idx.resolve_node_ids(
+            [k for k in (subj_key, obj_key, w_any_key, w_all_key) if k is not None])
+
+        subj_id = ids.get(subj_key)
+        obj_id = ids.get(obj_key)
 
         keys: list[tuple[int, int]] = []
 
@@ -683,10 +698,8 @@ class WildcardIndex:
                 keys.append((a_id, b_id))
 
         key(subj_id, obj_id)                                             # probe 1
-        w_any_id = (self._w_id(s_type, s_pred, 'any')
-                    if not subj_is_star and subject_shape_declared else None)
-        w_all_id = (self._w_id(o_type, relation, 'all')
-                    if not obj_is_star and object_shape_declared else None)
+        w_any_id = None if w_any_key is None else ids.get(w_any_key)
+        w_all_id = None if w_all_key is None else ids.get(w_all_key)
         key(w_any_id, obj_id)                                            # probe 2
         key(subj_id, w_all_id)                                           # probe 3
         key(w_any_id, w_all_id)                                          # probe 4

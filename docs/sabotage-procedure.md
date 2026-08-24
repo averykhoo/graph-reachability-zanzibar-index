@@ -221,6 +221,46 @@ So for any probe, sweep, or differential:
   every individual draw behaved correctly and the suite was green; only the *rate* was wrong,
   and nothing measured the rate.
 
+### A check that PARSES before it compares has two halves, and the easy sabotage tests one (2026-08-24c)
+
+Most checks in this repo are *extract, then compare*. A sabotage input chosen in a shape
+the extractor already handles exercises **only the comparison**, and passes while the
+extractor is blind. It looks like a real red, which is why it survives review.
+
+`scripts/handoff_lint.py::check_ledger_row_ids` shipped 2026-08-16 with this certifying
+sabotage, and it is a genuine failure of the comparison:
+
+    FAIL: docs/history/session-log.md:2 cites board id 'P99', which is on neither the
+          board nor its retired-ids line.
+
+`P99` is a shape `_ROW_ID` parses correctly, so the red proves the comparison works and
+says nothing about the read. Meanwhile the extractor matched `R6` inside `R6-99` and
+stopped at the word boundary — and `R6` **is** a real id, so an invented sub-item citation
+resolved to its real parent and reported clean for eight days across every `R6-N` id
+(nineteen of them, roughly a fifth of the live id space). Board row `TK46`.
+
+Two rules, both cheap:
+
+* **Choose the sabotage input in the shape that is actually blind.** If you cannot say
+  which shapes the extractor handles, that is the thing to probe first. "The check went
+  red" is not evidence about an input class it never received.
+* **Assert on the INTERMEDIATE, not only the verdict.** A verdict cannot distinguish *the
+  extractor read the id and judged it fine* from *the extractor never saw it*. The
+  replacement pins compare token lists over one identical sabotaged corpus:
+
+      inherited -> 0 violation(s); tokens ['R6', 'R6', 'P3', 'P6']
+      ported    -> 1 violation(s); tokens ['R6-99', 'R6', 'P3', 'P6']
+
+  The silence on the first line was not a judgement, and only the token list shows it.
+
+⚠ **Widening an extractor to close a hole is itself a change that needs a control.** The
+port above, applied alone, false-redded a *real* id (`R6-10`) that the board names in
+prose and deliberately never gives a table row. A fix paid for in false reds is how a
+believable check gets switched off. Pin the accept side (`tests/test_handoff_lint_row_ids.py`
+`::test_a_real_sub_item_named_only_in_prose_is_accepted`) in the same commit as the
+reject side — and keep any non-vacuity floor on the **narrow** harvest, or a broken parser
+coasts on the widened one.
+
 ### A MEASUREMENT is an assurance step too — ask what the number would look like on nothing
 
 Added 2026-08-17, from the `R6` measurement pass and `GS-2`. The section above says

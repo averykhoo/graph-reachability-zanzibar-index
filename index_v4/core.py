@@ -994,6 +994,65 @@ class ReachabilityIndex:
             cache[key] = row if row is not None else _MISSING
         return row
 
+    def resolve_node_ids(self, keys: list[tuple[str, str, str, str]]
+                         ) -> dict[tuple[str, str, str, str], int]:
+        """Resolve a SET of node identity tuples ``(predicate, type, name, wildcard)``
+        to ids in ONE statement; read-only (perf R6-6).
+
+        The read path resolves several identities before it can probe anything, and
+        each was its own ``_db_node`` point SELECT: an untainted
+        ``WildcardIndex._check_internal`` needs up to four (subject, object, and the
+        two wildcard variants), measured at **4.00 ``node_v4`` statements per
+        ``check``** against the 0.75 its already-batched edge probe pays. The four are
+        independent, so they go into one row-value ``IN`` served by
+        ``node_v4_unique_constraint`` (``models.py::NodeV4.__table_args__``) -- the
+        same shape, on the same dialects, as the edge probe this feeds.
+
+        CACHE-COHERENT, not cache-bypassing. It serves AND populates the per-batch
+        ``_node_cache`` (N15) exactly as ``node`` / ``cached_concrete_node`` do, so
+        inside a cascade (cache installed and warm) this still costs zero statements;
+        replacing warm cache hits with a fresh SELECT would have been a write-path
+        regression, and this entry point is on the write path via
+        ``_EvalContext.leaf_check``. Only genuine misses reach SQL. That is also why
+        it selects ENTITIES rather than projected columns: a bare row cannot be cached,
+        and the four statements it replaces already built entities, so nothing is lost.
+
+        Read-only by contract -- never creates, never flushes, never promotes
+        ``implicit`` -- because the read path must not run ``node``'s creation or
+        promotion branches. A missing identity is simply ABSENT from the returned dict
+        (callers read that as "no such node"), never a ``KeyError``. Callers construct
+        the tuples themselves, so ``node``'s encoding validation (name ``'*'`` iff a
+        non-empty wildcard) does not apply here."""
+        cache = self._node_cache
+        out: dict[tuple[str, str, str, str], int] = {}
+        misses: list[tuple[str, str, str, str]] = []
+        for key in dict.fromkeys(keys):     # dedupe (subject and object can coincide)
+            if cache is not None:
+                entry = cache.get(key, _UNCACHED)
+                if entry is not _UNCACHED:
+                    if entry is not _MISSING:
+                        out[key] = entry.id
+                    continue
+            misses.append(key)
+        if not misses:
+            return out
+        rows = self.session.exec(
+            select(NodeV4)
+            .where(NodeV4.store_id == self.store_id)
+            .where(tuple_(NodeV4.predicate, NodeV4.type,
+                          NodeV4.name, NodeV4.wildcard).in_(misses))
+        ).all()
+        found = {(n.predicate, n.type, n.name, n.wildcard): n for n in rows}
+        for key in misses:
+            node = found.get(key)
+            if node is not None:
+                out[key] = node.id
+            # negative entries too: same honesty contract as ``cached_concrete_node``
+            # (``node``'s creation choke point overwrites them)
+            if cache is not None:
+                cache[key] = node if node is not None else _MISSING
+        return out
+
     def _require_live_nodes(self, *node_ids: int) -> None:
         """Both endpoints must still exist (checked INSIDE the store lock): a stale
         id from a pre-lock resolution racing a concurrent remove_node would otherwise

@@ -86,6 +86,19 @@ Two controls were run for the checks whose exemptions could have made them vacuo
   bogus ``P99`` occupied; it stayed silent. Without that control the check could have been
   firing on the line's shape rather than on the id.
 
+**CORRECTION, 2026-08-24c (board row ``TK46``): the ``P99`` sabotage above was NOT
+sufficient, and this record over-claimed for eight days.** ``P99`` is a shape ``_ROW_ID``
+parses correctly, so it certified the COMPARISON and could not see that the EXTRACTOR was
+blind: ``R6-99`` matched ``R6``, a real id, and an invented sub-item citation reported
+clean across all nineteen ``R6-N`` ids. Both halves are now pinned as tests rather than as
+a docstring claim -- ``tests/test_handoff_lint_row_ids.py``, which asserts on the extracted
+TOKENS and not only on the verdict, and whose module docstring carries the literal output.
+The transferable rule is filed as ``docs/sabotage-procedure.md`` section "A check that
+PARSES before it compares has two halves". Read it before certifying any check here --
+every check below extracts something (ids, links, entry keys, table cells) before it
+judges anything, so every one of them has the same two halves and the same easy mistake
+available.
+
 Two things that make the above evidence rather than decoration:
 
 * **The instrument was controlled too.** Each sabotage was checked against the baseline
@@ -242,7 +255,16 @@ MENTION_ROOTS = ('docs/', 'formal/', 'tests/', 'scripts/', 'benchmarks/',
 _ROOT_ENTRY = re.compile(r'^## (\d{4}-\d\d-\d\d[a-z]?) ')
 _FORMAL_ENTRY = re.compile(r'^## Session (\d{4}-\d\d-\d\d[a-z]?)\b')
 _ROWS_LINE = re.compile(r'^rows:\s*(.+)$')
-_ROW_ID = re.compile(r'\b([A-Z]{1,3}-?\d+|ZT-[A-Z0-9-]+)\b')
+
+# Id shapes, ORDERED: the compound form must be tried before the bare one.
+#   ZT-P5   R6-19   AW-1   P3   B2   R6
+# The inherited pattern was ``[A-Z]{1,3}-?\d+|ZT-[A-Z0-9-]+`` and it had a live hole
+# (board row ``TK46``, fixed 2026-08-24c): on ``R6-19`` it matched ``R6`` and stopped at the
+# word boundary before the hyphen, so a ledger citing the INVENTED ``R6-99`` resolved to the
+# real parent ``R6`` and PASSED. Every ``R6-N`` sub-item sat in that blind spot -- at the
+# time, nineteen of them. Widening the extractor alone is NOT the fix and was observed
+# false-redding a real id; see ``check_ledger_row_ids`` for the other half.
+_ROW_ID = re.compile(r'\b(ZT-[A-Z0-9]+(?:-[A-Z0-9]+)*|[A-Z]{1,3}\d+(?:-\d+)?|[A-Z]{1,3}-\d+)\b')
 
 
 def _read(rel):
@@ -479,32 +501,57 @@ def check_ledger_row_ids(fail):
     the prose clause "every open item re-keyed onto the new board" rather than an id list,
     so the reverse direction false-fails most of the board on the very commit that created
     the ledger. This direction catches typos and invented ids and cannot false-fail.
+
+    THE EXTRACTOR IS THE FRAGILE HALF (board row ``TK46``, fixed 2026-08-24c). Until then
+    ``_ROW_ID`` truncated ``R6-99`` to ``R6``, which IS a real id, so the comparison below
+    found it and reported clean -- an invented sub-item citation passed, and every ``R6-N``
+    id was in that blind spot. The 2026-08-16 sabotage that certified this check used
+    ``P99``, which proves the COMPARISON works and cannot see whether the regex read the id
+    being compared. Both halves are now pinned in ``tests/test_handoff_lint_row_ids.py``.
+
+    WHY ``known`` READS THE WHOLE BOARD and not just its table rows. Widening the extractor
+    alone was observed false-redding ``session-log.md:388``'s ``R6-10`` -- a real, landed
+    sub-item that the board names in the ``### R6`` item block and deliberately never gives
+    a table row, because sub-items are not ranked. A ledger legitimately cites them. So the
+    id universe is every id shape ANYWHERE in the board; an id the board never mentions is
+    still the typo/invention this check exists to catch. The non-vacuity floor stays on the
+    TABLE harvest specifically, which is the part that breaks if the row parser breaks --
+    put it on the whole-file harvest and a broken parser would coast on prose.
+
+    KNOWN LIMIT, unchanged by the fix and never yet triggered: the retired line ends "the
+    whole ``ZT-*`` series" rather than listing them, so a ``rows:`` line citing a specific
+    ``ZT-`` id would false-red. That was equally true before; the series is closed, no
+    ``rows:`` line cites one, and inventing wildcard machinery for a dormant case is how a
+    check grows untested surface. Fix it when a session actually needs it.
     """
     board = _read(ROOT_BOARD)
     lines = _read(ROOT_LEDGER)
     if board is None or lines is None:
         return
-    known = set()
+    row_ids = set()
     for cells, _ in _table_rows(board):
-        known.add(cells[0].replace('`', '').strip())
+        row_ids.add(cells[0].replace('`', '').strip())
     for ln in board:
         if 'Closed ids stay retired' in ln or 'survives as the historical grouping' in ln:
-            known.update(m.group(1) for m in _ROW_ID.finditer(ln.replace('`', ' ')))
-    known.discard('')
-    if len(known) < 5:
+            row_ids.update(m.group(1) for m in _ROW_ID.finditer(ln.replace('`', ' ')))
+    row_ids.discard('')
+    if len(row_ids) < 5:
         fail('%s: parsed only %d board ids; the id parser is broken, so this check would '
-             'pass by comparing against nothing. Fix it.' % (ROOT_BOARD, len(known)))
+             'pass by comparing against nothing. Fix it.' % (ROOT_BOARD, len(row_ids)))
         return
+    known = set(row_ids)
+    for ln in board:
+        known.update(m.group(1) for m in _ROW_ID.finditer(ln.replace('`', ' ')))
     for i, ln in enumerate(lines, 1):
         m = _ROWS_LINE.match(ln.strip())
         if not m:
             continue
         for cited in _ROW_ID.finditer(m.group(1)):
             if cited.group(1) not in known:
-                fail('%s:%d cites board id %r, which is on neither the board nor its '
-                     'retired-ids line. Ids are never reused, so a citation that resolves '
-                     'to nothing is a typo or an invented id.'
-                     % (ROOT_LEDGER, i, cited.group(1)))
+                fail('%s:%d cites board id %r, which appears nowhere in %s -- not as a row, '
+                     'not on the retired-ids line, not in an item block. Ids are never '
+                     'reused, so a citation that resolves to nothing is a typo or an '
+                     'invented id.' % (ROOT_LEDGER, i, cited.group(1), ROOT_BOARD))
 
 
 def check_doc_links(fail):
