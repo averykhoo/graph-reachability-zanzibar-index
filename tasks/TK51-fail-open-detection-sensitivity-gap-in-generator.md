@@ -4,14 +4,14 @@ title: Fail-open detection sensitivity gap in generator-coverage design (dense-r
 pri: LATER
 size: M
 deps: []
-related: []
+related: [TK44]
 parent:
 labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21c
-moved: 2026-08-21c
-updated: 2026-08-21c
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -56,3 +56,7 @@ proposal. Re-check before assuming it has since been folded into a living doc.
 ### 2026-08-21c
 
 Provenance. COVERAGE.md 'Dropped, with reasons' (PART 1, J-26; sweep-j only; docs/design/generator-coverage/README.md:586-591, FROZEN, no living carrier). Not on the required 30-entry list (PROOF3.md), so filing was not mandatory -- but COVERAGE.md itself flags it: "J-26 is the one worth a second look before it stays dropped", and grep over the corpus/filing-log.md/notes.md/make_filing_plan.py before this session found neither a task nor a recorded decline. Adjudicated 2026-08-21c: filed rather than declined, because the recommendation is concrete, author-costed (~60s, inside budget), and targets fail-open detection specifically -- this repo's declared house failure mode. TK44 (U-29/J-27) covers unreached pair-cells, a different gap; it does not absorb this one.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [TK44]`. This row says fixing TK44 does not fix this; TK44 was blind to it, so closing TK44 could over-claim fail-open coverage.

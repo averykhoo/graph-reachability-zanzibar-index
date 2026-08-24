@@ -4,14 +4,14 @@ title: no Lean statement covers the BATCHED apply schedule (async catch_up / bui
 pri: HOLD
 size: M
 deps: []
-related: []
+related: [P18]
 parent:
 labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -37,3 +37,7 @@ closed:
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-13 (`CD-2`, tier 2, sweep-d only); anchor re-resolved by COVERAGE.md §C4 at formal/CORRESPONDENCE.md:392-423.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [P18]`. This row is the adjacent concurrency gap P18 is NOT; P18 did not name it back.

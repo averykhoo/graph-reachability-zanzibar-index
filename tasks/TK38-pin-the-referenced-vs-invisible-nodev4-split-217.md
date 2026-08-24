@@ -4,14 +4,14 @@ title: pin the referenced-vs-invisible NodeV4 split (217/49): the definition has
 pri: HOLD
 size: S
 deps: []
-related: []
+related: [P16]
 parent:
 labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -37,3 +37,7 @@ The `NodeV4` endpoint split re-derives as **217/49** (from an earlier 194/41) bu
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-23 (`CD-4`, tier 4, sweep-d only), distinct from `P16` (K/store-count bounds); anchor re-read this pass at formal/CORRESPONDENCE.md:560-565.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [P16]`. Same shape as TK8/P19: 'Distinct from P16' is stated only here, and P16 was the blind end.

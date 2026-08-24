@@ -247,6 +247,124 @@ readings of a wrong figure are not nine pieces of evidence.**
 
 ---
 
+### 2026-08-24b — F1 repaired: the `related`-edge sweep, 10 edges, 2 refused
+
+F1 found the tree loses the cross-item awareness a single file gives away for free, named
+`related` as the unused mechanism, and did not apply it because repairing a subject
+mid-measurement destroys the measurement. The 18-agent run is complete, so it is applied
+now.
+
+⚠ **The SUBJECT HAS CHANGED. The cost and quality figures above are not reproducible
+against this tree**, and a re-run must be reported as a different experiment, not as more
+n. `show P3` in particular now names `TK6` that it did not name when the 18 agents ran.
+
+**Criterion, fixed before the corpus was read**, because "add an edge wherever two ids
+appear together" is how a navigation aid becomes noise. An edge is added where **(a)**
+taking one item without knowing the other is a *mistake* — collision, duplicate, co-land,
+or absorbed scope — **and (b)** at least one end's `show` output does not currently name
+the other. The edge is written on the **blind** end only; `show` computes the incoming
+half, so one write serves both directions (the `P3`→`P6` pattern).
+
+| edge (written on) | why it is a mistake to be blind to it | blind end was |
+|---|---|---|
+| `R6-3` → `R6-13`, `R6-17` | `R6-17` is a LITERAL duplicate, `R6-13` the bulk twin; both name `R6-3`, `R6-3` named neither — and `R6-3` is the end that gets worked | `R6-3` |
+| `R6-16` → `R6-7`, `R6-8` | co-design triple, "take all three in one session or none"; prose-covered at all three ends, edge added to harden it (see the finding below) | none |
+| `TK20` → `R6-18` | `TK20`'s own trap says it **collides** with `R6-18` on the same table | `R6-18` |
+| `TK25` → `R6-5` | overlaps `R6-5`; "do not double-count the win" — and `R6-5` is where the double-count happens | `R6-5` |
+| `TK6` → `P3`, `P4` | scopes LIVE work, and says it "has never been folded into any board row's scope pointer". `P3` is the `NOW` item | `P3`, `P4` |
+| `TK51` → `TK44` | "fixing `TK44` does not fix this" — closing `TK44` could over-claim | `TK44` |
+| `TK8` → `P19` | "distinct from `P19` … do not merge them" | `P19` |
+| `TK13` → `P18` | the adjacent concurrency gap `P18` is NOT | `P18` |
+| `TK38` → `P16` | same shape as `TK8`/`P19` | `P16` |
+| `TK47` → `R6-6` | `R6-6` carries the moved-symbol trap but does not name the row that owns fixing the audit **doc** (verified: `TK47` does not occur in `R6-6`) | `R6-6` |
+
+Verified by running `show` at the blind end, not by trusting the write: `show R6-18` now
+reports incoming `TK20`, `show P3` incoming `TK6`, `show R6-7` incoming `R6-16`,
+`show R6-13` incoming `R6-3`, `show P16` incoming `TK38`. `lint` clean, 150 files.
+
+#### S1 — two candidate edges were REFUSED, and one of them was a trap the corpus set
+
+The generator was a mention scan: every open task body grepped for other ids. It proposed
+**51 of 91** tasks — a ~5:1 noise ratio — because the `R6-*` land-order paragraph and the
+"a cited symbol may have MOVED" trap are boilerplate repeated across the round.
+
+Two survivors were refused on reading:
+
+* **`TK11` → `P7` — a FALSE link the scan produced and `TK11` predicted.** `TK11`'s own
+  trap reads *"The `P7` collision is real and it is how this looks captured when it is
+  not. Lean's projection `P7` is not board id `P7`. **Do not resolve `P7` by grep.**"*
+  The scan resolved it by grep. Adding the edge would have encoded the exact false
+  capture the trap exists to prevent.
+* **`TK19` → `P3`** — the same class: `` `P3` `` inside `` the `P3` `_residue_cache` `` is
+  not board id `P3`. A second grep false positive of the id-namespace-collision shape.
+
+Also refused as prose-covered at both ends and therefore adding nothing: `P3`↔`P14`
+(absorption, settled and stated by both), `TK12`→`P3` (`P3` explicitly does not cover that
+residual), `P8`/`P9` (the `B2` parent already carries the grouping), and every `R6-*`
+land-order mention (a recommendation that lives once, in the parent).
+
+**The transferable rule: a mention scan is a candidate generator and must not be the
+adjudicator** — the same rule [`subagent-fanout-runbook.md`](subagent-fanout-runbook.md)
+already states for fan-outs. Sixteen of the twenty-six candidates read were rejected, and
+one of the rejects was a link the corpus had explicitly warned a grep would invent.
+
+#### S2 — the sweep found a false claim about the format, in `R6-16`'s own trap
+
+`R6-16`'s second trap explained at length why the co-design constraint cannot be encoded
+and must live in prose in three files, ending: *"The vocabulary has no mutual edge (lint
+rejects the cycle)."* That is true of `deps` and **false of `related`**, which §`related`
+of [`tasktool-spec.md`](tasktool-spec.md) defines as untyped, symmetric-ish and
+deliberately **not** cycle-checked. Corrected in place with a dated note. The constraint
+itself still lives in the traps: `related` navigates and cannot say "simultaneity", which
+is the same reason the spec refused typed relations.
+
+Worth carrying because it is the trial in miniature: the tree grew a mechanism, and an
+item written before it existed went on asserting the mechanism did not exist.
+
+---
+
+### 2026-08-24c — the tracer is spent, and the exit plan deletes 49 tracked items
+
+Two facts the 2026-08-30 verdict needs, neither of them a re-run.
+
+**T1 — the Q3 dye marker no longer separates the arms, so §7.3 cannot be reused.** The
+tracer worked because `9` was board-only and `11` tree-only. The board was corrected to
+`11` on 2026-08-24 (its `R6` row now re-counts from the children), so both systems now
+carry the same figure and a tracer answer identifies nothing. §S1 already warned the
+subject had changed; this is sharper — **the instrument itself is gone**, not merely the
+baseline. A re-run needs a newly-minted board/tree discrepancy, and minting one on purpose
+means deliberately leaving one tree stale, which is the thing the parallel-update contract
+forbids. Recorded before anyone plans a re-run around a metric that cannot fire.
+
+**T2 — a census, prompted by the user's question "are the `TK*` items tracked anywhere".**
+They are, completely: **51 ids, `TK1`–`TK51`, no gaps**, 49 open and 2 closed. No board row
+for any of them, by design — they are unranked, and the board's capacity budgets
+(`NOW` = 1, `NEXT` ≤ 3) are the reason the tree was built.
+
+⚠ **But the trial's exit plan destroys them.** `CLAUDE.md` says that if the tool is not
+helping by 2026-08-30 the answer is "delete `tasks/`, `scripts/task.py` and this bullet,
+which is one revert". Outside `tasks/`, exactly **one** `TK` id is mentioned anywhere in
+this repo — `TK49`, in `HANDOFF.md`'s `HS-5` row. The other 48 open ones exist in no other
+file, and `CLAUDE.md` says so itself in the `migrate.py` warning: they are hand-filed tasks
+"that no source document contains". So the revert is one revert for the *tool* and a
+deletion of 49 findings for the *repo*, and those are separable decisions that the current
+wording bundles into one.
+
+This is not an argument for keeping the tool. It is an argument that **the verdict has two
+questions, not one** — *does the query beat the file* (what §§1–7 measure) and *where do
+unranked findings live afterwards* (never posed). If the tool is dropped, the second
+question still needs an answer, and the honest options are: promote the survivors to board
+rows under a new grouping id, append them to a plain archive doc, or decide on the record
+that unranked findings are not worth keeping. Deleting them without choosing is the third
+option taken by default.
+
+⚠ **The verdict itself is on neither tree.** No `HANDOFF.md` row, no task file — verified
+by grep: `2026-08-30` appears in `CLAUDE.md`, this file, `tasktool-spec.md`,
+`tasktool-trial-stub.md` and the session log, and in zero tracked items. The one deadline
+that governs both systems is tracked by neither, which is its own small finding about both.
+
+---
+
 ## 7. Full run — design, pre-registered 2026-08-24 before any agent launched
 
 ### 7.1 The task is now SESSION-shaped

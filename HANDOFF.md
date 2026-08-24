@@ -16,18 +16,9 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **All ten phases were green on the tree they ran against** — `lean` last, after
-> `doc_counts --generate`, plus a 3-seed fuzz sweep. Measured **2026-08-21** on
-> `bl-2-leaf-name-read-leak`, **not this tree** (ledger `2026-08-24` added five commits; only `lean` re-run since): nine tiles PASSED, zero `xfailed`/`skipped`,
-> floors met (`MIN_TESTS_ALL` 903 → **923**, re-measured with `--collect-only`); every
-> figure lives in `formal/FINAL_REVIEW.md`'s generated block or the ledger, per Rhythm 3b.
-> **The old banner's "Known live correctness bugs: 0" was falsified by `BL-2`** — the
-> graph index granted reads at minted leaf-predicate names on the shipped Python, found
-> while scouting `P3`, fixed and pinned the same session
-> (`tests/test_reg18_leaf_name_read_leak.py`, six positive pins; the grids now cover leaf
-> names, which is why the net had missed it). `P3` scouted, not landed — a machine-checked
-> headline finding needs a human call first; see its block →
-> [`session-log.md`](docs/history/session-log.md) `2026-08-21b`. Ask
+> 🟢 **All ten phases ran green on the tree committed at `2026-08-24d`** — zero `xfailed`/`skipped`, floors met. Step 4e caught the eleven tests added with `R6-6` and `FINAL_REVIEW.md`'s generated block was regenerated deliberately; **every gate figure lives in that block**, not here (Rhythm 3b).
+> **`2026-08-24d`: `R6-6` landed** at its predicted `4.75 → 1.75` statements per `check`. Its pin was **green under the sabotage it exists for** until the fixture was rewritten, and dropping the `w_all` key still leaves all nine of that module's oracle grid-parity tests green → [`session-log.md`](docs/history/session-log.md) `2026-08-24d`.
+> `P3` scouted, not landed — its machine-checked headline finding needs a human call first; see its block → ledger `2026-08-21b`. **"Known live correctness bugs: 0" was falsified once already**, by `BL-2` (fixed and pinned same session, `Closed ids` note below). Two board `moved` cells disagree with the task tree, unreconciled on purpose: they need a call on what `moved` means, not an edit. Ask
 > `python scripts/gate_status.py`, never this line — any edit invalidates the
 > tree-addressed verdict. If you see red, it is yours: `git stash` and re-check.
 
@@ -44,7 +35,7 @@ forward forever and are never reused.**
 |---|---|---|---|---|---|
 | `P3` | leg 7 **4c-ii + step 7, one commit** — Route B adjudicated 2026-08-20b, absorbs `P14`'s classification half; **scouted 2026-08-21b: census hole + headline-guard human call, see block** → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.9 | **NOW** | L | — | 2026-08-21b |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
-| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×)**; 11 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24; the old `9 / 5` was wrong) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24 |
+| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d; the old `9 / 5` was wrong, and the `11` was right until `R6-6` closed) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24d |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
 | `P7` | `ttuStarFree` **(iii)+(iv)** — re-prove the 5 consumed sites, widen the gate → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16 | LATER | M | `P6` | 2026-08-16 |
@@ -167,11 +158,16 @@ materialises the edge, and the rest of the leg is inert until it lands.
 `ensureInBridges` / `ensureBridges`; `writeRules` / `writeLoggedRules`; `derive_schema_info`'s
 second loop.
 
-### `R6` — perf round 6: `R6-10` landed, eleven remain (re-counted 2026-08-24)
+### `R6` — perf round 6: `R6-10` and `R6-6` landed, ten remain (re-counted 2026-08-24d)
 
 **`R6-10` landed 2026-08-20b** (both steps): `−60.7%` incremental boolean write wall,
-**2.54×**, SQL statements/cycle `1929 → 822`. Remaining order: `R6-6` (4.75 → 1.75
-statements per `check`) → `R6-11` → `R6-5` (**32.7%** ORM construction for 3–4 columns) →
+**2.54×**, SQL statements/cycle `1929 → 822`.
+**`R6-6` landed 2026-08-24d** at exactly its predicted **4.75 → 1.75** statements per
+`check` (`−63.2%`). ⚠ **Take its one deviation as the pattern for `R6-5`/`R6-4`/`R6-9`:**
+the audit's sketch said "a fresh per-call query, not a cache", but every read-path batching
+item in this round has a cascade caller behind it (`_EvalContext.leaf_check`) where that
+would replace warm N15 cache hits with SQL — so batch *through* the cache, not past it.
+Remaining order: `R6-11` → `R6-5` (**32.7%** ORM construction for 3–4 columns) →
 `R6-4` → `R6-9` → `R6-18` (**53.1%** off the biggest table; owes a hand PG migration) →
 `R6-16` → `R6-7`+`R6-8` → `R6-1`.
 

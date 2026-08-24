@@ -4,14 +4,14 @@ title: unverified R6 lead A9: lookup_reachable/lookup_reverse hydrate full ORM r
 pri: HOLD
 size: ?
 deps: []
-related: []
+related: [R6-5]
 parent: R6
 labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -45,3 +45,7 @@ Both helpers select whole `EdgeV4` entities and then keep one int column, discar
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:859, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 9 of 16.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [R6-5]`. The audit marks this as overlapping R6-5 and the trap says do not double-count the win; R6-5 was blind to that, which is the end where the double-count would happen.

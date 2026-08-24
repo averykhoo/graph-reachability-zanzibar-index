@@ -25,6 +25,287 @@ from here.
 
 ---
 
+## 2026-08-24d — `R6-6` landed at its predicted 4.75 → 1.75 statements/`check`; its pin was green under sabotage
+
+rows: `R6`
+
+`task lint: clean (11 checks, 150 task file(s) parsed)`
+
+`read: board only`
+
+**On that read line, because it is the first one that means anything.** `python
+scripts/task.py board` was the only thing read to pick and start the work: the user asked
+"what are the next tasks, anything small?", and `board` + `ready` + three `show`s answered
+it end to end — `NOW`/`NEXT` are all L/M and entangled, the `S` rows are listed, and each
+`show` carried the traps and the read-first list. `HANDOFF.md` was opened only at
+write-back, to edit it. The previous two entries both warned that the trial's read tally
+was being sampled on comparison tasks that are guaranteed to need both trees; this is the
+ordinary-work sample they said was missing, and on it the query did replace the file read.
+⚠ One qualifier, against over-reading it: the traps that actually steered the work
+(`R6-6`'s moved-symbol trap, `TK47`'s "check the siblings") live in the task files because
+`migrate.py` put them there, and both were **incomplete** — see below. The tree replaced
+the board read; it did not replace re-deriving from source.
+
+**`R6-6` landed** (`index_v4/core.py::ReachabilityIndex.resolve_node_ids`, called once by
+`::WildcardIndex._check_internal`). The edge probe in front of which it sits was already
+one round trip; the up-to-four identity resolutions feeding it were a point SELECT each.
+Measured `python -m benchmarks.profile_r6 --target graph-check`, run alone: `node_v4`
+**4.00 → 1.00** per check, edge unchanged at 0.75, total **4.75 → 1.75** (`−63.2%`),
+1,080/2,000 true answers unchanged. Exactly the audit's prediction. Full write-up with the
+before/after table: `benchmarks/results/PERF_ANALYSIS.md` § Applied.
+
+* **The one deviation from the audit's fix sketch is the transferable part.** The sketch
+  said "a per-call fresh query, not a cache", and taken literally that is a WRITE-path
+  regression: `_check_internal` is also reached from `processor.py::_EvalContext.leaf_check`
+  inside a cascade, where the N15 `_node_cache` is installed and warm, so a fresh SELECT
+  replaces cache hits with SQL. The landed helper batches *through* the cache. The
+  verifier's "select bare columns, not entities" nit was declined for the same reason — a
+  projected row cannot be cached, and the four statements it replaces already built
+  entities. `R6-5`, `R6-4` and `R6-9` are the same shape and inherit the warning; it is now
+  in the `R6` board block.
+* ★ **The dropped-key pin was GREEN under the sabotage it exists for, and the fixture was
+  rewritten rather than the sabotage** (`docs/sabotage-procedure.md`: a green pin under a
+  sabotage that should break it is a verdict on the pin). It asked `check(alice, doc:d1)`
+  in all four probe cases; because the closure is materialised, the bridge
+  `alice → w_all → d1` is a real edge and probe 1 answers alone. Probes 3 and 4 are only
+  reachable with a **ghost endpoint** — a node that does not exist contributes no id and
+  drops every probe key naming it. After the rewrite, dropping key *k* reddens exactly the
+  two cases whose surviving probe mentions it: a 2×2 that is verified, not asserted.
+* ★ **Dropping the `w_all` key is `2 failed, 23 passed` in `tests/test_reads.py`** — the
+  only two reds are the two new cases, while all **nine** of that module's oracle
+  grid-parity tests stay green under a live under-grant. Widened it IS caught
+  (`4 failed, 56 passed` over matrix + lookup-oracle + wildcard-property), so this is a
+  module-local blind spot, not a project-wide one. `tests/test_lookup_oracle.py` (45
+  collected) is fully green: the lookup surface never assembles a `w_all` probe key.
+  Eight sabotages in total; the literal output is in the R6-6 block of `tests/test_reads.py`.
+* **The refactor orphaned `WildcardIndex._w_id`, and its docstring was the load-bearing
+  part.** Batching the w-variant ids into `_check_internal`'s own call left that wrapper
+  with no callers anywhere in the repo — and it is not a `CORRESPONDENCE.md` anchor, so
+  nothing in the gate would ever have said so. It was deleted, and the **W2** paragraph it
+  carried (why w-node resolution is deliberately uncached across calls: stale misses, and
+  false POSITIVES under SQLite rowid reuse) moved onto `::WildcardIndex._w_node`, the live
+  symbol the rule now constrains. The rule outlived the function; that is the usual way one
+  of these gets lost.
+* **The instrument was corrected too, and it needed it more after the fix than before.**
+  `benchmarks/profile_r6.py::target_graph_check`'s verdict predicate is `node_per >= 2.0`,
+  so post-fix **0.00 reads NOT MOTIVATED exactly like 1.00** — a probe that stopped
+  reaching the code would report as a *better* result than the real one. It now asserts
+  non-vacuity first. Sabotage: blind the `node_v4` tally → `INSTRUMENT BROKEN: 0.00
+  node_v4 statements per check`.
+
+**`TK47` closed, and it under-counted its own scope by four.** It named five stale
+`WildcardIndex.check` citations in `docs/perf-round6-audit-2026-08.md`; there are **nine**
+— `### R6-18`'s four verbatim blocks name the same moved probe, and so do appendix leads
+A4 and A14. Only the doc's own non-verbatim claims were repointed at
+`::WildcardIndex._check_internal` (two table rows and the `### R6-6` header). **Every
+`>`-quoted finder/verifier block was left verbatim on purpose** — those are the record of
+what was said on 2026-08-15/17, and editing quoted evidence to match today's tree is how
+provenance is destroyed; one dated symbol-correction note under the file's status banner
+covers all of them. That note also states why this class is structurally uncatchable by an
+anchor gate: `formal/conformance/anchor_check.py` reads only `CORRESPONDENCE.md`, and even
+in scope it would pass, because **both** names exist.
+
+**Two smaller corrections, made in place per Rhythm 5.** `benchmarks/profile_r6.py`'s Run
+block told readers to size the two GRAPH targets with `--scale`, which those targets do
+not take (they read `--graph-scale`) — so the audit's own `--target graph-check --scale
+400` silently ran the default 200 and nobody noticed. No recorded R6 figure is affected
+(statement counts are scale-invariant) and the landing measurement states the scale it
+actually ran at. And `tests/test_reads.py`'s "warm the w-id cache" comment, untrue since
+W2 made `_w_id` deliberately uncached.
+
+**Gate: all ten phases green on the committed tree**, plus a fuzz sweep beyond it. R6-6 is
+not an algorithm change — the probe-key set is identical, so `CLAUDE.md`'s sweep trigger
+does not strictly fire — but it rewrites how the hottest authorization read resolves its
+ids, so one ran anyway:
+`HYPOTHESIS_PROFILE=deep pytest tests/test_hypothesis.py tests/test_lookup_hypothesis.py -q
+--hypothesis-seed=17` → **`47 passed in 2357.03s (0:39:17)`**. (`--hypothesis-seed`, never
+the `HYPOTHESIS_SEED` env var, which hypothesis does not read — `CLAUDE.md` footgun 2.)
+
+**Filed, not fixed:** the audit's status banner says "Nothing here is landed", now false
+twice over (`R6-10`, `R6-6`). `TK48` already owns that banner for a different stale clause
+and its trap says to correct it from the body, so both clauses were routed there to be
+fixed in one reviewed edit rather than two.
+
+Still owed: nothing.
+
+## 2026-08-24c — `TK46` closed: the board linter was blind to every `R6-N` id, and the one-line fix was two
+
+rows: none. No board row changed. The item this session closed is tree-only, so it cannot
+be named here — the fixed check below refused this very line when it tried, which is the
+first thing the fix caught and a fair note on the two-tree split: `rows:` is a board
+vocabulary and has no way to say "a tree item moved". Two board `moved` cells disagree
+with the tree and were left alone deliberately — see the divergence note.
+
+`task lint: clean (11 checks, 150 task file(s) parsed)`
+
+`read: board + HANDOFF`
+
+**On that read line.** `task.py board` came first and answered "what is next" on its own.
+`HANDOFF.md` was then read in full because the user's second question was *do the two
+trees agree* — the same task-specific reason as `2026-08-24b`, and the same caveat: this
+is not evidence the query failed to replace the file read. Two of the last three sessions
+have now been comparison tasks, which is a fair warning that the trial's read tally is
+being sampled mostly on the one task shape guaranteed to need both. Ordinary work has
+been under-sampled.
+
+**`TK46` fixed and closed** (`scripts/handoff_lint.py`, `tests/test_handoff_lint_row_ids.py`).
+`check_ledger_row_ids` could not see the ids it was comparing: `_ROW_ID` matched `R6` in
+`R6-99` and stopped at the word boundary, so an invented sub-item citation resolved to its
+real parent and reported clean. Nineteen live `R6-N` ids sat in that hole. Full outcome
+evidence is in the closed task; the two things worth carrying up here:
+
+* **The row's own estimate was wrong, and its own trap is what caught that.** `TK46` said
+  "closed by porting one line". Porting the regex alone was run against the live tree and
+  false-redded a *real* id — `FAIL: docs/history/session-log.md:388 cites board id 'R6-10'`
+  — because the board names landed sub-items in the `### R6` block and never gives them a
+  table row. So `known` now harvests the whole board, with the non-vacuity floor kept on
+  the **table** harvest specifically; on the whole-file harvest a broken row parser would
+  coast on prose. The row's third trap ("widening a regex can go the other way") predicted
+  exactly this class.
+* **The 2026-08-16 sabotage that certified this check was `P99`, and `P99` could never
+  have found the bug.** It proves the comparison works; it cannot prove the regex read the
+  id being compared, because `P99` is a shape the regex handles. The instrument was not
+  controlled, only the subject. The replacement pins assert on the extracted **tokens**:
+  `inherited -> ['R6', 'R6', 'P3', 'P6']` vs `ported -> ['R6-99', 'R6', 'P3', 'P6']` over
+  the same sabotaged corpus. Method lesson filed to
+  [`sabotage-procedure.md`](../sabotage-procedure.md).
+
+Nine tests, durability rank 1 rather than a docstring. Suite-level sabotage run with each
+half reinstalled separately and the red is attributable both times: inherited regex →
+`3 failed, 6 passed` (the three extractor pins), whole-board harvest removed →
+`1 failed, 8 passed` (the false-red control).
+
+**`TK*` census, on the user's question "are they tracked anywhere".** They are, and
+nothing is missing: **51 ids, `TK1`–`TK51`, no gaps**, 49 open (14 `LATER`, 25 `HOLD`,
+10 `SOMEDAY`) and 2 closed (`TK1`/`TK14`, both `REFUTED` records). They carry no board row
+**by design** — they are unranked, and the board's capacity budgets are the reason the
+tree exists. ⚠ But they are tracked in exactly **one** place: outside `tasks/`, exactly one
+`TK` id is mentioned anywhere in this repo (`TK49`, in `HANDOFF.md`'s `HS-5` row). The
+trial's own exit plan in `CLAUDE.md` is "delete `tasks/`, `scripts/task.py` and this
+bullet, which is one revert" — that revert deletes 49 open items that no source document
+contains. **The 2026-08-30 verdict is not a row on either tree**, which is the one item
+neither system tracks.
+
+**Divergence found, and NOT reconciled — it needs a semantic call, not an edit.** Two
+`moved` cells disagree, in opposite directions:
+
+| row | `HANDOFF.md` | tree | what happened |
+|---|---|---|---|
+| `P3` | `2026-08-21b` | `2026-08-24` | the `related`-edge sweep bumped the file's `moved` |
+| `R6` | `2026-08-24` | `2026-08-21` (`updated: 2026-08-24b`) | the child re-count went to `updated` |
+
+Same week, same two sessions, opposite conventions: one treats a navigation-edge write as
+progress on the item, the other treats a re-count as not-progress. `moved` is the neglect
+signal on both trees, so guessing would just move the disagreement somewhere quieter.
+Recorded here so it is not "reconciled next time" by silent overwrite.
+
+**Gate.** `lean` re-run and `PASSED` on this tree (rc=0, 581 audits, step 4f green).
+Step 4e caught the nine added tests and `FINAL_REVIEW.md`'s generated block was
+regenerated deliberately (`923 → 932`, whole-repo `1418 → 1427`) — the counts pin doing
+its job, not a hand edit. The four `tests-tile` phases were re-run; the five `conf-tile`
+phases were **not**, and read `NO` for this tree. Ask `python scripts/gate_status.py`.
+
+**Still owed:** re-run the five `conf-tile` phases before any push (unaffected by this
+change in substance — no `formal/conformance/` file was touched — but tree-addressed, so
+their verdicts do not apply here). Adjudicate the `moved` semantics above and reconcile
+both trees in one session. File the 2026-08-30 trial verdict as a tracked item on both
+trees before the deadline.
+
+---
+
+## 2026-08-24b — the `related`-edge sweep: F1 repaired with 10 edges, 2 refused as false links
+
+rows: none. **No board row changed**, and that is a finding, not a skip — see below.
+
+`task lint: clean (11 checks, 150 task file(s) parsed)`
+
+`read: board + HANDOFF`
+
+**On that read line.** `task.py board` came first and was enough to find the work. `HANDOFF.md`
+was then read in full **because the task was to compare the two trees** — the board's
+cross-item prose is the reference the sweep is measured against. That is a task-specific
+reason, not evidence the query failed to replace the file read; a session doing ordinary
+work would not have needed it. Recorded this way so the trial's read tally is not
+silently inflated by the one task guaranteed to require both.
+
+**Executed the item `2026-08-24` left owed: the `related`-edge sweep for collisions
+other than `P3`/`P6`.** Ten edges added, each written on the **blind** end only (`show`
+computes the incoming half, so one write serves both directions):
+`R6-3`→`R6-13`,`R6-17` · `R6-16`→`R6-7`,`R6-8` · `TK20`→`R6-18` · `TK25`→`R6-5` ·
+`TK6`→`P3`,`P4` · `TK51`→`TK44` · `TK8`→`P19` · `TK13`→`P18` · `TK38`→`P16` ·
+`TK47`→`R6-6`. Full table, criterion and evidence:
+[`tasktool-trial-protocol.md`](../tasktool-trial-protocol.md) §6 `2026-08-24b`.
+
+**The criterion was fixed before the corpus was read**, because "add an edge wherever two
+ids appear together" is how a navigation aid becomes noise: an edge is added only where
+taking one item blind to the other is a *mistake*, **and** at least one end's `show` does
+not already name the other. Verified by running `show` at the blind end rather than
+trusting the write — `show P3` now reports incoming `TK6`, `show R6-18` incoming `TK20`.
+
+⚠ **The A/B's subject has now changed.** The 2026-08-24 cost and quality figures are not
+reproducible against this tree; a re-run is a different experiment, not more n.
+
+**Two candidate edges were REFUSED, and one was a trap the corpus had set in advance.**
+The generator was a mention scan (grep every body for other ids) and it proposed **51 of
+91** tasks — ~5:1 noise, because the `R6-*` land-order paragraph and the "a cited symbol
+may have MOVED" trap are boilerplate. `TK11`→`P7` was refused because `TK11`'s own trap
+says *"Lean's projection `P7` is not board id `P7`. **Do not resolve `P7` by grep**"* — and
+the scan had resolved it by grep. `TK19`→`P3` is the same id-namespace collision. **A
+mention scan is a candidate generator and must not be the adjudicator**, which is the rule
+[`subagent-fanout-runbook.md`](../subagent-fanout-runbook.md) already states for fan-outs.
+
+**The sweep also found a false claim about the format itself.** `R6-16`'s trap explained
+why the co-design constraint *cannot* be encoded and must live in prose across three
+files, ending "the vocabulary has no mutual edge (lint rejects the cycle)". True of `deps`,
+**false of `related`** — the spec defines it as untyped, symmetric-ish and deliberately not
+cycle-checked. Corrected in place with a dated note; the constraint still lives in the
+traps, because `related` navigates and cannot say "simultaneity". The tree grew a
+mechanism and an item written before it went on asserting the mechanism did not exist.
+
+**`task.py sync` reported 2 drift items, and one was a live wrong figure.** Run after the
+sweep, as the trial's own reconcile instrument:
+
+* **`HS-5` — content drift, not formatting.** The `2026-08-24` retitle fixed the title and
+  left the BODY asserting *"six always-living docs"* — the exact figure that session
+  retracted, still live one layer down. Rewritten to mirror the board cell (no count here;
+  `TK49` owns it), a trap added against restating it, read-first repointed at `TK49`.
+  **This is the A/B's finding `P4` recurring inside the tree**: a summary row carrying a
+  figure its own child corrects. The board row was right and the task body was wrong —
+  the second board-right/tree-wrong fact the trial has produced, after `F1`.
+* **`R6` — digest only; content agrees and the tree is AHEAD.** The board was corrected on
+  `2026-08-24` (`25.3%`→`25.4%`, and `11/4/3`) to match what the task body had carried
+  since `2026-08-21`, so the stored `source_hash` still pointed at pre-correction board
+  text. Re-stamped with `ack`, which holds `moved` — an ack must not claim progress.
+
+Both acked; `sync` now reports **CLEAN**.
+
+⚠ **One divergence is left standing ON PURPOSE: `R6`'s `moved` is `2026-08-24` on the
+board and `2026-08-21` in the tree.** Both are defensible (the board row progressed on the
+later date; the task did not), and harmonising it would erase exactly the kind of evidence
+the week is being run to collect. Recorded here instead of silently fixed.
+
+**Why no board row moved, stated rather than left to inference.** The board has no
+`related` field — its equivalent is prose adjacency, which it already has for every pair
+it carries (`P3`/`P6`, `R6-3`=`R6-17`, `R6-16`→`R6-7`+`R6-8` in the land order). Eight of
+the ten edges touch `TK*` ids that have **never had board rows**, so there is nothing to
+mirror. The `R6-16` correction is tree-only for the same reason: that trap exists only in
+the tree. This is the parallel-maintenance rule being satisfied, not waived — but it is
+also the first real asymmetry the trial has produced, and it points one way: **the tree
+can express something the board cannot**, which is the mirror image of `F1`.
+
+Still owed: unchanged from `2026-08-24` except the sweep, which is now done. `HS-5`'s real
+deliverable — adjudicating which measured docs are *deliberately* exempt from
+[`docs/README.md`](../README.md) §2 — is still untouched. `tasks/HS-5-six-always-living-docs-...md`'s
+FILENAME still carries the retracted "six". **The full gate has still not run on this tree
+— `verify.sh lean` re-run this session and PASSED on it (`holes=0, audits=581, pinned=581`;
+`.gate-runs/20260824-081226-lean.log`), and that is all. Nine tiles before any push.**
+No code changed this session, so nothing invalidates the 2026-08-21 tile run except the
+tree hash. Branch `tasktool-trial` is
+still unmerged, and until it is, the `CLAUDE.md` trial bullet is invisible to sessions on
+other branches and the trial silently does not happen.
+
+---
+
 ## 2026-08-24 — file-per-task tracker on trial beside the board; 18-agent A/B; three stale board figures fixed
 
 rows: `HS-5` (retitled), `R6` (count corrected), `P3` / `P6` (a `related` edge, tree only).

@@ -4,14 +4,14 @@ title: every closure flip writes an outbox row even with no boolean consumer (1.
 pri: LATER
 size: L
 deps: []
-related: []
+related: [R6-7, R6-8]
 parent: R6
 labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -27,7 +27,7 @@ closed:
 
 ⚠ **`R6-16` MUST be co-designed with `R6-7`/`R6-8`, never separately — and it is the round’s most dangerous fix.** Paranoia FULL uses the outbox as its worklist on **ALL** schemas, so gating emission without gating that consumer silently blinds the checker: an assurance step that fails by PASSING, which is this repo’s named house failure mode. **Take all three in one session, or take none of them.**
 
-⚠ **`deps` is EMPTY here on purpose, and that is not a downgrade of the trap above.** This row carried `deps: [R6-7, R6-8]` until 2026-08-21. Co-design is a SIMULTANEITY constraint; `deps` is PRECEDENCE — `task.py ready` lists a task once its deps are *closed*. The encoding therefore said the opposite of the audit twice over: it hid the round’s biggest combined space+write win from `ready` until two items the audit’s own land order puts AFTER it (positions 8 and 9, against this one at 7) were finished, while still leaving `R6-7`/`R6-8` takeable alone — which is exactly the "never separately" the trap forbids. The vocabulary has no mutual edge (lint rejects the cycle), so the constraint lives where it can be stated truthfully: in the traps of all three files.
+⚠ **`deps` is EMPTY here on purpose, and that is not a downgrade of the trap above.** This row carried `deps: [R6-7, R6-8]` until 2026-08-21. Co-design is a SIMULTANEITY constraint; `deps` is PRECEDENCE — `task.py ready` lists a task once its deps are *closed*. The encoding therefore said the opposite of the audit twice over: it hid the round’s biggest combined space+write win from `ready` until two items the audit’s own land order puts AFTER it (positions 8 and 9, against this one at 7) were finished, while still leaving `R6-7`/`R6-8` takeable alone — which is exactly the "never separately" the trap forbids. **Corrected 2026-08-24b: this trap used to end "the vocabulary has no mutual edge (lint rejects the cycle)", and that was wrong.** `deps` rejects cycles; `related` does not — `docs/tasktool-spec.md` §`related` states that `A related B` + `B related A` is the normal state and that acyclicity is meaningless for it. `related: [R6-7, R6-8]` is now set here, so `show` names the triple from all three ends (the incoming half is computed). It is navigation, NOT the constraint: `related` is untyped and cannot say "simultaneity", so the co-design requirement still lives in the traps of all three files, which is what you must read.
 
 ⚠ The auto-prune half must respect the `prune_outbox` MIN-cursor contract (the head row is kept so SQLite cannot recycle outbox ids under a held cursor).
 
@@ -49,3 +49,7 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`MOTIVATED, unlanded`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [R6-7, R6-8]`, and CORRECTED the second trap. It claimed 'the vocabulary has no mutual edge (lint rejects the cycle)' -- true of `deps`, false of `related`, which docs/tasktool-spec.md defines as untyped, symmetric-ish and deliberately NOT cycle-checked. The co-design requirement still lives in the traps of all three files: `related` navigates, it cannot say 'simultaneity'.

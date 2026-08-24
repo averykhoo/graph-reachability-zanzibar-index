@@ -8,10 +8,10 @@ related: []
 parent:
 labels: [perf]
 source: board
-source_hash: c59b3948b470
+source_hash: 529bc2529a2f
 created: 2026-08-21
 moved: 2026-08-21
-updated: 2026-08-21
+updated: 2026-08-24b
 closed:
 ---
 
@@ -59,3 +59,7 @@ fence and the reopening rule. Re-run with `python -m benchmarks.profile_r6 [_wri
 ### 2026-08-21
 
 Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`created` is an approximation**: the board never recorded one, so it is set to this row’s `moved` value (`2026-08-21`), which is an upper bound on the real creation date, not a measurement. Summary, traps and read-first come from the `### R6` item block verbatim; the board pointer is the first line of Read first. `R6-1`..`R6-19` were split out of this row into child tasks; the earlier pass wrote fourteen of them into `retired-ids.txt`, which would have made ten funded items unmintable forever. **The title’s count clause is REBUILT** from the children (`11 to land, 4 declined, 3 unreachable`) — the board cell’s "9 to land, 5 declined" was wrong against the audit’s own verdict tables and the old file said so in its last paragraph, which left the retraction below the fold while `board`, `list` and `ready` went on printing the wrong line. The landed clause before the semicolon is the board’s, verbatim. **One figure inside the ported cell was corrected in place and dated**: `R6-19` read "25.3% cumulative, self 2.0%", which pairs the 2026-08-17 undecomposed share with the 2026-08-18 re-run’s self time; the audit states cum 25.4% / self 2.0%.
+
+### 2026-08-24b
+
+Digest drift only; CONTENT AGREES and the tree is ahead. The board cell was corrected on 2026-08-24 (25.3% -> 25.4%, and 11/4/3) to match what this task body had already carried since 2026-08-21, so the stored source_hash pointed at the pre-correction board text. Re-stamped. NOTE the trees still disagree on moved: board says 2026-08-24, this file says 2026-08-21 -- left as-is deliberately, see the 2026-08-24b ledger entry.

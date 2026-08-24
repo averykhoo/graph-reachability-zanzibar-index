@@ -2,7 +2,10 @@
 P5: reads (boolean spec §6, §11-P5).
 
   * untainted check is ONE edge-probe SQL statement (all ≤4 probe keys in a single
-    row-value IN ... LIMIT 1) -- asserted with a cursor-level statement counter;
+    row-value IN ... LIMIT 1) -- asserted with a cursor-level statement counter, and
+    since R6-6 (2026-08-24d) ONE node-resolution statement in front of it, with each
+    of the four probe keys pinned individually decisive (that block carries its own
+    sabotage record);
   * derived check: edge probe + residue (intensional '*', ghost coverage, neg);
   * lookup/lookup_reverse extensions: derived edges arrive naturally, residues render
     as markers + excluded_node_ids, star-covered memberships join lookup();
@@ -51,7 +54,11 @@ def test_untainted_check_is_one_edge_statement(load_fga_schema):
     widx.add_tuple('...', 'user', 'alice', 'viewer', 'folder', 'root')
     session.commit()
 
-    # warm the w-id cache (it is read-path state, invalidated by writes)
+    # One warm-up call so the counted ones are steady-state. It caches NOTHING:
+    # w-node resolution is deliberately uncached across calls (W2,
+    # `WildcardIndex._w_node`) and the N15 node cache is not installed outside a write
+    # batch. (This line used to say "warm the w-id cache", which has not been true
+    # since W2 -- R6-6/TK47, 2026-08-24d.)
     widx.check('...', 'user', 'alice', 'viewer', 'folder', 'root')
 
     for q, expected in [
@@ -68,6 +75,256 @@ def test_untainted_check_is_one_edge_statement(load_fga_schema):
         # positive checks must issue exactly one probe (a no-key miss may issue zero)
         if expected:
             assert len(edge_probes) == 1, q
+    session.close()
+
+
+# --- R6-6: the node resolution in FRONT of that probe is batched too -------------
+#
+# The probe above was always one statement; the up-to-4 identity resolutions feeding
+# it were not (subject, object, w_any, w_all -- a `_db_node` point SELECT each,
+# measured at 4.00 node_v4 statements per check on `profile_r6 --target graph-check`).
+# They are now one row-value IN through `ReachabilityIndex.resolve_node_ids`.
+#
+# Batching a set of point lookups has exactly one interesting failure mode -- a key
+# that silently stops participating -- and it fails OPEN or CLOSED depending on which
+# key is dropped, while the statement count still looks perfect. So the count pin
+# below is deliberately paired with `test_all_four_probe_keys_survive_the_batched_
+# resolution`, which makes each of the four keys individually decisive. Neither test
+# is redundant with the other: the first cannot see a dropped key, and the second
+# cannot see a regression to four statements.
+#
+# ---------------------------------------------------------------------------------
+# SABOTAGE (`docs/sabotage-procedure.md`; literal observed output, 2026-08-24d)
+# ---------------------------------------------------------------------------------
+#
+# Eight sabotages, each the narrowest plausible weakening of ONE property of
+# `ReachabilityIndex.resolve_node_ids`, applied by `-p` plugin monkeypatch (never by
+# editing the source, so there is no restore step to get wrong). Baseline on the same
+# tree with the fix in place:
+#
+#     $ python -m pytest tests/test_reads.py -q
+#     25 passed in 42.50s
+#
+#   S1  keep the cache handling, lose the BATCH (one point SELECT per miss -- the
+#       pre-R6-6 shape, and nothing else about the change):
+#           2 failed, 23 passed in 52.67s
+#           FAILED ...::test_untainted_check_resolves_its_node_ids_in_one_statement
+#           FAILED ...::test_batched_resolution_serves_and_populates_the_n15_node_cache
+#       The second is that test's own non-vacuity assertion (`cold cache should still
+#       resolve once`) reading 4 instead of 1, not a second finding.
+#
+#   S2/S3/S2b/S3b  drop ONE key from the batch -- an off-by-one in the assembly.
+#       Each reddens exactly the two probe cases whose surviving probe mentions that
+#       key, which is the whole decisiveness claim, verified rather than asserted:
+#           drop w_all -> [3 subj->w_all], [4 w_any->w_all]     2 failed, 23 passed
+#           drop w_any -> [2 w_any->obj],  [4 w_any->w_all]     8 failed, 17 passed
+#           drop obj   -> [1 subj->obj],   [2 w_any->obj]      18 failed,  7 passed
+#           drop subj  -> [1 subj->obj],   [3 subj->w_all]     17 failed,  8 passed
+#       ★ **drop-w_all is the one worth reading.** It is `2 failed, 23 passed` -- the
+#       ONLY two reds in this module are the two new cases. Every other test here,
+#       including all nine oracle grid-parity tests, stayed green while a real
+#       under-grant was live. Widened to the headline nets it IS caught, so this is a
+#       module-local blind spot and not a project-wide one:
+#           $ SAB=s2 pytest tests/test_matrix.py tests/test_lookup_oracle.py \
+#                 tests/test_wildcard_property.py -q -p sab_r66_plugin
+#           4 failed, 56 passed in 106.82s      (baseline: 60 passed in 116.30s)
+#           FAILED tests/test_matrix.py::test_matrix_4way_union_wildcard[0], [1]
+#           FAILED tests/test_wildcard_property.py::test_wildcard_property_vs_oracle[0], [1]
+#       `tests/test_lookup_oracle.py` -- **45** of those 60, from
+#       `pytest tests/test_lookup_oracle.py -q --collect-only`, not from a run's tail
+#       -- stayed fully green: the lookup surface never assembles a w_all probe key.
+#       The other three drops are catastrophes rather than probes (7-17 collateral
+#       reds), and per the procedure they are recorded but carry little attribution.
+#
+#   S4  map the returned rows back onto the requested keys BY POSITION (assuming a
+#       row-value IN returns rows in IN-list order -- the fail-OPEN mistake a
+#       dict-keyed batch cannot make):  14 failed, 11 passed in 24.20s.
+#       Also a catastrophe; it does redden [1] and [2] plus the negative controls.
+#
+#   S5  read the N15 cache but never populate it ("caching is the write path's job"):
+#           1 failed, 24 passed in 41.83s
+#           FAILED ...::test_batched_resolution_serves_and_populates_the_n15_node_cache
+#       Exactly one red, and it is the write-path regression this pin exists for.
+#
+#   S6  populate hits but not misses:  1 failed, 24 passed in 42.15s -- the same
+#       single red.
+#       ★ **A green finding, recorded rather than dropped** (`sabotage-procedure.md`:
+#       a green sabotage is a finding): S6 leaves
+#       `test_a_node_created_inside_the_scope_is_seen_by_the_next_resolution` GREEN,
+#       because a negative entry that is never written cannot go stale. No narrow
+#       sabotage of `resolve_node_ids` reddens that test alone -- it fires only under
+#       the catastrophic key-drops. It is kept deliberately, as the net for a future
+#       change to `node`'s creation-site invalidation, which is the thing that makes
+#       writing negative entries here safe at all. It is a regression net, not
+#       evidence for this change.
+
+_R66_SCHEMA = '''
+type user
+type doc
+  relations
+    define viewer: [user, user:*]
+'''
+#: `('doc','viewer')` as an OBJECT wildcard shape (no DSL syntax -- spec §1.3, passed
+#: to the parser) makes this the DOUBLY-declared shape: `w_any(user,'...')` from
+#: `user:*` in the DSL and `w_all(doc,viewer)` from here. That is the only
+#: configuration in which `check` assembles all four probe keys, i.e. the only one
+#: that measures what R6-6 is about.
+_R66_OWC = frozenset({('doc', 'viewer')})
+
+
+def _r66_index(store_id='r66'):
+    rs = parse_openfga_schema(_R66_SCHEMA, object_wildcard_shapes=_R66_OWC)
+    return make_wildcard_index(rs.schema_info, store_id=store_id)
+
+
+def _node_statements(stmts):
+    return [s for s in stmts if 'node_v4' in s.lower() and 'edge_v4' not in s.lower()]
+
+
+def test_untainted_check_resolves_its_node_ids_in_one_statement():
+    """R6-6: ONE node_v4 statement per untainted check, not one per identity.
+
+    The floor is derived, not tuned: `check` needs up to four node ids and they are
+    independent, so one row-value IN over `node_v4_unique_constraint` answers all of
+    them (`ReachabilityIndex.resolve_node_ids`). Asserting `== 1` rather than `<= 4`
+    is the point -- the pre-R6-6 code passed `<= 4`.
+
+    ⚠ `== 1` and not `<= 1`: zero node statements would mean the resolution stopped
+    happening at all (or the counter stopped seeing it), which must not read as an
+    even better result. Same reason the edge-probe test above asserts `== 1` on the
+    positive cases.
+    """
+    session, widx = _r66_index()
+    widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
+    session.commit()
+    widx.check('...', 'user', 'alice', 'viewer', 'doc', 'd1')     # steady state
+
+    for q, expected in [
+        (('...', 'user', 'alice', 'viewer', 'doc', 'd1'), True),
+        (('...', 'user', 'ghost', 'viewer', 'doc', 'd1'), False),   # missing subject
+        (('...', 'user', 'alice', 'viewer', 'doc', 'd9'), False),   # missing object
+        (('...', 'user', '*', 'viewer', 'doc', 'd1'), False),       # star endpoint
+    ]:
+        with _count_statements(session) as stmts:
+            assert widx.check(*q) is expected, q
+        nodes = _node_statements(stmts)
+        assert len(nodes) == 1, (
+            f'{q}: expected exactly ONE batched node-resolution statement, got '
+            f'{len(nodes)}:\n' + '\n'.join(nodes))
+    session.close()
+
+
+#: (label, grant, query) -- one row per probe. The QUERY is what isolates the probe,
+#: and it is what the first draft of this test got wrong (see the docstring).
+_R66_PROBES = [
+    ('1 subj->obj',
+     ('...', 'user', 'alice', 'viewer', 'doc', 'd1'),
+     ('...', 'user', 'alice', 'viewer', 'doc', 'd1')),
+    ('2 w_any->obj',
+     ('...', 'user', '*', 'viewer', 'doc', 'd1'),
+     ('...', 'user', 'ghost', 'viewer', 'doc', 'd1')),
+    ('3 subj->w_all',
+     ('...', 'user', 'alice', 'viewer', 'doc', '*'),
+     ('...', 'user', 'alice', 'viewer', 'doc', 'dghost')),
+    ('4 w_any->w_all',
+     ('...', 'user', '*', 'viewer', 'doc', '*'),
+     ('...', 'user', 'ghost', 'viewer', 'doc', 'dghost')),
+]
+
+
+@pytest.mark.parametrize('label,grant,query', _R66_PROBES,
+                         ids=[p[0] for p in _R66_PROBES])
+def test_all_four_probe_keys_survive_the_batched_resolution(label, grant, query):
+    """R6-6: each of the four probe keys is INDIVIDUALLY decisive after batching.
+
+    Batching a set of point lookups has one interesting failure mode -- a key that
+    silently stops participating -- and a statement count cannot see it. So each case
+    grants exactly one shape and asks a query only THAT probe's key can answer.
+
+    ⚠ **The query, not the grant, is what isolates the probe, and the first draft of
+    this test got that wrong.** It asked `check(alice, d1)` in all four cases and was
+    GREEN under a sabotage that dropped the `w_all` key entirely (2026-08-24d;
+    `docs/sabotage-procedure.md`: a green pin under a sabotage that should break it is
+    a verdict on the pin). The closure is fully materialized, so with `doc:d1` interned
+    the bridge `alice -> w_all -> d1` is a real EDGE and probe 1 answers on its own;
+    probes 3 and 4 exist precisely for the case where the endpoint node does NOT exist,
+    and only a GHOST endpoint reaches them. Hence `dghost` / `ghost` above: a missing
+    node contributes no id, which drops every probe key that mentions it and leaves
+    exactly one standing.
+
+    Verified by construction: dropping key *k* from the batch reddens exactly the two
+    cases whose surviving probe mentions it (`subj`->1,3; `obj`->1,2; `w_any`->2,4;
+    `w_all`->3,4). The literal runs are in `docs/perf-round6-audit-2026-08.md`'s R6-6
+    landing note.
+    """
+    session, widx = _r66_index()
+    widx.add_tuple(*grant)
+    session.commit()
+    assert widx.check(*query) is True, \
+        f'probe {label}: grant {grant} no longer answers {query} -- key lost in the batch'
+    session.close()
+
+
+@pytest.mark.parametrize('label,grant,query', _R66_PROBES,
+                         ids=[p[0] for p in _R66_PROBES])
+def test_all_four_probe_keys_negative_control(label, grant, query):
+    """The control: with NO grant at all, every one of those queries is False.
+
+    Without it the case above could be passing on something ambient in the fixture
+    (an implicitly interned node, a bridge built for another reason) rather than on
+    the grant, and the parametrization would be decoration. It is also the pin that a
+    dropped key cannot make green: a fail-OPEN mis-mapping shows up here.
+    """
+    session, widx = _r66_index()
+    widx.add_tuple('...', 'user', 'bob', 'viewer', 'doc', 'other')   # unrelated traffic
+    session.commit()
+    assert widx.check(*query) is False, f'probe {label}: {query} granted by nothing'
+    session.close()
+
+
+def test_batched_resolution_serves_and_populates_the_n15_node_cache():
+    """R6-6 must not regress the WRITE path, where `_check_internal` is also reached
+    (`processor.py::_EvalContext.leaf_check`) and the N15 batch cache IS installed.
+
+    `resolve_node_ids` reads and writes that cache exactly as `node` does, so a repeat
+    resolution inside one scope costs ZERO statements -- a fresh batched SELECT per
+    call would have been strictly worse than the four cached point lookups it replaced.
+    Both halves are asserted: the first call still pays one (non-vacuity -- a cache
+    that was never consulted would also report zero on the second), the second pays
+    none.
+    """
+    session, widx = _r66_index()
+    widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
+    session.commit()
+    q = ('...', 'user', 'alice', 'viewer', 'doc', 'd1')
+
+    with widx.idx._node_cache_scope():
+        with _count_statements(session) as first:
+            assert widx.check(*q) is True
+        assert len(_node_statements(first)) == 1, 'cold cache should still resolve once'
+        with _count_statements(session) as second:
+            assert widx.check(*q) is True
+        assert len(_node_statements(second)) == 0, \
+            'the batched resolution bypassed the N15 cache -- write-path regression'
+    session.close()
+
+
+def test_a_node_created_inside_the_scope_is_seen_by_the_next_resolution():
+    """The negative-cache half of the same coherence contract.
+
+    A miss recorded by `resolve_node_ids` is stored as `_MISSING`, so it must be
+    overwritten when that identity is created later in the SAME batch -- otherwise a
+    read that ran before the write answers from a stale absence. `node` is the sole
+    creation choke point and overwrites the entry (N15); this pins that the entry
+    `resolve_node_ids` writes is subject to the same rule.
+    """
+    session, widx = _r66_index()
+    with widx.idx._node_cache_scope():
+        assert widx.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is False
+        widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
+        assert widx.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True, \
+            'a negative cache entry survived creation of the node it denied'
+    session.commit()
     session.close()
 
 

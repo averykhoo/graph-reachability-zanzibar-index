@@ -4,14 +4,14 @@ title: unverified R6 lead A4: EdgeV4 read indexes are not covering, so every pro
 pri: HOLD
 size: ?
 deps: []
-related: []
+related: [R6-18]
 parent: R6
 labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -45,3 +45,7 @@ The read queries project or filter columns the indexes do not carry: the check p
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:799, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 4 of 16.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [R6-18]`. This row's own trap says it COLLIDES with R6-18 on the same table; R6-18 did not name it back, so the motivated LATER row was blind to the collision. `show R6-18` now reports it as an incoming link.

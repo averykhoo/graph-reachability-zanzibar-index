@@ -14,6 +14,29 @@
 > When this round closes, retire this file verbatim to
 > `docs/history/perf-round6-2026-08.md`, following rounds 3–5.
 
+> ⚠ **Symbol correction, 2026-08-24d (board row `TK47`): every `WildcardIndex.check`
+> in this file that means the untainted PROBE now means
+> `index_v4/wildcard.py::WildcardIndex._check_internal`.** Fixing `BL-2` (2026-08-21)
+> split the public read entry: `::WildcardIndex.check` kept the name and became a
+> leaf-family DENY fence, and the old body — the four point SELECTs, the probe
+> assembly, the `select(EdgeV4.id)` existence probe — moved verbatim to
+> `::WildcardIndex._check_internal`. `formal/CORRESPONDENCE.md` was re-anchored the
+> same day; this file was not.
+>
+> **A `file::symbol` anchor gate cannot catch this class**, which is why it sat here:
+> `formal/conformance/anchor_check.py` reads only `CORRESPONDENCE.md`, and even in
+> scope it would pass, because BOTH names exist. The gate proves a pointer resolves,
+> never that it points at the code the claim is about.
+>
+> Corrected in place: the R6-6 row of the read-path verdict table, the R6-6 row of the
+> full findings table, and the `### R6-6` entry header. **Left verbatim, deliberately:**
+> every `>`-quoted finder/verifier block (`### R6-6`'s evidence, reasoning, corrections
+> and Lean-impact paragraphs; `### R6-18`'s four; appendix leads A4 and A14). Those are
+> a record of what was said on 2026-08-15/17, and editing quoted evidence to match
+> today's tree is how provenance is destroyed — read them through this note.
+> ⚠ `TK47` listed five sites; there are **nine** (`### R6-18` and the two appendix
+> leads name it too). Re-grep rather than trusting that list.
+
 ## Measured — the 2026-08-17 motivating-measurement pass (all 18)
 
 Full numbers, method, box conditions and the two honest limits (in-memory SQLite;
@@ -33,7 +56,7 @@ Read-path verdicts:
 
 | id | verdict | the measurement that decided it |
 |---|---|---|
-| `R6-6` | **MOTIVATED — land first** | exactly **4.00** `node_v4` point SELECTs per `check` + 0.75 edge; the fix takes the op **4.75 → 1.75 statements (−63% round trips)**, no Lean change |
+| `R6-6` | **MOTIVATED — land first** · ✅ **LANDED 2026-08-24d** | exactly **4.00** `node_v4` point SELECTs per `_check_internal` + 0.75 edge; the fix takes the op **4.75 → 1.75 statements (−63% round trips)**, no Lean change. Landed at exactly that figure — `benchmarks/results/PERF_ANALYSIS.md` § Applied |
 | `R6-5` | **MOTIVATED — promoted** | **22,410 ORM rows built (32.7% of profiled time)** to read 3–4 columns; `lookup_reachable` + `_classify_ids` = **52%** of boolean lookup. Filed medium, measured as the largest single block |
 | `R6-4` | **MOTIVATED** | **30.1%** of every boolean lookup, **193 `json.loads` per lookup** over only **100** residue rows — and the scan is O(#derived objects), so the share grows with the store |
 | `R6-1` | **MOTIVATED — but prototype first** | **74.1 `check` calls per `lookup`, 91.4%** of lookup wall time; `lookup` degrades 2.5× from scale 400→1600 while `check` stays flat. ⚠ This proves `check` DOMINATES, not that sharing ELIMINATES — the redundant fraction is unmeasured, and the naive fix is a correctness bug (see the entry) |
@@ -215,7 +238,7 @@ R6-13) — the corrections in each entry are the honest rating.
 | R6-3 | `setengine/engine.py::SetEngine._instances_of_type` | set-lookup | lookup-speed | medium | no | CONFIRMED (high) | _instances_of_type scans the entire interner per type; repeated acros... |
 | R6-4 | `index_v4/wildcard.py::WildcardIndex._collect_residue_memberships` | graph-read | lookup-speed | high | yes | CONFIRMED (high) | lookup on boolean schemas full-scans every residue row in the store a... |
 | R6-5 | `index_v4/core.py::ReachabilityIndex.lookup_reachable` | graph-read | lookup-speed | medium | no | CONFIRMED (high) | lookup_reachable/lookup_reverse fetch full Edge ORM rows, filter in P... |
-| R6-6 | `index_v4/wildcard.py::WildcardIndex.check` | graph-read | lookup-speed | medium | no | CONFIRMED (high) | check() issues up to 4 sequential point SELECTs for node resolution b... |
+| R6-6 | `index_v4/wildcard.py::WildcardIndex._check_internal` | graph-read | lookup-speed | medium | no | CONFIRMED (high) | check() issues up to 4 sequential point SELECTs for node resolution b... |
 | R6-7 | `index_v4/invariants.py::_check_outbox_sanity` | graph-write | repeated-work | high | no | CONFIRMED (high) | I10 outbox-sanity check rescans the ENTIRE outbox on every commit (tw... |
 | R6-8 | `index_v4/invariants.py::verify_outbox_deltas` | graph-write | repeated-work | high | no | CONFIRMED (high) | Delta-scoped verifier runs one BFS per flipped PAIR instead of per di... |
 | R6-9 | `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl` | graph-write | repeated-work | medium | no | CONFIRMED (high) | Write-tail refcount update re-SELECTs the two nodes it just batch-loa... |
@@ -372,7 +395,24 @@ R6-13) — the corrections in each entry are the honest rating.
 
 ### R6-6 — check() issues up to 4 sequential point SELECTs for node resolution before its single batched edge probe
 
-**`index_v4/wildcard.py::WildcardIndex.check`** · dimension: graph-read · category: lookup-speed · filed impact: medium · algorithm change (finder): no · verifier: **CONFIRMED** (high confidence)
+**`index_v4/wildcard.py::WildcardIndex._check_internal`** · dimension: graph-read · category: lookup-speed · filed impact: medium · algorithm change (finder): no · verifier: **CONFIRMED** (high confidence)
+
+> ✅ **LANDED 2026-08-24d at exactly the predicted figure: 4.75 → 1.75 statements per
+> check (−63.2%), `node_v4` 4.00 → 1.00, edge probe unchanged at 0.75.** Implemented as
+> `index_v4/core.py::ReachabilityIndex.resolve_node_ids`; pinned by the R6-6 block of
+> `tests/test_reads.py` (statement count + each of the four probe keys individually
+> decisive, 8 sabotages); write-up in `benchmarks/results/PERF_ANALYSIS.md` § Applied.
+> **One deviation from the fix sketch below, and it matters:** the sketch says "a
+> per-call fresh query, not a cache". Taken literally that regresses the WRITE path,
+> where this same entry point is reached through `processor.py::_EvalContext.leaf_check`
+> inside a cascade with the N15 `_node_cache` installed and warm — a fresh SELECT there
+> replaces cache hits with SQL. The landed version reads and populates that cache, and
+> the verifier's "select bare columns" nit was declined for the same reason (a projected
+> row cannot be cached, and the four statements it replaces already built entities).
+> The W2 no-caching rule is untouched: nothing is held across calls.
+>
+> The four paragraphs below are the 2026-08-15/17 record, left verbatim — including
+> their now-moved symbol names (see the symbol-correction note at the top of this file).
 
 **Evidence (finder, verbatim):**
 

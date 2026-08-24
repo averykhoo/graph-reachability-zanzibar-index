@@ -10,8 +10,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24d
+updated: 2026-08-24d
 closed:
 ---
 
@@ -39,3 +39,7 @@ This is a live `ZT-P3-5` — a stale figure in a durable place — in a `docs/` 
 ### 2026-08-21b
 
 **Provenance.** Surfaced by this project's own work: PROOF2.md §1 re-derived the census from the audit body alone (11 ids in 10 steps, 4 NOT MOTIVATED rows, 3 unreachable = the audit's own "ALL EIGHTEEN") and found the banner contradicts it. Banner re-read this pass at docs/perf-round6-audit-2026-08.md:3-5.
+
+### 2026-08-24d
+
+SECOND DEFECT IN THE SAME BANNER, found while closing TK47 (2026-08-24d): docs/perf-round6-audit-2026-08.md:3 also says 'Nothing here is landed', and that is now false twice over -- R6-10 landed 2026-08-20b (2.54x) and R6-6 landed 2026-08-24d (4.75 -> 1.75 statements/check). Both clauses of that banner are stale, so fix them in ONE reviewed edit rather than two. This row's own trap still binds: correct from the BODY (the verdict tables and the recommended-order list), and the safest form of the count clause carries no number at all. The landed items now carry a LANDED marker in the R6-6 verdict row and entry, so the body can be counted for that too.

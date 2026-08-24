@@ -4,14 +4,14 @@ title: leaf-family split: is storage=True/False modellable as one leaf? unresolv
 pri: LATER
 size: S
 deps: []
-related: []
+related: [P3, P4]
 parent:
 labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-08-24b
+updated: 2026-08-24b
 closed:
 ---
 
@@ -36,3 +36,7 @@ Open question §8.2 item 2 of the leaf-family-split scope doc: whether the `stor
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-6 (`LFS-1`, tier 2, sweep-f only); anchors re-resolved by COVERAGE.md §C4 and re-read here at formal/history/leaf-family-split-scope-2026-08-05.md:530-534.
+
+### 2026-08-24b
+
+related-edge sweep (trial finding F1): added `related: [P3, P4]`. This row states it scopes LIVE work and 'has never been folded into any board row's scope pointer' -- and P3 is the NOW item. `deps` stays empty for the reason this row already gives (it would invert the direction); `related` is ordering-free, so it encodes the link without touching `ready`.
