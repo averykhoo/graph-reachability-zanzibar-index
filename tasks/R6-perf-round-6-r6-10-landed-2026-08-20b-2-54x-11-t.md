@@ -1,6 +1,6 @@
 ---
 id: R6
-title: perf round 6 -- R6-10 landed 2026-08-20b (2.54x); 11 to land, 4 declined, 3 unreachable
+title: perf round 6 -- R6-10 (2.54x) and R6-6 landed; 10 to land, 4 declined, 3 unreachable
 pri: NEXT
 size: L
 deps: []
@@ -8,16 +8,17 @@ related: []
 parent:
 labels: [perf]
 source: board
-source_hash: 529bc2529a2f
+source_hash: a9d9cd2dbfdb
 created: 2026-08-21
-moved: 2026-08-21
-updated: 2026-08-24b
+moved: 2026-08-29
+updated: 2026-08-29
 closed:
 ---
 
 **`R6-10` landed 2026-08-20b** (both steps): `−60.7%` incremental boolean write wall,
-**2.54×**, SQL statements/cycle `1929 → 822`. Remaining order: `R6-6` (4.75 → 1.75
-statements per `check`) → `R6-11` → `R6-5` (**32.7%** ORM construction for 3–4 columns) →
+**2.54×**, SQL statements/cycle `1929 → 822`. **`R6-6` landed 2026-08-24d** at its
+predicted `4.75 → 1.75` statements per `check`. Remaining order:
+`R6-11` → `R6-5` (**32.7%** ORM construction for 3–4 columns) →
 `R6-4` → `R6-9` → `R6-18` (**53.1%** off the biggest table; owes a hand PG migration) →
 `R6-16` → `R6-7`+`R6-8` → `R6-1`.
 
@@ -26,7 +27,7 @@ statements per `check`) → `R6-11` → `R6-5` (**32.7%** ORM construction for 3
 (`R6-3` = `R6-17`, bulk twin `R6-13` — 0 calls each): they need a `T:*#P` workload first.
 `R6-19` owns the last unowned number (**cum 25.4%, self 2.0%** — a call-site fan-out; corrected here 2026-08-21: the board cell paired the 2026-08-17 pass’s *undecomposed* **25.3%** with the 2026-08-18 filing re-run’s self time, and no source states that pair. The audit’s `### R6-19` decomposition reads `145,560 calls tottime 0.382 s (2.0%) cum 4.80 s (25.4%)`).
 
-**`R6` is a PARENT row: all 19 `R6-N` sub-items are now tasks of their own** (`task.py list --parent R6`), so this row no longer has to carry them in prose. **Every count in the title and in this paragraph is COUNTED from those children at generation time** (`migrate.py::r6_census`), not restated from the board cell above — a restated count is the defect this whole migration exists to delete, and the board cell is the proof: it says "9 to land, 5 declined". As built: **11 `LATER`** (unlanded — the audit’s ten-item land order plus `R6-19`, filed 2026-08-18 outside the audit and therefore not in that order), **3 `HOLD`** (measured 0 calls — they need a `T:*#P` workload before they need a patch), **5 under `closed/`** (`R6-10` landed; `R6-2`/`R6-12`/`R6-14`/`R6-15` declined on an upper bound). The declined count is the audit’s own: exactly four `NOT MOTIVATED` verdict rows, so the board cell’s fifth decline does not exist. **Closing the last child is what reports that `R6` can close** — the round’s archive sweep is computed, not remembered. Re-count any time with `task.py list --parent R6`; do not re-type these numbers here.
+**`R6` is a PARENT row: all 19 `R6-N` sub-items are now tasks of their own** (`task.py list --parent R6`), so this row no longer has to carry them in prose. **Every count in the title and in this paragraph is COUNTED from those children at generation time** (`migrate.py::r6_census`), not restated from the board cell above — a restated count is the defect this whole migration exists to delete, and the board cell is the proof: it says "9 to land, 5 declined". Re-counted 2026-08-29: **10 `LATER`** (unlanded — the audit’s ten-item land order less `R6-6`, plus `R6-19`, filed 2026-08-18 outside the audit and therefore not in that order), **3 `HOLD`** (measured 0 calls — they need a `T:*#P` workload before they need a patch), **6 under `closed/`** (`R6-10` and `R6-6` landed; `R6-2`/`R6-12`/`R6-14`/`R6-15` declined on an upper bound). The declined count is the audit’s own: exactly four `NOT MOTIVATED` verdict rows, so the board cell’s fifth decline does not exist. **Closing the last child is what reports that `R6` can close** — the round’s archive sweep is computed, not remembered. Re-count any time with `task.py list --parent R6`; do not re-type these numbers here.
 
 ## Traps
 
@@ -63,3 +64,11 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-08-24b
 
 Digest drift only; CONTENT AGREES and the tree is ahead. The board cell was corrected on 2026-08-24 (25.3% -> 25.4%, and 11/4/3) to match what this task body had already carried since 2026-08-21, so the stored source_hash pointed at the pre-correction board text. Re-stamped. NOTE the trees still disagree on moved: board says 2026-08-24, this file says 2026-08-21 -- left as-is deliberately, see the 2026-08-24b ledger entry.
+
+### 2026-08-29
+
+Stale figures repaired, and the staleness itself is the trial evidence. The title said '11 to land' and the body's 'As built' census said 11 LATER / 5 closed, both generated 2026-08-21 by migrate.py::r6_census and never re-counted after R6-6 closed 2026-08-24d. HANDOFF.md:50 was CORRECT ('10 to land') the whole time -- the board was re-counted from the children, the tree was not. Re-counted live this session with task.py list --parent R6 --limit 0, R6-N children only: 10 LATER, 3 HOLD, 6 closed. This is the summary-row-contradicting-its-own-child defect (trial finding P4, then HS-5/TK49) recurring a third time, inside the tree, on the row whose self-recounting was cited as the tree's win. Recorded in docs/tasktool-trial-protocol.md section 6, append 2026-08-29 (A6), BEFORE this repair.
+
+Board row rewritten 2026-08-24d (R6-6 landed, '11 to land' -> '10 to land'); the task body was NOT re-counted at the time, so this ack follows an actual content repair this session, not a no-op re-stamp. See the 2026-08-29 Log entry.
+
+Re-stamp: the R6 board row was itself edited this session (moved 2026-08-24d -> 2026-08-29, and the cell now records that the tree carried the stale 11 for five days). Content already reconciled earlier this session; this ack only re-digests the rewritten row.

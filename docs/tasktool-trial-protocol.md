@@ -363,6 +363,119 @@ by grep: `2026-08-30` appears in `CLAUDE.md`, this file, `tasktool-spec.md`,
 `tasktool-trial-stub.md` and the session log, and in zero tracked items. The one deadline
 that governs both systems is tracked by neither, which is its own small finding about both.
 
+### 2026-08-29 — the eve of the verdict: findings rescued, the verdict filed, and the parallel-update contract is RED
+
+No §6 append had been made since 2026-08-24c. Five trial-week sessions (`2026-08-24d`,
+`2026-08-28`, `08-28b`, `08-28c`, `08-28d`) produced trial-relevant results that live only
+in `docs/history/session-log.md`, contrary to this file's own banner (`:3`). This append
+closes that gap and records the state one day before the deadline. **Everything below was
+verified first-hand this session**, not taken from a subagent report.
+
+**A1 — the two questions are now separated, and (b) is no longer destructive.** The 47 open
+`TK*` findings were snapshotted to
+[`docs/history/tasktool-findings-2026-08-29.md`](history/tasktool-findings-2026-08-29.md)
+(FROZEN, dated, 47 entries). A DELETE verdict no longer destroys them, so question (a)
+— *does the query beat the file* — can be decided on its merits. ⚠ This is
+**safe-to-delete, not decided-what-to-keep**: T2's second question (promote / append /
+write off) is still unanswered, and deleting without choosing remains the default third
+option.
+
+**A2 — the verdict is now tracked on both trees**, as `TK52` (board row + task file, same
+session key `2026-08-29`). This discharges the `Still owed` line carried since 2026-08-24c
+(`session-log.md:435`) and closes the finding at `:361-365` that *"the one deadline that
+governs both systems is tracked by neither"* — which stood for five days and was true until
+today.
+
+**A3 — T2's census is superseded, and it was right when written.** Measured today:
+**`TK1`–`TK51`, 51 ids, no gaps — 47 open, 4 closed.** T2 said *"49 open and 2 closed"*;
+the difference is exactly `TK46` and `TK47`, both closed 2026-08-24 in `01a2916`, i.e.
+hours after T2 was written. Recorded because the deletion figure is the number the verdict
+turns on, and it moved by two in five days.
+
+**A4 — "outside `tasks/`, exactly one `TK` id is mentioned anywhere in this repo" (`:346`)
+is now FALSE, and the corrected shape is sharper.** Of the 47 open ids: **34 appear nowhere
+outside `tasks/` at all**; 12 appear only in `session-log.md` and this file, i.e. as
+narrative, which survives a revert as prose but not as tracked work; and **exactly 1
+(`TK49`, `HANDOFF.md:60`) is on the board.** The original claim was true when written
+(`session-log.md:407`) and was invalidated by later sessions naming ids in passing. So the
+board-only reading holds — the board mentions one `TK` id — but "no other file mentions
+them" does not.
+
+**A5 — the read tally, the trial's central instrument, at n=7.** Counted directly from
+`session-log.md`: **`board + HANDOFF` 6 · `board only` 1 · `HANDOFF only` 0** (`:78`, `:142`,
+`:195`, `:242`, `:258`, `:365`, `:446`). Of the two comparison-task sessions the tool would
+be expected to lose (24b, 24c), both read both — declared at the time. Of the **five
+ordinary-work sessions** — the sample 24c said was under-sampled — **1 of 5** (`2026-08-24d`)
+replaced the file read; the four most recent, all ordinary formal work, read both and gave
+no reason. Coverage caveat: no session-log entry exists for 08-25, 08-26 or 08-27, so the
+trial week is 8 sessions clustered on two days.
+
+**A6 — ⚠ the parallel-update contract is RED on this tree, and it is the tree that is
+stale.** `python scripts/task.py sync` reports **`sync 2 drift item(s)`**: `BODY P3`
+(`90a1f8ce5f73 -> 36ebb5ee354e`) and `BODY R6` (`529bc2529a2f -> 12b064a9a482`). The four
+2026-08-28* sessions rewrote those board rows without re-stamping the task bodies. `P3`'s
+task *content* is current (its Log runs through `2026-08-28d`), so `P3` is digest drift.
+`R6` is a real content divergence: the task title still reads *"11 to land, 4 declined, 3
+unreachable"* while `HANDOFF.md:50` reads **"10 to land"**, because `R6-6` closed
+2026-08-24d. That is the summary-row-contradicting-its-own-child disease (P4, then `HS-5`)
+recurring a **third** time — this time inside the tree, on the row the tree's own
+self-recount was cited as a win for.
+
+⚠ **This is evidence for the verdict and was recorded before being reconciled.** CLAUDE.md's
+trial design says *"a divergence between them at the end of the week is the evidence"*, so
+it is written down here, permanently, in the form it was found. The reconciliation follows
+in the same session; do not read the repaired tree as though the divergence had not
+happened.
+
+**A7 — friction log, first-hand, from one session of ordinary use.** Recorded at the
+user's request (2026-08-29) because §§1–7 measured *reading cost* and never measured *cost
+of operating the tool*, which A6 suggests is the recurring price if it graduates. These
+are observed, not speculative; each cost this session real time or a real near-miss.
+
+1. ⚠ **`--source hand` is a silent trap, and `ack` reports success while doing nothing.**
+   A task filed hand-first that later gets a board row can never have its digest stamped:
+   `source` is immutable (`task.py:493`, SPEC.md §3.1), and `ack` on a `hand` task prints
+   `TK52 acked … source_hash unchanged (source: hand -- sync cannot read that source)` and
+   **exits 0**, while `sync` goes on reporting the task as drift forever. That is an
+   assurance step that fails by passing — this repo's declared house failure mode
+   ([`sabotage-procedure.md`](sabotage-procedure.md)) — inside the tool built to prevent
+   drift. The only remedy found was to delete the uncommitted file and re-file with
+   `--source board`. **Suggested fix: `ack` on a `hand` task whose id has a board row
+   should REFUSE, naming the re-file remedy**, rather than printing a success line.
+2. **Editing a board row silently re-reds `sync`.** The row digest changes, so every board
+   edit owes a follow-up `ack`. Hit twice in one session: `R6` was acked, the board row was
+   then edited, and `sync` went red again. Operationally this means **`ack` must be the
+   last step of a session**, after all board edits — nothing states that.
+3. **`new` mints the next `TK` id and ignores intent.** The verdict row wanted a `TT-1`-style
+   id and got `TK52`, so a ranked `NEXT` board row now carries an id from the series the
+   protocol describes as *"unranked findings"* (`:341`). Board ids and task ids share a
+   namespace, but only the `TK` series is mintable.
+4. ⚠ **`ls tasks/` is the obvious census and it is wrong.** Closed tasks move to
+   `tasks/closed/`, so a directory listing undercounts silently. This session nearly wrote
+   a false finding — that the 2026-08-24c census was wrong in both directions — off exactly
+   that mistake; the census was right, and `git ls-tree` plus the `id:` frontmatter was what
+   settled it. Anything that counts tasks must count both directories.
+5. **`list --parent R6` includes non-`R6-N` children** (`TK48`, `TK17`–`TK22`), so the
+   natural re-count of "R6 children" over-reports unless filtered to the `R6-` prefix; and
+   `list` silently caps at 20 rows without `--limit 0`. Both together are a live
+   mis-count risk on the exact operation A6 shows the tree had already got wrong.
+6. **Two minor CLI papercuts.** `set` is positional (`set R6 title "…"`); the `--title`
+   form fails with a bare argparse error rather than a pointer to the right form. And the
+   100-char title cap is enforced at `new` but is absent from `new --help`, so it is
+   discovered by refusal after the body file is already written.
+
+None of these bear on correctness — the 41 tests and 22 sabotage cases still pass, and
+`lint`/`sync` were clean at end of session. They bear on **usefulness**, which is the
+question actually being decided.
+
+**What is still unmeasured** (unchanged, and now unmeasurable within the trial): M1/M2/M3
+were never obtained after the pilot instrument failure (`:104-116`, `:163`); the Q3 dye
+marker is spent (`:330-337`), so the 18-agent figures cannot be reproduced against the
+current tree; the rubric's declared board-bias was never repaired with a Q6 (`:80-84`); the
+design measures *directed* use, never natural preference (`:382-390`); and **the cost of the
+parallel-maintenance contract itself was never recorded by any session** — which A6 suggests
+is not zero, since it is the step four consecutive sessions skipped.
+
 ---
 
 ## 7. Full run — design, pre-registered 2026-08-24 before any agent launched

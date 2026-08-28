@@ -8,10 +8,10 @@ related: [P6]
 parent:
 labels: [formal]
 source: board
-source_hash: 90a1f8ce5f73
+source_hash: 36ebb5ee354e
 created: 2026-08-21b
 moved: 2026-08-28d
-updated: 2026-08-28d
+updated: 2026-08-29
 closed:
 ---
 
@@ -107,3 +107,7 @@ Prop-level: strong_shadow_false_at_d_own_sigma0 -- the unweakened shadow is UNIN
 Instrument PROVED: shadowB_correct (shadowB S false = UntaintedShadow, via five per-field lemmas). Sabotage -- trim closedB's ab.2 conjunct AND its lemma statement to stay consistent -> rc=1, three errors, ALL inside shadowB_correct, while EVERY decide pin stayed green. 2026-08-28c's 'a guard-only pin cannot catch a fence removal' one layer down. Do not replace shadowB_correct with more decide rows.
 
 Also: revert-to-green exit plan written into the HANDOFF item block (was required in two places, existed in none). MIN_TESTS_ALL drift repaired 923->943 (20 tests of headroom against CLAUDE.md's zero-headroom contract), floor instrument-checked at 944. formal/README.md's rotted figures deleted rather than updated (both paragraphs). Cone sizing UNCHANGED: 42 modules / ~136 sites / 3 sessions. Full record: PROOF_STATUS 2026-08-28d.
+
+### 2026-08-29
+
+Digest-only drift: the four 2026-08-28* sessions rewrote the board row (fence layer, public-surface migration, P14 settled) without re-stamping. The task body IS current -- its Log carries per-session entries through 2026-08-28d -- so this re-stamps the source_hash against the rewritten row and changes no content.
