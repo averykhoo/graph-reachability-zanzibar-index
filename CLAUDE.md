@@ -85,6 +85,30 @@ IVM delta processor.
     was written into four docstring sites as one module's test count (it collects **12**).
     Get a count from `pytest <target> -q --collect-only`, never from a run's tail.
 
+## Delegation — subagents are for CONTEXT, not for parallelism
+- **The default working pattern (user preference, stated 2026-08-28): push bulky READING
+  into subagents and keep only their conclusions.** The purpose is to minimize context
+  bloat and token consumption so a session can run longer and get more done — **not** to
+  make things happen at once. Wall-clock parallelism is a side effect, never the
+  justification, and citing it as one leads to delegating cheap lookups (pure overhead)
+  and to splitting coupled work that then needs reconciling.
+- **The test before delegating:** *would doing this inline flood the context with file
+  contents?* Census sweeps, "find every call site of `X` and classify it", "verify these
+  seven claims against the live tree" — delegate, and take back a table. A single-fact
+  lookup where the file and symbol are already known — do it inline.
+- **Ask agents for verdicts plus `file::symbol` evidence, never file dumps.** An agent
+  that returns prose has spent the tokens without buying the certainty; one that returns
+  MATCHES / DIFFERS with line numbers is re-checkable. Worth doing because sizing claims
+  here have come in low repeatedly — `P3`'s re-verified "~123 sites / 7 files" budget was
+  live **~136 / 8** on 2026-08-28, the gap being the pin module its own session created.
+- **This is standing permission**: no need to ask before spawning read-only agents for
+  work of that shape. `ultracode` / the `Workflow` tool is a DIFFERENT and much heavier
+  thing (scripted fan-out, dozens of agents) and still takes a per-request opt-in.
+- ⚠ **Delegation does not transfer judgement.** A subagent's report is evidence, not a
+  finding. Contradicted reports get reconciled, not averaged; and anything headed for
+  `formal/history/` (append-only), a gate pin, or a golden gets verified first-hand
+  before it is written.
+
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`.
   Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`

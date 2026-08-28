@@ -6,8 +6,11 @@ import ZanzibarProofs.GraphIndex.CascadeEnum
 Two strata (derived-reading-derived). Model sources:
 
 * **The routed read.** `index_v4/processor.py::_EvalContext`: an UNTAINTED operand
-  leaf dispatches to `::_EvalContext.leaf_check` = `WildcardIndex.check` (the plain
-  wildcard-aware closure read = `probeNonDerived` on an untainted key), while a DERIVED
+  leaf dispatches to `::_EvalContext.leaf_check` = `WildcardIndex._check_internal`
+  (the plain wildcard-aware closure read = `probeNonDerived` on an untainted key;
+  it enters BELOW the public entry's leaf-name fence — since `BL-2`, 2026-08-21b,
+  the public `.check` answers False for every leaf family,
+  `docs/spec-deviations.md` + `tests/test_reg18_leaf_name_read_leak.py`), while a DERIVED
   operand leaf dispatches to `::_EvalContext.derived_check` →
   `::DeltaProcessor.derived_check` → `index_v4/wildcard.py::WildcardIndex._check_derived`
   (edge probe + residue = `probeDerived`).
@@ -87,7 +90,7 @@ theorem check_derived (σ : GraphState) (q : Query)
 /-- **The ROUTED node-recursion for `check_fn`** (the W3d-2 model extension):
     every operand leaf reads the graph's own `check`, which routes an untainted
     key to `probeNonDerived` (= `index_v4/processor.py::_EvalContext.leaf_check` →
-    `WildcardIndex.check`)
+    `WildcardIndex._check_internal`, below the public leaf-name fence — `BL-2`)
     and a derived key to `probeDerived` (= `::_EvalContext.derived_check` →
     `::DeltaProcessor.derived_check` → `WildcardIndex._check_derived`; the routing
     predicate itself is `::DeltaProcessor.member_check`). -/

@@ -10,8 +10,8 @@ labels: [formal]
 source: board
 source_hash: 90a1f8ce5f73
 created: 2026-08-21b
-moved: 2026-08-24
-updated: 2026-08-24
+moved: 2026-08-28
+updated: 2026-08-28
 closed:
 ---
 
@@ -71,3 +71,7 @@ generated ledger, never prose. Then `CascadeStable.lean::shadow_graphRec_agree` 
 ### 2026-08-21
 
 Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`created` is an approximation**: the board never recorded one, so it is set to this row’s `moved` value (`2026-08-21b`), which is an upper bound on the real creation date, not a measurement. Summary, traps and read-first come from the `### P3` item block verbatim; the board pointer is the first line of Read first.
+
+### 2026-08-28
+
+Six-agent live census + both human calls adjudicated (user delegated 2026-08-28): hql ACCEPTED; Route B RETAINED on corrected grounds -- its 'zero additional cone' argument is FALSIFIED (census hole propagates ~45 second-ring sites through checkFn_agree_of_graphRec into 4 files outside the cone). hql itself is cheap: 8 declarations, depth 2, audit pin untouched -- but it lands on the leg-5 non-vacuity instrument (final_applies), so the fence-modeling endgame (checkPublic mirroring BL-2's public deny) is the recommended repair shape. Full census: scope doc sec 11.11; adjudication record: PROOF_STATUS 2026-08-28. Stale-comment debt from 2026-08-21b discharged (4 sites). Sizing: ~136 sites / 8 files, third consecutive low count.

@@ -15,6 +15,102 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-28 (**THE TWO `P3` HUMAN CALLS ARE MADE — `hql` ACCEPTED, Route B RETAINED on corrected grounds — after a six-agent live census (full record: scope doc §11.11) falsified Route B's "zero additional cone" and found the `hql` guard cheaper than budgeted but landing ON the leg-5 non-vacuity instrument. A FENCE-MODELING endgame is recommended so the top-level claim stays unguarded. The 2026-08-21b stale-comment debt is discharged. No proof or definition changed.**)
+
+**Task taken:** `P3` de-risk, user-scoped ("de-risk + additive only") after the question
+"can 4c-ii land in one session with subagents" — answered NO, and the census below is why
+that answer was right: the recorded sizing was low for the third consecutive time, in ways
+that would have surfaced mid-window. **What changed in `formal/`:** four stale doc-comment
+sites fixed (`CascadeStrata.lean` header + `graphRecR` docstring, `ReconcileWrite.lean`
+header, `Audit.lean` W3d-2 narration — now naming `_check_internal` + the `BL-2` fence;
+`CORRESPONDENCE.md` §7.1's gap entry marked RESOLVED); scope doc gained §11.11 (the census
+record — sizing corrections, trap corrections, the falsified route argument; read it before
+touching the cone). No Lean declaration, proof, golden, or pin changed. `verify.sh lean`
+green after each edit batch.
+
+### 1. THE ADJUDICATIONS — user call, 2026-08-28
+
+The user delegated both standing `P3` human calls to the assistant's recommendation in
+plain text, stating the governing goal: *validate the graph index is actually correct —
+modeled accurately enough that at the end we can say the graph index provably returns the
+exact same result as the semantics, with no sharp edges.* The calls, made under that goal:
+
+* **`hql` ACCEPTED** — `hql : publicOfLeaf S q.object.type q.relation = none` on the ~10
+  headline statements, exactly as scouted 2026-08-21b §1 (the `isLeafPred` and
+  `isDerived`/taint shapes stay refused). Census: the guard is CHEAP — 8 declarations,
+  propagation terminates at depth 2, `audited_theorems.txt` untouched (§11.11 item 3).
+* **Route B RETAINED — but its stated selection ground is DEAD; do not cite it again.**
+  "Cone: ZERO additional" is falsified (§11.11 items 1–2: the `shadow_graphRec_agree`
+  repair propagates through `checkFn_agree_of_graphRec` into `ReconcileStars`/
+  `ReconcileDiff`/`ReconcileStarsComplete`/`CascadeEnum`, ~45 second-ring sites, zero of
+  the 14 mechanical). The corrected basis for retaining B: (i) its additional cone is
+  bounded and now MEASURED, vs Route C's whole-tree cone (`RulesWrite` sits upstream of
+  the W2 workhorses — 16 + 22 sites — plus the whole rules stack), which was never
+  scouted at this depth; (ii) C still owes the same leaf-terminality lemmas relocated
+  into the W2 chain (2026-08-20b §3, unchanged); (iii) three sessions of landed Route-B
+  scouting — the `Scratch4cii.lean` pins, the `untaintedShadow_*_derived` templates, the
+  battery — would be discarded for unmeasured ground. C's genuinely strongest point,
+  acknowledged: under C the shadow lemmas keep their statements, so the 14-site hole is
+  a Route-B-only cost. It does not outweigh (i)–(iii).
+
+### 2. ★ THE RECOMMENDED ENDGAME — model the `BL-2` FENCE, so the headline claim stays UNGUARDED. (Design proposal, NOT scouted; cost unmeasured.)
+
+`hql` alone leaves the top-level story as "check = sem except at minted leaf names" — a
+documented sharp edge, which is exactly what the user's goal statement rules out. But the
+shipped Python has NO such edge: `BL-2`'s fix fenced the public `WildcardIndex.check`
+(leaf-family queries answer False on every public surface; the unfenced probe moved to
+`_check_internal`, which only `_EvalContext.leaf_check`/`leaf_stars` call). The model
+currently mirrors the UNFENCED entry — that is the entire reason the post-4c-ii statements
+go false. So the repair that serves the goal is two-layered:
+
+* the `hql`-guarded theorems become the INTERNAL layer (they describe `_check_internal`,
+  which is what `CORRESPONDENCE.md` re-anchored them to on 2026-08-21b);
+* a thin PUBLIC layer models the fence — a `checkPublic` mirroring the shipped
+  `WildcardIndex.check` (deny iff `publicOfLeaf ≠ none`, else the existing read) — with
+  the headline `checkPublic σ q = sem S T q` carrying ONLY the existing `hqs`/`hqo`
+  guards. At a leaf name both sides are False: the fence denies, and `sem` denies by
+  undefined-⇒-empty (the store carries public-name tuples only; probes 1–2 observed
+  `sem qLeaf = false` at both witnesses). **One new lemma owed** — sem-denies-at-
+  undeclared under the admission hypotheses — shape known, cost unmeasured.
+
+This also repairs §11.11 item 4 (the guard lands on `W4WitnessDirect.final_applies`, the
+leg-5 non-vacuity instrument, where `hql` is FALSE at leaf queries and must become a
+binder): the witnesses consume the UNGUARDED public theorem, or gain concrete-`q`
+corollaries with `hql` discharged `by decide` — either way a hypothesis-free claim
+survives at a real query. **Owed in the 4c-ii commit, not after it**, or the instrument
+stops instrumenting exactly when it is needed.
+
+### 3. One technical choice left OPEN inside Route B, with its deciding fact named
+
+The dot-freeness of computed refs (what makes census sites 7–11 dischargeable) can come
+from THREADING (~8 extra hypotheses through the helper chain) or from a **`WF` clause**
+(`∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, relNameOK r`) — the latter turns
+`headline_definitions.txt:103` red until deliberately regenerated and re-discharges every
+`WF` witness, but makes five sites mechanical. **The deciding fact is whether
+`zanzibar_utils_v1.py::parse_schema_ast` rejects dotted relation REFERENCES (not just
+dotted declared names — that half is `relNameOK`'s existing citation).** If the parser
+guarantees it, the clause is the faithful model of the Python and is preferred despite
+the pin cost; if refs are unvalidated, threading. One grep + one probe, owed at the start
+of the landing session — do not choose blind.
+
+### 4. Corrections this entry makes to 2026-08-21b (append-only; that entry stands as written)
+
+* Its §2 phrasing "a new hypothesis on an audited signature plus 14 call-site repairs"
+  reads as a terminal count and is NOT one — see §11.11 item 1 for the propagation.
+* Its §1 scope line "~10 pinned headline statements … (and their dependents)" oversizes
+  the guard: `graph_correct` is the only one of the six with term-level consumers, and
+  the true set is 8 declarations, depth 2 (§11.11 item 3).
+* Its census (like 2026-08-20b's) omits `Scratch4cii.lean` — the pin module the
+  2026-08-20b session itself created: live budget ~136 sites / 8 files, not ~123 / 7
+  (§11.11 item 6).
+
+**Gate state at time of writing:** clean tree at session start, all ten phases green on
+`t2a:b73c66415942`; after this session's md + comment-only Lean edits, `verify.sh lean`
+re-run PASSED (rc=0, holes=0, audits=581, pinned=581, defs=155); the nine pytest-tile
+verdicts are tree-addressed and therefore STALE for the new tree — comment-only Lean
+edits and md edits cannot change collected behavior, but the gate's honesty rule is that
+verdicts are re-earned, not argued: re-run the tiles before any push.
+
 ## Session 2026-08-21b (**`P3` SCOUTED INTO AN EXECUTABLE DESIGN, NOT LANDED: the adjudication's census has a HOLE (`shadow_graphRec_agree`, 14 call sites, one file outside the budget), the `FoldAdmits` lockstep is 21-move/3-stay not 24, the keep-names/change-bodies decision is taken, an UNOWNED shadow-existence obligation surfaced — and MACHINE-CHECKED twice: after 4c-ii the headline theorems are FALSE AS WRITTEN at minted leaf-name queries. The narrowest repair is an `hql` guard and it is a HUMAN CALL. The probe's Python twin was live bug `BL-2`, fixed the same session.**)
 
 **Task taken:** `P3` (leg 7, step 4c-ii + step 7). NOT landed — the scout produced the

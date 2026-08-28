@@ -511,6 +511,12 @@ The bullet is corrected in place below.
   Python name. Logged here (this section is the declared home for model↔code
   drift) rather than editing the Lean sources in the BL-2 change, which touches
   `index_v4/` only; fold the comment fix into the next Lean-touching session.
+  **RESOLVED 2026-08-28** — all four comment sites (the census found the
+  ReconcileWrite header carries the identity twice, at its line 13 header and
+  line 22 body, so "three comments" was four sites) now name
+  `_check_internal` + the fence + `BL-2`: `CascadeStrata.lean` module header
+  and `graphRecR` docstring, `ReconcileWrite.lean` header, `Audit.lean` W3d-2
+  narration. Comment-only edits; `verify.sh lean` green after.
 
 * **`ResidueV1.version` is gated by nothing formal — now DECLARED as projection
   P7 (`ZT-P4-5(b)`, 2026-07-27).**

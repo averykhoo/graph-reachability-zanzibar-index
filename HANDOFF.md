@@ -16,9 +16,18 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **All ten phases ran green on the tree committed at `2026-08-24d`** — zero `xfailed`/`skipped`, floors met. Step 4e caught the eleven tests added with `R6-6` and `FINAL_REVIEW.md`'s generated block was regenerated deliberately; **every gate figure lives in that block**, not here (Rhythm 3b).
-> **`2026-08-24d`: `R6-6` landed** at its predicted `4.75 → 1.75` statements per `check`. Its pin was **green under the sabotage it exists for** until the fixture was rewritten, and dropping the `w_all` key still leaves all nine of that module's oracle grid-parity tests green → [`session-log.md`](docs/history/session-log.md) `2026-08-24d`.
-> `P3` scouted, not landed — its machine-checked headline finding needs a human call first; see its block → ledger `2026-08-21b`. **"Known live correctness bugs: 0" was falsified once already**, by `BL-2` (fixed and pinned same session, `Closed ids` note below). Two board `moved` cells disagree with the task tree, unreconciled on purpose: they need a call on what `moved` means, not an edit. Ask
+> 🟢 **`verify.sh lean` passed on today's tree (2026-08-28)**; the nine pytest-tile
+> verdicts are green on `2026-08-24d`'s tree and **stale here** — today's edits are
+> comment-only Lean + md, but verdicts are re-earned, not argued: re-run the tiles
+> before any push.
+> **`2026-08-28`: `P3`'s two standing human calls are made** — `hql` accepted, Route B
+> retained on corrected grounds (its "zero additional cone" argument is **falsified**
+> by a live census; ~136 sites / 8 files, third consecutive low count), and the guard
+> lands on the leg-5 non-vacuity instrument, so a fence-modeling endgame keeps the
+> headline claim unguarded → ledger `2026-08-28`, PROOF_STATUS `2026-08-28`, scope doc
+> §11.11. **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned
+> 2026-08-21b, `Closed ids` note below). Two board `moved` cells disagree with the task
+> tree, unreconciled on purpose: they need a call on what `moved` means, not an edit. Ask
 > `python scripts/gate_status.py`, never this line — any edit invalidates the
 > tree-addressed verdict. If you see red, it is yours: `git stash` and re-check.
 
@@ -33,7 +42,7 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7, one commit** — Route B adjudicated 2026-08-20b, absorbs `P14`'s classification half; **scouted 2026-08-21b: census hole + headline-guard human call, see block** → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.9 | **NOW** | L | — | 2026-08-21b |
+| `P3` | leg 7 **4c-ii + step 7, one commit** — **both human calls MADE 2026-08-28** (`hql` accepted; Route B retained, its cone argument falsified by the §11.11 census); one preflight open (dotted-ref probe), see block → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.11 | **NOW** | L | — | 2026-08-28 |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d; the old `9 / 5` was wrong, and the `11` was right until `R6-6` closed) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24d |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
@@ -83,47 +92,42 @@ target is self-sufficient by construction (verified row by row, 2026-08-16).
 ### `P3` — leg 7: step 4c-ii co-landing with step 7, in one commit
 
 Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6`
-in the same commit. Critical path. Route B (weaken `UntaintedShadow`) stands adjudicated
-(2026-08-20b, user call), absorbs `P14`'s classification half; scouted 2026-08-21b into
-an executable design — full record in PROOF_STATUS `## Session 2026-08-21b`. Movers:
-**census hole** — `CascadeStable.lean::shadow_graphRec_agree` (audited, 14 call sites, one
-in `CascadeEnum.lean`, outside the 7-file/84-site budget) discharges from
-`hunt : isDerived S (dt',r') = false`, which does not imply `publicOfLeaf = none` — a new
-hypothesis on an audited signature + 14 repairs, unbudgeted; **`FoldAdmits`** — 21 sites
-move, 3 stay σ0-side, not "all 24 in lockstep"; **decision taken** — keep names, change
-bodies of the live write leg, `rewriteClosure` keeps its meaning (the σ0 chain is
-rules-built by design), `writeRules` untouched (= the rejected Route C); **unowned
-obligation** — `CascadeStable.lean::reachedByW3d_shadow` (via `untaintedShadow_writeLeg`)
-pairs the same list on both folds; post-re-point the leaf list is a strict superset on a
-mixed schema even for untainted tuples — no slice owned it, the Lean budget grows.
+in the same commit. Critical path. **Both standing human calls are made (2026-08-28, user
+delegated; adjudication record: PROOF_STATUS `2026-08-28`): `hql` accepted**
+(`hql : publicOfLeaf S q.object.type q.relation = none` on the headline statements;
+`isLeafPred`- and taint-keyed shapes stay refused), and **Route B retained — on corrected
+grounds: its "zero additional cone" selection argument is falsified** by the census
+(scope doc **§11.11**, superseding §11.9's sizing): the `shadow_graphRec_agree` repair
+propagates — ~45 second-ring sites through `ReconcileStars.lean::checkFn_agree_of_graphRec`
+into 4 files with zero `UntaintedShadow` presence, zero of the 14 call sites mechanical
+(nothing in the tree gives dot-freeness of a computed ref). The `hql` guard is cheap
+(8 declarations, depth 2, audit pin untouched) **but lands on the leg-5 non-vacuity
+instrument** (`FullScope.lean::W4WitnessDirect.final_applies`, where `hql` is false at
+leaf queries) — adjudicated repair: the **fence-modeling endgame**, a `checkPublic` layer
+mirroring `BL-2`'s public deny, headline unguarded, witnesses consume it; unscouted, one
+sem-at-undeclared lemma owed, **in the 4c-ii commit, not after**. Budget ~136 sites /
+8 files (third consecutive low count). Still to write: the unowned superset-extras lemma
+(`reachedByW3d_shadow`) and `LeafNode` (`publicOfLeaf` carrier + `leafPublic p ≠ ""`);
+keep-names/change-bodies and `writeRules`-untouched stand as decided.
 
-🧭 **MACHINE-CHECKED, and it needs a HUMAN CALL before 4c-ii lands: after the re-point
-the headline theorems are FALSE AS WRITTEN — not merely unproven — at minted leaf-name
-queries.** Two independent kernel `by decide` constructions; probe 2 typechecked
-`graph_correct qLeaf admission w4fragment h hq b1 b2` verbatim, then the re-pointed
-drained state grants it while `sem` denies. Probe 1's literal output (`SlV`, `tlEditor`):
+🧭 **One preflight open — do not choose blind:** WF-clause vs threading for computed-ref
+dot-freeness hinges on whether `zanzibar_utils_v1.py::parse_schema_ast` rejects dotted
+relation references. One grep + one probe at the start of the landing session —
+PROOF_STATUS `2026-08-28` §3.
 
-    ("minted leaf name", "viewer.0")
-    ("hd: isDerived at leaf name", false)
-    ("hqs holds", true, "hqo holds", true)
-    ("probeNonDerived sR qLeaf", true)
-    ("check sR qLeaf", true)
-    ("sem qLeaf", false)
-    ("drainedB sRLc", true, "check sRLc qLeaf", true, "sem qLeaf", false, "check sRLc qPub", true)
+⚠ **Traps: scope doc §11.10 AS CORRECTED BY §11.11 item 8** — 7 order-sensitive own-key
+sites (4 `rw`-discharges + 3 positional), the emptiness bites at `rawWriteRels` not
+`atomLeaves`, the non-emptiness premise is `StoreValidRulesD`, `FoldAdmits` = 19 Prop
+sites + 2 exec gates move / 3 stay (`RulesComplete.lean:91`, `RestrictBase.lean:470`,
+`:531` stay). **It cannot be split** — the un-buildable window is the whole cone; do not
+open it at the tail of a session.
 
-The ~10 pinned headlines (`formal/headline_statements.txt`) each need a guard — accept
-the narrowest, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse the
-`isLeafPred`- and `isDerived`/taint-keyed shapes (analysis + probe-2 caveat: PROOF_STATUS).
-
-⚠ **Seven traps live in scope doc §11.10** — the backwards own-key premise, the
-leading-conjunct ordering, the `FoldAdmits` sites (21/3 above), the derived golden
-expectation, Route B's two premises. **Read §11.10 before touching the cone.**
-
-**Read first:** PROOF_STATUS `## Session 2026-08-21b` then `2026-08-20b`, scope doc §11.9
-then **§11.10 (the traps)**, `GraphIndex/Scratch4cii.lean`, §11.7, §11.5; completion
-criterion: PROOF_STATUS `2026-08-16c`, its numbers re-derived from `formal/FINAL_REVIEW.md`'s
-generated ledger, never prose. Then `CascadeStable.lean::shadow_graphRec_agree` /
-`::reachedByW3d_shadow` / `::untaintedShadow_writeLeg`, `LeafRules.lean::GraphState.writeRulesRaw`,
+**Read first:** scope doc **§11.11**, PROOF_STATUS `## Session 2026-08-28`, then
+`2026-08-21b` / `2026-08-20b`, §11.9, **§11.10 (the traps)**,
+`GraphIndex/Scratch4cii.lean`; completion criterion: PROOF_STATUS `2026-08-16c`, its
+numbers re-derived from `formal/FINAL_REVIEW.md`'s generated ledger, never prose. Then
+`CascadeStable.lean::shadow_graphRec_agree` / `::reachedByW3d_shadow`,
+`ReconcileStars.lean::checkFn_agree_of_graphRec`, `LeafRules.lean::GraphState.writeRulesRaw`,
 `Leaf.lean::publicOfLeaf`, `Exec.lean::foldAdmitsB`, `extractor.py::_edge_projection`.
 
 ### `P6` — `ttuStarFree` part (ii): bridges on the rule-routed write path

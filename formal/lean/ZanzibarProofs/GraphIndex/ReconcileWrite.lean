@@ -19,8 +19,10 @@ maintains a derived edge `subjNode s → objNode ⟨dt,on⟩ R` iff `should ∧ 
 star-free data `covered` is always `false`, so `should` alone decides — §7.6, P4). The
 compiled `check_fn` evaluates the boolean tree of the derived def; on the W3a fragment
 (operands are `computed` references to **untainted** relations — a single stratum)
-*every* leaf dispatches to `_EvalContext.leaf_check` = `widx.check` = the graph's
-≤4-probe reachability read (`probeNonDerived`). So `check_fn` is exactly `evalE` with
+*every* leaf dispatches to `_EvalContext.leaf_check` = `widx._check_internal` = the
+graph's ≤4-probe reachability read (`probeNonDerived`), entering below the public
+entry's leaf-name fence (`BL-2`, 2026-08-21b: the public `.check` answers False for
+every leaf family). So `check_fn` is exactly `evalE` with
 the node-recursion `rec` reading the graph instead of the fuel recursion — see
 `checkFn` below.
 

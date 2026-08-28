@@ -1081,6 +1081,147 @@ They are the mechanics that have each cost a session, and they are unchanged by 
   today; the post-4b derived read path will, and that surface is board row `P4`. Do not
   cancel `P4` without revisiting this.
 
+### 11.11 ★★ LIVE CENSUS RE-RUN (2026-08-28) — the census hole PROPAGATES (~45 second-ring
+### sites, 4 files with zero `UntaintedShadow`), so Route B's "ZERO additional cone" — the
+### sole stated ground for preferring it over Route C — is FALSIFIED. Polarity (trap 6)
+### holds. The `hql` guard is CHEAP and terminates at depth 2. NO Lean declaration changed.
+
+**Method.** Six read-only census agents over the live tree (`.lake` excluded), commissioned
+because this item's sizing had already come in low twice. Nothing was edited. The two
+load-bearing claims below were re-verified FIRST-HAND, not taken from a report:
+`Core/Schema.lean::WF` is a one-field structure (`relNames : ∀ p ∈ S.defs, relNameOK p.1.2`,
+declared key names only — its own docstring calls it a "Placeholder"), and
+`ReconcileStars.lean:615::checkFn_agree_of_graphRec` quantifies `r'` INSIDE the helper
+(`hag : ∀ s' r', isDerived S (dt, r') = false → …`). Counts marked (delegated) below are
+agent-reported and re-derivable, not hand-verified. Gate state at time of writing: clean
+tree, all ten phases green on `t2a:b73c66415942`.
+
+**1. ★★ THE CENSUS HOLE IS NOT 14 REPAIRS — it propagates, and ZERO of the 14 are
+mechanical today.** `PROOF_STATUS.md` 2026-08-21b §2 frames it as "a new hypothesis on an
+audited signature plus 14 call-site repairs"; that phrasing reads as a terminal count and is
+not one. The 14 sites split three ways:
+* **12-14** (`graph_correct_w3d` `CascadeSettle.lean:1119`, `graph_correct_w3d2`
+  `CascadeStrataResettle.lean:1539`, `_d` `:2683`) take the QUERY relation and need exactly
+  the `hql` guard — **already inside §1's budget, not new work**.
+* **1-3** (`CascadeEnum.lean:366`, `CascadeStable.lean:959`,
+  `CascadeStrataSettle.lean:3943`) push the hypothesis into `checkFn_agree_of_graphRec`
+  ITSELF, which has two further callers — `ReconcileDiff.lean:694` and
+  `ReconcileStarsComplete.lean:1021` — in files with **zero `UntaintedShadow` mentions**.
+  `ReconcileDiff.lean:694` has neither `hWF` nor `hlk` to derive the fact from.
+  (`checkFn_agree_of_graphRec_cd` at `:629` can be left alone, sparing four more sites.)
+* **4-11** change signatures of theorems used ~45 times in total (delegated count), reaching
+  `Equiv.lean`, `FullScope.lean`, `CascadeStrataAssemble.lean`, `CascadeEnum.lean`.
+
+**Why none are mechanical: nothing in the tree gives dot-freeness of a computed ref.** `WF`
+constrains declared key names only; `RewriteMatchDeclared` (`RestrictBase.lean:289`)
+constrains rewrite MATCH keys, not def refs. The alternative repair — a `WF` clause
+`∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, relNameOK r` — is not free: `WF` is pinned in
+`headline_definitions.txt:103` WITH its field list, so the clause turns gate step 4c red
+until deliberately regenerated, and every `WF` witness in `LeafWitness`/`W4Witness*`/
+`FullScope` must be re-discharged.
+
+**2. ★★ ROUTE B's SELECTION ARGUMENT IS FALSIFIED, and the fork returns to the user.**
+§11.9 and `PROOF_STATUS.md` 2026-08-20b §3 recommend Route B over Route C on ONE stated
+ground — Route B's **"Cone: ZERO additional"** (`CascadeStable` is downstream of `Cascade`,
+inside the 39-module cone 4c-ii pays anyway) versus Route C's whole-GraphIndex cone. Per
+item 1, Route B reaches **at least four files outside that cone**: `CascadeEnum`,
+`ReconcileStars`, `ReconcileDiff`, `ReconcileStarsComplete`. The gap between the routes is
+materially narrower than when the recommendation was made. **This does not by itself flip
+the recommendation** — Route C still owes the same leaf-terminality lemmas relocated into
+the W2 chain (2026-08-20b §3), which was a substantive objection and is unaffected. But the
+comparison no longer holds on its stated grounds, and the fork was a human call the first
+time. ⚠ Do not read this as "Route C is now preferred"; read it as "the basis for
+preferring B is gone and the choice is open."
+
+**3. THE `hql` GUARD IS CHEAP — 8 declarations, propagation terminates at DEPTH 2.** Not
+"~10 headlines plus dependents cascading". `graph_correct` is the only one of the six with
+any term-level consumers; the other five have none. Full threading list (delegated):
+5 one-token thread-throughs where the consumer is already in the change set
+(`FullScope.lean:383/398/411`, `Exec.lean:159/479`), plus **two genuinely new signatures** —
+`W4WitnessDirect.final_applies` (`FullScope.lean:1234`) and `.final_applies4` (`:1366`),
+which have no Lean consumers, hence depth 2. Pin impact: `audited_theorems.txt`
+**UNTOUCHED** (it is a NAME superset pin; no name changes, so `regen_audit_pin.sh` output is
+byte-identical); `headline_statements.txt` 8 rows; `headline_definitions.txt` **grows** —
+`publicOfLeaf`, `leafPublic`, `isLeafPred` enter the headline dependency closure for the
+first time, and that is the one pin diff that is not mechanical to eyeball.
+
+**4. ⚠⚠ THE GUARD LANDS ON THE NON-VACUITY INSTRUMENT — unrecorded by 2026-08-21b.**
+`W4WitnessDirect.final_applies` is not an ordinary consumer: `FullScope.lean:1181` names it
+**"★ THE LEG-5 INSTRUMENT"**, the sabotage-controlled witness whose whole job is to show
+`graph_correct` is not vacuous at `[user] but not blocked`, and whose own docstring states
+the failure mode it guards ("would still compile, still audit with standard axioms only,
+and still pass the identity, statement and definition pins — while saying nothing at all").
+`hql` is genuinely FALSE there: `Sd` declares `doc#approver := [user] but not banned`, so
+`approver` is derived and `publicOfLeaf Sd "doc" "approver.0" = some "approver"` by
+`Leaf.lean:499::publicOfLeaf_leafPred`; with `q` universally quantified the guard is not
+dischargeable and must become a binder. **So landing `hql` naively puts a hypothesis on the
+instrument that exists to detect vacuous hypotheses.** Mitigation, owed in the same commit:
+pair each witness with a concrete-`q` corollary whose `hql` is discharged `by decide`, so a
+hypothesis-free claim survives at a real query. Verified first-hand (`Sd` at
+`FullScope.lean:821`, `publicOfLeaf_leafPred` at `Leaf.lean:499`).
+
+**5. Trap 6 (polarity) HOLDS — the one piece of unambiguous good news.** Full mechanical
+polarity census of every declaration mentioning `UntaintedShadow` (delegated): **19 in
+conclusion position, all staying inside the shadow layer** (15 preservation lemmas, 3
+existence lemmas of the form `∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0`,
+and one NEGATED occurrence `Scratch4cii.lean:332::strong_shadow_false_at_raw`); **28 in
+hypothesis position**, including every lemma whose conclusion leaves the shadow layer; and
+**zero occurrences in `headline_statements.txt` / `headline_definitions.txt` / `Equiv.lean`
+/ `FullScope.lean`**. Route B's equivalence argument is intact on its own terms. What
+threatens it is item 1, not polarity.
+
+**6. Route B's site budget is ~136 / 8 files, not ~123 / 7.** Every file in the 2026-08-20b
+distribution matches its claimed line count EXACTLY; the gap is `GraphIndex/Scratch4cii.lean`
+(`UntaintedShadow` 5 lines, `DerNode` 8), absent from both claimed lists because it is the
+pin module that same session created. Live: `UntaintedShadow` 89 lines / 8 files, `DerNode`
+47 lines / 4 files (delegated). Third consecutive low sizing on this item.
+
+**7. `FoldAdmits`: the "21 / 3" and "24" counts differ only by CONVENTION — write the
+convention down.** Live strict Prop-hypothesis sites on a chain state: **22** (19 move + 3
+stay). The 2026-08-21b "21 move + 3 stay = 24" reconciles only if the two `foldAdmitsB`
+RUNTIME GATES (`Exec.lean:72` in `graphRunAux`, `:376` in `graphRunOpsAux`) are counted,
+which do move in lockstep. The three STAY sites are confirmed live at exactly their cited
+lines: `RulesComplete.lean:91` (`ReachedByRulesAdmitted.step`, `hadm`),
+`RestrictBase.lean:470` (`exists_admitted_restrict`), `:531`
+(`exists_admitted_ofAcyclicTarget`). No tree drift. §11.10's bare "24" is superseded and,
+read alone, also loses the fact that three sites must NOT move.
+
+**8. Corrections to §11.10's other traps** (append-only, so they are recorded here, not
+edited above):
+* Trap 1 — substance holds, phrasing imprecise. `atomLeaves` returns `[]` on `.computed R`
+  only when the operand is DERIVED (`Leaf.lean:404`); on the normal untainted shape it
+  returns a singleton. **The emptiness that actually bites is at `rawWriteRels`**
+  (`Leaf.lean:541`), not `atomLeaves`. And the named non-emptiness premise should be
+  `StoreValidRulesD`, not `StoreValidRules` — the latter + `ComputedOnly` admits no stored
+  derived-key tuple at all (`Scratch4cii.lean:113-118`), making the case vacuous.
+* Trap 2 — the FOUR `rw [h…leaf…]; simp` discharges are confirmed exactly
+  (`Cascade.lean:810`, `CascadeStrata.lean:1286`, `:1345`, `CascadeStrataSettle.lean:2044`),
+  but **three further sites are order-dependent on the same conjunct and are not `rw`-shaped**,
+  so the trap's phrasing does not cover them: `CascadeStrataSettle.lean:3190` and `:3243`
+  (`refine ⟨rfl, ?_, ?_⟩`, proving the leading `d.leaf = true` by `rfl`) and
+  `CascadeEnum.lean:491-494` (`by_cases` then positional `obtain`). Safer statement: **7
+  order-sensitive sites, 4 of them `rw`-discharges.**
+* Trap 5 — holds fully, mechanism re-verified: `_MIN_LEDGER_ROWS`/`_MIN_LEDGER_STACKED` are
+  both 19 (`test_conformance_state.py:377-378`), computed from live `observed` at `:514-515`
+  and asserted at `:516`, while the golden's only read is at `:545` and its write is in the
+  not-`exists()` branch at `:541` — so no regeneration repairs a floor failure. ⚠ But
+  **§11.10's own neighbourhood carries a stale cross-ref at line 281** of this file, still
+  saying `_MIN_LEDGER_ROWS = 18` at `:94` with the assertion at `:228`. §11.10 is right; :281
+  is wrong.
+
+**9. A gate blind spot, recorded for its own sake.** Changing `shadow_graphRec_agree`'s
+signature does **not** trip the gate. It is audited (`audited_theorems.txt:501`,
+`Audit.lean:790`), but step 4a pins NAMES as a superset check; it is in neither headline pin
+(it is a theorem, so not in 4c's definition closure) and has no `CORRESPONDENCE.md` anchor.
+Only `lake build` catches the 14 sites. The gate detects the CLAIM weakening downstream once
+`hql` lands, and is blind to the audited signature change itself — a small instance of the
+house failure mode located in the audit pin.
+
+**Owed before 4c-ii lands (unchanged in kind, re-sized here):** the `hql` acceptance is
+still the human call recorded at `PROOF_STATUS.md` 2026-08-21b §1, and item 2 above adds a
+SECOND: whether Route B survives losing its selection argument. Neither is settled by this
+census.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer
