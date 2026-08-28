@@ -339,6 +339,302 @@ theorem strong_shadow_false_at_raw :
   · rw [← derNodeB_correct] at hD
     exact absurd hD (by decide)
 
+/-! ## P14 (2026-08-28d): the six fields, against the σ0 the `_d` chain ACTUALLY builds
+
+Everything above compares `sR` against `sP`. For the narrow chain that is the right
+pairing. For the `_d` chain it is **not**, and no probe in this file noticed.
+
+`CascadeStrataSettle.lean::reachedByW3d2_shadow_d` (:1179-1190) concludes over
+
+    ∃ σ0, ReachedByRulesAdmitted σ0 S
+            (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ∧ UntaintedShadow S σ σ0
+
+— the derived-key seeds are DROPPED from σ0's store, which that theorem's own docstring
+calls "exactly what keeps σ0 inside the drained σ" (:1170-1171). Since
+`ReachedByRulesAdmitted.step` is `σ.writeRules S t` on store `t :: T`
+(`RulesComplete.lean:87-92`), a store of one derived-key tuple filters to `[]` and the
+only σ0 the `_d` chain can build is `emptyState S`. `sP SlSw tApp` — which writes the
+derived tuple onto the public `approver` R-node — is a σ0 that chain never pairs against.
+
+So `slSwD_not_mono` (:241) is a true statement about `sR` vs `sP` and is **not** a
+refutation of the `_d` chain's clause 1. The battery below re-asks it against `sF`, and
+extends it to the three `UntaintedShadow` fields nothing in this file has ever touched:
+everything above is edge-only (`mono` = `sub`, `extrasLeaf`/`extrasDer` = `classify`,
+`noLeafSources` = `term`), leaving `nodesSub`, `closed` and `closed0` unprobed. If
+`writeRulesRaw` minted leaf EDGES without minting leaf NODES, `closed` would fail and
+4c-ii would owe an unbudgeted edit to `LeafRules.lean::writeRulesRaw`.
+
+Store order matters: `ReachedByRulesAdmitted.step` PREPENDS, so a `Store` is
+head-most-recent and both folds below run over `T.reverse`.
+-/
+
+/-- σ0 exactly as `reachedByW3d2_shadow_d` builds it: rules-routed over the
+    untainted-FILTERED store. -/
+def sF (S : Schema) (T : Store) : GraphState :=
+  (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))).reverse.foldl
+    (fun acc u => acc.writeRules S u) (emptyState S)
+
+/-- The post-4c-ii σ over a whole store (the leaf-routed fold `sR` does for one write). -/
+def sRf (S : Schema) (T : Store) : GraphState :=
+  T.reverse.foldl (fun acc u => acc.writeRulesRaw S u) (emptyState S)
+
+/-- `UntaintedShadow.classify` as a Bool. `weak := true` is Route B's `LeafNode`
+    disjunct; `weak := false` is today's structure. -/
+def clsB (S : Schema) (weak : Bool) (σ σ0 : GraphState) : Bool :=
+  σ.edges.all (fun ab => σ0.edges.contains ab || derNodeB S ab.2 || (weak && leafNodeB S ab.2))
+
+/-- `UntaintedShadow.sub`. -/
+def subB (σ σ0 : GraphState) : Bool := σ0.edges.all (σ.edges.contains ·)
+
+/-- `UntaintedShadow.nodesSub`. -/
+def nodesSubB (σ σ0 : GraphState) : Bool := σ0.nodes.all (σ.nodes.contains ·)
+
+/-- `UntaintedShadow.closed` (and `.closed0`, which is the same predicate at σ0). -/
+def closedB (σ : GraphState) : Bool :=
+  σ.edges.all (fun ab => σ.nodes.contains ab.1 && σ.nodes.contains ab.2)
+
+/-- `UntaintedShadow.term`, extended over leaf nodes when `weak` — the clause-3 half of
+    Route B. `term` quantifies over ALL keys; "no `DerNode` has an out-edge" is
+    equivalent to "every edge's SOURCE is not a `DerNode`", which is what this decides. -/
+def termB (S : Schema) (weak : Bool) (σ : GraphState) : Bool :=
+  σ.edges.all (fun ab => !(derNodeB S ab.1 || (weak && leafNodeB S ab.1)))
+
+/-- All six fields of `UntaintedShadow` at once, against an EXPLICIT σ0. -/
+def shadowB (S : Schema) (weak : Bool) (σ σ0 : GraphState) : Bool :=
+  clsB S weak σ σ0 && subB σ σ0 && nodesSubB σ σ0
+    && closedB σ && closedB σ0 && termB S weak σ
+
+/-- Per-field breakdown in `UntaintedShadow` declaration order
+    (`classify`, `sub`, `nodesSub`, `closed`, `closed0`, `term`), so a `false` names
+    the field that failed instead of just the conjunction. -/
+def shadowFields (S : Schema) (weak : Bool) (σ σ0 : GraphState) :
+    Bool × Bool × Bool × Bool × Bool × Bool :=
+  (clsB S weak σ σ0, subB σ σ0, nodesSubB σ σ0, closedB σ, closedB σ0, termB S weak σ)
+
+/-! ### The instrument is PROVED, not plausible
+
+`derNodeB_correct` (:55) made the 2026-08-20 battery trustworthy one predicate at a
+time. This battery reads SIX fields, five of which are new hand transcriptions of
+`CascadeStable.lean:528-534`, so the same discipline is applied to the whole mirror:
+in its UNWEAKENED form `shadowB` decides `UntaintedShadow` exactly. A transcription
+slip in any of the six now fails to compile instead of silently returning `true`.
+
+⚠ The weakened form (`weak := true`) has no such theorem and cannot have one — the
+weakened `UntaintedShadow` is what 4c-ii is for and does not exist yet. `leafNodeB`
+likewise still has no `leafNodeB_correct` twin (:51). So the `weak := true` rows below
+are measurements of a PROPOSED structure, and their force comes from the strong rows
+next to them, which are proved. -/
+
+theorem clsB_correct (S : Schema) (σ σ0 : GraphState) :
+    clsB S false σ σ0 = true ↔ (∀ ab ∈ σ.edges, ab ∈ σ0.edges ∨ DerNode S ab.2) := by
+  simp only [clsB, List.all_eq_true]
+  constructor
+  · intro h ab hab
+    have h1 := h ab hab
+    simp only [Bool.false_and, Bool.or_false, Bool.or_eq_true, List.contains_iff_mem] at h1
+    exact h1.imp id (derNodeB_correct S ab.2).mp
+  · intro h ab hab
+    have h1 := h ab hab
+    simp only [Bool.false_and, Bool.or_false, Bool.or_eq_true, List.contains_iff_mem]
+    exact h1.imp id (derNodeB_correct S ab.2).mpr
+
+theorem subB_correct (σ σ0 : GraphState) :
+    subB σ σ0 = true ↔ (∀ ab ∈ σ0.edges, ab ∈ σ.edges) := by
+  simp [subB, List.all_eq_true, List.contains_iff_mem]
+
+theorem nodesSubB_correct (σ σ0 : GraphState) :
+    nodesSubB σ σ0 = true ↔ (∀ k ∈ σ0.nodes, k ∈ σ.nodes) := by
+  simp [nodesSubB, List.all_eq_true, List.contains_iff_mem]
+
+theorem closedB_correct (σ : GraphState) :
+    closedB σ = true ↔ (∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) := by
+  simp [closedB, List.all_eq_true, List.contains_iff_mem]
+
+theorem termB_correct (S : Schema) (σ : GraphState) :
+    termB S false σ = true ↔ (∀ k, DerNode S k → ∀ y, (k, y) ∉ σ.edges) := by
+  simp only [termB, List.all_eq_true]
+  constructor
+  · intro h k hk y hy
+    have h1 := h (k, y) hy
+    simp only [Bool.false_and, Bool.or_false, Bool.not_eq_true'] at h1
+    exact absurd ((derNodeB_correct S k).mpr hk) (by simp [h1])
+  · intro h ab hab
+    simp only [Bool.false_and, Bool.or_false, Bool.not_eq_true']
+    by_contra hcon
+    simp only [ne_eq, Bool.not_eq_false] at hcon
+    exact h ab.1 ((derNodeB_correct S ab.1).mp hcon) ab.2 (by simpa using hab)
+
+/-- **The six-field mirror decides the structure.**
+
+    SABOTAGE (2026-08-28d, `docs/sabotage-procedure.md`) — the narrowest *plausible*
+    weakening, not a catastrophe: a maintainer trims `closedB`'s `ab.2` conjunct as
+    redundant, and updates `closedB_correct`'s statement to match, so the mirror and its
+    own lemma stay CONSISTENT. Observed, `lake build`:
+
+        error: …/Scratch4cii.lean:475:43: Application type mismatch: The argument
+          (closedB_correct σ).mp hcl
+        has type
+          ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes
+        but is expected to have type
+          ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes
+        in the application
+          UntaintedShadow.mk …
+
+    (line numbers are the run's, before this docstring was added; the anchors that keep
+    are the symbols.) rc=1, three errors, **all three inside `shadowB_correct`**. ⚠ The
+    load-bearing half of that observation is what did NOT fail: every `decide` pin below,
+    from `d_sigma0_is_empty` on, stayed GREEN, because a weakened `closedB`
+    returns `true` wherever the honest one did. So the battery cannot police its own
+    transcription — only this theorem can, and it can only do it because it names
+    `UntaintedShadow` and lets `UntaintedShadow.mk` reject the argument. That is
+    2026-08-28c's "a guard-only pin cannot catch a fence removal" one layer further
+    down: **do not replace this with more `decide` rows.** -/
+theorem shadowB_correct (S : Schema) (σ σ0 : GraphState) :
+    shadowB S false σ σ0 = true ↔ UntaintedShadow S σ σ0 := by
+  simp only [shadowB, Bool.and_eq_true]
+  constructor
+  · rintro ⟨⟨⟨⟨⟨hc, hs⟩, hn⟩, hcl⟩, hcl0⟩, ht⟩
+    exact ⟨(clsB_correct S σ σ0).mp hc, (subB_correct σ σ0).mp hs,
+           (nodesSubB_correct σ σ0).mp hn, (closedB_correct σ).mp hcl,
+           (closedB_correct σ0).mp hcl0, (termB_correct S σ).mp ht⟩
+  · intro h
+    exact ⟨⟨⟨⟨⟨(clsB_correct S σ σ0).mpr h.classify, (subB_correct σ σ0).mpr h.sub⟩,
+             (nodesSubB_correct σ σ0).mpr h.nodesSub⟩, (closedB_correct σ).mpr h.closed⟩,
+           (closedB_correct σ0).mpr h.closed0⟩, (termB_correct S σ).mpr h.term⟩
+
+/-- A mixed store on `SlSw`: one derived-key write (`approver`) and one untainted write
+    (`viewer`). The filter keeps exactly the second. This is the shape the unowned
+    obligation `CascadeStable.lean::reachedByW3d_shadow` is about — post-re-point the
+    leaf list is a strict superset "on a mixed schema even for untainted tuples". -/
+def tMix : Store := [tApp, tViewer]
+
+/-! ### P1 — the σ0s genuinely differ, and only on the `_d` chain
+
+The whole point turns on `sF ≠ sP` at a derived-key write and `sF = sP` without one.
+Pinned first, or every row below is about a distinction that might not exist. -/
+
+/-- Observed: `(sF SlSw [tApp]).edges.length` → `0`, `.nodes.length` → `0` — the filter
+    drops the only tuple, so the `_d` chain's σ0 is literally `emptyState`, while
+    `sP SlSw tApp` carries the public `approver` R-node edge. That gap is the entire
+    content of `slSwD_not_mono` (:241). -/
+theorem d_sigma0_is_empty :
+    (sF SlSw [tApp]).edges = [] ∧ (sF SlSw [tApp]).nodes = []
+    ∧ (sP SlSw tApp).edges.length = 1 := by
+  refine ⟨by decide, by decide, by decide⟩
+
+/-- …and on the narrow chain the filter drops NOTHING, so `sF` and `sP` agree and the
+    2026-08-20 battery's pairing was right there. Observed: both `1`, equal. -/
+theorem narrow_sigma0_agrees :
+    (sF SlV [tlEditor]).edges = (sP SlV tlEditor).edges
+    ∧ (sF SlV [tlEditor]).edges.length = 1 := by
+  refine ⟨by decide, by decide⟩
+
+/-! ### P2 — the six-field battery
+
+Read the tuples in `UntaintedShadow` declaration order:
+`(classify, sub, nodesSub, closed, closed0, term)`. -/
+
+/-- **A — the `_d` chain against its OWN σ0: the weakened shadow holds, all six fields.**
+    Observed: `shadowB SlSw true (sR SlSw tApp) (sF SlSw [tApp])` → `true`,
+    fields → `(true, true, true, true, true, true)`. -/
+theorem d_weak_holds :
+    shadowB SlSw true (sR SlSw tApp) (sF SlSw [tApp]) = true
+    ∧ shadowFields SlSw true (sR SlSw tApp) (sF SlSw [tApp])
+        = (true, true, true, true, true, true) := by
+  refine ⟨by decide, by decide⟩
+
+/-- **A' — and the UNWEAKENED shadow fails, on `classify` ALONE.** Observed fields →
+    `(false, true, true, true, true, true)`. This is the sharp form of the Route B
+    claim: the weakening needed is exactly one disjunct on exactly one field. In
+    particular `term` holds even in its leaf-extended form, so clause 3 costs nothing. -/
+theorem d_strong_fails_only_on_classify :
+    shadowFields SlSw false (sR SlSw tApp) (sF SlSw [tApp])
+      = (false, true, true, true, true, true) := by decide
+
+/-- **B — the instrument artifact, isolated.** Against `sP` (the σ0 the `_d` chain never
+    builds) the failing fields are `sub` and `nodesSub`, NOT `classify`. Observed fields
+    → `(true, false, false, true, true, true)`. `mono` (:81) IS `sub`, so
+    `slSwD_not_mono`'s `false` is this `sub` — a true fact about the wrong pairing. -/
+theorem d_vs_sP_fails_on_sub :
+    shadowFields SlSw true (sR SlSw tApp) (sP SlSw tApp)
+      = (true, false, false, true, true, true) := by decide
+
+/-- **C — narrow chain**: weak holds; strong fails on `classify` alone. Observed
+    `(true,…)` and `(false, true, true, true, true, true)`. Consistent with
+    `strong_shadow_false_at_raw` (:332), which used `sP` — legitimate here by
+    `narrow_sigma0_agrees`. -/
+theorem narrow_weak_holds_strong_fails :
+    shadowB SlV true (sR SlV tlEditor) (sF SlV [tlEditor]) = true
+    ∧ shadowFields SlV false (sR SlV tlEditor) (sF SlV [tlEditor])
+        = (false, true, true, true, true, true) := by
+  refine ⟨by decide, by decide⟩
+
+/-- **D — the index-2 `_d` witness** (`SwU`, storage leaf at index 2): same result, so
+    nothing above is an index-0 accident. Observed → `true`. -/
+theorem d_idx2_weak_holds :
+    shadowB LeafWitness.SwU true (sR LeafWitness.SwU tAppU)
+      (sF LeafWitness.SwU [tAppU]) = true := by decide
+
+/-! ### P3 — the MIXED store: the unowned obligation's own shape
+
+`P3`'s item block records an unowned obligation at
+`CascadeStable.lean::reachedByW3d_shadow` (via `untaintedShadow_writeLeg`): post-re-point
+"the leaf list is a strict superset on a mixed schema **even for untainted tuples** — no
+slice owned it". `tMix` is that shape: one derived-key write plus one untainted `viewer`
+write on `SlSw`. Measured, the superset is real and it is 2 edges wide — and BOTH extras
+classify under the single `LeafNode` disjunct, including the one minted by the untainted
+tuple. -/
+
+/-- Observed: `(sRf SlSw tMix).edges.length` → `3` vs `(sF SlSw tMix).edges.length` → `1`
+    — a strict superset, exactly as the unowned obligation predicted. -/
+theorem mixed_is_strict_superset :
+    (sRf SlSw tMix).edges.length = 3 ∧ (sF SlSw tMix).edges.length = 1
+    ∧ subB (sRf SlSw tMix) (sF SlSw tMix) = true := by
+  refine ⟨by decide, by decide, by decide⟩
+
+/-- **The two extras, verbatim as observed.** `approver.0` is minted by the DERIVED-key
+    write; `approver.1` is minted by the UNTAINTED `viewer` write being rule-routed onto
+    a leaf. The second is the case no slice owned, and it is leaf-targeted like the
+    first. -/
+theorem mixed_extras_are_the_two_leaves :
+    (sRf SlSw tMix).edges.filter (fun ab => !((sF SlSw tMix).edges.contains ab))
+      = [(⟨"user", "alice", BARE, Variant.plain⟩, ⟨"doc", "d1", leafPred "approver" 0,
+            Variant.plain⟩),
+         (⟨"user", "carol", BARE, Variant.plain⟩, ⟨"doc", "d1", leafPred "approver" 1,
+            Variant.plain⟩)] := by decide
+
+/-- **E — the mixed store carries the weakened shadow, all six fields**, and the
+    unweakened one fails on `classify` alone. Observed `true` and
+    `(false, true, true, true, true, true)`. -/
+theorem mixed_weak_holds_strong_fails :
+    shadowB SlSw true (sRf SlSw tMix) (sF SlSw tMix) = true
+    ∧ shadowFields SlSw false (sRf SlSw tMix) (sF SlSw tMix)
+        = (false, true, true, true, true, true) := by
+  refine ⟨by decide, by decide⟩
+
+/-! ### P4 — the Prop-level consequence
+
+`shadowB_correct` turns the strong rows above into statements about `UntaintedShadow`
+itself, not about a Bool mirror of it. This is what `strong_shadow_false_at_raw` (:332)
+says for the narrow chain, now said for the chain where it was NOT previously
+established — and against the σ0 that chain actually builds. -/
+
+/-- **The unweakened `UntaintedShadow` is uninhabited at a leaf-routed `_d` state,
+    against the σ0 `reachedByW3d2_shadow_d` itself constructs.** So post-4c-ii the `_d`
+    chain's choice is not "strong shadow vs weak shadow" either: it is
+    "weakened-but-inhabited vs strong-but-uninhabited". -/
+theorem strong_shadow_false_at_d_own_sigma0 :
+    ¬ UntaintedShadow SlSw (sR SlSw tApp) (sF SlSw [tApp]) := by
+  intro h
+  exact absurd ((shadowB_correct SlSw (sR SlSw tApp) (sF SlSw [tApp])).mpr h) (by decide)
+
+/-- …and on the mixed store, where the untainted tuple contributes an extra of its own. -/
+theorem strong_shadow_false_at_mixed :
+    ¬ UntaintedShadow SlSw (sRf SlSw tMix) (sF SlSw tMix) := by
+  intro h
+  exact absurd ((shadowB_correct SlSw (sRf SlSw tMix) (sF SlSw tMix)).mpr h) (by decide)
+
 end Scratch4cii
 end Zanzibar
 
@@ -407,4 +703,38 @@ is false
 ```
 (`lrUnt_subsumed` stayed green under (Sb), as it must — the untainted fragment does not
 see the leaf half.)
+
+## Observed outputs — the P14 six-field battery (2026-08-28d)
+
+Raw `#eval` transcript from the first build of the P14 block, before its rows were
+converted to the `decide` pins above. Tuples read
+`(label, shadowB, (classify, sub, nodesSub, closed, closed0, term))`.
+
+```text
+info: ("A  _d weak   vs sF", true,  (true,  true,  true,  true, true, true))
+info: ("A' _d strong vs sF", false, (false, true,  true,  true, true, true))
+info: ("B  _d weak   vs sP", false, (true,  false, false, true, true, true))
+info: ("C  narrow weak   vs sF", true,  (true,  true, true, true, true, true))
+info: ("C' narrow strong vs sF", false, (false, true, true, true, true, true))
+info: ("D  _d idx2 weak vs sF", true,  (true, true, true, true, true, true))
+info: ("E  mixed weak   vs sF", true,  (true,  true, true, true, true, true))
+info: ("E' mixed strong vs sF", false, (false, true, true, true, true, true))
+info: ("sizes", 1, 0, 0, 3, 1, 2, 1)
+info: ("mixed extras",
+ [({ type := "user", name := "alice", pred := "...", variant := Zanzibar.Variant.plain },
+   { type := "doc", name := "d1", pred := "approver.0", variant := Zanzibar.Variant.plain }),
+  ({ type := "user", name := "carol", pred := "...", variant := Zanzibar.Variant.plain },
+   { type := "doc", name := "d1", pred := "approver.1", variant := Zanzibar.Variant.plain })])
+```
+
+`sizes` reads `(sR SlSw tApp).edges`, `(sF SlSw [tApp]).edges`, `(sF SlSw [tApp]).nodes`,
+`(sRf SlSw tMix).edges`, `(sF SlSw tMix).edges`, `(sR SlV tlEditor).edges`,
+`(sF SlV [tlEditor]).edges` — lengths.
+
+**What the eight rows say together.** `classify` is the only field that ever fails, and
+only in its unweakened form; `sub`/`nodesSub` fail only against `sP`, the σ0 the `_d`
+chain never builds. The three fields no probe had ever touched (`nodesSub`, `closed`,
+`closed0`) hold everywhere, on both chains and on the mixed store — so 4c-ii owes no
+edit to `LeafRules.lean::writeRulesRaw` for endpoint closure, a risk that was open
+until this battery ran.
 -/

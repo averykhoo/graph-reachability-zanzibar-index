@@ -15,6 +15,182 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-28d (**`P14`'s `UntaintedShadow` ADJUDICATION IS SETTLED, AND IT MOVED THE ANSWER: `classify` is the ONLY field that ever fails, the three fields no probe had ever touched hold everywhere, and the recorded refutation `slSwD_not_mono` turns out to be an INSTRUMENT ARTIFACT — it pairs against a σ0 the `_d` chain never builds. Against the σ0 `reachedByW3d2_shadow_d` actually constructs, the weakened shadow holds on all six fields and the unweakened one is UNINHABITED, now at Prop level. The six-field mirror is PROVED against `UntaintedShadow` itself, and its sabotage showed the `decide` pins are blind to a mis-transcription that only the correctness theorem catches. Also: a drifted gate floor repaired, and the orientation doc's rotted figures deleted rather than updated.**)
+
+**Task taken:** `P3`'s stated next step (`2026-08-28c`) — settle the `P14`
+`UntaintedShadow` adjudication with `#eval` probes in `Scratch4cii.lean` — plus the two
+found-not-fixed items that session declared. The cone was **not** opened: it is
+un-splittable, sized at 3 sessions, and this session was not a fresh window.
+
+### 1. The question, and why it was not the one on the board
+
+The board asked for `#eval` probes settling "the `P14` `UntaintedShadow` adjudication".
+A six-agent read-only census could not establish from the record what that phrase meant
+— the route call itself was closed by the user on `2026-08-28`, and `2026-08-28c` §5,
+its own cited backing, contains no such obligation. Rather than re-litigate a closed
+call, the session probed the genuinely-open residue, and found a live defect in the
+existing record while doing it.
+
+`CascadeStrataSettle.lean::reachedByW3d2_shadow_d` (`:1179-1190`, read first-hand)
+concludes over
+
+    ∃ σ0, ReachedByRulesAdmitted σ0 S
+            (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
+          ∧ UntaintedShadow S σ σ0
+
+— the derived-key seeds are DROPPED from σ0's store, which that theorem's own docstring
+(`:1170-1171`) calls "exactly what keeps σ0 inside the drained σ". With
+`ReachedByRulesAdmitted.step = σ.writeRules S t` (`RulesComplete.lean:87-92`), a store of
+one derived-key tuple filters to `[]`, so **the only σ0 the `_d` chain can build is
+`emptyState S`**. Every probe in the 2026-08-20 battery compares `sR` against `sP`, which
+writes the derived tuple onto the public R-node. For the narrow chain that pairing is
+right (the filter drops nothing — pinned, `narrow_sigma0_agrees`). For the `_d` chain it
+is not.
+
+### 2. What the battery measured
+
+New in `Scratch4cii.lean` (additive, zero-cone, still 1 importer / 0 audit rows / 0 pin
+rows): `sF` (σ0 as the `_d` chain builds it), `sRf` (the leaf-routed fold over a whole
+store), Bool mirrors of all six `UntaintedShadow` fields, and `shadowFields` for
+per-field attribution. Ten `#eval` rows, then converted to `decide` pins; the raw
+transcript is in the module's `## Observed outputs` block. Reading
+`(classify, sub, nodesSub, closed, closed0, term)`:
+
+| row | σ / σ0 | weak | result |
+|---|---|---|---|
+| A  | `sR SlSw tApp` / `sF` | yes | `true` — all six |
+| A' | same | no | `(false, true, true, true, true, true)` |
+| B  | `sR SlSw tApp` / **`sP`** | yes | `(true, false, false, true, true, true)` |
+| C  | `sR SlV tlEditor` / `sF` | yes | `true` — all six |
+| C' | same | no | `(false, true, true, true, true, true)` |
+| D  | `SwU` idx-2 `_d` | yes | `true` — all six |
+| E  | mixed store / `sF` | yes | `true` — all six |
+| E' | same | no | `(false, true, true, true, true, true)` |
+
+**Three findings, none of which the record contained.**
+
+* **`classify` is the only field that ever fails, and only unweakened.** `term` holds
+  even in its leaf-extended form, so Route B's clause 3 costs nothing. Route B's
+  weakening is **exactly one disjunct on exactly one field** — a materially sharper claim
+  than "weaken `UntaintedShadow`".
+* **`nodesSub`, `closed`, `closed0` hold everywhere** — both chains, both indices, mixed
+  store. No probe in this repo had ever touched them: the entire 2026-08-20 battery is
+  edge-only (`mono` = `sub`, `extrasLeaf`/`extrasDer` = `classify`, `noLeafSources` =
+  `term`). Had `writeRulesRaw` minted leaf EDGES without leaf NODES, `closed` would fail
+  and 4c-ii would owe an unbudgeted edit to `LeafRules.lean::writeRulesRaw` plus
+  re-proofs of `structInv_writeRulesRaw` / `inv_writeRulesRaw`. **That risk is retired,
+  measured rather than assumed.**
+* **`slSwD_not_mono` is an instrument artifact w.r.t. the `_d` chain.** Row B isolates it:
+  against `sP` the failing fields are `sub` and `nodesSub`, not `classify`, and `mono` IS
+  `sub`. The 2026-08-20 entry's "(★) clause 1 is REFUTED at a derived-key write" is a true
+  statement about the wrong pairing. **This corrects that entry; it is not retro-edited
+  there.** The pin itself stays — it is true as stated, and `d_vs_sP_fails_on_sub` now
+  sits beside it saying what it measures.
+
+**The mixed store also witnesses the unowned obligation.** `tMix = [tApp, tViewer]` on
+`SlSw` gives a strict superset — 3 edges vs σ0's 1 — whose two extras are `approver.0`
+(minted by the derived-key write) and **`approver.1`, minted by the UNTAINTED `viewer`
+write being rule-routed onto a leaf**. That second edge is precisely the
+"strict superset on a mixed schema even for untainted tuples" case `P3` records as owned
+by no slice (`reachedByW3d_shadow` via `untaintedShadow_writeLeg`). It classifies under
+the same single disjunct. That is a no-kill at the shape, not a discharge of the lemma.
+
+### 3. The instrument is PROVED, and its sabotage found the blind spot
+
+`derNodeB_correct` made the 2026-08-20 battery trustworthy one predicate at a time. This
+battery reads six fields, five of them new hand transcriptions of
+`CascadeStable.lean:528-534`, so `shadowB_correct : shadowB S false σ σ0 = true ↔
+UntaintedShadow S σ σ0` was proved through five per-field lemmas. It compiled first try.
+
+That upgrades the strong rows from Bool facts to Prop theorems:
+`strong_shadow_false_at_d_own_sigma0` — **the unweakened `UntaintedShadow` is uninhabited
+at a leaf-routed `_d` state against the σ0 that chain itself constructs** — and
+`strong_shadow_false_at_mixed`. `strong_shadow_false_at_raw` (2026-08-20) said this for
+the narrow chain only, and against `sP`.
+
+**Sabotage** (`docs/sabotage-procedure.md`), aimed at the narrowest *plausible* weakening
+rather than a catastrophe: a maintainer trims `closedB`'s `ab.2` conjunct as redundant
+**and updates `closedB_correct`'s statement to match**, so mirror and lemma stay mutually
+consistent. Observed, `lake build`, rc=1:
+
+```text
+error: …/Scratch4cii.lean:475:43: Application type mismatch: The argument
+  (closedB_correct σ).mp hcl
+has type
+  ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes
+but is expected to have type
+  ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes
+in the application
+  UntaintedShadow.mk …
+```
+
+Three errors, **all three inside `shadowB_correct`**. ⚠ **The load-bearing half is what
+did NOT fail: every `decide` pin stayed green**, because a weakened `closedB` returns
+`true` wherever the honest one did. The battery cannot police its own transcription; only
+the correctness theorem can, and only because it names `UntaintedShadow` and lets
+`UntaintedShadow.mk` reject the argument. **This is 2026-08-28c's "a guard-only pin cannot
+catch a fence removal" one layer further down** — there the statement pin matched 46/46
+while the definition pin fired; here the `decide` rows all pass while the typechecker
+fires. Do not replace `shadowB_correct` with more `decide` rows. Restored, green, rc=0.
+
+### 4. A drifted gate floor, repaired — with its instrument checked
+
+`CLAUDE.md` states the contract outright: "`MIN_CONF_ALL` / `MIN_TESTS_ALL` have ZERO
+headroom — they are set equal to the live collected counts". It had silently stopped
+being true. `MIN_TESTS_ALL` was **923** against a live **943** (`pytest tests/ -q
+--collect-only`), so **20 tests could have been deleted with the gate staying green**.
+`MIN_CONF_ALL` had not drifted (495 = 495); only this one had.
+
+Raised to 943, and the floor was checked rather than trusted: with `MIN_TESTS_ALL=944`,
+`bash formal/verify.sh tests-tile:1/4` gives rc=1 and, literally,
+
+```text
+FAIL: tests/ collects only 943 test(s); the gate floor is 944.
+```
+
+The edit then made `verify.sh` step 4e red — `doc_counts.py` reads the floor live out of
+`verify.sh` and `FINAL_REVIEW.md:42` still said 923 — which is the counts pin working
+exactly as designed. Regenerated; one line changed, confirming the block's other figures
+were already current.
+
+### 5. The 2026-08-28c found-not-fixed items, discharged
+
+* **`formal/README.md` Status paragraph** carried six figures dated 2026-07-29 and had
+  rotted to claiming `tests/` **762** against a live **943**, and **460** axiom reports
+  against a live **583**. **Deleted rather than updated**, per the precedent 2026-08-28c
+  set for the "26 statements" rot: live measurements have one machine-checked home
+  (`FINAL_REVIEW.md`'s generated block), live floors have one (`verify.sh`).
+* **The same file's gate-size paragraph** (`465` conformance / `419` differential)
+  restated numbers the generated block explicitly says not to restate — "three prose
+  copies rotted through two corpus additions before this became generated". This was the
+  fourth copy; deleted and pointed at the block.
+* **`docs/tasktool-trial-protocol.md:403` deliberately untouched**, unchanged from
+  2026-08-28c's reasoning: it is a pre-registered rubric and editing it corrupts the
+  pre-registration.
+
+### 6. The revert-to-green exit plan, now written down
+
+`HANDOFF.md` and `tasks/P3` both *required* a declared revert-to-green exit before the
+cone opens; a repo-wide grep found the requirement in those two places and the plan in
+none. Written into `P3`'s item block: the green anchor is a **commit sha** recorded in
+the session log before the cone opens (not a stash), the abort trigger is declared in
+wall-clock or context terms up front (cone `lake build` cycles are 200–400s and serial),
+findings are written to this file BEFORE reverting, `.gate-runs/ledger.tsv` and
+`formal/history/` are deliberately not undone, and **no partial cone is committed** —
+between the re-point and the guard landing the headline theorems are kernel-`decide`
+FALSE, so a mid-cone commit is a tree whose own pins assert something untrue.
+
+### 7. Sizing, unchanged
+
+Nothing here re-sizes the cone: still **42 modules / ~136 sites / 90-raw second ring over
+8 files / 3 sessions** (`2026-08-28c` §5). One risk was removed from it (the
+`writeRulesRaw` endpoint-closure edit, §2) and one claim sharpened (Route B = one
+disjunct on one field, §2), but no site count changed. ⚠ **There is still no
+machine-checked home for any cone/site figure** — all of them are prose in this file, and
+they can rot exactly as §5's did.
+
+---
+
 ## Session 2026-08-28c (**THE PUBLIC SURFACE IS MIGRATED. Seven declarations — `backend_equivalence`, `exclusion_effective`, `no_ghost_grant`, `graphRun_check_eq_sem`, `graphRunOps_check_eq_sem`, `W4WitnessDirect.final_applies`/`final_applies4` — now state `GraphModel.checkPublic`, proved through `graph_correct_public`, and NONE of them gained a hypothesis. The zcli driver moved with them. The migration's own sabotage found a real hole and closed it: the driver↔capstone coupling was UNPINNED, and reverting the driver left all 495 conformance tests green.**)
 
 **Task taken:** `P3`'s stated next step, exactly as 2026-08-28b §4 scoped it — "migrate the

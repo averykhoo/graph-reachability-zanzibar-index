@@ -396,7 +396,24 @@ MIN_CONF_ALL=495
 # (`GS-2`), which is a FAIL-OPEN surface -- every excluded input is one that can no
 # longer invalidate a cached green -- so each exclusion is pinned in a PAIR with a
 # control proving the scope still covers its neighbourhood.
-MIN_TESTS_ALL=923
+#
+# Raised 923 -> 943 on 2026-08-28d, and this one is a DRIFT REPAIR, not a growth
+# bump. CLAUDE.md states the contract for this knob outright -- "MIN_CONF_ALL /
+# MIN_TESTS_ALL have ZERO headroom -- they are set equal to the live collected
+# counts" -- and it had silently stopped being true: 20 tests had been added since
+# the last raise without the floor following them, so 20 could have been DELETED
+# with the gate staying green. The conformance side had not drifted
+# (MIN_CONF_ALL 495 == live 495); only this one had.
+#   measurement:  pytest tests/ -q --collect-only  ->  `943 tests collected`
+#   instrument check (the floor is live, not decorative): with MIN_TESTS_ALL=944,
+#   `bash formal/verify.sh tests-tile:1/4` fails at the global collection floor --
+#   observed literally:
+#     FAIL: tests/ collects only 943 test(s); the gate floor is 944.
+#   and rc=1. Restored to 943, which then passes. Without that check this edit
+#   would be a number changed on faith.
+# Zero headroom is the POINT: it is what makes deleting one test loud. Re-measure
+# and raise this whenever you add tests; that direction is always free.
+MIN_TESTS_ALL=943
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
