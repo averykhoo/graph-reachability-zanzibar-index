@@ -420,43 +420,61 @@ theorem graph_correct_public {S : Schema} {T : Store} {σ : GraphState} (q : Que
 
 /-- **T3 (`backend_equivalence`), full W4 scope.** The set engine and the graph
     index agree — by transitivity through `sem` (T1 ∘ T2b). The whole point of the
-    shared-spec architecture. -/
+    shared-spec architecture.
+
+    **Stated over the PUBLIC read (2026-08-28c).** The graph side is
+    `GraphModel.checkPublic`, the fenced entry corresponding to Python's
+    `WildcardIndex.check`; it was `GraphModel.check` (= `_check_internal`) until the
+    `checkPublic` migration. Two backends "agreeing" is a claim about what a caller can
+    observe, so the public entry is the honest side of the equation — and post-4c-ii it
+    is the only side that stays TRUE at minted leaf names, where the unfenced read
+    grants and `sem` denies. The internal layer keeps its own per-stage record in
+    `Equiv.lean`'s ladder, deliberately unmigrated. -/
 theorem backend_equivalence {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hA : GraphAdmission S T) (hF : W4Fragment S T)
     (h : ReachedBy σ S T) (hq : Drained S σ) (hValid : AllValid T)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    SetEngineModel.check S T q = GraphModel.check σ q := by
+    SetEngineModel.check S T q = GraphModel.checkPublic σ q := by
   rw [setEngine_correct S T q hA.wf hA.strat hValid,
-      graph_correct q hA hF h hq hqs hqo]
+      graph_correct_public q hA hF h hq hqs hqo]
 
 /-- **T6a (`exclusion_effective`), full W4 scope.** Whenever the spec denies, BOTH
     backends deny — with real exclusion content at this scope: `sem` denies a
     subject removed by a `but not` operand, so neither backend can grant it
-    (`exclusion_effective_w3c` exhibits the concrete under-a-star-grant case). -/
+    (`exclusion_effective_w3c` exhibits the concrete under-a-star-grant case).
+
+    **Graph side is the PUBLIC read (2026-08-28c).** A security property about what is
+    denied belongs on the entry a caller actually reaches. Note this direction is the
+    one the fence could never weaken — `Fence.lean::checkPublic_le_check` gives it
+    conservatively — but it is stated via `graph_correct_public` rather than that
+    inequality so the whole T6 family reads uniformly off one bridge. -/
 theorem exclusion_effective {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hA : GraphAdmission S T) (hF : W4Fragment S T)
     (h : ReachedBy σ S T) (hq : Drained S σ) (hValid : AllValid T)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T q = false) :
-    SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
+    SetEngineModel.check S T q = false ∧ GraphModel.checkPublic σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hA.wf hA.strat hValid]; exact hDeny
-  · rw [graph_correct q hA hF h hq hqs hqo]; exact hDeny
+  · rw [graph_correct_public q hA hF h hq hqs hqo]; exact hDeny
 
 /-- **T6b (`no_ghost_grant`), full W4 scope.** If the spec denies on the chain's
     own store, the graph denies at any fully-drained state — no stale edge or
     residue row survives the drain (`T'` is the store as written; `σ'` its
-    operationally reached state). -/
+    operationally reached state).
+
+    **Graph side is the PUBLIC read (2026-08-28c)** — "no ghost grant" is a statement
+    about grants that escape to a caller, so it is stated over `checkPublic`. -/
 theorem no_ghost_grant {S : Schema} {T' : Store} {σ' : GraphState} (q : Query)
     (hA : GraphAdmission S T') (hF : W4Fragment S T')
     (h : ReachedBy σ' S T') (hq : Drained S σ')
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T' q = false) :
-    GraphModel.check σ' q = false := by
-  rw [graph_correct q hA hF h hq hqs hqo]; exact hDeny
+    GraphModel.checkPublic σ' q = false := by
+  rw [graph_correct_public q hA hF h hq hqs hqo]; exact hDeny
 
 /-- **T2a (`graph_reached_inv`), full W4 scope.** The graph-index structural and
     residue invariant `Inv` (I1–I3 well-formedness/acyclicity + the four I6
@@ -1358,8 +1376,8 @@ theorem final_applies {σ : GraphState} (q : Query)
     (h : ReachedBy σ Sd Td) (hq : Drained Sd σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    GraphModel.check σ q = sem Sd Td q :=
-  graph_correct q admission w4fragment h hq hqs hqo
+    GraphModel.checkPublic σ q = sem Sd Td q :=
+  graph_correct_public q admission w4fragment h hq hqs hqo
 
 /-- **The T2a asymmetry is machine-checked, not asserted.** `W4NarrowT2a` re-imposes the
     narrow `StoreValidRules`, which `outside_old_admission` refutes at `Td` — so
@@ -1490,8 +1508,8 @@ theorem final_applies4 {σ : GraphState} (q : Query)
     (h : ReachedBy σ Sd Td4) (hq : Drained Sd σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    GraphModel.check σ q = sem Sd Td4 q :=
-  graph_correct q admission4 w4fragment4 h hq hqs hqo
+    GraphModel.checkPublic σ q = sem Sd Td4 q :=
+  graph_correct_public q admission4 w4fragment4 h hq hqs hqo
 
 end W4WitnessDirect
 end Zanzibar

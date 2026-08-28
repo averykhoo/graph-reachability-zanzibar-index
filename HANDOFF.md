@@ -16,20 +16,23 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-28b)** — `lean` +
-> `conf-tile:1..5/5` + `tests-tile:1..4/4`. The tiles are keyed to the code-scoped tree id
-> (`*.md` excluded), so this banner edit does not stale them; `lean` was re-run after it.
-> **`2026-08-28b`: the fence-modeling endgame is LANDED and green** —
-> `Fence.lean::checkPublic` + `FullScope.lean::graph_correct_public` give an **unguarded**
-> "public read = `sem`", needing neither `hql` nor the 4c-ii cone. Additive: pins 38→45 /
-> 155→160, zero rows moved. ⚠ Non-vacuity rests on the six `W4WitnessDirect.fence_*`
-> pins, NOT that theorem. **Next, pre-4c-ii: migrate the public surface +
-> `final_applies`(`4`) onto `checkPublic`** → PROOF_STATUS `2026-08-28b` §4.
-> **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned
-> 2026-08-21b, `Closed ids` note below). Two board `moved` cells disagree with the task
-> tree, unreconciled on purpose: they need a call on what `moved` means, not an edit. Ask
-> `python scripts/gate_status.py`, never this line — any edit invalidates the
-> tree-addressed verdict. If you see red, it is yours: `git stash` and re-check.
+> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-28c)** — `lean` +
+> `conf-tile:1..5/5` + `tests-tile:1..4/4`; tiles keyed to the code-scoped tree id (`*.md`
+> excluded) so this edit does not stale them, and `lean` was re-run after it.
+> **`2026-08-28c`: the public surface is migrated onto `checkPublic`** — 7 declarations
+> (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`, both
+> `graphRun*_check_eq_sem`, both `final_applies*`) plus the zcli driver, **none gaining a
+> hypothesis**, every proof a 1–2 line delegation; pins 45→46 / 160→161. ⚠ **The post-4c-ii
+> `hql` surface is now ONE row** (`graph_correct` `:27`) — the fence discharges the leaf
+> case for the rest. ⚠ **A hole was found and closed:** the driver↔capstone coupling was
+> unpinned (`495 passed` with the driver reverted), now pinned TEXTUALLY via
+> `Exec.lean::graphModeAnswers`; its sabotage showed the **statement pin blind at 46/46,
+> only the DEFINITION pin firing**. **Next: 4c-ii + step 7, the un-splittable cone** →
+> PROOF_STATUS `2026-08-28c` §5 for why that is 3 sessions, not 1.
+> **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned 2026-08-21b).
+> Two board `moved` cells disagree with the task tree, unreconciled on purpose: they need a
+> call on what `moved` means, not an edit. Ask `python scripts/gate_status.py`, never this
+> line — any edit invalidates the tree-addressed verdict. Red is yours: `git stash`.
 
 ## Board
 
@@ -42,7 +45,7 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7, one commit** — **the fence layer LANDED green 2026-08-28b** (`checkPublic` + `graph_correct_public`, additive, cone untouched); preflight CLOSED (`parse_schema_ast` rejects dotted *references* → WF clause is faithful). **Next step is pre-4c-ii: migrate the public surface + `final_applies`/`final_applies4` onto `checkPublic`** → PROOF_STATUS `2026-08-28b` §4 | **NOW** | L | — | 2026-08-28b |
+| `P3` | leg 7 **4c-ii + step 7, one commit** — fence layer landed 2026-08-28b; **public surface MIGRATED 2026-08-28c** (7 decls + zcli driver onto `checkPublic`, no new hypotheses; `hql` surface cut from 6 rows to **1**, `graph_correct` `:27`). Everything pre-4c-ii is now DONE. **What remains is the un-splittable 42-module cone** — measured 3 sessions, not 1 (PROOF_STATUS `2026-08-28c` §5) | **NOW** | L | — | 2026-08-28c |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d; the old `9 / 5` was wrong, and the `11` was right until `R6-6` closed) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24d |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
@@ -92,28 +95,23 @@ target is self-sufficient by construction (verified row by row, 2026-08-16).
 ### `P3` — leg 7: step 4c-ii co-landing with step 7, in one commit
 
 Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6`
-in the same commit. Critical path. **Both standing human calls are made (2026-08-28, user
-delegated; adjudication record: PROOF_STATUS `2026-08-28`): `hql` accepted**
-(`hql : publicOfLeaf S q.object.type q.relation = none` on the headline statements;
-`isLeafPred`- and taint-keyed shapes stay refused), and **Route B retained — on corrected
-grounds: its "zero additional cone" selection argument is falsified** by the census
-(scope doc **§11.11**, superseding §11.9's sizing): the `shadow_graphRec_agree` repair
-propagates — ~45 second-ring sites through `ReconcileStars.lean::checkFn_agree_of_graphRec`
-into 4 files with zero `UntaintedShadow` presence, zero of the 14 call sites mechanical
-(nothing in the tree gives dot-freeness of a computed ref). The `hql` guard is cheap
-(8 declarations, depth 2, audit pin untouched) **but lands on the leg-5 non-vacuity
-instrument** (`FullScope.lean::W4WitnessDirect.final_applies`, where `hql` is false at
-leaf queries) — adjudicated repair: the **fence-modeling endgame**, a `checkPublic` layer
-mirroring `BL-2`'s public deny, headline unguarded, witnesses consume it; unscouted, one
-sem-at-undeclared lemma owed, **in the 4c-ii commit, not after**. Budget ~136 sites /
-8 files (third consecutive low count). Still to write: the unowned superset-extras lemma
-(`reachedByW3d_shadow`) and `LeafNode` (`publicOfLeaf` carrier + `leafPublic p ≠ ""`);
-keep-names/change-bodies and `writeRules`-untouched stand as decided.
+in the same commit. Critical path. **Both standing human calls are made** (2026-08-28, user
+delegated; record: PROOF_STATUS `2026-08-28`): `hql` accepted in the narrow form
+`publicOfLeaf S q.object.type q.relation = none`, with `isLeafPred`- and taint-keyed shapes
+refused; **Route B retained on corrected grounds** — its "zero additional cone" argument is
+falsified by the census (scope doc **§11.11**, superseding §11.9's sizing). Still to write:
+the unowned superset-extras lemma (`reachedByW3d_shadow`) and `LeafNode` (`publicOfLeaf`
+carrier + `leafPublic p ≠ ""`); keep-names/change-bodies and `writeRules`-untouched stand.
 
-🧭 **One preflight open — do not choose blind:** WF-clause vs threading for computed-ref
-dot-freeness hinges on whether `zanzibar_utils_v1.py::parse_schema_ast` rejects dotted
-relation references. One grep + one probe at the start of the landing session —
-PROOF_STATUS `2026-08-28` §3.
+✅ **Everything pre-4c-ii is done (2026-08-28c)** — preflights closed, human calls made, the
+fence built (`2026-08-28b`), the public surface migrated onto it. **The `hql` guard is now
+ONE declaration, not the 8 once budgeted** (`graph_correct` `:27`; the other seven moved to
+`checkPublic` and need no binder). Cone measured **42 modules / ~136 sites / 90-raw second
+ring over 8 files** — the first sizing of this item in four to correct UPWARD, so do not
+re-cite lower figures. **Sized at 3 sessions, not 1** (PROOF_STATUS `2026-08-28c` §5): next
+session settles `P14`'s `UntaintedShadow` adjudication with `#eval` probes in
+`Scratch4cii.lean` (1 importer, 0 audit rows, 0 pin rows — file-local, deletable), then
+opens the cone at the TOP of a fresh window with a declared revert-to-green exit.
 
 ⚠ **Traps: scope doc §11.10 AS CORRECTED BY §11.11 item 8** — 7 order-sensitive own-key
 sites (4 `rw`-discharges + 3 positional), the emptiness bites at `rawWriteRels` not

@@ -15,6 +15,166 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-28c (**THE PUBLIC SURFACE IS MIGRATED. Seven declarations — `backend_equivalence`, `exclusion_effective`, `no_ghost_grant`, `graphRun_check_eq_sem`, `graphRunOps_check_eq_sem`, `W4WitnessDirect.final_applies`/`final_applies4` — now state `GraphModel.checkPublic`, proved through `graph_correct_public`, and NONE of them gained a hypothesis. The zcli driver moved with them. The migration's own sabotage found a real hole and closed it: the driver↔capstone coupling was UNPINNED, and reverting the driver left all 495 conformance tests green.**)
+
+**Task taken:** `P3`'s stated next step, exactly as 2026-08-28b §4 scoped it — "migrate the
+public surface + `final_applies`(`4`) onto `checkPublic` … own session, own sabotage". The
+user asked whether the REST of `P3` fits one session; scoping said no (§5), and directed
+step A only.
+
+### 1. What landed
+
+Seven declarations re-stated from `GraphModel.check` onto `GraphModel.checkPublic`, each
+proof re-pointed from `graph_correct` to `graph_correct_public`:
+
+| declaration | file | pin row |
+|---|---|---|
+| `backend_equivalence` | `FullScope.lean` | `headline_statements.txt:30` |
+| `exclusion_effective` | `FullScope.lean` | `:31` |
+| `no_ghost_grant` | `FullScope.lean` | `:32` |
+| `graphRun_check_eq_sem` | `GraphIndex/Exec.lean` | `:34` |
+| `graphRunOps_check_eq_sem` | `GraphIndex/Exec.lean` | `:35` |
+| `W4WitnessDirect.final_applies` | `FullScope.lean` | `:58` |
+| `W4WitnessDirect.final_applies4` | `FullScope.lean` | `:63` |
+
+**Every proof was a 1–2 line delegation and stayed one** — `lake build` succeeded first
+try, 1089 jobs, zero proof repair. `graph_correct_public` takes exactly `graph_correct`'s
+hypotheses, so no binder was added anywhere. Measured pin movement: **7 of 45 statement
+rows changed text; ZERO definition rows dropped or added; `audited_theorems.txt`
+byte-identical** (no declaration name changed — the 4a identity pin is blind to this
+change by construction, which is the `ZT-P5-LEG0` hole 4b/4c exist to cover).
+
+**NOT migrated, deliberately, each for a stated reason:**
+
+* `graph_correct` (`:27`) — it IS the internal-layer statement (`GraphModel.check` ↔
+  Python `_check_internal`), and `graph_correct_public`'s own unfenced branch appeals to
+  it. This is the one row that will take `hql` at 4c-ii.
+* `W4WitnessDirect.unfenced_grants` (`:51`) — the FOIL for `fence_changes_answer`.
+  Migrating it would destroy the differential, per 2026-08-28b §3.
+* `W4WitnessDirect.correct_applies` (`:45`) / `w3d2E_correct_applies` (`:55`) — staged
+  records over intermediate chains (`ReachedByW3d2C`/`E`), same class as the ladder below.
+* **The whole `Equiv.lean` 27-rung ladder.** This was flagged in advance as the session's
+  load-bearing unbudgeted branch (6→8 module cone, +27 edits if it migrated). **Resolved
+  by reading the file's own header rather than by taste:** the ladder is "the per-stage
+  corollary LADDER … each rung kept exactly as proved at its stage", and "the single
+  source of truth for the CURRENT claim is the unsuffixed `FullScope.lean` theorems". A
+  per-stage historical record of the internal layer stays on the internal read. **Cost:
+  zero edits.** Recorded in `CORRESPONDENCE.md:391` so the split does not later read as
+  drift.
+
+### 2. The `Cli.lean` coupling — a site the previous session's list did not contain
+
+2026-08-28b §4 named seven declarations. It did not name `Cli.lean`'s graph-mode read,
+which printed `GraphModel.check`. Migrating the two capstones without it would have made
+their own docstrings false ("under the W4 bundles, every verdict the CLI prints IS `sem`")
+— the theorems would have described a function the driver no longer called. The driver was
+migrated in the same commit for that reason. Note `Cli.lean` is NOT in the default lake
+target (`ZT-P2-4`); it needs `lake build zcli`, which the gate does at step 3.
+
+### 3. Sabotage — the hole this session found, and the pin that closes it
+
+Per `docs/sabotage-procedure.md`. **The subject was not "are the theorems pinned"** (the
+statement pin plainly covers that) but **"is the driver↔capstone coupling pinned"**.
+
+**Sabotage 1 — revert `Cli.lean` to `GraphModel.check`, migrate everything else.** Build
+green; full conformance suite:
+
+```
+495 passed in 590.51s (0:09:50)
+```
+
+**Nothing caught it.** That is a real hole, and it is structural rather than an oversight:
+pre-4c-ii nothing mints leaf nodes, so `check` and `checkPublic` are extensionally equal
+on every reachable state and **no corpus can distinguish them**. There is no behavioural
+test that could do this job today, and there will not be one until 4c-ii. The pin
+therefore has to be TEXTUAL.
+
+**The fix (durable, not a docstring).** New `Exec.lean::graphModeAnswers` — the answer
+vector the CLI prints, as a NAMED definition — plus `::graphModeAnswers_eq_sem` added to
+`statement_pin.py::HEADLINE`. The theorem's content is a one-line lift over the query
+list; **its actual job is to drag `graphModeAnswers` into the pinned-DEFINITION closure**,
+so its body is carried verbatim at `headline_definitions.txt:138`. `Cli.lean` now calls
+`printAnswers (graphModeAnswers σ qs)`.
+
+**Sabotage 2 — controlling the instrument, in its realistic form.** Reverting only the
+definition body gives a build error, which a reverter would simply fix; so this sabotage
+reverts the body AND repairs the proof to close via `graph_correct` instead. Result:
+`lake build` **succeeded (1089 jobs)** — the build is NOT the instrument — and the pin
+fired:
+
+```
+FAIL: the DEFINITION of def:Zanzibar.graphModeAnswers changed:
+    pinned: [def] def graphModeAnswers ... := qs.map (fun q => GraphModel.checkPublic σ q)
+    source: [def] def graphModeAnswers ... := qs.map (fun q => GraphModel.check σ q)
+  headline statement pin: 46/46 statements match
+```
+
+⚠ **Read the last line: the STATEMENT pin is blind to this.** `graphModeAnswers_eq_sem`'s
+text names only `graphModeAnswers`, so it matches byte-for-byte while meaning something
+different. **Only the DEFINITION pin fires.** This is 2026-08-28b's lesson — "a guard-only
+pin cannot catch a fence removal; only a pin stated over a STATE can" — recurring one
+layer up, and it is why removing `graphModeAnswers_eq_sem` from `HEADLINE` would silently
+un-pin the driver again. Both sabotages restored; tree green.
+
+### 4. Doc debt discharged, and one correction that matters
+
+* **The `26 statements` rot: 8 live sites, not the five 2026-08-28b listed** (its
+  `statement_pin.py:603` is now `:622`/`:630`). Fixed by **deleting the number**, not
+  updating it — every site now reads "the headline statements". Resetting 26→46 would have
+  re-armed the identical trap. `headline_definitions.txt:10` is GENERATED from
+  `statement_pin.py::DEF_HEADER`, so the generator was the single fix for both.
+* **`docs/latent-gaps.md` overstated the post-4c-ii blast radius and now does not.** It
+  named six theorems as going FALSE after the re-point. **Five of them, plus both
+  `final_applies` witnesses, are no longer in that set at all** — their leaf-name case is
+  discharged by the fence via `graph_correct_public`, so they stay TRUE and PROVED with no
+  new binder. **The remaining `hql` surface is ONE pinned row: `graph_correct` (`:27`).**
+  This is the migration's actual payoff, and it is what 2026-08-28b predicted when it wrote
+  "a migrated `final_applies` never gains an `hql` binder".
+* Five stale read-identity claims corrected (`ARCHITECTURE.md:162`/`:469`,
+  `SEMANTICS.md:694`, `formal/README.md:17`, `formal/HANDOFF.md:42`), plus
+  `CORRESPONDENCE.md:389`/`:391` and three `FINAL_REVIEW.md` sites. `CORRESPONDENCE.md`'s
+  anchor gate is pointer-resolution only, so a stale CLAIM there passes — these were found
+  by reading, not by the gate. **The gate did catch my own bad anchor**
+  (`::_check_internal` unqualified → `WildcardIndex._check_internal`): step 4d working
+  exactly as designed.
+* **Found, NOT fixed — declared rather than silently left:** `formal/README.md:122-124`
+  still carries stale gate figures — `tests/` collection **762** (live floor 923, collected
+  943) and the audit floor 460. Same rot class, different item, out of this session's
+  scope. `docs/tasktool-trial-protocol.md:403` restates the old six-theorem falsity claim
+  and was deliberately NOT edited: it is a PRE-REGISTERED trial rubric, and editing it
+  would corrupt the pre-registration rather than fix a doc.
+
+### 5. Scoping: the rest of `P3` does NOT fit one session (the question that was asked)
+
+Nine-agent census plus two adversarial critics, attacking in both directions. Verdict:
+**step A (this session) yes; step B (4c-ii) no** — three sessions, possibly four. Every
+load-bearing figure corrected UPWARD on re-measurement, the first sizing in four to do so:
+
+| figure | recorded | measured |
+|---|---|---|
+| recompile cone | 38/39 modules | **42** |
+| second ring (`checkFn_agree_of_graphRec`) | ~45 sites / 4 files | **90 raw, 50 code / 8 files** |
+| `UntaintedShadow` + `DerNode` sites | ~123 | **136** |
+| `26 statements` doc-rot sites | 5 | **8** |
+| verify cycle inside the cone | ~45 s | **200–400 s** |
+
+The binding constraint on step B is not volume but that trap 3 makes the cone
+**un-splittable**: the headline theorems are kernel-`decide`-proven FALSE between the
+re-point and the guard landing, so there is no green intermediate state to stop at.
+Subagents do not change this — only one tree compiles, and `lake build` is serial through
+the cone. **Correction to the forward plan, raised by the pessimism critic and confirmed
+by this session's work:** session 3's budgeted "hql binders on 8 pinned declarations" is
+now **1** (`graph_correct`), because this session migrated the other seven.
+
+### 6. Gate
+
+Ten phases green on this tree. `lean` re-run AFTER the `*.md` writes (the `t2a` rule).
+Pins moved **45→46 statements / 160→161 definitions**, audits **582→583**; all three carry
+`-ge` floors, so growth is free. `FINAL_REVIEW.md`'s generated counts block regenerated —
+step 4e caught it stale, as designed.
+
+---
+
 ## Session 2026-08-28b (**THE FENCE-MODELING ENDGAME IS LANDED, AND IT DID NOT NEED `hql` OR THE 4c-ii CONE. `GraphModel.checkPublic` + `graph_correct_public` are green on today's tree: the PUBLIC read equals `sem` with NO leaf-name guard on the caller. Purely ADDITIVE — no existing statement, definition or proof changed; the pins grew 38→45 statements / 155→160 definitions and zero rows moved. `reachedByW3d2E_schema` landed as an uncosted prerequisite. The recommended-but-unscouted layer is now scouted, built and sabotage-controlled.**)
 
 **Task taken:** `P3`, user-directed "do the hql thing", re-scoped after scouting to

@@ -7,7 +7,7 @@
 # schemas -- while its pinned statement line stays byte-identical and no
 # declaration name changes, so neither the statement pin nor the audit identity
 # pin fires.  This file closes that: it pins the full text of every project
-# declaration the 26 headline statements depend on, TRANSITIVELY, plus the ambient
+# declaration the headline statements depend on, TRANSITIVELY, plus the ambient
 # `variable` / `open` context of the files that host them.
 #
 # Rows:
@@ -135,6 +135,7 @@ def:Zanzibar.foldAdmitsB	[def] def foldAdmitsB : GraphState → List Tuple → B
 def:Zanzibar.freshDirectCands	[def] def freshDirectCands (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : List SubjectRef := (storedDirectSubjects T dt on R e).filter (fun u => decide (u.predicate = BARE ∧ u ∉ enum2Base σ dt on e ∧ u ∉ edgeHolders σ dt on R))
 def:Zanzibar.fuelBound	[def] def fuelBound (S : Schema) (T : Store) : Nat := S.keys.length * (T.length * 2 + 4)
 def:Zanzibar.grantsOf	[def] def grantsOf (T : Store) (rs : List Restriction) (otype oname rel : String) : List Tuple := T.filter (fun tup => tup.relation == rel && tup.object.type == otype && (matchingObjects oname).contains tup.object.name && restrictionMatches rs tup)
+def:Zanzibar.graphModeAnswers	[def] def graphModeAnswers (σ : GraphState) (qs : List Query) : List Bool := qs.map (fun q => GraphModel.checkPublic σ q)
 def:Zanzibar.graphRun	[def] def graphRun (S : Schema) (ts : List Tuple) : Option (GraphState × Store) := graphRunAux S ts (emptyState S) []
 def:Zanzibar.graphRunAux	[def] def graphRunAux (S : Schema) : List Tuple → GraphState → Store → Option (GraphState × Store) | [], σ, T => some (σ, T) | t :: ts, σ, T => if foldAdmitsB σ (rewriteClosure S t) then let σw := σ.writeLoggedRules S t graphRunAux S ts (cascadeLeg S (t :: T) σw) (t :: T) else none
 def:Zanzibar.graphRunOps	[def] def graphRunOps (S : Schema) (ops : List GraphOp) : Option (GraphState × Store) := graphRunOpsAux S ops (emptyState S) []

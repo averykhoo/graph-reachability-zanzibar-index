@@ -159,7 +159,9 @@ What each says, in English:
 - **T2b** — at every **fully drained** reached state, `GraphModel.check σ q = sem S T q`,
   for derived and untainted queries with a concrete object and bare-predicate star
   subjects.
-- **T3** — `SetEngineModel.check S T q = GraphModel.check σ q` (T1 ∘ T2b, transitivity
+- **T3** — `SetEngineModel.check S T q = GraphModel.checkPublic σ q` (the PUBLIC read
+  since 2026-08-28c; T2b's own `graph_correct` stays over `GraphModel.check`, the
+  internal layer) (T1 ∘ T2b, transitivity
   through `sem`; same scope as T2b, never wider).
 - **T4** — under acyclicity, adding/removing one direct edge preserves the path count
   `p = #paths` (the counting theorem — the basis of exact reference-counted removal).
@@ -466,7 +468,8 @@ classification.
 
 So `graph_correct` (T2b), `backend_equivalence` (T3), the T6 security corollaries and
 `Exec.graphRun{,Ops}_check_eq_sem` now **cover** that shape.
-`W4WitnessDirect.final_applies` instantiates the unsuffixed `graph_correct` at the
+`W4WitnessDirect.final_applies` instantiates the unsuffixed `graph_correct_public` (same
+hypothesis bundles; it adds none) at the
 minimal Direct-arm store and `final_applies4` at the four-tuple `direct_arm_exclusion`
 corpus store verbatim. `outside_old_admission`/`outside_old_admission4` are kept and
 still audited - they are now the proof that this was a **widening** and not a

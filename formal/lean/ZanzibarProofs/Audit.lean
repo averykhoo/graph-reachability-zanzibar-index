@@ -1224,6 +1224,10 @@ namespace Zanzibar
 #print axioms graphRun_store
 #print axioms drainedB_iff
 #print axioms graphRun_check_eq_sem
+-- ...and its vector form over the query list, which is the definition `Cli.lean`
+-- calls (`graphModeAnswers`). Audited separately because the pin it carries is what
+-- keeps the driver and the capstone describing the SAME read (2026-08-28c).
+#print axioms graphModeAnswers_eq_sem
 -- Exec-driver remove hardening (GraphIndex/Exec.lean): the op-stream driver
 -- exercises the completed Lean remove leg end-to-end. The remove constructor's
 -- store-discipline guard is DECIDED at runtime by Bool mirrors, each pinned to

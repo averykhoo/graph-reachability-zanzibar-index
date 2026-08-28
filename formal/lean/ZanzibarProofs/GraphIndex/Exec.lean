@@ -149,15 +149,82 @@ theorem drainedB_iff (S : Schema) (σ : GraphState) :
 /-- **Under the W4 bundles, the CLI's graph-mode output IS the perfect model.**
     If the driver accepts the corpus and lands drained (both machine-checked at
     runtime), then for every in-scope query the printed verdict equals `sem` —
-    this is `graph_correct` applied to `graphRun_reached`, no analogy anywhere. -/
+    this is `graph_correct_public` applied to `graphRun_reached`, no analogy anywhere.
+
+    ⚠ **"The printed verdict" is load-bearing, so this is stated over the PUBLIC read
+    (2026-08-28c).** `Cli.lean::printAnswers` is fed `GraphModel.checkPublic σ q`, and
+    this theorem must be about the same function or the sentence above is false. The two
+    were migrated in ONE commit for that reason; if you re-point either, re-point both.
+    Pre-4c-ii the two reads are extensionally equal on reachable states (no write mints
+    a leaf node), so the conformance goldens are byte-identical across this change —
+    which means **a green golden run is not evidence this migration is right**, the same
+    vacuity shape `graph_correct_public`'s own docstring warns about. -/
 theorem graphRun_check_eq_sem {S : Schema} {ts : List Tuple} {σ : GraphState}
     {T : Store} (hrun : graphRun S ts = some (σ, T)) (hdr : drainedB S σ = true)
     (hA : GraphAdmission S T) (hF : W4Fragment S T) (q : Query)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    GraphModel.check σ q = sem S T q :=
-  graph_correct q hA hF (graphRun_reached hrun) ((drainedB_iff S σ).mp hdr)
+    GraphModel.checkPublic σ q = sem S T q :=
+  graph_correct_public q hA hF (graphRun_reached hrun) ((drainedB_iff S σ).mp hdr)
     hqs hqo
+
+/-- **The answer vector the CLI prints, as a NAMED definition.**
+    `Cli.lean`'s graph mode is exactly `printAnswers (graphModeAnswers σ qs)`.
+
+    ⚠ **This definition exists to be PINNED, and that is its whole job.** Its body is
+    carried verbatim in `formal/headline_definitions.txt` (it is dragged into the closure
+    by `graphModeAnswers_eq_sem` below, which is in `statement_pin.py::HEADLINE`), so
+    re-pointing the driver's read from `checkPublic` back to the unfenced `check` changes
+    pinned golden TEXT and turns `verify.sh lean` red.
+
+    It was introduced 2026-08-28c because the migration's own sabotage proved the coupling
+    was otherwise unpinned. **Sabotage 1** (the hole): with `Cli.lean` reverted to
+    `GraphModel.check` and everything else migrated, the full conformance suite reported
+
+        495 passed in 590.51s (0:09:50)
+
+    — nothing anywhere caught a driver that no longer matched its capstone theorem. That
+    is expected pre-4c-ii (both reads agree on every reachable state, so no corpus can
+    distinguish them) and is why the pin has to be TEXTUAL rather than behavioural: no
+    corpus-based test can do this job until 4c-ii mints leaf nodes.
+
+    **Sabotage 2** (the instrument, run against this definition once it existed): revert
+    the body below to `GraphModel.check` AND repair this file's proof to close via
+    `graph_correct` instead — the realistic weakening, since a reverter who hits a build
+    error just fixes the build. Result: `lake build` **succeeded (1089 jobs)**, and the
+    pin caught it:
+
+        FAIL: the DEFINITION of def:Zanzibar.graphModeAnswers changed:
+            pinned: [def] def graphModeAnswers ... := qs.map (fun q => GraphModel.checkPublic σ q)
+            source: [def] def graphModeAnswers ... := qs.map (fun q => GraphModel.check σ q)
+          headline statement pin: 46/46 statements match
+
+    ⚠ Read that last line. **The STATEMENT pin is blind to this** — `graphModeAnswers_eq_sem`'s
+    text never mentions `check` or `checkPublic`, only `graphModeAnswers`, so it matches
+    byte-for-byte while meaning something different. Only the DEFINITION pin fires. This is
+    `2026-08-28b`'s lesson ("a guard-only pin cannot catch a fence removal; only a pin
+    stated over a STATE can") recurring one layer up, and it is the reason
+    `graphModeAnswers_eq_sem` is in `HEADLINE` at all: not for its own content, which is a
+    one-line lift, but to drag this definition's BODY into the pinned closure. If you ever
+    remove it from `HEADLINE`, this definition silently leaves the closure and the driver
+    becomes re-pointable again with no red anywhere. -/
+def graphModeAnswers (σ : GraphState) (qs : List Query) : List Bool :=
+  qs.map (fun q => GraphModel.checkPublic σ q)
+
+/-- **The printed answer VECTOR is `sem`, pointwise.** `graphRun_check_eq_sem` lifted
+    over the query list, stated about the definition the driver actually calls. This is
+    what drags `graphModeAnswers` into the pinned-definition closure. -/
+theorem graphModeAnswers_eq_sem {S : Schema} {ts : List Tuple} {σ : GraphState}
+    {T : Store} {qs : List Query}
+    (hrun : graphRun S ts = some (σ, T)) (hdr : drainedB S σ = true)
+    (hA : GraphAdmission S T) (hF : W4Fragment S T)
+    (hqs : ∀ q ∈ qs, q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : ∀ q ∈ qs, q.object.name ≠ STAR) :
+    graphModeAnswers σ qs = qs.map (fun q => sem S T q) := by
+  unfold graphModeAnswers
+  refine List.map_congr_left ?_
+  intro q hq
+  exact graphRun_check_eq_sem hrun hdr hA hF q (hqs q hq) (hqo q hq)
 
 /-! ## The op-stream driver — add AND remove (Exec-driver remove hardening)
 
@@ -469,14 +536,16 @@ theorem graphRunOps_store {S : Schema} {ops : List GraphOp} {σ : GraphState}
     applied to `graphRunOps_reached`, no analogy anywhere. The `remove`
     constructor's correctness (the completed Lean remove leg) is what makes this
     hold over retraction states, and `removeGateB` is what earns the driver the
-    right to construct them. -/
+    right to construct them.
+
+    Over the PUBLIC read, for the same reason as `graphRun_check_eq_sem` above. -/
 theorem graphRunOps_check_eq_sem {S : Schema} {ops : List GraphOp} {σ : GraphState}
     {T : Store} (hrun : graphRunOps S ops = some (σ, T)) (hdr : drainedB S σ = true)
     (hA : GraphAdmission S T) (hF : W4Fragment S T) (q : Query)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    GraphModel.check σ q = sem S T q :=
-  graph_correct q hA hF (graphRunOps_reached hrun) ((drainedB_iff S σ).mp hdr)
+    GraphModel.checkPublic σ q = sem S T q :=
+  graph_correct_public q hA hF (graphRunOps_reached hrun) ((drainedB_iff S σ).mp hdr)
     hqs hqo
 
 end Zanzibar

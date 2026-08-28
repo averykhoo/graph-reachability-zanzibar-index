@@ -33,13 +33,13 @@ That concession was the hole.  `graph_correct`'s scope is carried entirely by
 claims something strictly weaker over a strictly larger class of schemas while
 its pinned statement line stays BYTE-IDENTICAL.  The audit-identity pin (4a) does
 not fire either: no declaration name changed.  The same hole existed for every
-other named definition in the 26 statements, `sem` and `GraphModel.check`
+other named definition in the headline statements, `sem` and `GraphModel.check`
 included -- and `check := sem` is the exact model the project's own honesty norm
 (`formal/HANDOFF.md` house rule 1) names as forbidden.
 
 So this script now runs TWO pins:
 
-  * the STATEMENT pin (`formal/headline_statements.txt`) -- what the 26 headline
+  * the STATEMENT pin (`formal/headline_statements.txt`) -- what the headline
     theorems claim, verbatim; and
   * the DEFINITION pin (`formal/headline_definitions.txt`) -- the full text of
     every project declaration those statements DEPEND ON, transitively, together
@@ -157,6 +157,14 @@ HEADLINE = [
     # Phase 6 -- the CLI's graph mode IS the chain
     "Zanzibar.graphRun_reached",
     "Zanzibar.graphRun_check_eq_sem",
+    # ...and the vector form, whose real job is to drag `Exec.lean::graphModeAnswers`
+    # -- the definition `Cli.lean` actually calls -- into the pinned-DEFINITION closure,
+    # so its body is carried verbatim in headline_definitions.txt.  Added 2026-08-28c
+    # after the checkPublic migration's sabotage showed the driver could be reverted to
+    # the unfenced `check` with the entire conformance suite still green (495 passed):
+    # pre-4c-ii no corpus can distinguish the two reads, so the coupling between the
+    # driver and its capstone theorem is only pinnable as TEXT.
+    "Zanzibar.graphModeAnswers_eq_sem",
     # ...and the op-driver (removes) sibling.  Added 2026-08-05 (leg 5): it takes the
     # same two bundles and was axiom-printed but NOT statement-pinned, so restating it
     # to `True` was invisible here.  Nothing to do with leg 5's content; a gap the leg
@@ -619,7 +627,7 @@ DEF_HEADER = """\
 # schemas -- while its pinned statement line stays byte-identical and no
 # declaration name changes, so neither the statement pin nor the audit identity
 # pin fires.  This file closes that: it pins the full text of every project
-# declaration the 26 headline statements depend on, TRANSITIVELY, plus the ambient
+# declaration the headline statements depend on, TRANSITIVELY, plus the ambient
 # `variable` / `open` context of the files that host them.
 #
 # Rows:
