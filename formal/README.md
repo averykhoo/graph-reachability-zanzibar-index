@@ -89,12 +89,15 @@ driver / zcli op stream (2026-07-19, `graphRunOps` / `test_conformance_remove_gr
 `_REMOVE_EXCLUDED` skips because the remove guard fail-closes on Direct-arm stores —
 its validly-stored scope decision approved by Avery 2026-07-19),
 and a **generated-schema answer gate** (seeded generated schemas outside the
-curated corpora, spec-side only). Gate size as last measured (**2026-07-29**, by
-`pytest formal/conformance/ -q --collect-only`): **465** conformance tests collected
-across 15 files, 46 of them gate-tooling unit tests (`test_sorry_scan.py` 39,
-`test_runner_retry.py` 7) rather than comparisons — so 419 differential tests over
-13 files. Re-measure; nothing pins these numbers except the `-ge`
-floors in `verify.sh`.
+curated corpora, spec-side only). Gate size — conformance tests collected, how many
+of those are differential comparisons versus gate-tooling unit tests
+(`test_sorry_scan.py` / `test_runner_retry.py`), and over how many files — is
+**generated, in `FINAL_REVIEW.md`'s counts block**, which says of exactly these
+numbers: "Do not restate these numbers elsewhere — three prose copies rotted through
+two corpus additions before this became generated." This paragraph used to restate
+them (`465` / `419`, measured 2026-07-29) and had rotted to `495` / `449` by
+2026-08-28d, which is the fourth copy and the reason they are now deleted rather
+than updated.
 Residual unverified surface: the fragment carries, the compiler artifacts, the
 interner/bitmap representation layer, the SQL/transaction/concurrency layer
 (including the HA/multi-instance replica tailing), the **bulk build/backfill
@@ -111,22 +114,28 @@ out under "Orientation" above: the tree is
 **sorry-free and axiom-clean**, and `bash formal/verify.sh` (the fail-closed gate;
 agents run it **phased** per [`docs/gate-runbook.md`](../docs/gate-runbook.md) —
 the one-shot exceeds the ~10-min command cap) is green — `lake build` + 0 sorries +
-zcli preflight + axiom audit (**460** `#print axioms` reports, one per audited
-theorem, only `[propext, Classical.choice, Quot.sound]`, measured 2026-07-29) +
-**465** conformance tests collected (floors: `MIN_CONF_ALL` 465 = `MIN_CONF_HEAVY` 96
-+ `MIN_CONF_REST` 369), 0 skips, 0 xfails; `tests/` **762** collected (2026-07-29),
-more with a PostgreSQL DSN configured, since `tests/test_postgres_ha.py` is dropped at
-collection without one. **Most of
-these counts are measurements, not gate-enforced invariants** — re-measure rather
-than trusting the numbers here, and never read a count as coverage
+zcli preflight + axiom audit (one `#print axioms` report per audited theorem, each
+depending only on `[propext, Classical.choice, Quot.sound]`) + the whole of
+`formal/conformance/`, 0 skips, 0 xfails; plus `tests/`, more of it with a
+PostgreSQL DSN configured, since `tests/test_postgres_ha.py` is dropped at
+collection without one. **No figures are quoted in this paragraph, deliberately
+(2026-08-28d).** It used to carry six, dated 2026-07-29, and they rotted in place:
+it claimed `tests/` **762** collected against a live **943**, and **460** axiom
+reports against a live **583** — i.e. the orientation doc understated its own gate
+by ~180 tests and ~120 audited theorems, which is `ZT-P3-5` recurring. Live
+MEASUREMENTS have exactly one machine-checked home, `FINAL_REVIEW.md`'s generated
+counts block (regenerate with `python -m formal.conformance.doc_counts --generate`;
+gated by `verify.sh` step 4e). Live FLOORS have exactly one home, `formal/verify.sh`
+itself. Read them there, and never read a count as coverage
 (`FINAL_REVIEW.md` header). What IS enforced, since the 2026-07-26/27 gate
-hardening: `-ge` floors on the audit count (460), the conformance collection (465),
-the `tests/` collection (762) and the scanned-`.lean`-file count (64); an **identity
+hardening: `-ge` floors on the audit count, the conformance collection,
+the `tests/` collection and the scanned-`.lean`-file count (for the values, read
+`verify.sh`); an **identity
 pin** (`formal/audited_theorems.txt` — WHICH theorems are audited, not just how
 many); a **statement pin** (`formal/headline_statements.txt` — what the headline
 theorems SAY, so `theorem graph_correct : True := trivial` fails instead of
 building green); a **definition pin** (`formal/headline_definitions.txt` — what those
-statements' WORDS MEAN: the full text of all 132 project declarations they depend on
+statements' WORDS MEAN: the full text of every project declaration they depend on
 transitively, plus the hosting files' ambient `variable`/`open` context, because the
 statement pin records `(hF : W4Fragment S T)` by NAME and so cannot see the structure
 being weakened underneath it); a suspicion check on an axiom-free headline theorem; a

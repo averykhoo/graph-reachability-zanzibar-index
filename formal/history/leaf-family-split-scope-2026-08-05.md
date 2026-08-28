@@ -1222,6 +1222,38 @@ still the human call recorded at `PROOF_STATUS.md` 2026-08-21b §1, and item 2 a
 SECOND: whether Route B survives losing its selection argument. Neither is settled by this
 census.
 
+### 11.12 The revert-to-green exit for the 4c-ii cone (declared 2026-08-28d)
+
+Demoted here from `HANDOFF.md` (board line-ceiling); the board keeps the two rules that
+decide whether the exit exists at all, and points here for the rest. Both `HANDOFF.md` and
+`tasks/P3` had *required* a declared exit since 2026-08-28c; a repo-wide grep found the
+requirement in those two places and the plan in none. §11.11 and `PROOF_STATUS.md`
+2026-08-28c §5 are why one is needed: the cone is **un-splittable** — the headline theorems
+are kernel-`decide`-proven FALSE between the re-point and the guard landing — so there is
+no green intermediate state to stop at, and "I'll just finish it next session" is not
+available. Five rules, each with the failure it prevents.
+
+1. **The green anchor is a commit sha, not a stash.** Before opening the cone, `git log -1`
+   must name a commit that `python scripts/gate_status.py` calls COVERED on this tree.
+   Write that sha into the session-log entry FIRST. The exit is `git reset --hard <sha>`;
+   without a recorded sha there is no exit, only a diff nobody can evaluate.
+2. **Declare the abort trigger up front, in cycles.** In-cone `lake build` is **200–400s
+   and serial** (one tree compiles; subagents do not change that — 2026-08-28c §5), so
+   "try one more repair" has a price you can count before paying it. A wall-clock time or
+   a context fraction, fixed when the cone opens, not renegotiated at 90%.
+3. **Write the findings down BEFORE reverting.** Which sites broke, in what order, with
+   what error — that is the session's whole yield if the cone does not close, and it makes
+   attempt *n+1* cheaper than attempt *n*. It goes in `PROOF_STATUS.md`, which is
+   append-only and therefore survives the reset. Not `.scratch/`: the reset does not touch
+   it, but the repo does not keep it (`CLAUDE.md`, the `P7` precedent).
+4. **Two things the revert deliberately does not undo**: rows already appended to
+   `.gate-runs/ledger.tsv` (gitignored — a red row is evidence the attempt happened) and
+   anything already appended to `formal/history/`. Do not tidy either; the record of a
+   failed attempt is not damage.
+5. **Never commit a partial cone to "save progress".** A mid-cone tree is one whose own
+   pins assert something untrue, which is worse than no progress — it is the fail-by-
+   passing shape this repo has a standing procedure for. Green or reset.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

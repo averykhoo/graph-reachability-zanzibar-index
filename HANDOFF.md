@@ -16,19 +16,19 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-28c)** — `lean` +
+> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-28d)** — `lean` +
 > `conf-tile:1..5/5` + `tests-tile:1..4/4`; tiles keyed to the code-scoped tree id (`*.md`
-> excluded) so this edit does not stale them, and `lean` was re-run after it.
-> **`2026-08-28c`: the public surface is migrated onto `checkPublic`** — 7 declarations
-> (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`, both
-> `graphRun*_check_eq_sem`, both `final_applies*`) plus the zcli driver, **none gaining a
-> hypothesis**, every proof a 1–2 line delegation; pins 45→46 / 160→161. ⚠ **The post-4c-ii
-> `hql` surface is now ONE row** (`graph_correct` `:27`) — the fence discharges the leaf
-> case for the rest. ⚠ **A hole was found and closed:** the driver↔capstone coupling was
-> unpinned (`495 passed` with the driver reverted), now pinned TEXTUALLY via
-> `Exec.lean::graphModeAnswers`; its sabotage showed the **statement pin blind at 46/46,
-> only the DEFINITION pin firing**. **Next: 4c-ii + step 7, the un-splittable cone** →
-> PROOF_STATUS `2026-08-28c` §5 for why that is 3 sessions, not 1.
+> excluded), and `lean` was re-run after the last `*.md` edit.
+> **`2026-08-28d`: `P14`'s `UntaintedShadow` adjudication is settled, and it moved the
+> answer.** Route B's weakening is one disjunct on one field, and the never-probed
+> `nodesSub`/`closed`/`closed0` hold everywhere, so **4c-ii owes no `writeRulesRaw`
+> endpoint-closure edit**. ⚠ **`slSwD_not_mono` measures the wrong σ0** — the `_d` chain
+> builds σ0 over the *filtered* store, so the real σ0 is `emptyState` and against it the
+> strong shadow is uninhabited. Its sabotage: **every `decide` pin stayed green while only
+> `shadowB_correct` fired**, 2026-08-28c's blind-guard lesson one layer down. Gate floor
+> drift repaired: `MIN_TESTS_ALL` 923→**943**, instrument-checked at 944. **Next: 4c-ii +
+> step 7, the un-splittable cone — read its revert-to-green exit (scope doc §11.12) before
+> opening.** → PROOF_STATUS `2026-08-28c` §5 for why 3 sessions, `2026-08-28d` for the rest.
 > **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned 2026-08-21b).
 > Two board `moved` cells disagree with the task tree, unreconciled on purpose: they need a
 > call on what `moved` means, not an edit. Ask `python scripts/gate_status.py`, never this
@@ -45,7 +45,7 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7, one commit** — fence layer landed 2026-08-28b; **public surface MIGRATED 2026-08-28c** (7 decls + zcli driver onto `checkPublic`, no new hypotheses; `hql` surface cut from 6 rows to **1**, `graph_correct` `:27`). Everything pre-4c-ii is now DONE. **What remains is the un-splittable 42-module cone** — measured 3 sessions, not 1 (PROOF_STATUS `2026-08-28c` §5) | **NOW** | L | — | 2026-08-28c |
+| `P3` | leg 7 **4c-ii + step 7, one commit** — fence layer landed 2026-08-28b; **public surface MIGRATED 2026-08-28c** (7 decls + zcli driver onto `checkPublic`, no new hypotheses; `hql` surface cut from 6 rows to **1**, `graph_correct` `:27`). Everything pre-4c-ii is now DONE, **`P14`'s `UntaintedShadow` adjudication included (2026-08-28d: Route B = one disjunct on one field; the `writeRulesRaw` endpoint-closure risk retired; `slSwD_not_mono` shown to measure the wrong σ0)**. **What remains is the un-splittable 42-module cone** — measured 3 sessions, not 1 (PROOF_STATUS `2026-08-28c` §5), and its **revert-to-green exit is now declared in the item block: read it before opening** | **NOW** | L | — | 2026-08-28d |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d; the old `9 / 5` was wrong, and the `11` was right until `R6-6` closed) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24d |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
@@ -95,23 +95,25 @@ target is self-sufficient by construction (verified row by row, 2026-08-16).
 ### `P3` — leg 7: step 4c-ii co-landing with step 7, in one commit
 
 Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6`
-in the same commit. Critical path. **Both standing human calls are made** (2026-08-28, user
-delegated; record: PROOF_STATUS `2026-08-28`): `hql` accepted in the narrow form
-`publicOfLeaf S q.object.type q.relation = none`, with `isLeafPred`- and taint-keyed shapes
-refused; **Route B retained on corrected grounds** — its "zero additional cone" argument is
-falsified by the census (scope doc **§11.11**, superseding §11.9's sizing). Still to write:
-the unowned superset-extras lemma (`reachedByW3d_shadow`) and `LeafNode` (`publicOfLeaf`
-carrier + `leafPublic p ≠ ""`); keep-names/change-bodies and `writeRules`-untouched stand.
+in the same commit. Critical path.
 
-✅ **Everything pre-4c-ii is done (2026-08-28c)** — preflights closed, human calls made, the
-fence built (`2026-08-28b`), the public surface migrated onto it. **The `hql` guard is now
-ONE declaration, not the 8 once budgeted** (`graph_correct` `:27`; the other seven moved to
-`checkPublic` and need no binder). Cone measured **42 modules / ~136 sites / 90-raw second
-ring over 8 files** — the first sizing of this item in four to correct UPWARD, so do not
-re-cite lower figures. **Sized at 3 sessions, not 1** (PROOF_STATUS `2026-08-28c` §5): next
-session settles `P14`'s `UntaintedShadow` adjudication with `#eval` probes in
-`Scratch4cii.lean` (1 importer, 0 audit rows, 0 pin rows — file-local, deletable), then
-opens the cone at the TOP of a fresh window with a declared revert-to-green exit.
+✅ **Everything pre-4c-ii is done, `P14` included.** Both human calls made (2026-08-28):
+`hql` accepted as `publicOfLeaf S q.object.type q.relation = none`, Route B retained on
+corrected grounds (scope doc **§11.11**, superseding §11.9's sizing). Fence built and the
+public surface migrated onto it, so the `hql` guard is one declaration, not 8
+(`graph_correct` `:27`). Cone measured **42 modules / ~136 sites / 90-raw second ring over
+8 files** — the first sizing in four to correct upward, so do not re-cite lower figures —
+and **sized at 3 sessions, not 1** (PROOF_STATUS `2026-08-28c` §5). Still to write: the
+unowned superset-extras lemma (`reachedByW3d_shadow`) and `LeafNode`.
+
+✅ **`P14` settled (2026-08-28d), and it moved the answer.** Route B's weakening is one
+disjunct on one field, and the never-probed `nodesSub`/`closed`/`closed0` hold everywhere,
+so 4c-ii owes no `writeRulesRaw` endpoint-closure edit. ⚠ **`slSwD_not_mono` measures the
+wrong σ0** — `reachedByW3d2_shadow_d` builds σ0 over the *filtered* store, so the real σ0
+is `emptyState` and against it the strong shadow is uninhabited (PROOF_STATUS
+`2026-08-28d` §1–3). **Revert-to-green exit: scope doc §11.12** — load-bearing rules: the
+green anchor is a **commit sha** logged before the cone opens, and **no partial cone is
+committed**, a mid-cone tree being one whose own pins assert something untrue.
 
 ⚠ **Traps: scope doc §11.10 AS CORRECTED BY §11.11 item 8** — 7 order-sensitive own-key
 sites (4 `rw`-discharges + 3 positional), the emptiness bites at `rawWriteRels` not

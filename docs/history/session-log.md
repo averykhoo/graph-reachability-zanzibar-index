@@ -25,6 +25,66 @@ from here.
 
 ---
 
+## 2026-08-28d — `P14` settled: `classify` is the only failing field, and the old refutation used the wrong σ0
+
+rows: `P3`
+
+User asked to work the board with subagents for context economy, then gate and commit.
+Formal detail (the authority for this entry):
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-28d`. The 4c-ii cone was **not** opened — un-splittable, sized at 3
+sessions, and this was not a fresh window.
+
+* **`P14`'s `UntaintedShadow` adjudication is settled, and it moved the answer.** A new
+  six-field battery in `Scratch4cii.lean` (additive, zero-cone, still 1 importer / 0 audit
+  / 0 pin rows) finds that **`classify` is the only field that ever fails**, and only
+  unweakened — so Route B's weakening is one disjunct on one field, not "weaken
+  `UntaintedShadow`". `term` holds in its leaf-extended form, so clause 3 costs nothing.
+* **A risk was retired by measurement, not argument.** `nodesSub`, `closed` and `closed0`
+  had never been probed here — the whole 2026-08-20 battery is edge-only. They hold on
+  both chains, at both leaf indices, and on a mixed store, so **4c-ii owes no
+  endpoint-closure edit to `LeafRules.lean::writeRulesRaw`**.
+* ⚠ **The recorded refutation was an instrument artifact.** `slSwD_not_mono` pairs `sR`
+  against `sP`, but `CascadeStrataSettle.lean::reachedByW3d2_shadow_d` builds σ0 over the
+  untainted-**filtered** store, so at a one-derived-tuple store the σ0 is `emptyState` and
+  `sub` holds vacuously. Against the σ0 that theorem actually constructs, the weak shadow
+  holds on all six fields and the strong one is **uninhabited**
+  (`strong_shadow_false_at_d_own_sigma0`). This corrects `2026-08-20b`; the pin stays,
+  since it is true as stated, with `d_vs_sP_fails_on_sub` beside it saying what it measures.
+* **The instrument is proved, and its sabotage found the blind spot.** `shadowB_correct`
+  pins the six-field mirror to `UntaintedShadow` itself. Trimming `closedB`'s `ab.2`
+  conjunct *and* its lemma statement together gave rc=1 with three errors, all inside
+  `shadowB_correct`, while **every `decide` pin stayed green** — `2026-08-28c`'s
+  "a guard-only pin cannot catch a fence removal", one layer down.
+* **Gate floor drift repaired.** `MIN_TESTS_ALL` was 923 against a live 943, i.e. 20 tests
+  could have been deleted with the gate green, against `CLAUDE.md`'s explicit zero-headroom
+  contract. Raised, and the floor was checked rather than trusted (at 944:
+  `FAIL: tests/ collects only 943 test(s); the gate floor is 944.`, rc=1). That edit then
+  correctly reddened `verify.sh` step 4e; regenerated.
+* **Both `2026-08-28c` found-not-fixed items discharged.** `formal/README.md`'s two
+  figure-bearing paragraphs are deleted rather than updated (the Status one had rotted to
+  `762` vs live `943`; the gate-size one restated numbers `FINAL_REVIEW.md`'s generated
+  block explicitly says not to restate — it was the fourth such copy).
+  `docs/tasktool-trial-protocol.md:403` deliberately untouched, unchanged reasoning.
+* **The revert-to-green exit plan is written down** in `P3`'s item block. It was *required*
+  in two places and existed in none: green anchor is a recorded commit sha, abort trigger
+  declared up front in cycles (cone builds are 200–400s and serial), findings written to
+  `PROOF_STATUS.md` **before** reverting, and no partial cone committed.
+
+```
+task lint: clean (11 checks, 150 task file(s) parsed)
+```
+
+read: board + HANDOFF
+
+**Still owed:** nothing from this session's write-back. Carried forward, unchanged and
+deliberate: `docs/tasktool-trial-protocol.md:403` stays as-is (pre-registered rubric).
+Noted, not fixed: **there is still no machine-checked home for any cone/site figure** —
+the 42-modules / ~136-sites / 3-sessions numbers are prose in `PROOF_STATUS.md` and can
+rot exactly as `formal/README.md`'s did.
+
+---
+
 ## 2026-08-28c — the public surface is migrated onto `checkPublic`, and the `hql` surface drops from 6 rows to 1
 
 rows: `P3`

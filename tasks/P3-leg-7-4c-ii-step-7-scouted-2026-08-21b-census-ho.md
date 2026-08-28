@@ -10,8 +10,8 @@ labels: [formal]
 source: board
 source_hash: 90a1f8ce5f73
 created: 2026-08-21b
-moved: 2026-08-28c
-updated: 2026-08-28c
+moved: 2026-08-28d
+updated: 2026-08-28d
 closed:
 ---
 
@@ -95,3 +95,15 @@ Public-surface migration LANDED (step A of the remaining plan). Seven declaratio
 **Sizing (the question asked): the rest of P3 is 3 sessions, not 1.** 9-agent census + 2 adversarial critics. Every figure corrected UPWARD, first time in four: cone 38/39->42 modules, second ring ~45/4 -> 90 raw/50 code across 8 files, sites ~123->136, in-cone verify cycle ~45s -> 200-400s. Binding constraint is trap 3: the cone is un-splittable (headline theorems kernel-decide FALSE mid-way), so there is no green state to stop at. Subagents do not help -- one tree compiles, lake build is serial.
 
 Next session: settle the P14 UntaintedShadow adjudication with #eval probes in Scratch4cii.lean (1 importer, 0 audit rows, 0 pin rows, deletable), then open the cone at the top of a fresh window with a declared revert-to-green exit. Full record: PROOF_STATUS 2026-08-28c.
+
+### 2026-08-28d
+
+P14 UntaintedShadow adjudication SETTLED, and it moved the answer. New six-field battery in Scratch4cii.lean (additive, zero-cone, still 1 importer / 0 audit / 0 pin rows).
+
+FINDINGS. (1) classify is the ONLY UntaintedShadow field that ever fails, and only unweakened -- term holds in its leaf-extended form, so Route B's clause 3 costs nothing. Route B's weakening is exactly ONE disjunct on ONE field. (2) nodesSub/closed/closed0 hold everywhere (both chains, idx-0 and idx-2, mixed store). No probe in this repo had touched them -- the 2026-08-20 battery is edge-only. So 4c-ii owes NO writeRulesRaw endpoint-closure edit; that unbudgeted risk is retired by measurement. (3) slSwD_not_mono is an INSTRUMENT ARTIFACT w.r.t. the _d chain: reachedByW3d2_shadow_d builds sigma0 over the untainted-FILTERED store (CascadeStrataSettle.lean:1188-1189), so at a one-derived-tuple store sigma0 is emptyState and sub holds vacuously. Row B isolates it -- against sP the failures are sub+nodesSub, not classify. Corrects 2026-08-20b; the pin stays (it is true as stated) with d_vs_sP_fails_on_sub beside it.
+
+Prop-level: strong_shadow_false_at_d_own_sigma0 -- the unweakened shadow is UNINHABITED at a leaf-routed _d state against the sigma0 that chain itself constructs. Mixed store also witnesses the unowned superset-extras shape: the UNTAINTED viewer write mints approver.1, classifying under the same disjunct.
+
+Instrument PROVED: shadowB_correct (shadowB S false = UntaintedShadow, via five per-field lemmas). Sabotage -- trim closedB's ab.2 conjunct AND its lemma statement to stay consistent -> rc=1, three errors, ALL inside shadowB_correct, while EVERY decide pin stayed green. 2026-08-28c's 'a guard-only pin cannot catch a fence removal' one layer down. Do not replace shadowB_correct with more decide rows.
+
+Also: revert-to-green exit plan written into the HANDOFF item block (was required in two places, existed in none). MIN_TESTS_ALL drift repaired 923->943 (20 tests of headroom against CLAUDE.md's zero-headroom contract), floor instrument-checked at 944. formal/README.md's rotted figures deleted rather than updated (both paragraphs). Cone sizing UNCHANGED: 42 modules / ~136 sites / 3 sessions. Full record: PROOF_STATUS 2026-08-28d.
