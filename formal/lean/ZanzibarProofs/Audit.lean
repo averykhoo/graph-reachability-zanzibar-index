@@ -924,7 +924,8 @@ namespace Zanzibar
 -- **W3d-2 opening — the ROUTED leaf dispatch + the two-round scheduler (GraphIndex/
 -- CascadeStrata.lean, 2026-07-12c).** The W3d-2 model extension: `graphRecR` reads
 -- every operand leaf through the graph's own `check`, routing an untainted key to
--- `probeNonDerived` (`leaf_check` -> `widx.check`) and a derived key to `probeDerived`
+-- `probeNonDerived` (`leaf_check` -> `widx._check_internal`, below the public
+-- leaf-name fence -- `BL-2`) and a derived key to `probeDerived`
 -- (`derived_check` -> `widx._check_derived`; `derived_stars` = residue stars pointwise)
 -- -- `index_v4/processor.py::_EvalContext` and `::DeltaProcessor.member_check`.
 -- Conservativity: on computed-only defs with

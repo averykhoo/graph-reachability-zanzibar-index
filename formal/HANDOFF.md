@@ -78,6 +78,19 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**2026-08-28 — BOTH `P3` HUMAN CALLS ARE MADE (`hql` accepted; Route B retained on
+corrected grounds — its "zero additional cone" argument is FALSIFIED), after a live
+census re-sized the cone for the third consecutive time. A fence-modeling endgame
+(`checkPublic`, unscouted) is the recommended repair so the headline claim stays
+unguarded. No proof changed; four stale doc comments fixed (`CORRESPONDENCE.md` §7.1
+RESOLVED). Read `history/PROOF_STATUS.md` 2026-08-28 and scope doc §11.11 BEFORE
+resuming leg 7 — §11.11 supersedes the sizing in §11.9/2026-08-20b, and one technical
+choice (WF-clause vs threading for computed-ref dot-freeness) is left open with its
+deciding fact named (does `parse_schema_ast` reject dotted references?). The
+2026-08-16c block below stands as history; its adjudication is settled and its
+`FoldAdmits` "24" is superseded (19 Prop sites + 2 exec gates move / 3 stay —
+§11.11 item 7).**
+
 **2026-08-16c — 4c-ii is BLOCKED on a proof-design adjudication, not on coding. The shadow
 chain's cheap route is refuted and the landing criterion is weak. No Lean file changed.
 Read `history/PROOF_STATUS.md` 2026-08-16c and scope-doc §11.8 BEFORE resuming leg 7.**

@@ -25,6 +25,55 @@ from here.
 
 ---
 
+## 2026-08-28 — `P3`'s two human calls made (`hql` accepted, Route B retained); the census falsified B's cone argument
+
+rows: `P3`
+
+User-scoped de-risk session ("de-risk + additive only"), triggered by the question "can
+4c-ii land in one session with subagents?" — answered NO, and the census is why that
+answer was right. Six read-only census agents re-verified `P3`'s recorded sizing against
+the live tree; the formal detail is in
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-08-28` (the authority for this entry) and scope doc §11.11 (which supersedes
+§11.9/2026-08-20b's sizing). Headlines:
+
+* **Both standing `P3` human calls are made** (user delegated in plain text, stating the
+  goal: an unguarded "graph = semantics" claim with no sharp edges): `hql` accepted;
+  Route B retained — but its "zero additional cone" selection argument is **falsified**
+  (the `shadow_graphRec_agree` repair propagates ~45 second-ring sites through
+  `ReconcileStars.lean::checkFn_agree_of_graphRec` into 4 files with zero
+  `UntaintedShadow` presence; zero of the 14 sites are mechanical). Retention grounds:
+  measured-bounded vs unmeasured-whole-tree, and three sessions of landed scouting.
+* **The `hql` guard is cheap (8 declarations, depth 2, audit pin untouched) but lands on
+  the leg-5 non-vacuity instrument** (`W4WitnessDirect.final_applies`), where it is
+  FALSE at leaf queries — so the recommended repair shape adds a fence-modeling public
+  layer (`checkPublic` mirroring `BL-2`'s public deny; unscouted) keeping the headline
+  claim unguarded. Owed in the 4c-ii commit.
+* Budget ~136 sites / 8 files, not ~123 / 7 — the third consecutive low count on this
+  item, each time by the previous session's own new files.
+* The 2026-08-21b stale-comment debt is discharged: four Lean doc-comment sites now name
+  `_check_internal` + the fence (`CORRESPONDENCE.md` §7.1 marked RESOLVED). Comment-only.
+* `CLAUDE.md` gained a "Delegation" section (user preference, stated this session:
+  subagents exist to minimize context and tokens, never for parallelism; standing
+  permission for read-only fan-outs of census shape).
+
+**Method note.** Two census claims were load-bearing for the route re-adjudication
+(`WF`'s single field; `checkFn_agree_of_graphRec`'s internal quantifier) — both were
+re-verified first-hand before anything was written down. Per
+[`docs/subagent-fanout-runbook.md`](../subagent-fanout-runbook.md), a fan-out discovers;
+it does not adjudicate.
+
+task lint: clean (11 checks, 150 task file(s) parsed)
+read: board + HANDOFF
+
+Still owed: the nine pytest-tile verdicts are green only on `2026-08-24d`'s tree —
+re-run them before any push (today's edits are comment-only Lean + md; the `lean` phase
+was re-run green on today's tree, twice). Landing-session preflight, before choosing
+WF-clause vs threading: the `parse_schema_ast` dotted-reference probe (PROOF_STATUS
+`2026-08-28` §3).
+
+---
+
 ## 2026-08-24d — `R6-6` landed at its predicted 4.75 → 1.75 statements/`check`; its pin was green under sabotage
 
 rows: `R6`
