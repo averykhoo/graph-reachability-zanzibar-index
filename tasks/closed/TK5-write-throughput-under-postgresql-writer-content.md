@@ -10,9 +10,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 [`docs/architecture/correctness.md`](docs/architecture/correctness.md)`:125-140` argues multi-writer admission is correct by construction and that the `FOR UPDATE` semantics are now *observed* on PostgreSQL — lock ordering, contiguous exactly-once log rows under 4 concurrent writers, an index identical to a single-writer replay — and then ends: *"Throughput under contention remains untested beyond the retry-on-busy convergence tests."* An explicit gap in a LIVING architecture doc with no owning row.
@@ -37,3 +37,7 @@ Correctness under contention is covered; what is not measured is whether the loc
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-5 (`NG-2`, tier 1, sweep-n only); CONFIRMED OPEN by COVERAGE.md §C3; the sentence survives verbatim at docs/architecture/correctness.md:139-140 (LIVING).
+
+### 2026-08-29b
+
+APPENDED to docs/architecture/correctness.md, extending the multi-writer bullet in place rather than adding a second home. The write-off proposed for this id was REFUTED and the refutation was right: :139-140 sits in section 4 'Known gaps (documented, not defended)', whose sibling bullets are permanent accepted limitations ('Paranoia off = most runtime checking off', 'Freshness tokens lower-bound, never upper-bound'), so the sentence read as a scope disclaimer and a reader learned the limitation without learning a deliverable was owed. The appended clause is 'owed rather than accepted' plus the three things that were unique to tasks/: the deliverable is a MEASUREMENT not a fix; the reason it is a live question (the critical section runs an evaluator catch-up inside itself, so its length grows with the replica delta); and the target, tests/test_postgres_ha.py on the opt-in leg.

@@ -1,6 +1,6 @@
 ---
-id: TK23
-title: unverified R6 lead A7: facade edge ops re-pay the _require_live_nodes SELECT under the held lock
+id: TK22
+title: unverified R6 lead A6: full-tier invariant checker ORM-loads all nodes and edges twice per commit
 pri: HOLD
 size: ?
 deps: []
@@ -10,14 +10,14 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
-`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` — lead **A7** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:835`.
+`index_v4/invariants.py::_load` — lead **A6** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:823`.
 
-`_add_tuple_trusted` resolves endpoints under `_lock_store()` and then calls `add_edge_by_id`, which re-takes the lock and runs `_require_live_nodes` — one extra IN-SELECT. Core's own name-based `add_edge` documents skipping exactly this (*"resolved under the lock: live by construction, no re-verification round trip"*). Every facade edge op repeats it: the grant, each bridge add, each bridge strip, and `remove_tuple`'s grant removal, so one bridged add pays up to 3 redundant liveness queries. Finder: repeated-work, filed impact low, algorithm change no.
+`_load` does full ORM entity scans of `NodeV4` and `EdgeV4` at the top of `check_invariants`, which at the full tier runs per commit pre-commit AND again post-commit in a fresh session — and the same file already learned this lesson for the cheap tier, where the comment records ORM materialization as the bulk of the tier's cost and the `_NodeFacts`/`_ResidueFacts` NamedTuple pattern is already in place. The checker only ever READS attributes. Finder: write-speed, filed impact medium, algorithm change no.
 
 **UNVERIFIED, and that is the whole point of the row.** The appendix preserves its leads *"verbatim and UNVERIFIED"* (`docs/perf-round6-audit-2026-08.md:757`): no adversarial pass confirmed that the code does what is claimed, that the fix sketch is semantics-preserving, or that the Lean note is right. This lead carries no motivating measurement of its own, and `docs/perf-next-round.md`'s reopening rule requires one before anything lands. `HOLD` is therefore the honest pri and it is the vocabulary's own definition (`docs/README.md` §5: *deferred by an explicit recorded decision*) — the decision is the audit's, at `:756`: each finder returned 5-6 findings and only the top 3 by filed impact went to verification. Promote to `LATER` when a profile or `benchmarks/stmt_bench.py` run puts a number on it, not before.
 
@@ -29,19 +29,23 @@ closed:
 
 ⚠ **A cited symbol may have MOVED.** `R6-6`'s target did: `BL-2` split `index_v4/wildcard.py::WildcardIndex.check` into a public deny fence plus `::WildcardIndex._check_internal` on 2026-08-21, and the audit still names `::check`. `formal/conformance/anchor_check.py` cannot catch that class — it reads only `formal/CORRESPONDENCE.md`, and both symbol names exist anyway. Resolve the symbol by reading the code, not by trusting the doc.
 
-⚠ **This deletes a defense-in-depth check on a write path, for a LOW-impact win.** The finder says so itself and requires a sabotage test on the trusted entry before it is trusted. A liveness check removed on a wrong argument is a fail-open on the write side; weigh that against "filed impact: low" before spending the risk.
+⚠ **This is the paranoia instrument, not the subject.** Paranoia mode is ON by default via `make_wildcard_index`, so a column-select rewrite that quietly narrows what a check can see weakens every test in the suite at once and would fail by PASSING — the house failure mode. Sabotage it per [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md): break an invariant each tier is supposed to catch and watch it go red BEFORE and AFTER.
 
 ## Read first
 
-- [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)`:835` — this lead, verbatim (evidence + unreviewed fix sketch)
+- [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)`:823` — this lead, verbatim (evidence + unreviewed fix sketch)
 - the same file, §"Appendix — the 16 UNVERIFIED lower-ranked leads" (`:754-761`) — what "unverified" means here, in the audit's own words
 - the same file, §"Traps the numbers do not carry" — the round-wide traps
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the P12c fence and the reopening rule (**every item still needs a motivating measurement**)
-- `index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` — the code
+- `index_v4/invariants.py::_load` — the code
 - `python task.py show R6` — the parent: round-wide order, traps, and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
 ## Log
 
 ### 2026-08-21b
 
-**Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:835, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 7 of 16.
+**Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:823, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 6 of 16.
+
+### 2026-08-29b
+
+APPENDED to docs/perf-round6-audit-2026-08.md, new appendix subsection 'Cross-links and corrections the leads do not carry (added 2026-08-29b)'. Landed as ONE consolidated section rather than 13 inline notes: the leads are preserved verbatim by an explicit recorded decision, so corrections belong beside them, not inside them, and the doc already had the precedent (the demoted 'Traps the numbers do not carry' section). Each note was re-verified against the live tree by a four-agent fan-out before landing; per-id detail is in the section itself and in docs/history/tk-findings-adjudication-2026-08-29.md.
