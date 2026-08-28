@@ -445,6 +445,35 @@ inductive ReachedByW3d2E : GraphState → Schema → Store → Prop where
       (hprev : ReachedByW3d2E σ S T) :
       ReachedByW3d2E (runCascade2 S T σ (enumJobs2R1 S T σ) (enumJobs2R2 S T σ)) S T
 
+/-- **Every fully-operational W3d-2 state carries its schema.** The E-chain twin of
+    `CascadeStrata.lean::reachedByW3d2_schema`; same four-constructor induction, and
+    the cascade leg differs only in that the job lists are the canonical enumerations
+    read off the state rather than arbitrary `jobs1`/`jobs2` (`runCascade2` is applied
+    to both the same way, so the `split` is unchanged).
+
+    Owed by the fence layer: `GraphModel.checkPublic` reads `σ.schema` (faithful to
+    Python, which reads `self.schema_info`), while the headline hypotheses are stated
+    over `S` -- this is the lemma that lets one be rewritten into the other. No prior
+    session costed it; the W3d-2 form existed but the E form did not. -/
+theorem reachedByW3d2E_schema {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2E σ S T) : σ.schema = S := by
+  induction h with
+  | empty S => rfl
+  | @write σp S T t _ _ ih =>
+    show (σp.writeLoggedRules S t).schema = S
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema, writeRules_schema, ih]
+  | @remove σp S T t _ _ _ _ _ _ _ ih =>
+    show (σp.removeLoggedRules S t).schema = S
+    rw [removeLoggedRules_schema, ih]
+  | @cascade σp S T _ ih =>
+    show (runCascade2 S T σp (enumJobs2R1 S T σp) (enumJobs2R2 S T σp)).schema = S
+    unfold runCascade2
+    split
+    · show (reconcileJobsLR S T (reconcileJobsLR S T σp (enumJobs2R1 S T σp))
+        (enumJobs2R2 S T σp)).schema = S
+      rw [reconcileJobsLR_schema, reconcileJobsLR_schema, ih]
+    · exact ih
+
 /-- **The projection `ReachedByW3d2E ⇒ ReachedByW3d2C`, Direct-arm form** — the `_d`
     core of `reachedByW3d2E_toC` (E-chain widening leg 4). Same packaging as the
     untainted original, with every input swapped for the `_d`/`_filt` form legs 1–3

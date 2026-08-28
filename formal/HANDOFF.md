@@ -78,6 +78,18 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**2026-08-28b — THE FENCE-MODELING ENDGAME IS LANDED AND GREEN, WITHOUT `hql` AND WITHOUT
+OPENING THE 4c-ii CONE.** `GraphIndex/Fence.lean::GraphModel.checkPublic` +
+`FullScope.lean::graph_correct_public`: the PUBLIC read equals `sem` under exactly
+`graph_correct`'s hypotheses, no leaf-name guard. **2026-08-28's "owed INSIDE the 4c-ii
+commit" is refuted** — the fenced branch needs only `WF S` + "undeclared ⇒ `sem` denies",
+so it lands BEFORE the un-splittable cone, on green. Additive: pins 38→45 / 155→160, **zero rows moved**; `reachedByW3d2E_schema` was an uncosted prerequisite.
+⚠ **`graph_correct_public` is NOT what makes the fence non-vacuous** — pre-4c-ii it proves
+green even under a fence that never fires; the six `W4WitnessDirect.fence_*` pins at `Sd` are, and only `fence_changes_answer` catches a fence REMOVAL (§3 has the sabotage record).
+**Next, pre-4c-ii: migrate the public surface + `final_applies`(`4`) onto `checkPublic`** —
+where the payoff is banked; NOT done here (it moves pinned statements on the non-vacuity
+instruments); read `history/PROOF_STATUS.md` `2026-08-28b` §4 first.
+
 **2026-08-28 — BOTH `P3` HUMAN CALLS ARE MADE (`hql` accepted; Route B retained on
 corrected grounds — its "zero additional cone" argument is FALSIFIED), after a live
 census re-sized the cone for the third consecutive time. A fence-modeling endgame

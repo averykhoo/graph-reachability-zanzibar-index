@@ -1150,6 +1150,12 @@ namespace Zanzibar
 -- concrete compiled boolean schema + store). Standard axioms only:
 #print axioms w4_within_scope
 #print axioms graph_correct
+-- The PUBLIC read (`BL-2` fence, 2026-08-28): `graph_correct` is stated over
+-- `GraphModel.check` = `_check_internal`, BELOW the fence; `graph_correct_public` is
+-- stated over `GraphModel.checkPublic` = the public `WildcardIndex.check`, and is the
+-- one to read as "the graph index computes the spec". Audited for the same reason the
+-- others are -- a `: True := trivial` restatement would report no axioms.
+#print axioms graph_correct_public
 #print axioms backend_equivalence
 #print axioms exclusion_effective
 #print axioms no_ghost_grant

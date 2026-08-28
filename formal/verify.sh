@@ -531,8 +531,9 @@ MIN_PINNED_DEFS=139
 #     this rule is scoped to the headline set rather than applied globally.)
 HEADLINE_AUDITS="setEngine_correct sem_fuel_stable stratify_none_iff_cycle
 stratify_topological pathCount_addEdge pathCount_removeEdge runCascade2_no_abort
-cascade2_drains graph_correct graph_reached_inv backend_equivalence
-exclusion_effective no_ghost_grant graphRun_reached graphRun_check_eq_sem"
+cascade2_drains graph_correct graph_correct_public graph_reached_inv
+backend_equivalence exclusion_effective no_ghost_grant graphRun_reached
+graphRun_check_eq_sem"
 
 BUILD_LOG="$(mktemp)"   # removed by gate_on_exit, which was installed far above:
                         # the trap has to precede the floor-consistency checks,

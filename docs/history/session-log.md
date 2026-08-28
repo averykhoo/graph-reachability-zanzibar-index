@@ -25,6 +25,55 @@ from here.
 
 ---
 
+## 2026-08-28b — the fence-modeling endgame landed green, and it never needed `hql` or the 4c-ii cone
+
+rows: `P3`
+
+User asked to "do the hql thing". Scouting said don't, and the re-scope was confirmed
+before any Lean was written: `hql` is not the endgame but the INTERNAL layer, and the
+thing that keeps the headline unguarded is a public fence. Formal detail (the authority
+for this entry): [`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-28b`.
+
+* **The correction that made the session cheap.** 2026-08-28 recorded the fence layer as
+  owed INSIDE the 4c-ii commit — which trap 3 forbids splitting, so it read as expensive
+  and unscoutable. It is not: `graph_correct_public`'s fenced branch needs only `WF S`
+  plus "undeclared ⇒ `sem` denies", and its unfenced branch is today's `graph_correct`
+  verbatim. It landed BEFORE the cone, on green, as its own commit.
+* **Landed:** `GraphIndex/Fence.lean` (`checkPublic` + the `relNameOK_of_mem_keys`
+  bridge), `FullScope.lean::graph_correct_public` (unguarded public read = `sem`), and
+  `CascadeStrataAssemble.lean::reachedByW3d2E_schema` — a prerequisite no document had
+  costed. Purely additive: pins 38→45 statements / 155→160 definitions, **zero rows
+  moved**, no existing statement or proof changed.
+* ⚠ **The vacuity trap, and the sabotage that caught it.** `graph_correct_public` proves
+  green even under a fence that NEVER FIRES, because pre-4c-ii nothing mints leaf nodes.
+  The first sabotage (nulling `publicOfLeaf`) was the WRONG one — it breaks `Leaf.lean`'s
+  own lemmas, so the build dies before reaching the new pins: it sabotaged the instrument.
+  The narrow one (`checkPublic := check`) leaves the four polarity pins GREEN and fails
+  exactly one declaration, `fence_changes_answer`. A guard-only pin cannot catch a fence
+  removal; only one stated over a state can.
+* **Preflight closed:** `parse_schema_ast` rejects dotted REFERENCES, not just dotted
+  declarations (`_validate_ast_references`), so the WF clause is the faithful model — with
+  a carve-out for the BARE `...` sentinel.
+* **Deliberately not done:** migrating the public surface and `final_applies`(`4`) onto
+  `checkPublic`. That is where the 4c-ii payoff is banked, but it changes pinned statements
+  on the non-vacuity instruments and deserves its own session and sabotage.
+
+**Method note.** The scouting fan-out's report was evidence, not findings: its
+"three files import `GraphIndex.Leaf`" was two (the third is transitive) and its
+"four docs say 26" was five. Both were caught by first-hand greps before anything was
+written down. The load-bearing claim — that `graph_correct_public` is provable today with
+no `hql` — was verified against the live tree before the plan was accepted.
+
+task lint: clean (11 checks, 150 task file(s) parsed)
+read: board + HANDOFF
+
+Still owed: the nine pytest tiles. `verify.sh lean` is green on this tree; the tiles were
+last green on `2026-08-24d`'s tree and this session changed Lean, so they are stale and
+must be re-run before any push.
+
+---
+
 ## 2026-08-28 — `P3`'s two human calls made (`hql` accepted, Route B retained); the census falsified B's cone argument
 
 rows: `P3`

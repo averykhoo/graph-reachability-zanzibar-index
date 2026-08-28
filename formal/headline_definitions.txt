@@ -51,6 +51,7 @@ def:Zanzibar.FoldAdmits	[def] def FoldAdmits : GraphState → List Tuple → Pro
 def:Zanzibar.GraphAccepts	[def] def GraphAccepts (S : Schema) : Prop := (∀ tr ∈ S.objectWildcards, isDerived S tr = false) ∧ (∀ d ∈ S.defs, ∀ r ∈ exprRestrictions d.2, r.2.2 = true → r.2.1 ≠ BARE → isDerived S (r.1, r.2.1) = false) ∧ (∀ d ∈ S.defs, ∀ tt ∈ exprTtus d.2, isDerived S (d.1.1, tt.2) = false)
 def:Zanzibar.GraphAdmission	[structure] fields=(wf nodup strat ttuDirect matchDecl ranked objWild storeValid) structure GraphAdmission (S : Schema) (T : Store) : Prop where wf : WF S nodup : NodupKeys S strat : Stratifiable S ttuDirect : TtuTuplesetsDirect S matchDecl : RewriteMatchDeclared S ranked : RewriteRanked S objWild : ∀ tr ∈ S.objectWildcards, isDerived S tr = false storeValid : StoreValidRulesD S T
 def:Zanzibar.GraphModel.check	[def] def check (σ : GraphState) (q : Query) : Bool := if isDerived σ.schema (q.object.type, q.relation) then probeDerived σ q else probeNonDerived σ q
+def:Zanzibar.GraphModel.checkPublic	[def] def GraphModel.checkPublic (σ : GraphState) (q : Query) : Bool := if (publicOfLeaf σ.schema q.object.type q.relation).isSome then false else GraphModel.check σ q
 def:Zanzibar.GraphOp	[inductive] fields=(add remove) inductive GraphOp where | add (t : Tuple) | remove (t : Tuple) deriving Repr, Inhabited, DecidableEq
 def:Zanzibar.GraphState	[structure] fields=(schema edges nodes residue outbox watermark) structure GraphState where schema : Schema edges : List (NodeKey × NodeKey) nodes : List NodeKey residue : NodeKey → String → Option Residue outbox : List Delta watermark : Nat
 def:Zanzibar.HasDerivedCycle	[def] def HasDerivedCycle (S : Schema) : Prop := ∃ k, Reaches (depEdges S) k k
@@ -142,9 +143,11 @@ def:Zanzibar.hitsLeaf	[def] def hitsLeaf (σ : GraphState) (u : NodeKey) (dt on 
 def:Zanzibar.htermB	[def] def htermB (S : Schema) (T : Store) : Bool := (taintedKeys S).all fun k => noTtuTargetB S k.2 && noStoreSubjectRB T k.2
 def:Zanzibar.instances	[def] def instances (T : Store) (q : Query) (t : String) : List String := universeOf T q t false
 def:Zanzibar.isDerived	[def] def isDerived (S : Schema) (k : Key) : Bool := (taintedKeys S).contains k
+def:Zanzibar.isLeafPred	[def] def isLeafPred (p : String) : Bool := p.toList.contains '.'
 def:Zanzibar.iterate	[def] def iterate {α : Type} (f : α → α) : Nat → α → α | 0, x => x | n + 1, x => iterate f n (f x)
 def:Zanzibar.kahn	[def] def kahn (edges : List (Key × Key)) : Nat → List Key → List (List Key) → Option (List (List Key)) | 0, remaining, acc => if remaining.isEmpty then some acc.reverse else none | fuel + 1, remaining, acc => if remaining.isEmpty then some acc.reverse else let ready := readyNodes remaining edges if ready.isEmpty then none else kahn edges fuel (remaining.filter (fun n => ¬ ready.contains n)) (ready :: acc)
 def:Zanzibar.leafConcretes	[def] def leafConcretes (σ : GraphState) (dt on : String) (e : Expr) : List SubjectRef := (σ.nodes.filter (fun u => u.variant == Variant.plain && u.name != STAR && hitsLeaf σ u dt on e)).map nodeSubj
+def:Zanzibar.leafPred	[def] def leafPred (R : String) (i : Nat) : String := R ++ "." ++ toString i
 def:Zanzibar.matchingObjects	[def] def matchingObjects (oname : String) : List String := if oname = STAR then [STAR] else [oname, STAR]
 def:Zanzibar.memberOfGranted	[def] def memberOfGranted (rec : Rec) (T : Store) (q : Query) (grants : List Tuple) : Bool := grants.any (fun g => if g.subject.predicate == BARE then false else if g.subject.name != STAR then rec g.subject.type g.subject.name g.subject.predicate else (instances T q g.subject.type).any (fun inst => rec g.subject.type inst g.subject.predicate))
 def:Zanzibar.noStoreSubjectRB	[def] def noStoreSubjectRB (T : Store) (R : String) : Bool := T.all fun t => !(t.subject.predicate == R)
@@ -182,3 +185,5 @@ def:Zanzibar.ttuStarFreeB	[def] def ttuStarFreeB (S : Schema) (T : Store) : Bool
 def:Zanzibar.universeOf	[def] def universeOf (T : Store) (q : Query) (t : String) (includeEndpoints : Bool) : List String := let fromTuples := T.foldr (fun tup acc => let acc := if tup.subject.type = t ∧ tup.subject.name ≠ STAR then tup.subject.name :: acc else acc if tup.object.type = t ∧ tup.object.name ≠ STAR then tup.object.name :: acc else acc) [] let endpoints := if includeEndpoints then (if q.subject.type = t ∧ q.subject.name ≠ STAR then [q.subject.name] else []) ++ (if q.object.type = t ∧ q.object.name ≠ STAR then [q.object.name] else []) else [] (fromTuples ++ endpoints).dedup
 def:Zanzibar.wAllNode	[def] def wAllNode (t R : String) : NodeKey := ⟨t, STAR, R, Variant.wAll⟩
 def:Zanzibar.wildcardShapes	[def] def wildcardShapes (S : Schema) : List Shape := S.defs.flatMap (fun d => (exprRestrictions d.2).filterMap (fun r => if r.2.2 then some (r.1, r.2.1) else none))
+def:leafPublic	[def] def leafPublic (p : String) : String := String.ofList (p.toList.takeWhile (· ≠ '.'))
+def:publicOfLeaf	[def] def publicOfLeaf (S : Schema) (ty p : String) : Option String := if isLeafPred p && isDerived S (ty, leafPublic p) then some (leafPublic p) else none
