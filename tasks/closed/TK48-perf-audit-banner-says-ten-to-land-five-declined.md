@@ -10,9 +10,9 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-24d
-updated: 2026-08-24d
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 The status banner of `docs/perf-round6-audit-2026-08.md` (`:3-5`) reads *"ALL EIGHTEEN are now MEASURED (2026-08-17) — ten recommended to land in a stated order, five declined on an upper bound, three unreachable by any benchmarked workload."* The document's own body says **eleven** ids in the recommended order and **four** declines (exactly four `NOT MOTIVATED` verdict rows). Both splits sum to 18, which is how it survived review.
@@ -43,3 +43,7 @@ This is a live `ZT-P3-5` — a stale figure in a durable place — in a `docs/` 
 ### 2026-08-24d
 
 SECOND DEFECT IN THE SAME BANNER, found while closing TK47 (2026-08-24d): docs/perf-round6-audit-2026-08.md:3 also says 'Nothing here is landed', and that is now false twice over -- R6-10 landed 2026-08-20b (2.54x) and R6-6 landed 2026-08-24d (4.75 -> 1.75 statements/check). Both clauses of that banner are stale, so fix them in ONE reviewed edit rather than two. This row's own trap still binds: correct from the BODY (the verdict tables and the recommended-order list), and the safest form of the count clause carries no number at all. The landed items now carry a LANDED marker in the R6-6 verdict row and entry, so the body can be counted for that too.
+
+### 2026-08-29b
+
+Banner corrected in one edit (docs/perf-round6-audit-2026-08.md:3-14). Verified first-hand from the BODY per the finding's own trap: eleven MOTIVATED verdict rows (R6-6,5,4,1,10,11,9,16,18,7,8) and four NOT MOTIVATED (R6-2,14,12,15) -- 11+4+3 unreachable = the banner's own ALL EIGHTEEN. Instrument control: grep -c 'NOT MOTIVATED' returns 5 and is WRONG, line :90 is prose not a verdict row. Second clause 'Nothing here is landed' was false twice over (R6-10 2026-08-20b, R6-6 2026-08-24d) and is deleted. Per the trap the new banner carries NO count and points at the tables.

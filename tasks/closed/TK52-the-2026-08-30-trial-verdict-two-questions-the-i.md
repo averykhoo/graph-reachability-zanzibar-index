@@ -10,9 +10,9 @@ labels: [docs]
 source: board
 source_hash: 2928e2150c6b
 created: 2026-08-29
-moved: 2026-08-29
-updated: 2026-08-29
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 The `tasks/` trial ends **2026-08-30**. Until this row existed, that deadline appeared in
@@ -79,3 +79,7 @@ stale, which the parallel-update contract forbids.
 First reconciliation. Filed and given its HANDOFF.md board row in the same session, per the parallel-update contract; this stamps the row digest so any later board edit shows as drift.
 
 Verdict input added at the user's request: a first-hand FRICTION LOG from one session of ordinary use is now docs/tasktool-trial-protocol.md section 6, append 2026-08-29, item A7 -- six observed items, including one that is this repo's house failure mode (ack on a --source hand task prints a success line, exits 0, and stamps nothing, so sync reports that task as drift forever while the operator is told it is acked). Sections 1-7 measured READING cost and never measured the cost of OPERATING the tool, which is the recurring price if it graduates; A6 and A7 are the only evidence on that, and both are one session deep.
+
+### 2026-08-29b
+
+Question (b) DECIDED and recorded: docs/history/tk-findings-adjudication-2026-08-29.md buckets every open TK* id -- 5 written off against a named living carrier, 3 discharged this session (TK48 corrected, TK51 already implemented, TK49 landed into docs/README.md sec 2), the rest APPEND with a named destination. Method: nine-way live-tree fan-out, then an independent refutation pass on every proposed write-off, which OVERTURNED 6 of 11 -- so a single-pass adjudication would have written off six findings having no living carrier. The unlanded appends are carried by new board row TK53, not left as a residual with no owner (the TK11 defect). Question (a), does the query beat the file, is deliberately NOT decided here: deleting tasks/ and scripts/task.py is the user's call and the recommendation is in the ledger.

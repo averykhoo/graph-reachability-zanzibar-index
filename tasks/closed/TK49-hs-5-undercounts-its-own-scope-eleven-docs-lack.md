@@ -10,9 +10,9 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-24
-updated: 2026-08-24
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 `HS-5`'s title and body both say **six** always-living docs declare no liveness state. The measured count is **eleven**:
@@ -46,3 +46,7 @@ That is `ZT-P3-5` (a stale figure in a durable place) recurring inside a board r
 ### 2026-08-24
 
 Deliverable (2) DONE 2026-08-24: HS-5 retitled to 'always-living docs lack the liveness state docs/README.md sec 2 requires; count lives in TK49', and the HANDOFF.md row edited to match. The retitle followed this row's own trap -- the count was NOT copied into the new title, because six-then-nine-then-eleven across three readings is exactly what a title carrying a count does. Deliverable (1), the adjudication of which of the measured docs are deliberately exempt, is STILL OPEN and is the actual work here. Found during the task-tool trial: 9 of 9 BOARD-arm agents answered 'six' from the board row, and the tree agents answered 'six' too, because they stopped at HS-5's title rather than following 'children: TK49' one hop.
+
+### 2026-08-29b
+
+Scope correction LANDED, which is all this child was filed to carry. The enumeration and the measuring method now live in docs/README.md section 2 (re-measured 2026-08-29b: bolded LIVING/FROZEN/ACTIVE-PLAN within the first 8 lines), and HANDOFF.md's HS-5 row was repointed there in the same edit -- it previously read 'count lives in TK49', i.e. the board delegated its own substance by id into a tree that may be deleted, a dangling referent. Neither doc carries a count: the figure has read six/nine/eleven/this-list across four readings by four methods. The remaining ADJUDICATION (which docs are deliberately exempt) stays open on HS-5, where it belongs.

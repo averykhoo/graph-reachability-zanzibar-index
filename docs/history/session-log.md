@@ -25,6 +25,88 @@ from here.
 
 ---
 
+## 2026-08-29b — trial question (b) DECIDED: every `TK*` id bucketed, 3 discharged, appends carried by `TK53`
+
+rows: `TK52` (closed), `TK53` (new), `HS-5`, `R6`
+
+**No formal work.** `TK52`'s deliverable — the adjudication, not the snapshot — is
+delivered: [`tk-findings-adjudication-2026-08-29.md`](tk-findings-adjudication-2026-08-29.md)
+puts **every** open `TK*` id in exactly one bucket. ⚠ **Question (a) is deliberately NOT
+decided.** Deleting `tasks/` and `scripts/task.py` is the user's call; the recommendation
+is at the bottom of this entry.
+
+**1. Method, and the number that justifies it.** A nine-way fan-out adjudicated each
+finding against the live tree, distinguishing a carrier that holds the *subject* from one
+that holds the *finding* (i.e. tells a reader work is outstanding). Every proposed
+write-off then went to an independent agent told to **refute** it. **That pass overturned
+6 of 11** (`TK5`, `TK7`, `TK15`, `TK23`, `TK24`, `TK27`). A single-pass adjudication would
+have written off six findings with no living carrier — on the one verdict that is
+unrecoverable once the tree is gone.
+
+**2. Three discharged, all verified first-hand, and two were not what they were filed as.**
+* `TK48` — the perf-audit banner is **fixed**. Counted from the body: **eleven**
+  `MOTIVATED` rows and **four** `NOT MOTIVATED` (11+4+3 unreachable = its own "ALL
+  EIGHTEEN"), against a banner claiming *"ten … five"*. Its second clause *"Nothing here is
+  landed"* was false twice over (`R6-10`, `R6-6`). Per the finding's own trap the new
+  banner **carries no count** and points at the tables. ⚠ **Instrument control:**
+  `grep -c "NOT MOTIVATED"` returns **5** and is WRONG — `:90` is prose, not a verdict row.
+  I ran that grep first and would have written the wrong figure from it.
+* `TK51` — **stale, not written off.** The dense-regime pass it asks for **is implemented**:
+  `tests/test_generator_coverage.py:881` runs `_sweep(G.DENSE, DENSE_SUBSETS)` beside the
+  sparse sweep at `:805`, with the sabotage assertion at `:995-998`. "Stale" and "written
+  off" are different dispositions and the record now says which.
+* `TK49` — its scope correction **landed** into `docs/README.md` §2.
+
+**3. ⚠ The board was pointing into the tree.** `HS-5` read *"count is method-sensitive, it
+lives in `TK49`, not here"* — the **control arm delegating its own substance, by id, to the
+arm that may be deleted tomorrow**. A dangling referent either way: DELETE breaks it, KEEP
+leaves the board unable to state its own scope. The enumeration and the measuring method
+now live in `docs/README.md` §2 and the row points there. This is `CLAUDE.md`'s *"a trap
+must cite a symbol that EXISTS"* one level up — it applies to board rows citing task ids,
+and nothing checks it.
+
+**4. The count is method-sensitive, again, and neither doc carries one.** Re-measured
+2026-08-29b by a stated method (a bolded `LIVING`/`FROZEN`/`ACTIVE-PLAN` inside the first 8
+lines): the list in §2. It has read **six, then nine, then eleven, then this** across four
+readings — not because docs changed but because each used a different candidate set and a
+different test. §2 records the method beside the list and refuses a number; so does `HS-5`.
+
+**5. The appends are DECIDED, not LANDED, and that is a tracked row.** The remainder each
+have a named destination in a living doc. They are carried by **`TK53`**, filed before the
+adjudication file was written — a decision recorded with no open carrier is precisely the
+defect `TK11` exists to name (a residual declared at closure, never re-filed). `TK53` is
+what makes DELETE lossless; until it closes, DELETE still drops statements.
+
+**Recommendation on question (a), for the user to decide.** The directed 18-agent
+experiment is a real but narrow win: TREE at **88.7%/88.8%** of BOARD tokens, Mann–Whitney
+`U=0` as pre-registered — but on a total carrying a large fixed prompt floor, and at **3–5
+tool calls against the board's 1**. Against that: §4 pre-registers **M3** as *"the metric
+the whole trial turns on"* — *if the TREE arm keeps opening `HANDOFF.md` anyway, nothing
+was saved* — and M3 was **never obtained** (pilot instrument failure). The only natural-use
+substitute is the read tally, which is **self-reported**, the instrument §2 disqualifies by
+name; it shows most sessions read both. The board also **won** the one cross-item question
+(`S5`) structurally, by being one file. And the maintenance contract went RED with the tree
+the stale side, skipped by four consecutive sessions — a cost §6 says no session ever
+recorded. §7.4's pre-registered rule sinks the tree only on *quality loss at higher cost*,
+which did not happen, so the rule does **not** compel deletion; it also does not compel
+keeping. **My recommendation is DELETE the tool and KEEP two things it proved:** the
+mechanical `lint`/`sync` refusals, which the board has no analogue for and which caught
+real drift, and the `related` cross-links, which is the mechanism `F1` identified. Land
+`TK53` first — that is what makes the deletion lossless.
+
+`python scripts/task.py lint` → `task lint: clean (11 checks, 152 task file(s) parsed)`
+
+`read: board + HANDOFF` — but the two reads were not equivalent and the tally should not
+score them as one. **Orientation was `board` only**: `task.py board`, then `show TK52` and
+`show P3`, and work started from those. `HANDOFF.md` was opened later and in full, to
+**write** to it (three row edits, an item block, the banner). Declared the conservative way
+rather than as `board only`, because the 260 lines were read either way and M3 asks what
+was opened, not why.
+
+**Still owed:** nothing. `TK53` is queued work, not a skipped write-back step.
+
+---
+
 ## 2026-08-29 — trial verdict filed on both trees, 47 findings rescued; `sync` was RED and the TREE was the stale side
 
 rows: `TK52` (new), `R6`, `P3`
