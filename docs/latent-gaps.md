@@ -188,6 +188,43 @@ Listed so this file is a complete index of what is open, and pointed rather than
   "fails closed" wording inverts too. It was never re-tested. Home: board row `P12`; the
   probe and its completion criterion are in [`spec-deviations.md`](spec-deviations.md)
   `## 2026-08-10` §"Severity: FAIL-OPEN, correcting the original filing".
+* **Node GC and the node-flag lifecycle are unmodelled, and two named correctness bugs have
+  landed inside that one region** — `ZT-P0-1` (the unsound `_keys_referencing` elision) and
+  `BL-1` (the released-userset bridge leak, found by the hypothesis campaign). Home:
+  `formal/CORRESPONDENCE.md` §7.3 (`:982-1003`), which records both. ⚠ **What the home does
+  not say is what they imply.** §7.3 sits under §7 *"Known intentional divergences (model ≠
+  code, by design)"* and its preamble reads *"None is a bug"* (`:862-863`), so the region
+  reads as accepted — while the evidence that justified excluding it has moved. What is open
+  is the **adjudication** (model it, or record that the differential + hypothesis nets are
+  the intended net), not necessarily a model.
+* **The per-subject cheap reconcile path is unmodelled and has twice gained real logic** —
+  `index_v4/processor.py::DeltaProcessor.reconcile_subject` (body:
+  `::DeltaProcessor._reconcile_subject`); Lean models only the full-object reconcile. Home:
+  `formal/CORRESPONDENCE.md` §7.1 (`:476-493`), which itemizes both growths — promote-on-
+  record (2026-07-17) and escalation to a full reconcile (2026-07-26, `ZT-P0-1`/`ZT-P0-2`).
+  The justification that expired is the phrase *"a thin fast path"*
+  (`formal/ARCHITECTURE.md:776`), but the disposition in both homes is still "unmodeled, by
+  design", so nothing records the expiry as owed. Distinct from the node-GC bullet above —
+  different code, different argument, filed apart on purpose; do not merge them.
+* **Set-engine write admission is the gates' input filter, and is modelled only
+  Python-vs-Python** — `setengine/engine.py::SetEngine._validate` steps (1) and (3), the
+  latter via `::SetEngine._would_cycle` → `::SetEngine._flow_reaches`; only step (2) has a
+  Lean counterpart and only as a premise. Home: `formal/CORRESPONDENCE.md` §7.3
+  (`:950-961`), which already states the shrinkage risk and that nothing formal watches it.
+  ⚠ Listed here for the part the home does not frame: this is **not** a check that can pass
+  vacuously, it is the filter that decides how much there is to check — one level up from
+  the usual shape. A non-vacuity floor on how many corpora survive admission, in the style
+  of `anchor_check.py`'s `MIN_*` floors, may be worth more than a model and is a legitimate
+  outcome.
+* **`advance_index`'s docstring asserts the exact claim the model leaves unproved** —
+  `connectedstore/apply.py:104-105` argues that batch size *"affects only latency/
+  granularity, not the final materialized state or any semantic guarantee"*. Home:
+  `formal/CORRESPONDENCE.md` §6 (`:393-424`), which owns the batched-schedule gap and
+  already marks it open (*"nothing in the Lean tree quantifies over 'apply N ops, then one
+  cascade'"*, `:420-424`). ⚠ Named here only for the collision, which neither end records:
+  the home discusses `advance_index` and never mentions that the function's own docstring
+  states the unproved claim as settled. **It is an argument, not a proof — do not cite it as
+  one.**
 * **The two compile-time scope rejections are deliberate, not gaps** — object wildcards on
   derived relations, and wildcard usersets over derived relations, both raising
   `zanzibar_utils_v1.py::UnsupportedByGraphIndex`. Stated in `CLAUDE.md`'s layout section;

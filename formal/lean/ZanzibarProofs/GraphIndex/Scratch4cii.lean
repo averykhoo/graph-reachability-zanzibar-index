@@ -281,7 +281,15 @@ theorem swUD_classification_swap :
     (pathological) schema declaring a derived relation named `""` would make
     `publicOfLeaf _ _ BARE` return `some ""` and bare-subject nodes classify as
     `LeafNode`. Carry `leafPublic p ≠ ""` (or a WF nonempty-name clause) in the
-    `LeafNode` definition, or prove the empty name unreachable. -/
+    `LeafNode` definition, or prove the empty name unreachable.
+
+    ⚠ Severity, adjudicated 2026-08-29b — do NOT re-raise this on re-read. It was
+    once filed tier-1 ("a soundness hole in a well-formedness condition"); it is not.
+    It constrains code that has not been written — no `LeafNode` definition exists
+    anywhere in this tree, only the `leafNodeB` proxy above — so nothing in today's
+    tree is false because of it, and `bare_publicOfLeaf_none` beside this docstring
+    pins that the CURRENT carrier is safe. Reading a design constraint as a live
+    defect is what produced the original tier-1 filing. -/
 theorem bare_publicOfLeaf_none : publicOfLeaf SlV "doc" BARE = none := by decide
 
 /-- The node-level form: a bare subject node is NOT a `leafNodeB` node. Observed `false`. -/
