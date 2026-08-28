@@ -19,14 +19,14 @@ session: run the Rhythm protocol at the bottom.
 > 🟢 **All ten gate phases green on this tree (2026-08-29)** — `lean` +
 > `conf-tile:1..5/5` + `tests-tile:1..4/4`; tiles keyed to the code-scoped tree id (`*.md`
 > excluded), and `lean` was re-run after the last `*.md` edit.
-> ⏰ **`2026-08-29b`: trial question (b) is decided** — every open `TK*` id is bucketed
-> ([adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); the refutation pass
-> overturned 6 of 11 proposed write-offs. Unlanded appends → **`TK53`**, the row that makes
-> DELETE lossless. 🧭 **Question (a) — delete the tool or keep it — is the user's call and
-> is not made here**; evidence + recommendation in ledger `2026-08-29b`. `sync` **clean**.
-> **`2026-08-28d`: `P14` settled.** **Next: 4c-ii + step 7, the un-splittable cone — read its
+> ⏰ **`2026-08-29c`: question (b) decided, and most of it landed** — every open `TK*` id
+> bucketed ([adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); 22 appends
+> landed, **15 remain on `TK53`**, the row that makes DELETE lossless. Re-verification
+> overturned rows BOTH ways → ledger `2026-08-29c`. 🧭 **Question (a), delete or keep, is
+> the user's call and is not made here**; recommendation in ledger `2026-08-29b`.
+> **`2026-08-28d`: `P14` settled. Next: 4c-ii + step 7, the un-splittable cone — read its
 > revert-to-green exit (scope doc §11.12) first.** → PROOF_STATUS `2026-08-28c` §5.
-> **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned 2026-08-21b). Ask
+> **"Known live correctness bugs: 0"** stands (`BL-2` fixed 2026-08-21b) — but ask
 > `python scripts/gate_status.py`, never this line. Red is yours: `git stash`.
 
 ## Board
@@ -43,7 +43,7 @@ forward forever and are never reused.**
 | `P3` | leg 7 **4c-ii + step 7, one commit** — fence layer landed 2026-08-28b; **public surface MIGRATED 2026-08-28c** (7 decls + zcli driver onto `checkPublic`, no new hypotheses; `hql` surface cut from 6 rows to **1**, `graph_correct` `:27`). Everything pre-4c-ii is now DONE, **`P14`'s `UntaintedShadow` adjudication included (2026-08-28d: Route B = one disjunct on one field; the `writeRulesRaw` endpoint-closure risk retired; `slSwD_not_mono` shown to measure the wrong σ0)**. **What remains is the un-splittable 42-module cone** — measured 3 sessions, not 1 (PROOF_STATUS `2026-08-28c` §5), and its **revert-to-green exit is now declared in the item block: read it before opening** | **NOW** | L | — | 2026-08-28d |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d, and **the task tree was re-counted to match 2026-08-29** — it had carried the stale `11` for five days) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-29 |
-| `TK53` | **land the adjudicated `TK*` appends** — question (b) of the trial verdict is DECIDED (→ [adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)) and the appends are the unlanded half. Each is a statement that exists only in `tasks/` and has a named destination in a living doc. **This row is what makes DELETE lossless** — until it closes, deleting `tasks/` drops statements that no living doc carries. `TK52` closed on the decision; this carries the execution, so the decision is not a residual with no owner | **NEXT** | M | — | 2026-08-29b |
+| `TK53` | **land the adjudicated `TK*` appends** — question (b) is DECIDED (→ [adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); the appends are the unlanded half, **22 landed 2026-08-29c, 15 remain**. Each is a statement existing only in `tasks/`, with a named destination in a living doc. **This row is what makes DELETE lossless.** `TK52` closed on the decision; this carries the execution, so the decision is not a residual with no owner | **NEXT** | M | — | 2026-08-29c |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
 | `P7` | `ttuStarFree` **(iii)+(iv)** — re-prove the 5 consumed sites, widen the gate → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16 | LATER | M | `P6` | 2026-08-16 |
@@ -53,7 +53,7 @@ forward forever and are never reused.**
 | `P10` | re-run the scope audit, hand-curated → [fan-out runbook](docs/subagent-fanout-runbook.md), final § | LATER | M | — | 2026-08-16 |
 | `P11` | the fixture-TRIPLE question for 5 subsumed `.fga` fixtures → `tests/test_schema_shapes.py::KNOWN_SUBSUMED` | LATER | S | — | 2026-08-16 |
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
-| `HS-5` | always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines. **The enumeration and the measuring method now live in `docs/README.md` §2 itself**, re-measured 2026-08-29; what is open is the adjudication — which docs are deliberately exempt. **No count here, and none in §2 either**: it has read differently on every one of four readings → ledger `2026-08-29b` | LATER | S | — | 2026-08-29b |
+| `HS-5` | always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one. **Enumeration + measuring method now live in §2 itself**; what is open is the adjudication — which docs are deliberately exempt. **No count in either place**: it read differently on all four readings → ledger `2026-08-29b` | LATER | S | — | 2026-08-29b |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
@@ -128,11 +128,13 @@ numbers re-derived from `formal/FINAL_REVIEW.md`'s generated ledger, never prose
 
 ### `TK53` — land the adjudicated `TK*` appends
 
-Each append is one statement that exists nowhere but `tasks/`. Until this closes, deleting
-`tasks/` drops statements no living doc carries. **Read first:**
-[the adjudication](docs/history/tk-findings-adjudication-2026-08-29.md) — its table, its
-four traps, its "Method" § (the refutation pass overturned 6 of 11, so a single-pass sweep
-of the remainder will not do); then [the snapshot](docs/history/tasktool-findings-2026-08-29.md).
+Each append is one statement existing nowhere but `tasks/`; until this closes, deleting
+`tasks/` drops statements no living doc carries. **22 landed 2026-08-29c; 15 remain.**
+⚠ **Re-verify each row before writing it** — doing so overturned rows both ways, including
+a destination that did not exist and four "appends" already carried by their own source.
+**Read first:** [the adjudication](docs/history/tk-findings-adjudication-2026-08-29.md) —
+its table, its four traps, its "Method" §; then
+[the snapshot](docs/history/tasktool-findings-2026-08-29.md) for the finding text.
 
 ### `P6` — `ttuStarFree` part (ii): bridges on the rule-routed write path
 
@@ -191,14 +193,12 @@ not carry", demoted there 2026-08-20b, and both that day's corrections were appl
 **Read that section before taking an id** — count its bullets, do not trust this line.
 
 **Read first:** [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md)
-(verdicts, method, the two limits — in-memory SQLite understates statement-count wins,
-cProfile depresses throughput — and its three instrument corrections, whose transferable
-rule is [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) §"A MEASUREMENT is an
-assurance step too" and binds any re-run), then your id's entry in
-[`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) **including its
-verifier corrections**, then [`docs/perf-next-round.md`](docs/perf-next-round.md) for the
-fence and the reopening rule. Re-run with `python -m benchmarks.profile_r6 [_write]
---target <t>` — never beside another bench or pytest run.
+(verdicts, method, the two limits, and its three instrument corrections — whose
+transferable rule is [`sabotage-procedure.md`](docs/sabotage-procedure.md) §"A MEASUREMENT
+is an assurance step too" and binds any re-run), then your id's entry in
+[the audit](docs/perf-round6-audit-2026-08.md) **including its verifier corrections and the
+2026-08-29b appendix cross-links**, then [`perf-next-round.md`](docs/perf-next-round.md).
+Re-run with `python -m benchmarks.profile_r6 [_write] --target <t>`, never beside another.
 
 ## Standing traps
 

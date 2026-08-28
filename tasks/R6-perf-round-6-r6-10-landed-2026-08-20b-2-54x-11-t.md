@@ -8,7 +8,7 @@ related: []
 parent:
 labels: [perf]
 source: board
-source_hash: 6a2167f173fe
+source_hash: 77474b3d6848
 created: 2026-08-21
 moved: 2026-08-29
 updated: 2026-08-29b
@@ -76,3 +76,5 @@ Re-stamp: the R6 board row was itself edited this session (moved 2026-08-24d -> 
 ### 2026-08-29b
 
 Board block edited 2026-08-29b: the decline/unreachable split was replaced by a pointer at the audit's verdict tables, and the five-traps paragraph was reduced to a pointer that says to count the bullets. Both were restatements of docs/perf-round6-audit-2026-08.md, whose banner was corrected the same session (TK48) to carry no count -- restating a split on the board is the defect TK48 was filed for, one file over. No figure changed and no child moved; R6-19's number is unchanged. Task body content remains current.
+
+Block edited again in 2026-08-29c: the Read-first now names the audit's new 2026-08-29b appendix cross-links section alongside the verifier corrections, since ten of them are corrections to the appendix leads a perf session would otherwise read uncorrected. Reflowed for the line ceiling; no figure changed.

@@ -25,6 +25,78 @@ from here.
 
 ---
 
+## 2026-08-29c — `TK53`: 22 appends landed; re-verification overturned rows in BOTH directions
+
+rows: `TK53`, `R6`, `HS-5`
+
+Continuation of `2026-08-29b` (same working session; separate key because that entry was
+written before this work and entries are never retro-edited). **Question (a) remains the
+user's call and is still not made.**
+
+**1. What landed, in five commits, each gated green.**
+* `docs/latent-gaps.md` — four bullets in *"Latent, but owned by another doc"* (`TK8`,
+  `TK9`, `TK10`, `TK13`), the section whose stated job is to be a complete index of what is
+  open and which was missing them.
+* `docs/architecture/decision-log.md` — `TK2`, `TK40`, `TK41`, `TK42`, including a new
+  *"Reads are lenient"* section.
+* `docs/architecture/correctness.md` — `TK5`, `TK37`.
+* `docs/perf-round6-audit-2026-08.md` — one consolidated appendix subsection carrying ten
+  cross-links and corrections (`TK19`–`TK32`), landed beside the verbatim leads rather than
+  inside them.
+* `docs/README.md` §3 (`TK45`), plus `TK7` into the Lean docstring that already carries the
+  residual it corrects.
+
+**2. ⚠ Verification overturned findings in BOTH directions, which is the session's real
+result.** Every row was re-verified against the live tree before it was written, as the
+adjudication's own trap requires. That was not ceremony:
+* **Four rows marked `APPEND` were already carried** and were closed instead (`TK17`,
+  `TK23`, `TK24`, `TK27`) — the increment sits verbatim in the appendix lead's own fix
+  sketch.
+* **`TK41`'s destination did not exist.** The adjudication said "append to the existing
+  lenient-reads material" in `decision-log.md`; there is none. The file's only *lenient* is
+  `lenient ∀⇒∃`, the wildcard vacuity mode — a different sense, and the anchor `TK4`
+  targets. Landing there would have fused two unrelated concepts under one word.
+* **`TK13` and `TK10` shrank**; their homes already carried more than the findings claimed.
+* **`TK45` was half stale**, like `TK51` before it.
+* ⚠ **And `TK27` shows the adversarial pass failing the other way**: it *refuted* a correct
+  write-off by misreading a fix sketch. So `2026-08-29b`'s "6 of 11 overturned" measures
+  **disagreement, not correctness** — the pass catches wrong write-offs and can also
+  manufacture wrong appends. A dated correction is appended to the (FROZEN) adjudication
+  file. **Neither pass substitutes for opening the file.**
+
+**3. A near-miss worth recording, because it is the house failure mode in miniature.**
+While checking `TK45` I read `handoff_lint.py:216`'s *"explicit list rather than a glob"* as
+proof the frozen-banner check was list-based and therefore went stale. That comment belongs
+to `check_doc_links`, a **different check**; `::check_frozen_banners` globs every `.md`
+under the history dirs and its docstring explicitly refuses a filename list. Reading it the
+first way would have written a false statement into a living doc *and* closed a finding on
+a fabricated ground. The surviving residual is narrower and is what got recorded: design
+docs outside a history dir are walked by nothing, and a stale *description* (as opposed to
+a broken link) is not enforceable at all.
+
+**4. Sharpest thing found.** Appendix lead `A15`'s fix sketch is **backwards about the
+gate**: it reasons that CORRESPONDENCE anchors "still resolve since the public functions
+keep their names", but the anchors are on the **nested closures** an AOT rewrite would
+delete (`SetEngine.check.sat_expr`, `SetEngine.expand.do_expr`), and `anchor_check.py`
+walks nested bodies with a dotted prefix. `R6-1`'s and `R6-2`'s Lean notes already
+enumerate them; nothing connected that to `A15`. Runner-up: `A3` and `A14` both key
+invalidation on `ResidueV1.version`, the token this same document already refutes for
+`R6-4(a)`.
+
+**5. What remains.** Fifteen appends, tracked on `TK53`, listed in the adjudication table.
+`TK53` stays `NEXT`: until it closes, deleting `tasks/` still drops statements no living
+doc carries.
+
+`python scripts/task.py lint` → `task lint: clean (11 checks, 152 task file(s) parsed)`
+
+`read: board + HANDOFF` — unchanged from `2026-08-29b`, and the same caveat applies:
+orientation was `board` only, and `HANDOFF.md` was opened to write to it.
+
+**Still owed:** nothing. The fifteen remaining appends are queued work on `TK53`, not a
+skipped write-back step.
+
+---
+
 ## 2026-08-29b — trial question (b) DECIDED: every `TK*` id bucketed, 3 discharged, appends carried by `TK53`
 
 rows: `TK52` (closed), `TK53` (new), `HS-5`, `R6`
