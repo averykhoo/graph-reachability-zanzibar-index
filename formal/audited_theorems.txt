@@ -230,6 +230,7 @@ graph_correct_bareStar
 graph_correct_direct
 graph_correct_empty
 graph_correct_objStar
+graph_correct_public
 graph_correct_rules
 graph_correct_rulesBS
 graph_correct_usStar

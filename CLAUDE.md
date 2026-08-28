@@ -39,7 +39,22 @@ IVM delta processor.
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`
   (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in
   [`docs/gate-runbook.md`](docs/gate-runbook.md); details under "Running things"
-  below. Commit and push **only when asked**.
+  below. **Push only when asked.**
+- **COMMIT whenever the full gate is green and the session did work** (rule added
+  2026-08-28b, user instruction). Not "only when asked" — that was the old rule, and it
+  left green, gated, fully-recorded trees sitting uncommitted at session end, which is
+  pure downside: a green tree is the cheapest possible resume point, and an uncommitted
+  one is the easiest thing to lose. When `python scripts/gate_status.py` says
+  **COVERED on this tree** and you changed something, commit it. Corollaries:
+  * A green gate is the trigger, not a request. Do not wait to be asked.
+  * "Did work" excludes a session that only read; it includes docs-only edits.
+  * **Push is still opt-in and unchanged** — commit ≠ push.
+  * If the gate is NOT fully green, the old rule stands: do not commit to make progress
+    look like assurance. Say what is red and leave it.
+  * ⚠ Editing any `*.md` changes the `t2a` tree id and stales the `lean` verdict (the
+    pytest tiles key off `t2c`, which excludes `*.md`). So write the session records
+    FIRST, then re-run `lean`, then commit — otherwise the commit's own banner is a
+    claim the tree no longer supports.
   **As of 2026-07-27 `tests/` runs THROUGH `verify.sh`, not beside it.** It used to
   be "type `pytest tests/` and read the tail" — no count floor, no
   skipped/xfailed/xpassed parse, no exit-code assertion, no proof a tile collected

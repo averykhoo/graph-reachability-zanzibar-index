@@ -16,16 +16,16 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **`verify.sh lean` passed on today's tree (2026-08-28)**; the nine pytest-tile
-> verdicts are green on `2026-08-24d`'s tree and **stale here** — today's edits are
-> comment-only Lean + md, but verdicts are re-earned, not argued: re-run the tiles
-> before any push.
-> **`2026-08-28`: `P3`'s two standing human calls are made** — `hql` accepted, Route B
-> retained on corrected grounds (its "zero additional cone" argument is **falsified**
-> by a live census; ~136 sites / 8 files, third consecutive low count), and the guard
-> lands on the leg-5 non-vacuity instrument, so a fence-modeling endgame keeps the
-> headline claim unguarded → ledger `2026-08-28`, PROOF_STATUS `2026-08-28`, scope doc
-> §11.11. **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned
+> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-28b)** — `lean` +
+> `conf-tile:1..5/5` + `tests-tile:1..4/4`. The tiles are keyed to the code-scoped tree id
+> (`*.md` excluded), so this banner edit does not stale them; `lean` was re-run after it.
+> **`2026-08-28b`: the fence-modeling endgame is LANDED and green** —
+> `Fence.lean::checkPublic` + `FullScope.lean::graph_correct_public` give an **unguarded**
+> "public read = `sem`", needing neither `hql` nor the 4c-ii cone. Additive: pins 38→45 /
+> 155→160, zero rows moved. ⚠ Non-vacuity rests on the six `W4WitnessDirect.fence_*`
+> pins, NOT that theorem. **Next, pre-4c-ii: migrate the public surface +
+> `final_applies`(`4`) onto `checkPublic`** → PROOF_STATUS `2026-08-28b` §4.
+> **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned
 > 2026-08-21b, `Closed ids` note below). Two board `moved` cells disagree with the task
 > tree, unreconciled on purpose: they need a call on what `moved` means, not an edit. Ask
 > `python scripts/gate_status.py`, never this line — any edit invalidates the
@@ -42,7 +42,7 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7, one commit** — **both human calls MADE 2026-08-28** (`hql` accepted; Route B retained, its cone argument falsified by the §11.11 census); one preflight open (dotted-ref probe), see block → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.11 | **NOW** | L | — | 2026-08-28 |
+| `P3` | leg 7 **4c-ii + step 7, one commit** — **the fence layer LANDED green 2026-08-28b** (`checkPublic` + `graph_correct_public`, additive, cone untouched); preflight CLOSED (`parse_schema_ast` rejects dotted *references* → WF clause is faithful). **Next step is pre-4c-ii: migrate the public surface + `final_applies`/`final_applies4` onto `checkPublic`** → PROOF_STATUS `2026-08-28b` §4 | **NOW** | L | — | 2026-08-28b |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d; the old `9 / 5` was wrong, and the `11` was right until `R6-6` closed) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24d |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |

@@ -15,6 +15,101 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-28b (**THE FENCE-MODELING ENDGAME IS LANDED, AND IT DID NOT NEED `hql` OR THE 4c-ii CONE. `GraphModel.checkPublic` + `graph_correct_public` are green on today's tree: the PUBLIC read equals `sem` with NO leaf-name guard on the caller. Purely ADDITIVE — no existing statement, definition or proof changed; the pins grew 38→45 statements / 155→160 definitions and zero rows moved. `reachedByW3d2E_schema` landed as an uncosted prerequisite. The recommended-but-unscouted layer is now scouted, built and sabotage-controlled.**)
+
+**Task taken:** `P3`, user-directed "do the hql thing", re-scoped after scouting to
+`checkPublic`-first and confirmed by the user before any Lean was written.
+
+### 1. The decisive fact — `checkPublic` is NOT part of the 4c-ii cone
+
+2026-08-28 (§3) recorded the fence-modeling repair as owed **inside** the 4c-ii commit,
+which is why it read as expensive and frightening: unscouted, cost unmeasured, and welded
+to a cone that trap 3 (scope doc §11.10) forbids splitting. That framing was wrong.
+
+`graph_correct_public`'s fenced branch needs only `WF S` (`FullScope.lean::
+GraphAdmission.wf`, first field) plus "undeclared ⇒ `sem` denies"; its unfenced branch is
+today's `graph_correct` applied verbatim. Neither depends on anything 4c-ii does. So the
+layer lands **before** the cone opens, on green, where every step is individually
+buildable — instead of being the last thing attempted inside a ~136-site un-buildable
+window. **This retires the single largest constraint on 4c-ii without touching 4c-ii.**
+
+### 2. What landed
+
+* `GraphIndex/Fence.lean` (new): `GraphModel.checkPublic` (leaf-family deny, else
+  `check`), the bridge `not_mem_keys_of_publicOfLeaf_isSome` (contraposition of
+  `Leaf.lean::relNameOK_of_mem_keys` — declared names are dot-free, leaf predicates are
+  not), the two branch rewrites, and `checkPublic_le_check` (conservativity, hypothesis-free
+  so it survives into post-4c-ii states).
+* `FullScope.lean::graph_correct_public` — `checkPublic σ q = sem S T q` under exactly
+  `graph_correct`'s hypotheses, no `hql`. Case split on the fence; fenced branch closes by
+  `Spec/Confine.lean::semAux_undeclared`.
+* `CascadeStrataAssemble.lean::reachedByW3d2E_schema` — **a prerequisite no document
+  costed.** `ReachedBy := ReachedByW3d2E`, `checkPublic` reads `σ.schema`, and only the
+  W3d/W3d2 forms existed. Four-constructor induction, near copy of `reachedByW3d2_schema`.
+* Registered in all three pin mechanisms: `HEADLINE` (statement pin), `audited_theorems.txt`
+  + `Audit.lean` `#print axioms`, and `verify.sh`'s `HEADLINE_AUDITS`.
+
+### 3. ⚠ The vacuity hazard, and the sabotage that actually controls it
+
+**`graph_correct_public` proves green even under a fence that NEVER FIRES.** Pre-4c-ii no
+write mints a leaf node, so `check σ qLeaf = false` already holds on every *reachable*
+state and both sides agree at leaf names regardless. The theorem is therefore NOT evidence
+that the fence works; it would go silently false the moment 4c-ii mints leaf nodes.
+
+The six pins that do carry it are in `FullScope.lean::W4WitnessDirect`, stated at the
+HEADLINE schema `Sd` (the pre-existing polarity pins `Leaf.lean::pol_idx2`/`pol_nv7` run at
+`Sw`/`SwU`, so none of them constrained `Sd` at all). `fence_changes_answer` is the
+load-bearing one: it exhibits a hand-built state where the unfenced read GRANTS and the
+public read DENIES.
+
+**Sabotage record — the FIRST attempt was the wrong one, and that is the reusable lesson.**
+Nulling `publicOfLeaf` itself (`:= none`) breaks `Leaf.lean::publicOfLeaf_leafPred`,
+`pol_idx2` and `pol_nv7`, so the build dies inside `Leaf.lean` and never reaches the new
+pins — it sabotaged the INSTRUMENT, not the subject, and proved nothing. The narrow
+plausible weakening is someone simplifying the public read to delegate
+(`checkPublic σ q := check σ q`); run with `Fence.lean`'s two branch rewrites neutralized
+so the file still compiles, the SOLE failure is:
+
+```
+error: ZanzibarProofs/FullScope.lean:890:80: Tactic `decide` proved that the proposition
+  GraphModel.checkPublic σLeaf qLeaf = false
+is false
+```
+
+⚠ **Under that same sabotage the four `publicOfLeaf` polarity pins all stay GREEN** —
+`publicOfLeaf` is untouched. A guard-only pin cannot catch a fence removal; only a pin
+stated over a STATE can. Recorded because the obvious instinct is to pin the guard.
+
+Second-order benefit: the regenerated DEFINITION pin now carries `publicOfLeaf`'s body
+verbatim, so the null-fence sabotage is now caught by the pin as well as the build.
+
+### 4. What is now owed, and what is explicitly NOT done
+
+**Deliberately NOT done: migrating the public surface onto `checkPublic`.**
+`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`, `graphRun_check_eq_sem`,
+`graphRunOps_check_eq_sem` and the `final_applies`/`final_applies4` witnesses are still
+stated over the unfenced `check`. Migrating them is where the 4c-ii payoff is banked — a
+migrated `final_applies` never gains an `hql` binder — but it CHANGES pinned headline
+statements on the leg-5 non-vacuity instruments, which is a different risk class from
+everything above and deserves its own session with its own sabotage. Landing it half-done
+inside this commit would have put churn on the exact declarations whose job is detecting
+vacuity. **This is the next `P3` step, and it is still pre-4c-ii work.**
+
+**Preflight resolved (owed since 2026-08-28 §3):** `parse_schema_ast` REJECTS dotted
+REFERENCES, not merely dotted declarations — inline at `zanzibar_utils_v1.py:892-895` for
+declared names, and `::_validate_ast_references` (`:910-940`, called at `:906`, exhaustive
+over all six `Expr` constructors) for referenced ones. So the **WF clause is the faithful
+model** for computed-ref dot-freeness, per this ledger's own stated criterion. ⚠ Carve-out:
+`check_name` skips `name == '...'` (`:916`) even though BARE carries dots, matching
+`Leaf.lean::isLeafPred_bare` — a clause phrased without that carve-out is unfaithful.
+
+**Doc rot found:** `headline_statements.txt` was **38** rows before this session (now 45);
+**five** sites still said 26 — `statement_pin.py:36/:42/:603`, `README.md:126`,
+`headline_definitions.txt:10`. Not corrected here (the generated headers are regenerated
+output); flagged for the migration session.
+
+---
+
 ## Session 2026-08-28 (**THE TWO `P3` HUMAN CALLS ARE MADE — `hql` ACCEPTED, Route B RETAINED on corrected grounds — after a six-agent live census (full record: scope doc §11.11) falsified Route B's "zero additional cone" and found the `hql` guard cheaper than budgeted but landing ON the leg-5 non-vacuity instrument. A FENCE-MODELING endgame is recommended so the top-level claim stays unguarded. The 2026-08-21b stale-comment debt is discharged. No proof or definition changed.**)
 
 **Task taken:** `P3` de-risk, user-scoped ("de-risk + additive only") after the question

@@ -1,6 +1,7 @@
 import ZanzibarProofs.Equiv
 import ZanzibarProofs.GraphIndex.CascadeStrataAssemble
 import ZanzibarProofs.GraphIndex.CascadeStrataEdge
+import ZanzibarProofs.GraphIndex.Fence
 
 /-!
 # W4 — the full-scope restatement (`ReachedBy`, `GraphAdmission`, the final T-theorems)
@@ -369,6 +370,53 @@ theorem graph_correct {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hF.term
     hF.computedOrDirect hF.directArmsBare hF.directArmsConcrete
     hF.computedOnlyOperands hF.twoStrata hF.wsBare hF.noUnionDirects h hq hqs hqo
+
+/-- **T2b-public (`graph_correct_public`), full W4 scope — the PUBLIC read equals the
+    spec, with NO leaf-name guard on the caller.**
+
+    `graph_correct` above is stated over `GraphModel.check`, which models
+    `index_v4/wildcard.py::WildcardIndex._check_internal` — the probe BELOW the `BL-2`
+    fence. This theorem is stated over `GraphModel.checkPublic`, which models the public
+    `::WildcardIndex.check`, and it is the one that should be read as "the graph index
+    computes the spec".
+
+    **Why this exists (`P3` leg 7, 2026-08-28).** After the 4c-ii re-point the graph
+    mints leaf-family nodes, and at a query naming one of them the UNFENCED read grants
+    while `sem` denies — so `graph_correct` becomes false as written, and the accepted
+    repair was to guard it with `hql : publicOfLeaf S q.object.type q.relation = none`.
+    A guard is a weakening, and on the leg-5 non-vacuity instruments
+    (`W4WitnessDirect.final_applies` / `final_applies4`, where `q` is universally
+    quantified) it cannot be discharged and would have to become a binder — putting an
+    unsatisfiable-at-leaf-names hypothesis on the very declarations whose job is to
+    detect unsatisfiable hypotheses. Fencing the READ instead discharges the leaf case
+    where it actually belongs, so the public headline keeps its unguarded shape and the
+    witnesses keep theirs.
+
+    The fenced branch is correct, not merely conservative: a leaf-family name is
+    dot-carrying, declared relation names are dot-free
+    (`GraphIndex/Leaf.lean::relNameOK_of_mem_keys`), so the queried key is undeclared and
+    the spec denies there (`Spec/Confine.lean::semAux_undeclared`). `σ.schema = S` — the
+    fence reads the state's own schema, the hypotheses speak of `S` — is
+    `CascadeStrataAssemble.lean::reachedByW3d2E_schema`, landed for this proof.
+
+    ⚠ Non-vacuity does NOT come from this theorem. Pre-4c-ii the fence never fires on a
+    reachable state, so this proves green even under a null fence; the pins that refuse
+    that are `W4WitnessDirect.fence_changes_answer` and friends, with their sabotage
+    evidence recorded there. -/
+theorem graph_correct_public {S : Schema} {T : Store} {σ : GraphState} (q : Query)
+    (hA : GraphAdmission S T) (hF : W4Fragment S T)
+    (h : ReachedBy σ S T) (hq : Drained S σ)
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR) :
+    GraphModel.checkPublic σ q = sem S T q := by
+  have hsch : σ.schema = S := reachedByW3d2E_schema h
+  unfold GraphModel.checkPublic
+  split
+  · rename_i hsome
+    rw [hsch] at hsome
+    exact (semAux_undeclared S q.subject T q
+      (not_mem_keys_of_publicOfLeaf_isSome hA.wf hsome) _ _).symm
+  · exact graph_correct q hA hF h hq hqs hqo
 
 /-- **T3 (`backend_equivalence`), full W4 scope.** The set engine and the graph
     index agree — by transitivity through `sem` (T1 ∘ T2b). The whole point of the
@@ -825,6 +873,86 @@ def Sd : Schema :=
 /-- One admitted write THROUGH THE DIRECT ARM of the derived def:
     `user:alice ∈ approver@doc:d1`. -/
 def Td : Store := [⟨⟨"user", "alice", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩]
+
+/-! ### The public-fence non-vacuity witnesses (`BL-2`)
+
+⚠ **These are the SABOTAGE CONTROL for `graph_correct_public`, and they — not that
+theorem — are what make the fence contentful.** Before the 4c-ii re-point no write ever
+mints a leaf node, so `GraphModel.check σ qLeaf = false` already holds on every
+*reachable* state. `graph_correct_public` would therefore prove green even with
+`publicOfLeaf` replaced by `fun _ _ _ => none`: a fence that never fires. It would then
+go silently FALSE the instant 4c-ii starts minting leaf nodes — an assurance step that
+fails by PASSING, which `docs/sabotage-procedure.md` exists to refuse.
+
+Two things make these pins bite where the correctness theorem cannot. They are stated at
+the HEADLINE schema `Sd` — the pre-existing polarity pins (`Leaf.lean::pol_idx2` etc.)
+run at `Sw`/`SwU`, so none of them constrains the schema the headlines are instantiated
+at. And `fence_changes_answer` exhibits a state where the unfenced read GRANTS while the
+public read DENIES, so it fails under a null fence rather than merely losing information.
+
+**Sabotage evidence, 2026-08-28 — and the first attempt was the WRONG one.** Nulling
+`publicOfLeaf` itself (`:= none`) is too broad: it breaks `Leaf.lean`'s own
+`publicOfLeaf_leafPred`, `pol_idx2` and `pol_nv7`, so the build dies inside `Leaf.lean`
+and never reaches these pins at all. That sabotages the INSTRUMENT, not the subject, and
+proves nothing about the fence (`docs/sabotage-procedure.md`: break the narrowest
+*plausible* weakening, and control your instrument).
+
+The narrow plausible weakening is someone "simplifying" the public read to delegate —
+`checkPublic σ q := GraphModel.check σ q`. Run with `Fence.lean`'s two branch rewrites
+neutralized so the file still compiles, the SOLE failing declaration is
+`fence_changes_answer`, literal output:
+
+    error: Tactic `decide` proved that the proposition
+      GraphModel.checkPublic σLeaf qLeaf = false
+    is false
+
+⚠ **Under that same sabotage `fence_fires_idx0`/`idx2`/`not_identity`/`untainted_leaf`
+all stay GREEN** — `publicOfLeaf` is untouched, so the four polarity pins do NOT catch a
+fence removal. Only `fence_changes_answer` does, which is exactly why it is stated over a
+STATE (where the fence changes an answer) rather than over the guard alone. Restored, all
+five are green. -/
+
+/-- The fence FIRES at a minted leaf of `Sd`'s derived family, at index 0 … -/
+theorem fence_fires_idx0 :
+    publicOfLeaf Sd "doc" (leafPred "approver" 0) = some "approver" := by decide
+
+/-- … and at index 2, the index Python actually mints (scope doc §11.5, control C2) —
+    index-agnosticity, so a `".0"`-only pin cannot pass for the general fact. -/
+theorem fence_fires_idx2 :
+    publicOfLeaf Sd "doc" (leafPred "approver" 2) = some "approver" := by decide
+
+/-- The fence is NOT the identity: the PUBLIC name passes it untouched. This is the pin
+    that refuses a fence which simply denies everything — the mirror failure mode. -/
+theorem fence_not_identity : publicOfLeaf Sd "doc" "approver" = none := by decide
+
+/-- An UNTAINTED family's leaf passes the fence — `banned` is a plain `Direct` def, so
+    it has no derived leaf family and must not be fenced. -/
+theorem fence_untainted_leaf :
+    publicOfLeaf Sd "doc" (leafPred "banned" 0) = none := by decide
+
+/-- A state carrying a LEAF edge directly. Hand-built rather than reached by a write:
+    pre-4c-ii no write mints one, which is exactly why the discriminating witness below
+    has to construct the post-re-point shape by hand to be non-vacuous today. -/
+def σLeaf : GraphState :=
+  { schema := Sd
+    edges := [(subjNode ⟨"user", "alice", BARE⟩,
+               objNode ⟨"doc", "d1"⟩ (leafPred "approver" 0))]
+    nodes := [subjNode ⟨"user", "alice", BARE⟩,
+              objNode ⟨"doc", "d1"⟩ (leafPred "approver" 0)]
+    residue := fun _ _ => none
+    outbox := []
+    watermark := 0 }
+
+/-- A query AT the minted leaf name — the `BL-2` read that must not leak. -/
+def qLeaf : Query := ⟨⟨"user", "alice", BARE⟩, leafPred "approver" 0, ⟨"doc", "d1"⟩⟩
+
+/-- **The unfenced read GRANTS here.** (`_check_internal`'s behaviour — the leaf edge is
+    really present and really reachable.) -/
+theorem unfenced_grants : GraphModel.check σLeaf qLeaf = true := by decide
+
+/-- **… and the public read DENIES.** The fence changes a real answer, which is the fact
+    a null fence cannot reproduce. Mirrors `tests/test_reg18_leaf_name_read_leak.py`. -/
+theorem fence_changes_answer : GraphModel.checkPublic σLeaf qLeaf = false := by decide
 
 /-- **The witness store is genuinely outside the OLD admission bundle**: plain
     `StoreValidRules` (= `GraphAdmission.storeValid`) rejects the Direct-arm

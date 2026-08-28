@@ -143,6 +143,13 @@ HEADLINE = [
     "Zanzibar.cascade2_drains",
     # T2a / T2b / T3 / T6 -- the final graph theorems
     "Zanzibar.graph_correct",
+    # The PUBLIC read (`BL-2` fence, P3 leg 7, 2026-08-28).  `graph_correct` is stated
+    # over `GraphModel.check` = `_check_internal` (BELOW the fence); this one is stated
+    # over `GraphModel.checkPublic` = the public `WildcardIndex.check`, and it is the
+    # statement that should be read as "the graph index computes the spec".  Pinned
+    # here from the day it lands, so the leaf-name guard 4c-ii will add downstream
+    # cannot quietly migrate ONTO it.
+    "Zanzibar.graph_correct_public",
     "Zanzibar.graph_reached_inv",
     "Zanzibar.backend_equivalence",
     "Zanzibar.exclusion_effective",
@@ -167,6 +174,18 @@ HEADLINE = [
     "Zanzibar.W4WitnessDirect.within_scope",
     "Zanzibar.W4WitnessDirect.correct_applies",
     "Zanzibar.W4WitnessDirect.outside_old_admission",
+    # The `BL-2` public-fence non-vacuity pins (2026-08-28).  `graph_correct_public`
+    # proves green even under a fence that NEVER FIRES, because pre-4c-ii no write
+    # mints a leaf node -- so these, not that theorem, are what make the fence
+    # contentful, and they are exactly the "restated to True" hole this list guards.
+    # `fence_changes_answer` is the load-bearing one: under the delegate sabotage
+    # (`checkPublic := check`) the four polarity pins stay GREEN and only it goes red.
+    "Zanzibar.W4WitnessDirect.fence_fires_idx0",
+    "Zanzibar.W4WitnessDirect.fence_fires_idx2",
+    "Zanzibar.W4WitnessDirect.fence_not_identity",
+    "Zanzibar.W4WitnessDirect.fence_untainted_leaf",
+    "Zanzibar.W4WitnessDirect.unfenced_grants",
+    "Zanzibar.W4WitnessDirect.fence_changes_answer",
     # The E-chain widening's per-leg instruments.  Legs 3/4 landed these (they are
     # what catches a `_d` packaging whose hypotheses are jointly unsatisfiable) but
     # never pinned their statements -- same "quietest possible way" hole the comment
