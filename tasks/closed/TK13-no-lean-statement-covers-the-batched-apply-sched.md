@@ -10,9 +10,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-24b
-updated: 2026-08-24b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 *"Nothing in the Lean tree quantifies over 'apply N ops, then one cascade'."* The model covers the synchronous per-write schedule; the async `catch_up` / offline `build_index` schedules — where many ops are applied and then a single cascade drains — have no statement.
@@ -41,3 +41,7 @@ closed:
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [P18]`. This row is the adjacent concurrency gap P18 is NOT; P18 did not name it back.
+
+### 2026-08-29b
+
+NARROWED, and the finding's premise was half wrong. Verification: CORRESPONDENCE.md sec 6 (:393-424) already OWNS the batched-schedule gap AND marks it open in as many words -- ':420-424' says 'nothing in the Lean tree quantifies over apply N ops, then one cascade' and names 'widening ReachedByW3d2E (or adding a batched constructor)' as the honest fix. So the gap needed no new carrier. What no file recorded is the COLLISION: connectedstore/apply.py:104-105's docstring asserts the exact safety claim sec 6 says is unproved, and sec 6 discusses advance_index without ever mentioning it. That trap is what was appended to docs/latent-gaps.md.

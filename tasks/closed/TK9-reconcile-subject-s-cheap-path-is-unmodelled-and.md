@@ -10,9 +10,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 Lean models only the full-object reconcile (`reconcileStarsKey`/`reconcileStarsKeyD`). The per-subject cheap path has no model and has grown real logic twice: *promote-on-record* (2026-07-17) and *escalation to the full reconcile* (2026-07-26, the `ZT-P0-1`/`ZT-P0-2` fix). `formal/ARCHITECTURE.md:759-774` states the consequence plainly — *"the gap is no longer plausibly characterizable as 'a thin fast path'"* — and `CORRESPONDENCE.md` §7.1 puts it as *"a per-subject path that can escalate to a full reconcile and can mutate node flags is a real algorithm, and none of it is in the model."*
@@ -37,3 +37,7 @@ Both landed fixes are pinned Python-side by regression tests, so this is a model
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-9 (`ARCH-H-10`, tier 2, sweep-h only) and inventory-formal.md MISS #5, independently. Anchor re-read this pass at formal/ARCHITECTURE.md:759-764.
+
+### 2026-08-29b
+
+APPENDED to docs/latent-gaps.md, same section, as a bullet explicitly distinct from the node-GC one. Verified: reconcile_subject is the public wrapper at index_v4/processor.py:798 and _reconcile_subject the body at :803 -- CORRESPONDENCE cites the underscore form, so the bullet names both or the anchor looks like a mismatch. Both growths itemized at CORRESPONDENCE.md:483-486 and :487-491; the expired justification 'a thin fast path' is verbatim at formal/ARCHITECTURE.md:776. Home says nothing is owed (ARCHITECTURE.md:774-776 'does not widen the gap's disposition'), which is what justified the bullet.

@@ -10,9 +10,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-24b
-updated: 2026-08-24b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 Lean models the node-flag RULE and explicitly disclaims the collection ALGORITHM — `ReconcileDiff.lean` and `Cascade.lean` both say *"node GC is a modeled-away optimization"* (`formal/CORRESPONDENCE.md:975-996`). The argument for the exclusion is the usual one and is not silly. What makes it a filed row rather than a declared boundary is the empirical record: **two named correctness bugs have now landed inside that one unmodeled region** — `ZT-P0-1` (the unsound `_keys_referencing` elision) and, added to the map on 2026-08-21, `BL-1` (the released-userset bridge leak, found by the hypothesis campaign).
@@ -41,3 +41,7 @@ Two bugs in one modeled-away region is an argument for filing it, not evidence i
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [P19]`. 'Distinct from P19 ... do not merge them' is stated here and nowhere on P19, so the blind end was the one at risk of merging them.
+
+### 2026-08-29b
+
+APPENDED to docs/latent-gaps.md, section 'Latent, but owned by another doc'. Verified first-hand: both bugs are in one CORRESPONDENCE.md bullet at :982-1003 (ZT-P0-1 :991/:998, BL-1 :992/:999), and the 'two bugs in one region' sentence is :996-997. The bullet was justified because the home does NOT read as open: sec 7.3 sits under sec 7 'Known intentional divergences (model != code, by design)' and its preamble at :862-863 says 'None is a bug'. The new bullet carries the inference (the exclusion's justification has moved) and states the deliverable is an ADJUDICATION, not necessarily a model.
