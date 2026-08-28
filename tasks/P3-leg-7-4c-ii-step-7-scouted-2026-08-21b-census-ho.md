@@ -1,6 +1,6 @@
 ---
 id: P3
-title: leg 7 4c-ii + step 7 -- all pre-4c-ii work DONE 2026-08-28c; the cone remains, sized 3 sessions
+title: leg 7 4c-ii + step 7 -- pre-4c-ii DONE incl P14 (2026-08-28d); cone remains, 3 sessions
 pri: NOW
 size: L
 deps: []
