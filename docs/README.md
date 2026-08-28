@@ -67,6 +67,25 @@ moment its change lands** — part of the landing checklist, exactly like updati
 "nothing in the repo was modified" months after the leg landed is the failure this rule
 prevents.
 
+**⚠ Not yet adjudicated: a set of always-living docs declares no state at all**, in
+violation of the rule at the top of this section. Measured 2026-08-29 by looking for a
+bolded `LIVING` / `FROZEN` / `ACTIVE-PLAN` inside the first 8 lines: `formal/README.md`,
+`formal/CORRESPONDENCE.md`, `formal/ARCHITECTURE.md`, `formal/FINAL_REVIEW.md`,
+`formal/SEMANTICS.md`, `formal/HANDOFF.md`, `docs/gate-runbook.md`, the three specs in
+`docs/specs/`, `docs/perf-round6-audit-2026-08.md`, `docs/perf-next-round.md`,
+`docs/sabotage-procedure.md`, `docs/architecture/correctness.md`,
+`docs/architecture/decision-log.md`, and the two `benchmarks/results/` profiles. **Whether
+these are deliberately exempt is the open question, and the exemption belongs here when it
+is decided** — several are plainly living by any reading, and an exemption stated nowhere
+is indistinguishable from an oversight.
+
+⚠ **Do not put a count on it, here or in a title.** The figure has read six, then nine,
+then eleven, then the list above, across four readings on four days — not because docs
+changed but because each reading used a different candidate set and a different test for
+"declares a state". Whoever adjudicates this must **state their method with the answer**,
+as the sentence above does; a bare number is `ZT-P3-5` waiting to happen, and it already
+happened once inside the board row that tracks this very item.
+
 ## 3. The frozen banner
 
 Visible prose, in the first lines, never an HTML comment — an invisible banner does not

@@ -16,20 +16,16 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-29)** — `lean` +
+> 🟢 **All ten gate phases green on this tree (2026-08-29)** — `lean` +
 > `conf-tile:1..5/5` + `tests-tile:1..4/4`; tiles keyed to the code-scoped tree id (`*.md`
 > excluded), and `lean` was re-run after the last `*.md` edit.
-> ⏰ **`2026-08-29`: the `tasks/` trial verdict is DUE TOMORROW and is now a tracked row
-> (`TK52`) on both trees** — it was on neither for five days. It is **two questions**: does
-> the query beat the file, and where unranked `TK*` findings live afterwards. The 47 open
-> findings are snapshotted → `docs/history/tasktool-findings-2026-08-29.md`, so DELETE is
-> non-destructive — but that is safe-to-delete, **not** decided-what-to-keep. ⚠ `task.py
-> sync` was **RED on arrival and the TREE was the stale side** (`R6` carried "11 to land"
-> for five days; the board was right). Repaired, `sync` **CLEAN**; evidence recorded first,
-> in `docs/tasktool-trial-protocol.md` §6 append `2026-08-29`.
-> **`2026-08-28d`: `P14` settled** — 4c-ii owes no `writeRulesRaw` endpoint-closure edit.
-> **Next: 4c-ii + step 7, the un-splittable cone — read its revert-to-green exit (scope doc
-> §11.12) first.** → PROOF_STATUS `2026-08-28c` §5, `2026-08-28d`.
+> ⏰ **`2026-08-29b`: trial question (b) is decided** — every open `TK*` id is bucketed
+> ([adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); the refutation pass
+> overturned 6 of 11 proposed write-offs. Unlanded appends → **`TK53`**, the row that makes
+> DELETE lossless. 🧭 **Question (a) — delete the tool or keep it — is the user's call and
+> is not made here**; evidence + recommendation in ledger `2026-08-29b`. `sync` **clean**.
+> **`2026-08-28d`: `P14` settled.** **Next: 4c-ii + step 7, the un-splittable cone — read its
+> revert-to-green exit (scope doc §11.12) first.** → PROOF_STATUS `2026-08-28c` §5.
 > **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned 2026-08-21b). Ask
 > `python scripts/gate_status.py`, never this line. Red is yours: `git stash`.
 
@@ -47,7 +43,7 @@ forward forever and are never reused.**
 | `P3` | leg 7 **4c-ii + step 7, one commit** — fence layer landed 2026-08-28b; **public surface MIGRATED 2026-08-28c** (7 decls + zcli driver onto `checkPublic`, no new hypotheses; `hql` surface cut from 6 rows to **1**, `graph_correct` `:27`). Everything pre-4c-ii is now DONE, **`P14`'s `UntaintedShadow` adjudication included (2026-08-28d: Route B = one disjunct on one field; the `writeRulesRaw` endpoint-closure risk retired; `slSwD_not_mono` shown to measure the wrong σ0)**. **What remains is the un-splittable 42-module cone** — measured 3 sessions, not 1 (PROOF_STATUS `2026-08-28c` §5), and its **revert-to-green exit is now declared in the item block: read it before opening** | **NOW** | L | — | 2026-08-28d |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d, and **the task tree was re-counted to match 2026-08-29** — it had carried the stale `11` for five days) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-29 |
-| `TK52` | **the `tasks/` trial verdict — due 2026-08-30, i.e. tomorrow.** It is **two questions**, and the current exit-plan wording bundles them: *does the query beat the file* (what the protocol measured) and *where do unranked `TK*` findings live afterwards* (never posed). The second is the irreversible one, so decide it first. **The open findings are now snapshotted** → [`tasktool-findings-2026-08-29.md`](docs/history/tasktool-findings-2026-08-29.md), so DELETE is non-destructive and (a) can be judged on its merits — but that is safe-to-delete, **not** decided-what-to-keep, which is this row's deliverable | **NEXT** | S | — | 2026-08-29 |
+| `TK53` | **land the adjudicated `TK*` appends** — question (b) of the trial verdict is DECIDED (→ [adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)) and the appends are the unlanded half. Each is a statement that exists only in `tasks/` and has a named destination in a living doc. **This row is what makes DELETE lossless** — until it closes, deleting `tasks/` drops statements that no living doc carries. `TK52` closed on the decision; this carries the execution, so the decision is not a residual with no owner | **NEXT** | M | — | 2026-08-29b |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
 | `P7` | `ttuStarFree` **(iii)+(iv)** — re-prove the 5 consumed sites, widen the gate → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16 | LATER | M | `P6` | 2026-08-16 |
@@ -57,7 +53,7 @@ forward forever and are never reused.**
 | `P10` | re-run the scope audit, hand-curated → [fan-out runbook](docs/subagent-fanout-runbook.md), final § | LATER | M | — | 2026-08-16 |
 | `P11` | the fixture-TRIPLE question for 5 subsumed `.fga` fixtures → `tests/test_schema_shapes.py::KNOWN_SUBSUMED` | LATER | S | — | 2026-08-16 |
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
-| `HS-5` | always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines; **count is method-sensitive, it lives in `TK49`, not here** → ledger `2026-08-24` | LATER | S | — | 2026-08-24 |
+| `HS-5` | always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines. **The enumeration and the measuring method now live in `docs/README.md` §2 itself**, re-measured 2026-08-29; what is open is the adjudication — which docs are deliberately exempt. **No count here, and none in §2 either**: it has read differently on every one of four readings → ledger `2026-08-29b` | LATER | S | — | 2026-08-29b |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
@@ -73,7 +69,7 @@ forward forever and are never reused.**
 | `SD-4` | bulk-merge write path → [sketch](docs/architecture/bulk-merge-design.md) | SOMEDAY | L | — | 2026-08-16 |
 
 Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`, `BL-1` (2026-08-21), `BL-2` (2026-08-21b),
-`HS-4` and `GS-2` (2026-08-17), `HS-2` (2026-08-20b), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
+`HS-4` and `GS-2` (2026-08-17), `HS-2` (2026-08-20b), `TK52` (2026-08-29b), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
 `B1`'s underlying finding was verified closed on 2026-08-16 (both halves proved 2026-07-28
 and 2026-08-04; the record had simply never caught up) — evidence in `formal/HANDOFF.md`'s
 `B1` block. Retiring an id is not the same act as closing a finding: say which you mean —
@@ -130,6 +126,14 @@ numbers re-derived from `formal/FINAL_REVIEW.md`'s generated ledger, never prose
 `ReconcileStars.lean::checkFn_agree_of_graphRec`, `LeafRules.lean::GraphState.writeRulesRaw`,
 `Leaf.lean::publicOfLeaf`, `Exec.lean::foldAdmitsB`, `extractor.py::_edge_projection`.
 
+### `TK53` — land the adjudicated `TK*` appends
+
+Each append is one statement that exists nowhere but `tasks/`. Until this closes, deleting
+`tasks/` drops statements no living doc carries. **Read first:**
+[the adjudication](docs/history/tk-findings-adjudication-2026-08-29.md) — its table, its
+four traps, its "Method" § (the refutation pass overturned 6 of 11, so a single-pass sweep
+of the remainder will not do); then [the snapshot](docs/history/tasktool-findings-2026-08-29.md).
+
 ### `P6` — `ttuStarFree` part (ii): bridges on the rule-routed write path
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
@@ -175,20 +179,16 @@ Remaining order: `R6-11` → `R6-5` (**32.7%** ORM construction for 3–4 column
 `R6-4` → `R6-9` → `R6-18` (**53.1%** off the biggest table; owes a hand PG migration) →
 `R6-16` → `R6-7`+`R6-8` → `R6-1`.
 
-**Declined on an upper bound; do not reopen without new numbers:** `R6-15` (**0.9%**),
-`R6-12` (**1.00×**), `R6-14` (**5.0%**), `R6-2`. **Unreachable by any benchmarked workload**
-(`R6-3` = `R6-17`, bulk twin `R6-13` — 0 calls each): they need a `T:*#P` workload first.
-`R6-19` owns the last unowned number (25.4% cum, **self 2.0%** — a call-site fan-out; the old `25.3%` paired two passes and no source states that pair).
+**Declines and the unreachable three are the audit's verdict tables**, whose banner was
+corrected 2026-08-29b (`TK48`) to carry no count and point at them — read them there, and
+do not restate a split here. `R6-19` owns the last unowned number (25.4% cum, **self
+2.0%** — a call-site fan-out; the old `25.3%` paired two passes, which no source states).
 
 ⚠ **Five traps the numbers do not carry** live in
 [`perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do
-not carry", demoted there 2026-08-20b. **Read that section before taking an id.** Both
-2026-08-20b corrections were fully applied 2026-08-21: `R6-11`'s "8×" is **~4×** in all four
-places *and* the halving now lives in the instrument
-(`benchmarks/profile_r6.py::_ctxmgr_entries`, which refuses an odd ncalls), re-confirmed at
-`184 scopes / 40 reconciles = 4.6×` — verdict still `MOTIVATED`, only the size moved;
-`R6-4(a)`'s unsound `(id, version)` memo is now flagged **in its own entry**, because the
-fix sketch is a verbatim block that calls the key "sound".
+not carry", demoted there 2026-08-20b, and both that day's corrections were applied
+2026-08-21 (`R6-11`'s size, `R6-4(a)`'s unsound memo) in the entries themselves.
+**Read that section before taking an id** — count its bullets, do not trust this line.
 
 **Read first:** [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md)
 (verdicts, method, the two limits — in-memory SQLite understates statement-count wins,

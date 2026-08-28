@@ -8,10 +8,10 @@ related: []
 parent:
 labels: [perf]
 source: board
-source_hash: a9d9cd2dbfdb
+source_hash: 6a2167f173fe
 created: 2026-08-21
 moved: 2026-08-29
-updated: 2026-08-29
+updated: 2026-08-29b
 closed:
 ---
 
@@ -72,3 +72,7 @@ Stale figures repaired, and the staleness itself is the trial evidence. The titl
 Board row rewritten 2026-08-24d (R6-6 landed, '11 to land' -> '10 to land'); the task body was NOT re-counted at the time, so this ack follows an actual content repair this session, not a no-op re-stamp. See the 2026-08-29 Log entry.
 
 Re-stamp: the R6 board row was itself edited this session (moved 2026-08-24d -> 2026-08-29, and the cell now records that the tree carried the stale 11 for five days). Content already reconciled earlier this session; this ack only re-digests the rewritten row.
+
+### 2026-08-29b
+
+Board block edited 2026-08-29b: the decline/unreachable split was replaced by a pointer at the audit's verdict tables, and the five-traps paragraph was reduced to a pointer that says to count the bullets. Both were restatements of docs/perf-round6-audit-2026-08.md, whose banner was corrected the same session (TK48) to carry no count -- restating a split on the board is the defect TK48 was filed for, one file over. No figure changed and no child moved; R6-19's number is unchanged. Task body content remains current.

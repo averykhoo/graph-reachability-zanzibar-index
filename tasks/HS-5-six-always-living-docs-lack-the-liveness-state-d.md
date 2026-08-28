@@ -1,6 +1,6 @@
 ---
 id: HS-5
-title: always-living docs lack the liveness state docs/README.md sec 2 requires; count lives in TK49
+title: always-living docs declare no liveness state; enumeration+method now in docs/README.md sec 2
 pri: LATER
 size: S
 deps: []
@@ -8,10 +8,10 @@ related: []
 parent:
 labels: [docs]
 source: board
-source_hash: e5eebcba22b2
+source_hash: 1c9fdb32bb4c
 created: 2026-08-20b
-moved: 2026-08-24
-updated: 2026-08-24b
+moved: 2026-08-29b
+updated: 2026-08-29b
 closed:
 ---
 
@@ -37,3 +37,9 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-08-24b
 
 Body drift, and it was a WRONG FIGURE, not a formatting difference. The 2026-08-24 retitle fixed the title and left the body asserting 'six always-living docs' -- the exact retracted count TK49 corrects. Body rewritten to mirror the board cell (no count here; TK49 owns it), a trap added against restating it, and the read-first now points at TK49. source_hash re-stamped to the current board block.
+
+### 2026-08-29b
+
+Row rewritten 2026-08-29b: it used to read 'count is method-sensitive, it lives in TK49, not here' -- the board delegating its substance by id into the tasks/ tree, a dangling referent if the trial verdict is DELETE. The enumeration and the measuring method now live in docs/README.md sec 2 itself; the row points there and carries no count, and neither does sec 2. What remains open on this row is the adjudication: which of those docs are deliberately exempt. Child TK49 closed the same session, its scope correction having landed.
+
+Second re-stamp this session: the row was edited again while trimming HANDOFF.md to its line ceiling. Content unchanged in substance -- it still points at docs/README.md sec 2 for the enumeration and method, still carries no count, and the open adjudication (which docs are deliberately exempt) is unchanged.

@@ -10,9 +10,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21c
-moved: 2026-08-24b
-updated: 2026-08-24b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 The generator-coverage subset-driving discipline is tuned for **fail-closed** detection and
@@ -60,3 +60,7 @@ Provenance. COVERAGE.md 'Dropped, with reasons' (PART 1, J-26; sweep-j only; doc
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [TK44]`. This row says fixing TK44 does not fix this; TK44 was blind to it, so closing TK44 could over-claim fail-open coverage.
+
+### 2026-08-29b
+
+STALE, not written off: the recommendation is already implemented. tests/test_generator_coverage.py:881 runs _sweep(G.DENSE, DENSE_SUBSETS) beside the sparse sweep at :805, DENSE_SUBSETS is defined at :156, and :995-998 carries the sabotage assertion 'the DENSE regime detected nothing in the FAIL-OPEN direction'. The design doc's dense/sparse proposal landed; the finding outlived its defect. Recorded in docs/history/tk-findings-adjudication-2026-08-29.md.

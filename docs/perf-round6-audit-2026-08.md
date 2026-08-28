@@ -1,8 +1,17 @@
 # Perf round 6 — the 2026-08-15 two-backend audit (CANDIDATE worklist)
 
-> **Status: CANDIDATES. Nothing here is landed. ALL EIGHTEEN are now MEASURED
-> (2026-08-17)** — ten recommended to land in a stated order, five declined on an upper
-> bound, three unreachable by any benchmarked workload.
+> **Status: CANDIDATES. ALL EIGHTEEN are now MEASURED (2026-08-17)** — recommended to
+> land in a stated order, declined on an upper bound, or unreachable by any benchmarked
+> workload. **The split is the verdict tables below, and this banner deliberately states
+> no count for it** (corrected 2026-08-29, `TK48`): it used to read *"ten recommended to
+> land … five declined"*, and both figures contradicted this document's own body, which
+> carries **eleven** `MOTIVATED` rows and **four** `NOT MOTIVATED` ones. Each split
+> summed to 18, which is how it survived review for two weeks. Count the tables; do not
+> reintroduce a number here.
+> ⚠ **"Nothing here is landed" was also false, twice over, and is deleted**: `R6-10`
+> landed 2026-08-20b (2.54×) and `R6-6` landed 2026-08-24d (4.75 → 1.75 statements per
+> `check`). A landed item carries a `LANDED` marker in its own verdict row and entry, so
+> the body can be counted for that too.
 > This is the raw material for reopening the perf arc that closed at round 5.
 > Per the reopening rule in [`perf-next-round.md`](perf-next-round.md), **every
 > item still needs a motivating measurement** (`benchmarks/stmt_bench.py` /
