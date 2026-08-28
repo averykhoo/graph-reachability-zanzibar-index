@@ -187,10 +187,42 @@ Do not re-walk these without new evidence — the alternatives were considered.
   costs 1–2 bite. **Shape of the future work**: unify the lookup result contract on
   keys/markers → add the same `at_least` plumbing as `check` → extend the lookup
   oracle gate with a lagging-index leg (mostly test-writing).
+  ⚠ **None of that arc is built, and the id that filed it is CLOSED** — `ZT-P1-8b`
+  closed 2026-07-29 having landed the accept-and-raise half only. So the ledger
+  answers *"is `at_least` done?"* wrongly: the closed record covers less than its
+  filed scope, and this bullet's arrow-chain is the part still outstanding. Read the
+  chain above, not the id's status.
 * **Out of scope** (this round): snapshot / "at exactly" reads (only `at_least`
   lower-bounding); cross-store tokens (X6 — store-local); instance gossip (the DB
   log is the channel); schema-version skew (schemas are write-once — a new schema
-  is a new store).
+  is a new store). **Sharing tuples or state ACROSS stores** is out too, and stays
+  out until a design says what it means for three per-store things: `TupleLogV1`
+  (`store_id`-scoped, and every read filters on it), the watermark/cursor domain
+  (`source.py::log_watermark` is per store; `IndexCursorV1` is unique per index
+  store), and `_lock_store`'s store-granularity serialization. ⚠ Log **ids are
+  globally monotonic across stores** even though scoping is per-store, which is why
+  `lag()` counts rows instead of subtracting ids — a sharing design that assumes
+  per-store id density breaks on exactly that.
+
+## Reads are lenient — a cross-backend contract, not a per-backend default
+
+* **An undeclared `(type, relation)` reads as constantly false on every surface, and
+  never raises.** Enforced in three independent places, deliberately: the graph index
+  denies rather than raising (`index_v4/wildcard.py::WildcardIndex.check`, whose
+  docstring gives the reason — writes are already fenced by `RuleSet.apply` /
+  `SetEngine.add_tuple`, so a read has nothing to protect); the set engine returns
+  `False` on a missing AST entry (`setengine/engine.py::SetEngine.check`); and the
+  oracle does the same by the same construct (`tests/oracle.py::Oracle.check.sat`),
+  which is what lets it stay an independent reference. Writes are the strict side —
+  `validate_write_identifiers` polices the charset there.
+* **Rejected: schema type checking that makes a non-match an ERROR.** The open
+  question (*should every relation resolve to a single type, or should we duck-type?*)
+  is real, but it is not an additive validation: raising on a non-match **changes the
+  read contract on all three surfaces at once**, and the oracle's copy would have to
+  change separately or the independence contract breaks. Adjudicate any such proposal
+  against this bullet first; the leniency is load-bearing, not an omission.
+* ⚠ **Do not read this as the other "lenient" in this file.** `lenient ∀⇒∃` in the
+  non-goals below is the wildcard vacuity mode and is unrelated to read leniency.
 
 ## Non-goals (documented hooks only)
 
@@ -200,3 +232,15 @@ zookie-lite log-id token and multi-instance catch-up ARE built — see round 3);
 automatic outbox pruning; residue GC beyond empty-row deletion; lenient ∀⇒∃; a
 `family` metadata column; Rete-style general incremental matching; 64-bit id space;
 query-time node interning.
+
+**Rejected outright, with no hook — OpenFGA conditions.** Listed apart because the
+heading above promises hooks, and this one has none: `zanzibar_utils_v1.py` raises on
+a conditional type at parse time. The reason has never been written down and is not a
+matter of effort. **Conditions are evaluated at CHECK time; the graph index
+materializes the closure at WRITE time** — that is the whole basis of its O(1)
+`check` — so a condition depending on request context cannot be folded into a
+materialized closure at all. That makes "should we support conditions" a question
+about **which backend could host them**, not a feature to schedule: the set engine
+evaluates per call and memoizes nothing across queries, so it is the only plausible
+home, and supporting them on one backend would break the identical-semantics contract
+the two backends exist to hold. Anyone reopening this starts there, not at the parser.
