@@ -10,9 +10,9 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 `setengine/engine.py::SetEngine.population` — lead **A2** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:775`.
@@ -43,3 +43,7 @@ closed:
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:775, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 2 of 16.
+
+### 2026-08-29b
+
+WRITTEN OFF against a living carrier; survived refutation. Lead A2 is preserved verbatim in docs/perf-round6-audit-2026-08.md's appendix, and docs/perf-next-round.md:4-6 names the round-6 candidate list as the active worklist, so the lead is reachable from the living perf home. The entry added only round-wide boilerplate already in the appendix preamble. Disposition recorded in the adjudication file.

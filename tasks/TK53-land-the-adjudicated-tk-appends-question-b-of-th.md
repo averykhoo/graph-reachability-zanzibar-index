@@ -8,7 +8,7 @@ related: []
 parent:
 labels: []
 source: board
-source_hash: f894f839b0eb
+source_hash: 045f47f3553e
 created: 2026-08-29b
 moved: 2026-08-29b
 updated: 2026-08-29b
@@ -55,3 +55,5 @@ finding text itself, then the destination doc.
 ### 2026-08-29b
 
 Item block compressed to a pointer in the same session it was filed: the four traps and the disposition table live in docs/history/tk-findings-adjudication-2026-08-29.md, per docs/README.md sec 1 (one home per statement) and sec 4's defined trap-overflow move. HANDOFF.md was over its 260-line ceiling and its 10-badge trap budget on first write; both are clean now, and the ceiling was NOT raised.
+
+Row and block rewritten at end of session 2026-08-29c to record progress (22 landed, 15 remain) and to carry the re-verify trap onto the board itself, since that trap earned its place: re-verification overturned rows in BOTH directions. Also re-flowed to keep HANDOFF.md at its 260-line ceiling without raising it.

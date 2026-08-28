@@ -95,6 +95,23 @@ warn anybody:
 > as-of-then and several may now be false; live state: `HANDOFF.md` + the session
 > ledger. Corrections are appended dated at the top, never edited into the body.
 
+**What is mechanically enforced, and what is not** (measured 2026-08-29b — say which,
+because "there is a lint for it" has been assumed here before it was true):
+
+* **Enforced, and it does not go stale.** `scripts/handoff_lint.py::check_frozen_banners`
+  walks *every* `.md` under the history dirs and requires a declared state in the first
+  five lines. The exemption is structural — a file is exempt by declaring `LIVING` or
+  `ACTIVE-PLAN` up top — and the check deliberately refuses a hand-maintained filename
+  list, because a list beside a glob goes stale the first time someone adds a file. So a
+  new record landing in a history dir *is* covered automatically.
+* ⚠ **Not enforced: design docs that live outside a history dir.** Nothing walks
+  `docs/design/` or `docs/specs/`, so the "freeze at landing" rule above is held by hand
+  there. That is the residual half of what was once filed as a one-time sweep.
+* ⚠ **Not enforceable: a stale DESCRIPTION.** `::check_doc_links` proves a link resolves,
+  never that the sentence around it still describes the target. A citation naming a line or
+  a section of another doc breaks silently when that doc is rewritten, and no check will
+  tell you. This is why §5 says to cite stable keys rather than positions.
+
 ## 4. Signals rank only if they are bounded
 
 **Priority is a word in a column** — grep-able, unambiguous, and capacity-bounded so the

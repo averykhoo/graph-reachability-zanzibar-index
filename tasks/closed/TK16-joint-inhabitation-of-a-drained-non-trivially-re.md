@@ -10,9 +10,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 `W4Witness` machine-checks that both hypothesis BUNDLES are inhabited by a real compiled boolean schema, so the final theorems are not vacuous. The honesty caveat (`formal/FINAL_REVIEW.md` §2, restated at `formal/ARCHITECTURE.md:208-213`) is that **joint** inhabitation of a drained, non-trivially-reached state is demonstrated *empirically* — the conformance driver plus the proved `cascade2_drains` — rather than as a single kernel-checked term.
@@ -35,3 +35,7 @@ This is published honesty about a residual, already stated in two places, with a
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-16 (`ARCH-H-12`, tier 2, sweep-h only); anchor re-read this pass at formal/ARCHITECTURE.md:208-213.
+
+### 2026-08-29b
+
+WRITTEN OFF against a living carrier; survived refutation. formal/FINAL_REVIEW.md:181-188 carries the honesty caveat verbatim, including the part that matters most and is easiest to overstate: bundle inhabitation IS kernel-checked and only the CONJUNCTION is empirical. A reader of the carrier learns the residual and its correct severity. Disposition recorded in the adjudication file.
