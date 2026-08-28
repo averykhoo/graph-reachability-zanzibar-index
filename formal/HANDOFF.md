@@ -18,7 +18,7 @@ Pull in other docs only on demand:
 | `history/PROOF_STATUS.md` | append-only session ledger (newest first) | the TOP entry only, for fine detail on a resume point |
 | `history/ROADMAP.md` | per-stage designs + historical plans | the section for a stage's provenance |
 | `history/handoff-status-2026-08-16.md` | this file's retired zones, verbatim (the accretion narrative, W3c detail, the old Status section) | for provenance only — never for state |
-| `history/handoff-dated-blocks-2026-08-17.md` | this file's retired dated blocks, verbatim (2026-08-09, 2026-08-08) | for provenance only — never for state |
+| `history/handoff-dated-blocks-2026-08-17.md` | this file's retired dated blocks, verbatim (2026-08-14, 2026-08-09, 2026-08-08) | for provenance only — never for state |
 | `history/REVIEW.md` | historical one-shot session digest (2026-07-09→10) | never (history) |
 | `history/formal-verification-plan.md` | original strategy/phases/honesty clauses | rarely; §7 for claim wording |
 
@@ -39,7 +39,8 @@ Zanzibar boolean shape.*
 derived-def clauses in place of `computedOnly`, so `graph_correct` /
 `backend_equivalence` / `exclusion_effective` / `no_ghost_grant` /
 `Exec.graphRun{,Ops}_check_eq_sem` **apply at that store** —
-`W4WitnessDirect.final_applies` instantiates the unsuffixed `graph_correct` there.
+`W4WitnessDirect.final_applies` instantiates the unsuffixed `graph_correct_public` there
+(it was `graph_correct` until the 2026-08-28c public-read migration; same bundles).
 `W4WitnessDirect.outside_old_admission` (`¬ StoreValidRules Sd Td`) is KEPT, because it is
 now the proof that the widening was contentful rather than a relabeling, and
 `w4Fragment_of_computedOnly` proves the pre-leg-5 six fields imply all ten — nothing that
@@ -78,6 +79,33 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+**2026-08-28c — the public surface is migrated, and the `hql` surface is now one row.**
+Seven declarations (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
+`Exec.graphRun_check_eq_sem`, `::graphRunOps_check_eq_sem`,
+`W4WitnessDirect.final_applies`/`final_applies4`) now state `GraphModel.checkPublic`,
+proved through `graph_correct_public`. **None gained a hypothesis** — `graph_correct_public`
+takes exactly `graph_correct`'s bundles — and every proof stayed a 1–2 line delegation.
+`Cli.lean`'s graph mode migrated with them (it prints `Exec.lean::graphModeAnswers` now),
+because a capstone that names a different read than the driver calls makes its own
+docstring false.
+
+⚠ **What this changes for 4c-ii: `docs/latent-gaps.md` used to name SIX theorems as going
+FALSE after the re-point; five of them plus both `final_applies` witnesses are now out of
+that set entirely** (the fence discharges the leaf-name case). **The remaining `hql`
+surface is ONE pinned row — `graph_correct` (`headline_statements.txt:27`)**, deliberately
+kept as the INTERNAL-layer statement. `unfenced_grants` (`:51`) stays unfenced as
+`fence_changes_answer`'s foil; the `Equiv.lean` 27-rung ladder stays on `check` because it
+is a per-stage record of the internal layer (its own header says so) — zero edits.
+
+⚠ **A hole was found and closed here.** The driver↔capstone coupling was UNPINNED:
+reverting `Cli.lean` to the unfenced read left the full conformance suite green
+(`495 passed`), and structurally no corpus can catch it pre-4c-ii. Fix is TEXTUAL —
+`Exec.lean::graphModeAnswers` is a named definition whose body is pinned verbatim
+(`headline_definitions.txt:138`), dragged into the closure by `graphModeAnswers_eq_sem` in
+`statement_pin.py::HEADLINE`. Its own sabotage: build stayed green (1089 jobs), definition
+pin fired, **statement pin matched 46/46 and was blind**. Do not remove that theorem from
+`HEADLINE` — it un-pins the driver. Detail: `history/PROOF_STATUS.md` `2026-08-28c`.
+
 **2026-08-28b — THE FENCE-MODELING ENDGAME IS LANDED AND GREEN, WITHOUT `hql` AND WITHOUT
 OPENING THE 4c-ii CONE.** `GraphIndex/Fence.lean::GraphModel.checkPublic` +
 `FullScope.lean::graph_correct_public`: the PUBLIC read equals `sem` under exactly
@@ -86,9 +114,8 @@ commit" is refuted** — the fenced branch needs only `WF S` + "undeclared ⇒ `
 so it lands BEFORE the un-splittable cone, on green. Additive: pins 38→45 / 155→160, **zero rows moved**; `reachedByW3d2E_schema` was an uncosted prerequisite.
 ⚠ **`graph_correct_public` is NOT what makes the fence non-vacuous** — pre-4c-ii it proves
 green even under a fence that never fires; the six `W4WitnessDirect.fence_*` pins at `Sd` are, and only `fence_changes_answer` catches a fence REMOVAL (§3 has the sabotage record).
-**Next, pre-4c-ii: migrate the public surface + `final_applies`(`4`) onto `checkPublic`** —
-where the payoff is banked; NOT done here (it moves pinned statements on the non-vacuity
-instruments); read `history/PROOF_STATUS.md` `2026-08-28b` §4 first.
+Its "next, pre-4c-ii: migrate the public surface + `final_applies`(`4`)" — **done
+2026-08-28c**, see that block above.
 
 **2026-08-28 — BOTH `P3` HUMAN CALLS ARE MADE (`hql` accepted; Route B retained on
 corrected grounds — its "zero additional cone" argument is FALSIFIED), after a live
@@ -201,70 +228,6 @@ above; §11.6's cone estimate is refuted and its index-breadth figure is stale.*
 * Toolchain: `String.contains` does not kernel-reduce — leaf-layer defs stay
   `toList`-based or `decide` pins stall.
 
-**2026-08-14 — THE §11.3 FORK IS DECIDED: branch (α). `ttuStarFree` PART (i) IS IN.**
-Read `history/PROOF_STATUS.md` 2026-08-14 and scope-doc **§11.5** (appended; §11.3 is left
-as written and is wrong in two places).
-
-* **(α) — the `Delta` row moves to the leaf node.** Python's outbox row IS keyed at the leaf
-  (`index_v4/models.py::DeltaOutboxV1` has no relation column; the relation is the object
-  node's predicate), and `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`
-  recovers the public name from the compiled `LeafFamily` table. The Lean probe did not
-  refute (α); its control — the half-done (α), row moved with `affectedKeys` untouched —
-  produced the **empty** cascade key set, so the instrument is real.
-* **⚠ `publicOfLeaf` MUST BE INDEX-AGNOSTIC.** §11.3's prescribed "string surgery on the
-  `.i` suffix" is measurably wrong: Python routes `(viewer but not banned) or [user]` to
-  `approver.2`, where a `".0"`-stripper returns `none`. `Leaf.lean`'s former singular
-  `rawWriteRel` (since replaced by `Leaf.lean::rawWriteRels`) hardcoded index `0` and was
-  therefore a known-wrong model, not merely unmeasured.
-* **`writeLoggedOne` does NOT need an `S` parameter** — `GraphState.schema` already
-  exists and a `σ.schema`-reading variant is definitionally equal under `σ.schema = S`.
-  That removes ~145 mention-lines from the budget (61 + 84 re-measured, not §11.3's 58),
-  at the price of a per-site schema hypothesis.
-* **⚠ 4c CANNOT LAND ALONE — it must co-land with step 7.** P6 is a Python-side-only
-  filter (`formal/conformance/extractor.py::_edge_projection`), so the moment 4c re-points
-  `Exec.lean` the state gate reports ~76 leaf edges "only in LEAN model". Scope doc §7's
-  "each step green and pushable" is refuted at 4c.
-* **Live landing criterion** (re-derive from `FINAL_REVIEW.md`'s generated block, never from
-  prose): **`dropped by P6` → 0 and `compared against Lean` → 265** (today 76 and 189).
-* **`ttuStarFree` part (i) LANDED**: `Schema.isStarTuplesetThrough` + the widened
-  `Schema.isSubjectWildcardUserset` = both loops of `derive_schema_info`, as Python.
-  ⚠ **INERT on every live chain** — `writeRules`/`writeLoggedRules` never call
-  `ensureInBridges`, so part (ii) is what materializes the edge. Do NOT read part (i) as
-  closing the 2026-08-10 counterexample. Six `decide` pins carry it because, being inert,
-  the obvious sabotage reddens nothing else in the tree.
-* **Still owed** ⚠ **— SUPERSEDED TWICE; read the 2026-08-16 block at the top.** "Step 4c"
-  as named here does not exist any more (it is 4c-i + 4c-ii), **4c-i is DONE**, and part
-  (iv)'s blocking question is **ANSWERED: NO-BLOCK** (`GraphIndex/TtuStarWide.lean`) — do
-  not defer (iv) on decidability again. Genuinely still owed: leg 7 **4c-ii + 7 (co-land)**,
-  4b, 5, 6; `ttuStarFree` parts (ii) and (iii), and (iv)'s remaining effort. Occurrence
-  split re-measured: **163 in 18 modules**, only **5 genuinely CONSUMED**.
-
-**⚠ 2026-08-10 — ATTACK-FIRST KILL: `W4Fragment.ttuStarFree` CANNOT BE DROPPED.**
-The user asked to undo it as a mere scope cut. It is not one: dropping it makes
-`graph_correct` and `backend_equivalence` **FALSE**, machine-checked sorry-free and
-axiom-clean (`W4FragmentNoTS` = `W4Fragment` minus the one clause; `ReachedBy` from the
-tree's own `graphRun_reached`, never hand-assembled; 120 comparisons, control a
-one-character delta `folder:*` → `folder:f1`).
-**The predicted mechanism was REFUTED and the conclusion still holds** — the
-counterexample uses **no object wildcard**, so this is not the I14 bug; `bareStar` keeps
-that shape out of scope anyway. The real gap is one layer earlier: Lean's W1c **in-bridge**
-has no star-tupleset **through-shape** notion (`UsStarWrite.lean::Schema.isStarTuplesetThrough`
-models the shape; `::GraphState.ensureInBridges` is what ignores it), and
-`writeRules`/`writeLoggedRules` materialise **no bridges at all**. Python handles the shape
-correctly; Lean's `ensureInBridges` on it is a literal no-op (`edges 3 → 3`).
-Lifting it is a **four-part leg** (through-shape derivation; bridges on the rule-routed
-write path; re-proving `ttuLeaf_elim_nss` + `StarSeed`, which exist BECAUSE of the clause;
-the remove leg) across **162 occurrences in 18 modules**. Not blocking. Detail:
-`history/PROOF_STATUS.md` 2026-08-10.
-
-Older dated blocks — **2026-08-09** (leg 7 steps 3 and 4a, landed) and **2026-08-08** (the
-`rewriteClosure` dedup leg, closed) — were retired verbatim on 2026-08-17 to
-[`history/handoff-dated-blocks-2026-08-17.md`](history/handoff-dated-blocks-2026-08-17.md)
-to keep this file under its line ceiling. Their fuller entries are in
-`history/PROOF_STATUS.md` under the same date keys.
-
----
-
 ## House rules (non-negotiable, user-adjudicated)
 
 The SHARED doc conventions — liveness states, the frozen banner, citation keys, the
@@ -310,7 +273,7 @@ numbering is byte-stable and this pointer is deliberately unnumbered.
    and saying why (`"$PY" formal/conformance/statement_pin.py --generate` rewrites
    `headline_statements.txt` and `headline_definitions.txt` together).
    **Note what the definition pin is for.** Moving `twoStrata` from `W4Fragment` into
-   `GraphAdmission` BUILDS, keeps all 26 pinned statements byte-identical, changes no
+   `GraphAdmission` BUILDS, keeps every pinned statement byte-identical, changes no
    declaration name -- and converts a declared honest scope-carry into a claimed
    guarantee about Python's admission that is false (Python reaches 12 strata). That
    was invisible to every other check in the gate; it is the attack 4c exists for.

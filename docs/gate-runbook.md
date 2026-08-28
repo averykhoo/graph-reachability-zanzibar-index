@@ -302,7 +302,7 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   that structure changes what the theorem claims while its pinned line stays
   byte-identical *and* no declaration name changes, so 4a is blind too. `statement_pin.py`
   now also diffs `formal/headline_definitions.txt`: the full text of every project
-  declaration the 26 statements depend on, **transitively**, plus the ambient
+  declaration the headline statements depend on, **transitively**, plus the ambient
   `variable` / `open` context of the files hosting them (a dropped `[Fintype V]` is
   the same attack). 139 rows / 132 declarations, floor `MIN_PINNED_DEFS`.
   *Why unbounded depth:* resolution stops at the project boundary by construction, so

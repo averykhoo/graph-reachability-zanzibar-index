@@ -31,7 +31,9 @@ Modes (Phase 6 — graph-state conformance):
 * `"graph"` — run the OPERATIONAL graph model (`graphRun`: per input tuple one
   admitted logged write + one two-round cascade leg — the `ReachedBy` chain's
   own constructors, `GraphIndex/Exec.lean`), then answer each query with the
-  graph read `GraphModel.check`. With an `"ops"` field, runs `graphRunOps` over
+  PUBLIC graph read `GraphModel.checkPublic`, via the pinned `graphModeAnswers`
+  (the fenced entry — Python's `WildcardIndex.check`, not `_check_internal`;
+  migrated 2026-08-28c). With an `"ops"` field, runs `graphRunOps` over
   the add/remove stream instead (a remove is the `ReachedByW3d2E.remove`
   constructor, whose guard `removeGateB` decides at runtime — fail-closed on a
   gate miss). Errors (nonzero exit) if an op fails its gate / a write fails edge
@@ -317,6 +319,18 @@ def main (args : List String) : IO UInt32 := do
           -- With an `"ops"` field, drive the interleaved add/remove op stream
           -- (`graphRunOps`); without it, the add-only `graphRun` over `"tuples"`
           -- (byte-identical to before).
+          --
+          -- ⚠ The read is `Exec.lean::graphModeAnswers`, whose body is the PUBLIC
+          -- `GraphModel.checkPublic` — NOT the unfenced `check` (2026-08-28c). This
+          -- driver is a PUBLIC surface: it corresponds to `index_v4/wildcard.py::
+          -- WildcardIndex.check`, fenced since `BL-2`, not to `::_check_internal`.
+          -- "Cover exactly what is printed here" is only true if the capstone theorems
+          -- name the function this line calls, which is why the read is a NAMED,
+          -- statement-pinned definition rather than a lambda spelled out here: see
+          -- `graphModeAnswers`' docstring for the sabotage (495 passed with the read
+          -- reverted) that proves the coupling is otherwise unpinned. Keep this call a
+          -- bare application of `graphModeAnswers`; inlining the read here would move it
+          -- back outside the pin.
           match decodeOps j with
           | .error e => IO.eprintln s!"ops decode error: {e}"; pure 1
           | .ok opsOpt =>
@@ -330,7 +344,7 @@ def main (args : List String) : IO UInt32 := do
               pure 2
             | some (σ, _) =>
               if drainedB S σ then
-                printAnswers (qs.map (fun q => GraphModel.check σ q))
+                printAnswers (graphModeAnswers σ qs)
               else do
                 IO.eprintln "graph mode: final state not drained \
                   (outside the proved read scope)"

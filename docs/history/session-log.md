@@ -25,6 +25,72 @@ from here.
 
 ---
 
+## 2026-08-28c — the public surface is migrated onto `checkPublic`, and the `hql` surface drops from 6 rows to 1
+
+rows: `P3`
+
+User asked what the next task was, whether the rest of `P3` fits one session, and directed
+step A only after the scoping said no. Formal detail (the authority for this entry):
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-28c`.
+
+* **Landed:** seven declarations re-stated over `GraphModel.checkPublic` via
+  `graph_correct_public` — `backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
+  `Exec.graphRun_check_eq_sem`, `::graphRunOps_check_eq_sem`,
+  `W4WitnessDirect.final_applies`/`final_applies4` — plus `Cli.lean`'s graph-mode driver.
+  **None gained a hypothesis**, every proof stayed a 1–2 line delegation, `lake build`
+  clean first try. 7 of 45 pinned statement rows changed; **zero definition rows dropped**;
+  `audited_theorems.txt` byte-identical.
+* **The payoff, which is the point of the step.** `docs/latent-gaps.md` named six theorems
+  as machine-checked FALSE after the 4c-ii re-point. Five of them plus both `final_applies`
+  witnesses are now **out of that set entirely** — the fence discharges the leaf-name case
+  — so **the remaining `hql` surface is ONE pinned row**, `graph_correct` (`:27`), kept
+  deliberately as the internal-layer statement. The board's "8 declarations" figure is
+  superseded.
+* ⚠ **The session's sabotage found a real hole, not a confirmation.** The subject was the
+  driver↔capstone coupling, not the theorems. Reverting `Cli.lean` to the unfenced read
+  while migrating everything else left the entire conformance suite green —
+  `495 passed in 590.51s` — and that is structural, not an oversight: pre-4c-ii nothing
+  mints leaf nodes, so no corpus can distinguish the two reads. Fixed TEXTUALLY:
+  `Exec.lean::graphModeAnswers` is a named definition whose body is pinned verbatim,
+  dragged into the closure by `graphModeAnswers_eq_sem` in `statement_pin.py::HEADLINE`.
+* ⚠ **Controlling the instrument mattered, and repeated 2026-08-28b's lesson one layer up.**
+  The realistic sabotage reverts the body *and* repairs the proof, so `lake build`
+  **succeeded (1089 jobs)** — the build is not the instrument. The definition pin fired;
+  the **statement pin matched 46/46 and was blind**, because the theorem's text names only
+  `graphModeAnswers`. A guard-level pin still cannot catch a read swap.
+* **The `Equiv.lean` 27-rung ladder was NOT migrated, at zero cost.** It was flagged in
+  advance as the load-bearing unbudgeted branch (6→8 module cone, +27 edits). The answer
+  came from the file's own header — a per-stage historical record of the internal layer —
+  not from taste.
+* **Doc debt:** the `26 statements` rot was **8** live sites, not the 5 recorded; fixed by
+  deleting the number rather than resetting it, since 26→46 re-arms the same trap. The
+  `CORRESPONDENCE.md` anchor gate caught my own malformed anchor, which is step 4d working.
+* **Sizing, delivered as asked:** the rest of `P3` is **3 sessions, not 1**. Nine-agent
+  census plus two adversarial critics; every load-bearing figure corrected UPWARD for the
+  first time in four attempts (cone 38/39→**42** modules, second ring ~45/4→**90 raw / 50
+  code across 8 files**, sites ~123→**136**, in-cone verify cycle ~45 s→**200–400 s**). The
+  binding constraint is trap 3: the cone is un-splittable, so there is no green state to
+  stop at mid-way. Subagents do not change that — one tree compiles, `lake build` is serial.
+
+Trial lines (`tasks/` parallel-maintenance protocol):
+
+```
+task lint: clean (11 checks, 150 task file(s) parsed)
+```
+
+read: board + HANDOFF
+
+**Still owed:** nothing from this session's write-back. Two items found and deliberately
+NOT fixed, recorded so the next session can pick them up: `formal/README.md:122-124` still
+carries stale gate figures (`tests/` collection **762**, live floor 923 / collected 943) —
+same rot class as the `26 statements` fix, different item; and
+`docs/tasktool-trial-protocol.md:403` restates the superseded six-theorem falsity claim and
+must stay as-is, because it is a **pre-registered** trial rubric and editing it would
+corrupt the pre-registration rather than fix a doc.
+
+---
+
 ## 2026-08-28b — the fence-modeling endgame landed green, and it never needed `hql` or the 4c-ii cone
 
 rows: `P3`

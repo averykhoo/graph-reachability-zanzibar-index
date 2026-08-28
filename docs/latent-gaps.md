@@ -131,18 +131,36 @@ Python twin — live bug `BL-2` — is FIXED; its record is
 
 **Today's tree is unaffected — 4c-ii has not landed, so nothing is currently false.**
 Machine-checked (two independent kernel `by decide` constructions): AFTER the 4c-ii
-re-point, the pinned headline theorems (`graph_correct`, `backend_equivalence`,
-`exclusion_effective`, `no_ghost_grant`, `graphRun_check_eq_sem`,
-`graphRunOps_check_eq_sem` — `formal/headline_statements.txt`) are **FALSE AS WRITTEN**,
-not merely unproven, at queries whose relation is a minted leaf name: the re-pointed
-driver's drained state grants where `sem` denies, with every existing hypothesis
-inhabited.
+re-point, a pinned headline theorem stated over the UNFENCED `GraphModel.check` is
+**FALSE AS WRITTEN**, not merely unproven, at queries whose relation is a minted leaf
+name: the re-pointed driver's drained state grants where `sem` denies, with every
+existing hypothesis inhabited.
 
-**What would close it:** the human call adjudicating the guard, then the guard landing
-WITH 4c-ii in the same commit — never before (today the statements are true unguarded)
-and never after (the gate would meanwhile pin false statements). The accept/refuse
-analysis is in PROOF_STATUS `## Session 2026-08-21b`: accept the narrowest repairing
-guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
+**⚠ The blast radius SHRANK on 2026-08-28c and this entry used to overstate it.** It
+named six theorems (`graph_correct`, `backend_equivalence`, `exclusion_effective`,
+`no_ghost_grant`, `graphRun_check_eq_sem`, `graphRunOps_check_eq_sem`). Five of those,
+plus `W4WitnessDirect.final_applies`/`final_applies4`, have since been migrated onto the
+PUBLIC read `GraphModel.checkPublic` and are **no longer in the falsity set at all**:
+their leaf-name case is discharged by the fence, via `FullScope.lean::graph_correct_public`,
+whose fenced branch proves the query undeclared and appeals to `Spec/Confine.lean::semAux_undeclared`.
+Post-4c-ii they stay TRUE and PROVED with no new binder — which is exactly the payoff
+`2026-08-28b` predicted when it wrote "a migrated `final_applies` never gains an `hql`
+binder".
+
+**What is left is ONE row:** `Zanzibar.graph_correct` (`formal/headline_statements.txt:27`),
+which is deliberately the INTERNAL-layer statement (`GraphModel.check` = Python's
+`_check_internal`) and must stay unfenced — it is what `graph_correct_public`'s own
+unfenced branch appeals to. `W4WitnessDirect.unfenced_grants` (`:51`) is likewise
+deliberately unfenced: it is the FOIL for `fence_changes_answer`, and migrating it would
+destroy the differential. The `Equiv.lean` per-stage ladder and the chain-internal
+`correct_applies` / `w3d2E_correct_applies` are staged historical records of the internal
+layer and stay on `check` for the same reason.
+
+**What would close it:** the guard landing on `graph_correct` WITH 4c-ii in the same
+commit — never before (today the statement is true unguarded) and never after (the gate
+would meanwhile pin a false statement). The accept/refuse analysis is in PROOF_STATUS
+`## Session 2026-08-21b`, and the guard was ACCEPTED by user call on 2026-08-28: the
+narrowest repairing guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
 `isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes
 undeclared junk names where the claim holds today) and anything keyed on
 `isDerived`/taint (it guts every derived-query headline claim while the pin regenerates

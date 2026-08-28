@@ -14,7 +14,7 @@ reader should know before trusting the word:
 * **The final graph theorems USED to be VACUOUS on the canonical boolean idiom**
   (`can_view: [user] but not blocked`) — not narrower coverage, no theorem there at all.
   E-chain legs 5+6 (2026-08-05) closed that for T2b/T3/T6 and the Exec finals;
-  `W4WitnessDirect.final_applies4` instantiates the headline `graph_correct` at exactly
+  `W4WitnessDirect.final_applies4` instantiates the headline `graph_correct_public` at exactly
   that shape. ⚠ **T2a `graph_reached_inv` alone is still vacuous there**
   (`outside_narrow_t2a`), and a design decision — not proof effort — is what is owed.
   Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0 before quoting anything
@@ -123,7 +123,7 @@ than trusting the numbers here, and never read a count as coverage
 hardening: `-ge` floors on the audit count (460), the conformance collection (465),
 the `tests/` collection (762) and the scanned-`.lean`-file count (64); an **identity
 pin** (`formal/audited_theorems.txt` — WHICH theorems are audited, not just how
-many); a **statement pin** (`formal/headline_statements.txt` — what the 26 headline
+many); a **statement pin** (`formal/headline_statements.txt` — what the headline
 theorems SAY, so `theorem graph_correct : True := trivial` fails instead of
 building green); a **definition pin** (`formal/headline_definitions.txt` — what those
 statements' WORDS MEAN: the full text of all 132 project declarations they depend on
