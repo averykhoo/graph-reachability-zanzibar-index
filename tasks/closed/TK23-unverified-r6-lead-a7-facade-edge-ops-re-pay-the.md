@@ -1,6 +1,6 @@
 ---
-id: TK26
-title: unverified R6 lead A10: residue version bumps escalate every dependent to a full reconcile (Lean)
+id: TK23
+title: unverified R6 lead A7: facade edge ops re-pay the _require_live_nodes SELECT under the held lock
 pri: HOLD
 size: ?
 deps: []
@@ -10,14 +10,14 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
-`index_v4/processor.py::DeltaProcessor._run_cascade` — lead **A10** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:871`.
+`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` — lead **A7** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:835`.
 
-Every `_store_residue` bump fans out with a `None` value, meaning full-object reconcile, and `_fan_out`'s computed branch does the same — so a cheap-path flip of ONE subject forces each dependent object through the complete `_reconcile` pipeline (stars_fn, full candidate/audit enumeration, check_fn over EVERY member), re-evaluating subjects whose inputs did not change. Sketch: propagate granularity as `(key, changed_subjects | None)`, routing computed dependents through the existing cheap `reconcile_subject` path while ttu/userset dependents keep full reconciles. Finder: write-speed, filed impact medium, **algorithm change: YES**.
+`_add_tuple_trusted` resolves endpoints under `_lock_store()` and then calls `add_edge_by_id`, which re-takes the lock and runs `_require_live_nodes` — one extra IN-SELECT. Core's own name-based `add_edge` documents skipping exactly this (*"resolved under the lock: live by construction, no re-verification round trip"*). Every facade edge op repeats it: the grant, each bridge add, each bridge strip, and `remove_tuple`'s grant removal, so one bridged add pays up to 3 redundant liveness queries. Finder: repeated-work, filed impact low, algorithm change no.
 
 **UNVERIFIED, and that is the whole point of the row.** The appendix preserves its leads *"verbatim and UNVERIFIED"* (`docs/perf-round6-audit-2026-08.md:757`): no adversarial pass confirmed that the code does what is claimed, that the fix sketch is semantics-preserving, or that the Lean note is right. This lead carries no motivating measurement of its own, and `docs/perf-next-round.md`'s reopening rule requires one before anything lands. `HOLD` is therefore the honest pri and it is the vocabulary's own definition (`docs/README.md` §5: *deferred by an explicit recorded decision*) — the decision is the audit's, at `:756`: each finder returned 5-6 findings and only the top 3 by filed impact went to verification. Promote to `LATER` when a profile or `benchmarks/stmt_bench.py` run puts a number on it, not before.
 
@@ -29,21 +29,23 @@ Every `_store_residue` bump fans out with a `None` value, meaning full-object re
 
 ⚠ **A cited symbol may have MOVED.** `R6-6`'s target did: `BL-2` split `index_v4/wildcard.py::WildcardIndex.check` into a public deny fence plus `::WildcardIndex._check_internal` on 2026-08-21, and the audit still names `::check`. `formal/conformance/anchor_check.py` cannot catch that class — it reads only `formal/CORRESPONDENCE.md`, and both symbol names exist anyway. Resolve the symbol by reading the code, not by trusting the doc.
 
-⚠ **THIS ONE CHANGES THE MODELED ALGORITHM, so it owes a Lean update.** It rewrites the cascade invalidation rule (boolean spec §5.2), which is exactly `CLAUDE.md`'s "Perf work & the Lean model" case: the corresponding Lean definition would describe dead code. Update the model and re-run `formal/verify.sh` phased per gate-runbook §2, or log the gap in `formal/CORRESPONDENCE.md` §7 — do not let code and model drift unrecorded (§8). The finder's own note says the same, and adds that the §5.4 symbolic-delta full-object rule must be preserved (star-covered members hold no edges to invalidate them individually). Budget the Lean work as part of this row, not as a surprise.
+⚠ **This deletes a defense-in-depth check on a write path, for a LOW-impact win.** The finder says so itself and requires a sabotage test on the trusted entry before it is trusted. A liveness check removed on a wrong argument is a fail-open on the write side; weigh that against "filed impact: low" before spending the risk.
 
 ## Read first
 
-- [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)`:871` — this lead, verbatim (evidence + unreviewed fix sketch)
+- [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)`:835` — this lead, verbatim (evidence + unreviewed fix sketch)
 - the same file, §"Appendix — the 16 UNVERIFIED lower-ranked leads" (`:754-761`) — what "unverified" means here, in the audit's own words
 - the same file, §"Traps the numbers do not carry" — the round-wide traps
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the P12c fence and the reopening rule (**every item still needs a motivating measurement**)
-- `index_v4/processor.py::DeltaProcessor._run_cascade` — the code
-- [`CLAUDE.md`](CLAUDE.md) §"Perf work & the Lean model" — the rule that makes this row different from the other fifteen
-- [`formal/CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) §7-§8 — where a declared model gap is recorded if the Lean update is deferred
+- `index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` — the code
 - `python task.py show R6` — the parent: round-wide order, traps, and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
 ## Log
 
 ### 2026-08-21b
 
-**Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:871, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 10 of 16.
+**Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:835, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 7 of 16.
+
+### 2026-08-29b
+
+CLOSED as already carried. The entry's 'decisive trap' is verbatim in A7's own fix sketch -- 'This removes a defense-in-depth check on those paths, so sabotage-test the trusted entry per docs/sabotage-procedure.md before trusting it' -- and the low filed impact is on the entry's header line. Only the juxtaposition (weigh the risk against the impact) was new, and that is inference from two adjacent lines, not information. Symbols confirmed unmoved: wildcard.py:491 _add_tuple_trusted, core.py:1101 add_edge_by_id, :1056 _require_live_nodes, and core.py:1181 carries the cited comment verbatim.

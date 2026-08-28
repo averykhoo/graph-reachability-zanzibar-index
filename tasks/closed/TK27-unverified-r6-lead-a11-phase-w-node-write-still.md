@@ -1,6 +1,6 @@
 ---
-id: TK24
-title: unverified R6 lead A8: five cascade sites use per-id session.get N+1 loops beside the batch helper
+id: TK27
+title: unverified R6 lead A11: Phase-W node write still builds ~165k ORM objects while siblings use dicts
 pri: HOLD
 size: ?
 deps: []
@@ -10,14 +10,14 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
-`index_v4/processor.py::DeltaProcessor._fan_out` — lead **A8** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:847`.
+`index_v4/bulk_build.py::bulk_build` — lead **A11** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:883`.
 
-`_fan_out`'s ttu and userset branches, `_map_deltas_to_keys`' ttu arm, `_keys_referencing` and the subject-GC pre-pass each issue one `session.get` per id. `lookup_reachable` returns the FULL transitive-closure descendant set, so a well-connected entity turns one fan-out into hundreds of point SELECTs. `_nodes_by_ids` exists precisely for this — its docstring says *"replacing per-id session.get N+1 loops"* — and these five sites do not use it. Sketch: batch through the helper, or push the `(type, predicate)` filter into SQL. Finder: write-speed, filed impact medium, algorithm change no.
+Phase W builds a full dict of `NodeV4` ORM objects, `add_all`s them, flushes, reads ids back off the live instances and manually expunges each one — while edges, residues, residue-refs and outbox rows already go through `session.execute(insert(Model), chunk)` with plain dicts. The N18 comment in the code records the scale (~165k objects). On SQLAlchemy 2.0.51 the flush SQL is already batched, so the residue is pure Python churn. Sketch: chunked core insert over `sorted(nodes)` (same insertion order, so ids are assigned identically) plus one read-back SELECT. Finder: build-speed, filed impact medium, algorithm change no.
 
 **UNVERIFIED, and that is the whole point of the row.** The appendix preserves its leads *"verbatim and UNVERIFIED"* (`docs/perf-round6-audit-2026-08.md:757`): no adversarial pass confirmed that the code does what is claimed, that the fix sketch is semantics-preserving, or that the Lean note is right. This lead carries no motivating measurement of its own, and `docs/perf-next-round.md`'s reopening rule requires one before anything lands. `HOLD` is therefore the honest pri and it is the vocabulary's own definition (`docs/README.md` §5: *deferred by an explicit recorded decision*) — the decision is the audit's, at `:756`: each finder returned 5-6 findings and only the top 3 by filed impact went to verification. Promote to `LATER` when a profile or `benchmarks/stmt_bench.py` run puts a number on it, not before.
 
@@ -29,17 +29,23 @@ closed:
 
 ⚠ **A cited symbol may have MOVED.** `R6-6`'s target did: `BL-2` split `index_v4/wildcard.py::WildcardIndex.check` into a public deny fence plus `::WildcardIndex._check_internal` on 2026-08-21, and the audit still names `::check`. `formal/conformance/anchor_check.py` cannot catch that class — it reads only `formal/CORRESPONDENCE.md`, and both symbol names exist anyway. Resolve the symbol by reading the code, not by trusting the doc.
 
+⚠ **Node id assignment order is load-bearing and the identity gate is what pins it.** The sketch's correctness rests on inserting in the same sorted order so ids come out identical; `bulk_build`'s Python-vs-Python identity gate is the net. Run it, and read `R6-19`'s lesson about the bulk edge audit before assuming the gate is cheap.
+
 ## Read first
 
-- [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)`:847` — this lead, verbatim (evidence + unreviewed fix sketch)
+- [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md)`:883` — this lead, verbatim (evidence + unreviewed fix sketch)
 - the same file, §"Appendix — the 16 UNVERIFIED lower-ranked leads" (`:754-761`) — what "unverified" means here, in the audit's own words
 - the same file, §"Traps the numbers do not carry" — the round-wide traps
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the P12c fence and the reopening rule (**every item still needs a motivating measurement**)
-- `index_v4/processor.py::DeltaProcessor._fan_out` — the code
+- `index_v4/bulk_build.py::bulk_build` — the code
 - `python task.py show R6` — the parent: round-wide order, traps, and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
 ## Log
 
 ### 2026-08-21b
 
-**Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:847, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 8 of 16.
+**Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:883, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 11 of 16.
+
+### 2026-08-29b
+
+CLOSED as already carried. Both substantive parts -- that node id assignment order is load-bearing and must stay sorted(nodes), and that the Python-vs-Python identity gate is the net -- are in A11's fix sketch nearly word for word ('over sorted(nodes) (same insertion order, so ids are assigned identically) ... state is byte-identical, pinned by the identity gate'). Verified the sketch's ordering premise is today's code, not a new constraint: bulk_build.py:282-297 already iterates sorted(nodes). The rest of the entry was round-wide boilerplate already in the appendix preamble. Note: the challenge pass had REFUTED this write-off on the ground that the sketch misread; re-reading the sketch first-hand against the code shows the sketch is right and the refutation was wrong.

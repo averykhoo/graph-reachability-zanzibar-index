@@ -809,6 +809,84 @@ semantics-preserving, or that the Lean notes are right. History says treat
 these as leads only — the verified set above had fix sketches corrected and one
 refuted outright. Re-verify against the code before acting on any of them.
 
+### Cross-links and corrections the leads do not carry (added 2026-08-29b)
+
+⚠ **Read this before taking any appendix lead.** The leads are preserved verbatim, so a
+lead cannot say what was learned after it was filed. Each note below was checked against
+the live tree on 2026-08-29b; the leads themselves are still UNVERIFIED and none of this
+promotes one. The lead texts are unchanged — corrections live here, not in them.
+
+* **A3 and A14 are one function from two sides, and neither names the other.** A3 removes
+  `_check_derived`'s duplicate object resolve and memoises per call; A14 installs a
+  *persistent* decoded-snapshot cache on the same `::WildcardIndex._residue_state`.
+  Adjudicate them together or the second lands on a target the first has moved.
+* ⚠ **Both of them key invalidation on `ResidueV1.version`, and this document already
+  refutes that token** — see §"Traps the numbers do not carry" and the dated note on
+  `R6-4(a)`. `::DeltaProcessor._store_residue` deletes empty residues and writes
+  `version=1` on a fresh insert, so version equality is **not** content equality across a
+  delete/recreate. `R6-4(a)` got a note beside its verbatim sketch precisely because a
+  reader reads the sketch alone; A3's `(row.id, row.version)` memo and A14's cache key are
+  the same construct and had none. **A14 is additionally the only lead that gives a
+  read-path cache a cross-call lifetime** — the hazard `R6-6`'s verifier explicitly
+  credited its own fix for avoiding — and its `_store_residue` pop invalidates only the
+  writing instance's `WildcardIndex`, never a replica's.
+* **A4 collides with `R6-18` on the same table.** `R6-18` makes
+  `(store_id, subject_id, object_id)` the primary key, which subsumes A4's optional
+  subject-keyed companion outright, and under `WITHOUT ROWID` every secondary index carries
+  the full PK — so widening `ix_edge_v4_store_object` costs different bytes after `R6-18`
+  than before it. Land `R6-18` first or co-design them; **neither entry can be sized from
+  its own text.**
+* **A5 is a third appendix site for the 2026-08-24d symbol correction, and that note's
+  enumeration misses it.** The note names A4 and A14. A5's evidence points at "the
+  `check()` read path" in bare prose, so the re-grep the note prescribes (which keys on the
+  qualified `WildcardIndex.check`) does not surface it. The batched row-value-`IN` pattern
+  A5 says to copy lives in `::WildcardIndex._check_internal`; `::check` is the `BL-2` deny
+  fence and holds no probe.
+* ⚠ **A6 is a third assurance-checker rewrite, and the sabotage rule above does not name
+  it.** §"Rules that bind this list" enumerates `R6-7`/`R6-8`; A6 rewrites
+  `index_v4/invariants.py::_load`, whose consumer is the paranoia instrument that
+  `tests/wildcard_helpers.py::make_wildcard_index` installs at `PARANOIA_FULL` for the whole
+  suite. Its sketch argues flush-equivalence and never sabotage. **A projection that
+  quietly narrows what the checker can see fails by PASSING, everywhere at once** — break
+  an invariant per tier and watch it go red before *and* after.
+* **A9's "overlaps verified `R6-5`" is an understatement, and the double count would be
+  booked at the other end.** A9 names the same symbol as `R6-5`, and A9's sketch *is*
+  `R6-5`'s own stated minimum fix, so landing `R6-5` closes A9's body and leaves only the
+  cascade-side call sites (which are A8's). `R6-5`'s entry carries no pointer back here.
+  Land `R6-5`, re-profile, then ask whether a residue remains.
+* **A10 is the only one of the sixteen filed `algorithm change: yes`, and its Lean debt is
+  larger than its own sketch says.** The sketch names the §5.2 invalidation rule. But the
+  cheap path A10 would route computed dependents onto,
+  `::DeltaProcessor._reconcile_subject`, is recorded in `formal/CORRESPONDENCE.md` §7 as
+  having *no* Lean counterpart at all. So this does not update a modelled rule — it makes
+  an already-logged modelling gap the cascade's default path.
+* **A13's own proposed pin cannot see what A13 changes.** It suggests "a large-backlog
+  `catch_up` test at two batch sizes", which compares *final* state — precisely what
+  `connectedstore/apply.py::advance_index`'s docstring already argues is unaffected. The
+  change is to intermediate behaviour: splitting one drain into many commits shortens the
+  writer-blocking `_lock_store()` hold and lets a concurrent replica reader observe a
+  partially-applied backlog. That belongs on the opt-in PostgreSQL leg — SQLite's
+  `take_row_write_lock` arm is a real write lock but database-granular, and only PostgreSQL
+  shows the row-granular `FOR UPDATE` queueing this touches.
+* ⚠ **A15's sketch is backwards about the anchor gate.** It reasons that "anchors on
+  `check`/`expand` still resolve since the public functions keep their names".
+  `formal/CORRESPONDENCE.md` anchors the **nested closures** an AOT rewrite would delete —
+  `SetEngine.check.sat_expr` and siblings, `SetEngine.expand.do_expr` — and
+  `anchor_check.py` walks nested bodies with a dotted prefix, so `verify.sh lean` resolves
+  exactly those. `R6-1`'s and `R6-2`'s Lean notes already enumerate them.
+* ⚠ **A16's `del`→sentinel swap changes a failure MODE, not just a container.**
+  `Interner.release` deletes both entries today, so `Interner.key` on a released id raises
+  `KeyError`; a sentinel list returns `None`, and `SetEngine.result_keys` folds `key(i)`
+  straight into the returned key set — a loud crash becomes a silently wrong result.
+  Decide and pin what a read of a released id must DO before touching the container.
+
+**Checked and found already carried** (recorded so the check is not repeated): A1's
+id-order constraint is in its own sketch clause (b); A7's "this deletes defence-in-depth,
+sabotage-test it" is verbatim in its sketch and the impact is on its header line; A8's five
+sites, the unused `_nodes_by_ids` helper and the batching sketch are all in its own
+evidence, and `R6-5`'s verifier already cross-links it; A11's `sorted(nodes)` ordering
+premise and the identity gate are both in its sketch.
+
 ### [unverified · set-lookup] rebuild() replays full ORM rows one tuple at a time; no column projection or bulk bitmap insertion
 
 **`setengine/engine.py::SetEngine.rebuild`** · category: build-speed · filed impact: medium · algorithm change (finder): no

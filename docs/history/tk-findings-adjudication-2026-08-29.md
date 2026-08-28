@@ -5,6 +5,28 @@
 > home for that statement and this file is only provenance. Corrections append dated at
 > the top, never edited into the body.
 
+## Correction, 2026-08-29b — four `APPEND` rows were wrong, and one refutation was wrong
+
+Appended, not edited in. While landing the perf-appendix batch under `TK53`, each row was
+re-verified against the live tree first, as this file's own traps require. **Four rows the
+table below marks `APPEND` are in fact already carried and were closed instead:** `TK17`,
+`TK23`, `TK24`, `TK27`. In every case the increment sits verbatim in the appendix lead's
+own fix sketch — e.g. `A7`'s "sabotage-test the trusted entry before trusting it", and
+`A11`'s `sorted(nodes)` ordering premise, which is today's code rather than a new
+constraint.
+
+⚠ **`TK27` is the sharper lesson: the adversarial pass got it wrong in the other
+direction.** The challenge agent *refuted* the proposed write-off on the ground that the
+lead's fix sketch misread its own material. Reading the sketch first-hand against
+`index_v4/bulk_build.py:282-297` shows the sketch is right and the refutation was not. So
+the 6-of-11 overturn rate recorded under "Method" is a measurement of *disagreement*, not
+of correctness — the refutation pass is a filter that catches wrong write-offs and can also
+manufacture wrong appends. **Neither pass substitutes for opening the file.**
+
+That is the whole case for the re-verify trap, and it now has evidence on both sides.
+
+---
+
 **What this is.** [`TK52`](../../HANDOFF.md) split the `tasks/`-trial verdict into two
 questions and required the irreversible one to be answered first:
 

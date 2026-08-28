@@ -10,9 +10,9 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 `connectedstore/store.py::ConnectedStore.catch_up` — lead **A13** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:907`.
@@ -46,3 +46,7 @@ closed:
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:907, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 13 of 16.
+
+### 2026-08-29b
+
+APPENDED to docs/perf-round6-audit-2026-08.md, new appendix subsection 'Cross-links and corrections the leads do not carry (added 2026-08-29b)'. Landed as ONE consolidated section rather than 13 inline notes: the leads are preserved verbatim by an explicit recorded decision, so corrections belong beside them, not inside them, and the doc already had the precedent (the demoted 'Traps the numbers do not carry' section). Each note was re-verified against the live tree by a four-agent fan-out before landing; per-id detail is in the section itself and in docs/history/tk-findings-adjudication-2026-08-29.md.

@@ -107,7 +107,13 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   tails only the committed log delta into the evaluator (`catch_up_evaluator` →
   `apply_logged`, O(delta)), not a full O(live tuples) rebuild. Fine at human scale;
   a hot multi-reader deployment would still want a shared invalidation signal to
-  avoid per-reader tailing.
+  avoid per-reader tailing. ⚠ **That signal would be correctness-adjacent, not just
+  throughput.** The freshness contract (`at_least`, `StaleRead`) is what makes tokened
+  reads correct across sessions, and a shared invalidation signal is a *new way for a
+  reader to believe it is fresh*. Any such design must state what happens when the
+  signal is LOST or delayed, and the answer has to fail closed onto the token — a
+  reader that treats silence as "nothing changed" has upgraded a lower bound into a
+  recency claim, which the bullet below says the contract never makes.
 * **Concurrency coverage is SQLite-shaped by default, with a real-server leg on
   demand.** `_lock_store`'s `FOR UPDATE` arm no longer runs only in the imagination:
   `tests/test_postgres_ha.py` drives it against a live PostgreSQL and observes the
@@ -137,7 +143,15 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   `docs/spec-deviations.md` 2026-07-27). SQLite still renders the lock to a no-op and
   serializes writers itself, so the default CI run exercises a different path.
   Throughput under contention remains untested beyond the retry-on-busy convergence
-  tests.
+  tests — and **this one is owed rather than accepted**, unlike its neighbours in this
+  section. The open question is not correctness but shape: the critical section holds
+  the source lock *and* runs an evaluator catch-up inside itself, so its length grows
+  with the replica delta, and nobody has measured whether that degrades gracefully or
+  pathologically as writers are added. The deliverable is a measurement and a recorded
+  number, not necessarily a fix; the place for it is `tests/test_postgres_ha.py` on the
+  opt-in server leg, since SQLite renders the lock to a no-op and cannot answer it.
+  Budget for the result changing this prose rather than ratifying it — that leg has
+  falsified three of this document's assumptions once already.
 * **Supported backends, and where the dialect knowledge lives.** SQLite is the
   dev/test backend; **PostgreSQL is the supported server and the only one the gate
   ever exercises** (`tests/test_postgres_ha.py`, via `bash scripts/pg_local.sh start`

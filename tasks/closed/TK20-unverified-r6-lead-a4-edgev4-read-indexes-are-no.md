@@ -10,9 +10,9 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-24b
-updated: 2026-08-24b
-closed:
+moved: 2026-08-29b
+updated: 2026-08-29b
+closed: 2026-08-29b
 ---
 
 `index_v4/models.py::EdgeV4.__table_args__` — lead **A4** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:799`.
@@ -49,3 +49,7 @@ The read queries project or filter columns the indexes do not carry: the check p
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [R6-18]`. This row's own trap says it COLLIDES with R6-18 on the same table; R6-18 did not name it back, so the motivated LATER row was blind to the collision. `show R6-18` now reports it as an incoming link.
+
+### 2026-08-29b
+
+APPENDED to docs/perf-round6-audit-2026-08.md, new appendix subsection 'Cross-links and corrections the leads do not carry (added 2026-08-29b)'. Landed as ONE consolidated section rather than 13 inline notes: the leads are preserved verbatim by an explicit recorded decision, so corrections belong beside them, not inside them, and the doc already had the precedent (the demoted 'Traps the numbers do not carry' section). Each note was re-verified against the live tree by a four-agent fan-out before landing; per-id detail is in the section itself and in docs/history/tk-findings-adjudication-2026-08-29.md.
