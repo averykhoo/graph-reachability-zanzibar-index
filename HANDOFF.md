@@ -16,23 +16,22 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-28d)** — `lean` +
+> 🟢 **ALL TEN GATE PHASES GREEN on this tree (2026-08-29)** — `lean` +
 > `conf-tile:1..5/5` + `tests-tile:1..4/4`; tiles keyed to the code-scoped tree id (`*.md`
 > excluded), and `lean` was re-run after the last `*.md` edit.
-> **`2026-08-28d`: `P14`'s `UntaintedShadow` adjudication is settled, and it moved the
-> answer.** Route B's weakening is one disjunct on one field, and the never-probed
-> `nodesSub`/`closed`/`closed0` hold everywhere, so **4c-ii owes no `writeRulesRaw`
-> endpoint-closure edit**. ⚠ **`slSwD_not_mono` measures the wrong σ0** — the `_d` chain
-> builds σ0 over the *filtered* store, so the real σ0 is `emptyState` and against it the
-> strong shadow is uninhabited. Its sabotage: **every `decide` pin stayed green while only
-> `shadowB_correct` fired**, 2026-08-28c's blind-guard lesson one layer down. Gate floor
-> drift repaired: `MIN_TESTS_ALL` 923→**943**, instrument-checked at 944. **Next: 4c-ii +
-> step 7, the un-splittable cone — read its revert-to-green exit (scope doc §11.12) before
-> opening.** → PROOF_STATUS `2026-08-28c` §5 for why 3 sessions, `2026-08-28d` for the rest.
-> **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned 2026-08-21b).
-> Two board `moved` cells disagree with the task tree, unreconciled on purpose: they need a
-> call on what `moved` means, not an edit. Ask `python scripts/gate_status.py`, never this
-> line — any edit invalidates the tree-addressed verdict. Red is yours: `git stash`.
+> ⏰ **`2026-08-29`: the `tasks/` trial verdict is DUE TOMORROW and is now a tracked row
+> (`TK52`) on both trees** — it was on neither for five days. It is **two questions**: does
+> the query beat the file, and where unranked `TK*` findings live afterwards. The 47 open
+> findings are snapshotted → `docs/history/tasktool-findings-2026-08-29.md`, so DELETE is
+> non-destructive — but that is safe-to-delete, **not** decided-what-to-keep. ⚠ `task.py
+> sync` was **RED on arrival and the TREE was the stale side** (`R6` carried "11 to land"
+> for five days; the board was right). Repaired, `sync` **CLEAN**; evidence recorded first,
+> in `docs/tasktool-trial-protocol.md` §6 append `2026-08-29`.
+> **`2026-08-28d`: `P14` settled** — 4c-ii owes no `writeRulesRaw` endpoint-closure edit.
+> **Next: 4c-ii + step 7, the un-splittable cone — read its revert-to-green exit (scope doc
+> §11.12) first.** → PROOF_STATUS `2026-08-28c` §5, `2026-08-28d`.
+> **"Known live correctness bugs: 0"** stands (`BL-2` fixed and pinned 2026-08-21b). Ask
+> `python scripts/gate_status.py`, never this line. Red is yours: `git stash`.
 
 ## Board
 
@@ -47,7 +46,8 @@ forward forever and are never reused.**
 |---|---|---|---|---|---|
 | `P3` | leg 7 **4c-ii + step 7, one commit** — fence layer landed 2026-08-28b; **public surface MIGRATED 2026-08-28c** (7 decls + zcli driver onto `checkPublic`, no new hypotheses; `hql` surface cut from 6 rows to **1**, `graph_correct` `:27`). Everything pre-4c-ii is now DONE, **`P14`'s `UntaintedShadow` adjudication included (2026-08-28d: Route B = one disjunct on one field; the `writeRulesRaw` endpoint-closure risk retired; `slSwD_not_mono` shown to measure the wrong σ0)**. **What remains is the un-splittable 42-module cone** — measured 3 sessions, not 1 (PROOF_STATUS `2026-08-28c` §5), and its **revert-to-green exit is now declared in the item block: read it before opening** | **NOW** | L | — | 2026-08-28d |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
-| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d; the old `9 / 5` was wrong, and the `11` was right until `R6-6` closed) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-24d |
+| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d, and **the task tree was re-counted to match 2026-08-29** — it had carried the stale `11` for five days) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-29 |
+| `TK52` | **the `tasks/` trial verdict — due 2026-08-30, i.e. tomorrow.** It is **two questions**, and the current exit-plan wording bundles them: *does the query beat the file* (what the protocol measured) and *where do unranked `TK*` findings live afterwards* (never posed). The second is the irreversible one, so decide it first. **The open findings are now snapshotted** → [`tasktool-findings-2026-08-29.md`](docs/history/tasktool-findings-2026-08-29.md), so DELETE is non-destructive and (a) can be judged on its merits — but that is safe-to-delete, **not** decided-what-to-keep, which is this row's deliverable | **NEXT** | S | — | 2026-08-29 |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
 | `P7` | `ttuStarFree` **(iii)+(iv)** — re-prove the 5 consumed sites, widen the gate → [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16 | LATER | M | `P6` | 2026-08-16 |

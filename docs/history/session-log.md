@@ -25,6 +25,81 @@ from here.
 
 ---
 
+## 2026-08-29 — trial verdict filed on both trees, 47 findings rescued; `sync` was RED and the TREE was the stale side
+
+rows: `TK52` (new), `R6`, `P3`
+
+**No formal work. This session made the 2026-08-30 verdict decidable and did not decide
+it** — the call is the user's, and the irreversible half was deliberately left open.
+
+**1. The findings are rescued, so DELETE is no longer destructive.** All 47 open `TK*`
+findings are snapshotted in
+[`docs/history/tasktool-findings-2026-08-29.md`](tasktool-findings-2026-08-29.md) (FROZEN,
+47 entries, one per id, citations copied verbatim and explicitly *not* re-verified). The
+trial's exit plan — *"delete `tasks/`, `scripts/task.py` and this bullet, which is one
+revert"* — bundled two separable decisions; the snapshot unbundles them so question (a),
+*does the query beat the file*, can be judged on its merits. ⚠ **This is safe-to-delete,
+not decided-what-to-keep**; that adjudication is `TK52`'s deliverable.
+
+**2. The verdict is now a tracked item on both trees** (`TK52`: board row + task file,
+same session key), discharging the `Still owed` line carried since 2026-08-24c and closing
+the protocol's own finding that *"the one deadline that governs both systems is tracked by
+neither"*. It stood five days.
+
+**3. ⚠ The parallel-update contract was RED, and the tree was the stale side.**
+`task.py sync` reported **2 drift items** on arrival. `R6` was a real content divergence,
+not a digest one: the task title and its `As built` census still read **"11 to land" / 11
+`LATER` / 5 closed** — generated 2026-08-21 and never re-counted after `R6-6` closed
+2026-08-24d — while `HANDOFF.md` had said **"10 to land"** since that day. Re-counted live
+(`list --parent R6 --limit 0`, `R6-N` children only): **10 `LATER`, 3 `HOLD`, 6 closed**;
+the board was right the whole time. `P3` was digest-only (four `2026-08-28*` sessions
+rewrote the row without re-stamping; body content current). Both acked, `sync` now
+**CLEAN**. This is the summary-row-contradicting-its-own-child defect (trial `P4`, then
+`HS-5`/`TK49`) recurring a **third** time — inside the tree, on the row whose
+self-recounting was cited as the tree's win.
+
+**4. Two corrections to figures the verdict turns on.** The census is **`TK1`–`TK51`, 51
+ids, no gaps — 47 open, 4 closed**, superseding 2026-08-24c's *"49 open, 2 closed"* by
+exactly `TK46`/`TK47`, closed hours after it was written. And *"outside `tasks/`, exactly
+one `TK` id is mentioned anywhere in this repo"* is **now false**: 34 of the 47 appear
+nowhere outside `tasks/`, 12 appear only as narrative in the session log and the protocol,
+and exactly 1 (`TK49`) is on the board. The board-only reading survives; the
+no-other-file reading does not.
+
+**Method note.** A subagent fan-out did the bulk reading (47 task files, the protocol, the
+cross-reference sweep). Every load-bearing claim above was then re-verified first-hand
+before it was written into a tracked file — the `sync` output, the `R6` child re-count,
+the read tally, the census, and the `2026-08-30` grep. One agent-reported framing was
+wrong and was corrected: an early `ls tasks/` of mine missed `tasks/closed/`, which made
+the protocol's census look wrong in both directions; it was right when written.
+
+⚠ **`TK52` was filed twice.** The first `new` took `--source hand`, which left `sync`
+permanently unable to stamp its digest — a row that reports drift forever is a red
+instrument people learn to ignore. The uncommitted file was removed and re-filed with
+`--source board`, which takes the id from the row; it minted `TK52` again, so no id was
+burned.
+
+**5. Friction log, at the user's request.** §§1–7 measured *reading* cost and never
+measured the cost of *operating* the tool — the recurring price if it graduates. Six
+observed items are now protocol §6 `A7`, the sharpest being that **`ack` on a
+`--source hand` task prints a success line and exits 0 while stamping nothing**, so `sync`
+reports that task as drift forever: an assurance step that fails by passing, inside the
+tool built to prevent drift. Also recorded: `ls tasks/` silently undercounts because
+closed tasks live in `tasks/closed/` — the near-miss that nearly put a false finding in
+this entry.
+
+Full evidence, including what remains unmeasured: `docs/tasktool-trial-protocol.md` §6,
+append `2026-08-29`, written **before** the `R6` repair so the divergence survives it.
+
+`task lint: clean (11 checks, 151 task file(s) parsed)`
+`read: board + HANDOFF`
+
+**Still owed:** the verdict itself (`TK52`) — both questions, by 2026-08-30. Nothing else;
+`P3`'s cone was deliberately not opened, since it is un-splittable and has no green
+intermediate state.
+
+---
+
 ## 2026-08-28d — `P14` settled: `classify` is the only failing field, and the old refutation used the wrong σ0
 
 rows: `P3`
