@@ -1,4 +1,5 @@
-> **LIVING — the task tool's contract, tracked for the 2026-08-23 → 2026-08-30 trial.**
+> **LIVING — the task tool's contract, tracked for the 2026-08-23 → 2026-09-06 trial**
+> (extended a week on 2026-08-30; the tree is not being deleted).
 > Copied from `.scratch/tasktool/SPEC.md` so the tool's contract is not itself in a
 > gitignored directory. Where this file and `scripts/task.py` disagree, **the code wins**
 > (the repo's standing rule); fix the doc in place. Companion contracts that remain in

@@ -2733,6 +2733,57 @@ def test_lint_check_12_catches_the_three_banner_failures():
     assert rc == 0, out_text(out) + err
 
 
+def test_the_banner_may_not_carry_a_glyph_the_board_cannot_render():
+    """Check 12, fourth clause: no character `ascii_safe` would escape.
+
+    FOUND BY LOOKING AT THE OUTPUT, not by a test. `ASCII_FOLD` was censused out of task
+    titles and bodies, and `tasks/BANNER.md` did not exist when that census ran -- so the
+    first real banner, written in the house banner style, opened the session-start view
+    with a literal escape sequence::
+
+        \\u23f0 `TK53`: 15 appends remain. Until they land, deleting `tasks/` loses ...
+
+    The escape fallback is right for a TITLE (lossy but honest, written once by someone
+    who sees the result) and wrong for the banner, which is free prose rewritten every
+    session and printed at the very top of the view. A reader cannot tell noise from
+    content and nothing complains -- the fail-by-passing shape, in the one file whose
+    whole job is to be read first.
+
+    So the two glyphs already in use were mapped, and the GAP was made mechanical: the
+    next session that pastes an emoji is told at `lint` time instead of shipping noise.
+    Deliberately scoped to the banner; making every unmapped glyph fatal would redden 153
+    task files nobody is editing, and the fold exists precisely so those render.
+
+    Observed red before `unmappable` existed -- and note this case cannot be caught by
+    `test_board_ascii_under_cp1252`, which proves the output IS ascii, which an escape
+    sequence also is.
+    """
+    root = good_tree('bannerglyph')
+    banner_path = os.path.join(root, 'tasks', 'BANNER.md')
+
+    write(banner_path, u'%s -- state of play \U0001F680 shipping\nsecond line\n' % KEY)
+    rc, out, err = run(root, 'lint')
+    text = out_text(out) + err
+    assert rc == 1, text
+    line = first_match(text, r'character\(s\) `board` cannot render')
+    assert line is not None, text
+    assert 'U+1F680' in line, line
+
+    # A glyph that IS mapped stays green -- this is a check on renderability, not an
+    # ASCII-only rule, and banning the warn badge from the banner would be absurd.
+    write(banner_path, u'%s -- state of play\n⚠ a real trap\n' % KEY)
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    assert '(!) a real trap' in out_text(out), out_text(out)
+
+    # Restore control.
+    write(banner_path, BANNER_TEXT)
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+
+
 def test_non_task_md_is_skipped_only_at_the_top():
     """The exclusion is exact-name and TOP-LEVEL ONLY, and both halves are load-bearing.
 

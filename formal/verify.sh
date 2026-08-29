@@ -423,7 +423,9 @@ MIN_CONF_ALL=495
 #   observed literally:
 #     FAIL: tests/ collects only 1035 test(s); the gate floor is 1036.
 #   and rc=1. Restored to 1035, which then passes.
-MIN_TESTS_ALL=1035
+#   RAISED 1035 -> 1036 on 2026-08-30: the banner-glyph check (lint check 12's fourth
+#   clause) and its test. Re-measured with `pytest tests/ -q --collect-only`.
+MIN_TESTS_ALL=1036
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

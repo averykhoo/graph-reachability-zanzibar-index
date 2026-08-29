@@ -16,18 +16,18 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **All ten gate phases green on this tree (2026-08-29d)** — `lean` +
+> 🟢 **All ten gate phases green on this tree (2026-08-30)** — `lean` +
 > `conf-tile:1..5/5` + `tests-tile:1..4/4`; tiles keyed to the code-scoped tree id (`*.md`
 > excluded), and `lean` was re-run after the last `*.md` edit.
-> ⏰ **`2026-08-29d`: trial Phase A landed** — the tool's suite is in the gate
-> (`tests/test_tasktool.py`, 84 tests incl. 30 sabotage cases; `MIN_TESTS_ALL` 943→1035),
-> the six A7 footguns fixed and sabotaged, and `handoff_lint` now fails when a board row
-> has no task file — it reports clean, so the dual-update contract held all week.
-> 🧭 **Phase B (this file becomes a stub) is the question-(a) verdict and needs an
-> explicit user go** → tree row `TT-1`. `TK53`: **15 appends remain**. **`2026-08-28d`:
-> `P14` settled. Next: 4c-ii + step 7, the un-splittable cone — read its revert-to-green
-> exit (scope doc §11.12) first.** → PROOF_STATUS `2026-08-28c` §5. **"Known live
-> correctness bugs: 0"** stands — ask `python scripts/gate_status.py`. Red: `git stash`.
+> ⏰ **`2026-08-30`: trial extended to 2026-09-06; `tasks/` is not being deleted** (user).
+> Question narrows to **cutover-or-keep-both**; the dual-update contract runs another week.
+> `2026-08-29d`: the tool's suite is in the gate (85 tests incl. 30 sabotage cases), six
+> A7 footguns fixed, and `handoff_lint` fails when a board row has no task file — clean,
+> so the contract held week one. 🧭 **Phase B (this file becomes a stub) is the verdict
+> and needs an explicit user go** → row `TT-1`; `TT-2` = `sync` has no gated coverage.
+> `TK53`: **15 appends remain**. **`2026-08-28d`: `P14` settled. Next: 4c-ii + step 7,
+> the un-splittable cone — read its revert-to-green exit (scope doc §11.12) first.**
+> **"Known live correctness bugs: 0"** — ask `python scripts/gate_status.py`. Red: `git stash`.
 
 ## Board
 
