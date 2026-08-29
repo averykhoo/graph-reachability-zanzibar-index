@@ -25,6 +25,84 @@ from here.
 
 ---
 
+## 2026-08-30 — trial window extended to 2026-09-06, delete off the table; and the banner was printing `⏰`
+
+rows: `TT-1`, `TT-2`
+
+**User decision, recorded first because everything below follows from it:** the trial runs
+in parallel for another week, to **2026-09-06**, and `tasks/` is **not** being deleted. The
+open question narrows from keep-or-delete to **cutover-or-keep-both**. Phase B still needs
+an explicit go; it was not started.
+
+**1. Where the window was written down, and how each site was treated.** `2026-08-30`
+appeared in five tracked places. `CLAUDE.md` and `docs/tasktool-spec.md` are LIVING and
+were edited in place. `docs/tasktool-trial-protocol.md` and `docs/tasktool-trial-stub.md`
+are ACTIVE-PLAN, so they got dated correction banners and their bodies were left alone —
+including §6's "the 2026-08-30 verdict", which was true when written. `TK52`'s closed task
+file was left entirely alone. The protocol's own `2026-08-24c` finding — that the deadline
+governing both systems was tracked by neither — is now half-answered: the *extension* is on
+the tree (`TT-1`, `TT-2`) as well as in prose.
+
+**2. A defect in the session-start read, found by looking at it rather than by a test.**
+Asked whether the board is yet as good as `HANDOFF.md` at first run, I rendered it and the
+banner opened with a literal escape:
+
+```
+⏰ `TK53`: 15 appends remain. Until they land, deleting `tasks/` loses statements.
+```
+
+`ASCII_FOLD` was censused out of task **titles and bodies**; `tasks/BANNER.md` did not
+exist when that census ran, and it is the one input to this view that is free-form prose
+rewritten every session in the house banner style — which uses 🟢 and ⏰, neither mapped.
+The escape fallback is right for a title (lossy but honest, written once by someone who
+sees the result) and wrong at the very top of the session-start view, where a reader
+cannot tell noise from content and nothing complains.
+
+Both glyphs are now mapped, and the **gap** was made mechanical rather than the instance
+fixed: lint check 12 gained a fourth clause refusing any banner character `ascii_safe`
+would escape, scoped to the banner alone (making it fatal everywhere would redden 153 task
+files nobody is editing, and the fold exists so those render). ⚠ Note this class is
+invisible to `test_board_ascii_under_cp1252`, which proves the output **is** ASCII — and
+`⏰` is ASCII. A check can be green and blind to the thing beside it.
+
+**3. A sabotage that silently did nothing, caught only because its result was implausible.**
+The first attempt to redden the new check reported `1 passed` with the check supposedly
+disabled. The correct reading of that is "my test guards nothing"; the true cause was that
+the patch never applied — the string replacement matched nothing and I had not asserted
+otherwise. Re-run with the patch verified before the test (`found at`, `ORIGINAL LINE:`,
+`SABOTAGE APPLIED` printed), it reddens properly:
+
+```
+E       AssertionError: task lint: clean (12 checks, 7 task file(s) parsed)
+E       assert 0 == 1
+FAILED tests/test_tasktool.py::test_the_banner_may_not_carry_a_glyph_the_board_cannot_render
+```
+
+**Assert that the sabotage APPLIED before believing what the test says about it** — a
+no-op patch and a worthless test produce the identical green, and the green is the one
+this repo is built to distrust. `docs/sabotage-procedure.md` already says to control your
+instrument; this is that rule one level down, on the instrument's instrument.
+
+**4. `TT-2` filed: `sync` is the one surface with no gated coverage.** Phase A skipped
+`sync_sabotage.py` (14 cases) and `sync_accept.py` (57 assertions) on the explicit ground
+that `sync` retires at cutover. **The extension expired that ground** — `sync` is in live
+use for another week and the cutover may not come. Filing it was itself a small piece of
+evidence for the trial: `new --pri NEXT` was **refused** at write time (`NEXT would have 4
+rows, budget 3`), so it went in as LATER. Re-ranking the board is the user's call, not a
+side effect of filing.
+
+**5. My own banner tripped `BANNER_MAX_LINES`** on the first rewrite (16 lines, cap 14).
+Recorded because the author of a cap being caught by it the same week is the cheapest
+possible evidence that it is not decorative.
+
+`min_tasks_parsed` 153 → 154; `MIN_TESTS_ALL` 1035 → 1036, instrument-checked at 1037:
+`FAIL: tests/ collects only 1036 test(s); the gate floor is 1037.`
+
+**Still owed:** nothing. `TT-1` (Phase B) and `TT-2` (the `sync` port) are filed, not owed.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 154 task file(s) parsed)`
+read: board + HANDOFF
+
 ## 2026-08-29e — doc sweep after Phase A: five "465" floors, a fifth "~25 lines", and a second symbol that never existed
 
 rows: `TT-1`, `ZT-P5`

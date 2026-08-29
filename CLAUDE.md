@@ -11,7 +11,9 @@ IVM delta processor.
   item, plus an item block for each `NOW`/`NEXT`. This file (`CLAUDE.md`) is the durable
   contract; the board is what changes session-to-session. At end of session write back
   via its "Rhythm" protocol (session-log entry, banner, board rows).
-- **ON TRIAL 2026-08-23 → 2026-08-30: `tasks/` is maintained IN PARALLEL with the board.**
+- **ON TRIAL 2026-08-23 → 2026-09-06 (EXTENDED 2026-08-30, user decision — week one ran
+  to 2026-08-30; `tasks/` is NOT being deleted, and the parallel run continues):
+  `tasks/` is maintained IN PARALLEL with the board.**
   A file-per-task tree (one task per file) plus `scripts/task.py`, whose `board`
   verb prints the session-start view as a QUERY instead of a file — bounded by
   `task.py::BOARD_MAX_LINES` and asserted by a test, never restated as prose here (four
@@ -40,11 +42,12 @@ IVM delta processor.
     to live in gitignored `.scratch/`, i.e. it was already-lost evidence; the 30 sabotage
     cases are permanent tests now, and the historical record is
     [`docs/history/tasktool-proof-2026-08.md`](docs/history/tasktool-proof-2026-08.md)).
-    If it is not actually helping by 2026-08-30, the answer is to delete `tasks/`,
-    `scripts/task.py` and this bullet — but note that the DELETE path is only lossless
-    once `TK53`'s remaining appends land, and that the test rescue was landed first
-    precisely so a delete verdict costs no evidence. **Phase B, the cutover that retires
-    this board, needs an explicit user go** and is filed as tree row `TT-1`; the spec is
+    **DELETE is off the table as of 2026-08-30** (user decision): the tree runs in
+    parallel through 2026-09-06 and the question is now cutover-or-keep-both, not
+    keep-or-delete. The delete path is still described here because it remains the exit
+    if week two goes badly — and it is only lossless once `TK53`'s remaining appends
+    land. **Phase B, the cutover that retires this board, needs an explicit user go**
+    and is filed as tree row `TT-1`; the spec is
     [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md).
 - **Always run the gate before pushing.** Never push red or unverified: the phased
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`

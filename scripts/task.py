@@ -759,6 +759,14 @@ ASCII_FOLD = {
     u'−': '-',      # x2, U+2212 MINUS SIGN, which is NOT the ASCII hyphen ("-60.7%")
     u'σ': 'sigma',  # x2, P3's rewrite-closure chain (sigma0-side)
     u'🧭': '(nav)',  # x1, P3's "machine-checked, needs a human call" badge
+    # THE BANNER GLYPHS, added 2026-08-29e. Everything above was censused out of task
+    # TITLES and BODIES; `tasks/BANNER.md` did not exist when that census ran, and it is
+    # the one input to this view that is free-form prose rewritten every session in the
+    # house banner style -- which uses these two. Observed on the first real banner:
+    # `⏰ TK53: 15 appends remain`, i.e. the session-start read opened with an escape
+    # sequence. See `unmappable` for why that is now a refusal rather than a fold.
+    u'🟢': '[green]',
+    u'⏰': '[!]',
 }
 
 
@@ -785,6 +793,24 @@ def ascii_safe(text):
         else:
             out.append('\\u%04x' % ord(ch))
     return ''.join(out)
+
+
+def unmappable(text):
+    """The distinct non-ASCII characters ``ascii_safe`` would render as ``\\uXXXX``.
+
+    The escape fallback is the right behaviour for a TITLE -- it is lossy but honest, it
+    cannot crash, and a title is written once by someone who will see the result. It is
+    the wrong behaviour for ``tasks/BANNER.md``, which is free-form prose rewritten every
+    session and printed at the TOP of the session-start view: an unmapped glyph there
+    opens the read with `\\u23f0`, which is exactly what happened to the first real
+    banner. The reader cannot tell noise from content, and nothing complains.
+
+    So the banner gets a mechanical refusal (lint check 12) and everything else keeps the
+    fold. Deliberately NOT a wider rule: making every unmapped glyph fatal would turn a
+    cosmetic fallback into a gate failure on 153 task files nobody is editing today, and
+    the fold exists precisely so that they render.
+    """
+    return sorted(set(ch for ch in text if ord(ch) >= 128 and ch not in ASCII_FOLD))
 
 
 def prog():
@@ -2554,6 +2580,15 @@ def check_banner(store, fail, state):
         fail('%s is %d lines, cap %d. The banner is a handoff, not a log: the argument '
              'goes in the task file, the state of play goes here.'
              % (rel(path), len(lines), BANNER_MAX_LINES))
+    stray = unmappable('\n'.join(lines))
+    if stray:
+        fail('%s uses %d character(s) `board` cannot render: %s. They print as \\uXXXX '
+             'escapes at the very top of the session-start view -- observed on the first '
+             'real banner, which opened with `\\u23f0`. Either use a glyph in '
+             '`task.py::ASCII_FOLD` or add the mapping there (it is one line, and the '
+             'banner is the one input to this view that is free prose).'
+             % (rel(path), len(stray),
+                ', '.join('%r (U+%04X)' % (ch, ord(ch)) for ch in stray)))
     head = lines[0] if lines else ''
     if not SESSION_KEY_IN_TEXT.search(head):
         fail('%s: the first line (%r) carries no session key of the form YYYY-MM-DD[a-z]. '

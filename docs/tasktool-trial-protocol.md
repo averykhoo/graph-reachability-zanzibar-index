@@ -1,3 +1,13 @@
+> **CORRECTION 2026-08-30 — THE WINDOW WAS EXTENDED TO 2026-09-06, and DELETE is off the
+> table** (user decision: *"we won't delete tasks, it'll run in parallel for another
+> week"*). Everything below stands as written and is NOT edited — including §6's dated
+> observations, which say "the 2026-08-30 verdict" and were true when written. Read every
+> `2026-08-30` below as "the end of week one". What changed: the question is no longer
+> keep-or-delete but **cutover-or-keep-both**, and §7.3's pre-registered week-two measures
+> (`tree-sole-authority-spec-2026-08-29.md` §3) now have a week to run in. The delete
+> branch of the exit plan is dormant, not deleted — §6's `2026-08-24c` finding that it
+> destroys 49 tracked items is still the reason `TK53` matters.
+>
 > **ACTIVE-PLAN — the task-tool trial's measurement protocol, 2026-08-23 → 2026-08-30.**
 > Written and committed BEFORE any trial agent ran. That ordering is the whole point: a
 > rubric written after the results is a rubric fitted to them. Results append to §6; the

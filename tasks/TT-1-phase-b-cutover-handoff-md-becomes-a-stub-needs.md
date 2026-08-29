@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-29d
-moved: 2026-08-29d
-updated: 2026-08-29d
+moved: 2026-08-30
+updated: 2026-08-30
 closed:
 ---
 
@@ -46,3 +46,7 @@ retirement refusal; they are not deleted. `sync_sabotage.py` (14 cases) and
 - [`docs/history/tasktool-proof-2026-08.md`](docs/history/tasktool-proof-2026-08.md) -- what was sabotaged and what was not
 
 ## Log
+
+### 2026-08-30
+
+Trial window EXTENDED to 2026-09-06 and DELETE taken off the table (user, 2026-08-30). This row is unchanged in substance -- Phase B still needs an explicit go and is still the question-(a) verdict -- but the question it answers narrowed from keep-or-delete to cutover-or-keep-both. Its third trap (the unported sync suites) is now filed as its own row, TT-2, because the ground it rested on -- 'sync retires at cutover' -- expired with the extension.

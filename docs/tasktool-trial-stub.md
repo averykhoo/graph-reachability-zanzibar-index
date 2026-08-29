@@ -7,6 +7,10 @@
 > next regeneration and belong in the generator. Do not point sessions at this file;
 > during the trial it exists to be measured against `HANDOFF.md`, not to be followed.
 >
+> **CORRECTION 2026-08-30.** The trial window was extended to **2026-09-06** and the tree
+> is **not** being deleted (user decision). Line 3's "2026-08-23 → 2026-08-30" is week
+> one. This file remains a draft, not the live board.
+>
 > **CORRECTION 2026-08-29d.** Two classes of fix were applied here IN PLACE rather than
 > appended, and the distinction matters: the five broken relative links below were
 > *typos* (they resolved to `docs/CLAUDE.md`, `docs/formal/HANDOFF.md`,
