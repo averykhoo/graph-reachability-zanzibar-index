@@ -3,6 +3,21 @@
 **ACTIVE-PLAN 2026-08-29 — execution spec for an implementing agent. Mark FROZEN when
 landed or abandoned; corrections append dated at the top.**
 
+> **PHASE A IS LANDED — 2026-08-29d, commit `379dd60`, ten gate phases green.** Section 1
+> (A1–A5) below is still written in the undone imperative; **do not re-execute it.** Read
+> it as the record of what was decided, and ledger `2026-08-29d` as the record of what
+> happened and where it differed. Notable differences from this spec as written:
+> A2 item 5 was **already correct** and needed a pin rather than a fix (and its
+> `list --parent` prefix half is explicitly NOT scheduled); `MIN_TESTS_ALL` went 943 →
+> **1035**, not the figure any estimate here implied; a twelfth lint check (`check_banner`)
+> and a fifteenth field (`brief`) were added, so any count in this document is now stale
+> by construction. `sync_sabotage.py` / `sync_accept.py` were **not** ported — that gap is
+> live if Phase B never lands.
+>
+> **§2 (Phase B) and §3 (week-two measurement) remain OPEN and unexecuted.** Phase B is
+> filed as tree row `TT-1` and needs an explicit user go; landing it IS the trial's
+> question-(a) verdict, so it must not happen as a side effect of other work.
+
 Provenance: trial verdict evidence in ledger `2026-08-29` / `2026-08-29b`
 (`docs/history/session-log.md`), friction log `docs/tasktool-trial-protocol.md` §6 A7,
 and a 9-question tool census run 2026-08-29 (this spec's line-number cites come from it —

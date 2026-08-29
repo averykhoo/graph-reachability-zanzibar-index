@@ -70,11 +70,10 @@ forward forever and are never reused.**
 
 Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`, `BL-1` (2026-08-21), `BL-2` (2026-08-21b),
 `HS-4` and `GS-2` (2026-08-17), `HS-2` (2026-08-20b), `TK52` (2026-08-29b), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
-`B1`'s underlying finding was verified closed on 2026-08-16 (both halves proved 2026-07-28
-and 2026-08-04; the record had simply never caught up) — evidence in `formal/HANDOFF.md`'s
-`B1` block. Retiring an id is not the same act as closing a finding: say which you mean —
-`BL-1` is both (fixed 2026-08-21; pins green), as is `BL-2` (filed AND fixed 2026-08-21b;
-its six pins in `tests/test_reg18_leaf_name_read_leak.py` stay green as regression guards).
+`B1`'s finding was verified closed 2026-08-16 (halves proved 2026-07-28 / 2026-08-04) —
+evidence in `formal/HANDOFF.md`'s `B1` block. Retiring an id is not the same act as closing
+a finding: say which you mean — `BL-1` is both (fixed 2026-08-21; pins green), as is `BL-2`
+(filed AND fixed 2026-08-21b; six pins in `tests/test_reg18_leaf_name_read_leak.py` green).
 ⚠ **Do not reflow those two `Closed ids` lines.** `handoff_lint.py::check_ledger_row_ids`
 harvests retired ids LINE BY LINE (only lines carrying `Closed ids stay retired` or
 `survives as the historical grouping` are read), so rewrapping moves ids out of scope —
@@ -215,6 +214,7 @@ Cross-item only. Everything durable and repo-wide lives in `CLAUDE.md` instead.
 |---|---|---|
 | [`CLAUDE.md`](CLAUDE.md) | durable rules: env, the gate, layout, testing conventions, invariants, the four footguns | every session (auto-loaded) |
 | [`docs/README.md`](docs/README.md) | doc-system conventions: liveness, banners, ledger format, citation keys, signals | before restructuring any doc |
+| [`tasks/README.md`](tasks/README.md) · [`docs/tasktool-spec.md`](docs/tasktool-spec.md) | the task tree: layout, reading protocol, the rules `lint` cannot enforce / the tool's full contract | while the trial runs — any board edit owes the mirrored `task.py` op |
 | [`docs/history/session-log.md`](docs/history/session-log.md) | the root session ledger, newest first | top entry at session start; write one every session |
 | [`docs/gate-runbook.md`](docs/gate-runbook.md) | cap-safe phased `verify.sh`, the Postgres leg, fuzz, every floor and budget | before running the gate |
 | [`tests/dbengine.py`](tests/dbengine.py) | the SQLite-vs-server engine seam (`ZANZIBAR_TEST_DSN` / `ZANZIBAR_PG_REQUIRED`) | running the PostgreSQL leg |
