@@ -1,6 +1,7 @@
 ---
 id: TK30
 title: unverified R6 lead A14: derived check re-SELECTs and re-decodes the whole residue outside reconcile
+brief:
 pri: HOLD
 size: ?
 deps: []

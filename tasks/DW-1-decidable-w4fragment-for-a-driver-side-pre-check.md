@@ -1,6 +1,7 @@
 ---
 id: DW-1
 title: decidable W4Fragment for a driver-side pre-check
+brief:
 pri: SOMEDAY
 size: ?
 deps: []

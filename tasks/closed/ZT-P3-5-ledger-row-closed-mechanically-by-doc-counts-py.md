@@ -1,6 +1,7 @@
 ---
 id: ZT-P3-5
 title: ledger row: CLOSED mechanically by doc_counts.py counts pin
+brief:
 pri:
 size:
 deps: []

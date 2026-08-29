@@ -1,6 +1,7 @@
 ---
 id: HS-5
 title: always-living docs declare no liveness state; enumeration+method now in docs/README.md sec 2
+brief:
 pri: LATER
 size: S
 deps: []

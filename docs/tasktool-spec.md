@@ -39,8 +39,13 @@ stays marked open, and task groups never migrate to an archive.
 The fix decouples them:
 
 * **Database** — `tasks/*.md`, one file per task, unbounded, nothing ever dropped.
-* **Session view** — the OUTPUT of `task.py board`, about 25 lines, printed and never
-  committed. Constant context cost regardless of backlog size.
+* **Session view** — the OUTPUT of `task.py board`, printed and never committed, at
+  constant context cost regardless of backlog size. Its size is bounded by
+  `task.py::BOARD_MAX_LINES` and **asserted** by
+  `tests/test_tasktool.py::test_board_stays_under_its_size_ceiling`, which renders a
+  full-budget corpus. No figure is restated here: four places in this repo carried
+  "~25 lines" while the view grew a banner and a `brief` per row, and a size claim no
+  test reads rots exactly like a stale count.
 
 A committed `BOARD.md` would re-create the disease. The board is a query, always.
 
@@ -48,6 +53,8 @@ A committed `BOARD.md` would re-create the disease. The board is a query, always
 
 ```
 tasks/
+  BANNER.md              # NOT a task: session state (section 4 `board`, check 12)
+  README.md              # NOT a task: layout, reading protocol, unenforceable rules
   config.json            # machine config (see section 6)
   retired-ids.txt        # one id per line; ids are NEVER reused
   P3-leg7-4cii.md        # open tasks
@@ -57,7 +64,16 @@ tasks/
 ```
 
 * Only `*.md` files are tasks. `config.json` and `retired-ids.txt` are skipped by every
-  scan.
+  scan because they are not markdown.
+* **`BANNER.md` and `README.md` are markdown and are skipped by NAME**
+  (`task.py::NON_TASK_MD`), at the TOP LEVEL only — `closed/` is deliberately not exempt,
+  because an exemption that survives the archive move would hide a real record. Both
+  scanners apply it: `Store.md_paths` and the independent recount `disk_md_count`. They
+  share the constant and duplicate the walk, so a blind scanner is still caught by lint
+  check 10 while the two halves cannot disagree about the banner's filename.
+* **`ls tasks/` undercounts and always will** — it shows the open half only (about a
+  third of this corpus) and counts the two non-task files. The only census is
+  `task.py counts`; see `tasks/README.md`.
 * **Open vs closed is the FOLDER.** There is no `status` field.
 * **The id is the address, never the path.** Resolution: glob `<id>-*.md` in `tasks/`,
   then `tasks/closed/`, and verify the frontmatter `id` matches; fall back to a full scan
@@ -72,6 +88,7 @@ tasks/
 ---
 id: P3
 title: leg 7 step 4c-ii co-landing with step 7, in one commit
+brief: NOT parallel-safe with P6 -- same 38-module cone, whichever lands second re-pays it
 pri: NOW
 size: L
 deps: [P4, P6]
@@ -104,16 +121,17 @@ Ordered pointer list, `file::symbol` citation keys as the repo already uses.
 Append-only. Newest LAST. Written by `comment` and `close`.
 ```
 
-### 3.1 The fourteen fields
+### 3.1 The fifteen fields
 
-All fourteen keys are ALWAYS present, in exactly this order. An empty value means
+All fifteen keys are ALWAYS present, in exactly this order. An empty value means
 absent. Fixed order plus always-present is what makes diffs stable and the parser
 trivial.
 
 | field | set by | value | notes |
 |---|---|---|---|
 | `id` | `new`, immutable | e.g. `T7`, `P3`, `HS-5`, `ZT-P0-1` | unique across open + closed + retired registry |
-| `title` | human | one line, <= 100 chars | prints in `board` / `list` |
+| `title` | human | one line, <= `TITLE_MAX` chars | prints in `board` / `list` |
+| `brief` | `new --brief`, `set brief` | one line, <= `BRIEF_MAX` chars, no `\|`, **may be empty** | the constraint a board reader must not miss; prints under the NOW block and under each NEXT row |
 | `pri` | `promote` | `NOW`/`NEXT`/`LATER`/`HOLD`/`SOMEDAY` | exactly 1 NOW and <= 3 NEXT among OPEN tasks |
 | `size` | human | `S`/`M`/`L`/`?` | |
 | `deps` | `dep` | flow list of ids, `[]` when empty | ordering/blocking edges; acyclic |
@@ -130,7 +148,26 @@ trivial.
 **Key order groups by KIND, not by date of addition.** The two edge lists sit
 together, the two birth facts sit together, and the three stamps sit together at the
 end. Appending `updated`/`source`/`related` after `closed` would have been a smaller
-migration diff and a worse file to read for the rest of its life.
+migration diff and a worse file to read for the rest of its life. `brief` (added
+2026-08-29) follows the same rule: it is the second thing a reader reads, so it sits
+under `title`, not at the end where the migration would have been free.
+
+#### `brief` — the one line a board reader must not miss
+
+Optional, and its own emptiness is the common case. It exists for the class of fact that
+is invisible in a title and expensive to rediscover — the motivating one being board row
+`P6`'s *"NOT parallel-safe with `P3`"*, a sequencing constraint that was carried on the
+board, existed nowhere in the tree, and is worth two sessions of rework.
+
+Rules, all in `task.py::brief_problem` so that `set`, `new`, lint check 4 and
+`validate_record` cannot disagree: one line, no `|`, no leading/trailing whitespace, at
+most `BRIEF_MAX` chars. It may be **cleared** (`set <id> brief ""`), and that is
+deliberate — a constraint is usually true for a while and then not, and a field that can
+only be written accumulates stale warnings, which is worse than carrying none.
+
+It is NOT a summary. The body already holds the summary and `board` already prints it;
+`brief` earns its place on the board only by carrying something the title cannot. If it
+reads like a restatement of the title, delete it.
 
 #### `moved` vs `updated` -- the split, and the per-op rule
 
@@ -228,7 +265,7 @@ deliberately constrained subset:
   after the FIRST `": "` or after `":"` at end-of-line) or a flow list `[a, b]`;
 * everything is a string as far as the script is concerned. Never coerce to date or int.
 
-The canonical writer emits the fourteen keys in the fixed order, `[]` for empty lists,
+The canonical writer emits the fifteen keys in the fixed order, `[]` for empty lists,
 `key:` with nothing after the colon for empty scalars, and one trailing blank line before
 the body. Round-tripping an untouched file must be **byte-identical** — test that.
 
@@ -257,7 +294,7 @@ up from `--dir` (default: cwd) looking for a `tasks/config.json`. Every read op 
 
 | op | behavior |
 |---|---|
-| `board` | The session-start view, ~25 lines. NOW item (id, title, size, moved) plus its summary paragraph; NEXT rows; a ready count; open counts per pri; staleness warnings for NOW/NEXT whose `moved` is old. Never writes a file. |
+| `board` | The session-start view, bounded by `BOARD_MAX_LINES`. **`tasks/BANNER.md` verbatim first, and the op REFUSES if it is missing or longer than `BANNER_MAX_LINES`** — a default banner would be a session-start that looks complete and carries nothing. Then: NOW item (id, title, `brief`, size, moved) plus its summary paragraph; NEXT rows each with their `brief`; a ready count; open counts per pri; staleness warnings for NOW/NEXT whose `moved` is old. `--json` carries the banner under a `banner` key. Never writes a file. |
 | `list [--pri P] [--label L] [--parent ID] [--closed] [--all] [--limit N]` | Filterable table: id, pri, size, title, deps, moved. Closed deps annotated so a stale dep is visible. Default scope is OPEN only, sorted NOW-first then by id. **Capped at `LIST_LIMIT` (20) rows, and the truncation is ALWAYS announced** — `showing 20 of 91 task(s) (--limit 0 for all, --limit N for N)`. The cap exists because an uncapped table was 94 lines against 91 open tasks, i.e. most of a board-sized read for the view that was supposed to be cheaper than the board; the announcement exists because `20 task(s)` is a *true* sentence that leaves the reader believing they have seen the backlog, which is this repo's house failure mode reproduced inside the tool built to cure it. Pinned by `test_task.py::test_list_truncation_is_announced_and_json_is_not_cut`. **The default does not apply to `--json`** — a machine surface that drops rows by default breaks consumers silently — but an explicit `--limit` is honoured on both. |
 | `show ID` | Print the whole file. Also print derived facts the file cannot carry: which open tasks list this one in `deps` (the computed reverse edge), which tasks list it in `related` (incoming links, open and closed), and children if it is a parent. |
 | `ready` | Open tasks whose `deps` are all closed (or empty), restricted to `NOW`/`NEXT`/`LATER` — `HOLD` and `SOMEDAY` are excluded by definition. |
@@ -274,13 +311,13 @@ ledger.)
 
 | op | behavior |
 |---|---|
-| `new TITLE [--pri --size --deps --related --labels --parent --source --body FILE]` | Allocate the next id by SCANNING open + closed + retired registry for the max integer suffix on the configured prefix, then +1. Never store a counter — counters go stale. Create the file with the standard body skeleton. Print id and path. |
-| `set ID FIELD VALUE` | Only `title`, `size`, `labels`, `related`, `parent`. `id`/`created`/`source`/`moved`/`updated` are IMMUTABLE, and `closed`/`pri`/`deps` have dedicated ops whose rules a plain assignment would skip. `related` is whole-list assignment rather than add/rm because, unlike `deps`, no edge of it depends on the rest of the graph. |
+| `new TITLE [--id ID --brief --pri --size --deps --related --labels --parent --source --body FILE]` | Allocate the next id by SCANNING open + closed + retired registry for the max integer suffix on the configured prefix, then +1. Never store a counter — counters go stale. **`--id ID`** overrides that allocation, refusing an id that is live, retired, or malformed: without it every task joins the `id_prefix` series, so a piece of build work is minted into the series everything else cites as a *finding*, and since the id is the address the miscategory is permanent. Create the file with the standard body skeleton. Print id and path. |
+| `set ID FIELD VALUE` | Only `title`, `brief`, `size`, `labels`, `related`, `parent`. `id`/`created`/`source`/`moved`/`updated` are IMMUTABLE, and `closed`/`pri`/`deps` have dedicated ops whose rules a plain assignment would skip. `related` is whole-list assignment rather than add/rm because, unlike `deps`, no edge of it depends on the rest of the graph. **Positional, not flags** — `set P3 --title x` is the natural typo given every other write op here takes `--flags`, so the flag forms are declared and refused with the working command line rather than left to argparse's `unrecognized arguments`. |
 | `promote ID PRI [--demote ID2 PRI2]` | Change `pri`. **Refuse at write time** if the result would violate the NOW=1 / NEXT<=3 budget, naming the offending rows and telling the caller to pass `--demote`. With `--demote`, apply both changes atomically (write both files, or neither). Mechanical refusal beats a doc warning. |
 | `dep add ID DEP` / `dep rm ID DEP` | Existence check and cycle detection at write time; refuse on either failure. |
 | `comment ID -m TEXT` | Append a dated Log entry. `-m -` reads the message from stdin (for multi-line). This is the workhorse: cheap appends are what fix "completed but never marked". |
 | `touch ID` | Record progress with no message: bump `moved` and `updated`. For "worked it, the detail is in the session ledger". |
-| `ack ID -m TEXT` | Acknowledge reported drift: bump `updated`, leave `moved` ALONE, append a Log entry, and re-stamp `source_hash` to what the source says now -- or to the `acked-no-row` sentinel when the source names no row for this task, which is how a standing `CORPUS-ONLY` item stops reddening `sync --check` forever without ever going unnamed. **Message REQUIRED** -- the interesting `ack` answers a `BODY` report ("the board block was reworded; the task prose is still accurate"), and without the reason the digest advances silently and the judgement is lost. Never bumps `moved`: acknowledging drift is housekeeping, not progress. See SYNC-SPEC.md section 3.1. |
+| `ack ID -m TEXT [--since DIGEST]` | **REFUSES anything but `source: board`** (naming `comment` as the remedy): for a source `sync` cannot read there is no digest to stamp, so the old fall-through printed "acked", bumped `updated`, logged that the drift was reviewed, and recorded the acknowledgement nowhere a later run could read — the next `sync` reported the identical drift, and the session that handled it had a Log entry proving it did. Otherwise: bump `updated`, leave `moved` ALONE, append a Log entry, and re-stamp `source_hash` to what the source says now -- or to the `acked-no-row` sentinel when the source names no row for this task, which is how a standing `CORPUS-ONLY` item stops reddening `sync --check` forever without ever going unnamed. **Message REQUIRED** -- the interesting `ack` answers a `BODY` report ("the board block was reworded; the task prose is still accurate"), and without the reason the digest advances silently and the judgement is lost. Never bumps `moved`: acknowledging drift is housekeeping, not progress. **`ack` must be a session's LAST step** — it stamps what the source says AT ACK TIME, so acking and then editing the source records an acknowledgement of text nobody reviewed; pass `--since DIGEST` (what the drift report showed) and a mismatch is announced loudly on stderr. It warns rather than refuses because the source moving is usually the acking session's own edit and the ack is still correct; what is not acceptable is that it happen silently. See SYNC-SPEC.md section 3.1. |
 | `close ID -m TEXT` | **Message REQUIRED** (outcome evidence, per the repo's sabotage culture). Stamp `closed`, append the Log entry, move the file to `closed/`. Then PRINT (a) which open tasks just became ready because this was their last open dep, and (b) if it has a `parent`, whether that parent now has zero open children — the archive sweep, computed instead of remembered. |
 | `reopen ID -m TEXT` | Inverse. Message required. Clears `closed`, moves back to `tasks/`. Re-checks the pri budget and refuses if reopening would break it. |
 
@@ -289,7 +326,10 @@ Files are NEVER deleted. "Wontfix" is a `close` with a reason in the message.
 ### The reconciliation op
 
 `sync` is neither a read op nor a write op and has its own contract in
-[`SYNC-SPEC.md`](SYNC-SPEC.md): it reconciles the corpus against `HANDOFF.md`, reports
+`.scratch/tasktool/SYNC-SPEC.md` (**not tracked** — deliberately NOT written as a link,
+because a link that resolves to nothing is the rot this repo lints for; its results are
+recorded in [`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md)):
+it reconciles the corpus against `HANDOFF.md`, reports
 drift in six buckets, mints tasks for rows that have none (`--create-new`, the only mode
 that writes, and it only ever ADDS), and emits the mechanical fixes as pasteable
 `--mechanical` lines. **It has no delete path and no `--force`**, which is the whole
@@ -302,16 +342,19 @@ tracking, kanban rendering, a web UI, an MCP server.
 
 ## 5. `lint` checks
 
-Each check must name the offending file and id, and say what to do about it. **Eleven checks**
-as of 2026-08-21 (check 11 warns rather than fails); the count is printed by `lint`
+Each check must name the offending file and id, and say what to do about it. **Twelve
+checks** as of 2026-08-29 (check 11 warns rather than fails); the count is printed by `lint`
 itself -- `task lint: clean (N checks, M task file(s) parsed)` -- so no other surface
 should restate it.
 
 1. every `*.md` under `tasks/` and `tasks/closed/` parses (delimiters present, all
-   fourteen keys present, no unknown keys);
+   fifteen keys present, no unknown keys) — excluding `NON_TASK_MD` at the top level;
 2. ids unique across open + closed; no id appears in `retired-ids.txt` AND as a live file;
 3. filename starts with `<id>-` and ends `.md`;
-4. `pri` in the enum; `size` in the enum; `created`/`moved`/`updated` well-formed
+4. `pri` in the enum; `size` in the enum; `brief` one line, no `|`, unpadded, within
+   `BRIEF_MAX` (`task.py::brief_problem`, shared with `set`/`new`/`validate_record` so a
+   write op can never refuse a record lint calls green, or launder one it calls red);
+   `created`/`moved`/`updated` well-formed
    session keys; `created <= moved <= updated` under string comparison; `source` is
    `board`, `hand`, or a well-formed repo-relative path (shape only -- never checked
    against the disk); `source_hash` is empty, 12 lowercase hex, or the `acked-no-row`
@@ -345,6 +388,16 @@ should restate it.
     run, red or green, is carried in `--json` as `warnings`, and never touches the exit
     code. There is no flag to promote it to fatal: a warning that a flag can promote is a
     warning nobody promotes.
+
+12. **`tasks/BANNER.md` exists, fits `BANNER_MAX_LINES`, and its first line carries a
+    session key.** `board` already refuses without it, so this looks redundant and is
+    not: `board` refuses at READ time, which protects whoever runs it, while `lint` is
+    what a session runs before committing. The failure this catches is the session that
+    promoted a row, wrote no banner, and left the NEXT session's first command broken —
+    a refusal issued only to the victim is issued too late. The first-line rule is
+    deliberately weak (a well-formed key, nothing more): nothing can distinguish a banner
+    rewritten this session from one whose date was edited, and a check that pretended to
+    would be the fail-by-passing shape. What it does catch is a banner that is simply old.
 
 ## 6. `tasks/config.json`
 

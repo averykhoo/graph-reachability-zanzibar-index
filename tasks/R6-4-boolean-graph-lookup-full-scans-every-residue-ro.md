@@ -1,6 +1,7 @@
 ---
 id: R6-4
 title: boolean graph lookup full-scans every residue row and JSON-decodes per row (30.1%)
+brief:
 pri: LATER
 size: L
 deps: []

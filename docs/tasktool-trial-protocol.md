@@ -468,6 +468,28 @@ None of these bear on correctness — the 41 tests and 22 sabotage cases still p
 `lint`/`sync` were clean at end of session. They bear on **usefulness**, which is the
 question actually being decided.
 
+**A7 — resolution, 2026-08-29d.** All six fixed under Phase A of
+[`tree-sole-authority-spec-2026-08-29.md`](tree-sole-authority-spec-2026-08-29.md); the
+list above is left UNEDITED, because the friction as first found is the evidence and a
+tidied version of it is not. Each fix is pinned in `tests/test_tasktool.py` and was
+sabotaged before being believed.
+
+| # | what changed | where |
+|---|---|---|
+| 1 | `ack` **REFUSES** any source but `board` (rc 2). The message branches: if the task HAS a board row it names the re-file remedy the log asked for, since `source` is immutable; otherwise it names `comment`, which is what the old fall-through was actually doing minus the word "acked". | `task.py::op_ack` |
+| 2 | `ack --since DIGEST` — pass what the drift report showed and a moved source is announced loudly on stderr. Warns rather than refuses (the mover is usually the acking session itself); the *rule* is in `tasks/README.md` and `docs/tasktool-spec.md` §4. | `task.py::op_ack` |
+| 3 | `new --id ID`, validated against live + retired ids, so a work row is never forced into the `TK` findings series. | `task.py::op_new`, `build_parser` |
+| 4 | `tasks/README.md` states the layout and names `task.py counts` as the only census; `BANNER.md`/`README.md` are excluded from both scanners by name (`NON_TASK_MD`) so the two new files cannot themselves become the miscount. | `tasks/README.md`, `task.py::Store.md_paths`, `::disk_md_count` |
+| 5 | Truncation was **already** announced with `--limit 0` named in the footer, on every path including `--parent` — re-verified, and now pinned by a test on a 21-row corpus rather than by reading the code. | `task.py::op_list` (already correct) |
+| 6 | `set --title x` refuses with the working positional command line instead of argparse's `unrecognized arguments`; `field`/`value` became optional so the refusal is reachable at all. `new --help` prints the 100-char cap. | `task.py::op_set`, `build_parser` |
+
+⚠ **Item 5's OTHER half is not fixed and is not scheduled.** `list --parent R6` still
+includes children whose ids are not `R6-N` (`TK48`, `TK17`–`TK22`), because `parent` is a
+containment edge and the id prefix is not — they genuinely are children of `R6`. The
+mis-count risk is real but the remedy is not obviously "filter by prefix": that would make
+`list` lie about the parent graph to flatter a naming convention. Anyone re-counting
+`R6-N` sub-items should filter the output, and say they did.
+
 **What is still unmeasured** (unchanged, and now unmeasurable within the trial): M1/M2/M3
 were never obtained after the pilot instrument failure (`:104-116`, `:163`); the Q3 dye
 marker is spent (`:330-337`), so the 18-agent figures cannot be reproduced against the

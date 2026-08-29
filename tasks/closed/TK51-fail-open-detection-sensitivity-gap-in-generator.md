@@ -1,6 +1,7 @@
 ---
 id: TK51
 title: Fail-open detection sensitivity gap in generator-coverage design (dense-regime pass unbuilt)
+brief:
 pri: LATER
 size: M
 deps: []

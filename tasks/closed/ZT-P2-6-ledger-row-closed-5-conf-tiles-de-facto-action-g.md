@@ -1,6 +1,7 @@
 ---
 id: ZT-P2-6
 title: ledger row: CLOSED; 5 conf tiles de-facto action gate split worry
+brief:
 pri:
 size:
 deps: []

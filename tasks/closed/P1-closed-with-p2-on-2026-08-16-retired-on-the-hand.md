@@ -1,6 +1,7 @@
 ---
 id: P1
 title: closed with P2 on 2026-08-16; retired on the HANDOFF board
+brief:
 pri:
 size:
 deps: []

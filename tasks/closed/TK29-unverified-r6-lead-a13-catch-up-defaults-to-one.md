@@ -1,6 +1,7 @@
 ---
 id: TK29
 title: unverified R6 lead A13: catch_up defaults to one unbounded batch under a single lock and commit
+brief:
 pri: HOLD
 size: ?
 deps: []

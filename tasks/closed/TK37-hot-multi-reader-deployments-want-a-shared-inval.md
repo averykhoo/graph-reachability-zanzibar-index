@@ -1,6 +1,7 @@
 ---
 id: TK37
 title: hot multi-reader deployments want a shared invalidation signal, not per-reader log tailing
+brief:
 pri: SOMEDAY
 size: M
 deps: []

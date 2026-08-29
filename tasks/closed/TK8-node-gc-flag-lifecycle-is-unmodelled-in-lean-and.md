@@ -1,6 +1,7 @@
 ---
 id: TK8
 title: node GC / flag lifecycle is unmodelled in Lean, and TWO named bugs landed inside it
+brief:
 pri: LATER
 size: L
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: ZT-P4-1
 title: ledger row: CLOSED (both halves)
+brief:
 pri:
 size:
 deps: []

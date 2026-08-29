@@ -1,6 +1,7 @@
 ---
 id: P8
 title: write W4WitnessSelfRef (board B2)
+brief:
 pri: LATER
 size: S
 deps: []

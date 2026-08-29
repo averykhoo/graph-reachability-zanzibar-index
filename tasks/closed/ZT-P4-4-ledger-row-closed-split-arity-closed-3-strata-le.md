@@ -1,6 +1,7 @@
 ---
 id: ZT-P4-4
 title: ledger row: CLOSED, split - arity closed, >=3-strata Lean coverage DECLINED
+brief:
 pri:
 size:
 deps: []

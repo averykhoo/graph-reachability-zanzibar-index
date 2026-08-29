@@ -1,6 +1,7 @@
 ---
 id: SD-3
 title: tuple-log compaction -- only if the log outgrows "humans wrote this" scale
+brief:
 pri: SOMEDAY
 size: S
 deps: []

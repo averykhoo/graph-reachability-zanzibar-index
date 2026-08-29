@@ -1,6 +1,7 @@
 ---
 id: TK12
 title: the faithful Lean fix for the P3 edge-multiplicity divergence was never attempted
+brief:
 pri: LATER
 size: M
 deps: []

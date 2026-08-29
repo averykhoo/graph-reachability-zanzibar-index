@@ -1,6 +1,7 @@
 ---
 id: TK38
 title: pin the referenced-vs-invisible NodeV4 split (217/49): the definition has to be written first
+brief:
 pri: HOLD
 size: S
 deps: []

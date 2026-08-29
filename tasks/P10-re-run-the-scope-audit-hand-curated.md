@@ -1,6 +1,7 @@
 ---
 id: P10
 title: re-run the scope audit, hand-curated
+brief:
 pri: LATER
 size: M
 deps: []

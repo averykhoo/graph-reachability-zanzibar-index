@@ -1,6 +1,7 @@
 ---
 id: TK33
 title: store-level rebuild-instead-of-K-deltas IVM amortisation, measured crossover K* ~ 30-40
+brief:
 pri: HOLD
 size: L
 deps: []

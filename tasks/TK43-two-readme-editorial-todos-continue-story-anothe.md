@@ -1,6 +1,7 @@
 ---
 id: TK43
 title: two README editorial TODOs: 'continue story another day' and the MAFSA word-count trick
+brief:
 pri: SOMEDAY
 size: S
 deps: []

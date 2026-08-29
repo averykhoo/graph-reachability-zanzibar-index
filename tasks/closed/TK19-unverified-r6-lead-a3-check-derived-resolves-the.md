@@ -1,6 +1,7 @@
 ---
 id: TK19
 title: unverified R6 lead A3: _check_derived resolves the object node twice and decodes all 3 residue blobs
+brief:
 pri: HOLD
 size: ?
 deps: []

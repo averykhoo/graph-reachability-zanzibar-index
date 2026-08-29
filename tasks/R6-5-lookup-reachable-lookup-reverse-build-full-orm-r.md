@@ -1,6 +1,7 @@
 ---
 id: R6-5
 title: lookup_reachable/lookup_reverse build full ORM rows to read 3-4 columns (32.7%)
+brief:
 pri: LATER
 size: ?
 deps: []

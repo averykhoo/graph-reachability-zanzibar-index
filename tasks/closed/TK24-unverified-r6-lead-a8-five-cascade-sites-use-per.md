@@ -1,6 +1,7 @@
 ---
 id: TK24
 title: unverified R6 lead A8: five cascade sites use per-id session.get N+1 loops beside the batch helper
+brief:
 pri: HOLD
 size: ?
 deps: []

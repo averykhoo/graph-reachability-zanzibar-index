@@ -1,6 +1,7 @@
 ---
 id: SD-4
 title: bulk-merge write path
+brief:
 pri: SOMEDAY
 size: L
 deps: []

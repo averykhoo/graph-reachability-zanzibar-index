@@ -1,6 +1,7 @@
 ---
 id: P9
 title: lift the remove-gate exclusion (board B2)
+brief:
 pri: LATER
 size: M
 deps: []

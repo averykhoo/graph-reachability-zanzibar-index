@@ -1,6 +1,7 @@
 ---
 id: TK34
 title: benchmarks/canary.py nightly perf tripwire: proposed, decision pending, never built
+brief:
 pri: LATER
 size: M
 deps: []

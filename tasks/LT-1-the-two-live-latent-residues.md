@@ -1,6 +1,7 @@
 ---
 id: LT-1
 title: the two live latent residues
+brief:
 pri: HOLD
 size: ?
 deps: []

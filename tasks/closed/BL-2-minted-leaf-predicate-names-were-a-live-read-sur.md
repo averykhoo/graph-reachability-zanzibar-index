@@ -1,6 +1,7 @@
 ---
 id: BL-2
 title: minted leaf-predicate names were a live read surface; fixed 2026-08-21b in wildcard.py::check
+brief:
 pri:
 size:
 deps: []

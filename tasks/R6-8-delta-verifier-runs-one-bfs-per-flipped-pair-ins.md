@@ -1,6 +1,7 @@
 ---
 id: R6-8
 title: delta verifier runs one BFS per flipped PAIR instead of per distinct source (11.0%)
+brief:
 pri: LATER
 size: ?
 deps: []

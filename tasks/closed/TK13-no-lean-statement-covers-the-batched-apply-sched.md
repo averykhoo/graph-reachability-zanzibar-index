@@ -1,6 +1,7 @@
 ---
 id: TK13
 title: no Lean statement covers the BATCHED apply schedule (async catch_up / build_index)
+brief:
 pri: HOLD
 size: M
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK41
 title: schema type checking so every relation resolves to a single type (README open question)
+brief:
 pri: SOMEDAY
 size: M
 deps: []

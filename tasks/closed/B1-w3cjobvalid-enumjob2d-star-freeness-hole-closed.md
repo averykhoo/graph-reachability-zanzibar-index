@@ -1,6 +1,7 @@
 ---
 id: B1
 title: w3cJobValid_enumJob2D star-freeness hole, CLOSED 2026-08-16 (both halves proved 2026-07-28/08-04)
+brief:
 pri:
 size:
 deps: []

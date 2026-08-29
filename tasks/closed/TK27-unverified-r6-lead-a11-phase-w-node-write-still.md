@@ -1,6 +1,7 @@
 ---
 id: TK27
 title: unverified R6 lead A11: Phase-W node write still builds ~165k ORM objects while siblings use dicts
+brief:
 pri: HOLD
 size: ?
 deps: []

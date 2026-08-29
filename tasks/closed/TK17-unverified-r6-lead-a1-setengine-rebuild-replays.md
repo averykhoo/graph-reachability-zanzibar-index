@@ -1,6 +1,7 @@
 ---
 id: TK17
 title: unverified R6 lead A1: SetEngine.rebuild replays a full ORM row per tuple, no bulk bitmap load
+brief:
 pri: HOLD
 size: ?
 deps: []

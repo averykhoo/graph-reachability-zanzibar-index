@@ -1,6 +1,7 @@
 ---
 id: P11
 title: the fixture-TRIPLE question for 5 subsumed .fga fixtures
+brief:
 pri: LATER
 size: S
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridges on rule-routed write path; NOT parallel-safe with P3 (38-module cone)
+brief: NOT parallel-safe with P3 (same 38-module cone): land increment A and stop, or sequence B after P3, never both
 pri: NEXT
 size: M
 deps: []
@@ -11,7 +12,7 @@ source: board
 source_hash: 5c25e542f542
 created: 2026-08-20b
 moved: 2026-08-20b
-updated: 2026-08-20b
+updated: 2026-08-29d
 closed:
 ---
 

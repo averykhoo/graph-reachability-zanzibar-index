@@ -1,6 +1,7 @@
 ---
 id: TK40
 title: shared tuples / shared state support (README open question, no design)
+brief:
 pri: SOMEDAY
 size: L
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK6
 title: leaf-family split: is storage=True/False modellable as one leaf? unresolved at 4 dates
+brief:
 pri: LATER
 size: S
 deps: []

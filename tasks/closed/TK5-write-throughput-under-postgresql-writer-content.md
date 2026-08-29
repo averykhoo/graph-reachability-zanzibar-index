@@ -1,6 +1,7 @@
 ---
 id: TK5
 title: write throughput under PostgreSQL writer contention remains untested, and no row owns it
+brief:
 pri: LATER
 size: M
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK22
 title: unverified R6 lead A6: full-tier invariant checker ORM-loads all nodes and edges twice per commit
+brief:
 pri: HOLD
 size: ?
 deps: []

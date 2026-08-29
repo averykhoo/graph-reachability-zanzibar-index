@@ -19,7 +19,9 @@ rot independently, and the reader cannot tell which one is live.
 
 | content type | home |
 |---|---|
-| priority/status of open items | [`HANDOFF.md`](../HANDOFF.md) board, only |
+| priority/status of open items | [`HANDOFF.md`](../HANDOFF.md) board, only — **and, while the trial runs, the mirrored `task.py` op in the same session** ([`../tasks/README.md`](../tasks/README.md)). The two are a control and a treatment arm; a session that updates one of them destroys the result. `handoff_lint.py::check_ledger_row_ids` fails when a board row has no task file |
+| what the NEXT session must not miss | [`../tasks/BANNER.md`](../tasks/BANNER.md), rewritten every session (Rhythm step 2; `task.py lint` check 12 requires it, and `board` refuses to render without it) |
+| the one constraint a board reader must not miss, per item | the task file's `brief` field — one line, capped, and NOT a summary ([`tasktool-spec.md`](tasktool-spec.md) §3.1) |
 | session narrative | [`docs/history/session-log.md`](history/session-log.md) (root) / [`formal/history/PROOF_STATUS.md`](../formal/history/PROOF_STATUS.md) (formal detail) |
 | formal execution state ("what is proved, what is the next lemma") | [`formal/HANDOFF.md`](../formal/HANDOFF.md) — no priorities there |
 | method lessons | [`sabotage-procedure.md`](sabotage-procedure.md) (checks **and measurements**) / [`subagent-fanout-runbook.md`](subagent-fanout-runbook.md) (fan-outs) |

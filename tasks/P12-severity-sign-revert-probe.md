@@ -1,6 +1,7 @@
 ---
 id: P12
 title: severity-sign revert probe
+brief:
 pri: LATER
 size: S
 deps: []

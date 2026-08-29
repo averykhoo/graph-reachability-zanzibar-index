@@ -1,6 +1,7 @@
 ---
 id: TK47
 title: R6-6's target symbol moved with BL-2 and the perf audit still names ::check (both resolve)
+brief:
 pri: LATER
 size: S
 deps: []

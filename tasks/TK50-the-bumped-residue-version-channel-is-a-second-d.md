@@ -1,6 +1,7 @@
 ---
 id: TK50
 title: the _bumped residue-version channel is a second dirty-key source with no Lean model
+brief:
 pri: HOLD
 size: M
 deps: []

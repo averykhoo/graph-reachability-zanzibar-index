@@ -1,6 +1,7 @@
 ---
 id: TK15
 title: model n-ary Expr so leg-7 leaf allocation is faithful to nested-union parenthesization
+brief:
 pri: SOMEDAY
 size: L
 deps: []

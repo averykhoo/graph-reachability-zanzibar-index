@@ -16,18 +16,18 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **All ten gate phases green on this tree (2026-08-29)** — `lean` +
+> 🟢 **All ten gate phases green on this tree (2026-08-29d)** — `lean` +
 > `conf-tile:1..5/5` + `tests-tile:1..4/4`; tiles keyed to the code-scoped tree id (`*.md`
 > excluded), and `lean` was re-run after the last `*.md` edit.
-> ⏰ **`2026-08-29c`: question (b) decided, and most of it landed** — every open `TK*` id
-> bucketed ([adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); 22 appends
-> landed, **15 remain on `TK53`**, the row that makes DELETE lossless. Re-verification
-> overturned rows BOTH ways → ledger `2026-08-29c`. 🧭 **Question (a), delete or keep, is
-> the user's call and is not made here**; recommendation in ledger `2026-08-29b`.
-> **`2026-08-28d`: `P14` settled. Next: 4c-ii + step 7, the un-splittable cone — read its
-> revert-to-green exit (scope doc §11.12) first.** → PROOF_STATUS `2026-08-28c` §5.
-> **"Known live correctness bugs: 0"** stands (`BL-2` fixed 2026-08-21b) — but ask
-> `python scripts/gate_status.py`, never this line. Red is yours: `git stash`.
+> ⏰ **`2026-08-29d`: trial Phase A landed** — the tool's suite is in the gate
+> (`tests/test_tasktool.py`, 84 tests incl. 30 sabotage cases; `MIN_TESTS_ALL` 943→1035),
+> the six A7 footguns fixed and sabotaged, and `handoff_lint` now fails when a board row
+> has no task file — it reports clean, so the dual-update contract held all week.
+> 🧭 **Phase B (this file becomes a stub) is the question-(a) verdict and needs an
+> explicit user go** → tree row `TT-1`. `TK53`: **15 appends remain**. **`2026-08-28d`:
+> `P14` settled. Next: 4c-ii + step 7, the un-splittable cone — read its revert-to-green
+> exit (scope doc §11.12) first.** → PROOF_STATUS `2026-08-28c` §5. **"Known live
+> correctness bugs: 0"** stands — ask `python scripts/gate_status.py`. Red: `git stash`.
 
 ## Board
 
@@ -75,7 +75,7 @@ and 2026-08-04; the record had simply never caught up) — evidence in `formal/H
 `B1` block. Retiring an id is not the same act as closing a finding: say which you mean —
 `BL-1` is both (fixed 2026-08-21; pins green), as is `BL-2` (filed AND fixed 2026-08-21b;
 its six pins in `tests/test_reg18_leaf_name_read_leak.py` stay green as regression guards).
-⚠ **Do not reflow those two `Closed ids` lines.** `handoff_lint.py::check_ledger_ids`
+⚠ **Do not reflow those two `Closed ids` lines.** `handoff_lint.py::check_ledger_row_ids`
 harvests retired ids LINE BY LINE (only lines carrying `Closed ids stay retired` or
 `survives as the historical grouping` are read), so rewrapping moves ids out of scope —
 **and the FAILs then blame the LEDGER's citations, not this rewrap**. Observed 2026-08-21:
@@ -241,8 +241,8 @@ accretion started.
 0. **Run `python scripts/handoff_lint.py`** before committing any board edit.
 1. **Append one entry to [`docs/history/session-log.md`](docs/history/session-log.md)** —
    every session, no exceptions. Ledger first, so the banner has a key to cite.
-2. **Rewrite the Banner**: gate state as observed, today's date, the new headline, and the
-   entry key you just created.
+2. **Rewrite the Banner** — this one AND `tasks/BANNER.md` (lint check 12 requires it):
+   gate state as observed, today's date, the new headline, and the entry key just created.
 3. **Edit the board in place.** Flip `pri`; touch `moved` on every row you worked, not
    only the ones you re-ranked; delete closed rows **and sweep their ids out of every
    `deps` cell**; rewrite the item block of every touched `NOW`/`NEXT` item, read-first

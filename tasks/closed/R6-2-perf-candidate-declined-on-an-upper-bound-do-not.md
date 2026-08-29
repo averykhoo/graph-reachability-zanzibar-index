@@ -1,6 +1,7 @@
 ---
 id: R6-2
 title: perf candidate declined on an upper bound; do not reopen without new numbers
+brief:
 pri:
 size:
 deps: []

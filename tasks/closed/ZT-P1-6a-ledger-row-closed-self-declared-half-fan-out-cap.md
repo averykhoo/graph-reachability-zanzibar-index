@@ -1,6 +1,7 @@
 ---
 id: ZT-P1-6a
 title: ledger row: CLOSED, self-declared half (fan-out cap landed, store quota did not)
+brief:
 pri:
 size:
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK18
 title: unverified R6 lead A2: population() allocates a throwaway empty set on every call, hit or miss
+brief:
 pri: HOLD
 size: ?
 deps: []
