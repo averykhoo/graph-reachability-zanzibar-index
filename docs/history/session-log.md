@@ -25,6 +25,67 @@ from here.
 
 ---
 
+## 2026-08-29e — doc sweep after Phase A: five "465" floors, a fifth "~25 lines", and a second symbol that never existed
+
+rows: `TT-1`, `ZT-P5`
+
+Continuation of `2026-08-29d` (same working session; separate key because that entry was
+written before this work and entries are never retro-edited). A census of tracked docs for
+staleness introduced or exposed by `379dd60`. **Most of what it found was older than that
+commit** — Phase A's real contribution here was making it visible.
+
+**1. `docs/gate-runbook.md` carried `MIN_CONF_ALL` = 465 in five places; live is 495.**
+Also `MIN_CONF_HEAVY` = 96 and `MIN_CONF_REST` = 369 against a live 104 / 391 — three
+wrong numbers in one sentence, and a session copying it into a `conf-heavy` sanity check
+would have set a floor 8 tests low. This is the exact sin `CLAUDE.md` names *this file*
+for ("carried a wrong value for three weeks by doing so"), and the doc's own warning box
+documents it. **Fixed by deleting the figures, not by updating them** — the identity
+`MIN_CONF_HEAVY + MIN_CONF_REST == MIN_CONF_ALL` is asserted by `verify.sh` at startup, so
+prose restating any of the three buys nothing it cannot lose.
+
+**2. The fifth "~25 lines" claim.** `2026-08-29d` reported fixing four; there were five.
+`docs/tasktool-trial-stub.md` — the draft of the very stub Phase B will land — still
+described a board with no banner and no `brief`, and additionally listed **9 of the 12**
+lint checks as if that were the contract, omitting the corpus floor, the depth warning and
+`check_banner`. A partial contract is worse than none: a reader treats it as complete, and
+this one would have left them not knowing `tasks/BANNER.md` is required.
+
+⚠ **That file is GENERATED (`migrate.py::handoff_stub`) and the generator was not
+updated**, because `migrate.py` must not be run at all. Recorded in the file's own
+correction banner as a live divergence rather than left implicit. It also had **five**
+broken relative links (`docs/CLAUDE.md`, `docs/docs/README.md`, …) that
+`check_doc_links` has never seen, because the file is not in `handoff_lint.py::LINKED_DOCS`.
+
+**3. A second cite of a symbol that never existed.** `tasks/ZT-P5-*.md` cited
+`handoff_lint.py::check_ledger_ids` — the same non-existent symbol fixed at `HANDOFF.md:78`
+in `2026-08-29d`, in the same session, in a different tree. Both are now
+`check_ledger_row_ids`. Two independent copies of one wrong name is the argument for the
+`file::symbol`-must-grep rule, not an anecdote about it.
+
+**4. `docs/tasktool-spec.md` §7 said the schema "has not been widened to thirteen"** while
+§3.1 of the same file said fifteen. Rewritten to stop stating a count at all and to point
+at §3.1, with a note that the gap between `migrate.py`'s schema and the live one only ever
+widens — which is one more reason not to run it.
+
+**Deliberately NOT touched:** `docs/tasktool-trial-protocol.md`'s dated §6 observations
+(append-only; its A7 items already carry the `2026-08-29d` resolution table), every
+pre-`2026-08-29d` ledger entry, the literal sabotage transcripts quoted in
+`scripts/task.py` docstrings, and `docs/spec-deviations.md`. Those are as-of-then
+provenance and a "fix" would destroy the record.
+
+`HANDOFF.md` gained a `tasks/README.md` + `docs/tasktool-spec.md` row in *Where things
+live*; the line was paid for by reflowing the `B1`/`BL-2` paragraph, not by raising the
+ceiling. The `Closed ids` lines at `:71-72` were not touched — reflowing those is the trap
+three lines below them.
+
+`docs/tree-sole-authority-spec-2026-08-29.md` now carries a dated **PHASE A IS LANDED**
+banner naming where execution differed from the plan, so no session re-runs A1.
+
+**Still owed:** nothing.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 153 task file(s) parsed)`
+read: board + HANDOFF
+
 ## 2026-08-29d — Phase A landed: the task tool's suite is in the gate, and its six footguns are fixed
 
 rows: `TK53`, `P3`, `P6`, `R6`, `TT-1`

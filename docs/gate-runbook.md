@@ -163,14 +163,16 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
 
 - **Coverage is complete, by construction — and now also asserted.** A
   `conf-tile:I/K` phase collects `formal/conformance/` fresh, asserts the collected
-  total is `>= MIN_CONF_ALL` (465 today), then runs the node ids whose 0-based
+  total is `>= MIN_CONF_ALL` (**the value lives in `formal/verify.sh` and is not
+  restated here** — this file carried `465` for weeks after the live floor became
+  `495`, which is the rot this rule exists to stop), then runs the node ids whose 0-based
   collection index is `≡ I-1 (mod K)`. Every collected node lands in **exactly one**
   tile, so the K tiles partition the directory: a newly added file, corpus or
   parametrization is automatically in exactly one tile, nothing is named by hand, and
   the tile's size is cross-checked against the partition arithmetic
   (`floor((total-I)/K)+1`) so a tiling that is not a partition FAILs. Each tile's own
   pass floor is its exact size — every selected test must pass.
-- **The global floor is per-phase.** Because *every* tile re-asserts the 465-test
+- **The global floor is per-phase.** Because *every* tile re-asserts the `MIN_CONF_ALL`
   collection floor, you cannot lose conformance coverage and still get a green tile —
   even if you only ever run one.
 - **A split pass is not a weakened pass.** Every phase carries the same anti-vacuous
@@ -181,10 +183,11 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
   `passed >= floor` (conformance). So the green phases ≡ a green `verify.sh all`;
   there is no reconstructed-pass hole to manage.
 - **Legacy phases still work.** `conf-heavy` (`test_conformance_remove.py`, **175 s**
-  measured 2026-07-26, floor `MIN_CONF_HEAVY` = 96) and `conf-rest` (the dir MINUS that
-  file via `--ignore`, floor `MIN_CONF_REST` = 369) also tile the directory — 96 + 369
-  = 465 = `MIN_CONF_ALL`, and `verify.sh` checks that identity on its own floors at
-  startup. `conf-heavy` is a handy quick
+  measured 2026-07-26, floor `MIN_CONF_HEAVY`) and `conf-rest` (the dir MINUS that
+  file via `--ignore`, floor `MIN_CONF_REST`) also tile the directory —
+  `MIN_CONF_HEAVY + MIN_CONF_REST == MIN_CONF_ALL`, and `verify.sh` checks that identity
+  on its own floors at startup, which is why none of the three numbers is written down
+  here (all three were wrong in this paragraph until 2026-08-29d). `conf-heavy` is a handy quick
   single-file rerun. **`conf-rest` is AT OR OVER the cap** (579 s measured
   2026-07-19g/07-26 at 250-276 tests, and the whole dir is ~800 s of work) — that is
   why the `conf-tile` phases exist. Do not use `conf-rest` unattended; use the tiles.
@@ -689,7 +692,7 @@ and the throttle comes and goes mid-gate). What breaks and what to do:
 - **Conformance can blow the cap throttled — just use more tiles.** This no longer
   needs a hand-rolled wrapper: `verify.sh conf-tile:I/K` takes any `K`, so on a
   throttled box run `conf-tile:1/8 … conf-tile:8/8` (or `1/12 … 12/12`). Every tile
-  re-collects the directory, re-asserts the 465-test global floor, checks its own size
+  re-collects the directory, re-asserts the `MIN_CONF_ALL` global floor, checks its own size
   against the partition arithmetic and carries all of `run_conf`'s anti-vacuous guards
   — so the union is provably the whole dir for any `K` and there is nothing to
   replicate by hand. (The 2026-07-23 advice here — tile A = dir minus
@@ -743,7 +746,8 @@ optimization this session.
 controlled than test runtime): time a **deterministic, rarely-changing,
 hot-path-heavy subset**. Best candidates, because they change by design only when
 behavior changes:
-- the conformance corpora (`formal/conformance/`, ~465 deterministic tests),
+- the conformance corpora (`formal/conformance/`, deterministic; count in
+  `formal/FINAL_REVIEW.md`'s generated block),
 - the validation matrix (`tests/test_matrix.py`),
 - the compiled-RuleSet snapshots (`tests/snapshots/`).
 Track these via `pytest --durations=20` across commits and eyeball for a step

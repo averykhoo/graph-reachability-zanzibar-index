@@ -295,7 +295,7 @@ up from `--dir` (default: cwd) looking for a `tasks/config.json`. Every read op 
 | op | behavior |
 |---|---|
 | `board` | The session-start view, bounded by `BOARD_MAX_LINES`. **`tasks/BANNER.md` verbatim first, and the op REFUSES if it is missing or longer than `BANNER_MAX_LINES`** — a default banner would be a session-start that looks complete and carries nothing. Then: NOW item (id, title, `brief`, size, moved) plus its summary paragraph; NEXT rows each with their `brief`; a ready count; open counts per pri; staleness warnings for NOW/NEXT whose `moved` is old. `--json` carries the banner under a `banner` key. Never writes a file. |
-| `list [--pri P] [--label L] [--parent ID] [--closed] [--all] [--limit N]` | Filterable table: id, pri, size, title, deps, moved. Closed deps annotated so a stale dep is visible. Default scope is OPEN only, sorted NOW-first then by id. **Capped at `LIST_LIMIT` (20) rows, and the truncation is ALWAYS announced** — `showing 20 of 91 task(s) (--limit 0 for all, --limit N for N)`. The cap exists because an uncapped table was 94 lines against 91 open tasks, i.e. most of a board-sized read for the view that was supposed to be cheaper than the board; the announcement exists because `20 task(s)` is a *true* sentence that leaves the reader believing they have seen the backlog, which is this repo's house failure mode reproduced inside the tool built to cure it. Pinned by `test_task.py::test_list_truncation_is_announced_and_json_is_not_cut`. **The default does not apply to `--json`** — a machine surface that drops rows by default breaks consumers silently — but an explicit `--limit` is honoured on both. |
+| `list [--pri P] [--label L] [--parent ID] [--closed] [--all] [--limit N]` | Filterable table: id, pri, size, title, deps, moved. Closed deps annotated so a stale dep is visible. Default scope is OPEN only, sorted NOW-first then by id. **Capped at `LIST_LIMIT` rows, and the truncation is ALWAYS announced** — `showing <n> of <N> task(s) (--limit 0 for all, --limit N for N)`. The cap exists because an uncapped table ran to most of a board-sized read (measured 2026-08-21: 94 lines against 91 open tasks) for the view that was supposed to be cheaper than the board; the announcement exists because `20 task(s)` is a *true* sentence that leaves the reader believing they have seen the backlog, which is this repo's house failure mode reproduced inside the tool built to cure it. Pinned by `tests/test_tasktool.py::test_list_truncation_is_announced_and_json_is_not_cut`, on every path including `--parent`. **The default does not apply to `--json`** — a machine surface that drops rows by default breaks consumers silently — but an explicit `--limit` is honoured on both. |
 | `show ID` | Print the whole file. Also print derived facts the file cannot carry: which open tasks list this one in `deps` (the computed reverse edge), which tasks list it in `related` (incoming links, open and closed), and children if it is a parent. |
 | `ready` | Open tasks whose `deps` are all closed (or empty), restricted to `NOW`/`NEXT`/`LATER` — `HOLD` and `SOMEDAY` are excluded by definition. |
 | `lint` | Section 5. Exit 1 on any violation, 0 when clean. |
@@ -442,10 +442,14 @@ ids carry forward forever and are never reused. So id VALIDATION is permissive
 > artifact the moment tasks were filed that no source document contains, so
 > `migrate.py --rebuild` is guarded and reconciliation (`SYNC-SPEC.md`) is how the corpus
 > stays current. `migrate.py` still describes how the tree was BOOTSTRAPPED, and it still
-> emits the ten-field schema -- it has not been widened to thirteen, because widening a
-> tool nobody may run buys nothing and running it is the one thing the guard exists to
-> prevent. The one-off ten -> thirteen widening was done in place by
-> `migrate_schema13.py`, which adds keys to existing files and never rewrites a body.
+> emits the ten-field schema -- it has never been widened to the current schema, because
+> widening a tool nobody may run buys nothing and running it is the one thing the guard
+> exists to prevent. **Do not read this paragraph as a statement of the live schema**:
+> section 3.1 is the schema, and the field count has moved twice since (ten -> thirteen
+> in place by `migrate_schema13.py`, then thirteen -> fourteen, then `brief` on
+> 2026-08-29d), each time by a one-off script that adds keys to existing files and never
+> rewrites a body. The gap between `migrate.py`'s schema and the live one only ever
+> widens, which is another reason not to run it.
 
 A separate script, also under `.scratch/tasktool/`, that builds a `tasks/` tree from the
 main repo's current records. It READS the main repo and WRITES only into
