@@ -1,6 +1,7 @@
 ---
 id: N14
 title: perf candidate assessed and declined on a fresh profile (round-5 close-out)
+brief:
 pri:
 size:
 deps: []

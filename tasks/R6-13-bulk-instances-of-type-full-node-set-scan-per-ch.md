@@ -1,6 +1,7 @@
 ---
 id: R6-13
 title: bulk _instances_of_type full node-set scan per check_fn -- 0 calls in any profile
+brief:
 pri: HOLD
 size: ?
 deps: []

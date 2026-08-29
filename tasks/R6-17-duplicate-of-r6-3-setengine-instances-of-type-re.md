@@ -1,6 +1,7 @@
 ---
 id: R6-17
 title: duplicate of R6-3: SetEngine._instances_of_type rescan, multiplied per candidate
+brief:
 pri: HOLD
 size: ?
 deps: []

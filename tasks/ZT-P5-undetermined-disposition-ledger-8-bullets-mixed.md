@@ -1,6 +1,7 @@
 ---
 id: ZT-P5
 title: UNDETERMINED disposition: ledger: 8 bullets mixed - most CLOSED, bullet 6 still OPEN on live boar...
+brief:
 pri: HOLD
 size: ?
 deps: []

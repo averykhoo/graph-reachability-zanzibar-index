@@ -1,6 +1,7 @@
 ---
 id: R6-1
 title: set-engine lookup re-runs check with a fresh memo per candidate (91.4% of lookup)
+brief:
 pri: LATER
 size: L
 deps: []

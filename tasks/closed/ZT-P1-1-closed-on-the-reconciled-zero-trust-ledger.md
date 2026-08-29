@@ -1,6 +1,7 @@
 ---
 id: ZT-P1-1
 title: closed on the reconciled zero-trust ledger
+brief:
 pri:
 size:
 deps: []

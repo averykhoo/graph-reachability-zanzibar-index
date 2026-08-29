@@ -1,6 +1,7 @@
 ---
 id: ZT-P1-6
 title: ledger row: CLOSED - disposition was missing from every board until this ledger
+brief:
 pri:
 size:
 deps: []

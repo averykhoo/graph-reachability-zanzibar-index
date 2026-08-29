@@ -1,6 +1,7 @@
 ---
 id: R6-3
 title: _instances_of_type scans the entire interner per type -- 0 calls in any profile
+brief:
 pri: HOLD
 size: ?
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: ZT-P0-1
 title: zero-trust P0-1: closed, whitelist withdrawn, pinned by a regression test
+brief:
 pri:
 size:
 deps: []

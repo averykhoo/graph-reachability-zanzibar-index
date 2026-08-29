@@ -152,6 +152,17 @@ MAX_LINES = {
 BOARD_FILES = ('HANDOFF.md', 'formal/HANDOFF.md')
 ROOT_BOARD = 'HANDOFF.md'
 
+# The file-per-task tree, the board's replacement-on-trial. Named here rather than reached
+# for inline because two checks will read it if the cutover lands, and because its ABSENCE
+# is a legitimate state this script must keep working in (see ``_tree_ids``).
+TASKS_DIR = 'tasks'
+# Non-task markdown inside tasks/. Duplicated from ``scripts/task.py::NON_TASK_MD`` rather
+# than imported: this script imports nothing from the tool it is meant to cross-check, for
+# the same reason ``tests/oracle.py`` imports nothing from the backends -- one bug must not
+# be able to corrupt both sides. Duplication of a two-element tuple is the cheap half of
+# that trade, and the disagreement it could cause is a spurious extra id, not a missed one.
+TASKS_NON_TASK_MD = ('BANNER.md', 'README.md')
+
 NEXT_MAX = 3          # redesign section 4: NEXT is capped so the ranking argument happens
                       # once, at write time, instead of every session re-deriving it.
 WARN_BUDGET = 10      # redesign section 4: traps rank only while they are scarce.
@@ -265,6 +276,46 @@ _ROWS_LINE = re.compile(r'^rows:\s*(.+)$')
 # time, nineteen of them. Widening the extractor alone is NOT the fix and was observed
 # false-redding a real id; see ``check_ledger_row_ids`` for the other half.
 _ROW_ID = re.compile(r'\b(ZT-[A-Z0-9]+(?:-[A-Z0-9]+)*|[A-Z]{1,3}\d+(?:-\d+)?|[A-Z]{1,3}-\d+)\b')
+
+
+def _tree_ids():
+    """Every id the task tree knows -- open, closed, and retired -- or None if no tree.
+
+    None and an EMPTY SET are different answers and the caller treats them differently:
+    None means "this repo has no task tree", which is the state before the trial and a
+    perfectly good one; an empty set means the tree is there and the harvester read
+    nothing out of it, which is the blind-parser failure and gets a non-vacuity floor.
+
+    Ids come from the FRONTMATTER, not the filename. ``scripts/task.py`` is emphatic that
+    the id is the address and the filename is cosmetic -- it resolves by glob and then
+    falls back to a full frontmatter scan for exactly this reason -- so harvesting names
+    off disk would disagree with the tool the first time anyone renamed a file, and
+    disagree in the direction that invents ids.
+    """
+    root = os.path.join(REPO, TASKS_DIR)
+    if not os.path.isdir(root):
+        return None
+    out = set()
+    for d, top in ((root, True), (os.path.join(root, 'closed'), False)):
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if not name.endswith('.md') or (top and name in TASKS_NON_TASK_MD):
+                continue
+            with io.open(os.path.join(d, name), encoding='utf-8') as fh:
+                for ln in fh.read().split('\n')[:20]:
+                    if ln.startswith('id:'):
+                        out.add(ln[3:].strip())
+                        break
+    retired = os.path.join(root, 'retired-ids.txt')
+    if os.path.exists(retired):
+        with io.open(retired, encoding='utf-8') as fh:
+            for ln in fh:
+                ln = ln.strip()
+                if ln and not ln.startswith('#'):
+                    out.add(ln)
+    out.discard('')
+    return out
 
 
 def _read(rel):
@@ -523,6 +574,24 @@ def check_ledger_row_ids(fail):
     ``ZT-`` id would false-red. That was equally true before; the series is closed, no
     ``rows:`` line cites one, and inventing wildcard machinery for a dormant case is how a
     check grows untested surface. Fix it when a session actually needs it.
+
+    THE TREE IS A SECOND SOURCE OF IDS, auto-detected (added 2026-08-29, spec item A4).
+    ``tasks/`` holds one file per task and is the id universe the board is on trial to
+    replace; when it is present, its ids are unioned into ``known`` and it carries its own
+    non-vacuity floor. Auto-detected rather than flagged because the useful behaviour is
+    the same in all three states this repo passes through -- board only (before the
+    trial), both (now), tree only (after a cutover, when ``HANDOFF.md`` is a stub with no
+    table) -- and a flag would be a second thing to remember at exactly the moment the
+    first thing changed.
+
+    AND WHILE BOTH EXIST, THEIR DISAGREEMENT IS ITSELF THE VIOLATION. ``CLAUDE.md``'s
+    trial contract says a board row and its task file are updated in the SAME session; a
+    board id with no task file is that contract silently broken, and the trial's whole
+    result is the comparison between the two trees, so a divergence nobody noticed does
+    not merely leave a stale file -- it destroys the evidence. Checked in one direction
+    only: every board row id must exist in the tree. The reverse is false BY DESIGN (the
+    tree carries hand-filed tasks that were never board rows, which is most of why it
+    exists), and a check that fails on correct use is a check that gets deleted.
     """
     board = _read(ROOT_BOARD)
     lines = _read(ROOT_LEDGER)
@@ -535,13 +604,52 @@ def check_ledger_row_ids(fail):
         if 'Closed ids stay retired' in ln or 'survives as the historical grouping' in ln:
             row_ids.update(m.group(1) for m in _ROW_ID.finditer(ln.replace('`', ' ')))
     row_ids.discard('')
-    if len(row_ids) < 5:
+    tree_ids = _tree_ids()
+    if len(row_ids) < 5 and tree_ids is None:
         fail('%s: parsed only %d board ids; the id parser is broken, so this check would '
              'pass by comparing against nothing. Fix it.' % (ROOT_BOARD, len(row_ids)))
         return
     known = set(row_ids)
     for ln in board:
         known.update(m.group(1) for m in _ROW_ID.finditer(ln.replace('`', ' ')))
+    if tree_ids is not None:
+        # WHAT THIS FLOOR ACTUALLY BUYS, measured 2026-08-29d by deleting it and probing
+        # three corpora rather than by reasoning about it. While BOTH trees exist it does
+        # NOT provide detection: with the floor gone and the harvester blinded, the parity
+        # comparison below goes loud on its own (every board row reported as having no
+        # task file). What it buys today is a precise diagnosis instead of that misleading
+        # one, and an early return. The "passes by comparing against nothing" failure it
+        # is named for becomes real only AFTER the cutover, when HANDOFF.md is a stub,
+        # `row_ids` is empty, and the tree is the sole id universe -- which is the state
+        # this whole trial is trying to reach, so the floor goes in now rather than being
+        # remembered then. Recorded here because the first version of this comment claimed
+        # the detection outright and a sabotage pass showed it was silent.
+        if len(tree_ids) < 5:
+            fail('%s: harvested only %d ids from the task tree; the harvester is broken. '
+                 'While the board still carries rows this is a diagnosis rather than the '
+                 'only alarm (the parity check below would also go loud); once the board '
+                 'is a stub it is the only thing standing between a blind harvester and a '
+                 'check that passes by comparing against nothing. Fix it -- do not delete '
+                 'the tree branch.' % (TASKS_DIR, len(tree_ids)))
+            return
+        # Filtered through ``_ROW_ID`` before comparing, and the filter is not cosmetic:
+        # ``_table_rows`` yields the header row and the ``|---|---|`` separator too, so
+        # the raw harvest carries ``'id'`` and ``'---'``. Those were harmless while this
+        # set only fed the non-vacuity floor -- observed the moment it fed a comparison,
+        # as ``HANDOFF.md names '---', 'id', which tasks has no task file for``. Anything
+        # that is not id-SHAPED is not a row id and cannot be missing from anywhere.
+        missing = sorted(i for i in row_ids
+                         if _ROW_ID.match(i) and _ROW_ID.match(i).group(1) == i
+                         and i not in tree_ids)
+        if missing:
+            fail('%s names %s, which %s has no task file for. The trial contract in '
+                 'CLAUDE.md is that a board row and its task file move in the SAME '
+                 'session with the same --session key; a row that exists in only one tree '
+                 'is that contract broken, and the divergence between the two trees IS '
+                 'the trial\'s result, so this is lost evidence rather than an untidy '
+                 'file. File it (`python scripts/task.py new ... --id <ID>`) or remove '
+                 'the row.' % (ROOT_BOARD, ', '.join(repr(m) for m in missing), TASKS_DIR))
+        known.update(tree_ids)
     for i, ln in enumerate(lines, 1):
         m = _ROWS_LINE.match(ln.strip())
         if not m:
@@ -549,9 +657,12 @@ def check_ledger_row_ids(fail):
         for cited in _ROW_ID.finditer(m.group(1)):
             if cited.group(1) not in known:
                 fail('%s:%d cites board id %r, which appears nowhere in %s -- not as a row, '
-                     'not on the retired-ids line, not in an item block. Ids are never '
+                     'not on the retired-ids line, not in an item block%s. Ids are never '
                      'reused, so a citation that resolves to nothing is a typo or an '
-                     'invented id.' % (ROOT_LEDGER, i, cited.group(1), ROOT_BOARD))
+                     'invented id.'
+                     % (ROOT_LEDGER, i, cited.group(1), ROOT_BOARD,
+                        '' if tree_ids is None
+                        else ' -- and no task file in %s carries it either' % TASKS_DIR))
 
 
 def check_doc_links(fail):

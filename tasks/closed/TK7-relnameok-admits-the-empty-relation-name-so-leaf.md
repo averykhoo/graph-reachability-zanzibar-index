@@ -1,6 +1,7 @@
 ---
 id: TK7
 title: relNameOK admits the EMPTY relation name, so leafPublic BARE = "" -- constrains unwritten Lean
+brief:
 pri: HOLD
 size: S
 deps: [P3]

@@ -1,6 +1,7 @@
 ---
 id: SD-1
 title: lift the two scope rejections
+brief:
 pri: SOMEDAY
 size: L
 deps: []

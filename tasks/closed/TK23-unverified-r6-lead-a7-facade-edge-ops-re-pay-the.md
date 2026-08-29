@@ -1,6 +1,7 @@
 ---
 id: TK23
 title: unverified R6 lead A7: facade edge ops re-pay the _require_live_nodes SELECT under the held lock
+brief:
 pri: HOLD
 size: ?
 deps: []

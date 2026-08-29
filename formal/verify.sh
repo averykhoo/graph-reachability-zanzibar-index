@@ -413,7 +413,17 @@ MIN_CONF_ALL=495
 #   would be a number changed on faith.
 # Zero headroom is the POINT: it is what makes deleting one test loud. Re-measure
 # and raise this whenever you add tests; that direction is always free.
-MIN_TESTS_ALL=943
+#   RAISED 943 -> 1035 on 2026-08-29d: tests/test_tasktool.py (+84, the task tool's
+#   suite rescued out of gitignored .scratch/ -- 40 ported cases, 13 new, and 30
+#   sabotage cases turned into permanent tests) plus 8 in
+#   tests/test_handoff_lint_row_ids.py for handoff_lint's tree-aware mode. Re-measured
+#   the same way: `pytest tests/ -q --collect-only` -> `1035 tests collected`.
+#   Instrument check repeated at the new value: with MIN_TESTS_ALL=1036,
+#   `bash formal/verify.sh tests-tile:1/4` fails at the global collection floor --
+#   observed literally:
+#     FAIL: tests/ collects only 1035 test(s); the gate floor is 1036.
+#   and rc=1. Restored to 1035, which then passes.
+MIN_TESTS_ALL=1035
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

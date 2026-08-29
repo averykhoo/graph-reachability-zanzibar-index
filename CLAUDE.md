@@ -12,8 +12,11 @@ IVM delta processor.
   contract; the board is what changes session-to-session. At end of session write back
   via its "Rhythm" protocol (session-log entry, banner, board rows).
 - **ON TRIAL 2026-08-23 → 2026-08-30: `tasks/` is maintained IN PARALLEL with the board.**
-  A file-per-task tree (150 files, one task per file) plus `scripts/task.py`, whose `board`
-  verb prints the ~19-line session-start view as a QUERY instead of a file. `HANDOFF.md`
+  A file-per-task tree (one task per file) plus `scripts/task.py`, whose `board`
+  verb prints the session-start view as a QUERY instead of a file — bounded by
+  `task.py::BOARD_MAX_LINES` and asserted by a test, never restated as prose here (four
+  places in this repo carried a "~25 lines" claim while the view grew a banner and a
+  per-row `brief`). Corpus size: `python scripts/task.py counts`. `HANDOFF.md`
   stays authoritative; nothing about the gate changed. **Both are updated, every session,
   by whoever edits either** — a board row promoted, demoted, added or closed gets the
   matching `task.py promote` / `new` / `close -m` in the same session, with the same
@@ -32,9 +35,17 @@ IVM delta processor.
     contract: [`docs/tasktool-spec.md`](docs/tasktool-spec.md). **Do not run
     `.scratch/tasktool/migrate.py`** —
     its `--rebuild` destroys 51 hand-filed tasks that no source document contains.
-  * The trial is a question about USEFULNESS, not correctness — correctness is already
-    pinned (41 tests, 22 sabotage cases). If it is not actually helping by 2026-08-30, the
-    answer is to delete `tasks/`, `scripts/task.py` and this bullet, which is one revert.
+  * The trial is a question about USEFULNESS, not correctness — correctness is pinned by
+    `tests/test_tasktool.py`, which is INSIDE the gate as of 2026-08-29d (the suite used
+    to live in gitignored `.scratch/`, i.e. it was already-lost evidence; the 30 sabotage
+    cases are permanent tests now, and the historical record is
+    [`docs/history/tasktool-proof-2026-08.md`](docs/history/tasktool-proof-2026-08.md)).
+    If it is not actually helping by 2026-08-30, the answer is to delete `tasks/`,
+    `scripts/task.py` and this bullet — but note that the DELETE path is only lossless
+    once `TK53`'s remaining appends land, and that the test rescue was landed first
+    precisely so a delete verdict costs no evidence. **Phase B, the cutover that retires
+    this board, needs an explicit user go** and is filed as tree row `TT-1`; the spec is
+    [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md).
 - **Always run the gate before pushing.** Never push red or unverified: the phased
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`
   (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in

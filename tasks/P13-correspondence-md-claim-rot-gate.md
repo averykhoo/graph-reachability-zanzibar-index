@@ -1,6 +1,7 @@
 ---
 id: P13
 title: CORRESPONDENCE.md claim-rot gate
+brief:
 pri: LATER
 size: M
 deps: []

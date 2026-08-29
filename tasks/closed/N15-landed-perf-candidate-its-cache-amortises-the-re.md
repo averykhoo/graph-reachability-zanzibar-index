@@ -1,6 +1,7 @@
 ---
 id: N15
 title: landed perf candidate; its cache amortises the residual
+brief:
 pri:
 size:
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK31
 title: unverified R6 lead A15: set-engine check/expand re-walk the SchemaAST with isinstance dispatch
+brief:
 pri: HOLD
 size: ?
 deps: []

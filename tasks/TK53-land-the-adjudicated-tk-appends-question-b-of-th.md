@@ -1,6 +1,7 @@
 ---
 id: TK53
 title: land the adjudicated TK* appends — question (b) of the trial verdict is DECIDED (
+brief: 15 appends remain; until they land, deleting tasks/ drops statements no living doc carries. Re-verify each row
 pri: NEXT
 size: M
 deps: []
@@ -11,7 +12,7 @@ source: board
 source_hash: 045f47f3553e
 created: 2026-08-29b
 moved: 2026-08-29b
-updated: 2026-08-29b
+updated: 2026-08-29d
 closed:
 ---
 

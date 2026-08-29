@@ -1,6 +1,7 @@
 ---
 id: P18
 title: the concurrency / multi-instance layer -- the never-started TLA+ phase
+brief:
 pri: SOMEDAY
 size: L
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: R6-19
 title: the bulk edge audit drives ~139 plan evaluations per object reconcile (2.0% self)
+brief:
 pri: LATER
 size: ?
 deps: []

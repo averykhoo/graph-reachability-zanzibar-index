@@ -1,6 +1,7 @@
 ---
 id: ZT-P4-6
 title: ledger row: CLOSED, residual declared (encode.py still reads oracle parser)
+brief:
 pri:
 size:
 deps: []

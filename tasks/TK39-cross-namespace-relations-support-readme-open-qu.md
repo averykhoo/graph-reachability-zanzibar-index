@@ -1,6 +1,7 @@
 ---
 id: TK39
 title: cross-namespace relations support (README open question, no design)
+brief:
 pri: SOMEDAY
 size: L
 deps: []

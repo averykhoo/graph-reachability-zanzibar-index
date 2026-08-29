@@ -1,6 +1,7 @@
 ---
 id: TK28
 title: unverified R6 lead A12: boolean bulk build holds three full-closure copies in RAM at once
+brief:
 pri: HOLD
 size: ?
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK42
 title: conditional transitions / default-condition support (README open question, no design)
+brief:
 pri: SOMEDAY
 size: L
 deps: []

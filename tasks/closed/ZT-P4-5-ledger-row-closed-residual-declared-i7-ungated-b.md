@@ -1,6 +1,7 @@
 ---
 id: ZT-P4-5
 title: ledger row: CLOSED, residual declared (I7 ungated by formal, projection P7)
+brief:
 pri:
 size:
 deps: []

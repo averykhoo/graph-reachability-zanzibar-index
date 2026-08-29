@@ -1,6 +1,7 @@
 ---
 id: B2
 title: the historical grouping of P8 + P9 (container, not work)
+brief:
 pri: LATER
 size: ?
 deps: []

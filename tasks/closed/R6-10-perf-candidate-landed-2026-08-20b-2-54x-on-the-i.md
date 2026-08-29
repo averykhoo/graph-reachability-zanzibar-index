@@ -1,6 +1,7 @@
 ---
 id: R6-10
 title: perf candidate landed 2026-08-20b: 2.54x on the incremental boolean write wall
+brief:
 pri:
 size:
 deps: []

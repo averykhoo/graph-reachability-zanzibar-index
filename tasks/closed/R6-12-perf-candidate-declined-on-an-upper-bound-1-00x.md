@@ -1,6 +1,7 @@
 ---
 id: R6-12
 title: perf candidate declined on an upper bound (1.00x measured)
+brief:
 pri:
 size:
 deps: []

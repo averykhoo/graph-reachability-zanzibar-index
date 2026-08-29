@@ -1,6 +1,7 @@
 ---
 id: TK1
 title: REFUTED: TupleSource.__init__'s watermark+rebuild is atomic (_consistent_rebuild, 2026-07-27)
+brief:
 pri: LATER
 size: S
 deps: []

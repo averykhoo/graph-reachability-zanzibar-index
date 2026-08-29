@@ -1,6 +1,7 @@
 ---
 id: R6-7
 title: I10 outbox-sanity rescans the WHOLE outbox every commit despite a watermark (20.7%)
+brief:
 pri: LATER
 size: S
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK14
 title: REFUTED: the opposite untainted-arm multiplicity divergence closed 2026-08-08 (rewriteClosure)
+brief:
 pri: LATER
 size: S
 deps: []

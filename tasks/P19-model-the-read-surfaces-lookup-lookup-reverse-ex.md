@@ -1,6 +1,7 @@
 ---
 id: P19
 title: model the read surfaces (lookup / lookup_reverse / expand) in Lean
+brief:
 pri: SOMEDAY
 size: L
 deps: []

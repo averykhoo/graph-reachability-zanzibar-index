@@ -1,6 +1,7 @@
 ---
 id: BL-1
 title: bridge-release leak, fixed 2026-08-21 in processor.py::_gc_subject_node
+brief:
 pri:
 size:
 deps: []

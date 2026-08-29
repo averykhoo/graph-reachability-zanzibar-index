@@ -1,6 +1,7 @@
 ---
 id: TK4
 title: spec mandates a documented lenient-mode hook that does not exist in code (adjudicate)
+brief:
 pri: HOLD
 size: S
 deps: []

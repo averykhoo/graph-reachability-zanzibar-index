@@ -1,6 +1,7 @@
 ---
 id: TK46
 title: handoff_lint's _ROW_ID truncates R6-99 to R6, so an invented ledger id passes as real
+brief:
 pri: LATER
 size: S
 deps: []

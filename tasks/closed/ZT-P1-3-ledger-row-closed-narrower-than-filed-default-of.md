@@ -1,6 +1,7 @@
 ---
 id: ZT-P1-3
 title: ledger row: CLOSED narrower than filed (default OFF not ON)
+brief:
 pri:
 size:
 deps: []

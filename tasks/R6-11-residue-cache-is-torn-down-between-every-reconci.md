@@ -1,6 +1,7 @@
 ---
 id: R6-11
 title: residue cache is torn down between every reconcile_subject of a cascade (~4x/reconcile)
+brief:
 pri: LATER
 size: S
 deps: []

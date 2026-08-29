@@ -1,6 +1,7 @@
 ---
 id: TK26
 title: unverified R6 lead A10: residue version bumps escalate every dependent to a full reconcile (Lean)
+brief:
 pri: HOLD
 size: ?
 deps: []

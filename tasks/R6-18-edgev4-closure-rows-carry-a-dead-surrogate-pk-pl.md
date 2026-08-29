@@ -1,6 +1,7 @@
 ---
 id: R6-18
 title: EdgeV4 closure rows carry a dead surrogate PK plus store_id (53.1% smaller without)
+brief:
 pri: LATER
 size: M
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: P7
 title: ttuStarFree (iii)+(iv) -- re-prove the 5 consumed sites, widen the gate
+brief:
 pri: LATER
 size: M
 deps: [P6]

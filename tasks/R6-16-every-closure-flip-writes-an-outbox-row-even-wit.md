@@ -1,6 +1,7 @@
 ---
 id: R6-16
 title: every closure flip writes an outbox row even with no boolean consumer (1.00 row/edge)
+brief:
 pri: LATER
 size: L
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: R6-15
 title: perf candidate declined on an upper bound (0.9%)
+brief:
 pri:
 size:
 deps: []

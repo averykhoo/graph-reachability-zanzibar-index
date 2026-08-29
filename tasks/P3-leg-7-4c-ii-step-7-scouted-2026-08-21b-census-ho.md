@@ -1,6 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii + step 7 -- pre-4c-ii DONE incl P14 (2026-08-28d); cone remains, 3 sessions
+brief: Un-splittable 42-module cone (~3 sessions), never at a session tail; read the revert-to-green exit, scope doc 11.12
 pri: NOW
 size: L
 deps: []
@@ -11,7 +12,7 @@ source: board
 source_hash: 36ebb5ee354e
 created: 2026-08-21b
 moved: 2026-08-28d
-updated: 2026-08-29
+updated: 2026-08-29d
 closed:
 ---
 
@@ -111,3 +112,8 @@ Also: revert-to-green exit plan written into the HANDOFF item block (was require
 ### 2026-08-29
 
 Digest-only drift: the four 2026-08-28* sessions rewrote the board row (fence layer, public-surface migration, P14 settled) without re-stamping. The task body IS current -- its Log carries per-session entries through 2026-08-28d -- so this re-stamps the source_hash against the rewritten row and changes no content.
+
+### 2026-08-29d
+
+`brief` populated from the board row's constraint annotation (mechanical: `updated` only,
+`moved` held -- populating a field is not progress on the cone).

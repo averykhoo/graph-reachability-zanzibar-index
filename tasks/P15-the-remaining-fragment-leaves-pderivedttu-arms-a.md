@@ -1,6 +1,7 @@
 ---
 id: P15
 title: the remaining fragment leaves -- PDerivedTTU arms, and the twoStrata cap
+brief:
 pri: LATER
 size: L
 deps: []

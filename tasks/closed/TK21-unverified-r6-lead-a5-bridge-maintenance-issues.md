@@ -1,6 +1,7 @@
 ---
 id: TK21
 title: unverified R6 lead A5: bridge maintenance issues up to ~8 point existence probes per tuple write
+brief:
 pri: HOLD
 size: ?
 deps: []

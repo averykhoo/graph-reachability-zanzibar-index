@@ -1,6 +1,7 @@
 ---
 id: TK20
 title: unverified R6 lead A4: EdgeV4 read indexes are not covering, so every probed row costs a heap fetch
+brief:
 pri: HOLD
 size: ?
 deps: []

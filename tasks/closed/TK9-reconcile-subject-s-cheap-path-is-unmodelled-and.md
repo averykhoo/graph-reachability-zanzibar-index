@@ -1,6 +1,7 @@
 ---
 id: TK9
 title: reconcile_subject's cheap path is unmodelled and has grown real logic twice
+brief:
 pri: LATER
 size: M
 deps: []

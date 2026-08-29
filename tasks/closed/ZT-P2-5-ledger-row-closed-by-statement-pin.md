@@ -1,6 +1,7 @@
 ---
 id: ZT-P2-5
 title: ledger row: CLOSED by statement pin
+brief:
 pri:
 size:
 deps: []

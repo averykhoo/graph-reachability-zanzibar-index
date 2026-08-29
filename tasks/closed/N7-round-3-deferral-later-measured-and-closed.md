@@ -1,6 +1,7 @@
 ---
 id: N7
 title: round-3 deferral, later measured and closed
+brief:
 pri:
 size:
 deps: []

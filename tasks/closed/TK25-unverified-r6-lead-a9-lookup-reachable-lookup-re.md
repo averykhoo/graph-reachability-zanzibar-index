@@ -1,6 +1,7 @@
 ---
 id: TK25
 title: unverified R6 lead A9: lookup_reachable/lookup_reverse hydrate full ORM rows to project one id
+brief:
 pri: HOLD
 size: ?
 deps: []

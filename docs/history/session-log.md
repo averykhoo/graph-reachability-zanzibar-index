@@ -25,6 +25,137 @@ from here.
 
 ---
 
+## 2026-08-29d — Phase A landed: the task tool's suite is in the gate, and its six footguns are fixed
+
+rows: `TK53`, `P3`, `P6`, `R6`, `TT-1`
+
+Execution of Phase A of [`tree-sole-authority-spec-2026-08-29.md`](../tree-sole-authority-spec-2026-08-29.md).
+Phase A is additive and safe under **every** trial outcome — even a DELETE verdict wants
+the test rescue landed first. **Question (a) is still the user's call and is still not
+made here**; Phase B (the cutover) is filed as `TT-1` and needs an explicit go.
+
+**1. A1 — the suite is out of `.scratch/` and into the gate.** `tests/test_tasktool.py`,
+**84 tests**, 72 s wall: 40 ported cases, 13 new, **30 sabotage cases converted from the
+`--sabotage` self-runner into permanent tests** (22 fixture + 4 write-path + 4
+live-corpus), and one record-completeness pin that counts the 22/4/4 so deleting a
+sabotage case is red rather than free. No marks, no skips, no xfails. The live-corpus
+pass was repointed from the gitignored `sandbox-migrated` onto the **tracked** `tasks/`,
+copied into tmp; a missing corpus fails rather than skips, as it did before.
+
+`MIN_TESTS_ALL` **943 → 1035**, re-measured with `--collect-only` and instrument-checked
+at 1036, which failed literally as:
+
+```
+FAIL: tests/ collects only 1035 test(s); the gate floor is 1036.
+```
+
+The PROOF4/`sabotage-log.txt` record is transcribed into
+[`tasktool-proof-2026-08.md`](tasktool-proof-2026-08.md) (FROZEN), carrying the `22/22`
+and `4/4` results and the three instrument controls, with an explicit ⚠ against re-citing
+its `40 test(s)` / `11 checks` figures as current.
+
+**One thing did NOT get rescued, and it is a real gap.** `sync_sabotage.py` (14 cases) and
+`sync_accept.py` (57 assertions) stayed in scratch, on the grounds that `sync` retires at
+the Phase-B cutover. **If the cutover does not happen, that gap is live** — recorded in
+the proof doc and in `TT-1`'s traps, not left as a silent omission. One ported case,
+`test_migrate_schema14_refusal_is_a_message_not_a_traceback`, has no subject in this tree
+(its script was never tracked); its literal red transcript is in the module docstring.
+
+**2. A2 — the six A7 footguns, each fixed and sabotaged.** Resolution table appended to
+[`tasktool-trial-protocol.md`](../tasktool-trial-protocol.md) §6; the friction list itself
+is left **unedited**, because the friction as first found is the evidence.
+
+* `ack` **refuses** any source but `board`. The old fall-through printed "acked", bumped
+  `updated`, wrote a Log entry recording that the drift was reviewed — and stamped
+  nothing, so the next `sync` reported the identical drift and the session that "handled"
+  it had a log entry proving it did. The refusal branches: if the task **has** a board row
+  it names the re-file remedy (`source` is immutable by design), otherwise it names
+  `comment`, which is what the fall-through was actually doing minus the false word.
+* `ack --since DIGEST` encodes *"`ack` must be a session's last step"*: pass what the
+  drift report showed and a source that moved since is announced on stderr. It **warns**
+  rather than refuses — the mover is usually the acking session's own edit — and the rule
+  is stated in `tasks/README.md` and the spec.
+* `new --id ID`, validated against live + retired ids. Proved on real work: `TT-1` was
+  filed with it, instead of being minted into the `TK` **findings** series.
+* `set --title x` now refuses with the working positional command line; `field`/`value`
+  became `nargs='?'` so the refusal is reachable at all (argparse used to kill it first).
+  `new --help` prints the 100-char cap.
+* **Footgun 5 was already fixed.** `list` announces `showing 20 of 58 (--limit 0 for all,
+  --limit N for N)` on every path including `--parent`, and `ready` / `--json` have no cap
+  at all. It needed a pin, not a change — re-verified by measurement, not by reading.
+  ⚠ Its **other** half is NOT fixed and is not scheduled: `list --parent R6` still
+  includes children whose ids are not `R6-N`, because they genuinely are `R6`'s children
+  and filtering by id prefix would make `list` lie about the parent graph to flatter a
+  naming convention. Anyone re-counting `R6-N` sub-items must filter, and say they did.
+
+**3. A3 — `brief`, the banner, and a board size that is asserted instead of described.**
+`brief` is the 15th field, sitting under `title` because it is the second thing read.
+One shared `brief_problem` backs `set`, `new`, lint check 4 and `validate_record`, so a
+write op cannot refuse a record lint calls green. 152 files migrated; **round-trip
+153/153 byte-identical** afterwards. The four current NOW/NEXT rows were hand-populated
+from their board annotations, `--mechanical` — populating a field is not progress, and
+bumping `moved` on `P3` would have laundered a stale NOW row.
+
+`tasks/BANNER.md` is the single must-read thing: `board` **refuses** without it and
+refuses one over 14 lines, and new **lint check 12** catches missing / over-long / a first
+line with no session key. A default banner was rejected outright — it is a session-start
+that looks complete and carries nothing.
+
+The board now renders at **39 lines** against a new `BOARD_MAX_LINES = 50`, asserted by
+`test_board_stays_under_its_size_ceiling` on a full-budget corpus. This replaces **four**
+prose claims of "~25 lines" written before the view grew a banner and a `brief` per row.
+Two more stale counts fell out of the same sweep: `render_file`'s docstring said
+"Thirteen keys" while `FIELDS` held fourteen, and two live messages said "fourteen". All
+three now interpolate `len(FIELDS)` or name `FIELDS` — the number is spelled out in
+exactly one place, the spec's field table.
+
+**4. A4 — rehoming, and a parity check that came back clean.** `tasks/README.md` carries
+the preamble, the reading protocol, the rules the tool cannot enforce, and the mechanical
+answer to the `ls tasks/` trap. `handoff_lint.py::check_ledger_row_ids` auto-detects the
+task tree, unions its ids, and **fails when a board row has no task file** — the
+dual-update contract from `CLAUDE.md` made mechanical rather than remembered. Auto-detect
+rather than a flag, because the behaviour wanted is the same in all three states (board
+only / both / tree only after a cutover). **It reports clean, so the week's dual-update
+contract actually held.** `BANNER.md`/`README.md` are excluded from both scanners by name,
+top level only — `closed/` is deliberately not exempt.
+
+`HANDOFF.md:78`'s stale `check_ledger_ids` cite → `check_ledger_row_ids`, net-zero lines
+(the file is at exactly its 260 ceiling).
+
+**5. Two findings from sabotaging my own work, both of which changed something.**
+
+* **The parity check's first version reported `'---'` and `'id'` as missing task files** —
+  `_table_rows` yields the header row and the `|---|---|` separator, which was harmless
+  while that set only fed a non-vacuity floor and stopped being harmless the moment it fed
+  a comparison. Filtered through `_ROW_ID`; the literal pre-fix text is in the guarding
+  test's docstring.
+* **A guard was real and its stated reason was false.** The tree floor shipped carrying
+  the standard `MIN_DOC_LINKS` justification, *"the harvester is broken, so this check
+  would pass by comparing against nothing"*. Deleting it and probing **three** corpora
+  showed that while both trees exist the parity comparison goes loud on its own; the floor
+  buys a precise diagnosis and an early return, and the failure it is named for is real
+  only **after** the cutover, when the board is a stub. The floor stayed — that state is
+  what the work is trying to reach — but the comment and the message were rewritten to say
+  which half is which. Filed as a method lesson in
+  [`sabotage-procedure.md`](../sabotage-procedure.md): *a justification is an assurance
+  claim and gets sabotaged like one*, and *probe more than one corpus, chosen to differ in
+  what else is watching*.
+
+**6. A process mistake, recorded because the next session will be tempted the same way.**
+I probed the new `ack` refusal against the **live** corpus twice before switching to a
+throwaway copy. `P3` is board-sourced, so it did not refuse — it wrote a real Log entry
+saying `test` and then `probe`. Both are reverted and `P3`'s entry now says what actually
+happened. A write op is not a read op; probe it against `--dir <copy>`.
+
+`min_tasks_parsed` **150 → 153** (two files of growth had re-accumulated, plus `TT-1`),
+with the provenance note extended in `tasks/config.json`.
+
+**Still owed:** nothing. Phase B is not owed — it is gated on an explicit user go and is
+filed as `TT-1`.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 153 task file(s) parsed)`
+read: board + HANDOFF
+
 ## 2026-08-29c — `TK53`: 22 appends landed; re-verification overturned rows in BOTH directions
 
 rows: `TK53`, `R6`, `HS-5`

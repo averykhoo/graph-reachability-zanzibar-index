@@ -1,6 +1,7 @@
 ---
 id: R6-6
 title: check() pays 4 sequential point SELECTs for node resolution before its batched probe
+brief:
 pri: LATER
 size: S
 deps: []

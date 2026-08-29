@@ -1,6 +1,7 @@
 ---
 id: TK36
 title: delta post-processing layer to expand symbolic wildcard PermissionDeltas -- no id anywhere
+brief:
 pri: SOMEDAY
 size: L
 deps: []

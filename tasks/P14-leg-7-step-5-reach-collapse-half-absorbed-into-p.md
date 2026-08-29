@@ -1,6 +1,7 @@
 ---
 id: P14
 title: leg 7 step 5, reach-collapse half -- absorbed into P3 (Route B), breaks P3->P14->P4->P3 cycle
+brief:
 pri: LATER
 size: M
 deps: [P4]

@@ -1,6 +1,7 @@
 ---
 id: ZT-P5-NEW
 title: ledger row: CLOSED - write-time rejection, both xfails flipped to plain pins
+brief:
 pri:
 size:
 deps: []

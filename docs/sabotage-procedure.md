@@ -140,6 +140,43 @@ Two corollaries worth carrying:
    fan-out. A green pin under a sabotage that should break it is not reassurance about the
    code; it is a verdict on the pin.
 
+### A guard can be REAL and its stated reason FALSE — sabotage the sentence, not just the code (2026-08-29d)
+
+From `handoff_lint.py::check_ledger_row_ids`'s new non-vacuity floor on the task-tree id
+harvest. The floor is a copy of a shape this repo trusts (`MIN_DOC_LINKS`, `< 5` board
+ids, `min_tasks_parsed`), and it shipped carrying that shape's standard justification:
+*"the harvester is broken, so this check would pass by comparing against nothing."*
+
+Deleting the floor and probing **three** corpora rather than one showed the sentence was
+false in the state the repo is actually in:
+
+| corpus | floor deleted → |
+|---|---|
+| board with rows + blinded harvester | **loud** — the parity comparison reports all 8 board rows as having no task file |
+| stub board, 0 tree ids, a ledger citation | **loud** |
+| stub board, 2 tree ids that happen to satisfy the citation | **SILENT, 0 failures** |
+
+So while both trees exist the floor buys a *precise diagnosis* and an early return, not
+detection — something else was already going to fire. The failure it is named for is real
+only in the third row, the post-cutover state the work is trying to reach. The floor
+stayed (that state is coming, and a guard installed then is a guard nobody installs), but
+the comment and the failure message were rewritten to say which half is which.
+
+Two transferable rules:
+
+* **A justification is an assurance claim and gets sabotaged like one.** "This check
+  catches X" is testable: delete the check and see whether X actually escapes. Copying a
+  known-good guard's *shape* does not copy its *argument* — the argument depended on that
+  guard being the only thing looking.
+* **Probe more than one corpus, chosen to differ in what ELSE is watching.** A single
+  corpus conflates "my guard fired" with "something fired". The three above differ only in
+  whether the neighbouring comparison had anything to compare, which is exactly the
+  variable the claim turned on.
+
+Related: *"Sabotage your instrument too"* below is about the check being blind; this is
+about the check being sighted while its **stated reason for existing** is wrong — which
+is worse, because the sentence is what the next person edits against.
+
 ### A TEARDOWN test is not a DELETE test — when the natural ordering hides the branch
 
 A close cousin of the inert change: the sabotage fires on nothing because **no test ever

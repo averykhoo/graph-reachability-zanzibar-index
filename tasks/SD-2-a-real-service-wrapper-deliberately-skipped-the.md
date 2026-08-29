@@ -1,6 +1,7 @@
 ---
 id: SD-2
 title: a real service wrapper -- deliberately skipped; the store is a plain callable API
+brief:
 pri: SOMEDAY
 size: L
 deps: []

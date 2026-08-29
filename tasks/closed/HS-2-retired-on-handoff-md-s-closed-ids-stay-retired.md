@@ -1,6 +1,7 @@
 ---
 id: HS-2
 title: retired on HANDOFF.md's "Closed ids stay retired" line (2026-08-20b)
+brief:
 pri:
 size:
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: TK52
 title: the 2026-08-30 trial verdict -- two questions; the irreversible one is where TK findings live
+brief:
 pri: NEXT
 size: S
 deps: []

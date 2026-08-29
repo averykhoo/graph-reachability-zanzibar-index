@@ -1,6 +1,7 @@
 ---
 id: R6-9
 title: write-tail refcount update re-SELECTs the two nodes already in node_map (4.51/write)
+brief:
 pri: LATER
 size: S
 deps: []

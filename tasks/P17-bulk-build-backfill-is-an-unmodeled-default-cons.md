@@ -1,6 +1,7 @@
 ---
 id: P17
 title: bulk build/backfill is an unmodeled default constructor -- model it or scope-exclude it
+brief:
 pri: LATER
 size: M
 deps: []

@@ -1,6 +1,7 @@
 ---
 id: P16
 title: widen the enumeration/state bounds
+brief:
 pri: LATER
 size: M
 deps: []

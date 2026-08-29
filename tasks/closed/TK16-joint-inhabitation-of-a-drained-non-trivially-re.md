@@ -1,6 +1,7 @@
 ---
 id: TK16
 title: joint inhabitation of a drained, non-trivially-reached state is empirical, not kernel-checked
+brief:
 pri: SOMEDAY
 size: M
 deps: []

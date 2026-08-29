@@ -1,6 +1,7 @@
 ---
 id: P4
 title: leg 7 4b -- leaf-probe <-> directLeaf bridge
+brief:
 pri: LATER
 size: M
 deps: [P3]

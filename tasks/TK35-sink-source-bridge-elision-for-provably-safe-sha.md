@@ -1,6 +1,7 @@
 ---
 id: TK35
 title: sink/source bridge elision for provably-safe shapes -- a spec'd future optimization
+brief:
 pri: SOMEDAY
 size: M
 deps: []

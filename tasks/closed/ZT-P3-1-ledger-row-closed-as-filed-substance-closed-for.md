@@ -1,6 +1,7 @@
 ---
 id: ZT-P3-1
 title: ledger row: CLOSED as filed; substance closed for T2b, still OPEN for T2a (2026-08-05)
+brief:
 pri:
 size:
 deps: []
