@@ -108,6 +108,22 @@ fact is a `by decide` pin at a *fixed* schema. Its one falsifiable claim — tha
 came back rc=1 with `⊢ isLeafPred BARE = false` (BARE is dot-*carrying*, so dot-freeness
 never covers it).
 
+**Trial close-the-loop** (`CLAUDE.md`, the `tasks/` parallel-run contract):
+
+```
+task lint: clean (12 checks, 154 task file(s) parsed)
+```
+read: board + HANDOFF
+
+Honest note on that second line, since the trial is measuring exactly this: the board
+query genuinely replaced the *file* read for orientation — `task.py board` was the first
+command of the session and it named the next action correctly. But it did not replace
+`HANDOFF.md`, and could not have: the 35 KB `show P3` overflowed context, so the item
+detail was read from `tasks/P3-*.md` directly, and the trap list, read-first list and exit
+procedure were read from `HANDOFF.md` and the scope doc. So for this session the query was
+**additive, not substitutive** — which is the outcome the trial exists to detect, and is
+the failure mode the read-line was added to make visible rather than inferable.
+
 **Still owed:** steps 3–10 of the re-point, and before step 7 a **spike** on
 the top risk: three call sites pass `shadow_graphRec_agree` the arbitrary query's own
 relation, and nobody has traced whether the guard that would fix them stops at
