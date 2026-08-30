@@ -25,6 +25,29 @@ from here.
 
 ---
 
+## 2026-08-30c — `P3`'s red middle opened at step 3, against a new green anchor (`5f48be2`)
+
+rows: `P3`
+
+Formal detail is [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-30c`. This entry is the root trace.
+
+**The §11.12 preamble, committed before the first Lean edit.** Green anchor **`5f48be2`**
+(step 2's commit), verified COVERED first-hand by `python scripts/gate_status.py` at session
+start — all ten phases green on `t2a:06de578e49ce` / `t2c:c4364193bede`, working tree clean.
+Abort trigger fixed up front: 70% context consumed, or 10 red in-cone `lake build` cycles,
+whichever comes first. Rule 3 is applied in its **amended** form (the 2026-08-30b correction
+banner on the scope doc): this docs-only append is committed *first*, so the reset target
+already contains the session's yield — which is exactly the failure that cost 105 lines on
+2026-08-30b.
+
+**Note the anchor moved, and that is rule 6 working.** The previous attempt anchored at
+`d0310ed`; steps 1–2 landed and were committed in between, so this attempt risks only the
+middle. Banking a green-stoppable prefix is not a partial cone under rule 5.
+
+Still owed: the middle itself (steps 3→10) — this entry records only the preamble; the
+session's findings are appended to it as the cone proceeds.
+
 ## 2026-08-30b — `P3`'s green prefix is COMPLETE: steps 1–2 landed, and the red middle is 3→10
 
 rows: `P3`
