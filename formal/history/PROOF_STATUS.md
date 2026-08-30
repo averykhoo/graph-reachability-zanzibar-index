@@ -103,6 +103,42 @@ must be repointed at `DerNode S k ∨ LeafNode S k`, and the ~20 tier-1 sites in
 `CascadeStable.lean` / `CascadeStrataSettle.lean` / `Scratch4cii.lean` must discharge the
 new disjunct. §3 below records the one place where no lemma exists yet.
 
+### 1b. The genericization was SABOTAGED before it was believed — `Extra` is load-bearing
+
+A refactor is not a check, so the house rule does not literally apply; but this one makes a
+*claim* — that the widening is now a one-line re-instantiation — and the way that claim
+could be false is if the chain had stopped depending on the extras predicate at all. Then
+the genericization would have papered over the red window rather than deferring it.
+
+**The discriminating sabotage** (run AFTER the green prefix was committed at `b42c52d`,
+per §11.12 rule 6): instantiate the abbreviation at the weakest possible predicate,
+
+```lean
+abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
+  ShadowOver (fun _ => True) σ σ0     -- sabotage
+```
+
+If `Extra` were decoration the tree would stay green. **Observed: `rc=1`, ten errors**, and
+they land in both directions — producers *and* consumers:
+
+    CascadeStable.lean:800:19: Insufficient number of fields for `⟨...⟩` constructor:
+      Constructor `True.intro` does not have explicit fields, but 7 were provided
+    CascadeStable.lean:827:13: Unknown identifier `R`
+    CascadeStable.lean:922:67: Application type mismatch: The argument
+    CascadeStable.lean:923:62: Application type mismatch: The argument
+    CascadeStable.lean:938:80: unsolved goals
+    CascadeStable.lean:956:29: Application type mismatch: The argument
+
+`:800` is the `applyD` producer (its anonymous constructor collapses to `True.intro`);
+`:922`/`:923`/`:938` are `shadow_graphRec_agree`, and `:956` is `checkFn_eq_sem_w3d` —
+exactly the consumers §3 predicts will need `¬ LeafNode`. **So the remaining work is real
+and located where the plan says it is.** Reverted; `lake build` green again at 1089 jobs.
+
+Two docstrings were narrower than their theorems after the generalization
+(`shadow_reach_agree` said "off the `DerNode`s", `shadow_admitEdge_agree` said "never a
+`DerNode`") and were rewritten to name `Extra`, with this sabotage's result recorded in the
+first of them so the next reader does not have to re-run it.
+
 ### 2. ★ THE SIZING DISPUTE IS SETTLED — all three of the recorded figures are explained, and "42 modules" is a MIS-ROOTED CENSUS
 
 Two independent measurements (mine, and a delegated import-BFS re-run) agree name-for-name
