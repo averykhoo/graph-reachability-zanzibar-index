@@ -25,28 +25,31 @@ from here.
 
 ---
 
-## 2026-08-30b — `P3` has a green prefix: step 1 landed, and the red middle is steps 3→10
+## 2026-08-30b — `P3`'s green prefix is COMPLETE: steps 1–2 landed, and the red middle is 3→10
 
 rows: `P3`
 
-Formal detail — the recon, the sabotage transcripts, the baseline measurements — is
-[`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session 2026-08-30`, §0–§6,
-opened under scope-doc §11.12 rule 1 (green anchor `d0310ed`, recorded before the first
-Lean edit). This entry is the root trace, the two record corrections, and the process
-failure. All ten gate phases were run green on this tree after the Lean edit.
+Formal detail — the recon, the sabotage transcripts, the baseline measurements, the two
+landed lemmas — is [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-30`, §0–§8, opened under scope-doc §11.12 rule 1 (green anchor
+`d0310ed`, recorded before the first Lean edit). This entry is the root trace, the record
+corrections, and the process failure. **Gate: all ten phases ran green after step 1; the
+step-2 run was still going at write-back** — `python scripts/gate_status.py` answers this,
+never a line here.
 
 **1. The plan's shape changed, and that is the headline.** `P3` has been recorded as one
 un-splittable block since `2026-08-28c`, and the board row said so. It is not. An 8-agent
 read-only recon established that steps 1–2 — the `LeafNode` carrier and the unowned
 superset-extras lemma — are purely ADDITIVE: they state new things about the pre-re-point
 tree, take no hypothesis from the re-point, and change no existing declaration, so each can
-be gated and committed on green. The un-splittable middle is **steps 3→10**. It begins at
-the `UntaintedShadow.classify` weakening (`CascadeStable.lean:529`), which is where the
-headline theorems start being kernel-`decide` FALSE, and ends when `hql` lands on
+be gated and committed on green. **Both then landed in this session, so the prefix is now
+complete and everything left in `P3` is the middle.** That middle is **steps 3→10**: it
+begins at the `UntaintedShadow.classify` weakening (`CascadeStable.lean:529`), which is
+where the headline theorems start being kernel-`decide` FALSE, and ends when `hql` lands on
 `graph_correct` (`FullScope.lean` / `headline_statements.txt:27`). This does not weaken
-§11.12 — the middle is exactly as un-splittable as recorded — and `P3`'s size is unchanged
-at ~3 sessions. Its SHAPE changed: an item that could previously only be attempted by a
-3-session run now has a prefix a bounded session can bank.
+§11.12 — the middle is exactly as un-splittable as recorded. Its SHAPE changed: an item
+that could previously only be attempted by a 3-session run had a prefix a bounded session
+could bank, and a bounded session banked it.
 
 **2. Step 1 landed, green, and it is committed-clean.** `Leaf.lean` gains `LeafNode` (Route
 B's carrier for the `classify` disjunct), the Bool mirror `leafNodeB`, `leafNodeB_correct`
@@ -115,15 +118,48 @@ the project's deps. Evidence: all ten phases ran green today with the variable u
 Fixed in place, and the genuine footgun put in its place: `lake`/`lean` are NOT on `PATH`,
 they live in `~/.elan/bin` (`verify.sh:123` prepends it for you; a hand build does not).
 
-**7. Step 2 is designed and verified feasible, not written.** Green-stoppable, no
-dependency on the red middle. Proposed home `LeafRules.lean` after `::writeRulesRaw`;
-statement shape "every edge produced by the leaf fold is either produced by the rewrite
-fold, or its target is a `LeafNode`"; premises `hne` (§4 above) and `hmd` (no
-`schemaRewrites` rule matches a dotted relation). The strict-superset witness it generalises
-is already pinned at `Scratch4cii.lean::mixed_is_strict_superset` /
-`::mixed_extras_are_the_two_leaves`.
+**7. Step 2 landed too, and it is the lemma §11.11 recorded as owned by no slice.**
+`LeafRules.lean::rewriteClosureL_extras_leafNode`, proved at the designed statement for a
+general `t`, with no premise weakened:
 
-**Still owed:** nothing. Step 2 is `P3`'s next step, not a debt — it is in the item block.
+```
+∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
+  u ∈ rewriteClosure S t ∨ LeafNode S (objNode u.object u.relation)
+```
+
+— every tuple the leaf-routed closure produces is one the old rewrite closure already
+produced, or its target is a `LeafNode`. +229 lines, purely additive, `lake build` green;
+the workhorse is `::rewriteClosureAuxL_extras`, a lockstep equal-fuel induction over both
+kernels. **Non-vacuity is PINNED with no hypotheses** —
+`LeafRuleWitness::rewriteClosureL_extras_leafNode_nonvacuous` discharges all four premises
+at `SlV`/`tlEditor` and derives the conclusion THROUGH the lemma, refuting the left
+disjunct rather than deciding the conclusion directly. That was demanded, not optional: a
+four-premise lemma whose premises never hold together is true and empty, the same shape as
+`2026-08-28b`'s `graph_correct_public` vacuity warning. Two by-products worth their own
+names: `LeafRuleWitness::slV_wf` had to be proved (**no `WF SlV` witness existed anywhere
+importable**, which is why non-vacuity had never been cheap), and `::hne_of_keys_nonempty`
+turns the undecidable `hne` of §4 into a `by decide` scan of `S.keys` — reusable by the
+middle. Sabotage: drop the `LeafNode` disjunct → `rc=1`, type mismatch at
+`LeafRules.lean:518`, red for the right reason. **No pre-existing `by decide` pin would
+have caught it**; the non-vacuity theorem is now that reference.
+
+**8. ⚠ Three measurement flags, logged and NOT adjudicated.** The prefix did not need the
+cone's size, so none of these was chased; each is now a trap on the row, and the middle
+must settle them before it is planned, not after.
+
+* A live import-BFS census measured **24 modules / 125 code sites / 13 files**, second ring
+  **36 raw / 27 code** — against the record's **42 / ~136 / 8** and **90 / 50**. No measured
+  set reproduced the recorded figures. **The 3-session sizing rests on those figures, so it
+  is now unverified in both directions**: do not re-cite either set as fact.
+* `FoldAdmits`: 19 Prop + 2 exec gates move, 3 stay — but the second exec gate is
+  `Exec.lean:443`, not the scope doc's `:376`.
+* `hql` may land on more than one pinned row. `headline_statements.txt:46`
+  (`W4WitnessDirect.correct_applies`) and `:56` (`::w3d2E_correct_applies`) carry the
+  identical unfenced shape and are excluded from the "one row" count only as "staged records
+  over intermediate chains". Step 7 discovers this the hard way if nobody checks first.
+
+**Still owed:** nothing. Step 3 — `UntaintedShadow.classify` gains `∨ LeafNode S ab.2`, the
+first red edit — is the next session's opening move, and it is on the row.
 
 `python scripts/task.py lint` → `task lint: clean (12 checks, 154 task file(s) parsed)`
 read: board + HANDOFF
