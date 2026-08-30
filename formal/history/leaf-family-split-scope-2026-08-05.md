@@ -1350,6 +1350,15 @@ re-check, ~20 sites in 3 files go genuinely red.**
   Delete `:51` **first**, before relying on the battery; expect a diagnostic red confined
   to the file (1 importer, 0 audit rows, 0 pin rows).
 
+  ✅ **CLOSED 2026-08-30d, and the prediction in the sentence above was WRONG** — deleting
+  `:51` built **green**, `rc=0`, 1089 jobs: no battery row distinguishes the two carriers,
+  so the shadowing corrupted nothing and the P14 weak rows are valid as taken. Wrong in
+  the safe direction, but a green is not a measurement, so the difference was made
+  mechanical instead of argued: `Scratch4cii.lean::leafNodeB_here_is_the_guarded_carrier`
+  pins the two predicates apart at `LeafWitness.SwEmptyRel`, and re-adding the proxy makes
+  it — and **only** it — go red. That "only" is what licenses the green. Full record and
+  the literal sabotage output: PROOF_STATUS `## Session 2026-08-30d` §1–§2.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

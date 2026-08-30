@@ -44,12 +44,20 @@ def derNodeB (S : Schema) (k : NodeKey) : Bool :=
   isDerived S (k.type, k.pred) && k.pred != BARE && k.name != STAR
     && k.variant == Variant.plain
 
-/-- The proposed `LeafNode` carrier for Route B: `Leaf.lean::publicOfLeaf`, NOT
-    `isLeafPred` — `isLeafPred_bare` proves `isLeafPred BARE = true`, so an
-    `isLeafPred`-based carrier would classify every bare-subject node as "extra" and
-    kill `untaintedShadow_writeLeg`'s `hsubj` premise everywhere (E3 below). -/
-def leafNodeB (S : Schema) (k : NodeKey) : Bool :=
-  (publicOfLeaf S k.type k.pred).isSome
+/-! ⚠ **There is deliberately NO local `leafNodeB` here.** Until 2026-08-30d this file
+defined its own `def leafNodeB S k := (publicOfLeaf S k.type k.pred).isSome` at this
+point — a *proxy*, written before the real carrier existed. Step 1 of 4c-ii then added
+the guarded carrier `Leaf.lean::leafNodeB` (`publicOfLeaf` **and** `leafPublic ≠ ""` and
+`name ≠ STAR` and `variant = .plain`) in the parent namespace `Zanzibar`, and nothing
+went red, because shadowing is legal: the local proxy kept winning every unqualified
+reference in this file — including `clsB` and `termB`, the definitions the entire
+weakened battery below is stated over.
+
+That error ran in the UNSAFE direction. A *broader* leaf predicate makes the `weak`
+disjunct of `clsB` easier to satisfy, so the `weak := true` rows could have been green
+while the real widened `classify` fails. The proxy is therefore deleted rather than
+renamed: every `leafNodeB` below now resolves to `Leaf.lean::leafNodeB`, the carrier
+that `Leaf.lean::leafNodeB_correct` proves decides `Leaf.lean::LeafNode`. -/
 
 /-- **The instrument is PROVED, not trusted**: `derNodeB` decides `DerNode`. -/
 theorem derNodeB_correct (S : Schema) (k : NodeKey) :
@@ -285,16 +293,69 @@ theorem swUD_classification_swap :
 
     ⚠ Severity, adjudicated 2026-08-29b — do NOT re-raise this on re-read. It was
     once filed tier-1 ("a soundness hole in a well-formedness condition"); it is not.
-    It constrains code that has not been written — no `LeafNode` definition exists
-    anywhere in this tree, only the `leafNodeB` proxy above — so nothing in today's
-    tree is false because of it, and `bare_publicOfLeaf_none` beside this docstring
-    pins that the CURRENT carrier is safe. Reading a design constraint as a live
-    defect is what produced the original tier-1 filing. -/
+    It constrained code that had not been written, so nothing in the tree was false
+    because of it. Reading a design constraint as a live defect is what produced the
+    original tier-1 filing.
+
+    ⚠ **Status moved, 2026-08-30d.** This docstring used to add "no `LeafNode`
+    definition exists anywhere in this tree, only the `leafNodeB` proxy above". Both
+    halves are now false: step 1 of 4c-ii wrote `Leaf.lean::LeafNode`, and the proxy has
+    been deleted. The constraint this docstring describes was ANSWERED rather than
+    dropped — `LeafNode` carries the `leafPublic p ≠ ""` conjunct precisely for it, and
+    it is pinned against a schema that actually exhibits the pathology at
+    `Leaf.lean::swEmptyRel_bare_subject_not_leafNode`. -/
 theorem bare_publicOfLeaf_none : publicOfLeaf SlV "doc" BARE = none := by decide
 
-/-- The node-level form: a bare subject node is NOT a `leafNodeB` node. Observed `false`. -/
+/-- The node-level form: a bare subject node is NOT a `leafNodeB` node. Observed `false`.
+
+    ⚠ Cite this as `Scratch4cii.lean::bare_subject_not_leafNode`, never bare: a
+    SAME-NAMED theorem lives at `Leaf.lean:1180`. -/
 theorem bare_subject_not_leafNode :
     leafNodeB SlV (subjNode ⟨"user", "alice", BARE⟩) = false := by decide
+
+/-- **The instrument's own guard — a mechanical refusal, not a docstring.**
+
+    Every `leafNodeB` in this file must resolve to `Leaf.lean::leafNodeB`, the carrier
+    that `Leaf.lean::leafNodeB_correct` proves decides `Leaf.lean::LeafNode`. From step
+    1 of 4c-ii until 2026-08-30d it did NOT: this file defined its own unguarded proxy
+    `(publicOfLeaf S k.type k.pred).isSome`, which shadowed the real carrier for `clsB`
+    and `termB` and hence for the whole weakened battery below — silently, in the unsafe
+    direction, because nothing goes red when a legal shadow is introduced.
+
+    This theorem makes the shadow impossible to re-introduce silently. At
+    `LeafWitness.SwEmptyRel` the two predicates DISAGREE by construction: the second
+    conjunct records that the proxy's sole test passes there (`publicOfLeaf` is `some ""`,
+    via `isLeafPred BARE`), while the first records that the guarded carrier still says
+    `false` — the `leafPublic … ≠ ""` conjunct, E3's residual guard. So any local
+    redefinition of `leafNodeB` without that guard turns THIS file red at THIS line.
+
+    OBSERVED 2026-08-30d, deleting the proxy at the old `:51`: rc=0,
+    `Build completed successfully (1089 jobs)` — i.e. re-pointing the battery at the
+    strictly narrower carrier changed no verdict in this file, so the recorded prediction
+    of "a diagnostic red confined to the file" was wrong and the battery's rows are valid
+    as measured. That is a green result and therefore proves nothing by itself, which is
+    exactly why this discriminating pin exists beside it.
+
+    SABOTAGE, run to control THIS pin (`docs/sabotage-procedure.md`): re-add the deleted
+    proxy verbatim above `derNodeB_correct`. Observed rc=1, and this line was the
+    **only** error in the build:
+
+    ```text
+    error: ZanzibarProofs/GraphIndex/Scratch4cii.lean:344:78: Tactic `decide` proved
+      that the proposition
+      leafNodeB LeafWitness.SwEmptyRel (subjNode { type := "user", name := "alice",
+        predicate := BARE }) = false ∧
+        (publicOfLeaf LeafWitness.SwEmptyRel "user" BARE).isSome = true
+    is false
+    ```
+
+    "Only error" is the load-bearing half of that observation, and it is what upgrades
+    the green above from an absence of evidence into a measurement: this pin is the sole
+    thing in the file that separates the two carriers, so every OTHER row here is
+    insensitive to the shadowing. Proxy removed again: rc=0, 1089 jobs. -/
+theorem leafNodeB_here_is_the_guarded_carrier :
+    leafNodeB LeafWitness.SwEmptyRel (subjNode ⟨"user", "alice", BARE⟩) = false
+      ∧ (publicOfLeaf LeafWitness.SwEmptyRel "user" BARE).isSome = true := by decide
 
 /-! ## The starvation check (scope-doc §(c) residual) — does moving the Direct-arm
 edge off the R-node starve the reconcile candidate enumerators?
@@ -429,10 +490,16 @@ in its UNWEAKENED form `shadowB` decides `UntaintedShadow` exactly. A transcript
 slip in any of the six now fails to compile instead of silently returning `true`.
 
 ⚠ The weakened form (`weak := true`) has no such theorem and cannot have one — the
-weakened `UntaintedShadow` is what 4c-ii is for and does not exist yet. `leafNodeB`
-likewise still has no `leafNodeB_correct` twin (:51). So the `weak := true` rows below
-are measurements of a PROPOSED structure, and their force comes from the strong rows
-next to them, which are proved. -/
+weakened `UntaintedShadow` is what 4c-ii is for and does not exist yet. So the
+`weak := true` rows below are measurements of a PROPOSED structure, and their force
+comes from the strong rows next to them, which are proved.
+
+⚠ **Corrected 2026-08-30d.** This paragraph used to add "`leafNodeB` likewise still has
+no `leafNodeB_correct` twin (:51)". That was true when written and was falsified in
+silence by step 1 of 4c-ii, which added BOTH `Leaf.lean::leafNodeB` and its
+`leafNodeB_correct` in the parent namespace while this file's local proxy went on
+shadowing them. The proxy is gone; `leafNodeB` here IS the proved carrier, and
+`leafNodeB_here_is_the_guarded_carrier` above keeps it that way. -/
 
 theorem clsB_correct (S : Schema) (σ σ0 : GraphState) :
     clsB S false σ σ0 = true ↔ (∀ ab ∈ σ.edges, ab ∈ σ0.edges ∨ DerNode S ab.2) := by
