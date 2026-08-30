@@ -1,7 +1,7 @@
 ---
 id: P3
-title: leg 7 4c-ii + step 7 -- green prefix COMPLETE 2026-08-30b (steps 1-2); left is the middle, 3-10
-brief: Opens at step 3 (classify gains a LeafNode disjunct, first red edit), never at a session tail; sizing DISPUTED
+title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
+brief: Next: repoint the abbrev at DerNode v LeafNode, ~20 tier-1 sites in 3 files; sizing SETTLED at 21 modules, not 42
 pri: NOW
 size: L
 deps: []
@@ -9,10 +9,10 @@ related: [P6]
 parent:
 labels: [formal]
 source: board
-source_hash: c002792b539d
+source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-08-30b
-updated: 2026-08-30b
+moved: 2026-08-30c
+updated: 2026-08-30c
 closed:
 ---
 
@@ -51,31 +51,52 @@ the narrowest, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse th
 
 ## Traps
 
-⚠ **Seven traps live in scope doc §11.10** — the backwards own-key premise, the
-leading-conjunct ordering, the `FoldAdmits` sites (21/3 above), the derived golden
-expectation, Route B's two premises. **Read §11.10 before touching the cone**, AS
-CORRECTED BY §11.11 item 8 and by five corrections made 2026-08-30b:
+⚠ **The traps now live in scope doc §11.13, which SUPERSEDES §11.10** (and §11.11 item 8).
+Eight items; read it before touching the cone. Summary, with the three 2026-08-30b
+measurement flags now ADJUDICATED:
 
 * **the non-emptiness premise is NOT `StoreValidRulesD`** — it constrains stored tuples,
   never relation-name non-emptiness. The superset-extras lemma needs an explicit
   `hne : ∀ dt R, isDerived S (dt,R) = true → R ≠ ""`, and the red middle must thread it.
   It is cheap now: `LeafRules.lean::hne_of_keys_nonempty` turns it into a `by decide`
-  scan of `S.keys`.
+  scan of `S.keys`. ⚠ Its companion **`hmd` is discharged VACUOUSLY** at the only
+  non-vacuity witness (`schemaRewrites SlV = []`, `LeafRules.lean:609`), so the `exfalso`
+  at `LeafRules.lean:466-471` is dead under every fixture.
 * **`rawWriteRels` is `Leaf.lean:587`** (post-edit), not `:541` — cite `file::symbol`.
-* ⚠ **the cone sizing is DISPUTED and unverified in BOTH directions.** A live import-BFS
-  census on 2026-08-30b measured **24 modules / 125 code sites / 13 files** (second ring
-  36 raw / 27 code) against the record's **42 / ~136 / 8** (90 / 50), and no measured set
-  reproduced the recorded figures. The **3-session estimate rests on those figures**, so
-  re-measure before planning the middle and do not re-cite either set as fact.
-* **`FoldAdmits`' second exec gate is `Exec.lean:443`**, not the scope doc's `:376`
+* ✅ **FLAG 1 SETTLED — the sizing was wrong, and 42 was a MIS-ROOTED census.** Two
+  independent import-BFS runs agree: `CascadeStable`'s reverse cone is **20** (+root =
+  **21**). 41+root is reproducibly the cone of `DirectCorrect` AND of `RulesWrite`, and 41
+  is the *forward* cone of `CascadeStrataAssemble`. "~136 sites / 8 files" was a raw
+  TWO-symbol `grep -c` LINE count, correct at `d3c1226` and now stale (162/9). Size with
+  THREE numbers: **21 modules recompile, ~9 files / ~229 sites re-check, ~20 sites in 3
+  files go genuinely red.** ⚠ **A site count is meaningless without its symbol list and
+  its counting unit** — that ambiguity, not the tree, is what four censuses disagreed about.
+* ✅ **FLAG 2 SETTLED** — `FoldAdmits`' second exec gate is `Exec.lean:443`, not `:376`
   (19 Prop + 2 exec gates move, 3 stay).
-* ⚠ **`hql` may land on more than one pinned row.** `headline_statements.txt:46`
-  (`W4WitnessDirect.correct_applies`) and `:56` (`::w3d2E_correct_applies`) carry the
-  identical unfenced shape and are excluded from the "one row" count only as "staged
-  records over intermediate chains". Check before step 7; step 7 finds out the hard way.
+* ✅ **FLAG 3 SETTLED, and the answer moved: `hql` lands on THREE pinned rows, not one.**
+  `docs/latent-gaps.md` excludes `headline_statements.txt:46` / `:56` as "staged records
+  over intermediate chains"; that reason is REFUTED by `FullScope.lean:78`
+  (`abbrev ReachedBy := ReachedByW3d2E`) and `:84` (`abbrev Drained`), which make
+  `w3d2E_correct_applies` hypothesis-IDENTICAL to `final_applies` — it is that theorem
+  with the fence deleted, not an intermediate chain. **Their repair is probably migration
+  onto `checkPublic`, not the `hql` binder.** Structurally confirmed, not kernel-confirmed.
+* ⚠ **NEW — the one tier-1 site with NO existing lemma.** `shadow_graphRec_agree`
+  discharges its probe target from `isDerived S (dt',r') = false`, which does not exclude
+  a minted leaf name. It needs the operand relation *declared*, and nothing forces
+  `computedRefs` names to be declared — `Core/Schema.lean::WF` records only that DECLARED
+  names are dot-free. Python enforces it; the repair is faithful new modelling.
+* ⚠ **NEW — a BLIND INSTRUMENT, and the NEXT SESSION'S FIRST EDIT.** `Scratch4cii.lean:51`
+  defines a local unguarded `leafNodeB` SHADOWING the guarded carrier step 1 added at
+  `Leaf.lean:547`; the local one wins every unqualified use, including `clsB` (`:393`) and
+  `termB` (`:409`) — so the whole P14 weak battery measures a broader proxy than the
+  carrier it validates, in the UNSAFE direction. Delete `:51` first; expect a diagnostic
+  red confined to the file (1 importer, 0 audit rows, 0 pin rows — re-verified 2026-08-30c).
+* ✅ **Adding a hypothesis to `shadow_graphRec_agree` / `checkFn_eq_sem_w3d` /
+  `shadow_reach_agree` / `reachedByW3d_shadow` changes NO pin file** — none is in
+  `headline_statements.txt` or `headline_definitions.txt`; they carry name pins only.
 
-None of the three measurement flags was adjudicated — the prefix work did not need the
-cone's size, and they are logged, not settled.
+All three 2026-08-30b measurement flags are now adjudicated (2026-08-30c). Two new traps
+replace them.
 
 ⚠ **The revert-to-green exit is scope doc §11.12, and its rule 3 is DEFECTIVE**: it
 promises `PROOF_STATUS.md` "survives the reset", but nothing uncommitted survives
@@ -88,13 +109,17 @@ green-stoppable prefix before running a sabotage against it. It cost 105 lines o
 - [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule; enforced by `migrate.py::check_formal_pointer`, not merely stated)
 - board pointer: [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.9
 
-PROOF_STATUS **`## Session 2026-08-30` (§0–§8) FIRST** — it carries the prefix that landed,
-the sabotages, and the three measurement flags — then `2026-08-28c` / `2026-08-28d` /
-`2026-08-21b`; scope doc §11.11, **§11.10 (the traps)**, §11.12, then §11.9 / §11.7 / §11.5;
+PROOF_STATUS **`## Session 2026-08-30c` (§0–§6) FIRST** — it carries the genericization that
+landed, the settled sizing, the blind instrument, and the three now-adjudicated measurement
+flags — then `## Session 2026-08-30` (§0–§8) for the prefix and its sabotages, then
+`2026-08-28c` / `2026-08-28d` / `2026-08-21b`; scope doc **§11.13 (the traps, which
+SUPERSEDES §11.10)**, §11.11, §11.12, then §11.9 / §11.7 / §11.5;
 `GraphIndex/Scratch4cii.lean`; completion criterion: PROOF_STATUS `2026-08-16c`, its numbers
 re-derived from `formal/FINAL_REVIEW.md`'s generated ledger, never prose. Then
-`Leaf.lean::LeafNode`, `LeafRules.lean::rewriteClosureL_extras_leafNode`,
-`CascadeStable.lean::UntaintedShadow` / `::reachedByW3d_shadow` / `::untaintedShadow_writeLeg`,
+**`CascadeStable.lean::ShadowOver`** (the generic structure) and its `UntaintedShadow`
+abbrev, `Leaf.lean::LeafNode`, `LeafRules.lean::rewriteClosureL_extras_leafNode`,
+`CascadeStable.lean::reachedByW3d_shadow` / `::untaintedShadow_writeLeg` /
+`::shadow_graphRec_agree` (the census hole),
 `LeafRules.lean::GraphState.writeRulesRaw`, `Exec.lean::foldAdmitsB`,
 `extractor.py::_edge_projection`.
 
@@ -240,3 +265,31 @@ Gate: all ten phases were green after step 1; the step-2 run was still going at 
 `## Session 2026-08-30` sections 7-8; root ledger 2026-08-30b.
 
 Second write-back of the same session: the board row was rewritten again (prefix complete, step 3 is the next action, five trap corrections) and mirrored here in the same pass -- title, brief, the Traps section with the three measurement flags, the reordered Read first, and the 2026-08-30b Log entry. Re-stamping the digest against the row I just wrote and read.
+
+### 2026-08-30c
+
+THE MIDDLE SPLIT TOO. The recorded plan opened step 3 by widening UntaintedShadow.classify in place, red until step 10 -- that is why the middle was un-splittable. The plan conflates two separable things: making the shadow chain ABLE to carry a wider extras set, and WIDENING it. Separating them costs one abbrev.
+
+LANDED, green: CascadeStable.lean now carries `structure ShadowOver (P : NodeKey -> Prop)` with classify : forall ab in sigma.edges, ab in sigma0.edges OR P ab.2, and term : forall k, P k -> forall y, (k,y) not-in sigma.edges, plus `abbrev UntaintedShadow S sigma sigma0 := ShadowOver (DerNode S) sigma sigma0`. shadow_reach_agree, shadow_admitEdge_agree, untaintedShadow_writeLoggedOne, ::writeLeg and ::foldAdmits are generalized over {Extra}. ABBREV is the load-bearing word: it is reducible, so every existing field access, anonymous constructor, rcases and signature kept working unchanged. lake build green, 1089 jobs -- first try for the structure, one trivial repair (a stray S in a have-annotation) for the five lemmas. THREE in-cone cycles against an abort budget of TEN. The 65 UntaintedShadow sites in CascadeStrataSettle.lean and the whole CascadeSettle / CascadeEnum / CascadeStrataEnum / CascadeStrataAssemble chain never went red. The widening is now a one-line re-instantiation instead of a re-proof of the cascade chain.
+
+WHY FOUR SESSIONS OF COSTING MISSED IT: every census measured how many sites MENTION the symbol (85-229, depending on the symbol list). None asked how many depend on DerNode SPECIFICALLY rather than on "extras are terminal and off the probe target". That answer is 17 .classify sites and 9 .term sites. A sizing question asked in the wrong units cost roughly two sessions.
+
+SIZING SETTLED, and the record was wrong. Two independent import-BFS measurements agree name-for-name on the ring decomposition. CascadeStable's reverse cone is 20 (+root = 21), NOT 42. 41+root is reproducibly the reverse cone of DirectCorrect AND of RulesWrite, and 41 is the forward cone of CascadeStrataAssemble -- so the recorded "42 modules" is a delegated census rooted at the wrong module, and the wall-clock half of the 3-session estimate rested on a number 2x too large. The "~136 sites / 8 files" figure was a raw TWO-symbol grep -c LINE count (UntaintedShadow 89/8 + DerNode 47/4, at commit d3c1226): correct when taken, now stale at 162/9, a ~19 percent undercount -- the same failure mode it was written to correct. The 2026-08-30b census's "13 files" is exactly right (the raw mention set of the ~26-name shadow family); its "24 modules / 125 code sites" is unreproducible under any stated convention. SIZE WITH THREE NUMBERS: 21 modules recompile, ~9 files / ~229 sites re-check, ~20 sites in 3 files go genuinely red.
+
+DURABLE LESSON, and it should become a house rule: a site count is meaningless without its symbol list and its counting unit. The record and the censuses never disagreed about the tree -- they disagreed about what a "site" is, for four sessions, with neither publishing its convention.
+
+THE CENSUS HOLE IS REAL AND HAS NO EXISTING LEMMA. shadow_graphRec_agree discharges its probe target from hunt : isDerived S (dt',r') = false, which does NOT exclude a minted leaf name (approver.0 is not itself derived, but publicOfLeaf maps it to some "approver"). It needs the operand relation DECLARED, and nothing in the model forces computedRefs names to be declared -- Core/Schema.lean::WF records only that DECLARED names are dot-free. Python does enforce it (parse_schema_ast's _validate_ast_references), so the repair is faithful new modelling, not a lemma lookup. The other two halves are FREE: the wAllNode probe (LeafNode carries on != STAR, so the existing variant-mismatch proof transcribes verbatim) and the BARE-subject write-leg premise (leafPublic BARE = "" against LeafNode's mandatory != "" guard -- the E3 residual guard, already pinned at Leaf.lean::swBare_not_leafNode).
+
+RISK RETIRED BY MEASUREMENT: none of shadow_graphRec_agree / checkFn_eq_sem_w3d / shadow_reach_agree / reachedByW3d_shadow appears in headline_statements.txt or headline_definitions.txt -- they carry audited_theorems.txt rows only, which pin NAMES, not statements. Adding a hypothesis to any of them changes NO pin file. The recorded worry about "a new hypothesis on an audited signature" is therefore a worry about the 14 call sites only, not about the gate.
+
+BLIND INSTRUMENT, created by step 1's own session, and it is the next session's FIRST edit. Scratch4cii.lean:51 defines a local unguarded `def leafNodeB (S) (k) : Bool := (publicOfLeaf S k.type k.pred).isSome` inside namespace Zanzibar.Scratch4cii. The real carrier, added by step 1 at Leaf.lean:547 in namespace Zanzibar, is strictly narrower -- it also requires leafPublic k.pred != "" && k.name != STAR && k.variant == Variant.plain. Scratch4cii imports LeafRules -> Leaf, so both are in scope and the LOCAL one wins every unqualified reference, including clsB (:393) and termB (:409) -- the definitions the entire P14 weakened battery is stated over (d_weak_holds :549, narrow_weak_holds_strong_fails :575, d_idx2_weak_holds :583, mixed_weak_holds_strong_fails :618). The direction of the error is the UNSAFE one: a broader proxy makes the weak disjunct easier to satisfy, so those rows can be green while the real widened classify fails. Reported by a recon agent, then verified FIRST-HAND before being written down. Step 1 created it by adding a correctly-guarded twin in the parent namespace without noticing the child's proxy; nothing went red because shadowing is legal, and Scratch4cii.lean:432-433's own docstring still reads that leafNodeB "has no leafNodeB_correct twin (:51)" -- a comment that was true when written and that step 1 silently falsified. NOT FIXED HERE ON PURPOSE: its expected outcome is a diagnostic red worth its own gate cycle, not a rider on a commit whose headline is the genericization. Blast radius re-verified this session: 1 importer (ZanzibarProofs.lean:86), 0 audit rows, 0 headline-pin rows.
+
+MEASUREMENT FLAG (3) SETTLED, and the answer moved: hql lands on THREE pinned rows, not one. docs/latent-gaps.md excludes headline_statements.txt:46 (correct_applies) and :56 (w3d2E_correct_applies) as "staged records over intermediate chains". That reason is REFUTED by two abbrevs in the same file as the theorems, both read first-hand: FullScope.lean:78 `abbrev ReachedBy : GraphState -> Schema -> Store -> Prop := ReachedByW3d2E` and :84 `abbrev Drained (S) (sigma) : Prop := cascadeKeys S sigma = []`. So w3d2E_correct_applies (:1278) and final_applies (:1375) have DEFINITIONALLY IDENTICAL hypotheses; the sole difference is GraphModel.check (raw) versus GraphModel.checkPublic (fenced). ReachedByW3d2E IS the headline closure -- w3d2E_correct_applies is final_applies with the fence deleted and q still universally quantified, not an intermediate chain. Row :46 follows a fortiori via toC_applies (:1255), whose own docstring records that the projection is one-way. CONSEQUENCE FOR THE PLAN: the repair for :46/:56 is probably MIGRATION ONTO checkPublic (exactly as final_applies was migrated on 2026-08-28c), not the hql binder -- cheaper, and it keeps the guard off the pinned statements. Only :27 (graph_correct) genuinely needs the binder, because graph_correct_public delegates to it and takes the guard there. STRUCTURALLY CONFIRMED, NOT KERNEL-CONFIRMED: no build witness was constructed, and 4c-ii has not landed. Also found: docs/latent-gaps.md:152 cites unfenced_grants as headline_statements.txt:51; it is :52, and the off-by-one sits inside the very paragraph doing the exclusion arithmetic this finding disputes.
+
+CORRECTION TO THIS TASK'S OWN 2026-08-30b ENTRY: hmd is discharged VACUOUSLY. rewriteClosureL_extras_leafNode_nonvacuous was recorded as having "all four premises discharged at SlV/tlEditor". That is literally true and weaker than it sounds -- hmd is `by decide` at SlV precisely BECAUSE schemaRewrites SlV = [] (pinned in the same file at LeafRules.lean:609::lrV_untainted_layer_silent, verified first-hand this session). The theorem is still non-vacuous in the sense that mattered (the conclusion is reached THROUGH the lemma, with the left disjunct refuted by decide), but no fixture in the tree exercises the hmd branch of the induction -- the exfalso at LeafRules.lean:466-471 is dead under every witness. A schema with a non-empty schemaRewrites whose rules are all dot-free is owed before that premise can be called measured.
+
+EXIT PROCEDURE, applied in its AMENDED form. Green anchor 5f48be2, verified COVERED first-hand by gate_status.py before the first edit; the docs-only preamble was COMMITTED FIRST (99f4245) so the reset target already contained the session's yield -- the repair for the rule-3 defect that cost 105 lines on 2026-08-30b. Abort trigger declared up front (70 percent context, or 10 red in-cone cycles); spent 3, all green. Full record: PROOF_STATUS `## Session 2026-08-30c` sections 0-6; root ledger 2026-08-30c.
+
+Same-session mirror, not housekeeping: this session rewrote the P3 board row, the HANDOFF banner and the item block (the genericization, the settled sizing, the blind instrument, the three hql rows, the two corrections) and mirrored all of it here in the same pass -- title, brief, and this Log entry.
+
+Same-session re-stamp: this session rewrote the P3 board row and item block (the ShadowOver genericization, the settled 21-module sizing, the Scratch4cii:51 blind instrument, the three hql rows, the hmd-vacuity correction) and mirrored all of it into the 2026-08-30c Log entry in the same pass. Re-stamping the digest against the row I just wrote. The body's 2026-08-21 summary block is left as filed, per this task's convention that the Log carries the updates.

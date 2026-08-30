@@ -25,12 +25,84 @@ from here.
 
 ---
 
-## 2026-08-30c — `P3`'s red middle opened at step 3, against a new green anchor (`5f48be2`)
+## 2026-08-30c — the middle split too: the shadow is now generic, and "42 modules" was a mis-rooted census
 
 rows: `P3`
 
 Formal detail is [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
-`## Session 2026-08-30c`. This entry is the root trace.
+`## Session 2026-08-30c` §0–§6. This entry is the root trace. **Gate: all ten phases
+re-run green on this tree** — `python scripts/gate_status.py` answers this, never a line
+here.
+
+**1. The headline: `P3`'s middle shrank, for the second day running.** The recorded plan
+opened step 3 by widening `UntaintedShadow.classify` in place, going red until step 10 —
+that is *why* the middle was un-splittable and why the §11.12 exit exists. The plan
+conflates two separable things: making the shadow chain **able** to carry a wider extras
+set, and **widening** it. Separating them costs one `abbrev`. `CascadeStable.lean` now has
+`structure ShadowOver (P : NodeKey → Prop)` with `UntaintedShadow S σ σ0` an `abbrev` for
+`ShadowOver (DerNode S) σ σ0`, and five shadow lemmas generalized over `{Extra}`. Because
+`abbrev` is reducible, **every existing field access, anonymous constructor and signature
+kept working untouched**: `lake build` green at 1089 jobs, in **three in-cone cycles
+against a budget of ten**, with the 65 sites in `CascadeStrataSettle.lean` and the whole
+`CascadeSettle`/`CascadeEnum`/`CascadeStrataEnum`/`CascadeStrataAssemble` chain never
+going red. The widening is now a one-line re-instantiation instead of a re-proof.
+
+**Why four sessions of costing missed it:** every census measured *how many sites mention
+the symbol* (85–229, depending on the symbol list). None asked *how many depend on
+`DerNode` specifically, rather than on "extras are terminal and off the probe target"* —
+which is **17 `.classify` + 9 `.term`**. A sizing question asked in the wrong units cost
+roughly two sessions.
+
+**2. The sizing dispute is SETTLED, and the recorded figure was a mis-rooted census.**
+Reproduced first-hand, twice, independently: `CascadeStable`'s reverse import cone is
+**20** (+root = 21), not 42. **41 is the reverse cone of `DirectCorrect` and of
+`RulesWrite`**, and 41 is the *forward* cone of `CascadeStrataAssemble` — so the recorded
+"42 modules" is a delegated census rooted at the wrong module, and the wall-clock half of
+the 3-session estimate rested on a number 2× too large. The "~136 sites / 8 files" figure
+was a raw two-symbol `grep -c` LINE count, correct at `d3c1226` and now stale (162/9 at
+HEAD, a ~19% undercount — the same failure mode it was written to correct). Size this edit
+with **three** numbers: 21 modules recompile, ~9 files / ~229 sites re-check, **~20 sites
+in 3 files go genuinely red**.
+
+⚠ **The durable lesson, and it should become a house rule: a site count is meaningless
+without its symbol list and its counting unit.** The record and the census never disagreed
+about the tree — they disagreed about what a "site" is, for four sessions, with neither
+publishing its convention.
+
+**3. A blind instrument, created by step 1's own session.** `Scratch4cii.lean:51` defines
+a local unguarded `leafNodeB` that **shadows** the correctly-guarded carrier step 1 added
+at `Leaf.lean:547`; the local one wins every unqualified reference in the file, including
+`clsB` and `termB` — the definitions the whole P14 weakened battery is stated over. The
+error runs in the unsafe direction (a broader proxy makes the weak disjunct easier, so
+those rows can be green while the real widened `classify` fails). Reported by an agent,
+then verified first-hand before being written down. **Not fixed here, deliberately** — its
+expected outcome is a diagnostic red worth its own cycle, not a rider on a commit whose
+headline is the genericization. It is the next session's first edit.
+
+**4. `hql` lands on three pinned rows, not one** — measurement flag (3) settled, and the
+answer moved. `docs/latent-gaps.md` excludes `headline_statements.txt:46`/`:56` as "staged
+records over intermediate chains"; that reason is refuted by `FullScope.lean:78`
+(`abbrev ReachedBy := ReachedByW3d2E`) and `:84` (`abbrev Drained`), both read first-hand,
+which make `w3d2E_correct_applies` hypothesis-identical to `final_applies` — it is that
+theorem with the fence deleted, not an intermediate chain. Consequence: their repair is
+probably migration onto `checkPublic` (as `final_applies` was on 2026-08-28c), not the
+`hql` binder. Structurally confirmed, not kernel-confirmed.
+
+**5. Two corrections to earlier records.** (a) 2026-08-30b's "all four premises
+discharged" for `rewriteClosureL_extras_leafNode_nonvacuous` is true but weaker than it
+sounds: `hmd` is discharged **vacuously**, because `schemaRewrites SlV = []`
+(`LeafRules.lean:609`), so no fixture exercises that branch of the induction. (b) The
+worry about "a new hypothesis on an audited signature" is retired: none of
+`shadow_graphRec_agree` / `checkFn_eq_sem_w3d` / `shadow_reach_agree` /
+`reachedByW3d_shadow` is in `headline_statements.txt` or `headline_definitions.txt` — they
+carry only **name** pins, so adding a hypothesis changes no pin file.
+
+**6. What is still owed, and it is the real remaining cost.** The abbrev must be repointed
+at `DerNode S k ∨ LeafNode S k` and ~20 tier-1 sites must discharge the new disjunct. One
+of them has **no existing lemma**: `shadow_graphRec_agree` needs the probe relation to be
+*declared*, and nothing in the model forces `computedRefs` names to be declared —
+`Core/Schema.lean::WF` records only that declared names are dot-free. Python enforces it
+(`_validate_ast_references`), so the repair is faithful new modelling, not a lookup.
 
 **The §11.12 preamble, committed before the first Lean edit.** Green anchor **`5f48be2`**
 (step 2's commit), verified COVERED first-hand by `python scripts/gate_status.py` at session

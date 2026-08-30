@@ -1271,6 +1271,85 @@ available. Five rules, each with the failure it prevents.
    pins assert something untrue, which is worse than no progress — it is the fail-by-
    passing shape this repo has a standing procedure for. Green or reset.
 
+### 11.13 ★★ THE MIDDLE SPLIT TOO (2026-08-30c) — the shadow is now GENERIC in its extras
+### predicate, so the widening is a one-line re-instantiation; and §11.7/§11.11's "42
+### modules" is a MIS-ROOTED census — the real recompile cone is 21
+
+Appended, not edited. Full record: `PROOF_STATUS.md` `## Session 2026-08-30c` §0–§6.
+
+**1. The un-splittability was an artefact of the plan, not of the cone.** §11.12 exists
+because the recorded step 3 widens `UntaintedShadow.classify` *in place*, going red until
+`hql` lands at step 10. That conflates two separable things: making the shadow chain
+**able** to carry a wider extras set, and **widening** it. `CascadeStable.lean` now carries
+`structure ShadowOver (P : NodeKey → Prop)` — `classify` and `term` both quantified over
+`P` — with `abbrev UntaintedShadow S σ σ0 := ShadowOver (DerNode S) σ σ0`, and
+`shadow_reach_agree` / `shadow_admitEdge_agree` / `untaintedShadow_writeLoggedOne` /
+`::writeLeg` / `::foldAdmits` generalized over `{Extra}`. **`abbrev` is load-bearing**: it
+is reducible, so every field access, anonymous constructor, `rcases` and signature kept
+working unchanged. Observed: `lake build` green, **1089 jobs, three in-cone cycles against
+a ten-cycle abort budget**; the 65 `UntaintedShadow` sites in `CascadeStrataSettle.lean`
+and the whole `CascadeSettle`/`CascadeEnum`/`CascadeStrataEnum`/`CascadeStrataAssemble`
+chain never went red. §11.12 is NOT weakened — what remains after the re-instantiation is
+still a genuine red window — but it is now ~20 sites in 3 files, not the whole chain.
+
+**2. The sizing figures in §11.7 and §11.11 are refuted, and the failure was a UNIT
+ERROR.** Two independent import-BFS measurements agree name-for-name:
+`CascadeStable`'s reverse cone is **20** (+root = 21). **41 (+root = 42) is reproducibly
+the reverse cone of `DirectCorrect` and of `RulesWrite`**, and 41 is the *forward* cone of
+`CascadeStrataAssemble` — the recorded "42 modules" is a delegated census rooted at the
+wrong module, so the wall-clock half of the 3-session estimate rested on a 2×-too-large
+number. "~136 sites / 8 files" (`:1190-1195`) was a raw **two-symbol `grep -c` LINE
+count** — `UntaintedShadow` 89/8 + `DerNode` 47/4 at `d3c1226` — correct when taken and now
+stale at 162/9. The 2026-08-30b census's "13 files" is exactly right for the ~26-name
+family; its "24 modules / 125 sites" is unreproducible.
+
+⚠ **The durable rule this earns: a site count is meaningless without its symbol list and
+its counting unit.** The record and the censuses never disagreed about the tree — they
+disagreed about what a "site" is, for four sessions, with neither publishing its
+convention. Size 4c-ii with THREE numbers: **21 modules recompile, ~9 files / ~229 sites
+re-check, ~20 sites in 3 files go genuinely red.**
+
+**3. §11.10's trap set, as corrected on 2026-08-30c.** Supersedes the 2026-08-30b list.
+* **(a)** the non-emptiness premise is NOT `StoreValidRulesD` (it constrains stored tuples,
+  never relation names): thread `hne : ∀ dt R, isDerived S (dt,R) = true → R ≠ ""`, cheap
+  via `LeafRules.lean::hne_of_keys_nonempty`. ⚠ Its companion **`hmd` is discharged
+  VACUOUSLY** at the only non-vacuity witness — `schemaRewrites SlV = []`
+  (`LeafRules.lean:609::lrV_untainted_layer_silent`), so the `exfalso` at
+  `LeafRules.lean:466-471` is dead under every fixture. 2026-08-30b's "all four premises
+  discharged" is true but weaker than it reads.
+* **(b)** `rawWriteRels` is `Leaf.lean:587`, not `:541`.
+* **(c)** sizing: settled, see item 2 above. Do not re-cite 42 / ~136 / 24 / 125.
+* **(d)** `FoldAdmits`' second exec gate is `Exec.lean:443`, not `:376`.
+* **(e)** **`hql` lands on THREE pinned rows, not one.** `docs/latent-gaps.md` excludes
+  `headline_statements.txt:46` (`correct_applies`) and `:56` (`::w3d2E_correct_applies`)
+  as "staged records over intermediate chains"; that reason is refuted by `FullScope.lean:78`
+  (`abbrev ReachedBy := ReachedByW3d2E`) and `:84` (`abbrev Drained`), which make
+  `w3d2E_correct_applies` hypothesis-**identical** to `final_applies` — it is that theorem
+  with the fence deleted, not an intermediate chain. **Their repair is probably migration
+  onto `checkPublic`** (as `final_applies` was on 2026-08-28c), not the `hql` binder.
+  Structurally confirmed, not kernel-confirmed. (`latent-gaps.md:152` also cites
+  `unfenced_grants` as `:51`; it is `:52`, inside the paragraph doing that arithmetic.)
+* **(f)** adding a hypothesis to `shadow_graphRec_agree` / `checkFn_eq_sem_w3d` /
+  `shadow_reach_agree` / `reachedByW3d_shadow` changes **no pin file** — none is in
+  `headline_statements.txt` or `headline_definitions.txt`; they carry name pins only. The
+  recorded worry about "a new hypothesis on an audited signature" is about the 14 call
+  sites, not the gate.
+* **(g) NEW — the one tier-1 site with no existing lemma.** `shadow_graphRec_agree`
+  discharges its probe target from `isDerived S (dt',r') = false`, which does **not**
+  exclude a minted leaf name. It needs the operand relation *declared*, and nothing in the
+  model forces `computedRefs` names to be declared — `Core/Schema.lean::WF` records only
+  that *declared* names are dot-free. Python enforces it (`_validate_ast_references`), so
+  the repair is faithful new modelling. The `wAllNode` half (`on ≠ STAR`) and the
+  BARE-subject half (the E3 `leafPublic p ≠ ""` guard) are both free.
+* **(h) NEW — a BLIND INSTRUMENT created by step 1's own session.** `Scratch4cii.lean:51`
+  defines a local unguarded `leafNodeB` that **shadows** the guarded carrier step 1 added
+  at `Leaf.lean:547`; the local one wins every unqualified use, including `clsB` (`:393`)
+  and `termB` (`:409`), so the entire P14 weak battery measures a broader proxy than the
+  carrier it validates — in the **unsafe** direction (a broader proxy makes the weak
+  disjunct easier, so those rows can be green while the real widened `classify` fails).
+  Delete `:51` **first**, before relying on the battery; expect a diagnostic red confined
+  to the file (1 importer, 0 audit rows, 0 pin rows).
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

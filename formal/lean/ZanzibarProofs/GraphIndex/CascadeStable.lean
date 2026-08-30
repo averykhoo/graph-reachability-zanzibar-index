@@ -523,21 +523,40 @@ predicates) — so the reach agreement applies. -/
 def DerNode (S : Schema) (k : NodeKey) : Prop :=
   ∃ dt on R, isDerived S (dt, R) = true ∧ R ≠ BARE ∧ on ≠ STAR ∧ k = objNode ⟨dt, on⟩ R
 
-/-- **The untainted-core shadow relation.** `σ`'s edges are `σ0`'s plus edges into
-    terminal `DerNode`s; both endpoint-closed; `σ0`'s core embeds. -/
-structure UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop where
-  classify : ∀ ab ∈ σ.edges, ab ∈ σ0.edges ∨ DerNode S ab.2
+/-- **The shadow relation, generic in its EXTRAS predicate `P`.** `σ`'s edges are
+    `σ0`'s plus edges into terminal `P`-nodes; both endpoint-closed; `σ0`'s core embeds.
+
+    `P` is a parameter rather than a fixed `DerNode` because 4c-ii's Route B widens the
+    extras from `DerNode` to `DerNode ∨ LeafNode` (scope doc §11.9, `Leaf.lean::LeafNode`):
+    the re-pointed write leg mints leaf-named targets that the unweakened `classify` has
+    no branch for (`Scratch4cii.lean::strong_shadow_false_at_d_own_sigma0`). Every lemma
+    below that only needs "extras are terminal and off the probe target" is proved ONCE,
+    here, at generic `P`; widening then instantiates rather than re-proves.
+
+    ⚠ Nothing in this structure may mention `DerNode`. A lemma that needs a
+    `DerNode`-specific fact belongs below the `UntaintedShadow` abbreviation, not here —
+    that separation is the whole reason the widening is a one-line change instead of a
+    re-proof of the cascade chain. -/
+structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
+  classify : ∀ ab ∈ σ.edges, ab ∈ σ0.edges ∨ P ab.2
   sub : ∀ ab ∈ σ0.edges, ab ∈ σ.edges
   nodesSub : ∀ k ∈ σ0.nodes, k ∈ σ.nodes
   closed : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes
   closed0 : ∀ ab ∈ σ0.edges, ab.1 ∈ σ0.nodes ∧ ab.2 ∈ σ0.nodes
-  term : ∀ k, DerNode S k → ∀ y, (k, y) ∉ σ.edges
+  term : ∀ k, P k → ∀ y, (k, y) ∉ σ.edges
+
+/-- **The untainted-core shadow relation** — `ShadowOver` at today's extras predicate.
+    `abbrev` (hence reducible) on purpose: every existing field access, anonymous
+    constructor and `rcases` against this name keeps working unchanged, which is what
+    makes the genericization above a NO-OP on the current tree rather than a re-point. -/
+abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
+  ShadowOver (DerNode S) σ σ0
 
 /-- **Reach agreement off the `DerNode`s**: a probe into a non-`DerNode` target reads
     the same on `σ` and its shadow — extra edges are trailing hops onto terminal
     nodes the path can neither traverse nor end at. -/
-theorem shadow_reach_agree {S : Schema} {σ σ0 : GraphState}
-    (hsh : UntaintedShadow S σ σ0) {v : NodeKey} (hv : ¬ DerNode S v) (x : NodeKey) :
+theorem shadow_reach_agree {Extra : NodeKey → Prop} {σ σ0 : GraphState}
+    (hsh : ShadowOver Extra σ σ0) {v : NodeKey} (hv : ¬ Extra v) (x : NodeKey) :
     σ.reach x v = σ0.reach x v := by
   cases h1 : σ.reach x v <;> cases h0 : σ0.reach x v
   · rfl
@@ -546,7 +565,7 @@ theorem shadow_reach_agree {S : Schema} {σ σ0 : GraphState}
     rw [h1] at this
     cases this
   · exfalso
-    rcases nreaches_factor (P := fun ab => DerNode S ab.2) hsh.classify (reach_sound h1)
+    rcases nreaches_factor (P := fun ab => Extra ab.2) hsh.classify (reach_sound h1)
       with hE | ⟨ab, hD, hR⟩
     · have := reach_complete hsh.closed0 hE
       rw [h0] at this
@@ -559,18 +578,18 @@ theorem shadow_reach_agree {S : Schema} {σ σ0 : GraphState}
 
 /-- Admission agreement across the shadow: the cycle probe's target is the write's
     subject node, which is never a `DerNode` on the fragment. -/
-theorem shadow_admitEdge_agree {S : Schema} {σ σ0 : GraphState}
-    (hsh : UntaintedShadow S σ σ0) {a : NodeKey} (ha : ¬ DerNode S a) (b : NodeKey) :
+theorem shadow_admitEdge_agree {Extra : NodeKey → Prop} {σ σ0 : GraphState}
+    (hsh : ShadowOver Extra σ σ0) {a : NodeKey} (ha : ¬ Extra a) (b : NodeKey) :
     σ.admitEdge a b = σ0.admitEdge a b := by
   unfold GraphState.admitEdge
   rw [shadow_reach_agree hsh ha b]
 
 /-- One parallel step: the logged write on `σ`, the plain write on the shadow —
     admission agrees, so the shadow relation is maintained. -/
-theorem untaintedShadow_writeLoggedOne {S : Schema} {σ σ0 : GraphState}
-    (hsh : UntaintedShadow S σ σ0) {u : Tuple}
-    (ha : ¬ DerNode S (subjNode u.subject)) :
-    UntaintedShadow S (σ.writeLoggedOne u) (σ0.writeDirect u) := by
+theorem untaintedShadow_writeLoggedOne {Extra : NodeKey → Prop} {σ σ0 : GraphState}
+    (hsh : ShadowOver Extra σ σ0) {u : Tuple}
+    (ha : ¬ Extra (subjNode u.subject)) :
+    ShadowOver Extra (σ.writeLoggedOne u) (σ0.writeDirect u) := by
   have hadm := shadow_admitEdge_agree hsh ha (objNode u.object u.relation)
   unfold GraphState.writeLoggedOne
   by_cases hb : σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true
@@ -632,10 +651,10 @@ theorem untaintedShadow_writeLoggedOne {S : Schema} {σ σ0 : GraphState}
     exact hsh
 
 /-- The parallel write-leg fold maintains the shadow. -/
-theorem untaintedShadow_writeLeg {S : Schema} :
-    ∀ (us : List Tuple) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
-      (∀ u ∈ us, ¬ DerNode S (subjNode u.subject)) →
-      UntaintedShadow S (us.foldl (fun acc u => acc.writeLoggedOne u) σ)
+theorem untaintedShadow_writeLeg {Extra : NodeKey → Prop} :
+    ∀ (us : List Tuple) (σ σ0 : GraphState), ShadowOver Extra σ σ0 →
+      (∀ u ∈ us, ¬ Extra (subjNode u.subject)) →
+      ShadowOver Extra (us.foldl (fun acc u => acc.writeLoggedOne u) σ)
         (us.foldl (fun acc u => acc.writeDirect u) σ0) := by
   intro us
   induction us with
@@ -661,9 +680,9 @@ theorem foldAdmits_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) :
 
 /-- **Admission transfers to the shadow**: the logged fold and the shadow's plain
     fold accept the same writes. -/
-theorem untaintedShadow_foldAdmits {S : Schema} :
-    ∀ (us : List Tuple) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
-      (∀ u ∈ us, ¬ DerNode S (subjNode u.subject)) →
+theorem untaintedShadow_foldAdmits {Extra : NodeKey → Prop} :
+    ∀ (us : List Tuple) (σ σ0 : GraphState), ShadowOver Extra σ σ0 →
+      (∀ u ∈ us, ¬ Extra (subjNode u.subject)) →
       FoldAdmits σ us → FoldAdmits σ0 us := by
   intro us
   induction us with
@@ -676,7 +695,7 @@ theorem untaintedShadow_foldAdmits {S : Schema} :
       exact hadm1
     refine ⟨hadm0, ?_⟩
     -- the fold's next state on the σ side is `writeLoggedOne`'s CORE = `writeDirect`
-    have hstep : UntaintedShadow S (σ.writeLoggedOne u) (σ0.writeDirect u) :=
+    have hstep : ShadowOver Extra (σ.writeLoggedOne u) (σ0.writeDirect u) :=
       untaintedShadow_writeLoggedOne hsh (hs u List.mem_cons_self)
     have hfd : FoldAdmits (σ.writeLoggedOne u) rest := by
       -- `FoldAdmits σ (u :: rest)` continues at `σ.writeDirect u`; the logged step's
