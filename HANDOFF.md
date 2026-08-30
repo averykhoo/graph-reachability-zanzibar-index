@@ -16,14 +16,15 @@ session: run the Rhythm protocol at the bottom.
 
 ## Banner
 
-> 🟢 **Gate: green through step 1; step 2's run was still going at write-back** — ask
-> `python scripts/gate_status.py`; re-run `lean` after any `*.md` edit (tiles ignore `*.md`).
-> 🧭 **`2026-08-30b`: `P3`'s green prefix is complete.** Steps 1–2 both landed and gated —
-> the `LeafNode` carrier, and the superset-extras lemma no slice owned, non-vacuity pinned.
-> All that is left is the **un-splittable middle, steps 3→10**; the next session opens it
-> at **step 3** (`UntaintedShadow.classify` gains `∨ LeafNode S ab.2`, the first red edit),
-> never at a session tail. Exit §11.12, whose rule 3 is defective. Three measurement flags
-> now sit on the row, cone sizing included — do not re-cite a sizing as fact.
+> 🟢 **Gate: all ten phases re-run green on this tree** — ask `python scripts/gate_status.py`;
+> re-run `lean` after any `*.md` edit (tiles ignore `*.md`).
+> 🧭 **`2026-08-30c`: the middle was splittable too.** `UntaintedShadow` is now an `abbrev`
+> for `ShadowOver (P : NodeKey → Prop)`, generic in its EXTRAS predicate, so the widening is
+> a **one-line re-instantiation, not a re-proof** (green, 1089 jobs, 3 cycles of 10; the 65
+> `CascadeStrataSettle` sites never moved). Left: repoint at `DerNode ∨ LeafNode`, discharge
+> ~20 tier-1 sites in 3 files. 📏 **Sizing settled: 21 modules, not 42** — 42 was a census
+> rooted at the wrong module; a site count means nothing without its symbol list and unit.
+> `Scratch4cii.lean:51` shadows the real `leafNodeB` (scope doc §11.13 (h)) — delete first.
 > ⏰ **`2026-08-30`: trial extended to 2026-09-06; `tasks/` is not being deleted** (user).
 > Question narrows to **cutover-or-keep-both**; the dual-update contract runs another week.
 > 🧭 **Phase B (this file becomes a stub) is the verdict and needs an explicit user go** →
@@ -41,7 +42,7 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the green prefix is COMPLETE as of 2026-08-30b**: steps 1 and 2 both landed, gated and purely additive (`Leaf.lean::LeafNode` + proved Bool mirror; `LeafRules.lean::rewriteClosureL_extras_leafNode`, the superset-extras lemma no slice owned, with non-vacuity pinned). **Everything left is the un-splittable middle, steps 3→10** — from the `UntaintedShadow.classify` weakening (`CascadeStable.lean:529`) to `hql` landing on `graph_correct` (`headline_statements.txt:27`); **it opens at step 3, never at a session tail**. ⚠ **Its sizing is now DISPUTED** (three measurement flags in the block) — **read those and the revert-to-green exit before opening** | **NOW** | L | — | 2026-08-30b |
+| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the middle turned out to be splittable too (2026-08-30c)**: `UntaintedShadow` is now an `abbrev` for a `ShadowOver (P : NodeKey → Prop)` generic in its EXTRAS predicate, with five shadow lemmas generalized, so **the widening is a one-line re-instantiation instead of a re-proof of the cascade chain** (green, 1089 jobs, 3 cycles of 10; the 65 `CascadeStrataSettle` sites never moved). **Left: repoint the abbrev at `DerNode ∨ LeafNode` and discharge ~20 tier-1 sites in 3 files.** ⚠ **Sizing settled and the record was wrong — 21 modules recompile, not 42** (41+root is the cone of `DirectCorrect`/`RulesWrite`, i.e. a mis-rooted census); and one tier-1 site has **no existing lemma** (`shadow_graphRec_agree` needs operand declaredness, which `WF` does not model). Traps: scope doc §11.13 | **NOW** | L | — | 2026-08-30c |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d, and **the task tree was re-counted to match 2026-08-29** — it had carried the stale `11` for five days) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-29 |
 | `TK53` | **land the adjudicated `TK*` appends** — question (b) is DECIDED (→ [adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); the appends are the unlanded half, **22 landed 2026-08-29c, 15 remain**. Each is a statement existing only in `tasks/`, with a named destination in a living doc. **This row is what makes DELETE lossless.** `TK52` closed on the decision; this carries the execution, so the decision is not a residual with no owner | **NEXT** | M | — | 2026-08-29c |
@@ -91,38 +92,36 @@ target is self-sufficient by construction (verified row by row, 2026-08-16).
 ### `P3` — leg 7: step 4c-ii co-landing with step 7, in one commit
 
 Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6` in
-the same commit. Critical path. ✅ **Pre-4c-ii is done, `P14` included**: both human calls
-made, fence + public surface migrated, `hql` down to one declaration (`graph_correct` `:27`).
+the same commit. Critical path. ✅ **Pre-4c-ii is done, `P14` included** (both human calls
+made, fence + public surface migrated), and **the green prefix landed 2026-08-30b**:
+`Leaf.lean::LeafNode` (Route B's `classify` carrier, `publicOfLeaf` never `isLeafPred`) and
+`LeafRules.lean::rewriteClosureL_extras_leafNode` (the superset-extras lemma §11.11 left
+unowned), both purely additive, non-vacuity pinned.
 
-✅ **The green prefix is complete (2026-08-30b) — steps 1 and 2 both landed, gated and
-purely additive.** Step 1: `Leaf.lean::LeafNode`, Route B's `classify` carrier
-(`publicOfLeaf`, never `isLeafPred`), `::leafNodeB_correct`, the E3 pins. Step 2:
-`LeafRules.lean::rewriteClosureL_extras_leafNode`, the superset-extras lemma §11.11 left
-unowned — every tuple the leaf-routed closure produces is one `rewriteClosure` already
-produced or has a `LeafNode` target; general `t`, no premise weakened, non-vacuity pinned
-hypothesis-free at `::rewriteClosureL_extras_leafNode_nonvacuous` (needing `::slV_wf`, the
-tree's first `WF SlV`). **Next action is step 3** — `UntaintedShadow.classify` gains
-`∨ LeafNode S ab.2` (`CascadeStable.lean:529`), the FIRST RED edit and the middle's door.
+✅ **AND THE MIDDLE SPLIT TOO (2026-08-30c) — the shadow is now GENERIC in its extras
+predicate.** `CascadeStable.lean` carries `structure ShadowOver (P : NodeKey → Prop)` with
+`abbrev UntaintedShadow S σ σ0 := ShadowOver (DerNode S) σ σ0`, and five shadow lemmas
+generalized over `{Extra}`. `abbrev` is the load-bearing word — it is reducible, so every
+field access, anonymous constructor and signature kept working: **green, 1089 jobs, 3
+in-cone cycles of a 10-cycle budget**, and the 65 `CascadeStrataSettle` sites never moved.
+**Next: repoint the abbrev at `DerNode S k ∨ LeafNode S k`, discharge the ~20 tier-1 sites**
+(`CascadeStable`, `CascadeStrataSettle`, `Scratch4cii`).
 
-⚠ **Traps: §11.10 AS CORRECTED BY §11.11 item 8, plus five corrections from 2026-08-30b.**
-(a) the non-emptiness premise is NOT `StoreValidRulesD` (stored tuples, never relation
-names) — the middle threads `hne : ∀ dt R, isDerived S (dt,R) = true → R ≠ ""`, now cheap
-via `::hne_of_keys_nonempty`, beside `hmd`. (b) `rawWriteRels` is `Leaf.lean:587`, not
-`:541`. (c) **the sizing is DISPUTED, unverified in BOTH directions** — a live import-BFS
-census measured **24 modules / 125 sites / 13 files** (ring 2: 36 raw / 27 code) vs the
-recorded **42 / ~136 / 8** (90 / 50), neither reproducible; the 3-session estimate rests on
-them, so re-measure and cite neither as fact. (d) `FoldAdmits`' second exec gate is
-`Exec.lean:443`, not `:376`. (e) **`hql` may land on more than one pinned row**:
-`headline_statements.txt:46`/`:56` carry the identical unfenced shape, excluded from "one
-row" only as staged records over intermediate chains — check before step 7, not during.
-**The middle cannot be split**; never open it at a session tail. **Exit: §11.12** — anchor
-sha first, no partial cone committed, and **its rule 3 is DEFECTIVE**: nothing uncommitted
-survives `git reset --hard` (amendment + the 105 lines it cost: PROOF_STATUS `2026-08-30` §6).
+⚠ **Traps live in scope doc §11.13, which supersedes §11.10 — read it before touching the
+cone.** Eight items; the two that decide the next session are **(h)** `Scratch4cii.lean:51`
+defines a local unguarded `leafNodeB` SHADOWING step 1's guarded carrier (`Leaf.lean:547`),
+so the P14 weak battery measures a broader proxy in the unsafe direction — delete it FIRST,
+expect a diagnostic red confined to that file; and **(g)** `shadow_graphRec_agree` needs the
+operand relation *declared*, which `WF` does not model (Python does). Also settled there:
+`hql` lands on **three** pinned rows, not one. **Exit: §11.12** — anchor sha first, no
+partial cone committed; its rule 3 is defective, so use the amendment (commit the docs-only
+append first, reset onto it), as applied on `2026-08-30c`.
 
-**Read first:** PROOF_STATUS `## Session 2026-08-30` (§0–§8), `2026-08-28c`/`d`; scope doc
-**§11.11**, **§11.10 (traps)**, §11.12; `GraphIndex/Scratch4cii.lean`. Completion criterion:
-PROOF_STATUS `2026-08-16c`, numbers re-derived from `formal/FINAL_REVIEW.md`'s generated
-ledger, never prose. Then `Leaf.lean::LeafNode`, `CascadeStable.lean::UntaintedShadow`,
+**Read first:** PROOF_STATUS `## Session 2026-08-30c` (§0–§6), then `## Session 2026-08-30`
+(§0–§8), `2026-08-28c`/`d`; scope doc **§11.13 (traps)**, §11.11, §11.12;
+`GraphIndex/Scratch4cii.lean`. Completion criterion: PROOF_STATUS `2026-08-16c`, numbers
+re-derived from `formal/FINAL_REVIEW.md`'s generated ledger, never prose. Then
+`CascadeStable.lean::ShadowOver`, `Leaf.lean::LeafNode`,
 `LeafRules.lean::rewriteClosureL_extras_leafNode`, `extractor.py::_edge_projection`.
 
 ### `TK53` — land the adjudicated `TK*` appends

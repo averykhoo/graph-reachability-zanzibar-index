@@ -156,6 +156,24 @@ destroy the differential. The `Equiv.lean` per-stage ladder and the chain-intern
 `correct_applies` / `w3d2E_correct_applies` are staged historical records of the internal
 layer and stay on `check` for the same reason.
 
+> ⚠ **CORRECTION 2026-08-30c — the preceding paragraph is WRONG about `correct_applies` /
+> `w3d2E_correct_applies`, and its `unfenced_grants` cite is off by one (it is `:52`, not
+> `:51` — `:51` is `fence_untainted_leaf`).** The exclusion reason "staged historical
+> records of the internal layer" is refuted by two `abbrev`s in the same file as the
+> theorems: `FullScope.lean:78` is `abbrev ReachedBy : GraphState → Schema → Store → Prop :=
+> ReachedByW3d2E` and `:84` is `abbrev Drained (S) (σ) : Prop := cascadeKeys S σ = []`. So
+> `w3d2E_correct_applies` (`:1278`) has hypotheses **definitionally identical** to
+> `final_applies` (`:1375`); the sole difference is `GraphModel.check` versus
+> `GraphModel.checkPublic`. `ReachedByW3d2E` *is* the headline closure, so this is not an
+> intermediate chain — it is `final_applies` with the fence deleted and `q` still
+> universally quantified, and everything that makes `final_applies` need the fence makes
+> this row false post-re-point. `:46` follows a fortiori via `toC_applies` (`:1255`), whose
+> own docstring records that the projection is one-way. **The surface is THREE rows, not
+> one** — and the repair for `:46`/`:56` is probably migration onto `checkPublic` (as
+> `final_applies` was on `2026-08-28c`), not the `hql` binder. Structurally confirmed, NOT
+> kernel-confirmed: no build witness was constructed and 4c-ii has not landed. Evidence and
+> the row-by-row table: scope doc §11.13 (e), `PROOF_STATUS.md` `## Session 2026-08-30c` §5.
+
 **What would close it:** the guard landing on `graph_correct` WITH 4c-ii in the same
 commit — never before (today the statement is true unguarded) and never after (the gate
 would meanwhile pin a false statement). The accept/refuse analysis is in PROOF_STATUS

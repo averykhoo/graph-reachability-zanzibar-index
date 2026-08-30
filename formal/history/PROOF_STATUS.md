@@ -53,6 +53,212 @@ carries no re-point and no pin asserting anything untrue.
 edit costs nothing to re-validate; only a genuine content change pays the 200–400s in-cone
 cycle. That is the number the abort trigger is counting.
 
+### 1. ★★ THE MIDDLE IS NOT UN-SPLITTABLE EITHER — `UntaintedShadow` is now GENERIC in its extras predicate, and the widening is an INSTANTIATION rather than a re-proof
+
+This is the session's headline and it changes `P3`'s shape for the second day running.
+
+**The recorded plan for step 3 was: widen `UntaintedShadow.classify` in place, at which
+point the tree goes red and stays red until `hql` lands on `graph_correct` at step 10.**
+That is what made the middle un-splittable, and it is why §11.12 exists at all. The plan
+is sound but it is not forced — it conflates two independent things: making the shadow
+chain *able* to carry a wider extras set, and *widening* it.
+
+**Separating them costs one `abbrev`.** `CascadeStable.lean` now carries
+
+```lean
+structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
+  classify : ∀ ab ∈ σ.edges, ab ∈ σ0.edges ∨ P ab.2
+  …
+  term : ∀ k, P k → ∀ y, (k, y) ∉ σ.edges
+
+abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
+  ShadowOver (DerNode S) σ σ0
+```
+
+and `shadow_reach_agree`, `shadow_admitEdge_agree`, `untaintedShadow_writeLoggedOne`,
+`untaintedShadow_writeLeg`, `untaintedShadow_foldAdmits` are generalized over
+`{Extra : NodeKey → Prop}`. **`abbrev` is the load-bearing word**: it is reducible, so
+every existing field access, anonymous constructor, `rcases` and signature mentioning
+`UntaintedShadow` keeps working *unchanged*. The widening at step 4 is then a one-line
+change of the abbrev's instantiation, not a re-proof of the cascade chain.
+
+**Observed, first-hand, not predicted:** `lake build` **green, 1089 jobs, rc=0** — on the
+first attempt for the structure edit, and after exactly one trivial repair (a stray `S` in
+a `have` annotation at what is now `:698`) for the five-lemma generalization. **Three
+in-cone cycles total against an abort budget of ten.** The 65 `UntaintedShadow` sites in
+`CascadeStrataSettle.lean`, the 14 in `CascadeStrataResettle.lean`, and every site in
+`CascadeSettle` / `CascadeEnum` / `CascadeStrataEnum` / `CascadeStrataAssemble` were never
+touched and never went red.
+
+**Why this was not found in four prior sessions of costing:** every census measured *how
+many sites mention the symbol*, and the answer (85–229, depending on the symbol list) is
+genuinely large. None asked *how many sites depend on `DerNode` specifically rather than
+on "the extras are terminal and off the probe target"*. The answer to the second question
+is the one that sizes the edit, and it is **17 `.classify` sites and 9 `.term` sites** —
+of which the generic lemmas absorb all but the ~20 that must actually discharge
+`¬ LeafNode`. A sizing question asked in the wrong units cost roughly two sessions.
+
+**What is still owed for the widening** (i.e. this does NOT close the middle): the abbrev
+must be repointed at `DerNode S k ∨ LeafNode S k`, and the ~20 tier-1 sites in
+`CascadeStable.lean` / `CascadeStrataSettle.lean` / `Scratch4cii.lean` must discharge the
+new disjunct. §3 below records the one place where no lemma exists yet.
+
+### 2. ★ THE SIZING DISPUTE IS SETTLED — all three of the recorded figures are explained, and "42 modules" is a MIS-ROOTED CENSUS
+
+Two independent measurements (mine, and a delegated import-BFS re-run) agree name-for-name
+on the ring decomposition. Reproduced first-hand:
+
+| figure | recorded | measured now | what it actually was |
+|---|---|---|---|
+| modules recompiled | 42 | **21** (20 + root) | 42 is not any cone of `CascadeStable` |
+| code sites | ~136 | **~229** (26-symbol family) | a raw 2-symbol `grep -c` LINE count |
+| files | 8 / 13 | **9** code / 13 raw | cone-vs-mention-set, never the same unit |
+
+* **"42" is reproducibly the cone of a DIFFERENT module.** `CascadeStable`'s reverse cone
+  is **20**; `DirectCorrect`'s is **41** and `RulesWrite`'s is **41** (+root = 42), and
+  `CascadeStrataAssemble`'s *forward* cone is 41. So the recorded figure is a delegated
+  census rooted at the wrong module, and **the wall-clock half of the 3-session estimate
+  rested on a number 2× too large.**
+* **"~136 sites / 8 files" was CORRECT WHEN TAKEN and is now stale.** Its method is stated
+  at scope doc `:1190-1195`: `UntaintedShadow` 89 lines / 8 files + `DerNode` 47 lines /
+  4 files = 136, at commit `d3c1226`. The same method at HEAD gives 162 / 9 — the record
+  *undercounts by ~19%*, which is the "third consecutive low count" failure mode the
+  record itself was created to correct.
+* **The 2026-08-30 census's "13 files" is exactly right** (raw mention set of the ~26-name
+  shadow family); its "24 modules / 125 code sites" is unreproducible under any stated
+  convention and should not be re-cited.
+
+**The durable lesson, and it is a house rule waiting to be written: a site count is
+meaningless without its symbol list and its counting unit.** The record and the census
+never disagreed about the tree — they disagreed about what a "site" is, for four sessions,
+without either publishing its convention. Size this edit with **three** numbers: 21
+modules recompile, ~9 files / ~229 sites re-check, **~20 sites in 3 files go genuinely
+red**.
+
+### 3. The census hole is REAL and has NO existing lemma — this is the middle's true cost
+
+Verified first-hand at `CascadeStable.lean::shadow_graphRec_agree`. It discharges
+`hv1 : ¬ DerNode S (objNode ⟨dt', on'⟩ r')` from `hunt : isDerived S (dt', r') = false`.
+Post-widening it must also discharge `¬ LeafNode S (objNode ⟨dt', on'⟩ r')`, and
+**`isDerived S (dt', r') = false` does not imply that** — a minted leaf name `approver.0`
+is not itself derived, but `publicOfLeaf` maps it to `some "approver"`.
+
+Two halves, and only one is expensive:
+
+* **FREE.** The `wAllNode` probe (`hv3`): `LeafNode` carries `on ≠ STAR`, so the existing
+  variant-mismatch proof transcribes verbatim. The write-leg subject premise at a BARE
+  subject: `leafPublic BARE = ""` and `LeafNode`'s `leafPublic p ≠ ""` guard refutes it —
+  this is exactly what the E3 residual guard is for, and it is already pinned
+  (`Leaf.lean:1180::bare_subject_not_leafNode`; note `Scratch4cii.lean:296` declares a
+  same-named twin, so cite the file, not the bare symbol).
+* **NOT FREE, and unbudgeted.** `hv1` needs the query's relation to be *declared*, and
+  **nothing in the model forces the names in `computedRefs e` to be declared relations.**
+  `computedRefs` (`ReconcileCorrect.lean:46-52`) is a purely syntactic extractor. Python
+  does enforce it — `parse_schema_ast`'s `_validate_ast_references` rejects dotted
+  references — but `Core/Schema.lean::WF` records only that *declared* names are dot-free
+  (`relNames : ∀ p ∈ S.defs, relNameOK p.1.2`). So the faithful repair is a new schema
+  discipline (a `WF` clause, or a standalone predicate threaded through
+  `checkFn_eq_sem_w3d` and the two `reachedByW3d*_shadow` entry points), and either way it
+  is new modelling work, not a lemma lookup.
+
+**One risk retired while measuring this:** none of `shadow_graphRec_agree`,
+`checkFn_eq_sem_w3d`, `shadow_reach_agree`, `reachedByW3d_shadow` appears in
+`headline_statements.txt` or `headline_definitions.txt` — they carry only
+`audited_theorems.txt` rows, which pin **names**, not statements. **Adding a hypothesis to
+any of them changes no pin file.** The recorded worry about "a new hypothesis on an
+audited signature" is therefore a worry about the 14 call sites only, not about the gate.
+
+### 4. ⚠ A BLIND INSTRUMENT, created by step 1's own session: `Scratch4cii.lean:51` SHADOWS the real carrier
+
+Reported by a recon agent, then **verified first-hand before being written down**.
+
+`Scratch4cii.lean:51` defines, inside `namespace Zanzibar.Scratch4cii`:
+
+```lean
+def leafNodeB (S : Schema) (k : NodeKey) : Bool := (publicOfLeaf S k.type k.pred).isSome
+```
+
+The real carrier, added by step 1 on 2026-08-30b at `Leaf.lean:547` in `namespace
+Zanzibar`, is **strictly narrower**:
+
+```lean
+(publicOfLeaf S k.type k.pred).isSome && leafPublic k.pred != "" && k.name != STAR
+  && k.variant == Variant.plain
+```
+
+`Scratch4cii.lean` imports `LeafRules` → `Leaf`, so both are in scope and the *local* one
+wins every unqualified reference — including `clsB` (`:393`) and `termB` (`:409`), which
+are the definitions the entire P14 weakened battery is stated over (`d_weak_holds :549`,
+`narrow_weak_holds_strong_fails :575`, `d_idx2_weak_holds :583`,
+`mixed_weak_holds_strong_fails :618`).
+
+**The direction of the error is the unsafe one.** A broader proxy makes `clsB`'s weak
+disjunct *easier* to satisfy, so those rows can be green while the real widened `classify`
+fails. This is the house failure mode — an instrument that passes because it is measuring
+something other than its subject — and it is the second time in this cone that a carrier
+had to be controlled rather than trusted (2026-08-30b's E3 near-miss was the first).
+
+**How it was created, which is the part worth keeping:** step 1 added a *correctly
+guarded* `leafNodeB` in the parent namespace without noticing that a same-named unguarded
+proxy already existed in the child. Nothing went red, because nothing was supposed to:
+shadowing is legal. `Scratch4cii.lean:432-433`'s own docstring still reads "`leafNodeB`
+likewise still has no `leafNodeB_correct` twin (`:51`)" — a comment that was true when
+written and was silently falsified by step 1 landing `leafNodeB_correct`.
+
+**NOT FIXED IN THIS SESSION, deliberately.** The fix is to delete `:51` and let the nine
+in-file uses resolve to the real carrier — but its *expected* outcome is a diagnostic red
+confined to `Scratch4cii.lean`, and finding that out is worth its own gate cycle rather
+than being bundled into a commit whose headline is the genericization. Blast radius is
+contained and re-verified this session: **1 importer (`ZanzibarProofs.lean:86`), 0 audit
+rows, 0 headline-pin rows.** This is the next session's first edit, before any reliance on
+the weak battery.
+
+### 5. `hql` lands on THREE pinned rows, not one — `docs/latent-gaps.md` is wrong, and the repair is probably not `hql`
+
+Measurement flag (3) from 2026-08-30b, settled, and the answer moved.
+
+The record excludes `headline_statements.txt:46` (`W4WitnessDirect.correct_applies`) and
+`:56` (`::w3d2E_correct_applies`) from the `hql` surface as "staged records over
+intermediate chains". **That reason is refuted by two `abbrev`s in the same file as the
+theorems**, both read first-hand:
+
+* `FullScope.lean:78` — `abbrev ReachedBy : GraphState → Schema → Store → Prop := ReachedByW3d2E`
+* `FullScope.lean:84` — `abbrev Drained (S) (σ) : Prop := cascadeKeys S σ = []`
+
+So `w3d2E_correct_applies` (`:1278`) and `final_applies` (`:1375`) have **definitionally
+identical hypotheses**; the sole difference is `GraphModel.check` (raw) versus
+`GraphModel.checkPublic` (fenced). `ReachedByW3d2E` *is* the headline closure — it is not
+an intermediate chain, and `w3d2E_correct_applies` is `final_applies` with the fence
+deleted and `q` still universally quantified. Everything that makes `final_applies` need
+the fence makes this row false post-re-point. `:46` follows a fortiori via `toC_applies`
+(`:1255`), whose own docstring records that the projection is one-way.
+
+**Consequence for the plan: the repair for `:46`/`:56` is probably NOT the `hql` binder
+but migration onto `checkPublic`, exactly as `final_applies` was migrated on 2026-08-28c.**
+That is cheaper and it keeps the guard off the pinned statements. Only `:27`
+(`graph_correct`) genuinely needs the binder, because `graph_correct_public` delegates to
+it and takes the guard there.
+
+⚠ **Structurally confirmed, NOT kernel-confirmed.** No `lake build` witness was
+constructed for `:46`/`:56` (4c-ii has not landed). Also found: `docs/latent-gaps.md:152`
+cites `unfenced_grants` as `headline_statements.txt:51`; it is `:52` — and the off-by-one
+sits inside the very paragraph doing the exclusion arithmetic this section disputes.
+
+### 6. A correction to THIS ledger's own 2026-08-30b entry: `hmd` is discharged VACUOUSLY
+
+2026-08-30b recorded `rewriteClosureL_extras_leafNode_nonvacuous` as having "all four
+premises discharged at `SlV`/`tlEditor`". Literally true, and weaker than it sounds:
+`hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false` is `by decide` at `SlV`
+**because `schemaRewrites SlV = []`** — pinned in the same file at
+`LeafRules.lean:609::lrV_untainted_layer_silent`, verified first-hand this session.
+
+The theorem is still non-vacuous in the sense that mattered (the conclusion is reached
+*through* the lemma with the left disjunct refuted by `decide`). But **no fixture in the
+tree exercises the `hmd` branch of the induction** — the `exfalso` at `LeafRules.lean:466-471`
+is dead under every witness. A schema with a non-empty `schemaRewrites` whose rules are
+all dot-free is owed before that premise can be called measured. Recording it rather than
+fixing it: it is a coverage gap in a landed green lemma, not a defect in it.
+
 ---
 
 ## Session 2026-08-30 (**4c-ii cone OPENED — §11.12 preamble: green anchor and abort trigger declared before the first edit**)
