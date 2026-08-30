@@ -185,6 +185,50 @@ so no fixture exercises both layers at once. Pinning `NoLeafSubjects` only at `S
 reproduce exactly that vacuity. Do step 4's non-vacuity witness **and its failing
 control** before step 6, to learn the answer at the cheap end.
 
+### 7. Steps 1 and 2 LANDED, green, each with its own control
+
+**Step 1 — ANCHOR (`Scratch4cii.lean`, 1 module, green first try).** The four
+declarations that genuinely mean *the strong shadow* are restated at
+`ShadowOver (DerNode …)` instead of the `UntaintedShadow` abbrev:
+`strong_shadow_false_at_raw`, `shadowB_correct`, `strong_shadow_false_at_d_own_sigma0`,
+`strong_shadow_false_at_mixed`. Definitionally identical today (`abbrev` is reducible),
+so the build is unchanged; the point is that they are now immune to the flip.
+
+**Why it was MANDATORY rather than cosmetic — verified first-hand, not taken from the
+scout.** `Scratch4cii.lean:631::d_weak_holds` proves the *weak* mirror TRUE at
+`(sR SlSw tApp) (sF SlSw [tApp])` — byte-for-byte the fixture
+`strong_shadow_false_at_d_own_sigma0` asserts the strong shadow is FALSE at. So spelled
+with the abbrev, that theorem would have flipped from true to **false** at step 9: the
+failure mode is a false theorem, not a broken proof. `CascadeStable.lean`'s `ShadowOver`
+docstring also cites that symbol as the justification for the whole genericization, so
+re-pointing it silently would leave the contract citing a theorem that no longer says
+what it is cited for. Each anchored declaration now carries a ⚠ telling the next reader
+not to "simplify" it back.
+
+Also fixed there: both citations of `strong_shadow_false_at_raw` carried a stale `(:332)`
+(it is at `:409`). The numbers are **dropped, not refreshed** — this file's own
+`shadowB_correct` docstring already says "the anchors that keep are the symbols".
+
+**Step 2 — the leaf-refutation toolkit (`Leaf.lean`, 10 modules, green).** Four additive
+declarations after `leafNodeB_correct`: `leafPublic_bare`, `NotLeafName`,
+`not_leafNode_of_notLeafName`, `bare_subjNode_not_leafNode`. The gap they fill is real and
+was verified first-hand: **every** existing "a bare subject is not a `LeafNode`" fact in
+the tree is a `by decide` pin at a *fixed* schema (`Leaf.lean:1180` at `Sw`, `:1229` at
+`SwEmptyRel`, the `Scratch4cii` twin at `SlV`), and none is usable at the quantified `S`
+the ~19 post-flip goals will face.
+
+**SABOTAGE, on the one claim in it that could be wrong.** `NotLeafName p` is
+`p = BARE ∨ isLeafPred p = false`, and its docstring claims the disjuncts are
+non-redundant. That is a claim, so it was tested: collapse it to the second disjunct
+alone. Observed rc=1, with the second error naming the reason exactly —
+`⊢ isLeafPred BARE = false`, unprovable because `Leaf.lean:210::isLeafPred_bare` proves it
+`true`. BARE is *dot-carrying*, so dot-freeness never covers it; that asymmetry is the
+whole reason `LeafNode` needs its `leafPublic ≠ ""` conjunct. Restored: rc=0, 1089 jobs.
+The observed output is in the `NotLeafName` docstring, where the next person tempted to
+simplify it will be standing.
+
+**Steps 3–10 remain**, and the two risks above are unchanged and un-spiked.
+
 ---
 
 ## Session 2026-08-30c (**4c-ii RED MIDDLE opened at step 3 — §11.12 preamble re-declared against a new anchor**)
