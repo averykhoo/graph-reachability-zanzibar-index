@@ -20,11 +20,13 @@ session: run the Rhythm protocol at the bottom.
 > re-run `lean` after any `*.md` edit (tiles ignore `*.md`).
 > 🧭 **`2026-08-30c`: the middle was splittable too.** `UntaintedShadow` is now an `abbrev`
 > for `ShadowOver (P : NodeKey → Prop)`, generic in its EXTRAS predicate, so the widening is
-> a **one-line re-instantiation, not a re-proof** (green, 1089 jobs, 3 cycles of 10; the 65
-> `CascadeStrataSettle` sites never moved). Left: repoint at `DerNode ∨ LeafNode`, discharge
-> ~20 tier-1 sites in 3 files. 📏 **Sizing settled: 21 modules, not 42** — 42 was a census
-> rooted at the wrong module; a site count means nothing without its symbol list and unit.
-> `Scratch4cii.lean:51` shadows the real `leafNodeB` (scope doc §11.13 (h)) — delete first.
+> a **one-line re-instantiation, not a re-proof**. Left: repoint at `DerNode ∨ LeafNode`,
+> ~20 tier-1 sites in 3 files. 📏 **Sizing settled: 21 modules, not 42** — a site count
+> means nothing without its symbol list and unit. ✅ **`2026-08-30d`: blind instrument
+> closed, prediction wrong** — deleting the shadowing `Scratch4cii.lean:51` proxy built
+> **green**, so nothing separated it from the real `leafNodeB` and the P14 weak rows hold
+> as taken. A *pin* now, not an argument (`::leafNodeB_here_is_the_guarded_carrier`):
+> re-adding the proxy reds that line and **only** it — which is what licenses a green.
 > ⏰ **`2026-08-30`: trial extended to 2026-09-06; `tasks/` is not being deleted** (user).
 > Question narrows to **cutover-or-keep-both**; the dual-update contract runs another week.
 > 🧭 **Phase B (this file becomes a stub) is the verdict and needs an explicit user go** →
@@ -42,7 +44,7 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the middle turned out to be splittable too (2026-08-30c)**: `UntaintedShadow` is now an `abbrev` for a `ShadowOver (P : NodeKey → Prop)` generic in its EXTRAS predicate, with five shadow lemmas generalized, so **the widening is a one-line re-instantiation instead of a re-proof of the cascade chain** (green, 1089 jobs, 3 cycles of 10; the 65 `CascadeStrataSettle` sites never moved). **Left: repoint the abbrev at `DerNode ∨ LeafNode` and discharge ~20 tier-1 sites in 3 files.** ⚠ **Sizing settled and the record was wrong — 21 modules recompile, not 42** (41+root is the cone of `DirectCorrect`/`RulesWrite`, i.e. a mis-rooted census); and one tier-1 site has **no existing lemma** (`shadow_graphRec_agree` needs operand declaredness, which `WF` does not model). Traps: scope doc §11.13 | **NOW** | L | — | 2026-08-30c |
+| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the middle turned out to be splittable too (2026-08-30c)**: `UntaintedShadow` is now an `abbrev` for a `ShadowOver (P : NodeKey → Prop)` generic in its EXTRAS predicate, with five shadow lemmas generalized, so **the widening is a one-line re-instantiation instead of a re-proof of the cascade chain** (green, 1089 jobs, 3 cycles of 10; the 65 `CascadeStrataSettle` sites never moved). **Left: repoint the abbrev at `DerNode ∨ LeafNode` and discharge ~20 tier-1 sites in 3 files.** ⚠ **Sizing settled and the record was wrong — 21 modules recompile, not 42** (41+root is the cone of `DirectCorrect`/`RulesWrite`, i.e. a mis-rooted census); and one tier-1 site has **no existing lemma** (`shadow_graphRec_agree` needs operand declaredness, which `WF` does not model). ✅ **The blind instrument is closed (2026-08-30d) and its prediction was wrong**: deleting the shadowing `Scratch4cii.lean:51` proxy built green, so no battery row separated it from the real `leafNodeB` and the P14 weak rows are valid as taken — the difference is now a *pin*, not an argument. Traps: scope doc §11.13, item (h) closed | **NOW** | L | — | 2026-08-30d |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
 | `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d, and **the task tree was re-counted to match 2026-08-29** — it had carried the stale `11` for five days) → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-29 |
 | `TK53` | **land the adjudicated `TK*` appends** — question (b) is DECIDED (→ [adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); the appends are the unlanded half, **22 landed 2026-08-29c, 15 remain**. Each is a statement existing only in `tasks/`, with a named destination in a living doc. **This row is what makes DELETE lossless.** `TK52` closed on the decision; this carries the execution, so the decision is not a residual with no owner | **NEXT** | M | — | 2026-08-29c |
@@ -105,14 +107,13 @@ generalized over `{Extra}`. `abbrev` is the load-bearing word — it is reducibl
 field access, anonymous constructor and signature kept working: **green, 1089 jobs, 3
 in-cone cycles of a 10-cycle budget**, and the 65 `CascadeStrataSettle` sites never moved.
 **Next: repoint the abbrev at `DerNode S k ∨ LeafNode S k`, discharge the ~20 tier-1 sites**
-(`CascadeStable`, `CascadeStrataSettle`, `Scratch4cii`).
+in `CascadeStable` / `CascadeStrataSettle` / `Scratch4cii`.
 
 ⚠ **Traps live in scope doc §11.13, which supersedes §11.10 — read it before touching the
-cone.** Eight items; the two that decide the next session are **(h)** `Scratch4cii.lean:51`
-defines a local unguarded `leafNodeB` SHADOWING step 1's guarded carrier (`Leaf.lean:547`),
-so the P14 weak battery measures a broader proxy in the unsafe direction — delete it FIRST,
-expect a diagnostic red confined to that file; and **(g)** `shadow_graphRec_agree` needs the
-operand relation *declared*, which `WF` does not model (Python does). Also settled there:
+cone.** Eight items; **(h) is CLOSED (2026-08-30d)** — proxy deleted, the predicted red did
+**not** happen, carrier identity pinned rather than argued. So the item that decides the
+next session is **(g)** alone: `shadow_graphRec_agree` needs the operand relation
+*declared*, which `WF` does not model (Python does). Also settled there:
 `hql` lands on **three** pinned rows, not one. **Exit: §11.12** — anchor sha first, no
 partial cone committed; its rule 3 is defective, so use the amendment (commit the docs-only
 append first, reset onto it), as applied on `2026-08-30c`.

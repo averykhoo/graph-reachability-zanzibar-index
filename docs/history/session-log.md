@@ -25,6 +25,84 @@ from here.
 
 ---
 
+## 2026-08-30d — the blind instrument is closed, and the red it predicted never came
+
+rows: `P3`
+
+Formal detail is [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-30d` §0–§5. This entry is the root trace. **Gate:** ask
+`python scripts/gate_status.py`, never a line here.
+
+**1. The headline.** The previous session declared one specific edit as "the NEXT
+SESSION'S FIRST EDIT": delete `Scratch4cii.lean:51`, a local unguarded `leafNodeB` that
+had been silently **shadowing** the guarded carrier step 1 added at `Leaf.lean:547`. The
+child namespace wins every unqualified reference, so `clsB` and `termB` — and therefore
+the whole P14 weakened battery stated over them — were measuring a *broader* proxy than
+the carrier they exist to validate, in the unsafe direction. The recorded expectation was
+"a diagnostic red confined to the file".
+
+**It built green.** `rc=0`, `Build completed successfully (1089 jobs)`. Not one `by decide`
+row and not one `#eval` row in the battery distinguishes the broad proxy from the narrow
+carrier, so the shadowing corrupted no measurement and the P14 weak rows are valid as
+taken. The prediction was wrong in the safe direction — which is the pleasant half of a
+finding whose other half is that **the session could not tell that from a no-op edit.**
+
+**2. A green is not a measurement, so the difference was made mechanical.** "The two
+predicates agree everywhere I probe" and "my edit did not take effect" produce the same
+`rc=0`; distinguishing them by reasoning is exactly the house failure mode. New positive
+pin — not an `xfail`, not a docstring — `Scratch4cii.lean::leafNodeB_here_is_the_guarded_carrier`
+asserts a conjunction whose two halves **disagree by construction** at
+`LeafWitness.SwEmptyRel`, the pathological empty-relation-name schema: the second conjunct
+is precisely the deleted proxy's sole test (`publicOfLeaf … = some ""`), the first is E3's
+residual `leafPublic ≠ ""` guard that only the real carrier carries.
+
+**Sabotaged before believed** ([`docs/sabotage-procedure.md`](../sabotage-procedure.md)):
+re-add the proxy verbatim → `rc=1`, and that pin is the **only** error in the build. The
+"only" is the load-bearing word. It establishes that this pin is the sole thing in the
+file separating the two carriers, which is what upgrades §1's green from an absence of
+evidence into a measurement. Proxy removed again: `rc=0`, 1089 jobs.
+
+**3. Two docstrings had been falsified in silence** by step 1, by the same mechanism as
+the shadow itself — nothing goes red when a comment stops being true. One claimed
+`leafNodeB` "still has no `leafNodeB_correct` twin"; one claimed "no `LeafNode` definition
+exists anywhere in this tree". Both were true when written; both are now false. Corrected
+in place, each saying what it corrects and when, rather than overwritten.
+
+**4. Citation hygiene, applied *before* the fact this time.** `bare_subject_not_leafNode`
+exists in **both** `Leaf.lean:1180` and `Scratch4cii.lean`. Rather than record that in a
+session note, the `⚠ cite `file::symbol`` warning was attached to the Scratch4cii twin's
+own docstring — where the next reader of that name is actually standing.
+
+**5. Two gate lint failures were earned and fixed, not worked around.** `verify.sh lean`
+step 4f caught (a) `HANDOFF.md` at 266 lines against a 260 ceiling — the banner text this
+very session added; trimmed rather than the ceiling raised, per the check's own advice,
+and (b) this entry's absence. Both are the lint doing its job on the session that wrote
+the offending lines.
+
+**Still owed:** the re-point itself — instantiate the abbrev at `DerNode ∨ LeafNode` and
+discharge the ~20 tier-1 sites. Trap **(h)** is closed, so **(g)** (`shadow_graphRec_agree`
+needs operand declaredness, which `WF` does not model) is now the only one gating it.
+**6. The re-point was scouted** (six read-only agents), and because `.scratch/` is
+gitignored the durable half is **transcribed into** `PROOF_STATUS` `## Session 2026-08-30d`
+§6 rather than left there — labelled as agent output, since none of it is kernel-confirmed
+and no Lean edit was made from it. The useful idea is *make the flip a no-op before making
+it* (anchor / generalise / pre-widen), which turns a ~19-goal simultaneous break into ten
+green-stoppable steps. Two of my own briefing claims came back refuted, and I accept both:
+the `fun _ => True` sabotage's "ten errors" is a **lower** bound on tree-wide work, not an
+upper one (Lean never compiled the two files holding 14 of the 19 obligations, because
+their dependency had errored); and the *lemma* names in this cone **are** identity-pinned
+in `audited_theorems.txt` even though the predicate names are not — verified first-hand,
+as a gate-safety claim should be.
+
+**Still owed:** the re-point itself (steps 1–10 of §6), and before step 7 a **spike** on
+the top risk: three call sites pass `shadow_graphRec_agree` the arbitrary query's own
+relation, and nobody has traced whether the guard that would fix them stops at
+`graph_correct_w3d*` or reaches the byte-pinned `graph_correct`
+(`headline_statements.txt:27`). If it reaches, the cost is a reviewed weakening of a
+headline theorem — a user-visible scope change that must not be smuggled into this item.
+
+---
+
 ## 2026-08-30c — the middle split too: the shadow is now generic, and "42 modules" was a mis-rooted census
 
 rows: `P3`

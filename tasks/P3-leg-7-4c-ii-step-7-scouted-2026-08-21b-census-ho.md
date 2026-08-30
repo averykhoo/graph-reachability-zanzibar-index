@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Next: repoint the abbrev at DerNode v LeafNode, ~20 tier-1 sites in 3 files; sizing SETTLED at 21 modules, not 42
+brief: Next: repoint abbrev at DerNode v LeafNode, ~20 tier-1 sites/3 files; blind instrument CLOSED -- green, not red
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-08-30c
-updated: 2026-08-30c
+moved: 2026-08-30d
+updated: 2026-08-30d
 closed:
 ---
 
@@ -330,3 +330,31 @@ caught it; the real one is Leaf.lean:1180::bare_subject_not_leafNode, and note
 Scratch4cii.lean:296 declares a SAME-NAMED twin, so cite the file, not the bare symbol.
 This is CLAUDE.md's "a trap must cite a symbol that EXISTS" rule collecting again -- run
 the sweep before writing citations down, not after.
+
+### 2026-08-30d
+
+BLIND INSTRUMENT CLOSED, and the prediction attached to it was WRONG in the safe direction. The declared first edit was to delete Scratch4cii.lean:51, the local unguarded `leafNodeB` shadowing step 1's guarded carrier at Leaf.lean:547, with the recorded expectation of "a diagnostic red confined to the file". OBSERVED: rc=0, Build completed successfully (1089 jobs). No `by decide` row and no #eval row in the P14 weak battery distinguishes the broad proxy from the narrow carrier, so the shadowing corrupted nothing and those rows are valid as taken.
+
+A GREEN IS NOT A MEASUREMENT -- "the two predicates agree everywhere I probe" and "my edit did not take effect" produce the same rc=0. So the difference was made mechanical instead of argued. New positive pin (not an xfail, not a docstring): Scratch4cii.lean::leafNodeB_here_is_the_guarded_carrier asserts `leafNodeB LeafWitness.SwEmptyRel (subjNode <"user","alice",BARE>) = false AND (publicOfLeaf LeafWitness.SwEmptyRel "user" BARE).isSome = true`. The two conjuncts disagree BY CONSTRUCTION at SwEmptyRel, the pathological empty-relation-name schema: the second is exactly the proxy's sole test, the first is E3's residual `leafPublic != ""` guard that only the real carrier carries.
+
+SABOTAGED BEFORE BELIEVED: re-add the deleted proxy verbatim. rc=1, and that pin was the ONLY error in the build -- `Tactic decide proved that the proposition ... is false` at Scratch4cii.lean:344:78. "Only error" is the load-bearing half: it proves this pin is the sole thing in the file separating the two carriers, which is what upgrades the green above from an absence of evidence into a measurement. Proxy removed again: rc=0, 1089 jobs.
+
+TWO DOCSTRINGS were falsified in silence by step 1 and are corrected in place, each now saying what it corrects and when: Scratch4cii.lean:432-433 claimed leafNodeB "still has no leafNodeB_correct twin" (it has had one at Leaf.lean:552 since step 1), and :288-289 claimed "no LeafNode definition exists anywhere in this tree, only the leafNodeB proxy above" (Leaf.lean:538 defines it; the proxy is gone). The design constraint the latter describes was ANSWERED, not dropped -- LeafNode carries `leafPublic p != ""` for it, pinned at Leaf.lean::swEmptyRel_bare_subject_not_leafNode.
+
+CITATION HYGIENE, applied prospectively this time rather than caught after: `bare_subject_not_leafNode` exists in BOTH Leaf.lean:1180 and Scratch4cii.lean, so a warning to cite file::symbol is now attached to the Scratch4cii twin's own docstring -- where the next reader of that name is actually standing, rather than in a session record they may not read.
+
+RE-POINT NOT STARTED. Remaining 4c-ii work is unchanged: repoint the abbrev at DerNode v LeafNode and discharge ~20 tier-1 sites in 3 files, with shadow_graphRec_agree's census hole (trap (g)) the one site having no existing lemma -- now the ONLY trap that decides the next session, since (h) is closed. Scouting was delegated to read-only subagents this session; reports land in .scratch/4cii-repoint/ and anything acted on gets transcribed into PROOF_STATUS before it is relied on, since .scratch/ is gitignored.
+
+Same-session mirror: this session rewrote the P3 board row, brief, the HANDOFF banner and the item block, and scope doc 11.13 item (h); all of it mirrored here in the same pass with the same session key. Full record: PROOF_STATUS `## Session 2026-08-30d` sections 0-5.
+
+RE-POINT SCOUTED (six read-only agents), transcribed OUT of .scratch/ into PROOF_STATUS `## Session 2026-08-30d` section 6 the same session -- .scratch/ is gitignored, so a report left only there is already lost. Labelled as AGENT OUTPUT, not a finding: nothing is kernel-confirmed and no Lean edit was made from it.
+
+THE USEFUL IDEA: make the flip a NO-OP before making it. UntaintedShadow is a reducible abbrev, so the flip changes what ~19 goals ASSERT simultaneously in a file with 20 downstream modules. Three moves defuse that: ANCHOR (restate a declaration that genuinely means the strong shadow at `ShadowOver (DerNode S)` -- definitionally identical today, immune to the flip); GENERALISE (lift a proof's hardcoded DerNode facts to explicit premises over {Extra}, then instantiate); PRE-WIDEN (strengthen a `have : not DerNode S k` in place to `not (DerNode S k or LeafNode S k)` and feed today's already-Extra-generic consumers via Or.inl -- this typechecks TODAY, and it is what makes the three hardest sites green-stoppable). Ten green-stoppable steps result; step 9, the flip itself, becomes an import plus one abbrev body with a two-line rollback.
+
+TWO OF MY OWN BRIEFING CLAIMS CAME BACK REFUTED, and both are accepted:
+(1) "the fun _ => True sabotage's TEN errors is an upper bound on the damage" -- recorded 2026-08-30c and repeated by me -- is WRONG in the dangerous direction. Lean does not build a module whose dependency errored, so that run never compiled CascadeStrataSettle.lean or Scratch4cii.lean, and those two carry 14 of the 19 obligations. TEN IS A LOWER BOUND tree-wide; it upper-bounds only the error count within the first failing file. Size off the 19-obligation census, off neither number.
+(2) The pin blast radius is real and two scouts contradicted each other on it -- reconciled, not averaged. The PREDICATE names (UntaintedShadow / ShadowOver / DerNode / LeafNode) are unpinned, but the LEMMA names are identity-pinned in audited_theorems.txt. VERIFIED FIRST-HAND because it is a gate-safety claim: shadow_graphRec_agree, checkFn_eq_sem_w3d, shadow_reach_agree and reachedByW3d_shadow each carry exactly one audited_theorems.txt row and ZERO rows in headline_statements.txt / headline_definitions.txt; the four predicate names carry zero rows in all three. So adding a hypothesis changes no pin (names are what is pinned), the abbrev re-point cannot red the gate by itself, and NO STEP MAY RENAME OR DELETE A PINNED NAME.
+
+TOP OPEN RISK, DO NOT ASSUME IT AWAY: three Class-B call sites (CascadeSettle.lean:1119, CascadeStrataResettle.lean:1539 and :2683) invoke shadow_graphRec_agree with the ARBITRARY QUERY'S OWN relation, constrained only by a by_cases on isDerived, so step 7's ComputedRefsDeclared says nothing about them. The proposed guard is one GraphModel.checkPublic already performs -- but nobody traced whether it stops at graph_correct_w3d* or reaches graph_correct, whose statement is byte-pinned at headline_statements.txt:27. If it reaches, the cost is a reviewed weakening of a headline theorem: a user-visible scope change that must NOT be smuggled into this item. Spike it between steps 6 and 7.
+
+SECOND OPEN RISK: NoLeafSubjects (steps 4-6) is a new UNDISCHARGED assumption on the headline chain, and the existing leaf fixtures are vacuous the same way hmd was (schemaRewrites SlV = [], leafRewrites SlUnt = []; no fixture exercises both layers at once). Pinning it only at SlV reproduces exactly that vacuity -- so do step 4's non-vacuity witness AND its failing control before step 6, to learn the answer at the cheap end.

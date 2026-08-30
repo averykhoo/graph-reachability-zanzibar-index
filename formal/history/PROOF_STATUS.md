@@ -15,6 +15,178 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-30d (**the blind instrument is closed — and the prediction attached to it was WRONG in the safe direction**)
+
+**Task taken:** `P3`, at the step the previous session declared as "the NEXT SESSION'S
+FIRST EDIT" — delete the blind instrument at `Scratch4cii.lean:51` before touching the
+re-point. Green anchor `c101132` ("test(P3): sabotage the genericization — the extras
+predicate is load-bearing"), verified first-hand before the first edit: `python
+scripts/gate_status.py` → **"VERDICT: the ten-phase gate is COVERED on this tree"** at
+`t2a:453dfecd1eef` / `t2c:c90cf3d75dbb`, `lean` `rc=0 holes=0 audits=583 pinned=582
+defs=161`, working tree clean.
+
+### 0. What the instrument was
+
+Step 1 of 4c-ii added the guarded carrier `Leaf.lean:547::leafNodeB` in namespace
+`Zanzibar`. `Scratch4cii.lean:51` already defined an **unguarded** `leafNodeB` of the same
+name in the child namespace `Zanzibar.Scratch4cii`:
+
+    def leafNodeB (S : Schema) (k : NodeKey) : Bool :=
+      (publicOfLeaf S k.type k.pred).isSome
+
+The child wins every unqualified reference, so `clsB` (`:393`) and `termB` (`:409`) — and
+therefore the whole P14 weakened battery stated over them — measured the **broader**
+proxy, not the carrier they exist to validate. Nothing went red, because introducing a
+legal shadow never does. The error ran in the **unsafe** direction: a broader leaf
+predicate makes the `weak` disjunct of `clsB` easier to satisfy, so those rows could have
+been green while the real widened `classify` fails.
+
+### 1. The recorded prediction was wrong, and wrong the safe way
+
+The 2026-08-30c write-up predicted "a diagnostic red confined to the file". **Observed on
+deleting `:51`: `rc=0`, `Build completed successfully (1089 jobs)`.** Every `by decide`
+row and every `#eval` row in the battery holds unchanged against the strictly narrower
+carrier. So the shadowing did not in fact corrupt any measurement — the P14 weak battery's
+rows are valid as taken.
+
+That is a green result, and a green result proves nothing by itself. This is the
+`.scratch`/green-sabotage failure mode the house rule exists for: "the two predicates
+agree everywhere I probe" and "my edit did not take effect" produce the *same* `rc=0`.
+
+### 2. So the instrument was controlled, and the control is now permanent
+
+`Scratch4cii.lean::leafNodeB_here_is_the_guarded_carrier` is a new positive pin (not an
+`xfail`, not a docstring — CLAUDE.md's "prefer a mechanical refusal"):
+
+    theorem leafNodeB_here_is_the_guarded_carrier :
+        leafNodeB LeafWitness.SwEmptyRel (subjNode ⟨"user", "alice", BARE⟩) = false
+          ∧ (publicOfLeaf LeafWitness.SwEmptyRel "user" BARE).isSome = true := by decide
+
+The two conjuncts are chosen to **disagree by construction** at `SwEmptyRel`, the
+pathological empty-relation-name schema: the second records that the proxy's sole test
+passes there, the first that the guarded carrier still says `false` (E3's residual
+`leafPublic … ≠ ""` guard). Any re-introduction of an unguarded local `leafNodeB` turns
+the file red at that line.
+
+**SABOTAGE (`docs/sabotage-procedure.md`), run against the pin itself** — re-add the
+deleted proxy verbatim. Observed `rc=1`, and this was the **only** error in the build:
+
+    error: ZanzibarProofs/GraphIndex/Scratch4cii.lean:344:78: Tactic `decide` proved
+      that the proposition
+      leafNodeB LeafWitness.SwEmptyRel (subjNode { type := "user", name := "alice",
+        predicate := BARE }) = false ∧
+        (publicOfLeaf LeafWitness.SwEmptyRel "user" BARE).isSome = true
+    is false
+
+**"Only error" is the load-bearing half of that observation.** It is what upgrades §1's
+green from an absence of evidence into a measurement: this pin is the *sole* thing in the
+file that separates the two carriers, so every other row there is provably insensitive to
+the shadowing. Proxy removed again: `rc=0`, 1089 jobs.
+
+### 3. Two docstrings were falsified in silence and are now corrected in place
+
+Both were true when written and were falsified by step 1 without going red — the same
+mechanism as the shadow itself:
+
+* `Scratch4cii.lean:432-433` read that `leafNodeB` "still has no `leafNodeB_correct` twin
+  (:51)". It has had one since step 1, at `Leaf.lean:552`.
+* `Scratch4cii.lean:288-289` read that "no `LeafNode` definition exists anywhere in this
+  tree, only the `leafNodeB` proxy above". Both halves are now false: `Leaf.lean:538`
+  defines `LeafNode`, and the proxy is deleted. The design constraint that docstring
+  describes was **answered, not dropped** — `LeafNode` carries `leafPublic p ≠ ""`
+  precisely for it, pinned against a schema exhibiting the pathology at
+  `Leaf.lean::swEmptyRel_bare_subject_not_leafNode`.
+
+Each correction now says what it corrects and when, rather than silently overwriting.
+
+### 4. Citation hygiene, applied prospectively this time
+
+`bare_subject_not_leafNode` exists in **both** `Leaf.lean:1180` and `Scratch4cii.lean`.
+The 2026-08-30c entry recorded that a same-day draft cited a symbol that does not exist
+at all; the standing repair is to cite `file::symbol`, never the bare name. A `⚠` to that
+effect is now attached to the Scratch4cii twin's own docstring, where the next reader of
+that name will actually be standing.
+
+### 5. Status of the re-point itself
+
+**Not started.** The remaining 4c-ii work is unchanged and still sits where 2026-08-30c
+left it: re-point the `UntaintedShadow` abbrev at `DerNode ∨ LeafNode` and discharge
+~20 tier-1 sites in 3 files, with `shadow_graphRec_agree`'s census hole the one site
+having no existing lemma.
+
+### 6. The re-point was SCOUTED (read-only, six agents), and the scouting is transcribed here
+
+Full reports are in **gitignored** `.scratch/4cii-repoint/` (`01-producers` /
+`02-census-hole` / `03-consumers` / `04-unowned-obligation` / `05-exec-and-pins` /
+`00-PLAN`). Per the standing rule that a `.scratch`-only record is already lost, the
+durable part is transcribed below. ⚠ **This section is AGENT OUTPUT, not a finding.**
+Nothing in it has been kernel-confirmed; no Lean edit was made from it this session. It
+is a plan to be verified step by step, and the two items I *did* check first-hand are
+marked as such.
+
+**The organising principle (the useful idea): make the flip a NO-OP before making it.**
+Because `UntaintedShadow` is a reducible `abbrev`, the flip changes what ~19 goals
+*assert* simultaneously in a file with 20 downstream modules. Three moves defuse that,
+and every step is an instance of one: **ANCHOR** (restate a declaration that genuinely
+means the *strong* shadow at `ShadowOver (DerNode S)` — definitionally identical today,
+immune to the flip); **GENERALISE** (lift a proof's hardcoded `DerNode` facts to explicit
+premises over `{Extra}`, then instantiate); **PRE-WIDEN** (strengthen a
+`have : ¬ DerNode S k` in place to `¬ (DerNode S k ∨ LeafNode S k)` and feed today's
+already-`Extra`-generic consumers via `Or.inl` — this typechecks *today*, and it is what
+makes the three hardest sites green-stoppable).
+
+Ten green-stoppable steps: (1) anchor 4 `Scratch4cii` statements; (2) a schema-generic
+leaf-refutation toolkit in `Leaf.lean` (~15 lines — the existing "BARE is not a
+`LeafNode`" facts are all `by decide` at fixed schemas and **none is usable at a
+quantified `S`**); (3) generalise the `rewrite*_subject_pred_ne` chain to an arbitrary
+`Q`; (4) `NoLeafSubjects` + closure corollary + a non-vacuity witness *and* a failing
+control; (5) pre-widen the four `hsubj`/`hnsubj` obligations; (6) bundle `NoLeafSubjects`
+into `W4Fragment` + a deliberate definition-pin regeneration; (7) `ComputedRefsDeclared`
++ an unused `hnl` binder on `shadow_graphRec_agree`, discharged at 11 call sites;
+(8) generalise the four `DerNode`-hardcoding shadow lemmas; (9) **the flip** — an
+`import` plus the abbrev body, rollback = revert two lines; (10) restore the six-field
+policeman at `weak := true`.
+
+**Two corrections the scouts made to the briefing I gave them, both of which I accept:**
+
+* ⚠ **"The `fun _ => True` sabotage's TEN errors is an upper bound on the damage" — which
+  2026-08-30c recorded and I repeated — is WRONG, and wrong in the dangerous direction.**
+  Lean does not build a module whose dependency errored, so that run never compiled
+  `CascadeStrataSettle.lean` or `Scratch4cii.lean` at all — and those two carry 14 of the
+  19 obligations. **Ten is a LOWER bound on the work tree-wide**; it is an upper bound only
+  on the error *count within the first failing file*. Size this item off the 19-obligation
+  census, off neither number.
+* **The pin blast radius is real**, and two scouts contradicted each other on it. The one
+  claiming "no gate pin mentions these symbols" was wrong in framing: the *predicate* names
+  (`UntaintedShadow`/`ShadowOver`/`DerNode`/`LeafNode`) are indeed unpinned, but the *lemma*
+  names are identity-pinned in `audited_theorems.txt`. **I verified this half first-hand**
+  (it is a gate-safety claim, so it was not delegated): `shadow_graphRec_agree`,
+  `checkFn_eq_sem_w3d`, `shadow_reach_agree`, `reachedByW3d_shadow` each carry exactly one
+  `audited_theorems.txt` row and **zero** rows in `headline_statements.txt` /
+  `headline_definitions.txt`; the four predicate names carry zero rows in all three.
+  Consequence: adding a *hypothesis* changes no pin (names are what is pinned), the abbrev
+  re-point cannot red the gate by itself, and **no step may rename or delete a pinned name.**
+
+**The top open risk, which must NOT be assumed away:** three "Class B" call sites
+(`CascadeSettle.lean:1119`, `CascadeStrataResettle.lean:1539` and `:2683`) invoke
+`shadow_graphRec_agree` with the *arbitrary query's own* relation, constrained only by a
+`by_cases` on `isDerived`. Step 7's `ComputedRefsDeclared` says nothing about them. The
+proposed guard is one `GraphModel.checkPublic` already performs — but **nobody traced
+whether that guard stops at `graph_correct_w3d*` or reaches `graph_correct`, whose
+statement is byte-pinned at `headline_statements.txt:27`.** If it reaches, the cost is a
+reviewed weakening of a headline theorem: a user-visible scope change that must not be
+smuggled into this item. Spike it between steps 6 and 7; do not start step 7 assuming the
+answer.
+
+**Second open risk:** `NoLeafSubjects` (steps 4–6) is a new *undischarged* assumption on
+the headline chain, and the existing leaf fixtures are already vacuous in the way
+§`2026-08-30c` flagged for `hmd` — `schemaRewrites SlV = []`, `leafRewrites SlUnt = []`,
+so no fixture exercises both layers at once. Pinning `NoLeafSubjects` only at `SlV` would
+reproduce exactly that vacuity. Do step 4's non-vacuity witness **and its failing
+control** before step 6, to learn the answer at the cheap end.
+
+---
+
 ## Session 2026-08-30c (**4c-ii RED MIDDLE opened at step 3 — §11.12 preamble re-declared against a new anchor**)
 
 **Task taken:** `P3`, the un-splittable middle of the 4c-ii cone (steps 3→10), at the top of
