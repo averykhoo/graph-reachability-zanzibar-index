@@ -562,6 +562,64 @@ theorem leafNodeB_correct (S : Schema) (k : NodeKey) :
   · rintro ⟨ty, on, p, hs, hne, hon, rfl⟩
     simp [leafNodeB, objNode, hs, hne, hon]
 
+/-! ### Refuting `LeafNode` at a QUANTIFIED schema — the 4c-ii leaf toolkit
+
+Every "a bare subject is not a `LeafNode`" fact in this tree before 2026-08-30d was a
+`by decide` pin at a FIXED schema (`:1180` at `Sw`, `:1229` at `SwEmptyRel`, and the
+same-named twin in `Scratch4cii.lean` at `SlV`). **None of them is usable at a quantified
+`S`**, which is what the 4c-ii consumers need: after the shadow is re-pointed at
+`DerNode ∨ LeafNode`, ~19 goals must refute the new `LeafNode` disjunct for an arbitrary
+schema. These three declarations are that missing general form. -/
+
+/-- The BARE sentinel has an empty public prefix. `BARE = "..."` (`Core/Ident.lean:20`)
+    and `leafPublic` takes the prefix before the first `'.'`, so there is nothing before
+    it. This is the fact that makes `LeafNode`'s E3 guard bite. -/
+theorem leafPublic_bare : leafPublic BARE = "" := by decide
+
+/-- A predicate name that cannot carry a leaf node, for either of the two available
+    reasons: it is the BARE sentinel (empty public prefix — killed by `LeafNode`'s
+    `leafPublic … ≠ ""` conjunct), or it is dot-free (killed by `publicOfLeaf_not_leaf`).
+
+    ⚠ The two disjuncts are NOT redundant, and collapsing them to the second is the
+    obvious-looking mistake: `isLeafPred_bare` (`:210`) proves `isLeafPred BARE = true`,
+    so BARE is *dot-carrying* and the second disjunct never covers it. That asymmetry is
+    the whole reason `LeafNode` needs the `leafPublic` conjunct at all.
+
+    SABOTAGE (`docs/sabotage-procedure.md`, observed 2026-08-30d) — that ⚠ is a claim, so
+    it was tested rather than asserted: drop the `p = BARE` disjunct, leaving
+    `NotLeafName p := isLeafPred p = false`. rc=1, and the second error names the reason
+    exactly:
+
+    ```text
+    error: ZanzibarProofs/GraphIndex/Leaf.lean:604:31: unsolved goals
+    S : Schema
+    u : SubjectRef
+    h : u.predicate = BARE
+    ⊢ isLeafPred BARE = false
+    ```
+
+    — i.e. `bare_subjNode_not_leafNode` genuinely rests on the BARE disjunct and cannot be
+    re-derived from dot-freeness. (The first error, at the `rcases`, is just the arity
+    change.) Restored: rc=0, 1089 jobs. -/
+def NotLeafName (p : String) : Prop := p = BARE ∨ isLeafPred p = false
+
+/-- **The general refutation.** Schema-generic, store-free, `WF`-free. -/
+theorem not_leafNode_of_notLeafName {S : Schema} {k : NodeKey}
+    (h : NotLeafName k.pred) : ¬ LeafNode S k := by
+  rintro ⟨ty, on, p, hs, hne, _, heq⟩
+  have hp : k.pred = p := by simpa using congrArg NodeKey.pred heq
+  rcases h with hb | hnl
+  · exact hne (by rw [← hp, hb]; exact leafPublic_bare)
+  · rw [hp] at hnl
+    rw [publicOfLeaf_not_leaf (S := S) (ty := ty) hnl] at hs
+    simp at hs
+
+/-- A bare SUBJECT node is never a `LeafNode`, at ANY schema — the generic form of the
+    three fixed-schema `decide` pins, and the shape the 4c-ii write-leg premise needs. -/
+theorem bare_subjNode_not_leafNode {S : Schema} {u : SubjectRef}
+    (h : u.predicate = BARE) : ¬ LeafNode S (subjNode u) :=
+  not_leafNode_of_notLeafName (by simp [h, NotLeafName])
+
 /-! ## Raw-write routing — the measured fan-out
 
 Faithful shape per the 2026-08-15 measurement (module header): a raw write on a

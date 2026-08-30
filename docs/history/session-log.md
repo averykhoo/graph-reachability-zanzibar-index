@@ -94,7 +94,21 @@ their dependency had errored); and the *lemma* names in this cone **are** identi
 in `audited_theorems.txt` even though the predicate names are not — verified first-hand,
 as a gate-safety claim should be.
 
-**Still owed:** the re-point itself (steps 1–10 of §6), and before step 7 a **spike** on
+**7. Steps 1 and 2 of that plan landed green**, each with its own control
+(`PROOF_STATUS` §7). Step 1 anchors the four `Scratch4cii` declarations that genuinely
+mean the *strong* shadow at `ShadowOver (DerNode …)`, so the flip cannot silently change
+what they assert. That it was **mandatory** rather than tidy-up was verified first-hand:
+`d_weak_holds` proves the weak mirror TRUE at byte-for-byte the fixture where
+`strong_shadow_false_at_d_own_sigma0` asserts the strong shadow is FALSE — so under the
+abbrev spelling that theorem would have flipped from true to *false* at step 9. A false
+theorem, not a broken proof. Step 2 adds the schema-generic leaf-refutation toolkit to
+`Leaf.lean`; the gap is real, since every pre-existing "bare subject is not a `LeafNode`"
+fact is a `by decide` pin at a *fixed* schema. Its one falsifiable claim — that
+`NotLeafName`'s two disjuncts are non-redundant — was sabotaged rather than asserted, and
+came back rc=1 with `⊢ isLeafPred BARE = false` (BARE is dot-*carrying*, so dot-freeness
+never covers it).
+
+**Still owed:** steps 3–10 of the re-point, and before step 7 a **spike** on
 the top risk: three call sites pass `shadow_graphRec_agree` the arbitrary query's own
 relation, and nobody has traced whether the guard that would fix them stops at
 `graph_correct_w3d*` or reaches the byte-pinned `graph_correct`

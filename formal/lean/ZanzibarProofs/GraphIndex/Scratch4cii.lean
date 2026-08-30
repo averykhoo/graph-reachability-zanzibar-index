@@ -397,9 +397,17 @@ shadow makes the W3d read bridge UNPROVABLE (not false) at every leaf-routed sta
 
 /-- **The strong shadow is uninhabited at a leaf-routed state.** The raw write's
     `viewer.0` extra is neither in the rules-built σ0's edges nor `DerNode`-targeted,
-    so `UntaintedShadow.classify` (unweakened) has no branch for it. -/
+    so the unweakened `classify` has no branch for it.
+
+    ⚠ **ANCHORED at `ShadowOver (DerNode …)`, deliberately — do NOT "simplify" this back
+    to `UntaintedShadow`.** `UntaintedShadow` is a reducible `abbrev`, so the two spellings
+    are definitionally equal *today* and this is a no-op. They stop being equal the moment
+    4c-ii re-points the abbrev at `DerNode ∨ LeafNode`, and at that point this theorem
+    spelled with the abbrev would become **FALSE, not merely unprovable** — `d_weak_holds`
+    below proves the weak mirror TRUE at a sibling fixture. Anchoring says what this
+    theorem is *for*: it is a claim about the STRONG shadow specifically. -/
 theorem strong_shadow_false_at_raw :
-    ¬ UntaintedShadow SlV (sR SlV tlEditor) (sP SlV tlEditor) := by
+    ¬ ShadowOver (DerNode SlV) (sR SlV tlEditor) (sP SlV tlEditor) := by
   intro h
   have hmem : (subjNode ⟨"user", "alice", BARE⟩,
       objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) ∈ (sR SlV tlEditor).edges := by decide
@@ -564,9 +572,16 @@ theorem termB_correct (S : Schema) (σ : GraphState) :
     transcription — only this theorem can, and it can only do it because it names
     `UntaintedShadow` and lets `UntaintedShadow.mk` reject the argument. That is
     2026-08-28c's "a guard-only pin cannot catch a fence removal" one layer further
-    down: **do not replace this with more `decide` rows.** -/
+    down: **do not replace this with more `decide` rows.**
+
+    ⚠ **ANCHORED at `ShadowOver (DerNode …)`** — see `strong_shadow_false_at_raw`. Note
+    what the anchoring does *not* cost: the sabotage recorded above still works, because
+    `ShadowOver.mk` is the same constructor `UntaintedShadow.mk` abbreviates. What it buys
+    is that `shadowB … false` keeps deciding the **strong** shadow after the 4c-ii flip,
+    instead of silently becoming a wrong mirror of a widened one — which is the exact
+    failure this theorem exists to make impossible. -/
 theorem shadowB_correct (S : Schema) (σ σ0 : GraphState) :
-    shadowB S false σ σ0 = true ↔ UntaintedShadow S σ σ0 := by
+    shadowB S false σ σ0 = true ↔ ShadowOver (DerNode S) σ σ0 := by
   simp only [shadowB, Bool.and_eq_true]
   constructor
   · rintro ⟨⟨⟨⟨⟨hc, hs⟩, hn⟩, hcl⟩, hcl0⟩, ht⟩
@@ -637,7 +652,7 @@ theorem d_vs_sP_fails_on_sub :
 
 /-- **C — narrow chain**: weak holds; strong fails on `classify` alone. Observed
     `(true,…)` and `(false, true, true, true, true, true)`. Consistent with
-    `strong_shadow_false_at_raw` (:332), which used `sP` — legitimate here by
+    `strong_shadow_false_at_raw`, which used `sP` — legitimate here by
     `narrow_sigma0_agrees`. -/
 theorem narrow_weak_holds_strong_fails :
     shadowB SlV true (sR SlV tlEditor) (sF SlV [tlEditor]) = true
@@ -690,23 +705,36 @@ theorem mixed_weak_holds_strong_fails :
 
 /-! ### P4 — the Prop-level consequence
 
-`shadowB_correct` turns the strong rows above into statements about `UntaintedShadow`
-itself, not about a Bool mirror of it. This is what `strong_shadow_false_at_raw` (:332)
+`shadowB_correct` turns the strong rows above into statements about the strong shadow
+itself, not about a Bool mirror of it. This is what `strong_shadow_false_at_raw`
 says for the narrow chain, now said for the chain where it was NOT previously
-established — and against the σ0 that chain actually builds. -/
+established — and against the σ0 that chain actually builds.
 
-/-- **The unweakened `UntaintedShadow` is uninhabited at a leaf-routed `_d` state,
-    against the σ0 `reachedByW3d2_shadow_d` itself constructs.** So post-4c-ii the `_d`
-    chain's choice is not "strong shadow vs weak shadow" either: it is
-    "weakened-but-inhabited vs strong-but-uninhabited". -/
+(Both citations here carried a stale `(:332)` until 2026-08-30d; the theorem has not been
+at `:332` for some time. Line numbers in citations rot silently — this file's own
+`shadowB_correct` docstring already says "the anchors that keep are the symbols", so the
+numbers are dropped rather than refreshed.) -/
+
+/-- **The unweakened shadow is uninhabited at a leaf-routed `_d` state, against the σ0
+    `reachedByW3d2_shadow_d` itself constructs.** So post-4c-ii the `_d` chain's choice is
+    not "strong shadow vs weak shadow" either: it is "weakened-but-inhabited vs
+    strong-but-uninhabited".
+
+    ⚠ **ANCHORED** — see `strong_shadow_false_at_raw`. This one matters most of the four:
+    `CascadeStable.lean`'s `ShadowOver` docstring cites *this* symbol as the justification
+    for the whole genericization, so re-pointing it silently would leave that contract
+    citing a theorem that no longer says what it is cited for. And `d_weak_holds` (below)
+    proves the weak mirror TRUE at exactly this fixture — so under the abbrev spelling
+    this statement would flip from true to false at the flip. -/
 theorem strong_shadow_false_at_d_own_sigma0 :
-    ¬ UntaintedShadow SlSw (sR SlSw tApp) (sF SlSw [tApp]) := by
+    ¬ ShadowOver (DerNode SlSw) (sR SlSw tApp) (sF SlSw [tApp]) := by
   intro h
   exact absurd ((shadowB_correct SlSw (sR SlSw tApp) (sF SlSw [tApp])).mpr h) (by decide)
 
-/-- …and on the mixed store, where the untainted tuple contributes an extra of its own. -/
+/-- …and on the mixed store, where the untainted tuple contributes an extra of its own.
+    ⚠ **ANCHORED** — see `strong_shadow_false_at_raw`. -/
 theorem strong_shadow_false_at_mixed :
-    ¬ UntaintedShadow SlSw (sRf SlSw tMix) (sF SlSw tMix) := by
+    ¬ ShadowOver (DerNode SlSw) (sRf SlSw tMix) (sF SlSw tMix) := by
   intro h
   exact absurd ((shadowB_correct SlSw (sRf SlSw tMix) (sF SlSw tMix)).mpr h) (by decide)
 
