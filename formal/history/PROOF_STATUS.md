@@ -15,6 +15,177 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-30 (**4c-ii cone OPENED — §11.12 preamble: green anchor and abort trigger declared before the first edit**)
+
+**Task taken:** `P3`, the un-splittable 42-module 4c-ii cone, at the top of a fresh window
+(the §11.10 precondition). This entry is written BEFORE the first Lean edit because
+§11.12 rule 1 requires the anchor to be recorded first; findings are appended to it as the
+cone proceeds, per rule 3.
+
+### 0. The §11.12 preamble
+
+**Green anchor: `d0310edb5d00b50e6a97a7adf3fe65e67aa6aa6c` (`d0310ed`).** Verified COVERED
+on this tree by `python scripts/gate_status.py` at session start — all ten phases green
+against `t2a:682b0eb4b5fb` / `t2c:774ee9330ff7`, `lean` `rc=0 holes=0 audits=583
+pinned=582 defs=161`, working tree clean. That is the sha `git reset --hard` targets.
+
+**Abort trigger (rule 2, fixed now and not renegotiable at 90%):** revert on whichever
+comes first — (a) 70% of this session's context consumed, or (b) 12 in-cone `lake build`
+cycles without a green tree. Rule 2 asks for wall-clock or context fraction; context is
+the binding constraint for this agent, so it is the primary and the cycle count is a
+backstop.
+
+**⚠ A defect in rule 3, found while reading it, and the deviation taken.** Rule 3 says
+findings go in `PROOF_STATUS.md` because it "is append-only and therefore survives the
+reset". **It does not.** Append-only is a documentation convention about how the file is
+*edited*; it confers nothing on an *uncommitted* working-tree change, and rule 1's exit —
+`git reset --hard <sha>` — discards exactly that. Taken literally, the two rules compose
+into a procedure that destroys the session's whole yield at the moment it is most needed.
+Rule 4's "the revert deliberately does not undo … anything already appended to
+`formal/history/`" is true only of appends already committed.
+
+Deviation, for this session and recommended as the standing repair: **the revert is
+`git checkout -- formal/lean/`, not `git reset --hard`.** It restores exactly the cone
+(the only thing that must go back) and leaves this ledger entry, which is the yield,
+intact. Where a harder reset is genuinely wanted, commit the docs-only append FIRST and
+reset onto that commit — a docs-only commit is not a partial cone under rule 5, because it
+contains no Lean edit and therefore no pin asserting something untrue.
+
+### 1. Baseline measurements taken first-hand before opening
+
+- `lake build` at the anchor: **green, 1089 jobs**, `rc=0`.
+- **Lake traces on content, not mtime.** `touch ZanzibarProofs/GraphIndex/Leaf.lean`
+  followed by `lake build` completes in **2s**, not the recorded 200–400s. The in-cone
+  cycle cost is therefore paid only by genuine content changes, and a reverted edit costs
+  nothing to re-validate. This does not contradict `2026-08-28c` §5's 200–400s figure,
+  which is the cost of a real edit; it retires a different worry (that merely opening
+  files or reverting would cost cycles).
+- Toolchain: `leanprover/lean4:v4.31.0`, Lake 5.0.0-src+68218e8, via `~/.elan/bin`
+  (not on the default `PATH`; `verify.sh:123` prepends it).
+- `formal/verify.sh` sets `set -uo pipefail` (`:91`), so its `lake build … | tee` at
+  `:610` does **not** have the pipe-status footgun `CLAUDE.md` warns about. Recorded
+  because the shape looks like the footgun and will be re-flagged by every future reader.
+
+### 2. The plan's shape changed: steps 1–2 are GREEN-STOPPABLE, and the red middle is 3→10
+
+The single most useful thing an eight-agent read-only recon returned. The record has
+described 4c-ii as one un-splittable block since 2026-08-28c, and `HANDOFF.md`'s row still
+reads "**What remains is the un-splittable 42-module cone**". That is true of the
+*re-point*, and it is **not** true of everything `P3` owes. Two of the pieces still listed
+as outstanding — the `LeafNode` carrier and the unowned superset-extras lemma — are purely
+ADDITIVE: they state and prove new things about the pre-re-point tree, take no hypothesis
+from the re-point, and leave every existing declaration untouched. They can be landed,
+gated and committed on green.
+
+The un-splittable middle begins at the `UntaintedShadow.classify` weakening
+(`CascadeStable.lean:529`), which is where the headline theorems start being
+kernel-`decide` FALSE, and ends when the `hql` guard lands on `graph_correct`
+(`FullScope.lean:363` / `headline_statements.txt:27`). **Steps 3→10, not 1→10.**
+
+This does not weaken §11.12 — the middle is exactly as un-splittable as recorded, and the
+exit still applies to it. It means the cone has a green prefix that a bounded session can
+bank, which is the difference between a 3-session item that can only be attempted by a
+3-session run and one that can be walked in. `P3`'s size does not change; its *shape* does.
+
+### 3. Step 1 LANDED (green): the `LeafNode` carrier
+
+`Leaf.lean` gains `LeafNode` (Route B's carrier for the `classify` disjunct), the Bool
+mirror `leafNodeB`, and `leafNodeB_correct` proving the mirror decides it — modelled on
+`Scratch4cii.lean:44-68::derNodeB`/`derNodeB_correct`, whose proof structure transferred
+unchanged. Carrier is `publicOfLeaf`, never `isLeafPred` (the E3 trap:
+`isLeafPred BARE = true`, so an `isLeafPred` carrier classifies every bare-subject node as
+extra and kills `untaintedShadow_writeLeg`'s `hsubj` premise everywhere). Purely additive:
+`git diff --stat` = 1 file, +64/-0. Full `lake build` green, 1089 jobs.
+
+⚠ **`LeafWitness.SlV` is unusable from `Leaf.lean`** — it is defined at `LeafRules.lean:349`
+and `LeafRules` imports `Leaf`, so the `Scratch4cii` fixtures cannot be reused where the
+recon assumed. The pins are stated at `LeafWitness.Sw` (`Leaf.lean:793`, same file).
+
+### 4. ⚠ The E3 guard was UNPINNED, and the sabotage that proved it
+
+Per `docs/sabotage-procedure.md`, run before believing the new instrument. Literal results:
+
+- **Sabotage A** — drop `leafPublic k.pred != ""` from `leafNodeB` **only**:
+
+      rc=1
+      error: ZanzibarProofs/GraphIndex/Leaf.lean:557:13: Tactic `cases` failed with a nested error
+
+  `leafNodeB_correct` is live: a mirror that stops matching its Prop is caught.
+
+- **Sabotage B** — drop the guard from **BOTH** `LeafNode` and `leafNodeB`, consistently,
+  with the `obtain`/`rintro` arities adjusted so the weakening compiles for the right
+  reason: **`rc=0`. Fully green.** Both `by decide` pins and `leafNodeB_correct` are blind.
+
+The blindness is structural, not an oversight: `LeafWitness.Sw` declares no relation named
+`""`, and no query over `Sw` can distinguish the guarded carrier from the unguarded one.
+So the E3 residual — `leafPublic BARE = ""`, `Core/Schema.lean::relNameOK` does not forbid
+the empty relation name, hence `publicOfLeaf _ _ BARE = some ""` at a schema declaring a
+`""`-named derived relation — was carried **only by a docstring**. This is the
+2026-08-28c/2026-08-28d lesson recurring one layer further down: a `decide` pin cannot
+catch the removal of a guard it cannot express.
+
+⚠ **A first attempt at sabotage B was discarded, and the discard is the point.** Patching
+only the `obtain` arity left the `rintro` branch referencing a now-absent `hne`, giving
+`error: Unknown identifier 'hon'` — rc=1 for a reason that had nothing to do with the
+guard. Read as evidence that would have been a false "the pin works". The procedure's
+"control your *instrument* as well as your subject" is exactly this: a sabotage that fails
+to compile incidentally proves nothing, and the fix is to make the weakening consistent,
+not to accept the red.
+
+Repair, per the procedure's durability ranking (permanent test > docstring): a pathological
+fixture declaring a `""`-named derived relation, plus a `by decide` pin that is green with
+the guard and red without it — and the pin re-run under sabotage B before it is believed.
+
+### 5. The repair, and a near-miss inside it
+
+`LeafWitness.SwEmptyRel` declares `""` as a derived relation, with
+`swEmptyRel_pol_bare : publicOfLeaf SwEmptyRel "user" BARE = some ""` stated beside the pin
+so the next reader can see WHY it discriminates instead of re-deriving it, and
+`swEmptyRel_bare_subject_not_leafNode` as the discriminator. Verified first-hand under
+sabotage B (guard removed from both sites, arities adjusted so the weakening compiles for
+the right reason):
+
+    rc=1
+    error: ZanzibarProofs/GraphIndex/Leaf.lean:1228:74: Tactic `decide` proved that the proposition
+      leafNodeB SwEmptyRel (subjNode { type := "user", name := "alice", predicate := BARE }) = false
+    is false
+
+⚠ **The near-miss: the first fixture declared `""` derived on `"doc"`, and the sabotaged
+build stayed GREEN.** `publicOfLeaf` keys on the *subject's* type, and the probe subject is
+`"user"`-typed, so the empty derived relation must be declared on `"user"` for the trap to
+fire at all. A discriminating pin that could not discriminate — the failure mode the pin
+was written to prevent, reproduced one level up in the pin itself. Recorded in the pin's
+docstring. This is the third time in three sessions that the *instrument* was wrong in a
+way only an explicit sabotage caught (2026-08-28c's `graphModeAnswers`, 2026-08-28d's
+`shadowB_correct`, now this); it is no longer reasonable to treat that as coincidence.
+
+### 6. ⚠ I destroyed the work with `git checkout --`, and it proves §2's rule-3 defect
+
+Restoring the tree after the verification sabotage, this session ran
+`git checkout -- formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean`, intending to undo the
+sabotage. **None of the work was committed, so `checkout` reverted to `HEAD` and discarded
+all 105 lines**, not just the sabotage. Recovered: 64 lines from an out-of-tree file copy,
+the remaining 41 (the whole E3 block) only because the authoring agent still held them.
+
+This is not a footnote — it is §0's rule-3 defect happening, to the person who had written
+the defect down forty minutes earlier and then reached for the destructive command anyway.
+Two things follow, and they are the durable lesson:
+
+1. **§11.12's exit is unsafe as written for the same reason a plain `checkout` is.** Rule 3
+   promises `PROOF_STATUS.md` "survives the reset"; it does not, because nothing uncommitted
+   survives `git reset --hard`. Knowing that in the abstract did not prevent the loss.
+2. **The green-stoppable prefix must be COMMITTED as soon as it is green**, not carried
+   uncommitted while further sabotage runs against it. An additive, gated, green prefix is
+   not a partial cone under rule 5 — it contains no re-point and no pin asserting anything
+   untrue — so nothing in §11.12 forbids committing it, and §2's finding is precisely that
+   such a prefix exists. Carrying it uncommitted was the actual mistake; the `checkout` was
+   only what collected on it.
+
+Recommended amendment to §11.12, for whoever next edits the scope doc: replace rule 3's
+"append-only and therefore survives the reset" with "commit the docs-only append first,
+then reset onto it", and add a rule 6: *commit every green-stoppable prefix before running
+a sabotage against it.*
+
 ## Session 2026-08-28d (**`P14`'s `UntaintedShadow` ADJUDICATION IS SETTLED, AND IT MOVED THE ANSWER: `classify` is the ONLY field that ever fails, the three fields no probe had ever touched hold everywhere, and the recorded refutation `slSwD_not_mono` turns out to be an INSTRUMENT ARTIFACT — it pairs against a σ0 the `_d` chain never builds. Against the σ0 `reachedByW3d2_shadow_d` actually constructs, the weakened shadow holds on all six fields and the unweakened one is UNINHABITED, now at Prop level. The six-field mirror is PROVED against `UntaintedShadow` itself, and its sabotage showed the `decide` pins are blind to a mis-transcription that only the correctness theorem catches. Also: a drifted gate floor repaired, and the orientation doc's rotted figures deleted rather than updated.**)
 
 **Task taken:** `P3`'s stated next step (`2026-08-28c`) — settle the `P14`

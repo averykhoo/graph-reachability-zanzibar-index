@@ -15,6 +15,23 @@
 > today, so a cold reader following `P3`'s read-first list met a false status before this
 > banner.
 
+> **CORRECTION 2026-08-30b — §11.12 rule 3 is UNSAFE AS WRITTEN, and §11.10 is wrong in
+> two places.** Rule 3 sends findings to `PROOF_STATUS.md` because it "is append-only and
+> therefore survives the reset". It does not: append-only is a convention about how the
+> file is *edited* and confers nothing on an **uncommitted** working-tree change, which is
+> exactly what rule 1's `git reset --hard` discards. Read as written, rules 1 and 3 compose
+> into a procedure that destroys the session's yield at the moment it is most needed — and
+> it collected on 2026-08-30, costing 105 lines to a plain `git checkout --`. Amend rule 3
+> to **"commit the docs-only append FIRST, then reset onto it"**, and add a **rule 6:
+> commit every green-stoppable prefix before running a sabotage against it** (a green
+> additive prefix is not a partial cone under rule 5 — it contains no re-point and no pin
+> asserting anything untrue). §11.10's two corrections: the non-emptiness premise is **not**
+> `StoreValidRulesD` (that constrains stored tuples, never relation names — the
+> superset-extras lemma needs an explicit `hne : ∀ dt R, isDerived S (dt,R) = true → R ≠ ""`),
+> and `rawWriteRels` is `Leaf.lean:587`, not `:541`. Evidence and the recon that also split
+> the cone into a green prefix (steps 1–2) and an un-splittable middle (steps 3→10):
+> `PROOF_STATUS.md` `## Session 2026-08-30`.
+
 **Status as of 2026-08-05: the design decision is MADE — option (c). The work is DEFERRED,
 not scheduled.** Decided by the user 2026-08-05. This file is the scoping pass so the leg
 is resumable without re-deriving the blast radius; **no Lean declaration was changed to

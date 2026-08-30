@@ -1,7 +1,7 @@
 ---
 id: P3
-title: leg 7 4c-ii + step 7 -- pre-4c-ii DONE incl P14 (2026-08-28d); cone remains, 3 sessions
-brief: Un-splittable 42-module cone (~3 sessions), never at a session tail; read the revert-to-green exit, scope doc 11.12
+title: leg 7 4c-ii + step 7 -- step 1 LANDED 2026-08-30b; steps 1-2 green-stoppable, 3-10 are not
+brief: The middle (steps 3-10) is un-splittable and never at a session tail; exit scope doc 11.12, whose rule 3 is defective
 pri: NOW
 size: L
 deps: []
@@ -9,10 +9,10 @@ related: [P6]
 parent:
 labels: [formal]
 source: board
-source_hash: 36ebb5ee354e
+source_hash: 728d649aadda
 created: 2026-08-21b
-moved: 2026-08-28d
-updated: 2026-08-29d
+moved: 2026-08-30b
+updated: 2026-08-30b
 closed:
 ---
 
@@ -53,7 +53,19 @@ the narrowest, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse th
 
 ⚠ **Seven traps live in scope doc §11.10** — the backwards own-key premise, the
 leading-conjunct ordering, the `FoldAdmits` sites (21/3 above), the derived golden
-expectation, Route B's two premises. **Read §11.10 before touching the cone.**
+expectation, Route B's two premises. **Read §11.10 before touching the cone**, AS
+CORRECTED BY §11.11 item 8 and by two corrections made 2026-08-30b:
+
+* **the non-emptiness premise is NOT `StoreValidRulesD`** — it constrains stored tuples,
+  never relation-name non-emptiness. The superset-extras lemma needs an explicit
+  `hne : ∀ dt R, isDerived S (dt,R) = true → R ≠ ""`, and the red middle must thread it.
+* **`rawWriteRels` is `Leaf.lean:587`** (post-edit), not `:541` — cite `file::symbol`.
+
+⚠ **The revert-to-green exit is scope doc §11.12, and its rule 3 is DEFECTIVE**: it
+promises `PROOF_STATUS.md` "survives the reset", but nothing uncommitted survives
+`git reset --hard`. Commit the docs-only append first and reset onto it, and commit every
+green-stoppable prefix before running a sabotage against it. It cost 105 lines on
+2026-08-30b — PROOF_STATUS `## Session 2026-08-30` §6.
 
 ## Read first
 
@@ -117,3 +129,53 @@ Digest-only drift: the four 2026-08-28* sessions rewrote the board row (fence la
 
 `brief` populated from the board row's constraint annotation (mechanical: `updated` only,
 `moved` held -- populating a field is not progress on the cone).
+
+### 2026-08-30b
+
+Step 1 of the cone LANDED green, and the plan's SHAPE changed. An 8-agent read-only recon
+established that P3 is NOT one un-splittable block: steps 1-2 (the LeafNode carrier, and
+the unowned superset-extras lemma) are purely additive and green-stoppable; the
+un-splittable middle is steps 3->10, beginning at the UntaintedShadow.classify weakening
+(CascadeStable.lean:529) and ending when hql lands on graph_correct (FullScope.lean /
+headline_statements.txt:27). Size unchanged (~3 sessions); only the shape moved -- the cone
+now has a prefix a bounded session can bank.
+
+LANDED: Leaf.lean::LeafNode (Route B's carrier for the classify disjunct), the Bool mirror
+::leafNodeB, ::leafNodeB_correct, and the pins. +107 lines, purely additive, zero
+deletions. Carrier is publicOfLeaf, never isLeafPred (the E3 trap).
+
+A REAL HOLE, FOUND AND CLOSED BY SABOTAGE. The E3 guard `leafPublic p != ""` was UNPINNED:
+removing it from BOTH LeafNode and leafNodeB consistently builds GREEN (rc=0) -- both `by
+decide` pins and leafNodeB_correct were blind, because the Sw fixture declares no ""-named
+relation. Closed with a pathological fixture LeafWitness.SwEmptyRel ("" declared derived on
+"user") plus swEmptyRel_pol_bare and swEmptyRel_bare_subject_not_leafNode. Verified
+first-hand: under the sabotage the pin fires, rc=1, "Leaf.lean:1228:74: Tactic decide
+proved that the proposition ... is false". NEAR-MISS inside the repair: the first fixture
+declared "" on "doc" and the sabotaged build stayed GREEN -- publicOfLeaf keys on the
+SUBJECT's type, so the empty derived relation must be declared on "user". A discriminating
+pin that could not discriminate.
+
+TWO CORRECTIONS TO THE TRAPS. (1) "the non-emptiness premise is StoreValidRulesD" does NOT
+verify for the superset-extras lemma: StoreValidRulesD constrains stored tuples, never
+relation-name non-emptiness. The lemma needs an explicit hne : forall dt R, isDerived S
+(dt,R) = true -> R != "", and the red-middle consumer must thread it. (2) rawWriteRels is
+Leaf.lean:587 post-edit, not :541 -- cite file::symbol, not a line.
+
+PROCESS FAILURE WORTH THE ROW. Restoring after the verification sabotage, `git checkout --
+.../Leaf.lean` on uncommitted work reverted to HEAD and destroyed all 105 lines then
+written, not just the sabotage (recovered from a file backup plus the authoring agent's
+context). That is a live defect in the section 11.12 exit: rule 3 promises PROOF_STATUS
+"survives the reset", but nothing uncommitted survives `git reset --hard`. Amendment
+recommended in PROOF_STATUS 2026-08-30 section 6, and appended to the scope doc: commit the
+docs-only append FIRST and reset onto it, plus a new rule 6 -- commit every green-stoppable
+prefix before running a sabotage against it.
+
+NEXT: step 2 is designed and verified feasible (green-stoppable, no red dependency) but NOT
+written. Proposed home LeafRules.lean after ::writeRulesRaw; shape "every edge produced by
+the leaf fold is either produced by the rewrite fold, or its target is a LeafNode";
+premises hne (above) and hmd (no schemaRewrites rule matches a dotted relation).
+Strict-superset witness already pinned at Scratch4cii.lean::mixed_is_strict_superset /
+::mixed_extras_are_the_two_leaves. All ten gate phases green on this tree after the Lean
+edit. Full record: PROOF_STATUS `## Session 2026-08-30`; root ledger 2026-08-30b.
+
+Same-session re-stamp, not housekeeping: this session rewrote the P3 board row and item block (step 1 landed; the prefix/middle split; the two trap corrections) and mirrored all of it here -- title, brief, the 2026-08-30b Log entry, and a rewritten Traps section carrying the StoreValidRulesD and rawWriteRels corrections plus the defective 11.12 rule 3. The body's 2026-08-21 summary block is left as filed, per this task's own convention that the Log carries the updates.

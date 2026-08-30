@@ -25,6 +25,123 @@ from here.
 
 ---
 
+## 2026-08-30b — `P3` has a green prefix: step 1 landed, and the red middle is steps 3→10
+
+rows: `P3`
+
+Formal detail — the recon, the sabotage transcripts, the baseline measurements — is
+[`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session 2026-08-30`, §0–§6,
+opened under scope-doc §11.12 rule 1 (green anchor `d0310ed`, recorded before the first
+Lean edit). This entry is the root trace, the two record corrections, and the process
+failure. All ten gate phases were run green on this tree after the Lean edit.
+
+**1. The plan's shape changed, and that is the headline.** `P3` has been recorded as one
+un-splittable block since `2026-08-28c`, and the board row said so. It is not. An 8-agent
+read-only recon established that steps 1–2 — the `LeafNode` carrier and the unowned
+superset-extras lemma — are purely ADDITIVE: they state new things about the pre-re-point
+tree, take no hypothesis from the re-point, and change no existing declaration, so each can
+be gated and committed on green. The un-splittable middle is **steps 3→10**. It begins at
+the `UntaintedShadow.classify` weakening (`CascadeStable.lean:529`), which is where the
+headline theorems start being kernel-`decide` FALSE, and ends when `hql` lands on
+`graph_correct` (`FullScope.lean` / `headline_statements.txt:27`). This does not weaken
+§11.12 — the middle is exactly as un-splittable as recorded — and `P3`'s size is unchanged
+at ~3 sessions. Its SHAPE changed: an item that could previously only be attempted by a
+3-session run now has a prefix a bounded session can bank.
+
+**2. Step 1 landed, green, and it is committed-clean.** `Leaf.lean` gains `LeafNode` (Route
+B's carrier for the `classify` disjunct), the Bool mirror `leafNodeB`, `leafNodeB_correct`
+proving the mirror decides it, and the pins. The carrier is `publicOfLeaf`, never
+`isLeafPred` — the E3 trap: `isLeafPred BARE = true`, so an `isLeafPred` carrier classifies
+every bare-subject node as extra and kills `untaintedShadow_writeLeg`'s `hsubj` premise
+everywhere. +107 lines in one file, zero deletions.
+
+**3. A real hole, found by sabotage and closed with a fixture.** The E3 guard
+`leafPublic p ≠ ""` was UNPINNED. Removing it from `leafNodeB` alone reddens
+(`leafNodeB_correct` is live); removing it from **both** `LeafNode` and `leafNodeB`
+consistently, with the destructuring arities adjusted so the weakening compiles for the
+right reason, builds **fully green, `rc=0`** — both `by decide` pins and the correctness
+theorem are blind, because the `LeafWitness.Sw` fixture declares no `""`-named relation and
+no query over it can distinguish the two carriers. The residual was carried only by a
+docstring. Closed per the procedure's durability ranking with a pathological fixture,
+`LeafWitness.SwEmptyRel` (`""` declared derived on `"user"`), plus
+`swEmptyRel_pol_bare` stating why it discriminates and
+`swEmptyRel_bare_subject_not_leafNode` as the discriminator. Re-run under the sabotage
+before being believed:
+
+```
+rc=1
+error: ZanzibarProofs/GraphIndex/Leaf.lean:1228:74: Tactic `decide` proved that the proposition
+  leafNodeB SwEmptyRel (subjNode { type := "user", name := "alice", predicate := BARE }) = false
+is false
+```
+
+⚠ **The near-miss is the more useful half.** The first fixture declared `""` derived on
+`"doc"`, and the sabotaged build stayed GREEN — `publicOfLeaf` keys on the SUBJECT's type
+and the probe subject is `"user"`-typed, so the empty derived relation has to be declared
+on `"user"` for the trap to fire at all. A discriminating pin that could not discriminate:
+the exact failure the pin was written to prevent, reproduced one level up inside it. That
+is three sessions running (`2026-08-28c`'s `graphModeAnswers`, `2026-08-28d`'s
+`shadowB_correct`, now this) in which the INSTRUMENT was wrong in a way only an explicit
+sabotage caught.
+
+**4. Two corrections to the record, both from the step-2 design pass.**
+
+* The §11.10 trap "the non-emptiness premise is `StoreValidRulesD`" **does not verify** for
+  the superset-extras lemma. `StoreValidRulesD` constrains stored tuples; it says nothing
+  about relation-name non-emptiness. The lemma needs an explicit
+  `hne : ∀ dt R, isDerived S (dt, R) = true → R ≠ ""`, and the red-middle consumer must
+  thread it.
+* The same trap cites `rawWriteRels` at `:541`. It is `Leaf.lean:587` post-edit. Cite by
+  `file::symbol` — this repo's own standing rule — and the line drift stops mattering.
+
+**5. I destroyed the session's work with `git checkout --`, and it proves a live defect in
+the §11.12 exit.** Restoring the tree after the verification sabotage, this session ran
+`git checkout -- formal/lean/.../Leaf.lean` intending to undo the sabotage. Nothing was
+committed, so it reverted to `HEAD` and discarded all 105 lines then written, not just the
+sabotage; recovered from an out-of-tree file copy plus the authoring agent's context. The
+durable lesson is not "be careful": §11.12 rule 3 promises `PROOF_STATUS.md` "survives the
+reset", and **nothing uncommitted survives `git reset --hard`**. Knowing that in the
+abstract — this session had written it down forty minutes earlier — did not prevent the
+loss. The recommended amendment is in PROOF_STATUS §6: rule 3 should read "commit the
+docs-only append first, then reset onto it", plus a new rule 6, *commit every
+green-stoppable prefix before running a sabotage against it*. A dated correction banner
+now sits at the top of the scope doc so a reader of §11.12 meets it there; the rules
+themselves are §11's running record and are not retro-edited.
+
+**6. `CLAUDE.md` said `ZANZIBAR_PY` was a prerequisite; it is an override.** `verify.sh`
+stopped hardcoding the `avery` path under `ZT-P2-6` — `resolve_py` (`:297-320`) tries
+`$HOME`- and `$CONDA_PREFIX`-derived candidates first and accepts one only if it imports
+the project's deps. Evidence: all ten phases ran green today with the variable unset.
+Fixed in place, and the genuine footgun put in its place: `lake`/`lean` are NOT on `PATH`,
+they live in `~/.elan/bin` (`verify.sh:123` prepends it for you; a hand build does not).
+
+**7. Step 2 is designed and verified feasible, not written.** Green-stoppable, no
+dependency on the red middle. Proposed home `LeafRules.lean` after `::writeRulesRaw`;
+statement shape "every edge produced by the leaf fold is either produced by the rewrite
+fold, or its target is a `LeafNode`"; premises `hne` (§4 above) and `hmd` (no
+`schemaRewrites` rule matches a dotted relation). The strict-superset witness it generalises
+is already pinned at `Scratch4cii.lean::mixed_is_strict_superset` /
+`::mixed_extras_are_the_two_leaves`.
+
+**Still owed:** nothing. Step 2 is `P3`'s next step, not a debt — it is in the item block.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 154 task file(s) parsed)`
+read: board + HANDOFF
+
+⚠ **This line was wrong when first written, and the correction is the point.** The
+write-back agent recorded `read: HANDOFF only`, inferring it from the session's records
+rather than from what the session did; corrected here by the session itself. What actually
+happened: `python scripts/task.py board` was the FIRST command run, `show P3` the second,
+and `HANDOFF.md` was opened only afterwards and only for the §11.12 exit plan the board row
+points at but does not carry. So the query did replace the file read as the entry point,
+and the file read that followed was a pointer-chase, not a re-read.
+
+The trial's whole measurement is this line, which makes it the one line in the entry a
+subagent must never infer: the agent could see which files the session had *touched*, but
+not the order or the purpose, and those are exactly what the line asks about. Delegating
+the write-back is fine; delegating the self-report is not. Recorded so week two's reading
+of the read-lines knows one of them was very nearly synthetic.
+
 ## 2026-08-30 — trial window extended to 2026-09-06, delete off the table; and the banner was printing `⏰`
 
 rows: `TT-1`, `TT-2`

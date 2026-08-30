@@ -516,6 +516,52 @@ theorem publicOfLeaf_untainted {S : Schema} {ty p : String}
     (h : isDerived S (ty, leafPublic p) = false) : publicOfLeaf S ty p = none := by
   simp [publicOfLeaf, h]
 
+/-! ## `LeafNode` — Route B's carrier for the shadow's leaf disjunct
+
+The 4c-ii adjudication (`Scratch4cii.lean`, PROOF_STATUS 2026-08-20b/2026-08-28d)
+measured that post-re-point the σ-only extras are LEAF-targeted, so
+`CascadeStable.lean::UntaintedShadow.classify` needs a leaf disjunct shaped exactly
+like its `DerNode` one. This is that carrier, plus its PROVED Bool mirror. -/
+
+/-- A leaf-node key: the target of a raw leaf-routed write — a concrete (non-`STAR`)
+    object node whose predicate is a minted leaf name of a DERIVED family of its type.
+    The objNode-shaped analogue of `CascadeStable.lean::DerNode`, keyed on
+    `publicOfLeaf`, NEVER `isLeafPred`: `isLeafPred_bare` makes the BARE sentinel
+    dot-carrying, so an `isLeafPred` carrier would classify every bare-subject node as
+    a leaf node and kill the shadow write-leg's subject premise everywhere (the E3
+    trap, `Scratch4cii.lean::bare_publicOfLeaf_none`).
+
+    ⚠ The `leafPublic p ≠ ""` conjunct is E3's residual guard and is MANDATORY:
+    `leafPublic BARE = ""` and `Core/Schema.lean`'s `relNameOK` does not forbid the
+    empty relation name, so a schema declaring a derived relation named `""` would make
+    `publicOfLeaf _ _ BARE = some ""` and re-open the trap without it. -/
+def LeafNode (S : Schema) (k : NodeKey) : Prop :=
+  ∃ ty on p, (publicOfLeaf S ty p).isSome = true ∧ leafPublic p ≠ "" ∧ on ≠ STAR
+    ∧ k = objNode ⟨ty, on⟩ p
+
+/-- Bool mirror of `LeafNode` — the decidable form the shadow batteries probe with.
+    A wrong mirror silently returns `true` everywhere, so per the house rule the
+    instrument is PROVED, not trusted: `leafNodeB_correct` below. (The `variant ==
+    .plain` conjunct is forced by `objNode` at a non-`STAR` name, exactly as in
+    `Scratch4cii.lean::derNodeB`.) -/
+def leafNodeB (S : Schema) (k : NodeKey) : Bool :=
+  (publicOfLeaf S k.type k.pred).isSome && leafPublic k.pred != ""
+    && k.name != STAR && k.variant == Variant.plain
+
+/-- **The instrument is PROVED, not trusted**: `leafNodeB` decides `LeafNode`. -/
+theorem leafNodeB_correct (S : Schema) (k : NodeKey) :
+    leafNodeB S k = true ↔ LeafNode S k := by
+  constructor
+  · intro h
+    simp only [leafNodeB, Bool.and_eq_true, bne_iff_ne, beq_iff_eq] at h
+    obtain ⟨⟨⟨hs, hne⟩, hn⟩, hv⟩ := h
+    refine ⟨k.type, k.name, k.pred, hs, hne, hn, ?_⟩
+    cases k
+    simp only [objNode, if_neg hn]
+    simp_all
+  · rintro ⟨ty, on, p, hs, hne, hon, rfl⟩
+    simp [leafNodeB, objNode, hs, hne, hon]
+
 /-! ## Raw-write routing — the measured fan-out
 
 Faithful shape per the 2026-08-15 measurement (module header): a raw write on a
@@ -1121,6 +1167,67 @@ theorem smN_models_the_flat_form :
     (persistedLeaves SmN "doc"
        (.union (.union (.computed "a") (.computed "b")) (.computed "safe"))).length = 2 := by
   decide
+
+/-! ### `LeafNode` sanity pins — the E3 trap, at this file's own witness
+
+`Scratch4cii.lean:293-297` records these two facts against `LeafRules.lean::SlV`; that
+module imports this one, so here they are restated at `Sw` — the same two shapes
+(bare-subject node, minted storage-leaf node at a derived relation), now stated against
+the real `LeafNode` carrier via its proved decider rather than the Scratch proxy. -/
+
+/-- A bare-subject node is NOT a `LeafNode` — the E3 BARE trap does not fire here:
+    `leafPublic BARE = ""` and no derived relation of `Sw` is named `""`. -/
+theorem bare_subject_not_leafNode :
+    leafNodeB Sw (subjNode ⟨"user", "alice", BARE⟩) = false := by decide
+
+/-- A genuinely minted leaf name at a derived relation IS a `LeafNode`: `approver` is
+    derived at `Sw` (`approver_isDerived`) and `approver.0` is its storage leaf
+    (`routes_to_leaf`), so the routed target classifies. -/
+theorem minted_leaf_is_leafNode :
+    leafNodeB Sw (objNode ⟨"doc", "d1"⟩ (leafPred "approver" 0)) = true := by decide
+
+/-! ### The E3 guard's OWN pin — at the pathological schema, per the sabotage procedure
+
+The two pins above cannot police the `leafPublic … ≠ ""` conjunct: `Sw` declares no
+relation named `""`, so no query over `Sw` distinguishes the guarded carrier from the
+unguarded one. The fixture below is the ONLY schema shape that can — it makes the E3
+trap fire, so removing the guard flips a pin red instead of building green. -/
+
+/-- **Pathological, deliberately** — exists SOLELY to pin the E3 guard; not a realistic
+    schema. Declares a DERIVED relation whose name is the empty string `""` (legal:
+    `Core/Schema.lean`'s `relNameOK` forbids only `'.'`), which is exactly the shape
+    that makes `publicOfLeaf _ _ BARE = some ""` (`isLeafPred BARE = true`,
+    `leafPublic BARE = ""`). -/
+def SwEmptyRel : Schema :=
+  ⟨[(("user", "x"), .direct [("user", BARE, false)]),
+    (("user", ""), .excl (.computed "x") (.computed "x"))], []⟩
+
+/-- WHY the pin below discriminates, so the next reader need not re-derive it: at this
+    schema the BARE sentinel really does clear `publicOfLeaf`'s other two tests — only
+    the `leafPublic … ≠ ""` conjunct stands between a bare-subject node and `LeafNode`. -/
+theorem swEmptyRel_pol_bare : publicOfLeaf SwEmptyRel "user" BARE = some "" := by decide
+
+/-- **The E3 guard, pinned.** SABOTAGE (observed 2026-08-30,
+    `docs/sabotage-procedure.md`): removing the `leafPublic … ≠ ""` conjunct from BOTH
+    `LeafNode` and `leafNodeB` CONSISTENTLY (destructuring arities adjusted, so
+    `leafNodeB_correct` compiles for the right reason) builds fully GREEN without this
+    pin — `Sw` cannot express the weakening, and neither could a first cut of this
+    fixture that declared `""` on `"doc"` while probing a `"user"`-typed subject (the
+    trap fires only on the SUBJECT's type). With this pin, rc=1:
+
+    ```text
+    error: ZanzibarProofs/GraphIndex/Leaf.lean:1212:74: Tactic `decide` proved that
+      the proposition
+      leafNodeB SwEmptyRel (subjNode { type := "user", name := "alice",
+        predicate := BARE }) = false
+    is false
+    ```
+
+    (Line number is the run's; the anchor that keeps is the symbol. Independently
+    re-observed same-day at `:1228:74`.) Guard restored: rc=0,
+    `Build completed successfully`. -/
+theorem swEmptyRel_bare_subject_not_leafNode :
+    leafNodeB SwEmptyRel (subjNode ⟨"user", "alice", BARE⟩) = false := by decide
 
 end LeafWitness
 
