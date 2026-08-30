@@ -53,6 +53,17 @@ the symbol* (85–229, depending on the symbol list). None asked *how many depen
 which is **17 `.classify` + 9 `.term`**. A sizing question asked in the wrong units cost
 roughly two sessions.
 
+**1b. And it was sabotaged before it was believed.** A refactor is not a check, but this
+one makes a claim — that the widening is now a one-line re-instantiation — and that claim
+is false if the chain stopped depending on the extras predicate at all. Instantiating the
+abbrev at `fun _ => True` (run *after* committing the green prefix at `b42c52d`, per rule 6)
+gives **`rc=1`, ten errors**, in both directions: `:800` is the `applyD` producer, whose
+anonymous constructor collapses to `True.intro`; `:922`/`:923`/`:938` are
+`shadow_graphRec_agree` and `:956` is `checkFn_eq_sem_w3d` — precisely the consumers that
+will need `¬ LeafNode`. So the remaining work is real and sits where the plan says. Reverted,
+green again at 1089 jobs. Two docstrings that were narrower than their now-generic theorems
+were fixed in the same pass.
+
 **2. The sizing dispute is SETTLED, and the recorded figure was a mis-rooted census.**
 Reproduced first-hand, twice, independently: `CascadeStable`'s reverse import cone is
 **20** (+root = 21), not 42. **41 is the reverse cone of `DirectCorrect` and of

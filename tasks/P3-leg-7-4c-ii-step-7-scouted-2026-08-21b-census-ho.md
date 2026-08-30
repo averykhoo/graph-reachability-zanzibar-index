@@ -293,3 +293,40 @@ EXIT PROCEDURE, applied in its AMENDED form. Green anchor 5f48be2, verified COVE
 Same-session mirror, not housekeeping: this session rewrote the P3 board row, the HANDOFF banner and the item block (the genericization, the settled sizing, the blind instrument, the three hql rows, the two corrections) and mirrored all of it here in the same pass -- title, brief, and this Log entry.
 
 Same-session re-stamp: this session rewrote the P3 board row and item block (the ShadowOver genericization, the settled 21-module sizing, the Scratch4cii:51 blind instrument, the three hql rows, the hmd-vacuity correction) and mirrored all of it into the 2026-08-30c Log entry in the same pass. Re-stamping the digest against the row I just wrote. The body's 2026-08-21 summary block is left as filed, per this task's convention that the Log carries the updates.
+
+SABOTAGED BEFORE BELIEVED, and the extras predicate is load-bearing. A refactor is not a
+check, so the house rule does not literally apply -- but this one makes a CLAIM (that the
+widening is now a one-line re-instantiation), and that claim is false if the chain had
+stopped depending on the extras predicate at all, in which case the genericization would
+have papered over the red window rather than deferring it. Discriminating sabotage, run
+AFTER the green prefix was committed at b42c52d (section 11.12 rule 6): instantiate the
+abbrev at the weakest possible predicate, `ShadowOver (fun _ => True) sigma sigma0`.
+
+OBSERVED: rc=1, TEN errors, in BOTH directions -- producers and consumers.
+
+    CascadeStable.lean:800:19: Insufficient number of fields for `<...>` constructor:
+      Constructor `True.intro` does not have explicit fields, but 7 were provided
+    CascadeStable.lean:827:13: Unknown identifier `R`
+    CascadeStable.lean:922:67: Application type mismatch: The argument
+    CascadeStable.lean:923:62: Application type mismatch: The argument
+    CascadeStable.lean:938:80: unsolved goals
+    CascadeStable.lean:956:29: Application type mismatch: The argument
+
+:800 is the applyD producer, whose anonymous constructor collapses to True.intro;
+:922/:923/:938 are shadow_graphRec_agree and :956 is checkFn_eq_sem_w3d -- EXACTLY the
+consumers predicted to need the `not LeafNode` half. So the remaining work is real and
+sits where the plan says it sits. Reverted; lake build green again at 1089 jobs. Five
+in-cone cycles used of the ten-cycle abort budget.
+
+Two docstrings were narrower than their theorems after the generalization
+(shadow_reach_agree said "off the DerNodes", shadow_admitEdge_agree said "never a DerNode")
+and were rewritten to name Extra, with this sabotage's result recorded in the first of them
+so the next reader does not have to re-run it.
+
+CITATION HYGIENE, caught by a sweep rather than by luck: a draft of this session's write-up
+cited `Leaf.lean::swBare_not_leafNode` as the BARE-subject pin. NO SUCH DECLARATION EXISTS.
+A `grep -c "(theorem|def) <name>"` sweep over every symbol cited in the session records
+caught it; the real one is Leaf.lean:1180::bare_subject_not_leafNode, and note
+Scratch4cii.lean:296 declares a SAME-NAMED twin, so cite the file, not the bare symbol.
+This is CLAUDE.md's "a trap must cite a symbol that EXISTS" rule collecting again -- run
+the sweep before writing citations down, not after.

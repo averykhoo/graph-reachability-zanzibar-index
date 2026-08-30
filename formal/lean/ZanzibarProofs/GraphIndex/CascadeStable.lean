@@ -552,9 +552,14 @@ structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
 abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
   ShadowOver (DerNode S) σ σ0
 
-/-- **Reach agreement off the `DerNode`s**: a probe into a non-`DerNode` target reads
-    the same on `σ` and its shadow — extra edges are trailing hops onto terminal
-    nodes the path can neither traverse nor end at. -/
+/-- **Reach agreement off the extras**: a probe into a non-`Extra` target reads the same
+    on `σ` and its shadow — extra edges are trailing hops onto terminal nodes the path can
+    neither traverse nor end at. Generic in `Extra`; at today's instantiation
+    (`UntaintedShadow`) that reads "off the `DerNode`s".
+
+    `Extra` is genuinely load-bearing here, not decoration: instantiating the
+    `UntaintedShadow` abbreviation at `fun _ => True` fails the build with 10 errors
+    (2026-08-30c sabotage), four of them in this lemma's consumers. -/
 theorem shadow_reach_agree {Extra : NodeKey → Prop} {σ σ0 : GraphState}
     (hsh : ShadowOver Extra σ σ0) {v : NodeKey} (hv : ¬ Extra v) (x : NodeKey) :
     σ.reach x v = σ0.reach x v := by
@@ -577,7 +582,9 @@ theorem shadow_reach_agree {Extra : NodeKey → Prop} {σ σ0 : GraphState}
   · rfl
 
 /-- Admission agreement across the shadow: the cycle probe's target is the write's
-    subject node, which is never a `DerNode` on the fragment. -/
+    subject node, which callers must show is never an `Extra`. At today's instantiation
+    that obligation is "never a `DerNode` on the fragment"; post-widening it also has a
+    `LeafNode` half, free at a BARE subject via the E3 `leafPublic p ≠ ""` guard. -/
 theorem shadow_admitEdge_agree {Extra : NodeKey → Prop} {σ σ0 : GraphState}
     (hsh : ShadowOver Extra σ σ0) {a : NodeKey} (ha : ¬ Extra a) (b : NodeKey) :
     σ.admitEdge a b = σ0.admitEdge a b := by
