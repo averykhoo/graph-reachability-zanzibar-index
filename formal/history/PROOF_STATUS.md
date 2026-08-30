@@ -15,6 +15,46 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-30c (**4c-ii RED MIDDLE opened at step 3 — §11.12 preamble re-declared against a new anchor**)
+
+**Task taken:** `P3`, the un-splittable middle of the 4c-ii cone (steps 3→10), at the top of
+a fresh window — the §11.10 precondition, and the one the previous session's write-back
+insisted on ("open it at the top of a fresh window, never at a session tail"). The green
+prefix (steps 1–2) is committed and behind us. This entry is written BEFORE the first Lean
+edit, per §11.12 rule 1, and findings are appended to it as the cone proceeds (rule 3, as
+amended 2026-08-30b).
+
+### 0. The §11.12 preamble for this attempt
+
+**Green anchor: `5f48be2` — "feat(P3): land 4c-ii step 2 — the unowned superset-extras
+lemma, pinned non-vacuous".** Verified first-hand at session start: `python
+scripts/gate_status.py` reports **"VERDICT: the ten-phase gate is COVERED on this tree"**
+against `t2a:06de578e49ce` / `t2c:c4364193bede`, `lean` `rc=0 holes=0 audits=583
+pinned=582 defs=161`, working tree clean. That is the sha the exit targets. It is a
+*different, later* anchor than the previous session's `d0310ed`: steps 1 and 2 landed and
+were committed in between, which is rule 6 (the amendment) working as intended — the
+green-stoppable prefix was banked, so this attempt risks only the middle.
+
+**Abort trigger (rule 2, fixed now, not renegotiable at 90%):** revert on whichever comes
+first — (a) 70% of this session's context consumed, or (b) 10 in-cone `lake build` cycles
+that end red without a green tree in sight. Context is the binding constraint for this
+agent; the cycle count is the backstop. Recon was delegated to read-only subagents
+precisely to keep (a) far away from the first edit.
+
+**Rule 3 is applied in its AMENDED form**, per the 2026-08-30b correction banner on the
+scope doc: this preamble is committed as a **docs-only commit before the first Lean edit**,
+so the reset target already contains the session's yield. The revert is then
+`git checkout -- formal/lean/` (narrow) or `git reset --hard <preamble-commit>` (hard), and
+either one preserves this entry. A docs-only commit is not a partial cone under rule 5 — it
+carries no re-point and no pin asserting anything untrue.
+
+**Not re-measured, and deliberately so:** the previous session's baseline stands —
+`lake build` traces on *content*, not mtime, so `touch` + rebuild is ~2s and a reverted
+edit costs nothing to re-validate; only a genuine content change pays the 200–400s in-cone
+cycle. That is the number the abort trigger is counting.
+
+---
+
 ## Session 2026-08-30 (**4c-ii cone OPENED — §11.12 preamble: green anchor and abort trigger declared before the first edit**)
 
 **Task taken:** `P3`, the un-splittable 42-module 4c-ii cone, at the top of a fresh window
