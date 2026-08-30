@@ -139,11 +139,18 @@ IVM delta processor.
   before it is written.
 
 ## Running things
-- Conda env named after the folder: `graph-reachability-zanzibar-index`.
-  Interpreter: `C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe`
-  — **note (verified 2026-07-26): that path does not exist on this machine**; the env
-  lives under `C:/Users/user/anaconda3/envs/...`. `formal/verify.sh` hardcodes the
-  `avery` path too, so override it with `ZANZIBAR_PY` (it fails loudly, not silently).
+- Conda env named after the folder: `graph-reachability-zanzibar-index`; on this machine it
+  lives under `C:/Users/user/anaconda3/envs/...`.
+  **`ZANZIBAR_PY` is NOT required, and this bullet said it was until 2026-08-30.** It read
+  "`formal/verify.sh` hardcodes the `avery` path too, so override it with `ZANZIBAR_PY`".
+  `verify.sh` stopped hardcoding it under `ZT-P2-6`: `resolve_py` (`:297-320`) tries
+  `$HOME`- and `$CONDA_PREFIX`-derived locations FIRST, keeps the `avery` path only as one
+  later candidate, and accepts a candidate only if it can import the project's deps.
+  `ZANZIBAR_PY` still wins outright when set — it is an override, not a prerequisite.
+  Evidence: all ten gate phases were run green on 2026-08-30 with `ZANZIBAR_PY` unset.
+  ⚠ **The Lean toolchain is the one that is not on `PATH`** — `lake`/`lean` live in
+  `~/.elan/bin`, which `verify.sh:123` prepends for you. Building by hand needs
+  `export PATH="$HOME/.elan/bin:$PATH"` first, or `lake` is simply not found.
 - The full suite is the gate (`tests/` + `formal/conformance/`; more in `tests/` with a
   PostgreSQL DSN configured). These counts ARE enforced — `verify.sh` carries `-ge` floors
   on both (`MIN_TESTS_ALL` / `MIN_CONF_ALL`), so adding tests is always free and losing

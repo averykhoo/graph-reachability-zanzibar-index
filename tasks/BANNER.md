@@ -1,14 +1,14 @@
-2026-08-30 — gate green on this tree; ledger `2026-08-30` (root session-log).
+2026-08-30b — all ten gate phases green on this tree; ledger `2026-08-30b` (root session-log).
 
-⏰ **Trial EXTENDED to 2026-09-06; `tasks/` is NOT being deleted** (user decision). The
-question narrowed from keep-or-delete to **cutover-or-keep-both**. Phase B — `HANDOFF.md`
-becomes a stub — needs an explicit go and is row `TT-1`; landing it IS the verdict.
+🧭 **`P3` is not one block.** Steps 1–2 are a green-stoppable prefix and **step 1, the
+`LeafNode` carrier, landed green**; the un-splittable middle is **steps 3→10**, from the
+`classify` weakening to `hql` on `graph_correct` — never open it at a session tail. Step 2
+is next. Exit: §11.12, whose rule 3 is defective (PROOF_STATUS `2026-08-30` §6).
 
-⚠ **Dual-update contract in force another week**: every board edit gets the mirrored
-`task.py` op, same `--session`. `handoff_lint` FAILS when a board row has no task file.
+⏰ **Trial EXTENDED to 2026-09-06; `tasks/` is NOT being deleted** (user). The question is
+cutover-or-keep-both, and the dual-update contract runs another week: every board edit
+gets the mirrored `task.py` op, same `--session`.
 
-`TK53`: 15 appends remain — what makes a delete lossless, and delete is dormant, not
-gone. `TT-2` (new): `sync` is the one surface with no gated coverage.
-
-Start: `task.py board` → `show <id>` → the item's read-first list. Rules the tool cannot
-enforce: `tasks/README.md`. Gate: `python scripts/gate_status.py`, never a line here.
+`TK53`: 15 appends remain. `TT-1` = Phase B, the cutover that retires `HANDOFF.md`, needs
+an explicit go. `TT-2` = `sync` has no gated coverage. Start: `task.py board` → `show <id>`
+→ the item's read-first list; rules the tool cannot enforce: `tasks/README.md`.
