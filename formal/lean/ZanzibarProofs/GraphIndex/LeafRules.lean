@@ -293,6 +293,247 @@ theorem writeRulesRaw_schema (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.writeRulesRaw S t).schema = σ.schema :=
   schema_foldl_writeDirect _
 
+/-! ## Step 4c-ii, step 2 — the superset EXTRAS are all leaf nodes
+
+`writeRulesRaw`'s closure list is a strict superset of `writeRules`' **even for an
+untainted `t`**: the seeds agree there (`rawWriteTuples_untainted`), but
+`rewriteClosureL` closes under `schemaRewritesL = schemaRewrites S ++ leafRewrites S`,
+and a `leafRewrites` rule can fire on an untainted relation and mint a leaf-targeted
+copy `rewriteClosure` never produces — `lrV_closure_reaches_leaf` /
+`lrV_closure_today_misses_leaf` below are that pair at a store. Until now no proof
+slice OWNED the obligation "every such extra is leaf-targeted"; the post-re-point
+shadow classification (`Scratch4cii.lean`, PROOF_STATUS 2026-08-28d) consumes it in
+the shape of `Leaf.lean::LeafNode`. This section proves it against TODAY's tree, so
+the red middle of the 4c-ii re-point consumes a green fact instead of re-deriving it.
+
+Why the proof needs no saturation fact: the bounded kernels run at the SAME fuel
+(`S.keys.length + 1`), so the two closures are walked in LOCKSTEP — layer `n` of
+`rewriteClosureAuxL` is compared to layer `n` of `rewriteClosureAux`, and a
+leaf-shaped tuple never re-enters the untainted side because no `schemaRewrites` rule
+MATCHES a leaf name (`hmd`). That sidesteps "the bounded closure is closed under one
+more step", which only holds via the rank argument (`RestrictBase.lean` §saturation)
+and is not needed here.
+
+On the premises of the payoff theorem:
+* `hmd` — no untainted rewrite matches a leaf name. Without it, a schema whose
+  expression references a DOTTED name would let a `schemaRewrites` rule fire on a
+  leaf-routed seed and mint an extra that is neither in `rewriteClosure S t` nor
+  leaf-targeted. It is the `isLeafPred` shadow of
+  `RestrictBase.lean::RewriteMatchDeclared` + `WF` (declared ⇒ dot-free): a consumer
+  holding those discharges it as
+  `fun r hr => isLeafPred_eq_false_of_relNameOK (relNameOK_of_mem_keys hWF (hMatch r hr).1)`.
+  It is taken EXPLICITLY, not derived, because `RewriteMatchDeclared` lives in
+  `RestrictBase.lean`, whose imports (`ReconcileCorrect`, `RulesBareStar`) would drag
+  the Reconcile cone under this module and void the header's "the cone is one file"
+  accounting.
+* `hne` — a derived relation name is non-empty. `LeafNode` carries a mandatory
+  `leafPublic p ≠ ""` conjunct (E3's residual guard, `Leaf.lean::LeafNode`), and
+  `Core/Schema.lean::relNameOK` does not forbid `""`, so the fact must arrive as a
+  premise. ⚠ It is NOT supplied by `StoreValidRulesD`, which constrains stored
+  tuples, never relation-name non-emptiness.
+* `hon` — a `STAR`-named object routes `objNode` to its `w_all` variant, which
+  `LeafNode` deliberately excludes (it models the target of a raw leaf-routed write,
+  and object wildcards on derived relations are scope-rejected,
+  `zanzibar_utils_v1.py::UnsupportedByGraphIndex`). -/
+
+/-- A rule can only produce `some` by matching, and it keeps the object: the four
+    facts every consumer of `applyRRule` re-derives, extracted once.
+    (`RulesWrite.lean::applyRRule` — both kinds keep `t.object` and emit `r.outRel`.) -/
+theorem applyRRule_some {r : RRule} {t u : Tuple} (h : applyRRule r t = some u) :
+    u.object = t.object ∧ u.relation = r.outRel ∧
+      t.relation = r.matchRel ∧ t.object.type = r.objectType := by
+  unfold applyRRule at h
+  split at h
+  next hc =>
+    split at h
+    all_goals
+      have heq := Option.some.inj h
+      subst heq
+      exact ⟨rfl, rfl, hc.1, hc.2⟩
+  next => simp at h
+
+/-- The `objectType` companion of `outRel_mem_of_mem_exprArms`: `exprArms` stamps the
+    object type it was given onto every arm. -/
+theorem objectType_of_mem_exprArms {ot outRel : String} {e : Expr} {r : RRule}
+    (h : r ∈ exprArms ot outRel e) : r.objectType = ot := by
+  induction e with
+  | direct _ => simp [exprArms] at h
+  | computed _ => simp [exprArms] at h; subst h; rfl
+  | ttu _ _ => simp [exprArms] at h; subst h; rfl
+  | union a b iha ihb =>
+      rw [exprArms, List.mem_append] at h
+      exact h.elim iha ihb
+  | inter _ _ _ _ => simp [exprArms] at h
+  | excl _ _ _ _ => simp [exprArms] at h
+
+/-- **Every leaf rule targets a minted leaf of a relation DERIVED on its own object
+    type.** Sharpens `isLeafPred_outRel_of_mem_leafRewrites` from "carries a dot" to
+    the full provenance the `LeafNode` conclusion needs (`publicOfLeaf` demands
+    `isDerived`, not just a dot). -/
+theorem mem_leafRewrites_shape {S : Schema} {r : RRule} (h : r ∈ leafRewrites S) :
+    ∃ R i, r.outRel = leafPred R i ∧ isDerived S (r.objectType, R) = true := by
+  unfold leafRewrites at h
+  obtain ⟨d, hd, hr⟩ := List.mem_flatMap.mp h
+  have hder : isDerived S d.1 = true := (List.mem_filter.mp hd).2
+  unfold keyLeafRewrites at hr
+  obtain ⟨pi, _, hpi⟩ := List.mem_flatMap.mp hr
+  split at hpi
+  · refine ⟨d.1.2, pi.2, outRel_mem_of_mem_exprArms hpi, ?_⟩
+    rw [objectType_of_mem_exprArms hpi]
+    exact hder
+  · simp at hpi
+
+/-- A fired leaf rule's OUTPUT is leaf-shaped whatever tuple it fired on: minted leaf
+    relation, derived on the (preserved) object's type. This is why the invariant
+    below is absorbing — leaf rules can chain off anything and still land leaf-shaped. -/
+theorem leafShape_of_applyRRule_leafRewrites {S : Schema} {r : RRule} {u v : Tuple}
+    (hr : r ∈ leafRewrites S) (h : applyRRule r u = some v) :
+    ∃ R i, v.relation = leafPred R i ∧ isDerived S (v.object.type, R) = true ∧
+      v.object = u.object := by
+  obtain ⟨R, i, hout, hder⟩ := mem_leafRewrites_shape hr
+  obtain ⟨hobj, hrel, -, hty⟩ := applyRRule_some h
+  refine ⟨R, i, hrel.trans hout, ?_, hobj⟩
+  rw [hobj, hty]
+  exact hder
+
+/-- The `hmd` discharge bridge: a dot-free name is not a leaf predicate. With
+    `relNameOK_of_mem_keys`, this turns `RestrictBase.lean::RewriteMatchDeclared`'s
+    "declared" into this section's "matches no leaf name" without importing
+    `RestrictBase` (see the section header for why the import is refused). -/
+theorem isLeafPred_eq_false_of_relNameOK {R : String} (h : relNameOK R) :
+    isLeafPred R = false := by
+  by_contra hne
+  refine h ?_
+  have hne' : isLeafPred R = true := by simpa using hne
+  have hmem : '.' ∈ R.toList := by
+    simpa [isLeafPred, List.contains_eq_mem] using hne'
+  simpa [String.contains_char_eq] using hmem
+
+/-- **The lockstep kernel induction.** If every current-frontier tuple is either on
+    the untainted frontier or leaf-shaped (and shares `t`'s object), the same split
+    holds of every tuple either kernel ever produces — at EQUAL fuel, which is what
+    lets the payoff theorem instantiate both kernels at `S.keys.length + 1` with no
+    saturation lemma. Leaf-shaped means: relation is a minted leaf name of a relation
+    derived on `t.object.type`. The two step cases:
+    * an untainted rule cannot fire on a leaf-shaped tuple (`hmd` vs
+      `isLeafPred_leafPred`), so the untainted side only ever steps from the
+      untainted side — in lockstep;
+    * a leaf rule's output is leaf-shaped from ANY input
+      (`leafShape_of_applyRRule_leafRewrites`) — the invariant absorbs it. -/
+theorem rewriteClosureAuxL_extras {S : Schema}
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false) (t : Tuple) :
+    ∀ (n : Nat) (cur curB : List Tuple),
+      (∀ u ∈ cur, u.object = t.object) →
+      (∀ u ∈ cur, u ∈ curB ∨ ∃ R i, u.relation = leafPred R i ∧
+          isDerived S (t.object.type, R) = true) →
+      ∀ v ∈ rewriteClosureAuxL S n cur,
+        (v ∈ rewriteClosureAux S n curB ∨ ∃ R i, v.relation = leafPred R i ∧
+            isDerived S (t.object.type, R) = true) ∧ v.object = t.object := by
+  intro n
+  induction n with
+  | zero =>
+      intro cur curB hobj hinv v hv
+      exact ⟨hinv v hv, hobj v hv⟩
+  | succ n ih =>
+      intro cur curB hobj hinv v hv
+      simp only [rewriteClosureAuxL, List.mem_append] at hv
+      rcases hv with hv | hv
+      · rcases hinv v hv with hB | hleaf
+        · refine ⟨Or.inl ?_, hobj v hv⟩
+          simp only [rewriteClosureAux, List.mem_append]
+          exact Or.inl hB
+        · exact ⟨Or.inr hleaf, hobj v hv⟩
+      · have hstep_obj : ∀ w ∈ cur.flatMap (rewriteStepL S), w.object = t.object := by
+          intro w hw
+          obtain ⟨u, hu, hwu⟩ := List.mem_flatMap.mp hw
+          unfold rewriteStepL at hwu
+          obtain ⟨r, _, hr⟩ := List.mem_filterMap.mp hwu
+          rw [(applyRRule_some hr).1]
+          exact hobj u hu
+        have hstep_inv : ∀ w ∈ cur.flatMap (rewriteStepL S),
+            w ∈ curB.flatMap (rewriteStep S) ∨ ∃ R i, w.relation = leafPred R i ∧
+              isDerived S (t.object.type, R) = true := by
+          intro w hw
+          obtain ⟨u, hu, hwu⟩ := List.mem_flatMap.mp hw
+          unfold rewriteStepL at hwu
+          obtain ⟨r, hrmem, hr⟩ := List.mem_filterMap.mp hwu
+          rw [schemaRewritesL, List.mem_append] at hrmem
+          rcases hrmem with hrS | hrL
+          · rcases hinv u hu with hB | ⟨R, i, hrel, _⟩
+            · refine Or.inl (List.mem_flatMap.mpr ⟨u, hB, ?_⟩)
+              unfold rewriteStep
+              exact List.mem_filterMap.mpr ⟨r, hrS, hr⟩
+            · exfalso
+              have hm : u.relation = r.matchRel := (applyRRule_some hr).2.2.1
+              have hlp : isLeafPred r.matchRel = true := by
+                rw [← hm, hrel]; exact isLeafPred_leafPred R i
+              rw [hmd r hrS] at hlp
+              exact Bool.noConfusion hlp
+          · obtain ⟨R, i, hrel, hder, hwo⟩ := leafShape_of_applyRRule_leafRewrites hrL hr
+            refine Or.inr ⟨R, i, hrel, ?_⟩
+            rw [hwo, hobj u hu] at hder
+            exact hder
+        obtain ⟨hres, hvo⟩ := ih (cur.flatMap (rewriteStepL S))
+          (curB.flatMap (rewriteStep S)) hstep_obj hstep_inv v hv
+        rcases hres with hB | hleaf
+        · refine ⟨Or.inl ?_, hvo⟩
+          simp only [rewriteClosureAux, List.mem_append]
+          exact Or.inr hB
+        · exact ⟨Or.inr hleaf, hvo⟩
+
+/-- **The unowned superset-extras fact (4c-ii step 2).** Every tuple the leaf-routed
+    closure produces is either one today's rewrite closure already produced, or its
+    target node is a `LeafNode` — the exact split the post-re-point shadow
+    classification consumes, stated pre-re-point so it is green-stoppable. Seeds:
+    untainted `t` seeds `[t]` on both sides (`rawWriteTuples_untainted`); derived `t`
+    seeds only leaf-shaped tuples (`mem_rawWriteRels_derived`). The kernels then run
+    in lockstep (`rewriteClosureAuxL_extras`), and `publicOfLeaf_leafPred` /
+    `leafPublic_leafPred` + `hne` assemble a leaf-shaped survivor into `LeafNode`. -/
+theorem rewriteClosureL_extras_leafNode {S : Schema} (hWF : WF S)
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hne : ∀ dt R, isDerived S (dt, R) = true → R ≠ "")
+    {t : Tuple} (hon : t.object.name ≠ STAR) :
+    ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
+      u ∈ rewriteClosure S t ∨ LeafNode S (objNode u.object u.relation) := by
+  intro u hu
+  rw [mem_rewriteClosureL_iff] at hu
+  unfold rewriteClosureRawL at hu
+  have hobj : ∀ w ∈ rawWriteTuples S t, w.object = t.object := by
+    intro w hw
+    obtain ⟨r, _, rfl⟩ := List.mem_map.mp hw
+    rfl
+  have hinv : ∀ w ∈ rawWriteTuples S t, w ∈ [t] ∨ ∃ R i, w.relation = leafPred R i ∧
+      isDerived S (t.object.type, R) = true := by
+    intro w hw
+    by_cases hd : isDerived S (t.object.type, t.relation) = true
+    · obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hw
+      refine Or.inr ?_
+      obtain ⟨i, rfl⟩ := mem_rawWriteRels_derived hd hr
+      exact ⟨t.relation, i, rfl, hd⟩
+    · rw [rawWriteTuples_untainted (by simpa using hd)] at hw
+      exact Or.inl hw
+  obtain ⟨hres, huo⟩ := rewriteClosureAuxL_extras hmd t (S.keys.length + 1)
+    (rawWriteTuples S t) [t] hobj hinv u hu
+  rcases hres with hmem | ⟨R, i, hrel, hder⟩
+  · exact Or.inl (mem_rewriteClosure_iff.mpr hmem)
+  · refine Or.inr ⟨t.object.type, t.object.name, leafPred R i, ?_, ?_, hon, ?_⟩
+    · rw [publicOfLeaf_leafPred hWF hder i]; rfl
+    · rw [leafPublic_leafPred R i (relNameOK_of_isDerived hWF (k := (t.object.type, R)) hder)]
+      exact hne t.object.type R hder
+    · rw [huo, hrel]
+
+/-- The `hne` discharge bridge. `hne` quantifies over ALL strings, so it is not
+    decidable at a concrete schema; but derived ⇒ declared (`taintedKeys_subset_keys`),
+    so an `.all`-scan of the KEYS list — which IS `by decide` at any concrete schema —
+    suffices. The nonvacuity witness below consumes it, and 4c-ii can too. -/
+theorem hne_of_keys_nonempty {S : Schema} (h : S.keys.all (fun k => k.2 != "") = true) :
+    ∀ dt R, isDerived S (dt, R) = true → R ≠ "" := by
+  intro dt R hd
+  have hk : (dt, R) ∈ S.keys := taintedKeys_subset_keys S (by
+    simpa [isDerived, List.contains_eq_mem] using hd)
+  have := List.all_eq_true.mp h _ hk
+  simpa using this
+
 /-! ## The non-vacuity witnesses
 
 Everything above is additive, so a green build vets nothing: `leafRewrites` returning
@@ -461,6 +702,40 @@ theorem lrV_closure_today_misses_leaf :
 theorem lrV_writeRulesRaw_edges_ne :
     ((emptyState SlV).writeRulesRaw SlV tlEditor).edges
       ≠ ((emptyState SlV).writeRules SlV tlEditor).edges := by decide
+
+/-! ### Non-vacuity of the superset-extras lemma (4c-ii step 2)
+
+`rewriteClosureL_extras_leafNode` carries four premises, and a lemma whose premises
+never hold at once is true and says nothing — the `graph_correct_public` VACUITY
+WARNING shape (PROOF_STATUS 2026-08-28b), recurring. So the premises are DISCHARGED
+at `SlV`/`tlEditor` — all four, no hypothesis survives — and the lemma is APPLIED at
+the exact extra the `lrV_closure_reaches_leaf` / `lrV_closure_today_misses_leaf`
+pair pins: `doc:d1#viewer.0@user:alice` is in the leaf-routed closure and NOT in
+today's, so the instantiation is FORCED onto the `LeafNode` disjunct. The conclusion
+below is thereby derived *through the lemma* on a reachable instance, never decided
+directly — a `by decide` of the conclusion alone would prove nothing about the
+lemma's applicability. -/
+
+/-- `WF SlV` — same shape as `LeafWitness.wf`; no `WF` witness for `SlV` existed
+    anywhere importable, so it is proved here rather than found. -/
+theorem slV_wf : WF SlV := ⟨by
+  intro p hp
+  simp only [SlV, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl <;> simp [relNameOK, String.contains_char_eq]⟩
+
+/-- **The superset-extras lemma is NON-VACUOUS**: at `SlV`/`tlEditor` every premise is
+    discharged (`hWF` := `slV_wf`; `hmd`, `hon` and the seed membership by `decide`;
+    `hne` via `hne_of_keys_nonempty` + `decide`), and on the pinned extra it must take
+    the `LeafNode` disjunct, because the left one is refuted (`by decide`, the
+    membership half of `lrV_closure_today_misses_leaf`). -/
+theorem rewriteClosureL_extras_leafNode_nonvacuous :
+    LeafNode SlV (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) := by
+  have h := rewriteClosureL_extras_leafNode slV_wf (by decide)
+    (hne_of_keys_nonempty (by decide)) (t := tlEditor) (by decide)
+    ⟨⟨"user", "alice", BARE⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩ (by decide)
+  rcases h with hmem | hleaf
+  · exact absurd hmem (by decide)
+  · exact hleaf
 
 end LeafRuleWitness
 

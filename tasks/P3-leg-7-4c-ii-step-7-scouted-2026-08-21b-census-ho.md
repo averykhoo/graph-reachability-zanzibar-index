@@ -1,7 +1,7 @@
 ---
 id: P3
-title: leg 7 4c-ii + step 7 -- step 1 LANDED 2026-08-30b; steps 1-2 green-stoppable, 3-10 are not
-brief: The middle (steps 3-10) is un-splittable and never at a session tail; exit scope doc 11.12, whose rule 3 is defective
+title: leg 7 4c-ii + step 7 -- green prefix COMPLETE 2026-08-30b (steps 1-2); left is the middle, 3-10
+brief: Opens at step 3 (classify gains a LeafNode disjunct, first red edit), never at a session tail; sizing DISPUTED
 pri: NOW
 size: L
 deps: []
@@ -9,7 +9,7 @@ related: [P6]
 parent:
 labels: [formal]
 source: board
-source_hash: 728d649aadda
+source_hash: c002792b539d
 created: 2026-08-21b
 moved: 2026-08-30b
 updated: 2026-08-30b
@@ -54,12 +54,28 @@ the narrowest, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse th
 ⚠ **Seven traps live in scope doc §11.10** — the backwards own-key premise, the
 leading-conjunct ordering, the `FoldAdmits` sites (21/3 above), the derived golden
 expectation, Route B's two premises. **Read §11.10 before touching the cone**, AS
-CORRECTED BY §11.11 item 8 and by two corrections made 2026-08-30b:
+CORRECTED BY §11.11 item 8 and by five corrections made 2026-08-30b:
 
 * **the non-emptiness premise is NOT `StoreValidRulesD`** — it constrains stored tuples,
   never relation-name non-emptiness. The superset-extras lemma needs an explicit
   `hne : ∀ dt R, isDerived S (dt,R) = true → R ≠ ""`, and the red middle must thread it.
+  It is cheap now: `LeafRules.lean::hne_of_keys_nonempty` turns it into a `by decide`
+  scan of `S.keys`.
 * **`rawWriteRels` is `Leaf.lean:587`** (post-edit), not `:541` — cite `file::symbol`.
+* ⚠ **the cone sizing is DISPUTED and unverified in BOTH directions.** A live import-BFS
+  census on 2026-08-30b measured **24 modules / 125 code sites / 13 files** (second ring
+  36 raw / 27 code) against the record's **42 / ~136 / 8** (90 / 50), and no measured set
+  reproduced the recorded figures. The **3-session estimate rests on those figures**, so
+  re-measure before planning the middle and do not re-cite either set as fact.
+* **`FoldAdmits`' second exec gate is `Exec.lean:443`**, not the scope doc's `:376`
+  (19 Prop + 2 exec gates move, 3 stay).
+* ⚠ **`hql` may land on more than one pinned row.** `headline_statements.txt:46`
+  (`W4WitnessDirect.correct_applies`) and `:56` (`::w3d2E_correct_applies`) carry the
+  identical unfenced shape and are excluded from the "one row" count only as "staged
+  records over intermediate chains". Check before step 7; step 7 finds out the hard way.
+
+None of the three measurement flags was adjudicated — the prefix work did not need the
+cone's size, and they are logged, not settled.
 
 ⚠ **The revert-to-green exit is scope doc §11.12, and its rule 3 is DEFECTIVE**: it
 promises `PROOF_STATUS.md` "survives the reset", but nothing uncommitted survives
@@ -72,12 +88,15 @@ green-stoppable prefix before running a sabotage against it. It cost 105 lines o
 - [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule; enforced by `migrate.py::check_formal_pointer`, not merely stated)
 - board pointer: [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §11.9
 
-PROOF_STATUS `## Session 2026-08-21b` then `2026-08-20b`, scope doc §11.9
-then **§11.10 (the traps)**, `GraphIndex/Scratch4cii.lean`, §11.7, §11.5; completion
-criterion: PROOF_STATUS `2026-08-16c`, its numbers re-derived from `formal/FINAL_REVIEW.md`'s
-generated ledger, never prose. Then `CascadeStable.lean::shadow_graphRec_agree` /
-`::reachedByW3d_shadow` / `::untaintedShadow_writeLeg`, `LeafRules.lean::GraphState.writeRulesRaw`,
-`Leaf.lean::publicOfLeaf`, `Exec.lean::foldAdmitsB`, `extractor.py::_edge_projection`.
+PROOF_STATUS **`## Session 2026-08-30` (§0–§8) FIRST** — it carries the prefix that landed,
+the sabotages, and the three measurement flags — then `2026-08-28c` / `2026-08-28d` /
+`2026-08-21b`; scope doc §11.11, **§11.10 (the traps)**, §11.12, then §11.9 / §11.7 / §11.5;
+`GraphIndex/Scratch4cii.lean`; completion criterion: PROOF_STATUS `2026-08-16c`, its numbers
+re-derived from `formal/FINAL_REVIEW.md`'s generated ledger, never prose. Then
+`Leaf.lean::LeafNode`, `LeafRules.lean::rewriteClosureL_extras_leafNode`,
+`CascadeStable.lean::UntaintedShadow` / `::reachedByW3d_shadow` / `::untaintedShadow_writeLeg`,
+`LeafRules.lean::GraphState.writeRulesRaw`, `Exec.lean::foldAdmitsB`,
+`extractor.py::_edge_projection`.
 
 ## Log
 
@@ -179,3 +198,45 @@ Strict-superset witness already pinned at Scratch4cii.lean::mixed_is_strict_supe
 edit. Full record: PROOF_STATUS `## Session 2026-08-30`; root ledger 2026-08-30b.
 
 Same-session re-stamp, not housekeeping: this session rewrote the P3 board row and item block (step 1 landed; the prefix/middle split; the two trap corrections) and mirrored all of it here -- title, brief, the 2026-08-30b Log entry, and a rewritten Traps section carrying the StoreValidRulesD and rawWriteRels corrections plus the defective 11.12 rule 3. The body's 2026-08-21 summary block is left as filed, per this task's own convention that the Log carries the updates.
+
+SECOND WRITE-BACK, same session. Step 2 also LANDED green, so the green prefix is COMPLETE
+and everything left in P3 is the un-splittable middle, steps 3->10.
+
+STEP 2: LeafRules.lean::rewriteClosureL_extras_leafNode -- the unowned superset-extras
+lemma that section 11.11 recorded as owned by no slice. Proved at the designed statement,
+general t, no premise weakened: for all u in rewriteClosureL S (rawWriteTuples S t),
+u is in rewriteClosure S t OR LeafNode S (objNode u.object u.relation). +229 lines, purely
+additive, full lake build green. Workhorse: ::rewriteClosureAuxL_extras, a lockstep
+equal-fuel induction over both kernels.
+
+NON-VACUITY PINNED with no hypotheses:
+LeafRuleWitness::rewriteClosureL_extras_leafNode_nonvacuous. All four premises discharged
+at SlV/tlEditor, and the conclusion is derived THROUGH the lemma (left disjunct refuted),
+not decided directly. Demanded because a four-premise lemma whose premises never hold
+together is true and empty -- the same shape as 2026-08-28b's graph_correct_public vacuity
+warning. Two by-products: ::slV_wf had to be proved (no WF SlV witness existed anywhere
+importable), and ::hne_of_keys_nonempty, a reusable bridge turning the undecidable hne into
+a `by decide` scan of S.keys -- the middle inherits both.
+
+SABOTAGE: drop the LeafNode disjunct -> rc=1, type mismatch at LeafRules.lean:518, red for
+the right reason. No pre-existing `by decide` pin would have caught it; the non-vacuity
+theorem is now that reference.
+
+NEXT ACTION IS STEP 3: CascadeStable.lean::UntaintedShadow.classify gains the LeafNode
+disjunct (:529) -- the FIRST RED edit and the middle's only door. Open it at the top of a
+fresh window, never at a session tail, with the section 11.12 exit declared first.
+
+THREE MEASUREMENT FLAGS, logged and NOT adjudicated (the prefix did not need the cone
+size); all three are now in the Traps section. (1) A live import-BFS census measured 24
+modules / 125 code sites / 13 files (ring 2: 36 raw / 27 code) against the record's 42 /
+~136 / 8 (90 / 50), and no measured set reproduced the record -- the 3-session sizing rests
+on those figures and is unverified in both directions. (2) FoldAdmits' second exec gate is
+Exec.lean:443, not the scope doc's :376. (3) hql may land on more than one pinned row:
+headline_statements.txt:46 correct_applies and :56 w3d2E_correct_applies carry the
+identical unfenced shape.
+
+Gate: all ten phases were green after step 1; the step-2 run was still going at write-back
+-- ask scripts/gate_status.py, never a line here. Full detail: PROOF_STATUS
+`## Session 2026-08-30` sections 7-8; root ledger 2026-08-30b.
+
+Second write-back of the same session: the board row was rewritten again (prefix complete, step 3 is the next action, five trap corrections) and mirrored here in the same pass -- title, brief, the Traps section with the three measurement flags, the reordered Read first, and the 2026-08-30b Log entry. Re-stamping the digest against the row I just wrote and read.

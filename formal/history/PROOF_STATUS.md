@@ -186,6 +186,102 @@ Recommended amendment to §11.12, for whoever next edits the scope doc: replace 
 then reset onto it", and add a rule 6: *commit every green-stoppable prefix before running
 a sabotage against it.*
 
+### 7. Step 2 LANDED (green): the unowned superset-extras lemma, and it is NON-VACUOUS
+
+`LeafRules.lean::rewriteClosureL_extras_leafNode`, proved at the statement it was designed
+at — no premise weakened, no restriction to untainted `t`:
+
+    theorem rewriteClosureL_extras_leafNode {S : Schema} (hWF : WF S)
+        (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+        (hne : ∀ dt R, isDerived S (dt, R) = true → R ≠ "")
+        {t : Tuple} (hon : t.object.name ≠ STAR) :
+        ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
+          u ∈ rewriteClosure S t ∨ LeafNode S (objNode u.object u.relation)
+
+Every tuple the leaf-routed closure produces is either one the old rewrite closure already
+produced, or its target is a `LeafNode`. **This is the obligation §11.11 recorded as
+unowned** — the one no slice paid for, and the reason the post-re-point leaf list is a
+strict superset of the rewrite list even on untainted tuples. It is now owned, stated
+pre-re-point, and the red middle is one obligation shorter.
+
++229 lines, purely additive, `lake build` green at 1089 jobs. Supporting: `applyRRule_some`,
+`objectType_of_mem_exprArms`, `mem_leafRewrites_shape`,
+`leafShape_of_applyRRule_leafRewrites`, and the workhorse `rewriteClosureAuxL_extras`.
+
+**Non-vacuity is PINNED, with no hypotheses** —
+`LeafRuleWitness::rewriteClosureL_extras_leafNode_nonvacuous : LeafNode SlV (objNode
+⟨"doc","d1"⟩ (leafPred "viewer" 0))`. It instantiates the lemma at `SlV`/`tlEditor` on the
+extra already pinned by `lrV_closure_reaches_leaf` / `lrV_closure_today_misses_leaf`, and
+the left disjunct is refuted, so the conclusion is *derived through the lemma* rather than
+decided directly (verified first-hand by reading the proof term, not from the report).
+Demanded because a four-premise lemma whose premises cannot hold together is true and
+empty — the `2026-08-28b` `graph_correct_public` VACUITY WARNING and `2026-08-28d`'s
+`slSwD_not_mono` are the same shape, and a sabotage that only shows the conclusion is
+unprovable without a disjunct does NOT show the theorem ever applies.
+
+Discharging the premises produced two things worth keeping:
+
+- **`slV_wf` had to be proved: no `WF SlV` witness existed anywhere importable.** `SlV` is
+  used by `Scratch4cii.lean`'s probe batteries, which never needed it. Anyone assuming a
+  `WF` witness is available for a probe fixture should check first.
+- **`hne_of_keys_nonempty`** — `hne` quantifies over all strings and is not decidable, but
+  derived ⇒ declared (`taintedKeys_subset_keys`), so a `by decide` scan of `S.keys`
+  suffices. General-purpose: 4c-ii can reuse it at any concrete schema.
+
+⚠ **Three corrections to the step-2 design, from the proof attempt.** (i) The route "fuel
+induction reusing `rewriteClosureAuxL_eq`'s layer algebra" does not work — that lemma is
+the untainted-schema collapse and is unusable where the schema has derived keys; the
+invariant must be pushed through BOTH kernels at EQUAL FUEL (`rewriteClosureAuxL_extras`).
+(ii) `isLeafPred_outRel_of_mem_leafRewrites` exists but is too weak — dot-carrying only,
+where the proof needs derivedness plus object-type provenance (`mem_leafRewrites_shape`).
+(iii) `hmd` stays an explicit premise rather than being derived from
+`RestrictBase.lean::RewriteMatchDeclared`: importing `RestrictBase` would drag the Reconcile
+cone under `LeafRules` and void the header's one-file cone accounting. The bridge
+`isLeafPred_eq_false_of_relNameOK` gives a `RewriteMatchDeclared`+`WF` holder `hmd` in one
+line, so the red middle pays nothing for the choice.
+
+Sabotage, as required before believing it: drop the `LeafNode` disjunct from the conclusion
+→ `rc=1`, `LeafRules.lean:518: Type mismatch … has type u ∈ rewriteClosure S t ∨ ?m.252 but
+is expected to have type u ∈ rewriteClosure S t` — red because the leaf-shaped survivors
+have nowhere to go, which is the right reason. ⚠ **No existing `by decide` pin would catch
+the removal** (nothing references the new theorem yet); the non-vacuity theorem is now that
+reference, which is a second reason it was worth demanding.
+
+### 8. Where `P3` stands, and what the next session opens
+
+**The green prefix is COMPLETE.** Steps 1 and 2 — the `LeafNode` carrier and the
+superset-extras lemma — are landed, gated and committed. Everything remaining in `P3` is
+the un-splittable middle, steps 3→10, unchanged in content:
+
+3. weaken `CascadeStable.lean::UntaintedShadow.classify` with `∨ LeafNode S ab.2` ★ FIRST RED
+4. `::shadow_graphRec_agree` takes the `hql`-shaped hypothesis; discharge at its call sites,
+   then the second ring via `ReconcileStars.lean::checkFn_agree_of_graphRec`
+5. re-point the write-leg bodies onto `rewriteClosureL S (rawWriteTuples S t)`
+6. `Cascade.lean::affectedKeys` own-key branch via `publicOfLeaf`, `d.leaf = true` leading
+7. `hql` onto `graph_correct` and its consumer
+8. Python: retire the `P6` branch in `extractor.py::_edge_projection` + its two tests
+9. regenerate the statement/definition pins and the `CORRESPONDENCE.md` anchors
+10. full green ★ LAST RED
+
+⚠ **Two numbers in the record did not survive re-measurement and should not be re-cited
+until someone settles them.** A live import-BFS census measured a **24-module** reverse
+cone and **125 code sites / 13 files**, against the record's **42 modules / ~136 sites /
+8 files**; the second ring measured **36 raw / 27 code** against the recorded **90 / 50**.
+No measured set reproduced the recorded figures. This session did not adjudicate it — the
+prefix work did not need the cone size — so it is logged, not resolved. The 3-session
+sizing rests on those figures and is now itself unverified in both directions.
+
+⚠ **`FoldAdmits`**: the live census confirms 19 Prop sites + 2 exec gates move, 3 stay
+(`RulesComplete.lean:91`, `RestrictBase.lean:470`, `:531`) — but the second exec gate is
+`Exec.lean:443`, **not** the `:376` the scope doc documents.
+
+⚠ **`hql` may land on more than one pinned row.** The record says one (`graph_correct`,
+`headline_statements.txt:27`). A mechanical scan found `:46 correct_applies` and
+`:56 w3d2E_correct_applies` carrying the identical unfenced shape over `ReachedByW3d2C/E`,
+excluded from the count only as "staged records over intermediate chains". Whether those
+chains are re-pointed decides it, and step 7 is where it will be discovered the hard way if
+nobody checks first.
+
 ## Session 2026-08-28d (**`P14`'s `UntaintedShadow` ADJUDICATION IS SETTLED, AND IT MOVED THE ANSWER: `classify` is the ONLY field that ever fails, the three fields no probe had ever touched hold everywhere, and the recorded refutation `slSwD_not_mono` turns out to be an INSTRUMENT ARTIFACT — it pairs against a σ0 the `_d` chain never builds. Against the σ0 `reachedByW3d2_shadow_d` actually constructs, the weakened shadow holds on all six fields and the unweakened one is UNINHABITED, now at Prop level. The six-field mirror is PROVED against `UntaintedShadow` itself, and its sabotage showed the `decide` pins are blind to a mis-transcription that only the correctness theorem catches. Also: a drifted gate floor repaired, and the orientation doc's rotted figures deleted rather than updated.**)
 
 **Task taken:** `P3`'s stated next step (`2026-08-28c`) — settle the `P14`
