@@ -25,6 +25,24 @@ from here.
 
 ---
 
+## 2026-08-31b — `P20`: the narrowing is accepted because Python REFUSES what it excludes, and the refusal is now pinned
+
+rows: `P3`, `P20`
+
+Formal detail is [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-31b`. This entry is the root trace. **Gate:** ask
+`python scripts/gate_status.py`, never a line here.
+
+**This entry is opened BEFORE the first Lean edit** and is committed docs-only, per the
+§11.12 rule-1 preamble. Green anchor `077bb50`, verified COVERED first-hand. It is
+appended to as the session proceeds.
+
+**Scope fixed up front:** `P20` (a)+(b) and the one unblocked `P3` edit (the bridge). Step 6
+itself is **not** taken — adjudicating a change and landing it in the same session is the
+shape the user declined on 2026-08-31.
+
+Still owed: (in progress — this entry is appended to before the session closes)
+
 ## 2026-08-31 — the 4c-ii middle's blocking question was a misread `∨`; and step 3's cone is 30 modules, not 21
 
 rows: `P3`
