@@ -1090,15 +1090,40 @@ theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
       simpa [objNode_pred] using this
     rw [htype, hpred, hder] at hunt
     cases hunt
-  have hv3 : ¬ DerNode S (wAllNode dt' r') := by
-    rintro ⟨dt, on, R, _, _, hon, heq⟩
-    rw [objNode_plain hon] at heq
-    have := congrArg NodeKey.variant heq
-    simp [wAllNode] at this
+  -- PRE-WIDENED (4c-ii step 6, 2026-08-31c). This `have` is deliberately STRONGER than
+  -- what `shadow_reach_agree` asks for today, which is why the two uses below go through
+  -- `Or.inl`. At step 9 `UntaintedShadow` is re-pointed at `ShadowOver (fun k => DerNode
+  -- S k ∨ LeafNode S k)`; then `shadow_reach_agree` wants exactly this statement and the
+  -- flip is "delete the two `Or.inl` wrappers", not a proof. Same pattern as
+  -- `CascadeStrataSettle.lean:960`. Do NOT "simplify" it back to the `DerNode`-only form.
+  --
+  -- It costs no new premise, and that is a fact about `wAll` nodes rather than luck:
+  -- `State.lean::wAllNode` is `⟨t, STAR, R, Variant.wAll⟩`, while `Leaf.lean::LeafNode`
+  -- carries `on ≠ STAR ∧ k = objNode ⟨ty,on⟩ p`, which `DirectCorrect.lean::objNode_plain`
+  -- turns into `Variant.plain`. So the LeafNode disjunct dies by the SAME variant mismatch
+  -- the DerNode branch already used. Pinned against vacuity by the discriminating pair
+  -- `Leaf.lean::minted_leaf_is_leafNode` (true) / `::wAllNode_not_leafNode` (false) --
+  -- same schema, same type, same predicate, differing only in node shape.
+  --
+  -- ⚠ `hv1` is NOT free the same way and must not be bundled into this edit: it needs
+  -- `NotLeafName r'` for the OPERAND relation, which `hunt` does not give (a minted leaf
+  -- name like `viewer.0` is itself non-derived while `leafPublic` of it is derived), and
+  -- the premise cannot be phrased locally because `ReconcileStars.lean::
+  -- checkFn_agree_of_graphRec{,_cd}` hand their `hag` callback exactly
+  -- `isDerived S (dt,r') = false`. That is scope-doc 11.13 trap (g), still open.
+  have hv3 : ¬ (DerNode S (wAllNode dt' r') ∨ LeafNode S (wAllNode dt' r')) := by
+    rintro (⟨dt, on, R, _, _, hon, heq⟩ | ⟨ty, on, p, _, _, hon, heq⟩)
+    · rw [objNode_plain hon] at heq
+      have := congrArg NodeKey.variant heq
+      simp [wAllNode] at this
+    · rw [objNode_plain hon] at heq
+      have := congrArg NodeKey.variant heq
+      simp [wAllNode] at this
   unfold GraphModel.graphRec GraphModel.probeNonDerived
   dsimp only
   rw [shadow_reach_agree hsh hv1 (subjNode s), shadow_reach_agree hsh hv1 (wAnyNode s.shape),
-    shadow_reach_agree hsh hv3 (subjNode s), shadow_reach_agree hsh hv3 (wAnyNode s.shape)]
+    shadow_reach_agree hsh (fun h => hv3 (Or.inl h)) (subjNode s),
+    shadow_reach_agree hsh (fun h => hv3 (Or.inl h)) (wAnyNode s.shape)]
 
 /-- **The W3d read bridge (`checkFn_eq_sem_w3d`)**: the compiled pass guard equals
     `sem` at EVERY W3d state — through the untainted-core shadow (`checkFn` reads

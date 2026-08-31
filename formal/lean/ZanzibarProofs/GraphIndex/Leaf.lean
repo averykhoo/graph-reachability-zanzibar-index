@@ -1244,6 +1244,39 @@ theorem bare_subject_not_leafNode :
 theorem minted_leaf_is_leafNode :
     leafNodeB Sw (objNode ⟨"doc", "d1"⟩ (leafPred "approver" 0)) = true := by decide
 
+/-- **The `wAll` node at that SAME leaf name is NOT a `LeafNode`** — the companion the
+    pin above needs, and the reason `CascadeStable.lean::shadow_graphRec_agree`'s widened
+    `hv3` costs no new premise (4c-ii step 6, 2026-08-31c).
+
+    Read the two together: identical schema, identical object type, identical predicate.
+    The ONLY difference is the node SHAPE — `State.lean::wAllNode` is
+    `⟨t, STAR, R, Variant.wAll⟩`, and `LeafNode`'s `on ≠ STAR ∧ k = objNode ⟨ty,on⟩ p`
+    conjuncts force `Variant.plain` at a non-`STAR` name. So this pair isolates exactly
+    the variant/name argument and nothing else; it is not a restatement of
+    `bare_subject_not_leafNode`, which turns on `leafPublic BARE = ""` instead.
+
+    SABOTAGED BEFORE BELIEVED, per `docs/sabotage-procedure.md`. `wAllNode` is excluded by
+    BOTH of `leafNodeB`'s shape conjuncts, so removing either alone leaves this pin green
+    and proves nothing -- the narrowest weakening that actually reaches it drops both:
+    `&& k.name != STAR && k.variant == Variant.plain`. OBSERVED, rc=1, TWO errors:
+
+        Leaf.lean:1267:72: Tactic `decide` proved that the proposition
+          leafNodeB Sw (wAllNode "doc" (leafPred "approver" 0)) = false
+        is false
+        Leaf.lean:556:12: Tactic `cases` failed with a nested error:
+        Dependent elimination failed: Failed to solve equation ...
+
+    This pin was NOT the only error, and the second one is the honest reading rather than a
+    nuisance: `:556` is `leafNodeB_correct`, so the weakened decider stops matching the
+    `LeafNode` carrier at all. The pair is what licenses widening `hv3` for free -- the
+    carrier genuinely excludes `wAll` shapes, and the decider genuinely tracks the carrier.
+    ⚠ This is a LOWER bound on the damage: Lean does not build a module whose dependency
+    errored, so NO dependent of `Leaf.lean` was compiled in that run and the tree-wide
+    count is unmeasured (the 2026-08-30d lower-bound trap, recurring). Restored: rc=0,
+    1089 jobs. -/
+theorem wAllNode_not_leafNode :
+    leafNodeB Sw (wAllNode "doc" (leafPred "approver" 0)) = false := by decide
+
 /-! ### The E3 guard's OWN pin — at the pathological schema, per the sabotage procedure
 
 The two pins above cannot police the `leafPublic … ≠ ""` conjunct: `Sw` declares no
