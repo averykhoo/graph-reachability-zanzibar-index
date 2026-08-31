@@ -1,18 +1,18 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Next: repoint abbrev at DerNode v LeafNode, ~20 tier-1 sites/3 files; blind instrument CLOSED -- green, not red
+brief: Steps 3-5 GREEN. Pre-widen PARTIAL: 3 of 6 'free' sites were not; 5 obligations left, 6-10 blocked on P20.
 pri: NOW
 size: L
-deps: []
+deps: [P20]
 related: [P6]
 parent:
 labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-08-30d
-updated: 2026-08-30d
+moved: 2026-08-31
+updated: 2026-08-31
 closed:
 ---
 
@@ -374,3 +374,7 @@ SABOTAGED, on the one claim in it that could be wrong: NotLeafName p is `p = BAR
 STEPS 3-10 REMAIN, and both recorded risks are unchanged and un-spiked -- in particular the Class-B question (does the checkPublic guard reach the byte-pinned graph_correct?) must be answered BEFORE step 7 is started, not assumed during it.
 
 Trial close-the-loop for this session, mirrored from the root session-log. lint line: `task lint: clean (12 checks, 154 task file(s) parsed)`. read: board + HANDOFF. Honest note, since the trial measures exactly this: `task.py board` was the FIRST command of the session and named the next action correctly, so the query did replace the file read for ORIENTATION -- but it did not replace HANDOFF.md and could not have. `show P3` is 35KB and overflowed context, so the item detail came from tasks/P3-*.md read directly, and the traps / read-first list / exit procedure came from HANDOFF.md and the scope doc. For this session the query was ADDITIVE, NOT SUBSTITUTIVE. That is the outcome the trial exists to detect, and the reason the read-line is a required literal rather than a summary. Actionable consequence for the cutover-or-keep-both decision: `show` has no bounded mode, and a per-item read that cannot fit in a context window is not a replacement for a file -- TT-1 should treat that as a blocking gap, not a polish item.
+
+### 2026-08-31
+
+Steps 3-5 landed green (TtuTargetsSat + additive _gen chain; NoLeafSubjects with a two-layer witness whose sabotage bit twice, S12/S13; the pre-widen). Abbrev STILL UNFLIPPED. Pre-widen is PARTIAL: only 3 of the 6 'free' subjNode sites were free -- CascadeStable.lean:919, CascadeStrataSettle.lean:685 and :1246 quantify over rewriteClosure S t, whose subject predicate is not bare, so bare_subjNode_not_leafNode does not apply. 5 obligations outstanding, not 2. NEXT EDIT: place the NoLeafSubjects -> TtuTargetsSat S NotLeafName bridge (it is List.mem_append_left, since schemaRewritesL = schemaRewrites ++ leafRewrites at LeafRules.lean:106) in a module importing both LeafRules and ReconcileCorrect; only the seed-side NotLeafName t.subject.predicate is then unowned. Steps 6-10 blocked on P20. Full record: PROOF_STATUS ## Session 2026-08-31 sec 3-4; new traps at scope doc 11.13 (i) and (j).

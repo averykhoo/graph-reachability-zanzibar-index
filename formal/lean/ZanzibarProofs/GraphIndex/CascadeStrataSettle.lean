@@ -903,11 +903,25 @@ theorem filter_erase_neg {α : Type _} [DecidableEq α] {p : α → Bool} {t : �
     edge targets a `DerNode` (`classify`'s right branch) and is sourced at a
     non-`DerNode` subject node (so `term` is safe); every other field is monotone.
     Mirror of `untaintedShadow_writeLoggedOne` (`CascadeStable.lean`) without the
-    parallel σ0 step. -/
+    parallel σ0 step.
+
+    **PRE-WIDENED (4c-ii step 5).** `hsubj` is stated at the WIDE extras predicate
+    `DerNode ∨ LeafNode` even though `UntaintedShadow` is still `ShadowOver (DerNode S)`:
+    the `term` field's obligation at the added edge's source is `¬ Extra`, so it grows
+    with the extras when `CascadeStable.lean::UntaintedShadow` is re-pointed. Proving the
+    stronger premise now is what makes that re-point a no-op here. The only call site
+    (`reachedByW3d2_shadow_d`'s derived-write branch) discharges the new half for free from
+    `StoreValidRulesD`'s bare-subject conjunct via `Leaf.lean::bare_subjNode_not_leafNode`.
+
+    `hDer` stays NARROW on purpose — it is a positive producer feeding `classify`'s right
+    branch, so it takes the LEFT injection into the widened extras, and widening the
+    hypothesis instead would weaken the lemma for nothing. The two extras-dependent steps
+    below are written `first | exact … | exact Or.inl …`: today the `Or.inl` alternative
+    fires, after the re-point the bare one does, and **the lines do not change**. -/
 theorem untaintedShadow_writeLoggedOne_derived {S : Schema} {σ σ0 : GraphState}
     (hsh : UntaintedShadow S σ σ0) {u : Tuple}
     (hDer : DerNode S (objNode u.object u.relation))
-    (hsubj : ¬ DerNode S (subjNode u.subject)) :
+    (hsubj : ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject))) :
     UntaintedShadow S (σ.writeLoggedOne u) σ0 := by
   unfold GraphState.writeLoggedOne
   by_cases hb : σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true
@@ -922,7 +936,7 @@ theorem untaintedShadow_writeLoggedOne_derived {S : Schema} {σ σ0 : GraphState
       rcases List.mem_cons.mp hab with heq | hmem
       · refine Or.inr ?_
         rw [heq]
-        exact hDer
+        first | exact hDer | exact Or.inl hDer
       · exact hsh.classify ab hmem
     · -- sub
       intro ab hab
@@ -943,18 +957,23 @@ theorem untaintedShadow_writeLoggedOne_derived {S : Schema} {σ σ0 : GraphState
       rcases List.mem_cons.mp hy with heq | hmem
       · have h1 : k = subjNode u.subject := (Prod.ext_iff.mp heq).1
         rw [h1] at hk
-        exact hsubj hk
+        first | exact hsubj hk | exact hsubj (Or.inl hk)
       · exact hsh.term k hk y hmem
   · rw [if_neg hb]
     exact hsh
 
 /-- **The derived-key write LEG keeps the shadow with σ0 FIXED** — the fold form
     (consumed at the singleton closure `[t]` of a derived-key write; stated over any
-    all-`DerNode`-targeted batch). -/
+    all-`DerNode`-targeted batch).
+
+    **PRE-WIDENED (4c-ii step 5)** in lockstep with
+    `untaintedShadow_writeLoggedOne_derived`, whose premises it threads verbatim: the
+    subject premise is at the wide `DerNode ∨ LeafNode`, the positive target premise stays
+    narrow. -/
 theorem untaintedShadow_writeLeg_derived {S : Schema} :
     ∀ (us : List Tuple) (σ σ0 : GraphState), UntaintedShadow S σ σ0 →
       (∀ u ∈ us, DerNode S (objNode u.object u.relation)) →
-      (∀ u ∈ us, ¬ DerNode S (subjNode u.subject)) →
+      (∀ u ∈ us, ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject))) →
       UntaintedShadow S (us.foldl (fun acc u => acc.writeLoggedOne u) σ) σ0 := by
   intro us
   induction us with
@@ -1225,11 +1244,13 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
       have honS : t.object.name ≠ STAR := (hBS t List.mem_cons_self).2
       have hDer : DerNode S (objNode t.object t.relation) :=
         ⟨t.object.type, t.object.name, t.relation, hd, hRne, honS, rfl⟩
-      have hnsubj : ¬ DerNode S (subjNode t.subject) := by
-        rintro ⟨dt, on, R, _, hRne', _, heq⟩
-        have hp := congrArg NodeKey.pred heq
-        rw [subjNode_pred, objNode_pred, hbare] at hp
-        exact hRne' hp.symm
+      -- PRE-WIDENED (4c-ii step 5): the `LeafNode` half is free at a BARE subject.
+      have hnsubj : ¬ (DerNode S (subjNode t.subject) ∨ LeafNode S (subjNode t.subject)) := by
+        rintro (⟨dt, on, R, _, hRne', _, heq⟩ | hleaf)
+        · have hp := congrArg NodeKey.pred heq
+          rw [subjNode_pred, objNode_pred, hbare] at hp
+          exact hRne' hp.symm
+        · exact bare_subjNode_not_leafNode hbare hleaf
       refine ⟨σ0, h0, ?_⟩
       have hone : σp.writeLoggedRules S t = σp.writeLoggedOne t := by
         unfold GraphState.writeLoggedRules

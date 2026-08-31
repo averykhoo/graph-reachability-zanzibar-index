@@ -534,6 +534,159 @@ theorem hne_of_keys_nonempty {S : Schema} (h : S.keys.all (fun k => k.2 != "") =
   have := List.all_eq_true.mp h _ hk
   simpa using this
 
+/-! ## Step 4c-ii, step 4 — `NoLeafSubjects` and the SUBJECT half of the extras split
+
+`rewriteClosureL_extras_leafNode` above owns the **object** half of the widened shadow
+extras: every superset extra's target node is a `LeafNode`. The re-point's other half is
+the mirror obligation on the **subject** side — the goals of the shape
+`¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject))` that
+`CascadeStable.lean` / `CascadeStrataSettle.lean` open once `UntaintedShadow` is
+re-pointed at the disjunction. The `DerNode` half of those goals is owned by
+`ReconcileCorrect.lean::rewriteClosure_subject_pred_gen` (leg 7 step 3); the `LeafNode`
+half needs one fact this tree did not have.
+
+**Where a subject predicate can come from at all.** `RulesWrite.lean::applyRRule` is the
+only constructor of a rewritten tuple's subject, and it has exactly two branches:
+`.computed` copies `t.subject` through verbatim, and `.ttu tr` overwrites the predicate
+with `tr`. So "the rewrite machinery never MINTS a leaf-named subject predicate" is
+precisely a statement about the compiled rules' TTU targets — nothing else in the model
+can produce one. That statement is `NoLeafSubjects`.
+
+## ★★ Why the quantifier ranges over `schemaRewritesL`, and not over `schemaRewrites`
+
+⚠ **This is the trap the step exists to avoid, and it is live in this very file.**
+`LeafRuleWitness.lrV_untainted_layer_silent` proves `schemaRewrites SlV = []`, so ANY
+premise of the form `∀ r ∈ schemaRewrites S, …` is discharged **vacuously** at `SlV` —
+which is exactly how `rewriteClosureL_extras_leafNode`'s `hmd` is discharged, making the
+`exfalso` in `rewriteClosureAuxL_extras`' untainted-rule case dead under every fixture in
+this file. A `NoLeafSubjects` quantified over the untainted layer alone would reproduce
+that shape while looking done.
+
+It therefore ranges over `schemaRewritesL S = schemaRewrites S ++ leafRewrites S`, and
+the witness schema `LeafRuleWitness.SnlBoth` carries a TTU rule in **each** half, both of
+which fire in one closure. The two negative controls
+(`LeafRuleWitness.noLeafSubjects_false_leafLayer` /
+`::noLeafSubjects_false_untLayer`) are one per layer: each is the red produced by
+narrowing the quantifier to the other layer. -/
+
+/-- The subject predicate a rule REWRITES TO, as a 0-or-1 element list: `computed` copies
+    the subject through and mints nothing, `ttu tr` overwrites the predicate with `tr`
+    (`RulesWrite.lean::applyRRule`).
+
+    A `List` rather than an `Option` or an `∀ tr, r.kind = .ttu tr → …` binder **on
+    purpose**: it makes `NoLeafSubjects` a nest of BOUNDED quantifiers over decidable
+    atoms, hence `by decide`-able at a concrete schema. The binder shape is not
+    decidable, and every witness below would have had to be a hand proof — which is how
+    an unmeasured premise gets its non-vacuity asserted instead of checked. -/
+def ttuTargets (r : RRule) : List String :=
+  match r.kind with
+  | .computed => []
+  | .ttu tr => [tr]
+
+theorem ttuTargets_of_kind {r : RRule} {tr : String} (h : r.kind = RuleKind.ttu tr) :
+    ttuTargets r = [tr] := by
+  unfold ttuTargets; rw [h]
+
+/-- `NotLeafName` is `p = BARE ∨ isLeafPred p = false`, both halves decidable — but it is
+    a plain `def`, so instance synthesis will not unfold it. Supplied here so
+    `NoLeafSubjects` is `by decide`-able. -/
+instance : DecidablePred NotLeafName := fun p =>
+  inferInstanceAs (Decidable (p = BARE ∨ isLeafPred p = false))
+
+/-- **No rule of the FULL leaf-routed rule set mints a leaf-named subject predicate.**
+    Quantified over `schemaRewritesL` — see the ★★ note above for why the untainted-layer
+    -only form is the vacuous one. -/
+def NoLeafSubjects (S : Schema) : Prop :=
+  ∀ r ∈ schemaRewritesL S, ∀ tr ∈ ttuTargets r, NotLeafName tr
+
+/-- …and it is DECIDABLE at a concrete schema, which is what lets the witnesses below be
+    `decide` pins rather than hand proofs. (A plain `def` is not unfolded by instance
+    synthesis, so the instance has to be stated.) -/
+instance (S : Schema) : Decidable (NoLeafSubjects S) :=
+  inferInstanceAs (Decidable (∀ r ∈ schemaRewritesL S, ∀ tr ∈ ttuTargets r, NotLeafName tr))
+
+/-- The subject-predicate half of `applyRRule_some`: a fired rule either keeps the
+    subject predicate or replaces it with its own TTU target. There is no third case. -/
+theorem applyRRule_subject_pred {r : RRule} {t u : Tuple} (h : applyRRule r t = some u) :
+    u.subject.predicate = t.subject.predicate ∨ u.subject.predicate ∈ ttuTargets r := by
+  unfold applyRRule at h
+  split at h
+  next =>
+    split at h
+    next =>
+      have heq := Option.some.inj h
+      subst heq
+      exact Or.inl rfl
+    next tr hk =>
+      have heq := Option.some.inj h
+      subst heq
+      refine Or.inr ?_
+      rw [ttuTargets_of_kind hk]
+      simp
+  next => simp at h
+
+/-- One step of the FULL rule set preserves "the subject predicate is not a leaf name". -/
+theorem rewriteStepL_subject_notLeafName {S : Schema} (hnl : NoLeafSubjects S)
+    {t u : Tuple} (ht : NotLeafName t.subject.predicate) (h : u ∈ rewriteStepL S t) :
+    NotLeafName u.subject.predicate := by
+  unfold rewriteStepL at h
+  obtain ⟨r, hr, hap⟩ := List.mem_filterMap.mp h
+  rcases applyRRule_subject_pred hap with heq | hmem
+  · rw [heq]; exact ht
+  · exact hnl r hr _ hmem
+
+/-- The kernel induction — the invariant is absorbing at every fuel and frontier. -/
+theorem rewriteClosureAuxL_subject_notLeafName {S : Schema} (hnl : NoLeafSubjects S) :
+    ∀ (n : Nat) (cur : List Tuple),
+      (∀ w ∈ cur, NotLeafName w.subject.predicate) →
+      ∀ v ∈ rewriteClosureAuxL S n cur, NotLeafName v.subject.predicate := by
+  intro n
+  induction n with
+  | zero => intro cur hcur v hv; exact hcur v hv
+  | succ n ih =>
+      intro cur hcur v hv
+      simp only [rewriteClosureAuxL, List.mem_append] at hv
+      rcases hv with hv | hv
+      · exact hcur v hv
+      · refine ih _ ?_ v hv
+        intro w hw
+        obtain ⟨u, hu, hwu⟩ := List.mem_flatMap.mp hw
+        exact rewriteStepL_subject_notLeafName hnl (hcur u hu) hwu
+
+/-- **The closure corollary.** Under `NoLeafSubjects`, the leaf-routed closure of a seed
+    list whose subject predicates are all non-leaf names produces only non-leaf-named
+    subject predicates. -/
+theorem rewriteClosureL_subject_notLeafName {S : Schema} (hnl : NoLeafSubjects S)
+    {seeds : List Tuple} (hs : ∀ w ∈ seeds, NotLeafName w.subject.predicate)
+    {u : Tuple} (hu : u ∈ rewriteClosureL S seeds) : NotLeafName u.subject.predicate := by
+  rw [mem_rewriteClosureL_iff] at hu
+  unfold rewriteClosureRawL at hu
+  exact rewriteClosureAuxL_subject_notLeafName hnl _ seeds hs u hu
+
+/-- **The shape the 4c-ii write leg consumes.** `rawWriteTuples` only re-addresses the
+    RELATION (`{t with relation := r}`), so the seed premise collapses to a fact about
+    the raw write's own subject; the closure then never mints a leaf-named subject, so
+    no subject node of the leaf-routed write's expansion is a `LeafNode` — at ANY schema
+    satisfying `NoLeafSubjects`, with no `WF`, no store, and no fixture. -/
+theorem rewriteClosureL_subject_not_leafNode {S : Schema} (hnl : NoLeafSubjects S)
+    {t : Tuple} (ht : NotLeafName t.subject.predicate) :
+    ∀ u ∈ rewriteClosureL S (rawWriteTuples S t), ¬ LeafNode S (subjNode u.subject) := by
+  intro u hu
+  refine not_leafNode_of_notLeafName ?_
+  rw [subjNode_pred]
+  refine rewriteClosureL_subject_notLeafName hnl ?_ hu
+  intro w hw
+  unfold rawWriteTuples at hw
+  obtain ⟨r, _, rfl⟩ := List.mem_map.mp hw
+  exact ht
+
+/-- The BARE specialisation — a raw write of a concrete (non-userset) subject, which is
+    the overwhelmingly common caller shape. -/
+theorem rewriteClosureL_subject_not_leafNode_bare {S : Schema} (hnl : NoLeafSubjects S)
+    {t : Tuple} (ht : t.subject.predicate = BARE) :
+    ∀ u ∈ rewriteClosureL S (rawWriteTuples S t), ¬ LeafNode S (subjNode u.subject) :=
+  rewriteClosureL_subject_not_leafNode hnl (show NotLeafName _ from Or.inl ht)
+
 /-! ## The non-vacuity witnesses
 
 Everything above is additive, so a green build vets nothing: `leafRewrites` returning
@@ -736,6 +889,161 @@ theorem rewriteClosureL_extras_leafNode_nonvacuous :
   rcases h with hmem | hleaf
   · exact absurd hmem (by decide)
   · exact hleaf
+
+/-! ### Non-vacuity of `NoLeafSubjects` (4c-ii step 4) — and the failing control
+
+⚠ **Trap 7, restated where it can bite.** `lrV_untainted_layer_silent` above proves
+`schemaRewrites SlV = []`, so `SlV` cannot witness ANYTHING about the untainted layer:
+a premise quantified over it is discharged there by emptiness, which is the exact shape
+that makes `rewriteClosureL_extras_leafNode`'s `hmd` vacuous. Every witness in this
+block therefore runs at `SnlBoth`, whose two layers are both non-empty and both carry a
+**TTU** rule — the only rule kind that can mint a subject predicate at all.
+
+The instrument is CONTROLLED two ways: a positive pin at `SnlBoth`, and one *refutation*
+per layer (`noLeafSubjects_false_leafLayer` / `noLeafSubjects_false_untLayer`). A
+narrowing of the quantifier to either single layer leaves the positive pin green and
+reddens the refutation for the dropped layer.
+
+## ★ CONTROLLED — two sabotages, run 2026-08-31 (`docs/sabotage-procedure.md`)
+
+Both are the *narrowest plausible* weakening (the quantifier's range, nothing else), and
+both are exactly the vacuity shape trap 7 describes. ⚠ In **both** runs
+`noLeafSubjects_snlBoth` — the positive pin — stayed **GREEN**. A section carrying only
+that pin would have shipped either defect. That is the whole reason the refutations exist.
+
+**(S12) The leaf layer is dropped** — `NoLeafSubjects` quantified over `schemaRewrites S`
+instead of `schemaRewritesL S`. This is precisely `hmd`'s shape, and at `SlV`
+(`lrV_untainted_layer_silent`: `schemaRewrites SlV = []`) it would be vacuously true.
+`lake build` rc=**1**, two errors, the second naming the witness:
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:636:16: Application type mismatch: The argument
+  hr
+has type
+  r ∈ schemaRewritesL S
+but is expected to have type
+  r ∈ schemaRewrites S
+in the application
+  hnl r hr
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:991:75: Tactic `decide` proved that the proposition
+  ¬NoLeafSubjects SnlBadLeaf
+is false
+```
+
+(`:636` is `rewriteStepL_subject_notLeafName`, `:991` is `noLeafSubjects_false_leafLayer`,
+`:1008` is `noLeafSubjects_false_untLayer` — all three verified live after this record was
+inserted, by re-running both sabotages against the final file.)
+
+**(S13) The untainted layer is dropped** — quantified over `leafRewrites S`. The mirror
+image; `noLeafSubjects_false_untLayer` is the one that reddens, and
+`noLeafSubjects_false_leafLayer` stays green:
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1008:73: Tactic `decide` proved that the proposition
+  ¬NoLeafSubjects SnlBadUnt
+is false
+```
+
+Restored: rc=0, 1089 jobs, `Build completed successfully`. -/
+
+/-- **The both-layers witness.** `parent` / `banned` are storage; `editor` is an
+    UNTAINTED TTU (`viewer from parent`) and so compiles into the `schemaRewrites` layer;
+    `access := (viewer from parent) but not banned` is DERIVED and so compiles into the
+    `leafRewrites` layer, with its TTU arm at closure leaf 0.
+
+    `viewer` is deliberately NOT declared: `Leaf.lean::isPure`'s `!derivedAnywhere S tgt`
+    conjunct has to hold for a TTU arm to allocate a closure leaf at all. -/
+def SnlBoth : Schema :=
+  ⟨[(("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "editor"), .ttu "viewer" "parent"),
+    (("doc", "access"), .excl (.ttu "viewer" "parent") (.computed "banned"))], []⟩
+
+/-- **Layer 1 is non-empty and carries a TTU rule** — the direct refutation of the
+    `lrV_untainted_layer_silent` shape at this witness. -/
+theorem snlBoth_untainted_layer_ttu :
+    schemaRewrites SnlBoth = [⟨"doc", "parent", "editor", .ttu "viewer"⟩] := by decide
+
+/-- **Layer 2 is non-empty and also carries a TTU rule**, at the minted leaf. -/
+theorem snlBoth_leaf_layer_ttu :
+    leafRewrites SnlBoth =
+      [⟨"doc", "parent", leafPred "access" 0, .ttu "viewer"⟩,
+       ⟨"doc", "banned", leafPred "access" 1, .computed⟩] := by decide
+
+/-- The positive pin: `NoLeafSubjects` HOLDS at the both-layers witness. On its own this
+    says little — the two refutations below are what make it an instrument. -/
+theorem noLeafSubjects_snlBoth : NoLeafSubjects SnlBoth := by decide
+
+/-- Same schema, except the DERIVED key's TTU arm targets a dotted name. The untainted
+    layer is untouched and still clean (`snlBadLeaf_untainted_layer_clean`), so the only
+    reason `NoLeafSubjects` fails here is the LEAF layer. -/
+def SnlBadLeaf : Schema :=
+  ⟨[(("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "editor"), .ttu "viewer" "parent"),
+    (("doc", "access"), .excl (.ttu "viewer.0" "parent") (.computed "banned"))], []⟩
+
+theorem snlBadLeaf_untainted_layer_clean :
+    schemaRewrites SnlBadLeaf = [⟨"doc", "parent", "editor", .ttu "viewer"⟩] := by decide
+
+/-- **REFUTATION, leaf layer.** Reddens iff the quantifier stops covering
+    `leafRewrites` — the narrowing this whole section exists to make impossible. -/
+theorem noLeafSubjects_false_leafLayer : ¬ NoLeafSubjects SnlBadLeaf := by decide
+
+/-- The mirror: the UNTAINTED key's TTU arm targets a dotted name and the derived key is
+    clean, so the only reason `NoLeafSubjects` fails here is the untainted layer. -/
+def SnlBadUnt : Schema :=
+  ⟨[(("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "editor"), .ttu "viewer.0" "parent"),
+    (("doc", "access"), .excl (.ttu "viewer" "parent") (.computed "banned"))], []⟩
+
+theorem snlBadUnt_leaf_layer_clean :
+    leafRewrites SnlBadUnt =
+      [⟨"doc", "parent", leafPred "access" 0, .ttu "viewer"⟩,
+       ⟨"doc", "banned", leafPred "access" 1, .computed⟩] := by decide
+
+/-- **REFUTATION, untainted layer.** Reddens iff the quantifier stops covering
+    `schemaRewrites`. -/
+theorem noLeafSubjects_false_untLayer : ¬ NoLeafSubjects SnlBadUnt := by decide
+
+/-! #### The closure corollary, applied — both layers fire on ONE write -/
+
+/-- A raw write on the untainted storage relation `parent`, with a BARE subject. -/
+def tnlParent : Tuple := ⟨⟨"folder", "f1", BARE⟩, "parent", ⟨"doc", "d1"⟩⟩
+
+theorem tnlParent_subject_bare : tnlParent.subject.predicate = BARE := rfl
+
+/-- The UNTAINTED layer's TTU rule fires on this write… -/
+theorem snlBoth_closure_reaches_untainted_extra :
+    (rewriteClosureL SnlBoth (rawWriteTuples SnlBoth tnlParent)).contains
+      ⟨⟨"folder", "f1", "viewer"⟩, "editor", ⟨"doc", "d1"⟩⟩ = true := by decide
+
+/-- …and so does the LEAF layer's, in the same closure. This pair is the "both layers at
+    once" fact at the level that matters — not just "both rule lists are non-empty" but
+    "both rule lists CONTRIBUTE to the closure the corollary quantifies over". -/
+theorem snlBoth_closure_reaches_leaf_extra :
+    (rewriteClosureL SnlBoth (rawWriteTuples SnlBoth tnlParent)).contains
+      ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩ = true := by decide
+
+/-- **The corollary is not the identity here.** Both extras' subject predicate is
+    `viewer`, REWRITTEN by a TTU rule from the seed's `BARE` — so
+    `rewriteClosureL_subject_notLeafName` is genuinely propagating through the `.ttu`
+    branch of `applyRRule_subject_pred`, the only branch `NoLeafSubjects` constrains. A
+    `computed`-only witness would have exercised the `Or.inl` branch and proved nothing
+    about the premise. -/
+theorem snlBoth_extra_subject_rewritten :
+    (⟨"folder", "f1", "viewer"⟩ : SubjectRef).predicate ≠ tnlParent.subject.predicate := by
+  decide
+
+/-- **The applied conclusion, derived THROUGH the corollary** at the pinned leaf-layer
+    extra — never decided directly, because a `by decide` of the conclusion alone would
+    say nothing about whether the corollary applies. -/
+theorem noLeafSubjects_closure_nonvacuous :
+    ¬ LeafNode SnlBoth (subjNode ⟨"folder", "f1", "viewer"⟩) :=
+  rewriteClosureL_subject_not_leafNode_bare noLeafSubjects_snlBoth
+    (t := tnlParent) tnlParent_subject_bare
+    ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩ (by decide)
 
 end LeafRuleWitness
 
