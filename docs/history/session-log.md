@@ -140,6 +140,25 @@ treatment as the code.** Every one of these was written by someone who had just 
 underlying work first-hand — accuracy about the subject did not carry over into accuracy
 about the write-up.
 
+**8. The trial's two closing lines — and I omitted them until asked.**
+
+    task lint: clean (12 checks, 156 task file(s) parsed)
+    read: board + HANDOFF
+
+⚠ **`read: board + HANDOFF` again, and it was ADDITIVE, not substitutive** — `task.py board`
+and the full `HANDOFF.md` read went out in the same first tool call, and I would have needed
+`HANDOFF.md` regardless: the board view carries no item blocks, so the read-first lists, the
+traps and the Rhythm protocol are only in the file. That is the third session in a row to
+report the query as a supplement rather than a replacement (2026-08-30c, 2026-08-31, here).
+⚠ **And these two lines were MISSING from this entry until the user asked for feedback on the
+board** — written afterwards, which is exactly the failure mode they exist to expose. The
+instrument is self-reported and unenforced: nothing in `task.py lint`, `handoff_lint.py` or
+the gate checks that a session-log entry contains them, so a session that skips them looks
+identical to one that had nothing to report. **A lint check for these two lines is the
+cheapest possible fix and would have caught this.** Recorded plainly because the trial's whole
+value is the honesty of this datum, and a self-report that only appears when someone asks is
+worth less than one that is refused when absent.
+
 Still owed: nothing.
 
 ## 2026-08-31 — the 4c-ii middle's blocking question was a misread `∨`; and step 3's cone is 30 modules, not 21
