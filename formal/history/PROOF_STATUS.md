@@ -15,7 +15,42 @@ HANDOFF.md's "The next task".
 
 ---
 
-## Session 2026-08-31 (**4c-ii middle re-opened at step 3 — preamble re-declared, and the item's own headline question was a misread `∨`**)
+## Session 2026-08-31b (**`P20` adjudicated and given a mechanical refusal; the bridge placed; and the previous entry mis-cited its own new row as `P16`**)
+
+**Task taken:** `P20` first (it blocks `P3` steps 6–10), then the one unblocked `P3` edit —
+the `NoLeafSubjects → TtuTargetsSat S NotLeafName` bridge. Written and committed BEFORE the
+first Lean edit, per §11.12 rule 1 as amended 2026-08-30b.
+
+### 0. The §11.12 preamble for this attempt
+
+**Green anchor: `077bb50` — "feat(P3): land 4c-ii steps 3-5 …".** Verified first-hand at
+session start: `python scripts/gate_status.py` reports **"VERDICT: the ten-phase gate is
+COVERED on this tree"**, working tree clean, `lean: PASSED`. That is the sha the exit
+targets (`git reset --hard 077bb50`).
+
+**Abort trigger (rule 2, fixed now):** revert on whichever comes first — (a) 70% of this
+session's context consumed, or (b) **6** in-cone `lake build` cycles ending red. The budget
+is lower than the previous attempt's 10 because the Lean half of this session is a **single
+additive lemma**, not a re-point: if it needs six cycles, the placement analysis is wrong
+and more cycles will not fix it. Cycle counter resets to 0. Recon was delegated to five
+read-only scouts to keep (a) far from the first edit.
+
+**Scope fixed up front:** `P20` (a)+(b), the correspondence pin, and the `P3` bridge. Step 6
+(bundling `NoLeafSubjects` into `W4Fragment`) is **NOT** taken — that is the change `P20`
+adjudicates, and taking it in the same session as its own adjudication is the shape the
+user declined on 2026-08-31.
+
+### 1. ⚠ CORRECTION to `## Session 2026-08-31` — it mis-cites its own new row
+
+That entry's §2(b) closes with "Recorded as row `P16` in this session's write-back", and its
+§4 repeats "now blocked behind `P16`". **The row actually filed is `P20`.** `P16` is a
+different, live, open row (*widen the enumeration/state bounds*, `FINAL_REVIEW.md` §4(e)) —
+so this is not a typo that fails safe, it is a citation that resolves to the wrong open item
+and sends the next reader to unrelated work. `HANDOFF.md` had it right as `P20` throughout;
+the ledger is the copy that drifted. Appended here rather than edited there, per this file's
+banner.
+
+
 
 **Task taken:** `P3`, the 4c-ii middle (steps 3→10), at the top of a fresh window. This
 entry is written and committed BEFORE the first Lean edit, per §11.12 rule 1 as amended
