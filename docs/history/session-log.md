@@ -25,6 +25,43 @@ from here.
 
 ---
 
+## 2026-08-31 — the 4c-ii middle's blocking question was a misread `∨`; and step 3's cone is 30 modules, not 21
+
+rows: `P3`
+
+Formal detail is [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-08-31`. This entry is the root trace. **Gate:** ask
+`python scripts/gate_status.py`, never a line here.
+
+**This entry is opened BEFORE the first Lean edit** and is committed docs-only, per the
+§11.12 rule-1 preamble as amended 2026-08-30b. Green anchor `c780597`, verified COVERED
+first-hand. It is appended to as the session proceeds.
+
+**1. The headline.** The board, `HANDOFF.md` and the task file all carried P3's next step
+as "repoint the abbrev at `DerNode` **OR** `LeafNode`" — which reads as an unmade binary
+decision, and is why the step kept being deferred as needing a call. **It is not a fork:
+the target is the disjunction `DerNode ∨ LeafNode`**, said in those words in
+`HANDOFF.md:113`, `PROOF_STATUS ## Session 2026-08-30d` §5, and the `ShadowOver` docstring
+itself (`CascadeStable.lean:529-530`). And it *could not* be a fork — this tree already
+proves the two predicates **incomparable** (`Scratch4cii.lean:256::
+slSwD_classification_swap`, `by decide`), so neither alone can be the target. A settled
+call was re-litigated for several sessions because prose spelled a `∨` as "or".
+
+**2. Recon was delegated, and it paid for itself twice** — a four-agent read-only
+`Workflow` fan-out (task file, scope doc §11.13, `PROOF_STATUS`, live Lean tree) writing
+notes to `.scratch/p3-2026-08-31/`, then a synthesis pass that re-grepped every claim it
+relied on. It found two things no session record carried: **(a)** step 3 edits
+`ReconcileCorrect.lean`, whose reverse cone is **30 modules**, not the 21 the whole item is
+sized on; **(b)** step 6 will make `Zanzibar.graph_correct` strictly weaker **without
+turning its byte pin red**, because `headline_statements.txt:27` records the hypothesis by
+name. (b) is the house failure mode and is a user call — see `PROOF_STATUS` §2(b).
+⚠ Per the standing rule, the synthesis is *evidence, not a finding*: everything acted on
+below was re-verified first-hand against the tree before it was written.
+
+**Still owed:** the session is in progress; this list is rewritten at close.
+
+---
+
 ## 2026-08-30d — the blind instrument is closed, and the red it predicted never came
 
 rows: `P3`

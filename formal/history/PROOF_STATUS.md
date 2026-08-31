@@ -15,6 +15,83 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-31 (**4c-ii middle re-opened at step 3 — preamble re-declared, and the item's own headline question was a misread `∨`**)
+
+**Task taken:** `P3`, the 4c-ii middle (steps 3→10), at the top of a fresh window. This
+entry is written and committed BEFORE the first Lean edit, per §11.12 rule 1 as amended
+2026-08-30b. Findings are appended to it as the cone proceeds (rule 3).
+
+### 0. The §11.12 preamble for this attempt
+
+**Green anchor: `c780597` — "docs(P3): close the tasks/ trial loop".** Verified first-hand
+at session start: `python scripts/gate_status.py` reports **"VERDICT: the ten-phase gate is
+COVERED on this tree"** against `t2a:5fa2fd2c810e` / `t2c:7adea1aa9029`, `lean` `rc=0
+holes=0 audits=583 pinned=582 defs=161`, working tree clean. That is the sha the exit
+targets.
+
+⚠ **The previous preamble's anchor `5f48be2` is STALE** and must not be used as the reset
+target: steps 1–2 (`50af00e`) plus three doc commits landed after it. Anchoring the exit at
+`5f48be2` would discard the landed green prefix — which is rule 6 inverted. The anchor
+moves forward with every committed green prefix; that is the point of rule 6.
+
+**Abort trigger (rule 2, fixed now, not renegotiable later):** revert on whichever comes
+first — (a) 70% of this session's context consumed, or (b) 10 in-cone `lake build` cycles
+that end red without a green tree in sight. **The cycle counter resets to 0 for this
+attempt.** Context is the binding constraint; recon was delegated to read-only subagents
+(a four-scout `Workflow` fan-out writing to `.scratch/p3-2026-08-31/`) precisely to keep (a)
+far from the first edit.
+
+### 1. The item's headline open question was not a question — it was a misread `∨`
+
+The board, `HANDOFF.md` and the task file all carried the next step as **"repoint the abbrev
+at `DerNode` OR `LeafNode`"**, which reads as an unmade binary decision and was the reason
+this step kept being deferred as needing a call. It is not a fork. The target is the
+**disjunction** `fun k => DerNode S k ∨ LeafNode S k`, stated in three independent places —
+`HANDOFF.md:113`, this file's `## Session 2026-08-30d` §5, and the code's own contract in
+the `ShadowOver` docstring (`CascadeStable.lean:529-530`, "widens the extras from `DerNode`
+to `DerNode ∨ LeafNode`").
+
+**And it could not have been a fork**, which this tree already proves rather than argues:
+`Scratch4cii.lean:256::slSwD_classification_swap` shows by `decide` at witness `SlSw` that
+`sP SlSw tApp` carries an edge target with `derNodeB && !leafNodeB` while `sR SlSw tApp`
+carries one with `leafNodeB && !derNodeB`. **The two predicates are incomparable** — no
+implication lemma exists in either direction, so neither one alone can be the target.
+`DerNode` alone is refuted post-re-point by `Scratch4cii.lean:730::
+strong_shadow_false_at_d_own_sigma0`; `LeafNode` alone drops the derived extras the cascade
+chain consumes, which is what the `fun _ => True` sabotage (`c101132`) measured when it went
+red in **both** directions, at the producer (`CascadeStable.lean:800`) and at the consumers
+(`:922, :923, :938, :956`).
+
+Recorded here because the phrasing cost real sessions: **"`A` or `B`" in a board brief must
+be spelled `A ∨ B` when it is a disjunction**, or the next reader re-litigates a settled
+call. The board row and the task file are corrected in this session's write-back.
+
+### 2. Two sizing/pin corrections found during recon, before any edit
+
+**(a) The recompile cone for step 3 is 30 modules, not 21.** The item is sized on
+`CascadeStable`'s reverse cone (21, which re-measures correctly). But step 3 edits
+`ReconcileCorrect.lean`, whose reverse cone is **30** — 43% larger — and that file appears in
+neither the ~9-file re-check list nor the 3-red-file list. Measured by read-only import BFS
+over `formal/lean/ZanzibarProofs/**.lean`; the extra modules over `CascadeStable`'s cone are
+`Cascade`, `CascadeInv`, `CascadeStrata`, `CascadeStrataInv`, `ReconcileComplete`,
+`ReconcileDiff`, `ReconcileStars`, `ReconcileStarsComplete`, `ReconcileUpos`,
+`ReconcileUposComplete`, `RestrictBase`. Budget step 3 as the single most expensive
+`lake build` of the leg — and prefer the ADDITIVE form there precisely so that cone is a
+recompile rather than a re-proof.
+
+**(b) Step 6 will weaken a byte-pinned headline theorem WITHOUT turning its pin red.**
+Step 6 bundles `NoLeafSubjects` into `W4Fragment` (`FullScope.lean:193`).
+`headline_definitions.txt:102` pins `W4Fragment`'s field list, so it goes red and is
+deliberately regenerated — but `headline_statements.txt:27` records `graph_correct`'s
+hypothesis **by name**, as `(hF : W4Fragment S T)`, and `headline_definitions.txt:4-5` states
+that design explicitly. **So `Zanzibar.graph_correct` becomes strictly weaker while its
+byte-pinned statement stays byte-identical.** The statement pin is structurally blind to this
+class of weakening. That is this repo's house failure mode (an assurance step that fails by
+passing), it is a **user call**, and it blocks step 6 — not steps 3–5. It is raised as such
+in this session's report rather than decided here.
+
+---
+
 ## Session 2026-08-30d (**the blind instrument is closed — and the prediction attached to it was WRONG in the safe direction**)
 
 **Task taken:** `P3`, at the step the previous session declared as "the NEXT SESSION'S
