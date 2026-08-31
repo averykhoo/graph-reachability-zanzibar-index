@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Steps 3-5 GREEN. Pre-widen PARTIAL: 3 of 6 'free' sites were not; 5 obligations left, 6-10 blocked on P20.
+brief: Class-B spike ANSWERED: REACHES, 3 pinned rows not 1 -- needs USER CALL. hv3 landed free; 4 obligations left.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-08-31b
-updated: 2026-08-31b
+moved: 2026-08-31c
+updated: 2026-08-31c
 closed:
 ---
 
@@ -382,3 +382,13 @@ Steps 3-5 landed green (TtuTargetsSat + additive _gen chain; NoLeafSubjects with
 ### 2026-08-31b
 
 Bridge LANDED: CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects (mem_append_left), green 1089 jobs, 5 of a 6-cycle budget, sabotage on the containment DIRECTION (mem_append_right -> sole error in the tree). Also removed a FALSE sentence from the Lean source: the old rewriteClosure_subject_not_leafNode docstring taught that NoLeafSubjects is 'the same discipline on the OTHER rule list and does not discharge these'; schemaRewritesL = schemaRewrites ++ leafRewrites is a SUPERSET. Steps 6-10 UNBLOCKED (P20 closed ACCEPT). Still 5 obligations: the three rewriteClosure sites now need ONE premise (seed-side NotLeafName t.subject.predicate), not two, and remain undischarged; plus CascadeStable.lean:946/:956.
+
+### 2026-08-31c
+
+CLASS-B SPIKE ANSWERED -- REACHES, and on THREE pinned rows not one. Of the three sites passing shadow_graphRec_agree the arbitrary query's own relation, only CascadeStrataResettle.lean::graph_correct_w3d2_d reaches FullScope.lean::graph_correct (via CascadeStrataAssemble.lean::graph_correct_w3d2E_d at FullScope.lean:369, graph_correct's sole proof route); sites 1-2 (graph_correct_w3d / graph_correct_w3d2) die in the superseded Equiv.lean milestone theorems. Consumer sets re-verified FIRST-HAND by grep, not taken from the scout, because it is a gate-safety claim. headline_statements.txt rows 27/46/56 carry NO checkPublic (the nine that do: 28,30,31,32,34,36,53,59,64), so graph_correct AND W4WitnessDirect.correct_applies AND ::w3d2E_correct_applies all sit below the fence -- REFUTING the 2026-08-28c claim (repeated in HANDOFF.md) that the hql surface is one pinned row, and independently confirming scope doc 11.13 item (e). The cost lands on the two NON-VACUITY instruments, where an hql binder risks a hypothesis nothing satisfies; likely repair is migration onto checkPublic, not the binder. NOT ATTEMPTED -- user-visible scope change, needs an explicit user call, and P3's own record forbids smuggling it into step 7.
+
+STEP 6, THE ONE FREE OBLIGATION, LANDED. CascadeStable.lean::shadow_graphRec_agree's hv3 pre-widened to the DerNode-or-LeafNode form at the wAll node with ZERO new premises -- State.lean::wAllNode is Variant.wAll while Leaf.lean::LeafNode forces Variant.plain via on != STAR + DirectCorrect.lean::objNode_plain, so the LeafNode disjunct dies by the same variant mismatch DerNode already used. Two uses weakened via Or.inl (the CascadeStrataSettle.lean:960 pattern), so step 9 is 'delete two wrappers'. Green first try, 1089 jobs; 3 build cycles of a 6 budget, the single red being the deliberate sabotage.
+
+SABOTAGE, and it corrected itself once: wAllNode is excluded by BOTH of leafNodeB's shape conjuncts, so dropping either alone leaves the pin green and proves nothing. Dropping both fired it -- 'Tactic decide proved that the proposition leafNodeB Sw (wAllNode ...) = false is false' -- but it was NOT the only error: Leaf.lean:556 (leafNodeB_correct) also broke, which is the instrument being controlled alongside the subject. Both counts are a LOWER bound since Lean does not build dependents of a failed module (2026-08-30d trap recurring). New pin Leaf.lean::wAllNode_not_leafNode, discriminating against the pre-existing ::minted_leaf_is_leafNode at the same schema/type/predicate.
+
+4 OBLIGATIONS REMAIN, NOT 5. hv1 deliberately NOT bundled: hunt does not refute a minted leaf name, and the premise cannot be phrased locally because ReconcileStars.lean::checkFn_agree_of_graphRec{,_cd} hand hag exactly that hypothesis (11.13 trap (g)). Seed-side NotLeafName t.subject.predicate still has no owner; scout reports the only workable shape is a new store-level NoLeafStoreSubjects T threaded at ~20 sites -- AGENT OUTPUT, unverified, sizing input only. Full record: PROOF_STATUS ## Session 2026-08-31c.

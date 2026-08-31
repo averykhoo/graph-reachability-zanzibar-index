@@ -15,6 +15,164 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-08-31c (**the Class-B spike is ANSWERED — it REACHES the byte-pinned `graph_correct`, and it lands on THREE pinned rows, not one; plus the one free obligation discharged**)
+
+**Task taken:** the Class-B spike, which `P3` has carried as TOP OPEN RISK since 2026-08-30d
+with the standing instruction "spike it between steps 6 and 7, do not assume it during
+step 7"; then the cheapest green-stoppable step-6 edit. **Deliberately NOT taken:** the
+headline-theorem weakening the spike's answer implies — that is a user-visible scope change
+and `P3`'s own record forbids smuggling it into this item. It is surfaced for a human call.
+
+### 0. The §11.12 preamble for this attempt
+
+**Green anchor: `d0fa2d7`** — verified first-hand at session start, not assumed:
+`python scripts/gate_status.py` reported **"VERDICT: the ten-phase gate is COVERED on this
+tree"**, `lean: PASSED`, working tree clean. Exit is `git reset --hard d0fa2d7`.
+
+**Abort trigger:** 6 in-cone `lake build` cycles ending red. **Used: 3 cycles, of which the
+single red was the deliberate sabotage.** Both real builds were green first try.
+
+### 1. THE CLASS-B SPIKE — ANSWERED: it reaches, and the surface is wider than recorded
+
+The question `P3` posed: the three Class-B sites invoke `CascadeStable.lean::shadow_graphRec_agree`
+with the arbitrary query's own relation, constrained only by a `by_cases` on `isDerived`, so
+step 7's guard obligation propagates upward — but **does it stop at `graph_correct_w3d*`, or
+does it reach `FullScope.lean::graph_correct`, whose statement is byte-pinned at
+`headline_statements.txt:27`?**
+
+**Answer: it reaches — but by only ONE of the three sites.** Traced by a read-only subagent,
+then **re-verified first-hand** before being written here, because it is a gate-safety claim
+(CLAUDE.md's "delegation does not transfer judgement"; the consumer sets below are my own
+`grep`, not the agent's):
+
+* `CascadeSettle.lean::graph_correct_w3d` (site 1) — consumers are `Equiv.lean:516/:542/:566`
+  (the three W3d-1 milestone theorems, labelled *superseded* in-file) and
+  `CascadeEnum.lean:721`; `graph_correct_w3dE` has no consumer but its `Audit.lean:921`
+  `#print axioms`. **Dead end — does not reach.**
+* `CascadeStrataResettle.lean::graph_correct_w3d2` (site 2) — consumers are exactly
+  `Equiv.lean:601/:629/:655`, the W3d-2 milestones. **Dead end — does not reach.**
+* `CascadeStrataResettle.lean::graph_correct_w3d2_d` (site 3) — consumed at
+  `CascadeStrataAssemble.lean:736` (inside `graph_correct_w3d2E_d`) and at
+  `FullScope.lean:1112`; and `graph_correct_w3d2E_d` is consumed at `FullScope.lean:369`,
+  which is `graph_correct`'s **sole** proof route. **Reaches.**
+
+**And the surface is THREE pinned rows, not one.** `headline_statements.txt` rows 27, 46 and
+56 — `Zanzibar.graph_correct`, `W4WitnessDirect.correct_applies`,
+`::w3d2E_correct_applies` — contain **no** `checkPublic` (verified: the nine rows that do are
+28, 30, 31, 32, 34, 36, 53, 59, 64). All three are stated over the UNFENCED `GraphModel.check`
+and sit below the fence, and rows 46/56 consume `graph_correct_w3d2_d` / `graph_correct_w3d2E_d`
+*directly* (`FullScope.lean:1112`, `:1285`) rather than through `graph_correct_public`.
+
+**This REFUTES a claim this ledger has carried since 2026-08-28c** — "hql surface cut from 6
+rows to 1 … only `graph_correct` still needs the binder" — which `formal/HANDOFF.md` repeats.
+The 2026-08-28c reasoning was right about `final_applies`/`final_applies4` (they do route
+through `checkPublic`, and remain safe) and wrong to generalise it to the two
+`correct_applies` witnesses, which do not. Per this file's rules the old entry stands and is
+corrected here rather than edited. It also **independently corroborates scope-doc §11.13 item
+(e)**, which flagged the same tension from a structural argument; (e) can now be recorded as
+confirmed by consumer-set enumeration as well.
+
+⚠ **The cost is on the NON-VACUITY instruments, and that is the part that needs the human
+call.** Rows 46/56 are satisfiability witnesses with `q` universally quantified; adding
+`hql : publicOfLeaf S q.object.type q.relation = none` to a witness risks exactly the
+"unsatisfiable hypothesis on a non-vacuity instrument" failure that
+`FullScope.lean::graph_correct_public`'s own docstring warns about — a witness that proves
+green because nothing satisfies it. The likely correct repair is **migration onto
+`checkPublic`**, not the `hql` binder (also §11.13 (e)'s guess). **NOT ATTEMPTED THIS SESSION
+— it changes pinned statements on the instruments that certify non-vacuity, and it needs an
+explicit user decision.**
+
+`headline_definitions.txt` should not need regeneration (`publicOfLeaf`, `leafPublic`,
+`isLeafPred`, `checkPublic` are already pinned there); `audited_theorems.txt` pins names only.
+Both UNVERIFIED first-hand — they were not on the critical path for the spike and should be
+re-checked when the repair is actually attempted, not trusted from this paragraph.
+
+### 2. Step 6 — the one obligation that was free, discharged
+
+Of the five outstanding pre-widen obligations, **four need a premise that has no owner**
+(the seed-side `NotLeafName t.subject.predicate`, and the operand-side `NotLeafName r'` at
+`hv1`). **One needed nothing**, and it is now landed:
+`CascadeStable.lean::shadow_graphRec_agree`'s `hv3` is pre-widened to
+`¬ (DerNode S (wAllNode dt' r') ∨ LeafNode S (wAllNode dt' r'))`, with the two uses weakened
+through `Or.inl` — the pattern already shipped at `CascadeStrataSettle.lean:960`. At step 9
+the flip is "delete the two `Or.inl` wrappers", not a proof. **Green first try, 1089 jobs.**
+
+It costs no premise for a structural reason, not by luck: `State.lean::wAllNode` is
+`⟨t, STAR, R, Variant.wAll⟩`, `Leaf.lean::LeafNode` carries `on ≠ STAR ∧ k = objNode ⟨ty,on⟩ p`,
+and `DirectCorrect.lean::objNode_plain` turns that into `Variant.plain` — so the LeafNode
+disjunct dies by the *same* variant mismatch the DerNode branch already used.
+
+**A GREEN WIDENING INTO A DEAD PREDICATE WOULD PROVE NOTHING**, which is this repo's standing
+failure mode (`hmd` vacuous at its only witness; `graph_correct_public` green under a fence
+that never fires). So the widening is pinned against vacuity by a **discriminating pair** at
+one schema: `Leaf.lean::minted_leaf_is_leafNode` (`= true`, pre-existing) and the new
+`Leaf.lean::wAllNode_not_leafNode` (`= false`). Same schema `Sw`, same object type, same
+predicate — the *only* difference is node shape, so the pair isolates the variant/name
+argument and nothing else. It is not a restatement of `bare_subject_not_leafNode`, which turns
+on `leafPublic BARE = ""`.
+
+**SABOTAGED BEFORE BELIEVED.** First finding: `wAllNode` is excluded by **both** of
+`leafNodeB`'s shape conjuncts, so removing either alone leaves the pin green — a sabotage that
+"passes" and teaches nothing. The narrowest weakening that actually reaches it drops both
+(`&& k.name != STAR && k.variant == Variant.plain`). OBSERVED, rc=1, **two** errors:
+
+    Leaf.lean:1267:72: Tactic `decide` proved that the proposition
+      leafNodeB Sw (wAllNode "doc" (leafPred "approver" 0)) = false
+    is false
+    Leaf.lean:556:12: Tactic `cases` failed with a nested error:
+    Dependent elimination failed: Failed to solve equation
+
+The pin fired. It was **NOT the only error**, and that is reported rather than tidied: `:556`
+is `leafNodeB_correct`, i.e. the weakened decider stopped matching the `LeafNode` carrier —
+the instrument was controlled as well as the subject, which is what the procedure asks for.
+⚠ **Both counts are a LOWER bound**: Lean does not build a module whose dependency errored, so
+no dependent of `Leaf.lean` was compiled in that run. That is the 2026-08-30d lower-bound trap
+recurring; it is a property of the tool, so expect it every time a low module is sabotaged.
+Restored: rc=0, 1089 jobs. The literal output lives in the pin's own docstring, where the next
+person tempted to simplify the carrier will be standing.
+
+(The quoted `:1267` is the line *as observed*, with the sabotaged one-line-shorter `leafNodeB`
+in the file; the restored pin is one line lower. Cite `Leaf.lean::wAllNode_not_leafNode`.)
+
+### 3. What remains on 4c-ii, unchanged except by the above
+
+**Four obligations, not five.** The three `rewriteClosure` sites
+(`CascadeStable.lean::reachedByW3d_shadow`, `CascadeStrataSettle.lean::reachedByW3d2_shadow`,
+`::reachedByW3d2_shadow_d`'s untainted branch) each still need the seed-side
+`NotLeafName t.subject.predicate`; `hv1` still needs the operand-side `NotLeafName r'`
+(§11.13 trap (g), the one tier-1 site with no existing lemma).
+
+⚠ **`hv1` was deliberately NOT bundled with `hv3`** even though the two `have`s are adjacent,
+and the reason is recorded at the site: `hunt : isDerived S (dt', r') = false` does not refute
+a minted leaf name (`viewer.0` is itself non-derived while `leafPublic` of it is derived), and
+the premise cannot be phrased locally because
+`ReconcileStars.lean::checkFn_agree_of_graphRec{,_cd}` hand their `hag` callback exactly that
+hypothesis — so `hv1` drags a third file in. `hv3` was the whole of the free work.
+
+**Reported by the scout, NOT verified here, and therefore not to be relied on without
+re-checking:** the seed-side premise appears to have no existing owner anywhere (7 store-level
+predicates enumerated and rejected), with the only workable shape being a new store-level
+`NoLeafStoreSubjects T`, threaded like `BareStarStore`, at a measured 5 + 7 + 8 = 20 call
+sites across the three enclosing theorems. That is agent output labelled as such, per the
+house rule; it is the sizing input for the next session, not a finding.
+
+### 4. Trial close-the-loop
+
+`task lint: clean (12 checks, 154 task file(s) parsed)` — mirrored into `tasks/P3` the same
+session with the same `--session` key.
+
+**read: board only.** `python scripts/task.py board` was the first command and it named the
+next action (`P3`, steps 6–10 unblocked) correctly and sufficiently to start work — this
+session did NOT open `HANDOFF.md` to orient. That is the first time in this trial the query
+actually **replaced** the file read rather than being added to it, and it is worth recording
+*why* it worked here when it failed on 2026-08-30d: the item detail came from `show P3`
+(persisted to a file by the harness and read in slices) plus three delegated scouts, so the
+35KB item never had to fit in context at once. The `show`-is-unbounded gap logged against
+`TT-1` on 2026-08-30d is therefore **mitigable by tooling, not fatal** — but it was mitigated
+by the *harness*, not by `task.py`, so the `TT-1` blocking-gap note stands as written.
+
+---
+
 ## Session 2026-08-31b (**`P20` adjudicated and given a mechanical refusal; the bridge placed; and the previous entry mis-cited its own new row as `P16`**)
 
 **Task taken:** `P20` first (it blocks `P3` steps 6–10), then the one unblocked `P3` edit —

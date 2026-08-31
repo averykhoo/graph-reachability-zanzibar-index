@@ -1333,6 +1333,16 @@ re-check, ~20 sites in 3 files go genuinely red.**
   onto `checkPublic`** (as `final_applies` was on 2026-08-28c), not the `hql` binder.
   Structurally confirmed, not kernel-confirmed. (`latent-gaps.md:152` also cites
   `unfenced_grants` as `:51`; it is `:52`, inside the paragraph doing that arithmetic.)
+  ✅ **CONFIRMED INDEPENDENTLY 2026-08-31c, by a second and disjoint method** — consumer-set
+  enumeration rather than the `abbrev` argument above. Rows **27 / 46 / 56 carry no
+  `checkPublic`** (the nine that do: 28, 30, 31, 32, 34, 36, 53, 59, 64), and rows 46/56
+  consume `graph_correct_w3d2_d` / `graph_correct_w3d2E_d` **directly** at
+  `FullScope.lean:1112` / `:1285`, not through `graph_correct_public`. Two independent routes
+  to the same answer, so treat "three rows" as settled. ⚠ **The tension this item flagged is
+  now RESOLVED AGAINST `HANDOFF.md`**: its 2026-08-28c line "the remaining `hql` surface is
+  ONE pinned row" is **wrong**, and the banner now says so. 2026-08-28c was right only about
+  `final_applies`/`final_applies4`, which do route through `checkPublic` and stay safe.
+  Detail: PROOF_STATUS `## Session 2026-08-31c` §1.
 * **(f)** adding a hypothesis to `shadow_graphRec_agree` / `checkFn_eq_sem_w3d` /
   `shadow_reach_agree` / `reachedByW3d_shadow` changes **no pin file** — none is in
   `headline_statements.txt` or `headline_definitions.txt`; they carry name pins only. The
@@ -1387,6 +1397,30 @@ re-check, ~20 sites in 3 files go genuinely red.**
   targets are `≠ R`, not their shape; `WF` constrains *declared keys*, while `tr` is a
   referenced string inside an `Expr`). Full derivation: PROOF_STATUS `## Session 2026-08-31`
   §4, including the correction to the implementer's own "different rule lists" conclusion.
+* **(k) NEW 2026-08-31c — A SABOTAGE CAN FAIL TO FIRE BECAUSE THE TARGET IS GUARDED
+  *REDUNDANTLY*, and that reads exactly like a passing sabotage.** Landing
+  `Leaf.lean::wAllNode_not_leafNode`, the first attempt weakened one of `leafNodeB`'s two
+  shape conjuncts and the pin **stayed green** — not because the pin is weak, but because
+  `wAllNode` is excluded *twice over*: `k.name != STAR` **and** `k.variant == Variant.plain`
+  each refute it alone. A single-conjunct weakening therefore cannot reach the pin, and
+  stopping there would have recorded "sabotage ran, pin held" — a green that means nothing.
+  Dropping **both** fired it. **Rule: before believing a sabotage that fails to fire, check
+  whether your weakening can actually reach the assertion — enumerate the guards, do not
+  assume the one you picked is load-bearing.** This is the house failure mode (an assurance
+  step that fails by passing) reappearing *inside the sabotage procedure itself*, which is
+  why it is written here and not only in a session record.
+  Corollary already known but re-confirmed: the resulting error count is a **lower bound**,
+  since Lean does not compile dependents of a failed module (the 2026-08-30d trap). Both
+  observations: PROOF_STATUS `## Session 2026-08-31c` §2.
+* **(l) NEW 2026-08-31c — the Class-B spike is DONE; do not re-scope it, and do not start
+  its repair without a user call.** Answer: **REACHES** `graph_correct`, via
+  `graph_correct_w3d2_d` only (sites 1–2 die in superseded `Equiv.lean` milestones), landing
+  on the three pinned rows of (e). The repair touches pinned statements on the two
+  **non-vacuity instruments** (`W4WitnessDirect.correct_applies` / `::w3d2E_correct_applies`),
+  where an `hql` binder risks a hypothesis nothing satisfies — the failure shape
+  `FullScope.lean::graph_correct_public`'s own docstring warns about. Likely repair is
+  migration onto `checkPublic`, not the binder. **`P3`'s standing instruction that this must
+  not be smuggled into step 7 is unchanged and now has a measured cost behind it.**
 
 ## Provenance
 

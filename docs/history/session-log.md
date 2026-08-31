@@ -25,6 +25,63 @@ from here.
 
 ---
 
+## 2026-08-31c — the Class-B spike is answered: it REACHES `graph_correct`, on THREE pinned rows not one
+
+rows: `P3`
+
+**The spike `P3` has carried as TOP OPEN RISK since 2026-08-30d is discharged.** The step-7
+guard obligation **reaches** the byte-pinned `graph_correct` (`headline_statements.txt:27`) —
+but by only **one** of the three Class-B sites; `graph_correct_w3d` and `graph_correct_w3d2`
+die in `Equiv.lean` milestone theorems that are labelled superseded in-file. The consumer
+sets were re-verified first-hand rather than taken from the subagent that traced them,
+because it is a gate-safety claim.
+
+**And the surface is wider than this repo's records said.** Rows **27 / 46 / 56** carry no
+`checkPublic`, so `graph_correct`, `W4WitnessDirect.correct_applies` and
+`::w3d2E_correct_applies` all sit below the fence — the latter two consuming the `_d`
+theorems directly. That **refutes** the 2026-08-28c claim (repeated verbatim in
+`HANDOFF.md`) that the remaining `hql` surface is one pinned row, and independently confirms
+scope-doc §11.13 (e), which had reached the same conclusion by a different route.
+⛔ **The repair is deliberately NOT started**: it weakens pinned statements on the two
+*non-vacuity instruments*, where an `hql` binder risks a hypothesis nothing satisfies — the
+exact failure `graph_correct_public`'s docstring warns about. That is a user-visible scope
+change and `P3`'s own record forbids folding it into step 7. **It needs an explicit user
+call.**
+
+**Step 6's one free obligation landed.** `CascadeStable.lean::shadow_graphRec_agree`'s `hv3`
+is pre-widened to `¬ (DerNode ∨ LeafNode)` at the `wAll` node with **zero** new premises, so
+step 9's flip becomes "delete two `Or.inl` wrappers". Green first try, 1089 jobs, 3 of a
+6-cycle budget. `hv1` was deliberately left alone — it needs a premise that cannot be phrased
+locally and drags in a third file. **Four obligations remain, not five.**
+
+**Method lesson, filed as scope-doc §11.13 (k) because it is about the sabotage procedure
+itself:** the first sabotage of the new pin **failed to fire**, and not because the pin was
+strong — `wAllNode` is guarded *redundantly* (`k.name != STAR` **and**
+`k.variant == Variant.plain`), so weakening either alone cannot reach the assertion. Stopping
+there would have recorded a passing sabotage that proved nothing. Dropping both fired it. It
+was also **not** the only error (`leafNodeB_correct` broke too), which is reported rather
+than tidied away, and the count is a lower bound because Lean skips dependents of a failed
+module.
+
+Detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session 2026-08-31c`.
+New durable pin: `Leaf.lean::wAllNode_not_leafNode`.
+
+Trial close-the-loop, the two required literal lines:
+
+    task lint: clean (12 checks, 156 task file(s) parsed)
+    read: board only
+
+`task.py board` was the first command of the session and named the next action correctly and
+*sufficiently to start work* — `HANDOFF.md` was not opened to orient. **This is the first
+session in the trial where the query genuinely REPLACED the file read** rather than being
+added to it, and the reason is worth recording for the cutover decision: the 35KB `show P3`
+never had to fit in context, because the harness persisted it to a file read in slices and
+three delegated read-only scouts absorbed the Lean/doc bulk. So the "`show` has no bounded
+mode" gap logged against `TT-1` on 2026-08-30d is **mitigable, not fatal** — but it was
+mitigated by the *harness*, not by `task.py`, so that blocking-gap note stands as written.
+
+Still owed: nothing.
+
 ## 2026-08-31b — `P20`: the narrowing is accepted because Python REFUSES what it excludes, and the refusal is now pinned
 
 rows: `P3`, `P20`

@@ -1,14 +1,14 @@
-2026-08-31b — all ten gate phases green on this tree; ledger `2026-08-31b`.
+2026-08-31c — all ten gate phases green on this tree; ledger `2026-08-31c`.
 
-🧭 **`P20` adjudicated ACCEPT and CLOSED; `P3` steps 6–10 unblocked.** It excludes only
-schemas Python already refuses (`_validate_ast_references`), and the sabotage shows that
-refusal is the **premise**: neutered, `define safe: viewer.0 from parent` compiles to the
-forbidden rule, so the narrowing would be **unsound**. Landed, each sabotage-controlled: the
-scope pin, the correspondence pin, the `P3` bridge — which deleted a FALSE Lean docstring.
+(nav) **THE CLASS-B SPIKE IS ANSWERED AND IT NEEDS A USER CALL.** The step-7 guard **REACHES**
+the byte-pinned `graph_correct` — via **one** of the three sites; sites 1–2 die in superseded
+`Equiv.lean` milestones. Consumer sets re-verified first-hand, not taken from the scout.
 
-⚠ **The guard refuted that argument's general shape: `W4Fragment`'s ten EXISTING fields
-classify LOUD 0 · MIXED 3 · SILENT 7**, so "Python refuses what the fragment excludes" is
-the exception, not the rule — **the next narrowing inherits nothing**. `ttuStarFree` is
-SILENT (star subject on a TTU tupleset: admitted) → `P6`; `DW-1` promoted on it. Table:
-`test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`. Traps: scope doc §11.13 — (h) CLOSED, (b)
-itself stale, so **cite `file::symbol`**. Conformance 495 → 515. Trial runs to 2026-09-06.
+⚠ **THREE pinned rows, not one — `HANDOFF.md` was WRONG.** Rows 27/46/56 carry no
+`checkPublic`, so `W4WitnessDirect.correct_applies` / `::w3d2E_correct_applies` sit below the
+fence too; the 2026-08-28c "ONE pinned row" line is refuted and §11.13 (e) confirmed
+independently. Cost is on the **non-vacuity instruments** → repair is likely `checkPublic`
+migration, NOT the `hql` binder. **NOT attempted.**
+
+Step 6's free obligation landed: `hv3` pre-widened, zero new premises, green. **4 obligations
+left, not 5.** New §11.13 (k): a sabotage can fail to fire on a *redundantly* guarded target.
