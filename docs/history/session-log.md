@@ -58,7 +58,50 @@ name. (b) is the house failure mode and is a user call — see `PROOF_STATUS` §
 ⚠ Per the standing rule, the synthesis is *evidence, not a finding*: everything acted on
 below was re-verified first-hand against the tree before it was written.
 
-**Still owed:** the session is in progress; this list is rewritten at close.
+**3. Steps 3, 4 and 5 landed green.** `TtuTargetsSat` + an additive `_gen` chain (the three
+audited names kept as one-line corollaries, so the `audited_theorems.txt:451` row and all 8
+call sites never moved); `NoLeafSubjects` with a **two-layer** witness whose sabotage bit
+**twice** (S12/S13 each `rc=1` naming a refutation witness while the positive pin stayed
+green — which is exactly why two refutation witnesses were needed, not one); and the
+pre-widen, with the abbrev **still unflipped**. Detail: `PROOF_STATUS ## Session 2026-08-31`
+§3.
+
+**4. 🚧 The pre-widen is PARTIAL, and that is the finding.** The plan said six of the eight
+`¬ DerNode` obligations were free. **Three are.** The other three quantify over
+`rewriteClosure S t`, whose subject predicate `rewriteStep` overwrites with a TTU target — so
+it is not bare and `bare_subjNode_not_leafNode` does not apply. **5 obligations outstanding,
+not 2**, three of them a pre-step-9 blocker the ten-step recipe never contained. No premise
+was fabricated to close them; the bridge lemma was landed taking both as hypotheses.
+✅ And half of what is missing already exists: `LeafRules.lean:106` defines
+`schemaRewritesL = schemaRewrites ++ leafRewrites`, a **superset**, so
+`NoLeafSubjects → TtuTargetsSat S NotLeafName` is a `List.mem_append_left`. (The implementer
+concluded the opposite — "different rule lists" — and that was corrected here first-hand
+against the definition, not averaged.) Only the *seed-side*
+`NotLeafName t.subject.predicate` is genuinely unowned.
+
+**5. Two board consequences.** New row **`P20`** — the `W4Fragment` narrowing that its own
+byte pin cannot see — taken as a **user call: not accepted inside `P3`**, so it is adjudicated
+on its own and blocks `P3` steps 6–10. `R6` demoted `NEXT → LATER` to seat it under the cap
+of 3 (its item block was removed accordingly, and the ordering plus the "batch *through* the
+N15 cache" rule were folded into its row so nothing was lost with the block). ⚠ I first
+filed the new row as `P16`, **which already exists** ("widen the enumeration/state bounds") —
+ids are never reused, and `task.py new` refused it. Renumbered to `P20`. `handoff_lint` then
+caught that `P20` had no task file, which is the trial contract enforcing itself.
+
+**6. Two new traps → scope doc §11.13.** **(i)** re-expressing a *pinned* definition in terms
+of a new generic one moves a pin — `NoTtuTarget` **is** pinned at
+`headline_definitions.txt:62`, and trap (f)'s "adding a hypothesis touches no pin" does not
+cover it. **(j)** the three non-free sites above. Also: trap **(b)** was found to be *itself*
+stale — every `Leaf.lean` line number above `:552` written before today is +58 out since
+`50af00e`, so the trap that corrects a line number has a short half-life. **Cite
+`file::symbol`.**
+
+`task.py lint` → `task lint: clean (12 checks, 155 task file(s) parsed)`
+read: board only
+
+**Still owed:** the C1 spike (trace whether the `checkPublic` guard reaches `graph_correct`)
+is **not** taken — user scoped this session to steps 3–5. Steps 6–10 stay blocked on `P20`
+regardless. Next session's first edit is the bridge placement in §4.
 
 ---
 

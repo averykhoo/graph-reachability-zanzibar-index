@@ -90,6 +90,112 @@ class of weakening. That is this repo's house failure mode (an assurance step th
 passing), it is a **user call**, and it blocks step 6 — not steps 3–5. It is raised as such
 in this session's report rather than decided here.
 
+**ADJUDICATED, same session, by the user:** §2(b) went to the user as an explicit call and the
+answer is **"do not accept inside P3"** — P3 stops at step 5, and the `graph_correct`
+weakening is raised as its own board item with its own adjudication before any step-6 work.
+Recorded as row `P16` in this session's write-back. So steps 6–10 are now **blocked on a
+different item**, not merely sequenced behind a spike. The user also scoped this session to
+steps 3–5 (D1–D3) with the C1 spike **not** taken.
+
+### 3. Steps 3, 4 and 5 landed green. What they actually are
+
+All three were executed by delegated implementer agents against a written plan, each with an
+independent `lake build` and each reverted-on-red; every claim below was re-verified
+first-hand by this session before it was written here (`git diff --stat`, the definitions
+cited, the unflipped abbrev, the pin counts).
+
+**Step 3 (`ReconcileCorrect.lean`, +91/−27).** The generalisation parameter was *derived from
+the proofs, not guessed*: the chain tracks exactly one scalar — the subject's predicate name,
+a `String` — and no proof inspects the `≠`. `rewriteStep` either copies the subject
+(`computed`) or overwrites its predicate with a rule target (`ttu tr`). So the parameter is
+`Q : String → Prop` plus "every TTU target satisfies `Q`". Landed as
+`:652::TtuTargetsSat S Q` and the `_gen` chain `rewriteStep_subject_pred_gen` →
+`rewriteClosureAux_subject_pred_gen` → `rewriteClosure_subject_pred_gen`; **the three audited
+names keep their exact signatures as one-line corollaries at `Q := (· ≠ R)`.** Additive by
+construction, so all 8 call sites and the `audited_theorems.txt:451` NAME row are untouched
+(`grep -c` → still 1).
+
+⚠ **A trap the plan did not carry, found by the implementer:** `NoTtuTarget` **is** pinned, at
+`headline_definitions.txt:62`. Re-expressing it as `TtuTargetsSat S (· ≠ R)` — the obvious
+tidy-up — would have reddened the definition pin. It was left byte-identical and the generic
+def added beside it. The recon pass had cleared "adding a hypothesis changes no pin"; that is
+true and was not the hazard. **Re-expressing an existing pinned definition in terms of a new
+one is a distinct way to move a pin, and nothing in the plan or the traps list named it.**
+
+**Step 4 (`LeafRules.lean`, +308/−0, purely additive).**
+`:599::NoLeafSubjects S := ∀ r ∈ schemaRewritesL S, ∀ tr ∈ ttuTargets r, NotLeafName tr`,
+with a `Decidable` instance so the witnesses are `decide` pins rather than hand proofs, and
+the closure corollary chain down to
+`rewriteClosureL_subject_not_leafNode : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
+¬ LeafNode S (subjNode u.subject)`.
+
+**Trap 7 (the `hmd` vacuity shape) was avoided by construction, and the control proves it.**
+The quantifier ranges over `schemaRewritesL = schemaRewrites ++ leafRewrites`, and the witness
+`SnlBoth` carries a TTU rule in **each** layer with **both firing in one closure**. The
+mandatory sabotage ran and **bit twice**: S12 (drop the leaf layer) and S13 (drop the
+untainted layer) each gave `rc=1` naming a refutation witness — `¬NoLeafSubjects SnlBadLeaf`
+and `¬NoLeafSubjects SnlBadUnt`. In **both** runs the positive pin `noLeafSubjects_snlBoth`
+stayed GREEN, which is precisely why two refutation witnesses were needed rather than one:
+a single-layer witness would have passed under either sabotage. Literal outputs are in the
+Lean docstrings, and both sabotages were re-run against the final file so the pasted line
+numbers resolve live.
+
+**Step 5 (`CascadeStable.lean` +30, `CascadeStrataSettle.lean` +43/−13).** The pre-widen —
+proving the *stronger* obligations while the abbrev is still unflipped, so that the eventual
+flip is a no-op. `CascadeStable.lean` gains `import ZanzibarProofs.GraphIndex.Leaf` (pre-paying
+the flip's import half) and an additive bridge lemma placed BELOW the abbrev per trap 3. Two
+proof steps inside `untaintedShadow_writeLoggedOne_derived` whose types depend on the extras
+predicate are written `first | <post-flip form> | <today's form>`, so step 9 changes neither
+line; each got its own control (S14/S15, both `rc=1`) because the two point in opposite
+directions. **Verified unflipped:** `CascadeStable.lean:553-554` still reads
+`ShadowOver (DerNode S) σ σ0`, and `ShadowOver` at a `LeafNode`-bearing predicate has **zero**
+occurrences tree-wide.
+
+### 4. ⚠ The pre-widen is PARTIAL, and the reason is a NEW blocker the plan did not carry
+
+The plan (§D3/§F) said six of the eight `¬ DerNode` obligations were free via
+`Leaf.lean::bare_subjNode_not_leafNode`. **Only three are.** Derived from the definitions,
+not asserted:
+
+| site | subject term | free? |
+|---|---|---|
+| `CascadeStrataSettle.lean:1228` | `t.subject`, with `hbare` in scope at `:1217` | **yes** |
+| `CascadeStrataSettle.lean:910` | binder of `untaintedShadow_writeLoggedOne_derived`; its only caller `:1239` has `hbare` | **yes** |
+| `CascadeStrataSettle.lean:957` | binder of `untaintedShadow_writeLeg_derived`; **zero call sites tree-wide** | **yes** |
+| `CascadeStable.lean:919`, `CascadeStrataSettle.lean:685`, `:1246` | `u.subject` for `u ∈ rewriteClosure S t` | **NO — blocked** |
+
+`rewriteStep` overwrites the subject predicate with a TTU target, so a rewrite-closure
+subject predicate is **not BARE in general** and `bare_subjNode_not_leafNode` does not apply.
+Refuting `LeafNode` there needs, via step 3's `rewriteClosure_subject_pred_gen`, two premises:
+`TtuTargetsSat S NotLeafName` and `NotLeafName t.subject.predicate` (the seed's own subject).
+Neither was fabricated — per the standing rule the sites were left alone and the bridge lemma
+`CascadeStable.lean::rewriteClosure_subject_not_leafNode` was landed taking both as
+hypotheses, so the eventual discharge is one line.
+
+**⚠ CORRECTION to the implementer's own conclusion, made first-hand here.** Its notes close
+with "`NoLeafSubjects` is on `schemaRewritesL`; these sites are on `schemaRewrites`; they are
+different rule lists, so `NoLeafSubjects` does not discharge them." That is **wrong, in the
+favourable direction.** `LeafRules.lean:106` reads
+`def schemaRewritesL (S) : List RRule := schemaRewrites S ++ leafRewrites S` — a **superset**,
+not a disjoint list. So `NoLeafSubjects S` already implies `TtuTargetsSat S NotLeafName` by
+`List.mem_append_left` (modulo `ttuTargets r`, `LeafRules.lean:581`, vs
+`r.kind = .ttu tr`, which is the same two-branch match). **One of the two missing premises
+therefore already exists as of step 4.** What is genuinely unowned is only the *seed-side*
+`NotLeafName t.subject.predicate`, which nothing in scope at those three sites supplies
+(`NoTtuTarget S R` constrains targets `≠ R`, not their name shape; `WF` constrains declared
+KEYS while `tr` is a referenced string inside an `Expr`).
+
+The remaining obstacle for the half that does exist is **placement, not proof**:
+`LeafRules.lean` imports only `GraphIndex.Leaf`, while `TtuTargetsSat` lives in
+`ReconcileCorrect.lean`, so the bridge cannot live in `LeafRules` — it needs a module
+importing both. Not built this session (the ten-phase gate was mid-flight and a `.lean` edit
+would have invalidated the tiles); it is the **first** thing the next session should do.
+
+**Net: 5 obligations outstanding, not 2** — `CascadeStable.lean:946`/`:956` (the census hole,
+step 7, now blocked behind `P16`) plus the three `rewriteClosure` sites above, which are a new
+pre-step-9 blocker that the ten-step recipe does not contain. The recipe remains agent output,
+not a validated strategy; this is the second time it has been found short at contact.
+
 ---
 
 ## Session 2026-08-30d (**the blind instrument is closed — and the prediction attached to it was WRONG in the safe direction**)

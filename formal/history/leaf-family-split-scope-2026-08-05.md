@@ -1317,7 +1317,11 @@ re-check, ~20 sites in 3 files go genuinely red.**
   (`LeafRules.lean:609::lrV_untainted_layer_silent`), so the `exfalso` at
   `LeafRules.lean:466-471` is dead under every fixture. 2026-08-30b's "all four premises
   discharged" is true but weaker than it reads.
-* **(b)** `rawWriteRels` is `Leaf.lean:587`, not `:541`.
+* **(b)** `rawWriteRels` is `Leaf.lean:587`, not `:541`. ⚠ **This trap is ITSELF now stale
+  (2026-08-31): it is `Leaf.lean:645`.** Step 2 (`50af00e`) inserted the leaf-refutation
+  toolkit at `:577-621`, so **every `Leaf.lean` line number above `:552` written before
+  2026-08-31 is +58 out** — in this doc, in `PROOF_STATUS`, and in the task file. A trap that
+  corrects a line number is a trap with a short half-life: **cite `file::symbol`.**
 * **(c)** sizing: settled, see item 2 above. Do not re-cite 42 / ~136 / 24 / 125.
 * **(d)** `FoldAdmits`' second exec gate is `Exec.lean:443`, not `:376`.
 * **(e)** **`hql` lands on THREE pinned rows, not one.** `docs/latent-gaps.md` excludes
@@ -1358,6 +1362,31 @@ re-check, ~20 sites in 3 files go genuinely red.**
   pins the two predicates apart at `LeafWitness.SwEmptyRel`, and re-adding the proxy makes
   it — and **only** it — go red. That "only" is what licenses the green. Full record and
   the literal sabotage output: PROOF_STATUS `## Session 2026-08-30d` §1–§2.
+* **(i) NEW 2026-08-31 — RE-EXPRESSING a pinned definition moves a pin, and (f) does not
+  cover it.** (f) says adding a *hypothesis* touches no pin file, which is true and was
+  relied on. It does not follow that the definition layer is free: **`NoTtuTarget` IS
+  pinned**, at `headline_definitions.txt:62`. Step 3 introduced the generic
+  `ReconcileCorrect.lean::TtuTargetsSat S Q`, of which `NoTtuTarget` is exactly the
+  `Q := (· ≠ R)` instance — so the tidy-up of rewriting the old def in terms of the new one
+  would have reddened the definition pin for a pure refactor. It was left **byte-identical**
+  and the generic added beside it. Generalising a definition is the same hazard as renaming
+  one: **before generalising any `def`, grep `headline_definitions.txt` for its name.**
+* **(j) NEW 2026-08-31 — "the six free `subjNode` sites" is wrong; three of them are not
+  free.** `CascadeStable.lean:919`, `CascadeStrataSettle.lean:685` and `:1246` quantify over
+  `u ∈ rewriteClosure S t`, and `rewriteStep`'s `.ttu tr` branch **overwrites** the subject
+  predicate with the rule target — so the subject predicate is not BARE in general and
+  `Leaf.lean::bare_subjNode_not_leafNode` does not apply. Only the three that talk about the
+  **raw write subject** (`CascadeStrataSettle.lean:910`, `:957`, `:1228`) are free.
+  Refuting `LeafNode` at the other three needs `TtuTargetsSat S NotLeafName` **and**
+  `NotLeafName t.subject.predicate`. ✅ The first already exists as of step 4:
+  `schemaRewritesL = schemaRewrites ++ leafRewrites` (`LeafRules.lean:106`) makes
+  `NoLeafSubjects → TtuTargetsSat S NotLeafName` a `List.mem_append_left` — the obstacle is
+  *placement* (`LeafRules` imports only `GraphIndex.Leaf`; `TtuTargetsSat` lives in
+  `ReconcileCorrect`), not proof. The **seed-side** half is genuinely unowned: nothing at
+  those sites constrains a stored subject predicate's name shape (`NoTtuTarget S R` says
+  targets are `≠ R`, not their shape; `WF` constrains *declared keys*, while `tr` is a
+  referenced string inside an `Expr`). Full derivation: PROOF_STATUS `## Session 2026-08-31`
+  §4, including the correction to the implementer's own "different rule lists" conclusion.
 
 ## Provenance
 

@@ -622,11 +622,43 @@ def NoTtuTarget (S : Schema) (R : String) : Prop :=
 def NoStoreSubjectR (T : Store) (R : String) : Prop :=
   ∀ t ∈ T, t.subject.predicate ≠ R
 
-/-- One rewrite step keeps a subject off predicate `R`: `computed` preserves the subject; a
-    `ttu tr` sets it to `tr ≠ R` by `NoTtuTarget`. -/
-theorem rewriteStep_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R)
-    {t u : Tuple} (ht : t.subject.predicate ≠ R) (h : u ∈ rewriteStep S t) :
-    u.subject.predicate ≠ R := by
+/-! ### The subject-predicate chain, generic in the predicate
+
+The three `_subject_pred_ne` theorems below track exactly one scalar — the subject's
+PREDICATE NAME, a `String` — and their proofs never inspect the `≠`. `rewriteStep` has
+only two outcomes: `computed` copies the whole subject through, and `ttu tr` overwrites
+the subject predicate with the rule's target `tr`. So the honest parameter is an
+arbitrary `Q : String → Prop` closed under "is a TTU target" (`TtuTargetsSat`), and
+`R`-avoidance is the instance `Q := (· ≠ R)`.
+
+**Why generic, and why ADDITIVELY.** 4c-ii widens the shadow's extras predicate from
+`DerNode` to `DerNode ∨ LeafNode` (`CascadeStable.lean::ShadowOver`), so the consumers of
+this chain must additionally refute `Leaf.lean::LeafNode` at a rewrite-closure subject
+node. That half is keyed on `Leaf.lean::NotLeafName` (`p = BARE ∨ isLeafPred p = false`) —
+a *disjunction on the predicate name*, which the `Ne`-hardcoded statements below cannot
+express at all but which is a perfectly ordinary `Q`. The two halves are then two
+instantiations of one chain.
+
+⚠ `NoTtuTarget` is NOT re-expressed as `TtuTargetsSat S (· ≠ R)`: it is pinned verbatim at
+`formal/headline_definitions.txt::def:Zanzibar.NoTtuTarget`, so re-defining it reds the
+definition pin. It stays byte-identical and `TtuTargetsSat` sits beside it (the two are
+definitionally equal up to beta, which is why the corollaries pass `hnt` straight through).
+⚠ `rewriteClosure_subject_pred_ne` keeps its EXACT name and signature: it carries an
+`audited_theorems.txt` name row, a `#print axioms` in `Audit.lean`, and 8 call sites in 6
+files. -/
+
+/-- **`TtuTargetsSat S Q`** — every TTU rewrite rule's target relation satisfies `Q`. The
+    predicate-generic form of `NoTtuTarget`, which is this at `Q := (· ≠ R)`. -/
+def TtuTargetsSat (S : Schema) (Q : String → Prop) : Prop :=
+  ∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → Q tr
+
+/-- One rewrite step preserves any `Q` on the subject predicate that the schema's TTU
+    targets satisfy: `computed` preserves the subject; a `ttu tr` sets the predicate to
+    `tr`, and `Q tr` holds by `TtuTargetsSat`. -/
+theorem rewriteStep_subject_pred_gen {S : Schema} {Q : String → Prop}
+    (hnt : TtuTargetsSat S Q)
+    {t u : Tuple} (ht : Q t.subject.predicate) (h : u ∈ rewriteStep S t) :
+    Q u.subject.predicate := by
   unfold rewriteStep at h
   obtain ⟨r, hr, hap⟩ := List.mem_filterMap.mp h
   obtain ⟨ot, mr, or, kind⟩ := r
@@ -637,10 +669,11 @@ theorem rewriteStep_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget
     | ttu tr => simp only [Option.some.injEq] at hap; rw [← hap]; exact hnt _ hr tr rfl
   · simp at hap
 
-/-- Subject-predicate avoidance across the bounded closure. -/
-theorem rewriteClosureAux_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R) :
-    ∀ (n : Nat) (cur : List Tuple), (∀ w ∈ cur, w.subject.predicate ≠ R) →
-      ∀ u ∈ rewriteClosureAux S n cur, u.subject.predicate ≠ R := by
+/-- Subject-predicate `Q`-preservation across the bounded closure. -/
+theorem rewriteClosureAux_subject_pred_gen {S : Schema} {Q : String → Prop}
+    (hnt : TtuTargetsSat S Q) :
+    ∀ (n : Nat) (cur : List Tuple), (∀ w ∈ cur, Q w.subject.predicate) →
+      ∀ u ∈ rewriteClosureAux S n cur, Q u.subject.predicate := by
   intro n
   induction n with
   | zero => intro cur hcur u hu; exact hcur u hu
@@ -653,18 +686,44 @@ theorem rewriteClosureAux_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtu
       intro w hw
       rw [List.mem_flatMap] at hw
       obtain ⟨x, hx, hwx⟩ := hw
-      exact rewriteStep_subject_pred_ne hnt (hcur x hx) hwx
+      exact rewriteStep_subject_pred_gen hnt (hcur x hx) hwx
+
+/-- **Every rewrite-closure tuple of a `Q`-satisfying seed has a `Q`-satisfying subject
+    predicate**, provided every TTU target does. The predicate-generic parent of
+    `rewriteClosure_subject_pred_ne`; instantiate at `Q := (· ≠ R)` for the derived-R
+    avoidance the W3a fragment uses, or at `Leaf.lean::NotLeafName` for the `LeafNode`
+    half of 4c-ii's widened extras. -/
+theorem rewriteClosure_subject_pred_gen {S : Schema} {Q : String → Prop}
+    (hnt : TtuTargetsSat S Q)
+    {t u : Tuple} (ht : Q t.subject.predicate) (hu : u ∈ rewriteClosure S t) :
+    Q u.subject.predicate := by
+  rw [mem_rewriteClosure_iff] at hu
+  unfold rewriteClosureRaw at hu
+  exact rewriteClosureAux_subject_pred_gen hnt _ _
+    (fun w hw => by rw [List.mem_singleton.mp hw]; exact ht) _ hu
+
+/-- One rewrite step keeps a subject off predicate `R`: `computed` preserves the subject; a
+    `ttu tr` sets it to `tr ≠ R` by `NoTtuTarget`. The `Q := (· ≠ R)` instance of
+    `rewriteStep_subject_pred_gen`. -/
+theorem rewriteStep_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R)
+    {t u : Tuple} (ht : t.subject.predicate ≠ R) (h : u ∈ rewriteStep S t) :
+    u.subject.predicate ≠ R :=
+  rewriteStep_subject_pred_gen (Q := fun p => p ≠ R) hnt ht h
+
+/-- Subject-predicate avoidance across the bounded closure. The `Q := (· ≠ R)` instance of
+    `rewriteClosureAux_subject_pred_gen`. -/
+theorem rewriteClosureAux_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R) :
+    ∀ (n : Nat) (cur : List Tuple), (∀ w ∈ cur, w.subject.predicate ≠ R) →
+      ∀ u ∈ rewriteClosureAux S n cur, u.subject.predicate ≠ R :=
+  rewriteClosureAux_subject_pred_gen (Q := fun p => p ≠ R) hnt
 
 /-- **No rewrite-closure tuple of an `R`-avoiding seed has subject predicate `R`.** The seed
     avoids `R` (`NoStoreSubjectR`); each rewrite hop keeps it off `R` (`rewriteStep_subject_
-    pred_ne`). -/
+    pred_ne`). The `Q := (· ≠ R)` instance of `rewriteClosure_subject_pred_gen`. -/
 theorem rewriteClosure_subject_pred_ne {S : Schema} {R : String} (hnt : NoTtuTarget S R)
     {t u : Tuple} (ht : t.subject.predicate ≠ R) (hu : u ∈ rewriteClosure S t) :
-    u.subject.predicate ≠ R := by
-  rw [mem_rewriteClosure_iff] at hu
-  unfold rewriteClosureRaw at hu
-  exact rewriteClosureAux_subject_pred_ne hnt _ _
-    (fun w hw => by rw [List.mem_singleton.mp hw]; exact ht) _ hu
+    u.subject.predicate ≠ R :=
+  rewriteClosure_subject_pred_gen (Q := fun p => p ≠ R) hnt ht hu
 
 /-- **No W3a edge is sourced at an `R`-userset node.** A base edge's source is
     `subjNode u.subject` for a closure tuple `u` (predicate ≠ `R` by

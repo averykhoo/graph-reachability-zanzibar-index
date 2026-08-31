@@ -1,4 +1,5 @@
 import ZanzibarProofs.GraphIndex.Cascade
+import ZanzibarProofs.GraphIndex.Leaf
 
 /-!
 # Fan-out completeness — write-leg operand stability off the mapped keys (ROADMAP W3d-1b)
@@ -551,6 +552,35 @@ structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
     makes the genericization above a NO-OP on the current tree rather than a re-point. -/
 abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
   ShadowOver (DerNode S) σ σ0
+
+/-- **The `LeafNode` half of the widened write-leg subject obligation, on the
+    `rewriteClosure` chain** (4c-ii step 5 / the D3 pre-widen).
+
+    The three `hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject)`
+    obligations (here at `reachedByW3d_shadow`, and twice in
+    `CascadeStrataSettle.lean::reachedByW3d2_shadow` / `::reachedByW3d2_shadow_d`) are
+    quantified over the rewrite CLOSURE, whose subject predicate is **not BARE in general**:
+    `ReconcileCorrect.lean::rewriteStep`'s `.ttu tr` branch overwrites it with the rule's
+    target. So `Leaf.lean::bare_subjNode_not_leafNode` — which discharges the RAW-write
+    sites (`CascadeStrataSettle.lean::reachedByW3d2_shadow_d`'s derived branch, via
+    `StoreValidRulesD`'s bare-subject conjunct) — does not reach them, and the
+    `LeafNode` half needs `Leaf.lean::NotLeafName` transported along the closure by
+    `ReconcileCorrect.lean::rewriteClosure_subject_pred_gen`.
+
+    ⚠ **The two premises below are not available at any of those three sites today**, and
+    that is a real, recorded gap rather than an oversight of this lemma: `NoTtuTarget S R`
+    (all `hterm` supplies) constrains a TTU target only by `≠ R`, and nothing in
+    `NodupKeys` / `StoreValidRules` / `StoreValidRulesD` / `WF` / `BareStarStore`
+    constrains a TTU target's or a stored subject's *name shape*. `LeafRules.lean::
+    NoLeafSubjects` is the same discipline on the OTHER rule list
+    (`schemaRewritesL`, the leaf-routed chain) and does not discharge these. Supplying
+    `TtuTargetsSat S NotLeafName` on the untainted `schemaRewrites` chain is the
+    outstanding obligation the shadow re-point still owes. -/
+theorem rewriteClosure_subject_not_leafNode {S : Schema} {t u : Tuple}
+    (hQ : TtuTargetsSat S NotLeafName) (hbase : NotLeafName t.subject.predicate)
+    (hu : u ∈ rewriteClosure S t) : ¬ LeafNode S (subjNode u.subject) :=
+  not_leafNode_of_notLeafName
+    (by rw [subjNode_pred]; exact rewriteClosure_subject_pred_gen hQ hbase hu)
 
 /-- **Reach agreement off the extras**: a probe into a non-`Extra` target reads the same
     on `σ` and its shadow — extra edges are trailing hops onto terminal nodes the path can
