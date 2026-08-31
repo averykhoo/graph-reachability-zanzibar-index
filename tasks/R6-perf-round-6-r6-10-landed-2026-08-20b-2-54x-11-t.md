@@ -2,7 +2,7 @@
 id: R6
 title: perf round 6 -- R6-10 (2.54x) and R6-6 landed; 10 to land, 4 declined, 3 unreachable
 brief: Batch THROUGH the N15 cache, not past it (R6-6 is the pattern). Order: R6-11, R6-5, R6-4, R6-9, R6-18
-pri: LATER
+pri: NEXT
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [perf]
 source: board
 source_hash: 77474b3d6848
 created: 2026-08-21
-moved: 2026-08-31
-updated: 2026-08-31
+moved: 2026-08-31b
+updated: 2026-08-31b
 closed:
 ---
 

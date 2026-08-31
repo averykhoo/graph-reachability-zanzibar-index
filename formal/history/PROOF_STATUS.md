@@ -50,6 +50,161 @@ and sends the next reader to unrelated work. `HANDOFF.md` had it right as `P20` 
 the ledger is the copy that drifted. Appended here rather than edited there, per this file's
 banner.
 
+### 2. `P20` deliverable (a) — the adjudication. ACCEPTED, and the reason is checkable
+
+**Decision: the `NoLeafSubjects` narrowing of `W4Fragment` is ACCEPTED**, on the ground that
+it excludes only schemas **Python already refuses to compile**, and with the two mechanical
+guards in §3 as the condition of acceptance.
+
+The argument, stated so it can be attacked:
+
+1. The narrowing excludes exactly those schemas some rewrite rule of which has a TTU target
+   naming a compiler-minted leaf family (`viewer.0`), i.e. `¬ NotLeafName tr`.
+2. `zanzibar_utils_v1.py::_validate_ast_references` raises `ValueError` ("reserved leaf
+   namespace") on ANY referenced name containing `.` other than `...`, and applies it to a
+   TTU node's `target_rel`. So no such schema can reach the index at all.
+3. Therefore the narrowed `graph_correct` still covers **every schema the system can be made
+   to accept**; the schemas it drops are ones that raise at parse time.
+
+⚠ **Step 2 was PROSE, and the sabotage shows it is load-bearing rather than decorative.**
+With `check_name` neutered to a bare `return`, the schema `define safe: viewer.0 from parent`
+compiles, and it compiles to exactly the rule the new field forbids — observed literally:
+
+    rule -> 'safe' mints subject predicate 'viewer.0'
+
+i.e. the new `W4Fragment` field would be **FALSE at a schema Python accepted**, and the
+narrowing would be **unsound**, not merely tight. The Python refusal is the premise of the
+adjudication, so it is now pinned (§3(ii)) rather than asserted.
+
+**⚠ And the guard immediately refuted the general shape of that argument.** Deliverable (b)
+forced a field-by-field classification of the ten EXISTING `W4Fragment` fields against Python
+enforcement. Measured first-hand, by probe, not by reading:
+
+    LOUD 0    MIXED 3 (wsBare, bareStar, term)    SILENT 7
+
+**Zero of the ten existing fields is LOUD.** So "Python already refuses what the fragment
+excludes" — the entire justification for accepting THIS narrowing — is the **exception in
+this structure, not the rule**. Seven fields are silent scope holes: a schema violating them
+is accepted, runs, and answers queries, with its correctness resting on the differential net
+(oracle + matrix + hypothesis) and not on `graph_correct` at all. Two examples worth naming,
+both probe-confirmed admitted writes:
+* `ttuStarFree` — `folder:* parent doc:d1` on a TTU tupleset is **ADMITTED**. This is the
+  field board row `P6` exists to make inhabitable, and the one whose absence makes
+  `graph_correct` machine-checked FALSE rather than unproven.
+* `term`'s `NoStoreSubjectR` half — a stored userset subject naming a derived relation is
+  admitted.
+
+The durable lesson, and the reason this is recorded at the top of the item rather than in a
+footnote: **"the fragment is narrow but Python refuses the difference" is a claim that must
+be re-established per field, and nine times out of ten it is false here.** The next narrowing
+does not inherit this one's justification.
+
+### 3. What landed — three artifacts, each sabotage-controlled
+
+All three were built by delegated implementer agents against written specs; every claim below
+was re-verified first-hand before it was written here (`git status`, the classification counts
+re-derived by importing the module, the collection counts from `--collect-only`).
+
+**(i) `P20` deliverable (b) — the mechanical refusal.**
+`formal/conformance/test_w4fragment_scope_pin.py` (15 tests). It parses the live field names
+of `structure W4Fragment` out of `FullScope.lean` **by name, not by line number**, and asserts
+they equal the key set of `W4FRAGMENT_SCOPE` — a **hand-maintained** dict carrying, per field,
+a plain-English `demands`, a `classification` in {LOUD, MIXED, SILENT}, and `file::symbol`
+evidence. Well-formedness is itself asserted (prose ≥ 40 chars, MIXED rows must name their
+LOUD sub-case), so a field cannot be added with a blank cell.
+
+⚠ **Why this is not redundant with `headline_definitions.txt:102`, which already pins the
+field list.** That row is **auto-regenerated** by `statement_pin.py --generate`; accepting the
+narrowing destroys the signal in the same act. The new pin is hand-maintained, so the only way
+past it is to write down what the new field demands and whether Python enforces it. It
+converts the question from "did the pin change?" to "what did you give up?".
+
+SABOTAGE, three runs, all reverted, literal output in the module docstring. S1 appended
+`dummySabotage : True` to the real Lean structure: **2 failed**, naming the field and the
+count. S3 is the one worth flagging — it blinded the *instrument* (cleared the parser's body
+list), and both the parse floor and a synthetic known-answer control fired, diagnosing an
+instrument failure rather than a scope change. The implementer also **changed the code because
+of S2**: the anti-vacuity floor originally ran BEFORE the set comparison, which made a
+one-row deletion report "pin gutted" — true but unattributable. The floor was moved last.
+
+**(ii) The correspondence pin.**
+`formal/conformance/test_leaf_namespace_correspondence.py` (5 tests) — the Python mirror of
+`LeafRules.lean::NoLeafSubjects` over `::ttuTargets` and `Leaf.lean::NotLeafName`. A corpus
+sweep over all 50 schema sources with three MEASURED anti-vacuity floors, a **local**
+leaf-layer witness (`define safe: viewer from parent but not banned`, kept out of `corpus.py`
+so no other corpus sweep is perturbed), and the refusal control.
+
+⚠ **Honesty label, and it is in the module docstring in these words: this is a Python
+RE-IMPLEMENTATION, not a machine-check against Lean.** `zcli` exposes exactly three modes
+(`spec` / `graph` / `graph-state`, `Cli.lean:14`, rc 4 for anything else) and has no channel
+to evaluate an arbitrary Prop, so `Decidable (NoLeafSubjects S)` cannot be invoked from a
+conformance test. A **fourth zcli mode** is what would upgrade this to a real differential;
+the docstring names that as the requirement, and until then the file must not be described as
+machine-checked.
+
+**(iii) `P3` — the bridge lemma, and a FALSE docstring removed from the Lean source.**
+`CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects` : `NoLeafSubjects S →
+TtuTargetsSat S NotLeafName`, five lines, via `List.mem_append_left`, placed immediately
+before its only intended consumer `::rewriteClosure_subject_not_leafNode`, with one new
+`import ZanzibarProofs.GraphIndex.LeafRules` (acyclicity re-verified first-hand: `LeafRules`'
+forward cone contains no `Cascade*` and no `Reconcile*`). Green, `1089 jobs`, **5 of a
+6-cycle budget**.
+
+Three applicability theorems make it non-vacuous at `LeafRuleWitness.SnlBoth` — including
+`::rewriteClosure_subject_not_leafNode_snlBoth`, which is derived THROUGH the bridge rather
+than `decide`d directly, because a direct `decide` would say nothing about whether either
+lemma applies.
+
+SABOTAGE: `List.mem_append_left` → `mem_append_right` — the narrowest plausible weakening,
+since the containment DIRECTION is the lemma's entire content. Sole error in an 1089-job tree:
+
+    error: ... Application type mismatch: The argument hr has type
+      r ∈ schemaRewrites S  but is expected to have type  r ∈ leafRewrites S
+
+⚠ **And that confusion is precisely what the docstring being removed was teaching.**
+`::rewriteClosure_subject_not_leafNode` asserted in Lean source that `NoLeafSubjects` "is the
+same discipline on the OTHER rule list … and does not discharge these". `schemaRewritesL` is
+`schemaRewrites ++ leafRewrites` — a **superset**, not a sibling. `## Session 2026-08-31` §4
+corrected this in prose while the false sentence stayed in the source; it is now corrected in
+the source, quoting and labelling the old claim. **The replacement does not overclaim, and neither should any restatement of it:** what the
+bridge supplies is a **route** to `hQ` — from `NoLeafSubjects`, which is **not yet a
+`W4Fragment` field** (step 6 was not taken) — while the seed-side
+`NotLeafName t.subject.predicate` has no owner at all. **Neither premise is available at any
+of the three sites today, and all three remain undischarged.** ⚠ The tempting shorthand "they
+now need one premise, not two" is FALSE and was caught in this session's own board draft;
+`::rewriteClosure_subject_not_leafNode`'s docstring is the authority.
+
+### 4. Two coverage holes found on the way, one of them pre-existing and real
+
+**(a) The DSL front-end had ZERO coverage of the `.`-lock, and the TTU-target route had zero
+on EITHER front-end.** Grepping both refusal messages across all tracked `.py`, the only pin
+anywhere was `tests/test_openfga_json.py::test_rejects_reserved_dot_in_referenced_names`,
+which drives the **JSON** front-end and covers two routes (a `directly_related_user_types`
+restriction, a `computedUserset` ref). So `parse_openfga_schema` on a `.fga` string — what
+every corpus and every fixture actually uses — was unpinned, and the **TTU target** route,
+the one and only route `ttuTargets` reads, was unpinned on both. (ii) closes all three.
+That is not a new test for a new field; it is a hole that was already there.
+
+**(b) A scout sizing figure was out by 7×, in the direction that would have neutered a
+floor.** Recon reported "4 TTU-target rules corpus-wide"; live is **28 across 50 sources**.
+The 4 are the corpus-dict rules only — the other 24 are in `tests/fga_schemas/*.fga`, which
+the prescribed collector includes. Had 4 been used as the anti-vacuity floor it would have
+carried 7× slack. The implementer re-measured rather than inheriting, which is the only
+reason this is a footnote. ⚠ Same shape as §11.13 item 2: **a count is meaningless without
+its scope**, and a delegated count is evidence, not a finding.
+
+### 5. Floors and counts
+
+`formal/conformance/` collects **515** (was 495: +15, +5). `MIN_CONF_ALL` raised 495 → 515 and
+`MIN_CONF_REST` 391 → 411 (`MIN_CONF_HEAVY` unchanged at 104; `HEAVY_CONF` is one file and the
+new modules are not it — 104 + 411 = 515, re-measured first-hand). The floors are `-ge`, so
+this was **not** required to stay green; it is the deliberate reviewed edit CLAUDE.md's
+zero-headroom convention asks for, because leaving 495 would have silently bought 20 tests of
+slack. `FINAL_REVIEW.md`'s generated block regenerated via `doc_counts --generate`.
+
+**Step 6 was NOT taken.** `NoLeafSubjects` is not yet a field of `W4Fragment`; `P3` steps 6–10
+remain unstarted, now unblocked by this adjudication.
+
 
 
 **Task taken:** `P3`, the 4c-ii middle (steps 3→10), at the top of a fresh window. This

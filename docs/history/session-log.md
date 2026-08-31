@@ -41,7 +41,106 @@ appended to as the session proceeds.
 itself is **not** taken — adjudicating a change and landing it in the same session is the
 shape the user declined on 2026-08-31.
 
-Still owed: (in progress — this entry is appended to before the session closes)
+**1. `P20` is adjudicated: ACCEPT.** The `NoLeafSubjects` narrowing of `W4Fragment` excludes
+only schemas Python already refuses to compile (`zanzibar_utils_v1.py::_validate_ast_references`
+raises on any referenced name containing `.`), so the narrowed `graph_correct` still covers
+every schema the system can be made to accept. That argument was prose; it is now a test —
+and the sabotage shows it is **load-bearing, not decorative**: with the validator neutered,
+`define safe: viewer.0 from parent` compiles to exactly the rule the new field forbids, so the
+narrowing would be *unsound*, not merely tight.
+
+**2. ⚠ The guard immediately refuted the general shape of that argument, and this is the
+session's most important finding.** Deliverable (b) forced a field-by-field classification of
+`W4Fragment`'s ten EXISTING fields against Python enforcement, probe-derived. Result:
+**LOUD 0 · MIXED 3 · SILENT 7.** Zero existing fields are loudly enforced. So "Python refuses
+what the fragment excludes" is the **exception in this structure, not the rule** — seven
+fields are silent scope holes where a violating schema is accepted, runs, and answers
+queries, its correctness resting on the differential net rather than on `graph_correct`.
+`ttuStarFree` is one of them (`folder:* parent doc:d1` on a TTU tupleset: **admitted**), which
+is exactly what board row `P6` exists to fix. **The next narrowing does not inherit this
+one's justification.**
+
+**3. Three artifacts landed, each sabotage-controlled** — detail and literal outputs in
+`PROOF_STATUS` §3:
+* `formal/conformance/test_w4fragment_scope_pin.py` (15 tests) — the mechanical refusal. Parses
+  `W4Fragment`'s fields out of Lean by NAME and matches them against a **hand-maintained**
+  classification table. Not redundant with `headline_definitions.txt:102`, which pins the same
+  field list but is **auto-regenerated** — accepting a narrowing destroys that signal in the
+  same act. Sabotaged three ways, including blinding the *instrument*.
+* `formal/conformance/test_leaf_namespace_correspondence.py` (5 tests) — the Python mirror of
+  the Lean predicate, labelled in its own docstring as a **re-implementation, not a
+  machine-check** (zcli has three modes and no channel for an arbitrary Prop; a fourth mode is
+  what a real differential would need).
+* `CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects` — the `P3` bridge, green at
+  1089 jobs in 5 of a 6-cycle budget, plus **removal of a FALSE sentence from the Lean source**
+  claiming `NoLeafSubjects` "does not discharge these". Three sites remain undischarged; the
+  correction does not overclaim.
+
+**4. A pre-existing coverage hole, found on the way.** The `.`-lock had **zero** pins on the
+DSL front-end, and the **TTU-target route had zero on either front-end** — the only pin
+anywhere was `tests/test_openfga_json.py::test_rejects_reserved_dot_in_referenced_names` (JSON,
+two other routes). That is not a gap created by this work; it was already there, on the exact
+route the new Lean field depends on.
+
+**5. Floors.** Conformance collects 515 (was 495). `MIN_CONF_ALL` 495 → 515 and
+`MIN_CONF_REST` 391 → 411, re-measured first-hand. The floors are `-ge` so this was not needed
+to stay green — it is the deliberate edit the zero-headroom convention asks for, since leaving
+495 would have silently bought 20 tests of slack.
+
+⚠ Per the standing rule, all three implementer reports are **evidence, not findings**:
+the classification counts, the collection counts, the tree state and the floor arithmetic were
+each re-derived first-hand before being written here. One scout figure was refuted that way
+(“4 TTU targets corpus-wide”; live **28**, a 7× floor slack had it been inherited).
+
+**6. Two small things worth their line.** (i) `tasks/BANNER.md` was **stale at `2026-08-30c`**
+— the 2026-08-31 session rewrote `HANDOFF.md`'s banner but not this one, so the task tree's
+session-start view still carried "repoint the abbrev at `DerNode` **OR** `LeafNode`" (the
+misread disjunction that same session refuted) and "delete `Scratch4cii.lean:51` first"
+(trap (h), closed 2026-08-30d). Both are now gone. ⚠ **This is the parallel-update contract
+failing in the direction the trial exists to measure** — the board arm was updated, the tree
+arm was not, and nothing caught it, because `task.py lint` checks the banner's SHAPE (line
+cap, renderable glyphs) and not its freshness. Worth a lint check; not added this session.
+(ii) `task.py::ASCII_FOLD` has no mapping for the disjunction glyph, so the banner cannot
+spell the very symbol `P3`'s headline finding is about. One line to add, deliberately NOT
+added here: editing `scripts/task.py` mid-session changes `t2c` and would have invalidated
+the gate tiles already running.
+
+**7. An adversarial audit of this session's own write-back found 8 defects, 3 of them
+gate-red or claim-inflating.** Run as a read-only pass over the records BEFORE committing,
+against the live tree. It is the single highest-value thing this session did, and everything
+below would otherwise have been committed as true:
+* ⚠ **`tasks/config.json`'s `min_tasks_parsed` was not ratcheted when `P21` was filed** —
+  and **the entry immediately above records the identical miss from 2026-08-31, in the
+  identical shape** (file a row, forget the floor, let `tests-tile:1/4` find it). Twice is a
+  pattern, not an accident. `task.py new` has just written the file and could raise the floor
+  itself, or refuse to exit 0 until it is raised; **a warning in a provenance string has now
+  demonstrably failed to cause the behaviour twice.** Ratcheted 155 → 156.
+* ⚠ **Closing `P20` swept its id from the board's `deps` cell but not from the task tree's**
+  (`tasks/P3-….md` still read `deps: [P20]`), reddening
+  `tests/test_tasktool.py::test_sabotage_live_blind_parser`. Note the direction: it is the
+  same one-armed update §6(i) describes, **committed by the same session that wrote §6(i)**.
+  The board arm is the one that gets remembered. Swept via `task.py dep rm`.
+* ⚠ **`FINAL_REVIEW.md`'s "differential conformance tests" figure was inflated by 20** —
+  both new modules were counted as Lean-vs-Python differentials when neither is one, which is
+  what `doc_counts.py::TOOLING_FILES` exists to prevent. So the one number in the repo that
+  quantifies differential coverage was inflated **by exactly the two files this session had
+  just finished recording as not differentials.** Triaged; the figure is back to 449/13.
+  ⚠ **And the gate could not have caught it**: step 4e's `--check` compares the block against
+  a *regeneration of itself*, so a mis-triaged file is self-consistently wrong and stays
+  green. Filed with the method lesson in `docs/sabotage-procedure.md`.
+* Three more, all fixed: a `CascadeStable.lean:946`/`:956` citation carried forward stale
+  (the census hole is `::shadow_graphRec_agree`) — **on a row whose own trap says "cite
+  `file::symbol`", and in the same session that landed a pin asserting evidence must not
+  contain a bare line number**; an overclaim that the three `rewriteClosure` sites "now need
+  one premise, not two" when the Lean docstring says neither is available there; and the
+  banner carrying `(nav)` (the ASCII fold's *output*) instead of the glyph.
+
+The transferable part: **the records are an artifact, and they need the same adversarial
+treatment as the code.** Every one of these was written by someone who had just verified the
+underlying work first-hand — accuracy about the subject did not carry over into accuracy
+about the write-up.
+
+Still owed: nothing.
 
 ## 2026-08-31 — the 4c-ii middle's blocking question was a misread `∨`; and step 3's cone is 30 modules, not 21
 

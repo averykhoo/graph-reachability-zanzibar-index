@@ -459,14 +459,32 @@ remove-path and generated-schema gates). The Lean remove leg is closed at the va
 in `ARCHITECTURE.md`; the narrative is `history/PROOF_STATUS.md`.
 
 **In flight — leg 7, the leaf-family split (repo board rows `P3`, `P4`, `P5`, `P14`).**
-Steps 3, 4a, 4c-pre and 4c-i have landed. Owed: 4c-ii co-landing with step 7, then 4b, 5
-and 6. Read the dated blocks at the top of this file and the scope doc before starting.
+Steps 3, 4a, 4c-pre and 4c-i have landed, and within 4c-ii so have steps 1–5 plus the
+`NoLeafSubjects → TtuTargetsSat` bridge (2026-08-31b). Owed: the rest of 4c-ii co-landing
+with step 7, then 4b, 5 and 6. Steps 6–10 were blocked on row `P20` and are now unblocked —
+it was adjudicated **ACCEPT** on 2026-08-31b. Read the dated blocks at the top of this file
+and the scope doc before starting.
 
 **In flight — `ttuStarFree` (repo board rows `P6`, `P7`).** Part (i) landed and is inert;
 part (ii) is what materialises the edge; (iii) and (iv) follow.
 ⚠ **This is NOT an optional widening.** Without the `ttuStarFree` clause, `graph_correct`
 and `backend_equivalence` are machine-checked FALSE, not merely unproven — the 2026-08-10
 attack-first kill. `W4Fragment.ttuStarFree` must stay unchanged until part (ii) is in.
+⚠ **And 2026-08-31b measured that Python does not enforce it either**: a probe wrote
+`folder:* parent doc:d1` onto a TTU tupleset and it was **ADMITTED**. So this clause is a
+live hole on both sides at once, not a formality awaiting paperwork.
+
+**Scope honesty — the `W4Fragment` field classification (2026-08-31b).** `graph_correct`'s
+scope is exactly `W4Fragment`, and its ten fields now carry a gated, hand-maintained
+classification against Python enforcement:
+`formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`. Measured **LOUD 0 ·
+MIXED 3 · SILENT 7** — for seven fields a schema outside the proven fragment is accepted,
+runs and answers queries, with its correctness resting on the differential net rather than
+on `graph_correct`. ⚠ **Do not argue a future scope narrowing from "Python refuses the
+difference" without re-establishing it for that field** — it currently holds for none of the
+ten, and the one narrowing accepted on that ground (`P20`) is the exception. Closing the
+seven is repo board row `DW-1`; making the classification measured rather than argued needs
+a fourth `zcli` mode, row `P21`.
 
 **The one live scope carry.** T2a (`graph_reached_inv`) did not widen with T2b: it takes the
 extra `W4NarrowT2a` bundle, and a Direct-arm store provably fails it, so T2a stays vacuous

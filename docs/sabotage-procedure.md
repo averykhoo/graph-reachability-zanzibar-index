@@ -224,6 +224,60 @@ Two things this teaches:
    witness fails to elaborate when the bundle is not really wider. Legs 3/4's sabotages at
    least reddened `FullScope`; this one **reddens nothing**.
 
+### A pin you REGENERATE to accept a change cannot be the alarm for that change (2026-08-31b)
+
+The section above says a generated golden cannot witness a change to the tree that generates
+it. `P20` is the sharper form of that, and the difference matters because the first sounds
+like an accident and this one is a *workflow*:
+
+`formal/headline_definitions.txt` pins `W4Fragment`'s field list explicitly — the row reads
+`fields=(computedOrDirect … term)`. Adding a field really does turn it red. It is a real pin
+that really fires. **And it is still not an alarm**, because the documented way to accept the
+change is `statement_pin.py --generate`, so the red appears and is cleared *inside the same
+act as the change*. The signal and its dismissal are the same keystroke. Meanwhile
+`headline_statements.txt` records the hypothesis BY NAME (`(hF : W4Fragment S T)`, deliberate)
+and stays byte-identical, so the theorem `Zanzibar.graph_correct` gets **strictly weaker**
+with no durable trace anywhere.
+
+**The test for this shape:** *is the check's red cleared by re-running a generator, or by a
+human writing something down?* If a generator clears it, it measures **drift** — valuable,
+but blind to any change made on purpose. That is precisely the class "we are narrowing the
+theorem" belongs to.
+
+**The remedy is not a bigger generated pin.** It is a small HAND-MAINTAINED companion that
+nothing regenerates, positioned so the only way past it is to state what was given up.
+`formal/conformance/test_w4fragment_scope_pin.py` parses `W4Fragment`'s live field names out
+of the Lean source and matches them against a hand-written table carrying, per field, what it
+demands and whether Python enforces it. Adding a field cannot be absorbed by a regeneration;
+it forces a new row and a new classification.
+
+⚠ **And the companion immediately earned its place by refuting the argument it was built to
+support.** The narrowing was accepted on the ground "Python already refuses what this
+excludes". Filling the table out measured the ten EXISTING fields at **LOUD 0 · MIXED 3 ·
+SILENT 7** — the justification holds for *none* of them. A generated pin would never have
+asked the question, because a generated pin records what the tree says, and this is a question
+about what the tree does **not** say. Full record: `formal/history/PROOF_STATUS.md`
+`## Session 2026-08-31b` §2–§3.
+
+⚠ **The same shape bit again, in the same session, in a different file — so treat it as the
+general rule and not a `statement_pin` quirk.** `verify.sh` step 4e checks
+`formal/FINAL_REVIEW.md`'s generated counts block by running
+`doc_counts.py --check`, which **regenerates the block and compares by string equality**.
+That catches drift perfectly and is blind to a wrong *classification*: the same session filed
+two new conformance modules without adding them to `doc_counts.py::TOOLING_FILES`, so both
+were counted as Lean-vs-Python differentials when neither is one, and the repo's only measure
+of differential coverage was overstated by 20 — **self-consistently**, because the check
+compares the number against a re-derivation using the same wrong input. It was found by a
+read-only audit, not by the gate.
+
+**The generalisation:** a check of the form *"recompute X and compare to the recorded X"*
+tests transcription, never classification. Whenever such a check has a hand-maintained input
+(a tooling-file set, an exclusion list, a category map), **that input is unguarded by
+construction** — the check will happily agree with itself about a mis-filed entry. Guard the
+input separately: assert a property of the classification that a mis-filing would violate
+(e.g. "every file in `TOOLING_FILES` exists", "no module whose docstring says
+*re-implementation* is counted as a differential"), or make it derivable instead of declared.
+
 ### Sabotage your instrument too, not just your subject
 
 A measuring instrument can be as broken as the thing it measures — and it fails

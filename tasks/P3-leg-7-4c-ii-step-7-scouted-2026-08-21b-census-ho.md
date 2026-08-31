@@ -4,15 +4,15 @@ title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a
 brief: Steps 3-5 GREEN. Pre-widen PARTIAL: 3 of 6 'free' sites were not; 5 obligations left, 6-10 blocked on P20.
 pri: NOW
 size: L
-deps: [P20]
+deps: []
 related: [P6]
 parent:
 labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-08-31
-updated: 2026-08-31
+moved: 2026-08-31b
+updated: 2026-08-31b
 closed:
 ---
 
@@ -378,3 +378,7 @@ Trial close-the-loop for this session, mirrored from the root session-log. lint 
 ### 2026-08-31
 
 Steps 3-5 landed green (TtuTargetsSat + additive _gen chain; NoLeafSubjects with a two-layer witness whose sabotage bit twice, S12/S13; the pre-widen). Abbrev STILL UNFLIPPED. Pre-widen is PARTIAL: only 3 of the 6 'free' subjNode sites were free -- CascadeStable.lean:919, CascadeStrataSettle.lean:685 and :1246 quantify over rewriteClosure S t, whose subject predicate is not bare, so bare_subjNode_not_leafNode does not apply. 5 obligations outstanding, not 2. NEXT EDIT: place the NoLeafSubjects -> TtuTargetsSat S NotLeafName bridge (it is List.mem_append_left, since schemaRewritesL = schemaRewrites ++ leafRewrites at LeafRules.lean:106) in a module importing both LeafRules and ReconcileCorrect; only the seed-side NotLeafName t.subject.predicate is then unowned. Steps 6-10 blocked on P20. Full record: PROOF_STATUS ## Session 2026-08-31 sec 3-4; new traps at scope doc 11.13 (i) and (j).
+
+### 2026-08-31b
+
+Bridge LANDED: CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects (mem_append_left), green 1089 jobs, 5 of a 6-cycle budget, sabotage on the containment DIRECTION (mem_append_right -> sole error in the tree). Also removed a FALSE sentence from the Lean source: the old rewriteClosure_subject_not_leafNode docstring taught that NoLeafSubjects is 'the same discipline on the OTHER rule list and does not discharge these'; schemaRewritesL = schemaRewrites ++ leafRewrites is a SUPERSET. Steps 6-10 UNBLOCKED (P20 closed ACCEPT). Still 5 obligations: the three rewriteClosure sites now need ONE premise (seed-side NotLeafName t.subject.predicate), not two, and remain undischarged; plus CascadeStable.lean:946/:956.
