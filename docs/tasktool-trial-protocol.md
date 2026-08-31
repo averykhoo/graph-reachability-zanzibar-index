@@ -508,6 +508,94 @@ design measures *directed* use, never natural preference (`:382-390`); and **the
 parallel-maintenance contract itself was never recorded by any session** — which A6 suggests
 is not zero, since it is the step four consecutive sessions skipped.
 
+### 2026-08-31b — the parallel-maintenance cost, recorded at last; and one hard number that is not self-report
+
+Filed at the user's request after they asked for feedback on the board. It closes the gap the
+2026-08-29 append names in its own last paragraph: *"the cost of the parallel-maintenance
+contract itself was never recorded by any session — which A6 suggests is not zero, since it is
+the step four consecutive sessions skipped."* This session ran a real, full-size item
+(`P20` adjudication + `P3` bridge, ten gate phases, four commits) with both arms maintained.
+
+⚠ **DECLARE THE INSTRUMENT FIRST: everything below except B1 is SELF-REPORT, which §2 of this
+protocol rules out** (*"a session's own account of what it read is the least reliable
+instrument available"*). §2 is right, and this session is fresh evidence for it — see B4,
+where the session both skipped its own mandated self-report and then asserted a trend from
+memory that one `grep` refuted. Read B2–B5 as operator experience with a known-unreliable
+narrator, not as measurement. B1 alone is an artifact count.
+
+**B1 — the one hard number: across every `read:` line ever written, the query has replaced
+the file ONCE.** Counted by script over `docs/history/session-log.md`, not recalled:
+
+    board + HANDOFF   10        board only   1        HANDOFF only   0
+
+and the single `board only` is `2026-08-31`, the session immediately before this one. This is
+an artifact count over committed text, so it is not subject to §2's objection — though the
+lines it counts are themselves self-reports, which caps its strength. **Bearing on the
+verdict: §1's first question is "does it reduce what a session must read before it can start
+work?" On the record so far, ten times out of eleven, no.** This session's reason was
+structural rather than habitual — the board view carries no item blocks, so the read-first
+lists, the traps and the Rhythm protocol exist only in the file, and would have been needed
+whatever the intent. **That makes Phase B (`HANDOFF.md` becomes a stub, row `TT-1`)
+unsupported as specified**: the part sessions actually need is the part the tree does not
+carry. Cutover requires the tree to grow item blocks first, or the stub to keep them.
+
+**B2 — the parallel-maintenance cost, itemised.** The mirror ops themselves were CHEAP: ten
+`task.py` calls (`new`, `close`, two `promote`, two `touch`, three `comment`, one `dep rm`),
+all correct first try except one over-long `--brief` rejected at write time. **The cost is not
+in the ops. It is in `tasks/BANNER.md`, and it is large and pure waste**: ~6 round-trips to
+satisfy checks that the equivalent `HANDOFF.md` banner does not impose (a 14-line cap, then an
+unrenderable `∨`, then committing the ASCII fold's *output* `(nav)` instead of the glyph). The
+content is a second copy of `HANDOFF.md`'s banner. ⚠ **And it had drifted**: the previous
+session rewrote `HANDOFF.md`'s banner and not this one, so the tree's session-start view was
+still directing readers to "repoint the abbrev at `DerNode` OR `LeafNode`" — the misread
+disjunction that same session had refuted — and to delete `Scratch4cii.lean:51`, closed as
+trap (h) the day before. **A duplicated banner did not merely cost time; it served stale
+instructions from the arm under trial.**
+
+**B3 — the dual-update contract produced 2 of this session's 8 write-back defects, and one is
+the exact failure the trial exists to detect.** Closing `P20` swept its id from the board's
+`deps` cell but not from `tasks/P3-*.md`, which still read `deps: [P20]` — a one-armed update,
+committed by the same session that wrote a session-log paragraph about one-armed updates. The
+other: filing `P21` without ratcheting `tasks/config.json`'s zero-headroom floor, **the second
+consecutive session to miss it** (2026-08-31 did the identical thing with `P20`, and the
+config's own provenance string records that miss — so a warning in a provenance string has now
+demonstrably failed to cause the behaviour twice). ⚠ **Neither was caught by the author.** Both
+were caught by `tests/test_tasktool.py` via `tests-tile:1/4`. That is the honest split: **the
+tree's mechanical checks are earning their place; the human half of the contract is not being
+held, by anyone, in any session.**
+
+**B4 — the trial's own instrument is unenforced, and this session skipped it.** CLAUDE.md
+requires two literal lines per session-log entry (`task.py lint` output, and the `read:`
+self-report). This entry's session wrote a long ledger entry with **neither**, and nothing
+noticed: not `task.py lint`, not `handoff_lint.py`, not any of the ten gate phases. They were
+added only after the user asked for feedback on the board. ⚠ **A session that skips them is
+indistinguishable from one that had nothing to report** — the fail-by-passing shape
+`docs/sabotage-procedure.md` exists for, sitting on the primary instrument of the experiment.
+**A lint check asserting both lines are present in the newest entry is the cheapest possible
+fix.** Note the tension it would formalise: CLAUDE.md's instrument is self-report, which §2 of
+this protocol declares the least reliable available. Enforcing presence does not fix
+truthfulness — and the same session then asserted "third session in a row" about B1's trend
+from memory, wrong on both citations, refuted by one `grep`.
+
+**B5 — what the tree earned, stated as narrowly as the evidence allows.** Not the board view.
+Two things adjacent to it: (i) `task.py lint`'s 12 checks plus `tests/test_tasktool.py`, which
+caught four real defects this session; (ii) the per-item `Log` sections, which ACCUMULATE where
+board rows are DESTRUCTIVE — the dated entries appended to `P3`, `P6` and `DW-1` survive,
+whereas the equivalent board-row prose is overwritten by the next session to touch the row.
+⚠ **Both are arguments for the FILES and the LINT, and neither is an argument for the QUERY**,
+which is what §1 actually asks about.
+
+**B6 — the recommendation this suggests, offered as input to the 2026-09-06 decision, not as a
+verdict.** Neither listed option fits: cutover is unsupported (B1) and keep-both-as-is
+preserves the only measured pure cost (B2). A third shape is consistent with all of B1–B5 —
+**keep the tree, drop the duplication**: retire `tasks/BANNER.md` in favour of reading
+`HANDOFF.md`'s banner (one source, no drift, no second glyph dialect); add the B4 lint check;
+make `task.py new` ratchet its own floor or refuse to exit 0 (B3). Then decide cutover on the
+item-block question alone, which is the only real blocker and which
+`tree-sole-authority-spec-2026-08-29.md` should be checked against. ⚠ Not filed as board rows:
+the user asked for the feedback to be recorded, not executed, and filing rows would itself
+incur the B3 contract this entry is reporting on.
+
 ---
 
 ## 7. Full run — design, pre-registered 2026-08-24 before any agent launched

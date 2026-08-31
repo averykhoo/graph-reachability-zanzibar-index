@@ -150,7 +150,7 @@ full `HANDOFF.md` read went out in the same first tool call, and I would have ne
 `HANDOFF.md` regardless: the board view carries no item blocks, so the read-first lists, the
 traps and the Rhythm protocol are only in the file.
 
-⚠ **SAME-SESSION CORRECTION, and it is the fourth record defect of this session.** The
+⚠ **SAME-SESSION CORRECTION, and it is the NINTH record defect of this session** (the audit in §7 found eight; this is the one that got past the audit too). The
 sentence here first read "the third session in a row to report the query as a supplement
 (2026-08-30c, 2026-08-31, here)". **Both citations are wrong**: `2026-08-30c` carries no
 `read:` line at all, and `2026-08-31` is the one session that reported **`board only`** — so
