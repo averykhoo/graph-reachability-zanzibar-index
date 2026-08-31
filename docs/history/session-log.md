@@ -145,11 +145,24 @@ about the write-up.
     task lint: clean (12 checks, 156 task file(s) parsed)
     read: board + HANDOFF
 
-⚠ **`read: board + HANDOFF` again, and it was ADDITIVE, not substitutive** — `task.py board`
-and the full `HANDOFF.md` read went out in the same first tool call, and I would have needed
+⚠ **`read: board + HANDOFF`, and it was ADDITIVE, not substitutive** — `task.py board` and the
+full `HANDOFF.md` read went out in the same first tool call, and I would have needed
 `HANDOFF.md` regardless: the board view carries no item blocks, so the read-first lists, the
-traps and the Rhythm protocol are only in the file. That is the third session in a row to
-report the query as a supplement rather than a replacement (2026-08-30c, 2026-08-31, here).
+traps and the Rhythm protocol are only in the file.
+
+⚠ **SAME-SESSION CORRECTION, and it is the fourth record defect of this session.** The
+sentence here first read "the third session in a row to report the query as a supplement
+(2026-08-30c, 2026-08-31, here)". **Both citations are wrong**: `2026-08-30c` carries no
+`read:` line at all, and `2026-08-31` is the one session that reported **`board only`** — so
+"in a row" is exactly backwards. Measured over every `read:` line in this file:
+
+    board + HANDOFF   10        board only   1        HANDOFF only   0
+
+**and the single `board only` is the session immediately before this one.** The corrected
+figure is much stronger evidence than the false one it replaces, in the same direction: across
+eleven sessions the query has substituted for the file **once**. Written down as a caution —
+I asserted a trend from memory in the same entry that spends a paragraph on records needing
+adversarial checking, and it took a `grep` of one file to refute.
 ⚠ **And these two lines were MISSING from this entry until the user asked for feedback on the
 board** — written afterwards, which is exactly the failure mode they exist to expose. The
 instrument is self-reported and unenforced: nothing in `task.py lint`, `handoff_lint.py` or
