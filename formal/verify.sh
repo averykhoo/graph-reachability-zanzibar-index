@@ -352,7 +352,13 @@ GATE_TREE="$(gate_tree_id)"
 # Re-measured 2026-08-11 with `pytest formal/conformance/ -q --collect-only`: 494.
 # Re-measured 2026-08-16 after adding
 # test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one: 495.
-MIN_CONF_ALL=495
+# Re-measured 2026-08-31b after the two `P20` guard modules landed: 515
+# (+15 test_w4fragment_scope_pin.py, +5 test_leaf_namespace_correspondence.py).
+# Raised deliberately to restore the ZERO-HEADROOM convention -- CLAUDE.md keeps
+# these floors equal to the live collected count precisely so that DELETING a
+# single test turns the gate red. Leaving 495 here would have silently bought 20
+# tests of slack, which is the same hole the floor exists to close.
+MIN_CONF_ALL=515
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -480,8 +486,10 @@ MAX_TESTS_SKIPPED_ON_RDBMS=3
 #     the 2026-07-19g note blamed test_conformance_remove_graph.py, which is ~27 s)
 HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 # Re-measured 2026-08-11: test_conformance_remove.py collects 104; 494 - 104 = 390.
+# 2026-08-31b: the two `P20` guard modules are both in the REST tile (HEAVY_CONF is
+# exactly one file and did not change), so all +20 land here: 515 - 104 = 411.
 MIN_CONF_HEAVY=104
-MIN_CONF_REST=391
+MIN_CONF_REST=411
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

@@ -1,5 +1,6 @@
 import ZanzibarProofs.GraphIndex.Cascade
 import ZanzibarProofs.GraphIndex.Leaf
+import ZanzibarProofs.GraphIndex.LeafRules
 
 /-!
 # Fan-out completeness — write-leg operand stability off the mapped keys (ROADMAP W3d-1b)
@@ -553,6 +554,60 @@ structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
 abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
   ShadowOver (DerNode S) σ σ0
 
+/-! ### The `NoLeafSubjects` → `TtuTargetsSat` bridge (4c-ii step 6)
+
+`LeafRules.lean::NoLeafSubjects` quantifies over `LeafRules.lean::schemaRewritesL`, which
+is *literally* `schemaRewrites S ++ leafRewrites S` — a **superset** of the untainted list
+`ReconcileCorrect.lean::TtuTargetsSat` quantifies over, not a different one. So the leaf
+discipline implies the untainted one, and the implication is one `List.mem_append_left`.
+
+This is the only reason `CascadeStable` imports `LeafRules` (verified acyclic 2026-08-31:
+`LeafRules`' transitive import cone is `Leaf`/`Write`/`RulesWrite`/`State`/`Closure` +
+`Core.*`/`Spec.*` + Mathlib and contains **no** `Cascade*` or `Reconcile*` module; the
+reverse cone of `CascadeStable` is 20 modules, so the recompile is 21 files).
+-/
+
+/-- **`NoLeafSubjects` discharges `TtuTargetsSat _ NotLeafName`.** The whole content is the
+    containment `schemaRewrites S ⊆ schemaRewritesL S` (the LEFT summand of the append) plus
+    `LeafRules.lean::ttuTargets_of_kind` turning the kind equation `r.kind = .ttu tr` into
+    the list membership `tr ∈ ttuTargets r` that `NoLeafSubjects`' bounded quantifier wants.
+
+    ⚠ **SABOTAGED 2026-08-31** — the only thing this lemma asserts is the *direction* of that
+    containment, so the sabotage is `List.mem_append_left → List.mem_append_right`, the
+    narrowest plausible weakening (it type-checks as a name and is exactly the confusion a
+    reader who thinks the two lists are siblings would make). Literal observed output (the
+    quoted line number is as-observed, i.e. against this docstring's shorter draft; the
+    anchor is `ttuTargetsSat_notLeafName_of_noLeafSubjects`'s `exact` line):
+
+    ```text
+    error: ZanzibarProofs/GraphIndex/CascadeStable.lean:600:37: Application type mismatch: The
+    argument
+      hr
+    has type
+      r ∈ schemaRewrites S
+    but is expected to have type
+      r ∈ leafRewrites S
+    in the application
+      List.mem_append_right (schemaRewrites S) hr
+    error: Lean exited with code 1
+    Some required targets logged failures:
+    - ZanzibarProofs.GraphIndex.CascadeStable
+    error: build failed
+    ```
+
+    The red is ATTRIBUTABLE: it is the ONLY error in the tree, and the three applicability
+    theorems below (which consume this lemma) are downstream of it in the same file, so the
+    message names the containment and nothing else. Restored: `Build completed successfully
+    (1089 jobs)` — the same job count as the pre-change tree, because `LeafRules` was already
+    built through the root aggregator; the new import moves no jobs, only edges. -/
+theorem ttuTargetsSat_notLeafName_of_noLeafSubjects {S : Schema}
+    (h : NoLeafSubjects S) : TtuTargetsSat S NotLeafName := by
+  unfold TtuTargetsSat
+  unfold NoLeafSubjects schemaRewritesL at h
+  intro r hr tr hk
+  exact h r (List.mem_append_left _ hr) tr
+    (by rw [ttuTargets_of_kind hk]; exact List.Mem.head _)
+
 /-- **The `LeafNode` half of the widened write-leg subject obligation, on the
     `rewriteClosure` chain** (4c-ii step 5 / the D3 pre-widen).
 
@@ -567,20 +622,72 @@ abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
     `LeafNode` half needs `Leaf.lean::NotLeafName` transported along the closure by
     `ReconcileCorrect.lean::rewriteClosure_subject_pred_gen`.
 
-    ⚠ **The two premises below are not available at any of those three sites today**, and
-    that is a real, recorded gap rather than an oversight of this lemma: `NoTtuTarget S R`
-    (all `hterm` supplies) constrains a TTU target only by `≠ R`, and nothing in
-    `NodupKeys` / `StoreValidRules` / `StoreValidRulesD` / `WF` / `BareStarStore`
-    constrains a TTU target's or a stored subject's *name shape*. `LeafRules.lean::
-    NoLeafSubjects` is the same discipline on the OTHER rule list
-    (`schemaRewritesL`, the leaf-routed chain) and does not discharge these. Supplying
-    `TtuTargetsSat S NotLeafName` on the untainted `schemaRewrites` chain is the
-    outstanding obligation the shadow re-point still owes. -/
+    ⚠ **`hQ` HAS an owner; `hbase` does not — and the three call sites still supply
+    neither.** Corrected 2026-08-31; this paragraph previously read *"`LeafRules.lean::
+    NoLeafSubjects` is the same discipline on the OTHER rule list (`schemaRewritesL`, the
+    leaf-routed chain) and does not discharge these"*, which is **false**.
+    `LeafRules.lean::schemaRewritesL` is not another list: it is
+    `schemaRewrites S ++ leafRewrites S`, a SUPERSET of the very list `TtuTargetsSat`
+    ranges over. So `NoLeafSubjects S` **does** discharge `hQ`, by
+    `ttuTargetsSat_notLeafName_of_noLeafSubjects` above. (Prose fix recorded at
+    `formal/history/PROOF_STATUS.md` `## Session 2026-08-31` §4; this is the source-side
+    half of it.)
+
+    What is genuinely unowned at the three sites is the **seed side**, `hbase`: nothing in
+    scope there constrains a *stored* subject predicate's name shape. `NoTtuTarget S R`
+    (all `hterm` supplies) constrains TTU targets by `≠ R`, not by shape; `WF` constrains
+    DECLARED relation keys while a TTU target is a referenced string inside an `Expr`; and
+    `NodupKeys` / `StoreValidRules` / `StoreValidRulesD` / `BareStarStore` say nothing about
+    it either. **Neither premise is available at any of those three sites today** — the
+    bridge above supplies a *route* to `hQ` from a hypothesis nothing currently carries,
+    which is a smaller gap than the one this docstring used to claim, but still a gap. -/
 theorem rewriteClosure_subject_not_leafNode {S : Schema} {t u : Tuple}
     (hQ : TtuTargetsSat S NotLeafName) (hbase : NotLeafName t.subject.predicate)
     (hu : u ∈ rewriteClosure S t) : ¬ LeafNode S (subjNode u.subject) :=
   not_leafNode_of_notLeafName
     (by rw [subjNode_pred]; exact rewriteClosure_subject_pred_gen hQ hbase hu)
+
+/-! #### Applicability — the bridge is instantiated at a witness that HAS a TTU rule
+
+Anti-vacuity, per `docs/sabotage-procedure.md` §"a check that PARSES before it compares":
+a bridge INTO a `∀ r ∈ …, ∀ tr, r.kind = .ttu tr → …` is trivially true at any schema whose
+untainted rule list carries no `.ttu` rule at all, so proving it and stopping would certify
+nothing about the `.ttu` branch — the only branch either premise constrains.
+
+The floor is `LeafRules.lean::snlBoth_untainted_layer_ttu`, which pins
+`schemaRewrites SnlBoth = [⟨"doc", "parent", "editor", .ttu "viewer"⟩]` **by `decide`** — a
+measured, derived minimum (the list has exactly one rule, and its kind is `.ttu`), not a
+guessed one. The witness is reused rather than minted: `LeafRuleWitness.SnlBoth` already
+carries a TTU rule in *both* layers and is controlled there by two per-layer refutations
+(`::noLeafSubjects_false_leafLayer` / `::noLeafSubjects_false_untLayer`). -/
+
+/-- The bridge, applied. `SnlBoth`'s untainted layer is a one-element list holding a `.ttu`
+    rule (`LeafRules.lean::snlBoth_untainted_layer_ttu`), so this is not the
+    empty-quantifier instance. -/
+theorem ttuTargetsSat_notLeafName_snlBoth :
+    TtuTargetsSat LeafRuleWitness.SnlBoth NotLeafName :=
+  ttuTargetsSat_notLeafName_of_noLeafSubjects LeafRuleWitness.noLeafSubjects_snlBoth
+
+/-- The extra the UNTAINTED TTU rule mints on `LeafRuleWitness.tnlParent` really is in the
+    `rewriteClosure` that `rewriteClosure_subject_not_leafNode` quantifies over — the
+    non-vacuity denominator for the applied conclusion below. Its subject predicate is
+    `viewer`, REWRITTEN from the seed's `BARE` (`LeafRules.lean::tnlParent_subject_bare`),
+    so the `.ttu` branch of `ReconcileCorrect.lean::rewriteStep_subject_pred_gen` — the one
+    branch `TtuTargetsSat` constrains — is the branch that fires. -/
+theorem snlBoth_rewriteClosure_ttu_extra :
+    (⟨⟨"folder", "f1", "viewer"⟩, "editor", ⟨"doc", "d1"⟩⟩ : Tuple)
+      ∈ rewriteClosure LeafRuleWitness.SnlBoth LeafRuleWitness.tnlParent := by decide
+
+/-- **The applied conclusion, derived THROUGH the bridge and through
+    `rewriteClosure_subject_not_leafNode`** — never `decide`d directly, because deciding the
+    conclusion alone would say nothing about whether either lemma applies. -/
+theorem rewriteClosure_subject_not_leafNode_snlBoth :
+    ¬ LeafNode LeafRuleWitness.SnlBoth (subjNode ⟨"folder", "f1", "viewer"⟩) :=
+  rewriteClosure_subject_not_leafNode ttuTargetsSat_notLeafName_snlBoth
+    (t := LeafRuleWitness.tnlParent)
+    (show NotLeafName LeafRuleWitness.tnlParent.subject.predicate from
+      Or.inl LeafRuleWitness.tnlParent_subject_bare)
+    snlBoth_rewriteClosure_ttu_extra
 
 /-- **Reach agreement off the extras**: a probe into a non-`Extra` target reads the same
     on `σ` and its shadow — extra edges are trailing hops onto terminal nodes the path can

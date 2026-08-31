@@ -18,17 +18,22 @@ session: run the Rhythm protocol at the bottom.
 
 > 🟢 **Gate: all ten phases re-run green on this tree** — ask `python scripts/gate_status.py`;
 > re-run `lean` after any `*.md` edit (tiles ignore `*.md`).
-> ✅ **`2026-08-31`: re-point steps 3–5 landed green** — `TtuTargetsSat` + an additive `_gen`
-> chain (3 audited names kept as corollaries); `NoLeafSubjects`, two-layer witness, sabotage
-> bit **twice** (S12/S13); the pre-widen, abbrev **still unflipped**. 🚧 **But the pre-widen
-> is only partial — 3 of the 6 "free" sites were not free**: they quantify over
-> `rewriteClosure S t`, whose subject predicate is not bare → **5 obligations left, not 2**,
-> three a new pre-step-9 blocker. Half the missing premise already exists
-> (`LeafRules.lean:106` makes `NoLeafSubjects → TtuTargetsSat S NotLeafName` a
-> `mem_append_left`); only the *seed-side* `NotLeafName t.subject.predicate` is unowned, and
-> **placing that bridge is the next edit.** ⛔ **Steps 6–10 blocked on `P20`** (user call).
-> 📏 21 modules is `CascadeStable`'s cone; step 3 edits `ReconcileCorrect` — cone **30**.
-> Two new traps (pinned defs; the three non-free sites) → scope doc §11.13 (i), (j).
+> ✅ **`2026-08-31b`: `P20` adjudicated Accept and closed; `P3` steps 6–10 unblocked.** It
+> excludes only schemas Python already refuses, and the sabotage proves that refusal is the
+> *premise*, not a nicety: neutered, `define safe: viewer.0 from parent` compiles to the
+> forbidden rule, so the narrowing would be **unsound**.
+> 🚨 **But the guard refuted the argument's general shape — `W4Fragment`'s ten existing fields
+> classify LOUD 0 · MIXED 3 · SILENT 7.** "Python refuses what the fragment excludes" is the
+> exception here, not the rule; the next narrowing inherits nothing. (`ttuStarFree` is SILENT —
+> a star subject on a TTU tupleset is **admitted** → `P6`; `DW-1` promoted on that evidence.)
+> Landed: the hand-maintained scope pin (15 tests, **not** redundant with the
+> auto-*regenerated* `headline_definitions.txt:102`), the correspondence pin (5 tests, labelled
+> a **re-implementation, not a machine-check** → `P21`), and the `P3` bridge — which also
+> **deletes a false sentence from the Lean source**. Still **5 obligations**, all
+> undischarged — one of the two premises now has a *route*. Also closed a **pre-existing** hole: the
+> `.`-lock had zero pins on the DSL front-end, and the TTU-target route zero on either.
+> 📏 Conformance 495 → **515**, floors raised deliberately. Step 3's cone is **30**, not 21.
+> Detail: PROOF_STATUS `2026-08-31b`; traps → scope doc §11.13.
 > ⏰ **`2026-08-30`: trial extended to 2026-09-06; `tasks/` is not being deleted** (user).
 > Question narrows to **cutover-or-keep-both**; the dual-update contract runs another week.
 > 🧭 **Phase B (this file becomes a stub) is the verdict and needs an explicit user go** →
@@ -46,10 +51,9 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the middle turned out to be splittable too (2026-08-30c)**: `UntaintedShadow` is now an `abbrev` for a `ShadowOver (P : NodeKey → Prop)` generic in its EXTRAS predicate, with five shadow lemmas generalized, so **the widening is a one-line re-instantiation instead of a re-proof of the cascade chain** (green, 1089 jobs, 3 cycles of 10; the 65 `CascadeStrataSettle` sites never moved). **Left: repoint the abbrev at `DerNode ∨ LeafNode` and discharge ~20 tier-1 sites in 3 files.** ⚠ **Sizing settled and the record was wrong — 21 modules recompile, not 42** (41+root is the cone of `DirectCorrect`/`RulesWrite`, i.e. a mis-rooted census); and one tier-1 site has **no existing lemma** (`shadow_graphRec_agree` needs operand declaredness, which `WF` does not model). ✅ **Blind instrument closed (2026-08-30d) and its prediction was wrong** — the proxy deletion built green, so the P14 weak rows are valid as taken; the difference is a *pin* now, not an argument. ✅ **Re-point steps 1–2 landed green** (anchor the four strong-shadow declarations; the schema-generic leaf-refutation toolkit), each sabotage-controlled → PROOF_STATUS `2026-08-30d` §6–§7 carries the ten-step plan. **Before step 7, SPIKE the Class-B question** (banner) — three sites pass `shadow_graphRec_agree` the arbitrary query's own relation, and nobody has traced whether the fix reaches the byte-pinned `graph_correct`. Traps: scope doc §11.13, (h) closed. ✅ **Steps 3–5 landed green (2026-08-31)**: `TtuTargetsSat` + the additive `_gen` chain, `NoLeafSubjects` (sabotage bit twice), and the pre-widen — abbrev still unflipped. 🚧 **But the pre-widen is PARTIAL: 3 of 6 "free" sites were not free**, so **5 obligations outstanding, not 2**; the three `rewriteClosure`-quantified ones are a NEW pre-step-9 blocker. **Next edit: place the `NoLeafSubjects → TtuTargetsSat S NotLeafName` bridge** (it is `mem_append_left`, `LeafRules.lean:106`) in a module importing both; only the seed-side `NotLeafName t.subject.predicate` is then unowned. ⛔ **Steps 6–10 are BLOCKED on `P20`** (user call 2026-08-31: the `graph_correct` weakening is not accepted inside `P3`) | **NOW** | L | `P20` | 2026-08-31 |
-| `P20` | **`W4Fragment` gains `NoLeafSubjects` → `Zanzibar.graph_correct` gets strictly WEAKER while its byte pin stays byte-identical.** `headline_statements.txt:27` records the hypothesis **by name** (`(hF : W4Fragment S T)`, by design — `headline_definitions.txt:4-5`), so only the regenerated `headline_definitions.txt:102` row moves. The statement pin is structurally blind to this class of weakening = the house failure mode. **User call 2026-08-31: NOT accepted inside `P3`** — it is adjudicated here, first. Deliverables: (a) the scope-narrowing decision, (b) a **mechanical refusal** so the next silent narrowing cannot pass (a field-count assertion on `W4Fragment`, sabotaged by adding a dummy field) — `docs/sabotage-procedure.md` ranks that above a docstring. **Blocks `P3` steps 6–10** | **NEXT** | M | — | 2026-08-31 |
-| `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b) | **NEXT** | M | — | 2026-08-20b |
-| `R6` | perf round 6 — **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable (re-counted from the children 2026-08-24d, and **the task tree was re-counted to match 2026-08-29** — it had carried the stale `11` for five days). ⚠ **Batch *through* the N15 cache, not past it** (`R6-6` is the pattern; every read-path item has a cascade caller behind it). Order: `R6-11` → `R6-5` → `R6-4` → `R6-9` → `R6-18` → `R6-16` → `R6-7`+`R6-8` → `R6-1`. Five traps the numbers do not carry: [audit](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do not carry" — **count its bullets, do not trust a restated number**. Demoted from `NEXT` 2026-08-31 to seat `P20`, which blocks the critical path → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | LATER | L | — | 2026-08-31 |
+| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the middle turned out to be splittable too (2026-08-30c)**: `UntaintedShadow` is now an `abbrev` for a `ShadowOver (P : NodeKey → Prop)` generic in its EXTRAS predicate, with five shadow lemmas generalized, so **the widening is a one-line re-instantiation instead of a re-proof of the cascade chain** (green, 1089 jobs, 3 cycles of 10; the 65 `CascadeStrataSettle` sites never moved). **Left: repoint the abbrev at `DerNode ∨ LeafNode` and discharge ~20 tier-1 sites in 3 files.** ⚠ **Sizing settled and the record was wrong — 21 modules recompile, not 42** (41+root is the cone of `DirectCorrect`/`RulesWrite`, i.e. a mis-rooted census); and one tier-1 site has **no existing lemma** (`shadow_graphRec_agree` needs operand declaredness, which `WF` does not model). ✅ **Blind instrument closed (2026-08-30d) and its prediction was wrong** — the proxy deletion built green, so the P14 weak rows are valid as taken; the difference is a *pin* now, not an argument. ✅ **Re-point steps 1–2 landed green** (anchor the four strong-shadow declarations; the schema-generic leaf-refutation toolkit), each sabotage-controlled → PROOF_STATUS `2026-08-30d` §6–§7 carries the ten-step plan. **Before step 7, SPIKE the Class-B question** (banner) — three sites pass `shadow_graphRec_agree` the arbitrary query's own relation, and nobody has traced whether the fix reaches the byte-pinned `graph_correct`. Traps: scope doc §11.13, (h) closed. ✅ **Steps 3–5 landed green (2026-08-31)**: `TtuTargetsSat` + the additive `_gen` chain, `NoLeafSubjects` (sabotage bit twice), and the pre-widen — abbrev still unflipped. ✅ **The bridge landed 2026-08-31b** — `CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects` (`mem_append_left`; green at 1089 jobs, 5 of a 6-cycle budget, sabotage-controlled on the containment DIRECTION), with one new `import …GraphIndex.LeafRules` and three applicability theorems at `SnlBoth`. It also **removed a FALSE sentence from the Lean source** (the old docstring taught that `NoLeafSubjects` is "the same discipline on the OTHER rule list … and does not discharge these"; `schemaRewritesL` is a **superset**). 🚧 **Still 5 obligations, all undischarged** — the three `rewriteClosure` sites still need BOTH premises supplied at the site; what changed is that `hQ` now has a *route* (via `NoLeafSubjects`, which is not yet a `W4Fragment` field), while the seed-side `NotLeafName t.subject.predicate` has no owner at all. Plus the census hole at `CascadeStable.lean::shadow_graphRec_agree` (step 7). ✅ **Steps 6–10 are UNBLOCKED** — `P20` adjudicated ACCEPT (2026-08-31b) | **NOW** | L | — | 2026-08-31b |
+| `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b). **Fresh evidence 2026-08-31b that this is a live hole, not a formality:** `ttuStarFree` classifies **SILENT** in the new `W4Fragment` scope pin — a probe wrote `folder:* parent doc:d1` onto a TTU tupleset and it was **ADMITTED** (`_validate_ttu_tuplesets` rejects userset restrictions in tuplesets but deliberately keeps wildcard ones). So the field `graph_correct` depends on is one Python does not enforce | **NEXT** | M | — | 2026-08-31b |
+| `R6` | perf round 6 — restored to `NEXT` 2026-08-31b now that `P20` has closed and freed the seat it was demoted for. **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable. ⚠ **Batch *through* the N15 cache, not past it** (`R6-6` is the pattern). Order: `R6-11` → `R6-5` → `R6-4` → `R6-9` → `R6-18` → `R6-16` → `R6-7`+`R6-8` → `R6-1`. Five traps the numbers do not carry: [audit](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do not carry" — **count its bullets, do not trust a restated number** → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-31b |
 | `TK53` | **land the adjudicated `TK*` appends** — question (b) is DECIDED (→ [adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); the appends are the unlanded half, **22 landed 2026-08-29c, 15 remain**. Each is a statement existing only in `tasks/`, with a named destination in a living doc. **This row is what makes DELETE lossless.** `TK52` closed on the decision; this carries the execution, so the decision is not a residual with no owner | **NEXT** | M | — | 2026-08-29c |
 | `P4` | leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 | LATER | M | `P3` | 2026-08-16 |
 | `P5` | `Inv.negEdgeFree` under leaf routing; retire the T2a caveat → [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §9.1–9.3 + §7 step 6 | LATER | M | `P4` | 2026-08-16 |
@@ -66,8 +70,9 @@ forward forever and are never reused.**
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
 | `P16` | widen the enumeration/state bounds → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(e); read `test_conformance_enum.py`'s module docstring, which is half the plan | LATER | M | — | 2026-08-16 |
 | `P17` | bulk build/backfill is an unmodeled **default** constructor — model it or scope-exclude it in writing → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(h) + §3.1 item 6 | LATER | M | — | 2026-08-16 |
+| `P21` | **a fourth `zcli` mode, so a fragment predicate can be DIFFERENTIALLY checked instead of mirrored.** `test_leaf_namespace_correspondence.py` is a Python **re-implementation** of `LeafRules.lean::NoLeafSubjects` — it says so in its own docstring — because `zcli` exposes exactly three modes (`spec`/`graph`/`graph-state`, `Cli.lean:14`, rc 4 otherwise) and has no channel to evaluate a Prop. A mode that takes an encoded `Schema` and prints the decision of `Decidable (NoLeafSubjects S)` would turn every such mirror into a real differential over the 50-schema corpus. **The residual it closes:** a mirror can be wrong in the SAME direction as the model and nothing notices | LATER | M | — | 2026-08-31b |
 | `LT-1` | the two live latent residues → [`latent-gaps.md`](docs/latent-gaps.md) "Target 2" / "Target 3" | HOLD | ? | — | 2026-08-20b |
-| `DW-1` | decidable `W4Fragment` for a driver-side pre-check → [`CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) §"Conformance gates" | SOMEDAY | ? | — | 2026-08-16 |
+| `DW-1` | decidable `W4Fragment` for a driver-side pre-check. **Promoted SOMEDAY → LATER on 2026-08-31b, on measured evidence:** the new scope pin classifies `W4Fragment`'s ten fields **LOUD 0 · MIXED 3 · SILENT 7**, so for seven fields a schema outside the proven fragment is accepted, runs, and answers queries with no signal to the operator — its correctness resting on the differential net, not on `graph_correct`. A driver-side pre-check is what converts those seven silent holes into a refusal or a warning → [`CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) §"Conformance gates", and the live table is `test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE` | LATER | ? | — | 2026-08-31b |
 | `P18` | the concurrency / multi-instance layer — the never-started TLA+ phase → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(i) + §3.1 item 5 | SOMEDAY | L | — | 2026-08-16 |
 | `P19` | model the read surfaces (`lookup` / `lookup_reverse` / `expand`) in Lean → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(g) | SOMEDAY | L | — | 2026-08-16 |
 | `SD-1` | lift the two scope rejections → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(j) | SOMEDAY | L | — | 2026-08-16 |
@@ -75,7 +80,7 @@ forward forever and are never reused.**
 | `SD-3` | tuple-log compaction — only if the log outgrows "humans wrote this" scale | SOMEDAY | S | — | 2026-08-16 |
 | `SD-4` | bulk-merge write path → [sketch](docs/architecture/bulk-merge-design.md) | SOMEDAY | L | — | 2026-08-16 |
 
-Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`, `BL-1` (2026-08-21), `BL-2` (2026-08-21b),
+Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`, `BL-1` (2026-08-21), `BL-2` (2026-08-21b), `P20` (2026-08-31b — adjudicated ACCEPT, both deliverables landed),
 `HS-4` and `GS-2` (2026-08-17), `HS-2` (2026-08-20b), `TK52` (2026-08-29b), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
 `B1`'s finding was verified closed 2026-08-16 (halves proved 2026-07-28 / 2026-08-04) —
 evidence in `formal/HANDOFF.md`'s `B1` block. Retiring an id is not the same act as closing
@@ -109,13 +114,23 @@ word (reducible, so every field access and signature kept working).
 ✅ **Steps 1–5 have now landed green**, all sabotage-controlled → PROOF_STATUS
 `## Session 2026-08-31` §3. **The flip is step 9 and is a two-line rollback.**
 
-🚧 **The live state is the partial pre-widen**: 3 of the 6 supposedly free `subjNode` sites
-were not free (§11.13 (j)), leaving **5 obligations, not 2**. Next edit: place the
-`NoLeafSubjects → TtuTargetsSat S NotLeafName` bridge (a `mem_append_left`) in a module
-importing both `LeafRules` and `ReconcileCorrect`; only the seed-side
-`NotLeafName t.subject.predicate` is then unowned.
-⛔ **Steps 6–10 are blocked on `P20`** — the user declined (2026-08-31) to accept the
-`graph_correct` weakening inside this item.
+✅ **The bridge landed 2026-08-31b** —
+`CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects` (green, 1089 jobs, 5 of a
+6-cycle budget, non-vacuous at `LeafRuleWitness.SnlBoth`). It also **deleted a false sentence
+from the Lean source**: the old docstring taught that `NoLeafSubjects` is "the same discipline
+on the OTHER rule list … and does not discharge these", but `schemaRewritesL` is a **superset**.
+
+🚧 **Still 5 obligations; the three `rewriteClosure` sites remain undischarged.** Both
+premises must still be supplied AT the site — what changed is that `hQ` now has a route (from
+`NoLeafSubjects`, not yet a `W4Fragment` field), while the seed-side
+`NotLeafName t.subject.predicate` has no owner at all. **Do not restate this as "one premise, not
+two"** — `::rewriteClosure_subject_not_leafNode`'s own docstring says neither is available
+there today. Plus the census hole at `CascadeStable.lean::shadow_graphRec_agree` (step 7).
+
+✅ **Steps 6–10 are unblocked** — `P20` adjudicated Accept and closed. 🚨 **Read what that
+adjudication cost before reusing its logic**: its justification was "Python already refuses
+what the narrowing excludes", which holds for **zero of the ten existing fields**. Step 6's
+field is the exception; a future narrowing must re-establish the argument, not cite this one.
 
 ⚠ **Traps: scope doc §11.13, superseding §11.10 — read before touching the cone.** Ten
 items; **(h) CLOSED**, **(b) is itself stale** (Leaf.lean line numbers are +58 since
@@ -128,30 +143,19 @@ then `2026-08-30d` §6 (the ten-step plan) and `2026-08-30c`; scope doc **§11.1
 `formal/FINAL_REVIEW.md`'s generated ledger, never prose. Then
 `CascadeStable.lean::ShadowOver`, `Leaf.lean::LeafNode`, `extractor.py::_edge_projection`.
 
-### `P20` — the `W4Fragment` narrowing that its own byte pin cannot see
+### `R6` — perf round 6, restored to `NEXT`
 
-`P3` step 6 wants to add a `NoLeafSubjects` field to `FullScope.lean:193::W4Fragment`. Doing
-so makes `Zanzibar.graph_correct` **strictly weaker** — it is the headline "graph index =
-semantics" claim, and its scope is exactly `W4Fragment`. But
-`headline_statements.txt:27` records the hypothesis **by name**, as `(hF : W4Fragment S T)`,
-which `headline_definitions.txt:4-5` states is deliberate. So the statement row stays
-**byte-identical** and the only signal is a regenerated `headline_definitions.txt:102`.
+Restored 2026-08-31b: it was demoted on 2026-08-31 purely to seat `P20`, and `P20` has closed.
+Nothing about the work changed in between. **⚠ Batch *through* the N15 cache, not past it** —
+`R6-6` is the pattern, and every read-path item has a cascade caller behind it. Order:
+`R6-11` → `R6-5` → `R6-4` → `R6-9` → `R6-18` → `R6-16` → `R6-7`+`R6-8` → `R6-1`.
+**Not parallel-safe with `P3`/`P6` if it touches the cascade read path** — check before
+opening a cone that either of those owns.
 
-⚠ **This is the house failure mode** (`docs/sabotage-procedure.md`): an assurance step that
-fails by passing. The statement pin is not merely stale here — it is *structurally blind* to
-a whole class of weakening, and every future field added to any pinned-by-name structure has
-the same property.
-
-**User call 2026-08-31: the narrowing is not accepted inside `P3`.** It is adjudicated here
-first, which is why this row blocks `P3` steps 6–10. Deliverables: **(a)** the scope decision
-itself; **(b)** a **mechanical refusal** so the next silent narrowing cannot pass — the
-proposed form is a conformance assertion on `W4Fragment`'s field count, sabotaged by adding
-a dummy field and watching it go red. A docstring is explicitly *not* sufficient; the
-durability ranking in `sabotage-procedure.md` puts a permanent mechanical check above one.
-
-**Read first:** PROOF_STATUS `## Session 2026-08-31` §2(b) (the finding, with the pin-file
-line numbers verified live), then `formal/headline_definitions.txt:1-10` (the by-name design
-statement) and `:102`; `formal/conformance/statement_pin.py::HEADLINE`.
+**Read first:** [the audit](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do not
+carry" — **count its bullets; do not trust a restated number**; then
+[the profile](benchmarks/results/R6_PROFILE_2026-08-17.md) and
+[`docs/perf-next-round.md`](docs/perf-next-round.md) (the fence and the reopening rule).
 
 ### `TK53` — land the adjudicated `TK*` appends
 

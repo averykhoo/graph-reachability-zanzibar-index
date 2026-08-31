@@ -46,7 +46,24 @@ END = "<!-- END GENERATED COUNTS -->"
 #: Conformance files that are gate TOOLING (unit tests of the harness itself),
 #: not Lean-vs-Python differentials. Derived counts below split on this set, so a
 #: new tooling file must be added here or it inflates the "differential" figure.
-TOOLING_FILES = {"test_sorry_scan.py", "test_runner_retry.py"}
+#:
+#: Added 2026-08-31b, both from `P20`, and both are the reason this set exists:
+#: `test_w4fragment_scope_pin.py` compares Lean SOURCE TEXT against a hand-written
+#: table, and `test_leaf_namespace_correspondence.py` is a PYTHON RE-IMPLEMENTATION
+#: of `LeafRules.lean::NoLeafSubjects` (its own docstring says so, and board row
+#: `P21` exists precisely because it is NOT a differential -- zcli has no channel to
+#: evaluate a Prop). Landing them without triaging them here inflated the
+#: "differential conformance tests" figure by 20 -- i.e. the one number in the repo
+#: that quantifies Lean-vs-Python coverage was inflated by the two files the same
+#: session had recorded as not being Lean-vs-Python. Caught by a read-only audit
+#: pass, not by the gate: `--check` compares the block to a REGENERATION of itself,
+#: so a mis-triaged file is self-consistently wrong and stays green.
+TOOLING_FILES = {
+    "test_sorry_scan.py",
+    "test_runner_retry.py",
+    "test_w4fragment_scope_pin.py",
+    "test_leaf_namespace_correspondence.py",
+}
 
 
 def _collect(path: str) -> int:
