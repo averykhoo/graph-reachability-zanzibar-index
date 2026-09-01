@@ -1562,6 +1562,34 @@ re-check, ~20 sites in 3 files go genuinely red.**
   ⚠ **Both admission forms are needed**: `reachedByW3d_shadow`/`reachedByW3d2_shadow` carry
   the narrow `StoreValidRules`, `reachedByW3d2_shadow_d` carries `StoreValidRulesD`.
 
+* **(q) NEW 2026-09-02 — a grep census OVER-counts this cone, and the direction of the error
+  is the surprise.** Every previous sizing here came in LOW (`P3`'s "~123 sites" was live
+  ~136), which trained the habit of padding a grep figure upward. Threading
+  `reachedByW3d_shadow` measured the opposite: the grep said **46 non-comment lines across 9
+  files**, the probe said **18 declarations across 6 files**, and `CascadeStrata*` — 2 of the
+  9 files — **does not move at all**, because its matches are docstring references that a
+  `^\s*(--|\*|/--)` comment filter does not catch (Lean docstrings are `/-- … -/` blocks whose
+  CONTINUATION lines start with ordinary prose). Two rules follow, and they are cheap:
+  **(i)** `Audit.lean`'s `#print axioms` rows and `audited_theorems.txt` name rows are NOT
+  repair sites — a signature change does not break them — so exclude them before quoting any
+  figure; **(ii)** a declaration-level count via `awk` "nearest preceding `theorem`" is
+  unreliable and was **discarded** this session for reporting more declarations than there
+  were matching lines. **Size this cone with the probe** — add the premise, build, read the
+  errors, repeat — which is `2026-09-01e` §2's method and costs a handful of incremental
+  builds because Lean stops at the first failing module.
+
+* **(r) NEW 2026-09-02 — the six W3d-layer endpoints are AUDITED BUT NOT STATEMENT-PINNED,
+  so adding a hypothesis to them is invisible to the gate.** `graph_correct_w3d`,
+  `backend_equivalence_w3d`, `exclusion_effective_w3d`, `no_ghost_grant_w3d`,
+  `reachedByW3dC_inv`, `reachedByW3dE_inv` each carry an `audited_theorems.txt` row and an
+  `Audit.lean` `#print axioms`, and each is a TERMINAL claim consumed by nothing else in the
+  tree — yet **none has a `headline_statements.txt` row**, and audit rows pin NAMES only. So
+  the ten-phase gate reports green across a genuine weakening of all six. This is the house
+  failure mode in its exact form. **Anyone adding a premise anywhere in this cone must state
+  that fact in the session record and name the discharge that retires it** — the gate will
+  not do it for you. (Landed once, deliberately, on 2026-09-02; PROOF_STATUS `2026-09-02`
+  §7 carries the standing caveat until the `GraphAdmission` discharge lands.)
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

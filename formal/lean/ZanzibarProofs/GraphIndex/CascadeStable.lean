@@ -1550,17 +1550,24 @@ theorem untaintedShadow_cascade {S : Schema} {T : Store} {σ σ0 : GraphState}
 /-- **`reachedByW3d_shadow`** — every W3d state has an untainted-core shadow: a
     rules-ADMITTED state on the CURRENT store agreeing on everything off the derived
     R-nodes. The store-dependent hypotheses sit right of the colon and weaken along
-    the chain's prefix stores. -/
+    the chain's prefix stores.
+
+    ADDED HYPOTHESES (4c-ii step 9): `TtuTargetsSat S NotLeafName` and
+    `DirectRestrictionsNotLeaf S`, both SCHEMA-level, appended last in the `_d` precedent's
+    style. They are what `hsubjW` below needs, and being schema-level they cost no
+    weakening line at the recursive call — see scope doc §11.13 **(p)**. -/
 theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d σ S T) :
     NodupKeys S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     StoreValidRules S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    TtuTargetsSat S NotLeafName →
+    DirectRestrictionsNotLeaf S →
     ∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0 := by
   induction h with
   | empty S =>
-    intro _ _ _ _
+    intro _ _ _ _ _ _
     refine ⟨emptyState S, ReachedByRulesAdmitted.empty S, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro ab hab; simp [emptyState] at hab
     · intro ab hab; simp [emptyState] at hab
@@ -1569,26 +1576,59 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     · intro ab hab; simp [emptyState] at hab
     · intro k _ y hy; simp [emptyState] at hy
   | @write σp S T t hadm hprev ih =>
-    intro hNK hCO hSV hterm
+    intro hNK hCO hSV hterm hQ hDR
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO
       (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht'))
       (fun dt R hder => ⟨(hterm dt R hder).1,
         fun t' ht' => (hterm dt R hder).2 t' (List.mem_cons_of_mem _ ht')⟩)
-    have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) := by
-      rintro u hu ⟨dt, on, R, hder, _hRne, _hon, heq⟩
-      obtain ⟨hnt, hns⟩ := hterm dt R hder
-      have hpne : u.subject.predicate ≠ R :=
-        rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
-      apply hpne
-      have hp := congrArg NodeKey.pred heq
-      simpa [subjNode_pred, objNode_pred] using hp
+      hQ hDR
+    -- PRE-WIDENED (4c-ii step 9). The wide form is what the flip needs; today's two
+    -- consumers still want the narrow one, so `hsubj` re-narrows it through `Or.inl` and
+    -- the flip is then "delete the wrapper" (the idiom step 6 used for `hv3`).
+    --
+    -- ★ CONTROLLED BY THE FLIP PROBE, 2026-09-02 — §11.13 trap (n): this widening is DEAD
+    -- CODE today (`hsubj` throws the `LeafNode` half away), so no weakening can vet it and
+    -- only the re-point can. Flipped `UntaintedShadow` to
+    -- `ShadowOver (fun k => DerNode S k ∨ LeafNode S k)` and rebuilt. Before this
+    -- increment (PROOF_STATUS `2026-09-01e` probe 1) the flip red this file FOUR times:
+    -- `:1341`/`:1342` (`hsubj`) and `:1357`/`:1410` (`hv1`). After it, the `hsubj` pair is
+    -- replaced by exactly the wrapper mismatch it is designed to leave —
+    --   error: CascadeStable.lean:1608:67: Application type mismatch: The argument
+    --     hsubj
+    --   has type
+    --     ∀ u ∈ rewriteClosure S t, ¬DerNode S (subjNode u.subject)
+    --   but is expected to have type
+    --     ∀ u ∈ rewriteClosure S t, ¬(DerNode S (subjNode u.subject) ∨ LeafNode S (...))
+    -- — and passing `hsubjW` at both consumers clears them, leaving CascadeStable with
+    -- only `:1624`/`:1677`, i.e. `shadow_graphRec_agree`'s `hv3`/`hv1`, which are the two
+    -- OTHER obligations and are out of scope here (`hv1` waits on row 27's query-level
+    -- premise). So under the flip this site's obligation is DISCHARGED, not merely moved.
+    -- The flip was then reverted; the tree here is the unflipped one.
+    -- The `LeafNode` half is NOT free here the way it was for `hoffW`: this quantifies
+    -- over `rewriteClosure S t`, whose subject predicate `rewriteStep`'s `.ttu` branch
+    -- overwrites with the rule's target — hence BOTH new premises, the schema-side `hQ`
+    -- and the seed-side one, which `hDR` + the ALREADY-IN-SCOPE `hSV` discharge at
+    -- `List.mem_cons_self` (the write case's store is `t :: T`, so `hSV` covers the seed).
+    have hsubjW : ∀ u ∈ rewriteClosure S t,
+        ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) := by
+      rintro u hu (⟨dt, on, R, hder, _hRne, _hon, heq⟩ | hleaf)
+      · obtain ⟨hnt, hns⟩ := hterm dt R hder
+        have hpne : u.subject.predicate ≠ R :=
+          rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+        apply hpne
+        have hp := congrArg NodeKey.pred heq
+        simpa [subjNode_pred, objNode_pred] using hp
+      · exact rewriteClosure_subject_not_leafNode hQ
+          (noLeafStoreSubjects_of_storeValidRules hDR hSV t List.mem_cons_self) hu hleaf
+    have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) :=
+      fun u hu hd => hsubjW u hu (Or.inl hd)
     exact ⟨σ0.writeRules S t,
       ReachedByRulesAdmitted.step t h0
         (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
       untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    intro hNK hCO hSV hterm
-    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm
+    intro hNK hCO hSV hterm hQ hDR
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm hQ hDR
     exact ⟨σ0, h0,
       untaintedShadow_cascade hsh (reachedByRules_of_admitted h0) hSV hNK hCO hjv⟩
 
@@ -1753,6 +1793,7 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hTS : TtuStarFree S (t :: T))
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (h : ReachedByW3d σ S T) (hadm : FoldAdmits σ (rewriteClosure S t))
@@ -1773,8 +1814,8 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
       fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
   have h' : ReachedByW3d (σ.writeLoggedRules S t) S (t :: T) :=
     ReachedByW3d.write t hadm h
-  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d_shadow h' hNK hCO hSV hterm
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hCO hSVw htermw
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d_shadow h' hNK hCO hSV hterm hQ hDR
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hCO hSVw htermw hQ hDR
   have hclσ := reachedByW3d_edgesClosed h
   have htp' := reachedByW3d_edges_target_plain h' hBS
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
@@ -1818,6 +1859,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hTS : TtuStarFree S (t :: T))
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
@@ -1834,7 +1876,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
   have hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
       sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
     fun s hs => writeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat
-      hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
+      hQ hDR hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
   constructor
   · intro res hres
     rw [writeLoggedRules_residue] at hres

@@ -172,20 +172,90 @@ predicate stays as the named conclusion rather than the threaded hypothesis:
 This is a refinement WITHIN the user's decision (thread a premise, discharge it from
 admission), not a re-opening of it.
 
-### 6. What is NOT settled
+### 6. THE THREADING — one of the three sites is done, end to end, and MEASURED
 
-The **sizing of the threading is still unmeasured**. `2026-08-31c`'s `5 + 7 + 8 = 20`
-remains scout output and is not to be quoted; this session's own grep is **46 non-comment
-source LINES across 9 files** (counting unit: matching lines, excluding docstrings/comments
-and `Audit.lean`'s `#print axioms` name rows, which a signature change does not break) —
-and that is a raw upper-ish bound on lines, NOT a repair-site count. ⚠ A declaration-level
-count was attempted and **discarded as untrustworthy**: the awk pass reported more
-declarations than there were matching lines. Do not resurrect it; **measure with the
-probe**, which is this tree's established method (`2026-09-01e` §2).
+`reachedByW3d_shadow`'s two premises are threaded through the whole cone and the tree is
+green. The other two sites (`reachedByW3d2_shadow{,_d}`) are untouched and are the next
+increment.
 
-The step-9 **control** is unchanged: **probe 5 re-run without the `sorry`s**, plus the
-planned weakening — thread the premise, then weaken it to `True`, expecting the three
-`hsubj` sites and *nothing else* to redden.
+**What was threaded, and it is TWO premises per site, not one.** The seed premise alone is
+insufficient — `rewriteStep`'s `.ttu` branch overwrites the subject predicate with the
+schema rule's target, which nothing about the seed constrains. So each site takes
+`TtuTargetsSat S NotLeafName` (the schema side, `hQ`) *and* `DirectRestrictionsNotLeaf S`
+(the seed side, `hDR`, which with the ALREADY-IN-SCOPE `hSV` yields `hbase` at
+`List.mem_cons_self`). Three independent adversarial checks refuted "the seed premise
+suffices"; the correction is recorded here rather than in a scout report because the board
+had been carrying the one-premise framing.
+
+**The measured cost — a CLOSED list, not a grep.** 18 declarations across 6 files:
+
+| file | declarations |
+|---|---|
+| `CascadeStable.lean` | 3 (`reachedByW3d_shadow`, `writeLeg_sem_stable`, `settledKey_writeLeg`) |
+| `CascadeSettle.lean` | 6 (`completeKey_writeLeg`, `settledComplete_cascade_targeted`, `reachedByW3dC_settled`, `graph_correct_w3d`, + 2 call-only) |
+| `CascadeInv.lean` | 2 (`reachedByW3dC_edgeHygienic`, `reachedByW3dC_inv`) |
+| `CascadeEnum.lean` | 4 (`w3d_leg_context`, `w3dJobCoverage_enumJob`, `enumJobs_covg`, `reachedByW3dE_toC`, and `graph_correct_w3dE` / `reachedByW3dE_inv` call-only) |
+| `Equiv.lean` | 3 (`backend_equivalence_w3d`, `exclusion_effective_w3d`, `no_ghost_grant_w3d`) |
+| `FullScope.lean` | 0 signature changes (6 new witness pins only) |
+
+⚠ **`CascadeStrata*` did NOT move**, which is the surprise worth recording: the census's
+"2 non-comment lines in `CascadeStrataSettle`" for this symbol were docstring references
+that the comment filter missed. **The grep over-counted; the probe is the instrument.**
+`2026-08-31c`'s `5 + 7 + 8 = 20` and this session's own raw `46 lines / 9 files` are both
+retired by this table.
+
+**The control is the FLIP PROBE, not a weakening — §11.13 (n), and it returned a POSITIVE
+result.** The `hsubjW` widening is dead code today (`hsubj` throws the `LeafNode` half away
+through `Or.inl`), so only the re-point can vet it. Flipped `UntaintedShadow` to
+`ShadowOver (fun k => DerNode S k ∨ LeafNode S k)` and rebuilt:
+
+* **Before this increment** (`2026-09-01e` probe 1) the flip red `CascadeStable` **four**
+  times — `:1341`/`:1342` (`hsubj`) and `:1357`/`:1410` (`hv1`).
+* **After it**, the `hsubj` pair is replaced by exactly the wrapper mismatch the pre-widen
+  is designed to leave (`hsubj` has `¬DerNode …` but `¬(DerNode … ∨ LeafNode …)` expected),
+  and **passing `hsubjW` at both consumers clears them**, leaving `CascadeStable` with only
+  `:1624`/`:1677` = `shadow_graphRec_agree`'s `hv3`/`hv1`, the two OTHER obligations.
+  So under the flip **this site's obligation is DISCHARGED, not moved**. The flip was then
+  reverted; the landed tree is unflipped. Literal output is in the site's comment block.
+
+**Non-vacuity is machine-checked, and it is the trap (o) risk retired.** Six new pins in
+`FullScope.lean` — `directRestrictionsNotLeaf_S{x,y,d}` (`by decide`) and
+`ttuTargetsSat_notLeafName_S{x,y,d}` (derived THROUGH
+`ttuTargetsSat_notLeafName_of_noLeafSubjects`, not decided directly) — prove **both new
+premises hold at all three `GraphAdmission` witness schemas**. Had the clause been
+`relNameOK`-shaped these would be FALSE and the threading would have re-vacuated the final
+theorems. ⚠ `TtuTargetsSat` is deliberately NOT `Decidable` (its `∀ tr, r.kind = … → …`
+binder shape is why `NoLeafSubjects` exists with a bounded `ttuTargets` list —
+`LeafRules.lean:576-580`), so route it through the bridge; `by decide` on it fails to
+synthesize.
+
+### 7. ⚠ THE HONEST CAVEAT ON THIS LANDING — a weakening the gate CANNOT see
+
+**Six audited theorems now carry two hypotheses they did not carry before**:
+`graph_correct_w3d`, `backend_equivalence_w3d`, `exclusion_effective_w3d`,
+`no_ghost_grant_w3d`, `reachedByW3dC_inv`, `reachedByW3dE_inv`. Each has an
+`audited_theorems.txt` row and an `Audit.lean` `#print axioms`, and — checked first-hand —
+**each is a terminal claim, consumed by nothing else in the tree.**
+
+The gate stays green through this because **`audited_theorems.txt` pins NAMES only** and
+**none of the six has a `headline_statements.txt` row** (verified: 0 rows each; the pin
+reports 49/49 unchanged). That is precisely this repo's house failure mode — an assurance
+step that fails by passing — and it is recorded here rather than discovered later.
+
+What makes it a *permitted intermediate* rather than a silent regression:
+1. the 2026-09-02 user call explicitly allows an undischarged premise as an
+   intermediate-commit state (never as the leg's landing state);
+2. non-vacuity is machine-checked at every witness (§6), so nothing became vacuous; and
+3. the premises are Python-enforced facts (§1), so no real store or schema is excluded.
+
+**It is NOT resolved, and the next session owns it.** The discharge is:
+`DirectRestrictionsNotLeaf` + `TtuTargetsSat _ NotLeafName` become `GraphAdmission` fields,
+the six theorems take the bundle, and the six witness pins above become the field proofs.
+Known cost, measured by the adversarial pass: `headline_statements.txt` stays
+byte-identical (its extractor is textual, stopping at the first top-level `:=`/`where`), but
+`headline_definitions.txt` **will** redden — it pins `GraphAdmission`'s field list — and the
+four construction sites at `FullScope.lean:623/:739/:1486/:1621` plus the flat 8-clause
+conjunction at `:1042` they project from must be extended.
 
 ⚠ **Known cost of the endgame, measured by the adversarial pass and not yet paid:** adding
 a field to `GraphAdmission` leaves `headline_statements.txt` byte-identical (its extractor

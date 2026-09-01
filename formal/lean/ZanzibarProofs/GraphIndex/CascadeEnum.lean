@@ -350,6 +350,7 @@ theorem w3d_leg_context {S : Schema} {T : Store} {σ : GraphState}
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
@@ -357,7 +358,7 @@ theorem w3d_leg_context {S : Schema} {T : Store} {σ : GraphState}
     (∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
     (∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) := by
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hCO hSV hterm
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hCO hSV hterm hQ hDR
   refine ⟨fun s' hs' => ?_, fun sh hcov => ?_⟩
   · exact checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm h0 hsh
       hlk hco hleafUnt hs' hon
@@ -394,6 +395,7 @@ theorem w3dJobCoverage_enumJob {S : Schema} {T : Store} {σ : GraphState}
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
@@ -401,7 +403,7 @@ theorem w3dJobCoverage_enumJob {S : Schema} {T : Store} {σ : GraphState}
     (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE) :
     W3dJobCoverage S T σ (enumJob σ dt on R e) := by
   obtain ⟨hbridge, hcovDecl⟩ := w3d_leg_context hWF hTT hNK hR hSV hBS hTS hCO hMatch
-    hStrat hterm h hlk hco hleafUnt hon
+    hStrat hQ hDR hterm h hlk hco hleafUnt hon
   have hcl := reachedByW3d_edgesClosed h
   have hbareSub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE →
       u ∈ (leafConcretes σ dt on e).filter (fun u => u.predicate == BARE) :=
@@ -626,6 +628,7 @@ theorem enumJobs_covg {S : Schema} {T : Store} {σ : GraphState}
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -639,7 +642,7 @@ theorem enumJobs_covg {S : Schema} {T : Store} {σ : GraphState}
   obtain ⟨e, hlk, hje⟩ := Option.map_eq_some_iff.mp hfk
   obtain ⟨hder, _, hon⟩ := mem_cascadeKeys_props hk
   rw [← hje]
-  exact w3dJobCoverage_enumJob hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm h
+  exact w3dJobCoverage_enumJob hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hQ hDR hterm h
     hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) hon hWSbare
 
 /-! ### The fully-operational scheduler closure and the unconditional restatements -/
@@ -666,6 +669,7 @@ theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3dE σ S T) :
     WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
     RewriteMatchDeclared S → Stratifiable S →
+    TtuTargetsSat S NotLeafName → DirectRestrictionsNotLeaf S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) →
@@ -675,10 +679,10 @@ theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
     ReachedByW3dC σ S T := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
     exact ReachedByW3dC.empty S
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hCO hLU hWSbare hSV hBS hTS hterm
     have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
     have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
     have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
@@ -687,16 +691,16 @@ theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
       fun dt R hd => ⟨(hterm dt R hd).1,
         fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
     exact ReachedByW3dC.write t hadm
-      (ih hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSVw hBSw hTSw htermw)
+      (ih hWF hTT hNK hR hMatch hStrat hQ hDR hCO hLU hWSbare hSVw hBSw hTSw htermw)
   | @cascade σp S T hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hCO hLU hWSbare hSV hBS hTS hterm
     have hC : ReachedByW3dC σp S T :=
-      ih hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+      ih hWF hTT hNK hR hMatch hStrat hQ hDR hCO hLU hWSbare hSV hBS hTS hterm
     have hW3d : ReachedByW3d σp S T := reachedByW3dC_toW3d hC
     exact ReachedByW3dC.cascade (enumJobs S σp)
       (enumJobs_valid hWF hNK hSV hCO hW3d)
       enumJobs_cover enumJobs_scope
-      (enumJobs_covg hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
+      (enumJobs_covg hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO hLU
         hWSbare hW3d)
       hC
 
@@ -709,6 +713,7 @@ theorem graph_correct_w3dE {S : Schema} {T : Store} {σ : GraphState} (q : Query
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -718,9 +723,9 @@ theorem graph_correct_w3dE {S : Schema} {T : Store} {σ : GraphState} (q : Query
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
     GraphModel.check σ q = sem S T q :=
-  graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
+  graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO hLU
     hWSbare
-    (reachedByW3dE_toC h hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS
+    (reachedByW3dE_toC h hWF hTT hNK hR hMatch hStrat hQ hDR hCO hLU hWSbare hSV hBS hTS
       hterm)
     hq hqs hqo
 
@@ -731,6 +736,7 @@ theorem reachedByW3dE_inv {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3dE σ S T)
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
@@ -740,8 +746,8 @@ theorem reachedByW3dE_inv {σ : GraphState} {S : Schema} {T : Store}
       NoTtuTarget S R ∧ NoStoreSubjectR T R) :
     Inv S σ :=
   reachedByW3dC_inv
-    (reachedByW3dE_toC h hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS
+    (reachedByW3dE_toC h hWF hTT hNK hR hMatch hStrat hQ hDR hCO hLU hWSbare hSV hBS hTS
       hterm)
-    hWF hTT hNK hR hMatch hStrat hCO hLU hWSbare hSV hBS hTS hterm
+    hWF hTT hNK hR hMatch hStrat hQ hDR hCO hLU hWSbare hSV hBS hTS hterm
 
 end Zanzibar
