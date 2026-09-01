@@ -363,7 +363,7 @@ theorem w3d_leg_context {S : Schema} {T : Store} {σ : GraphState}
       hlk hco hleafUnt hs' hon
   · have hagree : σ.checkFn T (starSubj sh) dt on R e = σ0.checkFn T (starSubj sh) dt on R e :=
       checkFn_agree_of_graphRec T (starSubj sh) dt on R e hco hleafUnt
-        (fun s' r' hr' => shadow_graphRec_agree hsh s' on hr')
+        (fun s' r' _ hr' => shadow_graphRec_agree hsh s' on hr')
     have hcov0 : σ0.coveredFn T dt on R e sh = true := by
       show σ0.checkFn T (starSubj sh) dt on R e = true
       rw [← hagree]; exact hcov

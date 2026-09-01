@@ -25,6 +25,70 @@ from here.
 
 ---
 
+## 2026-09-01d — trap (g) dissolved: `hag` now carries the membership it always threw away
+
+rows: `P3`
+
+**The increment the previous entry left owed, landed.** `ReconcileStars.lean::
+checkFn_agree_of_graphRec` and `::checkFn_agree_of_graphRec_cd` now hand their `hag`
+callback `r' ∈ computedRefs e` alongside the derivedness fact. That membership was never
+missing — the callback has always bound it, as `evalE_computedOnly`'s own premise, and spent
+it only on `hleafUnt`. All nine producer sites took one ignored binder; the new consumer
+`CascadeStable.lean::checkFn_agree_of_graphRec_notLeafNode` turns it into `¬ LeafNode` via
+`notLeafNode_of_computedRef`. Green first attempt at every stage, 1089 jobs.
+
+Formal detail, the literal sabotage output and the call-site partition:
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-09-01d`. The short version:
+
+* **The sabotage that mattered is not the obvious one.** Reverting the widening proves only
+  that the edit exists; a widening nobody consumes is green by construction — the same
+  hazard `ComputedRefsNotLeaf` shipped with last session, one level up. The weakening run
+  was **"the binder was added and carries nothing"**: `hag`'s new premise became `r' = r'`
+  and the forward became `rfl`. One error, at the consumer. **All nine call sites stayed
+  green**, because each discards the membership with `_` — so the call sites cannot tell a
+  real membership from `rfl`, and the consumer is the only instrument in the tree.
+* **The recorded way-out citation was incomplete.** "`:618/:622/:633`" is binder / discard /
+  binder and names only ONE of the two discards; **`:637` is the `_cd` twin's**. A session
+  editing exactly the three cited lines would have shipped half the change. Cite
+  `file::symbol`, per the standing trap.
+* **The binder is still deferred — and no longer by trap (g).** The 14
+  `shadow_graphRec_agree` sites partition **3 + 8 + 3**: three arrive via the `hag` callback
+  (served now), eight already hold the membership locally, and three —
+  `CascadeSettle.lean:1119`, `CascadeStrataResettle.lean:1539` and `:2683`, **opened
+  first-hand because the deferral rests on them** — apply the lemma at the *query's own*
+  relation inside the `untainted query` branch, where no `computedRefs` membership exists or
+  can. Those need row 27's query-level premise, which is not landable before step 9's flip.
+  **`11 = 3 + 8`** is where the ten-step plan's "11 call sites" came from; the plan simply
+  never wrote down that the other three are a different repair.
+* **An unbudgeted site surfaced.** `CascadeStrataEnum.lean::checkFnR_star_declared`
+  (`:336-345`) has no `hlk` binder, so it will need a lookup premise as well as
+  `ComputedRefsNotLeaf S` when the threading increment runs.
+* **Gate safety, verified first-hand rather than delegated:** zero golden rows for the
+  predicate and both eliminators, and none in `Audit.lean` either — so last session's lemmas
+  were not audited and this one followed that precedent instead of inventing an audit row.
+  The exposure runs the other way: `Zanzibar.computedRefs` **is** pinned in
+  `headline_definitions.txt`, so threading it is free only while that declaration stays
+  byte-identical. Do not tidy `computedRefs` while threading it.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 156 task file(s) parsed)`
+
+read: board only  (`task.py board` was the first command of the session and named the right
+next action; `show P3` supplied the item detail. The root `HANDOFF.md` was not opened for
+orientation — it was opened at write-back, to edit it. ⚠ **`show P3` overflowed the context
+again — 60KB this time, up from 35KB on 2026-09-01b** — so the item had to be piped to a
+file and read from the tail. That is the same TT-1 blocking gap the earlier entry recorded,
+recurring and growing: `show` still has no bounded mode, and a per-item read that cannot fit
+in a context window is not a replacement for a file. Bulk reading was pushed into subagents
+this session, per the user's standing preference, which is why the file-level census work
+does not appear as reads here; every gate-safety and deferral claim above was nevertheless
+re-verified first-hand before being written down.)
+
+**Still owed: nothing skipped.** Next green-stoppable move is **step 8** — generalise the
+four `DerNode`-hardcoding shadow lemmas — untouched by this session. The `hnl` binder now
+depends on **step 9**, not on trap (g); that is a real change in the dependency graph and
+the board row says so.
+
 ## 2026-09-01c — step 7's named premise was FALSE: Python enforces a dot-lock, not declaredness
 
 rows: `P3`

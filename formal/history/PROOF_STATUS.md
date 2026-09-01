@@ -15,6 +15,128 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-01d (**trap (g) is DISSOLVED — `hag` now carries the membership it always bound and threw away. The binder is still deferred, and for a DIFFERENT reason than the trap named: three of the fourteen sites are query-relation sites.**)
+
+**Task taken:** the deferred half of 4c-ii step 7, as the previous entry scoped it — "WAY OUT
+FOUND: `:622` already computes `fun r' hr' => hag s r' (hleafUnt r' hr')` with `hr'` in scope
+and thrown away; widening `hag` dissolves the trap … so it is its own increment."
+
+**Green anchor, verified first-hand before the first edit:** `python scripts/gate_status.py`
+→ **"VERDICT: the ten-phase gate is COVERED on this tree"** at `t2a:4d21919df05b` /
+`t2c:dcd2961123e5`, HEAD `1c4bc3d`, working tree clean, `lean` `rc=0 holes=0 audits=585
+pinned=584 defs=161`.
+
+### 1. What landed
+
+`ReconcileStars.lean::checkFn_agree_of_graphRec` and `::checkFn_agree_of_graphRec_cd` both
+take a widened `hag`:
+
+    (hag : ∀ (s' : SubjectRef) (r' : String), r' ∈ computedRefs e →
+      isDerived S (dt, r') = false → GraphModel.graphRec σ s' dt on r' = …)
+
+and their bodies forward it — `hag s r' hr' (hleafUnt r' hr')` at `:622`, and the same at the
+`_cd` twin. **Note `:637`, the SECOND discard site.** The recorded citation for this way out
+was ":618/:622/:633", which is binder / discard / binder and names only ONE of the two
+discards; a session that edited exactly the three cited lines would have left `_cd` behind.
+
+All **nine** producer sites took an extra ignored binder (`fun s' r' _ hr' => …`):
+`CascadeEnum.lean:366`, `CascadeStable.lean:1338`, `CascadeStrataSettle.lean:3964`,
+`ReconcileDiff.lean:695` and `:879`, `ReconcileStars.lean:744`, `:839` (was passing `hmidag`
+bare — eta-expanded), `:831` (`fun s' r' _ _ =>`), `ReconcileStarsComplete.lean:1022`.
+Widening `hag` weakens a hypothesis, so every producer got strictly easier; nothing else moved.
+
+New consumer, `CascadeStable.lean::checkFn_agree_of_graphRec_notLeafNode`: `checkFn` agreement
+from a callback that sees `¬ LeafNode S (objNode ⟨dt,on⟩ r')` at every operand, discharged by
+`notLeafNode_of_computedRef hcr hlk hmem`. Stated over `¬ LeafNode` rather than
+`ComputedRefsNotLeaf` so it is already the shape `hv1` needs at step 9. `lake build
+ZanzibarProofs` green on the first attempt at each stage, 1089 jobs.
+
+### 2. The sabotage, and why the obvious one would have been worthless
+
+`ComputedRefsNotLeaf` was landed INERT last session. This widening is the same hazard one
+level up: **a widening nobody consumes is green by construction.** The obvious sabotage —
+revert `hag` to its old type — proves only that the edit exists.
+
+So the weakening chosen was the narrowest *plausible* one: **the binder is added and carries
+nothing.** `hag`'s new premise became `r' = r'` and the forward became `hag s r' rfl (…)`.
+Observed `rc=1`, and the ONLY error in the tree:
+
+    error: ZanzibarProofs/GraphIndex/CascadeStable.lean:641:74: Application type mismatch:
+      The argument
+      hmem
+    has type
+      r' = r'
+    but is expected to have type
+      r' ∈ computedRefs e
+    in the application
+      notLeafNode_of_computedRef hcr hlk hmem
+
+**The result that matters is what stayed GREEN: all nine call sites.** Each discards the
+membership with `_`, so not one of them can distinguish a binder carrying the real membership
+from a binder carrying `rfl`. The call sites are not the instrument;
+`checkFn_agree_of_graphRec_notLeafNode` is the only thing in the tree that is. ⚠ "Only error"
+is a LOWER bound — `CascadeStable` is upstream of ~20 modules and Lean does not build
+dependents of a failed module (the 2026-08-30d trap, recurring).
+
+### 3. ⚠ THE INCREMENT DOES NOT UNBLOCK THE BINDER, AND THE PLAN SAYS IT DOES
+
+The ten-step plan (`:1043-1053`) reads step 7 as "`ComputedRefsDeclared` + an unused `hnl`
+binder on `shadow_graphRec_agree`, discharged at 11 call sites", and 2026-09-01c re-scoped
+that to 14. **Both numbers hide a partition.** Of the 14 term-level sites:
+
+* **3 arrive through the `hag` callback** (`CascadeEnum:366`, `CascadeStable:1338`,
+  `CascadeStrataSettle:3964`) — these are what this session's widening serves, and all three
+  have `hlk` in scope.
+* **8 already hold `hr' : r' ∈ computedRefs e`** locally; they need only
+  `ComputedRefsNotLeaf S` threaded onto their enclosing declaration. (One,
+  `CascadeStrataEnum.lean::checkFnR_star_declared` `:336-345`, has **no** `hlk` binder and so
+  needs a lookup premise too — the sizing on record does not account for it.)
+* **3 cannot be served by `ComputedRefsNotLeaf` at all.** `CascadeSettle.lean:1119`,
+  `CascadeStrataResettle.lean:1539` and `:2683` — **opened and read first-hand, not taken
+  from a scout**, since this is the claim the deferral rests on. All three sit in the
+  `-- ===== untainted query` branch and apply `shadow_graphRec_agree hsh ⟨st, sn, sp⟩ on hd`
+  where `hd : isDerived S (dt, R) = false` and `R` is the **query's own relation**,
+  destructured from `q`. There is no `computedRefs` membership at those sites and there
+  cannot be one.
+
+So an unconditional `hnl` binder on `shadow_graphRec_agree` is **not green-stoppable today**:
+it reds those three. Their repair is the query-level premise adjudicated 2026-09-01 for
+headline row 27, which is explicitly not landable before step 9's flip
+(`docs/latent-gaps.md:164-167`, "never before … never after"). **11 = 3 + 8 is where the
+plan's "11 call sites" came from; the plan simply never wrote down that the other 3 are a
+different repair.** That is now recorded at the `hv1` site in-source and at scope-doc trap (g).
+
+### 4. Gate safety — verified first-hand, not delegated
+
+Adding a hypothesis touches no golden. Grepped `formal/*.txt` myself for
+`ComputedRefsNotLeaf` / `notLeafName_of_computedRef` / `notLeafNode_of_computedRef`: **zero
+rows in all three goldens**, and zero rows in `Audit.lean` — so the previous session's new
+lemmas were not audited either, and this session followed that precedent rather than
+inventing an audit row. `shadow_graphRec_agree` carries exactly one `audited_theorems.txt`
+row, and that file pins **names only** (its own header: "Every name below MUST still appear
+as a `#print axioms <name>` command"). No name was renamed or deleted.
+
+⚠ The real golden exposure runs the other way and was checked: `Zanzibar.computedRefs` IS
+pinned in `headline_definitions.txt`. Threading `r' ∈ computedRefs e` is free precisely
+because it leaves that declaration byte-identical — **do not "tidy" `computedRefs` while
+threading it.**
+
+### 5. Corrections to the record
+
+* **Trap (g) is dissolved, and it was ALSO mis-stated.** Its operative claim was that the
+  premise "cannot be phrased locally". It can now. Separately, 2026-09-01c had already struck
+  its "needs the operand relation *declared*" wording as measured-false. Both strikes are now
+  written into `formal/history/leaf-family-split-scope-2026-08-05.md` §11.13 (g) in place,
+  with the residue re-pointed at (e).
+* The ":618/:622/:633" citation is **not a complete site list** (see §1). Cite
+  `file::symbol`, per the standing trap about line numbers.
+
+### 6. Next
+
+Step 8 (generalise the four `DerNode`-hardcoding shadow lemmas) is the next green-stoppable
+move and is untouched by this session. The `hnl` binder is now **blocked on step 9**, not on
+trap (g) — that is a real change in the dependency graph and the board row says so.
+
 ## Session 2026-09-01c (**step 7's named premise is FALSE — Python enforces a DOT-LOCK, not declaredness. `ComputedRefsNotLeaf` landed instead, with eight pins and two sabotages; the binder threading is deferred and re-scoped from 11 sites to 14**)
 
 **Task taken:** land 4c-ii step 7 per the ten-step plan at `PROOF_STATUS.md:933-943` —

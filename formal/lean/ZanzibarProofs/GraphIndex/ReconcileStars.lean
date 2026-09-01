@@ -611,30 +611,41 @@ theorem graphRec_reconcileKey_inert {σ : GraphState} {S : Schema} (T : Store)
   · rfl
 
 /-- `checkFn` agreement across two states whose operand reads agree at the def's
-    `computed` leaves — subject-generic (`evalE_computedOnly`). -/
+    `computed` leaves — subject-generic (`evalE_computedOnly`).
+
+    `hag` also receives `r' ∈ computedRefs e`. The callback below has always bound that
+    membership (it is `evalE_computedOnly`'s own premise) and spent it only on `hleafUnt`;
+    forwarding it too costs nothing here and is what lets a consumer reach
+    `CascadeStable.lean::notLeafNode_of_computedRef`, whose side condition is membership.
+    Without it `hag` sees an arbitrary `r'` carrying only `isDerived S (dt, r') = false`,
+    which does NOT refute a minted leaf name — scope-doc 11.13 trap (g). -/
 theorem checkFn_agree_of_graphRec {σ σ0 : GraphState} {S : Schema} (T : Store)
     (s : SubjectRef) (dt on R : String) (e : Expr) (hco : ComputedOnly e)
     (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hag : ∀ (s' : SubjectRef) (r' : String), isDerived S (dt, r') = false →
+    (hag : ∀ (s' : SubjectRef) (r' : String), r' ∈ computedRefs e →
+      isDerived S (dt, r') = false →
       GraphModel.graphRec σ s' dt on r' = GraphModel.graphRec σ0 s' dt on r') :
     σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e := by
   unfold GraphState.checkFn
-  exact evalE_computedOnly e hco (fun r' hr' => hag s r' (hleafUnt r' hr'))
+  exact evalE_computedOnly e hco (fun r' hr' => hag s r' hr' (hleafUnt r' hr'))
 
 /-- `checkFn` agreement across two states agreeing on the def's `computed` leaves, WIDENED to a
     `ComputedOrDirect` def with bare `Direct` arms (leg 1's `evalE_computedOrDirect`). Subject-
     SHARED (a `Direct` arm reads the store at the fixed subject — the varying-subject form is
     refuted; `ReconcileCorrect` widening-leg note); only `rec`/query vary, all `wantEdge` needs.
-    (Lives here, not `ReconcileDiff`, so the W3c master `_d` core can consume it.) -/
+    (Lives here, not `ReconcileDiff`, so the W3c master `_d` core can consume it.)
+    `hag` carries `r' ∈ computedRefs e` for the reason given on the non-`_cd` twin above;
+    the two `hag` types must stay in step, since consumers swap between the legs. -/
 theorem checkFn_agree_of_graphRec_cd {σ σ0 : GraphState} {S : Schema} (T : Store)
     (s : SubjectRef) (dt on R : String) (e : Expr)
     (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
     (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hag : ∀ (s' : SubjectRef) (r' : String), isDerived S (dt, r') = false →
+    (hag : ∀ (s' : SubjectRef) (r' : String), r' ∈ computedRefs e →
+      isDerived S (dt, r') = false →
       GraphModel.graphRec σ s' dt on r' = GraphModel.graphRec σ0 s' dt on r') :
     σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e := by
   unfold GraphState.checkFn
-  exact evalE_computedOrDirect e hcd hba (fun r' hr' => hag s r' (hleafUnt r' hr'))
+  exact evalE_computedOrDirect e hcd hba (fun r' hr' => hag s r' hr' (hleafUnt r' hr'))
 
 /-! ## The master provenance — canonical stars, covered `neg`, uncovered edges
 
@@ -741,7 +752,8 @@ theorem reachedByW3c_master_d {σ : GraphState} {S : Schema} {T : Store}
     -- checkFn at the pass start equals the canonical (base) checkFn — any subject
     have hchk_eq : ∀ (x : SubjectRef), σp.checkFn T x dt on R e = σ0.checkFn T x dt on R e :=
       fun x => checkFn_agree_of_graphRec_cd T x dt on R e (hcd dt R e hlke hder)
-        (hba dt R e hlke hder) (hLU dt R e hlke hder) (fun s' r' hr' => hag s' dt on r' hr')
+        (hba dt R e hlke hder) (hLU dt R e hlke hder)
+        (fun s' r' _ hr' => hag s' dt on r' hr')
     -- the pass-start star filter equals the canonical (base) star filter
     have hstars_eq : (wildcardShapes S).filter (fun sh => σp.coveredFn T dt on R e sh)
         = (wildcardShapes S).filter (fun sh => σ0.coveredFn T dt on R e sh) := by
@@ -825,10 +837,12 @@ theorem reachedByW3c_master_d {σ : GraphState} {S : Schema} {T : Store}
           have h1 : (σ1.reconcileKey T dt on R e pre).checkFn T c dt on R e
               = σ1.checkFn T c dt on R e :=
             checkFn_agree_of_graphRec_cd T c dt on R e (hcd dt R e hlke hder)
-              (hba dt R e hlke hder) (hLU dt R e hlke hder) hmidag
+              (hba dt R e hlke hder) (hLU dt R e hlke hder)
+              (fun s' r' _ hr' => hmidag s' r' hr')
           have h2 : σ1.checkFn T c dt on R e = σp.checkFn T c dt on R e :=
             checkFn_agree_of_graphRec_cd T c dt on R e (hcd dt R e hlke hder)
-              (hba dt R e hlke hder) (hLU dt R e hlke hder) (fun s' r' _ => hag1 s' dt on r')
+              (hba dt R e hlke hder) (hLU dt R e hlke hder)
+              (fun s' r' _ _ => hag1 s' dt on r')
           have hcv := hchk
           rw [h1, h2, hchk_eq c] at hcv
           exact hcv

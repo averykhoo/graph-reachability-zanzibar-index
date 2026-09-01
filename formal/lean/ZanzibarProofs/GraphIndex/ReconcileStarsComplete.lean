@@ -1019,7 +1019,7 @@ theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     have hstep1 : (σ1.reconcileKey T dt on R e pre').checkFn T s dt on R e
         = σ1.checkFn T s dt on R e :=
       checkFn_agree_of_graphRec T s dt on R e (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
-        (fun x' r' hr' => hmidag x' r' hr')
+        (fun x' r' _ hr' => hmidag x' r' hr')
     have hstep2 : σ1.checkFn T s dt on R e = σpre.checkFn T s dt on R e :=
       checkFn_congr hσ1e hσ1n T s dt on R e
     have hstep3 : σpre.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
