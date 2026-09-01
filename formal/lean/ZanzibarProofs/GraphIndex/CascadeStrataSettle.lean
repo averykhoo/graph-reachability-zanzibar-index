@@ -3961,7 +3961,7 @@ theorem checkFn_eq_sem_w3d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
   calc σ.checkFn T s dt on R e
       = σ0.checkFn T s dt on R e :=
         checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
-          (fun s' r' hr' => shadow_graphRec_agree hsh s' on hr')
+          (fun s' r' _ hr' => shadow_graphRec_agree hsh s' on hr')
     _ = σ0.checkFn (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
           s dt on R e :=
         checkFn_store_irrel _ _ s dt on R hco

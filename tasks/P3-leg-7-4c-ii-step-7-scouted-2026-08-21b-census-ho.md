@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Step 7 predicate landed as ComputedRefsNotLeaf -- plan's 'Declared' premise was FALSE. hql is step 10, not 7.
+brief: Trap (g) dissolved: hag carries the membership. Binder now blocked on STEP 9 -- 3 of 14 sites are query-relation.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-01c
-updated: 2026-09-01c
+moved: 2026-09-01d
+updated: 2026-09-01d
 closed:
 ---
 
@@ -488,3 +488,48 @@ SIZING: shadow_graphRec_agree has 14 term-level call sites in 6 files, not 11 (3
 DEFERRED + design settled: ComputedRefsNotLeaf S alone cannot discharge hv1 at an arbitrary r'; it needs r' in computedRefs e, which ReconcileStars.lean:618/633 discards from the hag callback (scope-doc 11.13 trap (g)). WAY OUT FOUND: :622 already computes fun r' hr' => hag s r' (hleafUnt r' hr') with hr' in scope and thrown away -- widening hag dissolves the trap. Touches checkFn_agree_of_graphRec{,_cd} (9 sites) + the 14, so it is its own increment.
 
 ROUTING: 'step 7' is ambiguous across three numberings. Under the live ten-step plan hql is STEP 10 (PROOF_STATUS:1071-1072 says so), not step 7. hql is not landable before the flip: graph_correct is a proved theorem of today's tree, so the binder is a weakening nothing in the gate can distinguish -- docs/latent-gaps.md:164-167, 'never before ... never after'.
+
+### 2026-09-01d
+
+Trap (g) is DISSOLVED; the binder is still deferred, and NOT for the reason the trap named.
+
+LANDED: `ReconcileStars.lean::checkFn_agree_of_graphRec` and `_cd` both take a widened
+`hag` carrying `r' in computedRefs e` -- the membership the callback always bound and
+spent only on `hleafUnt`. Forwarded at `:622` AND at `:637`; the recorded citation
+":618/:622/:633" is binder/discard/binder and names only ONE of the two discards, so a
+session editing exactly those three lines would have left `_cd` behind. All NINE producer
+sites took an ignored binder (`ReconcileStars:839` was passing `hmidag` bare and was
+eta-expanded). New consumer `CascadeStable.lean::checkFn_agree_of_graphRec_notLeafNode`
+converts the membership to `not LeafNode` via `notLeafNode_of_computedRef`, stated in the
+shape `hv1` needs at step 9. Green first attempt at every stage, 1089 jobs.
+
+SABOTAGE, and the obvious one would have been worthless: reverting the widening proves only
+that the edit exists. The narrowest plausible weakening is "the binder was added and carries
+nothing" -- `hag`'s premise -> `r' = r'`, forward -> `rfl`. Observed rc=1, sole error:
+"Application type mismatch: the argument hmem has type r' = r' but is expected to have type
+r' in computedRefs e". ALL NINE CALL SITES STAYED GREEN -- each discards the membership with
+`_`, so none of them can tell a real membership from `rfl`. The call sites are not the
+instrument; the consumer is. ("Only error" is a LOWER bound -- CascadeStable is upstream of
+~20 modules and Lean does not build dependents of a failed module.)
+
+THE BINDER IS NOT UNBLOCKED, and the plan hides why. The 14 sites partition 3 + 8 + 3:
+3 arrive via the `hag` callback (served by this session, all with `hlk` in scope); 8 already
+hold `hr'` locally and need only `ComputedRefsNotLeaf S` threaded (WARNING:
+`CascadeStrataEnum.lean::checkFnR_star_declared` :336-345 has NO `hlk` and needs a lookup
+premise too -- unbudgeted); and 3 -- `CascadeSettle.lean:1119`,
+`CascadeStrataResettle.lean:1539` and `:2683`, OPENED FIRST-HAND, not taken from a scout --
+sit in the `untainted query` branch and apply the lemma at the QUERY's own relation R from a
+destructured `q`, where no computedRefs membership exists or can. Those need row 27's
+query-level premise, not landable before step 9's flip. So `11 = 3 + 8` is where the plan's
+"11 call sites" came from; it never recorded that the other 3 are a different repair.
+
+GATE SAFETY, verified first-hand: zero rows for `ComputedRefsNotLeaf` /
+`notLeafName_of_computedRef` / `notLeafNode_of_computedRef` in all three goldens and in
+`Audit.lean`, so the previous session's lemmas were not audited either and this one followed
+that precedent. `shadow_graphRec_agree` has one `audited_theorems.txt` row and that file pins
+NAMES ONLY. Nothing renamed. The exposure runs the other way: `Zanzibar.computedRefs` IS
+pinned in `headline_definitions.txt` -- threading it is free only while that declaration
+stays byte-identical, so do not tidy `computedRefs` while threading it.
+
+NEXT: step 8 (generalise the four DerNode-hardcoding shadow lemmas) -- untouched, and the
+next green-stoppable move. Record: PROOF_STATUS `## Session 2026-09-01d`.

@@ -1353,11 +1353,42 @@ re-check, ~20 sites in 3 files go genuinely red.**
   sites, not the gate.
 * **(g) NEW — the one tier-1 site with no existing lemma.** `shadow_graphRec_agree`
   discharges its probe target from `isDerived S (dt',r') = false`, which does **not**
-  exclude a minted leaf name. It needs the operand relation *declared*, and nothing in the
-  model forces `computedRefs` names to be declared — `Core/Schema.lean::WF` records only
-  that *declared* names are dot-free. Python enforces it (`_validate_ast_references`), so
-  the repair is faithful new modelling. The `wAllNode` half (`on ≠ STAR`) and the
-  BARE-subject half (the E3 `leafPublic p ≠ ""` guard) are both free.
+  exclude a minted leaf name. ~~It needs the operand relation *declared*, and nothing in
+  the model forces `computedRefs` names to be declared — `Core/Schema.lean::WF` records
+  only that *declared* names are dot-free. Python enforces it
+  (`_validate_ast_references`), so the repair is faithful new modelling.~~ The `wAllNode`
+  half (`on ≠ STAR`) and the BARE-subject half (the E3 `leafPublic p ≠ ""` guard) are both
+  free.
+  * ⚠ **STRUCK 2026-09-01c — "declared" was measured FALSE.**
+    `zanzibar_utils_v1.py::_validate_ast_references` enforces a **dot-lock**, not
+    declaredness: an undeclared operand is accepted and compiled; only a dotted one
+    raises. A declaredness clause would be strictly stronger than Python. The landed
+    predicate is `CascadeStable.lean::ComputedRefsNotLeaf` over `Leaf.lean::NotLeafName`,
+    which is byte-for-byte the Python check.
+  * ⚠ **MECHANISM DISSOLVED 2026-09-01d.** The trap's operative claim — that the premise
+    *cannot be phrased locally*, because `ReconcileStars.lean::checkFn_agree_of_graphRec`
+    and `_cd` hand their `hag` callback exactly `isDerived S (dt,r') = false` — no longer
+    holds. Both `hag`s now also carry `r' ∈ computedRefs e` (the callback always bound it
+    and spent it only on `hleafUnt`), and
+    `CascadeStable.lean::checkFn_agree_of_graphRec_notLeafNode` converts it to
+    `¬ LeafNode` for a caller holding `ComputedRefsNotLeaf S`.
+  * **What is still open is NOT (g).** The 14 term-level `shadow_graphRec_agree` sites
+    partition **3 + 8 + 3**: 3 arrive via the `hag` callback (served 2026-09-01d, all with
+    `hlk` in scope); 8 already hold `hr' : r' ∈ computedRefs e` locally and need only
+    `ComputedRefsNotLeaf S` threaded onto their enclosing declaration — ⚠ except
+    `CascadeStrataEnum.lean::checkFnR_star_declared` (`:336-345`), which has **no `hlk`
+    binder** and needs a lookup premise too, unbudgeted; and 3 —
+    `CascadeSettle.lean:1119`, `CascadeStrataResettle.lean:1539` and `:2683` — apply it at
+    the arbitrary **query** relation inside the `untainted query` branch, where no
+    `computedRefs` membership exists or can. Those need the query-level premise adjudicated
+    2026-09-01 for headline row 27, which is not landable before step 9's flip. Track them
+    as the residue of (e), not (g). **`11 = 3 + 8`** is where the ten-step plan's "11 call
+    sites" came from; it never recorded that the other 3 are a different repair.
+  * ⚠ **The way-out citation on record is INCOMPLETE, and half a fix builds.**
+    "`ReconcileStars.lean:618/622/633`" is binder / discard / **binder** — it names only ONE
+    of the two discard sites. The `_cd` twin's is **`:637`**. A session editing exactly the
+    three cited lines would have shipped a widened `checkFn_agree_of_graphRec` and an
+    un-widened `_cd`, which compiles. Cite `file::symbol`, per trap (b).
 * **(h) NEW — a BLIND INSTRUMENT created by step 1's own session.** `Scratch4cii.lean:51`
   defines a local unguarded `leafNodeB` that **shadows** the guarded carrier step 1 added
   at `Leaf.lean:547`; the local one wins every unqualified use, including `clsB` (`:393`)

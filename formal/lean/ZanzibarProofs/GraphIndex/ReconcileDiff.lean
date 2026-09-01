@@ -692,7 +692,7 @@ theorem wantEdge_reconcileKeyD_inert {σ : GraphState} {S : Schema} (T : Store)
   have hchk : (σ.reconcileKeyD T dt on R e cands).checkFn T x dt on R e
       = σ.checkFn T x dt on R e :=
     checkFn_agree_of_graphRec (S := S) T x dt on R e hco hlu
-      (fun s' r' hr' => graphRec_reconcileKeyD_inert T dt on R e cands hRne hcands hRns
+      (fun s' r' _ hr' => graphRec_reconcileKeyD_inert T dt on R e cands hRne hcands hRns
         honStar hder hcl s' dt on r' hr')
   have hcov : (σ.reconcileKeyD T dt on R e cands).coveredAt (objNode ⟨dt, on⟩ R) R x.shape
       = σ.coveredAt (objNode ⟨dt, on⟩ R) R x.shape := by
@@ -876,7 +876,7 @@ theorem wantEdge_reconcileKeyD_inert_cd {σ : GraphState} {S : Schema} (T : Stor
   have hchk : (σ.reconcileKeyD T dt on R e cands).checkFn T x dt on R e
       = σ.checkFn T x dt on R e :=
     checkFn_agree_of_graphRec_cd (S := S) T x dt on R e hcd hba hlu
-      (fun s' r' hr' => graphRec_reconcileKeyD_inert T dt on R e cands hRne hcands hRns
+      (fun s' r' _ hr' => graphRec_reconcileKeyD_inert T dt on R e cands hRne hcands hRns
         honStar hder hcl s' dt on r' hr')
   have hcov : (σ.reconcileKeyD T dt on R e cands).coveredAt (objNode ⟨dt, on⟩ R) R x.shape
       = σ.coveredAt (objNode ⟨dt, on⟩ R) R x.shape := by

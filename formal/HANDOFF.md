@@ -79,10 +79,10 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
-⚠ **This file's dated-block series STOPS at 2026-08-28c and six sessions have landed
-since** (`2026-08-30`…`2026-09-01b`). For anything after 2026-08-28c read
-`history/PROOF_STATUS.md` top-down; the blocks below are accurate as of their own dates
-except where corrected in place.
+⚠ **Dated blocks STOP at 2026-08-28c; eight sessions have landed since**
+(`2026-08-30`…`2026-09-01d` — the last dissolved §11.13 trap (g): `hag` now carries
+`r' ∈ computedRefs e`, so the `hnl` binder waits on **step 9**). For anything later read
+`history/PROOF_STATUS.md` top-down; blocks below hold as of their dates, or as corrected.
 
 **2026-08-28c — the public surface is migrated, and the `hql` surface is now one row.**
 🚨 **The "one row" half was REFUTED 2026-08-31c and then made true again by the 2026-09-01b

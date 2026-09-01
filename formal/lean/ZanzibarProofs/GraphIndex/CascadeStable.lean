@@ -618,6 +618,51 @@ theorem notLeafNode_of_computedRef {S : Schema} {k : String × String} {e : Expr
   not_leafNode_of_notLeafName
     (by simpa [objNode_pred] using notLeafName_of_computedRef h hlk hr)
 
+/-- **`checkFn` agreement from a callback that can refute `LeafNode` at every operand it
+    sees** — the consumer that makes the `hag` widening load-bearing.
+
+    `hmem` exists only because `ReconcileStars.lean::checkFn_agree_of_graphRec` now forwards
+    `r' ∈ computedRefs e` to `hag`. Against the pre-widening `hag`, which handed the callback
+    an arbitrary `r'` under `isDerived S (dt, r') = false` alone, this statement is NOT
+    provable: `hunt` does not refute a minted leaf name (pinned below at
+    `slVBadRef_hunt_holds`). That was scope-doc 11.13 trap (g).
+
+    Stated with `¬ LeafNode` — not `ComputedRefsNotLeaf` — in the callback so that it is
+    already the shape `shadow_graphRec_agree`'s `hv1` needs once step 9 pre-widens it.
+
+    **SABOTAGE** (`docs/sabotage-procedure.md`), run 2026-09-01d. The narrowest plausible
+    weakening is not "revert the widening" but "the binder was added and carries nothing":
+    `hag`'s new premise was changed to `r' = r'` and the forward at
+    `ReconcileStars.lean::checkFn_agree_of_graphRec` to `hag s r' rfl (hleafUnt r' hr')`.
+    Observed `rc=1`, and this was the ONLY error in the tree:
+
+        error: ZanzibarProofs/GraphIndex/CascadeStable.lean:641:74: Application type
+          mismatch: The argument
+          hmem
+        has type
+          r' = r'
+        but is expected to have type
+          r' ∈ computedRefs e
+        in the application
+          notLeafNode_of_computedRef hcr hlk hmem
+
+    All NINE `checkFn_agree_of_graphRec{,_cd}` call sites stayed green under that weakening,
+    because each discards the membership with `_`. So the call sites are not the instrument
+    for the widening — this theorem is the only thing in the tree that can tell a binder
+    that carries the membership from one that does not. ⚠ "Only error" is a LOWER bound:
+    Lean does not build dependents of a failed module, and `CascadeStable` is upstream of
+    twenty of them. -/
+theorem checkFn_agree_of_graphRec_notLeafNode {σ σ0 : GraphState} {S : Schema}
+    {k : String × String} (T : Store) (s : SubjectRef) (dt on R : String) (e : Expr)
+    (hco : ComputedOnly e) (hcr : ComputedRefsNotLeaf S) (hlk : S.lookup k = some e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hag : ∀ (s' : SubjectRef) (r' : String), ¬ LeafNode S (objNode ⟨dt, on⟩ r') →
+      isDerived S (dt, r') = false →
+      GraphModel.graphRec σ s' dt on r' = GraphModel.graphRec σ0 s' dt on r') :
+    σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e :=
+  checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
+    (fun s' r' hmem hunt => hag s' r' (notLeafNode_of_computedRef hcr hlk hmem) hunt)
+
 /-! #### The pins — the SOLE evidence, since the predicate is inert (step 7)
 
 Everything above is additive, so a green build vets nothing: `ComputedRefsNotLeaf`
@@ -1298,10 +1343,21 @@ theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
   --
   -- ⚠ `hv1` is NOT free the same way and must not be bundled into this edit: it needs
   -- `NotLeafName r'` for the OPERAND relation, which `hunt` does not give (a minted leaf
-  -- name like `viewer.0` is itself non-derived while `leafPublic` of it is derived), and
-  -- the premise cannot be phrased locally because `ReconcileStars.lean::
+  -- name like `viewer.0` is itself non-derived while `leafPublic` of it is derived).
+  --
+  -- The second half of that obstacle is GONE as of 2026-09-01d. It used to read "the
+  -- premise cannot be phrased locally because `ReconcileStars.lean::
   -- checkFn_agree_of_graphRec{,_cd}` hand their `hag` callback exactly
-  -- `isDerived S (dt,r') = false`. That is scope-doc 11.13 trap (g), still open.
+  -- `isDerived S (dt,r') = false`" -- scope-doc 11.13 trap (g). Both `hag`s now also carry
+  -- `r' ∈ computedRefs e`, and `::checkFn_agree_of_graphRec_notLeafNode` above turns that
+  -- into `¬ LeafNode S (objNode ⟨dt,on⟩ r')` for a caller holding `ComputedRefsNotLeaf S`.
+  --
+  -- What remains is a DIFFERENT obstacle, and it is why the binder is still deferred: of
+  -- this lemma's 14 term-level call sites, three (`CascadeSettle.lean:1119`,
+  -- `CascadeStrataResettle.lean:1539`, `:2683`) instantiate `r'` with the arbitrary
+  -- QUERY's own relation, where no `computedRefs` membership exists at all. Those need the
+  -- query-level premise adjudicated 2026-09-01 for headline row 27, which co-lands with
+  -- step 9. An unconditional new binder here would red those three today.
   have hv3 : ¬ (DerNode S (wAllNode dt' r') ∨ LeafNode S (wAllNode dt' r')) := by
     rintro (⟨dt, on, R, _, _, hon, heq⟩ | ⟨ty, on, p, _, _, hon, heq⟩)
     · rw [objNode_plain hon] at heq
@@ -1335,7 +1391,7 @@ theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
     σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
   have hstep : σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e :=
     checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
-      (fun s' r' hr' => shadow_graphRec_agree hsh s' on hr')
+      (fun s' r' _ hr' => shadow_graphRec_agree hsh s' on hr')
   rw [hstep]
   exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
     (ReachedByW3aAdmitted.base h0) hlk hco hleafUnt hs hon
