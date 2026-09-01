@@ -79,14 +79,14 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
-⚠ **This file's dated-block series STOPS at 2026-08-28c and four sessions have landed
-since** (`2026-08-30`…`2026-08-31c`, plus the `2026-09-01` decision entry). For anything
-after 2026-08-28c read `history/PROOF_STATUS.md` top-down; the blocks below are accurate
-as of their own dates except where corrected in place.
+⚠ **This file's dated-block series STOPS at 2026-08-28c and six sessions have landed
+since** (`2026-08-30`…`2026-09-01b`). For anything after 2026-08-28c read
+`history/PROOF_STATUS.md` top-down; the blocks below are accurate as of their own dates
+except where corrected in place.
 
 **2026-08-28c — the public surface is migrated, and the `hql` surface is now one row.**
-🚨 **THE "ONE ROW" HALF OF THIS TITLE IS REFUTED (2026-08-31c) — see the correction at the
-end of this block. The migration half stands.**
+🚨 **The "one row" half was REFUTED 2026-08-31c and then made true again by the 2026-09-01b
+migration — see the corrections at the end of this block. The migration half stands.**
 Seven declarations (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
 `Exec.graphRun_check_eq_sem`, `::graphRunOps_check_eq_sem`,
 `W4WitnessDirect.final_applies`/`final_applies4`) now state `GraphModel.checkPublic`,
@@ -99,20 +99,22 @@ docstring false.
 ⚠ **What this changes for 4c-ii: `docs/latent-gaps.md` used to name SIX theorems as going
 FALSE after the re-point; five of them plus both `final_applies` witnesses are now out of
 that set entirely** (the fence discharges the leaf-name case). ~~**The remaining `hql`
-surface is ONE pinned row — `graph_correct` (`headline_statements.txt:27`)**~~ 🚨 **FALSE —
-the surface is THREE rows: 27, 46 and 56.** Refuted 2026-08-31c by consumer-set
-enumeration: rows 46/56 (`W4WitnessDirect.correct_applies` / `::w3d2E_correct_applies`)
-carry no `checkPublic` and consume `graph_correct_w3d2{,E}_d` *directly*
-(`FullScope.lean:1112`, `:1285`), so they sit below the fence too. The 2026-08-28c
-reasoning was right about `final_applies`/`final_applies4` and wrong to generalise from
-them. ✅ **ADJUDICATED (user, 2026-09-01): rows 46/56 MIGRATE onto `checkPublic` — the same
-move this block records — and do NOT take the `hql` binder, because they are the
-non-vacuity instruments. Row 27 keeps its binder.** Grounds, the four binding conditions,
-and one known unknown: `history/PROOF_STATUS.md` `## Session 2026-09-01`.
-Row 27 remains deliberately
-kept as the INTERNAL-layer statement. `unfenced_grants` (`:51`) stays unfenced as
-`fence_changes_answer`'s foil; the `Equiv.lean` 27-rung ladder stays on `check` because it
-is a per-stage record of the internal layer (its own header says so) — zero edits.
+surface is ONE pinned row — `graph_correct` (`:27`)**~~ 🚨 **FALSE when written — it was
+THREE rows: 27, 46 and 56**, refuted 2026-08-31c by consumer-set enumeration (rows 46/56
+carried no `checkPublic` and consumed `graph_correct_w3d2{,E}_d` directly). The 2026-08-28c
+reasoning was right about `final_applies`/`final_applies4`, wrong to generalise.
+
+✅ **LANDED 2026-09-01b — the `hql` surface is ONE row after all, but by MIGRATION rather
+than by the 2026-08-28c argument.** Rows 46/56 are restated over `GraphModel.checkPublic`;
+the `hql` binder is REFUSED on both — `q` is universally quantified there, so it would put
+a schema-dependent hypothesis on the two SATISFIABILITY instruments, the house failure
+mode. Kernel-checked: row 46's bridge is `reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`;
+no `reachedByW3d2C_schema` is needed — **the grep wanted the wrong name.** Condition 2
+shipped three pinned instruments against the rows degrading into certifying the fence
+alone, both sabotages run → `history/PROOF_STATUS.md` `2026-09-01b`. Row 27 is deliberately
+kept as the INTERNAL-layer statement; `unfenced_grants` (`:52`) stays unfenced as
+`fence_changes_answer`'s foil, and `Equiv.lean`'s 27-rung ladder stays on `check` as a
+per-stage record of that layer (its own header says so) — zero edits.
 
 ⚠ **A hole was found and closed here.** The driver↔capstone coupling was UNPINNED:
 reverting `Cli.lean` to the unfenced read left the full conformance suite green

@@ -1432,6 +1432,31 @@ re-check, ~20 sites in 3 files go genuinely red.**
   `## Session 2026-09-01`. **`P3`'s standing instruction that this must
   not be smuggled into step 7 is unchanged and now has a measured cost behind it** — and is
   now discharged by condition 1 rather than by deferral.
+* **(m) NEW 2026-09-01b — (e), (l) and the "three rows" framing are now SPENT: the repair
+  LANDED, and the `hql` surface is ONE row again.** Rows 46/56 are stated over
+  `GraphModel.checkPublic` as of this date, neither took the `hql` binder, and row 27 is
+  untouched — so (e)'s "lands on THREE pinned rows, not one" was true when written and is
+  now history rather than a live constraint. Read (e) and (l) as the record of how the
+  decision was reached, not as open scope. Corrections to the facts they assert:
+  * **(e)'s enumeration is stale in one clause.** "Rows **27 / 46 / 56 carry no
+    `checkPublic`**" is now false for 46 and 56. The companion list — "the nine that do:
+    28, 30, 31, 32, 34, 36, 53, 59, 64" — still resolves correctly, because the three new
+    pins were deliberately APPENDED to `statement_pin.py`'s list (golden rows 65-67)
+    rather than filed thematically. Filing them next to the `fence_*` pins had shifted
+    `w3d2E_correct_applies` 56→59 and this enumeration 59→62, 64→67; that was caught and
+    reverted. `statement_pin.py`'s list order IS the golden's line order — file new pins
+    at the tail.
+  * **(l)'s "one known unknown" is REFUTED.** There is no `reachedByW3d2C_schema`, none
+    is needed, and the grep that failed to find one was looking for the wrong name: row
+    46's bridge composes as `reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`. This is now
+    kernel-checked, not a source read.
+  * **(k)'s redundant-guard trap was applied, not just cited.** The condition-2 sabotage
+    on `public_grant_survives_fence` holds the grant fixed (`unfenced_grants` machine-
+    checks the unfenced read still grants at `σLeaf`) so the observed flip is attributable
+    to leaf-ness alone and not to a missing edge.
+  * All four binding conditions are discharged. Full record, including both sabotages'
+    literal output: `PROOF_STATUS.md` `## Session 2026-09-01b`. What remains of this item
+    is row 27 / step 7, unchanged.
 
 ## Provenance
 

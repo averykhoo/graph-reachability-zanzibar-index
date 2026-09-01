@@ -1491,6 +1491,18 @@ namespace Zanzibar
 #print axioms W4WitnessDirect.within_scope
 #print axioms W4WitnessDirect.correct_applies
 
+-- **The CONDITION-2 instruments (2026-09-01).** The Class-B repair restated
+-- `correct_applies` and `w3d2E_correct_applies` over `GraphModel.checkPublic`, because
+-- after the 4c-ii re-point the unfenced shape is FALSE at a minted leaf name; the `hql`
+-- binder taken by `graph_correct` was REFUSED on these two, since a schema-dependent
+-- hypothesis on a SATISFIABILITY witness is this repo's house failure mode. A `checkPublic`
+-- equation has two branches, and `fence_changes_answer` pins only that the fenced one
+-- fires — so these recover the original unfenced statement at a query the fence provably
+-- does not touch, which is red unless the non-fence branch really does discharge the
+-- audited core. Sabotage evidence: their docstrings. Standard axioms only:
+#print axioms W4WitnessDirect.correct_applies_nonfence
+#print axioms W4WitnessDirect.w3d2E_correct_applies_nonfence
+
 -- E-chain Direct-arm widening, LEG 1 (2026-07-28) — the star-freeness prerequisites the
 -- E-chain's `w3cJobValid_enumJob2D` needs, landed FULLY ADDITIVELY (no existing declaration's
 -- meaning changed; headline statement pin 26/26 and definition pin 139/139 unmoved).

@@ -136,66 +136,42 @@ re-point, a pinned headline theorem stated over the UNFENCED `GraphModel.check` 
 name: the re-pointed driver's drained state grants where `sem` denies, with every
 existing hypothesis inhabited.
 
-**⚠ The blast radius SHRANK on 2026-08-28c and this entry used to overstate it.** It
-named six theorems (`graph_correct`, `backend_equivalence`, `exclusion_effective`,
-`no_ghost_grant`, `graphRun_check_eq_sem`, `graphRunOps_check_eq_sem`). Five of those,
-plus `W4WitnessDirect.final_applies`/`final_applies4`, have since been migrated onto the
-PUBLIC read `GraphModel.checkPublic` and are **no longer in the falsity set at all**:
-their leaf-name case is discharged by the fence, via `FullScope.lean::graph_correct_public`,
-whose fenced branch proves the query undeclared and appeals to `Spec/Confine.lean::semAux_undeclared`.
-Post-4c-ii they stay TRUE and PROVED with no new binder — which is exactly the payoff
-`2026-08-28b` predicted when it wrote "a migrated `final_applies` never gains an `hql`
-binder".
+**The blast radius has shrunk twice and is now ONE row.** The original filing named six
+theorems. On 2026-08-28c five of them, plus
+`W4WitnessDirect.final_applies`/`final_applies4`, were migrated onto the PUBLIC read
+`GraphModel.checkPublic`; on 2026-09-01 the last two exposed rows —
+`W4WitnessDirect.correct_applies` (`formal/headline_statements.txt:46`) and
+`::w3d2E_correct_applies` (`:56`) — were migrated the same way, kernel-checked, with the
+`hql` binder REFUSED on both: they are the non-vacuity / satisfiability instruments, and a
+schema-dependent binder on such a declaration is the house failure mode. A migrated row is
+**no longer in the falsity set at all**: its leaf-name case is discharged by the fence,
+via `FullScope.lean::graph_correct_public`, whose fenced branch proves the query
+undeclared and appeals to `Spec/Confine.lean::semAux_undeclared`. Post-4c-ii the migrated
+rows stay TRUE and PROVED with no new binder. Three pinned instruments guard the 46/56
+migration against degrading into certifying the fence alone
+(`public_grant_survives_fence`, `correct_applies_nonfence`,
+`w3d2E_correct_applies_nonfence`); adjudication grounds:
+`formal/history/PROOF_STATUS.md` `## Session 2026-09-01`.
 
 **What is left is ONE row:** `Zanzibar.graph_correct` (`formal/headline_statements.txt:27`),
 which is deliberately the INTERNAL-layer statement (`GraphModel.check` = Python's
 `_check_internal`) and must stay unfenced — it is what `graph_correct_public`'s own
-unfenced branch appeals to. `W4WitnessDirect.unfenced_grants` (`:51`) is likewise
+unfenced branch appeals to. `W4WitnessDirect.unfenced_grants` (`:52`) is likewise
 deliberately unfenced: it is the FOIL for `fence_changes_answer`, and migrating it would
-destroy the differential. The `Equiv.lean` per-stage ladder and the chain-internal
-`correct_applies` / `w3d2E_correct_applies` are staged historical records of the internal
-layer and stay on `check` for the same reason.
+destroy the differential. The `Equiv.lean` per-stage ladder is a per-stage record of the
+internal layer (its own header says so) and stays on `check` for the same reason.
 
-> ⚠ **CORRECTION 2026-08-30c — the preceding paragraph is WRONG about `correct_applies` /
-> `w3d2E_correct_applies`, and its `unfenced_grants` cite is off by one (it is `:52`, not
-> `:51` — `:51` is `fence_untainted_leaf`).** The exclusion reason "staged historical
-> records of the internal layer" is refuted by two `abbrev`s in the same file as the
-> theorems: `FullScope.lean:78` is `abbrev ReachedBy : GraphState → Schema → Store → Prop :=
-> ReachedByW3d2E` and `:84` is `abbrev Drained (S) (σ) : Prop := cascadeKeys S σ = []`. So
-> `w3d2E_correct_applies` (`:1278`) has hypotheses **definitionally identical** to
-> `final_applies` (`:1375`); the sole difference is `GraphModel.check` versus
-> `GraphModel.checkPublic`. `ReachedByW3d2E` *is* the headline closure, so this is not an
-> intermediate chain — it is `final_applies` with the fence deleted and `q` still
-> universally quantified, and everything that makes `final_applies` need the fence makes
-> this row false post-re-point. `:46` follows a fortiori via `toC_applies` (`:1255`), whose
-> own docstring records that the projection is one-way. **The surface is THREE rows, not
-> one** — and the repair for `:46`/`:56` is ~~probably~~ **DECIDED as** migration onto
-> `checkPublic` (as
-> `final_applies` was on `2026-08-28c`), not the `hql` binder. Structurally confirmed, NOT
-> kernel-confirmed: no build witness was constructed and 4c-ii has not landed. Evidence and
-> the row-by-row table: scope doc §11.13 (e), `PROOF_STATUS.md` `## Session 2026-08-30c` §5.
-> ✅ **Reach CONFIRMED 2026-08-31c** by consumer-set enumeration (`:46`/`:56` reach
-> `graph_correct` via `graph_correct_w3d2_d`), and ✅ **the repair ADJUDICATED by user call
-> 2026-09-01**: rows 46/56 migrate onto `checkPublic`; the `hql` binder is refused there
-> because they are the non-vacuity instruments. Grounds, four binding conditions, one known
-> unknown: `formal/history/PROOF_STATUS.md` `## Session 2026-09-01`.
-
-**What would close it:** two moves now, not one, because the surface is three rows.
-
-* **Rows 46/56 — landing FIRST, on today's tree, in their own commit.** The `checkPublic`
-  migration is provable before 4c-ii (the fence branch closes as row 28's does), and
-  condition 1 of the 2026-09-01 adjudication requires it to land separately rather than
-  inside step 7. So this half closes *early*, not in the 4c-ii commit.
-* **Row 27 — the guard landing on `graph_correct` WITH 4c-ii in the same
-  commit** — never before (today the statement is true unguarded) and never after (the gate
-  would meanwhile pin a false statement). The accept/refuse analysis is in PROOF_STATUS
-  `## Session 2026-08-21b`, and the guard was ACCEPTED by user call on 2026-08-28: the
-  narrowest repairing guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
-  `isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes
-  undeclared junk names where the claim holds today) and anything keyed on
-  `isDerived`/taint (it guts every derived-query headline claim while the pin regenerates
-  GREEN — the house failure mode). **That call is untouched by the 2026-09-01
-  adjudication** — row 27 is the internal-layer statement, not a satisfiability instrument.
+**What would close it:** the `hql` guard landing on `graph_correct` WITH 4c-ii in the same
+commit — never before (today the statement is true unguarded) and never after (the gate
+would meanwhile pin a false statement). That co-landing is step 7 of the 4c-ii plan (board
+row `P3`). The accept/refuse analysis is in PROOF_STATUS
+`## Session 2026-08-21b`, and the guard was ACCEPTED by user call on 2026-08-28: the
+narrowest repairing guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
+`isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes
+undeclared junk names where the claim holds today) and anything keyed on
+`isDerived`/taint (it guts every derived-query headline claim while the pin regenerates
+GREEN — the house failure mode). **That call is untouched by the 2026-09-01
+adjudication** — row 27 is the internal-layer statement, not a satisfiability instrument.
 
 ---
 
