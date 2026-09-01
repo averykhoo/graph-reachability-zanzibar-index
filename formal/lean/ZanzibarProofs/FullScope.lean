@@ -1696,4 +1696,25 @@ theorem final_applies4 {σ : GraphState} (q : Query)
   graph_correct_public q admission4 w4fragment4 h hq hqs hqo
 
 end W4WitnessDirect
+
+/-! ## 4c-ii step 9 — the new premises hold at every `GraphAdmission` witness
+
+Non-vacuity for the two hypotheses step 9 threads. `DirectRestrictionsNotLeaf` is the
+one that could have gone wrong: every `Direct` restriction in all three witnesses is
+`("user", BARE, _)`, and `BARE = "..."` is DOT-CARRYING, so the `relNameOK`-shaped
+("dot-free") clause a reader would reach for first is FALSE here and would make the
+bundle uninhabited — re-vacuating the final theorems. `NotLeafName`'s BARE escape is
+what makes these `decide`. Scope doc §11.13 trap (o). -/
+
+theorem directRestrictionsNotLeaf_Sx : DirectRestrictionsNotLeaf W4Witness.Sx := by decide
+theorem directRestrictionsNotLeaf_Sy : DirectRestrictionsNotLeaf W4WitnessUnion.Sy := by decide
+theorem directRestrictionsNotLeaf_Sd : DirectRestrictionsNotLeaf W4WitnessDirect.Sd := by decide
+
+theorem ttuTargetsSat_notLeafName_Sx : TtuTargetsSat W4Witness.Sx NotLeafName :=
+  ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+theorem ttuTargetsSat_notLeafName_Sy : TtuTargetsSat W4WitnessUnion.Sy NotLeafName :=
+  ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+theorem ttuTargetsSat_notLeafName_Sd : TtuTargetsSat W4WitnessDirect.Sd NotLeafName :=
+  ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+
 end Zanzibar

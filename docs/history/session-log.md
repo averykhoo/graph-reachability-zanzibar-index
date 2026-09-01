@@ -91,15 +91,38 @@ adjudication history the board does not carry (`HANDOFF.md`'s `P3` block, PROOF_
 `2026-09-01e`, and the `P20` warning). Same split as `2026-09-01`: the board replaced the
 file read for orientation, not for adjudication.
 
-Still owed: the **threading itself** (supply the two premises at the three `hsubj` sites and
-pre-widen them) and then the `GraphAdmission` field. Sizing is UNMEASURED — `5+7+8=20` is
-retired scout output, this session's grep gives 46 non-comment lines across 9 files as a raw
-figure only, and a declaration-level count was attempted and **discarded as untrustworthy**.
-Measure with the probe, not a grep. The control for step 9 is **probe 5 re-run without the
-`sorry`s** plus the weakening *thread the premise, then weaken it to `True`*, expecting the
-three `hsubj` sites and nothing else. Known unpaid cost: a `GraphAdmission` field leaves
-`headline_statements.txt` byte-identical but **does** redden `headline_definitions.txt` and
-needs the four construction sites at `FullScope.lean:623/:739/:1486/:1621`.
+**And one of the three sites is threaded end to end.** `reachedByW3d_shadow` now takes both
+premises — it is TWO, not one: the seed premise alone cannot survive a `.ttu` hop, which
+overwrites the subject predicate with the schema's rule target, so the schema-side
+`TtuTargetsSat S NotLeafName` rides along. Measured cost, a closed list rather than a grep:
+**18 declarations across 6 files**, and `CascadeStrata*` does not move at all — the census
+lines there were docstrings the filter missed, which retires both `5+7+8=20` and this
+session's own raw `46 lines / 9 files`.
+
+**The control was the flip probe (trap (n): a pre-widen can only be vetted by the re-point)
+and it came back positive.** Before this increment the flip red `CascadeStable` four times,
+two of them the `hsubj` obligation; after it, those two are replaced by exactly the `Or.inl`
+wrapper mismatch the pre-widen is designed to leave, and passing the wide form clears them —
+leaving only `shadow_graphRec_agree`'s `hv1`/`hv3`, which are the other two obligations. Six
+new `FullScope` pins machine-check that both premises hold at all three `GraphAdmission`
+witness schemas, so nothing became vacuous.
+
+⚠ **This landing carries a weakening the gate cannot see, and it is written down rather
+than left to be found.** Six audited terminal theorems (`graph_correct_w3d`,
+`backend_equivalence_w3d`, `exclusion_effective_w3d`, `no_ghost_grant_w3d`,
+`reachedByW3dC_inv`, `reachedByW3dE_inv`) now carry two hypotheses they did not carry
+before. The gate stays green because `audited_theorems.txt` pins NAMES only and none of the
+six has a `headline_statements.txt` row — the house failure mode exactly. It is a
+*permitted intermediate* (the user's call allows an undischarged premise for an
+intermediate commit, never for the leg) and non-vacuity is machine-checked, but it is not
+resolved.
+
+Still owed, and the next session owns it: the other two sites
+(`reachedByW3d2_shadow{,_d}`), then the discharge — both premises become `GraphAdmission`
+fields, the six theorems take the bundle, and the six witness pins become the field proofs.
+Known cost: `headline_statements.txt` stays byte-identical, `headline_definitions.txt`
+**will** redden, and the four construction sites at `FullScope.lean:623/:739/:1486/:1621`
+plus the flat conjunction at `:1042` must be extended.
 
 ---
 
