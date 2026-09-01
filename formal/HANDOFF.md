@@ -79,11 +79,11 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
-⚠ **Dated blocks STOP at 2026-08-28c; nine sessions have landed since**
-(`2026-08-30`…`2026-09-01e` — the last sized the flip at **5 repair sites / 4 declarations /
-2 files** and left **step 9 blocked on a design decision, not proof effort**: the seed-side
-`NotLeafName t.subject.predicate` wants a store-level premise threaded through three
-signatures. For anything later read `history/PROOF_STATUS.md` top-down.)
+⚠ **Dated blocks STOP at 2026-08-28c; ten sessions have landed since**
+(`2026-08-30`…`2026-09-02`. `2026-09-01e` sized the flip at **5 repair sites / 4 decls / 2
+files**; step 9's design call is **MADE — user, 2026-09-02: thread the premise and DISCHARGE
+it from `GraphAdmission`**, since write admission already enforces it
+(`setengine/engine.py:932` + `:916-919`). Later detail: `history/PROOF_STATUS.md` top-down.)
 
 **2026-08-28c — the public surface is migrated, and the `hql` surface is now one row.**
 🚨 **The "one row" half was REFUTED 2026-08-31c and then made true again by the 2026-09-01b

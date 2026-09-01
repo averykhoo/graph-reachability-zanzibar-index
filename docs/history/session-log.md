@@ -25,6 +25,62 @@ from here.
 
 ---
 
+## 2026-09-02 — the step-9 design call is MADE, and the step turns out to be cheaper than the record implied
+
+rows: `P3`
+
+**The user was asked the question `2026-09-01e` deliberately left open, weighed the
+recommendation, and took it.** The adjudication: the seed-side `NotLeafName
+t.subject.predicate` is to be threaded as a premise **and DISCHARGED from the
+`GraphAdmission` bundle** — an undischarged premise is a landing state for an intermediate
+commit only, never for the leg, because a conditional equivalence claim whose condition a
+reader must go and verify is exactly this repo's house failure mode.
+
+**The grounds were re-established FIRST-HAND rather than inherited**, which matters here
+more than usual: `P20`'s adjudication is the standing warning that "Python already refuses
+what the narrowing excludes" held for *zero of ten* fields, so the argument shape cannot be
+cited, only re-run. Re-run, it holds. Write admission gates every tuple on a declared type
+restriction (`setengine/engine.py:932`, check (2)), those restriction filters always pin
+the subject predicate to bare `...` or a *referenced relation name*
+(`zanzibar_utils_v1.py::_restriction_pattern` `:1012-1019`, plus
+`RelationalTriplePattern.match` `:288`), and a referenced name can never carry a dot
+(`_validate_ast_references`, `:916-919` — the same dot-lock step 7 already modelled as
+`CascadeStable.lean::ComputedRefsNotLeaf`). So the premise describes an **enforced
+invariant**, not a scope carve-out: it belongs in `GraphAdmission` (whose every field cites
+its enforcing mechanism) and not in `W4Fragment` (the honest-gaps bundle).
+
+**A second finding fell out of checking the premise, and it shrinks the step:** the
+consumer already exists. `CascadeStable.lean:880::rewriteClosure_subject_not_leafNode` is
+the post-flip `hsubj` shape stated over `rewriteClosure S t` verbatim, and of its two
+premises the schema-side `hQ` is already owned
+(`::ttuTargetsSat_notLeafName_of_noLeafSubjects`). Step 9 SUPPLIES `hbase`; it does not
+prove a closure theorem, which is how this row had been reading.
+
+Decision, its rejected alternatives and the verification detail:
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-02`.
+
+⚠ **The `lean` phase caught this entry's own absence**, along with both HANDOFF ceilings
+and the trap-badge budget — all four at ZERO headroom, so the doc edits had to be made
+net-neutral rather than merely correct. Worth recording because the first run *looked*
+green: the background wrapper reported exit 0 while `verify.sh lean` returned `rc=1`, which
+is CLAUDE.md's first standing footgun arriving in a new costume. Read the verdict line.
+
+`task lint: clean (12 checks, 156 task file(s) parsed)`
+
+`read: board + HANDOFF` — `python scripts/task.py board` ran first and correctly named `P3`
+and the pending call, but the question was *which way to decide*, which needed the
+adjudication history the board does not carry (`HANDOFF.md`'s `P3` block, PROOF_STATUS
+`2026-09-01e`, and the `P20` warning). Same split as `2026-09-01`: the board replaced the
+file read for orientation, not for adjudication.
+
+Still owed: see the session's final entry state — sizing of the threading is UNMEASURED
+(`5+7+8=20` is retired scout output) and must be re-measured before it is quoted; the
+control for step 9 is **probe 5 re-run without the `sorry`s** plus the weakening *thread
+the premise, then weaken it to `True`*, expecting the three `hsubj` sites and nothing else.
+
+---
+
 ## 2026-09-01e — step 8's free content landed; the flip's remaining cost is now a CLOSED list of four
 
 rows: `P3`

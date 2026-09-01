@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Step 8's free half landed; flip MEASURED at 5 sites/4 decls/2 files. Step 9 blocked on a DESIGN CALL, not proof.
+brief: DESIGN CALL MADE (user 2026-09-02): thread NoLeafStoreSubjects AND discharge from GraphAdmission. Unblocked proof work.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-01e
-updated: 2026-09-01e
+moved: 2026-09-02
+updated: 2026-09-02
 closed:
 ---
 
@@ -589,3 +589,7 @@ seed-side and operand-side premises that no declaration owns today.
 ### 2026-09-01e
 
 Step 8's free content LANDED: untaintedShadow_applyD + untaintedShadow_applyLoggedR{,_d} PRE-WIDENED in place with step 5's `first | <post-flip> | <today's>` idiom -- zero new declarations, zero signature changes, zero call-site churn, zero pin exposure (Audit.lean:786 cannot move). hoffW costs NO new premise: W3cJobValid's hcb makes every candidate BARE, and Leaf.lean::bare_subjNode_not_leafNode refutes LeafNode from it. Green first attempt, 1089 jobs, zero of a six-cycle budget. MEASUREMENT: staging the flip probe with `sorry` on each already-blocked obligation lets lake build past the red module -- wave 2 is 8 errors in 4 declarations, ALL in CascadeStrataSettle.lean, and with the flip applied and only the FOUR unowned obligations stubbed the ENTIRE tree builds green. Flip cost = 5 repair sites / 4 declarations / 2 files, retiring 2026-08-30c's '~20 sites in 3 files'. Trap (k) exactly: S1 (hoffW narrowed to its DerNode half) is GREEN unflipped and RED flipped, so the flip probe -- not a weakening -- is the standing control for a PRE-WIDEN. STEP 9 IS BLOCKED ON A DESIGN DECISION, NOT PROOF EFFORT: the seed-side NotLeafName t.subject.predicate at :1331/:718/:1317 wants a store-level NoLeafStoreSubjects T threaded through three signatures, which changes downstream statements and hence potentially the headline theorems -- the human call. Record: PROOF_STATUS ## Session 2026-09-01e.
+
+### 2026-09-02
+
+DESIGN CALL MADE (user, 2026-09-02) -- step 9 is unblocked proof work; no open decision remains on this item. Thread the seed-side obligation as a store-level NoLeafStoreSubjects T AND DISCHARGE it from GraphAdmission; an undischarged premise is an intermediate-commit state only, never the leg's landing state. Grounds re-established FIRST-HAND (not inherited from P20): admission pins every stored tuple's subject predicate to bare-or-a-referenced-relation-name (setengine/engine.py:932 check (2) -> zanzibar_utils_v1.py::_restriction_pattern :1012-1019 + RelationalTriplePattern.match :288) and a referenced name can never carry a dot (_validate_ast_references :916-919) -- the same dot-lock step 7 modelled as CascadeStable.lean::ComputedRefsNotLeaf. So it is an ENFORCED INVARIANT -> a GraphAdmission field, not a W4Fragment carry. CHEAPER THAN RECORDED: the consumer already exists -- LeafRules.lean:671::rewriteClosureL_subject_not_leafNode IS the post-flip hsubj shape verbatim, its schema half (NoLeafSubjects) already owned, the .ttu overwrite already absorbed by ::rewriteStepL_subject_notLeafName. Step 9 supplies a premise, it does not prove a closure theorem. Sizing still UNMEASURED (5+7+8=20 is retired scout output). Control unchanged: probe 5 re-run without the sorrys, plus the weakening 'thread it then weaken to True', expecting the three hsubj sites and nothing else. Record: PROOF_STATUS ## Session 2026-09-02.

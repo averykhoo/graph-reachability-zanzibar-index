@@ -15,6 +15,93 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-02 (**the step-9 design call is MADE — user decision: thread `NoLeafStoreSubjects`, and DISCHARGE it from admission rather than leaving it a bare premise.**)
+
+**Task taken:** the design decision `2026-09-01e` surfaced and deliberately did not make —
+*"the seed-side `NotLeafName t.subject.predicate` at three sites wants a **store-level**
+predicate (`NoLeafStoreSubjects T`) threaded through `reachedByW3d_shadow` /
+`reachedByW3d2_shadow{,_d}` … Do not thread it unasked."* The user was asked, weighed the
+recommendation, and took it.
+
+### 1. THE ADJUDICATION — user call, 2026-09-02
+
+> **Thread the store-level premise. It is to be DISCHARGED from the existing admission
+> bundle — it must not survive as a free-floating hypothesis on the headline theorems.**
+
+**The reasoning that earned the call, verified first-hand in the Python before it was put
+to the user** (not delegated — this is the load-bearing half, and CLAUDE.md's delegation
+rule reserves that for first-hand checking):
+
+The premise says *no stored tuple's subject predicate is a minted leaf name*. The only way
+that could NARROW the equivalence claim is if the real system could admit such a tuple.
+It cannot, and the enforcement is two mechanisms deep:
+
+1. **Every write is admission-gated on a declared type restriction**
+   (`setengine/engine.py:932`, check (2) of `SetEngine::_validate`) — and those restriction
+   filters always PIN the subject predicate: `zanzibar_utils_v1.py::_restriction_pattern`
+   (`:1012-1019`) sets `subject_predicate` to either bare `...` or the restriction's
+   referenced relation name, never `None`/wildcard, and
+   `RelationalTriplePattern.match` (`:288`) rejects on any mismatch.
+2. **A referenced relation name can never contain a dot** —
+   `zanzibar_utils_v1.py:916-919` raises at parse time (`"'.' in referenced relation
+   names"`), on top of the dot-reservation for declared names (`:892`, `:2223`).
+
+So every admitted tuple's subject predicate is bare-or-dot-free, which is literally
+`Leaf.lean:604::NotLeafName`. **`NoLeafStoreSubjects` models an ENFORCED INVARIANT, not a
+scope carve-out** — which is why it belongs in `FullScope.lean:125::GraphAdmission` (whose
+every field cites the Python mechanism that enforces it) and NOT in `W4Fragment` (the
+honest-gaps bundle of things Python does *not* enforce). It is the same adjudication the
+board already recorded for the neighbouring `shadow_graphRec_agree` obligation — *"Python
+enforces it; the repair is faithful new modelling"* — applied to the seed side.
+
+**Why the discharge condition is not optional.** A threaded-but-undischarged premise makes
+the equivalence claim conditional on something a reader must go and verify is enforced;
+that is exactly the "assurance step that fails by passing" shape this repo treats as its
+house failure mode. Threading-then-discharging may be split across increments (each
+green-stoppable), but an undischarged premise is a landing state only for an intermediate
+commit, never for the leg.
+
+**Rejected alternatives, recorded so they are not re-litigated:**
+* *Leave it a bare hypothesis on the downstream statements.* Refused as an END state per
+  the paragraph above; permitted as a landing SEQUENCE.
+* *Bake admitted-ness into the store type, or restate the shadows over a filtered store.*
+  A far larger refactor for identical mathematical content, and off-pattern: this tree
+  already threads `BareStarCorrect.lean:44::BareStarStore` as a plain
+  `∀ t ∈ T, …` store predicate. Copy that.
+
+### 2. The design is much CHEAPER than the blocked note implies — the consumer already exists
+
+Checked first-hand this session, and it retires the framing that step 9 needs new closure
+reasoning. **`LeafRules.lean:671::rewriteClosureL_subject_not_leafNode` is already exactly
+the post-flip `hsubj` shape:**
+
+```lean
+theorem rewriteClosureL_subject_not_leafNode {S : Schema} (hnl : NoLeafSubjects S)
+    {t : Tuple} (ht : NotLeafName t.subject.predicate) :
+    ∀ u ∈ rewriteClosureL S (rawWriteTuples S t), ¬ LeafNode S (subjNode u.subject)
+```
+
+Both of its premises are accounted for: the SCHEMA side `LeafRules.lean:599::NoLeafSubjects`
+is owned (`CascadeStable.lean:839::ttuTargetsSat_notLeafName_of_noLeafSubjects`, and it is
+`decide`-able with non-vacuity witnesses at `LeafRules.lean:893`ff), and the SEED side is
+precisely the obligation this decision unblocks. So step 9 is *supply the seed premise at
+three sites*, not *prove a closure theorem*. The `.ttu` branch of
+`ReconcileCorrect.lean::rewriteStep` overwriting the subject predicate with the rule target
+— `2026-09-01e` §1's reason the sites are not free — is already handled inside
+`LeafRules.lean:629::rewriteStepL_subject_notLeafName` by the `NoLeafSubjects` half.
+
+### 3. What is NOT settled by this entry
+
+The **sizing** of the threading is still to be measured, and `2026-08-31c`'s
+`5 + 7 + 8 = 20` call-site figure remains **scout output, explicitly unverified** — under
+this tree's own rule (a site count is meaningless without its symbol list and counting
+unit) it must be re-measured before it is quoted. The step-9 **control** is unchanged and
+already specified by `2026-09-01e`: **probe 5 re-run without the `sorry`s**, plus the
+planned sabotage — thread `NoLeafStoreSubjects`, then weaken it to `True`, expecting the
+three `hsubj` sites and *nothing else* to redden.
+
+---
+
 ## Session 2026-09-01e (**step 8's free content is LANDED, and the flip's remaining cost is now EXHAUSTIVELY measured: FOUR obligations in four declarations across two files, and nothing else in the tree breaks.**)
 
 **Task taken:** 4c-ii **step 8** — "generalise the four `DerNode`-hardcoding shadow
