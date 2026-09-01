@@ -163,8 +163,14 @@ internal layer (its own header says so) and stays on `check` for the same reason
 
 **What would close it:** the `hql` guard landing on `graph_correct` WITH 4c-ii in the same
 commit — never before (today the statement is true unguarded) and never after (the gate
-would meanwhile pin a false statement). That co-landing is step 7 of the 4c-ii plan (board
-row `P3`). The accept/refuse analysis is in PROOF_STATUS
+would meanwhile pin a false statement). ⚠ **This sentence used to call that co-landing
+"step 7 of the 4c-ii plan", and "step 7" is AMBIGUOUS across three live numberings
+(corrected 2026-09-01c).** Under the LIVE ten-step plan
+(`formal/history/PROOF_STATUS.md:933-943`) **`hql` is step 10**; step 7 is the
+`ComputedRefsNotLeaf` predicate, landed 2026-09-01c, and **step 9 is the flip** — which is
+the commit `hql` must actually co-land with. `PROOF_STATUS.md:1071-1072` says "step 10"
+directly, while its own §8 says step 7; the board carried the collision too. The
+accept/refuse analysis is in PROOF_STATUS
 `## Session 2026-08-21b`, and the guard was ACCEPTED by user call on 2026-08-28: the
 narrowest repairing guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
 `isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes

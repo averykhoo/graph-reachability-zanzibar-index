@@ -15,6 +15,116 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-01c (**step 7's named premise is FALSE — Python enforces a DOT-LOCK, not declaredness. `ComputedRefsNotLeaf` landed instead, with eight pins and two sabotages; the binder threading is deferred and re-scoped from 11 sites to 14**)
+
+**Task taken:** land 4c-ii step 7 per the ten-step plan at `PROOF_STATUS.md:933-943` —
+"`ComputedRefsDeclared` + an unused `hnl` binder on `shadow_graphRec_agree`, discharged at
+11 call sites". The session was entered believing the task was the `hql` binder; see
+"ROUTING" below.
+
+### 0. ⚠ THE STEP'S NAMED PREMISE IS FALSE, AND IT WAS MEASURED, NOT ARGUED
+
+`ComputedRefsDeclared` models nothing. `zanzibar_utils_v1.py::_validate_ast_references`
+(`:910-940`) enforces a **dot-lock on REFERENCED names**, not declared-ness: `check_name`
+(`:915-919`) raises iff `'.' in name and name != '...'`, applied to `Direct` restriction
+predicates (`:926-927`), `Computed.relation` (`:929`) and both TTU names (`:930-932`).
+Declared-ness is enforced nowhere. Literal observed output of the probe:
+
+```text
+A  undeclared-operand    : ACCEPTED    -- define alias: ghost
+A2 undeclared-in-boolean : ACCEPTED    -- define alias: viewer but not ghost
+B  dotted-operand        : REFUSED -> ValueError doc#alias: 'viewer.0' is inside the
+                                      reserved leaf namespace ('.' in referenced
+                                      relation names)
+```
+
+So a declared-ness clause would be STRICTLY STRONGER than Python — it would exclude
+schemas the implementation accepts and compiles, unfaithful in the dangerous direction —
+and it would contradict `Core/Schema.lean:66-69`, whose `WF` docstring already records
+that "reference-declared-ness is handled by the `undefined ⇒ empty` convention, so they
+are not extra `WF` clauses". **The plan's own alternative at `PROOF_STATUS.md:2074-2082`,
+a `WF` clause over `relNameOK`, is ALSO wrong**: `Core/Ident.lean::BARE = "..."` contains
+a dot, so `relNameOK BARE` is false while `check_name` escapes `'...'` explicitly.
+`Leaf.lean:604::NotLeafName p := p = BARE ∨ isLeafPred p = false` is `check_name` byte for
+byte. **Predicate renamed `ComputedRefsNotLeaf`; this is a plan correction, recorded here
+rather than applied silently.**
+
+### 1. What landed
+
+`CascadeStable.lean` (after the `UntaintedShadow` abbrev, before step 6's bridge):
+`ComputedRefsNotLeaf` + its `Decidable` instance + two eliminators
+(`notLeafName_of_computedRef`, `notLeafNode_of_computedRef` — the latter is the exact
+shape a pre-widened `hv1` will want). Zero-cone: purely additive, `lake build
+ZanzibarProofs.GraphIndex.CascadeStable` green first attempt, 1056 jobs.
+
+**The change is INERT** — nothing consumes it yet. Per `docs/sabotage-procedure.md:100-141`
+that flips the sabotage's job: a green build vets nothing, so the eight pins ARE the
+evidence and the docstring says so. Witness `computedRefsNotLeaf_slV`; non-vacuity
+`..._slV_nonvacuous` (two-atom operand list); refutation `computedRefsNotLeaf_false` at
+`SlVBadRef`; **the census hole exhibited rather than argued** — `slVBadRef_hunt_holds`
+(`isDerived SlVBadRef ("doc","banned.0") = false`, i.e. `shadow_graphRec_agree`'s `hunt`
+HOLDS at a minted leaf name) with `slVBadRef_shape_reachable`; and the **discriminating
+control** `computedRefsNotLeaf_ghost_true` / `slVGhostRef_undeclared`, which is what makes
+§0 machine-checked: the dot-lock reading accepts the undeclared operand, a declared-ness
+reading would refuse it.
+
+### 2. The sabotages — and S1 is a verdict on the PINS, not on the code
+
+**(S1) `NotLeafName` → `relNameOK`**, the plan's own proposal, applied to the `def` and its
+`Decidable` instance together. (The first attempt changed only the `def` and died of an
+instance type mismatch — an instrument artifact, discarded per `:281-313`.) **S1 did not
+discriminate what it was meant to**, failing before any pin:
+`failed to synthesize Decidable (∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, relNameOK r)`.
+`relNameOK` has no `DecidablePred` instance in this tree — an independent reason to refuse
+it, but NOT the BARE-escape reason. Measured separately: `NotLeafName BARE = true`,
+`isLeafPred BARE = true`. Per `:137-141` that green was a verdict on the pins, so
+`SlVBareRef` / `computedRefsNotLeaf_bare_true` / `bare_is_leafPred` were added afterwards
+to cover the difference the sabotage could not reach.
+
+**(S2) `∀ p ∈ S.defs` → `∀ p ∈ S.defs.take 1`**, both sites. Fires, attributably:
+```text
+error: CascadeStable.lean:651:74: Tactic `decide` proved that the proposition
+  ¬ComputedRefsNotLeaf SlVBadRef
+is false
+```
+Exactly one pin red (`computedRefsNotLeaf_false`) plus the eliminator on the code side.
+All five other pins GREEN. Restored, rebuilt, rc=0.
+
+### 3. SIZING CORRECTION — "11 call sites" is low; it is 14
+
+`shadow_graphRec_agree` has **14** live term-level applications in 6 files (16 grep hits
+minus the declaration at `CascadeStable.lean:1079` and the prose citation at
+`Leaf.lean:1248`): `CascadeEnum:366`; `CascadeSettle:1119`; `CascadeStable:1147`;
+`CascadeStrataEnum:353,391,445`; `CascadeStrataResettle:1507,1539,2638,2683`;
+`CascadeStrataSettle:1600,1668,1835,3964`. Three of them (`CascadeEnum:366`,
+`CascadeStable:1147`, `CascadeStrataSettle:3964`) are `hag` CALLBACKS, which is the shape
+that makes the binder hard; "11" counts the direct sites only.
+
+### 4. DEFERRED, with the design settled — why the binder did not land
+
+The binder cannot discharge `hv1` from `ComputedRefsNotLeaf S` alone: at an ARBITRARY `r'`
+the schema-level fact says nothing, and `shadow_graphRec_agree` quantifies `r'` freely.
+`hv1` needs `NotLeafName r'`, which needs `r' ∈ computedRefs e` — and
+`ReconcileStars.lean:618` (`checkFn_agree_of_graphRec`) / `:633` (`_cd`) hand their `hag`
+callback only `isDerived S (dt, r') = false`. **That is scope-doc §11.13 trap (g), and
+this session found the way out**: `ReconcileStars.lean:622` already computes
+`fun r' hr' => hag s r' (hleafUnt r' hr')` with `hr' : r' ∈ computedRefs e` **in scope and
+discarded**. Widening `hag` to pass `hr'` through dissolves the trap. That touches
+`checkFn_agree_of_graphRec{,_cd}` (9 use sites) plus the 14 above, so it is its own
+increment and is NOT bundled here — the tree is left green and stoppable.
+
+### 5. ROUTING — the board sent this session to the wrong step, and the banner is why
+
+The board's `P3` brief reads "Next: step 7 (row 27)", which conflates two numberings.
+Under the LIVE ten-step plan (`:933-943`) step 7 is this item and `hql` is **step 10**;
+`:1071-1072` says so in as many words ("red until `hql` lands at step 10") while §8
+elsewhere calls `hql` step 7. `docs/latent-gaps.md:166` also calls the `hql` co-landing
+"step 7 of the 4c-ii plan". **`hql` was not landable in any case** and this was re-verified
+first-hand: `graph_correct` is a proved theorem of today's tree (`FullScope.lean:363-372`),
+so the binder would be a weakening of a byte-pinned headline that nothing in the gate can
+distinguish from not adding it — `docs/latent-gaps.md:164-167` already adjudicates it
+"never before … never after". Board/banner wording corrected this session.
+
 ## Session 2026-09-01b (**the Class-B repair is LANDED — rows 46/56 are on `checkPublic`, kernel-checked, with three new pinned condition-2 instruments and two sabotage runs. All four binding conditions discharged.**)
 
 **Task taken:** execute the repair `## Session 2026-09-01` adjudicated. That entry was a
