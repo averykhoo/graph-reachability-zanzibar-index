@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Trap (g) dissolved: hag carries the membership. Binder now blocked on STEP 9 -- 3 of 14 sites are query-relation.
+brief: Step 8's free half landed; flip MEASURED at 5 sites/4 decls/2 files. Step 9 blocked on a DESIGN CALL, not proof.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-01d
-updated: 2026-09-01d
+moved: 2026-09-01e
+updated: 2026-09-01e
 closed:
 ---
 
@@ -585,3 +585,7 @@ minutes and will say.
 ORDERING CONSEQUENCE: shadow_graphRec_agree and the hsubj sites red in the SAME first wave as
 untaintedShadow_applyD, so step 8 alone does NOT make the flip green. Step 9 still needs the
 seed-side and operand-side premises that no declaration owns today.
+
+### 2026-09-01e
+
+Step 8's free content LANDED: untaintedShadow_applyD + untaintedShadow_applyLoggedR{,_d} PRE-WIDENED in place with step 5's `first | <post-flip> | <today's>` idiom -- zero new declarations, zero signature changes, zero call-site churn, zero pin exposure (Audit.lean:786 cannot move). hoffW costs NO new premise: W3cJobValid's hcb makes every candidate BARE, and Leaf.lean::bare_subjNode_not_leafNode refutes LeafNode from it. Green first attempt, 1089 jobs, zero of a six-cycle budget. MEASUREMENT: staging the flip probe with `sorry` on each already-blocked obligation lets lake build past the red module -- wave 2 is 8 errors in 4 declarations, ALL in CascadeStrataSettle.lean, and with the flip applied and only the FOUR unowned obligations stubbed the ENTIRE tree builds green. Flip cost = 5 repair sites / 4 declarations / 2 files, retiring 2026-08-30c's '~20 sites in 3 files'. Trap (k) exactly: S1 (hoffW narrowed to its DerNode half) is GREEN unflipped and RED flipped, so the flip probe -- not a weakening -- is the standing control for a PRE-WIDEN. STEP 9 IS BLOCKED ON A DESIGN DECISION, NOT PROOF EFFORT: the seed-side NotLeafName t.subject.predicate at :1331/:718/:1317 wants a store-level NoLeafStoreSubjects T threaded through three signatures, which changes downstream statements and hence potentially the headline theorems -- the human call. Record: PROOF_STATUS ## Session 2026-09-01e.

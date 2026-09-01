@@ -1489,6 +1489,43 @@ re-check, ~20 sites in 3 files go genuinely red.**
     literal output: `PROOF_STATUS.md` `## Session 2026-09-01b`. What remains of this item
     is row 27 / step 7, unchanged.
 
+* **(n) NEW 2026-09-01e — the flip's cost is MEASURED END TO END, and (k) has a second,
+  sharper exemplar: for a PRE-WIDEN, the flip PROBE is the control and no weakening can be.**
+  Step 8's free half landed by PRE-WIDEN in place rather than GENERALISE
+  (`CascadeStable.lean::untaintedShadow_applyD`,
+  `CascadeStrataSettle.lean::untaintedShadow_applyLoggedR{,_d}`), using step 5's
+  `first | <post-flip form> | <today's form>` idiom. Three durable facts fall out.
+  * **The "~20 sites in 3 files go genuinely red" scout figure (2026-08-30c) is RETIRED.**
+    Measured: **5 repair sites, 4 declarations, 2 files.** With the abbrev flipped and only
+    the four unowned obligations `sorry`-stubbed, the **entire tree builds green (1089
+    jobs)** — `CascadeSettle`, `CascadeStrataResettle`, `CascadeEnum`, `CascadeStrataEnum`,
+    `Equiv`, `Audit`, `Scratch4cii` and every headline theorem included. ⚠ This sizes the
+    flip's STRUCTURE. It does not license landing it: `sorry` supplies precisely the
+    false-as-written content, so the green is the claim *"only those four obligations stand
+    between today's tree and the flip"*, not *"the flip is sound"*.
+  * **How to close a probe's lower bound, and it is reusable.** Lean does not build
+    dependents of a failed module, which is why 2026-09-01d's "6 errors in 3 declarations"
+    saw only one third of the flip. Stub each *already-known-blocked* obligation with
+    `sorry` — a warning, not an error — and `lake` proceeds past the red module and reveals
+    the next wave. Wave 2 was **8 errors in 4 declarations, all in
+    `CascadeStrataSettle.lean`**; full first-plus-second wave, **14 errors in 7
+    declarations**. Never report a probe's error count without saying which modules it
+    could not reach.
+  * **(k) generalised: an alternative that only elaborates after a re-point cannot be
+    sabotaged before it.** The post-flip branch of a `first | … | …` is dead code today, so
+    S1 (`hoffW` narrowed to its `DerNode` half at all three sites) is **GREEN unflipped —
+    `Build completed successfully (1089 jobs). rc=0`** — and **RED under the flip**, one
+    attributable error at `CascadeStable.lean:1248` (itself a lower bound; the build stops
+    there). Run BOTH halves and record BOTH; a PRE-WIDEN whose only evidence is a
+    today-tree green has no evidence at all.
+  * **What is left is not step 8.** Step 9 is **blocked on a design decision, not proof
+    effort**: the seed-side `NotLeafName t.subject.predicate` at
+    `::reachedByW3d_shadow` / `::reachedByW3d2_shadow{,_d}` wants a store-level
+    `NoLeafStoreSubjects T` threaded through three signatures — changing their premises,
+    hence downstream statements, hence potentially the headline theorems. That is the
+    human call `P3` already carries. **Do not thread it unasked.** Full record:
+    `PROOF_STATUS.md` `## Session 2026-09-01e`.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

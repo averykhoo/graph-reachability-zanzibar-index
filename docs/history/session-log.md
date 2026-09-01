@@ -25,6 +25,50 @@ from here.
 
 ---
 
+## 2026-09-01e — step 8's free content landed; the flip's remaining cost is now a CLOSED list of four
+
+rows: `P3`
+
+**Step 8, taken by the cheaper route the previous entry flagged but could not check.**
+`untaintedShadow_applyD` and both `untaintedShadow_applyLoggedR{,_d}` are PRE-WIDENED in
+place with step 5's `first | <post-flip> | <today's>` idiom — no new declaration, no
+signature change, no call-site churn, and no exposure for `Audit.lean:786`'s name pin. The
+widened subject-side obligation costs **no new premise**: `W3cJobValid`'s `hcb` already
+makes every candidate's predicate `BARE`. Green first attempt at every stage, 1089 jobs,
+zero of a six-cycle abort budget.
+
+**The bigger result is the measurement.** 2026-09-01d's "6 errors in 3 declarations" was a
+LOWER bound because Lean does not build dependents of a failed module. Running the probe in
+five stages — stubbing each *known-blocked* obligation with `sorry` so the build proceeds
+past the red module — closed it: the second wave is **8 more errors in 4 declarations, all
+in `CascadeStrataSettle.lean`**, and with the flip applied and only the four unowned
+obligations stubbed **the whole tree builds green**. So the flip's complete remaining cost
+is **5 repair sites in 4 declarations across 2 files** — 3 free and now landed, 1 free at
+step 9 (delete two `Or.inl` wrappers), and 4 obligations blocked on premises nothing owns.
+That replaces 2026-08-30c's scout figure of "~20 sites in 3 files".
+
+**Trap (k) in its exact form, and it is recorded rather than papered over.** The post-flip
+alternative of a `first | … | …` block is dead code today, so the sabotage (`hoffW` narrowed
+to its `DerNode` half) is **GREEN unflipped and RED under the flip** — both halves run, both
+literal outputs in the entry. The standing control for this kind of change is the flip
+probe, not a weakening.
+
+Formal detail, the five-probe table, the literal sabotage output and the gate-safety check:
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-01e`.
+
+Still owed: nothing from this session. **Step 9 is blocked on a DESIGN DECISION, not proof
+effort** — the seed-side `NotLeafName t.subject.predicate` wants a store-level
+`NoLeafStoreSubjects T` threaded through `reachedByW3d_shadow` / `reachedByW3d2_shadow{,_d}`,
+which changes their premises and hence potentially the headline theorems; the board already
+records that as needing a human call. Do not thread it unasked. `hv1` still waits on row
+27's query-level premise.
+
+```text
+task lint: clean (12 checks, 156 task file(s) parsed)
+```
+read: board + HANDOFF
+
 ## 2026-09-01d — trap (g) dissolved: `hag` now carries the membership it always threw away
 
 rows: `P3`

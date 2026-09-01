@@ -289,7 +289,29 @@ transport mirrors verbatim: pass edges are `DerNode`-targeted, removals never hi
 shadow edges, sources stay bare. -/
 
 /-- One routed LOGGED pass preserves the shadow (the emission row is
-    edge/node-inert; mirror of `untaintedShadow_applyD`). -/
+    edge/node-inert; mirror of `untaintedShadow_applyD`).
+
+    **PRE-WIDENED (4c-ii step 8, 2026-09-01e), and this declaration is why the step's
+    first-wave error count was a LOWER bound.** Lean does not build dependents of a
+    failed module, so the 2026-09-01d flip probe — which stopped at
+    `CascadeStable.lean` — never compiled this file at all and could not see it. It was
+    measured this session by stubbing the four unowned obligations with `sorry` so the
+    build reached here. Two errors in this declaration and two in
+    `::untaintedShadow_applyLoggedR_d` — the same `Invalid ⟨…⟩` (build the extras
+    witness) / `unsolved goals` (destructure it) pair as `untaintedShadow_applyD`, one
+    at each of the two steps repaired below. (The probe's line numbers are recorded in
+    the session entry and are NOT the landed ones — this edit moved them.)
+
+    Repaired the same way and for the same reason — step 5's
+    `first | <post-flip form> | <today's form>` idiom, no new declaration, no signature
+    change, no call-site churn. ⚠ Unlike `untaintedShadow_applyD` this name carries **no**
+    `Audit.lean` `#print axioms` row, so a rename here would be silently unpinned rather
+    than caught by the gate; do not rename it.
+
+    ⚠ The post-flip alternative is dead code today and no weakening can reach it (scope
+    doc §11.13 trap (k)). Its control is the flip probe, whose 2026-09-01e run took this
+    file from 8 errors in 4 declarations to 4 in 2 — the two remaining being the `hsubj`
+    sites, which are blocked, not free. -/
 theorem untaintedShadow_applyLoggedR {S : Schema} {T : Store} {σ σ0 : GraphState}
     {j : W3cJob}
     (hsh : UntaintedShadow S σ σ0) (h0 : ReachedByRules σ0 S T)
@@ -324,13 +346,28 @@ theorem untaintedShadow_applyLoggedR {S : Schema} {T : Store} {σ σ0 : GraphSta
     unfold W3cJob.applyLoggedR
     rw [pushDelta_nodes]
     rfl
+  -- **PRE-WIDENED (4c-ii step 8).** The subject-side obligation at the POST-FLIP extras
+  -- predicate, with zero new premises: `hcb` (a `W3cJobValid` conjunct) makes every
+  -- candidate's predicate `BARE`, which `Leaf.lean::bare_subjNode_not_leafNode` refutes
+  -- `LeafNode` from outright. Mirror of `CascadeStable.lean::untaintedShadow_applyD`.
+  have hoffW : ∀ c ∈ j.cands,
+      ¬ (DerNode S (subjNode c) ∨ LeafNode S (subjNode c)) := by
+    rintro c hc (⟨dt, on, R, _, hRne', _, hkey⟩ | hleaf)
+    · have hp : R = c.predicate := by
+        have := congrArg NodeKey.pred hkey.symm
+        simpa [objNode_pred, subjNode_pred] using this
+      rw [hcb c hc] at hp
+      exact hRne' hp
+    · exact bare_subjNode_not_leafNode (hcb c hc) hleaf
   refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
   · -- classify
     intro ab hab
     obtain ⟨a, b⟩ := ab
     rcases hsound a b hab with hold | ⟨c, _, _, h2⟩
     · exact hsh.classify (a, b) hold
-    · exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
+    · first
+      | exact Or.inr (Or.inl ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩)
+      | exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
   · -- sub
     intro ab hab
     rw [hEfix]
@@ -359,12 +396,10 @@ theorem untaintedShadow_applyLoggedR {S : Schema} {T : Store} {σ σ0 : GraphSta
     intro k hk y hy
     rcases hsound k y hy with hold | ⟨c, hc, h1, _⟩
     · exact hsh.term k hk y hold
-    · obtain ⟨dt, on, R, _, hRne', _, hkey⟩ := hk
-      have : R = c.predicate := by
-        have hp := congrArg NodeKey.pred (hkey.symm.trans h1)
-        simpa [objNode_pred, subjNode_pred] using hp
-      rw [hcb c hc] at this
-      exact hRne' this
+    · subst h1
+      first
+      | exact hoffW c hc hk
+      | exact hoffW c hc (Or.inl hk)
 
 /-- The routed logged batch preserves the shadow — every prefix state of either
     round's job loop is shadowed (the read bridge holds MID-ROUND). -/
@@ -991,7 +1026,11 @@ theorem untaintedShadow_writeLeg_derived {S : Schema} :
     `hSV`/`hCO` route to "no σ0 edge targets the job's R-node"
     (`reachedByRules_derived_no_inedge`), take σ0's edge-target UNTAINTEDNESS directly —
     the filtered-σ0 rebuild supplies it via
-    `reachedByRulesAdmitted_untStore_edge_untainted`, no `ComputedOnly` needed. -/
+    `reachedByRulesAdmitted_untStore_edge_untainted`, no `ComputedOnly` needed.
+
+    **PRE-WIDENED (4c-ii step 8, 2026-09-01e)** — see `untaintedShadow_applyLoggedR`
+    above for the measurement and the idiom. Its `hunt` route to `hnojob` is
+    extras-independent, so the two repaired steps are exactly the same two. -/
 theorem untaintedShadow_applyLoggedR_d {S : Schema} {T : Store} {σ σ0 : GraphState}
     {j : W3cJob}
     (hsh : UntaintedShadow S σ σ0)
@@ -1026,13 +1065,28 @@ theorem untaintedShadow_applyLoggedR_d {S : Schema} {T : Store} {σ σ0 : GraphS
     unfold W3cJob.applyLoggedR
     rw [pushDelta_nodes]
     rfl
+  -- **PRE-WIDENED (4c-ii step 8).** The subject-side obligation at the POST-FLIP extras
+  -- predicate, with zero new premises: `hcb` (a `W3cJobValid` conjunct) makes every
+  -- candidate's predicate `BARE`, which `Leaf.lean::bare_subjNode_not_leafNode` refutes
+  -- `LeafNode` from outright. Mirror of `CascadeStable.lean::untaintedShadow_applyD`.
+  have hoffW : ∀ c ∈ j.cands,
+      ¬ (DerNode S (subjNode c) ∨ LeafNode S (subjNode c)) := by
+    rintro c hc (⟨dt, on, R, _, hRne', _, hkey⟩ | hleaf)
+    · have hp : R = c.predicate := by
+        have := congrArg NodeKey.pred hkey.symm
+        simpa [objNode_pred, subjNode_pred] using this
+      rw [hcb c hc] at hp
+      exact hRne' hp
+    · exact bare_subjNode_not_leafNode (hcb c hc) hleaf
   refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
   · -- classify
     intro ab hab
     obtain ⟨a, b⟩ := ab
     rcases hsound a b hab with hold | ⟨c, _, _, h2⟩
     · exact hsh.classify (a, b) hold
-    · exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
+    · first
+      | exact Or.inr (Or.inl ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩)
+      | exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
   · -- sub
     intro ab hab
     rw [hEfix]
@@ -1061,12 +1115,10 @@ theorem untaintedShadow_applyLoggedR_d {S : Schema} {T : Store} {σ σ0 : GraphS
     intro k hk y hy
     rcases hsound k y hy with hold | ⟨c, hc, h1, _⟩
     · exact hsh.term k hk y hold
-    · obtain ⟨dt, on, R, _, hRne', _, hkey⟩ := hk
-      have hcp : R = c.predicate := by
-        have hp := congrArg NodeKey.pred (hkey.symm.trans h1)
-        simpa [subjNode_pred, objNode_pred] using hp
-      rw [hcb c hc] at hcp
-      exact hRne' hcp
+    · subst h1
+      first
+      | exact hoffW c hc hk
+      | exact hoffW c hc (Or.inl hk)
 
 /-- The routed logged batch preserves the shadow, `_d` form. -/
 theorem untaintedShadow_reconcileJobsLR_d {S : Schema} {T : Store} :
