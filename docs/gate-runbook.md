@@ -292,9 +292,11 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   axioms, which is why the rule is scoped to the headline set.)
 - **4b STATEMENT** — `formal/conformance/statement_pin.py` extracts each headline
   theorem's statement text (binders + `:` + conclusion, up to the top-level `:=`)
-  from the Lean source and diffs it against `formal/headline_statements.txt` (26
-  statements: T0a/T0b, T1, T4, T5, T2a/T2b/T3/T6, the Phase-6 driver theorems and the
-  `W4Witness*` non-vacuity witnesses). The **proof** is not pinned — refactoring a
+  from the Lean source and diffs it against `formal/headline_statements.txt`
+  (T0a/T0b, T1, T4, T5, T2a/T2b/T3/T6, the Phase-6 driver theorems, the
+  `W4Witness*` non-vacuity witnesses, and everything pinned since — the golden
+  itself is the live roster; no count belongs in prose, per CLAUDE.md's
+  one-machine-checked-place rule). The **proof** is not pinned — refactoring a
   proof is normal work; changing what is CLAIMED is not. Regenerate deliberately:
   `"$PY" formal/conformance/statement_pin.py --generate`.
   *Honest scope:* this pins surface syntax **of the statement only**. On its own it

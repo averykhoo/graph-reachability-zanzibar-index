@@ -1,14 +1,14 @@
-2026-09-01 — all ten gate phases green on this tree; `lean` re-run after the doc edits.
+2026-09-01b — gate re-run after the doc edits; verdict line in the session-log entry.
 
-(nav) **THE CLASS-B REPAIR IS DECIDED (user, 2026-09-01) — nothing is waiting on you.** Rows
-46/56 (`correct_applies` / `::w3d2E_correct_applies`) **migrate onto `checkPublic`**; the `hql`
-binder is **REFUSED** there — they are the non-vacuity instruments, and a binder on a
-satisfiability witness is the house failure mode. **Row 27 keeps its 2026-08-28 binder.**
+(nav) **THE CLASS-B REPAIR IS LANDED (2026-09-01b) — all four conditions discharged.** Rows
+46/56 (`correct_applies` / `::w3d2E_correct_applies`) are now stated over `checkPublic`, the
+`hql` binder **REFUSED** on both. **Row 27 keeps its binder, so the `hql` surface is ONE row
+again** — by migration, not by the refuted 2026-08-28c argument. **Next on `P3`: step 7.**
 
-⚠ **Four conditions bind the repair session:** own commit **BEFORE** step 7 · sabotage the
-migrated witnesses' **NON-fence** branch · re-verify the two `2026-08-31c` UNVERIFIED
-paragraphs · doc sweep + `lean` re-run. Grounds + the one known unknown
-(`reachedByW3d2C_schema` may not exist — a grep, not a build): PROOF_STATUS `2026-09-01`.
-
-`2026-08-31c`: the spike REACHES `graph_correct`; **three** pinned rows, not one — §11.13 (e)
-confirmed, (l) adjudicated, (k) new. `hv3` free and green: **4 obligations left, not 5.**
+**The known unknown is REFUTED, kernel-checked:** no `reachedByW3d2C_schema` exists or is
+needed — the grep wanted the **wrong name**; row 46 composes via
+`reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`.
+⚠ **`statement_pin.py`'s list order IS `headline_statements.txt`'s line order — file new pins
+at the TAIL.** Filing this session's three thematically shifted `w3d2E_correct_applies` 56→59
+and the scope doc's `53, 59, 64` list, falsifying every living "rows 46/56" citation before it
+was caught. New pins are 65-67. Condition 2's three instruments: PROOF_STATUS `2026-09-01b`.

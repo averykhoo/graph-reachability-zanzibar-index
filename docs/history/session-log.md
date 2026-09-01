@@ -25,6 +25,71 @@ from here.
 
 ---
 
+## 2026-09-01b — the Class-B repair LANDS: rows 46/56 on `checkPublic`, all four conditions discharged
+
+rows: `P3`
+
+**The execution session for what `2026-09-01` decided.** That entry adjudicated and built
+nothing; this one built it. Rows 46 and 56 — `W4WitnessDirect.correct_applies` and
+`::w3d2E_correct_applies` — are now stated over `GraphModel.checkPublic`. Neither took an
+`hql` binder. Row 27 is untouched, so **the remaining `hql` surface is ONE row again** — by
+migration, not by the 2026-08-28c argument that was refuted for claiming it.
+
+Formal detail, both sabotages' literal output, and the gate record:
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-09-01b`. The short version:
+
+* **The known unknown is REFUTED, and by the kernel rather than a source read.** There is
+  no `reachedByW3d2C_schema`, none is needed, and the 2026-08-31c grep that failed to find
+  one **was looking for the wrong name**: row 46's schema bridge composes as
+  `reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`. It typechecks; `lake build
+  ZanzibarProofs.FullScope` was green on the first attempt. The pessimistic "may need
+  landing" branch never existed.
+* **Condition 2 was the only real work.** `fence_changes_answer` proves the fence *fires*;
+  nothing proved a migrated row still carries the audited core through the other branch,
+  which is how these two could have degraded into certifying the fence alone. Three new
+  statement-pinned instruments close it: `public_grant_survives_fence` (the fence is not
+  total — new `σPub`/`qPub` differ from `σLeaf`/`qLeaf` only in the leaf-ness of the name)
+  and `correct_applies_nonfence` / `w3d2E_correct_applies_nonfence` (each recovers the
+  ORIGINAL unfenced statement at a query the fence provably does not touch). **Both
+  sabotages were run**, and the observed output is in the docstrings.
+* **Condition 3's two UNVERIFIED claims were re-verified first-hand, and both held.**
+  `headline_definitions.txt` needed no regeneration — checked by inspection and then
+  empirically, by regenerating it and finding it byte-identical. `audited_theorems.txt`
+  pins names only, per its own header.
+* ⚠ **A footgun found and disarmed: `statement_pin.py`'s list order IS the golden's line
+  order.** Filing the three new pins thematically, next to the `fence_*` pins they belong
+  with, moved `w3d2E_correct_applies` from row 56 to 59 and shifted the scope doc's
+  `53, 59, 64` enumeration — **silently falsifying every living "rows 46/56" citation in
+  the repo**, the same rot as the stale `:45`/`:55` numbering already on record. The pins
+  were appended at the list tail instead (rows 65-67, nothing shifted; 46/53/56/59/64
+  re-verified), with a ⚠ comment there so the next person files the same way. This also
+  surfaced a pre-existing off-by-one: `formal/HANDOFF.md` cited `unfenced_grants` as
+  `:51`, and it is `:52`.
+* **Doc sweep:** `formal/HANDOFF.md`, `HANDOFF.md`'s banner + `P3` row, `tasks/BANNER.md`,
+  `docs/latent-gaps.md` (the `hql`-guard section rewritten to the current one-row truth —
+  that file has replace semantics, so the stacked corrections were folded in, not
+  extended), `docs/gate-runbook.md` (a rotten hardcoded "26 statements" count dropped for
+  a pointer at the golden — no count belongs in prose), and a dated **(m)** appended to
+  scope doc §11.13 marking (e)/(l) spent and correcting what they assert.
+
+**Gate:** all ten phases green on this tree; `lean` re-run last, after every `*.md` edit.
+`lean` failed once mid-session and correctly — step 4e caught `FINAL_REVIEW.md`'s counts
+block gone stale against the two new `#print axioms` lines; regenerated with
+`doc_counts --generate`. One red was self-inflicted: a 21-line `tasks/BANNER.md` against a
+14-line cap, which surfaced as two FAILING `tests-tile` phases via
+`test_tasktool.py::test_sabotage_live_blind_parser`'s baseline-green precondition.
+`task.py lint` reports that in one second — **run it right after touching `tasks/`**,
+rather than paying for it in tile runs.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 156 task file(s) parsed)`
+
+read: board only
+
+**Still owed:** nothing from this session. `P3` continues at **step 7** (row 27's `hql`
+guard, co-landing with 4c-ii). The seed-side `NoLeafStoreSubjects T` / ~20-call-site
+figure remains **scout output, unverified** — re-check it before minting the predicate.
+
 ## 2026-09-01 — the Class-B repair is ADJUDICATED: rows 46/56 migrate onto `checkPublic`, the `hql` binder refused
 
 rows: `P3`

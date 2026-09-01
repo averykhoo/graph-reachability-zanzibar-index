@@ -90,6 +90,7 @@ W4WitnessDirect.accepts
 W4WitnessDirect.admission
 W4WitnessDirect.admission4
 W4WitnessDirect.correct_applies
+W4WitnessDirect.correct_applies_nonfence
 W4WitnessDirect.coverage_applies
 W4WitnessDirect.final_applies
 W4WitnessDirect.final_applies4
@@ -99,6 +100,7 @@ W4WitnessDirect.outside_old_admission
 W4WitnessDirect.outside_old_admission4
 W4WitnessDirect.toC_applies
 W4WitnessDirect.w3d2E_correct_applies
+W4WitnessDirect.w3d2E_correct_applies_nonfence
 W4WitnessDirect.w4fragment
 W4WitnessDirect.w4fragment4
 W4WitnessDirect.within_scope

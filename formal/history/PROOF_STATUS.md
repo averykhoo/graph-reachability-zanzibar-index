@@ -15,7 +15,138 @@ HANDOFF.md's "The next task".
 
 ---
 
-## Session 2026-09-01 (**the Class-B repair is ADJUDICATED — `checkPublic` migration ACCEPTED for rows 46/56, the `hql` binder REFUSED on the non-vacuity instruments. A decision entry: no Lean file, proof, pin or golden was modified.**)
+## Session 2026-09-01b (**the Class-B repair is LANDED — rows 46/56 are on `checkPublic`, kernel-checked, with three new pinned condition-2 instruments and two sabotage runs. All four binding conditions discharged.**)
+
+**Task taken:** execute the repair `## Session 2026-09-01` adjudicated. That entry was a
+decision entry and built nothing; this one is the build. Rows 46 and 56 —
+`W4WitnessDirect.correct_applies` and `::w3d2E_correct_applies` — are now stated over
+`GraphModel.checkPublic`, neither took an `hql` binder, row 27 is untouched.
+
+### 1. WHAT LANDED
+
+Both theorems keep every hypothesis they had; only the conclusion moved, from
+`GraphModel.check σ q = sem Sd Td q` to `GraphModel.checkPublic σ q = sem Sd Td q`. Each
+proof gained the two-branch shape `graph_correct_public` (`FullScope.lean:406`) already
+used: `unfold GraphModel.checkPublic; split`, fenced arm closed by
+`not_mem_keys_of_publicOfLeaf_isSome` into `semAux_undeclared`, unfenced arm keeping the
+existing `exact` onto `graph_correct_w3d2_d` / `graph_correct_w3d2E_d`. No call site
+changed, because neither theorem had a Lean consumer — a grep over `formal/` found only
+`#print axioms` lines and prose.
+
+**The one known unknown is REFUTED, and now by the kernel rather than by a source read.**
+`## Session 2026-09-01` §3 closed it on a name grep and explicitly flagged
+(`:117-124`) that no build had confirmed it. It is confirmed: row 46's schema bridge is
+`reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)` and it typechecks. There is no
+`reachedByW3d2C_schema`, none is needed, and **the 2026-08-31c grep was looking for the
+wrong name** — the pessimistic "may need landing" branch never existed. Row 56 uses the
+direct `reachedByW3d2E_schema h`, as predicted.
+
+`lake build ZanzibarProofs.FullScope` → `Build completed successfully (1080 jobs)`, green
+on the first attempt; full-tree `lake build` → `Build completed successfully (1089 jobs)`.
+
+### 2. CONDITION 2 — THE NON-FENCE SABOTAGE, WHICH IS THE ONLY REAL WORK HERE
+
+The hazard named by the condition is exact: `fence_changes_answer` proves the fence
+FIRES, and a `checkPublic` equation has two branches, so nothing yet proved the migrated
+rows still carry the audited core's content through the other one. Left there, the two
+satisfiability instruments could degrade into certifying the fence alone — passing for
+the wrong reason, which is the failure an instrument is least able to notice about
+itself. **Three new declarations close it, and all three are statement-pinned:**
+
+* `public_grant_survives_fence : GraphModel.checkPublic σPub qPub = true` — the fence is
+  not TOTAL. New `σPub`/`qPub` are `σLeaf`/`qLeaf` with the public name `"approver"` in
+  place of `leafPred "approver" 0` and nothing else changed: the discriminating pair the
+  condition asked for, the `Leaf.lean::wAllNode_not_leafNode` pattern. This is the
+  end-to-end half; `fence_not_identity` was only the guard-level half, and a fence can
+  pass that and fail this.
+* `correct_applies_nonfence` / `w3d2E_correct_applies_nonfence` — each RECOVERS the
+  original unfenced `GraphModel.check σ q = sem Sd Td q` from the migrated row at a query
+  the fence provably does not touch (`hty : q.object.type = "doc"`,
+  `hrel : q.relation = "approver"`, discharged through `fence_not_identity` and
+  `checkPublic_of_not_leaf`). Each is therefore RED unless the non-fence branch really
+  does discharge the audited core. Two declarations, not one shared: row 56 discharges
+  `DirectArmsConcrete`, which row 46 never touches, and `toC_applies` projects the wrong
+  way (`E → C`) to certify anything about row 56's own core from row 46's.
+
+**Both sabotages were RUN, and the literal output is in the docstrings** (per
+`docs/sabotage-procedure.md`; the instrument is controlled, not just the subject):
+
+* Drop the `hty`/`hrel` public-name hypotheses from `correct_applies_nonfence` — the
+  narrowest plausible weakening, i.e. the claim "the recovery holds at every query" —
+  with the `rw` adjusted so the failure is about content and not a dangling identifier.
+  Observed: `error: ZanzibarProofs/FullScope.lean:1234:15: Type mismatch /
+  fence_not_identity / has type / publicOfLeaf Sd "doc" "approver" = none / but is
+  expected to have type / publicOfLeaf Sd q.object.type q.relation = none`.
+* Swap `public_grant_survives_fence`'s pair partner to `σLeaf`/`qLeaf` — same real grant
+  (`unfenced_grants` machine-checks the unfenced read still grants there, so the flip
+  cannot be blamed on a missing edge; §11.13 (k)'s redundant-guard trap), sole difference
+  the leaf-ness. Observed: ``error: ZanzibarProofs/FullScope.lean:1006:86: Tactic `decide`
+  proved that the proposition / GraphModel.checkPublic σLeaf qLeaf = true / is false``.
+
+Both reverted; the tree is green with the instruments in their intended form.
+
+### 3. CONDITION 3 — THE TWO `2026-08-31c` UNVERIFIED CLAIMS, RE-VERIFIED
+
+Both were true, and neither was taken from the prose that asserted them.
+
+* **`headline_definitions.txt` needs no regeneration.** Verified twice: by inspection
+  first (`checkPublic`:54, `isLeafPred`:147, `leafPublic`:189, `publicOfLeaf`:190 are all
+  already pinned), then empirically — `statement_pin.py --generate` rewrote the file and
+  git reports it byte-identical. The second check is the one worth having.
+* **`audited_theorems.txt` pins names only.** Its own header (`:3-5`) says the live
+  extraction must be a SUPERSET of the listed names against `#print axioms` commands, so
+  a statement change cannot move it. Confirmed: the two migrated names are unchanged
+  there. Two names were ADDED (the `_nonfence` instruments, with matching `#print axioms`
+  in `Audit.lean`) — additive, and consistent with the local convention that the
+  `*_applies` rows are axiom-audited while the `fence_*` pins are statement-pinned only.
+
+### 4. ⚠ A FOOTGUN FOUND AND DISARMED — PIN ORDER IS CITATION ORDER
+
+Filing the three new pins thematically, next to the `fence_*` pins they belong with,
+moved `w3d2E_correct_applies` from golden row 56 to row 59 and shifted the scope doc's
+`28, 30, 31, 32, 34, 36, 53, 59, 64` enumeration — **silently falsifying every living
+"rows 46/56" citation in the repo**, which is the same rot as the stale `:45`/`:55`
+numbering this ledger already records at `:1659`. `statement_pin.py`'s list order IS the
+golden's line order. The pins were moved to the END of the list instead, where they shift
+nothing (rows 46/53/56/59/64 re-verified to name exactly what the docs claim; the new
+pins are 65-67), and a ⚠ comment now says so at the list tail so the next person files
+there too. The doc sweep also fixed a pre-existing off-by-one this surfaced:
+`formal/HANDOFF.md` cited `unfenced_grants` as `:51`; it is `:52` (`:51` is
+`fence_untainted_leaf`).
+
+### 5. CONDITION 1 AND CONDITION 4
+
+Condition 1 — its own session, its own green commit, landing BEFORE step 7 — is satisfied
+by this session: a separate reviewable diff, no 4c-ii cone touched, nothing about step 7
+started. Condition 4 — doc sweep in the same commit, `verify.sh lean` re-run AFTER the
+`*.md` edits per `CLAUDE.md`'s `t2a` note — is recorded in §6.
+
+### 6. THE GATE
+
+All ten phases green on this tree. `lean` was run twice: once mid-session (it FAILED, and
+correctly — step 4e caught `FINAL_REVIEW.md`'s generated counts block gone stale against
+the two new `#print axioms` lines, `583→585` audited / `582→584` pinned; regenerated with
+`python -m formal.conformance.doc_counts --generate`), and once at the END, after every
+`*.md` edit, per the `t2a` note. Pin results on the final tree: headline statement pin
+49/49, definition pin 161/161, audited-name identity 584 pinned / 585 live (superset
+holds), `CORRESPONDENCE.md` 541 anchors resolved.
+
+⚠ **One red was self-inflicted and worth recording, because the instrument that caught it
+was not the one being watched.** The rewritten `tasks/BANNER.md` ran to 21 lines against a
+14-line cap, and it surfaced as `tests-tile:1/4` and `2/4` FAILING in
+`tests/test_tasktool.py::test_sabotage_live_blind_parser` /
+`::test_sabotage_live_min_parsed_floor` — whose BASELINE-green precondition on a copy of
+the live corpus is what noticed. `python scripts/task.py lint` reports it directly and in
+one second; running the gate first cost two tile runs. **Run `task.py lint` immediately
+after touching anything under `tasks/`.**
+
+**What is NOT closed.** Row 27 (`graph_correct`) still needs its `hql` guard when 4c-ii
+lands; that is step 7 and it is unchanged by this session. The seed-side
+`NoLeafStoreSubjects T` / ~20-call-site figure from `2026-08-31c` §3 remains **scout
+output, unverified** — it was not on this session's path and is still to be re-checked
+before the predicate is minted.
+
+ — `checkPublic` migration ACCEPTED for rows 46/56, the `hql` binder REFUSED on the non-vacuity instruments. A decision entry: no Lean file, proof, pin or golden was modified.**)
 
 **Task taken:** the user call that `2026-08-31c` surfaced and deliberately did not make.
 The user asked for the recommendation to be weighed, took it, and directed that every

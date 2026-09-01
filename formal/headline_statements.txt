@@ -43,7 +43,7 @@ Zanzibar.W4WitnessUnion.within_scope	: GraphAccepts Sy
 Zanzibar.W4WitnessDirect.accepts	: WF Sd ∧ NodupKeys Sd ∧ Stratifiable Sd ∧ TtuTuplesetsDirect Sd ∧ RewriteMatchDeclared Sd ∧ RewriteRanked Sd ∧ StoreValidRulesD Sd Td
 Zanzibar.W4WitnessDirect.fragment	: (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → ComputedOrDirect e) ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → DirectArmsBare e) ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived Sd (dt, r') = true → ∀ e', Sd.lookup (dt, r') = some e' → ComputedOnly e') ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived Sd (dt, r') = true → ∀ e', Sd.lookup (dt, r') = some e' → ∀ r'' ∈ computedRefs e', isDerived Sd (dt, r'') = false) ∧ (∀ sh ∈ wildcardShapes Sd, sh.2 = BARE) ∧ (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true → exprDirects e = []) ∧ BareStarStore Td ∧ TtuStarFree Sd Td ∧ (∀ dt R, isDerived Sd (dt, R) = true → NoTtuTarget Sd R ∧ NoStoreSubjectR Td R)
 Zanzibar.W4WitnessDirect.within_scope	: GraphAccepts Sd
-Zanzibar.W4WitnessDirect.correct_applies	{σ : GraphState} (q : Query) (h : ReachedByW3d2C σ Sd Td) (hq : cascadeKeys Sd σ = []) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.check σ q = sem Sd Td q
+Zanzibar.W4WitnessDirect.correct_applies	{σ : GraphState} (q : Query) (h : ReachedByW3d2C σ Sd Td) (hq : cascadeKeys Sd σ = []) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.checkPublic σ q = sem Sd Td q
 Zanzibar.W4WitnessDirect.outside_old_admission	: ¬ StoreValidRules Sd Td
 Zanzibar.W4WitnessDirect.fence_fires_idx0	: publicOfLeaf Sd "doc" (leafPred "approver" 0) = some "approver"
 Zanzibar.W4WitnessDirect.fence_fires_idx2	: publicOfLeaf Sd "doc" (leafPred "approver" 2) = some "approver"
@@ -53,7 +53,7 @@ Zanzibar.W4WitnessDirect.unfenced_grants	: GraphModel.check σLeaf qLeaf = true
 Zanzibar.W4WitnessDirect.fence_changes_answer	: GraphModel.checkPublic σLeaf qLeaf = false
 Zanzibar.W4WitnessDirect.coverage_applies	{σ : GraphState} {on : String} (hqo : on ≠ STAR) (h : ReachedByW3d2 σ Sd Td) : W3dJobCoverage Sd Td σ (enumJob2D σ Td "doc" on "approver" (.excl (.direct [("user", BARE, false)]) (.computed "banned")))
 Zanzibar.W4WitnessDirect.toC_applies	{σ : GraphState} (h : ReachedByW3d2E σ Sd Td) : ReachedByW3d2C σ Sd Td
-Zanzibar.W4WitnessDirect.w3d2E_correct_applies	{σ : GraphState} (q : Query) (h : ReachedByW3d2E σ Sd Td) (hq : cascadeKeys Sd σ = []) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.check σ q = sem Sd Td q
+Zanzibar.W4WitnessDirect.w3d2E_correct_applies	{σ : GraphState} (q : Query) (h : ReachedByW3d2E σ Sd Td) (hq : cascadeKeys Sd σ = []) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.checkPublic σ q = sem Sd Td q
 Zanzibar.W4WitnessDirect.admission	: GraphAdmission Sd Td
 Zanzibar.W4WitnessDirect.w4fragment	: W4Fragment Sd Td
 Zanzibar.W4WitnessDirect.final_applies	{σ : GraphState} (q : Query) (h : ReachedBy σ Sd Td) (hq : Drained Sd σ) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.checkPublic σ q = sem Sd Td q
@@ -62,3 +62,6 @@ Zanzibar.W4WitnessDirect.outside_old_admission4	: ¬ StoreValidRules Sd Td4
 Zanzibar.W4WitnessDirect.admission4	: GraphAdmission Sd Td4
 Zanzibar.W4WitnessDirect.w4fragment4	: W4Fragment Sd Td4
 Zanzibar.W4WitnessDirect.final_applies4	{σ : GraphState} (q : Query) (h : ReachedBy σ Sd Td4) (hq : Drained Sd σ) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) : GraphModel.checkPublic σ q = sem Sd Td4 q
+Zanzibar.W4WitnessDirect.public_grant_survives_fence	: GraphModel.checkPublic σPub qPub = true
+Zanzibar.W4WitnessDirect.correct_applies_nonfence	{σ : GraphState} (q : Query) (h : ReachedByW3d2C σ Sd Td) (hq : cascadeKeys Sd σ = []) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) (hty : q.object.type = "doc") (hrel : q.relation = "approver") : GraphModel.check σ q = sem Sd Td q
+Zanzibar.W4WitnessDirect.w3d2E_correct_applies_nonfence	{σ : GraphState} (q : Query) (h : ReachedByW3d2E σ Sd Td) (hq : cascadeKeys Sd σ = []) (hqs : q.subject.name = STAR → q.subject.predicate = BARE) (hqo : q.object.name ≠ STAR) (hty : q.object.type = "doc") (hrel : q.relation = "approver") : GraphModel.check σ q = sem Sd Td q

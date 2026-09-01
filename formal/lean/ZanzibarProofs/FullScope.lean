@@ -972,6 +972,55 @@ theorem unfenced_grants : GraphModel.check σLeaf qLeaf = true := by decide
     a null fence cannot reproduce. Mirrors `tests/test_reg18_leaf_name_read_leak.py`. -/
 theorem fence_changes_answer : GraphModel.checkPublic σLeaf qLeaf = false := by decide
 
+/-- The DISCRIMINATING PARTNER to `σLeaf` (2026-09-01, `P3` Class-B repair condition 2).
+    Same schema, same edge shape, same subject, same object — the SOLE difference is the
+    leaf-ness of the name the edge and the query carry: the public `"approver"` here
+    against `leafPred "approver" 0` there. The pattern is
+    `GraphIndex/Leaf.lean::wAllNode_not_leafNode`'s. -/
+def σPub : GraphState :=
+  { schema := Sd
+    edges := [(subjNode ⟨"user", "alice", BARE⟩,
+               objNode ⟨"doc", "d1"⟩ "approver")]
+    nodes := [subjNode ⟨"user", "alice", BARE⟩,
+              objNode ⟨"doc", "d1"⟩ "approver"]
+    residue := fun _ _ => none
+    outbox := []
+    watermark := 0 }
+
+/-- A query at the PUBLIC name — the read that must pass the fence untouched. -/
+def qPub : Query := ⟨⟨"user", "alice", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
+
+/-- **THE FENCE IS NOT TOTAL: a real grant survives it.** Together with
+    `fence_changes_answer` this is the discriminating pair — `checkPublic` answers `false`
+    at the leaf name and `true` here, on states differing in nothing else. It is the pin
+    that refuses a fence which simply denies everything, stated at the ANSWER rather than
+    at `publicOfLeaf` alone (`fence_not_identity` is the guard-level half; this is the
+    end-to-end half, and a fence could pass the first and fail the second).
+
+    **Why condition 2 needs it.** `correct_applies` / `w3d2E_correct_applies` below are
+    now stated over `checkPublic`. A theorem `checkPublic σ q = sem Sd Td q` would be
+    empty of positive content if the fence fired everywhere — it would certify the fence
+    and nothing else, which is exactly the "passes for the wrong reason" failure the
+    migration risks. This `by decide` says the `true` branch is reachable at this very
+    schema, so the equation has something to be right about.
+
+    **Controlled 2026-09-01 by swapping the discriminating-pair partner** — restate it
+    over `σLeaf`/`qLeaf`, i.e. hold the real grant fixed and change ONLY the leaf-ness of
+    the name (`unfenced_grants` machine-checks that the unfenced read grants there too, so
+    the grant is genuinely still present and the flip cannot be blamed on a missing edge —
+    the redundant-guard trap of scope doc §11.13 (k)). Observed:
+
+        lake build ZanzibarProofs.FullScope
+        → error: ZanzibarProofs/FullScope.lean:1006:86: Tactic `decide` proved that the
+          proposition
+            GraphModel.checkPublic σLeaf qLeaf = true
+          is false
+          error: Lean exited with code 1
+
+    So this pin turns on leaf-ness alone, which is what makes it the partner to
+    `fence_changes_answer` rather than a second copy of it. -/
+theorem public_grant_survives_fence : GraphModel.checkPublic σPub qPub = true := by decide
+
 /-- **The witness store is genuinely outside the OLD admission bundle**: plain
     `StoreValidRules` (= `GraphAdmission.storeValid`) rejects the Direct-arm
     grant — its arm is under `excl`, so `exprDirects` on the derived def is
@@ -1101,16 +1150,113 @@ theorem within_scope : GraphAccepts Sd := by
     `graph_correct_w3d2_d` instantiates at the witness pair with every
     schema/store hypothesis closed by `accepts` + `fragment` — the machine check
     that the Direct-arm fragment's hypothesis set is satisfiable by a real
-    compiled Direct-arm boolean schema (the attack of record for a widening). -/
+    compiled Direct-arm boolean schema (the attack of record for a widening).
+
+    **Restated over `checkPublic` on 2026-09-01** (`P3` leg 7, Class-B repair, user call;
+    grounds in `formal/history/PROOF_STATUS.md ## Session 2026-09-01`). After the 4c-ii
+    re-point the graph mints leaf-family nodes, and at a query naming one the UNFENCED
+    read grants while `sem` denies — so the old `GraphModel.check σ q = sem Sd Td q` shape
+    is FALSE as written, not merely unproven.
+
+    **The `hql` binder available to `graph_correct` (`:406`) is REFUSED here**, and the
+    reason is the one this declaration exists to enforce. `q` is universally quantified,
+    so `hql : publicOfLeaf Sd q.object.type q.relation = none` could not be discharged and
+    would have to become a *binder* — a schema-dependent hypothesis bolted onto a
+    SATISFIABILITY instrument, i.e. onto the very declaration whose job is to detect
+    unsatisfiable hypotheses. That is this project's house failure mode by construction
+    (`formal/conformance/statement_pin.py` says in as many words that unsatisfiable
+    premises compile, audit clean, and pass every pin), and `graph_correct_public`'s
+    docstring already refuses it for `final_applies` / `final_applies4`. Fencing the READ
+    discharges the leaf case where it belongs and leaves the witness an instrument. Same
+    move, same reasons, as the seven declarations migrated 2026-08-28c — none of which
+    gained a hypothesis either.
+
+    **Nothing true is given up.** `checkPublic` models the public `WildcardIndex.check`;
+    `GraphModel.check` models `_check_internal`, below the `BL-2` fence (Python-side pin:
+    `tests/test_reg18_leaf_name_read_leak.py`). The unfenced claim this used to make is
+    machine-checked FALSE post-re-point at a minted leaf name, and where it is still TRUE
+    it is still available — see `correct_applies_nonfence` directly below.
+
+    `σ.schema = Sd` — the fence reads the state's own schema while the hypotheses speak of
+    `Sd` — composes as `reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`
+    (`CascadeStrata.lean::reachedByW3d2_schema` ∘
+    `CascadeStrataSettle.lean::reachedByW3d2C_toW3d2`). There is no
+    `reachedByW3d2C_schema` and none is needed: the 2026-08-31c name grep that failed to
+    find one was looking for the wrong name.
+
+    ⚠ **Non-vacuity does not come from this theorem, and `fence_changes_answer` does not
+    supply it either** — that pins only that the fence FIRES. The instruments against a
+    row degrading into certifying the fence alone are `public_grant_survives_fence`
+    (the fence is not total) and `correct_applies_nonfence` (this row still reaches the
+    core off the fence), both with sabotage evidence recorded there. -/
 theorem correct_applies {σ : GraphState} (q : Query)
     (h : ReachedByW3d2C σ Sd Td) (hq : cascadeKeys Sd σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    GraphModel.check σ q = sem Sd Td q := by
+    GraphModel.checkPublic σ q = sem Sd Td q := by
   obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
   obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, hNoUD, hBS, hTS, hterm⟩ := fragment
-  exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
-    hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo
+  have hsch : σ.schema = Sd := reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)
+  unfold GraphModel.checkPublic
+  split
+  · rename_i hsome
+    rw [hsch] at hsome
+    exact (semAux_undeclared Sd q.subject Td q
+      (not_mem_keys_of_publicOfLeaf_isSome hWF hsome) _ _).symm
+  · exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+      hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo
+
+/-- **CONDITION-2 INSTRUMENT (2026-09-01): the migrated row still exercises the CORE,
+    not just the fence.**
+
+    `correct_applies` above is now an equation about `checkPublic`, and `checkPublic` has
+    two branches. `fence_changes_answer` proves the fenced branch fires; NOTHING proved
+    that the migrated row still carries `graph_correct_w3d2_d`'s content through the
+    other one. Without that the row could quietly degrade into certifying the fence — a
+    witness that passes for the wrong reason — and the whole point of these two
+    declarations is that they are the satisfiability instruments for the Direct-arm
+    fragment.
+
+    This recovers the ORIGINAL unfenced statement from the migrated one at a query the
+    fence provably does not touch (`fence_not_identity`: the public name `doc#approver`
+    passes `publicOfLeaf` untouched at `Sd`). It is therefore red unless the non-fence
+    branch of `correct_applies` really does discharge the audited T2b core. The
+    discriminating partner is the leaf-name case, where the same recovery is provably
+    IMPOSSIBLE: `unfenced_grants` (`check = true`) against `fence_changes_answer`
+    (`checkPublic = false`).
+
+    **Controlled 2026-09-01, per `docs/sabotage-procedure.md` — and the control is on the
+    INSTRUMENT, because a pin that would pass anyway pins nothing.** Sabotage: delete the
+    `hty` / `hrel` public-name hypotheses, the narrowest plausible weakening (it is
+    exactly the claim "the recovery holds at every query", which is what a reader who
+    mis-reads this theorem as free would assume), with the `rw` adjusted to match so the
+    failure is about the CONTENT and not about a dangling identifier. Observed:
+
+        lake build ZanzibarProofs.FullScope
+        → error: ZanzibarProofs/FullScope.lean:1234:15: Type mismatch
+            fence_not_identity
+          has type
+            publicOfLeaf Sd "doc" "approver" = none
+          but is expected to have type
+            publicOfLeaf Sd q.object.type q.relation = none
+          error: Lean exited with code 1
+
+    (the line number moves whenever this docstring is edited; it is quoted as observed)
+
+    i.e. the theorem genuinely turns on the queried name being the non-leaf one. It is not
+    a triviality that would survive a fence which fired everywhere — which is precisely
+    the degradation condition 2 exists to refuse. -/
+theorem correct_applies_nonfence {σ : GraphState} (q : Query)
+    (h : ReachedByW3d2C σ Sd Td) (hq : cascadeKeys Sd σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hty : q.object.type = "doc") (hrel : q.relation = "approver") :
+    GraphModel.check σ q = sem Sd Td q := by
+  have hsch : σ.schema = Sd := reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)
+  have hnl : publicOfLeaf σ.schema q.object.type q.relation = none := by
+    rw [hsch, hty, hrel]; exact fence_not_identity
+  rw [← checkPublic_of_not_leaf hnl]
+  exact correct_applies q h hq hqs hqo
 
 /-- **The `_d`/`_filt` COVERAGE packaging is jointly dischargeable too** — the leg-3
     non-vacuity attack (2026-08-05). `w3dJobCoverage_enumJob2D_state` instantiates at the
@@ -1274,16 +1420,54 @@ theorem toC_applies {σ : GraphState} (h : ReachedByW3d2E σ Sd Td) :
 
     (Historical note, superseded by leg 5: this docstring used to end "It does NOT mean
     the headline `graph_correct` covers this store … that rebase is leg 5." The rebase
-    has landed — see `final_applies` below.) -/
+    has landed — see `final_applies` below.)
+
+    **Restated over `checkPublic` on 2026-09-01**, with `correct_applies` and for the
+    identical reason — see that docstring for the full grounds and for why the `hql`
+    binder is refused on both. This row is `hypothesis-identical` to `final_applies`
+    modulo the fence, so leaving it unfenced while `final_applies` migrated on 2026-08-28c
+    was the actual inconsistency. Its schema bridge is the direct one,
+    `CascadeStrataAssemble.lean::reachedByW3d2E_schema` — the same lemma
+    `graph_correct_public` uses — rather than the composition row 46 needs. Condition-2
+    instrument: `w3d2E_correct_applies_nonfence`, directly below. -/
 theorem w3d2E_correct_applies {σ : GraphState} (q : Query)
     (h : ReachedByW3d2E σ Sd Td) (hq : cascadeKeys Sd σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
-    GraphModel.check σ q = sem Sd Td q := by
+    GraphModel.checkPublic σ q = sem Sd Td q := by
   obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
   obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, hNoUD, hBS, hTS, hterm⟩ := fragment
-  exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCD hDAB
-    directArmsConcrete hCOop hLU2 hWSbare hNoUD h hq hqs hqo
+  have hsch : σ.schema = Sd := reachedByW3d2E_schema h
+  unfold GraphModel.checkPublic
+  split
+  · rename_i hsome
+    rw [hsch] at hsome
+    exact (semAux_undeclared Sd q.subject Td q
+      (not_mem_keys_of_publicOfLeaf_isSome hWF hsome) _ _).symm
+  · exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCD hDAB
+      directArmsConcrete hCOop hLU2 hWSbare hNoUD h hq hqs hqo
+
+/-- **CONDITION-2 INSTRUMENT for the E-chain row** — the twin of
+    `correct_applies_nonfence`, and it is a separate declaration on purpose. Row 56 runs
+    the leg-4 E-chain and discharges `DirectArmsConcrete`, which row 46 never touches; a
+    single shared instrument would leave the question "does the E-chain row still reach
+    `graph_correct_w3d2E_d` off the fence?" answered only by projection through
+    `toC_applies`, which goes the wrong way (`ReachedByW3d2E` → `ReachedByW3d2C`) to
+    certify anything about this row's own core.
+
+    Same shape, same discriminating partner, same sabotage control as the C-chain twin;
+    the sabotage was run against that one, and the observed output is recorded there. -/
+theorem w3d2E_correct_applies_nonfence {σ : GraphState} (q : Query)
+    (h : ReachedByW3d2E σ Sd Td) (hq : cascadeKeys Sd σ = [])
+    (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+    (hqo : q.object.name ≠ STAR)
+    (hty : q.object.type = "doc") (hrel : q.relation = "approver") :
+    GraphModel.check σ q = sem Sd Td q := by
+  have hsch : σ.schema = Sd := reachedByW3d2E_schema h
+  have hnl : publicOfLeaf σ.schema q.object.type q.relation = none := by
+    rw [hsch, hty, hrel]; exact fence_not_identity
+  rw [← checkPublic_of_not_leaf hnl]
+  exact w3d2E_correct_applies q h hq hqs hqo
 
 /-! ### Leg 5 — the HEADLINE bundles, inhabited at the Direct-arm pair
 

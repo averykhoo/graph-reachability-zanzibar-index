@@ -32,8 +32,8 @@ number INTO it over restating it.
 | whole-repo suite | **1551** |
 | differential conformance tests | **449** across **13** files |
 | gate-tooling conformance tests | **66** across **4** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **583** |
-| audit identity pin (`audited_theorems.txt`) | **582** |
+| audited theorems (`#print axioms` in `Audit.lean`) | **585** |
+| audit identity pin (`audited_theorems.txt`) | **584** |
 | headline definition pin | **161** rows (**154** declarations + ambient) |
 | `CORRESPONDENCE.md` anchors | **541** (**334** Python + **207** Lean) |
 | `corpus.SCHEMAS` | **26** |

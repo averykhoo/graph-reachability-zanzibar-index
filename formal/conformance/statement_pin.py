@@ -221,6 +221,29 @@ HEADLINE = [
     "Zanzibar.W4WitnessDirect.admission4",
     "Zanzibar.W4WitnessDirect.w4fragment4",
     "Zanzibar.W4WitnessDirect.final_applies4",
+    # The CONDITION-2 instruments for the 2026-09-01 Class-B repair, which restated
+    # rows 46/56 (`correct_applies` / `w3d2E_correct_applies`) over `checkPublic`.
+    # `fence_changes_answer` proves the fence FIRES; it does NOT prove a migrated witness
+    # still carries `graph_correct_w3d2{,E}_d`'s content through the OTHER branch, so
+    # without these three the two rows could degrade into certifying the fence alone --
+    # a witness that passes for the wrong reason, which is exactly what a non-vacuity
+    # instrument exists to detect.  `public_grant_survives_fence` says the fence is not
+    # total (its `true` branch is reachable at this very schema); the two `_nonfence`
+    # rows recover the ORIGINAL unfenced statement at a query the fence provably does
+    # not touch.  Both sabotages, with their literal observed output, are in the
+    # docstrings.  Pinned here because "silently weakened" is the failure mode an
+    # instrument is least able to notice about itself.
+    #
+    # ⚠ APPENDED AT THE END ON PURPOSE, not filed next to the `fence_*` pins they belong
+    # with.  This list's order IS the golden's line order, and the whole repo cites these
+    # witnesses by golden row number ("rows 46/56").  Filing them thematically shifted
+    # `w3d2E_correct_applies` from row 56 to row 59 and moved the scope doc's
+    # `28, 30, ..., 53, 59, 64` enumeration, i.e. it silently falsified every living
+    # citation -- the same class of rot as the stale `:45`/`:55` numbering already
+    # recorded in PROOF_STATUS.  Appending shifts nothing.  Keep new pins here.
+    "Zanzibar.W4WitnessDirect.public_grant_survives_fence",
+    "Zanzibar.W4WitnessDirect.correct_applies_nonfence",
+    "Zanzibar.W4WitnessDirect.w3d2E_correct_applies_nonfence",
 ]
 
 DECL_RE = re.compile(
