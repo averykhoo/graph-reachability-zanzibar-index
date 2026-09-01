@@ -533,3 +533,55 @@ stays byte-identical, so do not tidy `computedRefs` while threading it.
 
 NEXT: step 8 (generalise the four DerNode-hardcoding shadow lemmas) -- untouched, and the
 next green-stoppable move. Record: PROOF_STATUS `## Session 2026-09-01d`.
+
+STEP 8 SIZED BY MEASUREMENT (same session, after the trap-(g) commit).
+
+The plan gives step 8 six words -- "generalise the four DerNode-hardcoding shadow lemmas" --
+and names none of them; the only document that does is under `.scratch/`, i.e. already lost.
+So the flip was run as a THROWAWAY PROBE: point the abbrev at the disjunction
+(`CascadeStable.lean:555` -> `ShadowOver (fun k => DerNode S k or LeafNode S k)`), build,
+read the errors, revert. rc=1, SIX errors, ALL in CascadeStable.lean, in exactly THREE decls:
+
+  :1180 Invalid anonymous-constructor notation  -- untaintedShadow_applyD  (:1154)
+  :1206 unsolved goals                          -- untaintedShadow_applyD
+  :1302 Application type mismatch               -- reachedByW3d_shadow     (:1269)
+  :1303 Application type mismatch               -- reachedByW3d_shadow
+  :1318 unsolved goals                          -- shadow_graphRec_agree   (:1315)
+  :1371 Application type mismatch               -- shadow_graphRec_agree
+
+Reverted; `lake build` green 1089 jobs and `git status --porcelain` empty, so no trace. Both
+predicted failure SHAPES are visible and distinguishable: BUILDING the extras witness fails
+as "Invalid anonymous constructor" (it stops elaborating once the target is an Or);
+DESTRUCTURING it in `term` fails as "unsolved goals".
+
+LOWER BOUND, and for the standing reason: Lean does not build dependents of a failed module,
+so CascadeStrataSettle.lean -- carrying untaintedShadow_applyLoggedR (:293), _applyLoggedR_d
+(:995) and two more hsubj sites (:685, :1267) -- was NEVER COMPILED by this probe. Do not
+read "6 errors / 3 decls" as the size of step 8. What it does establish: the shapes, the
+first wave, and that untaintedShadow_writeLoggedOne_derived (:921) is NOT in the first wave.
+
+VERIFIED FIRST-HAND while sizing (greps, each correcting something):
+* STEP 9 IS A ONE-LINE EDIT. `import ZanzibarProofs.GraphIndex.Leaf` is already
+  CascadeStable.lean:2, so no module needs a new import. The plan's "an import plus the
+  abbrev body, rollback = revert two lines" is stale.
+* untaintedShadow_applyD has exactly TWO term-level call sites (CascadeSettle.lean:476,
+  CascadeStable.lean:1231) plus `#print axioms` at Audit.lean:786 -- so it is NAME-PINNED.
+  Step 8 may add binders but must NOT rename it; an additive `_gen` plus a same-name wrapper
+  satisfies both. Siblings _applyLoggedR{,_d} carry no audit row, so a rename there would be
+  silently unpinned instead of caught.
+* Live decl lines (the .scratch plan's are stale in both directions): applyD :1154,
+  applyLoggedR :293, applyLoggedR_d :995, writeLoggedOne_derived :921.
+* DO NOT touch Scratch4cii.lean's explicit `ShadowOver (DerNode ...)` at :410/:513/:538/
+  :584/:730/:737 -- step 1's ANCHORS. Folding them back to UntaintedShadow would turn the
+  flip's regression detector into a tautology.
+
+UNVERIFIED, agent output, sizing input only: that PRE-WIDEN in place (step 5's
+`first | exact hDer | exact Or.inl hDer` idiom at CascadeStrataSettle.lean:939/:960) is a
+cheaper route than GENERALISE, with zero new decls and zero call-site churn; and that the
+`sub` field of the three apply* lemmas is extras-independent, making hex/hnc a complete
+premise set. Neither kernel-checked. Try the cheap route first -- the probe re-runs in two
+minutes and will say.
+
+ORDERING CONSEQUENCE: shadow_graphRec_agree and the hsubj sites red in the SAME first wave as
+untaintedShadow_applyD, so step 8 alone does NOT make the flip green. Step 9 still needs the
+seed-side and operand-side premises that no declaration owns today.
