@@ -499,6 +499,7 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
     (hR : RewriteRanked S) (hSV : StoreValidRules S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
@@ -512,7 +513,7 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
     W3dJobCoverage S T σ (enumJob2 σ dt on R e) := by
   have hcl := reachedByW3d2_edgesClosed h
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hCO hSV hterm
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hCO hSV hterm hQ hDR
   have hschema : σ.schema = S := reachedByW3d2_schema h
   have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
@@ -983,6 +984,7 @@ theorem w3dJobCoverage_enumJob2D_state {S : Schema} {T : Store} {σ : GraphState
     (hR : RewriteRanked S) (hSV : StoreValidRulesD S T)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOrDirect e)
@@ -1001,7 +1003,7 @@ theorem w3dJobCoverage_enumJob2D_state {S : Schema} {T : Store} {σ : GraphState
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
     W3dJobCoverage S T σ (enumJob2D σ T dt on R e) := by
   have hcl := reachedByW3d2_edgesClosed h
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSV hterm hWF hBS
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSV hterm hWF hBS hQ hDR
   have hschema : σ.schema = S := reachedByW3d2_schema h
   have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧

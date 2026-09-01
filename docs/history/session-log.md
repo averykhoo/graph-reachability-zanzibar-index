@@ -107,22 +107,33 @@ leaving only `shadow_graphRec_agree`'s `hv1`/`hv3`, which are the other two obli
 new `FullScope` pins machine-check that both premises hold at all three `GraphAdmission`
 witness schemas, so nothing became vacuous.
 
-⚠ **This landing carries a weakening the gate cannot see, and it is written down rather
-than left to be found.** Six audited terminal theorems (`graph_correct_w3d`,
-`backend_equivalence_w3d`, `exclusion_effective_w3d`, `no_ghost_grant_w3d`,
-`reachedByW3dC_inv`, `reachedByW3dE_inv`) now carry two hypotheses they did not carry
-before. The gate stays green because `audited_theorems.txt` pins NAMES only and none of the
-six has a `headline_statements.txt` row — the house failure mode exactly. It is a
-*permitted intermediate* (the user's call allows an undischarged premise for an
-intermediate commit, never for the leg) and non-vacuity is machine-checked, but it is not
-resolved.
+**Then the other two sites landed, and the discharge with them — step 9 is done.**
+`reachedByW3d2_shadow{,_d}` take the same pair (the `_d` variant routes the seed side
+through the widened discharge lemma, which is why both were built), and `GraphAdmission`
+gained `ttuNotLeaf` + `directRestrNotLeaf`. All four construction sites prove them
+`by decide` — that IS the non-vacuity evidence, since the `relNameOK`-shaped clause would be
+false there and leave the structure uninhabited. The headline theorems take both from the
+bundle, so `graph_correct` and `graph_reached_inv` assume exactly what they assumed before.
+The pin cost came in exactly as the adversarial pass predicted: `headline_statements.txt`
+byte-identical, `headline_definitions.txt` regenerated deliberately 161→164 (the
+`GraphAdmission` row plus three newly-reachable definitions — *the meaning of a claim grew
+three dependencies*, which is what that pin exists to catch), and `FINAL_REVIEW.md`'s counts
+block with it.
 
-Still owed, and the next session owns it: the other two sites
-(`reachedByW3d2_shadow{,_d}`), then the discharge — both premises become `GraphAdmission`
-fields, the six theorems take the bundle, and the six witness pins become the field proofs.
-Known cost: `headline_statements.txt` stays byte-identical, `headline_definitions.txt`
-**will** redden, and the four construction sites at `FullScope.lean:623/:739/:1486/:1621`
-plus the flat conjunction at `:1042` must be extended.
+📏 **And the flip is now ONE obligation.** Re-running the flip probe on the finished tree,
+the only reds are the eight `Or.inl` wrappers the pre-widens were designed to leave, plus
+`shadow_graphRec_agree`'s `hv1`; with the wrappers swapped and `hv1` alone stubbed the whole
+tree builds (1089 jobs, exactly one `sorry` warning). The probe was fully reverted.
+`2026-09-01e`'s "four unowned obligations" is retired — `hv1` needs row 27's query-level
+premise and is all that stands between this tree and 4c-ii.
+
+⚠ **One residue, written down rather than left to be found.** The six audited TERMINAL
+`_w3d`/`_w3d2` milestone theorems still spell their premises out one by one and now spell
+out two more. The gate cannot flag that: `audited_theorems.txt` pins NAMES only and none of
+the six has a `headline_statements.txt` row — the house failure mode exactly. It is bounded
+(the facts are `GraphAdmission` fields, witness-checked, and the headline layer takes them
+from the bundle), but retiring it means re-stating those six over the bundle, which is a
+separate decision and not part of step 9. PROOF_STATUS `2026-09-02` §7.
 
 ---
 

@@ -34,6 +34,7 @@ ambient:formal/lean/ZanzibarProofs/GraphIndex/CascadeStrataEnum.lean	open GraphM
 ambient:formal/lean/ZanzibarProofs/GraphIndex/Closure.lean	variable {V : Type} [DecidableEq V] [Fintype V]
 ambient:formal/lean/ZanzibarProofs/SetEngine/Correct.lean	open MemberSet SetEngineModel ; variable {s : SubjectRef}
 ambient:formal/lean/ZanzibarProofs/SetEngine/Eval.lean	open MemberSet
+def:NotLeafName	[def] def NotLeafName (p : String) : Prop := p = BARE ∨ isLeafPred p = false
 def:Zanzibar.Acyclic	[def] def Acyclic (g : DirectGraph V) : Prop := ∀ v, pathCount g v v = 0
 def:Zanzibar.AllValid	[def] def AllValid (T : Store) : Prop := ∀ tup ∈ T, ValidIdent tup.subject.type ∧ ValidIdent tup.relation ∧ ValidIdent tup.object.type
 def:Zanzibar.BARE	[def] def BARE : String := "..."
@@ -45,11 +46,12 @@ def:Zanzibar.Delta	[structure] fields=(id node relation leaf) structure Delta wh
 def:Zanzibar.DirectArmsBare	[def] def DirectArmsBare : Expr → Prop | .computed _ => True | .direct rs => ∀ r ∈ rs, r.2.1 = BARE | .union a b => DirectArmsBare a ∧ DirectArmsBare b | .inter a b => DirectArmsBare a ∧ DirectArmsBare b | .excl a b => DirectArmsBare a ∧ DirectArmsBare b | .ttu _ _ => True
 def:Zanzibar.DirectArmsConcrete	[def] def DirectArmsConcrete (S : Schema) : Prop := ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ∀ rs ∈ exprDirectsAll e, ∀ r ∈ rs, r.2.2 = false
 def:Zanzibar.DirectGraph	[structure] fields=(dcount) structure DirectGraph (V : Type) where dcount : V → V → Nat
+def:Zanzibar.DirectRestrictionsNotLeaf	[def] def DirectRestrictionsNotLeaf (S : Schema) : Prop := ∀ d ∈ S.defs, ∀ rs ∈ exprDirectsAll d.2, ∀ r ∈ rs, NotLeafName r.2.1
 def:Zanzibar.Drained	[abbrev] abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
 def:Zanzibar.Expr	[inductive] fields=(direct computed ttu union inter excl) inductive Expr where | direct : List Restriction → Expr | computed : String → Expr | ttu : (targetRel : String) → (tuplesetRel : String) → Expr | union : Expr → Expr → Expr | inter : Expr → Expr → Expr | excl : (base : Expr) → (subtract : Expr) → Expr deriving Repr, DecidableEq, Inhabited
 def:Zanzibar.FoldAdmits	[def] def FoldAdmits : GraphState → List Tuple → Prop | _, [] => True | σ, u :: rest => σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true ∧ FoldAdmits (σ.writeDirect u) rest
 def:Zanzibar.GraphAccepts	[def] def GraphAccepts (S : Schema) : Prop := (∀ tr ∈ S.objectWildcards, isDerived S tr = false) ∧ (∀ d ∈ S.defs, ∀ r ∈ exprRestrictions d.2, r.2.2 = true → r.2.1 ≠ BARE → isDerived S (r.1, r.2.1) = false) ∧ (∀ d ∈ S.defs, ∀ tt ∈ exprTtus d.2, isDerived S (d.1.1, tt.2) = false)
-def:Zanzibar.GraphAdmission	[structure] fields=(wf nodup strat ttuDirect matchDecl ranked objWild storeValid) structure GraphAdmission (S : Schema) (T : Store) : Prop where wf : WF S nodup : NodupKeys S strat : Stratifiable S ttuDirect : TtuTuplesetsDirect S matchDecl : RewriteMatchDeclared S ranked : RewriteRanked S objWild : ∀ tr ∈ S.objectWildcards, isDerived S tr = false storeValid : StoreValidRulesD S T
+def:Zanzibar.GraphAdmission	[structure] fields=(wf nodup strat ttuDirect matchDecl ranked objWild storeValid ttuNotLeaf directRestrNotLeaf) structure GraphAdmission (S : Schema) (T : Store) : Prop where wf : WF S nodup : NodupKeys S strat : Stratifiable S ttuDirect : TtuTuplesetsDirect S matchDecl : RewriteMatchDeclared S ranked : RewriteRanked S objWild : ∀ tr ∈ S.objectWildcards, isDerived S tr = false storeValid : StoreValidRulesD S T ttuNotLeaf : TtuTargetsSat S NotLeafName directRestrNotLeaf : DirectRestrictionsNotLeaf S
 def:Zanzibar.GraphModel.check	[def] def check (σ : GraphState) (q : Query) : Bool := if isDerived σ.schema (q.object.type, q.relation) then probeDerived σ q else probeNonDerived σ q
 def:Zanzibar.GraphModel.checkPublic	[def] def GraphModel.checkPublic (σ : GraphState) (q : Query) : Bool := if (publicOfLeaf σ.schema q.object.type q.relation).isSome then false else GraphModel.check σ q
 def:Zanzibar.GraphOp	[inductive] fields=(add remove) inductive GraphOp where | add (t : Tuple) | remove (t : Tuple) deriving Repr, Inhabited, DecidableEq
@@ -91,6 +93,7 @@ def:Zanzibar.StoreValidRulesD	[def] def StoreValidRulesD (S : Schema) (T : Store
 def:Zanzibar.Stratifiable	[def] def Stratifiable (S : Schema) : Prop := (stratify S).isSome
 def:Zanzibar.SubjectRef	[structure] fields=(type name predicate) structure SubjectRef where type : String name : String predicate : String deriving DecidableEq, Repr, Inhabited
 def:Zanzibar.TtuStarFree	[def] def TtuStarFree (S : Schema) (T : Store) : Prop := ∀ t ∈ T, t.subject.name = STAR → ∀ a ∈ schemaRewrites S, ∀ tr, a.kind = RuleKind.ttu tr → ¬(t.relation = a.matchRel ∧ t.object.type = a.objectType)
+def:Zanzibar.TtuTargetsSat	[def] def TtuTargetsSat (S : Schema) (Q : String → Prop) : Prop := ∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → Q tr
 def:Zanzibar.TtuTuplesetsDirect	[def] def TtuTuplesetsDirect (S : Schema) : Prop := ∀ d ∈ S.defs, ∀ tt ∈ exprTtus d.2, ∀ d' ∈ S.defs, d'.1 = (d.1.1, tt.2) → directsOnly d'.2 = true
 def:Zanzibar.Tuple	[structure] fields=(subject relation object) structure Tuple where subject : SubjectRef relation : String object : ObjectRef deriving DecidableEq, Repr, Inhabited
 def:Zanzibar.Variant	[inductive] fields=(plain wAny wAll) inductive Variant where | plain | wAny | wAll deriving DecidableEq, Repr, Inhabited
