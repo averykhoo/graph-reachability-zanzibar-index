@@ -18,12 +18,13 @@ session: run the Rhythm protocol at the bottom.
 
 > 🟢 **Gate: all ten phases re-run green on this tree** — ask `python scripts/gate_status.py`;
 > re-run `lean` after any `*.md` edit (tiles ignore `*.md`).
-> 🚨 **`2026-08-31c`: the Class-B spike is answered and needs a user call.** The step-7 guard
-> *reaches* the byte-pinned `graph_correct`, via one of the three sites (1–2 die in superseded
-> `Equiv.lean` milestones), and lands on **three** pinned rows (27/46/56) — refuting this
-> file's own 2026-08-28c line, confirming scope doc §11.13 (e). Cost is on the *non-vacuity
-> instruments*: likely repair is `checkPublic` migration, not the `hql` binder. Not attempted
-> — a user-visible scope change.
+> ✅ **`2026-09-01`: the Class-B repair is decided (user call) — nothing is waiting on you.**
+> Rows 46/56 (`correct_applies` / `::w3d2E_correct_applies`) **migrate onto `checkPublic`**;
+> the `hql` binder is **refused** there (they are the non-vacuity instruments). Row 27 keeps
+> its 2026-08-28 binder. **Four conditions bind the repair session, and one of them is
+> "before step 7, in its own commit"** → `P3`'s block, grounds in PROOF_STATUS `2026-09-01`.
+> Background `2026-08-31c`: the guard *reaches* the byte-pinned `graph_correct` via one of
+> three sites, on **three** pinned rows — refuting this file's own 2026-08-28c line.
 > ✅ Step 6: `hv3` pre-widened, zero new premises, green; pin `Leaf.lean::wAllNode_not_leafNode`;
 > **4 obligations left, not 5**. New §11.13 **(k)**: a sabotage can fail on a *redundant* guard.
 > ✅ **`2026-08-31b`: `P20` adjudicated Accept and closed; `P3` steps 6–10 unblocked** — it
@@ -51,7 +52,7 @@ forward forever and are never reused.**
 
 | id | item (→ pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
-| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the middle turned out to be splittable too (2026-08-30c)**: `UntaintedShadow` is now an `abbrev` for a `ShadowOver (P : NodeKey → Prop)` generic in its EXTRAS predicate, with five shadow lemmas generalized, so **the widening is a one-line re-instantiation instead of a re-proof of the cascade chain** (green, 1089 jobs, 3 cycles of 10; the 65 `CascadeStrataSettle` sites never moved). **Left: repoint the abbrev at `DerNode ∨ LeafNode` and discharge ~20 tier-1 sites in 3 files.** ⚠ **Sizing settled and the record was wrong — 21 modules recompile, not 42** (41+root is the cone of `DirectCorrect`/`RulesWrite`, i.e. a mis-rooted census); and one tier-1 site has **no existing lemma** (`shadow_graphRec_agree` needs operand declaredness, which `WF` does not model). ✅ **Blind instrument closed (2026-08-30d) and its prediction was wrong** — the proxy deletion built green, so the P14 weak rows are valid as taken; the difference is a *pin* now, not an argument. ✅ **Re-point steps 1–2 landed green** (anchor the four strong-shadow declarations; the schema-generic leaf-refutation toolkit), each sabotage-controlled → PROOF_STATUS `2026-08-30d` §6–§7 carries the ten-step plan. ✅ **The Class-B spike is DONE (2026-08-31c) and the answer is REACHES** — of the three sites passing `shadow_graphRec_agree` the arbitrary query's own relation, only `graph_correct_w3d2_d` reaches `graph_correct`; sites 1–2 die in superseded `Equiv.lean` milestones. **It lands on THREE pinned rows (27/46/56), not one** — which refutes this file's own 2026-08-28c line. ⛔ **The repair is NOT started and must not be smuggled into step 7: it is a user-visible weakening of pinned statements on the two non-vacuity instruments, and needs an explicit user call.** Traps: scope doc §11.13, (h) closed. ✅ **Steps 3–5 landed green (2026-08-31)**: `TtuTargetsSat` + the additive `_gen` chain, `NoLeafSubjects` (sabotage bit twice), and the pre-widen — abbrev still unflipped. ✅ **The bridge landed 2026-08-31b** — `CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects` (`mem_append_left`; green at 1089 jobs, 5 of a 6-cycle budget, sabotage-controlled on the containment DIRECTION), with one new `import …GraphIndex.LeafRules` and three applicability theorems at `SnlBoth`. It also **removed a FALSE sentence from the Lean source** (the old docstring taught that `NoLeafSubjects` is "the same discipline on the OTHER rule list … and does not discharge these"; `schemaRewritesL` is a **superset**). 🚧 **Still 5 obligations, all undischarged** — the three `rewriteClosure` sites still need BOTH premises supplied at the site; what changed is that `hQ` now has a *route* (via `NoLeafSubjects`, which is not yet a `W4Fragment` field), while the seed-side `NotLeafName t.subject.predicate` has no owner at all. Plus the census hole at `CascadeStable.lean::shadow_graphRec_agree` (step 7). ✅ **Steps 6–10 are UNBLOCKED** — `P20` adjudicated ACCEPT (2026-08-31b). ✅ **Step 6's free obligation landed 2026-08-31c**: `hv3` in `CascadeStable.lean::shadow_graphRec_agree` is pre-widened to `¬ (DerNode ∨ LeafNode)` at the `wAll` node with **zero** new premises (the `Variant.wAll` / `Variant.plain` mismatch does it), uses weakened via `Or.inl` so step 9 is "delete two wrappers"; green first try, 1089 jobs, sabotage-controlled by a new discriminating pin `Leaf.lean::wAllNode_not_leafNode` against the pre-existing `::minted_leaf_is_leafNode`. 🚧 **4 obligations remain, not 5** — the three `rewriteClosure` sites need the seed-side `NotLeafName t.subject.predicate` (no owner anywhere; the shape that works is a new store-level `NoLeafStoreSubjects T` threaded at ~20 sites — *scout figure, unverified*), and `hv1` needs the operand-side `NotLeafName r'` (§11.13 (g)). **Do not bundle `hv1` with `hv3`** — `hunt` does not refute a minted leaf name, and the premise cannot be phrased locally because `ReconcileStars.lean::checkFn_agree_of_graphRec{,_cd}` hand `hag` exactly that hypothesis, dragging in a third file | **NOW** | L | — | 2026-08-31c |
+| `P3` | leg 7 **4c-ii + step 7** — everything pre-4c-ii is DONE (`P14` included), and **the middle turned out to be splittable too (2026-08-30c)**: `UntaintedShadow` is now an `abbrev` for a `ShadowOver (P : NodeKey → Prop)` generic in its EXTRAS predicate, with five shadow lemmas generalized, so **the widening is a one-line re-instantiation instead of a re-proof of the cascade chain** (green, 1089 jobs, 3 cycles of 10; the 65 `CascadeStrataSettle` sites never moved). **Left: repoint the abbrev at `DerNode ∨ LeafNode` and discharge ~20 tier-1 sites in 3 files.** ⚠ **Sizing settled and the record was wrong — 21 modules recompile, not 42** (41+root is the cone of `DirectCorrect`/`RulesWrite`, i.e. a mis-rooted census); and one tier-1 site has **no existing lemma** (`shadow_graphRec_agree` needs operand declaredness, which `WF` does not model). ✅ **Blind instrument closed (2026-08-30d) and its prediction was wrong** — the proxy deletion built green, so the P14 weak rows are valid as taken; the difference is a *pin* now, not an argument. ✅ **Re-point steps 1–2 landed green** (anchor the four strong-shadow declarations; the schema-generic leaf-refutation toolkit), each sabotage-controlled → PROOF_STATUS `2026-08-30d` §6–§7 carries the ten-step plan. ✅ **The Class-B spike is DONE (2026-08-31c) and the answer is REACHES** — of the three sites passing `shadow_graphRec_agree` the arbitrary query's own relation, only `graph_correct_w3d2_d` reaches `graph_correct`; sites 1–2 die in superseded `Equiv.lean` milestones. **It lands on THREE pinned rows (27/46/56), not one** — which refutes this file's own 2026-08-28c line. ✅ **THE REPAIR IS DECIDED (user call, 2026-09-01) — no longer waiting on anyone: rows 46/56 MIGRATE onto `checkPublic`, the `hql` binder is REFUSED on the non-vacuity instruments, row 27 keeps its 2026-08-28 binder.** ⛔ **Still must not be smuggled into step 7** — but that is now discharged by *condition 1* (its own commit, on today's tree, landing BEFORE step 7), not by deferral. Four conditions bind it; grounds and the one known unknown are in PROOF_STATUS `## Session 2026-09-01`. Traps: scope doc §11.13, (h) closed, (e)+(l) adjudicated. ✅ **Steps 3–5 landed green (2026-08-31)**: `TtuTargetsSat` + the additive `_gen` chain, `NoLeafSubjects` (sabotage bit twice), and the pre-widen — abbrev still unflipped. ✅ **The bridge landed 2026-08-31b** — `CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects` (`mem_append_left`; green at 1089 jobs, 5 of a 6-cycle budget, sabotage-controlled on the containment DIRECTION), with one new `import …GraphIndex.LeafRules` and three applicability theorems at `SnlBoth`. It also **removed a FALSE sentence from the Lean source** (the old docstring taught that `NoLeafSubjects` is "the same discipline on the OTHER rule list … and does not discharge these"; `schemaRewritesL` is a **superset**). 🚧 **Still 5 obligations, all undischarged** — the three `rewriteClosure` sites still need BOTH premises supplied at the site; what changed is that `hQ` now has a *route* (via `NoLeafSubjects`, which is not yet a `W4Fragment` field), while the seed-side `NotLeafName t.subject.predicate` has no owner at all. Plus the census hole at `CascadeStable.lean::shadow_graphRec_agree` (step 7). ✅ **Steps 6–10 are UNBLOCKED** — `P20` adjudicated ACCEPT (2026-08-31b). ✅ **Step 6's free obligation landed 2026-08-31c**: `hv3` in `CascadeStable.lean::shadow_graphRec_agree` is pre-widened to `¬ (DerNode ∨ LeafNode)` at the `wAll` node with **zero** new premises (the `Variant.wAll` / `Variant.plain` mismatch does it), uses weakened via `Or.inl` so step 9 is "delete two wrappers"; green first try, 1089 jobs, sabotage-controlled by a new discriminating pin `Leaf.lean::wAllNode_not_leafNode` against the pre-existing `::minted_leaf_is_leafNode`. 🚧 **4 obligations remain, not 5** — the three `rewriteClosure` sites need the seed-side `NotLeafName t.subject.predicate` (no owner anywhere; the shape that works is a new store-level `NoLeafStoreSubjects T` threaded at ~20 sites — *scout figure, unverified*), and `hv1` needs the operand-side `NotLeafName r'` (§11.13 (g)). **Do not bundle `hv1` with `hv3`** — `hunt` does not refute a minted leaf name, and the premise cannot be phrased locally because `ReconcileStars.lean::checkFn_agree_of_graphRec{,_cd}` hand `hag` exactly that hypothesis, dragging in a third file | **NOW** | L | — | 2026-08-31c |
 | `P6` | `ttuStarFree` **(ii)** — bridges on the rule-routed write path; **NOT parallel-safe with `P3`** (same 38-module cone, corrected 2026-08-20b). **Fresh evidence 2026-08-31b that this is a live hole, not a formality:** `ttuStarFree` classifies **SILENT** in the new `W4Fragment` scope pin — a probe wrote `folder:* parent doc:d1` onto a TTU tupleset and it was **ADMITTED** (`_validate_ttu_tuplesets` rejects userset restrictions in tuplesets but deliberately keeps wildcard ones). So the field `graph_correct` depends on is one Python does not enforce | **NEXT** | M | — | 2026-08-31b |
 | `R6` | perf round 6 — restored to `NEXT` 2026-08-31b now that `P20` has closed and freed the seat it was demoted for. **`R6-10` landed 2026-08-20b (2.54×), `R6-6` landed 2026-08-24d (4.75 → 1.75 statements/`check`)**; 10 to land, 4 declined, 3 unreachable. ⚠ **Batch *through* the N15 cache, not past it** (`R6-6` is the pattern). Order: `R6-11` → `R6-5` → `R6-4` → `R6-9` → `R6-18` → `R6-16` → `R6-7`+`R6-8` → `R6-1`. Five traps the numbers do not carry: [audit](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do not carry" — **count its bullets, do not trust a restated number** → [profile](benchmarks/results/R6_PROFILE_2026-08-17.md) | **NEXT** | L | — | 2026-08-31b |
 | `TK53` | **land the adjudicated `TK*` appends** — question (b) is DECIDED (→ [adjudication](docs/history/tk-findings-adjudication-2026-08-29.md)); the appends are the unlanded half, **22 landed 2026-08-29c, 15 remain**. Each is a statement existing only in `tasks/`, with a named destination in a living doc. **This row is what makes DELETE lossless.** `TK52` closed on the decision; this carries the execution, so the decision is not a residual with no owner | **NEXT** | M | — | 2026-08-29c |
@@ -102,42 +103,41 @@ target is self-sufficient by construction (verified row by row, 2026-08-16).
 ### `P3` — leg 7: step 4c-ii co-landing with step 7, in one commit
 
 Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6` in
-the same commit. Critical path. ✅ **Pre-4c-ii is done, `P14` included** (both human calls
-made, fence + public surface migrated), and **the green prefix landed 2026-08-30b**:
-`Leaf.lean::LeafNode` (Route B's `classify` carrier, `publicOfLeaf` never `isLeafPred`) and
-`LeafRules.lean::rewriteClosureL_extras_leafNode` (the superset-extras lemma §11.11 left
-unowned), both purely additive, non-vacuity pinned.
+the same commit. Critical path. ✅ **Pre-4c-ii is done (`P14` included), and steps 1–6 have
+landed green**, each sabotage-controlled — the green prefix, the `ShadowOver` generalisation
+that made the middle splittable, the `NoLeafSubjects` bridge, and step 6's free `hv3`
+pre-widen. **The flip is step 9 and is a two-line rollback.** What landed and why, per step:
+PROOF_STATUS `2026-08-30b`…`2026-08-31c`.
 
-✅ **The middle split too (`2026-08-30c`)** — `structure ShadowOver (P : NodeKey → Prop)` with
-`abbrev UntaintedShadow S σ σ0 := ShadowOver (DerNode S) σ σ0`; `abbrev` is the load-bearing
-word (reducible, so every field access and signature kept working).
-✅ **Steps 1–5 have now landed green**, all sabotage-controlled → PROOF_STATUS
-`## Session 2026-08-31` §3. **The flip is step 9 and is a two-line rollback.**
+✅ **The Class-B repair is adjudicated (user call, 2026-09-01) — no open decision remains on
+this item.** Rows 46/56 are **re-stated over `GraphModel.checkPublic`**; the `hql` binder is
+**refused** on them (satisfiability witnesses with `q` universally quantified — the failure
+`FullScope.lean::graph_correct_public`'s docstring already refuses for `final_applies`).
+Row 27 keeps its 2026-08-28 binder. **Four binding conditions** — own green commit *before*
+step 7 · sabotage the migrated witnesses' *non-fence* branch · re-verify the two
+`2026-08-31c` unverified paragraphs · doc sweep + `lean` re-run — plus one known unknown
+(`reachedByW3d2C_schema` may not exist; a grep, not a build). All four, and the grounds:
+PROOF_STATUS `## Session 2026-09-01`, which is the authority for this paragraph.
 
-✅ **The bridge landed 2026-08-31b** —
-`CascadeStable.lean::ttuTargetsSat_notLeafName_of_noLeafSubjects` (green, 1089 jobs, 5 of a
-6-cycle budget, non-vacuous at `LeafRuleWitness.SnlBoth`). It also **deleted a false sentence
-from the Lean source**: the old docstring taught that `NoLeafSubjects` is "the same discipline
-on the OTHER rule list … and does not discharge these", but `schemaRewritesL` is a **superset**.
+🚧 **Four obligations remain, not five** (`hv3` discharged 2026-08-31c). The three
+`rewriteClosure` sites each need the seed-side `NotLeafName t.subject.predicate`, which has
+**no owner anywhere** (the `NoLeafStoreSubjects T` / ~20-site shape is **scout output,
+unverified**); `hv1` needs the operand-side `NotLeafName r'` and must **not** be bundled with
+`hv3` (it drags in a third file via `ReconcileStars.lean::checkFn_agree_of_graphRec`). **Do not
+restate the three sites as "one premise, not two"** —
+`::rewriteClosure_subject_not_leafNode`'s docstring says neither is available there today.
 
-🚧 **Still 5 obligations; the three `rewriteClosure` sites remain undischarged.** Both
-premises must still be supplied AT the site — what changed is that `hQ` now has a route (from
-`NoLeafSubjects`, not yet a `W4Fragment` field), while the seed-side
-`NotLeafName t.subject.predicate` has no owner at all. **Do not restate this as "one premise, not
-two"** — `::rewriteClosure_subject_not_leafNode`'s own docstring says neither is available
-there today. Plus the census hole at `CascadeStable.lean::shadow_graphRec_agree` (step 7).
-
-✅ **Steps 6–10 are unblocked** — `P20` adjudicated Accept and closed. 🚨 **Read what that
-adjudication cost before reusing its logic**: its justification was "Python already refuses
-what the narrowing excludes", which holds for **zero of the ten existing fields**. Step 6's
-field is the exception; a future narrowing must re-establish the argument, not cite this one.
+✅ **Steps 6–10 unblocked** (`P20` Accept, closed). 🚨 **Read what that adjudication cost
+before reusing its logic**: "Python already refuses what the narrowing excludes" holds for
+**zero of the ten fields** — step 6's is the exception; re-establish it, never cite `P20`.
 
 ⚠ **Traps: scope doc §11.13, superseding §11.10 — read before touching the cone.** Ten
 items; **(h) CLOSED**, **(b) is itself stale** (Leaf.lean line numbers are +58 since
 `50af00e` — cite `file::symbol`), **(i)/(j) new 2026-08-31**. **Exit: §11.12** via its
 amendment (commit the docs-only append first, reset onto it).
 
-**Read first:** PROOF_STATUS `## Session 2026-08-31` (§3 what landed, §4 the new blocker),
+**Read first:** PROOF_STATUS `## Session 2026-09-01` (the adjudication + its four conditions
+— before touching rows 46/56), then `## Session 2026-08-31` (§3 landed, §4 the blocker),
 then `2026-08-30d` §6 (the ten-step plan) and `2026-08-30c`; scope doc **§11.13 (traps)**,
 §11.11, §11.12. Completion criterion: PROOF_STATUS `2026-08-16c`, numbers re-derived from
 `formal/FINAL_REVIEW.md`'s generated ledger, never prose. Then

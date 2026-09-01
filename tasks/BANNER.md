@@ -1,14 +1,14 @@
-2026-08-31c — all ten gate phases green on this tree; ledger `2026-08-31c`.
+2026-09-01 — all ten gate phases green on this tree; `lean` re-run after the doc edits.
 
-(nav) **THE CLASS-B SPIKE IS ANSWERED AND IT NEEDS A USER CALL.** The step-7 guard **REACHES**
-the byte-pinned `graph_correct` — via **one** of the three sites; sites 1–2 die in superseded
-`Equiv.lean` milestones. Consumer sets re-verified first-hand, not taken from the scout.
+(nav) **THE CLASS-B REPAIR IS DECIDED (user, 2026-09-01) — nothing is waiting on you.** Rows
+46/56 (`correct_applies` / `::w3d2E_correct_applies`) **migrate onto `checkPublic`**; the `hql`
+binder is **REFUSED** there — they are the non-vacuity instruments, and a binder on a
+satisfiability witness is the house failure mode. **Row 27 keeps its 2026-08-28 binder.**
 
-⚠ **THREE pinned rows, not one — `HANDOFF.md` was WRONG.** Rows 27/46/56 carry no
-`checkPublic`, so `W4WitnessDirect.correct_applies` / `::w3d2E_correct_applies` sit below the
-fence too; the 2026-08-28c "ONE pinned row" line is refuted and §11.13 (e) confirmed
-independently. Cost is on the **non-vacuity instruments** → repair is likely `checkPublic`
-migration, NOT the `hql` binder. **NOT attempted.**
+⚠ **Four conditions bind the repair session:** own commit **BEFORE** step 7 · sabotage the
+migrated witnesses' **NON-fence** branch · re-verify the two `2026-08-31c` UNVERIFIED
+paragraphs · doc sweep + `lean` re-run. Grounds + the one known unknown
+(`reachedByW3d2C_schema` may not exist — a grep, not a build): PROOF_STATUS `2026-09-01`.
 
-Step 6's free obligation landed: `hv3` pre-widened, zero new premises, green. **4 obligations
-left, not 5.** New §11.13 (k): a sabotage can fail to fire on a *redundantly* guarded target.
+`2026-08-31c`: the spike REACHES `graph_correct`; **three** pinned rows, not one — §11.13 (e)
+confirmed, (l) adjudicated, (k) new. `hv3` free and green: **4 obligations left, not 5.**

@@ -169,20 +169,33 @@ layer and stay on `check` for the same reason.
 > universally quantified, and everything that makes `final_applies` need the fence makes
 > this row false post-re-point. `:46` follows a fortiori via `toC_applies` (`:1255`), whose
 > own docstring records that the projection is one-way. **The surface is THREE rows, not
-> one** — and the repair for `:46`/`:56` is probably migration onto `checkPublic` (as
+> one** — and the repair for `:46`/`:56` is ~~probably~~ **DECIDED as** migration onto
+> `checkPublic` (as
 > `final_applies` was on `2026-08-28c`), not the `hql` binder. Structurally confirmed, NOT
 > kernel-confirmed: no build witness was constructed and 4c-ii has not landed. Evidence and
 > the row-by-row table: scope doc §11.13 (e), `PROOF_STATUS.md` `## Session 2026-08-30c` §5.
+> ✅ **Reach CONFIRMED 2026-08-31c** by consumer-set enumeration (`:46`/`:56` reach
+> `graph_correct` via `graph_correct_w3d2_d`), and ✅ **the repair ADJUDICATED by user call
+> 2026-09-01**: rows 46/56 migrate onto `checkPublic`; the `hql` binder is refused there
+> because they are the non-vacuity instruments. Grounds, four binding conditions, one known
+> unknown: `formal/history/PROOF_STATUS.md` `## Session 2026-09-01`.
 
-**What would close it:** the guard landing on `graph_correct` WITH 4c-ii in the same
-commit — never before (today the statement is true unguarded) and never after (the gate
-would meanwhile pin a false statement). The accept/refuse analysis is in PROOF_STATUS
-`## Session 2026-08-21b`, and the guard was ACCEPTED by user call on 2026-08-28: the
-narrowest repairing guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
-`isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes
-undeclared junk names where the claim holds today) and anything keyed on
-`isDerived`/taint (it guts every derived-query headline claim while the pin regenerates
-GREEN — the house failure mode).
+**What would close it:** two moves now, not one, because the surface is three rows.
+
+* **Rows 46/56 — landing FIRST, on today's tree, in their own commit.** The `checkPublic`
+  migration is provable before 4c-ii (the fence branch closes as row 28's does), and
+  condition 1 of the 2026-09-01 adjudication requires it to land separately rather than
+  inside step 7. So this half closes *early*, not in the 4c-ii commit.
+* **Row 27 — the guard landing on `graph_correct` WITH 4c-ii in the same
+  commit** — never before (today the statement is true unguarded) and never after (the gate
+  would meanwhile pin a false statement). The accept/refuse analysis is in PROOF_STATUS
+  `## Session 2026-08-21b`, and the guard was ACCEPTED by user call on 2026-08-28: the
+  narrowest repairing guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
+  `isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes
+  undeclared junk names where the claim holds today) and anything keyed on
+  `isDerived`/taint (it guts every derived-query headline claim while the pin regenerates
+  GREEN — the house failure mode). **That call is untouched by the 2026-09-01
+  adjudication** — row 27 is the internal-layer statement, not a satisfiability instrument.
 
 ---
 
