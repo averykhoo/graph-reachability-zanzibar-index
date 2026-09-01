@@ -229,7 +229,59 @@ binder shape is why `NoLeafSubjects` exists with a bounded `ttuTargets` list —
 `LeafRules.lean:576-580`), so route it through the bridge; `by decide` on it fails to
 synthesize.
 
-### 7. ⚠ THE HONEST CAVEAT ON THIS LANDING — a weakening the gate CANNOT see
+### 6b. ALL THREE SITES ARE THREADED, AND THE PREMISES ARE DISCHARGED FROM `GraphAdmission`
+
+The other two sites landed the same way, and then the discharge landed on top, so **§7's
+caveat is retired for the headline theorems** (read §7 anyway — it still holds for the
+`_w3d`/`_w3d2` milestone layer, and it is the reason the gate could not have told you).
+
+* `reachedByW3d2_shadow` and `::_d` take the same two premises. The `_d` variant routes the
+  seed side through `noLeafStoreSubjects_of_storeValidRulesD` — this is exactly why §3 built
+  BOTH discharge lemmas.
+* **`GraphAdmission` gains two fields** — `ttuNotLeaf : TtuTargetsSat S NotLeafName` and
+  `directRestrNotLeaf : DirectRestrictionsNotLeaf S` — each documented in the structure
+  docstring with its enforcing Python mechanism, per that block's convention. All four
+  construction sites (`FullScope.lean` `W4Witness.accepts`, `W4WitnessUnion.accepts`,
+  `W4WitnessDirect.admission`, `::admission4`) discharge them **by `decide`**, which is the
+  non-vacuity evidence: had the clause been `relNameOK`-shaped it would be FALSE there and
+  the structure would be uninhabited.
+* The headline theorems now take both from the bundle (`hA.ttuNotLeaf`,
+  `hA.directRestrNotLeaf`), so `graph_correct` / `graph_reached_inv` are conditional on
+  **exactly the admission bundle, as before**.
+* ⚠ **`W4WitnessDirect`'s flat conjunction (`headline_statements.txt:43`) was deliberately
+  NOT extended.** Four sites destructure it positionally; they get the two facts inline
+  instead. That keeps a pinned headline row byte-identical.
+
+**The pin cost, and it is exactly what the adversarial pass predicted.**
+`headline_statements.txt` is **byte-identical (49/49)** — its extractor is textual and stops
+at the first top-level `:=`/`where`, so a structure's field list is invisible to it.
+`headline_definitions.txt` went RED and was **regenerated deliberately**
+(`statement_pin.py --generate`), 161 → **164** rows: the `GraphAdmission` row grew its two
+fields, and three definitions became newly reachable from the headline statements
+(`NotLeafName`, `DirectRestrictionsNotLeaf`, `TtuTargetsSat`). `FINAL_REVIEW.md`'s generated
+counts block was regenerated with it (`doc_counts --generate`). ⚠ That third bullet is the
+one worth pausing on: *the meaning of a claim grew three new dependencies*, which is
+precisely what the definition pin exists to surface — and it did.
+
+### 6c. THE FLIP IS NOW **ONE** OBLIGATION — measured, not projected
+
+The flip probe was re-run on the completed tree, staged the `2026-09-01e` way. With
+`UntaintedShadow` re-pointed at `ShadowOver (fun k => DerNode S k ∨ LeafNode S k)`:
+
+1. the only reds are the **eight `Or.inl` wrappers** the pre-widens were designed to leave
+   — six at the three `hsubj` sites (pass `hsubjW`), two at `hv3` — all mechanical; and
+2. `shadow_graphRec_agree`'s **`hv1`**.
+
+With those wrappers swapped and **`hv1` alone stubbed**, the whole tree builds:
+**`Build completed successfully (1089 jobs). rc=0`**, with exactly one
+`declaration uses 'sorry'` warning, at `CascadeStable.lean:1640` (`hv1`). The probe was then
+fully reverted; the landed tree is unflipped, zero `sorry`, 1089 jobs green.
+
+**So `2026-09-01e`'s "FOUR unowned obligations" is now ONE.** `hv1` still needs the
+operand-side `NotLeafName r'` at the query relation — row 27's query-level premise (§11.13
+(g)'s successor) — and that is the whole of what stands between this tree and 4c-ii.
+
+### 7. ⚠ THE CAVEAT THIS LANDING CARRIED — retired for the headline, still live one layer down
 
 **Six audited theorems now carry two hypotheses they did not carry before**:
 `graph_correct_w3d`, `backend_equivalence_w3d`, `exclusion_effective_w3d`,
@@ -248,14 +300,20 @@ What makes it a *permitted intermediate* rather than a silent regression:
 2. non-vacuity is machine-checked at every witness (§6), so nothing became vacuous; and
 3. the premises are Python-enforced facts (§1), so no real store or schema is excluded.
 
-**It is NOT resolved, and the next session owns it.** The discharge is:
-`DirectRestrictionsNotLeaf` + `TtuTargetsSat _ NotLeafName` become `GraphAdmission` fields,
-the six theorems take the bundle, and the six witness pins above become the field proofs.
-Known cost, measured by the adversarial pass: `headline_statements.txt` stays
-byte-identical (its extractor is textual, stopping at the first top-level `:=`/`where`), but
-`headline_definitions.txt` **will** redden — it pins `GraphAdmission`'s field list — and the
-four construction sites at `FullScope.lean:623/:739/:1486/:1621` plus the flat 8-clause
-conjunction at `:1042` they project from must be extended.
+**Status: RETIRED where it matters, still live one layer down — and the distinction is the
+point.** §6b landed the discharge, so `GraphAdmission` now carries both facts and the
+HEADLINE theorems are conditional on exactly the bundle they were conditional on before.
+What remains is that the `_w3d` / `_w3d2` MILESTONE theorems in `Equiv.lean` and
+`CascadeSettle.lean` still spell their premises out one by one — they always did, 13 of them
+— and now spell out two more. Those six are terminal audited claims, so nothing downstream
+launders the change; a reader comparing them against an older tree sees two extra
+hypotheses and the gate will not flag it.
+
+That residue is proportionate and it is now *bounded*: the two premises are `GraphAdmission`
+fields, machine-checked to hold at every witness, and they are the same facts the headline
+layer assumes. Retiring it entirely means re-stating those six over the bundle, which is a
+separate restatement decision and is NOT part of step 9. **Do not treat this paragraph as
+closed by §6b** — §6b closes the headline half only.
 
 ⚠ **Known cost of the endgame, measured by the adversarial pass and not yet paid:** adding
 a field to `GraphAdmission` leaves `headline_statements.txt` byte-identical (its extractor

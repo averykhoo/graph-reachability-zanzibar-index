@@ -1578,6 +1578,27 @@ re-check, ~20 sites in 3 files go genuinely red.**
   errors, repeat — which is `2026-09-01e` §2's method and costs a handful of incremental
   builds because Lean stops at the first failing module.
 
+* **(s) NEW 2026-09-02 — STEP 9 IS DONE, and the flip is down to ONE obligation.** All
+  three `hsubj` sites are threaded and both premises are `GraphAdmission` fields
+  (`ttuNotLeaf`, `directRestrNotLeaf`), discharged `by decide` at all four construction
+  sites. Re-running the flip probe on the finished tree: the only reds are the **eight
+  `Or.inl` wrappers** the pre-widens were built to leave — six at the `hsubj` sites, two at
+  `hv3` — plus `shadow_graphRec_agree`'s **`hv1`**; with the wrappers swapped and `hv1`
+  ALONE stubbed the whole tree builds (**1089 jobs, rc=0**, one `sorry` warning at
+  `CascadeStable.lean:1640`). **`2026-09-01e`'s "four unowned obligations" is retired.**
+  `hv1` needs row 27's query-level premise (the operand-side `NotLeafName r'` at the query
+  relation) and is the whole of what remains before 4c-ii.
+  ⚠ **The pin cost is now a measured fact rather than a prediction**: `headline_statements
+  .txt` byte-identical (49/49); `headline_definitions.txt` regenerated DELIBERATELY 161 →
+  164 — the `GraphAdmission` row plus **three newly-reachable definitions** (`NotLeafName`,
+  `DirectRestrictionsNotLeaf`, `TtuTargetsSat`). That third part is the one to expect and
+  not to panic at: the definition pin fires when *the meaning of a claim grows a new
+  dependency*, which is exactly what happened, and `FINAL_REVIEW.md`'s counts block must be
+  regenerated in the same breath (`doc_counts --generate`).
+  ⚠ **Do NOT extend `W4WitnessDirect`'s flat conjunction** (`headline_statements.txt:43`)
+  to carry the new fields: four sites destructure it positionally, and it is a pinned
+  headline row. Supply the two facts inline at those sites instead.
+
 * **(r) NEW 2026-09-02 — the six W3d-layer endpoints are AUDITED BUT NOT STATEMENT-PINNED,
   so adding a hypothesis to them is invisible to the gate.** `graph_correct_w3d`,
   `backend_equivalence_w3d`, `exclusion_effective_w3d`, `no_ghost_grant_w3d`,

@@ -121,7 +121,18 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       routes a public-name write on `can_view: [user] but not blocked` onto the
       derived def's Direct leaf family. The narrow form rejected exactly that store
       (`W4WitnessDirect.outside_old_admission` machine-checks it), which is why the
-      headline theorems used to be VACUOUS on the canonical Zanzibar boolean shape. -/
+      headline theorems used to be VACUOUS on the canonical Zanzibar boolean shape.
+    * `ttuNotLeaf` — a TTU arm's target is a *referenced* relation name, and
+      `'.'` is refused in one (`zanzibar_utils_v1.py::_validate_ast_references`, the
+      `'.' in name and name != '...'` dot-lock). Added by 4c-ii step 9.
+    * `directRestrNotLeaf` — likewise for the predicate component of a `Direct`
+      restriction, which is either the bare sentinel or a referenced relation name
+      (`::_restriction_pattern` + the same dot-lock). Added by 4c-ii step 9.
+      ⚠ Both are `NotLeafName`-shaped — *the bare sentinel OR dot-free* — and NOT
+      `relNameOK`-shaped. `BARE = "..."` is itself dot-carrying (`Core/Ident.lean`) and
+      every `Direct` restriction in all three witnesses below is `("user", BARE, _)`, so a
+      plain dot-free clause would be FALSE here, leave this structure uninhabited, and
+      re-vacuate every final theorem. Scope doc §11.13 trap (o). -/
 structure GraphAdmission (S : Schema) (T : Store) : Prop where
   wf : WF S
   nodup : NodupKeys S
@@ -131,6 +142,8 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
   ranked : RewriteRanked S
   objWild : ∀ tr ∈ S.objectWildcards, isDerived S tr = false
   storeValid : StoreValidRulesD S T
+  ttuNotLeaf : TtuTargetsSat S NotLeafName
+  directRestrNotLeaf : DirectRestrictionsNotLeaf S
 
 /-- **`W4Fragment S T` — the honest fragment carries.** Scope restrictions the
     current proof needs that Python admission does NOT imply (each is a documented
@@ -367,7 +380,7 @@ theorem graph_correct {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hqo : q.object.name ≠ STAR) :
     GraphModel.check σ q = sem S T q :=
   graph_correct_w3d2E_d q hA.wf hA.ttuDirect hA.nodup hA.ranked hA.storeValid
-    hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hF.term
+    hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hF.term
     hF.computedOrDirect hF.directArmsBare hF.directArmsConcrete
     hF.computedOnlyOperands hF.twoStrata hF.wsBare hF.noUnionDirects h hq hqs hqo
 
@@ -500,7 +513,7 @@ theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
     (h : ReachedBy σ S T) :
     Inv S σ :=
   reachedByW3d2E_inv h hA.wf hA.ttuDirect hA.nodup hA.ranked hA.matchDecl
-    hA.strat hN.computedOnly hF.twoStrata hF.wsBare hN.storeValid hF.bareStar
+    hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hN.computedOnly hF.twoStrata hF.wsBare hN.storeValid hF.bareStar
     hF.ttuStarFree hF.term
 
 /-! ## The W2 subsumption — untainted schemas sit inside the full scope
@@ -621,6 +634,8 @@ def Tx : Store := [⟨⟨"user", "alice", BARE⟩, "a", ⟨"doc", "1"⟩⟩]
 
 /-- The admission bundle is inhabited by the witness schema/store. -/
 theorem accepts : GraphAdmission Sx Tx where
+  ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+  directRestrNotLeaf := by decide
   wf := ⟨by
     intro p hp
     simp only [Sx, List.mem_cons, List.not_mem_nil, or_false] at hp
@@ -737,6 +752,8 @@ def Ty : Store :=
 
 /-- The admission bundle is inhabited by the union-rooted witness. -/
 theorem accepts : GraphAdmission Sy Ty where
+  ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+  directRestrNotLeaf := by decide
   wf := ⟨by
     intro p hp
     simp only [Sy, List.mem_cons, List.not_mem_nil, or_false] at hp
@@ -1203,7 +1220,7 @@ theorem correct_applies {σ : GraphState} (q : Query)
     rw [hsch] at hsome
     exact (semAux_undeclared Sd q.subject Td q
       (not_mem_keys_of_publicOfLeaf_isSome hWF hsome) _ _).symm
-  · exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+  · exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hterm
       hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo
 
 /-- **CONDITION-2 INSTRUMENT (2026-09-01): the migrated row still exercises the CORE,
@@ -1332,7 +1349,7 @@ theorem coverage_applies {σ : GraphState} {on : String} (hqo : on ≠ STAR)
       List.mem_cons, List.not_mem_nil, or_false] at hr'
     subst hr'
     exact absurd hd' (by decide)
-  exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+  exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hterm
     hCD hDAB hWSbare h hlk hder (hCD _ _ _ hlk hder) (hDAB _ _ _ hlk hder) hqo
     (hCOop _ _ _ hlk hder) (hLU2 _ _ _ hlk hder) hsettledOps
 
@@ -1402,7 +1419,7 @@ theorem toC_applies {σ : GraphState} (h : ReachedByW3d2E σ Sd Td) :
     ReachedByW3d2C σ Sd Td := by
   obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
   obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, _, hBS, hTS, hterm⟩ := fragment
-  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat hCD hDAB directArmsConcrete
+  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hCD hDAB directArmsConcrete
     hCOop hLU2 hWSbare hSV hBS hTS hterm
 
 /-- **The leg-4 E-chain FINAL is jointly dischargeable at the Direct-arm pair**:
@@ -1444,7 +1461,7 @@ theorem w3d2E_correct_applies {σ : GraphState} (q : Query)
     rw [hsch] at hsome
     exact (semAux_undeclared Sd q.subject Td q
       (not_mem_keys_of_publicOfLeaf_isSome hWF hsome) _ _).symm
-  · exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCD hDAB
+  · exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hterm hCD hDAB
       directArmsConcrete hCOop hLU2 hWSbare hNoUD h hq hqs hqo
 
 /-- **CONDITION-2 INSTRUMENT for the E-chain row** — the twin of
@@ -1484,6 +1501,8 @@ it is machine-checked FALSE at `Td`. -/
     `accepts` except that it is the real structure, and it adds `objWild` (`Sd`
     declares no object-wildcard shapes). -/
 theorem admission : GraphAdmission Sd Td where
+  ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+  directRestrNotLeaf := by decide
   wf := accepts.1
   nodup := accepts.2.1
   strat := accepts.2.2.1
@@ -1619,6 +1638,8 @@ theorem outside_old_admission4 : ¬ StoreValidRules Sd Td4 := by
     `StoreValidRulesD`'s DERIVED disjunct (bare subject, `exprDirectsAll` leaf, bare
     restriction); the two `banned` tuples take the untainted disjunct. -/
 theorem admission4 : GraphAdmission Sd Td4 where
+  ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+  directRestrNotLeaf := by decide
   wf := accepts.1
   nodup := accepts.2.1
   strat := accepts.2.2.1
@@ -1696,25 +1717,5 @@ theorem final_applies4 {σ : GraphState} (q : Query)
   graph_correct_public q admission4 w4fragment4 h hq hqs hqo
 
 end W4WitnessDirect
-
-/-! ## 4c-ii step 9 — the new premises hold at every `GraphAdmission` witness
-
-Non-vacuity for the two hypotheses step 9 threads. `DirectRestrictionsNotLeaf` is the
-one that could have gone wrong: every `Direct` restriction in all three witnesses is
-`("user", BARE, _)`, and `BARE = "..."` is DOT-CARRYING, so the `relNameOK`-shaped
-("dot-free") clause a reader would reach for first is FALSE here and would make the
-bundle uninhabited — re-vacuating the final theorems. `NotLeafName`'s BARE escape is
-what makes these `decide`. Scope doc §11.13 trap (o). -/
-
-theorem directRestrictionsNotLeaf_Sx : DirectRestrictionsNotLeaf W4Witness.Sx := by decide
-theorem directRestrictionsNotLeaf_Sy : DirectRestrictionsNotLeaf W4WitnessUnion.Sy := by decide
-theorem directRestrictionsNotLeaf_Sd : DirectRestrictionsNotLeaf W4WitnessDirect.Sd := by decide
-
-theorem ttuTargetsSat_notLeafName_Sx : TtuTargetsSat W4Witness.Sx NotLeafName :=
-  ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
-theorem ttuTargetsSat_notLeafName_Sy : TtuTargetsSat W4WitnessUnion.Sy NotLeafName :=
-  ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
-theorem ttuTargetsSat_notLeafName_Sd : TtuTargetsSat W4WitnessDirect.Sd NotLeafName :=
-  ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
 
 end Zanzibar

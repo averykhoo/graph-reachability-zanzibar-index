@@ -700,10 +700,12 @@ theorem reachedByW3d2_shadow {σ : GraphState} {S : Schema} {T : Store}
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     StoreValidRules S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
+    TtuTargetsSat S NotLeafName →
+    DirectRestrictionsNotLeaf S →
     ∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0 := by
   induction h with
   | empty S =>
-    intro _ _ _ _
+    intro _ _ _ _ _ _
     refine ⟨emptyState S, ReachedByRulesAdmitted.empty S, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro ab hab; simp [emptyState] at hab
     · intro ab hab; simp [emptyState] at hab
@@ -712,31 +714,39 @@ theorem reachedByW3d2_shadow {σ : GraphState} {S : Schema} {T : Store}
     · intro ab hab; simp [emptyState] at hab
     · intro k _ y hy; simp [emptyState] at hy
   | @write σp S T t hadm hprev ih =>
-    intro hNK hCO hSV hterm
+    intro hNK hCO hSV hterm hQ hDR
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO
       (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht'))
       (fun dt R hder => ⟨(hterm dt R hder).1,
         fun t' ht' => (hterm dt R hder).2 t' (List.mem_cons_of_mem _ ht')⟩)
-    have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) := by
-      rintro u hu ⟨dt, on, R, hder, _hRne, _hon, heq⟩
-      obtain ⟨hnt, hns⟩ := hterm dt R hder
-      have hpne : u.subject.predicate ≠ R :=
-        rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
-      apply hpne
-      have hp := congrArg NodeKey.pred heq
-      simpa [subjNode_pred, objNode_pred] using hp
+      hQ hDR
+    -- PRE-WIDENED (4c-ii step 9) — the `reachedByW3d_shadow` treatment, verbatim; see the
+    -- flip-probe control recorded at that site (`CascadeStable.lean`).
+    have hsubjW : ∀ u ∈ rewriteClosure S t,
+        ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) := by
+      rintro u hu (⟨dt, on, R, hder, _hRne, _hon, heq⟩ | hleaf)
+      · obtain ⟨hnt, hns⟩ := hterm dt R hder
+        have hpne : u.subject.predicate ≠ R :=
+          rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+        apply hpne
+        have hp := congrArg NodeKey.pred heq
+        simpa [subjNode_pred, objNode_pred] using hp
+      · exact rewriteClosure_subject_not_leafNode hQ
+          (noLeafStoreSubjects_of_storeValidRules hDR hSV t List.mem_cons_self) hu hleaf
+    have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) :=
+      fun u hu hd => hsubjW u hu (Or.inl hd)
     exact ⟨σ0.writeRules S t,
       ReachedByRulesAdmitted.step t h0
         (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
       untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
   | @remove σp S T t hadm _ hSVT _ _ htermT hprev ih =>
-    intro hNK hCO _ _
-    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSVT htermT
+    intro hNK hCO _ _ hQ hDR
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSVT htermT hQ hDR
     obtain ⟨σ0', h0', hsub⟩ := exists_admitted_erase h0 t
     exact ⟨σ0', h0', untaintedShadow_removeLeg hprev hsh h0 hadm h0' hsub hSVT hCO⟩
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ hprev ih =>
-    intro hNK hCO hSV hterm
-    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm
+    intro hNK hCO hSV hterm hQ hDR
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm hQ hDR
     exact ⟨σ0, h0,
       untaintedShadow_cascade2 hsh (reachedByRules_of_admitted h0) hSV hNK hCO
         hjv1 hjv2⟩
@@ -1256,12 +1266,14 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     WF S →
     BareStarStore T →
+    TtuTargetsSat S NotLeafName →
+    DirectRestrictionsNotLeaf S →
     ∃ σ0, ReachedByRulesAdmitted σ0 S
             (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
           ∧ UntaintedShadow S σ σ0 := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _
     refine ⟨emptyState S, ReachedByRulesAdmitted.empty S, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro ab hab; simp [emptyState] at hab
     · intro ab hab; simp [emptyState] at hab
@@ -1270,13 +1282,14 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
     · intro ab hab; simp [emptyState] at hab
     · intro k _ y hy; simp [emptyState] at hy
   | @write σp S T t hadm _ ih =>
-    intro hNK hCO hDAB hSV hterm hWF hBS
+    intro hNK hCO hDAB hSV hterm hWF hBS hQ hDR
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB
       (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht'))
       (fun dt R hder => ⟨(hterm dt R hder).1,
         fun t' ht' => (hterm dt R hder).2 t' (List.mem_cons_of_mem _ ht')⟩)
       hWF
       (fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht'))
+      hQ hDR
     by_cases hd : isDerived S (t.object.type, t.relation) = true
     · -- derived-key write: the filter drops `t`, σ0 is UNCHANGED; the one logged edge
       -- (seed-only closure) targets a `DerNode`
@@ -1316,23 +1329,33 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
           = t :: T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)) := by
         rw [List.filter_cons, if_pos (by simp [hd])]
       rw [hfe]
-      have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) := by
-        rintro u hu ⟨dt, on, R, hder, _hRne, _hon, heq⟩
-        obtain ⟨hnt, hns⟩ := hterm dt R hder
-        have hpne : u.subject.predicate ≠ R :=
-          rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
-        apply hpne
-        have hp := congrArg NodeKey.pred heq
-        simpa [subjNode_pred, objNode_pred] using hp
+      -- PRE-WIDENED (4c-ii step 9). Same treatment as `reachedByW3d_shadow`, but this
+      -- theorem carries `StoreValidRulesD`, so the seed side goes through the WIDENED
+      -- discharge lemma. (Its derived disjunct needs no schema premise at all — it
+      -- already forces a BARE subject — but the untainted one does, and this branch is
+      -- exactly the untainted-write branch.)
+      have hsubjW : ∀ u ∈ rewriteClosure S t,
+          ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) := by
+        rintro u hu (⟨dt, on, R, hder, _hRne, _hon, heq⟩ | hleaf)
+        · obtain ⟨hnt, hns⟩ := hterm dt R hder
+          have hpne : u.subject.predicate ≠ R :=
+            rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+          apply hpne
+          have hp := congrArg NodeKey.pred heq
+          simpa [subjNode_pred, objNode_pred] using hp
+        · exact rewriteClosure_subject_not_leafNode hQ
+            (noLeafStoreSubjects_of_storeValidRulesD hDR hSV t List.mem_cons_self) hu hleaf
+      have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) :=
+        fun u hu hd' => hsubjW u hu (Or.inl hd')
       exact ⟨σ0.writeRules S t,
         ReachedByRulesAdmitted.step t h0
           (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
         untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
   | @remove σp S T t hadm _ hSVT hBST _ htermT hprev ih =>
-    intro hNK hCO hDAB _ _ hWF _
+    intro hNK hCO hDAB _ _ hWF _ hQ hDR
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB
       (storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB)
-      htermT hWF hBST
+      htermT hWF hBST hQ hDR
     by_cases hd : isDerived S (t.object.type, t.relation) = true
     · -- derived-key erase: the filter never kept `t` — σ0 carries over unchanged
       have hfe : (T.erase t).filter (fun tp => !isDerived S (tp.object.type, tp.relation))
@@ -1359,8 +1382,8 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
         exact h0'
       exact untaintedShadow_removeLeg_d hNK hprev hsh h0 hadm h0e hsub
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
-    intro hNK hCO hDAB hSV hterm hWF hBS
-    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB hSV hterm hWF hBS
+    intro hNK hCO hDAB hSV hterm hWF hBS hQ hDR
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB hSV hterm hWF hBS hQ hDR
     have hND : ∀ t' ∈ T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)),
         isDerived S (t'.object.type, t'.relation) = false := by
       intro t' ht'
@@ -2392,6 +2415,7 @@ theorem writeLeg_sem_stable2 {σ : GraphState} {S : Schema} {T : Store} {t : Tup
     (hSV : StoreValidRules S (t :: T)) (hBS : BareStarStore (t :: T))
     (hTS : TtuStarFree S (t :: T))
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -2424,8 +2448,8 @@ theorem writeLeg_sem_stable2 {σ : GraphState} {S : Schema} {T : Store} {t : Tup
     ReachedByW3d2.write t hadm h
   have hσS : σ.schema = S := reachedByW3d2_schema h
   have hσ'S : (σ.writeLoggedRules S t).schema = S := reachedByW3d2_schema h'
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hCO hSVw htermw
-  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow h' hNK hCO hSV hterm
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hCO hSVw htermw hQ hDR
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow h' hNK hCO hSV hterm hQ hDR
   have hclσ := reachedByW3d2_edgesClosed h
   have htp' := reachedByW3d2_edges_target_plain h' hBS
   -- collapse at each derived operand key, on both sides of the leg
@@ -4315,6 +4339,7 @@ theorem writeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : T
     (hSV : StoreValidRulesD S (t :: T)) (hBS : BareStarStore (t :: T))
     (hTS : TtuStarFree S (t :: T))
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -4355,8 +4380,8 @@ theorem writeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : T
     ReachedByW3d2.write t hadm h
   have hσS : σ.schema = S := reachedByW3d2_schema h
   have hσ'S : (σ.writeLoggedRules S t).schema = S := reachedByW3d2_schema h'
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSVw htermw hWF hBSw
-  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow_d h' hNK hCD hDAB hSV hterm hWF hBS
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSVw htermw hWF hBSw hQ hDR
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow_d h' hNK hCD hDAB hSV hterm hWF hBS hQ hDR
   have hclσ := reachedByW3d2_edgesClosed h
   have htp' := reachedByW3d2_edges_target_plain h' hBS
   -- collapse at each derived operand key, on both sides of the leg
@@ -4431,6 +4456,7 @@ theorem removeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : 
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
     (hSVT : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOrDirect e)
@@ -4487,8 +4513,8 @@ theorem removeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : 
   have hσS : σ.schema = S := reachedByW3d2_schema h
   have hσ'S : (σ.removeLoggedRules S t).schema = S := by
     rw [removeLoggedRules_schema, hσS]
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSVD hterm hWF hBS
-  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow_d h' hNK hCD hDAB hSVDe hterme hWF hBSe
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSVD hterm hWF hBS hQ hDR
+  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d2_shadow_d h' hNK hCD hDAB hSVDe hterme hWF hBSe hQ hDR
   have hclσ := reachedByW3d2_edgesClosed h
   have htp := reachedByW3d2_edges_target_plain h hBS
   -- no closure member of the untainted-key tuple targets any derived node
