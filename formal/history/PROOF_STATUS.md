@@ -93,21 +93,35 @@ object 4c-ii changes, and exactly what a witness must not be allowed to assume a
    review), and `formal/HANDOFF.md`'s refuted "ONE pinned row" line goes with them.
    ⚠ Re-run `verify.sh lean` after the `*.md` edits, per `CLAUDE.md`'s `t2a` note.
 
-### 3. ONE KNOWN UNKNOWN, surfaced now so the repair session does not meet it cold
+### 3. THE ONE KNOWN UNKNOWN — raised, then CLOSED in the same session
 
 Row 28's fence branch needs `σ.schema = S` and gets it from
 `CascadeStrataAssemble.lean::reachedByW3d2E_schema`. Row 56 hypothesises
 `ReachedByW3d2E σ Sd Td`, so it can use that same lemma. **Row 46 hypothesises
-`ReachedByW3d2C`, and a `reachedByW3d2C_schema` did not appear in a name grep of
-`formal/lean/ZanzibarProofs/`.** It may exist under another name, or be a field of the
-structure (several `ReachedBy*` carriers expose `.schema` / `.schemaEq` — see
-`CascadeInv.lean:53-114`), or need landing. ⚠ **This is a grep, not a build** — it is
-sizing input for the repair session, in this file's "reported, not verified" sense, and
-the session must resolve it in the kernel rather than from this paragraph. Note also
-`docs/latent-gaps.md`'s standing observation that `:46` follows *a fortiori* from `:56`
-via `toC_applies`, whose projection is one-way (`FullScope.lean:1255`); whether that
-yields the schema equality or merely the correctness statement is part of the same
-question.
+`ReachedByW3d2C`, and a `reachedByW3d2C_schema` did not appear in a name grep** — raised
+here as sizing input, with "may need landing" as the pessimistic branch.
+
+✅ **It does not need landing. Row 46's schema equality COMPOSES from two lemmas that
+already exist**, both located by reading the source after the grep came back empty:
+
+* `CascadeStrataSettle.lean::reachedByW3d2C_toW3d2` — `ReachedByW3d2C σ S T →
+  ReachedByW3d2 σ S T` (`:2669`, docstring: "every W3d-2 coverage-chain state is a plain
+  W3d-2 state").
+* `CascadeStrata.lean::reachedByW3d2_schema` — `ReachedByW3d2 σ S T → σ.schema = S`
+  (`:433`, and it is `#print axioms`-audited at `Audit.lean:950`).
+
+So the fence branch takes `reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`. **The
+searched-for name was simply the wrong one** — the C-chain reaches the schema fact
+through the plain W3d-2 chain, not by carrying its own projection.
+
+⚠ **This is a SOURCE READ, not a kernel check.** Both symbols exist with exactly the
+types the composition needs and it typechecks by inspection, but no build was run — the
+repair session should let the kernel confirm it rather than cite this paragraph. What
+changed is the *sizing*: the pessimistic branch ("land a new lemma on an audited
+signature") is off the table, so the migration is now two statement edits plus the
+sabotage of condition 2. Superseded by this: the guess in `docs/latent-gaps.md` that `:46`
+might have to come *a fortiori* from `:56` via the one-way `toC_applies` — unnecessary,
+both rows discharge their own fence branch directly.
 
 ### 4. What did NOT change
 

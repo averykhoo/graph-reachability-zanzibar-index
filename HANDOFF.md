@@ -115,9 +115,9 @@ this item.** Rows 46/56 are **re-stated over `GraphModel.checkPublic`**; the `hq
 `FullScope.lean::graph_correct_public`'s docstring already refuses for `final_applies`).
 Row 27 keeps its 2026-08-28 binder. **Four binding conditions** — own green commit *before*
 step 7 · sabotage the migrated witnesses' *non-fence* branch · re-verify the two
-`2026-08-31c` unverified paragraphs · doc sweep + `lean` re-run — plus one known unknown
-(`reachedByW3d2C_schema` may not exist; a grep, not a build). All four, and the grounds:
-PROOF_STATUS `## Session 2026-09-01`, which is the authority for this paragraph.
+`2026-08-31c` unverified paragraphs · doc sweep + `lean` re-run. ✅ **No new lemma is
+needed**: row 46's `σ.schema` composes as `reachedByW3d2_schema ∘ reachedByW3d2C_toW3d2`
+(source read, not yet kernel-checked). Grounds: PROOF_STATUS `## Session 2026-09-01`.
 
 🚧 **Four obligations remain, not five** (`hv3` discharged 2026-08-31c). The three
 `rewriteClosure` sites each need the seed-side `NotLeafName t.subject.predicate`, which has

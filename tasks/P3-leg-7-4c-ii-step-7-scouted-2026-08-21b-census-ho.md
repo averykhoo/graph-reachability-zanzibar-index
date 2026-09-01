@@ -438,3 +438,21 @@ Docs re-pointed this session so nothing still defers to the user: HANDOFF.md ban
 row + P3 item block; formal/HANDOFF.md (the refuted "ONE pinned row" line, struck in
 place); docs/latent-gaps.md ("what would close it" is now two moves); scope doc sec 11.13
 (e) and (l). No Lean file was opened for edit.
+
+KNOWN UNKNOWN CLOSED (same session it was raised). Row 46's fence branch does NOT need a
+new lemma: sigma.schema = Sd composes from two that already exist --
+  CascadeStrataSettle.lean::reachedByW3d2C_toW3d2 : ReachedByW3d2C -> ReachedByW3d2 (:2669)
+  CascadeStrata.lean::reachedByW3d2_schema : ReachedByW3d2 -> sigma.schema = S (:433,
+    #print axioms-audited at Audit.lean:950)
+i.e. `reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`. The earlier NAME GREP failed only
+because the searched-for name was wrong: the C-chain reaches the schema fact through the
+plain W3d-2 chain rather than carrying its own projection.
+
+(!) SOURCE READ, NOT A KERNEL CHECK -- both symbols have exactly the types the composition
+needs and it typechecks by inspection, but no build was run. Let the kernel confirm it;
+do not cite this note as the proof. What it changes is SIZING: the pessimistic branch
+(land a new lemma on an audited signature, with the cone that implies) is off the table,
+so the migration is two statement edits plus condition 2's sabotage.
+
+Also superseded: docs/latent-gaps.md's guess that :46 might have to come a fortiori from
+:56 via the one-way toC_applies. Unnecessary -- both rows discharge their own fence branch.
