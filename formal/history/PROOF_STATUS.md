@@ -131,11 +131,78 @@ threading it.**
 * The ":618/:622/:633" citation is **not a complete site list** (see §1). Cite
   `file::symbol`, per the standing trap about line numbers.
 
-### 6. Next
+### 6. The flip PROBE — step 8 sized by measurement instead of by the plan's prose
 
-Step 8 (generalise the four `DerNode`-hardcoding shadow lemmas) is the next green-stoppable
-move and is untouched by this session. The `hnl` binder is now **blocked on step 9**, not on
-trap (g) — that is a real change in the dependency graph and the board row says so.
+The plan gives step 8 six words: "generalise the four `DerNode`-hardcoding shadow lemmas". It
+never names the four, and the only document that does is under `.scratch/`, i.e. already
+lost. Rather than argue the list, it was **measured**, using the diagnostic the plan's own
+organising principle implies: point the abbrev at the disjunction, build, read the errors,
+revert. `CascadeStable.lean:555` → `ShadowOver (fun k => DerNode S k ∨ LeafNode S k) σ σ0`.
+
+**Observed `rc=1`, six errors, ALL in `CascadeStable.lean`, in exactly THREE declarations:**
+
+    :1180:19  Invalid `⟨...⟩` notation: The expected type   -- untaintedShadow_applyD (:1154)
+    :1206:4   unsolved goals                                -- untaintedShadow_applyD
+    :1302:67  Application type mismatch                     -- reachedByW3d_shadow  (:1269)
+    :1303:62  Application type mismatch                     -- reachedByW3d_shadow
+    :1318:80  unsolved goals                                -- shadow_graphRec_agree (:1315)
+    :1371:29  Application type mismatch                     -- shadow_graphRec_agree
+
+Reverted immediately; `lake build` green at 1089 jobs and `git status --porcelain` empty, so
+the probe left no trace. The two failure SHAPES the plan predicts are both visible and are
+distinguishable in the output: **building** the extras witness fails as `Invalid ⟨...⟩` (the
+anonymous constructor stops elaborating once the target is an `Or`), and **destructuring** it
+in `term` fails as `unsolved goals`.
+
+⚠ **This is a LOWER bound, and the reason is the standing trap.** Lean does not build
+dependents of a failed module, so `CascadeStrataSettle.lean` — which carries
+`untaintedShadow_applyLoggedR` (`:293`), `::_applyLoggedR_d` (`:995`) and two more `hsubj`
+sites (`:685`, `:1267`) — **was never compiled by this probe**. Do not read "six errors,
+three declarations" as the size of step 8. What the probe establishes is the shapes, the
+first wave, and that `untaintedShadow_writeLoggedOne_derived` (`:921`) is **not** in the
+first wave despite the plan naming a lemma of that family.
+
+**Verified first-hand while sizing** (each a grep, and each correcting something):
+
+* **Step 9 is a ONE-line edit, not two.** `import ZanzibarProofs.GraphIndex.Leaf` is already
+  `CascadeStable.lean:2`, so no module needs a new import and acyclicity is already
+  build-proven. The plan's "an `import` plus the abbrev body, rollback = revert two lines"
+  (`:1173-1174`) is stale.
+* **`untaintedShadow_applyD` has exactly TWO term-level call sites** —
+  `CascadeSettle.lean:476` and `CascadeStable.lean:1231` — plus `#print axioms` at
+  `Audit.lean:786`. It is therefore **name-pinned** (`audited_theorems.txt`), so step 8 may
+  add binders but **must not rename it**; an additive `_gen` + same-name wrapper satisfies
+  both. Its siblings `_applyLoggedR{,_d}` carry no audit row, so a rename THERE would be
+  silently unpinned rather than caught.
+* Live declaration lines, since the `.scratch` plan's are stale in both directions:
+  `applyD` `:1154`, `applyLoggedR` `:293`, `applyLoggedR_d` `:995`,
+  `writeLoggedOne_derived` `:921`.
+* ⚠ **`Scratch4cii.lean` writes `ShadowOver (DerNode …)` explicitly at `:410`, `:513`,
+  `:538`, `:584`, `:730`, `:737` — step 1's ANCHORS.** Step 8 must not fold them back to
+  `UntaintedShadow`: they are the flip's regression detector, and folding them would make it
+  a tautology.
+
+**Unverified, agent output, sizing input only** (three scouts, adversarially cross-checked;
+the refuters disputed framing rather than the underlying line citations): that a cheaper
+route than GENERALISE exists — **PRE-WIDEN in place** using step 5's landed
+`first | exact hDer | exact Or.inl hDer` idiom (`CascadeStrataSettle.lean:939`, `:960`), for
+zero new declarations, zero call-site churn and zero pin surface; and that the `sub` field of
+the three `apply*` lemmas is extras-independent, so `hex`/`hnc` would be a complete premise
+set. Neither was kernel-checked. Decide between GENERALISE and PRE-WIDEN by trying the
+cheaper one first — the probe above is re-runnable in two minutes and will say.
+
+### 7. Next
+
+**Step 8 is the next green-stoppable move** and is untouched by this session. Its first wave
+is now measured rather than guessed. When it lands, its sabotage is already designed by this
+session's: the widening will again be green by construction, so the weakening to run is
+*"the premise carries nothing"* — not *"revert the generalisation"*.
+
+The `hnl` binder is now **blocked on step 9**, not on trap (g). That is a real change in the
+dependency graph and the board row says so. Note also what the probe shows about ordering:
+`shadow_graphRec_agree` and the `hsubj` sites red in the SAME first wave as
+`untaintedShadow_applyD`, so step 8 alone does not make the flip green — step 9 still needs
+the seed-side and operand-side premises that no declaration owns today.
 
 ## Session 2026-09-01c (**step 7's named premise is FALSE — Python enforces a DOT-LOCK, not declaredness. `ComputedRefsNotLeaf` landed instead, with eight pins and two sabotages; the binder threading is deferred and re-scoped from 11 sites to 14**)
 

@@ -84,10 +84,24 @@ this session, per the user's standing preference, which is why the file-level ce
 does not appear as reads here; every gate-safety and deferral claim above was nevertheless
 re-verified first-hand before being written down.)
 
-**Still owed: nothing skipped.** Next green-stoppable move is **step 8** — generalise the
-four `DerNode`-hardcoding shadow lemmas — untouched by this session. The `hnl` binder now
-depends on **step 9**, not on trap (g); that is a real change in the dependency graph and
-the board row says so.
+* **Step 8 was sized by measurement, not by the plan's prose.** The plan gives it six words
+  and names none of the lemmas; the only document that does is under `.scratch/`, i.e.
+  already lost. So the flip was run as a throwaway **probe** — point the abbrev at the
+  disjunction, build, read the errors, revert — and it reds **6 errors in 3 declarations,
+  all in `CascadeStable.lean`**: `untaintedShadow_applyD`, `reachedByW3d_shadow`,
+  `shadow_graphRec_agree`. Tree byte-identical afterwards. ⚠ A **lower** bound —
+  `CascadeStrataSettle.lean` never compiled, so its two `apply*` lemmas and two `hsubj`
+  sites are unmeasured. Two corrections fell out of the sizing greps: **step 9 is a
+  ONE-line edit** (the `Leaf` import is already `CascadeStable.lean:2`, so the plan's
+  "rollback = revert two lines" is stale), and `untaintedShadow_applyD` is **name-pinned**
+  via `Audit.lean:786` with exactly two call sites — step 8 may add binders but must not
+  rename it.
+
+**Still owed: nothing skipped.** Next green-stoppable move is **step 8**, untouched by this
+session but now measured. The `hnl` binder depends on **step 9**, not on trap (g); that is a
+real change in the dependency graph and the board row says so. Note what the probe implies
+about ordering: `shadow_graphRec_agree` and the `hsubj` sites red in the *same first wave* as
+`untaintedShadow_applyD`, so landing step 8 does not by itself make the flip green.
 
 ## 2026-09-01c — step 7's named premise was FALSE: Python enforces a dot-lock, not declaredness
 
