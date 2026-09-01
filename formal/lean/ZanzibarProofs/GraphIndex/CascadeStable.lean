@@ -554,6 +554,197 @@ structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
 abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
   ShadowOver (DerNode S) σ σ0
 
+/-! ### Leaf-free `computed` operands (4c-ii step 7)
+
+⚠ **PLAN CORRECTION, 2026-09-01c — the step as enumerated names a predicate whose
+premise is FALSE, and this session measured it.** `PROOF_STATUS.md:933-943` calls step 7
+`ComputedRefsDeclared`, and `PROOF_STATUS.md:2074-2082` proposes it as a `WF` clause
+`∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, relNameOK r`. Python enforces neither.
+`zanzibar_utils_v1.py::_validate_ast_references` (`:910-940`) enforces a **DOT-LOCK** on
+*referenced* names — `check_name` (`:915-919`) raises iff `'.' in name and name != '...'`,
+applied to `Direct` restriction predicates (`:926-927`), `Computed.relation` (`:929`) and
+both TTU names (`:930-932`). Declared-ness is enforced nowhere. Literal observed output:
+
+```text
+A  undeclared-operand    : ACCEPTED    -- define alias: ghost
+A2 undeclared-in-boolean : ACCEPTED    -- define alias: viewer but not ghost
+B  dotted-operand        : REFUSED -> ValueError doc#alias: 'viewer.0' is inside the
+                                      reserved leaf namespace ('.' in referenced
+                                      relation names)
+```
+
+A `ComputedRefsDeclared` would therefore be STRICTLY STRONGER than Python: it would
+exclude schemas Python accepts and compiles — unfaithful in the dangerous direction —
+and it would contradict `Core/Schema.lean:66-69`, whose `WF` docstring already records
+that "reference-declared-ness is handled by the `undefined ⇒ empty` convention, so they
+are not extra `WF` clauses".
+
+`relNameOK` is wrong for a second, independent reason: `Core/Ident.lean::BARE = "..."`
+CONTAINS a dot, so `relNameOK BARE` is FALSE, while `check_name` escapes `'...'`
+explicitly. `Leaf.lean:604::NotLeafName p := p = BARE ∨ isLeafPred p = false` is
+`check_name` byte for byte, escape included. That is the predicate below.
+
+⚠ **This block is INERT on today's tree** — nothing consumes it yet; its consumer is
+`shadow_graphRec_agree`'s `hv1`, which needs `NotLeafName r'` for the OPERAND relation
+(scope-doc §11.13 trap (g)). Per `docs/sabotage-procedure.md:100-141` that flips the
+sabotage's job: a green build vets NOTHING here, so the witness/control pins below are
+the SOLE evidence that the predicate has content, and they exist for no other reason.
+Do not "simplify" them away. -/
+
+/-- **No `computed` operand of any def names a minted leaf family.**
+    Quantified over `S.defs` rather than behind an `S.lookup k = some e →` binder so that
+    it is a nest of BOUNDED quantifiers over decidable atoms, hence `by decide`-able at a
+    concrete schema — the `LeafRules.lean:572-586` design rule. The binder form is not
+    decidable and every pin below would have become a hand proof. -/
+def ComputedRefsNotLeaf (S : Schema) : Prop :=
+  ∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, NotLeafName r
+
+/-- …and it is DECIDABLE. (A plain `def` is not unfolded by instance synthesis, so the
+    instance has to be stated — `LeafRules.lean:605`, same shape.) -/
+instance (S : Schema) : Decidable (ComputedRefsNotLeaf S) :=
+  inferInstanceAs (Decidable (∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, NotLeafName r))
+
+/-- The eliminator, read back through a lookup rather than `S.defs` membership. -/
+theorem notLeafName_of_computedRef {S : Schema} {k : String × String} {e : Expr}
+    {r : String} (h : ComputedRefsNotLeaf S) (hlk : S.lookup k = some e)
+    (hr : r ∈ computedRefs e) : NotLeafName r :=
+  h (k, e) (mem_defs_of_lookup hlk) r hr
+
+/-- **The consumer form** — the exact shape `shadow_graphRec_agree`'s `hv1` needs when it
+    is pre-widened at step 9, at an arbitrary object type and name. -/
+theorem notLeafNode_of_computedRef {S : Schema} {k : String × String} {e : Expr}
+    {r dt on : String} (h : ComputedRefsNotLeaf S) (hlk : S.lookup k = some e)
+    (hr : r ∈ computedRefs e) : ¬ LeafNode S (objNode ⟨dt, on⟩ r) :=
+  not_leafNode_of_notLeafName
+    (by simpa [objNode_pred] using notLeafName_of_computedRef h hlk hr)
+
+/-! #### The pins — the SOLE evidence, since the predicate is inert (step 7)
+
+Everything above is additive, so a green build vets nothing: `ComputedRefsNotLeaf`
+returning `True` on every schema would compile and audit exactly as cleanly. Each pin
+below exists for no other reason. The template is step 4's witness/control set
+(`LeafRules.lean:949-1048`): one witness, one non-vacuity companion, and controls that
+differ from the witness in exactly ONE cell so the red points at one thing.
+
+## ★ CONTROLLED — two sabotages, run 2026-09-01c (`docs/sabotage-procedure.md`)
+
+**(S1) The predicate is swapped for the one the PLAN proposed** — `NotLeafName r` →
+`relNameOK r`, applied consistently to the `def` AND its `Decidable` instance (the first
+attempt changed only the `def` and died of a type mismatch in the instance: an INSTRUMENT
+artifact, not a result — `:281-313`). **S1 did NOT discriminate what it was meant to.** It
+failed before reaching any pin:
+```text
+error: CascadeStable.lean:605:2: failed to synthesize
+  Decidable (∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, relNameOK r)
+```
+`relNameOK` carries no `DecidablePred` instance in this tree, so it cannot serve as this
+step's predicate without new instance work — an independent reason to refuse it, but not
+the BARE-escape reason the docstring claims. That green was a verdict on the PINS, and it
+is why `SlVBareRef` / `computedRefsNotLeaf_bare_true` were added afterwards.
+
+**(S2) The quantifier is narrowed to the first def** — `∀ p ∈ S.defs` →
+`∀ p ∈ S.defs.take 1`, again on both sites. This is the innocent-looking refactor that
+makes the feature stop being tested. Literal output:
+```text
+error: CascadeStable.lean:651:74: Tactic `decide` proved that the proposition
+  ¬ComputedRefsNotLeaf SlVBadRef
+is false
+```
+**Attributable**: exactly one pin reddened (`computedRefsNotLeaf_false`) plus the
+eliminator `notLeafName_of_computedRef` on the code side (`(k, e) ∈ List.take 1 S.defs`).
+Controls GREEN throughout: `computedRefsNotLeaf_slV`, `computedRefsNotLeaf_ghost_true`,
+`computedRefsNotLeaf_bare_true`, `slVBadRef_hunt_holds`, `slVBadRef_shape_reachable`.
+Restored, rebuilt, `rc=0`, 1056 jobs. -/
+
+namespace CrnlWitness
+
+/-- **Positive pin** at the canonical boolean shape `viewer := editor but not banned`
+    (`LeafRules.lean:743`). Says little alone — the refutations below give it content. -/
+theorem computedRefsNotLeaf_slV : ComputedRefsNotLeaf LeafRuleWitness.SlV := by decide
+
+/-- **Non-vacuity, and it is mandatory**: the predicate is trivially true at any schema
+    whose defs carry no `computed` leaf — the same trap `lrV_untainted_layer_silent`
+    (`LeafRules.lean:762`) exists to close. This exhibits a NONEMPTY, two-atom operand
+    list, so the witness above is quantifying over something. -/
+theorem computedRefsNotLeaf_slV_nonvacuous :
+    (LeafRuleWitness.SlV.lookup ("doc", "viewer")).map computedRefs
+      = some ["editor", "banned"] := by decide
+
+/-- The control: `SlV` with the exclusion's SUBTRACT operand re-pointed at a minted leaf
+    name. Differs from `SlV` in exactly ONE cell. -/
+def SlVBadRef : Schema :=
+  ⟨[(("doc", "editor"), .direct [("user", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "viewer"), .excl (.computed "editor") (.computed "banned.0"))], []⟩
+
+/-- **REFUTATION** — reddens iff the predicate stops seeing dotted `computed` operands. -/
+theorem computedRefsNotLeaf_false : ¬ ComputedRefsNotLeaf SlVBadRef := by decide
+
+/-- **★ THE CENSUS HOLE, EXHIBITED RATHER THAN ARGUED.** This is the whole reason step 7
+    exists. At the control, `shadow_graphRec_agree`'s hypothesis `hunt` **HOLDS** at the
+    dotted operand while the enclosing relation is genuinely derived — i.e. `hunt` alone
+    does NOT exclude a minted leaf name, so the pre-widened `hv1` cannot be discharged
+    from it (`CascadeStable.lean::shadow_graphRec_agree`'s ⚠ comment; scope-doc §11.13
+    trap (g)). Structural reason: `Spec/Stratify.lean::taintedKeys` filters `S.keys`, so a
+    name that is not a declared key can never be tainted. -/
+theorem slVBadRef_hunt_holds : isDerived SlVBadRef ("doc", "banned.0") = false := by decide
+
+/-- …and the shape is REACHABLE, not a curiosity: the enclosing relation really is
+    derived, so this is a state the cascade can be in. Without this, the pin above is
+    consistent with the whole schema being untainted. -/
+theorem slVBadRef_shape_reachable : isDerived SlVBadRef ("doc", "viewer") = true := by decide
+
+/-- **★ THE DISCRIMINATING CONTROL — this is what makes the plan correction machine-
+    checked rather than argued.** `SlV` with the subtract operand re-pointed at a
+    dot-free but UNDECLARED name. Python ACCEPTS this schema and compiles it (measured
+    this session — the `A`/`A2` rows in the block above), and the dot-lock reading
+    accepts it too. A `ComputedRefsDeclared` would REFUSE it, excluding a schema the
+    implementation runs. One cell from `SlV`, as with the other control. -/
+def SlVGhostRef : Schema :=
+  ⟨[(("doc", "editor"), .direct [("user", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "viewer"), .excl (.computed "editor") (.computed "ghost"))], []⟩
+
+/-- The dot-lock reading ACCEPTS the undeclared operand, faithfully to Python. Flip this
+    to `¬ ComputedRefsNotLeaf` and you have written `ComputedRefsDeclared` by accident. -/
+theorem computedRefsNotLeaf_ghost_true : ComputedRefsNotLeaf SlVGhostRef := by decide
+
+/-- …and the ghost really is undeclared — otherwise the pin above is vacuous, since a
+    DECLARED operand would satisfy both readings and discriminate nothing. -/
+theorem slVGhostRef_undeclared : SlVGhostRef.lookup ("doc", "ghost") = none := by decide
+
+/-! ##### The BARE escape — added because the S1 sabotage did NOT discriminate it
+
+The docstring above rejects `relNameOK` partly on the ground that `BARE = "..."` contains
+a dot, so `relNameOK BARE` is FALSE while Python's `check_name` escapes `'...'`
+explicitly. Sabotage S1 (swap `NotLeafName` → `relNameOK`, consistently across the def
+and its instance) was run to test that claim and **failed to test it**: it died at
+`failed to synthesize Decidable (relNameOK …)` before reaching any pin, because
+`relNameOK` carries no `DecidablePred` instance in this tree (`NotLeafName`'s is
+`LeafRules.lean:593`). Measured separately: `NotLeafName BARE = true`,
+`isLeafPred BARE = true`.
+
+Per `docs/sabotage-procedure.md:137-141` — "use the sabotage to reject a NARROWER pin you
+were about to write" — the fixtures below exist because that green was a verdict on the
+PINS, not on the code. -/
+
+/-- `SlV` with the subtract operand at the BARE sentinel. Python's `check_name` escapes
+    `'...'`, so this is accepted there; `relNameOK` would refuse it. -/
+def SlVBareRef : Schema :=
+  ⟨[(("doc", "editor"), .direct [("user", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "viewer"), .excl (.computed "editor") (.computed BARE))], []⟩
+
+/-- **The escape is load-bearing.** Green under `NotLeafName`; a `relNameOK` reading
+    refuses this schema, which is the difference the S1 sabotage could not reach. -/
+theorem computedRefsNotLeaf_bare_true : ComputedRefsNotLeaf SlVBareRef := by decide
+
+/-- …and the escape is doing real work rather than being unreachable: `BARE` is exactly
+    the string the leaf test would otherwise classify AS a leaf name. -/
+theorem bare_is_leafPred : isLeafPred BARE = true := by decide
+
+end CrnlWitness
+
 /-! ### The `NoLeafSubjects` → `TtuTargetsSat` bridge (4c-ii step 6)
 
 `LeafRules.lean::NoLeafSubjects` quantifies over `LeafRules.lean::schemaRewritesL`, which

@@ -1,14 +1,14 @@
-2026-09-01b — gate re-run after the doc edits; verdict line in the session-log entry.
+2026-09-01c — gate re-run after the doc edits; verdict line in the session-log entry.
 
-(nav) **THE CLASS-B REPAIR IS LANDED (2026-09-01b) — all four conditions discharged.** Rows
-46/56 (`correct_applies` / `::w3d2E_correct_applies`) are now stated over `checkPublic`, the
-`hql` binder **REFUSED** on both. **Row 27 keeps its binder, so the `hql` surface is ONE row
-again** — by migration, not by the refuted 2026-08-28c argument. **Next on `P3`: step 7.**
+(nav) **STEP 7's PREDICATE IS LANDED (2026-09-01c) as `ComputedRefsNotLeaf` — the step's
+named premise was FALSE.** Python **dot-locks** referenced relation names rather than
+requiring declaredness: an UNDECLARED operand is accepted and compiled, only a dotted one
+raises, so `ComputedRefsDeclared` would be stricter than Python. **Binder DEFERRED, design
+settled** — trap (g)'s way out is `ReconcileStars.lean:622`, which discards an in-scope `hr'`.
 
-**The known unknown is REFUTED, kernel-checked:** no `reachedByW3d2C_schema` exists or is
-needed — the grep wanted the **wrong name**; row 46 composes via
-`reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`.
-⚠ **`statement_pin.py`'s list order IS `headline_statements.txt`'s line order — file new pins
-at the TAIL.** Filing this session's three thematically shifted `w3d2E_correct_applies` 56→59
-and the scope doc's `53, 59, 64` list, falsifying every living "rows 46/56" citation before it
-was caught. New pins are 65-67. Condition 2's three instruments: PROOF_STATUS `2026-09-01b`.
+(!) **"STEP 7" IS AMBIGUOUS — three numberings are live and the board mixed them.** `hql`
+is **step 10**, not 7; step 9 (the flip) is what it co-lands with, and it is NOT landable
+before then — `graph_correct` is a proved theorem of today's tree.
+
+(!) **INERT, so its 8 pins are the SOLE evidence.** S1 was a verdict on the PINS, not the
+code. Sizing: 14 call sites, not 11.

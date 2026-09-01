@@ -25,6 +25,59 @@ from here.
 
 ---
 
+## 2026-09-01c — step 7's named premise was FALSE: Python enforces a dot-lock, not declaredness
+
+rows: `P3`
+
+**The step landed under a corrected name.** 4c-ii step 7 is enumerated
+(`formal/history/PROOF_STATUS.md:933-943`) as "`ComputedRefsDeclared` + an unused `hnl`
+binder on `shadow_graphRec_agree`". **`ComputedRefsDeclared` models nothing.** Measured,
+not argued: `zanzibar_utils_v1.py::_validate_ast_references` refuses a referenced relation
+name iff it contains `.` and is not `...`; an UNDECLARED operand is accepted and compiled,
+both plain and inside a boolean relation. A declaredness clause would be strictly stronger
+than Python — excluding schemas the implementation runs — and would contradict
+`Core/Schema.lean:66-69`, which already records declaredness as deliberately *not* a `WF`
+clause. Landed as **`ComputedRefsNotLeaf`**, over `Leaf.lean::NotLeafName`, which matches
+the Python check byte for byte including the `'...'` escape.
+
+Formal detail, the probe's literal output and both sabotages:
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md)
+`## Session 2026-09-01c`. The short version:
+
+* **The change is INERT, so the eight pins are the sole evidence** and the docstring says
+  so (`docs/sabotage-procedure.md:100-141`). Best of them: the census hole is now
+  *exhibited* — `slVBadRef_hunt_holds` shows `shadow_graphRec_agree`'s `hunt` HOLDS at a
+  minted leaf name, which is the whole reason the step exists; and the discriminating
+  control `computedRefsNotLeaf_ghost_true` makes the dot-lock-vs-declaredness call
+  machine-checked rather than a docstring assertion.
+* **Sabotage S1 was a verdict on the PINS, not the code.** Swapping in the plan's own
+  `relNameOK` died at `failed to synthesize Decidable …` before reaching a pin, so it never
+  tested the BARE escape it was aimed at. Three more pins were added afterwards to cover
+  the gap it exposed. S2 (narrow the quantifier to the first def) fires attributably —
+  one pin red, five green.
+* **`hql` was never landable, and this was re-verified first-hand.** `graph_correct` is a
+  *proved theorem of today's tree*, so the binder is a weakening of a byte-pinned headline
+  that nothing in the gate can distinguish from not adding it.
+  `docs/latent-gaps.md:164-167` already adjudicates it: "never before … never after".
+* **Two corrections to the record.** The `shadow_graphRec_agree` call-site count is **14**,
+  not 11 (the plan counts only the direct sites; 3 more are `hag` callbacks). And the
+  previous entry's "`P3` continues at step 7 (row 27's `hql` guard)" mixed two numberings —
+  under the live ten-step plan `hql` is **step 10**.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 156 task file(s) parsed)`
+
+read: board only  (`task.py board` + `show P3` was the whole session-start view; the root
+`HANDOFF.md` was never opened. `formal/HANDOFF.md` — a different file, the formal-frontier
+pointer the `P3` item names under "Read first" — was read as item content, not as the board.)
+
+**Still owed:** the binder threading, deferred deliberately with its design settled. It
+needs `r' ∈ computedRefs e` at `shadow_graphRec_agree`, which
+`ReconcileStars.lean:618/633` currently discards from the `hag` callback — scope-doc
+§11.13 trap (g). **The way out is new this session**: `ReconcileStars.lean:622` already has
+`hr'` in scope and throws it away, so widening `hag` to pass it through dissolves the trap.
+That touches `checkFn_agree_of_graphRec{,_cd}` (9 sites) plus the 14, so it is its own
+increment.
+
 ## 2026-09-01b — the Class-B repair LANDS: rows 46/56 on `checkPublic`, all four conditions discharged
 
 rows: `P3`

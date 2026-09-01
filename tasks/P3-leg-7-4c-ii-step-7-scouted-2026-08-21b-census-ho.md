@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Class-B repair LANDED 2026-09-01b: rows 46/56 on checkPublic, 4 conditions discharged. Next: step 7 (row 27).
+brief: Step 7 predicate landed as ComputedRefsNotLeaf -- plan's 'Declared' premise was FALSE. hql is step 10, not 7.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-01b
-updated: 2026-09-01b
+moved: 2026-09-01c
+updated: 2026-09-01c
 closed:
 ---
 
@@ -470,3 +470,21 @@ CONDITION 3: both 2026-08-31c UNVERIFIED claims re-verified first-hand and both 
 FOOTGUN FOUND: `statement_pin.py`'s list order IS the golden's line order. Filing the new pins thematically shifted `w3d2E_correct_applies` 56->59 and the scope doc's 53/59/64 enumeration, silently falsifying every living 'rows 46/56' citation. Pins moved to the list TAIL (rows 65-67); rows 46/53/56/59/64 re-verified unmoved. Also fixed a pre-existing off-by-one: `unfenced_grants` is golden row 52, not 51.
 
 Full record: PROOF_STATUS `## Session 2026-09-01b`. REMAINING on P3: step 7 (row 27's `hql`) and the rest of 4c-ii -- unchanged by this session.
+
+### 2026-09-01c
+
+Step 7's predicate LANDED under a corrected name; the binder is deferred with its design settled.
+
+PLAN CORRECTION, measured not argued: the ten-step plan (PROOF_STATUS:933-943) names this step ComputedRefsDeclared, and PROOF_STATUS:2074-2082 offers a WF clause over relNameOK. Both are unfaithful. zanzibar_utils_v1.py::_validate_ast_references (:910-940) enforces a DOT-LOCK on referenced names -- check_name (:915-919) raises iff '.' in name and name != '...'. Declaredness is enforced NOWHERE. Observed: undeclared operand ACCEPTED (plain and inside a boolean relation); dotted operand REFUSED with ValueError '...is inside the reserved leaf namespace'. A declaredness clause would be strictly STRONGER than Python -- excluding schemas it accepts and compiles -- and contradicts Core/Schema.lean:66-69, whose WF docstring already records declaredness as deliberately not a WF clause. relNameOK fails independently: BARE = '...' contains a dot, so relNameOK BARE is false while check_name escapes it.
+
+LANDED: CascadeStable.lean::ComputedRefsNotLeaf over Leaf.lean::NotLeafName (byte-for-byte the Python check), + Decidable instance + notLeafName_of_computedRef / notLeafNode_of_computedRef. Green first attempt, 1056 jobs, zero-cone additive.
+
+INERT, so the 8 pins are the SOLE evidence (sabotage-procedure.md:100-141), stated in the docstring. Census hole EXHIBITED: slVBadRef_hunt_holds shows hunt HOLDS at a minted leaf name. Dot-lock call MACHINE-CHECKED: computedRefsNotLeaf_ghost_true.
+
+SABOTAGES. S1 (NotLeafName -> relNameOK, def+instance together) FAILED TO DISCRIMINATE -- died at 'failed to synthesize Decidable (... relNameOK ...)' before reaching a pin, because relNameOK has no DecidablePred instance. That green was a verdict on the PINS, so SlVBareRef / computedRefsNotLeaf_bare_true / bare_is_leafPred were added after. S2 (forall p in S.defs -> S.defs.take 1) fires attributably: 'decide proved that the proposition ¬ComputedRefsNotLeaf SlVBadRef is false' -- 1 pin red, 5 green.
+
+SIZING: shadow_graphRec_agree has 14 term-level call sites in 6 files, not 11 (3 are hag callbacks).
+
+DEFERRED + design settled: ComputedRefsNotLeaf S alone cannot discharge hv1 at an arbitrary r'; it needs r' in computedRefs e, which ReconcileStars.lean:618/633 discards from the hag callback (scope-doc 11.13 trap (g)). WAY OUT FOUND: :622 already computes fun r' hr' => hag s r' (hleafUnt r' hr') with hr' in scope and thrown away -- widening hag dissolves the trap. Touches checkFn_agree_of_graphRec{,_cd} (9 sites) + the 14, so it is its own increment.
+
+ROUTING: 'step 7' is ambiguous across three numberings. Under the live ten-step plan hql is STEP 10 (PROOF_STATUS:1071-1072 says so), not step 7. hql is not landable before the flip: graph_correct is a proved theorem of today's tree, so the binder is a weakening nothing in the gate can distinguish -- docs/latent-gaps.md:164-167, 'never before ... never after'.
