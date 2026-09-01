@@ -79,7 +79,14 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
+⚠ **This file's dated-block series STOPS at 2026-08-28c and four sessions have landed
+since** (`2026-08-30`…`2026-08-31c`, plus the `2026-09-01` decision entry). For anything
+after 2026-08-28c read `history/PROOF_STATUS.md` top-down; the blocks below are accurate
+as of their own dates except where corrected in place.
+
 **2026-08-28c — the public surface is migrated, and the `hql` surface is now one row.**
+🚨 **THE "ONE ROW" HALF OF THIS TITLE IS REFUTED (2026-08-31c) — see the correction at the
+end of this block. The migration half stands.**
 Seven declarations (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
 `Exec.graphRun_check_eq_sem`, `::graphRunOps_check_eq_sem`,
 `W4WitnessDirect.final_applies`/`final_applies4`) now state `GraphModel.checkPublic`,
@@ -91,8 +98,18 @@ docstring false.
 
 ⚠ **What this changes for 4c-ii: `docs/latent-gaps.md` used to name SIX theorems as going
 FALSE after the re-point; five of them plus both `final_applies` witnesses are now out of
-that set entirely** (the fence discharges the leaf-name case). **The remaining `hql`
-surface is ONE pinned row — `graph_correct` (`headline_statements.txt:27`)**, deliberately
+that set entirely** (the fence discharges the leaf-name case). ~~**The remaining `hql`
+surface is ONE pinned row — `graph_correct` (`headline_statements.txt:27`)**~~ 🚨 **FALSE —
+the surface is THREE rows: 27, 46 and 56.** Refuted 2026-08-31c by consumer-set
+enumeration: rows 46/56 (`W4WitnessDirect.correct_applies` / `::w3d2E_correct_applies`)
+carry no `checkPublic` and consume `graph_correct_w3d2{,E}_d` *directly*
+(`FullScope.lean:1112`, `:1285`), so they sit below the fence too. The 2026-08-28c
+reasoning was right about `final_applies`/`final_applies4` and wrong to generalise from
+them. ✅ **ADJUDICATED (user, 2026-09-01): rows 46/56 MIGRATE onto `checkPublic` — the same
+move this block records — and do NOT take the `hql` binder, because they are the
+non-vacuity instruments. Row 27 keeps its binder.** Grounds, the four binding conditions,
+and one known unknown: `history/PROOF_STATUS.md` `## Session 2026-09-01`.
+Row 27 remains deliberately
 kept as the INTERNAL-layer statement. `unfenced_grants` (`:51`) stays unfenced as
 `fence_changes_answer`'s foil; the `Equiv.lean` 27-rung ladder stays on `check` because it
 is a per-stage record of the internal layer (its own header says so) — zero edits.

@@ -25,6 +25,77 @@ from here.
 
 ---
 
+## 2026-09-01 — the Class-B repair is ADJUDICATED: rows 46/56 migrate onto `checkPublic`, the `hql` binder refused
+
+rows: `P3`
+
+**A decision session. No Lean file, proof, pin or golden was modified** — the product is the
+adjudication and the doc re-pointing it required.
+
+**The user asked for the pending call to be weighed, took the recommendation, and directed
+that every record still deferring to them point at the decision instead.** So:
+
+> **Rows 46 and 56 of `headline_statements.txt` — `W4WitnessDirect.correct_applies` and
+> `::w3d2E_correct_applies` — are RE-STATED over `GraphModel.checkPublic`. They do NOT get an
+> `hql` binder. Row 27 (`graph_correct`) keeps the binder accepted 2026-08-28; that call is
+> not reopened.**
+
+**Why.** Rows 46/56 are satisfiability witnesses with `q` universally quantified — their job
+is to certify that the headline's hypothesis set is inhabited. An
+`hql : publicOfLeaf S q.object.type q.relation = none` binder puts a schema-dependent
+hypothesis on exactly the declarations that exist to detect unsatisfiable hypotheses, which
+is the failure `FullScope.lean::graph_correct_public`'s docstring already refuses for
+`final_applies`. The migration, by contrast, is a landed precedent (seven declarations on
+2026-08-28c, **none gained a hypothesis**), and the pin that makes the fence contentful —
+`fence_changes_answer` — is stated at `Sd`, the same schema rows 46/56 are instantiated at.
+It is also the honest correspondence: `checkPublic` models the real public
+`WildcardIndex.check`, while an `hql` binder models nothing in the Python. **Nothing true is
+given up** — post-re-point the unguarded statement is machine-checked FALSE, so the choice
+was only ever *which* weakening.
+
+**Four conditions bind the repair session**, and the first one is what discharges `P3`'s
+standing "do not smuggle this into step 7" — by sequencing rather than deferral: (1) its own
+session and its own green commit, landing **before** step 7, on today's tree; (2) sabotage
+the migrated witnesses' **non-fence** branch, since `fence_changes_answer` proves the fence
+fires but not that the witness still exercises `graph_correct` through the other branch;
+(3) re-verify the two paragraphs `2026-08-31c` labelled UNVERIFIED
+(`headline_definitions.txt`, `audited_theorems.txt`) rather than trusting them from prose;
+(4) doc sweep in the same commit, `verify.sh lean` re-run after the `*.md` edits.
+
+⚠ **One known unknown, surfaced rather than discovered cold later.** Row 28's fence branch
+takes `σ.schema = S` from `CascadeStrataAssemble.lean::reachedByW3d2E_schema`, which row 56
+can reuse — but row 46 hypothesises `ReachedByW3d2C` and **no `reachedByW3d2C_schema` turned
+up in a name grep**. It may be a structure field, exist under another name, or need landing.
+**That is a grep, not a build**: sizing input for the repair session, in this repo's
+"reported, not verified" sense.
+
+**Records re-pointed so nothing still defers to the user:** `HANDOFF.md` (banner, `P3` row,
+`P3` item block, read-first); `formal/HANDOFF.md` — the refuted "ONE pinned row" line struck
+in place, plus a new warning that its dated-block series stops at 2026-08-28c while four
+sessions have landed since; `docs/latent-gaps.md` — "what would close it" is now **two**
+moves, because rows 46/56 close *early* and independently of the 4c-ii commit; scope doc
+§11.13 (e) and (l); `tasks/P3` + `tasks/BANNER.md`. Full grounds:
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session 2026-09-01`.
+
+**Trial close-the-loop.**
+
+`task lint: clean (12 checks, 156 task file(s) parsed)`
+
+**read: board + HANDOFF.** `python scripts/task.py board` ran first and named `P3` and the
+pending call correctly — but the user's question was *which way to decide*, and that needed
+adjudication history the board does not carry: `HANDOFF.md`'s `P3` block, PROOF_STATUS
+`2026-08-31c`, and `graph_correct_public`'s own docstring. Honest reading: the board
+**replaced** the file read for orientation and did **not** replace it for adjudication — a
+narrower win than `2026-08-31c`'s "board only", and the gap is the item's *history* rather
+than its *state*. Worth weighing against `TT-1`: a cutover has to put that history somewhere.
+⚠ Also observed: `BANNER.md`'s 14-line cap was hit three times in a row because two of my
+"fixes" swapped two lines for two lines instead of removing one. The lint refused every time
+and its message was right each time — recorded because the failure was mine, not the tool's.
+
+**Still owed:** nothing.
+
+---
+
 ## 2026-08-31c — the Class-B spike is answered: it REACHES `graph_correct`, on THREE pinned rows not one
 
 rows: `P3`

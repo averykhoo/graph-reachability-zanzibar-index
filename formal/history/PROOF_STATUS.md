@@ -15,6 +15,125 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-01 (**the Class-B repair is ADJUDICATED — `checkPublic` migration ACCEPTED for rows 46/56, the `hql` binder REFUSED on the non-vacuity instruments. A decision entry: no Lean file, proof, pin or golden was modified.**)
+
+**Task taken:** the user call that `2026-08-31c` surfaced and deliberately did not make.
+The user asked for the recommendation to be weighed, took it, and directed that every
+record still deferring to them be re-pointed at the decision. **Nothing was built** — this
+entry, and the doc edits it governs, are the whole of the session's product.
+
+### 1. THE ADJUDICATION — user call, 2026-09-01
+
+> **Rows 46 and 56 — `W4WitnessDirect.correct_applies` and `::w3d2E_correct_applies` — are
+> to be RE-STATED over `GraphModel.checkPublic`. They do NOT get an `hql` binder.**
+
+The user delegated the call to the assistant's recommendation after reading it, in the
+same pattern as 2026-08-28's two `P3` calls. **Row 27 (`graph_correct`) is untouched by
+this**: its `hql` binder was accepted on 2026-08-28 and that decision stands — it is the
+INTERNAL-layer statement, `q`-quantified but not a satisfiability instrument, and
+`FullScope.lean::graph_correct_public` is its unguarded public twin already.
+
+**Grounds, in the order they carried weight:**
+
+**(a) A binder on a satisfiability witness is the house failure mode by construction.**
+Rows 46/56 exist to certify that the headline's hypothesis set is *inhabited by a real
+compiled Direct-arm boolean schema* — `correct_applies`' own docstring calls that "the
+attack of record for a widening". Adding `hql : publicOfLeaf S q.object.type q.relation
+= none` puts a schema-dependent hypothesis on the very declarations whose job is to detect
+unsatisfiable hypotheses. `graph_correct_public`'s docstring already refuses this move in
+as many words for `final_applies`/`final_applies4`; the spike only showed that two more
+rows are in the same position. `statement_pin.py`'s own warning applies — a lemma with
+unsatisfiable premises compiles, audits clean, and passes every pin in the gate.
+
+**(b) The migration is a landed, sabotage-controlled precedent, not a new shape.** Seven
+declarations made exactly this move on 2026-08-28c, **none gaining a hypothesis**, every
+proof a 1–2 line delegation. Decisively: the pin that makes the fence contentful,
+`W4WitnessDirect.fence_changes_answer`, is stated **at `Sd`** — the same schema rows 46/56
+are instantiated at — and it fails under a null fence rather than merely losing
+information (sabotage evidence: `FullScope.lean:911-929`, `2026-08-28` §3). So the
+migrated rows land on a fence that is already pinned non-vacuous *at their own schema*.
+
+**(c) Correspondence honesty.** `checkPublic` models the public
+`WildcardIndex.check`; `GraphModel.check` models `_check_internal`, below the `BL-2`
+fence. Python genuinely fences leaf names on the public read (`BL-2`, pinned by
+`tests/test_reg18_leaf_name_read_leak.py`). An `hql` binder models nothing in the code;
+the fence discharges the leaf case where the implementation actually discharges it.
+
+**What is being given up: nothing true.** Post-re-point, "unfenced `check` = `sem`,
+unguarded" is machine-checked FALSE at a minted leaf-name query, not merely unproven. The
+choice was never guard-or-not, only *which* weakening — and the migration is the one that
+leaves the witnesses' unguarded shape intact.
+
+**The steelman that was considered and rejected:** rows 46/56 already carry `hqs`/`hqo`,
+so "guards on witnesses" has precedent. Refused on a distinction: `hqs`/`hqo` are
+query-shape conditions decidable from `q` alone and satisfiable by inspection, whereas
+`hql` quantifies over the compiled leaf namespace of the schema — which is exactly the
+object 4c-ii changes, and exactly what a witness must not be allowed to assume away.
+
+### 2. CONDITIONS ATTACHED TO THE GO — all four are binding on the repair session
+
+1. **Its own session, its own green commit, landing BEFORE step 7.** The migration is
+   provable against *today's* tree — the fence branch closes the same way row 28 does,
+   with no 4c-ii dependency. Land the statement changes green first; step 7's guard then
+   threads internally and is discharged at the fence split without any pinned statement
+   being touched mid-red. This is what "not smuggled into step 7" means operationally:
+   a separate reviewable diff, not merely a separate paragraph.
+2. **Sabotage the migrated witnesses' NON-fence branch.** `fence_changes_answer` proves
+   the fence fires; it does not prove the migrated witness still exercises `graph_correct`
+   through the other branch. Without that, the rows could degrade into certifying only the
+   fence — a witness that passes for the wrong reason. Use the discriminating-pair pattern
+   from `Leaf.lean::wAllNode_not_leafNode` (`2026-08-31c` §2): same schema, same query
+   shape, sole difference the leaf-ness of the queried name.
+3. **Re-verify the two paragraphs `2026-08-31c` labelled UNVERIFIED** before relying on
+   them: that `headline_definitions.txt` needs no regeneration (`publicOfLeaf`,
+   `leafPublic`, `isLeafPred`, `checkPublic` already pinned), and that
+   `audited_theorems.txt` pins names only. Both are cheap; neither may be taken from prose.
+4. **Doc sweep in the same commit** — `headline_statements.txt` rows 46/56 are a
+   deliberate, reviewed golden edit (`ZANZIBAR_UPDATE_SNAPSHOTS=1` is not a shortcut past
+   review), and `formal/HANDOFF.md`'s refuted "ONE pinned row" line goes with them.
+   ⚠ Re-run `verify.sh lean` after the `*.md` edits, per `CLAUDE.md`'s `t2a` note.
+
+### 3. ONE KNOWN UNKNOWN, surfaced now so the repair session does not meet it cold
+
+Row 28's fence branch needs `σ.schema = S` and gets it from
+`CascadeStrataAssemble.lean::reachedByW3d2E_schema`. Row 56 hypothesises
+`ReachedByW3d2E σ Sd Td`, so it can use that same lemma. **Row 46 hypothesises
+`ReachedByW3d2C`, and a `reachedByW3d2C_schema` did not appear in a name grep of
+`formal/lean/ZanzibarProofs/`.** It may exist under another name, or be a field of the
+structure (several `ReachedBy*` carriers expose `.schema` / `.schemaEq` — see
+`CascadeInv.lean:53-114`), or need landing. ⚠ **This is a grep, not a build** — it is
+sizing input for the repair session, in this file's "reported, not verified" sense, and
+the session must resolve it in the kernel rather than from this paragraph. Note also
+`docs/latent-gaps.md`'s standing observation that `:46` follows *a fortiori* from `:56`
+via `toC_applies`, whose projection is one-way (`FullScope.lean:1255`); whether that
+yields the schema equality or merely the correctness statement is part of the same
+question.
+
+### 4. What did NOT change
+
+No Lean file was opened for edit. The four remaining 4c-ii obligations are exactly as
+`2026-08-31c` §3 left them (three `rewriteClosure` sites needing the seed-side
+`NotLeafName t.subject.predicate`; `hv1` needing the operand-side `NotLeafName r'`), and
+the seed-side `NoLeafStoreSubjects T` / ~20-site figure remains **scout output, unverified**
+— re-check it before minting the predicate. Gate: unchanged and green; `lean` re-run after
+this session's `*.md` edits because they move the `t2a` tree id.
+
+### 5. Trial close-the-loop
+
+`task lint: clean (12 checks, 154 task file(s) parsed)` — `tasks/P3` mirrored the same
+session under `--session 2026-09-01`.
+
+**read: board + HANDOFF.** `python scripts/task.py board` ran first and correctly named
+`P3` and the pending call, but the user's question was *which way to decide*, which needed
+the adjudication history the board does not carry — `HANDOFF.md`'s `P3` block, this
+ledger's `2026-08-31c`, and `graph_correct_public`'s docstring. Honest reading of the
+trial signal: the board **replaced** the file read for *orientation* and did not replace
+it for *adjudication*. That is a narrower win than `2026-08-31c`'s "board only", and the
+difference is the item's history rather than its state — worth noting against `TT-1`,
+since a cutover would have to carry that history somewhere.
+
+---
+
 ## Session 2026-08-31c (**the Class-B spike is ANSWERED — it REACHES the byte-pinned `graph_correct`, and it lands on THREE pinned rows, not one; plus the one free obligation discharged**)
 
 **Task taken:** the Class-B spike, which `P3` has carried as TOP OPEN RISK since 2026-08-30d

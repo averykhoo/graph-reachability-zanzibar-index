@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: Class-B spike ANSWERED: REACHES, 3 pinned rows not 1 -- needs USER CALL. hv3 landed free; 4 obligations left.
+brief: Class-B repair DECIDED (user 2026-09-01): rows 46/56 -> checkPublic, hql refused. 4 conditions. Nothing waiting.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-08-31c
-updated: 2026-08-31c
+moved: 2026-09-01
+updated: 2026-09-01
 closed:
 ---
 
@@ -392,3 +392,49 @@ STEP 6, THE ONE FREE OBLIGATION, LANDED. CascadeStable.lean::shadow_graphRec_agr
 SABOTAGE, and it corrected itself once: wAllNode is excluded by BOTH of leafNodeB's shape conjuncts, so dropping either alone leaves the pin green and proves nothing. Dropping both fired it -- 'Tactic decide proved that the proposition leafNodeB Sw (wAllNode ...) = false is false' -- but it was NOT the only error: Leaf.lean:556 (leafNodeB_correct) also broke, which is the instrument being controlled alongside the subject. Both counts are a LOWER bound since Lean does not build dependents of a failed module (2026-08-30d trap recurring). New pin Leaf.lean::wAllNode_not_leafNode, discriminating against the pre-existing ::minted_leaf_is_leafNode at the same schema/type/predicate.
 
 4 OBLIGATIONS REMAIN, NOT 5. hv1 deliberately NOT bundled: hunt does not refute a minted leaf name, and the premise cannot be phrased locally because ReconcileStars.lean::checkFn_agree_of_graphRec{,_cd} hand hag exactly that hypothesis (11.13 trap (g)). Seed-side NotLeafName t.subject.predicate still has no owner; scout reports the only workable shape is a new store-level NoLeafStoreSubjects T threaded at ~20 sites -- AGENT OUTPUT, unverified, sizing input only. Full record: PROOF_STATUS ## Session 2026-08-31c.
+
+### 2026-09-01
+
+THE CLASS-B REPAIR IS ADJUDICATED -- user call -- and this item now carries NO open decision.
+
+DECISION: headline_statements.txt rows 46/56 (W4WitnessDirect.correct_applies /
+::w3d2E_correct_applies) are RE-STATED over GraphModel.checkPublic. The hql binder is
+REFUSED on them. Row 27 (graph_correct) KEEPS the binder accepted 2026-08-28 -- that call
+is not reopened; it is the internal-layer statement, not a satisfiability instrument.
+
+GROUNDS (short form; full argument in PROOF_STATUS `## Session 2026-09-01` sec 1):
+(a) rows 46/56 are satisfiability witnesses with q universally quantified, so an
+    hql : publicOfLeaf S q.object.type q.relation = none binder puts a schema-dependent
+    hypothesis on the very declarations whose job is to detect unsatisfiable hypotheses --
+    the failure FullScope.lean::graph_correct_public's docstring already refuses for
+    final_applies.
+(b) The migration is a landed precedent (seven declarations, 2026-08-28c, none gained a
+    hypothesis), and fence_changes_answer -- the pin that makes the fence contentful -- is
+    stated at Sd, the SAME schema rows 46/56 are instantiated at.
+(c) checkPublic models the real public WildcardIndex.check; the hql binder models nothing
+    in Python.
+Nothing true is given up: post-re-point the unguarded statement is machine-checked FALSE,
+so the choice was only WHICH weakening.
+
+FOUR CONDITIONS, all binding on the repair session:
+ 1. Own session, own green commit, landing BEFORE step 7 (provable on today's tree). This
+    is what discharges "must not be smuggled into step 7" -- by sequencing, not deferral.
+ 2. Sabotage the migrated witnesses' NON-fence branch. fence_changes_answer proves the
+    fence fires, NOT that the witness still exercises graph_correct through the other
+    branch. Discriminating pair, per Leaf.lean::wAllNode_not_leafNode.
+ 3. Re-verify the two paragraphs 2026-08-31c labelled UNVERIFIED: headline_definitions.txt
+    needs no regeneration; audited_theorems.txt pins names only. Not from prose.
+ 4. Doc sweep in the same commit (rows 46/56 are a deliberate golden edit); re-run
+    verify.sh lean after any *.md edit.
+
+KNOWN UNKNOWN (sizing input, not a finding): row 28's fence branch takes sigma.schema = S
+from CascadeStrataAssemble.lean::reachedByW3d2E_schema, reusable by row 56 -- but row 46
+hypothesises ReachedByW3d2C and no reachedByW3d2C_schema appeared in a NAME GREP of
+formal/lean/ZanzibarProofs/. May be a structure field (cf. CascadeInv.lean:53-114 exposing
+.schema/.schemaEq), may exist under another name, may need landing. That is a grep, not a
+build -- resolve it in the kernel.
+
+Docs re-pointed this session so nothing still defers to the user: HANDOFF.md banner + P3
+row + P3 item block; formal/HANDOFF.md (the refuted "ONE pinned row" line, struck in
+place); docs/latent-gaps.md ("what would close it" is now two moves); scope doc sec 11.13
+(e) and (l). No Lean file was opened for edit.

@@ -1324,7 +1324,10 @@ re-check, ~20 sites in 3 files go genuinely red.**
   corrects a line number is a trap with a short half-life: **cite `file::symbol`.**
 * **(c)** sizing: settled, see item 2 above. Do not re-cite 42 / ~136 / 24 / 125.
 * **(d)** `FoldAdmits`' second exec gate is `Exec.lean:443`, not `:376`.
-* **(e)** **`hql` lands on THREE pinned rows, not one.** `docs/latent-gaps.md` excludes
+* **(e)** **`hql` lands on THREE pinned rows, not one.** ✅ **CONFIRMED by consumer-set
+  enumeration 2026-08-31c, and its "probably" is now DECIDED — see (l): the `checkPublic`
+  migration is the adjudicated repair for `:46`/`:56` (user, 2026-09-01).**
+  `docs/latent-gaps.md` excludes
   `headline_statements.txt:46` (`correct_applies`) and `:56` (`::w3d2E_correct_applies`)
   as "staged records over intermediate chains"; that reason is refuted by `FullScope.lean:78`
   (`abbrev ReachedBy := ReachedByW3d2E`) and `:84` (`abbrev Drained`), which make
@@ -1412,15 +1415,23 @@ re-check, ~20 sites in 3 files go genuinely red.**
   Corollary already known but re-confirmed: the resulting error count is a **lower bound**,
   since Lean does not compile dependents of a failed module (the 2026-08-30d trap). Both
   observations: PROOF_STATUS `## Session 2026-08-31c` §2.
-* **(l) NEW 2026-08-31c — the Class-B spike is DONE; do not re-scope it, and do not start
-  its repair without a user call.** Answer: **REACHES** `graph_correct`, via
+* **(l) NEW 2026-08-31c — the Class-B spike is DONE; do not re-scope it. ADJUDICATED
+  2026-09-01: the repair is DECIDED and the user call it was waiting on has been made.**
+  Answer: **REACHES** `graph_correct`, via
   `graph_correct_w3d2_d` only (sites 1–2 die in superseded `Equiv.lean` milestones), landing
   on the three pinned rows of (e). The repair touches pinned statements on the two
   **non-vacuity instruments** (`W4WitnessDirect.correct_applies` / `::w3d2E_correct_applies`),
   where an `hql` binder risks a hypothesis nothing satisfies — the failure shape
-  `FullScope.lean::graph_correct_public`'s own docstring warns about. Likely repair is
-  migration onto `checkPublic`, not the binder. **`P3`'s standing instruction that this must
-  not be smuggled into step 7 is unchanged and now has a measured cost behind it.**
+  `FullScope.lean::graph_correct_public`'s own docstring warns about.
+  **DECISION (user, 2026-09-01): rows 46/56 MIGRATE onto `checkPublic`; the `hql` binder is
+  REFUSED there. Row 27 keeps the binder accepted on 2026-08-28 — that call is untouched.**
+  Four conditions bind the repair session (own commit before step 7; sabotage the
+  migrated witnesses' NON-fence branch; re-verify the two `2026-08-31c` UNVERIFIED
+  paragraphs; doc sweep + `lean` re-run in the same commit) — full grounds and the one
+  known unknown (`reachedByW3d2C_schema` may not exist): `PROOF_STATUS.md`
+  `## Session 2026-09-01`. **`P3`'s standing instruction that this must
+  not be smuggled into step 7 is unchanged and now has a measured cost behind it** — and is
+  now discharged by condition 1 rather than by deferral.
 
 ## Provenance
 
