@@ -1150,7 +1150,33 @@ theorem reconcileJobsD_nodes_mono {S : Schema} {T : Store} :
     edges are `DerNode`-targeted, removals never hit shadow edges (a rules state has
     no in-edge at a derived R-node), sources stay off the `DerNode`s
     (bare candidates vs non-bare derived relations). Per-job form — every MID-BATCH
-    state of a cascade keeps the shadow, hence the read bridge. -/
+    state of a cascade keeps the shadow, hence the read bridge.
+
+    **PRE-WIDENED (4c-ii step 8, 2026-09-01e).** This was one of the three declarations
+    the 2026-09-01d flip probe reds, at both of its extras-touching proof steps —
+    `Invalid ⟨…⟩` where `classify` BUILDS the extras witness, `unsolved goals` where
+    `term` DESTRUCTURES it (`PROOF_STATUS.md` `## Session 2026-09-01d` §6). Both are
+    repaired here in place, by step 5's `first | <post-flip form> | <today's form>`
+    idiom (`CascadeStrataSettle.lean::untaintedShadow_writeLoggedOne_derived`, whose two
+    extras-dependent steps are written that way) rather than by GENERALISE: no new
+    declaration, no signature change, no call-site churn, and — since
+    `Audit.lean:786` `#print axioms` this name — no risk to the audit pin.
+
+    ⚠ The post-flip alternative is DEAD CODE on today's tree, so a sabotage cannot
+    reach it (scope doc §11.13 trap (k): a weakening that hits a redundant guard fires
+    for the wrong reason). Its control is therefore the flip PROBE, not a weakening —
+    re-point the abbrev at the disjunction, build, and read whether this declaration is
+    still in the error set. Run 2026-09-01e: it is NOT; see the docstring of
+    `hoffW` below for what the branch actually needs, and the session entry for the
+    literal before/after error sets.
+
+    `hoffW` is the widened subject-side obligation, and it costs **no new premise**:
+    `W3cJobValid`'s `hcb` conjunct already says every candidate's predicate is `BARE`,
+    which `Leaf.lean::bare_subjNode_not_leafNode` turns into `¬ LeafNode`. That is the
+    same "free at a BARE subject" fact step 5 used, and it is why the three `hsubj`
+    sites over `rewriteClosure S t` are NOT free the same way — `rewriteStep`'s `.ttu`
+    branch overwrites the subject predicate, so those need
+    `rewriteClosure_subject_not_leafNode`'s two still-unowned premises. -/
 theorem untaintedShadow_applyD {S : Schema} {T : Store} {σ σ0 : GraphState}
     {j : W3cJob}
     (hsh : UntaintedShadow S σ σ0) (h0 : ReachedByRules σ0 S T)
@@ -1171,13 +1197,29 @@ theorem untaintedShadow_applyD {S : Schema} {T : Store} {σ σ0 : GraphState}
     unfold W3cJob.applyD at hab
     exact reconcileStarsKeyD_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
       j.cands j.negCands j.uposCands σ a b hab
+  -- **PRE-WIDENED (4c-ii step 8).** The subject-side obligation stated at the POST-FLIP
+  -- extras predicate, with zero new premises: `hcb` (a `W3cJobValid` conjunct) says every
+  -- candidate's predicate is `BARE`, and `Leaf.lean::bare_subjNode_not_leafNode` refutes
+  -- `LeafNode` there outright. The `DerNode` half is the argument this proof already made
+  -- inline in `term`, lifted here so both halves live in one place.
+  have hoffW : ∀ c ∈ j.cands,
+      ¬ (DerNode S (subjNode c) ∨ LeafNode S (subjNode c)) := by
+    rintro c hc (⟨dt, on, R, _, hRne', _, hkey⟩ | hleaf)
+    · have hp : R = c.predicate := by
+        have := congrArg NodeKey.pred hkey.symm
+        simpa [objNode_pred, subjNode_pred] using this
+      rw [hcb c hc] at hp
+      exact hRne' hp
+    · exact bare_subjNode_not_leafNode (hcb c hc) hleaf
   refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
   · -- classify
     intro ab hab
     obtain ⟨a, b⟩ := ab
     rcases hsound a b hab with hold | ⟨c, _, _, h2⟩
     · exact hsh.classify (a, b) hold
-    · exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
+    · first
+      | exact Or.inr (Or.inl ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩)
+      | exact Or.inr ⟨j.dt, j.on, j.R, hder, hRne, hon, h2⟩
   · -- sub
     intro ab hab
     unfold W3cJob.applyD GraphState.reconcileStarsKeyD
@@ -1203,12 +1245,10 @@ theorem untaintedShadow_applyD {S : Schema} {T : Store} {σ σ0 : GraphState}
     intro k hk y hy
     rcases hsound k y hy with hold | ⟨c, hc, h1, _⟩
     · exact hsh.term k hk y hold
-    · obtain ⟨dt, on, R, _, hRne', _, hkey⟩ := hk
-      have : R = c.predicate := by
-        have hp := congrArg NodeKey.pred (hkey.symm.trans h1)
-        simpa [objNode_pred, subjNode_pred] using hp
-      rw [hcb c hc] at this
-      exact hRne' this
+    · subst h1
+      first
+      | exact hoffW c hc hk
+      | exact hoffW c hc (Or.inl hk)
 
 /-- The unlogged diffing batch preserves the shadow — every prefix state of a
     cascade's job loop is shadowed, so the read bridge holds MID-BATCH. -/

@@ -15,6 +15,189 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-01e (**step 8's free content is LANDED, and the flip's remaining cost is now EXHAUSTIVELY measured: FOUR obligations in four declarations across two files, and nothing else in the tree breaks.**)
+
+**Task taken:** 4c-ii **step 8** — "generalise the four `DerNode`-hardcoding shadow
+lemmas" — as the previous entry re-scoped it: measured, not argued, because the plan gives
+the step six words and names none of the four. 2026-09-01d's probe reds **6 errors in 3
+declarations** and recorded that figure as a **LOWER bound**, since Lean does not build
+dependents of a failed module and `CascadeStrataSettle.lean` therefore never compiled. The
+first job this session was to convert that lower bound into a closed list.
+
+**Green anchor, verified first-hand before the first edit** (§11.12 rule 1): `HEAD
+8768f44`, working tree clean, `python scripts/gate_status.py` → *"VERDICT: the ten-phase
+gate is COVERED on this tree"*, `t2a:5803d3fd747c` / `t2c:340444a080f7`, `lean` row
+`rc=0 holes=0 audits=585 pinned=584 defs=161`. A `lake build` on the untouched tree was
+run before any edit: `Build completed successfully (1089 jobs). rc=0`. Abort trigger
+declared up front: **six in-cone cycles**; the increment used **zero** — green first
+attempt at every stage.
+
+### 1. What landed — three PRE-WIDENs, no new declaration, no signature change
+
+The route taken is the **cheaper one the previous entry flagged as unverified agent output
+and told the next session to try first**: PRE-WIDEN in place with step 5's
+`first | <post-flip form> | <today's form>` idiom
+(`CascadeStrataSettle.lean::untaintedShadow_writeLoggedOne_derived`, whose docstring already
+states the rationale — *"today the `Or.inl` alternative fires, after the re-point the bare
+one does, and the lines do not change"*), **not** GENERALISE. It is now kernel-checked, and
+it is strictly cheaper than the plan's bucket: zero new declarations, zero call-site churn,
+zero new pin surface, and — decisively — **no risk to `Audit.lean:786`**, which
+`#print axioms` one of the three names.
+
+* `CascadeStable.lean::untaintedShadow_applyD` (`:1180`) — the two extras-touching proof
+  steps repaired, plus a new `have hoffW` (`:1205`) carrying the subject-side obligation at
+  the POST-FLIP predicate.
+* `CascadeStrataSettle.lean::untaintedShadow_applyLoggedR` (`:315`, `hoffW` at `:353`).
+* `CascadeStrataSettle.lean::untaintedShadow_applyLoggedR_d` (`:1034`, `hoffW` at `:1072`).
+
+**`hoffW` costs no new premise, and that is a fact rather than luck.** `W3cJobValid`'s
+second conjunct `hcb` already says every candidate's predicate is `BARE`
+(`ReconcileStarsComplete.lean:99-104`), which `Leaf.lean::bare_subjNode_not_leafNode` turns
+into `¬ LeafNode` outright. The `DerNode` half is the argument these three proofs already
+made inline in `term`; `hoffW` only lifts it out so both halves sit together. This is the
+same "free at a BARE subject" fact step 5 used — and it is exactly why the three `hsubj`
+sites are NOT free the same way: they quantify over `rewriteClosure S t`, whose subject
+predicate `ReconcileCorrect.lean::rewriteStep`'s `.ttu` branch overwrites with the rule's
+target.
+
+`lake build`: **`Build completed successfully (1089 jobs). rc=0`**, first attempt, at each
+of the three stages and at the final restored state.
+
+### 2. The measurement — the flip is now a CLOSED list, not a lower bound
+
+Method, and it is the part worth reusing: the probe was run in **five** stages, each one
+`flip → build → read → patch`, with `sorry` used to stub an obligation that is *known*
+blocked so the build would proceed PAST the failing module and reveal the next wave.
+`sorry` is a warning, not an error, so `lake` keeps going and dependents get oleans. That is
+what turned "unmeasured" into a list; the previous probe could not, because it reverted at
+the first red module.
+
+| probe | tree state | errors | where |
+|---|---|---|---|
+| 1 | flip, step 8's `applyD` repair landed | **4** (was 6) | `CascadeStable` `:1341`/`:1342` (`hsubj`), `:1357`/`:1410` (`hv1`) |
+| 2–3 | + `hv1`/`hsubj` stubbed, `hv3`'s two `Or.inl` wrappers deleted | **8** | `CascadeStrataSettle` `:333`/`:362`, `:695`/`:696`, `:1035`/`:1064`, `:1277`/`:1278` |
+| 4 | + both `applyLoggedR` repairs landed | **4** | `CascadeStrataSettle` `:708`/`:709`, `:1303`/`:1304` (`hsubj` only) |
+| 5 | + those two `hsubj` sites stubbed | **0** | — `Build completed successfully (1089 jobs). rc=0` |
+
+**Probe 1 is step 8's control.** Its error set is 2026-09-01d's minus exactly the two
+`untaintedShadow_applyD` rows (`Invalid ⟨…⟩` at `classify`, `unsolved goals` at `term`) —
+attributable, and the reason a weakening could not have served here (see §3).
+
+**Probe 5 is the result.** With the flip applied and ONLY the four unowned obligations
+stubbed, **the whole tree builds green**. So the complete remaining cost of step 9 is:
+
+1. `CascadeStable.lean::shadow_graphRec_agree`'s `hv3` — **delete the two `Or.inl`
+   wrappers** (`:1412-1413`). Free; step 6 pre-paid it. Confirmed by probe 3, which reds
+   `Or.inl h` with `DerNode S ?m ∨ LeafNode S ?m` against `DerNode S (wAllNode dt' r')`
+   until the wrappers go.
+2. `::shadow_graphRec_agree`'s `hv1` (`:1359`) — **BLOCKED**, the `hnl` binder; the three
+   query-relation sites need row 27's query-level premise, which co-lands with step 9.
+3. `::reachedByW3d_shadow`'s `hsubj` (`:1332`), `CascadeStrataSettle.lean::
+   reachedByW3d2_shadow`'s (`:720`) and `::reachedByW3d2_shadow_d`'s (`:1319`) —
+   **BLOCKED**, all three on the same seed-side `NotLeafName t.subject.predicate`, which no
+   declaration owns. `hQ` has an owner (`ttuTargetsSat_notLeafName_of_noLeafSubjects`);
+   `hbase` does not.
+
+**Nothing else in the tree breaks — measured, not inferred.** `CascadeSettle`,
+`CascadeStrataResettle`, `CascadeEnum`, `CascadeStrataEnum`, `CascadeStrataAssemble`,
+`Equiv`, `Audit`, `Scratch4cii` and every headline theorem compile under the flip once
+those four obligations are supplied. This **replaces** 2026-08-30c's scout figure *"~20
+sites in 3 files go genuinely red"* with a measured **5 repair sites in 4 declarations
+across 2 files, 3 of them free and now landed**.
+
+⚠ **What probe 5 does and does not license.** It measures the flip's *structural* cost. It
+does not license landing the flip: `sorry` makes a false-as-written statement available, and
+the four stubbed obligations are precisely where the semantic content of "the headline
+theorems are false as written at minted leaf names" lives. Probe 5's green says *"the only
+thing between today's tree and the flip is those four obligations"*, not *"the flip is
+sound"*.
+
+### 3. Sabotage — and why it had to be run under the flip
+
+Per `docs/sabotage-procedure.md` and the previous entry's design note, the weakening to run
+is **"the premise carries nothing"**, not "revert the edit". Here that is:
+
+> **S1 — `hoffW` is narrowed to its `DerNode` half only**, at all three sites, with the
+> `rintro` arity adjusted to match. Nothing else changes.
+
+Run at BOTH tree states, because §11.13 trap **(k)** is live here in its exact form — the
+post-flip alternative of a `first | … | …` block is DEAD CODE today, so a weakening aimed at
+it fires for the wrong reason or not at all:
+
+* **S1 on today's tree (unflipped): `Build completed successfully (1089 jobs). rc=0`.**
+  GREEN. This is the honest half: the widened `hoffW` is a **redundant guard** on the
+  current tree, and no sabotage run against today's tree can vet it.
+* **S1 under the flip: `rc=1`**, and the new error is attributable — it is the one row
+  probe 1 did not have:
+
+```text
+error: ZanzibarProofs/GraphIndex/CascadeStable.lean:1248:25: Application type mismatch: The argument
+  Or.inl hk
+has type
+  (DerNode S (subjNode c) ∨ LeafNode S (subjNode c)) ∨ ?m.431
+but is expected to have type
+  DerNode S (subjNode c)
+in the application
+  hoffW c hc (Or.inl hk)
+```
+
+⚠ That output is itself a LOWER bound — the build stops at `CascadeStable`, so
+`CascadeStrataSettle`'s two `hoffW` sites are unmeasured under S1, for exactly the reason
+the 2026-09-01d probe could not see them. Do not read "one error" as "one site".
+
+**So the flip probe, not a weakening, is this increment's instrument** — and that is a
+general fact about the PRE-WIDEN idiom rather than a shortcut taken here: an alternative
+that only elaborates after a re-point can only be controlled by performing the re-point. It
+is cheap (the whole five-stage sequence ran inside one session) and it is re-runnable.
+Record it as the standing control for step 8's kind of change.
+
+### 4. Gate safety — checked first-hand, not delegated
+
+No name was renamed, added or deleted, and **no signature changed**: all three edits are
+inside proof bodies (`have hoffW` is a local; the rest are tactic-block rewrites). So
+`audited_theorems.txt` (which pins NAMES only) cannot move, `Audit.lean:786`'s
+`#print axioms untaintedShadow_applyD` still resolves, and the headline statement and
+definition goldens are untouched by construction. ⚠ `untaintedShadow_applyLoggedR{,_d}`
+carry **no** audit row — a rename there would be silently unpinned rather than caught by the
+gate — which is why the docstrings now say so in place.
+
+### 5. Corrections to the record
+
+* **2026-08-30c's `"~20 sites in 3 files go genuinely red"` is superseded** by §2's measured
+  5-in-4-in-2. It was a scout figure, and it is retired under that entry's own rule that a
+  site count is meaningless without its symbol list and counting unit.
+* **The previous entry's "PRE-WIDEN in place … neither kernel-checked" is now
+  kernel-checked and CONFIRMED**, at all three `apply*` declarations. Its companion claim
+  that the `sub` field is extras-independent is confirmed too — `sub` never appeared in any
+  probe's error set.
+* **The 2026-09-01d probe's six-error set is not wrong, but it is one third of the flip.**
+  The full first-plus-second wave is **14 errors in 7 declarations**; the missing two thirds
+  were entirely in `CascadeStrataSettle.lean`.
+* **The two `hsubj` line numbers disagree across entries** (`:685`/`:1267` in 2026-09-01d;
+  `:1246` in the step-5 table). On the landed tree they are `:720` and `:1319` — re-grep
+  `have hsubj : ∀ u ∈ rewriteClosure S t` rather than trusting any of the three.
+
+### Next
+
+Step 8 is **done for everything that does not need a new premise.** What is left is not step
+8 at all — it is the two owner-less obligations, and the honest statement is that **step 9
+is blocked on a design decision, not on proof effort**:
+
+* the seed-side `NotLeafName t.subject.predicate` at three sites wants a **store-level**
+  predicate (`NoLeafStoreSubjects T`) threaded through `reachedByW3d_shadow` /
+  `reachedByW3d2_shadow{,_d}` — which changes their premises, hence downstream statements,
+  hence potentially the headline theorems. The board already records that the post-re-point
+  headline theorems are **false as written** and that this needs **a human call**. Do not
+  thread it unasked.
+* `hv1` needs row 27's query-level premise, which co-lands with the flip.
+
+Its sabotage, when it comes, is this one's shape: the premise carries nothing — thread
+`NoLeafStoreSubjects`, then weaken it to `True`, expecting the three `hsubj` sites and
+nothing else. And the control for the whole of step 9 is **probe 5 re-run without the
+`sorry`s**.
+
+---
+
 ## Session 2026-09-01d (**trap (g) is DISSOLVED — `hag` now carries the membership it always bound and threw away. The binder is still deferred, and for a DIFFERENT reason than the trap named: three of the fourteen sites are query-relation sites.**)
 
 **Task taken:** the deferred half of 4c-ii step 7, as the previous entry scoped it — "WAY OUT

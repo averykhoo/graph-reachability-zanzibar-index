@@ -1,14 +1,14 @@
-2026-09-01c — gate re-run after the doc edits; verdict line in the session-log entry.
+2026-09-01e — gate re-run after the step-8 increment; verdict line in the session-log entry.
 
-(nav) **STEP 7's PREDICATE IS LANDED (2026-09-01c) as `ComputedRefsNotLeaf` — the step's
-named premise was FALSE.** Python **dot-locks** referenced relation names rather than
-requiring declaredness: an UNDECLARED operand is accepted and compiled, only a dotted one
-raises, so `ComputedRefsDeclared` would be stricter than Python. **Binder DEFERRED, design
-settled** — trap (g)'s way out is `ReconcileStars.lean:622`, which discards an in-scope `hr'`.
+(nav) **STEP 8's FREE HALF LANDED AND THE FLIP IS A CLOSED LIST — 5 SITES / 4 DECLS / 2
+FILES.** `untaintedShadow_applyD` + `untaintedShadow_applyLoggedR{,_d}` PRE-WIDENED in place:
+no new declaration, no signature change, no pin exposure; `hoffW` costs no premise (`hcb` +
+`bare_subjNode_not_leafNode`). Green first attempt, 1089 jobs. The lower bound closed by
+staging the probe with `sorry` so `lake` builds PAST the red module — retiring "~20 sites".
+(!) **STEP 9 IS BLOCKED ON A DESIGN DECISION, NOT PROOF EFFORT.** The seed-side
+`NotLeafName t.subject.predicate` at three `rewriteClosure` sites wants a store-level
+`NoLeafStoreSubjects T` threaded through their signatures — changing downstream statements
+and hence potentially the headline theorems. **Do not thread it unasked.**
 
-(!) **"STEP 7" IS AMBIGUOUS — three numberings are live and the board mixed them.** `hql`
-is **step 10**, not 7; step 9 (the flip) is what it co-lands with, and it is NOT landable
-before then — `graph_correct` is a proved theorem of today's tree.
-
-(!) **INERT, so its 8 pins are the SOLE evidence.** S1 was a verdict on the PINS, not the
-code. Sizing: 14 call sites, not 11.
+(!) **A PRE-WIDEN's control is the flip PROBE, never a weakening** — §11.13 **(n)**, which
+generalises (k): S1 (`hoffW` narrowed to `DerNode`) is GREEN unflipped, RED flipped.

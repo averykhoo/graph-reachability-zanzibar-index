@@ -79,10 +79,11 @@ step ordering:**
 [`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
 **Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
 
-⚠ **Dated blocks STOP at 2026-08-28c; eight sessions have landed since**
-(`2026-08-30`…`2026-09-01d` — the last dissolved §11.13 trap (g): `hag` now carries
-`r' ∈ computedRefs e`, so the `hnl` binder waits on **step 9**). For anything later read
-`history/PROOF_STATUS.md` top-down; blocks below hold as of their dates, or as corrected.
+⚠ **Dated blocks STOP at 2026-08-28c; nine sessions have landed since**
+(`2026-08-30`…`2026-09-01e` — the last sized the flip at **5 repair sites / 4 declarations /
+2 files** and left **step 9 blocked on a design decision, not proof effort**: the seed-side
+`NotLeafName t.subject.predicate` wants a store-level premise threaded through three
+signatures. For anything later read `history/PROOF_STATUS.md` top-down.)
 
 **2026-08-28c — the public surface is migrated, and the `hql` surface is now one row.**
 🚨 **The "one row" half was REFUTED 2026-08-31c and then made true again by the 2026-09-01b
@@ -478,11 +479,10 @@ remove-path and generated-schema gates). The Lean remove leg is closed at the va
 in `ARCHITECTURE.md`; the narrative is `history/PROOF_STATUS.md`.
 
 **In flight — leg 7, the leaf-family split (repo board rows `P3`, `P4`, `P5`, `P14`).**
-Steps 3, 4a, 4c-pre and 4c-i have landed, and within 4c-ii so have steps 1–5 plus the
-`NoLeafSubjects → TtuTargetsSat` bridge (2026-08-31b). Owed: the rest of 4c-ii co-landing
-with step 7, then 4b, 5 and 6. Steps 6–10 were blocked on row `P20` and are now unblocked —
-it was adjudicated **ACCEPT** on 2026-08-31b. Read the dated blocks at the top of this file
-and the scope doc before starting.
+Steps 3, 4a, 4c-pre and 4c-i have landed; within 4c-ii, steps 1–6, the `NoLeafSubjects →
+TtuTargetsSat` bridge (2026-08-31b), step 7's predicate (2026-09-01c), the `hag` widening
+(2026-09-01d) and **step 8's free half (2026-09-01e)**. Owed: the rest of 4c-ii, then 4b, 5
+and 6 (6–10 unblocked by `P20`'s **ACCEPT**). Read the dated blocks and the scope doc first.
 
 **In flight — `ttuStarFree` (repo board rows `P6`, `P7`).** Part (i) landed and is inert;
 part (ii) is what materialises the edge; (iii) and (iv) follow.
