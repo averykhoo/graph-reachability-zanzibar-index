@@ -56,6 +56,23 @@ premises the schema-side `hQ` is already owned
 (`::ttuTargetsSat_notLeafName_of_noLeafSubjects`). Step 9 SUPPLIES `hbase`; it does not
 prove a closure theorem, which is how this row had been reading.
 
+**Then the seed side was given an owner, and it landed.** Six new declarations in
+`CascadeStable.lean` — `NoLeafStoreSubjects`, the schema fact `DirectRestrictionsNotLeaf`,
+two bridge steps and the discharge in both admission forms — all additive, green first
+attempt at 1089 jobs, no existing declaration or signature touched. The discharge closes on
+one line of the spec: `restrictionMatches`' middle conjunct is
+`tup.subject.predicate == r.2.1`, so an admitted tuple's subject predicate is *equal to*
+some declared restriction's, and the whole question reduces to a schema fact. Two sabotages
+were run and both fired attributably (narrowing `exprDirectsAll` → `exprDirects` reddens
+exactly the one discriminating witness; reading `r.1` instead of `r.2.1` reddens both).
+
+⚠ **The trap that nearly ate this, worth carrying:** the clause had to be `NotLeafName`-shaped
+("`= BARE` or dot-free"), never `relNameOK`-shaped ("dot-free"). `BARE = "..."` is itself
+dot-carrying, and every `Direct` restriction in every `GraphAdmission` witness schema is
+`("user", BARE, _)` — so the "obvious" dot-free clause is FALSE at all three witnesses and
+would have **re-vacuated** the headline theorems instead of narrowing them. That is the
+2026-08-05 vacuity failure mode arriving through a new door.
+
 Decision, its rejected alternatives and the verification detail:
 [`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
 2026-09-02`.
@@ -74,10 +91,15 @@ adjudication history the board does not carry (`HANDOFF.md`'s `P3` block, PROOF_
 `2026-09-01e`, and the `P20` warning). Same split as `2026-09-01`: the board replaced the
 file read for orientation, not for adjudication.
 
-Still owed: see the session's final entry state — sizing of the threading is UNMEASURED
-(`5+7+8=20` is retired scout output) and must be re-measured before it is quoted; the
-control for step 9 is **probe 5 re-run without the `sorry`s** plus the weakening *thread
-the premise, then weaken it to `True`*, expecting the three `hsubj` sites and nothing else.
+Still owed: the **threading itself** (supply the two premises at the three `hsubj` sites and
+pre-widen them) and then the `GraphAdmission` field. Sizing is UNMEASURED — `5+7+8=20` is
+retired scout output, this session's grep gives 46 non-comment lines across 9 files as a raw
+figure only, and a declaration-level count was attempted and **discarded as untrustworthy**.
+Measure with the probe, not a grep. The control for step 9 is **probe 5 re-run without the
+`sorry`s** plus the weakening *thread the premise, then weaken it to `True`*, expecting the
+three `hsubj` sites and nothing else. Known unpaid cost: a `GraphAdmission` field leaves
+`headline_statements.txt` byte-identical but **does** redden `headline_definitions.txt` and
+needs the four construction sites at `FullScope.lean:623/:739/:1486/:1621`.
 
 ---
 

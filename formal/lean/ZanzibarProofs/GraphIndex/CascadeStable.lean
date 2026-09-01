@@ -925,6 +925,251 @@ theorem rewriteClosure_subject_not_leafNode_snlBoth :
       Or.inl LeafRuleWitness.tnlParent_subject_bare)
     snlBoth_rewriteClosure_ttu_extra
 
+/-! ### The SEED side — an owner for `hbase` (4c-ii step 9)
+
+`rewriteClosure_subject_not_leafNode` takes two premises. `hQ` is owned above
+(`ttuTargetsSat_notLeafName_of_noLeafSubjects`); this section owns `hbase`, which the
+docstring there records as unowned at all three `rewriteClosure` sites.
+
+**The design call is the user's, 2026-09-02** (`formal/history/PROOF_STATUS.md
+## Session 2026-09-02`): thread the premise AND discharge it from admission, rather than
+leave it free-floating on downstream statements. The discharge is the content here, and it
+is worth naming what it rests on. A stored tuple's subject predicate is **not free** — it
+is PINNED by the restriction that admitted the tuple: `Spec/Semantics.lean::
+restrictionMatches`' second conjunct is literally `tup.subject.predicate == r.2.1`. So
+*"no stored subject is a leaf name"* reduces to *"no declared restriction NAMES a leaf
+name"*, a schema fact, and that is exactly what Python enforces —
+`zanzibar_utils_v1.py::_validate_ast_references` (`:916-919`) refuses `'.'` in any
+referenced relation name, and a restriction's predicate component is either `BARE` or such
+a name. It is step 7's dot-lock (`ComputedRefsNotLeaf`) read at the OTHER syntactic
+position, which is why this is faithful modelling and not a new scope restriction.
+
+⚠ **Nuance against the docstring above**, which says `StoreValidRulesD` "says nothing
+about" the seed predicate. That is INCOMPLETE rather than wrong, and the difference is this
+section: `StoreValidRulesD` *does* pin the predicate to some restriction's, but until now
+nothing constrained that restriction's NAME SHAPE, so the pin bottomed out in an
+unconstrained string. `DirectRestrictionsNotLeaf` is the missing half; neither premise
+discharges `hbase` alone.
+-/
+
+/-- **`NoLeafStoreSubjects T`** — no stored tuple's subject predicate is a minted leaf
+    name. Stated as a plain `∀ t ∈ T, …` exactly like `BareStarCorrect.lean::BareStarStore`
+    and `ReconcileCorrect.lean::NoStoreSubjectR`, so it weakens along a cons the same way
+    the `write` case of every `reachedBy*_shadow` induction needs. -/
+def NoLeafStoreSubjects (T : Store) : Prop :=
+  ∀ t ∈ T, NotLeafName t.subject.predicate
+
+theorem NoLeafStoreSubjects.tail {t : Tuple} {T : Store}
+    (h : NoLeafStoreSubjects (t :: T)) : NoLeafStoreSubjects T :=
+  fun t' ht' => h t' (List.mem_cons_of_mem _ ht')
+
+theorem NoLeafStoreSubjects.head {t : Tuple} {T : Store}
+    (h : NoLeafStoreSubjects (t :: T)) : NotLeafName t.subject.predicate :=
+  h t List.mem_cons_self
+
+/-- **`DirectRestrictionsNotLeaf S`** — no `Direct` restriction anywhere in the schema
+    names a leaf-named subject predicate.
+
+    Quantified over `exprDirectsAll`, NOT `exprDirects`, and the difference is load-bearing:
+    `exprDirects` returns `[]` under `inter`/`excl`, so the narrower form would leave the
+    DERIVED disjunct of `StoreValidRulesD` — the one that admits a stored tuple on
+    `can_view: [user] but not blocked` — completely unguarded. Pinned by
+    `directRestrictionsNotLeaf_false_sdrBadDerived` below.
+
+    Bounded quantifiers throughout, on the same purpose as `LeafRules.lean::NoLeafSubjects`:
+    it makes the predicate `by decide`-able at a concrete schema, so the witnesses below are
+    machine-checked pins rather than hand proofs. -/
+def DirectRestrictionsNotLeaf (S : Schema) : Prop :=
+  ∀ d ∈ S.defs, ∀ rs ∈ exprDirectsAll d.2, ∀ r ∈ rs, NotLeafName r.2.1
+
+instance (S : Schema) : Decidable (DirectRestrictionsNotLeaf S) :=
+  inferInstanceAs (Decidable (∀ d ∈ S.defs, ∀ rs ∈ exprDirectsAll d.2, ∀ r ∈ rs,
+    NotLeafName r.2.1))
+
+/-- `exprDirects` is a sublist-wise subset of `exprDirectsAll` (the latter also recurses
+    into `inter`/`excl`), so a `DirectRestrictionsNotLeaf` covers the narrow enumeration
+    that `StoreValidRules` and the untainted disjunct of `StoreValidRulesD` use. -/
+theorem mem_exprDirectsAll_of_mem_exprDirects :
+    ∀ {e : Expr} {rs : List Restriction}, rs ∈ exprDirects e → rs ∈ exprDirectsAll e := by
+  intro e
+  induction e with
+  | direct _ => intro rs h; exact h
+  | computed _ => intro rs h; simp [exprDirects] at h
+  | ttu _ _ => intro rs h; simp [exprDirects] at h
+  | inter _ _ _ _ => intro rs h; simp [exprDirects] at h
+  | excl _ _ _ _ => intro rs h; simp [exprDirects] at h
+  | union a b iha ihb =>
+      intro rs h
+      simp only [exprDirects, List.mem_append] at h
+      simp only [exprDirectsAll, List.mem_append]
+      exact h.imp iha ihb
+
+/-- **The pin step.** A matched restriction fixes the subject predicate to its own
+    predicate component, so a name-shape fact about restrictions transfers to the tuple. -/
+theorem notLeafName_of_restrictionMatches {rs : List Restriction} {t : Tuple}
+    (hr : ∀ r ∈ rs, NotLeafName r.2.1) (h : restrictionMatches rs t = true) :
+    NotLeafName t.subject.predicate := by
+  unfold restrictionMatches at h
+  rw [List.any_eq_true] at h
+  obtain ⟨r, hmem, hcond⟩ := h
+  simp only [Bool.and_eq_true, beq_iff_eq] at hcond
+  rw [hcond.1.2]
+  exact hr r hmem
+
+/-- **The discharge, narrow admission** — `NoLeafStoreSubjects` is a CONSEQUENCE of write
+    admission plus the schema's dot-lock, never an extra scope restriction. -/
+theorem noLeafStoreSubjects_of_storeValidRules {S : Schema} {T : Store}
+    (hd : DirectRestrictionsNotLeaf S) (hSV : StoreValidRules S T) :
+    NoLeafStoreSubjects T := by
+  intro t ht
+  obtain ⟨e, rs, hlk, hrs, hm⟩ := hSV t ht
+  exact notLeafName_of_restrictionMatches
+    (fun r hr => hd _ (mem_defs_of_lookup hlk) rs
+      (mem_exprDirectsAll_of_mem_exprDirects hrs) r hr) hm
+
+/-- **The discharge, widened admission** (`StoreValidRulesD`, the form `GraphAdmission.
+    storeValid` actually carries). The derived disjunct needs no schema premise at all: it
+    already requires a BARE subject, which is `NotLeafName`'s left disjunct outright. -/
+theorem noLeafStoreSubjects_of_storeValidRulesD {S : Schema} {T : Store}
+    (hd : DirectRestrictionsNotLeaf S) (hSV : StoreValidRulesD S T) :
+    NoLeafStoreSubjects T := by
+  intro t ht
+  rcases hSV t ht with ⟨_, e, rs, hlk, hrs, hm⟩ | ⟨_, hbare, _⟩
+  · exact notLeafName_of_restrictionMatches
+      (fun r hr => hd _ (mem_defs_of_lookup hlk) rs
+        (mem_exprDirectsAll_of_mem_exprDirects hrs) r hr) hm
+  · exact Or.inl hbare
+
+/-! #### Non-vacuity — the pins, which for an INERT addition are the sole evidence
+
+Nothing consumes the four declarations above yet (step 9's threading is the next
+increment), so a green build vets none of them: `DirectRestrictionsNotLeaf` returning
+`True` on every schema, or looking at the wrong component of a restriction, would compile
+and audit exactly as cleanly (`docs/sabotage-procedure.md`, "a check that PARSES before it
+compares"). Each pin below is chosen to redden under one specific plausible weakening.
+
+`LeafRuleWitness.SnlBoth` is deliberately NOT reused as the positive witness: every one of
+its `Direct` restrictions is `BARE`, so it would satisfy `DirectRestrictionsNotLeaf` via
+`NotLeafName`'s left disjunct without ever testing a referenced relation name — the
+all-`BARE` triviality.
+
+## ★ CONTROLLED — two sabotages, run 2026-09-02 (`docs/sabotage-procedure.md`)
+
+Both were run against the green tree (`Build completed successfully (1089 jobs). rc=0`,
+first attempt) and both fired attributably.
+
+**S1 — the quantifier is narrowed from `exprDirectsAll` to `exprDirects`** (in the `def`
+and its `Decidable` instance, nothing else). This is the narrowest *plausible* weakening:
+it is what someone would write who had only read `StoreValidRules`, and it is silent at
+every other pin here. Literal output, `rc=1`:
+
+```text
+error: ZanzibarProofs/GraphIndex/CascadeStable.lean:1095:52: Tactic `decide` proved that the proposition
+  ¬DirectRestrictionsNotLeaf SdrBadDerived
+is false
+```
+
+Exactly the discriminating pin, and only it among the `decide` pins —
+`directRestrictionsNotLeaf_false_sdrBadLeaf` stayed green, which is what makes the pair
+*discriminating* rather than merely red. (Two further errors at `:1028`/`:1040` are the two
+discharge lemmas' `mem_exprDirectsAll_of_mem_exprDirects` conversions becoming
+ill-typed — attributable, and evidence that the bridges really do depend on the widened
+enumeration.)
+
+**S2 — the predicate reads the wrong component of a restriction** (`NotLeafName r.2.1` →
+`NotLeafName r.1`, i.e. the subject TYPE instead of the subject PREDICATE). Literal
+output, `rc=1`:
+
+```text
+error: ZanzibarProofs/GraphIndex/CascadeStable.lean:1082:49: Tactic `decide` proved that the proposition
+  ¬DirectRestrictionsNotLeaf SdrBadLeaf
+is false
+error: ZanzibarProofs/GraphIndex/CascadeStable.lean:1095:52: Tactic `decide` proved that the proposition
+  ¬DirectRestrictionsNotLeaf SdrBadDerived
+is false
+```
+
+⚠ **What neither sabotage vets** — that `NotLeafName` is the right predicate *shape*. It is
+not `relNameOK` ("dot-free"), and the difference is not cosmetic: `BARE = "..."`
+(`Core/Ident.lean:20`) is itself dot-carrying and `isLeafPred` is a bare dot test
+(`Leaf.lean:196`, `::isLeafPred_bare`), so a `relNameOK`-shaped clause would be **FALSE at
+every `GraphAdmission` witness schema** — whose `Direct` restrictions are all
+`("user", BARE, _)` — and would therefore re-vacuate the headline theorems rather than
+narrow them. `NotLeafName`'s BARE escape is load-bearing, and it mirrors Python's own
+`name != '...'` escape in `_validate_ast_references`. -/
+
+namespace DirRestrWitness
+
+/-- Carries a USERSET restriction (`[group#member]`), so the positive pin tests
+    `NotLeafName` at a real referenced relation name rather than at `BARE`. -/
+def SdrUserset : Schema :=
+  ⟨[(("doc", "viewer"), .direct [("user", BARE, false), ("group", "member", false)]),
+    (("group", "member"), .direct [("user", BARE, false)])], []⟩
+
+theorem directRestrictionsNotLeaf_sdrUserset :
+    DirectRestrictionsNotLeaf SdrUserset := by decide
+
+/-- …and the witness is non-trivial in the direction that matters: it really does carry a
+    non-`BARE` restriction predicate, so the pin above is not the all-`BARE` case. -/
+theorem sdrUserset_has_userset_restriction :
+    (("group", "member", false) : Restriction) ∈
+      (exprDirectsAll (.direct [("user", BARE, false), ("group", "member", false)] : Expr)).flatten
+    := by decide
+
+/-- **REFUTATION 1 — the predicate component.** One restriction predicate replaced by a
+    minted leaf name on an UNTAINTED def. Reddens iff `DirectRestrictionsNotLeaf` stops
+    reading `r.2.1`, or `NotLeafName` stops rejecting a dotted name. -/
+def SdrBadLeaf : Schema :=
+  ⟨[(("doc", "viewer"), .direct [("user", BARE, false), ("group", "viewer.0", false)]),
+    (("group", "member"), .direct [("user", BARE, false)])], []⟩
+
+theorem directRestrictionsNotLeaf_false_sdrBadLeaf :
+    ¬ DirectRestrictionsNotLeaf SdrBadLeaf := by decide
+
+/-- **REFUTATION 2 — the `exprDirectsAll` choice.** The leaf-named restriction sits inside
+    an `excl` arm, where `exprDirects` returns `[]` and only `exprDirectsAll` reaches.
+    Reddens iff the quantifier is narrowed to `exprDirects` — the narrowing that would
+    leave `StoreValidRulesD`'s derived disjunct unguarded while every other pin here
+    stayed green. -/
+def SdrBadDerived : Schema :=
+  ⟨[(("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "access"), .excl (.direct [("group", "viewer.0", false)])
+      (.computed "banned"))], []⟩
+
+theorem directRestrictionsNotLeaf_false_sdrBadDerived :
+    ¬ DirectRestrictionsNotLeaf SdrBadDerived := by decide
+
+/-- The companion that makes REFUTATION 2 discriminating rather than merely red: the same
+    schema IS clean under the narrow enumeration, so the two pins differ exactly on the
+    `exprDirects` / `exprDirectsAll` choice and on nothing else. -/
+theorem sdrBadDerived_clean_under_exprDirects :
+    ∀ d ∈ SdrBadDerived.defs, ∀ rs ∈ exprDirects d.2, ∀ r ∈ rs, NotLeafName r.2.1 := by
+  decide
+
+/-- A tuple admitted by `SdrUserset`'s userset arm, with a NON-bare subject predicate. -/
+def tdrUserset : Tuple := ⟨⟨"group", "g1", "member"⟩, "viewer", ⟨"doc", "d1"⟩⟩
+
+theorem tdrUserset_subject_not_bare : tdrUserset.subject.predicate ≠ BARE := by decide
+
+theorem storeValidRules_sdrUserset : StoreValidRules SdrUserset [tdrUserset] := by
+  intro t ht
+  rw [List.mem_singleton] at ht
+  subst ht
+  refine ⟨.direct [("user", BARE, false), ("group", "member", false)],
+          [("user", BARE, false), ("group", "member", false)], rfl, ?_, by decide⟩
+  simp [exprDirects]
+
+/-- **The discharge, APPLIED** — derived THROUGH `noLeafStoreSubjects_of_storeValidRules`
+    and never `decide`d directly, so it certifies that the bridge APPLIES rather than that
+    its conclusion happens to hold at this store. Together with
+    `tdrUserset_subject_not_bare` it also certifies that the `restrictionMatches` route was
+    the one taken, not `NotLeafName`'s BARE shortcut. -/
+theorem noLeafStoreSubjects_sdrUserset : NoLeafStoreSubjects [tdrUserset] :=
+  noLeafStoreSubjects_of_storeValidRules directRestrictionsNotLeaf_sdrUserset
+    storeValidRules_sdrUserset
+
+end DirRestrWitness
+
 /-- **Reach agreement off the extras**: a probe into a non-`Extra` target reads the same
     on `σ` and its shadow — extra edges are trailing hops onto terminal nodes the path can
     neither traverse nor end at. Generic in `Extra`; at today's instantiation
