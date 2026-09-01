@@ -90,15 +90,111 @@ three sites*, not *prove a closure theorem*. The `.ttu` branch of
 — `2026-09-01e` §1's reason the sites are not free — is already handled inside
 `LeafRules.lean:629::rewriteStepL_subject_notLeafName` by the `NoLeafSubjects` half.
 
-### 3. What is NOT settled by this entry
+### 3. WHAT LANDED — the seed side now has an owner, additive and sabotage-controlled
 
-The **sizing** of the threading is still to be measured, and `2026-08-31c`'s
-`5 + 7 + 8 = 20` call-site figure remains **scout output, explicitly unverified** — under
-this tree's own rule (a site count is meaningless without its symbol list and counting
-unit) it must be re-measured before it is quoted. The step-9 **control** is unchanged and
-already specified by `2026-09-01e`: **probe 5 re-run without the `sorry`s**, plus the
-planned sabotage — thread `NoLeafStoreSubjects`, then weaken it to `True`, expecting the
-three `hsubj` sites and *nothing else* to redden.
+Kernel-checked, **green first attempt at every stage**, `Build completed successfully
+(1089 jobs). rc=0`. All of it is new declarations in `CascadeStable.lean`, immediately
+after `rewriteClosure_subject_not_leafNode`'s applicability block: **no existing
+declaration changed, no signature moved, no pin surface touched** (`lean` re-run:
+`holes=0, audits=585, pinned=584` — identical to the anchor, because none of the new names
+carries an audit row).
+
+* `NoLeafStoreSubjects (T : Store) : Prop := ∀ t ∈ T, NotLeafName t.subject.predicate`,
+  plus `.tail` / `.head` projections — the `BareStarStore` shape, so it weakens along a
+  cons exactly the way each `write` case needs.
+* `DirectRestrictionsNotLeaf (S : Schema)` — **the missing schema fact**, over
+  `exprDirectsAll` (not `exprDirects`), with a `Decidable` instance.
+* `mem_exprDirectsAll_of_mem_exprDirects`, `notLeafName_of_restrictionMatches` — the two
+  steps of the bridge.
+* `noLeafStoreSubjects_of_storeValidRules` and `::_of_storeValidRulesD` — **the discharge**,
+  in both admission forms, because the three target sites do not all carry the same one
+  (`reachedByW3d_shadow` / `reachedByW3d2_shadow` carry the narrow `StoreValidRules`;
+  `reachedByW3d2_shadow_d` carries `StoreValidRulesD`).
+
+**Why the discharge closes at all** — the load-bearing step, and it is one line of
+`Spec/Semantics.lean`: `restrictionMatches`' middle conjunct is
+`tup.subject.predicate == r.2.1`, so an admitted tuple's subject predicate is not free, it
+is **equal to some declared restriction's predicate component**. "No stored subject is a
+leaf name" therefore reduces to a schema fact, and the derived disjunct of
+`StoreValidRulesD` does not even need that — it already carries
+`t.subject.predicate = BARE`, which is `NotLeafName`'s left disjunct outright.
+
+⚠ **The trap this design had to avoid, and it is not cosmetic.** The clause is
+`NotLeafName`-shaped ("`= BARE` **or** dot-free"), **NOT** `relNameOK`-shaped ("dot-free").
+`BARE = "..."` is itself dot-carrying (`Core/Ident.lean:20`; `isLeafPred` is a bare dot
+test, `Leaf.lean:196`, and `::isLeafPred_bare` records the divergence on purpose), and
+**every `Direct` restriction in every `GraphAdmission` witness schema is `("user", BARE, _)`**
+— so a `relNameOK`-shaped field would be FALSE at `Sx`/`Sy`/`Sd`, make the bundle
+uninhabited, and **re-vacuate the headline theorems** rather than narrow them. That is the
+2026-08-05 vacuity failure mode arriving through a new door. `NotLeafName`'s BARE escape
+mirrors Python's own `name != '...'` escape in `_validate_ast_references`.
+
+### 4. Sabotage — the addition is INERT, so the pins are the sole evidence
+
+Nothing consumes the six new declarations yet, so a green build vets none of them: a
+`DirectRestrictionsNotLeaf` that returned `True` everywhere, or read the wrong component of
+a restriction, would compile and audit exactly as cleanly. Both runs are recorded with
+their literal output in the section docstring at `CascadeStable.lean`, per
+`docs/sabotage-procedure.md`'s durability ranking.
+
+* **S1 — the quantifier narrowed to `exprDirects`** (the weakening someone would write who
+  had read only `StoreValidRules`). `rc=1`, and **exactly the discriminating pin fired**:
+  `Tactic 'decide' proved that the proposition ¬DirectRestrictionsNotLeaf SdrBadDerived is
+  false`, while `::_false_sdrBadLeaf` stayed GREEN. That asymmetry is what makes the two
+  witnesses a discriminating pair rather than two red lights. Two further errors at
+  `:1028`/`:1040` are the discharge lemmas' conversions going ill-typed — attributable, and
+  independent evidence that the bridges really depend on the widened enumeration.
+* **S2 — the predicate reads `r.1` (subject TYPE) instead of `r.2.1` (subject PREDICATE)**.
+  `rc=1`, **both** refutation pins fired.
+
+A third witness, `sdrBadDerived_clean_under_exprDirects`, pins the *complement*: the same
+schema IS clean under the narrow enumeration, so S1's two pins differ on the
+`exprDirects`/`exprDirectsAll` choice and on nothing else. And `tdrUserset_subject_not_bare`
+keeps the positive pin from collapsing into `NotLeafName`'s BARE shortcut — the witness
+schema deliberately carries a USERSET restriction (`[group#member]`) precisely because
+reusing `LeafRuleWitness.SnlBoth` would have tested only the all-`BARE` triviality.
+
+### 5. A design refinement the work surfaced — thread the SCHEMA fact, not the store one
+
+The board and `2026-09-01e` both describe step 9 as threading a **store-level**
+`NoLeafStoreSubjects T`. Having built the discharge, the cheaper and more natural premise is
+the **schema-level** `DirectRestrictionsNotLeaf S`, for three reasons, and the store-level
+predicate stays as the named conclusion rather than the threaded hypothesis:
+
+1. `hSV` (`StoreValidRules`/`StoreValidRulesD`) is **already in scope at all three sites** —
+   the `write` case's store is `t :: T`, so `hSV t List.mem_cons_self` is the seed's own
+   admission fact. Combined with the schema premise it yields `hbase` locally.
+2. A schema premise needs **no weakening line per recursive call**; a store premise needs the
+   `fun t' ht' => h t' (List.mem_cons_of_mem _ ht')` boilerplate at every one.
+3. **Seven of `GraphAdmission`'s eight fields are schema-level** (only `storeValid` is not),
+   so this lands as a natural eighth rather than a second store-level field.
+
+This is a refinement WITHIN the user's decision (thread a premise, discharge it from
+admission), not a re-opening of it.
+
+### 6. What is NOT settled
+
+The **sizing of the threading is still unmeasured**. `2026-08-31c`'s `5 + 7 + 8 = 20`
+remains scout output and is not to be quoted; this session's own grep is **46 non-comment
+source LINES across 9 files** (counting unit: matching lines, excluding docstrings/comments
+and `Audit.lean`'s `#print axioms` name rows, which a signature change does not break) —
+and that is a raw upper-ish bound on lines, NOT a repair-site count. ⚠ A declaration-level
+count was attempted and **discarded as untrustworthy**: the awk pass reported more
+declarations than there were matching lines. Do not resurrect it; **measure with the
+probe**, which is this tree's established method (`2026-09-01e` §2).
+
+The step-9 **control** is unchanged: **probe 5 re-run without the `sorry`s**, plus the
+planned weakening — thread the premise, then weaken it to `True`, expecting the three
+`hsubj` sites and *nothing else* to redden.
+
+⚠ **Known cost of the endgame, measured by the adversarial pass and not yet paid:** adding
+a field to `GraphAdmission` leaves `headline_statements.txt` byte-identical (its extractor
+is textual and stops at the first top-level `:=`/`where`, so a structure's field list is
+invisible to it — 13 rows name `GraphAdmission` and all 13 bind it opaquely), but it **does
+redden `headline_definitions.txt`**, which pins the structure's field list, and it needs the
+four explicit construction sites at `FullScope.lean:623/:739/:1486/:1621` plus the flat
+8-clause conjunction at `:1042` that two of them project from positionally. That is a
+deliberate golden regeneration, not a surprise — file new pins at the TAIL (trap (m)).
 
 ---
 

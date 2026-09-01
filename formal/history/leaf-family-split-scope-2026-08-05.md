@@ -1518,13 +1518,49 @@ re-check, ~20 sites in 3 files go genuinely red.**
     attributable error at `CascadeStable.lean:1248` (itself a lower bound; the build stops
     there). Run BOTH halves and record BOTH; a PRE-WIDEN whose only evidence is a
     today-tree green has no evidence at all.
-  * **What is left is not step 8.** Step 9 is **blocked on a design decision, not proof
+  * **What is left is not step 8.** Step 9 was **blocked on a design decision, not proof
     effort**: the seed-side `NotLeafName t.subject.predicate` at
-    `::reachedByW3d_shadow` / `::reachedByW3d2_shadow{,_d}` wants a store-level
-    `NoLeafStoreSubjects T` threaded through three signatures — changing their premises,
-    hence downstream statements, hence potentially the headline theorems. That is the
-    human call `P3` already carries. **Do not thread it unasked.** Full record:
-    `PROOF_STATUS.md` `## Session 2026-09-01e`.
+    `::reachedByW3d_shadow` / `::reachedByW3d2_shadow{,_d}` wants a premise threaded
+    through three signatures — changing their premises, hence downstream statements, hence
+    potentially the headline theorems. **That call was MADE 2026-09-02 (user): thread it
+    AND discharge it from `GraphAdmission`.** See **(o)** and **(p)**. Full records:
+    `PROOF_STATUS.md` `## Session 2026-09-01e` and `## Session 2026-09-02`.
+
+* **(o) NEW 2026-09-02 — the seed-side premise must be `NotLeafName`-shaped, and a
+  `relNameOK`-shaped one would RE-VACUATE the headline theorems.** This is the sharpest
+  trap on the item, because the wrong clause is the one that reads more naturally.
+  `NotLeafName p := p = BARE ∨ isLeafPred p = false` — *"the bare sentinel, OR dot-free"*.
+  It is **not** `relNameOK p := ¬ p.contains '.'`. The reason is that `BARE = "..."` is
+  **itself dot-carrying** (`Core/Ident.lean:20`; `isLeafPred` is a bare dot test,
+  `Leaf.lean:196`, and `Leaf.lean::isLeafPred_bare` records that divergence on purpose),
+  while **every `Direct` restriction in every `GraphAdmission` witness schema is
+  `("user", BARE, _)`** (`FullScope.lean:615`/`:725`/`:888`). So a dot-free clause is FALSE
+  at `Sx`/`Sy`/`Sd`, makes the bundle uninhabited at its four construction sites, and turns
+  the final theorems VACUOUS — the exact 2026-08-05 failure mode this whole leg exists to
+  retire, arriving through a new door. The `NotLeafName` shape also mirrors Python, whose
+  `_validate_ast_references` dot-lock carries its own `and name != '...'` escape.
+  ⚠ It follows that `relNameOK` is the wrong tool anywhere a SUBJECT predicate is in
+  question; it is right only for object-side relation names. Step 7 hit the same wall from
+  the other side and landed `ComputedRefsNotLeaf` over `NotLeafName` for the same reason.
+
+* **(p) NEW 2026-09-02 — thread the SCHEMA fact, not the store fact; and the seed's
+  admission is ALREADY in scope.** The board and `2026-09-01e` both describe step 9 as
+  threading a store-level `NoLeafStoreSubjects T`. Cheaper and more natural, established by
+  building the discharge (`PROOF_STATUS` `2026-09-02` §3/§5): thread the schema-level
+  `CascadeStable.lean::DirectRestrictionsNotLeaf S` instead, because (i) `hSV` is already a
+  hypothesis at all three sites and each `write` case's store is `t :: T`, so
+  `hSV t List.mem_cons_self` IS the seed tuple's own admission fact; (ii) a schema premise
+  needs no `List.mem_cons_of_mem` weakening line per recursive call, a store premise needs
+  one at every one; (iii) **7 of `GraphAdmission`'s 8 fields are already schema-level** —
+  only `storeValid` is not. `NoLeafStoreSubjects` stays as the named CONCLUSION of the
+  discharge lemmas, not as the threaded hypothesis.
+  ⚠ **Quantify over `exprDirectsAll`, never `exprDirects`** — the latter returns `[]` under
+  `inter`/`excl`, so it would leave `StoreValidRulesD`'s DERIVED disjunct (the one admitting
+  `can_view: [user] but not blocked`) completely unguarded. Pinned discriminatingly by
+  `::directRestrictionsNotLeaf_false_sdrBadDerived` against
+  `::sdrBadDerived_clean_under_exprDirects`.
+  ⚠ **Both admission forms are needed**: `reachedByW3d_shadow`/`reachedByW3d2_shadow` carry
+  the narrow `StoreValidRules`, `reachedByW3d2_shadow_d` carries `StoreValidRulesD`.
 
 ## Provenance
 
