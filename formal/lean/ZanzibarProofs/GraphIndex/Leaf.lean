@@ -614,6 +614,37 @@ theorem not_leafNode_of_notLeafName {S : Schema} {k : NodeKey}
     rw [publicOfLeaf_not_leaf (S := S) (ty := ty) hnl] at hs
     simp at hs
 
+/-- **The query-route refutation** — the `publicOfLeaf`-shaped analogue of
+    `not_leafNode_of_notLeafName` above, refuting `LeafNode` from the ABSENCE of a public
+    mapping rather than from the shape of the name.
+
+    **Why it exists (`P3` leg 7 4c-ii, 2026-09-02).** Once `CascadeStable.lean::
+    shadow_graphRec_agree`'s `hv1` is pre-widened to `¬ (DerNode ∨ LeafNode)`, its fourteen
+    term-level call sites split 3 + 8 + 3 (measured by probe, not grep — scope-doc §11.13
+    (q)). Eleven are served by `CascadeStable.lean::notLeafNode_of_computedRef`, which needs
+    `r' ∈ computedRefs e`. The remaining THREE — `CascadeSettle.lean:1123`,
+    `CascadeStrataResettle.lean:1543` and `:2690` — instantiate the operand relation with the
+    arbitrary QUERY's own relation, where no `computedRefs` membership exists and none can be
+    manufactured; that is §11.13 (g)'s residue. All three call the lemma at
+    `objNode ⟨q.object.type, _⟩ q.relation`, so headline row 27's adjudicated guard
+    `hql : publicOfLeaf S q.object.type q.relation = none` (`FullScope.lean::graph_correct_public`'s
+    docstring) lands on exactly this shape. This is that guard's eliminator, and the two
+    routes meet at the same `¬ LeafNode` target.
+
+    Landed AHEAD of the co-landing deliberately: `hql` itself is not landable before the flip
+    (`docs/latent-gaps.md`, "never before … never after"), but its eliminator is additive and
+    green-stoppable, so the plan's one load-bearing unverified step becomes a machine-checked
+    fact instead of a prose argument. Non-vacuity pins: `publicOfLeaf_none_not_leafNode_nv`
+    and `publicOfLeaf_some_is_leafNode_nv` below. -/
+theorem not_leafNode_of_publicOfLeaf_none {S : Schema} {dt on r : String}
+    (h : publicOfLeaf S dt r = none) : ¬ LeafNode S (objNode ⟨dt, on⟩ r) := by
+  rintro ⟨ty, on', p, hs, _, _, heq⟩
+  have hty : dt = ty := by simpa using congrArg NodeKey.type heq
+  have hp : r = p := by simpa using congrArg NodeKey.pred heq
+  rw [hty, hp] at h
+  rw [h] at hs
+  simp at hs
+
 /-- A bare SUBJECT node is never a `LeafNode`, at ANY schema — the generic form of the
     three fixed-schema `decide` pins, and the shape the 4c-ii write-leg premise needs. -/
 theorem bare_subjNode_not_leafNode {S : Schema} {u : SubjectRef}
@@ -1276,6 +1307,75 @@ theorem minted_leaf_is_leafNode :
     1089 jobs. -/
 theorem wAllNode_not_leafNode :
     leafNodeB Sw (wAllNode "doc" (leafPred "approver" 0)) = false := by decide
+
+/-! ### `not_leafNode_of_publicOfLeaf_none`'s non-vacuity — the DISCRIMINATING pair
+
+Per `docs/sabotage-procedure.md`: that lemma is purely additive, so a green build vets
+nothing — a version whose premise were unsatisfiable at every node would compile and audit
+exactly as cleanly. These two pins are the evidence, and they are a PAIR: same schema, same
+object, differing ONLY in the relation. At the public name `approver` the mapping is absent
+(`pol_nv8`) and the node is refuted; at its storage leaf `approver.0` the mapping is present
+(`pol_nv7`) and the node genuinely IS a `LeafNode`. So the premise fails exactly where the
+conclusion fails — which is what makes it load-bearing rather than decorative, and is the
+same discrimination `minted_leaf_is_leafNode` / `wAllNode_not_leafNode` provide one axis
+over (node shape); this pair varies the RELATION instead.
+
+SABOTAGED BEFORE BELIEVED, two runs, 2026-09-02. Both target the lemma rather than the
+fixture, because the fixture pins are `by decide` and it is the LEMMA that could be
+decorative.
+
+**S1 — is the relation identification load-bearing?** The narrowest plausible weakening is
+not "delete the premise" (that fails to elaborate) but "the premise is about the wrong
+relation": `rw [hty, hp] at h` narrowed to `rw [hty] at h`, dropping `hp : r = p`.
+OBSERVED, rc=1:
+
+    error: ZanzibarProofs/GraphIndex/Leaf.lean:645:6: Tactic `rewrite` failed: Did not
+      find an occurrence of the pattern
+      publicOfLeaf S ty r
+    in the target expression
+      (publicOfLeaf S ty p).isSome = true
+
+So the identification of the destructured `p` with the lemma's own `r` is what connects
+premise to conclusion; without it the two `publicOfLeaf` applications are about different
+relations and nothing closes.
+
+**S2 — can the lemma be aimed at a genuine `LeafNode`?** The negative control: apply it at
+`approver.0`, where `pol_nv7` says the mapping is PRESENT, and where
+`publicOfLeaf_some_is_leafNode_nv` directly below proves the node IS a `LeafNode`.
+OBSERVED, rc=1:
+
+    error: ZanzibarProofs/GraphIndex/Leaf.lean:1341:36: Application type mismatch: The
+      argument
+      pol_nv7
+    has type
+      publicOfLeaf Sw "doc" (leafPred "approver" 0) = some "approver"
+    but is expected to have type
+      publicOfLeaf Sw "doc" (leafPred "approver" 0) = none
+
+Read S2 together with `publicOfLeaf_some_is_leafNode_nv`: a version of the lemma that
+dropped its premise would prove `¬ LeafNode` at a node this file separately proves IS a
+`LeafNode`, i.e. it would make the tree inconsistent. That is the strongest available
+statement that the premise is load-bearing, and unlike a log line it is PERMANENT — the
+control is a theorem in the tree, not a run someone has to remember.
+
+⚠ Both counts are LOWER bounds (the 2026-08-30d trap): `Leaf.lean` is near the root of the
+import graph, so no dependent module was compiled in either run. Restored: rc=0, 1089 jobs. -/
+
+/-- The lemma APPLIED, at a relation whose public mapping is absent. Stated as a use rather
+    than a restatement: an eliminator with no application in the tree is inert, and this is
+    the shape the three query-relation sites will consume at the 4c-ii co-landing. -/
+theorem publicOfLeaf_none_not_leafNode_nv :
+    ¬ LeafNode Sw (objNode ⟨"doc", "d1"⟩ "approver") :=
+  not_leafNode_of_publicOfLeaf_none pol_nv8
+
+/-- The discriminating companion: at the SAME schema and the SAME object, the storage leaf
+    `approver.0` IS a `LeafNode`. So the premise above is not vacuously true at this
+    fixture, and a lemma proved from a `True`-equivalent premise could not tell these two
+    nodes apart. Routed through the PROVED decider (`leafNodeB_correct`) rather than a
+    `decide` on `LeafNode`, which is a `Prop` carrying an existential. -/
+theorem publicOfLeaf_some_is_leafNode_nv :
+    LeafNode Sw (objNode ⟨"doc", "d1"⟩ (leafPred "approver" 0)) :=
+  (leafNodeB_correct Sw _).mp minted_leaf_is_leafNode
 
 /-! ### The E3 guard's OWN pin — at the pathological schema, per the sabotage procedure
 

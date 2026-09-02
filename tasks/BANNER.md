@@ -1,14 +1,14 @@
-2026-09-01e — gate re-run after the step-8 increment; verdict line in the session-log entry.
+2026-09-02b — ten-phase gate re-run after the eliminator landed; verdict in the session-log entry.
 
-(nav) **STEP 8's FREE HALF LANDED AND THE FLIP IS A CLOSED LIST — 5 SITES / 4 DECLS / 2
-FILES.** `untaintedShadow_applyD` + `untaintedShadow_applyLoggedR{,_d}` PRE-WIDENED in place:
-no new declaration, no signature change, no pin exposure; `hoffW` costs no premise (`hcb` +
-`bare_subjNode_not_leafNode`). Green first attempt, 1089 jobs. The lower bound closed by
-staging the probe with `sorry` so `lake` builds PAST the red module — retiring "~20 sites".
-(!) **STEP 9 IS BLOCKED ON A DESIGN DECISION, NOT PROOF EFFORT.** The seed-side
-`NotLeafName t.subject.predicate` at three `rewriteClosure` sites wants a store-level
-`NoLeafStoreSubjects T` threaded through their signatures — changing downstream statements
-and hence potentially the headline theorems. **Do not thread it unasked.**
+(nav) **THE 4c-ii CO-LANDING IS SIZED BY PROBE AND IS A CLOSED LIST — 14 SITES / 12 DECLS /
+6 FILES.** Staging `sorry` at every site builds the whole tree (rc=0, 1089 jobs), so nothing
+outside the census exists. 14 sites but 12 decls: `graph_correct_w3d2` and `_d` each host TWO
+(one servable, one query-relation), so "thread the predicate" and "add the query premise" are
+NOT separable — that is where a partial landing gets left half-done. Servability 7 of 8.
+LANDED: `Leaf.lean::not_leafNode_of_publicOfLeaf_none`, row 27's guard's eliminator, additive
+and pinned by a RELATION-varying pair; `lean` identical to anchor (585/584/164).
+(!) **NEXT IS THE ATOMIC CO-LANDING — nothing smaller is green-stoppable** (§11.12 rule 5).
 
-(!) **A PRE-WIDEN's control is the flip PROBE, never a weakening** — §11.13 **(n)**, which
-generalises (k): S1 (`hoffW` narrowed to `DerNode`) is GREEN unflipped, RED flipped.
+(!) **`grep "declaration uses 'sorry'"` RETURNS 0 — Lean uses BACKTICKS** — §11.13 **(u)**.
+14 staged sorries + rc=0 read back as "premise never needed". Make an assurance grep fire on
+purpose before believing its zero. (q) is the over-counting half of the same lesson.
