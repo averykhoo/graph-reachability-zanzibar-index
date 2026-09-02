@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: PROBE-SIZED CLOSED LIST: 14 sites / 12 decls / 6 files. hql's eliminator landed. Next = the atomic co-landing.
+brief: SIZING RETIRED: cone is 62+13 decls / 11 files, not 12/6. Two additive prerequisites LANDED; next = co-landing.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-02
-updated: 2026-09-02b
+moved: 2026-09-02c
+updated: 2026-09-02c
 closed:
 ---
 
@@ -621,3 +621,21 @@ SERVABILITY 7 of 8. Only CascadeStrataEnum::checkFnR_star_declared (:336) lacks 
 ⚠ CORRECTION filed against PROOF_STATUS `## Session 2026-09-02` §7 and scope-doc (r): "six" audited-but-unpinned carriers is an UNDERCOUNT -- two independent measurements say 38, the list omitting the whole _w3d2 family. UNVERIFIED first-hand; re-measure before quoting either number.
 
 NEXT = the atomic co-landing, and nothing smaller is green-stoppable: pre-widen hv1, thread ComputedRefsNotLeaf (+ one hlk into checkFnR_star_declared) across the 12 declarations, thread hql from row 27 to the 3 query sites, and the flip -- ONE commit, because 11.12 rule 5 forbids a partial cone and the headline theorems are decide-provably FALSE in between. Record: PROOF_STATUS ## Session 2026-09-02b.
+
+### 2026-09-02c
+
+⚠ BOTH HALVES OF THE ENTRY ABOVE ARE RETIRED. (1) The 14/12/6 census is a LOWER BOUND **by construction**, not a closed list: a staged `sorry` discharges the new premise LOCALLY, so the probe sizes WHERE THE PROOF BREAKS, never WHICH SIGNATURES MUST CHANGE -- and those differ by the whole transitive caller closure, which is what "thread the premise" means. Measured on the live tree: hcr thread = 62 declarations, hql thread = 13, across ELEVEN files; FIVE of them (CascadeInv, CascadeStrataEdge, CascadeStrataAssemble, Equiv, FullScope) are in neither the census nor the 8-file list. Corroborated first-hand by caller attribution -- Equiv.lean alone hosts six audited milestone decls in the cone (backend_equivalence_w3d :501, exclusion_effective_w3d :526, no_ghost_grant_w3d :553, and the _w3d2 trio :587/:613/:643). Filed as scope-doc 11.13 (v). Note (q) and (v) are the SAME cone mis-measured in opposite directions in one week -- grep over-counted, the probe under-counted.
+
+(2) "Nothing smaller is green-stoppable" is REFUTED BY KERNEL, twice. 11.12 rule 5 forbids a PARTIAL CONE -- a tree whose own pins assert something untrue -- and neither of these is one; both are additive, consume nothing, weaken no statement, green first attempt (rc=0, 1089 jobs, 0 sorries). Filed as 11.13 (w).
+
+LANDED (a): GraphAdmission.computedRefsNotLeaf -- the THIRD syntactic reading of the one Python dot-lock the other two admission rows already model, discharged `by decide` at all four construction sites. It is the TERMINATOR that cuts the hcr thread 79 -> 62, i.e. landing it FIRST makes the cone measurably smaller. Its whole consumer chain was already pre-staged and inert (CascadeStable :599/:604/:615/:655, whose docstring :587-592 names shadow_graphRec_agree's hv1 as the awaited consumer). NON-VACUITY is a new discriminating pair varying ONE axis, the name of a computed operand: FullScope::SxLeafRef (= Sx with r's left operand re-pointed to `leafPred "a" 0`), with sx_computedRefsNotLeaf TRUE, sxLeafRef_computedRefsNotLeaf_false FALSE, and sxLeafRef_other_admission_fields_hold proving NodupKeys/Stratifiable/TtuTuplesetsDirect/RewriteMatchDeclared/DirectRestrictionsNotLeaf/objWild ALL still true there -- so no neighbouring field implies the new one. (wf excluded deliberately: it is the field that would have caught a dot, and trap (o) is why relNameOK is still the wrong predicate.)
+
+LANDED (b): the WIDENED six-field instrument -- Scratch4cii::clsB_correct_weak / termB_correct_weak / shadowB_correct_weak. This is the one that MUST precede the flip. shadowB_correct (:583) is ANCHORED at ShadowOver (DerNode S), so the moment UntaintedShadow is re-pointed it decides a structure the live tree no longer uses while every `decide` row stays green. The file asserted this was unfixable -- :500-503 said the weak form "has no such theorem AND CANNOT HAVE ONE" -- which was already false: ShadowOver has been generic in its extras predicate since 11.13 item 1 (2026-08-30c). Paragraph rewritten in place. ⚠ STATE THEM AT THE EXPLICIT PREDICATE, NEVER AT UntaintedShadow, or they change meaning under the flip and reproduce the failure they prevent. SABOTAGE SAB-6 with literal output in termB_correct_weak's docstring: trimming termB's weak disjunct reds FOUR sites, ALL inside that twin, and EVERY decide row stays green -- the 2026-08-28d closedB shape one layer down.
+
+PIN MOVEMENT exactly as predicted, and the definition pin EARNED its keep: run BEFORE regenerating as the control on the pin itself, it fired with exactly two discrepancies (GraphAdmission gained a field; ComputedRefsNotLeaf newly reachable) and no others. After deliberate regeneration: headline_statements.txt 49/49 BYTE-IDENTICAL (graph_correct's hql is NOT in this landing), headline_definitions.txt 164 -> 165, FINAL_REVIEW counts regenerated, audited_theorems.txt untouched.
+
+INSTRUMENT CONTROL run first, per trap (u): a deliberate `sorry` in a leaf module made the grep fire -- backtick-safe grep = 1, straight-quote grep = 0, SAME log. Reverted.
+
+⚠ STILL UNVERIFIED, do not quote either number: 2026-09-02b's "six vs 38" audited-but-unpinned correction reproduces as NEITHER. Basename-normalised: 578 audited names, 43 statement-pinned, 35 overlap -> 543 audited carry a NAME pin and no STATEMENT pin; 13 match _w3d/_w3d2 by name. But a name-pattern count is the wrong instrument (it misses reachedByW3dC_inv/reachedByW3dE_inv, which the original six included); the right one needs the statement extractor, not grep.
+
+NEXT is still the atomic co-landing, now correctly sized and with its instrument in place. Re-size with the plan's P3/P4 staged-sorry probes BEFORE committing to a session budget -- and read the ERROR SET, not the exit code. Record: PROOF_STATUS ## Session 2026-09-02c.

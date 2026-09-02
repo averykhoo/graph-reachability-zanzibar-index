@@ -497,10 +497,24 @@ time. This battery reads SIX fields, five of which are new hand transcriptions o
 in its UNWEAKENED form `shadowB` decides `UntaintedShadow` exactly. A transcription
 slip in any of the six now fails to compile instead of silently returning `true`.
 
-⚠ The weakened form (`weak := true`) has no such theorem and cannot have one — the
-weakened `UntaintedShadow` is what 4c-ii is for and does not exist yet. So the
-`weak := true` rows below are measurements of a PROPOSED structure, and their force
-comes from the strong rows next to them, which are proved.
+⚠ **Corrected 2026-09-02c — this paragraph used to say the weakened form "has no such
+theorem AND CANNOT HAVE ONE".** The "cannot" was wrong, and wrong in the direction that
+costs an instrument: it inferred from *`UntaintedShadow` is not yet widened* that *the
+widened predicate cannot be named*, when `ShadowOver` has been generic in its extras
+predicate since 2026-08-30c (scope doc §11.13 item 1) and `fun k => DerNode S k ∨
+LeafNode S k` is nameable today. `clsB_correct_weak` / `termB_correct_weak` /
+`shadowB_correct_weak` below are that theorem. They are stated at the EXPLICIT widened
+predicate and never at `UntaintedShadow`, which is what makes them landable BEFORE the
+4c-ii flip and unchanged AFTER it.
+
+Why it mattered enough to land ahead of the flip: at the moment `UntaintedShadow` is
+re-pointed, `shadowB_correct` (:583) goes on deciding `ShadowOver (DerNode S)` — it is
+deliberately ANCHORED there — so without a widened twin the six-field mirror would stop
+instrumenting the structure the live tree actually uses, while every `decide` row below
+stayed green. That is precisely the 2026-08-28d `closedB` failure recorded at :551-575,
+one layer down, and the reason the fix is a proved twin rather than more `decide` rows.
+The `weak := true` rows below are still measurements of a PROPOSED structure — but their
+mirror is now proved to decide it.
 
 ⚠ **Corrected 2026-08-30d.** This paragraph used to add "`leafNodeB` likewise still has
 no `leafNodeB_correct` twin (:51)". That was true when written and was falsified in
@@ -592,6 +606,102 @@ theorem shadowB_correct (S : Schema) (σ σ0 : GraphState) :
     exact ⟨⟨⟨⟨⟨(clsB_correct S σ σ0).mpr h.classify, (subB_correct σ σ0).mpr h.sub⟩,
              (nodesSubB_correct σ σ0).mpr h.nodesSub⟩, (closedB_correct σ).mpr h.closed⟩,
            (closedB_correct σ0).mpr h.closed0⟩, (termB_correct S σ).mpr h.term⟩
+
+/-! ### …and the WIDENED mirror is proved too (4c-ii step 10, 2026-09-02c)
+
+The three twins below close the hole the corrected paragraph at :492-518 describes.
+`shadowB_correct` above is ANCHORED at `ShadowOver (DerNode S)` on purpose, so it
+survives the 4c-ii flip *as a pin on the strong shadow* — but that is exactly why it
+stops policing the live structure the moment `UntaintedShadow` is re-pointed. These
+state the same six-field decision at `fun k => DerNode S k ∨ LeafNode S k`, the
+predicate the flipped `UntaintedShadow` will name.
+
+⚠ Stated at the EXPLICIT predicate, NEVER at `UntaintedShadow`. That is not a stylistic
+choice: writing `UntaintedShadow` here would make these theorems change meaning under
+the flip, i.e. it would reproduce the very failure they exist to prevent, and it would
+make them unlandable before it. -/
+
+theorem clsB_correct_weak (S : Schema) (σ σ0 : GraphState) :
+    clsB S true σ σ0 = true ↔
+      (∀ ab ∈ σ.edges, ab ∈ σ0.edges ∨ (DerNode S ab.2 ∨ LeafNode S ab.2)) := by
+  simp only [clsB, List.all_eq_true]
+  constructor
+  · intro h ab hab
+    have h1 := h ab hab
+    simp only [Bool.true_and, Bool.or_eq_true, List.contains_iff_mem] at h1
+    rcases h1 with (h2 | h2) | h2
+    · exact Or.inl h2
+    · exact Or.inr (Or.inl ((derNodeB_correct S ab.2).mp h2))
+    · exact Or.inr (Or.inr ((leafNodeB_correct S ab.2).mp h2))
+  · intro h ab hab
+    simp only [Bool.true_and, Bool.or_eq_true, List.contains_iff_mem]
+    rcases h ab hab with h2 | h2 | h2
+    · exact Or.inl (Or.inl h2)
+    · exact Or.inl (Or.inr ((derNodeB_correct S ab.2).mpr h2))
+    · exact Or.inr ((leafNodeB_correct S ab.2).mpr h2)
+
+/-- **SABOTAGE** (`docs/sabotage-procedure.md`), run 2026-09-02c — and it is this theorem,
+    not `shadowB_correct_weak`, that turned out to be the instrument.
+
+    The narrowest *plausible* weakening is not "delete the twin" but a maintainer
+    simplifying `termB`'s `weak` disjunct away as redundant: `:477-478`'s
+    `!(derNodeB S ab.1 || (weak && leafNodeB S ab.1))` trimmed to `!(derNodeB S ab.1)`.
+    Observed, `lake build`, rc=1, **four error sites, ALL inside this declaration**:
+
+        error: …/Scratch4cii.lean:652:61: Invalid projection: Projections extract
+          constructor fields for one-constructor inductive types. The expression
+          h1
+        has type `derNodeB S k = false` which has no fields.
+        error: …/Scratch4cii.lean:652:52: unsolved goals
+        …
+        h1 : derNodeB S k = false
+        hk : DerNode S k
+        ⊢ derNodeB S k = false
+
+    ⚠ **The load-bearing half is what did NOT fail.** Every `decide` row in the battery
+    stayed GREEN — `d_weak_holds`, `mixed_weak_holds_strong_fails` and the rest — because
+    a `termB` that has forgotten leaves returns `true` wherever the honest one did. So
+    the battery is blind to this weakening in exactly the way `:551-575` records for
+    `closedB` in 2026-08-28d, and before this twin existed the trim would have built
+    green while the whole `weak := true` battery went on measuring a predicate that no
+    longer mentions leaf nodes at all. That is the entire case for landing the twins
+    ahead of the flip rather than with it. -/
+theorem termB_correct_weak (S : Schema) (σ : GraphState) :
+    termB S true σ = true ↔
+      (∀ k, (DerNode S k ∨ LeafNode S k) → ∀ y, (k, y) ∉ σ.edges) := by
+  simp only [termB, List.all_eq_true]
+  constructor
+  · intro h k hk y hy
+    have h1 := h (k, y) hy
+    simp only [Bool.true_and, Bool.not_eq_true', Bool.or_eq_false_iff] at h1
+    rcases hk with hk | hk
+    · exact absurd ((derNodeB_correct S k).mpr hk) (by simp [h1.1])
+    · exact absurd ((leafNodeB_correct S k).mpr hk) (by simp [h1.2])
+  · intro h ab hab
+    simp only [Bool.true_and, Bool.not_eq_true', Bool.or_eq_false_iff]
+    refine ⟨?_, ?_⟩
+    · by_contra hc
+      exact h ab.1 (Or.inl ((derNodeB_correct S ab.1).mp (by simpa using hc))) ab.2
+        (by simpa using hab)
+    · by_contra hc
+      exact h ab.1 (Or.inr ((leafNodeB_correct S ab.1).mp (by simpa using hc))) ab.2
+        (by simpa using hab)
+
+/-- **The six-field mirror decides the WIDENED structure.** The post-flip twin of
+    `shadowB_correct`; see the section note above for why it is stated at the explicit
+    predicate rather than at `UntaintedShadow`. -/
+theorem shadowB_correct_weak (S : Schema) (σ σ0 : GraphState) :
+    shadowB S true σ σ0 = true ↔ ShadowOver (fun k => DerNode S k ∨ LeafNode S k) σ σ0 := by
+  simp only [shadowB, Bool.and_eq_true]
+  constructor
+  · rintro ⟨⟨⟨⟨⟨hc, hs⟩, hn⟩, hcl⟩, hcl0⟩, ht⟩
+    exact ⟨(clsB_correct_weak S σ σ0).mp hc, (subB_correct σ σ0).mp hs,
+           (nodesSubB_correct σ σ0).mp hn, (closedB_correct σ).mp hcl,
+           (closedB_correct σ0).mp hcl0, (termB_correct_weak S σ).mp ht⟩
+  · intro h
+    exact ⟨⟨⟨⟨⟨(clsB_correct_weak S σ σ0).mpr h.classify, (subB_correct σ σ0).mpr h.sub⟩,
+             (nodesSubB_correct σ σ0).mpr h.nodesSub⟩, (closedB_correct σ).mpr h.closed⟩,
+           (closedB_correct σ0).mpr h.closed0⟩, (termB_correct_weak S σ).mpr h.term⟩
 
 /-- A mixed store on `SlSw`: one derived-key write (`approver`) and one untainted write
     (`viewer`). The filter keeps exactly the second. This is the shape the unowned
