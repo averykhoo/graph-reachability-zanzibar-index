@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: DESIGN CALL MADE (user 2026-09-02): thread NoLeafStoreSubjects AND discharge from GraphAdmission. Unblocked proof work.
+brief: PROBE-SIZED CLOSED LIST: 14 sites / 12 decls / 6 files. hql's eliminator landed. Next = the atomic co-landing.
 pri: NOW
 size: L
 deps: []
@@ -12,7 +12,7 @@ source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
 moved: 2026-09-02
-updated: 2026-09-02
+updated: 2026-09-02b
 closed:
 ---
 
@@ -85,12 +85,16 @@ measurement flags now ADJUDICATED:
   a minted leaf name. It needs the operand relation *declared*, and nothing forces
   `computedRefs` names to be declared — `Core/Schema.lean::WF` records only that DECLARED
   names are dot-free. Python enforces it; the repair is faithful new modelling.
-* ⚠ **NEW — a BLIND INSTRUMENT, and the NEXT SESSION'S FIRST EDIT.** `Scratch4cii.lean:51`
-  defines a local unguarded `leafNodeB` SHADOWING the guarded carrier step 1 added at
-  `Leaf.lean:547`; the local one wins every unqualified use, including `clsB` (`:393`) and
-  `termB` (`:409`) — so the whole P14 weak battery measures a broader proxy than the
-  carrier it validates, in the UNSAFE direction. Delete `:51` first; expect a diagnostic
-  red confined to the file (1 importer, 0 audit rows, 0 pin rows — re-verified 2026-08-30c).
+* ✅ **CLOSED 2026-08-30d — the BLIND INSTRUMENT is gone; this bullet used to say "the NEXT
+  SESSION'S FIRST EDIT" and said it for three sessions after the edit had landed.**
+  `Scratch4cii.lean:51`'s local unguarded `leafNodeB` shadowed the guarded carrier at
+  `Leaf.lean:547`, biasing the whole P14 weak battery in the UNSAFE direction. It is
+  deleted, and `Scratch4cii.lean:47-60` now carries an explicit NEGATIVE marker — *"There
+  is deliberately NO local `leafNodeB` here … every `leafNodeB` below now resolves to
+  `Leaf.lean::leafNodeB`, the carrier that `Leaf.lean::leafNodeB_correct` proves decides
+  `LeafNode`"*. ⚠ The trap's own prediction was WRONG: deleting it built GREEN, rc=0, 1089
+  jobs, no diagnostic red. Kept as a closed row rather than removed, because the marker in
+  `Scratch4cii.lean` is what stops the shadow being reintroduced. (Re-verified 2026-09-02b.)
 * ✅ **Adding a hypothesis to `shadow_graphRec_agree` / `checkFn_eq_sem_w3d` /
   `shadow_reach_agree` / `reachedByW3d_shadow` changes NO pin file** — none is in
   `headline_statements.txt` or `headline_definitions.txt`; they carry name pins only.
@@ -599,3 +603,21 @@ LANDED (additive, sabotage-controlled): the seed side now has an owner. Six new 
 THREADING: site 1 of 3 done end to end (reachedByW3d_shadow). It is TWO premises, not one -- the seed premise alone cannot survive a .ttu hop (rewriteStep overwrites the subject predicate with the schema rule's target), so TtuTargetsSat S NotLeafName rides with DirectRestrictionsNotLeaf S; three independent adversarial checks refuted the one-premise framing. MEASURED COST is a closed list: 18 declarations across 6 files (CascadeStable 3, CascadeSettle 6, CascadeInv 2, CascadeEnum 4, Equiv 3, FullScope 0 signature changes). CascadeStrata* does not move at all -- its census matches were docstrings the comment filter missed, so the GREP OVER-COUNTED (scope doc 11.13 (q)); this retires 5+7+8=20 AND this session's own 46 lines / 9 files. CONTROL = the flip probe (trap (n)), POSITIVE result: before, the flip red CascadeStable 4x (hsubj x2 + hv1 x2); after, the hsubj pair is replaced by exactly the Or.inl wrapper mismatch the pre-widen is designed to leave, and passing hsubjW clears them, leaving only shadow_graphRec_agree's hv3/hv1. NON-VACUITY machine-checked: six new FullScope pins prove both premises hold at Sx/Sy/Sd (TtuTargetsSat is deliberately NOT Decidable -- route through ttuTargetsSat_notLeafName_of_noLeafSubjects). CAVEAT, scope doc 11.13 (r): six AUDITED TERMINAL theorems (graph_correct_w3d, backend_equivalence_w3d, exclusion_effective_w3d, no_ghost_grant_w3d, reachedByW3dC_inv, reachedByW3dE_inv) now carry two hypotheses they did not before, and the gate CANNOT see it -- audit rows pin NAMES only and none has a headline_statements.txt row. Permitted intermediate per the user's call, non-vacuity checked, NOT resolved. NEXT: the other two sites, then the GraphAdmission discharge where the six witness pins become the field proofs.
 
 STEP 9 IS DONE. All three hsubj sites threaded (reachedByW3d_shadow, reachedByW3d2_shadow, ::_d -- the _d variant routes the seed side through noLeafStoreSubjects_of_storeValidRulesD, which is why BOTH discharge lemmas were built), AND the premises are DISCHARGED: GraphAdmission gains ttuNotLeaf : TtuTargetsSat S NotLeafName and directRestrNotLeaf : DirectRestrictionsNotLeaf S, each documented with its enforcing Python mechanism, discharged BY DECIDE at all four construction sites (that IS the non-vacuity evidence -- a relNameOK-shaped clause would be false there and leave the structure uninhabited). The headline theorems take both from the bundle, so graph_correct / graph_reached_inv assume exactly the admission bundle they assumed before. W4WitnessDirect's flat conjunction (headline_statements.txt:43) was deliberately NOT extended -- four sites destructure it positionally -- so a pinned headline row stays byte-identical. PIN COST exactly as the adversarial pass predicted: headline_statements.txt byte-identical 49/49; headline_definitions.txt regenerated DELIBERATELY 161->164 (the GraphAdmission row plus three newly-reachable defs: NotLeafName, DirectRestrictionsNotLeaf, TtuTargetsSat -- the meaning of a claim grew three dependencies, which is what that pin exists to surface); FINAL_REVIEW.md counts block regenerated with it. FLIP MEASUREMENT: re-running the flip probe on the finished tree, the only reds are the EIGHT Or.inl wrappers the pre-widens were designed to leave (six at the hsubj sites, two at hv3) plus shadow_graphRec_agree's hv1; with the wrappers swapped and hv1 ALONE stubbed the whole tree builds (1089 jobs rc=0, one sorry warning at CascadeStable.lean:1640). Probe fully reverted. 2026-09-01e's FOUR unowned obligations is now ONE -- hv1 needs row 27's query-level premise and is all that stands between this tree and 4c-ii. RESIDUAL (scope doc 11.13 (r), PROOF_STATUS 2026-09-02 sec 7): the six audited TERMINAL _w3d/_w3d2 milestone theorems still spell their premises out and now spell out two more; gate-invisible (audit rows pin NAMES only, no statement-pin row). Bounded and proportionate; retiring it means re-stating those six over the bundle, a SEPARATE decision, not step 9. New scope-doc traps: (q) grep over-counts this cone, size with the probe; (r) the gate-invisible weakening; (s) step 9 done + the flip is hv1 alone.
+
+### 2026-09-02b
+
+⚠ READ THIS BEFORE THE 2026-09-01d ENTRY BELOW: that entry's "WAY OUT FOUND ... widening hag ... is its own increment" is SPENT. The hag widening is in HEAD (50535a6, ancestor of dbf08a8; ReconcileStars.lean:625-627 and the _cd twin :643-645 both bind `r' ∈ computedRefs e`). It landed the same day the entry called it deferred, and this log was never updated -- so a board-first reader was being handed a no-op as the next task. Entered this session believing exactly that; corrected first-hand before any edit.
+
+SIZED BY PROBE, and it is a CLOSED LIST -- 14 sites / 12 declarations / 6 files. Run 1 (widen hv1, add the premise) gave rc=1 with ONE error at CascadeStable.lean:1722 and stopped at job 1070/1089 -- the (k) lower-bound trap exactly, since CascadeStable is upstream of twenty modules. Run 2 staged `sorry` at all 14 sites (trap (n)'s technique): rc=0, 1089 jobs, ZERO errors, so nothing outside the census exists. Declarations: CascadeEnum:347; CascadeSettle:899; CascadeStable:1707; CascadeStrataEnum:336/:373/:413; CascadeStrataSettle:1642/:1711/:1857/:4005; CascadeStrataResettle:1440/:2551. 14 sites but 12 declarations because graph_correct_w3d2 (:1440) and graph_correct_w3d2_d (:2551) EACH HOST TWO -- one servable, one query-relation -- which is why "thread the predicate" and "add the query premise" are NOT separable at declaration granularity, and where a partial landing gets left half-done. Retires "18 declarations across 6 files" for this step. Filed as scope-doc 11.13 (t).
+
+THE PLAN'S ONE UNVERIFIED STEP IS CLOSED. Nobody had checked that hql's shape discharges a widened hv1 at the three query sites; if it did not, neither route closes them. Verified by hand at all three (CascadeSettle:1120-1123, CascadeStrataResettle:1540-1543, :2687-2690): all byte-identical, query `⟨⟨st,sn,sp⟩, R, ⟨dt,on⟩⟩`, call `shadow_graphRec_agree hsh ⟨st,sn,sp⟩ on hd`, so unification forces dt'=dt=q.object.type and r'=R=q.relation. ALIGNS.
+
+LANDED: Leaf.lean::not_leafNode_of_publicOfLeaf_none -- row 27's guard's ELIMINATOR, and the missing half of the discharge machinery (notLeafNode_of_computedRef serves the 11 membership-bearing sites; this serves the 3 query sites; both meet at the same `¬ LeafNode` target). Green first attempt, rc=0, 1089 jobs; `verify.sh lean` PASSED with holes=0 audits=585 pinned=584 defs=164, IDENTICAL to the dbf08a8 anchor -- no pin file moved, no audit row added. Landed ahead of the co-landing deliberately: hql is not landable before the flip, but its eliminator is additive and green-stoppable, so the argument above is now a theorem instead of prose. NON-VACUITY is a PAIR varying the RELATION (publicOfLeaf_none_not_leafNode_nv at "approver" where the mapping is absent; publicOfLeaf_some_is_leafNode_nv proving approver.0 at the same schema and object IS a LeafNode) -- a second axis alongside minted_leaf_is_leafNode/wAllNode_not_leafNode, which vary node SHAPE. TWO SABOTAGES with literal output in the section docstring: S1 (drop the relation identification `hp`) rc=1, "Did not find an occurrence of the pattern publicOfLeaf S ty r"; S2 (negative control -- aim it at approver.0 via pol_nv7) rc=1, "has type ... = some \"approver\" but is expected to have type ... = none". S2 read with publicOfLeaf_some_is_leafNode_nv means a premise-free version would make the tree INCONSISTENT, and that control is a permanent theorem rather than a log line.
+
+SERVABILITY 7 of 8. Only CascadeStrataEnum::checkFnR_star_declared (:336) lacks `hlk` (and lacks `hder`, so the isDerived_declared escape is unavailable) -- the on-record claim CONFIRMED for it, REFUTED for the two _d siblings it also named (:373/:413 carry hlk at :377/:419). Cost overstated though: its single caller ::w3d2_leg_context (:463, applying at :486) already holds hlk at :473 at the same (dt,R) and e, so it is one binder and one argument.
+
+⚠ NEW INSTRUMENT TRAP, scope-doc 11.13 (u): `grep -c "declaration uses 'sorry'"` returns 0 because LEAN USES BACKTICKS. Run 2 first read back as "0 sorry warnings" against 14 staged sorries with rc=0 -- which says the premise was never needed. A green verdict produced entirely by a broken instrument, inside the tool being used to measure this cone. Use `grep -c "declaration uses .sorry."`; and make an assurance grep fire once on purpose before believing its zero.
+
+⚠ CORRECTION filed against PROOF_STATUS `## Session 2026-09-02` §7 and scope-doc (r): "six" audited-but-unpinned carriers is an UNDERCOUNT -- two independent measurements say 38, the list omitting the whole _w3d2 family. UNVERIFIED first-hand; re-measure before quoting either number.
+
+NEXT = the atomic co-landing, and nothing smaller is green-stoppable: pre-widen hv1, thread ComputedRefsNotLeaf (+ one hlk into checkFnR_star_declared) across the 12 declarations, thread hql from row 27 to the 3 query sites, and the flip -- ONE commit, because 11.12 rule 5 forbids a partial cone and the headline theorems are decide-provably FALSE in between. Record: PROOF_STATUS ## Session 2026-09-02b.

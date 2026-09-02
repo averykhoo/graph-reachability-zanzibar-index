@@ -25,6 +25,59 @@ from here.
 
 ---
 
+## 2026-09-02b — the co-landing is a CLOSED LIST of 14 sites / 12 decls / 6 files, and `hql`'s eliminator landed
+
+rows: `P3`
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-02b`. Traps: scope doc §11.13 **(t)** and **(u)**, plus an amendment to **(r)**.
+
+**Entered on a stale next-task and caught it before editing anything.** The task file's
+`2026-09-01d` entry records the `hag` widening as deferred, "hence its own increment". It is
+in HEAD — `50535a6`, an ancestor of `dbf08a8`, landed the same day the entry called it
+deferred, and the log was never updated. Acting on it would have produced an empty diff, a
+green gate and a commit that looked like progress. **A board-first reader is only as good as
+the board's freshness, and this is the second time in three sessions that a spent increment
+sat at the top of an item.**
+
+**The session's product is a MEASUREMENT and a missing eliminator** — the co-landing itself
+was not attempted, and nothing smaller than it is green-stoppable.
+
+* **Closed list, by probe (§11.13 (t)).** Run 1 gave one error and stopped at job 1070/1089
+  — the (k) lower-bound trap, since `CascadeStable` is upstream of twenty modules. Run 2
+  used (n)'s technique, staging `sorry` at every site: **`rc=0`, 1089 jobs, zero errors**, so
+  nothing outside the census exists. **14 sites but 12 declarations**, because
+  `graph_correct_w3d2` and `graph_correct_w3d2_d` each host two — one servable, one
+  query-relation. That is why the two repairs are not separable at declaration granularity,
+  and where a partial landing would be left half-done. Servability **7 of 8**.
+* **The plan's one load-bearing unverified step is now a theorem.** Every scout flagged the
+  same gap: nobody had checked that `hql`'s shape discharges a widened `hv1` at the three
+  query sites. Verified by hand, then landed as
+  `Leaf.lean::not_leafNode_of_publicOfLeaf_none` — row 27's guard's eliminator, additive,
+  `lean` identical to the anchor (585/584/164), non-vacuity pinned by a RELATION-varying
+  pair, two sabotages with literal output. The S2 negative control is a **permanent
+  theorem** rather than a log line: a premise-free version would prove `¬ LeafNode` at a node
+  the same file proves IS one.
+* **A new instrument trap (§11.13 (u)), and it is the house failure mode inside the
+  measuring tool.** `grep "declaration uses 'sorry'"` returns **0** — Lean uses BACKTICKS.
+  Fourteen staged sorries plus `rc=0` first read back as "the premise was never needed". The
+  general rule now filed: **an assurance grep must be made to fire once on purpose before
+  its zero is believed**, exactly as this repo already demands of tests, floors and pins.
+* **A correction appended, not merged** (ledger rule): PROOF_STATUS `2026-09-02` §7 and
+  §11.13 (r) both say **six** audited-but-unpinned carriers of the step-9 premises; two
+  independent measurements say **38**, omitting the whole `_w3d2` family. Both figures are
+  UNVERIFIED first-hand — re-measure before quoting either.
+* **Two stale docs fixed in place** (Rhythm step 5): the `P3` task file's `## Traps` bullet
+  still called deleting `Scratch4cii.lean:51` "the NEXT SESSION'S FIRST EDIT" three sessions
+  after it landed — and the trap's own prediction of a diagnostic red was wrong, the deletion
+  built green; and this board's `P3` item block said "the flip is step 9 and is a two-line
+  rollback" thirty lines above its own tail saying step 9 is done.
+
+`python scripts/task.py lint` → `task lint: clean (12 checks, 156 task file(s) parsed)`
+read: board + HANDOFF
+
+Still owed: nothing.
+
 ## 2026-09-02 — the step-9 design call is MADE, and the step turns out to be cheaper than the record implied
 
 rows: `P3`

@@ -1610,6 +1610,37 @@ re-check, ~20 sites in 3 files go genuinely red.**
   that fact in the session record and name the discharge that retires it** — the gate will
   not do it for you. (Landed once, deliberately, on 2026-09-02; PROOF_STATUS `2026-09-02`
   §7 carries the standing caveat until the `GraphAdmission` discharge lands.)
+  ⚠ **AMENDED 2026-09-02b: "six" is an UNDERCOUNT — two independent measurements put the
+  audited-but-unpinned carriers at 38**, this list omitting the whole `_w3d2` family. Both
+  measurements are UNVERIFIED first-hand; re-measure before quoting either number.
+
+* **(t) NEW 2026-09-02b — the `hv1` cone is a CLOSED LIST of 14 sites / 12 declarations /
+  6 files, measured by probe.** Staging `sorry` at every site (trap (n)'s technique) makes
+  the whole tree build — `rc=0`, 1089 jobs, zero errors, 14 `sorry` tokens, 12 `declaration
+  uses sorry` warnings — so nothing outside the census exists; this is a closed list, not a
+  lower bound. Declarations: `CascadeEnum:347`; `CascadeSettle:899`; `CascadeStable:1707`;
+  `CascadeStrataEnum:336/:373/:413`; `CascadeStrataSettle:1642/:1711/:1857/:4005`;
+  `CascadeStrataResettle:1440/:2551`. **14 sites but 12 declarations**, because
+  `graph_correct_w3d2` (`:1440`) and `graph_correct_w3d2_d` (`:2551`) each host TWO — one
+  membership-servable, one query-relation. ⚠ **Those two are where a partial landing gets
+  left half-done**: they are why "thread the predicate" and "add the query premise" are NOT
+  separable at declaration granularity. Servability, measured per site: **7 of 8** carry
+  `hlk` already; only `CascadeStrataEnum::checkFnR_star_declared` (`:336`) lacks it (and
+  lacks `hder`, so the `isDerived_declared` escape is unavailable) — but its single caller
+  `::w3d2_leg_context` (`:463`, applying at `:486`) already holds `hlk` at `:473` for the
+  same `(dt, R)` and `e`, so the fix is one binder and one argument, not a new obligation.
+  Retires the board's "18 declarations across 6 files" for this step.
+
+* **(u) NEW 2026-09-02b — ⚠ a `sorry`-counting grep SILENTLY RETURNS ZERO, because Lean
+  uses BACKTICKS.** Lean writes ``declaration uses `sorry` ``. `grep -c "declaration uses
+  'sorry'"` (straight quotes) matches **nothing** and reports `0`. Observed on run 2 of the
+  (t) probe: 14 staged `sorry` tokens and `rc=0` read back as "0 sorries", which taken at
+  face value says the added premise was never needed — a green verdict produced entirely by
+  a broken instrument, inside the tool being used to measure a cone whose whole hazard is
+  green-that-means-nothing. Use `grep -c "declaration uses .sorry."`, and more generally:
+  **a grep used as an assurance instrument must be made to fire once on purpose before its
+  zero is believed** — the same rule this repo already applies to tests, floors and pins.
+  Companion to (q), which is the over-counting half of the same lesson.
 
 ## Provenance
 

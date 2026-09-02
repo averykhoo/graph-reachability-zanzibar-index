@@ -15,6 +15,172 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-02b (**the co-landing is SIZED BY PROBE — 14 sites / 12 declarations / 6 files, a closed list — and its one unverified step is now a THEOREM**)
+
+**Task taken:** `P3`, user-directed "work on P3". Entered believing the next increment was
+the `hag` widening; that belief was WRONG and the correction is §1. Nothing in the 4c-ii
+co-landing itself was attempted — this session bought the MEASUREMENT and the missing
+eliminator, both of which the co-landing needs and neither of which it had.
+
+### 1. ⚠ THE `hag` WIDENING ALREADY LANDED — the note calling it "DEFERRED" is spent
+
+`tasks/P3-…md`'s `2026-09-01d` log entry records the `hag` widening as *"DEFERRED + design
+settled … WAY OUT FOUND … so it is its own increment"*. It is in HEAD. Verified first-hand:
+`ReconcileStars.lean:625-627` and its `_cd` twin `:643-645` both bind
+`(hag : ∀ (s' : SubjectRef) (r' : String), r' ∈ computedRefs e → isDerived S (dt, r') = false → …)`,
+the docstring at `:616-621` names trap (g) and the consumer, and
+`git merge-base --is-ancestor 50535a6 HEAD` succeeds (`50535a6`, *"feat(P3): dissolve 4c-ii
+trap (g) — hag carries the membership it always threw away"*, 2026-09-01 20:15).
+
+The entry that called it deferred was written the same day and **corrected by its own
+title** (`:512`), but the task-file log was never updated, so a board-first reader is
+handed a spent increment as the next task. Fixed in `tasks/` this session.
+
+### 2. THE PLAN'S ONE LOAD-BEARING UNVERIFIED STEP IS CLOSED — by hand, then by machine
+
+Every scout and judge this session independently flagged the SAME gap: nobody had checked
+that `hql`'s shape actually discharges a widened `hv1` at the three query-relation sites.
+If it did not, neither route closes them and the whole co-landing plan is wrong.
+
+Checked first-hand at all three (`CascadeSettle.lean:1120-1123`,
+`CascadeStrataResettle.lean:1540-1543`, `:2687-2690`). All three are byte-identical in
+shape: the query is `⟨⟨st, sn, sp⟩, R, ⟨dt, on⟩⟩` and the call is
+`shadow_graphRec_agree hsh ⟨st, sn, sp⟩ on hd` with `hd : isDerived S (dt, R) = false`, so
+unification forces `dt' = dt`, `r' = R`, i.e. exactly `q.object.type` and `q.relation`. A
+widened `hv1` owes `¬ LeafNode S (objNode ⟨dt, on⟩ R)`; `Leaf.lean:538-540` unfolds that to
+a witness carrying `(publicOfLeaf S ty p).isSome = true` with `ty = dt`, `p = R` by the same
+`objNode_type`/`objNode_pred` projections the existing `DerNode` branch already uses at
+`CascadeStable.lean:1646-1651`. Row 27's guard `publicOfLeaf S q.object.type q.relation =
+none` refutes it directly. **`ALIGNS`** — and §6 turns the argument into a theorem so the
+next session inherits a machine-checked fact rather than this paragraph.
+
+### 3. ★ THE MEASUREMENT — 14 sites / 12 declarations / 6 files, and it is a CLOSED LIST
+
+Traps (n) and (q) both say size this cone with the probe. Done, in two runs.
+
+**Run 1** (widen `hv1` to `¬ (DerNode ∨ LeafNode)`, add the premise, `Or.inl` the two uses):
+`rc=1`, ONE error, `CascadeStable.lean:1722`, build stopped at job 1070/1089. That is the
+(k) lower-bound trap exactly — `CascadeStable` is upstream of twenty modules, none of which
+were compiled, so "one error" measured nothing.
+
+**Run 2** (trap (n)'s technique: stage `sorry` at every site so `lake` builds PAST the red
+module): **`rc=0`, 1089 jobs, ZERO errors, 14 `sorry` tokens, 12 `declaration uses sorry`
+warnings.** Since the whole tree builds with exactly those 14 staged, **no site outside the
+census exists** — the list is closed, not a lower bound.
+
+| File | Declarations |
+|---|---|
+| `CascadeEnum.lean` | `:347` |
+| `CascadeSettle.lean` | `:899` |
+| `CascadeStable.lean` | `:1707` |
+| `CascadeStrataEnum.lean` | `:336`, `:373`, `:413` |
+| `CascadeStrataSettle.lean` | `:1642`, `:1711`, `:1857`, `:4005` |
+| `CascadeStrataResettle.lean` | `:1440`, `:2551` |
+
+14 sites but 12 declarations because `graph_correct_w3d2` (`:1440`) and `graph_correct_w3d2_d`
+(`:2551`) each host TWO — one servable, one query-relation. **Those two declarations are
+where a partial landing gets left half-done**, and they are the reason "thread the predicate"
+and "add the query premise" are not separable at declaration granularity.
+
+This retires, for this step, the board's "18 declarations across 6 files" and every
+grep-derived figure in the cone. Probe reverted; tree byte-identical to `dbf08a8` before §6.
+
+### 4. ⚠ NEW INSTRUMENT TRAP — `grep "declaration uses 'sorry'"` SILENTLY RETURNS 0
+
+Run 2's first reading was **"0 sorry warnings"** against 14 staged `sorry` tokens, alongside
+`rc=0`. Taken at face value that reads as "the premise was not needed" — a green result from
+a broken instrument, i.e. this repo's house failure mode inside the tool being used to
+measure it.
+
+Cause: **Lean writes ``declaration uses `sorry` `` with BACKTICKS**, not straight quotes.
+`grep -c "declaration uses 'sorry'"` matches nothing; `grep -c "declaration uses .sorry."`
+finds all 12. Filed as scope-doc §11.13 **(u)**. The general form: a grep used as an
+assurance instrument must be controlled by making it fire once on purpose, exactly like any
+other check in this repo.
+
+### 5. THE SERVABILITY SPLIT — 7 of 8, and the 8th costs one binder, not a proof
+
+Measured per-site against `notLeafNode_of_computedRef`'s three requirements
+(`ComputedRefsNotLeaf S`, a real `S.lookup k = some e`, and `r' ∈ computedRefs e` for the
+SAME relation). `ComputedRefsNotLeaf` is in scope at **zero** of the twelve declarations —
+that threading is the common cost and is assumed. Beyond it:
+
+* **7 of 8 servable.** `CascadeStrataEnum.lean:391` / `:445` carry `hlk` at `:377` / `:419`;
+  `CascadeStrataSettle.lean:1675` / `:1743` / `:1910` at `:1654` / `:1723` / `:1869`;
+  `CascadeStrataResettle.lean:1511` / `:2645` obtain it via
+  `obtain ⟨e, hlk⟩ := isDerived_declared hder` at `:1467` / `:2584`.
+* **`CascadeStrataEnum.lean::checkFnR_star_declared` (`:336`) genuinely lacks `hlk`** — and
+  also lacks `hder`, so the `obtain` escape is unavailable. The on-record claim is CONFIRMED
+  for this one declaration and **REFUTED for the two `_d` siblings it named**.
+* **But the cost was overstated.** Its single in-repo caller `w3d2_leg_context`
+  (`CascadeStrataEnum.lean:463`) applies it at `:486` already holding
+  `hlk : S.lookup (dt, R) = some e` at `:473`, at the same `(dt, R)` and the same `e`. So it
+  is a signature edit discharged by a name already in scope — one binder and one argument,
+  not an unfunded premise.
+
+### 6. WHAT LANDED — `Leaf.lean::not_leafNode_of_publicOfLeaf_none`, additive and pinned
+
+The `publicOfLeaf`-shaped analogue of `::not_leafNode_of_notLeafName`, refuting `LeafNode`
+from the ABSENCE of a public mapping. It is row 27's guard's eliminator, and the missing
+half of the discharge machinery: `::notLeafNode_of_computedRef` (step 7) serves the 11
+membership-bearing sites, this serves the 3 query-relation sites, and the two routes meet at
+the same `¬ LeafNode` target.
+
+Landed AHEAD of the co-landing deliberately. `hql` itself is not landable before the flip
+(`docs/latent-gaps.md`, "never before … never after"), but its ELIMINATOR is additive and
+green-stoppable, so §2's argument becomes a machine-checked fact now rather than a prose
+claim the next session has to re-derive under time pressure.
+
+Green first attempt, `rc=0`, 1089 jobs. `verify.sh lean` **PASSED**, `holes=0, audits=585,
+pinned=584, defs=164` — **identical to the `dbf08a8` anchor on every count**, confirming the
+increment moved no pin file and added no audit row. (Same choice as step 7's predicate,
+which is also unaudited and unpinned.)
+
+**Non-vacuity, and it is a PAIR, not a single pin.** `publicOfLeaf_none_not_leafNode_nv`
+applies the lemma at `"approver"` where `pol_nv8` says the mapping is absent;
+`publicOfLeaf_some_is_leafNode_nv` proves that at the SAME schema and SAME object the
+storage leaf `approver.0` genuinely IS a `LeafNode`, routed through the proved decider
+`leafNodeB_correct` rather than a `decide` on a `Prop` with an existential. Same schema,
+same object, differing only in the RELATION — a second discrimination axis alongside
+`minted_leaf_is_leafNode`/`wAllNode_not_leafNode`, which vary node SHAPE.
+
+**Two sabotages, literal output in the section docstring.** S1 — narrow `rw [hty, hp] at h`
+to `rw [hty] at h`, dropping the relation identification: `rc=1`, *"Did not find an
+occurrence of the pattern `publicOfLeaf S ty r` in the target expression `(publicOfLeaf S ty
+p).isSome = true`"*. S2 — the negative control, aim the lemma at `approver.0` via `pol_nv7`:
+`rc=1`, *"has type … `= some "approver"` but is expected to have type … `= none`"*. Read S2
+with `publicOfLeaf_some_is_leafNode_nv`: a premise-free version would prove `¬ LeafNode` at
+a node this file separately proves IS one, i.e. it would make the tree inconsistent. **That
+control is a permanent theorem, not a log line** — the durability ranking in
+`docs/sabotage-procedure.md` prefers exactly that. Both error counts are LOWER bounds
+(`Leaf.lean` is near the import root; no dependent compiled). Restored: `rc=0`, 1089 jobs.
+
+### 7. WHAT IS NOT CLOSED
+
+* **The co-landing itself is untouched** and remains atomic: pre-widen `hv1`, thread
+  `ComputedRefsNotLeaf` (+ one `hlk` into `checkFnR_star_declared`) across 12 declarations,
+  thread `hql` from row 27 to the 3 query sites, and the flip — in ONE commit, because
+  §11.12 rule 5 forbids committing a partial cone and the headline theorems are
+  `decide`-provably FALSE in between.
+* **`not_leafNode_of_publicOfLeaf_none` is INERT until then** — its only consumers are its
+  own pins. That is the same state step 7's predicate shipped in, and the pins are the sole
+  evidence, exactly as `CascadeStable.lean:666-669` says of `ComputedRefsNotLeaf`.
+* **§7 of `## Session 2026-09-02` is NOT closed by this entry** and this session did not
+  touch it. ⚠ But see the correction below — its number is wrong.
+* ⚠ **CORRECTION TO `## Session 2026-09-02` §7 AND SCOPE-DOC (r): "six" IS AN UNDERCOUNT.**
+  Two independent measurements this session put the audited-but-not-statement-pinned
+  carriers of the step-9 premises at **38**, not 6 — §7's list omits the entire `_w3d2`
+  family. Per the ledger's no-retro-edit rule this correction is appended here rather than
+  merged into that entry. It is a bigger gate-blind surface than recorded, and it is
+  **UNVERIFIED by me first-hand** — re-measure before acting on either number.
+
+### 8. Gate
+
+`lean` PASSED (`holes=0 audits=585 pinned=584 defs=164`, `handoff_lint: clean (10 checks)`);
+conformance and `tests/` tiles re-run after the doc writes, verdict in the board entry.
+
+---
+
 ## Session 2026-09-02 (**the step-9 design call is MADE — user decision: thread `NoLeafStoreSubjects`, and DISCHARGE it from admission rather than leaving it a bare premise.**)
 
 **Task taken:** the design decision `2026-09-01e` surfaced and deliberately did not make —
