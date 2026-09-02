@@ -15,6 +15,80 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-03b (**the `hql` human call was ALREADY DISCHARGED — `2026-09-03`'s "Still owed" is wrong on that point; and the write-path re-point is ONE LINE plus an import**)
+
+**Task taken:** `P3`, user-directed scout ("scout it first, decide after") of the `hql`
+decision `2026-09-03` had just escalated. **The escalation was unnecessary.** This entry
+refutes the first bullet of `2026-09-03`'s `Still owed:` and the "blocking human call"
+framing in that session's banner and board edits.
+
+### 1. Every pinned row over the unfenced read is already guarded
+
+Read first-hand from `formal/headline_statements.txt`:
+
+* **`:27 graph_correct`** carries `(hql : publicOfLeaf S q.object.type q.relation = none)`.
+  **4c-ii added it on 2026-09-02d** — that session's own banner says "statements 49/49
+  (`graph_correct` gains `hql`)". So the guard the decision was about is already in place.
+* **`:66 correct_applies_nonfence` / `:67 w3d2E_correct_applies_nonfence`** carry
+  `(hrel : q.relation = "approver")` instead. They do not need `hql` because they DERIVE
+  it: `FullScope.lean:1345-1347` reads
+
+      have hnl : publicOfLeaf σ.schema q.object.type q.relation = none := by
+        rw [hsch, hty, hrel]; exact fence_not_identity
+      rw [← checkPublic_of_not_leaf hnl]
+
+  `publicOfLeaf S ty p = if isLeafPred p && … then some … else none` (`Leaf.lean:465-466`),
+  and `"approver"` is dot-free, so `isLeafPred` is false for ANY schema. Structural, not
+  incidental.
+* **`:52 unfenced_grants`** is `GraphModel.check σLeaf qLeaf = true` over a CONCRETE state
+  and query — an assertion that the unfenced read grants, deliberately kept as the foil for
+  `fence_changes_answer`. It is not a `check = sem` claim and must stay unguarded.
+
+**Conclusion: `docs/latent-gaps.md:132-137` is STALE.** It describes the pre-4c-ii world
+("AFTER the 4c-ii re-point … is FALSE AS WRITTEN"), and 4c-ii landed. `P3` has no pending
+human decision; the remainder is proof engineering.
+
+⚠ **How the false escalation happened, because the mechanism matters more than the fact.**
+A subagent synthesizer asserted *"I confirmed `headline_statements.txt:27` carries no `hql`
+binder today."* It was taken at face value and escalated to the user. `sed -n '27p'` refutes
+it in two seconds. This is `CLAUDE.md`'s "delegation does not transfer judgement" landing on
+the exact class it names — a claim headed for a user-facing decision, not verified
+first-hand. The rule needs no amendment; it needed following.
+
+### 2. The write-path re-point, MEASURED
+
+Built on a scratch branch, then reverted (`git status --porcelain` empty, gate re-confirmed
+COVERED on master):
+
+    Cascade.lean:175   (rewriteClosure S t) → (rewriteClosureL S (rawWriteTuples S t))
+    Cascade.lean:1     + import ZanzibarProofs.GraphIndex.LeafRules
+    lake build → 4 errors, ALL in Cascade.lean, at :237 :240 :248 :250
+
+* **`writeLoggedOne` needs NO edit.** `Leaf.lean:762 rawWriteTuples` is
+  `(rawWriteRels S t).map fun r => { t with relation := r }` — it RE-ADDRESSES the relation
+  to the leaf name, so `objNode u.object u.relation` already denotes the leaf node. The
+  plan this session started from called for re-pointing that object node and moving the
+  `Delta` row; **both are unnecessary**, and `LeafRules.lean:242-245`'s own banner
+  over-specifies the same way.
+* **The import is a real structural change**, not a formality: `Cascade.lean` imported only
+  `ReconcileDiff`, and `rewriteClosureL` was unreachable from it. No cycle — `LeafRules` →
+  `Leaf` → `{Write, RulesWrite, Spec.Stabilize}` never reaches `Cascade` — but it moves
+  `LeafRules` into the cone of everything downstream of `Cascade`.
+* The four errors are ONE lemma family: `EvalEq` transfer (:237, :240) and a watermark
+  `rfl`/`simp` pair (:248, :250), all inductions written over the old closure list.
+
+⚠ **4 IS A FIRST WAVE, NOT A CONE SIZE.** Modules downstream of `Cascade` cannot compile
+until `Cascade` does, so nothing beyond it was type-checked. Quoting "4 errors" as the cost
+of the re-point would be this repo's recurring sizing error in its purest form. The honest
+statement is: *the first wave is 4 errors in 1 file; the total is unmeasured.*
+
+### 3. What `2026-09-03` got right, unchanged
+
+SAB-5's discharge (§1 there), the P6 instrument control (§3) and traps (z)/(aa) all stand;
+nothing in this entry touches them. Only the `hql` blocker and the re-point's shape move.
+
+---
+
 ## Session 2026-09-03 (**SAB-5 is DISCHARGED — it was never unobservable, only mis-instrumented; and the `P6` projection is NOT a Python-side commit: the Lean write path was never re-pointed**)
 
 **Task taken:** `P3`, user-directed — "fix SAB-5 and then continue". Both halves produced a
