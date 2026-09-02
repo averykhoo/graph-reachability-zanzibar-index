@@ -15,6 +15,127 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-03 (**SAB-5 is DISCHARGED — it was never unobservable, only mis-instrumented; and the `P6` projection is NOT a Python-side commit: the Lean write path was never re-pointed**)
+
+**Task taken:** `P3`, user-directed — "fix SAB-5 and then continue". Both halves produced a
+result that refutes a claim the previous session's records carry.
+
+**Green anchor (§11.12 rule 1):** `a55a433`, `gate_status.py` = COVERED on this tree at
+session start (all ten phases, ages ~2h). The Lean cone was never opened; every mutation
+below was a probe, reverted, with `git status --porcelain` empty before the next step.
+
+### 1. SAB-5 — observed, and the "unobservable" diagnosis was wrong
+
+`2026-09-02d` filed SAB-5 as owed on the grounds that its load-bearing half — *"the
+DEFINITION pin goes red when a field is deleted from a pinned structure"* — **cannot be
+observed**, because deleting `GraphAdmission.computedRefsNotLeaf` breaks the build at
+`FullScope.lean` and `verify.sh lean` never reaches step 4c.
+
+That reasoning has an instrument error in it. **`statement_pin.py` never builds Lean.** It
+is pure source-text extraction (its own docstring says so: it reads the statement "straight
+from the Lean source"). The build failure only masks the pin when the sabotage is run
+*through* `verify.sh`, whose build step precedes 4c. Run the instrument directly and the
+observation is clean, and takes 8.5 s:
+
+    $ git ... delete FullScope.lean:159  `computedRefsNotLeaf : ComputedRefsNotLeaf S`
+    $ python formal/conformance/statement_pin.py ; echo rc=$?
+    FAIL: pinned definition(s) NO LONGER reachable from the headline
+          statements (deleted, renamed, or the statement stopped
+          mentioning them -- all three change what is claimed):
+            def:Zanzibar.ComputedRefsNotLeaf
+    FAIL: the DEFINITION of def:Zanzibar.GraphAdmission changed:
+        >>> REMOVED field(s)/constructor(s): computedRefsNotLeaf
+          2 definition-pin discrepancy(ies) against formal/headline_definitions.txt.
+      headline statement pin: 49/49 statements match
+    rc=1
+
+**The control is the second-to-last line.** The STATEMENT pin stayed 49/49 green while the
+DEFINITION pin went red — a direct observation of the hollowed-from-underneath attack that
+4b is blind to and 4c exists to catch, which is exactly what `statement_pin.py`'s docstring
+claims and nothing had ever checked. Instrument control: reverted → rc=0, 165/165, tree
+clean. Encoding control (trap **(y)**): `git diff --numstat` read `0 1` identically with and
+without `--ignore-cr-at-eol`.
+
+**What remains genuinely unobserved, stated narrowly.** End-to-end through `verify.sh lean`,
+a *field deletion* is red for the wrong reason — the build. Observing step 4c fire
+end-to-end needs a mutation the build SURVIVES. That is a real gap, not a bookkeeping one,
+and it is now filed as its own row rather than as a substitute for SAB-5.
+
+### 2. The definition pin does not see dot-notation calls — new trap (z)
+
+Found while sizing the write-path re-point, and it is a live hole in the gate, not a
+curiosity. `formal/headline_definitions.txt` has **no `def:` row for
+`GraphState.writeLoggedRules` or `GraphState.writeLoggedOne`**. Both appear only as the
+*call text* `σ.writeLoggedRules S t` inside other pinned rows' bodies —
+`def:Zanzibar.graphRunAux` (:144), `def:Zanzibar.graphRunOpsAux` (:146), and the three
+`ReachedByW3d2`/`C`/`E` inductives (:73/:74/:75). The closure walk resolves bare names, not
+dot-notation applications, so these two never entered the closure.
+
+Consequence, and it lands directly on the work below: **re-pointing the BODY of
+`writeLoggedRules` changes what the model executes and step 4c stays green.** `rewriteClosure`
+IS pinned (as are `rewriteClosureAux`/`Raw`, `rewriteStep`, `schemaRewrites`), so a change
+*inside* those is caught — but the planned edit changes the CALL SITE, which is not.
+
+### 3. The `P6` projection: the criterion is met by a two-line deletion that proves nothing
+
+Ledger re-measured first-hand this session (25 corpora):
+
+    {'corpora': 25, 'raw': 498, 'P1': 233, 'P2': 0, 'P6': 76, 'compared': 189,
+     'nodes': 282, 'residues': 13}
+
+233 + 0 + 76 + 189 = 498, so the criterion `dropped → 0 / compared → 265` is arithmetically
+the whole gap, as `2026-08-16c` §3 says. Deleting the two-line P6 branch from
+`extractor.py::_edge_projection` reaches it exactly:
+
+    {'corpora': 25, 'raw': 498, 'P1': 233, 'P2': 0, 'P6': 0, 'compared': 265, ...}
+
+**And the state gate goes red, which is the point.** `2026-08-16c` §3's warning that the
+criterion is weak is now re-observed rather than cited:
+
+    $ pytest formal/conformance/test_conformance_state.py -q
+    19 failed, 37 passed in 43.54s
+    edge only in PYTHON     : ('user', 'alice', '...', '') -> ('doc', 'd1', 'viewer.0', '')
+    edge only in PYTHON     : ('user', 'bob', '...', '')   -> ('doc', 'd1', 'viewer.1', '')
+
+99 `edge only in PYTHON` lines. Composition of the 19, which settles a disputed count:
+**17** × `test_state_leangraph_vs_pythongraph` + **1** `test_residue_rich_corpus_is_really_rich`
+(it calls `diff_states` directly at :636 on `residue_rich`, itself one of the 17 tainted
+corpora) + **1** `test_projection_ledger_is_not_vacuous` (its `led["P6"] > 0` assertion
+inverts). This reproduces `2026-08-16c`'s `19 failed, 37 passed` exactly, and **refutes the
+"18 failed / 38 passed" correction** carried in the scope doc — that figure missed `:593`.
+Probe reverted; ledger re-read at 76/189; tree clean.
+
+### 4. The crux: the Lean write path was never re-pointed, so P6 is not retirable yet
+
+`HANDOFF.md`'s `P3` block states the remainder is "one thing", a Python-side number, because
+"the re-point is what makes Lean's and Python's edge targets agree". **Both halves are
+wrong**, verified first-hand:
+
+* **The re-point has not happened.** `LeafRules.lean:246 GraphState.writeRulesRaw` still
+  carries its `⚠ No caller yet` annotation and `LeafRules.lean:44` says in the tree's own
+  words *"Nothing here is wired into a caller."* Every occurrence outside that file is a
+  theorem, an `Audit.lean` `#print axioms` line, or a `Scratch4cii.lean` probe (:79, :212).
+  `Cascade.lean:175 writeLoggedRules` still folds over `rewriteClosure S t`, not
+  `rewriteClosureL`; `Cascade.lean:167 writeLoggedOne` still materializes
+  `objNode t.object t.relation`. `2026-09-02d` re-pointed the PROOF-side `UntaintedShadow`;
+  it did not touch the driver. `CORRESPONDENCE.md:325` says as much and was read as done.
+* **The targets therefore do NOT agree** — §3's 99 `edge only in PYTHON` rows are the
+  measurement. The 76 rows P6 drops become FAILING rows, not matching ones.
+* **The block also names the wrong projection.** It says P6 "drops Python `w_any` rows".
+  `w_any` is **P2** (`extractor.py:234`), which drops **0** of 498. P6 is the dotted
+  leaf-family branch at `:236-237`, keyed on `"." in obj[2]`. The observed divergences are
+  `viewer.0` / `viewer.1` targets, i.e. leaf predicates, confirming which branch is live.
+
+**Consequence for sizing.** Retiring the projection requires, first, re-pointing the
+executable write path (`Cascade.lean:167`/`:175`/`:301`, `RulesWrite.lean:135`) onto the
+leaf-routed closure and threading `publicOfLeaf` into `Cascade.lean:478 affectedKeys` — and
+`docs/latent-gaps.md:132-137` records, machine-checked, that after that re-point
+`graph_correct` is **FALSE AS WRITTEN** at minted leaf-name queries unless it gains the
+`hql` guard. That is a change to a pinned headline statement, and the `P3` item block itself
+flags it as needing a human call. **Not taken unilaterally this session.**
+
+---
+
 ## Session 2026-09-02d (**4c-ii IS LANDED — `UntaintedShadow` is re-pointed at `DerNode ∨ LeafNode`, both premises threaded and discharged, ONE statement-pin row moved**)
 
 **Task taken:** `P3`, the atomic co-landing the board has carried as `NOW` since

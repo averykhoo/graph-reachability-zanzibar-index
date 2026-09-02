@@ -1,14 +1,14 @@
-2026-09-02d — 4c-ii IS LANDED; ten-phase gate re-run, verdict in the session-log entry.
+2026-09-03 — SAB-5 discharged; the `P6` remainder was MIS-SIZED and is blocked on a human call.
 
-(nav) **THE 4c-ii CO-LANDING IS DONE.** `UntaintedShadow` re-pointed at `ShadowOver` over
-`DerNode`-or-`LeafNode`; `shadow_graphRec_agree` carries `hnl`; all **14 sites** supply it —
-**11 membership-served + 3 query-served**, `graph_correct_w3d2` and `_d` hosting ONE OF EACH.
-`hcr` = **62 decls / 11 files**, `hql` = **13**. Pin cost **ONE row**: statements 49/49
-(`graph_correct` gains `hql`), definitions **165 byte-identical**, audits untouched.
-(!) **NEXT ON `P3` IS THE `P6` PROJECTION, NOT LEAN** — `extractor.py::_edge_projection`.
-Criterion `0`/`265`; measured 2026-09-02 it is **76 / 189**. PROJECTION id, NOT board row `P6`.
-
-(!) **THE FLIP IS INVISIBLE TO EVERY PIN.** Only control is the flip probe: revert the line,
-watch `hsubjW` red — and watch the three `first | ... | ...` sites stay GREEN. Not evidence.
-(!) **`perl -i` EMITTING A WIDE CHAR RE-ENCODES THE FILE** — the build cannot see it; `git
-diff --numstat` vs `--ignore-cr-at-eol` can. This tree mixes LF and CRLF per file.
+(nav) **`P3` IS LEAN WORK AFTER ALL — this banner said the opposite until today.** The write
+path was never re-pointed: `LeafRules.lean:246 writeRulesRaw` still says `No caller yet` and
+`Cascade.lean:175` still folds `rewriteClosure`, not `rewriteClosureL`. 4c-ii re-pointed the
+PROOF-side shadow, not the driver, so Lean and Python edge targets do NOT agree.
+(!) **THE `0`/`265` CRITERION IS MET BY A TWO-LINE DELETION THAT PROVES NOTHING.** Observed
+2026-09-03: deleting `extractor.py:236-237` gives `P6 0 / compared 265` **and** reds the state
+gate — `19 failed, 37 passed`. Control is `test_conformance_state.py`; ledger **76 / 189** of 498.
+(!) **BLOCKING HUMAN CALL:** post-re-point `graph_correct` is FALSE AS WRITTEN without `hql`.
+(!) **§11.13 (z): THE DEFINITION PIN MISSES DOT-NOTATION CALLS** — no `def:` row exists for
+`writeLoggedRules`, so re-pointing its body leaves step 4c GREEN. Control is the state gate.
+(!) **SAB-5 WAS MIS-INSTRUMENTED:** `statement_pin.py` never builds Lean — run it DIRECTLY and
+a deleted field reds 4c **while 4b stays 49/49**. Owed: a BUILD-SURVIVING mutation for 4c.

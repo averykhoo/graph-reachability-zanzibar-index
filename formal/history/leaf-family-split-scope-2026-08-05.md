@@ -1720,6 +1720,53 @@ re-check, ~20 sites in 3 files go genuinely red.**
   equal what you intended; anything else is a silent rewrite. Emit non-ASCII as raw bytes
   (`"\xe2\x86\x92"`) or use an editor that preserves encoding.
 
+* **(z) NEW 2026-09-03 — the DEFINITION pin does not resolve dot-notation calls, so the
+  write-path re-point is invisible to step 4c.** `formal/headline_definitions.txt` carries
+  no `def:` row for `GraphState.writeLoggedRules` or `GraphState.writeLoggedOne`. Both
+  occur only as the *call text* `σ.writeLoggedRules S t` **inside** other pinned rows —
+  `def:Zanzibar.graphRunAux` (:144), `def:Zanzibar.graphRunOpsAux` (:146), and the three
+  `ReachedByW3d2`/`C`/`E` inductives (:73/:74/:75). `statement_pin.py`'s closure walk
+  resolves bare names, not dot-notation applications, so neither ever entered the closure.
+  **Consequence:** the planned re-point of `Cascade.lean:175`'s body — from
+  `rewriteClosure` to `rewriteClosureL`, i.e. the edit that changes which edges the model
+  actually writes — leaves step 4c GREEN. `rewriteClosure` itself IS pinned, so a change
+  *inside* it would be caught; the edit changes the CALL SITE, which is not. This is the
+  (x)-class hole one layer down and it is mechanical, not judgemental: the control for the
+  re-point must be the STATE GATE (`test_conformance_state.py`), never the pin trio.
+  Cheap partial fix if wanted: teach the walk to resolve `σ.f` / `x.f` receivers, or add
+  the two names to the pin by hand — but measure the churn first, `graphRunAux`'s body is
+  already pinned and a second copy buys nothing.
+
+* **(aa) NEW 2026-09-03 — `git checkout --` CAN INVALIDATE EVERY TILE VERDICT WHILE `git
+  status` STAYS CLEAN.** Reverting this session's two probes with `git checkout --` moved the
+  content-addressed tree id: session start was `t2c:c18b40544b46`, and afterwards a
+  **fully clean tree at the same HEAD** computed `t2c:f3d8f4a98aef`, dropping all nine
+  cached tile verdicts to `this tree: NO`. Cause: `git ls-files --eol` reports
+  `i/lf w/crlf` for both `formal/conformance/extractor.py` and
+  `formal/lean/ZanzibarProofs/FullScope.lean` — the index stores LF, `checkout` writes CRLF.
+  Git normalizes on read so it sees no change; `gate_status.py::_file_fingerprint` hashes
+  RAW BYTES, so it sees a different tree. **This is the (y) mechanism, and it is how this
+  tree came to mix LF and CRLF per file in the first place.**
+  * The gate caught it here, which is the safe direction. **The dangerous direction is the
+    mirror:** run the tiles, then have anything rewrite a file back to LF, and the ledger
+    still shows green rows for a tree that no longer exists. The rows would not match, so
+    the failure is loud — but only if someone asks `gate_status.py` instead of remembering.
+  * **Standing check:** after reverting any probe, run `python scripts/gate_status.py` and
+    read the `this tree` column before trusting a cached verdict. Do not infer coverage from
+    `git status --porcelain` being empty — it is not the same question.
+  * Prefer reverting from a byte-exact backup (`cp` the file aside before editing) over
+    `git checkout --` when cached tile verdicts are load-bearing for the session.
+
+* **SAB-5, and the instrument error that hid it (2026-09-03).** `2026-09-02d` filed SAB-5
+  as unobservable because deleting `GraphAdmission.computedRefsNotLeaf` breaks the build
+  before `verify.sh lean` reaches 4c. **That is a property of running the sabotage through
+  `verify.sh`, not of the pin.** `statement_pin.py` never builds Lean — run it directly and
+  the deletion reddens it in 8.5 s (`REMOVED field(s): computedRefsNotLeaf`, 2 discrepancies)
+  **while the statement pin stays 49/49**, which is the control that makes it evidence. The
+  durable rule: *when an assurance step looks unobservable, check whether you are observing
+  the instrument or the harness around it.* Still genuinely unobserved: 4c firing END-TO-END
+  through `verify.sh`, which needs a mutation the build survives.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

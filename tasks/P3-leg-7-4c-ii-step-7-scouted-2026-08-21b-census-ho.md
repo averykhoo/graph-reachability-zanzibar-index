@@ -1,9 +1,9 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: 4c-ii LANDED (shadow re-pointed, 14 sites, one pin row). Left: the P6 PROJECTION -- 76/189, target 0/265.
+brief: MIS-SIZED: Lean write path never re-pointed. Retiring P6 makes 76 rows FAIL (19f/37p). Blocked on hql call.
 pri: NOW
-size: M
+size: L
 deps: []
 related: [P6]
 parent:
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-02d
-updated: 2026-09-02d
+moved: 2026-09-03
+updated: 2026-09-03
 closed:
 ---
 
@@ -643,3 +643,19 @@ NEXT is still the atomic co-landing, now correctly sized and with its instrument
 ### 2026-09-02d
 
 4c-ii landed. UntaintedShadow re-pointed at ShadowOver (fun k => DerNode S k or LeafNode S k); shadow_graphRec_agree carries hnl; 14 sites = 11 membership-served + 3 query-served, with graph_correct_w3d2/_d hosting one of each. hcr threaded through 62 decls / 11 files, hql through 13; both terminated (GraphAdmission / the fence split). Pin cost ONE row: statements 49/49 with graph_correct gaining hql, definitions 165 byte-identical, audits untouched; verify.sh lean was run BEFORE regenerating as the control and fired with exactly that discrepancy. Three sabotages with green controls: SAB-1 (revert the flip; the three first|...| sites stay green), SAB-2 (hnl narrowed to the derivable not-DerNode reds at :1653), SAB-4 (mis-typed hql in graph_correct_w3d2_d gives exactly one error at its QUERY site, membership site green). NOT run: SAB-5 -- its definition-pin half is unobservable as specified because deleting the GraphAdmission field breaks the build before step 4c; filed as Still owed. Remainder is the extractor P6 projection (NOT board row P6). Record: PROOF_STATUS ## Session 2026-09-02d.
+
+### 2026-09-03
+
+SAB-5 DISCHARGED -- mis-instrumented, not unobservable. statement_pin.py never builds Lean, so run it DIRECTLY: deleting GraphAdmission.computedRefsNotLeaf (FullScope.lean:159) reddens the definition pin -- REMOVED field/constructor computedRefsNotLeaf, 2 discrepancies -- in 8.5s WHILE THE STATEMENT PIN STAYS 49/49 GREEN. That green is the control: a direct observation of the hollowed-from-underneath attack 4b is blind to. Reverted: rc=0, 165/165, tree clean; numstat 0/1 identical with and without --ignore-cr-at-eol. STILL UNOBSERVED: 4c firing END-TO-END through verify.sh, which needs a build-surviving mutation.
+
+THE P6 PROJECTION IS NOT RETIRABLE, and the board said it was. Verified first-hand: LeafRules.lean:246 writeRulesRaw still carries No-caller-yet; :44 still reads Nothing here is wired into a caller; Cascade.lean:175 writeLoggedRules still folds rewriteClosure, not rewriteClosureL; Cascade.lean:167 writeLoggedOne still emits objNode t.object t.relation. 4c-ii re-pointed the PROOF-side UntaintedShadow, not the executable driver.
+
+INSTRUMENT CONTROL (run, then reverted): deleting extractor.py:236-237 hits the completion criterion exactly -- P6 0, compared 265 -- AND reds the state gate: 19 failed / 37 passed, 99 x edge-only-in-PYTHON at viewer.0/viewer.1 targets. The criterion is met by a two-line deletion that proves nothing. The 19 = 17 x test_state_leangraph_vs_pythongraph + test_residue_rich_corpus_is_really_rich (:636 calls diff_states directly on a tainted corpus) + test_projection_ledger_is_not_vacuous. Reproduces 2026-08-16c and REFUTES the recorded 18-failed/38-passed.
+
+The board also named the wrong projection: w_any is P2 (drops 0 of 498); P6 is the dotted leaf-family branch keyed on a dot in obj[2].
+
+NEW TRAP 11.13(z): headline_definitions.txt has NO def: row for writeLoggedRules or writeLoggedOne -- they occur only as dot-notation call text inside graphRunAux (:144), graphRunOpsAux (:146) and ReachedByW3d2/C/E (:73/:74/:75). The closure walk resolves bare names, not receivers. So re-pointing Cascade.lean:175 body leaves step 4c GREEN while changing what the model executes; the control is the state gate.
+
+BLOCKING HUMAN CALL: after the re-point graph_correct is FALSE AS WRITTEN at minted leaf-name queries without the hql guard (docs/latent-gaps.md:132-137, machine-checked) -- a change to a pinned headline statement. Not taken unilaterally.
+
+Record: PROOF_STATUS ## Session 2026-09-03.
