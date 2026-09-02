@@ -507,7 +507,14 @@ LeafNode S k` is nameable today. `clsB_correct_weak` / `termB_correct_weak` /
 predicate and never at `UntaintedShadow`, which is what makes them landable BEFORE the
 4c-ii flip and unchanged AFTER it.
 
-Why it mattered enough to land ahead of the flip: at the moment `UntaintedShadow` is
+✅ **The flip has since happened (4c-ii, 2026-09-02d)**, so the paragraph below is no
+longer a prediction: `UntaintedShadow` now abbreviates
+`ShadowOver (fun k => DerNode S k ∨ LeafNode S k)`, and the `_weak` twins are what keeps
+this battery pointed at the live structure. The anchored originals stay ANCHORED — they
+are the negative pins that justify the widening, and re-pointing them would make them
+vacuous.
+
+Why it mattered enough to land ahead of the flip: from the moment `UntaintedShadow` is
 re-pointed, `shadowB_correct` (:583) goes on deciding `ShadowOver (DerNode S)` — it is
 deliberately ANCHORED there — so without a widened twin the six-field mirror would stop
 instrumenting the structure the live tree actually uses, while every `decide` row below

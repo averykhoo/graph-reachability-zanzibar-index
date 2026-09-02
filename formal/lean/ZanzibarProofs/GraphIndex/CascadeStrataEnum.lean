@@ -337,6 +337,7 @@ theorem checkFnR_star_declared {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hTS : TtuStarFree S T)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hcr : ComputedRefsNotLeaf S) (hlk : S.lookup (dt, R) = some e)
     (hco : ComputedOnly e) (hqo : on ≠ STAR)
     (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
@@ -349,8 +350,10 @@ theorem checkFnR_star_declared {S : Schema} {T : Store} {σ σ0 : GraphState}
   cases hd' : isDerived S (dt, r') with
   | false =>
     rw [GraphModel.check_untainted _ _ (by rw [hschema]; exact hd')] at hleaf
+    have hnl : ¬ LeafNode S (objNode ⟨dt, on⟩ r') :=
+      notLeafNode_of_computedRef hcr hlk hr'
     have hleaf0 : GraphModel.graphRec σ0 (starSubj sh) dt on r' = true := by
-      rw [← shadow_graphRec_agree hsh (starSubj sh) on hd']
+      rw [← shadow_graphRec_agree hsh (starSubj sh) on hnl hd']
       exact hleaf
     exact graphRec_star_declared hTT hSV hTS h0 hleaf0
   | true =>
@@ -374,6 +377,7 @@ theorem checkFnR_star_declared_d {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRulesD S T) (hTS : TtuStarFree S T)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hcr : ComputedRefsNotLeaf S)
     (hlk : S.lookup (dt, R) = some e) (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
     (hqo : on ≠ STAR)
     (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -387,8 +391,10 @@ theorem checkFnR_star_declared_d {S : Schema} {T : Store} {σ σ0 : GraphState}
     cases hd' : isDerived S (dt, r') with
     | false =>
       rw [GraphModel.check_untainted _ _ (by rw [hschema]; exact hd')] at hleaf
+      have hnl : ¬ LeafNode S (objNode ⟨dt, on⟩ r') :=
+        notLeafNode_of_computedRef hcr hlk hr'
       have hleaf0 : GraphModel.graphRec σ0 (starSubj sh) dt on r' = true := by
-        rw [← shadow_graphRec_agree hsh (starSubj sh) on hd']
+        rw [← shadow_graphRec_agree hsh (starSubj sh) on hnl hd']
         exact hleaf
       exact graphRec_star_declared_d hTT hSV hTS h0 hleaf0
     | true =>
@@ -416,6 +422,7 @@ theorem checkFnR_star_declared_d_filt {S : Schema} {T : Store} {σ σ0 : GraphSt
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
     (hsh : UntaintedShadow S σ σ0)
     (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hcr : ComputedRefsNotLeaf S)
     (hlk : S.lookup (dt, R) = some e) (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
     (hqo : on ≠ STAR)
     (hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -441,8 +448,10 @@ theorem checkFnR_star_declared_d_filt {S : Schema} {T : Store} {σ σ0 : GraphSt
     cases hd' : isDerived S (dt, r') with
     | false =>
       rw [GraphModel.check_untainted _ _ (by rw [hschema]; exact hd')] at hleaf
+      have hnl : ¬ LeafNode S (objNode ⟨dt, on⟩ r') :=
+        notLeafNode_of_computedRef hcr hlk hr'
       have hleaf0 : GraphModel.graphRec σ0 (starSubj sh) dt on r' = true := by
-        rw [← shadow_graphRec_agree hsh (starSubj sh) on hd']
+        rw [← shadow_graphRec_agree hsh (starSubj sh) on hnl hd']
         exact hleaf
       exact graphRec_star_declared_d hTT hSVU_D hTSU h0 hleaf0
     | true =>
@@ -470,6 +479,7 @@ theorem w3d2_leg_context {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hcr : ComputedRefsNotLeaf S)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hco : ComputedOnly e) (hqo : on ≠ STAR)
     (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -482,8 +492,8 @@ theorem w3d2_leg_context {S : Schema} {T : Store} {σ σ0 : GraphState}
       σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
     (∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) :=
   ⟨fun s' hs' => checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hMatch hStrat
-      hterm hCO hWSbare h0 hsh hschema hlk hder hco hLU2 hops hs' hqo,
-   fun _ hchk => checkFnR_star_declared hTT hSV hTS h0 hsh hschema hco hqo hops hchk⟩
+      hterm hCO hWSbare hcr h0 hsh hschema hlk hder hco hLU2 hops hs' hqo,
+   fun _ hchk => checkFnR_star_declared hTT hSV hTS h0 hsh hschema hcr hlk hco hqo hops hchk⟩
 
 /-! ## `W3dJobCoverage` for `enumJob2` at a W3d-2 state
 
@@ -500,6 +510,7 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
@@ -525,7 +536,7 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
     exact ⟨hset', hcomp',
       fun u hu => reachedByW3d2_reach_collapse_root hWF hSV hlk' hd' hco' h hu⟩
   obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context hWF hTT hNK hR hSV hBS hTS hMatch
-    hStrat hterm hCO hWSbare h0 hsh hschema hlk hder hco hqo hLU2 hops
+    hStrat hterm hCO hWSbare h0 hsh hschema hcr hlk hder hco hqo hLU2 hops
   exact w3dJobCoverage_enumJob2 hco hcl hqo hbridge hcovDecl hWSbare
 
 /-! ## The Direct-arm-widened enumerated job (`enumJob2D`) and its coverage — leg 5 sub-step 2
@@ -906,6 +917,7 @@ theorem w3d2_leg_context_d {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hcr : ComputedRefsNotLeaf S)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) (hqo : on ≠ STAR)
     (hLU2 : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -918,8 +930,8 @@ theorem w3d2_leg_context_d {S : Schema} {T : Store} {σ σ0 : GraphState}
       σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
     (∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) :=
   ⟨fun s' hs' => checkFnR_eq_sem_settled_d hWF hTT hNK hR hSV hBS hTS hMatch hStrat
-      hterm hCO hWSbare h0 hsh hschema hlk hder hcd hba hLU2 hops hs' hqo,
-   fun _ hchk => checkFnR_star_declared_d hTT hSV hTS h0 hsh hschema hlk hcd hba hqo hops hchk⟩
+      hterm hCO hcr hWSbare h0 hsh hschema hlk hder hcd hba hLU2 hops hs' hqo,
+   fun _ hchk => checkFnR_star_declared_d hTT hSV hTS h0 hsh hschema hcr hlk hcd hba hqo hops hchk⟩
 
 /-- **The routed leg context over the FILTERED shadow (`w3d2_leg_context_d_filt`)** —
     `w3d2_leg_context_d` with the base witness σ0 admitted over `T↾U`, the pair the
@@ -938,6 +950,7 @@ theorem w3d2_leg_context_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
     (hsh : UntaintedShadow S σ σ0)
     (hschema : σ.schema = S) {dt on R : String} {e : Expr}
+    (hcr : ComputedRefsNotLeaf S)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) (hqo : on ≠ STAR)
     (hCOop : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -952,8 +965,8 @@ theorem w3d2_leg_context_d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
       σ.checkFnR T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
     (∀ sh : Shape, σ.checkFnR T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) :=
   ⟨fun s' hs' => checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat
-      hterm hWSbare h0 hsh hschema hlk hder hcd hba hCOop hLU2 hops hs' hqo,
-   fun _ hchk => checkFnR_star_declared_d_filt hTT hSV hTS h0 hsh hschema hlk hcd hba hqo
+      hterm hcr hWSbare h0 hsh hschema hlk hder hcd hba hCOop hLU2 hops hs' hqo,
+   fun _ hchk => checkFnR_star_declared_d_filt hTT hSV hTS h0 hsh hschema hcr hlk hcd hba hqo
       hops hchk⟩
 
 /-! ## `W3dJobCoverage` for `enumJob2D` at a W3d-2 state
@@ -985,6 +998,7 @@ theorem w3dJobCoverage_enumJob2D_state {S : Schema} {T : Store} {σ : GraphState
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOrDirect e)
@@ -1013,7 +1027,7 @@ theorem w3dJobCoverage_enumJob2D_state {S : Schema} {T : Store} {σ : GraphState
     exact ⟨hset', hcomp',
       fun u hu => reachedByW3d2_reach_collapse_root_d hWF hDAB hSV hd' h hu⟩
   obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context_d_filt hWF hTT hNK hR hSV hBS hTS hMatch
-    hStrat hterm hWSbare h0 hsh hschema hlk hder hcd hba hqo hCOop hLU2 hops
+    hStrat hterm hWSbare h0 hsh hschema hcr hlk hder hcd hba hqo hCOop hLU2 hops
   exact w3dJobCoverage_enumJob2D hcd hba hcl hqo hbridge hcovDecl hWSbare
 
 end Zanzibar

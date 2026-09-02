@@ -1,9 +1,9 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: SIZING RETIRED: cone is 62+13 decls / 11 files, not 12/6. Two additive prerequisites LANDED; next = co-landing.
+brief: 4c-ii LANDED (shadow re-pointed, 14 sites, one pin row). Left: the P6 PROJECTION -- 76/189, target 0/265.
 pri: NOW
-size: L
+size: M
 deps: []
 related: [P6]
 parent:
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-02c
-updated: 2026-09-02c
+moved: 2026-09-02d
+updated: 2026-09-02d
 closed:
 ---
 
@@ -639,3 +639,7 @@ INSTRUMENT CONTROL run first, per trap (u): a deliberate `sorry` in a leaf modul
 ⚠ STILL UNVERIFIED, do not quote either number: 2026-09-02b's "six vs 38" audited-but-unpinned correction reproduces as NEITHER. Basename-normalised: 578 audited names, 43 statement-pinned, 35 overlap -> 543 audited carry a NAME pin and no STATEMENT pin; 13 match _w3d/_w3d2 by name. But a name-pattern count is the wrong instrument (it misses reachedByW3dC_inv/reachedByW3dE_inv, which the original six included); the right one needs the statement extractor, not grep.
 
 NEXT is still the atomic co-landing, now correctly sized and with its instrument in place. Re-size with the plan's P3/P4 staged-sorry probes BEFORE committing to a session budget -- and read the ERROR SET, not the exit code. Record: PROOF_STATUS ## Session 2026-09-02c.
+
+### 2026-09-02d
+
+4c-ii landed. UntaintedShadow re-pointed at ShadowOver (fun k => DerNode S k or LeafNode S k); shadow_graphRec_agree carries hnl; 14 sites = 11 membership-served + 3 query-served, with graph_correct_w3d2/_d hosting one of each. hcr threaded through 62 decls / 11 files, hql through 13; both terminated (GraphAdmission / the fence split). Pin cost ONE row: statements 49/49 with graph_correct gaining hql, definitions 165 byte-identical, audits untouched; verify.sh lean was run BEFORE regenerating as the control and fired with exactly that discrepancy. Three sabotages with green controls: SAB-1 (revert the flip; the three first|...| sites stay green), SAB-2 (hnl narrowed to the derivable not-DerNode reds at :1653), SAB-4 (mis-typed hql in graph_correct_w3d2_d gives exactly one error at its QUERY site, membership site green). NOT run: SAB-5 -- its definition-pin half is unobservable as specified because deleting the GraphAdmission field breaks the build before step 4c; filed as Still owed. Remainder is the extractor P6 projection (NOT board row P6). Record: PROOF_STATUS ## Session 2026-09-02d.

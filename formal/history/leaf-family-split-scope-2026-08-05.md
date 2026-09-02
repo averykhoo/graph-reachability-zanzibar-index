@@ -1692,6 +1692,34 @@ re-check, ~20 sites in 3 files go genuinely red.**
   ALL inside that twin, and **every `decide` row stays green** — exactly the 2026-08-28d
   `closedB` shape one layer down.
 
+* **(x) NEW 2026-09-02d — THE FLIP IS INVISIBLE TO EVERY PIN, and it is the trap the whole
+  4c-ii landing turns on.** Case-insensitive grep over `formal/headline_statements.txt` and
+  `formal/headline_definitions.txt` returns **ZERO** matches for `UntaintedShadow`,
+  `ShadowOver`, `LeafNode` or `DerNode`, and the definition pin's transitive closure stops
+  (at 165 rows) well before `CascadeStable.lean::UntaintedShadow`. So re-pointing that ONE
+  line changed what the entire internal development MEANS while **every pin stayed green** —
+  precisely the `ZT-P2-5` class the definition pin was built to catch, landing just outside
+  its reach. **No mechanical check will ever report it.** Its only control is the FLIP
+  PROBE: revert the abbrev, build, and read the ERROR SET — `hsubjW` must red at the
+  `untaintedShadow_foldAdmits`/`_writeLeg` sites and the bare `hv1` use, **while the three
+  self-adapting `first | … | …` alternations stay GREEN**. Those three self-adapt in BOTH
+  directions, which is exactly why a red there is never evidence and this probe is. This
+  generalises (n): for anything the pins cannot see, the control is a probe that must
+  produce a SPECIFIC error set, not merely a check that goes red.
+
+* **(y) NEW 2026-09-02d — a scripted edit can corrupt a file in a way the BUILD cannot
+  see.** A `perl -i` pass that emits a wide character (`"\x{2192}"` for `→`) switches
+  perl's output layer to UTF-8 and **re-encodes every existing UTF-8 byte in the file**
+  (`e2 86 92` → `c3 a2 c2 86 c2 92`). Lean compiles the resulting mojibake comment happily,
+  so `lake build` stays green on a corrupted file. What caught it was **`git diff
+  --numstat`** reporting `13 insertions / 2 deletions` where `11 / 0` was expected. This
+  tree also **mixes line endings per file** — `CascadeStrataAssemble`, `CascadeStrataEdge`,
+  `Equiv`, `FullScope` are LF; the six other `Cascade*` files are CRLF — so a blind CRLF
+  insertion leaves mixed endings behind. **Standing check after any scripted edit:** `git
+  diff --numstat` must equal `git diff --ignore-cr-at-eol --numstat`, and the counts must
+  equal what you intended; anything else is a silent rewrite. Emit non-ASCII as raw bytes
+  (`"\xe2\x86\x92"`) or use an editor that preserves encoding.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

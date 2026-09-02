@@ -547,12 +547,26 @@ structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
   closed0 : ∀ ab ∈ σ0.edges, ab.1 ∈ σ0.nodes ∧ ab.2 ∈ σ0.nodes
   term : ∀ k, P k → ∀ y, (k, y) ∉ σ.edges
 
-/-- **The untainted-core shadow relation** — `ShadowOver` at today's extras predicate.
-    `abbrev` (hence reducible) on purpose: every existing field access, anonymous
-    constructor and `rcases` against this name keeps working unchanged, which is what
-    makes the genericization above a NO-OP on the current tree rather than a re-point. -/
+/-- **The untainted-core shadow relation** — `ShadowOver` at the extras predicate the
+    live tree uses. **RE-POINTED at `DerNode ∨ LeafNode` by 4c-ii (2026-09-02d)**; this
+    docstring previously described the genericization as "a NO-OP rather than a
+    re-point", which was true only until this line moved.
+
+    `abbrev` (hence reducible) is load-bearing and must stay: every field access,
+    anonymous constructor and `rcases` against this name survived the re-point
+    unchanged, which is why the flip cost 2 `have` deletions and 4 argument re-points
+    across 2 files rather than a re-proof of the cascade chain. Turning it into a `def`
+    while re-pointing would break all of them.
+
+    ⚠ The flip is INVISIBLE TO EVERY PIN — `headline_statements.txt` /
+    `headline_definitions.txt` contain no occurrence of `UntaintedShadow`, `ShadowOver`,
+    `LeafNode` or `DerNode`, and the definition closure stops before this line. Its only
+    mechanical control is the flip probe (SAB-1, 2026-09-02d): reverting this one line
+    reds `:1625`/`:1626` (`hsubjW` too wide) and the bare `hv1` use, while the three
+    self-adapting `first | … | …` sites stay GREEN — which is exactly why those three
+    are not evidence and this probe is. -/
 abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
-  ShadowOver (DerNode S) σ σ0
+  ShadowOver (fun k => DerNode S k ∨ LeafNode S k) σ σ0
 
 /-! ### Leaf-free `computed` operands (4c-ii step 7)
 
@@ -584,12 +598,18 @@ CONTAINS a dot, so `relNameOK BARE` is FALSE, while `check_name` escapes `'...'`
 explicitly. `Leaf.lean:604::NotLeafName p := p = BARE ∨ isLeafPred p = false` is
 `check_name` byte for byte, escape included. That is the predicate below.
 
-⚠ **This block is INERT on today's tree** — nothing consumes it yet; its consumer is
-`shadow_graphRec_agree`'s `hv1`, which needs `NotLeafName r'` for the OPERAND relation
-(scope-doc §11.13 trap (g)). Per `docs/sabotage-procedure.md:100-141` that flips the
-sabotage's job: a green build vets NOTHING here, so the witness/control pins below are
-the SOLE evidence that the predicate has content, and they exist for no other reason.
-Do not "simplify" them away. -/
+✅ **This block is NO LONGER INERT (4c-ii, 2026-09-02d).** It shipped inert on
+2026-09-01c and this paragraph used to say a green build vetted nothing here; that is
+now false. Its awaited consumer arrived: `shadow_graphRec_agree`'s `hv1` takes an `hnl`
+premise, and `ComputedRefsNotLeaf` discharges it at the ELEVEN membership sites through
+`::notLeafNode_of_computedRef` / `::checkFn_agree_of_graphRec_notLeafNode`, with
+`GraphAdmission.computedRefsNotLeaf` terminating the thread at the headline.
+
+The pins below are still the evidence that the PREDICATE has content, and they are
+still the only such evidence — `ComputedRefsNotLeaf := True` would compile and audit
+identically, and no build failure would report it. Do not "simplify" them away.
+SAB-2 (2026-09-02d) additionally pins that the CONSUMER carries the content: narrowing
+`hnl` to the already-derivable `¬ DerNode` reds at `:1653`, `exact hnl hleaf`. -/
 
 /-- **No `computed` operand of any def names a minted leaf family.**
     Quantified over `S.defs` rather than behind an `S.lookup k = some e →` binder so that
@@ -1620,12 +1640,10 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
         simpa [subjNode_pred, objNode_pred] using hp
       · exact rewriteClosure_subject_not_leafNode hQ
           (noLeafStoreSubjects_of_storeValidRules hDR hSV t List.mem_cons_self) hu hleaf
-    have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) :=
-      fun u hu hd => hsubjW u hu (Or.inl hd)
     exact ⟨σ0.writeRules S t,
       ReachedByRulesAdmitted.step t h0
-        (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
-      untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
+        (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubjW hadm),
+      untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubjW⟩
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
     intro hNK hCO hSV hterm hQ hDR
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm hQ hDR
@@ -1639,23 +1657,26 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     `DerNode`s, so all four probes read identically. -/
 theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
     (hsh : UntaintedShadow S σ σ0) (s : SubjectRef) {dt' : String} (on' : String)
-    {r' : String} (hunt : isDerived S (dt', r') = false) :
+    {r' : String} (hnl : ¬ LeafNode S (objNode ⟨dt', on'⟩ r'))
+    (hunt : isDerived S (dt', r') = false) :
     GraphModel.graphRec σ s dt' on' r' = GraphModel.graphRec σ0 s dt' on' r' := by
-  have hv1 : ¬ DerNode S (objNode ⟨dt', on'⟩ r') := by
-    rintro ⟨dt, on, R, hder, _, _, heq⟩
-    have htype : dt' = dt := by
-      have := congrArg NodeKey.type heq
-      simpa [objNode_type] using this
-    have hpred : r' = R := by
-      have := congrArg NodeKey.pred heq
-      simpa [objNode_pred] using this
-    rw [htype, hpred, hder] at hunt
-    cases hunt
+  have hv1 : ¬ (DerNode S (objNode ⟨dt', on'⟩ r') ∨ LeafNode S (objNode ⟨dt', on'⟩ r')) := by
+    rintro (⟨dt, on, R, hder, _, _, heq⟩ | hleaf)
+    · have htype : dt' = dt := by
+        have := congrArg NodeKey.type heq
+        simpa [objNode_type] using this
+      have hpred : r' = R := by
+        have := congrArg NodeKey.pred heq
+        simpa [objNode_pred] using this
+      rw [htype, hpred, hder] at hunt
+      cases hunt
+    · exact hnl hleaf
   -- PRE-WIDENED (4c-ii step 6, 2026-08-31c). This `have` is deliberately STRONGER than
-  -- what `shadow_reach_agree` asks for today, which is why the two uses below go through
-  -- `Or.inl`. At step 9 `UntaintedShadow` is re-pointed at `ShadowOver (fun k => DerNode
-  -- S k ∨ LeafNode S k)`; then `shadow_reach_agree` wants exactly this statement and the
-  -- flip is "delete the two `Or.inl` wrappers", not a proof. Same pattern as
+  -- what `shadow_reach_agree` asked for BEFORE the flip, which is why the two uses below
+  -- used to go through `Or.inl`. **The re-point has happened (4c-ii, 2026-09-02d):**
+  -- `UntaintedShadow` now abbreviates `ShadowOver (fun k => DerNode S k ∨ LeafNode S k)`,
+  -- so `shadow_reach_agree` wants exactly this statement and the wrappers are gone --
+  -- the flip cost this declaration four deleted wrappers and no proof. Same pattern as
   -- `CascadeStrataSettle.lean:960`. Do NOT "simplify" it back to the `DerNode`-only form.
   --
   -- It costs no new premise, and that is a fact about `wAll` nodes rather than luck:
@@ -1666,23 +1687,29 @@ theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
   -- `Leaf.lean::minted_leaf_is_leafNode` (true) / `::wAllNode_not_leafNode` (false) --
   -- same schema, same type, same predicate, differing only in node shape.
   --
-  -- ⚠ `hv1` is NOT free the same way and must not be bundled into this edit: it needs
-  -- `NotLeafName r'` for the OPERAND relation, which `hunt` does not give (a minted leaf
-  -- name like `viewer.0` is itself non-derived while `leafPublic` of it is derived).
+  -- ⚠ `hv1` was NOT free the same way, and this block used to say so and record the
+  -- binder as DEFERRED. **That is spent: the binder LANDED with 4c-ii (2026-09-02d)**,
+  -- and the two obstacles it named were closed by two DIFFERENT routes, which is the
+  -- fact worth keeping. `hv1` needs `NotLeafName r'` for the OPERAND relation, which
+  -- `hunt` does not give (a minted leaf name like `viewer.0` is itself non-derived while
+  -- `leafPublic` of it is derived), so the premise had to arrive from the caller.
   --
-  -- The second half of that obstacle is GONE as of 2026-09-01d. It used to read "the
-  -- premise cannot be phrased locally because `ReconcileStars.lean::
-  -- checkFn_agree_of_graphRec{,_cd}` hand their `hag` callback exactly
-  -- `isDerived S (dt,r') = false`" -- scope-doc 11.13 trap (g). Both `hag`s now also carry
+  -- Route 1 -- the 11 MEMBERSHIP sites (scope-doc 11.13 trap (g), closed 2026-09-01d):
+  -- both `ReconcileStars.lean::checkFn_agree_of_graphRec{,_cd}` carry
   -- `r' ∈ computedRefs e`, and `::checkFn_agree_of_graphRec_notLeafNode` above turns that
   -- into `¬ LeafNode S (objNode ⟨dt,on⟩ r')` for a caller holding `ComputedRefsNotLeaf S`.
   --
-  -- What remains is a DIFFERENT obstacle, and it is why the binder is still deferred: of
-  -- this lemma's 14 term-level call sites, three (`CascadeSettle.lean:1119`,
-  -- `CascadeStrataResettle.lean:1539`, `:2683`) instantiate `r'` with the arbitrary
-  -- QUERY's own relation, where no `computedRefs` membership exists at all. Those need the
-  -- query-level premise adjudicated 2026-09-01 for headline row 27, which co-lands with
-  -- step 9. An unconditional new binder here would red those three today.
+  -- Route 2 -- the 3 QUERY sites (`CascadeSettle.lean::graph_correct_w3d`,
+  -- `CascadeStrataResettle.lean::graph_correct_w3d2{,_d}`) instantiate `r'` with the
+  -- arbitrary QUERY's own relation, where no `computedRefs` membership exists at all.
+  -- They discharge `hnl` from headline row 27's query guard instead, via
+  -- `Leaf.lean::not_leafNode_of_publicOfLeaf_none`. **The two routes are not
+  -- interchangeable and that is machine-checked, not asserted**: SAB-4 (2026-09-02d)
+  -- mis-typed `hql` inside `graph_correct_w3d2_d` alone and got EXACTLY ONE error, at
+  -- that declaration's query site, while its MEMBERSHIP site stayed green.
+  --
+  -- 14 sites, 11 + 3, and they are why "thread the predicate" and "add the query
+  -- premise" could not be separated: `graph_correct_w3d2` and `_d` each host ONE OF EACH.
   have hv3 : ¬ (DerNode S (wAllNode dt' r') ∨ LeafNode S (wAllNode dt' r')) := by
     rintro (⟨dt, on, R, _, _, hon, heq⟩ | ⟨ty, on, p, _, _, hon, heq⟩)
     · rw [objNode_plain hon] at heq
@@ -1694,8 +1721,8 @@ theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
   unfold GraphModel.graphRec GraphModel.probeNonDerived
   dsimp only
   rw [shadow_reach_agree hsh hv1 (subjNode s), shadow_reach_agree hsh hv1 (wAnyNode s.shape),
-    shadow_reach_agree hsh (fun h => hv3 (Or.inl h)) (subjNode s),
-    shadow_reach_agree hsh (fun h => hv3 (Or.inl h)) (wAnyNode s.shape)]
+    shadow_reach_agree hsh hv3 (subjNode s),
+    shadow_reach_agree hsh hv3 (wAnyNode s.shape)]
 
 /-- **The W3d read bridge (`checkFn_eq_sem_w3d`)**: the compiled pass guard equals
     `sem` at EVERY W3d state — through the untainted-core shadow (`checkFn` reads
@@ -1708,6 +1735,7 @@ theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hcr : ComputedRefsNotLeaf S)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     {s : SubjectRef} {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
@@ -1715,8 +1743,8 @@ theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hs : s.name = STAR → s.predicate = BARE) (hon : on ≠ STAR) :
     σ.checkFn T s dt on R e = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
   have hstep : σ.checkFn T s dt on R e = σ0.checkFn T s dt on R e :=
-    checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
-      (fun s' r' _ hr' => shadow_graphRec_agree hsh s' on hr')
+    checkFn_agree_of_graphRec_notLeafNode T s dt on R e hco hcr hlk hleafUnt
+      (fun s' r' hnl hr' => shadow_graphRec_agree hsh s' on hnl hr')
   rw [hstep]
   exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
     (ReachedByW3aAdmitted.base h0) hlk hco hleafUnt hs hon
@@ -1794,6 +1822,7 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (h : ReachedByW3d σ S T) (hadm : FoldAdmits σ (rewriteClosure S t))
@@ -1820,13 +1849,13 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
   have htp' := reachedByW3d_edges_target_plain h' hBS
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.writeLoggedRules S t).checkFn (t :: T) s dt on R e :=
-        (checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
+        (checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hcr
           h0' hsh' hlk hco hleafUnt hs hon).symm
     _ = σ.checkFn (t :: T) s dt on R e :=
         writeLeg_checkFn_stable (t :: T) hclσ htp' hlk hder hco hon hunmapped s
     _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3d hWF hTT hNK hR hSVw hBSw hTSw hCO hMatch hStrat htermw
+        checkFn_eq_sem_w3d hWF hTT hNK hR hSVw hBSw hTSw hCO hMatch hStrat htermw hcr
           h0 hsh hlk hco hleafUnt hs hon
 
 /-! ## `SettledKey` — the per-key soundness-side settledness predicate
@@ -1860,6 +1889,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
@@ -1876,7 +1906,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
   have hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
       sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
     fun s hs => writeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat
-      hQ hDR hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
+      hQ hDR hcr hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
   constructor
   · intro res hres
     rw [writeLoggedRules_residue] at hres

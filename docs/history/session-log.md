@@ -25,6 +25,67 @@ from here.
 
 ---
 
+## 2026-09-02d — 4c-ii IS LANDED: the shadow is re-pointed, both premises threaded and discharged, one pin row moved
+
+rows: `P3`
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-02d`.
+
+lint: `task lint: clean (12 checks, 156 task file(s) parsed)`
+read: board + HANDOFF
+
+**The item the board has carried as `NOW` since 2026-08-21b is done.**
+`CascadeStable.lean::UntaintedShadow` now abbreviates
+`ShadowOver (fun k => DerNode S k ∨ LeafNode S k)`; `shadow_graphRec_agree` carries an
+`hnl` premise; all 14 call sites supply it; `graph_correct` carries the query guard. Full
+tree green at every stage (1089 jobs, rc=0, zero `sorry`).
+
+* **The previous session's sizing was RIGHT, and is now kernel-confirmed rather than
+  computed.** The `hcr` thread is exactly **62 declarations across eleven files**, with
+  the per-file split it predicted (`CascadeStrataSettle` 14, `CascadeStrataResettle` 11,
+  `CascadeStrataEnum` 8, `CascadeEnum` 6, `Equiv` 6, `CascadeSettle` 5, `CascadeStrataAssemble`
+  4, `CascadeStable` 3, `CascadeStrataEdge` 3, `CascadeInv` 2, `FullScope` 0); `hql` is 13.
+* **And the 14-SITE census was right all along — (q)/(v)/(t) were one cone under three
+  COUNTING UNITS**, not three measurements of it: 14 argument-supply sites, 12 host
+  declarations, 62 signature changes, all true simultaneously. The sites split **11
+  membership-served + 3 query-served**, and `graph_correct_w3d2`/`_d` each host one of
+  each — which is precisely why the two halves could not be landed separately.
+* **Pin cost is one row, and the pin was run BEFORE regenerating as its own control.**
+  `verify.sh lean` failed with exactly one discrepancy — `graph_correct` gaining `hql` —
+  and step 4c (definitions) did not fire. After deliberate regeneration:
+  statements **49/49, one row changed**; definitions **165, byte-identical**;
+  `audited_theorems.txt` untouched.
+* ⚠ **The flip itself is invisible to every pin.** Both headline files contain zero
+  occurrences of `UntaintedShadow`/`ShadowOver`/`LeafNode`/`DerNode`, and the definition
+  closure stops before that line. Re-pointing it changed what the development MEANS with
+  every pin green — the `ZT-P2-5` class landing just outside the definition pin's reach.
+  Its only control is the flip probe, which is why SAB-1 is not optional.
+* **Three sabotages, each with a control that had to stay green** (literal output in
+  PROOF_STATUS and in the touched docstrings): SAB-1 reverting the flip reds the `hsubjW`
+  sites while the three self-adapting `first | … | …` sites stay GREEN; SAB-2 narrowing
+  `hnl` to the already-derivable `¬ DerNode` reds at `:1653`, the predicted line; SAB-4
+  mis-typing the query guard inside `graph_correct_w3d2_d` alone gives **exactly one
+  error, at that declaration's query site, with its membership site green** — which is
+  what makes the 11+3 split a fact rather than bookkeeping.
+* **New method trap, and the build could not have caught it:** a `perl -i` pass that emits
+  a wide character re-encodes the WHOLE file — inserting `→` via `"\x{2192}"`
+  double-encoded every existing UTF-8 byte in `CascadeStrataResettle.lean`. It surfaced as
+  `git diff --numstat` reporting 13/2 where 11/0 was expected; Lean would have compiled the
+  mojibake comment happily. Also: this tree **mixes line endings per file** (four LF, six
+  CRLF), so `numstat` vs `--ignore-cr-at-eol` numstat is now the standard check after any
+  scripted edit.
+
+**Still owed:** **SAB-5 was not run**, and its load-bearing half is the one that matters —
+*"the DEFINITION pin must go red when a field is deleted from a pinned structure"*. It
+cannot be observed as specified, because deleting `GraphAdmission.computedRefsNotLeaf`
+breaks the build at `FullScope.lean` and `verify.sh lean` never reaches step 4c. Partial
+evidence exists (step 4b was watched firing correctly this session; `2026-09-02c` watched
+step 4c fire on this same field), but the specified control has not been run. Next session:
+either construct a variant that keeps the tree building while the field is gone, or record
+in `docs/sabotage-procedure.md` that this instrument is only observable in that narrow
+window and say what the substitute is.
+
 ## 2026-09-02c — the "closed list" is a LOWER BOUND by construction, and "nothing smaller is green-stoppable" is refuted
 
 rows: `P3`
