@@ -132,7 +132,19 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       `relNameOK`-shaped. `BARE = "..."` is itself dot-carrying (`Core/Ident.lean`) and
       every `Direct` restriction in all three witnesses below is `("user", BARE, _)`, so a
       plain dot-free clause would be FALSE here, leave this structure uninhabited, and
-      re-vacuate every final theorem. Scope doc §11.13 trap (o). -/
+      re-vacuate every final theorem. Scope doc §11.13 trap (o).
+    * `computedRefsNotLeaf` — the THIRD reading of the same dot-lock: a `computed`
+      operand names a *referenced* relation, so it too is bare-or-dot-free
+      (`::_validate_ast_references:916-919`, the identical
+      `'.' in name and name != '...'` refusal that grounds the two rows above).
+      Added by 4c-ii step 10 as the seed of the co-landing's MEMBERSHIP route: it is
+      what lets `CascadeStable.lean::checkFn_agree_of_graphRec_notLeafNode` turn
+      `r' ∈ computedRefs e` into the `¬ LeafNode` that `::shadow_graphRec_agree`'s
+      pre-widened `hv1` needs at 11 of its 14 call sites. Trap (o) applies verbatim —
+      it is `NotLeafName`-shaped, and `CascadeStable.lean:582-585` records why
+      `relNameOK` would be the wrong predicate here for a SECOND reason (`BARE` is
+      dot-carrying, so `relNameOK BARE` is false while Python's `check_name`
+      escapes `'...'` explicitly). -/
 structure GraphAdmission (S : Schema) (T : Store) : Prop where
   wf : WF S
   nodup : NodupKeys S
@@ -144,6 +156,7 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
   storeValid : StoreValidRulesD S T
   ttuNotLeaf : TtuTargetsSat S NotLeafName
   directRestrNotLeaf : DirectRestrictionsNotLeaf S
+  computedRefsNotLeaf : ComputedRefsNotLeaf S
 
 /-- **`W4Fragment S T` — the honest fragment carries.** Scope restrictions the
     current proof needs that Python admission does NOT imply (each is a documented
@@ -636,6 +649,7 @@ def Tx : Store := [⟨⟨"user", "alice", BARE⟩, "a", ⟨"doc", "1"⟩⟩]
 theorem accepts : GraphAdmission Sx Tx where
   ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
   directRestrNotLeaf := by decide
+  computedRefsNotLeaf := by decide
   wf := ⟨by
     intro p hp
     simp only [Sx, List.mem_cons, List.not_mem_nil, or_false] at hp
@@ -654,6 +668,47 @@ theorem accepts : GraphAdmission Sx Tx where
     -- pre-leg-5 `StoreValidRules` clause verbatim
     exact Or.inl ⟨by decide, .direct [("user", BARE, false)], [("user", BARE, false)],
       rfl, by simp [exprDirects], by decide⟩
+
+/-! ### `computedRefsNotLeaf` is an INDEPENDENT field, not a tautology (4c-ii step 10)
+
+A green build vets nothing about a new admission field: `ComputedRefsNotLeaf` returning
+`True` on every schema would compile, audit, and discharge `by decide` at all four
+witnesses exactly as cleanly. `CascadeStable.lean:726::computedRefsNotLeaf_false` already
+pins that the PREDICATE has content. What that does NOT pin — and what adding it to
+`GraphAdmission` newly claims — is that the FIELD *narrows the bundle*, i.e. that no other
+admission field already implies it.
+
+The pair below is that pin, and it varies exactly ONE axis: the name of a `computed`
+operand. `SxLeafRef` is `Sx` with `r`'s left operand re-pointed from the declared `"a"`
+to the MINTED LEAF name `leafPred "a" 0` — spelled through `leafPred` rather than the
+literal `"a.0"` so the pin follows the minting function if it changes. Every neighbouring
+decidable admission field stays TRUE there; only `computedRefsNotLeaf` goes false. -/
+
+/-- `Sx` with one `computed` operand re-pointed at a minted leaf name. -/
+def SxLeafRef : Schema :=
+  ⟨[(("doc", "a"), .direct [("user", BARE, false)]),
+    (("doc", "b"), .direct [("user", BARE, false)]),
+    (("doc", "r"), .excl (.computed (leafPred "a" 0)) (.computed "b"))], []⟩
+
+/-- POSITIVE half of the pair — the live witness satisfies the new field. -/
+theorem sx_computedRefsNotLeaf : ComputedRefsNotLeaf Sx := by decide
+
+/-- NEGATIVE half — one operand rename is enough to refuse admission. -/
+theorem sxLeafRef_computedRefsNotLeaf_false : ¬ ComputedRefsNotLeaf SxLeafRef := by decide
+
+/-- **The independence half, and the reason this block exists.** Every OTHER decidable
+    `GraphAdmission` field still holds at `SxLeafRef`, so none of them implies the new
+    one and the field is genuinely load-bearing rather than derivable. (`wf` is omitted
+    deliberately: it is not `decide`-shaped here, and it is the one field that *would*
+    have caught a dot — which is exactly why `CascadeStable.lean:582-585` records that
+    `relNameOK` is the WRONG predicate for this clause, `BARE` being dot-carrying.) -/
+theorem sxLeafRef_other_admission_fields_hold :
+    NodupKeys SxLeafRef ∧ Stratifiable SxLeafRef ∧ TtuTuplesetsDirect SxLeafRef ∧
+      RewriteMatchDeclared SxLeafRef ∧ DirectRestrictionsNotLeaf SxLeafRef ∧
+      (∀ tr ∈ SxLeafRef.objectWildcards, isDerived SxLeafRef tr = false) := by
+  refine ⟨by unfold NodupKeys; decide, by unfold Stratifiable; decide,
+          by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
+          by decide, by decide⟩
 
 /-- The fragment bundle is inhabited by the witness schema/store. `Sx` is
     `ComputedOnly`, so the five derived-def clauses the leg-5 widening introduced
@@ -754,6 +809,7 @@ def Ty : Store :=
 theorem accepts : GraphAdmission Sy Ty where
   ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
   directRestrNotLeaf := by decide
+  computedRefsNotLeaf := by decide
   wf := ⟨by
     intro p hp
     simp only [Sy, List.mem_cons, List.not_mem_nil, or_false] at hp
@@ -1503,6 +1559,7 @@ it is machine-checked FALSE at `Td`. -/
 theorem admission : GraphAdmission Sd Td where
   ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
   directRestrNotLeaf := by decide
+  computedRefsNotLeaf := by decide
   wf := accepts.1
   nodup := accepts.2.1
   strat := accepts.2.2.1
@@ -1640,6 +1697,7 @@ theorem outside_old_admission4 : ¬ StoreValidRules Sd Td4 := by
 theorem admission4 : GraphAdmission Sd Td4 where
   ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
   directRestrNotLeaf := by decide
+  computedRefsNotLeaf := by decide
   wf := accepts.1
   nodup := accepts.2.1
   strat := accepts.2.2.1

@@ -25,6 +25,59 @@ from here.
 
 ---
 
+## 2026-09-02c — the "closed list" is a LOWER BOUND by construction, and "nothing smaller is green-stoppable" is refuted
+
+rows: `P3`
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-02c`. New traps: scope doc §11.13 **(v)** and **(w)**.
+
+lint: `task lint: clean (12 checks, 156 task file(s) parsed)`
+read: board + HANDOFF
+
+**The session's product is two landed prerequisites and a retired sizing.** Both of the
+previous session's headline claims turned out to be wrong, and in opposite ways.
+
+* **The census is a lower bound BY CONSTRUCTION (§11.13 (v)).** `2026-09-02b` staged `sorry`
+  at all 14 `shadow_graphRec_agree` sites, got `rc=0` / 1089 jobs / zero errors, and
+  concluded the list was CLOSED. The observation is right; it answers a different question.
+  **A staged `sorry` discharges the new premise LOCALLY**, so the probe sizes *where the
+  proof breaks*, never *which signatures must change to discharge it honestly* — and those
+  differ by the entire transitive caller closure, which is what "thread the premise" means.
+  Live: **62 declarations (`hcr`) + 13 (`hql`) across ELEVEN files**, five of them
+  (`CascadeInv`, `CascadeStrataEdge`, `CascadeStrataAssemble`, `Equiv`, `FullScope`) in
+  neither the census nor the board's 8-file list. ⚠ **(q) and (v) are the same cone
+  mis-measured in opposite directions inside one week** — grep over-counted, the probe
+  under-counted — which is the sharpest case yet for §11.13 item 2's rule that a site count
+  is meaningless without its symbol list *and its counting unit*.
+* **"Nothing smaller is green-stoppable" is refuted by kernel, twice (§11.13 (w)).** §11.12
+  rule 5 forbids committing a *partial cone* — a tree whose own pins assert something untrue
+  — and neither increment is one. Both additive, both green first attempt (1089 jobs, 0
+  sorries). (a) **`GraphAdmission.computedRefsNotLeaf`**, the third syntactic reading of the
+  one Python dot-lock the other two admission rows already model; it is the **terminator that
+  cuts the `hcr` thread 79 → 62**, so landing it first makes the cone *smaller*. Non-vacuity
+  is a new pair varying one axis (`FullScope::SxLeafRef`) plus a proof that every other
+  decidable admission field still holds there — i.e. the field is independent, not implied.
+  (b) **The widened six-field instrument** `Scratch4cii::{clsB,termB,shadowB}_correct_weak`,
+  which **must** precede the flip: `shadowB_correct` is anchored at the strong shadow, so
+  post-flip it would police nothing while every `decide` row stayed green. The file asserted
+  this was impossible — *"has no such theorem and cannot have one"* — which was already false,
+  since `ShadowOver` has been generic in its extras predicate since `2026-08-30c`.
+* **Instruments controlled before use, both times.** Trap (u)'s sorry-grep was made to fire on
+  purpose first (backtick-safe = 1, straight-quote = 0, same log). And `verify.sh lean` was run
+  *before* regenerating the definition pin, as the control on the pin itself: it fired with
+  exactly two discrepancies and no others. SAB-6's literal output is in `::termB_correct_weak`'s
+  docstring — four error sites, all inside the new twin, **every `decide` row green**.
+* ⚠ **Do not quote "six" or "38"** for the audited-but-unpinned residual; neither reproduces.
+  Measured here: **578 audited names, 43 statement-pinned, 35 overlapping → 543 carry a NAME
+  pin and no STATEMENT pin.** A name-pattern count is the wrong instrument for the question.
+
+Pins: statements **49/49 byte-identical**, definitions **164 → 165** (deliberate),
+`FINAL_REVIEW.md` counts regenerated twice (the second time for a `CORRESPONDENCE.md` anchor
+this session added, 541 → 542). Gate: all ten phases re-run green.
+
+---
+
 ## 2026-09-02b — the co-landing is a CLOSED LIST of 14 sites / 12 decls / 6 files, and `hql`'s eliminator landed
 
 rows: `P3`

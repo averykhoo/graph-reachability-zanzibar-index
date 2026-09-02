@@ -1642,6 +1642,56 @@ re-check, ~20 sites in 3 files go genuinely red.**
   zero is believed** — the same rule this repo already applies to tests, floors and pins.
   Companion to (q), which is the over-counting half of the same lesson.
 
+* **(v) ★★ NEW 2026-09-02c — the (t) census is a LOWER BOUND on the co-landing, and it is
+  a lower bound BY CONSTRUCTION.** (t) reports "14 sites / 12 declarations / 6 files" and
+  calls it a CLOSED list on the strength of run 2: `sorry` staged at all 14 sites builds
+  the whole tree, so nothing outside the census errors. That inference is invalid for the
+  question the board was asking. **A staged `sorry` discharges the new premise LOCALLY, so
+  the probe can never see the signature churn needed to discharge it HONESTLY** — it sizes
+  *where the proof breaks*, not *which signatures must change*. The two differ by the whole
+  transitive caller closure.
+  Measured on the live tree (`a43e5ac`): the `hcr` thread is **62 declarations** and the
+  `hql` thread **13**, across **ELEVEN files** — `CascadeStable`, `CascadeSettle`,
+  `CascadeInv`, `CascadeEnum`, `CascadeStrataSettle`, `CascadeStrataResettle`,
+  `CascadeStrataEnum`, `CascadeStrataEdge`, `CascadeStrataAssemble`, `Equiv`, `FullScope`
+  — of which **five** (`CascadeInv`, `CascadeStrataEdge`, `CascadeStrataAssemble`, `Equiv`,
+  `FullScope`) appear in NEITHER the 6-file census NOR the board's 8-file list. Corroborated
+  first-hand by caller attribution: `Equiv.lean` alone hosts six audited milestone
+  declarations in the cone (`backend_equivalence_w3d` `:501`, `exclusion_effective_w3d`
+  `:526`, `no_ghost_grant_w3d` `:553`, and the `_w3d2` trio at `:587`/`:613`/`:643`).
+  ⚠ This is (q) and (t) failing in OPPOSITE directions on the same cone within one session
+  — grep over-counted, the probe under-counted — which is the sharpest available statement
+  of §11.13 item 2's durable rule: **a site count is meaningless without its symbol list
+  AND its counting unit.** "Sites where an argument is supplied" and "declarations whose
+  signature changes" are different units, and the census published the first while the
+  board spent it as the second.
+
+* **(w) NEW 2026-09-02c — "nothing smaller than the atomic co-landing is green-stoppable"
+  is REFUTED BY KERNEL, twice.** The board carried that claim (citing §11.12 rule 5) as the
+  reason no increment could land before the cone. Rule 5 forbids committing a *partial
+  cone* — a tree whose own pins assert something untrue — and neither increment below is
+  one: both are additive, consume nothing, and weaken no statement.
+  1. **`GraphAdmission.computedRefsNotLeaf`** (`FullScope.lean:147`), discharged `by decide`
+     at all four construction sites. Green first attempt, rc=0, 1089 jobs. It is the
+     TERMINATOR that cuts the `hcr` thread from 79 declarations to 62 — i.e. landing it
+     first makes the cone measurably smaller.
+  2. **The widened six-field instrument** (`Scratch4cii.lean::clsB_correct_weak` /
+     `::termB_correct_weak` / `::shadowB_correct_weak`). Green first attempt.
+  ⚠ The second one is the one that MUST precede the flip, and the reason is the house
+  failure mode. `Scratch4cii.lean:583::shadowB_correct` is deliberately ANCHORED at
+  `ShadowOver (DerNode S)`, so at the instant `UntaintedShadow` is re-pointed it goes on
+  deciding a structure the live tree no longer uses, while every `decide` row in the
+  battery stays green. The file itself asserted this could not be fixed — its `:500-503`
+  said the weakened form "has no such theorem **and cannot have one**" — which was already
+  false when written: `ShadowOver` has been generic in its extras predicate since
+  §11.13 item 1 (2026-08-30c), so the widened predicate is nameable today and the twins are
+  landable BEFORE the flip. **State them at the explicit predicate, never at
+  `UntaintedShadow`** — otherwise they change meaning under the flip and reproduce the
+  failure they exist to prevent. Sabotage evidence (SAB-6), with literal output, is in
+  `::termB_correct_weak`'s docstring: trimming `termB`'s `weak` disjunct reds four sites,
+  ALL inside that twin, and **every `decide` row stays green** — exactly the 2026-08-28d
+  `closedB` shape one layer down.
+
 ## Provenance
 
 Decision: user, 2026-08-05 ("scope it as c and document that in handoff but we will defer

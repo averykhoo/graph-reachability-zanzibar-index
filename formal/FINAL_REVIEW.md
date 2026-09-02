@@ -34,8 +34,8 @@ number INTO it over restating it.
 | gate-tooling conformance tests | **66** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **585** |
 | audit identity pin (`audited_theorems.txt`) | **584** |
-| headline definition pin | **164** rows (**157** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **541** (**334** Python + **207** Lean) |
+| headline definition pin | **165** rows (**158** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **542** (**335** Python + **207** Lean) |
 | `corpus.SCHEMAS` | **26** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 26 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |

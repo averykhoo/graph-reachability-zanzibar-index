@@ -15,6 +15,168 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-02c (**the co-landing's sizing is a LOWER BOUND — 62+13 declarations across ELEVEN files, not 12/6 — and "nothing smaller is green-stoppable" is refuted by kernel: TWO additive prerequisites landed**)
+
+**Task taken:** `P3`, user-directed "keep working on p3". The board's `NOW` was the atomic
+co-landing, sized at 14 sites / 12 declarations / 6 files and marked *"nothing smaller is
+green-stoppable"*. Both halves of that framing turned out to be wrong, and this session
+landed the two increments the framing said could not exist.
+
+**Green anchor (§11.12 rule 1):** `a43e5ac`, `gate_status.py` = COVERED on this tree at
+session start (all ten phases, ages 27–42m). The cone was never opened, so the exit was
+never needed.
+
+### 0. Instrument control FIRST — trap (u), reproduced on purpose
+
+Before trusting any `sorry` count, the grep was made to fire. A throwaway
+`theorem zz_instrument_control_delete_me : True := by sorry` in `Scratch4cii.lean` (a leaf
+module), then `lake build`:
+
+    -- backtick-safe grep --                    1
+    -- the WRONG grep (straight quotes) --      0
+    362:warning: …/Scratch4cii.lean:846:8: declaration uses `sorry`
+
+Same log, same build. `grep -c "declaration uses .sorry."` = 1; `grep -c "declaration uses
+'sorry'"` = 0. Trap (u) is real and now first-hand, not inherited. Reverted immediately.
+
+### 1. ⚠ THE PROBE CENSUS IS A LOWER BOUND **BY CONSTRUCTION** — scope doc §11.13 (v)
+
+2026-09-02b sized the co-landing by staging `sorry` at all 14 `shadow_graphRec_agree`
+call sites, observing rc=0 / 1089 jobs / zero errors, and concluding the list is CLOSED —
+*"nothing outside the census exists"*. **The observation is right; the conclusion answers a
+different question than the board asked.** A staged `sorry` discharges the new premise
+LOCALLY. So the probe sizes *where the proof breaks*, and can never see *which signatures
+must change to discharge it honestly* — the two differ by the entire transitive caller
+closure, which is exactly what "thread the premise" means.
+
+Measured on the live tree: the `hcr` thread is **62 declarations**, the `hql` thread
+**13**, across **ELEVEN files**. Five of them — `CascadeInv`, `CascadeStrataEdge`,
+`CascadeStrataAssemble`, `Equiv`, `FullScope` — are in NEITHER the 6-file census NOR the
+board's 8-file list. Corroborated first-hand by caller attribution rather than by report:
+`Equiv.lean` alone hosts six audited milestone declarations in the cone
+(`backend_equivalence_w3d` `:501`, `exclusion_effective_w3d` `:526`, `no_ghost_grant_w3d`
+`:553`, and the `_w3d2` trio at `:587`/`:613`/`:643`), and `graph_correct_w3d2_d`'s cone
+runs `CascadeStrataAssemble` → `FullScope.lean:382`.
+
+⚠ Note what this is: **(q) and (v) are the same cone mis-measured in OPPOSITE directions
+inside one week** — grep over-counted, the probe under-counted. §11.13 item 2's rule ("a
+site count is meaningless without its symbol list and its counting unit") is the diagnosis
+in both cases: the census published *sites where an argument is supplied* and the board
+spent it as *declarations whose signature changes*.
+
+### 2. "NOTHING SMALLER IS GREEN-STOPPABLE" — REFUTED BY KERNEL, TWICE — §11.13 (w)
+
+§11.12 rule 5 forbids committing a **partial cone**: a tree whose own pins assert something
+untrue. Neither increment below is one. Both are additive, consume nothing, weaken no
+statement, and built green on the first attempt (rc=0, 1089 jobs, 0 sorries).
+
+**(a) `GraphAdmission.computedRefsNotLeaf`** (`FullScope.lean:147`) — the third syntactic
+reading of the ONE Python dot-lock the other two admission rows already model
+(`_validate_ast_references`'s `'.' in name and name != '...'`, here read at a `computed`
+operand). Discharged `by decide` at all four construction sites — `W4Witness.accepts`,
+`W4WitnessUnion.accepts`, `W4WitnessDirect.admission`, `::admission4`. It is the
+TERMINATOR that cuts the `hcr` thread from 79 declarations to 62: landing it first makes
+the remaining cone measurably smaller, which is the opposite of what "land it all at once"
+predicted.
+
+Its consumer chain was already fully pre-staged and inert, waiting for exactly this:
+`CascadeStable.lean:599` the predicate, `:604` its `Decidable` instance, `:615`
+`notLeafNode_of_computedRef`, `:655` `checkFn_agree_of_graphRec_notLeafNode` — whose
+docstring at `:587-592` names `shadow_graphRec_agree`'s `hv1` as the consumer and warns
+that a green build vets nothing here.
+
+**NON-VACUITY — the field is INDEPENDENT, not a tautology.** A green build proves nothing
+about a new admission field: `ComputedRefsNotLeaf := True` would compile, audit, and
+`decide` at all four witnesses identically. `CascadeStable.lean:726` already pins that the
+PREDICATE has content; what adding it to the bundle newly claims is that it NARROWS the
+bundle. New discriminating pair varying exactly one axis — the name of a `computed`
+operand (`FullScope.lean::SxLeafRef`, `Sx` with `r`'s left operand re-pointed from `"a"` to
+`leafPred "a" 0`, spelled through `leafPred` so the pin follows the minting function):
+
+* `sx_computedRefsNotLeaf : ComputedRefsNotLeaf Sx` — TRUE
+* `sxLeafRef_computedRefsNotLeaf_false : ¬ ComputedRefsNotLeaf SxLeafRef` — FALSE
+* `sxLeafRef_other_admission_fields_hold` — `NodupKeys` ∧ `Stratifiable` ∧
+  `TtuTuplesetsDirect` ∧ `RewriteMatchDeclared` ∧ `DirectRestrictionsNotLeaf` ∧ `objWild`
+  ALL still true at `SxLeafRef`. So no neighbouring field implies the new one.
+
+`wf` is deliberately excluded from that conjunction: it is the one field that *would* have
+caught a dot, and `CascadeStable.lean:582-585` records why `relNameOK` is nonetheless the
+WRONG predicate here — `BARE = "..."` is itself dot-carrying, so a dot-free clause is false
+at every witness and would re-vacuate the headline theorems (trap (o)).
+
+**(b) The WIDENED six-field instrument** — `Scratch4cii.lean::clsB_correct_weak` /
+`::termB_correct_weak` / `::shadowB_correct_weak`. This is the one that MUST precede the
+flip, and it is a house-failure-mode fix rather than a convenience.
+
+`Scratch4cii.lean:583::shadowB_correct` is deliberately ANCHORED at
+`ShadowOver (DerNode S)`. At the instant `UntaintedShadow` is re-pointed it therefore goes
+on deciding a structure the live tree no longer uses — while every `decide` row in the
+`weak := true` battery stays green, because those rows are measurements, not theorems. The
+file asserted this was unfixable: `:500-503` read *"the weakened form has no such theorem
+**and cannot have one** — the weakened `UntaintedShadow` … does not exist yet."* That was
+already false when written. `ShadowOver` has been generic in its extras predicate since
+§11.13 item 1 (2026-08-30c), so `fun k => DerNode S k ∨ LeafNode S k` is nameable today.
+The paragraph is rewritten in place with the correction and the reason.
+
+⚠ **Stated at the EXPLICIT predicate, never at `UntaintedShadow`.** Not stylistic: naming
+the abbrev would make these theorems change meaning under the flip — reproducing the exact
+failure they exist to prevent — and would make them unlandable before it.
+
+**SABOTAGE (SAB-6), literal output in `::termB_correct_weak`'s docstring.** Narrowest
+plausible weakening — a maintainer trims `termB`'s `weak` disjunct as redundant
+(`:477-478`, `!(derNodeB S ab.1 || (weak && leafNodeB S ab.1))` → `!(derNodeB S ab.1)`).
+Observed rc=1, four error sites, **all four inside `termB_correct_weak`**:
+
+    error: …/Scratch4cii.lean:652:61: Invalid projection: … The expression
+      h1
+    has type `derNodeB S k = false` which has no fields.
+    error: …/Scratch4cii.lean:652:52: unsolved goals
+    h1 : derNodeB S k = false
+    hk : DerNode S k
+    ⊢ derNodeB S k = false
+
+⚠ The load-bearing half is what did NOT fail: **every `decide` row stayed green**, because
+a `termB` that has forgotten leaves returns `true` wherever the honest one did. Before this
+twin existed, that trim would have built green while the whole `weak := true` battery went
+on measuring a predicate with no leaf clause in it. Same shape as the 2026-08-28d `closedB`
+sabotage, one layer down. Probe reverted; tree re-verified green.
+
+### 3. PIN MOVEMENT — predicted exactly, and the definition pin EARNED its keep
+
+`verify.sh lean` was run against the field addition *before* regenerating anything, as the
+control on the pin itself (if a pinned structure can gain a field silently, the pin is not
+working). It fired, with exactly two discrepancies and no others:
+
+    FAIL: definition(s) now reachable from the headline statements but NOT in the pin:
+            def:Zanzibar.ComputedRefsNotLeaf
+    FAIL: the DEFINITION of def:Zanzibar.GraphAdmission changed:
+        >>> ADDED field(s)/constructor(s): computedRefsNotLeaf
+
+Then regenerated deliberately. Final state: `headline_statements.txt` **49/49
+byte-identical** (no statement moves — `graph_correct`'s `hql` is NOT in this landing);
+`headline_definitions.txt` **164 → 165** (the `GraphAdmission` row plus the newly-reachable
+`ComputedRefsNotLeaf`); `FINAL_REVIEW.md` counts block regenerated with it;
+`audited_theorems.txt` untouched (585 live ⊇ 584 pinned, unchanged).
+
+### 4. What is NOT done, and what the next session should NOT re-derive
+
+The co-landing itself is untouched. `shadow_graphRec_agree`'s `hv1` is still `DerNode`-only,
+`UntaintedShadow` is still `ShadowOver (DerNode S)`, and no site was threaded. What changed
+is that the cone is smaller (62, not 79), correctly sized (11 files, not 6), and its
+instrument now exists.
+
+⚠ Carried forward UNVERIFIED, and it should be re-measured rather than quoted: 2026-09-02b
+filed a correction that §7's "six" audited-but-unpinned carriers is an undercount and that
+"two independent measurements say 38". Neither number reproduces here. A basename-normalised
+count over the pin files gives **578 audited names, 43 statement-pinned, 35 overlapping —
+so 543 audited theorems carry a NAME pin and no STATEMENT pin**, of which **13** match the
+`_w3d`/`_w3d2` family by name. But a name-pattern count is the wrong instrument for the
+question (it misses `reachedByW3dC_inv`/`reachedByW3dE_inv`, which the original six
+included), and the right one — *which audited statements actually changed* — needs the
+statement extractor, not grep. Neither 6 nor 38 should be repeated until that is run.
+
+---
+
 ## Session 2026-09-02b (**the co-landing is SIZED BY PROBE — 14 sites / 12 declarations / 6 files, a closed list — and its one unverified step is now a THEOREM**)
 
 **Task taken:** `P3`, user-directed "work on P3". Entered believing the next increment was
