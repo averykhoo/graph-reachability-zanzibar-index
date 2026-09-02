@@ -1,7 +1,7 @@
 ---
 id: P3
 title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: MIS-SIZED: Lean write path never re-pointed. Retiring P6 makes 76 rows FAIL (19f/37p). Blocked on hql call.
+brief: No blocking call after all (row 27 has hql). Re-point measured: 1 line + 1 import = 4 errors, 1 file.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-03
-updated: 2026-09-03
+moved: 2026-09-03b
+updated: 2026-09-03b
 closed:
 ---
 
@@ -659,3 +659,17 @@ NEW TRAP 11.13(z): headline_definitions.txt has NO def: row for writeLoggedRules
 BLOCKING HUMAN CALL: after the re-point graph_correct is FALSE AS WRITTEN at minted leaf-name queries without the hql guard (docs/latent-gaps.md:132-137, machine-checked) -- a change to a pinned headline statement. Not taken unilaterally.
 
 Record: PROOF_STATUS ## Session 2026-09-03.
+
+### 2026-09-03b
+
+REFUTES THIS ITEM OWN 2026-09-03 ENTRY. The hql human call was ALREADY DISCHARGED; escalating it was an error.
+
+headline_statements.txt:27 already carries (hql : publicOfLeaf S q.object.type q.relation = none) -- 4c-ii added it on 2026-09-02d, as that session banner records (statements 49/49, graph_correct gains hql). Rows :66 correct_applies_nonfence and :67 w3d2E_correct_applies_nonfence do not need it: they pin q.relation = approver and DERIVE the guard at FullScope.lean:1345-1347 via fence_not_identity + checkPublic_of_not_leaf -- structurally, since publicOfLeaf (Leaf.lean:465-466) requires isLeafPred and approver is dot-free. Row :52 unfenced_grants is a concrete =true witness, deliberately unfenced as the foil for fence_changes_answer. So docs/latent-gaps.md:132-137 is STALE -- it describes the pre-4c-ii world. P3 has NO pending human decision.
+
+HOW THE FALSE ESCALATION HAPPENED: a subagent synthesizer asserted that headline_statements.txt:27 carries no hql binder today. It was taken at face value and escalated to the user. Reading line 27 refutes it in two seconds. This is the CLAUDE.md rule delegation-does-not-transfer-judgement landing on the exact class it names.
+
+THE RE-POINT, MEASURED on a scratch branch then reverted: Cascade.lean:175 folding rewriteClosureL S (rawWriteTuples S t), plus import ZanzibarProofs.GraphIndex.LeafRules (no cycle -- LeafRules to Leaf to Write/RulesWrite/Stabilize never reaches Cascade), builds to 4 errors ALL in Cascade.lean at :237 :240 :248 :250 -- one lemma family (EvalEq transfer + a watermark rfl/simp pair). writeLoggedOne needs NO edit: Leaf.lean:762 rawWriteTuples re-addresses the tuple relation to the leaf name, so objNode u.object u.relation is already the leaf node. Both the starting plan and the LeafRules.lean:242-245 banner over-specify this step.
+
+WARNING: 4 IS A FIRST WAVE, NOT A CONE SIZE. Nothing downstream of Cascade type-checked, because it cannot until Cascade does. Quoting 4 as the cost of the re-point would be this repo recurring sizing error.
+
+Record: PROOF_STATUS ## Session 2026-09-03b.

@@ -1,14 +1,14 @@
-2026-09-03 — SAB-5 discharged; the `P6` remainder was MIS-SIZED and is blocked on a human call.
+2026-09-03b — SAB-5 discharged; `P6` was MIS-SIZED; the `hql` blocker turned out already closed.
 
-(nav) **`P3` IS LEAN WORK AFTER ALL — this banner said the opposite until today.** The write
-path was never re-pointed: `LeafRules.lean:246 writeRulesRaw` still says `No caller yet` and
-`Cascade.lean:175` still folds `rewriteClosure`, not `rewriteClosureL`. 4c-ii re-pointed the
-PROOF-side shadow, not the driver, so Lean and Python edge targets do NOT agree.
-(!) **THE `0`/`265` CRITERION IS MET BY A TWO-LINE DELETION THAT PROVES NOTHING.** Observed
-2026-09-03: deleting `extractor.py:236-237` gives `P6 0 / compared 265` **and** reds the state
-gate — `19 failed, 37 passed`. Control is `test_conformance_state.py`; ledger **76 / 189** of 498.
-(!) **BLOCKING HUMAN CALL:** post-re-point `graph_correct` is FALSE AS WRITTEN without `hql`.
-(!) **§11.13 (z): THE DEFINITION PIN MISSES DOT-NOTATION CALLS** — no `def:` row exists for
-`writeLoggedRules`, so re-pointing its body leaves step 4c GREEN. Control is the state gate.
-(!) **SAB-5 WAS MIS-INSTRUMENTED:** `statement_pin.py` never builds Lean — run it DIRECTLY and
-a deleted field reds 4c **while 4b stays 49/49**. Owed: a BUILD-SURVIVING mutation for 4c.
+(nav) **`P3` IS LEAN WORK AFTER ALL — this banner said the opposite until 2026-09-03.** The
+write path was never re-pointed: `LeafRules.lean:246 writeRulesRaw` still says `No caller yet`
+and `Cascade.lean:175` still folds `rewriteClosure`. 4c-ii re-pointed the PROOF-side shadow.
+Measured: `Cascade.lean:175` + one import = **4 errors, 1 file** — a FIRST WAVE, not a cone.
+(!) **NO BLOCKING CALL (2026-09-03b).** Row 27 has carried `hql` since 4c-ii; `:66`/`:67`
+derive it at `FullScope.lean:1345-1347`. `docs/latent-gaps.md:132-137` is STALE.
+(!) **THE `0`/`265` CRITERION IS MET BY A TWO-LINE DELETION THAT PROVES NOTHING.** Deleting
+`extractor.py:236-237` also reds the state gate — `19 failed, 37 passed`. Control is
+`test_conformance_state.py`; ledger **76 / 189** of 498. PROJECTION id `P6`, not board row.
+(!) **§11.13 (z): THE DEFINITION PIN MISSES DOT-NOTATION CALLS** — re-pointing
+`writeLoggedRules`'s body leaves step 4c GREEN. **(aa):** `git checkout --` can drop every
+tile verdict while `git status` is clean — ask `gate_status.py`, never `git status`.

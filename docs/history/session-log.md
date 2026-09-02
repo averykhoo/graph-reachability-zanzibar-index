@@ -25,6 +25,51 @@ from here.
 
 ---
 
+## 2026-09-03b — the `hql` blocker was already discharged, and the write-path re-point is one line plus an import
+
+rows: `P3`
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-03b`.
+
+lint: `task lint: clean (12 checks, 156 task file(s) parsed)`
+read: board + HANDOFF
+
+**This entry refutes the first `Still owed:` bullet of `2026-09-03`, immediately below.**
+That entry — and the banner and board edits it made — said `P3` was blocked on a human call
+about adding the `hql` guard to `graph_correct`. It is not. `headline_statements.txt:27`
+already carries `(hql : publicOfLeaf S q.object.type q.relation = none)`; **4c-ii added it
+on 2026-09-02d**, as that session's own banner records ("statements 49/49, `graph_correct`
+gains `hql`"). The other two unfenced rows, `:66`/`:67`, pin `q.relation = "approver"` and
+DERIVE the guard in their proofs (`FullScope.lean:1345-1347`, via `fence_not_identity` and
+`checkPublic_of_not_leaf`) — structurally, since `publicOfLeaf` requires a dotted name and
+`"approver"` has none. `:52 unfenced_grants` is a concrete `= true` witness and is meant to
+stay unguarded. So `docs/latent-gaps.md:132-137` is stale: it describes the pre-4c-ii world.
+
+⚠ **The mechanism is the lesson.** A subagent synthesizer asserted "I confirmed
+`headline_statements.txt:27` carries no `hql` binder today"; it was taken at face value and
+escalated to the user as a decision. `sed -n '27p'` refutes it in two seconds. This is
+`CLAUDE.md`'s "delegation does not transfer judgement" hitting the exact case it names — a
+claim headed for a user-facing decision, unverified first-hand. No rule needs changing.
+
+**The re-point, measured on a scratch branch and reverted:** changing `Cascade.lean:175` to
+fold `rewriteClosureL S (rawWriteTuples S t)` and adding
+`import ZanzibarProofs.GraphIndex.LeafRules` builds to **4 errors, all in `Cascade.lean`
+(:237, :240, :248, :250)** — one lemma family (`EvalEq` transfer + a watermark `rfl`/`simp`
+pair). `writeLoggedOne` needs no edit at all: `Leaf.lean:762 rawWriteTuples` re-addresses
+the tuple's relation to the leaf name, so the leaf node is already what gets materialized.
+Both the session's starting plan and `LeafRules.lean:242-245`'s own banner over-specify this
+step. ⚠ **4 is a FIRST WAVE, not a cone size** — nothing downstream of `Cascade` type-checked,
+because it cannot until `Cascade` does. Quoting it as the cost would be the house sizing error.
+
+**Still owed:**
+* **The re-point's actual proof repair**, and a real measurement of the cone past
+  `Cascade.lean`. No human call blocks it.
+* **`docs/latent-gaps.md:132-137` is stale and still says otherwise** — it should be retired
+  or re-scoped, and it is the document a future session would trust.
+* Everything under `2026-09-03`'s `Still owed:` except its first bullet: SAB-5's
+  build-surviving mutation (the ranked candidate is still unverified) and trap (z)'s fix.
+
 ## 2026-09-03 — SAB-5 was mis-instrumented, not unobservable; and the `P6` remainder is NOT a Python-side commit
 
 rows: `P3`
