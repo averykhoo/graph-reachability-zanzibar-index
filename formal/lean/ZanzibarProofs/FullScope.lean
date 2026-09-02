@@ -390,12 +390,13 @@ theorem graph_correct {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hA : GraphAdmission S T) (hF : W4Fragment S T)
     (h : ReachedBy σ S T) (hq : Drained S σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
-    (hqo : q.object.name ≠ STAR) :
+    (hqo : q.object.name ≠ STAR)
+    (hql : publicOfLeaf S q.object.type q.relation = none) :
     GraphModel.check σ q = sem S T q :=
   graph_correct_w3d2E_d q hA.wf hA.ttuDirect hA.nodup hA.ranked hA.storeValid
-    hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hF.term
+    hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.computedRefsNotLeaf hF.term
     hF.computedOrDirect hF.directArmsBare hF.directArmsConcrete
-    hF.computedOnlyOperands hF.twoStrata hF.wsBare hF.noUnionDirects h hq hqs hqo
+    hF.computedOnlyOperands hF.twoStrata hF.wsBare hF.noUnionDirects h hq hqs hqo hql
 
 /-- **T2b-public (`graph_correct_public`), full W4 scope — the PUBLIC read equals the
     spec, with NO leaf-name guard on the caller.**
@@ -442,7 +443,16 @@ theorem graph_correct_public {S : Schema} {T : Store} {σ : GraphState} (q : Que
     rw [hsch] at hsome
     exact (semAux_undeclared S q.subject T q
       (not_mem_keys_of_publicOfLeaf_isSome hA.wf hsome) _ _).symm
-  · exact graph_correct q hA hF h hq hqs hqo
+  · -- The fence's NEGATIVE branch discharges `graph_correct`'s new `hql` in place, so
+    -- this row stays byte-identical and rows 30/31/32 + the `Exec` rows gain nothing.
+    -- Name-free on purpose: `Option.not_isSome_iff_eq_none` does not exist in this tree.
+    rename_i hnone
+    rw [hsch] at hnone
+    have hql : publicOfLeaf S q.object.type q.relation = none := by
+      cases hpl : publicOfLeaf S q.object.type q.relation with
+      | none => rfl
+      | some v => rw [hpl] at hnone; exact absurd rfl hnone
+    exact graph_correct q hA hF h hq hqs hqo hql
 
 /-- **T3 (`backend_equivalence`), full W4 scope.** The set engine and the graph
     index agree — by transitivity through `sem` (T1 ∘ T2b). The whole point of the
@@ -526,7 +536,7 @@ theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
     (h : ReachedBy σ S T) :
     Inv S σ :=
   reachedByW3d2E_inv h hA.wf hA.ttuDirect hA.nodup hA.ranked hA.matchDecl
-    hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hN.computedOnly hF.twoStrata hF.wsBare hN.storeValid hF.bareStar
+    hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.computedRefsNotLeaf hN.computedOnly hF.twoStrata hF.wsBare hN.storeValid hF.bareStar
     hF.ttuStarFree hF.term
 
 /-! ## The W2 subsumption — untainted schemas sit inside the full scope
@@ -1276,8 +1286,14 @@ theorem correct_applies {σ : GraphState} (q : Query)
     rw [hsch] at hsome
     exact (semAux_undeclared Sd q.subject Td q
       (not_mem_keys_of_publicOfLeaf_isSome hWF hsome) _ _).symm
-  · exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hterm
-      hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo
+  · rename_i hnone
+    rw [hsch] at hnone
+    have hql : publicOfLeaf Sd q.object.type q.relation = none := by
+      cases hpl : publicOfLeaf Sd q.object.type q.relation with
+      | none => rfl
+      | some v => rw [hpl] at hnone; exact absurd rfl hnone
+    exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) (by decide) hterm
+      hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo hql
 
 /-- **CONDITION-2 INSTRUMENT (2026-09-01): the migrated row still exercises the CORE,
     not just the fence.**
@@ -1405,7 +1421,7 @@ theorem coverage_applies {σ : GraphState} {on : String} (hqo : on ≠ STAR)
       List.mem_cons, List.not_mem_nil, or_false] at hr'
     subst hr'
     exact absurd hd' (by decide)
-  exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hterm
+  exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) (by decide) hterm
     hCD hDAB hWSbare h hlk hder (hCD _ _ _ hlk hder) (hDAB _ _ _ hlk hder) hqo
     (hCOop _ _ _ hlk hder) (hLU2 _ _ _ hlk hder) hsettledOps
 
@@ -1475,7 +1491,7 @@ theorem toC_applies {σ : GraphState} (h : ReachedByW3d2E σ Sd Td) :
     ReachedByW3d2C σ Sd Td := by
   obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
   obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, _, hBS, hTS, hterm⟩ := fragment
-  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hCD hDAB directArmsConcrete
+  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) (by decide) hCD hDAB directArmsConcrete
     hCOop hLU2 hWSbare hSV hBS hTS hterm
 
 /-- **The leg-4 E-chain FINAL is jointly dischargeable at the Direct-arm pair**:
@@ -1517,8 +1533,14 @@ theorem w3d2E_correct_applies {σ : GraphState} (q : Query)
     rw [hsch] at hsome
     exact (semAux_undeclared Sd q.subject Td q
       (not_mem_keys_of_publicOfLeaf_isSome hWF hsome) _ _).symm
-  · exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) hterm hCD hDAB
-      directArmsConcrete hCOop hLU2 hWSbare hNoUD h hq hqs hqo
+  · rename_i hnone
+    rw [hsch] at hnone
+    have hql : publicOfLeaf Sd q.object.type q.relation = none := by
+      cases hpl : publicOfLeaf Sd q.object.type q.relation with
+      | none => rfl
+      | some v => rw [hpl] at hnone; exact absurd rfl hnone
+    exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) (by decide) hterm hCD hDAB
+      directArmsConcrete hCOop hLU2 hWSbare hNoUD h hq hqs hqo hql
 
 /-- **CONDITION-2 INSTRUMENT for the E-chain row** — the twin of
     `correct_applies_nonfence`, and it is a separate declaration on purpose. Row 56 runs

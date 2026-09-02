@@ -1646,8 +1646,12 @@ namespace Zanzibar
 -- (filtered σ0; the full-store `_d` pair is the 2026-07-20b kill). The `remove` case is
 -- unchanged in strength: `ReachedByW3d2E.remove` carries PLAIN `StoreValidRules` for its
 -- pre-store, converted by `storeValidRulesD_of_storeValidRules_directArmsBare`.
--- The audited `reachedByW3d2E_toC` and `graph_correct_w3d2E` are now BYTE-IDENTICAL wrappers
+-- The audited `reachedByW3d2E_toC` and `graph_correct_w3d2E` were BYTE-IDENTICAL wrappers
 -- over these cores (verified against HEAD), deriving every widened carry from `hCO`/`hSV`.
+-- ⚠ **4c-ii (2026-09-02d) broke that, deliberately and asymmetrically**: both gained
+-- `ComputedRefsNotLeaf S`, but only `graph_correct_w3d2E` gained the query guard
+-- `hql : publicOfLeaf S q.object.type q.relation = none` — `reachedByW3d2E_toC` has no
+-- query to guard. The two are no longer byte-identical and must not be re-merged.
 -- ★ NON-VACUITY, AGAIN NOT THE TYPE CHECKER, and leg 4 is a far bigger packaging than leg 3 —
 -- so it gets its own instruments rather than riding leg 3's: **`W4WitnessDirect.toC_applies`**
 -- and **`W4WitnessDirect.w3d2E_correct_applies`** instantiate both cores at the real compiled

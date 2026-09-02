@@ -15,6 +15,183 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-02d (**4c-ii IS LANDED — `UntaintedShadow` is re-pointed at `DerNode ∨ LeafNode`, both premises threaded and discharged, ONE statement-pin row moved**)
+
+**Task taken:** `P3`, the atomic co-landing the board has carried as `NOW` since
+2026-08-21b. It is done. `UntaintedShadow` now abbreviates
+`ShadowOver (fun k => DerNode S k ∨ LeafNode S k)`; `shadow_graphRec_agree` carries the
+`hnl` premise; all 14 call sites supply it; `graph_correct` carries the query guard.
+
+**Green anchor (§11.12 rule 1):** `ce0e582`, `gate_status.py` = COVERED on this tree at
+session start (all ten phases, ~1h old). The cone WAS opened this time — deliberately,
+and it closed in the same session, so the exit was not needed.
+
+### 0. Instrument control FIRST — trap (u), reproduced on purpose
+
+Before trusting any `sorry` count, a deliberate `theorem probe_sorry_instrument_check :
+True := by sorry` was appended to `Scratch4cii.lean` and built. Observed:
+
+    INSTRUMENT: rc=0  wildcard-grep=1  literal-single-quote-grep=0  errors=0
+    warning: ...Scratch4cii.lean:955:8: declaration uses `sorry`
+
+So `grep "declaration uses 'sorry'"` returns **0 on a tree that genuinely contains one**
+— trap **(u)** live, not merely recorded. Every `sorry` count below uses the `.` wildcard
+form. Probe reverted; `git status --porcelain` clean before work started.
+
+### 1. The sizing the previous session published is CONFIRMED — 62 + 13 across ELEVEN files
+
+`2026-09-02c` computed the cone with a script and could not build it. This session built
+it. The `hcr` thread is **exactly 62 declarations**, and the per-file split is exactly the
+one that session predicted:
+
+| file | decls | file | decls |
+|---|---|---|---|
+| `CascadeStable` | 3 | `CascadeStrataResettle` | 11 |
+| `CascadeSettle` | 5 | `CascadeStrataEnum` | 8 |
+| `CascadeInv` | 2 | `CascadeStrataEdge` | 3 |
+| `CascadeEnum` | 6 | `CascadeStrataAssemble` | 4 |
+| `CascadeStrataSettle` | 14 | `Equiv` | 6 |
+
+`FullScope` contributes **0 signature changes** — it terminates the thread instead
+(`hA.computedRefsNotLeaf` at `graph_correct` / `graph_reached_inv`, `by decide` at the
+four satisfiability witnesses). 3+5+2+6+14+11+8+3+4+6 = **62**. The `hql` thread is **13**:
+the six `graph_correct_w3d*` declarations, the six `Equiv` milestones, and `graph_correct`.
+
+**And the 14-SITE census was right all along.** (q)/(v)/(t) were a dispute about the
+COUNTING UNIT, not the tree: 14 argument-supply sites, 12 host declarations, 62 signature
+changes — three different true numbers for one cone. The sites resolved 11 membership-served
++ 3 query-served, and `graph_correct_w3d2`/`_d` each host ONE OF EACH, which is why the two
+halves were not separable.
+
+### 2. Corrections to the plan the previous session left (`.scratch/p3_plan.md`)
+
+All four were caught by the build, none changed the design:
+
+* **Arrow-form declarations cost more token sites than the plan enumerated.** It listed
+  motive `intro`s only; the recursive `ih` applications need the token too —
+  `CascadeInv` had 2 unlisted (`:483`/`:538`), and each `CascadeStrataResettle` arrow-form
+  declaration has 4 intros **plus 6 `ih` sites**, 20 tokens across the two rather than 8.
+* **`CascadeStrataEdge` is DOWNSTREAM of `CascadeStrataAssemble`**, not upstream: it
+  imports `CascadeStrataInv`. The plan's build order had the pair backwards.
+* **The tree mixes line-ending conventions per file** — `CascadeStrataAssemble`,
+  `CascadeStrataEdge`, `Equiv`, `FullScope` are LF; the six `Cascade*` others are CRLF.
+  A blind CRLF insertion left mixed endings in one file (fixed; `git diff --numstat`
+  equals `git diff --ignore-cr-at-eol --numstat` for all 13 files, so every changed line
+  is a real content change).
+* ⚠ **A `perl -i` pass that emits a WIDE CHARACTER re-encodes the whole file.** Inserting
+  `ComputedRefsNotLeaf S →` via `"\x{2192}"` switched perl's output layer to UTF-8 and
+  double-encoded every existing UTF-8 byte in `CascadeStrataResettle.lean`
+  (`e2 86 92` → `c3 a2 c2 86 c2 92`), showing up as `13 insertions / 2 deletions` where
+  11/0 was expected. Reverted and redone with the Edit tool for the two non-ASCII lines.
+  **The check that caught it was `git diff --numstat`, not the build** — Lean would have
+  compiled a mojibake comment happily. Every file was then audited for the byte sequence.
+
+### 3. The two claims nobody had built, both closed
+
+* **The `.isSome`-to-`= none` bridge (plan seq 20) works as written.** Name-free on
+  purpose (`Option.not_isSome_iff_eq_none` does not exist in this tree); the
+  `cases hpl … | some v => rw [hpl] at hnone; exact absurd rfl hnone` form compiled first
+  attempt at all three fence sites (`graph_correct_public`, `correct_applies`,
+  `w3d2E_correct_applies`), so rows 28/46/56 stay byte-identical.
+* **`ComputedRefsNotLeaf Sx/Sy/Sd := by decide` reduces.** Landed `2026-09-02c`;
+  re-confirmed here at the four `GraphAdmission` construction sites and the four witness
+  discharges. No fallback lemma was needed.
+
+### 4. Pin movement — predicted exactly, and the pin was run BEFORE regenerating
+
+`verify.sh lean` was run against the finished tree with the OLD pins, as the control on
+the pin itself. It failed with **exactly one discrepancy and no others**:
+
+    FAIL: the STATEMENT of Zanzibar.graph_correct changed (…/FullScope.lean):
+        pinned: … (hqo : q.object.name ≠ STAR) : GraphModel.check σ q = sem S T q
+        source: … (hqo : q.object.name ≠ STAR) (hql : publicOfLeaf S q.object.type
+                q.relation = none) : GraphModel.check σ q = sem S T q
+      1 headline theorem statement(s) differ from formal/headline_statements.txt.
+
+Step 4c (**definitions**) did NOT fire, and `audits=585 pinned=584` matched the anchor.
+After deliberate regeneration: `headline_statements.txt` **49/49, one row changed**;
+`headline_definitions.txt` **165, byte-identical**; `audited_theorems.txt` untouched.
+That is the whole pin cost of 4c-ii.
+
+⚠ **And that is also the exposure.** `audited_theorems.txt` pins NAMES only, so roughly
+seventy audited theorems gained a hypothesis — a strict weakening — with the identity pin
+green and the axiom sets unchanged. The six `Equiv` milestones
+(`backend_equivalence_w3d{,2}`, `exclusion_effective_w3d{,2}`, `no_ghost_grant_w3d{,2}`)
+now spell out BOTH new premises and no mechanical check reports it. That is the residual
+already on record from `2026-09-02` §7, one layer wider; it is a separate decision.
+
+### 5. THE FLIP IS INVISIBLE TO EVERY PIN
+
+Case-insensitive grep over both headline files returns ZERO matches for `UntaintedShadow`,
+`ShadowOver`, `LeafNode`, `DerNode` or `shadow`, and the definition closure stops before
+`CascadeStable.lean::UntaintedShadow`. So re-pointing that one line changed what the
+internal development MEANS while every pin stayed green. **No mechanical check says it** —
+the only control is the flip probe, which is why SAB-1 below is not optional.
+
+### 6. Sabotages — three run, literal output, each with its control
+
+* **SAB-1 — the flip is load-bearing.** Reverted `CascadeStable.lean::UntaintedShadow` to
+  `ShadowOver (DerNode S)` and changed nothing else. `rc=1`, and the first error is:
+
+        error: …/CascadeStable.lean:1625:67: Application type mismatch: The argument
+          hsubjW
+        has type
+          ∀ u ∈ rewriteClosure S t, ¬(DerNode S (subjNode u.subject) ∨ LeafNode S (…))
+        but is expected to have type
+          ∀ u ∈ rewriteClosure S t, ¬DerNode S (subjNode u.subject)
+        in the application
+          untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubjW
+
+  4 errors, all in `CascadeStable` — a LOWER bound (trap (k): it gates ~20 modules).
+  **CONTROL held:** the three self-adapting `first | … | …` sites stayed GREEN, which is
+  exactly why they are not evidence and this probe is.
+* **SAB-2 — `hnl` carries the `LeafNode` content.** The narrowest *plausible* weakening is
+  not "delete the premise" but "the binder was added and carries nothing": narrowed `hnl`
+  to the already-derivable `¬ DerNode`. Red at **`:1653`, the line the plan predicted**:
+
+        error: …/CascadeStable.lean:1653:16: Application type mismatch: The argument
+          hleaf
+        has type   LeafNode S (objNode { type := dt', name := on' } r')
+        but is expected to have type   DerNode S (…)
+        in the application   hnl hleaf
+
+  plus `:1720`, the first supplying site.
+* **SAB-4 — the two routes are genuinely different.** Inside `graph_correct_w3d2_d` ONLY,
+  mis-typed the query guard as a hypothesis already in scope (`on ≠ STAR := hqo`).
+  **EXACTLY ONE error**, at that declaration's QUERY site:
+
+        error: …/CascadeStrataResettle.lean:2713:47: Application type mismatch: The argument
+          hql
+        has type   on ≠ STAR
+        but is expected to have type   publicOfLeaf S dt R = none
+        in the application   not_leafNode_of_publicOfLeaf_none hql
+
+  **CONTROL held:** the MEMBERSHIP site at `:2665` in the SAME declaration stayed green.
+  This is what makes the 11+3 split a fact rather than bookkeeping.
+
+**NOT run, and why — recorded rather than skipped silently.** SAB-3 (predicate content),
+SAB-6 (the widened instrument) and SAB-7 (the membership carry) all target machinery that
+landed in earlier sessions with their own sabotage evidence in place
+(`2026-09-01c`/`d`, `2026-09-02c`); re-running them here would re-test a control, not this
+landing. **SAB-5 is the real omission**: its load-bearing half is *"the definition pin must
+go red when a field is deleted from a pinned structure"*, and it cannot be observed as
+specified — deleting `GraphAdmission.computedRefsNotLeaf` breaks the BUILD at
+`FullScope.lean`, so `verify.sh lean` never reaches step 4c. Partial evidence exists
+either way: step **4b** was watched firing correctly this session, and `2026-09-02c`
+watched step **4c** fire on this very field. Filed as owed work in the session-log entry.
+
+### 7. The flip's measured cost
+
+Two `have hsubj` deletions (2 lines each) + four `hsubjW` argument re-points, across
+**2 files**, plus the four wrapper deletions inside `shadow_graphRec_agree` that seq 22
+had added one step earlier. **No unlisted `ShadowOver` constructor was narrow** — the
+flip probe's error set never named one, which is the positive result that retires the
+"all 20 constructors are pre-widened" claim from report to kernel. The eight
+`first | <post-flip> | <today>` alternations needed no edit at all; post-flip the FIRST
+alternative fires and the source is byte-identical.
+
+---
+
 ## Session 2026-09-02c (**the co-landing's sizing is a LOWER BOUND — 62+13 declarations across ELEVEN files, not 12/6 — and "nothing smaller is green-stoppable" is refuted by kernel: TWO additive prerequisites landed**)
 
 **Task taken:** `P3`, user-directed "keep working on p3". The board's `NOW` was the atomic

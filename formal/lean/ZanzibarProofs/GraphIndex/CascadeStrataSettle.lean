@@ -733,12 +733,10 @@ theorem reachedByW3d2_shadow {σ : GraphState} {S : Schema} {T : Store}
         simpa [subjNode_pred, objNode_pred] using hp
       · exact rewriteClosure_subject_not_leafNode hQ
           (noLeafStoreSubjects_of_storeValidRules hDR hSV t List.mem_cons_self) hu hleaf
-    have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) :=
-      fun u hu hd => hsubjW u hu (Or.inl hd)
     exact ⟨σ0.writeRules S t,
       ReachedByRulesAdmitted.step t h0
-        (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
-      untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
+        (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubjW hadm),
+      untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubjW⟩
   | @remove σp S T t hadm _ hSVT _ _ htermT hprev ih =>
     intro hNK hCO _ _ hQ hDR
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSVT htermT hQ hDR
@@ -1345,12 +1343,10 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
           simpa [subjNode_pred, objNode_pred] using hp
         · exact rewriteClosure_subject_not_leafNode hQ
             (noLeafStoreSubjects_of_storeValidRulesD hDR hSV t List.mem_cons_self) hu hleaf
-      have hsubj : ∀ u ∈ rewriteClosure S t, ¬ DerNode S (subjNode u.subject) :=
-        fun u hu hd' => hsubjW u hu (Or.inl hd')
       exact ⟨σ0.writeRules S t,
         ReachedByRulesAdmitted.step t h0
-          (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubj hadm),
-        untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubj⟩
+          (untaintedShadow_foldAdmits (rewriteClosure S t) σp σ0 hsh hsubjW hadm),
+        untaintedShadow_writeLeg (rewriteClosure S t) σp σ0 hsh hsubjW⟩
   | @remove σp S T t hadm _ hSVT hBST _ htermT hprev ih =>
     intro hNK hCO hDAB _ _ hWF _ hQ hDR
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hDAB
@@ -1648,6 +1644,7 @@ theorem checkFnR_eq_sem_settled {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hcr : ComputedRefsNotLeaf S)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (hσS : σ.schema = S)
     {s : SubjectRef} {dt on R : String} {e : Expr}
@@ -1670,9 +1667,14 @@ theorem checkFnR_eq_sem_settled {S : Schema} {T : Store} {σ σ0 : GraphState}
     have hstep : GraphModel.graphRecR σ s dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩ := by
       cases hd' : isDerived S (dt, r') with
       | false =>
-        -- untainted operand: routing + the shadow + the W2 base equation
+        -- untainted operand: routing + the shadow + the W2 base equation.
+        -- The `have` is TYPED on purpose: the `rw` below elaborates with no expected
+        -- type, and `notLeafNode_of_computedRef`'s `{dt on}` are fixed by nothing in
+        -- its explicit arguments (`hlk` pins only the lookup key).
+        have hnl : ¬ LeafNode S (objNode ⟨dt, on⟩ r') :=
+          notLeafNode_of_computedRef hcr hlk hr'
         rw [GraphModel.graphRecR_eq_graphRec s on (by rw [hσS]; exact hd'),
-          shadow_graphRec_agree hsh s on hd']
+          shadow_graphRec_agree hsh s on hnl hd']
         exact graphRec_base_eq_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch h0
           hs hon r' hd'
       | true =>
@@ -1716,6 +1718,7 @@ theorem checkFnR_eq_sem_settled_d {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
+    (hcr : ComputedRefsNotLeaf S)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (hσS : σ.schema = S)
@@ -1739,8 +1742,10 @@ theorem checkFnR_eq_sem_settled_d {S : Schema} {T : Store} {σ σ0 : GraphState}
     have hstep : GraphModel.graphRecR σ s dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩ := by
       cases hd' : isDerived S (dt, r') with
       | false =>
+        have hnl : ¬ LeafNode S (objNode ⟨dt, on⟩ r') :=
+          notLeafNode_of_computedRef hcr hlk hr'
         rw [GraphModel.graphRecR_eq_graphRec s on (by rw [hσS]; exact hd'),
-          shadow_graphRec_agree hsh s on hd']
+          shadow_graphRec_agree hsh s on hnl hd']
         exact graphRec_base_eq_bs_d hWF hTT hNK hR hSV hBS hTS hMatch hterm h0 hs hon r' hd'
       | true =>
         obtain ⟨hset', hcomp', hcollapse'⟩ := hops r' hr' hd'
@@ -1860,6 +1865,7 @@ theorem checkFnR_eq_sem_settled_d_filt {S : Schema} {T : Store} {σ σ0 : GraphS
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hcr : ComputedRefsNotLeaf S)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h0 : ReachedByRulesAdmitted σ0 S
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
@@ -1906,8 +1912,10 @@ theorem checkFnR_eq_sem_settled_d_filt {S : Schema} {T : Store} {σ σ0 : GraphS
     have hstep : GraphModel.graphRecR σ s dt on r' = sem S T ⟨s, r', ⟨dt, on⟩⟩ := by
       cases hd' : isDerived S (dt, r') with
       | false =>
+        have hnl : ¬ LeafNode S (objNode ⟨dt, on⟩ r') :=
+          notLeafNode_of_computedRef hcr hlk hr'
         rw [GraphModel.graphRecR_eq_graphRec s on (by rw [hσS]; exact hd'),
-          shadow_graphRec_agree hsh s on hd',
+          shadow_graphRec_agree hsh s on hnl hd',
           graphRec_base_eq_bs_unt hWF hTT hNK hR hSVU hBSU hTSU hStoreUntU hMatch h0
             hs hon r' hd']
         exact (sem_untaintedFilter hNK hDecl hBS.noUsersetStar hTS ⟨s, r', ⟨dt, on⟩⟩ hd').symm
@@ -2290,6 +2298,7 @@ theorem writeLeg_sem_stable_sh {σ σ0 σ0' : GraphState} {S : Schema} {T : Stor
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (hcr : ComputedRefsNotLeaf S)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (h0' : ReachedByRulesAdmitted σ0' S (t :: T))
     (hsh' : UntaintedShadow S (σ.writeLoggedRules S t) σ0')
@@ -2311,13 +2320,13 @@ theorem writeLeg_sem_stable_sh {σ σ0 σ0' : GraphState} {S : Schema} {T : Stor
       fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.writeLoggedRules S t).checkFn (t :: T) s dt on R e :=
-        (checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
+        (checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hcr
           h0' hsh' hlk hco hleafUnt hs hon).symm
     _ = σ.checkFn (t :: T) s dt on R e :=
         writeLeg_checkFn_stable (t :: T) hclσ htp' hlk hder hco hon hunmapped s
     _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3d hWF hTT hNK hR hSVw hBSw hTSw hCO hMatch hStrat htermw
+        checkFn_eq_sem_w3d hWF hTT hNK hR hSVw hBSw hTSw hCO hMatch hStrat htermw hcr
           h0 hsh hlk hco hleafUnt hs hon
 
 /-- **`SettledKey` transports across a write leg given `sem` stability** — the
@@ -2416,6 +2425,7 @@ theorem writeLeg_sem_stable2 {σ : GraphState} {S : Schema} {T : Store} {t : Tup
     (hTS : TtuStarFree S (t :: T))
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -2476,7 +2486,7 @@ theorem writeLeg_sem_stable2 {σ : GraphState} {S : Schema} {T : Store} {t : Tup
     have hsem_op : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
         sem S (t :: T) ⟨x, r', ⟨dt, on⟩⟩ = sem S T ⟨x, r', ⟨dt, on⟩⟩ :=
       fun x hx => writeLeg_sem_stable_sh hWF hTT hNK hR hSV hBS hTS hCO hMatch
-        hStrat hterm h0 hsh h0' hsh' hclσ htp' hlk' hd' hco' hleafUnt'
+        hStrat hterm hcr h0 hsh h0' hsh' hclσ htp' hlk' hd' hco' hleafUnt'
         (hopsUnmapped r' hr' hd') hx hon
     obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
     exact ⟨settledKey_writeLeg_sem hNK hSV hCO hWSbare hlk' hd' hsem_op hset,
@@ -2496,7 +2506,7 @@ theorem writeLeg_sem_stable2 {σ : GraphState} {S : Schema} {T : Store} {t : Tup
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.writeLoggedRules S t).checkFnR (t :: T) s dt on R e :=
         (checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hMatch hStrat
-          hterm hCO hWSbare h0' hsh' hσ'S hlk hder hco hLU2e hops' hs hon).symm
+          hterm hCO hWSbare hcr h0' hsh' hσ'S hlk hder hco hLU2e hops' hs hon).symm
     _ = (σ.writeLoggedRules S t).checkFnR T s dt on R e :=
         checkFnR_store_irrel _ _ s dt on R hco
     _ = σ.checkFnR T s dt on R e :=
@@ -2504,7 +2514,7 @@ theorem writeLeg_sem_stable2 {σ : GraphState} {S : Schema} {T : Store} {t : Tup
           hcolOps hon hunmapped s
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
         checkFnR_eq_sem_settled hWF hTT hNK hR hSVw hBSw hTSw hMatch hStrat
-          htermw hCO hWSbare h0 hsh hσS hlk hder hco hLU2e hops hs hon
+          htermw hCO hWSbare hcr h0 hsh hσS hlk hder hco hLU2e hops hs hon
 
 /-! ## Batch groundwork for the stratum-staged invariant
 
@@ -2898,6 +2908,7 @@ theorem removeLeg_sem_stable_sh {σ σ0 σ0' : GraphState} {S : Schema} {T : Sto
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hcr : ComputedRefsNotLeaf S)
     (ht : t ∈ T)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (h0' : ReachedByRulesAdmitted σ0' S (T.erase t))
@@ -2920,13 +2931,13 @@ theorem removeLeg_sem_stable_sh {σ σ0 σ0' : GraphState} {S : Schema} {T : Sto
       fun t' ht' => (hterm dt R hd).2 t' (List.mem_of_mem_erase ht')⟩
   calc sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.removeLoggedRules S t).checkFn (T.erase t) s dt on R e :=
-        (checkFn_eq_sem_w3d hWF hTT hNK hR hSVe hBSe hTSe hCO hMatch hStrat hterme
+        (checkFn_eq_sem_w3d hWF hTT hNK hR hSVe hBSe hTSe hCO hMatch hStrat hterme hcr
           h0' hsh' hlk hco hleafUnt hs hon).symm
     _ = σ.checkFn (T.erase t) s dt on R e :=
         removeLeg_checkFn_stable (T.erase t) hclσ htp hlk hder hco hon hunmapped s
     _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
+        checkFn_eq_sem_w3d hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hcr
           h0 hsh hlk hco hleafUnt hs hon
 
 /-- **`SettledKey` transports across a retraction leg given `sem` stability** (dual of
@@ -3026,6 +3037,7 @@ theorem removeLeg_sem_stable {σ σ0 σ0' : GraphState} {S : Schema} {T : Store}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hcr : ComputedRefsNotLeaf S)
     (h : ReachedByW3d2 σ S T) (ht : t ∈ T)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
     (h0' : ReachedByRulesAdmitted σ0' S (T.erase t))
@@ -3039,7 +3051,7 @@ theorem removeLeg_sem_stable {σ σ0 σ0' : GraphState} {S : Schema} {T : Store}
     sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ := by
   have hsh' : UntaintedShadow S (σ.removeLoggedRules S t) σ0' :=
     untaintedShadow_removeLeg h hsh h0 ht h0' hsub hSV hCO
-  exact removeLeg_sem_stable_sh hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm ht
+  exact removeLeg_sem_stable_sh hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hcr ht
     h0 hsh h0' hsh' (reachedByW3d2_edgesClosed h)
     (reachedByW3d2_edges_target_plain h hBS) hlk hder hco hleafUnt hunmapped hs hon
 
@@ -3052,6 +3064,7 @@ theorem settledKey_removeLeg {σ σ0 σ0' : GraphState} {S : Schema} {T : Store}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hcr : ComputedRefsNotLeaf S)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d2 σ S T) (ht : t ∈ T)
     (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
@@ -3067,7 +3080,7 @@ theorem settledKey_removeLeg {σ σ0 σ0' : GraphState} {S : Schema} {T : Store}
     SettledKey S (T.erase t) (σ.removeLoggedRules S t) dt on R := by
   have hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
       sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-    fun s hs => removeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
+    fun s hs => removeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm hcr
       h ht h0 hsh h0' hsub hlk hder hco hleafUnt hunmapped hs hon
   exact settledKey_removeLeg_sem hNK hSV ht hCO hWSbare hlk hder hsem hset
 
@@ -3082,6 +3095,7 @@ theorem removeLeg_sem_stable2 {σ σ0 σ0' : GraphState} {S : Schema} {T : Store
     (hSV : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hcr : ComputedRefsNotLeaf S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -3145,7 +3159,7 @@ theorem removeLeg_sem_stable2 {σ σ0 σ0' : GraphState} {S : Schema} {T : Store
     have hsem_op : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
         sem S (T.erase t) ⟨x, r', ⟨dt, on⟩⟩ = sem S T ⟨x, r', ⟨dt, on⟩⟩ :=
       fun x hx => removeLeg_sem_stable_sh hWF hTT hNK hR hSV hBS hTS hCO hMatch
-        hStrat hterm ht h0 hsh h0' hsh' hclσ htp hlk' hd' hco' hleafUnt'
+        hStrat hterm hcr ht h0 hsh h0' hsh' hclσ htp hlk' hd' hco' hleafUnt'
         (hopsUnmapped r' hr' hd') hx hon
     obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
     exact ⟨settledKey_removeLeg_sem hNK hSV ht hCO hWSbare hlk' hd' hsem_op hset,
@@ -3165,7 +3179,7 @@ theorem removeLeg_sem_stable2 {σ σ0 σ0' : GraphState} {S : Schema} {T : Store
   calc sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.removeLoggedRules S t).checkFnR (T.erase t) s dt on R e :=
         (checkFnR_eq_sem_settled hWF hTT hNK hR hSVe hBSe hTSe hMatch hStrat
-          hterme hCO hWSbare h0' hsh' hσ'S hlk hder hco hLU2e hops' hs hon).symm
+          hterme hCO hWSbare hcr h0' hsh' hσ'S hlk hder hco hLU2e hops' hs hon).symm
     _ = (σ.removeLoggedRules S t).checkFnR T s dt on R e :=
         checkFnR_store_irrel _ _ s dt on R hco
     _ = σ.checkFnR T s dt on R e :=
@@ -3173,7 +3187,7 @@ theorem removeLeg_sem_stable2 {σ σ0 σ0' : GraphState} {S : Schema} {T : Store
           hcolOps hon hunmapped s
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
         checkFnR_eq_sem_settled hWF hTT hNK hR hSV hBS hTS hMatch hStrat
-          hterm hCO hWSbare h0 hsh hσS hlk hder hco hLU2e hops hs hon
+          hterm hCO hWSbare hcr h0 hsh hσS hlk hder hco hLU2e hops hs hon
 
 /-! ## Direct-arm settledness-transport groundwork (leg 5d, steps 2–3)
 
@@ -4006,6 +4020,7 @@ theorem checkFn_eq_sem_w3d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
     (hSV : StoreValidRulesD S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (h0 : ReachedByRulesAdmitted σ0 S
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
@@ -4036,8 +4051,8 @@ theorem checkFn_eq_sem_w3d_filt {S : Schema} {T : Store} {σ σ0 : GraphState}
       fun t ht => (hterm dt' R' hd).2 t (List.mem_filter.mp ht).1⟩
   calc σ.checkFn T s dt on R e
       = σ0.checkFn T s dt on R e :=
-        checkFn_agree_of_graphRec T s dt on R e hco hleafUnt
-          (fun s' r' _ hr' => shadow_graphRec_agree hsh s' on hr')
+        checkFn_agree_of_graphRec_notLeafNode T s dt on R e hco hcr hlk hleafUnt
+          (fun s' r' hnl hr' => shadow_graphRec_agree hsh s' on hnl hr')
     _ = σ0.checkFn (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation)))
           s dt on R e :=
         checkFn_store_irrel _ _ s dt on R hco
@@ -4061,6 +4076,7 @@ theorem writeLeg_sem_stable_sh_d {σ σ0 σ0' : GraphState} {S : Schema} {T : St
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (hcr : ComputedRefsNotLeaf S)
     (h0 : ReachedByRulesAdmitted σ0 S
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
     (hsh : UntaintedShadow S σ σ0)
@@ -4085,13 +4101,13 @@ theorem writeLeg_sem_stable_sh_d {σ σ0 σ0' : GraphState} {S : Schema} {T : St
       fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.writeLoggedRules S t).checkFn (t :: T) s dt on R e :=
-        (checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+        (checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat hcr hterm
           h0' hsh' hlk hco hleafUnt hs hon).symm
     _ = σ.checkFn (t :: T) s dt on R e :=
         writeLeg_checkFn_stable (t :: T) hclσ htp' hlk hder hco hon hunmapped s
     _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSVw hBSw hTSw hMatch hStrat htermw
+        checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSVw hBSw hTSw hMatch hStrat hcr htermw
           h0 hsh hlk hco hleafUnt hs hon
 
 /-- **Stratum-1 `sem` stability across a retraction leg, filtered-σ0 form** (`_d`
@@ -4102,6 +4118,7 @@ theorem removeLeg_sem_stable_sh_d {σ σ0 σ0' : GraphState} {S : Schema} {T : S
     (hSV : StoreValidRulesD S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hcr : ComputedRefsNotLeaf S)
     (ht : t ∈ T)
     (h0 : ReachedByRulesAdmitted σ0 S
       (T.filter (fun tp => !isDerived S (tp.object.type, tp.relation))))
@@ -4128,13 +4145,13 @@ theorem removeLeg_sem_stable_sh_d {σ σ0 σ0' : GraphState} {S : Schema} {T : S
       fun t' ht' => (hterm dt R hd).2 t' (List.mem_of_mem_erase ht')⟩
   calc sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.removeLoggedRules S t).checkFn (T.erase t) s dt on R e :=
-        (checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSVe hBSe hTSe hMatch hStrat hterme
+        (checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSVe hBSe hTSe hMatch hStrat hcr hterme
           h0' hsh' hlk hco hleafUnt hs hon).symm
     _ = σ.checkFn (T.erase t) s dt on R e :=
         removeLeg_checkFn_stable (T.erase t) hclσ htp hlk hder hco hon hunmapped s
     _ = σ.checkFn T s dt on R e := checkFn_store_irrel _ _ s dt on R hco
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
-        checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
+        checkFn_eq_sem_w3d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat hcr hterm
           h0 hsh hlk hco hleafUnt hs hon
 
 /-! ### Per-key settledness transports, widened admission -/
@@ -4340,6 +4357,7 @@ theorem writeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : T
     (hTS : TtuStarFree S (t :: T))
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -4406,7 +4424,7 @@ theorem writeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : T
     have hsem_op : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
         sem S (t :: T) ⟨x, r', ⟨dt, on⟩⟩ = sem S T ⟨x, r', ⟨dt, on⟩⟩ :=
       fun x hx => writeLeg_sem_stable_sh_d hWF hTT hNK hR hSV hBS hTS hMatch
-        hStrat hterm h0 hsh h0' hsh' hclσ htp' hlk' hd' hco' hleafUnt'
+        hStrat hterm hcr h0 hsh h0' hsh' hclσ htp' hlk' hd' hco' hleafUnt'
         (hopsUnmapped r' hr' hd') hx hon
     obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
     exact ⟨settledKey_writeLeg_sem_d hNK hadm honT hWSbare hd' hon
@@ -4437,7 +4455,7 @@ theorem writeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : T
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.writeLoggedRules S t).checkFnR (t :: T) s dt on R e :=
         (checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSV hBS hTS hMatch hStrat
-          hterm hWSbare h0' hsh' hσ'S hlk hder hcd hba hCOop_e hLU2e hops' hs hon).symm
+          hterm hcr hWSbare h0' hsh' hσ'S hlk hder hcd hba hCOop_e hLU2e hops' hs hon).symm
     _ = (σ.writeLoggedRules S t).checkFnR T s dt on R e :=
         checkFnR_cons_irrel_cd hcd hba hon hneKey
     _ = σ.checkFnR T s dt on R e :=
@@ -4445,7 +4463,7 @@ theorem writeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : T
           hcolOps hon hunmapped hopsUnmapped s
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
         checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSVw hBSw hTSw hMatch hStrat
-          htermw hWSbare h0 hsh hσS hlk hder hcd hba hCOop_e hLU2e hops hs hon
+          htermw hcr hWSbare h0 hsh hσS hlk hder hcd hba hCOop_e hLU2e hops hs hon
 
 /-- **Stratum-2 `sem` stability across a retraction leg, widened admission**
     (`removeLeg_sem_stable2_d`). Carries the `remove` constructor's own guards (the
@@ -4457,6 +4475,7 @@ theorem removeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : 
     (hSVT : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOrDirect e)
@@ -4555,7 +4574,7 @@ theorem removeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : 
     have hsem_op : ∀ x : SubjectRef, (x.name = STAR → x.predicate = BARE) →
         sem S (T.erase t) ⟨x, r', ⟨dt, on⟩⟩ = sem S T ⟨x, r', ⟨dt, on⟩⟩ :=
       fun x hx => removeLeg_sem_stable_sh_d hWF hTT hNK hR hSVD hBS hTS hMatch
-        hStrat hterm ht h0 hsh h0' hsh' hclσ htp hlk' hd' hco' hleafUnt'
+        hStrat hterm hcr ht h0 hsh h0' hsh' hclσ htp hlk' hd' hco' hleafUnt'
         (hopsUnmapped r' hr' hd') hx hon
     obtain ⟨hset, hcomp⟩ := hopsSettled r' hr' hd'
     exact ⟨settledKey_removeLeg_sem_d hNK honT hWSbare hd' hon
@@ -4583,7 +4602,7 @@ theorem removeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : 
   calc sem S (T.erase t) ⟨s, R, ⟨dt, on⟩⟩
       = (σ.removeLoggedRules S t).checkFnR (T.erase t) s dt on R e :=
         (checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSVDe hBSe hTSe hMatch hStrat
-          hterme hWSbare h0' hsh' hσ'S hlk hder hcd hba hCOop_e hLU2e hops' hs hon).symm
+          hterme hcr hWSbare h0' hsh' hσ'S hlk hder hcd hba hCOop_e hLU2e hops' hs hon).symm
     _ = (σ.removeLoggedRules S t).checkFnR T s dt on R e :=
         checkFnR_erase_irrel_cd hcd hba hon hneKey
     _ = σ.checkFnR T s dt on R e :=
@@ -4591,6 +4610,6 @@ theorem removeLeg_sem_stable2_d {σ : GraphState} {S : Schema} {T : Store} {t : 
           hcolOps hon hunmapped hopsUnmapped s
     _ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
         checkFnR_eq_sem_settled_d_filt hWF hTT hNK hR hSVD hBS hTS hMatch hStrat
-          hterm hWSbare h0 hsh hσS hlk hder hcd hba hCOop_e hLU2e hops hs hon
+          hterm hcr hWSbare h0 hsh hσS hlk hder hcd hba hCOop_e hLU2e hops hs hon
 
 end Zanzibar

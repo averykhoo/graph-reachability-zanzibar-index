@@ -504,6 +504,7 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -511,11 +512,12 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
-    (hqo : q.object.name ≠ STAR) :
+    (hqo : q.object.name ≠ STAR)
+    (hql : publicOfLeaf S q.object.type q.relation = none) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q hWF hStrat hValid,
-      graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO hLU
-        hWSbare h hq hqs hqo]
+      graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hcr hterm hCO hLU
+        hWSbare h hq hqs hqo hql]
 
 /-- **Historical milestone (W3d-1; see the `backend_equivalence_w3d` tag).**
 
@@ -529,6 +531,7 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -537,12 +540,13 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
+    (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
-  · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO hLU
-      hWSbare h hq hqs hqo]
+  · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hcr hterm hCO hLU
+      hWSbare h hq hqs hqo hql]
     exact hDeny
 
 /-- **Historical milestone (W3d-1; see the `backend_equivalence_w3d` tag).**
@@ -556,6 +560,7 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hBS : BareStarStore T') (hTS : TtuStarFree S T')
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -564,10 +569,11 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (h : ReachedByW3dC σ' S T') (hq : cascadeKeys S σ' = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
+    (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO hLU
-    hWSbare h hq hqs hqo]
+  rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hcr hterm hCO hLU
+    hWSbare h hq hqs hqo hql]
   exact hDeny
 
 /-! ## W3d-2 (two strata) scope — via `graph_correct_w3d2`
@@ -590,6 +596,7 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -599,11 +606,12 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
-    (hqo : q.object.name ≠ STAR) :
+    (hqo : q.object.name ≠ STAR)
+    (hql : publicOfLeaf S q.object.type q.relation = none) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q hWF hStrat hValid,
-      graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO
-        hLU2 hWSbare h hq hqs hqo]
+      graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hcr hterm hCO
+        hLU2 hWSbare h hq hqs hqo hql]
 
 /-- **Historical milestone (W3d-2; see the `backend_equivalence_w3d2` tag).**
 
@@ -616,6 +624,7 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -626,13 +635,14 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
+    (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q hWF hStrat hValid]
     exact hDeny
-  · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO
-      hLU2 hWSbare h hq hqs hqo]
+  · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hcr hterm hCO
+      hLU2 hWSbare h hq hqs hqo hql]
     exact hDeny
 
 /-- **Historical milestone (W3d-2; see the `backend_equivalence_w3d2` tag).**
@@ -646,6 +656,7 @@ theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Qu
     (hBS : BareStarStore T') (hTS : TtuStarFree S T')
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -656,10 +667,11 @@ theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Qu
     (h : ReachedByW3d2C σ' S T') (hq : cascadeKeys S σ' = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
+    (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hterm hCO
-    hLU2 hWSbare h hq hqs hqo]
+  rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hcr hterm hCO
+    hLU2 hWSbare h hq hqs hqo hql]
   exact hDeny
 
 /-- **T6c (wildcard scoping).** A `Direct` restriction (in particular a `T:*` grant)

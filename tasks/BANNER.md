@@ -1,14 +1,14 @@
-2026-09-02b — ten-phase gate re-run after the eliminator landed; verdict in the session-log entry.
+2026-09-02d — 4c-ii IS LANDED; ten-phase gate re-run, verdict in the session-log entry.
 
-(nav) **THE 4c-ii CO-LANDING IS SIZED BY PROBE AND IS A CLOSED LIST — 14 SITES / 12 DECLS /
-6 FILES.** Staging `sorry` at every site builds the whole tree (rc=0, 1089 jobs), so nothing
-outside the census exists. 14 sites but 12 decls: `graph_correct_w3d2` and `_d` each host TWO
-(one servable, one query-relation), so "thread the predicate" and "add the query premise" are
-NOT separable — that is where a partial landing gets left half-done. Servability 7 of 8.
-LANDED: `Leaf.lean::not_leafNode_of_publicOfLeaf_none`, row 27's guard's eliminator, additive
-and pinned by a RELATION-varying pair; `lean` identical to anchor (585/584/164).
-(!) **NEXT IS THE ATOMIC CO-LANDING — nothing smaller is green-stoppable** (§11.12 rule 5).
+(nav) **THE 4c-ii CO-LANDING IS DONE.** `UntaintedShadow` re-pointed at `ShadowOver` over
+`DerNode`-or-`LeafNode`; `shadow_graphRec_agree` carries `hnl`; all **14 sites** supply it —
+**11 membership-served + 3 query-served**, `graph_correct_w3d2` and `_d` hosting ONE OF EACH.
+`hcr` = **62 decls / 11 files**, `hql` = **13**. Pin cost **ONE row**: statements 49/49
+(`graph_correct` gains `hql`), definitions **165 byte-identical**, audits untouched.
+(!) **NEXT ON `P3` IS THE `P6` PROJECTION, NOT LEAN** — `extractor.py::_edge_projection`.
+Criterion `0`/`265`; measured 2026-09-02 it is **76 / 189**. PROJECTION id, NOT board row `P6`.
 
-(!) **`grep "declaration uses 'sorry'"` RETURNS 0 — Lean uses BACKTICKS** — §11.13 **(u)**.
-14 staged sorries + rc=0 read back as "premise never needed". Make an assurance grep fire on
-purpose before believing its zero. (q) is the over-counting half of the same lesson.
+(!) **THE FLIP IS INVISIBLE TO EVERY PIN.** Only control is the flip probe: revert the line,
+watch `hsubjW` red — and watch the three `first | ... | ...` sites stay GREEN. Not evidence.
+(!) **`perl -i` EMITTING A WIDE CHAR RE-ENCODES THE FILE** — the build cannot see it; `git
+diff --numstat` vs `--ignore-cr-at-eol` can. This tree mixes LF and CRLF per file.
