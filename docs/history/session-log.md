@@ -25,6 +25,91 @@ from here.
 
 ---
 
+## 2026-09-03 — SAB-5 was mis-instrumented, not unobservable; and the `P6` remainder is NOT a Python-side commit
+
+rows: `P3`
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-03`. New trap: scope doc §11.13 **(z)**.
+
+lint: `task lint: clean (12 checks, 156 task file(s) parsed)`
+read: board + HANDOFF
+
+**Two results, and each refutes something this repo's own records assert.**
+
+**1. SAB-5 is discharged.** `2026-09-02d` filed it as unobservable: deleting
+`GraphAdmission.computedRefsNotLeaf` breaks the build, so `verify.sh lean` never reaches
+step 4c. But that is a property of the *harness*, not the instrument —
+`statement_pin.py` is pure source-text extraction and never builds Lean. Run directly, it
+reddens in 8.5 s with `REMOVED field(s)/constructor(s): computedRefsNotLeaf` and
+`ComputedRefsNotLeaf` no longer reachable, **while the STATEMENT pin stays 49/49 green**.
+That green is what makes it evidence rather than bookkeeping: it is a direct observation of
+the hollowed-from-underneath attack 4b is blind to and 4c was built for, which
+`statement_pin.py`'s docstring has claimed since 2026-07-27 with nothing checking it.
+Reverted → rc=0, 165/165, tree clean; `--numstat` `0 1` identical with and without
+`--ignore-cr-at-eol` (trap (y) control). **Still genuinely unobserved:** 4c firing
+end-to-end through `verify.sh`, which needs a mutation the BUILD SURVIVES — filed below,
+narrowly, instead of being papered over with substitutes.
+
+**2. The `P6` projection cannot be retired, and the board said it could.** The `P3` item
+block and board row both stated the remainder was "one thing", a Python-side number, on the
+grounds that "4c-ii is what makes it retirable". Verified first-hand:
+`LeafRules.lean:246 writeRulesRaw` still carries `⚠ No caller yet` and `:44` still reads
+"Nothing here is wired into a caller"; `Cascade.lean:175 writeLoggedRules` still folds
+`rewriteClosure`, not `rewriteClosureL`; `Cascade.lean:167 writeLoggedOne` still
+materializes `objNode t.object t.relation`. **4c-ii re-pointed the proof-side
+`UntaintedShadow`, not the executable driver.** The block also named the wrong projection —
+it said P6 drops `w_any` rows, which is P2 (drops 0 of 498); P6 is the dotted leaf-family
+branch at `extractor.py:236-237`.
+
+The instrument control settles it. Deleting the branch hits the completion criterion
+exactly — `{'P6': 0, 'compared': 265}` — and the state gate goes red:
+`19 failed, 37 passed`, 99 × `edge only in PYTHON` at `viewer.0`/`viewer.1` targets. So the
+criterion is reachable by a two-line deletion that proves nothing, exactly as
+`2026-08-16c` §3 warned. The 19 decompose as 17 × `test_state_leangraph_vs_pythongraph` +
+`test_residue_rich_corpus_is_really_rich` (it calls `diff_states` directly at :636 on a
+tainted corpus) + `test_projection_ledger_is_not_vacuous`, reproducing `2026-08-16c` and
+**refuting the recorded "18 failed / 38 passed" correction**, which missed `:593`.
+
+**New trap §11.13 (z), found while sizing the re-point and live right now.** The definition
+pin has **no row for `writeLoggedRules` or `writeLoggedOne`** — they appear only as the call
+text `σ.writeLoggedRules S t` inside `graphRunAux`/`graphRunOpsAux`/the three `ReachedByW3d2*`
+inductives, because the closure walk resolves bare names, not dot-notation. So the planned
+re-point of `Cascade.lean:175`'s body leaves step 4c green while changing what the model
+executes. The control for that work is the state gate, not the pin trio.
+
+**Not taken unilaterally:** the re-point makes `graph_correct` **false as written** at minted
+leaf-name queries unless it gains the `hql` guard (`docs/latent-gaps.md:132-137`,
+machine-checked) — a change to a pinned headline statement. The `P3` item block has flagged
+this as needing a human call since it was opened; it is now surfaced in the banner and the
+board row rather than buried in the item.
+
+Board: `P3` stays `NOW`, re-sized **M → L**, with the refuted sizing recorded in place.
+
+**A third finding, and it cost this session a full tile re-run — new trap §11.13 (aa).**
+Reverting the two probes with `git checkout --` **moved the content-addressed tree id**:
+session start was `t2c:c18b40544b46`; afterwards a *fully clean tree at the same HEAD*
+computed `t2c:f3d8f4a98aef`, dropping all nine cached tile verdicts to `this tree: NO`.
+`git ls-files --eol` explains it — `i/lf w/crlf` on both files, so `checkout` writes CRLF
+while the index holds LF. Git normalizes on read and reports clean; `gate_status.py`
+hashes raw bytes and sees a different tree. This is (y)'s mechanism and is how this tree
+came to mix line endings per file. The gate caught it, which is the safe direction; the
+mirror — cached green rows surviving a rewrite back to LF — is the one to watch. Standing
+check: after reverting a probe, ask `gate_status.py`, never `git status`.
+
+**Still owed:**
+* **The write-path re-point itself** (`Cascade.lean:167`/`:175`/`:301`,
+  `RulesWrite.lean:135`, `publicOfLeaf` into `Cascade.lean:478 affectedKeys`) — blocked on
+  the `hql` human call above, not on analysis.
+* **SAB-5's end-to-end half:** find a mutation to a pinned definition that the Lean build
+  SURVIVES, so step 4c can be watched firing through `verify.sh` rather than through the
+  script alone. Candidate ranked this session but NOT run: swap the declaration order of
+  `ttuNotLeaf` (`FullScope.lean:157`) and `directRestrNotLeaf` (`:158`) in `GraphAdmission`
+  — all uses are by name, so the build should survive while the pinned `fields=(…)` list and
+  body text both move. **Unverified — it is a prediction, not a result.**
+* **Trap (z)'s fix is unwritten.** Recorded as a trap only; nobody has decided whether to
+  teach the closure walk dot-notation receivers or to pin the two names by hand.
+
 ## 2026-09-02d — 4c-ii IS LANDED: the shadow is re-pointed, both premises threaded and discharged, one pin row moved
 
 rows: `P3`
