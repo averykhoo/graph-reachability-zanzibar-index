@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-03b
-updated: 2026-09-03b
+moved: 2026-09-03c
+updated: 2026-09-03c
 closed:
 ---
 
@@ -673,3 +673,7 @@ THE RE-POINT, MEASURED on a scratch branch then reverted: Cascade.lean:175 foldi
 WARNING: 4 IS A FIRST WAVE, NOT A CONE SIZE. Nothing downstream of Cascade type-checked, because it cannot until Cascade does. Quoting 4 as the cost of the re-point would be this repo recurring sizing error.
 
 Record: PROOF_STATUS ## Session 2026-09-03b.
+
+### 2026-09-03c
+
+Trap (z) FIXED, and it was 66 declarations wide, not the 2 the trap named: statement_pin.py::_resolve was ALSO namespace-blind, so the non-vacuity witnesses' own schemas/stores (Sx/Sy/Sd/Td/Td4/qLeaf/qPub, MemberSet, Schema.lookup, GraphState.writeDirect) had no def: row at all. Closure 158->224, golden 165->232 (+67/-0), statements byte-identical. Control IS the finding: the OLD walk is 165/165 GREEN on a tree whose Sd witness has had its exclusion arm deleted. The trap's own suggested remedy (hand-pin two names) would have closed 2 of 66. SAB-5 fully discharged: 4c fires end-to-end through verify.sh on a GraphAdmission field-ORDER swap the build survives, 4a/4b green as controls. WRITE-PATH CONE MEASURED: the recorded 4 errors/1 file reproduce exactly, but fixing them forces writeLoggedRules_evalEq's twin to become writeRulesRaw, and that statement change opens a 17-wave 6-file descent (Cascade, CascadeStable, CascadeSettle, CascadeInv, CascadeStrata, CascadeStrataSettle) that never reached Equiv/FullScope/Audit -- a LOWER bound, and the 11-file scale rather than one file. 8 substantive obligations (A: NoTtuTarget does NOT transfer to schemaRewritesL, since leafRewrites covers derived keys the taint filter skips; E: ReachedByRulesAdmitted is a pinned INDUCTIVE) + 24 mechanical sites; RulesCorrect.lean:135 matches the grep but must NOT move. Probe reverted, tree unflipped, zero sorry. docs/latent-gaps.md's stale hql section deleted per its replace semantics. Detail: PROOF_STATUS 2026-09-03c.

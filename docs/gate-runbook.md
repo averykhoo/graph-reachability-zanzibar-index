@@ -309,10 +309,21 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   now also diffs `formal/headline_definitions.txt`: the full text of every project
   declaration the headline statements depend on, **transitively**, plus the ambient
   `variable` / `open` context of the files hosting them (a dropped `[Fintype V]` is
-  the same attack). 139 rows / 132 declarations, floor `MIN_PINNED_DEFS`.
+  the same attack). Floor `MIN_PINNED_DEFS`; **no row/declaration count is quoted here
+  deliberately** — this line read `139 rows / 132 declarations` while the live golden was
+  165/158 and then 232/224, i.e. it understated the pin by 40% (`ZT-P3-5` again). Read the
+  live figure from `formal/FINAL_REVIEW.md`'s generated block or `verify.sh`'s `defs=`
+  gate fact, never from prose.
+  *What it can see, corrected 2026-09-03c:* `_resolve` had two defects that silently
+  shrank the closure — it was **namespace-blind** (a bare `Sx` inside `namespace
+  Zanzibar.W4Witness` resolved to nothing, so the **non-vacuity witnesses' own schemas and
+  stores were unpinned**) and it **could not see receiver dot-calls** (`σ.f`, so the write
+  path's own definitions were unpinned). Both fixed; the closure grew by 66 declarations.
+  The sabotage and its literal output are in `statement_pin.py`'s module docstring.
   *Why unbounded depth:* resolution stops at the project boundary by construction, so
   the closure converges on its own — measured 58/36/17/5/7/3/3/2/1, settling at depth
-  9. Replayed over the tree's busiest fortnight (34 commits), levels 3–9 contributed
+  9 (the 2026-07-27 walk, kept as method provenance, not as today's shape). Replayed
+  over the tree's busiest fortnight (34 commits), levels 3–9 contributed
   **zero** firings beyond levels 1–2, so unbounded costs the same maintenance as
   depth-2 and covers 38 more definitions. Every would-be firing was a real meaning
   change. Regenerate both goldens together:
@@ -500,7 +511,21 @@ this source", never as full provenance.
 | id | covers | phases |
 |---|---|---|
 | `t2a:` | everything | `lean` |
-| `t2c:` | everything **minus `*.md` and `benchmarks/`** | `conf-tile:I/K`, `tests-tile:I/K` |
+| `t2c:` | everything **minus `*.md` and `benchmarks/`, but KEEPING `tasks/`** | `conf-tile:I/K`, `tests-tile:I/K` |
+
+🛑 **`tasks/` was added back to `t2c` on 2026-09-03c, closing a fail-open that had been
+open since 2026-08-29d.** The `*.md` exclusion was justified in 2026-08-17 by a survey
+concluding "NO collected test reads markdown". That was true then. `tests/test_tasktool.py`
+entered the gate twelve days later, and its `live_copy` helper copies the **live** `tasks/`
+corpus — entirely markdown — and lints it; **four** collected tests use it. So a
+`tasks/*.md` edit could turn the suite RED without moving `t2c`, leaving
+`gate_status.py` reporting COVERED from cached rows. **Demonstrated, not theorised:** this
+session edited `tasks/BANNER.md` past its 14-line cap, `t2c` did not move, and all four
+`tests-` tiles failed on `::test_sabotage_live_blind_parser`. ⚠ **The durable lesson is
+about the VERIFICATION, not the list: a scope exclusion rests on a survey of what exists
+TODAY, and nothing re-runs that survey when a test module lands. Re-do it whenever one
+enters the gate** — `verify.sh` cannot warn you, because the excluded file is invisible to
+it too. Fix + its three-way sabotage: `scripts/gate_status.py::CODE_SCOPE_MD_KEEP`.
 
 `lean` must keep the full scope because it genuinely reads markdown — step 4d resolves
 `CORRESPONDENCE.md` anchors, 4e scans prose globs (`docs/*.md`, `formal/*.md`,

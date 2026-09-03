@@ -1720,7 +1720,45 @@ re-check, ~20 sites in 3 files go genuinely red.**
   equal what you intended; anything else is a silent rewrite. Emit non-ASCII as raw bytes
   (`"\xe2\x86\x92"`) or use an editor that preserves encoding.
 
-* **(z) NEW 2026-09-03 — the DEFINITION pin does not resolve dot-notation calls, so the
+* **(z) ✅ CLOSED 2026-09-03c — FIXED, not merely recorded; and the hole was WIDER than
+  this entry said.** `statement_pin.py::_resolve` had TWO defects, not one, and the
+  measured cost was **66 declarations** missing from the closure (158 → 224; golden 165 →
+  232 rows, +67 insertions / −0 deletions, `headline_statements.txt` byte-identical).
+  * **R2** is this entry's own finding: receiver dot-calls. Fixed by `DOTCALL_RE` plus a
+    suffix match over declared names, taking ALL candidates when ambiguous.
+  * **R1 was NOT recorded here and is the worse of the two: namespace-blind bare
+    resolution.** `_resolve` only ever tried `Zanzibar.<tok>` and `<tok>`, so a bare name
+    written inside `namespace Zanzibar.W4Witness` never resolved — which means **the
+    non-vacuity witnesses' own schemas and stores were unpinned**: `W4Witness.Sx`/`Tx`,
+    `W4WitnessUnion.Sy`/`Ty`, `W4WitnessDirect.Sd`/`Td`/`Td4`/`qLeaf`/`qPub`. Those
+    definitions ARE the content of "the hypothesis bundles are inhabited". Fixed by trying
+    each prefix of the owning declaration's namespace, longest first.
+  * **SABOTAGE (R1), literal output in `statement_pin.py`'s module docstring**: drop the
+    exclusion arm from `Sd`, so `doc#approver := [user] but not banned` becomes
+    `doc#approver := [user]`. NEW walk `rc=1`, one attributable discrepancy naming
+    `def:Zanzibar.W4WitnessDirect.Sd`. **OLD walk, same mutated tree: `rc=0`,
+    `headline definition pin: 165/165 definitions match`** — fully green on a hollowed-out
+    non-vacuity witness. That control is the finding. The statement pin is 49/49 in BOTH
+    runs, which is what makes it the definition pin's job.
+  * **SABOTAGE (R2) — the end-to-end demonstration this entry asked for.** With the write
+    path actually re-pointed (`Cascade.lean:175` → `rewriteClosureL S (rawWriteTuples S
+    t)`, plus the import), the OLD pin is **`rc=0`, `165/165`, green** — the exact failure
+    predicted below. The NEW pin is `rc=1` and fires on **nineteen** newly-reachable
+    definitions, the whole leaf-rules machinery: `rewriteClosureL`, `rewriteClosureRawL`,
+    `rewriteClosureAuxL`, `rewriteStepL`, `schemaRewritesL`, `leafRewrites`,
+    `keyLeafRewrites`, `rawWriteTuples`, `rawWriteRels`, `persistedLeaves`, `pureLeaves`,
+    `atomLeaves`, `unionSpineLeaves`, `unionAll`, `splitPure`, `isPure`, `isTaintedUserset`,
+    `derivedAnywhere`, `PLeaf`. The meaning of the claim grows nineteen dependencies, which
+    is precisely what the pin exists to surface.
+  * ⚠ **The "cheap partial fix" this entry recommended — hand-pin the two names — would
+    have been the WRONG call**, and measurably so: it closes 2 of 66. Do not take a trap's
+    suggested remedy without re-sizing it.
+  * The consequence sentence below stands as history: **the control for the write-path
+    re-point was the state gate, and now the pin trio sees it too.**
+
+  The original entry, kept verbatim for provenance:
+
+  **(z) NEW 2026-09-03 — the DEFINITION pin does not resolve dot-notation calls, so the
   write-path re-point is invisible to step 4c.** `formal/headline_definitions.txt` carries
   no `def:` row for `GraphState.writeLoggedRules` or `GraphState.writeLoggedOne`. Both
   occur only as the *call text* `σ.writeLoggedRules S t` **inside** other pinned rows —
@@ -1756,6 +1794,34 @@ re-check, ~20 sites in 3 files go genuinely red.**
     `git status --porcelain` being empty — it is not the same question.
   * Prefer reverting from a byte-exact backup (`cp` the file aside before editing) over
     `git checkout --` when cached tile verdicts are load-bearing for the session.
+  * ⚠ **RECURRED 2026-09-03c with a DIFFERENT cause, and the cause is mundane: an ordinary
+    edit made WHILE the tiles were running.** Deleting one stray space from a *docstring*
+    in `formal/conformance/statement_pin.py` moved `t2c:a9b44960c077 → 092d9ec74d29` and
+    stranded **all five** freshly-green conformance tiles, plus the four `tests-` tiles then
+    in flight. No `git checkout`, no CRLF, no revert — just a one-character edit to a file
+    inside the code scope. **The rule this yields is a sequencing one: FREEZE the code
+    tree, then run the tiles; never interleave.** A `*.md` edit is free (the tiles exclude
+    `*.md`), which is exactly what makes the code-file exception easy to forget — the
+    session had been editing docs safely for an hour. `gate_status.py` caught it, so this
+    was again the safe direction; the cost was ~13 minutes of re-run.
+  * ⚠ **AND A THIRD TIME, SELF-INFLICTED, IGNORING THIS TRAP'S OWN ADVICE.** Reverting a
+    one-newline probe with `git checkout -- docs/latent-gaps.md` **silently discarded that
+    file's entire session rewrite** — the `hql` retirement, which was one of the session's
+    four deliverables. `git status` then showed the file CLEAN, so nothing flagged it; it
+    was caught only by grepping for the content that should have been there. The bullet
+    three up says it plainly — *prefer reverting from a byte-exact `cp` backup over
+    `git checkout --`* — and it was not followed because the probe felt too small to
+    warrant one. **`git checkout -- <path>` does not know which of your changes were the
+    probe.** Use `cp` aside, always, or scope the probe to a file you have not edited.
+  * ⚠ **THE DANGEROUS DIRECTION FINALLY MATERIALISED, and it was not this trap at all —
+    it was the SCOPE of the tree id.** `t2c` excludes `*.md`, but
+    `tests/test_tasktool.py::live_copy` reads the live `tasks/` markdown corpus, so a
+    `tasks/*.md` edit could turn the suite red while every cached tile row stayed green and
+    `gate_status.py` went on reporting COVERED. Found by walking into it (a `tasks/BANNER.md`
+    edit reddened four tiles with `t2c` unmoved) and **fixed** by keeping `tasks/` in the
+    code scope — `scripts/gate_status.py::CODE_SCOPE_MD_KEEP`, with a three-way sabotage
+    (moves on `tasks/*.md`; reverts byte-exactly; still ignores `docs/*.md`). Full write-up:
+    `docs/gate-runbook.md` §"Per-phase scopes".
 
 * **SAB-5, and the instrument error that hid it (2026-09-03).** `2026-09-02d` filed SAB-5
   as unobservable because deleting `GraphAdmission.computedRefsNotLeaf` breaks the build
@@ -1764,8 +1830,30 @@ re-check, ~20 sites in 3 files go genuinely red.**
   the deletion reddens it in 8.5 s (`REMOVED field(s): computedRefsNotLeaf`, 2 discrepancies)
   **while the statement pin stays 49/49**, which is the control that makes it evidence. The
   durable rule: *when an assurance step looks unobservable, check whether you are observing
-  the instrument or the harness around it.* Still genuinely unobserved: 4c firing END-TO-END
-  through `verify.sh`, which needs a mutation the build survives.
+  the instrument or the harness around it.*
+  * ✅ **DISCHARGED 2026-09-03c — 4c now observed firing END-TO-END through `verify.sh`.**
+    The mutation the build survives is a **field-ORDER swap**: exchange the
+    `ttuNotLeaf` / `directRestrNotLeaf` declaration lines in `FullScope.lean:157-158`. All
+    four construction sites bind by name, so nothing downstream notices —
+    `Build completed successfully (1089 jobs)` and then `(2150 jobs)`, both green.
+    `bash formal/verify.sh lean` then reaches 4c and FAILS there, `rc=1`:
+
+        --- [4a/6] audit IDENTITY pin (formal/audited_theorems.txt) ---
+          audited-name identity: 584 pinned, 585 live (live must be a SUPERSET)
+          headline theorems: 17 audited, all axiom-dependent
+        --- [4b/6] headline STATEMENT pin (formal/headline_statements.txt) ---
+        --- [4c/6] headline DEFINITION pin (formal/headline_definitions.txt) ---
+        FAIL: the DEFINITION of def:Zanzibar.GraphAdmission changed:
+            pinned: [structure] fields=(... storeValid ttuNotLeaf directRestrNotLeaf computedRefsNotLeaf) ...
+            source: [structure] fields=(... storeValid directRestrNotLeaf ttuNotLeaf computedRefsNotLeaf) ...
+              1 definition-pin discrepancy(ies) against formal/headline_definitions.txt.
+          headline statement pin: 49/49 statements match
+        FAIL: headline statement/definition pin (see above)
+
+    **4a and 4b are the controls and both stay green**, so the red is attributable to 4c
+    alone. Reverted from a byte-exact `cp` backup, not `git checkout` (trap (aa)).
+    SAB-5 is now closed in both halves: the instrument was mis-observed, AND the harness
+    path is confirmed.
 
 ## Provenance
 

@@ -122,63 +122,6 @@ ungated — `formal/conformance/test_conformance_nary_strata.py::test_multi_stra
 drives the real cascade at 3 strata. The gap is
 Lean-only, and quoting the wider version is how it gets re-filed as a Python coverage hole.
 
-### The post-4c-ii headline statements need the `hql` leaf-name guard
-
-**Filed by:** `formal/history/PROOF_STATUS.md` `## Session 2026-08-21b` (the finding's
-Python twin — live bug `BL-2` — is FIXED; its record is
-[`spec-deviations.md`](spec-deviations.md) `## 2026-08-21b` and is not this gap).
-**Board row:** `P3`.
-
-**Today's tree is unaffected — 4c-ii has not landed, so nothing is currently false.**
-Machine-checked (two independent kernel `by decide` constructions): AFTER the 4c-ii
-re-point, a pinned headline theorem stated over the UNFENCED `GraphModel.check` is
-**FALSE AS WRITTEN**, not merely unproven, at queries whose relation is a minted leaf
-name: the re-pointed driver's drained state grants where `sem` denies, with every
-existing hypothesis inhabited.
-
-**The blast radius has shrunk twice and is now ONE row.** The original filing named six
-theorems. On 2026-08-28c five of them, plus
-`W4WitnessDirect.final_applies`/`final_applies4`, were migrated onto the PUBLIC read
-`GraphModel.checkPublic`; on 2026-09-01 the last two exposed rows —
-`W4WitnessDirect.correct_applies` (`formal/headline_statements.txt:46`) and
-`::w3d2E_correct_applies` (`:56`) — were migrated the same way, kernel-checked, with the
-`hql` binder REFUSED on both: they are the non-vacuity / satisfiability instruments, and a
-schema-dependent binder on such a declaration is the house failure mode. A migrated row is
-**no longer in the falsity set at all**: its leaf-name case is discharged by the fence,
-via `FullScope.lean::graph_correct_public`, whose fenced branch proves the query
-undeclared and appeals to `Spec/Confine.lean::semAux_undeclared`. Post-4c-ii the migrated
-rows stay TRUE and PROVED with no new binder. Three pinned instruments guard the 46/56
-migration against degrading into certifying the fence alone
-(`public_grant_survives_fence`, `correct_applies_nonfence`,
-`w3d2E_correct_applies_nonfence`); adjudication grounds:
-`formal/history/PROOF_STATUS.md` `## Session 2026-09-01`.
-
-**What is left is ONE row:** `Zanzibar.graph_correct` (`formal/headline_statements.txt:27`),
-which is deliberately the INTERNAL-layer statement (`GraphModel.check` = Python's
-`_check_internal`) and must stay unfenced — it is what `graph_correct_public`'s own
-unfenced branch appeals to. `W4WitnessDirect.unfenced_grants` (`:52`) is likewise
-deliberately unfenced: it is the FOIL for `fence_changes_answer`, and migrating it would
-destroy the differential. The `Equiv.lean` per-stage ladder is a per-stage record of the
-internal layer (its own header says so) and stays on `check` for the same reason.
-
-**What would close it:** the `hql` guard landing on `graph_correct` WITH 4c-ii in the same
-commit — never before (today the statement is true unguarded) and never after (the gate
-would meanwhile pin a false statement). ⚠ **This sentence used to call that co-landing
-"step 7 of the 4c-ii plan", and "step 7" is AMBIGUOUS across three live numberings
-(corrected 2026-09-01c).** Under the LIVE ten-step plan
-(`formal/history/PROOF_STATUS.md:933-943`) **`hql` is step 10**; step 7 is the
-`ComputedRefsNotLeaf` predicate, landed 2026-09-01c, and **step 9 is the flip** — which is
-the commit `hql` must actually co-land with. `PROOF_STATUS.md:1071-1072` says "step 10"
-directly, while its own §8 says step 7; the board carried the collision too. The
-accept/refuse analysis is in PROOF_STATUS
-`## Session 2026-08-21b`, and the guard was ACCEPTED by user call on 2026-08-28: the
-narrowest repairing guard, `hql : publicOfLeaf S q.object.type q.relation = none`; refuse
-`isLeafPred q.relation = false` (over-broad — schema-independent, and it also excludes
-undeclared junk names where the claim holds today) and anything keyed on
-`isDerived`/taint (it guts every derived-query headline claim while the pin regenerates
-GREEN — the house failure mode). **That call is untouched by the 2026-09-01
-adjudication** — row 27 is the internal-layer statement, not a satisfiability instrument.
-
 ---
 
 ## Latent, but owned by another doc
@@ -252,6 +195,18 @@ Each of these still *reads* as open somewhere in the dated ledger, because a led
 is written in the present tense of its own day. They are closed. This list is the guard
 rail; delete a bullet only when its ledger text can no longer be misread.
 
+* **The post-4c-ii `hql` leaf-name guard on the headline statements** — filed by
+  `formal/history/PROOF_STATUS.md` `## Session 2026-08-21b`, board row `P3`. **Closed
+  2026-09-02d**: 4c-ii and the `hql` guard landed in the SAME commit, which was the
+  closing condition the section stated. Verified first-hand 2026-09-03b and 2026-09-03c —
+  `formal/headline_statements.txt:27` (`Zanzibar.graph_correct`) carries the binder, and
+  `:66`/`:67` derive it at `FullScope.lean:1345-1347`. ⚠ **This section outlived its
+  closure by a day and cost a session**: on 2026-09-03 it was read as current and produced
+  a FALSE ESCALATION — a blocking human call raised on a decision already made and landed
+  — which `2026-09-03b` then had to refute. It is the sharpest case yet for this file's
+  replace semantics, and the reason this bullet exists rather than a struck-through
+  section. `:52` (`W4WitnessDirect.unfenced_grants`) is deliberately unfenced and always
+  was, as the FOIL for `fence_changes_answer`; that is not a residue of this gap.
 * **`ZT-P5`'s star-subject/star-object tupleset write divergence** (`folder:* parent
   folder:*`, accept/reject parity) — the 2026-07-26 entry says "**NOT FIXED here**
   (investigation scope)". It was **fixed the same day** by

@@ -54,7 +54,10 @@ justification is measurement, not taste:
     Mathlib and core lemma resolves to nothing and stops the walk.  Measured
     2026-07-27: 58 declarations at depth 1, then 36 / 17 / 5 / 7 / 3 / 3 / 2 / 1,
     converging at depth 9 to 132 declarations and ~28 KB -- about a third of the
-    365 declarations in the tree, not "half the tree" and not unbounded.
+    365 declarations in the tree, not "half the tree" and not unbounded.  (That
+    figure is the 2026-07-27 walk and is kept as provenance for the measurement
+    method; it is not today's count.  Read the live one from the golden or from
+    `verify.sh`'s `defs=` gate fact -- and note that R1/R2 below grew it.)
   * The deep levels DO NOT CHURN.  Replaying the pin against three earlier
     revisions of the most active fortnight this tree has had (34 commits touching
     `formal/lean/`): from `dc505fd` (2026-07-13) the full closure would have
@@ -66,6 +69,65 @@ justification is measurement, not taste:
     `W4Fragment` (the `RootBoolean` widening), `Delta` (the `leaf` provenance
     tag), `affectedKeys` (the 2026-07-20c own-key model fix), `StoreValidRulesD`.
     Those are exactly the edits `CLAUDE.md` says must not drift unrecorded.
+
+TWO RESOLUTION DEFECTS, FOUND AND FIXED 2026-09-03.  The walk above is only as
+good as `_resolve`, and `_resolve` was wrong in two ways that each SILENTLY
+SHRANK the closure.  Both were found while sizing scope-doc trap (z), which had
+recorded only the narrowest symptom (`GraphState.writeLoggedRules` unpinned);
+the measured hole was 66 declarations, from 158 to 224.
+
+  R1  NAMESPACE-BLIND BARE RESOLUTION.  `_resolve` tried only `Zanzibar.<tok>`
+      and `<tok>`.  Lean resolves a bare name against the ENCLOSING namespace
+      first, so `Sx` written inside `namespace Zanzibar.W4Witness` names
+      `Zanzibar.W4Witness.Sx` -- which resolved to nothing.  Consequence, and it
+      is the worse of the two: the NON-VACUITY WITNESSES' OWN SCHEMAS AND STORES
+      (`W4Witness.Sx`/`Tx`, `W4WitnessUnion.Sy`/`Ty`, `W4WitnessDirect.Sd`/`Td`/
+      `Td4`/`qLeaf`/`qPub`) were never pinned.  Those definitions are the entire
+      content of "the hypothesis bundles are inhabited": rewrite `Sd` into a
+      schema that trivially satisfies everything and every witness statement in
+      HEADLINE stays byte-identical while the non-vacuity claim evaporates.
+      That is the ZT-P2-5 attack aimed at the instrument instead of the theorem.
+      Fixed by trying each prefix of the owning declaration's namespace, longest
+      first.
+
+  R2  RECEIVER DOT-CALLS (trap (z) proper).  `σ.writeLoggedRules S t` tokenizes
+      under IDENT_RE to the bare `writeLoggedRules` -- the receiver `σ` is
+      non-ASCII, so the match starts after it -- and that bare name is not
+      declared, so the call resolved to nothing.  `GraphState.writeLoggedRules`
+      and `::writeLoggedOne` therefore appeared in NO `def:` row, though both
+      occur as call text inside five pinned rows (`graphRunAux`, `graphRunOpsAux`,
+      the three `ReachedByW3d2`/`C`/`E` inductives).  Consequence: re-pointing
+      the write path's body -- the edit that changes WHICH EDGES THE MODEL
+      WRITES -- left step 4c green.  Lean resolves such a call through the
+      receiver's TYPE, which text cannot recover, so the fix is a suffix match
+      over declared names, taking ALL candidates when ambiguous.
+
+Both fixes only ever ADD to the closure: the flip was measured to lose nothing
+(`set(base) - set(fixed)` empty).  `MIN_PINNED_DEFS` is asserted with `>=` and so
+did not move.  The golden went 165 -> 232 rows, +67 insertions / -0 deletions,
+and `headline_statements.txt` stayed byte-identical (49/49).
+
+SABOTAGE, WITH ITS OBSERVED OUTPUT (2026-09-03).  A pin that grows by 67 rows has
+to be shown to CHECK those rows, not merely to list them.  The narrowest
+plausible weakening of the R1 hole: drop the exclusion arm from the `Sd` witness
+schema in FullScope.lean, so `doc#approver := [user] but not banned` becomes
+`doc#approver := [user]` -- the non-vacuity witness stops witnessing a boolean
+schema at all.  Two runs, same mutated tree:
+
+    NEW walk   rc=1  FAIL: the DEFINITION of def:Zanzibar.W4WitnessDirect.Sd changed:
+                       pinned: ... .excl (.direct [("user", BARE, false)]) (.computed "banned")) ...
+                       source: ... .direct [("user", BARE, false)]) ...
+                     1 definition-pin discrepancy(ies)
+                     headline statement pin: 49/49 statements match
+
+    OLD walk   rc=0  headline statement pin: 49/49 statements match
+                     headline definition pin: 165/165 definitions match (floor 139)
+
+The OLD run is the control and it is the whole finding: fully green, every count
+matching, on a tree whose non-vacuity witness had been hollowed out.  `Sd` had no
+`def:` row to compare -- `grep -c 'def:Zanzibar.W4WitnessDirect.Sd'` on the old
+golden returns 0.  The statement pin is green in BOTH runs, which is what makes
+this the definition pin's job and not the statement pin's.
 
 WHERE IT STOPS, AND WHAT IS CONSEQUENTLY STILL INVISIBLE.  Say it plainly; this
 is one level deeper, not a proof of anything:
@@ -507,7 +569,9 @@ def index_definitions() -> tuple[dict[str, tuple[str, str, list[str]]], dict[str
     return defs, ambient
 
 
-def _resolve(tok: str, defs: dict[str, tuple[str, str, list[str]]]) -> str | None:
+def _resolve(
+    tok: str, defs: dict[str, tuple[str, str, list[str]]], owner_ns: str = ""
+) -> str | None:
     """Best-effort name resolution for a token appearing in Lean source text.
 
     Everything in the development lives in `namespace Zanzibar`, so a bare `Inv`
@@ -517,11 +581,71 @@ def _resolve(tok: str, defs: dict[str, tuple[str, str, list[str]]]) -> str | Non
     Over-resolution (a binder that happens to share a declaration's name) only
     ever pins something extra, which is harmless; UNDER-resolution is the risk,
     and is why the walk is unbounded rather than truncated.
+
+    `owner_ns` is the namespace of the declaration whose text is being scanned,
+    and is tried FIRST, longest prefix down -- Lean resolves a bare name against
+    the enclosing namespace, and until 2026-09-03 this function did not.  That
+    defect is measured in the module docstring under "R1"; the short version is
+    that `Sx` written inside `namespace Zanzibar.W4Witness` resolved to nothing,
+    so the non-vacuity witnesses' own schemas and stores were never pinned.
     """
-    for cand in (f"Zanzibar.{tok}", tok, f"Zanzibar.{tok.split('.')[0]}"):
+    cands: list[str] = []
+    if owner_ns:
+        parts = owner_ns.split(".")
+        for i in range(len(parts), 0, -1):
+            cands.append(".".join(parts[:i]) + "." + tok)
+    cands += [f"Zanzibar.{tok}", tok, f"Zanzibar.{tok.split('.')[0]}"]
+    for cand in cands:
         if cand in defs:
             return cand
     return None
+
+
+# A RECEIVER dot-call: `σ.writeLoggedRules`, `acc.writeLoggedOne`, `g.addEdge`.
+# IDENT_RE cannot see these -- it yields the bare tail (`writeLoggedRules`),
+# because the receiver is either a non-ASCII binder that stops the match or an
+# unresolvable one-letter name.  Lean resolves the call through the RECEIVER'S
+# TYPE, which is not recoverable from text, so the honest approximation is a
+# suffix match over the declared names (see "R2" in the module docstring).
+DOTCALL_RE = re.compile(r"[^\s]\.\s*([A-Za-z_][A-Za-z0-9_'!?]*)")
+
+
+def _suffix_index(
+    defs: dict[str, tuple[str, str, list[str]]]
+) -> dict[str, list[str]]:
+    """Last name component -> every declaration ending in it."""
+    idx: dict[str, list[str]] = {}
+    for name in defs:
+        idx.setdefault(name.split(".")[-1], []).append(name)
+    return idx
+
+
+def _ns_of(full: str) -> str:
+    return full.rsplit(".", 1)[0] if "." in full else ""
+
+
+def _refs(
+    text: str,
+    owner_ns: str,
+    defs: dict[str, tuple[str, str, list[str]]],
+    suffix: dict[str, list[str]],
+) -> set[str]:
+    """Every project declaration `text` names, by either resolution route."""
+    out: set[str] = set()
+    for t in IDENT_RE.findall(text):
+        r = _resolve(t, defs, owner_ns)
+        if r:
+            out.add(r)
+    for f in DOTCALL_RE.findall(text):
+        r = _resolve(f, defs, owner_ns)
+        if r:
+            out.add(r)
+        else:
+            # Ambiguous (`.check` is both `GraphModel.check` and
+            # `SetEngineModel.check`): take ALL candidates.  Pinning one extra
+            # declaration costs a golden row; missing the real one is the hole.
+            out.update(suffix.get(f, ()))
+    return out
 
 
 def definition_closure(
@@ -531,11 +655,11 @@ def definition_closure(
 
     Returns (name -> depth at which it was first reached, per-level sizes).
     """
+    suffix = _suffix_index(defs)
     seen: dict[str, int] = {}
-    frontier = {
-        r for n in HEADLINE for t in IDENT_RE.findall(stmts[n])
-        if (r := _resolve(t, defs))
-    }
+    frontier: set[str] = set()
+    for n in HEADLINE:
+        frontier |= _refs(stmts[n], _ns_of(n), defs, suffix)
     sizes: list[int] = []
     depth = 1
     while frontier:
@@ -544,9 +668,8 @@ def definition_closure(
             seen[r] = depth
         nxt = set()
         for k in frontier:
-            for t in IDENT_RE.findall(defs[k][1]):
-                r = _resolve(t, defs)
-                if r and r not in seen:
+            for r in _refs(defs[k][1], _ns_of(k), defs, suffix):
+                if r not in seen:
                     nxt.add(r)
         frontier = nxt
         depth += 1
