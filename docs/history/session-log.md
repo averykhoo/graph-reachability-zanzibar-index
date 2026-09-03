@@ -25,6 +25,108 @@ from here.
 
 ---
 
+## 2026-09-03c — trap (z) fixed, 66 decls wide not 2; SAB-5 closed end-to-end; write-path cone is 11-file scale
+
+rows: `P3`
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-03c`.
+
+lint: `task lint: clean (12 checks, 156 task file(s) parsed)`
+read: board + HANDOFF
+
+**Order taken was the user's, and the reason they gave for it held.** Trap (z) first, so
+the write-path re-point would land against a gate that can observe it; then the re-point,
+with the stale-doc retirement folded in; SAB-5's last piece at the tail.
+
+**(z) was two defects, not one, and the unrecorded one was worse.** Beyond the receiver
+dot-calls the trap named, `statement_pin.py::_resolve` never tried the ENCLOSING namespace
+— so a bare name written inside `namespace Zanzibar.W4Witness` resolved to nothing, and
+**the non-vacuity witnesses' own schemas and stores had no `def:` row at all**. Closure 158
+→ 224; golden 165 → 232 rows, `+67 / -0`, statements byte-identical.
+
+⚠ **The control is the finding, and it generalises.** The sabotage (delete `Sd`'s exclusion
+arm, so the boolean witness stops witnessing a boolean schema) reds the fixed pin with one
+attributable row — but the OLD pin is `165/165` GREEN on that same tree. An instrument that
+reports a clean count while the thing it certifies has been hollowed out is this repo's
+house failure mode aimed at the assurance layer itself, one level below where §11.13 was
+looking.
+
+⚠ **A trap's suggested remedy is not a sized plan.** (z) offered "hand-pin the two names".
+That closes **2 of 66**. The entry was written by the session that found the symptom, which
+is exactly when the blast radius is least known — so re-measure before taking one.
+
+**The write-path re-point: the recorded first wave was accurate AND the cone is large.**
+Both halves matter. `Cascade.lean:175` + one import gives exactly the 4 recorded errors, in
+one file — but fixing them forces `writeLoggedRules_evalEq`'s twin to become
+`writeRulesRaw`, and that statement change opens a 17-wave, 6-file descent that stopped
+before reaching `Equiv`/`FullScope`/`Audit`. 8 substantive obligations, one needing a new
+premise (`NoTtuTarget` does not transfer to `schemaRewritesL`, because `leafRewrites`
+covers derived keys the taint filter skips), one changing a pinned inductive. Reverted; not
+landed; the tree is unflipped with zero `sorry`. **What landed is the instrument.**
+
+**Doc rot retired:** `docs/latent-gaps.md`'s `hql` section — the one that produced
+`2026-09-03`'s false escalation a day after `2026-09-02d` closed it — is deleted per that
+file's own replace semantics, with a bullet in its `Closed` list.
+
+⚠ **Trap (aa) recurred, with a mundane new cause: an ordinary edit made WHILE the tiles
+were running.** Removing one stray space from a *docstring* in `statement_pin.py` moved
+`t2c` and stranded all five freshly-green conformance tiles plus the four `tests-` tiles in
+flight. No `git checkout`, no CRLF — a one-character edit to a file in the code scope. The
+rule is a sequencing one: **freeze the code tree, then run the tiles, never interleave.**
+`*.md` edits are free, which is what makes the code-file exception easy to forget after an
+hour of safe doc editing. `gate_status.py` caught it; cost was a re-run.
+
+🛑 **A FAIL-OPEN IN THE GATE'S OWN CACHING, found by walking into it and FIXED.** `t2c`
+(the pytest tiles' tree id) excludes `*.md`. That exclusion was justified in 2026-08-17 by
+a survey concluding "NO collected test reads markdown" — true then, and **false since
+2026-08-29d**, when `tests/test_tasktool.py` entered the gate: its `live_copy` helper
+copies the LIVE `tasks/` corpus (entirely markdown) and lints it, and four collected tests
+use it. So a `tasks/*.md` edit could turn the suite RED while `gate_status.py` went on
+reporting COVERED from cached rows. Demonstrated rather than argued: this session's
+`tasks/BANNER.md` rewrite broke its 14-line cap, `t2c` did not move, and all four `tests-`
+tiles failed on `::test_sabotage_live_blind_parser`. Fixed by keeping `tasks/` in the code
+scope (`scripts/gate_status.py::CODE_SCOPE_MD_KEEP`), with a three-way sabotage: it MOVES
+on a `tasks/*.md` edit, REVERTS byte-exactly, and still IGNORES `docs/*.md` (so the
+2026-08-17 docs-edit optimisation this id exists for is intact).
+
+⚠ **The lesson is about the VERIFICATION, not the list.** A scope exclusion rests on a
+survey of what exists *today*, and nothing re-runs that survey when a new test module
+lands. Re-do it whenever one enters the gate — `verify.sh` cannot warn you, because the
+excluded file is invisible to it too. Two of this session's three assurance findings
+((z) and this) have the same shape: **a check whose justification was measured once and
+then quietly outlived by the tree.**
+
+⚠ **And a self-inflicted loss worth recording, because the trap that forbids it is on this
+very item's list.** Reverting a one-newline probe with `git checkout -- docs/latent-gaps.md`
+silently discarded that file's ENTIRE session rewrite — one of the four deliverables.
+`git status` showed the file clean afterwards, so nothing flagged it; it was caught only by
+grepping for content that should have been there, and redone. Scope doc §11.13 (aa) already
+says *prefer a byte-exact `cp` backup over `git checkout --`*, and it was not followed
+because the probe felt too small to warrant one. **`git checkout -- <path>` does not know
+which of your changes were the probe.**
+
+**All four of `2026-09-03b`'s owed items are discharged**: the cone measurement, the
+`latent-gaps.md` retirement, SAB-5's build-surviving mutation, and trap (z)'s fix. The
+proof repair itself is not landed — see below.
+
+**Still owed:**
+* **The write-path re-point's actual proof repair.** Now a sized job rather than an open
+  question: 8 substantive obligations and 27 mechanical line edits, each with its symbol, in
+  PROOF_STATUS `2026-09-03c` §4. Start with **(A)** — it needs a new premise and everything
+  else is downstream of knowing its shape — and note **(E)** changes a pinned inductive.
+* **Finish the cone measurement past `CascadeStrataSettle`.** The probe stopped at wave 17
+  with `CascadeEnum`, `CascadeStrataEnum`, `CascadeStrataResettle`, `Equiv`, `FullScope`,
+  `Audit` never reached, so every figure recorded is a LOWER bound. `Equiv` hosts six
+  audited milestone declarations, so it is the one that decides whether the headline layer
+  moves.
+* **Re-run the 2026-08-17 `t2c` exclusion survey** if any further test module joins the
+  gate. The fix keeps `tasks/` in scope, but the *class* of defect is unfixed: nothing
+  mechanically re-checks which collected tests read `*.md`.
+* **Nothing else.** The write-back ran in full: ledger, both banners, board row + item
+  block, `task.py touch`/`comment`, the stale `gate-runbook.md` §4c count fixed in place,
+  and the `t2c` scope fix documented in `gate-runbook.md` §"Per-phase scopes".
+
 ## 2026-09-03b — the `hql` blocker was already discharged, and the write-path re-point is one line plus an import
 
 rows: `P3`

@@ -1,14 +1,14 @@
-2026-09-03b — SAB-5 discharged; `P6` was MIS-SIZED; the `hql` blocker turned out already closed.
+2026-09-03c — trap (z) FIXED (66 decls wide, not 2); SAB-5 closed end-to-end; the re-point is the 11-file scale.
 
-(nav) **`P3` IS LEAN WORK AFTER ALL — this banner said the opposite until 2026-09-03.** The
-write path was never re-pointed: `LeafRules.lean:246 writeRulesRaw` still says `No caller yet`
-and `Cascade.lean:175` still folds `rewriteClosure`. 4c-ii re-pointed the PROOF-side shadow.
-Measured: `Cascade.lean:175` + one import = **4 errors, 1 file** — a FIRST WAVE, not a cone.
-(!) **NO BLOCKING CALL (2026-09-03b).** Row 27 has carried `hql` since 4c-ii; `:66`/`:67`
-derive it at `FullScope.lean:1345-1347`. `docs/latent-gaps.md:132-137` is STALE.
-(!) **THE `0`/`265` CRITERION IS MET BY A TWO-LINE DELETION THAT PROVES NOTHING.** Deleting
-`extractor.py:236-237` also reds the state gate — `19 failed, 37 passed`. Control is
-`test_conformance_state.py`; ledger **76 / 189** of 498. PROJECTION id `P6`, not board row.
-(!) **§11.13 (z): THE DEFINITION PIN MISSES DOT-NOTATION CALLS** — re-pointing
-`writeLoggedRules`'s body leaves step 4c GREEN. **(aa):** `git checkout --` can drop every
-tile verdict while `git status` is clean — ask `gate_status.py`, never `git status`.
+(nav) **`P3`: the write-path re-point is NOT one file.** The recorded 4 errors reproduce,
+but fixing them forces a statement change (`writeLoggedRules_evalEq`'s twin →
+`writeRulesRaw`), opening a 6-file cone — **8 obligations, 27 mechanical line edits**, each
+with its symbol in PROOF_STATUS `2026-09-03c` §4. A LOWER bound (`Equiv`/`FullScope`/`Audit`
+never reached). **(A)** needs a new premise, **(E)** changes a pinned inductive.
+(!) **§11.13 (z) CLOSED — the hole was WIDER than it recorded.** `_resolve` was also
+namespace-blind, so the non-vacuity witnesses' own schemas/stores had **no `def:` row**.
+Golden 165 → **232**. Control = the finding: the OLD walk is `165/165` GREEN on a hollowed
+`Sd`. **A trap's suggested remedy is not sized** — (z)'s would have closed 2 of 66.
+(!) **SAB-5 discharged**: 4c fires end-to-end through `verify.sh` on a `GraphAdmission`
+field-ORDER swap; 4a/4b green as controls. (!) **(aa):** the tree id moves on ANY code edit
+— including one made while tiles run (bit again 2026-09-03c). Ask `gate_status.py`.

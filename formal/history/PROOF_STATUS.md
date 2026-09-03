@@ -15,6 +15,199 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-03c (**trap (z) is FIXED and the hole was 66 declarations wide, not 2 — the non-vacuity witnesses were unpinned; SAB-5 fully discharged; and the write-path cone is MEASURED at 6 files / 8 substantive obligations, not "one more file"**)
+
+**Task taken:** `P3`, user-directed order — trap (z) first, then the write-path re-point
+with the stale-doc retirement folded in, SAB-5's last piece at the tail. The reasoning the
+user gave for that order held up exactly: doing (z) first meant the re-point landed against
+a gate that can actually observe it.
+
+### 1. Trap (z): fixed, and it was two defects, not one
+
+`statement_pin.py::_resolve` was wrong in two independent ways, each of which SILENTLY
+SHRANK the definition-pin closure. Measured: **158 → 224 declarations**, golden **165 → 232
+rows**, `+67 / -0`, `headline_statements.txt` byte-identical (49/49). Nothing was lost
+(`set(base) - set(fixed)` empty), and `MIN_PINNED_DEFS` is a `>=` floor so it did not move.
+
+* **R2 — receiver dot-calls**, the recorded finding. `σ.writeLoggedRules S t` tokenizes to
+  the bare `writeLoggedRules` (the non-ASCII receiver stops `IDENT_RE`), which is not a
+  declared name. Fixed with a `DOTCALL_RE` pass plus a suffix match over declared names,
+  taking ALL candidates when ambiguous — over-resolution costs a golden row, under-
+  resolution is the hole.
+* **R1 — namespace-blind bare resolution**, which trap (z) did NOT record and which is the
+  worse of the two. `_resolve` only tried `Zanzibar.<tok>` and `<tok>`, never the enclosing
+  namespace. So **the non-vacuity witnesses' own schemas and stores had no `def:` row at
+  all**: `W4Witness.Sx`/`Tx`, `W4WitnessUnion.Sy`/`Ty`,
+  `W4WitnessDirect.Sd`/`Td`/`Td4`/`qLeaf`/`qPub`, along with `MemberSet` and its algebra,
+  `GraphState.writeDirect`, `Schema.lookup`, the `SetEngineModel.expand*` family. Those
+  definitions are the entire content of "the hypothesis bundles are inhabited".
+
+⚠ **The trap's own suggested remedy would have been the wrong call.** It proposed hand-
+pinning `writeLoggedRules`/`writeLoggedOne`. That closes **2 of 66**. Re-size a trap's
+recommendation before taking it.
+
+### 2. The sabotages, and why the OLD run is the finding
+
+**SAB-Z1 (R1).** Narrowest plausible weakening: drop the exclusion arm from the `Sd`
+witness schema, so `doc#approver := [user] but not banned` becomes `doc#approver :=
+[user]` — the boolean non-vacuity witness stops witnessing a boolean schema.
+
+    NEW walk   rc=1  FAIL: the DEFINITION of def:Zanzibar.W4WitnessDirect.Sd changed
+                     1 definition-pin discrepancy(ies)
+                     headline statement pin: 49/49 statements match
+    OLD walk   rc=0  headline statement pin: 49/49 statements match
+                     headline definition pin: 165/165 definitions match (floor 139)
+
+**The OLD run is the whole finding**: fully green, every count matching, on a tree whose
+non-vacuity witness had been hollowed out. `grep -c 'def:Zanzibar.W4WitnessDirect.Sd'` on
+the old golden returns **0** — there was nothing to compare. The statement pin is green in
+BOTH runs, which is what makes this the definition pin's job and not the statement pin's.
+
+**SAB-Z2 (R2) — the end-to-end demonstration trap (z) asked for.** With the write path
+genuinely re-pointed, the OLD pin is **`rc=0`, `165/165`, green**, exactly as (z)
+predicted. The NEW pin is `rc=1` and fires on **nineteen** newly-reachable definitions —
+the entire leaf-rules machinery (`rewriteClosureL`, `rewriteClosureRawL`,
+`rewriteClosureAuxL`, `rewriteStepL`, `schemaRewritesL`, `leafRewrites`, `keyLeafRewrites`,
+`rawWriteTuples`, `rawWriteRels`, `persistedLeaves`, `pureLeaves`, `atomLeaves`,
+`unionSpineLeaves`, `unionAll`, `splitPure`, `isPure`, `isTaintedUserset`,
+`derivedAnywhere`, `PLeaf`). Literal output and both controls are in `statement_pin.py`'s
+module docstring, which is where they survive; scope doc §11.13 (z) carries the same,
+marked CLOSED.
+
+### 3. SAB-5's last piece: 4c observed firing END-TO-END through `verify.sh`
+
+`2026-09-03` left this owed — it needed "a mutation the build survives". It is a
+**field-ORDER swap**: exchange the `ttuNotLeaf` / `directRestrNotLeaf` declaration lines at
+`FullScope.lean:157-158`. All four construction sites bind by name, so the build is
+untouched (`1089 jobs`, then `2150 jobs`, both green), and `verify.sh lean` runs on to 4c
+and fails there with `rc=1`, one discrepancy, `fields=(...)` naming the reordered pair.
+**4a and 4b are the controls and stay green** (`584 pinned / 585 live`; `49/49`), so the
+red is attributable to 4c alone. Reverted from a byte-exact `cp` backup, not `git checkout`
+(trap (aa)). SAB-5 is closed in both halves.
+
+### 4. The write-path re-point: the 4 errors are real, and the cone is NOT one file
+
+The recorded measurement **reproduced exactly**: `Cascade.lean:175` → `rewriteClosureL S
+(rawWriteTuples S t)` plus `import ZanzibarProofs.GraphIndex.LeafRules` gives **4 errors,
+all in `Cascade.lean`** (`:237`/`:240`/`:248`/`:250`), one lemma family. Those four are
+mechanical — the `generalize rewriteClosure S t = ts` in `writeLoggedRules_evalEq` and
+`writeLoggedRules_watermark` no longer matches the folded list — **except that fixing them
+forces a STATEMENT change**: `writeLoggedRules_evalEq`'s unlogged twin must become
+`σ.writeRulesRaw S t`, because `writeRules` folds the plain closure and the logged write
+now folds the leaf-routed one. The two are not `EvalEq` in general; that is the point of
+the leg.
+
+**That statement change is what opens the cone.** Probed with the staged-`sorry` method
+(2026-09-01e's), stubbing each blocked obligation so `lake` proceeds past the red module
+instead of reporting the first wave as a cone size (trap (k)). Waves, in order:
+
+**17 build iterations.** Per-iteration error counts, re-derived from the logs rather than
+from memory (`grep -c '^error: Zanzibar' /tmp/b$i.log`) — the first draft of this table was
+written from memory and got the sequence wrong, which is the §11.13 item 2 failure in
+miniature:
+
+| iteration | module | errors |
+|---|---|---|
+| 1 | `Cascade` | 4 — **the recorded ones, reproduced exactly** |
+| 2 | `Cascade` | 1 |
+| 3–9 | `CascadeStable` | 10, 4, 3, 1, 4, 1, 1 |
+| 10–11 | `CascadeSettle` | 2, 1 |
+| 12 | *(clean; build advanced)* | 0 |
+| 13 | `CascadeInv` | 1 |
+| 14 | *(clean; build advanced)* | 0 |
+| 15–16 | `CascadeStrata` | 3, 2 |
+| 17 | `CascadeStrataSettle` | **12 — unresolved when the probe stopped** |
+
+⚠ **Do not read those counts as obligation counts.** Iterations 5 and 7 include reds caused
+by the STAGING, not by the re-point: a bare `sorry` in term position carries no type, so
+`rw [sorry]` and `rcases sorry` fail on their own, and one iteration is a mis-balanced paren
+in my own typed stub. The counts that mean something are the per-module dispositions:
+
+| module | distinct sites | disposition |
+|---|---|---|
+| `Cascade` | 5 | 4 mechanical (the recorded four) + the `:708-714` branch carrying **(A)** |
+| `CascadeStable` | 16 | 12 mechanical + **(B)**, **(C)**, **(D)**, **(E)** |
+| `CascadeSettle` | 3 | 2 mechanical + **(F)** |
+| `CascadeStrata` | 5 | 3 mechanical + **(G)**, **(H)** |
+| `CascadeInv` | 1 | 1 mechanical |
+| `CascadeStrataSettle` | 21 | 9 mechanical applied + **12 never triaged** |
+
+**Stopped at wave 17, deliberately, with the probe reverted.** `CascadeStrataSettle` is
+wave 17 of an unfinished descent, and `CascadeEnum`, `CascadeStrataEnum`,
+`CascadeStrataResettle`, `Equiv`, `FullScope` and `Audit` had not been reached at all — so
+**every number here is a LOWER bound**, in exactly the sense trap (k) describes and trap
+(v) sharpens. **What is settled is the verdict, not the count: this is the 11-file scale
+the `hcr`/`hql` threads hit, not "one more file".** Six files were touched before the
+probe stopped.
+
+**Eight substantive obligations were identified — these are the leg's real content, and
+none is a mechanical rename:**
+
+* **(A) an L-analogue of `ReconcileCorrect.lean::rewriteClosure_subject_pred_ne`**
+  (`Cascade.lean:714`, `CascadeStrata.lean:1100`). ⚠ **This one needs a NEW PREMISE and the
+  reason is structural**: `schemaRewritesL = schemaRewrites ++ leafRewrites`, and
+  `leafRewrites` runs `exprArms` over the closure leaves of DERIVED keys — which
+  `schemaRewrites` skips entirely by its taint filter. `exprArms (.ttu tr ts)` emits a
+  `.ttu tr` rule, so **a derived key's TTU arm produces a leaf rule with a TTU target that
+  `NoTtuTarget S R` says nothing about.** `NoTtuTarget` does NOT transfer to the L closure.
+  Verified first-hand at `LeafRules.lean:98`/`:106`, `RulesWrite.lean:61-67`.
+* **(B) `rewriteClosureL_object`** — `CascadeStable.lean:282`.
+* **(C) `rewriteClosureL_produced`** — `CascadeStable.lean:1795`.
+* **(D) the shadow's `hsubjW`** restated over the L closure — `CascadeStable.lean:1645-1646`.
+* **(E) the INDUCTIVE `ReachedByRulesAdmitted` itself** — its `step` constructor carries
+  `FoldAdmits σ0 (rewriteClosure S t)`, so the re-point is a **definition** change, not a
+  proof repair, and it drags the shadow's target `UntaintedShadow S _ (σ0.writeRules S t)`
+  with it.
+* **(F) an L-analogue of `rewriteClosure_rel_ne_bare`** — `CascadeSettle.lean:112`.
+* **(G) `CascadeStrata.lean::count_writeLoggedRules`** — its STATEMENT names
+  `rewriteClosure S t` twice (in `hadm` and on the RHS); restating it moves its callers.
+* **(H) `writeRulesRaw_schema`**, which does not exist — `CascadeStrata.lean:439`.
+
+**Mechanical, by contrast, and applied:** **27 LINE edits across 5 files** —
+`CascadeStable` 12, `CascadeStrataSettle` 9, `CascadeStrata` 3 (one argument + two
+`unfold`s), `CascadeSettle` 2, `CascadeInv` 1. ⚠ **The unit is LINES, not sites**: the
+`show` + `generalize` pair at `CascadeStable:1766-1767` is two lines for one site, which is
+why §11.13 item 2 makes the counting unit travel with the number. Each is a
+`rewriteClosure S t` appearing as an explicit list ARGUMENT to an already-list-generic
+lemma
+(`foldl_writeDirect_edges_sound`, `edgesClosed_foldl_writeDirect`,
+`foldl_writeDirect_nodes_mono`, `foldl_writeLoggedOne_outbox_mono`, and the `show` /
+`generalize` / `unfold` forms). `RulesCorrect.lean:135` matches that grep and must **NOT**
+move — it is the genuine unlogged W2 path.
+
+⚠ **`writeLoggedOne` needs no edit** — `rawWriteTuples` re-addresses `relation` to the leaf
+name, so `LeafRules.lean:242-245`'s banner over-specifies. That much of the recorded plan
+holds.
+
+### 5. What this session did NOT land, and why
+
+The write-path re-point is **reverted; the tree is unflipped and carries zero `sorry`.**
+Landing it is not green-stoppable in the state the probe left it: 8 undischarged
+obligations, one of which (A) is a new premise on a chain the headline theorems reach, and
+one of which (E) changes a pinned inductive. Committing a partial cone is what §11.12
+rule 5 forbids. **What IS landed is the instrument** — the gate can now see the re-point,
+which is the precondition the user identified for doing the work at all.
+
+### 6. Doc rot retired
+
+`docs/latent-gaps.md` still carried the `hql` gap as open. It is **deleted** — that file
+has replace semantics by its own header ("when a gap closes, its section is deleted, not
+struck through") — and a bullet filed in its `Closed` list instead. Row 27's binder was
+re-verified first-hand before writing. That section is what produced `2026-09-03`'s false
+escalation, one day after `2026-09-02d` closed it.
+
+⚠ **Trap (aa) recurred, with a mundane new cause: an ordinary edit made WHILE the tiles
+were running.** Removing one stray space from a *docstring* in `statement_pin.py` moved
+`t2c` and stranded all five freshly-green conformance tiles plus the four `tests-` tiles in
+flight. No `git checkout`, no CRLF — a one-character edit to a file in the code scope. The
+rule is a sequencing one: **freeze the code tree, then run the tiles, never interleave.**
+`*.md` edits are free, which is what makes the code-file exception easy to forget after an
+hour of safe doc editing. `gate_status.py` caught it; cost was a re-run.
+
+Recorded in full at scope doc §11.13 (aa).
+
+---
+
 ## Session 2026-09-03b (**the `hql` human call was ALREADY DISCHARGED — `2026-09-03`'s "Still owed" is wrong on that point; and the write-path re-point is ONE LINE plus an import**)
 
 **Task taken:** `P3`, user-directed scout ("scout it first, decide after") of the `hql`

@@ -38,15 +38,25 @@ the habit this ledger exists to retire. So:
     CORRESPONDENCE.md anchors, 4e scans prose globs (docs/*.md, formal/*.md,
     HANDOFF.md, CLAUDE.md), 4f lints both boards and the session ledger. A
     docs-only edit really can turn `lean` red.
-  * `t2c:` -- CODE inputs: `all` minus `*.md` and `benchmarks/`. The pytest tiles
+  * `t2c:` -- CODE inputs: `all` minus `benchmarks/` and minus `*.md` EXCEPT under
+    `tasks/`, which collected tests read (see CODE_SCOPE_MD_KEEP). The pytest tiles
     use it.
 
   ⚠ AN EXCLUSION IS A FAIL-OPEN: an excluded input can no longer invalidate a
-  cached green. The two exclusions were verified, not assumed -- no collected test
-  reads markdown (only `doc_counts.py` does, from step 4e), no `.md` file exists
-  under `tests/` or `formal/conformance/` at all, and nothing there imports
-  `benchmarks`. Fixtures (*.fga), goldens (*.txt) and corpora (*.json) stay IN
-  scope by construction, since only two extensions are named. See `_in_scope`.
+  cached green. The exclusions were verified, not assumed -- but ONE OF THOSE
+  VERIFICATIONS WENT STALE AND HAD TO BE REPAIRED (2026-09-03c). The claim was "no
+  collected test reads markdown"; it was true in 2026-08-17 and false from
+  2026-08-29d, when `tests/test_tasktool.py` joined the gate and brought
+  `live_copy`, which copies the LIVE `tasks/` markdown corpus and lints it (four
+  collected tests use it). A `tasks/*.md` edit could then redden the suite without
+  moving `t2c`. Hence `CODE_SCOPE_MD_KEEP`. What remains verified: nothing under
+  `tests/` or `formal/conformance/` imports `benchmarks`, and the only other
+  markdown reader is `doc_counts.py`, which runs from step 4e (an `all`-scope
+  phase). Fixtures (*.fga), goldens (*.txt) and corpora (*.json) stay IN scope by
+  construction. See `_in_scope`.
+  ⚠ THE REPAIRED DEFECT IS THE VERIFICATION, NOT THE LIST: a scope exclusion rests
+  on a survey of what exists TODAY, and nothing re-runs that survey when a test
+  module lands. Re-do it whenever one enters the gate.
   The scope tag is mixed into the digest AND the prefix, so a code-scoped id
   cannot match an all-scoped row even by coincidence, and the `t1` -> `t2` bump
   makes every pre-existing row structurally incapable of matching.
@@ -135,18 +145,38 @@ TREE_ID_ALGO = "t2"
 #            CLAUDE.md, and 4f lints both board files and the session ledger. A
 #            docs-only edit genuinely can turn `lean` red, and the gate-runbook
 #            already warns about exactly that.
-#   code  -- `all` minus *.md and benchmarks/. Used by the pytest tiles.
+#   code  -- `all` minus benchmarks/ and minus *.md except under tasks/ (which
+#            collected tests read). Used by the pytest tiles.
 #
 # ⚠ THE EXCLUSION IS A FAIL-OPEN SURFACE, so it was verified rather than assumed
 # (2026-08-17). Excluding an input a tile really reads would cache a stale green --
-# this repo's house failure mode. What was checked:
+# this repo's house failure mode.
+#
+# 🛑 AND IT WENT STALE, EXACTLY THAT WAY (found and fixed 2026-09-03c). The first
+# bullet below -- "NO collected test reads markdown" -- was true when written and
+# FALSE twelve days later: `tests/test_tasktool.py` entered the gate on 2026-08-29d,
+# and its `live_copy` helper copies the LIVE `tasks/` corpus (entirely markdown) and
+# lints it; four collected tests use it. So a `tasks/*.md` edit could turn the suite
+# RED without moving `t2c`, and `gate_status.py` would go on reporting COVERED from
+# the cached rows. Demonstrated, not theorised: this session edited `tasks/BANNER.md`
+# past its 14-line cap, `t2c` did not move, and all four `tests-` tiles failed on
+# `::test_sabotage_live_blind_parser`. Fixed by keeping `tasks/` IN the code scope
+# (`CODE_SCOPE_MD_KEEP`, below).
+#
+# ⚠ The durable lesson is about the VERIFICATION, not the list: a scope exclusion is
+# justified by a survey of what exists TODAY, and nothing re-runs that survey when a
+# new test module lands. Re-do it whenever a test module is added to the gate --
+# `verify.sh` cannot tell you, because the excluded file is invisible to it too.
+#
+# What was checked in 2026-08-17 (first bullet now superseded as above):
 #   * NO collected test reads markdown. Every `.md` in tests/ and
 #     formal/conformance/test_*.py is a docstring mention. The only real reader is
 #     formal/conformance/doc_counts.py, which runs from `verify.sh` step 4e (an
 #     `all`-scope phase), and no collected test imports it.
 #   * NO `.md` file exists under tests/ or formal/conformance/ at all, so no
 #     golden, fixture or corpus can be markdown. Goldens are .txt; conformance
-#     carries one .json.
+#     carries one .json. (Still true -- the markdown the suite reads lives in
+#     `tasks/`, outside both directories, which is why the survey missed it.)
 #   * NOTHING under tests/ or formal/conformance/ imports `benchmarks`; the
 #     dependency runs the other way (benchmarks imports tests.wildcard_helpers).
 # Re-verify all three before widening this list. Fixtures (*.fga), goldens (*.txt),
@@ -174,11 +204,22 @@ def phase_scope(phase: str) -> str:
     return SCOPE_CODE if _TILE_PHASE_RE.match(phase or "") else SCOPE_ALL
 
 
+# `tasks/` is markdown that collected tests genuinely READ, so it is NOT excludable.
+# See the fail-open note above: `tests/test_tasktool.py::live_copy` copies the LIVE
+# `tasks/` corpus (four tests use it) and lints it, so a `tasks/*.md` edit can turn the
+# suite red without moving a `*.md`-excluding tree id.  Demonstrated 2026-09-03c.
+CODE_SCOPE_MD_KEEP = (b"tasks/",)
+
+
 def _in_scope(rel: bytes, scope: str) -> bool:
     if scope == SCOPE_ALL:
         return True
     p = rel.replace(b"\\", b"/")
-    return not (p.endswith(b".md") or p.startswith(b"benchmarks/"))
+    if p.startswith(b"benchmarks/"):
+        return False
+    if p.endswith(b".md") and not p.startswith(CODE_SCOPE_MD_KEEP):
+        return False
+    return True
 
 # A tree column carrying one of these identifies nothing: `verify.sh` writes
 # `unknown` when `--tree-id` fails, and `nogit` is a pre-2026-08-17 leftover.
@@ -423,7 +464,7 @@ def report(require_green: bool) -> int:
     rows = read_ledger(d / LEDGER_NAME)
 
     print(f"tree:   {ids[SCOPE_ALL]}   ({head_description()})")
-    print(f"        {ids[SCOPE_CODE]}   (code scope: excludes *.md and benchmarks/; "
+    print(f"        {ids[SCOPE_CODE]}   (code scope: excludes benchmarks/ and *.md outside tasks/; "
           f"used by the pytest tiles)")
     print(f"ledger: {d / LEDGER_NAME}  ({len(rows)} row(s))")
 
