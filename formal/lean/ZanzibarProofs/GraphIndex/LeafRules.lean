@@ -687,6 +687,270 @@ theorem rewriteClosureL_subject_not_leafNode_bare {S : Schema} (hnl : NoLeafSubj
     ∀ u ∈ rewriteClosureL S (rawWriteTuples S t), ¬ LeafNode S (subjNode u.subject) :=
   rewriteClosureL_subject_not_leafNode hnl (show NotLeafName _ from Or.inl ht)
 
+/-! ## The WRITE-PATH re-point — the structural twins the re-pointed fold needs
+
+`Cascade.lean::GraphState.writeLoggedRules` folds `rewriteClosure S t`; the re-point makes
+it fold `rewriteClosureL S (rawWriteTuples S t)`, the same list `::writeRulesRaw` above
+already folds. Its consumers in `CascadeStable.lean` reach for
+`RulesCorrect.lean::rewriteClosure_object` and `::rewriteClosure_produced`, neither of which
+has an L twin — obligations **(B)** and **(C)** of the write-path cone
+(`formal/history/PROOF_STATUS.md` `## Session 2026-09-03c` §4).
+
+Proved here on the UNFLIPPED tree deliberately. They are additive, consume nothing, change
+no existing declaration and no pin, so they are §11.12 **rule 6**'s *green additive prefix*
+("it contains no re-point and no pin asserting anything untrue"), not a partial cone under
+rule 5. Landing them before opening the cone makes what remains smaller — the move that cut
+the `hcr` thread 79 → 62 on 2026-09-02c.
+
+The proofs transcribe their plain twins modulo `schemaRewrites → schemaRewritesL`, because
+`rewriteStepL` (`:188`) differs from `RulesWrite.lean::rewriteStep` only in which rule list
+it `filterMap`s, and `applyRRule` is shared. `applyRRule_some` above is the four-fact
+extraction both need, which is why `RulesCorrect` is not imported here.
+
+## ★ CONTROLLED — two sabotages, run 2026-09-05 (`docs/sabotage-procedure.md`)
+
+Everything here is ADDITIVE and therefore INERT, so a green build vets nothing. The one
+claim that can actually be wrong is that **`schemaRewritesL` is load-bearing** — that these
+are not just the plain lemmas with a longer name. Both sabotages are that claim, attacked at
+its two independent entry points. Restored from a byte-exact `cp` backup, never
+`git checkout --` (trap (aa)); tree byte-identical after, `1089 jobs`, `rc=0`, zero `sorry`.
+
+**(SAB-A) `TtuTargetsSatL` narrowed to `schemaRewrites`** — the narrowest plausible
+weakening of obligation (A)'s new premise, i.e. "it was `NoTtuTarget` all along". `rc=1`,
+SIX errors, and the two that matter are the WITNESSES rather than the plumbing:
+
+```text
+LeafRules.lean:859:55: Type mismatch                    -- noLeafSubjects_iff_ttuTargetsSatL
+LeafRules.lean:871:16: Application type mismatch        -- rewriteStepL_subject_pred_gen
+LeafRules.lean:1348:8: (kernel) application type mismatch  -- stP_full_layer_does_target_viewer
+LeafRules.lean:1354:8: (kernel) application type mismatch  -- ttuTargetsSatL_snlBoth_ne_banned
+```
+
+`:1348` firing is the whole point: under the narrowed premise `TtuTargetsSatL SlStP
+(· ≠ "viewer")` becomes VACUOUSLY TRUE (`stP_untainted_layer_silent`), so its negation stops
+being provable. That is the `SlStP` pair doing the job it was written for — without it, the
+narrowing would have been invisible at the witness layer and only the plumbing would have
+complained.
+
+**(SAB-B) `rewriteStepL_outRel`'s existential narrowed to `schemaRewrites`** — the same
+attack on (B)/(C)'s side. `rc=1`, TWO errors, both attributable:
+
+```text
+LeafRules.lean:730:12: Application type mismatch  -- rewriteStepL_outRel
+LeafRules.lean:786:23: Application type mismatch  -- rewriteClosureAuxL_produced
+```
+
+⚠ Both counts are LOWER bounds: Lean does not build the dependents of a failed module, and
+`LeafRules` is upstream of the whole cascade chain (traps (k)/(v)). -/
+
+/-- One L-rewrite step preserves the object — twin of
+    `RulesCorrect.lean::rewriteStep_object`. -/
+theorem rewriteStepL_object {S : Schema} {t u : Tuple} (h : u ∈ rewriteStepL S t) :
+    u.object = t.object := by
+  unfold rewriteStepL at h
+  obtain ⟨r, _, hap⟩ := List.mem_filterMap.mp h
+  exact (applyRRule_some hap).1
+
+/-- One L-rewrite step's output relation is some FULL-rule-set rule's `outRel`, at that
+    rule's object type — twin of `RulesCorrect.lean::rewriteStep_outRel`.
+
+    ⚠ The existential ranges over `schemaRewritesL`, and that is not a cosmetic widening:
+    a leaf rule's `outRel` is a MINTED LEAF NAME, which the untainted layer provably never
+    emits (`not_isLeafPred_outRel_of_mem_schemaRewrites`). So the plain twin is not merely
+    weaker at a leaf-routed output — it is false there. -/
+theorem rewriteStepL_outRel {S : Schema} {t u : Tuple} (h : u ∈ rewriteStepL S t) :
+    ∃ r ∈ schemaRewritesL S, r.objectType = u.object.type ∧ r.outRel = u.relation := by
+  unfold rewriteStepL at h
+  obtain ⟨r, hr, hap⟩ := List.mem_filterMap.mp h
+  obtain ⟨hobj, hrel, -, hty⟩ := applyRRule_some hap
+  exact ⟨r, hr, by rw [hobj, hty], hrel.symm⟩
+
+/-- Object preservation across the L closure kernel, over an ARBITRARY seed list — which is
+    what the leaf-routed write needs, its seed being the `rawWriteTuples` fan-out rather
+    than a singleton. Twin of `RulesCorrect.lean::rewriteClosureAux_object`. -/
+theorem rewriteClosureAuxL_object {S : Schema} {O : ObjectRef} :
+    ∀ (n : Nat) (cur : List Tuple), (∀ w ∈ cur, w.object = O) →
+      ∀ u ∈ rewriteClosureAuxL S n cur, u.object = O := by
+  intro n
+  induction n with
+  | zero => intro cur hcur u hu; exact hcur u hu
+  | succ m ih =>
+      intro cur hcur u hu
+      rw [rewriteClosureAuxL, List.mem_append] at hu
+      rcases hu with hin | hrec
+      · exact hcur u hin
+      · refine ih _ ?_ u hrec
+        intro w hw
+        rw [List.mem_flatMap] at hw
+        obtain ⟨x, hx, hwx⟩ := hw
+        rw [rewriteStepL_object hwx]; exact hcur x hx
+
+/-- **(B) Every leaf-routed closure tuple carries the raw write's object.** Twin of
+    `RulesCorrect.lean::rewriteClosure_object`, at the seed the re-pointed
+    `writeLoggedRules` fold uses.
+
+    Object preservation survives the fan-out for a reason worth naming: `Leaf.lean:762
+    rawWriteTuples` re-addresses the RELATION only (`fun r => { t with relation := r }`),
+    so the entire seed list already shares `t.object` before the closure starts. -/
+theorem rewriteClosureL_object {S : Schema} {t u : Tuple}
+    (h : u ∈ rewriteClosureL S (rawWriteTuples S t)) : u.object = t.object := by
+  rw [mem_rewriteClosureL_iff] at h
+  unfold rewriteClosureRawL at h
+  refine rewriteClosureAuxL_object _ _ ?_ _ h
+  intro w hw
+  unfold rawWriteTuples at hw
+  obtain ⟨r, _, rfl⟩ := List.mem_map.mp hw
+  rfl
+
+/-- Every `rewriteClosureAuxL` member is in the seed list or is an L-rewrite output. Twin of
+    `RulesCorrect.lean::rewriteClosureAux_produced`. -/
+theorem rewriteClosureAuxL_produced {S : Schema} :
+    ∀ (n : Nat) (cur : List Tuple) {u : Tuple}, u ∈ rewriteClosureAuxL S n cur →
+      u ∈ cur ∨ ∃ r ∈ schemaRewritesL S,
+        r.objectType = u.object.type ∧ r.outRel = u.relation := by
+  intro n
+  induction n with
+  | zero => intro cur u hu; exact Or.inl hu
+  | succ m ih =>
+      intro cur u hu
+      rw [rewriteClosureAuxL, List.mem_append] at hu
+      rcases hu with hin | hrec
+      · exact Or.inl hin
+      · rcases ih _ hrec with hcur | hout
+        · rw [List.mem_flatMap] at hcur
+          obtain ⟨x, _, hux⟩ := hcur
+          exact Or.inr (rewriteStepL_outRel hux)
+        · exact Or.inr hout
+
+/-- **(C) Every leaf-routed closure tuple is a re-addressed seed or an L-rewrite output.**
+    Twin of `RulesCorrect.lean::rewriteClosure_produced`.
+
+    ⚠ **The left disjunct is `u ∈ seeds`, NOT `u = t`.** The plain twin can say `u = t`
+    because its closure seeds with the singleton `[t]`; the leaf-routed one seeds with the
+    measured FAN-OUT `rawWriteTuples S t`, so a member may be any of the re-addressed
+    storage-leaf copies. A consumer wanting the raw write back must compose with
+    `rewriteClosureL_object` (same object) and `rawWriteTuples`' relation re-addressing.
+    The singleton form does NOT survive the re-point, and that is content of the leg rather
+    than an accident of how this statement is written. -/
+theorem rewriteClosureL_produced {S : Schema} {seeds : List Tuple} {u : Tuple}
+    (h : u ∈ rewriteClosureL S seeds) :
+    u ∈ seeds ∨ ∃ r ∈ schemaRewritesL S,
+      r.objectType = u.object.type ∧ r.outRel = u.relation := by
+  rw [mem_rewriteClosureL_iff] at h
+  unfold rewriteClosureRawL at h
+  exact rewriteClosureAuxL_produced _ _ h
+
+/-- **`TtuTargetsSatL S Q`** — every TTU target of the FULL leaf-routed rule set satisfies
+    `Q`. The predicate-generic form of `NoLeafSubjects` above (which is this at
+    `Q := NotLeafName`), and the L twin of `ReconcileCorrect.lean::TtuTargetsSat`.
+
+    ⚠ **This is obligation (A)'s NEW PREMISE, and it is genuinely new rather than a
+    re-spelling.** `ReconcileCorrect.lean::NoTtuTarget` quantifies over `schemaRewrites S`
+    ALONE, so it constrains only the untainted layer. `leafRewrites` (`:98`) runs `exprArms`
+    over the closure leaves of DERIVED keys — exactly the keys `schemaRewrites` drops by its
+    taint filter (`RulesWrite.lean:61-67`) — and `exprArms` on a `.ttu` arm emits a `.ttu`
+    rule. So a derived key's TTU arm produces a leaf rule whose target `NoTtuTarget S R` says
+    nothing about: **`NoTtuTarget` does NOT transfer to the L closure**, which is why the
+    L-analogue below cannot simply re-use it.
+
+    The reassuring half is that this quantification is ALREADY ACCEPTED in this tree at a
+    different `Q`: `NoLeafSubjects` is literally it at `NotLeafName`, and that one is
+    discharged from `GraphAdmission` (2026-09-02). So (A) needs a new premise, not a new
+    KIND of premise.
+
+    ★ **AND THE PREMISE LOOKS DISCHARGEABLE, which the record does not say** (it frames (A)
+    as needing a new premise, full stop, and sizes the plan off that). Two facts, each
+    verified first-hand 2026-09-05, compose:
+
+    * `Leaf.lean::isPure`'s TTU arm is `!isDerived S (ty, ts) && !derivedAnywhere S tgt`, and
+      `Leaf.lean::atomLeaves` emits `.closure (.ttu tgt ts)` ONLY under `isPure`. So every
+      TTU target a LEAF rule can carry is `derivedAnywhere`-FALSE.
+    * `FullScope.lean:238 W4Fragment.term` supplies `NoTtuTarget S R` only under
+      `isDerived S (dt, R) = true` — as do all fifteen `Equiv.lean` consumers (`:281`…`:660`).
+      So the `R` these consumers care about is always derived, i.e. `derivedAnywhere S R`.
+
+    Those cannot both hold of the same name, so `tgt ≠ R` is FREE on the leaf half and
+    `TtuTargetsSatL S (· ≠ R)` should follow from `NoTtuTarget S R` plus "R is derived".
+
+    ⚠ **NOT PROVED HERE — this is a source reading, not a kernel check.** The missing lemma
+    is "every `.closure` leaf of `persistedLeaves` is `isPure`", a mutual induction over
+    `Leaf.lean::persistedLeaves` / `::unionSpineLeaves` for which NO purity lemma exists in
+    the tree today. Until it is proved, treat the premise as assumed and this paragraph as
+    sizing input only. The `SlStP` pair below shows the gap is REAL at a non-derived `R`;
+    it does NOT show the gap survives at the derived `R` the consumers actually supply,
+    and those are different claims. -/
+def TtuTargetsSatL (S : Schema) (Q : String → Prop) : Prop :=
+  ∀ r ∈ schemaRewritesL S, ∀ tr ∈ ttuTargets r, Q tr
+
+/-- …and it is decidable at a concrete schema and decidable `Q`, which is what lets the
+    witnesses below be `decide` pins. (A plain `def` is not unfolded by instance synthesis,
+    so the instance has to be stated — same reason as `NoLeafSubjects`' above.) -/
+instance (S : Schema) (Q : String → Prop) [DecidablePred Q] :
+    Decidable (TtuTargetsSatL S Q) :=
+  inferInstanceAs (Decidable (∀ r ∈ schemaRewritesL S, ∀ tr ∈ ttuTargets r, Q tr))
+
+/-- `NoLeafSubjects` IS `TtuTargetsSatL` at `NotLeafName` — definitionally, so the existing
+    `NotLeafName` development above and this generic one are one chain, not two. -/
+theorem noLeafSubjects_iff_ttuTargetsSatL {S : Schema} :
+    NoLeafSubjects S ↔ TtuTargetsSatL S NotLeafName := Iff.rfl
+
+/-- One L-rewrite step preserves any `Q` on the subject predicate that the FULL rule set's
+    TTU targets satisfy. The generic parent of `rewriteStepL_subject_notLeafName`; the proof
+    is that one with `NotLeafName` abstracted, since it never inspects the predicate. -/
+theorem rewriteStepL_subject_pred_gen {S : Schema} {Q : String → Prop}
+    (hnt : TtuTargetsSatL S Q) {t u : Tuple} (ht : Q t.subject.predicate)
+    (h : u ∈ rewriteStepL S t) : Q u.subject.predicate := by
+  unfold rewriteStepL at h
+  obtain ⟨r, hr, hap⟩ := List.mem_filterMap.mp h
+  rcases applyRRule_subject_pred hap with heq | hmem
+  · rw [heq]; exact ht
+  · exact hnt r hr _ hmem
+
+/-- Subject-predicate `Q`-preservation across the L closure kernel, at every fuel and
+    frontier. -/
+theorem rewriteClosureAuxL_subject_pred_gen {S : Schema} {Q : String → Prop}
+    (hnt : TtuTargetsSatL S Q) :
+    ∀ (n : Nat) (cur : List Tuple), (∀ w ∈ cur, Q w.subject.predicate) →
+      ∀ v ∈ rewriteClosureAuxL S n cur, Q v.subject.predicate := by
+  intro n
+  induction n with
+  | zero => intro cur hcur v hv; exact hcur v hv
+  | succ n ih =>
+      intro cur hcur v hv
+      simp only [rewriteClosureAuxL, List.mem_append] at hv
+      rcases hv with hv | hv
+      · exact hcur v hv
+      · refine ih _ ?_ v hv
+        intro w hw
+        obtain ⟨u, hu, hwu⟩ := List.mem_flatMap.mp hw
+        exact rewriteStepL_subject_pred_gen hnt (hcur u hu) hwu
+
+/-- The `Q`-generic L closure corollary, over an arbitrary seed list. -/
+theorem rewriteClosureL_subject_pred_gen {S : Schema} {Q : String → Prop}
+    (hnt : TtuTargetsSatL S Q) {seeds : List Tuple}
+    (hs : ∀ w ∈ seeds, Q w.subject.predicate) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S seeds) : Q u.subject.predicate := by
+  rw [mem_rewriteClosureL_iff] at hu
+  unfold rewriteClosureRawL at hu
+  exact rewriteClosureAuxL_subject_pred_gen hnt _ seeds hs u hu
+
+/-- **(A) No leaf-routed closure tuple of an `R`-avoiding raw write has subject predicate
+    `R`.** The L twin of `ReconcileCorrect.lean::rewriteClosure_subject_pred_ne`, at the seed
+    the re-pointed `writeLoggedRules` fold uses.
+
+    The seed premise collapses to a fact about the raw write's OWN subject, exactly as in
+    `rewriteClosureL_subject_not_leafNode`: `rawWriteTuples` re-addresses the relation only,
+    so the fan-out cannot introduce a fresh subject predicate. -/
+theorem rewriteClosureL_subject_pred_ne {S : Schema} {R : String}
+    (hnt : TtuTargetsSatL S (· ≠ R)) {t : Tuple} (ht : t.subject.predicate ≠ R)
+    {u : Tuple} (hu : u ∈ rewriteClosureL S (rawWriteTuples S t)) :
+    u.subject.predicate ≠ R := by
+  refine rewriteClosureL_subject_pred_gen hnt ?_ hu
+  intro w hw
+  unfold rawWriteTuples at hw
+  obtain ⟨r, _, rfl⟩ := List.mem_map.mp hw
+  exact ht
+
 /-! ## The non-vacuity witnesses
 
 Everything above is additive, so a green build vets nothing: `leafRewrites` returning
@@ -1044,6 +1308,97 @@ theorem noLeafSubjects_closure_nonvacuous :
   rewriteClosureL_subject_not_leafNode_bare noLeafSubjects_snlBoth
     (t := tnlParent) tnlParent_subject_bare
     ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩ (by decide)
+
+/-! ### Non-vacuity of the write-path twins — obligations (A), (B), (C)
+
+`rewriteClosureL_object` / `::rewriteClosureL_produced` / `::rewriteClosureL_subject_pred_ne`
+are **INERT**: the write-path re-point that will consume them has not landed, so a green
+build vets nothing about them and the pins below are the SOLE evidence
+(`docs/sabotage-procedure.md` §"The INERT change").
+
+Two separate things are pinned. **That the twins APPLY** — at a closure member which is
+genuinely DERIVED rather than handed to them by the seed fan-out, so neither is a claim about
+an empty or trivial set. And **that obligation (A)'s new premise is genuinely new**: the
+claim that `NoTtuTarget` does not transfer to the L closure was PROSE in
+`formal/history/PROOF_STATUS.md` `## Session 2026-09-03c` §4, and the `SlStP` pair below
+makes it a `decide`. -/
+
+/-- The pinned leaf-layer extra is **not a seed** — the closure produced it, `rawWriteTuples`'
+    fan-out did not. This is what stops the two applications below from landing at a seed,
+    where they would say nothing. -/
+theorem snlBoth_leaf_extra_not_a_seed :
+    ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩ ∉
+      rawWriteTuples SnlBoth tnlParent := by decide
+
+/-- **(B) applied** at that derived extra. The object survives a `.ttu` hop that rewrote the
+    SUBJECT (`snlBoth_extra_subject_rewritten`), which is the only way object preservation
+    could plausibly have failed. Derived THROUGH the lemma — a `by decide` of the equation
+    alone would say nothing about whether the lemma applies. -/
+theorem rewriteClosureL_object_nonvacuous :
+    (⟨"doc", "d1"⟩ : ObjectRef) = tnlParent.object :=
+  rewriteClosureL_object (S := SnlBoth) (t := tnlParent)
+    (u := ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩) (by decide)
+
+/-- **(C) applied**, and FORCED onto the right disjunct: the extra is not a seed, so
+    "produced by a rule" is the only branch available. The rule it names lives in the
+    `leafRewrites` half — `snlBoth_untainted_layer_ttu` pins `schemaRewrites SnlBoth` to its
+    single member, whose `outRel` is `editor`, not `access.0`. So (C)'s quantification over
+    `schemaRewritesL` rather than `schemaRewrites` is load-bearing here, not decorative. -/
+theorem rewriteClosureL_produced_nonvacuous :
+    ∃ r ∈ schemaRewritesL SnlBoth,
+      r.objectType = "doc" ∧ r.outRel = leafPred "access" 0 := by
+  rcases rewriteClosureL_produced (S := SnlBoth)
+      (seeds := rawWriteTuples SnlBoth tnlParent)
+      (u := ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩)
+      (by decide) with hseed | h
+  · exact absurd hseed snlBoth_leaf_extra_not_a_seed
+  · exact h
+
+/-- **(A)'s premise gap, MACHINE-CHECKED rather than argued.** `SlStP` is
+    `access := viewer from parent but not banned`. Its UNTAINTED layer satisfies
+    `ReconcileCorrect.lean::NoTtuTarget SlStP "viewer"` — spelled out verbatim here, since
+    importing `ReconcileCorrect` is refused in this file — while its FULL layer does NOT
+    satisfy the L twin at the same relation, because `leafRewrites` compiles the DERIVED
+    key's TTU arm into `⟨"doc", "parent", access.0, .ttu "viewer"⟩` (`lrStP_rules`).
+
+    ⚠ The first holds VACUOUSLY — the taint filter leaves `schemaRewrites SlStP` empty — and
+    that IS the finding rather than a weakness of the witness: a premise constraining only the
+    untainted layer is satisfied, trivially, by a schema whose leaf layer does target the
+    relation. That is exactly why obligation (A) needs a new premise instead of re-using
+    `NoTtuTarget`, and it is the pair to re-run if anyone proposes threading `NoTtuTarget`
+    through the re-pointed fold.
+
+    ⚠ The `NoTtuTarget` side is deliberately NOT a `decide`: its `∀ tr, r.kind = .ttu tr → …`
+    shape quantifies over ALL strings, so it has no `Decidable` instance (observed:
+    *"failed to synthesize Decidable (∀ r ∈ schemaRewrites SlStP, ∀ (tr : String), …)"*).
+    Routing it through `stP_untainted_layer_silent` is the better witness anyway — the empty
+    rule list is the *reason* the premise holds, stated rather than hidden inside a kernel
+    evaluation. -/
+theorem stP_untainted_layer_silent : schemaRewrites SlStP = [] := by decide
+
+theorem stP_untainted_layer_no_ttu_target_viewer :
+    ∀ r ∈ schemaRewrites SlStP, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ "viewer" := by
+  rw [stP_untainted_layer_silent]
+  simp
+
+theorem stP_full_layer_does_target_viewer :
+    ¬ TtuTargetsSatL SlStP (· ≠ "viewer") := by decide
+
+/-- The satisfiability half of the pair: `TtuTargetsSatL` is not a premise nothing meets.
+    `SnlBoth`'s TTU targets are `viewer` in BOTH layers, so it satisfies the L form at
+    `(· ≠ "banned")`. -/
+theorem ttuTargetsSatL_snlBoth_ne_banned : TtuTargetsSatL SnlBoth (· ≠ "banned") := by decide
+
+/-- **(A) applied** where its premise genuinely holds, at the same derived extra. The seed's
+    subject predicate is `BARE` and the extra's is `viewer`, so the `.ttu` branch of
+    `applyRRule_subject_pred` — the only branch `TtuTargetsSatL` constrains — is the one
+    carrying the conclusion. A `computed`-only witness would have run the `Or.inl` branch and
+    proved nothing about the premise. -/
+theorem rewriteClosureL_subject_pred_ne_nonvacuous :
+    (⟨"folder", "f1", "viewer"⟩ : SubjectRef).predicate ≠ "banned" :=
+  rewriteClosureL_subject_pred_ne ttuTargetsSatL_snlBoth_ne_banned
+    (t := tnlParent) (by decide)
+    (u := ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩) (by decide)
 
 end LeafRuleWitness
 

@@ -25,6 +25,67 @@ from here.
 
 ---
 
+## 2026-09-05 — the write-path cone HAS a green additive prefix: (A)/(B)/(C) landed, (H) was never open
+
+rows: `P3`
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-05`.
+
+lint: `task lint: clean (12 checks, 156 task file(s) parsed)`
+read: board + HANDOFF
+
+**No re-point was made.** `Cascade.lean:175` still folds `rewriteClosure`; the tree is
+unflipped, zero `sorry`, and every pin is byte-identical to the `7200484` anchor
+(statements 49/49, definitions **232/232**, `audits=585 pinned=584`).
+
+**The session's claim.** `2026-09-03c` §5 said landing the write path "is not
+green-stoppable … 8 undischarged obligations". True of the RE-POINT, false of the
+OBLIGATIONS: five of the eight are L-analogues of existing plain-closure lemmas, and an
+L-analogue is provable against `rewriteClosureL` TODAY because that definition already
+exists and is already what `LeafRules.lean::writeRulesRaw` folds. §11.13 **(w)** recurring
+a third time, licensed by §11.12 **rule 6** — a green additive prefix contains no re-point
+and no pin asserting anything untrue, and both halves were checked rather than assumed.
+
+**(H) was never open.** `writeRulesRaw_schema` exists at `LeafRules.lean:292` and predates
+the probe that declared it missing — so the record was wrong when written, not stale. Found
+by grepping all eight cited symbols before reading anything else. **CLAUDE.md's "cite a
+symbol that EXISTS" applies to claims of NON-existence too**, and nothing in the gate can
+catch that direction. 8 substantive obligations is 7.
+
+**Landed:** 21 declarations in `LeafRules.lean` — (B) `rewriteClosureL_object`, (C)
+`::rewriteClosureL_produced`, (A) `::rewriteClosureL_subject_pred_ne` plus the `Q`-generic
+chain (`TtuTargetsSatL`) it instantiates, with non-vacuity pins and two sabotages. Zero
+existing declarations touched, no new import, green at every stage (1089 jobs), four build
+cycles of a declared ten. Why it was cheap: `rewriteClosureAuxL` is `rewriteClosureAux` with
+`rewriteStepL` swapped in, `rewriteStepL` is `rewriteStep` with `schemaRewritesL` swapped in,
+`applyRRule` is shared, and the plain aux lemmas are already seed-LIST-generic. **The
+obligations were sized as cone repairs because the probe met them as cone repairs; met
+head-on as lemmas about an existing definition they are transcriptions.**
+
+**★ (A)'s premise looks DISCHARGEABLE, which changes its sizing.** `Leaf.lean::isPure`'s TTU
+arm requires `!derivedAnywhere S tgt` and `::atomLeaves` emits a `.closure` TTU leaf only
+under `isPure`, so every leaf-rule TTU target is derived-nowhere; while
+`FullScope.lean:238 W4Fragment.term` supplies `NoTtuTarget S R` only for a DERIVED `R` (as do
+all fifteen `Equiv.lean` consumers). A name cannot be both. ⚠ **Source reading, not a kernel
+check** — the missing lemma is "every `.closure` leaf of `persistedLeaves` is `isPure`", a
+mutual induction for which no purity lemma exists today. Next session's first move; additive.
+
+**Sabotages, both restored from a byte-exact `cp` backup (trap (aa)).** SAB-A narrowed
+`TtuTargetsSatL` to `schemaRewrites` → `rc=1`, six errors, and the two that matter are
+WITNESSES not plumbing (`stP_full_layer_does_target_viewer` at `:1348` fires because the
+narrowed premise becomes vacuously true). SAB-B narrowed `rewriteStepL_outRel`'s existential
+→ `rc=1`, two attributable errors. Both counts are lower bounds (traps (k)/(v)).
+
+**Method note worth carrying:** a 23-agent read-only recon ran in parallel with the work and
+independently converged on the same `TtuTargetsSatL` design — but its most useful output was
+the `isPure` discharge route above, which I then verified first-hand before believing. It
+also refuted my own pin's reach (the `SlStP` witness shows the gap at a NON-derived `R`, not
+at the derived `R` consumers actually supply). Delegation as evidence, reconciled not
+averaged — CLAUDE.md's rule landing the right way round this time.
+
+Still owed: nothing.
+
 ## 2026-09-03c — trap (z) fixed, 66 decls wide not 2; SAB-5 closed end-to-end; write-path cone is 11-file scale
 
 rows: `P3`

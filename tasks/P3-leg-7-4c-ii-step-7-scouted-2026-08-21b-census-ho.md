@@ -1,7 +1,7 @@
 ---
 id: P3
-title: leg 7 4c-ii -- the MIDDLE split too: the shadow is generic, widening is a re-instantiation
-brief: No blocking call after all (row 27 has hql). Re-point measured: 1 line + 1 import = 4 errors, 1 file.
+title: leg 7 4c-ii -- the write-path OBLIGATIONS have a green additive prefix; the re-point does not
+brief: (A)/(B)/(C) landed additive, zero pin cost; (H) never existed, so 8 obligations is 7. (A) may be dischargeable.
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-03c
-updated: 2026-09-03c
+moved: 2026-09-05
+updated: 2026-09-05
 closed:
 ---
 
@@ -677,3 +677,79 @@ Record: PROOF_STATUS ## Session 2026-09-03b.
 ### 2026-09-03c
 
 Trap (z) FIXED, and it was 66 declarations wide, not the 2 the trap named: statement_pin.py::_resolve was ALSO namespace-blind, so the non-vacuity witnesses' own schemas/stores (Sx/Sy/Sd/Td/Td4/qLeaf/qPub, MemberSet, Schema.lookup, GraphState.writeDirect) had no def: row at all. Closure 158->224, golden 165->232 (+67/-0), statements byte-identical. Control IS the finding: the OLD walk is 165/165 GREEN on a tree whose Sd witness has had its exclusion arm deleted. The trap's own suggested remedy (hand-pin two names) would have closed 2 of 66. SAB-5 fully discharged: 4c fires end-to-end through verify.sh on a GraphAdmission field-ORDER swap the build survives, 4a/4b green as controls. WRITE-PATH CONE MEASURED: the recorded 4 errors/1 file reproduce exactly, but fixing them forces writeLoggedRules_evalEq's twin to become writeRulesRaw, and that statement change opens a 17-wave 6-file descent (Cascade, CascadeStable, CascadeSettle, CascadeInv, CascadeStrata, CascadeStrataSettle) that never reached Equiv/FullScope/Audit -- a LOWER bound, and the 11-file scale rather than one file. 8 substantive obligations (A: NoTtuTarget does NOT transfer to schemaRewritesL, since leafRewrites covers derived keys the taint filter skips; E: ReachedByRulesAdmitted is a pinned INDUCTIVE) + 24 mechanical sites; RulesCorrect.lean:135 matches the grep but must NOT move. Probe reverted, tree unflipped, zero sorry. docs/latent-gaps.md's stale hql section deleted per its replace semantics. Detail: PROOF_STATUS 2026-09-03c.
+
+### 2026-09-05
+
+THE WRITE-PATH CONE HAS A GREEN ADDITIVE PREFIX, and the record's "not green-stoppable" was
+a statement about the RE-POINT read as one about the OBLIGATIONS. Five of the eight are
+L-analogues of existing plain-closure lemmas, and an L-analogue is provable against
+rewriteClosureL TODAY -- that definition already exists and is already what
+LeafRules.lean::writeRulesRaw folds, so nothing has to be re-pointed to prove things about
+it. Third recurrence of scope-doc 11.13 (w); 11.12 rule 6 is the licence (a green additive
+prefix contains no re-point and no pin asserting anything untrue -- both halves checked).
+
+LANDED: obligations (A) rewriteClosureL_subject_pred_ne (+ the Q-generic chain TtuTargetsSatL
+/ rewriteStepL_subject_pred_gen / rewriteClosureAuxL_subject_pred_gen /
+rewriteClosureL_subject_pred_gen + a Decidable instance), (B) rewriteClosureL_object (+
+rewriteStepL_object, rewriteClosureAuxL_object), (C) rewriteClosureL_produced (+
+rewriteStepL_outRel, rewriteClosureAuxL_produced). 21 declarations in LeafRules.lean, zero
+existing declarations touched, no new import, green at every stage (1089 jobs, 0 sorry), four
+build cycles of a declared ten. PIN COST ZERO: statements 49/49, definitions 232/232,
+audits=585 pinned=584 -- the 7200484 anchor exactly, and measured against the post-trap-(z)
+walk, a far more sensitive instrument than the one in place when this cone was first sized.
+
+(H) WAS NEVER OPEN -- the record was WRONG WHEN WRITTEN, not stale. writeRulesRaw_schema is
+declared at LeafRules.lean:292 and git log -S places it in the 4c-i landing, before the probe
+that reported it missing. Found by grepping all eight cited symbols before reading anything
+else. CLAUDE.md's "a trap must cite a symbol that EXISTS" binds a claim of NON-existence too,
+and no gate phase can catch that direction. 8 substantive obligations is 7.
+
+WHY IT WAS CHEAP, and why four sessions of sizing missed it: rewriteClosureAuxL is
+rewriteClosureAux with rewriteStepL swapped in; rewriteStepL is rewriteStep with
+schemaRewritesL swapped in; applyRRule is SHARED; and the plain aux lemmas are already stated
+over an arbitrary seed LIST, so the fan-out costs nothing. The obligations were sized as cone
+repairs because the probe met them as cone repairs.
+
+(C) DIFFERS FROM ITS TWIN AND CONSUMERS MUST KNOW: its left disjunct is u in seeds, NOT u = t.
+The plain twin seeds with the singleton [t]; the leaf-routed one seeds with the measured
+fan-out rawWriteTuples S t. Recover the raw write via rewriteClosureL_object.
+
+(A)'s PREMISE LOOKS DISCHARGEABLE -- the record frames (A) as needing a new premise, full
+stop, and sizes the plan off that. Leaf.lean::isPure's TTU arm requires !derivedAnywhere S
+tgt and ::atomLeaves emits a .closure TTU leaf only under isPure, so every leaf-rule TTU
+target is derived-NOWHERE; FullScope.lean:238 W4Fragment.term supplies NoTtuTarget S R only
+under isDerived S (dt,R) = true, as do all fifteen Equiv.lean consumers (:281-:660). A name
+cannot be both. (!) SOURCE READING, NOT A KERNEL CHECK: the missing lemma is "every .closure
+leaf of persistedLeaves is isPure", a mutual induction over persistedLeaves/unionSpineLeaves,
+and no purity lemma exists in the tree today. Next session's first move; additive.
+
+SABOTAGES, both restored from a byte-exact cp backup (trap (aa)), literal output in
+LeafRules.lean's section docstring. SAB-A (narrow TtuTargetsSatL to schemaRewrites, i.e. "it
+was NoTtuTarget all along") -> rc=1, SIX errors, and the two that matter are WITNESSES not
+plumbing: stP_full_layer_does_target_viewer fires because the narrowed premise goes VACUOUSLY
+TRUE. SAB-B (narrow rewriteStepL_outRel's existential) -> rc=1, TWO attributable errors
+(rewriteStepL_outRel, rewriteClosureAuxL_produced). Both counts LOWER bounds, traps (k)/(v).
+
+(!) READ THE SlStP PAIR'S LIMITATION WITH IT: "viewer" is not derived in SlStP, so the pair
+shows the gap at an R the consumers never supply -- not that it survives at the derived R the
+discharge argument above concerns. Different claims.
+
+INSTRUMENT LIMIT worth carrying: NoTtuTarget's shape (forall tr, r.kind = ttu tr -> ...)
+quantifies over ALL strings and has NO Decidable instance, so a witness for it cannot be a
+decide. NoLeafSubjects and TtuTargetsSatL avoid it with the bounded (forall tr in ttuTargets
+r) form. Cost one build cycle.
+
+REMAINING on the write path: (D) hsubjW over the L closure, (E) the inductive
+ReachedByRulesAdmitted (a definition change -- still the plan-shaping one), (F) an L-analogue
+of rewriteClosure_rel_ne_bare, (G) count_writeLoggedRules. (F) is SCOPED BUT NOT ATTEMPTED and
+must be attacked before it is proved (house rule 2): its plain twin discharges the
+rewrite-output case from WF.relNames via relNameOK, which a MINTED LEAF NAME does not satisfy,
+so it needs a fresh argument that leafPred R i != BARE rather than a transcription -- and
+isLeafPred BARE = true (Leaf.lean:210) is why dot-freeness is the wrong instrument.
+
+Record: PROOF_STATUS ## Session 2026-09-05.
+
+Same-session mirror: this session rewrote the P3 board row, title, brief, the HANDOFF banner
+and the item block (including its read-first list) and mirrored all of it here in the same
+pass with the same session key.
+

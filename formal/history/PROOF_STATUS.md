@@ -15,6 +15,166 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-05 (**the write-path cone has a GREEN ADDITIVE PREFIX after all — obligations (A)/(B)/(C) landed on the unflipped tree, (H) was never open, and (A)'s premise looks DISCHARGEABLE rather than new**)
+
+**Task taken:** `P3`, unassigned session, resumed from `2026-09-03c` §4 — the eight
+write-path obligations. **No re-point was made. `Cascade.lean:175` still folds
+`rewriteClosure`; the tree is unflipped and carries zero `sorry`.**
+
+### 1. The claim this session tests
+
+`2026-09-03c` §5 concluded that landing the write-path re-point "is not green-stoppable in
+the state the probe left it: 8 undischarged obligations". That is true of the RE-POINT. It is
+not true of the **obligations**, and the difference is the session: five of the eight are
+L-analogues of existing plain-closure lemmas, and an L-analogue can be stated and proved
+against `rewriteClosureL` TODAY, because `rewriteClosureL` already exists and is already
+what `LeafRules.lean::writeRulesRaw` folds. Nothing has to be re-pointed to prove things
+about it.
+
+This is §11.13 **(w)** recurring for the third time — "nothing smaller is green-stoppable"
+refuted by kernel — and §11.12 **rule 6** is the criterion that licenses it: *a green
+additive prefix is not a partial cone under rule 5, because it contains no re-point and no
+pin asserting anything untrue.* Both halves hold here and were checked, not assumed:
+`headline_statements.txt` 49/49 and `headline_definitions.txt` **232/232 byte-identical**,
+`audits=585 pinned=584`, i.e. identical to the `7200484` anchor on every count.
+
+### 2. (H) WAS NEVER OPEN — the record is wrong, not stale
+
+`2026-09-03c` §4 lists "**(H) `writeRulesRaw_schema`, which does not exist** —
+`CascadeStrata.lean:439`". It does exist, at **`LeafRules.lean:292`**:
+
+    theorem writeRulesRaw_schema (σ : GraphState) (S : Schema) (t : Tuple) :
+        (σ.writeRulesRaw S t).schema = σ.schema
+
+Found by grepping the eight cited symbols before reading anything else — the first thing
+this session did. `git log -S` places it in the 4c-i landing, i.e. it predates the probe that
+declared it missing. So this is not a stale record; it was wrong when written. **8 substantive
+obligations is 7.** CLAUDE.md's "cite a symbol that EXISTS" applies to a claim of
+NON-existence too, and nothing in the gate can catch that direction.
+
+### 3. LANDED — obligations (B), (C), (A), additive and sabotage-controlled
+
+21 declarations in `LeafRules.lean`, zero existing declarations touched, no new import.
+`lake build` green at every stage (**1089 jobs, rc=0, 0 sorry**); four build cycles of a
+declared ten-cycle budget, the only reds being the two deliberate sabotages and one
+`Decidable` synthesis failure recorded in §5.
+
+* **(B) `rewriteClosureL_object`** — twin of `RulesCorrect.lean::rewriteClosure_object`.
+  Via new `rewriteStepL_object` + `rewriteClosureAuxL_object`.
+* **(C) `rewriteClosureL_produced`** — twin of `::rewriteClosure_produced`, via
+  `rewriteStepL_outRel` + `rewriteClosureAuxL_produced`. ⚠ **Its left disjunct is
+  `u ∈ seeds`, NOT `u = t`**: the plain twin seeds with the singleton `[t]`, the leaf-routed
+  one with the measured fan-out `rawWriteTuples S t`. The singleton form does not survive
+  the re-point, and consumers written against it will need `rewriteClosureL_object` to get
+  the raw write back.
+* **(A) `rewriteClosureL_subject_pred_ne`**, plus the `Q`-generic chain it instantiates
+  (`TtuTargetsSatL` + `rewriteStepL_subject_pred_gen` / `rewriteClosureAuxL_subject_pred_gen`
+  / `rewriteClosureL_subject_pred_gen`) and a `Decidable` instance.
+
+**Why the transcription is nearly free, and why four sessions of sizing did not notice:**
+`rewriteClosureAuxL` is `rewriteClosureAux` with `rewriteStepL` swapped in, `rewriteStepL` is
+`rewriteStep` with `schemaRewritesL` swapped in, and `applyRRule` is SHARED. The plain aux
+lemmas are moreover already stated over an arbitrary seed LIST, so the fan-out costs nothing.
+The obligations were sized as cone repairs because the probe met them as cone repairs; met
+head-on as lemmas about an existing definition they are transcriptions.
+
+**`NoLeafSubjects` is `TtuTargetsSatL` at `NotLeafName`, definitionally**
+(`noLeafSubjects_iff_ttuTargetsSatL := Iff.rfl`). So (A)'s "new premise" is a new INSTANCE of
+a quantification this tree already accepted and already discharges from `GraphAdmission`
+(2026-09-02) — not a new kind of premise.
+
+### 4. ★ (A)'s premise looks DISCHARGEABLE — the record's framing is half wrong
+
+`2026-09-03c` §4 marks (A) as the obligation that shapes the plan because it "needs a NEW
+PREMISE and the reason is structural": `leafRewrites` runs `exprArms` over DERIVED keys'
+closure leaves, which `schemaRewrites` skips by taint filter, so a derived TTU arm emits a
+leaf rule whose target `NoTtuTarget S R` says nothing about. **That chain is correct and is
+now machine-checked** (§5). But it stops one definition short, and two facts read first-hand
+this session compose to close it:
+
+* `Leaf.lean::isPure`'s TTU arm is `!isDerived S (ty, ts) && !derivedAnywhere S tgt`, and
+  `Leaf.lean::atomLeaves` emits `.closure (.ttu tgt ts)` **only** under `isPure`. So every
+  TTU target a LEAF rule can carry is `derivedAnywhere`-FALSE.
+* `FullScope.lean:238 W4Fragment.term` supplies `NoTtuTarget S R` **only** under
+  `isDerived S (dt, R) = true`, and so do all fifteen `Equiv.lean` consumers (`:281`…`:660`).
+  So the `R` the consumers care about is always derived.
+
+A name cannot be both, so `tgt ≠ R` is free on the leaf half and `TtuTargetsSatL S (· ≠ R)`
+should reduce to `NoTtuTarget S R` + "R is derived".
+
+⚠ **SOURCE READING, NOT A KERNEL CHECK — do not cite this as the proof.** The missing lemma
+is "every `.closure` leaf of `persistedLeaves` is `isPure`", a mutual induction over
+`Leaf.lean::persistedLeaves` / `::unionSpineLeaves`; **no purity lemma exists in the tree
+today** (grep: `derivedAnywhere` has only its definition at `Leaf.lean:347` and two doc
+mentions). What it changes is SIZING: if it holds, (A) costs no new admission field and the
+"new premise on a chain the headline theorems reach" risk is retired. That is the next
+session's first move and it is additive and green-stoppable like the rest of this prefix.
+
+### 5. The pins, and the two sabotages
+
+Everything above is INERT — the re-point that consumes it has not landed — so a green build
+vets nothing and the pins are the SOLE evidence (`docs/sabotage-procedure.md` §"The INERT
+change"). Non-vacuity is at `SnlBoth`/`tnlParent`, the existing two-layer witness, applied at
+a closure member pinned NOT to be a seed (`snlBoth_leaf_extra_not_a_seed`), so (B) and (C)
+are applied at a genuinely DERIVED member and the conclusions are derived THROUGH the lemmas
+rather than decided directly. (A) is applied where its premise holds and where the seed's
+subject predicate is `BARE` while the extra's is `viewer` — so the `.ttu` branch of
+`applyRRule_subject_pred`, the only branch `TtuTargetsSatL` constrains, is the one carrying
+the conclusion; a `computed`-only witness would have run `Or.inl` and proved nothing.
+
+**The record's (A) claim is now a `decide`.** `stP_untainted_layer_silent :
+schemaRewrites SlStP = []` beside `stP_full_layer_does_target_viewer :
+¬ TtuTargetsSatL SlStP (· ≠ "viewer")` — the untainted layer is silent at a schema whose
+leaf layer targets `viewer`. ⚠ **Read the limitation with it**: `"viewer"` is NOT derived in
+`SlStP`, so this pair shows the gap at an `R` the consumers never supply. It does not show
+the gap survives at the derived `R` of §4, and those are different claims.
+
+**SAB-A — `TtuTargetsSatL` narrowed to `schemaRewrites`** (the narrowest plausible weakening:
+"it was `NoTtuTarget` all along"). `rc=1`, SIX errors; the two that matter are witnesses, not
+plumbing:
+
+    LeafRules.lean:859:55  Type mismatch                     -- noLeafSubjects_iff_ttuTargetsSatL
+    LeafRules.lean:871:16  Application type mismatch         -- rewriteStepL_subject_pred_gen
+    LeafRules.lean:1348:8  (kernel) application type mismatch -- stP_full_layer_does_target_viewer
+    LeafRules.lean:1354:8  (kernel) application type mismatch -- ttuTargetsSatL_snlBoth_ne_banned
+
+`:1348` firing is the point: under the narrowed premise the property becomes VACUOUSLY TRUE,
+so its negation stops being provable. Without the `SlStP` pair the narrowing would have been
+invisible at the witness layer and only the plumbing would have complained.
+
+**SAB-B — `rewriteStepL_outRel`'s existential narrowed to `schemaRewrites`.** `rc=1`, TWO
+errors, both attributable: `:730` `rewriteStepL_outRel`, `:786` `rewriteClosureAuxL_produced`.
+
+⚠ Both counts are LOWER bounds (traps (k)/(v)); `LeafRules` is upstream of the cascade chain.
+Both restored from a byte-exact `cp` backup, never `git checkout --` (trap (aa)); `diff`
+byte-identical after each, full build green at 1089 jobs.
+
+### 6. A found instrument limit, recorded because it cost a cycle
+
+`NoTtuTarget`'s shape `∀ tr, r.kind = RuleKind.ttu tr → …` quantifies over ALL strings and
+therefore has **no `Decidable` instance** — observed: *"failed to synthesize Decidable (∀ r ∈
+schemaRewrites SlStP, ∀ (tr : String), …)"*. A witness for it cannot be a `decide`. Routing
+through `stP_untainted_layer_silent` is the better witness anyway: the empty rule list is the
+REASON the premise holds, stated rather than buried in a kernel evaluation. `NoLeafSubjects`
+and `TtuTargetsSatL` avoid this by using the bounded `∀ tr ∈ ttuTargets r` form.
+
+### 7. What remains on the write-path cone
+
+Unchanged and NOT attempted: **(D)** the shadow's `hsubjW` over the L closure, **(E)** the
+inductive `ReachedByRulesAdmitted` (a definition change), **(F)** an L-analogue of
+`rewriteClosure_rel_ne_bare`, **(G)** `CascadeStrata.lean::count_writeLoggedRules`. **(F) was
+scoped but deliberately not attempted** — its plain twin discharges the rewrite-output case
+from `WF.relNames` via `relNameOK`, which a MINTED LEAF NAME does not satisfy, so the
+L-analogue needs a fresh argument that `leafPred R i ≠ BARE` rather than a transcription.
+Attack it before proving it (house rule 2): unlike (B)/(C) it is not obviously true by
+transcription, and `isLeafPred BARE = true` (`Leaf.lean:210`) is exactly the trap that makes
+dot-freeness the wrong instrument here.
+
+Then the re-point itself, its 27 mechanical LINE edits, and `RulesCorrect.lean:135` which
+matches the grep and must NOT move.
+
+---
+
 ## Session 2026-09-03c (**trap (z) is FIXED and the hole was 66 declarations wide, not 2 — the non-vacuity witnesses were unpinned; SAB-5 fully discharged; and the write-path cone is MEASURED at 6 files / 8 substantive obligations, not "one more file"**)
 
 **Task taken:** `P3`, user-directed order — trap (z) first, then the write-path re-point
