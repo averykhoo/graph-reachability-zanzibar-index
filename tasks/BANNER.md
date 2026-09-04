@@ -1,14 +1,14 @@
-2026-09-03c — trap (z) FIXED (66 decls wide, not 2); SAB-5 closed end-to-end; the re-point is the 11-file scale.
+2026-09-05 — the write-path OBLIGATIONS have a green additive prefix: (A)/(B)/(C) landed, (H) never existed.
 
-(nav) **`P3`: the write-path re-point is NOT one file.** The recorded 4 errors reproduce,
-but fixing them forces a statement change (`writeLoggedRules_evalEq`'s twin →
-`writeRulesRaw`), opening a 6-file cone — **8 obligations, 27 mechanical line edits**, each
-with its symbol in PROOF_STATUS `2026-09-03c` §4. A LOWER bound (`Equiv`/`FullScope`/`Audit`
-never reached). **(A)** needs a new premise, **(E)** changes a pinned inductive.
-(!) **§11.13 (z) CLOSED — the hole was WIDER than it recorded.** `_resolve` was also
-namespace-blind, so the non-vacuity witnesses' own schemas/stores had **no `def:` row**.
-Golden 165 → **232**. Control = the finding: the OLD walk is `165/165` GREEN on a hollowed
-`Sd`. **A trap's suggested remedy is not sized** — (z)'s would have closed 2 of 66.
-(!) **SAB-5 discharged**: 4c fires end-to-end through `verify.sh` on a `GraphAdmission`
-field-ORDER swap; 4a/4b green as controls. (!) **(aa):** the tree id moves on ANY code edit
-— including one made while tiles run (bit again 2026-09-03c). Ask `gate_status.py`.
+(nav) **`P3`: obligations (A), (B), (C) LANDED, additive, tree unflipped.** 21 declarations
+in `LeafRules.lean`, zero existing ones touched, **pin cost zero** (49/49, 232/232). The
+lesson: *"the cone is un-splittable"* is a claim about the RE-POINT that keeps being read as
+one about the OBLIGATIONS — an L-analogue is provable today. §11.13 (w), third firing.
+(!) **(H) was never open; the record was wrong WHEN WRITTEN.** `writeRulesRaw_schema` is at
+`LeafRules.lean:292`. **8 obligations is 7.** "Cite a symbol that EXISTS" binds claims of
+NON-existence too. Left: (D), (E) the pinned inductive, (F), (G).
+(!) **(A)'s premise looks DISCHARGEABLE** (`isPure` forces leaf-rule TTU targets
+derived-nowhere; `W4Fragment.term` gives `NoTtuTarget` only for derived `R`) — source
+reading, NOT kernel-checked. Next move. **(F) must be ATTACKED first**: `relNameOK` fails a
+minted leaf name and `isLeafPred BARE = true`, so it is no transcription.
+(!) **`t2c` includes `tasks/*.md`** — write the mirror BEFORE the tiles or they strand.
