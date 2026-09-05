@@ -3740,6 +3740,18 @@ def test_sabotage_live_blind_parser():
         FAIL: the scan offered 0 closed task file(s) but <t>/live/tasks/closed holds 59
         *.md on disk. The scanner is not seeing the corpus (this is the control, not a
         data problem): fix `Store.md_paths` rather than the count.
+
+    2026-09-05b: "exactly two" was an over-specification of the LIVE corpus, not of the
+    guard. Blinding the scanner to `closed/` also dangles every `related:` link from an
+    open row to a closed one, and the first such link appeared the day `P3` closed with
+    `TK6` still pointing at it (observed, third line alongside the two above)::
+
+        FAIL: <t>/live_blind/tasks/TK6-leaf-family-split-is-storage-true-false-modellab.md:
+        related id 'P3' resolves to no task (open or closed). `related` is navigation: ...
+
+    That third red is a CONSEQUENCE of the sabotage, not a weakening of it, so the
+    assertion now is: the floor and the recount each fire exactly once, and any other
+    violation is a dangling-`related` line -- anything else is still unexplained and fails.
     """
     root = live_copy('live_blind')
     try:
@@ -3749,13 +3761,18 @@ def test_sabotage_live_blind_parser():
         rc1, text = lint_text(root, blind)
         assert rc1 != 0, 'GREEN UNDER SABOTAGE on the LIVE corpus:\n%s' % text
         fails = [l.strip() for l in text.split('\n') if l.strip().startswith('FAIL:')]
-        assert len(fails) == 2, (
-            'expected exactly 2 violations (floor + recount), got %d:\n%s'
-            % (len(fails), text))
-        assert [l for l in fails if 'parsed only' in l], fails
-        assert [l for l in fails if 'scan offered' in l], (
-            'the independent recount did not fire against the live corpus, which is the '
-            'exact hole the live pass was added to close:\n%s' % text)
+        floor = [l for l in fails if 'parsed only' in l]
+        recount = [l for l in fails if 'scan offered' in l]
+        other = [l for l in fails if l not in floor and l not in recount]
+        assert len(floor) == 1, ('the floor must fire exactly once, got %d:\n%s'
+                                 % (len(floor), text))
+        assert len(recount) == 1, (
+            'the independent recount did not fire (exactly once) against the live corpus, '
+            'which is the exact hole the live pass was added to close:\n%s' % text)
+        unexplained = [l for l in other if 'resolves to no task' not in l]
+        assert not unexplained, (
+            'violation(s) the blinding does not explain (only dangling `related` links '
+            'into closed/ are expected):\n%s' % '\n'.join(unexplained))
         # Restore control.
         rc2, back = lint_text(root)
         assert rc2 == 0, 'RESTORE NOT GREEN:\n%s' % back

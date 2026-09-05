@@ -1688,8 +1688,17 @@ namespace Zanzibar
 -- ⚠ T2a is NOT widened and now says so in its own type: `graph_reached_inv` gained a third
 -- bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + narrow `StoreValidRules`), and
 -- `outside_narrow_t2a` machine-checks `Td` fails it. Probe D.3 (2026-07-28) proved
--- `Inv.negEdgeFree` FALSE on the `_d` fragment; that is a P6 leaf-family MODELLING limit,
--- not a Python bug, and a design decision is owed before leg 7.
+-- `Inv.negEdgeFree` FALSE on the `_d` fragment, which was read as a P6 leaf-family
+-- MODELLING limit rather than a Python bug, with a design decision owed before leg 7.
+-- ★ 2026-09-05 — THAT JUSTIFICATION IS RETIRED AND THE CARRY IS NOT. Leg 7's flip landed:
+-- `Cascade.lean::GraphState.writeLoggedRules` folds `rewriteClosureL S (rawWriteTuples S t)`
+-- and extractor projection P6 is deleted, so the write lands on the leaf family and never on
+-- the bare public R-node — D.3's mechanism is gone. T2a still did NOT widen:
+-- `graph_reached_inv` still takes `W4NarrowT2a` and `outside_narrow_t2a` (pinned below) still
+-- holds. What is owed is now PROOF WORK — prove `Inv.negEdgeFree` on the `_d` fragment for
+-- the leaf-routed write leg, then restate `graph_reached_inv` without the bundle — NOT a
+-- design decision. Post-flip probe output, with its positive control and every caveat, is
+-- transcribed in `W4NarrowT2a`'s docstring.
 -- ★ CONTROLLED (house rule 2; full observed output in `final_applies`'s docstring): the
 -- sabotage is the plausible HALF-DONE leg — widen `W4Fragment` but leave
 -- `GraphAdmission.storeValid` narrow and convert with
@@ -1717,7 +1726,9 @@ namespace Zanzibar
 #print axioms W4WitnessDirect.w4fragment4
 #print axioms W4WitnessDirect.final_applies4
 
--- LEG 7 (leaf-family split / retire projection P6), STEP 3 (2026-08-09) — ADDITIVE leaf
+-- LEG 7 (leaf-family split / retire projection P6 — ★ THE LEG LANDED 2026-09-05 and P6 IS
+-- RETIRED; T2a's "P6 modelling limit" justification went with it, but T2a itself did not
+-- widen — see the leg-5 block above), STEP 3 (2026-08-09) — ADDITIVE leaf
 -- ADDRESSING. `GraphIndex/Leaf.lean` introduces `leafPred`/`isLeafPred`/`leafNode` plus the
 -- distinctness linchpin `leafPred_ne_relName` — which needs NO new sentinel axiom alongside
 -- `STAR`/`BARE`: `Core/Schema.lean`'s `relNameOK` already forbids `'.'` in a declared
@@ -1756,6 +1767,7 @@ namespace Zanzibar
 -- LEG 7 STEP 4c-PRE (2026-08-15) — the MEASURED allocation model, the INDEX-AGNOSTIC
 -- `publicOfLeaf`, and the fan-out routing. Three measurements re-founded this layer
 -- (PROOF_STATUS 2026-08-15; scope doc §11.6): (1) enumerating the 76 P6-dropped edge rows
+-- (★ those 76 rows are COMPARED, not dropped, since P6 was retired 2026-09-05)
 -- across all 25 GRAPH_FRAGMENT corpora shows leaf indices > 0 IN THE GATE (index >= 1 in 17/25
 -- corpora, index 2 in 5 of them -- re-measured 2026-08-16; the earlier "1 and 2 in 17/25"
 -- overstated the index-2 breadth 3.4x), so the previous hardcoded index 0 could never meet

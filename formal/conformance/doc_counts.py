@@ -218,7 +218,6 @@ prose copies rotted through two corpus additions before this became generated.
 | raw `EdgeV4` rows | **{m['proj']['raw']}** |
 | dropped by P1 (closure-only) | **{m['proj']['P1']}** |
 | dropped by P2 (bridge) | **{m['proj']['P2']}** |
-| dropped by P6 (leaf-family copy) | **{m['proj']['P6']}** |
 | **compared against Lean** | **{m['proj']['compared']}** |
 | raw `NodeV4` rows (all dropped by P5) | **{m['proj']['nodes']}** |
 | residue rows kept | **{m['proj']['residues']}** |

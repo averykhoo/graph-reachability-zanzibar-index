@@ -1,4 +1,11 @@
 import ZanzibarProofs.GraphIndex.ReconcileDiff
+-- Step 4c-ii, THE FLIP: the live logged write leg is now leaf-routed, so this module
+-- needs `rawWriteTuples` (`Leaf.lean:762`), `rewriteClosureL` (`LeafRules.lean:214`) and
+-- `GraphState.writeRulesRaw` (`LeafRules.lean:255`). **Cycle-checked by transitive
+-- closure**: `LeafRules`' import cone is `Leaf` → {`Write`, `RulesWrite`,
+-- `Spec.Stabilize`} plus `RulesSound`'s 29-module cone, and no module in it is a
+-- `Cascade*` module, so no cycle is created and no new module is added to the build.
+import ZanzibarProofs.GraphIndex.LeafRules
 
 /-!
 # The cascade scheduling layer — logged writes, delta→key mapping, the drain loop (ROADMAP W3d-1a)
@@ -169,11 +176,19 @@ def GraphState.writeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
   then (σ.writeDirect t).pushDelta (objNode t.object t.relation) t.relation true
   else σ
 
-/-- **The logged rule-routed write**: W2's `writeRules` fold with a delta row per
-    accepted rewrite-closure member (`RuleSet.apply` + per-triple `add_tuple`, each
-    `add_edge` emitting its flips). -/
+/-- **The logged rule-routed write**: the LEAF-ROUTED fold with a delta row per accepted
+    rewrite-closure member (`RuleSet.apply` + per-triple `add_tuple`, each `add_edge`
+    emitting its flips).
+
+    **RE-POINTED by step 4c-ii (THE FLIP)**: the seed list is `rawWriteTuples S t`
+    (`Leaf.lean:762` — stage 1, `RuleSet.apply`'s re-addressing of the raw write onto its
+    storage leaves) and the closure is `rewriteClosureL` (`LeafRules.lean:214` — stage 2,
+    the closure under `schemaRewritesL = schemaRewrites ++ leafRewrites`). Its unlogged
+    twin is therefore `GraphState.writeRulesRaw` (`LeafRules.lean:255`), NOT
+    `GraphState.writeRules`; see `writeLoggedRules_evalEq` below. On an untainted schema
+    the two coincide definitionally (`writeRulesRaw_untaintedSchema`). -/
 def GraphState.writeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
-  (rewriteClosure S t).foldl (fun acc u => acc.writeLoggedOne u) σ
+  (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.writeLoggedOne u) σ
 
 /-! ## `EvalEq` — the read-relevant core, and the logged/unlogged correspondence -/
 
@@ -226,23 +241,38 @@ theorem writeLoggedOne_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tup
     rw [writeDirect_reject (Bool.eq_false_iff.mpr hb)]
     exact h
 
-/-- **The logged routed write's core is the unlogged `writeRules`.** All W2 edge/node
-    facts about `writeRules` transfer to `writeLoggedRules` through this. -/
-theorem writeLoggedRules_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (S : Schema)
-    (t : Tuple) : EvalEq (σ'.writeLoggedRules S t) (σ.writeRules S t) := by
-  unfold GraphState.writeLoggedRules GraphState.writeRules
-  generalize rewriteClosure S t = ts
-  induction ts generalizing σ' σ with
-  | nil => exact h
+/-- **The logged fold's core is the plain `writeDirect` fold, at ANY list.** The
+    list-generic form of `writeLoggedRules_evalEq` below — extracted by step 4c-ii because
+    the post-flip shadow leg pairs the logged fold on the LEAF-ROUTED list against a plain
+    fold on the untainted one, and so needs the correspondence at a list that is not
+    `rewriteClosureL S (rawWriteTuples S t)`
+    (`CascadeStable.lean::untaintedShadow_writeLegL`). -/
+theorem foldl_writeLoggedOne_evalEq : ∀ (us : List Tuple) {σ' σ : GraphState}, EvalEq σ' σ →
+    EvalEq (us.foldl (fun acc u => acc.writeLoggedOne u) σ')
+      (us.foldl (fun acc u => acc.writeDirect u) σ) := by
+  intro us
+  induction us with
+  | nil => intro σ' σ h; exact h
   | cons u rest ih =>
+    intro σ' σ h
     simp only [List.foldl_cons]
     exact ih (writeLoggedOne_evalEq h u)
+
+/-- **The logged routed write's core is the unlogged `writeRulesRaw`.** All W2 edge/node
+    facts about the leaf-routed fold transfer to `writeLoggedRules` through this.
+
+    **RE-POINTED by step 4c-ii (THE FLIP)** from `GraphState.writeRules` to
+    `GraphState.writeRulesRaw` (`LeafRules.lean:255`) — both sides fold over the same
+    list `rewriteClosureL S (rawWriteTuples S t)`. -/
+theorem writeLoggedRules_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (S : Schema)
+    (t : Tuple) : EvalEq (σ'.writeLoggedRules S t) (σ.writeRulesRaw S t) :=
+  foldl_writeLoggedOne_evalEq (rewriteClosureL S (rawWriteTuples S t)) h
 
 /-- The logged write leaves the watermark untouched. -/
 theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.writeLoggedRules S t).watermark = σ.watermark := by
   unfold GraphState.writeLoggedRules
-  generalize rewriteClosure S t = ts
+  generalize rewriteClosureL S (rawWriteTuples S t) = ts
   induction ts generalizing σ with
   | nil => rfl
   | cons u rest ih =>
@@ -260,8 +290,8 @@ theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
 through the IDENTICAL `ruleset.apply(triple)` rewrite fan-out, then applies
 `_add_tuple_trusted` (ADD) or `_remove_tuple_trusted` (REMOVE) per rewrite-closure member.
 So the retraction of a raw tuple is the fold of a per-member edge decrement over the SAME
-`rewriteClosure S t` the write path folds `writeLoggedOne` over — modelled below as
-`removeLoggedRules`, the exact retract mirror of `writeLoggedRules`. The per-member step
+`rewriteClosureL S (rawWriteTuples S t)` the write path folds `writeLoggedOne` over —
+modelled below as `removeLoggedRules`, the exact retract mirror of `writeLoggedRules`. The per-member step
 uses `removeEdgeOne` (erase ONE copy — the ref-counted `-1`, NOT the filter-all
 `removeEdgePair`; see the `ReconcileDiff.lean` R1 KILL note) and emits its retraction
 delta the way `writeLoggedOne` emits its write delta. These are STANDALONE additive defs:
@@ -293,13 +323,22 @@ def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
   else σ
 
 /-- **The logged rule-routed retraction**: the retract mirror of `writeLoggedRules` — fold
-    `removeLoggedOne` over the SAME `rewriteClosure S t` the write path folds
-    `writeLoggedOne` over (`zanzibar_utils_v1.py::RuleSet.apply` as a list —
-    `GraphIndex/RulesWrite.lean::rewriteClosure`). Mirrors
-    `connectedstore/apply.py::_apply_row`'s REMOVE branch: the `ruleset.apply(triple)`
-    fan-out with `WildcardIndex._remove_tuple_trusted` per member. -/
+    `removeLoggedOne` over the SAME `rewriteClosureL S (rawWriteTuples S t)` the write path
+    folds `writeLoggedOne` over (`zanzibar_utils_v1.py::RuleSet.apply` as a list, stage 1 =
+    the re-addressing onto storage leaves, stage 2 = the closure under
+    `schemaRewritesL`). Mirrors `connectedstore/apply.py::_apply_row`'s REMOVE branch: the
+    `ruleset.apply(triple)` fan-out with `WildcardIndex._remove_tuple_trusted` per member.
+
+    **RE-POINTED by step R5 (the remove leg of THE FLIP)**: `apply.py::_apply_row`
+    (`:62-66`) computes `ruleset.apply(triple)` ONCE, OUTSIDE the ADD/REMOVE choice —
+    `fn = widx._add_tuple_trusted if row.op == 'ADD' else widx._remove_tuple_trusted`,
+    then `for d in ruleset.apply(triple): fn(...)`. So the retraction fan-out is
+    byte-for-byte the write fan-out, and folding the PLAIN `rewriteClosure S t` here while
+    the write leg folds the leaf-routed closure was a MODEL BUG: it left the minted leaf
+    edge behind on a write-then-remove of one tuple (the "edge leak"). With both legs on
+    the same list the retraction retracts exactly what the write leg materialised. -/
 def GraphState.removeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
-  (rewriteClosure S t).foldl (fun acc u => acc.removeLoggedOne u) σ
+  (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.removeLoggedOne u) σ
 
 /-- **The chain-level retraction admission guard** — the retract mirror of the write leg's
     `FoldAdmits`. A raw tuple may be retracted only if it is IN the store: `t ∈ T`. Mirror
@@ -342,7 +381,7 @@ def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
 theorem removeLoggedRules_schema (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.removeLoggedRules S t).schema = σ.schema := by
   unfold GraphState.removeLoggedRules
-  generalize rewriteClosure S t = ts
+  generalize rewriteClosureL S (rawWriteTuples S t) = ts
   induction ts generalizing σ with
   | nil => rfl
   | cons u rest ih =>
@@ -353,7 +392,7 @@ theorem removeLoggedRules_schema (σ : GraphState) (S : Schema) (t : Tuple) :
 theorem removeLoggedRules_nodes (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.removeLoggedRules S t).nodes = σ.nodes := by
   unfold GraphState.removeLoggedRules
-  generalize rewriteClosure S t = ts
+  generalize rewriteClosureL S (rawWriteTuples S t) = ts
   induction ts generalizing σ with
   | nil => rfl
   | cons u rest ih =>
@@ -365,7 +404,7 @@ theorem removeLoggedRules_nodes (σ : GraphState) (S : Schema) (t : Tuple) :
 theorem removeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.removeLoggedRules S t).watermark = σ.watermark := by
   unfold GraphState.removeLoggedRules
-  generalize rewriteClosure S t = ts
+  generalize rewriteClosureL S (rawWriteTuples S t) = ts
   induction ts generalizing σ with
   | nil => rfl
   | cons u rest ih =>
@@ -456,17 +495,40 @@ def GraphState.affectedObjects (σ : GraphState) (d : Delta) : List NodeKey :=
     `tupleset_feeders` / `target_feeders` arms); see `CORRESPONDENCE.md` §7.
 
     * **LeafFamily own-key branch** (the `isinstance(fam, LeafFamily)` arm of
-      `::DeltaProcessor._map_deltas_to_keys`): a RAW leaf-routed
-      write/remove (`d.leaf = true`) on a DERIVED relation dirties its OWN derived key
-      `(d.node.type, d.node.pred, d.node.name)` (Python routes the write onto the
-      storage leaf `<R>.<i>` and dirties `key = (o_type, fam.owner_relation, o_name)`).
-      Guarded `d.node.name ≠ STAR` — Python's `if o_name == '*': raise
-      InvariantViolation` in that same arm (a wildcard-object delta on a derived key is
-      a leaked decision-15 shape; a bare `assert` since `ZT-P1-2` is a `raise`, so it
-      survives `python -O`) — and `isDerived` (untainted leaves have
-      no derived own-key; and reconcile emissions carry `leaf = false`, so this branch is
-      empty for them — the fence that lets the cascade quiesce, since `_fan_out` never
-      re-dirties its own key).
+      `::DeltaProcessor._map_deltas_to_keys`, `processor.py:1411-1422`): a RAW leaf-routed
+      write/remove (`d.leaf = true`) dirties the PUBLIC key the delta's leaf name belongs
+      to, `(d.node.type, publicOfLeaf S d.node.type d.node.pred, d.node.name)`.
+
+      **RE-POINTED by step (alpha).** This branch used to test
+      `isDerived S (d.node.type, d.node.pred)` on the DELTA'S OWN PREDICATE and emit that
+      predicate as the key's relation. Post-flip that is simply the wrong lookup: the
+      leaf-routed write re-addresses onto the MINTED LEAF NAME `<R>.<i>`, so the delta
+      carries `d.node.pred = "approver.0"`, `isDerived` is FALSE there (a minted name is
+      not a declared key), the branch never fired, and the cascade never reconciled the
+      public key. Python does the lookup Python does: `fam = namespace.get((o_type,
+      o_pred))` on the delta's OBJECT PREDICATE, and if that resolves to a `LeafFamily`
+      it dirties `key = (o_type, fam.owner_relation, o_name)` — the PUBLIC owner
+      relation recovered from the leaf. `Leaf.lean::publicOfLeaf` is exactly
+      `fam.owner_relation`, index-agnostically (`::publicOfLeaf_leafPred`), and
+      `::publicOfLeaf_rawWriteRels` is the round trip.
+
+      REPLACE, not append. Python's arms are exclusive: a PUBLIC derived name resolves to
+      a `DerivedFamily` and takes `_fan_out` (`processor.py:1445-1452`, an `elif`), never
+      the own-key arm. The dropped `isDerived S (d.node.type, d.node.pred)` disjunct is
+      also provably DEAD post-flip on a WF schema — for a derived seed every closure
+      member is leaf-named (`Leaf.lean::mem_rawWriteRels_derived`) and no rule of
+      `schemaRewritesL` outputs a derived relation (`noRuleOutputsL_of_derived`) — so
+      keeping it as a third append component would perturb every
+      `List.mem_append_left/right` shape in the tree for zero content.
+
+      `d.node.name ≠ STAR` is KEPT: Python's `if o_name == '*': raise InvariantViolation`
+      in that same arm (a wildcard-object delta on a derived key is a leaked decision-15
+      shape; a `raise` rather than an `assert` since `ZT-P1-2`, so it survives
+      `python -O`). `d.leaf = true` is KEPT and is load-bearing: reconcile emissions push
+      with the default `leaf := false`, so this branch is empty for them — the fence that
+      lets the cascade quiesce, since `_fan_out` never re-dirties its own key. Untainted
+      families keep having no derived own-key: `publicOfLeaf` returns `none` on them
+      (`Leaf.lean::publicOfLeaf_untainted`), which is the guard this branch now reads.
     * **DerivedFamily fan-out** (`::DeltaProcessor._fan_out`'s `edge.via == 'computed'`
       arm, fragment-restricted): a candidate object node `v` (concrete — derived keys
       are never star-named, which is what the wildcard-object `raise InvariantViolation`
@@ -477,8 +539,11 @@ def GraphState.affectedObjects (σ : GraphState) (d : Delta) : List NodeKey :=
     Keys are `(dt, R, on)` triples. -/
 def affectedKeys (S : Schema) (σ : GraphState) (d : Delta) :
     List (String × String × String) :=
-  (if d.leaf = true ∧ d.node.name ≠ STAR ∧ isDerived S (d.node.type, d.node.pred) = true
-   then [(d.node.type, d.node.pred, d.node.name)] else [])
+  (if d.leaf = true ∧ d.node.name ≠ STAR then
+     match publicOfLeaf S d.node.type d.node.pred with
+     | some R => [(d.node.type, R, d.node.name)]
+     | none   => []
+   else [])
   ++ (σ.affectedObjects d).flatMap (fun v =>
     if v.name = STAR then []
     else S.keys.filterMap (fun k =>
@@ -491,8 +556,14 @@ def affectedKeys (S : Schema) (σ : GraphState) (d : Delta) :
 def GraphState.frontierRows (σ : GraphState) : List Delta :=
   σ.outbox.filter (fun d => σ.watermark < d.id)
 
-/-- The invalidation key set of the round: every frontier row's affected keys
-    (coalescing/dedup is irrelevant — reconciles are idempotent). -/
+/-- The invalidation key set of the round: every frontier row's affected keys.
+    This W3d-1 form is consumed only as a SET (`= []`, `∈`, `∉`), so it stays a bare
+    `flatMap`. ⚠ It used to say "coalescing/dedup is irrelevant — reconciles are
+    idempotent". That is true of the ANSWER and false of the STATE: `reconcileKeyDR`
+    stacks one edge per candidate occurrence (`CORRESPONDENCE.md` §7.2 item 6), so a
+    key reconciled twice in a round doubles its multiplicity, and the executed W3d-2
+    form `cascadeKeysAbove` (`CascadeStrata.lean`) is deduplicated since 2026-09-05b
+    after that compounding timed out ten conformance tests. -/
 def cascadeKeys (S : Schema) (σ : GraphState) : List (String × String × String) :=
   σ.frontierRows.flatMap (affectedKeys S σ)
 
@@ -653,7 +724,7 @@ def runCascade (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
 inductive ReachedByW3d : GraphState → Schema → Store → Prop where
   | empty (S : Schema) : ReachedByW3d (emptyState S) S []
   | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
-      (hadm : FoldAdmits σ (rewriteClosure S t))
+      (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t)))
       (hprev : ReachedByW3d σ S T) :
       ReachedByW3d (σ.writeLoggedRules S t) S (t :: T)
   | cascade {σ : GraphState} {S : Schema} {T : Store} (jobs : List W3cJob)
@@ -697,33 +768,36 @@ theorem reconcileJobsD_edge_sound {S : Schema} {T : Store} :
     cascade's edge sources are bare candidates (`BARE ≠ R`). The store hypothesis is
     taken at the chain's own store and weakens along the prefix. -/
 theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
-    {R : String} (hRne : R ≠ BARE) (h : ReachedByW3d σ S T) :
-    NoTtuTarget S R → NoStoreSubjectR T R → ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
+    {dt R : String} (hRne : R ≠ BARE) (h : ReachedByW3d σ S T) :
+    isDerived S (dt, R) = true → NoTtuTarget S R → NoStoreSubjectR T R →
+      ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
   induction h with
   | empty S =>
-    intro _ _ a b hab
+    intro _ _ _ a b hab
     simp [emptyState] at hab
   | @write σp S T t hadm hprev ih =>
-    intro hnt hns a b hab
+    intro hder hnt hns a b hab
     rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
-    unfold GraphState.writeRules at hab
-    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) hab with hin | ⟨u, hu, h1, _⟩
-    · exact ih hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
+    unfold GraphState.writeRulesRaw at hab
+    rcases foldl_writeDirect_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
+      with hin | ⟨u, hu, h1, _⟩
+    · exact ih hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
     · rw [h1, subjNode_pred]
-      exact rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
+        (hns t List.mem_cons_self) hu
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    intro hnt hns a b hab
+    intro hder hnt hns a b hab
     unfold runCascade at hab
     split at hab
     · have hab' : (a, b) ∈ (reconcileJobsL S T σp jobs).edges := hab
       rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).edges] at hab'
       rcases reconcileJobsD_edge_sound jobs σp a b hab' with hold | ⟨j, hj, c, hc, h1, _⟩
-      · exact ih hnt hns a b hold
+      · exact ih hder hnt hns a b hold
       · rw [h1, subjNode_pred]
         obtain ⟨_, hcb, _⟩ := hjv j hj
         rw [hcb c hc]
         exact Ne.symm hRne
-    · exact ih hnt hns a b hab
+    · exact ih hder hnt hns a b hab
 
 /-- **The derived R-node is never an edge source on a W3d state.** -/
 theorem reachedByW3d_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
@@ -733,7 +807,7 @@ theorem reachedByW3d_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
     ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
   obtain ⟨hnt, hns⟩ := hterm dt R hder
   intro y hy
-  exact reachedByW3d_edge_source_ne_R hRne h hnt hns _ y hy (objNode_pred ⟨dt, on⟩ R)
+  exact reachedByW3d_edge_source_ne_R hRne h hder hnt hns _ y hy (objNode_pred ⟨dt, on⟩ R)
 
 /-- R-node terminality survives the batch itself (the mid-cascade state the leftover
     check reads): a batch edge's source is a bare candidate, never an R-node. -/
@@ -806,8 +880,9 @@ theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
     have hkeys : affectedKeys S (reconcileJobsL S T σ jobs) d = [] := by
       unfold affectedKeys
       rw [hobj]
-      have hleaf_ne : ¬(d.leaf = true ∧ d.node.name ≠ STAR ∧
-          isDerived S (d.node.type, d.node.pred) = true) := by rw [hleaf]; simp
+      -- **(alpha)**: the own-key guard lost its `isDerived` conjunct; `d.leaf = false`
+      -- still kills it, which is the quiescence fence.
+      have hleaf_ne : ¬(d.leaf = true ∧ d.node.name ≠ STAR) := by rw [hleaf]; simp
       rw [if_neg hleaf_ne, List.nil_append]
       simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
       by_cases hst : d.node.name = STAR

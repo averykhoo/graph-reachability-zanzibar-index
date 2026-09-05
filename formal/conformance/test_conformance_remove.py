@@ -394,9 +394,9 @@ def _graph_state(session, widx):
     """Id-free graph fingerprint: (snapshot_rows, residues_by_name).
 
     Uses `snapshot_rows` (I11/I12 multiset), NOT `extract_sql_state` — the
-    latter's P2/P6 projections would hide a stale bridge or leaf edge that a
-    remove-path residue leak leaves behind, which is exactly what this gate must
-    catch."""
+    latter's P2 projection would hide a stale bridge that a remove-path residue
+    leak leaves behind, which is exactly what this gate must catch (P6 retired
+    2026-09-05; leaf edges are compared now)."""
     from index_v4.invariants import snapshot_rows
     return snapshot_rows(session, widx.idx.store_id), _residues_by_name(session, widx)
 

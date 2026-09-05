@@ -359,14 +359,36 @@ theorem reconcileJobsLR_eq {S : Schema} (T : Store)
 def GraphState.frontierRowsAbove (σ : GraphState) (n : Nat) : List Delta :=
   σ.outbox.filter (fun d => n < d.id)
 
-/-- The invalidation key set of a round at cursor `n`. -/
+/-- The invalidation key set of a round at cursor `n` — **deduplicated**, first
+    occurrence kept (`List.eraseDups`; NOT Mathlib's `List.dedup`, which keeps the LAST
+    occurrence and would reorder the jobs — see `ReconcileDiff.lean`'s hazard note).
+
+    Python dedups here too: `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`
+    collects into `keys: dict` (`:1362`) and short-circuits repeated objects through
+    `processed_objects: set` (`:1407`, `:1443-1445`), so a key dirtied by two frontier
+    rows is reconciled ONCE per round. Until
+    2026-09-05b this was a bare `flatMap` and the model reconciled it once PER ROW. That
+    was invisible while every raw write produced exactly one `leaf = true` outbox row;
+    the write-path flip (leg 7) minted a second row per rewrite, both mapping to the
+    public key (own-key via `publicOfLeaf` AND fan-out via `computedRefs`), and the
+    doubled job list compounded with the adjudicated presence stacking
+    (`CORRESPONDENCE.md` §7.2 item 6) into a per-leg blow-up — `cross_stratum_resettle`
+    went 0.2 s → 20.8 s → >120 s across four adds, timing out ten conformance tests.
+    Answers were unchanged throughout (membership reads). The dedup is therefore a
+    fidelity fix that happens to restore the cost, not a speed hack. -/
 def cascadeKeysAbove (S : Schema) (σ : GraphState) (n : Nat) :
     List (String × String × String) :=
-  (σ.frontierRowsAbove n).flatMap (affectedKeys S σ)
+  ((σ.frontierRowsAbove n).flatMap (affectedKeys S σ)).eraseDups
 
-/-- W3d-1's `cascadeKeys` is the round at the stored watermark. -/
-theorem cascadeKeys_eq_above (S : Schema) (σ : GraphState) :
-    cascadeKeys S σ = cascadeKeysAbove S σ σ.watermark := rfl
+/-- W3d-1's `cascadeKeys` is the round at the stored watermark — as a SET.
+    (This was `cascadeKeys S σ = cascadeKeysAbove S σ σ.watermark := rfl` until
+    2026-09-05b; the dedup breaks list equality, and the list form had no consumer.) -/
+theorem mem_cascadeKeys_iff_above (S : Schema) (σ : GraphState)
+    (k : String × String × String) :
+    k ∈ cascadeKeys S σ ↔ k ∈ cascadeKeysAbove S σ σ.watermark := by
+  unfold cascadeKeys cascadeKeysAbove
+  rw [List.mem_eraseDups]
+  exact Iff.rfl
 
 /-- Advance the frontier cursor past a round's read
     (`frontier_start = max((r.id for r in rows), default=frontier_start)` in
@@ -402,7 +424,7 @@ def runCascade2 (S : Schema) (T : Store) (σ : GraphState) (jobs1 jobs2 : List W
 inductive ReachedByW3d2 : GraphState → Schema → Store → Prop where
   | empty (S : Schema) : ReachedByW3d2 (emptyState S) S []
   | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
-      (hadm : FoldAdmits σ (rewriteClosure S t))
+      (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t)))
       (hprev : ReachedByW3d2 σ S T) :
       ReachedByW3d2 (σ.writeLoggedRules S t) S (t :: T)
   | remove {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
@@ -436,7 +458,7 @@ theorem reachedByW3d2_schema {σ : GraphState} {S : Schema} {T : Store}
   | empty S => rfl
   | @write σp S T t _ _ ih =>
     show (σp.writeLoggedRules S t).schema = S
-    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema, writeRules_schema, ih]
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema, writeRulesRaw_schema, ih]
   | @remove σp S T t _ _ _ _ _ _ _ ih =>
     show (σp.removeLoggedRules S t).schema = S
     rw [removeLoggedRules_schema, ih]
@@ -673,10 +695,19 @@ def edgeOfTuple (u : Tuple) : NodeKey × NodeKey :=
   (subjNode u.subject, objNode u.object u.relation)
 
 /-- The model-internal occurrence count of edge `(a,b)` across the store's rewrite
-    closures — `Σ_{t ∈ T}` (occurrences of `(a,b)` among `rewriteClosure S t`). The RHS of
-    the R3 invariant. -/
+    closures — `Σ_{t ∈ T}` (occurrences of `(a,b)` among
+    `rewriteClosureL S (rawWriteTuples S t)`). The RHS of the R3 invariant.
+
+    **RE-POINTED by step R5** (envelope (iv)). With BOTH legs folding the leaf-routed
+    closure (`writeLoggedRules` / `removeLoggedRules`, `Cascade.lean:191`/`:341`), THIS is
+    the true `(S,T)` function of the reachable state: at a minted-leaf target the state
+    count and this sum are both 1 (the plain sum was 0), and at a public derived target
+    the R3 guard `isDerived S (b.type,b.pred) = false` excludes it. Summing the PLAIN
+    closure here while the legs fold the L closure is what made R3 false on the write-only
+    flip; forking it per leg was explicitly refused (the legs are symmetric, so one
+    function suffices). -/
 def untOccCount (S : Schema) (T : Store) (a b : NodeKey) : Nat :=
-  ((T.flatMap (rewriteClosure S)).map edgeOfTuple).count (a, b)
+  ((T.flatMap (fun t => rewriteClosureL S (rawWriteTuples S t))).map edgeOfTuple).count (a, b)
 
 /-! ### The retraction's count-shrink law -/
 
@@ -707,9 +738,10 @@ theorem count_removeLoggedOne (u : Tuple) (p : NodeKey × NodeKey) (σ : GraphSt
 theorem count_removeLoggedRules (p : NodeKey × NodeKey) (S : Schema) (t : Tuple) :
     ∀ (σ : GraphState),
       (σ.removeLoggedRules S t).edges.count p
-        = σ.edges.count p - ((rewriteClosure S t).map edgeOfTuple).count p := by
+        = σ.edges.count p
+            - ((rewriteClosureL S (rawWriteTuples S t)).map edgeOfTuple).count p := by
   unfold GraphState.removeLoggedRules
-  generalize rewriteClosure S t = us
+  generalize rewriteClosureL S (rawWriteTuples S t) = us
   induction us with
   | nil => intro σ; simp
   | cons u rest ih =>
@@ -733,10 +765,11 @@ theorem count_removeLoggedRules (p : NodeKey × NodeKey) (S : Schema) (t : Tuple
 theorem untOccCount_erase (S : Schema) (T : Store) (t : Tuple) (a b : NodeKey) (ht : t ∈ T) :
     untOccCount S T a b
       = untOccCount S (T.erase t) a b
-        + ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
+        + ((rewriteClosureL S (rawWriteTuples S t)).map edgeOfTuple).count (a, b) := by
   unfold untOccCount
   have hperm : T ~ t :: T.erase t := List.perm_cons_erase ht
-  have h1 := ((hperm.flatMap_right (rewriteClosure S)).map edgeOfTuple).count_eq (a, b)
+  have h1 := ((hperm.flatMap_right
+    (fun t => rewriteClosureL S (rawWriteTuples S t))).map edgeOfTuple).count_eq (a, b)
   rw [h1, List.flatMap_cons, List.map_append, List.count_append]
   omega
 
@@ -794,15 +827,20 @@ theorem count_foldl_writeDirect (a b : NodeKey) :
     omega
 
 /-- The logged rule-routed write's count-growth: the edge count grows by the closure's
-    occurrence count of `(a,b)` (the logged core is the unlogged `writeRules`,
-    `writeLoggedRules_evalEq`; then `count_foldl_writeDirect` under `FoldAdmits`). -/
+    occurrence count of `(a,b)` (the logged core is the unlogged `writeRulesRaw`,
+    `writeLoggedRules_evalEq`; then `count_foldl_writeDirect` under `FoldAdmits`).
+
+    **RE-POINTED by step 4c-ii (THE FLIP, obligation G)**: both `hadm` and the RHS's
+    occurrence list are now the leaf-routed closure `rewriteClosureL S (rawWriteTuples S t)`.
+    `count_foldl_writeDirect` is list-generic, so only the list moved. -/
 theorem count_writeLoggedRules (a b : NodeKey) (σ : GraphState) (S : Schema) (t : Tuple)
-    (hadm : FoldAdmits σ (rewriteClosure S t)) :
+    (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t))) :
     (σ.writeLoggedRules S t).edges.count (a, b)
-      = σ.edges.count (a, b) + ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
+      = σ.edges.count (a, b)
+        + ((rewriteClosureL S (rawWriteTuples S t)).map edgeOfTuple).count (a, b) := by
   rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges]
-  unfold GraphState.writeRules
-  exact count_foldl_writeDirect a b (rewriteClosure S t) hadm
+  unfold GraphState.writeRulesRaw
+  exact count_foldl_writeDirect a b (rewriteClosureL S (rawWriteTuples S t)) hadm
 
 /-! ### The cascade leg — a routed diffing pass is untainted-count-inert
 
@@ -924,9 +962,14 @@ theorem reachedByW3d2_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     rw [count_writeLoggedRules a b σp S t hadm, ih a b hb]
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
+    -- Both sides now literally add the SAME summand,
+    -- `((rewriteClosureL S (rawWriteTuples S t)).map edgeOfTuple).count (a,b)`: the write
+    -- leg materialises it (`count_writeLoggedRules`) and `untOccCount` sums it (R5).
     omega
   | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
     intro a b hb
+    -- Exact Nat arithmetic: post-R5 `count_removeLoggedRules` SUBTRACTS and
+    -- `untOccCount_erase` SPLITS OFF the same L-closure count, so no floor is hit.
     rw [count_removeLoggedRules (a, b) S t σp, ih a b hb, untOccCount_erase S T t a b hadm]
     omega
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
@@ -935,6 +978,195 @@ theorem reachedByW3d2_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     have h2 : ∀ j ∈ jobs2, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs2 hjv2
     rw [count_runCascade2_of_ne S T σp jobs1 jobs2 h1 h2]
     exact ih a b hb
+
+/-! ### ★ THE R5 WITNESS BLOCK — the fixture that used to REFUTE R3, now pinning it
+
+⚠ **HISTORY, so the deletions above are not re-litigated.** Between the write-path flip and
+R5 this section held four kernel REFUTATIONS (`reachedByW3d2_untOccCount_refuted`,
+`writeThenRemove_leaks_leaf_edge` and their source-side twins): with only the WRITE leg
+folding `rewriteClosureL S (rawWriteTuples S t)` while `untOccCount` and
+`removeLoggedRules` still summed/retracted the PLAIN closure, R3 was false at
+`LeafRules.lean::LeafRuleWitness.SlV`, and a write/remove round trip leaked the minted leaf
+edge `doc:d1#viewer.0@user:alice`. R5 (`Cascade.lean::GraphState.removeLoggedRules` folds
+the SAME list; `untOccCount` sums it) removed both. The refutations are GONE because their
+statements are now false; what survives here is the same fixture turned around into
+POSITIVE `decide` pins, so reverting either half of R5 reddens the kernel rather than
+merely un-proving something.
+
+⚠ The chain witness is a `ReachedByW3d2` state, NOT a hand-built `GraphState`: a fact about
+the constructors is what says anything about the theorem.
+
+⚠ **NOT deleted, deliberately** — `writeLeg_occCount_target_differs` below stays TRUE and
+stays load-bearing. It is a fact about the TWO CLOSURE LISTS, not about either leg, and it
+is the necessity control for `count_edgeOfTuple_closureL_of_notLeaf`'s `isLeafPred`
+guard (`:1436`): drop that guard and this witness refutes the result. Same for
+`tvDer_occCount_target_differs` at the derived-seed site. -/
+
+/-- **The leaf-routed closure's occurrence multiset is not the plain closure's**, at `SlV`.
+    The target node is the leaf node `doc:d1#viewer.0`; note the R3 guard
+    `isDerived S (b.type, b.pred)` is FALSE there, i.e. a minted leaf name is never a
+    declared key and the guard does not fence these extras out. That is why R3 could not be
+    saved by a guard and had to be saved by making the two legs symmetric (R5), and it is
+    why `count_edgeOfTuple_closureL_of_notLeaf` needs its `isLeafPred` hypothesis. -/
+theorem writeLeg_occCount_target_differs :
+    isDerived LeafRuleWitness.SlV
+        ((objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)).type,
+          (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)).pred) = false
+      ∧ ((rewriteClosureL LeafRuleWitness.SlV
+            (rawWriteTuples LeafRuleWitness.SlV LeafRuleWitness.tlEditor)).map
+            edgeOfTuple).count
+            (subjNode ⟨"user", "alice", BARE⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
+        ≠ ((rewriteClosure LeafRuleWitness.SlV LeafRuleWitness.tlEditor).map
+            edgeOfTuple).count
+            (subjNode ⟨"user", "alice", BARE⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) := by
+  decide
+
+/-- The leaf-routed closure of the `SlV` `editor` write, computed. Two tuples: the write
+    itself and its `viewer.0` leaf copy (the untainted layer of `SlV` is empty —
+    `LeafRules.lean::LeafRuleWitness.lrV_untainted_layer_silent` — so nothing else fires, and
+    no rule matches a `viewer.0` relation, so the second round is empty). Pinned as an
+    equation so the refutation below can fold over an EXPLICIT list: `decide`-ing
+    `FoldAdmits` against the unevaluated closure re-reduces it once per step and blows the
+    heartbeat budget. -/
+theorem lrV_closureL_eq :
+    rewriteClosureL LeafRuleWitness.SlV
+        (rawWriteTuples LeafRuleWitness.SlV LeafRuleWitness.tlEditor)
+      = [LeafRuleWitness.tlEditor,
+         ⟨⟨"user", "alice", BARE⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩] := by
+  decide
+
+/-- Both writes of that fold are admitted from the empty state (two distinct endpoints, no
+    back-path), so the refutation's witness state is a genuine `ReachedByW3d2.write` step and
+    not a hand-built `GraphState`. -/
+theorem lrV_foldAdmits :
+    FoldAdmits (emptyState LeafRuleWitness.SlV)
+      (rewriteClosureL LeafRuleWitness.SlV
+        (rawWriteTuples LeafRuleWitness.SlV LeafRuleWitness.tlEditor)) := by
+  rw [lrV_closureL_eq]
+  exact ⟨by decide, by decide, trivial⟩
+
+/-- The leaf node `doc:d1#viewer.0` satisfies `reachedByW3d2_untOccCount`'s GUARD: a minted
+    leaf name is not a declared key, so `isDerived` is false there. This is the half that
+    makes the refutation bite — the guard was supposed to fence the extras out. -/
+theorem lrV_leafNode_not_derived :
+    isDerived LeafRuleWitness.SlV
+      ((objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)).type,
+        (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)).pred) = false := by
+  decide
+
+/-- **R5, PINNED at the RHS.** `untOccCount` SEES the leaf edge — exactly once — because it
+    now sums `rewriteClosureL S (rawWriteTuples S t)`, the same list both legs fold. Before
+    R5 this `decide` said `= 0` (the plain closure of the store's one tuple is the tuple
+    itself, targeting `doc:d1#editor`), and that zero against the write leg's positive count
+    was the refutation of R3. Re-point `untOccCount` back at `rewriteClosure` and this goes
+    red. -/
+theorem lrV_untOccCount_leaf_one :
+    untOccCount LeafRuleWitness.SlV [LeafRuleWitness.tlEditor]
+      (subjNode ⟨"user", "alice", BARE⟩)
+      (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) = 1 := by
+  decide
+
+/-- …but the flipped write leg DOES materialise it. Taken by edge-COMPLETENESS under
+    `lrV_foldAdmits` rather than by `decide`-ing the logged fold: kernel-reducing
+    `writeLoggedRules` re-evaluates the leaf-routed closure at every step and does not fit in
+    any sane heartbeat budget. -/
+theorem lrV_writeLeg_has_leaf_edge :
+    (subjNode ⟨"user", "alice", BARE⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
+      ∈ ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+          LeafRuleWitness.tlEditor).edges := by
+  rw [(writeLoggedRules_evalEq (EvalEq.refl (emptyState LeafRuleWitness.SlV))
+    LeafRuleWitness.SlV LeafRuleWitness.tlEditor).edges]
+  exact foldl_writeDirect_edge_complete _ lrV_foldAdmits
+    ⟨⟨"user", "alice", BARE⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩
+    (by rw [lrV_closureL_eq]; simp)
+
+/-- The witness state is a genuine chain state: ONE admitted logged write of the untainted
+    `editor` tuple, from the empty state, over the store `[tlEditor]`.
+
+    ⚠ **The implicits are supplied EXPLICITLY, and that is load-bearing.** Written as
+    `ReachedByW3d2.write LeafRuleWitness.tlEditor lrV_foldAdmits (ReachedByW3d2.empty _)` this
+    declaration does not elaborate: unifying `hadm`'s `FoldAdmits ?σ (rewriteClosureL ?S
+    (rawWriteTuples ?S ?t))` sends the elaborator into `whnf` on the leaf-routed closure.
+    Measured 2026-09-05, this file, `lake build ZanzibarProofs.GraphIndex.CascadeStrata`:
+    `error: … CascadeStrata.lean:1053:0: (deterministic) timeout at 'whnf', maximum number of
+    heartbeats (1000000) has been reached` — and it still timed out at 4000000. With the
+    `@`-form it elaborates instantly. Same treatment at `tlUsEditor_chain`, `tvDer_chain`
+    and `RemoveOccCount.lean::reachedByW3d2E_untOccCount_leaf_pinned`. -/
+theorem lrV_chain :
+    ReachedByW3d2
+      ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor)
+      LeafRuleWitness.SlV [LeafRuleWitness.tlEditor] :=
+  @ReachedByW3d2.write (emptyState LeafRuleWitness.SlV) LeafRuleWitness.SlV
+    ([] : Store) LeafRuleWitness.tlEditor lrV_foldAdmits
+    (ReachedByW3d2.empty LeafRuleWitness.SlV)
+
+/-! ### ★ THE EDGE LEAK, CLOSED — the round-trip is edge-neutral again
+
+⚠ **What used to be here, and why a bare deletion would have been the wrong move.** Before
+R5 this section held `writeThenRemove_leaks_leaf_edge` and
+`writeThenRemove_not_edge_neutral`: with only the write leg flipped, writing `tlEditor` and
+then retracting the very same tuple LEFT the minted leaf edge `doc:d1#viewer.0@user:alice`
+in the index, because the write leg materialised `rewriteClosureL S (rawWriteTuples S t)`
+while the remove leg retracted `rewriteClosure S t`, which never mentions that edge. Per
+`docs/sabotage-procedure.md`'s durability ranking, a fix whose only trace is a DELETED
+refutation is a doc warning; so the fixture stays and the claim is INVERTED into the
+positive pins below. Revert either half of R5 — the `removeLoggedRules` re-point or
+`untOccCount`'s — and `writeThenRemove_edge_count_zero` goes red at the exact edge that
+used to leak.
+
+⚠ Note what is NOT here, deliberately: an `isLeafPred b.pred = false` guard. Adding one to
+R3 would have made the old counterexample inadmissible and the theorem provable again —
+a trap of exactly the house shape, since the leaked edges were the entire behavioural
+content of the write-only flip. The fix is the symmetric legs, not a narrower invariant. -/
+
+/-- **THE LEAK, CLOSED — full strength.** Writing `tlEditor` onto the empty state and then
+    retracting the same tuple returns EVERY edge count to zero: the write leg adds
+    `((rewriteClosureL S (rawWriteTuples S t)).map edgeOfTuple).count p` copies
+    (`count_writeLoggedRules` under `lrV_foldAdmits`) and, post-R5, the remove leg subtracts
+    exactly that many (`count_removeLoggedRules`, now over the SAME list). Stated for an
+    arbitrary `p`, so it covers the leaked leaf edge and everything else at once, and it
+    needs no chain constructors — it is a fact about the two state functions composed. -/
+theorem writeThenRemove_edge_count_zero (p : NodeKey × NodeKey) :
+    (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).edges.count p = 0 := by
+  obtain ⟨a, b⟩ := p
+  rw [count_removeLoggedRules (a, b) LeafRuleWitness.SlV LeafRuleWitness.tlEditor,
+    count_writeLoggedRules a b (emptyState LeafRuleWitness.SlV) LeafRuleWitness.SlV
+      LeafRuleWitness.tlEditor lrV_foldAdmits]
+  have hz : (emptyState LeafRuleWitness.SlV).edges.count (a, b) = 0 := by
+    simp [emptyState]
+  omega
+
+/-- The leaked edge itself, named: after the round trip `doc:d1#viewer.0@user:alice` is GONE.
+    This is the literal negation of the deleted `writeThenRemove_leaks_leaf_edge`. -/
+theorem writeThenRemove_no_leaf_edge :
+    (subjNode ⟨"user", "alice", BARE⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
+      ∉ (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+            LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
+            LeafRuleWitness.tlEditor).edges :=
+  List.count_eq_zero.mp (writeThenRemove_edge_count_zero _)
+
+/-- The round trip IS edge-neutral: the multiset returns to `emptyState`'s. (The literal
+    negation of the deleted `writeThenRemove_not_edge_neutral`.) -/
+theorem writeThenRemove_edge_neutral :
+    (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).edges
+      = (emptyState LeafRuleWitness.SlV).edges := by
+  have hnil : ∀ p, (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+      LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
+      LeafRuleWitness.tlEditor).edges.count p = 0 := writeThenRemove_edge_count_zero
+  have h1 : (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+      LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
+      LeafRuleWitness.tlEditor).edges = [] := by
+    rcases hlist : (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).edges with _ | ⟨e, rest⟩
+    · rfl
+    · exact absurd (hnil e) (by rw [hlist]; simp)
+  rw [h1]; simp [emptyState]
 
 /-! ### The cascade leg — a routed diffing pass is NON-BARE-SOURCE-count-inert (R5b source leg)
 
@@ -1064,6 +1296,11 @@ theorem reachedByW3d2_srcOccCount {σ : GraphState} {S : Schema} {T : Store}
     rw [count_writeLoggedRules a b σp S t hadm, ih a b ha]
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
+    -- Same R5 mechanism as the target-side twin: the state and the `(S,T)` function name
+    -- the SAME list. Note what did NOT happen — the source guard `a.pred ≠ BARE` was NOT
+    -- narrowed to fence out the leaf-routed extras (a leaf rule copies the subject through
+    -- unchanged, so a userset-subject write's extras keep a non-bare source and a guard
+    -- could never exclude them). The fix is the state function, not the guard.
     omega
   | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
     intro a b ha
@@ -1078,28 +1315,307 @@ theorem reachedByW3d2_srcOccCount {σ : GraphState} {S : Schema} {T : Store}
     rw [count_runCascade2_of_src S T σp jobs1 jobs2 ha h1 h2]
     exact ih a b ha
 
+/-! ### ★ THE R3-SOURCE WITNESS — the userset-subject fixture, now pinning R3-source
+
+⚠ **HISTORY.** This block held `reachedByW3d2_srcOccCount_refuted` before R5. It needed its
+OWN witness because `a.pred ≠ BARE` demands a USERSET subject and `tlEditor`'s subject is
+bare — a leaf rule copies the subject through unchanged
+(`RulesWrite.lean::applyRRule`'s `.computed` branch), so a userset-subject write's
+leaf extras keep that non-bare source and the source guard could never have fenced them
+out. That is exactly why the source site could not be repaired by a guard either. R5 made
+the theorem true; the refutation is deleted and `tlUsEditor_untOccCount_leaf_one` below is
+its inversion. -/
+
+/-- A userset-subjected raw write on `SlV`'s untainted `editor`: `doc:d1#editor@group:g1#member`.
+    Its leaf copy keeps the userset subject, so the extra edge it materialises has a NON-BARE
+    source — exactly what `reachedByW3d2_srcOccCount`'s guard was supposed to fence out. -/
+def tlUsEditor : Tuple := ⟨⟨"group", "g1", "member"⟩, "editor", ⟨"doc", "d1"⟩⟩
+
+theorem tlUsEditor_closureL_eq :
+    rewriteClosureL LeafRuleWitness.SlV (rawWriteTuples LeafRuleWitness.SlV tlUsEditor)
+      = [tlUsEditor,
+         ⟨⟨"group", "g1", "member"⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩] := by
+  decide
+
+theorem tlUsEditor_foldAdmits :
+    FoldAdmits (emptyState LeafRuleWitness.SlV)
+      (rewriteClosureL LeafRuleWitness.SlV (rawWriteTuples LeafRuleWitness.SlV tlUsEditor)) := by
+  rw [tlUsEditor_closureL_eq]
+  exact ⟨by decide, by decide, trivial⟩
+
+/-- ⚠ The implicit arguments are supplied EXPLICITLY on purpose. Letting the elaborator infer
+    `{σ}{S}{T}` here makes it whnf `rewriteClosureL … (rawWriteTuples …)` while unifying
+    `hadm`, which blows the heartbeat budget (measured 2026-09-05: `(deterministic) timeout
+    at whnf … 1000000 heartbeats`, on a term that elaborates instantly once the implicits are
+    given). Same treatment at `lrV_chain`. -/
+theorem tlUsEditor_chain :
+    ReachedByW3d2
+      ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV tlUsEditor)
+      LeafRuleWitness.SlV [tlUsEditor] :=
+  @ReachedByW3d2.write (emptyState LeafRuleWitness.SlV) LeafRuleWitness.SlV
+    ([] : Store) tlUsEditor tlUsEditor_foldAdmits (ReachedByW3d2.empty LeafRuleWitness.SlV)
+
+/-- **R5, PINNED at the SOURCE-side RHS.** Was `= 0` before R5 (the plain closure of the
+    store's one tuple misses the leaf copy) — that zero against the write leg's positive
+    count refuted R3-source. Now the L sum sees it exactly once. -/
+theorem tlUsEditor_untOccCount_leaf_one :
+    untOccCount LeafRuleWitness.SlV [tlUsEditor]
+      (subjNode ⟨"group", "g1", "member"⟩)
+      (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) = 1 := by
+  decide
+
+theorem tlUsEditor_writeLeg_has_leaf_edge :
+    (subjNode ⟨"group", "g1", "member"⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
+      ∈ ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+          tlUsEditor).edges := by
+  rw [(writeLoggedRules_evalEq (EvalEq.refl (emptyState LeafRuleWitness.SlV))
+    LeafRuleWitness.SlV tlUsEditor).edges]
+  exact foldl_writeDirect_edge_complete _ tlUsEditor_foldAdmits
+    ⟨⟨"group", "g1", "member"⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩
+    (by rw [tlUsEditor_closureL_eq]; simp)
+
+/-- **R3-source, PINNED at the reachable witness that used to REFUTE it.** The guard
+    `a.pred ≠ BARE` holds (`"member" ≠ "..."`) AND admits the leaf-routed extra — and the
+    invariant holds anyway post-R5, because both sides count the same list. This is
+    `reachedByW3d2_srcOccCount` instantiated at the old counterexample: it agrees, at 1
+    rather than at the old mismatched `1 = 0`. -/
+theorem tlUsEditor_srcOccCount_agrees :
+    ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+        tlUsEditor).edges.count
+        (subjNode ⟨"group", "g1", "member"⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
+      = 1 := by
+  rw [reachedByW3d2_srcOccCount tlUsEditor_chain (subjNode ⟨"group", "g1", "member"⟩)
+    (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) (by decide)]
+  exact tlUsEditor_untOccCount_leaf_one
+
+/-! ## ★ THE PLAIN/LEAF-ROUTED CLOSURE LOCALISATION — where the two closures AGREE
+
+⚠ **HISTORY, and the role change.** Between the write flip and R5 this section carried
+"the REPAIRED R3": `reachedByW3d2_untOccCount_notLeaf`, the original R3 statement WIDENED
+with `isLeafPred b.pred = false`, which was true while the unguarded original was refuted.
+R5 made the original TRUE, so the guarded twin became strictly weaker and redundant, and it
+is deleted. What survives — and is now load-bearing rather than a repair — is
+`count_edgeOfTuple_closureL_of_notLeaf` below: the per-tuple bridge between the PLAIN
+closure and the leaf-routed one, off `LeafRules.lean`'s localisation
+(`::mem_rewriteClosureL_iff_notLeaf_notDerived`). It is what lets a fact proved against a
+PLAIN-closure rebuild (`ReachedByRulesAdmitted`'s `σ0`, which envelope (viii) leaves
+un-re-pointed) be converted into a fact about `untOccCount`, which R5 moved to the L sum.
+
+The two closures have the SAME members away from two name classes, so they agree on every
+edge whose target predicate avoids both:
+
+* a **minted leaf name** (`viewer.0`) — the extras the leaf routing ADDS; and
+* the **public name of a derived relation** — the seed the routing REMOVES when the write
+  is addressed at a derived relation directly.
+
+Both guards are NECESSARY, and both necessity controls are kept rather than deleted:
+`writeLeg_occCount_target_differs` (`:978`) refutes the equation at a leaf target, and
+`tvDer_occCount_target_differs` (`:1585`) at a public derived target. -/
+
+/-- **The count-level localisation.** Both closures are `.dedup`ed, so an edge's occurrence
+    count in either is `0` or `1` and the equality is a MEMBERSHIP question — which is what
+    `LeafRules.lean`'s localisation answers. The proof does not need `edgeOfTuple` to be
+    injective: it turns each count into the length of a filter (`count_eq_countP` /
+    `countP_map` / `countP_eq_length_filter`), observes the two filters are `Nodup` with the
+    same members, and closes with `Nodup.subperm` both ways.
+
+    The guards are read off the TARGET node `b` and transported to the tuple through
+    `objNode_pred` / `objNode_type`, so a caller needs nothing but the two facts an R3
+    consumer already has at an edge endpoint.
+
+    ⚠ **BOTH guards are refuted-if-dropped, in the kernel, at fixtures in this file**
+    (`docs/sabotage-procedure.md`: a mechanical refusal, not a comment saying "needed").
+    Drop `hlp` and the conclusion is false at `writeLeg_occCount_target_differs`'s leaf
+    target — where `hbd` HOLDS, which is the whole reason the R3 guard alone does not fence
+    the extras out. Drop `hbd` and it is false at `tvDer_occCount_target_differs`'s public
+    derived target — where `hlp` HOLDS. The two controls use different mechanisms (extras
+    added / seed removed) and neither subsumes the other.
+
+    The instrument was controlled as well as the subject, 2026-09-05: re-running the
+    dependent chain theorem's proof script with `hlp` deleted from its statement goes red
+    with the LITERAL error
+    `Application type mismatch: The argument hb has type isDerived S (b.type, b.pred) = false
+    but is expected to have type isLeafPred b.pred = false in the application
+    count_edgeOfTuple_closureL_of_notLeaf hmd hnd t a b hb` — i.e. the guard is genuinely
+    consumed by the proof and is not decorative. -/
+theorem count_edgeOfTuple_closureL_of_notLeaf {S : Schema}
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hnd : ∀ r ∈ schemaRewrites S, isDerived S (r.objectType, r.matchRel) = false)
+    (t : Tuple) (a b : NodeKey)
+    (hlp : isLeafPred b.pred = false)
+    (hbd : isDerived S (b.type, b.pred) = false) :
+    ((rewriteClosureL S (rawWriteTuples S t)).map edgeOfTuple).count (a, b)
+      = ((rewriteClosure S t).map edgeOfTuple).count (a, b) := by
+  have key : ∀ (u : Tuple), edgeOfTuple u = (a, b) →
+      (isLeafPred u.relation = false ∧ isDerived S (u.object.type, u.relation) = false) := by
+    intro u hu
+    have hb : objNode u.object u.relation = b := congrArg Prod.snd hu
+    have hp : u.relation = b.pred := by rw [← hb, objNode_pred]
+    have hty : u.object.type = b.type := by rw [← hb, objNode_type]
+    exact ⟨by rw [hp]; exact hlp, by rw [hp, hty]; exact hbd⟩
+  have hcount : ∀ (l : List Tuple),
+      (l.map edgeOfTuple).count (a, b)
+        = (l.filter (fun u => edgeOfTuple u == (a, b))).length := by
+    intro l
+    rw [List.count_eq_countP, List.countP_map, List.countP_eq_length_filter]
+    rfl
+  have hnL : (rewriteClosureL S (rawWriteTuples S t)).Nodup := by
+    unfold rewriteClosureL; exact List.nodup_dedup _
+  have hnP : (rewriteClosure S t).Nodup := by
+    unfold rewriteClosure; exact List.nodup_dedup _
+  rw [hcount, hcount]
+  have hsub1 : (rewriteClosureL S (rawWriteTuples S t)).filter
+        (fun u => edgeOfTuple u == (a, b))
+      ⊆ (rewriteClosure S t).filter (fun u => edgeOfTuple u == (a, b)) := by
+    intro u hu
+    obtain ⟨hmem, hq⟩ := List.mem_filter.mp hu
+    have he : edgeOfTuple u = (a, b) := by simpa using hq
+    exact List.mem_filter.mpr
+      ⟨mem_rewriteClosure_of_mem_rewriteClosureL_notLeaf hmd hmem (key u he).1, hq⟩
+  have hsub2 : (rewriteClosure S t).filter (fun u => edgeOfTuple u == (a, b))
+      ⊆ (rewriteClosureL S (rawWriteTuples S t)).filter
+        (fun u => edgeOfTuple u == (a, b)) := by
+    intro u hu
+    obtain ⟨hmem, hq⟩ := List.mem_filter.mp hu
+    have he : edgeOfTuple u = (a, b) := by simpa using hq
+    exact List.mem_filter.mpr
+      ⟨mem_rewriteClosureL_of_mem_rewriteClosure_notDerived hnd hmem (key u he).2, hq⟩
+  exact Nat.le_antisymm
+    ((hnL.filter _).subperm hsub1).length_le
+    ((hnP.filter _).subperm hsub2).length_le
+
+/-! ### ★ THE DERIVED-SEED WITNESS — `tvDer`, repurposed as a NECESSITY CONTROL
+
+⚠ **HISTORY, and the role change.** This block held
+`reachedByW3d2_srcOccCount_notLeaf_refuted`: proof that adding `isLeafPred b.pred = false`
+to the SOURCE-guarded R3 did not repair it either. That refutation used the OTHER puncture
+of the write-only flip — a write addressed directly at a derived public relation with no
+storage-bearing leaf re-addresses to `[]`, so the write leg materialised NOTHING while
+`untOccCount` still summed the plain closure and reported the seed. R5 moved `untOccCount`
+onto the SAME empty list, so both sides are now 0 and the refutation is gone
+(`tvDer_srcOccCount_agrees` below is its inversion).
+
+⚠ **The fixture stays, and it is not decorative.** `tvDer` is the witness that a derived
+write with NO storage-bearing leaf routes to `[]`, materialises nothing and dirties nothing
+— which is why any theorem asserting that a derived write dirties its own public key needs
+a ROUTING premise (`rawWriteRels S t ≠ []`), and why that premise is Python-faithful rather
+than a guard-narrowing dodge. `tvDer_not_storeValidD` is the other half: this witness is
+OUTSIDE `StoreValidRulesD`, exactly the admission Python's `TupleSource` enforces, so the
+routing premise is discharged at real consumers instead of assumed. **Both halves are now
+cashed in** (2026-09-05 round 2): the premise sits on
+`CascadeStrataSettle.lean::writeLeg_own_key_dirty`, its necessity is pinned in the kernel by
+`CascadeStrataSettle.lean::tvDer_own_key_not_dirty` (at THIS fixture), and it is discharged
+from `StoreValidRulesD` by `CascadeStrataSettle.lean::rawWriteRels_ne_nil_of_exprDirectsAll`.
+`tvDer_occCount_target_differs` remains the necessity control for
+`count_edgeOfTuple_closureL_of_notLeaf`'s SECOND guard. -/
+
+/-- A DIRECT write of `SlV`'s derived public relation `viewer`, userset-subjected. -/
+def tvDer : Tuple := ⟨⟨"group", "g1", "member"⟩, "viewer", ⟨"doc", "d1"⟩⟩
+
+/-- Measured 2026-09-05, literal `#eval` output: `rawWriteTuples SlV tvDer` → `[]`. The
+    `excl (computed …) (computed …)` body has no direct arm, hence no storage-bearing leaf,
+    hence `rawWriteRels`' `filterMap` is empty — the `some e` branch, NOT the documented
+    `none` fail-closed backstop. -/
+theorem tvDer_closureL_nil :
+    rewriteClosureL LeafRuleWitness.SlV (rawWriteTuples LeafRuleWitness.SlV tvDer) = [] := by
+  decide
+
+theorem tvDer_foldAdmits :
+    FoldAdmits (emptyState LeafRuleWitness.SlV)
+      (rewriteClosureL LeafRuleWitness.SlV (rawWriteTuples LeafRuleWitness.SlV tvDer)) := by
+  rw [tvDer_closureL_nil]; trivial
+
+/-- ⚠ Implicits explicit, per `tlUsEditor_chain`'s note. -/
+theorem tvDer_chain :
+    ReachedByW3d2 ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV tvDer)
+      LeafRuleWitness.SlV [tvDer] :=
+  @ReachedByW3d2.write (emptyState LeafRuleWitness.SlV) LeafRuleWitness.SlV
+    ([] : Store) tvDer tvDer_foldAdmits (ReachedByW3d2.empty LeafRuleWitness.SlV)
+
+/-- **The write vanishes.** A fold over the empty closure is the identity, so a reachable
+    post-write state has NO edges at all. -/
+theorem tvDer_edges_nil :
+    ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV tvDer).edges = [] := by
+  rw [(writeLoggedRules_evalEq (EvalEq.refl (emptyState LeafRuleWitness.SlV))
+    LeafRuleWitness.SlV tvDer).edges]
+  unfold GraphState.writeRulesRaw
+  rw [tvDer_closureL_nil]
+  rfl
+
+/-- **R5, PINNED at the derived-seed puncture.** Was `= 1` before R5 (the plain closure of a
+    derived-addressed write is its own seed, targeting the PUBLIC node `doc:d1#viewer`) —
+    that 1 against the write leg's empty edge set refuted the leaf-guarded R3-source. Now
+    `untOccCount` sums `rewriteClosureL SlV (rawWriteTuples SlV tvDer) = []` and agrees with
+    the state at 0. -/
+theorem tvDer_untOccCount_zero :
+    untOccCount LeafRuleWitness.SlV [tvDer] (subjNode ⟨"group", "g1", "member"⟩)
+      (objNode ⟨"doc", "d1"⟩ "viewer") = 0 := by decide
+
+/-- **`count_edgeOfTuple_closureL_of_notLeaf`'s SECOND guard is load-bearing too.** The
+    companion of `writeLeg_occCount_target_differs`: that one refutes the count equality at a
+    LEAF target where the derived-guard `hbd` holds; this one refutes it at a PUBLIC DERIVED
+    target where the leaf-guard `hlp` holds. So neither guard can be dropped, and the two
+    punctures are genuinely distinct mechanisms — the first is an edge the flip ADDS, the
+    second an edge the flip REMOVES. -/
+theorem tvDer_occCount_target_differs :
+    isLeafPred (objNode ⟨"doc", "d1"⟩ "viewer").pred = false
+      ∧ ((rewriteClosureL LeafRuleWitness.SlV
+            (rawWriteTuples LeafRuleWitness.SlV tvDer)).map edgeOfTuple).count
+            (subjNode ⟨"group", "g1", "member"⟩, objNode ⟨"doc", "d1"⟩ "viewer")
+        ≠ ((rewriteClosure LeafRuleWitness.SlV tvDer).map edgeOfTuple).count
+            (subjNode ⟨"group", "g1", "member"⟩, objNode ⟨"doc", "d1"⟩ "viewer") := by decide
+
+/-- **R3-source, PINNED at the derived-seed witness that used to refute its leaf-guarded
+    widening.** The UNGUARDED `reachedByW3d2_srcOccCount` — no leaf guard was ever added —
+    holds here: the reachable post-write state has no edges and `untOccCount` reports 0. -/
+theorem tvDer_srcOccCount_agrees :
+    ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV tvDer).edges.count
+        (subjNode ⟨"group", "g1", "member"⟩, objNode ⟨"doc", "d1"⟩ "viewer")
+      = 0 := by
+  rw [reachedByW3d2_srcOccCount tvDer_chain (subjNode ⟨"group", "g1", "member"⟩)
+    (objNode ⟨"doc", "d1"⟩ "viewer") (by decide)]
+  exact tvDer_untOccCount_zero
+
+/-- **The scope marker, now the NECESSITY CONTROL for the routing premise.** `tvDer` is
+    outside the admitted fragment: `StoreValidRulesD`'s derived arm demands a BARE subject
+    (and, at the real consumers, a matching `Direct` restriction), so Python's `TupleSource`
+    admission would refuse this write. That is what makes `rawWriteRels S t ≠ []` a premise
+    a consumer can DISCHARGE rather than a guard that narrows a theorem until its
+    counterexample stops being admissible. -/
+theorem tvDer_not_storeValidD : ¬ StoreValidRulesD LeafRuleWitness.SlV [tvDer] := by
+  intro H
+  rcases H tvDer (by simp) with ⟨hu, _⟩ | ⟨_, hb, _⟩
+  · exact absurd hu (by decide)
+  · exact absurd hb (by decide)
+
 /-! ## R-node terminality over the two-round closure -/
 
 /-- **No W3d-2 edge is sourced at an `R`-userset node** (the two-round analog of
     `reachedByW3d_edge_source_ne_R`): a logged write's edge sources are rewrite-
     closure subjects, either round's cascade edge sources are bare candidates. -/
 theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
-    {R : String} (hRne : R ≠ BARE) (h : ReachedByW3d2 σ S T) :
-    NoTtuTarget S R → NoStoreSubjectR T R → ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
+    {dt R : String} (hRne : R ≠ BARE) (h : ReachedByW3d2 σ S T) :
+    isDerived S (dt, R) = true → NoTtuTarget S R → NoStoreSubjectR T R →
+      ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
+  -- OBLIGATION (A), W3d-2 twin: `rewriteClosureL_subject_pred_ne_of_noTtuTarget` needs
+  -- `hder` to rule out the LEAF layer's TTU targets (`NoTtuTarget` ranges over
+  -- `schemaRewrites` only). Schema-level, so no weakening line anywhere.
   induction h with
   | empty S =>
-    intro _ _ a b hab
+    intro _ _ _ a b hab
     simp [emptyState] at hab
   | @write σp S T t hadm hprev ih =>
-    intro hnt hns a b hab
+    intro hder hnt hns a b hab
     rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
-    unfold GraphState.writeRules at hab
-    rcases foldl_writeDirect_edges_sound (rewriteClosure S t) hab with hin | ⟨u, hu, h1, _⟩
-    · exact ih hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
+    unfold GraphState.writeRulesRaw at hab
+    rcases foldl_writeDirect_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
+      with hin | ⟨u, hu, h1, _⟩
+    · exact ih hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
     · rw [h1, subjNode_pred]
-      exact rewriteClosure_subject_pred_ne hnt (hns t List.mem_cons_self) hu
+      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
+        (hns t List.mem_cons_self) hu
   | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
-    intro hnt hns a b hab
+    intro hder hnt hns a b hab
     -- The removed-store edge `(a,b)` with a source-`R` predicate would need a stored
     -- tuple in `T.erase t` whose subject predicate is `R` (via the source occurrence
     -- count), contradicting `NoStoreSubjectR (T.erase t) R`.
@@ -1112,7 +1628,12 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
       rw [← hcount]
       intro hz
       exact (List.count_eq_zero.mp hz) hab
-    have hmem : (a, b) ∈ ((T.erase t).flatMap (rewriteClosure S)).map edgeOfTuple := by
+    -- **R5**: `untOccCount` now sums the LEAF-ROUTED closure, so the witness tuple comes
+    -- out of `rewriteClosureL S (rawWriteTuples S t')` and the subject-predicate fact is
+    -- the L twin (`rewriteClosureL_subject_pred_ne_of_noTtuTarget`, which additionally
+    -- needs `hder` to rule out the LEAF layer's TTU targets — already in scope here).
+    have hmem : (a, b) ∈ ((T.erase t).flatMap
+        (fun t' => rewriteClosureL S (rawWriteTuples S t'))).map edgeOfTuple := by
       by_contra hnm
       exact hne (List.count_eq_zero.mpr hnm)
     rw [List.mem_map] at hmem
@@ -1120,10 +1641,10 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
     rw [List.mem_flatMap] at hu
     obtain ⟨t', ht', hu'⟩ := hu
     have hsrc : subjNode u.subject = a := congrArg Prod.fst heq
-    exact rewriteClosure_subject_pred_ne hnt (hns t' ht') hu'
+    exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder (hns t' ht') hu'
       (by rw [← subjNode_pred u.subject, hsrc, haR])
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ hprev ih =>
-    intro hnt hns a b hab
+    intro hder hnt hns a b hab
     unfold runCascade2 at hab
     split at hab
     · have hab' : (a, b) ∈ (reconcileJobsLR S T (reconcileJobsLR S T σp jobs1)
@@ -1131,7 +1652,7 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
       rcases reconcileJobsLR_edge_sound jobs2 _ a b hab' with hmid | ⟨j, hj, c, hc, h1, _⟩
       · rcases reconcileJobsLR_edge_sound jobs1 σp a b hmid
           with hold | ⟨j, hj, c, hc, h1, _⟩
-        · exact ih hnt hns a b hold
+        · exact ih hder hnt hns a b hold
         · rw [h1, subjNode_pred]
           obtain ⟨_, hcb, _⟩ := hjv1 j hj
           rw [hcb c hc]
@@ -1140,7 +1661,7 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
         obtain ⟨_, hcb, _⟩ := hjv2 j hj
         rw [hcb c hc]
         exact Ne.symm hRne
-    · exact ih hnt hns a b hab
+    · exact ih hder hnt hns a b hab
 
 /-- **The derived R-node is never an edge source on a W3d-2 state.** -/
 theorem reachedByW3d2_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
@@ -1150,7 +1671,7 @@ theorem reachedByW3d2_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store
     ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
   obtain ⟨hnt, hns⟩ := hterm dt R hder
   intro y hy
-  exact reachedByW3d2_edge_source_ne_R hRne h hnt hns _ y hy (objNode_pred ⟨dt, on⟩ R)
+  exact reachedByW3d2_edge_source_ne_R hRne h hder hnt hns _ y hy (objNode_pred ⟨dt, on⟩ R)
 
 /-- R-node terminality survives a routed logged batch, from any terminal base state
     (the batch-transported form — stackable round over round). -/
@@ -1254,6 +1775,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
   -- (A) unfold `hscope2`: j's def reads a ROUND-1 job's derived pred as an operand
   have hjk := hscope2 j hj
   unfold cascadeKeysAbove at hjk
+  rw [List.mem_eraseDups] at hjk
   obtain ⟨d', hd'raw, hjk'⟩ := List.mem_flatMap.mp hjk
   unfold GraphState.frontierRowsAbove at hd'raw
   obtain ⟨hd'mem, hd'gt'⟩ := List.mem_filter.mp hd'raw
@@ -1344,8 +1866,10 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
       d = [] := by
     unfold affectedKeys
     rw [hobj2]
-    rw [if_neg (show ¬(d.leaf = true ∧ d.node.name ≠ STAR ∧
-        isDerived S (d.node.type, d.node.pred) = true) by rw [hleafd]; simp),
+    -- **(alpha)**: the guard's third conjunct is gone; `hleafd : d.leaf = false` still
+    -- kills it. (This is `runCascade2_no_abort`'s SECOND `affectedKeys` site — the one
+    -- that states the condition literally in a `show` rather than discharging it inline.)
+    rw [if_neg (show ¬(d.leaf = true ∧ d.node.name ≠ STAR) by rw [hleafd]; simp),
       List.nil_append]
     simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
     by_cases hst : d.node.name = STAR

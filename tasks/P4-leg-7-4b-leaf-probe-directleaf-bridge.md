@@ -4,15 +4,15 @@ title: leg 7 4b -- leaf-probe <-> directLeaf bridge
 brief:
 pri: LATER
 size: M
-deps: [P3]
+deps: []
 related: []
 parent:
 labels: [formal]
 source: board
 source_hash: 83dc21911a69
 created: 2026-08-16
-moved: 2026-08-16
-updated: 2026-08-16
+moved: 2026-09-05b
+updated: 2026-09-05b
 closed:
 ---
 
@@ -32,3 +32,7 @@ None recorded. This row sits below `NEXT`, so it never had an item block; traps 
 ### 2026-08-21
 
 Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`created` is an approximation**: the board never recorded one, so it is set to this row’s `moved` value (`2026-08-16`), which is an upper bound on the real creation date, not a measurement. Body is the board cell: summary line plus the row’s pointer.
+
+### 2026-09-05b
+
+2026-09-05b: dep P3 swept (landed). Re-scope before starting: the leaf-probe <-> directLeaf bridge now has the whole leaf-routed write path live in the model (Cascade.lean:190-191, :340-341, affectedKeys :542-546), and the toolkit it was going to bridge to is the one CascadeStrataSettle.lean:3721 rawWriteRels_ne_nil_of_exprDirectsAll already walks (persistedLeaves/unionSpineLeaves/atomLeaves/pureLeaves/splitPure vs exprDirectsAll).

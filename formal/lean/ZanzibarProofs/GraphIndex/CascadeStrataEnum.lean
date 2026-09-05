@@ -226,11 +226,25 @@ def enum2Base (σ : GraphState) (dt on : String) (e : Expr) : List SubjectRef :=
 
 /-- The state-derived W3d-2 enumerated job for one derived key `(dt,R)` at object `on`:
     bare base ∪ edge holders as `cands`, bare base as `negCands`, userset base as
-    `uposCands` (the residue-named `neg`/`upos` now included via `enum2Base`). -/
+    `uposCands` (the residue-named `neg`/`upos` now included via `enum2Base`).
+
+    `cands` is a SET (`List.eraseDups`, first occurrence kept) since 2026-09-05b —
+    mirroring `index_v4/processor.py::DeltaProcessor._reconcile`'s `candidates`, a
+    `dict[int, NodeV4]` keyed on node id, at the whole list rather than only at the
+    Direct-arm contribution (`freshDirectCands`). Without it every duplicate node in
+    `σ.nodes` and every stacked in-edge at the R-node is a SEPARATE candidate, and
+    `reconcileKeyDR` — which has no presence diff (`CORRESPONDENCE.md` §7.2 item 6) —
+    writes one edge per occurrence, so the multiplicity at a key feeds its own next
+    reconcile: exponential in the number of legs. Measured on `two_stratum_cascade`
+    before this dedup: `alice → approver` = 2, 13, 46, 204, 1013 across the five
+    adds (pre-flip control, 16.4 s at the fifth), and 4, 26, 92, 408, 2026 (176.8 s,
+    past the harness's 120 s zcli timeout) after leg 7's write-path flip doubled the
+    base — with the round's key list already deduplicated (`cascadeKeysAbove`). With
+    the set the growth is at most +1 per reconcile of the key. -/
 def enumJob2 (σ : GraphState) (dt on R : String) (e : Expr) : W3cJob :=
   { dt := dt, on := on, R := R, e := e,
-    cands := (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
-             ++ edgeHolders σ dt on R,
+    cands := ((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+             ++ edgeHolders σ dt on R).eraseDups,
     negCands := (enum2Base σ dt on e).filter (fun u => u.predicate == BARE),
     uposCands := (enum2Base σ dt on e).filter (fun u => u.predicate != BARE) }
 
@@ -268,8 +282,14 @@ theorem w3dJobCoverage_enumJob2 {S : Schema} {T : Store} {σ : GraphState}
   refine ⟨fun s hs => ?_, fun s hsb hsn hsem hunc => ?_,
     fun s hsn hcov hstar hsemF => ?_, fun s hsu hsn hsem => ?_⟩
   · -- clause (1): edge holders ⊆ cands
+    show s ∈ ((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+      ++ edgeHolders σ dt on R).eraseDups
+    rw [List.mem_eraseDups]
     exact List.mem_append_right _ (mem_edgeHolders hs)
   · -- clause (2): uncovered sem-true bare ∈ cands
+    show s ∈ ((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+      ++ edgeHolders σ dt on R).eraseDups
+    rw [List.mem_eraseDups]
     refine List.mem_append_left _ ?_
     by_contra hnm
     have hnb : s ∉ enum2Base σ dt on e := fun h => hnm (hbareSub s h hsb)
@@ -510,6 +530,7 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
@@ -524,7 +545,7 @@ theorem w3dJobCoverage_enumJob2_state {S : Schema} {T : Store} {σ : GraphState}
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
     W3dJobCoverage S T σ (enumJob2 σ dt on R e) := by
   have hcl := reachedByW3d2_edgesClosed h
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hCO hSV hterm hQ hDR
+  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow h hNK hCO hSV hterm hQ hDR hLS hMatch hBS
   have hschema : σ.schema = S := reachedByW3d2_schema h
   have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧
@@ -766,18 +787,30 @@ def enum2BaseD (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : Lis
     ledger is UNMOVED at 16 — the widening is state-inert on every in-fragment corpus, so no
     golden regen is owed by this leg. `direct_arm_exclusion` is the only mover because it is
     the only `GRAPH_FRAGMENT` corpus that is not `ComputedOnly`, and on the rest
-    `enumJob2D_eq_enumJob2` makes the change an identity.) -/
+    `enumJob2D_eq_enumJob2` makes the change an identity.)
+
+    ⚠ DATED 2026-09-05b: the figures above are PRE-DEDUP. Since that day `enumJob2D.cands`
+    is wrapped in `List.eraseDups` (the `_reconcile` candidates-dict mirror), which subsumes
+    this filter's SET-level effect on `cands` — a subject already in `enum2Base`/`edgeHolders`
+    is removed by the dedup whether or not the filter drops it — so the "filter DEFEATED"
+    control would no longer move the multiplicity ledger (not re-measured), and the
+    `direct_arm_exclusion` golden it cites is `[4, 1]` now, not `[16, 1]`. The filter stays
+    because `mem_enumJob2D_cands` / `w3dJobCoverage_enumJob2D` are stated against it. -/
 def freshDirectCands (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) :
     List SubjectRef :=
   (storedDirectSubjects T dt on R e).filter (fun u =>
     decide (u.predicate = BARE ∧ u ∉ enum2Base σ dt on e ∧ u ∉ edgeHolders σ dt on R))
 
-/-- The Direct-arm-widened state-derived W3d-2 enumerated job for one derived key `(dt,R)`. -/
+/-- The Direct-arm-widened state-derived W3d-2 enumerated job for one derived key `(dt,R)`.
+    `cands` is a set (`List.eraseDups`) since 2026-09-05b, as in `enumJob2` — see its
+    docstring for the measurement. `freshDirectCands`' own presence diff is now subsumed
+    by the outer dedup (its sabotage control above no longer moves the ledger); it is kept
+    because `mem_enumJob2D_cands` and `w3dJobCoverage_enumJob2D` are stated against it. -/
 def enumJob2D (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : W3cJob :=
   { dt := dt, on := on, R := R, e := e,
-    cands := (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+    cands := ((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
              ++ freshDirectCands σ T dt on R e
-             ++ edgeHolders σ dt on R,
+             ++ edgeHolders σ dt on R).eraseDups,
     negCands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate == BARE),
     uposCands := (enum2BaseD σ T dt on R e).filter (fun u => u.predicate != BARE) }
 
@@ -788,8 +821,9 @@ def enumJob2D (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : W3cJ
 theorem mem_enumJob2D_cands {σ : GraphState} {T : Store} {s : SubjectRef}
     {dt on R : String} {e : Expr} (hs : s ∈ enum2BaseD σ T dt on R e)
     (hsb : s.predicate = BARE) : s ∈ (enumJob2D σ T dt on R e).cands := by
-  show s ∈ ((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
-             ++ freshDirectCands σ T dt on R e) ++ edgeHolders σ dt on R
+  show s ∈ (((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+             ++ freshDirectCands σ T dt on R e) ++ edgeHolders σ dt on R).eraseDups
+  rw [List.mem_eraseDups]
   by_cases hbase : s ∈ enum2Base σ dt on e
   · exact List.mem_append_left _
       (List.mem_append_left _ (List.mem_filter.mpr ⟨hbase, by simp [hsb]⟩))
@@ -856,7 +890,10 @@ theorem w3dJobCoverage_enumJob2D {S : Schema} {T : Store} {σ : GraphState}
     fun u hu hub => List.mem_filter.mpr ⟨hu, by simp [hub]⟩
   refine ⟨fun s hs => ?_, fun s hsb hsn hsem hunc => ?_,
     fun s hsn hcov hstar hsemF => ?_, fun s hsu hsn hsem => ?_⟩
-  · exact List.mem_append_right _ (mem_edgeHolders hs)
+  · show s ∈ (((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+      ++ freshDirectCands σ T dt on R e) ++ edgeHolders σ dt on R).eraseDups
+    rw [List.mem_eraseDups]
+    exact List.mem_append_right _ (mem_edgeHolders hs)
   · by_contra hnm
     -- `cands` carries the presence diff, so the contrapositive goes through
     -- `mem_enumJob2D_cands` (which covers all three of its segments) rather than
@@ -998,6 +1035,7 @@ theorem w3dJobCoverage_enumJob2D_state {S : Schema} {T : Store} {σ : GraphState
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -1017,7 +1055,8 @@ theorem w3dJobCoverage_enumJob2D_state {S : Schema} {T : Store} {σ : GraphState
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r') :
     W3dJobCoverage S T σ (enumJob2D σ T dt on R e) := by
   have hcl := reachedByW3d2_edgesClosed h
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d2_shadow_d h hNK hCD hDAB hSV hterm hWF hBS hQ hDR
+  obtain ⟨σ0, h0, hsh⟩ :=
+    reachedByW3d2_shadow_d h hNK hCD hDAB hSV hterm hWF hBS hQ hDR hLS hMatch
   have hschema : σ.schema = S := reachedByW3d2_schema h
   have hops : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       SettledKey S T σ dt on r' ∧ CompleteKey S T σ dt on r' ∧

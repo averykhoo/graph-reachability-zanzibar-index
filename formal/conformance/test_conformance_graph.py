@@ -64,9 +64,10 @@ relabeling: the corpus really was outside the bundle, and a rebase moved it.
     `W4WitnessDirect.outside_narrow_t2a` machine-checks that this corpus fails
     it. T2a remains vacuous exactly where T2b no longer is. That is a declared
     asymmetry with a design decision owed, not a proof gap: probe D.3 proved
-    `Inv.negEdgeFree` FALSE on the `_d` fragment (a P6 leaf-family MODELLING
-    limit — Python is fine, `RuleSet.apply` puts the edge and the `neg` row on
-    different nodes). This module compares `check` answers, which is T2b's
+    `Inv.negEdgeFree` FALSE on the `_d` fragment (a leaf-family MODELLING
+    limit — projection P6 retired 2026-09-05, and the modelling-limit claim
+    itself is unchanged by the retirement; Python is fine, `RuleSet.apply` puts
+    the edge and the `neg` row on different nodes). This module compares `check` answers, which is T2b's
     business, so the classification here is unaffected.
   * **The Lean REMOVE gate.** `removeGateB` decides plain `storeValidRulesB`,
     so `direct_arm_exclusion` stays in

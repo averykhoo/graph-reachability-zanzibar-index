@@ -424,9 +424,11 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
         # TWO carve-outs remain, and neither is a divergence:
         #   * T2a `graph_reached_inv` takes a third bundle `W4NarrowT2a` that this store
         #     provably fails (`outside_narrow_t2a`). Probe D.3 machine-checked
-        #     `Inv.negEdgeFree` FALSE on the `_d` fragment — a P6 leaf-family MODELLING
-        #     limit; Python routes the write onto the leaf family, so the edge and the
-        #     `neg` row live on different nodes (0 mismatches on the real backends).
+        #     `Inv.negEdgeFree` FALSE on the `_d` fragment — a leaf-family MODELLING
+        #     limit (projection P6 retired 2026-09-05; the modelling-limit claim itself
+        #     is unchanged by the retirement); Python routes the write onto the leaf
+        #     family, so the edge and the `neg` row live on different nodes (0
+        #     mismatches on the real backends).
         #   * the REMOVE-stream Lean gate still excludes it (see
         #     test_conformance_remove_graph._REMOVE_EXCLUDED): `removeGateB` decides
         #     plain `storeValidRulesB`. That is now the SOLE reason for the exclusion —

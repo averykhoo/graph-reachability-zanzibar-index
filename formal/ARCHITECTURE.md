@@ -342,8 +342,9 @@ differential comparisons break down as:
   Lean graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — same
   `graphRun` fold, same admission/drain gates, emitting canonical direct edges + residue
   triples) is diffed against the real Python graph index's final SQL state
-  (`EdgeV4`/`ResidueV1` decoded through `NodeV4`). Compared under **seven documented
-  projections** P1–P7, each justified in `formal/conformance/extractor.py`: P1 closure
+  (`EdgeV4`/`ResidueV1` decoded through `NodeV4`). Compared under **six documented
+  projections since 2026-09-05** — P1–P5 and P7, the numbering left alone where **P6
+  retired 2026-09-05** — each justified in `formal/conformance/extractor.py`: P1 closure
   rows (a function of the direct set), P2 wildcard bridges (inert — RE-MEASURED
   2026-07-29 over the 23 corpora then in the fragment: 477 raw `EdgeV4` rows, **P2
   dropped 0 of them**, and `bridged_in_shapes`/`bridged_out_shapes` compiled EMPTY on
@@ -354,9 +355,14 @@ differential comparisons break down as:
   EXACTLY, and the derived arm is golden-pinned by
   `test_conformance_state.py::test_derived_arm_multiplicity_ledger`; see
   `CORRESPONDENCE.md` §7.2 for the adjudication), P4 all-empty residue rows, P5 node GC (**no `NodeV4` row is compared at
-  all**), P6 leaf-family closure-leaf copies
-  (evaluation output compared exactly), **P7 `ResidueV1.version`** — declared
-  2026-07-27, and unlike P1–P6 a **MODELLING GAP, not a representation difference**:
+  all**), ~~P6 leaf-family closure-leaf copies
+  (evaluation output compared exactly)~~ — **RETIRED 2026-09-05**: leg 7's flip re-pointed
+  the Lean logged write path onto the leaf-routed closure, so the leaf rows are compared
+  DIRECTLY (76 rows moved from dropped to compared, `compared against Lean` 189 → **265**,
+  measured 2026-09-05 over the 25 in-fragment corpora; the `"P6"` ledger key is deleted
+  rather than pinned at 0) — **P7 `ResidueV1.version`** — declared
+  2026-07-27, and unlike P1–P5 (the other five, since P6 retired) a **MODELLING GAP, not a
+  representation difference**:
   Lean's `Residue` has no version field at all, so invariant **I7 is gated by nothing
   formal** (§6.1 item 4). Attack-first: the gate's first run FOUND the P6
   divergence under full check-parity; a deliberately corrupted extraction fails with the
@@ -480,18 +486,33 @@ ten, so nothing that held before stopped holding.
 bundle, `W4NarrowT2a` (schema-wide `ComputedOnly` + the narrow `StoreValidRules`), and
 `W4WitnessDirect.outside_narrow_t2a` machine-checks that the Direct-arm store fails it.
 **T2a is still vacuous exactly where T2b no longer is.** That is a declared carry with a
-counterexample attached, not a proof gap: Leg-0 probe D.3 machine-checked
-`Inv.negEdgeFree` FALSE on the `_d` fragment (under `StoreValidRulesD` a Direct-arm write
-lands an edge at the very derived R-node whose residue carries the `neg` row). **Python
-is fine** - `RuleSet.apply` routes the write onto the leaf family, so the edge and the
-`neg` row live on different nodes; 0 mismatches over the grid and a 6-way order sweep on
-the real backends. It is a modelling limit of projection **P6** (the leaf-family
-collapse), and a **design decision** is owed before further work: (a) restate T2a at
-drained states only, (b) weaken `negEdgeFree` to exempt the current
-un-cascaded write leg, or (c) model the leaf-family split.
-(⚠ (b) used to read `negEdgeFree`/`uposEdgeFree`; the pairing was refuted by
+counterexample attached.
+
+*The justification it used to carry, dated and RETIRED 2026-09-05:* Leg-0 probe D.3
+machine-checked `Inv.negEdgeFree` FALSE on the `_d` fragment (under `StoreValidRulesD` a
+Direct-arm write lands an edge at the very derived R-node whose residue carries the `neg`
+row). **Python was never wrong** - `RuleSet.apply` routes the write onto the leaf family,
+so the edge and the `neg` row live on different nodes; 0 mismatches over the grid and a
+6-way order sweep on the real backends. That made it a modelling limit of projection
+**P6** (the leaf-family collapse), and the answer chosen 2026-08-05 was option (c), model
+the leaf-family split and retire P6.
+
+**★ 2026-09-05 - option (c) landed and T2a did not move with it, so what is owed is now
+PROOF WORK, not a design decision.**
+`GraphIndex/Cascade.lean::GraphState.writeLoggedRules` folds
+`rewriteClosureL S (rawWriteTuples S t)` - the model routes a Direct-arm write onto the
+leaf family exactly as Python does - and projection P6 is deleted from `extractor.py`. So
+D.3's mechanism no longer exists in the model, while `graph_reached_inv` still takes
+`W4NarrowT2a` and `outside_narrow_t2a` still holds. The two owed steps: prove
+`Inv.negEdgeFree` on the `_d` fragment for the leaf-routed write leg, then restate
+`graph_reached_inv` without the bundle. The post-flip probe output, its positive control
+and every caveat are in `FINAL_REVIEW.md` §3.0 and in `FullScope.lean::W4NarrowT2a`'s
+docstring. ((a) "restate T2a at drained states only" and (b) "weaken `negEdgeFree`"
+remain the claim-shrinking alternatives nobody chose.
+⚠ (b) used to read `negEdgeFree`/`uposEdgeFree`; the pairing was refuted by
 measurement 2026-08-08 — `uposEdgeFree` is structurally immune on the `_d`
-fragment. See `history/leaf-family-split-scope-2026-08-05.md` §9.2.)
+fragment, so the `Inv`-side obligation is ONE clause. See
+`history/leaf-family-split-scope-2026-08-05.md` §9.2.)
 
 **The conformance evidence on that shape is now theorem-backed for answers.**
 `direct_arm_exclusion` moved into `test_conformance_graph._THEOREM_BACKED` (the split is
@@ -528,10 +549,16 @@ per-field argument or a Lean witness makes it so.
    missing branch**, so cross-checking the two artifacts would have shown false
    agreement. See `FINAL_REVIEW.md` §3 item 1 and `CORRESPONDENCE.md` §7.
 2. **The Python COMPILER artifacts are trusted, not modeled** — `compile_ruleset`'s taint
-   computation, strata assignment, derived-predicate plans, fan-out tables, and
-   leaf-family routing have no Lean counterpart (the Lean model reads the RAW boolean defs
+   computation, strata assignment, derived-predicate plans and fan-out tables have no Lean
+   counterpart (the Lean model reads the RAW boolean defs
    and derives taint/strata/jobs itself). Pinned by the snapshot tests + the conformance
    corpora; a compiler bug on an unexercised shape would not fail any Lean gate.
+   ★ **Leaf-family routing came OUT of this list 2026-09-05** (P3 leg 7, the flip): the
+   allocation (`GraphIndex/Leaf.lean` `persistedLeaves`), the storage fan-in
+   (`rawWriteRels`/`rawWriteTuples`) and the closure-leaf rule minting
+   (`GraphIndex/LeafRules.lean` `leafRewrites`/`rewriteClosureL`) are all modeled now, and
+   both logged write legs fold them — so a routing bug reddens `diff_states` rather than
+   being projected away. What remains trusted is the four items named above.
 3. **Fragment carries** — the `W4Fragment` gaps (§4.1): > 2 derived strata; non-`ComputedOnly`
    derived operand leaves (`Direct`/TTU arms under a boolean — `PDerivedTTU`/`PDerivedUserset`
    plan leaves; **the `Direct`-arm half of this is the §6.0 vacuity, not a coverage
@@ -568,7 +595,8 @@ per-field argument or a Lean witness makes it so.
    the theorems and the `formal/` gates were and remain untouched; see `FINAL_REVIEW.md`
    §3's resolved note and `docs/spec-deviations.md` 2026-07-13.
 4. **The state-gate projections** — state-level conformance IS implemented, but a
-   divergence strictly inside a projected class (P6 leaf-family edge content, P3 edge
+   divergence strictly inside a projected class (~~P6 leaf-family edge content~~ — **P6
+   RETIRED 2026-09-05**, that content is now compared directly, P3 edge
    multiplicity **on the derived arm only since 2026-07-29 — the untainted arm is now
    compared exactly and the derived arm is golden-pinned**, P2 bridge edges — inert — P5 node GC, under which **no `NodeV4` row is
    compared at all**, and **P7** `ResidueV1.version`, declared as a projection
@@ -652,8 +680,9 @@ operator is unrestricted)**, and the **`Direct`-arm half of the LEAF fragment is
 the conformance reclassification), so those theorems are no longer vacuous on the
 commonest boolean schema in the language (§6.0). What remains under (c), and these are
 now the highest-value items: **T2a alone did not widen** (`graph_reached_inv` carries an
-extra `W4NarrowT2a` bundle the Direct-arm store provably fails — a DESIGN DECISION is
-owed, not proof effort), the TTU/userset leaf arms (`PDerivedTTU`/`PDerivedUserset`,
+extra `W4NarrowT2a` bundle the Direct-arm store provably fails — since 2026-09-05, with
+leg 7's flip landed, what is owed is proof work, not a design decision; §6.0 has the
+two steps), the TTU/userset leaf arms (`PDerivedTTU`/`PDerivedUserset`,
 still `False` under `ComputedOrDirect`), **> 2 strata**, and the Lean REMOVE guard, which
 still decides plain `storeValidRulesB`; (d) remove legs on the Lean side — **DONE 2026-07-19f** at the
 validly-stored + drained-prior scope: the `remove` constructor on `ReachedByW3d2`/`C`/`E`

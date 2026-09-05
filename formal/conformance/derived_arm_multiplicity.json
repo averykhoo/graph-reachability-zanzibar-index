@@ -1,89 +1,89 @@
 {
   "boolean_exclusion": {
     "user:alice#.../ -> doc:d1#viewer/": [
-      13,
+      3,
       1
     ]
   },
   "boolean_intersection": {
     "user:alice#.../ -> doc:d1#viewer/": [
-      8,
+      2,
       1
     ]
   },
   "boolean_star_exclusion": {},
   "cross_stratum_resettle": {
     "user:dave#.../ -> doc:d1#v/": [
-      7,
+      2,
       1
     ]
   },
   "deep_grid": {},
   "demorgans": {
     "user:alice#.../ -> doc:d1#lhs/": [
-      85,
+      4,
       1
     ],
     "user:alice#.../ -> doc:d1#rhs/": [
-      85,
+      4,
       1
     ]
   },
   "direct_arm_exclusion": {
     "user:alice#.../ -> doc:d1#approver/": [
-      16,
+      4,
       1
     ]
   },
   "double_exclusion": {
     "user:alice#.../ -> doc:d1#viewer/": [
-      364,
+      6,
       1
     ],
     "user:carol#.../ -> doc:d1#viewer/": [
-      4,
+      1,
       1
     ]
   },
   "group_userset": {},
   "nary_intersection": {
     "user:alice#.../ -> doc:d1#all_of/": [
-      363,
+      5,
       1
     ]
   },
   "nary_union": {},
   "nary_union_derived4": {
     "user:ua#.../ -> doc:d1#any_of4/": [
-      364,
+      6,
       1
     ],
     "user:ub#.../ -> doc:d1#any_of4/": [
-      121,
+      5,
       1
     ],
     "user:uc#.../ -> doc:d1#any_of4/": [
-      40,
+      4,
       1
     ],
     "user:us#.../ -> doc:d1#any_of4/": [
-      72,
+      3,
       1
     ],
     "user:us#.../ -> doc:d1#safe/": [
-      32,
+      3,
       1
     ]
   },
   "nested_boolean": {
     "user:alice#.../ -> doc:d1#viewer/": [
-      80,
+      4,
       1
     ]
   },
   "reconvergent_derived": {
     "user:alice#.../ -> doc:d1#viewer/": [
-      52,
+      3,
       1
     ]
   },
@@ -96,15 +96,15 @@
   "ttu": {},
   "two_stratum_cascade": {
     "user:alice#.../ -> doc:d1#approver/": [
-      1013,
+      5,
       1
     ],
     "user:alice#.../ -> doc:d1#viewer/": [
-      400,
+      4,
       1
     ],
     "user:bob#.../ -> doc:d1#viewer/": [
-      25,
+      3,
       1
     ]
   },

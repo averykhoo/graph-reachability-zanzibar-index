@@ -29,7 +29,10 @@ This file supplies exactly that missing half, and nothing else.
 
 ## ★★ Why this is step 4c-**i**, and why it is not a caller re-point
 
-Scope doc §11.6 (2026-08-15). The 76 edge rows projection P6 drops are mostly
+Scope doc §11.6 (2026-08-15). The 76 edge rows projection P6 dropped (★ RETIRED
+2026-09-05 — P3 landed (α)+(R5); P6 branch deleted from
+`formal/conformance/extractor.py`, the 76 now the `_MIN_LEAF_COMPARED` floor in
+`formal/conformance/test_conformance_state.py`) are mostly
 **rule-copied closure-leaf edges**, and the correct leaf index is a function of *which
 arm produced the copy* — provenance `rewriteClosure` does not carry. For
 `viewer: editor but not banned` the `editor`-arm and `banned`-arm members are
@@ -241,6 +244,65 @@ theorem rewriteClosureRawL_singleton {S : Schema}
     rewriteClosureRawL S [t] = rewriteClosureRaw S t := by
   simp [rewriteClosureRawL, rewriteClosureRaw, rewriteClosureAuxL_eq h]
 
+/-! ## The SUPERSET direction — the plain closure sits inside the leaf-routed one
+
+`rewriteClosureL_extras_leafNode` (below) classifies what the L closure has that the plain
+one does not. Its mirror — that the L closure loses NOTHING — is what the post-flip shadow
+needs for `ShadowOver.sub`: every edge the shadow's plain fold materializes must still be
+present in the logged, leaf-routed state. It is pure rule-set monotonicity: `schemaRewritesL`
+is `schemaRewrites ++ leafRewrites`, and `filterMap` over an append is an append. -/
+
+/-- One step of the untainted kernel is contained in one step of the full kernel. -/
+theorem rewriteStep_subset_rewriteStepL {S : Schema} {t u : Tuple}
+    (h : u ∈ rewriteStep S t) : u ∈ rewriteStepL S t := by
+  unfold rewriteStep at h
+  unfold rewriteStepL schemaRewritesL
+  rw [List.filterMap_append, List.mem_append]
+  exact Or.inl h
+
+/-- **Kernel monotonicity at equal fuel.** A frontier contained in an L-frontier stays
+    contained after any number of rounds. -/
+theorem rewriteClosureAux_subset_auxL (S : Schema) :
+    ∀ (n : Nat) (cur curL : List Tuple), (∀ x ∈ cur, x ∈ curL) →
+      ∀ y ∈ rewriteClosureAux S n cur, y ∈ rewriteClosureAuxL S n curL := by
+  intro n
+  induction n with
+  | zero => intro cur curL hs y hy; exact hs y hy
+  | succ n ih =>
+    intro cur curL hs y hy
+    rw [rewriteClosureAux, List.mem_append] at hy
+    rw [rewriteClosureAuxL, List.mem_append]
+    rcases hy with hcur | hnext
+    · exact Or.inl (hs y hcur)
+    · refine Or.inr (ih _ _ ?_ y hnext)
+      intro x hx
+      obtain ⟨c, hc, hxc⟩ := List.mem_flatMap.mp hx
+      exact List.mem_flatMap.mpr ⟨c, hs c hc, rewriteStep_subset_rewriteStepL hxc⟩
+
+/-- **The plain rewrite-closure of a seed is inside the leaf-routed closure of any seed
+    list containing it.** Both kernels run at the SAME fuel `S.keys.length + 1`, so no
+    saturation fact is needed — exactly as for `rewriteClosureL_extras_leafNode`. This is
+    `ShadowOver.sub`'s side condition at the flip
+    (`CascadeStable.lean::untaintedShadow_writeLegL`'s `hsub`). -/
+theorem rewriteClosure_subset_rewriteClosureL {S : Schema} {t : Tuple} {seeds : List Tuple}
+    (hseed : t ∈ seeds) {u : Tuple} (h : u ∈ rewriteClosure S t) :
+    u ∈ rewriteClosureL S seeds := by
+  rw [mem_rewriteClosure_iff] at h
+  rw [mem_rewriteClosureL_iff]
+  unfold rewriteClosureRaw at h
+  unfold rewriteClosureRawL
+  refine rewriteClosureAux_subset_auxL S _ [t] seeds ?_ u h
+  intro x hx
+  rw [List.mem_singleton] at hx
+  exact hx ▸ hseed
+
+/-- The raw write is one of its own leaf-routed seeds when it is untainted — the
+    instantiation `rewriteClosure_subset_rewriteClosureL` is consumed at. -/
+theorem mem_rawWriteTuples_self {S : Schema} {t : Tuple}
+    (h : isDerived S (t.object.type, t.relation) = false) : t ∈ rawWriteTuples S t := by
+  rw [rawWriteTuples_untainted h]
+  exact List.mem_singleton_self t
+
 /-! ## The leaf-routed rule write — the shape step 4c-ii re-points callers at -/
 
 /-- **`RuleSet.apply` + per-triple `add_tuple`, both stages.** Stage 1 re-addresses the
@@ -248,10 +310,17 @@ theorem rewriteClosureRawL_singleton {S : Schema}
     closes the result under the full rule set including the leaf targets; each surviving
     triple is materialized by today's `writeDirect`.
 
-    ⚠ **No caller yet.** Re-pointing `writeLoggedOne` / `removeLoggedOne` / `writeRules`
-    at this, moving the `Delta` row to the leaf per branch (α), and threading
-    `publicOfLeaf` into `affectedKeys`' own-key branch is step 4c-ii — which must
-    co-land with step 7 (retire P6), because P6 is a Python-side-only filter. -/
+    ⚠ **CALLERS, as of R5 + (alpha) — this docstring said "No caller yet" and was wrong on
+    the tree it sat in.** `Cascade.lean::GraphState.writeLoggedRules` has folded this list
+    since the write flip, `::GraphState.removeLoggedRules` since R5, and
+    `::affectedKeys`' own-key branch now threads `Leaf.lean::publicOfLeaf` (branch (α)). The
+    one thing that remains UNCHANGED and un-re-pointed is
+    `RulesWrite.lean::GraphState.writeRules` — the PLAIN shadow rebuild that
+    `ReachedByRulesAdmitted` folds, deliberately kept on `rewriteClosure` so the
+    `RulesComplete`/`RulesWrite` development stands; the bridge between the two is
+    `CascadeStrataSettle.lean::untOccCount_eq_plainOcc_of_notLeaf`. ★ **Step 7 RETIRED P6
+    2026-09-05** (P3 landed (α)+(R5); the branch is deleted from
+    `formal/conformance/extractor.py`, ledger key and all) — nothing on this leg is owed. -/
 def GraphState.writeRulesRaw (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
   (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.writeDirect u) σ
 
@@ -614,6 +683,77 @@ def NoLeafSubjects (S : Schema) : Prop :=
 instance (S : Schema) : Decidable (NoLeafSubjects S) :=
   inferInstanceAs (Decidable (∀ r ∈ schemaRewritesL S, ∀ tr ∈ ttuTargets r, NotLeafName tr))
 
+/-! ### `LeafScope` — the four schema-level facts the FLIPPED write leg needs
+
+Step 4c-ii re-points the logged write leg at `rewriteClosureL S (rawWriteTuples S t)`.
+Two shadow obligations open at every W3d / W3d-2 chain state, and between them they want
+FOUR schema facts that the pre-flip development never threaded:
+
+* the SUBJECT half — `rewriteClosureL_subject_not_leafNode` wants `NoLeafSubjects S`
+  (`CascadeStable.lean::admissionNameShape_does_not_give_noLeafSubjects` refutes deriving
+  it from the three name-shape fields `GraphAdmission` already carried);
+* the OBJECT half — `rewriteClosureL_extras_leafNode` wants `WF S`, its `hmd`
+  (no untainted rule MATCHES a leaf name) and its `hne` (a derived relation's public name
+  is non-empty, `LeafNode`'s E3 residual guard).
+
+They are bundled into ONE carrier rather than threaded as four separate premises purely to
+keep the re-point's signature churn to one binder per theorem: the cone between
+`reachedByW3d_shadow` and `FullScope.lean` is ~20 signatures deep, and four binders there
+is four times the chance of a mis-ordered call site. Every field is decidable at a concrete
+schema, which is what makes the ultimate discharge `by decide` at each `GraphAdmission`
+witness. -/
+
+/-- **The leaf-routing scope discipline.** See the section note above; `wf` and
+    `matchNotLeaf` feed `rewriteClosureL_extras_leafNode`'s `hWF`/`hmd`, `keysNonempty`
+    feeds its `hne` through `LeafScope.derivedNameNonempty`, and `noLeafSubjects` feeds
+    `rewriteClosureL_subject_not_leafNode`.
+
+    `keysNonempty` is stated in the `.all` (decidable) form rather than as the `∀ dt R,
+    isDerived …` binder the consumer wants, for the reason `hne_of_keys_nonempty`'s
+    docstring gives: the binder form quantifies over ALL strings and so is not `by
+    decide`-able, and an undecidable field is how a scope premise gets asserted instead of
+    checked. -/
+structure LeafScope (S : Schema) : Prop where
+  wf : WF S
+  matchNotLeaf : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false
+  noLeafSubjects : NoLeafSubjects S
+  keysNonempty : S.keys.all (fun k => k.2 != "") = true
+
+/-- The `hne` shape `rewriteClosureL_extras_leafNode` consumes, from the decidable field. -/
+theorem LeafScope.derivedNameNonempty {S : Schema} (h : LeafScope S) :
+    ∀ dt R, isDerived S (dt, R) = true → R ≠ "" :=
+  hne_of_keys_nonempty h.keysNonempty
+
+/-- **`keysNonempty` IS a new assumption** — the kernel refutation of the tempting shortcut
+    "`WF` already forbids a degenerate relation name, so drop the field".
+
+    Per `docs/sabotage-procedure.md`, the narrowest plausible weakening of `LeafScope` is to
+    delete `keysNonempty` and try to recover `derivedNameNonempty` from `wf`; this says that
+    cannot work, at a fixture that already exists for exactly this hazard
+    (`Leaf.lean::LeafWitness.SwEmptyRel`, minted for the E3 `leafPublic … ≠ ""` guard —
+    `::swEmptyRel_bare_subject_not_leafNode`). The schema is `WF` (its declared names carry no
+    `'.'`) and declares a DERIVED relation named `""`, so the `.all`-scan is false. It is not
+    a realistic schema — Python's `check_name` rejects the empty identifier, which is what
+    makes the field an honest scope claim rather than a hole — but `WF` does not know that. -/
+theorem wf_does_not_give_keysNonempty :
+    WF LeafWitness.SwEmptyRel
+      ∧ isDerived LeafWitness.SwEmptyRel ("user", "") = true
+      ∧ LeafWitness.SwEmptyRel.keys.all (fun k => k.2 != "") = false := by
+  refine ⟨⟨?_⟩, by decide, by decide⟩
+  intro p hp
+  simp only [LeafWitness.SwEmptyRel, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl <;> simp [relNameOK]
+
+/-- `matchNotLeaf` from the shape the admission fragment already carries: a rewrite's match
+    key is DECLARED (`RestrictBase.lean::RewriteMatchDeclared`, whose first component this
+    takes as `hdecl`), declared names are dot-free (`WF`), and a dot-free name is not a leaf
+    predicate. Stated over `hdecl` rather than over `RewriteMatchDeclared` itself so this
+    file need not import `RestrictBase` (see the `isLeafPred_eq_false_of_relNameOK` note). -/
+theorem matchNotLeaf_of_declared {S : Schema} (hWF : WF S)
+    (hdecl : ∀ r ∈ schemaRewrites S, (r.objectType, r.matchRel) ∈ S.keys) :
+    ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false :=
+  fun r hr => isLeafPred_eq_false_of_relNameOK (relNameOK_of_mem_keys hWF (hdecl r hr))
+
 /-- The subject-predicate half of `applyRRule_some`: a fired rule either keeps the
     subject predicate or replaces it with its own TTU target. There is no third case. -/
 theorem applyRRule_subject_pred {r : RRule} {t u : Tuple} (h : applyRRule r t = some u) :
@@ -705,11 +845,15 @@ already folds. Its consumers in `CascadeStable.lean` reach for
 has an L twin — obligations **(B)** and **(C)** of the write-path cone
 (`formal/history/PROOF_STATUS.md` `## Session 2026-09-03c` §4).
 
-Proved here on the UNFLIPPED tree deliberately. They are additive, consume nothing, change
-no existing declaration and no pin, so they are §11.12 **rule 6**'s *green additive prefix*
-("it contains no re-point and no pin asserting anything untrue"), not a partial cone under
-rule 5. Landing them before opening the cone makes what remains smaller — the move that cut
-the `hcr` thread 79 → 62 on 2026-09-02c.
+⚠ **SUPERSEDED FRAMING.** These were proved on the then-UNFLIPPED tree as §11.12 **rule 6**'s
+*green additive prefix* — additive, consuming nothing, changing no declaration and no pin.
+That framing described the tree they landed on, not the tree they sit in: post-flip both
+legs (`writeLoggedRules`, and `removeLoggedRules` since R5) fold
+`rewriteClosureL S (rawWriteTuples S t)`, so `rewriteClosureL_object` and
+`rewriteClosureL_produced` are LOAD-BEARING on the live write and remove paths — every
+notarget/subject-shape argument in `CascadeStable.lean` and `CascadeStrataSettle.lean` goes
+through them. Landing them before opening the cone still made what remained smaller — the
+move that cut the `hcr` thread 79 → 62 on 2026-09-02c — but they are no longer a prefix.
 
 The proofs transcribe their plain twins modulo `schemaRewrites → schemaRewritesL`, because
 `rewriteStepL` (`:188`) differs from `RulesWrite.lean::rewriteStep` only in which rule list
@@ -881,13 +1025,20 @@ theorem rewriteClosureL_produced {S : Schema} {seeds : List Tuple} {u : Tuple}
     Those cannot both hold of the same name, so `tgt ≠ R` is FREE on the leaf half and
     `TtuTargetsSatL S (· ≠ R)` should follow from `NoTtuTarget S R` plus "R is derived".
 
-    ⚠ **NOT PROVED HERE — this is a source reading, not a kernel check.** The missing lemma
-    is "every `.closure` leaf of `persistedLeaves` is `isPure`", a mutual induction over
-    `Leaf.lean::persistedLeaves` / `::unionSpineLeaves` for which NO purity lemma exists in
-    the tree today. Until it is proved, treat the premise as assumed and this paragraph as
-    sizing input only. The `SlStP` pair below shows the gap is REAL at a non-derived `R`;
-    it does NOT show the gap survives at the derived `R` the consumers actually supply,
-    and those are different claims. -/
+    ⚠ **THIS WARNING IS NOW DISCHARGED — corrected 2026-09-05, re-checked against the live
+    tree rather than deleted.** It read "NOT PROVED HERE — this is a source reading, not a
+    kernel check", and named the missing lemma as "every `.closure` leaf of
+    `persistedLeaves` is `isPure`", "for which NO purity lemma exists in the tree today".
+    That lemma DOES exist now: see the section **"Obligation (A)'s PREMISE — DISCHARGED, not
+    assumed"** below in this same file, which proves it and concludes `TtuTargetsSatL S
+    (· ≠ R)` from `ReconcileCorrect.lean::NoTtuTarget S R` plus `isDerived S (dt, R) = true`
+    — exactly the pair `FullScope.lean:238 W4Fragment.term` and all fifteen `Equiv.lean`
+    consumers already carry. So obligation (A) needs NO new premise, and the composition
+    above is a kernel fact rather than sizing input.
+
+    The `SlStP` pair below still shows the gap is REAL at a NON-derived `R`; it does not
+    show it survives at the derived `R` the consumers actually supply, and those remain
+    different claims. -/
 def TtuTargetsSatL (S : Schema) (Q : String → Prop) : Prop :=
   ∀ r ∈ schemaRewritesL S, ∀ tr ∈ ttuTargets r, Q tr
 
@@ -1734,8 +1885,9 @@ theorem lrUnt_nonempty : schemaRewrites SlUnt ≠ [] := by decide
 /-! ### The end-to-end fact: a raw write now reaches the LEAF closure edges -/
 
 /-- A raw write on the untainted `editor` of `SlV`. Its rewrite closure must now contain
-    the `viewer.0` copy — the edge projection P6 drops today, and the reason leg 7
-    exists. -/
+    the `viewer.0` copy — the edge projection P6 used to drop, and the reason leg 7
+    exists. ★ **RETIRED 2026-09-05** (P3 landed (α)+(R5); P6 branch deleted from
+    `formal/conformance/extractor.py`), so this copy now reaches the compare arm. -/
 def tlEditor : Tuple := ⟨⟨"user", "alice", BARE⟩, "editor", ⟨"doc", "d1"⟩⟩
 
 /-- **THE 4c-i PAYOFF, at a store.** Under the full rule set the closure of a raw
@@ -2303,6 +2455,241 @@ theorem isPure_of_closure_mem_persistedLeaves_merged_nonvacuous :
     isPure SlA "doc" (.union (.computed "a") (.computed "b")) = true :=
   isPure_of_closure_mem_persistedLeaves (ty := "doc")
     (e := .excl (.union (.computed "a") (.computed "b")) (.computed "banned")) (by decide)
+
+end LeafRuleWitness
+
+/-! ## Step 4c-ii, step 6 — THE LOCALISATION: where the flip's damage lives, exactly
+
+`rewriteClosureL_extras_leafNode` (above) is a ONE-SIDED classification: every tuple the
+leaf-routed closure produces that today's closure does not is `LeafNode`-targeted. That is
+what the shadow transport needs, and it is deliberately weak — it says nothing about the
+tuples the two closures SHARE, and nothing about the direction in which the plain closure
+could be the larger one.
+
+This section closes both gaps. The two membership lemmas below say exactly where the two
+closures agree:
+
+* **away from LEAF names the leaf-routed closure adds nothing**
+  (`mem_rewriteClosure_of_mem_rewriteClosureL_notLeaf`), and
+* **away from DERIVED names it loses nothing**
+  (`mem_rewriteClosureL_of_mem_rewriteClosure_notDerived`),
+
+so on the intersection of the two guards the two closures have the SAME members
+(`mem_rewriteClosureL_iff_notLeaf_notDerived`).
+
+⚠ **ROLE CHANGE at step R5, recorded because this docstring used to say the opposite.** It
+read: "Rounds 3–5 left three `sorry`s standing for the R3 occurrence-count invariant
+(`CascadeStrata.lean::reachedByW3d2_untOccCount`, `::reachedByW3d2_srcOccCount`,
+`RemoveOccCount.lean::reachedByW3d2E_untOccCount`), each REFUTED in the kernel post-flip …
+the flip does not break R3, it PUNCTURES it", and it named `::reachedByW3d2_untOccCount_notLeaf`
+/ `::reachedByW3d2E_untOccCount_notLeaf` as the guarded repairs that landed sorry-free.
+All three R3 theorems are now UNGUARDED THEOREMS — R5 made both legs fold the same
+leaf-routed closure and moved `untOccCount` onto it, so there is no puncture left to
+localise — and the two guarded twins are deleted as redundant. What this section supplies
+now is the PLAIN↔LEAF-ROUTED bridge that
+`CascadeStrataSettle.lean::untOccCount_eq_plainOcc_of_notLeaf` uses to carry facts about the
+un-re-pointed PLAIN shadow rebuild (`ReachedByRulesAdmitted`) across to `untOccCount`. That
+is a load-bearing role, not a repair role.
+
+⚠ **Both guards are load-bearing and both are pinned by a witness below**, per
+`docs/sabotage-procedure.md` — a localisation lemma whose guards are decorative is exactly
+the "assurance step that fails by passing" this repo keeps finding. Dropping `hlp` is
+refuted by `lrV_localisation_needs_notLeaf`; dropping `hut` by
+`lrV_localisation_needs_notDerived`. Neither is a hypothetical: they are the two mechanisms
+the flip actually has.
+
+The premises are the ones this file already threads (`rewriteClosureL_extras_leafNode`'s
+`hmd` = `LeafScope.matchNotLeaf`, and `hnd` = the second component of
+`RestrictBase.lean::RewriteMatchDeclared`, which `GraphAdmission.matchDecl` carries). They
+are taken as bare binders rather than as `LeafScope`/`RewriteMatchDeclared` so this file
+still needs no import from `RestrictBase` — the same reason
+`matchNotLeaf_of_declared` is stated over `hdecl`. -/
+
+/-- The empty worklist stays empty at any fuel.
+
+    ⚠ `RestrictBase.lean::rewriteClosureAux_nil` is the SAME fact under a different name.
+    This file sits below `RestrictBase` in the import order and deliberately does not import
+    it, so the two-line induction is repeated under a distinct name; naming it identically
+    would make every module that sees both an ambiguous-identifier error. -/
+theorem rewriteClosureAux_nil_frontier (S : Schema) : ∀ n, rewriteClosureAux S n [] = [] := by
+  intro n
+  induction n with
+  | zero => rfl
+  | succ m ih =>
+    show [] ++ rewriteClosureAux S m (List.flatMap (rewriteStep S) []) = []
+    simpa using ih
+
+/-- **No untainted rewrite fires on a derived-key tuple.** A firing rule's match key would
+    BE the derived key, but every schema rewrite's match key is untainted (`hnd`). The
+    `RewriteMatchDeclared`-based twin is `RestrictBase.lean::rewriteClosure_derived_eq_seed`;
+    this is the `hnd`-only form, so it is available here. -/
+theorem rewriteStep_nil_of_derived {S : Schema}
+    (hnd : ∀ r ∈ schemaRewrites S, isDerived S (r.objectType, r.matchRel) = false)
+    {t : Tuple} (hd : isDerived S (t.object.type, t.relation) = true) :
+    rewriteStep S t = [] := by
+  unfold rewriteStep
+  rw [List.filterMap_eq_nil_iff]
+  intro r hr
+  unfold applyRRule
+  rw [if_neg]
+  rintro ⟨hrel, htype⟩
+  have hu := hnd r hr
+  rw [htype, hrel] at hd
+  rw [hu] at hd
+  exact Bool.false_ne_true hd
+
+/-- **The dead-end seed, membership form.** A derived-key tuple's plain rewrite closure is
+    the seed alone, so anything in it IS the seed. -/
+theorem mem_rewriteClosure_derived_self {S : Schema}
+    (hnd : ∀ r ∈ schemaRewrites S, isDerived S (r.objectType, r.matchRel) = false)
+    {t : Tuple} (hd : isDerived S (t.object.type, t.relation) = true)
+    {u : Tuple} (hu : u ∈ rewriteClosure S t) : u = t := by
+  have hstep := rewriteStep_nil_of_derived hnd hd
+  rw [mem_rewriteClosure_iff] at hu
+  unfold rewriteClosureRaw at hu
+  rw [rewriteClosureAux] at hu
+  have hfm : List.flatMap (rewriteStep S) [t] = [] := by simp [hstep]
+  rw [hfm, rewriteClosureAux_nil_frontier] at hu
+  simpa using hu
+
+/-- **(→) AWAY FROM LEAF NAMES THE LEAF-ROUTED CLOSURE ADDS NOTHING.** The sharp form of
+    `rewriteClosureL_extras_leafNode`: that lemma's second disjunct is `LeafNode`, a
+    predicate with three further conjuncts; here the disjunct is discharged outright by the
+    ONE observable a consumer actually has at an edge endpoint — the target predicate is not
+    a minted (dot-carrying) name. Needs neither `WF` nor the `hne` non-empty-name guard,
+    which is why it can serve the occurrence-count sites where no `LeafScope` is in hand. -/
+theorem mem_rewriteClosure_of_mem_rewriteClosureL_notLeaf {S : Schema}
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    {t u : Tuple} (hu : u ∈ rewriteClosureL S (rawWriteTuples S t))
+    (hlp : isLeafPred u.relation = false) : u ∈ rewriteClosure S t := by
+  rw [mem_rewriteClosureL_iff] at hu
+  unfold rewriteClosureRawL at hu
+  have hobj : ∀ w ∈ rawWriteTuples S t, w.object = t.object := by
+    intro w hw
+    obtain ⟨r, _, rfl⟩ := List.mem_map.mp hw
+    rfl
+  have hinv : ∀ w ∈ rawWriteTuples S t, w ∈ [t] ∨ ∃ R i, w.relation = leafPred R i ∧
+      isDerived S (t.object.type, R) = true := by
+    intro w hw
+    by_cases hd : isDerived S (t.object.type, t.relation) = true
+    · obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hw
+      refine Or.inr ?_
+      obtain ⟨i, rfl⟩ := mem_rawWriteRels_derived hd hr
+      exact ⟨t.relation, i, rfl, hd⟩
+    · rw [rawWriteTuples_untainted (by simpa using hd)] at hw
+      exact Or.inl hw
+  obtain ⟨hres, _⟩ := rewriteClosureAuxL_extras hmd t (S.keys.length + 1)
+    (rawWriteTuples S t) [t] hobj hinv u hu
+  rcases hres with hmem | ⟨R, i, hrel, _⟩
+  · exact mem_rewriteClosure_iff.mpr hmem
+  · exfalso
+    rw [hrel, isLeafPred_leafPred] at hlp
+    exact Bool.noConfusion hlp
+
+/-- **(←) AWAY FROM DERIVED NAMES THE LEAF-ROUTED CLOSURE LOSES NOTHING.** Two cases, and
+    the second is the half a reader will not expect. On an UNTAINTED seed the plain closure
+    is literally a subset (`rewriteClosure_subset_rewriteClosureL`, pure rule-set
+    monotonicity). On a DERIVED seed it is NOT: `rawWriteTuples` re-addresses the write onto
+    its storage leaves and the public-named seed `t` is simply gone. That case is not proved,
+    it is EXCLUDED — a derived seed's whole closure is `{t}` (`mem_rewriteClosure_derived_self`)
+    and `t`'s own relation is derived, so `hut` rules it out.
+
+    ⚠ Which is exactly why `hut` cannot be dropped: `lrV_localisation_needs_notDerived`
+    exhibits a directly-written derived relation whose post-flip closure is `[]`. -/
+theorem mem_rewriteClosureL_of_mem_rewriteClosure_notDerived {S : Schema}
+    (hnd : ∀ r ∈ schemaRewrites S, isDerived S (r.objectType, r.matchRel) = false)
+    {t u : Tuple} (hu : u ∈ rewriteClosure S t)
+    (hut : isDerived S (u.object.type, u.relation) = false) :
+    u ∈ rewriteClosureL S (rawWriteTuples S t) := by
+  by_cases hd : isDerived S (t.object.type, t.relation) = true
+  · exfalso
+    rw [mem_rewriteClosure_derived_self hnd hd hu, hd] at hut
+    exact Bool.noConfusion hut
+  · exact rewriteClosure_subset_rewriteClosureL
+      (mem_rawWriteTuples_self (by simpa using hd)) hu
+
+/-- **THE LOCALISATION.** On a tuple whose relation is neither a minted leaf name nor a
+    derived relation of its own object type, the leaf-routed closure and today's closure
+    agree on membership — for EVERY seed, tainted or not. The flip is invisible there. -/
+theorem mem_rewriteClosureL_iff_notLeaf_notDerived {S : Schema}
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hnd : ∀ r ∈ schemaRewrites S, isDerived S (r.objectType, r.matchRel) = false)
+    {t u : Tuple} (hlp : isLeafPred u.relation = false)
+    (hut : isDerived S (u.object.type, u.relation) = false) :
+    u ∈ rewriteClosureL S (rawWriteTuples S t) ↔ u ∈ rewriteClosure S t :=
+  ⟨fun h => mem_rewriteClosure_of_mem_rewriteClosureL_notLeaf hmd h hlp,
+   fun h => mem_rewriteClosureL_of_mem_rewriteClosure_notDerived hnd h hut⟩
+
+namespace LeafRuleWitness
+
+/-! ### The localisation's three controls
+
+Two guard-necessity refutations and one premise-non-vacuity witness. All three are
+`by decide` at fixtures this file already owns, so none of them can rot into a claim about
+a schema that no longer exists. -/
+
+/-- **CONTROL 1 — `hlp` is load-bearing.** Drop the not-a-leaf-name guard from
+    `mem_rewriteClosureL_iff_notLeaf_notDerived` and the `→` direction is FALSE: at `SlV`
+    the `editor` write's leaf copy `doc:d1#viewer.0@user:alice` is in the leaf-routed
+    closure and not in today's, and it SATISFIES `hut` (`isDerived SlV ("doc","viewer.0")`
+    is `false`, because a minted leaf name is never a declared key — the very fact that
+    makes the R3 guard `isDerived … = false` fail to fence the extras out). -/
+theorem lrV_localisation_needs_notLeaf :
+    (⟨⟨"user", "alice", BARE⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩ : Tuple)
+        ∈ rewriteClosureL SlV (rawWriteTuples SlV tlEditor)
+      ∧ (⟨⟨"user", "alice", BARE⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩ : Tuple)
+        ∉ rewriteClosure SlV tlEditor
+      ∧ isDerived SlV ("doc", leafPred "viewer" 0) = false := by decide
+
+/-- **CONTROL 2 — `hut` is load-bearing, and the mechanism is the opposite one.** A DIRECT
+    write of the derived public relation `viewer` on `SlV` re-addresses to NOTHING:
+    `viewer := editor but not banned` has no direct arm, so it has no storage-bearing leaf,
+    so `rawWriteRels` filter-maps to `[]` and the post-flip write materialises an EMPTY
+    closure while today's write materialises the seed. Its relation is not a leaf name
+    (`isLeafPred "viewer" = false`), so `hlp` alone does not exclude it.
+
+    Measured 2026-09-05 by `#eval`, literal output:
+    `rawWriteTuples SlV ⟨⟨"group","g1","member"⟩, "viewer", ⟨"doc","d1"⟩⟩` → `[]`;
+    `rewriteClosure SlV` of the same tuple → the one-element list containing it.
+
+    ⚠ Scope, stated so it is not over-read: such a tuple is NOT admitted —
+    `CascadeStrata.lean::tvDer_not_storeValidD` proves `¬ StoreValidRulesD SlV [tvDer]`,
+    because `StoreValidRulesD`'s derived arm demands a BARE subject. So this control
+    establishes that `hut` is needed for the lemma AS STATED (which quantifies over all
+    seeds, admitted or not); it does not by itself establish a live authorization gap. -/
+theorem lrV_localisation_needs_notDerived :
+    rawWriteTuples SlV ⟨⟨"group", "g1", "member"⟩, "viewer", ⟨"doc", "d1"⟩⟩ = []
+      ∧ rewriteClosureL SlV
+          (rawWriteTuples SlV ⟨⟨"group", "g1", "member"⟩, "viewer", ⟨"doc", "d1"⟩⟩) = []
+      ∧ (⟨⟨"group", "g1", "member"⟩, "viewer", ⟨"doc", "d1"⟩⟩ : Tuple)
+          ∈ rewriteClosure SlV ⟨⟨"group", "g1", "member"⟩, "viewer", ⟨"doc", "d1"⟩⟩
+      ∧ isLeafPred "viewer" = false := by decide
+
+/-- **CONTROL 3 — the premises are not vacuous, and neither is the conclusion.** `SlV` is a
+    poor non-vacuity witness for `hmd`/`hnd`: `lrV_untainted_layer_silent` proves
+    `schemaRewrites SlV = []`, so both premises hold for the empty reason. `SnlBoth` has a
+    real untainted rewrite — measured 2026-09-05, literal `#eval` output:
+
+    `schemaRewrites SnlBoth` → `[{objectType := "doc", matchRel := "parent",
+    outRel := "editor", kind := RuleKind.ttu "viewer"}]`
+
+    — and it FIRES: the plain closure of `doc:d1#parent@doc:d0#viewer` is two tuples
+    (`parent`, then the rewritten `editor`), while the leaf-routed closure is three (those
+    two plus the leaf `access.0`). So on this schema the localisation is contentful in both
+    directions at once: it says the two closures agree at `parent` and at `editor`, and it
+    says nothing at `access.0`, which is precisely where they differ. -/
+theorem snlBoth_localisation_nonvacuous :
+    (∀ r ∈ schemaRewrites SnlBoth, isLeafPred r.matchRel = false)
+      ∧ (∀ r ∈ schemaRewrites SnlBoth, isDerived SnlBoth (r.objectType, r.matchRel) = false)
+      ∧ schemaRewrites SnlBoth ≠ []
+      ∧ rewriteClosure SnlBoth ⟨⟨"doc", "d0", "viewer"⟩, "parent", ⟨"doc", "d1"⟩⟩
+          = [⟨⟨"doc", "d0", "viewer"⟩, "parent", ⟨"doc", "d1"⟩⟩,
+             ⟨⟨"doc", "d0", "viewer"⟩, "editor", ⟨"doc", "d1"⟩⟩]
+      ∧ rewriteClosureL SnlBoth
+            (rawWriteTuples SnlBoth ⟨⟨"doc", "d0", "viewer"⟩, "parent", ⟨"doc", "d1"⟩⟩)
+          = [⟨⟨"doc", "d0", "viewer"⟩, "parent", ⟨"doc", "d1"⟩⟩,
+             ⟨⟨"doc", "d0", "viewer"⟩, "editor", ⟨"doc", "d1"⟩⟩,
+             ⟨⟨"doc", "d0", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩] := by decide
 
 end LeafRuleWitness
 

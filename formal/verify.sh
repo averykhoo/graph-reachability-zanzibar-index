@@ -641,7 +641,13 @@ run_lean() {
     ''|*[!0-9]*) echo "FAIL: soundness-hole scanner errored"; exit 1;;
   esac
   # Belt and suspenders: the compiler's own verdict (Lake replays cached logs).
-  WARNED=$(grep -c "declaration uses 'sorry'" "$BUILD_LOG" || true)
+  # 2026-09-05: Lean 4.31 prints the warning with BACKTICKS -- "declaration uses `sorry`" --
+  # so the straight-quote pattern this line carried since ZT-P2-4 matched NOTHING: the belt
+  # was dead and only the token scan above stood. Controlled before the edit on a real
+  # staged-sorry build log (/tmp/b10.log, 4 warnings): old pattern 0, dot-wildcard 4.
+  # The pattern is dot-wildcarded rather than backticked so a future quote-style change
+  # cannot kill it the same way again (scope doc §11.13 trap (u)).
+  WARNED=$(grep -c "declaration uses .sorry." "$BUILD_LOG" || true)
   echo "  tracked holes: $SORRIES (token scan), $WARNED (build-log warnings)"
   gate_fact "holes=$SORRIES"
   [ "$SORRIES" = "0" ] || { echo "FAIL: soundness-hole count is $SORRIES (gate requires 0)"; exit 1; }
@@ -660,11 +666,11 @@ run_lean() {
   # conformance ground truth therefore reached no check. Tee it into the same log and
   # re-run the grep over the combined log.
   ( cd "$LEAN_DIR" && lake build zcli 2>&1 | tee -a "$BUILD_LOG" ) || { echo "FAIL: lake build zcli"; exit 1; }
-  WARNED_ZCLI=$(grep -c "declaration uses 'sorry'" "$BUILD_LOG" || true)
+  WARNED_ZCLI=$(grep -c "declaration uses .sorry." "$BUILD_LOG" || true)
   echo "  build-log 'declaration uses sorry' warnings (library + zcli): $WARNED_ZCLI"
   [ "$WARNED_ZCLI" = "0" ] \
     || { echo "FAIL: the library+zcli build log reports $WARNED_ZCLI 'declaration uses sorry' warning(s)"; \
-         grep -n "declaration uses 'sorry'" "$BUILD_LOG" | head -20; \
+         grep -n "declaration uses .sorry." "$BUILD_LOG" | head -20; \
          exit 1; }
 
   echo "=== [4/5] axiom audit (ZanzibarProofs.Audit; HARD gate: standard axioms only) ==="

@@ -16,9 +16,12 @@ reader should know before trusting the word:
   E-chain legs 5+6 (2026-08-05) closed that for T2b/T3/T6 and the Exec finals;
   `W4WitnessDirect.final_applies4` instantiates the headline `graph_correct_public` at exactly
   that shape. ⚠ **T2a `graph_reached_inv` alone is still vacuous there**
-  (`outside_narrow_t2a`), and a design decision — not proof effort — is what is owed.
-  Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0 before quoting anything
-  graph-side.
+  (`outside_narrow_t2a`), and what is owed is PROOF work — `Inv.negEdgeFree` on the `_d`
+  fragment for the leaf-routed write leg, then `graph_reached_inv` without the
+  `W4NarrowT2a` bundle. (This line read "a design decision — not proof effort" until
+  2026-09-05, when leg 7's flip landed and retired that justification; the carry itself
+  did not move.) Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0 before quoting
+  anything graph-side.
 * **A genuine model-vs-Python infidelity was found in the audited chain AFTER this
   directory was first described as "complete"** (2026-07-20b: Lean's `affectedKeys`
   lacked Python's LeafFamily own-key branch, yielding a modeled *drained* state with

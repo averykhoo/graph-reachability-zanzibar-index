@@ -25,6 +25,128 @@ from here.
 
 ---
 
+## 2026-09-05b — `P3` LANDED: the write-leg-only flip was kernel-refuted, so (α)+R5 co-landed; sorry-free, P6 retired
+
+rows: `P3` (closed), `P6` (→ `NOW`), `P4`, `P5`, `P14`, `TK54` + `TK55` (new)
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-05b` (§1–§8 the refutation, §9 the landing, §10 the multiplicity fix); new traps
+(bb)–(hh) in [the scope doc](../../formal/history/leaf-family-split-scope-2026-08-05.md)
+§11.13.
+
+lint: `task lint: clean (12 checks, 158 task file(s) parsed)`
+read: board + HANDOFF (the `P3` block and the banner only — HANDOFF was not read in full)
+
+**The re-point as adjudicated was FALSE, and the kernel said so.** Re-pointing ONLY
+`GraphState.writeLoggedRules` onto `rewriteClosureL S (rawWriteTuples S t)` builds green
+with four `sorry`s — and one of them is unfixable because the theorem is false: a
+sorryAx-FREE `decide` refutes `graph_correct` on that tree (§2). Mechanism: the write lands
+on the leaf node, the remove leg and the dirty-key branch still look at the public node, so
+a write-then-remove leaves a ghost grant and the cascade never re-reconciles the public
+key. Python has neither defect (§3). So branch (α) (`affectedKeys` dirties the public key
+via `publicOfLeaf`) and R5 (leaf-routed `removeLoggedRules`) are CO-REQUISITES, not
+follow-ups. **User decision: widen `P3` and land all three now.** The RED tree is kept as
+evidence on branch `p3-flip-red-2026-09-05` (`d6d2dfc`, "do not merge").
+
+**Landed (§9), one commit:** both logged legs fold the same leaf-routed list
+(`Cascade.lean:190-191`, `:340-341`), the own-key branch reads back through `publicOfLeaf`
+(`:542-546`), `untOccCount` restated over L. All four `sorry`s discharged — three with
+byte-identical statements once both legs name the same list; the fourth needed a ROUTING
+OBLIGATION (`CascadeStrataSettle.lean::rawWriteRels_ne_nil_of_exprDirectsAll`, bridging
+`Leaf.lean`'s allocation walk to `exprDirectsAll`'s admission walk), and its new premise
+`hroute` is discharged at its sole consumer, so no headline gained a binder (49/49). 53
+refutation/bridge/`#check` declarations deleted, each after its `decide` went red first;
+their content survives as kernel necessity controls (`::tvDer_own_key_not_dirty` etc.). The
+verifier's decisive check: `hroute` HOLDS at the deleted refutation's own witness
+(`rawWriteRels Sw tw = ["approver.0"]`) — the refutation died to (α), not to a guard (trap
+(gg)). `GraphAdmission` gained `noLeafSubjects` (sanctioned) and `keysNonempty` (accepted as
+scope: Python-enforced, not `WF`-derivable — **flagged to the user, not signed off**).
+Pins: statements 49/49 unchanged; definitions regenerated **232 → 250** after a control run
+showed exactly the predicted 35-row diff and nothing else (§9.3). Projection **P6 is
+deleted** from the extractor; ledger `P6 = 0`, `compared 189 → 265`, conformance count 515
+unchanged, and a positive pin (`test_conformance_state.py::test_leaf_rows_reach_the_compare_arm`,
+floor 76) replaces the ledger key that would otherwise silently stop moving.
+
+**The flip doubled an ALREADY-exponential derived-arm stacking, and ten conformance tests
+timed out (§10, trap (hh)).** `two_stratum_cascade` alice→approver at n=1..5 was 2/13/46/204/
+1013 on the control tree (16.4 s at n=5) and 4/26/92/408/2026 after the flip (176.8 s
+against `runner.py`'s 120 s zcli timeout); `cross_stratum_resettle` went 12/160/900/timeout.
+Root cause is two model lists that the Python keys as a `dict`/`set` and the model
+`flatMap`'d: the dirty-key list `CascadeStrata.lean::cascadeKeysAbove`
+(`processor.py::_map_deltas_to_keys`) and the enum candidates `CascadeStrataEnum.lean::
+enumJob2(D).cands` (`processor.py::_reconcile` `candidates: dict`). Both got core
+`List.eraseDups` (first occurrence — Mathlib `.dedup` keeps the last), `mem_cascadeKeys_iff_above`
+replaced the zero-consumer `cascadeKeys_eq_above`, the consumer sites in
+Resettle/Assemble/Settle/Inv/Enum were re-closed (§10.3), and the multiplicities are now
+`1…5` (0.1 s), re-measured first-hand. Consequences, each with a control run first: golden
+`derived_arm_multiplicity.json` regenerated (all 19 rows down; `direct_arm_exclusion` `[16, 1]`
+→ `[4, 1]`), `_MIN_LEDGER_STACKED` **19 → 18** (`_MIN_LEDGER_ROWS` stays 19; literal
+anti-vacuity output in the docstring), definition pin regenerated **250/250** after the
+control showed exactly `def:Zanzibar.cascadeKeysAbove` + `def:Zanzibar.enumJob2D` and
+nothing else. `CORRESPONDENCE.md` §7.2 item 6 (the residual `+1` per reconcile) is STILL
+OPEN — no longer exponential, still not the Python's `1`. Two observations recorded, not
+acted on: `Exec.lean:82` now gates on `foldAdmitsB` over the leaf-routed list (a stricter
+refusal surface than Python's admission), and `State.lean:160-161`'s reach fuel is
+`σ.nodes.length + 1`.
+
+**The gate's `sorry` belt had been counting 0 on every build since `ZT-P2-4`** (§5, trap
+(dd)): the grep pattern was wrong for Lean's backtick-quoted warning, so the 4-`sorry` RED
+tree passed it. Fixed in `verify.sh` (`:644-650`, `:669`, `:673`); control 0 → 4 on the
+RED log, live 0 on the landed tree.
+
+**T2a did NOT widen, and its justification is retired.** `graph_reached_inv` still takes
+`W4NarrowT2a`; `outside_narrow_t2a` still holds. The "P6 modelling limit" story is gone —
+the model now routes exactly as Python does — so the carry is proof work owed, not a design
+decision. The D.3 probe re-run on the landed model
+(`formal/probes/d3_negedgefree_postflip_2026-09-05.lean`, rc 0, re-run first-hand with
+identical output) reports `negFree := true` on the model's own write leg
+(`{edges 5, rows 1, negTested 2, negFree true}`, `rawWriteRels S tW = ["approver.0"]`) while
+the bridge-sabotage control reproduces D.3's kill (`negFree false`) — so `Inv.negEdgeFree`
+(`GraphIndex/State.lean:706`) is plausibly provable on the `_d` fragment and is the only
+clause implicated. ⚠ D.3's own witness (`Sd`/`Td`) is vacuous under routing; probe with
+`LeafWitness.Sw`/`tw`. `P5` is that item.
+
+**Board and tree bookkeeping:** `P3` closed. `P6` → `NOW` mechanically (the top `NEXT` row;
+its "not parallel-safe with `P3`" blocker is gone) — **the user may re-rank**. `P4` deps
+swept. `TK54` (`Scratch4cii.lean` is a tracked module inside the gated proof tree) and
+`TK55` (`keysNonempty`: scope or discharge — user call) filed, both `LATER`/S. Mirrored in
+`tasks/` under `--session 2026-09-05b` (`close P3`, `dep rm P4 P3`, `promote P6 NOW`,
+comments on `P4`/`P5`/`P6`/`P14`, `new` ×2). ⚠ `tasks/config.json::min_tasks_parsed` was
+ratcheted **156 → 158** for the two new files — the THIRD consecutive session in which
+`task.py new` was run without the ratchet, found only by running `task.py counts` by hand
+after `conf-tile:1/5` had already passed on the un-ratcheted tree (config.json is in the
+tiles' code scope, so that tile was re-run); the mechanical fix (`new` raising the floor
+itself) is still not done. `tests/test_tasktool.py::test_sabotage_live_blind_parser` was
+relaxed from "exactly 2 FAILs" to "floor ×1 + recount ×1 + only `resolves to no task`
+extras" because closing `P3` made `TK6`'s `related: [P3]` dangle under the blinded parser
+(literal in the docstring). `CORRESPONDENCE.md` anchors **543 → 583** over the session (new §5 rows and §7.2
+items 5c/6 for the flip and the dedups; `anchor_check.py` 583/583) and
+`FINAL_REVIEW.md`'s counts block regenerated (515 / 1036 / 585 / 583; definition pin
+232 → 250, `compared against Lean` 189 → 265). `formal/HANDOFF.md`
+was over its 520-line ceiling after the sweep and was condensed back to pointers (narrative
+lives in PROOF_STATUS); it is 519 lines.
+
+**Gate, as observed on this tree:** all TEN phases PASSED — the nine pytest tiles
+(`conf-tile:1/5`…`5/5` at `collected=515 selected=103 conf_passed=103`,
+`tests-tile:1/4`…`4/4` at `collected=1036 selected=259 tests_passed=259`, zero `xfailed`,
+zero `skipped`, every floor met, all on `t2c:ce27f3337040` with the tile rows read from
+`.gate-runs/ledger.tsv` and each tile's own log — NOT from the wrapper's stdout, which an
+orphaned earlier runner had polluted), then `lean` LAST after this entry was spliced
+(`holes=0 audits=585 pinned=584 defs=250`, statements 49/49, anchors 583/583,
+`doc_counts --check` green); `python scripts/gate_status.py` →
+`VERDICT: the ten-phase gate is COVERED on this tree`. No Python algorithm changed
+(`index_v4/` / `setengine/` untouched), so no fuzz sweep is owed. The earlier tile
+runs at 20:20–21:37 were on intermediate trees (the timeouts, the un-ratcheted
+`config.json`, and one runner that survived a `TaskStop` and kept appending stale
+rows) and are superseded, not evidence.
+
+Still owed: a user call on `p3-flip-red-2026-09-05` (keep as evidence vs delete — it is the
+only non-`.scratch` copy of the six refutation rounds); a user call on `keysNonempty`
+(scope vs discharge, `TK55`); no `lake clean` full rebuild has ever been run on this tree
+(§9.5); `task.py new` still does not ratchet `min_tasks_parsed` itself.
+
+---
+
 ## 2026-09-05 — the write-path cone HAS a green additive prefix: (A)/(B)/(C) landed, (H) was never open
 
 rows: `P3`

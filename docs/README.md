@@ -170,7 +170,10 @@ docstrings. They must survive a rewrite of the file they came from.
 
   When the target is a comment, a branch, or a `dict` key rather than a symbol,
   **quote the code and name the symbol it sits in** — `extractor.py::_edge_projection`
-  (`if "." in obj[2] …: return "P6"`), `corpus.py::SCHEMAS`'s `"residue_rich"` entry.
+  (`if obj[3] == "any" or subj[3] == "all": return "P2"`), `corpus.py::SCHEMAS`'s
+  `"residue_rich"` entry. (The example used to quote that function's `return "P6"`
+  branch, which was deleted when P6 retired 2026-09-05 — a quoted branch is a citation
+  too, and it rots exactly like a line number.)
   A step with an in-code marker is cited by the marker (`_reconcile` step (2c)), and
   a numbered invariant by its number (`I1`, `I6`) — both travel with the code.
 * **House rules → their number.** `formal/HANDOFF.md`'s house-rule numbering and this

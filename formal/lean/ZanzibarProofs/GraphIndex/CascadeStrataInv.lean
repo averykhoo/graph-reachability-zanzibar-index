@@ -121,7 +121,7 @@ transport verbatim across a retraction. -/
 theorem removeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.removeLoggedRules S t).residue = σ.residue := by
   unfold GraphState.removeLoggedRules
-  generalize rewriteClosure S t = us
+  generalize rewriteClosureL S (rawWriteTuples S t) = us
   induction us generalizing σ with
   | nil => rfl
   | cons u rest ih =>
@@ -478,8 +478,9 @@ theorem reconcileStarsKeyDR_row_edge_consistent {S : Schema} {σ : GraphState}
 theorem enumJob2_negCands_subset (σ : GraphState) (dt on R : String) (e : Expr) :
     ∀ c ∈ (enumJob2 σ dt on R e).negCands, c ∈ (enumJob2 σ dt on R e).cands := by
   intro c hc
-  show c ∈ (enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
-    ++ edgeHolders σ dt on R
+  show c ∈ ((enum2Base σ dt on e).filter (fun u => u.predicate == BARE)
+    ++ edgeHolders σ dt on R).eraseDups
+  rw [List.mem_eraseDups]
   exact List.mem_append_left _ hc
 
 /-- The Direct-arm-widened job's candidate discipline. NOT the one-line
