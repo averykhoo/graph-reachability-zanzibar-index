@@ -1,4 +1,13 @@
 import ZanzibarProofs.GraphIndex.Leaf
+-- Obligation (F) only: `StoreValidRules` (`RulesSound.lean:201`) and `lookup_rel_ne_bare`
+-- (`DirectCorrect.lean:74`), so `rewriteClosureL_rel_ne_bare` can carry EXACTLY the premise
+-- list of its plain twin `RulesChain.lean::rewriteClosure_rel_ne_bare` and be a drop-in at
+-- the post-flip consumer `CascadeSettle.lean:112`. **Cycle-checked 2026-09-05, by transitive
+-- closure rather than by eye**: `RulesSound`'s import cone is 29 modules and contains
+-- neither `GraphIndex.Leaf` nor `GraphIndex.LeafRules` nor any `Cascade*` module, while
+-- `LeafRules` is imported only by `Audit`, `CascadeStable` and `Scratch4cii` — none of which
+-- is in that cone. No new module is added, so the job count is unchanged.
+import ZanzibarProofs.GraphIndex.RulesSound
 
 /-!
 # Leaf-provenance rewrite rules — leg 7 step **4c-i**
@@ -951,6 +960,207 @@ theorem rewriteClosureL_subject_pred_ne {S : Schema} {R : String}
   obtain ⟨r, _, rfl⟩ := List.mem_map.mp hw
   exact ht
 
+/-! ## Obligation (F) — the L twin of `RulesChain.lean::rewriteClosure_rel_ne_bare`
+
+★ **Dot-freeness is the right instrument on ONE arm and useless on the other**, and that
+asymmetry is the whole content of (F). `isLeafPred_bare` (`Leaf.lean:210`) proves
+`isLeafPred BARE = true` — the bare-subject sentinel `"..."` is itself dot-carrying. So:
+
+* on the **untainted** arm the existing `not_isLeafPred_outRel_of_mem_schemaRewrites`
+  (`:141`) closes the goal precisely BECAUSE a declared name is dot-FREE and `BARE` is not;
+* on the **leaf** arm it separates nothing: a minted `leafPred R i` is dot-carrying exactly
+  like `BARE`, so `isLeafPred_outRel_of_mem_leafRewrites` (`:129`) is satisfied by both. The
+  leaf arm needs the SHAPE of the minted name — `leafPred_ne_bare` below.
+
+## ★ CONTROLLED — three sabotages, run 2026-09-05 (`docs/sabotage-procedure.md`)
+
+(F) is **INERT**: the write-path re-point that consumes it has not landed, so a green build
+vets nothing about it and these runs — plus the `decide` attack pins in
+`LeafRuleWitness` — are the only evidence there is. Each weakening below is the NARROWEST
+plausible one (a premise, or a quantifier's range), never an obvious catastrophe; each was
+restored from a byte-exact `cp` backup, never `git checkout --`.
+
+**(S15) `leafPred_ne_bare` is given a non-emptiness premise** — `(_hR : R ≠ "")`, the
+plausible reading that only the empty relation name could collide with `"..."`. It is not:
+`R` is unbounded at BOTH consumers. `lake build` rc=**1**, two errors, and they are the two
+arms firing at once — a single-arm red would have meant the other arm was dead code:
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1117:4: Type mismatch
+  leafPred_ne_bare R i
+has type
+  R ≠ "" → leafPred R i ≠ BARE
+but is expected to have type
+  leafPred R i ≠ BARE
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1130:4: Type mismatch
+  leafPred_ne_bare ?m.75 ?m.76
+has type
+  ?m.75 ≠ "" → leafPred ?m.75 ?m.76 ≠ BARE
+but is expected to have type
+  leafPred t.relation i ≠ BARE
+```
+
+(`:1117` is `outRel_ne_bare_of_mem_schemaRewritesL`'s leaf arm, `:1130` is
+`rawWriteTuples_rel_ne_bare`'s DERIVED-seed branch. This weakening changes no line COUNT, so
+both numbers read the same in the restored file — checked, not assumed.)
+
+**(S16) The leaf half is dropped from the rule quantifier** — `outRel_ne_bare_of_mem_`
+`schemaRewritesL` restated over `schemaRewrites S`, i.e. exactly `(S12)`'s shape one section
+later. The untainted proof still goes through unchanged, so nothing local complains; the red
+lands at the closure theorem, the only place that knows the produced rule is in the FULL set:
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1145:52: Application type mismatch: The argument
+  hr
+has type
+  r ∈ schemaRewritesL S
+but is expected to have type
+  r ∈ schemaRewrites S
+in the application
+  outRel_ne_bare_of_mem_schemaRewritesL hWF hr
+```
+
+(This weakening deletes five lines, so `:1145` in the sabotaged file is
+`rewriteClosureL_rel_ne_bare_of_rel`'s rule case at `:1150` in the restored one.)
+
+**(S17) The WRONG INSTRUMENT — run because the paragraph above makes a claim.** The leaf arm
+is closed from `isLeafPred_outRel_of_mem_leafRewrites` (dot-carrying) instead of
+`outRel_leafPred_of_mem_leafRewrites` (minted shape). The residual hypothesis states the
+defect exactly: under `r.outRel = BARE` the dot-carrying fact simplifies to **`True`** — it
+carries no information whatever, and `False` stays unreachable.
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1115:2: unsolved goals
+case inr
+S : Schema
+hWF : WF S
+r : RRule
+hl : r ∈ leafRewrites S
+hb : r.outRel = BARE
+hlp : True
+⊢ False
+```
+
+(`:1115` is the leaf arm's `·` bullet, the same line in the sabotaged and restored files.)
+
+All three restored by `cp` from the pre-sabotage copy: rc=0, `Build completed successfully
+(1089 jobs)`, zero `declaration uses `sorry``.
+
+⚠ **The sorry-grep instrument was itself controlled** (trap (u)), same session and before any
+zero above was believed: a throwaway
+`theorem zzz_sorry_instrument_control : (1:Nat) = 1 := by sorry` appended to this file made
+`grep -c 'declaration uses .sorry.'` report **1** while the straight-quote spelling reported
+**0**, on the literal warning
+`ZanzibarProofs/GraphIndex/LeafRules.lean:1652:8: declaration uses `sorry``. That `:1652` was
+the end of the file in THAT run — the throwaway was `cp`-restored away and this record was
+inserted afterwards, so nothing at `:1652` today relates to it. The zeroes above are measured
+zeroes, not an unfired grep.
+-/
+
+/-- **A minted leaf name is never the `BARE` sentinel** — for EVERY relation `R` (including
+    dot-carrying and empty ones) and every index `i`.
+
+    Not a `decide`: `R` ranges over all strings. The argument is structural, and rests on two
+    core facts about `Nat.toDigits` — it is never `[]` (`Nat.toDigits_ne_nil`) and every
+    character in it is a digit (`Nat.isDigit_of_mem_toDigits`). `leafPred R i` ends in
+    `toString i`, so its character list CONTAINS a digit; every character of `BARE = "..."`
+    is `'.'`, which is not one.
+
+    ⚠ The tempting shortcut — "`R` is declared, hence dot-free, so `leafPred R i` carries one
+    dot and `BARE` carries three" — does not serve the `leafRewrites` arm: nothing there
+    bounds `R`'s dots except `WF`, and the arm is reached only after a `List.mem_flatMap`
+    extraction that hands back `R := d.1.2`. The unconditional form keeps the leaf arm
+    `WF`-FREE, which is why (F) needs `WF` for the untainted arm alone. -/
+theorem leafPred_ne_bare (R : String) (i : Nat) : leafPred R i ≠ BARE := by
+  intro heq
+  have hdata : (leafPred R i).toList = R.toList ++ '.' :: (toString i).toList := by
+    simp [leafPred, String.toList_append]
+  rw [heq] at hdata
+  have hbare : (BARE : String).toList = ['.', '.', '.'] := by decide
+  rw [hbare] at hdata
+  obtain ⟨c, hc⟩ : ∃ c, c ∈ Nat.toDigits 10 i :=
+    List.exists_mem_of_ne_nil _ Nat.toDigits_ne_nil
+  have hcs : c ∈ (toString i).toList := by simpa using hc
+  have hdig : c.isDigit = true := Nat.isDigit_of_mem_toDigits (by decide) (by decide) hc
+  have hmem : c ∈ ['.', '.', '.'] := by
+    rw [hdata]; exact List.mem_append_right _ (List.mem_cons_of_mem _ hcs)
+  have hdot : c = '.' := by simpa using hmem
+  rw [hdot] at hdig
+  exact absurd hdig (by decide)
+
+/-- **Every leaf rule targets a MINTED leaf name**, with its public relation and index
+    recoverable. The shape-carrying strengthening of `isLeafPred_outRel_of_mem_leafRewrites`
+    (`:129`), whose `isLeafPred` conclusion cannot tell a leaf target from `BARE`. -/
+theorem outRel_leafPred_of_mem_leafRewrites {S : Schema} {r : RRule}
+    (h : r ∈ leafRewrites S) : ∃ R i, r.outRel = leafPred R i := by
+  unfold leafRewrites at h
+  obtain ⟨d, _, hd⟩ := List.mem_flatMap.mp h
+  unfold keyLeafRewrites at hd
+  obtain ⟨pi, _, hpi⟩ := List.mem_flatMap.mp hd
+  split at hpi
+  · exact ⟨d.1.2, pi.2, outRel_mem_of_mem_exprArms hpi⟩
+  · simp at hpi
+
+/-- **No rule of the FULL leaf-routed rule set targets `BARE`** — the two arms for two
+    different reasons, which is exactly what the twin's single `relNameOK` argument cannot
+    cover once `leafRewrites` is in range. -/
+theorem outRel_ne_bare_of_mem_schemaRewritesL {S : Schema} (hWF : WF S) {r : RRule}
+    (h : r ∈ schemaRewritesL S) : r.outRel ≠ BARE := by
+  rw [schemaRewritesL, List.mem_append] at h
+  rcases h with hu | hl
+  · intro hb
+    have hnl := not_isLeafPred_outRel_of_mem_schemaRewrites hWF hu
+    rw [hb, isLeafPred_bare] at hnl
+    exact Bool.noConfusion hnl
+  · obtain ⟨R, i, hr⟩ := outRel_leafPred_of_mem_leafRewrites hl
+    rw [hr]
+    exact leafPred_ne_bare R i
+
+/-- **The seed fan-out never mints `BARE` either.** Either the key is untainted and the
+    single seed keeps `t.relation`, or it is derived and every seed carries a minted leaf
+    name (`Leaf.lean::mem_rawWriteRels_derived`). Note the premise is about the RAW write,
+    not about the seeds: the fan-out is what this lemma has to see through. -/
+theorem rawWriteTuples_rel_ne_bare {S : Schema} {t : Tuple} (ht : t.relation ≠ BARE)
+    {u : Tuple} (hu : u ∈ rawWriteTuples S t) : u.relation ≠ BARE := by
+  unfold rawWriteTuples at hu
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hu
+  show r ≠ BARE
+  by_cases hd : isDerived S (t.object.type, t.relation) = true
+  · obtain ⟨i, rfl⟩ := mem_rawWriteRels_derived hd hr
+    exact leafPred_ne_bare _ _
+  · rw [rawWriteRels_untainted (by simpa using hd)] at hr
+    rw [List.mem_singleton.mp hr]
+    exact ht
+
+/-- **(F), general form.** No tuple of the leaf-routed closure of a raw write carries the
+    bare-subject sentinel as its RELATION.
+
+    ★ **Strictly weaker premises than the twin, and the report says so.**
+    `RulesChain.lean::rewriteClosure_rel_ne_bare` carries `StoreValidRules S T` and `t ∈ T`
+    only to extract `t.relation ≠ BARE` through `lookup_rel_ne_bare`; nothing else in either
+    argument inspects the store. This form takes that consequence directly and needs **no
+    store at all**. The drop-in twin-shaped version is the two-line corollary below, so the
+    consumer site is unaffected by the weakening. -/
+theorem rewriteClosureL_rel_ne_bare_of_rel {S : Schema} (hWF : WF S) {t : Tuple}
+    (ht : t.relation ≠ BARE) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S (rawWriteTuples S t)) : u.relation ≠ BARE := by
+  rcases rewriteClosureL_produced hu with hseed | ⟨r, hr, -, hrout⟩
+  · exact rawWriteTuples_rel_ne_bare ht hseed
+  · rw [← hrout]
+    exact outRel_ne_bare_of_mem_schemaRewritesL hWF hr
+
+/-- **(F), drop-in form.** EXACTLY `RulesChain.lean::rewriteClosure_rel_ne_bare`'s premise
+    list and conclusion, at the leaf-routed seed. Post-flip, `CascadeSettle.lean:112`'s
+    `exact rewriteClosure_rel_ne_bare hWF hSV List.mem_cons_self hu` becomes
+    `exact rewriteClosureL_rel_ne_bare hWF hSV List.mem_cons_self hu` — one identifier, no
+    other movement. Pinned as such by `rewriteClosureL_rel_ne_bare_dropin_nonvacuous`, which
+    applies it at that literal argument shape. -/
+theorem rewriteClosureL_rel_ne_bare {S : Schema} {T : Store} (hWF : WF S)
+    (hSV : StoreValidRules S T) {t : Tuple} (ht : t ∈ T) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S (rawWriteTuples S t)) : u.relation ≠ BARE :=
+  rewriteClosureL_rel_ne_bare_of_rel hWF
+    (by obtain ⟨e, _, hlk, _, _⟩ := hSV t ht; exact lookup_rel_ne_bare hWF hlk) hu
+
 /-! ## The non-vacuity witnesses
 
 Everything above is additive, so a green build vets nothing: `leafRewrites` returning
@@ -999,6 +1209,433 @@ closure leaf. That asymmetry is exactly why `SlA` is in this witness set — it 
 only shape that distinguishes the merge at the RULE layer, just as `SmA` is the only one
 that distinguishes it at the ALLOCATION layer (`Leaf.lean` sabotage S6).
 -/
+
+/-! ## Obligation (A)'s PREMISE — DISCHARGED, not assumed
+
+★ The `TtuTargetsSatL` note above (`:891`) ends by flagging its own composition as
+**"NOT PROVED HERE — this is a source reading, not a kernel check"**, and names the missing
+step: *"every `.closure` leaf of `persistedLeaves` is `isPure`"*. This section proves that
+lemma and closes the gap, so obligation (A) needs **no new premise**: `TtuTargetsSatL S (· ≠ R)`
+follows from the pair the consumers already carry — `ReconcileCorrect.lean::NoTtuTarget S R`
+together with `isDerived S (dt, R) = true`, which is exactly what `FullScope.lean:238
+W4Fragment.term` supplies and what all fifteen `Equiv.lean` consumers (`:281`…`:660`) hold.
+
+⚠ **`NoTtuTarget` is spelled out UNFOLDED below rather than named**, for the same reason
+`stP_untainted_layer_no_ttu_target_viewer` spells it out: it lives in `ReconcileCorrect.lean`,
+which this file does not import. The two are definitionally equal, so a consumer holding a
+`NoTtuTarget S R` passes it straight in — checked out-of-tree 2026-09-05 with
+`lake env lean` on a scratch file importing BOTH modules, where
+`rewriteClosureL_subject_pred_ne_of_noTtuTarget (hnt : NoTtuTarget S R) …` elaborates with no
+coercion. **The import would in fact be legal** (cycle check by transitive closure, not by
+eye: `ReconcileCorrect`'s import cone is 35 modules and contains neither `GraphIndex.Leaf` nor
+`GraphIndex.LeafRules` nor any `Cascade*`, while `LeafRules` is imported only by `Audit`,
+`CascadeStable` and `Scratch4cii`, none of which is in that cone); it is simply not needed,
+and the unfolded form keeps this change import-free.
+
+## ★ STEP 1 WAS THE ATTACK, NOT THE PROOF (house rule 2)
+
+The claim under attack: **a `.closure` leaf can never carry a TTU node whose target is
+derived anywhere**, so no leaf rule can mint that target as a subject predicate. It was
+attacked by enumerating every site that can emit a `PLeaf.closure` at all — there are exactly
+four, and `pureLeaves` has exactly two call sites, both `isPure`-guarded:
+
+* `atomLeaves`'s `.ttu` arm (`Leaf.lean:402`) — emits `.closure (.ttu tgt ts)` **only** under
+  `isPure`, whose TTU conjunct is `!derivedAnywhere S tgt`. No bypass.
+* `atomLeaves`'s `.computed` arm — emits `.closure (.computed R)`, which `exprArms` turns into
+  a `.computed` rule; `ttuTargets` of that is `[]`. Nothing to target.
+* `atomLeaves`'s `.direct` arm — the impure branch emits `.storage`/`.userset` only, and the
+  pure branch goes through `pureLeaves (.direct rs)` where `splitPure` returns `(rs, [])`, so
+  `unionAll [] = none` and no closure leaf is emitted at all.
+* `persistedLeaves`'s `.union` arm — `pureLeaves (.union a b)` under `isPure`, and `isPure` on
+  a union is the CONJUNCTION of its arms, so every member of the merged leaf is pure.
+
+The `.inter`/`.excl` arms of both `persistedLeaves` and `unionSpineLeaves`, and the whole
+`unionSpineLeaves` spine, only recurse — they emit nothing themselves. **No arm bypasses
+`isPure`, so the attack fails and the lemma is true as stated.**
+
+Four adversarial schemas were then run through `leafRewrites` as a control on that reading
+(`lake env lean`, 2026-09-05): a derived TTU target under a plain `excl` (`LeafWitness.StD`);
+the same target buried in an IMPURE union next to a clean one, so the spine-flattening arm
+runs; a `.direct ∪ .ttu` union whose derived target makes the whole union impure; and the
+same target under nested `inter`/`excl`. In every one the derived-target arm minted **no
+rule at all** and the clean arms minted theirs at the shifted indices. The first and the
+cross-type case are kept below as permanent `decide` pins (`lrStD_no_ttu_rule`,
+`lrXt_cross_type_drop`) rather than described, because a described run is a lost run.
+
+## What is proved, in dependency order
+
+1. `mem_keys_of_mem_taintedKeys` / `mem_keys_of_isDerived` — taint never leaves `S.keys`
+   (`taintStep` is a `filter` of `S.keys`, and the fixpoint's outermost application is one).
+   **No `WF` and no `NodupKeys` needed**: this is the weakest premise there is, none.
+2. `derivedAnywhere_of_isDerived` — one derived key witnesses the type-agnostic test.
+3. `isPure_of_closure_mem_persistedLeaves` — **the missing purity lemma**, by one induction
+   over `Expr` proving the `persistedLeaves`/`unionSpineLeaves` pair simultaneously (the two
+   are mutually defined but every recursive call is on an immediate subterm, so plain
+   structural induction on the shared argument suffices — no mutual-induction principle).
+4. `derivedAnywhere_eq_false_of_mem_leafRewrites` — every leaf rule's TTU target is derived
+   NOWHERE, by (3) plus a walk of `exprArms` over a pure subtree.
+5. `ttuTargetsSatL_ne_of_noTtuTarget` and its closure corollary — the two arms of
+   `schemaRewritesL` closed by `NoTtuTarget` (untainted) and by (4) + (2) (leaf).
+
+## ★ CONTROLLED — three sabotages, run 2026-09-05 (`docs/sabotage-procedure.md`)
+
+Each is the NARROWEST plausible weakening of the thing it guards, not an obvious catastrophe;
+each was applied to the green file, built with `lake build ZanzibarProofs.GraphIndex.LeafRules`,
+and restored from a byte-exact `cp` backup (md5-verified identical after each restore), never
+by `git checkout`. Every line number quoted below was RE-MEASURED against this final file,
+after this record was inserted, by re-running all three sabotages; the outputs are literal.
+
+**The instrument was controlled first.** Lean prints *declaration uses* with the word `sorry`
+in BACKTICKS, so a straight-quote grep for it matches nothing and a zero from that grep is
+meaningless. Appending `theorem zzz_sorry_instrument_control_A : (1:Nat) = 1 := by sorry` and
+rebuilding this module gave `rc=0`, dot-wildcard grep **1**, straight-quote grep **0**, at
+`LeafRules.lean:2309:8`. Removed; the zero in the final build is a measurement, not a hope.
+
+**(S14) The TTU purity is read off the TUPLESET conjunct instead of the TARGET conjunct.**
+`isPure`'s TTU arm is a two-conjunct `&&` and the two are adjacent:
+`!isDerived S (ty, ts)` is about the tupleset relation — which becomes the rule's `matchRel` —
+and `!derivedAnywhere S tgt` is about the target, which becomes `ttuTargets`. Reading the
+first is the single most plausible transcription slip in this development, and it is exactly
+the confusion that would make the leaf-layer fact false. `hp.2` → `hp.1`;
+`lake build` rc=**1**:
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1571:6: Type mismatch: After simplification, term
+  hp.left
+ has type
+  isDerived S (ty, ts) = false
+but is expected to have type
+  derivedAnywhere S tr = false
+```
+
+**(S15) The purity lemma is narrowed to the SPINE half.** `persistedLeaves` and
+`unionSpineLeaves` differ on exactly one arm — the pure union, which the first MERGES through
+`pureLeaves` and the second never does. That distinction was measured WRONG once already in
+this file's history (the 2026-08-16b `unionSpineLeaves` correction), so projecting the wrong
+component is a live failure mode and not a hypothetical. `.1` → `.2` in
+`isPure_of_closure_mem_persistedLeaves`; `lake build` rc=**1**:
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1536:53: Application type mismatch: The argument
+  h
+has type
+  PLeaf.closure sub ∈ persistedLeaves S ty e
+but is expected to have type
+  PLeaf.closure sub ∈ unionSpineLeaves S ty e
+in the application
+  (isPure_closure_persistedLeaves_and_spine e).right sub h
+```
+
+**(S16) `hder` is dropped from the leaf arm** — the weakening the record's own framing invites
+("reuse `NoTtuTarget`"), and the one `hder_load_bearing` refutes semantically. Removing the
+`derivedAnywhere_of_isDerived hder` rewrite leaves the `Bool` collision unclosed;
+`lake build` rc=**1**:
+
+```text
+error: ZanzibarProofs/GraphIndex/LeafRules.lean:1624:4: Type mismatch
+  Bool.noConfusion h1
+has type
+  Bool.noConfusionType ?m.66 (derivedAnywhere S R) false
+but is expected to have type
+  False
+```
+
+⚠ S16 is the weakest of the three as evidence, because it reddens by failing to COMPILE. The
+durable form of that control is `hder_load_bearing` below, which is a permanent `decide`
+refutation of the `hder`-free STATEMENT at `SlStP` — a lemma that no longer needs the premise
+would still be false there, and no proof-shape change can hide it. -/
+
+section ObligationAPremise
+
+variable {S : Schema}
+
+/-- **Taint never leaves the declared keys.** `taintStep` is a `filter` of `S.keys`, so at
+    any nonzero fuel the OUTERMOST application of the fixpoint iteration is one; at fuel zero
+    the result is the empty seed. Hence `taintedKeys S ⊆ S.keys` with no side conditions —
+    in particular no `WF` and no `NodupKeys`, which is the weakest premise available. -/
+theorem mem_keys_of_mem_taintedKeys {k : Key} (h : k ∈ taintedKeys S) : k ∈ S.keys := by
+  have gen : ∀ (n : Nat) (cur : List Key),
+      k ∈ iterate (taintStep S) n cur → k ∈ cur ∨ k ∈ S.keys := by
+    intro n
+    induction n with
+    | zero => intro cur hc; exact Or.inl hc
+    | succ m ih =>
+        intro cur hc
+        rw [iterate] at hc
+        rcases ih _ hc with h1 | h2
+        · rw [taintStep] at h1
+          exact Or.inr (List.mem_of_mem_filter h1)
+        · exact Or.inr h2
+  rcases gen _ _ h with h1 | h2
+  · simp at h1
+  · exact h2
+
+/-- A derived key is a DECLARED key. -/
+theorem mem_keys_of_isDerived {k : Key} (h : isDerived S k = true) : k ∈ S.keys := by
+  refine mem_keys_of_mem_taintedKeys ?_
+  unfold isDerived at h
+  simpa [List.contains_eq_mem] using h
+
+/-- **The type-agnostic taint test, from one witness type.** `derivedAnywhere S R` is
+    `S.keys.any (k.2 == R && isDerived S k)`, so a single derived `(dt, R)` decides it —
+    the key is in `S.keys` by `mem_keys_of_isDerived`, which is the only non-obvious step. -/
+theorem derivedAnywhere_of_isDerived {R dt : String} (h : isDerived S (dt, R) = true) :
+    derivedAnywhere S R = true := by
+  unfold derivedAnywhere
+  refine List.any_eq_true.mpr ⟨(dt, R), mem_keys_of_isDerived h, ?_⟩
+  simp [h]
+
+/-- Splitting a PURE subtree (`Leaf.lean::splitPure`) leaves every non-`Direct` member pure:
+    the only interesting arm is `union`, where `isPure` is the conjunction of the arms. -/
+theorem isPure_of_mem_splitPure_snd {ty : String} :
+    ∀ {e : Expr}, isPure S ty e = true → ∀ x ∈ (splitPure e).2, isPure S ty x = true := by
+  intro e
+  induction e with
+  | direct rs => intro _ x hx; simp [splitPure] at hx
+  | computed R => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+  | ttu tgt ts => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+  | union a b iha ihb =>
+      intro h x hx
+      rw [isPure, Bool.and_eq_true] at h
+      rw [splitPure] at hx
+      simp only [List.mem_append] at hx
+      rcases hx with hx | hx
+      · exact iha h.1 x hx
+      · exact ihb h.2 x hx
+  | inter a b _ _ => intro h; simp [isPure] at h
+  | excl a b _ _ => intro h; simp [isPure] at h
+
+/-- Re-folding pure members into `unionAll`'s LEFT-nested union keeps them pure. -/
+theorem isPure_foldl_union {ty : String} :
+    ∀ (es : List Expr) (e : Expr), isPure S ty e = true →
+      (∀ x ∈ es, isPure S ty x = true) → isPure S ty (es.foldl Expr.union e) = true := by
+  intro es
+  induction es with
+  | nil => intro e he _; simpa using he
+  | cons a es ih =>
+      intro e he hall
+      simp only [List.foldl_cons]
+      refine ih _ ?_ (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+      rw [isPure, Bool.and_eq_true]
+      exact ⟨he, hall a (List.mem_cons_self ..)⟩
+
+/-- `unionAll` of pure members is pure. -/
+theorem isPure_of_unionAll {ty : String} {es : List Expr} {sub : Expr}
+    (hall : ∀ x ∈ es, isPure S ty x = true) (h : unionAll es = some sub) :
+    isPure S ty sub = true := by
+  cases es with
+  | nil => simp [unionAll] at h
+  | cons e es =>
+      rw [unionAll] at h
+      simp only [Option.some.injEq] at h
+      subst h
+      exact isPure_foldl_union es e (hall e (List.mem_cons_self ..))
+        (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+
+/-- **The MERGED closure leaf is pure.** `pureLeaves`' storage half carries no `.closure` at
+    all; its closure half is `unionAll (splitPure e).2`, pure by the two lemmas above. This is
+    the arm that covers `persistedLeaves`' pure-union merge — the shape `SlA`/`SmA` exist to
+    distinguish, and the one a purity lemma written only for atoms would miss. -/
+theorem isPure_of_closure_mem_pureLeaves {ty : String} {e sub : Expr}
+    (hp : isPure S ty e = true) (h : PLeaf.closure sub ∈ pureLeaves e) :
+    isPure S ty sub = true := by
+  simp only [pureLeaves, List.mem_append] at h
+  rcases h with h | h
+  · split at h <;> simp at h
+  · split at h
+    · simp at h
+    · rename_i sub' heq
+      simp only [List.mem_singleton, PLeaf.closure.injEq] at h
+      subst h
+      exact isPure_of_unionAll (isPure_of_mem_splitPure_snd hp) heq
+
+/-- **Every `.closure` leaf `atomLeaves` emits is pure** — the three non-recursive emission
+    sites, checked one at a time. The `.direct` impure branch emits `.storage`/`.userset`
+    only; the `.computed` else-branch is pure exactly because it is the else-branch; the
+    `.ttu` arm is `isPure`-guarded outright. -/
+theorem isPure_of_closure_mem_atomLeaves {ty : String} {e sub : Expr}
+    (h : PLeaf.closure sub ∈ atomLeaves S ty e) : isPure S ty sub = true := by
+  cases e with
+  | direct rs =>
+      rw [atomLeaves] at h
+      split at h
+      · rename_i hp; exact isPure_of_closure_mem_pureLeaves hp h
+      · simp only [List.mem_append] at h
+        rcases h with h | h
+        · split at h <;> simp at h
+        · obtain ⟨r, _, hr⟩ := List.mem_map.mp h; simp at hr
+  | computed R =>
+      rw [atomLeaves] at h
+      split at h
+      · simp at h
+      · rename_i hnd
+        simp only [List.mem_singleton, PLeaf.closure.injEq] at h
+        subst h
+        simp [isPure, hnd]
+  | ttu tgt ts =>
+      rw [atomLeaves] at h
+      split at h
+      · rename_i hp
+        simp only [List.mem_singleton, PLeaf.closure.injEq] at h
+        subst h; exact hp
+      · simp at h
+  | union a b => simp [atomLeaves] at h
+  | inter a b => simp [atomLeaves] at h
+  | excl a b => simp [atomLeaves] at h
+
+/-- **THE MISSING PURITY LEMMA, both halves at once.** `persistedLeaves` and
+    `unionSpineLeaves` are mutually defined, but every recursive call in the block is on an
+    IMMEDIATE SUBTERM of the shared `Expr` argument, so one plain structural induction proving
+    the conjunction discharges both — no mutual-induction principle is needed. The `.union`
+    case is where the two differ and where the whole content sits: `persistedLeaves` may MERGE
+    (via `pureLeaves`, purity carried by `isPure_of_closure_mem_pureLeaves`), while
+    `unionSpineLeaves` never merges and only flattens. -/
+theorem isPure_closure_persistedLeaves_and_spine {ty : String} : ∀ (e : Expr),
+    (∀ sub, PLeaf.closure sub ∈ persistedLeaves S ty e → isPure S ty sub = true) ∧
+    (∀ sub, PLeaf.closure sub ∈ unionSpineLeaves S ty e → isPure S ty sub = true) := by
+  intro e
+  induction e with
+  | direct rs =>
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h; exact isPure_of_closure_mem_atomLeaves h
+      · simp only [unionSpineLeaves] at h; exact isPure_of_closure_mem_atomLeaves h
+  | computed R =>
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h; exact isPure_of_closure_mem_atomLeaves h
+      · simp only [unionSpineLeaves] at h; exact isPure_of_closure_mem_atomLeaves h
+  | ttu tgt ts =>
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h; exact isPure_of_closure_mem_atomLeaves h
+      · simp only [unionSpineLeaves] at h; exact isPure_of_closure_mem_atomLeaves h
+  | union a b iha ihb =>
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h
+        split at h
+        · rename_i hp; exact isPure_of_closure_mem_pureLeaves hp h
+        · simp only [List.mem_append] at h
+          exact h.elim (iha.2 sub) (ihb.2 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim (iha.2 sub) (ihb.2 sub)
+  | inter a b iha ihb =>
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves, List.mem_append] at h
+        exact h.elim (iha.1 sub) (ihb.1 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim (iha.1 sub) (ihb.1 sub)
+  | excl a b iha ihb =>
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves, List.mem_append] at h
+        exact h.elim (iha.1 sub) (ihb.1 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim (iha.1 sub) (ihb.1 sub)
+
+/-- **Every `.closure` leaf of the allocation is pure.** The `persistedLeaves` projection of
+    the pair — the statement `:885` says no lemma in the tree has. -/
+theorem isPure_of_closure_mem_persistedLeaves {ty : String} {e sub : Expr}
+    (h : PLeaf.closure sub ∈ persistedLeaves S ty e) : isPure S ty sub = true :=
+  (isPure_closure_persistedLeaves_and_spine e).1 sub h
+
+/-- The converse of `ttuTargets_of_kind` (`:595`): the LIST form determines the kind. -/
+theorem kind_of_mem_ttuTargets {r : RRule} {tr : String} (h : tr ∈ ttuTargets r) :
+    r.kind = RuleKind.ttu tr := by
+  unfold ttuTargets at h
+  split at h
+  · simp at h
+  · rename_i t hk
+    simp only [List.mem_singleton] at h
+    subst h; exact hk
+
+/-- **The TTU targets of a PURE subtree are derived nowhere.** `exprArms` mints a `.ttu tgt`
+    rule exactly at a `.ttu tgt ts` node, and `isPure`'s TTU arm is
+    `!isDerived S (ty, ts) && !derivedAnywhere S tgt` — the SECOND conjunct, about the TARGET,
+    is the one this consumes. (The first is about the TUPLESET relation `ts`, which becomes
+    the rule's `matchRel`, not its target; see sabotage (S14).) -/
+theorem derivedAnywhere_eq_false_of_mem_exprArms_of_isPure {ty : String} :
+    ∀ {e : Expr}, isPure S ty e = true → ∀ {ot outRel : String} {r : RRule},
+      r ∈ exprArms ot outRel e → ∀ tr ∈ ttuTargets r, derivedAnywhere S tr = false := by
+  intro e
+  induction e with
+  | direct rs => intro _ _ _ _ hr; simp [exprArms] at hr
+  | computed R =>
+      intro _ _ _ _ hr tr htr
+      simp only [exprArms, List.mem_singleton] at hr
+      subst hr
+      simp [ttuTargets] at htr
+  | ttu tgt ts =>
+      intro hp _ _ _ hr tr htr
+      simp only [exprArms, List.mem_singleton] at hr
+      subst hr
+      simp only [ttuTargets, List.mem_singleton] at htr
+      subst htr
+      rw [isPure, Bool.and_eq_true] at hp
+      simpa using hp.2
+  | union a b iha ihb =>
+      intro hp _ _ _ hr
+      rw [isPure, Bool.and_eq_true] at hp
+      rw [exprArms, List.mem_append] at hr
+      exact hr.elim (iha hp.1) (ihb hp.2)
+  | inter a b _ _ => intro hp; simp [isPure] at hp
+  | excl a b _ _ => intro hp; simp [isPure] at hp
+
+/-- **★ THE LEAF-LAYER FACT.** Every rule in `leafRewrites S` that has a TTU target has one
+    that is derived NOWHERE. `keyLeafRewrites` mints rules only off `.closure` leaves (its
+    `_ => []` arm), those leaves are pure, and a pure subtree's TTU targets are
+    `derivedAnywhere`-false. The `zipIdx` index is irrelevant to the target, so it is
+    projected away with `List.zipIdx_map_fst`. -/
+theorem derivedAnywhere_eq_false_of_mem_leafRewrites {r : RRule} (h : r ∈ leafRewrites S) :
+    ∀ tr ∈ ttuTargets r, derivedAnywhere S tr = false := by
+  unfold leafRewrites at h
+  obtain ⟨d, _, hd⟩ := List.mem_flatMap.mp h
+  unfold keyLeafRewrites at hd
+  obtain ⟨pi, hpi, hr⟩ := List.mem_flatMap.mp hd
+  split at hr
+  · rename_i sub heq
+    have hmem : PLeaf.closure sub ∈ persistedLeaves S d.1.1 d.2 := by
+      rw [← heq]
+      have := List.mem_map_of_mem (f := Prod.fst) hpi
+      rwa [List.zipIdx_map_fst] at this
+    exact derivedAnywhere_eq_false_of_mem_exprArms_of_isPure
+      (isPure_of_closure_mem_persistedLeaves hmem) hr
+  · simp at hr
+
+/-- **★★ OBLIGATION (A)'s PREMISE, DISCHARGED.** `TtuTargetsSatL S (· ≠ R)` from the pair the
+    consumers already carry. The two arms of `schemaRewritesL` are closed differently and
+    that asymmetry is the whole proof:
+
+    * **untainted arm** — `NoTtuTarget S R` verbatim (spelled out; see the section header on
+      why it is not named), via `kind_of_mem_ttuTargets` to get from the list form to the
+      binder form;
+    * **leaf arm** — a leaf rule's TTU target is `derivedAnywhere`-FALSE
+      (`derivedAnywhere_eq_false_of_mem_leafRewrites`) while `R` is `derivedAnywhere`-TRUE
+      (`derivedAnywhere_of_isDerived hder`), and a `Bool` is not both.
+
+    ⚠ `hder` is LOAD-BEARING, not decoration: `hder_load_bearing` below is the machine-checked
+    refutation of the `hder`-free statement, at `SlStP`. -/
+theorem ttuTargetsSatL_ne_of_noTtuTarget {R dt : String}
+    (hnt : ∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ R)
+    (hder : isDerived S (dt, R) = true) : TtuTargetsSatL S (· ≠ R) := by
+  intro r hr tr htr
+  rw [schemaRewritesL, List.mem_append] at hr
+  rcases hr with hr | hr
+  · exact hnt r hr tr (kind_of_mem_ttuTargets htr)
+  · intro heq
+    have h1 := derivedAnywhere_eq_false_of_mem_leafRewrites hr tr htr
+    rw [heq, derivedAnywhere_of_isDerived hder] at h1
+    exact Bool.noConfusion h1
+
+/-- **(A) in the CONSUMER's exact shape.** `Cascade.lean:713`'s
+    `exact rewriteClosure_subject_pred_ne …` has `NoTtuTarget S R` and
+    `isDerived S (dt, R) = true` in scope; post-flip it needs the L twin at the same premises,
+    and this is it — `rewriteClosureL_subject_pred_ne` with its `TtuTargetsSatL` premise
+    manufactured rather than assumed. -/
+theorem rewriteClosureL_subject_pred_ne_of_noTtuTarget {R dt : String}
+    (hnt : ∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ R)
+    (hder : isDerived S (dt, R) = true) {t : Tuple} (ht : t.subject.predicate ≠ R)
+    {u : Tuple} (hu : u ∈ rewriteClosureL S (rawWriteTuples S t)) :
+    u.subject.predicate ≠ R :=
+  rewriteClosureL_subject_pred_ne (ttuTargetsSatL_ne_of_noTtuTarget hnt hder) ht hu
+
+end ObligationAPremise
 
 namespace LeafRuleWitness
 
@@ -1399,6 +2036,273 @@ theorem rewriteClosureL_subject_pred_ne_nonvacuous :
   rewriteClosureL_subject_pred_ne ttuTargetsSatL_snlBoth_ne_banned
     (t := tnlParent) (by decide)
     (u := ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩) (by decide)
+
+/-! ### Obligation (F) — the ATTACK, its two surviving counterexamples, and the applications
+
+★ **STEP 1 was the attack, not the proof** (formal house rule 2, `formal/HANDOFF.md:257-272`).
+Before anything was proved, the target statement was attacked at each of the three routes by
+which a `BARE` relation could reach the leaf-routed closure. **Two of the three attacks
+SUCCEED** against a weakened premise list, and both are pinned below as `decide`
+counterexamples rather than described:
+
+* **(i) A seed minted by `rawWriteRels`.** Attack FAILS, and provably so. A derived key's
+  seeds are `leafPred t.relation i` (`Leaf.lean::mem_rawWriteRels_derived`), and
+  `leafPred_ne_bare` rules those out for every `R` and `i`. No schema can be built against
+  it: `leafPred R i` ends in `toString i`, a non-empty DIGIT string, and `BARE` is three
+  dots. The `decide`-over-`R` route the record floated is not available (`R` is unbounded),
+  which is why that lemma is structural.
+* **(ii) A seed that is the raw write ITSELF, on an untainted key.** Attack **SUCCEEDS**.
+  `rawWriteTuples S t = [t]` there, so a write whose own relation is `BARE` puts a
+  `BARE`-relation tuple straight into the closure — `bareSeed_attack` decides it, at a schema
+  for which `WF` HOLDS (`slV_wf`). So `WF` alone does not save the statement: this is what
+  the twin's `hSV`/`ht` pair buys, and what
+  `rewriteClosureL_rel_ne_bare_of_rel`'s `ht : t.relation ≠ BARE` buys directly.
+* **(iii) A rule whose `outRel` is `BARE`.** Attack **SUCCEEDS** against a `WF`-free
+  statement. `schemaRewrites` COPIES the declared relation name into `outRel`, and the only
+  thing forbidding a relation literally named `"..."` is `relNameOK` — a `WF` clause, not a
+  structural one. `sbareRel_closure_reaches_bare` builds that schema and decides the
+  membership; `sbareRel_not_wf` pins that `WF` is exactly what excludes it. On the
+  `leafRewrites` half the same attack fails, because `outRel` there is MINTED
+  (`outRel_leafPred_of_mem_leafRewrites`), never copied.
+
+Both surviving counterexamples are kept as permanent pins: they are what make (F)'s two
+premises load-bearing instead of decorative, and either one going green under a future
+premise-narrowing is the signal. -/
+
+/-- ATTACK (ii). A write whose relation IS the bare sentinel, on a key `SlV` does not
+    declare — hence untainted, hence `rawWriteTuples` is the identity on it. -/
+def tBareRel : Tuple := ⟨⟨"user", "alice", BARE⟩, BARE, ⟨"doc", "d1"⟩⟩
+
+theorem tBareRel_rel_is_bare : tBareRel.relation = BARE := rfl
+
+/-- **The seed premise is load-bearing**: this closure member's relation is `BARE`, at a
+    schema satisfying `WF`. Drop `ht` from `rewriteClosureL_rel_ne_bare_of_rel` and the
+    statement is false here. -/
+theorem bareSeed_attack :
+    (rewriteClosureL SlV (rawWriteTuples SlV tBareRel)).contains tBareRel = true := by decide
+
+/-- ATTACK (iii). A schema declaring a relation literally NAMED `BARE`. Everything else is
+    ordinary: `editor` is a storage relation and the second def is an untainted `computed`,
+    so it compiles into the `schemaRewrites` half and copies its own name into `outRel`. -/
+def SbareRel : Schema :=
+  ⟨[(("doc", "editor"), .direct [("user", BARE, false)]),
+    (("doc", BARE), .computed "editor")], []⟩
+
+/-- The rule really is minted with `outRel = BARE` — stated so the counterexample below is
+    attributable to the rule layer, not to a seed. -/
+theorem sbareRel_rule :
+    schemaRewrites SbareRel = [⟨"doc", "editor", BARE, .computed⟩] := by decide
+
+/-- **`WF` is load-bearing**: a raw `editor` write reaches a closure tuple whose relation is
+    `BARE`, purely through the untainted rewrite arm. -/
+theorem sbareRel_closure_reaches_bare :
+    (rewriteClosureL SbareRel (rawWriteTuples SbareRel tlEditor)).contains
+      ⟨⟨"user", "alice", BARE⟩, BARE, ⟨"doc", "d1"⟩⟩ = true := by decide
+
+/-- …and `WF` is exactly what excludes that schema, so the counterexample is a statement
+    about the premise rather than about the model. -/
+theorem sbareRel_not_wf : ¬ WF SbareRel := by
+  intro h
+  exact h.relNames (("doc", BARE), Expr.computed "editor") (by simp [SbareRel])
+    (by simp [BARE, String.contains])
+
+/-! #### Non-vacuity — both arms of (F) are REACHED, and the drop-in shape is exercised
+
+(F) is inert until the write-path flip lands, so a green build vets nothing about it. Three
+applications below, each derived THROUGH the theorem (never `decide`d directly, which would
+say nothing about applicability) and each landing on a DIFFERENT arm of the case split. -/
+
+/-- **NON-VACUITY, the leaf-RULE arm.** `lrV_closure_reaches_leaf` pins
+    `doc:d1#viewer.0@user:alice` as a closure member; its relation is a minted leaf name, so
+    (F) discharges it through `outRel_ne_bare_of_mem_schemaRewritesL`'s `leafRewrites` half —
+    the half where `isLeafPred` is the wrong instrument. -/
+theorem rewriteClosureL_rel_ne_bare_leafArm_nonvacuous :
+    leafPred "viewer" 0 ≠ BARE :=
+  rewriteClosureL_rel_ne_bare_of_rel slV_wf (t := tlEditor) (by decide)
+    (u := ⟨⟨"user", "alice", BARE⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩) (by decide)
+
+/-- The SEED that carries a minted leaf name: at `LeafWitness.Sw` the write `tw` is on a
+    DERIVED public relation, so `rawWriteRels` re-addresses it onto `approver.0`
+    (`LeafWitness.routes_to_leaf`) before the closure starts. -/
+theorem swSeedLeaf_mem :
+    ({ LeafWitness.tw with relation := leafPred "approver" 0 } : Tuple) ∈
+      rewriteClosureL LeafWitness.Sw (rawWriteTuples LeafWitness.Sw LeafWitness.tw) := by
+  decide
+
+/-- **NON-VACUITY, the SEED arm.** Same theorem, discharged through
+    `rawWriteTuples_rel_ne_bare`'s DERIVED branch (`mem_rawWriteRels_derived`) instead. The
+    `SlV`/`tlEditor` witness above can never reach this branch — its write is untainted, so
+    its seed list is the singleton and the derived branch is dead there. -/
+theorem rewriteClosureL_rel_ne_bare_seedArm_nonvacuous :
+    leafPred "approver" 0 ≠ BARE :=
+  rewriteClosureL_rel_ne_bare_of_rel LeafWitness.wf (t := LeafWitness.tw) (by decide)
+    swSeedLeaf_mem
+
+/-- A one-tuple store `SlV` admits: `tlEditor` lands on the declared `editor`, whose def is a
+    `Direct` arm its `user`/BARE subject matches. Needed so the drop-in form is applied at a
+    store that genuinely satisfies `StoreValidRules`, not at a vacuous one. -/
+theorem slV_storeValid : StoreValidRules SlV [tlEditor] := by
+  intro t ht
+  obtain rfl := List.mem_singleton.mp ht
+  exact ⟨.direct [("user", BARE, false)], [("user", BARE, false)],
+    by decide, by decide, by decide⟩
+
+/-- **The drop-in form applied at the consumer's LITERAL argument shape** —
+    `hWF`, `hSV`, `List.mem_cons_self`, `hu` — so what is checked is the expression
+    `CascadeSettle.lean:112` will actually contain post-flip, not merely a lemma with a
+    matching type. -/
+theorem rewriteClosureL_rel_ne_bare_dropin_nonvacuous :
+    leafPred "viewer" 0 ≠ BARE :=
+  rewriteClosureL_rel_ne_bare slV_wf slV_storeValid List.mem_cons_self
+    (u := ⟨⟨"user", "alice", BARE⟩, leafPred "viewer" 0, ⟨"doc", "d1"⟩⟩) (by decide)
+
+/-! ### Obligation (A)'s premise — the surviving ATTACK pins, the CONTROL, and non-vacuity
+
+Three separate things live here and they are not interchangeable:
+
+* the **attack** pins — two schemas on which a derived TTU target reaches the allocation and
+  is DROPPED, kept as `decide` facts rather than as the prose of a deleted `#eval` run;
+* the **control** — `hder_load_bearing`, the machine-checked refutation of the `hder`-free
+  statement, which is what makes the premise a premise instead of decoration;
+* the **non-vacuity** witnesses — every new theorem applied at a fixture where its hypotheses
+  genuinely hold and its interesting branch is genuinely taken, derived THROUGH the theorem.
+
+⚠ Everything runs at `SnlBoth`, not at `SlV`: `lrV_untainted_layer_silent` proves
+`schemaRewrites SlV = []`, so `SlV` discharges `hnt` by EMPTINESS and would witness nothing
+about the untainted arm. `SnlBoth` carries a TTU rule in BOTH layers, which is the only
+rule kind either arm of `ttuTargetsSatL_ne_of_noTtuTarget` constrains. -/
+
+/-- **ATTACK PIN 1 — the derived TTU target mints no rule.** `LeafWitness.StD` is `access :=
+    viewer from parent but not banned` with `viewer` DERIVED on `folder`. The `viewer` arm
+    contributes nothing and `banned` inherits index 0 — so `leafRewrites` carries no `.ttu`
+    rule at all, and the leaf-layer fact holds here for the strongest possible reason.
+    (`Leaf.lean::stD_leaves` pins the same drop one layer down, at the ALLOCATION; this is
+    the RULE layer, which is what `TtuTargetsSatL` quantifies over.) -/
+theorem lrStD_no_ttu_rule :
+    leafRewrites LeafWitness.StD =
+      [⟨"folder", "e", leafPred "viewer" 0, .computed⟩,
+       ⟨"folder", "b", leafPred "viewer" 1, .computed⟩,
+       ⟨"doc", "banned", leafPred "access" 0, .computed⟩] := by decide
+
+/-- **ATTACK PIN 2 — the CROSS-TYPE drop, which is why the lemma is stated over
+    `derivedAnywhere` and not over `isDerived S (ty, ·)`.** Here `viewer` is UNTAINTED on
+    `folder` — the only type `doc:parent` admits — and DERIVED on the unrelated type `team`.
+    A same-type taint test would let `doc:access`'s TTU arm through; `derivedAnywhere` does
+    not, and the arm is dropped exactly as in pin 1.
+
+    ⚠ `Leaf.lean`'s `derivedAnywhere` section header records that Python's `compile_ruleset`
+    REFUSES to compile this shape (its exclusivity pass runs the same type-agnostic name
+    test), so this fixture is a MODEL-level probe and not a corpus schema. It is kept anyway,
+    because it is the only shape that distinguishes the two taint tests, and the model is the
+    thing `ttuTargetsSatL_ne_of_noTtuTarget` is proved about. -/
+def SlXt : Schema :=
+  ⟨[(("team", "z"), .direct [("user", BARE, false)]),
+    (("team", "y"), .direct [("user", BARE, false)]),
+    (("team", "viewer"), .excl (.computed "z") (.computed "y")),
+    (("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "access"), .excl (.ttu "viewer" "parent") (.computed "banned"))], []⟩
+
+/-- The premise of the attack: `viewer` IS derived somewhere here… -/
+theorem slXt_viewer_derived_anywhere : derivedAnywhere SlXt "viewer" = true := by decide
+
+/-- …and NOT on the type the tupleset admits — so a same-type test would pass it. -/
+theorem slXt_viewer_untainted_on_folder : isDerived SlXt ("folder", "viewer") = false := by
+  decide
+
+/-- …and the TTU arm is dropped regardless: `banned` inherits index 0. -/
+theorem lrXt_cross_type_drop :
+    leafRewrites SlXt =
+      [⟨"team", "z", leafPred "viewer" 0, .computed⟩,
+       ⟨"team", "y", leafPred "viewer" 1, .computed⟩,
+       ⟨"doc", "banned", leafPred "access" 0, .computed⟩] := by decide
+
+/-- **★ THE CONTROL — `hder` is load-bearing, and this is the refutation that proves it.**
+    Drop `hder` from `ttuTargetsSatL_ne_of_noTtuTarget` and the statement is FALSE, witnessed
+    by `SlStP`: its untainted layer satisfies `NoTtuTarget SlStP "viewer"` (vacuously — the
+    taint filter empties it, `stP_untainted_layer_silent`), yet its FULL layer targets
+    `viewer` from the derived key's compiled TTU arm. The two halves already existed as the
+    (A)-premise gap pins at `:2016`/`:2021`; pairing them is what turns them into an
+    instrument for THIS theorem.
+
+    The `hder`-free statement fails here precisely because `viewer` is derived NOWHERE in
+    `SlStP` (`slStP_viewer_not_derived_anywhere`), which is the hypothesis being dropped. -/
+theorem slStP_viewer_not_derived_anywhere : derivedAnywhere SlStP "viewer" = false := by decide
+
+theorem hder_load_bearing :
+    (∀ r ∈ schemaRewrites SlStP, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ "viewer")
+      ∧ ¬ TtuTargetsSatL SlStP (· ≠ "viewer") :=
+  ⟨stP_untainted_layer_no_ttu_target_viewer, stP_full_layer_does_target_viewer⟩
+
+/-! #### Non-vacuity — every new theorem applied where its branches are REACHED -/
+
+/-- `access` is derived at `SnlBoth`, on `doc`. -/
+theorem snlBoth_access_derived : isDerived SnlBoth ("doc", "access") = true := by decide
+
+/-- **`derivedAnywhere_of_isDerived` applied**, not decided: the type-agnostic conclusion
+    comes out of the one-witness lemma. -/
+theorem derivedAnywhere_of_isDerived_nonvacuous : derivedAnywhere SnlBoth "access" = true :=
+  derivedAnywhere_of_isDerived (dt := "doc") snlBoth_access_derived
+
+/-- **The leaf arm is REACHED.** `SnlBoth`'s leaf layer really does contain a rule with a TTU
+    target, so `derivedAnywhere_eq_false_of_mem_leafRewrites` is not quantifying over an empty
+    set of interesting rules — the shape that would make the whole leaf half vacuous. -/
+theorem snlBoth_leaf_layer_has_ttu_target :
+    ∃ r ∈ leafRewrites SnlBoth, ttuTargets r ≠ [] := by decide
+
+/-- **`derivedAnywhere_eq_false_of_mem_leafRewrites` applied THROUGH the lemma**, at that
+    rule and its target. A `by decide` of `derivedAnywhere SnlBoth "viewer" = false` would
+    prove the fact without proving the lemma reaches it. -/
+theorem derivedAnywhere_eq_false_of_mem_leafRewrites_nonvacuous :
+    derivedAnywhere SnlBoth "viewer" = false :=
+  derivedAnywhere_eq_false_of_mem_leafRewrites
+    (r := ⟨"doc", "parent", leafPred "access" 0, .ttu "viewer"⟩) (by decide) "viewer"
+    (by decide)
+
+/-- The untainted premise at `SnlBoth`, in the unfolded `NoTtuTarget` shape. NOT vacuous:
+    `snlBoth_untainted_layer_ttu` pins that this layer contains a TTU rule, whose target
+    `viewer` is what the `≠ "access"` obligation is discharged against. -/
+theorem snlBoth_untainted_layer_no_ttu_target_access :
+    ∀ r ∈ schemaRewrites SnlBoth, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ "access" := by
+  rw [snlBoth_untainted_layer_ttu]
+  intro r hr tr hk
+  simp only [List.mem_singleton] at hr
+  subst hr
+  simp only [RuleKind.ttu.injEq] at hk
+  subst hk
+  decide
+
+/-- **★ (A)'s PREMISE, MANUFACTURED.** `TtuTargetsSatL SnlBoth (· ≠ "access")` derived through
+    `ttuTargetsSatL_ne_of_noTtuTarget` from `NoTtuTarget` + "`access` is derived" — never
+    `decide`d, so what is checked is the THEOREM's applicability and not just the fact.
+    Compare `ttuTargetsSatL_snlBoth_ne_banned` (`:2027`), which IS a `decide`: that one shows
+    the predicate is satisfiable, this one shows it is DERIVABLE from the consumers' premises. -/
+theorem ttuTargetsSatL_snlBoth_ne_access_manufactured :
+    TtuTargetsSatL SnlBoth (· ≠ "access") :=
+  ttuTargetsSatL_ne_of_noTtuTarget snlBoth_untainted_layer_no_ttu_target_access
+    (dt := "doc") snlBoth_access_derived
+
+/-- **The consumer-shaped corollary applied end to end.** The seed is the untainted write
+    `tnlParent` (subject predicate `BARE`), and the tuple examined is the LEAF-layer extra
+    `snlBoth_closure_reaches_leaf_extra` pins — a tuple the leaf layer's TTU rule minted, so
+    the `.ttu` branch of `applyRRule_subject_pred` is the one carrying the conclusion. A
+    `computed`-only witness would have run `Or.inl` and exercised no premise. -/
+theorem rewriteClosureL_subject_pred_ne_of_noTtuTarget_nonvacuous :
+    (⟨"folder", "f1", "viewer"⟩ : SubjectRef).predicate ≠ "access" :=
+  rewriteClosureL_subject_pred_ne_of_noTtuTarget
+    snlBoth_untainted_layer_no_ttu_target_access (dt := "doc") snlBoth_access_derived
+    (t := tnlParent) (by decide)
+    (u := ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩) (by decide)
+
+/-- **The purity lemma is non-vacuous at a MERGED leaf** — the arm a lemma written only for
+    atoms would miss. `SlA` is `r := (a or b) but not banned`, whose leaf `r.0` is the merged
+    `.union (.computed "a") (.computed "b")` (`Leaf.lean::smA_merges`); the lemma says that
+    merged subtree is pure. -/
+theorem isPure_of_closure_mem_persistedLeaves_merged_nonvacuous :
+    isPure SlA "doc" (.union (.computed "a") (.computed "b")) = true :=
+  isPure_of_closure_mem_persistedLeaves (ty := "doc")
+    (e := .excl (.union (.computed "a") (.computed "b")) (.computed "banned")) (by decide)
 
 end LeafRuleWitness
 
