@@ -279,15 +279,26 @@ def _tree_files(repo: Path) -> list[bytes]:
     return sorted({p for p in raw.split(b"\0") if p})
 
 
-def _file_fingerprint(repo: Path, rel: bytes) -> bytes:
+def _file_fingerprint(repo: Path, rel: bytes) -> bytes | None:
     path = repo / os.fsdecode(rel)
     try:
         data = path.read_bytes()
     except FileNotFoundError:
-        # In the index, absent from the worktree. A deletion is a content change
-        # like any other, so it gets its own marker rather than being skipped --
-        # skipping it would make `rm tests/test_matrix.py` invisible to the id.
-        return b"absent"
+        # In the index, absent from the worktree: a deletion (or the delete half
+        # of a rename) not yet committed. Return None and let `tree_id` SKIP the
+        # entry -- which is exactly what happens once the deletion is committed
+        # and the path leaves `ls-files --cached`. So the id survives the commit.
+        # The deletion itself stays visible: the path's CONTENT has left the
+        # hash, so the id differs from the tree that still had the file
+        # (`tests/test_gate_status.py::test_tree_id_moves_when_a_tracked_file_is_deleted`).
+        # Until 2026-09-05b this returned an `absent` MARKER instead, on the
+        # theory that skipping would hide `rm tests/test_matrix.py`. It did not
+        # need to: the marker made a PENDING deletion hash differently from a
+        # COMMITTED one, i.e. GS-1 again -- ten green phases earned at
+        # t2c:ce27f3337040 read stale at t2c:82a9ff014f3f one `git commit` later,
+        # the only pending change being a board-row rename into `tasks/closed/`
+        # (`::test_tree_id_survives_a_commit_of_a_deletion_or_rename`).
+        return None
     except OSError as exc:
         # Unreadable is NOT "empty" and NOT "skip": either would let the id agree
         # with a tree it never read. Refuse, and let the caller record `unknown`.
@@ -316,10 +327,13 @@ def tree_id(repo: Path = REPO_ROOT, scope: str = SCOPE_ALL) -> str:
     for rel in _tree_files(repo):
         if not _in_scope(rel, scope):
             continue
+        fingerprint = _file_fingerprint(repo, rel)
+        if fingerprint is None:
+            continue    # deleted in the worktree, still in the index: see above
         covered += 1
         h.update(rel)
         h.update(b"\0")
-        h.update(_file_fingerprint(repo, rel))
+        h.update(fingerprint)
         h.update(b"\0")
     if not covered:
         # An id over nothing would match every other empty-scope id -- i.e. it

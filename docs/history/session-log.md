@@ -138,7 +138,31 @@ orphaned earlier runner had polluted), then `lean` LAST after this entry was spl
 (`index_v4/` / `setengine/` untouched), so no fuzz sweep is owed. The earlier tile
 runs at 20:20–21:37 were on intermediate trees (the timeouts, the un-ratcheted
 `config.json`, and one runner that survived a `TaskStop` and kept appending stale
-rows) and are superseded, not evidence.
+rows) and are superseded, not evidence. That was commit `2ccd321`.
+
+🛑 **Two instrument incidents AFTER that commit, both fixed, one more commit.**
+(1) One second after `2ccd321`, `gate_status.py` said NOT covered on a byte-identical
+tree: `t2c:ce27f3337040` → `t2c:82a9ff014f3f`, `t2a:3c6cd121680f` → `t2a:44ac835f64e1`.
+`GS-1` in a new costume — a PENDING deletion (the `tasks/P3-*.md` → `tasks/closed/`
+rename) hashed as `path + "absent"`, a committed one as nothing. Fixed by skipping such
+entries (`scripts/gate_status.py::_file_fingerprint` returns `None`); the new test
+`tests/test_gate_status.py::test_tree_id_survives_a_commit_of_a_deletion_or_rename` was
+run RED against the old code first (`assert 't2a:f75e122a9466' == 't2a:cef5c8a446fd'`,
+`1 failed, 24 deselected`) and the existing deletion test is the control (it needed a
+second committed file, since an id over zero files is refused — correct, but it made
+the control pass for the wrong reason). `MIN_TESTS_ALL` **1036 → 1037**, re-measured
+with `--collect-only`; `FINAL_REVIEW.md` counts regenerated again; runbook §4 has the
+write-up. (2) Removing the control worktree `Temp/zz-control` gutted the main tree's
+`formal/lean/.lake/packages/mathlib/` — its `.lake/packages` was an NTFS junction into
+the main tree and `git worktree remove --force` recursed through it (`.git`, the
+oleans, `lakefile`, manifest, toolchain, `Mathlib/Algebra`…`Mathlib/Lean*` gone before
+the 2-minute timeout killed it); `lean` then failed at `lake build` ("`URL has changed`",
+"`unable to read tree fabf563…`"). Nothing tracked was touched; recovered with
+`rm -rf` + `lake exe cache get` (8498 files decompressed from `~/.cache/mathlib`, no
+downloads) + `lake build` (1089 jobs, 0 sorry) in ~5 min. Runbook "Gotchas" carries the
+rule: share packages by COPY, never by junction. The second commit's gate: all ten
+phases re-run on the fixed tree — the nine tiles at `collected=1037`, `lean` last —
+and `gate_status.py` COVERED, this time surviving the commit.
 
 Still owed: a user call on `p3-flip-red-2026-09-05` (keep as evidence vs delete — it is the
 only non-`.scratch` copy of the six refutation rounds); a user call on `keysNonempty`

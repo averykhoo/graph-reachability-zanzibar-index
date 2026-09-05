@@ -505,6 +505,21 @@ matching tree id does **not** mean the same Lean build) or the environment
 (`ZANZIBAR_TEST_DSN`, installed deps). Read a green row as "this phase passed against
 this source", never as full provenance.
 
+⚠ **"Invariant under `git commit`" had a hole until 2026-09-05b: a commit carrying a
+DELETION or RENAME moved the id.** An index entry with no worktree file hashed as
+`path + "absent"` while pending and as nothing once committed, so the moment a session
+committed a board-row rename (`tasks/P3-*.md` → `tasks/closed/`) its ten green phases
+went stale — `t2c:ce27f3337040` → `t2c:82a9ff014f3f`, `t2a:3c6cd121680f` →
+`t2a:44ac835f64e1`, every byte identical, `gate_status.py` → "NOT covered". Fail-safe,
+like the original `GS-1`, and just as expensive: the whole gate re-run to earn back a
+verdict that could not have changed. Fixed by SKIPPING such entries (which is what a
+committed deletion already does); the deletion stays visible because the file's content
+leaves the hash. Pinned by
+`tests/test_gate_status.py::test_tree_id_survives_a_commit_of_a_deletion_or_rename`,
+with `::test_tree_id_moves_when_a_tracked_file_is_deleted` as the control. Rows earned on
+trees WITHOUT a pending deletion hash identically under both versions, so history is
+intact; rows earned on a tree WITH one are unmatched now, which is the safe direction.
+
 **Per-phase scopes (2026-08-17, row `GS-2`) — why a docs edit no longer costs you
 25 minutes.** There are two ids, and a phase is matched against its own:
 
@@ -748,6 +763,21 @@ and the throttle comes and goes mid-gate). What breaks and what to do:
   profile ran pre-push; a multi-seed / deep sweep caught it the next run. The
   differential oracle gate with *fixed seeds* is necessary but not sufficient for
   an algorithm change — randomized/stateful fuzzing is what finds the long tail.
+- ⚠ **`git worktree remove --force` FOLLOWS an NTFS junction (hit 2026-09-05b).** A
+  control worktree for a Lean before/after measurement had `formal/lean/.lake/packages`
+  as a junction (`mklink /J`) into the main tree's packages so it could reuse mathlib.
+  Removing the worktree recursed through the junction and deleted the main tree's
+  `.lake/packages/mathlib/` in directory order (`.git`, the `.lake` oleans, `lakefile`,
+  `lake-manifest`, `lean-toolchain`, then `Mathlib/Algebra`…`Mathlib/Lean*`) until the
+  2-minute tool timeout killed it — `lean` then failed at `lake build` with
+  "`mathlib: URL has changed`" / "`unable to read tree fabf563…`", because `git` inside
+  the gutted directory had walked up to THIS repo. Nothing tracked was touched (the
+  tree id is blind to `.lake/**`, so no verdict was wrongly kept either). Recovery,
+  ~5 min: `rm -rf .lake/packages/mathlib`, then `lake exe cache get` (re-clones at the
+  manifest's rev and decompresses from `~/.cache/mathlib`), then `lake build` — a no-op
+  for the project's own `.lake/build`. **Share packages into a throwaway worktree by
+  COPY, never by junction; and if a junction exists, unlink it (`rmdir` on the link
+  itself) BEFORE `git worktree remove`.**
 
 ---
 

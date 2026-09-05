@@ -431,7 +431,11 @@ MIN_CONF_ALL=515
 #   and rc=1. Restored to 1035, which then passes.
 #   RAISED 1035 -> 1036 on 2026-08-30: the banner-glyph check (lint check 12's fourth
 #   clause) and its test. Re-measured with `pytest tests/ -q --collect-only`.
-MIN_TESTS_ALL=1036
+#   RAISED 1036 -> 1037 on 2026-09-05b: `tests/test_gate_status.py::
+#   test_tree_id_survives_a_commit_of_a_deletion_or_rename` (GS-1 in the content
+#   scheme: a pending deletion's `absent` marker moved the id at commit).
+#   Re-measured with `pytest tests/ -q --collect-only` -> `1037 tests collected`.
+MIN_TESTS_ALL=1037
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
