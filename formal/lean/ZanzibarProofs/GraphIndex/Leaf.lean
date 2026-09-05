@@ -18,13 +18,21 @@ and `_write_derived` pins the public node non-implicit because it
 "anchors the residue row"). Invariant I4 requires every `'.'`-predicate node to be a
 declared leaf family (`index_v4/invariants.py::_check_derived_invariants`).
 
-Until now the conformance extractor hid the difference: projection **P6** drops every
-Python edge row whose target predicate carries a `'.'`
-(`formal/conformance/extractor.py::_edge_projection`), because the model has no leaf nodes to
+Until 2026-09-05 the conformance extractor hid the difference: projection **P6** dropped
+every Python edge row whose target predicate carries a `'.'`
+(`formal/conformance/extractor.py::_edge_projection`), because the model had no leaf nodes to
 compare them against. Retiring P6 is leg 7; this file is its steps 3 and 4a — the
 addressing and the forked write — **plus, since 2026-08-15, the measured allocation
-model those steps turned out to need** (see the next block). Nothing here is wired into
-a CALLER yet (that is step 4c), so no existing caller-level definition changes.
+model those steps turned out to need** (see the next block).
+
+★ **RETIRED 2026-09-05** (P3 landed (α)+(R5); the P6 branch is DELETED from
+`formal/conformance/extractor.py`, ledger key and all). The definitions here now have
+CALLERS: step 4c-ii re-pointed `Cascade.lean::GraphState.writeLoggedRules` and step R5
+`Cascade.lean::GraphState.removeLoggedRules` at `rewriteClosureL S (rawWriteTuples S t)`,
+so the model emits leaf rows and they reach `diff_states`' compare arm. The sentence
+this block used to end with — "Nothing here is wired into a CALLER yet (that is step
+4c), so no existing caller-level definition changes" — was true of 2026-08-15 and is
+kept only as the record of that state.
 
 ## ★ 2026-08-15 — the index model was re-founded on MEASUREMENT, refuting two shapes
 
@@ -40,7 +48,9 @@ now **measured wrong**, and this file carries the corrected model:
   own leaf (`viewer.1 = banned` in `boolean_exclusion`, `rhs.2` in `demorgans`,
   `all_of.2` in `nary_intersection`, …), and in `direct_arm_exclusion` the subtract arm
   is `approver.1`. An index-`0`-only routing would fail `diff_states` on most of the
-  fragment the moment P6 is retired.
+  fragment the moment P6 is retired. ★ **RETIRED 2026-09-05** (P3 landed (α)+(R5); P6
+  branch deleted from `formal/conformance/extractor.py`) — so that is now a LIVE
+  comparison, not a prediction.
   ⚠ **Re-measured 2026-08-16: this bullet used to read "indices 1 AND 2 in 17 of 25",
   which overstates the index-2 breadth 3.4×.** Live histogram over the dotted-object
   rows: index 0 ×43, 1 ×28, 2 ×7; the five index-2 corpora are `demorgans`,
@@ -96,7 +106,9 @@ defects, both structural:
 on **744/744** subject × derived-key comparisons, with three positive controls reddening
 it (4, 1 and 4 mismatches), so that instrument is not vacuous.
 
-★ **Why this mattered before 4c-i and not after.** The dropped P6 rows are mostly
+★ **Why this mattered before 4c-i and not after.** The rows P6 used to drop (★ RETIRED
+2026-09-05 — P3 landed (α)+(R5); P6 branch deleted from
+`formal/conformance/extractor.py`) are mostly
 rule-copied CLOSURE-leaf edges, so `LeafRules.lean`'s rule minting is indexed by
 `persistedLeaves`. Had 4c-i been built on the pre-order model, every closure-leaf rule
 on a merged subtree would have targeted the wrong leaf — discoverable only after the
@@ -515,6 +527,25 @@ theorem publicOfLeaf_not_leaf {S : Schema} {ty p : String} (h : isLeafPred p = f
 theorem publicOfLeaf_untainted {S : Schema} {ty p : String}
     (h : isDerived S (ty, leafPublic p) = false) : publicOfLeaf S ty p = none := by
   simp [publicOfLeaf, h]
+
+/-- **The own-key branch's structural read-back** (step (alpha)). Whatever `publicOfLeaf`
+    returns is a DERIVED relation of the same type, and it is `leafPublic p`. This is the
+    fact `CascadeEnum.lean::mem_affectedKeys_props` used to read straight off the old
+    guard's `isDerived S (d.node.type, d.node.pred) = true` conjunct; post-(alpha) the
+    guard is the `some R` arm of a `match` and this recovers the same two components,
+    so every downstream key-shape fact (`mem_cascadeKeys_props`,
+    `mem_cascadeKeysAbove_props`, `enumJobs2At_keyFacts`, `enumJobs2R1/R2_valid`) rides on
+    it unchanged. -/
+theorem isDerived_of_publicOfLeaf {S : Schema} {ty p R : String}
+    (h : publicOfLeaf S ty p = some R) : isDerived S (ty, R) = true ∧ R = leafPublic p := by
+  unfold publicOfLeaf at h
+  by_cases hc : isLeafPred p && isDerived S (ty, leafPublic p)
+  · rw [if_pos hc] at h
+    have hR : R = leafPublic p := (Option.some.inj h).symm
+    refine ⟨?_, hR⟩
+    rw [hR]
+    exact (Bool.and_eq_true _ _ |>.mp hc).2
+  · rw [if_neg hc] at h; exact absurd h (by simp)
 
 /-! ## `LeafNode` — Route B's carrier for the shadow's leaf disjunct
 
@@ -1199,9 +1230,13 @@ merged it into ONE closure leaf where Python allocates THREE.
 
 ⚠ **This is not a constructed shape.** It is
 `formal/conformance/corpus.py::SCHEMAS`' `nary_union_derived4`, which is in
-`GRAPH_FRAGMENT` and contributes rows to the P6 ledger — so the defect would have
+`GRAPH_FRAGMENT` and contributed rows to the P6 ledger — so the defect would have
 surfaced as a `diff_states` divergence the moment leg 7 step 7 retired P6, i.e. after
-the whole 4c-ii cone had been paid. -/
+the whole 4c-ii cone had been paid. ★ **RETIRED 2026-09-05** (P3 landed (α)+(R5); P6
+branch deleted from `formal/conformance/extractor.py`): the cone IS paid, so the shape
+is now refused mechanically by
+`formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one`
+rather than waiting to surface. -/
 
 /-- `nary_union_derived4`'s schema, encoded exactly as `encode.py` hands it to Lean:
     `any_of4 = ((a ∪ b) ∪ c) ∪ safe` with `safe` derived. -/

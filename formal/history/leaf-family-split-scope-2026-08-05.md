@@ -1823,6 +1823,211 @@ re-check, ~20 sites in 3 files go genuinely red.**
     (moves on `tasks/*.md`; reverts byte-exactly; still ignores `docs/*.md`). Full write-up:
     `docs/gate-runbook.md` §"Per-phase scopes".
 
+* **(bb) NEW 2026-09-05b — a `by decide`-discharged premise is INVISIBLE to a grep for its
+  own type, and an ANONYMOUS CONSTRUCTOR is invisible to a grep for the structure too.**
+  Sizing the flip's premise growth, the obvious question is "where is `NoLeafSubjects`
+  actually assumed, and where is it discharged?". Measured on the RED snapshot `d6d2dfc`,
+  `grep -n NoLeafSubjects formal/lean/ZanzibarProofs/FullScope.lean` returns **exactly one
+  line** — `:172  noLeafSubjects : NoLeafSubjects S`, the field declaration itself. The four
+  witnesses that actually discharge it (`:702`, `:864`, `:1628`, `:1768`) all read
+  `noLeafSubjects := by decide` and **name the Prop nowhere**. Identically for the flip's
+  second new field: `keysNonempty` is declared at `:188` and discharged at `:703`/`:865`/
+  `:1629`/`:1769`, with `S.keys.all …` appearing at neither.
+  * ⚠ **One layer worse, and this is the half that bites.** `LeafRules.lean::LeafScope` is
+    constructed **anonymously** at `FullScope.lean:1340`, `:1469`, `:1539` and `:1587` as
+    `⟨hWF, by decide, by decide, by decide⟩` — four positional fields, zero identifiers. A
+    grep for `LeafScope` in `FullScope.lean` returns **four hits and none of them is a
+    construction site** (`:182` and `:191`/`:196` are docstring, `:198` is
+    `GraphAdmission.leafScope`'s own conclusion). So the structure that the whole re-pointed
+    shadow cone threads has, by grep, no users in the file that supplies it.
+  * **The error direction is UNSAFE.** Both wrong answers a grep gives — "this premise is
+    assumed in one place" and "nothing constructs this bundle" — read as *the field is inert
+    / vacuous / removable*. That is exactly the conclusion a session hunting for cheap
+    premise reductions wants to reach. The 2026-09-05 round-5 report walked into the mirror
+    image of this and had to land two theorems (`slV_admission_nil`, `swTw_admission`) to
+    discover that **no theorem in the tree had constructed a full `GraphAdmission` since the
+    two fields were added** — the widened bundle's inhabitability was untested for four
+    rounds, and a widened-into-vacuity bundle is the classic silent way for an admission
+    hypothesis to stop meaning anything.
+  * **The rule:** grep the **lowercase field/consumer name** (`noLeafSubjects`,
+    `keysNonempty`), never the Prop name, and for any structure with ≥3 fields also grep the
+    anonymous-constructor shape (`⟨` plus the arity) before concluding it has no users.
+    Trap (q)'s "a grep census OVER-counts this cone" has a twin: **it under-counts wherever
+    Lean lets you omit a name.**
+
+* **(cc) ★★ NEW 2026-09-05b — THE WRITE-LEG-ONLY FLIP IS KERNEL-REFUTED: branch (α) and R5
+  are CO-REQUISITES of the re-point, not follow-ups, and no amount of proving closes the
+  gap.** The adjudicated scope — "change bodies of the LIVE LOGGED WRITE LEG only" — was
+  landed in full (`p3-flip-red-2026-09-05` = `d6d2dfc`, off anchor `68f2c69`; 17 `.lean` +
+  13 non-Lean files, +3381/−653). `lake build` is `rc=0`, `Build completed successfully
+  (1089 jobs)`, 0 errors — and the tree contains `Exec.lean:980::graph_correct_refuted`,
+  `#print axioms` → `[propext, Classical.choice, Quot.sound]`, **sorryAx-FREE**, refuting the
+  named theorem through `:1059::graph_correct_explicit` and `:1069`'s
+  `#check graph_correct_refuted graph_correct_explicit`. `headline_statements.txt` reads
+  **49/49 match** on that same tree. **The statement pin alone would ship a false claim.**
+  * **Mechanism 1 — the own-key gap (needs (α)).** The flipped write re-addresses onto the
+    minted storage leaf `approver.0`; `affectedKeys`' own-key branch
+    (`Cascade.lean:510-511`) tests `isDerived S (d.node.type, d.node.pred)` on a leaf name,
+    which is not a declared key; the cascade never fires; the state reports **DRAINED** with
+    `GraphModel.check = false` where `sem = true`. In-fragment at `W4WitnessDirect.Sd`/`Td`
+    (every hypothesis from a pre-existing declaration: `::admission`, `::w4fragment`,
+    `graphRunOps_reached`, `drainedB_iff`), reproducing at the corpus store `Td4`.
+    **Fail-CLOSED.** Staged as `CascadeStrataSettle.lean:3317::writeLeg_own_key_dirty`
+    (`sorry` at `:3342`), refuted at `::writeLeg_own_key_dirty_refuted` (`[propext]`).
+  * **Mechanism 2 — the unflipped remove leg leaks (needs R5).** `removeLoggedRules` still
+    folds the plain closure, so `Exec.lean::writeThenRemove_leaks_leaf_edge` leaves a leaf
+    edge behind on a store-NEUTRAL op pair (unbounded under churn), and
+    `::graphRunOps_leak_internal_ghost_grant` shows `_check_internal` answering TRUE at the
+    leaked leaf name **below the BL-2 fence** while `checkPublic` and `sem` answer false —
+    fail-OPEN one layer beneath, with the leaf fence the single load-bearing barrier. Staged
+    at `CascadeStrata.lean:919`/`:1293` and `RemoveOccCount.lean:143`.
+  * ⚠ **Neither is a production defect and the record must say so out loud**, because
+    "leaked edge on an authorization index" is a sentence the next reader will write.
+    `connectedstore/apply.py::_apply_row` (`:62-66`) routes **ONE** `ruleset.apply` fan-out
+    for ADD and REMOVE alike, and `Cascade.lean:488-492` already documents Python dirtying
+    `(o_type, fam.owner_relation, o_name)` while `Leaf.lean:465::publicOfLeaf`'s docstring
+    says it is "exactly the guard `affectedKeys`' own-key branch needs". **Both fixes are the
+    MODEL catching up with Python.** The one thing that does NOT transfer is the model's
+    read-inertia control: `index_v4/processor.py::_EvalContext.leaf_check` probes below the
+    fence with a leaf predicate and its comment (`:107-113`) says those readers legitimately
+    expect real grants.
+  * **Why this is a trap and not just a finding.** All four `sorry`s stand for statements the
+    same tree refutes sorryAx-free, so **discharging any one of them yields a sorryAx-free
+    proof of `False`**. There is no lemma to find. Two shortcuts were found and refused and
+    are recorded so they are not rediscovered: adding `NotLeafName b.pred` to R3's guard
+    (goes green, removes three `sorry`s, and is this repo's house failure mode — narrowing
+    an invariant until it stops seeing what it guards), and lifting round 5's impossibility
+    through `reachedByW3d2E_toC`, which **elaborates green and proves nothing** because the
+    projection is itself one of the 40 `sorryAx`-tainted audited theorems. Post-flip, ANY
+    route through a contaminated lemma yields green theorems that are not evidence: run
+    `#print axioms` on every new declaration before believing it.
+  * **Cost of the co-requisites, re-measured 2026-09-05b. Counting unit stated per item 2 of
+    this section: matching LINES (`git grep -c`, summed) over `formal/lean/**/*.lean`,
+    substring match, at the named tree.** At `d6d2dfc`: `affectedKeys` 55/12 files,
+    `cascadeKeys` 206/18 (of which `cascadeKeysAbove` 52/8), `removeLoggedRules` 279/13
+    (`CascadeStrataSettle.lean` alone **143**), `untOccCount`+`srcOccCount` **211/8**. At the
+    anchor `68f2c69`: 50/11, 194/18, 270/13, **87/5**. ⚠ **The workflow's recorded R5 figure
+    "126 occurrences / 7 files" matches NEITHER tree** — it is a round-4 mid-flight
+    measurement, and rounds 5–6 more than doubled it with their own refutation content. Do
+    not re-cite 126/7. **(α)'s real cost is not lines**: it is one branch of one definition
+    with no new import, but **8 pinned definition rows change MEANING** (`affectedKeys`,
+    `cascadeKeys`, `cascadeKeysAbove`, `Drained`, `drainedB`, `enumJobs2R1`, `enumJobs2R2`,
+    `runCascade2`) and **`Drained` is a HYPOTHESIS of `graph_correct`**.
+
+* **(dd) NEW 2026-09-05b — THE GATE'S `sorry` BELT WAS COUNTING 0 ON EVERY BUILD SINCE
+  `ZT-P2-4`, because Lean 4.31 prints the warning with BACKTICKS.** `formal/verify.sh`'s
+  build-log check searched for the straight-quote form `declaration uses 'sorry'`. Lean emits
+  ``declaration uses `sorry` ``. The pattern matched **nothing, ever**, and only the
+  independent token scan at `:653` stood between the repo and a hole-bearing tree. This is
+  trap (u) (a `sorry`-counting grep silently returning zero) recurring at the OTHER end of
+  the same phase — and it is the exact shape `docs/sabotage-procedure.md` calls the house
+  failure mode: **an assurance step that fails by passing.**
+  * **The control was run before the edit, on a real 4-warning build log**, and is recorded
+    in the file at `verify.sh:644-649` rather than only in a report:
+
+        # 2026-09-05: Lean 4.31 prints the warning with BACKTICKS -- "declaration uses `sorry`" --
+        # so the straight-quote pattern this line carried since ZT-P2-4 matched NOTHING: the belt
+        # was dead and only the token scan above stood. Controlled before the edit on a real
+        # staged-sorry build log (/tmp/b10.log, 4 warnings): old pattern 0, dot-wildcard 4.
+
+    **Old pattern 0, new pattern 4, same log** — that pair is the evidence, not the fixed
+    line. The repair is at `:650` (`WARNED`), `:669` (`WARNED_ZCLI`, the library+zcli log)
+    and `:673` (the listing grep on failure); all three had the same defect.
+  * **Dot-wildcard, deliberately, not backticks:** `grep -c "declaration uses .sorry."` so a
+    future quote-style change in Lean cannot kill it the same way a third time.
+  * ⚠ **This fix lives in the flip's 13-file NON-Lean changeset.** Committing the Lean tree
+    without it ships a tree whose gate cannot see its own four `sorry`s. Anyone separating
+    the two changesets must carry `verify.sh` with the Lean half, not with the docs.
+  * ⚠ **And the mirror, from the staleness-trap instrument:** grepping a build log for
+    `: False` is NOT a sufficient read of a `#check` bridge. When a bridge is mis-aimed the
+    `#check` errors *and then degrades* to `… sorry : False`, so **the `False` still prints**.
+    The error line is what carries the assurance.
+
+* **(ee) NEW 2026-09-05b — TAKE A RED SNAPSHOT WITH A TEMP INDEX; `git checkout` / `git stash`
+  UNDER `core.autocrlf=true` REWRITES THIS REPO'S LF FILES AS CRLF.** This is trap (aa)'s
+  mechanism arriving at the moment it does the most damage: preserving a red tree as
+  evidence. Confirmed in the config, not assumed — `git config core.autocrlf` → **`true`**,
+  and `.gitattributes` is **deliberately narrow**: its own header says a broad
+  `* text=auto` "would renormalize every tracked file at once", so it pins **only**
+  `tasks/**` and `scripts/task.py` as `text eol=lf`. **Nothing under `formal/` is pinned.**
+  * **Measured on `d6d2dfc` with `git ls-files --eol`:** `formal/verify.sh`,
+    `GraphIndex/LeafRules.lean`, `GraphIndex/Exec.lean` and `GraphIndex/RemoveOccCount.lean`
+    are all `i/lf  w/lf` — LF in the index *and* the working tree, protected by no attribute.
+    A `git checkout`/`git stash pop` on any of them writes CRLF. Meanwhile
+    `formal/conformance/extractor.py` already reads **`i/lf  w/crlf`**: the rewrite has
+    happened to that file once already, and it is the recorded cause of trap (aa)'s
+    `t2c:c18b40544b46 → f3d8f4a98aef` tile-verdict wipe.
+  * **The route that worked, and its positive control.** The snapshot was committed without
+    touching the working tree or the real index —
+    `GIT_INDEX_FILE=/tmp/x.idx git add -A && git write-tree && git commit-tree` — and the
+    resulting blobs are byte-clean: `git show d6d2dfc:formal/verify.sh | grep -c $'\r'` = **0**,
+    same for `LeafRules.lean`. A `stash`/`checkout` round trip would have baked CRLF into the
+    evidence commit for exactly the files whose LF-ness trap (y)'s hygiene check exists to
+    protect.
+  * **Why it matters more here than for an ordinary revert.** A RED snapshot's whole value is
+    being byte-faithful to the tree that was measured. If `checkout` CRLF-ifies four files,
+    the commit no longer reproduces the build, `git diff --numstat` stops equalling
+    `git diff --ignore-cr-at-eol --numstat` (trap (y)'s standing check goes red on a change
+    nobody made), and `gate_status.py::_file_fingerprint` — which hashes RAW BYTES — reports
+    a different tree than the one the phases ran against.
+  * **Standing rule, unifying (y)/(aa)/(ee):** never move a load-bearing tree through
+    `checkout`/`stash` in this repo. Snapshot with a temp index, revert from a byte-exact
+    `cp` backup, and re-read `python scripts/gate_status.py`'s `this tree` column afterwards
+    rather than inferring coverage from `git status --porcelain` being empty.
+
+* **(ff) NEW 2026-09-05b — THE DEFINITION PIN SEES A BODY CHANGE, NOT A MEANING CHANGE.**
+  `PROOF_STATUS.md` `2026-09-05b` §6 sized (α) as "8 pinned definitions change meaning"
+  (`affectedKeys`, `cascadeKeys`, `cascadeKeysAbove`, `Drained`, `drainedB`,
+  `enumJobs2R1`/`R2`, `runCascade2`). When (α) landed, the pin moved on EXACTLY ONE of
+  them — `affectedKeys`, whose text changed. The other seven changed meaning through it with
+  their pinned text byte-identical, and `Drained` is a hypothesis of `graph_correct`. This
+  is by design (`statement_pin.py`'s FAIL text says a byte-identical statement can still
+  claim something different because a definition it names now means something different)
+  — the pin is a DIFF DETECTOR at the leaf that moved, and a reader of a pin diff must
+  walk the consumers themselves. **How to apply:** when a pin diff shows one definition
+  changed, list its transitive consumers among the pinned rows and write THAT list in the
+  history entry as the meaning-change set; do not report "1 row changed" as "1 definition
+  affected". The control run's 35-row diff is recorded in full in `2026-09-05b` §9.3 for
+  this reason.
+
+* **(gg) NEW 2026-09-05b — A NEW PREMISE ON A FORMERLY-`sorry`'D THEOREM MUST BE EVALUATED
+  AT THE REFUTATION'S OWN WITNESS before the refutation is deleted.** Round 2 closed
+  `writeLeg_own_key_dirty` by adding `hroute : rawWriteRels S t ≠ []`. A premise like that
+  can close a false theorem two ways: by excluding the counterexample (a guard-dodge — the
+  refutation "dies" because its witness no longer satisfies the hypotheses) or by naming the
+  missing fact (the witness still satisfies every hypothesis and the conclusion is now true
+  there). The build cannot tell them apart; both are green. The independent verifier's
+  decisive check was `#eval rawWriteRels LeafWitness.Sw LeafWitness.tw = ["approver.0"]` —
+  `hroute` HOLDS at the deleted refutation's witness, so the refutation died to (α), not to
+  the guard. **How to apply:** for every premise added to a theorem that had a kernel
+  counterexample, `#eval`/`decide` the premise at that counterexample and record the
+  literal output; if the premise is FALSE there, the theorem was narrowed, not proved, and
+  the history entry must say so. The necessity controls
+  (`CascadeStrataSettle.lean::tvDer_own_key_not_dirty` — drop `hroute` and the theorem is
+  false) prove the premise is needed; only the witness check proves it is not a dodge.
+
+* **(hh) NEW 2026-09-05b — A `flatMap` IN THE MODEL WHERE THE PYTHON HAS A `dict`/`set` IS A
+  MULTIPLICITY DIVERGENCE, AND ANYTHING THAT WIDENS THE WRITE LEG COMPOUNDS IT.** The flip
+  routed each public write onto `rewriteClosureL` (typically 2 leaf tuples), which doubled
+  the frontier rows, which doubled the dirty-key list `CascadeStrata.lean::cascadeKeysAbove`
+  (a bare `flatMap` at the time), which doubled the enum candidate list
+  `CascadeStrataEnum.lean::enumJob2D` (also a bare `flatMap`) — and the derived-arm edge
+  multiplicity, ALREADY exponential in the number of reconciles (§7.2 item 6, control
+  `two_stratum_cascade` 2/13/46/204/1013 at n=1..5), doubled on top of that: 4/26/92/408/2026,
+  zcli 176.8 s at n=5 against a 120 s timeout, ten conformance tests red. The fix was NOT a
+  timeout bump and NOT a speed hack: both lists are `dict`/`set`-keyed in the Python
+  (`processor.py::_map_deltas_to_keys` `keys: dict` / `processed_objects: set`;
+  `processor.py::_reconcile` `candidates: dict`), so both got core `List.eraseDups` (first
+  occurrence — NOT Mathlib `.dedup`, which keeps the last), and the multiplicities went to
+  `1…5` (0.1 s). **How to apply:** before landing anything that changes what the model feeds
+  into a reconcile (the dirty-key list, the candidate list, the frontier), re-measure the
+  derived-arm multiplicities per stratum on `two_stratum_cascade` and
+  `cross_stratum_resettle` on BOTH the control tree and the candidate tree (PROOF_STATUS
+  `2026-09-05b` §10.1 has the table and the recipe) — a doubling that reads as "just slower"
+  is a Python-mirroring gap, and the golden `derived_arm_multiplicity.json` is the pin that
+  turns it red. Regenerating that golden is legitimate ONLY with a control run first
+  (`_MIN_LEDGER_STACKED` went 19 → 18 with the literal control output in the test docstring).
+
 * **SAB-5, and the instrument error that hid it (2026-09-03).** `2026-09-02d` filed SAB-5
   as unobservable because deleting `GraphAdmission.computedRefsNotLeaf` breaks the build
   before `verify.sh lean` reaches 4c. **That is a property of running the sabotage through

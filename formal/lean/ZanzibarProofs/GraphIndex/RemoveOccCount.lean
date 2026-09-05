@@ -153,6 +153,9 @@ theorem reachedByW3d2E_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     rw [count_writeLoggedRules a b σp S t hadm, ih a b hb]
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
+    -- Post-R5 both sides add the SAME L-closure summand. This is the FULLY-OPERATIONAL
+    -- instance, and it is the one `RemoveConfluence.lean`'s R4 stack — hence
+    -- `graph_correct`'s remove leg — stands on.
     omega
   | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
     intro a b hb
@@ -169,5 +172,61 @@ theorem reachedByW3d2E_untOccCount {σ : GraphState} {S : Schema} {T : Store}
       enumJobs2At_Rnode_ne (hkfacts _ _) hb
     rw [count_runCascade2_of_ne S T σp (enumJobs2R1 S T σp) (enumJobs2R2 S T σp) h1 h2]
     exact ih a b hb
+
+/-! ## ★ R3 ON THE FULLY-OPERATIONAL CHAIN — PINNED AT THE FIXTURE THAT REFUTED IT
+
+⚠ **HISTORY, so the deletions are not re-litigated.** Between the write-path flip and R5
+this section held `reachedByW3d2E_untOccCount_refuted` (R3 false at
+`LeafRules.lean::LeafRuleWitness.SlV`, because the write leg materialised
+`doc:d1#viewer.0@user:alice` while `untOccCount` summed PLAIN closures and reported 0), its
+`_explicit` staleness bridge and the `#check … : False` composition, plus
+`reachedByW3d2E_untOccCount_notLeaf`, the same theorem WIDENED with
+`isLeafPred b.pred = false` — provable while the original was refuted. R5 (symmetric legs +
+`untOccCount` over the L closure) made the ORIGINAL true, so:
+
+* the refutation and its bridge are FALSE and are deleted;
+* the guarded twin is now strictly weaker than `reachedByW3d2E_untOccCount` and is deleted
+  as redundant — the guard is gone, not narrowed, which is what keeps this from being the
+  house failure mode (a theorem rescued by making its counterexample inadmissible).
+
+`ReachedByW3d2E` is the chain whose `cascade` constructor runs the STATE-DERIVED job
+enumeration, so it is the chain `RemoveConfluence.lean`'s R4 stack and the `graph_correct`
+cone stand on. The positive pin below is the refutation's own fixture, agreeing. -/
+
+/-- **R3 holds at the LEAF target that used to refute it.** Same schema, same write, same
+    chain, same edge `doc:d1#viewer.0@user:alice`: the leaf-routed write leg materialises
+    it (count 1) and `untOccCount` — post-R5 the sum of the SAME leaf-routed closures —
+    reports 1 too. Re-point either leg back at `rewriteClosure` and this goes red.
+
+    ⚠ The implicits are given EXPLICITLY, per `CascadeStrata.lean::tlUsEditor_chain`'s note:
+    inferring them makes the elaborator whnf the leaf-routed closure while unifying `hadm`
+    and blows the heartbeat budget. -/
+theorem reachedByW3d2E_untOccCount_leaf_pinned :
+    ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).edges.count
+        (subjNode ⟨"user", "alice", BARE⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
+      = 1 := by
+  rw [reachedByW3d2E_untOccCount
+    (@ReachedByW3d2E.write (emptyState LeafRuleWitness.SlV) LeafRuleWitness.SlV
+      ([] : Store) LeafRuleWitness.tlEditor lrV_foldAdmits
+      (ReachedByW3d2E.empty LeafRuleWitness.SlV))
+    (subjNode ⟨"user", "alice", BARE⟩) (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
+    lrV_leafNode_not_derived]
+  exact lrV_untOccCount_leaf_one
+
+/-- **And at the ordinary untainted target**, where R3 was true before R5 as well — kept so
+    the pin above is not the only instance and a regression that broke BOTH would be
+    visible as two reds rather than one. -/
+theorem reachedByW3d2E_untOccCount_nonleaf_pinned :
+    ((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+        LeafRuleWitness.tlEditor).edges.count
+        (subjNode ⟨"user", "alice", BARE⟩, objNode ⟨"doc", "d1"⟩ "editor")
+      = untOccCount LeafRuleWitness.SlV [LeafRuleWitness.tlEditor]
+        (subjNode ⟨"user", "alice", BARE⟩) (objNode ⟨"doc", "d1"⟩ "editor") :=
+  reachedByW3d2E_untOccCount
+    (@ReachedByW3d2E.write (emptyState LeafRuleWitness.SlV) LeafRuleWitness.SlV
+      ([] : Store) LeafRuleWitness.tlEditor lrV_foldAdmits
+      (ReachedByW3d2E.empty LeafRuleWitness.SlV))
+    (subjNode ⟨"user", "alice", BARE⟩) (objNode ⟨"doc", "d1"⟩ "editor") (by decide)
 
 end Zanzibar

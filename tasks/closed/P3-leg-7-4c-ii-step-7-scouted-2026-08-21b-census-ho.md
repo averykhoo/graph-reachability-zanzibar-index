@@ -11,9 +11,9 @@ labels: [formal]
 source: board
 source_hash: 8aec5fb3ac34
 created: 2026-08-21b
-moved: 2026-09-05
-updated: 2026-09-05
-closed:
+moved: 2026-09-05b
+updated: 2026-09-05b
+closed: 2026-09-05b
 ---
 
 Re-point the rule-routed write path onto leaf-indexed targets and retire projection `P6`
@@ -753,3 +753,8 @@ Same-session mirror: this session rewrote the P3 board row, title, brief, the HA
 and the item block (including its read-first list) and mirrored all of it here in the same
 pass with the same session key.
 
+### 2026-09-05b
+
+LANDED 2026-09-05b, one commit on master. The write-leg-only re-point (as adjudicated) was KERNEL-REFUTED: graph_correct FALSE with a sorryAx-free decide on the flipped tree (RED snapshot kept on branch p3-flip-red-2026-09-05 = d6d2dfc, do not merge). User decision: widen P3 and co-land branch (alpha) (affectedKeys dirties the public key via publicOfLeaf, Cascade.lean:542-546) + R5 (leaf-routed removeLoggedRules, Cascade.lean:340-341) with the write leg (Cascade.lean:190-191). All four sorrys discharged; 53 refutation/bridge/#check decls deleted after each decide went red; routing obligation CascadeStrataSettle.lean::rawWriteRels_ne_nil_of_exprDirectsAll; hroute discharged at its sole consumer. Pins 49/49 statements, definitions regenerated 232 -> 250 after a control run showed exactly the predicted diff. Projection P6 deleted from formal/conformance/extractor.py (ledger P6=0, compared 189 -> 265, count 515 unchanged; positive pin test_conformance_state.py::test_leaf_rows_reach_the_compare_arm floor 76). GraphAdmission gained noLeafSubjects (sanctioned) + keysNonempty (accepted as scope, Python-enforced; flagged to user). verify.sh sorry belt fixed (was counting 0 since ZT-P2-4). T2a did NOT widen: graph_reached_inv still takes W4NarrowT2a; justification retired, now proof work = P5 (probe re-run first-hand: negFree true on the model's own write leg, control reproduces D.3). Evidence: PROOF_STATUS.md 2026-09-05b (sec 1-8 refutation, sec 9 landing); scope doc sec 11.13 traps (bb)-(gg); session-log 2026-09-05b.
+
+ADDENDUM 2026-09-05b (same session, before commit): the landed flip DOUBLED an already-exponential derived-arm multiplicity in the model (two_stratum_cascade alice->approver across five adds: control 2,13,46,204,1013 in 16.4s; post-flip 4,26,92,408,2026 in 176.8s) and formal/conformance/test_conformance_state.py's derived-arm ledger hit invoke_zcli's 120s timeout. Root cause is pre-existing and Python-mirrorable, not the flip: (1) cascadeKeysAbove (CascadeStrata.lean) did not dedup the dirty keys where processor.py::_map_deltas_to_keys uses a dict (:1362) and processed_objects set (:1407); (2) enumJob2/enumJob2D (CascadeStrataEnum.lean) did not dedup cands where _reconcile's candidates dict does. Both now wrap in core List.eraseDups (first-occurrence; NOT Mathlib dedup); cascadeKeys_eq_above (rfl, zero consumers) replaced by mem_cascadeKeys_iff_above; 8 Resettle sites + 4 Assemble + 2 Settle + 1 Inv + Enum clause sites repaired. Post-fix multiplicities 1,2,3,4,5 in 0.1s each; every decide pin in Exec.lean still builds; answers unchanged. Golden derived_arm_multiplicity.json regenerated AFTER a control run (literal: 'ANTI-VACUITY: the derived-arm ledger observed 19 row(s) (18 with lean multiplicity > 1); floors are 19/19') -> _MIN_LEDGER_STACKED 19 -> 18 with provenance in the floor block; definition pin control failed on exactly def:Zanzibar.cascadeKeysAbove + def:Zanzibar.enumJob2D and was regenerated (250/250, count unchanged). CORRESPONDENCE sec 7.2 item 6 (edge-level presence diff in reconcileKeyDR) is STILL OPEN; its residual is now +1 per reconcile of a key instead of doubling. Record: PROOF_STATUS 2026-09-05b sec 10.

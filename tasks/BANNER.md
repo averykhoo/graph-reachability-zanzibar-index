@@ -1,14 +1,14 @@
-2026-09-05 — the write-path OBLIGATIONS have a green additive prefix: (A)/(B)/(C) landed, (H) never existed.
+2026-09-05b — `P3` LANDED: the write-leg-only flip was kernel-refuted, so (alpha)+R5 co-landed; sorry-free, P6 retired.
 
-(nav) **`P3`: obligations (A), (B), (C) LANDED, additive, tree unflipped.** 21 declarations
-in `LeafRules.lean`, zero existing ones touched, **pin cost zero** (49/49, 232/232). The
-lesson: *"the cone is un-splittable"* is a claim about the RE-POINT that keeps being read as
-one about the OBLIGATIONS — an L-analogue is provable today. §11.13 (w), third firing.
-(!) **(H) was never open; the record was wrong WHEN WRITTEN.** `writeRulesRaw_schema` is at
-`LeafRules.lean:292`. **8 obligations is 7.** "Cite a symbol that EXISTS" binds claims of
-NON-existence too. Left: (D), (E) the pinned inductive, (F), (G).
-(!) **(A)'s premise looks DISCHARGEABLE** (`isPure` forces leaf-rule TTU targets
-derived-nowhere; `W4Fragment.term` gives `NoTtuTarget` only for derived `R`) — source
-reading, NOT kernel-checked. Next move. **(F) must be ATTACKED first**: `relNameOK` fails a
-minted leaf name and `isLeafPred BARE = true`, so it is no transcription.
-(!) **`t2c` includes `tasks/*.md`** — write the mirror BEFORE the tiles or they strand.
+🟢 Gate: ask `python scripts/gate_status.py` (all ten phases were run on the committed tree; re-run `lean` after any `*.md` edit).
+★ **`P3` is CLOSED.** Both logged legs fold `rewriteClosureL S (rawWriteTuples S t)` (`Cascade.lean:190-191`, `:340-341`),
+`affectedKeys` dirties the PUBLIC key via `publicOfLeaf` (`:542-546`); all four `sorry`s discharged; pins 49/49 + **250/250**
+(regenerated 232 → 250 after a control run); projection **P6 deleted** (ledger P6=0, compared 189 → 265, count 515 unchanged).
+⚠ **The adjudicated write-leg-ONLY re-point was FALSE** — `graph_correct` refuted sorryAx-free on that tree (branch
+`p3-flip-red-2026-09-05`, do not merge). Branch (alpha) + R5 are co-requisites, not follow-ups. PROOF_STATUS `2026-09-05b` §1–§10.
+⚠ **`verify.sh`'s `sorry` belt had counted 0 on every build since `ZT-P2-4`** (grep pattern vs Lean's backtick quoting) — fixed, live 0.
+⚠ **The flip doubled an ALREADY-exponential derived-arm stacking** (zcli >120s on `two_stratum_cascade`; control 1013 at n=5) — two Python-mirroring `eraseDups` (`cascadeKeysAbove`, `enumJob2(D).cands`) make it linear; golden regenerated after a control run, `_MIN_LEDGER_STACKED` 19 → 18.
+→ **`P6` promoted to `NOW` MECHANICALLY** (top `NEXT`, its `P3` blocker gone) — re-rank if you disagree. `P4` deps swept; `P5`
+is now PROOF work (T2a did NOT widen; probe re-run: `negFree := true` on the model's own write leg, control reproduces D.3).
+⚠ User calls owed: `TK55` `keysNonempty` (scope vs discharge); keep-or-delete the RED branch. `TK54`: `Scratch4cii.lean` is tracked.
+(!) `t2c` includes `tasks/*.md` — write the mirror BEFORE the tiles or they strand. New traps: scope doc §11.13 (bb)–(gg).

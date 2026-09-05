@@ -50,108 +50,92 @@ held before stopped holding.
 now takes a third bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + the narrow
 `StoreValidRules`), and `W4WitnessDirect.outside_narrow_t2a` machine-checks that the
 Direct-arm store fails it — so T2a **remains vacuous exactly where T2b no longer is.**
-That is not a proof gap: Leg-0 probe D.3 machine-checked `Inv.negEdgeFree` FALSE on the
-`_d` fragment. **Python is fine** (`RuleSet.apply` routes the write onto the leaf family,
-so the edge and the `neg` row live on different nodes — 0 mismatches on the real backends);
-it is a modelling limit of the P6 leaf-family collapse.
+Leg 7's flip (2026-09-05) retired this carry's justification — a P6 leaf-family modelling
+limit, evidenced by Leg-0 probe D.3's `Inv.negEdgeFree`-FALSE result — without retiring the
+carry: the model now routes a Direct-arm write onto the leaf family exactly as Python
+always did, so D.3's mechanism is gone, yet `graph_reached_inv` still takes `W4NarrowT2a`
+and `outside_narrow_t2a` still holds. Python was never implicated. What is owed is proof
+work, not a design decision: (1) prove `Inv.negEdgeFree` on the `_d` fragment for the
+leaf-routed write leg, (2) restate `graph_reached_inv` without the bundle. Post-flip probe
+output and every caveat on it: `FullScope.lean::W4NarrowT2a`'s docstring and
+`history/PROOF_STATUS.md` 2026-09-05b §9.5.
 
-**The design decision that was owed here is now MADE (2026-08-05): option (c) — model
-the leaf-family split and retire P6 — and the work is DEFERRED, not scheduled.** (a)
-"restate at drained states only" and (b) "weaken `negEdgeFree`" both shrink
-the claim; (c) is the only one that raises assurance. The decisive finding: **nothing
-consumes `Inv`** — it appears as a hypothesis only in `Inv → Inv` preservation steps:
+**The design decision that was owed here was made 2026-08-05 — option (c), model the leaf
+family and retire P6 — and its work landed 2026-09-05.** The deliberation, the two rejected
+options ((a) restate at drained states only, (b) weaken `negEdgeFree`), the "nothing
+consumes `Inv`" finding that decided it, the 2026-07-11j precedent against (b), and the
+blast radius (55–65% of the tree; `Spec/`/`SetEngine/` entirely spared) are in
+[`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md)
+and `history/PROOF_STATUS.md` 2026-08-05e.
+⚠ **The one correction that lives only here:** that finding's "exactly four places" is
+wrong, and two of its anchors (`State.lean:813`, `:854`) had drifted onto
+`putResidue_residue` and `structInv_addEdge`, neither of which mentions `Inv`. Re-measured
+2026-08-19 by `grep -rn '(h : Inv S σ)\|Inv S σ →'`: **five** preservation steps, not four —
 `State.lean::inv_putResidue`, `Write.lean::inv_writeDirect`,
 `RulesWrite.lean::inv_foldl_writeDirect`, `RulesWrite.lean::inv_writeRules`,
-`ReconcileWrite.lean::inv_reconcileKey`, plus the forgetful `State.lean::Inv.toStruct`
-(`Inv → StructInv`). `EdgeHygienic` is consumed nowhere — so weakening `negEdgeFree` could
-not turn anything red, which is precisely the house failure mode (rule 7).
-⚠ **The COUNT moved and the old anchors had rotted.** This read "exactly four places" with
-line-number anchors, two of which (`State.lean:813`, `:854`) had drifted onto
-`putResidue_residue` and `structInv_addEdge` — neither of which mentions `Inv`. Re-measured
-2026-08-19 by `grep -rn '(h : Inv S σ)\|Inv S σ →'`: **five** preservation steps, not four.
-The finding it supports (nothing CONSUMES `Inv`) is unchanged; the number was never the
-load-bearing part, but it was wrong. There is also precedent pointing away from (b): when
-`negEdgeFree` was found FALSE over plain `ReachedByW3d` on 2026-07-11j
-(`CascadeInv.lean`'s module header, the `CascadeInv.lean::reachedByW3dC_inv` rationale), the answer was to
-scope the theorem to the coverage chain, not to weaken the invariant.
-**Scope, blast radius (55–65% of the tree; `Spec/`/`SetEngine/` entirely spared) and a
-step ordering:**
-[`history/leaf-family-split-scope-2026-08-05.md`](history/leaf-family-split-scope-2026-08-05.md).
-**Until it runs, the T2a half of the vacuity caveat stays** — carry it as written above.
+`ReconcileWrite.lean::inv_reconcileKey` — plus the forgetful `State.lean::Inv.toStruct`.
+The finding it supports (nothing consumes `Inv`) is unchanged.
 
-⚠ **Dated blocks STOP at 2026-08-28c; twelve sessions have landed since**
-(`2026-08-30`…`2026-09-02c`. `2026-09-01e` sized the flip at **5 sites / 4 decls / 2 files**;
-**step 9 is DONE (2026-09-02)**; **2026-09-02b**'s "CLOSED 14/12/6" is RETIRED by
-**2026-09-02c** as a lower bound — live **62 + 13 decls / ELEVEN files**; §11.13 (v)/(w).)
+⚠ **Dated blocks STOP at 2026-08-28c; every session since is recorded in
+`history/PROOF_STATUS.md`, not here** — `2026-08-30`…`2026-09-02c`, then `2026-09-05` and
+`2026-09-05b`, which is where leg 7's flip landed (see the leg-7 block below). Sizing
+history worth carrying: `2026-09-01e` sized the flip at **5 sites / 4 decls / 2 files**;
+**step 9 is done (2026-09-02)**; **2026-09-02b**'s "CLOSED 14/12/6" is retired by
+**2026-09-02c** as a lower bound — live **62 + 13 decls / ELEVEN files**; §11.13 (v)/(w).
 
-**2026-08-28c — the public surface is migrated, and the `hql` surface is now one row.**
-🚨 **The "one row" half was REFUTED 2026-08-31c and then made true again by the 2026-09-01b
-migration — see the corrections at the end of this block. The migration half stands.**
+**2026-08-28c — the public surface is migrated, and the `hql` surface is one row.**
 Seven declarations (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
 `Exec.graphRun_check_eq_sem`, `::graphRunOps_check_eq_sem`,
-`W4WitnessDirect.final_applies`/`final_applies4`) now state `GraphModel.checkPublic`,
-proved through `graph_correct_public`. **None gained a hypothesis** — `graph_correct_public`
-takes exactly `graph_correct`'s bundles — and every proof stayed a 1–2 line delegation.
+`W4WitnessDirect.final_applies`/`final_applies4`) state `GraphModel.checkPublic`, proved
+through `graph_correct_public`. **None gained a hypothesis** — `graph_correct_public` takes
+exactly `graph_correct`'s bundles — and every proof stayed a 1–2 line delegation.
 `Cli.lean`'s graph mode migrated with them (it prints `Exec.lean::graphModeAnswers` now),
 because a capstone that names a different read than the driver calls makes its own
 docstring false.
 
-⚠ **What this changes for 4c-ii: `docs/latent-gaps.md` used to name SIX theorems as going
-FALSE after the re-point; five of them plus both `final_applies` witnesses are now out of
-that set entirely** (the fence discharges the leaf-name case). ~~**The remaining `hql`
-surface is ONE pinned row — `graph_correct` (`:27`)**~~ 🚨 **FALSE when written — it was
-THREE rows: 27, 46 and 56**, refuted 2026-08-31c by consumer-set enumeration (rows 46/56
-carried no `checkPublic` and consumed `graph_correct_w3d2{,E}_d` directly). The 2026-08-28c
-reasoning was right about `final_applies`/`final_applies4`, wrong to generalise.
-
-✅ **LANDED 2026-09-01b — the `hql` surface is ONE row after all, but by MIGRATION rather
-than by the 2026-08-28c argument.** Rows 46/56 are restated over `GraphModel.checkPublic`;
-the `hql` binder is REFUSED on both — `q` is universally quantified there, so it would put
-a schema-dependent hypothesis on the two SATISFIABILITY instruments, the house failure
-mode. Kernel-checked: row 46's bridge is `reachedByW3d2_schema (reachedByW3d2C_toW3d2 h)`;
-no `reachedByW3d2C_schema` is needed — **the grep wanted the wrong name.** Condition 2
-shipped three pinned instruments against the rows degrading into certifying the fence
-alone, both sabotages run → `history/PROOF_STATUS.md` `2026-09-01b`. Row 27 is deliberately
-kept as the INTERNAL-layer statement; `unfenced_grants` (`:52`) stays unfenced as
+🚨 The "one row" half was **false when written** — it was three rows (27, 46, 56), refuted
+2026-08-31c by consumer-set enumeration — and was made true again by the 2026-09-01b
+migration rather than by the 2026-08-28c argument: rows 46/56 are restated over
+`GraphModel.checkPublic`, and the `hql` binder is refused on both, because `q` is
+universally quantified there and the binder would put a schema-dependent hypothesis on the
+two satisfiability instruments (the house failure mode). Row 27 is deliberately kept as the
+internal-layer statement; `unfenced_grants` (`:52`) stays unfenced as
 `fence_changes_answer`'s foil, and `Equiv.lean`'s 27-rung ladder stays on `check` as a
-per-stage record of that layer (its own header says so) — zero edits.
+per-stage record of that layer. The consumer enumeration, the three pinned instruments and
+both sabotages: `history/PROOF_STATUS.md` `2026-08-31c` and `2026-09-01b`; the
+`docs/latent-gaps.md` "six theorems" recount is in `2026-08-28c`.
 
 ⚠ **A hole was found and closed here.** The driver↔capstone coupling was UNPINNED:
 reverting `Cli.lean` to the unfenced read left the full conformance suite green
 (`495 passed`), and structurally no corpus can catch it pre-4c-ii. Fix is TEXTUAL —
 `Exec.lean::graphModeAnswers` is a named definition whose body is pinned verbatim
-(`headline_definitions.txt:138`), dragged into the closure by `graphModeAnswers_eq_sem` in
+(`headline_definitions.txt:212`), dragged into the closure by `graphModeAnswers_eq_sem` in
 `statement_pin.py::HEADLINE`. Its own sabotage: build stayed green (1089 jobs), definition
 pin fired, **statement pin matched 46/46 and was blind**. Do not remove that theorem from
 `HEADLINE` — it un-pins the driver. Detail: `history/PROOF_STATUS.md` `2026-08-28c`.
 
-**2026-08-28b — THE FENCE-MODELING ENDGAME IS LANDED AND GREEN, WITHOUT `hql` AND WITHOUT
-OPENING THE 4c-ii CONE.** `GraphIndex/Fence.lean::GraphModel.checkPublic` +
-`FullScope.lean::graph_correct_public`: the PUBLIC read equals `sem` under exactly
-`graph_correct`'s hypotheses, no leaf-name guard. **2026-08-28's "owed INSIDE the 4c-ii
-commit" is refuted** — the fenced branch needs only `WF S` + "undeclared ⇒ `sem` denies",
-so it lands BEFORE the un-splittable cone, on green. Additive: pins 38→45 / 155→160, **zero rows moved**; `reachedByW3d2E_schema` was an uncosted prerequisite.
+**2026-08-28b — the fence-modeling endgame landed green, without `hql` and without opening
+the 4c-ii cone.** `GraphIndex/Fence.lean::GraphModel.checkPublic` +
+`FullScope.lean::graph_correct_public`: the public read equals `sem` under exactly
+`graph_correct`'s hypotheses, no leaf-name guard, purely additive. Narrative and sizing:
+`history/PROOF_STATUS.md` 2026-08-28b.
 ⚠ **`graph_correct_public` is NOT what makes the fence non-vacuous** — pre-4c-ii it proves
-green even under a fence that never fires; the six `W4WitnessDirect.fence_*` pins at `Sd` are, and only `fence_changes_answer` catches a fence REMOVAL (§3 has the sabotage record).
-Its "next, pre-4c-ii: migrate the public surface + `final_applies`(`4`)" — **done
-2026-08-28c**, see that block above.
+green even under a fence that never fires; the six `W4WitnessDirect.fence_*` pins at `Sd`
+are, and only `fence_changes_answer` catches a fence REMOVAL (§3 has the sabotage record).
 
-**2026-08-28 — BOTH `P3` HUMAN CALLS ARE MADE (`hql` accepted; Route B retained on
-corrected grounds — its "zero additional cone" argument is FALSIFIED), after a live
-census re-sized the cone for the third consecutive time. A fence-modeling endgame
-(`checkPublic`, unscouted) is the recommended repair so the headline claim stays
-unguarded. No proof changed; four stale doc comments fixed (`CORRESPONDENCE.md` §7.1
-RESOLVED). Read `history/PROOF_STATUS.md` 2026-08-28 and scope doc §11.11 BEFORE
-resuming leg 7 — §11.11 supersedes the sizing in §11.9/2026-08-20b, and one technical
-choice (WF-clause vs threading for computed-ref dot-freeness) is left open with its
-deciding fact named (does `parse_schema_ast` reject dotted references?). The
-2026-08-16c block below stands as history; its adjudication is settled and its
-`FoldAdmits` "24" is superseded (19 Prop sites + 2 exec gates move / 3 stay —
-§11.11 item 7).**
+**2026-08-28 — both `P3` human calls are made** (`hql` accepted; Route B retained on
+corrected grounds — its "zero additional cone" argument is falsified), after a live census
+re-sized the cone for the third consecutive time. Its recommended fence-modeling repair
+landed the next day, and the technical choice it left open (WF-clause vs threading for
+computed-ref dot-freeness) was overtaken by the 2026-09-05 flip, which threads
+`NoLeafSubjects` from `GraphAdmission`. The 2026-08-16c block below stands as history; its
+`FoldAdmits` "24" is superseded — 19 Prop sites + 2 exec gates move / 3 stay, scope doc
+§11.11 item 7, which also supersedes the sizing in §11.9/2026-08-20b. Narrative:
+`history/PROOF_STATUS.md` 2026-08-28.
 
-**2026-08-16c — 4c-ii is BLOCKED on a proof-design adjudication, not on coding. The shadow
-chain's cheap route is refuted and the landing criterion is weak. No Lean file changed.
-Read `history/PROOF_STATUS.md` 2026-08-16c and scope-doc §11.8 BEFORE resuming leg 7.**
+**2026-08-16c — history: 4c-ii was blocked here on a proof-design adjudication, not on
+coding, and the shadow chain's cheap route was refuted (unblocked, and landed, 2026-09-05).
+No Lean file changed; detail in `history/PROOF_STATUS.md` 2026-08-16c and scope-doc §11.8.**
 
 * ⚠ **ROUTE A IS REFUTED.** Re-pointing `ReachedByRulesAdmitted.step` cannot work:
   `ReconcileComplete.lean::reachedByW3aAdmitted_toW3a` needs a `ReachedByRules σ S T` witness
@@ -167,11 +151,12 @@ Read `history/PROOF_STATUS.md` 2026-08-16c and scope-doc §11.8 BEFORE resuming 
   non-emptiness premise (`StoreValidRules`), not `WF`. Measure whether
   `StoreValidRules` + `ComputedOnly` admits a stored tuple on a derived key at all.
 * ⚠ **The criterion only counts CONJOINED with a green gate.** `dropped by P6 → 0` /
-  `compared → 265` is a pure function of the Python side: commenting out the leaf-family-copy
-  branch of `extractor.py::_edge_projection` (`if "." in obj[2] and obj[2] != "...": return
-  "P6"`) publishes it with no Lean change. Its control is the state gate,
-  which then reports `19 failed, 37 passed` / `edge only in PYTHON`. Also: §11.5 predicts
-  `only in LEAN model`; a Python-first order gives the mirror.
+  `compared → 265` was a pure function of the Python side, publishable by commenting out one
+  branch of `extractor.py::_edge_projection` with no Lean change. **Discharged 2026-09-05,
+  conjoined**: the branch is gone, so that attack is no longer available, and the successor
+  control is the positive floor `_MIN_LEAF_COMPARED = 76` asserted by
+  `formal/conformance/test_conformance_state.py::test_leaf_rows_reach_the_compare_arm`.
+  Measured ledger, the sabotage and its control: `history/PROOF_STATUS.md` 2026-09-05b §7.
 * Verified while attacking: the `FoldAdmits` lockstep is **24** spelled-list sites, not 7;
   `Audit.lean` is an EDITED file of this step (`:314` pins `reachedByRules_of_admitted`);
   and `_MIN_LEDGER_ROWS`/`_MIN_LEDGER_STACKED = 19/19` sit before the golden read.
@@ -180,27 +165,19 @@ Read `history/PROOF_STATUS.md` 2026-08-16c and scope-doc §11.8 BEFORE resuming 
 refuted THREE more times first, and `ttuStarFree` part (iv)'s BLOCKING QUESTION IS
 ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11.7 FIRST.**
 
-* **4c-i landed with a ZERO recompile cone, and §11.6's cost cell is REFUTED.** It sized
-  4c-i as "the full GraphIndex tree, ~double the Cascade cone" — true only of an *edit* to
-  `schemaRewrites`. As an EXTENSION downstream of `RulesWrite` the cone is **one file**,
-  and the `Cascade → LeafRules` import 4c-ii needs is cycle-free. **Budget the cone once,
-  at 4c-ii.** `leafRewrites` supplies the half `schemaRewrites`' taint filter omits: each
-  derived key's CLOSURE leaves compile to rules targeting the MINTED LEAF NAME. Additivity
-  is *proved* (`schemaRewrites_leafRewrites_disjoint`), not observed. Measured 50/50
-  schemas / 32 non-empty rule sets against `compile_ruleset`'s real output.
+* **4c-i landed with a zero recompile cone, and §11.6's cost cell is refuted.** As an
+  extension downstream of `RulesWrite` the cone is **one file**, and the `Cascade →
+  LeafRules` import 4c-ii needs is cycle-free; additivity is *proved*
+  (`schemaRewrites_leafRewrites_disjoint`), not observed. Detail: scope-doc §11.7.
 * **⚠ THE ALLOCATION WAS WRONG THREE MORE TIMES**, all caught before 4c-i was built on it:
   Python MERGES a maximal pure subtree (`(a or b) but not banned` → `r.0={a,b}`,
   `r.1=banned`, not three leaves, storage always first); a tainted userset restriction gets
   its OWN storage leaf (reachable from the live fixture `userset_over_derived.fga`); and —
   **invisibly to the instrument that validated the first two** — the n-ary union SPINE.
-* **THE METHOD LESSON, now in [`docs/sabotage-procedure.md`](../docs/sabotage-procedure.md).**
-  The first two fixes were validated by transcribing `persistedLeaves` into Python: *"82/82,
-  0 disagreements"*. That transcription consumed Python's **n-ary** AST; Lean never sees it
-  (`encode.py::_fold_binary` LEFT-FOLDS). Re-run binarized: 1 disagreement, on
-  `nary_union_derived4`, **which is in `GRAPH_FRAGMENT`**. *A transcription of the right
-  rule over the wrong input REPRESENTATION is the mirror instrument with extra steps* — and
-  the second, genuinely independent instrument (744/744) was structurally incapable of
-  catching it.
+* **The method lesson** — *a transcription of the right rule over the wrong input
+  representation is the mirror instrument with extra steps* — is written up, with the
+  "82/82" run that produced it, in
+  [`docs/sabotage-procedure.md`](../docs/sabotage-procedure.md).
 * **⚠ A LIMIT OF THE BINARY `Expr` LEG 7 MUST CARRY.** `Core/Schema.lean` justifies
   left-folding n-ary unions by associativity+commutativity — true of `sem`, **false of the
   leaf ALLOCATION**. Measured: `a or b or safe` → 2 leaves, `(a or b) or safe` → **1**, and
@@ -230,6 +207,7 @@ above; §11.6's cone estimate is refuted and its index-breadth figure is stale.*
   2026-08-14 `rawWriteRel`-index-0 model could never meet `P6 → 0 / compared → 265` —
   and a raw write **fans out** to every matching storage leaf, so it was wrong in arity
   too. Both facts are now Lean pins (`LeafWitness.swU_routes`, `swF_fanout`).
+  The flip met that target exactly on 2026-09-05 (`history/PROOF_STATUS.md` 2026-09-05b §7).
 * **`Leaf.lean` is reworked while still unwired**: `persistedLeaves` (the pre-order
   allocation — derived refs and non-pure TTU arms consume NO index),
   `leafPublic`/`publicOfLeaf` (dot-free prefix, never `".0"`; `publicOfLeaf_rawWriteRels`
@@ -477,12 +455,33 @@ remove-path and generated-schema gates). The Lean remove leg is closed at the va
 + drained-prior scope and is driven end-to-end. The staged ladder that got there is a table
 in `ARCHITECTURE.md`; the narrative is `history/PROOF_STATUS.md`.
 
-**In flight — leg 7, the leaf-family split (repo board rows `P3`, `P4`, `P5`, `P14`).**
-Steps 3, 4a, 4c-pre and 4c-i have landed; within 4c-ii, steps 1–6, the `NoLeafSubjects →
-TtuTargetsSat` bridge (2026-08-31b), step 7's predicate (2026-09-01c), the `hag` widening
-(2026-09-01d), step 8's free half (2026-09-01e), **step 9 (2026-09-02)**, `hql`'s eliminator
-(2026-09-02b), both co-landing prerequisites (2026-09-02c). Owed: **the ATOMIC co-landing,
-ONE commit** — `hv1`, `ComputedRefsNotLeaf`, `hql`, the flip, at **62 + 13 decls / ELEVEN files**, not 12/6 (§11.12 rule 5; §11.13 (v)).
+**Landed 2026-09-05 — leg 7, the leaf-family split (repo board rows `P3`, `P4`, `P5`,
+`P14`): the flip is in.** Both logged legs now fold the leaf-routed closure —
+`Cascade.lean:190-191::GraphState.writeLoggedRules` and `:340-341::removeLoggedRules` fold
+`rewriteClosureL S (rawWriteTuples S t)` instead of `rewriteClosure S t` over public
+relation names — and `affectedKeys` (`:542-546`) reads the public relation back through
+`publicOfLeaf`; `writeRules`, `rewriteClosure` and `reachedByRules_edge_sound` are
+unchanged. The write-leg-only flip was kernel-refuted first, so branch (α) and R5 co-landed
+in the same commit (`untOccCount` restated over the L closure at
+`CascadeStrata.lean:687`, `:716::count_removeLoggedRules`). `GraphAdmission` gained
+`noLeafSubjects` and `keysNonempty`, both honest Python-side scope claims mirroring
+`zanzibar_utils_v1.py::_validate_ast_references`; the second is an accepted scope narrowing
+flagged to the user. **Step 7 co-landed: projection P6 is retired** (the 2026-08-16c block's
+discharged criterion above). The tree is sorry-free, statement pin 49/49, definition pin
+regenerated 232 → 250 after a control run on the old pins.
+Mechanics, the refutation, the co-requisite sizing, the P6 Python half and the pin control:
+`history/PROOF_STATUS.md` 2026-09-05b §1, §2, §7, §9.
+⚠ **The flip doubled an ALREADY-exponential derived-arm stacking**; ten conformance tests
+timed out (`two_stratum_cascade`, five adds: control 1013 edges, post-flip 2026). Two Python
+mirrors landed with it, both core `List.eraseDups`: `CascadeStrata.lean::cascadeKeysAbove`
+(the `_map_deltas_to_keys` keys-dict; `cascadeKeys_eq_above` → `mem_cascadeKeys_iff_above`)
+and `enumJob2`/`enumJob2D`'s `cands` (the `_reconcile` candidates dict; `edgeHolders` is
+one entry per held EDGE — the doubling). Post-fix `1…5` in 0.1 s, answers unchanged. Golden
+`derived_arm_multiplicity.json` regenerated after a control run, `_MIN_LEDGER_STACKED`
+19 → 18, definition pin 250/250 after its control. `CORRESPONDENCE.md` §7.2 item 5c; item 6
+stays open, residual `+1` per reconcile. Record: `history/PROOF_STATUS.md` 2026-09-05b §10.
+Owed next: nothing on the flip itself. The T2a/`negEdgeFree` re-read is done and T2a did
+not widen — see the caveat at the top of this file and the scope carry below.
 
 **In flight — `ttuStarFree` (repo board rows `P6`, `P7`).** Part (i) landed and is inert;
 part (ii) is what materialises the edge; (iii) and (iv) follow.
@@ -507,9 +506,9 @@ a fourth `zcli` mode, row `P21`.
 
 **The one live scope carry.** T2a (`graph_reached_inv`) did not widen with T2b: it takes the
 extra `W4NarrowT2a` bundle, and a Direct-arm store provably fails it, so T2a stays vacuous
-exactly where T2b (since 2026-08-05) no longer is. This is a modelling limit of the P6
-leaf-family collapse, not a Python bug — `RuleSet.apply` routes the write onto the leaf
-family, and the real backends show no mismatch. Retiring the carry is what leg 7 is for.
+exactly where T2b (since 2026-08-05) no longer is. Leg 7's flip retired the justification,
+not the bundle; what is owed is proof work, not a design decision. Full statement, the two
+obligations and the post-flip probe: the T2a caveat at the top of this file.
 
 **Optional assurance-widening** is inventoried and ranked in `FINAL_REVIEW.md` §4, and every
 item still open there now carries a repo-board row (`P15`–`P19`, plus `P9` and `SD-1`). That

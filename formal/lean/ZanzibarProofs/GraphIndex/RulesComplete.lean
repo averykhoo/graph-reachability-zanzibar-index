@@ -57,6 +57,30 @@ def FoldAdmits : GraphState → List Tuple → Prop
       σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true ∧
       FoldAdmits (σ.writeDirect u) rest
 
+/-- `FoldAdmits` is a FINITE conjunction of `admitEdge` Bool tests, hence decidable at a
+    concrete state and list. Supplied because `FoldAdmits` is a plain recursive `def`, which
+    instance synthesis will not unfold on its own.
+
+    **Consumers, re-censused after R5 + (alpha)** (the docstring used to name the write-leg
+    REFUTATIONS, all three of which are now deleted): the `by decide` closure-admission pins
+    that every chain witness in the tree is built from —
+    `CascadeStrata.lean::lrV_foldAdmits`, `::tlUsEditor_foldAdmits`, `::tvDer_foldAdmits`
+    and `CascadeStrataSettle.lean::swTw_foldAdmits`. Those feed the `ReachedByW3d2` /
+    `ReachedByW3d2E` `write` constructors at every positive pin, so the instance is more
+    load-bearing now than it was, not less. It reads no residue, so the function-valued
+    field of `GraphState` is no obstacle. -/
+def decFoldAdmits : (σ : GraphState) → (us : List Tuple) → Decidable (FoldAdmits σ us)
+  | _, [] => isTrue trivial
+  | σ, u :: rest =>
+      if h : σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true then
+        match decFoldAdmits (σ.writeDirect u) rest with
+        | isTrue ht => isTrue ⟨h, ht⟩
+        | isFalse hf => isFalse (fun hc => hf hc.2)
+      else isFalse (fun hc => h hc.1)
+
+instance instDecidableFoldAdmits (σ : GraphState) (us : List Tuple) :
+    Decidable (FoldAdmits σ us) := decFoldAdmits σ us
+
 /-- **Fold edge-completeness.** If every write in the fold is admitted, every tuple's
     materialised edge is present in the folded state — its own `writeDirect` adds it
     (admission), and the rest of the fold preserves it (edge monotonicity). -/

@@ -2,7 +2,7 @@
 id: P6
 title: ttuStarFree (ii) -- bridges on rule-routed write path; NOT parallel-safe with P3 (38-module cone)
 brief: NOT parallel-safe with P3 (same 38-module cone): land increment A and stop, or sequence B after P3, never both
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 5c25e542f542
 created: 2026-08-20b
-moved: 2026-08-31b
-updated: 2026-08-31b
+moved: 2026-09-05b
+updated: 2026-09-05b
 closed:
 ---
 
@@ -66,3 +66,9 @@ Sizing flag, filed from P3's 2026-08-30c census. This row's '38-module cone' fig
 ### 2026-08-31b
 
 Fresh evidence this is a LIVE hole: ttuStarFree classifies SILENT in the new W4Fragment scope pin (test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE). Probe wrote 'folder:* parent doc:d1' onto a TTU tupleset: ADMITTED. _validate_ttu_tuplesets rejects userset restrictions in tuplesets but deliberately keeps wildcard ones ('star tuplesets are this repo's deliberate object-wildcard extension'). So the field graph_correct depends on is one Python does not enforce.
+
+### 2026-09-05b
+
+2026-09-05b: P3 LANDED, so the 'NOT parallel-safe with P3' blocker is gone and this row is promoted to NOW MECHANICALLY (top NEXT row; user may re-rank). Re-scope before starting: the write leg now lives at Cascade.lean:190-191 GraphState.writeLoggedRules := (rewriteClosureL S (rawWriteTuples S t)).foldl writeLoggedOne, and the remove leg mirrors it (:340-341); RulesWrite.lean::writeRules and Cascade.lean::writeLoggedOne are byte-unchanged. Increment B's in-bridge must be materialised on the LEAF-routed list (rawWriteTuples), not on the raw public tuple, or it re-creates the ghost-grant divergence PROOF_STATUS 2026-09-05b sec 2 refuted. The definition pin is 250 rows now; expect a pin diff on writeLoggedRules/removeLoggedRules and adjudicate it in formal/history/ (scope doc trap (ff): the pin shows the body that moved, not the meaning changes through it).
+
+2026-09-05b addendum: the cascade's dirty-key list is now cascadeKeysAbove := (...).eraseDups and enumJob2(D).cands is deduped (CascadeStrataEnum.lean) -- both are faithfulness mirrors of processor.py landed with P3 after the flip doubled an exponential derived-arm stacking. Any increment here that touches affectedKeys or the enum candidates inherits those eraseDups and their membership lemmas (mem_cascadeKeys_iff_above, List.mem_eraseDups); re-measure two_stratum_cascade multiplicities (expect 1..5) before regenerating any golden.

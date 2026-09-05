@@ -808,13 +808,17 @@ rather than quoting):*
   `graphRun` fold and rc 2/3 gates as graph mode, emitting the canonical
   direct-edge set + residue rows) diffed against the Python graph index's
   final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4`), every
-  in-fragment corpus, under the SEVEN documented projections P1–P7 of
-  `formal/conformance/extractor.py` (P1 closure rows / P2 bridges — inert, RE-MEASURED
+  in-fragment corpus, under the SIX documented projections of
+  `formal/conformance/extractor.py` — P1–P5 and P7 since **P6 retired 2026-09-05**, the
+  numbering deliberately left alone (P1 closure rows / P2 bridges — inert, RE-MEASURED
   on 2026-07-29 over the 23 corpora then in the fragment: 477 raw `EdgeV4` rows, 0
   dropped by P2 / P3 multiplicity,
   narrowed 2026-07-29 to the DERIVED arm only, the untainted arm now compared exactly /
-  P4 empty residues / P5 node GC, under which no `NodeV4` row is compared at all / P6
-  leaf-family split / P7 `ResidueV1.version`, declared 2026-07-27 — a MODELLING gap, not
+  P4 empty residues / P5 node GC, under which no `NodeV4` row is compared at all /
+  ~~P6 leaf-family split~~ — RETIRED 2026-09-05, the model's logged write now folds the
+  leaf-routed closure and those 76 rows are compared directly (`compared against Lean`
+  189 → 265, measured 2026-09-05 over the 25 in-fragment corpora) /
+  P7 `ResidueV1.version`, declared 2026-07-27 — a MODELLING gap, not
   a representation difference: Lean's `Residue` has no version field, so I7 is gated by
   nothing formal).
 - **C3 exhaustive small-scope enumeration** (2026-07-12m):

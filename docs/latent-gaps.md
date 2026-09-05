@@ -138,6 +138,11 @@ Listed so this file is a complete index of what is open, and pointed rather than
   which also records the trap (**do not** instead make
   `formal/lean/ZanzibarProofs/GraphIndex/Write.lean::GraphState.admitEdge` reject a present
   edge — that breaks the untainted arm, which is load-bearing for `untOccCount`).
+  **2026-09-05b:** still open, but no longer exponential — the two LIST-vs-SET gaps that
+  compounded through it (`cascadeKeysAbove`'s dirty keys, `enumJob2(D)`'s candidates) are
+  closed by Python-mirroring `eraseDups` (§7.2 item 5c), so the residual is `+1` per
+  reconcile of a key; the P3 flip had doubled the old base and timed out ten conformance
+  tests (`formal/history/PROOF_STATUS.md` `2026-09-05b` §10).
 * **The 2026-08-09 entry's severity sign** — an explicit **prediction, not an
   observation**: the 2026-08-10 rule (a dropped TTU parent is a false NEGATIVE under a
   positive TTU and a false POSITIVE under a negated one) predicts the 2026-08-09 sibling's

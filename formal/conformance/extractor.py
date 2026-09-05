@@ -127,28 +127,24 @@ outside these classes fails the gate:
      endpoints/references of the COMPARED state and so
      pinned implicitly by the edge+residue equality; the remaining **41** are
      invisible to this gate entirely — they exist only to carry P1-dropped
-     closure rows or P6-dropped leaf-family edges. What IS gated instead, and
-     Python-side only:
+     closure rows. (That 41 is as measured 2026-07-27, when P6 also dropped
+     leaf-family edges; P6 retired 2026-09-05, so some of those nodes are now
+     endpoints of COMPARED rows and the live figure will be lower.)
+     What IS gated instead, and Python-side only:
      `test_conformance_state.py::test_python_nodes_are_all_justified` (no orphan
      node rows; 0 orphans measured across every in-fragment corpus). Node FLAG
      behaviour remains, in `CORRESPONDENCE.md` §7's words, "invisible to the
      gate by construction" — the concession is now quantified, and repeated in
      `FINAL_REVIEW.md` §3 / `ARCHITECTURE.md` §6.
-  P6 **Leaf-family storage split.** Python's compiler routes a boolean def's
-     untainted operand relations onto `<relation>.<index>` closure-leaf
-     families (`RuleSet.apply` emits e.g. `editor` -> `viewer.0` copies —
-     observed even on ComputedOnly defs, correcting `CORRESPONDENCE.md` §7's
-     "the shapes coincide" note, which holds only for `storage=True` leaves:
-     `storage=False` closure leaves still hold routed edges). The Lean model
-     deliberately has NO leaf-family split (CORRESPONDENCE §7 divergence 4) —
-     it reads the raw boolean defs. Projection: drop Python direct edges
-     whose TARGET predicate contains `'.'` — `'.'` is reserved in declared
-     relation names (`zanzibar_utils_v1`), so such a family can only be
-     compiler-generated. The dropped edges' CONTENT is not unpinned: the
-     compiled plans read exactly these leaves, and their evaluation output —
-     the residues and processor-written derived edges — is compared EXACTLY
-     here, on top of check-verdict conformance and the compiled-RuleSet
-     snapshot tests.
+  P6 **RETIRED 2026-09-05.** Was the leaf-family storage split: Python's
+     compiler routes a boolean def's storage onto `<relation>.<index>` leaf
+     families and the model wrote public names, so leaf-named edges were
+     dropped before comparison (76 rows on the 25-corpus fragment when
+     retired). Board row `P3` (leg 7, step 4c-ii + step 7) re-pointed the
+     model's logged write path onto the same leaf-routed closure
+     (`GraphIndex/LeafRules.lean::GraphState.writeRulesRaw` wired into
+     `Cascade.lean::GraphState.writeLoggedRules`), so those rows are now
+     compared; there is no dotted-relation filter left in `_edge_projection`.
 
   P7 **`ResidueV1.version` is dropped** (declared 2026-07-27, ZT-P4-5(b); it
      was being dropped SILENTLY before, which is the thing this projection
@@ -163,7 +159,8 @@ outside these classes fails the gate:
      counterpart") — and `grep -rn 'version' lean/ZanzibarProofs/GraphIndex/`
      finds only that comment. There is no monotone counter anywhere in the
      model to compare against, so this is a MODELLING GAP, not a
-     representation difference like P1–P6 (the other six): unlike those, no argument recovers
+     representation difference like P1–P5 (the other five, since P6 retired
+     2026-09-05): unlike those, no argument recovers
      the dropped information from what remains. It is recorded as such in
      `CORRESPONDENCE.md` §7.2, and the consequence is stated there and here:
      **I7 is gated by nothing formal.** Its only pins are Python-side —
@@ -212,7 +209,7 @@ def derived_relations(schema_text: str) -> frozenset:
 # --------------------------------------------------------------------------- #
 
 def _edge_projection(nodes: dict, e) -> str | None:
-    """Which projection drops this raw `EdgeV4` row — `"P1"`/`"P2"`/`"P6"` — or
+    """Which projection drops this raw `EdgeV4` row — `"P1"`/`"P2"` — or
     `None` if the row survives to be compared.
 
     **THE single implementation of the edge-side projection cascade.** Both
@@ -233,16 +230,14 @@ def _edge_projection(nodes: dict, e) -> str | None:
     subj, obj = nodes[e.subject_id], nodes[e.object_id]
     if obj[3] == "any" or subj[3] == "all":
         return "P2"                                     # bridge edge
-    if "." in obj[2] and obj[2] != "...":
-        return "P6"                                     # leaf-family copy
     return None
 
 
 def projection_ledger(session, store_id: str) -> dict[str, int]:
     """Count, for ONE store, how many raw rows each projection drops.
 
-    Returns `raw` / `P1` / `P2` / `P6` / `compared` (edges, and `P1+P2+P6+
-    compared == raw` by construction) plus `nodes` (raw `NodeV4` rows, all of
+    Returns `raw` / `P1` / `P2` / `compared` (edges, and `P1+P2+compared == raw`
+    by construction) plus `nodes` (raw `NodeV4` rows, all of
     which P5 drops) and `residues` (rows kept — residues are keyed on the public
     relation, so no edge projection touches them).
 
@@ -263,7 +258,7 @@ def projection_ledger(session, store_id: str) -> dict[str, int]:
         for n in session.exec(
             select(NodeV4).where(NodeV4.store_id == store_id)).all()
     }
-    out = {"raw": 0, "P1": 0, "P2": 0, "P6": 0, "compared": 0,
+    out = {"raw": 0, "P1": 0, "P2": 0, "compared": 0,
            "nodes": len(nodes), "residues": 0}
     for e in session.exec(
             select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
@@ -273,7 +268,7 @@ def projection_ledger(session, store_id: str) -> dict[str, int]:
     out["residues"] = len(session.exec(
         select(ResidueV1).where(ResidueV1.store_id == store_id)).all())
 
-    if out["P1"] + out["P2"] + out["P6"] + out["compared"] != out["raw"]:
+    if out["P1"] + out["P2"] + out["compared"] != out["raw"]:
         raise AssertionError(                           # cannot happen; pinned anyway
             f"projection_ledger: drops+compared != raw for {store_id}: {out}")
     return out
@@ -297,7 +292,7 @@ def graph_fragment_ledger() -> dict[str, int]:
     from formal.conformance.backends import graphindex_drive
     from formal.conformance.corpus import GRAPH_FRAGMENT, SCHEMAS
 
-    total = {"corpora": 0, "raw": 0, "P1": 0, "P2": 0, "P6": 0,
+    total = {"corpora": 0, "raw": 0, "P1": 0, "P2": 0,
              "compared": 0, "nodes": 0, "residues": 0}
     for name in sorted(GRAPH_FRAGMENT):
         schema_text, tuples, object_wildcards = SCHEMAS[name]
@@ -314,7 +309,8 @@ def graph_fragment_ledger() -> dict[str, int]:
 
 
 def extract_sql_state(session, store_id: str) -> dict:
-    """Read the canonical state off the SQL tables (projections P1–P2, P5–P7;
+    """Read the canonical state off the SQL tables (projections P1–P2, P5, P7 —
+    P6 retired 2026-09-05;
     P3 is applied by `diff_states`, which needs the schema's taint set).
 
     `edge_counts` carries `direct_edge_count`-weighted multiplicity for the same
@@ -334,7 +330,7 @@ def extract_sql_state(session, store_id: str) -> dict:
     derived_flag: dict[tuple, bool] = {}
     for e in session.exec(
             select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
-        # P1 (closure-only) / P2 (bridge) / P6 (leaf-family copy). The cascade
+        # P1 (closure-only) / P2 (bridge). The cascade
         # lives in `_edge_projection` so `projection_ledger` counts exactly the
         # rows this drops — see that function's docstring.
         if _edge_projection(nodes, e) is not None:
@@ -442,12 +438,14 @@ def _classify_edges(py: dict, tainted: frozenset) -> dict:
     not where this module claims it is — so it raises rather than silently
     exempting the wrong set.
 
-    **⚠ Corrected 2026-08-08.** This paragraph used to end the leaf-family clause
-    with "**which P6 already dropped**", i.e. it justified the agreement by saying
-    leaf rows never reach this function. That was load-bearing-sounding and FALSE
-    as an explanation, and it would have become actively misleading the moment P6
-    retires (`formal/history/leaf-family-split-scope-2026-08-05.md` §6/§7 step 2).
-    The agreement does not depend on P6 at all; it is STRUCTURAL, on both sides:
+    **⚠ Corrected 2026-08-08; P6 RETIRED 2026-09-05.** This paragraph used to end
+    the leaf-family clause with "**which P6 already dropped**", i.e. it justified
+    the agreement by saying leaf rows never reach this function. That was
+    load-bearing-sounding and FALSE as an explanation, and it would have become
+    actively misleading the moment P6 retired
+    (`formal/history/leaf-family-split-scope-2026-08-05.md` §6/§7 step 2) — which
+    has now happened: leaf rows DO reach this function. The agreement never
+    depended on P6; it is STRUCTURAL, on both sides:
 
       * a leaf family is registered in `RuleSet.compiled.leaf_families`, NOT in
         `schema_info.derived_families`, and `WildcardIndex._derived_write_ctx`
@@ -460,11 +458,13 @@ def _classify_edges(py: dict, tainted: frozenset) -> dict:
         relation-name check) — so a dotted pair can never enter the taint set.
 
     Both predicates are therefore False on every leaf row, and cannot disagree.
-    Measured 2026-08-08 with the P6 branch removed, over the 23 corpora then in
-    the fragment: all 23 classified with
-    **0 raises**, all 73 then-newly-surviving leaf keys landing in the untainted arm.
-    That measurement also refuted the scope doc's "it raises on disagreement —
-    settle this before deleting the filter" as a hazard for THIS class of row.
+    Measured 2026-08-08 by removing the P6 branch AHEAD of time, over the 23
+    corpora then in the fragment: all 23 classified with **0 raises**, all 73
+    then-newly-surviving leaf keys landing in the untainted arm. That measurement
+    refuted the scope doc's "it raises on disagreement — settle this before
+    deleting the filter" as a hazard for THIS class of row, and it is superseded
+    by the live tree: P6 retired 2026-09-05, so the 25-corpus fragment's 76 leaf
+    rows now run through this function for real.
     Per the house preference for a mechanical refusal over a doc paragraph, the
     structural claim is pinned by
     `test_conformance_state.py::test_leaf_rows_are_structurally_untainted`.

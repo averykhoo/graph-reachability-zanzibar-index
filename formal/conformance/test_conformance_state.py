@@ -16,7 +16,8 @@ form of `extractor.py`:
 Every projection the comparison applies is enumerated and justified in
 `extractor.py` (P1 closure rows, P2 bridges, P3 multiplicity — **derived arm
 only since 2026-07-29; untainted-arm multiplicity is compared EXACTLY**, P4
-empty residues, P5 nodes, P6 leaf-family split, P7 residue version). Nothing else is dropped: a
+empty residues, P5 nodes, P6 (retired 2026-09-05, leaf-family split — now
+compared), P7 residue version). Nothing else is dropped: a
 divergence outside those documented classes fails here even when every check
 verdict agrees — which is exactly the drift class the verdict gate cannot see
 (P6 was FOUND by this gate's first run).
@@ -97,11 +98,21 @@ def test_projection_ledger_is_not_vacuous():
 
     `FINAL_REVIEW.md`'s generated block publishes how many raw rows each
     projection drops. A published count is worth nothing unless breaking the
-    filter breaks the count, so this pins the three properties that make it
-    meaningful: the cascade partitions the raw rows exactly, P6 actually FIRES,
-    and something actually survives to be compared. `extract_sql_state` and
-    `projection_ledger` share ONE predicate (`extractor._edge_projection`), so
-    there is no second implementation to drift.
+    filter breaks the count, so this pins the properties that make it
+    meaningful: the cascade partitions the raw rows exactly, something actually
+    survives to be compared, and the projections still drop something (raw >
+    compared). `extract_sql_state` and `projection_ledger` share ONE predicate
+    (`extractor._edge_projection`), so there is no second implementation to
+    drift.
+
+    The third property used to be "P6 actually FIRES" (`led["P6"] > 0`). P6
+    retired 2026-09-05 and its key is gone from the ledger — a retired filter
+    must not publish a permanent zero — so the leaf rows it dropped are now
+    pinned as COMPARED by `test_leaf_rows_reach_the_compare_arm` below.
+
+    ★ HISTORICAL (P6 retired 2026-09-05; the evidence below is the run that
+    proved the ledger was not vacuous while P6 was live — figures as observed
+    then, deliberately not restated against today's tree):
 
     ★ SABOTAGE EVIDENCE (2026-08-05, `docs/sabotage-procedure.md`). Deleting the
     P6 branch from `_edge_projection` — i.e. exactly what "retire P6" will look
@@ -124,8 +135,10 @@ def test_projection_ledger_is_not_vacuous():
     predicate `'...'`**.
     The guard is dead code on this corpus set — `'...'` is the bare SUBJECT
     sentinel and object nodes carry relation names. That is a coverage gap in the
-    corpus, not in this pin, and `test_p6_bare_sentinel_guard_is_unexercised`
-    below is its permanent record so it cannot quietly become load-bearing.
+    corpus, not in this pin, and its permanent record was
+    `test_p6_bare_sentinel_guard_is_unexercised`, DELETED with P6 on 2026-09-05
+    — there is no bare-sentinel clause left for it to guard. The replacement at
+    that position is `test_leaf_rows_reach_the_compare_arm`.
     """
     from formal.conformance.extractor import graph_fragment_ledger
 
@@ -133,11 +146,8 @@ def test_projection_ledger_is_not_vacuous():
     assert led["corpora"] == len(GRAPH_FRAGMENT), (
         f"ledger drove {led['corpora']} corpora, GRAPH_FRAGMENT has "
         f"{len(GRAPH_FRAGMENT)} — the ledger is describing a different set")
-    assert led["P1"] + led["P2"] + led["P6"] + led["compared"] == led["raw"], (
+    assert led["P1"] + led["P2"] + led["compared"] == led["raw"], (
         f"projection cascade does not partition the raw rows: {led}")
-    # The filter fires. Without this, deleting P6 would leave a green ledger that
-    # merely reported a different (still self-consistent) number.
-    assert led["P6"] > 0, f"P6 never fires — the published drop count is a lie: {led}"
     # Something survives. Guards the dual collapse (everything dropped ⇒ the
     # differential gate compares nothing and still reports "equal").
     assert led["compared"] > 0, f"nothing survives the projections: {led}"
@@ -146,26 +156,56 @@ def test_projection_ledger_is_not_vacuous():
         f"be measuring a gate that has no blind spot, which is false: {led}")
 
 
-def test_p6_bare_sentinel_guard_is_unexercised():
-    """P6's `obj[2] != '...'` clause is DEAD on the current corpus set.
+# Anti-vacuity floor for the P6-retirement pin below. MEASURED 2026-09-05 with
+# `extractor.graph_fragment_ledger()` over all 25 in-fragment corpora, on the tree
+# that retired P6: `{'corpora': 25, 'raw': 498, 'P1': 233, 'P2': 0,
+# 'compared': 265}`. Of the **78** leaf-TARGET `EdgeV4` rows the selector below
+# sees (`_MIN_LEAF_ROWS`, same predicate, one test down), **76** reach the compare
+# arm and the other **2** are closure-only rows P1 drops first — 76 = 78 - 2, and
+# those 76 are exactly the rows P6 used to drop. Set AT measured reality per the
+# repo's floor discipline: adding a corpus is free, losing a leaf comparison is
+# loud.
+_MIN_LEAF_COMPARED = 76
 
-    Not a defect — a recorded coverage fact, found by controlling the sabotage of
-    `test_projection_ledger_is_not_vacuous` (removing this clause changed
-    nothing). Object nodes carry relation names; `'...'` is the bare SUBJECT
-    predicate sentinel, so no object node should ever carry it.
 
-    This test exists so the situation cannot change silently. If a future corpus
-    DOES produce an object node with predicate `'...'`, this fails — and at that
-    moment the clause becomes load-bearing and the narrow sabotage above starts
-    discriminating. Either outcome is informative; drifting between them silently
-    is not.
+def test_leaf_rows_reach_the_compare_arm():
+    """Leaf-family (`<rel>.<n>`) edge rows are COMPARED against Lean, not filtered.
+
+    **This is the permanent sabotage for the P6 retirement (2026-09-05).** P6
+    dropped every Python direct edge whose TARGET predicate contained `'.'`,
+    because the Lean model wrote public relation names where Python's compiler
+    routes storage onto leaf families. Board row `P3` (leg 7) re-pointed the
+    model's logged write path onto the same leaf-routed closure, so the filter
+    came out of `extractor._edge_projection`. Nothing else in this suite would
+    notice it going back in: `test_projection_ledger_is_not_vacuous` only checks
+    that the cascade partitions the raw rows, and a re-added filter partitions
+    them just as exactly. Hence a positive pin rather than a deleted assertion —
+    **reintroducing ANY dotted-relation projection reddens this test.**
+
+    Three assertions, in the order they must fire:
+      1. the instrument — leaf rows are actually being seen (a selector that
+         stops finding its subject makes 2 and 3 pass vacuously);
+      2. every leaf row's projection is `None` (compared) or `"P1"`
+         (closure-only, dropped for a reason that has nothing to do with leaves)
+         — never any other id;
+      3. the count that reaches the compare arm is at least `_MIN_LEAF_COMPARED`
+         (provenance in that constant's comment), so a filter that drops only
+         SOME leaf rows is caught too.
+
+    Deliberately runs the RAW `EdgeV4` rows through `_edge_projection` itself,
+    not through `projection_ledger`'s aggregate: the ledger no longer has a key
+    that would move if leaf rows started being dropped again (they would simply
+    vanish from `compared` into a new bucket), which is exactly the blind spot
+    this closes.
     """
     from sqlmodel import select
 
     from formal.conformance.backends import graphindex_drive
+    from formal.conformance.extractor import _edge_projection
     from index_v4.models import EdgeV4, NodeV4
 
-    surviving_p1 = dotted = bare = 0
+    dotted = compared = 0
+    filtered: list[str] = []
     for name in sorted(GRAPH_FRAGMENT):
         schema_text, tuples, object_wildcards = SCHEMAS[name]
         session, _widx, store_id = graphindex_drive(
@@ -178,30 +218,41 @@ def test_p6_bare_sentinel_guard_is_unexercised():
             }
             for e in session.exec(
                     select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
-                if e.direct_edge_count <= 0:
-                    continue
-                surviving_p1 += 1
-                pred = nodes[e.object_id][2]
-                dotted += "." in pred
-                bare += pred == "..."
+                obj = nodes[e.object_id]
+                if "." not in obj[2] or obj[2] == "...":
+                    continue                            # not a leaf-family row
+                dotted += 1
+                proj = _edge_projection(nodes, e)
+                if proj is None:
+                    compared += 1
+                elif proj != "P1":
+                    filtered.append(
+                        f"{name} {obj[0]}:{obj[1]}#{obj[2]} -> {proj}")
         finally:
             session.close()
 
-    assert surviving_p1 > 0 and dotted > 0, (
-        f"instrument check: expected some P1-surviving dotted rows, got "
-        f"{surviving_p1} surviving / {dotted} dotted")
-    assert bare == 0, (
-        f"{bare} object node(s) now carry predicate '...' — P6's bare-sentinel "
-        f"guard has become load-bearing. Update this test AND re-run the narrow "
-        f"sabotage in test_projection_ledger_is_not_vacuous, which was recorded "
-        f"as non-discriminating precisely because this count was 0.")
+    assert dotted > 0, (
+        "instrument check: 0 leaf-family rows inspected — the selector stopped "
+        "finding its subject, so the two assertions below would pass vacuously")
+    assert not filtered, (
+        f"{len(filtered)} leaf-family row(s) are dropped by a projection other "
+        f"than P1: {sorted(filtered)[:5]}. P6 retired 2026-09-05 and leaf rows "
+        f"must reach the compare arm. P2 (a bridge edge whose object is a leaf "
+        f"family) is the one drop that would be legitimate here, and it was 0 "
+        f"fragment-wide when this was written — if that is what fired, widen "
+        f"this test deliberately rather than relaxing it.")
+    assert compared >= _MIN_LEAF_COMPARED, (
+        f"only {compared} of {dotted} leaf-family row(s) reach the compare arm, "
+        f"floor {_MIN_LEAF_COMPARED} — leaf edges are being filtered back out "
+        f"of the state gate")
 
 # Anti-vacuity floor for the leaf-row structural pin below. Measured 2026-08-09
 # over all 25 in-fragment corpora (`GRAPH_FRAGMENT` had just grown 23 -> 25 with
 # `reconvergent_diamond` / `reconvergent_derived`; the 2026-08-08 measurement of
 # the 23-corpus set was 75 = 73 + 2): **78** leaf-TARGET `EdgeV4` rows — 76 of
-# them surviving P1 (and hence P6-dropped), the other 2 closure-only rows P1
-# drops first. Set AT measured reality per the repo's floor discipline.
+# them surviving P1 (and hence, while P6 was live, P6-dropped), the other 2
+# closure-only rows P1 drops first. Set AT measured reality per the repo's floor
+# discipline.
 # Re-derive with the test's own selector — note it has NO P1 filter, which is
 # the point of the test (it runs upstream of `_edge_projection`):
 #   $ZANZIBAR_PY -c "
@@ -233,21 +284,23 @@ _MIN_LEAF_ROWS = 78
 
 def test_leaf_rows_are_structurally_untainted():
     """Leaf-family edge rows are `derived=False` AND schema-untainted — for a
-    STRUCTURAL reason, not because P6 hides them.
+    STRUCTURAL reason, not because a projection hides them (P6 did, until it
+    retired 2026-09-05).
 
     This pins the claim that `extractor._classify_edges` actually depends on: that
     schema taint and `EdgeV4.derived` cannot disagree on a `<rel>.<n>` leaf row.
     Until 2026-08-08 that function justified the agreement with "leaf families
     which P6 already dropped" — an explanation that is false as reasoning (the
     agreement holds for reasons unrelated to P6) and that would have SILENTLY
-    become wrong when P6 retires. This test is that paragraph converted into a
-    refusal, because the next person will not read the paragraph.
+    become wrong when P6 retired, which it did on 2026-09-05. This test is that
+    paragraph converted into a refusal, because the next person will not read
+    the paragraph.
 
     Note the deliberate scope: it runs against the RAW `EdgeV4` rows, upstream of
-    `_edge_projection`, so it keeps testing exactly the same property after P6 is
-    deleted. That is the point — it is the check that makes retiring P6 safe
+    `_edge_projection`, so it kept testing exactly the same property when P6 was
+    deleted. That was the point — it is the check that made retiring P6 safe
     (`formal/history/leaf-family-split-scope-2026-08-05.md` §7 step 2), so it must
-    not itself be routed through the filter being retired.
+    not itself be routed through the projection cascade.
 
     ★ SABOTAGE EVIDENCE (2026-08-08, `docs/sabotage-procedure.md`). Three
     sabotages were run, and the FIRST one — the obvious one, the one this test was
@@ -279,10 +332,10 @@ def test_leaf_rows_are_structurally_untainted():
          line — stated plainly so nobody credits this test with I5's work.
 
     Net: assertion 2 is load-bearing here; assertion 1 is corroborating. The
-    property as a whole is worth pinning upstream of the filter anyway, because
-    once P6 retires a disagreement becomes a raise in the middle of the state
-    gate, and `test_state_leangraph_vs_pythongraph` cannot see it today — P6 drops
-    these rows before `_classify_edges` is ever called.
+    property as a whole was worth pinning upstream of the filter, because since
+    P6 retired (2026-09-05) a disagreement IS a raise in the middle of the state
+    gate. While P6 was live `test_state_leangraph_vs_pythongraph` could not see
+    it — P6 dropped these rows before `_classify_edges` was ever called.
 
     ★ AND THE INSTRUMENT IS CONTROLLED. `_MIN_LEAF_ROWS` is not decoration: with
     the leaf-row selector inverted to a predicate matching nothing, both property
@@ -335,8 +388,8 @@ def test_leaf_rows_are_structurally_untainted():
         f"{len(flagged_derived)} leaf row(s) carry derived=True: "
         f"{sorted(flagged_derived)[:5]}. `_classify_edges` classifies by SCHEMA "
         f"taint, which can never contain a dotted pair, so a derived=True leaf "
-        f"row is a genuine disagreement — and once P6 retires it becomes a raise "
-        f"in the middle of the state gate.")
+        f"row is a genuine disagreement — and since P6 retired (2026-09-05) it "
+        f"IS a raise in the middle of the state gate.")
     assert not in_taint, (
         f"{len(in_taint)} leaf pair(s) entered the schema taint set: "
         f"{sorted(in_taint)[:5]}. `.` is reserved in declared relation names, so "
@@ -374,8 +427,20 @@ def test_leaf_rows_are_structurally_untainted():
 #       AssertionError: ANTI-VACUITY: the derived-arm ledger observed 19 row(s)
 #       (0 with lean multiplicity > 1); floors are 19/19. ...
 #       assert (19 >= 19 and 0 >= 19)
+# ★ LOWERED 2026-09-05b, _MIN_LEDGER_STACKED 19 -> 18 (deliberate; the only floor
+# edit this file has had). `enumJob2`/`enumJob2D` (`CascadeStrataEnum.lean`) now
+# dedup their `cands` (mirroring `_reconcile`'s id-keyed `candidates` dict), which
+# turns the model's derived-arm stacking from exponential-per-leg into +1 per
+# reconcile of the key. Every one of the 19 rows moved (`two_stratum_cascade`
+# alice->approver 1013 -> 5; the full table is in `history/PROOF_STATUS.md`
+# 2026-09-05b), and exactly one settled at 1 — `double_exclusion` carol->viewer,
+# 4 -> 1, reconciled once with want=true — so the live stacked count is 18. The
+# un-updated run was the control; its literal output:
+#       AssertionError: ANTI-VACUITY: the derived-arm ledger observed 19 row(s)
+#       (18 with lean multiplicity > 1); floors are 19/19. An empty ledger
+#       matches an empty golden and pins nothing.
 _MIN_LEDGER_ROWS = 19
-_MIN_LEDGER_STACKED = 19
+_MIN_LEDGER_STACKED = 18
 
 
 def _n_rows(state) -> int:
@@ -393,7 +458,10 @@ def test_state_leangraph_vs_pythongraph(name):
     the fragment: 153 of the 171 edges then compared carried a multiplicity
     nothing had ever compared, and one was genuinely non-unit (`nary_union`
     routes `alice` onto the untainted `any_of` from all three arms — both sides
-    say 3).
+    say 3). **Those 153/171 are as of 2026-07-29 and are now a floor, not the
+    width:** P6 retired 2026-09-05, so the leaf-family rows it used to drop are
+    compared here too (live ledger that day: 265 compared of 498 raw over the
+    25-corpus fragment).
 
     SABOTAGE EVIDENCE (run 2026-07-29, on the fragment as of then), literal
     observed output — note each failed on EXACTLY the one corpus that then had
@@ -475,7 +543,13 @@ def test_derived_arm_multiplicity_ledger():
       opened in the first place.
 
     Measured 2026-07-29 when the ledger was created, over the 23 corpora then in
-    the fragment: 18 derived-arm edges, Python all 1, Lean 4 … 1013.
+    the fragment: 18 derived-arm edges, Python all 1, Lean 4 … 1013. **Since
+    2026-09-05b the stacking is linear, not exponential**: `enumJob2`/`enumJob2D`
+    dedup their candidate list (`CascadeStrataEnum.lean`), so `edgeHolders`'
+    re-enumeration of every existing copy no longer feeds the next reconcile —
+    the model adds ONE copy per reconcile of the key with `want = true`. The
+    golden was regenerated that day (19 rows moved, Lean now 1 … 6) and
+    `_MIN_LEDGER_STACKED` lowered 19 -> 18 (comment above the floors).
 
     SABOTAGE EVIDENCE (docs/sabotage-procedure.md; run 2026-07-29 on the
     23-corpus fragment, when the anti-vacuity floors were 18/18 — the two
@@ -658,8 +732,9 @@ def test_python_nodes_are_all_justified(name):
     `NodeV4` rows, 194 were edge/residue endpoints of the COMPARED state and
     thus pinned
     implicitly by the edge+residue equality above; the other **41 are invisible
-    to the gate entirely** — they exist only to carry P1-dropped closure rows or
-    P6-dropped leaf-family edges.
+    to the gate entirely** — they exist only to carry P1-dropped closure rows.
+    (All three figures are as of 2026-07-27, when P6 also dropped leaf-family
+    edges; P6 retired 2026-09-05, so the live invisible count is lower.)
 
     So this test gates the one node-level property that is checkable Python-side
     and is a real failure mode the state comparison cannot see: a leaked node
@@ -809,7 +884,8 @@ def test_no_corpus_nests_a_pure_union_inside_an_impure_one():
           "`encode.py::_fold_binary` left-folds it into a shape indistinguishable from "
           "the FLAT n-ary form, which `GraphIndex/Leaf.lean::persistedLeaves` allocates "
           "as one leaf PER member. The Lean model would therefore mis-index this key's "
-          "leaf family, invisibly today (projection P6 drops leaf edges) and as a "
-          "`diff_states` divergence the moment leg 7 step 7 retires P6.\n"
+          "leaf family, and since P6 retired (2026-09-05, leg 7 step 7) that "
+          "surfaces as a `diff_states` divergence in the state gate — it was "
+          "invisible only while P6 dropped leaf edges.\n"
           "Either rewrite the schema in flat n-ary form (same semantics, same "
           "allocation) or make `Expr` n-ary — see Leaf.lean's 2026-08-16b block.")

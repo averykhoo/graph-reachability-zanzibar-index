@@ -15,6 +15,586 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-05b (**`P3` LANDED. The WRITE-LEG-ONLY flip was KERNEL-REFUTED first — `graph_correct` FALSE on the flipped tree with a sorryAx-FREE proof — so branch (α) and R5 were landed as CO-REQUISITES in the same commit; the tree is sorry-free at 49/49 + 250/250 pins, P6 is retired, and the gate's `sorry` belt had been counting 0 on every build since `ZT-P2-4`**)
+
+**Task taken:** `P3`, resumed from this same day's `## Session 2026-09-05` §7 — the re-point
+itself. An opus workflow (`wf_2419328f-0c3`, 6 rounds + an independent verifier) landed the
+**WRITE-LEG-ONLY** flip exactly as adjudicated. It is preserved as a **RED SNAPSHOT on a
+side branch**, `p3-flip-red-2026-09-05` = `d6d2dfc`, parented on the anchor `68f2c69`; its
+commit message says "do not merge" and it must not reach `master`. A second workflow then
+landed the two co-requisites (α) and R5 on top of it — **§9**. §0–§8 were verified
+first-hand by this session against `d6d2dfc`, §9 against the landed tree, unless a sentence
+says otherwise. Read §8 and §9 for the outcome; §1–§7 are the evidence trail.
+
+### 0. ★ CORRECTION to `## Session 2026-09-05` §4 — appended, not merged
+
+That entry marks (A)'s premise **"⚠ SOURCE READING, NOT A KERNEL CHECK … no purity lemma
+exists in the tree today"**. That was true when written and **false about three hours
+later**, superseded by `68f2c69` (`formal(P3): land the flip's remaining additive prefix`).
+The premise is now a kernel fact needing **no new admission field**:
+
+* `LeafRules.lean::ttuTargetsSatL_ne_of_noTtuTarget` and
+  `::rewriteClosureL_subject_pred_ne_of_noTtuTarget` take only `NoTtuTarget S R` and
+  `isDerived S (dt, R) = true` — both already in scope at `Cascade.lean:699-714`.
+* The purity chain §4 called missing is landed as
+  `LeafRules.lean::derivedAnywhere_of_isDerived` (unconditional),
+  `::isPure_of_closure_mem_persistedLeaves`, `::derivedAnywhere_eq_false_of_mem_leafRewrites`,
+  with attack pins `bareSeed_attack` / `sbareRel_closure_reaches_bare` / `sbareRel_not_wf`.
+
+`docs/README.md` §2/§6 forbids retro-editing the old entry, so this is the correction of
+record: **§4's sizing conclusion survives, its assurance caveat does not.** Its companion
+in-tree prose is now stale too and is owed a fix (§7): `LeafRules.lean`'s
+"⚠ **NOT PROVED HERE — this is a source reading, not a kernel check**" docstring, at
+`:884` on the anchor and `:1014` on `d6d2dfc`.
+
+### 1. What the flip is, mechanically
+
+Anchor `68f2c69` → `d6d2dfc` is 30 files, **3381 insertions / 653 deletions**, 17 `.lean`
+plus 13 non-Lean (re-counted this session with `git diff --name-only`; round 5's report
+said 12 non-Lean and was off by one).
+
+* The re-point itself, `Cascade.lean:190-191`:
+
+      def GraphState.writeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
+        (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.writeLoggedOne u) σ
+
+  and its `evalEq` twin is now `LeafRules.lean:314-315::GraphState.writeRulesRaw` (the same
+  `rewriteClosureL S (rawWriteTuples S t)` fold under `writeDirect`), not `writeRules` —
+  `Cascade.lean:267-270::writeLoggedRules_evalEq`.
+* `CascadeStrata.lean:803::count_writeLoggedRules` restated over the L list on **both** the
+  `hadm` and the RHS occurrence list (obligation (G)).
+* `ReachedByW3d2` / `C` / `E`'s **write constructors** now carry
+  `hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t))`, and `Exec.lean`'s
+  `graphRunAux` / `graphRunOpsAux` re-point their `foldAdmitsB` to match.
+* **`GraphAdmission` gained TWO fields, where the adjudication sanctioned one** —
+  `FullScope.lean::GraphAdmission.noLeafSubjects` (`:172`) **and**
+  `::keysNonempty : S.keys.all (fun k => k.2 != "") = true` (`:188`). Both are honest
+  Python-side scope claims (`zanzibar_utils_v1.py::_validate_ast_references`'s nested
+  `check_name`, `:915-919`, raises iff `'.' in name and name != '...'` and is applied to
+  TTU targets at `:930-931`; the empty name is excluded by `_IDENTIFIER_RE`'s `{1,256}`
+  repeat, `:31`), both discharged `by decide` at all four witnesses, and the second is
+  pinned non-redundant by `LeafRules.lean::wf_does_not_give_keysNonempty`. It is a scope
+  narrowing of nine byte-identical pinned statements and **needs an explicit call** (§8).
+* `LeafRules.lean:706::LeafScope` (wf / matchNotLeaf / noLeafSubjects / keysNonempty)
+  assembled by `FullScope.lean:197::GraphAdmission.leafScope` and threaded into 42
+  declarations; `WF S` added to 17; `BareStarStore T` to both `_shadow` theorems; the
+  `(ii)`-shaped `hder : isDerived S (dt,R) = true` at `Cascade.lean:729` **and** at
+  `CascadeStrata.lean:1645`, which the adjudication did not name.
+* **Deliberately unmoved, and re-checked in the file:** `GraphState.writeRules`,
+  `rewriteClosure`, `RulesCorrect.lean:125::reachedByRules_edge_sound`, and
+  `RulesComplete.lean:105-110::ReachedByRulesAdmitted` (its file's whole diff is +18/−0, a
+  new `decFoldAdmits` instance, no existing declaration touched).
+
+Build on that tree: `rc=0`, `Build completed successfully (1089 jobs)`, **0 errors, FOUR
+staged `sorry`s**. `formal/headline_statements.txt` **49/49 unmoved**;
+`formal/headline_definitions.txt` **29 discrepancies** (22 newly-reachable L-defs, 6
+substitution rows, 1 `GraphAdmission` row reporting the two ADDED fields).
+
+### 2. ★★ THE FINDING: a green `lake build` shipping a FALSE headline
+
+`Exec.lean:980::graph_correct_refuted` — `#print axioms` → **`[propext, Classical.choice,
+Quot.sound]`, sorryAx-FREE** — and it refutes the NAMED theorem, not a lookalike:
+`:1059::graph_correct_explicit` is `graph_correct` eta-expanded and `:1069` is the literal
+`#check graph_correct_refuted graph_correct_explicit`, which the build prints as `: False`.
+Re-verified first-hand this session with `lake env lean` probes (`/tmp/axprobe.lean`,
+`/tmp/axprobe2.lean`), not inherited: **`graph_correct` itself depends on `sorryAx`**, and
+**40 of the 584 audited theorems** are `sorryAx`-tainted (2026-09-05) — `graph_correct`,
+`graph_correct_public`, `backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
+`graph_reached_inv`, `graphRun_check_eq_sem`, `graphRunOps_check_eq_sem`,
+`graphModeAnswers_eq_sem`, `reachedByW3d2E_toC(_d)`, all the `W4WitnessDirect *_applies`
+instruments. The whole headline cone of the flip is sorry-backed.
+
+The four `sorry`s, each with a sorryAx-free `*_refuted` beside it, so each is a
+**mechanical refusal rather than a doc warning** (`docs/sabotage-procedure.md`):
+
+    CascadeStrataSettle.lean:3317  writeLeg_own_key_dirty        (sorry at :3342)
+    CascadeStrata.lean:919         reachedByW3d2_untOccCount     (sorry at :954)
+    CascadeStrata.lean:1293        reachedByW3d2_srcOccCount     (sorry at :1316)
+    RemoveOccCount.lean:143        reachedByW3d2E_untOccCount    (sorry at :165)
+
+**Discharging any of the four would produce a sorryAx-free proof of `False`.** That is a
+theorem about the tree, not a judgement call, and it is why six workflow rounds discharged
+zero of them.
+
+### 3. The two mechanisms — and Python has NEITHER
+
+**(1) The own-key gap makes the headline false, fail-CLOSED.** The flipped write
+re-addresses onto the minted storage leaf `approver.0`; `affectedKeys`' own-key branch
+(`Cascade.lean:510-511`) tests `isDerived S (d.node.type, d.node.pred)` on that leaf name,
+which is not a declared key, so it is false; the cascade never fires; the public edge is
+never materialised; **the state then reports itself DRAINED** with `GraphModel.check = false`
+where `sem = true`. In-fragment at `W4WitnessDirect.Sd`/`Td` — every hypothesis comes from a
+declaration that already existed for another purpose (`::admission`, `::w4fragment`,
+`graphRunOps_reached`, `drainedB_iff`) — and it reproduces at the four-tuple corpus store
+`Td4`. **A missing grant, not a ghost grant.**
+
+**(2) With `removeLoggedRules` unflipped, the legs are asymmetric and leaf edges LEAK.**
+`Exec.lean::writeThenRemove_leaks_leaf_edge` (store-neutral op pair, edges not neutral;
+`::_leak_accumulates` shows it is unbounded under churn), and
+`::graphRunOps_leak_internal_ghost_grant`: on a state with the store back at `[]` and
+reporting DRAINED, `GraphModel.check` (= `WildcardIndex._check_internal`, **below** the BL-2
+fence) answers TRUE at the leaked leaf name while `checkPublic` and `sem` answer false. So:
+fail-closed at the public entry, **fail-open one layer beneath it**, with the leaf fence the
+single load-bearing barrier.
+
+⚠ **Neither is shipped behaviour, and this must not be reported as a production defect.**
+`connectedstore/apply.py::_apply_row` (`:62-66`) picks `_add_tuple_trusted` /
+`_remove_tuple_trusted` by `row.op` and then routes **ONE** `ruleset.apply(triple)` fan-out
+for both, so Python's remove path is leaf-routed too; and `Cascade.lean:488-492`'s own
+docstring already records Python dirtying `(o_type, fam.owner_relation, o_name)`, while
+`Leaf.lean:465::publicOfLeaf`'s says it is *"exactly the guard `affectedKeys`' own-key
+branch needs"*. **Both fixes are the MODEL catching up with Python, not design changes.**
+The one caveat that does transfer: the model's read-inertia control does not — Python's
+`index_v4/processor.py::_EvalContext.leaf_check` probes the façade with a LEAF PREDICATE
+below the fence and its own comment (`:107-113`) says those readers "legitimately expect
+real grants", so "leaked leaf edges are inert" is a property of this MODEL, not a safety
+property of the system.
+
+**Scope marker, pinned rather than asserted:** `tvDer_not_storeValidD`. The second puncture
+(`rawWriteRels` of a write at a derived relation with no storage leaf is `[]`, so the write
+leg materialises an EMPTY closure) sits **outside** the admitted fragment, so it is a
+statement about the lemma as stated and not a live authorization gap.
+
+### 4. What the flip PUNCTURES rather than breaks (round 6's localisation)
+
+`LeafRules.lean::mem_rewriteClosureL_iff_notLeaf_notDerived` + `::count_edgeOfTuple_closureL_of_notLeaf`
+give the two `untOccCount` sites back sorry-free under one added guard
+(`isLeafPred b.pred = false`): `reachedByW3d2_untOccCount_notLeaf`,
+`reachedByW3d2E_untOccCount_notLeaf`, and `Exec.lean::reachedByW3d2E_untOccCount_notLeaf_of_admission`
+proves both of their bare binders are components of `GraphAdmission` — a proof rather than a
+docstring claim. Non-vacuity at a NON-empty store is `Exec.lean::slV_admission_tlEditor`.
+So R3 is false **at exactly two name classes**, minted leaf names and the public name of a
+directly-written derived relation — actionable, where "R3 is false post-flip" was not.
+⚠ The source-guard site `reachedByW3d2_srcOccCount` is **not** repaired by the same move
+(`reachedByW3d2_srcOccCount_notLeaf_refuted`), and its remaining question — leaf guard PLUS
+a store-validity premise — was deliberately left open rather than closed with a fresh
+un-threaded binder.
+
+⚠ **The repair the tree REFUSED, recorded so it cannot be rediscovered as a shortcut:**
+adding `NotLeafName b.pred` to R3's guard goes green and removes three `sorry`s. It is this
+repo's house failure mode — narrowing an invariant until it stops seeing what it guards — so
+it was refused, written into `CascadeStrata.lean`'s section docstring, and then reused as the
+**sabotage input** for the staleness trap in §5.
+
+### 5. ★ THE GATE'S `sorry` BELT HAD BEEN BLIND — and the fix is in the NON-Lean changeset
+
+`formal/verify.sh:650` (and `:669` `WARNED_ZCLI`, `:673`'s listing grep) matched the
+straight-quote form `declaration uses 'sorry'`. **Lean 4.31 prints BACKTICKS.** The
+in-file comment carries the control literally, at `:644-649`:
+
+    # 2026-09-05: Lean 4.31 prints the warning with BACKTICKS -- "declaration uses `sorry`" --
+    # so the straight-quote pattern this line carried since ZT-P2-4 matched NOTHING: the belt
+    # was dead and only the token scan above stood. Controlled before the edit on a real
+    # staged-sorry build log (/tmp/b10.log, 4 warnings): old pattern 0, dot-wildcard 4.
+
+**Old pattern 0, dot-wildcard 4, on the same 4-warning log.** The token scan at `:653` was
+the only live check, so this is a belt that failed by passing for the whole `ZT-P2-4` era —
+and the pattern is now dot-wildcarded, not backticked, so a future quote-style change cannot
+kill it the same way (§11.13 trap (u), now trap (dd)). ⚠ **It lives in the 13-file NON-Lean
+changeset**: committing the Lean flip without it ships a tree whose gate cannot see its own
+four `sorry`s.
+
+### 6. Co-requisite sizing — RE-MEASURED this session, and the recorded R5 figure is stale
+
+**Counting unit, stated because §11.13 item 2 exists:** matching **LINES**
+(`git grep -c`, summed), over `formal/lean/**/*.lean`, substring match, at the two named
+trees. Not occurrences, not declarations.
+
+| symbol | anchor `68f2c69` | RED snapshot `d6d2dfc` |
+| --- | --- | --- |
+| `affectedKeys` | 50 lines / 11 files | **55 / 12** |
+| `cascadeKeys` (incl. `cascadeKeysAbove`) | 194 / 18 | **206 / 18** |
+| `cascadeKeys` alone / `cascadeKeysAbove` alone | 126 / 14 · 50 / 8 | 136 / 14 · 52 / 8 |
+| `removeLoggedRules` | 270 / 13 | **279 / 13** (`CascadeStrataSettle.lean` alone **143**) |
+| `untOccCount` + `srcOccCount` | 87 / 5 | **211 / 8** |
+
+⚠ **The workflow's recorded R5 figure, "`untOccCount`/`srcOccCount` 126 occurrences / 7
+files", matches neither tree.** It is a round-4 mid-flight measurement; rounds 5 and 6 added
+the refutation and localisation content that took it to 211/8 (`Exec.lean` 45,
+`CascadeStrata.lean` 59, `RemoveOccCount.lean` 33 lines of the total). `affectedKeys 55/12`
+reproduces exactly and `CascadeStrataSettle`'s 143 reproduces exactly; `cascadeKeys 207` and
+`removeLoggedRules 284` are each within a handful and were probably taken a round earlier.
+**Do not re-cite 126/7.** This is §11.13 item 2 recurring: the numbers never disagreed about
+the tree, they disagreed about *which* tree.
+
+**Pin cost of (α) is the part that needs a decision, not the line count.** Eight pinned
+definition rows change MEANING — `affectedKeys`, `cascadeKeys`, `cascadeKeysAbove`,
+`Drained`, `drainedB`, `enumJobs2R1`, `enumJobs2R2`, `runCascade2` — each verified present
+in `formal/headline_definitions.txt` this session. **`Drained` is a HYPOTHESIS of
+`graph_correct`**, so this is a headline-meaning change, not a lemma tweak. The edit itself
+is one branch of one definition (`Cascade.lean:510-511`), no new import — `Cascade.lean`
+already imports `LeafRules` → `Leaf`, so `publicOfLeaf` is in scope.
+
+### 7. The P6 retirement's Python half (prepared, uncommitted, in the same non-Lean changeset)
+
+`formal/conformance/extractor.py`'s P6 branch is deleted — there is no dotted-relation filter
+left in `_edge_projection` — and the ledger keys drop P6. The replacement is a **positive
+pin**, `formal/conformance/test_conformance_state.py:159-247`:
+`_MIN_LEAF_COMPARED = 76` plus `::test_leaf_rows_reach_the_compare_arm`, three assertions in
+firing order (instrument: `dotted > 0`; every dotted row projects to `None` or `"P1"` and
+nothing else; `compared >= 76`). It runs raw `EdgeV4` rows through `_edge_projection`
+directly rather than through `projection_ledger`, because the ledger **no longer has a key
+that would move** if leaf rows started being dropped again — they would simply vanish from
+`compared` into a new bucket. Ledger post-retire, measured 2026-09-05:
+`{'corpora': 25, 'raw': 498, 'P1': 233, 'P2': 0, 'compared': 265}` against a pre-retire
+P6 of 76 / compared 189; conformance collection count **515, unchanged**.
+The state-gate tiles were run on the landed tree AFTER this entry was written (`.md` edits
+stale `lean`, so records go first, then `conf-tile:*`/`tests-tile:*`, then `lean` last);
+their literal `PASSED` lines are in the session-log entry and in the commit message, and
+`_MIN_LEAF_COMPARED = 76` is a floor that a green `conf-tile` has then confirmed
+end-to-end rather than a figure measured once.
+
+**Both known-false prose sites are FIXED on the landed tree** (carried from `68f2c69`'s
+message, re-confirmed in the file this session, and re-checked after the landing):
+`CascadeStable.lean`'s claim that "Python's `check_name` does not forbid a dot inside a TTU
+target either" — it does, `zanzibar_utils_v1.py:931-932` inside the TTU `elif` at `:930` —
+was at `:2392` on the anchor, `:2642` on `d6d2dfc`, and is corrected at `:2664-2670` on the
+landed tree (the correction itself first cited `:930-931`, off by one; fixed first-hand
+against the file); and `LeafRules.lean`'s "NOT PROVED HERE" (§0), `:884` → `:1014` →
+discharged at `:1023-1030` on the landed tree, which names the purity lemma that now exists.
+⚠ Both line numbers moved by ~250 in one commit. Cite `file::symbol` (trap (b)).
+
+### 8. The decision, and what this session owes forward
+
+**User decision 2026-09-05: widen `P3` and land (α)+(R5) now.** The alternative on record —
+revert the write-leg re-point to `68f2c69` and land (α) first — was not taken. The
+adjudicated "change bodies of the LIVE LOGGED WRITE LEG only" scope is therefore **retired
+by evidence**, not by preference: the write-leg-only flip is not a partial cone that can be
+finished later, it is a tree in which a pinned headline is false.
+
+**VERDICT (§9 has the evidence): the co-landing discharged ALL FOUR `sorry`s and cleared
+`sorryAx` from all 40 audited names.** `reachedByW3d2_srcOccCount` did NOT need a leaf
+guard or a store-validity premise — once R5 makes both legs fold the same list, its
+statement is byte-identical to the anchor's and the `write` case closes by `omega`. The
+one theorem that needed a new premise is the non-headline `writeLeg_own_key_dirty`
+(`hroute`, discharged at its sole consumer), and the 49/49 statement pin is the proof that
+nothing headline-reachable gained a binder.
+
+**The RED-tree scaffolding is DELETED, and it went red before it was deleted.** All six
+`*_explicit` bridges, all six `#check … : False` compositions, all `*_refuted*`
+declarations, the `Exec` leak block, and `swTw_own_key_not_dirty` are gone — 47 deletions
+in round 1, 6 in round 2 (the last bridge + `#check` went only after the routing obligation
+landed). Each refutation's `decide` was watched go red on a whole-tree build first (cycle 5:
+the three `Exec` leak decides; cycle 8: the three `graph_correct` divergence decides;
+`swTw_own_key_not_dirty` at (α)). Confirmed by grep on the landed tree: no `#check` command
+anywhere in `formal/lean/ZanzibarProofs`, no declaration matching `_refuted|_explicit|[Ll]eak`,
+and the gate's axiom audit printed 0 `sorryAx` lines — nothing inherited `sorryAx`. The
+mis-aimed-bridge trap in the paragraph above is moot on a tree with no bridges.
+
+**Pin deltas, final:** of the 29 definition discrepancies on `d6d2dfc`, NONE "survives" in
+the sense of being an unexplained row — the landed tree's control run showed 35 (§9.3: 4 no
+longer reachable + 22 newly reachable + 9 changed), every one adjudicated, and the pin was
+regenerated deliberately: `headline_definitions.txt` **232 → 250** rows, check-only
+`250/250`; `headline_statements.txt` **49/49, unchanged**. `formal/audited_theorems.txt`
+untouched.
+
+**`GraphAdmission.keysNonempty`: ACCEPTED AS SCOPE by this session, flagged to the user, not
+yet separately signed off** — §9.4 carries the grounds (Python-enforced by
+`validate_write_identifiers`'s `{1,256}` charset; not derivable from `WF` by
+`LeafRules.lean:734::wf_does_not_give_keysNonempty`). If the user wants it discharged
+instead, the work is a `WF`-strengthening or a proof that the leaf split never produces an
+empty key — either is a follow-up item, not a blocker, because it excludes no schema the
+Python can load.
+
+**The ten-phase gate and the commit:** `lean` steps 1–5 were green on the landed tree
+before any record was written (§9.3; only 4e's `FINAL_REVIEW.md` generated-counts block was
+red, pending its regeneration for the 232 → 250 pin). The tiles and the final `lean` ran
+after the records; the session-log entry in `HANDOFF.md` and the commit message carry the
+ten literal verdict lines. ONE commit on `master`, containing the Lean tree, the P6
+retirement, the `verify.sh` belt fix, both pins, the docs and these records — nothing partial.
+`d6d2dfc` is a side-branch evidence commit and stays one.
+
+**Still owed:** a user decision on `p3-flip-red-2026-09-05` — it is the only non-`.scratch`
+copy of six rounds of refutation work, so it must not be deleted merely because it is red;
+and the T2a proof work that the flip converted from a design decision into an obligation
+(§9.5). The two false-prose fixes in §7 are done.
+
+### 9. ★★ (α)+(R5) LANDED — the flip is COMPLETE, sorry-free, and `graph_correct` is PROVED again (not merely un-refuted)
+
+Second opus workflow (`wf_0d8172eb-378`: design plan → adversarial plan review → landing
+rounds → independent verifier), on the RED tree, Lean files only, no pin regenerated, no
+`verify.sh` run — those two were kept as THIS session's controls (§9.3). Everything below
+was re-measured first-hand before it was written here.
+
+**9.1 What landed.** Both logged legs now fold the SAME leaf-routed list, and the
+own-key branch reads the public relation back through `publicOfLeaf`:
+
+    Cascade.lean:190-191  writeLoggedRules  := (rewriteClosureL S (rawWriteTuples S t)).foldl (… writeLoggedOne …) σ
+    Cascade.lean:340-341  removeLoggedRules := (rewriteClosureL S (rawWriteTuples S t)).foldl (… removeLoggedOne …) σ
+    Cascade.lean:542-546  affectedKeys own-key branch:
+        if d.leaf = true ∧ d.node.name ≠ STAR then
+          match publicOfLeaf S d.node.type d.node.pred with
+          | some R => [(d.node.type, R, d.node.name)] | none => []
+        else []
+
+`untOccCount` is restated over the L closure (`CascadeStrata.lean:687`), and
+`count_removeLoggedRules` now opens with `generalize rewriteClosureL S (rawWriteTuples S t) = us`
+(`:722`) — so `formal/CORRESPONDENCE.md`'s "list-generic … `generalize rewriteClosure S t = us`"
+sentence was false on this tree and is corrected in this commit. Python parity is the
+same fact as §3: `connectedstore/apply.py::_apply_row` (`:62-66`) evaluates ONE
+`ruleset.apply(triple)` outside the ADD/REMOVE choice, and
+`index_v4/processor.py:1416-1422` dirties `(o_type, fam.owner_relation, o_name)` for a
+`LeafFamily` hit — the Lean now computes exactly that key.
+
+* **Round 1** (12 of 14 whole-tree builds): R5 first, then (α). THREE of the four
+  `sorry`s discharged with their statements BYTE-IDENTICAL to the anchor
+  (`reachedByW3d2_untOccCount`, `reachedByW3d2_srcOccCount`, `reachedByW3d2E_untOccCount`):
+  once both legs name the same list the `write` cases close by `omega` and the `remove`
+  cases are unchanged in text. 47 declarations deleted — **each refutation deleted only
+  after its `decide` went red on a whole-tree build** (cycle 5 reddened the three `Exec`
+  leak decides, cycle 8 the three `graph_correct` divergence decides). One `sorry` left:
+  `writeLeg_own_key_dirty` was STILL FALSE after (α), at `tvDer` — a derived def with no
+  `Direct` arm routes to `rawWriteRels = []`, the fold is the identity, nothing is dirtied.
+* **Round 2** (4 builds): the missing piece was a ROUTING OBLIGATION, not a guard.
+  `CascadeStrataSettle.lean:3721::rawWriteRels_ne_nil_of_exprDirectsAll` bridges
+  `Leaf.lean`'s ALLOCATION walk (`persistedLeaves`/`unionSpineLeaves`/`atomLeaves`/
+  `pureLeaves`/`splitPure`) to `ReconcileCorrect.lean::exprDirectsAll`'s ADMISSION walk
+  (one structural induction proving the `persistedLeaves` and `unionSpineLeaves` halves
+  simultaneously). Sited in `CascadeStrataSettle.lean`, not `Leaf.lean` as the plan said —
+  the adversarial plan review caught that `exprDirectsAll` is outside `Leaf.lean`'s import
+  cone, and round 2 re-verified it by probe before moving. `writeLeg_own_key_dirty`
+  (`:3813`) is proved with binders `hNK → hWF` and a new `hroute : rawWriteRels S t ≠ []`,
+  and **`hroute` is DISCHARGED at its sole consumer** (`writeLeg_sem_stable2_d`'s `hneKey`
+  step, from `hSV : StoreValidRulesD S (t :: T)`), not carried — the 49/49 statement pin
+  is the mechanical proof that no headline gained a binder. The deleted refutation's
+  content survives as kernel NECESSITY CONTROLS rather than prose:
+  `::tvDer_rawWriteRels_nil` (`:3921`), `::tvDer_own_key_not_dirty` (`:3943`, drop `hroute`
+  and the theorem is false), `::swF_unmatched_subject_routes_nowhere` (`:3741`), and the
+  positive inversion `::swTw_own_key_dirty` (`:3902`, `by decide` at the very fixture the
+  refutation used). Last `_explicit` bridge and last `#check … : False` deleted;
+  `leakLeafQuery` → `writeExtraLeafQuery` (a name that asserted a defect R5 closed).
+* **Verifier: CONFIRMED, 23/23 MATCHES, 0 envelope breaches.** The one check that could
+  have overturned it: `hroute` is a NEW premise on a formerly-sorried theorem, so it
+  evaluated the premise AT the deleted refutation's own witness —
+  `rawWriteRels LeafWitness.Sw LeafWitness.tw = ["approver.0"]`, `hroute` HOLDS there, and
+  the conclusion is TRUE. **The refutation died to (α), not to the guard.** Also by
+  `#eval`: `graphRunOps Sd [add t]` materialises the PUBLIC edge `doc:d1#approver` and
+  `(check, checkPublic, sem) = (true, true, true)`; `[add t; remove t]` on `Sd` ends with
+  `σ.edges = []` and `T = []` — the leaf edge is retracted, nothing leaks.
+
+**9.2 Re-measured by this session (2026-09-05), not inherited.** `lake build` `rc=0`,
+`Build completed successfully (1089 jobs)`; backtick-safe grep
+`declaration uses .sorry.` = **0**; tactic-position `sorry`/`admit` grep over
+`formal/lean/ZanzibarProofs` = **0** (three docstring hits that quote past sabotage
+instruments); no declaration named `*_refuted` / `*_explicit` / `*[Ll]eak*` /
+`swTw_own_key_not_dirty`, no `#check` command anywhere in the tree; `git diff --numstat`
+byte-identical with and without `--ignore-cr-at-eol` over all 19 changed `.lean` files
+(trap (y)); 0 untracked files; `writeRules` / `rewriteClosure` /
+`RulesCorrect.lean::reachedByRules_edge_sound` byte-unchanged vs `68f2c69`;
+`RulesComplete.lean` still +18/−0. The gate's own axiom audit (§9.3) printed **0**
+`sorryAx` lines over `Audit.lean`'s 585 `#print axioms` — on `d6d2dfc` there were 40.
+Anchor `68f2c69` → this tree: **32 files, +3928/−922** (19 `.lean` + 13 non-Lean).
+
+**9.3 The control, run BEFORE regenerating anything.** `bash formal/verify.sh lean` on the
+landed tree with the OLD pins: `rc=1`, steps 1–4 green (library, soundness-hole inventory,
+zcli, axiom audit), and the ONLY red is step 5's definition pin — **35 rows**: 4 pinned
+definitions no longer reachable from any headline (`rewriteClosure`, `rewriteClosureAux`,
+`rewriteClosureRaw`, `rewriteStep`), 22 newly reachable (the `LeafRules`/`Leaf` cone:
+`rewriteClosureL`/`RawL`/`AuxL`, `rewriteStepL`, `schemaRewritesL`, `leafRewrites`,
+`keyLeafRewrites`, `persistedLeaves`, `unionSpineLeaves`, `atomLeaves`, `pureLeaves`,
+`splitPure`, `isPure`, `isTaintedUserset`, `derivedAnywhere`, `ttuTargets`, `unionAll`,
+`PLeaf`, `NoLeafSubjects`, `rawWriteRels`, `rawWriteTuples`, plus the `LeafRules.lean`
+ambient row), and 9 whose DEFINITION changed (`GraphAdmission` — ADDED fields exactly
+`noLeafSubjects, keysNonempty` —, `GraphState.writeLoggedRules`,
+`GraphState.removeLoggedRules`, `ReachedByW3d2`/`C`/`E`, `affectedKeys`, `graphRunAux`,
+`graphRunOpsAux`). Statement pin **49/49**. The belt from §5 now reads
+`build-log 'declaration uses sorry' warnings (library + zcli): 0` — a live 0, not a dead
+one. **Adjudication of the four "no longer reachable" rows: EXPECTED.** Their definitions
+are byte-unchanged (`RulesWrite.lean` has an empty diff) and they remain the closure of
+the UNLOGGED `writeRules`; the headline cone simply stopped naming the plain closure
+because both logged legs fold `rewriteClosureL`. Then, deliberately:
+`statement_pin.py --generate` → `headline_definitions.txt` **232 → 250** rows, check-only
+`250/250` + `49/49`; `Audit.lean` and `formal/audited_theorems.txt` untouched, so no
+`regen_audit_pin.sh`. `verify.sh lean` re-run green on the regenerated pins.
+
+⚠ **What the definition pin did and did not see, recorded because §6 predicted "8 pinned
+rows change meaning".** Exactly ONE of those eight moved in the pin — `affectedKeys`,
+whose BODY changed. `cascadeKeys`, `cascadeKeysAbove`, `Drained`, `drainedB`,
+`enumJobs2R1`/`R2` and `runCascade2` all changed MEANING (through `affectedKeys`) with
+their pinned text byte-identical, and `Drained` is a hypothesis of `graph_correct`. The
+pin catches a meaning change only at the definition whose text moves; a reader of the pin
+diff sees `affectedKeys` and must know to follow its consumers. That is by design (the
+pin's own FAIL text says so) — it is recorded here so the next meaning change is not
+under-counted the same way.
+
+**9.4 Two admission fields, one sanctioned — the call.** `GraphAdmission.keysNonempty` is
+kept as SCOPE, on the strength of its Python enforcement (`zanzibar_utils_v1.py`'s
+`_IDENTIFIER_RE` `{1,256}` repeat, `:31`, applied by `validate_write_identifiers` `:133` —
+an empty relation name cannot be written) and of the kernel fact that it is not derivable
+from `WF` (`LeafRules.lean:734::wf_does_not_give_keysNonempty`). It narrows nine
+byte-identical pinned statements to schemas whose declared relation names are non-empty,
+which is every schema the Python can load. The user has not separately signed this off;
+it is flagged in the session hand-off as the one item that is a scope call rather than a
+proof.
+
+**9.5 Residuals, all recorded rather than absorbed.**
+* `CascadeStable.lean:2669` cited the two TTU `check_name` calls as `:930-931`; they are
+  `:931-932` (`:930` is the `elif`). Fixed here, first-hand against the file.
+* The workflow's docstring sweep did not reach five "P6 leaf-family modelling limit"
+  sentences (`Audit.lean:1691`, `FullScope.lean:61/:287/:571/:1005`) — the T2a carry's
+  justification. Post-flip the model routes a Direct-arm write onto the leaf family
+  exactly as Python does, so probe D.3's mechanism (2026-07-28) no longer exists; but
+  `graph_reached_inv` still takes `W4NarrowT2a` (`FullScope.lean:330`) and
+  `outside_narrow_t2a` (`:1728`) still holds, so **T2a did not widen — it is now proof work
+  owed (`P5`), not a design decision.** Rewritten in this commit (Lean docstrings,
+  `FINAL_REVIEW.md`, `ARCHITECTURE.md`, `formal/HANDOFF.md`).
+  **Measured, not asserted — the D.3 / 2026-08-08 probe re-run on the model's OWN write
+  leg**, at D.3's wildcard-carrying schema (`LeafWitness.Sw`/`tw`), key domain
+  routing-INDEPENDENT (schema relations × `{bare,.0,.1,.2}` × store objects = 144 pairs,
+  never `σ.nodes` — the 2026-08-08 vacuity trap), run by an opus agent and then RE-RUN
+  first-hand by this session with identical output (`rc=0`, both prefix orders):
+
+      ("PROBE",
+       some ("(A subject-leafrouted, B bare-preflip, C drained, D bridge-sabotage)",
+        { edges := 5, rows := 1, negTested := 2, negFree := true,  uposTested := 0, uposFree := true },
+        { edges := 5, rows := 1, negTested := 2, negFree := false, uposTested := 0, uposFree := true },
+        { edges := 5, rows := 1, negTested := 4, negFree := true,  uposTested := 0, uposFree := true },
+        { edges := 6, rows := 1, negTested := 2, negFree := false, uposTested := 0, uposFree := true }))
+
+  (A) `writeLoggedRules` lands the edge on `doc:d1#approver.0` (`rawWriteRels S tW =
+  ["approver.0"]`), the bare node has no incoming edge, `negFree := true` at
+  `negTested := 2`, `rows := 1`; (B) the pre-flip bare edge on the SAME drained state with
+  the SAME residue rows (`A vs B: rows identical? = true`) reproduces D.3's kill; (C) drained
+  green; (D) a hypothetical `approver.0 → approver` bridge turns (A) red, so the instrument
+  is reachability-sensitive. `negTested` counts `neg` entries with multiplicity (`neg :=
+  [bob, bob]`), hence 2/2/4 vs 2026-08-08's 1/1/3. Fuel-capped `GraphState.reach`, one
+  schema shape, write leg only — a measurement, not a proof. **Source kept TRACKED** at
+  `formal/probes/d3_negedgefree_postflip_2026-09-05.lean` (outside the lake package;
+  run with `lake env lean` from `formal/lean`), because the 2026-08-08 original lived in
+  a scratch module since deleted and had to be rebuilt from prose today.
+* `formal/lean/ZanzibarProofs/GraphIndex/Scratch4cii.lean` is a TRACKED file inside the
+  gated proof tree (committed at `a55a433`, sorry-free, source of the build's linter
+  warnings). Pre-existing, untouched here; filed as a board item.
+* Every whole-tree build here — the workflow's, mine, and the gate's — was INCREMENTAL
+  (lake's content-hash cache). Nothing did `lake clean`. Three independent `lake env lean`
+  elaborations against those oleans (the 584-name census, the `Sd`/`Td` trace, the `Sw`/`tw`
+  guard probe) resolved every post-flip name, so the artifacts correspond to the sources;
+  a clean rebuild remains the belt nobody has pulled.
+* Exec.lean keeps two HISTORY docstrings that still say "staleness trap" (`:949`, `:1230`)
+  describing apparatus that is gone, and three docstrings quote a `zz*_sorry_instrument_*`
+  sabotage literally (`CascadeStable.lean:2826`, `LeafRules.lean:1198`, `:1437`) — evidence
+  text, not live instruments. Left as written.
+
+### 10. ★ THE FLIP DOUBLED AN ALREADY-EXPONENTIAL DERIVED-ARM STACKING — ten conformance tests timed out, and the fix is TWO PYTHON MIRRORS, not a speed hack
+
+Found by the gate, same session, after §9 was written: the first pytest tiles on the landed
+tree went RED on **timeouts, not answers** — `conf-tile:2/5` `3 failed, 100 passed in
+527.48s` (`test_conformance_graph.py::test_leangraph_vs_pythongraph[cross_stratum_resettle]`,
+`::test_leangraph_vs_spec[cross_stratum_resettle]`,
+`test_conformance_state.py::test_state_leangraph_vs_pythongraph[cross_stratum_resettle]`),
+then `conf-tile:1/5` with 21 `timed out after 120s` lines across `nary_intersection`
+(graph/spec/state) and `test_conformance_remove_graph.py::…[boolean_exclusion |
+demorgans | nary_union_derived4 | two_stratum_cascade]` — ten tests, all against
+`runner.py::_ZCLI_TIMEOUT_S = 120`. Every answer zcli did return was correct; it just stopped
+returning them.
+
+**10.1 The measurement — the base was ALREADY exponential, and the flip doubled it.** The
+zcli on the pre-flip commit (`51642dc`, built in a control worktree) and the landed one were
+driven over tuple prefixes of the same corpus request (`two_stratum_cascade`,
+`user:alice → doc:d1#approver` edge multiplicity in the model's state after `n` adds):
+
+    n                     1     2     3     4      5      wall @ n=5
+    control (51642dc)     2    13    46   204   1013      16.4 s
+    post-flip, no dedup   4    26    92   408   2026     176.8 s   (alice→viewer 800, bob→viewer 50)
+    post both dedups      1     2     3     4      5       0.1 s
+
+`cross_stratum_resettle` (same schema shape) pre-fix, post-flip: n=1 `alice→a 12`, n=2
+`alice→a 160, alice→v 48, dave→a 12`, n=3 `alice→a 900`, n=4 TIMEOUT; control n=1..4
+`2 / 13 / 46 / dave→v 7`, all ≤ 0.2 s. So the previously-recorded goldens (`1013`, `364`,
+`85`, …) were the model **one corpus tuple away from the harness timeout before P3
+touched it**; the flip adds a constant factor of exactly 2 at every `n` (measured; the
+mechanism was not isolated because the fix below removes the base), and 2× on an exponential
+is what crossed the line.
+
+**10.2 Two mechanisms, both Python-mirrored, neither modeled.** Two places where the model
+kept a LIST that Python keeps as a SET, each compounding through
+`CORRESPONDENCE.md` §7.2 item 6's no-presence-diff `reconcileKeyDR` fold:
+
+* **Dirty keys.** `CascadeStrata.lean::cascadeKeysAbove` was a bare
+  `(σ.frontierRowsAbove n).flatMap (affectedKeys S σ)`; a key dirtied by `k` frontier rows
+  was reconciled `k` times per round, each reconcile stacking one edge per candidate
+  occurrence. Python: `processor.py::_map_deltas_to_keys` accumulates `keys: dict` (`:1362`)
+  and short-circuits repeats through `processed_objects: set` (`:1407`, `:1443-1445`) — a
+  key is reconciled ONCE per round. Now `(…).eraseDups` (`CascadeStrata.lean:379-381`).
+* **Candidates.** `CascadeStrataEnum.lean::enumJob2` / `::enumJob2D` built `cands` as
+  `filter ++ (freshDirectCands) ++ edgeHolders` with repeats across the pieces AND inside
+  `edgeHolders` (one entry per held edge, so an edge of multiplicity `m` contributed `m`
+  candidates → `m` fresh edges: the doubling). Python: `_reconcile` collects
+  `candidates: dict[int, NodeV4]` (`:916`) — one entry per node. Now
+  `(…).eraseDups` at the whole list (`:244-247`, `:809-813`); `freshDirectCands`'s
+  presence-diff filter (item 5b) is SUBSUMED at the set level and kept only because
+  `mem_enumJob2D_cands` / `w3dJobCoverage_enumJob2D` are stated against it (its docstring
+  now carries a dated note; its "filter DEFEATED" control would no longer move the ledger,
+  not re-measured).
+
+Both are core `List.eraseDups` (first occurrence kept), NOT Mathlib's `List.dedup`;
+`SubjectRef` derives `DecidableEq` (`Core/Refs.lean:22-26`), which gives the `LawfulBEq`
+the lemma `List.mem_eraseDups` needs. Answer-inert by construction (membership is
+unchanged: `mem_cascadeKeys_iff_above`, `List.mem_eraseDups`); every `decide` pin in
+`Exec.lean` still builds; the tree stays sorry-free. **Item 6 itself is STILL OPEN** — a
+key reconciled in two different rounds still stacks — but its residual is now `+1` per
+reconcile of the key instead of doubling per leg, which is why the post-fix column is
+`1, 2, 3, 4, 5`.
+
+**10.3 Proof repair, measured.** `cascadeKeys_eq_above` (a `rfl`, ZERO consumers) is
+replaced by `mem_cascadeKeys_iff_above (S σ k) : k ∈ cascadeKeys S σ ↔ k ∈ cascadeKeysAbove
+S σ σ.watermark` (`CascadeStrata.lean:386`); the W3d-1 `cascadeKeys` (`Cascade.lean:561`)
+stays a bare `flatMap` because it is consumed only as a set. Sites repaired: 8 in
+`CascadeStrataResettle.lean` (`hcover1 _ ((mem_cascadeKeys_iff_above _ _ _).mp hdirty)` —
+these were the 8 "Application type mismatch" errors of the first build, defeq lost),
+`CascadeStrataAssemble.lean` `mem_cascadeKeysAbove_props` + four `w3cJobValid_enumJob2(D)`
+`simp only [… List.mem_eraseDups, List.mem_append]` sites, `CascadeStrataSettle.lean`
+`round2_key_reads_derived` / `round1_emission_dirties`, `CascadeStrata.lean`
+`runCascade2_no_abort`, `CascadeStrataInv.lean::enumJob2_negCands_subset`, and the
+`show … .eraseDups; rw [List.mem_eraseDups]` clause sites in `CascadeStrataEnum.lean`
+(the 3 type mismatches of the second build). Two whole-tree builds, both
+`Build completed successfully (1089 jobs)`, zcli `2152 jobs`, `sorry` belt 0.
+
+**10.4 The golden, the floor, the pin — each with its control (`docs/sabotage-procedure.md`).**
+* `formal/conformance/derived_arm_multiplicity.json` — **all 19 rows moved**, every one
+  DOWN, Python column unchanged:
+
+      boolean_exclusion 13→3 · boolean_intersection 8→2 · cross_stratum_resettle 7→2 ·
+      demorgans lhs/rhs 85→4 · direct_arm_exclusion 16→4 · double_exclusion alice 364→6,
+      carol 4→1 · nary_intersection 363→5 · nary_union_derived4 ua 364→6, ub 121→5,
+      uc 40→4, us/any_of4 72→3, us/safe 32→3 · nested_boolean 80→4 ·
+      reconvergent_derived 52→3 · two_stratum_cascade approver 1013→5, viewer 400→4,
+      bob/viewer 25→3
+
+  Control run FIRST (un-updated golden against the fixed zcli), literal:
+  `AssertionError: ANTI-VACUITY: the derived-arm ledger observed 19 row(s) (18 with lean
+  multiplicity > 1); floors are 19/19. An empty ledger matches an empty golden and pins
+  nothing.` — i.e. the anti-vacuity floor fired BEFORE the row comparison could, on the one
+  row (`double_exclusion carol`) whose multiplicity is now 1. Regenerated with
+  `ZANZIBAR_UPDATE_SNAPSHOTS=1`, then `_MIN_LEDGER_STACKED` **19 → 18** with that literal
+  as its provenance in `test_conformance_state.py`'s floor block (`_MIN_LEDGER_ROWS` stays
+  19); module re-run `56 passed in 26.20s`. The golden's docstring says a regen belongs "in
+  its own commit"; that cannot be met green here because the Lean change and the golden
+  are coupled through the ledger — recorded in the commit message instead.
+* Definition pin, control first: `FAIL: the DEFINITION of def:Zanzibar.cascadeKeysAbove
+  changed` and `… def:Zanzibar.enumJob2D changed` — **2 discrepancies, exactly the two
+  edited definitions** (`enumJob2`'s `cands` is not a pinned definition); statements
+  `49/49`. Regenerated → `250/250` (count unchanged, so §9.3's "232 → 250" stands).
+* `doc_counts --check` green, `515 conf / 1036 tests / 585 audits / 569 anchors`.
+
+**10.5 Three observations carried, not acted on.**
+1. `GraphState.reach`'s fuel is `σ.nodes.length + 1` (`State.lean:160-161`) over the
+   duplicate-laden node list — answer-inert (`reachB` is monotone in fuel and a real path is
+   DAG-bounded) but it is why the artifact's cost scaled ~cubically, and it is a quantity
+   Python has no counterpart for.
+2. A new refusal surface: `Exec.lean:82::graphRunAux` now gates on
+   `foldAdmitsB σ (rewriteClosureL S (rawWriteTuples S t))`, a strictly longer list, so
+   strictly more writes can return `none` (CLI error). Not exercised by the corpus; a live
+   behaviour change of the flip independent of multiplicity.
+3. `Cascade.lean:559-566`'s docstring said "coalescing/dedup is irrelevant — reconciles are
+   idempotent". True of the ANSWER, false of the STATE — the sentence that let two list-vs-set
+   gaps ship unmodeled. Rewritten to say so.
+
+Kept scripts (gitignored/Temp, not evidence): `zprefix.py` (per-prefix state census, the
+instrument behind 10.1), `zbisect.py`, `zstate.py`, `.scratch/ledger_diff.py`.
+
+---
+
 ## Session 2026-09-05 (**the write-path cone has a GREEN ADDITIVE PREFIX after all — obligations (A)/(B)/(C) landed on the unflipped tree, (H) was never open, and (A)'s premise looks DISCHARGEABLE rather than new**)
 
 **Task taken:** `P3`, unassigned session, resumed from `2026-09-03c` §4 — the eight

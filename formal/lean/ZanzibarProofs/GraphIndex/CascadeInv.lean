@@ -146,7 +146,7 @@ theorem structInv_writeLoggedRules {S : Schema} {σ : GraphState} (h : StructInv
       intro σ h
       rw [List.foldl_cons]
       exact ih (structInv_writeLoggedOne h u)
-  exact hgen (rewriteClosure S t) h
+  exact hgen (rewriteClosureL S (rawWriteTuples S t)) h
 
 /-- A single logged routed-edge retraction preserves `StructInv` (present branch =
     `removeEdgeOne` then `pushDelta`; absent branch = identity). Retract mirror of
@@ -174,7 +174,7 @@ theorem structInv_removeLoggedRules {S : Schema} {σ : GraphState} (h : StructIn
       intro σ h
       rw [List.foldl_cons]
       exact ih (structInv_removeLoggedOne h u)
-  exact hgen (rewriteClosure S t) h
+  exact hgen (rewriteClosureL S (rawWriteTuples S t)) h
 
 /-- One W3d logged reconcile job (diffing pass then the coalesced processor emission)
     preserves `StructInv`. -/
@@ -455,6 +455,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     WF S → TtuTuplesetsDirect S → NodupKeys S → RewriteRanked S →
     RewriteMatchDeclared S → Stratifiable S →
     TtuTargetsSat S NotLeafName → DirectRestrictionsNotLeaf S →
+    LeafScope S →
     ComputedRefsNotLeaf S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -465,10 +466,10 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     EdgeHygienic σ := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ k r res hrow
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ k r res hrow
     simp [emptyState] at hrow
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hcr hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSV hBS hTS hterm
       k r res hrow
     -- weaken the store-indexed hypotheses back to `T` for the IH
     have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
@@ -481,7 +482,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     have hW3dpost : ReachedByW3d (σp.writeLoggedRules S t) S (t :: T) :=
       ReachedByW3d.write t hadm (reachedByW3dC_toW3d hprev)
     have hEHp : EdgeHygienic σp :=
-      ih hWF hTT hNK hR hMatch hStrat hQ hDR hcr hCO hLU hWSbare hSVw hBSw hTSw htermw
+      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSVw hBSw hTSw htermw
     -- the row is the pre-write row, at a declared derived key
     rw [writeLoggedRules_residue] at hrow
     obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
@@ -491,14 +492,14 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     constructor
     · intro n hn hre
       have hedge := reachedByW3d_reach_collapse_root hWF hSV hlk hder hco hW3dpost hre
-      rw [writeLeg_derived_inedges_eq hSV hlk hder hco (subjNode n)] at hedge
+      rw [writeLeg_derived_inedges_eq hWF hSV hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).1 n hn (NReaches.edge hedge)
     · intro n hn hre
       have hedge := reachedByW3d_reach_collapse_root hWF hSV hlk hder hco hW3dpost hre
-      rw [writeLeg_derived_inedges_eq hSV hlk hder hco (subjNode n)] at hedge
+      rw [writeLeg_derived_inedges_eq hWF hSV hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).2 n hn (NReaches.edge hedge)
   | @cascade σp S T jobs hjv hcover hscope hcovg hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hcr hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSV hBS hTS hterm
       k r res hrow
     have hW3dpost : ReachedByW3d (runCascade S T σp jobs) S T :=
       ReachedByW3d.cascade jobs hjv hcover hscope (reachedByW3dC_toW3d hprev)
@@ -511,7 +512,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     · -- targeted key: SettledKey verdicts vs the bare-sourced single edge
       obtain ⟨⟨hrowS, hedgeS⟩, _⟩ :=
         settledComplete_cascade_targeted hWF hTT hNK hR hSV hBS hTS hMatch
-          hStrat hQ hDR hcr hterm hCO hLU hWSbare (reachedByW3dC_toW3d hprev) hjv hcovg hlk hder
+          hStrat hQ hDR hLS hcr hterm hCO hLU hWSbare (reachedByW3dC_toW3d hprev) hjv hcovg hlk hder
           hon htgt
       obtain ⟨_, h2, h3⟩ := hrowS res hrow
       constructor
@@ -519,7 +520,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
         have hedge :=
           reachedByW3d_reach_collapse_root hWF hSV hlk hder hco hW3dpost hre
         have hpred : n.predicate = BARE := by
-          have := reachedByW3d_Rnode_source_bare hW3dpost hlk hder hco hSV
+          have := reachedByW3d_Rnode_source_bare hW3dpost hWF hlk hder hco hSV
             (subjNode n) hedge
           rwa [subjNode_pred] at this
         have hsemT := hedgeS n hpred (h2 n hn).1 hedge
@@ -529,14 +530,14 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
         have hedge :=
           reachedByW3d_reach_collapse_root hWF hSV hlk hder hco hW3dpost hre
         have hpred : n.predicate = BARE := by
-          have := reachedByW3d_Rnode_source_bare hW3dpost hlk hder hco hSV
+          have := reachedByW3d_Rnode_source_bare hW3dpost hWF hlk hder hco hSV
             (subjNode n) hedge
           rwa [subjNode_pred] at this
         exact absurd hpred (h3 n hn).1
     · -- untargeted key: row and in-edges verbatim from the pre-leg state
       have hnot : ∀ j ∈ jobs, ¬ j.keyMatch dt on R := fun j hj hkm => htgt ⟨j, hj, hkm⟩
       have hEHp : EdgeHygienic σp :=
-        ih hWF hTT hNK hR hMatch hStrat hQ hDR hcr hCO hLU hWSbare hSV hBS hTS hterm
+        ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSV hBS hTS hterm
       rcases runCascade_cases S T σp jobs with hrc | hrc
       · have hev := reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs
         have hupd_res : ({ reconcileJobsL S T σp jobs with
@@ -584,6 +585,7 @@ theorem reachedByW3dC_inv {σ : GraphState} {S : Schema} {T : Store}
     (hWF : WF S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S) (hR : RewriteRanked S)
     (hMatch : RewriteMatchDeclared S) (hStrat : Stratifiable S)
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
+    (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
@@ -596,7 +598,7 @@ theorem reachedByW3dC_inv {σ : GraphState} {S : Schema} {T : Store}
     Inv S σ := by
   have hst := reachedByW3dC_structInv h
   have hhy := reachedByW3d_residueHygienic (reachedByW3dC_toW3d h)
-  have heh := reachedByW3dC_edgeHygienic h hWF hTT hNK hR hMatch hStrat hQ hDR hcr hCO hLU
+  have heh := reachedByW3dC_edgeHygienic h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU
     hWSbare hSV hBS hTS hterm
   exact
     { schemaEq := hst.schemaEq

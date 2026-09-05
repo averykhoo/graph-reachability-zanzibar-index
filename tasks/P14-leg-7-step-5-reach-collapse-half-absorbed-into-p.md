@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 7cbc1a1dc6fb
 created: 2026-08-20b
-moved: 2026-08-20b
-updated: 2026-08-20b
+moved: 2026-09-05b
+updated: 2026-09-05b
 closed:
 ---
 
@@ -32,3 +32,7 @@ None recorded. This row sits below `NEXT`, so it never had an item block; traps 
 ### 2026-08-21
 
 Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`created` is an approximation**: the board never recorded one, so it is set to this row’s `moved` value (`2026-08-20b`), which is an upper bound on the real creation date, not a measurement. Body is the board cell: summary line plus the row’s pointer.
+
+### 2026-09-05b
+
+2026-09-05b: P3 (which absorbed this item's classification half) LANDED; the reach-collapse half is untouched. Re-size against the landed tree before starting.
