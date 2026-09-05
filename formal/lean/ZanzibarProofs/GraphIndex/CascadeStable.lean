@@ -2350,4 +2350,228 @@ theorem removeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} 
   exact mem_foldl_removeLoggedOne_edges_iff_of_notarget (rewriteClosure S t)
     (fun w hw => rewriteClosure_notarget_derived hSV ht hlk hder hco w hw) σ
 
+/-! ## Obligation (D) of the write-path cone — SCOUTED 2026-09-05: it is ONE PREMISE SHORT
+
+`reachedByW3d_shadow`'s `@write` arm (`:1633-1646`) builds
+
+```text
+hsubjW : ∀ u ∈ rewriteClosure S t,
+           ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject))
+```
+
+and feeds it to `untaintedShadow_foldAdmits` / `untaintedShadow_writeLeg`, both of which
+are already LIST-GENERIC in their first argument. So the re-point owes exactly one thing
+here: the SAME disjunction over `rewriteClosureL S (rawWriteTuples S t)`.
+
+**The two halves are not in the same state, and the docstrings elsewhere in this tree do
+not distinguish them.**
+
+* The `DerNode` half is **DISCHARGED**. `LeafRules.lean::rewriteClosureL_subject_pred_ne`
+  wants `TtuTargetsSatL S (· ≠ R)`, which looks like a new premise — but
+  `LeafRules.lean::rewriteClosureL_subject_pred_ne_of_noTtuTarget` manufactures it from
+  `NoTtuTarget S R` plus `isDerived S (dt, R) = true`, and the site's `hterm dt R hder`
+  supplies **both**. `writeLegSubjectsWide_L` below threads it; nothing new is assumed.
+* The `LeafNode` half is **NOT**. `LeafRules.lean:680::rewriteClosureL_subject_not_leafNode`
+  wants `LeafRules.lean::NoLeafSubjects S`, i.e. `TtuTargetsSatL S NotLeafName` —
+  quantified over `schemaRewritesL S = schemaRewrites S ++ leafRewrites S`. The site holds
+  only `hQ : TtuTargetsSat S NotLeafName`, quantified over `schemaRewrites S` **alone**
+  (`GraphAdmission.ttuNotLeaf`, `FullScope.lean:157`). The bridge that exists,
+  `ttuTargetsSat_notLeafName_of_noLeafSubjects` (`:859`), runs the OTHER way — superset to
+  subset — and its converse is FALSE.
+
+⚠ **The gap is not closable the way obligation (A)'s was.** (A)'s leaf-layer arm is killed
+by `LeafRules.lean::derivedAnywhere_eq_false_of_mem_leafRewrites`: a leaf rule's TTU target
+is `derivedAnywhere`-false while `R` is `derivedAnywhere`-true, so `tr ≠ R` is free. That
+instrument says nothing about a target's NAME SHAPE. Nor does anything else in scope:
+`WF.relNames` (`Core/Schema.lean:71`) constrains DECLARED def keys, while a TTU target is a
+referenced string inside an `Expr`; and `RewriteMatchDeclared` (`RestrictBase.lean:289`)
+constrains `matchRel` over `schemaRewrites` only.
+
+**Where the premise would have to come from.** Either a new `GraphAdmission` field (OUT OF
+SCOPE for this session by instruction — and it would be a real Python-side scope claim,
+since Python's `check_name` does not forbid a dot inside a TTU target either), or the same
+threading `hQ`/`hDR` got at 4c-ii step 9: append `NoLeafSubjects S` right of the colon on
+`reachedByW3d_shadow` and its two `CascadeStrataSettle.lean` twins
+(`::reachedByW3d2_shadow` `:738`, `::reachedByW3d2_shadow_d` `:1348`). It is schema-level,
+so it costs **no** weakening line at the recursive call (scope doc §11.13 (p)), and the
+ultimate discharge is **free at every concrete admission instance in the tree**: all four
+`GraphAdmission` witnesses already prove `ttuNotLeaf` as
+`ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)` (`FullScope.lean:660`, `:820`,
+`:1582`, `:1720`) — i.e. `by decide : NoLeafSubjects S` is ALREADY being elaborated there
+and then thrown away. Threading it changes those four lines to hand over the stronger fact
+they already have.
+
+## ★ CONTROLLED — one sabotage, run 2026-09-05 (`docs/sabotage-procedure.md`)
+
+The claim under attack is the one this whole section exists to assert: **`hnl` is not
+redundant** — i.e. (D) is genuinely NOT discharged by what the site holds. The narrowest
+plausible weakening is therefore to write the theorem the way an optimistic reading would:
+swap `writeLegSubjectsWide_L`'s `hnl : NoLeafSubjects S` for the site's own
+`hQ : TtuTargetsSat S NotLeafName` (its binder is left named `hnl` so the message names the
+argument) and let it flow into the `LeafNode` half. `rc=1`,
+`lake build ZanzibarProofs.GraphIndex.CascadeStable`, TWO errors — the second is the
+NON-VACUITY WITNESS below refusing to accept the weaker premise, which is the half that
+would otherwise have gone unnoticed:
+
+```text
+error: ZanzibarProofs/GraphIndex/CascadeStable.lean:2506:47: Application type mismatch: The argument
+  hnl
+has type
+  TtuTargetsSat S NotLeafName
+but is expected to have type
+  NoLeafSubjects ?m.109
+in the application
+  @rewriteClosureL_subject_not_leafNode ?m.109 hnl
+error: ZanzibarProofs/GraphIndex/CascadeStable.lean:2556:4: Application type mismatch: The argument
+  LeafRuleWitness.noLeafSubjects_snlBoth
+has type
+  NoLeafSubjects LeafRuleWitness.SnlBoth
+but is expected to have type
+  TtuTargetsSat ?m.1 NotLeafName
+in the application
+  writeLegSubjectsWide_L LeafRuleWitness.noLeafSubjects_snlBoth
+```
+
+Restored from a byte-exact `cp` backup (never `git checkout --`, trap (aa)); whole tree
+`rc=0`, `Build completed successfully (1089 jobs)`, zero `sorry`.
+
+⚠ The error count is a LOWER bound: `CascadeStable` is upstream of the whole cascade chain,
+and Lean does not build the dependents of a failed module (traps (k)/(v)). -/
+
+/-- `SnlBadLeaf`'s UNTAINTED layer is CLEAN — `LeafRules.lean::snlBadLeaf_untainted_layer_clean`
+    pins it to the single rule `⟨"doc", "parent", "editor", .ttu "viewer"⟩` — so
+    `GraphAdmission.ttuNotLeaf`, which quantifies over `schemaRewrites` alone, HOLDS at this
+    schema. Proved through the pinned layer rather than by `decide`, because `TtuTargetsSat`
+    carries an unbounded `∀ tr` and so has no `Decidable` instance. -/
+theorem ttuTargetsSat_notLeafName_snlBadLeaf :
+    TtuTargetsSat LeafRuleWitness.SnlBadLeaf NotLeafName := by
+  intro r hr tr hk
+  rw [LeafRuleWitness.snlBadLeaf_untainted_layer_clean, List.mem_singleton] at hr
+  subst hr
+  have htr : tr = "viewer" := by simpa using hk.symm
+  subst htr
+  decide
+
+/-- **THE GAP, MECHANIZED — the finding of this section, as a kernel fact rather than prose.**
+
+    `SnlBadLeaf` satisfies **every** name-shape field `GraphAdmission` carries
+    (`ttuNotLeaf`, `directRestrNotLeaf`, `computedRefsNotLeaf`) and still fails
+    `NoLeafSubjects`, because its DERIVED key's TTU arm targets `"viewer.0"` and that arm
+    compiles into `leafRewrites` — the half of `schemaRewritesL` no admission field ranges
+    over. So no combination of the site's in-scope schema premises can produce the premise
+    `rewriteClosureL_subject_not_leafNode` needs; the converse of `:859`'s bridge is refuted,
+    not merely unproved.
+
+    The witness is REUSED, not minted: `LeafRuleWitness.SnlBadLeaf` and its refutation
+    already exist and are controlled by the S12/S13 layer sabotages recorded at
+    `LeafRules.lean:1809`. -/
+theorem admissionNameShape_does_not_give_noLeafSubjects :
+    TtuTargetsSat LeafRuleWitness.SnlBadLeaf NotLeafName
+      ∧ DirectRestrictionsNotLeaf LeafRuleWitness.SnlBadLeaf
+      ∧ ComputedRefsNotLeaf LeafRuleWitness.SnlBadLeaf
+      ∧ ¬ NoLeafSubjects LeafRuleWitness.SnlBadLeaf :=
+  ⟨ttuTargetsSat_notLeafName_snlBadLeaf, by decide, by decide,
+    LeafRuleWitness.noLeafSubjects_false_leafLayer⟩
+
+/-- **The packaged `hsubjW` the flip will need**, at the EXPLICIT disjunction rather than
+    through the `UntaintedShadow` abbreviation (scope doc §11.13 trap (w)), and with the
+    site's own `hterm` binder verbatim so the flip is a substitution rather than a re-proof.
+
+    Post-flip `reachedByW3d_shadow`'s `@write` arm can write
+
+    ```text
+    have hsubjW := writeLegSubjectsWide_L hnl hterm
+      (noLeafStoreSubjects_of_storeValidRules hDR hSV).head
+    ```
+
+    ⚠ **`hnl` is the one thing that is NOT in scope there** — see the section docstring.
+    Every other premise is: `hterm` is the induction's own hypothesis, and the seed fact is
+    `hDR` + `hSV` at `List.mem_cons_self`, exactly as the unflipped site already computes it
+    at `:1641-1642`. -/
+theorem writeLegSubjectsWide_L {S : Schema} {T : Store} {t : Tuple}
+    (hnl : NoLeafSubjects S)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true →
+      NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (hbase : NotLeafName t.subject.predicate) :
+    ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
+      ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) := by
+  rintro u hu (⟨dt, on, R, hder, _hRne, _hon, heq⟩ | hleaf)
+  · obtain ⟨hnt, hns⟩ := hterm dt R hder
+    have hpne : u.subject.predicate ≠ R :=
+      rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
+        (hns t List.mem_cons_self) hu
+    apply hpne
+    have hp := congrArg NodeKey.pred heq
+    simpa [subjNode_pred, objNode_pred] using hp
+  · exact rewriteClosureL_subject_not_leafNode hnl hbase u hu hleaf
+
+/-! ### Non-vacuity — every one of the three premises is live at the fixture
+
+`writeLegSubjectsWide_L` has three hypotheses and each has a vacuity mode: `hnl` is
+vacuously true at a schema whose rule lists carry no `.ttu` rule (`SlV`, whose untainted
+layer is EMPTY — `LeafRules.lean::lrV_untainted_layer_silent`), `hterm` is vacuously true at
+a schema with no derived key, and the conclusion is vacuously true if the closure is empty.
+`SnlBoth` defeats all three: both layers carry a TTU rule
+(`snlBoth_untainted_layer_ttu` / `::snlBoth_leaf_layer_ttu`), `("doc","access")` is derived,
+and the closure of the raw write on `parent` genuinely CONTAINS a leaf-layer extra whose
+subject predicate was rewritten from `BARE` to `viewer`
+(`::snlBoth_closure_reaches_leaf_extra`, `::snlBoth_extra_subject_rewritten`). -/
+
+/-- The fixture's `hterm`. Proved WITHOUT case-splitting on the derived key: a derived `R`
+    is `derivedAnywhere`-true (`LeafRules.lean::derivedAnywhere_of_isDerived`), while both
+    names that could break a conjunct — the untainted layer's sole TTU target `"viewer"`,
+    and the stored subject's `BARE` — are `derivedAnywhere`-FALSE by `decide`. A `Bool` is
+    not both. -/
+theorem snlBoth_hterm :
+    ∀ dt R, isDerived LeafRuleWitness.SnlBoth (dt, R) = true →
+      NoTtuTarget LeafRuleWitness.SnlBoth R
+        ∧ NoStoreSubjectR (LeafRuleWitness.tnlParent :: ([] : Store)) R := by
+  intro dt R hder
+  have hda : derivedAnywhere LeafRuleWitness.SnlBoth R = true :=
+    derivedAnywhere_of_isDerived hder
+  refine ⟨?_, ?_⟩
+  · intro r hr tr hk
+    rw [LeafRuleWitness.snlBoth_untainted_layer_ttu, List.mem_singleton] at hr
+    subst hr
+    have htr : tr = "viewer" := by simpa using hk.symm
+    subst htr
+    intro hRv
+    rw [← hRv] at hda
+    exact absurd hda (by decide)
+  · intro t' ht'
+    rw [List.mem_singleton] at ht'
+    subst ht'
+    rw [LeafRuleWitness.tnlParent_subject_bare]
+    intro hRb
+    rw [← hRb] at hda
+    exact absurd hda (by decide)
+
+/-- **The applied conclusion, derived THROUGH `writeLegSubjectsWide_L`** at the pinned
+    leaf-layer extra — never `decide`d directly, because deciding the conclusion alone would
+    say nothing about whether the theorem applies. -/
+theorem writeLegSubjectsWide_L_snlBoth :
+    ¬ (DerNode LeafRuleWitness.SnlBoth (subjNode ⟨"folder", "f1", "viewer"⟩)
+        ∨ LeafNode LeafRuleWitness.SnlBoth (subjNode ⟨"folder", "f1", "viewer"⟩)) :=
+  writeLegSubjectsWide_L (T := ([] : Store)) (t := LeafRuleWitness.tnlParent)
+    LeafRuleWitness.noLeafSubjects_snlBoth snlBoth_hterm
+    (show NotLeafName LeafRuleWitness.tnlParent.subject.predicate from
+      Or.inl LeafRuleWitness.tnlParent_subject_bare)
+    ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩ (by decide)
+
+/-! ### The INSTRUMENT was controlled too, not just the subject (trap (u), house rule 7)
+
+A `0 sorry` reading is worth nothing unless the grep that produced it can produce a `1`.
+Probed 2026-09-05 by inserting `theorem zz_sorry_instrument_probe : True := by sorry`
+immediately above `ttuTargetsSat_notLeafName_snlBadLeaf` and rebuilding this module:
+
+```text
+warning: ZanzibarProofs/GraphIndex/CascadeStable.lean:2446:8: declaration uses `sorry`
+```
+
+`grep -c 'declaration uses .sorry.'` → **1**; the straight-quote spelling
+`grep -c "declaration uses 'sorry'"` → **0** on the SAME log, because Lean prints
+backticks. The probe was removed by `cp` from a byte-exact backup and the module rebuilt
+`rc=0`; this note sits BELOW the two line numbers quoted in the sabotage block above so
+that recording it does not invalidate them. -/
+
 end Zanzibar
