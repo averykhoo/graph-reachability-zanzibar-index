@@ -58,6 +58,18 @@ test" -- rather than a docstring warning:
      with `test_a_phase_rerun_red_on_the_same_tree_is_not_green` as the negative
      control -- the keying must not buy freshness by forgetting failures.
 
+  6. GS-1 again, 2026-09-05b, in the content-addressed scheme itself: a PENDING
+     deletion hashed as `path + "absent"`, a COMMITTED one as nothing, so any
+     commit carrying a deletion or rename moved the id. Direction: fail-SAFE.
+         ten phases earned pre-commit   t2c:ce27f3337040   t2a:3c6cd121680f
+         `--tree-id` one commit later   t2c:82a9ff014f3f   t2a:44ac835f64e1
+     -> "the ten-phase gate is NOT covered on this tree", every byte identical,
+     the one pending change a board-row rename into `tasks/closed/`.
+     Pinned by `test_tree_id_survives_a_commit_of_a_deletion_or_rename` (its
+     docstring has the pre-fix failure verbatim), with
+     `test_tree_id_moves_when_a_tracked_file_is_deleted` as the control that
+     skipping the entry does not hide the deletion.
+
 CONTROLS. `test_tree_id_moves_when_a_tracked_file_is_edited` is the positive
 control: the pre-fix scheme got this case RIGHT, so a "fix" that broke it would
 be a regression the four sabotages above could not see.
@@ -161,6 +173,60 @@ def test_tree_id_survives_a_commit_that_changes_no_content(repo: Path) -> None:
 
     _git(repo, "commit", "-q", "-m", "same content, now committed")
     assert _id(repo) == dirty, "committing changed the id although content did not"
+
+
+def test_tree_id_survives_a_commit_of_a_deletion_or_rename(repo: Path) -> None:
+    """GS-1 in a new costume: a PENDING deletion hashed differently from a
+    committed one, so the id moved at `git commit` although no byte did.
+
+    Observed 2026-09-05b on the real repo, with every tracked file identical
+    before and after the commit and the only pending deletion a board-row
+    rename (`tasks/P3-*.md` -> `tasks/closed/P3-*.md`):
+
+        ten phases earned pre-commit   t2c:ce27f3337040   t2a:3c6cd121680f
+        `--tree-id` one commit later   t2c:82a9ff014f3f   t2a:44ac835f64e1
+        gate_status.py                 -> lean: missing; formal/conformance:
+                                          no green tile; tests/: no green tile
+
+    Mechanism: `_file_fingerprint` returned an `absent` MARKER for an index
+    entry with no worktree file, so the pending deletion contributed
+    `path + "absent"` to the hash while the committed deletion (path gone from
+    `ls-files --cached`) contributed nothing. Fail-SAFE, like GS-1 -- and, like
+    GS-1, it turns ten green phases stale one second after the commit the
+    green was earned for, on every rename or deletion this repo's board makes.
+
+    The test against the pre-fix code, verbatim:
+
+        FAILED tests/test_gate_status.py::test_tree_id_survives_a_commit_of_a_deletion_or_rename
+          AssertionError: staging the deletion changed the id
+          assert 't2a:f75e122a9466' == 't2a:cef5c8a446fd'
+        1 failed, 24 deselected in 1.17s
+
+    (the STAGING step is where the old scheme lost it, `git rm` dropping the
+    index entry that carried the marker). The deletion itself stays visible --
+    `test_tree_id_moves_when_a_tracked_file_is_deleted` is the control.
+    """
+    (repo / "other.txt").write_text("stays\n", encoding="utf-8")
+    _git(repo, "add", "other.txt")
+    _git(repo, "commit", "-q", "-m", "a second file so the scope never empties")
+    before = _id(repo)
+
+    (repo / "kept.txt").rename(repo / "moved.txt")   # a rename = delete + create
+    pending = _id(repo)
+    assert pending != before, "a pending rename did not move the id (control)"
+
+    _git(repo, "add", "-A")
+    assert _id(repo) == pending, "staging the deletion changed the id"
+
+    _git(repo, "commit", "-q", "-m", "same content, rename now committed")
+    assert _id(repo) == pending, "committing the deletion changed the id"
+
+    (repo / "moved.txt").unlink()
+    deleted = _id(repo)
+    assert deleted not in (pending, before), "a pending deletion did not move the id"
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "deletion committed")
+    assert _id(repo) == deleted, "committing a plain deletion changed the id"
 
 
 def test_two_repos_with_identical_content_but_different_history_agree(
@@ -301,12 +367,23 @@ def test_tree_id_moves_when_a_tracked_file_is_edited(repo: Path) -> None:
 
 
 def test_tree_id_moves_when_a_tracked_file_is_deleted(repo: Path) -> None:
-    """Deletion is a content change; the `absent` marker is what records it.
+    """Deletion is a content change: the file's bytes leave the hash.
 
-    Skipping unreadable index entries instead would make `rm tests/test_matrix.py`
-    invisible to the gate -- a deletion that removes coverage is precisely the
-    edit this repo's `-ge` floors exist to catch.
+    A deletion that removes coverage is precisely the edit this repo's `-ge`
+    floors exist to catch, so this is the control for
+    `test_tree_id_survives_a_commit_of_a_deletion_or_rename`: since 2026-09-05b
+    an index entry with no worktree file is SKIPPED (not given an `absent`
+    marker), and this test is what proves skipping does not hide the deletion.
+    UNREADABLE entries are a different case and still refuse -- see
+    `test_tree_id_refuses_to_guess_when_git_cannot_be_read`.
+
+    A second committed file keeps the scope non-empty after the deletion: an
+    id over zero files is refused outright (`TreeIdError`), which is correct but
+    would make this test pass for the wrong reason.
     """
+    (repo / "other.txt").write_text("stays\n", encoding="utf-8")
+    _git(repo, "add", "other.txt")
+    _git(repo, "commit", "-q", "-m", "a second file so the scope never empties")
     before = _id(repo)
     (repo / "kept.txt").unlink()
     assert _id(repo) != before
