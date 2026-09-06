@@ -187,6 +187,46 @@ def test_block_comment_ending_midline_does_not_hide_next_line_axiom(tmp_path):
     assert sorry_scan.scan(root) == 1
 
 
+# --- 2026-09-06: `opaque` DECLARATIONS (the tree has carried zero since the
+# `hValid`/`ValidIdent` deletion; a new one is refused mechanically) ---
+
+def test_opaque_declaration_trips(tmp_path):
+    # Literally the declaration the tree carried for six weeks (`Core/Ident.lean`):
+    # a predicate with no definition, on which T3's `hValid` could never be
+    # discharged for a non-empty store.
+    root = _write(tmp_path, "opaque ValidIdent : String → Prop\n")
+    assert sorry_scan.scan(root) == 1
+
+
+def test_opaque_declaration_reported_as_opaque_kind(tmp_path):
+    findings = sorry_scan.scan_text("opaque ValidIdent : String → Prop\n")
+    assert [f.kind for f in findings] == ["opaque"]
+
+
+def test_indented_and_modified_opaque_declarations_trip(tmp_path):
+    root = _write(tmp_path,
+                  "  opaque o1 : Nat\n"
+                  "private opaque o2 : Nat\n"
+                  "noncomputable opaque o3 : Nat\n"
+                  "@[irreducible] opaque o4 : Nat\n")
+    assert sorry_scan.scan(root) == 4
+
+
+def test_opaque_word_in_prose_does_not_trip(tmp_path):
+    # The live tree mentions the word in ~15 docstrings/comments describing the
+    # deletion; none may count.
+    root = _write(tmp_path, "/-- Identifiers are opaque strings; the opaque was deleted. -/\n"
+                            "-- opaque ValidIdent : String → Prop   (gone 2026-09-06)\n"
+                            "theorem foo : True := trivial\n")
+    assert sorry_scan.scan(root) == 0
+
+
+def test_opaque_prefixed_identifier_does_not_trip(tmp_path):
+    root = _write(tmp_path, "def opaque_key : Nat := 0\n"
+                            "def opaqueness : Nat := 0\n")
+    assert sorry_scan.scan(root) == 0
+
+
 # --- ZT-P2-3: an unterminated string used to silently swallow the rest of a file ---
 
 def test_unterminated_string_is_reported(tmp_path):

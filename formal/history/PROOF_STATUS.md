@@ -15,6 +15,147 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-06 (**`TK56` — T3 carried an UNDISCHARGEABLE hypothesis for six weeks; deleted, and T3 is now INSTANTIATED (two witnesses); the tree carries zero `opaque`s and the scanner refuses a new one; `task.py new` ratchets its own floor**)
+
+**Task taken:** a user request for a second opinion on "the optimal next step toward set-engine
+= graph-index equivalence", with the instruction "if it's deleting `hValid`, do that, gate,
+commit, then tell me what the next thing after is". The opinion (§1) agreed with the prior
+session's pick and it was executed (§2–§6). Filed as `TK56` (closed this session). Everything
+below was verified first-hand on the landed tree unless a sentence says otherwise.
+
+### 1. The second opinion — hygiene, not reach; and where the reach actually is
+
+`backend_equivalence` (T3) was proved `rw [setEngine_correct S T q hA.wf hA.strat hValid,
+graph_correct_public …]`, so it carried `hValid : AllValid T` **only** to feed T1's
+underscored, unused binder `_hValid`. `AllValid` was built on `opaque ValidIdent : String →
+Prop` (`Core/Ident.lean`), and an opaque `Prop`-valued predicate has no introduction rule —
+so `AllValid T` was undischargeable for **every non-empty store**, and T3 had no
+instantiation anywhere in the tree while T2b (`graph_correct_public`) had two
+(`W4WitnessDirect.final_applies`/`final_applies4`). Deleting it is correct and cheap in
+proof terms (T1's proof never touched it), but it is an M-sized edit, not S: `Core/Ident.lean`
+is a root import (cold rebuild, over the harness cap), 49 Lean sites across 5 files (§2), three
+goldens regenerate, ~8 docs.
+
+Verdict: **do it — but it is hygiene.** It makes T3 *applicable*; it does not widen what
+T3 covers. The σ-axis is where reach is: `ReachedBy := ReachedByW3d2E` (`FullScope.lean:90`)
+has `empty : ReachedByW3d2E (emptyState S) S []` as its only base constructor
+(`CascadeStrataAssemble.lean:430`), so no theorem routed through it says anything about an
+index built by `build_index(bulk=True)` — the DEFAULT constructor (`connectedstore/build.py:33`,
+`:82-87`, `bulk_build.py`/`bulk_backfill.py`). That is board row `P17` ("bulk build/backfill is
+an unmodeled default constructor — model it or scope-exclude it"), and it is the answer to
+"the next thing after" (§7).
+
+### 2. What was deleted (49 Lean sites, 5 files) and what was added
+
+* `SetEngine/Correct.lean` — `def AllValid` deleted; `setEngine_correct (S) (T) (q)` is now
+  stated with **no hypotheses**. (The `_hWF`/`_hStrat` binders went with it — they were as
+  unused as `_hValid`, and the T1 pin row regenerates either way.)
+* `Core/Ident.lean` — `opaque ValidIdent` deleted; the file is 34 lines: `STAR`, `BARE`,
+  `star_ne_bare`. **The tree now carries ZERO `opaque` declarations** (grep, then §5).
+* `Equiv.lean` — 18 rung statements lose `(hValid : AllValid T)`, 18 `rw` calls become
+  `setEngine_correct S T q` (36 lines; `git diff --stat` 36+/36−); the ladder docstring
+  records this as the ONE tree-wide exception to "each rung kept exactly as proved".
+* `FullScope.lean` — `backend_equivalence` and `exclusion_effective` lose the binder; T3
+  now takes **exactly T2b's hypotheses** `hA hF h hq hqs hqo`.
+* `Audit.lean` — two new `#print axioms` (§4).
+
+Added, the two instantiations (both audited, both pinned):
+
+* `FullScope.lean::W4WitnessDirect.equivalence_applies` — T3 applied at the Direct-arm
+  witness store `Sd`/`Td`, for any reached drained σ and any in-scope q: a one-line
+  `backend_equivalence q admission w4fragment h hq hqs hqo`.
+* `Exec.lean::graphRunOps_directArm_backend_equivalence` — the closed form:
+  `∃ σ, graphRunOps Sd sdDirectArmOps = some (σ, Td) ∧ ReachedBy σ Sd Td ∧ Drained Sd σ ∧
+  SetEngineModel.check Sd Td sdDirectArmQuery = GraphModel.checkPublic σ sdDirectArmQuery ∧
+  SetEngineModel.check Sd Td sdDirectArmQuery = true`. The last conjunct is what makes it
+  more than an equation between two `false`s: at this executed store BOTH backends grant
+  `user:alice#... approver doc:d1`, and they are proved equal. Proof: `obtain` from
+  `graphRunOps_directArm_check_eq_sem`, then T3 with `(by decide)` for the two query-shape
+  side conditions, then `rw [setEngine_correct]; exact sem_directArm_grants`.
+
+### 3. Build
+
+Cold `lake build && lake build zcli` from an uncapped shell (`Core/Ident.lean` is a root
+import, so every project `.olean` was invalid): **`LAKE_RC=0` on the first attempt**, zero
+`error:` lines, 2152 build steps. Both witnesses compiled exactly as first written — `(by
+decide)` discharged the two query-shape side conditions on the string literals, as
+`star_ne_bare` predicted, and `rw [setEngine_correct]; exact sem_directArm_grants` closed the
+`= true` conjunct. One restart was self-inflicted: a comment-only fix to `Ident.lean` mid-build
+(its new docstring cited a `CORRESPONDENCE.md §"GraphAdmission"` that does not exist; the row
+is under §6) invalidated the running build at 1025/1089. Rule, restated: **every Lean edit in,
+THEN one cold build** — a docstring is a hash change like any other.
+
+### 4. Pins — three goldens regenerated, with the reason the pin headers demand
+
+* `headline_statements.txt` 49 → **51**: three rows RESTATED (`setEngine_correct`,
+  `backend_equivalence`, `exclusion_effective` — each a binder DELETION, conclusions
+  byte-identical; no headline gained a hypothesis) and two ADDED
+  (`W4WitnessDirect.equivalence_applies`, `graphRunOps_directArm_backend_equivalence`).
+* `headline_definitions.txt` 250 → **251**: `def:Zanzibar.AllValid` GONE (the definition no
+  longer exists — that is the whole change, not a drift), `sdDirectArmOps` and
+  `sdDirectArmQuery` IN as ambient dependencies of the new `Exec.lean` headline.
+* `audited_theorems.txt` 584 → **587**: the two new witnesses, plus
+  `graphModeAnswers_eq_sem` — which had a `#print axioms` in `Audit.lean` but was never
+  pinned. The pin is a SUPERSET test, so an unpinned audit is invisible until someone
+  regenerates; this regeneration caught it. Live audits 585 → 587, pin = live for the
+  first time since that audit was added.
+* `FINAL_REVIEW.md` counts block regenerated (verify.sh 4e): conformance 515 → **520**,
+  `tests/` 1037 → **1038**, whole-repo 1552 → **1558**, gate-tooling 66 → **71**
+  (`test_sorry_scan.py` 39 → 44), definition pin 250 → 251.
+
+### 5. `sorry_scan.py` now refuses `opaque` — with the sabotage evidence
+
+The scanner's docstring said "WHAT IT DOES NOT LOOK FOR: `opaque`. The tree carries exactly
+one deliberate `opaque` … so flagging it here would be a permanent false positive." With
+zero opaques that reason is gone, and a doc note is the weaker form of the rule. The
+declaration regex is now `(?P<kw>axiom|opaque)[ \t\r\n]` at the same anchored position;
+the finding's `kind` names the keyword.
+
+Evidence (2026-09-06, `formal/conformance/test_sorry_scan.py`, 39 → **44** cases):
+* the live tree: `scanned 70 project .lean file(s)`, **0** findings, rc 0;
+* the instrument control — `HEAD:formal/lean/ZanzibarProofs/Core/Ident.lean` (the file as
+  it was before this session) scanned alone: `opaque token: .:37`, **1**, rc 1. The exact
+  declaration the tree carried is what the check now refuses.
+* five new cases: a bare `opaque` trips; `kind == "opaque"`; indented / `private` /
+  `noncomputable` / `@[irreducible]` forms trip (4); the word in prose does not; `opaque_key`
+  / `opaqueness` identifiers do not.
+
+### 6. `task.py new` ratchets `min_tasks_parsed` itself (side item, landed because it was owed three times)
+
+`tasks/config.json`'s provenance string recorded the manual floor ratchet being forgotten in
+THREE consecutive sessions (2026-08-31, 2026-08-31b, 2026-09-05b), each in the identical
+shape, and named this fix each time. `scripts/task.py::ratchet_min_parsed` runs after every
+`new`: `max(floor, files on disk)` as a one-integer substitution on the raw text (the
+provenance object is not re-serialised). It never lowers the floor — a breach stays red;
+only headroom is closed — which is what separates it from the self-sealing floor `counts`
+refuses to write. Pinned both ways by
+`tests/test_tasktool.py::test_new_ratchets_the_floor_to_the_measured_total_and_never_lowers_it`
+(85 → 86 cases); instrument control: the same test against `HEAD`'s `task.py` went RED at the
+`1 -> 2` assertion. First live use: filing `TK56` printed `floor min_tasks_parsed 158 -> 159`.
+
+### 7. Next — `P17`, and two user calls that are not mine to make
+
+* **`P17`** is the reach step (§1): model the bulk constructor so `ReachedBy` (or a second
+  base constructor into it) covers `build_index(bulk=True)` states, or scope-exclude it in
+  writing in `FINAL_REVIEW.md`. Until then every headline is a statement about indexes grown
+  from `emptyState` by logged writes only.
+* Owed user calls, unchanged from `2026-09-05b`: `TK55` (`keysNonempty` — accept as scope or
+  discharge), the red branch `p3-flip-red-2026-09-05` (keep vs delete), and the `tasks/`
+  trial's end-of-window decision (`TT-1`, cutover-or-keep-both; the window closes today).
+* `P6` sits at `NOW` mechanically; this session did not re-rank it.
+
+### 8. Gate
+
+All ten phases run on this tree, in the order the `t2a`/`t2c` split demands (every `*.md`
+edit first, including this section, then `lean` last): `conf-tile:1/5`…`5/5` all
+`PASSED` (104+104+104+104+104 = **520** collected and passed, rc 0 each);
+`tests-tile:1/4`…`4/4` all `PASSED` (260+260+259+259 = **1038**, rc 0 each; zero
+`skipped`/`xpassed`/`deselected`); then `lean` `PASSED` — build green, pins 51/51 statements,
+251/251 definitions, 587/587 audits, `sorry` belt 0, `sorry_scan` 0 over 70 files, every
+`CORRESPONDENCE.md` anchor resolved. `python scripts/gate_status.py`: **COVERED on this
+tree**. No algorithm changed, so no fuzz sweep was owed. Committed, not pushed (push is
+opt-in; several commits on `master` are unpushed).
+
 ## Session 2026-09-05b (**`P3` LANDED. The WRITE-LEG-ONLY flip was KERNEL-REFUTED first — `graph_correct` FALSE on the flipped tree with a sorryAx-FREE proof — so branch (α) and R5 were landed as CO-REQUISITES in the same commit; the tree is sorry-free at 49/49 + 250/250 pins, P6 is retired, and the gate's `sorry` belt had been counting 0 on every build since `ZT-P2-4`**)
 
 **Task taken:** `P3`, resumed from this same day's `## Session 2026-09-05` §7 — the re-point

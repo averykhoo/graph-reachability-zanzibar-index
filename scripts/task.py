@@ -2756,7 +2756,57 @@ def op_new(store, args):
         raise Refused('%s already exists' % rel(path))
     write_text(path, render_file(fm, body))
     emit('%s  %s' % (new_id, rel(path)))
+    ratchet_min_parsed(store)
     return 0
+
+
+_FLOOR_INT_RE = re.compile(r'("min_tasks_parsed"\s*:\s*)(-?\d+)')
+
+
+def ratchet_min_parsed(store):
+    """After ``new`` has written ONE file, raise ``min_tasks_parsed`` to the measured
+    total -- and never, under any input, lower it. Returns the floor now in the file,
+    or None when the key is absent / not an int (lint's job to report, not this one's).
+
+    Why a tool is allowed to touch this floor here and nowhere else. ``counts`` prints
+    the value and refuses to write it, on the argument that "a floor a tool can raise by
+    itself is a floor that re-seals every time it is breached". That argument is about a
+    tool that sets the floor to whatever is on disk -- which would also LOWER it after
+    files were lost, i.e. seal the breach. This function is ``max(floor, measured)``: a
+    breach (floor > disk) stays red, untouched; only HEADROOM (floor < disk) is closed,
+    and headroom is the defect the floor exists to prevent (`rm -rf tasks/closed`
+    printed ``clean`` with 94 files of it). On a zero-headroom tree the result is exactly
+    ``+1`` for the file ``new`` just wrote.
+
+    Why it is mechanical. config.json's own provenance string records the manual step
+    being forgotten in THREE consecutive sessions (2026-08-31, 2026-08-31b, 2026-09-05b),
+    each time in the identical shape -- file a row, do not ratchet, let ``tests-tile:1/4``
+    find it, re-run a tile -- and names this exact fix each time. A note in a provenance
+    string is not sufficient to cause a step; a tool that has just created the file is.
+
+    The edit is a targeted substitution on the RAW text, not a ``json.dump`` round-trip:
+    the file carries a long provenance object whose formatting a re-serialisation would
+    churn, and the only int-valued ``"min_tasks_parsed":`` key is the top-level one (the
+    provenance's copy is string-valued, so the regex cannot match it). More than one
+    int-valued match means the file is not the shape this understands -- leave it alone.
+    """
+    cfg_path = os.path.join(store.dir, 'config.json')
+    if not os.path.exists(cfg_path):
+        return None
+    raw = read_text(cfg_path)
+    matches = list(_FLOOR_INT_RE.finditer(raw))
+    if len(matches) != 1:
+        return None
+    m = matches[0]
+    old = int(m.group(2))
+    disk_open, disk_closed = disk_md_count(store.dir)
+    now = disk_open + disk_closed
+    if now <= old:
+        return old
+    write_text(cfg_path, raw[:m.start(2)] + str(now) + raw[m.end(2):])
+    emit('floor   min_tasks_parsed %d -> %d  (raised by `new` to the measured total; '
+         'this path never lowers it)' % (old, now))
+    return now
 
 
 def _ghost(pri, task_id='<new>', title='(the new task)'):

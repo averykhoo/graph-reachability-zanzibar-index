@@ -1653,6 +1653,59 @@ def test_a_disabled_floor_is_refused_not_accepted():
 
 
 @case
+def test_new_ratchets_the_floor_to_the_measured_total_and_never_lowers_it():
+    """`new` raises `min_tasks_parsed` to the measured file total itself (2026-09-06).
+
+    config.json's provenance string records the manual ratchet being FORGOTTEN in three
+    consecutive sessions (2026-08-31, 2026-08-31b, 2026-09-05b), each in the identical
+    shape -- file a row, leave the floor, let `tests-tile:1/4` go red on `floor N vs N+1
+    files on disk`, re-run the tile -- and each time names this fix. Observed BEFORE the
+    fix, on a fresh tree with floor 1: two `new`s left `min_tasks_parsed` at 1 against 2
+    files on disk, i.e. one file of headroom, which is the same defect as ninety-four.
+
+    Pinned in BOTH directions, because `counts` refuses to write the floor on the
+    argument that a self-raising floor "re-seals every time it is breached":
+      * zero-headroom tree, `new`  -> floor +1 (1 -> 2), lint clean, and the config's
+        provenance text is byte-identical apart from that one integer (no json.dump
+        round-trip);
+      * a BREACH (floor 9 over 2 files) is NOT sealed -- `new` leaves 9 alone and lint
+        still reports `parsed only 3 task file(s)`; the path only ever closes headroom.
+    """
+    root = fresh('ratchet', config={'min_tasks_parsed': 1})
+    cfg = os.path.join(root, 'tasks', 'config.json')
+    before = read(cfg).decode('utf-8')
+    # `--pri NOW` only so that lint's exactly-one-NOW check (unrelated) stays green.
+    rc, out, err = run(root, 'new', 'first', '--pri', 'NOW', '--session', KEY)
+    assert rc == 0, err
+    # 1 file against floor 1: max(1, 1) -- nothing to raise, nothing printed.
+    assert 'floor' not in out_text(out), out_text(out)
+    assert read(cfg).decode('utf-8') == before, 'a no-op ratchet must not rewrite the file'
+
+    rc, out, err = run(root, 'new', 'second', '--session', KEY)
+    assert rc == 0, err
+    text = out_text(out)
+    assert first_match(text, r'^floor +min_tasks_parsed 1 -> 2') is not None, text
+    after = read(cfg).decode('utf-8')
+    assert json.loads(after)['min_tasks_parsed'] == 2, after
+    assert after == before.replace('"min_tasks_parsed": 1', '"min_tasks_parsed": 2'), (
+        'the ratchet must be a one-integer substitution on the raw text, not a '
+        're-serialisation:\n%s' % after)
+    rc, text = lint_text(root)
+    assert rc == 0 and 'clean' in text, text
+
+    # The breach half. A floor ABOVE the corpus means files were lost; `new` must not
+    # bring the floor down to meet what is left.
+    write(cfg, after.replace('"min_tasks_parsed": 2', '"min_tasks_parsed": 9'))
+    rc, out, err = run(root, 'new', 'third', '--session', KEY)
+    assert rc == 0, err
+    assert 'floor' not in out_text(out), out_text(out)
+    assert json.loads(read(cfg).decode('utf-8'))['min_tasks_parsed'] == 9
+    rc, text = lint_text(root)
+    assert rc == 1 and 'parsed only 3 task file(s)' in text, (
+        'a breach must stay red after `new`; the ratchet only closes headroom:\n%s' % text)
+
+
+@case
 def test_shipped_config_is_measured_not_an_example():
     """The three knobs in the SHIPPED config are the ones that were copied out of
     SPEC.md section 6's example block and never checked against the tree they guard.

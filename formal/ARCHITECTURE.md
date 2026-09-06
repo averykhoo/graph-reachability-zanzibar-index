@@ -53,7 +53,8 @@ genuinely independent corners and one parser bug cannot corrupt two of them.
 
 - **Domain** (`Core/`): schema AST (`Expr`/`Schema`, binary `union`/`inter` left-folded
   from the n-ary DSL), tuples/queries (`Refs.lean`), the store and its query universe
-  (`Store.lean`), opaque valid identifiers (`Ident.lean`).
+  (`Store.lean`), the two identifier sentinels `STAR`/`BARE` (`Ident.lean` — its
+  `opaque ValidIdent` was deleted 2026-09-06; the tree carries no opaques).
 - **The store as a Datalog¬ program** (`SEMANTICS.md` §3): each `(schema, store)` denotes
   a stratified Datalog-with-negation program; `sem` is its perfect model.
 - **Well-formedness** `WF S` (`Core/Schema.lean`, §4.2) and **stratifiability**
@@ -147,11 +148,13 @@ quantify over a schema `S`, a finite store `T`, and a query `q`.
 
 What each says, in English:
 
-- **T1** — for every WF, stratifiable schema and identifier-valid store, the set-engine
-  model's `check` equals `sem`. Full scope. (The three hypotheses are retained to match
-  the equivalence route but the equality is unconditional — all three are underscored
-  and unused in the proof, `SetEngine/Correct.lean::setEngine_correct`. "Full scope" is if anything an
-  under-claim here.)
+- **T1** — for every schema, store and query, the set-engine model's `check` equals
+  `sem`. Full scope, **unconditional** (`SetEngine/Correct.lean::setEngine_correct`).
+  Until 2026-09-06 the statement carried three underscored, unused binders — WF,
+  stratifiable, and `hValid : AllValid T` over an `opaque` `ValidIdent` — which made
+  T3 (which routed through T1) undischargeable at every concrete non-empty store; all
+  three binders, `AllValid` and the opaque were deleted together, so T3 now carries
+  exactly T2b's hypotheses (`SEMANTICS.md` §2.1 history).
 - **T2a** — the 8-clause graph invariant `Inv` (structural I1–I3 + the four I6
   residue-hygiene clauses) holds at **every** operationally-reached state — dirty keys
   and mid-drain included. (There is **no** `materialized = materialize …` state-equality

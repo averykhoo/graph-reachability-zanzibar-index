@@ -19,31 +19,34 @@ session: run the Rhythm protocol at the bottom.
 > 🟢 **Gate: all ten phases re-run green on this tree** — ask `python scripts/gate_status.py`;
 > re-run `lean` after any `*.md` edit — and `t2c` excludes `*.md` only *outside* `tasks/`, so a
 > `tasks/*.md` edit stales the tiles too (corrected 2026-09-05).
-> ✅ **`2026-09-05b`: `P3` is landed and closed.** Both logged legs fold
-> `rewriteClosureL S (rawWriteTuples S t)` (`Cascade.lean:190-191`, `:340-341`), `affectedKeys`
-> dirties the public key via `publicOfLeaf` (`:542-546`); four `sorry`s discharged; pins 49/49 +
-> **250/250** (regenerated 232 → 250 after a control run); **extractor projection P6 deleted**
-> (ledger `P6 = 0`, `compared 189 → 265`, count 515 unchanged). PROOF_STATUS `2026-09-05b` §1–§10.
-> 🛑 **The flip doubled an already-exponential derived-arm stacking** — ten conformance tests
-> timed out (`two_stratum_cascade` n=5: control 1013, post-flip 2026 edges). Two Python mirrors
-> landed with it: `cascadeKeysAbove` and `enumJob2(D).cands` are `.eraseDups` now (the
-> `_map_deltas_to_keys` dict / `_reconcile` candidates dict); growth is linear (1…5, 0.1 s),
-> answers unchanged, **golden `derived_arm_multiplicity.json` regenerated after a control run,
-> `_MIN_LEDGER_STACKED` 19 → 18**. CORRESPONDENCE §7.2 item 6 still open. PROOF_STATUS §10.
-> 🛑 **The adjudicated write-leg-only re-point was false** — a sorryAx-free `decide` refuted
-> `graph_correct` on that tree (kept on branch `p3-flip-red-2026-09-05`, do not merge). Branch
-> (α) and R5 were co-requisites, not follow-ups — that is why the "11-file scale" was widened.
-> 🔧 **`verify.sh`'s `sorry` belt had counted 0 on every build since `ZT-P2-4`** (grep pattern vs
-> Lean's backtick quoting) — fixed; control 0 → 4 on the red log, live 0. Trap (dd).
-> 🧭 **`P6` is `NOW` mechanically** (top `NEXT`, blocker gone) — re-rank if you disagree. `P5` is
-> now PROOF work: T2a did NOT widen, its "P6 modelling limit" story is retired, and the re-run
-> probe says `negFree := true` on the model's own write leg. **User calls owed: `TK55`
-> (`keysNonempty` scope vs discharge) and the red branch (keep vs delete).** `TK54` filed.
-> `2026-09-05`, `2026-09-03c`, `2026-09-02d` rotated → PROOF_STATUS. Live from them: §11.13
-> **(x)**/**(y)** and now **(bb)…(gg)**; "step 7" is ambiguous — three numberings, `hql` is step 10.
-> ⏰ **`2026-08-30`: trial extended to 2026-09-06; `tasks/` is not being deleted** (user) —
-> question narrows to **cutover-or-keep-both**; the dual-update contract runs another week.
-> 🧭 **Phase B (this file becomes a stub) needs an explicit user go** → row `TT-1`; `TT-2` = `sync` has no gated coverage. `TK53`: **15 appends remain**.
+> ✅ **`2026-09-06` (`TK56`, closed): T1 is unconditional and T3 carries EXACTLY T2b's
+> hypotheses.** `hValid : AllValid T` sat on an `opaque ValidIdent` — undischargeable at every
+> non-empty store, so `backend_equivalence` had NO instance while T2b had two. Deleted (49 Lean
+> sites / 5 files; cold build `LAKE_RC=0` first try) and T3 is now INSTANTIATED:
+> `W4WitnessDirect.equivalence_applies` + `Exec.lean::graphRunOps_directArm_backend_equivalence`
+> (∃σ at an executed store where BOTH backends answer `true`, proved equal). Pins 49 → **51**
+> statements, 250 → **251** defs, 584 → **587** audits — the regeneration also caught
+> `graphModeAnswers_eq_sem`, audited but never pinned (the superset rule hides that).
+> 🔧 **Zero `opaque`s in the tree, and `sorry_scan.py` now refuses one at declaration position**
+> (control: `HEAD`'s `Ident.lean` → 1 finding, rc 1; live 0 over 70 files; 39 → 44 cases).
+> 🔧 **`task.py new` ratchets `min_tasks_parsed` itself** (`158 → 159` on filing `TK56`) — the
+> manual step three consecutive sessions forgot; `max(floor, disk)`, never lowers, so a breach
+> stays red. `tests/test_tasktool.py` 85 → 86 (control: red against `HEAD`'s `task.py`).
+> 🧭 **The reach step toward equivalence is `P17`, and the second opinion agreed:** `ReachedBy`
+> has `emptyState` as its ONLY base constructor (`CascadeStrataAssemble.lean:430`), so no
+> headline covers an index built by `build_index(bulk=True)` — the DEFAULT constructor
+> (`connectedstore/build.py:82-87`). Model `bulk_build`/`bulk_backfill`, or scope-exclude it in
+> `FINAL_REVIEW.md`. **Not re-ranked here** (user-assigned task); `P6` stays `NOW` mechanically.
+> PROOF_STATUS `2026-09-06` §1–§8 has the detail.
+> 📌 **`2026-09-05b` (rotated → PROOF_STATUS `2026-09-05b` §1–§10): `P3` landed, `P6` retired.**
+> The adjudicated write-leg-only re-point was FALSE (sorryAx-free `decide` refuted
+> `graph_correct`; kept on branch `p3-flip-red-2026-09-05`, do not merge); (α)+R5 co-landed;
+> two `eraseDups` Python mirrors fixed an exponential stacking; `verify.sh`'s `sorry` belt had
+> counted 0 since `ZT-P2-4` — fixed. Live traps from it: scope doc §11.13 **(bb)…(gg)**.
+> ⚠ **User calls owed: `TK55`** (`keysNonempty` scope vs discharge), **the red branch** (keep vs
+> delete), and **the `tasks/` trial window closes TODAY, 2026-09-06** → cutover-or-keep-both is
+> row `TT-1` (Phase B needs an explicit user go); `TT-2` = `sync` has no gated coverage.
+> `TK53`: **15 appends remain**.
 > **"Known live correctness bugs: 0"** — ask `python scripts/gate_status.py`. Red: snapshot it
 > with a TEMP INDEX, never `git stash`/`git checkout --` (autocrlf rewrites LF → CRLF; trap (ee)).
 

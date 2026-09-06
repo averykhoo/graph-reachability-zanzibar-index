@@ -1248,6 +1248,12 @@ namespace Zanzibar
 #print axioms graphRunOps_reached
 #print axioms graphRunOps_store
 #print axioms graphRunOps_check_eq_sem
+-- ★ 2026-09-06 — T3 `backend_equivalence` at a DRIVER-BUILT state: `graphRunOps` on the
+-- `W4WitnessDirect` pair yields a concrete `σ` (reached + drained by the run itself) at
+-- which the set-engine model's answer equals the graph's public answer, and that answer
+-- is a GRANT. The first executable instance of the headline theorem; see
+-- `W4WitnessDirect.equivalence_applies` for why none existed before. Standard axioms only:
+#print axioms graphRunOps_directArm_backend_equivalence
 -- #1 Leaf widening (Direct arm) leg 4 — the base-equation WALL discharged
 -- (GraphIndex/RestrictBase.lean, 2026-07-19). The WIDENED base `hag` equations:
 -- on an admitted rule-routed base over a `StoreValidRulesD` store — stored BARE
@@ -1711,6 +1717,15 @@ namespace Zanzibar
 #print axioms W4WitnessDirect.w4fragment
 #print axioms W4WitnessDirect.final_applies
 #print axioms W4WitnessDirect.outside_narrow_t2a
+-- ★ 2026-09-06 — the headline `backend_equivalence` (T3) INSTANTIATED, for the first
+-- time. T3 used to carry `(hValid : AllValid T)` over an `opaque` `ValidIdent`, which no
+-- proof used and no concrete store could discharge, so every witness above stopped at T2b
+-- and T3's inhabitation was a comment. `hValid`, `AllValid` and the opaque were deleted
+-- (T3/T6a now take exactly T2b's hypotheses; T1 is stated unconditionally), and
+-- `equivalence_applies` applies T3 at `Sd`/`Td` under the same reached-state hypotheses as
+-- `final_applies`. Its driver-built companion is audited with the `graphRunOps` trio.
+-- Standard axioms only:
+#print axioms W4WitnessDirect.equivalence_applies
 
 -- E-chain Direct-arm widening, LEG 6 (2026-08-05) — the conformance payoff. `Td4` is the
 -- `direct_arm_exclusion` corpus store VERBATIM (four tuples, the full truth table), not the

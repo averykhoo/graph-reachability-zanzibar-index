@@ -23,7 +23,11 @@ were restated over the operational closure at its then-current scope and re-prov
 as REAL, axiom-clean theorems; the scope then widened stage by stage with the
 write model (bridges → rule routing → reconcile → the scheduler chains). This file
 hosts that per-stage corollary LADDER (`*_direct` … `*_w3d2`), each rung kept
-exactly as proved at its stage. The FINAL full-scope statements — the unsuffixed
+exactly as proved at its stage — with ONE tree-wide exception: on 2026-09-06 the
+never-used T1 hypothesis `hValid : AllValid T` (built on an `opaque` predicate, hence
+undischargeable at any concrete store) was deleted from `setEngine_correct` and
+therefore from every rung's statement and `rw` call; the graph-side hypotheses of
+each rung are untouched. The FINAL full-scope statements — the unsuffixed
 `backend_equivalence` / `exclusion_effective` / `no_ghost_grant` (with
 `graph_correct` / `graph_reached_inv`) over `ReachedBy := ReachedByW3d2E` and the
 `GraphAdmission`/`W4Fragment` provenance split — live in `FullScope.lean`. From
@@ -54,9 +58,9 @@ namespace Zanzibar
 theorem backend_equivalence_direct (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hSF : StarFreeStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : ReachedByAdmitted σ S T) (hValid : AllValid T) :
+    (hReach : ReachedByAdmitted σ S T) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid,
+  rw [setEngine_correct S T q,
       graph_correct_direct S T σ q hWF hPD hSV hSF hqs hqo hReach]
 
 /-!
@@ -77,11 +81,11 @@ is a one-line consequence of T1/T2b + a spec lemma, at the fragment's scope.
 theorem exclusion_effective_direct (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hSF : StarFreeStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : ReachedByAdmitted σ S T) (hValid : AllValid T)
+    (hReach : ReachedByAdmitted σ S T)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_direct S T σ q hWF hPD hSV hSF hqs hqo hReach]; exact hDeny
 
 /-- **Historical milestone (W1a; different chain — see the
@@ -118,9 +122,9 @@ theorem backend_equivalence_objStar (S : Schema) (T : Store) (σ : GraphState) (
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T)
     (hOS : ObjStarStore T) (hOV : ObjStarValid S T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : WildReachedAdmitted σ S T) (hValid : AllValid T) :
+    (hReach : WildReachedAdmitted σ S T) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid,
+  rw [setEngine_correct S T q,
       graph_correct_objStar S T σ q hWF hPD hSV hOS hOV hqs hqo hReach]
 
 /-- **Historical milestone (W1b; retains object-wildcard store scope — see the
@@ -132,11 +136,11 @@ theorem exclusion_effective_objStar (S : Schema) (T : Store) (σ : GraphState) (
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T)
     (hOS : ObjStarStore T) (hOV : ObjStarValid S T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : WildReachedAdmitted σ S T) (hValid : AllValid T)
+    (hReach : WildReachedAdmitted σ S T)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_objStar S T σ q hWF hPD hSV hOS hOV hqs hqo hReach]; exact hDeny
 
 /-- **Historical milestone (W1b; retains object-wildcard store scope — see the
@@ -167,9 +171,9 @@ theorem no_ghost_grant_objStar (S : Schema) (T' : Store) (σ' : GraphState) (q :
 theorem backend_equivalence_usStar (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hUS : UsStarStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : UsStarReachedAdmitted σ S T) (hValid : AllValid T) :
+    (hReach : UsStarReachedAdmitted σ S T) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid,
+  rw [setEngine_correct S T q,
       graph_correct_usStar S T σ q hWF hPD hSV hUS hqs hqo hReach]
 
 /-- **Historical milestone (W1c; retains userset-star store scope — see the
@@ -180,11 +184,11 @@ theorem backend_equivalence_usStar (S : Schema) (T : Store) (σ : GraphState) (q
 theorem exclusion_effective_usStar (S : Schema) (T : Store) (σ : GraphState) (q : Query)
     (hWF : WF S) (hPD : PureDirect S) (hSV : StoreValid S T) (hUS : UsStarStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : UsStarReachedAdmitted σ S T) (hValid : AllValid T)
+    (hReach : UsStarReachedAdmitted σ S T)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF (stratifiable_pureDirect hPD) hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_usStar S T σ q hWF hPD hSV hUS hqs hqo hReach]; exact hDeny
 
 /-- **Historical milestone (W1c; retains userset-star store scope — see the
@@ -222,9 +226,9 @@ theorem backend_equivalence_rules (S : Schema) (T : Store) (σ : GraphState) (q 
     (hWF : WF S) (hUT : UntaintedSchema S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : ReachedByRulesAdmitted σ S T) (hValid : AllValid T) :
+    (hReach : ReachedByRulesAdmitted σ S T) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF (stratifiable_untainted hUT) hValid,
+  rw [setEngine_correct S T q,
       graph_correct_rules S T σ q hWF hUT hTT hNK hR hSV hSF hqs hqo hReach]
 
 /-- **Historical milestone (W2; residual generality — see the
@@ -236,11 +240,11 @@ theorem exclusion_effective_rules (S : Schema) (T : Store) (σ : GraphState) (q 
     (hWF : WF S) (hUT : UntaintedSchema S) (hTT : TtuTuplesetsDirect S) (hNK : NodupKeys S)
     (hR : RewriteRanked S) (hSV : StoreValidRules S T) (hSF : StarFreeStore T)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
-    (hReach : ReachedByRulesAdmitted σ S T) (hValid : AllValid T)
+    (hReach : ReachedByRulesAdmitted σ S T)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF (stratifiable_untainted hUT) hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_rules S T σ q hWF hUT hTT hNK hR hSV hSF hqs hqo hReach]; exact hDeny
 
 /-- **Historical milestone (W2; residual generality — see the
@@ -282,10 +286,10 @@ theorem backend_equivalence_w3a (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (h : W3aComplete S T σ) (hValid : AllValid T)
+    (h : W3aComplete S T σ)
     (hqbare : q.subject.predicate = BARE) (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF hStrat hValid,
+  rw [setEngine_correct S T q,
       graph_correct_w3a q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
 
 /-- **Historical milestone (W3a; see the `backend_equivalence_w3a` tag).**
@@ -300,12 +304,12 @@ theorem exclusion_effective_w3a (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (h : W3aComplete S T σ) (hValid : AllValid T)
+    (h : W3aComplete S T σ)
     (hqbare : q.subject.predicate = BARE) (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_w3a q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqbare hqs hqo]
     exact hDeny
 
@@ -350,10 +354,10 @@ theorem backend_equivalence_w3b (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (h : W3bComplete S T σ) (hValid : AllValid T)
+    (h : W3bComplete S T σ)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF hStrat hValid,
+  rw [setEngine_correct S T q,
       graph_correct_w3b q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqs hqo]
 
 /-- **Historical milestone (W3b; see the `backend_equivalence_w3b` tag).**
@@ -369,12 +373,12 @@ theorem exclusion_effective_w3b (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (h : W3bComplete S T σ) (hValid : AllValid T)
+    (h : W3bComplete S T σ)
     (hqs : q.subject.name ≠ STAR) (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_w3b q hWF hTT hNK hR hSV hSF hMatch hStrat hterm hCO hLU h hqs hqo]
     exact hDeny
 
@@ -424,11 +428,11 @@ theorem backend_equivalence_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
-    (h : W3cComplete S T σ) (hValid : AllValid T)
+    (h : W3cComplete S T σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF hStrat hValid,
+  rw [setEngine_correct S T q,
       graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
         hWSbare h hqs hqo]
 
@@ -447,13 +451,13 @@ theorem exclusion_effective_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
-    (h : W3cComplete S T σ) (hValid : AllValid T)
+    (h : W3cComplete S T σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_w3c q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm hCO hLU
       hWSbare h hqs hqo]
     exact hDeny
@@ -511,12 +515,12 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
-    (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
     (hql : publicOfLeaf S q.object.type q.relation = none) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF hStrat hValid,
+  rw [setEngine_correct S T q,
       graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO hLU
         hWSbare h hq hqs hqo hql]
 
@@ -539,14 +543,14 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
-    (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
     (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF hStrat hValid]; exact hDeny
+  · rw [setEngine_correct S T q]; exact hDeny
   · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO hLU
       hWSbare h hq hqs hqo hql]
     exact hDeny
@@ -608,12 +612,12 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
-    (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
     (hql : publicOfLeaf S q.object.type q.relation = none) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
-  rw [setEngine_correct S T q hWF hStrat hValid,
+  rw [setEngine_correct S T q,
       graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO
         hLU2 hWSbare h hq hqs hqo hql]
 
@@ -637,14 +641,14 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
-    (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = []) (hValid : AllValid T)
+    (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
     (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T q = false) :
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
-  · rw [setEngine_correct S T q hWF hStrat hValid]
+  · rw [setEngine_correct S T q]
     exact hDeny
   · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO
       hLU2 hWSbare h hq hqs hqo hql]

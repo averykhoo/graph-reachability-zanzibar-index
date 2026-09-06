@@ -17,12 +17,19 @@ WHAT IT LOOKS FOR (all of these are ways a "0 sorries" tree can still be unsound
     to sit inside an audited dependency cone. Note the tree legitimately contains
     the WORD "axiom" in prose and in `#print axioms <thm>` COMMANDS, so the match
     is anchored at a declaration position (line start, modulo declaration
-    modifiers) — `#print axioms` starts with `#` and never matches.
-
-WHAT IT DOES NOT LOOK FOR: `opaque`. The tree carries exactly one deliberate
-`opaque` (`Core/Ident.lean` `ValidIdent`, a Phase-1 placeholder) and the axiom
-audit already reports an opaque constant in any dependency cone that routes
-through one, so flagging it here would be a permanent false positive.
+    modifiers) — `#print axioms` starts with `#` and never matches;
+  * `opaque` DECLARATIONS (since 2026-09-06) — same anchoring, same reason. An
+    `opaque P : String → Prop` is a constant with no definition: any hypothesis
+    built on it is undischargeable, and a theorem that assumes one can be vacuous
+    at every concrete instance. Until 2026-09-06 this scanner deliberately did
+    NOT flag `opaque`, because the tree carried exactly one (`Core/Ident.lean`
+    `ValidIdent`, a Phase-1 placeholder) and a warning about it would have been a
+    permanent false positive. That opaque — and the never-used T3 hypothesis
+    `hValid : AllValid T` built on it — were deleted that day; the tree carries
+    ZERO opaques and the scan now refuses a new one mechanically rather than by
+    a doc note. (The axiom audit also reports an opaque constant in any audited
+    cone that routes through one, but only for AUDITED theorems; this check
+    covers every declaration.)
 
 Contract (matches the old heredoc + verify.sh's use of it):
   * argv holds one or more Lean source roots (a directory is scanned recursively
@@ -64,21 +71,22 @@ _DOT = "."
 # like `sorryish` / `presorry` from tripping (pinned in test_sorry_scan.py).
 HOLE_RE = re.compile(r"\b(?:sorryAx|sorry|admit|native_decide)\b")
 
-# A custom `axiom` DECLARATION, anchored at a declaration position: start of line,
-# optionally preceded by declaration modifiers / an attribute block, and followed
-# by whitespace (so `axiom_free_foo` is not a match). `#print axioms X` begins with
-# `#` and can never match. Applied to the comment/string-stripped text, so prose
-# mentions of the word are already gone.
+# A custom `axiom` or `opaque` DECLARATION, anchored at a declaration position:
+# start of line, optionally preceded by declaration modifiers / an attribute block,
+# and followed by whitespace (so `axiom_free_foo` / `opaque_key` are not matches).
+# `#print axioms X` begins with `#` and can never match. Applied to the
+# comment/string-stripped text, so prose mentions of either word are already gone.
+# The keyword is captured so the finding's `kind` names which one tripped.
 AXIOM_DECL_RE = re.compile(
     r"^[ \t]*(?:(?:@\[[^\]\n]*\]|private|protected|scoped|local|noncomputable)[ \t]+)*"
-    r"axiom[ \t\r\n]",
+    r"(?P<kw>axiom|opaque)[ \t\r\n]",
     re.MULTILINE,
 )
 
 
 class Finding(NamedTuple):
     """One violation: its kind, the offending text, and the 1-based line."""
-    kind: str      # 'token' | 'axiom' | 'unterminated-string'
+    kind: str      # 'token' | 'axiom' | 'opaque' | 'unterminated-string'
     text: str
     line: int
 
@@ -148,7 +156,8 @@ def scan_text(src: str) -> list[Finding]:
             Finding("token", m.group(0), stripped.count("\n", 0, m.start()) + 1))
     for m in AXIOM_DECL_RE.finditer(stripped):
         findings.append(
-            Finding("axiom", m.group(0).strip(), stripped.count("\n", 0, m.start()) + 1))
+            Finding(m.group("kw"), m.group(0).strip(),
+                    stripped.count("\n", 0, m.start()) + 1))
     return findings
 
 

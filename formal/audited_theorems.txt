@@ -92,6 +92,7 @@ W4WitnessDirect.admission4
 W4WitnessDirect.correct_applies
 W4WitnessDirect.correct_applies_nonfence
 W4WitnessDirect.coverage_applies
+W4WitnessDirect.equivalence_applies
 W4WitnessDirect.final_applies
 W4WitnessDirect.final_applies4
 W4WitnessDirect.fragment
@@ -209,6 +210,7 @@ foldAdmits_of_acyclic
 foldl_writeDirectRaw_eq
 foldl_writeDirect_edge_complete
 grantReach_of_trail
+graphModeAnswers_eq_sem
 graphRec_base_eq
 graphRec_base_eq_bs
 graphRec_base_eq_bs_d
@@ -221,6 +223,7 @@ graphRec_reduce_base_adm
 graphRec_reduce_base_adm_bs
 graphRec_star_declared
 graphRunOps_check_eq_sem
+graphRunOps_directArm_backend_equivalence
 graphRunOps_reached
 graphRunOps_store
 graphRun_check_eq_sem

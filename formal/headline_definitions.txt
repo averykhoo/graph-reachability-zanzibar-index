@@ -38,7 +38,6 @@ ambient:formal/lean/ZanzibarProofs/SetEngine/Eval.lean	open MemberSet
 ambient:formal/lean/ZanzibarProofs/SetEngine/MemberSet.lean	variable {Id : Type} [DecidableEq Id]
 def:NotLeafName	[def] def NotLeafName (p : String) : Prop := p = BARE ∨ isLeafPred p = false
 def:Zanzibar.Acyclic	[def] def Acyclic (g : DirectGraph V) : Prop := ∀ v, pathCount g v v = 0
-def:Zanzibar.AllValid	[def] def AllValid (T : Store) : Prop := ∀ tup ∈ T, ValidIdent tup.subject.type ∧ ValidIdent tup.relation ∧ ValidIdent tup.object.type
 def:Zanzibar.BARE	[def] def BARE : String := "..."
 def:Zanzibar.BareStarStore	[def] def BareStarStore (T : Store) : Prop := ∀ t ∈ T, (t.subject.name = STAR → t.subject.predicate = BARE) ∧ t.object.name ≠ STAR
 def:Zanzibar.CompleteKey	[def] def CompleteKey (S : Schema) (T : Store) (σ : GraphState) (dt on R : String) : Prop := (∀ sh ∈ wildcardShapes S, sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true → (σ.residue (objNode ⟨dt, on⟩ R) R).isSome = true) ∧ (∀ s : SubjectRef, s.predicate = BARE → s.name ≠ STAR → sem S T ⟨s, R, ⟨dt, on⟩⟩ = true → ¬(s.shape ∈ wildcardShapes S ∧ sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true) → (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges) ∧ (∀ s : SubjectRef, s.predicate ≠ BARE → s.name ≠ STAR → sem S T ⟨s, R, ⟨dt, on⟩⟩ = true → ∃ res, σ.residue (objNode ⟨dt, on⟩ R) R = some res ∧ s ∈ res.upos) ∧ (∀ s : SubjectRef, s.name ≠ STAR → s.shape ∈ wildcardShapes S → sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true → sem S T ⟨s, R, ⟨dt, on⟩⟩ = false → ∃ res, σ.residue (objNode ⟨dt, on⟩ R) R = some res ∧ s ∈ res.neg)
@@ -253,6 +252,8 @@ def:Zanzibar.rewriteStepL	[def] def rewriteStepL (S : Schema) (t : Tuple) : List
 def:Zanzibar.runCascade2	[def] def runCascade2 (S : Schema) (T : Store) (σ : GraphState) (jobs1 jobs2 : List W3cJob) : GraphState := if ((reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).frontierRowsAbove ((reconcileJobsLR S T σ jobs1).frontierMax (σ.frontierMax σ.watermark))).all (fun d => (affectedKeys S (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2) d).isEmpty) then { reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2 with watermark := (reconcileJobsLR S T (reconcileJobsLR S T σ jobs1) jobs2).maxOutboxId } else σ
 def:Zanzibar.schemaRewrites	[def] def schemaRewrites (S : Schema) : List RRule := (S.defs.filter (fun d => !(isDerived S d.1))).flatMap (fun d => exprArms d.1.1 d.1.2 d.2)
 def:Zanzibar.schemaRewritesL	[def] def schemaRewritesL (S : Schema) : List RRule := schemaRewrites S ++ leafRewrites S
+def:Zanzibar.sdDirectArmOps	[def] def sdDirectArmOps : List GraphOp := [GraphOp.add ⟨⟨"user", "alice", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩]
+def:Zanzibar.sdDirectArmQuery	[def] def sdDirectArmQuery : Query := ⟨⟨"user", "alice", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
 def:Zanzibar.sem	[def] def sem (S : Schema) (T : Store) (q : Query) : Bool := semAux S q.subject T q (fuelBound S T) q.object.type q.object.name q.relation
 def:Zanzibar.semAux	[def] def semAux (S : Schema) (subject : SubjectRef) (T : Store) (q : Query) : Nat → String → String → String → Bool | 0, _, _, _ => false | fuel + 1, otype, oname, rel => step S subject T q (semAux S subject T q fuel) otype oname rel
 def:Zanzibar.splitPure	[def] def splitPure : Expr → List Restriction × List Expr | .direct rs => (rs, []) | .union a b => let l := splitPure a let r := splitPure b (l.1 ++ r.1, l.2 ++ r.2) | e => ([], [e])

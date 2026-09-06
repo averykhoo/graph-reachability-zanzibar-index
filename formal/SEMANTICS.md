@@ -102,14 +102,24 @@ backends' lookup surfaces are pinned empirically by the brute-force oracle gate
   never matches any validated stored tuple (`correctness.md`/CLAUDE.md).
 
 **Spec treatment.** Model identifiers as opaque strings with two distinguished
-sentinels `STAR = "*"` and `BARE = "..."`. Introduce a predicate `ValidIdent :
-String → Prop` = charset+length membership. `Store` tuples carry the
-precondition that every field satisfies the positional validity of
-`validate_write_identifiers`. The spec does **not** re-derive the charset regex;
-it takes `ValidIdent` as an axiom-level predicate and only relies on: (a) a
-declared *relation* name can never be `'*'`, `'...'`, or contain `'.'` (§4.1); (b)
-a concrete entity name can never be `'*'`. These two facts are what make the
-sentinels unambiguous.
+sentinels `STAR = "*"` and `BARE = "..."`. The spec does **not** re-derive the
+charset regex; it relies only on: (a) a declared *relation* name can never be
+`'*'`, `'...'`, or contain `'.'` (§4.1); (b) a concrete entity name can never be
+`'*'`. These two facts are what make the sentinels unambiguous.
+
+**History (2026-09-06).** Until this date the spec also introduced a predicate
+`ValidIdent : String → Prop` (= charset+length membership) as an `opaque`
+axiom-level constant, and `Store` tuples were said to "carry the precondition"
+that every field satisfies it (`AllValid T`, the `hValid` hypothesis of T1/T3).
+No proof ever consumed it, and because it was opaque it could not be discharged
+for any non-empty store — so T3 had no concrete instantiation while T2b had two.
+Predicate, hypothesis and opaque were deleted together (`Core/Ident.lean` now
+carries only the two sentinels and `star_ne_bare`); the one place a proof
+actually needs a fragment of write-validity — a declared relation name is
+non-empty — is `GraphAdmission.keysNonempty` (`FullScope.lean`), mirrored to
+`validate_write_identifiers` in `CORRESPONDENCE.md` §6. The tree carries zero
+`opaque` declarations and `formal/conformance/sorry_scan.py` now refuses a new
+one at the declaration position, the same way it refuses `axiom`.
 
 ### 2.2 References
 
@@ -610,9 +620,11 @@ name, the code wins):
 - `hWF : WF S` (§4.2; `Core/Schema.lean`).
 - `hStrat : Stratifiable S` — `stratify S` succeeds (§4.4 — no claim without
   it; `Spec/Stratify.lean`).
-- `hValid : AllValid T` (`SetEngine/Correct.lean`) — every stored tuple's
-  `subject.type`, `relation`, `object.type` satisfy `ValidIdent` (§2.1;
-  `ValidIdent` is deliberately opaque, `Core/Ident.lean`).
+- ~~`hValid : AllValid T`~~ — **deleted 2026-09-06** (§2.1 history). It was
+  T1's third underscored binder and T3/T6a's only non-T2b hypothesis; nothing
+  ever used it, and being built on an `opaque` it could not be discharged at
+  any concrete non-empty store. T1 is now stated unconditionally and T3 carries
+  exactly T2b's hypotheses.
 - `hDecl : StoreDeclared S T` — every stored tuple's `(object.type, relation)`
   is declared and its subject type is among the declared restriction types
   (`Spec/Confine.lean`). The semantic half of write-validity, implied by the
@@ -688,10 +700,10 @@ theorem covers that surplus.
 |----|------------------|-------------------------|
 | **T0a** | `sem_fuel_stable` (`Spec/WellDef.lean`) | `hStrat → hDecl → ∀ f ≥ fuelBound S T, semAux S q.subject T q f … = sem S T q` — fuel-stability of the executable evaluator over declared stores. (There is NO relational `Sem`; the Phase-0 "relational ≡ executable" T0a was never built — §3.) |
 | **T0b** | `stratify_none_iff_cycle` / `stratify_topological` (`Spec/WellDef.lean`) | `stratify` fails exactly on a derived-dependency cycle; on success, stratum assignment is topological (dependencies respect the layering). |
-| **T1** | `setEngine_correct` (`SetEngine/Correct.lean`) | `hWF → hStrat → hValid → SetEngineModel.check S T q = sem S T q`. Full scope. (The three hypotheses are retained but underscored/unneeded — the equality is unconditional; they match the statement `backend_equivalence` routes through.) |
+| **T1** | `setEngine_correct` (`SetEngine/Correct.lean`) | `SetEngineModel.check S T q = sem S T q` — **unconditional**, for every schema, store and query. Full scope. (Until 2026-09-06 the statement carried three underscored, unused binders `_hWF → _hStrat → _hValid →`; all three were deleted — the equality never depended on them.) |
 | **T2a** | `graph_reached_inv` (`FullScope.lean`) | `hA → hF → h → Inv S σ` — the 8-clause invariant (I1–I3 structural + the four I6 residue-hygiene clauses) at EVERY operationally-reached state, dirty keys and mid-drain included. (The Phase-0 shape additionally claimed `materialized = materialize S (netTuples ops)`; **no such state-equality theorem exists** — state-level conformance is an open item, §10.) |
 | **T2b** | `graph_correct` (`FullScope.lean`) | `hA → hF → h → hq → hqs → hqo → GraphModel.check σ q = sem S T q` — at every fully-drained reached state, derived AND untainted queries. |
-| **T3** | `backend_equivalence` (`FullScope.lean`) | T2b's hypotheses + `hValid` ⟹ `SetEngineModel.check S T q = GraphModel.checkPublic σ q` (T1 ∘ T2b, transitivity through `sem`; same scope as T2b, never wider). **The graph side is the PUBLIC read since 2026-08-28c** — `graph_correct` (T2b) itself remains over the unfenced `GraphModel.check`. |
+| **T3** | `backend_equivalence` (`FullScope.lean`) | **exactly T2b's hypotheses** (`hA → hF → h → hq → hqs → hqo`; the extra `hValid` was deleted 2026-09-06) ⟹ `SetEngineModel.check S T q = GraphModel.checkPublic σ q` (T1 ∘ T2b, transitivity through `sem`; same scope as T2b, never wider — and, since 2026-09-06, **instantiated**: `W4WitnessDirect.equivalence_applies` and `Exec.lean::graphRunOps_directArm_backend_equivalence`, the latter a closed `∃ σ` at a concrete executed store where both backends answer `true`). **The graph side is the PUBLIC read since 2026-08-28c** — `graph_correct` (T2b) itself remains over the unfenced `GraphModel.check`. |
 | **T4** | `pathCount_addEdge` / `pathCount_removeEdge` (`GraphIndex/Closure.lean`) | acyclicity ⟹ add/remove of a direct edge preserves `p = #paths` (the counting theorem; the DAG hypothesis is enforced by §7.3). |
 | **T5** | `runCascade2_no_abort` / `cascade2_drains` (`GraphIndex/CascadeStrata.lean`) | the two-round cascade drains every dirty key, and the scheduler's abort branch is provably dead at ≤ 2 derived strata (`hLU2`; attack-confirmed LIVE at 3 strata — which is why `twoStrata` is an honest carry). |
 | **T6a** | `exclusion_effective` (`FullScope.lean`) | T3's hypotheses + `hDeny : sem S T q = false` ⟹ BOTH backends deny — with real exclusion content at this scope: a subject removed by a `but not` operand is denied by both (`exclusion_effective_w3c` exhibits the under-a-star-grant case). |

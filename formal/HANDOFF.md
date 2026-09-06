@@ -76,12 +76,13 @@ wrong, and two of its anchors (`State.lean:813`, `:854`) had drifted onto
 `ReconcileWrite.lean::inv_reconcileKey` — plus the forgetful `State.lean::Inv.toStruct`.
 The finding it supports (nothing consumes `Inv`) is unchanged.
 
-⚠ **Dated blocks STOP at 2026-08-28c; every session since is recorded in
-`history/PROOF_STATUS.md`, not here** — `2026-08-30`…`2026-09-02c`, then `2026-09-05` and
-`2026-09-05b`, which is where leg 7's flip landed (see the leg-7 block below). Sizing
-history worth carrying: `2026-09-01e` sized the flip at **5 sites / 4 decls / 2 files**;
-**step 9 is done (2026-09-02)**; **2026-09-02b**'s "CLOSED 14/12/6" is retired by
-**2026-09-02c** as a lower bound — live **62 + 13 decls / ELEVEN files**; §11.13 (v)/(w).
+⚠ **Dated blocks STOP at 2026-08-28c; every session since is in `history/PROOF_STATUS.md`,
+not here** — `2026-08-30`…`2026-09-02c`, `2026-09-05`, `2026-09-05b` (leg 7's flip landed;
+leg-7 block below), `2026-09-06` (`TK56`: T3's undischargeable `hValid`/`opaque ValidIdent`
+deleted; T3 takes exactly T2b's hypotheses, INSTANTIATED by `W4WitnessDirect.equivalence_applies`;
+zero opaques, `sorry_scan.py` refuses one; pins 51 + 251). Sizing: `2026-09-01e` sized the
+flip at **5 sites / 4 decls / 2 files**; **step 9 done (2026-09-02)**; **2026-09-02b**'s "CLOSED
+14/12/6" is retired by **2026-09-02c** as a lower bound — live **62 + 13 decls / ELEVEN files**; §11.13 (v)/(w).
 
 **2026-08-28c — the public surface is migrated, and the `hql` surface is one row.**
 Seven declarations (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
