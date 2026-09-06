@@ -25,6 +25,68 @@ from here.
 
 ---
 
+## 2026-09-06 — `TK56`: T3's undischargeable `hValid` (and its `opaque`) deleted; T3 instantiated; next is `P17`
+
+rows: `TK56` (new, closed), `P17` (named as the next step — pointer only, not re-ranked), `P6` (untouched, still `NOW` mechanically)
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session
+2026-09-06` (§1 the second opinion, §2 the 49-site deletion and the two witnesses, §3 the
+cold build, §4 the three regenerated pins, §5 the `sorry_scan` sabotage evidence, §6 the
+`task.py` floor ratchet, §7 next, §8 the gate).
+
+lint: `task lint: clean (12 checks, 159 task file(s) parsed)`
+read: board + HANDOFF (the banner and the `P17` row; the prior session's context was carried
+in-conversation, so HANDOFF was not re-read in full)
+
+**Task (user-assigned): a second opinion on "the optimal next step toward set-engine =
+graph-index equivalence", then "if it's deleting `hValid`, do that, gate, commit, and tell
+me what the next thing after is".** The opinion agreed with the prior session's pick, with
+one qualification that is the whole point of the entry: deleting `hValid` is HYGIENE, not
+reach. `backend_equivalence` (T3) carried `hValid : AllValid T` only to feed T1's unused
+`_hValid` binder, and `AllValid` sat on `opaque ValidIdent : String → Prop` — a `Prop` with no
+introduction rule, so `AllValid T` was undischargeable at every non-empty store and T3 had
+NO instance anywhere in the tree while T2b (`graph_correct_public`) had two. Six weeks of a
+headline that could not be applied.
+
+**Landed:** `AllValid` and `opaque ValidIdent` deleted; `setEngine_correct` (T1) is now
+`(S) (T) (q) : SetEngineModel.check S T q = sem S T q` with no hypotheses; 18 `Equiv.lean`
+rungs and `FullScope.lean`'s T3/T6a lose the binder (49 sites / 5 files); T3 takes exactly
+T2b's `hA hF h hq hqs hqo`. Two instantiations added, audited and pinned:
+`FullScope.lean::W4WitnessDirect.equivalence_applies` and
+`Exec.lean::graphRunOps_directArm_backend_equivalence` — the latter a closed form (∃σ at an
+EXECUTED store, `ReachedBy`, `Drained`, both backends `= true`, proved equal). Cold build
+`LAKE_RC=0` first try (one self-inflicted restart: a docstring edit to the root import
+mid-build). Pins regenerated with the reasons in PROOF_STATUS §4: statements 49 → **51**,
+definitions 250 → **251** (`AllValid` gone, `sdDirectArmOps`/`sdDirectArmQuery` in), audits
+584 → **587** — the regeneration also caught `graphModeAnswers_eq_sem`, audited but never
+pinned; the superset rule hides exactly that.
+
+**Two mechanical refusals landed beside it, each with a control:**
+* The tree now carries ZERO `opaque`s, so `formal/conformance/sorry_scan.py` refuses one at
+  declaration position (`AXIOM_DECL_RE` = `axiom|opaque`). Control: `HEAD`'s `Ident.lean`
+  scanned alone → 1 finding, rc 1; live 0 over 70 files. `test_sorry_scan.py` 39 → 44.
+* `scripts/task.py new` ratchets `min_tasks_parsed` itself (`task.py::ratchet_min_parsed`,
+  `max(floor, disk)`, never lowers) — the manual step `tasks/config.json`'s provenance recorded
+  as forgotten in THREE consecutive sessions. First live use: filing `TK56` printed
+  `floor min_tasks_parsed 158 -> 159`. `tests/test_tasktool.py` 85 → 86; the new test is RED
+  against `HEAD`'s `task.py`. Spec row updated (`docs/tasktool-spec.md` `new`).
+
+**Next (the answer to "what after"): `P17`.** `ReachedBy := ReachedByW3d2E` has
+`emptyState` as its only base constructor (`CascadeStrataAssemble.lean:430`), so every
+headline is a statement about indexes grown from empty by logged writes — and
+`build_index(bulk=True)` is the DEFAULT constructor (`connectedstore/build.py:82-87`,
+`bulk_build.py`/`bulk_backfill.py`). Model it as a second base constructor, or scope-exclude
+it in writing in `FINAL_REVIEW.md`. Not re-ranked here (user-assigned task).
+
+Docs touched: `formal/SEMANTICS.md` (§2.1, T1/T3 rows, the `hValid` bullet),
+`formal/FINAL_REVIEW.md` (T1/T3 clauses + counts block), `formal/ARCHITECTURE.md`,
+`formal/HANDOFF.md`, `docs/tasktool-spec.md`, `tasks/BANNER.md`, this board's banner.
+
+Still owed: the three user calls carried from `2026-09-05b` — `TK55` (`keysNonempty` scope vs
+discharge), branch `p3-flip-red-2026-09-05` (keep vs delete), and the `tasks/` trial decision
+`TT-1` (window closes today; cutover-or-keep-both). `TK53`: 15 appends. `P6` at `NOW` was not
+re-examined.
+
 ## 2026-09-05b — `P3` LANDED: the write-leg-only flip was kernel-refuted, so (α)+R5 co-landed; sorry-free, P6 retired
 
 rows: `P3` (closed), `P6` (→ `NOW`), `P4`, `P5`, `P14`, `TK54` + `TK55` (new)

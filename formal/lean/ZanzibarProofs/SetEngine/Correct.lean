@@ -349,18 +349,25 @@ theorem containsShape_expandAux (S : Schema) (s : SubjectRef) (T : Store) (q : Q
           exact containsShape_expandE S s T q (expandAux S s T q n) (semAux S s T q n)
             ih (wfp_expandAux S s T q n) ot on rel e
 
-/-- Every stored tuple is write-valid (`hValid`, §8). -/
-def AllValid (T : Store) : Prop :=
-  ∀ tup ∈ T, ValidIdent tup.subject.type ∧ ValidIdent tup.relation ∧ ValidIdent tup.object.type
+/-- **T1.** The set-engine model answers exactly the specification — **unconditionally**.
 
-/-- **T1.** The set-engine model answers exactly the specification.
+    No well-formedness, stratifiability or identifier-validity hypothesis is needed: the
+    concrete expansion computes `semAux` at every fuel, and the two run at the same
+    `fuelBound`, so the equality holds for every schema and every store.
 
-    Note the well-formedness / stratifiability / validity hypotheses are *not needed*:
-    the concrete expansion computes `semAux` at every fuel, and the two run at the same
-    `fuelBound`, so equality is unconditional. They are retained (underscored) to match
-    the theorem statement `backend_equivalence` routes through. -/
-theorem setEngine_correct (S : Schema) (T : Store) (q : Query)
-    (_hWF : WF S) (_hStrat : Stratifiable S) (_hValid : AllValid T) :
+    **History (2026-09-06).** Until this date the statement carried three underscored,
+    unused binders `(_hWF : WF S) (_hStrat : Stratifiable S) (_hValid : AllValid T)`,
+    "retained to match the theorem statement `backend_equivalence` routes through". The
+    third was the only one that ever mattered: `AllValid` was built on an `opaque`
+    `ValidIdent` (formerly `Core/Ident.lean`), so `AllValid T` was undischargeable for any
+    non-empty concrete store and the headline `backend_equivalence` — whose proof only
+    ever passed `hValid` straight into this theorem — could not be instantiated at all
+    (`FullScope.lean`'s `W4Witness` note recorded exactly that). All three binders were
+    deleted together with `AllValid` and `ValidIdent`; T3/T6a now carry precisely T2b's
+    hypotheses, and `W4WitnessDirect.equivalence_applies` / `Exec.lean
+    ::graphRunOps_directArm_backend_equivalence` are the first concrete instantiations of
+    `backend_equivalence`. -/
+theorem setEngine_correct (S : Schema) (T : Store) (q : Query) :
     SetEngineModel.check S T q = sem S T q := by
   unfold SetEngineModel.check sem
   exact containsShape_expandAux S q.subject T q (fuelBound S T)

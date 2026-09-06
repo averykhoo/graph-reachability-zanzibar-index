@@ -5,9 +5,19 @@ import Mathlib.Data.List.Basic
 # Core identifiers and sentinels
 
 See `SEMANTICS.md` §2.1. Identifiers are opaque strings; two sentinels are
-distinguished. `ValidIdent` is taken as an OPAQUE predicate (the spec does not
-re-derive the charset regex — plan §2.1); no proof unfolds it or derives
-structural facts from it.
+distinguished. Star/bare sentinel distinctions are made by explicit store
+hypotheses (`StarFreeStore`, `BareStarStore`, …), never by a validity predicate.
+
+**No identifier-validity predicate (since 2026-09-06).** This file used to declare
+`opaque ValidIdent : String → Prop` — the charset+length validity of
+`zanzibar_utils_v1.py::validate_write_identifiers` — which entered the theorems only
+through `AllValid` (`SetEngine/Correct.lean`), a hypothesis of T1/T3/T6a that no
+proof ever used and that, being built on an opaque, could not be discharged for any
+non-empty concrete store; it was the sole reason the headline `backend_equivalence`
+had no instantiation. Both declarations were deleted together with that hypothesis
+(the tree now carries NO `opaque`). The Python write-validation correspondence lives
+where a proof actually consumes it: `GraphAdmission.keysNonempty`
+(`FullScope.lean`; the `FullScope.lean::GraphAdmission` row of `CORRESPONDENCE.md` §6).
 -/
 
 namespace Zanzibar
@@ -20,20 +30,5 @@ def STAR : String := "*"
 def BARE : String := "..."
 
 theorem star_ne_bare : STAR ≠ BARE := by decide
-
-/-- Charset+length validity of an identifier
-    (`zanzibar_utils_v1.py::validate_write_identifiers` → `::_require` →
-    `::is_valid_identifier`, matching the module-level `_IDENTIFIER_RE`; since
-    `ZT-P1-1`, 2026-07-26, that regex is `\Z`-anchored and applied with
-    `re.fullmatch`, so a trailing newline no longer sneaks past the 1–256 bound).
-    Deliberately OPAQUE: no proof unfolds it and no
-    structural lemmas are derived from it. It enters the theorems only through the
-    carried hypothesis `AllValid` (`SetEngine/Correct.lean`) — retained in the
-    T1/T3 statements but unused by their proofs, and (being opaque) NOT
-    dischargeable for a concrete store inside the model (cf. the `W4Witness` note
-    in `FullScope.lean`). Star/bare sentinel distinctions are made by explicit
-    store hypotheses (`StarFreeStore`, `BareStarStore`, …), never via
-    `ValidIdent`. -/
-opaque ValidIdent : String → Prop
 
 end Zanzibar

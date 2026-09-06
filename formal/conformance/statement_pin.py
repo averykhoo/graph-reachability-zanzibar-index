@@ -273,6 +273,14 @@ HEADLINE = [
     "Zanzibar.W4WitnessDirect.w4fragment",
     "Zanzibar.W4WitnessDirect.final_applies",
     "Zanzibar.W4WitnessDirect.outside_narrow_t2a",
+    # 2026-09-06 -- the headline `backend_equivalence` (T3) INSTANTIATED for the first
+    # time, once its never-used `hValid : AllValid T` hypothesis (over an `opaque`
+    # predicate, undischargeable at any concrete store) was deleted.  Two forms: the
+    # universally-quantified one beside `final_applies`, and a driver-BUILT one in
+    # `Exec.lean` whose last conjunct pins that the agreed answer is a grant.  Pinned so
+    # a restatement to `True` -- or a quiet drop of the `= true` conjunct -- is visible.
+    "Zanzibar.W4WitnessDirect.equivalence_applies",
+    "Zanzibar.graphRunOps_directArm_backend_equivalence",
     # Leg 6 -- the same two bundles at `Td4`, the `direct_arm_exclusion` corpus store
     # VERBATIM rather than the one-tuple minimal store.  `final_applies4` is what
     # licenses `test_conformance_graph._THEOREM_BACKED` to carry that corpus: the

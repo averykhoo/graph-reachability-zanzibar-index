@@ -931,6 +931,34 @@ theorem graphRunOps_directArm_check_eq_sem :
         (drainedB_iff W4WitnessDirect.Sd σ0).mp hdr,
         by rw [hchk, sem_directArm_grants]⟩
 
+/-- **★ The headline `backend_equivalence` (T3) at a DRIVER-BUILT state — the first
+    concrete instance of the project's namesake theorem (2026-09-06).**
+
+    `graphRunOps_directArm_check_eq_sem` above hands over a genuine chain state `σ`
+    (produced by `graphRunOps`, with `ReachedBy` and `Drained` discharged from the run
+    itself); this theorem applies `backend_equivalence` to it, so the SET-ENGINE model's
+    answer equals the GRAPH index's public answer at that state — and the last conjunct
+    pins that the agreed answer is a GRANT (`true`), not a vacuous double-deny.
+
+    Why it is new: until 2026-09-06 T3 carried `(hValid : AllValid T)` over an `opaque`
+    predicate, so it could not be applied at any non-empty concrete store; every
+    executable witness in this file stopped at T2b. Companion (universally quantified
+    over the reached state): `FullScope.lean::W4WitnessDirect.equivalence_applies`. -/
+theorem graphRunOps_directArm_backend_equivalence :
+    ∃ σ : GraphState,
+      graphRunOps W4WitnessDirect.Sd sdDirectArmOps = some (σ, W4WitnessDirect.Td)
+        ∧ ReachedBy σ W4WitnessDirect.Sd W4WitnessDirect.Td
+        ∧ Drained W4WitnessDirect.Sd σ
+        ∧ SetEngineModel.check W4WitnessDirect.Sd W4WitnessDirect.Td sdDirectArmQuery
+            = GraphModel.checkPublic σ sdDirectArmQuery
+        ∧ SetEngineModel.check W4WitnessDirect.Sd W4WitnessDirect.Td sdDirectArmQuery
+            = true := by
+  obtain ⟨σ, hrun, h, hq, _⟩ := graphRunOps_directArm_check_eq_sem
+  refine ⟨σ, hrun, h, hq, ?_, ?_⟩
+  · exact backend_equivalence sdDirectArmQuery W4WitnessDirect.admission
+      W4WitnessDirect.w4fragment h hq (by decide) (by decide)
+  · rw [setEngine_correct]; exact sem_directArm_grants
+
 set_option maxHeartbeats 4000000 in
 /-- **The agreement is not an artefact of the one-tuple store.** It reproduces at
     `W4WitnessDirect.Td4`, the four-tuple CORPUS store that `::admission4` / `::w4fragment4`
