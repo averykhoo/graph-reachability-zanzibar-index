@@ -622,6 +622,21 @@ BRIEF_MAX = 120
 # own ceiling, 1 NOW + 3 NEXT all carrying briefs -- and asserts this number.
 BOARD_MAX_LINES = 50
 
+# `show` prints the Log NEWEST FIRST and ABOVE the body, and only this many entries by
+# default (added 2026-09-06c, Phase B-prime prerequisite 1). The file on disk is
+# append-only, newest LAST -- `append_log` and every digest stay exactly as they were --
+# this is a rendering order, chosen against a real complaint: a reader opens a task and
+# the top of it is the original summary, which is the STALEST text in the file, while
+# the corrections that supersede it sit at the bottom under `## Log`. That is how `P6`'s
+# tree file served "NOT parallel-safe with `P3`" for a full session after the board said
+# `P3` had landed. Jira renders the same way for the same reason: the description is
+# the claim, the comments are what happened to it, and you read the newest comment first.
+#
+# Bounded, like `board`, and the truncation is ALWAYS announced -- `showing 5 of 12 log
+# entries (--head 0 for all)` -- for the reason `LIST_LIMIT` gives: a silent cap is a true
+# sentence that leaves the reader believing they saw everything. `--json` is never cut.
+SHOW_LOG_HEAD = 5
+
 # `tasks/` holds task files, two non-markdown files, and -- since 2026-08-29 -- two
 # markdown files that are NOT tasks. `md_paths` used to take every `*.md` in the
 # directory, so BANNER.md and README.md would have been scanned as tasks and failed lint
@@ -2028,8 +2043,76 @@ def op_list(store, args):
     return 0
 
 
+def section_slug(heading):
+    """``## Read first`` -> ``read-first``: the name `show --section` takes."""
+    return re.sub(r'[^a-z0-9]+', '-', heading.strip().lower()).strip('-')
+
+
+def split_body(body):
+    """The body as `show` reads it: ``summary`` (prose before the first ``## ``), the
+    named ``sections`` in file order as ``(heading, text)``, and the ``log`` as
+    ``(session-key, text)`` entries in FILE order (newest last -- the caller reverses).
+
+    Read-only and lossless in intent, not in bytes: this is a VIEW over the file, and
+    nothing that writes a task file goes through it. `append_log` still owns the Log's
+    on-disk shape, which is why the Log is split by the same rule it appends by -- the
+    section runs to the next ``## `` heading, entries are ``### <key>`` lines inside it.
+    """
+    lines = body.split('\n') if body else []
+    summary, sections, log = [], [], []
+    current = None          # None = summary; else [heading, [lines]]
+    in_log = False
+    entry = None            # [key, [lines]] while inside the Log
+    for line in lines:
+        if line.startswith('## '):
+            if entry is not None:
+                log.append(entry)
+                entry = None
+            heading = line[3:].strip()
+            in_log = (line.strip() == LOG_HEADING)
+            current = None if in_log else [heading, []]
+            if current is not None:
+                sections.append(current)
+            continue
+        if in_log:
+            if line.startswith('### '):
+                if entry is not None:
+                    log.append(entry)
+                entry = [line[4:].strip(), []]
+            elif entry is not None:
+                entry[1].append(line)
+            # Prose between `## Log` and the first `### key` is not an entry and is
+            # dropped from the VIEW only; the file keeps it.
+            continue
+        if current is None:
+            summary.append(line)
+        else:
+            current[1].append(line)
+    if entry is not None:
+        log.append(entry)
+
+    def text(block):
+        return '\n'.join(block).strip('\n')
+
+    return {'summary': text(summary),
+            'sections': [(h, text(b)) for h, b in sections],
+            'log': [(k, text(b)) for k, b in log]}
+
+
 def op_show(store, args):
     task = store.need(args.id)
+    parts = split_body(task.body)
+    newest_first = list(reversed(parts['log']))
+    head = SHOW_LOG_HEAD if getattr(args, 'head', None) is None else args.head
+    if head < 0:
+        raise Refused('--head takes 0 (all entries) or a positive count, not %d.' % head)
+    shown = newest_first if head == 0 else newest_first[:head]
+    section = getattr(args, 'section', None)
+    known = ['summary', 'log'] + [section_slug(h) for h, _ in parts['sections']]
+    if section is not None and section not in known:
+        raise Refused('%s has no section %r. It has: %s. Section names are the `## `'
+                      ' headings lower-cased with spaces as dashes (`## Read first` -> '
+                      '`read-first`).' % (task.id, section, ', '.join(known)))
     # The two DERIVED facts the file itself cannot carry without rotting: the reverse of
     # `deps`, and the child list. Both are computed on every read precisely so that no
     # human ever has to maintain them (SPEC.md section 3.1, "no blocks field").
@@ -2052,13 +2135,60 @@ def op_show(store, args):
         d['open_children'] = open_children
         d['related_in'] = related_in
         d['body'] = task.body
+        # The machine surface is NEVER cut (the `list --json` rule): the whole Log,
+        # newest first, beside the raw body.
+        d['log'] = [{'session': k, 'text': t} for k, t in newest_first]
+        d['sections'] = [{'heading': h, 'text': t} for h, t in parts['sections']]
+        d['summary'] = parts['summary']
         emit_json(d)
         return 0
 
+    def emit_log():
+        n = len(newest_first)
+        if not n:
+            emit('## Log -- empty')
+            return
+        emit('## Log -- newest first (%s; the file itself is append-only, newest last)'
+             % ('%d entries' % n if len(shown) == n
+                else 'showing %d of %d entries; --head 0 for all' % (len(shown), n)))
+        for key, text in shown:
+            emit()
+            emit('### %s' % key)
+            if text:
+                emit()
+                sys.stdout.write(ascii_safe(text) + '\n')
+
+    def emit_section(heading, text):
+        emit('## %s' % heading)
+        if text:
+            emit()
+            sys.stdout.write(ascii_safe(text) + '\n')
+
     emit('# %s  (%s)' % (rel(task.path), 'closed' if task.is_closed else 'open'))
     emit()
-    sys.stdout.write(ascii_safe(task.render()))
+    if section is not None:
+        # ONE section, bounded by construction: the reader asked for a slice and gets
+        # that slice, the way `board` is a slice of the corpus.
+        if section == 'log':
+            emit_log()
+        elif section == 'summary':
+            sys.stdout.write(ascii_safe(parts['summary']) + '\n')
+        else:
+            for h, t in parts['sections']:
+                if section_slug(h) == section:
+                    emit_section(h, t)
+        return 0
+
+    sys.stdout.write(ascii_safe(render_file(task.fm, '').rstrip('\n')) + '\n')
     emit()
+    emit_log()
+    emit()
+    if parts['summary']:
+        sys.stdout.write(ascii_safe(parts['summary']) + '\n')
+        emit()
+    for h, t in parts['sections']:
+        emit_section(h, t)
+        emit()
     emit('-- derived (computed on read, stored nowhere) --')
     emit('blocks (open tasks listing %s in deps): %s'
          % (task.id, ', '.join(blockers) or '(none)'))
@@ -2597,6 +2727,71 @@ def check_banner(store, fail, state):
              % (rel(path), clip(head, 60)))
 
 
+def check_board_sync(store, fail, state):
+    """Check 13 (2026-09-06c, Phase B-prime prerequisite 3): `sync --check` drift is a
+    lint violation.
+
+    THE EVIDENCE THAT MADE THIS A LINT CHECK: on 2026-09-06b `sync --check` found NINE
+    one-armed updates (`P6 R6 P4 P5 P14 TK55 TK54 P21 DW-1`) -- board item blocks
+    rewritten with no matching task edit -- across a fortnight in which every session's
+    ledger entry carried a `task lint: clean` line. The dual-update contract was being
+    reported met by a check that never looked at the board. `sync --check` was a separate
+    verb nobody was required to run, and a check nobody has to run is a check that is
+    not run. Folding it in here is the mechanical refusal the trial protocol prefers to
+    a doc warning.
+
+    THREE OUTCOMES, and the middle one is the one to read carefully:
+      * NO BOARD FILE at or above the tree -- pass, and `state['board']` records it. A
+        fixture tree in a temp dir has no board and never will; that is not drift.
+      * A BOARD FILE WITH NO ROW TABLE -- violation, today. That is the one-hop stub
+        Phase B-prime turns `HANDOFF.md` into, and the cutover retires this check along
+        with `sync`, `ack` and `source_hash` (tree-sole-authority-spec, B-prime (vi)).
+        Until that commit lands, a table-less board means someone deleted the table
+        early, and the lint says so rather than reading the empty board as "no drift".
+      * DRIFT > 0 -- one violation carrying the rendered report lines, so the ledger
+        evidence is the same text `sync --check` would have printed.
+
+    The instrument control is `report['rows']`: a board that parses to zero rows would
+    make every task CORPUS-ONLY and that is drift, not silence, so a blinded parser
+    goes red rather than green.
+    """
+    try:
+        where = find_board(store, None)
+    except Refused:
+        state['board'] = None
+        return
+    state['board'] = where
+    if state['parsed'] != sum(state['seen']):
+        # Check 1 already failed on the unparseable file(s); `store.tasks()` would raise
+        # the same ParseError here and turn a red lint into a traceback.
+        return
+    try:
+        board = parse_board(read_text(where), where)
+    except (Refused, ParseError) as exc:
+        fail('%s exists but `sync` cannot read it as a board: %s -- if this is the '
+             'Phase B-prime cutover (the board became a one-hop stub), retire this check '
+             'with `sync`; until then a table-less board is a deleted table, not a clean '
+             'one.' % (rel(where), clip(str(exc).split('\n')[0], 160)))
+        return
+    try:
+        report = sync_report(store, board, where)
+    except Refused as exc:
+        # e.g. a task whose `source` is empty: `sync` refuses to classify it, and check 4
+        # has already named the file. Report the refusal; do not turn lint into a trace.
+        fail('`sync --check` refused to run against %s: %s'
+             % (rel(where), clip(str(exc).split('\n')[0], 200)))
+        return
+    if not report['drift']:
+        return
+    lines = []
+    render_sync_report(report, lines.append)
+    fail('`sync --check` reports %d drift item(s) against %s -- a board row or item block '
+         'changed with no matching task edit, or the reverse. Read the report, fix the '
+         'lagging side, then `%s ack <id> -m "..."` (BODY) or `close`/`comment` as the '
+         'line says. The report:\n    %s'
+         % (report['drift'], rel(where), prog(), '\n    '.join(lines)))
+
+
 LINT_CHECKS = (
     check_parses,
     check_ids_unique,
@@ -2617,6 +2812,8 @@ LINT_CHECKS = (
     check_parent_depth,
     # Appended for the same reason check 11 was: the numbers are citations.
     check_banner,
+    # Appended, same reason. Retires WITH `sync` at the Phase B-prime cutover.
+    check_board_sync,
 )
 
 
@@ -3159,6 +3356,11 @@ def op_ack(store, args):
     entry, bumps `updated`, holds `moved`, and -- the whole difference -- does not put the
     word "acked" on a reconciliation that did not happen.
 
+    THE FIFTH CASE (2026-09-06c) narrows that refusal: `source: hand` whose id HAS a
+    board row is ADOPTED -- `source` flips to `board`, the row's digest is stamped, the
+    Log entry records the flip. See the inline comment for why this is the one write to
+    `source` after `new`. `hand` with no row, and every path source, are still refused.
+
     `--since` (added with it) encodes the "`ack` must be a session's LAST step" rule from
     `docs/tasktool-trial-protocol.md` section 6. `ack` stamps what the source says AT ACK
     TIME, not what the drift report the human read said; if the source moved in between --
@@ -3172,26 +3374,35 @@ def op_ack(store, args):
     message = read_message(args.message)
     task = need_writable(store, args.id)
     key = resolve_key(key, task)
-    if task.source != 'board':
-        # WHICH REMEDY depends on whether a row exists, and the friction log (A7 item 1)
-        # is specifically about the case where one does: a task filed hand-first that
-        # later acquires a board row can never be stamped, because `source` is immutable
-        # by design. Naming only `comment` there would be answering a different question
-        # than the one the caller has.
-        remedy = ('`task.py comment %s -m ...` writes the same Log entry and the same '
-                  '`updated` bump without claiming a reconciliation.' % task.id)
+    adopted = None
+    if task.source == 'hand':
+        # THE FIFTH CASE (2026-09-06c, Phase B-prime prerequisite 6): `source: hand` and
+        # the board HAS a row for this id -- filed by hand first, given a row later.
+        # `sync_report` digests the row and reports BODY drift on it forever, and until
+        # today this op refused it, so the only exit was to hand-edit `source` in the
+        # frontmatter, which is exactly the surgery the tool exists to prevent (three of
+        # the nine drifts found 2026-09-06b: `TK55`, `TK54`, `P21`).
+        #
+        # So `ack` ADOPTS it: `source` flips `hand -> board`, the digest is stamped, and
+        # the Log entry says so. This is the one write to `source` after `new`, and it is
+        # allowed on the same argument as the `acked-no-row` sentinel: the value is not
+        # taken from a human, it records a fact THIS RUN OBSERVED (the row exists, and its
+        # digest is what got stamped). One direction only -- `board -> hand` would be
+        # laundering a reconciled task back into the quiet bucket, and a path source is
+        # still refused below because there is still nothing to stamp.
         try:
             where = find_board(store, getattr(args, 'board', None))
             rows = parse_board(read_text(where), where)['rows']
         except (Refused, ParseError, IOError, OSError):
             rows = []
         if any(r['id'] == task.id for r in rows):
-            remedy = ('%s HAS a row on the board, so what you probably want is for it to '
-                      'be board-sourced -- and `source` is immutable by design, so that '
-                      'is a re-file (`new --id %s --source board`, then delete the old '
-                      'file) and not an op. If the hand provenance is correct and you '
-                      'only want the reason recorded, use `task.py comment %s -m ...`.'
-                      % (task.id, task.id, task.id))
+            task.fm['source'] = 'board'
+            adopted = ('source hand -> board (%s has a row on %s; adopted by ack, and '
+                       'from now on `sync` digests that row against this file)'
+                       % (task.id, rel(where)))
+    if task.source != 'board':
+        remedy = ('`task.py comment %s -m ...` writes the same Log entry and the same '
+                  '`updated` bump without claiming a reconciliation.' % task.id)
         raise Refused(
             'ack refuses %s: its source is %s, and `sync` can only read `source: board`. '
             '`ack` exists to re-stamp `source_hash` after reviewing reported drift, and '
@@ -3246,6 +3457,9 @@ def op_ack(store, args):
                  'says AT ACK TIME, so the digest just written covers text you may not '
                  'have read. Re-run `sync --check` and make `ack` the session\'s last '
                  'step.' % (task.id, since, rel(where), now_digest))
+    if adopted:
+        note = adopted + '; ' + note
+        message = message + '\n\n(ack adopted this task: ' + adopted + ')'
     task.body = append_log(task.body, key, message)
     write_text(task.path, stamp_and_render(task, key, False))
     emit('%s acked %s (moved held at %s -- ack never claims progress); %s'
@@ -3917,8 +4131,16 @@ def build_parser():
                         '--json; 0 for all). Truncation is always announced in the '
                         'footer.' % LIST_LIMIT)
 
-    s = read_op('show', 'print a task file plus its derived facts')
+    s = read_op('show', 'print a task: frontmatter, Log NEWEST FIRST, then the body, '
+                        'then its derived facts')
     s.add_argument('id')
+    s.add_argument('--section', default=None, metavar='NAME',
+                   help='print ONE section only: summary, log, or a `## ` heading '
+                        'lower-cased with dashes (traps, read-first, ...)')
+    s.add_argument('--head', type=int, default=None, metavar='N',
+                   help='show the N newest Log entries (default %d; 0 for all). '
+                        'Truncation is always announced; --json is never cut'
+                        % SHOW_LOG_HEAD)
 
     read_op('ready', 'open NOW/NEXT/LATER tasks whose deps are all closed')
     read_op('lint', 'mechanical checks; exit 1 on any violation')

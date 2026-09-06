@@ -370,26 +370,70 @@ def check_ceilings(fail):
                  'deliberately and say why in the commit.' % (rel, n, cap))
 
 
+def _tree_open_pris():
+    """``(pri, filename)`` for every OPEN task file, or None if there is no tree.
+
+    Same harvest as ``_tree_ids`` (frontmatter, first 20 lines) and the same None-versus-
+    empty distinction: None is "no tree", an empty list is a tree the harvester read
+    nothing out of, and the caller must not treat the second as a satisfied budget.
+    """
+    root = os.path.join(REPO, TASKS_DIR)
+    if not os.path.isdir(root):
+        return None
+    out = []
+    for name in sorted(os.listdir(root)):
+        if not name.endswith('.md') or name in TASKS_NON_TASK_MD:
+            continue
+        with io.open(os.path.join(root, name), encoding='utf-8') as fh:
+            for ln in fh.read().split('\n')[:20]:
+                if ln.startswith('pri:'):
+                    out.append((ln[4:].strip().upper(), name))
+                    break
+    return out
+
+
 def check_priority_capacities(fail):
+    """NOW == 1 and NEXT <= NEXT_MAX -- read from the board's table while it has one,
+    and from the task tree's ``pri:`` fields once it does not.
+
+    THE TREE FALLBACK (2026-09-06c, Phase B-prime prerequisite 2). After the cutover
+    ``HANDOFF.md`` is a one-hop stub with no row table, and this check's only branch for
+    "no rows" was a violation -- so the cutover commit would have had to delete the
+    check, and a capacity nobody checks is no capacity (``docs/README.md`` section 4).
+    The fallback is NOT a second opinion while the board has rows: pre-cutover the
+    board is the ranked view and ``scripts/task.py lint`` check 5 already budgets the
+    tree, so running both here would double-report every disagreement. It is the
+    check's home AFTER the table is gone.
+    """
     lines = _read(ROOT_BOARD)
     if lines is None:
         return
     pris = _pri_values(lines)
-    if not pris:
-        fail('%s: found no board rows with a recognised pri value. The parser looks for a '
-             'markdown table with "id" and "pri" header cells -- if the board was '
-             'restructured, fix this check rather than deleting it.' % ROOT_BOARD)
-        return
+    if pris:
+        where = ROOT_BOARD
+        unit = 'rows (lines %s)'
+    else:
+        tree = _tree_open_pris()
+        if not tree:
+            fail('%s: found no board rows with a recognised pri value%s. The parser '
+                 'looks for a markdown table with "id" and "pri" header cells -- if the '
+                 'board was restructured, fix this check rather than deleting it.'
+                 % (ROOT_BOARD, ' and there is no task tree to fall back to'
+                    if tree is None else ', and %s/ has no open task files' % TASKS_DIR))
+            return
+        pris = tree
+        where = '%s/ (the board has no row table, so the tree is the ranking)' % TASKS_DIR
+        unit = 'open task files (%s)'
     now = [ln for v, ln in pris if v == 'NOW']
     nxt = [ln for v, ln in pris if v == 'NEXT']
     if len(now) != 1:
-        fail('%s: found %d NOW rows (lines %s), must be exactly 1. NOW is what an '
+        fail('%s: found %d NOW %s, must be exactly 1. NOW is what an '
              'unassigned session picks up; two of them is no ranking at all.'
-             % (ROOT_BOARD, len(now), now or '-'))
+             % (where, len(now), unit % (now or '-')))
     if len(nxt) > NEXT_MAX:
-        fail('%s: found %d NEXT rows (lines %s), cap is %d. Demote one to LATER -- the cap '
+        fail('%s: found %d NEXT %s, cap is %d. Demote one to LATER -- the cap '
              'is the mechanism that forces the ranking argument.'
-             % (ROOT_BOARD, len(nxt), nxt, NEXT_MAX))
+             % (where, len(nxt), unit % nxt, NEXT_MAX))
 
 
 def check_no_stars(fail):
@@ -753,6 +797,74 @@ def check_doc_links(fail):
              % (parsed, seen_files, MIN_DOC_LINKS))
 
 
+# --- Session receipt (check_session_receipt, added 2026-09-06c, Phase B-prime prereq 7) ---
+# The trial's two literal lines, as CLAUDE.md's trial bullet demands them of every session-
+# log entry: the `task lint` output, and an honest self-report of what was read to start
+# work. The accepted read vocabulary is a constant so the cutover can change it in one
+# place (post-cutover there is no HANDOFF to read "in full", and the line will say so).
+# Both regexes SEARCH the line after normalisation rather than anchoring, because the C1
+# tally (docs/tasktool-trial-protocol.md section 6, 2026-09-06) found four shapes in the
+# ledger and none of them wrong: a bare line, a backticked one, `lint: <backticked>`, and
+# `` `python scripts/task.py lint` -> <backticked> ``. A check that rejected three of the
+# four would have been commented out by the second session it bit.
+READ_VOCAB = ('board only', 'board + HANDOFF', 'HANDOFF only')
+_LINT_RECEIPT = re.compile(
+    r'task lint: (?:clean \(\d+ checks?, \d+ task file\(s\) parsed(?:, \d+ warning\(s\))?\)'
+    r'|\d+ violation\(s\))')
+_READ_RECEIPT = re.compile(r'(?:^|\W)read: (%s)(?:\W|$)'
+                           % '|'.join(re.escape(v) for v in READ_VOCAB))
+
+
+def _newest_entry_lines(rel, pattern):
+    """The lines of the FIRST entry (the ledger is newest-first), or None if no file."""
+    lines = _read(rel)
+    if lines is None:
+        return None
+    start = None
+    for i, ln in enumerate(lines):
+        if pattern.match(ln):
+            if start is None:
+                start = i
+                continue
+            return lines[start:i]
+    return lines[start:] if start is not None else []
+
+
+def check_session_receipt(fail):
+    """The newest root-ledger entry carries both trial receipts: a `task lint:` result
+    line and a `read: <vocab>` line.
+
+    Why it is mechanical rather than a rule in CLAUDE.md: the rule IS in CLAUDE.md, and
+    the C1 tally found 2 of 35 entries with neither line and one with the lint line only.
+    Two lines nobody checks decay into one, and the trial's read-tally -- the only
+    evidence of whether the board query replaced the file read or was added to it --
+    decays with them. Only the NEWEST entry is checked: older entries are history, and a
+    check that demanded retroactive edits to an append-only ledger would be ignored.
+    """
+    entry = _newest_entry_lines(ROOT_LEDGER, _ROOT_ENTRY)
+    if entry is None:
+        fail('MISSING: %s' % ROOT_LEDGER)
+        return
+    if not entry:
+        fail('%s: no `## <session-key> ` entry found, so there is nothing to check the '
+             'session receipts on -- the entry regex or the ledger is broken.'
+             % ROOT_LEDGER)
+        return
+    head = entry[0].strip()
+    norm = [ln.strip().replace('`', '').replace('**', '') for ln in entry]
+    if not any(_LINT_RECEIPT.search(ln) for ln in norm):
+        fail('%s: the newest entry (%s) has no `task lint: clean (N checks, M task '
+             'file(s) parsed)` / `task lint: N violation(s)` line. Paste the literal '
+             'output of `python scripts/task.py lint` -- it is the visible hole if the '
+             'parallel tree update was skipped (CLAUDE.md, the trial bullet).'
+             % (ROOT_LEDGER, head[:80]))
+    if not any(_READ_RECEIPT.search(ln) for ln in norm):
+        fail('%s: the newest entry (%s) has no `read: %s` line. It is the honest '
+             'self-report of what was actually read to start work, and the only way the '
+             'trial learns whether the board query REPLACED the file read or was added '
+             'to it.' % (ROOT_LEDGER, head[:80], ' | '.join(READ_VOCAB)))
+
+
 CHECKS = (
     check_ceilings,
     check_priority_capacities,
@@ -764,6 +876,9 @@ CHECKS = (
     check_ledger_ordering,
     check_ledger_row_ids,
     check_doc_links,
+    # Appended (2026-09-06c). The task.py lint checks are cited by number and appended for
+    # that reason; these are not numbered, but the same habit costs nothing.
+    check_session_receipt,
 )
 
 

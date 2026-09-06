@@ -224,6 +224,24 @@ def lint_text(root, task_py=None):
     return proc.returncode, (out + err).decode('utf-8', 'replace')
 
 
+def assert_intact_but_drifted(root):
+    """Lint says the tree is structurally intact AND check 13 reports the board drift
+    this test set up on purpose (a row deleted, a task closed while its row stays).
+
+    Before 2026-09-06c these sites asserted `lint` rc 0 -- lint did not look at the
+    board then. Now it does (check 13, `check_board_sync`), so "intact" is "every
+    violation is check 13's", and the drift is asserted PRESENT as the instrument
+    control: a test whose deliberate drift went unreported has found a blind check, not
+    a clean tree.
+    """
+    rc, data, err = rj(root, 'lint')
+    other = [v for v in data['violations'] if '`sync --check`' not in v]
+    assert not other, 'lint found something besides the deliberate board drift:\n%s' \
+        % '\n'.join(other)
+    assert rc == 1 and data['violations'], (
+        'this test drifts the board on purpose and check 13 reported nothing: %r' % data)
+
+
 def first_match(text, pattern):
     for line in text.split('\n'):
         if re.search(pattern, line):
@@ -826,12 +844,13 @@ def test_lint_clean_on_a_good_tree():
     so the literal is now `clean (12 checks`. The length is asserted independently of
     the printed string so that a check added without updating the header, or a header
     hard-coded past the list, is red rather than merely inconsistent.
+    RE-MEASURED 2026-09-06c: `check_board_sync` (check 13) appended; `clean (13 checks`.
     """
     root = good_tree('clean')
-    assert len(TM.LINT_CHECKS) == 12, [c.__name__ for c in TM.LINT_CHECKS]
+    assert len(TM.LINT_CHECKS) == 13, [c.__name__ for c in TM.LINT_CHECKS]
     rc, out, err = run(root, 'lint')
     assert rc == 0, 'clean tree is not green:\n%s\n%s' % (out_text(out), err)
-    assert 'clean (12 checks' in out_text(out), out_text(out)
+    assert 'clean (13 checks' in out_text(out), out_text(out)
     # TWELVE, not eleven, since 2026-08-29. A clean tree must also report NO warnings --
     # a check that warns about a tree with nothing wrong is a check the next reader
     # learns to scroll past.
@@ -1396,8 +1415,9 @@ def test_the_moved_updated_split_survives_automation():
     fm = dict(TM.parse_file(read(closed_path).decode('utf-8'), closed_path)[0])
     assert (fm['closed'], fm['moved'], fm['updated']) == (
         KEY + 'b', KEY + 'c', KEY + 'd'), fm
-    rc, out, err = run(root, 'lint')
-    assert rc == 0, out_text(out) + err
+    # T4 is closed while its row stays, and the tree was never reconciled: both are
+    # board drift, and since 2026-09-06c lint check 13 reports it.
+    assert_intact_but_drifted(root)
 
 
 @case
@@ -1413,6 +1433,11 @@ def test_source_is_written_once_and_never_again():
     mutable. Observed with it added::
 
         AssertionError: ('`set source` was ACCEPTED (rc 0): provenance is now editable',)
+
+    ONE EXCEPTION since 2026-09-06c, and it takes no value from a human: `ack` on a
+    `source: hand` task whose id HAS a board row flips it to `board` (one direction only)
+    and records the flip in the Log -- `test_ack_adopts_a_hand_task_that_has_a_row`. The
+    `set` refusal pinned here is unchanged.
     """
     root = good_tree('prov')
     rc, out, err = run(root, 'new', 'a synced row', '--source', 'board', '--session', KEY)
@@ -1513,7 +1538,7 @@ def test_parent_depth_warns_and_stays_green():
     text = out_text(out) + err
     assert rc == 0, ('depth is a WARNING, not a violation -- exit %d:\n%s' % (rc, text))
     assert 'WARN' in text and 'T8 -> T4 -> T6' in text, text
-    assert 'clean (12 checks' in out_text(out), out_text(out)
+    assert 'clean (13 checks' in out_text(out), out_text(out)
     assert '1 warning(s)' in out_text(out), out_text(out)
 
     rc, data, err = rj(root, 'lint')
@@ -1842,8 +1867,7 @@ def test_sync_has_no_delete_path():
             '%s emitted a RUNNABLE close command; close is a human act with a required '
             'message, so it may only ever be SUGGESTED in prose' % ' '.join(argv))
     assert read(path) == before, 'sync rewrote a task it only reported on'
-    rc, out, err = run(root, 'lint')
-    assert rc == 0, out_text(out) + err
+    assert_intact_but_drifted(root)     # T4's row is gone on purpose: CORPUS-ONLY
 
 
 @case
@@ -2007,8 +2031,7 @@ def test_sync_creates_with_the_rows_id_and_emits_mechanical_commands():
     assert not [n for n in os.listdir(os.path.join(root, 'tasks'))
                 if n.startswith('T0-')], 'a retired id was filed'
 
-    rc, out, err = run(root, 'lint')
-    assert rc == 0, out_text(out) + err
+    assert_intact_but_drifted(root)     # the retired `T0` row is still on the board
 
 
 @case
@@ -2392,6 +2415,66 @@ def test_ack_refuses_a_hand_filed_task_and_names_the_remedy():
     assert rc == 0, out_text(out) + err
 
 
+def test_ack_adopts_a_hand_task_that_has_a_row():
+    """The fifth `ack` case (2026-09-06c, Phase B-prime prerequisite 6): `source: hand`
+    with a board row is ADOPTED, not refused.
+
+    C3 of the 2026-09-06 trial pass found three of the nine drifts (`TK55`, `TK54`,
+    `P21`) unackable: filed by hand first, given a row later, digested by `sync` as
+    BODY drift forever, and refused by `ack` because `source` was immutable. The only
+    exit was hand-editing the frontmatter. Now: `source` flips `hand -> board`, the
+    row's digest is stamped, the Log entry says so, and the next `sync --check` is
+    CLEAN. Hand-with-no-row (the test above) and a path source stay refused --
+    `source` is never written from a human-supplied value, and never flips back.
+
+    Sabotage, run 2026-09-06c before this was believed: the adoption branch's
+    `task.fm['source'] = 'board'` deleted (the digest is still computed, the Log still
+    written, but provenance is not flipped). Observed::
+
+        AssertionError: ack accepted T5 but did not adopt it (rc=2): ack refuses T5:
+        its source is `source: hand`, ...
+    """
+    root = sync_tree('ackadopt')
+    seed_hashes(root)
+    bpath = os.path.join(root, 'HANDOFF.md')
+    # Give hand-filed T5 a row. It now drifts (BODY, first reconciliation) and, before
+    # today, could not be acked.
+    write(bpath, read(bpath).decode('utf-8').replace(
+        '| `T6` | the group', '| `T5` | held delta | HOLD | M | %s | 2026-08-21 |\n'
+        '| `T6` | the group' % u'—'))
+    rc, out, err = run(root, 'sync', '--check')
+    assert rc == 1 and 'BODY              T5' in out_text(out), (rc, out_text(out))
+
+    rc, out, err = run(root, 'ack', 'T5', '-m', 'row added; body still right',
+                       '--session', KEY + 'b')
+    assert rc == 0, 'ack accepted T5 but did not adopt it (rc=%d): %s' % (rc, err)
+    text = out_text(out)
+    assert 'T5 acked %sb' % KEY in text and 'source hand -> board' in text, text
+    rc, data, err = rj(root, 'show', 'T5')
+    assert data['source'] == 'board', data
+    assert re.match(r'^[0-9a-f]{12}$', data['source_hash']), data['source_hash']
+    assert data['moved'] == KEY, 'adoption is an ack; it must not move `moved`'
+    body = read(os.path.join(root, 'tasks', 'T5-held-delta.md')).decode('utf-8')
+    assert 'ack adopted this task: source hand -> board' in body, body
+    rc, out, err = run(root, 'sync', '--check')
+    assert rc == 0 and 'CLEAN' in out_text(out), (rc, out_text(out))
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+
+    # One direction, and only from `hand`: a PATH source with a row is still refused,
+    # because there is still no digest of that document to stamp.
+    rc, out, err = run(root, 'new', 'an audited row', '--session', KEY,
+                       '--source', 'docs/perf-round6-audit-2026-08.md')
+    assert rc == 0, err
+    write(bpath, read(bpath).decode('utf-8').replace(
+        '| `T6` | the group', '| `T8` | an audited row | LATER | M | %s | 2026-08-21 |\n'
+        '| `T6` | the group' % u'—'))
+    rc, out, err = run(root, 'ack', 'T8', '-m', 'x', '--session', KEY + 'b')
+    assert rc == 2 and 'docs/perf-round6-audit-2026-08.md' in err, (rc, err)
+    rc, data, err = rj(root, 'show', 'T8')
+    assert data['source'] == 'docs/perf-round6-audit-2026-08.md', data
+
+
 def test_ack_since_warns_on_stderr_when_the_source_moved():
     """A7 footgun 2: "`ack` must be a session's LAST step", encoded rather than written.
 
@@ -2747,7 +2830,9 @@ def test_lint_check_12_catches_the_three_banner_failures():
     """
     root = good_tree('bannerlint')
     banner_path = os.path.join(root, 'tasks', 'BANNER.md')
-    assert TM.LINT_CHECKS[-1].__name__ == 'check_banner', \
+    # Index 11 (position 12): the checks are cited by number, so the position is the
+    # claim -- `[-1]` was the claim until check 13 was appended on 2026-09-06c.
+    assert TM.LINT_CHECKS[11].__name__ == 'check_banner', \
         [c.__name__ for c in TM.LINT_CHECKS]
 
     # 1. Missing.
@@ -2784,6 +2869,119 @@ def test_lint_check_12_catches_the_three_banner_failures():
     write(banner_path, BANNER_TEXT)
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
+
+
+def test_lint_check_13_reports_board_drift_and_a_tableless_board():
+    """Check 13 (2026-09-06c, Phase B-prime prerequisite 3): `sync --check` drift is a
+    lint violation, so the dual-update contract is checked by the line every session
+    already pastes into the ledger.
+
+    Why: 2026-09-06b's `sync --check` found NINE one-armed updates across a fortnight of
+    ledger entries that all read `task lint: clean`. `sync --check` was a separate verb
+    nobody had to run. Three outcomes are pinned here: a reconciled board is green; a
+    board whose item block moved is red, naming the id and carrying the sync report; a
+    board with NO ROW TABLE is red too (that is the post-cutover stub, and this check
+    retires WITH `sync` at the cutover -- until then a missing table is a deleted one).
+    The no-board case is `test_lint_clean_on_a_good_tree`: `good_tree` has no board and
+    lints clean with 13 checks.
+    """
+    root = sync_tree('lint13')
+    seed_hashes(root)
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+
+    bpath = os.path.join(root, 'HANDOFF.md')
+    board = read(bpath).decode('utf-8')
+    write(bpath, board.replace('The summary paragraph as the BOARD states it.',
+                               'The summary paragraph, REWRITTEN on the board only.'))
+    rc, out, err = run(root, 'lint')
+    assert rc == 1, ('a rewritten item block did not redden lint: %s%s'
+                     % (out_text(out), err))
+    assert '`sync --check` reports 1 drift item(s)' in err, err
+    assert 'BODY              T1  source block moved' in err, err
+    assert 'task.py ack <id>' in err, 'the violation must name the remedy: %s' % err
+
+    # The remedy the message names makes it green again.
+    rc, out, err = run(root, 'ack', 'T1', '-m', 'read both; task body still right',
+                       '--session', KEY + 'b')
+    assert rc == 0, err
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+
+    # A board with no row table: red, and the message says what to do at the cutover.
+    write(bpath, u'# HANDOFF -- one-hop stub\n\nStart with `python scripts/task.py '
+                 u'board`.\n')
+    rc, out, err = run(root, 'lint')
+    assert rc == 1, out_text(out) + err
+    assert 'cannot read it as a board' in err and 'retire this check' in err, err
+
+    # Restore control.
+    write(bpath, board)
+    rc, out, err = run(root, 'ack', 'T1', '-m', 'restored', '--session', KEY + 'c')
+    assert rc == 0, err
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+
+
+def show_log_keys(root, tid, *extra):
+    """The `### <key>` order `show` printed, and the raw stdout beside it."""
+    rc, out, err = run(root, 'show', tid, *extra)
+    assert rc == 0, err
+    lines = out_lines(out)
+    return [l[4:].strip() for l in lines if l.startswith('### ')], lines
+
+
+def test_show_renders_the_log_newest_first_and_never_touches_the_file():
+    """`show` prints the Log NEWEST FIRST, above the body, truncated to SHOW_LOG_HEAD
+    entries with the truncation announced; the file stays append-only and untouched.
+
+    The complaint (2026-09-06, a session's trial feedback): the file appends, so the
+    top of a long task is its OLDEST state and a reader takes the stale summary as
+    current -- `P6`'s summary still described the branch as untested weeks after the
+    Log recorded it tested. The fix is in the VIEW only (Jira's comment order); the
+    file is unchanged because `git diff` on an append-only Log is readable and a
+    prepend-only one is not.
+    """
+    root = good_tree('shownf')
+    path = os.path.join(root, 'tasks', 'T2-next-alpha.md')
+    for n in range(1, 8):
+        rc, out, err = run(root, 'comment', 'T2', '-m', 'entry number %d' % n,
+                           '--session', '%s%s' % (KEY, 'abcdefg'[n - 1]))
+        assert rc == 0, err
+    before = read(path)
+    file_keys = [l[4:].strip() for l in before.decode('utf-8').split('\n')
+                 if l.startswith('### ')]
+    assert file_keys == ['%s%s' % (KEY, c) for c in 'abcdefg'], file_keys
+
+    keys, lines = show_log_keys(root, 'T2')
+    assert keys == list(reversed(file_keys))[:TM.SHOW_LOG_HEAD], (keys, lines)
+    head = [l for l in lines if l.startswith('## Log')]
+    assert len(head) == 1 and 'newest first' in head[0], lines
+    assert 'showing %d of 7 entries' % TM.SHOW_LOG_HEAD in head[0], head[0]
+    assert '--head 0' in head[0], 'the truncation must say how to see everything'
+    # The Log sits ABOVE the summary, which is the whole point.
+    assert lines.index(head[0]) < lines.index('Summary line.'), lines
+
+    keys, lines = show_log_keys(root, 'T2', '--head', '0')
+    assert keys == list(reversed(file_keys)), keys
+    assert 'showing' not in [l for l in lines if l.startswith('## Log')][0]
+    keys, lines = show_log_keys(root, 'T2', '--head', '2')
+    assert keys == list(reversed(file_keys))[:2], keys
+    keys, lines = show_log_keys(root, 'T2', '--section', 'log', '--head', '0')
+    assert keys == list(reversed(file_keys)) and 'Summary line.' not in lines, lines
+    keys, lines = show_log_keys(root, 'T2', '--section', 'summary')
+    assert keys == [] and 'Summary line.' in lines, lines
+
+    # JSON is never cut: it is what a tool reads, and a tool has no scroll to save.
+    rc, data, err = rj(root, 'show', 'T2')
+    assert [e['session'] for e in data['log']] == list(reversed(file_keys)), data['log']
+    assert data['log'][0]['text'].strip() == 'entry number 7', data['log'][0]
+
+    rc, out, err = run(root, 'show', 'T2', '--section', 'nope')
+    assert rc == 2 and 'It has: summary, log' in err, (rc, err)
+    rc, out, err = run(root, 'show', 'T2', '--head', '-1')
+    assert rc == 2, (rc, err)
+    assert read(path) == before, 'show wrote the file'
 
 
 def test_the_banner_may_not_carry_a_glyph_the_board_cannot_render():
@@ -2861,7 +3059,7 @@ def test_non_task_md_is_skipped_only_at_the_top():
     rc, out, err = run(root, 'lint')
     assert rc == 0, ('a top-level README.md was scanned as a task:\n%s'
                      % (out_text(out) + err))
-    assert 'clean (12 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
+    assert 'clean (13 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
     rc, data, err = rj(root, 'counts')
     assert (data['total'], data['disk_total']) == (7, 7), (
         'README.md reached one of the two scanners: %s' % data)
@@ -3604,7 +3802,8 @@ def test_sabotage_wp_parent_depth_warning_can_go_silent():
         task lint: clean (11 checks, 8 task file(s) parsed)
 
     RE-MEASURED 2026-08-29: the same run now reads `clean (12 checks, ...)`, check_banner
-    having joined the list. The observation is the CLEAN line either way, which is the
+    having joined the list; 2026-09-06c: `clean (13 checks, ...)`, check_board_sync.
+    The observation is the CLEAN line either way, which is the
     point -- a silenced warning is indistinguishable from a healthy tree.
     """
     message = writepath_sabotage('sab_parent_depth.py',
@@ -3833,8 +4032,65 @@ def test_sabotage_live_blind_parser():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_sabotage_bprime_check_13_can_go_blind():
+    """`if not report['drift']: return` -> `return` -- check 13 computes the sync report
+    and then ignores it, the narrowest edit that keeps the check IN the list (so the
+    `13 checks` header still prints) while making it report nothing.
+
+    The guarding test is test_lint_check_13_reports_board_drift_and_a_tableless_board,
+    and it must fail on the red half. 2026-09-06c observed::
+
+        a rewritten item block did not redden lint: task lint: clean (13 checks, 7 task
+        file(s) parsed)
+    """
+    message = writepath_sabotage(
+        'sab_check13.py',
+        "    if not report['drift']:\n        return\n",
+        "    return\n",
+        test_lint_check_13_reports_board_drift_and_a_tableless_board)
+    assert 'did not redden lint' in message and 'clean (13 checks' in message, message
+
+
+def test_sabotage_bprime_ack_adoption_can_skip_the_flip():
+    """`task.fm['source'] = 'board'` deleted from the adoption branch -- the digest is
+    still computed and the Log still written, but provenance stays `hand`, so the ack
+    falls into the refusal below it (or, had the refusal also gone, `sync` would digest
+    the row against a hand task forever). The guarding test is
+    test_ack_adopts_a_hand_task_that_has_a_row. 2026-09-06c observed (first line of
+    the assertion; the refusal text follows on the next stderr line)::
+
+        ack accepted T5 but did not adopt it (rc=2): task ack: REFUSED
+    """
+    message = writepath_sabotage(
+        'sab_ack_adopt.py',
+        "            task.fm['source'] = 'board'\n",
+        "            pass\n",
+        test_ack_adopts_a_hand_task_that_has_a_row)
+    assert 'did not adopt it' in message, message
+
+
+def test_sabotage_bprime_show_can_print_the_log_oldest_first():
+    """`list(reversed(parts['log']))` -> `list(parts['log'])` -- the view prints the
+    Log in FILE order again, which is the exact complaint the feature answers, while
+    the header still says "newest first". The guarding test is
+    test_show_renders_the_log_newest_first_and_never_touches_the_file.
+    2026-09-06c observed (the assertion message is the `(keys, lines)` tuple; the keys
+    the sabotaged view printed, oldest first, are its head)::
+
+        (['2026-08-21a', '2026-08-21b', '2026-08-21c', '2026-08-21d', '2026-08-21e'],
+        ['# <t>/shownf/tasks/T2-next-alpha.md  (open)', '', '---', 'id: T2', ...
+    """
+    message = writepath_sabotage(
+        'sab_show_order.py',
+        "list(reversed(parts['log']))", "list(parts['log'])",
+        test_show_renders_the_log_newest_first_and_never_touches_the_file)
+    assert "'%sa'" % KEY in message, message
+
+
 def test_the_sabotage_record_is_complete():
-    """The module docstring claims 22/22 + 4/4 + 4/4. This counts them.
+    """The module docstring claims 22/22 + 4/4 + 4/4. This counts them. The three
+    `test_sabotage_bprime_*` cases (2026-09-06c: check 13, ack adoption, show order)
+    are counted separately so that the 2026-08-21 record stays what it was.
 
     A transcribed record is a number in prose, and prose is what rotted in the first
     place: `.scratch/tasktool/sabotage-log.txt` said `22/22` and nothing tied that to the
@@ -3846,9 +4102,11 @@ def test_the_sabotage_record_is_complete():
     fixture = [n for n in names if n.startswith('test_sabotage_check_')]
     writepath = [n for n in names if n.startswith('test_sabotage_wp_')]
     live = [n for n in names if n.startswith('test_sabotage_live_')]
+    bprime = [n for n in names if n.startswith('test_sabotage_bprime_')]
     assert len(fixture) == 22, sorted(fixture)
     assert len(writepath) == 4, sorted(writepath)
     assert len(live) == 4, sorted(live)
+    assert len(bprime) == 3, sorted(bprime)
     # And the harness the whole file rests on is the real tool, not a leftover copy.
     assert TASK_PY == REAL_TASK_PY, TASK_PY
     assert os.path.isfile(REAL_TASK_PY), REAL_TASK_PY

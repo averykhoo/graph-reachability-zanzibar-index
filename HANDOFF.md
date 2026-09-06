@@ -19,26 +19,27 @@ session: run the Rhythm protocol at the bottom.
 > 🟢 **Gate: all ten phases re-run green on this tree** — ask `python scripts/gate_status.py`;
 > re-run `lean` after any `*.md` edit — and `t2c` excludes `*.md` only *outside* `tasks/`, so a
 > `tasks/*.md` edit stales the tiles too (corrected 2026-09-05).
-> ✅ **`2026-09-06b` (`P17` + `TK55` closed, user-decided):** `P17` took option (c) — the DEFAULT
-> constructor `build_index(bulk=True)` is now pinned by a conformance differential,
-> `test_conformance_bulk_state.py` (bulk vs the incremental Python graph state, EXACT, over all
-> 25 `GRAPH_FRAGMENT` corpora; multiplicity sabotage red `incremental=3 bulk=1`), and
-> `FINAL_REVIEW.md` §3.1 item 6 / §4(h) carry the written scope statement; the Lean
-> `bulk = replay` theorem is `P24` (`SOMEDAY`). `TK55`: `define : [user]` used to compile to
-> `Filter(relation='')` and the graph answered `False` where oracle + set said `True` through
-> `define : viewer` — BOTH parsers now refuse an empty declared name (15 pins), and
-> `keysNonempty` is accepted as scope with a justification that is now true.
+> ✅ **`2026-09-06b` (`P17` + `TK55` closed, user-decided):** `P17` option (c) — the DEFAULT
+> `build_index(bulk=True)` is pinned by `test_conformance_bulk_state.py` (bulk vs incremental
+> Python graph state, EXACT, 25 corpora; sabotage red `incremental=3 bulk=1`) + the scope
+> statement in `FINAL_REVIEW.md` §3.1 item 6 / §4(h); Lean `bulk = replay` is `P24`. `TK55`:
+> `define : [user]` compiled to `Filter(relation='')` and the graph answered `False` where
+> oracle + set said `True` — BOTH parsers now refuse an empty declared name (15 pins).
 > 🔍 **Branch `p3-flip-red-2026-09-05` inventoried, then DELETED (user decision, no tag)** —
-> 26/30 files were scaffolding already on master; the 4 evidence files and the literal refuted
-> declarations live in
+> the evidence and the literal refuted declarations live in
 > [`formal/history/p3-flip-red-snapshot-2026-09-05.md`](formal/history/p3-flip-red-snapshot-2026-09-05.md)
-> (55/55 quotes re-verified BEFORE deletion). `d6d2dfc` is unreachable now; that note is the record.
-> 🧭 **Trial window closed today — NO cutover; prework + grade only (user decision).** The tree
-> was the STALE arm (9 drifts, all reconciled + acked; hand-sourced rows with a board row cannot
-> be acked — a tool gap); a Phase B′ candidate is DRAFTED at the top of
-> [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md)
-> (not decided); the grade is [`tasktool-trial-protocol.md`](docs/tasktool-trial-protocol.md)
-> §6 `2026-09-06`. **Next: the feedback pass with the user; `TT-1` still needs an explicit go.**
+> (55/55 quotes re-verified BEFORE deletion). `d6d2dfc` is unreachable; that note is the record.
+> 🧭 **`2026-09-06c` — Phase B′ DECIDED (user, the feedback pass): the tree becomes authoritative
+> and this file becomes a one-hop note — but the cutover commit itself STILL NEEDS AN EXPLICIT
+> GO (`TT-1`).** Five of seven prerequisites landed with sabotage evidence (status table atop
+> [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md);
+> decisions D1–D5 in [`tasktool-trial-protocol.md`](docs/tasktool-trial-protocol.md) §6):
+> `task.py show` renders the Log **newest-first** (user request; file stays append-only);
+> `task.py lint` **check 13** makes `sync --check` drift a violation; `ack` ADOPTS a hand task
+> that has a board row (the `2026-09-06b` tool gap); `handoff_lint` check 2 falls back to the
+> tree when the row table is gone, and its 11th check REQUIRES the newest ledger entry to carry
+> the literal `task lint:` and `read:` lines — a missing receipt now reddens `lean`.
+> `TT-2` retires with `sync` at the cutover.
 > ⚠ **Two floors had LEAKED headroom on `HEAD`** — `TK56` added 6 tests without ratcheting
 > (clean checkout 520/1038 vs 515/1037). Both re-measured and zero-headroom again. New rows:
 > `P22` (the I14 crossable-middle loop in `bulk_build.py` is unpinned — a GREEN sabotage),
@@ -46,7 +47,7 @@ session: run the Rhythm protocol at the bottom.
 > 📌 **`2026-09-06` (rotated → PROOF_STATUS `2026-09-06` §1–§8): `TK56` closed** — T3
 > instantiated, zero `opaque`s, `sorry_scan.py` refuses one, `task.py new` ratchets its own floor.
 > `2026-09-05b` (`P3` landed) → PROOF_STATUS `2026-09-05b`; live traps: scope doc §11.13 **(bb)…(gg)**.
-> `TK53`: **15 appends remain**; `TT-2` = `sync` has no gated coverage.
+> `TK53`: **15 appends remain**; `TT-2` (`sync`'s `.scratch` cases) resolves as "retired with `sync`".
 > **"Known live correctness bugs: 0"** — ask `python scripts/gate_status.py`. Red: snapshot it
 > with a TEMP INDEX, never `git stash`/`git checkout --` (autocrlf rewrites LF → CRLF; trap (ee)).
 

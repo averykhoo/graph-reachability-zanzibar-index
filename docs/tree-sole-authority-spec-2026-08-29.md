@@ -3,9 +3,39 @@
 **ACTIVE-PLAN 2026-08-29 — execution spec for an implementing agent. Mark FROZEN when
 landed or abandoned; corrections append dated at the top.**
 
-## 2026-09-06 — Phase B-prime candidate: the tree is authoritative, HANDOFF.md becomes a one-hop note (DRAFT, not decided)
+## 2026-09-06c — Phase B′ DECIDED (user decision); five of seven prerequisites landed; the cutover itself still needs an explicit go
 
-**This is a CANDIDATE for the user's decision, not a decision.** Nothing below is landed;
+**Decision (user, 2026-09-06c): Phase B′ as drafted below.** The tree becomes
+authoritative; `HANDOFF.md` becomes the one-hop note of (ii); item blocks become task
+bodies read via a bounded `show`; the Rhythm moves to `docs/README.md`; the `Closed ids`
+lines are dropped (`tasks/closed/` + `check_ledger_row_ids` cover them); `sync`, `ack`
+and `source_hash` retire at the cutover, and `TT-2` resolves as "retired with sync"
+(recorded in `docs/tasktool-spec.md` §4). **The cutover commit itself is NOT landed and
+still needs an explicit user go — `TT-1`'s trap stands.** Prerequisite status, same
+session, each with its evidence:
+
+| # | prerequisite | status | evidence |
+|---|---|---|---|
+| 1 | bounded `show` | **landed** — Log newest-first above the body, `--section`, `--head`, `SHOW_LOG_HEAD`, truncation announced, `--json` uncut | `TT-3`; `tests/test_tasktool.py::test_show_renders_the_log_newest_first_and_never_touches_the_file` + `test_sabotage_bprime_show_can_print_the_log_oldest_first` |
+| 2 | `handoff_lint` check 2 tree-aware | **landed** — falls back to `tasks/*.md` `pri:` when the board has no table; board still read while it has one | `TT-4`; `tests/test_handoff_lint_b_prime.py` (two NOW files → red) |
+| 3 | `sync --check` in `lint` | **landed** as check 13 `task.py::check_board_sync` | `TT-5`; `test_lint_check_13_reports_board_drift_and_a_tableless_board` + `test_sabotage_bprime_check_13_can_go_blind` |
+| 4 | `TT-2` port-or-retire | **decided: retire with `sync`** at cutover | `TT-2` Log 2026-09-06c; `docs/tasktool-spec.md` §4 |
+| 5 | retired-ids parity | **checked, no gap** (2026-09-06) | (iv) 5 below |
+| 6 | `source: hand`-with-a-row | **landed** — `ack` adopts (hand → board, digest stamped, Log line); hand-without-row and path sources still refused | `TT-6`; `test_ack_adopts_a_hand_task_that_has_a_row` + `test_sabotage_bprime_ack_adoption_can_skip_the_flip` |
+| 7 | B4 lint check | **landed** — `handoff_lint.py::check_session_receipt`, both literal lines in the newest ledger entry, all four observed shapes accepted | `TT-7`; `tests/test_handoff_lint_b_prime.py` |
+
+Plus the feedback that arrived mid-decision: the Log is APPENDED, so the top of a long
+task file was its oldest state — `show` now renders it newest-first (Jira order) while
+the file stays append-only. **Still owed before the cutover:** the cutover commit itself
+per (ii)/(iii)/(v) — banner consolidation (`tasks/BANNER.md` retires, `check_banner`
+retargets), `MAX_LINES['HANDOFF.md']` → 60, Rhythm rewrite in `docs/README.md`,
+`check_board_sync` / `sync` / `ack` / `source_hash` retirement, `READ_VOCAB` update in
+`handoff_lint.py` (there is no `HANDOFF` to read in full after it). None of that is
+started; it waits for the go.
+
+## 2026-09-06 — Phase B-prime candidate: the tree is authoritative, HANDOFF.md becomes a one-hop note (DRAFT — DECIDED 2026-09-06c, see above)
+
+**This was a CANDIDATE for the user's decision; the decision is recorded above.** Nothing below was landed when written;
 no row was filed for it (filing would incur the dual-update cost this section is about),
 and `TT-1` still carries the user-go gate. It amends §2's "≤20-line stub" into a shape the
 week-two evidence supports, and lists what must exist BEFORE the cutover so that a single

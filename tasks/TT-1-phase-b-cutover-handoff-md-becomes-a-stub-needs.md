@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-29d
-moved: 2026-09-06b
-updated: 2026-09-06b
+moved: 2026-09-06c
+updated: 2026-09-06c
 closed:
 ---
 
@@ -54,3 +54,7 @@ Trial window EXTENDED to 2026-09-06 and DELETE taken off the table (user, 2026-0
 ### 2026-09-06b
 
 2026-09-06b measurement (no decision; user deferred the authority call). Read tally by script over docs/history/session-log.md, per session entry: 35 trial-window entries, 27 'board + HANDOFF', 6 'board only', 0 'HANDOFF only' self-reports, 2 entries without a read line (2026-08-24, 2026-08-30c). sync --check at session start: 9 BODY drifts (P6 R6 P4 P5 P14 TK55 TK54 P21 DW-1) -- P6's tree brief still said 'NOT parallel-safe with P3' a session after the board said P3 LANDED; three were unackable (source: hand with a board row; op_ack refuses, task.py:3175). All nine reconciled, sync CLEAN, lint clean. Phase B-prime candidate (tree authoritative, HANDOFF.md a one-hop note) drafted as the dated 2026-09-06 amendment at the top of docs/tree-sole-authority-spec-2026-08-29.md, sections (i)-(vi), with the prerequisites sized. Retired-ids parity checked: all 14 named Closed ids resolve to tasks/closed/, ZT-* covers 36 closed files + ZT-P5 open on HOLD; counts' '0 retired' is retired-ids.txt being deliberately empty, not a gap.
+
+### 2026-09-06c
+
+Phase B-prime DECIDED 2026-09-06c (user decision, feedback pass on C7). Five of seven prerequisites landed this session: TT-3 (bounded show), TT-4 (check 2 tree-aware), TT-5 (sync in lint, check 13), TT-6 (ack adopts hand-with-row), TT-7 (receipt lint); prereq 4 decided (TT-2 retires with sync), prereq 5 checked no gap. Status table: top of docs/tree-sole-authority-spec-2026-08-29.md. STILL NEEDS AN EXPLICIT USER GO for the cutover commit itself: banner consolidation, MAX_LINES['HANDOFF.md'] -> 60, Rhythm -> docs/README.md, retire check 13 / sync / ack / source_hash, READ_VOCAB update, one revertable commit. The trap on this row stands.

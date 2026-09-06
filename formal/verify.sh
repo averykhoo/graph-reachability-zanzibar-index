@@ -446,7 +446,12 @@ MIN_CONF_ALL=546
 #   and_never_lowers_it` landed without this file; clean checkout collected 1038),
 #   +15 `tests/test_reg_empty_relation_name.py` (TK55: an empty declared relation
 #   name is now refused by both parsers). Re-measured -> `1053 tests collected`.
-MIN_TESTS_ALL=1053
+#   RAISED 1053 -> 1089 on 2026-09-06c (Phase B-prime prerequisites): +30
+#   `tests/test_handoff_lint_b_prime.py` (check 2's tree fallback, the new
+#   check_session_receipt -- 24 of them the parametrised receipt shapes) and +6 in
+#   `tests/test_tasktool.py` (ack adoption, lint check 13, newest-first `show`, and
+#   their three sabotage twins). Re-measured -> `1089 tests collected`.
+MIN_TESTS_ALL=1089
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
