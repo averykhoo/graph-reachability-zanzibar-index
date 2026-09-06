@@ -213,6 +213,112 @@ That is the shape to reach for when the question is sharp: one agent, one hard q
 controlled instrument. The fan-out is for breadth over a *curated* list, and it is worth
 much less than it looks if the verification phase does not run.
 
+## ★ The third fan-out (2026-09-06) — verification RAN, and was thrown away anyway
+
+A 15-agent run over a **hand-seeded** list of seven questions (the six open decision points
+the `2026-09-05b` session left for the user, plus "what is actually next"): 7 investigators,
+7 adversarial verifiers paired one-to-one, 1 completeness critic. **15 of 15 agents
+completed, 0 errors, 0 empty results** — 1,461,263 subagent tokens, 643 tool uses, ~26 min
+wall clock. Rules 1–6 held; attrition was not the failure this time.
+
+The failure was new, and it is not in the list above.
+
+### Fault 3 — the verify phase completed, and the orchestrator never read it
+
+The script was `pipeline(items, investigate, verify)` where stage 2 returned
+`{brief, verdict}` — **siblings**. On completion the orchestrator pulled `point_id`,
+`headline` and `recommendation` out of each brief, read the critic, and **never opened a
+single `verdict` object**. Seven agents, roughly half the run's cost, produced adversarial
+refutations that went into `journal.jsonl` and were never read by anyone.
+
+Rules 3 and 4 are written against the risk that verification **does not run**. This is the
+other half of the same coin: verification runs, completes, and is discarded — because the
+brief alone reads as a finished artifact, and the check is a sibling you have to
+deliberately go and fetch.
+
+⚠ **The fix is a SHAPE, not a discipline.** A verify stage must return the *revised item*,
+never a verdict beside it:
+
+```js
+// wrong — `verdict` is optional to read, so it will eventually go unread
+pipeline(items, i => investigate(i), r => verify(r).then(v => ({brief: r, verdict: v})))
+
+// right — one artifact per item, and it is the post-verification one
+pipeline(items, i => investigate(i), r => reviseUnderRefutation(r))
+```
+
+**Replace, never append.** If the verified object is the *only* object, skipping the check
+is unreachable. Same principle as the rest of this repo: prefer a mechanical refusal over a
+warning that the next person has to remember.
+
+### What the schema bought, and the one field to add
+
+Structured output earned its place, and specifically the per-claim
+`status: CONFIRMED | REFUTED | PARTIAL | UNVERIFIABLE` enum. **Every high-value finding of
+the run arrived through `REFUTED`** — that `GraphAdmission.keysNonempty`'s "Python enforces
+it" justification is false at the schema-declaration path, and that three of the four
+factual claims in board row `TK54` are wrong. Without a first-class slot for *"the doc
+asserts X, the tree says not-X"*, those come back as hedged prose and get discounted.
+
+**Next schema should promote it further**: a `contradicts_docs` array of
+`{doc_site, what_it_says, what_is_true}`. In a repo whose docs are known to drift, that is
+the product; everything else is context.
+
+The prompt line that actually did the work was not structural:
+
+> *Distinguish sharply: what is MECHANICALLY TRUE in the tree today vs what a doc ASSERTS.
+> Do not repeat a claim from `HANDOFF.md` or a session log as if you had verified it.*
+
+That one sentence is the difference between seven summarizers and seven auditors.
+
+### Disagreement was again the most valuable output — and the method field is what saved it
+
+Exactly as 2026-08-14 found. An investigator measured `P6`'s reverse-import cone at **48**
+modules against the orchestrator's **40**. Because the schema required `evidence` to carry
+the *method* and not just the number, the gap was diagnosable rather than a coin flip: the
+agent seeded from 8 modules over a 70-module denominator, the orchestrator from 5 over 69.
+Re-run first-hand with the agent's own seed set: **46**. The board's long-quoted "38" is an
+understatement either way, and cone size is *rebuild* radius, not *edit* radius (`P3`'s
+comparable cone produced an 11-file edit — commit `7200484`).
+
+⚠ Require the METHOD in the evidence field, not just the citation. A bare number cannot be
+reconciled, only averaged — and averaging is what destroys the signal you paid for.
+
+### The critic outperformed every investigator
+
+The single completeness critic — one agent, asked *"what is missing, what interacts, what is
+the biggest unrecognised risk"* — returned the three things nobody was assigned: that
+`formal/probes/` is compiled by **no** gate (so `P5`'s evidence file can rot silently), that
+`TT-2`'s 44 KB `sync` test suite exists only in gitignored `.scratch/`, and that **nothing in
+the repo is backed up** (`origin` holds one ref; `origin/master..master` is 55 files /
++7855 / −1254; no CI config exists at all).
+
+**Shift the ratio.** Fewer parallel investigators, more budget into one high-effort
+synthesizer whose only job is to ask what is unowned. Breadth found the answers to the
+questions asked; the critic found the questions.
+
+### ⚠ Every cost this run paid is one this file already predicted
+
+Recorded because it is the most useful thing in this entry, and it is a self-report:
+**the orchestrator did not read this runbook before launching the fan-out**, though
+`HANDOFF.md`'s "Where things live" says to read it *before a fan-out*. Consequences, all of
+them documented above in this same file:
+
+* **The file-per-agent + reducer pattern (§"How to persist results") was not used.** So the
+  completion payload arrived as one ~238 KB blob, truncated, and getting at the structured
+  fields took three hand-written extraction scripts against `journal.jsonl` — the exact
+  awkwardness that section opens by naming.
+* **The UTF-8 trap fired again.** `UnicodeEncodeError: 'charmap' codec can't encode
+  character '→'` while printing agent results, fixed with `-X utf8` and
+  `encoding='utf-8'`. This is written down **twice already** — §"How to persist results"
+  ("Write UTF-8 explicitly") and the `P10` section below. It still fired, because both
+  copies sit under *persisting* results and the failure happens at *extracting* them.
+* **Progress was not legible.** `journal.jsonl` interleaves `started` and `result` records,
+  so a line-count threshold guessed for "done" (15) was in fact mid-run. Count `result`
+  records only, or don't poll.
+
+**The pattern in this file works. It only works if it is read first.**
+
 ## The re-run this file is owed (board row `P10`, ~1 session)
 
 The 2026-08-10 scope audit is **not** done; it died at 32 of 278 items, with verification
