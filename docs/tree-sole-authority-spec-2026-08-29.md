@@ -3,6 +3,106 @@
 **ACTIVE-PLAN 2026-08-29 — execution spec for an implementing agent. Mark FROZEN when
 landed or abandoned; corrections append dated at the top.**
 
+## 2026-09-06 — Phase B-prime candidate: the tree is authoritative, HANDOFF.md becomes a one-hop note (DRAFT, not decided)
+
+**This is a CANDIDATE for the user's decision, not a decision.** Nothing below is landed;
+no row was filed for it (filing would incur the dual-update cost this section is about),
+and `TT-1` still carries the user-go gate. It amends §2's "≤20-line stub" into a shape the
+week-two evidence supports, and lists what must exist BEFORE the cutover so that a single
+session can land it as one commit with a revert line. Every symbol cited was grepped on
+2026-09-06; every count is from a script named here, run the same day.
+
+### (i) Evidence measured 2026-09-06
+
+* **Read line, by script** (`.scratch/tt1/read_tally.py`, transcribed here: 52 `## ` session
+  entries in `docs/history/session-log.md`, 35 of them in the trial window ≥ `2026-08-23`):
+  `read: board + HANDOFF` **27** · `read: board only` **6** · `read: HANDOFF only` **0** as a
+  self-report (one textual hit at `session-log.md:1759` is a quoted, retracted line inside
+  `2026-08-30b`, whose own report is `board + HANDOFF`) · **2** trial entries with no read
+  line (`2026-08-24`, `2026-08-30c`). So the query REPLACED the file in 6 of 33 reporting
+  sessions (`2026-08-24d`, `2026-08-31`, `2026-08-31c`, `2026-09-01b/c/d` — the last four
+  consecutive `P3` sub-sessions where `board` + `show P3` was the whole read,
+  `session-log.md:900,971`). The board carries no item blocks, so `board + HANDOFF` is
+  structural, not habitual (B1). The tally script is gitignored (`.scratch/tt1/`); its
+  output is transcribed here and its method is three lines: split on `^## <session-key>`,
+  strip backticks/bold, count the three literal forms per entry.
+* **Nine BODY drifts** at session start (`task.py sync --check` rc 1: `P6`, `R6`, `P4`, `P5`,
+  `P14`, `TK55`, `TK54`, `P21`, `DW-1`). `P6`'s tree title/brief/Traps still said "NOT
+  parallel-safe with `P3` (38-module cone)" a full session after `HANDOFF.md:64` said `P3`
+  LANDED — the arm under trial served a retired constraint as its NOW row's brief. Three of
+  the nine (`TK55`/`TK54`/`P21`) were **unackable by construction**: filed `source: hand`
+  and given a board row the same session, `sync_report` (`task.py:3619`) reports them
+  forever while `op_ack` (`task.py:3175`) refuses them (rc 2). Reconciled 2026-09-06b via
+  the spec §3.1 hand-edit route (`source` flipped + Log entry); `sync --check` rc 0 after.
+* **B1–B6** (`docs/tasktool-trial-protocol.md` §6, append `2026-08-31b`): cutover as
+  specified is unsupported (B1); the measured pure cost is the duplicated banner (B2); the
+  mechanical checks catch what the human half misses (B3, B5); the two-literal-lines
+  instrument is unenforced — `handoff_lint.py` has no check for `read:` (grepped: 0 hits)
+  (B4); B6 recommends "keep the tree, drop the duplication". `task.py new` now ratchets
+  its own floor (`task.py::ratchet_min_parsed`, 2026-09-06), which closes B3's second half.
+
+### (ii) What a one-hop `HANDOFF.md` carries
+
+Rewritten every session, never appended; ≤ 60 lines — lower `MAX_LINES['HANDOFF.md']`
+(`handoff_lint.py:148`, today 260) so `check_ceilings` (`:358`) enforces it: (1) the **banner** — the single copy; `tasks/BANNER.md` retires,
+`task.py board` prints `HANDOFF.md`'s banner instead (B2/B6), so `check_banner`
+(`task.py:2555`) retargets; (2) **Still owed** — the verbatim skipped Rhythm actions;
+(3) a **next-session pointer**: `python scripts/task.py board`, then `show <NOW id>`.
+No table, no item blocks, no Closed-ids lines. "One hop" means: the file names where to
+go and nothing a query can derive.
+
+### (iii) What moves where
+
+| from `HANDOFF.md` | to | note |
+|---|---|---|
+| `## Standing traps` (`:186-193`) | the guarded item's task file (`DW-1` for `ttuDirect`) or `CLAUDE.md` if repo-wide | 2 traps today |
+| `## Where things live` (`:195-216`) | `docs/README.md` (routing table already lives there) | drop the `tasks/README.md` row's "while the trial runs" clause |
+| `## Rhythm` (`:218-244`) | `docs/README.md`, rewritten for tree ops | step 0 = `task.py lint` + `handoff_lint.py`; step 3 = `promote`/`close -m`/`touch`/`set brief` per touched row |
+| item blocks (`:107-184`) | the task bodies (summary/Traps/Read first), read via a BOUNDED `show` | all three current blocks were reconciled into their files 2026-09-06b |
+| board table + `Closed ids` lines (`:62-105`) | the query (`board`/`list`/`ready`) and `tasks/closed/` | parity verified — see (iv) |
+
+### (iv) Prerequisites, each with a size
+
+1. **Bounded `show`** — `op_show` (`task.py:2031`) prints the whole file; only `--json` exists.
+   Add `show ID --section {summary,traps,read-first,log} --head N` so the item read is
+   bounded like `board` is by `BOARD_MAX_LINES` (`:623`). Size S (~40 lines + 2 tests).
+2. **`handoff_lint.py` check 2 tree-aware** — `check_priority_capacities` (`:373-392`)
+   hard-fails on a board with no pri table ("found no board rows"), so a one-hop file
+   cannot be lint-clean without this. Retarget to `task.py::check_pri_budget` (`:2227`)
+   via `--json`, or skip when `ROOT_BOARD` carries no table. Size S. Sabotage: a second
+   NOW task file must still go red.
+3. **`sync --check` rc folded into Rhythm step 0 or `lint`** — today it is a separate verb
+   nobody's ledger line reports (`op_sync` exit at `task.py:3806`); this session found 9
+   drifts nobody had seen. Until cutover it is the parallel-update detector; after
+   cutover it retires per §2. Size XS; sabotage: edit one board cell, expect rc 1.
+4. **`TT-2` port** — `sync_sabotage.py` (14 cases) / `sync_accept.py` (57 assertions) are
+   still only in `.scratch/tasktool/`. Either port them (size M) or let them retire WITH
+   `sync` at cutover and record that in `docs/tasktool-spec.md` — decide, do not drift.
+5. **Retired-ids parity — CHECKED, no gap.** `task.py counts` says `0 retired` because
+   `tasks/retired-ids.txt` is deliberately empty (spent ids only); the board's `Closed ids`
+   lines harvest 15 tokens via `parse_board` (`task.py:3460-3473`): all 14 named ids
+   (`P1 P2 HS-1 HS-3 GS-1 BL-1 BL-2 P20 P3 HS-4 GS-2 HS-2 TK52 B1`) resolve to
+   `tasks/closed/`, and `ZT-*` is a glob covering 36 files under `tasks/closed/` plus
+   `ZT-P5` open on `HOLD` (acked-no-row). Script: `.scratch/tt1/retired_parity.py`.
+   `check_ledger_row_ids` (`handoff_lint.py:547`) already resolves ids against the tree.
+6. **The `source: hand`-with-a-row trap** — either `new` refuses a hand source when the
+   id has a board row, or (post-cutover) the field loses its meaning with `sync`. Size XS.
+7. **B4 lint check** — the two literal lines in the newest ledger entry. Size S.
+
+### (v) Rollback
+
+One commit; message carries `git revert <sha>`. The revert restores `HANDOFF.md`'s table,
+blocks and `tasks/BANNER.md`; the tree keeps running exactly as in the trial. Anything
+written to task bodies between cutover and revert survives (files are never deleted), so a
+revert loses nothing except the one-hop shape itself.
+
+### (vi) Status
+
+**Candidate only.** The user asked for the authority decision to be deferred; this section
+exists so the decision can be made against measured evidence and a costed checklist
+rather than against §2 as written on 2026-08-29. It is not a verdict, not a plan in force,
+and it files no rows.
+
 > **PHASE A IS LANDED — 2026-08-29d, commit `379dd60`, ten gate phases green.** Section 1
 > (A1–A5) below is still written in the undone imperative; **do not re-execute it.** Read
 > it as the record of what was decided, and ledger `2026-08-29d` as the record of what

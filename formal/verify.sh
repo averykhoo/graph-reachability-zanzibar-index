@@ -358,7 +358,13 @@ GATE_TREE="$(gate_tree_id)"
 # these floors equal to the live collected count precisely so that DELETING a
 # single test turns the gate red. Leaving 495 here would have silently bought 20
 # tests of slack, which is the same hole the floor exists to close.
-MIN_CONF_ALL=515
+# Re-measured 2026-09-06b with `pytest formal/conformance/ -q --collect-only`: 546.
+#   +5 were ALREADY unratcheted on HEAD 9f05fbf (TK56 added five
+#   test_sorry_scan.py cases without touching this file -- the leak this comment
+#   block warns about, caught by measuring a clean checkout: 520 against 515);
+#   +26 test_conformance_bulk_state.py (P17: bulk build vs Python-graph state over
+#   every GRAPH_FRAGMENT corpus, plus the coverage pin).
+MIN_CONF_ALL=546
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -435,7 +441,12 @@ MIN_CONF_ALL=515
 #   test_tree_id_survives_a_commit_of_a_deletion_or_rename` (GS-1 in the content
 #   scheme: a pending deletion's `absent` marker moved the id at commit).
 #   Re-measured with `pytest tests/ -q --collect-only` -> `1037 tests collected`.
-MIN_TESTS_ALL=1037
+#   RAISED 1037 -> 1053 on 2026-09-06b: +1 was already unratcheted on HEAD 9f05fbf
+#   (TK56's `test_tasktool.py::test_new_ratchets_the_floor_to_the_measured_total_
+#   and_never_lowers_it` landed without this file; clean checkout collected 1038),
+#   +15 `tests/test_reg_empty_relation_name.py` (TK55: an empty declared relation
+#   name is now refused by both parsers). Re-measured -> `1053 tests collected`.
+MIN_TESTS_ALL=1053
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -492,8 +503,11 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 # Re-measured 2026-08-11: test_conformance_remove.py collects 104; 494 - 104 = 390.
 # 2026-08-31b: the two `P20` guard modules are both in the REST tile (HEAVY_CONF is
 # exactly one file and did not change), so all +20 land here: 515 - 104 = 411.
+# 2026-09-06b: HEAVY_CONF re-measured at 104 (unchanged); test_sorry_scan.py's +5 and
+# test_conformance_bulk_state.py's +26 are both REST: 546 - 104 = 442. (The identity
+# check below is what caught this -- the first MIN_CONF_ALL ratchet left it at 515.)
 MIN_CONF_HEAVY=104
-MIN_CONF_REST=411
+MIN_CONF_REST=442
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

@@ -25,6 +25,80 @@ from here.
 
 ---
 
+## 2026-09-06b — `P17` + `TK55` closed by user decision; red branch inventoried, kept; trial window closed, no cutover
+
+rows: `P17` (closed), `TK55` (closed), `P22` / `P23` / `P24` (new), `TT-1` (tree-only; prework, `moved`
+bumped by a `comment`), `P6` (untouched, still `NOW` mechanically)
+
+Formal detail: [`PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md) `## Session 2026-09-06b`
+(§1 `P17` and why not a Lean constructor, §2 `TK55` — the divergence was real, §3 the branch
+inventory and the evidence note, §4 `TT-1` prework, §5 the leaked floors, §6 mechanical checks,
+§7 next, §8 gate pointer → here).
+
+lint: `task lint: clean (12 checks, 162 task file(s) parsed)`
+read: board + HANDOFF (the board query first, then `HANDOFF.md` in full, then `show TT-1`)
+
+**Task (user-assigned):** four owed items from `2026-09-06` — "look into these things, explain
+the context, recommend what should be done about each, and what should be done this session",
+under an `ultracode` opt-in. Run as two scripted waves (land + adversarial review; fix + branch
+note + independent re-check), every test result re-run first-hand afterwards. User decisions,
+via one question each: **`P17` → option (c)** now (conformance differential + written scope;
+the Lean `bulk = replay` shape filed `SOMEDAY` as `P24`); **`TK55` → fix both parsers AND
+accept `keysNonempty` as scope**; **branch → keep as-is, inventory, tag/delete later**;
+**`TT-1` → prework + grade only, decide at a feedback pass**.
+
+**Landed.** `formal/conformance/test_conformance_bulk_state.py` (26 tests; bulk-built state
+vs the write-by-write Python graph state, exact, over every `GRAPH_FRAGMENT` corpus, plus the
+Lean-anchored `diff_states` leg and a coverage pin) with `backends.py::bulk_build_drive` and
+`extractor.py::python_bulk_graph_state`; an empty-declared-name refusal in
+`zanzibar_utils_v1.py::parse_schema_ast` and, independently, `tests/oracle.py::parse_schema_ast`,
+pinned by `tests/test_reg_empty_relation_name.py` (15); the `keysNonempty` docstring in
+`FullScope.lean` rewritten to a true justification (`lake build` rc 0); `FINAL_REVIEW.md` §3.1
+items 3 and 6 + §4(h), `CORRESPONDENCE.md` §8.1, `ARCHITECTURE.md` and `spec-deviations.md`
+(`2026-09-06` entry; its stale "first seven entries" ordering note also fixed);
+`formal/history/p3-flip-red-snapshot-2026-09-05.md` (FROZEN; the branch's refuted declarations
+verbatim, 55/55 re-verified); a DRAFT Phase B′ amendment atop
+`docs/tree-sole-authority-spec-2026-08-29.md`; the trial grade,
+[`tasktool-trial-protocol.md`](../tasktool-trial-protocol.md) §6 `2026-09-06` (C1–C7).
+
+**Sabotage, first-hand:** main-parser refusal disabled → `8 failed, 7 passed in 0.24s`;
+`bulk_build.py`'s Phase-W multiplicity clamped to 1 → `1 failed, 25 passed in 8.73s`
+(`[nary_union] … incremental=3 bulk=1`); both restored byte-exact. **Two GREEN sabotages are
+findings:** deleting the I14 crossable-middle loop (`bulk_build.py:206-221`) stays green in every
+`build_index` caller → `P22`; collapsing Phase-P path counts is green in the new module because
+`extract_sql_state` keeps direct rows only — `tests/test_bulk_build.py` remains the only closure
+pin, and the docstring says so.
+
+**Floors:** a `git stash -u` checkout of `HEAD 9f05fbf` collected **520 / 1038** against
+`MIN_CONF_ALL=515` / `MIN_TESTS_ALL=1037` — `TK56` added six tests without ratcheting. Both
+re-measured after this session's +26 / +15 → **546 / 1053**, provenance written beside them.
+⚠ The first ratchet edited `MIN_CONF_ALL` alone; `verify.sh:512`'s identity check
+(`MIN_CONF_HEAVY + MIN_CONF_REST == MIN_CONF_ALL`) would have failed every conformance phase —
+surfaced by `doc_counts --check` before the gate ran. `MIN_CONF_REST` 411 → 442 (`HEAVY_CONF`
+re-measured at 104, unchanged).
+
+**Trial (`TT-1`) prework:** `sync --check` found the tree was the STALE arm — 9 drifts, all
+reconciled and acked; three `source: hand` rows with a board row could not be acked without a
+hand flip to `source: board` (tool gap, recorded as prerequisite 6 of the draft). Read tally
+over the window, re-measured by script: 35 entries, `board + HANDOFF` 27, `board only` 6,
+`HANDOFF only` 0, no line 2. User's leaning going into the feedback pass, recorded in C7: keep
+the tree, make `HANDOFF.md` ephemeral/one-hop. Not decided.
+
+**Board:** `P17`, `TK55` rows deleted and retired on the closed-ids line (with `TK56`, which
+`2026-09-06` closed but never listed); `P22`, `P23` (`LATER` S), `P24` (`SOMEDAY` M) added;
+banner rewritten; `tasks/BANNER.md` rewritten (14 lines); mirror ops `close` ×2, `new` ×3,
+`ack` ×3 (first reconciliations), `sync CLEAN`. `handoff_lint` refused an 11th trap badge
+(de-badged `P24`) and a 523-line `formal/HANDOFF.md` (two redundant blank lines removed).
+
+**Gate:** ten phases run after every edit above; verdicts and `gate_status.py` in the
+commit message. If this line still says that, the run had not finished when the entry was
+written — check `python scripts/gate_status.py` on the committed tree.
+
+**Owed to the user (not owed to the next session):** the branch tag/delete call; the trial
+feedback pass and the `TT-1` go.
+
+Still owed: nothing.
+
 ## 2026-09-06 — `TK56`: T3's undischargeable `hValid` (and its `opaque`) deleted; T3 instantiated; next is `P17`
 
 rows: `TK56` (new, closed), `P17` (named as the next step — pointer only, not re-ranked), `P6` (untouched, still `NOW` mechanically)

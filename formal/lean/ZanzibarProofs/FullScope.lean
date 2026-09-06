@@ -194,9 +194,17 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
       Stated in the decidable `.all` form (see `LeafRules.lean::LeafScope.keysNonempty`);
       `hne_of_keys_nonempty` turns it into the binder shape the consumer wants.
 
-      **Honest as a Python-side scope claim.** `zanzibar_utils_v1.py::check_name` rejects the
-      empty string (the identifier charset is `1–256` characters), so no parsed schema can
-      declare `""`; and `validate_write_identifiers` applies the same rule on the write path. -/
+      **Honest as a Python-side scope claim — since 2026-09-06 (`TK55`), and NOT before.**
+      This docstring used to say `check_name` / the identifier charset rejected `""` at parse
+      time. That was FALSE: the charset (`validate_write_identifiers`) fires on the WRITE path
+      only, and both schema parsers accepted `define : [user]` — a computed reference to the
+      empty name (`define : viewer`) was reachable through a valid write on `viewer`, where the
+      set engine answered `check = true` and the graph answered `false` (untainted) or refused
+      the write in `DeltaProcessor._write_derived` (boolean). The parse-time refusal is now
+      `zanzibar_utils_v1.py::parse_schema_ast`'s empty-name lock (the `if not relation_name`
+      raise beside the `'.'` lock) and, independently, `tests/oracle.py::parse_schema_ast`'s;
+      pinned by `tests/test_reg_empty_relation_name.py`, whose docstring carries the pre-fix
+      probe output and both single-parser sabotages. -/
   keysNonempty : S.keys.all (fun k => k.2 != "") = true
 
 /-- **The flipped write leg's scope carrier, assembled from the admission bundle.**

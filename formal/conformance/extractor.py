@@ -385,6 +385,37 @@ def python_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
         session.close()
 
 
+def python_bulk_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
+    """BULK-BUILD the real graph index from the corpus as a tuple snapshot
+    (`backends.bulk_build_drive` -> `connectedstore.build_index(bulk=True)` ->
+    `index_v4/bulk_build.py`), then extract the SAME canonical state as
+    `python_graph_state` — same `extract_sql_state`, same projections P1/P2/P5/P7.
+
+    Board row `P17`. The two Python extractors differ ONLY in how the index came
+    to exist: `python_graph_state` grows it write-by-write through the logged
+    path the Lean `ReachedBy` chain models; this one constructs the final state
+    in one offline pass, which no Lean constructor describes. Their canonical
+    states are compared EXACTLY — multiplicity on BOTH arms — by
+    `test_conformance_bulk_state.py`, and the bulk state is diffed against the
+    Lean model directly under the usual projections.
+
+    Out of scope here, by design: the outbox. The bulk path writes exactly one
+    `ADDED` row per final closure pair (`bulk_build.py` Phase W (3)), whereas
+    the incremental path's outbox is a per-write delta history; the two are
+    equal as multisets only for an add-only load, and neither is part of the
+    canonical state this gate compares (Lean's `graph-state` dump has no outbox
+    channel).
+    """
+    from formal.conformance.backends import bulk_build_drive
+
+    session, _widx, store_id = bulk_build_drive(schema_text, tuples,
+                                                object_wildcards)
+    try:
+        return extract_sql_state(session, store_id)
+    finally:
+        session.close()
+
+
 # --------------------------------------------------------------------------- #
 # Lean side
 # --------------------------------------------------------------------------- #

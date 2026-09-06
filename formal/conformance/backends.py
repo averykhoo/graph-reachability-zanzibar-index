@@ -92,6 +92,63 @@ def graphindex_drive(schema_text: str, tuples, object_wildcards=()):
     return session, widx, "conf"
 
 
+def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
+    """Build the real graph index OFFLINE from a tuple snapshot, via
+    `connectedstore.build_index(bulk=True)` — the production bootstrap path
+    (`index_v4/bulk_build.py`: one in-memory pass, closed-form path counts,
+    in-memory boolean backfill, bulk INSERTs) — instead of growing it one logged
+    write + cascade at a time as `graphindex_drive` does.
+
+    Board row `P17`: the Lean headline theorems quantify over indexes grown from
+    `emptyState` by the `ReachedBy` chain's own constructors (its only base
+    constructor is `empty`, `CascadeStrataAssemble.lean`), so a bulk-built index
+    is OUTSIDE the proof's scope by construction. This drive is what lets the
+    state gate pin it to the model-driven state anyway
+    (`test_conformance_bulk_state.py`).
+
+    The snapshot is written through a `TupleSource` (admission-validated, the
+    same seam `tests/test_bulk_build.py::_seed_source` uses), then
+    `build_index(session, store_id)` — same store id for source and index, the
+    production default — materializes the index. Conformance corpora are
+    add-only, duplicate-free and admission-clean, so EVERY corpus tuple must
+    land as a `TupleV1` row: `TupleSource.add` is idempotent on duplicates and
+    absorbs nothing else, so a landed count below `len(tuples)` means the
+    snapshot the bulk side saw is SMALLER than the one `graphindex_drive`
+    replayed — the two sides would be comparing different stores. That is
+    refused here (ZT-P4-7's rule: never silently shrink one side of a
+    differential), not tolerated.
+
+    Returns `(session, widx, store_id)` like `graphindex_drive`; the caller owns
+    closing the session.
+    """
+    from sqlmodel import select
+
+    from connectedstore import TupleSource, build_index, save_schema
+    from setengine.models import TupleV1
+
+    store_id = "conf"
+    session = _fresh_session()
+    save_schema(session, store_id, schema_text, frozenset(object_wildcards))
+    src = TupleSource(session, store_id)
+    for tup in tuples:
+        src.add(tup.subject_predicate, tup.subject_type, tup.subject_name,
+                tup.relation, tup.object_type, tup.object_name)
+    session.commit()
+
+    landed = len(session.exec(
+        select(TupleV1).where(TupleV1.store_id == store_id)).all())
+    if landed != len(tuples):
+        raise AssertionError(
+            f"bulk_build_drive: {landed} TupleV1 row(s) landed for a corpus of "
+            f"{len(tuples)} tuple(s) — the snapshot build_index will read is not "
+            f"the tuple list graphindex_drive replays (a duplicate the source "
+            f"deduplicated, or a rejected write). Refusing to compare two "
+            f"different stores.")
+
+    _cursor, widx, _ruleset = build_index(session, store_id, bulk=True)
+    return session, widx, store_id
+
+
 def graphindex_answers(schema_text: str, tuples, queries,
                        object_wildcards=()) -> list[bool]:
     """Drive the real graph index (see `graphindex_drive`) and answer each

@@ -886,6 +886,20 @@ def parse_schema_ast(schema: str) -> SchemaAST:
             relation_name = relation_name.strip()
             if not colon:
                 raise ValueError(f'malformed relation definition (missing colon): {line!r}')
+            # Empty-name lock (TK55, 2026-09-06): `define : [user]` used to parse and
+            # compile to a Filter on relation ''. No write can ever land on '' (the
+            # identifier charset is 1-256 chars), but a COMPUTED reference to it
+            # (`define : viewer`) is reachable through a valid write on `viewer` --
+            # and there the backends diverged: the set engine answered check True
+            # on '' while the graph answered False (untainted) or refused the write
+            # in `DeltaProcessor._write_derived` (boolean). Refusing at parse time
+            # is what makes `FullScope.lean::GraphAdmission.keysNonempty` a Python
+            # scope claim rather than an assumption. Kept to EMPTY only -- the full
+            # identifier charset is deliberately NOT imposed on declared names here.
+            if not relation_name:
+                raise ValueError(
+                    f"type {current_type!r}: a declared relation name may not be empty "
+                    f"({line!r})")
             # Lexical collision lock (boolean spec §3.2): '.' is reserved for synthetic
             # leaf predicates ('<relation>.<index>'), so a *declared* relation name may
             # never contain it. Tuple-side entity names remain unrestricted.

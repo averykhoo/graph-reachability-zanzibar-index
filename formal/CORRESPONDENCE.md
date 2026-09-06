@@ -386,7 +386,7 @@ anchors instead. Fixing them is a separate, Lean-owning task.
 |---|---|---|
 | `GraphIndex/CascadeStrataAssemble.lean::ReachedByW3d2E` = **`ReachedBy`** | the write path as *admitted write + same-transaction cascade* | `connectedstore/apply.py::advance_index` → `index_v4/processor.py::DeltaProcessor.run_cascade`; `tests/test_matrix.py` `GraphBackend.apply`. **"interleaved" is true of ONE of Python's two schedules — see the row note below** |
 | `FullScope.lean::Drained` (`:96`, `cascadeKeys S σ = []`) | outbox fully drained at commit boundary. **The text is unchanged by the flip but the CLAIM is strictly stronger since 2026-09-05**: `GraphIndex/Cascade.lean::cascadeKeys` (`:561`) is `frontierRows.flatMap (affectedKeys S σ)`, and the write legs now materialise minted-leaf edges, so the frontier carries leaf-tagged deltas whose own-key branch resolves through `GraphIndex/Leaf.lean::publicOfLeaf`. Pre-flip there were no such rows to be dirty — "drained" ranged over a strictly smaller frontier | boolean spec §7.8 / I9 `index_v4/processor.py::DeltaProcessor.audit_fixpoint` |
-| `FullScope.lean::GraphAdmission` (`wf`/`nodup`/`strat`/`ttuDirect`/`matchDecl`/`ranked`/`objWild`/`storeValid`/`ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf`/`noLeafSubjects`/`keysNonempty` — `storeValid` WIDENED to `StoreValidRulesD` by E-chain leg 5, 2026-08-05, mirroring `RuleSet.apply` routing a public-name write onto a derived def's Direct leaf family; `ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf` are the three syntactic readings of Python's ONE dot-lock, added by 4c-ii steps 9 and 10. ★ **TWO fields added 2026-09-05 by 4c-ii (THE FLIP), obligations (D) and (E)** — `noLeafSubjects` (`GraphIndex/LeafRules.lean::NoLeafSubjects`: no rule of the FULL leaf-routed set `schemaRewritesL` mints a leaf-named SUBJECT predicate; NOT derivable from the three dot-lock fields, refuted in-kernel by `GraphIndex/CascadeStable.lean::admissionNameShape_does_not_give_noLeafSubjects`) and `keysNonempty` (a declared relation name is non-empty — the object half, `LeafNode`'s E3 residual guard pushed back to its source; `Core/Schema.lean::relNameOK` forbids only `'.'`, so `WF` cannot supply it). Both are consumed only through `FullScope.lean::GraphAdmission.leafScope`, which assembles `GraphIndex/LeafRules.lean::LeafScope` — so no headline assumes anything new) | what compile+write admission guarantees | see field docs; e.g. `ttuDirect` ↔ `zanzibar_utils_v1.py::_validate_ttu_tuplesets`, `matchDecl` ↔ `zanzibar_utils_v1.py::RuleSet.apply`'s raise on a raw write matching no declared restriction, `objWild` ↔ `::_reject_object_wildcard_scope`; `ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf` ↔ `zanzibar_utils_v1.py::_validate_ast_references`'s `'.' in name and name != '...'` dot-lock, read at a TTU arm's target, a `Direct` restriction's predicate, and a `computed` operand respectively. **The two new fields are Python-enforced too, and that is what makes them scope claims rather than assumptions:** `noLeafSubjects` ↔ the same `::_validate_ast_references` walk — `zanzibar_utils_v1.py::_validate_ast_references.check_name` (`:915-919`) applied by the TTU branch (`:930-932`) to BOTH `target_rel` and `tupleset_rel`, so no arm, untainted layer or leaf layer, can compile a dotted TTU target; `keysNonempty` ↔ the `1–256`-char identifier charset, `zanzibar_utils_v1.py::_IDENTIFIER_RE` (`:31`) at parse time and `zanzibar_utils_v1.py::validate_write_identifiers` (`:133`) on the write path, which reject `""` outright |
+| `FullScope.lean::GraphAdmission` (`wf`/`nodup`/`strat`/`ttuDirect`/`matchDecl`/`ranked`/`objWild`/`storeValid`/`ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf`/`noLeafSubjects`/`keysNonempty` — `storeValid` WIDENED to `StoreValidRulesD` by E-chain leg 5, 2026-08-05, mirroring `RuleSet.apply` routing a public-name write onto a derived def's Direct leaf family; `ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf` are the three syntactic readings of Python's ONE dot-lock, added by 4c-ii steps 9 and 10. ★ **TWO fields added 2026-09-05 by 4c-ii (THE FLIP), obligations (D) and (E)** — `noLeafSubjects` (`GraphIndex/LeafRules.lean::NoLeafSubjects`: no rule of the FULL leaf-routed set `schemaRewritesL` mints a leaf-named SUBJECT predicate; NOT derivable from the three dot-lock fields, refuted in-kernel by `GraphIndex/CascadeStable.lean::admissionNameShape_does_not_give_noLeafSubjects`) and `keysNonempty` (a declared relation name is non-empty — the object half, `LeafNode`'s E3 residual guard pushed back to its source; `Core/Schema.lean::relNameOK` forbids only `'.'`, so `WF` cannot supply it). Both are consumed only through `FullScope.lean::GraphAdmission.leafScope`, which assembles `GraphIndex/LeafRules.lean::LeafScope` — so no headline assumes anything new) | what compile+write admission guarantees | see field docs; e.g. `ttuDirect` ↔ `zanzibar_utils_v1.py::_validate_ttu_tuplesets`, `matchDecl` ↔ `zanzibar_utils_v1.py::RuleSet.apply`'s raise on a raw write matching no declared restriction, `objWild` ↔ `::_reject_object_wildcard_scope`; `ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf` ↔ `zanzibar_utils_v1.py::_validate_ast_references`'s `'.' in name and name != '...'` dot-lock, read at a TTU arm's target, a `Direct` restriction's predicate, and a `computed` operand respectively. **The two new fields are Python-enforced too, and that is what makes them scope claims rather than assumptions:** `noLeafSubjects` ↔ the same `::_validate_ast_references` walk — `zanzibar_utils_v1.py::_validate_ast_references.check_name` applied by the same function's `isinstance(e, TTU)` branch to BOTH `target_rel` and `tupleset_rel`, so no arm, untainted layer or leaf layer, can compile a dotted TTU target; `keysNonempty` ↔ **the parse-time empty-name lock in `zanzibar_utils_v1.py::parse_schema_ast` (the `if not relation_name` raise beside the `'.'` lock) and, independently, in `tests/oracle.py::parse_schema_ast` — both added 2026-09-06 (`TK55`), pinned by `tests/test_reg_empty_relation_name.py`. ⚠ This cell used to say the identifier charset (`_IDENTIFIER_RE`) rejected `""` "at parse time"; that was FALSE — `validate_write_identifiers` fires on the WRITE path only, both parsers accepted `define : [user]`, and a computed reference to the empty name (`define : viewer`) was reachable through a valid write on `viewer`, where the set engine answered `check=True` and the graph answered `False` (untainted) or refused the write in `DeltaProcessor._write_derived` (boolean). The write-path charset is still the ONLY guard for every OTHER out-of-charset declared name (`*`, inner whitespace, `#`, non-ASCII, >256 chars): those still parse and compile, and the graph refuses the write on the referencing relation while the set engine accepts it (probe 2026-09-06, `ParityEngine` raises `accept/reject disagreement`)** |
 | `FullScope.lean::W4Fragment` (`computedOrDirect`/`directArmsBare`/`directArmsConcrete`/`computedOnlyOperands`/`noUnionDirects`/`twoStrata`/`wsBare`/`bareStar`/`ttuStarFree`/`term` — **TEN** fields since E-chain leg 5, 2026-08-05, split `computedOnly` into the first five; `rootB` was deleted 2026-07-17). Plus `FullScope.lean::W4NarrowT2a` (`computedOnly`/`storeValid`), which **T2a `graph_reached_inv` alone** takes IN ADDITION — the widening's declared asymmetry, counterexampled at a real store by `W4WitnessDirect.outside_narrow_t2a` | — the HONEST carries: restrictions Python does NOT impose | `history/ROADMAP.md` "W4 — honest gaps" |
 | `GraphIndex/Exec.lean::graphRun` + `::graphRun_reached` / `::graphRun_check_eq_sem` + `::graphModeAnswers` / `::graphModeAnswers_eq_sem` | the conformance driver IS the chain (theorem, not analogy). **Since 2026-08-28c the driver's read is the PUBLIC one**: `Cli.lean` prints `graphModeAnswers`, whose body is `GraphModel.checkPublic`, and the capstones are stated over that same read — so "every printed verdict is `sem`" names the function actually called. `graphModeAnswers` is statement-pinned for exactly that reason (its sabotage: reverting the read left all 495 conformance tests green) | driven against `WildcardIndex` by `test_conformance_graph.py` (verdicts) and `test_conformance_state.py` (final state, zcli mode `"graph-state"`; the dump code in `Cli.lean` is driver-level, its projections documented in the mode header + `formal/conformance/extractor.py`). **Read correspondence:** `checkPublic` ↔ `index_v4/wildcard.py::WildcardIndex.check` (the fenced public entry, `BL-2`), NOT `index_v4/wildcard.py::WildcardIndex._check_internal` — which is what `GraphModel.check` models |
 | `GraphIndex/Exec.lean::GraphOp` + `::graphRunOps` + `::removeGateB` + `::graphRunOps_reached` / `::graphRunOps_store` / `::graphRunOps_check_eq_sem` | the op-stream driver over the chain, add/remove **interleaved per op** | zcli graph/graph-state modes take an optional `"ops"` stream (absent ⇒ the legacy add-only `graphRun`, byte-identical; spec mode rejects `"ops"` with **rc 5**, `test_cli_mode.py`); driven against the real graph index by `test_conformance_remove_graph.py` (ANSWER level, differential vs oracle on the erased store) |
@@ -1007,11 +1007,14 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   bug here silently shrinks the enumerated space — and nothing formal watches it.
 * **`index_v4/processor.py::DeltaProcessor.backfill` and `::DeltaProcessor.audit_fixpoint`.**
   `backfill()` is the bootstrap/repair path (and the `bulk=False` reference side
-  of the bulk gate); `audit_fixpoint` is the I9 "a second reconcile changes
+  of the bulk gate — so NEITHER side of `build_index` is the modeled
+  constructor; the bulk side is pinned to the model-driven state by
+  `formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`,
+  `P17`, 2026-09-06); `audit_fixpoint` is the I9 "a second reconcile changes
   nothing" check. The Lean chain models only incremental write+cascade;
   `Quiescent` states the drained condition but nothing models the audit sweep.
-  `::DeltaProcessor._live_keys_of` (the key enumeration both use) is likewise
-  unmodeled.
+  `index_v4/processor.py::DeltaProcessor._live_keys_of` (the key enumeration both
+  use) is likewise unmodeled.
 * **Graph-side `lookup` / `lookup_reverse` and the `_collect_*` family.**
   `index_v4/wildcard.py::WildcardIndex.lookup`, `::WildcardIndex.lookup_reverse`,
   `::WildcardIndex._collect_residue_memberships`, `::WildcardIndex._collect_reachable`, `::WildcardIndex._collect_reverse`,
@@ -1441,7 +1444,22 @@ no-Lean-impact change, not perf only.)*
   `build_index(..., bulk=True)`. **The net is the differential identity gate**
   (`tests/test_bulk_build.py`): same snapshot built both ways, compared on
   id-independent canonical projections, plus the I1–I13 checker and an oracle
-  read-parity grid. No modeled definition describes dead code.
+  read-parity grid — and, since 2026-09-06 (`P17`), the Lean-anchored state
+  differential `formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`,
+  which pins the bulk-built state (edges with exact multiplicities on every arm,
+  derived flags, residues) to the write-by-write state over the 25
+  `GRAPH_FRAGMENT` corpora and diffs it directly against the zcli dump. "Every
+  arm" there means the DIRECT multigraph only: the canonical form is
+  `extract_sql_state`'s P1 projection (`direct_edge_count > 0` rows;
+  `indirect_edge_count` never read), so the bulk builder's materialized closure
+  — Phase-P path counts and pure-indirect rows — is outside the conformance
+  module's reach and is pinned only by `tests/test_bulk_build.py` (the module
+  docstring of `test_conformance_bulk_state.py` records both green sabotages). Not
+  covered by either: the I14 crossable-middle loop
+  (`index_v4/bulk_build.py::bulk_build`, the Phase-B mirror of
+  `index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`) — no bulk-built
+  corpus in the repo has a crossable shape, so disabling it is green everywhere
+  (sabotage 2026-09-06). No modeled definition describes dead code.
 * **R4-BF — bulk boolean backfill for `build_index`
   (`index_v4/bulk_backfill.py`, `index_v4/bulk_build.py`,
   `connectedstore/build.py`, 2026-07-15).** Same disposition as P13, one layer
@@ -1452,16 +1470,27 @@ no-Lean-impact change, not perf only.)*
   **alternative constructor of the same modeled state**, reusing the compiled plan
   closures (`plan.check_fn` / `plan.stars_fn` via a `_BulkEvalContext` matching
   the `_EvalContext` callback protocol). **The net is the extended differential
-  identity gate** (`tests/test_bulk_build.py`, 6 corpora, each guarded by
-  anti-vacuity assertions), plus the I1–I13 checker and an oracle read-parity
-  grid. *Note (`ZT-P3-6`): bulk build/backfill is the DEFAULT `build_index` path
-  and an entirely separate constructor of index state with no Lean model, pinned
-  only by a Python↔Python differential — it is documented here but was missing
-  from `FINAL_REVIEW.md` §3 / `ARCHITECTURE.md` §6's residual-surface lists.*
+  identity gate** (`tests/test_bulk_build.py`, every `_CORPORA` entry, each
+  guarded by anti-vacuity assertions), plus the I1–I13 checker and an oracle read-parity
+  grid, plus (2026-09-06, `P17`) the conformance differential
+  `formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`,
+  whose exact residue comparison (stars / neg / upos per key) is a second,
+  Lean-anchored pin on the bulk backfill's Phase-D output
+  (`tests/test_bulk_build.py::_residues_proj` is the first) — dropping `upos`
+  from the bulk residue rows
+  fails it (`2 failed, 24 passed`, `residue_rich` and `taint_union_userset_arm`).
+  *Note (`ZT-P3-6`): bulk build/backfill is the DEFAULT `build_index` path
+  and an entirely separate constructor of index state with no Lean model; until
+  2026-09-06 it was pinned only by a Python↔Python differential and was missing
+  from `FINAL_REVIEW.md` §3 / `ARCHITECTURE.md` §6's residual-surface lists —
+  `FINAL_REVIEW.md` §3.1 item 6 now carries the scope statement.*
 * **N18 — stream the bulk builder's Phase-W writes + Phase-R snapshot read
   (`index_v4/bulk_build.py`, 2026-07-16).** A pure RAM-ceiling optimization on
   the same alternative constructor; **no rows, no state, and no modeled algorithm
-  change**. The Phase-P DP is untouched. What changed is *how* the
+  change** (the streamed writer's output is what
+  `formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`
+  reads back, so a chunking bug that dropped or duplicated a row would now show
+  as a state diff against the write-by-write side). The Phase-P DP is untouched. What changed is *how* the
   already-computed rows reach the DB: (a) Phase W builds/executes/frees the edge,
   residue and outbox row dicts in bounded `_WRITE_CHUNK` chunks in the identical
   order, so per-table auto-increment ids are assigned exactly as the old single

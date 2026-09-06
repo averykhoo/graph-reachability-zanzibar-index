@@ -1,7 +1,7 @@
 ---
 id: P4
 title: leg 7 4b -- leaf-probe <-> directLeaf bridge
-brief:
+brief: Unblocked 2026-09-05b (P3 closed; deps swept); bridge target is the live leaf-routed write path
 pri: LATER
 size: M
 deps: []
@@ -9,14 +9,16 @@ related: []
 parent:
 labels: [formal]
 source: board
-source_hash: 83dc21911a69
+source_hash: 015e6dd88c0d
 created: 2026-08-16
-moved: 2026-09-05b
-updated: 2026-09-05b
+moved: 2026-09-06b
+updated: 2026-09-06b
 closed:
 ---
 
-leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge
+leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge. Unblocked 2026-09-05b (`P3` closed; deps
+swept): the whole leaf-routed write path is live in the model (`Cascade.lean:190-191`,
+`:340-341`, `affectedKeys` `:542-546`), so the bridge target is the landed leg, not a plan.
 
 ## Traps
 
@@ -36,3 +38,7 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-09-05b
 
 2026-09-05b: dep P3 swept (landed). Re-scope before starting: the leaf-probe <-> directLeaf bridge now has the whole leaf-routed write path live in the model (Cascade.lean:190-191, :340-341, affectedKeys :542-546), and the toolkit it was going to bridge to is the one CascadeStrataSettle.lean:3721 rawWriteRels_ne_nil_of_exprDirectsAll already walks (persistedLeaves/unionSpineLeaves/atomLeaves/pureLeaves/splitPure vs exprDirectsAll).
+
+### 2026-09-06b
+
+Board cell appended 2026-09-05b: 'Unblocked 2026-09-05b (P3 closed; deps swept)'. Task summary + brief now carry it (the 2026-09-05b Log entry already had the re-scope detail). Diff source: git 51642dc -> HEAD.

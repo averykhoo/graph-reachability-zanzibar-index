@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-29d
-moved: 2026-08-30
-updated: 2026-08-30
+moved: 2026-09-06b
+updated: 2026-09-06b
 closed:
 ---
 
@@ -50,3 +50,7 @@ retirement refusal; they are not deleted. `sync_sabotage.py` (14 cases) and
 ### 2026-08-30
 
 Trial window EXTENDED to 2026-09-06 and DELETE taken off the table (user, 2026-08-30). This row is unchanged in substance -- Phase B still needs an explicit go and is still the question-(a) verdict -- but the question it answers narrowed from keep-or-delete to cutover-or-keep-both. Its third trap (the unported sync suites) is now filed as its own row, TT-2, because the ground it rested on -- 'sync retires at cutover' -- expired with the extension.
+
+### 2026-09-06b
+
+2026-09-06b measurement (no decision; user deferred the authority call). Read tally by script over docs/history/session-log.md, per session entry: 35 trial-window entries, 27 'board + HANDOFF', 6 'board only', 0 'HANDOFF only' self-reports, 2 entries without a read line (2026-08-24, 2026-08-30c). sync --check at session start: 9 BODY drifts (P6 R6 P4 P5 P14 TK55 TK54 P21 DW-1) -- P6's tree brief still said 'NOT parallel-safe with P3' a session after the board said P3 LANDED; three were unackable (source: hand with a board row; op_ack refuses, task.py:3175). All nine reconciled, sync CLEAN, lint clean. Phase B-prime candidate (tree authoritative, HANDOFF.md a one-hop note) drafted as the dated 2026-09-06 amendment at the top of docs/tree-sole-authority-spec-2026-08-29.md, sections (i)-(vi), with the prerequisites sized. Retired-ids parity checked: all 14 named Closed ids resolve to tasks/closed/, ZT-* covers 36 closed files + ZT-P5 open on HOLD; counts' '0 retired' is retired-ids.txt being deliberately empty, not a gap.
