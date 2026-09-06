@@ -678,6 +678,52 @@ banner de-duplicated; an ephemeral one that does not is a cutover in disguise an
 tree to grow blocks first. **Decide that question, and the rest is mechanical.** Not filed as
 board rows; the user asked for the grade to be recorded ahead of a feedback pass.
 
+### 2026-09-06c — the feedback pass: C7 DECIDED (Phase B′ as drafted), the cheap prerequisites landed, the cutover waits for a go
+
+The pass the previous entry asked for. The user was given C1–C7 and two choices and took
+both recommendations: **C7 → Phase B′ as drafted** (tree authoritative; item blocks → task
+bodies behind a bounded `show`; Rhythm → `docs/README.md`; the `Closed ids` lines dropped
+because `tasks/closed/` + `check_ledger_row_ids` already cover them; `sync`/`ack`/
+`source_hash` retire at cutover; `TT-2` resolves as "retired with sync"), and **scope →
+file the seven prerequisites as rows and land the XS/S ones now**, the cutover itself
+still gated on an explicit go (`TT-1`'s trap). The decision and the per-prerequisite
+status table are at the top of `tree-sole-authority-spec-2026-08-29.md`; this entry
+records what the pass learned that the table does not.
+
+**D1 — the C3 fix was designed the way `acked-no-row` was, and that argument held.** `ack`
+now adopts a `source: hand` task that has a board row (`source` → `board`, digest stamped,
+Log line). It is the one write to `source` after `new`, and it is allowed because the
+value is a fact the run OBSERVED, not a value a human supplied — the same reasoning that
+let the sentinel through on 2026-08-21e. One direction only. The refusal for hand-without-
+row and for path sources is untouched, and the test that pinned the refusal still passes.
+
+**D2 — B4 needed six lint-line shapes and four read-line shapes, not "two literal lines".**
+`check_session_receipt` normalises backticks, bold and indentation and SEARCHES the line,
+because the ledger's newest entry had `lint: \`task lint: …\`` and `read: board + HANDOFF
+(the board query first, …)` — both honest, neither literal. All of C1's observed shapes are
+parametrised green in `tests/test_handoff_lint_b_prime.py`; a paraphrase (`task lint:
+clean` with no counts; `read: everything`) is red. Only the NEWEST entry is checked —
+retroactive demands on an append-only ledger get ignored, not met.
+
+**D3 — check 13 broke seven existing tests, and every one of them was a test that asserted
+`lint` rc 0 on a tree whose board it had deliberately drifted.** That is the finding, not a
+cost: those tests used `lint` to mean "the files are intact", and until today `lint` could
+not see the board at all, so "intact" and "reconciled" were the same green. They now assert
+`assert_intact_but_drifted` — every violation is check 13's AND the deliberate drift is
+reported — which is the instrument control the old assertion lacked.
+
+**D4 — the append-only Log complaint (user, mid-pass).** A session had found obsolete
+state at the TOP of a task because comments append; `P6`'s summary was the live example.
+`show` now renders the Log newest-first above the body, bounded by `SHOW_LOG_HEAD` with the
+cut announced, `--section`/`--head` for a slice, `--json` never cut. The FILE is unchanged:
+`git diff` on an append-only Log is readable; on a prepend-only one it is not.
+
+**D5 — mirror ops this session:** `new` ×5 (`TT-3`…`TT-7`, `--id` so build work does not
+join the `TK` finding series), `close` ×5 with the test names as evidence, `comment` ×2
+(`TT-1`, `TT-2`), `lint` clean at 13 checks, `sync --check` CLEAN. Read line for this
+session: `board + HANDOFF` — the board query first, then `HANDOFF.md` in full for the
+feedback pass, then `show` for `TT-1`/`TT-2`/`P6`.
+
 ---
 
 ## 7. Full run — design, pre-registered 2026-08-24 before any agent launched

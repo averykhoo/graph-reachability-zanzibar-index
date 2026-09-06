@@ -11,9 +11,16 @@ IVM delta processor.
   item, plus an item block for each `NOW`/`NEXT`. This file (`CLAUDE.md`) is the durable
   contract; the board is what changes session-to-session. At end of session write back
   via its "Rhythm" protocol (session-log entry, banner, board rows).
-- **ON TRIAL 2026-08-23 → 2026-09-06 (EXTENDED 2026-08-30, user decision — week one ran
-  to 2026-08-30; `tasks/` is NOT being deleted, and the parallel run continues):
-  `tasks/` is maintained IN PARALLEL with the board.**
+- **TRIAL 2026-08-23 → 2026-09-06, DECIDED 2026-09-06c (user, the feedback pass): Phase B′
+  — the tree becomes authoritative and `HANDOFF.md` becomes a one-hop note. UNTIL THE
+  CUTOVER COMMIT LANDS, which still needs an explicit user go (`TT-1`), everything below
+  stays in force: `tasks/` is maintained IN PARALLEL with the board.** Five of the seven
+  cutover prerequisites landed on 2026-09-06c (status table atop
+  [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md)):
+  `task.py lint` check 13 now makes `sync --check` drift a violation, `ack` adopts a hand
+  task that has a board row, `show` renders a task's Log newest-first, and
+  `handoff_lint.py::check_session_receipt` makes the `lean` phase RED if the newest
+  session-log entry lacks the two literal lines described below.
   A file-per-task tree (one task per file) plus `scripts/task.py`, whose `board`
   verb prints the session-start view as a QUERY instead of a file — bounded by
   `task.py::BOARD_MAX_LINES` and asserted by a test, never restated as prose here (four
@@ -42,12 +49,12 @@ IVM delta processor.
     to live in gitignored `.scratch/`, i.e. it was already-lost evidence; the 30 sabotage
     cases are permanent tests now, and the historical record is
     [`docs/history/tasktool-proof-2026-08.md`](docs/history/tasktool-proof-2026-08.md)).
-    **DELETE is off the table as of 2026-08-30** (user decision): the tree runs in
-    parallel through 2026-09-06 and the question is now cutover-or-keep-both, not
-    keep-or-delete. The delete path is still described here because it remains the exit
-    if week two goes badly — and it is only lossless once `TK53`'s remaining appends
-    land. **Phase B, the cutover that retires this board, needs an explicit user go**
-    and is filed as tree row `TT-1`; the spec is
+    **DELETE is off the table as of 2026-08-30** (user decision), and as of 2026-09-06c
+    the question is answered: **cutover** (Phase B′). The cutover commit — banner
+    consolidation, `MAX_LINES['HANDOFF.md']` → 60, Rhythm → `docs/README.md`, retirement
+    of check 13 / `sync` / `ack` / `source_hash`, `READ_VOCAB` update, one revertable
+    commit — **needs an explicit user go and must not be started unasked**; it is tree
+    row `TT-1`, and the spec is
     [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md).
 - **Always run the gate before pushing.** Never push red or unverified: the phased
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`

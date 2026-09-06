@@ -25,6 +25,72 @@ from here.
 
 ---
 
+## 2026-09-06c — Phase B′ DECIDED (user); 5/7 prerequisites landed with sabotage evidence; cutover still needs a go
+
+rows: `TT-1` (comment: decided, cutover pending an explicit go), `TT-2` (comment: retires with
+`sync`), `TT-3` … `TT-7` (new, closed — tree-only, no board rows), `P6` (untouched, still `NOW`
+mechanically)
+
+**Task (user-assigned):** the trial feedback pass. Two decisions taken via one question each:
+**C7 → Phase B′ as drafted** (tree authoritative; `HANDOFF.md` becomes a one-hop note; item
+blocks move into task bodies behind a bounded `show`; Rhythm → `docs/README.md`; the
+closed-ids lines go because `tasks/closed/` + `check_ledger_row_ids` cover them; `sync` /
+`ack` / `source_hash` retire at the cutover; `TT-2` resolves as "retired with `sync`"), and
+**scope → file every prerequisite as a row and land the cheap ones now**; the cutover commit
+itself waits for the explicit go `TT-1`'s trap demands. A mid-pass user request — a session had
+complained that a task's top was obsolete because comments append — became prerequisite 1:
+`show` renders the Log **newest-first** (Jira-style); the file stays append-only.
+
+**Landed** (status table atop
+[`tree-sole-authority-spec-2026-08-29.md`](../tree-sole-authority-spec-2026-08-29.md);
+decisions D1–D5 in [`tasktool-trial-protocol.md`](../tasktool-trial-protocol.md) §6):
+
+* `TT-3` `task.py show`: Log newest-first above the body, `SHOW_LOG_HEAD` = 5 with the cut
+  announced, `--section`, `--head`, `--json` uncut —
+  `test_show_renders_the_log_newest_first_and_never_touches_the_file`.
+* `TT-4` `handoff_lint.py::check_priority_capacities` falls back to the tree's open `pri:`
+  fields when the board has no row table; None and empty trees are still red —
+  `tests/test_handoff_lint_b_prime.py` (new, 30 tests).
+* `TT-5` `task.py lint` **check 13**, `check_board_sync`: `sync --check` drift is now a lint
+  violation, so a session that updates one arm goes red instead of leaving a hole for the
+  next reader. It broke seven tests that asserted "lint clean" on deliberately drifted
+  fixtures; they now assert `assert_intact_but_drifted` (every violation is check 13's).
+* `TT-6` `task.py ack` fifth case: a `source: hand` task with a board row is ADOPTED
+  (`source` → `board`, digest stamped, Log line) — the tool gap `2026-09-06b` hit three
+  times. Path sources and row-less hand tasks are still refused.
+* `TT-7` `handoff_lint.py::check_session_receipt` (11th check): the newest entry of THIS file
+  must carry both trial receipts — the `task lint:` line and the `read:` line — in one of
+  the shapes the ledger actually uses (all six lint × four read shapes pinned green).
+* Prerequisite 4 decided (`TT-2` retires with `sync`); prerequisite 5 re-checked, no gap.
+
+**Sabotage, first-hand** (observed lines in the test docstrings): check 13's drift branch
+deleted → `task lint: clean (13 checks, 7 task file(s) parsed)` on a rewritten item block, red;
+`ack` adoption flip → `pass` → `ack accepted T5 but did not adopt it (rc=2): task ack: REFUSED`;
+`show` without `reversed()` → keys `['2026-08-21a', …]` oldest-first, red; receipt check made
+to scan the whole ledger → `AssertionError: []`; tree fallback `if not tree:` → `if tree is
+None:` stayed red for the WRONG reason (`found 0 NOW`), so that test asserts the message text.
+`test_the_sabotage_record_is_complete` now requires three `bprime` sabotages.
+
+**Board / tree:** mirror ops `new` ×5 (`TT-3` … `TT-7`, `min_tasks_parsed` 162 → 167 by
+`new` itself), `close` ×5 with the test names as evidence, `comment` ×2 (`TT-1`, `TT-2`);
+banner + `tasks/BANNER.md` rewritten; the `CLAUDE.md` trial bullet now records the decision.
+⚠ One `close -m` message went through a double-quoted Bash string carrying backticks, which
+ran as command substitutions and ate two fragments (`...: command not found`); fixed by hand
+in `tasks/closed/TT-7-…md`. Quote close messages with single quotes or a heredoc.
+
+`python scripts/task.py lint` → `task lint: clean (13 checks, 167 task file(s) parsed)`
+read: board + HANDOFF (the board query first, then `HANDOFF.md` in full, then `show TT-1`)
+`sync --check` → CLEAN (2 acked-no-row, 43 hand-filed, 62 closed, 30 unreadable-source — unchanged).
+
+**Gate:** `MIN_TESTS_ALL` re-measured and ratcheted for the new tests; ten phases run after
+every edit above; verdicts and `gate_status.py` in the commit message.
+
+**Owed to the user:** the `TT-1` go — the cutover commit (banner consolidation,
+`MAX_LINES['HANDOFF.md']` → 60, Rhythm rewrite, retirement of check 13 / `sync` / `ack` /
+`source_hash`, `READ_VOCAB` update), one revertable commit.
+
+Still owed: nothing.
+
 ## 2026-09-06b — `P17` + `TK55` closed by user decision; red branch inventoried, kept; trial window closed, no cutover
 
 rows: `P17` (closed), `TK55` (closed), `P22` / `P23` / `P24` (new), `TT-1` (tree-only; prework, `moved`

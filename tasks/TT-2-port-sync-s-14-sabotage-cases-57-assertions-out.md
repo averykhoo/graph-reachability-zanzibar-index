@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-30
-moved: 2026-08-30
-updated: 2026-08-30
+moved: 2026-09-06c
+updated: 2026-09-06c
 closed:
 ---
 
@@ -55,3 +55,7 @@ missing corpus FAILS rather than skips). Follow it.
 - [`docs/tasktool-spec.md`](docs/tasktool-spec.md) section 4 "The reconciliation op"
 
 ## Log
+
+### 2026-09-06c
+
+DECIDED 2026-09-06c (user: Phase B-prime as drafted): NOT ported. sync_sabotage.py / sync_accept.py retire WITH sync, ack and source_hash at the Phase B-prime cutover; recorded in docs/tasktool-spec.md section 4 (the reconciliation op) and tree-sole-authority-spec prerequisite 4. Until the cutover lands the 14+57 cases stay where they are (.scratch, already-lost by the repo's own rule) -- the sync behaviour they covered is exercised by tests/test_tasktool.py's sync/ack cases, which are gated. Close this at the cutover, not before.
