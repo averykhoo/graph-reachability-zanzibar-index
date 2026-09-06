@@ -5,6 +5,13 @@ as-of-then and describe a tree that is NOT master; live state: [`HANDOFF.md`](..
 + [`../HANDOFF.md`](../HANDOFF.md) + the session ledgers. Corrections are appended dated
 at the top, never edited into the body.
 
+> **Correction 2026-09-06b — the branch is DELETED (user decision, no tag).** `git branch -D
+> p3-flip-red-2026-09-05` ran the same day this note was written; `git branch --contains
+> d6d2dfc` now lists nothing, so `d6d2dfc` is unreachable except via reflog until it expires
+> and will be garbage-collected. The reproduce recipe at the bottom and every `git show
+> d6d2dfc:<path>` citation therefore no longer resolves on a fresh clone. **This file is the
+> whole record**; the quotes in it were verified against the branch BEFORE deletion (55/55).
+
 This is the only tracked copy of the literal refuting declarations from the RED snapshot —
 commit `d6d2dfc` (parent `68f2c69`; 30 files, +3381/-653 per `git diff --stat`), the working
 tree at the moment the adjudicated "write leg only" flip was found kernel-REFUTED. Every

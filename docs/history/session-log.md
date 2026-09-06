@@ -94,8 +94,9 @@ banner rewritten; `tasks/BANNER.md` rewritten (14 lines); mirror ops `close` ×2
 commit message. If this line still says that, the run had not finished when the entry was
 written — check `python scripts/gate_status.py` on the committed tree.
 
-**Owed to the user (not owed to the next session):** the branch tag/delete call; the trial
-feedback pass and the `TT-1` go.
+**Owed to the user (not owed to the next session):** the trial feedback pass and the `TT-1` go.
+*(Same-session addendum, after commit `ef5eb20`: the user chose DELETE, no tag — `git branch -D
+p3-flip-red-2026-09-05` done; `d6d2dfc` unreachable; correction appended atop the snapshot note.)*
 
 Still owed: nothing.
 

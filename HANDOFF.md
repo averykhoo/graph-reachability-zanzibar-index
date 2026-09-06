@@ -28,10 +28,11 @@ session: run the Rhythm protocol at the bottom.
 > `Filter(relation='')` and the graph answered `False` where oracle + set said `True` through
 > `define : viewer` — BOTH parsers now refuse an empty declared name (15 pins), and
 > `keysNonempty` is accepted as scope with a justification that is now true.
-> 🔍 **Branch `p3-flip-red-2026-09-05` inventoried, KEPT as-is** — 26/30 files are scaffolding
-> already on master; the 4 evidence files and the literal refuted declarations now live in
+> 🔍 **Branch `p3-flip-red-2026-09-05` inventoried, then DELETED (user decision, no tag)** —
+> 26/30 files were scaffolding already on master; the 4 evidence files and the literal refuted
+> declarations live in
 > [`formal/history/p3-flip-red-snapshot-2026-09-05.md`](formal/history/p3-flip-red-snapshot-2026-09-05.md)
-> (55/55 quotes re-verified against the branch). **Tag-then-delete is still the user's call.**
+> (55/55 quotes re-verified BEFORE deletion). `d6d2dfc` is unreachable now; that note is the record.
 > 🧭 **Trial window closed today — NO cutover; prework + grade only (user decision).** The tree
 > was the STALE arm (9 drifts, all reconciled + acked; hand-sourced rows with a board row cannot
 > be acked — a tool gap); a Phase B′ candidate is DRAFTED at the top of

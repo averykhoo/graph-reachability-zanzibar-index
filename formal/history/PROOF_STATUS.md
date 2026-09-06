@@ -99,7 +99,8 @@ two `...`-abbreviated statements expanded). The note's 1089-jobs / 4-warnings / 
 figures are the snapshot's SELF-REPORT (commit message + docstrings), not re-measured, and
 it says so. Literal `sorry` tokens in the note are safe: `sorry_scan.py:174` scans `*.lean`
 only, and `doc_counts.py:343` exempts `history` paths. **The branch is untouched; tag-then-
-delete is the user's call and remains owed.**
+delete is the user's call and remains owed.** *Same-session addendum, after `ef5eb20`: the
+user chose delete, no tag — `git branch -D` done, `d6d2dfc` unreachable, correction atop the note.*
 
 ### 4. `TT-1` — no cutover; the tree was the stale arm
 
