@@ -658,11 +658,20 @@ per-field argument or a Lean witness makes it so.
    instead of replaying routed triples through the incremental
    `WildcardIndex.add_tuple` / `DeltaProcessor` path that the Lean `ReachedBy` chain
    models. `connectedstore.build_index` takes `bulk: bool = True`, so a real bootstrap
-   takes this path; the modeled incremental path survives as `bulk=False`, kept as the
-   reference side. **No Lean model describes the bulk constructor at all**; its entire net
-   is a Python-vs-Python differential identity gate (`tests/test_bulk_build.py`, six
-   corpora: the same snapshot built both ways must produce identical state, plus the
-   I1–I13 checker and an oracle read-parity grid). Documented in `CORRESPONDENCE.md`
+   takes this path. Its `bulk=False` side is NOT the modeled path either (this item
+   said it was until 2026-09-06): it loads every tuple through `add_tuple` and then runs
+   `DeltaProcessor.backfill()`, which `CORRESPONDENCE.md` §7 lists as unmodeled. The
+   modeled constructor is the ONLINE one — logged writes each followed by a
+   same-transaction cascade. **No Lean model describes the bulk constructor at all.**
+   Its net is the Python-vs-Python differential identity gate
+   (`tests/test_bulk_build.py`, every `_CORPORA` entry: the same snapshot built both
+   ways must produce identical state, plus the I1–I13 checker and an oracle read-parity
+   grid) and, since 2026-09-06 (`P17`), the Lean-anchored state differential
+   `formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`,
+   which pins the bulk-built DIRECT multigraph + derived flags + residues to the
+   model-driven state (the materialized closure is outside its projection and stays
+   pinned only by `tests/test_bulk_build.py`). The scope statement lives in
+   `FINAL_REVIEW.md` §3.1 item 6. Documented in `CORRESPONDENCE.md`
    §7/§8.1 — this list and `FINAL_REVIEW.md` §3 are simply the two honesty ledgers that
    stopped being updated, which is why the 2026-07-26 zero-trust review had to find it.
 7. **Non-stratifiable schemas** (rejected upstream; the model assumes stratifiability). The
@@ -703,7 +712,12 @@ in the ANSWER enumeration, K = 4 on the two capped shapes, and state coverage be
 (f) — fixing the derived-TTU userset-subject divergence and flipping its strict xfails —
 is **DONE** (2026-07-13, Python-side; `FINAL_REVIEW.md` §3's resolved note). Added
 2026-07-26: **(h)** model or explicitly scope-exclude the bulk build/backfill constructor
-(item 6), and **(i)** the concurrency / multi-instance layer (item 5 — the deferred TLA+
+(item 6) — **scope-excluded 2026-09-06 (`P17`)**: `FINAL_REVIEW.md` §3.1 item 6 carries the
+scope statement (the headline theorems hold for indexes grown by logged writes and
+cascades; neither `build_index` side is that constructor — `bulk=False` is load-all
+`add_tuple` + the unmodeled `DeltaProcessor.backfill()`), and the bulk-built state is
+pinned to the model-driven state by `test_conformance_bulk_state.py`, not modeled; and
+**(i)** the concurrency / multi-instance layer (item 5 — the deferred TLA+
 phase, never started).
 
 ---

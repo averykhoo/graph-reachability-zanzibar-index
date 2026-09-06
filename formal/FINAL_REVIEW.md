@@ -27,19 +27,19 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **520** |
-| `tests/` collected | **1038** |
-| whole-repo suite | **1558** |
-| differential conformance tests | **449** across **13** files |
+| `formal/conformance/` collected | **546** |
+| `tests/` collected | **1053** |
+| whole-repo suite | **1599** |
+| differential conformance tests | **475** across **14** files |
 | gate-tooling conformance tests | **71** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **587** |
 | audit identity pin (`audited_theorems.txt`) | **587** |
 | headline definition pin | **251** rows (**242** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **583** (**345** Python + **238** Lean) |
+| `CORRESPONDENCE.md` anchors | **590** (**352** Python + **238** Lean) |
 | `corpus.SCHEMAS` | **26** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 26 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=515 (=104+411), `MIN_TESTS_ALL`=1037, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=546 (=104+442), `MIN_TESTS_ALL`=1053, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
@@ -67,6 +67,7 @@ Per conformance file:
 | `test_conformance_graph.py` | 51 | differential |
 | `test_sorry_scan.py` | 44 | tooling |
 | `test_conformance_generated.py` | 40 | differential |
+| `test_conformance_bulk_state.py` | 26 | differential |
 | `test_conformance_random.py` | 26 | differential |
 | `test_conformance_remove_graph.py` | 23 | differential |
 | `test_conformance_nary_strata.py` | 19 | differential |
@@ -529,6 +530,17 @@ Everything §7 lists, plus the fragment carries:
    had it fail once — on 2026-07-17 a real model-vs-Python divergence was found at
    STATE level in exactly that situation. The object-wildcard corpus has never been
    probed at state level. Treat the sentence as a hypothesis, not a finding.*
+
+   **The two `GraphAdmission` fields added by the flip (`FullScope.lean::GraphAdmission`,
+   13 fields), classified with `test_w4fragment_scope_pin.py`'s vocabulary (LOUD = Python
+   raises on schemas/writes outside the field; SILENT = accepted; MIXED = some sub-cases
+   raise), added 2026-09-06 (`TK55`):**
+
+   | field | demands | class | evidence |
+   |---|---|---|---|
+   | `keysNonempty` | every declared relation name is non-empty | **LOUD** | refused at parse time by both parsers as of 2026-09-06 — `zanzibar_utils_v1.py::parse_schema_ast`'s empty-name lock and, independently, `tests/oracle.py::parse_schema_ast`'s; pinned by `tests/test_reg_empty_relation_name.py`. ⚠ It was SILENT until that day, while `FullScope.lean` and `CORRESPONDENCE.md` §6 both claimed LOUD ("rejected at parse time by the identifier charset") — the charset is write-path only, and the empty name was reachable through `define : viewer` (untainted: graph accepts the write and answers `check=False` against oracle `True`; boolean: graph refuses in `DeltaProcessor._write_derived`, set engine accepts) |
+   | `noLeafSubjects` | no rule of the full leaf-routed rule set mints a leaf-named (`'.'`-carrying) SUBJECT predicate | **LOUD** | refused at parse time by the PRODUCTION parser: a `'.'` in a declared name is `zanzibar_utils_v1.py::parse_schema_ast`'s dot-lock (pinned by `tests/test_boolean_compile.py::test_dot_reserved_in_relation_declarations`), and a `'.'` in any referenced name — TTU target/tupleset, `Direct` restriction predicate, `computed` operand — is `zanzibar_utils_v1.py::_validate_ast_references` (pinned by `tests/test_openfga_json.py::test_rejects_reserved_dot_in_referenced_names`); both backends construct through that parser, so nothing outside the field can be built. ⚠ Unlike `keysNonempty`, this lock is NOT mirrored in the oracle's parser: `tests/oracle.py::parse_schema_ast` accepts `define ...: viewer` (probe 2026-09-06), so the oracle cannot refuse it independently — a `TK55`-shaped follow-up, not a scope hole |
+
 4. **The state-gate projections** — state-level conformance IS implemented
    (§1), but a divergence strictly inside a projected class would not fail it:
    ~~leaf-family edge content (P6 — pinned instead by the plans' evaluation
@@ -609,12 +621,36 @@ Everything §7 lists, plus the fragment carries:
    incrementally — instead of replaying routed triples through the incremental
    `WildcardIndex.add_tuple` / `DeltaProcessor` path that the Lean `ReachedBy`
    chain models. `connectedstore.build_index` takes `bulk: bool = True`, so this
-   is the path a real bootstrap takes; the modeled incremental path survives as
-   `bulk=False`, kept only as the reference side. **No Lean model describes the
-   bulk constructor at all.** Its entire net is a Python-vs-Python differential
-   identity gate (`tests/test_bulk_build.py`, six corpora: same snapshot built
-   both ways must produce byte-identical state, plus the I1–I13 checker and an
-   oracle read-parity grid). Both surfaces are documented in
+   is the path a real bootstrap takes. Its `bulk=False` side is NOT the modeled
+   path either (this item said it was until 2026-09-06): it loads every tuple
+   through `add_tuple` and then runs `DeltaProcessor.backfill()`, which
+   `CORRESPONDENCE.md` §7 lists as unmodeled. The modeled constructor is the
+   ONLINE one — logged writes each followed by a same-transaction cascade, the
+   `ReachedBy` chain's only constructors. **Scope statement (`P17`, 2026-09-06):
+   the headline theorems hold for indexes grown from `emptyState` by logged
+   writes and cascades; a bulk-built index is pinned to that model-driven state
+   by `formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`
+   over the 25 `GRAPH_FRAGMENT` corpora (exact multiplicities on every arm,
+   derived flags, residues; a second leg diffs the bulk state directly against
+   the Lean dump), not by the proof.** "Every arm" means the DIRECT multigraph
+   only: the canonical form is `extract_sql_state`'s P1 projection, which keeps
+   `direct_edge_count > 0` rows and never reads `indirect_edge_count`, so the
+   bulk builder's materialized closure (Phase-P path counts, pure-indirect rows)
+   is outside that module's reach and is pinned only by `tests/test_bulk_build.py`
+   (its module docstring records the two green sabotages). What that test does not cover: remove
+   histories (only `tests/test_connectedstore_build.py::test_built_index_equals_live_maintained`'s
+   single add+remove history reaches the bulk builder), the outbox rows bulk
+   writes (one ADDED per closure pair; the Lean dump has no outbox channel), and
+   the bridge / I14 crossable-middle phases, which no `GRAPH_FRAGMENT` corpus
+   reaches — bridges are pinned by `tests/test_bulk_build.py`'s `wildcards` and
+   `rc2_star_tupleset` corpora; the I14 loop (`index_v4/bulk_build.py:206-221`)
+   is pinned by NOTHING (disabling it was green in every `build_index` caller
+   in `tests/` and in the conformance module — the complete reach of
+   `bulk_build`, which only `connectedstore/build.py` imports, 2026-09-06).
+   The Python-vs-Python identity gate remains as a second net
+   (`tests/test_bulk_build.py`, 7 corpora: same snapshot built both ways must
+   produce byte-identical state, plus the I1–I13 checker and an oracle
+   read-parity grid). Both surfaces are documented in
    `CORRESPONDENCE.md` §7/§8.1 — this document and `ARCHITECTURE.md` are simply
    the two honesty ledgers that stopped being updated; that omission was found by
    the 2026-07-26 zero-trust review, not by any gate.
@@ -760,7 +796,11 @@ sample. Item (f) — fixing the derived-TTU userset-subject check divergence and
 flipping its strict xfails — is **DONE** (2026-07-13, Python-side; §3's resolved
 note). New under this heading since 2026-07-26: **(h) model or explicitly
 scope-exclude the bulk build/backfill constructor** (§3 item 6 — it is the default
-`build_index` path and has no Lean counterpart), and **(i) the concurrency /
+`build_index` path and has no Lean counterpart; the scope-exclusion half is DONE
+2026-09-06 under `P17`: §3 item 6 now states the scope, and
+`formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`
+pins the bulk-built state to the model-driven state over 25 corpora — the
+"model it" half, a Lean `bulk = replay` theorem, is a SOMEDAY row, not started), and **(i) the concurrency /
 multi-instance layer** (§3 item 5 — the deferred TLA+ phase, never started).
 
 **(j) the two SCOPE REJECTIONS — object wildcards on derived relations, and wildcard

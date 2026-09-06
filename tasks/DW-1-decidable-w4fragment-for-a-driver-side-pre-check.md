@@ -1,7 +1,7 @@
 ---
 id: DW-1
 title: decidable W4Fragment for a driver-side pre-check
-brief:
+brief: SOMEDAY -> LATER 2026-08-31b on measured evidence: W4Fragment scope pin is LOUD 0 / MIXED 3 / SILENT 7
 pri: LATER
 size: ?
 deps: []
@@ -9,14 +9,19 @@ related: []
 parent:
 labels: [formal]
 source: board
-source_hash: 77a601be5a88
+source_hash: 04392ec66204
 created: 2026-08-16
-moved: 2026-08-31b
-updated: 2026-08-31b
+moved: 2026-09-06b
+updated: 2026-09-06b
 closed:
 ---
 
-decidable `W4Fragment` for a driver-side pre-check
+decidable `W4Fragment` for a driver-side pre-check. **Promoted SOMEDAY → LATER on
+2026-08-31b, on measured evidence:** the scope pin classifies `W4Fragment`'s ten fields
+**LOUD 0 · MIXED 3 · SILENT 7**, so for seven fields a schema outside the proven fragment is
+accepted, runs, and answers queries with no signal to the operator — its correctness resting
+on the differential net, not on `graph_correct`. A driver-side pre-check is what converts
+those seven silent holes into a refusal or a warning.
 
 ## Traps
 
@@ -26,6 +31,7 @@ None recorded. This row sits below `NEXT`, so it never had an item block; traps 
 
 - [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule; enforced by `migrate.py::check_formal_pointer`, not merely stated)
 - [`CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) §"Conformance gates"
+- the live table: `formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE` (`:228`)
 
 ## Log
 
@@ -36,3 +42,7 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-08-31b
 
 Promoted SOMEDAY -> LATER on measured evidence: the new scope pin classifies W4Fragment's ten fields LOUD 0 / MIXED 3 / SILENT 7. For seven fields a schema outside the proven fragment is accepted, runs, and answers queries with no operator signal -- correctness resting on the differential net, not graph_correct. A driver-side pre-check is what converts those into a refusal or a warning. Live table: test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE.
+
+### 2026-09-06b
+
+Board cell rewritten 2026-08-31b (SOMEDAY -> LATER on the LOUD 0 / MIXED 3 / SILENT 7 scope-pin evidence; live table named). The pri was already LATER in the tree; the summary, brief and Read first now carry the evidence and the table symbol. Diff source: git 077bb50 -> HEAD.

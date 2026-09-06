@@ -1,7 +1,7 @@
 ---
 id: R6
 title: perf round 6 -- R6-10 (2.54x) and R6-6 landed; 10 to land, 4 declined, 3 unreachable
-brief: Batch THROUGH the N15 cache, not past it (R6-6 is the pattern). Order: R6-11, R6-5, R6-4, R6-9, R6-18
+brief: Batch THROUGH the N15 cache (R6-6 is the pattern); NOT parallel-safe with P6 on the cascade read path
 pri: NEXT
 size: L
 deps: []
@@ -9,10 +9,10 @@ related: []
 parent:
 labels: [perf]
 source: board
-source_hash: 77474b3d6848
+source_hash: b895d453a044
 created: 2026-08-21
-moved: 2026-08-31b
-updated: 2026-08-31b
+moved: 2026-09-06b
+updated: 2026-09-06b
 closed:
 ---
 
@@ -30,7 +30,20 @@ predicted `4.75 → 1.75` statements per `check`. Remaining order:
 
 **`R6` is a PARENT row: all 19 `R6-N` sub-items are now tasks of their own** (`task.py list --parent R6`), so this row no longer has to carry them in prose. **Every count in the title and in this paragraph is COUNTED from those children at generation time** (`migrate.py::r6_census`), not restated from the board cell above — a restated count is the defect this whole migration exists to delete, and the board cell is the proof: it says "9 to land, 5 declined". Re-counted 2026-08-29: **10 `LATER`** (unlanded — the audit’s ten-item land order less `R6-6`, plus `R6-19`, filed 2026-08-18 outside the audit and therefore not in that order), **3 `HOLD`** (measured 0 calls — they need a `T:*#P` workload before they need a patch), **6 under `closed/`** (`R6-10` and `R6-6` landed; `R6-2`/`R6-12`/`R6-14`/`R6-15` declined on an upper bound). The declined count is the audit’s own: exactly four `NOT MOTIVATED` verdict rows, so the board cell’s fifth decline does not exist. **Closing the last child is what reports that `R6` can close** — the round’s archive sweep is computed, not remembered. Re-count any time with `task.py list --parent R6`; do not re-type these numbers here.
 
+**Restored to `NEXT` 2026-08-31b**: it was demoted on 2026-08-31 purely to seat `P20`, and
+`P20` closed 2026-08-31b. Nothing about the work changed in between. Re-counted 2026-09-06b
+with `task.py list --parent R6 --limit 0 --all` (R6-N children only): 10 `LATER`, 3 `HOLD`,
+6 closed — the title's count clause still holds.
+
 ## Traps
+
+⚠ **Batch *through* the N15 cache, not past it** — `R6-6` is the pattern, and every
+read-path item in this round has a cascade caller behind it (`_EvalContext.leaf_check`)
+where a fresh per-call query would replace warm N15 cache hits with SQL.
+
+⚠ **Not parallel-safe with `P6` if it touches the cascade read path** (`P3` closed
+2026-09-05b, so `P6` — now `NOW` — owns that cone). Check before opening a cone that `P6`
+owns; the old `P3`/`P6` collision paragraph in `P6`'s file is the shape to expect.
 
 ⚠ **Five traps the numbers do not carry** live in
 [`perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §"Traps the numbers do
@@ -79,3 +92,7 @@ Re-stamp: the R6 board row was itself edited this session (moved 2026-08-24d -> 
 Board block edited 2026-08-29b: the decline/unreachable split was replaced by a pointer at the audit's verdict tables, and the five-traps paragraph was reduced to a pointer that says to count the bullets. Both were restatements of docs/perf-round6-audit-2026-08.md, whose banner was corrected the same session (TK48) to carry no count -- restating a split on the board is the defect TK48 was filed for, one file over. No figure changed and no child moved; R6-19's number is unchanged. Task body content remains current.
 
 Block edited again in 2026-08-29c: the Read-first now names the audit's new 2026-08-29b appendix cross-links section alongside the verifier corrections, since ten of them are corrections to the appendix leads a perf session would otherwise read uncorrected. Reflowed for the line ceiling; no figure changed.
+
+### 2026-09-06b
+
+Board row + block rewritten 2026-08-31b (restored to NEXT after P20 closed; N15-cache trap and the new 'not parallel-safe with P6 on the cascade read path' trap moved into the block; declines/unreachable reduced to a pointer at the audit). Task body reconciled 2026-09-06b: restoration paragraph added, both traps added to Traps, brief carries the P6 collision; children re-counted 10 LATER / 3 HOLD / 6 closed, title unchanged. Diff source: git 50af00e -> HEAD.

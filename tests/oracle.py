@@ -264,7 +264,16 @@ def parse_schema_ast(text: str) -> dict[tuple[str, str], object]:
             if current_type is None:
                 raise ValueError('relation defined outside of a type')
             name, _, body = line[len('define '):].partition(':')
-            ast[(current_type, name.strip())] = _Parser(_tokenize(body.strip()), name.strip()).parse()
+            name = name.strip()
+            # Independent empty-name refusal (TK55, 2026-09-06). The production parser
+            # has the same check; this one is NOT shared with it (independence
+            # contract above), so a regression in either parser is caught alone by
+            # tests/test_reg_empty_relation_name.py.
+            if not name:
+                raise ValueError(
+                    f"type {current_type!r}: a declared relation name may not be empty "
+                    f"({line!r})")
+            ast[(current_type, name)] = _Parser(_tokenize(body.strip()), name).parse()
     return ast
 
 

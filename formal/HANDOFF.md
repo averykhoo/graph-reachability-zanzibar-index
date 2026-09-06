@@ -77,12 +77,14 @@ wrong, and two of its anchors (`State.lean:813`, `:854`) had drifted onto
 The finding it supports (nothing consumes `Inv`) is unchanged.
 
 ⚠ **Dated blocks STOP at 2026-08-28c; every session since is in `history/PROOF_STATUS.md`,
-not here** — `2026-08-30`…`2026-09-02c`, `2026-09-05`, `2026-09-05b` (leg 7's flip landed;
-leg-7 block below), `2026-09-06` (`TK56`: T3's undischargeable `hValid`/`opaque ValidIdent`
-deleted; T3 takes exactly T2b's hypotheses, INSTANTIATED by `W4WitnessDirect.equivalence_applies`;
-zero opaques, `sorry_scan.py` refuses one; pins 51 + 251). Sizing: `2026-09-01e` sized the
-flip at **5 sites / 4 decls / 2 files**; **step 9 done (2026-09-02)**; **2026-09-02b**'s "CLOSED
-14/12/6" is retired by **2026-09-02c** as a lower bound — live **62 + 13 decls / ELEVEN files**; §11.13 (v)/(w).
+not here** — `2026-08-30`…`2026-09-02c`, `2026-09-05`, `2026-09-05b` (leg 7's flip landed; leg-7
+block below), `2026-09-06` (`TK56`: undischargeable `hValid`/`opaque ValidIdent` deleted; T3 takes
+exactly T2b's hypotheses, INSTANTIATED by `W4WitnessDirect.equivalence_applies`; zero opaques;
+pins 51 + 251), `2026-09-06b` (`P17`/`TK55` closed: bulk pinned by `test_conformance_bulk_state.py`
++ scope statement, `keysNonempty` accepted, empty declared names refused by both parsers; red-branch
+evidence → `history/p3-flip-red-snapshot-2026-09-05.md`; `P22`–`P24` filed). Sizing: `2026-09-01e`
+sized the flip at **5 sites / 4 decls / 2 files**; **step 9 done (2026-09-02)**; **2026-09-02b**'s
+"CLOSED 14/12/6" is retired by **2026-09-02c** as a lower bound — live **62 + 13 decls / ELEVEN files**; §11.13 (v)/(w).
 
 **2026-08-28c — the public surface is migrated, and the `hql` surface is one row.**
 Seven declarations (`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`,
@@ -332,7 +334,6 @@ last-edge surgery (`nreaches_last`, cf. `nreaches_relation_rewrite`).
 
 ---
 
-
 ## Board — the two ORPHANED findings, adjudicated 2026-07-27 (ZT-P4 item 4)
 
 Both lived only in `history/` and had reached no board. Each was re-verified
@@ -383,7 +384,6 @@ board are the two blocks below, verbatim.**
 > `storedDirectSubjects` half of the Board-B1 star-freeness hole is closed" the whole time.
 > The repo board retired the id; this file kept the open verdict. That gap is the argument
 > for the rule that a finding is closed where it is RECORDED, not where it is fixed.
-
 
 ### B2 — `PDerivedUserset` never modelled in Lean · verdict: **OVERTAKEN Python-side; a DECLARED Lean scope gap; the CONFORMANCE half was a real hole and is now closed**
 

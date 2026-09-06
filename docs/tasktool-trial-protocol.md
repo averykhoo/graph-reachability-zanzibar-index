@@ -596,6 +596,88 @@ item-block question alone, which is the only real blocker and which
 the user asked for the feedback to be recorded, not executed, and filing rows would itself
 incur the B3 contract this entry is reporting on.
 
+### 2026-09-06 — the window closes: the tree was the STALE arm, the query still did not replace the file, and the mechanics kept earning their place
+
+Filed at the user's request ("grade the helpfulness of the task tool … add your feedback into
+the existing list"), on the trial's last day, by the session that also did the `TT-1` prework.
+**No cutover was decided** (user: "prework + grade only, decide later"); the user's stated
+leaning going into the feedback pass is *keep the task tool; deprecate `HANDOFF.md` or relegate
+it to something ephemeral that carries between sessions once and is replaced* — recorded here so
+the pass starts from it rather than rediscovering it. Same instrument caveat as `2026-08-31b`:
+C1 is an artifact count, C2–C3 are mechanical findings with the tool's own output as evidence,
+C4–C7 are operator experience.
+
+**C1 — the hard number, extended to the whole window, and re-measured this session by script
+over `docs/history/session-log.md` (not carried forward from `2026-08-31b`).** Entries dated
+2026-08-23 … 2026-09-06: **35**. `read:` self-reports:
+
+    board + HANDOFF   27        board only   6        HANDOFF only   0        no read line   2
+
+The six `board only` are `2026-08-24d`, `2026-08-31`, `2026-08-31c`, `2026-09-01b/c/d` — a
+run of three consecutive sessions in the `P3` proof push, where the item was already in hand
+and the board view's brief was enough. **So the answer to §1's first question over the full
+window is: 6 of 33, and never once by a session that was picking up new work.** Consistent
+with `2026-08-31b`'s B1 and its structural explanation (the item blocks live only in the file).
+⚠ A method note that is also a finding: a strict `^read:` line-start match counts **19 / 4 /
+0 / 12**; the figures above come from a match that tolerates `**read: …**`, inline backticks
+and indented forms. The "two literal lines" instrument was written in at least four shapes,
+which is what B4's proposed lint check would have to normalise before it could assert anything.
+
+**C2 — the tree was the STALE arm, and the tool said so on the first query.**
+`python scripts/task.py sync --check` at session start reported **9 drifts** (`P6`, `R6`, `P4`,
+`P5`, `P14`, `TK55`, `TK54`, `P21`, `DW-1`): board rows whose text had moved under sessions
+that updated `HANDOFF.md` and not the mirror — the one-armed update B3 predicted, now at scale.
+Two readings, both true: the parallel-maintenance contract was NOT held (nine times); and the
+detector WORKED — every drift was found mechanically, with the old and new digest, in one
+command, and all nine were reconciled and acked this session. **The board has no equivalent
+instrument in the other direction**: nothing can tell you a `tasks/*.md` Log line was never
+promoted to its board row, because the board carries no digest of the tree.
+
+**C3 — an `ack` gap that blocked reconciliation, found by trying.** Three of the nine
+(`TK55`, `TK54`, `P21`) were `source: hand` tasks that nonetheless HAVE a board row (filed by
+hand first, row added later). `sync` reports their drift; `ack` refuses it — `source_hash` is
+only maintained for `source: board`. The only exit was to hand-edit `source: hand → board` with
+a Log line, which is exactly the kind of by-hand frontmatter surgery the tool exists to
+prevent. Also learned the hard way: `ack --since` wants the digest the CURRENT drift report
+shows, not the one recorded in the file. Both are filed as prerequisite 6 of the Phase B′
+candidate at the top of `tree-sole-authority-spec-2026-08-29.md` (DRAFT, not decided), not as
+board rows, for the same reason B6 gave.
+
+**C4 — the mirror ops this session, itemised, as evidence the ops themselves are cheap and
+the WRITE-TIME REFUSALS are the useful part.** `close` ×2, `new` ×3, `ack` ×12 (nine drifts +
+three first reconciliations), `comment` ×1, `lint` ×4, `sync --check` ×4. Refusals hit: a label
+outside `config.json`'s vocabulary (`tests` — the vocabulary is `formal/perf/docs/infra`, which
+has no home for a test-only or oracle-side item; two of today's three new rows were mis-labelled
+`formal`/`infra` to get past it), a 103-char title, a 127- then 126-char brief. Every refusal
+was correct and every retry was one line; **`new` ratcheted `min_tasks_parsed` 159 → 162
+itself** (B3's fix, landed `2026-09-06`, observed working three times). Contrast the board:
+`handoff_lint.py` refused an 11th trap badge, which was also correct — but the board's checks
+run at commit time, the tree's at write time, and the write-time ones cost less because the
+mistake is still on screen.
+
+**C5 — `tasks/BANNER.md` again.** Written once, in one pass, because the 14-line cap was known
+in advance; but it is still a hand-maintained second copy of `HANDOFF.md`'s banner, and B2's
+argument stands unchanged. Nothing this session changes it.
+
+**C6 — what was useful, said as narrowly as the evidence allows.** In order: (i) `sync --check`
+as a stale-arm detector (C2) — the single most valuable thing the tree did all week, and the
+thing a one-file board cannot do; (ii) the write-time refusals and the self-ratcheting floor
+(C4); (iii) `lint` as the two-line session receipt; (iv) `show <id>` for one item's body plus
+its accumulated Log — read, in this session, for `TT-1` only. **Not useful, still:** the
+`board` query as a replacement for reading `HANDOFF.md` (C1). The tree's value is in its
+FILES, its LINT and its DIGESTS; the query is a view over them, and the file it competes with
+carries content the tree does not.
+
+**C7 — input to the user's plan, offered as a shape, not a verdict.** The user's leaning
+(keep the tree; make `HANDOFF.md` ephemeral, one-hop, replaced each session) is consistent
+with C1–C6 IF the three things the file carries and the tree does not — the item blocks with
+their read-first lists, the Rhythm protocol, and the closed-ids ledger that `handoff_lint.py`
+harvests line by line — get a home first. The Phase B′ draft names them as prerequisites. An
+ephemeral `HANDOFF.md` that still hosts item blocks is the `2026-08-31b` B6 shape with the
+banner de-duplicated; an ephemeral one that does not is a cutover in disguise and needs the
+tree to grow blocks first. **Decide that question, and the rest is mechanical.** Not filed as
+board rows; the user asked for the grade to be recorded ahead of a feedback pass.
+
 ---
 
 ## 7. Full run — design, pre-registered 2026-08-24 before any agent launched

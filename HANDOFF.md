@@ -19,34 +19,33 @@ session: run the Rhythm protocol at the bottom.
 > 🟢 **Gate: all ten phases re-run green on this tree** — ask `python scripts/gate_status.py`;
 > re-run `lean` after any `*.md` edit — and `t2c` excludes `*.md` only *outside* `tasks/`, so a
 > `tasks/*.md` edit stales the tiles too (corrected 2026-09-05).
-> ✅ **`2026-09-06` (`TK56`, closed): T1 is unconditional and T3 carries EXACTLY T2b's
-> hypotheses.** `hValid : AllValid T` sat on an `opaque ValidIdent` — undischargeable at every
-> non-empty store, so `backend_equivalence` had NO instance while T2b had two. Deleted (49 Lean
-> sites / 5 files; cold build `LAKE_RC=0` first try) and T3 is now INSTANTIATED:
-> `W4WitnessDirect.equivalence_applies` + `Exec.lean::graphRunOps_directArm_backend_equivalence`
-> (∃σ at an executed store where BOTH backends answer `true`, proved equal). Pins 49 → **51**
-> statements, 250 → **251** defs, 584 → **587** audits — the regeneration also caught
-> `graphModeAnswers_eq_sem`, audited but never pinned (the superset rule hides that).
-> 🔧 **Zero `opaque`s in the tree, and `sorry_scan.py` now refuses one at declaration position**
-> (control: `HEAD`'s `Ident.lean` → 1 finding, rc 1; live 0 over 70 files; 39 → 44 cases).
-> 🔧 **`task.py new` ratchets `min_tasks_parsed` itself** (`158 → 159` on filing `TK56`) — the
-> manual step three consecutive sessions forgot; `max(floor, disk)`, never lowers, so a breach
-> stays red. `tests/test_tasktool.py` 85 → 86 (control: red against `HEAD`'s `task.py`).
-> 🧭 **The reach step toward equivalence is `P17`, and the second opinion agreed:** `ReachedBy`
-> has `emptyState` as its ONLY base constructor (`CascadeStrataAssemble.lean:430`), so no
-> headline covers an index built by `build_index(bulk=True)` — the DEFAULT constructor
-> (`connectedstore/build.py:82-87`). Model `bulk_build`/`bulk_backfill`, or scope-exclude it in
-> `FINAL_REVIEW.md`. **Not re-ranked here** (user-assigned task); `P6` stays `NOW` mechanically.
-> PROOF_STATUS `2026-09-06` §1–§8 has the detail.
-> 📌 **`2026-09-05b` (rotated → PROOF_STATUS `2026-09-05b` §1–§10): `P3` landed, `P6` retired.**
-> The adjudicated write-leg-only re-point was FALSE (sorryAx-free `decide` refuted
-> `graph_correct`; kept on branch `p3-flip-red-2026-09-05`, do not merge); (α)+R5 co-landed;
-> two `eraseDups` Python mirrors fixed an exponential stacking; `verify.sh`'s `sorry` belt had
-> counted 0 since `ZT-P2-4` — fixed. Live traps from it: scope doc §11.13 **(bb)…(gg)**.
-> ⚠ **User calls owed: `TK55`** (`keysNonempty` scope vs discharge), **the red branch** (keep vs
-> delete), and **the `tasks/` trial window closes TODAY, 2026-09-06** → cutover-or-keep-both is
-> row `TT-1` (Phase B needs an explicit user go); `TT-2` = `sync` has no gated coverage.
-> `TK53`: **15 appends remain**.
+> ✅ **`2026-09-06b` (`P17` + `TK55` closed, user-decided):** `P17` took option (c) — the DEFAULT
+> constructor `build_index(bulk=True)` is now pinned by a conformance differential,
+> `test_conformance_bulk_state.py` (bulk vs the incremental Python graph state, EXACT, over all
+> 25 `GRAPH_FRAGMENT` corpora; multiplicity sabotage red `incremental=3 bulk=1`), and
+> `FINAL_REVIEW.md` §3.1 item 6 / §4(h) carry the written scope statement; the Lean
+> `bulk = replay` theorem is `P24` (`SOMEDAY`). `TK55`: `define : [user]` used to compile to
+> `Filter(relation='')` and the graph answered `False` where oracle + set said `True` through
+> `define : viewer` — BOTH parsers now refuse an empty declared name (15 pins), and
+> `keysNonempty` is accepted as scope with a justification that is now true.
+> 🔍 **Branch `p3-flip-red-2026-09-05` inventoried, KEPT as-is** — 26/30 files are scaffolding
+> already on master; the 4 evidence files and the literal refuted declarations now live in
+> [`formal/history/p3-flip-red-snapshot-2026-09-05.md`](formal/history/p3-flip-red-snapshot-2026-09-05.md)
+> (55/55 quotes re-verified against the branch). **Tag-then-delete is still the user's call.**
+> 🧭 **Trial window closed today — NO cutover; prework + grade only (user decision).** The tree
+> was the STALE arm (9 drifts, all reconciled + acked; hand-sourced rows with a board row cannot
+> be acked — a tool gap); a Phase B′ candidate is DRAFTED at the top of
+> [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md)
+> (not decided); the grade is [`tasktool-trial-protocol.md`](docs/tasktool-trial-protocol.md)
+> §6 `2026-09-06`. **Next: the feedback pass with the user; `TT-1` still needs an explicit go.**
+> ⚠ **Two floors had LEAKED headroom on `HEAD`** — `TK56` added 6 tests without ratcheting
+> (clean checkout 520/1038 vs 515/1037). Both re-measured and zero-headroom again. New rows:
+> `P22` (the I14 crossable-middle loop in `bulk_build.py` is unpinned — a GREEN sabotage),
+> `P23` (declared-name charset asymmetry between the two parsers).
+> 📌 **`2026-09-06` (rotated → PROOF_STATUS `2026-09-06` §1–§8): `TK56` closed** — T3
+> instantiated, zero `opaque`s, `sorry_scan.py` refuses one, `task.py new` ratchets its own floor.
+> `2026-09-05b` (`P3` landed) → PROOF_STATUS `2026-09-05b`; live traps: scope doc §11.13 **(bb)…(gg)**.
+> `TK53`: **15 appends remain**; `TT-2` = `sync` has no gated coverage.
 > **"Known live correctness bugs: 0"** — ask `python scripts/gate_status.py`. Red: snapshot it
 > with a TEMP INDEX, never `git stash`/`git checkout --` (autocrlf rewrites LF → CRLF; trap (ee)).
 
@@ -73,25 +72,26 @@ forward forever and are never reused.**
 | `P10` | re-run the scope audit, hand-curated → [fan-out runbook](docs/subagent-fanout-runbook.md), final § | LATER | M | — | 2026-08-16 |
 | `P11` | the fixture-TRIPLE question for 5 subsumed `.fga` fixtures → `tests/test_schema_shapes.py::KNOWN_SUBSUMED` | LATER | S | — | 2026-08-16 |
 | `P12` | severity-sign revert probe → [`spec-deviations.md`](docs/spec-deviations.md) 2026-08-10 entry | LATER | S | — | 2026-08-16 |
-| `TK55` | **`GraphAdmission.keysNonempty`: accept as scope or discharge — USER CALL.** `P3` added TWO admission fields (`FullScope.lean:172 noLeafSubjects`, `:188 keysNonempty`) where the scope doc sanctioned one; `keysNonempty` narrows nine byte-identical pinned statements to schemas with non-empty relation names. Accepted as scope 2026-09-05b, NOT signed off: Python enforces it (`_IDENTIFIER_RE` `:31` / `validate_write_identifiers` `:133`) and it is not `WF`-derivable (`LeafRules.lean:734::wf_does_not_give_keysNonempty`). Accept → record in `FINAL_REVIEW.md`'s scope list and close; discharge → strengthen `WF` or prove the split never mints an empty key → PROOF_STATUS `2026-09-05b` §9.4 | LATER | S | — | 2026-09-05b |
+| `P22` | **`bulk_build.py:206-221`'s I14 crossable-middle loop is pinned by NOTHING.** Found 2026-09-06b by the `P17` sabotage sweep: deleting the loop stays GREEN across every `build_index` caller — `tests/test_bulk_build.py`, the new `test_conformance_bulk_state.py` (all 25 `GRAPH_FRAGMENT` corpora, exact state compare) and the matrix. Either no corpus reaches a crossable middle under bulk (write one that does, watch it go red, keep it as a permanent test) or the loop is dead code (prove it, delete it). A loop no sabotage can reach is unverified code on the DEFAULT constructor → `test_conformance_bulk_state.py` module docstring, "green sabotages" | LATER | S | — | 2026-09-06b |
+| `P23` | **declared-name charset asymmetry between the two parsers.** `TK55` closed the EMPTY name on both sides, but `tests/oracle.py::parse_schema_ast` still has no `.`-lock on declared relation names, and every other out-of-charset declared name (`*`, a space, `#`, non-ASCII, 257 chars) is graph-refused / set-accepted — today caught only by `ParityEngine`'s accept/reject unanimity, never by a schema-level pin. Decide the contract (refuse at parse, in BOTH parsers, pinned the way `tests/test_reg_empty_relation_name.py` pins the empty case) → [`spec-deviations.md`](docs/spec-deviations.md) 2026-09-06 entry | LATER | S | — | 2026-09-06b |
 | `TK54` | `Scratch4cii.lean` is a TRACKED module inside the gated lake package (since `a55a433`; sorry-free; the source of the build's linter warnings) — delete it or justify it with a docstring and a name that says what it pins. Either way the job count and `MIN_SCANNED_LEAN_FILES` move: re-measure, never difference → PROOF_STATUS `2026-09-05b` §9.5 | LATER | S | — | 2026-09-05b |
 | `HS-5` | always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one. **Enumeration + measuring method now live in §2 itself**; what is open is the adjudication — which docs are deliberately exempt. **No count in either place**: it read differently on all four readings → ledger `2026-08-29b` | LATER | S | — | 2026-08-29b |
 | `P13` | `CORRESPONDENCE.md` claim-rot gate → [design](formal/history/claim-rot-gate-design-2026-08-16.md) | LATER | M | — | 2026-08-16 |
 | `AW-1` | `FINAL_REVIEW.md` §4(d) under-claims after the remove leg → that item's own dated note | LATER | S | — | 2026-08-16 |
 | `P15` | the remaining fragment leaves — `PDerivedTTU` arms, and the `twoStrata` cap → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(c)(ii) + §3.1 item 3 | LATER | L | — | 2026-08-16 |
 | `P16` | widen the enumeration/state bounds → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(e); read `test_conformance_enum.py`'s module docstring, which is half the plan | LATER | M | — | 2026-08-16 |
-| `P17` | bulk build/backfill is an unmodeled **default** constructor — model it or scope-exclude it in writing → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(h) + §3.1 item 6 | LATER | M | — | 2026-08-16 |
 | `P21` | **a fourth `zcli` mode, so a fragment predicate can be DIFFERENTIALLY checked instead of mirrored.** `test_leaf_namespace_correspondence.py` is a Python **re-implementation** of `LeafRules.lean::NoLeafSubjects` — it says so in its own docstring — because `zcli` exposes exactly three modes (`spec`/`graph`/`graph-state`, `Cli.lean:14`, rc 4 otherwise) and has no channel to evaluate a Prop. A mode that takes an encoded `Schema` and prints the decision of `Decidable (NoLeafSubjects S)` would turn every such mirror into a real differential over the 50-schema corpus. **The residual it closes:** a mirror can be wrong in the SAME direction as the model and nothing notices | LATER | M | — | 2026-08-31b |
 | `LT-1` | the two live latent residues → [`latent-gaps.md`](docs/latent-gaps.md) "Target 2" / "Target 3" | HOLD | ? | — | 2026-08-20b |
 | `DW-1` | decidable `W4Fragment` for a driver-side pre-check. **Promoted SOMEDAY → LATER on 2026-08-31b, on measured evidence:** the new scope pin classifies `W4Fragment`'s ten fields **LOUD 0 · MIXED 3 · SILENT 7**, so for seven fields a schema outside the proven fragment is accepted, runs, and answers queries with no signal to the operator — its correctness resting on the differential net, not on `graph_correct`. A driver-side pre-check is what converts those seven silent holes into a refusal or a warning → [`CORRESPONDENCE.md`](formal/CORRESPONDENCE.md) §"Conformance gates", and the live table is `test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE` | LATER | ? | — | 2026-08-31b |
 | `P18` | the concurrency / multi-instance layer — the never-started TLA+ phase → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(i) + §3.1 item 5 | SOMEDAY | L | — | 2026-08-16 |
 | `P19` | model the read surfaces (`lookup` / `lookup_reverse` / `expand`) in Lean → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(g) | SOMEDAY | L | — | 2026-08-16 |
+| `P24` | **Lean `bulkState = replay`** — a `ReadEq` theorem that the offline constructor (`bulk_build.py` + `bulk_backfill.py`) reaches the same `GraphState` as replaying the tuples through `ReachedBy`, which would put `build_index(bulk=True)` under the headline instead of under the scope statement `P17` wrote (2026-09-06b). Caveat: `GraphState` carries no refcount / path-count / `implicit` / `derived` / version fields (`State.lean:105-111`), so the theorem can only speak to the projection the extractor compares — the edge MULTIPLICITIES `test_conformance_bulk_state.py` pins stay Python-only either way → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §3.1 item 6 | SOMEDAY | M | — | 2026-09-06b |
 | `SD-1` | lift the two scope rejections → [`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md) §4(j) | SOMEDAY | L | — | 2026-08-16 |
 | `SD-2` | a real service wrapper — deliberately skipped; the store is a plain callable API | SOMEDAY | L | — | 2026-08-16 |
 | `SD-3` | tuple-log compaction — only if the log outgrows "humans wrote this" scale | SOMEDAY | S | — | 2026-08-16 |
 | `SD-4` | bulk-merge write path → [sketch](docs/architecture/bulk-merge-design.md) | SOMEDAY | L | — | 2026-08-16 |
 
-Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`, `BL-1` (2026-08-21), `BL-2` (2026-08-21b), `P20` (2026-08-31b — adjudicated ACCEPT, both deliverables landed), `P3` (2026-09-05b — the flip landed sorry-free with the remove leg and the dirty-key branch co-flipped; the extractor's edge projection retired),
+Closed ids stay retired: `P1`, `P2`, `HS-1`, `HS-3` (all done 2026-08-16), `GS-1`, `BL-1` (2026-08-21), `BL-2` (2026-08-21b), `P20` (2026-08-31b — adjudicated ACCEPT, both deliverables landed), `P3` (2026-09-05b — the flip landed sorry-free with the remove leg and the dirty-key branch co-flipped; the extractor's edge projection retired), `TK56` (2026-09-06), `P17` and `TK55` (2026-09-06b — bulk pinned by conformance differential + written scope; empty declared name refused by both parsers, `keysNonempty` accepted as scope),
 `HS-4` and `GS-2` (2026-08-17), `HS-2` (2026-08-20b), `TK52` (2026-08-29b), `B1`, and the whole `ZT-*` zero-trust series. `B2` survives as the historical grouping of `P8` + `P9`.
 `B1`'s finding was verified closed 2026-08-16 (halves proved 2026-07-28 / 2026-08-04) —
 evidence in `formal/HANDOFF.md`'s `B1` block. Retiring an id is not the same act as closing

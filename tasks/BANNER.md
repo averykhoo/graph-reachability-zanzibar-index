@@ -1,14 +1,14 @@
-2026-09-06 — `TK56`: T3's undischargeable `hValid` deleted (with its `opaque`); T3 now INSTANTIATED at an executed store; `P17` is the reach step.
+2026-09-06b — `P17` + `TK55` CLOSED (user-decided); branch inventoried and KEPT; trial window closed with NO cutover — prework + grade only.
 
 🟢 Gate: ask `python scripts/gate_status.py` (all ten phases run on the committed tree; re-run `lean` after any `*.md` edit).
-★ **T1 is unconditional, T3 carries EXACTLY T2b's hypotheses.** `hValid : AllValid T` sat on `opaque ValidIdent` — undischargeable at
-every non-empty store, so T3 had NO instance while T2b had two. Deleted (49 Lean sites / 5 files, cold build green first try); added
-`W4WitnessDirect.equivalence_applies` + `Exec.lean::graphRunOps_directArm_backend_equivalence` (exists sigma: both backends answer `true`, proved equal).
-★ Pins 49→**51** statements, 250→**251** defs, 584→**587** audits (regeneration also caught the never-pinned `graphModeAnswers_eq_sem`).
-⚠ **Zero `opaque`s in the tree; `sorry_scan.py` now refuses one at declaration position** (control: HEAD's `Ident.lean` → 1, rc 1; live 0/70).
-⚠ **`task.py new` ratchets `min_tasks_parsed` itself** (158→159 on filing `TK56`) — the manual step three sessions forgot; never lowers.
-→ **Next toward equivalence: `P17`** — `ReachedBy` grows only from `emptyState`, so no headline covers `build_index(bulk=True)`, the DEFAULT
-constructor. Model `bulk_build`/`bulk_backfill` as a base constructor, or scope-exclude it in `FINAL_REVIEW.md`. Second opinion agreed. NOT re-ranked here.
-⚠ User calls owed (unchanged): `TK55` `keysNonempty` (scope vs discharge); keep-or-delete branch `p3-flip-red-2026-09-05`; the `tasks/` trial
-window closes TODAY 2026-09-06 (`TT-1` cutover-or-keep-both). `P6` stays `NOW` mechanically.
-(!) `t2c` includes `tasks/*.md` — write the mirror BEFORE the tiles or they strand. PROOF_STATUS `2026-09-06` §1–§8 has the detail.
+★ **`P17`, option (c):** `build_index(bulk=True)` — the DEFAULT constructor — is pinned by `formal/conformance/test_conformance_bulk_state.py`
+(vs incremental Python state, EXACT, 25 corpora; sabotage red `incremental=3 bulk=1`) + scope statement `FINAL_REVIEW.md` §3.1 item 6 / §4(h); Lean → `P24`.
+★ **`TK55`:** `define : [user]` compiled to `Filter(relation='')` and the graph answered `False` where oracle + set said `True` — BOTH parsers now
+refuse an empty declared name (`tests/test_reg_empty_relation_name.py`, 15 pins); `keysNonempty` accepted as scope with a now-true justification.
+→ **Branch `p3-flip-red-2026-09-05`:** 26/30 files already on master; evidence + literal refuted declarations extracted to
+`formal/history/p3-flip-red-snapshot-2026-09-05.md` (55/55 quotes re-verified). Kept as-is; **tag-then-delete is the user's call.**
+→ **Trial:** the tree was the STALE arm (9 drifts reconciled + acked; a hand-sourced row with a board row cannot be acked — tool gap). Phase B'
+candidate DRAFTED atop `docs/tree-sole-authority-spec-2026-08-29.md` (not decided); grade in `docs/tasktool-trial-protocol.md` §6 `2026-09-06`.
+⚠ Two floors had LEAKED headroom on HEAD (`TK56` +6 tests, no ratchet; clean checkout 520/1038 vs 515/1037) — re-measured, zero-headroom again.
+New: `P22` (I14 loop in `bulk_build.py` unpinned — GREEN sabotage), `P23` (declared-name charset asymmetry). `TT-1` still needs an explicit go.
+(!) `t2c` includes `tasks/*.md` — mirror BEFORE the tiles or they strand. `P6` stays `NOW` mechanically.

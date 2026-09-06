@@ -20,11 +20,39 @@ here" about things fixed hours later. **What is still latent today lives in
 [`latent-gaps.md`](latent-gaps.md)**, which has replace semantics; ranking lives on the
 [`HANDOFF.md`](../HANDOFF.md) board. Split out 2026-08-20 (row `HS-2`).
 
-**Ordering, so an append lands in the right place:** the first seven entries are
-newest-first (2026-08-14 … 2026-07-29); the file then restarts at `## 2026-07-07` and runs
-**oldest-first** to `## 2026-07-28` at EOF. New entries go at the TOP.
+**Ordering, so an append lands in the right place:** the entries from the top down to
+`## 2026-07-29` are **newest-first**; the file then restarts at `## 2026-07-07` and runs
+**oldest-first** to `## 2026-07-28` at EOF. New entries go at the TOP, directly under the
+`---` below. (This note said "the first seven entries … 2026-08-14" until 2026-09-06b — a
+count that went stale on the very next append; `grep -n '^## 20'` is the live list.)
 
 ---
+
+## 2026-09-06 — `TK55`: an empty declared relation name was accepted by both parsers and diverged the backends
+
+`define : [user]` parsed (both `zanzibar_utils_v1.py::parse_schema_ast` and
+`tests/oracle.py::parse_schema_ast`) and compiled to a `Filter` on relation `''`. A
+direct write on `''` was refused by both backends (the write-path charset,
+`validate_write_identifiers`), but a COMPUTED reference (`define : viewer`) was
+reachable through a valid write on `viewer`: untainted, the graph accepted the write
+and answered `check=False` where the oracle and both set engines answered `True` (a
+silent 3-way check divergence; `ParityEngine` raised `check parity broken`); boolean,
+the graph refused the write in `DeltaProcessor._write_derived` while both set engines
+accepted it (`ParityEngine` raised `accept/reject disagreement`). Both parsers now
+refuse the empty name at parse time (message `type 'doc': a declared relation name may
+not be empty (...)`, the same literal in `zanzibar_utils_v1.py` and `tests/oracle.py`,
+deliberately NOT shared — the oracle's independence contract), pinned by
+`tests/test_reg_empty_relation_name.py` (15 tests collected 2026-09-06; the pre-fix
+probe output and both single-parser sabotages are in its module docstring). This is
+also what turns `FullScope.lean::GraphAdmission.keysNonempty` from an assumption into a
+Python-enforced scope claim (`formal/CORRESPONDENCE.md`, the `GraphAdmission` row).
+Deliberately EMPTY-only: the same set-accepts / graph-refuses asymmetry still exists for
+every other out-of-charset declared name (`*`, inner whitespace, `#`, non-ASCII, >256
+chars, control chars) — those are caught by `ParityEngine` as an accept/reject
+disagreement, not as a silent check divergence — and the oracle's parser has no `'.'`
+lock on DECLARED names (its only `'.'` check is on userset-restriction predicates, so
+`define ...: viewer` and `define a.b: [user]` are accepted there while production
+refuses both; probed 2026-09-06). Both are filed as notes, not fixed here.
 
 ## 2026-08-21b — the graph index GRANTS a query for a minted LEAF PREDICATE name, bypassing the boolean guard
 

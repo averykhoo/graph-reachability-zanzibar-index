@@ -15,6 +15,137 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-06b (**`P17` and `TK55` CLOSED by user decision — the DEFAULT constructor `build_index(bulk=True)` is pinned by a 25-corpus state differential plus a written scope statement, not a Lean constructor; an EMPTY declared relation name was a real backend divergence and both parsers now refuse it; the red `P3` branch's evidence is extracted and the branch is KEPT; the trial window closed with NO cutover; two gate floors had leaked 6 tests of headroom**)
+
+**Task taken (user-assigned):** "look into these things, explain the context, recommend what
+should be done about each, and what should be done this session" for the four items the
+`2026-09-06` entry left owed — `P17`, `TK55`, branch `p3-flip-red-2026-09-05`, `TT-1` — run
+under the user's `ultracode` opt-in (two scripted waves: land + review, then fix + note +
+independent re-check). The user decided each: **`P17` → option (c)** (conformance differential
++ scope statement now, Lean shape `SOMEDAY`); **`TK55` → fix the parsers AND accept as scope**;
+**branch → keep as-is, inventory it, tag/delete later**; **`TT-1` → prework + grade, decide
+later**. Everything in §1–§2 that is a test result was re-run first-hand by the orchestrator
+after the agents reported it; the branch inventory (§3) is agent evidence re-verified quote by
+quote by a second agent, not by me, and the entry says so.
+
+### 1. `P17` — why not a Lean bulk constructor, and what pins the default constructor now
+
+The `2026-09-06` entry's recommendation was to add `bulk` as a base constructor of
+`ReachedBy`. Rejected on inspection: `GraphState` (`GraphIndex/State.lean:105-111`) carries no
+refcount / path-count / `implicit` / `derived` / version fields, so a Lean `bulkState` could only
+ever be stated over the projection the extractor already compares — the multiplicities that
+distinguish `bulk_build.py`'s Phase R/W from the incremental path are exactly what it could
+not see. The real gap was narrower: interleaved-vs-bulk agreement on BOOLEAN schemas was pinned
+by one fixed history in `tests/test_bulk_build.py`, and by nothing on the conformance corpus.
+
+**Landed:** `formal/conformance/test_conformance_bulk_state.py` (26 tests) —
+`test_state_bulkbuild_vs_pythongraph[<corpus>]` over every `GRAPH_FRAGMENT` corpus (25 on
+2026-09-06) compares the bulk-built SQL state (`extractor.py::python_bulk_graph_state`, driven by
+`backends.py::bulk_build_drive`) against the write-by-write Python graph state EXACTLY —
+edge multiplicities, the processor's `derived` stamp, residues — and then runs the Lean-anchored
+`diff_states` as a second leg; `test_bulk_leg_covers_graph_fragment_exactly` pins that the
+parametrisation IS the fragment (no silent exemption list). All 25 agree; no corpus needed an
+exemption. **Sabotage, re-run by me on the landed tree:** `bulk_build.py:319`'s
+`'direct_edge_count': min(1, m.get((a, b), 0))` → `1 failed, 25 passed in 8.73s`,
+`[nary_union] edge MULTIPLICITY ('user','alice','...','') -> ('doc','d1','any_of',''):
+incremental=3 bulk=1`; file `cmp`-restored, `26 passed in 11.49s`. The module docstring carries
+the full set (derived-flag red on 11 corpora, residue red on 2, instrument refusal) — and two
+**GREEN** sabotages that are findings, not reassurance: (i) the I14 crossable-middle loop
+`bulk_build.py:206-221` can be deleted and EVERY `build_index` caller in the tree stays green
+(`37 passed`, `24 passed`, this module `26 passed`) — filed as **`P22`**; (ii) collapsing Phase
+P's path counts to presence is green HERE because `extract_sql_state`'s P1 projection keeps
+direct rows only — `tests/test_bulk_build.py` is still the ONLY pin on the materialised closure,
+and the docstring says so instead of letting this module look like a replacement.
+
+**Written scope:** `FINAL_REVIEW.md` §3.1 item 6 rewritten (bulk is the default; what pins it;
+what remains outside), §4(h) updated; `CORRESPONDENCE.md` §8.1 entries for P13 and R4-BF;
+`ARCHITECTURE.md:661-675` / `:715-720` corrected. The Lean `bulkState = replay` theorem is
+**`P24`** (`SOMEDAY`) with the `GraphState`-fields caveat in its body.
+
+### 2. `TK55` — the divergence was real, and the fix is in both parsers
+
+The orchestrator's first probe was WRONG and an agent corrected it: the set engine DOES
+refuse a direct write on relation `''`. The real divergence is one hop over:
+`define : [user]` parsed in both `zanzibar_utils_v1.py::parse_schema_ast` and the independent
+`tests/oracle.py::parse_schema_ast` and compiled to `Filter(relation='')`; through
+`define : viewer` (a computed reference to the empty name) the graph ADMITTED the write and
+answered `check = False` where oracle and set engine said `True`. **Landed:** an explicit
+empty-name refusal in each parser (`zanzibar_utils_v1.py:899-901`, beside the `.`-lock;
+`tests/oracle.py:274`, no new imports — the independence contract holds) and
+`tests/test_reg_empty_relation_name.py` (15 tests). **Sabotage, re-run by me:** main parser's
+check disabled → `8 failed, 7 passed in 0.24s`; restored → `15 passed in 0.18s`.
+**Scope:** `GraphAdmission.keysNonempty` (`FullScope.lean:208`) is ACCEPTED, and its
+docstring (`:194-207`) now gives the true justification — Python enforces non-empty keys at
+parse time as of this session, the field is stated in decidable `.all` form, and it is not
+`WF`-derivable (`LeafRules.lean::wf_does_not_give_keysNonempty` stands). Recorded in
+`FINAL_REVIEW.md` §3.1 item 3 and `docs/spec-deviations.md` `2026-09-06`. Residual — the
+oracle parser has no `.`-lock and every OTHER out-of-charset declared name is still
+graph-refused / set-accepted with only `ParityEngine` unanimity catching it — is **`P23`**.
+`lake build ZanzibarProofs.FullScope` rc=0 (docstring-only change).
+
+### 3. Branch `p3-flip-red-2026-09-05` — inventoried, evidence extracted, KEPT
+
+Agent inventory (30 files vs master `9f05fbf`): 26 are scaffolding already on master
+verbatim; 4 are evidence files whose content is INVERTED on master (the refuting
+declarations); the literal refuted declarations — `graph_correct_refuted` (branch
+`Exec.lean:980`), `graph_correct_public_refuted` (`:932`), `graphRunOps_directArm_diverges`,
+the four staged-`sorry` theorem heads — exist in no tracked file, and `PROOF_STATUS`
+`2026-09-05b` cites them BY LINE, which dangles the moment the branch goes. **Landed:**
+`formal/history/p3-flip-red-snapshot-2026-09-05.md` (171 lines, FROZEN 2026-09-06): the
+declarations verbatim, the `#check`/axioms lines, the staged-sorry sites, and a reproduce
+recipe that does not `git checkout`. A second agent re-located every quoted item on the branch
+(55/55; 6 draft imprecisions corrected in place — a dropped `LeafRuleWitness.` namespace,
+two `...`-abbreviated statements expanded). The note's 1089-jobs / 4-warnings / 40-of-584
+figures are the snapshot's SELF-REPORT (commit message + docstrings), not re-measured, and
+it says so. Literal `sorry` tokens in the note are safe: `sorry_scan.py:174` scans `*.lean`
+only, and `doc_counts.py:343` exempts `history` paths. **The branch is untouched; tag-then-
+delete is the user's call and remains owed.**
+
+### 4. `TT-1` — no cutover; the tree was the stale arm
+
+Measured over the trial window's 35 session-log entries: `read: board + HANDOFF` 27, `board
+only` 6, `HANDOFF only` 0, no read line 2. `task.py sync --check` at session start reported
+**9 drifts** (`P6`, `R6`, `P4`, `P5`, `P14`, `TK55`, `TK54`, `P21`, `DW-1`) — all reconciled
+and acked; three (`TK55`, `TK54`, `P21`) were `source: hand` rows that HAVE a board row and
+therefore could not be acked at all until `source` was hand-flipped to `board` with a Log line
+— a tool gap, recorded as prerequisite 6 of the Phase B′ candidate drafted (DRAFT, dated,
+undecided) at the top of `docs/tree-sole-authority-spec-2026-08-29.md`. The grade is
+`docs/tasktool-trial-protocol.md` §6 `2026-09-06`. This session's own mirror: `close P17`,
+`close TK55`, `new P22`/`P23`/`P24`, three first-reconciliation acks, `sync CLEAN`.
+
+### 5. Two floors had leaked headroom — caught by measuring a clean checkout
+
+`MIN_CONF_ALL=515` / `MIN_TESTS_ALL=1037` on `HEAD 9f05fbf`, but a `git stash -u` checkout
+collected **520 / 1038**: `TK56` added five `test_sorry_scan.py` cases and one
+`test_tasktool.py` case without touching `verify.sh`. Re-measured after this session's
+additions (+26 / +15): **546 / 1053**, both written with that provenance
+(`verify.sh:361`, `:438`). Method note: `git stash` alone left the untracked new modules in
+place and produced `1 error` — the count that matters is the one with `-u`. And the first
+ratchet was itself incomplete: `MIN_CONF_ALL` alone, leaving `MIN_CONF_HEAVY + MIN_CONF_REST`
+at 515, which `verify.sh:512`'s identity check would have failed on every conformance phase.
+`doc_counts --check` surfaced it before the gate ran; `MIN_CONF_REST` 411 → 442 with
+`HEAVY_CONF` re-measured (104, unchanged).
+
+### 6. Mechanical checks (independent agent, all rc=0, then re-run by me where cheap)
+
+`doc_counts --check` 546 conf / 1053 tests / 587 audits / 590 anchors; `anchor_check`
+590/590 (one anchor at `CORRESPONDENCE.md:1016` had to be re-pointed to
+`index_v4/processor.py::DeltaProcessor._live_keys_of`); `handoff_lint` clean (10 checks —
+after one trap-badge overflow, 11 > 10, fixed by de-badging the `P24` row);
+`task.py lint` clean (12 checks, 162 files); `sorry_scan --min-files 64` 70 files, 0; three
+historical "six corpora" hits deliberately left (frozen / dated / arithmetically right).
+
+### 7. Next
+
+`P6` stays `NOW` mechanically (not re-ranked — user-assigned session). Owed to the user:
+the branch tag/delete decision; the trial feedback pass and the `TT-1` go. Gate: see §8.
+
+### 8. Gate
+
+Ten phases run in order after every `*.md` and `tasks/*.md` edit above; verdicts recorded in
+`docs/history/session-log.md` `2026-09-06b` (this entry was written BEFORE the run, per the
+"records first, then `lean`" rule, so the verdict line lives there, not here).
+
 ## Session 2026-09-06 (**`TK56` — T3 carried an UNDISCHARGEABLE hypothesis for six weeks; deleted, and T3 is now INSTANTIATED (two witnesses); the tree carries zero `opaque`s and the scanner refuses a new one; `task.py new` ratchets its own floor**)
 
 **Task taken:** a user request for a second opinion on "the optimal next step toward set-engine
