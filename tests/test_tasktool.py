@@ -2951,9 +2951,19 @@ def test_sabotage_check_parses():
         FAIL: <t>/sab/tasks/T2-next-alpha.md: missing keys ['parent'], unknown keys -
         (all fourteen keys are always present -- see SPEC.md section 3.1). Fix the
         frontmatter by hand -- the fourteen keys are fixed and always present.
+
+    THE BARE DASH (``TK65``, fixed 2026-09-07b). Note ``unknown keys -`` above: an empty
+    list rendered as ``-``, so the ABSENCE of unknown keys reads as a key NAMED "-". This
+    was one of a pair; ``check_pri_budget``'s half was fixed 2026-08-21 and this half was
+    missed, which is exactly how an unmatched half gets rediscovered as a "new" defect
+    later. ``(none)`` is the established rendering elsewhere in ``task.py`` -- asserted
+    below so a third spelling cannot be introduced quietly.
     """
     line = sabotage('sab_parses', sab_parses, r'missing keys')
     assert 'T2-next-alpha.md' in line, line
+    assert "missing keys ['parent']" in line, line
+    assert 'unknown keys (none)' in line, line
+    assert 'unknown keys -' not in line, line
 
 
 def test_sabotage_check_ids_unique():

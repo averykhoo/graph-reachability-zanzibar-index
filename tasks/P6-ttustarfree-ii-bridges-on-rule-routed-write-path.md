@@ -47,7 +47,8 @@ re-measure with a probe wave before quoting it. The live constraint now is the o
 and this row carried it for weeks**
 (corrected 2026-08-20b). Logically independent, **textually colliding**: both re-point
 `RulesWrite.lean::writeRules` and `Cascade.lean::writeLoggedOne`, both move `FoldAdmits` +
-`Exec.lean::foldAdmitsB` in lockstep, and **both pay the same 38-module cone** — whichever
+`Exec.lean::foldAdmitsB` in lockstep (⚠ **21 of 24 sites, not all 24 — three must STAY on
+the σ0 side**; `PROOF_STATUS.md:4897`, `TK67`), and **both pay the same 38-module cone** — whichever
 lands second re-pays it. Land increment A (additive, zero-cone) and stop, or sequence B
 after `P3`; never concurrently. **Probe with `#eval` before paying the cone, exactly as
 `P3` did**: `CascadeStable.lean`'s `writeLeg_reach_stable` family says a write leg does not

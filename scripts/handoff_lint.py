@@ -435,9 +435,20 @@ def check_priority_capacities(fail):
     now = [ln for v, ln in pris if v == 'NOW']
     nxt = [ln for v, ln in pris if v == 'NEXT']
     if len(now) != 1:
-        fail('%s: found %d NOW %s, must be exactly 1. NOW is what an '
-             'unassigned session picks up; two of them is no ranking at all.'
-             % (where, len(now), unit % (now or '-')))
+        # ONE message true of BOTH sides of the "!=", because this is one check. The old
+        # text was the `> 1` branch's ("two of them is no ranking at all") printed
+        # verbatim on a count of ZERO -- a FAIL describing a situation the corpus was not
+        # in, read by a session at the moment it is already confused. Fixed in the sibling
+        # checker 2026-08-21 (`task.py::check_pri_budget`, pinned by
+        # `tests/test_tasktool.py::test_regression_zero_now_message_is_true_of_zero`) and
+        # ported here 2026-09-07b -- the two checkers had disagreed about the same
+        # invariant for 17 days, which is worse than either being wrong alone: whichever
+        # you meet first teaches you the rule. The zero case became reachable here when
+        # this check gained its tree fallback at the 2026-09-06 cutover.
+        fail('%s: found %d NOW %s, must be exactly 1. NOW is the one row an '
+             'unassigned session picks up: with none it has no answer, with more '
+             'than one it has no ranking.'
+             % (where, len(now), unit % (now or '(none)')))
     if len(nxt) > NEXT_MAX:
         fail('%s: found %d NEXT %s, cap is %d. Demote one to LATER -- the cap '
              'is the mechanism that forces the ranking argument.'

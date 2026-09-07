@@ -224,7 +224,7 @@ above; §11.6's cone estimate is refuted and its index-breadth figure is stale.*
   bakes them into `RewriteFilter.rewrite_relation`). Revised order: **4c-i** rules with
   leaf provenance (under `RulesWrite`, cone ≈ the whole GraphIndex tree) → **4c-ii**
   caller re-point + (α) row move (`d.leaf = true` stays the LEADING conjunct;
-  `foldAdmitsB`/`FoldAdmits` move in lockstep) → 4b/5/6/7; 4c-ii + 7 still co-land.
+  `foldAdmitsB`/`FoldAdmits` lockstep covers **21 of 24 sites**; three stay σ0-side — `PROOF_STATUS.md:4897`, `TK67`) → 4b/5/6/7; 4c-ii + 7 still co-land.
 * Toolchain: `String.contains` does not kernel-reduce — leaf-layer defs stay
   `toList`-based or `decide` pins stall.
 

@@ -22,12 +22,31 @@ swept): the whole leaf-routed write path is live in the model (`Cascade.lean:190
 
 ## Traps
 
-None recorded. This row sits below `NEXT`, so it never had an item block; traps for it, if any, live at the pointer below.
+⚠ **Do not cancel `P4` without reading why it must not be cancelled first.** Two frozen
+records say so, and neither is reachable from this row's title or brief:
+
+- `formal/history/leaf-family-split-scope-2026-08-05.md:1099` — under Route B, σ/σ0 reach
+  agreement is **no longer supplied at leaf-node targets**. Nothing probes those today; the
+  post-4b derived read path will, and that surface is this row. "Do not cancel `P4` without
+  revisiting this."
+- `formal/history/PROOF_STATUS.md:5146` — the same narrowing from the proof side: "If P4
+  were ever cancelled, this narrowing is where the loss would surface."
+
+The warning is reproduced here as a POINTER, not a copy: `formal/history/` is append-only
+and frozen as-of-then, so a second copy of the sentence would be a second home for a claim
+nothing updates (`docs/README.md`, one-home rule). Read the lines; do not trust this
+summary of them.
+
+⚠ **The general case is bigger than `P4`, and is filed as `TK66`.** The board-to-tree
+migration could only carry what the board held, so ANY directive that lived only in
+`formal/history/` is in this same position. `P4` is the instance that was measured; a
+2026-09-07b sweep found sixteen more candidates. Do not read "P4 is fixed" as "the class is
+fixed".
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule; enforced by `migrate.py::check_formal_pointer`, not merely stated)
-- [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7
+- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule — stated there, and since 2026-09-07b enforced by nothing: this line used to cite `migrate.py::check_formal_pointer`, which was deleted with `.scratch/tasktool/` on 2026-09-07. `TK61` is the same defect elsewhere.)
+- [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 — and §11.10 at `:1099` for the do-not-cancel warning above
 
 ## Log
 

@@ -11,9 +11,9 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07
-updated: 2026-09-07
-closed:
+moved: 2026-09-07b
+updated: 2026-09-07b
+closed: 2026-09-07b
 ---
 
 `notes.md` "Still open" item 2. Two lint messages shared one cosmetic defect: an empty list
@@ -38,3 +38,17 @@ rediscovered as a "new" defect two years later.
 - [`docs/history/tasktool-scratch-archive-2026-09-07.md`](../docs/history/tasktool-scratch-archive-2026-09-07.md) section 5 item 8
 
 ## Log
+
+### 2026-09-07b
+
+LANDED. task.py check_parses renders an empty list as `(none)`, matching the established
+wording at :1946/:1978/:2273-2278 rather than inventing a third spelling. The live line was
+:1120, not the :1110-1112 this row cited -- a drifted line citation, which is itself the
+argument for the path-only rule now recorded on TK59.
+
+Pinned by extending the EXISTING sabotage test rather than adding a new one:
+tests/test_tasktool.py::test_sabotage_check_parses already produces this exact message, so
+it now asserts `unknown keys (none)` and refuses `unknown keys -`. Its docstring carries the
+pre-fix observed line, which is where the bare dash is visible in the record.
+
+Both halves of the 2026-08-21 pair are now closed.

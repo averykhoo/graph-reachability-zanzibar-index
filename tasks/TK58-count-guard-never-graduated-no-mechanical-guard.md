@@ -11,8 +11,8 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07
-updated: 2026-09-07
+moved: 2026-09-07b
+updated: 2026-09-07b
 closed:
 ---
 
@@ -59,3 +59,36 @@ own expectations cannot fail.
 - `scripts/handoff_lint.py` -- the `CHECKS` tuple and the existing scope lists
 
 ## Log
+
+### 2026-09-07b
+
+PLAN AGREED 2026-09-07b (user), not started. Batch 4 -- do this LAST of the TK57-TK65 set,
+after TK59 lands check 14.
+
+DO NOT PORT count_guard.py AS DESIGNED. The archived design (six prose patterns, a declared
+DELIVERABLES list, a frozen-exempt baseline) was built for a 99-file flat scratch corpus and
+goes red on dozens of legitimate lines here -- session-log entries and fenced transcripts are
+full of counts that are evidence, not claims. Red on arrival is how a check gets deleted.
+
+SCOPE IT DOWN to the figures that have actually rotted in this repo:
+  * patterns: N checks, N open tasks/rows, N tests. Three, not six. Grow the list only when
+    a real rot is found, and say in the commit which one motivated the new pattern.
+  * scan: CLAUDE.md, HANDOFF.md, docs/README.md, docs/*.md (non-history), tasks/.
+  * skip: fenced blocks, docs/history/, formal/history/, tasks/closed/, and any line
+    carrying a date stamp. Frozen and closed files are as-of-then by definition
+    (CLAUDE.md, "Status lines inside docs/history/ ... are FROZEN as-of-then").
+
+HOME: a new check appended to handoff_lint.py::CHECKS. Not a standalone script -- the
+original file warned about exactly that, and a script nobody gates is a dead check. Note
+handoff_lint already rides verify.sh 4f, so it is gated on arrival.
+
+KEEP these two rules from the archived design, they are the load-bearing part:
+  * recording an exemption is an ASSERTION, via a separate verb a scan can never call.
+  * no baseline regeneration, ever. A guard that rewrites its own expectations cannot fail.
+
+SABOTAGE: write "12 checks" into HANDOFF.md, watch it go red, restore. Control: the clean
+tree must be green in the same run.
+
+SCOPE NOTE, measured 2026-09-07b: this session removed two restated counts by hand (TK60
+deleted R6 parent census; TK61 reworded 13 R6-N citations). Re-measure the live corpus
+before sizing -- the S/M estimate on this row predates both.

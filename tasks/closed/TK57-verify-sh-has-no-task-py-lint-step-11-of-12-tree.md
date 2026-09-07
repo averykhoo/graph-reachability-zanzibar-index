@@ -11,9 +11,9 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07
-updated: 2026-09-07
-closed:
+moved: 2026-09-07b
+updated: 2026-09-07b
+closed: 2026-09-07b
 ---
 
 `INTEGRATION.md` section 6 step 7 called the `verify.sh` 4g patch "not optional and not a
@@ -50,3 +50,26 @@ The gap is reproducible rather than merely arguable: with a second row flipped t
 - `docs/tasktool-trial-protocol.md:576` -- an independent record of the same gap
 
 ## Log
+
+### 2026-09-07b
+
+LANDED. verify.sh gained step [4g/7]: `( cd "$REPO_ROOT" && "$PY" scripts/task.py lint )`
+with the same exit-code branch 4f uses. 4a-4f renumbered /6 to /7 (six echo lines in
+verify.sh; no test or doc asserted the old labels -- the other /6 hits are history, scratch
+and this task body).
+
+SABOTAGE, and the first attempt was discarded. A second NOW row -- the sabotage this task
+proposed -- is NOT attributable: handoff_lint at 4f catches it too via its tree fallback, so
+the phase would have gone red one step early and proved nothing about 4g. Used instead a
+dangling dep (deps: [] to deps: [NOSUCH1]), which only task.py sees. Observed on ONE tree:
+
+    4f  handoff_lint: clean (11 checks)                                  rc=0
+    4g  task lint: 1 violation(s)
+          FAIL: .../TK66-....md: dep NOSUCH1 resolves to no task (open or closed).
+        FAIL: task tree lint (see above)                                 rc=1
+
+and the "=== lean phase ... PASSED ===" line did not print, which is the wiring under test.
+Control: restored tree, task lint: clean, rc=0. 4f green with 4g red is the whole
+justification for the step -- it is coverage 4f does not have.
+
+No check count is restated in the new comment; task.py::LINT_CHECKS stays the one home.
