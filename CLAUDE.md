@@ -32,9 +32,11 @@ IVM delta processor.
   * **Every re-rank, close, and progress note goes through an op with `--session <key>`**
     — `promote` / `touch` / `close -m` / `set <id> brief` / `comment <id> -m` — never a
     hand edit of a task file's frontmatter. Full schema and op contract:
-    [`docs/tasktool-spec.md`](docs/tasktool-spec.md). **Do not run
-    `.scratch/tasktool/migrate.py`** — its `--rebuild` destroys 51 hand-filed tasks that
-    no source document contains.
+    [`docs/tasktool-spec.md`](docs/tasktool-spec.md). The gitignored `.scratch/tasktool/`
+    build directory (and the `migrate.py --rebuild` landmine this bullet used to warn
+    about) was **DELETED 2026-09-07**; what it proved — decisions absent from the spec,
+    the cited evidence sections, and nine findings that were never fixed — is
+    [`docs/history/tasktool-scratch-archive-2026-09-07.md`](docs/history/tasktool-scratch-archive-2026-09-07.md).
   * **Close the loop in your session-log entry with two literal lines** (enforced:
     `handoff_lint.py::check_session_receipt` makes the `lean` phase RED without them):
     the output of `python scripts/task.py lint`, and `read: board only` /

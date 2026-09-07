@@ -4,22 +4,32 @@
 > FROZEN ([`tasktool-trial-protocol.md`](tasktool-trial-protocol.md)). At the cutover
 > `sync`, `ack` and lint check 13 RETIRED (section 4, "The retired verbs"; section 5) and
 > `source_hash` froze. Copied from `.scratch/tasktool/SPEC.md` so the tool's contract is
-> not itself in a gitignored directory. Where this file and `scripts/task.py` disagree,
-> **the code wins** (the repo's standing rule); fix the doc in place. `SYNC-SPEC.md` and
-> `START-HERE.md` were companion contracts in scratch; with `sync` gone, the former is
-> provenance only (its results: [`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md)).
+> not itself in a gitignored directory — a precaution that paid off on **2026-09-07, when
+> that directory was deleted**. Where this file and `scripts/task.py` disagree, **the code
+> wins** (the repo's standing rule); fix the doc in place. `SYNC-SPEC.md` and
+> `START-HERE.md` were companion contracts in scratch and went with it; what they decided
+> is in [`history/tasktool-scratch-archive-2026-09-07.md`](history/tasktool-scratch-archive-2026-09-07.md),
+> and `sync`'s results are in [`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md).
 
 # SPEC — `task.py`, a file-per-task tracker
 
 Design settled in conversation 2026-08-20/21. This file is the contract; implement
-exactly this. Where it is silent, prefer the simplest thing and write a note in
-`notes.md` rather than inventing a feature.
+exactly this. Where it is silent, prefer the simplest thing and record the decision in your
+session-log entry rather than inventing a feature. (Until 2026-09-07 this line named
+`notes.md`, a companion file in the gitignored build directory; that directory is deleted
+and the decisions it held are in
+[`history/tasktool-scratch-archive-2026-09-07.md`](history/tasktool-scratch-archive-2026-09-07.md)
+section 3.)
 
 ## 0. Hard constraints for anyone working on this
 
-* **Write ONLY inside `.scratch/tasktool/`.** The main repo is READ-ONLY. Another agent
-  is actively editing the real tree; touching it is the one unrecoverable mistake here.
-  Never edit `HANDOFF.md`, `scripts/`, `docs/`, `formal/`, or anything outside this dir.
+* ~~**Write ONLY inside `.scratch/tasktool/`.**~~ **HISTORICAL, and false since the tool
+  graduated.** This was a build-era constraint: the tool was written in a scratch directory
+  while another agent edited the real tree concurrently, so touching the repo was "the one
+  unrecoverable mistake here". The tool now IS the repo (`scripts/task.py`, tracked
+  `tasks/`), and the scratch directory was deleted 2026-09-07. Kept, struck through, because
+  the sentence survived the graduation unedited for nine days and a reader who met it would
+  have drawn exactly the wrong conclusion about where to work.
 * **Python 3, standard library only.** No PyYAML, no `python-frontmatter`, no pip installs.
 * **Windows host.** Always `io.open(path, encoding='utf-8')` for read and write; never
   rely on the platform default. Console stdout may be cp1252, so **all script OUTPUT must
@@ -232,9 +242,11 @@ the file through the archive move and through any rename. SYNC-SPEC.md section 3
 updated to match; the superseded design is not left standing in it.
 
 Validation is on the SHAPE, not on existence: a `source` path is never checked against
-the disk. This corpus lives under `.scratch/` while its sources live in a read-only repo,
-and a source document that is later renamed or archived would turn the gate red for a
-fact that is still true.
+the disk. A source document that is later renamed, archived or deleted would turn the gate
+red for a fact that is still true (the task did come from it). The reason originally given
+here — that the corpus lived under `.scratch/` while its sources lived in a read-only repo
+— stopped being true when the tree was tracked; corrected 2026-09-07, when the deletion of
+`.scratch/tasktool/` made the surviving reason concrete rather than hypothetical.
 
 #### `related` -- navigation, deliberately not a graph
 
@@ -336,9 +348,11 @@ Files are NEVER deleted. "Wontfix" is a `close` with a reason in the message.
 ### The retired verbs — `sync` and `ack` (2026-09-06)
 
 `sync` was neither a read op nor a write op and had its own contract in
-`.scratch/tasktool/SYNC-SPEC.md` (**not tracked** — deliberately NOT written as a link,
-because a link that resolves to nothing is the rot this repo lints for; its results are
-recorded in [`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md)):
+`.scratch/tasktool/SYNC-SPEC.md` (**deleted 2026-09-07 with the rest of that gitignored
+directory**; the two design points of it that outlive the verb are transcribed at
+[`history/tasktool-scratch-archive-2026-09-07.md`](history/tasktool-scratch-archive-2026-09-07.md)
+section 3, and its results are recorded in
+[`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md)):
 it reconciled the corpus against `HANDOFF.md`'s row table, reported drift in six
 buckets, minted tasks for rows that had none (`--create-new`, the only mode that wrote,
 and it only ever ADDED), and emitted the mechanical fixes as pasteable `--mechanical`
@@ -463,13 +477,17 @@ example into the shipped config on 2026-08-21, and all three were wrong there: `
 minted `T1`, which is already the set-engine correctness theorem; `5` was a floor far
 below the live corpus, so deleting the entire `closed/` archive — the MAJORITY of the
 files — still linted clean at exit 0 (the literal transcript, with the figures as they
-stood that day, is in `fix-tool.md` under BLOCKER 1); and `14` had no derivation
-anywhere. This file states no corpus figure of its own: run
-`python task.py --dir <tree> counts`, which is the single machine-checked home for
-every one of them. The live values, and how each was measured, are in
-`sandbox-migrated/tasks/config.json`'s `_provenance` block — the generator is
-`migrate.py::config_blob`, which measures the floor from the corpus it just wrote, and
-`measure_prefix.py` / `measure_stale.py` re-derive the other two. `id_prefix` and
+stood that day, is transcribed at
+[`history/tasktool-scratch-archive-2026-09-07.md`](history/tasktool-scratch-archive-2026-09-07.md)
+section 2.7; it was in the gitignored `fix-tool.md` under BLOCKER 1 until that directory
+was deleted); and `14` had no derivation anywhere. This file states no corpus figure of its
+own: run `python scripts/task.py counts`, which is the single machine-checked home for
+every one of them. The live values, and how each was measured, are in the tracked
+[`../tasks/config.json`](../tasks/config.json)'s `_provenance` block. Of the three
+re-derivation tools named there, `scripts/measure_stale.py` is tracked (ported 2026-09-07),
+`measure_prefix.py`'s assertion now lives as
+`tests/test_tasktool.py::test_shipped_config_is_measured_not_an_example`, and the floor is
+maintained mechanically by `scripts/task.py::ratchet_min_parsed`. `id_prefix` and
 `min_tasks_parsed` have NO defaults in `task.py`: a missing prefix is a refusal at
 `new`, a missing floor is a lint violation, because a guessed floor is a floor with
 headroom.
@@ -494,10 +512,21 @@ ids carry forward forever and are never reused. So id VALIDATION is permissive
 
 ## 7. Migration (`migrate.py`)
 
+> **DELETED 2026-09-07 — this section is now history, not a description of anything on
+> disk.** `migrate.py` lived in the gitignored `.scratch/tasktool/`, which was deleted that
+> day; before deletion its whole body was commented out behind a refusal, because its
+> `--rebuild` manifest guard was found to FAIL OPEN when `--out` named the corpus directory
+> rather than its parent (the guard inventories `<out>/tasks/`, the wipe deletes `<out>`,
+> so aiming one level too deep reported "nothing at risk" and destroyed 68 files at rc 0).
+> The transcript and the guard's design record are in
+> [`history/tasktool-scratch-archive-2026-09-07.md`](history/tasktool-scratch-archive-2026-09-07.md)
+> section 4. Read the rest of this section as the record of how the tree was bootstrapped.
+>
 > **Superseded for ongoing use (2026-08-21).** The corpus stopped being a derived
 > artifact the moment tasks were filed that no source document contains, so
-> `migrate.py --rebuild` is guarded and reconciliation (`SYNC-SPEC.md`) is how the corpus
-> stays current. `migrate.py` still describes how the tree was BOOTSTRAPPED, and it still
+> `migrate.py --rebuild` was guarded and reconciliation (`SYNC-SPEC.md`, itself retired
+> 2026-09-06) was how the corpus stayed current. `migrate.py` still describes how the tree
+> was BOOTSTRAPPED, and it still
 > emits the ten-field schema -- it has never been widened to the current schema, because
 > widening a tool nobody may run buys nothing and running it is the one thing the guard
 > exists to prevent. **Do not read this paragraph as a statement of the live schema**:
@@ -507,9 +536,11 @@ ids carry forward forever and are never reused. So id VALIDATION is permissive
 > rewrites a body. The gap between `migrate.py`'s schema and the live one only ever
 > widens, which is another reason not to run it.
 
-A separate script, also under `.scratch/tasktool/`, that builds a `tasks/` tree from the
-main repo's current records. It READS the main repo and WRITES only into
-`.scratch/tasktool/sandbox/`. It must be re-runnable: wipe the output dir and rebuild.
+It was a separate script under `.scratch/tasktool/` that built a `tasks/` tree from the
+main repo's records. It READ the main repo and WROTE only into its own output directory,
+and while it was a generator it was deliberately re-runnable: wipe the output dir and
+rebuild. That era ended when the corpus became hand-maintained — a hand-filed task is the
+fact with no home in the generator, and the rebuild is what would destroy it.
 
 Inputs and what to take from each:
 

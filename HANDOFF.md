@@ -21,7 +21,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 > "Known live correctness bugs: 0" — ask `gate_status.py`, not this line.
 > ⚠ A `close -m` / `comment -m` message with backticks inside DOUBLE quotes is command-substituted by the shell and the fragments vanish silently — single-quote it, or a heredoc, or a file (bit 2026-09-06c).
 > ⚠ On a red gate, snapshot with a TEMP INDEX, never `git stash` / `git checkout --` — autocrlf rewrites LF → CRLF (trap (ee), scope doc §11.13).
-> ⚠ Do not run `.scratch/tasktool/migrate.py` — its `--rebuild` destroys 51 hand-filed tasks that no source document contains.
+> 🧭 `.scratch/tasktool/` DELETED 2026-09-07 (the `migrate.py --rebuild` landmine went with it); its record is `docs/history/tasktool-scratch-archive-2026-09-07.md`, and the nine findings it carried that were never fixed are filed as `TK57`-`TK65`.
 
 ## Still owed
 
