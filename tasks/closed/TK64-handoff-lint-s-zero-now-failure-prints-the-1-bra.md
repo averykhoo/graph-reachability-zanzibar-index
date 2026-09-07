@@ -11,9 +11,9 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07
-updated: 2026-09-07
-closed:
+moved: 2026-09-07b
+updated: 2026-09-07b
+closed: 2026-09-07b
 ---
 
 `AUDIT.md` finding T3 (2026-08-21): the zero-`NOW` lint failure printed the `> 1` branch's
@@ -44,3 +44,22 @@ rule.
 - `scripts/task.py:2443` -- the fix and its reasoning, already made once
 
 ## Log
+
+### 2026-09-07b
+
+LANDED. handoff_lint.py::check_priority_capacities now prints ONE message true on both
+sides of the "!=", ported from task.py::check_pri_budget where it was fixed 2026-08-21:
+"NOW is the one row an unassigned session picks up: with none it has no answer, with more
+than one it has no ranking." The bare `-` id list went to `(none)` in the same line -- the
+same twin defect TK65 fixed on the other side.
+
+Pinned at tests/test_handoff_lint_b_prime.py::test_zero_now_message_is_true_of_zero, which
+asserts BOTH branches so a future edit cannot re-introduce a one-sided sentence.
+
+SABOTAGE: reverted the message only (not the check) and ran the new test. Observed red:
+
+    AssertionError: [tasks/ (the board has no row table, so the tree is the ranking):
+    found 0 NOW open task files (-), must be exactly 1. NOW is what an unassigned session
+    picks up; two of them is no ranking at all.]
+
+Restored: 48 passed (test_handoff_lint_b_prime.py + test_handoff_lint_row_ids.py).

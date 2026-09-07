@@ -11,9 +11,9 @@ labels: [formal]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07
-updated: 2026-09-07
-closed:
+moved: 2026-09-07b
+updated: 2026-09-07b
+closed: 2026-09-07b
 ---
 
 `AUDIT.md` finding F6, confirmed still true on 2026-09-07.
@@ -51,3 +51,28 @@ has no home at all.
 - `formal/history/PROOF_STATUS.md:247` -- the warning itself
 
 ## Log
+
+### 2026-09-07b
+
+LANDED for the P4 instance; the general case is now TK66, which is the bigger half.
+
+tasks/P4 Traps replaced "None recorded" with the do-not-cancel warning as a POINTER, not a
+copy -- formal/history/ is append-only and frozen, so a copy would be a second home for a
+statement nothing updates (docs/README.md one-home rule).
+
+BOTH LINE CITATIONS ON THIS ROW WERE WRONG and were corrected by reading them:
+  * leaf-family-split-scope-2026-08-05.md:1082 is really :1099
+  * PROOF_STATUS.md:247 is really :5146
+That is worth more than the fix. A row filed to say "a trap must cite something that
+exists" cited two lines that did not, which is why the read-first resolver planned on TK59
+now checks the PATH only and never the line number.
+
+Also fixed in the same file: P4 read-first cited migrate.py::check_formal_pointer as
+enforcing the formal-pointer rule. Dead since 2026-09-07 (TK61, same class).
+
+THE GENERAL CASE IS NOT CLOSED. A read-only sweep of formal/history/ and docs/history/ this
+session found 17 directives no live file surfaces, one of which (FoldAdmits lockstep) is not
+merely unsurfaced but actively CONTRADICTED by two live docs. Filed as TK66 (the class, with
+the sweep table as evidence, explicitly marked unverified) and TK67 (the contradiction,
+verified first-hand and annotated at both live sites). Do not read this close as closing the
+class -- P4 was one of 17.

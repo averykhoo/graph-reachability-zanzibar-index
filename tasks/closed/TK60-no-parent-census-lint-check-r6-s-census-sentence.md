@@ -11,9 +11,9 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07
-updated: 2026-09-07
-closed:
+moved: 2026-09-07b
+updated: 2026-09-07b
+closed: 2026-09-07b
 ---
 
 `notes.md` "Still open" item 1 named a parent-census lint check as the durable fix for a
@@ -46,3 +46,24 @@ assert about them, and fails when the two disagree.
 - `scripts/task.py` -- `LINT_CHECKS` and `check_parent_depth` as the nearest shape
 
 ## Log
+
+### 2026-09-07b
+
+LANDED, and NOT as proposed. No parent-census lint check was built. The census was DELETED
+instead, which is the cheaper and more durable fix: R6 title no longer carries a count
+clause, and the body paragraph that asserted "10 LATER, 3 HOLD, 6 closed" is replaced by the
+query that derives it (`task.py list --parent R6 --limit 0 --all`). Nothing to recompute
+means nothing to drift, and no check 14 slot spent.
+
+Two things found while doing it, both recorded in the row:
+  * the migrate.py::r6_census attribution was dead (deleted with .scratch/tasktool/), so the
+    "generated, not typed" claim was false on its face -- the TK61 defect, in a second place.
+  * R6 now has 37 children, not 19: TK17-TK32 and TK47/TK48 are parented there too. The old
+    census silently meant "R6-N children only" and had a caveat bolted on to say so. A
+    census check would have had to encode that scope rule; the query plus one warning
+    sentence does it without a mechanism.
+
+Judgements that are NOT derivable -- which candidates were declined and on what number --
+were left in place. Only the counts went.
+
+Check 14 remains unspent and is claimed by TK59 (read-first resolver).

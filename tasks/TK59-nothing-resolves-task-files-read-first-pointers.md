@@ -11,8 +11,8 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07
-updated: 2026-09-07
+moved: 2026-09-07b
+updated: 2026-09-07b
 closed:
 ---
 
@@ -50,3 +50,31 @@ renamed file sends a session to a dead end at the moment it is trying to start w
 - `scripts/handoff_lint.py` -- `LINKED_DOCS` and `check_doc_links`
 
 ## Log
+
+### 2026-09-07b
+
+PLAN AGREED 2026-09-07b (user), not started. Batch 3 of the TK57-TK65 sweep; TK57/TK60/TK61/TK63/TK64/TK65 landed this session, this one did not.
+
+Shape: a NEW check in task.py::LINT_CHECKS, appended as number 14 (13 is retired at the
+cutover and never reused). check_read_first: for every OPEN task, each "## Read first"
+entry must resolve.
+
+Decisions taken up front, so the next session does not re-litigate them:
+  * Resolve markdown links and backticked paths as PATHS; resolve file::symbol by grep.
+  * A "path:LINE" citation is checked for the PATH ONLY, never the line. Evidence from
+    this session: TK63 cited PROOF_STATUS.md:247 for the do-not-cancel-P4 warning and the
+    real line is :5146, and TK64/TK65 both cited line numbers that had drifted by one to
+    ten lines. Line numbers rot faster than a check can be worth. Do not gate on them.
+  * Do NOT touch the `source` field. task.py::SOURCE_PATH deliberately never
+    existence-checks it, and that reasoning still holds: a legitimately archived source
+    would turn the gate red for a fact that is still true.
+  * Sabotage: rename a cited file, watch check 14 go red, restore. Control: the same run
+    on the unrenamed tree must be green, so the red is attributable.
+
+Now cheaper than when filed: verify.sh grew step 4g this session (TK57), so task.py lint
+runs INSIDE the gate. Check 14 is therefore gated the moment it is appended, with no
+verify.sh change needed.
+
+Do this one BEFORE TK66. TK66 (formal/history directives invisible to the tree) wants a
+pointer-resolver of exactly this shape, and is probably an extension of check 14 rather
+than its own mechanism.

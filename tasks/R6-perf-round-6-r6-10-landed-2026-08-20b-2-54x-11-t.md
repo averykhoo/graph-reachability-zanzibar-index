@@ -1,6 +1,6 @@
 ---
 id: R6
-title: perf round 6 -- R6-10 (2.54x) and R6-6 landed; 10 to land, 4 declined, 3 unreachable
+title: perf round 6 -- R6-10 (2.54x) and R6-6 landed; counts derived from the children, never typed here
 brief: Batch THROUGH the N15 cache (R6-6 is the pattern); NOT parallel-safe with P6 on the cascade read path
 pri: NEXT
 size: L
@@ -11,8 +11,8 @@ labels: [perf]
 source: board
 source_hash: b895d453a044
 created: 2026-08-21
-moved: 2026-09-06b
-updated: 2026-09-06b
+moved: 2026-09-07b
+updated: 2026-09-07b
 closed:
 ---
 
@@ -28,12 +28,32 @@ predicted `4.75 → 1.75` statements per `check`. Remaining order:
 (`R6-3` = `R6-17`, bulk twin `R6-13` — 0 calls each): they need a `T:*#P` workload first.
 `R6-19` owns the last unowned number (**cum 25.4%, self 2.0%** — a call-site fan-out; corrected here 2026-08-21: the board cell paired the 2026-08-17 pass’s *undecomposed* **25.3%** with the 2026-08-18 filing re-run’s self time, and no source states that pair. The audit’s `### R6-19` decomposition reads `145,560 calls tottime 0.382 s (2.0%) cum 4.80 s (25.4%)`).
 
-**`R6` is a PARENT row: all 19 `R6-N` sub-items are now tasks of their own** (`task.py list --parent R6`), so this row no longer has to carry them in prose. **Every count in the title and in this paragraph is COUNTED from those children at generation time** (`migrate.py::r6_census`), not restated from the board cell above — a restated count is the defect this whole migration exists to delete, and the board cell is the proof: it says "9 to land, 5 declined". Re-counted 2026-08-29: **10 `LATER`** (unlanded — the audit’s ten-item land order less `R6-6`, plus `R6-19`, filed 2026-08-18 outside the audit and therefore not in that order), **3 `HOLD`** (measured 0 calls — they need a `T:*#P` workload before they need a patch), **6 under `closed/`** (`R6-10` and `R6-6` landed; `R6-2`/`R6-12`/`R6-14`/`R6-15` declined on an upper bound). The declined count is the audit’s own: exactly four `NOT MOTIVATED` verdict rows, so the board cell’s fifth decline does not exist. **Closing the last child is what reports that `R6` can close** — the round’s archive sweep is computed, not remembered. Re-count any time with `task.py list --parent R6`; do not re-type these numbers here.
+**`R6` is a PARENT row: every `R6-N` sub-item is a task of its own**, so this row does not
+carry them in prose. **There is deliberately no census here.** Get it from the tree:
+
+    python scripts/task.py list --parent R6 --limit 0 --all
+
+⚠ That query answers a WIDER question than it looks. `R6`'s children are no longer only the
+`R6-N` items — the unverified perf leads (`TK17`–`TK32`) and `TK47`/`TK48` are parented here
+too, so a raw total is not a count of round-6 candidates. Filter to the `R6-N` ids for that.
+
+WHY NOTHING IS COUNTED HERE (`TK60`, 2026-09-07b). This paragraph used to carry
+"10 `LATER`, 3 `HOLD`, 6 closed", asserted to be generated rather than typed, citing
+`migrate.py::r6_census` as the thing that recomputed it. Two failures compounded. The
+citation died: `migrate.py` lived in the deleted `.scratch/tasktool/`, so the sentence
+claimed an enforcement that could not run. And the numbers were hand-maintained in fact —
+the title's "11 to land" had already been corrected to "10 to land" by hand when `R6-6`
+closed, and the scope caveat above had to be bolted on when the `TK` leads were parented
+here. A count that must be re-typed whenever a child moves is a count that will be wrong;
+the query is never wrong. The dispositions that are NOT derivable — which candidates were
+declined and on what number — stay in the paragraphs above, because those are judgements,
+not counts.
+
+**Closing the last child is what reports that `R6` can close** — the round's archive sweep
+is computed, not remembered.
 
 **Restored to `NEXT` 2026-08-31b**: it was demoted on 2026-08-31 purely to seat `P20`, and
-`P20` closed 2026-08-31b. Nothing about the work changed in between. Re-counted 2026-09-06b
-with `task.py list --parent R6 --limit 0 --all` (R6-N children only): 10 `LATER`, 3 `HOLD`,
-6 closed — the title's count clause still holds.
+`P20` closed 2026-08-31b. Nothing about the work changed in between.
 
 ## Traps
 

@@ -754,7 +754,7 @@ run_lean() {
   # -------------------------------------------------------------------------- #
   # 4a. IDENTITY pin (ZT-P2-5). WHICH theorems are audited, not just how many.
   # -------------------------------------------------------------------------- #
-  echo "--- [4a/6] audit IDENTITY pin (formal/audited_theorems.txt) ---"
+  echo "--- [4a/7] audit IDENTITY pin (formal/audited_theorems.txt) ---"
   [ -f "$AUDIT_PIN" ] \
     || { echo "FAIL: audit identity pin missing: $AUDIT_PIN"; \
          echo "      regenerate with: bash formal/regen_audit_pin.sh"; exit 1; }
@@ -814,8 +814,8 @@ run_lean() {
   #     the churn measurement behind it, and -- read this part -- what it still
   #     cannot see.
   # -------------------------------------------------------------------------- #
-  echo "--- [4b/6] headline STATEMENT pin (formal/headline_statements.txt) ---"
-  echo "--- [4c/6] headline DEFINITION pin (formal/headline_definitions.txt) ---"
+  echo "--- [4b/7] headline STATEMENT pin (formal/headline_statements.txt) ---"
+  echo "--- [4c/7] headline DEFINITION pin (formal/headline_definitions.txt) ---"
   # The golden's own floor, asserted here as well as inside the script, exactly as
   # MIN_PINNED_AUDITS is for the identity pin: a truncated or emptied golden makes
   # the comparison pass over nothing, which is the ZT-P2-1 shape one level down.
@@ -844,7 +844,7 @@ run_lean() {
   # lines/2-weeks drift rate that had already destroyed its predecessor's line
   # numbers. Cheap (~1 s, no Lean toolchain), so it rides the `lean` phase.
   # -------------------------------------------------------------------------- #
-  echo "--- [4d/6] CORRESPONDENCE.md anchor pin ---"
+  echo "--- [4d/7] CORRESPONDENCE.md anchor pin ---"
   "$PY" "$REPO_ROOT/formal/conformance/anchor_check.py" \
     || { echo "FAIL: CORRESPONDENCE.md anchors (see above)"; exit 1; }
 
@@ -868,7 +868,7 @@ run_lean() {
   # machine-checked place to check them against, and extending the block is one
   # row in doc_counts.py::measure.
   # -------------------------------------------------------------------------- #
-  echo "--- [4e/6] FINAL_REVIEW.md counts pin ---"
+  echo "--- [4e/7] FINAL_REVIEW.md counts pin ---"
   ( cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" "$PY" -m formal.conformance.doc_counts --check ) \
     || { echo "FAIL: FINAL_REVIEW.md counts pin (see above)"; exit 1; }
 
@@ -883,8 +883,68 @@ run_lean() {
   # CONSEQUENCE, the same one 4e already has: a HANDOFF-only edit now needs `lean`
   # green before push. See docs/gate-runbook.md.
   # -------------------------------------------------------------------------- #
-  echo "--- [4f/6] handoff board lint (scripts/handoff_lint.py) ---"
+  echo "--- [4f/7] handoff board lint (scripts/handoff_lint.py) ---"
   ( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/handoff_lint.py" )     || { echo "FAIL: handoff board lint (see above)"; exit 1; }
+
+  # -------------------------------------------------------------------------- #
+  # 4g. THE TASK TREE LINT. Since the 2026-09-06 cutover the tree under tasks/ is
+  # the SOLE authority on open work -- and until this step landed (2026-09-07b,
+  # TK57) exactly ONE of its lint checks reached the gate, indirectly, through
+  # check_priority_capacities' tree fallback riding 4f. Everything else the tool
+  # polices -- deps resolve, parents exist and are open, filenames match ids, the
+  # closed field agrees with the directory, labels are in vocabulary, min_parsed,
+  # the BANNER.md tombstone, parent depth -- reached the gate only via the pytest
+  # tiles, which run the tool's UNIT TESTS against synthetic corpora and never
+  # lint the live tree. A tool whose tests are gated and whose corpus is not is
+  # a tool that is correct about nothing in particular.
+  #
+  # This was promised repeatedly and never landed: the deleted .scratch/tasktool/
+  # carried it as graduation condition 21, as a same-commit requirement, and as
+  # THE open dependency in two proof documents. Filed as TK57 when that directory
+  # went; landing it here closes it.
+  #
+  # It rides `lean` for the reason 4d/4e/4f do -- pure Python, no Lean toolchain,
+  # sub-second -- and NOT as an eleventh phase, which would mean propagating a new
+  # phase count through CLAUDE.md and the gate runbook for a check with no
+  # toolchain of its own. Same consequence as 4e/4f, now extended: a tasks/-only
+  # edit needs `lean` green before push.
+  #
+  # Deliberately NOT restated here: how many checks the tool runs. task.py's
+  # LINT_CHECKS is the home for that number (check 13 was retired at the cutover
+  # and its number is never reused), and a count in this comment would be wrong
+  # at the next renumbering -- which is the very defect class TK58 exists to stop.
+  #
+  # SABOTAGE (docs/sabotage-procedure.md), run 2026-09-07b. The FIRST sabotage
+  # attempted was a second NOW row, and it was DISCARDED as non-attributable: 4f
+  # catches that too (check_priority_capacities' tree fallback), so the phase would
+  # have gone red one step earlier and proved nothing about 4g. The sabotage has to
+  # break something ONLY this step sees. Used instead: a dangling dep, `deps: []` ->
+  # `deps: [NOSUCH1]` on one task file. Observed, both steps run on that same tree::
+  #
+  #     4f  handoff_lint: clean (11 checks)                              rc=0
+  #     4g  --- [4g/7] task tree lint (scripts/task.py lint) ---
+  #         task lint: 1 violation(s)
+  #           FAIL: .../tasks/TK66-....md: dep 'NOSUCH1' resolves to no task (open or
+  #           closed). ... a dep that resolves to nothing blocks forever.
+  #
+  # Use a NON-MINTED-SHAPE id for this. The first run used `TK999`, and writing that
+  # into the session ledger turned
+  # tests/test_tasktool.py::test_shipped_config_is_measured_not_an_example red: it
+  # pins, with zero headroom, that exactly ONE `TK`-shaped token repo-wide resolves
+  # to no task. That pin is correct and caught this; do not add an exemption to it.
+  #         FAIL: task tree lint (see above)                             rc=1
+  #
+  # 4f green and 4g red on ONE tree is the whole point of the step: it is coverage
+  # 4f does not have. The `=== lean phase ... PASSED ===` line did NOT print, which
+  # is the wiring being tested here -- the `||` aborts before the phase can declare
+  # success.
+  #
+  # INSTRUMENT CONTROL: on the restored tree this step prints `task lint: clean` at
+  # rc=0, so the red is attributable to the sabotage and not to a tree that was
+  # already dirty.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4g/7] task tree lint (scripts/task.py lint) ---"
+  ( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/task.py" lint )        || { echo "FAIL: task tree lint (see above)"; exit 1; }
 
   echo "=== lean phase (steps 1-4) PASSED (holes=$SORRIES, audits=$OBSERVED_AUDITS, pinned=$PINNED_AUDITS) ==="
 }

@@ -1115,9 +1115,15 @@ def load_task(path, is_closed):
     missing = [k for k in FIELDS if k not in fm]
     unknown = [k for k in fm if k not in FIELDS]
     if missing or unknown:
+        # `(none)` and not a bare `-`: an empty list rendered as `-` reads as a VALUE
+        # sitting where the ids go, so `missing keys -, unknown keys ['status']` looks
+        # like a missing key named "-". Twin of the `check_pri_budget` defect fixed
+        # 2026-08-21; this half was missed then and fixed 2026-09-07b. `(none)` is the
+        # established rendering elsewhere in this file -- do not invent a third.
         raise ParseError('%s: missing keys %s, unknown keys %s (all %d keys are '
                          'always present -- see SPEC.md section 3.1)'
-                         % (rel(path), missing or '-', unknown or '-', len(FIELDS)))
+                         % (rel(path), missing or '(none)', unknown or '(none)',
+                            len(FIELDS)))
     for k in LIST_FIELDS:
         if not isinstance(fm[k], list):
             raise ParseError('%s: %r must be a flow list like [a, b] or [] -- got %r'

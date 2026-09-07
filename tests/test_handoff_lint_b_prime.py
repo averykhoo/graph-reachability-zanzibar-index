@@ -163,6 +163,49 @@ def test_capacities_do_not_coast_on_an_empty_tree(tmp_path, monkeypatch):
     assert len(out) == 1 and "has no open task files" in out[0], out
 
 
+def test_zero_now_message_is_true_of_zero(tmp_path, monkeypatch):
+    """BUG FOUND 2026-08-21 (audit T3), fixed in `task.py` the same day and left unported
+    here for 17 days; refiled 2026-09-07 as `TK64` and fixed 2026-09-07b.
+
+    The `len(now) != 1` failure printed the `> 1` branch's explanation on a count of
+    ZERO, beside a bare `-` where the id list goes. Observed 2026-09-07b by reverting
+    only the message (not the check) and running this test::
+
+        E  AssertionError: ['tasks/ (the board has no row table, so the tree is the
+        E  ranking): found 0 NOW open task files (-), must be exactly 1. NOW is what an
+        E  unassigned session picks up; two of them is no ranking at all.']
+
+    Both halves are wrong for this corpus: the tree HAS a ranking problem, but it is
+    that nothing is ranked, and the `-` reads as an id rather than as the absence of
+    one. The zero case became reachable in this file only at the 2026-09-06 cutover,
+    when the check gained its tree fallback -- before that a board with no NOW row
+    tripped the "no board rows" branch instead.
+
+    One check, one message, true on both sides of the `!=` -- the same resolution as
+    `tests/test_tasktool.py::test_regression_zero_now_message_is_true_of_zero`, which
+    pins the sibling. The two checkers disagreeing about one invariant is worse than
+    either being wrong alone: whichever you meet first teaches you the rule.
+    """
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    (tmp_path / "HANDOFF.md").write_text(STUB_BOARD, encoding="utf-8")
+
+    # A tree that parses fine and simply ranks nothing -- not an empty harvest.
+    _write_tasks(tmp_path, {"P3": "LATER", "P6": "LATER"})
+    out = _run(handoff_lint.check_priority_capacities)
+    assert len(out) == 1, out
+    assert "found 0 NOW open task files" in out[0], out
+    assert "(none)" in out[0] and "(-)" not in out[0], out
+    assert "two of them" not in out[0], out
+    assert "with none it has no answer" in out[0], out
+
+    # The SAME sentence on the other side of the !=, where it must also be true.
+    _write_tasks(tmp_path, {"P3": "NOW", "P6": "NOW"})
+    out = _run(handoff_lint.check_priority_capacities)
+    assert len(out) == 1, out
+    assert "found 2 NOW open task files" in out[0], out
+    assert "with more than one it has no ranking" in out[0], out
+
+
 # --- check_session_receipt ----------------------------------------------------------------
 
 LINT_SHAPES = (
