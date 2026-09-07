@@ -5,8 +5,10 @@ as-of-then and several may now be false; live state is the tree (`task.py show <
 and `formal/HANDOFF.md`. Corrections are appended dated at the top, never edited in.
 
 **Provenance.** Transcribed 2026-09-07 from `.scratch/tasktool/`, the gitignored build
-directory of the task tool, immediately before that directory was deleted. It held ~120 MB
-across ~30 markdown records, a dozen scripts and eleven working subdirectories. This file
+directory of the task tool, immediately before that directory was deleted (to the Windows
+Recycle Bin, not `rm -rf`, so it is restorable until the bin is emptied). It held 14,916
+items, 78.2 MB: ~30 markdown records, a dozen scripts and eleven working
+subdirectories. This file
 is the load-bearing extract, written to the same rule the directory itself kept failing:
 **anything recorded only in `.scratch/` is already lost.** It follows the precedent of
 [`tasktool-proof-2026-08.md`](tasktool-proof-2026-08.md), which transcribed `PROOF4.md`
