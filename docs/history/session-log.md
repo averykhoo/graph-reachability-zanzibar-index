@@ -125,8 +125,15 @@ task lint: clean (12 checks, 177 task file(s) parsed)
 read: board + note — with the qualification in the paragraph directly above: the note was
 read to start, the board only at the end.
 
-**Still owed:** the deletion itself — `.scratch/tasktool/` is still on disk, defused,
-awaiting the user's go. Everything else in this entry is done.
+**The deletion.** Done at the end of the session, to the **Windows Recycle Bin** on a user
+call rather than `rm -rf`: 14,916 items, 78.2 MB, restorable from
+`C:\Users\user\PycharmProjects\graph-reachability-zanzibar-index\.scratch` until the bin is
+emptied. Confirmed present in the bin by enumerating `Shell.Application.Namespace(10)`
+rather than by trusting the delete call's silence. (Sizes quoted as "~120 MB" earlier in
+the session came from `du -sh`, which reports block-rounded disk usage and over-reports
+badly across ~15k small files; 78.2 MB is the byte sum.)
+
+**Still owed:** nothing.
 
 ---
 
