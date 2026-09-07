@@ -1,3 +1,11 @@
+> **FROZEN 2026-09-06d — provenance, not a living document.** The cutover this file
+> drafted LANDED on 2026-09-06d (Phase B′, one revertable commit); the live one-hop note
+> is [`HANDOFF.md`](../HANDOFF.md) and the live Rhythm is `docs/README.md` §7. This draft
+> was never regenerated for the final shape (a `## Banner` blockquote, no trap list,
+> ≤60 lines) and differs from what landed; read it for the reasoning of 2026-08-23 only.
+> Status lines below are as-of-then. Corrections append dated at the top, never edited
+> into the body. Original header follows.
+>
 > **ACTIVE-PLAN — the TRIAL's proposed board, NOT the live one.** The live board is
 > [`HANDOFF.md`](../HANDOFF.md) and it remains authoritative for the trial week
 > (2026-08-23 → 2026-08-30). This file is what `HANDOFF.md` would be reduced to if the

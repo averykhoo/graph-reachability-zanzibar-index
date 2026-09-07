@@ -23,11 +23,11 @@ unbenchmarked"; all three were fixed later. Two had a correction appended; the t
 records the finding, this file records whether it is still true, and the two never restate
 each other.
 
-⚠ **Ranking is not here.** Priority and size live on the [`HANDOFF.md`](../HANDOFF.md)
-board and nowhere else (`docs/README.md` §1); each section below names its board row id so
-the two can be joined, and states no `NOW`/`NEXT`/`HOLD` word of its own. A gap with no
-board row is one nobody has queued — that is a fact about the board, not a licence to
-chase it.
+⚠ **Ranking is not here.** Priority and size live in the task tree (`python
+scripts/task.py show <id>`; the `HANDOFF.md` board until the 2026-09-06 cutover) and
+nowhere else (`docs/README.md` §1); each section below names its task id so the two can
+be joined, and states no `NOW`/`NEXT`/`HOLD` word of its own. A gap with no task is one
+nobody has queued — that is a fact about the tree, not a licence to chase it.
 
 **Entering a gap here.** It must be (a) still true today, verified — not inferred from the
 ledger's tense, and (b) named precisely enough that a completion criterion exists. "Filed

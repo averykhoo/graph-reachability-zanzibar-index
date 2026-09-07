@@ -1,10 +1,15 @@
 # `tasks/` — the priority tree
 
-**LIVING.** Rules that outlive any one session. State of play is in
-[`BANNER.md`](BANNER.md); the ranked view is a QUERY, `python scripts/task.py board`.
+**LIVING.** Rules that outlive any one session. **This tree is the sole authority on
+what is open and how it ranks** (since the 2026-09-06 cutover, Phase B′ of
+[`../docs/tree-sole-authority-spec-2026-08-29.md`](../docs/tree-sole-authority-spec-2026-08-29.md)).
+State of play is the `## Banner` section of [`../HANDOFF.md`](../HANDOFF.md), the one-hop
+note; the ranked view is a QUERY, `python scripts/task.py board`, which prints that banner
+above the rows.
 
 Full schema and operation contract: [`../docs/tasktool-spec.md`](../docs/tasktool-spec.md).
-Trial protocol and friction log: [`../docs/tasktool-trial-protocol.md`](../docs/tasktool-trial-protocol.md).
+End-of-session write-back (the Rhythm): [`../docs/README.md`](../docs/README.md) §7.
+Trial protocol and friction log, now FROZEN: [`../docs/tasktool-trial-protocol.md`](../docs/tasktool-trial-protocol.md).
 
 ## What this is
 
@@ -33,10 +38,12 @@ is the one home for a live corpus figure.
 * **`lint` does not know whether a task is TRUE, useful, current, or correctly ranked.**
   It converts *silently violated* into *loudly must-look*, and that is all it does. A
   green tree is not a well-ranked tree.
-* **`ack` must be a session's LAST step.** It stamps `source_hash` with what the source
-  says AT ACK TIME, so acking and then editing the source records an acknowledgement of
-  text nobody reviewed. Pass `--since <digest>` (the digest the drift report showed) and
-  a mismatch is announced. The flag is opt-in; the rule is not.
+* **Every re-rank, close and progress goes through an op, in the session that made it.**
+  `promote` / `close -m` / `touch` / `comment` / `set brief`, each with `--session <key>`
+  (the ledger key). Nothing reconciles the tree against a second copy any more -- `sync`
+  and `ack` retired with the board -- so a change made only in your head, or only in the
+  ledger, is simply lost. `moved` is never edited by hand: `board` reads it to warn about
+  neglected `NOW`/`NEXT` rows, and a hand edit is how that warning stops firing.
 * **`brief` is a constraint, not a summary.** It earns its place on the board by carrying
   the thing a reader is hurt by missing — "NOT parallel-safe with `P3`" — and it is
   capped at 120 chars for exactly that reason. If it reads like a title, delete it:
@@ -46,7 +53,6 @@ is the one home for a live corpus figure.
 
 ```
 tasks/
-  BANNER.md          <- not a task: the must-read session state
   README.md          <- not a task: this file
   config.json        <- id_prefix, label vocabulary, budgets, min_tasks_parsed
   retired-ids.txt    <- spent ids, never reused, never re-minted
@@ -56,10 +62,12 @@ tasks/
 ```
 
 **`ls tasks/` shows only the open half**, and about two thirds of this corpus is closed.
-It also counts `BANNER.md` and `README.md`, which are not tasks — `Store.md_paths` and
-`disk_md_count` both skip them by exact name at the top level (`NON_TASK_MD`), and
-`closed/` is deliberately *not* exempt, because an exemption that survives the archive
-move would hide a real record.
+It also counts `README.md`, which is not a task — `Store.md_paths` and `disk_md_count`
+both skip it by exact name at the top level (`NON_TASK_MD`), and `closed/` is
+deliberately *not* exempt, because an exemption that survives the archive move would
+hide a real record. `BANNER.md` is still in that skip list but is a TOMBSTONE: the banner
+moved into `../HANDOFF.md` at the cutover, and lint check 12 fails if a `tasks/BANNER.md`
+reappears (two copies drift within days).
 
 **The only census is `python scripts/task.py counts`.** It prints open, closed, distinct
 ids, retired, an independent disk recount, and the measured value `min_tasks_parsed`

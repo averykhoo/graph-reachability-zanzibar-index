@@ -1,10 +1,13 @@
-> **LIVING — the task tool's contract, tracked for the 2026-08-23 → 2026-09-06 trial**
-> (extended a week on 2026-08-30; the tree is not being deleted).
-> Copied from `.scratch/tasktool/SPEC.md` so the tool's contract is not itself in a
-> gitignored directory. Where this file and `scripts/task.py` disagree, **the code wins**
-> (the repo's standing rule); fix the doc in place. Companion contracts that remain in
-> scratch for now: `SYNC-SPEC.md` (drift buckets, the no-delete guarantee) and
-> `START-HERE.md` (build-session handoff).
+> **LIVING — the task tool's contract.** The tree is the repo's SOLE authority on open
+> work since the 2026-09-06 cutover (Phase B′, [`tree-sole-authority-spec-2026-08-29.md`](tree-sole-authority-spec-2026-08-29.md));
+> the 2026-08-23 → 2026-09-06 trial it was written for is over and its protocol is
+> FROZEN ([`tasktool-trial-protocol.md`](tasktool-trial-protocol.md)). At the cutover
+> `sync`, `ack` and lint check 13 RETIRED (section 4, "The retired verbs"; section 5) and
+> `source_hash` froze. Copied from `.scratch/tasktool/SPEC.md` so the tool's contract is
+> not itself in a gitignored directory. Where this file and `scripts/task.py` disagree,
+> **the code wins** (the repo's standing rule); fix the doc in place. `SYNC-SPEC.md` and
+> `START-HERE.md` were companion contracts in scratch; with `sync` gone, the former is
+> provenance only (its results: [`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md)).
 
 # SPEC — `task.py`, a file-per-task tracker
 
@@ -32,10 +35,11 @@ exactly this. Where it is silent, prefer the simplest thing and write a note in
 
 ## 1. Why this exists (the problem being solved)
 
-The repo tracks work in `HANDOFF.md`, which is simultaneously the *database* and the
-*session-start read*. That coupling caps the database at what a session can afford to
-read (today: a hard 260-line ceiling), so items get dropped for space, completed work
-stays marked open, and task groups never migrate to an archive.
+The repo tracked work in `HANDOFF.md`, which was simultaneously the *database* and the
+*session-start read*. That coupling capped the database at what a session can afford to
+read (a hard 260-line ceiling until the cutover; 60 since, because the file is now one
+hop), so items got dropped for space, completed work stayed marked open, and task groups
+never migrated to an archive.
 
 The fix decouples them:
 
@@ -54,8 +58,8 @@ A committed `BOARD.md` would re-create the disease. The board is a query, always
 
 ```
 tasks/
-  BANNER.md              # NOT a task: session state (section 4 `board`, check 12)
   README.md              # NOT a task: layout, reading protocol, unenforceable rules
+                         # (BANNER.md lived here until 2026-09-06; now a tombstone, check 12)
   config.json            # machine config (see section 6)
   retired-ids.txt        # one id per line; ids are NEVER reused
   P3-leg7-4cii.md        # open tasks
@@ -71,7 +75,10 @@ tasks/
   because an exemption that survives the archive move would hide a real record. Both
   scanners apply it: `Store.md_paths` and the independent recount `disk_md_count`. They
   share the constant and duplicate the walk, so a blind scanner is still caught by lint
-  check 10 while the two halves cannot disagree about the banner's filename.
+  check 10 while the two halves cannot disagree about the banner's filename. Since the
+  2026-09-06 cutover the banner is the `## Banner` section of `<root>/HANDOFF.md`
+  (`task.py::note_path`, `BANNER_HEADING`, `extract_banner`); `BANNER.md` stays in the
+  skip list so that a reappearing one is check 12's violation, not a parse failure.
 * **`ls tasks/` undercounts and always will** — it shows the open half only (about a
   third of this corpus) and counts the two non-task files. The only census is
   `task.py counts`; see `tasks/README.md`.
@@ -140,7 +147,7 @@ trivial.
 | `parent` | human or `new` | one id or empty | containment/rollup, distinct from deps |
 | `labels` | human | flow list, `[]` when empty | drawn from the closed vocabulary in config |
 | `source` | `new`, **immutable** | `board` / `hand` / a repo-relative path | where this task came from |
-| `source_hash` | `sync --create-new`, `ack` | 12 hex chars, the `acked-no-row` sentinel, or empty | the source block as of the last reconciliation, or an acknowledgement that the source names no row for this task (SYNC-SPEC.md sections 3 / 3.1) |
+| `source_hash` | **FROZEN since 2026-09-06** (was `sync --create-new`, `ack`) | 12 hex chars, the `acked-no-row` sentinel, or empty | the source block as of the last reconciliation before the cutover, or an acknowledgement that the source named no row. No op sets it any more; check 4 still validates its shape; it is kept because a field deleted from 167 files is history rewritten, and one nobody writes costs nothing |
 | `created` | `new`, immutable | session key | |
 | `moved` | PROGRESS writes only | session key | staleness signal: last time a session made progress |
 | `updated` | EVERY write | session key | last write of any kind, including housekeeping |
@@ -186,19 +193,21 @@ progress:
 | bump | ops |
 |---|---|
 | **both `moved` and `updated`** | `new`, `touch`, `promote`, `dep add`/`dep rm`, `close`, `reopen`, `comment`, `set` -- a session recording real work |
-| **`updated` only** | `ack` (acknowledging reported drift), and any write carrying `--mechanical`: sync-applied field fixes and any future mechanical/housekeeping op |
+| **`updated` only** | any write carrying `--mechanical`: a tool fixing fields on a session's behalf, a review that changed nothing (`comment <id> -m ... --mechanical`), any future housekeeping op. (`ack`, the one unconditionally updated-only verb, retired 2026-09-06.) |
 
 `--mechanical` is offered on `set`/`promote`/`dep`/`comment`/`touch` and is **for a
-tool, not for a person**: `sync` passes it on every field fix it applies, the same way
-it emits every command -- unconditionally -- and a human doing the work simply never
-types it. That is what keeps the rule free of judgement: the caller is decided once, at
-the call site. It is deliberately absent from `close`/`reopen`, which require a message
-and which `sync` is forbidden from ever performing — and from `ack`, which is
-unconditionally ack-class and so has nothing to flag.
+tool, not for a person**: an automation passes it on every field fix it applies --
+unconditionally -- and a human doing the work simply never types it. That is what keeps
+the rule free of judgement: the caller is decided once, at the call site. It is
+deliberately absent from `close`/`reopen`, which require a message and are never a
+tool's to perform.
 
 Nothing can VERIFY that an automation passed the flag honestly; an automation that omits
 it launders `moved` exactly as if the flag did not exist. What it buys is that an honest
-tool has a way to be honest, and that `ack` cannot be anything else.
+tool has a way to be honest. Pinned by
+`tests/test_tasktool.py::test_the_moved_updated_split_survives_automation` and its two
+sabotages (`test_sabotage_wp_ack_does_not_move_moved`, re-pointed at `comment
+--mechanical` at the cutover, and `test_sabotage_wp_mechanical_is_honoured`).
 
 **A closed task can still receive comments** -- that is exactly why `updated` exists
 separately from `closed`. `closed` says when the item stopped being work; `updated` says
@@ -295,7 +304,7 @@ up from `--dir` (default: cwd) looking for a `tasks/config.json`. Every read op 
 
 | op | behavior |
 |---|---|
-| `board` | The session-start view, bounded by `BOARD_MAX_LINES`. **`tasks/BANNER.md` verbatim first, and the op REFUSES if it is missing or longer than `BANNER_MAX_LINES`** — a default banner would be a session-start that looks complete and carries nothing. Then: NOW item (id, title, `brief`, size, moved) plus its summary paragraph; NEXT rows each with their `brief`; a ready count; open counts per pri; staleness warnings for NOW/NEXT whose `moved` is old. `--json` carries the banner under a `banner` key. Never writes a file. |
+| `board` | The session-start view, bounded by `BOARD_MAX_LINES`. **The banner — the `## Banner` section of `<root>/HANDOFF.md` (its `> ` blockquote, blank lines dropped; `tasks/BANNER.md` until 2026-09-06) — verbatim first, and the op REFUSES if the note is missing, has no such section, has an empty one, or one longer than `BANNER_MAX_LINES`** — a default banner would be a session-start that looks complete and carries nothing. Then: NOW item (id, title, `brief`, size, moved) plus its summary paragraph; NEXT rows each with their `brief`; a ready count; open counts per pri; staleness warnings for NOW/NEXT whose `moved` is old. `--json` carries the banner under a `banner` key. Never writes a file. |
 | `list [--pri P] [--label L] [--parent ID] [--closed] [--all] [--limit N]` | Filterable table: id, pri, size, title, deps, moved. Closed deps annotated so a stale dep is visible. Default scope is OPEN only, sorted NOW-first then by id. **Capped at `LIST_LIMIT` rows, and the truncation is ALWAYS announced** — `showing <n> of <N> task(s) (--limit 0 for all, --limit N for N)`. The cap exists because an uncapped table ran to most of a board-sized read (measured 2026-08-21: 94 lines against 91 open tasks) for the view that was supposed to be cheaper than the board; the announcement exists because `20 task(s)` is a *true* sentence that leaves the reader believing they have seen the backlog, which is this repo's house failure mode reproduced inside the tool built to cure it. Pinned by `tests/test_tasktool.py::test_list_truncation_is_announced_and_json_is_not_cut`, on every path including `--parent`. **The default does not apply to `--json`** — a machine surface that drops rows by default breaks consumers silently — but an explicit `--limit` is honoured on both. |
 | `show ID [--section NAME] [--head N]` | Frontmatter, then **the Log NEWEST FIRST, above the body** (since 2026-09-06c; the file itself stays append-only, newest last, because `git diff` on an append-only Log is readable), truncated to `SHOW_LOG_HEAD` entries with the truncation ALWAYS announced (`showing k of N entries; --head 0 for all`), then the summary and the other `##` sections in file order. Why the view is inverted: a session's trial feedback found the top of a long task was its OLDEST state — `P6`'s summary still called the branch untested weeks after its Log recorded it tested — and a reader takes the top as current. `--section summary|log|<slug>` prints one slice (unknown names are refused with the list of what the task has); `--head N` bounds the Log (`0` = all; negative refused). `--json` is never cut and carries `log` (newest first, `{session, text}`), `sections`, `summary`. Also print derived facts the file cannot carry: which open tasks list this one in `deps` (the computed reverse edge), which tasks list it in `related` (incoming links, open and closed), and children if it is a parent. Pinned by `tests/test_tasktool.py::test_show_renders_the_log_newest_first_and_never_touches_the_file`. |
 | `ready` | Open tasks whose `deps` are all closed (or empty), restricted to `NOW`/`NEXT`/`LATER` — `HOLD` and `SOMEDAY` are excluded by definition. |
@@ -318,24 +327,52 @@ ledger.)
 | `dep add ID DEP` / `dep rm ID DEP` | Existence check and cycle detection at write time; refuse on either failure. |
 | `comment ID -m TEXT` | Append a dated Log entry. `-m -` reads the message from stdin (for multi-line). This is the workhorse: cheap appends are what fix "completed but never marked". |
 | `touch ID` | Record progress with no message: bump `moved` and `updated`. For "worked it, the detail is in the session ledger". |
-| `ack ID -m TEXT [--since DIGEST]` | **REFUSES anything but `source: board`** (naming `comment` as the remedy): for a source `sync` cannot read there is no digest to stamp, so the old fall-through printed "acked", bumped `updated`, logged that the drift was reviewed, and recorded the acknowledgement nowhere a later run could read — the next `sync` reported the identical drift, and the session that handled it had a Log entry proving it did. **One exception since 2026-09-06c: a `source: hand` task whose id HAS a board row is ADOPTED** — `source` flips `hand → board`, the row's digest is stamped, the Log entry records the flip. It is the one write to `source` after `new`, allowed on the `acked-no-row` argument (the value records a fact this run observed, not a value a human supplied), one direction only; hand-with-no-row and path sources are still refused. Why: three of the nine 2026-09-06b drifts (`TK55`, `TK54`, `P21`) were hand-filed tasks that acquired rows later, and the only exit was hand-editing frontmatter (`tests/test_tasktool.py::test_ack_adopts_a_hand_task_that_has_a_row`). Otherwise: bump `updated`, leave `moved` ALONE, append a Log entry, and re-stamp `source_hash` to what the source says now -- or to the `acked-no-row` sentinel when the source names no row for this task, which is how a standing `CORPUS-ONLY` item stops reddening `sync --check` forever without ever going unnamed. **Message REQUIRED** -- the interesting `ack` answers a `BODY` report ("the board block was reworded; the task prose is still accurate"), and without the reason the digest advances silently and the judgement is lost. Never bumps `moved`: acknowledging drift is housekeeping, not progress. **`ack` must be a session's LAST step** — it stamps what the source says AT ACK TIME, so acking and then editing the source records an acknowledgement of text nobody reviewed; pass `--since DIGEST` (what the drift report showed) and a mismatch is announced loudly on stderr. It warns rather than refuses because the source moving is usually the acking session's own edit and the ack is still correct; what is not acceptable is that it happen silently. See SYNC-SPEC.md section 3.1. |
+| `ack ID -m TEXT [--since DIGEST]` | **RETIRED 2026-09-06 — see "The retired verbs" below; the rest of this cell is the pre-cutover contract, kept as the record.** REFUSED anything but `source: board` (naming `comment` as the remedy): for a source `sync` cannot read there is no digest to stamp, so the old fall-through printed "acked", bumped `updated`, logged that the drift was reviewed, and recorded the acknowledgement nowhere a later run could read — the next `sync` reported the identical drift, and the session that handled it had a Log entry proving it did. **One exception since 2026-09-06c: a `source: hand` task whose id HAS a board row is ADOPTED** — `source` flips `hand → board`, the row's digest is stamped, the Log entry records the flip. It is the one write to `source` after `new`, allowed on the `acked-no-row` argument (the value records a fact this run observed, not a value a human supplied), one direction only; hand-with-no-row and path sources are still refused. Why: three of the nine 2026-09-06b drifts (`TK55`, `TK54`, `P21`) were hand-filed tasks that acquired rows later, and the only exit was hand-editing frontmatter (`tests/test_tasktool.py::test_ack_adopts_a_hand_task_that_has_a_row`). Otherwise: bump `updated`, leave `moved` ALONE, append a Log entry, and re-stamp `source_hash` to what the source says now -- or to the `acked-no-row` sentinel when the source names no row for this task, which is how a standing `CORPUS-ONLY` item stops reddening `sync --check` forever without ever going unnamed. **Message REQUIRED** -- the interesting `ack` answers a `BODY` report ("the board block was reworded; the task prose is still accurate"), and without the reason the digest advances silently and the judgement is lost. Never bumps `moved`: acknowledging drift is housekeeping, not progress. **`ack` must be a session's LAST step** — it stamps what the source says AT ACK TIME, so acking and then editing the source records an acknowledgement of text nobody reviewed; pass `--since DIGEST` (what the drift report showed) and a mismatch is announced loudly on stderr. It warns rather than refuses because the source moving is usually the acking session's own edit and the ack is still correct; what is not acceptable is that it happen silently. See SYNC-SPEC.md section 3.1. |
 | `close ID -m TEXT` | **Message REQUIRED** (outcome evidence, per the repo's sabotage culture). Stamp `closed`, append the Log entry, move the file to `closed/`. Then PRINT (a) which open tasks just became ready because this was their last open dep, and (b) if it has a `parent`, whether that parent now has zero open children — the archive sweep, computed instead of remembered. |
 | `reopen ID -m TEXT` | Inverse. Message required. Clears `closed`, moves back to `tasks/`. Re-checks the pri budget and refuses if reopening would break it. |
 
 Files are NEVER deleted. "Wontfix" is a `close` with a reason in the message.
 
-### The reconciliation op
+### The retired verbs — `sync` and `ack` (2026-09-06)
 
-`sync` is neither a read op nor a write op and has its own contract in
+`sync` was neither a read op nor a write op and had its own contract in
 `.scratch/tasktool/SYNC-SPEC.md` (**not tracked** — deliberately NOT written as a link,
 because a link that resolves to nothing is the rot this repo lints for; its results are
 recorded in [`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md)):
-it reconciles the corpus against `HANDOFF.md`, reports
-drift in six buckets, mints tasks for rows that have none (`--create-new`, the only mode
-that writes, and it only ever ADDS), and emits the mechanical fixes as pasteable
-`--mechanical` lines. **It has no delete path and no `--force`**, which is the whole
-reason it replaced `migrate.py --rebuild`. `ack` above is its companion: the verb that
-acknowledges a reported prose drift without claiming progress.
+it reconciled the corpus against `HANDOFF.md`'s row table, reported drift in six
+buckets, minted tasks for rows that had none (`--create-new`, the only mode that wrote,
+and it only ever ADDED), and emitted the mechanical fixes as pasteable `--mechanical`
+lines. It had no delete path and no `--force`, which is the whole reason it replaced
+`migrate.py --rebuild`. `ack` was its companion: the verb that acknowledged a reported
+prose drift without claiming progress.
+
+**Both retired at the Phase B′ cutover, 2026-09-06**, because the thing they reconciled
+against no longer exists: `HANDOFF.md` is a one-hop note with no row table, and the
+tree is the sole authority. The retirement is a REFUSAL, not a deletion of the verbs:
+`task.py::retired_verb` answers every old argv shape (the parser still accepts every
+former flag) with rc 2, `task <op>: REFUSED`, the cutover date, the replacement
+(`comment <id> -m ...`, `--mechanical` for an updated-only write; `close`/`reopen` for
+dispositions) and the sentence `Nothing was read or written` — which is the property
+pinned: the old verbs' hazard was a side effect nobody read, and a retirement that
+still stamped something would be worse. Pinned by
+`tests/test_tasktool.py::test_retired_verbs_refuse_every_old_argv_shape`, parametrized
+over the argv of every one of the ten `sync`/`ack` cases it replaced (the count floor in
+`verify.sh` has zero headroom, so a retirement that deleted its tests would not be
+allowed to), and by two sabotages: `test_sabotage_bprime_check_13_can_go_blind`
+(`'sync'` removed from `OPS` → a `KeyError` traceback, rc 1, observed `sync
+--check` was not refused (rc=1)`) and `test_sabotage_bprime_ack_adoption_can_skip_the_flip`
+(the message's `retired at the` citation reworded → the message assertion goes red). The
+two names are pre-cutover and kept so the 2026-09-06c sabotage record stays countable.
+
+**`TT-2` resolved as "retired with `sync`"** (decided 2026-09-06c, executed at the
+cutover): `sync_sabotage.py` (14 cases) and `sync_accept.py` (57 assertions) were never
+ported out of `.scratch/tasktool/`; their record is the proof doc above, and the verb
+they covered no longer runs. The one behaviour of theirs that outlives `sync` — nothing
+in this tool deletes a task file — is pinned by
+`tests/test_tasktool.py::test_close_moves_stamps_and_reports` (the file MOVES to
+`closed/`), and the comment above `task.py::CUTOVER_DATE` records the grep: `os.remove`
+appears exactly twice in `task.py`, both the second half of a move. That grep is a
+statement, not a test — nothing in the gate counts it.
 
 Deliberately absent, and each is a headstone in the distributed-bug-tracker graveyard:
 `edit` (that is your editor), `search` (that is grep), assignees, due dates, time
@@ -343,11 +380,12 @@ tracking, kanban rendering, a web UI, an MCP server.
 
 ## 5. `lint` checks
 
-Each check must name the offending file and id, and say what to do about it. **Thirteen
-checks** as of 2026-09-06c (check 11 warns rather than fails); the count is printed by `lint`
-itself -- `task lint: clean (N checks, M task file(s) parsed)` -- so no other surface
-should restate it. Checks are cited by NUMBER, so a new check is APPENDED, never
-inserted.
+Each check must name the offending file and id, and say what to do about it. **Twelve
+checks** since the 2026-09-06 cutover (thirteen for the last hours of the trial; check 11
+warns rather than fails); the count is printed by `lint` itself -- `task lint: clean (N
+checks, M task file(s) parsed)` -- so no other surface should restate it. Checks are
+cited by NUMBER, so a new check is APPENDED, never inserted, **and a retired number is
+never reused** — the next check appended is 14.
 
 1. every `*.md` under `tasks/` and `tasks/closed/` parses (delimiters present, all
    fifteen keys present, no unknown keys) — excluding `NON_TASK_MD` at the top level;
@@ -391,27 +429,31 @@ inserted.
     code. There is no flag to promote it to fatal: a warning that a flag can promote is a
     warning nobody promotes.
 
-12. **`tasks/BANNER.md` exists, fits `BANNER_MAX_LINES`, and its first line carries a
-    session key.** `board` already refuses without it, so this looks redundant and is
-    not: `board` refuses at READ time, which protects whoever runs it, while `lint` is
-    what a session runs before committing. The failure this catches is the session that
-    promoted a row, wrote no banner, and left the NEXT session's first command broken —
-    a refusal issued only to the victim is issued too late. The first-line rule is
-    deliberately weak (a well-formed key, nothing more): nothing can distinguish a banner
-    rewritten this session from one whose date was edited, and a check that pretended to
-    would be the fail-by-passing shape. What it does catch is a banner that is simply old.
+12. **The banner exists, fits `BANNER_MAX_LINES`, its first line carries a session key,
+    and it uses only glyphs `board` can render** — the banner being the `## Banner`
+    section of `<root>/HANDOFF.md` since the 2026-09-06 cutover (`tasks/BANNER.md`
+    before it; **a `tasks/BANNER.md` that reappears is itself a violation**, because two
+    copies drift within days and `board` prints only one of them). `board` already
+    refuses without it, so this looks redundant and is not: `board` refuses at READ
+    time, which protects whoever runs it, while `lint` is what a session runs before
+    committing. The failure this catches is the session that promoted a row, wrote no
+    banner, and left the NEXT session's first command broken — a refusal issued only to
+    the victim is issued too late. The first-line rule is deliberately weak (a
+    well-formed key, nothing more): nothing can distinguish a banner rewritten this
+    session from one whose date was edited, and a check that pretended to would be the
+    fail-by-passing shape. What it does catch is a banner that is simply old. Pinned by
+    `tests/test_tasktool.py::test_lint_check_12_catches_the_three_banner_failures`
+    (missing note, over the cap, no key, no heading, empty section) and
+    `test_lint_check_12_refuses_a_reappearing_tasks_banner_file`.
 
-13. **`sync --check` drift is a lint violation** (2026-09-06c, Phase B′ prerequisite 3,
-    `task.py::check_board_sync`). Three outcomes: no `HANDOFF.md` at or above the tree →
-    pass (a fixture tree has no board; that is not drift); a board file with NO row
-    table → violation naming the cutover (that is the post-cutover stub, and this check
-    retires WITH `sync`, `ack` and `source_hash` at the Phase B′ cutover — until then a
-    missing table is a deleted one); drift > 0 → one violation carrying the rendered
-    `sync` report, so the ledger's `task lint:` line is the evidence. Why: 2026-09-06b's
-    `sync --check` found NINE one-armed updates across a fortnight of ledger entries
-    that all read `task lint: clean` — `sync --check` was a separate verb nobody had to
-    run. Pinned by `tests/test_tasktool.py::test_lint_check_13_reports_board_drift_and_a_tableless_board`
-    and its sabotage `test_sabotage_bprime_check_13_can_go_blind`.
+13. **RETIRED at the 2026-09-06 cutover; the number is never reused.** It was
+    `task.py::check_board_sync` (2026-09-06c, Phase B′ prerequisite 3): `sync --check`
+    drift as a lint violation, so the dual-update contract was checked by the line every
+    session already pasted into the ledger. Why it existed: 2026-09-06b's `sync --check`
+    found NINE one-armed updates across a fortnight of ledger entries that all read
+    `task lint: clean`. Why it is gone: there is no row table to reconcile against.
+    `test_lint_reads_no_board_and_check_13_is_gone` pins the retirement (a tableless
+    note lints clean; `LINT_CHECKS` has twelve entries and no `check_board_sync`).
 
 ## 6. `tasks/config.json`
 

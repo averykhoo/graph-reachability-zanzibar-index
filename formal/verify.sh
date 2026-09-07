@@ -451,7 +451,11 @@ MIN_CONF_ALL=546
 #   check_session_receipt -- 24 of them the parametrised receipt shapes) and +6 in
 #   `tests/test_tasktool.py` (ack adoption, lint check 13, newest-first `show`, and
 #   their three sabotage twins). Re-measured -> `1089 tests collected`.
-MIN_TESTS_ALL=1089
+#   RAISED 1089 -> 1091 on 2026-09-06d (Phase B-prime cutover): net +2 in
+#   `tests/test_tasktool.py` -- ten `sync`/`ack` tests became one 11-way parametrised
+#   refusal test, plus the reappearing-BANNER.md and check-13-is-gone tests.
+#   Re-measured -> `1091 tests collected`.
+MIN_TESTS_ALL=1091
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

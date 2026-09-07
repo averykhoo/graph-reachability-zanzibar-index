@@ -11,9 +11,9 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-08-29d
-moved: 2026-09-06c
-updated: 2026-09-06c
-closed:
+moved: 2026-09-06d
+updated: 2026-09-06d
+closed: 2026-09-06d
 ---
 
 Phase A of `docs/tree-sole-authority-spec-2026-08-29.md` is LANDED (2026-08-29d): the
@@ -58,3 +58,7 @@ Trial window EXTENDED to 2026-09-06 and DELETE taken off the table (user, 2026-0
 ### 2026-09-06c
 
 Phase B-prime DECIDED 2026-09-06c (user decision, feedback pass on C7). Five of seven prerequisites landed this session: TT-3 (bounded show), TT-4 (check 2 tree-aware), TT-5 (sync in lint, check 13), TT-6 (ack adopts hand-with-row), TT-7 (receipt lint); prereq 4 decided (TT-2 retires with sync), prereq 5 checked no gap. Status table: top of docs/tree-sole-authority-spec-2026-08-29.md. STILL NEEDS AN EXPLICIT USER GO for the cutover commit itself: banner consolidation, MAX_LINES['HANDOFF.md'] -> 60, Rhythm -> docs/README.md, retire check 13 / sync / ack / source_hash, READ_VOCAB update, one revertable commit. The trap on this row stands.
+
+### 2026-09-06d
+
+Landed 2026-09-06d as one revertable commit (user go: "yes let's get the switch all done"). tasks/BANNER.md deleted (tombstone, check 12); HANDOFF.md rewritten to the one-hop note under MAX_LINES 60; Rhythm -> docs/README.md sec 7, Where things live -> sec 8; check 13 retired (never reused); sync/ack refuse via task.py::retired_verb; source_hash frozen; READ_VOCAB -> board only / board + note; traps re-homed (ttuDirect -> DW-1, frozen history status -> CLAUDE.md). Evidence: tests/test_tasktool.py (94 collected), tests/test_handoff_lint_b_prime.py, the commit message carries the git revert line.

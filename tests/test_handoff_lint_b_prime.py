@@ -94,6 +94,9 @@ def _write_tasks(root: Path, pris: dict[str, str]) -> None:
     if d.is_dir():
         shutil.rmtree(d)
     d.mkdir(parents=True)
+    # A tombstone decoy: tasks/BANNER.md was retired at the 2026-09-06 cutover, but this
+    # linter still excludes it by NAME (TASKS_NON_TASK_MD), and the decoy `pri: NOW` line
+    # is what proves the exclusion. task.py's own lint check 12 is what refuses the file.
     (d / "BANNER.md").write_text("2026-08-21 banner\npri: NOW\n", encoding="utf-8")
     for tid, pri in pris.items():
         (d / f"{tid}-x.md").write_text(TASK_FILE.format(tid=tid, pri=pri), encoding="utf-8")
@@ -172,11 +175,14 @@ LINT_SHAPES = (
     "task lint: 2 violation(s)",
 )
 
+# The post-cutover vocabulary (2026-09-06): `board + HANDOFF` / `HANDOFF only` were the
+# trial's words for reading a row table that no longer exists. Older ledger entries keep
+# them; only the newest entry is checked, so the shapes below are the ones it can carry.
 READ_SHAPES = (
-    "read: board + HANDOFF",
+    "read: board + note",
     "`read: board only`",
-    "**read: HANDOFF only.**",
-    "read: board + HANDOFF (the board query first, then `HANDOFF.md` in full)",
+    "**read: board + note.**",
+    "read: board + note (the board query first, then `HANDOFF.md`, the one-hop note)",
 )
 
 
@@ -204,7 +210,7 @@ def test_receipt_is_red_when_either_line_is_missing_from_the_newest_entry(tmp_pa
     monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
     both = "task lint: clean (12 checks, 162 task file(s) parsed)\nread: board only"
 
-    _write_ledger(tmp_path, "read: board + HANDOFF\nno lint line here", older_body=both)
+    _write_ledger(tmp_path, "read: board + note\nno lint line here", older_body=both)
     out = _run(handoff_lint.check_session_receipt)
     assert len(out) == 1 and "has no `task lint:" in out[0], out
     assert "2026-09-06c newest" in out[0], out
@@ -213,7 +219,7 @@ def test_receipt_is_red_when_either_line_is_missing_from_the_newest_entry(tmp_pa
                   older_body=both)
     out = _run(handoff_lint.check_session_receipt)
     assert len(out) == 1 and "has no `read:" in out[0], out
-    assert "board only | board + HANDOFF | HANDOFF only" in out[0], out
+    assert "board only | board + note" in out[0], out
 
     _write_ledger(tmp_path, "nothing at all", older_body=both)
     assert len(_run(handoff_lint.check_session_receipt)) == 2
@@ -222,6 +228,13 @@ def test_receipt_is_red_when_either_line_is_missing_from_the_newest_entry(tmp_pa
     # without the counts. Both are what a session writes when it is paraphrasing.
     _write_ledger(tmp_path, "task lint: clean\nread: everything", older_body=both)
     assert len(_run(handoff_lint.check_session_receipt)) == 2
+
+    # The RETIRED vocabulary is a near-miss too: a post-cutover entry that says
+    # `read: board + HANDOFF` is describing a file shape that no longer exists.
+    _write_ledger(tmp_path, "task lint: clean (12 checks, 162 task file(s) parsed)\n"
+                            "read: board + HANDOFF", older_body=both)
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "has no `read:" in out[0], out
 
 
 def test_receipt_refuses_a_ledger_with_no_entries(tmp_path, monkeypatch):

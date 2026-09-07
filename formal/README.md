@@ -37,7 +37,7 @@ The four durable docs point:
 2. **`HANDOFF.md` — the formal subtree's execution state.** Entry point: the dated
    resume blocks (newest first), the numbered house rules, build/verify commands, the
    two orphaned findings, and a status section that points at the rest. It ranks
-   nothing — priorities live on the repo board `../HANDOFF.md`. The staged theorem
+   nothing — priorities live in the task tree (`python scripts/task.py board`). The staged theorem
    ladder moved to `ARCHITECTURE.md` on 2026-08-16, and the retired narrative to
    `history/handoff-status-2026-08-16.md`.
 3. **`FINAL_REVIEW.md` — the exact claim.** The plan-§7 claim verbatim,

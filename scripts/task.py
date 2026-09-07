@@ -18,15 +18,18 @@ pass instead; a tool that only says "no" trains people to work around it.
 
 WHY THIS EXISTS
 ---------------
-This repo tracks work in ``HANDOFF.md``, which is simultaneously the *database*
-and the *session-start read*. That coupling caps the database at whatever a cold
-session can afford to read -- today a hard 260-line ceiling enforced by
-``scripts/handoff_lint.py::check_ceilings``. The observable consequences are all
-in the repo's own record: items dropped "for space", completed work still marked
-open because nobody wanted to spend board lines on a disposition, and task groups
-that never migrated to an archive.
+Until the 2026-09-06 cutover this repo tracked work in ``HANDOFF.md``, which was
+simultaneously the *database* and the *session-start read*. That coupling capped
+the database at whatever a cold session could afford to read -- a hard 260-line
+ceiling enforced by ``scripts/handoff_lint.py::check_ceilings``. The observable
+consequences are all in the repo's own record: items dropped "for space",
+completed work still marked open because nobody wanted to spend board lines on a
+disposition, and task groups that never migrated to an archive.
 
-The fix is to decouple the two:
+The fix was to decouple the two, and since the cutover (Phase B-prime,
+``docs/tree-sole-authority-spec-2026-08-29.md``) the tree is the SOLE authority:
+``HANDOFF.md`` is a one-hop note whose only structured content is the banner
+this tool prints at the top of ``board``.
 
 * the DATABASE is ``tasks/*.md``, one file per task, unbounded, nothing ever
   dropped and nothing ever deleted;
@@ -58,8 +61,9 @@ THE HONEST LIMITS OF THIS THING
   landing half a swap) but not a crash between the two ``write()`` calls. There
   is no lock: two concurrent runs can both allocate the same id. Single-session
   tooling, deliberately.
-* ``lint`` reads only the ``tasks/`` tree. It has no idea what the main repo's
-  documents say, so it cannot catch a task that contradicts ``HANDOFF.md``.
+* ``lint`` reads only the ``tasks/`` tree plus ``HANDOFF.md``'s banner (check 12).
+  It has no idea what the main repo's documents say, so it cannot catch a task
+  that contradicts a design doc or the ledger.
 
 WHAT IS DELIBERATELY ABSENT, each one a headstone in the distributed
 bug-tracker graveyard: ``edit`` (that is your editor), ``search`` (that is
@@ -463,7 +467,6 @@ dead still lints clean.
 import argparse
 import datetime
 import glob
-import hashlib
 import io
 import json
 import os
@@ -511,8 +514,15 @@ SOURCE_FIXED = ('board', 'hand')
 # from it). Shape is mechanical; existence is not this tool's business.
 SOURCE_PATH = re.compile(r'^[A-Za-z0-9_][A-Za-z0-9_./+-]*$')
 
-# `source_hash` is the digest of this task's SOURCE BLOCK as of the last reconciliation:
-# empty when nothing has ever reconciled the task, otherwise SOURCE_HASH_LEN hex chars.
+# `source_hash` is FROZEN as of the 2026-09-06 cutover. It was the digest of this task's
+# SOURCE BLOCK as of the last reconciliation: empty when nothing had ever reconciled the
+# task, otherwise SOURCE_HASH_LEN hex chars (or the sentinel below). `sync` and `ack` --
+# its only two writers -- retired with the board (Phase B-prime), so NO write path sets
+# it any more; every file keeps whatever it carried, `new` writes it empty, and lint
+# check 4 still validates its shape so a hand edit cannot quietly invent a new value. The
+# key is NOT dropped from FIELDS: dropping it is a tree-wide rewrite of every file for a
+# field that costs one line, and the history below is why the values that are there mean
+# what they mean. The rationale that follows is kept as the record of that design.
 #
 # WHY A DIGEST AND NOT A COMPARISON (SYNC-SPEC.md section 2, `BODY`). Comparing the
 # source's prose against the task's prose reports drift FOREVER: the two legitimately
@@ -637,13 +647,19 @@ BOARD_MAX_LINES = 50
 # sentence that leaves the reader believing they saw everything. `--json` is never cut.
 SHOW_LOG_HEAD = 5
 
-# `tasks/` holds task files, two non-markdown files, and -- since 2026-08-29 -- two
-# markdown files that are NOT tasks. `md_paths` used to take every `*.md` in the
-# directory, so BANNER.md and README.md would have been scanned as tasks and failed lint
-# checks 1 and 3. The exclusion is EXPLICIT and tested rather than incidental: the
-# alternative shapes (a `tasks/meta/` subdirectory, a `_` filename prefix) both hide the
-# two files a new reader most needs to find, and `ls tasks/` is the first thing anyone
-# types.
+# `tasks/` holds task files, two non-markdown files, and one markdown file that is NOT a
+# task (README.md). `md_paths` used to take every `*.md` in the directory, so README.md
+# would have been scanned as a task and failed lint checks 1 and 3. The exclusion is
+# EXPLICIT and tested rather than incidental: the alternative shapes (a `tasks/meta/`
+# subdirectory, a `_` filename prefix) both hide the file a new reader most needs to
+# find, and `ls tasks/` is the first thing anyone types.
+#
+# BANNER.md is a TOMBSTONE. From 2026-08-29 to the 2026-09-06 cutover the banner lived in
+# `tasks/BANNER.md` as a second copy of the one in `HANDOFF.md`; the cutover deleted the
+# file and made `HANDOFF.md`'s the only one (see BANNER_HEADING). The name stays excluded
+# so that a session which recreates the file from an old habit gets a task that is
+# silently ignored rather than a lint red on checks 1 and 3 blaming a "task" -- and
+# `check_banner` says the file is retired if it reappears.
 BANNER_FILENAME = 'BANNER.md'
 README_FILENAME = 'README.md'
 NON_TASK_MD = (BANNER_FILENAME, README_FILENAME)
@@ -652,15 +668,26 @@ NON_TASK_MD = (BANNER_FILENAME, README_FILENAME)
 # should not repeat -- and it is the one part of the session-start view that no query can
 # derive, because it is a judgement about state and not a fact about it.
 #
+# WHERE IT LIVES (since the 2026-09-06 cutover): the blockquote under the `## Banner`
+# heading of the `HANDOFF.md` that sits BESIDE `tasks/` -- i.e. `<root>/HANDOFF.md`, the
+# one-hop note the board file became. One copy, not two: for a week the tree carried its
+# own `tasks/BANNER.md` and the two drifted within days, which is the same defect as a
+# restated count. `board` prints exactly those lines, blockquote marker stripped, and
+# nothing else from the note; the rest of the note is for a human reading the file.
+#
 # `board` REFUSES when it is missing, and that is the whole design. A default banner ("no
 # banner this session") is a session-start that looks complete and carries nothing, which
-# is this repo's house failure mode wearing a friendly message; the file being absent is
-# not a state anyone should be able to read past. It is cheap to satisfy -- one file, and
-# the Rhythm rewrites it anyway -- and expensive to skip, which is the correct direction.
+# is this repo's house failure mode wearing a friendly message; the section being absent
+# is not a state anyone should be able to read past. It is cheap to satisfy -- one
+# section, and the Rhythm rewrites it anyway -- and expensive to skip, which is the
+# correct direction.
 #
 # The line cap is enforced at RENDER time and not only by lint, because `board`'s size
 # claim (BOARD_MAX_LINES) is arithmetic over this number plus the row budgets, and a claim
-# that holds only when lint has been run since the last edit is not a claim.
+# that holds only when lint has been run since the last edit is not a claim. Blank lines
+# inside the section are not counted; every other line is.
+BOARD_FILENAME = 'HANDOFF.md'
+BANNER_HEADING = '## Banner'
 BANNER_MAX_LINES = 14
 
 # THE `moved` / `updated` SPLIT, which is the reason both fields exist.
@@ -676,10 +703,11 @@ BANNER_MAX_LINES = 14
 # The rule is PER-OP and mechanical; nothing here consults judgement about whether an
 # edit "felt like progress":
 #   both  -- new, touch, promote, dep add/rm, close, reopen, comment, set
-#   updated only -- ack, and any write carrying --mechanical (the flag a housekeeping
-#                   TOOL passes on every call it makes; see PROGRESS_OPS below)
+#   updated only -- any write carrying --mechanical (the flag a housekeeping TOOL passes
+#                   on every call it makes; see PROGRESS_OPS below). `ack`, the one op
+#                   that was unconditionally updated-only, retired at the 2026-09-06
+#                   cutover; the split it existed to protect is still the flag's.
 PROGRESS_OPS = ('new', 'set', 'promote', 'dep', 'comment', 'touch', 'close', 'reopen')
-ACK_OPS = ('ack',)
 
 # HOLD and SOMEDAY are excluded from `ready` BY DEFINITION, not as a filter someone can
 # turn off: a HOLD item with satisfied deps is still held, and offering it as ready is how
@@ -815,7 +843,8 @@ def unmappable(text):
 
     The escape fallback is the right behaviour for a TITLE -- it is lossy but honest, it
     cannot crash, and a title is written once by someone who will see the result. It is
-    the wrong behaviour for ``tasks/BANNER.md``, which is free-form prose rewritten every
+    the wrong behaviour for the banner (``HANDOFF.md``'s ``## Banner`` blockquote; before
+    the cutover ``tasks/BANNER.md``), which is free-form prose rewritten every
     session and printed at the TOP of the session-start view: an unmapped glyph there
     opens the read with `\\u23f0`, which is exactly what happened to the first real
     banner. The reader cannot tell noise from content, and nothing complains.
@@ -1529,9 +1558,10 @@ def source_hash_problem(value, source):
                 'has no source that could be missing a row for it. Blank the hash, or fix '
                 'the provenance.' % SOURCE_HASH_NO_ROW) if source == 'hand' else None
     if not SOURCE_HASH_RE.match(value):
-        return ('source_hash %r is neither %d lowercase hex chars nor the %r sentinel. It '
-                'is written only by `sync --create-new` and `ack`, never by hand -- if it '
-                'is wrong, blank it and re-`ack` the task.'
+        return ('source_hash %r is neither %d lowercase hex chars nor the %r sentinel. The '
+                'field is FROZEN since the 2026-09-06 cutover (its writers, `sync '
+                '--create-new` and `ack`, retired with the board) and was never written '
+                'by hand -- if it is wrong, blank it.'
                 % (value, SOURCE_HASH_LEN, SOURCE_HASH_NO_ROW))
     if source == 'hand':
         return ('source_hash is set but source is `hand`: a hand-filed task has no '
@@ -1805,25 +1835,74 @@ def check_budget(open_tasks, budgets, changing):
 
 # --- Read ops -------------------------------------------------------------------------
 
+def note_path(store):
+    """`<root>/HANDOFF.md`: the one-hop note beside `tasks/`, which carries the banner."""
+    return os.path.join(os.path.dirname(os.path.abspath(store.dir)), BOARD_FILENAME)
+
+
+def extract_banner(text):
+    """The banner lines of a note, or None when it has no `## Banner` heading.
+
+    The section is every line after the heading up to the next `## ` heading (or the end
+    of the file). Blank lines are dropped -- they are paragraph spacing, not content --
+    and a leading blockquote marker (`> ` or a bare `>`) is stripped, because the note
+    writes the banner as a blockquote for a human reader and `board` prints plain text.
+    Nothing else is interpreted: bold, code spans and links reach the console verbatim,
+    exactly as `tasks/BANNER.md` did, so what `board` shows is what the file says.
+
+    ONE HEADING, matched exactly (`BANNER_HEADING`), not "a heading containing Banner":
+    the note is free prose and a looser match would let a `## Banner history` section
+    silently become the session-start read.
+    """
+    lines = text.replace('\r\n', '\n').split('\n')
+    out, inside, found = [], False, False
+    for line in lines:
+        if line.startswith('## '):
+            if inside:
+                break
+            inside = line.rstrip() == BANNER_HEADING
+            found = found or inside
+            continue
+        if inside and line.strip():
+            if line.startswith('>'):
+                line = line[1:]
+                if line.startswith(' '):
+                    line = line[1:]
+            out.append(line.rstrip())
+    return out if found else None
+
+
 def banner_lines(store):
-    """The `tasks/BANNER.md` lines, or a Refusal. See BANNER_MAX_LINES for why not both."""
-    path = os.path.join(store.dir, BANNER_FILENAME)
+    """The banner lines of `<root>/HANDOFF.md`, or a Refusal. See BANNER_MAX_LINES."""
+    path = note_path(store)
     if not os.path.exists(path):
         raise Refused(
             '%s does not exist, and `board` will not render a session-start view without '
-            'it. The banner is the one part of this view that cannot be derived -- where '
-            'the last session stopped and what this one must not repeat -- so a board '
-            'without it is a session-start that looks complete and carries nothing. '
-            'Write it (first line: a date and a ledger session key; at most %d lines); '
-            'the Rhythm in docs/README.md rewrites it every session anyway.'
-            % (rel(path), BANNER_MAX_LINES))
-    lines = read_text(path).rstrip('\n').split('\n')
+            'its banner. The banner is the one part of this view that cannot be derived '
+            '-- where the last session stopped and what this one must not repeat -- so a '
+            'board without it is a session-start that looks complete and carries '
+            'nothing. Write the note with a `%s` section (first banner line: a date and '
+            'a ledger session key; at most %d lines); the Rhythm in docs/README.md '
+            'rewrites it every session anyway.'
+            % (rel(path), BANNER_HEADING, BANNER_MAX_LINES))
+    lines = extract_banner(read_text(path))
+    if lines is None:
+        raise Refused('%s has no `%s` heading, so there is no banner for `board` to '
+                      'print. Since the 2026-09-06 cutover the banner lives ONLY there '
+                      '(tasks/BANNER.md is retired); add the section, blockquoted, first '
+                      'line dated with a session key.' % (rel(path), BANNER_HEADING))
+    if not lines:
+        raise Refused('%s: the `%s` section is empty. An empty banner is a session-start '
+                      'that looks complete and carries nothing; write where the last '
+                      'session stopped.' % (rel(path), BANNER_HEADING))
     if len(lines) > BANNER_MAX_LINES:
-        raise Refused('%s is %d lines, cap %d. `board` states a size (%d lines) that is '
-                      'arithmetic over this cap plus the NOW/NEXT budgets, so an '
-                      'over-long banner does not make the view longer -- it makes the '
-                      'view\'s claim false. Cut it: the banner is a handoff, not a log.'
-                      % (rel(path), len(lines), BANNER_MAX_LINES, BOARD_MAX_LINES))
+        raise Refused('%s: the `%s` section is %d lines, cap %d. `board` states a size '
+                      '(%d lines) that is arithmetic over this cap plus the NOW/NEXT '
+                      'budgets, so an over-long banner does not make the view longer -- '
+                      'it makes the view\'s claim false. Cut it: the banner is a handoff, '
+                      'not a log.'
+                      % (rel(path), BANNER_HEADING, len(lines), BANNER_MAX_LINES,
+                         BOARD_MAX_LINES))
     return lines
 
 
@@ -2683,8 +2762,10 @@ def check_min_parsed(store, fail, state):
 
 
 def check_banner(store, fail, state):
-    """Check 12: `tasks/BANNER.md` exists, fits BANNER_MAX_LINES, and its first line
-    carries a date and a session key.
+    """Check 12: `<root>/HANDOFF.md` exists, has a `## Banner` section that fits
+    BANNER_MAX_LINES, uses only glyphs `board` can render, and whose first line carries
+    a date and a session key. (Until the 2026-09-06 cutover the subject was
+    `tasks/BANNER.md`; the rules are the same, the file moved.)
 
     `board` refuses without it, so why lint it too? Because the two answer different
     questions. `board` refuses at READ time, which protects the reader who runs it; lint
@@ -2696,100 +2777,66 @@ def check_banner(store, fail, state):
     and a session key, both merely well-formed. Nothing here can tell a banner rewritten
     this session from one whose date was edited, and a check that pretended to would be
     the fail-by-passing shape. What it does catch is the banner that is simply OLD --
-    which, given the Rhythm rewrites this file every session, is the failure that
+    which, given the Rhythm rewrites this section every session, is the failure that
     actually happens.
+
+    THE TOMBSTONE CLAUSE: a `tasks/BANNER.md` that reappears is a violation, not a
+    second banner. It is excluded from the task scan by name (NON_TASK_MD), so without
+    this clause a session writing the banner where it used to live would lint clean
+    and `board` would print the OTHER, older one.
     """
-    path = os.path.join(store.dir, BANNER_FILENAME)
+    stale = os.path.join(store.dir, BANNER_FILENAME)
+    if os.path.exists(stale):
+        fail('%s exists, but it was retired at the 2026-09-06 cutover: the banner lives '
+             'ONLY in the `%s` section of %s now, and `board` prints that one. Move the '
+             'text there and delete this file -- two copies drift within days, which is '
+             'why there is one.' % (rel(stale), BANNER_HEADING, BOARD_FILENAME))
+    path = note_path(store)
     if not os.path.exists(path):
-        fail('%s does not exist. It is the session-start read that no query can derive, '
-             'and `board` refuses without it -- so this is a broken session-start for '
-             'whoever comes next, not a missing nicety.' % rel(path))
+        fail('%s does not exist. Its `%s` section is the session-start read that no query '
+             'can derive, and `board` refuses without it -- so this is a broken '
+             'session-start for whoever comes next, not a missing nicety.'
+             % (rel(path), BANNER_HEADING))
         return
-    lines = read_text(path).rstrip('\n').split('\n')
+    lines = extract_banner(read_text(path))
+    if lines is None:
+        fail('%s has no `%s` heading. It is the session-start read that no query can '
+             'derive, and `board` refuses without it -- so this is a broken '
+             'session-start for whoever comes next, not a missing nicety.'
+             % (rel(path), BANNER_HEADING))
+        return
+    if not lines:
+        fail('%s: the `%s` section is empty. An empty banner is a session-start that '
+             'looks complete and carries nothing.' % (rel(path), BANNER_HEADING))
+        return
     if len(lines) > BANNER_MAX_LINES:
-        fail('%s is %d lines, cap %d. The banner is a handoff, not a log: the argument '
-             'goes in the task file, the state of play goes here.'
-             % (rel(path), len(lines), BANNER_MAX_LINES))
+        fail('%s: the `%s` section is %d lines, cap %d. The banner is a handoff, not a '
+             'log: the argument goes in the task file, the state of play goes here.'
+             % (rel(path), BANNER_HEADING, len(lines), BANNER_MAX_LINES))
     stray = unmappable('\n'.join(lines))
     if stray:
-        fail('%s uses %d character(s) `board` cannot render: %s. They print as \\uXXXX '
-             'escapes at the very top of the session-start view -- observed on the first '
-             'real banner, which opened with `\\u23f0`. Either use a glyph in '
+        fail('%s: the banner uses %d character(s) `board` cannot render: %s. They print '
+             'as \\uXXXX escapes at the very top of the session-start view -- observed on '
+             'the first real banner, which opened with `\\u23f0`. Either use a glyph in '
              '`task.py::ASCII_FOLD` or add the mapping there (it is one line, and the '
              'banner is the one input to this view that is free prose).'
              % (rel(path), len(stray),
                 ', '.join('%r (U+%04X)' % (ch, ord(ch)) for ch in stray)))
-    head = lines[0] if lines else ''
+    head = lines[0]
     if not SESSION_KEY_IN_TEXT.search(head):
-        fail('%s: the first line (%r) carries no session key of the form YYYY-MM-DD[a-z]. '
-             'The banner is rewritten every session and dated so that the next reader can '
-             'tell at a glance whether it describes the state they are looking at.'
-             % (rel(path), clip(head, 60)))
+        fail('%s: the first banner line (%r) carries no session key of the form '
+             'YYYY-MM-DD[a-z]. The banner is rewritten every session and dated so that '
+             'the next reader can tell at a glance whether it describes the state they '
+             'are looking at.' % (rel(path), clip(head, 60)))
 
 
-def check_board_sync(store, fail, state):
-    """Check 13 (2026-09-06c, Phase B-prime prerequisite 3): `sync --check` drift is a
-    lint violation.
-
-    THE EVIDENCE THAT MADE THIS A LINT CHECK: on 2026-09-06b `sync --check` found NINE
-    one-armed updates (`P6 R6 P4 P5 P14 TK55 TK54 P21 DW-1`) -- board item blocks
-    rewritten with no matching task edit -- across a fortnight in which every session's
-    ledger entry carried a `task lint: clean` line. The dual-update contract was being
-    reported met by a check that never looked at the board. `sync --check` was a separate
-    verb nobody was required to run, and a check nobody has to run is a check that is
-    not run. Folding it in here is the mechanical refusal the trial protocol prefers to
-    a doc warning.
-
-    THREE OUTCOMES, and the middle one is the one to read carefully:
-      * NO BOARD FILE at or above the tree -- pass, and `state['board']` records it. A
-        fixture tree in a temp dir has no board and never will; that is not drift.
-      * A BOARD FILE WITH NO ROW TABLE -- violation, today. That is the one-hop stub
-        Phase B-prime turns `HANDOFF.md` into, and the cutover retires this check along
-        with `sync`, `ack` and `source_hash` (tree-sole-authority-spec, B-prime (vi)).
-        Until that commit lands, a table-less board means someone deleted the table
-        early, and the lint says so rather than reading the empty board as "no drift".
-      * DRIFT > 0 -- one violation carrying the rendered report lines, so the ledger
-        evidence is the same text `sync --check` would have printed.
-
-    The instrument control is `report['rows']`: a board that parses to zero rows would
-    make every task CORPUS-ONLY and that is drift, not silence, so a blinded parser
-    goes red rather than green.
-    """
-    try:
-        where = find_board(store, None)
-    except Refused:
-        state['board'] = None
-        return
-    state['board'] = where
-    if state['parsed'] != sum(state['seen']):
-        # Check 1 already failed on the unparseable file(s); `store.tasks()` would raise
-        # the same ParseError here and turn a red lint into a traceback.
-        return
-    try:
-        board = parse_board(read_text(where), where)
-    except (Refused, ParseError) as exc:
-        fail('%s exists but `sync` cannot read it as a board: %s -- if this is the '
-             'Phase B-prime cutover (the board became a one-hop stub), retire this check '
-             'with `sync`; until then a table-less board is a deleted table, not a clean '
-             'one.' % (rel(where), clip(str(exc).split('\n')[0], 160)))
-        return
-    try:
-        report = sync_report(store, board, where)
-    except Refused as exc:
-        # e.g. a task whose `source` is empty: `sync` refuses to classify it, and check 4
-        # has already named the file. Report the refusal; do not turn lint into a trace.
-        fail('`sync --check` refused to run against %s: %s'
-             % (rel(where), clip(str(exc).split('\n')[0], 200)))
-        return
-    if not report['drift']:
-        return
-    lines = []
-    render_sync_report(report, lines.append)
-    fail('`sync --check` reports %d drift item(s) against %s -- a board row or item block '
-         'changed with no matching task edit, or the reverse. Read the report, fix the '
-         'lagging side, then `%s ack <id> -m "..."` (BODY) or `close`/`comment` as the '
-         'line says. The report:\n    %s'
-         % (report['drift'], rel(where), prog(), '\n    '.join(lines)))
+# check 13 (`check_board_sync`, 2026-09-06c) RETIRED at the 2026-09-06 cutover with the
+# board row table it reconciled against. Its number is NEVER reused: `LINT_CHECKS` now
+# has 12 entries and the next appended check is 14, so every "check 13" citation in
+# docs/tasktool-spec.md, the ledger and the sabotage records keeps meaning the retired
+# check. The evidence that made it a lint check (nine one-armed board updates found by
+# `sync --check` on 2026-09-06b under a fortnight of `task lint: clean` lines) is kept
+# in docs/tasktool-spec.md section 4 and docs/history/tasktool-proof-2026-08.md.
 
 
 LINT_CHECKS = (
@@ -2812,8 +2859,8 @@ LINT_CHECKS = (
     check_parent_depth,
     # Appended for the same reason check 11 was: the numbers are citations.
     check_banner,
-    # Appended, same reason. Retires WITH `sync` at the Phase B-prime cutover.
-    check_board_sync,
+    # check 13 (`check_board_sync`) retired at the 2026-09-06 cutover; see the comment
+    # above. The next check appended here is number 14.
 )
 
 
@@ -2865,15 +2912,16 @@ def op_new(store, args):
     labels = split_list(args.labels)
     related = split_list(args.related)
     # `source` defaults to `hand` because the default CALLER is a human typing `new`. A
-    # tool that files on someone else's behalf -- `sync --create-new`, `file_backlog.py`
-    # -- passes the real provenance, and that is the whole reason the field is set here
-    # and never again: provenance is a fact about the moment of creation, and a field a
-    # later op could rewrite is a field that will eventually disagree with the Log.
+    # tool that files on someone else's behalf -- `file_backlog.py`; `sync --create-new`
+    # before its 2026-09-06 retirement -- passes the real provenance, and that is the
+    # whole reason the field is set here and never again: provenance is a fact about the
+    # moment of creation, and a field a later op could rewrite is a field that will
+    # eventually disagree with the Log.
     # `is None` and NOT `or`: an explicitly EMPTY --source is a caller who meant to pass
     # provenance and passed nothing (a shell variable that did not expand is the usual
     # way), and silently filing it as `hand` is the most damaging default available --
-    # sync reads this field to decide whether a task it cannot find in any source is a
-    # hand-filed backlog item (expected, silent) or a board row that vanished (reported).
+    # the field is the only record of where a task came from once its source document
+    # is gone (the board's row table is gone since the cutover).
     # Observed while writing the test: `new --source ''` was accepted and stored `hand`.
     source = 'hand' if args.source is None else args.source.strip()
     bad_source = source_problem(source)
@@ -2907,24 +2955,26 @@ def op_new(store, args):
                       'once.' % (pri, '\n  '.join(violations)))
 
     # `source_hash` and `body_text` have NO command-line flags, and that is deliberate.
-    # `sync --create-new` builds this Namespace itself and sets them; a human typing `new`
-    # has no digest to pass (it is a fact about a reconciliation, not about the task), so
-    # a flag for it could only ever be a way to claim a reconciliation that did not
-    # happen -- and a claimed reconciliation is exactly the state that makes sync silent
-    # forever. Same shape as `--mechanical`'s "for a tool, not a person", one step
-    # further: not offered at all rather than offered and documented as off-limits.
+    # `sync --create-new` built this Namespace itself and set them (until 2026-09-06,
+    # when it retired; `source_hash` is frozen and `new` now always writes it empty). A
+    # human typing `new` has no digest to pass (it was a fact about a reconciliation, not
+    # about the task), so a flag for it could only ever be a way to claim a
+    # reconciliation that did not happen. Same shape as `--mechanical`'s "for a tool, not
+    # a person", one step further: not offered at all rather than offered and documented
+    # as off-limits.
     source_hash = (getattr(args, 'source_hash', None) or '').strip()
     bad_hash = source_hash_problem(source_hash, source)
     if bad_hash:
         raise Refused(bad_hash)
 
-    # THE ID COMES FROM THE SOURCE WHEN THE SOURCE HAS ONE. A board row is already
+    # THE ID COMES FROM THE SOURCE WHEN THE SOURCE HAS ONE. A board row was already
     # addressed -- `P3` is `P3` in the ledger, in `formal/HANDOFF.md`, and in every
-    # citation ever written -- so minting `TK52` for a row that says `TK99` would file a
+    # citation ever written -- so minting `TK52` for a row that said `TK99` would file a
     # task that answers to a name nobody uses and leave the row looking unfiled forever
     # (observed while writing sync_accept.py case B: the mint succeeded, and the very next
-    # `sync --check` reported the row as NEW *and* the fresh task as CORPUS-ONLY).
-    # `next_id` still owns allocation for everything a human types.
+    # `sync --check` reported the row as NEW *and* the fresh task as CORPUS-ONLY). The
+    # board is gone since 2026-09-06 but `file_backlog.py`-style callers still pass ids
+    # from documents; `next_id` still owns allocation for everything a human types.
     given = (getattr(args, 'task_id', None) or '').strip()
     if given:
         if not ID_OK.match(given):
@@ -3101,27 +3151,30 @@ IMMUTABLE = {
               'is wrong, that is a hand edit plus a Log entry saying so, not an op',
     'moved': 'derived from the write path: it bumps when a session makes progress',
     'updated': 'derived from the write path: it bumps on every write',
-    'source_hash': 'the reconciliation watermark -- what the source block hashed to when '
-                   '`sync --create-new` filed this task or `ack` last acknowledged it. '
-                   'Setting it by hand is claiming a reconciliation that did not happen, '
-                   'which is the one thing that would make sync report nothing forever',
+    'source_hash': 'FROZEN since the 2026-09-06 cutover -- it was the reconciliation '
+                   'watermark (what the source block hashed to when `sync --create-new` '
+                   'filed this task or `ack` last acknowledged it), and both writers '
+                   'retired with the board. No op sets it any more; a hand edit would '
+                   'claim a reconciliation nothing can perform',
 }
 
 
 def progress(args):
     """False when ``--mechanical`` was passed: bump `updated`, leave `moved` alone.
 
-    THE FLAG IS FOR A TOOL, NOT FOR A PERSON. `sync` will pass it on every field fix it
-    applies, unconditionally, the same way it emits every command unconditionally; a human
-    running `set`/`promote`/`dep` by hand IS the session doing the work and simply never
-    types it. That is what keeps SPEC.md section 3.1's per-op rule mechanical: the caller
-    is decided once, at the call site, not per item by a model asking itself whether this
-    particular edit counts as progress.
+    THE FLAG IS FOR A TOOL, NOT FOR A PERSON. `sync` passed it on every field fix it
+    applied, unconditionally, the same way it emitted every command unconditionally
+    (retired 2026-09-06; a script that edits fields on a session's behalf is the caller
+    now); a human running `set`/`promote`/`dep` by hand IS the session doing the work
+    and simply never types it. That is what keeps SPEC.md section 3.1's per-op rule
+    mechanical: the caller is decided once, at the call site, not per item by a model
+    asking itself whether this particular edit counts as progress.
 
     Nothing here can VERIFY that a tool passed it honestly, and pretending otherwise would
     be worse than saying so: an automation that omits the flag launders `moved` exactly as
     if the flag did not exist. What the flag buys is that the honest automation has a way
-    to be honest, and that `ack` -- the op with no other purpose -- cannot be anything but.
+    to be honest. (`ack`, the op that had no other purpose, retired with `sync`; a review
+    that changes nothing is `comment --mechanical` now.)
     """
     return not getattr(args, 'mechanical', False)
 
@@ -3307,166 +3360,6 @@ def op_touch(store, args):
     return 0
 
 
-def op_ack(store, args):
-    """Acknowledge reported drift: bump `updated`, leave `moved` ALONE, log WHY, and
-    re-stamp `source_hash` to what the source says right now.
-
-    It cannot move the staleness needle, and that is the half it shares with every
-    ack-class write: if acknowledging drift bumped `moved`, a scheduled housekeeping pass
-    would keep every NOW row permanently fresh and `board`'s staleness warning would be
-    unfireable -- a check that fails by passing, which is this repo's declared house
-    failure mode.
-
-    THE MESSAGE IS REQUIRED, reversing this op's original "no `-m`" rule, and the reason
-    is the audit trail rather than tidiness. The interesting `ack` is the one that answers
-    a `BODY` report: the board's block was rewritten, someone read both, and the task's
-    prose needed no change. Without a message that judgement is destroyed -- the digest
-    silently advances and the next reader sees a task that was never in drift at all. With
-    it, the record reads like the Jira comment it is: the description stayed stable, and
-    HERE IS WHY. A message with nothing to say costs one line; a lost reason costs the
-    only evidence that the drift was looked at.
-
-    RE-STAMPING IS NOT UNCONDITIONAL. The digest is written only for a task whose source
-    this tool can actually READ (today: `source: board`). For a task sourced from a
-    document sync cannot parse, the hash is left exactly as it was and the output says so
-    -- claiming a reconciliation that did not happen is the single edit that would make
-    `sync` silent forever, so it is not something `ack` is allowed to do as a side effect.
-
-    THE THIRD CASE, added 2026-08-21e: `source: board` and the row is GONE. That is the
-    `CORPUS-ONLY` report, and it used to leave the field untouched, which made `ack`
-    a no-op for the one bucket that was red forever. It now writes the
-    `SOURCE_HASH_NO_ROW` sentinel. That is not the same edit as the paragraph above
-    forbids: the forbidden one CLAIMS a reconciliation against text that was never read,
-    while this one records an ABSENCE this run observed directly, and the absence is
-    exactly what is being acknowledged. Three ops still write this field and none of them
-    takes a value from a human.
-
-    THE FOURTH CASE IS NOW A REFUSAL (added 2026-08-29, A7 footgun 1). Every source this
-    tool cannot read -- `hand`, and the `docs/whatever.md` path form -- used to fall
-    through to the success line below carrying an explanatory `note`. That is the exact
-    fail-by-passing shape this repo is built around: rc=0, the word "acked" in the output,
-    a `## Log` entry recording that the drift was reviewed, `updated` bumped -- and
-    `source_hash` untouched, so the acknowledgement was never recorded anywhere a later
-    run could read it. The next `sync --check` reports the identical drift, and the
-    session that "handled" it has a log entry proving it did. The note was true and nobody
-    read it, because a true note under a success line is decoration.
-
-    So the op now REFUSES anything but `source: board`, and names the remedy. The remedy
-    is `comment`, which is what the fall-through was actually doing: it writes the log
-    entry, bumps `updated`, holds `moved`, and -- the whole difference -- does not put the
-    word "acked" on a reconciliation that did not happen.
-
-    THE FIFTH CASE (2026-09-06c) narrows that refusal: `source: hand` whose id HAS a
-    board row is ADOPTED -- `source` flips to `board`, the row's digest is stamped, the
-    Log entry records the flip. See the inline comment for why this is the one write to
-    `source` after `new`. `hand` with no row, and every path source, are still refused.
-
-    `--since` (added with it) encodes the "`ack` must be a session's LAST step" rule from
-    `docs/tasktool-trial-protocol.md` section 6. `ack` stamps what the source says AT ACK
-    TIME, not what the drift report the human read said; if the source moved in between --
-    a board row edited later in the same session -- the digest written is for text nobody
-    reviewed, and the drift is stamped acknowledged unseen. Pass the digest the report
-    showed and a mismatch says so, loudly, on stderr. It WARNS rather than refuses because
-    the source moving is often the human's own edit and the ack is still the right act;
-    what is not acceptable is that it happen silently.
-    """
-    key = session_key(args.session)
-    message = read_message(args.message)
-    task = need_writable(store, args.id)
-    key = resolve_key(key, task)
-    adopted = None
-    if task.source == 'hand':
-        # THE FIFTH CASE (2026-09-06c, Phase B-prime prerequisite 6): `source: hand` and
-        # the board HAS a row for this id -- filed by hand first, given a row later.
-        # `sync_report` digests the row and reports BODY drift on it forever, and until
-        # today this op refused it, so the only exit was to hand-edit `source` in the
-        # frontmatter, which is exactly the surgery the tool exists to prevent (three of
-        # the nine drifts found 2026-09-06b: `TK55`, `TK54`, `P21`).
-        #
-        # So `ack` ADOPTS it: `source` flips `hand -> board`, the digest is stamped, and
-        # the Log entry says so. This is the one write to `source` after `new`, and it is
-        # allowed on the same argument as the `acked-no-row` sentinel: the value is not
-        # taken from a human, it records a fact THIS RUN OBSERVED (the row exists, and its
-        # digest is what got stamped). One direction only -- `board -> hand` would be
-        # laundering a reconciled task back into the quiet bucket, and a path source is
-        # still refused below because there is still nothing to stamp.
-        try:
-            where = find_board(store, getattr(args, 'board', None))
-            rows = parse_board(read_text(where), where)['rows']
-        except (Refused, ParseError, IOError, OSError):
-            rows = []
-        if any(r['id'] == task.id for r in rows):
-            task.fm['source'] = 'board'
-            adopted = ('source hand -> board (%s has a row on %s; adopted by ack, and '
-                       'from now on `sync` digests that row against this file)'
-                       % (task.id, rel(where)))
-    if task.source != 'board':
-        remedy = ('`task.py comment %s -m ...` writes the same Log entry and the same '
-                  '`updated` bump without claiming a reconciliation.' % task.id)
-        raise Refused(
-            'ack refuses %s: its source is %s, and `sync` can only read `source: board`. '
-            '`ack` exists to re-stamp `source_hash` after reviewing reported drift, and '
-            'for this task there is no digest to stamp -- so an ack here would log the '
-            'word "acked", bump `updated`, change nothing a later run can read, and let '
-            'the next `sync` report the same drift. %s'
-            % (task.id, ('`source: %s`' % task.source) if task.source
-               else 'empty (repair it with `sync`, or refile the task)', remedy))
-    where = find_board(store, getattr(args, 'board', None))
-    board = parse_board(read_text(where), where)
-    row = None
-    for candidate in board['rows']:
-        if candidate['id'] == task.id:
-            row = candidate
-            break
-    if row is None:
-        # An ack on a task whose row has VANISHED is a legitimate act -- it is the
-        # CORPUS-ONLY report -- and until 2026-08-21e it was also a NO-OP: the hash
-        # was left alone, the next `sync --check` reported the same two items, and
-        # steps 1-3 of the housekeeping loop exited 1 forever (PROOF4.md section 6
-        # bug B). An op that reports "acknowledged" and changes nothing observable is
-        # the worst of both: the reader believes the item is handled and the gate
-        # keeps saying it is not.
-        #
-        # So the sentinel is written. It is NOT a digest of absence and not a claim
-        # that a reconciliation happened -- it says only what this run OBSERVED, that
-        # the source names no row for this id, plus the fact that a human looked. The
-        # reason itself is in the Log entry beside it, which is why `-m` is required.
-        # If a row ever appears, the sentinel is compared against its real digest,
-        # never matches (it is not hex), and the task is reported again -- see
-        # SOURCE_HASH_NO_ROW for the full argument.
-        note = ('source_hash %s -> %s (%s has no row on %s -- acknowledged, so `sync` '
-                'stops counting it as drift and starts counting it as acknowledged; '
-                'if a row reappears it is reported again)'
-                % (task.source_hash or '(none)', SOURCE_HASH_NO_ROW, task.id,
-                   rel(where)))
-        task.fm['source_hash'] = SOURCE_HASH_NO_ROW
-        now_digest = SOURCE_HASH_NO_ROW
-    else:
-        digest = source_digest(source_block_text(row, board['blocks']))
-        note = 'source_hash %s -> %s' % (task.source_hash or '(none)', digest)
-        task.fm['source_hash'] = digest
-        now_digest = digest
-    since = getattr(args, 'since', None)
-    if since and since != now_digest:
-        # NOT a refusal: see the docstring. The source moving between the report and the
-        # ack is usually the acking session's own edit, and the ack is still correct --
-        # what is unacceptable is that the human believe they acknowledged the text the
-        # report showed them when they acknowledged something else.
-        emit_err('WARNING: %s source moved since the drift report you are acknowledging: '
-                 'report showed %s, %s says %s right now. `ack` stamps what the source '
-                 'says AT ACK TIME, so the digest just written covers text you may not '
-                 'have read. Re-run `sync --check` and make `ack` the session\'s last '
-                 'step.' % (task.id, since, rel(where), now_digest))
-    if adopted:
-        note = adopted + '; ' + note
-        message = message + '\n\n(ack adopted this task: ' + adopted + ')'
-    task.body = append_log(task.body, key, message)
-    write_text(task.path, stamp_and_render(task, key, False))
-    emit('%s acked %s (moved held at %s -- ack never claims progress); %s'
-         % (task.id, key, task.moved or '-', note))
-    return 0
-
-
 def op_close(store, args):
     key = session_key(args.session)
     # The message is REQUIRED, and argparse enforces it. A close with no outcome evidence
@@ -3542,535 +3435,34 @@ def op_reopen(store, args):
     return 0
 
 
-# --- sync: reconciliation, never regeneration (SYNC-SPEC.md) --------------------------
+# --- retired verbs: `ack` and `sync` (2026-09-06 cutover, Phase B-prime) ---------------
 #
-# THE ONE PROPERTY THIS SECTION EXISTS TO HAVE: there is no delete path. Not a flag, not
-# a --force. Grep this file for `os.remove` and `shutil` and you will find `os.remove`
-# exactly twice, both in `op_close`/`op_reopen`, both the second half of a MOVE, and
-# `shutil` not imported at all. `sync` writes through `op_new` and nothing else, so the
-# strongest thing it can do to an existing file is nothing. A board row that vanishes is
-# a REPORT, because a row can vanish from a careless edit just as easily as from a
-# finished item, and a tool that turns a typo into a deletion is worse than no tool.
+# Both verbs reconciled the task tree against the board's row table and item blocks
+# (SYNC-SPEC.md; `docs/tasktool-spec.md` section 4 keeps the contract as a record).
+# The cutover made the tree the sole authority and turned `HANDOFF.md` into a one-hop
+# note with no row table, so there is nothing left to reconcile against. The verbs are
+# kept as REFUSALS rather than removed from the parser: a session that types `sync
+# --check` from an old runbook gets the reason and the replacement, not
+# `invalid choice`. The one property the old section existed to have -- no delete path
+# -- still holds: `os.remove` appears exactly twice in this file, both the second half
+# of a MOVE in `op_close`/`op_reopen`.
 
-BOARD_FILENAME = 'HANDOFF.md'
-BOARD_TABLE_HEAD = '| id | item'
-BOARD_BLOCKS_HEAD = '## Item blocks'
-BOARD_READ_FIRST = '**Read first:**'
-# Read EXACTLY as handoff_lint.py::check_ledger_ids reads them: line by line, only lines
-# carrying one of these phrases. A different harvest here would disagree with the repo's
-# own linter about which ids are retired, and the board warns in place that reflowing
-# those lines moves ids out of scope.
-BOARD_RETIRED_MARKERS = ('Closed ids stay retired',
-                         'survives as the historical grouping')
-BOARD_GROUPING = re.compile(r'`([^`]+)`\s+survives as the historical grouping')
-ARROW = u'→'          # the board's pointer glyph
-WARN_GLYPH = u'⚠'     # the repo's trap badge; the board's own paragraph badging
-
-# The buckets, in report order. Each name is cited in SYNC-SPEC.md section 2 and in the
-# emitted output, so renaming one is a documentation edit as well as a code edit.
-SYNC_BUCKETS = ('NEW', 'FIELD', 'BODY', 'CORPUS-ONLY', 'RETIRED-BUT-OPEN',
-                'CLOSED-BUT-ON-BOARD')
-
-# The fields sync reconciles, and the two it deliberately does not.
-#
-# `title` IS NOT HERE, and dropping it is a measured decision rather than an omission.
-# SYNC-SPEC.md section 2 originally listed it. On the live board, 2026-08-21d, `pri` /
-# `size` / `deps` agreed with the corpus on 26 of 26 rows and `title` agreed on 0 of 26 --
-# because a board cell is markdown (bold, inline code, a `[text](link)` pointer, an arrow)
-# and a task title is a folded 100-char line, so `set <id> title <cell>` is neither
-# pasteable nor right. A retitled row is a PROSE change and reaches the reader through
-# `BODY` instead, where a human is already required. A mechanical fix nobody can paste is
-# a FIELD bucket that trains its reader to ignore the FIELD bucket.
-#
-# `moved` is not here either: it is the corpus's own staleness signal, written by the
-# write path, and copying it from the board would let a board edit launder a stale row --
-# the same laundering `--mechanical` exists to prevent, arriving through the other door.
-SYNC_FIELDS = ('pri', 'size', 'deps')
+CUTOVER_DATE = '2026-09-06'
 
 
-def find_board(store, explicit):
-    """Locate the board. Explicit path wins; otherwise walk UP from the tasks dir.
-
-    Walking up looks for the exact name ``HANDOFF.md`` and stops at the first hit, which
-    from ``.scratch/tasktool/sandbox-migrated/tasks`` is the repo's real board four levels
-    up. The sandbox's own ``HANDOFF-stub.md`` is deliberately not a candidate: it is the
-    short pointer the board becomes AFTER this tool graduates, not a source of rows,
-    and picking it up would give sync an empty board and therefore a report claiming every
-    task had lost its row -- a wrong answer that looks like a very serious right one.
-    """
-    if explicit:
-        if not os.path.isfile(explicit):
-            raise Refused('--board %s does not exist. sync READS its source; it never '
-                          'creates one.' % rel(explicit))
-        return explicit
-    cur = os.path.abspath(store.dir)
-    while True:
-        candidate = os.path.join(cur, BOARD_FILENAME)
-        if os.path.isfile(candidate):
-            return candidate
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            raise Refused('no %s at or above %s. Pass --board <path>. sync will not '
-                          'fall back to "no rows found": an empty board and a missing '
-                          'board are the same input and opposite facts, and guessing '
-                          'between them would report every task as orphaned.'
-                          % (BOARD_FILENAME, rel(store.dir)))
-        cur = parent
-
-
-def parse_board(text, where='<board>'):
-    """The board -> ``{'rows': [...], 'blocks': {id: text}, 'retired': [ids]}``.
-
-    Structural, not positional, and it FAILS rather than degrades: a table whose header
-    is missing, or a row with the wrong cell count, raises. That is the instrument
-    control SYNC-SPEC.md section 3 asks for -- a parser that silently returns zero rows
-    turns "I cannot read the board" into "the board is empty", and the second one is a
-    catastrophic report delivered with total confidence.
-    """
-    lines = text.replace('\r\n', '\n').split('\n')
-    rows, in_table, saw_table = [], False, False
-    for line in lines:
-        if line.startswith(BOARD_TABLE_HEAD):
-            in_table, saw_table = True, True
-            continue
-        if in_table:
-            if not line.startswith('|'):
-                break
-            if line.startswith('|---'):
-                continue
-            cells = [c.strip() for c in line.strip().strip('|').split('|')]
-            if len(cells) != 6:
-                raise Refused('%s: board row has %d cells, expected 6 (id | item | pri | '
-                              'size | deps | moved):\n  %s' % (rel(where), len(cells),
-                                                               line[:160]))
-            rows.append({
-                'id': cells[0].strip('`').strip(),
-                'cell': cells[1],
-                'pri': cells[2].replace('**', '').strip(),
-                'size': cells[3].replace('**', '').strip(),
-                'deps': re.findall(r'`([^`]+)`', cells[4]),
-                'moved': cells[5],
-            })
-    if not saw_table:
-        raise Refused('%s: no board table (no line starting %r). If this file is a '
-                      'board, its table header changed; if it is not, pass the right '
-                      '--board.' % (rel(where), BOARD_TABLE_HEAD))
-
-    blocks = {}
-    if BOARD_BLOCKS_HEAD in text:
-        section = text[text.index(BOARD_BLOCKS_HEAD):]
-        # An item block runs to the next `### ` or to the next `## ` heading, whichever
-        # comes first. Splitting on `\n### ` alone swallowed the whole tail of the file
-        # into the last block, so the last NOW/NEXT item's digest changed every time an
-        # UNRELATED later section did -- a false BODY report on one arbitrary task.
-        for part in re.split(r'\n### ', section)[1:]:
-            head, _, rest = part.partition('\n')
-            m = re.match(r'`([^`]+)`', head.strip())
-            if not m:
-                continue
-            stop = re.search(r'\n## ', rest)
-            blocks[m.group(1)] = rest[:stop.start()] if stop else rest
-
-    retired, span = [], []
-    for line in lines:
-        if any(marker in line for marker in BOARD_RETIRED_MARKERS):
-            span.append(line)
-    joined = '\n'.join(span)
-    # The grouping clause names an id that is explicitly NOT retired ("`B2` survives as
-    # the historical grouping of `P8` + `P9`"), and everything after it on that line is
-    # the group's membership. Truncate there rather than hardcoding B2.
-    m = BOARD_GROUPING.search(joined)
-    if m:
-        joined = joined[:m.start()]
-    for tid in re.findall(r'`([^`]+)`', joined):
-        if tid not in retired:
-            retired.append(tid)
-    return {'rows': rows, 'blocks': blocks, 'retired': retired}
-
-
-def source_block_text(row, blocks):
-    """The text a task's PROSE comes from: the item cell, plus the item block if any.
-
-    The pri/size/deps/moved cells are deliberately excluded. Every one of them is a
-    `FIELD` fix, and folding them in here would make one `promote` on the board fire both
-    a FIELD report and a BODY report against the same task -- two reports, two buckets,
-    one change, and the reader has to work out that they are the same thing.
-    """
-    parts = [row['cell']]
-    block = blocks.get(row['id'])
-    if block:
-        parts.append(block)
-    return normalise_source(u'\n\n'.join(parts))
-
-
-def normalise_source(text):
-    """Trailing-whitespace and blank-edge normalisation before hashing.
-
-    Narrow on purpose. It absorbs exactly the edits that change no meaning and that an
-    editor makes without being asked (a stripped trailing space, a reflowed blank line at
-    the edge of a block). It does NOT collapse internal blank lines or fold case: those
-    are real edits to the source, and a digest that shrugs at real edits is a digest that
-    reports nothing.
-    """
-    lines = [line.rstrip() for line in text.replace('\r\n', '\n').split('\n')]
-    while lines and not lines[0]:
-        lines.pop(0)
-    while lines and not lines[-1]:
-        lines.pop()
-    return u'\n'.join(lines)
-
-
-def source_digest(text):
-    return hashlib.sha256(text.encode('utf-8')).hexdigest()[:SOURCE_HASH_LEN]
-
-
-def strip_markdown(cell):
-    """A board cell -> plain text. Cosmetic, and only ever used for a TITLE."""
-    text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', cell)   # [text](link) -> text
-    text = text.replace('**', '').replace('`', '')
-    return re.sub(r'\s+', ' ', text).strip()
-
-
-def split_cell(cell):
-    """``(item text, pointer markdown)`` -- the board cell's two halves.
-
-    The pointer is whatever follows the last arrow glyph. It is the first line of the
-    task's `## Read first`, exactly as `migrate.py` placed it, because the pointer is the
-    one thing every row below NEXT has instead of an item block.
-    """
-    if ARROW in cell:
-        item, _, pointer = cell.rpartition(ARROW)
-        return item.strip(), pointer.strip()
-    return cell.strip(), ''
-
-
-def board_title(row):
-    """A title for a minted task: the cell's item half, folded to one clipped line.
-
-    Lossy and known to be: see SYNC_FIELDS for why `title` is not a reconciled field.
-    What this has to be is *safe* (one line, within the cap, never empty), not faithful --
-    a session that works the item rewrites the title along with the body.
-    """
-    item, pointer = split_cell(row['cell'])
-    title = strip_markdown(item) or strip_markdown(pointer) or row['id']
-    if len(title) > 100:
-        title = title[:97].rstrip() + '...'
-    return title
-
-
-def board_body(row, blocks):
-    """The body for a task minted from a board row: summary / Traps / Read first / Log.
-
-    The split rule is the board's OWN badging, not position: a paragraph badged with the
-    warn glyph is a trap. `migrate.py::open_task` learned this the hard way -- `P3` has
-    carried its traps both before and after its completion criterion within two sessions,
-    so any positional rule is wrong every other week.
-    """
-    item, pointer = split_cell(row['cell'])
-    summary, traps, read_first = [strip_markdown(item) or row['id']], [], []
-    if pointer:
-        read_first.append(u'- board pointer: %s' % pointer)
-    block = blocks.get(row['id'])
-    if block:
-        before, marker, after = block.partition(BOARD_READ_FIRST)
-        summary = []
-        for para in normalise_source(before).split(u'\n\n'):
-            if not para.strip():
-                continue
-            (traps if para.lstrip().startswith(WARN_GLYPH) else summary).append(para)
-        if marker and after.strip():
-            read_first.append(normalise_source(after))
-    out = [u'\n\n'.join(summary).strip() or row['id'], u'', u'## Traps', u'']
-    if traps:
-        out += [u'\n\n'.join(traps).strip(), u'']
-    out += [u'## Read first', u'']
-    if read_first:
-        out += [u'\n\n'.join(read_first).strip(), u'']
-    out += [LOG_HEADING, u'']
-    return u'\n'.join(out)
-
-
-
-def sync_report(store, board, where):
-    """Compute every bucket. READ ONLY -- this function writes nothing, ever.
-
-    Bucketing is total and disjoint: every board row and every task lands in exactly one
-    place, and the two "expected, silent" outcomes (a hand-filed task, a closed task whose
-    row is gone) are COUNTED rather than dropped, so the summary line always adds up
-    against `task.py counts`.
-    """
-    rows = board['rows']
-    by_id = store.by_id()
-    row_by_id = dict((r['id'], r) for r in rows)
-    report = dict((k, []) for k in ('new', 'field', 'body', 'corpus_only_open',
-                                    'corpus_only_acked', 'corpus_only_closed',
-                                    'retired_but_open', 'closed_but_on_board', 'hand'))
-    report['unreadable'] = {}
-    report['board'] = rel(where)
-    report['rows'] = len(rows)
-    report['tasks'] = len(store.tasks())
-
-    for row in rows:
-        digest = source_digest(source_block_text(row, board['blocks']))
-        task = by_id.get(row['id'])
-        if task is None:
-            report['new'].append({'id': row['id'], 'title': board_title(row),
-                                  'pri': row['pri'], 'size': row['size'],
-                                  'deps': row['deps'], 'digest': digest, 'row': row})
-            continue
-        if task.is_closed:
-            # THE REVERSE CASE, which the spec's original section 2 had no bucket for: the
-            # corpus says done, the board still ranks it. Nothing else in this repo
-            # catches it -- lint sees a well-formed closed task and the board is not
-            # linted against the corpus at all -- and it is the shape a stale board takes
-            # once `close` is the only way out of the open set.
-            report['closed_but_on_board'].append(
-                {'id': task.id, 'closed': task.closed, 'pri': row['pri']})
-            continue
-        changes = field_changes(task, row)
-        if changes:
-            report['field'].append({'id': task.id, 'changes': changes})
-        if task.source_hash != digest:
-            report['body'].append({'id': task.id, 'stored': task.source_hash,
-                                   'current': digest,
-                                   'seeded': bool(task.source_hash)})
-
-    for task in store.tasks():
-        # INSTRUMENT CONTROL (SYNC-SPEC.md section 3): fail loudly rather than degrade.
-        # A malformed `source` is the one input that could make sync WRONG AND QUIET --
-        # an empty one reads as "not board, not a path", falls off the end of the
-        # bucketing, and the task silently stops being reconciled. It is already a lint
-        # violation (check 4), so the honest response here is to refuse and point at the
-        # linter, not to invent a bucket for a value the schema does not admit.
-        bad = source_problem(task.source)
-        if bad:
-            raise Refused('%s: %s\n\nRun `%s lint` first: sync will not bucket a task '
-                          'whose provenance it cannot read, because the plausible guess '
-                          '("hand-filed, expected") is the one that makes this tool go '
-                          'quiet about it forever.' % (rel(task.path), bad, prog()))
-        if task.id in row_by_id:
-            continue
-        if task.source == 'hand':
-            report['hand'].append(task.id)          # expected, and NOT drift
-        elif task.source == 'board':
-            if task.is_closed:
-                # R1: the normal path. A row vanishes because the item was closed, and
-                # the corpus already records that. Counted, silent, exit 0.
-                report['corpus_only_closed'].append(task.id)
-            elif task.source_hash == SOURCE_HASH_NO_ROW:
-                # ACKNOWLEDGED (SOURCE_HASH_NO_ROW): a human read this, said why in the
-                # Log, and the situation has not changed since. Counted and NAMED on every
-                # run -- never silent, because "expected, therefore invisible" is how a
-                # bucket stops being checked -- but not drift, because a check that is red
-                # forever is a check nobody reads the exit code of.
-                report['corpus_only_acked'].append({'id': task.id, 'pri': task.pri})
-            else:
-                report['corpus_only_open'].append({'id': task.id, 'pri': task.pri,
-                                                   'title': task.title})
-        else:
-            report['unreadable'].setdefault(task.source, []).append(task.id)
-
-    for tid in board['retired']:
-        task = by_id.get(tid)
-        if task is not None and not task.is_closed:
-            report['retired_but_open'].append({'id': tid, 'pri': task.pri})
-
-    report['drift'] = (len(report['new']) + len(report['field']) + len(report['body'])
-                       + len(report['corpus_only_open'])
-                       + len(report['retired_but_open'])
-                       + len(report['closed_but_on_board']))
-    return report
-
-
-def field_changes(task, row):
-    """The FIELD bucket for one row: the fields that differ, each with its command."""
-    out = []
-    if row['pri'] and task.pri != row['pri']:
-        out.append({'field': 'pri', 'from': task.pri, 'to': row['pri'],
-                    'commands': ['promote %s %s --mechanical' % (task.id, row['pri'])],
-                    'rank': -1 if pri_rank(row['pri']) > pri_rank(task.pri) else 1})
-    if row['size'] and task.size != row['size']:
-        out.append({'field': 'size', 'from': task.size, 'to': row['size'],
-                    'commands': ['set %s size %s --mechanical' % (task.id, row['size'])],
-                    'rank': 0})
-    if sorted(task.deps) != sorted(row['deps']):
-        cmds = ['dep rm %s %s --mechanical' % (task.id, d)
-                for d in task.deps if d not in row['deps']]
-        cmds += ['dep add %s %s --mechanical' % (task.id, d)
-                 for d in row['deps'] if d not in task.deps]
-        out.append({'field': 'deps', 'from': task.deps, 'to': row['deps'],
-                    'commands': cmds, 'rank': 0})
-    return out
-
-
-def corpus_arg(store):
-    """``--dir <resolved corpus root>``: the target, echoed so a pasted line cannot miss.
-
-    Derived from the STORE and not from ``args.dir``, so it is the corpus this run
-    actually reconciled rather than the string somebody typed -- ``--dir .``, a relative
-    path, and a walk UP from a subdirectory all resolve to the same absolute root here.
-    """
-    root = os.path.dirname(os.path.abspath(store.dir)).replace(os.sep, '/')
-    return '--dir "%s"' % root if ' ' in root else '--dir %s' % root
-
-
-def sync_command_lines(report, store):
-    """Every mechanical fix, as lines that run in the order printed -- AND IN ANY CWD.
-
-    ORDERING IS PART OF THE CONTRACT, not cosmetics. `promote` refuses at write time if
-    the result would break NOW=1 / NEXT<=3, so a board that swapped its NOW row emits two
-    promotions of which the raising one is refused if it runs first. Demotions are
-    therefore emitted before promotions (`rank` -1 / 0 / 1 above). This is the one place
-    the emitted set is not order-free, and the alternative -- telling the reader to sort
-    it out -- is exactly the "needs a judgement call to PROCEED" that SYNC-SPEC.md
-    section 4 calls a design bug.
-
-    THE TARGET IS PART OF THE CONTRACT TOO, and it was missing until 2026-08-21e
-    (PROOF4.md section 6 bug A). This function took no ``store`` and built each line as
-    ``'python %s %s' % (prog(), cmd)``, so `--dir` was never echoed: an operator standing
-    in corpus `d2` who ran `--dir d1 sync --commands` and pasted the emitted lines
-    verbatim -- which is EXACTLY what the housekeeping loop this feature exists to enable
-    does -- edited `d2` and left `d1` untouched. Three rc=0 lines, plausible success text,
-    no warning anywhere: the house failure mode, failing by passing, with a write attached.
-    Reproduced literally in PROOF4.md section 6.
-
-    ``prog()`` had already made this argument for ``argv[0]`` -- "a printed command must
-    be the command the reader can actually run" -- and it applies with more force to the
-    target than to the interpreter path, because a wrong interpreter path is an error and
-    a wrong target is a silent edit to the wrong corpus. The resolved ROOT is emitted
-    unconditionally, including when `--dir` was never passed, because "the cwd I happen to
-    be in" is not a target a pasted line may depend on.
-    """
-    ranked = []
-    for entry in report['field']:
-        for change in entry['changes']:
-            for cmd in change['commands']:
-                ranked.append((change['rank'], entry['id'], change['field'], cmd))
-    ranked.sort(key=lambda item: (item[0], item[1], item[2]))
-    prefix = 'python %s %s' % (prog(), corpus_arg(store))
-    return ['%s %s' % (prefix, cmd) for _, _, _, cmd in ranked]
-
-
-def sync_create_new(store, report, board, args):
-    """Mint a task for every NEW row. THE ONLY WRITE PATH IN `sync`, and it only adds.
-
-    It goes through `op_new` rather than writing frontmatter itself, so a synced task gets
-    the same id allocation, the same budget refusal, the same dep and label validation and
-    the same canonical rendering as a typed one. A second creation path is a second
-    schema, and this corpus already paid for one of those.
-
-    A row that `op_new` refuses (an unresolvable dep, a `NOW` when the corpus already has
-    one) is REPORTED and skipped, and the run still exits 1. Creating it anyway with the
-    offending field blanked would file a task that agrees with nothing.
-    """
-    made, refused = [], []
-    for item in report['new']:
-        row = item['row']
-        ns = argparse.Namespace(
-            session=args.session, task_id=item['id'], title=item['title'],
-            pri=row['pri'] or 'LATER', size=row['size'] or '?',
-            deps=','.join(row['deps']), labels=None,
-            parent=None, related=None, source='board', body=None,
-            source_hash=item['digest'], body_text=board_body(row, board['blocks']))
-        try:
-            op_new(store, ns)
-            made.append(item['id'])
-        except Refused as exc:
-            refused.append((item['id'], str(exc)))
-        store.invalidate()
-    return made, refused
-
-
-def op_sync(store, args):
-    """Reconcile the corpus against the board: report drift, create what is new, and
-    never, under any flag, remove anything.
-
-    The exit code is the drift REMAINING when the run ends, so the housekeeping loop in
-    SYNC-SPEC.md section 4 can sit in a gate: `--create-new` resolves the NEW bucket and
-    the run goes green if that was all there was.
-    """
-    where = find_board(store, args.board)
-    board = parse_board(read_text(where), where)
-    report = sync_report(store, board, where)
-
-    created, refused = [], []
-    if args.create_new:
-        created, refused = sync_create_new(store, report, board, args)
-        if created:
-            report = sync_report(store, board, where)   # re-measure; do not subtract
-        report['created'] = created
-        report['refused'] = [{'id': i, 'why': w} for i, w in refused]
-        report['drift'] += len(refused)
-
-    if args.json:
-        for entry in report['new']:
-            entry.pop('row', None)
-        emit_json(report)
-        return 1 if report['drift'] else 0
-
-    if args.commands:
-        # STDOUT carries commands and nothing else, so `sync --commands | sh` is a real
-        # thing a cheap model can do; the report goes to stderr beside it. Splitting the
-        # streams is what keeps the mechanical half mechanical.
-        for line in sync_command_lines(report, store):
-            emit(line)
-        render_sync_report(report, emit_err)
-    else:
-        render_sync_report(report, emit)
-    return 1 if report['drift'] else 0
-
-
-def render_sync_report(report, out):
-    out('sync   %s  (%d row(s) vs %d task(s))'
-        % (report['board'], report['rows'], report['tasks']))
-    for item in report.get('created', []):
-        out('  CREATED           %s' % item)
-    for item in report.get('refused', []):
-        out('  NEW-REFUSED       %s: %s' % (item['id'], item['why'].split('\n')[0]))
-    for item in report['new']:
-        out('  NEW               %s  %s/%s  %s'
-            % (item['id'], item['pri'], item['size'], clip(item['title'], 44)))
-    for entry in report['field']:
-        for change in entry['changes']:
-            out('  FIELD             %s %s: %r -> %r'
-                % (entry['id'], change['field'], change['from'], change['to']))
-    for item in report['body']:
-        out('  BODY              %s  source block moved (%s -> %s)%s'
-            % (item['id'], item['stored'] or '(never reconciled)', item['current'],
-               '' if item['seeded'] else ' -- first reconciliation'))
-    for item in report['corpus_only_open']:
-        out('  CORPUS-ONLY       %s (source: board, still OPEN, %s) -- row is gone; '
-            'close it if it is done' % (item['id'], item['pri']))
-    for item in report['corpus_only_acked']:
-        out('  ACKED-NO-ROW      %s (source: board, still OPEN, %s) -- no row, '
-            'acknowledged; NOT drift. See its Log for why. If a row reappears the stored '
-            '%r will not match its digest and %s is reported again.'
-            % (item['id'], item['pri'], SOURCE_HASH_NO_ROW, item['id']))
-    for item in report['retired_but_open']:
-        out('  RETIRED-BUT-OPEN  %s is on the retired line and still open' % item['id'])
-    for item in report['closed_but_on_board']:
-        out('  CLOSED-BUT-ON-BOARD %s closed %s but still a %s row'
-            % (item['id'], item['closed'], item['pri']))
-    if report['body']:
-        out('  BODY drift is never auto-applied. `git diff -- %s` is the old-vs-new '
-            'source diff (git is where the board\'s history lives, not this tool); then '
-            'rewrite the body and `%s ack <id> -m "..."`.'
-            % (report['board'], prog()))
-    if report['corpus_only_open'] or report['retired_but_open']:
-        out('  close is NEVER automatic: a row can vanish from a careless edit as easily '
-            'as from a finished item.')
-    # The two silent buckets are PRINTED AS COUNTS on every run, clean or dirty. They are
-    # the instrument control: "expected, therefore invisible" is how a bucket stops being
-    # checked, and a run that reports nothing at all is indistinguishable from a run whose
-    # scanner went blind.
-    out('  quiet             %d hand-filed, %d closed-and-off-the-board'
-        % (len(report['hand']), len(report['corpus_only_closed'])))
-    for src in sorted(report['unreadable']):
-        out('  UNREADABLE-SOURCE %d task(s) cite %s -- sync cannot read that document, '
-            'so it reports the count rather than bucketing them as hand-filed. NOT drift.'
-            % (len(report['unreadable'][src]), src))
-    out('sync   %s' % ('CLEAN' if not report['drift']
-                       else '%d drift item(s)' % report['drift']))
+def retired_verb(store, args):
+    """`ack` / `sync`: refuse, name the cutover, name the replacement. Reads nothing,
+    writes nothing -- the Refused is raised before any file is opened, so a refusal
+    that also stamped `updated` somewhere is not a shape this can take."""
+    raise Refused('`%s` was retired at the %s cutover (Phase B-prime: the task tree is '
+                  'the sole authority, and HANDOFF.md carries no row table to reconcile '
+                  'against). Nothing was read or written. `source_hash` is frozen '
+                  '(lint check 4 still validates its shape; no op sets it). To record a '
+                  'review that changed nothing: `comment <id> -m ... --mechanical` (bumps '
+                  '`updated`, holds `moved`; without the flag a comment is progress and '
+                  'bumps both); dispositions are `close` / `reopen`. Record: '
+                  'docs/tasktool-spec.md section 4, docs/history/tasktool-proof-2026-08.md.'
+                  % (args.op, CUTOVER_DATE))
 
 
 # --- CLI ------------------------------------------------------------------------------
@@ -4108,14 +3500,14 @@ def build_parser():
                        help='session key to stamp (default: today)')
         if mechanical:
             # Offered on the field ops a housekeeping tool actually emits, and NOT on
-            # close/reopen: those require a message and `sync` is forbidden from ever
-            # auto-closing, so a --mechanical close would only ever be a human quietly
-            # declining to record that they closed something.
+            # close/reopen: those require a message and no tool is allowed to auto-close,
+            # so a --mechanical close would only ever be a human quietly declining to
+            # record that they closed something.
             s.add_argument('--mechanical', action='store_true',
                            help='housekeeping write: bump `updated` only and leave '
-                                '`moved` alone. For TOOLS (sync applies field fixes with '
-                                'it on every call); a session doing the work never passes '
-                                'it')
+                                '`moved` alone. For TOOLS (a script fixing fields on a '
+                                'session\'s behalf); a session doing the work never '
+                                'passes it')
         return s
 
     read_op('board', 'the session-start view: banner, NOW, NEXT (see BOARD_MAX_LINES)')
@@ -4153,9 +3545,9 @@ def build_parser():
     # 3). `next_id` allocates from `id_prefix`, which is one prefix for the whole corpus;
     # a session filing a piece of build work under `TK<n>` mints an id in the series
     # everything else cites as a FINDING, and the id is the address, so the miscategory is
-    # permanent. The validation is the same one `sync --create-new` already passes through
-    # (unused, not retired, well-formed) -- this only makes the existing path reachable
-    # from the command line.
+    # permanent. The validation is the one `sync --create-new` passed through until its
+    # 2026-09-06 retirement (unused, not retired, well-formed) -- this only makes the
+    # existing path reachable from the command line.
     s.add_argument('--id', dest='task_id', default=None, metavar='ID',
                    help='use this id instead of allocating the next one in the '
                         'id_prefix series. Refused if it is live or retired')
@@ -4207,38 +3599,28 @@ def build_parser():
     s = write_op('touch', 'record progress: bump `moved` and `updated`', mechanical=True)
     s.add_argument('id')
 
-    s = write_op('ack', 'acknowledge drift: bump `updated` only, re-stamp source_hash')
-    s.add_argument('id')
-    s.add_argument('-m', '--message', required=True,
-                   help='why the task needed no change, or - to read stdin')
-    s.add_argument('--board', default=None,
-                   help='the source document (default: the nearest %s above tasks/)'
-                        % BOARD_FILENAME)
-    s.add_argument('--since', default=None, metavar='DIGEST',
-                   help='the source_hash the drift report you are acknowledging showed. '
-                        'If the source has moved since, the mismatch is announced on '
-                        'stderr -- `ack` must be a session\'s LAST step')
+    # RETIRED VERBS (2026-09-06 cutover). Both keep their old flag surface so that every
+    # argv shape an old runbook or ledger entry carries still parses and reaches
+    # `retired_verb`, which refuses with the reason. An `invalid choice: 'sync'` from
+    # argparse would name neither the cutover nor the replacement. Nothing here is
+    # required any more: a bare `task.py ack` must refuse too, not die in argparse.
+    s = sub.add_parser('ack', help='RETIRED %s: refuses and names the replacement'
+                                   % CUTOVER_DATE)
+    s.add_argument('id', nargs='?', default=None)
+    s.add_argument('--session', default=None, help=argparse.SUPPRESS)
+    s.add_argument('-m', '--message', default=None, help=argparse.SUPPRESS)
+    s.add_argument('--board', default=None, help=argparse.SUPPRESS)
+    s.add_argument('--since', default=None, metavar='DIGEST', help=argparse.SUPPRESS)
 
-    # `sync` is neither a read op nor a write op and gets its own block. `--check` is the
-    # default and is accepted as an explicit flag anyway, because SYNC-SPEC.md section 4's
-    # loop is meant to be pasted verbatim by a model that should not have to know which
-    # of four flags is the default one.
-    s = sub.add_parser('sync', help='reconcile against the board; reports, adds, NEVER '
-                                    'deletes')
-    s.add_argument('--session', default=None,
-                   help='session key to stamp on anything --create-new mints')
-    s.add_argument('--check', action='store_true',
-                   help='report drift and change nothing (the default)')
+    s = sub.add_parser('sync', help='RETIRED %s: refuses and names the replacement'
+                                    % CUTOVER_DATE)
+    s.add_argument('--session', default=None, help=argparse.SUPPRESS)
+    s.add_argument('--check', action='store_true', help=argparse.SUPPRESS)
     s.add_argument('--create-new', dest='create_new', action='store_true',
-                   help='additionally MINT a task for every source row that has none. '
-                        'The only mode that writes, and it only ever adds')
-    s.add_argument('--commands', action='store_true',
-                   help='emit the mechanical fixes as pasteable lines on stdout, with '
-                        'the report on stderr')
-    s.add_argument('--json', action='store_true', help='machine-readable report')
-    s.add_argument('--board', default=None,
-                   help='the source document (default: the nearest %s at or above '
-                        'tasks/)' % BOARD_FILENAME)
+                   help=argparse.SUPPRESS)
+    s.add_argument('--commands', action='store_true', help=argparse.SUPPRESS)
+    s.add_argument('--json', action='store_true', help=argparse.SUPPRESS)
+    s.add_argument('--board', default=None, help=argparse.SUPPRESS)
 
     s = write_op('close', 'close a task; message REQUIRED')
     s.add_argument('id')
@@ -4256,8 +3638,7 @@ def build_parser():
 OPS = {
     'board': op_board, 'list': op_list, 'show': op_show, 'ready': op_ready,
     'lint': op_lint, 'counts': op_counts, 'new': op_new, 'set': op_set,
-    'ack': op_ack,
-    'sync': op_sync,
+    'ack': retired_verb, 'sync': retired_verb,
     'promote': op_promote,
     'dep': op_dep, 'comment': op_comment, 'touch': op_touch, 'close': op_close,
     'reopen': op_reopen,
@@ -4301,6 +3682,11 @@ def main(argv=None):
         return 2
     try:
         merge_session(args)
+        if OPS[args.op] is retired_verb:
+            # Before Store.find: the constructor reads tasks/config.json, and the
+            # refusal's "Nothing was read or written" is meant literally (2026-09-06d
+            # audit finding -- the docstring said so while a file was already open).
+            return retired_verb(None, args)
         store = Store.find(args.dir)
         return OPS[args.op](store, args)
     except Refused as exc:

@@ -731,7 +731,7 @@ formal/
   CORRESPONDENCE.md  -- Lean def <-> Python file:line map (the audit backbone)
   FINAL_REVIEW.md    -- the authoritative, clause-checked claim (governs)
   HANDOFF.md         -- execution-state entry point + house rules + build/verify
-                        (ranks nothing; the repo board ../HANDOFF.md does)
+                        (ranks nothing; the task tree `scripts/task.py board` does)
   README.md          -- one-page orientation
   REFERENCES.md      -- external references
   verify.sh          -- the one-command fail-closed green gate
