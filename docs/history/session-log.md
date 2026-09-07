@@ -9,14 +9,19 @@ from here.
 
 **The rules** (conventions are defined once in [`docs/README.md`](../README.md)):
 
-* **Newest entry first.** One entry EVERY session, without exception — the board's
-  `moved` column is only meaningful if every session leaves a dated trace.
+* **Newest entry first.** One entry EVERY session, without exception — a task's
+  `moved` field is only meaningful if every session leaves a dated trace.
 * **Entry key: `## YYYY-MM-DD[letter] — <headline>`.** The letter disambiguates
   same-day sessions (`2026-08-16`, `2026-08-16b`, …). The key is a stable citation
   target: entries are **never retro-edited**. A later entry names what it refutes.
-* **The headline is one line and feeds the banner** in [`HANDOFF.md`](../../HANDOFF.md)
-  verbatim, so keep it under ~120 characters including the key.
-* **`rows:`** names the [`HANDOFF.md`](../../HANDOFF.md) board ids the session touched.
+* **The headline is one line and feeds the banner** — the `## Banner` section of
+  [`HANDOFF.md`](../../HANDOFF.md) — verbatim, so keep it under ~120 characters
+  including the key.
+* **`rows:`** names the task ids the session touched (`tasks/`; the `HANDOFF.md` board
+  ids until the 2026-09-06 cutover).
+* **Two literal receipt lines**, enforced by `handoff_lint.py::check_session_receipt` on
+  the newest entry only: the output of `python scripts/task.py lint`, and
+  `read: board only` / `read: board + note`.
 * **`Still owed:`** closes every entry. If the session ran short of context and skipped
   a write-back step, list the skipped actions here *verbatim* — the next session
   executes them before its own work.
@@ -24,6 +29,92 @@ from here.
   root, so from this file they resolve against `../../`.
 
 ---
+
+## 2026-09-06d — Phase B′ cutover LANDED: tree sole authority, `HANDOFF.md` one-hop, `sync`/`ack`/check 13 retired
+
+rows: `TT-1` (closed — this commit), `TT-2` (closed — retired with `sync`), `TT-8` (new, LATER:
+the audit's deferred finding), `DW-1` (comment: the `ttuDirect` trap moved into its Traps),
+`P6` (untouched, still `NOW` mechanically)
+
+task lint: clean (12 checks, 168 task file(s) parsed)
+read: board + note
+
+**Task (user go, verbatim: "yes let's get the switch all done, you can use subagents or
+ultracode to farm the validation out").** The cutover per
+[`tree-sole-authority-spec-2026-08-29.md`](../tree-sole-authority-spec-2026-08-29.md)
+(ii)/(iii)/(v), as ONE revertable commit — the commit message carries the `git revert`
+line. To undo the whole thing: revert that one commit; nothing else moved.
+
+**What changed, by surface:**
+
+* `scripts/task.py` — lint check 12 reads the banner from the `## Banner` blockquote of
+  `<root>/HANDOFF.md` (`note_path`, `BANNER_HEADING`, `extract_banner`) and fails on a
+  reappearing `tasks/BANNER.md`; `board` reads the same; check 13 (`check_board_sync`)
+  deleted, number never reused, `lint` prints `12 checks`; `sync` and `ack` stay in the
+  parser with every old flag SUPPRESSed and dispatch to `retired_verb` → rc 2, `task <op>:
+  REFUSED`, the cutover date, the replacement (`comment`), and `Nothing was read or
+  written`; `source_hash` frozen (check 4 still validates its shape).
+* `scripts/handoff_lint.py` — `MAX_LINES['HANDOFF.md']` 260 → 60; `READ_VOCAB` →
+  `('board only', 'board + note')`; still 11 checks. `scripts/gate_status.py` —
+  `CODE_SCOPE_MD_KEEP` names `tasks/` and `HANDOFF.md`, so the tiles' tree id covers the
+  note too.
+* `HANDOFF.md` 246 → ≤60 lines: `## Banner` (≤ `BANNER_MAX_LINES`, first line carries the
+  session key, `ASCII_FOLD`-mappable glyphs only), `## Still owed`, `## Next session`. No
+  table, no item blocks, no `Closed ids` lines (the three item blocks were reconciled into
+  their task files on 2026-09-06b). `tasks/BANNER.md` DELETED.
+* Docs — Rhythm → `docs/README.md` §7, "Where things live" → §8; `CLAUDE.md` start-here
+  rewritten (query first, the note is one hop, the receipt rule with the new vocabulary,
+  the backtick trap), trap 2 (frozen history status lines) promoted into its
+  Gotchas; trap 1 (`ttuDirect`) → `DW-1` Traps; `tasks/README.md`, `docs/tasktool-spec.md`
+  (§4 "The retired verbs", §5 twelve checks + check 13 RETIRED), `docs/latent-gaps.md`,
+  `docs/architecture/overview.md`, `docs/spec-deviations.md`, `docs/gate-runbook.md`,
+  `benchmarks/results/PERF_ANALYSIS.md` re-pointed from "the board" to the tree; the
+  trial stub, the spec and the protocol flipped to FROZEN with dated landed notes
+  (protocol §6 `2026-09-06d`, E1–E3).
+
+**Tests** (re-measured with `--collect-only`, 2026-09-06d): `tests/test_tasktool.py`
+92 → **94**, `tests/test_handoff_lint_b_prime.py` 30 (unchanged, edits only).
+Ten `sync`/`ack` tests became `test_retired_verbs_refuse_every_old_argv_shape` (11
+argv shapes); new `test_lint_check_12_refuses_a_reappearing_tasks_banner_file` and
+`test_lint_reads_no_board_and_check_13_is_gone`; check-12 test gained the no-heading and
+empty-section clauses. Three sabotage cases RE-POINTED and RE-RUN, observed lines in
+their docstrings: `test_sabotage_bprime_check_13_can_go_blind` (`'sync'` dropped from
+`OPS` → `sync --check` was not refused (rc=1)`), `test_sabotage_bprime_ack_adoption_can_skip_the_flip`
+(citation reworded → `task ack: REFUSED` without the cutover line, red),
+`test_sabotage_wp_ack_does_not_move_moved` (`comment --mechanical` hard-wired to progress
+→ `moved` 2026-08-21b → 2026-08-21c: a review laundered a stale row into a fresh one).
+The four `test_sabotage_live_*` cases went green only once the live `HANDOFF.md` and
+`tasks/BANNER.md` were in the final shape — before that they reported the four check-12
+violations of the pre-cutover tree, which is the instrument working.
+
+**Validation farmed out** (user opt-in): a Workflow of read-only agents checked the
+landed tree against the spec — every claim in this entry and in the FROZEN notes
+re-verified against `file::symbol`, stale-reference sweep for `BANNER.md` / `sync` /
+`ack` / `check 13` / "the board" across tracked `*.md`, and an adversarial pass on the
+retirement. 21 agents, 13 findings confirmed, 2 refuted; what was done: seven "repo
+board" pointers my sweep missed re-pointed (`formal/HANDOFF.md` ×4, line-neutral at its
+520 cap; `formal/README.md`, `formal/ARCHITECTURE.md`, `docs/architecture/bulk-merge-design.md`,
+`README.md`); `main()` now dispatches a retired verb BEFORE `Store.find`, because the
+constructor reads `config.json` and the refusal says "Nothing was read"; the spec's
+"the ledger names the sha" parenthetical dropped (it cannot); 247 → 246. Deferred to
+the tree: `extract_banner` is not code-fence-aware (`TT-8`, LATER). Judgement stayed
+here: nothing an agent reported was written into this entry unverified.
+
+**Tree ops:** `close TT-1 -m`, `close TT-2 -m`, `comment DW-1 -m`, all
+`--session 2026-09-06d`, messages passed single-quoted (the backtick trap from
+`2026-09-06c`).
+
+**Gate:** the commit is made only on a tree where `gate_status.py` says COVERED — all
+ten phases, records written first, `lean` last; verdicts in the commit message. Not pushed.
+The run finished 2026-09-07 (context was cleared mid-gate; handoff in `.scratch/`). Two
+things the gate caught, both worth keeping: editing `formal/verify.sh` for the
+`MIN_TESTS_ALL` ratchet STALED all nine already-green tiles, because `verify.sh` is inside
+the tiles' `t2c` code scope — the ratchet has to come before the tiles, not after. And
+step 4e (`FINAL_REVIEW.md` counts pin) went RED on a doc whose counts block a prior
+session believed it had regenerated: the block still read `1089` in all three rows against
+a tree of `1091`. Regenerated for real, `lean` re-run green. That pin is not decorative.
+
+Still owed: nothing.
 
 ## 2026-09-06c — Phase B′ DECIDED (user); 5/7 prerequisites landed with sabotage evidence; cutover still needs a go
 

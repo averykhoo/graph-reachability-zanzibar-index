@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-30
-moved: 2026-09-06c
-updated: 2026-09-06c
-closed:
+moved: 2026-09-06d
+updated: 2026-09-06d
+closed: 2026-09-06d
 ---
 
 `sync` is the only `task.py` surface whose test suite is still in gitignored `.scratch/`:
@@ -59,3 +59,7 @@ missing corpus FAILS rather than skips). Follow it.
 ### 2026-09-06c
 
 DECIDED 2026-09-06c (user: Phase B-prime as drafted): NOT ported. sync_sabotage.py / sync_accept.py retire WITH sync, ack and source_hash at the Phase B-prime cutover; recorded in docs/tasktool-spec.md section 4 (the reconciliation op) and tree-sole-authority-spec prerequisite 4. Until the cutover lands the 14+57 cases stay where they are (.scratch, already-lost by the repo's own rule) -- the sync behaviour they covered is exercised by tests/test_tasktool.py's sync/ack cases, which are gated. Close this at the cutover, not before.
+
+### 2026-09-06d
+
+Retired with sync at the 2026-09-06d cutover, as decided 2026-09-06c. sync_sabotage.py (14 cases) and sync_accept.py (57 assertions) stay in untracked .scratch/tasktool/; their record is docs/history/tasktool-proof-2026-08.md and the verb they covered now refuses (task.py::retired_verb, test_retired_verbs_refuse_every_old_argv_shape). The one property that outlives sync -- nothing deletes a task file -- is pinned by test_close_moves_stamps_and_reports. Spec record: docs/tasktool-spec.md sec 4 "The retired verbs".

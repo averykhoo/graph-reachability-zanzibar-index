@@ -19,8 +19,8 @@ rot independently, and the reader cannot tell which one is live.
 
 | content type | home |
 |---|---|
-| priority/status of open items | [`HANDOFF.md`](../HANDOFF.md) board, only — **and, while the trial runs, the mirrored `task.py` op in the same session** ([`../tasks/README.md`](../tasks/README.md)). The two are a control and a treatment arm; a session that updates one of them destroys the result. `handoff_lint.py::check_ledger_row_ids` fails when a board row has no task file |
-| what the NEXT session must not miss | [`../tasks/BANNER.md`](../tasks/BANNER.md), rewritten every session (Rhythm step 2; `task.py lint` check 12 requires it, and `board` refuses to render without it) |
+| priority/status of open items | the task tree, [`../tasks/`](../tasks/README.md), only — one file per task, read as a QUERY (`python scripts/task.py board`, then `show <id>`; contract in [`tasktool-spec.md`](tasktool-spec.md)). **Sole authority since the 2026-09-06 cutover** (Phase B′ of [`tree-sole-authority-spec-2026-08-29.md`](tree-sole-authority-spec-2026-08-29.md)); `HANDOFF.md` carries no row table and no item blocks, and `handoff_lint.py::check_ledger_row_ids` resolves every id the ledger cites against the tree |
+| what the NEXT session must not miss | the `## Banner` section of [`HANDOFF.md`](../HANDOFF.md) — the one-hop note, ≤60 lines, rewritten every session (§7 step 2; `task.py lint` check 12 requires the banner, `board` prints it verbatim and refuses without it). `tasks/BANNER.md` is a tombstone: check 12 fails if it reappears |
 | the one constraint a board reader must not miss, per item | the task file's `brief` field — one line, capped, and NOT a summary ([`tasktool-spec.md`](tasktool-spec.md) §3.1) |
 | session narrative | [`docs/history/session-log.md`](history/session-log.md) (root) / [`formal/history/PROOF_STATUS.md`](../formal/history/PROOF_STATUS.md) (formal detail) |
 | formal execution state ("what is proved, what is the next lemma") | [`formal/HANDOFF.md`](../formal/HANDOFF.md) — no priorities there |
@@ -49,7 +49,7 @@ whether a statement is still true.
 |---|---|---|
 | **LIVING** | maintained; every statement is claimed true today | fix in place when it goes wrong |
 | **FROZEN** | provenance only; status lines are as-of-then | visible banner (§3); corrections appended dated at the top, never edited into the body |
-| **ACTIVE-PLAN** | a scope/plan doc currently being executed | body is provenance; corrections appended dated at the top; live until its board rows close, then frozen |
+| **ACTIVE-PLAN** | a scope/plan doc currently being executed | body is provenance; corrections appended dated at the top; live until its task rows close, then frozen |
 
 ACTIVE-PLAN exists because live scope docs sit under `formal/history/` for filing
 reasons and moving them would break inbound links. The state is declared in the header
@@ -132,27 +132,31 @@ ranking argument happens once at write time instead of being re-derived every se
 | badge | meaning | budget |
 |---|---|---|
 | 🟢 / 🔴 | gate state — banner only | 1 |
-| ⚠ | a trap: acting without reading this line produces WRONG work | at most 10 board-wide |
+| ⚠ | a trap: acting without reading this line produces WRONG work | at most 10 in `HANDOFF.md` (`handoff_lint.py::WARN_BUDGET`) |
 | 🧭 | waiting on a user decision (the line must name the decision) | as needed |
 
-`★` and `★★` are **retired** from the two board files ([`HANDOFF.md`](../HANDOFF.md) and
+`★` and `★★` are **retired** from the two handoff files ([`HANDOFF.md`](../HANDOFF.md) and
 [`formal/HANDOFF.md`](../formal/HANDOFF.md)) and are removed from other living docs as
 they get touched. Frozen archives keep theirs as provenance; the append-only ledgers keep
 old entries untouched, but **new ledger entries do not use `★`**. Bold ALL-CAPS survives
-only inside a ⚠ line.
+only inside a ⚠ line. The banner in `HANDOFF.md` is printed by `task.py board` through
+`task.py::ASCII_FOLD`, so it may use only glyphs that table maps — `task.py lint` check 12
+refuses any other (`′`, `✅`, `📌`, `🔍` are the ones that have been pasted into it).
 
 **⚠ overflow is a defined move, not an invention.** At budget, the trap demotes to the
-owning item's scope-doc "Traps" section and the board block keeps the pointer. If that
-feels wrong, the trap was load-bearing enough to belong in `CLAUDE.md` — which is
-auto-loaded every session, so it costs the reader nothing.
+owning task file's `## Traps` section (`python scripts/task.py show <id> --section traps`)
+and the banner keeps at most a pointer. If that feels wrong, the trap was load-bearing
+enough to belong in `CLAUDE.md` — which is auto-loaded every session, so it costs the
+reader nothing.
 
 ## 5. Stable keys, never positions
 
 Ids and keys are cited from append-only ledgers, frozen archives, code comments and test
 docstrings. They must survive a rewrite of the file they came from.
 
-* **Board items → id** (`P3`, `B1`, `ZT-P3-5`, `R6`, `HS-1`). **Ids are carried forward
-  forever and never reused**, including after the row closes.
+* **Tasks → id** (`P3`, `B1`, `ZT-P3-5`, `R6`, `HS-1`). **Ids are carried forward
+  forever and never reused**, including after the task closes (`tasks/closed/` keeps the
+  file; `tasks/retired-ids.txt` holds spent ids that never had one).
 * **Ledger entries → date key** (`2026-08-16b`), never a position in the file.
 * **Code → `file::symbol`** (`Cascade.lean::GraphState.writeLoggedOne`), never a line
   number. `verify.sh lean` resolves every `file::symbol` anchor in
@@ -192,10 +196,13 @@ docstrings. They must survive a rewrite of the file they came from.
 
 ## 6. Boards replace; ledgers accrete
 
-**Board files are rewritten in place** — no dated layers, no strikethrough graveyards, no
-"as of" stacking. When a fact changes, the old text is deleted, not annotated. Item
-blocks have replace semantics: every session that touches an item rewrites its block
-*including its read-first list*.
+**The note and a task's body are rewritten in place** — no dated layers, no strikethrough
+graveyards, no "as of" stacking. When a fact changes, the old text is deleted, not
+annotated. `HANDOFF.md` is rewritten whole every session; a task file's summary, `brief`,
+`## Traps` and `## Read first` have replace semantics — every session that touches a task
+rewrites what it invalidated, *read-first list included*. The one accreting part of a task
+file is its `## Log`, which `comment` / `close` / `promote` append to (and `show` renders
+newest-first, so the file's top is never mistaken for its current state).
 
 **Ledgers are append-only and never retro-edited.** A later entry names what it refutes.
 Entry format is defined in [`history/session-log.md`](history/session-log.md)'s own
@@ -204,3 +211,77 @@ header; one root entry is written EVERY session.
 This split is the whole cure for the disease that produced this redesign: updates that
 arrive as new dated layers instead of edits in place, so the same fact ends up stated
 three or four times at different ages and the reader cannot rank them.
+
+## 7. Rhythm — the end-of-session write-back
+
+Moved here from `HANDOFF.md` at the 2026-09-06 cutover (Phase B′: the tree is the sole
+authority; the note is one hop). The step numbers are cited from code and the ledger —
+**keep them byte-stable** (§5). Steps 0–3 are the **mandatory floor**; if context runs
+short, list every skipped step-4/5/6 action *verbatim* under `## Still owed` in
+`HANDOFF.md` and the next session executes it before its own work. A skip that leaves no
+trace is how the last accretion started.
+
+0. **Run `python scripts/task.py lint` and `python scripts/handoff_lint.py`** before
+   committing anything. Both must be clean; `verify.sh lean` runs the second one too.
+1. **Append one entry to [`history/session-log.md`](history/session-log.md)** — every
+   session, no exceptions. Ledger first, so the banner has a key to cite. The entry
+   carries two literal lines, and `handoff_lint.py::check_session_receipt` reddens
+   `lean` when the newest entry lacks either: the output of `python scripts/task.py
+   lint`, and `read: board only` or `read: board + note` — an honest report of whether
+   the board query was the whole session-start read, or the note was needed as well.
+2. **Rewrite the `## Banner` of [`HANDOFF.md`](../HANDOFF.md)** — the single copy: gate
+   state as observed, the entry key just created on its FIRST line, the headline, what
+   the next session must not repeat. At most `task.py::BANNER_MAX_LINES` lines, only
+   glyphs `ASCII_FOLD` maps (§4); check 12 enforces all three. Then rewrite the rest of
+   the note: `## Still owed` (verbatim skipped actions, or "Nothing") and the next-session
+   pointer. The whole file stays under `handoff_lint.py::MAX_LINES`.
+3. **Edit the tree, by op, in the same session.** `promote <id> <PRI>` for every re-rank;
+   `touch <id>` for every task you progressed and did not otherwise write (never edit
+   `moved` by hand — it is what `board` reads to warn about neglect); `close <id> -m`
+   for every finished task (the tool sweeps the id out of every `deps` cell); `set <id>
+   brief` when the one-line constraint changed; and rewrite the summary / `## Traps` /
+   `## Read first` of every `NOW`/`NEXT` task you touched. `comment <id> -m` records a
+   review that changed nothing (`--mechanical` for a tool acting on a session's behalf:
+   `updated` moves, `moved` holds). Pass `--session <key>` with the ledger key.
+3b. **Do not restate gate counts in prose.** They live in `formal/FINAL_REVIEW.md`'s
+   generated block and are machine-checked by `verify.sh` step 4e; regenerate with
+   `python -m formal.conformance.doc_counts --generate`. The old board went stale three
+   separate times by keeping its own copies (`ZT-P3-5`).
+4. **File method lessons in their runbook now** — the ledger entry summarises and points.
+5. **Fix wrong docs in place now.** Living doc → edit it; FROZEN or ACTIVE-PLAN → append a
+   dated correction at the top. **The note never hosts a correction to another doc.**
+6. **New traps** → the owning task's `## Traps` section, or `CLAUDE.md` if durable and
+   repo-wide. The banner carries a pointer at most.
+
+⚠ Editing any `*.md` changes the `t2a` tree id and stales the `lean` verdict, and
+`t2c` includes `tasks/*.md` and `HANDOFF.md` (`gate_status.py::CODE_SCOPE_MD_KEEP`), so
+a tree or note edit stales the pytest tiles too. Write the records FIRST, then run the
+gate, then commit. Before starting anything: `bash formal/verify.sh lean` should be green
+in ~60 s warm; if it is not, fix that first — it is the fastest signal in the repo.
+
+## 8. Where things live
+
+Moved here from `HANDOFF.md` at the 2026-09-06 cutover. `CLAUDE.md` is auto-loaded;
+`HANDOFF.md` is the one file read by hand at session start, after `task.py board`.
+
+| doc | what it is | when to read |
+|---|---|---|
+| [`CLAUDE.md`](../CLAUDE.md) | durable rules: env, the gate, layout, testing conventions, invariants, the four footguns | every session (auto-loaded) |
+| [`HANDOFF.md`](../HANDOFF.md) | the one-hop note: the banner, `## Still owed`, the next-session pointer — nothing a query can derive | every session, after `python scripts/task.py board` |
+| [`../tasks/README.md`](../tasks/README.md) · [`tasktool-spec.md`](tasktool-spec.md) | the task tree: layout, reading protocol, the rules `lint` cannot enforce / the tool's full contract and op semantics | before your first write op; when an op refuses |
+| this file | doc-system conventions: liveness, banners, ledger format, citation keys, signals, the Rhythm | before restructuring any doc; at write-back |
+| [`history/session-log.md`](history/session-log.md) | the root session ledger, newest first | top entry at session start; write one every session |
+| [`gate-runbook.md`](gate-runbook.md) | cap-safe phased `verify.sh`, the Postgres leg, fuzz, every floor and budget | before running the gate |
+| [`../tests/dbengine.py`](../tests/dbengine.py) | the SQLite-vs-server engine seam (`ZANZIBAR_TEST_DSN` / `ZANZIBAR_PG_REQUIRED`) | running the PostgreSQL leg |
+| [`architecture/overview.md`](architecture/overview.md) | architecture index — module map plus pointers to every deeper doc | orienting in unfamiliar code |
+| [`spec-deviations.md`](spec-deviations.md) | the dated divergence ledger — append-only, true as of each date key, never live status | when behaviour surprises you |
+| [`latent-gaps.md`](latent-gaps.md) | what is still latent **today**; rewritten in place | before chasing a gap you found in the ledger |
+| [`sabotage-procedure.md`](sabotage-procedure.md) | how to prove a check actually checks; the catalogue of checks that failed by passing | before adding any test, floor, pin or gate phase |
+| [`subagent-fanout-runbook.md`](subagent-fanout-runbook.md) | how to run a multi-agent sweep without wasting it | before launching a fan-out |
+| [`perf-next-round.md`](perf-next-round.md) | perf fence, dead ends, hygiene, the reopening rule | before any perf work |
+| [`specs/`](specs/) | the original design specs, cited by code as "spec §N" | when a code comment cites one |
+| [`../formal/HANDOFF.md`](../formal/HANDOFF.md) | the formal subtree's execution state and house rules — the read-first for any formal task | before touching `formal/` |
+| [`../formal/CORRESPONDENCE.md`](../formal/CORRESPONDENCE.md) | the model↔Python map; §7/§8 record algorithm drift | when changing a modeled algorithm |
+| [`../formal/FINAL_REVIEW.md`](../formal/FINAL_REVIEW.md) | the governing claim doc — and **the only home for live counts** (generated block) | whenever you need a figure |
+| [`../benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md) | measured perf numbers per landed item | assessing a perf candidate |
+| [`history/`](history/) · [`../formal/history/`](../formal/history/) | retired records and the append-only ledgers. [`history/handoff-status-2026-07.md`](history/handoff-status-2026-07.md) holds the reconciled **`ZT-*` disposition ledger**; [`history/tasktool-proof-2026-08.md`](history/tasktool-proof-2026-08.md) the tool's sabotage record | for method and provenance — **never for state** |

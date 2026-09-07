@@ -622,8 +622,9 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
 
-> Live/open tracking now lives in the priority board [`HANDOFF.md`](HANDOFF.md) — ranked
-> rows, not a narrative status file; the list below is the
+> Live/open tracking now lives in the task tree (`python scripts/task.py board`;
+> [`HANDOFF.md`](HANDOFF.md) is the one-hop note) — ranked tasks, not a narrative status
+> file; the list below is the
 > record of what shipped (struck = done) plus a few deliberately-deferred items.
 
 * ~~re-introduce invariant checks for the index v3, and think of more checks~~

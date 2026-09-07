@@ -4,13 +4,13 @@
 below** — the newest one is the resume point. (There is no section called "The next task";
 that heading died in an earlier restructure and several docs still cited it until
 2026-08-16.) This file carries the formal subtree's *execution* state and its house rules.
-It does **not** rank anything: priorities for every open item, `formal/` included, live on
-the repo board [`HANDOFF.md`](../HANDOFF.md), and formal items are cited there by row id.
+It does **not** rank anything: priorities for every open item, `formal/` included, live in
+the task tree (`python scripts/task.py board`; [`HANDOFF.md`](../HANDOFF.md) is a one-hop note).
 Pull in other docs only on demand:
 
 | doc | what it's for | when to read |
 |---|---|---|
-| [`../HANDOFF.md`](../HANDOFF.md) | the repo priority board — what to pick up, and every open item's rank | to choose work, or to cite an item by id |
+| `python scripts/task.py board` (+ [`../HANDOFF.md`](../HANDOFF.md), the one-hop note) | the task tree — what to pick up, and every open item's rank (`show <id>`) | to choose work, or to cite an item by id |
 | `ARCHITECTURE.md` | the durable topical map (trust root, models, the theorem tables + scopes, pinning, residual surface) | for "how it all fits together" |
 | `FINAL_REVIEW.md` | the exact, clause-checked claim (plan §7 + cross-check), and the only home for live counts | for the precise wording of what is/isn't proved, or any figure |
 | `SEMANTICS.md` | the spec / trust root (`sem`, models, theorem statements) | when touching spec-level defs |
@@ -447,7 +447,7 @@ you retire an id, say in the same edit whether the finding died with it.
 
 No figures here, deliberately (house rule 3): live counts are in `FINAL_REVIEW.md`'s
 generated block, gated by `verify.sh` step 4e. This section states execution state only;
-ranking lives on the repo board.
+ranking lives in the task tree (`task.py board`).
 
 **Closed.** The W1 → W4 staged widening and Phase 6 are done: T1, T2a, T2b, T3 and T6 hold
 over `ReachedBy` at the W4 scope, sorry-free and axiom-clean, with the Python side pinned by
@@ -512,8 +512,8 @@ not the bundle; what is owed is proof work, not a design decision. Full statemen
 obligations and the post-flip probe: the T2a caveat at the top of this file.
 
 **Optional assurance-widening** is inventoried and ranked in `FINAL_REVIEW.md` §4, and every
-item still open there now carries a repo-board row (`P15`–`P19`, plus `P9` and `SD-1`). That
-section is the home for the argument; the board is the home for the rank.
+item still open there now carries a task (`P15`–`P19`, plus `P9` and `SD-1`). That
+section is the home for the argument; the task tree is the home for the rank.
 
 Historical detail for every closed stage: `history/PROOF_STATUS.md` (ledger, newest first)
 and `history/ROADMAP.md` (designs + post-mortems); the topical synthesis is

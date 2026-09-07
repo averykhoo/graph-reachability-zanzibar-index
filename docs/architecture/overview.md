@@ -4,9 +4,9 @@ Zanzibar-style relationship/permission indexing: **two evaluation backends with
 identical semantics and opposite cost models**, pinned together by an independent
 reference oracle and a validation matrix.
 
-> For current project status and the ranked open items, see the root
-> [`HANDOFF.md`](../../HANDOFF.md) (the priority board; the session entry
-> point). This file is the
+> For current project status and the ranked open items, run `python scripts/task.py
+> board` (the task tree is the sole authority since the 2026-09-06 cutover); the root
+> [`HANDOFF.md`](../../HANDOFF.md) is the one-hop note it opens with. This file is the
 > architecture index — start here for the code, go deeper per file:
 
 | doc | covers |

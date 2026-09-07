@@ -12,7 +12,7 @@ source: board
 source_hash: 04392ec66204
 created: 2026-08-16
 moved: 2026-09-06b
-updated: 2026-09-06b
+updated: 2026-09-06d
 closed:
 ---
 
@@ -25,7 +25,7 @@ those seven silent holes into a refusal or a warning.
 
 ## Traps
 
-None recorded. This row sits below `NEXT`, so it never had an item block; traps for it, if any, live at the pointer below.
+- ⚠ **Do NOT lift `ttuDirect` in Lean.** It is load-bearing for the current admission story; this row is the open descendant, and nothing is blocked meanwhile. (Moved here from `HANDOFF.md` "Standing traps" at the 2026-09-06 cutover -- the note carries no trap list; a trap lives with the item it guards.)
 
 ## Read first
 
@@ -46,3 +46,7 @@ Promoted SOMEDAY -> LATER on measured evidence: the new scope pin classifies W4F
 ### 2026-09-06b
 
 Board cell rewritten 2026-08-31b (SOMEDAY -> LATER on the LOUD 0 / MIXED 3 / SILENT 7 scope-pin evidence; live table named). The pri was already LATER in the tree; the summary, brief and Read first now carry the evidence and the table symbol. Diff source: git 077bb50 -> HEAD.
+
+### 2026-09-06d
+
+The "do not lift ttuDirect in Lean" trap moved here from HANDOFF.md Standing traps at the 2026-09-06d cutover (see ## Traps). No change to the item itself.

@@ -90,6 +90,16 @@ WHAT THE PORT CHANGED (and why), beyond paths
   and ``LINT_CHECKS`` is 12 long. Every corpus builder here writes a ``BANNER.md``, the
   ``11 checks`` assertions were re-measured to ``12``, and the ``ack`` cases moved onto
   board-sourced fixtures. Per-case notes are in the cases themselves.
+* The tool changed again at the 2026-09-06 cutover (Phase B-prime, the tree becomes the
+  sole authority): ``ack`` and ``sync`` are RETIRED verbs that refuse (rc 2) and touch
+  nothing; lint check 13 (``check_board_sync``) is gone and ``LINT_CHECKS`` is 12 long
+  again (13 is never reused); the banner moved from ``tasks/BANNER.md`` to the
+  ``## Banner`` section of ``<root>/HANDOFF.md`` and a reappearing ``tasks/BANNER.md``
+  is a check-12 violation; ``source_hash`` is frozen. The ten ``sync``/``ack`` cases
+  became ``test_retired_verbs_refuse_every_old_argv_shape`` (parametrized over the same
+  ten argv shapes -- the count floor in verify.sh has zero headroom, and a retirement
+  that deletes its tests is a retirement nobody can see). Every corpus builder now
+  writes the note instead of the file (``write_banner``).
 """
 
 import datetime
@@ -122,15 +132,35 @@ WARN = u'⚠'                 # the repo's trap badge; must never reach stdout r
 ARROW = u'→'
 KEY = '2026-08-21'               # every test pins --session, so nothing depends on today
 
-# Written into every fixture tree. `board` REFUSES without it and lint check 12 fails
-# without it, so a corpus builder that omits it produces a tree no read op will render.
-# The first line must carry a session key (check_banner uses SESSION_KEY_IN_TEXT, an
-# unanchored \b...\b search, so ordinary prose around the date is fine).
+# Written into every fixture tree, as the `## Banner` section of `<root>/HANDOFF.md`
+# (since the 2026-09-06 cutover; `tasks/BANNER.md` before it). `board` REFUSES without
+# it and lint check 12 fails without it, so a corpus builder that omits it produces a
+# tree no read op will render. The first line must carry a session key (check_banner
+# uses SESSION_KEY_IN_TEXT, an unanchored \b...\b search, so ordinary prose around the
+# date is fine).
 BANNER_TEXT = (
     '%s -- fixture banner, written by tests/test_tasktool.py.\n'
     '\n'
     'State of play: this is a throwaway corpus. Nothing here outlives the test.\n'
 ) % KEY
+
+
+def note_text(banner, before='', after=''):
+    """The one-hop note around a banner: the banner's lines as a `> ` blockquote under
+    the exact `## Banner` heading, with optional prose above and a section below --
+    the shape the live HANDOFF.md has, so a fixture tests the parser the note uses."""
+    quoted = '\n'.join(('> ' + ln).rstrip() for ln in banner.rstrip('\n').split('\n'))
+    return ('# HANDOFF -- fixture one-hop note\n\n%s\n%s\n\n%s\n\n## Still owed\n\n'
+            'Nothing.\n%s' % (before, TM.BANNER_HEADING, quoted, after))
+
+
+def banner_path(root):
+    return os.path.join(root, 'HANDOFF.md')
+
+
+def write_banner(root, banner, **kw):
+    """Write (or REPLACE) the fixture note so that its banner is exactly `banner`."""
+    write(banner_path(root), note_text(banner, **kw))
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -225,21 +255,18 @@ def lint_text(root, task_py=None):
 
 
 def assert_intact_but_drifted(root):
-    """Lint says the tree is structurally intact AND check 13 reports the board drift
-    this test set up on purpose (a row deleted, a task closed while its row stays).
-
-    Before 2026-09-06c these sites asserted `lint` rc 0 -- lint did not look at the
-    board then. Now it does (check 13, `check_board_sync`), so "intact" is "every
-    violation is check 13's", and the drift is asserted PRESENT as the instrument
-    control: a test whose deliberate drift went unreported has found a blind check, not
-    a clean tree.
+    """Lint says the tree is structurally intact. The name is historical: between
+    2026-09-06c and the cutover the same day, check 13 (`check_board_sync`) reported the
+    board drift these tests set up on purpose (a row deleted, a task closed while its
+    row stays) and this helper asserted it PRESENT. Check 13 retired with the board;
+    the fixture board is still written (it is inert prose above the tree now), and the
+    assertion is simply that the tree lints clean -- the drift is no longer anything
+    the tool can see, which is the cutover's whole point.
     """
     rc, data, err = rj(root, 'lint')
-    other = [v for v in data['violations'] if '`sync --check`' not in v]
-    assert not other, 'lint found something besides the deliberate board drift:\n%s' \
-        % '\n'.join(other)
-    assert rc == 1 and data['violations'], (
-        'this test drifts the board on purpose and check 13 reported nothing: %r' % data)
+    assert rc == 0 and not data['violations'], (
+        'lint found something in a tree the test built as intact:\n%s'
+        % '\n'.join(data['violations']))
 
 
 def first_match(text, pattern):
@@ -291,7 +318,7 @@ def fresh(name, config=None, banner=BANNER_TEXT):
           json.dumps(cfg, indent=2) + '\n')
     write(os.path.join(root, 'tasks', 'retired-ids.txt'), '')
     if banner is not None:
-        write(os.path.join(root, 'tasks', 'BANNER.md'), banner)
+        write_banner(root, banner)
     return root
 
 
@@ -330,9 +357,11 @@ def good_tree(name):
     HOLD, SOMEDAY. Seven files, and CONFIG's floor is seven -- zero headroom, so a
     sabotage that loses even one file to the scanner is red.
 
-    BANNER.md is NOT one of the seven: it is excluded by exact name at the top level from
-    both scanners (``NON_TASK_MD``), which ``test_non_task_md_is_skipped_only_at_the_top``
-    pins rather than assumes.
+    The banner is NOT one of the seven: it lives in `<root>/HANDOFF.md`, outside the
+    tree. (`tasks/BANNER.md`, its pre-cutover home, is still excluded by exact name from
+    both scanners -- ``NON_TASK_MD`` -- which
+    ``test_non_task_md_is_skipped_only_at_the_top`` pins rather than assumes, and a
+    reappearing one is a check-12 violation.)
     """
     root = fresh(name)
     os.makedirs(os.path.join(root, 'tasks', 'closed'))
@@ -349,9 +378,12 @@ def good_tree(name):
     return root
 
 
-SYNC_BOARD = u"""# HANDOFF -- a fixture board
-
-## Board
+# A pre-cutover board shape, kept as the PROSE that `sync_tree` writes above the
+# `## Banner` section. Nothing reads the table any more (`sync`/`ack` refuse before
+# opening a file; check 13 is gone) -- it is here so that the retired-verb refusal test
+# runs against a tree where the old verbs would have had something to do, and so that
+# the banner parser is exercised on a note carrying other sections around it.
+SYNC_BOARD = u"""## Board
 
 | id | item (%s pointer) | pri | size | deps | moved |
 |---|---|---|---|---|---|
@@ -378,34 +410,23 @@ Nothing here.
 
 
 def sync_tree(name, board=SYNC_BOARD):
-    """`good_tree` plus a board above it, with T1..T4/T6 marked `source: board`.
+    """`good_tree` with T1..T4/T6 marked `source: board` and the note carrying a
+    pre-cutover board shape ABOVE its `## Banner` section.
 
-    T5 and T7 stay `hand`: a corpus with no hand-filed tasks cannot show that the quiet
-    bucket is quiet, and the whole point of the `source` field is that the two are
-    distinguished per task rather than per tree. Since 2026-08-29 it is also the only
-    fixture on which `ack` runs at all -- `ack` refuses a `source: hand` task outright.
+    T5 and T7 stay `hand`: the `source` field distinguishes the two per task, and a
+    corpus with only one kind cannot show that. Before the cutover this was the fixture
+    `sync` reconciled and `ack` ran on; now it is the fixture the retired-verb refusals
+    run on (a tree where the verbs would have had work to do) and the one that proves
+    the banner parser ignores the sections around the banner.
     """
     root = good_tree(name)
     for tid, slug in (('T1', 'the-now-row'), ('T2', 'next-alpha'), ('T3', 'next-beta'),
                       ('T4', 'later-gamma'), ('T6', 'the-group')):
         p = os.path.join(root, 'tasks', '%s-%s.md' % (tid, slug))
         write(p, read(p).decode('utf-8').replace('source: hand', 'source: board'))
-    write(os.path.join(root, 'HANDOFF.md'), board)
+    write_banner(root, BANNER_TEXT, before=board)
     write(os.path.join(root, 'tasks', 'retired-ids.txt'), 'T0\n')
     return root
-
-
-def seed_hashes(root):
-    """The one-off `migrate_schema14.py` step, in miniature: reconcile, then ack.
-
-    Written as a helper rather than baked into `sync_tree` because "a corpus that has
-    never been reconciled" is itself a state worth testing, and the fixture would hide it.
-    """
-    rc, out, err = run(root, 'sync', '--json')
-    for item in json.loads(out.decode('utf-8'))['body']:
-        rc2, _, err2 = run(root, 'ack', item['id'], '-m', 'seeded', '--session', KEY)
-        assert rc2 == 0, err2
-    return rc
 
 
 def live_copy(name):
@@ -420,6 +441,10 @@ def live_copy(name):
         shutil.rmtree(root)
     os.makedirs(root)
     shutil.copytree(src, os.path.join(root, 'tasks'))
+    # The live banner lives in the live note since the cutover; a copy of the corpus
+    # without it would refuse `board` and fail check 12 for a reason that is not the
+    # test's. (`scripts/gate_status.py::CODE_SCOPE_MD_KEEP` lists HANDOFF.md for this.)
+    shutil.copy2(os.path.join(LIVE_TREE, 'HANDOFF.md'), banner_path(root))
     return root
 
 
@@ -845,12 +870,14 @@ def test_lint_clean_on_a_good_tree():
     the printed string so that a check added without updating the header, or a header
     hard-coded past the list, is red rather than merely inconsistent.
     RE-MEASURED 2026-09-06c: `check_board_sync` (check 13) appended; `clean (13 checks`.
+    RE-MEASURED at the 2026-09-06 cutover: check 13 retired with the board, the number
+    is never reused, and the header reads `clean (12 checks` again.
     """
     root = good_tree('clean')
-    assert len(TM.LINT_CHECKS) == 13, [c.__name__ for c in TM.LINT_CHECKS]
+    assert len(TM.LINT_CHECKS) == 12, [c.__name__ for c in TM.LINT_CHECKS]
     rc, out, err = run(root, 'lint')
     assert rc == 0, 'clean tree is not green:\n%s\n%s' % (out_text(out), err)
-    assert 'clean (13 checks' in out_text(out), out_text(out)
+    assert 'clean (12 checks' in out_text(out), out_text(out)
     # TWELVE, not eleven, since 2026-08-29. A clean tree must also report NO warnings --
     # a check that warns about a tree with nothing wrong is a check the next reader
     # learns to scroll past.
@@ -1322,21 +1349,23 @@ def test_counts_is_the_one_home_for_a_live_figure():
 
 @case
 def test_the_moved_updated_split_survives_automation():
-    """The whole reason there are two stamps: an ack-class write must NOT move `moved`.
+    """The whole reason there are two stamps: a housekeeping write must NOT move `moved`.
 
     `moved` answers "when did a session last make PROGRESS", and `board` reads it to warn
-    about neglected NOW/NEXT rows. If a housekeeping pass -- a cheap model acking the sync
-    agent's drift report, a scheduled mechanical field fix -- could bump `moved`, then a
-    neglected row would look fresh forever and the staleness warning could never fire
-    again. A check that cannot fire is this repo's declared house failure mode, so the
-    property is asserted here rather than described in SPEC.md and hoped for.
+    about neglected NOW/NEXT rows. If a housekeeping pass -- a cheap model recording a
+    review that changed nothing, a scheduled mechanical field fix -- could bump `moved`,
+    then a neglected row would look fresh forever and the staleness warning could never
+    fire again. A check that cannot fire is this repo's declared house failure mode, so
+    the property is asserted here rather than described in SPEC.md and hoped for.
 
     PORT NOTE (2026-08-29): the scratch original ran on `good_tree`, whose tasks are all
-    `source: hand`. `ack` now REFUSES a hand-filed task outright (spec A2.1), so every
-    `ack` here would be an exit-2 refusal and the case would be testing the refusal rather
-    than the stamp split. The fixture is therefore `sync_tree` -- the same seven tasks with
-    T1..T4/T6 marked `source: board` and a board above them -- and step 6's closed-task ack
-    moved from T7 (hand) to T4 (board). Nothing about the stamp property changed.
+    `source: hand`. `ack` then REFUSED a hand-filed task outright (spec A2.1), so the
+    fixture became `sync_tree` -- the same seven tasks with T1..T4/T6 marked
+    `source: board` -- and step 6's closed-task ack moved from T7 (hand) to T4 (board).
+    CUTOVER NOTE (2026-09-06): `ack` is retired, and the updated-only write a review
+    makes is `comment --mechanical`. Steps 2, 5 and 6 use it; nothing about the stamp
+    property changed, and the fixture stays `sync_tree` so the ledger of what this case
+    ran on is continuous.
 
     Sabotage, run before this was believed -- `op_ack` calling the progress path
     (`stamp_and_render(task, key, True)`, the one-word edit a refactor makes when it
@@ -1351,7 +1380,8 @@ def test_the_moved_updated_split_survives_automation():
         AssertionError: set --mechanical moved `moved` 2026-08-21b -> 2026-08-21d
 
     Baseline before and after each: `32 test(s), 0 failed`. Both are now permanent cases:
-    test_sabotage_wp_ack_does_not_move_moved / test_sabotage_wp_mechanical_is_honoured.
+    test_sabotage_wp_ack_does_not_move_moved / test_sabotage_wp_mechanical_is_honoured
+    (the first re-pointed at `comment --mechanical` at the cutover, same sabotage).
     """
     root = sync_tree('stamps')
     path = os.path.join(root, 'tasks', 'T2-next-alpha.md')
@@ -1368,17 +1398,17 @@ def test_the_moved_updated_split_survives_automation():
     assert rc == 0, err
     assert stamps() == (KEY + 'b', KEY + 'b'), stamps()
 
-    # 2. `ack` bumps `updated` ONLY -- and says so, because a caller who cannot see the
-    #    difference will assume the tool did the obvious thing.
-    rc, out, err = run(root, 'ack', 'T2', '-m', 'saw the drift report; body still true',
-                       '--session', KEY + 'c')
+    # 2. `comment --mechanical` bumps `updated` ONLY -- and says so, because a caller
+    #    who cannot see the difference will assume the tool did the obvious thing.
+    rc, out, err = run(root, 'comment', 'T2', '-m', 'reviewed; body still true',
+                       '--mechanical', '--session', KEY + 'c')
     assert rc == 0, err
     moved, updated = stamps()
     assert moved == KEY + 'b', (
-        'ack moved `moved` %sb -> %s: an acknowledgement just laundered a stale row into '
-        'a fresh one' % (KEY, moved))
+        'comment --mechanical moved `moved` %sb -> %s: a review just laundered a stale '
+        'row into a fresh one' % (KEY, moved))
     assert updated == KEY + 'c', stamps()
-    assert 'moved held at %sb' % KEY in out_text(out), out_text(out)
+    assert '(updated only)' in out_text(out), out_text(out)
 
     # 3. --mechanical does the same for the field ops a housekeeping TOOL emits.
     rc, out, err = run(root, 'set', 'T2', 'size', 'L', '--mechanical',
@@ -1396,27 +1426,29 @@ def test_the_moved_updated_split_survives_automation():
     assert stamps() == (KEY + 'e', KEY + 'e'), stamps()
 
     # 5. The invariant that makes the pair checkable at rest: updated >= moved, always.
-    #    An ack with an EARLIER key would break it, so it is refused rather than written.
-    rc, out, err = run(root, 'ack', 'T2', '-m', 'backdated', '--session', KEY + 'd')
+    #    A housekeeping write with an EARLIER key would break it, so it is refused
+    #    rather than written.
+    rc, out, err = run(root, 'comment', 'T2', '-m', 'backdated', '--mechanical',
+                       '--session', KEY + 'd')
     assert rc == 2, (rc, out_text(out), err)
     assert 'earlier than' in err and 'moved' in err, err
 
-    # 6. A closed task can still be commented on and acked -- which is exactly why
-    #    `updated` is a separate field from `closed`.
+    # 6. A closed task can still be commented on, with and without the flag -- which is
+    #    exactly why `updated` is a separate field from `closed`.
     rc, out, err = run(root, 'close', 'T4', '-m', 'done', '--session', KEY + 'b')
     assert rc == 0, err
     rc, out, err = run(root, 'comment', 'T4', '-m', 'a late note',
                        '--session', KEY + 'c')
     assert rc == 0, err
-    rc, out, err = run(root, 'ack', 'T4', '-m', 'archived; nothing to add',
-                       '--session', KEY + 'd')
+    rc, out, err = run(root, 'comment', 'T4', '-m', 'archived; nothing to add',
+                       '--mechanical', '--session', KEY + 'd')
     assert rc == 0, err
     closed_path = os.path.join(root, 'tasks', 'closed', 'T4-later-gamma.md')
     fm = dict(TM.parse_file(read(closed_path).decode('utf-8'), closed_path)[0])
     assert (fm['closed'], fm['moved'], fm['updated']) == (
         KEY + 'b', KEY + 'c', KEY + 'd'), fm
-    # T4 is closed while its row stays, and the tree was never reconciled: both are
-    # board drift, and since 2026-09-06c lint check 13 reports it.
+    # T4 is closed while the note's old board prose still lists it. Before the cutover
+    # that was drift check 13 reported; now it is prose the tool does not read.
     assert_intact_but_drifted(root)
 
 
@@ -1434,10 +1466,11 @@ def test_source_is_written_once_and_never_again():
 
         AssertionError: ('`set source` was ACCEPTED (rc 0): provenance is now editable',)
 
-    ONE EXCEPTION since 2026-09-06c, and it takes no value from a human: `ack` on a
-    `source: hand` task whose id HAS a board row flips it to `board` (one direction only)
-    and records the flip in the Log -- `test_ack_adopts_a_hand_task_that_has_a_row`. The
-    `set` refusal pinned here is unchanged.
+    ONE EXCEPTION existed for the last hours of the trial (2026-09-06c to the cutover
+    the same day), and it took no value from a human: `ack` on a `source: hand` task
+    whose id HAD a board row flipped it to `board`. `ack` retired with the board, so
+    since the cutover the mechanism is exact again: NO op writes the field after `new`.
+    The `set` refusal pinned here never changed.
     """
     root = good_tree('prov')
     rc, out, err = run(root, 'new', 'a synced row', '--source', 'board', '--session', KEY)
@@ -1525,7 +1558,9 @@ def test_parent_depth_warns_and_stays_green():
     grouping the depth was expressing).
 
     PORT NOTE: the two `clean (11 checks` literals were RE-MEASURED to `12` for
-    `check_banner`; the warning-count and rollup assertions are unchanged.
+    `check_banner`, to `13` for `check_board_sync` (2026-09-06c), and back to `12` when
+    check 13 retired at the cutover; the warning-count and rollup assertions are
+    unchanged.
     """
     root = good_tree('depth')
     rc, out, err = run(root, 'lint')
@@ -1538,7 +1573,7 @@ def test_parent_depth_warns_and_stays_green():
     text = out_text(out) + err
     assert rc == 0, ('depth is a WARNING, not a violation -- exit %d:\n%s' % (rc, text))
     assert 'WARN' in text and 'T8 -> T4 -> T6' in text, text
-    assert 'clean (13 checks' in out_text(out), out_text(out)
+    assert 'clean (12 checks' in out_text(out), out_text(out)
     assert '1 warning(s)' in out_text(out), out_text(out)
 
     rc, data, err = rj(root, 'lint')
@@ -1823,485 +1858,97 @@ def test_shipped_config_is_measured_not_an_example():
     assert int(cfg['stale_days']) >= 7, cfg['stale_days']
 
 
-@case
-def test_sync_has_no_delete_path():
-    """A board row can vanish in every mode sync has, and the task file stays on disk.
+# --- the retired verbs (2026-09-06 cutover) ---------------------------------------------
+#
+# Ten cases lived here until the cutover: six `sync` cases (no delete path; BODY drift
+# compares the source against itself; `--create-new` files with the row's id and emits
+# mechanical commands; silent on the normal path and loud on the reverse; refuses a source
+# it cannot read; `--commands` name the corpus) and four `ack` cases (covers CORPUS-ONLY
+# and cannot hide a new problem; refuses a hand-filed task; adopts a hand task that has a
+# row; `--since` warns on stderr). Their sabotage records are preserved in
+# docs/history/tasktool-proof-2026-08.md and the bodies in git history (the commit before
+# the cutover). Both verbs retired with the board's row table, so each case became one
+# parameter of the refusal test below -- the argv shape it used, run against the fixture
+# it used -- rather than being deleted: verify.sh's test-count floor carries zero
+# headroom on purpose, and a retirement that removes its tests is a retirement nobody
+# can see go wrong.
 
-    THE property of this design (SYNC-SPEC.md section 0): a row disappears from a board
-    as easily by a careless edit as by a finished item, so `sync` reports and stops. The
-    assertion is on the FILESYSTEM and on the bytes, not on the absence of a flag -- a
-    tool with no `--delete` flag can still call `os.remove`.
+RETIRED_ARGV = (
+    ('sync_has_no_delete_path', ('sync', '--check')),
+    ('sync_body_drift', ('sync', '--json')),
+    ('sync_creates_and_emits_commands', ('sync', '--create-new', '--session', KEY + 'b')),
+    ('sync_silent_normal_loud_reverse', ('sync', '--commands')),
+    ('sync_refuses_unreadable_source', ('sync', '--check', '--board', 'HANDOFF.md')),
+    ('sync_commands_name_corpus', ('sync',)),
+    ('ack_covers_corpus_only', ('ack', 'T4', '-m', 'row retired by hand; task still true',
+                                '--session', KEY + 'b')),
+    ('ack_refuses_hand_filed', ('ack', 'T5', '-m', 'nothing changed',
+                                '--session', KEY + 'b')),
+    ('ack_adopts_hand_task_with_row', ('ack', 'T5', '-m', 'row added; body still right',
+                                       '--session', KEY + 'b')),
+    ('ack_since_warns', ('ack', 'T1', '-m', 'acked in the same session',
+                         '--since', 'abcdef012345', '--session', KEY + 'b')),
+    ('ack_bare', ('ack',)),
+)
 
-    Sabotage (sync_sabotage.py S1), run before this was believed -- `os.remove(task.path)`
-    on the CORPUS-ONLY branch of `sync_report`, i.e. the tool "tidying up" an orphan.
-    Literal, with `<t>/` eliding the checkout path as elsewhere in this file::
 
-        AssertionError: sync REMOVED <t>/testtmp/sync_del/tasks/T4-later-gamma.md. There
-        is no flag for this and there must be no code path for it either.
+def tree_bytes(root):
+    """Every file under `root`, by relative path, as bytes -- the whole fixture, note
+    included, so that a refusal which "only" re-stamped a file is caught."""
+    out = {}
+    for base, dirs, names in os.walk(root):
+        for name in names:
+            path = os.path.join(base, name)
+            out[os.path.relpath(path, root)] = read(path)
+    return out
 
-    Baseline before and after: `37 test(s), 0 failed`.
+
+@pytest.mark.parametrize('label,argv', RETIRED_ARGV, ids=[r[0] for r in RETIRED_ARGV])
+def test_retired_verbs_refuse_every_old_argv_shape(label, argv):
+    """`ack` and `sync` refuse (rc 2), name the cutover and the replacement, and touch
+    NOTHING -- for every argv shape the ten retired cases used, plus a bare `ack`.
+
+    Three things are pinned, and the third is the instrument control:
+      * the refusal is a `Refused` (rc 2, `REFUSED` on stderr, empty stdout) that names
+        the cutover date and the replacement (`comment <id> -m ...`) -- not an argparse
+        `invalid choice`, which would name neither, and not a traceback;
+      * the fixture is byte-identical afterwards, every file including the note. The
+        old verbs' whole hazard was a side effect nobody read (`ack` stamping a digest
+        for text nobody looked at); a retirement that still stamps something is worse;
+      * a NON-retired write on the same tree succeeds (`comment --mechanical`), so the
+        tree was writable and the refusal is the verb's, not the fixture's.
+
+    Sabotage, run at the cutover before this was believed: `'sync': retired_verb`
+    deleted from `OPS` (the parser still knows the verb; dispatch does not). Observed::
+
+        KeyError: 'sync'
+
+    -- a traceback, rc 1, which the rc-2 / `REFUSED` assertions reject. And the mirror:
+    the refusal message's `retired at the` phrase reworded -- `assert 'retired at the
+    2026-09-06 cutover' in err` is red, which is the point: the message is a citation
+    the ledger and docs/tasktool-spec.md carry, not decoration.
     """
-    root = sync_tree('sync_del')
-    seed_hashes(root)
-    path = os.path.join(root, 'tasks', 'T4-later-gamma.md')
-    before = read(path)
-    board = read(os.path.join(root, 'HANDOFF.md')).decode('utf-8')
-    write(os.path.join(root, 'HANDOFF.md'),
-          '\n'.join(l for l in board.split('\n') if not l.startswith('| `T4` |')))
-
-    rc, out, err = run(root, 'sync', '--check')
-    text = out_text(out)
-    assert rc == 1, text
-    assert 'CORPUS-ONLY       T4' in text, text
-    assert 'close it if it is done' in text, text
-    assert 'close is NEVER automatic' in text, text
-
-    for argv in (('sync', '--check'), ('sync', '--commands'),
-                 ('sync', '--create-new', '--session', KEY), ('sync', '--json')):
-        rc, out, err = run(root, *argv)
-        assert os.path.isfile(path), (
-            'sync REMOVED %s. There is no flag for this and there must be no code path '
-            'for it either.' % path)
-        runnable = [l for l in out_text(out).split('\n') if l.startswith('python ')]
-        assert not [l for l in runnable if ' close ' in l], (
-            '%s emitted a RUNNABLE close command; close is a human act with a required '
-            'message, so it may only ever be SUGGESTED in prose' % ' '.join(argv))
-    assert read(path) == before, 'sync rewrote a task it only reported on'
-    assert_intact_but_drifted(root)     # T4's row is gone on purpose: CORPUS-ONLY
-
-
-@case
-def test_sync_body_drift_compares_the_source_against_itself():
-    """BODY fires when the SOURCE moves, and never when a session rewrites a task.
-
-    The refinement that makes the bucket usable (SYNC-SPEC.md section 2). Comparing the
-    board's prose against the task's prose reports drift forever, because the two
-    legitimately diverge the moment anyone works the item -- and a check that can never
-    go green is as dead as one that never fires. So the trigger is the stored digest of
-    the source block, and the two halves below are the two things that must be true of
-    it: a task rewrite is SILENT, a source rewrite is exactly ONE report.
-
-    Sabotage (sync_sabotage.py S2 and S3), run before this was believed. First
-    `report['body'].append(...)` changed to `[].append(...)`, the narrowest weakening
-    that goes quiet rather than loud::
-
-        AssertionError: rewriting ONE block produced 0 report(s), not 1: []
-
-    then `source_block_text` hashing the row CELL only, dropping the item block. On the
-    LIVE corpus, whose seeds were written by the unweakened tool, the same edit is LOUD
-    instead: `sync_accept.py` case G observed all three blocked rows (`P3`, `P6`, `R6`)
-    reporting at once, `sync   5 drift item(s)`. A stored digest pins the hash FUNCTION
-    as well as the source text.
-
-    Baseline before and after each: `37 test(s), 0 failed`.
-    """
-    root = sync_tree('sync_body')
-    seed_hashes(root)
-    rc, out, err = run(root, 'sync', '--check')
-    assert 'BODY' not in out_text(out), out_text(out)
-
-    # 1. A SESSION rewrites the task body. This must produce nothing at all.
-    path = os.path.join(root, 'tasks', 'T1-the-now-row.md')
-    write(path, read(path).decode('utf-8').replace(
-        'Summary line.', 'A completely rewritten summary a session typed.'))
-    rc, out, err = run(root, 'sync', '--check')
-    assert 'BODY' not in out_text(out), (
-        'a session rewriting a task body produced drift:\n%s' % out_text(out))
-
-    # 2. The BOARD rewrites T1's item block. Exactly one report, against exactly T1.
-    bpath = os.path.join(root, 'HANDOFF.md')
-    write(bpath, read(bpath).decode('utf-8').replace(
-        'The summary paragraph as the BOARD states it.',
-        'The summary paragraph, REWRITTEN on the board this session.'))
-    rc, out, err = run(root, 'sync', '--check')
-    text = out_text(out)
-    reports = [l for l in text.split('\n') if l.startswith('  BODY   ')]
-    assert rc == 1 and len(reports) == 1 and 'T1' in reports[0], (
-        'rewriting ONE block produced %d report(s), not 1: %s' % (len(reports), reports))
-    assert 'never auto-applied' in text, text
-
-    # 3. `ack -m` closes it out: updated advances, `moved` does NOT, the reason is logged.
-    fm = dict(TM.parse_file(read(path).decode('utf-8'), path)[0])
-    rc, out, err = run(root, 'ack', 'T1', '-m', 'reworded on the board; the task prose '
-                       'is still accurate', '--session', KEY + 'b')
+    root = sync_tree('retired_' + label)
+    before = tree_bytes(root)
+    rc, out, err = run(root, *argv)
+    assert rc == 2, ('%s: `%s` was not refused (rc=%d)\n%s\n%s'
+                     % (label, ' '.join(argv), rc, out_text(out), err))
+    assert 'REFUSED' in err and 'Traceback' not in err, err
+    assert 'retired at the 2026-09-06 cutover' in err, err
+    assert 'comment <id> -m' in err, ('the refusal must name the replacement: %s' % err)
+    assert 'Nothing was read or written' in err, err
+    assert out_text(out).strip() == '', out_text(out)
+    assert tree_bytes(root) == before, (
+        '%s: a refused `%s` changed the tree: %s'
+        % (label, argv[0], sorted(k for k in set(before) | set(tree_bytes(root))
+                                  if before.get(k) != tree_bytes(root).get(k))))
+    # The control: the same tree takes an updated-only write from a live verb.
+    rc, out, err = run(root, 'comment', 'T1', '-m', 'the replacement works',
+                       '--mechanical', '--session', KEY + 'b')
     assert rc == 0, err
-    after = dict(TM.parse_file(read(path).decode('utf-8'), path)[0])
-    assert after['moved'] == fm['moved'], (
-        'ack bumped `moved` %s -> %s: acknowledging drift is housekeeping, not progress'
-        % (fm['moved'], after['moved']))
-    assert after['updated'] == KEY + 'b', after
-    assert after['source_hash'] != fm['source_hash'], after
-    assert 'still accurate' in read(path).decode('utf-8').split('## Log')[-1], (
-        'ack did not record WHY the description needed no change -- which is the only '
-        'thing that distinguishes an acknowledged report from an unread one')
-    rc, out, err = run(root, 'sync', '--check')
-    assert 'BODY' not in out_text(out), out_text(out)
+    assert '(updated only)' in out_text(out), out_text(out)
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
-
-
-@case
-def test_sync_creates_with_the_rows_id_and_emits_mechanical_commands():
-    """`--create-new` files the ROW's id with `source: board`; `--commands` is pasteable.
-
-    The id half is not a detail: a board row is already an ADDRESS (`P3` is `P3` in the
-    ledger, in every citation), so minting a fresh id for it files a task nobody can look
-    up and leaves the row looking unfiled forever.
-
-    Sabotage (sync_sabotage.py S4 and S5), run before this was believed. First
-    `task_id=item['id']` dropped from the Namespace `sync_create_new` builds, so `op_new`
-    allocates by scanning as it does for a human -- and the red lands on the RETIRED-id
-    clause, because with allocation restored the retired row is filed happily under a
-    minted name::
-
-        assert 'NEW-REFUSED       T0' in text and 'retired-ids.txt' in text, text
-        AssertionError: T9  <t>/testtmp/sync_new/tasks/T9-a-retired-id-someone-re-typed.md
-
-    then `--mechanical` dropped from the emitted `set` line::
-
-        AssertionError: a sync command without --mechanical: ['python <t>/task.py set T4
-        size L']
-
-    Baseline before and after each: `37 test(s), 0 failed`.
-    """
-    root = sync_tree('sync_new')
-    seed_hashes(root)
-    bpath = os.path.join(root, 'HANDOFF.md')
-    board = read(bpath).decode('utf-8')
-
-    # A new row, and a size change on an existing one, in the same board edit.
-    board = board.replace('| `T4` | later gamma | LATER | ? |',
-                          '| `T4` | later gamma | LATER | L |')
-    board = board.replace('| `T6` | the group',
-                          '| `T8` | a row typed straight onto the board | LATER | S '
-                          '| `T2` | 2026-08-21 |\n| `T6` | the group')
-    write(bpath, board)
-
-    rc, out, err = run(root, 'sync', '--check')
-    text = out_text(out)
-    assert rc == 1 and 'NEW               T8' in text, text
-    assert "FIELD             T4 size: '?' -> 'L'" in text, text
-
-    # --commands: stdout is ONLY commands, so `sync --commands | sh` is a real thing.
-    rc, out, err = run(root, 'sync', '--commands')
-    lines = [l.rstrip() for l in out_text(out).split('\n') if l.strip()]
-    assert lines and all(l.startswith('python ') for l in lines), lines
-    assert all('--mechanical' in l for l in lines), (
-        'a sync command without --mechanical: %s' % lines)
-    assert any(l.endswith('set T4 size L --mechanical') for l in lines), lines
-    # And every line names the corpus it was emitted for; see
-    # test_sync_commands_name_the_corpus_they_reconcile for why that is behavioural.
-    assert all(('--dir %s' % root.replace(os.sep, '/')) in l for l in lines), lines
-
-    before = dict(TM.parse_file(read(os.path.join(root, 'tasks', 'T4-later-gamma.md'))
-                                .decode('utf-8'), 'T4')[0])
-    for line in lines:
-        argv = line.split()[2:]
-        if argv[:1] == ['--dir']:       # run() supplies its own, identical, --dir
-            argv = argv[2:]
-        rc, out, err = run(root, *argv + ['--session', KEY + 'b'])
-        assert rc == 0, err
-    after = dict(TM.parse_file(read(os.path.join(root, 'tasks', 'T4-later-gamma.md'))
-                               .decode('utf-8'), 'T4')[0])
-    assert after['size'] == 'L', after
-    assert after['moved'] == before['moved'], (
-        'applying a sync command moved `moved` %s -> %s: a housekeeping pass laundered '
-        'the staleness signal' % (before['moved'], after['moved']))
-    assert after['updated'] == KEY + 'b', after
-
-    # --create-new: the row's own id, its fields, `source: board`, and a seeded digest.
-    rc, out, err = run(root, 'sync', '--create-new', '--session', KEY + 'b')
-    made = os.path.join(root, 'tasks', 'T8-a-row-typed-straight-onto-the-board.md')
-    assert os.path.isfile(made), (
-        "sync minted no task with the row's id T8; `next_id` allocated one instead, so "
-        "the row is STILL reported NEW and the new task is CORPUS-ONLY.\n%s"
-        % out_text(out))
-    fm = dict(TM.parse_file(read(made).decode('utf-8'), made)[0])
-    assert fm['source'] == 'board', fm
-    assert re.match(r'^[0-9a-f]{12}$', fm['source_hash']), fm
-    assert (fm['pri'], fm['size'], fm['deps']) == ('LATER', 'S', ['T2']), fm
-
-    # A retired id on the board is REFUSED, not filed: ids are never reused.
-    write(bpath, read(bpath).decode('utf-8').replace(
-        '| `T6` | the group', '| `T0` | a retired id someone re-typed | LATER | S | '
-        '%s | 2026-08-21 |\n| `T6` | the group' % u'—'))
-    rc, out, err = run(root, 'sync', '--create-new', '--session', KEY + 'b')
-    text = out_text(out)
-    assert 'NEW-REFUSED       T0' in text and 'retired-ids.txt' in text, text
-    assert not [n for n in os.listdir(os.path.join(root, 'tasks'))
-                if n.startswith('T0-')], 'a retired id was filed'
-
-    assert_intact_but_drifted(root)     # the retired `T0` row is still on the board
-
-
-@case
-def test_sync_is_silent_on_the_normal_path_and_loud_on_the_reverse():
-    """R1, both directions: a closed task off the board is silent; on it, reported.
-
-    Sabotage (sync_sabotage.py S6 and S7), run before this was believed -- the closed
-    orphan bucketed as the open one (the pre-R1 spec)::
-
-        AssertionError: closing a task and dropping its row reported drift: exit 1
-
-    and, for the reverse half, an early `continue` on `task.is_closed` in `sync_report`::
-
-        AssertionError: T2 is closed and still a NEXT row, and sync said nothing
-
-    Baseline before and after each: `37 test(s), 0 failed`.
-    """
-    root = sync_tree('sync_r1')
-    seed_hashes(root)
-    rc, out, err = run(root, 'close', 'T4', '-m', 'done', '--session', KEY + 'b')
-    assert rc == 0, err
-    bpath = os.path.join(root, 'HANDOFF.md')
-    write(bpath, '\n'.join(l for l in read(bpath).decode('utf-8').split('\n')
-                           if not l.startswith('| `T4` |')))
-    rc, out, err = run(root, 'sync', '--check')
-    text = out_text(out)
-    assert rc == 0, 'closing a task and dropping its row reported drift: exit %d\n%s' % (
-        rc, text)
-    assert 'T4' not in text, text
-    # Silent, but COUNTED. A bucket nobody prints is a bucket nobody checks.
-    assert 'closed-and-off-the-board' in text, text
-
-    # The reverse: close T2 and LEAVE its row.
-    rc, out, err = run(root, 'close', 'T2', '-m', 'done', '--session', KEY + 'b')
-    assert rc == 0, err
-    rc, out, err = run(root, 'sync', '--check')
-    text = out_text(out)
-    assert rc == 1 and 'CLOSED-BUT-ON-BOARD T2' in text, (
-        'T2 is closed and still a NEXT row, and sync said nothing\n%s' % text)
-    assert 'FIELD             T2' not in text, (
-        'a closed task was field-reconciled against a row it should not have\n%s' % text)
-
-
-@case
-def test_sync_refuses_a_source_it_cannot_read_rather_than_guessing():
-    """Instrument control: a malformed `source` stops sync, it does not get a bucket.
-
-    The dangerous guess is `hand` -- "expected, not drift" -- which makes the task
-    invisible to this tool forever.
-
-    Sabotage (sync_sabotage.py S8), run before this was believed -- the guard neutered
-    (`bad = None`) and the empty value folded into the hand bucket. The observed output is
-    worse than the assertion asked for: not merely unreported, but a clean bill of
-    health::
-
-        assert rc == 2, (rc, out_text(out), err)
-        AssertionError: (0, 'sync   <t>/testtmp/sync_prov/HANDOFF.md  (4 row(s) vs 7
-        task(s))[CR][LF]  quiet             3 hand-filed, 0 closed-and-off-the-board
-        [CR][LF]sync   CLEAN[CR][LF]', '')
-
-    Read the `3 hand-filed`: the task with NO provenance at all was counted as one of
-    them, and the run ended `CLEAN`.
-
-    Baseline before and after: `37 test(s), 0 failed`.
-    """
-    root = sync_tree('sync_prov')
-    seed_hashes(root)
-    path = os.path.join(root, 'tasks', 'T4-later-gamma.md')
-    write(path, read(path).decode('utf-8').replace('source: board', 'source:'))
-    # AND drop its row, which is the dangerous shape: a task ON the board is reconciled
-    # against its row whatever its provenance says, so the silence only bites once the
-    # task is the kind sync has to CLASSIFY.
-    bpath = os.path.join(root, 'HANDOFF.md')
-    write(bpath, '\n'.join(l for l in read(bpath).decode('utf-8').split('\n')
-                           if not l.startswith('| `T4` |')))
-    rc, out, err = run(root, 'sync', '--check')
-    assert rc == 2, (rc, out_text(out), err)
-    assert 'REFUSED' in err and 'source is empty' in err, err
-    assert 'T4-later-gamma.md' in err, err
-    rc, out, err = run(root, 'lint')
-    assert rc == 1 and 'source is empty' in err, err
-
-
-def run_verbatim(cwd, line, *extra):
-    """Run an emitted `--commands` line EXACTLY as printed, from ``cwd``.
-
-    Deliberately does not go through ``run()``: ``run()`` injects its own ``--dir``, which
-    is the one thing this must not do. The whole hazard of PROOF4.md section 6 bug A is
-    that a pasted line carries no target of its own and silently inherits the cwd's.
-    """
-    argv = line.split() + list(extra)
-    proc = subprocess.Popen([sys.executable] + argv[1:], cwd=cwd,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = proc.communicate()
-    return proc.returncode, out, err.decode('utf-8', 'replace')
-
-
-@case
-def test_sync_commands_name_the_corpus_they_reconcile():
-    """An emitted line edits the corpus it was emitted FOR, from any cwd. PROOF4 bug A.
-
-    THE BUG. `sync_command_lines` took no `store` and built each line as
-    `'python %s %s' % (prog(), cmd)`, so the target was never echoed. An operator standing
-    in corpus `near` who runs `--dir <far> sync --commands` and pastes the lines verbatim
-    edited `near` and left `far` untouched. Three rc=0 lines, plausible success text, no
-    warning anywhere: this repo's declared house failure mode, failing by PASSING, with a
-    write attached.
-
-    WHY TWO CORPORA AND NOT AN ASSERTION ON THE STRING. `assert '--dir' in line` passes
-    against a line that names the WRONG directory, and it passes against a line nobody can
-    run. The property is behavioural.
-
-    Sabotage (sync_sabotage.py S9 and S10), run before this was believed. First the fix
-    reverted to the exact line the bug shipped (`'python %s %s' % (prog(), cmd)`)::
-
-        assert ('--dir %s' % far.replace(os.sep, '/')) in line, (
-        AssertionError: the emitted line does not name its corpus: 'python
-        <t>/task.py set T4 size L --mechanical'
-
-    Then S10 makes the SAME edit and additionally deletes this test's own string
-    assertion, controlling the instrument as well as the subject::
-
-        assert read(os.path.join(near, 'tasks', name)) == before, (
-        AssertionError: pasting sync's own output edited the corpus in the CWD instead of
-        the one it was emitted for. T4-later-gamma.md under <t>\\testtmp\\sync_dir_near
-        changed.
-
-    Baseline before and after each: `40 test(s), 0 failed`.
-    """
-    far = sync_tree('sync_dir_far')
-    near = sync_tree('sync_dir_near')
-    seed_hashes(far)
-    seed_hashes(near)
-
-    # One field drift on the FAR board only. The NEAR corpus is an innocent bystander and
-    # is never named on any command line in this test.
-    bpath = os.path.join(far, 'HANDOFF.md')
-    write(bpath, read(bpath).decode('utf-8').replace(
-        '| `T4` | later gamma | LATER | ? |', '| `T4` | later gamma | LATER | L |'))
-
-    near_before = dict((n, read(os.path.join(near, 'tasks', n)))
-                       for n in sorted(os.listdir(os.path.join(near, 'tasks')))
-                       if n.endswith('.md'))
-
-    rc, out, err = run(far, 'sync', '--commands')
-    lines = [l.rstrip() for l in out_text(out).split('\n') if l.strip()]
-    assert lines, (out_text(out), err)
-    for line in lines:
-        assert ('--dir %s' % far.replace(os.sep, '/')) in line, (
-            'the emitted line does not name its corpus: %r' % line)
-
-    # Apply them VERBATIM, standing in the bystander corpus. This is the paste.
-    for line in lines:
-        rc, out, err = run_verbatim(near, line, '--session', KEY + 'b')
-        assert rc == 0, (line, out_text(out), err)
-
-    for name, before in near_before.items():
-        assert read(os.path.join(near, 'tasks', name)) == before, (
-            'pasting sync\'s own output edited the corpus in the CWD instead of the one '
-            'it was emitted for. %s under %s changed.' % (name, near))
-
-    fm = dict(TM.parse_file(read(os.path.join(far, 'tasks', 'T4-later-gamma.md'))
-                            .decode('utf-8'), 'T4')[0])
-    assert fm['size'] == 'L', (
-        'the emitted line named a corpus but did not edit it: %s' % fm)
-    assert fm['updated'] == KEY + 'b' and fm['moved'] == KEY, fm
-
-    rc, out, err = run(far, 'sync', '--check')
-    assert rc == 0 and 'FIELD' not in out_text(out), out_text(out)
-    for root in (far, near):
-        rc, out, err = run(root, 'lint')
-        assert rc == 0, out_text(out) + err
-
-
-@case
-def test_ack_covers_corpus_only_and_cannot_hide_a_new_problem():
-    """`ack` silences a standing CORPUS-ONLY item -- and only while it stays that item.
-
-    THE DEFECT (PROOF4.md section 6 bug B). `sync --check` was red forever: `B2` and
-    `ZT-P5` are open, `source: board`, and have no row, both TRUE findings that only a
-    human `close` can clear. So steps 1-3 of the housekeeping loop exited 1 on every run,
-    indefinitely, and a cheap model had no printed way to tell weeks-old standing drift
-    from something that changed since the last run. A permanently red check is a dead
-    check.
-
-    THE PROPERTY THAT MAKES THE FIX ADMISSIBLE: an acknowledgement must not be able to
-    hide a NEW, DIFFERENT problem. So the halves below are (1) it goes quiet, (2) the item
-    is still NAMED, and (3) the moment the situation CHANGES it is reported again.
-
-    Sabotage (sync_sabotage.py S11 and S12), run before this was believed. S11 is a
-    ONE-TOKEN edit: the BODY comparison accepts the sentinel as a match for any digest
-    (`if task.source_hash not in (digest, SOURCE_HASH_NO_ROW)`)::
-
-        assert rc == 1, (
-        AssertionError: acking a missing row silenced the task AFTER its row came back:
-        the acknowledgement hid a new, different situation.
-
-    S12 keeps the bucket but stops NAMING it::
-
-        assert 'ACKED-NO-ROW      T4' in text, (
-        AssertionError: the acknowledged item is not named on the report. A bucket that
-        goes silent is a bucket that stops being checked.
-
-    Baseline before and after each: `40 test(s), 0 failed`.
-    """
-    root = sync_tree('sync_ack_only')
-    seed_hashes(root)
-    bpath = os.path.join(root, 'HANDOFF.md')
-    board = read(bpath).decode('utf-8')
-    row = [l for l in board.split('\n') if l.startswith('| `T4` |')][0]
-    write(bpath, '\n'.join(l for l in board.split('\n') if l != row))
-
-    # 1. Standing drift, exactly as B2 / ZT-P5 present on the live board.
-    rc, out, err = run(root, 'sync', '--check')
-    assert rc == 1 and 'CORPUS-ONLY       T4' in out_text(out), out_text(out)
-
-    # 2. ack it with a reason -- and the reason lands in the Log, which is the whole
-    #    audit trail this buys over a flag or an ignore-list.
-    rc, out, err = run(root, 'ack', 'T4', '-m', 'row retired by hand; task still true',
-                       '--session', KEY + 'b')
-    assert rc == 0, err
-    assert 'acked-no-row' in out_text(out), out_text(out)
-    path = os.path.join(root, 'tasks', 'T4-later-gamma.md')
-    text = read(path).decode('utf-8')
-    fm = dict(TM.parse_file(text, path)[0])
-    assert fm['source_hash'] == TM.SOURCE_HASH_NO_ROW, fm
-    assert 'row retired by hand; task still true' in text, text
-    # ack is housekeeping, never progress (SPEC.md section 3.1).
-    assert fm['moved'] == KEY and fm['updated'] == KEY + 'b', fm
-
-    # 3. Green, and STILL NAMED. Silence would just move the failure from "red forever"
-    #    to "quiet forever", which is the worse of the two.
-    rc, out, err = run(root, 'sync', '--check')
-    text = out_text(out)
-    assert rc == 0, ('acking the only standing item left the check red:\n%s' % text)
-    assert 'CLEAN' in text, text
-    assert 'ACKED-NO-ROW      T4' in text, (
-        'the acknowledged item is not named on the report. A bucket that goes silent is '
-        'a bucket that stops being checked.\n%s' % text)
-
-    # 4. THE SITUATION CHANGES: the row comes back. The acknowledgement was of an absence,
-    #    so it must not survive the absence ending.
-    write(bpath, '\n'.join((l + '\n' + row) if l.startswith('| `T3` |') else l
-                           for l in read(bpath).decode('utf-8').split('\n')))
-    rc, out, err = run(root, 'sync', '--check')
-    text = out_text(out)
-    assert rc == 1, (
-        'acking a missing row silenced the task AFTER its row came back: the '
-        'acknowledgement hid a new, different situation.\n%s' % text)
-    assert 'BODY              T4' in text and TM.SOURCE_HASH_NO_ROW in text, text
-    assert 'ACKED-NO-ROW' not in text, text
-
-    # 5. And the ordinary ack still closes it, restamping the real digest.
-    rc, out, err = run(root, 'ack', 'T4', '-m', 'read both; body still right',
-                       '--session', KEY + 'b')
-    assert rc == 0, err
-    fm = dict(TM.parse_file(read(path).decode('utf-8'), path)[0])
-    assert re.match(r'^[0-9a-f]{12}$', fm['source_hash']), fm
-    rc, out, err = run(root, 'sync', '--check')
-    assert rc == 0, out_text(out)
-    rc, out, err = run(root, 'lint')
-    assert rc == 0, out_text(out) + err
-
-    # 6. A `hand` task may not carry the sentinel either: a hand-filed task has no source
-    #    that could be missing a row for it, so lint calls it what it is.
-    hand = os.path.join(root, 'tasks', 'T5-held-delta.md')
-    write(hand, read(hand).decode('utf-8')
-          .replace('source_hash:', 'source_hash: ' + TM.SOURCE_HASH_NO_ROW))
-    rc, out, err = run(root, 'lint')
-    assert rc == 1 and 'sentinel' in err and 'T5' in err, err
 
 
 @case
@@ -2379,150 +2026,6 @@ def test_list_truncation_is_announced_and_json_is_not_cut():
 
 
 # --- cases for the 2026-08-29 changes (spec A2 footguns, A3 board upgrades) ------------
-
-def test_ack_refuses_a_hand_filed_task_and_names_the_remedy():
-    """A7 footgun 1: `ack` on a `source: hand` task printed SUCCESS and stamped nothing.
-
-    The only stamping branch was `if task.source == 'board':`; the hand path fell straight
-    through to a success print and `return 0`. So the one op whose entire job is to record
-    "I read the drift report and the task is still right" logged the word "acked", bumped
-    `updated`, changed nothing a later run can read, and let the next `sync` report the
-    same drift forever. It must REFUSE, nonzero, naming the remedy -- `comment`, which
-    writes the same Log entry and the same `updated` bump without claiming a
-    reconciliation.
-    """
-    root = sync_tree('ackhand')
-    seed_hashes(root)
-
-    # T5 is `source: hand` in this fixture. The refusal is exit 2, not a soft warning.
-    before = read(os.path.join(root, 'tasks', 'T5-held-delta.md'))
-    rc, out, err = run(root, 'ack', 'T5', '-m', 'nothing changed', '--session', KEY + 'b')
-    assert rc == 2, ('ack accepted a hand-filed task (rc=%d): %s' % (rc, out_text(out)))
-    assert 'REFUSED' in err, err
-    assert '`source: hand`' in err, err
-    assert 'task.py comment T5' in err, (
-        'the refusal must name the remedy, not just the rule: %s' % err)
-    assert read(os.path.join(root, 'tasks', 'T5-held-delta.md')) == before, (
-        'a refused ack still wrote the file')
-
-    # The green half, without which this test would be equally happy with an `ack` that
-    # refuses everything: a board-sourced task still acks.
-    rc, out, err = run(root, 'ack', 'T1', '-m', 'read it; still true',
-                       '--session', KEY + 'b')
-    assert rc == 0, err
-    assert 'T1 acked %sb' % KEY in out_text(out), out_text(out)
-    rc, out, err = run(root, 'lint')
-    assert rc == 0, out_text(out) + err
-
-
-def test_ack_adopts_a_hand_task_that_has_a_row():
-    """The fifth `ack` case (2026-09-06c, Phase B-prime prerequisite 6): `source: hand`
-    with a board row is ADOPTED, not refused.
-
-    C3 of the 2026-09-06 trial pass found three of the nine drifts (`TK55`, `TK54`,
-    `P21`) unackable: filed by hand first, given a row later, digested by `sync` as
-    BODY drift forever, and refused by `ack` because `source` was immutable. The only
-    exit was hand-editing the frontmatter. Now: `source` flips `hand -> board`, the
-    row's digest is stamped, the Log entry says so, and the next `sync --check` is
-    CLEAN. Hand-with-no-row (the test above) and a path source stay refused --
-    `source` is never written from a human-supplied value, and never flips back.
-
-    Sabotage, run 2026-09-06c before this was believed: the adoption branch's
-    `task.fm['source'] = 'board'` deleted (the digest is still computed, the Log still
-    written, but provenance is not flipped). Observed::
-
-        AssertionError: ack accepted T5 but did not adopt it (rc=2): ack refuses T5:
-        its source is `source: hand`, ...
-    """
-    root = sync_tree('ackadopt')
-    seed_hashes(root)
-    bpath = os.path.join(root, 'HANDOFF.md')
-    # Give hand-filed T5 a row. It now drifts (BODY, first reconciliation) and, before
-    # today, could not be acked.
-    write(bpath, read(bpath).decode('utf-8').replace(
-        '| `T6` | the group', '| `T5` | held delta | HOLD | M | %s | 2026-08-21 |\n'
-        '| `T6` | the group' % u'—'))
-    rc, out, err = run(root, 'sync', '--check')
-    assert rc == 1 and 'BODY              T5' in out_text(out), (rc, out_text(out))
-
-    rc, out, err = run(root, 'ack', 'T5', '-m', 'row added; body still right',
-                       '--session', KEY + 'b')
-    assert rc == 0, 'ack accepted T5 but did not adopt it (rc=%d): %s' % (rc, err)
-    text = out_text(out)
-    assert 'T5 acked %sb' % KEY in text and 'source hand -> board' in text, text
-    rc, data, err = rj(root, 'show', 'T5')
-    assert data['source'] == 'board', data
-    assert re.match(r'^[0-9a-f]{12}$', data['source_hash']), data['source_hash']
-    assert data['moved'] == KEY, 'adoption is an ack; it must not move `moved`'
-    body = read(os.path.join(root, 'tasks', 'T5-held-delta.md')).decode('utf-8')
-    assert 'ack adopted this task: source hand -> board' in body, body
-    rc, out, err = run(root, 'sync', '--check')
-    assert rc == 0 and 'CLEAN' in out_text(out), (rc, out_text(out))
-    rc, out, err = run(root, 'lint')
-    assert rc == 0, out_text(out) + err
-
-    # One direction, and only from `hand`: a PATH source with a row is still refused,
-    # because there is still no digest of that document to stamp.
-    rc, out, err = run(root, 'new', 'an audited row', '--session', KEY,
-                       '--source', 'docs/perf-round6-audit-2026-08.md')
-    assert rc == 0, err
-    write(bpath, read(bpath).decode('utf-8').replace(
-        '| `T6` | the group', '| `T8` | an audited row | LATER | M | %s | 2026-08-21 |\n'
-        '| `T6` | the group' % u'—'))
-    rc, out, err = run(root, 'ack', 'T8', '-m', 'x', '--session', KEY + 'b')
-    assert rc == 2 and 'docs/perf-round6-audit-2026-08.md' in err, (rc, err)
-    rc, data, err = rj(root, 'show', 'T8')
-    assert data['source'] == 'docs/perf-round6-audit-2026-08.md', data
-
-
-def test_ack_since_warns_on_stderr_when_the_source_moved():
-    """A7 footgun 2: "`ack` must be a session's LAST step", encoded rather than written.
-
-    `ack` stamps what the source says AT ACK TIME. If the source moved between the drift
-    report a session read and the ack it types at the end, the digest just written covers
-    text nobody read -- and the next `sync` is green about it. `--since DIGEST` re-reads
-    the source and announces the mismatch loudly on STDERR; the exit code is unchanged,
-    because the stamp is still the honest one, it is the READING that was stale.
-    """
-    root = sync_tree('acksince')
-    seed_hashes(root)
-    path = os.path.join(root, 'tasks', 'T1-the-now-row.md')
-
-    def digest():
-        return dict(TM.parse_file(read(path).decode('utf-8'), path)[0])['source_hash']
-
-    seeded = digest()
-    assert re.match(r'^[0-9a-f]{12}$', seeded), seeded
-
-    # 1. The matching case is SILENT. Without this half the test would pass against an
-    #    `ack` that warns unconditionally, which is a warning nobody reads.
-    rc, out, err = run(root, 'ack', 'T1', '-m', 'acked in the same session',
-                       '--since', seeded, '--session', KEY + 'b')
-    assert rc == 0, err
-    assert err.strip() == '', 'an unmoved source produced a warning: %r' % err
-    assert digest() == seeded, digest()
-
-    # 2. The source moves under the session's feet.
-    bpath = os.path.join(root, 'HANDOFF.md')
-    write(bpath, read(bpath).decode('utf-8').replace(
-        'The summary paragraph as the BOARD states it.',
-        'A DIFFERENT paragraph, edited after the drift report was printed.'))
-    rc, out, err = run(root, 'ack', 'T1', '-m', 'acked from a stale report',
-                       '--since', seeded, '--session', KEY + 'c')
-    assert rc == 0, ('the mismatch is a WARNING, not a refusal -- the stamp is still '
-                     'honest: rc=%d %s' % (rc, err))
-    moved_to = digest()
-    assert moved_to != seeded, moved_to
-    assert 'WARNING' in err, ('the mismatch must be announced: %r' % err)
-    assert 'source moved since the drift report' in err, err
-    assert seeded in err and moved_to in err, (
-        'the warning must print BOTH digests, or the reader cannot tell what they '
-        'missed: %r' % err)
-    assert 'last step' in err.lower(), (
-        'the warning must state the rule it is enforcing: %r' % err)
-    rc, out, err = run(root, 'lint')
-    assert rc == 0, out_text(out) + err
-
 
 def test_new_id_is_explicit_and_refuses_live_malformed_or_retired():
     """A7 footgun 3: `new` had no id control, so a work row was forced into the findings
@@ -2768,8 +2271,9 @@ def test_lint_check_4_catches_a_hand_edited_bad_brief():
 
 
 def test_board_refuses_a_missing_or_overlong_banner():
-    """A3.2: `tasks/BANNER.md` is the single must-read thing, and `board` REFUSES without
-    it.
+    """A3.2: the banner (the `## Banner` section of `<root>/HANDOFF.md` since the
+    2026-09-06 cutover; `tasks/BANNER.md` before it) is the single must-read thing, and
+    `board` REFUSES without it.
 
     A missing banner is a broken session-start, not a default. The alternative -- render
     the board and omit the banner -- is the failure this repo names: a session-start that
@@ -2778,7 +2282,7 @@ def test_board_refuses_a_missing_or_overlong_banner():
     part that silently went missing.
     """
     root = good_tree('banner')
-    banner_path = os.path.join(root, 'tasks', 'BANNER.md')
+    note = banner_path(root)
 
     # The green baseline first: a board that never renders would pass every assertion
     # below without the check existing.
@@ -2789,10 +2293,10 @@ def test_board_refuses_a_missing_or_overlong_banner():
     assert out_text(out).index(BANNER_TEXT.split('\n')[0]) < out_text(out).index('BOARD'), \
         out_text(out)
 
-    os.remove(banner_path)
+    os.remove(note)
     rc, out, err = run(root, 'board')
     assert rc == 2, ('board rendered without a banner (rc=%d):\n%s' % (rc, out_text(out)))
-    assert 'does not exist' in err and 'BANNER.md' in err, err
+    assert 'does not exist' in err and 'HANDOFF.md' in err, err
     assert 'session-start' in err, err
     # The refusal precedes ALL output, --json included: a machine consumer must not get a
     # banner-less payload either.
@@ -2802,7 +2306,7 @@ def test_board_refuses_a_missing_or_overlong_banner():
     # Over the cap. `board` states a size that is arithmetic over this cap plus the
     # NOW/NEXT budgets, so an over-long banner does not make the view longer -- it makes
     # the view's CLAIM false.
-    write(banner_path, '%s -- banner\n' % KEY + '\n'.join(
+    write_banner(root, '%s -- banner\n' % KEY + '\n'.join(
         'filler line %d' % n for n in range(TM.BANNER_MAX_LINES)) + '\n')
     rc, out, err = run(root, 'board')
     assert rc == 2, ('an over-long banner rendered (rc=%d)' % rc)
@@ -2811,9 +2315,9 @@ def test_board_refuses_a_missing_or_overlong_banner():
 
     # Exactly at the cap is legal -- pinned so this test cannot be satisfied by a check
     # that refuses every banner.
-    write(banner_path, '\n'.join(['%s -- banner' % KEY] +
+    write_banner(root, '\n'.join(['%s -- banner' % KEY] +
                                  ['line %d' % n for n in range(TM.BANNER_MAX_LINES - 1)])
-          + '\n')
+                 + '\n')
     rc, out, err = run(root, 'board')
     assert rc == 0, ('a banner of exactly %d lines must render: %s'
                      % (TM.BANNER_MAX_LINES, err))
@@ -2829,23 +2333,24 @@ def test_lint_check_12_catches_the_three_banner_failures():
     refusal the tool only issues to the victim is a refusal issued too late.
     """
     root = good_tree('bannerlint')
-    banner_path = os.path.join(root, 'tasks', 'BANNER.md')
+    note = banner_path(root)
     # Index 11 (position 12): the checks are cited by number, so the position is the
-    # claim -- `[-1]` was the claim until check 13 was appended on 2026-09-06c.
+    # claim -- `[-1]` was the claim until check 13 was appended on 2026-09-06c, and it
+    # is `[-1]` again since the cutover retired 13, but 11 is the claim that matters.
     assert TM.LINT_CHECKS[11].__name__ == 'check_banner', \
         [c.__name__ for c in TM.LINT_CHECKS]
 
     # 1. Missing.
-    os.remove(banner_path)
+    os.remove(note)
     rc, out, err = run(root, 'lint')
     text = out_text(out) + err
     assert rc == 1, text
-    line = first_match(text, r'BANNER\.md does not exist')
+    line = first_match(text, r'HANDOFF\.md does not exist')
     assert line is not None, text
     assert 'board` refuses without it' in line, line
 
     # 2. Over the cap.
-    write(banner_path, '%s -- banner\n' % KEY + '\n'.join(
+    write_banner(root, '%s -- banner\n' % KEY + '\n'.join(
         'filler line %d' % n for n in range(TM.BANNER_MAX_LINES)) + '\n')
     rc, out, err = run(root, 'lint')
     text = out_text(out) + err
@@ -2857,7 +2362,7 @@ def test_lint_check_12_catches_the_three_banner_failures():
     #    weak (a date, merely well-formed): nothing here can tell a banner rewritten this
     #    session from one whose date was edited, and a check that pretended to would be
     #    the fail-by-passing shape. What it catches is the banner that is simply OLD.
-    write(banner_path, 'the state of play\n\nno date anywhere on the first line\n')
+    write_banner(root, 'the state of play\n\nno date anywhere on the first line\n')
     rc, out, err = run(root, 'lint')
     text = out_text(out) + err
     assert rc == 1, text
@@ -2865,62 +2370,88 @@ def test_lint_check_12_catches_the_three_banner_failures():
     assert line is not None, text
     assert 'YYYY-MM-DD' in line, line
 
+    # 4. (2026-09-06 cutover) The note exists but has no `## Banner` heading, or has an
+    #    empty one -- the two ways a rewrite of HANDOFF.md loses the banner while the
+    #    file it lives in is still there.
+    write(note, u'# HANDOFF -- a note with no banner section\n\nProse only.\n')
+    rc, out, err = run(root, 'lint')
+    text = out_text(out) + err
+    assert rc == 1, text
+    assert first_match(text, r'has no `## Banner` heading') is not None, text
+    write(note, u'# HANDOFF\n\n%s\n\n## Still owed\n\nNothing.\n' % TM.BANNER_HEADING)
+    rc, out, err = run(root, 'lint')
+    text = out_text(out) + err
+    assert rc == 1, text
+    assert first_match(text, r'`## Banner` section is empty') is not None, text
+
     # Restore control.
-    write(banner_path, BANNER_TEXT)
+    write_banner(root, BANNER_TEXT)
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
 
 
-def test_lint_check_13_reports_board_drift_and_a_tableless_board():
-    """Check 13 (2026-09-06c, Phase B-prime prerequisite 3): `sync --check` drift is a
-    lint violation, so the dual-update contract is checked by the line every session
-    already pastes into the ledger.
+def test_lint_check_12_refuses_a_reappearing_tasks_banner_file():
+    """`tasks/BANNER.md` is a TOMBSTONE since the 2026-09-06 cutover: the banner lives
+    only in the `## Banner` section of `<root>/HANDOFF.md`, and a `tasks/BANNER.md`
+    that reappears is a check-12 violation even when the note's banner is fine.
 
-    Why: 2026-09-06b's `sync --check` found NINE one-armed updates across a fortnight of
-    ledger entries that all read `task lint: clean`. `sync --check` was a separate verb
-    nobody had to run. Three outcomes are pinned here: a reconciled board is green; a
-    board whose item block moved is red, naming the id and carrying the sync report; a
-    board with NO ROW TABLE is red too (that is the post-cutover stub, and this check
-    retires WITH `sync` at the cutover -- until then a missing table is a deleted one).
-    The no-board case is `test_lint_clean_on_a_good_tree`: `good_tree` has no board and
-    lints clean with 13 checks.
+    Why a refusal and not a skip: the file is still in `NON_TASK_MD`, so the scanners
+    would ignore it -- and a session that wrote its banner there out of habit would see
+    lint stay green while `board` printed a DIFFERENT banner, the fail-by-passing shape
+    in the one file whose job is to be read first.
     """
-    root = sync_tree('lint13')
-    seed_hashes(root)
+    root = good_tree('tombstone')
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
-
-    bpath = os.path.join(root, 'HANDOFF.md')
-    board = read(bpath).decode('utf-8')
-    write(bpath, board.replace('The summary paragraph as the BOARD states it.',
-                               'The summary paragraph, REWRITTEN on the board only.'))
+    write(os.path.join(root, 'tasks', 'BANNER.md'), BANNER_TEXT)
     rc, out, err = run(root, 'lint')
-    assert rc == 1, ('a rewritten item block did not redden lint: %s%s'
-                     % (out_text(out), err))
-    assert '`sync --check` reports 1 drift item(s)' in err, err
-    assert 'BODY              T1  source block moved' in err, err
-    assert 'task.py ack <id>' in err, 'the violation must name the remedy: %s' % err
-
-    # The remedy the message names makes it green again.
-    rc, out, err = run(root, 'ack', 'T1', '-m', 'read both; task body still right',
-                       '--session', KEY + 'b')
+    text = out_text(out) + err
+    assert rc == 1, ('a reappearing tasks/BANNER.md was tolerated:\n%s' % text)
+    line = first_match(text, r'BANNER\.md.*retired at the 2026-09-06 cutover')
+    assert line is not None, text
+    assert 'HANDOFF.md' in line, line
+    # `board` still renders (it reads the note, and the note is fine): the tombstone is
+    # lint's to enforce, before the commit, not the reader's to trip over.
+    rc, out, err = run(root, 'board')
     assert rc == 0, err
+    os.remove(os.path.join(root, 'tasks', 'BANNER.md'))
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
 
-    # A board with no row table: red, and the message says what to do at the cutover.
-    write(bpath, u'# HANDOFF -- one-hop stub\n\nStart with `python scripts/task.py '
-                 u'board`.\n')
-    rc, out, err = run(root, 'lint')
-    assert rc == 1, out_text(out) + err
-    assert 'cannot read it as a board' in err and 'retire this check' in err, err
 
-    # Restore control.
-    write(bpath, board)
-    rc, out, err = run(root, 'ack', 'T1', '-m', 'restored', '--session', KEY + 'c')
-    assert rc == 0, err
+def test_lint_reads_no_board_and_check_13_is_gone():
+    """The 2026-09-06 cutover, from lint's side: a note with NO row table lints clean,
+    a note whose old board prose contradicts the tree lints clean, and there is no
+    `check_board_sync` in `LINT_CHECKS` (12 long; the number 13 is never reused).
+
+    Between 2026-09-06c and the cutover, `test_lint_check_13_reports_board_drift_and_a_
+    tableless_board` pinned the opposite of all three (its body is in git history under
+    that name, and its sabotage record is `docs/history/tasktool-proof-2026-08.md`).
+    This case is its inverse, kept so the retirement is a pinned fact rather than an
+    absence: the tree is the sole authority, and lint has nothing to reconcile it
+    against.
+    """
+    assert len(TM.LINT_CHECKS) == 12, [c.__name__ for c in TM.LINT_CHECKS]
+    assert 'check_board_sync' not in [c.__name__ for c in TM.LINT_CHECKS]
+    assert not hasattr(TM, 'check_board_sync')
+
+    root = sync_tree('lint_noboard')
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
+
+    # Old board prose that now contradicts the tree: not lint's business.
+    bpath = banner_path(root)
+    note = read(bpath).decode('utf-8')
+    write(bpath, note.replace('The summary paragraph as the BOARD states it.',
+                              'The summary paragraph, REWRITTEN in the note only.'))
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+
+    # A note that is ONLY the one-hop shape: clean too.
+    write_banner(root, BANNER_TEXT)
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+    assert 'clean (12 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
 
 
 def show_log_keys(root, tid, *extra):
@@ -3010,9 +2541,8 @@ def test_the_banner_may_not_carry_a_glyph_the_board_cannot_render():
     sequence also is.
     """
     root = good_tree('bannerglyph')
-    banner_path = os.path.join(root, 'tasks', 'BANNER.md')
 
-    write(banner_path, u'%s -- state of play \U0001F680 shipping\nsecond line\n' % KEY)
+    write_banner(root, u'%s -- state of play \U0001F680 shipping\nsecond line\n' % KEY)
     rc, out, err = run(root, 'lint')
     text = out_text(out) + err
     assert rc == 1, text
@@ -3022,7 +2552,7 @@ def test_the_banner_may_not_carry_a_glyph_the_board_cannot_render():
 
     # A glyph that IS mapped stays green -- this is a check on renderability, not an
     # ASCII-only rule, and banning the warn badge from the banner would be absurd.
-    write(banner_path, u'%s -- state of play\n⚠ a real trap\n' % KEY)
+    write_banner(root, u'%s -- state of play\n⚠ a real trap\n' % KEY)
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
     rc, out, err = run(root, 'board')
@@ -3030,7 +2560,7 @@ def test_the_banner_may_not_carry_a_glyph_the_board_cannot_render():
     assert '(!) a real trap' in out_text(out), out_text(out)
 
     # Restore control.
-    write(banner_path, BANNER_TEXT)
+    write_banner(root, BANNER_TEXT)
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
 
@@ -3038,8 +2568,10 @@ def test_the_banner_may_not_carry_a_glyph_the_board_cannot_render():
 def test_non_task_md_is_skipped_only_at_the_top():
     """The exclusion is exact-name and TOP-LEVEL ONLY, and both halves are load-bearing.
 
-    `BANNER.md` and `README.md` are markdown that lives in `tasks/` for a reader; without
-    the skip they would be loaded as tasks and fail checks 1 and 3 on every run. But an
+    `README.md` is markdown that lives in `tasks/` for a reader (`BANNER.md` was, until
+    the 2026-09-06 cutover; it stays in the skip list so that a reappearing one is
+    check 12's violation and not a parse failure); without the skip they would be
+    loaded as tasks and fail checks 1 and 3 on every run. But an
     exemption that TRAVELS WITH THE ARCHIVE MOVE is an exemption that hides a real record
     -- so nothing under `closed/` is exempt, and a `README.md` filed there is a parse
     failure rather than a quiet omission.
@@ -3059,15 +2591,17 @@ def test_non_task_md_is_skipped_only_at_the_top():
     rc, out, err = run(root, 'lint')
     assert rc == 0, ('a top-level README.md was scanned as a task:\n%s'
                      % (out_text(out) + err))
-    assert 'clean (13 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
+    assert 'clean (12 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
     rc, data, err = rj(root, 'counts')
     assert (data['total'], data['disk_total']) == (7, 7), (
         'README.md reached one of the two scanners: %s' % data)
     assert (data['disk_open'], data['disk_closed']) == (7, 0), data
 
-    # BANNER.md has been present in every one of those runs -- state it, rather than let
-    # it be an incidental fact of the fixture.
-    assert os.path.isfile(os.path.join(root, 'tasks', 'BANNER.md'))
+    # tasks/BANNER.md is ABSENT in every one of those runs since the cutover (the banner
+    # is in the note) -- state it, rather than let it be an incidental fact of the
+    # fixture.
+    assert not os.path.isfile(os.path.join(root, 'tasks', 'BANNER.md'))
+    assert os.path.isfile(banner_path(root))
     assert set(TM.NON_TASK_MD) == set(['BANNER.md', 'README.md']), TM.NON_TASK_MD
 
     # ... and under closed/ the same filename IS scanned, and fails.
@@ -3802,7 +3336,8 @@ def test_sabotage_wp_parent_depth_warning_can_go_silent():
         task lint: clean (11 checks, 8 task file(s) parsed)
 
     RE-MEASURED 2026-08-29: the same run now reads `clean (12 checks, ...)`, check_banner
-    having joined the list; 2026-09-06c: `clean (13 checks, ...)`, check_board_sync.
+    having joined the list; 2026-09-06c: `clean (13 checks, ...)`, check_board_sync;
+    the 2026-09-06 cutover: `clean (12 checks, ...)` again, check 13 retired.
     The observation is the CLEAN line either way, which is the
     point -- a silenced warning is indistinguishable from a healthy tree.
     """
@@ -3823,11 +3358,22 @@ def test_sabotage_wp_ack_does_not_move_moved():
 
         AssertionError: ack moved `moved` 2026-08-21b -> 2026-08-21c: an acknowledgement
         just laundered a stale row into a fresh one
+
+    RE-POINTED at the 2026-09-06 cutover: `op_ack` is gone, and the housekeeping write
+    a review makes is `comment --mechanical`. The same one-constant edit is applied to
+    `op_comment` (its `progress(args)` hard-wired to `True`, the flag consulted nowhere
+    on that path). The name is kept so the 2026-08-21 record stays countable. Observed
+    at the cutover::
+
+        comment --mechanical moved `moved` 2026-08-21b -> 2026-08-21c: a review just
+        laundered a stale row into a fresh one
     """
     message = writepath_sabotage(
         'sab_ack_progress.py',
-        'write_text(task.path, stamp_and_render(task, key, False))',
-        'write_text(task.path, stamp_and_render(task, key, True))',
+        'task.body = append_log(task.body, key, message)\n'
+        '    write_text(task.path, stamp_and_render(task, key, progress(args)))',
+        'task.body = append_log(task.body, key, message)\n'
+        '    write_text(task.path, stamp_and_render(task, key, True))',
         test_the_moved_updated_split_survives_automation)
     assert 'laundered a stale row' in message, message
 
@@ -3855,8 +3401,9 @@ def test_sabotage_wp_source_validation_is_not_lenient():
     """`source_problem()` returns None for everything -- a lenient validator, the way
     every lenient validator arrives.
 
-    `sync` keys its whole CORPUS-ONLY behaviour off `source`, so a value that reads
-    correctly to a human and matches nothing mechanically makes the task invisible to the
+    `sync` keyed its whole CORPUS-ONLY behaviour off `source` (retired at the 2026-09-06
+    cutover; the field is still provenance, written once by `new`), so a value that reads
+    correctly to a human and matches nothing mechanically made the task invisible to the
     tool forever.
 
     2026-08-21 observed::
@@ -4032,41 +3579,62 @@ def test_sabotage_live_blind_parser():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def _retired_sync_check_case():
+    """One parameter of the refusal test, as a no-arg callable for the harness."""
+    test_retired_verbs_refuse_every_old_argv_shape('sync_has_no_delete_path',
+                                                   ('sync', '--check'))
+
+
 def test_sabotage_bprime_check_13_can_go_blind():
-    """`if not report['drift']: return` -> `return` -- check 13 computes the sync report
-    and then ignores it, the narrowest edit that keeps the check IN the list (so the
-    `13 checks` header still prints) while making it report nothing.
+    """RE-POINTED at the 2026-09-06 cutover; the name is kept so the 2026-09-06c record
+    (three `bprime` cases) stays countable.
 
-    The guarding test is test_lint_check_13_reports_board_drift_and_a_tableless_board,
-    and it must fail on the red half. 2026-09-06c observed::
+    Until the cutover this was `if not report['drift']: return` -> `return` in check 13
+    (the check computed the sync report and ignored it; observed `a rewritten item block
+    did not redden lint: task lint: clean (13 checks, 7 task file(s) parsed)`). Check
+    13 retired with the board, so the sabotage is now the cutover's own: `'sync':
+    retired_verb,` deleted from `OPS` -- the parser still knows the verb, dispatch does
+    not, and the "refusal" is a traceback with rc 1 that names neither the cutover nor
+    the replacement. The guarding test is
+    test_retired_verbs_refuse_every_old_argv_shape (the `sync --check` parameter), and
+    it must fail on the rc-2 assertion. Observed at the cutover::
 
-        a rewritten item block did not redden lint: task lint: clean (13 checks, 7 task
-        file(s) parsed)
+        sync_has_no_delete_path: `sync --check` was not refused (rc=1)
     """
     message = writepath_sabotage(
-        'sab_check13.py',
-        "    if not report['drift']:\n        return\n",
-        "    return\n",
-        test_lint_check_13_reports_board_drift_and_a_tableless_board)
-    assert 'did not redden lint' in message and 'clean (13 checks' in message, message
+        'sab_retired_sync.py',
+        "'ack': retired_verb, 'sync': retired_verb,",
+        "'ack': retired_verb,",
+        _retired_sync_check_case)
+    assert 'was not refused (rc=1)' in message, message
 
 
 def test_sabotage_bprime_ack_adoption_can_skip_the_flip():
-    """`task.fm['source'] = 'board'` deleted from the adoption branch -- the digest is
-    still computed and the Log still written, but provenance stays `hand`, so the ack
-    falls into the refusal below it (or, had the refusal also gone, `sync` would digest
-    the row against a hand task forever). The guarding test is
-    test_ack_adopts_a_hand_task_that_has_a_row. 2026-09-06c observed (first line of
-    the assertion; the refusal text follows on the next stderr line)::
+    """RE-POINTED at the 2026-09-06 cutover; the name is kept so the 2026-09-06c record
+    stays countable.
 
-        ack accepted T5 but did not adopt it (rc=2): task ack: REFUSED
+    Until the cutover this was `task.fm['source'] = 'board'` deleted from `ack`'s
+    adoption branch (observed `ack accepted T5 but did not adopt it (rc=2): task ack:
+    REFUSED`). `ack` retired with the board, so the sabotage is now the retirement's
+    other failure shape: the refusal message reworded so that it no longer names the
+    cutover (`retired at the` -> `removed at the`). The verb still refuses with rc 2 and
+    still touches nothing; what is lost is the CITATION -- the phrase the ledger,
+    docs/tasktool-spec.md and this module quote, which is what lets a reader who hits
+    the refusal find the record. The guarding test is
+    test_retired_verbs_refuse_every_old_argv_shape, and it must fail on the message
+    assertion. Observed at the cutover (the assertion message is the stderr the test
+    was handed)::
+
+        task ack: REFUSED
     """
+    def case():
+        test_retired_verbs_refuse_every_old_argv_shape('ack_bare', ('ack',))
     message = writepath_sabotage(
-        'sab_ack_adopt.py',
-        "            task.fm['source'] = 'board'\n",
-        "            pass\n",
-        test_ack_adopts_a_hand_task_that_has_a_row)
-    assert 'did not adopt it' in message, message
+        'sab_retired_reworded.py',
+        "'`%s` was retired at the %s cutover",
+        "'`%s` was removed at the %s cutover",
+        case)
+    assert 'REFUSED' in message, message
 
 
 def test_sabotage_bprime_show_can_print_the_log_oldest_first():
@@ -4089,8 +3657,9 @@ def test_sabotage_bprime_show_can_print_the_log_oldest_first():
 
 def test_the_sabotage_record_is_complete():
     """The module docstring claims 22/22 + 4/4 + 4/4. This counts them. The three
-    `test_sabotage_bprime_*` cases (2026-09-06c: check 13, ack adoption, show order)
-    are counted separately so that the 2026-08-21 record stays what it was.
+    `test_sabotage_bprime_*` cases (2026-09-06c: check 13, ack adoption, show order;
+    the first two RE-POINTED at the 2026-09-06 cutover onto the retired-verb refusal,
+    names kept) are counted separately so that the 2026-08-21 record stays what it was.
 
     A transcribed record is a number in prose, and prose is what rotted in the first
     place: `.scratch/tasktool/sabotage-log.txt` said `22/22` and nothing tied that to the

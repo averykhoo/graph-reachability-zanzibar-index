@@ -1,3 +1,9 @@
+> **FROZEN 2026-09-06d — provenance, not a living document.** The trial this protocol
+> governed is over: the verdict was cutover (§6, 2026-09-06c) and the cutover LANDED on
+> 2026-09-06d (§6, last entry). Status lines below are as-of-then; live state:
+> `python scripts/task.py board`, [`HANDOFF.md`](../HANDOFF.md), the session ledger.
+> Corrections append dated at the top, never edited into the body.
+>
 > **CORRECTION 2026-08-30 — THE WINDOW WAS EXTENDED TO 2026-09-06, and DELETE is off the
 > table** (user decision: *"we won't delete tasks, it'll run in parallel for another
 > week"*). Everything below stands as written and is NOT edited — including §6's dated
@@ -723,6 +729,42 @@ join the `TK` finding series), `close` ×5 with the test names as evidence, `com
 (`TT-1`, `TT-2`), `lint` clean at 13 checks, `sync --check` CLEAN. Read line for this
 session: `board + HANDOFF` — the board query first, then `HANDOFF.md` in full for the
 feedback pass, then `show` for `TT-1`/`TT-2`/`P6`.
+
+### 2026-09-06d — the cutover LANDED; the trial's last measurement is the shape of its own exit
+
+The go came in the same words the protocol was waiting for ("yes let's get the switch all
+done"). What landed is listed atop `tree-sole-authority-spec-2026-08-29.md` (its
+2026-09-06d entry); this entry records the three things about the EXIT that the design
+predicted and that were then observed.
+
+**E1 — the last parallel update was the cheapest, because it was the last.** The cutover
+session touched both arms one final time: `HANDOFF.md` rewritten wholesale (246 → a note
+under 60 lines) and the tree updated by `close` ×2 (`TT-1`, `TT-2`), `comment` ×1
+(`DW-1`, its trap moved in), `--session 2026-09-06d` throughout. Nothing was reconciled
+between them, because after this commit there is nothing to reconcile: `sync --check`,
+which would have measured the divergence, is the verb that retired.
+
+**E2 — the tests, not the docs, were the load-bearing part of the cutover.** Ten
+`sync`/`ack` tests could not simply be deleted (the `MIN_TESTS_ALL` floor has zero
+headroom and would have gone red), so their argv became an 11-way refusal test, and the
+three sabotage cases that pointed at the retired code were RE-POINTED and RE-RUN, their
+new literal outputs recorded (`test_sabotage_bprime_check_13_can_go_blind` now guards
+`'sync'` in `OPS`; `..._ack_adoption_can_skip_the_flip` guards the refusal's citation;
+`test_sabotage_wp_ack_does_not_move_moved` guards `comment --mechanical`). A cutover that
+had deleted them would have left the spec's status table above citing three sabotage
+tests that no longer existed, with nothing in the gate to say so.
+
+**E3 — the read line's vocabulary changed, which is the whole point.** `read: board +
+HANDOFF` was an honest answer while the file WAS the database; after the cutover the note
+is fourteen banner lines the board already prints, so the vocabulary is `board only` /
+`board + note` and `handoff_lint.py::check_session_receipt` accepts nothing else. The
+trial's central question — does the query REPLACE the file — stops being measurable and
+becomes structural: there is no file to read instead.
+
+The `.scratch/tasktool/` directory (`migrate.py`, `SYNC-SPEC.md`, `START-HERE.md`,
+`sync_sabotage.py`, `sync_accept.py`) is untracked and was left as it was; the tracked
+record of what it proved is `history/tasktool-proof-2026-08.md`, and the standing
+warning not to run `migrate.py --rebuild` stays in `CLAUDE.md`.
 
 ---
 

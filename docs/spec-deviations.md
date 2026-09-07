@@ -17,8 +17,9 @@ frozen conflict stops the work and goes to the user instead.
 ⚠ **This file does not answer "is it still open."** A dated entry is written in the present
 tense of its own day and cannot be trusted for live status — several below say "NOT FIXED
 here" about things fixed hours later. **What is still latent today lives in
-[`latent-gaps.md`](latent-gaps.md)**, which has replace semantics; ranking lives on the
-[`HANDOFF.md`](../HANDOFF.md) board. Split out 2026-08-20 (row `HS-2`).
+[`latent-gaps.md`](latent-gaps.md)**, which has replace semantics; ranking lives in the
+task tree (`python scripts/task.py show <id>`; the [`HANDOFF.md`](../HANDOFF.md) board
+until the 2026-09-06 cutover). Split out 2026-08-20 (row `HS-2`).
 
 **Ordering, so an append lands in the right place:** the entries from the top down to
 `## 2026-07-29` are **newest-first**; the file then restarts at `## 2026-07-07` and runs

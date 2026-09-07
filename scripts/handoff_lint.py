@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""handoff_lint.py -- mechanical guards on the two board files and the ledgers.
+"""handoff_lint.py -- mechanical guards on the two handoff notes and the ledgers.
 
-Run it before committing any board edit (it is step 0 of HANDOFF.md's Rhythm)::
+Run it before committing any edit to them (it is step 0 of the Rhythm, docs/README.md
+section 7; until the 2026-09-06 cutover the Rhythm lived in HANDOFF.md itself)::
 
     python scripts/handoff_lint.py
 
@@ -140,21 +141,28 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #                    re-accreted the entire 986-line disease and doubled it, i.e. it would
 #                    stop being a guard at all, and section 11's decision was explicitly
 #                    that the point is "firing on the first appended layer, not the
-#                    absolute number".
+#                    absolute number". LOWERED to 60 on 2026-09-06 (the Phase B-prime
+#                    cutover, user go): the row table, item blocks, standing traps,
+#                    "Where things live" and the Rhythm all left the file -- the tree is
+#                    the authority and the file is a one-hop note (title, pointers, the
+#                    banner `board` prints, still-owed, next-session). 60 is the spec's
+#                    figure (docs/tree-sole-authority-spec-2026-08-29.md), not landed+10%:
+#                    the point of a one-hop note is that it CANNOT grow a table back.
 #   formal/HANDOFF.md was 1005 lines with a 1105 ceiling that the script itself called
 #                    "not a guard". HS-3 (the deep half) landed 2026-08-16: 1010 -> 471,
 #                    so the ceiling drops to 520 as the same landed+10% rule prescribes.
 MAX_LINES = {
-    'HANDOFF.md': 260,
+    'HANDOFF.md': 60,
     'formal/HANDOFF.md': 520,
 }
 
 BOARD_FILES = ('HANDOFF.md', 'formal/HANDOFF.md')
 ROOT_BOARD = 'HANDOFF.md'
 
-# The file-per-task tree, the board's replacement-on-trial. Named here rather than reached
-# for inline because two checks will read it if the cutover lands, and because its ABSENCE
-# is a legitimate state this script must keep working in (see ``_tree_ids``).
+# The file-per-task tree, the sole authority on open work since the 2026-09-06 cutover
+# (on trial as the board's replacement from 2026-08-23). Named here rather than reached
+# for inline because two checks read it, and because its ABSENCE is a legitimate state
+# this script must keep working in -- a temp root in a test (see ``_tree_ids``).
 TASKS_DIR = 'tasks'
 # Non-task markdown inside tasks/. Duplicated from ``scripts/task.py::NON_TASK_MD`` rather
 # than imported: this script imports nothing from the tool it is meant to cross-check, for
@@ -619,23 +627,23 @@ def check_ledger_row_ids(fail):
     ``rows:`` line cites one, and inventing wildcard machinery for a dormant case is how a
     check grows untested surface. Fix it when a session actually needs it.
 
-    THE TREE IS A SECOND SOURCE OF IDS, auto-detected (added 2026-08-29, spec item A4).
-    ``tasks/`` holds one file per task and is the id universe the board is on trial to
-    replace; when it is present, its ids are unioned into ``known`` and it carries its own
-    non-vacuity floor. Auto-detected rather than flagged because the useful behaviour is
-    the same in all three states this repo passes through -- board only (before the
-    trial), both (now), tree only (after a cutover, when ``HANDOFF.md`` is a stub with no
+    THE TREE IS THE ID UNIVERSE, auto-detected (added 2026-08-29, spec item A4; the sole
+    authority since the 2026-09-06 cutover). ``tasks/`` holds one file per task; when it
+    is present, its ids are unioned into ``known`` and it carries its own non-vacuity
+    floor. Auto-detected rather than flagged because the useful behaviour is the same in
+    all three states this repo passed through -- board only (before the trial), both
+    (the trial fortnight), tree only (now: ``HANDOFF.md`` is a one-hop note with no
     table) -- and a flag would be a second thing to remember at exactly the moment the
     first thing changed.
 
-    AND WHILE BOTH EXIST, THEIR DISAGREEMENT IS ITSELF THE VIOLATION. ``CLAUDE.md``'s
-    trial contract says a board row and its task file are updated in the SAME session; a
-    board id with no task file is that contract silently broken, and the trial's whole
-    result is the comparison between the two trees, so a divergence nobody noticed does
-    not merely leave a stale file -- it destroys the evidence. Checked in one direction
-    only: every board row id must exist in the tree. The reverse is false BY DESIGN (the
-    tree carries hand-filed tasks that were never board rows, which is most of why it
-    exists), and a check that fails on correct use is a check that gets deleted.
+    AND IF A ROW TABLE EVER REAPPEARS, ITS DISAGREEMENT WITH THE TREE IS ITSELF THE
+    VIOLATION. During the trial ``CLAUDE.md``'s contract said a board row and its task
+    file are updated in the SAME session; a board id with no task file was that contract
+    silently broken. Post-cutover the branch is kept because it costs nothing and turns
+    a re-grown table into a loud one. Checked in one direction only: every board row id
+    must exist in the tree. The reverse is false BY DESIGN (the tree carries hand-filed
+    tasks that were never board rows, which is most of why it exists), and a check that
+    fails on correct use is a check that gets deleted.
     """
     board = _read(ROOT_BOARD)
     lines = _read(ROOT_LEDGER)
@@ -663,11 +671,12 @@ def check_ledger_row_ids(fail):
         # comparison below goes loud on its own (every board row reported as having no
         # task file). What it buys today is a precise diagnosis instead of that misleading
         # one, and an early return. The "passes by comparing against nothing" failure it
-        # is named for becomes real only AFTER the cutover, when HANDOFF.md is a stub,
-        # `row_ids` is empty, and the tree is the sole id universe -- which is the state
-        # this whole trial is trying to reach, so the floor goes in now rather than being
-        # remembered then. Recorded here because the first version of this comment claimed
-        # the detection outright and a sabotage pass showed it was silent.
+        # is named for became real AT the 2026-09-06 cutover: HANDOFF.md is a one-hop
+        # note, `row_ids` is empty, and the tree is the sole id universe -- so this floor
+        # is now the only thing between a blind harvester and a vacuous pass. It went in
+        # 2026-08-29 rather than being remembered at the cutover. Recorded here because
+        # the first version of this comment claimed the detection outright and a sabotage
+        # pass showed it was silent.
         if len(tree_ids) < 5:
             fail('%s: harvested only %d ids from the task tree; the harvester is broken. '
                  'While the board still carries rows this is a diagnosis rather than the '
@@ -686,13 +695,11 @@ def check_ledger_row_ids(fail):
                          if _ROW_ID.match(i) and _ROW_ID.match(i).group(1) == i
                          and i not in tree_ids)
         if missing:
-            fail('%s names %s, which %s has no task file for. The trial contract in '
-                 'CLAUDE.md is that a board row and its task file move in the SAME '
-                 'session with the same --session key; a row that exists in only one tree '
-                 'is that contract broken, and the divergence between the two trees IS '
-                 'the trial\'s result, so this is lost evidence rather than an untidy '
-                 'file. File it (`python scripts/task.py new ... --id <ID>`) or remove '
-                 'the row.' % (ROOT_BOARD, ', '.join(repr(m) for m in missing), TASKS_DIR))
+            fail('%s names %s, which %s has no task file for. Since the 2026-09-06 '
+                 'cutover the tree is the sole authority and %s carries no row table at '
+                 'all; a row that names an id with no task file is a citation to nothing. '
+                 'File it (`python scripts/task.py new ... --id <ID>`) or remove the row.'
+                 % (ROOT_BOARD, ', '.join(repr(m) for m in missing), TASKS_DIR, ROOT_BOARD))
         known.update(tree_ids)
     for i, ln in enumerate(lines, 1):
         m = _ROWS_LINE.match(ln.strip())
@@ -798,16 +805,18 @@ def check_doc_links(fail):
 
 
 # --- Session receipt (check_session_receipt, added 2026-09-06c, Phase B-prime prereq 7) ---
-# The trial's two literal lines, as CLAUDE.md's trial bullet demands them of every session-
-# log entry: the `task lint` output, and an honest self-report of what was read to start
-# work. The accepted read vocabulary is a constant so the cutover can change it in one
-# place (post-cutover there is no HANDOFF to read "in full", and the line will say so).
+# The two literal lines CLAUDE.md demands of every session-log entry (born as the trial's
+# receipts, kept at the 2026-09-06 cutover): the `task lint` output, and an honest
+# self-report of what was read to start work. The read vocabulary changed AT the cutover
+# -- there is no HANDOFF row table to read "in full" any more, so `board + HANDOFF` /
+# `HANDOFF only` gave way to `board + note` (the query, then the one-hop note). Entries
+# older than the cutover keep the old words; only the newest entry is checked.
 # Both regexes SEARCH the line after normalisation rather than anchoring, because the C1
 # tally (docs/tasktool-trial-protocol.md section 6, 2026-09-06) found four shapes in the
 # ledger and none of them wrong: a bare line, a backticked one, `lint: <backticked>`, and
 # `` `python scripts/task.py lint` -> <backticked> ``. A check that rejected three of the
 # four would have been commented out by the second session it bit.
-READ_VOCAB = ('board only', 'board + HANDOFF', 'HANDOFF only')
+READ_VOCAB = ('board only', 'board + note')
 _LINT_RECEIPT = re.compile(
     r'task lint: (?:clean \(\d+ checks?, \d+ task file\(s\) parsed(?:, \d+ warning\(s\))?\)'
     r'|\d+ violation\(s\))')
@@ -831,15 +840,17 @@ def _newest_entry_lines(rel, pattern):
 
 
 def check_session_receipt(fail):
-    """The newest root-ledger entry carries both trial receipts: a `task lint:` result
-    line and a `read: <vocab>` line.
+    """The newest root-ledger entry carries both receipts: a `task lint:` result line
+    and a `read: <vocab>` line.
 
     Why it is mechanical rather than a rule in CLAUDE.md: the rule IS in CLAUDE.md, and
-    the C1 tally found 2 of 35 entries with neither line and one with the lint line only.
-    Two lines nobody checks decay into one, and the trial's read-tally -- the only
-    evidence of whether the board query replaced the file read or was added to it --
-    decays with them. Only the NEWEST entry is checked: older entries are history, and a
-    check that demanded retroactive edits to an append-only ledger would be ignored.
+    the C1 tally (trial week two) found 2 of 35 entries with neither line and one with
+    the lint line only. Two lines nobody checks decay into one. Post-cutover the lint
+    line is the proof the tree was linted before the commit (there is no board to
+    cross-check it against any more), and the read line keeps recording whether the
+    query was enough or the note was needed too. Only the NEWEST entry is checked: older
+    entries are history, and a check that demanded retroactive edits to an append-only
+    ledger would be ignored.
     """
     entry = _newest_entry_lines(ROOT_LEDGER, _ROOT_ENTRY)
     if entry is None:
@@ -855,14 +866,14 @@ def check_session_receipt(fail):
     if not any(_LINT_RECEIPT.search(ln) for ln in norm):
         fail('%s: the newest entry (%s) has no `task lint: clean (N checks, M task '
              'file(s) parsed)` / `task lint: N violation(s)` line. Paste the literal '
-             'output of `python scripts/task.py lint` -- it is the visible hole if the '
-             'parallel tree update was skipped (CLAUDE.md, the trial bullet).'
+             'output of `python scripts/task.py lint` -- it is the proof the tree was '
+             'linted before the commit (CLAUDE.md, the receipt rule).'
              % (ROOT_LEDGER, head[:80]))
     if not any(_READ_RECEIPT.search(ln) for ln in norm):
         fail('%s: the newest entry (%s) has no `read: %s` line. It is the honest '
-             'self-report of what was actually read to start work, and the only way the '
-             'trial learns whether the board query REPLACED the file read or was added '
-             'to it.' % (ROOT_LEDGER, head[:80], ' | '.join(READ_VOCAB)))
+             'self-report of what was actually read to start work: whether the board '
+             'query was enough, or the one-hop note was needed as well.'
+             % (ROOT_LEDGER, head[:80], ' | '.join(READ_VOCAB)))
 
 
 CHECKS = (

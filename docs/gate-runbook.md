@@ -129,11 +129,14 @@ Conformance genuinely is independent of `tests/`; `lean` is not.
 
 ★ **A HANDOFF-ONLY change also requires re-running `lean`** (new 2026-08-16). Step
 **4f** runs `scripts/handoff_lint.py`, so editing `HANDOFF.md` or
-`formal/HANDOFF.md` — adding a board row, flipping a `pri`, appending a ledger
-entry — can turn the `lean` phase red without a line of code changing. Same
-surprising direction as the `tests/` coupling above: a docs-only edit reddens the
-Lean phase. Run `python scripts/handoff_lint.py` yourself first (it is Rhythm step
-0 and takes under a second) rather than discovering it after a Lean build.
+`formal/HANDOFF.md` — rewriting the banner, appending a ledger entry — can turn the
+`lean` phase red without a line of code changing. Same surprising direction as the
+`tests/` coupling above: a docs-only edit reddens the Lean phase. Run `python
+scripts/handoff_lint.py` and `python scripts/task.py lint` yourself first (Rhythm step
+0, `docs/README.md` §7, under a second each) rather than discovering it after a Lean
+build. Since the 2026-09-06 cutover the `tests-tile` phases key off `t2c`, which
+INCLUDES `tasks/*.md` and `HANDOFF.md` (`gate_status.py::CODE_SCOPE_MD_KEEP`), so a
+tree op after the tiles ran stales them too.
 
 ### 2. Lean + conformance — the split `verify.sh` gate
 `verify.sh` takes a **phase argument** so the whole formal gate (its 5 steps) runs

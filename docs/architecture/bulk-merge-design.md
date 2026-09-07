@@ -7,8 +7,8 @@
 > read-only session and **was never written down** — a repo-wide search on 2026-08-16
 > found no trace of it, so it must be re-derived, not recovered. Write the full design
 > up in the style of `p13-bulk-build-design.md` **before implementing**. Tracked as
-> board row `SD-4` in [`HANDOFF.md`](../../HANDOFF.md) (SOMEDAY — revisit only on a
-> concrete large-batch ingest need). Migrated out of `HANDOFF.md` on 2026-08-16.
+> task `SD-4` in the task tree (`python scripts/task.py show SD-4`; SOMEDAY — revisit
+> only on a concrete large-batch ingest need). Migrated out of `HANDOFF.md` on 2026-08-16.
 
 ## What it is
 

@@ -1,7 +1,28 @@
 # Tree-as-sole-authority — build & test spec
 
-**ACTIVE-PLAN 2026-08-29 — execution spec for an implementing agent. Mark FROZEN when
-landed or abandoned; corrections append dated at the top.**
+**FROZEN 2026-09-06d — provenance, not a living document.** The Phase B′ cutover below
+LANDED on 2026-09-06d in one revertable commit (its message carries the `git revert`
+line; `git log --grep=2026-09-06d` finds it). Status lines below — "not started", "waits for the
+go", the prerequisite table's "still owed" — are as-of-then; live state: `python
+scripts/task.py board`, [`HANDOFF.md`](../HANDOFF.md) (the one-hop note), the session
+ledger. Corrections append dated at the top, never edited into the body. Was
+ACTIVE-PLAN 2026-08-29 → 2026-09-06d.
+
+## 2026-09-06d — LANDED (user go, "yes let's get the switch all done")
+
+Everything (ii)/(iii)/(v) asked for, in one commit: `tasks/BANNER.md` deleted and
+`check_banner` (lint 12) retargeted to the `## Banner` section of `HANDOFF.md` with the
+old path a tombstone violation; `HANDOFF.md` rewritten to the one-hop note under
+`MAX_LINES['HANDOFF.md'] = 60`; Rhythm and "Where things live" moved to `docs/README.md`
+§7/§8; `check_board_sync` (check 13) retired, number never reused; `sync` and `ack` kept
+in the parser as REFUSALS (`task.py::retired_verb`, rc 2, "Nothing was read or
+written"); `source_hash` frozen; `READ_VOCAB` → `board only` / `board + note`; the two
+standing traps re-homed (`ttuDirect` → `DW-1` Traps, frozen history status lines →
+`CLAUDE.md`); `TT-1` and `TT-2` closed with `--session 2026-09-06d`; this file, the
+stub and the protocol frozen. The test changes and their sabotage evidence are in the
+commit message and in `tests/test_tasktool.py` docstrings (`test_retired_verbs_refuse_every_old_argv_shape`,
+`test_lint_check_12_refuses_a_reappearing_tasks_banner_file`,
+`test_lint_reads_no_board_and_check_13_is_gone`).
 
 ## 2026-09-06c — Phase B′ DECIDED (user decision); five of seven prerequisites landed; the cutover itself still needs an explicit go
 

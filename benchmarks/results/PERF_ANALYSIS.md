@@ -2,8 +2,9 @@
 
 > **LIVING** — but only in one section. The maintained part of this file is the
 > `## Applied` log: one entry per landed perf item with the measurement that justified
-> it, appended as it lands. `HANDOFF.md`’s “Where things live” table points here for
-> exactly that, and every `## Applied` entry is claimed true today.
+> it, appended as it lands. The “Where things live” table (`docs/README.md` §8; in
+> `HANDOFF.md` until the 2026-09-06 cutover) points here for exactly that, and every
+> `## Applied` entry is claimed true today.
 >
 > ⚠ **Mixed liveness — do not read the rest of the file as current.** Everything ABOVE
 > `## Applied` is the point-in-time 2026-07-14 curve analysis, and `## Optimization

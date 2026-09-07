@@ -208,7 +208,11 @@ def phase_scope(phase: str) -> str:
 # See the fail-open note above: `tests/test_tasktool.py::live_copy` copies the LIVE
 # `tasks/` corpus (four tests use it) and lints it, so a `tasks/*.md` edit can turn the
 # suite red without moving a `*.md`-excluding tree id.  Demonstrated 2026-09-03c.
-CODE_SCOPE_MD_KEEP = (b"tasks/",)
+# `HANDOFF.md` joined the list at the 2026-09-06 cutover for the same reason: its
+# `## Banner` section is what `task.py board` prints and lint check 12 reads, and
+# `live_copy` copies it beside the corpus. Prefix match, so `formal/HANDOFF.md`
+# (which no collected test reads) stays excluded.
+CODE_SCOPE_MD_KEEP = (b"tasks/", b"HANDOFF.md")
 
 
 def _in_scope(rel: bytes, scope: str) -> bool:

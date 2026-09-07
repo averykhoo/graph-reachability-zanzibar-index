@@ -7,55 +7,46 @@ the set engine natively, the graph index via derived predicates maintained by a 
 IVM delta processor.
 
 ## Start here (every session)
-- **Read [`HANDOFF.md`](HANDOFF.md) first** — the priority board: a ranked row per open
-  item, plus an item block for each `NOW`/`NEXT`. This file (`CLAUDE.md`) is the durable
-  contract; the board is what changes session-to-session. At end of session write back
-  via its "Rhythm" protocol (session-log entry, banner, board rows).
-- **TRIAL 2026-08-23 → 2026-09-06, DECIDED 2026-09-06c (user, the feedback pass): Phase B′
-  — the tree becomes authoritative and `HANDOFF.md` becomes a one-hop note. UNTIL THE
-  CUTOVER COMMIT LANDS, which still needs an explicit user go (`TT-1`), everything below
-  stays in force: `tasks/` is maintained IN PARALLEL with the board.** Five of the seven
-  cutover prerequisites landed on 2026-09-06c (status table atop
-  [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md)):
-  `task.py lint` check 13 now makes `sync --check` drift a violation, `ack` adopts a hand
-  task that has a board row, `show` renders a task's Log newest-first, and
-  `handoff_lint.py::check_session_receipt` makes the `lean` phase RED if the newest
-  session-log entry lacks the two literal lines described below.
-  A file-per-task tree (one task per file) plus `scripts/task.py`, whose `board`
-  verb prints the session-start view as a QUERY instead of a file — bounded by
-  `task.py::BOARD_MAX_LINES` and asserted by a test, never restated as prose here (four
-  places in this repo carried a "~25 lines" claim while the view grew a banner and a
-  per-row `brief`). Corpus size: `python scripts/task.py counts`. `HANDOFF.md`
-  stays authoritative; nothing about the gate changed. **Both are updated, every session,
-  by whoever edits either** — a board row promoted, demoted, added or closed gets the
-  matching `task.py promote` / `new` / `close -m` in the same session, with the same
-  session key (`--session`). That is the trial's whole design: the two trees are a control
-  and a treatment arm, and **a divergence between them at the end of the week is the
-  evidence** — which is why a session that updates only one of them destroys the result for
-  everyone, and why "I'll reconcile it next time" is the one move that cannot be allowed.
-  * Close the loop in your session-log entry with two literal lines: the output of
-    `python scripts/task.py lint`, and `read: board only` / `read: board + HANDOFF` /
-    `read: HANDOFF only` — an honest self-report of what you actually read to start work.
-    The lint line is the visible hole if the parallel update was skipped; the read line is
-    the only way to learn whether the query actually REPLACED the file read or merely got
-    added to it, which is the difference between the trial succeeding and looking like it.
-  * Start with `python scripts/task.py board`; `show <id>` is the per-item read, `ready`
-    lists unblocked work, `list` is capped at 20 rows and says so. Full schema and op
-    contract: [`docs/tasktool-spec.md`](docs/tasktool-spec.md). **Do not run
-    `.scratch/tasktool/migrate.py`** —
-    its `--rebuild` destroys 51 hand-filed tasks that no source document contains.
-  * The trial is a question about USEFULNESS, not correctness — correctness is pinned by
-    `tests/test_tasktool.py`, which is INSIDE the gate as of 2026-08-29d (the suite used
-    to live in gitignored `.scratch/`, i.e. it was already-lost evidence; the 30 sabotage
-    cases are permanent tests now, and the historical record is
+- **Start with `python scripts/task.py board`** — the session-start view, printed as a
+  QUERY over the file-per-task tree in `tasks/` (bounded by `task.py::BOARD_MAX_LINES`,
+  asserted by a test, never restated as prose here). It opens with the `## Banner`
+  section of [`HANDOFF.md`](HANDOFF.md), which is now a **one-hop note** (≤60 lines:
+  banner, still-owed, where to go next — no row table, no item blocks). `show <id>` is
+  the per-item read (Log newest-first), `ready` lists unblocked work, `list` is capped
+  at 20 rows and says so. This file (`CLAUDE.md`) is the durable contract; the tree is
+  what changes session-to-session. At end of session write back via the Rhythm in
+  [`docs/README.md`](docs/README.md) §7 (session-log entry, banner, tree ops).
+- **The tree is the SOLE authority on open work since the 2026-09-06 cutover (Phase B′,
+  user go 2026-09-06d).** The 2026-08-23 → 2026-09-06 trial ran the tree and the board
+  in parallel as treatment and control; DELETE was taken off the table 2026-08-30 and
+  the decision on 2026-09-06c was cutover. The cutover commit is ONE revertable commit
+  (its message carries the `git revert` line); the spec and its landed status table are
+  [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md)
+  (FROZEN), the trial's protocol and verdict
+  [`docs/tasktool-trial-protocol.md`](docs/tasktool-trial-protocol.md) (FROZEN).
+  What changed at the cutover, so old runbooks do not mislead: `tasks/BANNER.md` is a
+  tombstone (lint check 12 fails if it reappears); `task.py sync` and `ack` REFUSE
+  (rc 2) and name their replacement; lint check 13 is retired and its number is never
+  reused; `source_hash` is frozen; `HANDOFF.md`'s cap is 60 lines
+  (`handoff_lint.py::MAX_LINES`). Nothing about the gate changed.
+  * **Every re-rank, close, and progress note goes through an op with `--session <key>`**
+    — `promote` / `touch` / `close -m` / `set <id> brief` / `comment <id> -m` — never a
+    hand edit of a task file's frontmatter. Full schema and op contract:
+    [`docs/tasktool-spec.md`](docs/tasktool-spec.md). **Do not run
+    `.scratch/tasktool/migrate.py`** — its `--rebuild` destroys 51 hand-filed tasks that
+    no source document contains.
+  * **Close the loop in your session-log entry with two literal lines** (enforced:
+    `handoff_lint.py::check_session_receipt` makes the `lean` phase RED without them):
+    the output of `python scripts/task.py lint`, and `read: board only` /
+    `read: board + note` — an honest self-report of what you actually read to start
+    work. The lint line is the visible hole if the tree was left unlinted; the read line
+    is the only way to learn whether the query actually REPLACED the file read.
+  * ⚠ **A `close -m` / `comment -m` message with backticks inside DOUBLE quotes is
+    command-substituted by the shell** — the backticked text vanishes silently. Use single
+    quotes, or a heredoc, or a file.
+  * Correctness of the tool is pinned by `tests/test_tasktool.py`, INSIDE the gate since
+    2026-08-29d (the sabotage cases are permanent tests; the historical record is
     [`docs/history/tasktool-proof-2026-08.md`](docs/history/tasktool-proof-2026-08.md)).
-    **DELETE is off the table as of 2026-08-30** (user decision), and as of 2026-09-06c
-    the question is answered: **cutover** (Phase B′). The cutover commit — banner
-    consolidation, `MAX_LINES['HANDOFF.md']` → 60, Rhythm → `docs/README.md`, retirement
-    of check 13 / `sync` / `ack` / `source_hash`, `READ_VOCAB` update, one revertable
-    commit — **needs an explicit user go and must not be started unasked**; it is tree
-    row `TT-1`, and the spec is
-    [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md).
 - **Always run the gate before pushing.** Never push red or unverified: the phased
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`
   (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in
@@ -349,6 +340,11 @@ IVM delta processor.
 - **Never edit a golden/oracle result to make a refactor pass** — and the compiled-
   RuleSet snapshots (`tests/snapshots/`) are the byte-identity gate for untainted
   compilation.
+- **Status lines inside `docs/history/` and `formal/history/` are FROZEN as-of-then.**
+  A "still open" / "N sorries" / "next lemma is X" in a dated history file was true on
+  its date and nothing updates it. Read them for METHOD, never for state; state lives in
+  the tree (`task.py show <id>`) and in `formal/HANDOFF.md`. (Promoted from `HANDOFF.md`
+  "Standing traps" at the 2026-09-06 cutover — the note carries no trap list.)
 - **Perf work & the Lean model.** The Lean proofs (`formal/`) verify *algorithm-twins*
   of the Python (`formal/CORRESPONDENCE.md` is the model↔code map). A behavior-preserving
   micro-optimization needs no Lean change (the differential matrix + hypothesis +
