@@ -1,0 +1,53 @@
+---
+id: TK63
+title: the do-not-cancel-P4 warning is one hop away and the tree cannot see it
+brief:
+pri: LATER
+size: S
+deps: []
+related: [TT-1]
+parent:
+labels: [formal]
+source: docs/history/tasktool-scratch-archive-2026-09-07.md
+source_hash:
+created: 2026-09-07
+moved: 2026-09-07
+updated: 2026-09-07
+closed:
+---
+
+`AUDIT.md` finding F6, confirmed still true on 2026-09-07.
+
+The "do not cancel `P4`" warning lives at
+`formal/history/leaf-family-split-scope-2026-08-05.md:1082` and
+`formal/history/PROOF_STATUS.md:247`. It was never on the `HANDOFF.md` board, so the
+migration to the task tree could not carry it -- the migration's input was the board.
+
+`tasks/P4-*.md` reads, under `## Traps`: "None recorded. This row sits below `NEXT`, so it
+never had an item block; traps for it, if any, live at the pointer below."
+
+That sentence is honest, and it is still a hole. Since the 2026-09-06 cutover the tree is
+the SOLE authority on open work, so a session that trusts `task.py show P4` as
+self-sufficient -- which is exactly what the cutover tells it to do -- will not see the
+warning. The status lines in `formal/history/` are frozen as-of-then and nothing surfaces
+them.
+
+This was never intended to be fixed by the migration. It is filed now because the record
+naming it as a KNOWN residue was in the deleted directory, and without this row the hole
+has no home at all.
+
+## Traps
+
+- Do not copy the warning's text into the task and call it done: `formal/history/` is
+  append-only and frozen, so a copy is a second home for a statement that will not be
+  updated together. Read `docs/README.md`'s one-home rule before choosing a form.
+- The general case matters more than `P4`: the board-to-tree migration could only carry
+  what the board held, so any trap that lived only in `formal/history/` is in the same
+  position. `P4` is the one instance that was actually measured.
+
+## Read first
+
+- [`docs/history/tasktool-scratch-archive-2026-09-07.md`](../docs/history/tasktool-scratch-archive-2026-09-07.md) section 5 item 9
+- `formal/history/PROOF_STATUS.md:247` -- the warning itself
+
+## Log

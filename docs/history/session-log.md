@@ -30,6 +30,106 @@ from here.
 
 ---
 
+## 2026-09-07 — `.scratch/tasktool/` defused and transcribed; 9 never-fixed findings filed as `TK57`–`TK65`
+
+rows: `TK57`–`TK65` (new, all `LATER`/`SOMEDAY` — the findings rescued out of the deleted
+directory; nothing re-ranked, the `NOW`/`NEXT` set is untouched). All nine carry
+`related: [TT-1]` on a user call, tagging them to the task-tool migration family; `related`
+rather than `parent` because `TT-1` is closed and `check_parent_open` refuses a closed
+parent.
+
+**The task.** Defuse the `migrate.py` landmine the banner warned about, then rescue
+whatever in `.scratch/tasktool/` was worth keeping so the directory can be deleted. Scope
+confirmed with the user as `.scratch/tasktool/` only, **not** all of `.scratch/` — several
+tracked files cite other scratch material by path, including from Lean sources
+(`formal/lean/ZanzibarProofs/FullScope.lean:380`).
+
+**1. The landmine was real, and worse than the warning said.** The warning was that
+`--rebuild` destroys hand-filed tasks. Tested against throwaway copies of `tasks/`: aimed
+correctly (`--out` = the tree's PARENT) the manifest guard holds exactly as designed,
+rc 4, naming all 168 ids, corpus unchanged. Aimed one level deeper, at the corpus directory
+itself — which is literally named `tasks/`, so it is the natural mistake — it printed
+`manifest guard: ... matches migrate-manifest.json exactly; nothing hand-filed or
+hand-edited is at risk` and deleted 68 of 171 files, **at rc 0, with no `--force`**. There
+was no manifest at that path. The guard inventories `<out>/tasks/` while the wipe deletes
+`<out>`: the scan path and the destruction path are different paths, and only one of them
+was reasoned about. That is a guard that fails by passing, so the file was made inert
+rather than left guarded — whole body commented out behind a two-statement refusal, rc 2 on
+`--rebuild`, on `--rebuild --force` and on `--help`, verified against a fresh copy. The
+comment-out is byte-reversible and that was verified too, round-tripping to the recorded
+`sha256 68d95d94…`.
+
+Correction to the retired warning: it said **51** hand-filed tasks. The refusal names
+**all** ids in the tree.
+
+**2. Nothing tracked depended on the directory.**
+`git grep -E "(open|Path|import|sys\.path)[^#]*\.scratch"` over `*.py`/`*.sh` returns zero
+hits; all ~30 tracked references were prose. Nine of them cited it **by section**, as
+evidence, which is why the archive doc transcribes those referents rather than summarising
+them.
+
+**3. What was rescued**, into
+[`docs/history/tasktool-scratch-archive-2026-09-07.md`](tasktool-scratch-archive-2026-09-07.md)
+(FROZEN): the cited sections (`COVERAGE.md` §C5, `PROOF.md` §2d, `PROOF2.md` §1,
+`PROOF3.md` §1a and the J-26 non-membership grep, `INTEGRATION.md` §5.2, `fix-tool.md`
+BLOCKER 1, `inventory-formal.md` MISSes #2/#4/#5); the decisions that were never written
+into the spec (the positive-claim retirement rule, the "a write op must never manufacture a
+state lint calls red" rule, no-auto-repair, empty `pri`/`size` on closed records, the board
+as a query, the Sonnet-safety principle); `SYNC-SPEC.md`'s two surviving design points; and
+the `count_guard.py` design, since the tool itself is gone.
+
+Two scripts were PORTED rather than described, because both are cited by live instructions
+in tracked files: `scripts/measure_glyphs.py` (`scripts/task.py` says "re-run it after any
+bulk import") and `scripts/measure_stale.py` (`tasks/config.json` says "re-derive with"
+it). Both retargeted at the tracked tree; `measure_stale.py`'s hardcoded
+`TODAY = date(2026, 8, 21)` became `--today`, since a hardcoded clock turns a measurement
+into a fixed answer that looks plausible forever. **The first tracked run of
+`measure_glyphs.py` reports 12 unmapped code points**, so `ASCII_FOLD` is not currently
+complete for the corpus — recorded in its comment at `scripts/task.py`, not filed, because
+the tracked pin (`test_banner_is_ascii`) deliberately covers the banner only.
+
+**4. Three stale statements found in LIVING files, unrelated to the deletion.**
+`docs/tasktool-spec.md:20` still told readers "Write ONLY inside `.scratch/tasktool/`. The
+main repo is READ-ONLY" — a build-era constraint that survived graduation by nine days and
+would have sent a reader to exactly the wrong place. Its `:235` and `scripts/task.py:511`
+both justified never existence-checking a `source` path on the grounds that "this corpus
+lives under `.scratch/`", untrue since the tree was tracked (the rule is right; the reason
+was not). And `:480` pointed at `sandbox-migrated/tasks/config.json` for the live config
+values. All three corrected in place.
+
+**5. Nine findings that were never fixed**, each re-verified first-hand before filing —
+a subagent's report is evidence, not a finding. `TK57` `formal/verify.sh` has no `task.py
+lint` step (`grep -c 'task\.py' formal/verify.sh` → **0**), so eleven of twelve tree checks
+reach the gate only through the pytest tiles; the 4g patch was graduation condition 21 and
+never landed. `TK58` `count_guard.py` never graduated, so there is no mechanical guard
+against a restated corpus count — this repo's most-recurring defect class. `TK59`
+`LINKED_DOCS` excludes `tasks/`, so no task file's `## Read first` pointers are resolved by
+anything. `TK64` `handoff_lint.py:439` still prints the `> 1` branch's sentence on a
+zero-`NOW` failure, fixed in `task.py` and never ported back. `TK60` no parent-census
+check, deferred through three renumberings. `TK61` thirteen `R6-N` bodies cite `migrate.py`
+as the guarantor of their trap count — a citation to something that no longer exists.
+`TK62` nothing checks the `R6-N` transcribed figures against the audit. `TK65` the
+`missing keys -` cosmetic, the unfixed half of a fixed pair. `TK63` the "do not cancel
+`P4`" warning is one hop away in `formal/history/` and `tasks/P4` records no traps — which
+matters more since the cutover made the tree sole authority.
+
+**A note on the read receipt.** The vocabulary is `board only` / `board + note`, and
+neither is a true description of this session: it was handed a specific task, read the note
+(and `CLAUDE.md`) but never ran `board` to choose work, and ran `board` only at the end to
+check the banner edit. The check cannot express that, so the cheapest compliant answer is a
+claim that did not happen — a small fail-by-passing shape in the receipt itself. Recorded
+here rather than filed, since it is a one-line vocabulary question for whoever next touches
+`READ_VOCAB`.
+
+task lint: clean (12 checks, 177 task file(s) parsed)
+read: board + note — with the qualification in the paragraph directly above: the note was
+read to start, the board only at the end.
+
+**Still owed:** the deletion itself — `.scratch/tasktool/` is still on disk, defused,
+awaiting the user's go. Everything else in this entry is done.
+
+---
+
 ## 2026-09-06d — Phase B′ cutover LANDED: tree sole authority, `HANDOFF.md` one-hop, `sync`/`ack`/check 13 retired
 
 rows: `TT-1` (closed — this commit), `TT-2` (closed — retired with `sync`), `TT-8` (new, LATER:

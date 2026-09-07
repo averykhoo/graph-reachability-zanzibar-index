@@ -508,10 +508,16 @@ LIST_FIELDS = ('deps', 'related', 'labels')
 # a second state file that can desync, go missing, or silently degrade to "everything
 # looks hand-filed".
 SOURCE_FIXED = ('board', 'hand')
-# Deliberately NOT checked for existence on disk. This corpus lives under .scratch/ while
-# its sources live in a READ-ONLY repo, and a source document that is later renamed or
-# archived would turn the whole gate red for a fact that is still TRUE (the task did come
-# from it). Shape is mechanical; existence is not this tool's business.
+# Deliberately NOT checked for existence on disk. A source document that is later renamed,
+# archived or deleted would turn the whole gate red for a fact that is still TRUE (the task
+# did come from it). Shape is mechanical; existence is not this tool's business.
+#
+# The original reason given here was that the corpus lived under .scratch/ while its
+# sources lived in a read-only repo. That stopped being true when the tree was tracked, and
+# the sentence survived the move; corrected 2026-09-07. The RULE is unchanged and the
+# rewritten reason is the stronger one -- it is now demonstrated rather than hypothetical,
+# since .scratch/tasktool/ was deleted that day and several tasks legitimately cite sources
+# that no longer exist.
 SOURCE_PATH = re.compile(r'^[A-Za-z0-9_][A-Za-z0-9_./+-]*$')
 
 # `source_hash` is FROZEN as of the 2026-09-06 cutover. It was the digest of this task's
@@ -775,9 +781,11 @@ LOG_HEADING = '## Log'
 # rather than dropping characters: a silently dropped glyph in a `show` is a lie about the
 # file's contents, and this tool's whole job is to be a faithful view of the files.
 #
-# The table is MEASURED, not guessed: `measure_glyphs.py` counts every non-ASCII code
-# point in the live corpus and prints which are unmapped. Re-run it after any bulk
-# import. The five added on 2026-08-21 were all unmapped and all landed on the rows a
+# The table is MEASURED, not guessed: `scripts/measure_glyphs.py` counts every non-ASCII
+# code point in the live corpus and prints which are unmapped, exiting 1 if any are. Re-run
+# it after any bulk import. (It was gitignored under .scratch/tasktool/ until 2026-09-07,
+# when it was ported here ahead of that directory's deletion; the first tracked run
+# reported 12 unmapped code points, so the table is not currently complete for the corpus.) The five added on 2026-08-21 were all unmapped and all landed on the rows a
 # session reads FIRST -- the section sign alone occurs 77 times across 32 of the 99
 # files, and rendered P3's own trap as "Read §11.10 before touching the cone":
 # honest, unreadable, and un-greppable once pasted.
