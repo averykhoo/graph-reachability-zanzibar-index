@@ -28,9 +28,9 @@ Open question §8.2 item 2 of the leaf-family-split scope doc: whether the `stor
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention; `migrate.py::check_formal_pointer` enforces it for the generated rows and 18/18 formal tasks satisfy it)
+- [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - [`formal/history/leaf-family-split-scope-2026-08-05.md`](formal/history/leaf-family-split-scope-2026-08-05.md)`:530-534` (§8.2 item 2) — the question, and `:467-468`, `:772-775`, `:819-822` for the other three flags (ACTIVE-PLAN)
-- `python task.py show P3` and `show P4` — the live work this scopes
+- `python scripts/task.py show P3` and `show P4` — the live work this scopes
 
 ## Log
 

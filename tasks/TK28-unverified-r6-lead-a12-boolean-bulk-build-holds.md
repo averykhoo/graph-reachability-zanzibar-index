@@ -39,7 +39,7 @@ On a boolean schema the backfill's `reach_out`/`reach_in` (full transitive reach
 - the same file, §"Traps the numbers do not carry" — the round-wide traps
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the P12c fence and the reopening rule (**every item still needs a motivating measurement**)
 - `index_v4/bulk_build.py::bulk_build` — the code
-- `python task.py show R6` — the parent: round-wide order, traps, and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
+- `python scripts/task.py show R6` — the parent: round-wide order, traps, and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
 ## Log
 

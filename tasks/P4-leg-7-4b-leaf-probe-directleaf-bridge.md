@@ -45,7 +45,7 @@ fixed".
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule — stated there, and since 2026-09-07b enforced by nothing: this line used to cite `migrate.py::check_formal_pointer`, which was deleted with `.scratch/tasktool/` on 2026-09-07. `TK61` is the same defect elsewhere.)
+- [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule — stated there, and enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`. Naming that symbol here would itself be a dead pointer, which is why this line only describes it; `TK59` is the row that would re-enforce the rule.)
 - [scope doc](formal/history/leaf-family-split-scope-2026-08-05.md) §7 — and §11.10 at `:1099` for the do-not-cancel warning above
 
 ## Log

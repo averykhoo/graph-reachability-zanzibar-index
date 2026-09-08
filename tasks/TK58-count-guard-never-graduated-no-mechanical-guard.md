@@ -11,8 +11,8 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07b
-updated: 2026-09-07b
+moved: 2026-09-08
+updated: 2026-09-08
 closed:
 ---
 
@@ -92,3 +92,74 @@ tree must be green in the same run.
 SCOPE NOTE, measured 2026-09-07b: this session removed two restated counts by hand (TK60
 deleted R6 parent census; TK61 reworded 13 R6-N citations). Re-measure the live corpus
 before sizing -- the S/M estimate on this row predates both.
+
+### 2026-09-08
+
+CENSUS 2026-09-08, before any code. The check as specified on this row is RED ON
+ARRIVAL: the three agreed patterns fire on 87 lines in the agreed scan scope. Numbers
+are a subagent sweep; the items marked VERIFIED were re-checked first-hand.
+
+SCOPE ACTUALLY SCANNED: `CLAUDE.md`, `HANDOFF.md`, 12 x `docs/*.md` (top level, incl.
+`docs/README.md`), 72 x `tasks/*.md`. Fence-aware. The per-line date-stamp skip dropped
+18 lines, the fence rule 1.
+
+BREAKDOWN of the 87: 7 true live claims, ~65 evidence, 15 pattern false positives.
+
+THE SHAPE IS FAVOURABLE. 61 of the 80 non-claims collapse under ONE file-level
+exemption. Zero hits in `HANDOFF.md`, `docs/README.md`, `docs/latent-gaps.md`,
+`docs/perf-next-round.md`, `docs/tasktool-spec.md`, `tasks/README.md`, and 70 of 72 open
+task files. Residue to adjudicate by hand: roughly 26 lines.
+
+AMENDMENT 1, and it invalidates part of the agreed plan. THE PER-LINE DATE-STAMP SKIP
+DOES NOT WORK. `docs/spec-deviations.md` contributes 35 hits, every one a pytest summary
+inside a dated entry -- but the date sits on the `## <date>` HEADING, not on the body
+line, so a per-line rule sees none of it. The exemption predicate must key on the FILE's
+liveness banner (`docs/README.md`'s LIVING / FROZEN / ACTIVE-PLAN vocabulary), not on the
+line. `spec-deviations.md`'s own banner says it is append-only and every entry true as of
+its date key -- that is the machine-readable fact to key on. Same mechanism covers the
+three FROZEN 2026-09-06d tasktool docs (15 hits) and `docs/perf-round6-audit-2026-08.md`.
+
+AMENDMENT 2: pattern (b) needs a word boundary. It currently matches "6 row" inside the
+identifier `R6-6` (`docs/perf-round6-audit-2026-08.md:40`, twice) and "00 row" inside
+`1.00 row/edge` (`R6-16:3`). Other false positives are DB/closure rows (`14,868 rows`,
+`100,000 rows`, `one row per id`) and narrative "two checks" / "one test" meaning a
+specific pair, not a census.
+
+AMENDMENT 3, SELF-REFERENTIAL TRAP: this row's own SABOTAGE bullet (TK58 line 89)
+instructs writing a restated check-count literal into `HANDOFF.md`, and that instruction
+contains the literal. The check fires on its own design spec. Same shape as the
+minted-id pin that caught the 2026-09-07b write-up twice. Plan for it -- describe the
+token rather than quoting it, or accept the row is exempt-by-banner -- do not weaken the
+pattern to dodge it.
+
+THE 7 TRUE LIVE CLAIMS, and TWO OF THEM ARE ALREADY WRONG TODAY:
+  * VERIFIED WRONG -- `docs/gate-runbook.md:285` says three checks run inside the `lean`
+    phase. `formal/verify.sh` echoes `[4a/7]` through `[4g/7]`: seven. TK57 added 4g and
+    renumbered 4a-4f last session; this line was not updated.
+  * VERIFIED WRONG -- `docs/gate-runbook.md:365` states a check count for
+    `scripts/handoff_lint.py`. The `CHECKS` tuple at `handoff_lint.py:890-904` has ELEVEN
+    entries; `check_session_receipt` was appended 2026-09-06c and the prose was not
+    updated. Rot introduced by the very session that added the eleventh check.
+  * `docs/gate-runbook.md:81` -- a skip-budget figure restated in prose; true today
+    against `verify.sh:505`.
+  * `docs/gate-runbook.md:197` and `:201` -- a per-file test count, restated TWICE in the
+    same bullet, and unverifiable statically (the file has one parametrized `def test_`).
+    That duplication is the ZT-P3-5 shape exactly.
+  * `CLAUDE.md:16` -- restates `task.py:609 LIST_LIMIT`. True today. Borderline: a UI cap,
+    not a corpus census.
+  * `TK62:19` -- a live census of open `R6-N` rows; rots the moment one closes.
+
+A third wrong figure, outside this row's scan scope but the same defect:
+`docs/tasktool-spec.md:397` restates the `task.py` lint check count, and it goes wrong
+the moment TK59 appends check 14.
+
+HOME CONFIRMED 2026-09-08, first-hand: no existing check overlaps.
+`handoff_lint.py::check_frozen_banners` tests banner PRESENCE and never reads the body;
+`check_bold_caps` counts formatting, not numerals; `check_ledger_row_ids` resolves ids,
+not counts. The module docstring at `handoff_lint.py:17` names this exact motivation and
+nothing implements it. Appending to `CHECKS` rides `verify.sh` 4f, so it is gated on
+arrival with no `verify.sh` edit.
+
+ORDERING NOTE: still do this AFTER TK59, and there is now a concrete reason beyond the
+one already on this row. Landing check 14 makes `docs/tasktool-spec.md:397` wrong; TK59
+fixes that line as part of its own doc update, so this check does not inherit it.

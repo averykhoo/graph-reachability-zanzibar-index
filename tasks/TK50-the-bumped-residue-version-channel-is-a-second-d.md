@@ -30,9 +30,9 @@ Not a crash or a correctness bug — a version bump with no outbox row would abo
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention; `migrate.py::check_formal_pointer` enforces it for the generated rows and 18/18 formal tasks satisfy it)
+- [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - [`formal/CORRESPONDENCE.md`](formal/CORRESPONDENCE.md)`:436-452` — the ★ NEW entry (`ZT-P4-3a`), and `:352` — the T5 row that carries the weaker-abort warning
-- `index_v4/processor.py::DeltaProcessor._store_residue` — where `_bumped` is appended, and `::DeltaProcessor._run_cascade` — where it is drained
+- `index_v4/processor.py::DeltaProcessor._store_residue` — where `_bumped` is appended, and `index_v4/processor.py::DeltaProcessor._run_cascade` — where it is drained
 - `formal/lean/ZanzibarProofs/GraphIndex/CascadeStrata.lean::runCascade2_no_abort` — the theorem whose scope this bounds
 
 ## Log

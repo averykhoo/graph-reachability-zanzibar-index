@@ -26,7 +26,7 @@ Lean's `Expr` is binary where Python's compiler flattens n-ary unions, so leaf a
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention; `migrate.py::check_formal_pointer` enforces it for the generated rows and 18/18 formal tasks satisfy it)
+- [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - [`formal/CORRESPONDENCE.md`](formal/CORRESPONDENCE.md)`:807-851` — the DECLARED-not-fixed entry and its scope argument
 - `zanzibar_utils_v1.py::compile_ruleset` — the Python side that flattens
 

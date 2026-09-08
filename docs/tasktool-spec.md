@@ -394,12 +394,14 @@ tracking, kanban rendering, a web UI, an MCP server.
 
 ## 5. `lint` checks
 
-Each check must name the offending file and id, and say what to do about it. **Twelve
-checks** since the 2026-09-06 cutover (thirteen for the last hours of the trial; check 11
-warns rather than fails); the count is printed by `lint` itself -- `task lint: clean (N
-checks, M task file(s) parsed)` -- so no other surface should restate it. Checks are
+Each check must name the offending file and id, and say what to do about it. `lint` prints
+how many run — `task lint: clean (N checks, M task file(s) parsed)` — and that print is the
+count's only home; no other surface should restate it, this sentence included. (It read
+"**Twelve checks**" until 2026-09-08 and went wrong the moment check 14 was appended,
+which is the `ZT-P3-5` shape inside the spec for the tool built to cure it.) Checks are
 cited by NUMBER, so a new check is APPENDED, never inserted, **and a retired number is
-never reused** — the next check appended is 14.
+never reused** — check 13 is retired, so the LIST is one shorter than the highest NUMBER,
+and the next check appended is 15. Check 11 warns rather than fails.
 
 1. every `*.md` under `tasks/` and `tasks/closed/` parses (delimiters present, all
    fifteen keys present, no unknown keys) — excluding `NON_TASK_MD` at the top level;
@@ -467,7 +469,25 @@ never reused** — the next check appended is 14.
     found NINE one-armed updates across a fortnight of ledger entries that all read
     `task lint: clean`. Why it is gone: there is no row table to reconcile against.
     `test_lint_reads_no_board_and_check_13_is_gone` pins the retirement (a tableless
-    note lints clean; `LINT_CHECKS` has twelve entries and no `check_board_sync`).
+    note lints clean, and `LINT_CHECKS` carries no `check_board_sync`).
+
+14. **Every `## Read first` pointer on an OPEN task resolves on disk** (`check_read_first`,
+    added 2026-09-08, `TK59`). Markdown links, backticked paths and the path half of a
+    `file::symbol`; for `file::symbol` the symbol is resolved too, by word-boundary search
+    in the file. **The path only, never the line** — `path:190` and `path:190-191` are both
+    stripped, because line numbers rot faster than the check could be worth (`TK63`, a row
+    filed to say "cite something that exists", cited two that were both already wrong).
+    **Either root**: a target counts as resolved if it exists relative to the repo root or
+    to `tasks/`, because the corpus was written overwhelmingly root-relative and a
+    renderer-strict rule would fail ~130 live pointers and teach the next session that the
+    check is noise. Closed tasks are exempt — their pointers may die with the files they
+    name, the rule `docs/history/` already lives under. A task with no `## Read first`
+    section, and an entry that names no path at all, each print a WARNING rather than
+    failing: both are legitimate, and a silent skip is how a blind spot becomes permanent.
+    Instrument control: `min_read_first_pointers` in `tasks/config.json` (validated, not
+    merely compared). What it does NOT do is judge whether a resolving pointer is the RIGHT
+    one. Pinned by `tests/test_tasktool.py::test_sabotage_rf_path` and
+    `::test_sabotage_rf_symbol`.
 
 ## 6. `tasks/config.json`
 

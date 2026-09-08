@@ -26,7 +26,7 @@ closed:
 
 ## Read first
 
-- [`README.md`](README.md)`:399` — the question, in its list
+- [`README.md`](../README.md)`:399` — the question, in its list (the ROOT README, 660 lines; `tasks/README.md` is a different 86-line file and this link used to resolve to it)
 - `zanzibar_utils_v1.py::parse_openfga_schema` — the parser that would have to admit it
 - `tests/oracle.py` — the independent oracle, which parses the DSL itself
 

@@ -459,9 +459,13 @@ TOOL, because their subjects have no exit code to redden.)
 Nor does it cover a scanner fooled TWICE OVER: ``disk_md_count`` is deliberately
 independent of ``Store.md_paths``, so the recount catches one blinded scanner --
 but an edit that blinds both would pass, and no floor can catch a corpus that was
-never written. And the checks reach exactly as far as ``tasks/``: nothing here
-resolves a ``## Read first`` pointer, so a task whose entire navigation list is
-dead still lints clean.
+never written. And the checks reached exactly as far as ``tasks/`` until 2026-09-08:
+nothing here resolved a ``## Read first`` pointer, so a task whose entire navigation
+list was dead still linted clean. Check 14 (``check_read_first``) closes that, and
+found 25 dead pointers across 24 of the 66 open tasks on the day it landed. What it
+still does NOT do: judge whether a pointer that resolves is the RIGHT one (two rows
+cited ``README.md`` meaning the root file while it resolved to ``tasks/README.md``),
+or read the prose around it.
 """
 
 import argparse
@@ -2853,6 +2857,339 @@ def check_banner(store, fail, state):
 # in docs/tasktool-spec.md section 4 and docs/history/tasktool-proof-2026-08.md.
 
 
+# --- Check 14: `## Read first` pointers resolve -----------------------------------------
+
+# A token is treated as a PATH when it carries a `/` or one of these extensions. Bare
+# basenames are deliberately included: the corpus's real deaths were `verify.sh` and
+# `Cascade.lean` written without their directories, and a `/`-only rule would have skipped
+# exactly those. The cost is that a prose word ending in one of these would be probed --
+# which is fine, because a probe that resolves costs nothing and one that does not IS the
+# finding.
+POINTER_EXTS = ('.md', '.py', '.sh', '.lean', '.txt', '.json', '.tsv', '.toml', '.yml')
+
+_RF_MD_LINK = re.compile(r'\]\(([^)\s]+)\)')
+_RF_CODE_SPAN = re.compile(r'`([^`]+)`')
+# `:190` and `:190-191` both appear in the corpus. The LINE IS NEVER CHECKED, only
+# stripped -- see the check's docstring for why.
+_RF_LINE_SUFFIX = re.compile(r':\d+(?:-\d+)?$')
+# The WHOLE link, label included. Removed from the line before code spans are read, so a
+# link's own code-span LABEL is never resolved as if it were a path. That is not a
+# hypothetical: `handoff_lint.py::check_doc_links` records 32 false reds from exactly this
+# (its MENTION_ROOTS exists for it), and check 14's first run reproduced it anyway --
+# `[`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md)` reported `FINAL_REVIEW.md` dead while the
+# target beside it resolved fine. The eager reading is the obvious one and it looks right.
+_RF_WHOLE_LINK = re.compile(r'\[[^\]]*\]\([^)\s]+\)')
+# Asymmetric ON PURPOSE: `.` is stripped only from the RIGHT. Stripping it from the left
+# turns `../formal/HANDOFF.md` into `/formal/HANDOFF.md`, which resolves nowhere -- the
+# first run reported 22 dead pointers that were all the checker eating its own `../`.
+_RF_LSTRIP = '([\'"'
+_RF_RSTRIP = '.,;:!?\'")]'
+
+# THE INSTRUMENT CONTROL for check 14 lives in `tasks/config.json` as
+# `min_read_first_pointers`, not as a module constant, for the same reason
+# `min_tasks_parsed` does: the floor is a property of a CORPUS, and this tool is run
+# against fixture trees as well as this repo's. A module constant sized for the live tree
+# would redden every fixture, and "make the fixture pass" is how a floor gets deleted.
+# Provenance for the live value is in that file's `_provenance` block.
+MIN_READ_FIRST_POINTERS_KEY = 'min_read_first_pointers'
+
+
+def _rf_entries(task):
+    """The `## Read first` section of `task`, as (line_number, text) pairs.
+
+    Line-numbered against the FILE so a violation is clickable, and returning every line
+    of the section rather than every `- ` bullet. The corpus has 18 pointers sitting on
+    WRAPPED CONTINUATION lines (`P6`, `R6`, `TK53`); a bullet-only parser drops them
+    silently, which is a checker that fails by passing on the exact rows most likely to
+    carry a stale pointer.
+    """
+    lines = (task.body or '').split('\n')
+    offset = len(render_file(task.fm, '').split('\n')) - 1
+    out = []
+    inside = False
+    for i, ln in enumerate(lines):
+        if ln.startswith('## '):
+            inside = (ln.strip() == '## Read first')
+            continue
+        if inside and ln.strip():
+            out.append((offset + i + 1, ln))
+    return out
+
+
+def _rf_candidates(text):
+    """Every (token, symbol) path candidate on one line of a read-first section."""
+    found = []
+    for target in _RF_MD_LINK.findall(text):
+        found.append(target.split('#', 1)[0])
+    for span in _RF_CODE_SPAN.findall(_RF_WHOLE_LINK.sub(' ', text)):
+        # A code span is not necessarily a path: `python scripts/task.py show P16` is a
+        # COMMAND. Tokenising means the path inside it is still resolved and the verb and
+        # the id are simply not candidates -- so the corpus needed no special rule for
+        # CLI entries once they were written with their real path.
+        found.extend(span.split())
+    out = []
+    for raw in found:
+        tok = raw.lstrip(_RF_LSTRIP).rstrip(_RF_RSTRIP)
+        if tok.endswith("'s"):
+            tok = tok[:-2]
+        # A trailing slash is a DIRECTORY reference (`.scratch/tasktool/`). Directories
+        # are skipped: the ones this corpus names are deliberately deleted or gitignored,
+        # and reddening on them would make the check unfixable rather than informative.
+        if not tok or tok.endswith('/'):
+            continue
+        symbol = ''
+        if '::' in tok:
+            tok, symbol = tok.split('::', 1)
+            if not tok:
+                # `::Foo` elision meaning "same file as the previous entry". Resolvable
+                # only by carrying state across entries, which makes the check depend on
+                # entry ORDER. Swept out of the corpus 2026-09-08 instead.
+                continue
+        tok = _RF_LINE_SUFFIX.sub('', tok)
+        if not tok:
+            continue
+        if '/' not in tok and not tok.endswith(POINTER_EXTS):
+            continue
+        out.append((tok, symbol))
+    return out
+
+
+def check_read_first(store, fail, state):
+    """Check 14: every `## Read first` pointer on an OPEN task resolves on disk.
+
+    THE HAZARD THIS CLOSES. A `## Read first` list is the only navigation surface a
+    session gets out of a task file, and until 2026-09-08 nothing resolved one. The
+    tool's own module docstring said so. `handoff_lint.py::check_doc_links` resolves
+    markdown links, but `LINKED_DOCS` is a fixed eight-file tuple that does not include
+    `tasks/`, and its `_MD_MENTION` matches `.md` only -- so a read-first citing a `.py`
+    was checked by nothing in this repo even in principle.
+
+    It was not a theoretical hole. Measured 2026-09-08, before this check existed: 25
+    dead pointers across 24 of the 66 open tasks, 22 of them the same line -- a
+    `migrate.py::check_formal_pointer` citation in the formal-item boilerplate, naming a
+    file deleted with `.scratch/tasktool/` on 2026-09-07. `R6-1` recorded that deletion
+    and `TK61` reworded ONE of the 22 copies; the other 21 kept sending every formal
+    session to a file that does not exist. This check would have gone red the day the
+    file was deleted.
+
+    RESOLUTION RULES, each decided against a measured corpus shape rather than a
+    preference:
+
+    * EITHER ROOT. A target resolves if it exists relative to the repo root OR to the
+      citing file's directory. 130 of the corpus's 141 markdown links were written bare
+      (`](formal/HANDOFF.md)`, no `../`), i.e. root-relative, and 11 were written
+      `../`-relative; ZERO were dead under both. Resolving strictly the way a markdown
+      renderer would -- which is what `check_doc_links` does, deliberately, because a
+      reader CLICKS those -- would fail 130 live pointers and teach the next session that
+      this check is noise. A read-first pointer's consumer is `task.py show` in a
+      terminal, not a renderer. The cost is recorded rather than hidden: either-root
+      cannot tell `README.md` (root, 660 lines) from `tasks/README.md` (86), which is
+      exactly how `TK39` and `TK43` cited `:399` and `:142` against the wrong file for
+      weeks. Both were repointed to `../README.md` by hand on 2026-09-08; the check does
+      not catch that class and is not claimed to.
+
+    * THE PATH ONLY, NEVER THE LINE. `path:190` and `path:190-191` both appear; the
+      suffix is stripped and discarded. Line numbers rot faster than a check can be
+      worth -- `TK63`, a row filed to say "cite something that exists", cited two line
+      numbers on 2026-09-07 and BOTH were wrong (`:1082` -> `:1099`, `:247` -> `:5146`),
+      and `TK64`/`TK65` had both drifted. Gating on them would produce a permanent red
+      that says nothing about whether the pointer is useful.
+
+    * `file::symbol` RESOLVES THE SYMBOL TOO, by word-boundary search in the file. This
+      is the half that makes the check bite rather than merely tidy: a renamed function
+      leaves the path resolving and the pointer useless. Cheap, too -- of 55 occurrences
+      measured 2026-09-08, 30 resolved fully and there were ZERO symbol-level misses
+      among files that exist, so every failure was already a file-level one.
+
+    * `source` IS NOT TOUCHED. `task.py::SOURCE_PATH` deliberately never
+      existence-checks it, because a legitimately archived source would turn the gate red
+      for a fact that is still true. That reasoning is unchanged; this check reads the
+      body and nothing else.
+
+    * OPEN TASKS ONLY. A closed task is a record of what was true when it closed, and its
+      pointers are allowed to die with the files they name -- the same rule
+      `docs/history/` lives under.
+
+    WHAT IS A WARNING RATHER THAN A VIOLATION, and why that is not a dodge: an entry
+    carrying no path at all (`- that item's own dated note`; two rows literally say
+    `(the board row carried no pointer)`) and a task with no `## Read first` section at
+    all (four of them: `P22`, `P23`, `P24`, `TK54`). Both are legitimate states, but a
+    SILENT skip is how a checker's blind spot becomes permanent, so each prints on every
+    run. `op_lint` prints warnings red or green and they never touch the exit code.
+
+    THE INSTRUMENT IS CONTROLLED, which is the step this repo's record says gets skipped.
+    `min_read_first_pointers` asserts the parser found pointers AT ALL: a tokeniser that
+    silently stops matching would otherwise report clean on exactly the corpus it exists
+    to police, which is `check_min_parsed`'s lesson and `MIN_DOC_LINKS`' reason for
+    existing. The floor VALUE is validated as well as read -- a `0`, a `true` or a quoted
+    `"150"` is a violation naming the key -- because `min_tasks_parsed` shipped without
+    that validation and one config value could switch its control off in silence.
+
+    SABOTAGE (docs/sabotage-procedure.md), 2026-09-08. Four runs against the LIVE tree,
+    each restored; the permanent fixture cases are
+    `tests/test_tasktool.py::test_sabotage_rf_path` and `::test_sabotage_rf_symbol`.
+    Baseline first, on the unsabotaged tree, so every red below is attributable::
+
+        task lint: clean (13 checks, 179 task file(s) parsed), 23 warning(s)   rc=0
+
+    (1) A CITED `.py` IS RENAMED -- `git mv scripts/handoff_lint.py handoff_lint2.py`,
+    the class of death no other check in this repo can see, since
+    `handoff_lint.py::_MD_MENTION` matches `.md` only::
+
+        task lint: 2 violation(s)
+          FAIL: .../tasks/TK58-....md:59: read-first pointer 'scripts/handoff_lint.py'
+          resolves to nothing. ...
+          FAIL: .../tasks/TK59-....md:50: read-first pointer 'scripts/handoff_lint.py'
+          resolves to nothing. ...
+
+    (2) A CITED SYMBOL GOES STALE -- `::DeltaProcessor._run_cascade` ->
+    `::DeltaProcessor._run_cascade_stratum` on `TK50`, standing in for the code-side
+    rename (the observable is identical: the pointer names a symbol the file lacks)::
+
+        FAIL: .../tasks/TK50-....md:35: read-first pointer
+        'index_v4/processor.py::DeltaProcessor._run_cascade_stratum' resolves to a file,
+        but '_run_cascade_stratum' does not appear in it. ...
+
+    (3) THE FLOOR CAN FIRE -- raised to 5000 against the live tree, which is also how the
+    live pointer count was MEASURED rather than estimated::
+
+        FAIL: check 14 resolved only 209 read-first pointer(s) across the open tasks,
+        floor min_read_first_pointers=5000. ...
+
+    (4) THE TOKENISER GOES BLIND -- an early `return []` in `_rf_candidates`, the shape a
+    refactor actually produces. This is the one that matters: (1) and (2) only prove the
+    check notices broken DATA, and a checker that has stopped looking reports clean on
+    exactly the corpus it exists to police::
+
+        FAIL: check 14 resolved only 0 read-first pointer(s) across the open tasks,
+        floor min_read_first_pointers=150. ...
+
+    TWO FALSE REDS ON A CLEAN TREE CAME FIRST, and they are recorded because both are the
+    obvious way to write this and both look right. The token cleaner stripped `.` from
+    BOTH ends, eating the `../` off every relative link (22 dead pointers reported, all of
+    them the checker eating its own input); and code spans were read before markdown links
+    were removed, so the LABEL of ``[`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md)`` was
+    resolved as a path and reported dead while the target beside it resolved fine. That
+    second one is the identical false positive `check_doc_links` records 32 of and warns
+    about in its own docstring -- read during this work, and reproduced anyway.
+    """
+    # TWO roots for a normal run: the tree's parent (which IS the repo root when `tasks/`
+    # sits in it) and the tree itself.
+    #
+    # The third is an ESCAPE HATCH FOR ONE CALLER and is deliberately not derived. A
+    # `tasks/` tree copied somewhere else -- which `tests/test_tasktool.py::live_copy`
+    # does, to sabotage the real corpus without touching it -- is severed from the repo
+    # its pointers name, so every `formal/...` entry would redden for a reason that is not
+    # about the corpus. Deriving this from `__file__` was tried first and is WRONG: the
+    # sabotage harness runs PATCHED COPIES of this file out of a temp directory, so
+    # `__file__` there names a repo that does not exist, and the whole live-copy pass went
+    # red on pointers it had no business judging.
+    #
+    # THE COST, stated rather than discovered later: with the hatch set, a pointer resolves
+    # if the file exists under ANY root, so deleting a pointed-to file inside a copied tree
+    # will not redden -- the original still has it. Sabotage this check by breaking the
+    # POINTER, not the target; `test_sabotage_check_read_first` does exactly that.
+    roots = [os.path.dirname(os.path.abspath(store.dir)), os.path.abspath(store.dir)]
+    hatch = os.environ.get('ZANZIBAR_TASK_POINTER_ROOT')
+    if hatch:
+        roots.append(os.path.abspath(hatch))
+    resolved = 0
+    entry_lines = 0
+    for task in state['tasks']:
+        if task.is_closed:
+            continue
+        entries = _rf_entries(task)
+        entry_lines += len(entries)
+        if not entries:
+            state['warnings'].append(
+                '%s (%s) has no `## Read first` section, so check 14 resolves nothing '
+                'for it. Not a violation -- a task can legitimately carry no pointers -- '
+                'but a silent skip is how a blind spot becomes permanent.'
+                % (rel(task.path), task.id))
+            continue
+        for lineno, text in entries:
+            cands = _rf_candidates(text)
+            if not cands and text.strip().startswith('- '):
+                state['warnings'].append(
+                    '%s:%d: read-first entry names no path (%s). Not a violation; some '
+                    'entries are deliberately prose.'
+                    % (rel(task.path), lineno, clip(text.strip(), 60)))
+            for tok, symbol in cands:
+                # `../formal/HANDOFF.md` is written relative to `tasks/`, so against the
+                # REPO root it points above the repo and resolves nowhere. Try the
+                # `../`-stripped spelling too rather than making the corpus pick one
+                # convention: 130 of its links are root-relative and 11 are `../`-relative
+                # (measured 2026-09-08), both are correct-looking, and this check is
+                # aimed at files that are GONE, not at spelling.
+                bare = tok
+                while bare.startswith('../'):
+                    bare = bare[3:]
+                forms = [tok] if bare == tok else [tok, bare]
+                hits = [p for p in (os.path.normpath(os.path.join(r, f))
+                                    for r in roots for f in forms)
+                        if os.path.exists(p)]
+                if not hits:
+                    fail('%s:%d: read-first pointer %r resolves to nothing. Tried it '
+                         'against %s. A task whose navigation '
+                         'list is dead sends a session to a dead end at the moment it is '
+                         'trying to start work -- fix the pointer or drop the entry.'
+                         % (rel(task.path), lineno, tok,
+                            ', '.join(rel(r) for r in roots)))
+                    continue
+                resolved += 1
+                if not symbol:
+                    continue
+                target = hits[0]
+                if os.path.isdir(target):
+                    continue
+                name = symbol.split('.')[-1]
+                try:
+                    with io.open(target, encoding='utf-8', errors='replace') as fh:
+                        blob = fh.read()
+                except IOError:
+                    blob = ''
+                if not re.search(r'\b%s\b' % re.escape(name), blob):
+                    fail('%s:%d: read-first pointer %r resolves to a file, but %r does '
+                         'not appear in it. A renamed symbol leaves the path green and '
+                         'the pointer useless, which is the half of this check that '
+                         'bites. Update the anchor or the name.'
+                         % (rel(task.path), lineno, '%s::%s' % (tok, symbol), name))
+    key = MIN_READ_FIRST_POINTERS_KEY
+    if not entry_lines:
+        # NOTHING TO TOKENISE, so the floor would be asserting that a corpus has content
+        # rather than that the parser works. A tree built entirely by `task.py new` is
+        # exactly this: the template writes an EMPTY `## Read first`, so a floor applied
+        # unconditionally would redden a tree whose every task is brand new -- correct use
+        # of the tool.
+        #
+        # THE RESIDUAL, stated because it is the shape this repo keeps rediscovering: this
+        # makes the floor blind to a sabotage of `_rf_entries` itself (blind the SECTION
+        # extractor, get zero entries, skip the floor). It is not silent -- every task then
+        # trips the "has no `## Read first` section" warning, so blinding the extractor on
+        # the live tree prints 60+ warnings on every run rather than a quiet green -- but
+        # it is weaker than the tokeniser half, which `min_read_first_pointers` does catch
+        # mechanically. If a third check ever needs this shape, count entries against their
+        # own declared floor instead of special-casing zero.
+        return
+    if key not in store.config:
+        fail('%s declares no `%s` floor, so check 14 cannot tell "every pointer '
+             'resolves" from "the tokeniser matched nothing". There is no default worth '
+             'having: a guessed floor is a floor with headroom.'
+             % (rel(os.path.join(store.dir, 'config.json')), key))
+        return
+    floor = store.config[key]
+    if not isinstance(floor, int) or isinstance(floor, bool) or floor < 1:
+        fail('%s has %s = %r; expected a positive integer. A value of 0 or less is not a '
+             'LOWERED floor, it is a DISABLED one -- and a disabled instrument control is '
+             'the "check that passes forever" this whole class of guard exists to '
+             'prevent.' % (rel(os.path.join(store.dir, 'config.json')), key, floor))
+    elif resolved < floor:
+        fail('check 14 resolved only %d read-first pointer(s) across the open tasks, '
+             'floor %s=%d. This is the INSTRUMENT CONTROL, not a coverage target: a '
+             'pointer checker that matches nothing passes forever. Fix the tokeniser '
+             'rather than lowering the floor.' % (resolved, key, floor))
+
+
 LINT_CHECKS = (
     check_parses,
     check_ids_unique,
@@ -2874,7 +3211,8 @@ LINT_CHECKS = (
     # Appended for the same reason check 11 was: the numbers are citations.
     check_banner,
     # check 13 (`check_board_sync`) retired at the 2026-09-06 cutover; see the comment
-    # above. The next check appended here is number 14.
+    # above. The next check appended here is number 15.
+    check_read_first,
 )
 
 
