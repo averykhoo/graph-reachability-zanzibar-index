@@ -82,6 +82,11 @@ IVM delta processor.
     the chain continues happily past the failure. Bit 2026-08-10 (a `4 failed` run
     reported exit 0), and again on 2026-08-11 and 2026-08-14. Run
     `cmd > /tmp/p.log 2>&1; rc=$?`, branch on `$rc`, and **read the `PASSED` line**.
+    The 2026-09-08b variant runs the OTHER way — `EXIT=0` under a log ending `25 failed`
+    — because looping phases in one command lets the harness kill the shell while its
+    `pytest` child survives, and the orphan then writes the next phase's log. **One phase
+    per command**; on any exit-code/log disagreement, check for a stray interpreter and
+    re-run alone to a fresh log before believing either.
   * ⚠ **`HYPOTHESIS_SEED=N` does nothing** — hypothesis never reads that variable, so a
     "multi-seed sweep" written with it runs the SAME seed every time. Only
     `--hypothesis-seed=N` works; `tests/conftest.py` now refuses the env var outright.
@@ -158,7 +163,7 @@ IVM delta processor.
   **★ No figures here, deliberately (2026-08-14).** This bullet used to read "**1227
   tests** … `tests/` **762** + `formal/conformance/` **465**" as re-measured 2026-07-29.
   By 2026-08-14 the live floors were **879** and **494** — i.e. the durable contract
-  understated the suite by ~400 tests, and anyone sizing a coverage change off it would
+  understated the suite by hundreds of tests, and anyone sizing a coverage change off it would
   have mis-planned. That is `ZT-P3-5` recurring in the one file that is supposed to be
   stable. **Live figures live in ONE machine-checked place**, `formal/FINAL_REVIEW.md`'s
   generated counts block (gated by `verify.sh` step 4e; regenerate with

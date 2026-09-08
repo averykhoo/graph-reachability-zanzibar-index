@@ -30,6 +30,102 @@ from here.
 
 ---
 
+## 2026-09-08b — `TK58` landed: handoff_lint refuses a restated corpus count, the repo's oldest defect class
+
+rows: closed `TK58`. Nothing re-ranked; `P6` stays `NOW`, `R6`/`TK53` stay `NEXT`. Batch 4
+was the last of the `TK57`–`TK65` set that was going to be built; `TK62` stays declined.
+
+task lint: clean (13 checks, 179 task file(s) parsed), 23 warning(s)
+read: board + note
+
+**The task.** Finish `TK58` — the scoped-down `count_guard` — which the previous session
+censused but did not build. `scripts/handoff_lint.py::check_restated_counts` is the twelfth
+check in `CHECKS`, so it rides `verify.sh` step 4f and was gated on arrival with no
+`verify.sh` edit. It refuses `N checks` / `N open tasks` / `N tests` in `CLAUDE.md`,
+`HANDOFF.md`, top-level `docs/*.md` and `tasks/*.md`. `docs/README.md` §1 has forbidden this
+in prose since the doc system was written and nothing enforced it, which is why `ZT-P3-5`
+kept recurring; the rule now has a mechanism.
+
+**The census on the row was re-derived first-hand rather than trusted, and one of its
+conclusions did not survive.** It reported 87 raw hits and 7 true live claims under a wider
+pattern set. Re-measured with the three agreed patterns plus the escapes: **6** live claims,
+all of them restated *test* counts, and every one fixed in this commit by DELETING the number
+and pointing at its home — `docs/gate-runbook.md` ×4 (including a `MAX_TESTS_SKIPPED_ON_RDBMS`
+value restated in prose, the exact footgun `CLAUDE.md` names for `MAX_TESTS_XFAILED`),
+`docs/sabotage-procedure.md` ×1, `CLAUDE.md` ×1. The row's `TK62:19` and `CLAUDE.md:16` claims
+are NOT caught by the landed patterns and the check does not pretend otherwise.
+
+**The escapes, and the one the row got right.** AMENDMENT 1 on the row was correct and
+load-bearing: a per-LINE date-stamp skip sees nothing in `docs/spec-deviations.md`, whose
+3511 lines carry their date on the `## <date>` heading. Keying the exemption on the FILE's
+liveness banner (`FROZEN` / `ACTIVE-PLAN` / the append-only form of `LIVING`) is what makes
+the check survivable. Five escapes ship: fence, quoted span, dated line, banner, and a task
+file's append-only `## Log`.
+
+**Each escape was measured, not argued.** Disabled in turn against the live corpus, counting
+what each suppresses: banner **+8**, dated-line **+4**, task `## Log` **+1**, quoted-span
+**+0**, fence **+0**. ⚠ The last two suppress nothing today — the exact state the archived
+`count_guard`'s FROZEN exemption was caught in — so they are kept only because each has a
+test that is now their whole justification. An escape that suppresses nothing AND has no test
+is decoration.
+
+**The retrospective control is stronger than the sabotage, and it is why this was believed.**
+Run against the parent commit `966f6aa`, the patterns report BOTH figures the 2026-09-08
+session found by hand (`gate-runbook.md:285` "Three checks", `:365` a stale `handoff_lint.py`
+count) plus four the same reader walked past. Real, independently-confirmed rot from before
+the check existed. The invented sabotage — one true-today sentence appended to the banner —
+reddens naming `HANDOFF.md:30` and the token; the same line re-prefixed `Measured 2026-09-08:`
+goes silent, so the check judges the escape and not the line's shape. Baseline green in the
+same session, both restored.
+
+**⚠ The finding of the session is in the INSTRUMENT.** A sabotage certifies the case you
+sabotaged; the seventeen tests written around the check were seventeen unverified claims. So
+ten one-line weakenings were applied to `check_restated_counts` in turn — the edits a future
+session would actually make, not deletions — and the module run against each. Nine reddened
+by exactly the test that claimed to guard them. The tenth, widening the `checks` pattern to
+allow an intervening word, **broke the check while the whole module passed**, because the test
+owning that property asserted on one of the three patterns. No amount of re-reading the check
+would have shown it. Fixed, sweep now 10/10, and the transferable rule is filed as
+`docs/sabotage-procedure.md` §"Sweep the TEST MODULE with mutations".
+
+**Also measured, and rejected:** widening the corpus pattern to allow an intervening word
+("the 65 still open tasks" is a census the immediate form misses). Against the live tree it
+found zero new real claims and one false red — `docs/tasktool-spec.md:420`, a capacity RULE.
+Uniform immediacy is a measured trade, not a symmetry argument.
+
+**The check caught its own author within the hour**: the new `sabotage-procedure.md` section
+said "all seventeen tests passed", and `handoff_lint` refused it. Fixed the prescribed way.
+
+**Where the coverage lives, deliberately split.** `tests/test_handoff_lint_count_guard.py`
+pins the MECHANISM on synthetic corpora only. There is no live-corpus assertion, and that is a
+gate-hole argument rather than taste: the pytest tiles key off `t2c`, which excludes `*.md`
+outside `tasks/`, so a corpus assertion would stay "green on this tree" after someone edited
+`docs/gate-runbook.md`. Corpus coverage belongs to 4f/`lean`, which keys off `t2a`.
+
+**A second trap, hit while gating this and now in the runbook.** The tiles were run as a
+`for` loop; the harness killed the loop at the cap and the SHELL died while its `pytest`
+child kept running. The next phase overlapped with that orphan, they shared a log file, and
+a phase that reported `EXIT=0` had a log ending in `25 failed, 252 passed` — the failures
+being the orphan's, with `rc=3221225794` (Windows DLL-init) from two runs fighting over
+process handles. `25 + 252 = 277` is exactly the clean re-run's count, which is what
+identified it. One phase per command; on a code/log disagreement, check for a stray
+interpreter and re-run alone to a fresh log rather than debugging the red.
+
+**One pre-existing test had to change**, and it was pinning the wrong property:
+`test_handoff_lint_b_prime.py::test_the_two_checks_are_in_the_list_and_the_receipt_is_last`
+asserted `check_session_receipt` is LAST in `CHECKS`. Its own docstring says the rule is
+"appended, never inserted" — but last-ness makes the next legitimate APPEND fail while
+still permitting an insertion anywhere after it. Now pins the INDEX, renamed
+`..._and_nothing_was_inserted`. `formal/FINAL_REVIEW.md`'s counts block regenerated
+(`tests/` 1094 → 1111).
+
+Still owed: nothing. `docs/README.md` §1 now states what is enforced and what is not
+(`docs/history/`, `docs/specs/`, `docs/architecture/`, `formal/`, and a task `## Log` are all
+out of scope); `docs/sabotage-procedure.md` carries the mutation-sweep rule and
+`docs/gate-runbook.md` the orphaned-child trap.
+
+---
+
 ## 2026-09-08 — `TK59` landed: lint check 14 resolves every `## Read first` pointer; it found 25 dead ones
 
 rows: closed `TK59`. Censuses appended to `TK58` and `TK59` before any code; follow-on note

@@ -40,6 +40,19 @@ rot independently, and the reader cannot tell which one is live.
 `verify.sh` step 4e. Do not restate a count in prose anywhere — a quoted count is not
 merely stale, it is unenforced. This file states no figures for that reason.
 
+**Enforced since 2026-09-08** (task `TK58`), and it was prose-only for the eight months
+before that, which is why `ZT-P3-5` kept recurring:
+`scripts/handoff_lint.py::check_restated_counts` refuses `N checks` / `N open tasks` /
+`N tests` in `CLAUDE.md`, `HANDOFF.md`, top-level `docs/*.md` and `tasks/*.md`, riding
+`verify.sh` step 4f. **The remedy is always to DELETE the number and point at its home,
+never to update it** — an updated number is the same unenforced claim, one day younger.
+Four structural escapes exist and are the sanctioned way to write a figure down: a fenced
+block (evidence), a backticked or quoted span (a citation), a `YYYY-MM-DD` key on the line
+(a stamped observation), and a file whose §2 banner declares its body provenance
+(`FROZEN`, `ACTIVE-PLAN`, or the append-only form of `LIVING`). What is *not* covered:
+`docs/history/`, `docs/specs/`, `docs/architecture/`, `formal/`, and a task file's
+append-only `## Log`.
+
 ## 2. Liveness is declared, and it is three-valued
 
 Every doc declares one of these in its first lines. A reader must never have to infer
