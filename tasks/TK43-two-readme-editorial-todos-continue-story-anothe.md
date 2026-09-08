@@ -26,7 +26,7 @@ Author's-voice edits only — nobody else can write these, and nothing depends o
 
 ## Read first
 
-- [`README.md`](README.md)`:142` and `:150` — the two markers
+- [`README.md`](../README.md)`:142` and `:150` — the two markers (the ROOT README; `tasks/README.md` is a different file and this link used to resolve to it)
 
 ## Log
 

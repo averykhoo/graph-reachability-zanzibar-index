@@ -455,7 +455,16 @@ MIN_CONF_ALL=546
 #   `tests/test_tasktool.py` -- ten `sync`/`ack` tests became one 11-way parametrised
 #   refusal test, plus the reappearing-BANNER.md and check-13-is-gone tests.
 #   Re-measured -> `1091 tests collected`.
-MIN_TESTS_ALL=1091
+#   RAISED 1091 -> 1094 on 2026-09-08 (TK59, lint check 14): +2 in
+#   `tests/test_tasktool.py` (`test_sabotage_rf_path`, `test_sabotage_rf_symbol`),
+#   and +1 THAT WAS ALREADY UNRATCHETED on the committed tree -- a clean checkout
+#   collected 1092 against this floor of 1091, so one test of headroom had
+#   re-accumulated since 2026-09-06d without anyone raising it. That is the same
+#   miss `tasks/config.json`'s min_tasks_parsed provenance records four consecutive
+#   sessions of, in the same shape, and it is why the mechanical ratchet exists
+#   there and not here. Re-measured with `pytest tests/ -q --collect-only` ->
+#   `1094 tests collected`.
+MIN_TESTS_ALL=1094
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

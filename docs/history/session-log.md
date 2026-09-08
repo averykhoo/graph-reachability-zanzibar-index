@@ -30,6 +30,118 @@ from here.
 
 ---
 
+## 2026-09-08 — `TK59` landed: lint check 14 resolves every `## Read first` pointer; it found 25 dead ones
+
+rows: closed `TK59`. Censuses appended to `TK58` and `TK59` before any code; follow-on note
+on `TK66`. Nothing re-ranked; `P6` stays `NOW`, `R6`/`TK53` stay `NEXT`. `TK58` scoped and
+censused but NOT built — see Still owed.
+
+**The task.** The user asked what was left of the `TK57`–`TK65` sweep and what it would take
+to finish batches 3 and 4 this session. Answer, given up front: not both. Each is a session
+plus a ten-phase gate. Batch 3 (`TK59`) was taken; batch 4 (`TK58`) was censused so it starts
+from measurement instead of from the plan's assumptions. `TK62` stays declined.
+
+**Both batches were RED ON ARRIVAL as specified, and that is the finding that shaped the
+session.** Two read-only subagent censuses ran before any code (the delegation rule: push the
+bulky reading out, keep the table). Load-bearing claims from both were re-verified first-hand
+before being written anywhere — a subagent report is evidence, not a finding.
+
+**1. What check 14 found (`TK59`).** 25 dead pointers across 24 of the 66 open tasks. 22 were
+one line: a citation of a checker deleted with `.scratch/tasktool/` on 2026-09-07. `R6-1`
+recorded that deletion and `TK61` reworded ONE of the 22 copies; the other 21 kept sending
+every formal session to a file that does not exist. Verified by hand:
+`git ls-files | grep -c 'migrate.*\.py'` → `0`. The rest were bare basenames whose real homes
+are under `formal/` (`test_conformance_enum.py`, `verify.sh`, `Cascade.lean`,
+`UsStarWrite.lean`).
+
+Two FALSE GREENS a path-only check cannot see: `TK39` and `TK43` link `[README.md](README.md)`
+and cite `:399` / `:142` / `:150`. From `tasks/` that resolves to `tasks/README.md` — **86
+lines**, against the root README's **660** (both measured 2026-09-08). Repointed by hand; the
+check does not catch that class and its docstring says so rather than implying otherwise.
+
+**The corpus was swept BEFORE the check landed**, so it shipped green rather than red — a
+check that is red on arrival is a check someone deletes. 22 boilerplate lines retracted, and
+the retraction DESCRIBES the deleted checker instead of naming it, because a retraction that
+names a dead file leaves a dead pointer. That is the same conclusion 2026-09-07b reached about
+a minted-shape id it could not quote; the 13 `R6-N` lines `TK61` reworded had the identical
+defect and got the identical treatment. 17 `python task.py show <id>` entries were rewritten to
+the spelling `HS-5` already used, `python scripts/task.py show <id>` — they then resolve as
+paths, so **check 14 needed no special rule for CLI entries at all**. A rule not needed beats a
+rule handled.
+
+**2. The two false reds, which are the useful part.** The first version of check 14 reported 22
+dead pointers on a clean tree: the token cleaner stripped `.` from both ends and ate the `../`
+off every relative link — the checker eating its own input. The second version reported a fresh
+batch: code spans were read before markdown links were removed, so the LABEL of
+``[`FINAL_REVIEW.md`](formal/FINAL_REVIEW.md)`` was resolved as a path and called dead while
+the target beside it resolved fine. **That is the identical false positive
+`handoff_lint.py::check_doc_links` records 32 of and warns about in its own docstring** — read
+during this work, and reproduced anyway. Both are recorded in `check_read_first`'s docstring,
+because both are the obvious way to write this and both look right.
+
+**3. Sabotage.** Four runs on the live tree, each restored, plus two permanent fixture cases
+(`tests/test_tasktool.py::test_sabotage_rf_path`, `::test_sabotage_rf_symbol`, counted in their
+own bucket so the 2026-08-21 transcript's 22/22 still means its own 22). Baseline green first,
+so every red is attributable. Renaming a cited `.py` reddens — the class no other check here
+can see, since `check_doc_links` matches `.md` only. A stale `file::symbol` reddens. The floor
+fires when raised. And the one that matters:
+
+```
+FAIL: check 14 resolved only 0 read-first pointer(s) across the open tasks,
+floor min_read_first_pointers=150.
+```
+
+an early `return []` in the tokeniser. The first three only prove the check notices broken
+DATA; only the fourth asks whether it notices itself having stopped looking.
+
+**4. Design decisions that departed from the agreed plan, each because the corpus said so.**
+EITHER ROOT rather than renderer-strict: 130 of the corpus's links are root-relative and 11 are
+`../`-relative, and zero were dead under both, so a strict rule would fail 130 live pointers.
+Line RANGES (`:190-191`) strip too — the plan anticipated only `:190`. The instrument control
+lives in `tasks/config.json` as `min_read_first_pointers`, not as a module constant, because a
+constant sized for the live tree reddens every fixture and "make the fixture pass" is how a
+floor gets deleted; 209 pointers resolved live (measured by raising the floor until it fired),
+floor 150, headroom **on purpose** because the quantity is not monotonic — closing a task takes
+its whole section with it.
+
+**5. Two limits stated rather than left to be discovered.** The floor is skipped when the
+corpus offers no read-first entries at all, so blinding the SECTION extractor evades it — not
+silently (every task then trips a warning) but genuinely more weakly than the tokeniser half.
+And `ZANZIBAR_TASK_POINTER_ROOT` is an escape hatch for one caller: a `tasks/` tree copied out
+of the repo is severed from the files its pointers name. Deriving that root from `__file__` was
+tried and is wrong — the sabotage harness runs patched COPIES of the tool out of a temp
+directory, so `__file__` there names a repo that does not exist.
+
+**6. Three live wrong figures, found by `TK58`'s census and fixed.** `docs/gate-runbook.md:285`
+said three checks run inside `lean`; `verify.sh` echoes `[4a/7]`…`[4g/7]` — seven.
+`docs/gate-runbook.md:365` named a stale `handoff_lint.py` check count; `CHECKS` at
+`handoff_lint.py:890-904` has eleven entries, `check_session_receipt` having been appended
+2026-09-06c without the prose being updated. Both verified by hand, both **rot introduced by
+the very sessions that added the things they miscount**, both in the file a session reads to
+run the gate. `docs/tasktool-spec.md`'s check-count sentence was the third and went wrong the
+moment check 14 was appended — `ZT-P3-5` inside the spec for the tool built to cure it. All
+three fixed by DELETING the restated number and pointing at the tool that prints it, the
+`TK60`/`TK61` precedent, not by writing a fresh number that rots again. The runbook was also
+missing a `4g` entry entirely; added.
+
+**`TK58`'s census, on the row.** 87 raw hits in the agreed scan scope: 7 true live claims, ~65
+evidence, 15 pattern false positives. 61 of the 80 non-claims collapse under ONE file-level
+exemption, leaving ~26 lines to adjudicate. The agreed per-line date-stamp skip **provably does
+not work**: `docs/spec-deviations.md` contributes 35 hits and dates its `##` headings, not its
+body lines, so the exemption must key on the file's liveness banner. Pattern (b) needs a word
+boundary — it matches "6 row" inside `R6-6` and "00 row" inside `1.00 row/edge`. And the row's
+own sabotage instruction contains the literal it tells you to write, so the check fires on its
+own design spec.
+
+task lint: clean (13 checks, 179 task file(s) parsed), 23 warning(s)
+read: board only
+
+Still owed: `TK58` (batch 4) scoped and censused but not built — deliberate, two ten-phase
+gates did not fit in one session, and everything needed is on the row. The ledger receipt
+vocabulary still has no token for "entered via `show`" (carried from 2026-09-07b, unfiled).
+
+---
+
 ## 2026-09-07b — six of `TK57`–`TK65` landed; `task.py lint` is INSIDE the gate as `[4g/7]`; `TK66`/`TK67` filed
 
 rows: closed `TK57`, `TK60`, `TK61`, `TK63`, `TK64`, `TK65`. New `TK66`, `TK67` (both

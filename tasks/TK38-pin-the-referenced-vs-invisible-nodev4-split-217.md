@@ -28,10 +28,10 @@ The `NodeV4` endpoint split re-derives as **217/49** (from an earlier 194/41) bu
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention; `migrate.py::check_formal_pointer` enforces it for the generated rows and 18/18 formal tasks satisfy it)
+- [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - [`formal/CORRESPONDENCE.md`](formal/CORRESPONDENCE.md)`:560-565` — the provisional split and the instruction
-- `formal/conformance/doc_counts.py` — the generated-counts machinery a pin would ride (`verify.sh` step 4e)
-- `python task.py show P16` — the adjacent bounds row this is NOT
+- `formal/conformance/doc_counts.py` — the generated-counts machinery a pin would ride (`formal/verify.sh` step 4e)
+- `python scripts/task.py show P16` — the adjacent bounds row this is NOT
 
 ## Log
 

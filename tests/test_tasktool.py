@@ -126,6 +126,16 @@ TASK_PY = REAL_TASK_PY
 # directory that CONTAINS `tasks/`, so the live tree root is the repo root itself.
 LIVE_TREE = REPO_ROOT
 
+# Check 14 resolves `## Read first` pointers against the tree's parent. `live_copy` trees
+# are copies of the live corpus in a bare temp directory, severed from the repo their
+# pointers name, so without this every `formal/...` entry would redden for a reason that
+# has nothing to do with the sabotage under test. Set process-wide (not per call) because
+# `lint_text` inherits the environment rather than building one, and set to the REAL repo
+# so the escape hatch names something that exists even when the tool under test is a
+# patched copy running out of TMP. Fixture trees are unaffected in practice: their only
+# pointer is `tasks/config.json`, which resolves against their own root first.
+os.environ['ZANZIBAR_TASK_POINTER_ROOT'] = REPO_ROOT
+
 TMP = None                       # set by the autouse session fixture below
 
 WARN = u'⚠'                 # the repo's trap badge; must never reach stdout raw
@@ -288,6 +298,13 @@ CONFIG = {
     'labels': ['formal', 'perf', 'docs', 'infra'],
     'budgets': {'NOW': 1, 'NEXT': 3},
     'min_tasks_parsed': 7,
+    # Check 14's instrument control. ONE, not seven: the fixture's job is to prove the
+    # floor can FIRE, and a fully blinded tokeniser reports 0, which any positive floor
+    # catches. Sizing it to the fixture's live pointer count instead would redden every
+    # tree in this file that places fewer than seven open tasks -- and a floor that
+    # reddens on a legitimate tree is one someone deletes. The live tree's floor carries
+    # real headroom and its own provenance; see tasks/config.json.
+    'min_read_first_pointers': 1,
     'stale_days': 14,
 }
 
@@ -324,7 +341,10 @@ def fresh(name, config=None, banner=BANNER_TEXT):
 
 def canon(tid, title, brief='', pri='LATER', size='M', deps=(), related=(), parent='',
           labels=(), source='hand', source_hash='', created=KEY, moved=KEY,
-          updated=None, closed='', body='Summary line.\n\n## Log\n'):
+          updated=None, closed='', body=('Summary line.\n\n## Read first\n\n'
+                                         '- `tasks/config.json` -- always present in a '
+                                         'fixture tree, so check 14 has something that '
+                                         'RESOLVES to count\n\n## Log\n')):
     """Render a task file exactly as task.py's canonical writer would.
 
     `updated` defaults to `moved`, not to KEY: that is what the schema-13 migration
@@ -872,13 +892,16 @@ def test_lint_clean_on_a_good_tree():
     RE-MEASURED 2026-09-06c: `check_board_sync` (check 13) appended; `clean (13 checks`.
     RE-MEASURED at the 2026-09-06 cutover: check 13 retired with the board, the number
     is never reused, and the header reads `clean (12 checks` again.
+    RE-MEASURED 2026-09-08: `check_read_first` appended as check 14 (13 stays retired and
+    unreused, so the LIST is thirteen long while the highest NUMBER is fourteen -- that
+    divergence is permanent and is why the header counts entries, not numbers).
     """
     root = good_tree('clean')
-    assert len(TM.LINT_CHECKS) == 12, [c.__name__ for c in TM.LINT_CHECKS]
+    assert len(TM.LINT_CHECKS) == 13, [c.__name__ for c in TM.LINT_CHECKS]
     rc, out, err = run(root, 'lint')
     assert rc == 0, 'clean tree is not green:\n%s\n%s' % (out_text(out), err)
-    assert 'clean (12 checks' in out_text(out), out_text(out)
-    # TWELVE, not eleven, since 2026-08-29. A clean tree must also report NO warnings --
+    assert 'clean (13 checks' in out_text(out), out_text(out)
+    # THIRTEEN entries since 2026-09-08. A clean tree must also report NO warnings --
     # a check that warns about a tree with nothing wrong is a check the next reader
     # learns to scroll past.
     assert 'WARN' not in out_text(out) + err, (out_text(out), err)
@@ -1573,7 +1596,7 @@ def test_parent_depth_warns_and_stays_green():
     text = out_text(out) + err
     assert rc == 0, ('depth is a WARNING, not a violation -- exit %d:\n%s' % (rc, text))
     assert 'WARN' in text and 'T8 -> T4 -> T6' in text, text
-    assert 'clean (12 checks' in out_text(out), out_text(out)
+    assert 'clean (13 checks' in out_text(out), out_text(out)
     assert '1 warning(s)' in out_text(out), out_text(out)
 
     rc, data, err = rj(root, 'lint')
@@ -2431,7 +2454,7 @@ def test_lint_reads_no_board_and_check_13_is_gone():
     absence: the tree is the sole authority, and lint has nothing to reconcile it
     against.
     """
-    assert len(TM.LINT_CHECKS) == 12, [c.__name__ for c in TM.LINT_CHECKS]
+    assert len(TM.LINT_CHECKS) == 13, [c.__name__ for c in TM.LINT_CHECKS]
     assert 'check_board_sync' not in [c.__name__ for c in TM.LINT_CHECKS]
     assert not hasattr(TM, 'check_board_sync')
 
@@ -2451,7 +2474,7 @@ def test_lint_reads_no_board_and_check_13_is_gone():
     write_banner(root, BANNER_TEXT)
     rc, out, err = run(root, 'lint')
     assert rc == 0, out_text(out) + err
-    assert 'clean (12 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
+    assert 'clean (13 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
 
 
 def show_log_keys(root, tid, *extra):
@@ -2591,7 +2614,7 @@ def test_non_task_md_is_skipped_only_at_the_top():
     rc, out, err = run(root, 'lint')
     assert rc == 0, ('a top-level README.md was scanned as a task:\n%s'
                      % (out_text(out) + err))
-    assert 'clean (12 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
+    assert 'clean (13 checks, 7 task file(s) parsed)' in out_text(out), out_text(out)
     rc, data, err = rj(root, 'counts')
     assert (data['total'], data['disk_total']) == (7, 7), (
         'README.md reached one of the two scanners: %s' % data)
@@ -3665,6 +3688,69 @@ def test_sabotage_bprime_show_can_print_the_log_oldest_first():
     assert "'%sa'" % KEY in message, message
 
 
+def sab_rf_path(root):
+    """The edit: `tasks/config.json` is renamed and ONE read-first pointer is left behind.
+
+    Deliberately a rename, not a deletion. The corpus defect check 14 was built for is
+    exactly this shape -- `migrate.py` went away on 2026-09-07 and 21 of its 22 citations
+    stayed -- and it is also the narrowest plausible weakening, since a rename is the edit
+    a real session makes while a deletion of a config file is not.
+    """
+    p = os.path.join(root, 'tasks', 'T2-next-alpha.md')
+    write(p, read(p).decode('utf-8').replace('`tasks/config.json`',
+                                             '`tasks/settings.json`'))
+
+
+def sab_rf_symbol(root):
+    """The edit: the path stays right and the SYMBOL goes stale, as after a rename."""
+    p = os.path.join(root, 'tasks', 'T2-next-alpha.md')
+    write(p, read(p).decode('utf-8').replace(
+        '`tasks/config.json`', '`tasks/config.json::no_such_key`'))
+
+
+def test_sabotage_rf_path():
+    """check_14, half one: a read-first pointer names a file that is gone.
+
+    2026-09-08 observed, on the fixture tree::
+
+        FAIL: <t>/sab_rf_path/tasks/T2-next-alpha.md:23: read-first pointer
+        'tasks/settings.json' resolves to nothing. Tried it against
+        <t>/sab_rf_path, <t>/sab_rf_path/tasks, <repo>. A task whose navigation list is
+        dead sends a session to a dead end at the moment it is trying to start work --
+        fix the pointer or drop the entry.
+
+    THE INSTRUMENT WAS CONTROLLED SEPARATELY, and it had to be: the FIRST version of this
+    check reported 22 dead pointers on a clean tree because its token cleaner stripped a
+    leading `.` and ate the `../` off every relative link, and a second batch because it
+    resolved the code-span LABEL of a markdown link as if it were a path -- the identical
+    false-positive that `handoff_lint.py::check_doc_links` records 32 of, read and then
+    reproduced anyway. Both are why `sabotage()` asserts a GREEN BASELINE first: a red on a
+    tree that was already red proves nothing about the sabotage.
+    """
+    line = sabotage('sab_rf_path', sab_rf_path, r'resolves to nothing')
+    assert 'T2-next-alpha.md' in line, line
+    assert 'tasks/settings.json' in line, line
+
+
+def test_sabotage_rf_symbol():
+    """check_14, half two: the path resolves and the SYMBOL does not.
+
+    This is the half that makes the check bite rather than merely tidy -- a renamed
+    function leaves the file resolving and the pointer useless, and nothing else in this
+    repo resolves a `file::symbol` outside `formal/CORRESPONDENCE.md`.
+
+    2026-09-08 observed::
+
+        FAIL: <t>/sab_rf_symbol/tasks/T2-next-alpha.md:23: read-first pointer
+        'tasks/config.json::no_such_key' resolves to a file, but 'no_such_key' does not
+        appear in it. A renamed symbol leaves the path green and the pointer useless,
+        which is the half of this check that bites. Update the anchor or the name.
+    """
+    line = sabotage('sab_rf_symbol', sab_rf_symbol, r'does not appear in it')
+    assert 'no_such_key' in line, line
+    assert 'T2-next-alpha.md' in line, line
+
+
 def test_the_sabotage_record_is_complete():
     """The module docstring claims 22/22 + 4/4 + 4/4. This counts them. The three
     `test_sabotage_bprime_*` cases (2026-09-06c: check 13, ack adoption, show order;
@@ -3682,10 +3768,15 @@ def test_the_sabotage_record_is_complete():
     writepath = [n for n in names if n.startswith('test_sabotage_wp_')]
     live = [n for n in names if n.startswith('test_sabotage_live_')]
     bprime = [n for n in names if n.startswith('test_sabotage_bprime_')]
+    # Check 14's two cases (2026-09-08: a dead PATH, a stale SYMBOL) are counted in their
+    # own bucket for the same reason the bprime three are -- so that the 22/22 the
+    # 2026-08-21 transcript recorded keeps meaning the twenty-two cases that produced it.
+    rf = [n for n in names if n.startswith('test_sabotage_rf_')]
     assert len(fixture) == 22, sorted(fixture)
     assert len(writepath) == 4, sorted(writepath)
     assert len(live) == 4, sorted(live)
     assert len(bprime) == 3, sorted(bprime)
+    assert len(rf) == 2, sorted(rf)
     # And the harness the whole file rests on is the real tool, not a leftover copy.
     assert TASK_PY == REAL_TASK_PY, TASK_PY
     assert os.path.isfile(REAL_TASK_PY), REAL_TASK_PY

@@ -28,10 +28,10 @@ The reason it needs an id: the closed record `ZT-P4-5` is titled *"residual decl
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention; `migrate.py::check_formal_pointer` enforces it for the generated rows and 18/18 formal tasks satisfy it)
+- [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - [`formal/CORRESPONDENCE.md`](formal/CORRESPONDENCE.md)`:515-534` — the declared gap, and [`formal/FINAL_REVIEW.md`](formal/FINAL_REVIEW.md)`:443-448` — the same gap in the second document
 - `index_v4/invariants.py::_check_residue_rows` — I7, the only thing pinning it
-- `python task.py show ZT-P4-5` — the closure that declared the residual
+- `python scripts/task.py show ZT-P4-5` — the closure that declared the residual
 
 ## Log
 

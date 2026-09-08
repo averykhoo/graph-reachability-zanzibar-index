@@ -282,7 +282,10 @@ Two erosions used to keep the gate fully green:
    scans TOKENS not statements so it finds nothing, and the audit prints a clean
    report.
 
-Three checks now run inside the `lean` phase (all cheap; total ~2 s):
+Step 4 is a series of cheap checks that run inside the `lean` phase. `formal/verify.sh`
+numbers them and echoes each as `[4a/N]`…`[4N/N]`; that echo is the count's only home, and
+the list below follows its numbering. (Restated here as "three" until 2026-09-08, by which
+time there were seven — the `ZT-P3-5` shape, in the file a session reads to run the gate.)
 
 - **4a IDENTITY** — the live `#print axioms <name>` extraction must be a **superset**
   of `formal/audited_theorems.txt`. Adding audits is free; swapping a headline
@@ -362,8 +365,10 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   machine-checked place to check them against, and widening the block is one row
   in `doc_counts.py::measure`.
 - **4f BOARD LINT** (added 2026-08-16, board row `HS-1`) — `python
-  scripts/handoff_lint.py`. Ten checks over the two board files, the two ledgers
-  and a short list of living doc roots: line ceilings, exactly one `NOW` row and at
+  scripts/handoff_lint.py`. A suite of checks over the two board files, the two ledgers
+  and a short list of living doc roots — the tool prints how many on every run
+  (`handoff_lint: clean (N checks)`), which is that number's only home: line ceilings,
+  exactly one `NOW` row and at
   most three `NEXT`, zero retired `★` glyphs, the trap budget, a liveness
   declaration in the first ten lines of every `docs/history/` and `formal/history/`
   file, the ledger-headline cap, the bold-caps ratchets,
@@ -383,6 +388,14 @@ Three checks now run inside the `lean` phase (all cheap; total ~2 s):
   pointer resolves to something actionable, or that a `moved` date is not a lie.
   Full `moved`-vs-ledger cross-validation was attempted and rejected as
   unsatisfiable — see `check_ledger_row_ids`' docstring.
+- **4g TASK TREE LINT** (added 2026-09-07b, `TK57`) — `python scripts/task.py lint`.
+  The tree's own lint checks, cited by NUMBER and therefore appended and never inserted;
+  `lint` prints how many run (`task lint: clean (N checks, M task file(s) parsed)`) and
+  that print is the count's only home. Before this step exactly one of the tool's checks
+  reached the gate. **Consequence, the same one 4e and 4f carry:** a `tasks/`-only edit
+  now needs `lean` green before push. Documented here 2026-09-08 — the step landed in
+  `formal/verify.sh` a session earlier and this runbook was not updated, which is why the
+  bullet above it said "three".
 
 #### What step 2 scans now (`formal/conformance/sorry_scan.py`)
 The hole scan is no longer just `\b(?:sorry|admit)\b` over `formal/lean/ZanzibarProofs`:

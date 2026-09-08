@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-07b
-moved: 2026-09-07b
-updated: 2026-09-07b
+moved: 2026-09-08
+updated: 2026-09-08
 closed:
 ---
 
@@ -84,3 +84,20 @@ were dropped as generic house rules already in `CLAUDE.md` or as past-tense reco
 - [`docs/history/tasktool-scratch-archive-2026-09-07.md`](../docs/history/tasktool-scratch-archive-2026-09-07.md) section 5 item 9 — where `TK63` came from
 
 ## Log
+
+### 2026-09-08
+
+Re-read this row before starting it. `TK59` LANDED 2026-09-08: lint check 14
+(`task.py::check_read_first`) now resolves markdown links, backticked paths and
+`file::symbol` anchors in every OPEN task's `## Read first`, gated via `verify.sh` 4g.
+
+This row is probably an EXTENSION of check 14 rather than its own mechanism -- the
+tokeniser, the either-root resolution rule and the symbol lookup are already written and
+sabotaged. What is NOT covered and is what this row is actually about: a directive that
+lives only in `formal/history/` and is surfaced by no live file. Check 14 proves a pointer
+RESOLVES; it says nothing about whether a live file should have carried the statement in
+the first place.
+
+Also still true and worth carrying: the table on this row is a subagent's and is marked
+UNVERIFIED. `TK59` re-measured two of its neighbours' claims this session and both moved,
+so re-verify before acting on any row of it.

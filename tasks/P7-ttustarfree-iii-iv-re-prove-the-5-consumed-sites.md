@@ -24,7 +24,7 @@ None recorded. This row sits below `NEXT`, so it never had an item block; traps 
 
 ## Read first
 
-- [`formal/HANDOFF.md`](formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule; enforced by `migrate.py::check_formal_pointer`, not merely stated)
+- [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - [`PROOF_STATUS.md`](formal/history/PROOF_STATUS.md) 2026-08-16
 
 ## Log
