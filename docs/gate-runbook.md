@@ -25,6 +25,24 @@ cold Lean build.
 CPU-contention between concurrent heavy jobs has corrupted measurements before
 (benchmarks) and just wastes wall-clock (tests). Do these **one at a time**.
 
+⚠ **ONE PHASE PER COMMAND — never a `for` loop over phases** (hit 2026-09-08b). A loop
+that runs several tiles fits no cap, so the harness kills it at ~10 min. It kills the
+SHELL; the `pytest` child it was waiting on **keeps running**. The next phase you start
+then overlaps with that orphan, and the damage is not a slow run:
+
+* the orphan and the new run write the SAME `/tmp/*.log`, so a phase that genuinely
+  PASSED shows another run's `FAILED` lines and a `FAIL: tests (pytest rc=1)` tail;
+* the two runs fight over process handles, so subprocess-spawning tests fail with
+  `rc=3221225794` (`0xC0000142`, Windows DLL-init) — a *plausible-looking* red that has
+  nothing to do with the code.
+
+Observed as `EXIT=0` from a phase whose log ended in `25 failed, 252 passed` — an exit
+code and a log disagreeing, which is the house failure mode wearing new clothes. If you
+ever see that pair, **do not debug the failures**: check for a stray interpreter
+(`Get-Process python`), then re-run the phase alone to a FRESH log file. The clean re-run
+here was `277 passed`, and `25 + 252 = 277` is the giveaway that one tile's output had
+been split across two writers.
+
 **Interpreter.** `verify.sh` resolves it itself (since 2026-07-26): `ZANZIBAR_PY`
 wins if set, otherwise it tries `$HOME/anaconda3|miniconda3|mambaforge/envs/graph-
 reachability-zanzibar-index/python.exe`, two literal `C:/Users/...` fallbacks,
@@ -78,11 +96,12 @@ Postgres HA suite) is to **drop it at COLLECTION** when `ZANZIBAR_TEST_DSN` is
 unset, not to collect it and skip at run time; a tolerated skip is how coverage
 leaks, and it is the reason the parse is zero-tolerance.
 
-**The one exception, and it only exists WITH a DSN.** Three tests in the shared HA
-modules are SQLite-only *by nature* — two pin the `StaleRead` pinned-snapshot path,
-one pins "a replica never sees torn state" — and PostgreSQL at READ COMMITTED gives
+**The one exception, and it only exists WITH a DSN.** A few tests in the shared HA
+modules are SQLite-only *by nature* — they pin the `StaleRead` pinned-snapshot path
+and "a replica never sees torn state" — and PostgreSQL at READ COMMITTED gives
 a reader no stable snapshot at all, so those properties do not exist there to test.
-They `skipif` on `ZANZIBAR_TEST_DSN`, so `MAX_TESTS_SKIPPED_ON_RDBMS=3` applies only
+They `skipif` on `ZANZIBAR_TEST_DSN`, so the `MAX_TESTS_SKIPPED_ON_RDBMS` budget
+(its value lives in `formal/verify.sh`, and nowhere else) applies only
 when a DSN is exported; the default SQLite gate keeps its hard zero. A budgeted
 outcome also counts toward the tile's floor, so budgeting something never quietly
 shrinks what had to pass.
@@ -194,11 +213,11 @@ are order-independent. Every phase must print `PASSED`. Together, `lean` + the f
   single-file rerun. **`conf-rest` is AT OR OVER the cap** (579 s measured
   2026-07-19g/07-26 at 250-276 tests, and the whole dir is ~800 s of work) — that is
   why the `conf-tile` phases exist. Do not use `conf-rest` unattended; use the tiles.
-- **Where `conf-rest`'s time actually goes.** `test_conformance_enum.py` — 6 tests,
+- **Where `conf-rest`'s time actually goes.** `test_conformance_enum.py` —
   **~380-475 s** (exhaustive small-scope enumeration) — is the hog, not
   `test_conformance_remove_graph.py` (21 tests, ~27 s) as the 2026-07-19g note
   guessed. Everything else in `conf-rest` is ~165 s combined. The `conf-tile` split
-  interleaves those 6 tests across the **five** tiles (K=5 is the recommended default
+  interleaves that module's cases across the **five** tiles (K=5 is the recommended default
   above; the "four" this sentence used to say was left over from an earlier K and
   contradicted the recommendation 40 lines up), which is what balances them.
 - **`bash formal/verify.sh` with no arg** still runs all 5 steps in one shot
@@ -576,7 +595,7 @@ be markdown; and nothing under those directories imports `benchmarks` (the depen
 runs the other way). Fixtures (`*.fga`), goldens (`*.txt`) and corpora (`*.json`) stay
 in scope by construction — only two extensions are named — and an **unrecognised phase
 falls back to the widest scope**, so a new or mistyped phase over-invalidates rather
-than under-invalidating. Pinned by the eight `GS-2` tests in
+than under-invalidating. Pinned by the `GS-2` tests in
 `tests/test_gate_status.py`, each exclusion paired with a control proving the scope
 still covers its neighbourhood.
 

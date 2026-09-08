@@ -117,6 +117,13 @@ Two things that make the above evidence rather than decoration:
 The harness that produced this is deliberately not committed: it rewrites tracked files in
 place and restores them, which is fine to run by hand and a hazard to leave lying around.
 Re-derive it from this list if you change a check.
+
+``check_restated_counts`` (added 2026-09-08, task ``TK58``) breaks the pattern above and
+should be read as the better model: its sabotage, its five escapes' measured
+contributions, and a ten-mutation sweep of its own test module all live in
+``tests/test_handoff_lint_count_guard.py``, where they RUN. Everything above this
+paragraph is a transcript that nothing re-executes -- accurate on its date, and unable to
+notice the day it stops being true.
 """
 
 import io
@@ -887,6 +894,205 @@ def check_session_receipt(fail):
              % (ROOT_LEDGER, head[:80], ' | '.join(READ_VOCAB)))
 
 
+# --- Restated corpus counts (check_restated_counts, added 2026-09-08, task ``TK58``) -----
+# The scan scope. Two DECLARED files plus two GLOBS, which is the archived design's "a
+# declared list AND a walk" split (docs/history/tasktool-scratch-archive-2026-09-07.md
+# section 6): the declared half fails loudly if a file it names is deleted, the glob half
+# picks up a doc nobody remembered to register. ``docs/`` is TOP LEVEL only -- the same
+# scope the 2026-09-08 census measured -- because docs/history/ is provenance by its path
+# and docs/specs/ + docs/architecture/ were never censused, and a scope widened without a
+# census is how a check arrives red on lines nobody has read.
+COUNT_DECLARED = ('CLAUDE.md', 'HANDOFF.md')
+COUNT_GLOB_DIRS = ('docs', TASKS_DIR)
+
+# Floor on files actually SCANNED, i.e. walked AND not exempt. One number guards both ways
+# the walk can go quietly blind: a glob that stops matching, and an exemption predicate
+# that widens until it swallows the corpus. Measured 79 walked / 75 scanned on 2026-09-08;
+# 40 survives closing half the open tasks (they move to tasks/closed/, out of scope) and
+# still catches either failure. Same loose-instrument-control idiom as MIN_DOC_LINKS.
+MIN_COUNT_SCANNED = 40
+
+# A number: a numeral run, or a spelled-out number from THREE upward. "one" and "two" are
+# deliberately absent -- at those magnitudes the prose is narrative ("one test", "two
+# checks" meaning a specific pair) far more often than it is a census, and the census
+# forms this guards are bigger than two. Measured: including them added noise and no hits.
+# The lookbehind keeps a number from starting mid-token: without it "6 row" matched inside
+# ``R6-6`` and "00 row" inside ``1.00 row/edge`` (both observed in the 2026-09-08 census).
+_COUNT_WORDS = ('three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|'
+                'fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty')
+_COUNT_NUM = r'(?<![\w.,\-])(?:\d[\d,]*|%s)' % _COUNT_WORDS
+
+# THREE patterns, not the archived design's six, and the list grows only when a real rot is
+# found -- the commit that adds a fourth must say which rot motivated it. Each carries the
+# HOME the figure actually lives in, because "delete the number" is only actionable next to
+# "and here is where to read it". The noun follows the number IMMEDIATELY: an intervening
+# prose word turns a census ("6 tests") into a description of a subset ("six isinstance
+# tests", "44 KB test suite"), which is not this defect. A quoted qualifier stays
+# transparent because _COUNT_QUOTED blanks it to spaces, so "the eight `GS-2` tests" is
+# still caught.
+_COUNT_PATTERNS = (
+    ('checks', re.compile(r'%s\s+checks?\b' % _COUNT_NUM, re.I),
+     'the tool prints its own check count (`handoff_lint.py`, `task.py lint`)'),
+    ('open tasks/rows', re.compile(
+        r'%s\s+(?:open\s+(?:tasks?|rows?|items?)|task\s+files?)\b' % _COUNT_NUM, re.I),
+     '`python scripts/task.py counts`'),
+    ('tests', re.compile(r'%s\s+tests?\b' % _COUNT_NUM, re.I),
+     "`formal/FINAL_REVIEW.md`'s generated counts block (verify.sh step 4e)"),
+)
+
+# The escape vocabulary. Every one is STRUCTURAL -- a property of the text or of the file's
+# own declared contract -- so there is no baseline file to keep, and therefore nothing for a
+# scan to regenerate. The archived design's sharpest point was that a guard which rewrites
+# its own expectations cannot fail; the cheapest way to honour it is to have no baseline.
+#
+#   fence     a fenced block is EVIDENCE (a transcript, a run's output), not a claim.
+#   quoted    a backticked or double-quoted number is a QUOTATION -- the wrong figure a
+#             correction is repealing, or a literal a test asserts. CLAUDE.md's "★ No
+#             figures here" bullet is exactly this shape and must stay writable.
+#   dated     a line carrying a YYYY-MM-DD[letter] key is a stamped observation, true as
+#             of that day. This is the repo's own convention for a measured number.
+#   banner    the file declares its body is provenance: FROZEN, ACTIVE-PLAN, or the
+#             append-only form of LIVING (docs/README.md sections 2-3).
+#   log       a task file's `## Log` is append-only and dated per entry. Its FRONTMATTER,
+#             summary, Traps and Read-first stay in scope -- those are present-tense.
+#
+# ⚠ AMENDMENT 1 of the 2026-09-08 census killed the obvious version of `dated`: a per-LINE
+# date test sees nothing in docs/spec-deviations.md, whose 3511 lines carry their date on
+# the `## <date>` HEADING and not on the body line. That file contributes the single
+# largest block of legitimate hits in the repo, so the exemption had to key on the FILE's
+# liveness banner instead. `banner` and `log` are both that fix.
+_COUNT_QUOTED = re.compile(u'`[^`]*`|"[^"]*"|“[^”]*”')
+_COUNT_DATED = re.compile(r'\b\d{4}-\d\d-\d\d[a-z]?\b')
+_COUNT_APPEND_ONLY = re.compile(r'\*\*LIVING\b[^\n*]*append-only', re.I)
+
+
+def _count_scan_files():
+    """(rel, lines) for every file in scope, in a stable order."""
+    out = []
+    for rel in COUNT_DECLARED:
+        out.append(rel)
+    for d in COUNT_GLOB_DIRS:
+        full = os.path.join(REPO, d)
+        if not os.path.isdir(full):
+            continue
+        for name in sorted(os.listdir(full)):
+            if not name.endswith('.md'):
+                continue
+            if d == TASKS_DIR and name in TASKS_NON_TASK_MD:
+                continue
+            out.append('%s/%s' % (d, name))
+    return out
+
+
+def _count_exempt(lines):
+    """The file-level provenance banner that exempts this file, or None."""
+    head = '\n'.join(lines[:LIVENESS_WINDOW])
+    if _FROZEN_DECL.search(head):
+        return 'FROZEN'
+    if _COUNT_APPEND_ONLY.search(head):
+        return 'LIVING/append-only'
+    if re.search(r'\*\*ACTIVE-PLAN\b', head):
+        return 'ACTIVE-PLAN'
+    return None
+
+
+def check_restated_counts(fail):
+    """No live doc restates a corpus count -- checks, open tasks, tests -- in prose.
+
+    THE DEFECT. ``ZT-P3-5`` is this repo's most-recurring documentation failure: a figure
+    copied out of its machine-checked home into a sentence, where nothing can ever
+    re-derive it. docs/README.md section 1 already forbids it in words ("Do not restate a
+    count in prose anywhere -- a quoted count is not merely stale, it is unenforced"), and
+    the rule had no enforcement of any kind, which is why the count of things it has
+    rotted keeps growing. A ``count_guard.py`` was designed for the gitignored
+    ``.scratch/tasktool/`` corpus and never graduated; it was deleted with that directory
+    on 2026-09-07 (task ``TK58``). This is the port, scoped down from six patterns to
+    three and re-keyed onto the tracked tree's own liveness conventions.
+
+    WHAT IT REFUSES is a CENSUS -- ``N checks``, ``N open tasks``, ``N tests`` -- not an
+    enumeration. "two pin the pinned-snapshot path, one pins torn state" carries its own
+    evidence in the same sentence and is verifiable by reading it; "Three tests in the
+    shared HA modules" is a number whose home is a knob in ``formal/verify.sh``. The
+    remedy is always the same one the 2026-09-08 fix used: **delete the number and point
+    at its home**, never update it in place. An updated number is the same unenforced
+    claim, one day younger.
+
+    THE RETROSPECTIVE CONTROL, which is stronger than an invented sabotage and is why this
+    check was believed. Two figures in ``docs/gate-runbook.md`` were found wrong BY HAND on
+    2026-09-08 -- a "Three checks now run inside the `lean` phase" that seven do, and a
+    handoff_lint check count that was stale the day the eleventh check landed. Both were
+    fixed before this check existed. Run against the parent commit (``966f6aa``), these
+    patterns report::
+
+         81 tests   Three tests    | ... Three tests in the shared HA
+        197 tests   6 tests        | ... `test_conformance_enum.py` - 6 tests,
+        201 tests   6 tests        | ... interleaves those 6 tests across the **five** tiles
+        285 checks  Three checks   | Three checks now run inside the `lean` phase ...
+        365 checks  Ten checks     | scripts/handoff_lint.py`. Ten checks over the two board files ...
+        566 tests   eight        t | ... Pinned by the eight `GS-2` tests in
+
+    i.e. it catches BOTH lines a human had to find by reading, plus four more the same
+    human walked past. That is the check firing on real, independently-confirmed rot from
+    before it was written, not on a hole dug for it.
+
+    SABOTAGE (docs/sabotage-procedure.md), 2026-09-08, the narrowest PLAUSIBLE weakening --
+    a session appending one true-today sentence to the banner, which is exactly how every
+    figure this check exists for was born. Literal observed output in the module docstring
+    above. The instrument was controlled too: the clean tree is green in the same run, and
+    the sabotage line names ``HANDOFF.md`` specifically.
+
+    RED ON ARRIVAL WAS THE RISK AND IT WAS MEASURED FIRST. The census on ``TK58``
+    (2026-09-08) found 87 raw hits under a wider pattern set; this narrowed set plus the
+    escapes left **6**, every one a real restated test count, all six fixed in the landing
+    commit. A check that arrives red on dozens of legitimate lines is a check someone
+    deletes, so the corpus was swept before the check was wired in.
+
+    THE MECHANISM IS PINNED BY ``tests/test_handoff_lint_count_guard.py``, not by this
+    docstring: which escape suppresses what, the token each pattern extracts, and the two
+    directions the walk can go blind. Read it before editing anything here -- it carries a
+    ten-mutation sweep in which the obvious widening of the ``checks`` pattern broke this
+    check while every test still passed, and the test that now closes that hole says so.
+    """
+    scanned = 0
+    for rel in _count_scan_files():
+        lines = _read(rel)
+        if lines is None:
+            fail('MISSING: %s is scanned by check_restated_counts but does not exist. '
+                 'Remove it from COUNT_DECLARED deliberately -- a count guard over a file '
+                 'that is gone guards nothing.' % rel)
+            continue
+        if _count_exempt(lines) is not None:
+            continue
+        scanned += 1
+        is_task = rel.startswith(TASKS_DIR + '/')
+        fence = False
+        for i, ln in enumerate(lines, 1):
+            if ln.lstrip().startswith('```'):
+                fence = not fence
+                continue
+            if is_task and ln.startswith('## Log'):
+                break
+            if fence or _COUNT_DATED.search(ln):
+                continue
+            bare = _COUNT_QUOTED.sub(lambda m: ' ' * len(m.group(0)), ln)
+            for label, pat, home in _COUNT_PATTERNS:
+                m = pat.search(bare)
+                if not m:
+                    continue
+                fail('%s:%d restates a %s count in prose (%r). A quoted count is not '
+                     'merely stale, it is UNENFORCED -- docs/README.md section 1, and '
+                     'ZT-P3-5 is this repo\'s most-recurring doc defect. DELETE the '
+                     'number and point at its home (%s); do not update it in place. If '
+                     'the line is a stamped observation, give it a YYYY-MM-DD key; if it '
+                     'quotes a figure it is repealing, put the quoted text in backticks.'
+                     % (rel, i, label, m.group(0).strip(), home))
+    if scanned < MIN_COUNT_SCANNED:
+        fail('check_restated_counts scanned only %d file(s), floor %d. Either the globs '
+             'have gone blind or the banner exemption has widened until it swallows the '
+             'corpus -- both make this check pass by reading nothing. Fix the walk, not '
+             'the floor.' % (scanned, MIN_COUNT_SCANNED))
+
+
 CHECKS = (
     check_ceilings,
     check_priority_capacities,
@@ -901,6 +1107,8 @@ CHECKS = (
     # Appended (2026-09-06c). The task.py lint checks are cited by number and appended for
     # that reason; these are not numbered, but the same habit costs nothing.
     check_session_receipt,
+    # Appended 2026-09-08 (task ``TK58``).
+    check_restated_counts,
 )
 
 

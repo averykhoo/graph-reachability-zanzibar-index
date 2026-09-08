@@ -295,10 +295,19 @@ def test_receipt_refuses_a_ledger_with_no_entries(tmp_path, monkeypatch):
     assert len(out) == 1 and out[0].startswith("MISSING:"), out
 
 
-def test_the_two_checks_are_in_the_list_and_the_receipt_is_last():
+def test_the_two_checks_are_in_the_list_and_nothing_was_inserted():
     """Appended, never inserted: the task.py lint checks are cited by number, and this
-    file keeps the same habit so a citation like "the eleventh check" stays true."""
+    file keeps the same habit so a citation like "the eleventh check" stays true.
+
+    ⚠ This asserted `names[-1] == "check_session_receipt"` until 2026-09-08b, and that
+    pinned the wrong property. LAST-ness is not what keeps an ordinal citation true --
+    POSITION is -- so the assertion made the next legitimate APPEND fail while still
+    permitting an insertion anywhere after index 10. `check_restated_counts` (`TK58`) was
+    the append that found it. Pinning the index instead keeps the real invariant and lets
+    the tuple grow at the end, which is the only place it is allowed to grow.
+    """
     names = [c.__name__ for c in handoff_lint.CHECKS]
     assert names[1] == "check_priority_capacities", names
-    assert names[-1] == "check_session_receipt", names
-    assert len(names) == 11, names
+    assert names[10] == "check_session_receipt", names
+    assert names[11] == "check_restated_counts", names
+    assert len(names) == 12, names

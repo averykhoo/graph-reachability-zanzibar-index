@@ -11,9 +11,9 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-08
-updated: 2026-09-08
-closed:
+moved: 2026-09-08b
+updated: 2026-09-08b
+closed: 2026-09-08b
 ---
 
 `REVIEW.md` blocker 6 found restated corpus counts already rotted across five files -- the
@@ -163,3 +163,41 @@ arrival with no `verify.sh` edit.
 ORDERING NOTE: still do this AFTER TK59, and there is now a concrete reason beyond the
 one already on this row. Landing check 14 makes `docs/tasktool-spec.md:397` wrong; TK59
 fixes that line as part of its own doc update, so this check does not inherit it.
+
+### 2026-09-08b
+
+LANDED 2026-09-08b as `scripts/handoff_lint.py::check_restated_counts`, the twelfth entry
+in `CHECKS`, so it rides `verify.sh` 4f and was gated on arrival with no `verify.sh` edit.
+Pinned by `tests/test_handoff_lint_count_guard.py`.
+
+WHAT SHIPPED vs the plan on this row. Three patterns as agreed (`N checks`, `N open
+tasks/rows`, `N tests`), immediate noun only. AMENDMENT 1 was right and load-bearing: the
+exemption keys on the FILE's liveness banner, not on a per-line date stamp. Five escapes:
+fence, quoted span, dated line, provenance banner (FROZEN / ACTIVE-PLAN / append-only
+LIVING), and a task file's `## Log`. No baseline file exists, so `--record-frozen` was not
+needed at all -- a structural exemption has nothing for a scan to regenerate, which is a
+stronger form of the rule this row asked to keep.
+
+THE CENSUS ON THIS ROW WAS RE-DERIVED AND ONE FIGURE DID NOT SURVIVE. Re-measured with the
+landed patterns: 6 live claims, not 7, and all six are restated TEST counts. All fixed in
+the landing commit by deleting the number: `docs/gate-runbook.md` x4 (one of them a
+`MAX_TESTS_SKIPPED_ON_RDBMS` value restated in prose, the exact footgun CLAUDE.md names for
+`MAX_TESTS_XFAILED`), `docs/sabotage-procedure.md` x1, `CLAUDE.md` x1. The row's `TK62:19`
+and `CLAUDE.md:16` items are NOT caught by the landed patterns; the check does not pretend
+otherwise. AMENDMENT 3's self-reference resolved itself: this row's `## Log` is exempt.
+
+EVERY ESCAPE MEASURED, disabled in turn against the live corpus -- banner +8, dated-line +4,
+task Log +1, quoted-span +0, fence +0. The last two suppress nothing today, which is the
+state the archived design's FROZEN exemption was caught in, so each is kept ONLY because it
+has a test that is now its whole justification.
+
+RETROSPECTIVE CONTROL, stronger than the invented sabotage: run against parent commit
+`966f6aa`, the patterns report both figures the previous session found BY HAND plus four it
+walked past. The invented sabotage reddens naming the file, line and token; the same line
+with a `Measured <date>:` prefix goes silent.
+
+⚠ THE FINDING IS IN THE INSTRUMENT. Ten one-line weakenings applied in turn: nine reddened
+the test that claimed to guard them, the tenth broke the check with the whole module still
+green (the test owning that property asserted one of three patterns). Filed as a rule in
+`docs/sabotage-procedure.md`. Also measured and REJECTED: widening the corpus pattern to
+admit an intervening word -- zero new real claims, one false red on a capacity rule.

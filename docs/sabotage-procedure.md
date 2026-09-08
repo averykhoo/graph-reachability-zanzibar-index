@@ -24,7 +24,7 @@ below is drawn entirely from checks that were *already in this repo, green, and 
 | the axiom audit | "457/457 reports" | counted reports without checking **which** theorems |
 | the validation matrix | "both `SetOps`" | **silently halved** when `pyroaring` was missing |
 | a property test | twelve steps | could `continue` past **all twelve** |
-| `tests/` (728 tests) | "the gate" | was **outside** `verify.sh` entirely |
+| the whole `tests/` suite | "the gate" | was **outside** `verify.sh` entirely |
 | isolation-level guard | `SERIALIZABLE` accepted | justified by a comment about a database **this project does not support** — and it was a live authorization fail-open |
 | the headline STATEMENT pin | pins 26 theorem statements | **blind** to a definition change that silently converts a scope-carry into a false guarantee (2026-07-27) |
 | a plan-leaf coverage floor | "the kind is compiled" | a corpus can compile a leaf and drive it **constantly empty** (2026-07-28) |
@@ -311,6 +311,34 @@ So for any probe, sweep, or differential:
   it, but only if the scope is asserted rather than assumed. Note what made it invisible:
   every individual draw behaved correctly and the suite was green; only the *rate* was wrong,
   and nothing measured the rate.
+
+### Sweep the TEST MODULE with mutations — one sabotage certifies one test (2026-09-08)
+
+A sabotage certifies the *case you sabotaged*. When you then write a suite of tests around
+the new check, each of those tests is an unverified claim about what it guards, and the
+suite's green tells you nothing about which of them is load-bearing.
+
+The cheap fix is a **mutation sweep**: apply one plausible weakening at a time to the
+check, run the whole test module against each, and require that a *named* test reddens for
+every one. `check_restated_counts` (`TK58`) was swept over ten weakenings. Nine were caught
+by exactly the test that claimed to guard them; the tenth — widening one of its three
+patterns to allow an intervening word, the single most likely "improvement" anyone would
+make — **broke the check while the whole module still passed**, because the test that owned
+that property asserted on one pattern and there were three. The hole was in the
+*instrument*, and no amount of re-reading the check would have shown it.
+
+Three rules fall out, and they are cheap enough that there is no excuse:
+* **A test module that guards N cases must assert on all N.** One representative is how a
+  suite silently becomes decoration.
+* **Pick the mutations a future editor would actually make** — relaxing a regex, deleting
+  a floor, widening a scope — not deletions of whole functions.
+* **Restore from memory in a `finally`, and diff afterwards.** The sweep rewrites a tracked
+  file in place; on this repo that also means writing bytes back with the original line
+  endings (`newline=''`), or the "restore" lands as a whole-file CRLF diff.
+
+The sweep script itself is throwaway and gitignored — but its *table* is evidence, so it
+goes in the test module's docstring, where the next reader is already looking. See
+`tests/test_handoff_lint_count_guard.py`.
 
 ### A check that PARSES before it compares has two halves, and the easy sabotage tests one (2026-08-24c)
 
