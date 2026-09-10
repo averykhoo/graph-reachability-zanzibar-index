@@ -456,6 +456,16 @@ The bullet is corrected in place below.
   version bump that dirties a key with no corresponding outbox row is invisible
   to the theorem and would abort the real transaction. T5 therefore does not
   entail "Python's abort is dead code".
+  ⚠ **A pending perf lead would promote this section's other gap to the cascade's
+  default path** (added 2026-09-10, `TK50`).
+  `docs/perf-round6-audit-2026-08.md` records **A10** as the only one of its
+  sixteen leads filed `algorithm change: yes`, and records that the cheap path
+  A10 would route computed dependents onto —
+  `index_v4/processor.py::DeltaProcessor._reconcile_subject`, the §7 entry below
+  with no Lean counterpart — means A10 does not update a modelled rule but makes
+  an already-logged modelling gap the default. The pointer is one-way: **no file
+  under `formal/` names A10.** Sequence A10 against any attempt to model this
+  section, or the model gets written against a path A10 would replace.
 * **★ CORRECTED — `affectedKeys` models 2 of ~6 delta→key channels
   (`ZT-P4-3b`).** The 2026-07-20c bullet below said `affectedKeys` *"now carries
   **BOTH** Python branches"*, which an auditor would take at face value. It
@@ -573,6 +583,16 @@ The bullet is corrected in place below.
   > ∪ residue object nodes ∪ residue `neg`/`upos` subject nodes) and the number is
   > method-sensitive. Treat **266** as solid and 217/49 as provisional; pinning it
   > needs the definition written down first.
+  > ⚠ **And the definition has to come from somewhere other than the script that
+  > would measure it** (added 2026-09-10, `TK38`).
+  > `formal/conformance/extractor.py::graph_fragment_ledger` counts `NodeV4` rows
+  > but classifies none of them — that absence *is* the "no in-repo implementation
+  > to reuse" named just above. So a pin built on a reconstruction written for the
+  > purpose would certify only that the reconstruction is deterministic, not that
+  > "referenced" means anything. `docs/sabotage-procedure.md` gives the general
+  > form: a check of the shape *"recompute X and compare to the recorded X"* tests
+  > transcription, never classification. Write the predicate down independently
+  > first, then pin against it.
   **Partly closed 2026-07-27:** the
   `residue_rich` corpus (in `GRAPH_FRAGMENT`, pinned by
   `formal/conformance/test_conformance_state.py::test_residue_rich_corpus_is_really_rich`)

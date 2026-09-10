@@ -89,6 +89,10 @@ tasks/
   2026-09-06 cutover the banner is the `## Banner` section of `<root>/HANDOFF.md`
   (`task.py::note_path`, `BANNER_HEADING`, `extract_banner`); `BANNER.md` stays in the
   skip list so that a reappearing one is check 12's violation, not a parse failure.
+  `extract_banner` is **fence-aware** (2026-09-10, `TT-8`): a `## Banner` heading inside a
+  ``` or `~~~` fence is skipped, so a worked example of the banner shape cannot be mistaken
+  for the section or truncate it, and **two real `## Banner` headings REFUSE** rather than
+  silently picking one — `board` exits 2 and check 12 fails naming both line numbers.
 * **`ls tasks/` undercounts and always will** — it shows the open half only (about a
   third of this corpus) and counts the two non-task files. The only census is
   `task.py counts`; see `tasks/README.md`.

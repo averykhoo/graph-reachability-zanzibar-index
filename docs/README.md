@@ -76,6 +76,17 @@ belongs in a living doc (`sabotage-procedure.md`, `subagent-fanout-runbook.md`,
 `CLAUDE.md`, or this file) where the next session will actually read it. Archiving a
 lesson alongside the status is how a hard-won rule becomes invisible.
 
+**An author's-voice TODO is a declared hole, not drift.** The root
+[`README.md`](../README.md) carries two editorial markers — `:142` *"todo: continue story
+another day"* and `:150`'s placeholder for the MAFSA word-count trick — standing for
+unfinished narrative that only their author can write, flagged in place rather than smoothed
+over. **Do not "resolve" a marker like that by deleting it**; the only way to retire one is
+to write the prose it stands for. A silent deletion turns a published hole into an invisible
+one, which is the documentation analogue of what
+[`sabotage-procedure.md`](sabotage-procedure.md) refuses for coverage: *"Publish the residue
+rather than rounding it away."* Cite these by the path `../README.md` — a bare `README.md`
+link from inside `docs/` resolves to the wrong file, and once did.
+
 **Freeze at landing.** A design or investigation record gets its frozen banner **the
 moment its change lands** — part of the landing checklist, exactly like updating
 `formal/CORRESPONDENCE.md` for an algorithm change. A design doc that still says

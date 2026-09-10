@@ -2346,6 +2346,61 @@ def test_board_refuses_a_missing_or_overlong_banner():
                      % (TM.BANNER_MAX_LINES, err))
 
 
+# A worked example of the banner shape, fenced -- the likeliest thing anyone writes into
+# a note that is documentation ABOUT a tool with a banner. `TT-8`'s subject.
+FENCED_BANNER_EXAMPLE = (
+    '```markdown\n'
+    '## Banner\n'
+    '\n'
+    '> 2026-01-01a -- EXAMPLE ONLY, this is documentation of the banner shape.\n'
+    '```\n'
+)
+
+# The SAME worked example, delimited five other legal ways. Added 2026-09-10 after an
+# adversarial mutation sweep of `extract_banner`: twelve plausible weakenings, and SEVEN
+# of them left the whole module green, every one of them a fence shape the module never
+# wrote. Each constant below is the narrowest corpus that reddens one of them -- see the
+# table in the test's docstring for which is which.
+TILDE_BANNER_EXAMPLE = FENCED_BANNER_EXAMPLE.replace('```', '~~~')
+
+# CommonMark allows up to three spaces of indent on a fence delimiter. The HEADING stays
+# at column 0 on purpose: indenting it too would make this corpus pass against an
+# indent-blind scan, since `   ## Banner` does not start with `## ` either.
+INDENTED_BANNER_EXAMPLE = (
+    '   ```markdown\n'
+    '## Banner\n'
+    '\n'
+    '> 2026-01-01a -- EXAMPLE ONLY, this is documentation of the banner shape.\n'
+    '   ```\n'
+)
+
+# A closing fence may be LONGER than the one that opened it (never shorter).
+LONG_CLOSE_BANNER_EXAMPLE = (
+    '```markdown\n'
+    '## Banner\n'
+    '\n'
+    '> 2026-01-01a -- EXAMPLE ONLY, this is documentation of the banner shape.\n'
+    '````\n'
+)
+
+# A fence line carrying an INFO STRING opens, it never closes -- so the ```python line
+# below leaves the outer block open and only the bare ``` ends it. Getting this wrong
+# leaves the parser fence-open at EOF and the real banner disappears entirely.
+NESTED_BANNER_EXAMPLE = (
+    '```markdown\n'
+    '## Banner\n'
+    '\n'
+    '> 2026-01-01a -- EXAMPLE ONLY, this is documentation of the banner shape.\n'
+    '\n'
+    '```python\n'
+    'print("a fence INSIDE the worked example")\n'
+    '```\n'
+)
+
+# EVERY fence is tracked, not just the first one the scan happens to meet.
+TWO_FENCED_BANNER_EXAMPLES = FENCED_BANNER_EXAMPLE + '\n' + FENCED_BANNER_EXAMPLE
+
+
 def test_lint_check_12_catches_the_three_banner_failures():
     """Check 12 exists even though `board` already refuses, because the two answer
     different questions.
@@ -2354,6 +2409,91 @@ def test_lint_check_12_catches_the_three_banner_failures():
     session runs BEFORE it commits, and the failure this catches is the session that
     promoted a row, wrote no banner, and left the NEXT session's first command broken. A
     refusal the tool only issues to the victim is a refusal issued too late.
+
+    CLAUSES 5-7 ARE `TT-8` (2026-09-10): `extract_banner` compared raw lines, so a
+    ``` fence was invisible to it. `board` and check 12 SHARE the extractor, which is the
+    part that makes this the house failure mode rather than a parser nit -- both consumers
+    agreed on the wrong text and neither could see the other was wrong.
+
+    Sabotage: a copy of the LIVE `HANDOFF.md` with one fenced example inserted, run
+    through `check_banner` directly. Literal observed output, pre-fix (`git show
+    HEAD:scripts/task.py`) and post-fix, same corpus, same harness:
+
+        UNFIXED                                  FIXED
+        --- mode=before        (example above the real section)
+        check 12 failures: 0                     check 12 failures: 0
+        extract_banner -> ['2026-01-01a --       extract_banner -> ['2026-09-08b -- ...
+        EXAMPLE ONLY, ...', '```']               (the REAL banner)
+        --- mode=onlyfenced    (the example is the note's only `## Banner`)
+        check 12 failures: 0                     FAIL: <TMP>/HANDOFF.md has no
+        extract_banner -> ['2026-01-01a --       `## Banner` heading. ...
+        EXAMPLE ONLY, ...', '```']               check 12 failures: 1
+        --- mode=twice         (two real `## Banner` sections)
+        check 12 failures: 0                     FAIL: <TMP>/HANDOFF.md has 2
+                                                 `## Banner` headings (lines 14, 31) ...
+                                                 check 12 failures: 1
+
+    `board` on the pre-fix `before` corpus printed the example verbatim above the BOARD
+    header::
+
+        2026-01-01a -- EXAMPLE ONLY, this is documentation of the banner shape.
+        ```
+
+        BOARD  64 open, 115 closed  ...
+
+    Clause 5 is the ACCEPT side and it is not decoration: widening an extractor to close a
+    hole is itself a change that needs a control (`docs/sabotage-procedure.md`), and a
+    fence-aware scan that skipped one line too many would silently drop the real banner.
+    It asserts on the INTERMEDIATE -- the text `board` actually prints -- because a green
+    verdict cannot distinguish "the extractor read the right section" from "the extractor
+    read the example and the example happened to lint clean".
+
+    EACH CLAUSE WAS CERTIFIED SEPARATELY, because clause 5 fires first and would otherwise
+    mask 6 and 7 -- one representative is how a suite silently becomes decoration
+    (`docs/sabotage-procedure.md`, "Sweep the TEST MODULE with mutations"). Each clause's
+    corpus was run standalone through `against()` at the pre-fix tool. Literal output::
+
+        clause 5 accept        vs PRE-FIX task.py -> RED: board printed the wrong text
+        clause 5 accept        vs FIXED   task.py -> GREEN
+        clause 6 only-fenced   vs PRE-FIX task.py -> RED: lint was clean with only a
+                                                          FENCED banner
+        clause 6 only-fenced   vs FIXED   task.py -> GREEN
+        clause 7 two-banners   vs PRE-FIX task.py -> RED: a second `## Banner` linted
+                                                          clean
+        clause 7 two-banners   vs FIXED   task.py -> GREEN
+
+    CLAUSES 8-12 CAME FROM THE MUTATION SWEEP (2026-09-10), which is the step the
+    per-clause certification above does NOT cover: a sabotage certifies the case you
+    sabotaged, so twelve plausible weakenings were applied to `extract_banner` /
+    `check_banner` one at a time and the whole module run against each. Literal
+    module-wide verdict per mutation, BEFORE clauses 8-12 and the clause-7 path
+    assertion existed -- seven of twelve were green, i.e. unpinned::
+
+        M1  `_FENCE_RE` tracks only ``` and not ~~~          GREEN  -> clause 8
+        M2  fence must start at column 0 (drop ` {0,3}`)     GREEN  -> clause 9
+        M3  naive toggle: any fence line flips the state     GREEN  -> clause 11
+        M4  closing fence must be the SAME length (>= -> ==) GREEN  -> clause 10
+        M5  a fence line with an info string may CLOSE       GREEN  -> clause 11
+        M6  headings harvested regardless of fence state     RED    (this test)
+        M7  refuse only at THREE banners (> 1 -> > 2)        RED    (this test)
+        M8  two banners WARN and the first is used           RED    (this test)
+        M9  `check_banner` swallows the Refused silently     RED    (this test)
+        M10 section slice runs one line past the next head   RED    (this test +
+                                                                    test_board_refuses_a_
+                                                                    missing_or_overlong_
+                                                                    banner and 5 more)
+        M11 `check_banner` drops the `where` argument        GREEN  -> clause 7's
+                                                                    `HANDOFF.md` assert
+        M12 only the FIRST fence in the file is tracked      GREEN  -> clause 12
+
+    Every one of the seven is a shape clause 5 does not write: clause 5 uses exactly one
+    ``` fence, at column 0, opened and closed with three backticks and nothing nested
+    inside, so it is satisfied by a scan that understands only that one shape. That is
+    the `docs/sabotage-procedure.md` rule "a test module that guards N cases must assert
+    on all N" failing in the small -- the fence GRAMMAR is the N, not the fence.
+
+    After the additions each of the twelve reddens; the re-run table is in the sweep
+    section of this docstring's sibling clauses (each clause names the mutation it owns).
     """
     root = good_tree('bannerlint')
     note = banner_path(root)
@@ -2406,6 +2546,97 @@ def test_lint_check_12_catches_the_three_banner_failures():
     text = out_text(out) + err
     assert rc == 1, text
     assert first_match(text, r'`## Banner` section is empty') is not None, text
+
+    # 5. (TT-8) A FENCED `## Banner` above the real one is a code line, not a heading.
+    #    The accept side, asserted on the intermediate: lint stays clean AND `board`
+    #    prints the real banner. Pre-fix this pair was clean-lint + example-printed.
+    write_banner(root, BANNER_TEXT, before=FENCED_BANNER_EXAMPLE)
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, ('a fenced example is not a banner heading:\n%s'
+                     % (out_text(out) + err))
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    assert BANNER_TEXT.split('\n')[0] in out_text(out), (
+        'board printed something other than the real banner:\n%s' % out_text(out))
+    assert 'EXAMPLE ONLY' not in out_text(out), (
+        'board printed the FENCED example as the banner -- TT-8 reproducing:\n%s'
+        % out_text(out))
+
+    # 6. (TT-8) A fenced example as the note's ONLY `## Banner` is NO banner. Pre-fix
+    #    this linted clean and `board` rendered the example, so the session that deleted
+    #    its banner section while leaving a doc example behind saw nothing at all.
+    write(note, u'# HANDOFF -- the banner section was deleted; an example survives\n\n'
+                u'%s\n## Still owed\n\nNothing.\n' % FENCED_BANNER_EXAMPLE)
+    rc, out, err = run(root, 'lint')
+    text = out_text(out) + err
+    assert rc == 1, text
+    assert first_match(text, r'has no `## Banner` heading') is not None, text
+    rc, out, err = run(root, 'board')
+    assert rc == 2, ('board rendered a fenced example as the banner (rc=%d):\n%s'
+                     % (rc, out_text(out)))
+
+    # 7. (TT-8) TWO `## Banner` sections REFUSE, they do not warn and do not silently
+    #    pick one. The old scan stopped at the next `## ` heading, so the second section
+    #    was invisible: the reader got one of the two chosen by file order, with nothing
+    #    on screen saying a choice had been made.
+    write_banner(root, BANNER_TEXT,
+                 after=u'\n%s\n\n> %s -- the OTHER banner.\n' % (TM.BANNER_HEADING, KEY))
+    rc, out, err = run(root, 'lint')
+    text = out_text(out) + err
+    assert rc == 1, ('a second `## Banner` linted clean:\n%s' % text)
+    line = first_match(text, r'has 2 `## Banner` headings')
+    assert line is not None, text
+    assert 'no safe way to pick one' in line, line
+    # ...and it NAMES the file. `check_banner` passes `rel(path)` as `extract_banner`'s
+    # `where`; dropping that argument (mutation M11) falls back to the literal string
+    # "the note" and left the whole module green, because every other assertion here is
+    # about the wording after the subject. A refusal that does not say which file to open
+    # is a refusal the reader has to reproduce before they can act on it.
+    assert 'HANDOFF.md' in line, (
+        'the two-banner refusal does not name the file it is about:\n%s' % line)
+    rc, out, err = run(root, 'board')
+    assert rc == 2, ('board picked one of two banners (rc=%d):\n%s' % (rc, out_text(out)))
+    assert 'REFUSED' in err and 'has 2 `## Banner` headings' in err, err
+
+    # 8-12. (TT-8 mutation sweep) The fence GRAMMAR, one clause per weakening that the
+    #    module could not see. Each corpus is clause 5 again -- one worked example above
+    #    the real section -- delimited a different legal way, so the accept side is
+    #    identical in all five: lint clean, `board` rc 0, and the text `board` prints is
+    #    the REAL banner and not the example. Asserting on that intermediate is the point:
+    #    a green lint alone cannot tell "read the right section" from "read the example,
+    #    which happened to lint clean". Each entry names the mutation it owns and what
+    #    that mutation does to this corpus.
+    for label, mutation, symptom, example in [
+            ('8', 'M1  ~~~ dropped from _FENCE_RE',
+             'the example is not in a fence at all, so its heading is a second banner',
+             TILDE_BANNER_EXAMPLE),
+            ('9', 'M2  fence must start at column 0',
+             'an indented delimiter is invisible and the heading is a second banner',
+             INDENTED_BANNER_EXAMPLE),
+            ('10', 'M4  closing fence must be the SAME length',
+             'the longer closer never closes, so the real banner stays inside a fence',
+             LONG_CLOSE_BANNER_EXAMPLE),
+            ('11', 'M3/M5  info string may close a fence',
+             '```python closes, the bare ``` re-opens, and the real banner is swallowed',
+             NESTED_BANNER_EXAMPLE),
+            ('12', 'M12 only the FIRST fence is tracked',
+             'the second example is unfenced and its heading is a second banner',
+             TWO_FENCED_BANNER_EXAMPLES),
+    ]:
+        where = 'clause %s (%s -> %s)' % (label, mutation, symptom)
+        write_banner(root, BANNER_TEXT, before=example)
+        rc, out, err = run(root, 'lint')
+        assert rc == 0, ('%s: a fenced example is not a banner heading:\n%s'
+                         % (where, out_text(out) + err))
+        rc, out, err = run(root, 'board')
+        assert rc == 0, ('%s: board refused a note with exactly one real banner:\n%s'
+                         % (where, err))
+        assert BANNER_TEXT.split('\n')[0] in out_text(out), (
+            '%s: board printed something other than the real banner:\n%s'
+            % (where, out_text(out)))
+        assert 'EXAMPLE ONLY' not in out_text(out), (
+            '%s: board printed the FENCED example as the banner:\n%s'
+            % (where, out_text(out)))
 
     # Restore control.
     write_banner(root, BANNER_TEXT)

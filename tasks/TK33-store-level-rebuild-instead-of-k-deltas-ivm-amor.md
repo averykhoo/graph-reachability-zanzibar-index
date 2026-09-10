@@ -11,8 +11,8 @@ labels: [perf]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -37,3 +37,11 @@ The evaluated proposal (*"if we detect a DoS-causing fan-out, do a bulk rebuild 
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-18 (`SD-C6`, tier 3, sweep-c only); anchor re-resolved by COVERAGE.md §C4. The crossover figure is at docs/spec-deviations.md:859; the proposal it grew out of is at :801-804 with the measurement table at :805-816.
+
+### 2026-09-10
+
+TK53 disposition 2026-09-10: NOT an append. Both the verify and the adversarial pass agree the statement is ALREADY CARRIED in the named destination, `docs/spec-deviations.md` -- the rebuild-outbox entry's blocker 4 (zero REMOVED rows, the fail-open direction), the cap note that `index_v4/core.py` "already exempts removals" (grepped live), and the later "it inherits blockers 2-4" sentence that binds mid-stream refusal, quiescence and the REMOVED fail-open together.
+
+I confirmed the two anchor phrases exist first-hand; I did not re-derive the whole store-level-quota argument. Deliberately citing them by PHRASE, not line: this session appended three dated entries to the top of that file, so every line number recorded for it before 2026-09-10 has shifted.
+
+No prose was written. The row stays open as work (the amortisation question is undecided); what it is no longer is a statement that exists only in `tasks/`.

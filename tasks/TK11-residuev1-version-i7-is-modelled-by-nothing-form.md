@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -38,3 +38,11 @@ The reason it needs an id: the closed record `ZT-P4-5` is titled *"residual decl
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-11 (`CD-1` = `NEW-3`, tier 2) — one of only four items found by two buckets (sweep-d + sweep-i) in two documents, and independently inventory-formal.md MISS #2. Anchor re-read at formal/CORRESPONDENCE.md:515-534.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append) as a new bullet in `docs/perf-round6-audit-2026-08.md`, section "Cross-links and corrections the leads do not carry", beside the A14 version-memo bullet.
+
+The drafted prose asserted that `install_paranoia` is NOT wired into `ConnectedStore`. That is FALSE and was caught by the adversarial pass: `connectedstore/store.py:193` calls it. The true and sharper statement, which is what landed, is that it IS wired but `ConnectedStore.DEFAULT_PARANOIA` is `PARANOIA_OFF` (`store.py:98`), so a DEFAULT deployment runs I7 unchecked. Verified both lines first-hand, plus `index_v4/invariants.py:408 _check_residue_rows` and the independent P7 projection statement in `formal/FINAL_REVIEW.md` (:147, :554).
+
+The bullet is explicitly date-stamped 2026-09-10 because that section's preamble claims every note below it was checked on 2026-08-29b; an undated append would have inherited a check date it never got.

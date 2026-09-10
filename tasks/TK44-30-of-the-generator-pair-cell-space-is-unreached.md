@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -37,3 +37,13 @@ That is why this is `HOLD` and not a defect: it is **published honesty**, delibe
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-29 (`J-27`, tier 4; sweep-j + sweep-k, two documents). Sweep-k guessed `GS-1`; `GS-1` is a closed gate-tree-id row and does not cover it. Both carriers re-read this pass; the LIVING one is docs/sabotage-procedure.md:482-487.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append) into `docs/sabotage-procedure.md`, section "What this procedure cannot do", after the residue paragraph. The row's own citation (:482-487) and the adjudication's (:524-526) are BOTH dead -- the paragraph is at :641-647 now.
+
+The first pass called this ALREADY_CARRIED and the adversarial pass OVERTURNED it, and the overturn is the interesting part: the first pass reconstructed the wrong half of the finding from a frozen history file and matched it against a carrier for a statement the adjudication never claimed was missing.
+
+The real half is a live ZT-P3-5 recurrence, and I verified all four figures first-hand rather than trusting the report: `tests/test_generator_coverage.py:68` says ~19% and `:428` says ~28% -- the SAME claim, identical wording ("unreached even at `deep`"), contradicting each other inside ONE module -- while `:1152` says ~30% and `docs/sabotage-procedure.md:643` says "roughly a quarter".
+
+Nothing mechanical catches it, and this is worth carrying: `check_restated_counts` (TK58, landed 2026-09-08) is scoped to top-level `docs/` and `tasks/` markdown and to check/open-task/test counts, so a PERCENTAGE in a `.py` docstring is out of scope twice over. The landed text points at `tests/test_generator_coverage.py::test_report_cell_coverage` (:1149, run with -s) as the single live source.

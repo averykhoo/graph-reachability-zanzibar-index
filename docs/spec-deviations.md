@@ -29,6 +29,72 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-09-10 — `TK4`: §3.4 mandates a lenient-mode hook as a *per-shape config flag*; no such flag exists, and the adjudication is still a human call
+
+Recorded as a divergence, not a decision. `docs/specs/wildcard-materialization-spec.md`
+§3.4 (*Strict ∀⇒∃, pinned*) ends: *"Leave a documented hook (a per-shape config flag that
+would add a single `w_all(S) → w_any(S)` edge for the lenient/vacuous reading) but do not
+implement it."* That sentence names an artifact. **No such flag exists** — a sweep of the
+backends for a `per-shape` / lenient / vacuous config surface returns only unrelated prose
+(`zanzibar_utils_v1.py:493` on silent drops, `:1203` on vacuous tuplesets, and
+`index_v4/wildcard.py:641` on *read* leniency, which is a different thing entirely).
+
+**Why this is interpretive rather than a bug.** The same spec's §10 lists *"Lenient/vacuous
+∀⇒∃ mode (hook only)"* under **Non-goals (do not build)**, with no condition attached — so
+the mandate may already be discharged by the spec text itself, a *hook* being documentation
+of where the edge would go rather than a code affordance. Two live sentences read it that
+way without settling it: `docs/architecture/theory.md:82-83` ("A single lenient edge would
+be the vacuous-truth mode; documented hook, not built") describes the **edge**, not the
+flag, and predates the finding; and `docs/architecture/decision-log.md`'s "Non-goals
+(documented hooks only)" list is inherited verbatim from `docs/specs/graph-boolean-ivm-spec.md`
+(the BOOLEAN spec), so it does not speak to wildcard §3.4 at all. The ⚠ bullet immediately
+above that list declines the question on purpose.
+
+**Still open, and it is a human call** — either (a) add the flag, or (b) reword §3.4 so it
+stops mandating an artifact. `CLAUDE.md`'s "where a spec and the code disagree on a name,
+the code wins" settles naming, not existence. ⚠ Whichever way it goes, do **not** implement
+the lenient reading: §3.4 pins strict ∀⇒∃ as the default and only mode, and the oracle and
+both backends agree on it. Only the HOOK is at issue. Live status:
+`python scripts/task.py show TK4`.
+
+## 2026-09-10 — `TK35`: §2.3's "unnecessary bridges are harmless" is harmless *to answers*, not to state
+
+`docs/specs/wildcard-materialization-spec.md` §2.3 closes with *"a few unnecessary
+O(1)-degree bridge edges are harmless, a missed bridge is a correctness bug."* Both halves
+of that trade have since been tested by real bugs, and they landed on opposite sides.
+Recorded here rather than in the spec, which is held frozen at landing (`docs/README.md` §3
+flags `docs/specs/` as the hand-held half of that rule).
+
+The **missed-bridge** half is confirmed at answer level: the `## 2026-08-09` entry below
+roots its under-report in `index_v4/wildcard.py::WildcardIndex._ensure_bridges` never
+interning a crossing middle, making `check` a false negative against the oracle. The
+**unnecessary-bridge** half is weaker than "harmless": `BL-1`, the released-userset bridge
+leak (`## 2026-08-20b`, fixed `## 2026-08-21`), left a bridge alive past its endpoint's
+release. It was measured **STATE-ONLY** and explicitly *not* an authorization fail-open — no
+over- or under-grant on any read surface — yet it meant unbounded node/edge growth under
+add/remove churn, and it poisoned rebuild-parity and permutation comparisons on any store
+that had churned.
+
+So read §2.3 as *harmless to answers, not to state*. The same unqualified sentence is
+mirrored at `zanzibar_utils_v1.py::SchemaInfo` and needs the same reading. Any
+bridge-elision proposal must clear the §7 lifecycle as well as the §2.3 creation rule.
+
+## 2026-09-10 — `TK36`: a symbolic-delta expansion layer would deliberately breach the read-path enumeration rule
+
+`docs/specs/wildcard-materialization-spec.md` §6 ends on a `PermissionDelta`s bullet noting
+symbolic-wildcard-delta expansion as a future layer, and §10 lists *"Delta
+post-processing/expansion of symbolic wildcard deltas"* under **Non-goals (do not build)**
+with no condition attached. Recorded here rather than in the spec, per the freeze rule above.
+
+The tension worth naming is with the bullet immediately above it, which makes *"Never
+enumerate a marker into concretes"* a read-path invariant — expansion is exactly that
+enumeration, done on purpose. The read side has since acquired a second, independent reason
+to refuse it: `index_v4/wildcard.py::WildcardIndex.lookup_reverse` fences leaf families
+because a leaf family is storage-internal and enumerating one hands out a whole operand set.
+Whoever builds expansion must say why neither reason binds to deltas, and keep the
+enumeration confined to that one place — otherwise the next reader copies it back onto a
+read path.
+
 ## 2026-09-06 — `TK55`: an empty declared relation name was accepted by both parsers and diverged the backends
 
 `define : [user]` parsed (both `zanzibar_utils_v1.py::parse_schema_ast` and

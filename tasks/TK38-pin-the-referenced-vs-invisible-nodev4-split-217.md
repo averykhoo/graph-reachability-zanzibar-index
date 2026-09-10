@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-24b
-updated: 2026-08-24b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -42,3 +42,11 @@ The `NodeV4` endpoint split re-derives as **217/49** (from an earlier 194/41) bu
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [P16]`. Same shape as TK8/P19: 'Distinct from P16' is stated only here, and P16 was the blind end.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append) into `formal/CORRESPONDENCE.md` sec 7.1, as a continuation of the SUPERSEDED blockquote in the State-gate-thinness bullet, immediately after "needs the definition written down first."
+
+GATE-ANCHORED destination, so this was verified before writing, not after: `verify.sh lean` resolves every `file::symbol` anchor in this file, and the one anchor the append adds -- `formal/conformance/extractor.py::graph_fragment_ledger` -- resolves at `extractor.py:277`.
+
+The drafted prose claimed a split would be "pinned off graph_fragment_ledger's own classification". False, and caught by the adversarial pass: that function COUNTS `NodeV4` rows and classifies none, which is exactly why the doc says the split has no in-repo implementation to reuse. The landed text says that absence IS the missing implementation, and cites the canonical form of the rule at `docs/sabotage-procedure.md:273` ("recompute X and compare to the recorded X" tests transcription, never classification) rather than re-deriving it -- the draft had garbled that quote into a run-on.

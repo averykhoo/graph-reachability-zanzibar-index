@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -46,3 +46,11 @@ On a boolean schema the backfill's `reach_out`/`reach_in` (full transitive reach
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-17, the `R6-A1..R6-A16` block (tier 3, sweep-g only; sweep-l never reached the appendix). Source: docs/perf-round6-audit-2026-08.md:895, inside the appendix at :754-953. CONFIRMED OPEN AND UNCHANGED by COVERAGE.md §C3: `grep -c 'R6-A'` -> 0, no id anywhere. Lead 12 of 16.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append) into the "Measurement hygiene:" bullet of `docs/perf-next-round.md`, section "Standing hygiene / gate notes".
+
+Verified first-hand: `benchmarks/profile_r6_write.py::target_space` (:600) is an on-disk byte A/B -- two SQLite layouts, VACUUMed, bytes compared -- not a RAM reading; `benchmarks/_harness.py::rss_mb` is defined at :30 and is already wired into `bulk_scale_bench.py` and `set_engine_bench.py` (:43, as the `peak_rss_mb` wrapper).
+
+Wording was chosen to avoid a self-contradiction the adversarial pass flagged: the doc's own :32 advertises `profile_r6_write.py` as covering "space", so the landed text says the profilers are not a RAM instrument and names what `target_space` actually measures, rather than claiming the doc has no space target.

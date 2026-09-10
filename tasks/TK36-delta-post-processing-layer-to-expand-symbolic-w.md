@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -34,3 +34,11 @@ closed:
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-21 (`W-3`, tier 4, sweep-l only); anchor re-read this pass at docs/specs/wildcard-materialization-spec.md:259.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append), RE-HOMED to `docs/spec-deviations.md` for the same reason as TK35: `docs/README.md:122-124` holds `docs/specs/` frozen at landing by hand, so a dated append into the spec body is not the right form.
+
+The drafted prose said sec 10 keeps expansion a non-goal "until a consumer that actually needs expanded deltas exists". Caught adversarially and dropped: `wildcard-materialization-spec.md:324` lists it among Non-goals with NO condition attached -- the consumer rationale is this task row's, not the spec's. Verified :324 first-hand.
+
+The landed text keeps the half that is actually load-bearing and adds the stronger second reason the read path has since grown: `index_v4/wildcard.py::WildcardIndex.lookup_reverse` fences leaf families because a leaf family is storage-internal (`wildcard.py:864`). The sec 6 invariant it is in tension with, "Never enumerate a marker into concretes", is at `:258` -- grepped.

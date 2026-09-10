@@ -30,6 +30,76 @@ from here.
 
 ---
 
+## 2026-09-10 — `TT-8` landed (fence-aware banner) and `TK53` closed: 15 appends dispositioned, 4 verdicts overturned
+
+rows: closed `TT-8`, closed `TK53`; dispositions logged on `TK3` `TK4` `TK6` `TK11` `TK15`
+`TK28` `TK33` `TK34` `TK35` `TK36` `TK38` `TK39` `TK43` `TK44` `TK50`. Nothing re-ranked;
+`P6` stays `NOW`, `R6` stays `NEXT`.
+
+task lint: clean (13 checks, 179 task file(s) parsed), 23 warning(s)
+read: board only
+
+**`TT-8`.** `task.py::extract_banner` is now fence-aware and refuses two `## Banner`
+headings instead of silently picking one. The sabotage was built BEFORE the fix, against
+the `git show HEAD:` extractor on a temp copy of the live corpus, and reproduced the bug:
+`check 12 failures: 0` for a banner that existed only inside a fence, and `0` again for two
+real banners. Post-fix, both go red. Each of the three new clauses was certified standalone
+against the pre-fix tool, because clause 5 fires first and would otherwise mask 6 and 7.
+
+The mutation sweep is the part worth carrying. Twelve narrow weakenings; **seven left every
+test green** — tracking ` ``` ` but not `~~~`, requiring a column-0 fence, a naive toggle,
+an `==` close-marker length test, letting an info-string line close a fence, dropping the
+filename from the refusal, and tracking only the first fence in the file. The gap was
+uniform: the original clause wrote ONE fence shape, so what was unguarded was the fence
+*grammar*, not the fence. Five clauses plus a filename assertion close all seven. This is
+the second consecutive check where the module sweep found holes the single sabotage missed,
+which is now evidence for the 2026-09-08b rule rather than an anecdote.
+
+**`TK53`.** All 15 remaining appends are dispositioned: 11 landed, 3 were already carried
+(`TK15`, `TK33`, `TK34`), 1 superseded (`TK6` — its destination, a `P4` board row in
+`HANDOFF.md`, was abolished by the 2026-09-06 cutover; the file is 49 lines with zero table
+rows). `tasks/` no longer sole-homes any of the fifteen statements, which is the condition
+this row existed to reach. The individual `TK` rows stay OPEN on purpose: landing a
+statement discharges the sole-home problem, not the underlying question.
+
+Method, and it is the reusable part: each destination doc got a verify pass and then an
+adversarial refute pass, grouped by destination so a doc was read twice rather than fifteen
+times. **Every one of the eleven drafted appends carried at least one factual defect, and
+four verdicts were overturned between the passes.** Caught before writing: a claim that
+`install_paranoia` is not wired into `ConnectedStore` (it is, `store.py:193` — the true and
+sharper statement is that `DEFAULT_PARANOIA` is `PARANOIA_OFF`), a severity error calling
+the `BL-1` leak answer-level when it is recorded STATE-ONLY and explicitly not a fail-open,
+a mis-description of what spec §10 conditions its non-goal on, and a link form already known
+to resolve to the wrong file. A single-pass sweep would have written all of them — which is
+exactly what the row's own re-verify trap predicted.
+
+The refuters were wrong once too, so nothing was transcribed: one claimed perf lead `A10`
+rewrites the `_bumped` fan-out, where the audit (`:857-862`) says it routes onto
+`_reconcile_subject`, a different §7 gap. The weaker accurate claim is what landed.
+
+`TK35`/`TK36` were **re-homed** from `docs/specs/wildcard-materialization-spec.md` to
+`docs/spec-deviations.md`. `docs/README.md:122-124` holds `docs/specs/` frozen at landing
+*by hand* — nothing walks it — so a dated append into a spec body looks legal and is not.
+
+`TK44` surfaced a live `ZT-P3-5` recurrence in passing:
+`tests/test_generator_coverage.py:68` (~19%) and `:428` (~28%) state one measurement with
+identical wording and different values *inside a single module*, against `:1152` (~30%) and
+`sabotage-procedure.md`'s "roughly a quarter". `check_restated_counts` cannot see it — wrong
+file type and wrong pattern, out of scope twice over. Recorded in the landed text, with
+`::test_report_cell_coverage` named as the single live source.
+
+Still owed:
+- **The ledger receipt vocabulary still has no token for "entered via `show`"** — carried
+  unchanged from 2026-09-07b and 2026-09-08b. Still unfiled; file it or extend
+  `handoff_lint.py::check_session_receipt`'s vocabulary.
+- **`TT-8` left one behaviour unpinned by a clause, deliberately:** a fence *inside* the
+  banner section now counts as banner content, so such a corpus fails the 14-line cap rather
+  than truncating silently. Correct, but observed rather than designed-and-tested.
+- **A percentage has no mechanical guard anywhere.** `TK44`'s four divergent figures are
+  now described in `sabotage-procedure.md`, but nothing refuses the next one. Extending
+  `check_restated_counts` to percentages, and past top-level markdown into `.py` docstrings,
+  is unfiled work.
+
 ## 2026-09-08b — `TK58` landed: handoff_lint refuses a restated corpus count, the repo's oldest defect class
 
 rows: closed `TK58`. Nothing re-ranked; `P6` stays `NOW`, `R6`/`TK53` stay `NEXT`. Batch 4

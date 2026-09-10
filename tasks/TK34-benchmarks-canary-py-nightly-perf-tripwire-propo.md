@@ -11,8 +11,8 @@ labels: [perf]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -37,3 +37,11 @@ Filed `LATER` rather than `HOLD` because, unlike the appendix leads, this one is
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-19 (`GRB-H-1`, tier 3, sweep-h only); COVERAGE.md §C4 re-confirmed the file still does not exist. Proposal at docs/gate-runbook.md:752-762.
+
+### 2026-09-10
+
+TK53 disposition 2026-09-10: NOT an append. Both passes agree the statement is ALREADY CARRIED, and the drafted prose would have DUPLICATED `docs/sabotage-procedure.md` -- its opening already names "every measurement instrument whose number you intend to act on: a benchmark, a profile, a probe", and :227 is a whole section titled "A pin you REGENERATE to accept a change cannot be the alarm for that change (2026-08-31b)", which is the canary trap stated in its general form.
+
+Verified `:227` first-hand.
+
+No prose was written -- writing it would have been a second home for a rule that already has one, against the routing rule in `docs/README.md`. The row stays open as an undecided PROPOSAL (nightly perf tripwire: never built, decision pending); only its statement is no longer sole-homed.
