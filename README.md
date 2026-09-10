@@ -397,6 +397,14 @@ goals:
 * (real) availability <-- why real? might have misread the handwriting on my notes
 * multi-tenancy
 * cross-namespace relations?
+    * (2026-09-10) whatever this turns into is a schema-*shape* change, and schemas here are
+      static and write-once — a new schema means a new store and index built from the tuples,
+      not a migration ([`decision-log.md`](docs/architecture/decision-log.md)) — so any design
+      has to survive that before anything else. It also lands in the parser
+      (`zanzibar_utils_v1.py::parse_openfga_schema`), `compile_ruleset`, both backends, and
+      `tests/oracle.py` — and the oracle has to be changed *separately*, by hand: it parses
+      the DSL itself on purpose, so sharing one parser fix across both would let a single
+      parser bug corrupt both sides of the validation matrix.
 * shared tuples / state?
 * acyclic check
 

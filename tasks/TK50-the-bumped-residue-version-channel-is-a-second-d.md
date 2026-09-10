@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -40,3 +40,13 @@ Not a crash or a correctness bug — a version bump with no outbox row would abo
 ### 2026-08-21b
 
 **Provenance.** inventory-formal.md MISS #4, citing formal/CORRESPONDENCE.md §7.1 ("★ NEW -- the `_bumped` residue-version channel is a SECOND dirty-key source with no model", `ZT-P4-3a`). COVERAGE.md DROPPED it as frozen-provenance; re-instated here because the carrier is CORRESPONDENCE.md, and the anchors (`:352`, `:436-452`) resolve in the current tree.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append) into `formal/CORRESPONDENCE.md` sec 7.1, as a continuation of the `_bumped` residue-version-channel bullet.
+
+The prior sweep called this ALREADY_CARRIED and the adversarial pass OVERTURNED it: the channel and T5 legs ARE carried, but the second trap -- that a pending perf lead rewrites what this entry declares unmodelled -- was carried nowhere.
+
+I then had to correct the REFUTER too, which is why this is a first-hand write and not a transcription. Its revised draft said A10 "would propagate granularity through the residue-bump fan-out", i.e. that A10 touches the `_bumped` channel directly. That is NOT what the audit says. `docs/perf-round6-audit-2026-08.md:857-862` says A10's sketch names the sec 5.2 invalidation rule and routes computed dependents onto `::DeltaProcessor._reconcile_subject`, a DIFFERENT sec 7 gap with no Lean counterpart -- so A10 makes an already-logged modelling gap the cascade default. That weaker, accurate claim is what landed.
+
+Verified first-hand: :857 carries "the only one of the sixteen filed `algorithm change: yes`" verbatim, and `grep -r 'A10' formal/` returns ZERO matches, so the "no file under formal/ names A10" clause is true as written.

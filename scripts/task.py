@@ -1858,7 +1858,14 @@ def note_path(store):
     return os.path.join(os.path.dirname(os.path.abspath(store.dir)), BOARD_FILENAME)
 
 
-def extract_banner(text):
+# A fenced-code-block delimiter: up to three spaces of indent, then >=3 backticks or
+# >=3 tildes. Group 2 is the rest of the line -- an INFO STRING (```markdown) on an
+# opening fence, and necessarily empty on a closing one, which is what CommonMark says
+# and what distinguishes ```` ``` ```` from ```` ```py ```` when a fence is already open.
+_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})(.*)$')
+
+
+def extract_banner(text, where='the note'):
     """The banner lines of a note, or None when it has no `## Banner` heading.
 
     The section is every line after the heading up to the next `## ` heading (or the end
@@ -1871,23 +1878,68 @@ def extract_banner(text):
     ONE HEADING, matched exactly (`BANNER_HEADING`), not "a heading containing Banner":
     the note is free prose and a looser match would let a `## Banner history` section
     silently become the session-start read.
+
+    FENCE-AWARE (`TT-8`, 2026-09-10). A `## Banner` inside a ``` fence is a code line,
+    not a heading -- the note is documentation about a tool that has a banner, so a
+    worked example of the banner shape is the likeliest thing anyone writes. Before this,
+    the scan compared raw lines and a fenced example placed ABOVE the real section became
+    the banner outright, silently, in BOTH consumers at once (`board` renders it, lint
+    check 12 validates it), so the two agreed on the wrong text and neither could see the
+    other was wrong. Literal observed output of the sabotage, against a copy of the live
+    note with one fenced example inserted above `## Banner`:
+
+        --- mode=before act=check12
+        --- check 12 failures: 0
+        extract_banner -> ['2026-01-01a -- EXAMPLE ONLY, this is documentation of
+        the banner shape', '```']
+
+    -- i.e. a clean lint, and `board` printing the example. The permanent pin is
+    `tests/test_tasktool.py::test_lint_check_12_catches_the_three_banner_failures`.
+
+    TWO BANNERS REFUSE, they do not warn. The old scan stopped at the next `## ` heading,
+    so a second `## Banner` section was simply invisible: the reader gets one of the two,
+    chosen by file order, with nothing on screen to say a choice was made. There is no
+    safe default here -- picking either is picking the possibly-stale one -- so this
+    raises `Refused` and both consumers stop.
     """
     lines = text.replace('\r\n', '\n').split('\n')
-    out, inside, found = [], False, False
-    for line in lines:
-        if line.startswith('## '):
-            if inside:
-                break
-            inside = line.rstrip() == BANNER_HEADING
-            found = found or inside
+    heads, fence = [], None       # heads: (index, is_the_banner_heading), fences skipped
+    for i, line in enumerate(lines):
+        match = _FENCE_RE.match(line)
+        if match:
+            marker, rest = match.group(1), match.group(2)
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence) and not rest.strip():
+                fence = None
             continue
-        if inside and line.strip():
-            if line.startswith('>'):
+        if fence is None and line.startswith('## '):
+            heads.append((i, line.rstrip() == BANNER_HEADING))
+    banners = [i for i, is_banner in heads if is_banner]
+    if len(banners) > 1:
+        raise Refused(
+            '%s has %d `%s` headings (lines %s), and there is no safe way to pick one: '
+            'whichever this printed would be the session-start read, and the other would '
+            'be an equally plausible banner nobody is looking at. Keep exactly one '
+            'section -- if the second is an EXAMPLE of the banner shape, put it in a '
+            '``` fence, which this parser skips.'
+            % (where, len(banners), BANNER_HEADING,
+               ', '.join(str(i + 1) for i in banners)))
+    if not banners:
+        return None
+    start = banners[0]
+    after = [i for i, _ in heads if i > start]
+    stop = after[0] if after else len(lines)
+    out = []
+    for line in lines[start + 1:stop]:
+        if not line.strip():
+            continue
+        if line.startswith('>'):
+            line = line[1:]
+            if line.startswith(' '):
                 line = line[1:]
-                if line.startswith(' '):
-                    line = line[1:]
-            out.append(line.rstrip())
-    return out if found else None
+        out.append(line.rstrip())
+    return out
 
 
 def banner_lines(store):
@@ -1903,7 +1955,7 @@ def banner_lines(store):
             'a ledger session key; at most %d lines); the Rhythm in docs/README.md '
             'rewrites it every session anyway.'
             % (rel(path), BANNER_HEADING, BANNER_MAX_LINES))
-    lines = extract_banner(read_text(path))
+    lines = extract_banner(read_text(path), rel(path))
     if lines is None:
         raise Refused('%s has no `%s` heading, so there is no banner for `board` to '
                       'print. Since the 2026-09-06 cutover the banner lives ONLY there '
@@ -2798,6 +2850,14 @@ def check_banner(store, fail, state):
     which, given the Rhythm rewrites this section every session, is the failure that
     actually happens.
 
+    FENCES AND SECOND BANNERS (`TT-8`, 2026-09-10) are handled in `extract_banner`, which
+    this check SHARES with `board` -- which is exactly what made the defect dangerous:
+    both consumers agreed on the wrong text. A fenced `## Banner` is a code line, so a
+    note whose only `## Banner` is a worked example now fails here instead of linting
+    clean while `board` printed the example; a second `## Banner` raises, and this check
+    reports it rather than letting it abort the rest of the lint run. See that function's
+    docstring for the literal sabotage output.
+
     THE TOMBSTONE CLAUSE: a `tasks/BANNER.md` that reappears is a violation, not a
     second banner. It is excluded from the task scan by name (NON_TASK_MD), so without
     this clause a session writing the banner where it used to live would lint clean
@@ -2816,7 +2876,14 @@ def check_banner(store, fail, state):
              'session-start for whoever comes next, not a missing nicety.'
              % (rel(path), BANNER_HEADING))
         return
-    lines = extract_banner(read_text(path))
+    try:
+        lines = extract_banner(read_text(path), rel(path))
+    except Refused as exc:
+        # A second `## Banner` is a REFUSAL in `board` (rc 2). Lint reports it as a
+        # failure rather than letting the exception escape, so the remaining checks still
+        # run and one broken note does not hide the rest of the tree's violations.
+        fail(str(exc))
+        return
     if lines is None:
         fail('%s has no `%s` heading. It is the session-start read that no query can '
              'derive, and `board` refuses without it -- so this is a broken '

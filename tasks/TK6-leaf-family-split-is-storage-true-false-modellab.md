@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-24b
-updated: 2026-08-24b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -41,3 +41,13 @@ Open question §8.2 item 2 of the leaf-family-split scope doc: whether the `stor
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [P3, P4]`. This row states it scopes LIVE work and 'has never been folded into any board row's scope pointer' -- and P3 is the NOW item. `deps` stays empty for the reason this row already gives (it would invert the direction); `related` is ordering-free, so it encodes the link without touching `ready`.
+
+### 2026-09-10
+
+TK53 disposition 2026-09-10: NOT an append -- SUPERSEDED, and the destination itself is gone.
+
+The adjudication routed this to a `P4` board-row scope pointer at `HANDOFF.md:51`. That location was ABOLISHED by the 2026-09-06 cutover, which turned the note into a one-hop banner. Verified first-hand today: `HANDOFF.md` is 49 lines and contains ZERO table rows, so there is no row to append a pointer to, and the file cannot grow one (its cap is `handoff_lint.py::MAX_LINES`).
+
+The first pass called this ALREADY_CARRIED via the tree's own derived incoming-`related` edges; the adversarial pass overturned that to SUPERSEDED on the stronger ground that the named destination no longer exists in any form. Both agree no prose should be written, which is the operative conclusion.
+
+If the underlying leaf-family-split question still needs a live pointer, it needs a NEW destination decided by a human -- do not re-point it at `HANDOFF.md`. The row stays open.

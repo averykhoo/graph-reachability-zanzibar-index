@@ -646,6 +646,20 @@ Publish the residue rather than rounding it away
 (`docs/design/generator-coverage/README.md` §6 is the model: a coverage design that claims
 completeness is the failure mode it was written to fix).
 
+But publishing a residue does not keep it *readable*, and this one has drifted (added
+2026-09-10, `TK44`). The figure in the paragraph above, the frozen design's own, and the
+gate's docstrings at `tests/test_generator_coverage.py:68` and `:428` are four statements of
+a single measurement — and those last two **contradict each other inside one module**, under
+identical wording ("unreached even at `deep`") with different values, as read on 2026-09-10.
+Nothing mechanical catches this: `scripts/handoff_lint.py::check_restated_counts` scans
+top-level `docs/` and `tasks/` markdown for restated corpus counts, so a percentage sitting
+in a `.py` docstring is outside its scope twice over. Take the residue from
+`tests/test_generator_coverage.py::test_report_cell_coverage` (run it with `-s`) together
+with the date you read it, never from prose. Note what this settles, though: a practice, not
+the question. Whether that UNKNOWN residue is worth *attacking* — or whether publishing it
+was always the whole intended answer — has never been decided, and that decision is open
+work living in the tree, not here.
+
 And it says nothing about the **plan** you are executing. Treat a scope/design document the
 way you treat a check: E-chain legs 2/3/4 each landed a correction to their own plan — two
 instructions refuted by measurement, a gate specification found insufficient **three legs

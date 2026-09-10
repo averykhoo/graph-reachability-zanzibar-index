@@ -144,6 +144,15 @@ composition-write round-trips that would change the modeled algorithm; leave the
 - **Measurement hygiene:** never two bench/pytest processes at once. New
   statement-count results go in `STMT_BASELINE_2026-07-14.md` +
   `PERF_ANALYSIS.md` "Applied" entries; never overwrite `scale_bench.jsonl`.
+  **A RAM item needs a RAM instrument, and neither round-6 profiler is one** (added
+  2026-09-10, `TK28`). The `space` target above is
+  `benchmarks/profile_r6_write.py::target_space`, an *on-disk* byte A/B — two SQLite
+  layouts, VACUUMed, bytes compared — and every other target in both profilers reports
+  wall time and SQL statement counts. So an RSS regression or win is invisible to all of
+  them. The instrument that does exist is `benchmarks/_harness.py::rss_mb` (`'current'` /
+  `'peak'`), already wired into `bulk_scale_bench.py` and `set_engine_bench.py` — use it,
+  or say up front how you will measure, before deciding whether a memory item lands.
+  Otherwise the "win" is unfalsifiable.
   **Before believing a profile, run the five-second test in
   [`sabotage-procedure.md`](sabotage-procedure.md) §"A MEASUREMENT is an assurance
   step too"** — a probe that ran on nothing reports a clean small share, and that

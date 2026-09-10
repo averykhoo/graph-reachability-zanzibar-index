@@ -830,6 +830,18 @@ promotes one. The lead texts are unchanged — corrections live here, not in the
   read-path cache a cross-call lifetime** — the hazard `R6-6`'s verifier explicitly
   credited its own fix for avoiding — and its `_store_residue` pop invalidates only the
   writing instance's `WildcardIndex`, never a replica's.
+* ⚠ **And the invalidation token itself is gated by nothing formal** (added 2026-09-10 and
+  checked that day — this note is *not* part of the section's 2026-08-29b sweep). `TK11` is
+  the open row that owns the gap. `formal/CORRESPONDENCE.md` §7 records `ResidueV1.version`
+  as a declared modelling gap — projection **P7**, and `GraphIndex/State.lean`'s `Residue`
+  carries no version field — so **I7** (`index_v4/invariants.py::_check_residue_rows`) has
+  no `Inv` clause, and `formal/FINAL_REVIEW.md` names the same projection independently.
+  The checker *is* reachable from production — `connectedstore/store.py:193` installs it —
+  but `ConnectedStore.DEFAULT_PARANOIA` is `PARANOIA_OFF` (`:98`), so a default deployment
+  runs I7 unchecked. A14 therefore rests every derived read's correctness on an invariant
+  no proof covers and no default run exercises, on top of the content-equality hazard
+  above. Adjudicate the two together, or land A14 only after `ResidueV1.version` is
+  modelled.
 * **A4 collides with `R6-18` on the same table.** `R6-18` makes
   `(store_id, subject_id, object_id)` the primary key, which subsumes A4's optional
   subject-keyed companion outright, and under `WITHOUT ROWID` every secondary index carries

@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -41,3 +41,11 @@ The deliverable is the ADJUDICATION first (is the scope boundary accepted, or is
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-3 (`SEM-A1`, tier 1, sweep-g only); CONFIRMED OPEN in code by COVERAGE.md §C3 against index_v4/invariants.py:773-803. The escalation at formal/SEMANTICS.md:898-899 is verbatim unanswered.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append). The statement now lives in `formal/README.md`, appended to the "Residual unverified surface:" paragraph in "## The claim (what this does and does NOT prove)": the I9 cascade precondition is a CONVENTION, `install_paranoia` wires the checker and the delta-scoped verifier but not I9, and `SEMANTICS.md` sec 11-A1 flags it as wanting sign-off that was never given.
+
+Verified first-hand before writing, not taken from the agent report: `index_v4/processor.py::DeltaProcessor.audit_fixpoint` is defined at :1658 and EVERY call site is under `tests/` (parity.py:98, test_connectedstore*.py, test_connectedstore_concurrency.py:145) -- no production caller. `invariants.py:184` states the exclusion by design. `SEMANTICS.md` sec 11 is at :902 and A1 at :907 (the row's own `## Read first` cites :891-899, which is 16 lines stale -- lint check 14 resolves pointers, not line numbers, so it stays green).
+
+Not closed: the row is still the open question of whether a per-write check is wanted. What changed is that the STATEMENT is no longer sole-homed in `tasks/`.

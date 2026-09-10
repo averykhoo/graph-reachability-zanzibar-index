@@ -11,8 +11,8 @@ labels: [docs, infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-08-21b
-updated: 2026-08-21b
+moved: 2026-09-10
+updated: 2026-09-10
 closed:
 ---
 
@@ -37,3 +37,11 @@ closed:
 ### 2026-08-21b
 
 **Provenance.** COVERAGE.md PART 1 U-4 (`W-2`, tier 1, sweep-l only); COVERAGE.md §C3 confirms the spec text survives and no flag exists, and flags the item as INTERPRETIVE. Re-read `docs/specs/wildcard-materialization-spec.md:141` this pass.
+
+### 2026-09-10
+
+LANDED 2026-09-10 (TK53 append), as a dated entry at the TOP of `docs/spec-deviations.md` (the ledger is newest-first down to `## 2026-07-29`; the row's `## 2026-08-29` date key was stale).
+
+The prior sweep called this ALREADY_CARRIED and an adversarial pass OVERTURNED it, correctly. `docs/architecture/theory.md:82-83` describes the lenient EDGE, not the per-shape FLAG that sec 3.4 actually mandates, and it predates the finding; `decision-log.md`'s "Non-goals (documented hooks only)" list is inherited verbatim from `docs/specs/graph-boolean-ivm-spec.md:259` (the BOOLEAN spec), so it cannot adjudicate wildcard sec 3.4; and `decision-log.md:224` declines the question on purpose. None of the three carried it.
+
+Verified first-hand: sec 3.4 at `wildcard-materialization-spec.md:141` names "a per-shape config flag"; sec 10 at :324 lists the mode under Non-goals with NO condition attached; and a sweep of the backends for a per-shape/lenient/vacuous config surface returns only unrelated prose. The entry deliberately does NOT pick outcome (a) or (b) -- the row's trap reserves that for a human.
