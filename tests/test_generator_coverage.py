@@ -65,9 +65,20 @@ widen the DRIVEN config space — see `DRIVE_K` for the measurement that decided
 `ci`; `deep` only raises the widths.
 
 The cell numbers are a FLOOR with provenance (rank 3 on the sabotage procedure's
-durability ranking), not an "every cell is hit" claim — ~19% of the pair space is
-unreached even at `deep`, and that residue is published rather than rounded away
-(`test_report_cell_coverage`, run with `-s`).
+durability ranking), not an "every cell is hit" claim — a large minority of the pair
+space is unreached even at `deep`, and that residue is published rather than rounded away.
+
+⚠ **The size of that residue is deliberately NOT written down here, or anywhere else in
+prose** (2026-09-10, task `GC-1`). It was, four times, in four different values: this
+docstring said `~19%`, `test_every_alphabet_feature_is_hit_or_rejection_explained` said
+`~28%` — the same sentence, the same claimed measurement, contradicting each other inside
+ONE module — while `test_report_cell_coverage` said `~30%` and `docs/sabotage-procedure.md`
+said "roughly a quarter". At most one could be right. They were also measuring different
+things (HIT-only vs HIT+REJ, `ci` vs `deep`, live vs the frozen design's prototype), which
+is how four honest sentences drift apart without anyone lying. That is `ZT-P3-5`, this
+repo's most-recurring documentation defect, and the remedy is always the same: delete the
+number, point at its home. **The home is `test_report_cell_coverage` — run it with `-s`
+and take the figure together with the date you read it.**
 The FEATURE-level statement is the exact one (rank 1): HIT u REJ-explained == alphabet,
 with no hand-written exemption list anywhere in this file.
 
@@ -425,9 +436,10 @@ def test_every_alphabet_feature_is_hit_or_rejection_explained():
         it (`test_rejection_witness_is_still_refused`).
 
     `UNACCOUNTED == set()` is the assertion. Note what this is NOT: it is not "every one
-    of the 1275 cells is hit". ~28% of the pair space is unreached even at `deep`, and
-    pretending otherwise is how a coverage check gets `skipif`'d the first time it
-    flakes. The FEATURE-level statement is the one that can be exact, so it is the one
+    of the 1275 cells is hit". A large minority of the pair space is unreached even at
+    `deep` (the figure is printed by `test_report_cell_coverage`, and is deliberately not
+    restated here — see the ⚠ in this module's docstring), and pretending otherwise is how
+    a coverage check gets `skipif`'d the first time it flakes. The FEATURE-level statement is the one that can be exact, so it is the one
     that is exact — and it holds under `ci`, not only under `deep`.
 
     SABOTAGE 1 (literal output). Narrowest plausible weakening, and the strongest one
@@ -1149,10 +1161,16 @@ def test_admission_parity_is_asserted_not_assumed():
 def test_report_cell_coverage(capsys):
     """Not an assertion: the published coverage record.
 
-    `docs/design/generator-coverage/README.md` §6.1 is explicit that ~30% of the pair
-    space stays unreached and that the number should be PUBLISHED, not rounded away. The
-    floors live in `test_enumerator_cell_coverage_floor`; this prints the current
+    `docs/design/generator-coverage/README.md` §6 item 1 is explicit that a large minority
+    of the pair space stays unreached and that the number should be PUBLISHED, not rounded
+    away. The floors live in `test_enumerator_cell_coverage_floor`; this prints the current
     figures so a reviewer sees the open number next to the closed one.
+
+    ★ **THIS TEST IS THE HOME OF THAT RESIDUE.** Nothing in this repo should restate the
+    figure in prose; four prose copies had already drifted to four different values by
+    2026-09-10 (task `GC-1`, and the ⚠ in this module's docstring). Quote it from a run,
+    with the date of that run, or not at all — the README's own value is frozen as-of its
+    date and measures the prototype, not this tree.
 
     Run with `-s` to see it.
     """

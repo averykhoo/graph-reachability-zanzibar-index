@@ -43,6 +43,41 @@ ever see that pair, **do not debug the failures**: check for a stray interpreter
 here was `277 passed`, and `25 + 252 = 277` is the giveaway that one tile's output had
 been split across two writers.
 
+⚠ **The same disagreement needs NEITHER a loop NOR an orphan — two runs and one filename
+are enough** (hit 2026-09-10). A `conf-tile:1/5` reported `EXIT=0` under a log ending
+`60 failed, 50 passed` / `FAIL: conf (pytest rc=1)`. `tasklist` showed no stray
+interpreter and no phase had been looped, so it was filed as a hole in `verify.sh`'s own
+exit-code guard. It was not one: `verify.sh` detected the failure, exited 1, and recorded
+`FAILED … rc=1` in the ledger, and bash preserves an exit status across a returning EXIT
+trap (tested three ways on bash 5.2.26). **Two runs were simply in flight at once**, which
+the ledger says outright once you read column 1 as the START time and column 2 as the
+duration:
+
+```
+run A  started 14:35:01  ran 225 s -> ended 14:38:46   FAILED  60 failed, 50 passed
+run B  started 14:36:14  ran 196 s -> ended 14:39:30   PASSED  110 passed
+```
+
+B started 73 s into A; both redirected into the fixed `/tmp/p.log` this file used to
+prescribe. A wrote 6466 lines and finished first, B wrote ~30 and finished last, so B's
+banner landed at a low offset and A's failure tail stayed at the end. `rc` was B's honest
+`0`; `tail` was A's failure. **Note that the documented fix for the `tail` footgun is what
+created this one** — a fixed log path is a shared resource.
+
+Two things changed as a result, and the first is why you are unlikely to meet this again:
+
+* **`verify.sh` now takes an exclusive run lock** (`scripts/gate_lock.py`, task `GL-1`)
+  before any phase work. A second concurrent run **refuses**, nonzero, in under a second:
+  `REFUSED: another gate run holds the lock…` naming the incumbent phase, its pid and the
+  lock file, plus `FAIL: refusing to start '<phase>' while another gate run holds the
+  lock.` It lands in the ledger as `FAILED … rc=1 refused=lock-held` with a 0 s duration.
+  A colliding run therefore can no longer report success, whatever the log says. The lock
+  also closes the orphan variant above: `verify.sh` re-execs itself (parent tees, child
+  works), the orphan *is* the child, and it holds the lock until it dies. A lock older
+  than an hour is stolen automatically and loudly, so a SIGKILLed run cannot brick the
+  gate; if you are sure nothing is alive, delete `.gate-runs/gate.lock`.
+* **The recipe below no longer names a fixed path.**
+
 **Interpreter.** `verify.sh` resolves it itself (since 2026-07-26): `ZANZIBAR_PY`
 wins if set, otherwise it tries `$HOME/anaconda3|miniconda3|mambaforge/envs/graph-
 reachability-zanzibar-index/python.exe`, two literal `C:/Users/...` fallbacks,
@@ -131,8 +166,20 @@ masks a failure. ⚠ **`tail` does this too, and it is the one that keeps biting
 phase looks like exit 0 — and if it is followed by `&& <next phase>`, the chain
 happily continues past the failure. This bit the 2026-08-10 session (a genuinely
 `4 failed` run reported exit 0) and bit again on 2026-08-11 (a FAILED `lean` phase
-reported exit 0, caught only by reading the output rather than the status). Use
-`bash formal/verify.sh <phase> > /tmp/p.log 2>&1; rc=$?` and branch on `$rc`.
+reported exit 0, caught only by reading the output rather than the status). Use a **fresh log file per run** and branch on `$rc`:
+
+```bash
+LOG=$(mktemp /tmp/gate-XXXXXX.log)
+bash formal/verify.sh <phase> > "$LOG" 2>&1; rc=$?
+echo "EXIT=$rc  log=$LOG"; tail -20 "$LOG"
+```
+
+⚠ **Not `/tmp/p.log`.** This file prescribed that fixed path until 2026-09-10, and a
+fixed path is a shared resource: two runs redirecting into it produced `EXIT=0` under
+another run's `60 failed` tail (the trap above). `mktemp` costs nothing and makes the
+pairing of a status to a log unambiguous. `verify.sh` also writes its own uniquely-named
+copy under `.gate-runs/` and prints the path in its banner — when in doubt, read that one,
+because it cannot be another run's.
 **This is already written down twice below and was hit anyway — if you are reading
 it now, that is the whole warning.**
 
