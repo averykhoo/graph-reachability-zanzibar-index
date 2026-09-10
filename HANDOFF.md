@@ -13,12 +13,12 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-09-10 — `TT-8` and `TK53` LANDED: **`extract_banner` is fence-aware** (a `## Banner` inside a fence is skipped; two real ones REFUSE), and **`TK53`'s appends are all dispositioned** — 11 landed, 3 already carried, 1 superseded — so `tasks/` no longer sole-homes any of them and DELETE is lossless.
+> 2026-09-10b — `GL-1` LANDED: **the gate takes an exclusive run lock** (`scripts/gate_lock.py`), so two `verify.sh` runs can no longer overlap. The 2026-09-10 `EXIT=0`-under-`60 failed` report was **not** a hole in the exit-code guard at `verify.sh:270-273` — that guard was correct and never in play; two runs shared the runbook's fixed `/tmp/p.log`. `GC-1` deleted four contradictory prose copies of one coverage figure. `MIN_TESTS_ALL` 1094 → 1131.
 > 🟢 Gate: ask `python scripts/gate_status.py` (re-run `lean` after any `*.md` edit, and `t2c` INCLUDES `tasks/*.md` + `HANDOFF.md`, so a tree op after the tiles stales them too).
 > ⚠ **Writing a figure into a live doc now needs one of four escapes** — a fenced block, a backticked/quoted span, a `YYYY-MM-DD` key on the line, or a file whose banner declares its body provenance. The remedy on a red is to **DELETE the number and point at its home**, never to update it. Out of scope: `docs/history/`, `docs/specs/`, `docs/architecture/`, `formal/`, and a task file's `## Log`.
-> ⚠ **A sabotage certifies ONE test; sweep the whole module with mutations.** Fired again 2026-09-10 on `TT-8`: of twelve narrow weakenings, SEVEN left every test green, because the clause wrote one fence shape and so left the fence *grammar* unguarded. That is now two consecutive additions whose module sweep found holes the single sabotage missed — evidence, not anecdote. `docs/sabotage-procedure.md` §"Sweep the TEST MODULE with mutations".
+> ⚠ **A sabotage certifies ONE test; sweep the whole module with mutations.** Now THREE consecutive additions whose sweep found what the single sabotage missed: `TT-8` (7 of 12 weakenings left everything green — the clause guarded one fence shape, not the fence *grammar*) and `GL-1` (10 of 11 caught; the 11th, stealing a stale lock by `unlink` instead of `rename`, was **INERT** — no behavioural test could see it). `GL-1` also caught its own INSTRUMENT: one mutation appeared to redden until it turned out to be dying of a `TypeError`, not of the property. `docs/sabotage-procedure.md` §"Sweep the TEST MODULE with mutations".
 > ⚠ **`formal/HANDOFF.md` and `tasks/P6` said `FoldAdmits` moves "in lockstep"; the correction (`PROOF_STATUS.md:4897`) says 21 of 24 sites move and THREE MUST STAY.** Both live sites annotated 2026-09-07b; verifying the three against the current Lean tree is `TK67`. A session following the formal note would have moved sites that must not move.
-> ⚠ **Never loop gate phases in one command.** The harness kills the SHELL at the cap, not its `pytest` child; the next phase then overlaps with the orphan, shares its log file, and a PASSING phase reports `EXIT=0` under a log ending `25 failed`. Full trap in `docs/gate-runbook.md` §"The recipe" (hit 2026-09-08b).
+> ⚠ **Two gate runs at once make a PASSING phase report `EXIT=0` under another run's failing log** — via a loop that leaves an orphan (2026-09-08b, `25 failed`) or via plain overlap (2026-09-10, `60 failed`). Both need only two writers and one filename. `verify.sh` now REFUSES a second concurrent run (ledger: `FAILED … rc=1 refused=lock-held`) and the recipe uses `mktemp`, never a fixed path — but still **one phase per command**. `docs/gate-runbook.md` §"The recipe".
 > 🧭 `TK66`: a sweep found **17 forward-binding directives that live only in `formal/history/`** and no live file surfaces (`P4`'s was one). The table on that row is a subagent's, explicitly UNVERIFIED — read the line before acting. Now probably an EXTENSION of check 14 rather than its own mechanism (noted on the row).
 > → The `TK57`–`TK65` sweep and `TK53` are both DONE; `TK62` (figure-equality) stays DECLINED, reasons on its row. Next ranked work is what the board ranks: `P6` is `NOW`, `R6` is `NEXT`.
 > → To undo the whole cutover: `git revert` the 2026-09-06d commit (its message carries the line). Nothing else moved.
@@ -34,11 +34,14 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
   from 2026-09-07b, when a session entered at `show TK57` and had to write the nearest
   false token with a caveat). Unfiled; file it or extend
   `handoff_lint.py::check_session_receipt`'s vocabulary.
-- **A percentage has no mechanical guard anywhere.** `TK44` found one measurement stated
-  four ways, two of them contradicting inside a single module
-  (`tests/test_generator_coverage.py`). `check_restated_counts` is out of scope twice over —
-  wrong pattern, wrong file type. Extending it to percentages and into `.py` docstrings is
-  unfiled work.
+- **A percentage still has no mechanical guard** — now FILED as `GC-1`. The four
+  contradictory copies are deleted and point at `test_report_cell_coverage`; the check that
+  would have caught them is still owed, and the row records why widening is not free.
+- **`MIN_TESTS_ALL` is ratcheted BY HAND, and the third consecutive raise again found
+  pre-existing headroom** — i.e. tests that could have been deleted green. Size and
+  provenance are in the floor's own comment in `formal/verify.sh`. `tasks/config.json`
+  solved this mechanically; the gate has no equivalent, and a session that only ADDS
+  tests never sees a red to remind it. Unfiled.
 - **`TT-8` left one behaviour observed but unpinned:** a fence *inside* the banner section
   now counts as banner content, so such a corpus fails the line cap rather than truncating.
 

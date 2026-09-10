@@ -202,6 +202,22 @@ GATE_TREE="unknown"                     # replaced once $PY is resolved, below
 GATE_REACHED_END=0                      # set to 1 only by the final banner
 gate_fact() { GATE_FACTS="${GATE_FACTS:+$GATE_FACTS }$1"; }
 
+# ---------------------------------------------------------------------------- #
+# THE RUN LOCK (2026-09-10, task `GL-1`). One gate run at a time. The full write-up
+# -- what happened, why a lock and not a third runbook warning, and why staleness is
+# age-based -- is the module docstring of scripts/gate_lock.py. The short version:
+# on 2026-09-10 two conf-tile:1/5 runs overlapped by ~2.5 min (ledger rows 14:35:01
+# +225s and 14:36:14 +196s), both redirecting to the runbook's then-fixed
+# /tmp/p.log, and the caller of the PASSING one read the FAILING one's tail -- a
+# green EXIT=0 over `60 failed`. Declared here, above the first `exit` in the
+# script body, for the same reason the ledger block is (see the WARNING there):
+# `set -u` is on and gate_on_exit runs on EVERY exit path, including the ones
+# above the point where the lock is actually taken.
+# ---------------------------------------------------------------------------- #
+GATE_LOCK_FILE="$GATE_RUNS_DIR/gate.lock"
+GATE_LOCK_OWNER="$$-$(date +%s)-${RANDOM:-0}"
+GATE_LOCK_HELD=0                        # set to 1 only by a successful acquire
+
 # The tree the run STARTED against, so a green row can be matched to the working
 # copy it certifies. Delegated to scripts/gate_status.py --tree-id so the writer
 # and the reader cannot compute it two different ways: a status tool that derived
@@ -262,6 +278,19 @@ gate_on_exit() {
     status=FAILED
   fi
   gate_write_row "$status" "$rc"
+  # Release AFTER the row is written (the lock covers the whole run, bookkeeping
+  # included) but BEFORE the INCONSISTENT branch below, which exits and would
+  # otherwise leak the lock on exactly the path that already went wrong. Failure
+  # to release is reported and never changes the verdict -- a leaked lock makes
+  # the NEXT run refuse, which is the safe direction, and gate_lock.py steals it
+  # by age anyway.
+  if [ "$GATE_LOCK_HELD" = "1" ]; then
+    "$PY" "$REPO_ROOT/scripts/gate_lock.py" release "$GATE_LOCK_FILE" \
+      --owner "$GATE_LOCK_OWNER" >/dev/null || \
+      echo "WARN: could not release $GATE_LOCK_FILE -- the next run will refuse until" \
+           "it is removed or ages out" >&2
+    GATE_LOCK_HELD=0
+  fi
   if [ "$status" = "INCONSISTENT" ]; then
     # NOT a logging concern. The script reached `exit 0` without printing its
     # final banner, i.e. it reported success without running to the end of the
@@ -334,6 +363,19 @@ fi
 # is not silent, though; gate_tree_id WARNs, because an `unknown` row buys no
 # coverage at all (see its ⚠ above).
 GATE_TREE="$(gate_tree_id)"
+
+# Take the run lock (see the block above and scripts/gate_lock.py). As early as
+# $PY allows and before ANY phase work, so a refused run costs a second and
+# certifies nothing. A refusal is deliberately a FAILED row rather than a silent
+# no-op: "this run did not certify anything" is exactly what the ledger should say
+# about it, and gate_status.py already treats a non-PASSED row as no coverage.
+if ! "$PY" "$REPO_ROOT/scripts/gate_lock.py" acquire "$GATE_LOCK_FILE" \
+       --phase "$PHASE" --owner "$GATE_LOCK_OWNER"; then
+  gate_fact "refused=lock-held"
+  echo "FAIL: refusing to start '$PHASE' while another gate run holds the lock."
+  exit 1
+fi
+GATE_LOCK_HELD=1
 
 # ---------------------------------------------------------------------------- #
 # The hard-coded assurance floors.
@@ -464,7 +506,19 @@ MIN_CONF_ALL=546
 #   sessions of, in the same shape, and it is why the mechanical ratchet exists
 #   there and not here. Re-measured with `pytest tests/ -q --collect-only` ->
 #   `1094 tests collected`.
-MIN_TESTS_ALL=1094
+#   RAISED 1094 -> 1131 on 2026-09-10b (GL-1): +20 `tests/test_gate_lock.py` (the gate
+#   run lock -- see scripts/gate_lock.py), and +17 THAT WERE ALREADY UNRATCHETED on the
+#   committed tree: a clean checkout at 3ac7fd2 collected 1111 against this floor of
+#   1094, so seventeen tests of headroom had re-accumulated since 2026-09-08. That is
+#   now the THIRD consecutive raise to find pre-existing headroom (1 on 2026-09-08, 1 on
+#   2026-09-06d's predecessor, 17 here) -- the miss is not occasional, and the honest
+#   reading is that "re-measure and raise whenever you add tests" is a rule this repo
+#   does not reliably keep by hand. `tasks/config.json`'s min_tasks_parsed solved the
+#   same problem with a mechanical ratchet on the write path; there is no equivalent
+#   here, and a session that only ADDS tests never sees a red to remind it. Carried as a
+#   "Still owed" bullet in HANDOFF.md rather than fixed in the same change.
+#   Re-measured with `pytest tests/ -q --collect-only` -> `1131 tests collected`.
+MIN_TESTS_ALL=1131
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

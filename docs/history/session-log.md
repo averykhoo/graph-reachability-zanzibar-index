@@ -30,6 +30,132 @@ from here.
 
 ---
 
+## 2026-09-10b — `GL-1`: the gate takes a run lock; the "failed successfully" report was two runs, not a broken guard
+
+rows: created and closed `GL-1`; created `GC-1` (open). Nothing re-ranked; `P6` stays
+`NOW`, `R6` stays `NEXT`.
+
+task lint: clean (13 checks, 181 task file(s) parsed), 24 warning(s)
+read: board only
+
+**The filed diagnosis was wrong, and that is the most reusable part of this entry.**
+`3ac7fd2` recorded a `conf-tile:1/5` reporting `EXIT=0` under a log ending `60 failed,
+50 passed` / `FAIL: conf (pytest rc=1)`, and reasoned that `verify.sh:270-273` — the
+`gate_on_exit` INCONSISTENT branch — "has a hole or its EXIT trap died with everything
+else". Neither. Three checks, in the order that settled it:
+
+* The log's own last line is `FAIL: conf (pytest rc=1)` and the ledger row is
+  `conf-tile:1/5 FAILED … rc=1`. `verify.sh` detected the failure and exited **1**.
+* The EXIT trap was alive — it is what wrote that row.
+* Bash preserves an exit status across a *returning* EXIT trap. Tested three ways on
+  bash 5.2.26 (trap function ending in a false `[ ]`, in a no-op, in an unexecuted `if`);
+  all three gave `EXIT=1`. The guard at `:270-273` covers exit 0 *without* the PASSED
+  banner, which never happened, so it was never in play.
+
+**What actually happened: two runs, one filename.** Reading `.gate-runs/ledger.tsv`
+column 1 as the START time and column 2 as the duration:
+
+```
+run A  started 14:35:01  ran 225 s -> ended 14:38:46   FAILED  60 failed, 50 passed
+run B  started 14:36:14  ran 196 s -> ended 14:39:30   PASSED  110 passed
+run C  started 14:40:21  ran 190 s -> ended 14:43:31   PASSED  110 passed   ("re-run alone")
+```
+
+B started 73 s into A. Both followed this repo's own recipe, which named the FIXED path
+`> /tmp/p.log 2>&1; rc=$?`. Two processes redirecting into one path each truncate it and
+then write at independent offsets; A emitted 6466 lines and finished first, B emitted ~30
+and finished last, so B's banner landed at a low offset and A's failure tail stayed at the
+end of the file. `rc` was B's honest `0`. `tail` was A's failure. Reproduced verbatim with
+two throwaway scripts before anything was changed.
+
+Three things worth carrying:
+
+1. **This is the third variant of footgun #1 and it needs neither of the first two's
+   ingredients** — no pipe eats the status, no orphaned interpreter writes the log. Two
+   writers and one filename are sufficient. The session that filed it checked for a stray
+   interpreter (correctly, per the 2026-09-08b runbook entry), found none, and concluded
+   the guard must be broken — because the runbook offered no third possibility.
+2. **The documented fix for footgun #1 created it.** `/tmp/p.log` was prescribed *because*
+   piping through `tail` eats the exit code. A fixed log path is a shared resource.
+3. **The concurrency is also the most plausible cause of the 60 failures**, which were all
+   `rc=3221225794` (`0xC0000142`, STATUS_DLL_INIT_FAILED) on `zcli` spawn — what two tiles
+   racing to spawn the same large Lean binary looks like. They were filed as generic
+   "fallout from this session's agent fan-out"; the sharper statement is that the gate was
+   running twice.
+
+**`GL-1` — the mechanical refusal.** `scripts/gate_lock.py` plus wiring in `verify.sh`
+(acquire after `gate_tree_id`, before any phase work; release from `gate_on_exit` after the
+ledger row and before the INCONSISTENT `exit`). A colliding run now refuses, nonzero, in
+under a second, and lands as `FAILED … rc=1 refused=lock-held` with a 0 s duration — so it
+**cannot report success whatever the log says**, which is the property that was missing.
+Staleness is age-based (3600 s, > 3x the longest legitimate run) rather than
+liveness-based, deliberately: `os.kill(pid, 0)` on Windows calls `TerminateProcess` rather
+than probing, so the obvious liveness check would kill the incumbent run, and the recorded
+pid is an MSYS pid anyway. Steals are announced; the steal claims the lock by `os.rename`
+so two stealers cannot both win.
+
+It also closes the **2026-09-08b orphan variant** as a side effect: `verify.sh` re-execs
+itself (parent tees, child works), so the process that survives a harness kill is the
+child — which holds the lock and releases it from its own EXIT trap. The next phase
+refuses instead of overlapping. One mechanism, both variants.
+
+Sabotage, end-to-end against the real gate (`lean` backgrounded, second `lean` 8 s later):
+
+```
+===== SECOND (colliding) RUN: rc=1 =====
+REFUSED: another gate run holds the lock, so this run has done nothing.
+         wanted phase: lean
+         held by phase: lean (pid 16744, started 2026-09-10T19:16:28, 7 s ago)
+FAIL: refusing to start 'lean' while another gate run holds the lock.
+===== FIRST RUN: rc=0 =====
+=== lean phase (steps 1-4) PASSED (holes=0, audits=587, pinned=587) ===
+```
+
+Instrument controlled: the lock file was confirmed gone afterwards, and the incumbent's
+verdict was unaffected.
+
+**The mutation sweep found the hole again, and then found one in itself.** Eleven
+weakenings of `gate_lock.py`; ten reddened a named test. The eleventh — steal a stale lock
+by `unlink` instead of `rename` — was **INERT**: no behavioural test in the module can see
+the difference, because it only appears when two runs steal at once. Pinned structurally
+(a source-reading mirror) with its limits stated, since a genuinely concurrent two-stealer
+test would be timing-dependent, i.e. a flaky test inside the gate. ⚠ And the *first* draft
+of that same mutation appeared to redden a named test — but only because it died of a
+`TypeError` the code's `except OSError` does not catch. **A sweep row can be green for the
+wrong reason exactly as easily as a test can**; the instrument needed sabotaging as much as
+the subject did. That is now three consecutive additions where the module sweep earned its
+keep.
+
+**`GC-1` — the `ZT-P3-5` recurrence `TK44` found.** One measurement stated four ways with
+four different values, two of them contradicting inside a single module. Live figure,
+measured today via `test_report_cell_coverage`: `UNKNOWN 404 (31.7%)` of 1275 cells, `ci`,
+K<=2. The cause is ordinary: the four sentences measured different things (HIT-only vs
+HIT+REJ, `ci` vs `deep`, this tree vs the frozen prototype), so all four could be written
+in good faith and no two agree. ⚠ **The commit that documented the drift introduced a fifth
+wrong value** — `docs/sabotage-procedure.md` gained "roughly a quarter", obtained by
+pairing one instrument's floor with another's framing. All four are now deleted and point
+at the one home. The check that would have caught them is still owed and is on the row,
+along with why widening `check_restated_counts` is not free.
+
+That check did fire on this session, though, which is the confirmation it is live: a
+"Still owed" bullet written for this entry said `17 tests` and `handoff_lint` refused
+`HANDOFF.md:41` on the spot. The number was deleted rather than updated, per its own
+instruction.
+
+**`MIN_TESTS_ALL` 1094 → 1131**, with the instrument check the knob's provenance requires:
+at 1132, `tests-tile:1/4` fails with `FAIL: tests/ collects only 1131 test(s); the gate
+floor is 1132.` and `rc=1`; restored to 1131, which passes. Of the 37 raised, only 20 are
+this session's new tests — **17 were already unratcheted** on `3ac7fd2`, the third
+consecutive raise to find pre-existing headroom. Carried as a "Still owed" bullet.
+
+GATE: all ten phases green on this tree — `lean` holes=0 audits=587 pinned=587;
+conf 110/109/109/109/109 (546); tests 283/283/283/282 (1131). `FINAL_REVIEW.md`'s counts
+block regenerated for the floor raise (`tests/` collected 1111 → 1131).
+
+Still owed: nothing skipped.
+
+---
+
 ## 2026-09-10 — `TT-8` landed (fence-aware banner) and `TK53` closed: 15 appends dispositioned, 4 verdicts overturned
 
 rows: closed `TT-8`, closed `TK53`; dispositions logged on `TK3` `TK4` `TK6` `TK11` `TK15`

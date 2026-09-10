@@ -81,12 +81,22 @@ IVM delta processor.
     FAILED phase then looks like exit 0 — and if it is followed by `&& <next phase>`,
     the chain continues happily past the failure. Bit 2026-08-10 (a `4 failed` run
     reported exit 0), and again on 2026-08-11 and 2026-08-14. Run
-    `cmd > /tmp/p.log 2>&1; rc=$?`, branch on `$rc`, and **read the `PASSED` line**.
+    `cmd > "$(mktemp /tmp/gate-XXXXXX.log)" 2>&1; rc=$?`, branch on `$rc`, and **read the
+    `PASSED` line**.
     The 2026-09-08b variant runs the OTHER way — `EXIT=0` under a log ending `25 failed`
     — because looping phases in one command lets the harness kill the shell while its
     `pytest` child survives, and the orphan then writes the next phase's log. **One phase
     per command**; on any exit-code/log disagreement, check for a stray interpreter and
     re-run alone to a fresh log before believing either.
+    ⚠ **The 2026-09-10 variant needs neither a pipe nor an orphan: two runs and one
+    filename.** `EXIT=0` under a log ending `60 failed`, with no stray interpreter and no
+    loop — two overlapping runs both redirecting into the FIXED `/tmp/p.log` this file
+    used to prescribe, so the caller got the passing run's honest `rc` beside the failing
+    run's tail. **A fixed log path is a shared resource; use `mktemp`.** `verify.sh` now
+    takes an exclusive run lock (`scripts/gate_lock.py`) and a second concurrent run
+    refuses nonzero in under a second, so this cannot recur silently — but the same
+    reasoning applies to any command you run twice. Note what this one cost: it was filed
+    as a hole in `verify.sh`'s exit-code guard, and the guard was fine.
   * ⚠ **`HYPOTHESIS_SEED=N` does nothing** — hypothesis never reads that variable, so a
     "multi-seed sweep" written with it runs the SAME seed every time. Only
     `--hypothesis-seed=N` works; `tests/conftest.py` now refuses the env var outright.

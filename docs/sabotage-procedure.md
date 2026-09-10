@@ -640,22 +640,35 @@ goes in the test's docstring and the commit message, where review sees it.
 
 It also cannot turn coverage into proof. The generator-coverage leg reaches a large
 majority of pairwise cells with `UNACCOUNTED == set()` and no hand-written exemption list —
-and **roughly a quarter of the pair space is still unreached even at `deep`**. So read a
+and **a large minority of the pair space is still unreached even at `deep`**. So read a
 green gate as **"the instruments we have found nothing"**, never as "there is nothing".
 Publish the residue rather than rounding it away
 (`docs/design/generator-coverage/README.md` §6 is the model: a coverage design that claims
 completeness is the failure mode it was written to fix).
 
-But publishing a residue does not keep it *readable*, and this one has drifted (added
-2026-09-10, `TK44`). The figure in the paragraph above, the frozen design's own, and the
-gate's docstrings at `tests/test_generator_coverage.py:68` and `:428` are four statements of
-a single measurement — and those last two **contradict each other inside one module**, under
-identical wording ("unreached even at `deep`") with different values, as read on 2026-09-10.
-Nothing mechanical catches this: `scripts/handoff_lint.py::check_restated_counts` scans
-top-level `docs/` and `tasks/` markdown for restated corpus counts, so a percentage sitting
-in a `.py` docstring is outside its scope twice over. Take the residue from
-`tests/test_generator_coverage.py::test_report_cell_coverage` (run it with `-s`) together
-with the date you read it, never from prose. Note what this settles, though: a practice, not
+But publishing a residue does not keep it *readable*, and this one had drifted (found
+2026-09-10, `TK44`; fixed the same day, `GC-1`). The sentence above, the frozen design's
+own, and the gate's docstrings at `tests/test_generator_coverage.py:68` and `:428` were
+**four statements of one measurement, carrying four different values** — and those last two
+contradicted each other inside a single module, under identical wording ("unreached even at
+`deep`"). Note how ordinary the cause was: they measured different things (HIT-only vs
+HIT+REJ, `ci` vs `deep`, this tree vs the frozen prototype), so all four could be written
+in good faith and no two agreed. ⚠ **And the first attempt to WRITE THIS PARAGRAPH UP added
+a fifth wrong value** — the sentence above once read "roughly a quarter", a figure derived
+by pairing one instrument's floor with another's framing. A note about a drifting number is
+still prose, and prose is what drifts.
+
+All four are now deleted and point at the one home:
+`tests/test_generator_coverage.py::test_report_cell_coverage`. Run it with `-s` and take
+the residue together with the date you read it, never from prose.
+
+Nothing mechanical catches this class yet:
+`scripts/handoff_lint.py::check_restated_counts` scans top-level `docs/` and `tasks/`
+markdown for restated *census* counts (`N checks`, `N tests`, `N open tasks`), so a
+**percentage** sitting in a **`.py` docstring** is outside its scope on both axes. Widening
+it is open work in the tree (`GC-1`), and is not free: that check was landed only after a
+census showed it arrived red on six real lines and no legitimate ones, and a fourth pattern
+is required by its own contract to name the rot that motivated it. Note what this settles, though: a practice, not
 the question. Whether that UNKNOWN residue is worth *attacking* — or whether publishing it
 was always the whole intended answer — has never been decided, and that decision is open
 work living in the tree, not here.
