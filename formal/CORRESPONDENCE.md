@@ -1087,6 +1087,49 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   (`tests/snapshots/`, byte-identity for untainted compilation) — not by any
   theorem about the compiler.
 
+* **★ The DERIVED TTU THROUGH-SHAPE — Python bridges it from the CASCADE, and no Lean
+  fragment reaches it (added 2026-09-13, `P6` step 0).** A schema can declare a
+  star-tupleset through-shape whose through-*relation* is derived — `folder#approver`
+  a `but not`, with `doc#control := approver from parent` making `(folder, "approver")`
+  a declared through-shape. Python handles it: the delta processor writes the derived
+  public node through `index_v4/processor.py::DeltaProcessor._write_derived` →
+  `index_v4/wildcard.py::WildcardIndex.add_tuple`, which calls
+  `::WildcardIndex._ensure_bridges` on BOTH endpoints, so the bridge is built from the
+  cascade rather than from the raw write leg; retraction is
+  `index_v4/processor.py::DeltaProcessor._gc_public_node` →
+  `index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges`.
+
+  **No Lean fragment reaches the shape, and the reason is the taint filter, not a
+  restriction anyone wrote for this purpose.** `GraphIndex/RulesWrite.lean::schemaRewrites`
+  drops derived defs — the faithful mirror of `zanzibar_utils_v1.py::compile_ruleset`'s
+  `if key not in tainted` loop — and a TTU arm whose target is derived normally taints its
+  own owner key, because `Spec/Stratify.lean::exprRefs`'s `.ttu` case adds the target ref
+  via the tupleset's parent types. So the arm is never in `schemaRewrites`, and every
+  predicate quantified over it — `GraphIndex/RulesBareStar.lean::TtuStarFree`,
+  `GraphIndex/TtuStarWide.lean::TtuStarFreeW`,
+  `GraphIndex/ReconcileCorrect.lean::NoTtuTarget` — is **vacuous** there. Machine-checked
+  at the shape the 2026-09-12 probe measured:
+  `GraphIndex/TtuStarWide.lean::Zanzibar.RoutingArmWitness.no_rewrite_arms`,
+  `::Zanzibar.RoutingArmWitness.narrow_admits`,
+  `::Zanzibar.RoutingArmWitness.wide_admits_vacuously`, with
+  `::Zanzibar.RoutingArmWitness.outside_fragment` giving the store-independent kill
+  (`FullScope.lean::W4Fragment`'s `computedOrDirect` field refuses a derived `.ttu` def).
+
+  ⚠ **Two things this entry does NOT say.** (1) It does not say `term` is redundant:
+  `GraphIndex/TtuStarWide.lean::Zanzibar.TermNonvacuityWitness.term_not_vacuous` exhibits a
+  schema where the arm survives the filter with a derived target (an **undeclared** tupleset
+  relation, so `exprRefs` adds no target ref), and there `NoTtuTarget` is genuinely false.
+  (2) It does not say the shape is unreachable in Python — it is reachable, and covered
+  only by the differential matrix and the hypothesis campaign. For the standing goal that
+  the graph index answer exactly what the set engine answers, that is where an edge case
+  could still hide unproved; filed as task `P25`.
+
+  Consumer-side tool, so a later widening does not have to rediscover this:
+  `GraphIndex/TtuStarWide.lean::ttuStarFreeW_through_untainted` — under the `NoTtuTarget`
+  half of `FullScope.lean::W4Fragment`'s `term` field, a TTU arm's through-shape is
+  untainted at every object type, so `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset`
+  is only ever asked about a public (never leaf-minted) relation name.
+
 ### 7.4 Pre-existing entries (carried forward)
 
 * **~~`affectedKeys` omits the LeafFamily own-key branch~~ — RESOLVED 2026-07-20c.**

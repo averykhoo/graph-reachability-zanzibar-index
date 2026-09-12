@@ -30,6 +30,81 @@ from here.
 
 ---
 
+## 2026-09-13 — `P6` step 0 LANDED; the 2026-09-12b `term` reason was FALSE and the conclusion survives, stronger
+
+rows: `P6` (Log `2026-09-13`, brief set, stays `NOW`, now startable at step 1); `P25`
+(pointer comment — `CORRESPONDENCE.md` §7.3 now cites it by id). Nothing closed.
+
+task lint: clean (13 checks, 182 task file(s) parsed), 25 warning(s)
+read: board only
+
+Executed step 0 of the 2026-09-12b plan: the Wall-1 lemma, the witness pin, the
+`CORRESPONDENCE.md` §7 entry. All three landed, and the middle one landed **saying the
+opposite of what the plan told it to say**.
+
+**The correction, measured before anything was written.** 2026-09-12b recorded the kill
+condition as "the probe's `Sd` VIOLATES `W4Fragment.term`, because `("doc","control")` is a
+`.ttu "approver"` arm and `approver` is derived", and made that the basis for "the payoff is
+UNMEASURED, not failed". A `lake env lean` eval of the actual store says
+`htermB Sd Td = true` — **`Sd` satisfies `term`**. `NoTtuTarget` quantifies over
+`schemaRewrites`, which drops DERIVED defs (`GraphIndex/RulesWrite.lean::schemaRewrites`,
+mirroring `zanzibar_utils_v1.py::compile_ruleset`'s `if key not in tainted` loop), and the
+arm's own owner key is tainted too — `Spec/Stratify.lean::exprRefs`'s `.ttu` case adds the
+derived target ref via the tupleset's parent types. So the arm is never in `schemaRewrites`
+and `term` never sees it. Had the pin been written as instructed it would have reddened on
+first build.
+
+**The conclusion 2026-09-12b reached is nonetheless right, by a stronger route, and this is
+the part worth carrying forward.** `schemaRewrites Sd = []`, so at that store *both*
+`ttuStarFreeB` and `ttuStarFreeWB` are **vacuously true**: the widened predicate is not
+merely satisfiable there, it is **not engaged** there. The ROUTING arm was never a widening
+case, so "14 → 9 of 546 mismatches" was measured on a store part (ii) owes nothing to. And
+the fragment exclusion is store-INDEPENDENT rather than store-dependent: `Sd` fails
+`W4Fragment` at `computedOrDirect` (a derived key whose def is a `.ttu`), for every store.
+Pinned as `GraphIndex/TtuStarWide.lean::Zanzibar.RoutingArmWitness.outside_fragment`.
+
+**What is in the tree now** (all additive; no audited name re-opened, `TtuStarFreeW` and
+`ttuStarFreeWB` untouched, `W4Fragment.ttuStarFree` not flipped — that is step 4):
+`::ttuStarFreeW_through_untainted` (the Wall-1 lemma, 3 lines: under `term`'s `NoTtuTarget`
+half a TTU arm's through-shape is untainted at every object type, so
+`Schema.isSubjectWildcardUserset` is only ever asked about a public, never-leaf-minted
+relation name); `::Zanzibar.RoutingArmWitness` (10 pins, the corrected boundary);
+`::Zanzibar.TermNonvacuityWitness` (4 pins); the mutation-sweep table in the module
+docstring; and a `CORRESPONDENCE.md` §7.3 entry with 20 new anchors, all resolving.
+
+**`hterm` is non-vacuous — and that needed its own measurement.** M1 of the sweep shows the
+hypothesis is *referenced*; it does not show it *excludes* anything, and given how nearly
+`NoTtuTarget` follows from the taint fixpoint alone, a tautology dressed as a scope result
+was the live risk. An **undeclared tupleset relation** is the one route by which an arm
+survives the filter with a derived target (`exprRefs` adds no target ref when the lookup
+misses), and there `htermB Sund [] = false`. Pinned as
+`::Zanzibar.TermNonvacuityWitness.term_not_vacuous`.
+
+**The sweep's own instrument failed first, in the direction that looks like a finding.** A
+`decide` pin cannot fail by passing; its failure mode is asserting something true regardless
+of the witness. So the sweep mutates the WITNESS and demands a named red per pin. Its first
+run reported `RED: <unattributed>` for all six mutations — the error-location regex expected
+`…lean:N:C: error` while lake prints `error: …lean:N:C:` — and the "candidate inert pins"
+list was therefore the entire module, which reads exactly like a discovery. `M0` is now a
+permanent instrument control that flips one pin's own claim and requires the attribution to
+name it. Final sweep: 10 mutations, all 14 pins reddened by at least one, restore green.
+`M5` (star subject → concrete) is **INERT** and recorded as such in the docstring — the
+vacuity those pins assert holds for any store, so the star is there to match the probe's
+shape, not because a pin depends on it. `M7` needed a two-part mutation to redden
+`wide_admits_vacuously`, which is the honest sign that that pin's content is a conjunction.
+
+**New open question, unmeasured, filed on the row rather than answered.** `Sund` also fails
+`RewriteMatchDeclared`, which `FullScope.lean:1350` carries separately from `W4Fragment`. So
+`term`'s `NoTtuTarget` half is non-vacuous as a predicate but may be *implied* by the other
+admission carries inside the full chain. Nobody has measured that; if it is implied, step 4's
+flip has one fewer premise to justify. The docstring states the limit explicitly so the pin
+is not over-read.
+
+Still owed: `P6` steps 1–4 (step 1 is the zero-cone go/no-go, and its probe must report PER
+DOMAIN); the `term`-independence question above; re-size `P6` `M` → `L` at step 2.
+
+---
+
 ## 2026-09-12b — `P6` UNBLOCKED: `W4Fragment.term` already excludes the "scope defect"; both walls decided, plan on row
 
 rows: `P6` (Log `2026-09-12b`, summary/Traps/Read-first rewritten, brief set; stays `NOW`,
