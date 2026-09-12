@@ -484,14 +484,14 @@ stays open, residual `+1` per reconcile. Record: `history/PROOF_STATUS.md` 2026-
 Owed next: nothing on the flip itself. The T2a/`negEdgeFree` re-read is done and T2a did
 not widen — see the caveat at the top of this file and the scope carry below.
 
-**In flight — `ttuStarFree` (repo board rows `P6`, `P7`).** Part (i) landed and is inert;
-part (ii) is what materialises the edge; (iii) and (iv) follow.
-⚠ **This is NOT an optional widening.** Without the `ttuStarFree` clause, `graph_correct`
-and `backend_equivalence` are machine-checked FALSE, not merely unproven — the 2026-08-10
-attack-first kill. `W4Fragment.ttuStarFree` must stay unchanged until part (ii) is in.
-⚠ **And 2026-08-31b measured that Python does not enforce it either**: a probe wrote
-`folder:* parent doc:d1` onto a TTU tupleset and it was **ADMITTED**. So this clause is a
-live hole on both sides at once, not a formality awaiting paperwork.
+**In flight — `ttuStarFree` (tree rows `P6`, `P7`).** Part (i) landed and is inert. ⚠ **NOT
+optional:** without the clause `graph_correct`/`backend_equivalence` are machine-checked FALSE
+(2026-08-10 kill); `W4Fragment.ttuStarFree` stays unchanged until (ii) is in; Python does not
+enforce it either (2026-08-31b: `folder:* parent doc:d1` on a TTU tupleset **ADMITTED**).
+⚠ **2026-09-12: "(ii) materialises the edge" is KNOWN FALSE as stated, and (iv)'s premise is
+what is in question** — `TtuStarFreeW` (`TtuStarWide.lean:72-76`) lacks an `isDerived = false`
+conjunct, so it admits a DERIVED through-shape with NO bridgeable leaf-routed node; the remove
+leg cannot retract a bridge either. Blocked on a user scope call: `task.py show P6` + `formal/probes/p6_inbridge_stability_2026-09-12.lean`.
 
 **Scope honesty — the `W4Fragment` field classification (2026-08-31b).** `graph_correct`'s
 scope is exactly `W4Fragment`, and its ten fields now carry a gated, hand-maintained

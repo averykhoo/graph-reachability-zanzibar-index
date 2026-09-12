@@ -30,6 +30,119 @@ from here.
 
 ---
 
+## 2026-09-12 — `P6` is BLOCKED, not expensive: `TtuStarFreeW` admits a through-shape no routing can bridge
+
+rows: `P6` (two `2026-09-12` Log entries; **not** re-ranked — it stays `NOW`, still a
+user-owned call). Nothing closed. New tracked file:
+[`formal/probes/p6_inbridge_stability_2026-09-12.lean`](../../formal/probes/p6_inbridge_stability_2026-09-12.lean).
+
+task lint: clean (13 checks, 181 task file(s) parsed), 24 warning(s)
+read: board + note
+
+User asked what was next, then whether `P6` fits one session, then to attempt it with
+`ultracode` and to split it if completion failed. Answer to the sizing question was **no**;
+the attempt then found something better than a size — **a scope defect that makes increment B
+impossible as specified, rather than expensive.** Detail lives on the `P6` row
+(`python scripts/task.py show P6`), which is the sole authority on open work; this entry is
+the trace and the method note.
+
+**The finding.** `TtuStarFreeW` (`GraphIndex/TtuStarWide.lean:72-76`) requires only
+`S.isSubjectWildcardUserset t.subject.type tr = true` — **no `isDerived … = false`
+conjunct** — so it admits stores whose TTU through-shape is a *derived* relation. At a derived
+through-shape there is no node on the leaf-routed write list for `ensureInBridges` to fire on,
+because `isStarTuplesetThrough` and disjunct (a) both scan `S.defs` and a minted leaf
+`<R>.<i>` is not a declared shape. The probe measured it rather than arguing it:
+`leafBridged := false`, `bridgesOnLeafRouted := 0`, `bridgesOnPublicKeyed := 1`, against
+`legEdgesIntoLeaf := 1` / `legEdgesIntoPublic := 0`. The only bridgeable node is the **public**
+one, which is exactly what `P6`'s standing constraint forbids. **So part (ii) cannot inhabit
+the predicate part (iv) already landed and audit-pinned** — and (iv) was scheduled on
+*decidability* alone, which is the only question anyone asked of it. The payoff criterion
+failed too: bridging moves the graph-vs-`sem` grid from 14 mismatches to 9 of 546, i.e.
+`bridgedAgree := false`. Restoring that agreement is the whole purpose of increment B.
+
+**Second, independent blocker.** The write leg would mint an edge the remove leg *provably
+cannot retract* (`objNode` yields only `Variant.wAll`/`plain`, `State.lean:126-128`, while
+`wAnyNode` is `Variant.wAny`, `:122`, so no bridge pair is ever an `edgeOfTuple` image), there
+is **zero** bridge-retraction machinery tree-wide (grepped six name variants: only an unrelated
+sabotage pin), and the obvious guard repair is the shape `RemoveOccCount.lean:178-194` refuses
+by name — "a theorem rescued by making its counterexample inadmissible". Both walls need a
+**human decision**, so neither was taken.
+
+**It does not split, and the boundary argument is where the naive answer fails.** Every
+candidate boundary either leaves the bridge un-called — a fourth repeat of part (i)'s
+inertness, with `W4Fragment.ttuStarFree` still uninhabited — or mints the edge and takes the
+whole 42-module cone at once. "Cone 0 ⇒ gate green at the boundary" is **false here**:
+`statement_pin.py::lean_files` is `LEAN_ROOT.rglob("*.lean")` and consults imports *never*, so
+a new decl adds a pin row at import-cone 0; `doc_counts --check` runs inside the `lean` phase
+(`formal/verify.sh:935`); and `TtuStarFree` sits in `formal/headline_statements.txt:44` inside
+`W4WitnessDirect.fragment`, so widening it reds the headline pin as well.
+
+**Method, and the part worth reusing.** Eleven agents: four read-only (spec / splittability /
+census / probe design), **one serial** Lean runner, five adversarial skeptics on distinct
+lenses, one synthesis. Two constraints made it safe on a shared laptop: no agent could run
+`lake build` or `verify.sh` (one tree, serial builds), and **no worktrees** — a
+`git worktree remove --force` once recursed through a `.lake/packages` junction and gutted the
+main tree's mathlib. The probe is zero-cone *by construction* because `formal/probes/` sits
+outside the lake package and `verify.sh` never reads it (grepped).
+**All five skeptics refuted something.** They were reconciled, not averaged — and that is what
+earned the session its result, twice over:
+
+* ⚠ **A subagent report retired a VALID trap, and first-hand checking caught it.** The
+  synthesis claimed "`RulesComplete.lean:91` / `ReachedByRulesAdmitted.step` does not exist …
+  there is no `step` constructor", and elsewhere called the constructor `write`. **Both wrong.**
+  The inductive is `RulesComplete.lean:111`, the constructor **is** `step` at `:113`, `hadm` is
+  its field at `:115`, and it is used at 8+ sites. Only the line number `91` drifted. Had that
+  been believed, the `FoldAdmits` three-stay-sites trap would have been deleted as
+  unenforceable. This is the standing rule earning its keep: a subagent's report is evidence,
+  not a finding.
+* ⚠ **Two of my own figures from earlier the same day were wrong, and both were counting-unit
+  failures** — the exact class this repo has burned four sessions on. (1) I wrote that the
+  row's "38-module cone" was "an undercount, retired". It is **reconcilable**: union of the six
+  reverse cones excluding the root aggregator = **42**, four of the six targets are themselves
+  members, so union-minus-targets = **38** and union-∪-targets = **44**. One graph, three
+  honest numbers. (2) I wrote "23 theorems / ~1,050 lines / 3 files" for the at-risk stability
+  surface; the enumeration summed to **22**, and it had dropped the remove-leg duals in tiers 2
+  and 3. First-hand recount under a stated unit: `CascadeStable` 10, `CascadeStrataSettle` 18,
+  `CascadeSettle` 1 = **29 declarations**.
+
+**A tier-2 instrument is owed, and the probe says so about itself.** `guardPre := false` and
+`guardPost := false` in **all eight arms including BASE and NULL**, so no arm ever satisfied
+the tier-2 premises and tier 2 is **undecided — zero information**, not green and not red.
+Relatedly, do not read arm B-SUB-L's `verdict := "GREEN"` as "logging the bridge fixes it":
+four of `verdictOf`'s six conjuncts quantify over unmapped keys only and the bridge mapped 3
+of 4, so the green is bought by a ~75% collapse of the instrument's domain (`reachPairs`
+1152 → 288, `guardPairs` 168 → 42) with `reachStableAll := false` — the probe's own documented
+vacuity signature — ignored by the verdict. Tier 1, by contrast, is a solid negative:
+`hunmapped` genuinely holds at a subject-endpoint bridge and the statements still go **FALSE**.
+
+**Still owed:**
+
+- **The Wall-1 decision is open and belongs to the user** — narrow `TtuStarFreeW` to untainted
+  through-shapes (cheapest; re-opens four audited names, reds `[4b]`/`[4c]`/`[4e]`; the three
+  `WideWitness` pins survive because `SwT`'s shape is `.direct`), model the entity-middle half
+  (a larger project than `P6`; `CORRESPONDENCE.md:964-973` records it as deliberately
+  unmodelled), or teach `isSubjectWildcardUserset` minted leaves (`UsStarWrite.lean:106-109`
+  warns it breaks an audited lemma and a constructor field). Wall 2 needs a second decision:
+  bridge-GC in the Lean model, or a ref-counted Python presence-guard.
+- **A tier-2 stability instrument that actually engages its premises**, replacing the arms that
+  returned zero information. Any replacement must gate its verdict on the unmapped-key count
+  and must read `reachStableAll`, because a bridge both moves reachability and adds the key —
+  one event, both effects — which is how this probe went vacuous at mapped keys.
+- **The `two_stratum_cascade` multiplicity re-measure** (expect `1…5`) before any golden is
+  regenerated, because a *logged* bridge adds frontier rows (`ckeys := 8`, 4 distinct).
+  `affectedKeys` itself needs no code edit — verified: `Cascade.lean:542` guards the own-key
+  branch on `d.node.name ≠ STAR`, `:548` skips `v.name = STAR` in fan-out.
+- **No `PROOF_STATUS.md` entry was written** — deliberate, to avoid a third copy of one
+  statement. The formal entry point instead carries a *pointer*: `formal/HANDOFF.md`'s
+  "In flight — `ttuStarFree`" block now names the scope defect and points at the row and the
+  probe. If a later session wants the formal ledger to carry the detail itself, that is an
+  open choice, not an oversight.
+- Unverified and flagged as such on the row: the def-pin closure simulation (242 → 243), live
+  `doc_counts` values, `TtuStarWide`'s cone of 1, and the `statement_pin.py::_refs` suffix
+  naming trap (mechanism read, not simulated).
+
+---
+
 ## 2026-09-10b — `GL-1`: the gate takes a run lock; the "failed successfully" report was two runs, not a broken guard
 
 rows: created and closed `GL-1`; created `GC-1` (open). Nothing re-ranked; `P6` stays
