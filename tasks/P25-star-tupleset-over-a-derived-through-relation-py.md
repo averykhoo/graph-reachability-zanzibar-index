@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-12b
-moved: 2026-09-12b
-updated: 2026-09-12b
+moved: 2026-09-13
+updated: 2026-09-13
 closed:
 ---
 
@@ -71,3 +71,7 @@ one: the 2026-08-20 census found `bridged_in_shapes` empty on all corpus schemas
 - `formal/CORRESPONDENCE.md` sec 7 (where the boundary gets recorded at `P6` step 0).
 
 ## Log
+
+### 2026-09-13
+
+Pointer only, nothing changed. `formal/CORRESPONDENCE.md` §7.3 now carries the derived-TTU-through-shape boundary entry and cites this row BY ID as the place the Python-only coverage is tracked (anchored to `DeltaProcessor._write_derived` -> `WildcardIndex.add_tuple` -> `_ensure_bridges`, retraction `_gc_public_node` -> `_maybe_remove_bridges`). Two facts measured 2026-09-13 that sharpen this row before anyone starts it: (1) the fragment excludes the shape because `schemaRewrites` DROPS DERIVED DEFS, not because of `W4Fragment.term` -- at such a store `schemaRewrites = []` and every TTU-star predicate is VACUOUS, pinned by `GraphIndex/TtuStarWide.lean::Zanzibar.RoutingArmWitness`; (2) so a corpus for this row must assert its own non-vacuity, or it will pass by measuring nothing. See `P6` Log `2026-09-13`.

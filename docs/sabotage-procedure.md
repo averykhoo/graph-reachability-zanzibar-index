@@ -340,6 +340,34 @@ The sweep script itself is throwaway and gitignored — but its *table* is evide
 goes in the test module's docstring, where the next reader is already looking. See
 `tests/test_handoff_lint_count_guard.py`.
 
+**★ A sweep needs an `M0` — a control mutation whose expected red is NAMED IN ADVANCE
+(added 2026-09-13, `P6` step 0).** The sweep's output has two failure modes and they look
+identical: "no test reddened, because the pin is inert" and "no test reddened, because the
+attribution is broken". On 2026-09-13 a sweep over new Lean `decide` pins reported
+`RED: <unattributed>` for all six mutations — the error-location regex expected
+`…lean:N:C: error` while lake prints `error: …lean:N:C:` — so the "candidate inert pins"
+list came back as *the entire module*. A broken harness had produced the most alarming
+possible finding, and nothing in the output said so.
+
+The fix is one extra mutation, run first: **break a pin's own claim and require the sweep to
+attribute the red to that pin by name.** If M0 does not name its own pin, every other row in
+the table is uninterpretable and the run is void. It costs one build and it converts the
+sweep from a thing you read hopefully into a thing that can fail loudly. This is
+§"Sabotage your instrument too" specialised to sweeps, and it is cheap enough to be
+mandatory.
+
+**Sweeping a `decide` pin is not the same as sweeping a test.** A `decide` pin cannot fail by
+passing — it either proves the proposition or reds. Its failure mode is **asserting something
+true regardless of the witness**: an inert pin that reads like evidence. So mutate the
+*witness*, not the pin, and require a named red per pin. Two results from that run worth
+transferring:
+* a pin that only reddens under a **two-part** mutation has a conjunction for its content,
+  and should say so (there, "the widening admits *and* it is not engaged");
+* a mutation that reddens nothing can still be **honest** — two pins there assert a vacuity
+  that holds for any store, so the store's shape genuinely cannot matter. Record it as INERT
+  with the reason, because the alternative is a reader inferring that the unused part of the
+  witness is load-bearing.
+
 ### A check that PARSES before it compares has two halves, and the easy sabotage tests one (2026-08-24c)
 
 Most checks in this repo are *extract, then compare*. A sabotage input chosen in a shape

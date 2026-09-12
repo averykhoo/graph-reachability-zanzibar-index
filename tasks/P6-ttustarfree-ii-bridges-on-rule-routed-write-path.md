@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: DECIDED 2026-09-12b: Wall 1 by lemma under W4Fragment.term; Wall 2 = Lean releaseInBridges, LOGGED. Start at step 0
+brief: Step 0 LANDED 2026-09-13; the 2026-09-12b `term` reason was FALSE -- exclusion is via the taint filter. Start at step 1
 pri: NOW
 size: M
 deps: []
@@ -11,22 +11,27 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-12b
-updated: 2026-09-12b
+moved: 2026-09-13
+updated: 2026-09-13
 closed:
 ---
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
 predicate is actually inhabited.
 
-**STARTABLE as of 2026-09-12b — both walls are DECIDED and the plan is the Log entry of
-that key.** Wall 1 (the "scope defect") dissolved on a first-hand read: `W4Fragment.term`
-(`FullScope.lean:299`) already forbids a derived TTU through-relation inside the fragment,
-and the probe store that exhibited the defect (`Sd`) violates `term`. Resolution: a lemma
-under `term` plus a `decide` pin that `Sd` is fragment-rejected — no edit to `TtuStarFreeW`,
-no audited name re-opened. Wall 2: the remove leg gets a NEW `releaseInBridges` mirroring
-Python's `_maybe_remove_bridges`; the bridge is LOGGED on both legs because Python's is.
-Landing order is steps 0–4 in that Log entry; step 0 is one session and additive, step 1 is
+**STEP 0 LANDED 2026-09-13; START AT STEP 1.** Both walls were DECIDED on 2026-09-12b and
+the plan is that key's Log entry; step 0 executed it, and **corrected its reason**. Wall 1
+(the "scope defect") is dissolved — but NOT by `W4Fragment.term`, which the probe store
+`Sd` **satisfies** (`htermB Sd Td = true`, measured). The exclusion is the TAINT FILTER:
+`schemaRewrites` drops derived defs, the arm's own owner key is tainted via `exprRefs`'s
+`.ttu` case, so at such a store `schemaRewrites = []` and every TTU-star predicate —
+narrow and widened alike — is **VACUOUS**. `Sd` leaves `W4Fragment` at `computedOrDirect`,
+for EVERY store. Landed: `TtuStarWide.lean::ttuStarFreeW_through_untainted` (the Wall-1
+lemma, consumer-side) plus 14 `decide` pins in `::Zanzibar.RoutingArmWitness` /
+`::Zanzibar.TermNonvacuityWitness`, a mutation-sweep table, and a `CORRESPONDENCE.md` §7.3
+entry. No edit to `TtuStarFreeW`, no audited name re-opened. Wall 2 is unchanged: the remove
+leg gets a NEW `releaseInBridges` mirroring Python's `_maybe_remove_bridges`, LOGGED on both
+legs because Python's is. Remaining order is steps 1–4 in the `2026-09-12b` entry; step 1 is
 the zero-cone go/no-go probe, step 3 is the cone payment (`P3`-class, several sessions).
 Re-size `M` → `L` at step 2.
 
@@ -48,12 +53,20 @@ multiplicities (expect `1…5`) before regenerating a golden (PROOF_STATUS `2026
 
 ## Traps
 
-⚠ **The 2026-09-12 "scope defect" was measured OUTSIDE the fragment — do not re-derive it.**
-The ROUTING and REPAIR arms of `formal/probes/p6_inbridge_stability_2026-09-12.lean` run on
-`Sd` (`:902-906`), whose `doc#control := approver from parent` has a DERIVED through-relation;
-`W4Fragment.term` (`FullScope.lean:299`, via `NoTtuTarget`, `ReconcileCorrect.lean:616`)
-rejects exactly that. So "`TtuStarFreeW` admits a shape no routing can bridge" is true of the
-standalone predicate and irrelevant to the fragment it is a field of. The in-scope payoff
+⚠ **The 2026-09-12 "scope defect" was measured OUTSIDE the fragment — do not re-derive it,
+and do not re-derive the WRONG REASON for it either.** The ROUTING and REPAIR arms of
+`formal/probes/p6_inbridge_stability_2026-09-12.lean` run on `Sd` (`:902-906`), whose
+`doc#control := approver from parent` has a DERIVED through-relation. **2026-09-12b said
+`W4Fragment.term` rejects that store and 2026-09-13 MEASURED that it does not**
+(`htermB Sd Td = true`): `NoTtuTarget` quantifies over `schemaRewrites`, which DROPS DERIVED
+DEFS, and the arm's own owner key `("doc","control")` is tainted too — `exprRefs`'s `.ttu`
+case adds the derived target ref via the tupleset's parent types — so the arm never reaches
+the quantifier. What actually holds is stronger: `schemaRewrites Sd = []`, so BOTH
+`ttuStarFreeB` and `ttuStarFreeWB` are **vacuously true** there (the widening is not merely
+satisfied, it is not ENGAGED), and `Sd` fails `W4Fragment.computedOrDirect` for EVERY store.
+All of it is pinned in `GraphIndex/TtuStarWide.lean::Zanzibar.RoutingArmWitness` — read those
+pins rather than re-arguing this. So "`TtuStarFreeW` admits a shape no routing can bridge" is
+true of the standalone predicate and irrelevant to the fragment it is a field of. The in-scope payoff
 number (mismatches after a LOGGED leaf-routed bridge on an UNTAINTED through-shape) has NOT
 been measured — that is plan step 1, and it is the go/no-go. Likewise arm B-SUB's tier-1
 FALSE is the UNLOGGED bridge; Python's bridge is logged (`core.py:1101-1107`), and the
@@ -96,7 +109,8 @@ materialises the edge, and the rest of the leg is inert until it lands.
 ## Read first
 
 - [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
-- **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. Start at step 0.
+- **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. **Start at step 1** — step 0 landed 2026-09-13, whose Log entry CORRECTS 2026-09-12b's Wall-1 reason; read the newer entry first.
+- `formal/lean/ZanzibarProofs/GraphIndex/TtuStarWide.lean` — what step 0 put there: `::ttuStarFreeW_through_untainted` (the consumer-side Wall-1 lemma), `::Zanzibar.RoutingArmWitness` (which stores are OUT of scope, and why — `no_rewrite_arms` is the load-bearing pin), `::Zanzibar.TermNonvacuityWitness` (that `term` excludes anything at all), and the mutation-sweep table. ⚠ **Step 1's probe must assert per-arm non-vacuity**: an arm measured where `schemaRewrites = []` is measuring nothing, which is exactly how the 2026-09-12 ROUTING arm produced a number that meant nothing.
 - Python's side of the bridge, read before modelling it: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` (write), `::_maybe_remove_bridges` (retract), `index_v4/core.py::ReachabilityIndex.add_edge_by_id` (why the bridge is logged), `index_v4/processor.py::DeltaProcessor._write_derived` (the out-of-fragment derived case).
 - board pointer: `ttuStarFree` **(ii)** — bridges on the rule-routed write path. **Promoted `NEXT` → `NOW` MECHANICALLY on 2026-09-05b** — `P3` LANDED (write leg now folds `rewriteClosureL S (rawWriteTuples S t)`, `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean:190-191`), so "NOT parallel-safe with `P3`" is moot and **increment B must bridge on the LEAF-routed list, not the public one**. Fresh evidence 2026-08-31b that this is a live hole: `ttuStarFree` classifies **SILENT** in the `W4Fragment` scope pin (`formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`)
 
@@ -576,3 +590,111 @@ or add a targeted conformance corpus with a star tupleset over a derived relatio
 id to be assigned at filing.
 
 Not re-ranked; stays `NOW`; now STARTABLE at step 0.
+
+### 2026-09-13
+
+STEP 0 LANDED (Lean additive, gate `lean` green). The Wall-1 lemma, the witness pin, the
+`CORRESPONDENCE.md` §7.3 entry. **Step 0's middle deliverable landed saying the OPPOSITE of
+what the 2026-09-12b plan specified, and the plan's conclusion survives it — stronger.**
+
+**CORRECTION to the 2026-09-12b entry, measured first-hand before anything was written.**
+That entry recorded the kill condition as "the probe's `Sd` VIOLATES `W4Fragment.term`,
+because `("doc","control")` is a `.ttu "approver"` arm and `approver` is derived", and made
+it the basis of "the payoff is UNMEASURED, not failed". **It is false.** Measured by
+`lake env lean` on the actual store, verbatim:
+
+```text
+("taintedKeys Sd", [("folder", "approver"), ("doc", "control")])
+("isDerived (folder,approver) / (doc,control) / (doc,parent) / (folder,blocked)", true, true, false, false)
+("schemaRewrites Sd", [])
+("noTtuTargetB Sd approver / control", true, true)
+("htermB Sd Td / Sd TdStar / Sd []", true, true, true)
+("isStarTuplesetThrough (folder,approver)", true)
+("isSubjectWildcardUserset (folder,approver)", true)
+("ttuStarFreeB / ttuStarFreeWB on TdStar", true, true)
+("lookup (doc,control)", some (Zanzibar.Expr.ttu "approver" "parent"))
+```
+
+`NoTtuTarget` quantifies over `schemaRewrites`, and `schemaRewrites` DROPS DERIVED DEFS
+(`GraphIndex/RulesWrite.lean::schemaRewrites`, the mirror of
+`zanzibar_utils_v1.py::compile_ruleset`'s `if key not in tainted` loop). The arm's own owner
+key `("doc","control")` is tainted too, because `Spec/Stratify.lean::exprRefs`'s `.ttu` case
+adds the derived target ref `("folder","approver")` via the tupleset's parent types. So the
+arm never reaches `schemaRewrites` and `term` never sees it. Written as specified, the pin
+would have reddened on first build.
+
+**The conclusion is right by a stronger route — carry THIS forward, not the `term` reason.**
+`schemaRewrites Sd = []`, so at that store BOTH `ttuStarFreeB` and `ttuStarFreeWB` are
+**vacuously true**: the widened predicate is not merely satisfiable there, it is **not
+ENGAGED** there. The 2026-09-12 ROUTING arm was never a widening case at all, so the
+"14 -> 9 of 546 mismatches" payoff failure was measured on a store increment B owes nothing
+to. And the exclusion is store-INDEPENDENT where the `term` reason would have been
+store-dependent: `Sd` leaves `W4Fragment` at `computedOrDirect` (a derived key whose
+definition is a `.ttu`; `ReconcileCorrect.lean::ComputedOrDirect` is `False` there), for
+EVERY store.
+
+**In the tree now** — all additive; `TtuStarFreeW` / `ttuStarFreeWB` untouched, zero audited
+names re-opened, `W4Fragment.ttuStarFree` NOT flipped (that is step 4):
+* `GraphIndex/TtuStarWide.lean::ttuStarFreeW_through_untainted` — the Wall-1 lemma, 3 lines.
+  Under `term`'s `NoTtuTarget` half, a TTU arm's through-shape `(dt, tr)` is untainted at
+  every object type, so `Schema.isSubjectWildcardUserset` is only ever asked about a PUBLIC
+  (never leaf-minted) relation name. `t ∈ T`, `subject.name = STAR` and the match are
+  deliberately NOT binders — the fact is about the schema alone, and the docstring says so.
+* `::Zanzibar.RoutingArmWitness` — 10 pins: the corrected boundary, including
+  `no_rewrite_arms`, `narrow_admits`, `wide_admits_vacuously`, `term_holds` (the pin that
+  refutes 2026-09-12b) and `outside_fragment` (the store-independent kill).
+* `::Zanzibar.TermNonvacuityWitness` — 4 pins, see below.
+* The mutation-sweep table, in the module docstring.
+* `CORRESPONDENCE.md` §7.3: the derived TTU through-shape as a declared fragment boundary,
+  with Python's cascade-side coverage anchored. 20 new anchors, all resolving (612/612).
+
+**`hterm` is NON-VACUOUS, and that needed its own measurement.** The sweep's M1 shows the
+hypothesis is *referenced*; it does not show it *excludes* anything, and since `NoTtuTarget`
+very nearly follows from the taint fixpoint alone, "a tautology dressed as a scope result"
+was the live risk. The one route by which an arm survives the filter with a derived target is
+an **UNDECLARED tupleset relation** — `exprRefs` adds no target ref when the lookup misses,
+so the owner stays untainted. Measured 2026-09-13:
+
+```text
+("taintedKeys Sund", [("folder", "approver")])
+("isDerived (folder,approver) / (doc,control)", true, false)
+("schemaRewrites Sund",
+ [{ objectType := "doc", matchRel := "parent", outRel := "control", kind := Zanzibar.RuleKind.ttu "approver" }])
+("noTtuTargetB Sund approver  -- FALSE here means term is NOT vacuous", false)
+("htermB Sund []", false)
+("rewriteMatchDeclaredB? see below", none)
+```
+
+**MUTATION SWEEP (`docs/sabotage-procedure.md` "Sweep the TEST MODULE with mutations").** A
+`decide` pin cannot fail by passing; its failure mode is asserting something true regardless
+of the witness. So the sweep mutates the WITNESS one plausible edit at a time and requires a
+NAMED red per pin. 10 mutations, all 14 pins reddened by at least one, restore green; the
+table is in the module docstring.
+* ⚠ **The instrument failed first, in the direction that looks like a finding.** Run 1
+  reported `RED: <unattributed>` for all six mutations, because the error-location regex
+  expected `...lean:N:C: error` while lake prints `error: ...lean:N:C:`. The "candidate inert
+  pins" list was then the whole module — which reads exactly like a discovery. `M0` is now a
+  permanent instrument control: it flips one pin's own claim and the sweep must attribute the
+  red to that pin by name.
+* `M5` (star subject -> concrete) is **INERT**, and that is honest rather than a hole: the
+  vacuity `narrow_admits` / `wide_admits_vacuously` assert holds for ANY store, because
+  `no_rewrite_arms` is what carries it. Said out loud in the docstring so the next reader
+  does not take the star subject for load-bearing.
+* `M7` needed a TWO-part mutation (surviving arm + undeclared through-shape) to redden
+  `wide_admits_vacuously` — the honest sign that that pin's content is a conjunction.
+
+**NEW OPEN QUESTION, unmeasured, recorded rather than answered.** `Sund` also fails
+`RewriteMatchDeclared`, which `FullScope.lean:1350` carries SEPARATELY from `W4Fragment`. So
+`term`'s `NoTtuTarget` half is non-vacuous as a predicate but may be *implied* by the other
+admission carries inside the full theorem chain. If it is, step 4's flip has one fewer
+premise to justify and the Wall-1 lemma becomes hypothesis-free. Cheap to settle (does any
+chain-level theorem assume declared tuplesets?); nobody has. The `TermNonvacuityWitness`
+docstring states this limit explicitly so the pin is not over-read.
+
+**NEXT: step 1**, unchanged from the 2026-09-12b plan and now unblocked — the zero-cone
+go/no-go probe, re-aimed at the IN-FRAGMENT store (`WideWitness.SwT` is exactly that shape:
+untainted `folder#viewer`, arm present, narrow rejects / wide admits). Its verdict function
+must report PER DOMAIN. Note for that probe: `RoutingArmWitness` is now the machine-checked
+statement of which stores are OUT of scope, so an arm measured on a store where
+`schemaRewrites = []` is measuring nothing — check `no_rewrite_arms`-style non-vacuity per
+arm before reading any mismatch count.
