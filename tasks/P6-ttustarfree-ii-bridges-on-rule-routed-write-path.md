@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: P3 LANDED: increment B bridges on the LEAF-routed list (rawWriteTuples), never the public name; 38-cone is pre-flip
+brief: DECIDED 2026-09-12b: Wall 1 by lemma under W4Fragment.term; Wall 2 = Lean releaseInBridges, LOGGED. Start at step 0
 pri: NOW
 size: M
 deps: []
@@ -11,24 +11,36 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-12
-updated: 2026-09-12
+moved: 2026-09-12b
+updated: 2026-09-12b
 closed:
 ---
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
 predicate is actually inhabited.
 
-**`NOW` as of 2026-09-05b, by mechanism not by judgement**: `P3` landed and closed, this
-was the top `NEXT` row, and its only blocker was the textual collision recorded below — so
-it moved up. **Re-rank freely.** What `P3` changed for this item: the write leg is no longer
+**STARTABLE as of 2026-09-12b — both walls are DECIDED and the plan is the Log entry of
+that key.** Wall 1 (the "scope defect") dissolved on a first-hand read: `W4Fragment.term`
+(`FullScope.lean:299`) already forbids a derived TTU through-relation inside the fragment,
+and the probe store that exhibited the defect (`Sd`) violates `term`. Resolution: a lemma
+under `term` plus a `decide` pin that `Sd` is fragment-rejected — no edit to `TtuStarFreeW`,
+no audited name re-opened. Wall 2: the remove leg gets a NEW `releaseInBridges` mirroring
+Python's `_maybe_remove_bridges`; the bridge is LOGGED on both legs because Python's is.
+Landing order is steps 0–4 in that Log entry; step 0 is one session and additive, step 1 is
+the zero-cone go/no-go probe, step 3 is the cone payment (`P3`-class, several sessions).
+Re-size `M` → `L` at step 2.
+
+What `P3` changed for this item: the write leg is no longer
 `writeLoggedOne` over the public closure — `GraphState.writeLoggedRules` folds
 `rewriteClosureL S (rawWriteTuples S t)` (`Cascade.lean:190-191`), the remove leg folds the
 SAME list (`:340-341`), and `affectedKeys` dirties the PUBLIC key through `publicOfLeaf`
 (`:542-546`). **Increment B must bridge on that leaf-routed list**; a bridge keyed on the
 public relation name would land on a node the write leg no longer touches — the same
 leg-asymmetry class the kernel refuted in `P3`'s first attempt, where a write-then-remove
-left a ghost grant (PROOF_STATUS `2026-09-05b` §2). Also inherited from `P3`: the dirty-key
+left a ghost grant (PROOF_STATUS `2026-09-05b` §3, `:392-411` — the row said §2 until
+2026-09-12b; §2 is the false-headline finding). Inside the fragment the leaf-routed list at
+an untainted through-shape IS the public node, so the constraint and the bridge target
+coincide there. Also inherited from `P3`: the dirty-key
 list `cascadeKeysAbove` and the enum candidates `enumJob2(D).cands` are `.eraseDups` sets
 (membership via `mem_cascadeKeys_iff_above` / `List.mem_eraseDups`) — any increment
 touching `affectedKeys` or the candidate lists re-measures `two_stratum_cascade`'s
@@ -36,11 +48,25 @@ multiplicities (expect `1…5`) before regenerating a golden (PROOF_STATUS `2026
 
 ## Traps
 
+⚠ **The 2026-09-12 "scope defect" was measured OUTSIDE the fragment — do not re-derive it.**
+The ROUTING and REPAIR arms of `formal/probes/p6_inbridge_stability_2026-09-12.lean` run on
+`Sd` (`:902-906`), whose `doc#control := approver from parent` has a DERIVED through-relation;
+`W4Fragment.term` (`FullScope.lean:299`, via `NoTtuTarget`, `ReconcileCorrect.lean:616`)
+rejects exactly that. So "`TtuStarFreeW` admits a shape no routing can bridge" is true of the
+standalone predicate and irrelevant to the fragment it is a field of. The in-scope payoff
+number (mismatches after a LOGGED leaf-routed bridge on an UNTAINTED through-shape) has NOT
+been measured — that is plan step 1, and it is the go/no-go. Likewise arm B-SUB's tier-1
+FALSE is the UNLOGGED bridge; Python's bridge is logged (`core.py:1101-1107`), and the
+logged variant makes `writeLeg_reach_stable`'s `hunmapped` premise exclude the bridged key by
+design (`CascadeStable.lean:367` quantifies over the POST-write `cascadeKeys`), so read
+B-SUB-L's shrunken domain as the premise working, not as vacuity — and build the per-domain
+instrument before believing either reading.
+
 ⚠ **`P3` LANDED 2026-09-05b, so "NOT parallel-safe with `P3`" is MOOT** — the collision
 below is kept as the record of why the two could not run concurrently, not as a live
-constraint. The "38-module cone" figure in it is **pre-flip and unreproduced** (the
-2026-08-30c Log entry already flagged its lineage as a census rooted at the wrong module);
-re-measure with a probe wave before quoting it. The live constraint now is the one above:
+constraint. Its "38-module cone" is one of THREE honest numbers for one graph, measured
+2026-09-12 (union of the six reverse cones excl. root aggregator `42`; minus the six targets
+`38`; with them `44`) — state the unit. The live constraint now is the one above:
 **bridge on the LEAF-routed list (`rawWriteTuples`), never on the public relation name.**
 
 ⚠ **Historical (superseded by `P3` landing): "It can run in parallel with `P3`" was WRONG,
@@ -70,6 +96,8 @@ materialises the edge, and the rest of the leg is inert until it lands.
 ## Read first
 
 - [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
+- **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. Start at step 0.
+- Python's side of the bridge, read before modelling it: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` (write), `::_maybe_remove_bridges` (retract), `index_v4/core.py::ReachabilityIndex.add_edge_by_id` (why the bridge is logged), `index_v4/processor.py::DeltaProcessor._write_derived` (the out-of-fragment derived case).
 - board pointer: `ttuStarFree` **(ii)** — bridges on the rule-routed write path. **Promoted `NEXT` → `NOW` MECHANICALLY on 2026-09-05b** — `P3` LANDED (write leg now folds `rewriteClosureL S (rawWriteTuples S t)`, `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean:190-191`), so "NOT parallel-safe with `P3`" is moot and **increment B must bridge on the LEAF-routed list, not the public one**. Fresh evidence 2026-08-31b that this is a live hole: `ttuStarFree` classifies **SILENT** in the `W4Fragment` scope pin (`formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`)
 
 `formal/CORRESPONDENCE.md` §7 (`ZT-P5-NEW`);
@@ -408,3 +436,143 @@ REJECTS it -- that pin is the red-to-green evidence and the thing that makes K1
 un-forgettable. Do NOT touch `W4Fragment.ttuStarFree` (`FullScope.lean:298`, structure `:280`):
 widening it without materialising the edge IS the machine-checked-FALSE state. Then stop and
 re-plan; increment B proper does not begin until Walls 1 and 2 are both decided.
+
+### 2026-09-12b
+
+PLAN SESSION (no Lean edited; both walls DECIDED, plan recorded). User delegated the two
+technical calls with one goal stated: prove the graph index algorithm correct and leave no
+edge-case bugs. Both calls below follow from that goal by one rule -- the Lean claim must
+describe what the SHIPPED code does, so mirror Python. Everything cited was re-read
+first-hand this session against the live tree.
+
+**THE FRAMING CHANGES: Wall 1 is NOT a scope defect inside the fragment.**
+`W4Fragment.term` (`formal/lean/ZanzibarProofs/FullScope.lean:299`) is
+`∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R`, and
+`NoTtuTarget S R` (`GraphIndex/ReconcileCorrect.lean:616-617`) is
+`∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ R`. So inside `W4Fragment` --
+the ONLY place `TtuStarFreeW` will ever be consumed, as the replacement for the
+`ttuStarFree` field at `:298` -- no TTU arm has a derived through-relation, and the
+through-shape `(t.subject.type, tr)` that `TtuStarFreeW` bridges is never derived. The
+2026-09-12 ROUTING arm measured store `Sd`
+(`formal/probes/p6_inbridge_stability_2026-09-12.lean:902-906`: `doc#control := approver
+from parent` with `folder#approver` derived), and `Sd` VIOLATES `term` -- the probe's own
+line `:502` invokes `term` for the stability store but never applied it to `Sd`. The
+"14 -> 9 of 546 mismatches" payoff failure was measured on the same out-of-fragment store.
+CONSEQUENCE: (ii) does not have to inhabit the derived through-shape, the (a)/(b)/(c)
+trilemma is retired, and the payoff criterion is UNMEASURED in scope, not failed.
+
+What Python does at the out-of-fragment shape, for the boundary record: the processor's
+`_write_derived` (`index_v4/processor.py:657-681`) writes the derived public node through
+`WildcardIndex.add_tuple`, which calls `_ensure_bridges` on BOTH endpoints
+(`index_v4/wildcard.py:521-522`) -- so Python bridges the PUBLIC derived node from the
+CASCADE, never from the raw write leg. Retraction is `_gc_public_node` (`processor.py:1262`)
+-> `_maybe_remove_bridges`. That is a fragment boundary of the same class as the
+entity-middle half (`formal/CORRESPONDENCE.md:964-973`), not something increment B owes.
+
+**Two more first-hand facts that dissolve the "logged/unlogged vise" and reshape Wall 2.**
+1. Python's bridges are LOGGED. `_ensure_own_bridges` (`wildcard.py:267-279`) adds via
+   `idx.add_edge_by_id`, whose contract (`index_v4/core.py:1101-1107`) records reachability
+   flips in the delta outbox. So the LOGGED horn is the faithful one. And
+   `writeLeg_reach_stable` (`CascadeStable.lean:362-370`) states `hunmapped` over
+   `cascadeKeys S (σ.writeLoggedRules S t)` -- the POST-write state -- with a proof shaped
+   "a new backward path factors through a routed edge whose frontier row puts the key in
+   `cascadeKeys`, contradicting unmappedness". A logged bridge extends that argument by one
+   case (the new edge is a bridge, its delta is a frontier row); it does NOT make the theorem
+   vacuous, it makes the theorem apply as designed: bridged key => dirty => cascade
+   reconciles it. Arm B-SUB's tier-1 FALSE (`hazardUnmapped := true`) was the UNLOGGED
+   variant, which is not what Python does. Arm B-SUB-L's domain shrink is the theorem's
+   premise doing its job, not an instrument defect -- but the instrument still needs a
+   per-domain verdict (see step 1) so nobody has to argue this again.
+2. Python's retract dual is `_maybe_remove_bridges` (`wildcard.py:363-386`): strip the bridges
+   when the node is `implicit` and `reference_count == bridge degree`, deferring to
+   `_sync_entity_middles` only for crossing middles. That is a refcount-guarded GC that is
+   ALREADY the shipped design. (The prior comment's "its retract dual is entity GC" describes
+   the middle half, not the own-bridge half.)
+
+**DECISION, Wall 1 (taken this session): resolve by LEMMA, not by narrowing.** No edit to
+`TtuStarFreeW` or `ttuStarFreeWB`; the four audited names at `formal/audited_theorems.txt:537-540`
+stay untouched; `[4b]`/`[4c]` stay green. Instead:
+  (1) `TtuStarWide.lean` (import cone 1): `theorem ttuStarFreeW_through_untainted` -- under
+      `hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R`, every `t ∈ T` with a star
+      subject and every matching TTU arm `tr` has `isDerived S (t.subject.type, tr) = false`.
+      Proof is by contradiction from `NoTtuTarget` applied to the arm; expect ~3 lines.
+  (2) A fourth witness pin, `WideWitness`-style: the probe's `Sd` FAILS `term` by `decide`
+      (`NoTtuTarget Sd "approver"` is false because `("doc","control")` is `.ttu "approver"`).
+      That is the K1 kill condition made mechanically un-forgettable at ZERO audited-name
+      cost. New `theorem` rows DO add pin lines (`statement_pin.py::lean_files` walks
+      `rglob("*.lean")`, no import check), so regenerate `FINAL_REVIEW.md` counts
+      (`python -m formal.conformance.doc_counts --generate`) or `[4e]` reds.
+  (3) `formal/CORRESPONDENCE.md` sec 7 entry: derived TTU through-shape is a fragment
+      boundary; Python covers it via the processor path cited above.
+  Rejected: narrowing the predicate (re-opens four audited names for a conjunct `term`
+  already implies); modelling the derived half (a larger project -- file it as a follow-on
+  row, see below); teaching `isSubjectWildcardUserset` about minted leaves (breaks
+  `bridgedInConcrete_elim`, `UsStarWrite.lean:106-109`).
+
+**DECISION, Wall 2 (taken this session): bridge-GC in the Lean model, LOGGED, mirroring
+`_maybe_remove_bridges`.** A NEW definition `GraphState.releaseInBridges c` on the remove
+leg: if `c` is `bridgedInConcrete` and its only remaining incident edges are its bridges,
+drop the bridge edge (and the node, as implicit GC would). Composed into `removeLoggedOne`
+(`Cascade.lean:319-323`) after `removeEdgeOne`, on both endpoints, with a `pushDelta` on
+the `wAnyNode` as Python's `remove_edge_by_id` logs. `count_removeLoggedRules`
+(`CascadeStrata.lean:738`) is then RESTATED -- closure-list count plus released bridges --
+which is a change to the model, not the `RemoveOccCount.lean:178-194` shape (no guard is
+added to any existing theorem to exclude a counterexample). Rejected: ref-counting Python's
+presence guard (changes shipped code to fit a proof -- the wrong direction for the stated
+goal); deferring GC to an "increment C" (re-pays the remove-side cone and leaves a
+write-then-remove residue the row-multiset hypothesis tests would flag on the Python side
+if Python did it).
+
+**THE PLAN, in landing order. Each numbered step ends on a green, committable tree.**
+Step 0 -- Wall-1 lemma + `Sd` pin + CORRESPONDENCE entry (cone 1, one session, additive).
+Step 1 -- Re-aim the probe at the IN-FRAGMENT store with a LOGGED leaf-routed bridge (zero
+  cone; the go/no-go). New dated probe or new arms in the existing one:
+  * REPAIR arm on the `viewer from parent` store (`ThroughShapeWitness.Sthru`,
+    `UsStarWrite.lean:163-166`, or the probe's stability store): does a logged bridge on
+    the leaf-routed list bring graph-vs-`sem` mismatches to ZERO after drain? If not zero,
+    STOP and re-plan before any cone is paid -- something other than the bridge is missing.
+  * Stability arms with the LOGGED bridge and a verdict function that reports PER DOMAIN
+    (unmapped keys: reach/graphRec/checkFn stable? bridged-now-mapped keys: drained cascade
+    agrees?) instead of `reachStableAll`. Retires the "GREEN by collapse" ambiguity.
+  * Tier-2 replacement instrument: `guardPre`/`guardPost` were false in all eight arms, so
+    the tier-2 premises were never satisfied; find what state they need and build it.
+  * A write-then-remove arm counting the bridge-only residue WITHOUT `releaseInBridges`
+    (quantifies Wall 2) and confirming zero residue WITH a prototype of it.
+Step 2 -- Additive definitions (cone 0): `ensureInBridgesLogged` (= `ensureInBridges` +
+  `pushDelta (wAnyNode (c.type, c.pred)) c.pred true`) and `releaseInBridges`, each with
+  `StructInv` preservation and `EvalEq` lemmas in the style of `structInv_ensureInBridges`
+  (`UsStarWrite.lean:274`). NAMING TRAP: `statement_pin.py::_refs` resolves receiver
+  dot-calls by SUFFIX -- do not give either a tail colliding with `.writeLoggedRules`,
+  `.addEdge`, `.reach`.
+Step 3 -- THE CONE PAYMENT, both legs at once (cone `42` modules, unit = reverse import
+  cone of the six targets excl. root aggregator; see the 2026-09-12 CORRECTIONS 1).
+  Compose into `writeLoggedOne` (`Cascade.lean:174-177`) AND the unlogged `writeRules` twin
+  (`RulesWrite.lean`) so `EvalEq` survives, bridge-before-grant on both endpoints in the
+  order `wildcard.py:521-522` uses; `releaseInBridges` into `removeLoggedOne`/`removeRules`.
+  Then restate, in the honest direction, the theorems step 1 proved false:
+  `writeLoggedRules_edge_delta` (`CascadeStable.lean:118-121`, audited `Audit.lean:761`:
+  delta = routed edges + bridge edges), tier-0 `reachedByW3d_edges_target_plain`
+  (`CascadeStable.lean:292`) / `reachedByW3d2_edges_target_plain`
+  (`CascadeStrataSettle.lean:193`) (target `plain` OR `wAny`), `count_removeLoggedRules`;
+  `writeLeg_reach_stable` keeps its statement and gains a bridge case IF step 1 confirms.
+  Inherited chores: def-pin diff adjudicated in `formal/history/` (trap (ff)); `FoldAdmits`
+  `21` move / `3` stay (`RulesComplete.lean:115`, `RestrictBase.lean:470`, `:531`);
+  `two_stratum_cascade` multiplicity re-measure before any golden; `extractor.py::
+  _edge_projection`'s P2 projection docstring flips (Lean now creates `w_any` rows).
+Step 4 -- The flip: `W4Fragment.ttuStarFree := TtuStarFreeW` (`FullScope.lean:298`) and
+  `Exec.lean::removeGateB -> removeGateBW`; the headline pin at
+  `formal/headline_statements.txt:44` reds and is adjudicated; `W4Fragment.ttuStarFree`
+  is finally inhabited by a bridged store, pinned by `decide` on `Sthru`.
+
+**SIZING, honestly.** Steps 0-1 fit one session. Step 3 is the same class as `P3` (sized
+`3` sessions, took `24`), and every estimate on this row has moved UP; so "several
+sessions, checkpointed" with no number. Re-size `M` -> `L` at step 2.
+
+**FOLLOW-ON TO FILE (not this row's scope): the derived TTU through-shape is covered by
+Python and NOT by any proof.** For the user's stated goal that is exactly where an edge-case
+bug can hide unproved. The differential matrix + hypothesis campaign are the net there
+today; a row should either extend the fragment (model the processor's public-node bridge)
+or add a targeted conformance corpus with a star tupleset over a derived relation. Candidate
+id to be assigned at filing.
+
+Not re-ranked; stays `NOW`; now STARTABLE at step 0.

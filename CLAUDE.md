@@ -6,6 +6,27 @@ independent reference oracle. Both backends support boolean operators (`and` / `
 the set engine natively, the graph index via derived predicates maintained by a stratified
 IVM delta processor.
 
+## Who decides (user instruction, 2026-09-12b)
+- **The user does not read or write Lean proofs and is not going to.** All key architectural
+  decisions — in `formal/` and in the Python — are DELEGATED to the model. Do not hand a
+  Lean-shaped choice back to the user ("narrow the predicate or add a lemma?"); decide it,
+  record the decision and its reasoning on the task row (`task.py comment <id> --session
+  <key>`), and move on. Ask the user only about goals and priorities, never about proof
+  mechanics.
+- **The primary consideration is EQUIVALENCE: the graph index must give the same answers as
+  the set engine** (the oracle is the referee for both). Every decision is weighed as
+  engineering complexity against that goal. If the two backends disagree, **the default
+  assumption is that the Python is wrong and should be fixed** — not that the Lean fragment
+  should be narrowed to exclude the case, and not that a golden or oracle result should be
+  edited to match. A proof that describes something other than the shipped code is a proof
+  of nothing (`formal/CORRESPONDENCE.md` §8).
+- **When a session is stuck on an executive decision** (which of two sound designs, whether
+  a cone is worth paying, whether a divergence is a Python bug or a fragment boundary), it
+  may spawn a `claude-fable-5` subagent (`Agent` tool, `model: "fable"`) to think the issue
+  through against the goal above and return a decision with reasoning. The subagent's
+  answer is a recommendation, not an order — the session records it on the row with the
+  reasoning, then acts. This applies whatever model the session itself runs on.
+
 ## Start here (every session)
 - **Start with `python scripts/task.py board`** — the session-start view, printed as a
   QUERY over the file-per-task tree in `tasks/` (bounded by `task.py::BOARD_MAX_LINES`,

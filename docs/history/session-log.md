@@ -30,6 +30,65 @@ from here.
 
 ---
 
+## 2026-09-12b — `P6` UNBLOCKED: `W4Fragment.term` already excludes the "scope defect"; both walls decided, plan on row
+
+rows: `P6` (Log `2026-09-12b`, summary/Traps/Read-first rewritten, brief set; stays `NOW`,
+now STARTABLE); `P25` filed (`LATER`, the derived through-shape the fragment excludes). Nothing
+closed. No code, no Lean edited — plan session at the user's request.
+
+task lint: clean (13 checks, 182 task file(s) parsed), 25 warning(s)
+read: board + note
+
+User asked for a plan to get `P6` done, and delegated the two "user-owned" calls the
+2026-09-12 entry left open with one stated goal: prove the graph index correct, no edge-case
+bugs. Both calls follow from that goal by one rule — the Lean claim must describe what the
+shipped code does, so mirror Python — and both are taken and recorded on the row.
+
+**The finding that changed the plan (first-hand, not delegated).** The 2026-09-12 "scope
+defect" is real of the standalone predicate and irrelevant to the fragment it is a field of:
+`W4Fragment.term` (`formal/lean/ZanzibarProofs/FullScope.lean:299`) requires `NoTtuTarget S R`
+for every derived `R`, and `NoTtuTarget` (`GraphIndex/ReconcileCorrect.lean:616-617`) says no
+TTU arm has `tr = R`. The probe's ROUTING and REPAIR arms ran on `Sd`
+(`formal/probes/p6_inbridge_stability_2026-09-12.lean:902-906`, `doc#control := approver from
+parent` over a derived `folder#approver`), which violates `term` — the probe's own `:502`
+invokes `term` for the OTHER store and never applied it to this one. So "(ii) cannot inhabit
+the predicate" and "14 → 9 of 546" are both out-of-fragment measurements; the in-scope payoff
+is UNMEASURED, not failed. Two more reads reshaped Wall 2 and the logged/unlogged "vise":
+Python's bridges are LOGGED (`_ensure_own_bridges` → `add_edge_by_id`, whose contract at
+`index_v4/core.py:1101-1107` records flips in the outbox), and `writeLeg_reach_stable`'s
+`hunmapped` (`CascadeStable.lean:367`) is over the POST-write `cascadeKeys`, so a logged bridge
+is excluded by the premise by design rather than falsifying the theorem — arm B-SUB's FALSE was
+the unlogged variant. Python's retract dual is `_maybe_remove_bridges` (`wildcard.py:363-386`),
+a refcount-guarded GC, already shipped.
+
+**Decisions (on the row, with rejected alternatives and their costs).** Wall 1: a lemma
+`ttuStarFreeW_through_untainted` under `term` + a `decide` pin that `Sd` is fragment-rejected —
+zero audited names re-opened, versus four for the narrowing option. Wall 2: a NEW
+`releaseInBridges` on the remove leg mirroring `_maybe_remove_bridges`, logged; restate
+`count_removeLoggedRules` rather than guard it (the `RemoveOccCount.lean:178-194` shape is not
+taken). Plan = five steps, each ending green: 0 lemma+pin+CORRESPONDENCE §7 (cone 1);
+1 re-aimed probe on the in-fragment store with a LOGGED bridge and a PER-DOMAIN verdict — the
+go/no-go is "mismatches → 0 after drain"; 2 additive defs (cone 0); 3 both legs at once (the
+`42`-module cone, unit on the row); 4 the flip of `W4Fragment.ttuStarFree`. Sizing stated
+without a number, on this row's own precedent.
+
+**Standing instruction promoted to `CLAUDE.md` § "Who decides" (user, mid-session).** The
+user does not read or write Lean and is delegating all key architectural decisions to the
+model; the one consideration is EQUIVALENCE — graph index output must match the set engine —
+and a divergence means the Python should probably be fixed, not the fragment narrowed. A
+session stuck on an executive call may spawn a `claude-fable-5` subagent to weigh complexity
+against that goal and return a recommendation. Recorded there because it is repo-wide and
+durable, not row-specific; the `P6` decisions above were already taken under it.
+
+**Method notes.** (1) A subagent-free session: every claim above was read inline because each
+was a known `file::symbol`; nothing needed a census. (2) `task.py set brief` refused a 169-char
+brief and `new` refused a 103-char title, both cleanly — the caps are doing their job. (3) The
+`-m -` stdin path decodes UTF-8 bytes (`task.py::read_message`), so a message file with Lean
+glyphs is safe; a long quoted heredoc through the Bash tool was not (parse error), so the
+message went via a `.scratch/` file — which is fine because the durable copy is the task Log.
+
+Still owed: nothing from the Rhythm. `P6` step 0 is the next session's first edit.
+
 ## 2026-09-12 — `P6` is BLOCKED, not expensive: `TtuStarFreeW` admits a through-shape no routing can bridge
 
 rows: `P6` (two `2026-09-12` Log entries; **not** re-ranked — it stays `NOW`, still a
