@@ -156,6 +156,26 @@ def NoBridgedDerived (S : Schema) : Prop :=
 def GraphState.bridgedInConcrete (σ : GraphState) (c : NodeKey) : Bool :=
   c.variant == Variant.plain && c.name != STAR && σ.schema.isSubjectWildcardUserset c.type c.pred
 
+/-- `bridgedInConcrete` decomposed: a bridged-in-concrete node is plain, star-free, of
+    a declared subject-wildcard userset shape (hence `pred ≠ BARE`).
+
+    (Lives here since `P6` step 3b, 2026-09-13; it was `UsStarCorrect.lean`'s, but
+    `Cascade.lean`'s import cone reaches `UsStarWrite` and NOT `UsStarCorrect`, so the
+    bridged write legs there could not see it. Pure relocation — statement, proof and
+    audited NAME are unchanged, so `audited_theorems.txt:149` stays green.) -/
+theorem bridgedInConcrete_elim {σ : GraphState} {c : NodeKey}
+    (h : σ.bridgedInConcrete c = true) :
+    c.variant = Variant.plain ∧ c.name ≠ STAR ∧ c.pred ≠ BARE ∧
+      σ.schema.isSubjectWildcardUserset c.type c.pred = true := by
+  unfold GraphState.bridgedInConcrete at h
+  simp only [Bool.and_eq_true, beq_iff_eq, bne_iff_ne, ne_eq] at h
+  obtain ⟨⟨hv, hn⟩, hsw⟩ := h
+  refine ⟨hv, hn, ?_, hsw⟩
+  -- pred ≠ BARE from isSubjectWildcardUserset (its first conjunct is `pred != BARE`)
+  unfold Schema.isSubjectWildcardUserset at hsw
+  simp only [Bool.and_eq_true, bne_iff_ne, ne_eq] at hsw
+  exact hsw.1
+
 /-! ### Non-vacuity pins for the through-shape disjunct (part (i), 2026-08-14)
 
 ★ **These are the ONLY red-to-green evidence that disjunct (b) does anything.** Part (i) is
@@ -252,7 +272,7 @@ end ThroughShapeWitness
     `if not self.idx.direct_edge_exists_by_id(node.id, w_any.id)` before `add_edge_by_id`.
     The guard order here is Python's: intern first (the node is added on every bridged
     branch, present edge included), test the edge second. The multiset statement is pinned
-    by `ensureInBridges_idem` + `InBridgeIdemWitness` below — do not weaken either to a
+    by `ensureInBridges_count_le_one` + `InBridgeIdemWitness` below — do not weaken either to a
     reachability-level claim, which is what let this through for a month. -/
 def GraphState.ensureInBridges (σ : GraphState) (c : NodeKey) : GraphState :=
   if σ.bridgedInConcrete c then
@@ -372,6 +392,64 @@ theorem ensureInBridges_mono {σ : GraphState} {c k : NodeKey} (hk : k ∈ σ.no
       · simpa using hk'
       · exact hk'
   · rw [if_neg hbr]; exact hk
+
+/-! ## Edge and node effects of the in-bridge machinery
+
+Relocated here by `P6` step 3b (2026-09-13) from `UsStarClosure.lean` (`edges_mono`,
+`nodes_mem`) and `UsStarCorrect.lean` (`edges_mem`), unchanged in statement and proof.
+`Cascade.lean`'s transitive import cone contains `UsStarWrite` but neither of those two
+files, so its bridged write legs could not see them; their four original use sites in
+`UsStarClosure.lean` still resolve, since `UsStarClosure → UsStarCorrect → … → UsStarWrite`. -/
+
+/-- `ensureInBridges` only ever adds edges. -/
+theorem ensureInBridges_edges_mono {σ : GraphState} {c : NodeKey} {e : NodeKey × NodeKey}
+    (he : e ∈ σ.edges) : e ∈ (σ.ensureInBridges c).edges := by
+  unfold GraphState.ensureInBridges
+  by_cases hbr : σ.bridgedInConcrete c = true
+  · rw [if_pos hbr]; split
+    · rw [addNode_edges]; exact he
+    · split
+      · rw [addEdge_edges, addNode_edges]; exact List.mem_cons_of_mem _ he
+      · rw [addNode_edges]; exact he
+  · rw [if_neg (by simpa using hbr)]; exact he
+
+/-- A node of `ensureInBridges` is old or the single `w_any` node it may add. -/
+theorem ensureInBridges_nodes_mem {σ : GraphState} {c k : NodeKey}
+    (hk : k ∈ (σ.ensureInBridges c).nodes) :
+    k ∈ σ.nodes ∨ k = wAnyNode (c.type, c.pred) := by
+  unfold GraphState.ensureInBridges at hk
+  by_cases hbr : σ.bridgedInConcrete c = true
+  · rw [if_pos hbr] at hk; split at hk
+    · rw [addNode_nodes] at hk
+      rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
+    · split at hk
+      · rw [addEdge_nodes, addNode_nodes] at hk
+        rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
+      · rw [addNode_nodes] at hk
+        rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
+  · rw [if_neg (by simpa using hbr)] at hk; exact Or.inl hk
+
+/-- `ensureInBridges`'s edge effect: an edge is either an old edge or the single
+    in-bridge `c → wAnyNode (c.type, c.pred)` (with `c` bridged-in-concrete). Unchanged
+    in STATEMENT by the P6-step-2 presence guard — the new branch leaves `edges` alone,
+    so it lands in the left disjunct — which is the point: the guard is invisible to
+    every consumer that reasons about the edge SET, and visible only to the multiset
+    statement `ensureInBridges_count_le_one` below. -/
+theorem ensureInBridges_edges_mem {σ : GraphState} {c : NodeKey} {e : NodeKey × NodeKey}
+    (he : e ∈ (σ.ensureInBridges c).edges) :
+    e ∈ σ.edges ∨ (e = (c, wAnyNode (c.type, c.pred)) ∧ σ.bridgedInConcrete c = true) := by
+  unfold GraphState.ensureInBridges at he
+  by_cases hbr : σ.bridgedInConcrete c = true
+  · rw [if_pos hbr] at he
+    split at he
+    · rw [addNode_edges] at he; exact Or.inl he
+    · split at he
+      · rw [addEdge_edges, addNode_edges] at he
+        rcases List.mem_cons.mp he with heq | hmem
+        · exact Or.inr ⟨heq, hbr⟩
+        · exact Or.inl hmem
+      · rw [addNode_edges] at he; exact Or.inl he
+  · rw [if_neg (by simpa using hbr)] at he; exact Or.inl he
 
 /-! ## ★ The bridge multiplicity is at most one (`P6` step 2, 2026-09-13b)
 
@@ -738,6 +816,361 @@ theorem schema_foldl_writeBridgedOne (ts : List Tuple) :
     simp only [List.foldl_cons]
     rw [ih]; exact writeBridgedOne_schema σ t
 
+/-! ### ★ Edge soundness — where a bridged fold's edges come from (`P6` step 3b, 2026-09-13)
+
+The bridged twin of `RulesCorrect.lean::foldl_writeDirect_edges_sound`, and the keystone
+every step-3b consumer needs: once `writeRulesRaw` folds `writeBridgedOne` instead of
+`writeDirect`, every argument of the form *"an edge of a reached state is old or the
+materialization of a written tuple"* is FALSE as stated, because the prologue lands a second
+kind of edge. The two-disjunct lemma becomes three:
+
+1. `(a, b) ∈ σ.edges` — the edge predates the fold;
+2. `∃ u ∈ us, a = subjNode u.subject ∧ b = objNode u.object u.relation` — the guarded GRANT
+   of some member of the folded list, exactly the old second disjunct;
+3. `σ.schema.isSubjectWildcardUserset a.type a.pred = true ∧ b = wAnyNode (a.type, a.pred)`
+   — an IN-BRIDGE: `GraphState.ensureInBridges` materialized `a → w_any(a.type, a.pred)`
+   for a concrete endpoint of a declared subject-wildcard userset shape
+   (`index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`, §5).
+
+★ **Why disjunct (3) needs no existential, and is keyed on the fold's START-STATE schema.**
+The obvious statement — "∃ u ∈ us, `a` is an endpoint of `u` and the accumulator at that
+point says `a` is bridged-in" — would force every call site to reconstruct which prefix of
+`us` had been written, which is what makes a soundness lemma unusable. It is avoidable
+because the only schema-sensitive test in the whole bridge, `GraphState.bridgedInConcrete`
+(`:156`), reads `σ.schema` and NOTHING else about the state, and the schema is fold-invariant
+(`writeBridgedOne_schema` per step, `schema_foldl_writeBridgedOne` for the whole fold). So
+the shape test can be moved back to the start state and the accumulator never appears.
+Dropping the existential also drops the endpoint: the disjunct does not say WHICH tuple's
+prologue added the bridge, only that `a`'s shape is one the schema bridges.
+
+Note what (3) does *not* claim: not that `a` is a live node, and not that this fold added the
+bridge (an in-bridge already in `σ.edges` lands in (1)). It is the weakest statement true of
+every edge, which is what a soundness lemma is for; the strengthenings belong with the
+consumer that needs them. -/
+
+/-- **One bridged write's edges: old, the grant, or an in-bridge.** The three disjuncts are
+    `GraphState.writeBridgedOne`'s three edge sources — the pre-state, the guarded grant
+    `subjNode t.subject → objNode t.object t.relation`, and either of the two
+    `ensureInBridges` calls in `GraphState.bridgePre`. The subject-side and object-side
+    bridges collapse into ONE disjunct because `ensureInBridges_edges_mem` reports the bridge
+    against its own concrete endpoint `c`, and the disjunct quantifies over neither
+    endpoint — it just reads the shape of `a` off the schema.
+
+    The in-bridge disjunct is stated against `σ.schema`, not the bridged pre-state's, because
+    `bridgePre` only ever `addNode`s and `ensureInBridges`es and both are schema-fixed
+    (`addNode_schema`, `ensureInBridges_schema`); the two `simp only` steps below are that
+    rewrite. A REJECTED grant returns `σ` with the bridges rolled back with it (see
+    `GraphState.bridgePre`'s docstring on Python's transactional abort), so that branch is
+    immediately disjunct (1). -/
+theorem writeBridgedOne_edges_sound {σ : GraphState} {t : Tuple} {a b : NodeKey}
+    (hab : (a, b) ∈ (σ.writeBridgedOne t).edges) :
+    (a, b) ∈ σ.edges ∨
+      (a = subjNode t.subject ∧ b = objNode t.object t.relation) ∨
+      (σ.schema.isSubjectWildcardUserset a.type a.pred = true ∧
+        b = wAnyNode (a.type, a.pred)) := by
+  -- The PROLOGUE alone: an edge of `bridgePre` is old or one of its two in-bridges.
+  have hpre : ∀ {x y : NodeKey}, (x, y) ∈ (σ.bridgePre t).edges →
+      (x, y) ∈ σ.edges ∨
+        (σ.schema.isSubjectWildcardUserset x.type x.pred = true ∧
+          y = wAnyNode (x.type, x.pred)) := by
+    intro x y hxy
+    unfold GraphState.bridgePre at hxy
+    rcases ensureInBridges_edges_mem hxy with hin | ⟨heq, hbr⟩
+    · -- not the object-side bridge: peel the subject-side call
+      rcases ensureInBridges_edges_mem hin with hin' | ⟨heq, hbr⟩
+      · simp only [addNode_edges] at hin'; exact Or.inl hin'
+      · obtain ⟨e1, e2⟩ := Prod.ext_iff.mp heq
+        subst e1
+        have hsw := (bridgedInConcrete_elim hbr).2.2.2
+        simp only [addNode_schema] at hsw
+        exact Or.inr ⟨hsw, e2⟩
+    · obtain ⟨e1, e2⟩ := Prod.ext_iff.mp heq
+      subst e1
+      have hsw := (bridgedInConcrete_elim hbr).2.2.2
+      simp only [ensureInBridges_schema, addNode_schema] at hsw
+      exact Or.inr ⟨hsw, e2⟩
+  unfold GraphState.writeBridgedOne at hab
+  split at hab
+  · -- admitted: the grant edge on top of the prologue
+    rw [addEdge_edges] at hab
+    rcases List.mem_cons.mp hab with heq | hmem
+    · obtain ⟨e1, e2⟩ := Prod.ext_iff.mp heq
+      exact Or.inr (Or.inl ⟨e1, e2⟩)
+    · rcases hpre hmem with hold | hbridge
+      · exact Or.inl hold
+      · exact Or.inr (Or.inr hbridge)
+  · -- refused: the write is the identity, bridges discarded
+    exact Or.inl hab
+
+/-- ★ **Folding the bridged write: every edge is old, some member's grant, or an in-bridge.**
+    The `P6` step 3b keystone. `LeafRules.lean::writeRulesRaw` folds this step over a
+    leaf-routed list (and `Cascade.lean`'s logged twin over the same list), so every
+    soundness argument downstream of the bridged write leg has to pass through here; the
+    section note above says what the three disjuncts mean and why (3) carries no existential.
+
+    Compare `RulesCorrect.lean::foldl_writeDirect_edges_sound`: this is that statement plus
+    disjunct (3), and this is that proof plus one case. The extra case is discharged by
+    `writeBridgedOne_schema` alone — not the whole-fold `schema_foldl_writeBridgedOne` —
+    because the induction applies the IH at `σ.writeBridgedOne t`, which is ONE step from the
+    start state; the fold-level invariant is what the *statement* rests on, not the proof. -/
+theorem foldl_writeBridgedOne_edges_sound (us : List Tuple) :
+    ∀ {σ : GraphState} {a b : NodeKey},
+      (a, b) ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges →
+      (a, b) ∈ σ.edges ∨
+        (∃ u ∈ us, a = subjNode u.subject ∧ b = objNode u.object u.relation) ∨
+        (σ.schema.isSubjectWildcardUserset a.type a.pred = true ∧
+          b = wAnyNode (a.type, a.pred)) := by
+  induction us with
+  | nil => intro σ a b hab; exact Or.inl hab
+  | cons t rest ih =>
+    intro σ a b hab
+    -- (t :: rest).foldl f σ = rest.foldl f (σ.writeBridgedOne t)
+    rcases ih hab with hin | ⟨u, hu, h1, h2⟩ | ⟨hsw, hw⟩
+    · -- an edge of the one-step state: old, `t`'s grant, or `t`'s prologue bridge
+      rcases writeBridgedOne_edges_sound hin with hold | ⟨h1, h2⟩ | ⟨hsw, hw⟩
+      · exact Or.inl hold
+      · exact Or.inr (Or.inl ⟨t, List.mem_cons_self, h1, h2⟩)
+      · exact Or.inr (Or.inr ⟨hsw, hw⟩)
+    · exact Or.inr (Or.inl ⟨u, List.mem_cons_of_mem _ hu, h1, h2⟩)
+    · -- the IH's bridge disjunct is keyed on the accumulator; the schema is fold-invariant
+      rw [writeBridgedOne_schema] at hsw
+      exact Or.inr (Or.inr ⟨hsw, hw⟩)
+
+/-! ### ★ Monotonicity, node soundness and endpoint closure (`P6` step 3b, 2026-09-13)
+
+The rest of the bridged toolbox: the twins of the four `writeDirect` facts every consumer of
+`LeafRules.lean::writeRulesRaw`'s fold reaches for —
+`RulesComplete.lean::foldl_writeDirect_edges_mono`,
+`CascadeStable.lean::foldl_writeDirect_nodes_mono`, `::foldl_writeDirect_nodes_sound` and
+`::edgesClosed_foldl_writeDirect`. Each fold lemma is its original's induction verbatim over
+a one-step twin; the one-step twins are the new content, and they come out of the
+`ensureInBridges` elimination principles three sections up.
+
+★ **Only ONE of the four statements changes shape, and it has to.** Node soundness widens by
+TWO disjuncts, one per endpoint: `GraphState.bridgePre` runs `ensureInBridges` on the subject
+AND on the object, and either call can intern a `wAnyNode` (the object-side one firing on its
+own is pinned by `BridgedWriteWitness.object_bridge_fires`), so a node of the folded state can
+be a `w_any` that is the endpoint of no written tuple. The unwidened statement — the one
+`CascadeStable.lean::foldl_writeDirect_nodes_sound` carries — is therefore FALSE here, and
+rather than leave the widening looking defensive, ONE DISJUNCT AT A TIME is refuted:
+`BridgedWriteWitness.node_soundness_without_subject_wany_is_false` and
+`::node_soundness_without_object_wany_is_false` each kill the three-disjunct statement that
+keeps the other side, which a fortiori kills the two-disjunct one.
+
+The two `w_any` disjuncts are spelled through the projections `(subjNode u.subject).type` /
+`.pred`, not `u.subject.type` / `u.subject.predicate`, because that is the form
+`ensureInBridges_nodes_mem` hands back at `c := subjNode u.subject`. They agree — `subjNode`
+and `objNode` (`State.lean:117`, `:126`) carry the type and predicate through BOTH of their
+branches — but only after a case split on `name = STAR` that a consumer may not want; leaving
+it undone keeps the statement free of the split.
+
+Endpoint closure is stated BARE (`∀ ab ∈ _.edges, ab.1 ∈ _.nodes ∧ ab.2 ∈ _.nodes`), not
+wrapped in `StructInv`, to match `CascadeStable.lean::edgesClosed_foldl_writeDirect`, which
+four proofs in that file call in exactly that shape. It holds for the reason
+`structInv_ensureInBridges` does: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`
+interns the `w_any` with `create_if_missing=True` BEFORE it tests `direct_edge_exists_by_id`,
+and `GraphState.ensureInBridges` keeps that order — the node is added on every bridged branch,
+the `P6`-step-2 presence branch included — while `bridgePre` `addNode`s both endpoints first. -/
+
+/-- **`ensureInBridges` preserves edge endpoint-closure** (given the concrete endpoint is
+    already live) — the bare-predicate twin of `structInv_ensureInBridges`'s `edgesClosed`
+    clause, needed separately because `CascadeStable.lean` reasons about endpoint closure
+    without carrying the rest of `StructInv`.
+
+    Both endpoints of the one edge this can add are covered by the definition's own order:
+    `c` is live by hypothesis (`GraphState.bridgePre` `addNode`s it first — that is what its
+    docstring's "the node prologue is NOT decoration" paragraph is about), and
+    `wAnyNode (c.type, c.pred)` is interned on every bridged branch, so it is a node whichever
+    branch produced the edge. Old edges ride out on `ensureInBridges_mono`. -/
+theorem edgesClosed_ensureInBridges {σ : GraphState}
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) {c : NodeKey} (hc : c ∈ σ.nodes) :
+    ∀ ab ∈ (σ.ensureInBridges c).edges,
+      ab.1 ∈ (σ.ensureInBridges c).nodes ∧ ab.2 ∈ (σ.ensureInBridges c).nodes := by
+  intro ab hab
+  rcases ensureInBridges_edges_mem hab with hold | ⟨heq, hbr⟩
+  · obtain ⟨h1, h2⟩ := hcl ab hold
+    exact ⟨ensureInBridges_mono h1, ensureInBridges_mono h2⟩
+  · -- the in-bridge: `c` survives, and the `w_any` head is added on all three branches
+    have hw : wAnyNode (c.type, c.pred) ∈ (σ.ensureInBridges c).nodes := by
+      unfold GraphState.ensureInBridges
+      rw [if_pos hbr]
+      split
+      · simp
+      · split <;> simp
+    subst heq
+    exact ⟨ensureInBridges_mono hc, hw⟩
+
+/-- **The bridged write only ever adds edges** — the twin of
+    `RulesComplete.lean::writeDirect_edges_mono`. Both prologue calls are edge-monotone
+    (`ensureInBridges_edges_mono`), and the guarded grant either conses onto that or returns
+    `σ` itself. -/
+theorem writeBridgedOne_edges_mono (σ : GraphState) (t : Tuple) :
+    ∀ e ∈ σ.edges, e ∈ (σ.writeBridgedOne t).edges := by
+  intro e he
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  have hpre : e ∈ ((((σ.addNode (subjNode t.subject)).addNode
+      (objNode t.object t.relation)).ensureInBridges (subjNode t.subject)).ensureInBridges
+      (objNode t.object t.relation)).edges :=
+    ensureInBridges_edges_mono (ensureInBridges_edges_mono (by simpa using he))
+  split
+  · rw [addEdge_edges]; exact List.mem_cons_of_mem _ hpre
+  · exact he
+
+/-- Folding the bridged write only ever adds edges — the twin of
+    `RulesComplete.lean::foldl_writeDirect_edges_mono`, its induction unchanged. -/
+theorem foldl_writeBridgedOne_edges_mono (us : List Tuple) :
+    ∀ {σ : GraphState}, ∀ e ∈ σ.edges,
+      e ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges := by
+  induction us with
+  | nil => intro σ e he; exact he
+  | cons t rest ih =>
+    intro σ e he
+    exact ih e (writeBridgedOne_edges_mono σ t e he)
+
+/-- Existing nodes persist across the bridged write — the twin of
+    `Write.lean::writeDirect_monoNodes`, and `writeUsStar_monoNodes`'s proof below minus the
+    out-bridge layer. **Named `monoNodes`, not `nodes_mono`**, to match those two originals;
+    the FOLD below keeps `CascadeStable.lean::foldl_writeDirect_nodes_mono`'s spelling for the
+    same reason. The inconsistency is the existing tree's, and copying it is what makes each
+    twin greppable from its original. -/
+theorem writeBridgedOne_monoNodes (σ : GraphState) (t : Tuple) :
+    ∀ k ∈ σ.nodes, k ∈ (σ.writeBridgedOne t).nodes := by
+  intro k hk
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  have hk2 : k ∈ ((((σ.addNode (subjNode t.subject)).addNode
+      (objNode t.object t.relation)).ensureInBridges (subjNode t.subject)).ensureInBridges
+      (objNode t.object t.relation)).nodes :=
+    ensureInBridges_mono (ensureInBridges_mono
+      (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hk)))
+  split
+  · simpa using hk2
+  · exact hk
+
+/-- The bridged fold only adds nodes — the twin of
+    `CascadeStable.lean::foldl_writeDirect_nodes_mono`, its induction unchanged. -/
+theorem foldl_writeBridgedOne_nodes_mono (us : List Tuple) :
+    ∀ (σ : GraphState), ∀ k ∈ σ.nodes,
+      k ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).nodes := by
+  induction us with
+  | nil => intro σ k hk; exact hk
+  | cons u rest ih =>
+    intro σ k hk
+    simp only [List.foldl_cons]
+    exact ih _ k (writeBridgedOne_monoNodes σ u k hk)
+
+/-- **One bridged write's node SOUNDNESS** — a node of the written state is old, one of the
+    two endpoints, or one of the two endpoints' `w_any` nodes. The grant contributes nothing:
+    `addEdge` leaves `nodes` alone, so every node comes from `GraphState.bridgePre`, whose
+    only node sources are its two `addNode`s and the two `ensureInBridges` calls
+    (`ensureInBridges_nodes_mem`, peeled object-side first because that is the outer call).
+
+    ⚠ **The last two disjuncts are not padding, and neither is redundant.** Dropping either
+    one leaves a statement that is false of the FOLD on a single member — see the section note
+    above, `BridgedWriteWitness.node_soundness_without_subject_wany_is_false` and
+    `::node_soundness_without_object_wany_is_false`. A refused grant returns `σ`, so that
+    branch is the first disjunct. -/
+theorem writeBridgedOne_nodes_sound {σ : GraphState} {t : Tuple} {k : NodeKey}
+    (hk : k ∈ (σ.writeBridgedOne t).nodes) :
+    k ∈ σ.nodes ∨
+      k = subjNode t.subject ∨ k = objNode t.object t.relation ∨
+      k = wAnyNode ((subjNode t.subject).type, (subjNode t.subject).pred) ∨
+      k = wAnyNode ((objNode t.object t.relation).type, (objNode t.object t.relation).pred) := by
+  unfold GraphState.writeBridgedOne at hk
+  split at hk
+  · -- admitted: the grant adds no node, so every node comes from the prologue
+    rw [addEdge_nodes] at hk
+    unfold GraphState.bridgePre at hk
+    rcases ensureInBridges_nodes_mem hk with hk1 | hwb
+    · rcases ensureInBridges_nodes_mem hk1 with hk0 | hwa
+      · simp only [addNode_nodes] at hk0
+        rcases List.mem_cons.mp hk0 with heq | hk0'
+        · exact Or.inr (Or.inr (Or.inl heq))
+        · rcases List.mem_cons.mp hk0' with heq | hold
+          · exact Or.inr (Or.inl heq)
+          · exact Or.inl hold
+      · exact Or.inr (Or.inr (Or.inr (Or.inl hwa)))
+    · exact Or.inr (Or.inr (Or.inr (Or.inr hwb)))
+  · -- refused: the write is the identity, bridges discarded
+    exact Or.inl hk
+
+/-- **The bridged fold's node SOUNDNESS** — `CascadeStable.lean::foldl_writeDirect_nodes_sound`
+    widened by the two `w_any` disjuncts (section note above for why, and for why they are
+    spelled through `subjNode`/`objNode` projections). The induction is the original's: the IH
+    runs at `σ.writeBridgedOne u`, one step from the start state, and `writeBridgedOne_nodes_sound`
+    closes the gap — no fold-level invariant is needed here, unlike the edge-soundness keystone
+    whose STATEMENT rests on schema fold-invariance. -/
+theorem foldl_writeBridgedOne_nodes_sound (us : List Tuple) :
+    ∀ (σ : GraphState), ∀ k ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).nodes,
+      k ∈ σ.nodes ∨
+        ∃ u ∈ us,
+          k = subjNode u.subject ∨ k = objNode u.object u.relation ∨
+          k = wAnyNode ((subjNode u.subject).type, (subjNode u.subject).pred) ∨
+          k = wAnyNode ((objNode u.object u.relation).type,
+            (objNode u.object u.relation).pred) := by
+  induction us with
+  | nil => intro σ k hk; exact Or.inl hk
+  | cons u rest ih =>
+    intro σ k hk
+    simp only [List.foldl_cons] at hk
+    rcases ih (σ.writeBridgedOne u) k hk with hstep | ⟨w, hw, hwk⟩
+    · rcases writeBridgedOne_nodes_sound hstep with hold | hend
+      · exact Or.inl hold
+      · exact Or.inr ⟨u, List.mem_cons_self, hend⟩
+    · exact Or.inr ⟨w, List.mem_cons_of_mem _ hw, hwk⟩
+
+/-- **The bridged write preserves edge endpoint-closure** — the twin of
+    `ReconcileDiff.lean::edgesClosed_writeDirect`, in the same BARE shape (see the section
+    note). Three stages, each keeping both endpoints live for the next: the two `addNode`s,
+    then the two `ensureInBridges` calls (`edgesClosed_ensureInBridges`, which is why each
+    needs its endpoint already interned), then the guarded grant, whose endpoints are exactly
+    the two nodes the prologue interned. A refused grant returns `σ` and the hypothesis. -/
+theorem edgesClosed_writeBridgedOne {σ : GraphState}
+    (hcl : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) (t : Tuple) :
+    ∀ ab ∈ (σ.writeBridgedOne t).edges,
+      ab.1 ∈ (σ.writeBridgedOne t).nodes ∧ ab.2 ∈ (σ.writeBridgedOne t).nodes := by
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  set a := subjNode t.subject with ha_def
+  set b := objNode t.object t.relation with hb_def
+  have ha0 : a ∈ ((σ.addNode a).addNode b).nodes :=
+    List.mem_cons_of_mem _ List.mem_cons_self
+  have hb0 : b ∈ ((σ.addNode a).addNode b).nodes := List.mem_cons_self
+  have hcl0 : ∀ ab ∈ ((σ.addNode a).addNode b).edges,
+      ab.1 ∈ ((σ.addNode a).addNode b).nodes ∧ ab.2 ∈ ((σ.addNode a).addNode b).nodes := by
+    intro ab hab
+    simp only [addNode_edges] at hab
+    obtain ⟨h1, h2⟩ := hcl ab hab
+    exact ⟨List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h1),
+      List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h2)⟩
+  have hcl1 := edgesClosed_ensureInBridges hcl0 ha0
+  have hb1 : b ∈ (((σ.addNode a).addNode b).ensureInBridges a).nodes := ensureInBridges_mono hb0
+  have hcl2 := edgesClosed_ensureInBridges hcl1 hb1
+  set σ2 := (((σ.addNode a).addNode b).ensureInBridges a).ensureInBridges b with hσ2_def
+  have ha2 : a ∈ σ2.nodes := ensureInBridges_mono (ensureInBridges_mono ha0)
+  have hb2 : b ∈ σ2.nodes := ensureInBridges_mono hb1
+  split
+  · intro ab hab
+    rw [addEdge_edges] at hab
+    rw [addEdge_nodes]
+    rcases List.mem_cons.mp hab with heq | hmem
+    · obtain ⟨h1, h2⟩ := Prod.ext_iff.mp heq
+      rw [h1, h2]; exact ⟨ha2, hb2⟩
+    · exact hcl2 ab hmem
+  · exact hcl
+
+/-- The bridged fold preserves edge endpoint-closure — the twin of
+    `CascadeStable.lean::edgesClosed_foldl_writeDirect`, its induction unchanged. -/
+theorem edgesClosed_foldl_writeBridgedOne (us : List Tuple) :
+    ∀ (σ : GraphState), (∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes) →
+      ∀ ab ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges,
+        ab.1 ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).nodes
+          ∧ ab.2 ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).nodes := by
+  induction us with
+  | nil => intro σ hcl; exact hcl
+  | cons u rest ih =>
+    intro σ hcl
+    simp only [List.foldl_cons]
+    exact ih _ (edgesClosed_writeBridgedOne hcl u)
+
 /-! ### ★ Red-to-green witnesses for the bridged step (`P6` step 3a, 2026-09-13d)
 
 `writeBridgedOne` is ADDITIVE: `writeRulesRaw` still folds `writeDirect`, so the whole
@@ -883,6 +1316,135 @@ theorem self_grant_is_refused :
     `σ`, this would hold the bridge. -/
 theorem refused_write_leaves_no_bridge :
     (base.writeBridgedOne tSelf).edges = base.edges := by decide
+
+/-- ★ **NON-VACUITY for the keystone's THIRD disjunct** (`P6` step 3b, 2026-09-13).
+    `foldl_writeBridgedOne_edges_sound` *without* its in-bridge case is FALSE, and this
+    refutes it. That weakening is the narrowest plausible one rather than a strawman: the
+    two-disjunct statement is character-for-character
+    `RulesCorrect.lean::foldl_writeDirect_edges_sound`, the shape every existing consumer
+    already reasons in, so a future reader who "simplified" the keystone back to it would
+    leave both remaining disjuncts and the whole proof green and would only be caught here.
+
+    The witness is one member: `base` is `emptyState`, so the bridge
+    `subjNode tThru.subject → w_any(folder, viewer)` that `bridgePre` lands (pinned
+    independently by `bridged_creates_the_bridge`) is neither an old edge nor `tThru`'s
+    grant. It pins the one-step `writeBridgedOne_edges_sound` a fortiori.
+
+    ★ **CONTROLLED: it also fails RED — not green — if the model stops bridging**, which is
+    the failure mode a refutation-shaped pin has to be checked for (no bridge ⇒ no
+    counterexample ⇒ nothing to prove). Step 3a's `M1` re-run on 2026-09-13 (drop both
+    `ensureInBridges` calls from `GraphState.bridgePre`, whole-module build, restored
+    baseline `rc=0`) reddened it, literal observed output (line numbers as of that run —
+    this declaration sat at `:1098`):
+
+    ```text
+    error: …/UsStarWrite.lean:1104:60: Tactic `decide` proved that the proposition
+      (subjNode tThru.subject, w0) ∈ (List.foldl (fun acc u => acc.writeBridgedOne u) base [tThru]).edges
+    is false
+    ```
+
+    That same run reddened `writeBridgedOne_edges_sound`'s PROOF
+    (`ensureInBridges_edges_mem` no longer applies to an unbridged prologue) but left
+    `foldl_writeBridgedOne_edges_sound` green — its proof goes through the one-step lemma's
+    statement, which stays true when nothing bridges. So the keystone pair alone would not
+    have caught `M1`; this pin is the arm that does. -/
+theorem two_disjunct_soundness_is_false :
+    ¬ (∀ (us : List Tuple) (σ : GraphState) (a b : NodeKey),
+        (a, b) ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges →
+        (a, b) ∈ σ.edges ∨
+          ∃ u ∈ us, a = subjNode u.subject ∧ b = objNode u.object u.relation) := by
+  intro h
+  have hc := h [tThru] base (subjNode tThru.subject) w0 (by decide)
+  revert hc
+  decide
+
+/-- ★ **NON-VACUITY for the node-soundness widening, SUBJECT side** (`P6` step 3b,
+    2026-09-13). `foldl_writeBridgedOne_nodes_sound` *minus* its subject-side `w_any`
+    disjunct is FALSE, and this refutes it on one member.
+
+    The weakening refuted here is the narrowest plausible one, not a strawman: it keeps BOTH
+    endpoint disjuncts and the OTHER `w_any`, so it is what a reader who noticed only the
+    object-side bridge would write, and the whole rest of the file would stay green under it.
+    A fortiori this also refutes the unwidened `CascadeStable.lean::foldl_writeDirect_nodes_sound`
+    shape (that statement implies this one, so falsifying this one falsifies it too) — which
+    is why there is no separate two-disjunct node pin.
+
+    `base` is `emptyState`, so `w0` is in the folded state's nodes only because
+    `GraphState.bridgePre` interned it for `tThru`'s SUBJECT (`subject_is_bridged_in`,
+    `bridged_creates_the_bridge`), and it is neither endpoint of `tThru` nor the object's
+    `w_any` (`objNode tThru.object tThru.relation` has shape `(doc, viewer)`).
+
+    ★ **CONTROLLED: it fails RED, not green, if the model stops bridging** — the failure mode
+    a refutation-shaped pin has to be checked for (no bridge ⇒ no counterexample ⇒ nothing
+    left to refute ⇒ a vacuously green pin). Step 3a's `M1` re-run on 2026-09-13 (drop both
+    `ensureInBridges` calls from `GraphState.bridgePre`; whole-module build `rc=1`; definition
+    restored byte-identically, `rc=0`) reddens it. Literal observed output — line numbers as
+    of that run, where the mutation made the file one line shorter and this declaration sat
+    at `:1374`:
+
+    ```text
+    error: …/UsStarWrite.lean:1383:35: Tactic `decide` proved that the proposition
+      w0 ∈ (List.foldl (fun acc u => acc.writeBridgedOne u) base [tThru]).nodes
+    is false
+    ```
+
+    ★ **ATTRIBUTION: `M2` (bridge the SUBJECT only) leaves this one GREEN** and reds only its
+    object-side mirror below. So the pair measures the two sides separately rather than both
+    reporting "something about bridging broke".
+
+    `M1` also reds the PROOFS of `writeBridgedOne_nodes_sound`, `writeBridgedOne_monoNodes`,
+    `writeBridgedOne_edges_mono` and `edgesClosed_writeBridgedOne` — the `ensureInBridges`
+    elimination principles stop applying to an unbridged prologue — while leaving all four
+    FOLD lemmas green, since each goes through its one-step twin's statement. A broken proof
+    is not a broken claim; these two pins are the arms that observe the claim. -/
+theorem node_soundness_without_subject_wany_is_false :
+    ¬ (∀ (us : List Tuple) (σ : GraphState) (k : NodeKey),
+        k ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).nodes →
+        k ∈ σ.nodes ∨
+          ∃ u ∈ us, k = subjNode u.subject ∨ k = objNode u.object u.relation ∨
+            k = wAnyNode ((objNode u.object u.relation).type,
+              (objNode u.object u.relation).pred)) := by
+  intro h
+  have hc := h [tThru] base w0 (by decide)
+  revert hc
+  decide
+
+/-- ★ **NON-VACUITY for the node-soundness widening, OBJECT side** (`P6` step 3b,
+    2026-09-13) — the mirror of the pin above, and the pair is deliberate: one refutation
+    would leave the *other* endpoint's disjunct pinned by nothing but a proof that happens to
+    need it, which is exactly the `M2` failure the `tObj` block above was added for (a broken
+    PROOF is not a broken claim).
+
+    Here `tObj`'s subject is `user:u1` with a `BARE` predicate, so the subject-side bridge does
+    NOT fire (`tObj_subject_is_not_bridged_in`) and `w0` can only have come from the
+    object-side `ensureInBridges` call (`object_endpoint_is_bridged_in`,
+    `object_bridge_fires`).
+
+    ★ **CONTROLLED against BOTH mutations, 2026-09-13** (whole-module builds, definition
+    restored byte-identically after each, baseline `rc=0`). `M1` — drop both bridges — reds it,
+    and so does `M2` — *bridge the SUBJECT only*, which is the mutation this pin exists for:
+    the `tObj` block above records that `M2` once reddened `structInv_writeBridgedOne` and
+    NOTHING else, a broken proof that a rewrite would have retired. Literal observed output
+    under `M2` (line numbers as of that run; `M2` is line-count-neutral, so this declaration
+    sat at `:1397`):
+
+    ```text
+    error: …/UsStarWrite.lean:1405:34: Tactic `decide` proved that the proposition
+      w0 ∈ (List.foldl (fun acc u => acc.writeBridgedOne u) base [tObj]).nodes
+    is false
+    ```
+
+    Under `M1` the same line reds with `[tObj]` likewise (`:1404:34` in that run). -/
+theorem node_soundness_without_object_wany_is_false :
+    ¬ (∀ (us : List Tuple) (σ : GraphState) (k : NodeKey),
+        k ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).nodes →
+        k ∈ σ.nodes ∨
+          ∃ u ∈ us, k = subjNode u.subject ∨ k = objNode u.object u.relation ∨
+            k = wAnyNode ((subjNode u.subject).type, (subjNode u.subject).pred)) := by
+  intro h
+  have hc := h [tObj] base w0 (by decide)
+  revert hc
+  decide
 
 end BridgedWriteWitness
 

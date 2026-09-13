@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-13e
-updated: 2026-09-13e
+moved: 2026-09-13g
+updated: 2026-09-13g
 closed:
 ---
 
@@ -198,6 +198,20 @@ materialises the edge, and the rest of the leg is inert until it lands.
 
 ## Read first
 
+- **[`docs/p6-step3b-plan-2026-09-13.md`](../docs/p6-step3b-plan-2026-09-13.md) IS THE STEP-3b
+  EXECUTION MAP AND IT REPLACES THE SCOUTING, NOT THE ROW** (ACTIVE-PLAN, opened 2026-09-13f;
+  corrections append dated at the top; freeze it when `P6` closes). Fifteen ordered steps, the
+  per-module fallout, the six blockers, and a "Corrections to the `P6` row" section listing the
+  points where the row and this file DISAGREE -- each verified first-hand before it was written.
+  Read it BEFORE re-measuring anything: the reason it exists is that the measuring is the
+  expensive half (`CLAUDE.md` sec "SCOUTING IS A DELIVERABLE"). (!) Its largest correction is that
+  the row's standing claim *"the carry terminates in `GraphAdmission`, so NO HEADLINE GAINS A
+  HYPOTHESIS"* is **FALSE** --
+  `formal/lean/ZanzibarProofs/GraphIndex/CascadeStrata.lean::runCascade2_no_abort` and
+  `::cascade2_drains` are statement-pinned headlines (`formal/headline_statements.txt`) that
+  consume the carry and so gain `(hNBD : NoBridgedDerived S)`.
+  (!) Two of its items are flagged NOT first-hand verified in place; do not promote either into a
+  tracked file without confirming it.
 - **The `2026-09-13e` Log entry is what step 3b starts from for the R-NODE obligation** --
   `TK68` is closed, the field/carry/bridge are in the tree, and the cone is MEASURED at 12
   application sites / 47 declarations / 12 files across BOTH twin pairs (the entry names the
@@ -1272,3 +1286,41 @@ and the honest-direction restatements (`writeLoggedRules_edge_delta`, the two ti
 
 BOUNDS UNCHANGED: do NOT route a stratum-2 userset-subject obligation through `checkFn`; do
 NOT narrow `TtuStarFreeW`; do NOT touch `W4Fragment.ttuStarFree` before step 4.
+
+### 2026-09-13g
+
+SESSION OPENED 2026-09-13g -- interim state comment, written BEFORE the work so it is not lost
+(the new `CLAUDE.md` rule "SCOUTING IS A DELIVERABLE" is this session's, same instruction).
+
+WHERE 3b ACTUALLY STANDS, measured first-hand this session:
+* Steps 1 and 2 of `docs/p6-step3b-plan-2026-09-13.md` ARE ALREADY IN THE WORKING TREE,
+  uncommitted and never gated. `git diff --stat`: `UsStarClosure.lean` -31/+?, `UsStarCorrect.lean`
+  -39, `UsStarWrite.lean` +521. The four MOVES landed (`bridgedInConcrete_elim`,
+  `ensureInBridges_edges_mono`, `ensureInBridges_edges_mem`, `ensureInBridges_nodes_mem`) and so did
+  the step-2 toolbox including THE KEYSTONE `foldl_writeBridgedOne_edges_sound`, plus
+  `edgesClosed_{,foldl_}writeBridgedOne`, both `_nodes_mono`/`_nodes_sound` pairs, and three
+  negative controls (`two_disjunct_soundness_is_false`, `node_soundness_without_{subject,object}_wany_is_false`).
+* STILL OWED from step 2, confirmed absent: `foldl_writeBridgedOne_nodesFromEdges` (the one the plan
+  flags NON-TRIVIAL -- the accept branch can intern a `wAnyNode` with no incident edge, so it needs
+  `edgesClosed` as a side condition) and `foldl_writeBridgedOne_edge_complete` (deliberately
+  deferred; it is stated over `FoldAdmits`, the step-14 honesty question).
+* NOTHING past step 2 has been attempted. The three re-points are NOT made.
+
+(!) THE LEAN VERDICT ON THIS TREE IS UNKNOWN, AND THE FIRST RUN LIED IN A NEW WAY.
+`bash formal/verify.sh lean` returned `EXIT=1` with `error: build failed`, but the only two errors
+were `failed to open file ...UsStarWrite.olean: 2` at `CascadeStrataEnum` and `Equiv` -- and
+`UsStarWrite.lean` itself logged ZERO errors. Cause, established by process inspection rather than
+guessed: a BARE `lake build` (pid 16596, started 23:15:43, parent not `verify.sh`) was running
+concurrently and was mid-write of that `.olean` when the gate tried to read it. So the red is an
+artifact of the race, not a proof failure -- and the tree's real lean status is still UNMEASURED.
+NEW VARIANT WORTH CARRYING: `verify.sh`'s run lock (`scripts/gate_lock.py`, added after the
+2026-09-10 two-writers-one-filename bug) only excludes another `verify.sh`. A bare `lake build` --
+which any subagent can run, and one did here despite a read-only instruction -- is NOT excluded, and
+it corrupts the gate's view of a file the gate never edited. Before believing a `lean` red whose
+errors are all `failed to open file ... .olean`, run `Get-CimInstance Win32_Process -Filter
+"Name='lake.exe' OR Name='lean.exe'"` and re-run alone.
+
+NEXT ACTION when this session resumes or the next one starts: re-run `verify.sh lean` ALONE on the
+untouched tree to get the real step-1+2 verdict. End of step 2 is one of only TWO commit-safe points
+in the whole of 3b (the other is the end of step 15), so if it is green it should be committed
+before any re-point is made.
