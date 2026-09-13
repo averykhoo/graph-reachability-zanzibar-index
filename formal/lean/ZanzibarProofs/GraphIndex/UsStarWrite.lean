@@ -1171,6 +1171,127 @@ theorem edgesClosed_foldl_writeBridgedOne (us : List Tuple) :
     simp only [List.foldl_cons]
     exact ih _ (edgesClosed_writeBridgedOne hcl u)
 
+/-! ### ★ Nodes are edge endpoints (`P6` step 3b, 2026-09-13g)
+
+The twin of `CascadeStrataSettle.lean::foldl_writeDirect_nodesFromEdges`, and the last of
+the step-2 toolbox. **It needs NO side condition** — see the `ensureInBridges` helper
+directly below, which is where the whole question lives.
+
+⚠ **The plan (`docs/p6-step3b-plan-2026-09-13.md`, "Toolbox gaps") predicted this lemma
+would need `edgesClosed` as an extra hypothesis, and that prediction is WRONG.** Its
+reasoning was right up to the last step: `GraphState.ensureInBridges` really can intern a
+`wAnyNode` with no incident edge, via the sub-branch where its own `admitEdge` refuses, so
+the naive induction really does get stuck there. What the plan then reached for was
+`edgesClosed` — *"an isolated `wAnyNode` reaches nothing, so `admitEdge` cannot fail"*. But
+the refutation is shorter and needs no invariant at all: `admitEdge c w` is
+`(c != w) && !reach w c` (`Write.lean:69`), so a refusal is either `c = w` — impossible,
+since `bridgedInConcrete c` forces `c.name ≠ STAR` while `(wAnyNode _).name = STAR` — or
+`reach w c = true`, and `reach_sound` turns THAT into an `NReaches` path whose very first
+edge leaves `w`. That first edge is already an incident edge of `w` in `σ.edges`, i.e. it
+IS the witness the goal is asking for; nothing needed to be closed. Landing the weaker
+statement matters downstream: the six-ish consumers named for the keystone call the
+`writeDirect` original with one argument, and a twin with an extra hypothesis would have
+made each of them carry an `edgesClosed` proof it does not otherwise need. -/
+
+/-- **One `ensureInBridges` call either keeps you inside the old node set, or hands you an
+    incident edge** — the relative form, and the reason the fold lemma below needs no
+    invariant. Relative because the states `GraphState.bridgePre` passes through do NOT
+    satisfy "every node is an edge endpoint": its two `addNode`s intern the grant's
+    endpoints before the grant exists.
+
+    The three bridged branches, in the definition's order: the presence branch already has
+    the edge `c → w_any` in `σ.edges`; the admitting branch adds exactly that edge; and the
+    refusing branch — the one that interns a `w_any` with no NEW edge — cannot refuse for
+    the self-loop reason (a bridged-in concrete is star-free, a `w_any` is not), so it
+    refused on a back-path `w_any →* c`, whose first edge is an old outgoing edge of the
+    `w_any` and settles the goal on the right. -/
+theorem ensureInBridges_nodes_incident {σ : GraphState} (c : NodeKey) :
+    ∀ k ∈ (σ.ensureInBridges c).nodes,
+      k ∈ σ.nodes ∨ ∃ ab ∈ (σ.ensureInBridges c).edges, k = ab.1 ∨ k = ab.2 := by
+  intro k hk
+  rcases ensureInBridges_nodes_mem hk with hold | hw
+  · exact Or.inl hold
+  · subst hw
+    set w := wAnyNode (c.type, c.pred) with hw_def
+    by_cases hbr : σ.bridgedInConcrete c = true
+    · by_cases hpres : (c, w) ∈ σ.edges
+      · exact Or.inr ⟨(c, w), ensureInBridges_edges_mono hpres, Or.inr rfl⟩
+      · by_cases hadm : (σ.addNode w).admitEdge c w = true
+        · -- the bridge edge is the one this branch adds
+          have hmem : (c, w) ∈ (σ.ensureInBridges c).edges := by
+            unfold GraphState.ensureInBridges
+            rw [if_pos hbr, if_neg hpres, if_pos hadm, addEdge_edges]
+            exact List.mem_cons_self
+          exact Or.inr ⟨(c, w), hmem, Or.inr rfl⟩
+        · -- refused: not for `c = w` (a bridged-in concrete is star-free), so on a back-path
+          have hne : c ≠ w := by
+            intro heq
+            have hn : c.name ≠ STAR := (bridgedInConcrete_elim hbr).2.1
+            exact hn (by rw [heq, hw_def]; rfl)
+          have hreach : (σ.addNode w).reach w c = true := by
+            by_contra hr
+            rw [Bool.not_eq_true] at hr
+            exact hadm (by unfold GraphState.admitEdge; rw [hr]; simp [hne])
+          have hN : NReaches σ.edges w c := by simpa using reach_sound hreach
+          have hout : ∃ x, (w, x) ∈ σ.edges := by
+            cases hN with
+            | edge h => exact ⟨_, h⟩
+            | head h _ => exact ⟨_, h⟩
+          obtain ⟨x, hx⟩ := hout
+          exact Or.inr ⟨(w, x), ensureInBridges_edges_mono hx, Or.inl rfl⟩
+    · -- unbridged: the call is the identity, so the node was already there
+      left
+      rw [show σ.ensureInBridges c = σ by unfold GraphState.ensureInBridges; rw [if_neg hbr]] at hk
+      exact hk
+
+/-- **One bridged write keeps every node an edge endpoint** — the one-step core of the
+    twin below. The accept branch's grant edge `(a, b)` covers both interned endpoints, the
+    two `ensureInBridges` calls cover themselves (`ensureInBridges_nodes_incident`), old
+    nodes ride their old edges out on `ensureInBridges_edges_mono`, and a refused grant
+    returns `σ` with its hypothesis intact. -/
+theorem writeBridgedOne_nodesFromEdges {σ : GraphState} (t : Tuple)
+    (h : ∀ k ∈ σ.nodes, ∃ ab ∈ σ.edges, k = ab.1 ∨ k = ab.2) :
+    ∀ k ∈ (σ.writeBridgedOne t).nodes,
+      ∃ ab ∈ (σ.writeBridgedOne t).edges, k = ab.1 ∨ k = ab.2 := by
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  set a := subjNode t.subject with ha_def
+  set b := objNode t.object t.relation with hb_def
+  split
+  · intro k hk
+    rw [addEdge_nodes] at hk
+    rw [addEdge_edges]
+    rcases ensureInBridges_nodes_incident b k hk with hk1 | ⟨ab, hab, hor⟩
+    · rcases ensureInBridges_nodes_incident a k hk1 with hk0 | ⟨ab, hab, hor⟩
+      · simp only [addNode_nodes] at hk0
+        rcases List.mem_cons.mp hk0 with heq | hk0'
+        · exact ⟨(a, b), List.mem_cons_self, Or.inr heq⟩
+        · rcases List.mem_cons.mp hk0' with heq | hold
+          · exact ⟨(a, b), List.mem_cons_self, Or.inl heq⟩
+          · obtain ⟨ab, hab, hor⟩ := h k hold
+            exact ⟨ab, List.mem_cons_of_mem _
+              (ensureInBridges_edges_mono (ensureInBridges_edges_mono (by simpa using hab))),
+              hor⟩
+      · exact ⟨ab, List.mem_cons_of_mem _ (ensureInBridges_edges_mono hab), hor⟩
+    · exact ⟨ab, List.mem_cons_of_mem _ hab, hor⟩
+  · exact h
+
+/-- **The bridged fold's nodes are edge endpoints** — the twin of
+    `CascadeStrataSettle.lean::foldl_writeDirect_nodesFromEdges`, statement UNCHANGED
+    (see the section note for why the predicted `edgesClosed` side condition is not
+    needed) and induction unchanged. -/
+theorem foldl_writeBridgedOne_nodesFromEdges (us : List Tuple) :
+    ∀ (σ : GraphState),
+      (∀ k ∈ σ.nodes, ∃ ab ∈ σ.edges, k = ab.1 ∨ k = ab.2) →
+      ∀ k ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).nodes,
+        ∃ ab ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges,
+          k = ab.1 ∨ k = ab.2 := by
+  induction us with
+  | nil => intro σ h; exact h
+  | cons u rest ih =>
+    intro σ h
+    simp only [List.foldl_cons]
+    exact ih (σ.writeBridgedOne u) (writeBridgedOne_nodesFromEdges u h)
+
 /-! ### ★ Red-to-green witnesses for the bridged step (`P6` step 3a, 2026-09-13d)
 
 `writeBridgedOne` is ADDITIVE: `writeRulesRaw` still folds `writeDirect`, so the whole
