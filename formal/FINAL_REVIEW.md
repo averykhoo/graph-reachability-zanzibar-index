@@ -28,14 +28,14 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **546** |
-| `tests/` collected | **1140** |
-| whole-repo suite | **1686** |
+| `tests/` collected | **1149** |
+| whole-repo suite | **1695** |
 | differential conformance tests | **475** across **14** files |
 | gate-tooling conformance tests | **71** across **4** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **587** |
-| audit identity pin (`audited_theorems.txt`) | **587** |
-| headline definition pin | **251** rows (**242** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **633** (**366** Python + **267** Lean) |
+| audited theorems (`#print axioms` in `Audit.lean`) | **602** |
+| audit identity pin (`audited_theorems.txt`) | **602** |
+| headline definition pin | **253** rows (**244** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **643** (**371** Python + **272** Lean) |
 | `corpus.SCHEMAS` | **26** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 26 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
@@ -531,8 +531,11 @@ Everything §7 lists, plus the fragment carries:
    STATE level in exactly that situation. The object-wildcard corpus has never been
    probed at state level. Treat the sentence as a hypothesis, not a finding.*
 
-   **The two `GraphAdmission` fields added by the flip (`FullScope.lean::GraphAdmission`,
-   13 fields), classified with `test_w4fragment_scope_pin.py`'s vocabulary (LOUD = Python
+   **The two `GraphAdmission` fields added by the flip (`FullScope.lean::GraphAdmission`
+   — the live field list is pinned verbatim in `formal/headline_definitions.txt`, which is
+   where to read it; a fourteenth field, `usWild`, was added 2026-09-13e by `TK68` and is
+   classified in the row below the table), classified with
+   `test_w4fragment_scope_pin.py`'s vocabulary (LOUD = Python
    raises on schemas/writes outside the field; SILENT = accepted; MIXED = some sub-cases
    raise), added 2026-09-06 (`TK55`):**
 
@@ -540,6 +543,7 @@ Everything §7 lists, plus the fragment carries:
    |---|---|---|---|
    | `keysNonempty` | every declared relation name is non-empty | **LOUD** | refused at parse time by both parsers as of 2026-09-06 — `zanzibar_utils_v1.py::parse_schema_ast`'s empty-name lock and, independently, `tests/oracle.py::parse_schema_ast`'s; pinned by `tests/test_reg_empty_relation_name.py`. ⚠ It was SILENT until that day, while `FullScope.lean` and `CORRESPONDENCE.md` §6 both claimed LOUD ("rejected at parse time by the identifier charset") — the charset is write-path only, and the empty name was reachable through `define : viewer` (untainted: graph accepts the write and answers `check=False` against oracle `True`; boolean: graph refuses in `DeltaProcessor._write_derived`, set engine accepts) |
    | `noLeafSubjects` | no rule of the full leaf-routed rule set mints a leaf-named (`'.'`-carrying) SUBJECT predicate | **LOUD** | refused at parse time by the PRODUCTION parser: a `'.'` in a declared name is `zanzibar_utils_v1.py::parse_schema_ast`'s dot-lock (pinned by `tests/test_boolean_compile.py::test_dot_reserved_in_relation_declarations`), and a `'.'` in any referenced name — TTU target/tupleset, `Direct` restriction predicate, `computed` operand — is `zanzibar_utils_v1.py::_validate_ast_references` (pinned by `tests/test_openfga_json.py::test_rejects_reserved_dot_in_referenced_names`); both backends construct through that parser, so nothing outside the field can be built. ⚠ Unlike `keysNonempty`, this lock is NOT mirrored in the oracle's parser: `tests/oracle.py::parse_schema_ast` accepts `define ...: viewer` (probe 2026-09-06), so the oracle cannot refuse it independently — a `TK55`-shaped follow-up, not a scope hole |
+   | `usWild` (added 2026-09-13e, `TK68`) | no DERIVED key is a subject-wildcard *userset* shape, i.e. no derived relation carries an in-bridge | **LOUD** | refused at COMPILE time, both disjuncts of `formal/lean/ZanzibarProofs/GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset`: a literal `[T:*#p]` restriction over a derived `(T,p)` raises `UnsupportedByGraphIndex` in `zanzibar_utils_v1.py::_build_plan_tree` (`:1881-1886`), and a star-tupleset TTU through-shape landing on a derived target raises in `zanzibar_utils_v1.py::_reject_object_wildcard_scope` (`:1484-1492`). Neither is dodgeable from an untainted container: `::_mentions` (`:1677-1678`) makes a userset restriction a reference so `::compute_taint` taints the container, and an untainted TTU onto a derived predicate name is refused earlier by `::_validate_ttu_tuplesets` (`:1132-1145`). ⚠ **This field is a fidelity gap CLOSED, not a new assumption** — `objWild` mirrored the first of Python's two `UnsupportedByGraphIndex` scope rejections and nothing mirrored the second, so for as long as the bundle lacked it the Lean admission predicate admitted schemas the shipped compiler refuses. Narrowing machine-checked twice: `FullScope.lean::W4Witness.sxUsWild_other_admission_fields_hold` (independent of the other admission fields) and `::sxThruDerived_wsBare_holds_but_usWild_fails` (independent of `W4Fragment.wsBare`, which makes the literal disjunct identically false on the fragment) |
 
 4. **The state-gate projections** — state-level conformance IS implemented
    (§1), but a divergence strictly inside a projected class would not fail it:

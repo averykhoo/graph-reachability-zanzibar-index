@@ -806,8 +806,14 @@ run_lean() {
          echo "      If that is intended (e.g. retiring a known-vacuous audit line), lower"; \
          echo "      EXPECTED_MIN_AUDITS in formal/verify.sh deliberately and say why in formal/history/."; \
          exit 1; }
-  BAD=$(echo "$AUDIT_OUT" | grep -iE "depends on axioms" \
-        | grep -vE "\[(propext|Classical\.choice|Quot\.sound)(, (propext|Classical\.choice|Quot\.sound))*\]$" || true)
+  # The allowlist lives in formal/audit_axiom_filter.sh so that
+  # tests/test_gate_axiom_filter.py can exercise the REAL filter rather than a
+  # reimplementation. It rejoins Lean's ~100-column line wrapping before matching:
+  # a long declaration name used to end the head line at `[propext,` with no closing
+  # bracket, which the anchored allowlist read as a non-standard axiom (2026-09-13e,
+  # `TK68`). See that script's header for the verbatim observed output and for why
+  # loosening the anchor instead would have made the guard blind to a wrapped `sorryAx`.
+  BAD=$(echo "$AUDIT_OUT" | sh "$REPO_ROOT/formal/audit_axiom_filter.sh")
   if [ -n "$BAD" ]; then
     echo "FAIL: non-standard axioms in the audit:"
     echo "$BAD"

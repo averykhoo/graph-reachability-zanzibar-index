@@ -1056,7 +1056,7 @@ statements are now false, and replaced by the positive pins below. -/
 theorem slV_admission_nil : GraphAdmission LeafRuleWitness.SlV ([] : Store) := by
   refine ⟨LeafRuleWitness.slV_wf, by unfold NodupKeys; decide, by unfold Stratifiable; decide,
     by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
-    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, by decide, ?_,
+    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, by decide, by decide, ?_,
     ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide), by decide, by decide,
     by decide, by decide⟩
   intro t ht
@@ -1201,7 +1201,7 @@ Consequences, stated so nobody re-derives them:
 theorem swTw_admission : GraphAdmission LeafWitness.Sw [LeafWitness.tw] := by
   refine ⟨LeafWitness.wf, by unfold NodupKeys; decide, by unfold Stratifiable; decide,
     by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
-    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, by decide, ?_,
+    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, by decide, by decide, ?_,
     ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide), by decide, by decide,
     by decide, by decide⟩
   intro t ht
@@ -1276,7 +1276,7 @@ theorem slV_admission_tlEditor :
     GraphAdmission LeafRuleWitness.SlV [LeafRuleWitness.tlEditor] := by
   refine ⟨LeafRuleWitness.slV_wf, by unfold NodupKeys; decide, by unfold Stratifiable; decide,
     by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
-    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, by decide, ?_,
+    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, by decide, by decide, ?_,
     ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide), by decide, by decide,
     by decide, by decide⟩
   intro t ht

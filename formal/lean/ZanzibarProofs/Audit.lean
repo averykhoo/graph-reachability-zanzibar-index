@@ -1166,6 +1166,60 @@ namespace Zanzibar
 #print axioms W4Witness.accepts
 #print axioms W4Witness.fragment
 #print axioms W4Witness.within_scope
+-- `TK68` (2026-09-13e): `GraphAdmission.usWild`, the SUBJECT-wildcard twin of `objWild`
+-- -- Python refuses a wildcard userset over a derived relation
+-- (`zanzibar_utils_v1.py::_build_plan_tree:1881-1886` for a literal `[T:*#p]`;
+-- `::_reject_object_wildcard_scope:1484-1492` for a star-tupleset through-shape) and the
+-- Lean admission bundle did not, so it was strictly WEAKER than the shipped compiler.
+-- The four below are the field's evidence, and they are audited for the reason the
+-- header gives: a new admission field that is a TAUTOLOGY would build, discharge `by
+-- decide` at all seven construction sites, and mirror nothing. `sxUsWild_usWild_false`
+-- is the negative half, `sxUsPlain_usWild` the one-bit control that attributes it to the
+-- `wildcard` flag (Python's own branch), and `sxUsWild_other_admission_fields_hold` the
+-- independence half. `noBridgedDerived` turns the decidable FIELD into the ∀-over-strings
+-- CARRY that `P6` step 3b threads (`UsStarWrite.lean::NoBridgedDerived`, whose docstring
+-- carries the type-index trap making the general predicate-string claim unsaveable).
+-- Standard axioms only:
+#print axioms GraphAdmission.noBridgedDerived
+#print axioms W4Witness.sxUsWild_usWild_false
+#print axioms W4Witness.sxUsPlain_usWild
+#print axioms W4Witness.sxUsWild_r_is_derived_and_bridged
+#print axioms W4Witness.sxUsWild_other_admission_fields_hold
+-- ★ The SHARP half of the same argument, and the one that makes the field non-trivial
+-- where the HEADLINES stand. `W4Fragment.wsBare` forces every literal wildcard shape
+-- BARE, which makes disjunct (a) of `isSubjectWildcardUserset` identically false on the
+-- whole W4 fragment -- so the `SxUsWild` pair above (a non-bare wildcard restriction)
+-- shows independence from the other ADMISSION fields but NOT from the fragment.
+-- `sxThruDerived_wsBare_holds_but_usWild_fails` closes that: `wsBare` HOLDS at
+-- `SxThruDerived` and `usWild` fails anyway, via the star-tupleset THROUGH-shape
+-- (disjunct (b), purely schematic, untouched by `wsBare` or by store-indexed
+-- `ttuStarFree`). `sxThruPlain_usWild` is the one-axis control -- dropping `but not
+-- banned` re-admits the schema -- and `sx_noBridgedDerived_applies` is the behavioural
+-- arm on the CARRY, routed through the bundle rather than through `decide`, so a broken
+-- bridge reddens a claim and not just a proof. Standard axioms only:
+#print axioms W4Witness.sxThruDerived_wsBare_holds_but_usWild_fails
+#print axioms W4Witness.sxThruPlain_usWild
+#print axioms W4Witness.sxThru_shape_present_in_both
+#print axioms W4Witness.sxThru_literal_disjunct_is_false
+#print axioms W4Witness.sxThruDerived_other_admission_fields_hold
+#print axioms W4Witness.sx_noBridgedDerived_applies
+-- (!) THE SWEEP CHANGED THE DELIVERABLE, and these four are what it added. On the first
+-- run the two mutations that matter most -- re-ranging `usWild` over `S.objectWildcards`
+-- (a plausible copy-paste slip from the field beside it) and over `[]` (vacuous on EVERY
+-- schema) -- reddened `GraphAdmission.noBridgedDerived` and NOTHING else: a broken PROOF,
+-- not a broken claim, which is `P6` step 3a's lesson recurring. The cause was structural:
+-- every pin above RE-SPELLS the predicate, so none of them observes the FIELD, and a
+-- mutation of the field could not move them by construction. These four claim something
+-- about `GraphAdmission` itself -- it REFUSES the two schemas Python refuses and ACCEPTS
+-- their one-bit-away controls -- so a tautological field makes the refusals FALSE rather
+-- than merely unproved. The `_admitted` pair is also the sharpest non-vacuity statement
+-- here: the bundle is inhabited one `wildcard` flag / one boolean operator away from each
+-- refusal, so neither can be dismissed as the bundle rejecting the neighbourhood.
+-- Standard axioms only:
+#print axioms W4Witness.sxUsWild_not_admitted
+#print axioms W4Witness.sxThruDerived_not_admitted
+#print axioms W4Witness.sxUsPlain_admitted
+#print axioms W4Witness.sxThruPlain_admitted
 -- The UNION-ROOTED non-vacuity witness (FullScope.lean, 2026-07-17): the exact
 -- scope Legs 1-2 widened — a union-rooted derived def (`approver := viewer or
 -- admin`) over a boolean `viewer`, both bundles inhabited. Standard axioms only:

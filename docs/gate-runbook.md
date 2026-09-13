@@ -362,6 +362,20 @@ time there were seven — the `ZT-P3-5` shape, in the file a session reads to ru
   through `propext` / `Classical.choice` / `Quot.sound`, so axiom-freedom is the
   signature of a vacuous restatement. (12 non-headline lemmas legitimately report no
   axioms, which is why the rule is scoped to the headline set.)
+  ⚠ **The ALLOWLIST lives in `formal/audit_axiom_filter.sh`, not inline, and it rejoins
+  Lean's line wrapping before matching (2026-09-13e, `TK68`).** It used to be two inline
+  `grep`s whose allowlist was anchored `\]$`. **Lean wraps a `#print axioms` message at
+  ~100 columns**, so a long enough declaration name pushes the axiom list onto
+  continuation lines and the head line ends `[propext,` with no closing bracket — and the
+  gate then reports `FAIL: non-standard axioms in the audit` for a theorem whose axioms
+  are the standard three. Observed on
+  `W4Witness.sxThruDerived_other_admission_fields_hold`; the trigger is NAME LENGTH, so it
+  will recur as declaration names grow. **If you meet this red, do not loosen the
+  allowlist** — dropping the `$` or prefix-matching `[propext` makes the check blind to a
+  wrapped list whose TAIL carries `sorryAx`, which is the one axiom the audit exists to
+  catch. The filter is pinned by `tests/test_gate_axiom_filter.py`, which runs the shipped
+  script rather than a copy of its pipeline; its docstring carries the six-row sabotage
+  table, including which rows are honestly INERT.
 - **4b STATEMENT** — `formal/conformance/statement_pin.py` extracts each headline
   theorem's statement text (binders + `:` + conclusion, up to the top-level `:=`)
   from the Lean source and diffs it against `formal/headline_statements.txt`

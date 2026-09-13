@@ -117,6 +117,35 @@ def Schema.isSubjectWildcardUserset (S : Schema) (t p : String) : Bool :=
     (S.defs.any (fun d => (exprRestrictions d.2).contains (t, p, true))
      || S.isStarTuplesetThrough t p)
 
+/-- **No DERIVED key is bridged in** — the scope carry `P6` step 3b threads, and the
+    honest form of `FullScope.lean::GraphAdmission.usWild`
+    (`TK68`, 2026-09-13e). Python refuses both disjuncts above over a tainted key:
+    `zanzibar_utils_v1.py::_build_plan_tree:1881-1886` for a literal `[T:*#p]`, and
+    `::_reject_object_wildcard_scope:1484-1492` for a star-tupleset through-shape.
+
+    **Why a named `def` rather than a spelled-out binder.** Once the leaf-routed write
+    leg bridges, `Cascade.lean::reachedByW3d_edge_source_ne_R` and its two-round twin
+    `CascadeStrata.lean::reachedByW3d2_edge_source_ne_R` both go FALSE — a bridge edge
+    is sourced at its CONCRETE endpoint, whose predicate can be `R` — and both must be
+    restated with this carry. Their consumers are 1 + 2 + 8 application sites
+    (`reachedByW3d_edge_source_ne_R` 1, `reachedByW3d_Rnode_not_source` 2,
+    `reachedByW3d2_Rnode_not_source` 8; measured 2026-09-13e), and the carry has to
+    reach every one of them. It is deliberately SCHEMA-level and store-free, which is
+    what makes that cheap: unlike the store-indexed `W4Fragment.term` — whose
+    `∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R` is
+    spelled out at 134 declarations and needs a two-line store-weakening lambda at 22 of
+    them (`t :: T → T`, `T → T.erase t`) — this one passes through a `write` or `remove`
+    step verbatim.
+
+    ⚠ **Do NOT weaken this to a claim about the predicate STRING.** Both `isDerived` and
+    `isSubjectWildcardUserset` are keyed on `(type, relation)`; a literal `[x:*#R]`
+    restriction at an UNTAINTED key `(x, R)` is legal Python and bridges a node whose
+    `pred` is `R`. So `a.pred ≠ R` is false as a general claim about an arbitrary node no
+    matter what premise is added — the restatement must carry the TYPE. `TK68`'s
+    type-index trap. -/
+def NoBridgedDerived (S : Schema) : Prop :=
+  ∀ dt R, isDerived S (dt, R) = true → S.isSubjectWildcardUserset dt R = false
+
 /-! ## The bridged-in-concrete test and `ensureInBridges` -/
 
 /-- `c` is a concrete *userset* node whose shape `(type, pred)` is a declared
