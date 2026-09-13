@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-13h
-updated: 2026-09-13h
+moved: 2026-09-14
+updated: 2026-09-14
 closed:
 ---
 
@@ -1466,3 +1466,69 @@ disjunct-(b) branch and asserting from `hDR` alone, which should fail at `SnvLea
 NEXT ACTION UNCHANGED: step 3 (the `LeafRules` re-point) is the first RED step, and it is still not
 started. Before it, re-read plan secs C9 and C10 -- the additive-first test has now paid twice and may
 pay again.
+
+### 2026-09-14
+
+STEP 14 IS NOT "DEFERRABLE IF RECORDED" ANY MORE -- it is a CORRECTNESS obligation, and the proof is
+now in the tree. Plus `BridgeNode`, the `FoldAdmitsBridged` family, and both owed evidence items from
+`2026-09-13h` discharged. Detail: `docs/p6-step3b-plan-2026-09-13.md` sec "Corrections appended
+2026-09-14" and sec "C10".
+
+(!) THE FINDING, AND IT CHANGES THE PLAN'S RANKING OF STEP 14.
+`Cascade.lean::FoldAdmitsHonestyWitness.foldl_edge_complete_is_false_for_the_bridged_fold` is a KERNEL
+refutation, verified first-hand this session:
+  `¬ (∀ us σ, FoldAdmits σ us → ∀ u ∈ us, edgeOf u ∈ (us.foldl writeBridgedOne σ).edges)`
+i.e. `RulesComplete.lean::foldl_writeDirect_edge_complete` -- the workhorse EVERY write-leg
+edge-completeness argument runs through -- restated over the bridged fold while keeping `FoldAdmits`
+as its hypothesis is FALSE. The weakening refuted is the narrowest plausible one: character-for-
+character the existing lemma with `writeDirect` swapped for `writeBridgedOne`, which is exactly what
+the step-3 re-point does to the code while leaving the binder untouched. **So a session that lands
+step 3 and leaves the `hadm` binders alone is not merely "describing the wrong fold" (the plan's
+wording) -- it is entitled to a FALSE conclusion.** The plan's toolbox entry
+"`foldl_writeBridgedOne_edge_complete` -- BLOCKED on the FoldAdmits decision" is now decided
+MECHANICALLY rather than by judgement: it cannot be stated over `FoldAdmits` at all.
+
+LANDED (all additive, whole-tree build green, audited CLEAN-ADDITIVE, sabotage logs independently
+corroborated line-by-line against the raw `lake` output by the auditor):
+* `Cascade.lean::FoldAdmitsBridged` + `decFoldAdmitsBridged` + `foldAdmitsBridgedB` +
+  `foldAdmitsBridgedB_iff` -- step 14's additive half, pre-paid. The MOVE (19 `hadm` binders, 3
+  stay-sites, 2 `foldAdmitsB` runtime gates) is red work and is untouched.
+* `::FoldAdmitsHonestyWitness` (11 decls) -- the disagreement is pinned at the LITERAL argument shape
+  `ReachedByW3d.write`'s `hadm` binds, with two attribution controls showing the two predicates AGREE
+  where the bridge merely fires, so the divergence is the cycle and not bridging.
+* `CascadeStable.lean::BridgeNode` + intro/elim + `not_bridgedInConcrete_of_bridgeNode` +
+  `not_derNode_of_bridgeNode` (the two extras disjuncts are DISJOINT by variant) +
+  `not_bridgeNode_of_star_bare` (T3 in the shape `ShadowOver.term` consumes, all six premises free at
+  `reachedByW3d_shadow`) + `bridgeNode_nonvacuous`. DEFINED and left UNUSED by `UntaintedShadow` --
+  the widening itself is the red step.
+
+(!) A DELIBERATE TRIPWIRE IS NOW IN THE TREE -- DO NOT "FIX" IT BY WEAKENING THE CONSTRUCTOR.
+`Cascade.lean::FoldAdmitsHonestyWitness.w3d_write_applies_with_the_stale_hypothesis` inhabits the live
+`ReachedByW3d.write` constructor at the cycle fixture TODAY. When step 14 re-points `hadm` to
+`FoldAdmitsBridged`, no term can inhabit it there and the declaration goes RED -- which is the point:
+the honesty fix cannot land silently. The prescribed response is in its docstring (move the pin to an
+admitted fixture and record the flip).
+
+BOTH OWED EVIDENCE ITEMS FROM `2026-09-13h` ARE DISCHARGED:
+* `hmd`'s negative control exists (`StarBareWitness.SmdLeaf` + `smdLeaf_hmd_breaks_star_bare`), and
+  the answer is a SPLIT the plan ran together: `hmd` CAN fail at a WF schema -- so do NOT drop the
+  premise, the general lemma is false without it -- but CANNOT fail at a `GraphAdmission`-ADMITTED
+  one. The provider is `RestrictBase.lean::RewriteMatchDeclared` via `GraphAdmission.matchDecl`, NOT
+  `WF` (`WF.relNames` constrains declared key names only, never a name a body references). Both halves
+  are pinned, not asserted.
+* The T2 payoff sweep ran (M0 instrument control + M1/M2 the prescribed weakening and its dual + M4 a
+  propagation control), and the table with each mutation's LITERAL `lake` output is in
+  `CascadeStable.lean` sec "CONTROLLED -- MUTATION SWEEP (2026-09-14)".
+
+(!) THE ERROR-RECOVERY FAILURE MODE RECURRED FOR THE THIRD INDEPENDENT TIME, AND IT INVALIDATED THE
+PRESCRIBED SABOTAGE. M1 and M2 each reddened EXACTLY ONE declaration -- their own -- while every
+consumer and control stayed GREEN, because Lean admits a failed declaration at its stated type. So
+`C10`'s prescribed sabotage could NEVER have shown the weakened THEOREM false; it could only show that
+PROOF incomplete. M4 (deleting the premise from the STATEMENT) propagated to three declarations, which
+is the contrast that identifies the cause: **statement changes are observed, proof changes are not.**
+The durable answer landed instead of the docstring: `hQ_free_statement_is_false` and
+`hDR_free_statement_is_false` are kernel refutations of the two weakened READINGS.
+
+NEXT ACTION, UNCHANGED AND NOW THE ONLY THING LEFT THAT IS NOT ADDITIVE: step 3, the `LeafRules`
+re-point. Every piece of step-3b work that could be done without re-pointing has now been done and
+committed green across four commits. What remains is genuinely red from step 3 to step 15.

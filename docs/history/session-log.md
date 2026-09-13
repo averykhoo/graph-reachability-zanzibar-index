@@ -30,6 +30,53 @@ from here.
 
 ---
 
+## 2026-09-14 — `P6` step 3b: step 14 is a CORRECTNESS obligation, not an honesty one — kernel-refuted
+
+rows: `P6` (Log `2026-09-14`). Nothing re-ranked. Fourth and final committed batch of the session
+that opened at `2026-09-13g`.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board + note
+
+**The additive-first re-plan paid a third time, and this one changed a plan ranking.** Pre-paying step
+14's additive half — the `FoldAdmitsBridged` predicate, its decidable twin and the iff — put enough
+machinery in the tree to ask the honest question mechanically. The answer:
+`Cascade.lean::FoldAdmitsHonestyWitness.foldl_edge_complete_is_false_for_the_bridged_fold` refutes
+`RulesComplete.lean::foldl_writeDirect_edge_complete` — the workhorse every write-leg
+edge-completeness argument runs through — restated over the bridged fold with `FoldAdmits` still as
+its hypothesis. The weakening refuted is the narrowest plausible one: character-for-character the
+existing lemma with `writeDirect` swapped for `writeBridgedOne`, which is exactly what the step-3
+re-point does to the code while leaving the binder untouched. **So a session that lands step 3 and
+leaves the `hadm` binders alone is not merely describing the wrong fold — it is entitled to a false
+conclusion.** The plan called step 14 "an HONESTY obligation, not a build blocker" and "legitimately
+deferrable IF recorded"; that is no longer the right ranking.
+
+A deliberate tripwire now guards it: `w3d_write_applies_with_the_stale_hypothesis` inhabits the live
+`ReachedByW3d.write` constructor at the cycle fixture today, and goes RED the moment step 14 re-points
+`hadm`. The honesty fix cannot land silently. Its docstring prescribes the correct response, because
+the tempting wrong one — weakening the constructor back — would retire the evidence.
+
+**Both evidence items recorded as owed yesterday are discharged, and one of them found a third
+recurrence of the repo's quietest failure mode.** The prescribed T2 sabotage (M1/M2) reddened exactly
+one declaration each — their own — while every consumer and control stayed green, because Lean
+error-recovers a failed declaration at its stated type. M4, which deleted a premise from the
+STATEMENT rather than the proof, propagated to three. That contrast identifies the cause: **statement
+changes are observed, proof changes are not**, so the prescribed sabotage could never have shown the
+weakened theorem false. The durable answer landed in place of a docstring — two kernel refutations of
+the weakened readings. The `hmd` question resolved into a split the plan had run together: it CAN
+fail at a WF schema, so the premise must stay, but CANNOT fail at a `GraphAdmission`-admitted one, and
+its provider is `RewriteMatchDeclared`, not `WF`.
+
+Where `P6` stands: every piece of step 3b that can be done without re-pointing is landed, gated and
+committed, across four commits. Step 3 is the first red step and the only remaining non-additive work.
+
+Still owed: step 3 onward (genuinely red, steps 3–15); the `CORRESPONDENCE.md` §7 gap entry for the
+deferred step 14, whose content is now the refutation rather than the old "anti-monotone probe"
+wording; and `FoldAdmitsBridged → FoldAdmits`, which needs edge-set monotonicity of `GraphState.reach`
+— no such lemma exists, the tree has only fuel monotonicity, and it was left out rather than `sorry`'d.
+
+---
+
 ## 2026-09-13h — `P6` step 3b: the SHADOW's support layer lands GREEN; step 8's go/no-go is answered
 
 rows: `P6` (Log `2026-09-13h`). Nothing re-ranked. Same session as `2026-09-13g`, second committed
