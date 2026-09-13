@@ -1056,6 +1056,31 @@ theorem exprDirectsAll_computedOnly : ∀ {e : Expr}, ComputedOnly e → exprDir
   | excl a b iha ihb =>
     intro h; simp only [exprDirectsAll, iha h.1, ihb h.2, List.append_nil]
 
+/-- **A `ComputedOnly` tree has no `TTU` node at all** — the `exprTtus` twin of
+    `exprDirectsAll_computedOnly` directly above, proved the same way (both enumerations
+    recurse through all three boolean nodes and are `[]` at `computed`, and `ComputedOnly`
+    is `False` at the `direct`/`ttu` leaves).
+
+    **What consumes it.** `UsStarWrite.lean::Schema.isStarTuplesetThrough` scans `exprTtus`
+    over ALL of `S.defs`, derived defs included, whereas
+    `ReconcileCorrect.lean::TtuTargetsSat` ranges over `schemaRewrites`, which the taint
+    filter (`RulesWrite.lean::schemaRewrites`) drops every derived def from. This lemma is
+    what plugs that gap: at a derived def the `ComputedOnly`-at-derived premise the
+    `reachedByW3d*_shadow` family already binds empties the scan outright, so the TTU-target
+    premise only ever has to cover the untainted defs it actually quantifies over. -/
+theorem exprTtus_computedOnly : ∀ {e : Expr}, ComputedOnly e → exprTtus e = [] := by
+  intro e
+  induction e with
+  | computed _ => intro _; rfl
+  | direct _ => intro h; exact h.elim
+  | ttu _ _ => intro h; exact h.elim
+  | union a b iha ihb =>
+    intro h; simp only [exprTtus, iha h.1, ihb h.2, List.append_nil]
+  | inter a b iha ihb =>
+    intro h; simp only [exprTtus, iha h.1, ihb h.2, List.append_nil]
+  | excl a b iha ihb =>
+    intro h; simp only [exprTtus, iha h.1, ihb h.2, List.append_nil]
+
 /-- **`DirectArmsConcrete S`** — a **derived** def's `Direct` arms carry no wildcard-flagged
     restriction (`r.2.2 = false` on every arm reachable through any boolean nesting).
 

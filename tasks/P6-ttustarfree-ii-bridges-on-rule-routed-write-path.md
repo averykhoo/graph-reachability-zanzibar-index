@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-13g
-updated: 2026-09-13g
+moved: 2026-09-13h
+updated: 2026-09-13h
 closed:
 ---
 
@@ -1409,3 +1409,60 @@ the re-run PASSED unchanged.
 
 NEXT ACTION: step 3 (the LeafRules re-point) is the first RED step. Before it, re-read plan sec C9 --
 it may contain further additive work worth landing green first.
+
+### 2026-09-13h
+
+STEP 8's SUPPORT LAYER IS LANDED AND GREEN -- T2 and T3 are machine-checked instead of paper proofs.
+Same session as `2026-09-13g`, second committed batch. Detail:
+`docs/p6-step3b-plan-2026-09-13.md` sec "C10".
+
+THE POINT: the shadow (step 8) was the plan's SINGLE SCHEDULE RISK -- the one piece with no landed
+design, gating all 19 downstream modules, whose worst case was a `TK68`-sized new admission field.
+Applying `C9`'s additive-first test to it shows its *support* layer mentions only definitions that
+already exist, so it lands GREEN before the red run rather than inside it. **69 declarations**,
+whole-tree build rc=0, audited CLEAN-ADDITIVE with ZERO deletions tree-wide, pins and anchors at
+baseline (`51/51`, `253/253`, `643/643`).
+
+WHAT THAT BUYS: step 8's go/no-go is answered. NO new `GraphAdmission` field. T3 costs the shadow
+family exactly two new binders (`TtuTuplesetsDirect S`, `TtuStarFree S T`), both already bound at all
+five call sites. T2 costs ZERO new binders -- its four premises are 1, 2, 5 and 6 of
+`reachedByW3d_shadow` verbatim. The remaining step-8 work is the widening itself, which is red.
+
+(!) THE LEAF-TTU GAP IS NOW A KERNEL REFUTATION, NOT A CLAIM.
+`CascadeStable.lean::StarBareWitness.slStP_leaf_ttu_breaks_star_bare` proves that at
+`LeafRuleWitness.SlStP` every premise EXCEPT the ComputedOnly one holds and the conclusion is FALSE --
+a bare `folder:*` parent walks out of the L closure carrying predicate `viewer`. `TtuStarFree`
+quantifies over `schemaRewrites S` while `rewriteStepL` steps over
+`schemaRewritesL S = schemaRewrites S ++ leafRewrites S`, so leaf ttu arms sit outside its quantifier
+entirely. Neither the plan body nor the first recon sweep saw this.
+
+(!) AN AUDIT FOUND A VACUITY HOLE AND IT IS CLOSED -- AND THE SHAPE IS WORTH CARRYING.
+`not_bridgedInConcrete_of_leafNode` is the form `ShadowOver.term` will consume and needs a `LeafNode`
+AND the four premises AT THE SAME SCHEMA. `LeafNode` was pinned only at `Sw`, the premises only at
+`Snv` -- so the composed lemma had no witness of its own and could have been vacuously true at every
+schema in the development while looking fully pinned. Closed by
+`LeafBridgeWitness.snv_has_a_leafNode`, routed through the proved decider `Leaf.lean::leafNodeB_correct`.
+**Each hypothesis family pinned separately proves nothing about their conjunction** -- check for this
+whenever a lemma composes two of them.
+
+(!) NEW GATE TRAP, MEASURED: `statement_pin.py` pins an `ambient:<path>` row -- a file's `variable` /
+`open` lines in order. In `CascadeStable.lean`, `CascadeStrata*.lean` or any pin-hosting module, a
+single additive `open` REDS step 4c while `51/51 statements match` stays green. Fully qualify instead.
+
+CORRECTIONS TO THE PLAN'S OWN CORRECTIONS (both in the safe direction, both now machine-checked):
+`C1`'s premise list undercounts by two (`NodupKeys S` and `hmd`, both FREE from
+`reachedByW3d_shadow` premises 1 and 7, `hmd` via `LeafScope.matchNotLeaf`) and `C2`'s by one
+(`NodupKeys S`). `C1`'s cited instrument for sub-obligation (b) is the wrong lemma -- the proof uses
+`isLeafPred_outRel_of_mem_leafRewrites`, and `isLeafPred_eq_false_of_relNameOK` is what BUILDS `hmd`
+one level up. `C1` budgeted the leaf-ttu killer as possibly "the bulk of the work"; it went through
+unrestricted in nine declarations, because the `ComputedOnly` twin of the purity chain is EASIER than
+the `isPure` original it copies.
+
+STILL OWED ON THIS LAYER, recorded rather than asserted: `hmd` has no negative control (load-bearing
+at four arms by inspection, but no fixture exhibits a schema where it fails); and no source-level
+sabotage rebuild of the T2 payoff was run -- the narrowest plausible weakening to try is dropping the
+disjunct-(b) branch and asserting from `hDR` alone, which should fail at `SnvLeafTtu`.
+
+NEXT ACTION UNCHANGED: step 3 (the `LeafRules` re-point) is the first RED step, and it is still not
+started. Before it, re-read plan secs C9 and C10 -- the additive-first test has now paid twice and may
+pay again.

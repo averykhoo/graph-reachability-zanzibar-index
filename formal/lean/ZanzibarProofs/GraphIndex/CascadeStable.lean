@@ -1212,6 +1212,900 @@ theorem noLeafStoreSubjects_sdrUserset : NoLeafStoreSubjects [tdrUserset] :=
 
 end DirRestrWitness
 
+/-! ### T2 — a LEAF predicate is never a bridge SOURCE (`P6` step 3b, additive half)
+
+**What this discharges.** `P6` step 3b widens the shadow's extras predicate with a
+`BridgeNode` disjunct, and `ShadowOver.term` then owes three "no extra node is an edge
+SOURCE" obligations. The SECOND of them (T2) is: no `Leaf.lean::LeafNode` is bridged in,
+i.e. at a leaf predicate `p` the bridge test `UsStarWrite.lean::
+Schema.isSubjectWildcardUserset ty p` is `false`. **The widening itself is NOT landed here**
+— this section is deliberately additive: every definition it mentions already exists, so the
+lemma is provable and committable GREEN, ahead of the red re-point run.
+
+**The route, and why it needs FOUR supports rather than the one the plan body priced.**
+`isSubjectWildcardUserset` is an outer `p != BARE` guard over a DISJUNCTION, and the guard
+is useless here (a leaf name is not `BARE`), so both disjuncts must die separately, from two
+DIFFERENT hypotheses `reachedByW3d_shadow` already binds:
+  (a) the literal `[ty:*#p]` restriction is killed by `DirectRestrictionsNotLeaf S` — but
+      that premise quantifies over `exprDirectsAll` while the disjunct is a membership in
+      `exprRestrictions`, and only the CONVERSE flattening existed
+      (`ReconcileStarsComplete.lean::mem_exprRestrictions_of_directsAll`). The forward
+      direction is `::mem_exprDirectsAll_of_mem_exprRestrictions`, landed with it.
+  (b) `isStarTuplesetThrough` is killed by `TtuTargetsSat S NotLeafName` — but that premise
+      ranges over `schemaRewrites`, which DROPS every derived def, while the disjunct scans
+      `exprTtus` over ALL of `S.defs`. The gap splits in two and needs three more lemmas:
+      at a DERIVED def the ComputedOnly-at-derived premise empties the scan
+      (`ReconcileCorrect.lean::exprTtus_computedOnly`); at an UNTAINTED def the def is
+      boolean-free (`RestrictBase.lean::containsBool_of_mem_defs_untainted`) so its TTU
+      nodes really are rewrite arms (`RulesWrite.lean::mem_exprArms_of_mem_exprTtus` — FALSE
+      without boolean-freeness, see its own note) which really are schema rewrites
+      (`RulesWrite.lean::mem_schemaRewrites_of_mem_exprArms`).
+⚠ The precedent the plan body cited for (b), `ReconcileCorrect.lean::
+rewriteStep_subject_pred_gen`, is the wrong shape and does not transfer: it CONSUMES
+`TtuTargetsSat` across a `rewriteStep` membership and maps nothing out of `exprTtus`.
+
+**No new `LeafScope` / `GraphAdmission` field is needed** — `hNK`, `hCO`, `hQ` and `hDR`
+below are hypotheses 1, 2, 5 and 6 of `reachedByW3d_shadow` verbatim. -/
+
+/-- **T2, the payoff.** At a LEAF predicate — `¬ NotLeafName p`, i.e. `p ≠ BARE` and `p`
+    carries a `'.'` — no subject-wildcard userset shape is declared, so nothing of that
+    shape is ever bridged in.
+
+    The hypothesis list is what the proof actually consumes, and all four are already bound
+    (in this order, as premises 1 / 2 / 5 / 6) by `reachedByW3d_shadow` and by both
+    `CascadeStrataSettle.lean` W3d-2 twins, so threading this costs those theorems NO new
+    binder. `NodupKeys` is needed twice — it is what makes `S.lookup d.1` return THIS def's
+    body, for `hCO` and for the boolean-freeness step.
+
+    Non-vacuity is pinned below (`LeafBridgeWitness`), and it matters: `LeafRules.lean::
+    lrV_untainted_layer_silent` proves `schemaRewrites SlV = []`, so `hQ` discharges
+    VACUOUSLY at that fixture and `SlV` cannot serve as the witness. -/
+theorem isSubjectWildcardUserset_false_of_notLeafName {S : Schema} {ty p : String}
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hQ : TtuTargetsSat S NotLeafName)
+    (hDR : DirectRestrictionsNotLeaf S)
+    (hleaf : ¬ NotLeafName p) :
+    S.isSubjectWildcardUserset ty p = false := by
+  -- disjunct (a): a literal `[ty:*#p]` restriction, refuted by `DirectRestrictionsNotLeaf`
+  have hA : S.defs.any (fun d => (exprRestrictions d.2).contains (ty, p, true)) = false := by
+    by_contra hcon
+    rw [Bool.not_eq_false] at hcon
+    simp only [List.any_eq_true] at hcon
+    obtain ⟨d, hd, hmem⟩ := hcon
+    rw [List.contains_eq_mem] at hmem
+    obtain ⟨rs, hrs, hr⟩ :=
+      mem_exprDirectsAll_of_mem_exprRestrictions (of_decide_eq_true hmem)
+    exact hleaf (hDR d hd rs hrs (ty, p, true) hr)
+  -- disjunct (b): a star-tupleset TTU through-shape, refuted by `TtuTargetsSat`
+  have hB : S.isStarTuplesetThrough ty p = false := by
+    by_contra hcon
+    rw [Bool.not_eq_false] at hcon
+    unfold Schema.isStarTuplesetThrough at hcon
+    simp only [List.any_eq_true] at hcon
+    obtain ⟨d, hd, tt, htt, hcond⟩ := hcon
+    rw [Bool.and_eq_true, beq_iff_eq] at hcond
+    have htr : tt.1 = p := hcond.1
+    cases hder : isDerived S d.1 with
+    | true =>
+      -- a derived def is `ComputedOnly`, and a `ComputedOnly` tree has no TTU node at all
+      rw [exprTtus_computedOnly (hCO d.1.1 d.1.2 d.2 (lookup_of_mem hNK hd) hder)] at htt
+      simp at htt
+    | false =>
+      -- an untainted def is boolean-free, so its TTU node IS a schema rewrite rule
+      have htt' : (tt.1, tt.2) ∈ exprTtus d.2 := htt
+      have hrule : (⟨d.1.1, tt.2, d.1.2, RuleKind.ttu tt.1⟩ : RRule) ∈ schemaRewrites S :=
+        mem_schemaRewrites_of_mem_exprArms hd hder
+          (mem_exprArms_of_mem_exprTtus
+            (containsBool_of_mem_defs_untainted hNK hd hder) htt')
+      exact hleaf (htr ▸ hQ _ hrule tt.1 rfl)
+  simp only [Schema.isSubjectWildcardUserset, hA, hB, Bool.or_self, Bool.and_false]
+
+/-- **T2 as `ShadowOver.term` will consume it**: a `LeafNode` of `S` is not a bridged-in
+    concrete node of any state carrying `S`, so it sources no bridge edge. Routed through
+    `Leaf.lean::not_leafNode_of_notLeafName` (contrapositive), never re-derived. -/
+theorem not_bridgedInConcrete_of_leafNode {S : Schema} {σ : GraphState} {k : NodeKey}
+    (hsc : σ.schema = S)
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hQ : TtuTargetsSat S NotLeafName)
+    (hDR : DirectRestrictionsNotLeaf S)
+    (hk : LeafNode S k) :
+    σ.bridgedInConcrete k = false := by
+  have hnl : ¬ NotLeafName k.pred := fun h => not_leafNode_of_notLeafName h hk
+  unfold GraphState.bridgedInConcrete
+  rw [hsc, isSubjectWildcardUserset_false_of_notLeafName hNK hCO hQ hDR hnl]
+  exact Bool.and_false _
+
+/-! #### Non-vacuity — the pin the recon sweep demanded, and the fixture it ruled out
+
+★ **A vacuous T2 is worse than no T2.** Two verifiers disagreed about whether the lemma
+above does any work at the tree's existing leaf fixture `SlV`, and the reconciliation was
+that BOTH are right about different questions: T2 is *sound* there, and its `hQ` premise is
+*vacuous* there, because `LeafRules.lean::lrV_untainted_layer_silent` proves
+`schemaRewrites SlV = []` by `decide` — so ANY `∀ r ∈ schemaRewrites S` premise discharges
+for free and `SlV` cannot be the witness. Hence this fixture, following
+`LeafRules.lean::wf_does_not_give_keysNonempty`.
+
+`Snv` is built so that **every premise is non-vacuous and every disjunct of the conclusion is
+live**:
+  * `hQ` — `schemaRewrites Snv` is a ONE-rule list carrying a real `RuleKind.ttu`
+    (`snv_schemaRewrites`), so the premise is a constraint, not an empty quantifier.
+  * `hDR` — the schema carries a non-`BARE` restriction predicate (`snv_hDR_is_not_vacuous`),
+    so the premise is tested at a referenced relation name and not only via `NotLeafName`'s
+    `BARE` escape — the all-`BARE` triviality `DirRestrWitness` already documents.
+  * `hCO` — there IS a derived key (`snv_hCO_is_not_vacuous`), so the ComputedOnly-at-derived
+    premise has a non-empty domain.
+  * the CONCLUSION is not constantly `false` on this schema: `isSubjectWildcardUserset`
+    returns `true` here at a non-leaf predicate through disjunct (a)
+    (`snv_bridges_a_non_leaf_pred`) AND disjunct (b) is live too
+    (`snv_through_shape_is_live`). So `snv_leaf_pred_is_not_a_bridge_source` is a fact ABOUT
+    the leaf predicate, not about a schema that bridges nothing.
+
+**The two controls are what make it discriminating.** Each perturbs exactly one premise and
+flips the conclusion at the SAME leaf predicate `"editor.0"`, so neither disjunct can be
+claimed to be dead weight:
+  * `SnvLeafDirect` adds a literal `[user:*#editor.0]` — `hDR` goes FALSE, `hQ` still holds,
+    and the conclusion goes TRUE through disjunct (a).
+  * `SnvLeafTtu` renames the TTU target to `"editor.0"` — `hQ` goes FALSE, `hDR` still
+    holds, and the conclusion goes TRUE through disjunct (b). -/
+
+namespace LeafBridgeWitness
+
+/-- `folder#viewer: [user, group:*#member]` · `doc#parent: [folder, folder:*]` ·
+    `doc#viewer: [user] or viewer from parent` · `doc#editor: viewer but not banned`.
+
+    The `excl` def makes `("doc","editor")` the one DERIVED key (so `hCO` has a domain and
+    `"editor.0"` is a plausible minted leaf name of a real derived family); the `[folder:*]`
+    restriction under a TTU tupleset makes the through-shape disjunct live; the
+    `[group:*#member]` restriction makes the literal disjunct live at a NON-leaf predicate. -/
+def Snv : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false), ("group", "member", true)]),
+    (("group", "member"),  .direct [("user", BARE, false)]),
+    (("doc", "parent"),    .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "viewer"),    .union (.direct [("user", BARE, false)]) (.ttu "viewer" "parent")),
+    (("doc", "banned"),    .direct [("user", BARE, false)]),
+    (("doc", "editor"),    .excl (.computed "viewer") (.computed "banned"))], []⟩
+
+-- (`NodupKeys` is a plain `def`, so instance search will not unfold it for `decide`.)
+theorem snv_nodupKeys : NodupKeys Snv := by unfold NodupKeys; decide
+
+theorem snv_directRestrictionsNotLeaf : DirectRestrictionsNotLeaf Snv := by decide
+
+/-- `hQ`'s quantifier is NON-EMPTY here — this is the exact fact `SlV` fails. -/
+theorem snv_schemaRewrites :
+    schemaRewrites Snv = [⟨"doc", "parent", "viewer", RuleKind.ttu "viewer"⟩] := by decide
+
+theorem snv_ttuTargetsSat : TtuTargetsSat Snv NotLeafName := by
+  intro r hr tr hkind
+  rw [snv_schemaRewrites, List.mem_singleton] at hr
+  subst hr
+  have heq : RuleKind.ttu "viewer" = RuleKind.ttu tr := hkind
+  injection heq with h
+  subst h
+  exact Or.inr (by decide)
+
+theorem snv_taintedKeys : taintedKeys Snv = [("doc", "editor")] := by decide
+
+theorem snv_computedOnly :
+    ∀ dt R e, Snv.lookup (dt, R) = some e → isDerived Snv (dt, R) = true → ComputedOnly e := by
+  intro dt R e hlk hder
+  have hk : (dt, R) ∈ taintedKeys Snv := by
+    unfold isDerived at hder
+    rw [List.contains_eq_mem] at hder
+    exact of_decide_eq_true hder
+  rw [snv_taintedKeys, List.mem_singleton] at hk
+  rw [hk] at hlk
+  have hval : Snv.lookup ("doc", "editor")
+      = some (Expr.excl (.computed "viewer") (.computed "banned")) := by decide
+  rw [hval] at hlk
+  injection hlk with he
+  subst he
+  exact ⟨trivial, trivial⟩
+
+/-- **THE PIN.** Derived THROUGH the lemma and never `decide`d directly, so it certifies
+    that T2 APPLIES at a schema where all four premises are live — not merely that its
+    conclusion happens to hold. -/
+theorem snv_leaf_pred_is_not_a_bridge_source :
+    Snv.isSubjectWildcardUserset "doc" "editor.0" = false :=
+  isSubjectWildcardUserset_false_of_notLeafName snv_nodupKeys snv_computedOnly
+    snv_ttuTargetsSat snv_directRestrictionsNotLeaf (by decide)
+
+theorem snv_hCO_is_not_vacuous : isDerived Snv ("doc", "editor") = true := by decide
+
+/-- ★ **The JOINT witness, and it is the one the battery above was missing** (added
+    2026-09-13g, after an audit found the gap). `not_bridgedInConcrete_of_leafNode` is the
+    form `ShadowOver.term` will actually consume, and it needs a `LeafNode` AND the four
+    premises **at the same schema**. Everything else here pins the premises at `Snv` while
+    the tree's only `LeafNode` pins live at `Sw` — so the composed lemma had no witness of
+    its own and could have been vacuously true at every schema in the development. It is
+    not: `Snv` carries one. Routed through the PROVED decider (`Leaf.lean::leafNodeB_correct`)
+    rather than asserting the `Prop` directly, per this namespace's own convention. -/
+theorem snv_has_a_leafNode :
+    LeafNode Snv (objNode ⟨"doc", "d1"⟩ (leafPred "editor" 0)) :=
+  (leafNodeB_correct Snv _).mp (by decide)
+
+theorem snv_hDR_is_not_vacuous :
+    ∃ d ∈ Snv.defs, ∃ rs ∈ exprDirectsAll d.2,
+      (("group", "member", true) : Restriction) ∈ rs := by decide
+
+/-- The conclusion is doing work: the SAME function returns `true` on this schema at a
+    non-leaf predicate, through disjunct (a). -/
+theorem snv_bridges_a_non_leaf_pred :
+    Snv.isSubjectWildcardUserset "group" "member" = true := by decide
+
+/-- …and disjunct (b) is live here too, so neither arm of the proof is scanning a dead set. -/
+theorem snv_through_shape_is_live :
+    Snv.isStarTuplesetThrough "folder" "viewer" = true := by decide
+
+/-- **CONTROL A — `hDR` is load-bearing.** `Snv` plus a literal `[user:*#editor.0]`. -/
+def SnvLeafDirect : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false), ("group", "member", true),
+        ("user", "editor.0", true)]),
+    (("group", "member"),  .direct [("user", BARE, false)]),
+    (("doc", "parent"),    .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "viewer"),    .union (.direct [("user", BARE, false)]) (.ttu "viewer" "parent")),
+    (("doc", "banned"),    .direct [("user", BARE, false)]),
+    (("doc", "editor"),    .excl (.computed "viewer") (.computed "banned"))], []⟩
+
+theorem snvLeafDirect_breaks_hDR : ¬ DirectRestrictionsNotLeaf SnvLeafDirect := by decide
+
+theorem snvLeafDirect_schemaRewrites :
+    schemaRewrites SnvLeafDirect = [⟨"doc", "parent", "viewer", RuleKind.ttu "viewer"⟩] := by
+  decide
+
+/-- …and ONLY `hDR` breaks: `hQ` is untouched, which is what makes the control attributable
+    to disjunct (a) rather than to "the schema got worse". -/
+theorem snvLeafDirect_keeps_hQ : TtuTargetsSat SnvLeafDirect NotLeafName := by
+  intro r hr tr hkind
+  rw [snvLeafDirect_schemaRewrites, List.mem_singleton] at hr
+  subst hr
+  have heq : RuleKind.ttu "viewer" = RuleKind.ttu tr := hkind
+  injection heq with h
+  subst h
+  exact Or.inr (by decide)
+
+theorem snvLeafDirect_bridges_the_leaf_pred :
+    SnvLeafDirect.isSubjectWildcardUserset "user" "editor.0" = true := by decide
+
+/-- **CONTROL B — `hQ` is load-bearing.** `Snv` with the TTU target renamed to the leaf
+    name, so the through-shape disjunct fires at `"editor.0"`. -/
+def SnvLeafTtu : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false), ("group", "member", true)]),
+    (("group", "member"),  .direct [("user", BARE, false)]),
+    (("doc", "parent"),    .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "viewer"),    .union (.direct [("user", BARE, false)])
+                                  (.ttu "editor.0" "parent")),
+    (("doc", "banned"),    .direct [("user", BARE, false)]),
+    (("doc", "editor"),    .excl (.computed "viewer") (.computed "banned"))], []⟩
+
+theorem snvLeafTtu_breaks_hQ : ¬ TtuTargetsSat SnvLeafTtu NotLeafName := by
+  intro h
+  exact absurd
+    (h ⟨"doc", "parent", "viewer", RuleKind.ttu "editor.0"⟩ (by decide) "editor.0" rfl)
+    (by decide)
+
+/-- …and ONLY `hQ` breaks: `hDR` still holds, so the control is attributable to disjunct (b).
+    Together with CONTROL A this is what proves BOTH disjuncts have to be killed — a proof
+    that handled only one of them would be green at one of these two schemas. -/
+theorem snvLeafTtu_keeps_hDR : DirectRestrictionsNotLeaf SnvLeafTtu := by decide
+
+theorem snvLeafTtu_bridges_the_leaf_pred :
+    SnvLeafTtu.isSubjectWildcardUserset "folder" "editor.0" = true := by decide
+
+end LeafBridgeWitness
+
+/-! ### T3 — the L-closure STAR-BARE family (`P6` step 3b, additive half)
+
+**What this discharges, and why `BareStarStore` alone does NOT.** `P6` step 3b widens the
+shadow's extras predicate with a bridge-node disjunct, and `ShadowOver.term` then owes a
+third obligation (T3): a bridge node `wAnyNode (ty, p)` sources no edge. The plan body
+justified T3 from `FullScope.lean::W4Fragment.bareStar : BareStarStore T` — "every stored
+STAR subject is BARE, and `isSubjectWildcardUserset _ BARE = false` by the outer
+`p != BARE` guard". **That justification is REFUTED.** `BareStarStore`
+(`BareStarCorrect.lean::BareStarStore`) quantifies over STORED tuples, while the
+obligation is about members of `rewriteClosureL S (rawWriteTuples S t)` — the list the
+re-pointed write leg folds — and the closure MANUFACTURES a non-BARE star subject:
+`RulesWrite.lean::applyRRule`'s `ttu` arm preserves the subject NAME (so `STAR` survives)
+and OVERWRITES the predicate with the TTU target, a declared relation name and hence not
+`BARE`. The outer guard never fires and that member IS an edge source. The hazard is the
+designed case, not a corner.
+
+**The tree already pays this price for the PLAIN closure, and the engine is `private`.**
+`RulesBareStar.lean::rewriteClosure_star_bare` exists for exactly this hazard and takes
+`TtuTuplesetsDirect S`, `TtuStarFree S T` and `BareStarStore T`; its engine `StarSeed` /
+`starSeed_step` is `private`, so an L version cannot reuse it. This section is the L twin,
+re-minted. **Nothing is re-pointed, no existing statement moves and nothing is
+de-privatised** — every definition mentioned here already exists, so the family lands
+GREEN ahead of the red re-point run.
+
+**Two premises the plain twin does not need, and one of them is the unbudgeted gap.**
+  * `hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false` — free from
+    `LeafRules.lean::LeafScope.matchNotLeaf`, premise 7 of `reachedByW3d_shadow`. It closes
+    the two arms the L step adds over the plain one: on a DERIVED write `rawWriteTuples`
+    re-addresses the seed onto `leafPred` names, and `leafRewrites` outputs carry them too,
+    and neither can be matched by an untainted rule, whose `matchRel` is a declared,
+    dot-free name. It is genuinely load-bearing rather than tidy: a rule's `matchRel` is
+    whatever relation NAME its `computed`/`ttu` arm references, and nothing in `WF` stops an
+    untainted def from referencing a dot-carrying name.
+  * ⚠ `hlc : ∀ r ∈ leafRewrites S, r.kind = RuleKind.computed` — **THE GAP, and it is what
+    makes this section cost more than a transcription.** `TtuStarFree` quantifies over
+    `schemaRewrites S`, the untainted-ONLY rule set, but `rewriteStepL` steps over
+    `schemaRewritesL S = schemaRewrites S ++ leafRewrites S`, and `leafRewrites` mints
+    `.ttu` arms off DERIVED defs' closure leaves — arms OUTSIDE `TtuStarFree`'s quantifier
+    entirely. So `TtuTuplesetsDirect + TtuStarFree + BareStarStore` is **not sufficient**
+    for the L closure. `hlc` kills those arms and is itself derived from the
+    ComputedOnly-at-derived premise the `reachedByW3d*_shadow` family already binds
+    (`kind_computed_of_mem_leafRewrites_computedOnly` below), so T3 costs NO new admission
+    or scope field beyond the `TtuTuplesetsDirect` / `TtuStarFree` pair. The refutation of
+    the `hlc`-free statement is machine-checked at `StarBareWitness`:
+    `slStP_leaf_ttu_breaks_star_bare`.
+
+⚠ **The cheap route is REFUSED, as a recorded decision on the `P6` row.**
+`LeafRules.lean::rewriteClosureL_subject_pred_gen` at a suitable `TtuTargetsSatL` gives T3
+in about three lines, but its provider is a SCHEMA-LEVEL ban on TTU targets that rejects
+through-shape schemas the STORE-level `TtuStarFree` admits — it would narrow the Lean
+fragment below what the Python compiler accepts. Nothing below uses it. -/
+
+/-! #### (2) The killer — a `ComputedOnly` derived layer mints no `.ttu` leaf rule
+
+Structurally a `ComputedOnly` twin of `LeafRules.lean`'s purity chain
+(`isPure_of_mem_splitPure_snd` … `isPure_of_closure_mem_persistedLeaves`), which is the
+only place in the tree that walks `persistedLeaves`' closure leaves. It cannot live beside
+it: `ComputedOnly` is `ReconcileCorrect.lean`'s and `LeafRules.lean` does not import that
+module. This file imports both. -/
+
+/-- Splitting a `ComputedOnly` subtree (`Leaf.lean::splitPure`) leaves every non-`Direct`
+    member `ComputedOnly`. EASIER than its purity twin on two arms: `splitPure` returns an
+    `inter`/`excl` node whole, and `ComputedOnly` is happy there (where `isPure` is `false`
+    and the arm is vacuous). -/
+theorem computedOnly_of_mem_splitPure_snd :
+    ∀ {e : Expr}, ComputedOnly e → ∀ x ∈ (splitPure e).2, ComputedOnly x := by
+  intro e
+  induction e with
+  | direct rs => intro h; exact h.elim
+  | computed R => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+  | ttu tgt ts => intro h; exact h.elim
+  | union a b iha ihb =>
+      intro h x hx
+      rw [splitPure] at hx
+      simp only [List.mem_append] at hx
+      rcases hx with hx | hx
+      · exact iha h.1 x hx
+      · exact ihb h.2 x hx
+  | inter a b _ _ => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+  | excl a b _ _ => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+
+/-- Re-folding `ComputedOnly` members into `unionAll`'s LEFT-nested union keeps them
+    `ComputedOnly`. -/
+theorem computedOnly_foldl_union :
+    ∀ (es : List Expr) (e : Expr), ComputedOnly e →
+      (∀ x ∈ es, ComputedOnly x) → ComputedOnly (es.foldl Expr.union e) := by
+  intro es
+  induction es with
+  | nil => intro e he _; simpa using he
+  | cons a es ih =>
+      intro e he hall
+      simp only [List.foldl_cons]
+      refine ih _ ?_ (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+      exact ⟨he, hall a (List.mem_cons_self ..)⟩
+
+/-- `unionAll` of `ComputedOnly` members is `ComputedOnly`. -/
+theorem computedOnly_of_unionAll {es : List Expr} {sub : Expr}
+    (hall : ∀ x ∈ es, ComputedOnly x) (h : unionAll es = some sub) : ComputedOnly sub := by
+  cases es with
+  | nil => simp [unionAll] at h
+  | cons e es =>
+      rw [unionAll] at h
+      simp only [Option.some.injEq] at h
+      subst h
+      exact computedOnly_foldl_union es e (hall e (List.mem_cons_self ..))
+        (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+
+/-- **The MERGED closure leaf of a `ComputedOnly` subtree is `ComputedOnly`** — the arm
+    that covers `persistedLeaves`' pure-union merge, and the one a lemma written only for
+    atoms would miss. -/
+theorem computedOnly_of_closure_mem_pureLeaves {e sub : Expr}
+    (hco : ComputedOnly e) (h : PLeaf.closure sub ∈ pureLeaves e) : ComputedOnly sub := by
+  simp only [pureLeaves, List.mem_append] at h
+  rcases h with h | h
+  · split at h <;> simp at h
+  · split at h
+    · simp at h
+    · rename_i sub' heq
+      simp only [List.mem_singleton, PLeaf.closure.injEq] at h
+      subst h
+      exact computedOnly_of_unionAll (computedOnly_of_mem_splitPure_snd hco) heq
+
+/-- Every `.closure` leaf `atomLeaves` emits from a `ComputedOnly` expression is
+    `ComputedOnly`. Only the `.computed` arm can fire at all: `ComputedOnly` is `False` at
+    `.direct` and `.ttu`, and `atomLeaves` is `[]` at the three boolean shapes. -/
+theorem computedOnly_of_closure_mem_atomLeaves {S : Schema} {ty : String} {e sub : Expr}
+    (hco : ComputedOnly e) (h : PLeaf.closure sub ∈ atomLeaves S ty e) : ComputedOnly sub := by
+  cases e with
+  | direct rs => exact hco.elim
+  | computed R =>
+      rw [atomLeaves] at h
+      split at h
+      · simp at h
+      · simp only [List.mem_singleton, PLeaf.closure.injEq] at h
+        subst h
+        exact hco
+  | ttu tgt ts => exact hco.elim
+  | union a b => simp [atomLeaves] at h
+  | inter a b => simp [atomLeaves] at h
+  | excl a b => simp [atomLeaves] at h
+
+/-- **The `ComputedOnly` twin of `LeafRules.lean::isPure_closure_persistedLeaves_and_spine`,
+    both halves at once.** One plain structural induction discharges the mutually-defined
+    pair for the reason that lemma records — every recursive call in the block is on an
+    IMMEDIATE subterm. The `.union` case is where the two allocators differ and where the
+    content sits: `persistedLeaves` may MERGE (through `pureLeaves`), `unionSpineLeaves`
+    never does. -/
+theorem computedOnly_closure_persistedLeaves_and_spine {S : Schema} {ty : String} :
+    ∀ (e : Expr), ComputedOnly e →
+      (∀ sub, PLeaf.closure sub ∈ persistedLeaves S ty e → ComputedOnly sub) ∧
+      (∀ sub, PLeaf.closure sub ∈ unionSpineLeaves S ty e → ComputedOnly sub) := by
+  intro e
+  induction e with
+  | direct rs => intro hco; exact hco.elim
+  | computed R =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h
+        exact computedOnly_of_closure_mem_atomLeaves hco h
+      · simp only [unionSpineLeaves] at h
+        exact computedOnly_of_closure_mem_atomLeaves hco h
+  | ttu tgt ts => intro hco; exact hco.elim
+  | union a b iha ihb =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h
+        split at h
+        · exact computedOnly_of_closure_mem_pureLeaves hco h
+        · simp only [List.mem_append] at h
+          exact h.elim ((iha hco.1).2 sub) ((ihb hco.2).2 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).2 sub) ((ihb hco.2).2 sub)
+  | inter a b iha ihb =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+  | excl a b iha ihb =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+
+/-- **Every `.closure` leaf of a `ComputedOnly` allocation is `ComputedOnly`.** -/
+theorem computedOnly_of_closure_mem_persistedLeaves {S : Schema} {ty : String} {e sub : Expr}
+    (hco : ComputedOnly e) (h : PLeaf.closure sub ∈ persistedLeaves S ty e) :
+    ComputedOnly sub :=
+  (computedOnly_closure_persistedLeaves_and_spine e hco).1 sub h
+
+/-- Every rewrite arm of a `ComputedOnly` expression is a `.computed` arm — `exprArms` mints
+    a `.ttu` rule at a `.ttu` node and nowhere else, and `ComputedOnly` has none. -/
+theorem kind_computed_of_mem_exprArms_computedOnly :
+    ∀ {e : Expr}, ComputedOnly e → ∀ {ot outRel : String} {r : RRule},
+      r ∈ exprArms ot outRel e → r.kind = RuleKind.computed := by
+  intro e
+  induction e with
+  | direct rs => intro hco; exact hco.elim
+  | computed R =>
+      intro _ _ _ _ hr
+      simp only [exprArms, List.mem_singleton] at hr
+      subst hr
+      rfl
+  | ttu tgt ts => intro hco; exact hco.elim
+  | union a b iha ihb =>
+      intro hco _ _ _ hr
+      rw [exprArms, List.mem_append] at hr
+      exact hr.elim (iha hco.1) (ihb hco.2)
+  | inter a b _ _ => intro _ _ _ _ hr; simp [exprArms] at hr
+  | excl a b _ _ => intro _ _ _ _ hr; simp [exprArms] at hr
+
+/-- **★ THE KILLER** — `C1`'s item 4, the piece neither the plan body nor the first recon
+    sweep had. Under the ComputedOnly-at-derived premise the `reachedByW3d*_shadow` family
+    already binds, the LEAF layer of the compiled rule set mints only `.computed` rules, so
+    `rewriteStepL` can fire a `ttu` arm only from `schemaRewrites` — which is exactly where
+    `RulesBareStar.lean::TtuStarFree`'s quantifier lives.
+
+    `NodupKeys` is what makes `S.lookup d.1` return THIS def's body, exactly as in
+    `isSubjectWildcardUserset_false_of_notLeafName` above. Neither premise is new.
+
+    ⚠ **`hCO` is load-bearing and the fixture that shows it already existed.**
+    `LeafRules.lean::lrStP_rules` pins `leafRewrites LeafRuleWitness.SlStP` as carrying
+    `⟨"doc", "parent", access.0, RuleKind.ttu "viewer"⟩` — a `.ttu` LEAF rule — and
+    `StarBareWitness.slStP_breaks_hCO` below is the `hCO` failure that admits it. -/
+theorem kind_computed_of_mem_leafRewrites_computedOnly {S : Schema}
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    {r : RRule} (h : r ∈ leafRewrites S) : r.kind = RuleKind.computed := by
+  unfold leafRewrites at h
+  obtain ⟨d, hd, hdr⟩ := List.mem_flatMap.mp h
+  have hdefs : d ∈ S.defs := (List.mem_filter.mp hd).1
+  have hder : isDerived S d.1 = true := (List.mem_filter.mp hd).2
+  have hco : ComputedOnly d.2 := hCO d.1.1 d.1.2 d.2 (lookup_of_mem hNK hdefs) hder
+  unfold keyLeafRewrites at hdr
+  obtain ⟨pi, hpi, hr⟩ := List.mem_flatMap.mp hdr
+  split at hr
+  · rename_i sub heq
+    have hmem : PLeaf.closure sub ∈ persistedLeaves S d.1.1 d.2 := by
+      rw [← heq]
+      have := List.mem_map_of_mem (f := Prod.fst) hpi
+      rwa [List.zipIdx_map_fst] at this
+    exact kind_computed_of_mem_exprArms_computedOnly
+      (computedOnly_of_closure_mem_persistedLeaves hco hmem) hr
+  · simp at hr
+
+/-! #### (a) The SEEDS are free — `rawWriteTuples` re-addresses the RELATION only -/
+
+/-- **Every seed of the raw write's fan-out carries the raw write's own subject.** Stated
+    over the FAN-OUT rather than the singleton, which is the form the L closure needs:
+    `Leaf.lean::rawWriteTuples` is `(rawWriteRels S t).map (fun r => { t with relation := r })`
+    and touches nothing but the relation. -/
+theorem rawWriteTuples_subject {S : Schema} {t w : Tuple} (h : w ∈ rawWriteTuples S t) :
+    w.subject = t.subject := by
+  unfold rawWriteTuples at h
+  obtain ⟨r, _, rfl⟩ := List.mem_map.mp h
+  rfl
+
+/-- …and every seed is either the raw write itself or carries a MINTED LEAF relation
+    (`Leaf.lean::mem_rawWriteRels_derived`). This is the dichotomy the untainted `ttu` arm is
+    killed on: an untainted rule's `matchRel` is dot-free (`hmd`), so it cannot match the
+    leaf-routed half of the fan-out, and what remains is the stored tuple `TtuStarFree`
+    already speaks about. -/
+theorem mem_rawWriteTuples_eq_or_isLeafPred {S : Schema} {t w : Tuple}
+    (h : w ∈ rawWriteTuples S t) : w = t ∨ isLeafPred w.relation = true := by
+  by_cases hd : isDerived S (t.object.type, t.relation) = true
+  · refine Or.inr ?_
+    unfold rawWriteTuples at h
+    obtain ⟨r, hr, rfl⟩ := List.mem_map.mp h
+    obtain ⟨i, rfl⟩ := mem_rawWriteRels_derived hd hr
+    simp
+  · rw [rawWriteTuples_untainted (by simpa using hd)] at h
+    exact Or.inl (List.mem_singleton.mp h)
+
+/-! #### (b) + (c) The `StarSeed` machinery, ported to `schemaRewritesL` -/
+
+/-- The L carrier — `RulesBareStar.lean::StarSeed` with the seed SET widened to the raw
+    write's fan-out and the output provenance widened to the FULL rule set. The plain
+    original is `private`, so this is a re-mint; `RulesBareStar.lean` is not touched. -/
+def StarSeedL (S : Schema) (t w : Tuple) : Prop :=
+  (w.subject.name = STAR → w.subject = t.subject) ∧
+  (w ∈ rawWriteTuples S t ∨
+    ∃ r ∈ schemaRewritesL S, r.objectType = w.object.type ∧ r.outRel = w.relation)
+
+/-- **The step.** Only a `ttu` arm can change a subject predicate, and under the four
+    premises no `ttu` arm ever fires on a star-subject L-closure member. FOUR cases, two of
+    which the plain twin does not have:
+      * a LEAF `ttu` arm — impossible outright, by `hlc` (the gap `C1` names);
+      * an untainted `ttu` arm on the stored seed — `TtuStarFree` verbatim;
+      * an untainted `ttu` arm on a leaf-ROUTED seed, or on a leaf-routed rewrite OUTPUT —
+        both carry a minted leaf relation, which `hmd` forbids an untainted `matchRel` from
+        being;
+      * an untainted `ttu` arm on an untainted rewrite output — `TtuTuplesetsDirect`, via
+        `RulesCorrect.lean::no_rewrite_outputs_tupleset`, exactly as in the plain twin. -/
+theorem starSeedL_step {S : Schema} {T : Store}
+    (hTT : TtuTuplesetsDirect S) (hTS : TtuStarFree S T)
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hlc : ∀ r ∈ leafRewrites S, r.kind = RuleKind.computed)
+    {t : Tuple} (ht : t ∈ T) {x u : Tuple}
+    (hx : StarSeedL S t x) (hu : u ∈ rewriteStepL S x) : StarSeedL S t u := by
+  obtain ⟨hxs, hRx⟩ := hx
+  refine ⟨?_, Or.inr (rewriteStepL_outRel hu)⟩
+  unfold rewriteStepL at hu
+  obtain ⟨r, hr, happly⟩ := List.mem_filterMap.mp hu
+  rw [schemaRewritesL, List.mem_append] at hr
+  unfold applyRRule at happly
+  split at happly
+  · rename_i hcond
+    cases hk : r.kind with
+    | computed =>
+      rw [hk] at happly
+      simp only [Option.some.injEq] at happly
+      intro hustar
+      rw [← happly] at hustar ⊢
+      exact hxs hustar
+    | ttu tr =>
+      rw [hk] at happly
+      simp only [Option.some.injEq] at happly
+      intro hustar
+      have hxstar : x.subject.name = STAR := by rw [← happly] at hustar; exact hustar
+      exfalso
+      rcases hr with hrS | hrL
+      · rcases hRx with hseed | ⟨r', hr', hr'ot, hr'out⟩
+        · -- a SEED: either the stored tuple itself, or a leaf-routed re-addressing
+          rcases mem_rawWriteTuples_eq_or_isLeafPred hseed with rfl | hlp
+          · exact hTS _ ht hxstar r hrS tr hk hcond
+          · rw [hcond.1, hmd r hrS] at hlp
+            exact Bool.noConfusion hlp
+        · -- an OUTPUT: of an untainted rule, or of a leaf rule
+          obtain ⟨d, hd, hd1, harm⟩ := schemaRewrites_provenance hrS
+          have htt : (tr, r.matchRel) ∈ exprTtus d.2 := exprArms_ttu_mem d.2 harm tr hk
+          rw [schemaRewritesL, List.mem_append] at hr'
+          rcases hr' with hr'S | hr'L
+          · refine no_rewrite_outputs_tupleset hTT hd htt hr'S ?_ ?_
+            · rw [hr'ot, hcond.2]
+              exact (congrArg Prod.fst hd1).symm
+            · rw [hr'out, hcond.1]
+          · have hlp := isLeafPred_outRel_of_mem_leafRewrites hr'L
+            rw [hr'out, hcond.1, hmd r hrS] at hlp
+            exact Bool.noConfusion hlp
+      · -- a LEAF `ttu` arm: outside `TtuStarFree`'s quantifier entirely, killed by `hlc`
+        rw [hlc r hrL] at hk
+        exact RuleKind.noConfusion hk
+  · simp at happly
+
+/-- **A star-subject L-closure member carries the raw write's FULL subject.** The L twin of
+    `RulesBareStar.lean::rewriteClosure_star_subject`; same kernel induction, at the
+    fan-out seed list. -/
+theorem rewriteClosureL_star_subject {S : Schema} {T : Store}
+    (hTT : TtuTuplesetsDirect S) (hTS : TtuStarFree S T)
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hlc : ∀ r ∈ leafRewrites S, r.kind = RuleKind.computed)
+    {t : Tuple} (ht : t ∈ T) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S (rawWriteTuples S t))
+    (hstar : u.subject.name = STAR) : u.subject = t.subject := by
+  have haux : ∀ (n : Nat) (cur : List Tuple), (∀ w ∈ cur, StarSeedL S t w) →
+      ∀ v ∈ rewriteClosureAuxL S n cur, StarSeedL S t v := by
+    intro n
+    induction n with
+    | zero => intro cur hcur v hv; exact hcur v hv
+    | succ m ih =>
+      intro cur hcur v hv
+      rw [rewriteClosureAuxL, List.mem_append] at hv
+      rcases hv with hin | hrec
+      · exact hcur v hin
+      · refine ih (cur.flatMap (rewriteStepL S)) ?_ v hrec
+        intro w hw
+        obtain ⟨y, hy, hwy⟩ := List.mem_flatMap.mp hw
+        exact starSeedL_step hTT hTS hmd hlc ht (hcur y hy) hwy
+  rw [mem_rewriteClosureL_iff] at hu
+  unfold rewriteClosureRawL at hu
+  refine (haux (S.keys.length + 1) (rawWriteTuples S t) ?_ u hu).1 hstar
+  intro w hw
+  exact ⟨fun _ => rawWriteTuples_subject hw, Or.inl hw⟩
+
+/-- **(1) `rewriteClosureL_star_bare`** — the L analogue of
+    `RulesBareStar.lean::rewriteClosure_star_bare`, and its premise list is SIX rather than
+    that theorem's three. The three extras are all already bound by `reachedByW3d_shadow`
+    and by both `CascadeStrataSettle.lean` W3d-2 twins — `NodupKeys` (premise 1), the
+    ComputedOnly-at-derived clause (premise 2), and `hmd`, supplied by
+    `LeafScope.matchNotLeaf` off premise 7 — so threading this costs those theorems no new
+    binder beyond the `TtuTuplesetsDirect` / `TtuStarFree` pair the plain twin already
+    needs, whose providers exist (`FullScope.lean::GraphAdmission.ttuDirect` and
+    `::W4Fragment.ttuStarFree`). `W4Fragment.ttuStarFree` is CONSUMED here, never narrowed. -/
+theorem rewriteClosureL_star_bare {S : Schema} {T : Store}
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hTT : TtuTuplesetsDirect S) (hTS : TtuStarFree S T) (hBS : BareStarStore T)
+    {t : Tuple} (ht : t ∈ T) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S (rawWriteTuples S t))
+    (hstar : u.subject.name = STAR) : u.subject.predicate = BARE := by
+  have hsub := rewriteClosureL_star_subject hTT hTS hmd
+    (fun r hr => kind_computed_of_mem_leafRewrites_computedOnly hNK hCO hr) ht hu hstar
+  rw [hsub]
+  exact (hBS t ht).1 (by rw [← hsub]; exact hstar)
+
+/-! #### (3) The bridge-node endpoint, and T3 in the shape `term` consumes -/
+
+/-- **A node that IS a bridge node belongs to a STAR subject.** The EXTRACTION direction of
+    `RulesBareStar.lean::wAnyNode_eq_subjNode`, which only CONSTRUCTS
+    (`wAnyNode (ty, p) = subjNode ⟨ty, STAR, p⟩`); a tree-wide grep finds no lemma going the
+    other way, and `ShadowOver.term`'s bridge case arrives holding exactly this equation.
+    One `variant` mismatch: a non-star subject's node is `plain`. -/
+theorem star_of_subjNode_eq_wAnyNode {s : SubjectRef} {sh : Shape}
+    (h : subjNode s = wAnyNode sh) : s.name = STAR := by
+  by_contra hne
+  rw [subjNode, if_neg hne] at h
+  simp [wAnyNode] at h
+
+/-- **T3 at the write leg's SUBJECT endpoint, assembled.** No member of the list the
+    re-pointed write leg folds has a bridge node as its subject node: a bridge node forces a
+    STAR subject (`star_of_subjNode_eq_wAnyNode`), a star subject of the L closure is BARE
+    (`rewriteClosureL_star_bare`), and `UsStarWrite.lean::Schema.isSubjectWildcardUserset`
+    is `false` at `BARE` by the OUTER `p != BARE` guard the file insists stays outermost.
+
+    Stated over `isSubjectWildcardUserset` rather than over a `BridgeNode` predicate because
+    that predicate does not exist yet — minting it is the RED half of step 3b. This is the
+    same fact, at the definition the red half will wrap. -/
+theorem isSubjectWildcardUserset_false_of_star_bare {S : Schema} {T : Store}
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hTT : TtuTuplesetsDirect S) (hTS : TtuStarFree S T) (hBS : BareStarStore T)
+    {t : Tuple} (ht : t ∈ T) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S (rawWriteTuples S t)) {ty p : String}
+    (hnode : subjNode u.subject = wAnyNode (ty, p)) :
+    S.isSubjectWildcardUserset ty p = false := by
+  have hstar : u.subject.name = STAR := star_of_subjNode_eq_wAnyNode hnode
+  have hbare : u.subject.predicate = BARE :=
+    rewriteClosureL_star_bare hNK hCO hmd hTT hTS hBS ht hu hstar
+  have hp : p = BARE := by
+    have h2 := congrArg NodeKey.pred hnode
+    simp only [subjNode_pred, wAnyNode] at h2
+    exact h2.symm.trans hbare
+  rw [hp]
+  simp [Schema.isSubjectWildcardUserset]
+
+/-! #### Non-vacuity, and the control that makes `hCO` load-bearing
+
+★ Per `docs/sabotage-procedure.md`. The vacuity risk here is specific and worth naming: a
+star-subject member of `rewriteClosureL S (rawWriteTuples S t)` might simply never exist,
+in which case the whole family would be a theorem about an empty set. `snv_star_closure_member`
+refutes that by exhibiting one at a NON-seed member (`unvStar_ne_seed`), on the `Snv` fixture
+the T2 section already built, and `snv_star_closure_member_is_bare` derives the conclusion
+THROUGH `rewriteClosureL_star_bare` rather than by `decide`, so it certifies applicability.
+(The conclusion's VALUE is `rfl` at any fixture — a seed star subject is bare by
+`BareStarStore` and the closure is what could break it — so the content of that pin is the
+applicability, not the equation. Stated rather than implied.)
+
+**The control is the load-bearing half.** `LeafRuleWitness.SlStP` is `access := viewer from
+parent but not banned`: its derived def carries a `.ttu`, `hCO` is FALSE there
+(`slStP_breaks_hCO`), and `LeafRules.lean::lrStP_rules` already pins that its leaf layer
+mints `⟨"doc", "parent", access.0, RuleKind.ttu "viewer"⟩`. EVERY other premise of
+`rewriteClosureL_star_bare` holds at that fixture and the conclusion FAILS — a bare
+`folder:*` parent walks out of the L closure carrying predicate `"viewer"`. That is `C1`'s
+third gap as a kernel refutation rather than a paper one, and it is why the
+`TtuTuplesetsDirect + TtuStarFree + BareStarStore` premise list of the plain twin cannot
+simply be transcribed.
+
+⚠ **`hmd` is NOT controlled here.** It is load-bearing by inspection (an untainted rule's
+`matchRel` is whatever relation name its arm references, and nothing in `WF` stops a def
+from referencing a dot-carrying name), but no fixture in this file exhibits that schema.
+Owed, and recorded as owed rather than asserted. -/
+
+namespace StarBareWitness
+
+/-! ⚠ **Deliberately NOT `open LeafBridgeWitness`.** `statement_pin.py` pins an
+`ambient:<path>` row per hosting file — the file's `variable` / `open` lines, in order —
+and `CascadeStable.lean` hosts pinned declarations, so ONE `open` here turns
+`check_definitions` red (measured this session: `FAIL: … ambient:…/CascadeStable.lean`).
+Every `LeafBridgeWitness` reference below is spelled out instead. -/
+
+/-- The raw write whose L closure carries a STAR subject ACROSS a rewrite step: a bare
+    `user:*` grant of `LeafBridgeWitness.Snv`'s UNTAINTED `doc#viewer`. -/
+def tnvStar : Tuple := ⟨⟨"user", STAR, BARE⟩, "viewer", ⟨"doc", "d1"⟩⟩
+
+/-- …and the member it produces — `Snv`'s derived `doc#editor` routes `viewer` onto the
+    minted leaf `editor.0`, so this is a genuine closure OUTPUT, not a re-addressed seed. -/
+def unvStar : Tuple := ⟨⟨"user", STAR, BARE⟩, leafPred "editor" 0, ⟨"doc", "d1"⟩⟩
+
+theorem unvStar_ne_seed : unvStar ≠ tnvStar := by decide
+
+theorem snv_leafRewrites_nonempty : leafRewrites LeafBridgeWitness.Snv ≠ [] := by decide
+
+theorem snv_star_closure_member :
+    unvStar ∈ rewriteClosureL LeafBridgeWitness.Snv
+      (rawWriteTuples LeafBridgeWitness.Snv tnvStar) := by decide
+
+theorem snv_star_closure_member_is_star : unvStar.subject.name = STAR := by decide
+
+theorem snv_ttuTuplesetsDirect : TtuTuplesetsDirect LeafBridgeWitness.Snv := by
+  unfold TtuTuplesetsDirect; decide
+
+theorem snv_matchNotLeaf :
+    ∀ r ∈ schemaRewrites LeafBridgeWitness.Snv, isLeafPred r.matchRel = false := by
+  intro r hr
+  rw [LeafBridgeWitness.snv_schemaRewrites, List.mem_singleton] at hr
+  subst hr
+  decide
+
+theorem snv_bareStar : BareStarStore [tnvStar] := by
+  intro t' ht'
+  rw [List.mem_singleton] at ht'
+  subst ht'
+  exact ⟨fun _ => rfl, by decide⟩
+
+/-- Non-vacuous for the right reason: `schemaRewrites Snv` is a ONE-rule list carrying a real
+    `RuleKind.ttu` (`snv_schemaRewrites`), so this premise is a constraint rather than an
+    empty quantifier — it is discharged because `tnvStar`'s relation is not that rule's
+    tupleset, not because there is no rule. -/
+theorem snv_ttuStarFree : TtuStarFree LeafBridgeWitness.Snv [tnvStar] := by
+  intro t' ht' _ a ha tr _ hmatch
+  rw [List.mem_singleton] at ht'
+  subst ht'
+  rw [LeafBridgeWitness.snv_schemaRewrites, List.mem_singleton] at ha
+  subst ha
+  exact absurd hmatch.1 (by decide)
+
+/-- The leaf layer of `Snv` is non-empty (`snv_leafRewrites_nonempty`) and entirely
+    `.computed`, derived THROUGH the killer rather than `decide`d. -/
+theorem snv_leaf_rules_all_computed :
+    ∀ r ∈ leafRewrites LeafBridgeWitness.Snv, r.kind = RuleKind.computed :=
+  fun _ hr => kind_computed_of_mem_leafRewrites_computedOnly
+    LeafBridgeWitness.snv_nodupKeys LeafBridgeWitness.snv_computedOnly hr
+
+/-- **THE PIN.** Derived THROUGH `rewriteClosureL_star_bare`, at a configuration where the
+    star-subject hypothesis is REACHED at a non-seed closure member and every premise is
+    live. See the section note on what this pin does and does not certify. -/
+theorem snv_star_closure_member_is_bare : unvStar.subject.predicate = BARE :=
+  rewriteClosureL_star_bare LeafBridgeWitness.snv_nodupKeys
+    LeafBridgeWitness.snv_computedOnly snv_matchNotLeaf
+    snv_ttuTuplesetsDirect snv_ttuStarFree snv_bareStar (List.mem_singleton_self tnvStar)
+    snv_star_closure_member snv_star_closure_member_is_star
+
+/-- The control's raw write: a BARE `folder:*` parent — legal under `BareStarStore`. -/
+def tstpStar : Tuple := ⟨⟨"folder", STAR, BARE⟩, "parent", ⟨"doc", "d1"⟩⟩
+
+/-- …and the non-BARE star subject `SlStP`'s LEAF `ttu` rule manufactures out of it. -/
+def ustpStar : Tuple := ⟨⟨"folder", STAR, "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩
+
+theorem slStP_nodupKeys : NodupKeys LeafRuleWitness.SlStP := by unfold NodupKeys; decide
+
+/-- The untainted layer is EMPTY at `SlStP` — which is what makes `hmd` and `TtuStarFree`
+    hold there vacuously, and therefore what makes the control attributable to `hCO`. -/
+theorem slStP_untainted_layer_silent : schemaRewrites LeafRuleWitness.SlStP = [] := by decide
+
+theorem slStP_matchNotLeaf :
+    ∀ r ∈ schemaRewrites LeafRuleWitness.SlStP, isLeafPred r.matchRel = false := by
+  intro r hr
+  rw [slStP_untainted_layer_silent] at hr
+  simp at hr
+
+theorem slStP_ttuStarFree : TtuStarFree LeafRuleWitness.SlStP [tstpStar] := by
+  intro t' _ _ a ha
+  rw [slStP_untainted_layer_silent] at ha
+  simp at ha
+
+theorem slStP_ttuTuplesetsDirect : TtuTuplesetsDirect LeafRuleWitness.SlStP := by
+  unfold TtuTuplesetsDirect; decide
+
+theorem slStP_bareStar : BareStarStore [tstpStar] := by
+  intro t' ht'
+  rw [List.mem_singleton] at ht'
+  subst ht'
+  exact ⟨fun _ => rfl, by decide⟩
+
+theorem slStP_star_member :
+    ustpStar ∈ rewriteClosureL LeafRuleWitness.SlStP
+      (rawWriteTuples LeafRuleWitness.SlStP tstpStar) := by decide
+
+theorem slStP_star_member_is_star : ustpStar.subject.name = STAR := by decide
+
+theorem slStP_star_member_is_not_bare : ustpStar.subject.predicate ≠ BARE := by decide
+
+/-- `hCO` is FALSE at `SlStP`: `access := viewer from parent but not banned` is an `excl`
+    whose LEFT arm is a `.ttu`, and `ComputedOnly` is `False` at a `.ttu` leaf. -/
+theorem slStP_breaks_hCO :
+    ¬ (∀ dt R e, LeafRuleWitness.SlStP.lookup (dt, R) = some e →
+        isDerived LeafRuleWitness.SlStP (dt, R) = true → ComputedOnly e) := by
+  intro h
+  have hlk : LeafRuleWitness.SlStP.lookup ("doc", "access")
+      = some (Expr.excl (.ttu "viewer" "parent") (.computed "banned")) := by decide
+  have hder : isDerived LeafRuleWitness.SlStP ("doc", "access") = true := by decide
+  exact (h "doc" "access" _ hlk hder).1
+
+/-- **★ THE CONTROL, in one statement.** Every premise of `rewriteClosureL_star_bare`
+    EXCEPT the ComputedOnly one holds at `LeafRuleWitness.SlStP`, and the conclusion is
+    FALSE there. So the `hCO` premise — equivalently `hlc`, the leaf-layer killer — is not
+    decoration: without it the theorem is false, not merely unproven. This is `C1`'s
+    "`TtuStarFree` quantifies over `schemaRewrites` but `rewriteStepL` steps over
+    `schemaRewritesL`" gap as a kernel fact. -/
+theorem slStP_leaf_ttu_breaks_star_bare :
+    NodupKeys LeafRuleWitness.SlStP ∧
+    (∀ r ∈ schemaRewrites LeafRuleWitness.SlStP, isLeafPred r.matchRel = false) ∧
+    TtuTuplesetsDirect LeafRuleWitness.SlStP ∧
+    TtuStarFree LeafRuleWitness.SlStP [tstpStar] ∧
+    BareStarStore [tstpStar] ∧
+    tstpStar ∈ [tstpStar] ∧
+    ustpStar ∈ rewriteClosureL LeafRuleWitness.SlStP
+      (rawWriteTuples LeafRuleWitness.SlStP tstpStar) ∧
+    ustpStar.subject.name = STAR ∧
+    ustpStar.subject.predicate ≠ BARE :=
+  ⟨slStP_nodupKeys, slStP_matchNotLeaf, slStP_ttuTuplesetsDirect, slStP_ttuStarFree,
+    slStP_bareStar, List.mem_singleton_self tstpStar, slStP_star_member,
+    slStP_star_member_is_star, slStP_star_member_is_not_bare⟩
+
+end StarBareWitness
+
 /-- **Reach agreement off the extras**: a probe into a non-`Extra` target reads the same
     on `σ` and its shadow — extra edges are trailing hops onto terminal nodes the path can
     neither traverse nor end at. Generic in `Extra`; at today's instantiation

@@ -80,6 +80,29 @@ theorem untaintedSchema_restrict {S : Schema} (hNK : NodupKeys S) :
   rw [lookup_of_mem hNK hpS] at hbt
   exact hbt
 
+/-- **One untainted def is boolean-free** — `untaintedSchema_restrict`'s per-def core, lifted
+    out so it can be used on a schema that is NOT globally untainted.
+
+    Identical argument: an untainted DECLARED key is not base-tainted (`untainted_closed`,
+    the taint fixpoint's closure property), and under `NodupKeys` `baseTaint` reads exactly
+    this def's own `containsBool` (`lookup_of_mem`). The whole-schema wrapper above is this
+    plus "every key of the restricted schema is untainted"; every consumer that holds a
+    BOOLEAN schema and only knows one def survived the taint filter needs this form instead
+    — e.g. `RulesWrite.lean::mem_exprArms_of_mem_exprTtus`, whose `containsBool` hypothesis
+    this is the sole supplier of at a `schemaRewrites` member. -/
+theorem containsBool_of_mem_defs_untainted {S : Schema} (hNK : NodupKeys S)
+    {d : (String × String) × Expr} (hd : d ∈ S.defs) (hu : isDerived S d.1 = false) :
+    containsBool d.2 = false := by
+  have hkey : d.1 ∈ S.keys := List.mem_map.mpr ⟨d, hd, rfl⟩
+  have hu' : d.1 ∉ taintedKeys S := by
+    unfold isDerived at hu
+    rw [List.contains_eq_mem] at hu
+    exact of_decide_eq_false hu
+  have hbt := (untainted_closed S hkey hu').1
+  unfold baseTaint at hbt
+  rw [lookup_of_mem hNK hd] at hbt
+  exact hbt
+
 /-- No key is derived in the restricted schema (it is untainted). -/
 theorem isDerived_restrict {S : Schema} (hNK : NodupKeys S) (k : String × String) :
     isDerived (restrictUntainted S) k = false :=
