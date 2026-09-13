@@ -1762,4 +1762,226 @@ theorem cascade_drains {σ : GraphState} {S : Schema} {T : Store} {jobs : List W
   intro d hd
   exact mem_outbox_le_maxOutboxId _ d hd
 
+/-! ## ★ `FoldAdmitsBridged` — the honest fold-admission predicate (`P6` step 14, additive half)
+
+**The obligation.** Once step 3 re-points `LeafRules.lean::GraphState.writeRulesRaw` (and with
+it `GraphState.writeLoggedRules`) to fold `GraphState.writeBridgedOne`, the `write`
+constructors of `ReachedByW3d` (`:1536`) and `ReachedByW3d2` keep a hypothesis
+`FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t))` (`RulesComplete.lean::FoldAdmits`)
+that probes `GraphState.writeDirect`'s UNBRIDGED state — while the fold actually taken probes
+`(σ.bridgePre u).admitEdge`. `GraphState.admitEdge` is ANTI-monotone in edges and
+`GraphState.bridgePre` only ADDS edges, so the stale hypothesis is strictly WEAKER than the
+truth: every `hadm` binder keeps type-checking while describing a fold nobody runs. That is
+this repo's named house failure mode — an assurance step that fails by PASSING
+(`docs/sabotage-procedure.md`).
+
+**What lands here, and what does not.** The predicate, its decidable twin, its `Bool` mirror
+and the EVIDENCE that the two predicates differ. The MOVE — re-pointing the 19 `hadm`
+signature binders enumerated in `docs/p6-step3b-plan-2026-09-13.md` § Step 14 — is RED work
+and is deliberately not started; nothing below is referenced by any existing declaration, so
+this section is purely additive and lands green ahead of the re-point (the additive-first
+test of that plan's `C9`).
+
+⚠ **`FoldAdmits` lives in `RulesComplete.lean`, which is upstream of this file and is NOT
+imported by `UsStarWrite.lean`.** So the honest twin cannot live beside
+`GraphState.writeBridgedOne`; `Cascade.lean` is the first module that sees both. Do not
+"tidy" it up next to its subject — the import direction `Cascade → UsStarWrite` must never be
+reversed. -/
+
+/-- **`FoldAdmitsBridged σ us`** — folding `GraphState.writeBridgedOne` over `us` from `σ`
+    admits every write. The honest twin of `RulesComplete.lean::FoldAdmits`, differing from
+    it in exactly one place: the probe reads the BRIDGED pre-state `σ.bridgePre u`, which is
+    the state `GraphState.writeBridgedOne` itself probes, and the tail continues at
+    `σ.writeBridgedOne u` rather than `σ.writeDirect u`.
+
+    Shape-for-shape a mirror of `FoldAdmits`, so a consumer that `rcases`es one can `rcases`
+    the other, and `foldAdmitsBridgedB` below stands to it exactly as
+    `Exec.lean::foldAdmitsB` stands to `FoldAdmits`. -/
+def FoldAdmitsBridged : GraphState → List Tuple → Prop
+  | _, [] => True
+  | σ, u :: rest =>
+      (σ.bridgePre u).admitEdge (subjNode u.subject) (objNode u.object u.relation) = true ∧
+      FoldAdmitsBridged (σ.writeBridgedOne u) rest
+
+/-- `FoldAdmitsBridged` is a finite conjunction of `admitEdge` Bool tests, hence decidable at
+    a concrete state and list — the mirror of `RulesComplete.lean::decFoldAdmits`, supplied
+    for the same reason (a plain recursive `def` is not unfolded by instance synthesis). It
+    is what the `by decide` pins below run on. -/
+def decFoldAdmitsBridged :
+    (σ : GraphState) → (us : List Tuple) → Decidable (FoldAdmitsBridged σ us)
+  | _, [] => isTrue trivial
+  | σ, u :: rest =>
+      if h : (σ.bridgePre u).admitEdge (subjNode u.subject)
+          (objNode u.object u.relation) = true then
+        match decFoldAdmitsBridged (σ.writeBridgedOne u) rest with
+        | isTrue ht => isTrue ⟨h, ht⟩
+        | isFalse hf => isFalse (fun hc => hf hc.2)
+      else isFalse (fun hc => h hc.1)
+
+instance instDecidableFoldAdmitsBridged (σ : GraphState) (us : List Tuple) :
+    Decidable (FoldAdmitsBridged σ us) := decFoldAdmitsBridged σ us
+
+/-- Executable mirror of `FoldAdmitsBridged`, verbatim the shape of
+    `Exec.lean::foldAdmitsB`. It is deliberately NOT placed in `Exec.lean` beside that one:
+    `Exec` is DOWNSTREAM of this file (`docs/p6-step3b-plan-2026-09-13.md` § Corrections'
+    19-module downstream set), and the runtime driver cannot gate on the bridged fold until
+    the leg it drives is re-pointed. When step 3 lands, `Exec.lean::graphRunAux` (`:82`) and
+    `::graphRunOpsAux` (`:454`) are the two runtime gates that must move to this. -/
+def foldAdmitsBridgedB : GraphState → List Tuple → Bool
+  | _, [] => true
+  | σ, u :: rest =>
+      (σ.bridgePre u).admitEdge (subjNode u.subject) (objNode u.object u.relation)
+      && foldAdmitsBridgedB (σ.writeBridgedOne u) rest
+
+/-- The mirror is exact: `foldAdmitsBridgedB` decides `FoldAdmitsBridged`. Same proof as
+    `Exec.lean::foldAdmitsB_iff`. -/
+theorem foldAdmitsBridgedB_iff (us : List Tuple) :
+    ∀ σ : GraphState, foldAdmitsBridgedB σ us = true ↔ FoldAdmitsBridged σ us := by
+  induction us with
+  | nil => intro σ; simp [foldAdmitsBridgedB, FoldAdmitsBridged]
+  | cons u rest ih =>
+    intro σ
+    simp [foldAdmitsBridgedB, FoldAdmitsBridged, Bool.and_eq_true, ih]
+
+/-! ### ★ The two predicates PROVABLY disagree — the evidence step 14 exists for
+
+Without this namespace the section above is a definition nobody calls, and "the stale `hadm`
+is weaker" stays a claim in a docstring. The positive control it lifts already existed at the
+PROBE level — `UsStarWrite.lean::BridgedWriteWitness.bridged_probe_refuses_the_cycle`
+(`= false`) against `::unbridged_probe_admits_the_cycle` (`= true`), both by `decide`. What
+is new here is the same fact at the PREDICATE level, and then at the **argument shape `hadm`
+actually binds**, `rewriteClosureL S (rawWriteTuples S t)`.
+
+The fixture is `UsStarWrite.lean::BridgedWriteWitness`'s, unchanged, so step 2's, step 3a's
+and this session's pins all read as ONE scenario: `ThroughShapeWitness.Sthru`, and the
+wildcard-userset grant `tCycle = folder:*#viewer viewer folder:f1`, whose own subject-side
+bridge `folder:f1#viewer → w_any(folder, viewer)` closes a cycle with the grant.
+
+⚠ **Honest limit, measured not assumed.** `cycle_closure_is_the_member` reports that the
+closure list here is the SINGLETON seed — `Sthru`'s only rewrite rule is `doc#viewer ←
+viewer from parent`, which matches relation `parent`, and `tCycle`'s relation is `viewer`, so
+nothing fires. So these pins exhibit the disagreement at the right argument SHAPE, not inside
+a multi-member fold. A multi-member divergence is not needed for the honesty obligation (one
+member already makes the hypothesis describe the wrong fold) and is not claimed. -/
+namespace FoldAdmitsHonestyWitness
+
+/-- The step-3a / step-2 scenario, unchanged. -/
+def base : GraphState := BridgedWriteWitness.base
+
+/-- **The closure list, measured.** `rawWriteTuples` is the identity on this untainted key
+    and no rewrite of `Sthru` matches relation `viewer`, so the list `hadm` quantifies over is
+    the seed alone. Stated rather than assumed, because every pin below that is phrased at the
+    closure is derived THROUGH this equation. -/
+theorem cycle_closure_is_the_member :
+    rewriteClosureL ThroughShapeWitness.Sthru
+        (rawWriteTuples ThroughShapeWitness.Sthru BridgedWriteWitness.tCycle)
+      = [BridgedWriteWitness.tCycle] := by decide
+
+/-- **The stale predicate ADMITS the fold** — `RulesComplete.lean::FoldAdmits` probes the
+    unbridged state, which does not yet hold the bridge the cycle runs through. -/
+theorem unbridged_fold_admits :
+    FoldAdmits base [BridgedWriteWitness.tCycle] := by decide
+
+/-- …and the executable mirror of the honest predicate REFUSES it. -/
+theorem bridgedB_refuses : foldAdmitsBridgedB base [BridgedWriteWitness.tCycle] = false := by
+  decide
+
+/-- ★ **The honest predicate refuses the same fold.** Derived THROUGH
+    `foldAdmitsBridgedB_iff` rather than `decide`d directly, so it certifies that the `Bool`
+    mirror and the `Prop` agree on a fixture where the answer is `false` — the direction a
+    mirror that had drifted would be caught in. -/
+theorem bridged_fold_refuses : ¬ FoldAdmitsBridged base [BridgedWriteWitness.tCycle] := by
+  intro h
+  have hb := (foldAdmitsBridgedB_iff _ _).mpr h
+  rw [bridgedB_refuses] at hb
+  exact Bool.noConfusion hb
+
+/-- ★ **THE PIN: the two predicates disagree at the argument shape `hadm` binds.**
+    `ReachedByW3d.write`'s hypothesis is `FoldAdmits σ (rewriteClosureL S (rawWriteTuples S
+    t))`; this is that exact expression, true of `FoldAdmits` and FALSE of
+    `FoldAdmitsBridged`. So re-pointing the binders is a REAL change of hypothesis and not a
+    definitional unfolding — which is the thing a reader deferring step 14 has to know. -/
+theorem disagree_at_a_closure_list :
+    FoldAdmits base (rewriteClosureL ThroughShapeWitness.Sthru
+        (rawWriteTuples ThroughShapeWitness.Sthru BridgedWriteWitness.tCycle)) ∧
+      ¬ FoldAdmitsBridged base (rewriteClosureL ThroughShapeWitness.Sthru
+        (rawWriteTuples ThroughShapeWitness.Sthru BridgedWriteWitness.tCycle)) := by
+  rw [cycle_closure_is_the_member]
+  exact ⟨unbridged_fold_admits, bridged_fold_refuses⟩
+
+/-- ★ **ATTRIBUTION CONTROL 1**: at a member with NO bridged-in endpoint the two predicates
+    agree. Without it, `disagree_at_a_closure_list` would be satisfied by a
+    `FoldAdmitsBridged` that differs from `FoldAdmits` everywhere, which would say nothing
+    about the bridge. Mirrors `UsStarWrite.lean::BridgedWriteWitness.
+    control_agrees_with_writeDirect`. -/
+theorem control_unbridged_member_agrees :
+    FoldAdmits base [BridgedWriteWitness.tCtrl] ∧
+      FoldAdmitsBridged base [BridgedWriteWitness.tCtrl] := by decide
+
+/-- ★ **ATTRIBUTION CONTROL 2, the sharper one**: at `tThru` the subject IS bridged in
+    (`::subject_is_bridged_in`) and the two predicates STILL agree. So the divergence is not
+    "the bridge fires", it is specifically the cycle the bridge closes — which is why the
+    honest predicate is needed rather than a side condition saying "no endpoint is
+    bridged". -/
+theorem control_bridged_grant_agrees :
+    FoldAdmits base [BridgedWriteWitness.tThru] ∧
+      FoldAdmitsBridged base [BridgedWriteWitness.tThru] := by decide
+
+/-- The unbridged fold materialises `tCycle`'s grant… -/
+theorem unbridged_fold_lands_the_grant :
+    (subjNode BridgedWriteWitness.tCycle.subject,
+      objNode BridgedWriteWitness.tCycle.object BridgedWriteWitness.tCycle.relation) ∈
+      ([BridgedWriteWitness.tCycle].foldl (fun acc u => acc.writeDirect u) base).edges := by
+  decide
+
+/-- …and the bridged fold — the one step 3 makes live — does NOT. This pair is the
+    CONSEQUENCE of the hypothesis mismatch: it is not a matter of which state a probe reads,
+    it is the difference between an edge existing and not existing. -/
+theorem bridged_fold_drops_the_grant :
+    (subjNode BridgedWriteWitness.tCycle.subject,
+      objNode BridgedWriteWitness.tCycle.object BridgedWriteWitness.tCycle.relation) ∉
+      ([BridgedWriteWitness.tCycle].foldl (fun acc u => acc.writeBridgedOne u) base).edges := by
+  decide
+
+/-- ★★ **THE REFUTATION — why step 14 is an honesty obligation and not a tidy-up.**
+    `RulesComplete.lean::foldl_writeDirect_edge_complete` is the workhorse every
+    edge-completeness argument on the write leg runs through: *`FoldAdmits` ⇒ every member's
+    edge is in the folded state.* Stated over the BRIDGED fold with `FoldAdmits` still as its
+    hypothesis — i.e. exactly what a session that re-points the fold and leaves the binders
+    alone would be entitled to assume — it is FALSE, and this refutes it on one member.
+
+    The weakening refuted is the narrowest plausible one: it is character-for-character the
+    existing lemma with `writeDirect` swapped for `writeBridgedOne` in the fold, which is what
+    the re-point does to the code while leaving the hypothesis untouched. Mirrors
+    `UsStarWrite.lean::BridgedWriteWitness.two_disjunct_soundness_is_false`. -/
+theorem foldl_edge_complete_is_false_for_the_bridged_fold :
+    ¬ (∀ (us : List Tuple) (σ : GraphState), FoldAdmits σ us → ∀ u ∈ us,
+        (subjNode u.subject, objNode u.object u.relation) ∈
+          (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges) := by
+  intro h
+  have hc := h [BridgedWriteWitness.tCycle] base unbridged_fold_admits
+    BridgedWriteWitness.tCycle (by decide)
+  revert hc
+  decide
+
+/-- ★ **The stale hypothesis is CONSTRUCTIBLE at this fixture**, on the live inductive: the
+    `ReachedByW3d.write` constructor applies at `(emptyState Sthru, Sthru, tCycle)` today, and
+    its `hadm` is `unbridged_fold_admits`. Together with `bridged_fold_refuses` that is the
+    whole of step 14 in one line — after the re-point this step is still admitted by the
+    constructor while the fold it names refuses the grant.
+
+    ⚠ **This declaration is a TRIPWIRE and is meant to go RED when step 14 lands.** When the
+    constructor's `hadm` is re-pointed to `FoldAdmitsBridged`, no term can inhabit it at this
+    fixture — `bridged_fold_refuses` says so. The correct response is then to move the pin to
+    an admitted fixture (e.g. `BridgedWriteWitness.tThru`, by `control_bridged_grant_agrees`)
+    and record the flip; NOT to weaken the constructor back. -/
+theorem w3d_write_applies_with_the_stale_hypothesis :
+    ReachedByW3d (base.writeLoggedRules ThroughShapeWitness.Sthru BridgedWriteWitness.tCycle)
+      ThroughShapeWitness.Sthru [BridgedWriteWitness.tCycle] :=
+  .write BridgedWriteWitness.tCycle
+    (by rw [cycle_closure_is_the_member]; exact unbridged_fold_admits)
+    (.empty ThroughShapeWitness.Sthru)
+
+end FoldAdmitsHonestyWitness
+
 end Zanzibar
