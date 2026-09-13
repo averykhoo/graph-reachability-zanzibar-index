@@ -314,6 +314,52 @@ theorem mem_exprRestrictions_of_directsAll {e : Expr} {rs : List Restriction}
   | computed _ => simp [exprDirectsAll] at hd
   | ttu _ _ => simp [exprDirectsAll] at hd
 
+/-- **The FORWARD flattening** — the converse of `mem_exprRestrictions_of_directsAll` above,
+    and the direction every `exprRestrictions`-phrased obligation needs when the available
+    premise is `exprDirectsAll`-phrased (`CascadeStable.lean::DirectRestrictionsNotLeaf` is
+    the live one: it quantifies over `exprDirectsAll`, while
+    `UsStarWrite.lean::Schema.isSubjectWildcardUserset`'s literal disjunct is a membership in
+    `exprRestrictions`).
+
+    **It holds at EVERY expression shape, with nothing excluded.** The two enumerations have
+    the same recursion — `[]` at `computed`/`ttu`, `++` at all three boolean nodes — and
+    differ only at `.direct rs`, where `exprRestrictions` returns `rs` and `exprDirectsAll`
+    returns `[rs]`. So the statement is exactly "flatten the one-level nesting", and no arm
+    needs a side condition. (Checked arm by arm against both definitions before it was
+    written: `State.lean::exprRestrictions`, `ReconcileCorrect.lean::exprDirectsAll`.) -/
+theorem mem_exprDirectsAll_of_mem_exprRestrictions :
+    ∀ {e : Expr} {r : Restriction}, r ∈ exprRestrictions e →
+      ∃ rs ∈ exprDirectsAll e, r ∈ rs := by
+  intro e
+  induction e with
+  | direct rs' =>
+    intro r hr
+    simp only [exprRestrictions] at hr
+    exact ⟨rs', by simp [exprDirectsAll], hr⟩
+  | computed _ => intro r hr; simp [exprRestrictions] at hr
+  | ttu _ _ => intro r hr; simp [exprRestrictions] at hr
+  | union a b iha ihb =>
+    intro r hr
+    simp only [exprRestrictions, List.mem_append] at hr
+    simp only [exprDirectsAll, List.mem_append]
+    rcases hr with h | h
+    · obtain ⟨rs, hrs, hmem⟩ := iha h; exact ⟨rs, Or.inl hrs, hmem⟩
+    · obtain ⟨rs, hrs, hmem⟩ := ihb h; exact ⟨rs, Or.inr hrs, hmem⟩
+  | inter a b iha ihb =>
+    intro r hr
+    simp only [exprRestrictions, List.mem_append] at hr
+    simp only [exprDirectsAll, List.mem_append]
+    rcases hr with h | h
+    · obtain ⟨rs, hrs, hmem⟩ := iha h; exact ⟨rs, Or.inl hrs, hmem⟩
+    · obtain ⟨rs, hrs, hmem⟩ := ihb h; exact ⟨rs, Or.inr hrs, hmem⟩
+  | excl a b iha ihb =>
+    intro r hr
+    simp only [exprRestrictions, List.mem_append] at hr
+    simp only [exprDirectsAll, List.mem_append]
+    rcases hr with h | h
+    · obtain ⟨rs, hrs, hmem⟩ := iha h; exact ⟨rs, Or.inl hrs, hmem⟩
+    · obtain ⟨rs, hrs, hmem⟩ := ihb h; exact ⟨rs, Or.inr hrs, hmem⟩
+
 /-- `DirectArmsBare` propagates to every arm reachable via `exprDirectsAll`: each such arm's
     restrictions are all BARE (`r.2.1 = BARE`). -/
 theorem directArmsBare_mem : ∀ {e : Expr}, DirectArmsBare e →

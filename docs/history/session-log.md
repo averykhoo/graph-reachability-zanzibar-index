@@ -30,6 +30,49 @@ from here.
 
 ---
 
+## 2026-09-13h — `P6` step 3b: the SHADOW's support layer lands GREEN; step 8's go/no-go is answered
+
+rows: `P6` (Log `2026-09-13h`). Nothing re-ranked. Same session as `2026-09-13g`, second committed
+batch — a separate entry rather than a retro-edit, because `g` is already a citation target.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board + note
+
+**The re-plan paid a second time, and this time on the plan's own SINGLE SCHEDULE RISK.** Step 8 —
+widening the shadow's "extras" predicate — is the piece with no landed design, gating all 19
+downstream modules, whose worst case was a `TK68`-sized new admission field. Its *support* layer turns
+out to mention only definitions that already exist, so it lands green BEFORE the red run instead of
+inside it: **69 declarations**, whole-tree build rc=0, warning count unchanged, audited CLEAN-ADDITIVE
+with zero deletions tree-wide, pins and anchors at baseline.
+
+**Step 8's go/no-go is now answered rather than forecast.** No new `GraphAdmission` field. T3 costs
+the shadow family exactly two new binders, both already bound at all five call sites; T2 costs none —
+its four premises are premises 1, 2, 5 and 6 of `reachedByW3d_shadow` verbatim. What remains of step 8
+is the widening itself, which is red.
+
+**The leaf-ttu gap became a kernel refutation.** `TtuStarFree` quantifies over `schemaRewrites S`
+while `rewriteStepL` steps over `schemaRewrites S ++ leafRewrites S`, so leaf ttu arms sit outside its
+quantifier entirely — neither the plan body nor the first recon sweep saw this.
+`StarBareWitness.slStP_leaf_ttu_breaks_star_bare` now proves that at `SlStP` every premise except the
+ComputedOnly one holds and the conclusion is FALSE.
+
+**An audit found a vacuity hole, and its shape is the transferable part.**
+`not_bridgedInConcrete_of_leafNode` needs a `LeafNode` AND four premises *at the same schema*;
+`LeafNode` was pinned only at `Sw` and the premises only at `Snv`, so the composed lemma had no witness
+of its own and could have been vacuously true everywhere while looking fully pinned. Closed by a joint
+witness routed through the proved decider. **Each hypothesis family pinned separately proves nothing
+about their conjunction.**
+
+Also measured: `statement_pin.py` pins an `ambient:<path>` row — a file's `variable`/`open` lines in
+order — so in any pin-hosting module a single additive `open` reds step 4c *while* `51/51 statements
+match` stays green.
+
+Still owed: step 3 (the `LeafRules` re-point) is the first RED step and was not started. `hmd` has no
+negative control, and no source-level sabotage rebuild of the T2 payoff was run — both recorded on the
+row as owed rather than asserted.
+
+---
+
 ## 2026-09-13g — `P6` step 3b: the ADDITIVE half lands GREEN; two standing claims on the row are REFUTED
 
 rows: `P6` (three Log entries under `2026-09-13g`, the false `## Traps` paragraph struck and

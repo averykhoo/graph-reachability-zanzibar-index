@@ -82,6 +82,52 @@ def exprArms (ot outRel : String) : Expr → List RRule
 def schemaRewrites (S : Schema) : List RRule :=
   (S.defs.filter (fun d => !(isDerived S d.1))).flatMap (fun d => exprArms d.1.1 d.1.2 d.2)
 
+/-- **A TTU node of a BOOLEAN-FREE expression is one of its rewrite arms.**
+
+    `exprTtus` (`State.lean`) and `exprArms` agree on `computed`/`ttu`/`union`/`direct`;
+    they part company at `inter`/`excl`, where `exprTtus` RECURSES and `exprArms` returns
+    `[]` ("boolean nodes are out of the untainted fragment", above). `containsBool e = false`
+    is exactly the hypothesis that rules those two arms out, and it is what an untainted
+    declared key supplies (`RestrictBase.lean::containsBool_of_mem_defs_untainted`).
+
+    ⚠ **The hypothesis is not decoration.** Without it the statement is FALSE: at
+    `e = .inter (.ttu "tr" "ts") (.computed "c")` the LHS list is `[("tr","ts")]` while
+    `exprArms ot outRel e = []`. So this is the honest form of "`exprTtus` targets ⊆ what
+    `exprArms` collects" — it holds on the boolean-free defs, which are precisely the ones
+    `schemaRewrites` keeps. -/
+theorem mem_exprArms_of_mem_exprTtus {ot outRel tr ts : String} :
+    ∀ {e : Expr}, containsBool e = false → (tr, ts) ∈ exprTtus e →
+      (⟨ot, ts, outRel, RuleKind.ttu tr⟩ : RRule) ∈ exprArms ot outRel e := by
+  intro e
+  induction e with
+  | direct _ => intro _ h; simp [exprTtus] at h
+  | computed _ => intro _ h; simp [exprTtus] at h
+  | ttu tr' ts' =>
+    intro _ h
+    simp only [exprTtus, List.mem_singleton, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    simp [exprArms]
+  | union a b iha ihb =>
+    intro hcb h
+    simp only [containsBool, Bool.or_eq_false_iff] at hcb
+    simp only [exprTtus, List.mem_append] at h
+    simp only [exprArms, List.mem_append]
+    exact h.imp (iha hcb.1) (ihb hcb.2)
+  | inter _ _ _ _ => intro hcb; simp [containsBool] at hcb
+  | excl _ _ _ _ => intro hcb; simp [containsBool] at hcb
+
+/-- **A declared UNTAINTED def's rewrite arms are schema rewrites.** The `def`-level twin of
+    `RulesComplete.lean::lookup_exprArms_sub`, which asks for `UntaintedSchema S` — an
+    untaintedness claim about the WHOLE schema, far too strong for a consumer that holds a
+    boolean schema and knows only that THIS def survived the taint filter. Both directions of
+    `schemaRewrites`' definition are one `List.mem_flatMap` / `List.mem_filter` step; the
+    only content is that `isDerived S d.1 = false` is literally the filter's predicate. -/
+theorem mem_schemaRewrites_of_mem_exprArms {S : Schema} {d : (String × String) × Expr}
+    (hd : d ∈ S.defs) (hu : isDerived S d.1 = false) {a : RRule}
+    (ha : a ∈ exprArms d.1.1 d.1.2 d.2) : a ∈ schemaRewrites S := by
+  unfold schemaRewrites
+  exact List.mem_flatMap.mpr ⟨d, List.mem_filter.mpr ⟨hd, by rw [hu]; rfl⟩, ha⟩
+
 /-- Apply one rewrite rule to a tuple, if it matches (relation + object type). -/
 def applyRRule (r : RRule) (t : Tuple) : Option Tuple :=
   if t.relation = r.matchRel ∧ t.object.type = r.objectType then
